@@ -11,6 +11,6 @@ public class RoleSimpleDTO {
     private String roleId;
     private String roleCode;
     private String roleChName;
-    /** 是否主角色（用户已分配角色中有且仅有一个为 true，登录时作为当前登录角色） */
+    /** 是否默认展示角色（PT_USER_ROLE.DEFAULT_ASSIGN），不影响权限计算 */
     private Boolean primary;
 }

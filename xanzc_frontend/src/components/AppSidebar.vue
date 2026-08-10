@@ -59,7 +59,11 @@ function initOpen() {
     if (m.children && m.children.length && !(m.resourceId in openMap)) openMap[m.resourceId] = true;
   }
 }
-onMounted(() => menuStore.load());
+onMounted(() => {
+  menuStore.load().catch(() => {
+    // store 已清空旧菜单并记录错误；侧栏保持空态，等待下一次显式重试。
+  });
+});
 watch(() => menuStore.tree, initOpen, { immediate: true });
 
 function toggle(id) { openMap[id] = !openMap[id]; }

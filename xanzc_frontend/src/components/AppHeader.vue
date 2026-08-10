@@ -13,7 +13,7 @@
         <div class="avatar">{{ avatarLetter }}</div>
         <div class="meta">
           <b>{{ store.displayName }}</b>
-          <small>{{ store.orgName || store.roleName || '—' }}</small>
+          <small>{{ store.orgName || store.roleSummary || '—' }}</small>
         </div>
         <span style="font-size:10px;opacity:.5">▾</span>
       </div>
@@ -23,16 +23,15 @@
             <span style="color:#9CA3AF;font-size:12px">{{ store.user?.username }} · {{ store.user?.deptNo || store.user?.mainOrgCode || '—' }}</span>
           </el-dropdown-item>
           <el-dropdown-item divided disabled>
-            <span style="color:#9CA3AF;font-size:12px">切换角色</span>
+            <span style="color:#9CA3AF;font-size:12px">已分配角色</span>
           </el-dropdown-item>
           <el-dropdown-item
             v-for="r in store.roles"
             :key="r.roleId"
-            :command="`role:${r.roleId}`"
+            disabled
           >
-            <span :style="{ fontWeight: r.roleId === store.activeRoleId ? 600 : 400, minWidth: '120px', display: 'inline-flex', justifyContent: 'space-between', alignItems: 'center' }">
+            <span style="min-width:120px;display:inline-flex;align-items:center">
               <span>{{ r.roleChName }}</span>
-              <span v-if="r.roleId === store.activeRoleId" style="color:#22c55e;margin-left:12px">✓</span>
             </span>
           </el-dropdown-item>
           <el-dropdown-item divided command="changePassword">修改密码</el-dropdown-item>
@@ -68,17 +67,15 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
-import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useUserStore } from '@/stores/user';
-import { logout, switchRole, getCurrentUser } from '@/api/auth';
+import { logout } from '@/api/auth';
 import { getUnreadCount } from '@/api/workspace';
 import { changeMyPassword } from '@/api/users';
 
 const kw = ref('');
 const unread = ref(0);
 const store = useUserStore();
-const router = useRouter();
 
 async function refreshUnread() {
   try { const n = await getUnreadCount(); if (typeof n === 'number') unread.value = n; } catch {}
@@ -97,43 +94,15 @@ const avatarLetter = computed(() => {
 });
 
 async function onCommand(cmd) {
-  if (typeof cmd === 'string' && cmd.startsWith('role:')) {
-    const roleId = cmd.slice(5);
-    if (roleId === store.activeRoleId) return; // 已是当前角色
-    const r = store.roles.find(x => x.roleId === roleId);
-    try {
-      await ElMessageBox.confirm(
-        `确认切换到角色「${r?.roleChName || roleId}」？切换后菜单、业务操作将按该角色权限显示与处理。`,
-        '切换角色', { type: 'warning', confirmButtonText: '确认切换', cancelButtonText: '取消' });
-    } catch { return; }
-    try {
-      await switchRole(roleId);
-      // 切换后重新拉取后端「权威」当前用户（已激活新角色：roles 主标记、activeRoleId 等均为服务端真值），
-      // 全量覆盖本地 store，避免整页刷新后路由守卫「有 user 就不再拉 current-user」而沿用登录时旧缓存。
-      // 拉取失败再退回仅 patch activeRoleId，保证切换不被网络抖动卡死。
-      try {
-        const fresh = await getCurrentUser();
-        if (fresh && fresh.empId && fresh.empId !== 'mock') store.setUser(fresh);
-        else store.setActiveRole(roleId);
-      } catch { store.setActiveRole(roleId); }
-      ElMessage.success(`已切换到「${r?.roleChName || roleId}」，正在进入工作台`);
-      // 跳转工作台并整页刷新，确保菜单/权限/数据范围/待办全部按新角色重新拉取
-      await router.push('/workspace').catch(() => {});
-      window.location.reload();
-    } catch (e) {
-      ElMessage.error('切换角色失败：' + (e?.message || e));
-    }
-    return;
-  }
   if (cmd === 'logout') {
     try {
       await ElMessageBox.confirm('确定退出登录？', '提示', { type: 'warning' });
     } catch { return; }
     try { await logout(); } catch { /* yiti session 后端清不掉也无所谓，前端继续清 */ }
     store.clear();
-    // 整页跳转（对齐切换角色的 location.reload 做法）：router.replace 是 SPA 内跳转，
+    // 整页跳转：SPA 内跳转不会销毁全部运行时状态，
     // menu store 等 Pinia 内存态会残留给下一个登录用户（旧菜单/旧索引）
-    window.location.replace('/login');
+    window.location.replace('/#/login');
   } else if (cmd === 'changePassword') {
     pwdDlg.oldPassword = '';
     pwdDlg.newPassword = '';
@@ -160,7 +129,7 @@ async function onChangePassword() {
     setTimeout(async () => {
       try { await logout(); } catch {}
       store.clear();
-      router.replace('/login');
+      window.location.replace('/#/login');
     }, 600);
   } catch (e) {
     ElMessage.error('修改失败：' + (e?.message || e));

@@ -21,7 +21,7 @@ public class CurrentUserRespDTO {
     private String deptNo;
     private Integer orgLevel;
     private List<RoleSimpleDTO> roles;
-    /** 当前激活角色ID（角色切换后为所切角色；roles 中该角色 primary=true） */
+    /** 兼容旧客户端的保留字段；权限并集模式下恒为 null */
     private String activeRoleId;
     /** 拥有的资源URL列表 */
     private List<String> permissions;

@@ -119,21 +119,17 @@ public class RoleResourceService {
     }
 
     /**
-     * 全量替换角色的"菜单"绑定 + 联动重建接口绑定（先删后插，事务保证原子性）。
+     * 全量替换角色的菜单绑定（先删后插，事务保证原子性）。
      * <p>语义：</p>
      * <ul>
-     *   <li>删除该角色所有菜单绑定（ISMENU=1）+ 所有接口绑定（ISMENU=0）；</li>
+     *   <li>仅删除该角色所有菜单绑定（ISMENU=1）；</li>
      *   <li>按 menuIds 插入新菜单绑定；</li>
-     *   <li>menuIds 非空时：联动绑「所选菜单下挂的接口」+「所有公共接口（PARENT_RESOURCE_ID 为空）」；</li>
-     *   <li>menuIds 空时：所有接口/菜单都已清，角色退回"无任何资源"。</li>
+     *   <li>接口绑定（ISMENU=0）由权限配置显式维护，本方法既不删除也不自动授予。</li>
      * </ul>
-     * <p>关系定义在 PT_RESOURCE.PARENT_RESOURCE_ID 字段：接口资源指向所属菜单。
-     * 没填 PARENT_RESOURCE_ID 的接口视为"公共基础接口"，只要分配 ≥1 菜单就附带。</p>
-     * <p>管理员仍可在「权限配置」页面用 replaceResources 单独调整接口绑定；
-     * 但下一次 replaceMenus 时这些手工调整会被覆盖。</p>
+     * <p>菜单可见性与 API 授权属于两个独立维度，避免仅因勾选菜单就获得其下全部接口权限。</p>
      *
      * @param roleId  角色ID
-     * @param menuIds 替换后的菜单ID列表（空列表表示清空该角色所有菜单+接口绑定）
+     * @param menuIds 替换后的菜单ID列表（空列表仅清空菜单绑定）
      * @param reason  操作原因（审计用）
      */
     @Transactional
@@ -142,32 +138,32 @@ public class RoleResourceService {
             throw new BizException(AuthErrorCode.ROLE_NOT_FOUND.getCode(),
                 AuthErrorCode.ROLE_NOT_FOUND.getMessage());
         }
-        // 1. 清菜单 + 清接口绑定（接口要按新菜单重建，旧绑定全清）
+        // 必须在删除旧绑定前完成全量校验，保证任一非法 ID 都不会让角色菜单被部分清空。
+        for (String menuId : menuIds) {
+            if (menuId == null || menuId.isBlank()) {
+                throw new BizException(AuthErrorCode.RESOURCE_NOT_FOUND.getCode(),
+                        AuthErrorCode.RESOURCE_NOT_FOUND.getMessage());
+            }
+            PtResource resource = resourceMapper.selectById(menuId);
+            if (resource == null) {
+                throw new BizException(AuthErrorCode.RESOURCE_NOT_FOUND.getCode(),
+                        AuthErrorCode.RESOURCE_NOT_FOUND.getMessage());
+            }
+            if (!Integer.valueOf(0).equals(resource.getStatus())
+                    || !Integer.valueOf(1).equals(resource.getIsMenu())) {
+                throw new BizException(AuthErrorCode.STATUS_CONSTRAINT_DENIED.getCode(),
+                        "资源不是启用菜单: " + menuId);
+            }
+        }
+        // 菜单与 API 权限解耦：这里只维护 ISMENU=1，显式 API 绑定保持原样
         roleResourceMapper.deleteMenuBindingsByRoleId(roleId);
-        roleResourceMapper.deleteInterfaceBindingsByRoleId(roleId);
 
-        // 2. 插新菜单绑定
+        // 插新菜单绑定
         for (String menuId : menuIds) {
             insertBinding(roleId, menuId);
         }
 
-        // 3. 联动绑接口（menuIds 非空才绑；空菜单等于"无任何资源"）
-        int interfaceCount = 0;
-        if (!menuIds.isEmpty()) {
-            // 3a. 所选菜单下挂的接口
-            List<String> menuInterfaceIds = resourceMapper.selectInterfaceIdsByMenuIds(menuIds);
-            for (String resId : menuInterfaceIds) {
-                insertBinding(roleId, resId);
-            }
-            // 3b. 公共基础接口（PARENT_RESOURCE_ID 为空的接口，所有有菜单的角色都附带）
-            List<String> publicInterfaceIds = resourceMapper.selectPublicInterfaceIds();
-            for (String resId : publicInterfaceIds) {
-                insertBinding(roleId, resId);
-            }
-            interfaceCount = menuInterfaceIds.size() + publicInterfaceIds.size();
-        }
-
-        // 4. 自动配默认数据范围（SELF）—— 仅在该 bizType 还没配置时新增，已配置的绝不覆盖。
+        // 自动配默认数据范围（SELF）—— 仅在该 bizType 还没配置时新增，已配置的绝不覆盖。
         //    历史 bug：原代码直接调 saveBizScope，但它是 upsert（已存在时 updateById 强制覆盖）。
         //    导致管理员在权限配置页手工把 REPORT 调成 ORG_SUBTREE 后，下次分配菜单会被改回 SELF。
         String[] defaultBizTypes = {"REPORT", "PERF_CONFIG", "SYS_CONFIG", "NAV", "LEAD", "CUSTOMER", "LOAN", "SUPPORT"};
@@ -184,8 +180,8 @@ public class RoleResourceService {
 
         cacheService.evictRoleResourceCache(roleId);
         publishCacheInvalidatedEvent(roleId, reason);
-        log.info("[RoleResourceService.replaceMenus] 完成 roleId={}, menus={}, 联动接口={}",
-                roleId, menuIds.size(), interfaceCount);
+        log.info("[RoleResourceService.replaceMenus] 完成 roleId={}, menus={}, API绑定保持不变",
+                roleId, menuIds.size());
     }
 
     /**

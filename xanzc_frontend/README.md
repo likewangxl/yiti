@@ -27,7 +27,7 @@ src/
 ├── layouts/        # DefaultLayout（侧边栏 + 头部 + 内容区）
 ├── mock/           # 全部 mock 数据（VITE_USE_MOCK=true 时启用）
 ├── router/         # 路由表 + 全局守卫
-├── stores/         # Pinia stores（当前只 user）
+├── stores/         # Pinia 用户、菜单、权限 store（授权请求带会话代际控制）
 ├── styles/         # tokens.scss + index.scss
 ├── views/
 │   ├── login/
@@ -56,7 +56,7 @@ NO_PROXY=localhost,127.0.0.1 ./node_modules/.bin/vite --port 8090 --host 0.0.0.0
 
 打开 `http://localhost:8090/`：
 
-- 自动跳到 `#/login?redirect=/workspace`
+- 未登录时跳到 `#/login?redirect=<原路径>`；登录后按“已授权 redirect → 工作台 → 首个授权菜单 → no-access”选择落点。红色专属登录在无 redirect 时优先红色工作台
 - 默认账号 `admin / 123456`（由 yiti `PT_USER` 表 seed）
 
 ## 后端联调
@@ -64,7 +64,7 @@ NO_PROXY=localhost,127.0.0.1 ./node_modules/.bin/vite --port 8090 --host 0.0.0.0
 - yiti 后端默认 8080；vite proxy 配置 `/api` → `http://localhost:8080`
 - mock 模式：`.env.development` 设 `VITE_USE_MOCK=true`，所有 api 直接返 mock 数据
 - 真实模式：`VITE_USE_MOCK=false` + yiti 启动后自动走真接口
-- 失败兜底：真接口失败时 `call()` 会自动用 mock 兜底（控制台 `[api fallback]` warn）
+- 失败兜底：普通 GET 查询失败时 `call()` 可使用 mock 兜底；认证用户、菜单、权限三个安全关键 GET 严格抛错
 
 ## 关键设计点
 
@@ -78,7 +78,7 @@ yiti `ResponseWrapper` 形如：
 
 - `code === "0"` 视为成功
 - 业务失败：`ElMessage.error(message)` 后 reject
-- 401：`gotoLogin()` 自动跳 `/login`，并把当前 hash 写入 redirect query
+- 401：`gotoLogin()` 清空授权快照后自动跳 `#/login`，并把当前 hash 写入 redirect query
 - 分页响应：`page` 字段优先于 `data`（PageResult 走 page）
 - `unwrapPage(r)`：自动从 `records / list / content / rows / data` 抽数组，view 不用关心
 
@@ -96,7 +96,7 @@ onMounted(async () => {
 });
 ```
 
-后端没起 / 接口出错时永远有 mock 兜底，UI 不会白屏。
+普通展示查询可使用 mock 骨架；授权状态不兜底，失败时清空旧菜单并进入安全空态。
 
 ### 3. 路由守卫
 
@@ -104,7 +104,16 @@ onMounted(async () => {
 
 - `meta.public === true` 的路由（如 `/login`）放行
 - 否则检查 Pinia user store；未登录跳 `/login?redirect=<原路径>`
-- 登录成功后 `LoginPage` 读 `route.query.redirect` 跳回去
+- 登录成功后先严格加载授权菜单，再按安全落点规则跳转
+- redirect 只允许精确菜单 URL、授权叶子菜单的详情子路径，或持有 `M_RE_ENGINE` 时的 `/redengine/**`；敏感红色路由仍须通过资源守卫
+- UIAS 固定回到 `/workspace` 而用户没有工作台菜单时，自动进入首个授权叶子
+- 红色引擎敏感路由通过 `requiredMenu`/`requiredResource` 在组件挂载前 fail-close
+
+### 4. 多角色权限
+
+登录用户的全部已分配角色同时生效，前端不提供会话角色切换。顶栏只读展示角色列表，菜单和资源权限分别以后端 `my-menus`、`permissions` 的并集结果为准。
+
+菜单和权限 store 使用请求代际隔离；登录、换用户、退出、改密重登和 401 都会废弃旧 pending，避免上一用户的迟到响应写回当前会话。前端菜单隐藏与路由守卫只负责体验和 fail-close，后端 RBAC 始终是最终安全边界；当前权限 DTO 尚无 HTTP method 字段，本轮不在前端扩张 method + URL 的按钮级判定。
 
 ## 与 yiti 后端的对应
 

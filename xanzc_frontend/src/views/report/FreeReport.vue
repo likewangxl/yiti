@@ -102,18 +102,9 @@ import {
 import { useUserStore } from '@/stores/user';
 
 // 仅 自由报表操作人(R_2FAB45A1) 可导入/禁用/启用；管理员、资财部负责人均不再显示这些按钮。
-// 只看「当前激活角色」（current-user 返回全部角色但只给激活的打 primary 标记，
-// 切换角色后按钮随之变化；后端同样按激活角色判定）。
+// 取消角色切换后按全部已分配角色判断；任一角色具备能力即可展示操作入口。
 const userStore = useUserStore();
-const OPERATOR_ROLES = ['R_2FAB45A1'];
-const isOperator = computed(() => {
-  const roles = userStore.user?.roles || [];
-  // 优先用 activeRoleId 锁定当前激活角色，再退回 primary 标记
-  const activeId = userStore.activeRoleId;
-  const active = (activeId && roles.find(r => r.roleId === activeId))
-              || roles.find(r => r.primary);
-  return !!active && OPERATOR_ROLES.includes(active.roleCode);
-});
+const isOperator = computed(() => userStore.hasRoleCode('R_2FAB45A1'));
 
 const batches = ref([]);
 const pgNo = ref(1);

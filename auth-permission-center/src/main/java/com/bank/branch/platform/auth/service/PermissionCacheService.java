@@ -6,6 +6,8 @@ import com.bank.branch.platform.auth.mapper.RoleBizScopeMapper;
 import com.bank.branch.platform.auth.mapper.ResourceMapper;
 import com.bank.branch.platform.auth.mapper.RoleResourceMapper;
 import com.bank.branch.platform.auth.mapper.UserRoleMapper;
+import com.bank.branch.platform.auth.security.context.CurrentUserProvider;
+import com.bank.branch.platform.common.security.context.CurrentUserContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,7 +34,7 @@ public class PermissionCacheService {
     private final RoleResourceMapper roleResourceMapper;
     private final UserRoleMapper userRoleMapper;
     private final RoleBizScopeMapper roleBizScopeMapper;
-    private final com.bank.branch.platform.auth.security.context.CurrentUserProvider currentUserProvider;
+    private final CurrentUserProvider currentUserProvider;
 
     // ── 直接读 DB（去 Redis） ─────────────────────────────────────
 
@@ -42,19 +44,17 @@ public class PermissionCacheService {
     }
 
     /**
-     * 获取「本次请求生效」的角色ID集合：
-     * <p>当前会话已选定激活角色（角色切换/登录主角色）时，仅返回该激活角色，
-     * 使菜单/接口权限/数据范围都按当前角色解析；无会话上下文（跨模块内部调用、
-     * 定时任务等）或未设激活角色时，回退为全部已分配角色，保持原有行为。</p>
+     * 获取权限计算所使用的角色 ID 集合。
+     * <p>系统不再按 Session 中的激活角色收窄权限，始终以数据库中全部有效角色的并集为准。</p>
      *
      * @param empId 员工ID
      * @return 生效角色ID集合
      */
     public Set<String> getEffectiveRoleIds(String empId) {
-        var ctx = currentUserProvider.get();
-        if (ctx != null && ctx.activeRoleId() != null
-                && empId != null && empId.equals(ctx.empId())) {
-            return java.util.Set.of(ctx.activeRoleId());
+        CurrentUserContext ctx = currentUserProvider.get();
+        if (ctx != null && empId != null && empId.equals(ctx.empId())) {
+            // AuthenticationFilter 已在本请求中按 DB 刷新全部有效角色；忽略兼容字段 activeRoleId。
+            return ctx.roleIds() == null ? new HashSet<>() : new HashSet<>(ctx.roleIds());
         }
         return getRoleIdsByEmpId(empId);
     }

@@ -138,10 +138,16 @@ async function onSubmit() {
     store.setUser(user);
     // 强制重拉当前用户菜单：session 过期被守卫踢回 /login 等未整页刷新的路径下，
     // menu store 仍缓存着上一个用户的菜单（loaded=true 时 load() 默认跳过）
-    await useMenuStore().load(true);
+    const menuStore = useMenuStore();
+    let landingPath = '/no-access';
+    try {
+      await menuStore.load(true);
+      landingPath = menuStore.resolveLandingPath(route.query.redirect && String(route.query.redirect));
+    } catch (_) {
+      // 登录已成功，但授权菜单不可用时 fail-close 到说明页，不能沿用上一用户菜单。
+    }
     ElMessage.success(`欢迎，${user.displayName || user.username}`);
-    const redirect = route.query.redirect && String(route.query.redirect);
-    router.replace(redirect || '/workspace');
+    router.replace(landingPath);
   } catch (e) {
     // 登录 401：http.js 拦截器对 /auth/login 故意不弹（避免覆盖其他提示），由本页处理
     // 后端 AUTH-40101 message="用户名或密码错误" 已被 http.js 挂到 e.message

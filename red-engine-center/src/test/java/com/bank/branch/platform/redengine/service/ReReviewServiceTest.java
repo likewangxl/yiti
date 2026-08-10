@@ -36,7 +36,8 @@ import static org.mockito.Mockito.when;
  * ReReviewService 单元测试 -- 纯 JUnit 5 + Mockito，不连数据库。
  * 覆盖 Task 9 简报要求的 4 个核心用例（队列只含 status=1 / approve 超限抛 RE-40004 且不落
  * RE_SCORE 不改状态 / approve 正常落 RE_SCORE+状态2+reviewerId/reviewDate / reject 状态3），
- * 并补充 approve 上报不存在抛 RE-40003、score 为 null/0 时跳过评分落库的边界用例。
+ * 并补充 approve 上报不存在抛 RE-40003、score 为 null/0 时跳过评分落库，以及创建人与审核人
+ * 相同时 approve/reject 均以 RE-40008 fail-close 的边界用例。
  */
 @ExtendWith(MockitoExtension.class)
 class ReReviewServiceTest {
@@ -113,6 +114,25 @@ class ReReviewServiceTest {
                     assertThat(bizEx.getMessage()).isEqualTo("提交记录不存在");
                 });
 
+        verify(reScoreMapper, never()).insert(any(ReScore.class));
+        verify(reSubmitMapper, never()).updateById(any(ReSubmit.class));
+    }
+
+    @Test
+    void approve_submitterSameAsReviewer_throwsRe40008_beforeScoreOrUpdate() {
+        ReSubmit existing = existingSubmit(9L, 100L, "1.1", new BigDecimal("35"));
+        existing.setSubmitterId("E008");
+        when(reSubmitMapper.selectById(9L)).thenReturn(existing);
+
+        assertThatThrownBy(() -> reReviewService.approve(9L, new BigDecimal("10"), "自审", "E008"))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> {
+                    BizException bizEx = (BizException) ex;
+                    assertThat(bizEx.getCode()).isEqualTo("RE-40008");
+                    assertThat(bizEx.getMessage()).isEqualTo("禁止审核本人提交的记录");
+                });
+
+        verify(reScoreMapper, never()).selectList(any());
         verify(reScoreMapper, never()).insert(any(ReScore.class));
         verify(reSubmitMapper, never()).updateById(any(ReSubmit.class));
     }
@@ -205,6 +225,11 @@ class ReReviewServiceTest {
 
     @Test
     void reject_updatesStatus3_withFeedbackReviewerAndDate() {
+        ReSubmit existing = existingSubmit(20L, 100L, "1.1", new BigDecimal("35"));
+        existing.setStatus(2);
+        existing.setSubmitterId("E_OTHER");
+        when(reSubmitMapper.selectById(20L)).thenReturn(existing);
+
         reReviewService.reject(20L, "材料不齐", "E006");
 
         verify(reSubmitMapper).updateById(ArgumentMatchers.<ReSubmit>argThat(u ->
@@ -213,6 +238,35 @@ class ReReviewServiceTest {
                         && "材料不齐".equals(u.getReviewFeedback())
                         && "E006".equals(u.getReviewerId())
                         && u.getReviewDate() != null));
+    }
+
+    @Test
+    void reject_submitterSameAsReviewer_throwsRe40008_beforeUpdate() {
+        ReSubmit existing = existingSubmit(21L, 100L, "1.1", new BigDecimal("35"));
+        existing.setSubmitterId("E009");
+        when(reSubmitMapper.selectById(21L)).thenReturn(existing);
+
+        assertThatThrownBy(() -> reReviewService.reject(21L, "自审驳回", "E009"))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> {
+                    BizException bizEx = (BizException) ex;
+                    assertThat(bizEx.getCode()).isEqualTo("RE-40008");
+                    assertThat(bizEx.getMessage()).isEqualTo("禁止审核本人提交的记录");
+                });
+
+        verify(reSubmitMapper, never()).updateById(any(ReSubmit.class));
+    }
+
+    @Test
+    void reject_submitNotFound_preservesSilentNoopUpdateContract() {
+        when(reSubmitMapper.selectById(22L)).thenReturn(null);
+
+        reReviewService.reject(22L, "不存在记录", "E010");
+
+        verify(reSubmitMapper).updateById(ArgumentMatchers.<ReSubmit>argThat(u ->
+                u.getId().equals(22L)
+                        && u.getStatus().equals(3)
+                        && "E010".equals(u.getReviewerId())));
     }
 
     @Test

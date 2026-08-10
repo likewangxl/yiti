@@ -196,9 +196,9 @@ const greeting = computed(() => {
   return `${t}，${store.displayName || '当前用户'}`;
 });
 const desc = computed(() => {
-  const role = store.roleName || '—';
+  const role = store.roleSummary || '—';
   const org  = store.orgName  || '—';
-  return `当前角色：${role} · 机构：${org}`;
+  return `已分配角色：${role} · 机构：${org}`;
 });
 
 // 公告

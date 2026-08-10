@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
+import { resetAuthorizationSnapshots } from '@/stores/authorizationSnapshot';
 
 export const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 export const API_BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -17,13 +18,15 @@ http.interceptors.request.use(cfg => {
 });
 
 // 401 时跳登录页：用 hashchange 解耦，避免 http.js 直接 import router 形成循环
-// 同时清空 user store 缓存
+// 同时清空持久化用户信息和内存授权快照
 let unauth401Lock = false;
 function gotoLogin() {
+  // 授权清理不能受跳转防抖影响：锁定期间到达的另一条 401 也必须让当前快照失效。
+  resetAuthorizationSnapshots();
+  try { sessionStorage.removeItem('xanzc:user'); } catch {}
   if (unauth401Lock) return;
   unauth401Lock = true;
   setTimeout(() => { unauth401Lock = false; }, 1500);
-  try { sessionStorage.removeItem('xanzc:user'); } catch {}
   // 已经在登录页就别再跳
   if (location.hash.startsWith('#/login')) return;
   const cur = location.hash.replace(/^#/, '') || '/';

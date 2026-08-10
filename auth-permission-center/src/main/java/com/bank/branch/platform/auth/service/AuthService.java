@@ -30,6 +30,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -122,15 +123,14 @@ public class AuthService {
 
         // 查询角色列表
         List<PtRole> roles = userRoleMapper.selectRolesByUserId(user.getUserId());
-        // 无角色用户禁止登录；并把主角色排到首位作为当前登录角色（前端取 roles[0]）
+        // 无角色用户禁止登录；主角色仅用于登录响应中的默认展示顺序，不参与权限收窄
         PtRole primaryRole = resolvePrimaryRoleAndOrder(user.getUserId(), roles);
         Set<String> roleCodes = roles.stream().map(PtRole::getRoleCode).collect(Collectors.toSet()); // 仅日志用
 
-        // 当前登录角色 = 主角色：会话上下文按「单一当前角色」构建
-        // 菜单/接口权限/数据范围/工作流候选均以当前角色为准，可经 /api/auth/switch-role 切换
-        CurrentUserContext userCtx = buildContextForActiveRole(
+        // 会话始终保存全部有效角色的并集；主角色只作为 UI 默认展示信息
+        CurrentUserContext userCtx = buildContextForRoles(
             user.getUserId(), user.getUsername(), user.getUserchnname(),
-            mainOrgCode, mainOrgName, orgLevel, primaryRole);
+            mainOrgCode, mainOrgName, orgLevel, roles);
         session.setAttribute(SESSION_USER_KEY, userCtx);
 
         // 构建响应
@@ -218,14 +218,14 @@ public class AuthService {
         }
 
         List<PtRole> roles = userRoleMapper.selectRolesByUserId(user.getUserId());
-        // 无角色用户禁止登录；并把主角色排到首位作为当前登录角色（前端取 roles[0]）
+        // 无角色用户禁止登录；主角色仅用于登录响应中的默认展示顺序，不参与权限收窄
         PtRole primaryRole = resolvePrimaryRoleAndOrder(user.getUserId(), roles);
         Set<String> roleCodes = roles.stream().map(PtRole::getRoleCode).collect(Collectors.toSet()); // 仅日志用
 
-        // 当前登录角色 = 主角色：会话上下文按「单一当前角色」构建（同 login 链路）
-        CurrentUserContext userCtx = buildContextForActiveRole(
+        // UIAS 与普通登录保持相同的全部有效角色并集语义
+        CurrentUserContext userCtx = buildContextForRoles(
                 user.getUserId(), user.getUsername(), user.getUserchnname(),
-                mainOrgCode, mainOrgName, orgLevel, primaryRole);
+                mainOrgCode, mainOrgName, orgLevel, roles);
         session.setAttribute(SESSION_USER_KEY, userCtx);
 
         // UIAS 授权信息塞 session 供后续业务消费
@@ -271,18 +271,11 @@ public class AuthService {
     }
 
     /**
-     * 从 Session 中获取当前登录用户上下文
-     *
-     * @param session HttpSession
-     * @return CurrentUserContext
-     * @throws AuthException 未登录时抛出 AUTH-40105
-     */
-    /**
      * 登录时校验角色并解析主角色：
      * <ol>
      *   <li>无任何角色的用户禁止登录（抛 AUTH-40107）；</li>
      *   <li>取用户主角色（DEFAULT_ASSIGN=1），缺失时回退第一个角色；</li>
-     *   <li>将主角色排到 roles 列表首位，使前端以 roles[0] 作为当前登录角色。</li>
+     *   <li>将主角色排到 roles 列表首位，作为客户端默认展示角色。</li>
      * </ol>
      *
      * @param userId 用户ID
@@ -302,57 +295,88 @@ public class AuthService {
     }
 
     /**
-     * 按「单一当前角色」构建会话上下文：roleIds/roleCodes/候选组仅含该角色，
-     * activeRoleId 指向该角色，使后续菜单/接口权限/数据范围/工作流候选都按当前角色解析。
+     * 按全部有效角色构建会话上下文。
+     * <p>角色 ID、角色编码和工作流角色候选组均取并集；任一角色为 SYS_ADMIN
+     * 即具备系统管理员标识。{@code activeRoleId} 固定为 {@code null}，不再以角色切换收窄权限。</p>
      */
-    private CurrentUserContext buildContextForActiveRole(
+    private CurrentUserContext buildContextForRoles(
             String empId, String username, String displayName,
-            String mainOrgCode, String mainOrgName, Integer orgLevel, PtRole activeRole) {
-        Set<String> roleIds = java.util.Set.of(activeRole.getRoleId());
-        Set<String> roleCodes = java.util.Set.of(activeRole.getRoleCode());
-        // 候选组 Key：ROLE:{当前角色CODE} / USER:{empId} / ORG:{mainOrgCode}
-        Set<String> candidateGroupKeys = new java.util.HashSet<>();
-        candidateGroupKeys.add("ROLE:" + activeRole.getRoleCode());
+            String mainOrgCode, String mainOrgName, Integer orgLevel, List<PtRole> roles) {
+        if (roles == null || roles.isEmpty()) {
+            throw new AuthException(AuthErrorCode.USER_NO_ROLE.getCode(),
+                    AuthErrorCode.USER_NO_ROLE.getMessage());
+        }
+        Set<String> roleIds = roles.stream()
+                .map(PtRole::getRoleId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<String> roleCodes = roles.stream()
+                .map(PtRole::getRoleCode)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<String> candidateGroupKeys = roleCodes.stream()
+                .map(roleCode -> "ROLE:" + roleCode)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
         candidateGroupKeys.add("USER:" + empId);
         if (mainOrgCode != null) {
             candidateGroupKeys.add("ORG:" + mainOrgCode);
         }
-        boolean isAdmin = "SYS_ADMIN".equals(activeRole.getRoleCode());
+        boolean isAdmin = roleCodes.contains("SYS_ADMIN");
         return new CurrentUserContext(empId, username, displayName,
                 mainOrgCode, mainOrgName, orgLevel,
-                roleIds, roleCodes, candidateGroupKeys, isAdmin, activeRole.getRoleId());
+                roleIds, roleCodes, candidateGroupKeys, isAdmin, null);
     }
 
     /**
-     * 切换当前会话的激活角色（仅本次会话生效，重新登录回到主角色）。
-     * <p>校验目标角色确为该用户已分配角色后，按单角色重建会话上下文，
-     * 切换后菜单、接口权限、数据范围、工作流待办均按新角色处理。</p>
+     * 兼容旧客户端的角色切换入口。
+     * <p>权限已改为全部有效角色并集，此方法仅校验目标角色仍属于当前用户并返回角色信息，
+     * 不修改 Session，也不会改变菜单、接口权限、数据范围或工作流候选组。</p>
      *
      * @param roleId  目标角色ID
      * @param session 当前会话
-     * @return 切换后的当前角色信息
+     * @return 经校验的目标角色信息
+     * @deprecated 权限不再需要角色切换；兼容一个版本周期后移除
      */
+    @Deprecated(since = "2026-08", forRemoval = true)
     public RoleSimpleDTO switchRole(String roleId, HttpSession session) {
         CurrentUserContext ctx = getCurrentUser(session); // 未登录抛 AUTH-40105
         List<PtRole> roles = userRoleMapper.selectRolesByUserId(ctx.empId());
-        PtRole target = roles.stream()
+        PtRole target = (roles == null ? List.<PtRole>of() : roles).stream()
                 .filter(r -> r.getRoleId().equals(roleId)).findFirst()
                 .orElseThrow(() -> new AuthException(AuthErrorCode.RBAC_DENIED.getCode(),
                         "无法切换到未分配给当前用户的角色"));
-        CurrentUserContext newCtx = buildContextForActiveRole(
-                ctx.empId(), ctx.username(), ctx.displayName(),
-                ctx.mainOrgCode(), ctx.mainOrgName(), ctx.orgLevel(), target);
-        session.setAttribute(SESSION_USER_KEY, newCtx);
-        log.info("[AuthService.switchRole] empId={} 切换当前角色 -> {}({})",
+        String primaryRoleId = userRoleMapper.selectPrimaryRoleId(ctx.empId());
+        log.info("[AuthService.switchRole] deprecated no-op empId={} role={}({})",
                 ctx.empId(), target.getRoleCode(), roleId);
         RoleSimpleDTO dto = new RoleSimpleDTO();
         dto.setRoleId(target.getRoleId());
         dto.setRoleCode(target.getRoleCode());
         dto.setRoleChName(target.getRoleChName());
-        dto.setPrimary(true); // 标记为当前激活角色
+        dto.setPrimary(target.getRoleId().equals(primaryRoleId));
         return dto;
     }
 
+    /**
+     * 根据数据库中的全部有效角色刷新会话的角色派生上下文。
+     * <p>由认证过滤器在每个受保护请求上调用，使角色撤销、角色禁用以及 SYS_ADMIN
+     * 回收在下一次请求立即生效，并自动把旧的单角色 Session 升级为角色并集语义。</p>
+     *
+     * @param sessionContext Session 中已有的身份与机构上下文
+     * @return 使用数据库当前有效角色重建的上下文
+     * @throws AuthException 用户已无有效角色时抛出 AUTH-40107
+     */
+    public CurrentUserContext refreshRoleContext(CurrentUserContext sessionContext) {
+        List<PtRole> roles = userRoleMapper.selectRolesByUserId(sessionContext.empId());
+        return buildContextForRoles(
+                sessionContext.empId(), sessionContext.username(), sessionContext.displayName(),
+                sessionContext.mainOrgCode(), sessionContext.mainOrgName(), sessionContext.orgLevel(), roles);
+    }
+
+    /**
+     * 从 Session 中获取当前登录用户上下文。
+     *
+     * @param session HttpSession
+     * @return 当前用户上下文
+     * @throws AuthException 未登录时抛出 AUTH-40105
+     */
     public CurrentUserContext getCurrentUser(HttpSession session) {
         Object attr = session.getAttribute(SESSION_USER_KEY);
         if (!(attr instanceof CurrentUserContext)) {
@@ -375,7 +399,8 @@ public class AuthService {
         log.debug("[AuthService.getUserPermissions] empId={}", empId);
 
         // 获取用户角色信息
-        List<PtRole> roles = userRoleMapper.selectRolesByUserId(empId);
+        List<PtRole> queriedRoles = userRoleMapper.selectRolesByUserId(empId);
+        List<PtRole> roles = queriedRoles == null ? List.of() : queriedRoles;
         Set<String> roleIds = roles.stream().map(PtRole::getRoleId).collect(Collectors.toSet());
         Set<String> roleCodes = roles.stream().map(PtRole::getRoleCode).collect(Collectors.toSet());
         boolean isAdmin = roleCodes.contains("SYS_ADMIN");
@@ -509,7 +534,7 @@ public class AuthService {
         if (empId == null || empId.isEmpty()) {
             return java.util.Collections.emptyList();
         }
-        // 按「本次请求生效角色」过滤菜单：会话切换角色后侧边栏只显示当前角色的菜单
+        // 按全部有效角色的菜单并集过滤；角色变更由每请求 DB 查询即时体现
         java.util.Set<String> roleIds = cacheService.getEffectiveRoleIds(empId);
         java.util.Set<String> allowed = new java.util.HashSet<>();
         if (roleIds != null) {

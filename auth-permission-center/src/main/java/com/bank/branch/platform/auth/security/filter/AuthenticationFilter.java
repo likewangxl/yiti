@@ -7,6 +7,7 @@ import com.bank.branch.platform.auth.security.context.CurrentUserProvider;
 import com.bank.branch.platform.auth.service.AuthService;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.common.web.exception.AuthException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -26,6 +27,7 @@ import java.util.List;
 /**
  * 认证过滤器
  * 责任：从 HttpSession 中恢复 CurrentUserContext 并放入 ThreadLocal。
+ * 每个受保护请求都会实时校验用户状态并按数据库中的有效角色重建角色派生上下文。
  * 白名单 URL 直接放行，无需认证。
  * 未登录或 Session 失效时返回 HTTP 401 + 标准错误响应体。
  * 无论请求结果如何，finally 块都会清理 ThreadLocal 防止内存泄漏。
@@ -52,6 +54,7 @@ public class AuthenticationFilter extends OncePerRequestFilter {
     private final CurrentUserProvider currentUserProvider;
     private final ObjectMapper objectMapper;
     private final UserMapper userMapper;
+    private final AuthService authService;
 
     private final AntPathMatcher antPathMatcher = new AntPathMatcher();
 
@@ -76,18 +79,49 @@ public class AuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        // 实时重查用户状态：管理员禁用/锁定用户后，下一次请求立即失效（按主键查走索引 <1ms）
-        PtUser freshUser = userMapper.selectByUserId(ctx.empId());
-        if (freshUser == null || freshUser.getIsEnabled() == 1 || freshUser.getIsLocked() == 1) {
-            log.warn("[AuthFilter] 用户已被禁用/锁定/删除，踢出 session empId={}", ctx.empId());
-            session.invalidate();
-            writeUnauthorized(response);
+        CurrentUserContext refreshedCtx;
+        try {
+            // 实时重查用户状态：管理员禁用/锁定用户后，下一次请求立即失效（按主键查走索引 <1ms）
+            PtUser freshUser = userMapper.selectByUserId(ctx.empId());
+            if (freshUser == null
+                    || Integer.valueOf(1).equals(freshUser.getIsEnabled())
+                    || Integer.valueOf(1).equals(freshUser.getIsLocked())
+                    || Integer.valueOf(1).equals(freshUser.getIsExpired())) {
+                log.warn("[AuthFilter] 用户已被禁用/锁定/过期/删除，踢出 session empId={}", ctx.empId());
+                session.invalidate();
+                writeUnauthorized(response);
+                return;
+            }
+            // 实时查询有效角色：旧 Session 自动升级，撤销/禁用角色与 SYS_ADMIN 回收立即生效
+            refreshedCtx = authService.refreshRoleContext(ctx);
+        } catch (AuthException ex) {
+            if (isIdentityInvalid(ex)) {
+                // 401 类认证异常代表用户/角色身份已经失效：销毁 Session，避免继续沿用旧权限。
+                log.warn("[AuthFilter] 用户身份已失效，踢出 session empId={}, reason={}",
+                        ctx.empId(), ex.getMessage());
+                session.invalidate();
+                writeUnauthorized(response);
+                return;
+            }
+            // 其他 AuthException 不能被误判为身份失效；按基础设施故障 fail-close 并保留 Session。
+            log.error("[AuthFilter] 认证服务异常，拒绝本次请求并保留 session empId={}, code={}",
+                    ctx.empId(), ex.getCode(), ex);
+            writeServiceUnavailable(response);
             return;
+        } catch (RuntimeException ex) {
+            // 数据库等基础设施异常只拒绝本次请求，不销毁仍可能有效的 Session，避免瞬时故障批量踢用户下线
+            log.error("[AuthFilter] 认证基础设施暂不可用，拒绝本次请求并保留 session empId={}",
+                    ctx.empId(), ex);
+            writeServiceUnavailable(response);
+            return;
+        }
+        if (!refreshedCtx.equals(ctx)) {
+            session.setAttribute(AuthService.SESSION_USER_KEY, refreshedCtx);
         }
 
         // 将用户上下文设置到 ThreadLocal，供后续拦截器和业务层使用
-        currentUserProvider.set(ctx);
-        log.debug("[AuthFilter] 认证通过 empId={}", ctx.empId());
+        currentUserProvider.set(refreshedCtx);
+        log.debug("[AuthFilter] 认证通过 empId={}", refreshedCtx.empId());
         try {
             filterChain.doFilter(request, response);
         } finally {
@@ -103,6 +137,11 @@ public class AuthenticationFilter extends OncePerRequestFilter {
         return WHITELIST.stream().anyMatch(pattern -> antPathMatcher.match(pattern, uri));
     }
 
+    /** 只有 401 类认证异常才表示当前用户或角色身份已经失效。 */
+    private boolean isIdentityInvalid(AuthException ex) {
+        return ex.getCode() != null && ex.getCode().startsWith("AUTH-401");
+    }
+
     /** 向客户端写入 HTTP 401 标准错误响应 */
     private void writeUnauthorized(HttpServletResponse response) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -111,6 +150,17 @@ public class AuthenticationFilter extends OncePerRequestFilter {
         ResponseWrapper<?> body = ResponseWrapper.error(
             AuthErrorCode.NOT_AUTHENTICATED.getCode(),
             AuthErrorCode.NOT_AUTHENTICATED.getMessage());
+        response.getWriter().write(objectMapper.writeValueAsString(body));
+    }
+
+    /** 向客户端写入 HTTP 503 标准错误响应，不销毁现有 Session。 */
+    private void writeServiceUnavailable(HttpServletResponse response) throws IOException {
+        response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        ResponseWrapper<?> body = ResponseWrapper.error(
+                AuthErrorCode.AUTH_SERVICE_UNAVAILABLE.getCode(),
+                AuthErrorCode.AUTH_SERVICE_UNAVAILABLE.getMessage());
         response.getWriter().write(objectMapper.writeValueAsString(body));
     }
 }

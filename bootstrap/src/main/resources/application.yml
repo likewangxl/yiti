@@ -1,5 +1,5 @@
 server:
-  port: 18080
+  port: 18081
   servlet:
     context-path: /
 
@@ -105,7 +105,7 @@ platform:
   #   --platform.soap.netty.port=30523，否则 30522 端口冲突会导致整个上下文启动失败。
   soap:
     netty:
-      port: 30522
+      port: 30523
       boss-threads: 1
       worker-threads: 4
       max-content-length: 10485760

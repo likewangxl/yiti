@@ -215,4 +215,4 @@ com.bank.branch.platform.<module>/
 ### 子代理派遣规范（绝对红线）
 - **派遣任何 subagent（Agent 工具）时，model 参数必须 ≥ sonnet（即只能是 `sonnet` 或 `opus`），禁止使用 `haiku`**。
 - 即使 plan 文档建议"机械任务用 cheap model"，也要降级到 sonnet 而非 haiku。
-- 此规则适用于全部 subagent 类型（executor、explore、code-reviewer、debugger 等），无例外。
+- 此规则适用于全部 subagent 类型（executor、explore、code-reviewer、debugger 等），无例外。理

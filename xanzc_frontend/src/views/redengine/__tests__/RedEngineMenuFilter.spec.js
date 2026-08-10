@@ -17,9 +17,16 @@ describe('红色引擎侧边栏菜单过滤(canSee)', () => {
     expect(visibleTitles).toEqual(['工作台', '上报记录']);
   });
 
-  it('resourceUrls 为 null（拉取中/失败降级）时全部放行', () => {
+  it('resourceUrls 为 null（拉取中/失败）时仅放行无需鉴权的工作台', () => {
     const visibleTitles = menuItems.filter((item) => canSee(item, null)).map((item) => item.title);
-    expect(visibleTitles).toEqual(menuItems.map((item) => item.title));
+    expect(visibleTitles).toEqual(['工作台']);
+  });
+
+  it('通配资源按路径边界匹配，不把相似前缀当成已授权', () => {
+    const reviewItem = menuItems.find((item) => item.res === '/api/re/reviews/**');
+    expect(canSee(reviewItem, new Set(['/api/re/reviews']))).toBe(true);
+    expect(canSee(reviewItem, new Set(['/api/re/reviews/42']))).toBe(true);
+    expect(canSee(reviewItem, new Set(['/api/re/reviewshop']))).toBe(false);
   });
 
   it('菜单数据源已包含"用户党组织映射"入口，res 精确指向 /api/re/user-party-maps', () => {

@@ -1,6 +1,7 @@
 package com.bank.branch.platform.auth.service;
 
 import com.bank.branch.platform.auth.api.dto.LoginRespDTO;
+import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
 import com.bank.branch.platform.auth.entity.ExtUserOrg;
 import com.bank.branch.platform.auth.entity.PtRole;
 import com.bank.branch.platform.auth.entity.PtUser;
@@ -12,16 +13,20 @@ import com.bank.branch.platform.auth.mapper.ResourceMapper;
 import com.bank.branch.platform.auth.entity.PtResource;
 import com.bank.branch.platform.auth.service.BizScopeService;
 import com.bank.branch.platform.auth.service.PermissionCacheService;
+import com.bank.branch.platform.auth.uniauth.UniAuthSidecarClient;
+import com.bank.branch.platform.auth.uniauth.dto.UniAuthRespDTO;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
 import org.mockito.ArgumentCaptor;
 import com.bank.branch.platform.common.web.exception.AuthException;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Set;
@@ -42,7 +47,13 @@ class AuthServiceTest {
     @Mock PermissionCacheService cacheService;
     @Mock BizScopeService bizScopeService;
     @Mock ResourceMapper resourceMapper;
+    @Mock UniAuthSidecarClient uniAuthSidecarClient;
     @InjectMocks AuthService authService;
+
+    @BeforeEach
+    void injectOptionalUniAuthClient() {
+        ReflectionTestUtils.setField(authService, "uniAuthSidecarClient", uniAuthSidecarClient);
+    }
 
     @Test
     void login_shouldThrowAuthExceptionWhenUserNotFound() {
@@ -128,6 +139,92 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_shouldBuildUnionContextFromAllValidRoles() {
+        PtUser user = makeEnabledUser("E001", "admin", "hashed");
+        when(userMapper.selectByUsername("admin")).thenReturn(user);
+        when(passwordEncoder.matches("pass", "hashed")).thenReturn(true);
+
+        ExtUserOrg userOrg = new ExtUserOrg();
+        userOrg.setUserId("E001");
+        userOrg.setOrgCode("ORG001");
+        when(userOrgMapper.selectByUserId("E001")).thenReturn(userOrg);
+
+        com.bank.branch.platform.auth.entity.ExtOrgInfo org = new com.bank.branch.platform.auth.entity.ExtOrgInfo();
+        org.setOrgCode("ORG001");
+        org.setOrgName("测试分行");
+        when(orgMapper.selectByOrgCode("ORG001")).thenReturn(org);
+
+        PtRole reporter = makeRole("R_REPORTER", "PARTY_REPORTER", "党建报送员");
+        PtRole admin = makeRole("R_ADMIN", "SYS_ADMIN", "系统管理员");
+        when(userRoleMapper.selectRolesByUserId("E001"))
+                .thenReturn(new java.util.ArrayList<>(List.of(reporter, admin)));
+        when(userRoleMapper.selectPrimaryRoleId("E001")).thenReturn("R_REPORTER");
+
+        authService.login("admin", "pass", session);
+
+        ArgumentCaptor<CurrentUserContext> ctxCap = ArgumentCaptor.forClass(CurrentUserContext.class);
+        verify(session).setAttribute(eq(AuthService.SESSION_USER_KEY), ctxCap.capture());
+        CurrentUserContext ctx = ctxCap.getValue();
+        assertThat(ctx.roleIds()).containsExactlyInAnyOrder("R_REPORTER", "R_ADMIN");
+        assertThat(ctx.roleCodes()).containsExactlyInAnyOrder("PARTY_REPORTER", "SYS_ADMIN");
+        assertThat(ctx.candidateGroupKeys()).containsExactlyInAnyOrder(
+                "ROLE:PARTY_REPORTER", "ROLE:SYS_ADMIN", "USER:E001", "ORG:ORG001");
+        assertThat(ctx.systemAdmin()).isTrue();
+        assertThat(ctx.activeRoleId()).isNull();
+    }
+
+    @Test
+    void loginByUniAuth_shouldBuildUnionContextFromAllValidRoles() {
+        PtUser user = makeEnabledUser("E001", "E001", "unused");
+        when(userMapper.selectByUsername("E001")).thenReturn(user);
+
+        UniAuthRespDTO uniAuthResp = new UniAuthRespDTO();
+        UniAuthRespDTO.RspSvcHeader header = new UniAuthRespDTO.RspSvcHeader();
+        header.setReturnCode("000000000000");
+        uniAuthResp.setRspSvcHeader(header);
+        when(uniAuthSidecarClient.queryUserInfo("E001")).thenReturn(uniAuthResp);
+
+        PtRole reporter = makeRole("R_REPORTER", "PARTY_REPORTER", "党建报送员");
+        PtRole reviewer = makeRole("R_REVIEWER", "PARTY_REVIEWER", "党建审核员");
+        when(userRoleMapper.selectRolesByUserId("E001"))
+                .thenReturn(new java.util.ArrayList<>(List.of(reporter, reviewer)));
+        when(userRoleMapper.selectPrimaryRoleId("E001")).thenReturn("R_REPORTER");
+
+        authService.loginByUniAuth("E001", session);
+
+        ArgumentCaptor<CurrentUserContext> ctxCap = ArgumentCaptor.forClass(CurrentUserContext.class);
+        verify(session).setAttribute(eq(AuthService.SESSION_USER_KEY), ctxCap.capture());
+        CurrentUserContext ctx = ctxCap.getValue();
+        assertThat(ctx.roleIds()).containsExactlyInAnyOrder("R_REPORTER", "R_REVIEWER");
+        assertThat(ctx.roleCodes()).containsExactlyInAnyOrder("PARTY_REPORTER", "PARTY_REVIEWER");
+        assertThat(ctx.candidateGroupKeys()).containsExactlyInAnyOrder(
+                "ROLE:PARTY_REPORTER", "ROLE:PARTY_REVIEWER", "USER:E001");
+        assertThat(ctx.systemAdmin()).isFalse();
+        assertThat(ctx.activeRoleId()).isNull();
+    }
+
+    @Test
+    void switchRole_shouldValidateAssignmentWithoutChangingUnionSessionContext() {
+        CurrentUserContext existing = new CurrentUserContext(
+                "E001", "E001", "测试用户", "ORG001", "测试分行", 2,
+                Set.of("R_REPORTER", "R_REVIEWER"),
+                Set.of("PARTY_REPORTER", "PARTY_REVIEWER"),
+                Set.of("ROLE:PARTY_REPORTER", "ROLE:PARTY_REVIEWER", "USER:E001", "ORG:ORG001"),
+                false, null);
+        when(session.getAttribute(AuthService.SESSION_USER_KEY)).thenReturn(existing);
+        PtRole reporter = makeRole("R_REPORTER", "PARTY_REPORTER", "党建报送员");
+        PtRole reviewer = makeRole("R_REVIEWER", "PARTY_REVIEWER", "党建审核员");
+        when(userRoleMapper.selectRolesByUserId("E001")).thenReturn(List.of(reporter, reviewer));
+        when(userRoleMapper.selectPrimaryRoleId("E001")).thenReturn("R_REPORTER");
+
+        RoleSimpleDTO result = authService.switchRole("R_REVIEWER", session);
+
+        assertThat(result.getRoleId()).isEqualTo("R_REVIEWER");
+        assertThat(result.getPrimary()).isFalse();
+        verify(session, never()).setAttribute(anyString(), any());
+    }
+
+    @Test
     void logout_shouldInvalidateSession() {
         authService.logout(session);
         verify(session).invalidate();
@@ -144,6 +241,14 @@ class AuthServiceTest {
         u.setIsExpired(0);
         u.setPassWrongCount(0);
         return u;
+    }
+
+    private PtRole makeRole(String roleId, String roleCode, String roleName) {
+        PtRole role = new PtRole();
+        role.setRoleId(roleId);
+        role.setRoleCode(roleCode);
+        role.setRoleChName(roleName);
+        return role;
     }
 
     // ── L1 补全测试 ──────────────────────────────────────────────
@@ -239,5 +344,18 @@ class AuthServiceTest {
         assertThat(dto.getRoleCodes()).containsExactlyInAnyOrder("ROLE_A", "ROLE_B");
         // 关键：不再逐条单查 → 无 N+1
         verify(resourceMapper, never()).selectByResourceId(anyString());
+    }
+
+    @Test
+    void getUserPermissions_nullRoles_shouldReturnEmptyCollections() {
+        when(userRoleMapper.selectRolesByUserId("E001")).thenReturn(null);
+        when(bizScopeService.getUserBizScopes("E001")).thenReturn(java.util.Map.of());
+
+        var dto = authService.getUserPermissions("E001");
+
+        assertThat(dto.getRoleIds()).isEmpty();
+        assertThat(dto.getRoleCodes()).isEmpty();
+        assertThat(dto.getResourceUrls()).isEmpty();
+        verifyNoInteractions(cacheService, resourceMapper);
     }
 }

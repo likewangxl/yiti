@@ -7,8 +7,7 @@ import java.util.Set;
  * 当前登录用户上下文
  * 封装当前请求的用户身份信息，包括员工ID、主机构、角色集合等
  *
- * 注意: 实现 Serializable 接口以支持 Spring Session Redis 存储。
- * 当 Spring Session store-type=redis 时，存入 session 的对象必须可序列化。
+ * 注意: 实现 Serializable 接口以支持 Spring Session JDBC 存储。
  *
  * @param empId              员工ID
  * @param username           用户名
@@ -20,7 +19,7 @@ import java.util.Set;
  * @param roleCodes          角色编码集合（ROLE_CODE）
  * @param candidateGroupKeys 候选组标识集合（用于工作流）
  * @param systemAdmin        是否系统管理员
- * @param activeRoleId       当前激活角色ID（角色切换用）；为 null 表示不限定单一角色，按全部角色解析权限
+ * @param activeRoleId       兼容旧 Session 的保留字段；新建/刷新上下文恒为 null，权限始终按全部有效角色并集解析
  */
 public record CurrentUserContext(
     String empId,
@@ -39,7 +38,7 @@ public record CurrentUserContext(
     private static final long serialVersionUID = 1L;
 
     /**
-     * 兼容旧 10 参构造：不指定当前激活角色（activeRoleId=null，按全部角色解析权限）。
+     * 兼容旧 10 参构造：权限按全部有效角色并集解析，activeRoleId 固定为 null。
      */
     public CurrentUserContext(String empId, String username, String displayName,
                               String mainOrgCode, String mainOrgName, Integer orgLevel,

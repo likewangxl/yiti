@@ -28,12 +28,13 @@
 
 请求处理顺序：
 
-1. **AuthenticationFilter**（Servlet Filter，order=1，仅拦截 `/api/*`）：从 HttpSession 读取 `CurrentUserContext`，无效返回 401，有效存入 ThreadLocal（`CurrentUserProvider`）。
+1. **AuthenticationFilter**（Servlet Filter，order=1，仅拦截 `/api/*`）：从 HttpSession 读取 `CurrentUserContext`，实时重查账号状态和数据库有效角色；用户删除/禁用/锁定/过期或无有效角色时销毁 Session 并返回 401；数据库及其他认证基础设施异常按 Fail Close 返回标准 503，但保留 Session，避免瞬时故障批量踢用户下线。有效上下文写回 Session 并存入 ThreadLocal（`CurrentUserProvider`），旧的单角色 Session 会在首次请求自动升级。
 2. **AuthorizationInterceptor**（MVC Interceptor for `/api/**`）：
    - 白名单直接放行（登录/登出/UIAS 三个端点/Knife4j/actuator health 等，详见 `WebMvcAuthConfig`）；
    - `ResourceMatcher`：AntPathMatcher 匹配 URL→`PT_RESOURCE`，未注册返回 403（AUTH-40302）；
-   - `RbacAuthorizer`：RBAC 检查，SYS_ADMIN 跳过；角色判定走 `PermissionCacheService.getEffectiveRoleIds()`——若当前会话已切换角色（见下文"角色切换"），仅按该激活角色解析权限，否则回退为全部已分配角色；
-   - `BizMetaResolver`：解析 `@BizAuth` 注解（bizType + bizAction），缺失返回 403（AUTH-40304）；
+   - `current-user`/`my-menus`/`permissions` 是已认证用户自服务资源：仍须通过 AuthenticationFilter，仍须在 `PT_RESOURCE` 登记，但不依赖角色资源绑定或 BizScope；
+   - `RbacAuthorizer`：RBAC 检查，SYS_ADMIN 跳过；角色判定走 `PermissionCacheService.getEffectiveRoleIds()`，始终使用数据库中全部有效角色的并集；
+   - `BizMetaResolver`：解析 `@BizAuth` 注解（bizType + bizAction），缺失时构建仅含身份/机构/候选组的最小上下文；
    - `BizScopeFacade.buildScopeContext()`：构建 `DataScopeContext` 到 ThreadLocal。
 3. **业务 Controller 方法执行**。
 4. **`afterCompletion`** 清理 `DataScopeContext`（`common-security` 的 `DataScopeCleanupFilter` 兜底二次清理，防内存泄漏）。
@@ -44,16 +45,22 @@
 
 `PermissionCacheService` 原设计为 Cache-Aside（Redis，5 分钟 TTL），**2026-05-20 项目去 Redis 后已改为直接查库**：行内多实例环境无共享 Redis 可用，且 `PT_USER_ROLE`/`PT_ROLE_RESOURCE` 均为主键索引点查（约 0.1ms），业务 SQL 本身耗时更高，去掉缓存层对热路径性能无感知影响。
 
-- `getRoleIdsByEmpId`/`getEffectiveRoleIds`/`getResourceIdsByRoleId`/`getAllResources`/`getBizScopesByRoleId` 现均直查 Mapper；权限缓存失效等同"当次即查最新"，天然 Fail Close：查不到/异常时按无权限处理，不会误放行。
+- `getRoleIdsByEmpId`/`getResourceIdsByRoleId`/`getAllResources`/`getBizScopesByRoleId` 现均直查 Mapper；`getEffectiveRoleIds` 对当前请求用户复用 AuthenticationFilter 刚按数据库刷新的 `CurrentUserContext.roleIds`（忽略兼容字段 `activeRoleId`），查询其他用户或无请求上下文时才直查 Mapper。权限数据查不到/异常时按无权限或请求失败处理，不会误放行。
 - `evictXxxCache` 系列方法（`evictUserRolesCache`/`evictRoleResourceCache`/`evictBizScopeCache`/`evictAllResourceCache`/`evictOrgSubtreeCache`）**保留原方法签名，实现改为 NoOp**（仅打 debug 日志），避免动 `RoleService`/`UserRoleService`/`BizScopeService`/`RoleResourceService` 里大量调用点；后续如发现真实热点可改回本地缓存（Caffeine）。
 - 权限变更时仍发布 `PermissionCacheInvalidatedEvent`（`USER_ROLE`/`ROLE_RESOURCE`/`BIZ_SCOPE` 三种事件类型），但**目前仓库内无其他监听者消费**——事件保留是为兼容未来重新引入缓存/多节点通知的扩展点，而非当前有实际效果的失效通知。
 
-### session 单激活角色模型
+### session 全部有效角色并集模型
 
-- 登录（普通登录或 UIAS）时确定一个**主角色**：取用户 `DEFAULT_ASSIGN=1` 的角色（`PT_USER_ROLE.DEFAULT_ASSIGN`），缺失时回退第一个角色；`CurrentUserContext` 增加 `activeRoleId` 字段记录当前会话生效角色。
-- `POST /api/auth/switch-role`（`AuthController.switchRole`）：仅本次会话内切换当前角色（必须是本人已分配角色），重新登录回落到主角色。
-- 切换后影响范围：菜单（`my-menus`）、接口 RBAC、DataScope 数据范围、工作流候选组（Flowable 任务声明）全部按新激活角色重新解析（`PermissionCacheService.getEffectiveRoleIds(empId)`：若当前会话 `activeRoleId` 非空且与传入 empId 一致，只返回该激活角色；否则回退全部角色）。
-- `current-user` 响应（`CurrentUserRespDTO`）内 `roles` 为当前用户全部已分配角色，并用 `primary` 字段标出当前激活角色。
+- 普通登录与 UIAS 登录均把数据库中全部有效角色写入 `CurrentUserContext.roleIds`/`roleCodes`；工作流候选组包含全部 `ROLE:{roleCode}`，并保留 `USER:{empId}` 与可用的 `ORG:{mainOrgCode}`。
+- 任一有效角色的 `ROLE_CODE=SYS_ADMIN` 时 `systemAdmin=true`。AuthenticationFilter 每请求重建这些角色派生字段，因此角色撤销、角色禁用和 SYS_ADMIN 回收在下一次请求立即生效。
+- `activeRoleId` 为兼容既有 Spring Session JDBC 序列化结构而保留，新建和刷新上下文恒为 `null`。菜单、接口 RBAC、DataScope 与工作流候选组均按全部有效角色并集解析；DataScope 本阶段继续使用既有优先级合并规则。
+- `DEFAULT_ASSIGN=1` 的主角色仅用于登录响应和 `current-user.roles[].primary` 的默认展示标记，不收窄权限。
+- `POST /api/auth/switch-role` 保留一个版本周期作为 `Deprecated` 兼容端点：仍校验目标角色属于当前用户，但不修改 Session，也不改变权限。
+
+### 菜单与 API 授权解耦
+
+- `RoleResourceService.replaceMenus` 会在删除旧绑定前逐个校验资源存在、`STATUS=0` 且 `ISMENU=1`；任一不存在、禁用或接口资源 ID 都整体拒绝且不改变原绑定。校验通过后只删除并重建菜单绑定。
+- `ISMENU=0` 的 API 绑定必须通过显式权限配置维护；菜单替换不会删除已有 API，也不会根据菜单父子关系或“公共接口”自动授予 API。
 
 ### UIAS 统一认证单点登录（`uniauth` 包）
 

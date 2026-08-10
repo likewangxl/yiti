@@ -55,27 +55,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * ISENABLED=0(启用)/ISLOCKED=0(未锁)，且唯一角色 R_BACK_TECH 在 PT_ROLE_RESOURCE 里没有任何
  * {@code P_RE_%} 资源绑定。</p>
  *
- * <p><strong>终审 F-2 收口（case④⑤⑥）</strong>：终审报告 {@code .superpowers/sdd/final-review.md}
- * Finding F-2 指出写/导出端点缺 HTTP 层 RBAC 403 自动化用例，本次补齐 3 条：
- * {@code R_RE_REPORT} 调 {@code POST /reviews/{id}/approve}（报送员无审核权）、
- * {@code R_RE_REPORT} 调 {@code GET /export/submit}（报送员无导出权，{@code P_RE_EXPORT} 仅绑
- * {@code R_RE_ORGREV}/{@code R_RE_SECR}/SYS_ADMIN）、{@code R_RE_BRREV} 调
- * {@code POST /cockpit/overdue/execute}（支部审核无 EXECUTE 权，{@code P_RE_CKPT_EXEC} 仅绑
- * {@code R_RE_ORGREV}）。库内核查（2026-07-19）确认 onepl_test_bootstrap 当前无任何账号绑定
- * {@code RE_ROLE_1..4}，故沿用 {@code task-17d-report.md} §五.1 的"临时插 {@code PT_USER_ROLE} 行 +
- * {@code switch-role}"模式，账号改选 {@code reviewer_chen}（USER_ID=E60001，主角色
- * {@code R_CREDIT_REVIEWER}，{@code DEFAULT_ASSIGN=1}）而非 task-17d 的 {@code tech_wu}——
- * 因为 {@code tech_wu} 唯一角色 {@code R_BACK_TECH} 的 {@code DEFAULT_ASSIGN} 实际为 0，
- * 若给它追加党建角色行，存在登录后主角色被"回退到结果集首个元素"逻辑意外漂移到新角色、
- * 反而污染 case③ 断言的风险（详见 {@code redengine-rbac-403-temp-roles.sql} 头部注释）；
- * {@code reviewer_chen} 主角色 {@code DEFAULT_ASSIGN=1} 明确存在，{@code AuthService}
- * 按 {@code DEFAULT_ASSIGN=1} 直查主角色，追加的 {@code DEFAULT_ASSIGN=0} 临时行零副作用。
- * 类级 {@code @Sql} 在每个测试方法前后插入/删除该临时绑定，仅作用于 onepl_test_bootstrap，
- * 不留残留。<strong>密码坑</strong>：{@code reviewer_chen} 登录密码为 {@code password}，
- * 并非文档惯例 {@code 123456}——其 {@code PWD} 哈希与 bootstrap {@code admin} 完全相同
- * （{@code 2026-04-10-pt-align-and-test-seed.sql} 头部"BCrypt('123456')"注释系历史误标，
- * {@code lead-e2e-data.sql} 已注明该哈希实际明文为 {@code password}，本类 case②
- * {@code login("admin","password")} 亦为佐证），实测已核实通过。</p>
+ * <p><strong>2026-08-10 无角色切换回归</strong>：类级 SQL 创建三个临时用户：仅报送员、
+ * 仅支部审核员，以及同时拥有两个角色的并集用户。并集用户故意把支部审核员设为默认角色，
+ * 但仍必须同时具备报送和审核能力；测试全程不调用 {@code /api/auth/switch-role}。
+ * 这既验证资源授权取全部有效角色并集，也保留报送员无审核/导出、支部审核员无高危执行权的负例；
+ * 即使并集用户同时具备上报和审核资源，Service 仍必须基于 RE_SUBMIT.submitterId 二次拒绝自审。</p>
  */
 @SpringBootTest
 @ActiveProfiles("redengine-smoke")
@@ -128,8 +112,7 @@ class RedEngineSmokeIT {
     @Test
     @DisplayName("红色引擎鉴权 - R_RE_REPORT(党建报送员)调审核通过端点返回 403(报送员无审核权)")
     void reviewApprove_reportRole_returns403() throws Exception {
-        MockHttpSession session = login("reviewer_chen", "password");
-        switchRole(session, "RE_ROLE_4"); // R_RE_REPORT，P_RE_REVIEW_APPR 仅绑 R_RE_BRREV/R_RE_ORGREV
+        MockHttpSession session = login("re_it_report", "password");
 
         mockMvc.perform(post("/api/re/reviews/999999/approve")
                         .session(session)
@@ -142,8 +125,7 @@ class RedEngineSmokeIT {
     @Test
     @DisplayName("红色引擎鉴权 - R_RE_REPORT(党建报送员)调数据导出端点返回 403(报送员无导出权)")
     void export_reportRole_returns403() throws Exception {
-        MockHttpSession session = login("reviewer_chen", "password");
-        switchRole(session, "RE_ROLE_4"); // R_RE_REPORT，P_RE_EXPORT 仅绑 R_RE_ORGREV/R_RE_SECR
+        MockHttpSession session = login("re_it_report", "password");
 
         mockMvc.perform(get("/api/re/export/submit").session(session))
                 .andExpect(status().isForbidden())
@@ -153,8 +135,7 @@ class RedEngineSmokeIT {
     @Test
     @DisplayName("红色引擎鉴权 - R_RE_BRREV(党建支部审核员)调执行逾期扣分端点返回 403(支部审核无 EXECUTE 权)")
     void cockpitOverdueExecute_brrevRole_returns403() throws Exception {
-        MockHttpSession session = login("reviewer_chen", "password");
-        switchRole(session, "RE_ROLE_2"); // R_RE_BRREV，P_RE_CKPT_EXEC 仅绑 R_RE_ORGREV
+        MockHttpSession session = login("re_it_brrev", "password");
 
         mockMvc.perform(post("/api/re/cockpit/overdue/execute")
                         .session(session)
@@ -162,6 +143,87 @@ class RedEngineSmokeIT {
                         .content("{\"submitId\":999999,\"deductionPoints\":5,\"reason\":\"RBAC 403 回归\"}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("AUTH-40301"));
+    }
+
+    @Test
+    @DisplayName("红色引擎鉴权 - 仅报送员无需切换角色即可创建上报")
+    void createSubmit_reportRole_withoutSwitch_returns200() throws Exception {
+        MockHttpSession session = login("re_it_report", "password");
+
+        mockMvc.perform(post("/api/re/submits")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validSubmitJson("仅报送角色")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data").isNumber());
+    }
+
+    @Test
+    @DisplayName("红色引擎鉴权 - 报送员+支部审核员取权限并集，无需切换即可上报并查看待审队列")
+    void submitAndReview_multiRoleUnion_withoutSwitch_returns200() throws Exception {
+        MockHttpSession session = login("re_it_union", "password");
+
+        mockMvc.perform(post("/api/re/submits")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validSubmitJson("多角色权限并集")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
+
+        mockMvc.perform(get("/api/re/reviews/queue")
+                        .session(session)
+                        .param("pageNo", "1")
+                        .param("pageSize", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
+    }
+
+    @Test
+    @DisplayName("红色引擎鉴权 - 报送员+支部审核员并集不包含导出权限")
+    void export_multiRoleUnionWithoutExportPermission_returns403() throws Exception {
+        MockHttpSession session = login("re_it_union", "password");
+
+        mockMvc.perform(get("/api/re/export/submit").session(session))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH-40301"));
+    }
+
+    @Test
+    @DisplayName("红色引擎鉴权 - 报送员+支部审核员不能审核本人创建的上报")
+    void approveAndReject_ownSubmitWithMultiRoleUnion_returnsRe40008() throws Exception {
+        MockHttpSession session = login("re_it_union", "password");
+
+        MvcResult createResult = mockMvc.perform(post("/api/re/submits")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validSubmitJson("多角色禁止自审")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andReturn();
+        long submitId = objectMapper.readTree(createResult.getResponse().getContentAsString())
+                .path("data").asLong();
+
+        mockMvc.perform(post("/api/re/reviews/{id}/approve", submitId)
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"score\":5,\"feedback\":\"禁止自审回归\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("RE-40008"))
+                .andExpect(jsonPath("$.message").value("禁止审核本人提交的记录"));
+
+        mockMvc.perform(post("/api/re/reviews/{id}/reject", submitId)
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"feedback\":\"禁止自审回归\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("RE-40008"))
+                .andExpect(jsonPath("$.message").value("禁止审核本人提交的记录"));
+
+        mockMvc.perform(get("/api/re/reviews/{id}/preview", submitId).session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.status").value(1));
     }
 
     // ============================== 私有 helper ==============================
@@ -180,19 +242,21 @@ class RedEngineSmokeIT {
         return (MockHttpSession) result.getRequest().getSession(false);
     }
 
-    /**
-     * 真实 POST /api/auth/switch-role 切换会话当前激活角色（仅本次会话生效，不落库），
-     * 沿用 {@code task-17d-report.md} §五.1 验证过的"会话内单激活角色"切换模式——
-     * 平台登录只取 {@code DEFAULT_ASSIGN=1} 的角色作为 session 激活角色，测试账号临时追加的
-     * 党建角色（{@code DEFAULT_ASSIGN=0}）必须经此接口显式切换才会进入鉴权判定集合。
-     */
-    private void switchRole(MockHttpSession session, String roleId) throws Exception {
-        mockMvc.perform(post("/api/auth/switch-role")
-                        .session(session)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"roleId\":\"" + roleId + "\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("0"));
+    /** 构造不含附件的合法上报请求，避免测试触发外部对象存储。 */
+    private String validSubmitJson(String projectName) {
+        return """
+            {
+              "dimension":"dim1",
+              "itemCode":"1.1",
+              "itemName":"红色引擎鉴权回归",
+              "maxScore":10,
+              "projectName":"%s",
+              "submitType":1,
+              "submitDate":"2026-08-10",
+              "formData":"{}",
+              "fileObjectIds":[]
+            }
+            """.formatted(projectName);
     }
 
     /** 递归统计树节点总数（含根节点自身 + 所有层级 children）。 */

@@ -1,51 +1,96 @@
 -- ============================================================
--- RedEngineSmokeIT 补充用例（终审 F-2 收口）：写/导出端点 RBAC 403 回归 —— 前置临时角色绑定
+-- RedEngineSmokeIT：无角色切换的多用户/多角色 RBAC 测试夹具
 --
--- 用途：库内核查（2026-07-19）确认 onepl_test_bootstrap 当前无任何账号绑定
--- RE_ROLE_1..4（PT_USER_ROLE 无 RE_ROLE_% 行），故按 task-17d-report.md §五.1 同款模式，
--- 给既有测试账号 E60001(reviewer_chen) 临时追加两行 DEFAULT_ASSIGN=0 的党建角色绑定，
--- 测试内再用 POST /api/auth/switch-role 显式切换到目标角色（仅本会话生效，不落库）。
---
--- 为什么选 E60001 而非沿用 task-17d 的 tech_wu(E40002)：
---   查库发现 tech_wu 现有唯一角色 R_BACK_TECH 的 DEFAULT_ASSIGN 实际是 0（非 1）——
---   AuthService.resolvePrimaryRoleAndOrder 在查无 DEFAULT_ASSIGN=1 行时，回退到
---   selectRolesByUserId 结果集的第一个元素（该查询无 ORDER BY，PT_USER_ROLE 主键
---   为(USER_ID,ROLE_ID)，MySQL 常按聚簇索引序返回，'RE_ROLE_2' 字典序小于
---   'R_BACK_TECH'）。若给 tech_wu 追加 RE_ROLE_* 行，存在把登录后主角色"意外"从
---   R_BACK_TECH 漂移到 RE_ROLE_2 的风险，将破坏本文件既有第 3 个用例
---   （orgTree_roleWithoutRedEnginePermission_returns403，断言 tech_wu 登录后无
---   P_RE_* 权限）。E60001(reviewer_chen) 的主角色 R_CREDIT_REVIEWER 经查
---   DEFAULT_ASSIGN=1，AuthService.selectPrimaryRoleId 按 DEFAULT_ASSIGN=1 直接
---   SQL 查询定位主角色（不依赖列表顺序），追加 DEFAULT_ASSIGN=0 的新角色行不会
---   改变其登录后解析出的主角色，零副作用。
---
--- 仅执行于 onepl_test_bootstrap；WHERE NOT EXISTS 保证幂等重跑不冲突；
--- 配套 redengine-rbac-403-temp-roles-cleanup.sql 在 AFTER_TEST_METHOD 精确删除同两行，无残留。
+-- 约束：
+--   1. 三个临时用户都复用 admin 的 BCrypt 密码摘要，测试密码固定为 password；
+--   2. RE_IT_REPORT 仅有报送员，RE_IT_BRREV 仅有支部审核员；
+--   3. RE_IT_UNION 同时有报送员和支部审核员，且故意将支部审核员标成默认角色，
+--      用于证明授权必须取全部有效角色并集，而不是只取 DEFAULT_ASSIGN 角色；
+--   4. 固定 USER_ID/USERNAME 若已被非本夹具数据占用，利用临时表主键冲突立即失败，禁止接管；
+--   5. 不登记、不调用 A_SWITCH_ROLE；所有写入由配套 cleanup 按所有权标记精确清理。
 -- ============================================================
 
-INSERT INTO PT_USER_ROLE (USER_ID, ROLE_ID, DEFAULT_ASSIGN, INHERIT_ASSIGN, GROUP_ASSING)
-SELECT 'E60001', 'RE_ROLE_4', 0, 0, 0
-WHERE NOT EXISTS (SELECT 1 FROM PT_USER_ROLE WHERE USER_ID = 'E60001' AND ROLE_ID = 'RE_ROLE_4');
+-- PT_USER.USER_ID/USERNAME 没有完整的业务唯一约束，固定夹具必须先验证所有权。
+-- unsafe 行存在时第二次插入 GUARD_ID=1 会触发主键冲突，使 @Sql 在任何业务写入前 fail-close。
+DROP TEMPORARY TABLE IF EXISTS TMP_RE_IT_FIXTURE_OWNERSHIP_GUARD;
+CREATE TEMPORARY TABLE TMP_RE_IT_FIXTURE_OWNERSHIP_GUARD (GUARD_ID INT PRIMARY KEY);
+INSERT INTO TMP_RE_IT_FIXTURE_OWNERSHIP_GUARD (GUARD_ID) VALUES (1);
+INSERT INTO TMP_RE_IT_FIXTURE_OWNERSHIP_GUARD (GUARD_ID)
+SELECT 1
+WHERE EXISTS (
+    SELECT 1
+      FROM PT_USER
+     WHERE (USER_ID IN ('RE_IT_REPORT', 'RE_IT_BRREV', 'RE_IT_UNION')
+            OR USERNAME IN ('re_it_report', 're_it_brrev', 're_it_union'))
+       AND NOT (
+           CREATE_AUTHOR = 'RedEngineSmokeIT'
+           AND REMARK = 'RedEngineSmokeIT managed fixture 2026-08-10'
+           AND ((USER_ID = 'RE_IT_REPORT' AND USERNAME = 're_it_report')
+             OR (USER_ID = 'RE_IT_BRREV' AND USERNAME = 're_it_brrev')
+             OR (USER_ID = 'RE_IT_UNION' AND USERNAME = 're_it_union'))
+       )
+);
+DROP TEMPORARY TABLE TMP_RE_IT_FIXTURE_OWNERSHIP_GUARD;
+
+INSERT INTO PT_USER
+    (USER_ID, USERNAME, USERCHNNAME, PWD, ISENABLED, ISLOCKED, PASS_WRONG_COUNT, CREATE_AUTHOR, REMARK)
+SELECT 'RE_IT_REPORT', 're_it_report', '红色引擎IT-仅报送', PWD, 0, 0, 0,
+       'RedEngineSmokeIT', 'RedEngineSmokeIT managed fixture 2026-08-10'
+FROM PT_USER
+WHERE USERNAME = 'admin'
+  AND NOT EXISTS (SELECT 1 FROM PT_USER WHERE USER_ID = 'RE_IT_REPORT');
+
+INSERT INTO PT_USER
+    (USER_ID, USERNAME, USERCHNNAME, PWD, ISENABLED, ISLOCKED, PASS_WRONG_COUNT, CREATE_AUTHOR, REMARK)
+SELECT 'RE_IT_BRREV', 're_it_brrev', '红色引擎IT-仅支部审核', PWD, 0, 0, 0,
+       'RedEngineSmokeIT', 'RedEngineSmokeIT managed fixture 2026-08-10'
+FROM PT_USER
+WHERE USERNAME = 'admin'
+  AND NOT EXISTS (SELECT 1 FROM PT_USER WHERE USER_ID = 'RE_IT_BRREV');
+
+INSERT INTO PT_USER
+    (USER_ID, USERNAME, USERCHNNAME, PWD, ISENABLED, ISLOCKED, PASS_WRONG_COUNT, CREATE_AUTHOR, REMARK)
+SELECT 'RE_IT_UNION', 're_it_union', '红色引擎IT-报送审核并集', PWD, 0, 0, 0,
+       'RedEngineSmokeIT', 'RedEngineSmokeIT managed fixture 2026-08-10'
+FROM PT_USER
+WHERE USERNAME = 'admin'
+  AND NOT EXISTS (SELECT 1 FROM PT_USER WHERE USER_ID = 'RE_IT_UNION');
 
 INSERT INTO PT_USER_ROLE (USER_ID, ROLE_ID, DEFAULT_ASSIGN, INHERIT_ASSIGN, GROUP_ASSING)
-SELECT 'E60001', 'RE_ROLE_2', 0, 0, 0
-WHERE NOT EXISTS (SELECT 1 FROM PT_USER_ROLE WHERE USER_ID = 'E60001' AND ROLE_ID = 'RE_ROLE_2');
+SELECT 'RE_IT_REPORT', 'RE_ROLE_4', 1, 0, 0
+WHERE NOT EXISTS (
+    SELECT 1 FROM PT_USER_ROLE WHERE USER_ID = 'RE_IT_REPORT' AND ROLE_ID = 'RE_ROLE_4'
+);
 
--- ------------------------------------------------------------
--- 补registrant：POST /api/auth/switch-role 在 onepl_test_bootstrap 缺失 PT_RESOURCE
--- 登记（实测核实：yiti_test 已有 A_SWITCH_ROLE 资源且绑定 37/41 个角色，onepl_test_bootstrap
--- 该资源 0 行——两库历史种子漂移，onepl_test_bootstrap 这份缺口非本任务引入）。
--- 缺失时 ResourceMatcher 判定"未登记"，任何角色（含 SYS_ADMIN）调用 switch-role 都会
--- 403 AUTH-40302，而非按角色返回 200/403，导致测试内"切到党建角色"这一步本身先炸。
--- 照抄 yiti_test 的 A_SWITCH_ROLE 行结构原样登记，并仅绑定 reviewer_chen 当前激活角色
--- R_CREDIT_REVIEWER（切换发生在切换前的角色下，只需这一个角色能通过 switch-role 本身的
--- 资源校验），不扩大绑定面。INSERT IGNORE + MD5 主键保证幂等。
--- ------------------------------------------------------------
-INSERT IGNORE INTO PT_RESOURCE
- (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_RANK_NO, ISMENU, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_USER, REMARK)
-VALUES
- ('A_SWITCH_ROLE', '/api/auth/switch-role', 'POST', '切换当前角色', 0, 0, NULL, 0, 'PLATFORM', 'redengine-merge-final-review-fix',
-  '终审 F-2 收口临时补登记：onepl_test_bootstrap 缺失该资源，照抄 yiti_test 同名行，测试后清理');
+INSERT INTO PT_USER_ROLE (USER_ID, ROLE_ID, DEFAULT_ASSIGN, INHERIT_ASSIGN, GROUP_ASSING)
+SELECT 'RE_IT_BRREV', 'RE_ROLE_2', 1, 0, 0
+WHERE NOT EXISTS (
+    SELECT 1 FROM PT_USER_ROLE WHERE USER_ID = 'RE_IT_BRREV' AND ROLE_ID = 'RE_ROLE_2'
+);
 
-INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE)
-SELECT MD5(CONCAT('R_CREDIT_REVIEWER', '#', 'A_SWITCH_ROLE')), 'R_CREDIT_REVIEWER', 'A_SWITCH_ROLE', 'PLATFORM';
+INSERT INTO PT_USER_ROLE (USER_ID, ROLE_ID, DEFAULT_ASSIGN, INHERIT_ASSIGN, GROUP_ASSING)
+SELECT 'RE_IT_UNION', 'RE_ROLE_2', 1, 0, 0
+WHERE NOT EXISTS (
+    SELECT 1 FROM PT_USER_ROLE WHERE USER_ID = 'RE_IT_UNION' AND ROLE_ID = 'RE_ROLE_2'
+);
+
+INSERT INTO PT_USER_ROLE (USER_ID, ROLE_ID, DEFAULT_ASSIGN, INHERIT_ASSIGN, GROUP_ASSING)
+SELECT 'RE_IT_UNION', 'RE_ROLE_4', 0, 0, 0
+WHERE NOT EXISTS (
+    SELECT 1 FROM PT_USER_ROLE WHERE USER_ID = 'RE_IT_UNION' AND ROLE_ID = 'RE_ROLE_4'
+);
+
+-- 上报接口必须从登录工号解析党组织；party_role 只是兼容描述，不参与 RBAC。
+INSERT INTO RE_USER_PARTY_MAP (USER_ID, PARTY_ORG_ID, PARTY_ROLE, DELETED)
+SELECT 'RE_IT_REPORT', MIN(ID), 'REPORTER', 0
+FROM RE_PARTY_ORG
+WHERE DELETED = 0
+  AND NOT EXISTS (SELECT 1 FROM RE_USER_PARTY_MAP WHERE USER_ID = 'RE_IT_REPORT')
+HAVING MIN(ID) IS NOT NULL;
+
+INSERT INTO RE_USER_PARTY_MAP (USER_ID, PARTY_ORG_ID, PARTY_ROLE, DELETED)
+SELECT 'RE_IT_UNION', MIN(ID), 'REPORTER', 0
+FROM RE_PARTY_ORG
+WHERE DELETED = 0
+  AND NOT EXISTS (SELECT 1 FROM RE_USER_PARTY_MAP WHERE USER_ID = 'RE_IT_UNION')
+HAVING MIN(ID) IS NOT NULL;

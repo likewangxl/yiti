@@ -3,6 +3,7 @@ package com.bank.branch.platform.auth.service;
 import com.bank.branch.platform.auth.entity.PtRole;
 import com.bank.branch.platform.auth.entity.PtRoleBizScope;
 import com.bank.branch.platform.auth.entity.PtRoleResource;
+import com.bank.branch.platform.auth.entity.PtResource;
 import com.bank.branch.platform.auth.mapper.RoleBizScopeMapper;
 import com.bank.branch.platform.auth.mapper.RoleMapper;
 import com.bank.branch.platform.auth.mapper.RoleResourceMapper;
@@ -109,38 +110,84 @@ class RoleResourceServiceTest {
     }
 
     @Test
-    void replaceMenus_shouldRebindInterfacesPerMenu_includingPublicInterfaces() {
+    void replaceMenus_interfaceResourceId_shouldRejectBeforeDeletingExistingMenus() {
         when(roleMapper.selectByRoleId("R_RM")).thenReturn(makeRole("R_RM"));
+        when(resourceMapper.selectById("P_RE_CKPT_EXEC"))
+                .thenReturn(makeResource("P_RE_CKPT_EXEC", 0, 0));
+
+        assertThatThrownBy(() -> roleResourceService.replaceMenus(
+                "R_RM", List.of("P_RE_CKPT_EXEC"), "非法接口冒充菜单"))
+                .isInstanceOf(BizException.class);
+
+        verify(roleResourceMapper, never()).deleteMenuBindingsByRoleId(anyString());
+        verify(roleResourceMapper, never()).insert(any(PtRoleResource.class));
+        verifyNoInteractions(bizScopeService, cacheService, eventPublisher);
+    }
+
+    @Test
+    void replaceMenus_missingResourceId_shouldRejectBeforeDeletingExistingMenus() {
+        when(roleMapper.selectByRoleId("R_RM")).thenReturn(makeRole("R_RM"));
+        when(resourceMapper.selectById("M_MISSING")).thenReturn(null);
+
+        assertThatThrownBy(() -> roleResourceService.replaceMenus(
+                "R_RM", List.of("M_MISSING"), "不存在菜单"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40402"));
+
+        verify(roleResourceMapper, never()).deleteMenuBindingsByRoleId(anyString());
+        verify(roleResourceMapper, never()).insert(any(PtRoleResource.class));
+        verifyNoInteractions(bizScopeService, cacheService, eventPublisher);
+    }
+
+    @Test
+    void replaceMenus_disabledResourceId_shouldRejectWholeRequestBeforeDeletingExistingMenus() {
+        when(roleMapper.selectByRoleId("R_RM")).thenReturn(makeRole("R_RM"));
+        when(resourceMapper.selectById("M_VALID"))
+                .thenReturn(makeResource("M_VALID", 0, 1));
+        when(resourceMapper.selectById("M_DISABLED"))
+                .thenReturn(makeResource("M_DISABLED", 1, 1));
+
+        assertThatThrownBy(() -> roleResourceService.replaceMenus(
+                "R_RM", List.of("M_VALID", "M_DISABLED"), "混合菜单"))
+                .isInstanceOf(BizException.class);
+
+        verify(roleResourceMapper, never()).deleteMenuBindingsByRoleId(anyString());
+        verify(roleResourceMapper, never()).insert(any(PtRoleResource.class));
+        verifyNoInteractions(bizScopeService, cacheService, eventPublisher);
+    }
+
+    @Test
+    void replaceMenus_shouldReplaceMenusWithoutTouchingExplicitInterfaceBindings() {
+        when(roleMapper.selectByRoleId("R_RM")).thenReturn(makeRole("R_RM"));
+        when(resourceMapper.selectById("M_PERF_METRICS"))
+                .thenReturn(makeResource("M_PERF_METRICS", 0, 1));
+        when(resourceMapper.selectById("M_PERF_IMPORT"))
+                .thenReturn(makeResource("M_PERF_IMPORT", 0, 1));
         when(roleResourceMapper.insert(any(PtRoleResource.class))).thenReturn(1);
-        // mock 联动查询：M_PERF_METRICS 下 2 个接口 + 1 个公共接口
-        when(resourceMapper.selectInterfaceIdsByMenuIds(List.of("M_PERF_METRICS", "M_PERF_IMPORT")))
-            .thenReturn(List.of("A_METRIC_LIST", "A_METRIC_GET"));
-        when(resourceMapper.selectPublicInterfaceIds())
-            .thenReturn(List.of("A_AUTH_LOGIN"));
 
         roleResourceService.replaceMenus("R_RM", List.of("M_PERF_METRICS", "M_PERF_IMPORT"), "替换菜单");
 
-        // 清菜单 + 清接口（不调用全量 deleteByRoleId）
+        // 菜单分配只维护 IS_MENU=1；既有显式 API 绑定必须保持原样
         verify(roleResourceMapper).deleteMenuBindingsByRoleId("R_RM");
-        verify(roleResourceMapper).deleteInterfaceBindingsByRoleId("R_RM");
+        verify(roleResourceMapper, never()).deleteInterfaceBindingsByRoleId(anyString());
         verify(roleResourceMapper, never()).deleteByRoleId(anyString());
-        // 插入 2 菜单 + 2 菜单接口 + 1 公共接口 = 5 条
-        verify(roleResourceMapper, times(5)).insert(any(PtRoleResource.class));
+        verify(resourceMapper, never()).selectInterfaceIdsByMenuIds(anyList());
+        verify(resourceMapper, never()).selectPublicInterfaceIds();
+        verify(roleResourceMapper, times(2)).insert(any(PtRoleResource.class));
         // 缓存失效 + 事件发布
         verify(cacheService).evictRoleResourceCache("R_RM");
         verify(eventPublisher).publishEvent(any());
     }
 
     @Test
-    void replaceMenus_emptyList_shouldClearMenusAndInterfacesAndSkipPublicBinding() {
+    void replaceMenus_emptyList_shouldClearMenusWithoutTouchingExplicitInterfaceBindings() {
         when(roleMapper.selectByRoleId("R_RM")).thenReturn(makeRole("R_RM"));
 
         roleResourceService.replaceMenus("R_RM", List.of(), "清空菜单");
 
-        // 菜单 + 接口绑定都清
+        // 清空菜单也不能删除角色已显式配置的 API 权限
         verify(roleResourceMapper).deleteMenuBindingsByRoleId("R_RM");
-        verify(roleResourceMapper).deleteInterfaceBindingsByRoleId("R_RM");
-        // 无菜单时不查接口、不插任何绑定
+        verify(roleResourceMapper, never()).deleteInterfaceBindingsByRoleId(anyString());
         verify(resourceMapper, never()).selectInterfaceIdsByMenuIds(anyList());
         verify(resourceMapper, never()).selectPublicInterfaceIds();
         verify(roleResourceMapper, never()).insert(any(PtRoleResource.class));
@@ -151,9 +198,9 @@ class RoleResourceServiceTest {
     void replaceMenus_shouldNotOverrideExistingBizScope() {
         // 防御性回归：已配置的 BizScope 绝不能被自动写回 SELF（历史 bug：经营机构负责人 REPORT=ORG_SUBTREE 被覆盖）
         when(roleMapper.selectByRoleId("R_RM")).thenReturn(makeRole("R_RM"));
+        when(resourceMapper.selectById("M_PERF_METRICS"))
+                .thenReturn(makeResource("M_PERF_METRICS", 0, 1));
         when(roleResourceMapper.insert(any(PtRoleResource.class))).thenReturn(1);
-        when(resourceMapper.selectInterfaceIdsByMenuIds(any())).thenReturn(List.of());
-        when(resourceMapper.selectPublicInterfaceIds()).thenReturn(List.of());
         // REPORT 已存在；其余 7 个 bizType 不存在
         PtRoleBizScope existing = new PtRoleBizScope();
         existing.setRoleId("R_RM"); existing.setBizType("REPORT"); existing.setDataScope("ORG_SUBTREE");
@@ -238,5 +285,13 @@ class RoleResourceServiceTest {
         r.setRoleId(roleId);
         r.setRoleCode("CUST_MANAGER");
         return r;
+    }
+
+    private PtResource makeResource(String resourceId, int status, int isMenu) {
+        PtResource resource = new PtResource();
+        resource.setResourceId(resourceId);
+        resource.setStatus(status);
+        resource.setIsMenu(isMenu);
+        return resource;
     }
 }

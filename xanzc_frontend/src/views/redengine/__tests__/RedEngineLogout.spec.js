@@ -17,7 +17,8 @@ vi.mock('@/api/http', () => ({
   default: { get: vi.fn().mockResolvedValue({ resourceUrls: [] }) }
 }));
 vi.mock('@/api/auth', () => ({
-  logout: vi.fn().mockResolvedValue('OK')
+  logout: vi.fn().mockResolvedValue('OK'),
+  getMyPermissions: vi.fn().mockResolvedValue({ resourceUrls: [] })
 }));
 
 import { logout } from '@/api/auth';

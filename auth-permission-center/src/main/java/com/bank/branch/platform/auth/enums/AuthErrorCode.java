@@ -50,7 +50,10 @@ public enum AuthErrorCode {
 
     // 500 内部错误
     INTERNAL_ERROR("AUTH-50001", "权限服务内部错误"),
-    CACHE_ERROR("AUTH-50002", "缓存服务异常");
+    CACHE_ERROR("AUTH-50002", "缓存服务异常"),
+
+    // 503 服务暂不可用
+    AUTH_SERVICE_UNAVAILABLE("AUTH-50301", "认证服务暂不可用，请稍后重试");
 
     private final String code;
     private final String message;
