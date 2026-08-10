@@ -131,13 +131,14 @@ describe('AppHeader 退出登录', () => {
   });
 });
 
-describe('AppHeader 多角色只读展示', () => {
-  it('展示全部已分配角色，但不再允许切换角色或刷新页面', async () => {
+describe('AppHeader 多角色合并生效', () => {
+  it('账号菜单只说明角色已合并生效，不再渲染逐角色菜单项', async () => {
     const userStore = useUserStore();
     userStore.setUser({
       empId: 'A001',
       username: 'userA',
       displayName: '用户A',
+      mainOrgName: '测试机构',
       roles: [
         { roleId: 'R1', roleCode: 'NORMAL', roleChName: '普通用户' },
         { roleId: 'R2', roleCode: 'R_RE_REPORT', roleChName: '党建报送员' }
@@ -147,10 +148,11 @@ describe('AppHeader 多角色只读展示', () => {
     wrapper = mount(AppHeader, { global: { plugins: [pinia], stubs } });
     await settle();
 
-    expect(wrapper.text()).toContain('已分配角色');
+    expect(wrapper.text()).toContain('2 个角色权限已合并生效');
     expect(wrapper.text()).not.toContain('切换角色');
-    expect(wrapper.text()).toContain('普通用户');
-    expect(wrapper.text()).toContain('党建报送员');
+    // 逐角色菜单项会延续“点某个角色才能看到其菜单”的错误心智，必须完全移除。
+    expect(wrapper.text()).not.toContain('普通用户');
+    expect(wrapper.text()).not.toContain('党建报送员');
 
     // 即使旧调用方仍发出历史 role:* command，也必须被忽略。
     wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'role:R2');

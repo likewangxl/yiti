@@ -9,7 +9,7 @@
     <div class="spacer" />
 
     <el-dropdown trigger="click" @command="onCommand">
-      <div class="role-pick">
+      <div class="account-pick">
         <div class="avatar">{{ avatarLetter }}</div>
         <div class="meta">
           <b>{{ store.displayName }}</b>
@@ -22,17 +22,8 @@
           <el-dropdown-item disabled>
             <span style="color:#9CA3AF;font-size:12px">{{ store.user?.username }} · {{ store.user?.deptNo || store.user?.mainOrgCode || '—' }}</span>
           </el-dropdown-item>
-          <el-dropdown-item divided disabled>
-            <span style="color:#9CA3AF;font-size:12px">已分配角色</span>
-          </el-dropdown-item>
-          <el-dropdown-item
-            v-for="r in store.roles"
-            :key="r.roleId"
-            disabled
-          >
-            <span style="min-width:120px;display:inline-flex;align-items:center">
-              <span>{{ r.roleChName }}</span>
-            </span>
+          <el-dropdown-item v-if="store.roles.length" divided disabled>
+            <span class="role-merge-note">{{ store.roles.length }} 个角色权限已合并生效</span>
           </el-dropdown-item>
           <el-dropdown-item divided command="changePassword">修改密码</el-dropdown-item>
           <el-dropdown-item command="logout">退出登录</el-dropdown-item>
@@ -157,7 +148,7 @@ async function onChangePassword() {
 }
 .search { width: 360px; }
 .spacer { flex: 1; }
-.role-pick {
+.account-pick {
   display: flex; align-items: center; gap: 8px;
   padding: 4px 10px;
   border: 1px solid $border-1;
@@ -177,6 +168,7 @@ async function onChangePassword() {
     small { color: $text-3; font-size: 11px; }
   }
 }
+.role-merge-note { color: #9CA3AF; font-size: 12px; }
 .icon-btn {
   width: 32px; height: 32px;
   display: grid; place-items: center;
