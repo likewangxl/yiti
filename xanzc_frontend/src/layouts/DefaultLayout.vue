@@ -4,6 +4,7 @@
     <div class="main">
       <AppHeader />
       <AppBreadcrumb />
+      <WorkspaceTabs />
       <div class="content" :class="{ 'content--full': $route.meta.fullBleed }">
         <router-view :key="$route.fullPath" v-slot="{ Component }">
           <transition name="page">
@@ -19,6 +20,7 @@
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppHeader from '@/components/AppHeader.vue';
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue';
+import WorkspaceTabs from '@/components/WorkspaceTabs.vue';
 </script>
 
 <style lang="scss" scoped>
@@ -32,9 +34,11 @@ import AppBreadcrumb from '@/components/AppBreadcrumb.vue';
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
 }
 .content {
   flex: 1;
+  min-width: 0;
   overflow: auto;
   padding: 16px 20px;
 }

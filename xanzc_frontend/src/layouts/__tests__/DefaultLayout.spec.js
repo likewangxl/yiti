@@ -9,7 +9,11 @@ import { mount } from '@vue/test-utils';
 import DefaultLayout from '../DefaultLayout.vue';
 
 const stubs = {
-  AppSidebar: true, AppHeader: true, AppBreadcrumb: true, 'router-view': true
+  AppSidebar: true,
+  AppHeader: true,
+  AppBreadcrumb: true,
+  WorkspaceTabs: { template: '<div class="workspace-tabs-stub" />' },
+  'router-view': true
 };
 
 function mountWithMeta(meta) {
@@ -19,6 +23,13 @@ function mountWithMeta(meta) {
 }
 
 describe('DefaultLayout.vue full-bleed 内容区', () => {
+  it('面包屑下渲染工作区页签栏，且页签栏不属于 content padding 契约', () => {
+    const wrapper = mountWithMeta({ title: '工作台' });
+    expect(wrapper.find('.workspace-tabs-stub').exists()).toBe(true);
+    expect(wrapper.find('.content').element.previousElementSibling.className)
+      .toBe('workspace-tabs-stub');
+  });
+
   it('路由声明 meta.fullBleed 时内容区带 content--full(去 padding)', () => {
     const wrapper = mountWithMeta({ fullBleed: true });
     expect(wrapper.find('.content').classes()).toContain('content--full');
