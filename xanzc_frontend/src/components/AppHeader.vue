@@ -22,9 +22,6 @@
           <el-dropdown-item disabled>
             <span style="color:#9CA3AF;font-size:12px">{{ store.user?.username }} · {{ store.user?.deptNo || store.user?.mainOrgCode || '—' }}</span>
           </el-dropdown-item>
-          <el-dropdown-item v-if="store.roles.length" divided disabled>
-            <span class="role-merge-note">{{ store.roles.length }} 个角色权限已合并生效</span>
-          </el-dropdown-item>
           <el-dropdown-item divided command="changePassword">修改密码</el-dropdown-item>
           <el-dropdown-item command="logout">退出登录</el-dropdown-item>
         </el-dropdown-menu>
