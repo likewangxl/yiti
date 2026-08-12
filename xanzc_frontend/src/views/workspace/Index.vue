@@ -89,7 +89,7 @@
           <el-radio-button value="PENDING">待办</el-radio-button>
           <el-radio-button value="DONE">已办</el-radio-button>
         </el-radio-group>
-        <el-button type="primary" link size="small" aria-label="刷新我的任务" @click="loadTasks">刷新</el-button>
+        <el-button type="primary" link size="small" aria-label="刷新我的任务" :loading="tasksLoading" :disabled="tasksLoading" @click="loadTasks">刷新</el-button>
       </div>
       <div v-if="tasksLoading" class="table-state" role="status" aria-live="polite">{{ taskLoadingText }}</div>
       <el-table v-else-if="tasks.length" :data="tasks" stripe size="small">
@@ -295,6 +295,7 @@ async function onNtfClick(notification) {
     router.push('/system/notifications');
   } catch {
     // 写操作失败由统一 HTTP 拦截器提供真实错误反馈；不编造失败原因，也不误导为已读。
+    router.push('/system/notifications');
   } finally {
     markingNotificationIds.delete(notification.id);
   }
@@ -304,28 +305,32 @@ const taskTab = ref('PENDING');
 const tasks = ref([]);
 const tasksLoading = ref(false);
 const todoCount = ref(0);
+let tasksRequestGeneration = 0;
 const taskEmptyText = computed(() => (taskTab.value === 'PENDING' ? '暂无待办任务' : '暂无已办任务'));
 const taskLoadingText = computed(() => (taskTab.value === 'PENDING' ? '待办任务加载中' : '已办任务加载中'));
 
 async function loadTasks() {
   const requestedTab = taskTab.value;
+  const requestGeneration = ++tasksRequestGeneration;
   tasksLoading.value = true;
   try {
     const result = await (requestedTab === 'PENDING' ? listTodoTasks : listDoneTasks)({ pageSize: 20 });
-    // 用户切换页签时，较晚返回的旧请求不能覆盖当前页签内容或摘要。
-    if (requestedTab !== taskTab.value) return;
+    // 同一页签连续刷新也可能乱序返回，只有最新一代请求可以提交结果。
+    if (requestGeneration !== tasksRequestGeneration || requestedTab !== taskTab.value) return;
     tasks.value = Array.isArray(result) ? result : (result?.records || []);
     if (requestedTab === 'PENDING') {
       const total = Number(result?.total);
       todoCount.value = Number.isFinite(total) ? total : tasks.value.length;
     }
   } catch {
-    if (requestedTab === taskTab.value) {
+    if (requestGeneration === tasksRequestGeneration && requestedTab === taskTab.value) {
       tasks.value = [];
       if (requestedTab === 'PENDING') todoCount.value = 0;
     }
   } finally {
-    if (requestedTab === taskTab.value) tasksLoading.value = false;
+    if (requestGeneration === tasksRequestGeneration && requestedTab === taskTab.value) {
+      tasksLoading.value = false;
+    }
   }
 }
 

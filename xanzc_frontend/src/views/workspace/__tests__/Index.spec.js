@@ -212,6 +212,34 @@ describe('Workspace Index', () => {
     expect(tasks.text()).toContain('暂无已办任务');
   });
 
+  it('同一页签连续刷新时以后发请求为准，旧响应不能覆盖数据或提前结束加载', async () => {
+    const olderRequest = deferred();
+    const newerRequest = deferred();
+    api.listTodoTasks.mockReturnValueOnce(olderRequest.promise).mockReturnValueOnce(newerRequest.promise);
+
+    wrapper = mountPage();
+    await nextTick();
+    const refreshButton = wrapper.find('button[aria-label="刷新我的任务"]');
+    const newerLoad = wrapper.vm.loadTasks();
+    await nextTick();
+
+    expect(refreshButton.attributes('disabled')).toBeDefined();
+    newerRequest.resolve({ records: [{ id: 'TASK_NEW' }], total: 9 });
+    await settle();
+
+    expect(wrapper.vm.tasks).toEqual([{ id: 'TASK_NEW' }]);
+    expect(wrapper.vm.todoCount).toBe(9);
+    expect(refreshButton.attributes('disabled')).toBeUndefined();
+
+    olderRequest.resolve({ records: [{ id: 'TASK_OLD' }], total: 1 });
+    await newerLoad;
+    await settle();
+
+    expect(wrapper.vm.tasks).toEqual([{ id: 'TASK_NEW' }]);
+    expect(wrapper.vm.todoCount).toBe(9);
+    expect(refreshButton.attributes('disabled')).toBeUndefined();
+  });
+
   it('公告和通知以具名按钮跳转，不保留无 href 的锚点或可点击 div', async () => {
     api.listRecentAnnouncements.mockResolvedValue([{ id: 'ANN_1', title: '季度经营公告', publishDate: '2026-08-12T09:00:00' }]);
     api.listNotifications.mockResolvedValue({
@@ -259,6 +287,38 @@ describe('Workspace Index', () => {
 
     expect(wrapper.findAll('.workspace-summary .summary-item')[1].text()).toContain('未读1条');
     expect(order).toEqual(['event', 'navigate']);
+    window.removeEventListener('notification-changed', onNotificationChanged);
+  });
+
+  it('标记通知已读失败仍导航，但不改变未读状态、计数或派发事件', async () => {
+    const markReadRequest = deferred();
+    const order = [];
+    const onNotificationChanged = () => order.push('event');
+    window.addEventListener('notification-changed', onNotificationChanged);
+    routerPush.mockImplementation(() => order.push('navigate'));
+    api.markRead.mockReturnValue(markReadRequest.promise);
+    api.getUnreadNotificationCount.mockResolvedValue(2);
+    api.listNotifications.mockResolvedValue({
+      records: [{ id: 'NTF_FAIL', title: '失败通知', isRead: false, createdTime: '2026-08-12T09:00:00' }]
+    });
+
+    wrapper = mountPage();
+    await settle();
+
+    const notification = wrapper.find('button[aria-label="查看通知：失败通知"]');
+    const click = notification.trigger('click');
+    await flushPromises();
+    expect(api.markRead).toHaveBeenCalledTimes(1);
+
+    markReadRequest.reject(new Error('mark read failed'));
+    await click;
+    await settle();
+
+    expect(routerPush).toHaveBeenCalledTimes(1);
+    expect(routerPush).toHaveBeenCalledWith('/system/notifications');
+    expect(order).toEqual(['navigate']);
+    expect(notification.classes()).toContain('unread');
+    expect(wrapper.findAll('.workspace-summary .summary-item')[1].text()).toContain('未读2条');
     window.removeEventListener('notification-changed', onNotificationChanged);
   });
 
