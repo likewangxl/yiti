@@ -111,6 +111,14 @@ describe('DefaultLayout.vue 侧栏壳层状态', () => {
 });
 
 describe('DefaultLayout.vue 路由焦点管理', () => {
+  it('仅提供可聚焦的内容容器，不额外创建 main 地标', () => {
+    const wrapper = mountWithMeta({ title: '工作台' });
+    const content = wrapper.find('#app-main');
+
+    expect(content.element.tagName).toBe('DIV');
+    expect(wrapper.find('main#app-main').exists()).toBe(false);
+  });
+
   it('初始挂载不抢占已有焦点', async () => {
     const probe = createFocusProbe();
     const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
@@ -127,8 +135,8 @@ describe('DefaultLayout.vue 路由焦点管理', () => {
   it('path 或 fullPath 变化后聚焦主内容，并保留全出血与侧栏折叠状态', async () => {
     const probe = createFocusProbe();
     const wrapper = mountWithMeta({ title: '工作台' }, { attachTo: true });
-    const main = wrapper.find('main#app-main').element;
-    const focusSpy = vi.spyOn(main, 'focus');
+    const content = wrapper.find('#app-main').element;
+    const focusSpy = vi.spyOn(content, 'focus');
 
     await wrapper.find('.header-stub').trigger('click');
     probe.focus();
@@ -139,7 +147,7 @@ describe('DefaultLayout.vue 路由焦点管理', () => {
     await flushRouteFocus();
 
     expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
-    expect(document.activeElement).toBe(main);
+    expect(document.activeElement).toBe(content);
     expect(wrapper.find('.content').classes()).toContain('content--full');
     expect(wrapper.find('.sidebar-stub').attributes('data-collapsed')).toBe('true');
 
@@ -149,7 +157,7 @@ describe('DefaultLayout.vue 路由焦点管理', () => {
     await flushRouteFocus();
 
     expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
-    expect(document.activeElement).toBe(main);
+    expect(document.activeElement).toBe(content);
     focusSpy.mockRestore();
   });
 });

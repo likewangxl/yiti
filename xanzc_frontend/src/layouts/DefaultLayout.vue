@@ -5,13 +5,13 @@
       <AppHeader :sidebar-collapsed="sidebarCollapsed" @toggle-sidebar="toggleSidebar" />
       <AppBreadcrumb />
       <WorkspaceTabs />
-      <main ref="mainElement" id="app-main" class="content" :class="{ 'content--full': $route.meta.fullBleed }" tabindex="-1">
+      <div ref="mainElement" id="app-main" class="content" :class="{ 'content--full': $route.meta.fullBleed }" tabindex="-1">
         <router-view :key="$route.fullPath" v-slot="{ Component }">
           <transition name="page">
             <component :is="Component" />
           </transition>
         </router-view>
-      </main>
+      </div>
     </div>
   </div>
 </template>
