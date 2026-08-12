@@ -1,219 +1,163 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle>
-        <span class="sub" v-if="currentPlan">
-          方案：<em>{{ currentPlanLabel }}</em>
-        </span>
-        <span class="sub" v-else>单条 / 批量 / 修正 <em>(修正会触发回算)</em></span>
+  <main class="bp-crud target-values-page" aria-labelledby="target-values-page-title">
+    <header class="page-h">
+      <PageTitle id="target-values-page-title">
+        <span class="sub" v-if="currentPlan">方案：<em>{{ currentPlanLabel }}</em></span>
+        <span class="sub" v-else>维护单条、批量导入与修正后的目标值</span>
       </PageTitle>
-      <div class="actions">
-        <el-button link type="primary" @click="backToTargets">← 返回目标管理</el-button>
-        <!-- 仅方案创建人可新增目标值；非创建人时按钮置灰并通过 tooltip 解释原因 -->
-        <el-tooltip
-          :disabled="!plans.length || currentPlan?.createdBy === userStore.user?.empId"
-          content="只有该目标方案的创建人可以新增目标值"
-          placement="top"
-        >
+      <div class="actions action-group" role="group" aria-label="目标值操作">
+        <el-button @click="backToTargets">返回目标管理</el-button>
+        <el-button :disabled="!f.planId" @click="downloadTpl">下载模板</el-button>
+        <el-tooltip :disabled="canManageValues" content="只有该目标方案的创建人可以导入或新增目标值" placement="top">
           <span>
-            <el-button
-              type="primary"
-              :disabled="!plans.length || currentPlan?.createdBy !== userStore.user?.empId"
-              @click="openCreateRow"
-            >+ 新增目标值</el-button>
+            <el-button :loading="importingValues" :disabled="!canManageValues || importingValues" @click="triggerImportFile">导入目标值</el-button>
+          </span>
+        </el-tooltip>
+        <el-tooltip :disabled="canManageValues" content="只有该目标方案的创建人可以新增目标值" placement="top">
+          <span>
+            <el-button type="primary" :disabled="!canManageValues" @click="openCreateRow">新增目标值</el-button>
           </span>
         </el-tooltip>
       </div>
-    </div>
+    </header>
 
-    <!-- 筛选栏。方案/维度由 URL 传入锁定 -->
-    <div class="card-section filter-grid">
-      <div>
-        <div class="lab">维度</div>
-        <el-select v-model="f.subjectType" clearable placeholder="全部" style="width:100px">
-          <el-option value="EMP" label="员工" />
-          <el-option value="ORG" label="机构" />
-        </el-select>
-      </div>
-      <div>
-        <div class="lab">阶段名称</div>
-        <el-select v-model="f.stageName" clearable filterable placeholder="全部" style="width:200px">
-          <el-option v-for="s in stageNameOptions" :key="s" :value="s" :label="s" />
-        </el-select>
-      </div>
-      <div>
-        <div class="lab">对象</div>
-        <el-select v-model="f.subjectId" clearable filterable @change="loadValues"
-          :loading="loadingSubjects" placeholder="全部" style="width:100%">
-          <el-option v-for="s in subjectOptions" :key="s.subjectId"
-            :value="s.subjectId" :label="s.label" />
-        </el-select>
-      </div>
-      <div>
-        <div class="lab">指标</div>
-        <el-select v-model="f.metricCode" clearable filterable @change="loadValues" placeholder="全部" style="width:100%">
-          <el-option v-for="m in filteredMetricOptions" :key="m.metricCode"
-            :value="m.metricCode" :label="m.metricName" />
-        </el-select>
-      </div>
-    </div>
+    <input ref="importFileRef" class="file-input" type="file" accept=".xlsx,.xls" aria-label="导入目标值文件" @change="onImportFileSelected" />
 
-    <!-- 主表 -->
-    <div class="card-section table">
-      <el-table :data="pagedRows" size="default" empty-text="暂无目标值" v-loading="loadingValues">
+    <section class="card-section filter-bar" aria-label="目标值筛选">
+      <el-form class="filter-form" inline aria-label="目标值筛选">
+        <el-form-item label="维度">
+          <el-select v-model="f.subjectType" clearable placeholder="全部" aria-label="按对象维度筛选" @change="onFilterChange">
+            <el-option value="EMP" label="员工" />
+            <el-option value="ORG" label="机构" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="阶段名称">
+          <el-select v-model="f.stageName" clearable filterable placeholder="全部" aria-label="按阶段名称筛选" @change="onFilterChange">
+            <el-option v-for="s in stageNameOptions" :key="s" :value="s" :label="s" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="对象">
+          <el-select v-model="f.subjectId" clearable filterable :loading="loadingSubjects" placeholder="全部" aria-label="按对象筛选" @change="loadValues">
+            <el-option v-for="s in subjectOptions" :key="s.subjectId" :value="s.subjectId" :label="s.label" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="指标">
+          <el-select v-model="f.metricCode" clearable filterable placeholder="全部" aria-label="按指标筛选" @change="loadValues">
+            <el-option v-for="m in filteredMetricOptions" :key="m.metricCode" :value="m.metricCode" :label="m.metricName" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="生效状态">
+          <el-select v-model="f.approvalStatus" clearable placeholder="全部" aria-label="按生效状态筛选" @change="onFilterChange">
+            <el-option value="NORMAL" label="已生效" />
+            <el-option value="ADJUSTING" label="修正中" />
+            <el-option value="REJECTED" label="已驳回" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="loadValues">查询</el-button>
+          <el-button @click="resetFilters">重置</el-button>
+        </el-form-item>
+      </el-form>
+    </section>
+
+    <section class="card-section data-panel" aria-label="目标值列表" aria-describedby="target-values-table-state" :aria-busy="loadingValues ? 'true' : 'false'">
+      <div class="toolbar">
+        <div>
+          <h2 id="target-values-table-heading" class="section-title">目标值列表</h2>
+          <p class="hint">目标修正必须填写原因；保存后按既有流程更新并刷新当前列表。</p>
+        </div>
+        <p id="target-values-table-state" class="table-state" role="status" aria-live="polite">{{ targetValuesState }}</p>
+      </div>
+      <div v-if="valuesError" class="table-error" role="alert">
+        <span>{{ valuesError }}</span>
+        <el-button link type="primary" @click="loadValues">重新加载</el-button>
+      </div>
+      <el-table :data="pagedRows" size="default" :empty-text="valuesError ? '加载失败，请重新加载' : '暂无目标值数据'" v-loading="loadingValues" aria-labelledby="target-values-table-heading" aria-describedby="target-values-table-state">
         <el-table-column label="维度" width="90">
-          <template #default="{row}">{{ subjectTypeLabel(row.subjectType) || '-' }}</template>
+          <template #default="{ row }">{{ subjectTypeLabel(row.subjectType) || '-' }}</template>
         </el-table-column>
-        <el-table-column label="对象" min-width="190">
-          <template #default="{row}">
-            <!-- 主标题：员工名称/机构名称；副标题：工号/部门编号 -->
+        <el-table-column label="对象" min-width="190" show-overflow-tooltip>
+          <template #default="{ row }">
             <div>{{ row.subjectName || '-' }}</div>
-            <div style="color:#909399;font-size:12px;">{{ row.subjectDisplayId || row.subjectId || '-' }}</div>
+            <div class="cell-meta">{{ row.subjectDisplayId || row.subjectId || '-' }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="指标" min-width="190">
-          <template #default="{row}">
-            <!-- 主标题：指标名称；副标题：指标编号 -->
+        <el-table-column label="指标" min-width="190" show-overflow-tooltip>
+          <template #default="{ row }">
             <div>{{ row.metricName || row.metricCode || '-' }}</div>
-            <div style="color:#909399;font-size:12px;">{{ row.metricCode }}</div>
+            <div class="cell-meta">{{ row.metricCode }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="阶段名称" min-width="120">
-          <template #default="{row}">{{ row.stageName || '-' }}</template>
-        </el-table-column>
+        <el-table-column label="阶段名称" min-width="120" prop="stageName" />
         <el-table-column label="起止日期" min-width="210">
-          <template #default="{row}">
-            <span v-if="row.startDate || row.endDate">{{ row.startDate || '…' }} ~ {{ row.endDate || '…' }}</span>
+          <template #default="{ row }">
+            <span v-if="row.startDate || row.endDate">{{ row.startDate || '未设' }} 至 {{ row.endDate || '未设' }}</span>
             <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column label="目标值" width="140" align="right">
-          <template #default="{row}">{{ fmtNum(row.targetValue) }}</template>
+          <template #default="{ row }">{{ fmtNum(row.targetValue) }}</template>
         </el-table-column>
         <el-table-column label="基础值" width="140" align="right">
-          <template #default="{row}">{{ row.baseValue != null ? fmtNum(row.baseValue) : '-' }}</template>
+          <template #default="{ row }">{{ row.baseValue != null ? fmtNum(row.baseValue) : '-' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="110" fixed="right">
-          <template #default="{row}">
+        <el-table-column label="生效状态" width="110">
+          <template #default="{ row }">
+            <el-tag :class="apprCls(row.approvalStatus)" effect="plain" size="small">{{ apprLabel(row.approvalStatus) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="190" fixed="right">
+          <template #default="{ row }">
+            <el-button v-if="canTargetAdjust" link type="primary" size="small" @click="openAdjust(row)">调整</el-button>
             <el-button link type="primary" size="small" @click="openEditRow(row)">修改</el-button>
             <el-button link type="danger" size="small" @click="onDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <div class="pager">
-        <el-pagination
-          v-model:current-page="pager.pageNo"
-          v-model:page-size="pager.pageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="filteredRows.length"
-          background
-          layout="total, sizes, prev, pager, next, jumper"
-        />
-      </div>
+      <nav class="pager" aria-label="目标值列表分页">
+        <el-pagination v-model:current-page="pager.pageNo" v-model:page-size="pager.pageSize" :page-sizes="[10, 20, 50, 100]" :total="filteredRows.length" background layout="total, sizes, prev, pager, next, jumper" />
+      </nav>
+    </section>
 
-      <el-alert type="info" :closable="false" show-icon style="margin-top:14px"
-        title="目标修正保存后立即生效，手动触发 KPI 历史回算。" />
-    </div>
-
-    <!-- 修正弹框：截图 180 -->
-    <el-dialog v-model="adjDlg.show" :title="adjTitle" width="540px" :close-on-click-modal="false">
+    <el-dialog v-model="adjDlg.show" class="bp-crud-dialog" :title="adjTitle" width="540px" :close-on-click-modal="false" :close-on-press-escape="!adjDlg.saving" aria-label="目标值调整确认">
       <el-form ref="adjFormRef" :model="adjDlg.form" :rules="adjRules" label-position="top" size="default">
-        <el-form-item label="当前目标">
-          <el-input :model-value="fmtNum(adjDlg.row?.targetValue)" disabled />
-        </el-form-item>
-        <el-form-item label="修正后目标" prop="newValue" required>
-          <el-input-number v-model="adjDlg.form.newValue" :precision="2" :controls="false" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="当前基础值">
-          <el-input :model-value="adjDlg.row?.baseValue != null ? fmtNum(adjDlg.row?.baseValue) : '-'" disabled />
-        </el-form-item>
-        <el-form-item label="修正后基础值">
-          <el-input-number v-model="adjDlg.form.newBaseValue" :precision="2" :controls="false" style="width:100%"
-            placeholder="可空：不改基础值则留空" />
-        </el-form-item>
-        <el-form-item label="修正原因" prop="reason" required>
-          <el-input v-model="adjDlg.form.reason" type="textarea" :rows="3"
-            placeholder="请说明修正原因，将记入修正记录" />
-        </el-form-item>
+        <el-form-item label="当前目标"><el-input :model-value="fmtNum(adjDlg.row?.targetValue)" disabled /></el-form-item>
+        <el-form-item label="调整后目标" prop="newValue" required><el-input-number v-model="adjDlg.form.newValue" class="field-control" :precision="2" :controls="false" /></el-form-item>
+        <el-form-item label="当前基础值"><el-input :model-value="adjDlg.row?.baseValue != null ? fmtNum(adjDlg.row?.baseValue) : '-'" disabled /></el-form-item>
+        <el-form-item label="调整后基础值"><el-input-number v-model="adjDlg.form.newBaseValue" class="field-control" :precision="2" :controls="false" placeholder="可空：不改基础值则留空" /></el-form-item>
+        <el-form-item label="调整原因" prop="reason" required><el-input v-model="adjDlg.form.reason" type="textarea" :rows="3" placeholder="请说明调整原因，将记入审批记录" /></el-form-item>
       </el-form>
-      <el-alert type="warning" :closable="false" show-icon
-        title="保存后目标值立即生效，并触发 KPI 历史回算。" />
+      <el-alert class="dialog-alert" type="warning" :closable="false" show-icon title="确认保存后将按当前业务流程更新目标值，并触发 KPI 历史回算。" />
       <template #footer>
-        <el-button @click="adjDlg.show = false">取消</el-button>
-        <el-button type="primary" :loading="adjDlg.saving" @click="onSubmitAdjust">保存</el-button>
+        <el-button :disabled="adjDlg.saving" @click="closeAdjust">取消</el-button>
+        <el-button type="primary" :loading="adjDlg.saving" :disabled="adjDlg.saving" @click="onSubmitAdjust">确认保存</el-button>
       </template>
     </el-dialog>
 
-    <!-- 新增目标值 -->
-    <!-- 方案 / 周期键 / 对象维度 已隐藏：
-         - planId 用当前选中的 f.planId
-         - cycleKey 由 inferCycleKey() 自动派生
-         - subjectType 用 currentPlan.targetDim（目标管理主页传入方案的维度） -->
-    <el-dialog v-model="valDlg.show" :title="valDlg.editing ? '修改目标值' : '新增目标值'" width="500px">
+    <el-dialog v-model="valDlg.show" class="bp-crud-dialog" :title="valDlg.editing ? '修改目标值' : '新增目标值'" width="500px" :close-on-click-modal="false" :close-on-press-escape="!valDlg.saving" aria-label="目标值编辑">
       <el-form ref="valFormRef" :model="valDlg.form" :rules="valRules" label-width="100px" size="default">
-        <el-form-item label="阶段名称" prop="stageName">
-          <el-input v-model="valDlg.form.stageName" maxlength="100" clearable placeholder="如 一阶段" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="起始日期" prop="startDate">
-          <el-date-picker v-model="valDlg.form.startDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择起始日期" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="截止日期" prop="endDate">
-          <el-date-picker v-model="valDlg.form.endDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择截止日期" style="width:100%" />
-        </el-form-item>
-        <!-- 维度：选择后「对象」「指标」下拉随之动态变化；修改模式下身份字段锁定 -->
+        <el-form-item label="阶段名称" prop="stageName"><el-input v-model="valDlg.form.stageName" maxlength="100" clearable placeholder="如 一阶段" /></el-form-item>
+        <el-form-item label="起始日期" prop="startDate"><el-date-picker v-model="valDlg.form.startDate" class="field-control" type="date" value-format="YYYY-MM-DD" placeholder="请选择起始日期" /></el-form-item>
+        <el-form-item label="截止日期" prop="endDate"><el-date-picker v-model="valDlg.form.endDate" class="field-control" type="date" value-format="YYYY-MM-DD" placeholder="请选择截止日期" /></el-form-item>
         <el-form-item label="维度" prop="subjectType">
-          <el-select v-model="valDlg.form.subjectType" :disabled="valDlg.editing" @change="onDimChange" style="width:100%">
-            <el-option value="EMP" label="员工" />
-            <el-option value="ORG" label="机构" />
-          </el-select>
+          <el-select v-model="valDlg.form.subjectType" class="field-control" :disabled="valDlg.editing" @change="onDimChange"><el-option value="EMP" label="员工" /><el-option value="ORG" label="机构" /></el-select>
         </el-form-item>
         <el-form-item label="对象" prop="subjectId">
-          <el-autocomplete
-            v-model="valDlg.form.subjectDisplay"
-            :disabled="valDlg.editing"
-            :fetch-suggestions="querySubjectSuggestions"
-            :placeholder="valDlg.form.subjectType === 'ORG'
-              ? '输入部门编号或机构名搜索（如 02974000 / 资金财务部）'
-              : '输入用户名或中文名搜索（如 finance_zhou / 周八）'"
-            clearable
-            highlight-first-item
-            style="width:100%"
-            @select="onSubjectSelect"
-            @clear="onSubjectClear"
-          >
-            <template #default="{ item }">
-              <div style="display:flex; justify-content:space-between; gap:12px;">
-                <!-- ORG 显示部门编号(item.display)，EMP 显示用户名(item.value) -->
-                <span style="font-family: ui-monospace, monospace;">{{ item.display || item.value }}</span>
-                <span style="color:#999;">{{ item.label }}</span>
-              </div>
-            </template>
+          <el-autocomplete v-model="valDlg.form.subjectDisplay" class="field-control" :disabled="valDlg.editing" :fetch-suggestions="querySubjectSuggestions" :placeholder="valDlg.form.subjectType === 'ORG' ? '输入部门编号或机构名搜索' : '输入用户名或中文名搜索'" clearable highlight-first-item @select="onSubjectSelect" @clear="onSubjectClear">
+            <template #default="{ item }"><div class="suggestion-row"><span class="mono">{{ item.display || item.value }}</span><span class="cell-meta">{{ item.label }}</span></div></template>
           </el-autocomplete>
         </el-form-item>
-        <el-form-item label="指标" prop="metricCode">
-          <el-select v-model="valDlg.form.metricCode" filterable :disabled="valDlg.editing"
-                     :placeholder="metricsForDim.length ? '请选择指标' : '所选 KPI 方案暂无可选指标'"
-                     style="width:100%">
-            <el-option v-for="m in metricsForDim" :key="m.metricCode"
-                       :value="m.metricCode"
-                       :label="`${m.metricCode} · ${m.metricName}`" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="目标值" prop="targetValue">
-          <el-input-number v-model="valDlg.form.targetValue" :precision="2" :controls="false" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="基础值">
-          <el-input-number v-model="valDlg.form.baseValue" :precision="2" :controls="false" style="width:100%" placeholder="可空" />
-        </el-form-item>
+        <el-form-item label="指标" prop="metricCode"><el-select v-model="valDlg.form.metricCode" class="field-control" filterable :disabled="valDlg.editing" :placeholder="metricsForDim.length ? '请选择指标' : '所选 KPI 方案暂无可选指标'"><el-option v-for="m in metricsForDim" :key="m.metricCode" :value="m.metricCode" :label="`${m.metricCode} · ${m.metricName}`" /></el-select></el-form-item>
+        <el-form-item label="目标值" prop="targetValue"><el-input-number v-model="valDlg.form.targetValue" class="field-control" :precision="2" :controls="false" /></el-form-item>
+        <el-form-item label="基础值"><el-input-number v-model="valDlg.form.baseValue" class="field-control" :precision="2" :controls="false" placeholder="可空" /></el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="valDlg.show = false">取消</el-button>
-        <el-button type="primary" :loading="valDlg.saving" @click="onSaveValue">保存</el-button>
+        <el-button :disabled="valDlg.saving" @click="closeValueDialog">取消</el-button>
+        <el-button type="primary" :loading="valDlg.saving" :disabled="valDlg.saving" @click="onSaveValue">保存</el-button>
       </template>
     </el-dialog>
-
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -344,13 +288,8 @@ function rebuildMetricMap() {
 }
 
 // 后端 UpsertTargetValueReqDTO @Pattern(^(EMP|ORG)$) 仅允许 EMP / ORG
-const BASE_DIMS = [
-  { v: 'EMP', l: '员工' },
-  { v: 'ORG', l: '机构' }
-];
 const subjectTypeLabel = (t) => ({ EMP: '员工', ORG: '机构' }[t] || '');
 const fmtNum = (v) => (v == null || v === '') ? '-' : Number(v).toLocaleString();
-const fmtRate = (v) => (v == null) ? '-' : `${Number(v).toFixed(1)}%`;
 
 const apprCls = (s) => ({
   NORMAL:    'tag-success',
@@ -372,19 +311,6 @@ const apprLabel = (s) => ({
   DRAFT:     '草稿',
   REJECTED:  '已驳回'
 }[s] || '已生效');
-const rateCls = (r) => {
-  const n = Number(r);
-  if (n >= 90) return 'rate-ok';
-  if (n >= 70) return 'rate-mid';
-  return 'rate-low';
-};
-const hasAdjust = (row) => row.approvalStatus === 'ADJUSTING' || row.approvalStatus === 'IN_APPROVAL';
-const avaChar = (n) => (n || '').slice(-2, -1) || '员';
-const avaColor = (n) => {
-  const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#A855F7', '#EC4899'];
-  let h = 0; for (const c of (n || '')) h = (h * 31 + c.charCodeAt(0)) % COLORS.length;
-  return COLORS[h];
-};
 
 // === 方案 ===
 const plans = ref([]);
@@ -428,6 +354,7 @@ const filteredMetricOptions = computed(() => {
 const f = reactive({ planId: '', subjectType: '', subjectId: '', metricCode: '', stageName: '', approvalStatus: '' });
 const values = ref([]);
 const loadingValues = ref(false);
+const valuesError = ref('');
 
 // === 对象下拉（方案内目标值去重；EMP→工号+姓名，ORG→部门编号+机构名称）===
 const subjectOptions = ref([]);
@@ -456,9 +383,13 @@ watch(() => f.planId, () => {
 }, { immediate: true });
 
 // === 当前传入方案上下文（H1 副标题用，仅显示名称，不显示方案/KPI 的 ID） ===
-const currentPlan      = computed(() =>
-  plans.value.find(p => (p.id || p.planCode) === f.planId) || null
-);
+const samePlan = (plan, planId) => String(plan?.id ?? plan?.planCode ?? '') === String(planId ?? '');
+const currentPlan = computed(() => plans.value.find(p => samePlan(p, f.planId)) || null);
+const canManageValues = computed(() => {
+  const createdBy = currentPlan.value?.createdBy;
+  const empId = userStore.user?.empId;
+  return createdBy != null && empId != null && String(createdBy) === String(empId);
+});
 const currentPlanLabel = computed(() => {
   const p = currentPlan.value;
   if (!p) return '-';
@@ -485,9 +416,15 @@ async function loadKpiMetricCodes() {
 watch(() => currentPlan.value?.kpiSchemeId, () => { loadKpiMetricCodes(); }, { immediate: true });
 
 async function loadValues() {
-  if (!f.planId) { values.value = []; pager.pageNo = 1; return; }
+  if (!f.planId) {
+    values.value = [];
+    valuesError.value = '';
+    pager.pageNo = 1;
+    return;
+  }
   pager.pageNo = 1;
   loadingValues.value = true;
+  valuesError.value = '';
   try {
     // 目标修正取消审批后「提交即生效」，直接写 PERF_TARGET_VALUE，
     // 列表不再 join PERF_TARGET_ADJUST_APPLY，直接展示主表的目标值/基础值。
@@ -519,7 +456,10 @@ async function loadValues() {
         : x.subjectId;
       return { ...x, subjectName, orgName, orgCode, metricName, subjectDisplayId };
     });
-  } catch { values.value = []; } finally { loadingValues.value = false; }
+  } catch {
+    values.value = [];
+    valuesError.value = '目标值加载失败，请检查筛选条件后重新加载。';
+  } finally { loadingValues.value = false; }
 }
 
 const filteredRows = computed(() => {
@@ -538,6 +478,23 @@ const pagedRows = computed(() => {
   const start = (pager.pageNo - 1) * pager.pageSize;
   return filteredRows.value.slice(start, start + pager.pageSize);
 });
+const targetValuesState = computed(() => {
+  if (loadingValues.value) return '目标值列表加载中';
+  if (valuesError.value) return '目标值列表加载失败';
+  return filteredRows.value.length ? `共 ${filteredRows.value.length} 条目标值` : '暂无目标值数据';
+});
+
+function onFilterChange() {
+  pager.pageNo = 1;
+}
+function resetFilters() {
+  f.subjectType = '';
+  f.subjectId = '';
+  f.metricCode = '';
+  f.stageName = '';
+  f.approvalStatus = '';
+  loadValues();
+}
 
 // === 修正弹框 ===
 const adjFormRef = ref(null);
@@ -545,6 +502,7 @@ const adjDlg = reactive({
   show: false, saving: false, row: null,
   form: { newValue: 0, newBaseValue: null, cycleKey: '', ownerOrgId: '', reason: '' }
 });
+const adjustSubmitting = ref(false);
 const adjTitle = computed(() => {
   if (!adjDlg.row) return '目标修正';
   return `目标修正 · ${subjectTypeLabel(adjDlg.row.subjectType)}${adjDlg.row.subjectName} · ${adjDlg.row.metricName || adjDlg.row.metricCode}`;
@@ -573,6 +531,9 @@ async function onDelete(row) {
   }
 }
 function openAdjust(row) {
+  if (!canTargetAdjust.value) {
+    return ElMessage.warning('当前角色无权发起目标调整');
+  }
   // 防御：未选目标方案时提交会报"planId 必填"
   if (!f.planId) {
     return ElMessage.warning('请先在顶部「方案」筛选中选择一个目标方案，再发起修正');
@@ -585,59 +546,70 @@ function openAdjust(row) {
   adjDlg.show = true;
 }
 async function onSubmitAdjust() {
-  try { await adjFormRef.value.validate(); } catch { return; }
-  // 当前目标值与修正后目标值相同时不允许提交
-  const curVal = adjDlg.row?.approvalStatus === 'APPROVED'
-    ? Number(adjDlg.row?.currentTarget ?? adjDlg.row?.targetValue ?? 0)
-    : Number(adjDlg.row?.targetValue ?? adjDlg.row?.originalTarget ?? 0);
-  const curBase = adjDlg.row?.baseValue != null ? Number(adjDlg.row.baseValue) : null;
-  const newBase = adjDlg.form.newBaseValue != null ? Number(adjDlg.form.newBaseValue) : null;
-  const targetChanged = Number(adjDlg.form.newValue) !== curVal;
-  const baseChanged   = newBase !== curBase;
-  // 目标值和基础值都没变 → 无需修正
-  if (!targetChanged && !baseChanged) {
-    return ElMessage.warning('修正后目标值/基础值均与当前值相同，无需修正');
-  }
-  // 后端必填的 cycleKey / ownerOrgId 在这里自动兜底（UI 不再暴露）
-  const plan = plans.value.find(p => (p.id || p.planCode) === f.planId);
-  const cycleKey = adjDlg.row.cycleKey || inferCycleKey();
-  // 归属机构兜底链：行 → 方案 → 当前登录用户主机构（替代之前硬编码 'ROOT'）
-  const ownerOrgId = adjDlg.row.ownerOrgId
-    || adjDlg.row.orgCode
-    || plan?.ownerOrgId
-    || plan?.ownerOrgCode
-    || userStore.user?.mainOrgCode
-    || userStore.user?.orgCode
-    || '';
-  if (!ownerOrgId) {
-    return ElMessage.warning('当前用户没有归属机构，无法发起目标修正。请联系管理员设置主机构。');
-  }
-  adjDlg.saving = true;
+  if (adjDlg.saving || adjustSubmitting.value) return;
+  if (!canTargetAdjust.value) return ElMessage.warning('当前角色无权发起目标调整');
+  // 校验本身异步，单独的同步锁覆盖「尚未进入 saving 状态」的窗口，避免快速双击绕过按钮禁用。
+  adjustSubmitting.value = true;
   try {
-    await submitTargetAdjust({
-      planId:      f.planId,
-      subjectType: adjDlg.row.subjectType,
-      subjectId:   adjDlg.row.subjectId || adjDlg.row.subjectName,
-      cycleKey,
-      ownerOrgId,
-      reason:      adjDlg.form.reason,
-      metricCode:  adjDlg.row.metricCode,
-      oldValue:    Number(adjDlg.row.currentTarget ?? adjDlg.row.targetValue ?? 0),
-      newValue:    Number(adjDlg.form.newValue),
-      oldBaseValue: curBase,
-      newBaseValue: newBase
-    });
-    ElMessage.success('已保存，目标值已生效');
-    adjDlg.show = false;
-    // 直接生效后重新拉取主表，刷新「当前目标 / 基础值」
-    loadValues();
-  } catch (err) {
-    ElMessage.error(err?.bizMsg || err?.message || '提交失败');
-  } finally { adjDlg.saving = false; }
+    try { await adjFormRef.value.validate(); } catch { return; }
+    // 当前目标值与修正后目标值相同时不允许提交
+    const curVal = adjDlg.row?.approvalStatus === 'APPROVED'
+      ? Number(adjDlg.row?.currentTarget ?? adjDlg.row?.targetValue ?? 0)
+      : Number(adjDlg.row?.targetValue ?? adjDlg.row?.originalTarget ?? 0);
+    const curBase = adjDlg.row?.baseValue != null ? Number(adjDlg.row.baseValue) : null;
+    const newBase = adjDlg.form.newBaseValue != null ? Number(adjDlg.form.newBaseValue) : null;
+    const targetChanged = Number(adjDlg.form.newValue) !== curVal;
+    const baseChanged = newBase !== curBase;
+    if (!targetChanged && !baseChanged) {
+      return ElMessage.warning('修正后目标值/基础值均与当前值相同，无需修正');
+    }
+    // 后端必填的 cycleKey / ownerOrgId 在这里自动兜底（UI 不再暴露）
+    const plan = plans.value.find(p => samePlan(p, f.planId));
+    const cycleKey = adjDlg.row.cycleKey || inferCycleKey();
+    const ownerOrgId = adjDlg.row.ownerOrgId
+      || adjDlg.row.orgCode
+      || plan?.ownerOrgId
+      || plan?.ownerOrgCode
+      || userStore.user?.mainOrgCode
+      || userStore.user?.orgCode
+      || '';
+    if (!ownerOrgId) {
+      return ElMessage.warning('当前用户没有归属机构，无法发起目标修正。请联系管理员设置主机构。');
+    }
+    adjDlg.saving = true;
+    try {
+      await submitTargetAdjust({
+        planId: f.planId,
+        subjectType: adjDlg.row.subjectType,
+        subjectId: adjDlg.row.subjectId || adjDlg.row.subjectName,
+        cycleKey,
+        ownerOrgId,
+        reason: adjDlg.form.reason,
+        metricCode: adjDlg.row.metricCode,
+        oldValue: Number(adjDlg.row.currentTarget ?? adjDlg.row.targetValue ?? 0),
+        newValue: Number(adjDlg.form.newValue),
+        oldBaseValue: curBase,
+        newBaseValue: newBase
+      });
+      ElMessage.success('已保存，目标值已生效');
+      adjDlg.show = false;
+      // 直接生效后重新拉取主表，刷新「当前目标 / 基础值」。
+      loadValues();
+    } catch (err) {
+      ElMessage.error(err?.bizMsg || err?.message || '提交失败');
+    } finally {
+      adjDlg.saving = false;
+    }
+  } finally {
+    adjustSubmitting.value = false;
+  }
+}
+function closeAdjust() {
+  if (!adjDlg.saving) adjDlg.show = false;
 }
 // 从筛选方案 / 当前日期推导 cycleKey（YEARLY: yyyy / QUARTERLY: yyyyQn / MONTHLY: yyyyMM）
 function inferCycleKey() {
-  const plan = plans.value.find(p => (p.id || p.planCode) === f.planId);
+  const plan = plans.value.find(p => samePlan(p, f.planId));
   const cycle = (plan?.cycleType || plan?.cycle || 'QUARTERLY').toUpperCase();
   const d = new Date();
   const y = d.getFullYear();
@@ -685,6 +657,9 @@ const metricsForDim = computed(() => {
 async function openCreateRow() {
   if (!f.planId) {
     return ElMessage.warning('请先选择目标方案再新增目标值');
+  }
+  if (!canManageValues.value) {
+    return ElMessage.warning('只有该目标方案的创建人可以新增目标值');
   }
   // 维度默认选中「员工」(EMP)，用户可在对话框中切换
   valDlg.editing = false;
@@ -756,6 +731,7 @@ watch(() => valDlg.form.subjectDisplay, (val) => {
 });
 
 async function onSaveValue() {
+  if (valDlg.saving) return;
   try { await valFormRef.value.validate(); } catch { return; }
   if (!f.planId) {
     return ElMessage.warning('当前没有选中目标方案，无法保存目标值');
@@ -806,20 +782,33 @@ async function onSaveValue() {
     ElMessage.error(err?.bizMsg || err?.message || '保存失败');
   } finally { valDlg.saving = false; }
 }
+function closeValueDialog() {
+  if (!valDlg.saving) valDlg.show = false;
+}
 
 // === 导入目标值 / 下载模板 ===
 const importFileRef = ref(null);
+const importingValues = ref(false);
 function triggerImportFile() {
   if (!f.planId) return ElMessage.warning('请先选择目标方案');
+  if (!canManageValues.value) return ElMessage.warning('只有该目标方案的创建人可以导入目标值');
+  if (importingValues.value) return;
   importFileRef.value?.click();
 }
 async function onImportFileSelected(e) {
+  if (importingValues.value) return;
   const file = e.target?.files?.[0];
   if (!file) return;
+  if (!canManageValues.value) {
+    ElMessage.warning('只有该目标方案的创建人可以导入目标值');
+    if (importFileRef.value) importFileRef.value.value = '';
+    return;
+  }
   const plan = currentPlan.value;
   if (!plan) { ElMessage.warning('当前方案信息缺失'); return; }
-  // 全屏加载遮罩：解析 Excel + 校验 + 批量入库期间显示「正在导入」旋转图标，表示处理中
-  const loading = ElLoading.service({ lock: true, text: '正在导入目标值，请稍候…', background: 'rgba(0, 0, 0, 0.6)' });
+  importingValues.value = true;
+  // 全屏加载遮罩：解析 Excel、校验及批量入库期间保留明确的处理中状态。
+  const loading = ElLoading.service({ lock: true, text: '正在导入目标值，请稍候…' });
   try {
     const XLSX = await import('xlsx');
     const ab = await file.arrayBuffer();
@@ -882,7 +871,8 @@ async function onImportFileSelected(e) {
     ElMessage.error(err?.bizMsg || err?.message || '导入失败');
   } finally {
     loading.close();
-    importFileRef.value.value = '';
+    importingValues.value = false;
+    if (importFileRef.value) importFileRef.value.value = '';
   }
 }
 function downloadTpl() {
@@ -902,46 +892,59 @@ onMounted(async () => {
 </script>
 
 <style lang="scss" scoped>
-.page-h h1 .sub { font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400;
-  em { color: $text-1; font-style: normal; font-weight: 500; }
-  .dot { margin: 0 6px; color: $text-4; }
-}
-.filter-grid {
-  display: grid; grid-template-columns: 120px 220px 1fr 1fr; gap: 16px;
-  .lab { font-size: 13px; color: $text-2; margin-bottom: 6px; }
-}
-.table { padding: 14px 16px 12px; }
-.pager { margin-top: 12px; display: flex; justify-content: flex-end; }
-.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
-.dim-banner {
-  margin: 0 0 16px; padding: 10px 14px; border-radius: 4px;
-  background: rgba(64, 158, 255, 0.08);
-  border-left: 3px solid #409eff;
-  font-size: 14px; color: $text-2;
-}
-.dim-hint { margin-left: 8px; font-size: 12px; color: $text-4; }
-
-.subject {
-  display: inline-flex; align-items: center; gap: 8px; font-size: 13px;
-  .ava {
-    width: 26px; height: 26px; border-radius: 50%; color: #fff;
-    display: inline-flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 600;
-    flex-shrink: 0;
-  }
-  .subject-text {
-    display: inline-flex; flex-direction: column; line-height: 1.35;
-  }
-  .subject-sub {
-    font-size: 12px; color: $text-3;
-  }
+.target-values-page {
+  min-width: 0;
 }
 
-.adj-tag {
-  margin-left: 6px; font-size: 12px; color: #f59e0b; font-weight: 600;
+.page-h .sub em {
+  color: var(--color-text-strong);
+  font-style: normal;
+  font-weight: 500;
 }
 
-.rate-ok  { color: #16a34a; font-weight: 600; }
-.rate-mid { color: #f59e0b; font-weight: 600; }
-.rate-low { color: #dc2626; font-weight: 600; }
+.file-input {
+  block-size: 1px;
+  clip: rect(0 0 0 0);
+  inline-size: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+}
+
+.cell-meta {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.field-control {
+  width: 100%;
+}
+
+.suggestion-row {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+}
+
+.table-error {
+  align-items: center;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-fg);
+  color: var(--color-danger-fg);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+
+.dialog-alert {
+  margin-top: var(--space-3);
+}
 </style>
