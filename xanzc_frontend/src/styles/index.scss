@@ -65,3 +65,140 @@ a { color: inherit; text-decoration: none; }
   .trend.up { color: $success; }
   .trend.down { color: $danger; }
 }
+
+/* Scoped CRUD page baseline */
+.bp-crud {
+  display: grid;
+  gap: var(--space-4);
+  width: 100%;
+}
+
+.bp-crud :where(.page-h) {
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin: 0;
+  min-height: var(--space-8);
+}
+
+.bp-crud :where(.page-h .page-title) {
+  color: var(--color-text-strong);
+  line-height: 28px;
+}
+
+.bp-crud :where(.page-h .sub) {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  margin-left: var(--space-3);
+}
+
+.bp-crud :where(.card-section) {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-surface);
+  margin: 0;
+}
+
+.bp-crud :where(.filter-bar, .filter-form) {
+  align-items: center;
+}
+
+.bp-crud :where(.filter-bar) {
+  padding: var(--space-3) var(--space-4);
+}
+
+.bp-crud :where(.filter-form) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.bp-crud :where(.filter-form .el-form-item) {
+  margin-bottom: 0;
+}
+
+.bp-crud :where(.toolbar) {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.bp-crud :where(.toolbar .section-title) {
+  color: var(--color-text-strong);
+  margin-bottom: var(--space-1);
+}
+
+.bp-crud :where(.data-panel) {
+  padding: var(--space-4);
+}
+
+.bp-crud :where(.data-panel .el-table) {
+  --el-table-border-color: var(--color-border);
+  --el-table-header-bg-color: var(--color-surface-soft);
+  --el-table-row-hover-bg-color: var(--color-brand-100);
+}
+
+.bp-crud :where(.action-group) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.bp-crud :where(.action-group .el-button, .toolbar .el-button) {
+  margin-left: 0;
+  min-height: var(--space-8);
+}
+
+.bp-crud :where(.pager) {
+  align-items: center;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+}
+
+.bp-crud :where(.pager .el-pagination) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: var(--space-2);
+}
+
+.bp-crud :where(.hint) {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.bp-crud :where(.table-state) {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: right;
+}
+
+.bp-crud-dialog {
+  --el-dialog-padding-primary: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-popover);
+}
+
+.bp-crud-dialog :where(.el-dialog__header) {
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 0;
+  margin-right: 0;
+  padding-bottom: var(--space-4);
+}
+
+.bp-crud-dialog :where(.el-dialog__footer) {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+}
+/* End scoped CRUD page baseline */

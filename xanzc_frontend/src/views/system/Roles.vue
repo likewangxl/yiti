@@ -1,21 +1,21 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle><span class="sub">角色 CRUD · 已绑用户查看 · 资源/数据范围请去【权限配置】</span></PageTitle>
-      <div class="actions">
+  <main class="bp-crud roles-page" aria-labelledby="roles-page-title">
+    <header class="page-h">
+      <PageTitle id="roles-page-title"><span class="sub">角色 CRUD · 已绑用户查看 · 资源/数据范围请去【权限配置】</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="角色管理操作">
         <el-button @click="reload">刷新</el-button>
         <el-button @click="goPermission">→ 配置资源/数据范围</el-button>
         <el-button type="primary" @click="openCreate">+ 新增角色</el-button>
       </div>
-    </div>
+    </header>
 
-    <div class="card-section">
-      <el-form inline size="default">
+    <section class="card-section filter-bar" aria-label="角色筛选">
+      <el-form class="filter-form" inline size="default" aria-label="角色筛选">
         <el-form-item label="关键字">
-          <el-input v-model="filters.keyword" placeholder="角色名 / 角色编码" clearable style="width:220px" />
+          <el-input v-model="filters.keyword" aria-label="按角色名称或编码筛选" placeholder="角色名 / 角色编码" clearable style="width:220px" />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="filters.recordStatus" clearable placeholder="全部" style="width:140px">
+          <el-select v-model="filters.recordStatus" aria-label="按角色状态筛选" clearable placeholder="全部" style="width:140px">
             <el-option :value="0" label="可用" />
             <el-option :value="1" label="不可用" />
           </el-select>
@@ -25,10 +25,20 @@
           <el-button @click="resetFilters">重置</el-button>
         </el-form-item>
       </el-form>
-    </div>
+    </section>
 
-    <div class="card-section">
-      <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无角色">
+    <section class="card-section data-panel" aria-label="角色列表" aria-describedby="roles-table-state" :aria-busy="loading ? 'true' : 'false'">
+      <div class="toolbar">
+        <div>
+          <h2 id="roles-table-heading" class="section-title">角色列表</h2>
+          <p class="hint">查看角色状态、已绑用户及菜单分配。</p>
+        </div>
+        <p id="roles-table-state" class="table-state" role="status" aria-live="polite">
+          {{ loading ? '角色列表加载中' : rows.length ? `共 ${pager.total} 个角色` : '暂无角色数据' }}
+        </p>
+      </div>
+
+      <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无角色数据" aria-labelledby="roles-table-heading" aria-describedby="roles-table-state">
         <el-table-column prop="roleCode" label="角色编码" width="160">
           <template #default="{row}"><code class="mono">{{ row.roleCode }}</code></template>
         </el-table-column>
@@ -62,7 +72,7 @@
         </el-table-column>
       </el-table>
 
-      <div class="pager">
+      <nav class="pager" aria-label="角色列表分页">
         <el-pagination
           v-model:current-page="pager.pageNo"
           v-model:page-size="pager.pageSize"
@@ -73,11 +83,11 @@
           @size-change="reload"
           @current-change="reload"
         />
-      </div>
-    </div>
+      </nav>
+    </section>
 
     <!-- 新增 / 编辑弹窗 -->
-    <el-dialog v-model="dlg.show" :title="dlg.editing ? '编辑角色' : '新增角色'" width="520px">
+    <el-dialog v-model="dlg.show" class="bp-crud-dialog" :title="dlg.editing ? '编辑角色' : '新增角色'" width="520px">
       <el-form ref="dlgFormRef" :model="dlg.form" :rules="dlg.rules" label-width="100px">
         <!-- 角色编码：新增时不显示（后端自动生成 R_XXXXXXXX），编辑时只读展示 -->
         <el-form-item v-if="dlg.editing" label="角色编码">
@@ -103,7 +113,7 @@
     </el-dialog>
 
     <!-- 分配菜单弹窗（参考 xanpd role.vue：左侧角色名 + 右侧菜单树勾选） -->
-    <el-dialog v-model="menuDlg.show" :title="`分配菜单 · ${menuDlg.role?.roleChName || ''}`" width="520px" :close-on-click-modal="false">
+    <el-dialog v-model="menuDlg.show" class="bp-crud-dialog" :title="`分配菜单 · ${menuDlg.role?.roleChName || ''}`" width="520px" :close-on-click-modal="false">
       <el-form label-width="80px" v-if="menuDlg.role">
         <el-form-item label="角色">
           <el-input :value="menuDlg.role.roleChName" disabled />
@@ -138,7 +148,7 @@
     </el-dialog>
 
     <!-- 已绑用户弹窗 -->
-    <el-dialog v-model="userDlg.show" :title="`已绑用户 · ${userDlg.role?.roleChName || ''}`" width="760px">
+    <el-dialog v-model="userDlg.show" class="bp-crud-dialog" :title="`已绑用户 · ${userDlg.role?.roleChName || ''}`" width="760px">
       <el-table :data="userDlg.rows" size="default" v-loading="userDlg.loading" max-height="420" empty-text="暂无用户">
         <!-- 后端 RoleUserRespDTO 字段：empId/username/displayName/orgCode/orgName/isEnabled/bindTime -->
         <el-table-column label="工号" width="120">
@@ -182,7 +192,7 @@
         <el-button @click="userDlg.show = false">关闭</el-button>
       </template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -371,17 +381,13 @@ onMounted(reload);
 </script>
 
 <style lang="scss" scoped>
-.page-h h1 .sub { font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400; }
-.pager { margin-top: 14px; display: flex; justify-content: flex-end; }
-.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
-.hint { color: $text-3; font-size: 12px; margin-top: 4px; }
-.mono { font-family: ui-monospace, monospace; font-size: 12px; }
+.mono { color: var(--color-text); font-family: ui-monospace, monospace; font-size: 12px; }
 .menu-tree-wrap {
   max-height: 360px;
   overflow: auto;
   width: 100%;
-  border: 1px solid $border-2;
-  border-radius: 4px;
-  padding: 6px 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  padding: var(--space-2);
 }
 </style>
