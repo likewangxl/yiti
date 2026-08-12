@@ -1,10 +1,10 @@
 <template>
-  <main class="no-access">
+  <main class="no-access" aria-labelledby="no-access-title">
     <div class="no-access__card">
       <div class="no-access__code">403</div>
-      <h1>暂无可访问功能</h1>
-      <p>可能尚未分配菜单，或权限信息加载失败。你可以重新加载权限，仍无法进入时请联系系统管理员。</p>
-      <div class="no-access__actions">
+      <h1 id="no-access-title">暂无可访问功能</h1>
+      <p role="status" aria-live="polite">可能尚未分配菜单，或权限信息加载失败。你可以重新加载权限，仍无法进入时请联系系统管理员。</p>
+      <div class="no-access__actions" role="group" aria-label="权限恢复操作">
         <el-button type="primary" :loading="retrying" @click="retry">重新加载权限</el-button>
         <el-button @click="exitLogin">退出登录</el-button>
       </div>
@@ -62,24 +62,26 @@ async function exitLogin() {
 }
 .no-access__card {
   width: min(440px, 100%);
-  padding: 48px 36px;
-  border: 1px solid $border-1;
-  border-radius: 12px;
-  background: #fff;
+  padding: var(--space-8) var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
   text-align: center;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, .08);
+  box-shadow: var(--shadow-surface);
 }
 .no-access__code {
-  color: $primary;
-  font-size: 52px;
+  color: var(--color-brand-700);
+  font-size: 48px;
   font-weight: 700;
   line-height: 1;
 }
-h1 { margin: 18px 0 8px; color: $text-1; font-size: 22px; }
-p { margin: 0; color: $text-3; font-size: 14px; line-height: 1.7; }
+h1 { margin: var(--space-4) 0 var(--space-2); color: var(--color-text-strong); font-size: 22px; }
+p { margin: 0; color: var(--color-text-muted); font-size: 14px; line-height: 1.7; }
 .no-access__actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   justify-content: center;
-  margin-top: 28px;
+  margin-top: var(--space-6);
 }
 </style>

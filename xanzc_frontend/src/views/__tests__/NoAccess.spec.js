@@ -49,6 +49,12 @@ beforeEach(() => {
 afterEach(() => wrapper?.unmount());
 
 describe('NoAccess 安全恢复入口', () => {
+  it('提供可读主标题和权限恢复操作组', () => {
+    expect(wrapper.find('main[aria-labelledby="no-access-title"]').exists()).toBe(true);
+    expect(wrapper.find('h1#no-access-title').exists()).toBe(true);
+    expect(wrapper.find('[aria-label="权限恢复操作"]').exists()).toBe(true);
+  });
+
   it('说明权限可能未分配或加载失败，并可重试进入首个授权菜单', async () => {
     expect(wrapper.text()).toContain('权限信息加载失败');
     expect(wrapper.text()).toContain('重新加载权限');

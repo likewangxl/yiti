@@ -4,13 +4,13 @@
   后端：GET /api/reports/notices（列表） / GET /api/reports/notices/{id}（详情）
 -->
 <template>
-  <div class="notice-query">
+  <main class="bp-crud notice-query" aria-labelledby="notice-query-title">
     <div class="page-h">
-      <PageTitle />
+      <PageTitle id="notice-query-title" />
       <span class="desc">通知公告查询，按序号倒序</span>
     </div>
 
-    <div class="card-section">
+    <section class="card-section filter-bar" aria-label="公告筛选">
       <el-form inline size="default" class="filter-form" @submit.prevent>
         <el-form-item label="标题">
           <el-input v-model="q.title" placeholder="模糊" clearable style="width:220px" />
@@ -30,13 +30,29 @@
           <el-button @click="onReset">重置</el-button>
         </el-form-item>
       </el-form>
+    </section>
 
-      <el-table :data="rows" v-loading="loading" border stripe size="default" empty-text="暂无公告">
+    <section class="card-section data-panel" aria-label="公告列表" aria-describedby="notice-table-state" :aria-busy="loading ? 'true' : 'false'">
+      <div class="toolbar">
+        <div>
+          <h2 id="notice-table-heading" class="section-title">公告列表</h2>
+          <p class="hint">按标题、公开范围和创建时间查询历史公告。</p>
+        </div>
+        <p id="notice-table-state" class="table-state" role="status" aria-live="polite">
+          {{ errorMessage || (loading ? '公告列表加载中' : rows.length ? `共 ${total} 条公告` : '暂无公告') }}
+        </p>
+      </div>
+      <div v-if="errorMessage" class="error-state" role="alert">
+        <span>{{ errorMessage }}</span>
+        <el-button link type="primary" @click="reload">重试</el-button>
+      </div>
+      <el-table :data="rows" v-loading="loading" border stripe size="default" empty-text="暂无公告"
+                aria-labelledby="notice-table-heading" aria-describedby="notice-table-state">
         <el-table-column type="index" label="序号" width="60" />
         <el-table-column prop="title" label="标题" min-width="240" show-overflow-tooltip />
         <el-table-column label="是否公开" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.isPublic === '1' ? 'success' : 'info'" effect="plain" size="small">
+            <el-tag :class="row.isPublic === '1' ? 'tag-success' : 'tag-info'" effect="plain" size="small">
               {{ row.isPublic === '1' ? '公开' : '私有' }}
             </el-tag>
           </template>
@@ -57,14 +73,15 @@
           layout="total, sizes, prev, pager, next, jumper"
           @size-change="reload" @current-change="reload" />
       </div>
-    </div>
+    </section>
 
     <!-- 正文弹框 -->
-    <el-dialog v-model="dlg.show" :title="dlg.data.title || '公告详情'" width="720px" top="6vh">
-      <div v-loading="dlg.loading" class="notice-detail">
+    <el-dialog v-model="dlg.show" class="bp-crud-dialog" :title="dlg.data.title || '公告详情'" width="720px" top="6vh">
+      <section v-loading="dlg.loading" class="detail-section notice-detail" aria-label="公告详情" :aria-busy="dlg.loading ? 'true' : 'false'">
+        <p v-if="dlg.errorMessage" class="error-state" role="alert">{{ dlg.errorMessage }}</p>
         <div class="meta">
           <span>创建时间：{{ dlg.data.createTime || '-' }}</span>
-          <el-tag :type="dlg.data.isPublic === '1' ? 'success' : 'info'" effect="plain" size="small">
+          <el-tag :class="dlg.data.isPublic === '1' ? 'tag-success' : 'tag-info'" effect="plain" size="small">
             {{ dlg.data.isPublic === '1' ? '公开' : '私有' }}
           </el-tag>
         </div>
@@ -73,10 +90,10 @@
           <span>附件：{{ dlg.data.extend }}</span>
           <el-button link type="primary" :loading="dlg.downloading" @click="onDownloadAtt">下载附件</el-button>
         </div>
-      </div>
+      </section>
       <template #footer><el-button @click="dlg.show = false">关闭</el-button></template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -87,6 +104,7 @@ import { listNotices, getNotice, downloadNoticeAttachment } from '@/api/history'
 const loading = ref(false);
 const rows = ref([]);
 const total = ref(0);
+const errorMessage = ref('');
 const pageNo = ref(1);
 const pageSize = ref(20);
 const q = reactive({ title: '', isPublic: '' });
@@ -94,6 +112,7 @@ const dateRange = ref(null);
 
 async function reload() {
   loading.value = true;
+  errorMessage.value = '';
   try {
     const params = { pageNo: pageNo.value, pageSize: pageSize.value };
     if (q.title) params.title = q.title.trim();
@@ -103,20 +122,21 @@ async function reload() {
     const r = await listNotices(params);
     rows.value = r.records || [];
     total.value = r.total || 0;
-  } catch { rows.value = []; total.value = 0; }
+  } catch { rows.value = []; total.value = 0; errorMessage.value = '公告列表加载失败，请重试'; }
   finally { loading.value = false; }
 }
 function onSearch() { pageNo.value = 1; reload(); }
 function onReset() { q.title = ''; q.isPublic = ''; dateRange.value = null; pageNo.value = 1; reload(); }
 
-const dlg = reactive({ show: false, loading: false, downloading: false, data: {} });
+const dlg = reactive({ show: false, loading: false, downloading: false, data: {}, errorMessage: '' });
 async function openDetail(row) {
+  if (dlg.loading) return;
   dlg.data = { ...row };
-  dlg.show = true; dlg.loading = true;
+  dlg.show = true; dlg.loading = true; dlg.errorMessage = '';
   try {
     const d = await getNotice(row.noticId);
     if (d && d.noticId) dlg.data = d;
-  } catch { ElMessage.error('加载公告失败'); }
+  } catch { dlg.errorMessage = '公告详情加载失败，请重试'; ElMessage.error('加载公告失败'); }
   finally { dlg.loading = false; }
 }
 
@@ -134,12 +154,22 @@ onMounted(reload);
 </script>
 
 <style lang="scss" scoped>
-.filter-form { margin-bottom: 12px; }
-.pager { margin-top: 12px; display: flex; justify-content: flex-end; }
+.notice-query { min-width: 0; }
 .notice-detail {
-  .meta { display: flex; align-items: center; gap: 12px; color: #888; font-size: 13px; margin-bottom: 12px; }
+  .meta { display: flex; align-items: center; gap: var(--space-3); color: var(--color-text-muted); font-size: 13px; margin-bottom: var(--space-3); }
   .content { white-space: pre-wrap; line-height: 1.7; font-size: 14px; min-height: 80px; }
-  .extend { margin-top: 14px; padding-top: 12px; border-top: 1px solid #eee; font-size: 13px; color: #555;
-            display: flex; align-items: center; gap: 12px; }
+  .extend { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--color-border); font-size: 13px; color: var(--color-text);
+            display: flex; align-items: center; gap: var(--space-3); }
+}
+.error-state {
+  align-items: center;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-danger-fg);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
 }
 </style>

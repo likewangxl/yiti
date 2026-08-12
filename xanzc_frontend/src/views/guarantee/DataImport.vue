@@ -4,13 +4,13 @@
   后端：GET /api/reports/data-imports（列表） / GET /api/reports/data-imports/{batchNum}（透视数据）
 -->
 <template>
-  <div class="data-import">
+  <main class="bp-crud data-import" aria-labelledby="data-import-title">
     <div class="page-h">
-      <PageTitle />
+      <PageTitle id="data-import-title" />
       <span class="desc">导入批次列表，点击「查看数据」展示该批次的导入数据</span>
     </div>
 
-    <div class="card-section">
+    <section class="card-section filter-bar" aria-label="导入批次筛选">
       <el-form inline size="default" class="filter-form" @submit.prevent>
         <el-form-item label="批次号">
           <el-input v-model="q.batchNum" placeholder="模糊" clearable style="width:180px" />
@@ -28,7 +28,24 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="rows" v-loading="loading" border stripe size="default" empty-text="暂无导入批次">
+    </section>
+
+    <section class="card-section data-panel" aria-label="导入批次列表" aria-describedby="data-import-table-state" :aria-busy="loading ? 'true' : 'false'">
+      <div class="toolbar">
+        <div>
+          <h2 id="data-import-table-heading" class="section-title">导入批次列表</h2>
+          <p class="hint">按批次查看历史导入记录，可打开透视数据或下载批次文件。</p>
+        </div>
+        <p id="data-import-table-state" class="table-state" role="status" aria-live="polite">
+          {{ errorMessage || (loading ? '导入批次加载中' : rows.length ? `共 ${total} 个批次` : '暂无导入批次') }}
+        </p>
+      </div>
+      <div v-if="errorMessage" class="error-state" role="alert">
+        <span>{{ errorMessage }}</span>
+        <el-button link type="primary" @click="reload">重试</el-button>
+      </div>
+      <el-table :data="rows" v-loading="loading" border stripe size="default" empty-text="暂无导入批次"
+                aria-labelledby="data-import-table-heading" aria-describedby="data-import-table-state">
         <el-table-column type="index" label="序号" width="60" />
         <el-table-column prop="batchNum" label="批次号" min-width="160" show-overflow-tooltip />
         <el-table-column prop="dataName" label="数据名称" min-width="160" show-overflow-tooltip />
@@ -53,10 +70,11 @@
           layout="total, sizes, prev, pager, next, jumper"
           @size-change="reload" @current-change="reload" />
       </div>
-    </div>
+    </section>
 
     <!-- 透视数据弹框：动态表头 + 行（服务端分页，前两列模糊过滤） -->
-    <el-dialog v-model="dlg.show" :title="dlg.title" width="1200px" top="4vh" class="view-dialog">
+    <el-dialog v-model="dlg.show" :title="dlg.title" width="1200px" top="4vh" class="view-dialog bp-crud-dialog">
+      <section class="detail-section" aria-label="导入批次数据详情" :aria-busy="dlg.loading ? 'true' : 'false'">
       <el-form v-if="dlg.columns.length" inline size="default" class="dlg-filter" @submit.prevent>
         <el-form-item v-if="dlg.columns[0]" :label="dlg.columns[0].label">
           <el-input v-model="dlg.f1" placeholder="模糊" clearable style="width:160px"
@@ -85,9 +103,11 @@
           layout="total, sizes, prev, pager, next, jumper"
           @size-change="loadDlgPage" @current-change="loadDlgPage" />
       </div>
+      <p v-if="dlg.errorMessage" class="error-state" role="alert">{{ dlg.errorMessage }}</p>
+      </section>
       <template #footer><el-button @click="dlg.show = false">关闭</el-button></template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -98,6 +118,7 @@ import { listDataImports, getDataImportData, exportDataImport } from '@/api/hist
 const loading = ref(false);
 const rows = ref([]);
 const total = ref(0);
+const errorMessage = ref('');
 const pageNo = ref(1);
 const pageSize = ref(20);
 const q = reactive({ batchNum: '', dataName: '' });
@@ -105,6 +126,7 @@ const dateRange = ref(null);
 
 async function reload() {
   loading.value = true;
+  errorMessage.value = '';
   try {
     const params = { pageNo: pageNo.value, pageSize: pageSize.value };
     if (q.batchNum) params.batchNum = q.batchNum.trim();
@@ -114,21 +136,23 @@ async function reload() {
     const r = await listDataImports(params);
     rows.value = r.records || [];
     total.value = r.total || 0;
-  } catch { rows.value = []; total.value = 0; }
+  } catch { rows.value = []; total.value = 0; errorMessage.value = '导入批次加载失败，请重试'; }
   finally { loading.value = false; }
 }
 function onSearch() { pageNo.value = 1; reload(); }
 function onReset() { q.batchNum = ''; q.dataName = ''; dateRange.value = null; pageNo.value = 1; reload(); }
 
 const dlg = reactive({ show: false, loading: false, title: '', batchNum: '',
-  columns: [], rows: [], pageNo: 1, pageSize: 20, total: 0, f1: '', f2: '' });
+  columns: [], rows: [], pageNo: 1, pageSize: 20, total: 0, f1: '', f2: '', errorMessage: '' });
 
 // 打开查看弹框：重置分页/过滤并加载首页
 async function openData(row) {
+  if (dlg.loading) return;
   dlg.title = `导入数据 · ${row.dataName || row.batchNum}`;
   dlg.batchNum = row.batchNum;
   dlg.columns = []; dlg.rows = []; dlg.pageNo = 1; dlg.total = 0;
   dlg.f1 = ''; dlg.f2 = '';
+  dlg.errorMessage = '';
   dlg.show = true;
   await loadDlgPage();
 }
@@ -137,6 +161,7 @@ async function openData(row) {
 async function loadDlgPage() {
   if (!dlg.batchNum) return;
   dlg.loading = true;
+  dlg.errorMessage = '';
   try {
     const params = { pageNo: dlg.pageNo, pageSize: dlg.pageSize };
     // 列 key 取自上一次返回的动态表头；首次加载无表头则不带过滤
@@ -146,7 +171,7 @@ async function loadDlgPage() {
     dlg.columns = d.columns || [];
     dlg.rows = d.rows || [];
     dlg.total = d.total || 0;
-  } catch { ElMessage.error('加载数据失败'); }
+  } catch { dlg.errorMessage = '批次数据加载失败，请重试'; ElMessage.error('加载数据失败'); }
   finally { dlg.loading = false; }
 }
 
@@ -156,6 +181,7 @@ function onDlgReset() { dlg.f1 = ''; dlg.f2 = ''; dlg.pageNo = 1; loadDlgPage();
 
 // 下载整个批次为 Excel（后端全量生成，不分页）
 async function onDownload(row) {
+  if (row._downloading) return;
   row._downloading = true;
   try {
     await exportDataImport(row.batchNum, `数据导入_${row.dataName || row.batchNum}.xlsx`);
@@ -167,9 +193,19 @@ onMounted(reload);
 </script>
 
 <style lang="scss" scoped>
-.filter-form { margin-bottom: 12px; }
-.dlg-filter { margin-bottom: 10px; }
-.pager { margin-top: 12px; display: flex; justify-content: flex-end; }
+.data-import { min-width: 0; }
+.dlg-filter { margin-bottom: var(--space-3); }
+.error-state {
+  align-items: center;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-danger-fg);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
 </style>
 
 <!-- 非 scoped：el-dialog 默认 teleport 到 body，scoped 选择器选不中，用自定义 class 限定全局样式 -->
