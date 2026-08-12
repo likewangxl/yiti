@@ -229,7 +229,7 @@ describe('Dashboard.vue 行长报表仪表盘', () => {
     expect(wrapper.get('[data-testid="trend-summary"]').text()).toContain('一般性存款月均（万元）');
   });
 
-  it('排名以达成率为主值，目标和实际为辅助值且不臆造单位', async () => {
+  it('排名区展示机构存款规模实际值和单位，不表达达成率', async () => {
     getDashboardPresidentMock.mockResolvedValue(dashboardFixture({
       ranking: [{
         rank: 2,
@@ -244,12 +244,14 @@ describe('Dashboard.vue 行长报表仪表盘', () => {
     wrapper = mountDashboard();
     await settle();
 
+    const section = wrapper.get('.rank-card');
     const row = wrapper.get('[data-testid="rank-row"]');
-    expect(row.get('[data-testid="achievement-rate"]').text()).toBe('91.2%');
-    expect(row.get('[data-testid="rank-target"]').text()).toContain('800 万元');
-    expect(row.get('[data-testid="rank-actual"]').text()).toContain('729.6 万元');
-    expect(row.get('[data-testid="rank-actual"]').text()).not.toContain('%');
-    expect(row.get('[data-testid="rank-status"]').text()).toBe('未达成');
-    expect(row.get('[data-testid="rank-progress"]').attributes('style')).toContain('91.2%');
+    expect(section.get('.title').text()).toBe('机构存款规模排名');
+    expect(section.text()).toContain('729.6 万元');
+    expect(section.text()).not.toMatch(/%|达成|目标/);
+    expect(section.text()).not.toContain('91.2');
+    expect(row.get('[data-testid="rank-value"]').text()).toBe('729.6 万元');
+    expect(row.attributes('aria-label')).toContain('存款规模 729.6 万元');
+    expect(row.attributes('aria-label')).not.toMatch(/达成率|已达成|目标|实际/);
   });
 });

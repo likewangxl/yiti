@@ -38,7 +38,7 @@ describe('行长仪表盘 API 适配', () => {
     callMock.mockReset();
   });
 
-  it('把 date 映射为 dataDate，并保留趋势系列和排名业务字段', async () => {
+  it('把 date 映射为 dataDate，并保留趋势系列及排名实际值单位', async () => {
     callMock.mockResolvedValue(presidentResponse);
 
     const result = await getDashboardPresident({ orgCode: 'XA001', date: '2026-08-10' });
@@ -61,6 +61,30 @@ describe('行长仪表盘 API 适配', () => {
       target: 800,
       actual: 729.6,
       unit: '万元'
+    }]);
+  });
+
+  it('V1 排名未提供单位或 actual 时，按 M_0265 存款规模补实际值和万单位', async () => {
+    callMock.mockResolvedValue({
+      ...presidentResponse,
+      orgRanking: [{
+        rank: 1,
+        orgName: '城北支行',
+        achievementRate: 680,
+        target: null,
+        actual: null
+      }]
+    });
+
+    const result = await getDashboardPresident({ date: '2026-08-10' });
+
+    expect(result.ranking).toEqual([{
+      rank: 1,
+      orgName: '城北支行',
+      achievementRate: 680,
+      target: null,
+      actual: 680,
+      unit: '万'
     }]);
   });
 

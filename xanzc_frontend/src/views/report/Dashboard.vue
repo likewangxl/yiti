@@ -64,7 +64,7 @@
           <div class="panel-skeleton" />
         </section>
         <section class="card-section rank-card card-section--loading" aria-label="机构排名加载中">
-          <div class="card-h"><h2 class="title">机构达成率排名</h2></div>
+          <div class="card-h"><h2 class="title">机构存款规模排名</h2></div>
           <div class="panel-skeleton" />
         </section>
       </section>
@@ -132,11 +132,11 @@
         <section class="card-section rank-card" aria-labelledby="ranking-title">
           <div class="card-h">
             <div>
-              <h2 id="ranking-title" class="title">机构达成率排名</h2>
-              <p class="card-meta">主值为达成率，目标与实际为辅助参考</p>
+              <h2 id="ranking-title" class="title">机构存款规模排名</h2>
+              <p class="card-meta">按存款规模排序，单位以接口返回为准</p>
             </div>
           </div>
-          <ol v-if="hasRankingData" class="rank-list" aria-label="按达成率排序的机构排名">
+          <ol v-if="hasRankingData" class="rank-list" aria-label="按存款规模排序的机构排名">
             <li
               v-for="(rank, index) in data.ranking"
               :key="rank.orgId || rank.orgCode || rank.orgName || index"
@@ -150,34 +150,20 @@
                 <div class="rank-progress-track" aria-hidden="true">
                   <span
                     class="rank-progress"
-                    :class="`rank-progress--${rankStatusType(rank)}`"
-                    :style="{ width: `${rankingProgress(rank.achievementRate)}%` }"
+                    :style="{ width: `${rankingProgress(rank)}%` }"
                     data-testid="rank-progress"
                   />
                 </div>
               </div>
               <div class="rank-result">
-                <strong class="achievement-rate" data-testid="achievement-rate">{{ formatAchievementRate(rank.achievementRate) }}</strong>
-                <span class="achievement-label">达成率</span>
-                <span :class="['rank-status', `rank-status--${rankStatusType(rank)}`]" data-testid="rank-status">
-                  {{ rankStatus(rank) }}
-                </span>
+                <strong class="rank-value" data-testid="rank-value">{{ formatAmount(rankingActual(rank), rank.unit) }}</strong>
+                <span class="rank-value-label">存款规模</span>
               </div>
-              <dl class="rank-support">
-                <div>
-                  <dt>目标</dt>
-                  <dd data-testid="rank-target">{{ formatAmount(rank.target, rank.unit) }}</dd>
-                </div>
-                <div>
-                  <dt>实际</dt>
-                  <dd data-testid="rank-actual">{{ formatAmount(rank.actual, rank.unit) }}</dd>
-                </div>
-              </dl>
             </li>
           </ol>
           <div v-else class="section-empty section-empty--compact" data-testid="ranking-empty" role="status">
             <strong>暂无机构排名数据</strong>
-            <span>当前数据日期没有可排名的机构达成率。</span>
+            <span>当前数据日期没有可排名的机构存款规模。</span>
           </div>
         </section>
       </section>
@@ -373,39 +359,33 @@ function formatAmount(value, unit = '') {
   return formatted === '—' ? formatted : (unit ? `${formatted} ${unit}` : formatted);
 }
 
-function formatAchievementRate(value) {
-  if (!hasValue(value)) return '—';
-  const rendered = String(value).trim();
-  return rendered.endsWith('%') ? rendered : `${formatNumber(value)}%`;
-}
-
-function numericAchievementRate(value) {
+function numericRankingValue(value) {
   if (!hasValue(value)) return null;
-  const numeric = Number(String(value).replace('%', '').trim());
+  const numeric = Number(String(value).replace(/,/g, '').trim());
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function rankingProgress(value) {
-  const rate = numericAchievementRate(value);
-  return rate === null ? 0 : Math.min(100, Math.max(0, rate));
+function rankingActual(rank) {
+  return hasValue(rank?.actual) ? rank.actual : rank?.achievementRate;
 }
 
-function rankStatusType(rank) {
-  const rate = numericAchievementRate(rank.achievementRate);
-  if (rate === null) return 'pending';
-  return rate >= 100 ? 'achieved' : 'behind';
-}
+const maxRankingValue = computed(() => Math.max(
+  0,
+  ...data.value.ranking
+    .map(rank => numericRankingValue(rankingActual(rank)))
+    .filter(value => value !== null)
+));
 
-function rankStatus(rank) {
-  const type = rankStatusType(rank);
-  if (type === 'pending') return '待计算';
-  return type === 'achieved' ? '已达成' : '未达成';
+function rankingProgress(rank) {
+  const value = numericRankingValue(rankingActual(rank));
+  if (value === null || maxRankingValue.value <= 0) return 0;
+  return Math.min(100, Math.max(0, (value / maxRankingValue.value) * 100));
 }
 
 function rankingAriaLabel(rank, index) {
   const name = rank.orgName || '未命名机构';
   const position = rank.rank || index + 1;
-  return `${name}，第 ${position} 名，达成率 ${formatAchievementRate(rank.achievementRate)}，${rankStatus(rank)}，目标 ${formatAmount(rank.target, rank.unit)}，实际 ${formatAmount(rank.actual, rank.unit)}`;
+  return `${name}，第 ${position} 名，存款规模 ${formatAmount(rankingActual(rank), rank.unit)}`;
 }
 
 async function onExportPdf() {
@@ -642,8 +622,7 @@ onBeforeUnmount(() => { requestGeneration += 1; });
   }
 
   .rank-no,
-  .achievement-label,
-  .rank-support dt {
+  .rank-value-label {
     color: var(--color-text-muted);
     font-size: 12px;
     line-height: 18px;
@@ -676,62 +655,22 @@ onBeforeUnmount(() => { requestGeneration += 1; });
     display: block;
     height: 100%;
     border-radius: inherit;
+    background: var(--color-brand-700);
   }
-
-  .rank-progress--achieved { background: var(--color-success-fg); }
-  .rank-progress--behind { background: var(--color-warning-fg); }
-  .rank-progress--pending { background: var(--color-text-muted); }
 
   .rank-result {
-    display: grid;
-    grid-template-columns: auto auto;
-    column-gap: var(--space-1);
-    align-items: baseline;
-    justify-items: end;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-1);
+    text-align: right;
   }
 
-  .achievement-rate {
+  .rank-value {
     color: var(--color-text-strong);
     font-size: 18px;
     font-weight: 600;
     line-height: 24px;
-  }
-
-  .rank-status {
-    grid-column: 1 / -1;
-    margin-top: var(--space-1);
-    font-size: 12px;
-    line-height: 18px;
-  }
-
-  .rank-status--achieved { color: var(--color-success-fg); }
-  .rank-status--behind { color: var(--color-warning-fg); }
-  .rank-status--pending { color: var(--color-text-muted); }
-
-  .rank-support {
-    grid-column: 2 / -1;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-2);
-    margin: 0;
-  }
-
-  .rank-support div {
-    min-width: 0;
-  }
-
-  .rank-support dt,
-  .rank-support dd {
-    margin: 0;
-  }
-
-  .rank-support dd {
-    overflow: hidden;
-    color: var(--color-text);
-    font-size: 12px;
-    line-height: 18px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .state-panel {

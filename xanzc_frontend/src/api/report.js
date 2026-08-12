@@ -212,7 +212,7 @@ function mapDashboardParams(params = {}) {
 
 // 后端 PresidentDashboardRespDTO 的字段名与 Dashboard.vue 消费模型不同。
 // 适配层只统一容器结构，业务字段必须原样保留：趋势系列的 name/unit 和排名的
-// rank/orgName/achievementRate/target/actual 都由页面直接消费，避免把 actual 误当达成率。
+// rank/orgName/achievementRate/target/actual 都可供调用方按需消费，排名页面按存款规模语义展示。
 function normalizeChart(chart) {
   if (!chart || typeof chart !== 'object') return { xAxis: [], series: [] };
   return {
@@ -234,15 +234,17 @@ function normalizeLegacyTrend(trend) {
 }
 
 function normalizeRanking(items) {
+  // V1 排名实际按 M_0265 一般性存款月均余额排序；后端 DTO 暂无排名 unit，页面因此按该指标配置使用“万”。
+  const defaultRankingUnit = '万';
   return (Array.isArray(items) ? items : []).map((item, index) => ({
     ...item,
     rank: item.rank ?? (index + 1),
     orgName: item.orgName ?? item.org ?? '',
     achievementRate: item.achievementRate ?? null,
     target: item.target ?? null,
-    actual: item.actual ?? item.val ?? null,
-    // 当前后端 DTO 未固定 unit 字段；一旦后端补充，页面使用其真实单位而不臆造金额单位。
-    unit: item.unit ?? item.actualUnit ?? item.targetUnit ?? ''
+    actual: item.actual ?? item.val ?? item.achievementRate ?? null,
+    // 后端补充 unit/actualUnit/targetUnit 时严格透传，否则按 V1 的 M_0265 配置映射为“万”。
+    unit: item.unit || item.actualUnit || item.targetUnit || defaultRankingUnit
   }));
 }
 
