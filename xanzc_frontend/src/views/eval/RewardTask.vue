@@ -1,32 +1,34 @@
 <template>
   <!-- 奖励分配明细录入（分配人把该部门共同的「分配合计」分给部门下每一个人） -->
-  <div class="reward-task">
-    <div class="page-h">
-      <el-button :icon="ArrowLeft" plain @click="emit('back')">返回</el-button>
-      <h1 class="process-title">{{ group.taskName || group.dept || '无部门' }}</h1>
-      <span class="desc">{{ group.taskTypeLabel || group.taskType }} · {{ group.dept || '' }}</span>
-      <div class="proc-actions">
+  <section class="bp-crud reward-task" aria-labelledby="reward-task-page-title" :aria-busy="loading ? 'true' : 'false'">
+    <header class="page-h">
+      <el-button :icon="ArrowLeft" plain aria-label="返回待处理任务" @click="emit('back')">返回</el-button>
+      <h1 id="reward-task-page-title" class="process-title">{{ group.taskName || group.dept || '无部门' }}</h1>
+      <span class="sub">{{ group.taskTypeLabel || group.taskType }} · {{ group.dept || '' }}</span>
+      <div class="proc-actions action-group" role="group" aria-label="奖励分配操作">
         <div class="default-setter">
           <span class="ds-label">给每个人分配</span>
           <el-input-number v-model="fillEach" :min="0" :step="1" :precision="2" size="small"
-            controls-position="right" style="width: 140px" />
+            controls-position="right" class="fill-input" aria-label="每人默认分配金额" />
           <el-button size="small" @click="applyFillEach">应用到全部</el-button>
         </div>
         <el-button
           type="primary"
           :loading="submitting"
-          :disabled="!canSubmit"
+          :disabled="!canSubmit || submitting"
           @click="handleSubmit"
         >提交分配{{ pendingCount > 0 ? `（${pendingCount}）` : '' }}</el-button>
       </div>
       <div class="deadline-hint">
         <el-icon><Clock /></el-icon>
-        截止：{{ formatDateTime(group.deadline) }}
+        <span>截止：{{ formatDateTime(group.deadline) }}</span>
       </div>
-    </div>
+    </header>
 
     <!-- 分配合计 + 剩余提示 -->
-    <div class="alloc-summary">
+    <section class="card-section allocation-summary" aria-label="奖励分配汇总">
+      <h2 class="section-title">奖励分配汇总</h2>
+      <div class="summary-grid">
       <div class="summary-item">
         <span class="lbl">分配合计</span>
         <span class="val total">{{ formatNum(assignTotal) }}</span>
@@ -39,9 +41,22 @@
         <span class="lbl">距离还剩</span>
         <span class="val" :class="{ negative: remaining < 0, done: isZero(remaining) }">{{ formatNum(remaining) }}</span>
       </div>
-    </div>
+      </div>
+      <p class="hint" role="status" aria-live="polite">{{ isZero(remaining) ? '分配金额已平衡，可以提交。' : '分配值之和必须等于分配合计。' }}</p>
+    </section>
 
-    <el-table v-loading="loading" :data="items" border stripe style="width: 100%">
+    <section class="card-section data-panel" aria-label="奖励分配明细" aria-describedby="reward-task-table-state">
+      <div class="toolbar">
+        <div>
+          <h2 id="reward-task-table-heading" class="section-title">奖励分配明细</h2>
+          <p class="hint">每名人员的分配值允许为 0，提交前必须完成整组金额平衡。</p>
+        </div>
+        <p id="reward-task-table-state" class="table-state" role="status" aria-live="polite">
+          {{ loading ? '奖励分配明细加载中' : loadError || (items.length ? `待提交 ${pendingCount} 人` : '该部门暂无待分配人员') }}
+        </p>
+      </div>
+    <el-table v-loading="loading" :data="items" border stripe empty-text="该部门暂无待分配人员"
+      aria-labelledby="reward-task-table-heading" aria-describedby="reward-task-table-state">
       <el-table-column label="被分配人工号" width="140" align="center">
         <template #default="{ row }">{{ row.beAssignedUserId }}</template>
       </el-table-column>
@@ -65,7 +80,7 @@
         <template #default="{ row }">
           <span v-if="row.submitted === 1" class="score-submitted">
             {{ formatNum(row.assignValue) }}
-            <el-icon style="font-size:12px;color:#1e7e34"><Check /></el-icon>
+            <el-icon class="submitted-icon"><Check /></el-icon>
           </span>
           <el-input-number
             v-else
@@ -77,7 +92,9 @@
       </el-table-column>
       <template #empty>该部门暂无待分配人员</template>
     </el-table>
-  </div>
+    <div class="pager summary-foot" aria-label="奖励分配明细说明"><span class="hint">提交成功后返回待处理任务列表，人数会同步刷新。</span></div>
+    </section>
+  </section>
 </template>
 
 <script setup>
@@ -92,6 +109,7 @@ const props = defineProps({
 const emit = defineEmits(['back'])
 
 const loading = ref(false)
+const loadError = ref('')
 const items = ref([])
 // 每行分配值草稿：itemId -> 分配值
 const editValues = reactive({})
@@ -131,6 +149,7 @@ function previewCash(row) {
 
 async function load() {
   loading.value = true
+  loadError.value = ''
   items.value = []
   Object.keys(editValues).forEach(k => delete editValues[k])
   try {
@@ -140,6 +159,7 @@ async function load() {
       if (it.submitted !== 1) editValues[it.itemId] = 0
     }
   } catch (e) {
+    loadError.value = '奖励分配明细加载失败，请重试'
     ElMessage.error('加载待分配人员失败：' + (e?.message || '未知错误'))
   } finally {
     loading.value = false
@@ -155,6 +175,7 @@ function applyFillEach() {
 }
 
 async function handleSubmit() {
+  if (submitting.value) return
   const pending = items.value.filter(it => it.submitted !== 1)
   if (pending.length === 0) {
     ElMessage.warning('没有待分配的人员')
@@ -218,84 +239,69 @@ onMounted(load)
 </script>
 
 <style lang="scss" scoped>
-$text-1: #1a1a2e;
-$text-3: #a0aec0;
-$bg-soft: #f7fafc;
-$primary: #4361ee;
-
 .reward-task {
-  padding: 24px;
-  background: #fff;
-  min-height: 100%;
-
-  .page-h {
-    display: flex;
-    align-items: center;
-    margin-bottom: 16px;
-    gap: 12px;
-
-    h1 { font-size: 20px; font-weight: 600; color: $text-1; margin: 0; }
-    .process-title { font-size: 18px; }
-    .desc { font-size: 13px; color: $text-3; }
-  }
-
   .proc-actions {
     margin-left: auto;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-3);
 
     .default-setter {
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 6px;
-      background: $bg-soft;
+      gap: var(--space-2);
+      padding: var(--space-1) var(--space-3);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-control);
+      background: var(--color-surface-soft);
 
-      .ds-label { font-size: 13px; color: $text-1; white-space: nowrap; }
+      .ds-label { font-size: 14px; color: var(--color-text); white-space: nowrap; }
     }
   }
+
+  .fill-input { width: 140px; }
 
   .deadline-hint {
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-size: 13px;
-    padding: 4px 10px;
-    border-radius: 6px;
-    margin-left: 12px;
-    color: #d46b08;
-    background: #fff7e6;
+    gap: var(--space-1);
+    font-size: 12px;
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-control);
+    margin-left: var(--space-3);
+    color: var(--color-warning-fg);
+    background: var(--color-warning-bg);
+    border: 1px solid var(--color-warning-fg);
   }
 
-  .alloc-summary {
-    display: flex;
-    gap: 24px;
-    margin-bottom: 16px;
-    padding: 12px 16px;
-    border-radius: 8px;
-    background: $bg-soft;
+  .allocation-summary {
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-4);
+    }
 
     .summary-item {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: var(--space-1);
 
-      .lbl { font-size: 12px; color: $text-3; }
-      .val { font-size: 20px; font-weight: 700; color: $text-1; }
-      .val.total { color: $primary; }
-      .val.negative { color: #cf1322; }
-      .val.done { color: #1e7e34; }
+      .lbl { font-size: 12px; color: var(--color-text-muted); }
+      .val { font-size: 22px; line-height: 32px; font-weight: 600; color: var(--color-text-strong); font-variant-numeric: tabular-nums; }
+      .val.total { color: var(--color-brand-700); }
+      .val.negative { color: var(--color-danger-fg); }
+      .val.done { color: var(--color-success-fg); }
     }
   }
 
   .score-submitted {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-1);
     font-weight: 600;
-    color: #1e7e34;
+    color: var(--color-success-fg);
   }
+  .submitted-icon { font-size: 12px; color: var(--color-success-fg); }
+  .cash-preview { color: var(--color-text); font-variant-numeric: tabular-nums; }
 }
 </style>

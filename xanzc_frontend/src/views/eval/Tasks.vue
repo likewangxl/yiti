@@ -1,36 +1,53 @@
 <template>
   <!-- 评价任务管理页面（管理端：统一列表 = 规则任务 + 导入批次） -->
-  <div class="eval-tasks-page">
-    <div class="page-h">
-      <PageTitle />
-      <span class="desc">发起评价活动 · 管理任务生命周期</span>
-      <div class="actions">
+  <main class="bp-crud eval-tasks-page" aria-labelledby="eval-tasks-page-title" :aria-busy="tableLoading ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="eval-tasks-page-title"><span class="sub">发起评价活动并管理任务生命周期</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="评价任务操作">
+        <el-button :loading="tableLoading" @click="loadList">刷新</el-button>
         <el-button type="primary" @click="openWizard">新增待处理任务</el-button>
       </div>
-    </div>
+    </header>
 
     <!-- 筛选栏 -->
-    <div class="filter-bar">
-      <el-select v-model="filter.status" placeholder="全部状态" clearable style="width: 140px" @change="handleFilterChange">
+    <section class="card-section filter-bar" aria-label="评价任务筛选">
+      <el-form class="filter-form" inline aria-label="评价任务筛选">
+        <el-form-item label="状态">
+          <el-select v-model="filter.status" aria-label="按任务状态筛选" placeholder="全部状态" clearable class="status-filter" @change="handleFilterChange">
         <el-option label="全部" value="" />
         <el-option label="进行中" :value="0" />
         <el-option label="已结束" :value="1" />
         <el-option label="草稿" :value="2" />
         <el-option label="处理中" :value="3" />
         <el-option label="导入失败" :value="4" />
-      </el-select>
-      <el-input v-model="filter.keyword" placeholder="搜索任务名称/批次/创建人" clearable style="width: 240px; margin-left: 12px"
-        @keyup.enter="handleFilterChange" @clear="handleFilterChange">
-        <template #prefix><el-icon><Search /></el-icon></template>
-      </el-input>
-      <el-button style="margin-left: 8px" @click="handleFilterChange">搜索</el-button>
-    </div>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="关键词">
+          <el-input v-model="filter.keyword" aria-label="按任务名称批次或创建人筛选" placeholder="任务名称 / 批次 / 创建人" clearable class="keyword-filter"
+            @keyup.enter="handleFilterChange" @clear="handleFilterChange">
+            <template #prefix><el-icon><Search /></el-icon></template>
+          </el-input>
+        </el-form-item>
+        <el-form-item><el-button type="primary" @click="handleFilterChange">查询</el-button></el-form-item>
+      </el-form>
+    </section>
 
     <!-- 统一任务列表 -->
-    <el-table v-loading="tableLoading" :data="tableData" border stripe style="width: 100%; margin-top: 16px">
+    <section class="card-section data-panel" aria-label="统一评价任务列表" aria-describedby="eval-tasks-table-state">
+      <div class="toolbar">
+        <div>
+          <h2 id="eval-tasks-table-heading" class="section-title">统一评价任务列表</h2>
+          <p class="hint">规则任务和导入批次统一展示；发布、关闭和导出均保留原任务契约。</p>
+        </div>
+        <p id="eval-tasks-table-state" class="table-state" role="status" aria-live="polite">
+          {{ tableLoading ? '评价任务列表加载中' : loadError || (tableData.length ? `共 ${pager.total} 条任务` : '暂无评价任务数据') }}
+        </p>
+      </div>
+      <el-table v-loading="tableLoading" :data="tableData" border stripe empty-text="暂无评价任务数据"
+        aria-labelledby="eval-tasks-table-heading" aria-describedby="eval-tasks-table-state">
       <el-table-column label="来源" width="100" align="center">
         <template #default="{ row }">
-          <span class="tag-type">{{ row.sourceType === 'AUTO' ? '自动生成' : '手工导入' }}</span>
+          <span class="status-badge tag-info">{{ row.sourceType === 'AUTO' ? '自动生成' : '手工导入' }}</span>
         </template>
       </el-table-column>
       <el-table-column label="任务类型" width="100" align="center">
@@ -47,12 +64,12 @@
       </el-table-column>
       <el-table-column label="状态" width="90" align="center">
         <template #default="{ row }">
-          <span v-if="row.status === 2" class="tag-warning">草稿</span>
-          <span v-else-if="row.status === 0" class="tag-success">进行中</span>
-          <span v-else-if="row.status === 1" class="tag-info">已结束</span>
-          <span v-else-if="row.status === 3" class="tag-warning">处理中</span>
-          <span v-else-if="row.status === 4" class="tag-danger">导入失败</span>
-          <span v-else class="tag-info">{{ row.status }}</span>
+          <span v-if="row.status === 2" class="status-badge tag-warning">草稿</span>
+          <span v-else-if="row.status === 0" class="status-badge tag-success">进行中</span>
+          <span v-else-if="row.status === 1" class="status-badge tag-info">已结束</span>
+          <span v-else-if="row.status === 3" class="status-badge tag-warning">处理中</span>
+          <span v-else-if="row.status === 4" class="status-badge tag-danger">导入失败</span>
+          <span v-else class="status-badge tag-info">{{ row.status }}</span>
         </template>
       </el-table-column>
       <el-table-column label="明细数" width="80" align="center">
@@ -62,25 +79,26 @@
       <el-table-column label="操作" width="240" align="center" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link @click="openDetail(row)">详情</el-button>
-          <el-button v-if="row.status === 2" type="success" link @click="handlePublish(row)">发布</el-button>
-          <el-button v-if="row.sourceType === 'AUTO' && row.status === 0" type="danger" link @click="handleCloseTask(row)">关闭</el-button>
-          <el-button type="primary" link @click="handleExport(row)">导出</el-button>
-          <el-button v-if="row.status === 0 || row.status === 2 || row.status === 4 || isDeadlinePassed(row)" type="danger" link @click="handleDelete(row)">删除</el-button>
+          <el-button v-if="row.status === 2" type="success" link :loading="isPending('publish', row.sourceId)" :disabled="isPending('publish', row.sourceId)" @click="handlePublish(row)">发布</el-button>
+          <el-button v-if="row.sourceType === 'AUTO' && row.status === 0" type="danger" link :loading="isPending('close', row.sourceId)" :disabled="isPending('close', row.sourceId)" @click="handleCloseTask(row)">关闭</el-button>
+          <el-button type="primary" link :loading="isPending('export', row.sourceId)" :disabled="isPending('export', row.sourceId)" @click="handleExport(row)">导出</el-button>
+          <el-button v-if="row.status === 0 || row.status === 2 || row.status === 4 || isDeadlinePassed(row)" type="danger" link :loading="isPending('delete', row.sourceId)" :disabled="isPending('delete', row.sourceId)" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
 
-    <div class="pagination-wrap">
+      <nav class="pager" aria-label="统一评价任务列表分页">
       <el-pagination
         v-model:current-page="pager.pageNo" v-model:page-size="pager.pageSize"
         :total="pager.total" :page-sizes="[10, 20, 50]"
         layout="total, sizes, prev, pager, next, jumper" background
         @size-change="loadList" @current-change="loadList"
       />
-    </div>
+      </nav>
+    </section>
 
     <!-- ===== 新建任务弹窗 ===== -->
-    <el-dialog v-model="createDialog.visible" title="新建评价任务" width="680px"
+    <el-dialog v-model="createDialog.visible" class="bp-crud-dialog" title="新建评价任务" width="680px"
       :close-on-click-modal="false" @closed="resetCreateForm">
       <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="110px" label-position="right">
         <el-form-item label="任务名称" prop="taskName">
@@ -101,12 +119,12 @@
       </el-form>
       <template #footer>
         <el-button @click="createDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="createDialog.submitting" @click="handleCreateTask">保存</el-button>
+        <el-button type="primary" :loading="createDialog.submitting" :disabled="createDialog.submitting" @click="handleCreateTask">保存</el-button>
       </template>
     </el-dialog>
 
     <!-- ===== 新增待处理任务向导 ===== -->
-    <el-dialog v-model="wizard.visible" title="新增待处理任务" width="660px"
+    <el-dialog v-model="wizard.visible" class="bp-crud-dialog" title="新增待处理任务" width="660px"
       :close-on-click-modal="false" @closed="resetWizard">
       <el-form label-width="100px" label-position="right">
         <el-form-item label="任务来源">
@@ -137,7 +155,7 @@
             <el-form-item label="导入文件">
               <div style="width: 100%">
                 <div style="margin-bottom: 8px">
-                  <el-button size="small" @click="doDownloadTpl">📥 下载导入模板</el-button>
+                  <el-button size="small" @click="doDownloadTpl">下载导入模板</el-button>
                   <span v-if="wizard.importType === 'REWARD'" class="form-tip">8 列：被分配人工号/姓名 + 部门名称 + 原始值 + 分配值(留空) + 兑现值 + 分配人工号 + 分配合计</span>
                   <span v-else class="form-tip">11 列：被打分人 编号/姓名/部门 + 分组部门 + 被打分人标签 + 打分人 编号/姓名/标签/部门 + 权重标签 + 评价类型</span>
                 </div>
@@ -160,14 +178,14 @@
       <template #footer>
         <el-button @click="wizard.visible = false">取消</el-button>
         <el-button v-if="wizard.source === 'IMPORT' && (wizard.importType === 'EVAL' || wizard.importType === 'REWARD')"
-          type="primary" :loading="importing" :disabled="!wizardFile || !wizard.deadline || !wizard.taskName" @click="doImportAssign">
+          type="primary" :loading="importing" :disabled="importing || !wizardFile || !wizard.deadline || !wizard.taskName" @click="doImportAssign">
           开始导入
         </el-button>
       </template>
     </el-dialog>
 
     <!-- ===== 规则任务详情弹窗 ===== -->
-    <el-dialog v-model="ruleDetail.visible" title="任务详情" width="800px" :close-on-click-modal="false">
+    <el-dialog v-model="ruleDetail.visible" class="bp-crud-dialog" title="任务详情" width="800px" :close-on-click-modal="false">
       <div v-if="ruleDetail.data" v-loading="ruleDetail.loading">
         <el-descriptions :column="2" border class="detail-desc">
           <el-descriptions-item label="任务名称">{{ ruleDetail.data.task.taskName }}</el-descriptions-item>
@@ -196,13 +214,13 @@
       </div>
       <template #footer>
         <el-button v-if="ruleDetail.data && ruleDetail.data.task.status === 0"
-          type="danger" :loading="ruleDetail.closing" @click="handleCloseTaskFromDetail">关闭任务</el-button>
+          type="danger" :loading="ruleDetail.closing" :disabled="ruleDetail.closing" @click="handleCloseTaskFromDetail">关闭任务</el-button>
         <el-button @click="ruleDetail.visible = false">关闭</el-button>
       </template>
     </el-dialog>
 
     <!-- ===== 导入批次详情弹窗 ===== -->
-    <el-dialog v-model="batchDetail.visible" title="批次详情" width="900px" :close-on-click-modal="false">
+    <el-dialog v-model="batchDetail.visible" class="bp-crud-dialog" title="批次详情" width="900px" :close-on-click-modal="false">
       <div v-if="batchDetail.data" v-loading="batchDetail.loading">
         <el-descriptions :column="2" border class="detail-desc">
           <el-descriptions-item label="批次ID">{{ batchDetail.data.batch.batchId }}</el-descriptions-item>
@@ -220,7 +238,7 @@
         </el-descriptions>
         <!-- 导入失败(4)：明细未入库、评价明细为空，改为展示行级错误明细 -->
         <div v-if="batchDetail.data.batch.status === 4">
-          <div class="detail-section-title">导入错误明细<span v-if="batchErrorInfo.truncated" style="font-weight: normal; color: #909399; font-size: 12px; margin-left: 6px">（仅显示前 {{ batchErrorInfo.errors.length }} 条，共 {{ batchErrorInfo.total }} 条，修正后请重新导入）</span></div>
+          <div class="detail-section-title">导入错误明细<span v-if="batchErrorInfo.truncated" class="batch-error-hint">（仅显示前 {{ batchErrorInfo.errors.length }} 条，共 {{ batchErrorInfo.total }} 条，修正后请重新导入）</span></div>
           <el-table :data="batchErrorInfo.errors" border stripe size="small" max-height="320" style="width: 100%; margin-top: 8px">
             <el-table-column prop="row" label="行号" width="100" align="center" />
             <el-table-column prop="message" label="错误信息" min-width="320" show-overflow-tooltip />
@@ -316,13 +334,13 @@
         </div>
       </div>
       <template #footer>
-        <el-button v-if="batchDetail.data && batchDetail.data.batch.status === 2"
-          type="success" :loading="batchDetail.publishing" @click="handlePublishFromDetail">确认发布</el-button>
+          <el-button v-if="batchDetail.data && batchDetail.data.batch.status === 2"
+          type="success" :loading="batchDetail.publishing" :disabled="batchDetail.publishing" @click="handlePublishFromDetail">确认发布</el-button>
         <el-button @click="handleExportById(batchDetail.data?.batch?.batchId, batchDetail.data?.batch?.taskType === 'REWARD' ? 'reward' : 'batch')">导出 Excel</el-button>
         <el-button @click="batchDetail.visible = false">关闭</el-button>
       </template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -348,9 +366,21 @@ const filter = reactive({ status: '', keyword: '' })
 const pager = reactive({ pageNo: 1, pageSize: 20, total: 0 })
 const tableLoading = ref(false)
 const tableData = ref([])
+const loadError = ref('')
+const pendingActions = reactive({
+  publish: new Set(),
+  close: new Set(),
+  export: new Set(),
+  delete: new Set()
+})
+
+function isPending(type, id) {
+  return id != null && pendingActions[type]?.has(id)
+}
 
 async function loadList() {
   tableLoading.value = true
+  loadError.value = ''
   try {
     const params = { page: pager.pageNo, pageSize: pager.pageSize }
     if (filter.status !== '') params.status = filter.status
@@ -359,6 +389,9 @@ async function loadList() {
     tableData.value = res.records || []
     pager.total = res.total || 0
   } catch (e) {
+    tableData.value = []
+    pager.total = 0
+    loadError.value = '评价任务加载失败，请刷新重试'
     ElMessage.error('加载任务列表失败：' + (e?.message || '未知错误'))
   } finally {
     tableLoading.value = false
@@ -455,14 +488,21 @@ async function loadBatchDetailItems() {
 // ===================== 发布 =====================
 
 async function handlePublish(row) {
+  if (!row?.sourceId || isPending('publish', row.sourceId)) return
   try {
     await ElMessageBox.confirm(
       `确认发布「${row.taskName}」？发布后打分人即可看到待处理任务。`,
       '确认发布', { type: 'warning', confirmButtonText: '确认发布', cancelButtonText: '取消' }
     )
-    await publishAssignBatch(row.sourceId)
-    ElMessage.success('已发布')
-    loadList()
+    if (isPending('publish', row.sourceId)) return
+    pendingActions.publish.add(row.sourceId)
+    try {
+      await publishAssignBatch(row.sourceId)
+      ElMessage.success('已发布')
+      loadList()
+    } finally {
+      pendingActions.publish.delete(row.sourceId)
+    }
   } catch (e) {
     if (e === 'cancel') return
     ElMessage.error('发布失败：' + (e?.message || '未知错误'))
@@ -471,9 +511,12 @@ async function handlePublish(row) {
 
 async function handlePublishFromDetail() {
   if (!batchDetail.data) return
+  const batchId = batchDetail.data.batch.batchId
+  if (!batchId || isPending('publish', batchId)) return
+  pendingActions.publish.add(batchId)
   batchDetail.publishing = true
   try {
-    await publishAssignBatch(batchDetail.data.batch.batchId)
+    await publishAssignBatch(batchId)
     ElMessage.success('批次已发布')
     batchDetail.visible = false
     loadList()
@@ -481,6 +524,7 @@ async function handlePublishFromDetail() {
     ElMessage.error('发布失败：' + (e?.message || '未知错误'))
   } finally {
     batchDetail.publishing = false
+    pendingActions.publish.delete(batchId)
   }
 }
 
@@ -494,6 +538,8 @@ async function handleExport(row) {
 }
 
 async function handleExportById(id, type) {
+  if (!id || isPending('export', id)) return
+  pendingActions.export.add(id)
   try {
     let blob
     let filename
@@ -508,20 +554,30 @@ async function handleExportById(id, type) {
       filename = `评价明细_batch_${id}.xlsx`
     }
     saveBlob(blob, filename)
-  } catch (e) { /* http.js 已提示 */ }
+  } catch (e) { /* http.js 已提示 */
+  } finally {
+    pendingActions.export.delete(id)
+  }
 }
 
 // ===================== 关闭任务 =====================
 
 async function handleCloseTask(row) {
+  if (!row?.sourceId || isPending('close', row.sourceId)) return
   try {
     await ElMessageBox.confirm(
       `确认关闭任务「${row.taskName}」？关闭后无法重新开启。`,
       '关闭确认', { type: 'warning', confirmButtonText: '确认关闭', cancelButtonText: '取消' }
     )
-    await closeTask(row.sourceId)
-    ElMessage.success('任务已关闭')
-    loadList()
+    if (isPending('close', row.sourceId)) return
+    pendingActions.close.add(row.sourceId)
+    try {
+      await closeTask(row.sourceId)
+      ElMessage.success('任务已关闭')
+      loadList()
+    } finally {
+      pendingActions.close.delete(row.sourceId)
+    }
   } catch (e) {
     if (e === 'cancel') return
     ElMessage.error('关闭任务失败：' + (e?.message || '未知错误'))
@@ -532,11 +588,14 @@ async function handleCloseTaskFromDetail() {
   if (!ruleDetail.data) return
   const taskName = ruleDetail.data.task.taskName
   const taskId = ruleDetail.data.task.taskId
+  if (!taskId || isPending('close', taskId)) return
   try {
     await ElMessageBox.confirm(
       `确认关闭任务「${taskName}」？关闭后无法重新开启。`,
       '关闭确认', { type: 'warning', confirmButtonText: '确认关闭', cancelButtonText: '取消' }
     )
+    if (isPending('close', taskId)) return
+    pendingActions.close.add(taskId)
     ruleDetail.closing = true
     await closeTask(taskId)
     ElMessage.success('任务已关闭')
@@ -547,6 +606,7 @@ async function handleCloseTaskFromDetail() {
     ElMessage.error('关闭任务失败：' + (e?.message || '未知错误'))
   } finally {
     ruleDetail.closing = false
+    pendingActions.close.delete(taskId)
   }
 }
 
@@ -605,6 +665,7 @@ function resetCreateForm() {
 }
 
 async function handleCreateTask() {
+  if (createDialog.submitting) return
   const valid = await createFormRef.value?.validate().catch(() => false)
   if (!valid) return
   createDialog.submitting = true
@@ -667,7 +728,7 @@ async function doDownloadTpl() {
 function onWizardFilePick(uploadFile) { wizardFile.value = uploadFile.raw || null }
 
 async function doImportAssign() {
-  if (!wizardFile.value || !wizard.deadline || !wizard.taskName) return
+  if (importing.value || !wizardFile.value || !wizard.deadline || !wizard.taskName) return
   // 捕获当前导入类型（轮询期间向导可能已重置），后续按类型路由到对应批次详情接口
   const importType = wizard.importType
   importing.value = true
@@ -764,15 +825,22 @@ function isDeadlinePassed(row) {
 
 async function handleDelete(row) {
   const label = row.sourceType === 'AUTO' ? '规则任务' : '导入批次'
+  if (!row?.sourceId || isPending('delete', row.sourceId)) return
   try {
     await ElMessageBox.confirm(
       `确认删除${label}「${row.taskName}」？删除后数据无法恢复，请确认。`,
       '删除确认',
       { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' }
     )
-    await deleteUnifiedTask(row.sourceType === 'AUTO' ? 'AUTO' : 'IMPORT', row.sourceId)
-    ElMessage.success('已删除')
-    loadList()
+    if (isPending('delete', row.sourceId)) return
+    pendingActions.delete.add(row.sourceId)
+    try {
+      await deleteUnifiedTask(row.sourceType === 'AUTO' ? 'AUTO' : 'IMPORT', row.sourceId)
+      ElMessage.success('已删除')
+      loadList()
+    } finally {
+      pendingActions.delete.delete(row.sourceId)
+    }
   } catch (e) {
     if (e === 'cancel') return
     ElMessage.error('删除失败：' + (e?.message || '未知错误'))
@@ -788,75 +856,49 @@ onUnmounted(() => { clearPollTimer() })
 </script>
 
 <style lang="scss" scoped>
-$text-1: #1a1a2e;
-$text-2: #4a5568;
-$text-3: #a0aec0;
-$border-1: #e2e8f0;
-$bg-soft: #f7fafc;
-$primary: #4361ee;
-$danger: #e53e3e;
-
 .eval-tasks-page {
-  padding: 24px;
-  background: #fff;
-  min-height: 100%;
+  .status-filter { width: 140px; }
+  .keyword-filter { width: 260px; }
 
-  .page-h {
-    display: flex; align-items: center; margin-bottom: 20px; gap: 12px;
-    h1 { font-size: 20px; font-weight: 600; color: $text-1; margin: 0; }
-    .desc { font-size: 13px; color: $text-3; }
-    .actions { margin-left: auto; }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 2px var(--space-2);
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    font-size: 12px;
+    line-height: 18px;
   }
+  .tag-success { color: var(--color-success-fg); background: var(--color-success-bg); border-color: var(--color-success-fg); }
+  .tag-info { color: var(--color-info-fg); background: var(--color-info-bg); border-color: var(--color-info-fg); }
+  .tag-warning { color: var(--color-warning-fg); background: var(--color-warning-bg); border-color: var(--color-warning-fg); }
+  .tag-danger { color: var(--color-danger-fg); background: var(--color-danger-bg); border-color: var(--color-danger-fg); }
 
-  .filter-bar {
-    display: flex; align-items: center; padding: 12px 16px;
-    background: $bg-soft; border-radius: 8px; border: 1px solid $border-1;
-  }
-
-  .pagination-wrap { display: flex; justify-content: flex-end; margin-top: 20px; }
-
-  .tag-success {
-    display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px;
-    background: #e6f4ea; color: #1e7e34; border: 1px solid #b7dfbf;
-  }
-  .tag-info {
-    display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px;
-    background: #f0f0f0; color: #666; border: 1px solid #d9d9d9;
-  }
-  .tag-warning {
-    display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px;
-    background: #fff7e6; color: #d46b08; border: 1px solid #ffd591;
-  }
-  .tag-danger {
-    display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px;
-    background: #fff1f0; color: $danger; border: 1px solid #ffa39e;
-  }
-
-  .form-tip { font-size: 12px; color: $text-3; margin-top: 4px; margin-left: 8px; }
+  .form-tip { font-size: 12px; color: var(--color-text-muted); margin-top: var(--space-1); margin-left: var(--space-2); }
 
   .imp-errors {
-    margin-top: 12px;
-    .err-title { font-size: 13px; color: $danger; margin-bottom: 6px; }
+    margin-top: var(--space-3);
+    .err-title { font-size: 14px; color: var(--color-danger-fg); margin-bottom: var(--space-1); }
   }
 
-  .detail-desc { margin-bottom: 16px; }
+  .detail-desc { margin-bottom: var(--space-4); }
 
   .detail-section-title {
-    font-size: 14px; font-weight: 600; color: $text-1;
-    padding: 8px 0 4px 0; border-bottom: 1px solid $border-1; margin-bottom: 8px;
+    font-size: 16px; font-weight: 600; color: var(--color-text-strong);
+    padding: var(--space-2) 0 var(--space-1); border-bottom: 1px solid var(--color-border); margin-bottom: var(--space-2);
   }
 
-  .score-empty { color: $text-3; }
+  .score-empty { color: var(--color-text-muted); }
+  .batch-error-hint { font-weight: 400; color: var(--color-text-muted); font-size: 12px; margin-left: var(--space-2); }
 
   .tag-type {
-    display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px;
-    background: #eef2ff; color: $primary; border: 1px solid #c7d2fe;
+    display: inline-flex; padding: 2px var(--space-2); border-radius: var(--radius-control); font-size: 12px;
+    background: var(--color-brand-100); color: var(--color-brand-700); border: 1px solid var(--color-brand-500);
   }
 
   .score-submitted {
-    display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: #1e7e34;
+    display: inline-flex; align-items: center; gap: var(--space-1); font-weight: 600; color: var(--color-success-fg);
   }
 }
-
-.pagination-wrap :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>
