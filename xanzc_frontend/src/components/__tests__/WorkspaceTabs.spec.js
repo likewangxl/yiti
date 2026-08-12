@@ -87,6 +87,9 @@ describe('WorkspaceTabs.vue', () => {
   it('以工作台作为首个固定页签且不可关闭', () => {
     const wrapper = mountTabs();
 
+    expect(wrapper.find('nav.workspace-tabs').attributes('aria-label')).toBe('工作区页签');
+    expect(wrapper.findAll('[aria-current="page"]')).toHaveLength(1);
+    expect(wrapper.find('[aria-current="page"]').text()).toContain('工作台');
     const tabs = wrapper.findAll('[data-tab-key]');
     expect(tabs).toHaveLength(1);
     expect(tabs[0].attributes('data-tab-key')).toBe('/workspace');
@@ -146,6 +149,26 @@ describe('WorkspaceTabs.vue', () => {
     await wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__close').trigger('click');
     expect(routerMock.push).toHaveBeenCalledWith('/perf/metrics');
     expect(wrapper.find('[data-tab-key="/system/users"]').exists()).toBe(false);
+  });
+
+  it('页签切换保留记录时的完整 fullPath 与查询参数，并且当前项使用页面导航语义', async () => {
+    const wrapper = mountTabs();
+    visit({
+      path: '/report/free',
+      fullPath: '/report/free?period=2026-08&orgCode=B001',
+      name: 'ReportFree',
+      meta: { title: '动态报表' }
+    });
+    await nextTick();
+
+    const active = wrapper.find('[data-tab-key="/report/free?period=2026-08&orgCode=B001"] .workspace-tabs__label');
+    expect(active.attributes('aria-current')).toBe('page');
+    expect(wrapper.findAll('[aria-current="page"]')).toHaveLength(1);
+
+    visit({ path: '/workspace', name: 'Workspace', meta: { title: '工作台' } });
+    await nextTick();
+    await wrapper.find('[data-tab-key="/report/free?period=2026-08&orgCode=B001"] .workspace-tabs__label').trigger('click');
+    expect(routerMock.push).toHaveBeenCalledWith('/report/free?period=2026-08&orgCode=B001');
   });
 
   it('固定页签点击可回到工作台，关闭固定页签不会触发导航', async () => {

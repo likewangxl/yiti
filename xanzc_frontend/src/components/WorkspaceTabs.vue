@@ -1,20 +1,19 @@
 <template>
-  <section class="workspace-tabs" aria-label="工作区页签">
+  <nav class="workspace-tabs" aria-label="工作区页签">
     <div class="workspace-tabs__scroll">
-      <div ref="tabsListRef" class="workspace-tabs__list" role="tablist">
+      <div ref="tabsListRef" class="workspace-tabs__list">
         <div
           v-for="tab in tabs"
           :key="tab.key"
           class="workspace-tabs__tab"
           :class="{ 'workspace-tabs__tab--active': tab.key === activeKey }"
           :data-tab-key="tab.key"
-          role="tab"
-          :aria-selected="tab.key === activeKey"
         >
           <button
             type="button"
             class="workspace-tabs__label"
             :title="tab.title"
+            :aria-current="tab.key === activeKey ? 'page' : undefined"
             @click="selectTab(tab)"
           >
             {{ tab.title }}
@@ -31,7 +30,7 @@
         </div>
       </div>
     </div>
-  </section>
+  </nav>
 </template>
 
 <script setup>
@@ -88,14 +87,14 @@ function closeTab(tab) {
 
 <style lang="scss" scoped>
 .workspace-tabs {
-  height: 76px;
-  flex: 0 0 76px;
+  height: var(--layout-workspace-tabs-height);
+  flex: 0 0 var(--layout-workspace-tabs-height);
   min-width: 0;
   overflow: hidden;
-  background: #eef2f6;
-  border-bottom: 1px solid $border-1;
+  background: var(--color-workspace-strip);
+  border-bottom: 1px solid var(--color-border);
   // 对齐截图：页签本体 44px，下方留出更宽的工作区分隔带。
-  padding: 9px 20px 22px;
+  padding: 9px var(--layout-content-gutter) 22px;
 }
 
 .workspace-tabs__scroll {
@@ -105,17 +104,17 @@ function closeTab(tab) {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
-  scrollbar-color: $border-2 transparent;
+  scrollbar-color: var(--color-border-strong) transparent;
 
   &::-webkit-scrollbar { height: 6px; }
   &::-webkit-scrollbar-track { background: transparent; }
-  &::-webkit-scrollbar-thumb { background: $border-2; border-radius: 3px; }
+  &::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: 3px; }
 }
 
 .workspace-tabs__list {
   display: flex;
   align-items: stretch;
-  gap: 6px;
+  gap: var(--space-2);
   width: max-content;
   min-width: 100%;
   height: 100%;
@@ -124,30 +123,30 @@ function closeTab(tab) {
 .workspace-tabs__tab {
   display: inline-flex;
   align-items: center;
-  min-width: 116px;
+  min-width: 124px;
   max-width: 220px;
   height: 100%;
-  padding: 0 9px 0 14px;
-  color: $text-3;
-  font-size: 16px;
-  background: rgba(255, 255, 255, .62);
-  border: 1px solid $border-1;
+  padding: 0 var(--space-1) 0 var(--space-3);
+  color: var(--color-text);
+  font-size: 14px;
+  background: color-mix(in srgb, var(--color-surface) 62%, transparent);
+  border: 1px solid var(--color-border);
   border-top: 2px solid transparent;
   border-radius: 4px 4px 0 0;
-  transition: color .15s ease, background-color .15s ease, border-color .15s ease;
+  transition: color var(--motion-fast) var(--ease-enter), background-color var(--motion-fast) var(--ease-enter), border-color var(--motion-fast) var(--ease-enter);
 
   &:hover {
-    color: $primary;
-    background: #fff;
+    color: var(--color-brand-700);
+    background: var(--color-surface);
   }
 }
 
 .workspace-tabs__tab--active {
-  color: $primary;
-  background: #fff;
-  border-color: $border-1;
-  border-top-color: $primary;
-  box-shadow: 0 -1px 0 rgba(0, 61, 122, .08);
+  color: var(--color-brand-700);
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  border-top-color: var(--color-brand-700);
+  box-shadow: 0 -1px 0 color-mix(in srgb, var(--color-brand-700) 8%, transparent);
 }
 
 .workspace-tabs__label {
@@ -171,21 +170,25 @@ function closeTab(tab) {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
-  margin-left: 5px;
-  padding: 2px;
-  color: $text-4;
+  width: 40px;
+  height: 40px;
+  margin-left: var(--space-1);
+  padding: 0;
+  color: var(--color-text-muted);
   background: transparent;
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-control);
   cursor: pointer;
 
   :deep(svg) { width: 13px; height: 13px; }
 
   &:hover {
-    color: $danger;
-    background: #fef2f2;
+    color: var(--color-danger-fg);
+    background: var(--color-danger-bg);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-tabs__tab { transition-duration: 1ms; }
 }
 </style>

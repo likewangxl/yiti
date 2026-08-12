@@ -1,10 +1,19 @@
 <template>
-  <nav class="crumb">
-    <span>🏠</span>
-    <template v-for="(c, i) in items" :key="i">
-      <span class="sep">/</span>
-      <span :class="{ last: i === items.length - 1 }">{{ c }}</span>
-    </template>
+  <nav class="crumb" aria-label="面包屑">
+    <ol class="crumb-list">
+      <li class="crumb-home" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false"><path d="m4 11 8-7 8 7v9h-5v-6H9v6H4z" /></svg>
+      </li>
+      <li
+        v-for="(c, i) in items"
+        :key="`${c}-${i}`"
+        class="crumb-item"
+        :class="{ last: i === items.length - 1 }"
+        :aria-current="i === items.length - 1 ? 'page' : undefined"
+      >
+        {{ c }}
+      </li>
+    </ol>
   </nav>
 </template>
 
@@ -30,16 +39,36 @@ const items = computed(() => {
 
 <style lang="scss" scoped>
 .crumb {
-  background: #fff;
-  height: $crumb-h;
-  border-bottom: 1px solid $border-1;
+  background: var(--color-surface);
+  height: var(--layout-breadcrumb-height);
+  border-bottom: 1px solid var(--color-border);
   display: flex; align-items: center;
-  padding: 0 20px;
+  padding: 0 var(--layout-content-gutter);
   font-size: 12px;
-  color: $text-3;
-  gap: 6px;
+  color: var(--color-text-muted);
   flex-shrink: 0;
-  .sep { color: $text-4; }
-  .last { color: $text-1; font-weight: 500; }
+}
+.crumb-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  list-style: none;
+}
+.crumb-home {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  color: var(--color-text-muted);
+  svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+}
+.crumb-item {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
+  &::before { padding-right: 6px; color: var(--color-text-muted); content: '/'; }
+  &.last { overflow: hidden; color: var(--color-text-strong); font-weight: 500; text-overflow: ellipsis; }
 }
 </style>

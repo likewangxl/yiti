@@ -1,11 +1,19 @@
 <template>
   <header class="hdr">
-    <div class="toggle">☰</div>
-    <div class="search">
-      <el-input v-model="kw" placeholder="搜索客户 / 线索 / 任务编号 / 报表..." size="default">
-        <template #prefix><span>🔍</span></template>
-      </el-input>
-    </div>
+    <button
+      type="button"
+      class="shell-toggle"
+      data-testid="sidebar-toggle"
+      :aria-label="props.sidebarCollapsed ? '展开侧边导航' : '折叠侧边导航'"
+      :aria-expanded="props.sidebarCollapsed ? 'false' : 'true'"
+      aria-controls="app-sidebar"
+      :title="props.sidebarCollapsed ? '展开侧边导航' : '折叠侧边导航'"
+      @click="emit('toggle-sidebar')"
+    >
+      <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+        <path d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+    </button>
     <div class="spacer" />
 
     <el-dropdown trigger="click" @command="onCommand">
@@ -15,7 +23,7 @@
           <b>{{ store.displayName }}</b>
           <small>{{ store.orgName || store.roleSummary || '—' }}</small>
         </div>
-        <span style="font-size:10px;opacity:.5">▾</span>
+        <span class="account-caret" aria-hidden="true">▾</span>
       </div>
       <template #dropdown>
         <el-dropdown-menu>
@@ -28,9 +36,19 @@
       </template>
     </el-dropdown>
 
-    <div class="icon-btn" @click="$router.push('/system/notifications')" title="通知中心" style="cursor:pointer">
-      <el-badge :value="unread" :max="99" :hidden="!unread">🔔</el-badge>
-    </div>
+    <button
+      type="button"
+      class="icon-btn"
+      aria-label="通知中心"
+      title="通知中心"
+      @click="$router.push('/system/notifications')"
+    >
+      <el-badge :value="unread" :max="99" :hidden="!unread">
+        <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+          <path d="M18 10a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 22h4" />
+        </svg>
+      </el-badge>
+    </button>
 
     <!-- 修改密码弹窗（用户改自己的密码，要求旧密码） -->
     <el-dialog v-model="pwdDlg.show" title="修改密码" width="440px" :close-on-click-modal="false">
@@ -61,7 +79,10 @@ import { logout } from '@/api/auth';
 import { getUnreadCount } from '@/api/workspace';
 import { changeMyPassword } from '@/api/users';
 
-const kw = ref('');
+const props = defineProps({
+  sidebarCollapsed: { type: Boolean, default: false }
+});
+const emit = defineEmits(['toggle-sidebar']);
 const unread = ref(0);
 const store = useUserStore();
 
@@ -127,51 +148,48 @@ async function onChangePassword() {
 
 <style lang="scss" scoped>
 .hdr {
-  background: #fff;
-  border-bottom: 1px solid $border-1;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   display: flex; align-items: center;
-  padding: 0 16px;
-  gap: 16px;
-  height: $header-h;
+  padding: 0 var(--space-4);
+  gap: var(--space-4);
+  height: var(--layout-header-height);
   flex-shrink: 0;
 }
-.toggle {
-  width: 32px; height: 32px;
+.shell-toggle,
+.icon-btn {
+  width: 40px; height: 40px;
   display: grid; place-items: center;
-  border-radius: 4px;
-  color: $text-2;
+  padding: 0;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
   cursor: pointer;
-  &:hover { background: $bg-soft; }
+  transition: color var(--motion-fast) var(--ease-enter), background-color var(--motion-fast) var(--ease-enter);
+
+  &:hover { color: var(--color-brand-700); background: var(--color-surface-soft); }
+  svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 }
-.search { width: 360px; }
 .spacer { flex: 1; }
 .account-pick {
-  display: flex; align-items: center; gap: 8px;
-  padding: 4px 10px;
-  border: 1px solid $border-1;
-  border-radius: 16px;
-  background: $bg-soft;
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface-soft);
   cursor: pointer;
-  outline: none;
-  &:hover { border-color: $primary-400; }
+  &:hover { border-color: var(--color-brand-500); }
   .avatar {
     width: 28px; height: 28px; border-radius: 50%;
-    background: linear-gradient(135deg, $primary-400, $primary);
-    color: #fff; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--color-brand-500), var(--color-brand-700));
+    color: var(--color-surface); display: grid; place-items: center;
     font-size: 12px; font-weight: 600;
   }
   .meta { font-size: 12px; line-height: 1.2;
     b { display: block; font-weight: 600; font-size: 12px; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    small { color: $text-3; font-size: 11px; }
+    small { color: var(--color-text-muted); font-size: 11px; }
   }
 }
-.role-merge-note { color: #9CA3AF; font-size: 12px; }
-.icon-btn {
-  width: 32px; height: 32px;
-  display: grid; place-items: center;
-  border-radius: 4px;
-  color: $text-2;
-  cursor: pointer;
-  &:hover { background: $bg-soft; color: $primary; }
-}
+.account-caret { font-size: 10px; opacity: .5; }
 </style>
