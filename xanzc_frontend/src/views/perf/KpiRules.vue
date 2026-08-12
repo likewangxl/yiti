@@ -1,26 +1,25 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle />
-      <span class="desc">方案 · 权重 · 公式预览 · 计分上下限</span>
-      <div class="actions">
-        <el-button @click="reload">刷新</el-button>
+  <main class="bp-crud kpi-rules-page" aria-labelledby="kpi-rules-page-title">
+    <header class="page-h">
+      <PageTitle id="kpi-rules-page-title"><span class="sub">配置方案、权重、计分边界与员工标签范围</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="KPI方案操作">
+        <el-button :loading="loading" @click="reload">刷新</el-button>
         <el-button v-if="isCaizai" @click="downloadKpiTpl">下载模板</el-button>
         <el-button v-if="isCaizai" :loading="importing" @click="triggerImportKpi">导入KPI方案</el-button>
-        <el-button v-if="isCaizai" type="primary" @click="openCreate">+ 新增KPI方案</el-button>
+        <el-button v-if="isCaizai" type="primary" @click="openCreate">新增KPI方案</el-button>
       </div>
-    </div>
+    </header>
     <!-- 隐藏的文件选择框：导入KPI方案 -->
     <input ref="importKpiInput" type="file" accept=".xlsx,.xls" style="display:none"
-      @change="onImportKpiFile" />
+      aria-label="选择KPI方案导入文件" @change="onImportKpiFile" />
 
-    <div class="card-section">
-      <el-form :inline="true" size="default">
+    <section class="card-section filter-bar" aria-label="KPI方案筛选">
+      <el-form class="filter-form" :inline="true" size="default" aria-label="KPI方案筛选">
         <el-form-item label="方案名称">
-          <el-input v-model="f.keyword" clearable placeholder="编码 / 名称" style="width:220px" @keyup.enter="reload" />
+          <el-input v-model="f.keyword" aria-label="按方案编码或名称筛选" clearable placeholder="编码 / 名称" style="width:220px" @keyup.enter="reload" />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="f.status" clearable placeholder="全部" style="width:160px" @change="reload">
+          <el-select v-model="f.status" aria-label="按KPI方案状态筛选" clearable placeholder="全部" style="width:160px" @change="reload">
             <el-option v-for="o in STATUS_OPTIONS" :key="o.value" :value="o.value" :label="o.label" />
           </el-select>
         </el-form-item>
@@ -29,10 +28,21 @@
           <el-button @click="resetFilters">重置</el-button>
         </el-form-item>
       </el-form>
-    </div>
+    </section>
 
-    <div class="card-section table">
-      <el-table :data="filteredRows" size="default" empty-text="暂无方案" v-loading="loading">
+    <section class="card-section data-panel table" aria-label="KPI方案列表" aria-labelledby="kpi-rules-table-heading"
+      aria-describedby="kpi-rules-table-state" :aria-busy="loading ? 'true' : 'false'">
+      <div class="toolbar">
+        <div>
+          <h2 id="kpi-rules-table-heading" class="section-title">KPI方案列表</h2>
+          <p class="hint">维护方案状态、指标项和可见范围；人员标签保留多选并集语义。</p>
+        </div>
+        <p id="kpi-rules-table-state" class="table-state" role="status" aria-live="polite">
+          {{ loading ? 'KPI方案列表加载中' : loadError || (filteredRows.length ? `共 ${total} 个KPI方案` : '暂无KPI方案数据') }}
+        </p>
+      </div>
+      <el-table :data="filteredRows" size="default" empty-text="暂无KPI方案数据" v-loading="loading"
+        aria-labelledby="kpi-rules-table-heading" aria-describedby="kpi-rules-table-state">
         <el-table-column label="方案编码" width="130">
           <template #default="{row}"><code class="mono">{{ row.schemeCode }}</code></template>
         </el-table-column>
@@ -53,7 +63,7 @@
           <template #default="{row}">
             <template v-if="row.createdByName || row.createdByUsername || row.createdBy">
               <div>{{ row.createdByName || row.createdByUsername || row.createdBy }}</div>
-              <div v-if="row.createdByUsername || row.createdBy" style="color:#909399;font-size:12px;">{{ row.createdByUsername || row.createdBy }}</div>
+              <div v-if="row.createdByUsername || row.createdBy" class="creator-account">{{ row.createdByUsername || row.createdBy }}</div>
             </template>
             <span v-else>-</span>
           </template>
@@ -72,7 +82,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <div class="pager">
+      <nav class="pager" aria-label="KPI方案列表分页">
         <el-pagination
           v-model:current-page="pageNo"
           v-model:page-size="pageSize"
@@ -82,12 +92,13 @@
           @current-change="reload"
           @size-change="reload"
         />
-      </div>
-    </div>
+      </nav>
+    </section>
 
     <!-- 编辑/新增/查看 大弹框（合并方案信息 + 指标配置表 + 公式提示） -->
     <el-dialog
       v-model="dlg.show"
+      class="bp-crud-dialog"
       :title="dlgTitle"
       width="1100px" top="5vh"
       :close-on-click-modal="false"
@@ -117,8 +128,8 @@
                 :value="t.tagId" :label="t.tagName" />
             </el-select>
             <!-- 标签被删除后方案范围会静默失效，这里显式提示用户重选 -->
-            <div v-if="invalidTagIds.length" class="tag-invalid-tip">
-              ⚠ 已选中的标签 {{ invalidTagIds.join('、') }} 已被删除，该部分范围不再生效，请重新选择后保存。
+            <div v-if="invalidTagIds.length" class="tag-invalid-tip" role="alert">
+              已选中的标签 {{ invalidTagIds.join('、') }} 已被删除，该部分范围不再生效，请重新选择后保存。
             </div>
           </el-form-item>
         </div>
@@ -127,7 +138,7 @@
       <div class="card-h">
         <div class="title">指标配置</div>
         <span class="weight-sum" :class="{ ok: weightSum === 100 }">
-          权重合计：{{ weightSum.toFixed(0) }}% {{ weightSum === 100 ? '✓' : '' }}
+          权重合计：{{ weightSum.toFixed(0) }}% {{ weightSum === 100 ? '（已平衡）' : '' }}
         </span>
       </div>
       <!-- default-expand-all：表达式（计算表达式 / SQL 表达式）作为展开行单独占满一行编辑/展示 -->
@@ -180,7 +191,7 @@
               <el-option v-for="m in metricsByDim(row.baseDim)" :key="m.metricCode"
                 :value="m.metricCode" :label="`${m.metricName}（${m.metricCode}）`">
                 <span>{{ m.metricName }}</span>
-                <span style="color:#8492a6;font-size:12px;margin-left:8px;">{{ m.metricCode }}</span>
+                <span class="metric-option-code">{{ m.metricCode }}</span>
               </el-option>
             </el-select>
           </template>
@@ -217,7 +228,7 @@
         </el-table-column>
       </el-table>
 
-      <el-button v-if="!dlg.readOnly" plain @click="addItemRow" style="margin-top:10px">+ 添加指标</el-button>
+      <el-button v-if="!dlg.readOnly" plain @click="addItemRow" style="margin-top:10px">添加指标</el-button>
 
       <!-- 可用变量提示：点击占位符插入到「当前聚焦的表达式」光标处（计算表达式用裸名、SQL 表达式用 :占位符） -->
       <div class="sql-date-macros" style="margin-top:12px">
@@ -226,7 +237,7 @@
           <tr><th style="width:180px">变量</th><th>含义</th></tr>
           <tr v-for="m in SQL_MACROS" :key="m.token">
             <td>
-              <code class="macro-btn" @mousedown.prevent="insertMacro(m.token)" :title="`点击插入 ${m.token}`">{{ m.token }}</code>
+              <button type="button" class="macro-btn" @mousedown.prevent="insertMacro(m.token)" :aria-label="`插入变量 ${m.token}`" :title="`插入 ${m.token}`">{{ m.token }}</button>
             </td>
             <td>{{ m.desc }}</td>
           </tr>
@@ -247,7 +258,7 @@
         </template>
       </template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -303,6 +314,7 @@ function markRecentlyCreated(idOrCode) {
 const rows = ref([]);
 const total = ref(0);
 const loading = ref(false);
+const loadError = ref('');
 const pageNo = ref(1);
 const pageSize = ref(20);
 const f = reactive({ keyword: '', status: '', cycleType: '', dateRange: null });
@@ -355,6 +367,7 @@ async function onImportKpiFile(ev) {
 
 async function reload() {
   loading.value = true;
+  loadError.value = '';
   try {
     const raw = await listKpiRules({
       pageNo: pageNo.value, pageSize: pageSize.value,
@@ -389,7 +402,9 @@ async function reload() {
           .catch(() => {})
       ));
     }
-  } catch {} finally { loading.value = false; }
+  } catch {
+    loadError.value = 'KPI方案加载失败，请刷新重试';
+  } finally { loading.value = false; }
 }
 
 const filteredRows = computed(() => {
@@ -845,87 +860,93 @@ onMounted(() => { reload(); loadOrgTree(); });
 </script>
 
 <style lang="scss" scoped>
-.table { padding: 0; padding-bottom: 12px; }
-.link { color: $primary; cursor: pointer; }
-.pager { display: flex; justify-content: flex-end; padding: 12px 14px; }
-.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
-.mono { font-family: ui-monospace, monospace; font-size: 12px; }
+.table { padding-bottom: var(--space-4); }
+.link { color: var(--color-brand-700); cursor: pointer; }
+.creator-account,
+.metric-option-code { color: var(--color-text-muted); font-size: 12px; }
+.metric-option-code { margin-left: var(--space-2); }
+.mono { color: var(--color-text); font-family: ui-monospace, monospace; font-size: 12px; }
 
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 0 16px;
-  margin-bottom: 8px;
-  :deep(.el-form-item) { margin-bottom: 16px; }
+  gap: 0 var(--space-4);
+  margin-bottom: var(--space-2);
+  :deep(.el-form-item) { margin-bottom: var(--space-4); }
 }
 
 .card-h {
   display: flex; align-items: center; gap: 12px;
-  padding: 14px 0 10px;
-  border-bottom: 1px solid $border-1;
-  margin: 8px 0 14px;
-  .title { font-size: 15px; font-weight: 600; flex: 1; color: $text-1; }
+  padding: var(--space-3) 0 var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  margin: var(--space-2) 0 var(--space-3);
+  .title { font-size: 15px; font-weight: 600; flex: 1; color: var(--color-text-strong); }
   .weight-sum {
-    font-size: 13px; color: $text-3; font-weight: 500;
-    &.ok { color: $success; font-weight: 700; }
+    font-size: 13px; color: var(--color-text-muted); font-weight: 500;
+    &.ok { color: var(--color-success-fg); font-weight: 700; }
   }
 }
 
 .formula-hint {
-  margin-top: 14px; padding: 10px 14px;
-  background: #ecfeff; border: 1px solid #bae6fd; border-radius: 4px;
-  font-size: 13px; color: $text-2; line-height: 1.7;
+  margin-top: var(--space-3); padding: var(--space-2) var(--space-3);
+  background: var(--color-info-bg); border: 1px solid var(--color-border-strong); border-radius: var(--radius-control);
+  font-size: 13px; color: var(--color-text); line-height: 1.7;
   code {
-    font-family: ui-monospace, monospace; background: rgba(255,255,255,.7);
-    padding: 1px 6px; border-radius: 3px; color: $primary; margin: 0 2px;
+    font-family: ui-monospace, monospace; background: var(--color-surface);
+    padding: 1px 6px; border-radius: var(--radius-control); color: var(--color-brand-700); margin: 0 2px;
   }
-  .dim { color: $text-3; }
+  .dim { color: var(--color-text-muted); }
 }
 
 /* SQL 表达式展开行：标签 + 全宽文本框，单独一行 */
 .sql-expr-row {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 4px 12px 8px;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3) var(--space-2);
 }
 .sql-expr-label {
   flex-shrink: 0;
-  padding-top: 6px;
+  padding-top: var(--space-1);
   font-size: 13px;
-  color: $text-2;
+  color: var(--color-text);
   white-space: nowrap;
 }
 .sql-expr-row :deep(.el-textarea) { flex: 1; }
 
 /* SQL 可用变量提示（参考指标编辑 Metrics.vue 的占位符/含义表） */
 .sql-date-macros {
-  background: #f7f9fc;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
-  padding: 10px 12px;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
   font-size: 12px;
   line-height: 1.5;
 }
-.sql-date-macros .hint-title { font-weight: 600; color: #303133; margin-bottom: 6px; }
+.sql-date-macros .hint-title { font-weight: 600; color: var(--color-text-strong); margin-bottom: 6px; }
 .sql-date-macros .hint-table { border-collapse: collapse; width: 100%; }
 .sql-date-macros .hint-table th,
 .sql-date-macros .hint-table td {
-  border: 1px solid #ebeef5;
-  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  padding: var(--space-1) var(--space-2);
   text-align: left;
   vertical-align: top;
 }
-.sql-date-macros .hint-table th { background: #fafafa; color: #606266; font-weight: 500; }
-.sql-date-macros code { background: #fff5e6; color: #b87600; padding: 0 4px; border-radius: 2px; }
-.sql-date-macros code.macro-btn {
+.sql-date-macros .hint-table th { background: var(--color-surface); color: var(--color-text); font-weight: 500; }
+.sql-date-macros .macro-btn {
+  background: var(--color-brand-100);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  color: var(--color-brand-700);
+  font: inherit;
+  padding: 0 4px;
   cursor: pointer;
   user-select: none;
   transition: background .15s, color .15s, box-shadow .15s;
 }
-.sql-date-macros code.macro-btn:hover { background: #ffd591; color: #874d00; box-shadow: 0 0 0 1px #fa8c16; }
-.sql-date-macros code.macro-btn:active { background: #fa8c16; color: #fff; }
-.sql-date-macros .hint-foot { margin-top: 8px; color: #909399; }
+.sql-date-macros .macro-btn:hover { background: var(--color-surface); color: var(--color-brand-700); box-shadow: 0 0 0 1px var(--color-focus); }
+.sql-date-macros .macro-btn:active { background: var(--color-brand-700); color: var(--color-surface); }
+.sql-date-macros .hint-foot { margin-top: var(--space-2); color: var(--color-text-muted); }
 /* 员工标签范围：已选标签被删除时的失效提示 */
-.tag-invalid-tip { margin-top: 6px; font-size: 12px; line-height: 1.5; color: #e6a23c; }
+.tag-invalid-tip { margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--color-warning-fg); }
 </style>

@@ -1,29 +1,40 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle />
-      <span class="desc"></span>
-      <div class="actions">
-        <el-button @click="reload">刷新</el-button>
-        <el-button @click="triggerImport">📥 导入指标</el-button>
-        <el-button @click="downloadTemplate">📄 下载模板</el-button>
-        <input ref="fileInputRef" type="file" accept=".xlsx,.xls" style="display:none" @change="onFileSelected" />
-        <el-button type="primary" @click="openCreate">+ 新增指标</el-button>
+  <main class="bp-crud metrics-page" aria-labelledby="metrics-page-title">
+    <header class="page-h">
+      <PageTitle id="metrics-page-title"><span class="sub">定义、验证并维护绩效指标口径</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="指标库操作">
+        <el-button :loading="metricsLoading" @click="reload">刷新</el-button>
+        <el-button :loading="importing" :disabled="importing" @click="triggerImport">导入指标</el-button>
+        <el-button @click="downloadTemplate">下载模板</el-button>
+        <input ref="fileInputRef" type="file" accept=".xlsx,.xls" style="display:none" aria-label="选择指标导入文件" @change="onFileSelected" />
+        <el-button type="primary" @click="openCreate">新增指标</el-button>
       </div>
-    </div>
+    </header>
 
-    <div class="layout">
+    <div class="layout" aria-label="指标库双栏工作区">
       <!-- 左：分类树 -->
-      <div class="card-section tree-col">
-        <div class="card-h-mini">指标层级</div>
-        <el-input
-          v-model="treeKeyword"
-          placeholder="搜索：指标名称 / 编号 / 分类"
-          size="small"
-          clearable
-          :prefix-icon="Search"
-          class="tree-search"
-        />
+      <section class="card-section tree-col data-panel" aria-label="指标层级" aria-labelledby="metrics-tree-heading"
+        aria-describedby="metrics-tree-state" :aria-busy="metricsLoading ? 'true' : 'false'">
+        <div class="toolbar compact-toolbar">
+          <div>
+            <h2 id="metrics-tree-heading" class="section-title">指标层级</h2>
+            <p class="hint">按分类、维度与层级浏览指标定义。</p>
+          </div>
+          <p id="metrics-tree-state" class="table-state" role="status" aria-live="polite">
+            {{ metricsLoading ? '指标库加载中' : metricsError || (allMetrics.length ? `共 ${allMetrics.length} 项指标` : '暂无指标数据') }}
+          </p>
+        </div>
+        <form class="tree-filter filter-form" aria-label="指标树筛选" @submit.prevent>
+          <el-input
+            v-model="treeKeyword"
+            aria-label="按指标名称、编号或分类搜索"
+            placeholder="搜索：指标名称 / 编号 / 分类"
+            size="small"
+            clearable
+            :prefix-icon="Search"
+            class="tree-search"
+          />
+        </form>
         <el-tree
           ref="treeRef"
           :data="treeData"
@@ -37,10 +48,11 @@
           @node-expand="onNodeExpand"
           @node-collapse="onNodeCollapse"
           empty-text="暂无指标"
+          aria-labelledby="metrics-tree-heading"
         >
           <template #default="{ node, data }">
             <span class="tree-node">
-              <span v-if="!data.isMetric" class="ico">📁</span>
+              <span v-if="!data.isMetric" class="tree-folder-mark" aria-hidden="true">分类</span>
               <span v-if="data.isMetric && data.raw?.metricLevel != null"
                     class="lvl-badge" :class="'lvl-' + data.raw.metricLevel">{{ data.raw.metricLevel }}</span>
               <span :class="{ 'tree-leaf': data.isMetric }">{{ node.label }}</span>
@@ -50,14 +62,23 @@
             </span>
           </template>
         </el-tree>
-      </div>
+      </section>
 
       <!-- 右：详情 + 同分类 -->
-      <div class="card-section detail-col" v-loading="detailLoading">
-        <div v-if="!detail.metricCode" class="empty-pane">← 在左侧选择任一指标查看详情</div>
+      <section class="card-section detail-col data-panel" aria-label="指标详情" aria-labelledby="metrics-detail-heading"
+        aria-describedby="metrics-detail-state" :aria-busy="detailLoading ? 'true' : 'false'" v-loading="detailLoading">
+        <div class="toolbar">
+          <div>
+            <h2 id="metrics-detail-heading" class="section-title">{{ detail.metricCode ? `指标详情 · ${detail.metricName}` : '指标详情' }}</h2>
+            <p class="hint">查看计算逻辑、版本记录和同分类指标。</p>
+          </div>
+          <p id="metrics-detail-state" class="table-state" role="status" aria-live="polite">
+            {{ detailLoading ? '指标详情加载中' : detailError || (detail.metricCode ? `已选中 ${detail.metricName}` : '请选择一个指标查看详情') }}
+          </p>
+        </div>
+        <div v-if="!detail.metricCode" class="empty-pane" role="status">请从左侧选择任一指标查看详情</div>
         <template v-else>
-          <div class="card-h">
-            <div class="title">指标详情 · {{ detail.metricName }}</div>
+          <div class="detail-summary">
             <el-tag :class="statusCls(detail.status)" effect="plain">{{ statusLabel(detail.status) }}</el-tag>
             <span class="version">{{ detail.version || `v${detail.metricLevel || 1}` }}</span>
           </div>
@@ -94,33 +115,31 @@
 
           <!-- 计算公式：SQL / EXPR / SUMMARY 三选一；若后端字段为空，显示占位块（不让模板看起来缺一栏） -->
           <template v-if="detail.calcLogicType === 'SQL'">
-            <div class="block-h">SQL 表达式</div>
+            <h3 class="block-h">SQL 表达式</h3>
             <pre class="code">{{ detail.sqlText || '-- 暂未配置 SQL，可点【编辑】补充' }}</pre>
           </template>
           <template v-else-if="detail.calcLogicType === 'EXPR'">
-            <div class="block-h">Groovy 表达式</div>
+            <h3 class="block-h">Groovy 表达式</h3>
             <pre class="code">{{ detail.exprDisplay || detail.exprText || '// 暂未配置表达式，可点【编辑】补充' }}</pre>
           </template>
           <template v-else-if="detail.calcLogicType === 'SUMMARY'">
-            <div class="block-h">SUMMARY 汇总规则</div>
+            <h3 class="block-h">SUMMARY 汇总规则</h3>
             <pre class="code">{{ detail.summaryRule || '/* 暂未配置汇总规则 */' }}</pre>
           </template>
           <template v-else>
-            <div class="block-h">计算逻辑</div>
+            <h3 class="block-h">计算逻辑</h3>
             <pre class="code">{{ '/* 计算方式未指定 */' }}</pre>
           </template>
 
-          <div class="acts">
+          <div class="acts action-group" role="group" aria-label="指标详情操作">
             <el-button type="primary" :disabled="isDisabled" @click="openEdit(detail)">编辑</el-button>
-            <el-button :disabled="isDisabled" @click="onExecute">⚡立即执行</el-button>
+            <el-button :disabled="isDisabled" @click="onExecute">立即执行</el-button>
             <el-button @click="onShowVersions">查看版本历史</el-button>
-            <el-button @click="onViewAudit">📋 查看审计</el-button>
+            <el-button @click="onViewAudit">查看审计</el-button>
             <el-button v-if="!isDisabled" type="warning" plain @click="onChangeStatus('DISABLED')">停用</el-button>
             <el-button v-else type="success" plain @click="onChangeStatus('ACTIVE')">启用</el-button>
           </div>
-          <div class="audit-hint">
-            ⚠ 立即执行 / 编辑 / 状态变更 均属高危动作，会自动写入「系统设置 → 审计日志」
-          </div>
+          <p class="audit-hint" role="note">立即执行、编辑和状态变更均属高危动作，会自动写入「系统设置 → 审计日志」。</p>
 
           <!-- 详情侧"试运行"结果区（仅在按过试运行后才出现） -->
           <div v-if="detailTrial.status" class="trial-detail">
@@ -141,16 +160,16 @@
                  class="trial-expr" style="margin-top:8px">
               EXPR 单值结果：<code class="mono">{{ detailTrial.exprResult }}</code>
             </div>
-            <div v-else-if="detailTrial.status === 'FAILED'" class="trial-error" style="margin-top:8px">
-              ✗ {{ detailTrial.errorMsg || '试运行失败，请检查 SQL/EXPR 是否合法' }}
+            <div v-else-if="detailTrial.status === 'FAILED'" class="trial-error" style="margin-top:8px" role="alert">
+              {{ detailTrial.errorMsg || '试运行失败，请检查 SQL/EXPR 是否合法' }}
             </div>
-            <div v-else class="trial-empty" style="margin-top:8px; color:#999">
+            <div v-else class="trial-empty" style="margin-top:8px">
               （无样本数据）
             </div>
           </div>
 
-          <div class="block-h">同分类指标</div>
-          <el-table :data="sameCategory" size="default" border empty-text="—">
+          <h3 class="block-h">同分类指标</h3>
+          <el-table :data="sameCategory" size="default" border empty-text="暂无同分类指标" aria-label="同分类指标列表">
             <el-table-column label="编码" prop="metricCode" width="100">
               <template #default="{row}"><code class="mono">{{ row.metricCode }}</code></template>
             </el-table-column>
@@ -175,11 +194,11 @@
             </el-table-column>
           </el-table>
         </template>
-      </div>
+      </section>
     </div>
 
     <!-- 编辑/新增 弹框 -->
-    <el-dialog v-model="dlg.show" :title="dlg.editing ? '编辑指标 · ' + dlg.form.metricName : '新增指标'"
+    <el-dialog v-model="dlg.show" class="bp-crud-dialog" :title="dlg.editing ? '编辑指标 · ' + dlg.form.metricName : '新增指标'"
       width="780px" top="5vh" @closed="dlg.editing = null" @opened="onExprDialogOpened">
       <el-form ref="formRef" :model="dlg.form" :rules="formRules" label-position="top" size="default">
         <div class="form-grid">
@@ -240,16 +259,16 @@
             <el-button type="primary" style="margin-left:8px" :disabled="!exprPickCode"
                        @click="insertMetricChip">添加</el-button>
             <el-button style="margin-left:8px" title="插入安全除法：除数为 0 时结果取 0"
-                       @click="insertDiv">÷ 安全除</el-button>
+                       @click="insertDiv">插入安全除法</el-button>
           </template>
-          <div v-if="dlg.form.metricLevel === 1" style="font-size:12px;color:#999;margin-top:2px">1级指标仅支持SQL</div>
+          <div v-if="dlg.form.metricLevel === 1" class="logic-hint">1级指标仅支持SQL</div>
         </el-form-item>
 
         <template v-if="dlg.form.calcLogicType === 'EXPR'">
           <el-form-item label="Groovy 表达式">
             <div class="expr-edit-wrap">
               <!-- 可编辑表达式区：指标以标签插入（可删除），运算符/数字/括号可直接键入 -->
-              <div ref="exprEditorRef" class="expr-editor" contenteditable="true"
+              <div ref="exprEditorRef" class="expr-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Groovy 表达式"
                    @input="syncExprText" @click="onExprEditorClick"
                    data-placeholder="从上方选择指标点【添加】插入指标标签；运算符（+ - * / ( )）与数字可直接键入，例如：指标A + 指标B * 2"></div>
               <div class="expr-hint">指标以标签形式嵌入，点标签上的 × 可删除；其余位置可自由编辑运算符与数字。</div>
@@ -271,7 +290,7 @@
               <tr><th style="width:180px">SQL 占位符</th><th>含义</th></tr>
               <tr v-for="m in DATE_MACROS" :key="m.token">
                 <td>
-                  <code class="macro-btn" @click="insertMacro(m.token)" :title="`点击插入 ${m.token}`">{{ m.token }}</code>
+                  <button type="button" class="macro-btn" @click="insertMacro(m.token)" :aria-label="`插入 SQL 变量 ${m.token}`" :title="`插入 ${m.token}`">{{ m.token }}</button>
                 </td>
                 <td>{{ m.desc }}</td>
               </tr>
@@ -291,8 +310,8 @@
               :placeholder="dlg.form.baseDim === 'EMP' ? '对象值：员工工号 → :objectId' : (dlg.form.baseDim === 'ORG' ? '对象值：机构编号 → :objectId' : '对象值 → :objectId')"
               style="flex:1; min-width:240px" />
             <el-button type="primary" @click="onTrialFromDialog" :loading="dlg.trialing"
-                       :disabled="metricEditBlocked" :title="metricEditBlocked ? '指标数据加载完成后可用' : ''">▶ 试运行</el-button>
-            <span v-if="metricEditBlocked" style="margin-left:8px; color:#e6a23c; font-size:12px">指标数据加载中…</span>
+                       :disabled="metricEditBlocked" :title="metricEditBlocked ? '指标数据加载完成后可用' : ''">试运行</el-button>
+            <span v-if="metricEditBlocked" class="loading-hint">指标数据加载中…</span>
             <el-tag v-if="dlg.trial.status === 'SUCCESS'" class="tag-success" effect="plain">
               成功 · {{ dlg.trial.exprResult != null ? ('结果 ' + dlg.trial.exprResult) : ((dlg.trial.totalRows ?? dlg.trial.rows.length) + ' 行') }} · {{ ((dlg.trial.cost || 0) / 1000).toFixed(1) }}s
             </el-tag>
@@ -310,25 +329,25 @@
             <div>计算结果：<code class="mono">{{ dlg.trial.exprResult }}</code></div>
             <!-- 列出 Groovy 计算用到的用户指标数据（含命中数据版本），方便核对结果为何是该值 -->
             <div v-if="exprVarList(dlg.trial.exprVars).length" class="trial-vars" style="margin-top: 8px">
-              <div style="color:#909399; margin-bottom:4px">
+              <div class="trial-vars-title">
                 Groovy 用到的指标取值<span v-if="dlg.trial.dataVersion">（数据版本 {{ dlg.trial.dataVersion }}）</span>：
               </div>
               <div v-for="v in exprVarList(dlg.trial.exprVars)" :key="v.code" style="line-height:1.9">
-                <code class="mono">{{ v.code }}</code><span v-if="v.name" style="color:#909399"> · {{ v.name }}</span>
+                <code class="mono">{{ v.code }}</code><span v-if="v.name" class="trial-var-name"> · {{ v.name }}</span>
                 ＝ <code class="mono">{{ v.value }}</code>
-                <span v-if="Number(v.value) === 0" style="color:#e6a23c">（该对象/日期宽表中无此指标数据，取 0）</span>
+                <span v-if="Number(v.value) === 0" class="trial-var-fallback">（该对象/日期宽表中无此指标数据，取 0）</span>
               </div>
             </div>
           </div>
-          <div v-else-if="dlg.trial.status === 'FAILED'" class="trial-error">
-            ✗ {{ dlg.trial.errorMsg || '试运行失败，请检查 SQL/Groovy 表达式是否合法' }}
+          <div v-else-if="dlg.trial.status === 'FAILED'" class="trial-error" role="alert">
+            {{ dlg.trial.errorMsg || '试运行失败，请检查 SQL/Groovy 表达式是否合法' }}
           </div>
         </el-form-item>
 
         <!-- 隐含字段（不让用户暴露太多复杂度） -->
       </el-form>
       <template #footer>
-        <span v-if="metricEditBlocked" style="margin-right:12px; color:#e6a23c; font-size:12px">指标数据加载中，请稍候…</span>
+        <span v-if="metricEditBlocked" class="dialog-loading-hint">指标数据加载中，请稍候…</span>
         <el-button @click="dlg.show = false">取消</el-button>
         <el-button :loading="dlg.saving" :disabled="metricEditBlocked"
                    :title="metricEditBlocked ? '指标数据加载完成后可用' : ''" @click="onSave('DRAFT')">保存为草稿</el-button>
@@ -338,7 +357,7 @@
     </el-dialog>
 
     <!-- 版本历史（复用审计日志） -->
-    <el-dialog v-model="versionDlg.show" title="版本历史" width="720px">
+    <el-dialog v-model="versionDlg.show" class="bp-crud-dialog" title="版本历史" width="720px">
       <el-table :data="versionDlg.list" size="default" empty-text="暂无变更记录" v-loading="versionDlg.loading">
         <el-table-column label="版本" prop="version" width="70" align="center" />
         <el-table-column label="动作" width="120">
@@ -357,7 +376,7 @@
     </el-dialog>
 
     <!-- 立即执行对话框：日期 + 原因合并到一页 -->
-    <el-dialog v-model="execDlg.show" title="立即执行" width="520px" :close-on-click-modal="false">
+    <el-dialog v-model="execDlg.show" class="bp-crud-dialog" title="立即执行" width="520px" :close-on-click-modal="false">
       <el-form label-width="100px">
         <el-form-item label="指标编码">
           <el-input v-model="execDlg.metricCode" readonly />
@@ -384,16 +403,14 @@
         <el-form-item label="执行原因" required>
           <el-input v-model="execDlg.reason" type="textarea" :rows="3" placeholder="高危操作，必填执行原因" />
         </el-form-item>
-        <div class="audit-hint" style="font-size:12px; color:#999; margin-left:100px">
-          ⚠ 将写入宽表 + run_task，自动记入审计日志
-        </div>
+        <p class="audit-hint exec-audit-hint" role="note">将写入宽表和 run_task，并自动记入审计日志。</p>
       </el-form>
       <template #footer>
         <el-button @click="execDlg.show = false">取消</el-button>
         <el-button type="primary" :loading="execDlg.submitting" @click="confirmExecute">确认执行</el-button>
       </template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -460,8 +477,10 @@ const categories = ref([]);  // [{value, label}] 来自 GET /api/perf/metrics/ca
 // 解析引用指标标签与校验上级指标，未加载完成时禁止这些操作，避免按"空列表"误判引用非法。
 const metricsLoading = ref(false);
 const metricsLoaded = ref(false);
+const metricsError = ref('');
 async function reload() {
   metricsLoading.value = true;
+  metricsError.value = '';
   try {
     const [r, cs] = await Promise.all([
       listMetrics({ pageSize: 100 }),
@@ -477,6 +496,7 @@ async function reload() {
     if (allMetrics.value.length && !picked.value) onPick(allMetrics.value[0].metricCode);
   } catch {
     // 加载失败保持 metricsLoaded 原值（首次失败则仍为 false，继续禁止编辑保存）
+    metricsError.value = '指标库加载失败，请刷新重试';
   } finally {
     metricsLoading.value = false;
   }
@@ -612,15 +632,17 @@ const sameCategory = computed(() => {
 });
 
 const detailLoading = ref(false);
+const detailError = ref('');
 async function onPick(code) {
   if (!code) return;
   picked.value = code;
   resetDetailTrial();
   detailLoading.value = true;
+  detailError.value = '';
   try {
     const r = await getMetricDetail(code);
     if (r) detail.value = r;
-  } catch {}
+  } catch { detailError.value = '指标详情加载失败，请重新选择或刷新指标库'; }
   finally { detailLoading.value = false; }
 }
 function onTreeClick(node) {
@@ -1365,12 +1387,15 @@ async function onShowVersions() {
 
 // === 导入指标（直接上传 METRIC_DEF 文件） ===
 const fileInputRef = ref(null);
+const importing = ref(false);
 function triggerImport() {
+  if (importing.value) return;
   fileInputRef.value?.click();
 }
 async function onFileSelected(e) {
   const file = e.target?.files?.[0];
-  if (!file) return;
+  if (!file || importing.value) return;
+  importing.value = true;
   try {
     const resp = await uploadImportFile('METRIC_DEF', file);
     const errRows = resp?.errorRows || 0;
@@ -1383,7 +1408,8 @@ async function onFileSelected(e) {
   } catch (err) {
     ElMessage.error(err?.bizMsg || err?.message || '导入失败');
   } finally {
-    fileInputRef.value.value = '';
+    importing.value = false;
+    if (fileInputRef.value) fileInputRef.value.value = '';
   }
 }
 function downloadTemplate() {
@@ -1399,21 +1425,20 @@ onMounted(reload);
   .expr-editor {
     min-height: 64px;
     width: 100%;
-    border: 1px solid var(--el-border-color, #dcdfe6);
-    border-radius: 4px;
-    padding: 8px 10px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-control);
+    padding: var(--space-2) var(--space-3);
     font-size: 14px;
     line-height: 28px;
-    background: #fff;
-    outline: none;
+    background: var(--color-surface);
     word-break: break-all;
-    &:focus { border-color: var(--el-color-primary, #409eff); }
+    &:focus { border-color: var(--color-brand-500); }
     &:empty::before {
       content: attr(data-placeholder);
-      color: #b6bcc4;
+      color: var(--color-text-muted);
     }
   }
-  .expr-hint { font-size: 12px; color: #999; margin-top: 4px; }
+  .expr-hint { font-size: 12px; color: var(--color-text-muted); margin-top: var(--space-1); }
   // 指标标签：编号·名称 + 删除按钮
   :deep(.metric-chip) {
     display: inline-flex;
@@ -1421,106 +1446,107 @@ onMounted(reload);
     gap: 4px;
     margin: 0 2px;
     padding: 1px 4px 1px 8px;
-    border-radius: 4px;
-    background: var(--el-color-primary-light-9, #ecf5ff);
-    border: 1px solid var(--el-color-primary-light-5, #a0cfff);
-    color: var(--el-color-primary, #409eff);
+    border-radius: var(--radius-control);
+    background: var(--color-brand-100);
+    border: 1px solid var(--color-border-strong);
+    color: var(--color-brand-700);
     font-size: 13px;
     line-height: 20px;
     user-select: none;
     white-space: nowrap;
     .chip-del {
       cursor: pointer;
-      color: #909399;
+      color: var(--color-text-muted);
       font-weight: bold;
       padding: 0 2px;
-      &:hover { color: var(--el-color-danger, #f56c6c); }
+      &:hover { color: var(--color-danger-fg); }
     }
   }
 }
 .layout {
   display: grid;
-  grid-template-columns: 370px 1fr;
-  gap: 12px;
+  grid-template-columns: minmax(320px, 370px) minmax(0, 1fr);
+  gap: var(--space-4);
+  min-height: min(760px, calc(100vh - 216px));
 }
 .tree-col {
-  padding: 16px;
-  max-height: calc(100vh - 200px);
+  max-height: calc(100vh - 216px);
   overflow-y: auto;
   overflow-x: auto;
   &::-webkit-scrollbar { width: 6px; height: 6px; }
-  &::-webkit-scrollbar-thumb { background: #c0c4cc; border-radius: 3px; }
+  &::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: var(--radius-control); }
   &::-webkit-scrollbar-track { background: transparent; }
   :deep(.el-tree) { min-width: max-content; }
   :deep(.el-tree-node__content) { white-space: nowrap; }
 }
-.card-h-mini {
-  font-size: 14px; font-weight: 600;
-  padding: 0 0 12px;
-  border-bottom: 1px solid $border-1;
-  margin-bottom: 10px;
-  color: $text-1;
-}
-.tree-search { margin-bottom: 10px; }
+.compact-toolbar { margin-bottom: var(--space-2); }
+.tree-filter { margin-bottom: var(--space-3); }
+.tree-search { width: 100%; }
 .tree-node {
   display: flex; align-items: center; gap: 6px;
   flex: 1; min-width: 0;
-  .ico { font-size: 13px; }
-  .tree-leaf { color: $text-1; }
+  .tree-folder-mark {
+    background: var(--color-surface-soft);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    color: var(--color-text-muted);
+    font-size: 11px;
+    line-height: 16px;
+    padding: 0 4px;
+  }
+  .tree-leaf { color: var(--color-text-strong); }
   .tree-tag { margin-left: auto; }
   // 指标层级数字徽标（1/2/3），按层级配色
   .lvl-badge {
     flex: none;
     display: inline-flex; align-items: center; justify-content: center;
     width: 16px; height: 16px; border-radius: 50%;
-    font-size: 11px; font-weight: 700; line-height: 1; color: #fff;
-    background: #909399;
-    &.lvl-1 { background: #409eff; }
-    &.lvl-2 { background: #67c23a; }
-    &.lvl-3 { background: #e6a23c; }
+    font-size: 11px; font-weight: 700; line-height: 1; color: var(--color-surface);
+    background: var(--color-text-muted);
+    &.lvl-1 { background: var(--color-brand-500); }
+    &.lvl-2 { background: var(--color-success-fg); }
+    &.lvl-3 { background: var(--color-warning-fg); }
   }
 }
 .detail-col {
-  padding: 18px 22px;
-  max-height: calc(100vh - 200px);
+  max-height: calc(100vh - 216px);
   overflow: auto;
 }
-.empty-pane { padding: 80px 20px; text-align: center; color: $text-3; font-size: 13px; }
-.card-h {
+.empty-pane { padding: var(--space-10) var(--space-4); text-align: center; color: var(--color-text-muted); font-size: 13px; }
+.detail-summary {
   display: flex; align-items: center; gap: 10px;
-  padding: 0 0 14px; border-bottom: 1px solid $border-1; margin-bottom: 16px;
-  .title { font-size: 16px; font-weight: 600; flex: 1; }
-  .version { font-size: 12px; color: $text-3; }
+  padding: 0 0 var(--space-3); border-bottom: 1px solid var(--color-border); margin-bottom: var(--space-4);
+  .version { font-size: 12px; color: var(--color-text-muted); }
 }
 .meta-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
   td {
-    padding: 10px 14px;
-    border: 1px solid $border-1;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border);
   }
-  .lab { background: $bg-soft; color: $text-2; width: 110px; }
-  .val { color: $text-1; }
+  .lab { background: var(--color-surface-soft); color: var(--color-text); width: 110px; }
+  .val { color: var(--color-text-strong); }
 }
 .block-h {
-  font-size: 13px; font-weight: 600; margin: 22px 0 10px; color: $text-1;
+  font-size: 13px; font-weight: 600; margin: var(--space-6) 0 var(--space-2); color: var(--color-text-strong);
 }
 .code {
-  background: #1e293b; color: #f1f5f9; border-radius: 4px; padding: 12px 14px;
+  background: var(--color-surface-soft); color: var(--color-text-strong); border: 1px solid var(--color-border); border-radius: var(--radius-control); padding: var(--space-3);
   font-family: ui-monospace, monospace; font-size: 12.5px; line-height: 1.6;
   white-space: pre-wrap; overflow: auto; margin: 0;
 }
-.acts { margin: 22px 0 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+.acts { margin: var(--space-6) 0 var(--space-2); }
 .audit-hint {
-  margin-top: 6px; padding: 8px 12px;
-  background: #fffbeb; border: 1px solid #fed7aa; border-radius: 4px;
-  color: #92400e; font-size: 12.5px; line-height: 1.6;
+  margin-top: var(--space-2); padding: var(--space-2) var(--space-3);
+  background: var(--color-warning-bg); border: 1px solid var(--color-border-strong); border-radius: var(--radius-control);
+  color: var(--color-warning-fg); font-size: 12.5px; line-height: 1.6;
 }
-.req { color: #16A34A; font-weight: 600; }
-.opt { color: $text-3; }
-.mono { font-family: ui-monospace, monospace; font-size: 12px; }
+.req { color: var(--color-success-fg); font-weight: 600; }
+.opt { color: var(--color-text-muted); }
+.mono { color: var(--color-text); font-family: ui-monospace, monospace; font-size: 12px; }
 
 .form-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px;
@@ -1528,28 +1554,38 @@ onMounted(reload);
 .trial-row {
   display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
 }
+.logic-hint,
+.loading-hint,
+.dialog-loading-hint,
+.trial-vars-title,
+.trial-var-name,
+.trial-empty { color: var(--color-text-muted); font-size: 12px; }
+.loading-hint { margin-left: var(--space-2); }
+.dialog-loading-hint { margin-right: var(--space-3); }
+.trial-vars-title { margin-bottom: var(--space-1); }
+.trial-var-fallback { color: var(--color-warning-fg); }
 .trial-error {
-  margin-top: 12px; padding: 10px 14px;
-  background: #fef2f2; border: 1px solid #fecaca; border-radius: 4px;
-  color: $danger; font-size: 13px; line-height: 1.6;
+  margin-top: var(--space-3); padding: var(--space-2) var(--space-3);
+  background: var(--color-danger-bg); border: 1px solid var(--color-border-strong); border-radius: var(--radius-control);
+  color: var(--color-danger-fg); font-size: 13px; line-height: 1.6;
 }
 .trial-detail {
-  margin-top: 14px; padding: 12px 14px;
-  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px;
+  margin-top: var(--space-3); padding: var(--space-3);
+  background: var(--color-surface-soft); border: 1px solid var(--color-border); border-radius: var(--radius-control);
 }
-.trial-title { font-size: 13px; font-weight: 600; color: $text-1; }
-.trial-expr  { font-size: 13px; color: $text-1; }
+.trial-title { font-size: 13px; font-weight: 600; color: var(--color-text-strong); }
+.trial-expr  { font-size: 13px; color: var(--color-text-strong); }
 .sql-date-macros {
-  background: #f7f9fc;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
-  padding: 10px 12px;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
   font-size: 12px;
   line-height: 1.5;
 }
 .sql-date-macros .hint-title {
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-strong);
   margin-bottom: 6px;
 }
 .sql-date-macros .hint-table {
@@ -1558,38 +1594,39 @@ onMounted(reload);
 }
 .sql-date-macros .hint-table th,
 .sql-date-macros .hint-table td {
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--color-border);
   padding: 4px 8px;
   text-align: left;
   vertical-align: top;
 }
 .sql-date-macros .hint-table th {
-  background: #fafafa;
-  color: #606266;
+  background: var(--color-surface);
+  color: var(--color-text);
   font-weight: 500;
 }
-.sql-date-macros code {
-  background: #fff5e6;
-  color: #b87600;
+.sql-date-macros :deep(.macro-btn) {
+  background: var(--color-brand-100);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  color: var(--color-brand-700);
+  font: inherit;
   padding: 0 4px;
-  border-radius: 2px;
-}
-.sql-date-macros code.macro-btn {
   cursor: pointer;
   user-select: none;
   transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 }
-.sql-date-macros code.macro-btn:hover {
-  background: #ffd591;
-  color: #874d00;
-  box-shadow: 0 0 0 1px #fa8c16;
+.sql-date-macros :deep(.macro-btn:hover) {
+  background: var(--color-surface);
+  color: var(--color-brand-700);
+  box-shadow: 0 0 0 1px var(--color-focus);
 }
-.sql-date-macros code.macro-btn:active {
-  background: #fa8c16;
-  color: #fff;
+.sql-date-macros :deep(.macro-btn:active) {
+  background: var(--color-brand-700);
+  color: var(--color-surface);
 }
 .sql-date-macros .hint-foot {
-  margin-top: 8px;
-  color: #909399;
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
 }
+.exec-audit-hint { margin-left: 100px; }
 </style>
