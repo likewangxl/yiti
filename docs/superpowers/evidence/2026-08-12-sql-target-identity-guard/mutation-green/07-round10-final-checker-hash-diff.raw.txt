@@ -1,0 +1,13 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T21:07:35.419081Z
+COMMAND git diff --no-index --no-ext-diff --stat /dev/null docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.py
+SHA256 73701fdfdf25da4861aaf031c1f8891aca09e6d684583cad68b461e40735c760 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.sh
+SHA256 7044a687516b5a587eb546186a13c6b67123b7523ac56a9333b51d0dac8bd362 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.py
+SHA256 9cdda5c67bddcd7ca602d70dc71862c4ede8ed25733e3d57aa639f872493783f /home/djdev/leid/yiti/docs/superpowers/scripts/tests/sql-target-identity-guard/test_mutations.py
+SHA256 09b69c382092f5da9dfb050add062ffce7b3a57becfc20ee2e5a512342820ae7 /home/djdev/leid/yiti/docs/superpowers/scripts/tests/sql-target-identity-guard/mutation-fixtures.json
+SHA256 51a66d294ab9d8351d0df2a8d7d854db6c700e8e52f702dba5e1cb29a2beff5f /home/djdev/leid/yiti/docs/superpowers/evidence/2026-08-12-sql-target-identity-guard/README.md
+EXIT_CODE 1
+UTC_FINISHED 2026-08-11T21:07:35.421656Z
+--- RAW_STDOUT_STDERR ---
+ .../2026-08-12-verify-sql-target-identity-guard.py | 1102 ++++++++++++++++++++
+ 1 file changed, 1102 insertions(+)

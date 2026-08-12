@@ -4,16 +4,21 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.report.dto.req.ScreenDataReqDTO;
+import com.bank.branch.platform.report.dto.req.ScreenDatasourceProbeReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenDatasourceSaveReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenTryRunReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDataRespDTO;
 import com.bank.branch.platform.report.entity.PerfKpiScheme;
+import com.bank.branch.platform.report.entity.RptScreen;
 import com.bank.branch.platform.report.entity.RptScreenDatasource;
+import com.bank.branch.platform.report.entity.RptScreenPublishLog;
 import com.bank.branch.platform.report.enums.RptErrorCode;
 import com.bank.branch.platform.report.exception.RptException;
 import com.bank.branch.platform.report.mapper.ScreenKpiSchemeMapper;
 import com.bank.branch.platform.report.mapper.RptScreenBlockMapper;
 import com.bank.branch.platform.report.mapper.RptScreenDatasourceMapper;
+import com.bank.branch.platform.report.mapper.RptScreenMapper;
+import com.bank.branch.platform.report.mapper.RptScreenPublishLogMapper;
 import com.bank.branch.platform.report.support.ScreenMetricSlotDao;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -46,6 +52,8 @@ class ScreenDatasourceServiceTest {
 
     @Mock private RptScreenDatasourceMapper dsMapper;
     @Mock private RptScreenBlockMapper blockMapper;
+    @Mock private RptScreenMapper screenMapper;
+    @Mock private RptScreenPublishLogMapper publishLogMapper;
     @Mock private ScreenQueryEngine engine;
     @Mock private ScreenMetricSlotDao slotDao;
     @Mock private ScreenKpiSchemeMapper kpiSchemeMapper;
@@ -59,15 +67,66 @@ class ScreenDatasourceServiceTest {
     void setUp() {
         service = new ScreenDatasourceServiceImpl(dsMapper, blockMapper, engine, slotDao, kpiSchemeMapper,
                 currentUserApi, auditApi, scopeGuard);
+        ReflectionTestUtils.setField(service, "screenMapper", screenMapper);
+        ReflectionTestUtils.setField(service, "publishLogMapper", publishLogMapper);
         lenient().when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
     }
 
     private ScreenDatasourceSaveReqDTO wideReq() {
         ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
         req.setDsName("员工存款");
+        req.setBizLine("COMMON");
         req.setSourceKind("WIDE_TABLE");
         req.setConfigJson("{\"table\":\"EMP_INDEX_RESULT\",\"metrics\":[{\"metricCode\":\"M_0001\"}]}");
+        req.setReason("测试保存数据源");
         return req;
+    }
+
+    /** 直接调用服务层也不能绕过 HTTP DTO 的高危审计原因校验。 */
+    @Test
+    void save_missingReasonFailsClosedBeforeInsert() {
+        when(slotDao.selectByCodes(anyList())).thenReturn(
+                List.of(new ScreenMetricSlotDao.MetricSlot("M_0001", "存款余额", 3, "EMP")));
+
+        ScreenDatasourceSaveReqDTO req = wideReq();
+        req.setReason(null);
+        assertThatThrownBy(() -> service.save(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43022");
+        verify(dsMapper, never()).insert(any(RptScreenDatasource.class));
+    }
+
+    /** 配置态试跑缺失原因时不得触发查询引擎，避免把审计绕过变成只读数据泄露。 */
+    @Test
+    void tryRun_missingReasonFailsClosedBeforeEngine() {
+        ScreenTryRunReqDTO req = new ScreenTryRunReqDTO();
+        req.setSourceKind("CUSTOM_SQL");
+        req.setDsType("SINGLE");
+        req.setConfigJson("{\"sql\":\"SELECT COUNT(*) AS cnt FROM ACT_RU_TASK\",\"dateCol\":null}");
+
+        assertThatThrownBy(() -> service.tryRun(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43022");
+        verify(engine, never()).tryRun(any(), any(), any());
+    }
+
+    /** 保存审计必须落真实 CONFIG 动作、保留 timeParamJson 和调用方理由。 */
+    @Test
+    void save_auditIsStructuredConfigAndIncludesTimeParamJson() {
+        when(slotDao.selectByCodes(anyList())).thenReturn(
+                List.of(new ScreenMetricSlotDao.MetricSlot("M_0001", "存款余额", 3, "EMP")));
+        ScreenDatasourceSaveReqDTO req = wideReq();
+        req.setReason("新增存款指标数据源");
+        req.setTimeParamJson("[{\"period\":\"MONTH\"}]");
+
+        service.save(req);
+
+        ArgumentCaptor<com.bank.branch.platform.governance.api.dto.AuditLogCmd> audit =
+                ArgumentCaptor.forClass(com.bank.branch.platform.governance.api.dto.AuditLogCmd.class);
+        verify(auditApi).log(audit.capture());
+        assertThat(audit.getValue().getBizAction()).isEqualTo("CONFIG");
+        assertThat(audit.getValue().getReason()).isEqualTo("新增存款指标数据源");
+        assertThat(audit.getValue().getAfterSnapshot()).contains("timeParamJson");
     }
 
     @Test
@@ -86,6 +145,27 @@ class ScreenDatasourceServiceTest {
         assertThat(saved.getConfigJson()).contains("\"slot\":3");
         assertThat(saved.getConfigJson()).contains("\"metricName\":\"存款余额\"");
         assertThat(saved.getConfigJson()).contains("\"subjectParam\":\"empId\"");
+    }
+
+    /** 状态是存储安全边界，大小写输入必须规范化；未知状态不得写入后在运行期绕过 DISABLED。 */
+    @Test
+    void save_statusIsStrictAndCanonicalized() {
+        when(slotDao.selectByCodes(anyList())).thenReturn(
+                List.of(new ScreenMetricSlotDao.MetricSlot("M_0001", "存款余额", 3, "EMP")));
+        ScreenDatasourceSaveReqDTO lowerCase = wideReq();
+        lowerCase.setStatus("active");
+
+        service.save(lowerCase);
+
+        ArgumentCaptor<RptScreenDatasource> saved = ArgumentCaptor.forClass(RptScreenDatasource.class);
+        verify(dsMapper).insert(saved.capture());
+        assertThat(saved.getValue().getStatus()).isEqualTo("ACTIVE");
+
+        ScreenDatasourceSaveReqDTO illegal = wideReq();
+        illegal.setStatus("PENDING");
+        assertThatThrownBy(() -> service.save(illegal))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
     }
 
     @Test
@@ -121,6 +201,7 @@ class ScreenDatasourceServiceTest {
     void save_customSql_timeseriesWithoutDateCol_throws43003() {
         ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
         req.setDsName("趋势SQL");
+        req.setBizLine("COMMON");
         req.setSourceKind("CUSTOM_SQL");
         req.setDsType("TIMESERIES");
         req.setConfigJson("{\"sql\":\"SELECT 1\",\"dateCol\":null}");
@@ -133,6 +214,7 @@ class ScreenDatasourceServiceTest {
     void save_customSql_invalidSql_propagates43002() {
         ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
         req.setDsName("坏SQL");
+        req.setBizLine("COMMON");
         req.setSourceKind("CUSTOM_SQL");
         req.setDsType("SINGLE");
         req.setConfigJson("{\"sql\":\"SELECT * FROM PT_USER\",\"dateCol\":null}");
@@ -147,6 +229,7 @@ class ScreenDatasourceServiceTest {
     void save_customSql_ok_audits() {
         ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
         req.setDsName("流程数");
+        req.setBizLine("COMMON");
         req.setSourceKind("CUSTOM_SQL");
         req.setDsType("SINGLE");
         req.setConfigJson("{\"sql\":\"SELECT COUNT(*) AS cnt FROM ACT_RU_TASK\",\"dateCol\":null}");
@@ -163,8 +246,10 @@ class ScreenDatasourceServiceTest {
     private ScreenDatasourceSaveReqDTO kpiDetailReq(String configJson) {
         ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
         req.setDsName("KPI细项");
+        req.setBizLine("COMMON");
         req.setSourceKind("KPI_DETAIL");
         req.setConfigJson(configJson);
+        req.setReason("测试保存 KPI 细项数据源");
         return req;
     }
 
@@ -296,7 +381,7 @@ class ScreenDatasourceServiceTest {
         ds.setId(9L);
         when(dsMapper.selectById(9L)).thenReturn(ds);
         when(blockMapper.countByDsId(9L)).thenReturn(2);
-        assertThatThrownBy(() -> service.delete(9L))
+        assertThatThrownBy(() -> service.delete(9L, "验证已引用数据源"))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43007");
         verify(dsMapper, never()).deleteById(9L);
@@ -308,16 +393,38 @@ class ScreenDatasourceServiceTest {
         ds.setId(9L);
         when(dsMapper.selectById(9L)).thenReturn(ds);
         when(blockMapper.countByDsId(9L)).thenReturn(0);
-        service.delete(9L);
+        service.delete(9L, "重复配置清理");
         verify(dsMapper).deleteById(9L);
+    }
+
+    /** 删除审计动作必须是 DELETE 而不是内部事件名。显式 reason URL 契约由 controller 测试守护。 */
+    @Test
+    void delete_withReasonWritesDeleteAudit() {
+        RptScreenDatasource ds = new RptScreenDatasource();
+        ds.setId(9L);
+        ds.setDsCode("SCRDS_9");
+        ds.setDsName("待删除数据源");
+        ds.setStatus("ACTIVE");
+        when(dsMapper.selectById(9L)).thenReturn(ds);
+        when(blockMapper.countByDsId(9L)).thenReturn(0);
+
+        service.delete(9L, "重复配置清理");
+
+        ArgumentCaptor<com.bank.branch.platform.governance.api.dto.AuditLogCmd> audit =
+                ArgumentCaptor.forClass(com.bank.branch.platform.governance.api.dto.AuditLogCmd.class);
+        verify(auditApi).log(audit.capture());
+        assertThat(audit.getValue().getBizAction()).isEqualTo("DELETE");
+        assertThat(audit.getValue().getReason()).isEqualTo("重复配置清理");
+        assertThat(audit.getValue().getRequestMethod()).isEqualTo("DELETE");
     }
 
     @Test
     void queryData_notFoundOrDisabled_throws43001() {
         when(dsMapper.selectById(1L)).thenReturn(null);
-        ScreenDataReqDTO req = new ScreenDataReqDTO();
-        req.setDsId(1L);
-        assertThatThrownBy(() -> service.queryData(req))
+        when(screenMapper.selectList(any())).thenReturn(List.of(legacyRuntimeScreen(1L)),
+                List.of(legacyRuntimeScreen(2L)));
+        ScreenDataReqDTO missingReq = legacyRuntimeRequest(1L);
+        assertThatThrownBy(() -> service.queryData(missingReq))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43001");
 
@@ -325,8 +432,8 @@ class ScreenDatasourceServiceTest {
         disabled.setId(2L);
         disabled.setStatus("DISABLED");
         when(dsMapper.selectById(2L)).thenReturn(disabled);
-        req.setDsId(2L);
-        assertThatThrownBy(() -> service.queryData(req))
+        ScreenDataReqDTO disabledReq = legacyRuntimeRequest(2L);
+        assertThatThrownBy(() -> service.queryData(disabledReq))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43001");
     }
@@ -341,11 +448,11 @@ class ScreenDatasourceServiceTest {
         ds.setStatus("ACTIVE");
         ds.setSourceKind("WIDE_TABLE");
         when(dsMapper.selectById(3L)).thenReturn(ds);
+        when(screenMapper.selectList(any())).thenReturn(List.of(legacyRuntimeScreen(3L)));
         doThrow(new RptException(RptErrorCode.SCREEN_DATA_SCOPE_DENIED))
                 .when(scopeGuard).check(any(), any());
 
-        ScreenDataReqDTO req = new ScreenDataReqDTO();
-        req.setDsId(3L);
+        ScreenDataReqDTO req = legacyRuntimeRequest(3L);
         assertThatThrownBy(() -> service.queryData(req))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43013");
@@ -359,10 +466,10 @@ class ScreenDatasourceServiceTest {
         ds.setId(3L);
         ds.setStatus("ACTIVE");
         when(dsMapper.selectById(3L)).thenReturn(ds);
+        when(screenMapper.selectList(any())).thenReturn(List.of(legacyRuntimeScreen(3L)));
         when(engine.query(any(), any())).thenReturn(new ScreenDataRespDTO(List.of("c"), List.of()));
 
-        ScreenDataReqDTO req = new ScreenDataReqDTO();
-        req.setDsId(3L);
+        ScreenDataReqDTO req = legacyRuntimeRequest(3L);
         service.queryData(req);
 
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(scopeGuard, engine);
@@ -444,6 +551,36 @@ class ScreenDatasourceServiceTest {
         verify(auditApi).log(any());
     }
 
+    /** 设计器列探测只能使用已保存数据源和独立管理审计，不得借运行时 schema1 路径。 */
+    @Test
+    void probeColumns_usesSavedDatasourceAndWritesDedicatedStructuredAudit() {
+        RptScreenDatasource saved = new RptScreenDatasource();
+        saved.setId(72L);
+        saved.setDsCode("SCRDS_72");
+        saved.setDsName("机构指标");
+        saved.setDsType("SINGLE");
+        saved.setSourceKind("WIDE_TABLE");
+        saved.setBizLine("COMMON");
+        saved.setStatus("ACTIVE");
+        saved.setConfigJson("{\"scopeMode\":\"SUBJECT\",\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\"}");
+        when(dsMapper.selectById(72L)).thenReturn(saved);
+        when(engine.tryRun(any(), any(), any())).thenReturn(new ScreenDataRespDTO(List.of("余额"), List.of()));
+        ScreenDatasourceProbeReqDTO req = new ScreenDatasourceProbeReqDTO();
+        req.setReason("设计器绑定前核对列");
+
+        ScreenDataRespDTO response = service.probeColumns(72L, req);
+
+        assertThat(response.getColumns()).containsExactly("余额");
+        ArgumentCaptor<com.bank.branch.platform.governance.api.dto.AuditLogCmd> audit =
+                ArgumentCaptor.forClass(com.bank.branch.platform.governance.api.dto.AuditLogCmd.class);
+        verify(auditApi).log(audit.capture());
+        assertThat(audit.getValue().getTargetType()).isEqualTo("RPT_SCREEN_DATASOURCE");
+        assertThat(audit.getValue().getTargetId()).isEqualTo("72");
+        assertThat(audit.getValue().getResourceUrl())
+                .isEqualTo("/api/screen/admin/datasources/72/probe-columns");
+        assertThat(audit.getValue().getReason()).isEqualTo("设计器绑定前核对列");
+    }
+
     @Test
     void update_notFound_throws43001() {
         when(dsMapper.selectById(5L)).thenReturn(null);
@@ -469,6 +606,7 @@ class ScreenDatasourceServiceTest {
         req.setDsName("更新后的名称");
         req.setSourceKind("KPI_RESULT");
         req.setConfigJson("{\"cycleType\":\"QUARTERLY\"}");
+        req.setReason("更新数据源定义");
 
         service.update(6L, req);
 
@@ -479,20 +617,186 @@ class ScreenDatasourceServiceTest {
         assertThat(cap.getValue().getDsName()).isEqualTo("更新后的名称");
     }
 
+    /** 已发布屏快照引用的数据源不得原地改变查询语义，错误必须带完整屏编码。 */
+    @Test
+    void update_publishedReferencesRejectSemanticChangeAndReturnAllScreenCodes() {
+        RptScreenDatasource existing = new RptScreenDatasource();
+        existing.setId(6L);
+        existing.setDsCode("SCRDS_LOCKED");
+        existing.setDsName("季度指标");
+        existing.setDsType("TIMESERIES");
+        existing.setSourceKind("KPI_RESULT");
+        existing.setBizLine("COMMON");
+        existing.setStatus("ACTIVE");
+        existing.setConfigJson("{\"cycleType\":\"MONTHLY\"}");
+        when(dsMapper.selectById(6L)).thenReturn(existing);
+        RptScreen alpha = new RptScreen();
+        alpha.setId(71L);
+        alpha.setScreenCode("SCR_ALPHA");
+        alpha.setCanvasPublishedJson("{\"bindSnapshots\":{\"11\":{\"bind\":{\"dsId\":6}}}}");
+        RptScreen beta = new RptScreen();
+        beta.setId(72L);
+        beta.setScreenCode("SCR_BETA");
+        beta.setCanvasPublishedJson("{\"bindSnapshots\":{\"12\":{\"bind\":{\"dsId\":6}}}}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(beta, alpha));
+
+        ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
+        req.setDsName("季度指标");
+        req.setSourceKind("KPI_RESULT");
+        req.setBizLine("COMMON");
+        req.setStatus("ACTIVE");
+        req.setConfigJson("{\"cycleType\":\"QUARTERLY\"}");
+        req.setReason("尝试改变查询周期");
+
+        assertThatThrownBy(() -> service.update(6L, req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_DS_IN_USE.getCode())
+                .hasMessageContaining("SCR_ALPHA")
+                .hasMessageContaining("SCR_BETA");
+        verify(dsMapper, never()).updateById(any(RptScreenDatasource.class));
+    }
+
+    /** 已发布引用仅允许改名称/备注等非查询语义元数据。 */
+    @Test
+    void update_publishedReferencesAllowsCosmeticMetadataOnlyChange() {
+        RptScreenDatasource existing = new RptScreenDatasource();
+        existing.setId(6L);
+        existing.setDsCode("SCRDS_LOCKED");
+        existing.setDsName("旧名称");
+        existing.setDsType("TIMESERIES");
+        existing.setSourceKind("KPI_RESULT");
+        existing.setBizLine("COMMON");
+        existing.setStatus("ACTIVE");
+        existing.setConfigJson("{\"cycleType\":\"MONTHLY\"}");
+        when(dsMapper.selectById(6L)).thenReturn(existing);
+        RptScreen screen = new RptScreen();
+        screen.setId(71L);
+        screen.setScreenCode("SCR_ALPHA");
+        screen.setCanvasPublishedJson("{\"bindSnapshots\":{\"11\":{\"bind\":{\"dsId\":6}}}}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+
+        ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
+        req.setDsName("新名称");
+        req.setSourceKind("KPI_RESULT");
+        req.setBizLine("COMMON");
+        req.setStatus("ACTIVE");
+        req.setConfigJson("{\"cycleType\":\"MONTHLY\"}");
+        req.setRemark("只改展示说明");
+        req.setReason("修正文案");
+
+        service.update(6L, req);
+
+        verify(dsMapper).updateById(any(RptScreenDatasource.class));
+    }
+
+    /** 删除时也要扫描归档发布包，不能只按当前草稿 block 或当前发布包判断。 */
+    @Test
+    void delete_archivedPublishedReferenceRejectsAndReturnsCompleteScreenCode() {
+        RptScreenDatasource existing = new RptScreenDatasource();
+        existing.setId(6L);
+        when(dsMapper.selectById(6L)).thenReturn(existing);
+        RptScreen screen = new RptScreen();
+        screen.setId(71L);
+        screen.setScreenCode("SCR_ARCHIVED");
+        screen.setCanvasPublishedJson("{\"bindSnapshots\":{}}");
+        RptScreenPublishLog archive = new RptScreenPublishLog();
+        archive.setScreenId(71L);
+        archive.setSnapshotJson("{\"bindSnapshots\":{\"11\":{\"bind\":{\"dsId\":6}}}}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(publishLogMapper.selectList(any())).thenReturn(List.of(archive));
+
+        assertThatThrownBy(() -> service.delete(6L, "验证归档引用"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_DS_IN_USE.getCode())
+                .hasMessageContaining("SCR_ARCHIVED");
+        verify(dsMapper, never()).deleteById(6L);
+    }
+
+    /** 无快照归档无法证明“不引用”任一数据源，因此冻结扫描必须保守拒绝删除并返回该屏编码。 */
+    @Test
+    void delete_untrustedArchivedPackageFailsClosedForUnknownReference() {
+        RptScreenDatasource existing = new RptScreenDatasource();
+        existing.setId(6L);
+        when(dsMapper.selectById(6L)).thenReturn(existing);
+        RptScreen screen = new RptScreen();
+        screen.setId(71L);
+        screen.setScreenCode("SCR_UNTRUSTED_ARCHIVE");
+        screen.setCanvasPublishedJson("{\"components\":[],\"bindSnapshots\":{}}");
+        RptScreenPublishLog archive = new RptScreenPublishLog();
+        archive.setScreenId(71L);
+        archive.setSnapshotJson("{\"schemaVersion\":1,\"components\":[{\"component\":\"ChartWidget\",\"blockId\":11}]}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(publishLogMapper.selectList(any())).thenReturn(List.of(archive));
+
+        assertThatThrownBy(() -> service.delete(6L, "验证不可信归档"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_DS_IN_USE.getCode())
+                .hasMessageContaining("SCR_UNTRUSTED_ARCHIVE");
+        verify(dsMapper, never()).deleteById(6L);
+    }
+
+    /** 草稿也引用时不能先返回泛化错误而吞掉已发布引用屏；发布冻结优先级更高。 */
+    @Test
+    void delete_draftAndPublishedReferencesReturnsAllPublishedScreenCodes() {
+        RptScreenDatasource existing = new RptScreenDatasource();
+        existing.setId(6L);
+        when(dsMapper.selectById(6L)).thenReturn(existing);
+        RptScreen alpha = new RptScreen();
+        alpha.setId(71L);
+        alpha.setScreenCode("SCR_ALPHA");
+        alpha.setCanvasPublishedJson("{\"bindSnapshots\":{\"11\":{\"bind\":{\"dsId\":6}}}}");
+        RptScreen beta = new RptScreen();
+        beta.setId(72L);
+        beta.setScreenCode("SCR_BETA");
+        beta.setCanvasPublishedJson("{\"bindSnapshots\":{\"12\":{\"bind\":{\"dsId\":6}}}}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(beta, alpha));
+
+        assertThatThrownBy(() -> service.delete(6L, "验证当前发布引用"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_DS_IN_USE.getCode())
+                .hasMessageContaining("SCR_ALPHA")
+                .hasMessageContaining("SCR_BETA");
+        verify(dsMapper, never()).deleteById(6L);
+    }
+
     // ===== fieldMeta（spec 2026-07-17 §3.2，全 source_kind 通用）=====
 
     /** 携带指定 configJson 的宽表保存请求（槽位翻译 mock 为 M_0001 → val_3/EMP） */
     private ScreenDatasourceSaveReqDTO wideReqWith(String configJson) {
         ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
         req.setDsName("员工存款");
+        req.setBizLine("COMMON");
         req.setSourceKind("WIDE_TABLE");
         req.setConfigJson(configJson);
+        req.setReason("测试保存宽表数据源");
         return req;
     }
 
     private void mockSlotEmp() {
         when(slotDao.selectByCodes(anyList())).thenReturn(
                 List.of(new ScreenMetricSlotDao.MetricSlot("M_0001", "存款余额", 3, "EMP")));
+    }
+
+    /** 构造可验证的 schema1 历史屏：运行请求不能再仅凭客户端 dsId 取数。 */
+    private RptScreen legacyRuntimeScreen(Long dsId) {
+        RptScreen screen = new RptScreen();
+        screen.setId(17L);
+        screen.setScreenCode("SCR_LEGACY");
+        screen.setStatus("ACTIVE");
+        screen.setBizLine("COMMON");
+        screen.setOrgScopeMode("LEGACY_CONTEXT");
+        screen.setPublishStatus(1);
+        screen.setCanvasPublishedJson("{\"schemaVersion\":1,\"components\":[{\"component\":\"ChartWidget\","
+                + "\"blockId\":11}],\"bindSnapshots\":{\"11\":{\"bind\":{\"dsId\":" + dsId + "}}}}");
+        return screen;
+    }
+
+    private ScreenDataReqDTO legacyRuntimeRequest(Long dsId) {
+        ScreenDataReqDTO req = new ScreenDataReqDTO();
+        req.setSchemaVersion(1);
+        req.setScreenCode("SCR_LEGACY");
+        req.setDsId(dsId);
+        return req;
     }
 
     @Test

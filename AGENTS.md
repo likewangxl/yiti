@@ -1,4 +1,4 @@
-<!-- Generated: 2026-04-26 | Updated: 2026-07-12 -->
+<!-- Generated: 2026-04-26 | Updated: 2026-08-11 -->
 
 # AGENTS.md
 
@@ -216,3 +216,11 @@ com.bank.branch.platform.<module>/
 - **派遣任何 subagent（Agent 工具）时，model 参数必须 ≥ sonnet（即只能是 `sonnet` 或 `opus`），禁止使用 `haiku`**。
 - 即使 plan 文档建议"机械任务用 cheap model"，也要降级到 sonnet 而非 haiku。
 - 此规则适用于全部 subagent 类型（executor、explore、code-reviewer、debugger 等），无例外。理
+
+### 前端与数据库验证门禁（绝对红线）
+- 任何前端功能、交互、样式或 API 契约改动，除单元测试和构建外，必须使用官方 `playwright-cli` 对真实运行页面验证关键流程；不得用 Vitest、Playwright Test 或 MCP 替代 CLI 浏览器验收。
+- 每次 CLI 验收必须归档真实执行命令、路由/拦截器注册清单、原始 console 输出、原始 requests/response 摘要及截图。无 mock 验收须同时证明未注册 mock route、请求实际到达目标服务；开发态 mock 必须逐条列出 route 与响应、显著标注“仅开发态 mock，非联调”，不得以占位伪代码、手工改写日志或截图替代原始证据。
+- 任何 DDL、DML 或数据库脚本开始前，必须先对现有 `yiti_test` 做只读盘点。覆盖、清空、重建或从 `yiti` 克隆到 `yiti_test` 均属于破坏性操作，必须先取得明确确认；不得把“测试验证”或“备份”视为隐含授权，更不得直接改动 `yiti`。
+- 备份仅针对获准操作的目标库：须保存受控访问的备份文件、表/行数清单与 checksum 清单，并在独立隔离实例完成可恢复性演练和校验。备份、diff、日志、截图和工单不得暴露生产敏感数据；需要时先脱敏、最小化导出并限定留存与访问人员。
+- 获准克隆后，`yiti_test` 必须隔离 `SPRING_SESSION`、`PT_LOCK`、Quartz/`sys_job_conf` 调度、消息消费者/生产者、缓存命名空间、对象存储和所有外联凭据/回调；禁用调度和外发，使用独立实例标识。仅可在该隔离环境验证结构、数据、约束、真实查询、幂等复跑、执行前后 diff 与恢复演练。
+- `yiti_test` 验证失败不得进入 `yiti`；验证通过后须先报告完整证据，并再次取得对 `yiti` 的明确执行确认，方可执行。任何未确认、隔离不完整或证据缺失均为停止条件。

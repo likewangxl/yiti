@@ -1,0 +1,72 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T22:13:42.615010Z
+COMMAND /usr/bin/python3 docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py
+SHA256 a70da54c994620d340022ca7f0c53cdf6af358989214805c481042007b4d20f2 /home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py
+SHA256 364059149d998dc08f20c73b0d78be7cc27a5c12d7fadf49b425ca06feee42f1 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-root-managed-launcher.py
+SHA256 aa8406d180f7a8f5b61587d924dd711cd348dca375d83767f733e30eb468e325 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.py
+SHA256 9e53b6c5b4b475f10d5fb591d416855504599780d8a9d2e1556b38e13d4dcb6a /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh
+SHA256 fa9ac8ce82512b9a91bb9a43f3e941d791ef2bc004fbfe3239be35533586aa17 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner@.service.template
+SHA256 90854d2003ec532e359a45e7e758c523e4d8d7fdeeab535d11aa327c1a49cf66 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.schema.json
+SHA256 b11be885fcaf185b4e68b7e02f73411a5bd0b9ccf29622f9097dc12b7fe23f8b /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.json
+SHA256 573cb0bffc622553307ca63d8184d609537a35907828810cd18bc10af7b83080 /home/djdev/leid/yiti/docs/superpowers/sql/controlled-batch-manifest-trust/README.md
+EXIT_CODE 0
+UTC_FINISHED 2026-08-11T22:13:42.709971Z
+--- RAW_STDOUT_STDERR ---
+test_a2_loader_declares_same_fd_strict_schema_and_independent_pin (__main__.ControlledSqlBatchRunnerRound10Test) ... ok
+test_a2_proof_rejects_duplicate_keys_target_state_and_claim_manifest_bind_failures (__main__.ControlledSqlBatchRunnerRound10Test) ... ok
+test_a2_signature_boundary_fails_before_mysql (__main__.ControlledSqlBatchRunnerRound10Test) ... ok
+test_claim_helper_consumed_revoked_or_offline_reply_is_fail_closed_without_echo (__main__.ControlledSqlBatchRunnerRound10Test) ... ok
+test_claim_helper_success_is_signed_and_bound_to_launcher_and_manifest (__main__.ControlledSqlBatchRunnerRound10Test) ... ok
+test_claim_token_rejects_duplicate_replay_style_fields_and_wrong_launcher_binding (__main__.ControlledSqlBatchRunnerRound10Test) ... ok
+test_complete_execute_mock_sequence_allows_only_checker_claim_and_one_mysql (__main__.ControlledSqlBatchRunnerRound10Test) ... ok
+test_missing_root_launcher_deployment_proof_fails_closed_before_claim_or_mysql (__main__.ControlledSqlBatchRunnerRound10Test) ... ok
+test_mysql_runtime_contract_is_signed_release_data_not_version_or_help_probe (__main__.ControlledSqlBatchRunnerRound10Test) ... ok
+test_new_protocol_schemas_and_nonexecutable_fixtures_are_checked_in (__main__.ControlledSqlBatchRunnerRound10Test) ... ok
+test_root_launcher_produces_sealed_pid_bound_proof_and_drops_to_no_login_account (__main__.ControlledSqlBatchRunnerRound10Test) ... ok
+test_runner_requires_signed_sealed_launcher_proof_not_an_environment_marker (__main__.ControlledSqlBatchRunnerRound10Test) ... ok
+test_shell_execute_is_permanently_rejected_and_validate_path_is_isolated (__main__.ControlledSqlBatchRunnerRound10Test) ... ok
+test_systemd_unit_declares_strict_pre_interpreter_environment_and_service_contract (__main__.ControlledSqlBatchRunnerRound10Test) ... ok
+test_binary_mode_is_frozen_by_signed_release_contract_schema_and_example (__main__.ControlledSqlBatchRunnerRound11Test)
+runner argv、schema 和签名 example 必须绑定同一 binary-mode option 契约。 ... ok
+test_private_key_reader_accepts_0400_and_0600_with_root_only_ancestors (__main__.ControlledSqlBatchRunnerRound11Test)
+合法私钥仅接受 root-owned regular 0400/0600；元数据由 mock 提供。 ... ok
+test_private_key_reader_rejects_actual_symlink (__main__.ControlledSqlBatchRunnerRound11Test)
+最终 key 使用 O_NOFOLLOW，真实符号链接不能被签名器接收。 ... ok
+test_sign_payload_passes_the_opened_private_key_fd_via_proc_without_path_reopen (__main__.ControlledSqlBatchRunnerRound11Test)
+签名 argv 只能引用 inherited FD，不能重新把私钥 pathname 交给 openssl。 ... ok
+test_sign_payload_rejects_group_or_other_readable_private_key_before_openssl (__main__.ControlledSqlBatchRunnerRound11Test)
+0644 与 0440 当前会穿透旧的仅拒绝 group/other write 检查，必须成为 Red。 ... ok
+test_sign_payload_rejects_group_or_other_traversable_private_key_parent_before_openssl (__main__.ControlledSqlBatchRunnerRound11Test)
+0755/0711 父目录泄露私钥路径并允许非 root 遍历，必须 fail-close。 ... ok
+test_unit_and_trust_readme_require_root_only_private_key_installation_validation (__main__.ControlledSqlBatchRunnerRound11Test)
+部署材料必须明示私钥本体、所有祖先目录及只读安装核验方式。 ... ok
+test_defaults_parser_allows_only_minimal_client_tls_contract (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_defaults_parser_rejects_injection_groups_and_unknown_options_without_secret_echo (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_execution_never_reaches_mysql_when_trust_or_receipt_boundary_fails (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_fixed_two_rounds_use_exactly_one_mocked_mysql_subprocess_and_never_log_password (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_managed_manifest_path_rejects_operator_selected_locations (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_manifest_schema_is_loaded_and_executed_not_merely_documented (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_manifest_window_rejects_future_expired_and_long_lived_authorizations (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_mysql_command_uses_only_fixed_defaults_file_and_tcp_tls (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_mysql_login_path_isolation_uses_fixed_empty_account_home_and_clean_child_environment (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_mysql_stdin_contains_exactly_two_byte_preserved_rounds_without_source (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_no_legacy_environment_defaults_or_path_source_sql_remains (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_reader_fails_when_fstat_changes_during_the_single_read (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_receipt_has_no_static_local_execution_fallback (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_runner_never_selects_security_tools_from_path (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_schema_validator_rejects_boolean_for_integer (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_secure_reader_declares_descriptor_checks_and_no_resolve_reopen (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_secure_reader_rejects_symlink_without_socket_or_subprocess (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_shell_uses_fixed_absolute_interpreters_and_removes_double_run (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_signature_verification_uses_opened_fds_and_fixed_openssl (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_strict_json_rejects_duplicate_keys_before_schema_validation (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_unprovisioned_key_pin_is_not_a_production_test_bypass (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+test_validate_only_never_reaches_execution_or_mysql (__main__.ControlledSqlBatchRunnerTrustTest) ... ok
+
+----------------------------------------------------------------------
+Ran 43 tests in 0.030s
+
+OK
+EXECUTION START: change_ticket=CHG-ROUND10-TEST; one mysql process; fixed two rounds
+EXECUTION START: change_ticket=CHG-ROUND9-TEST; one mysql process; fixed two rounds
+VALIDATION PASS: change_ticket=CHG-ROUND9-TEST; expires_at_utc=2030-01-01T00:10:00Z; approved_manifest_sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

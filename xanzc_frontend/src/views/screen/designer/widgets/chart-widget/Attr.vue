@@ -45,6 +45,19 @@
         <el-option v-for="c in colOptions" :key="c" :label="c" :value="c" />
       </el-select>
     </el-form-item>
+    <el-form-item v-if="needValueCol" label="列探测">
+      <div class="probe-box">
+        <el-input v-model="probe.reason" data-testid="datasource-probe-reason" maxlength="500"
+                  placeholder="填写列探测原因（高危审计必填）" />
+        <el-select v-if="probeRequiresNamedGroup" v-model="probe.testOrgGroupCode" filterable
+                   data-testid="datasource-probe-group" placeholder="选择测试机构组">
+          <el-option v-for="group in probeOrgGroups" :key="group.groupCode"
+                     :label="`${group.groupName} (${group.groupCode})`" :value="group.groupCode" />
+        </el-select>
+        <el-button :loading="probe.running" data-testid="datasource-probe-submit" @click="probeColumns">探测列</el-button>
+        <div class="attr-hint">使用独立高危资源 R_RPT_SCR_DS_PROBE；不调用运行时 /screen/data。命名机构组必须选择测试机构组。</div>
+      </div>
+    </el-form-item>
 
     <el-form-item label="标题"><el-input v-model="styleCfg.title" @input="syncStyle" /></el-form-item>
     <el-form-item label="刷新(秒)"><el-input-number v-model="styleCfg.refreshSec" :min="0" @change="syncStyle" /></el-form-item>
@@ -53,15 +66,20 @@
 </template>
 <script setup>
 import { computed, reactive, ref, onMounted, watch } from 'vue';
+import { ElMessage } from 'element-plus';
 import CommonAttr from '@/views/screen/designer/panels/CommonAttr.vue';
-import { listScreenDatasources, queryScreenData } from '@/api/screen';
+import { listScreenDatasources, listOrgGroups, probeScreenDatasourceColumns } from '@/api/screen';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import { chartMetas } from '@/views/screen/designer/widgets';
 import { filterDatasourcesByMeta } from './dsFilter';
+import { buildDatasourceProbeRequest, datasourceTryRunScopeMode } from '@/utils/dsConfig';
+import { filterActiveOrgGroups, filterReportScreenOrgGroups } from '@/utils/screenScope';
 const props = defineProps({ element: { type: Object, required: true } });
 const store = useScreenDesignerStore();
 const datasources = ref([]);
 const colOptions = ref([]);   // 数值列下拉候选（按数据源探测，探测失败仍可 allow-create 手输）
+const probeOrgGroups = ref([]);
+const probe = reactive({ reason: '', testOrgGroupCode: '', running: false });
 const bind = reactive(parse(props.element.bindJson));
 const styleCfg = reactive(parse(props.element.styleJson));
 const drill = reactive(parse(props.element.drillJson));
@@ -88,6 +106,11 @@ const dsHint = computed(() => {
   return parts.join('，');
 });
 const needValueCol = computed(() => innerType.value === 'GAUGE' || innerType.value === 'LIQUID_PROGRESS');
+const selectedDatasource = computed(() => datasources.value.find(item => item.id === bind.dsId) || null);
+const probeRequiresNamedGroup = computed(() => {
+  try { return datasourceTryRunScopeMode(selectedDatasource.value?.configJson) === 'NAMED_GROUP'; }
+  catch { return false; }
+});
 
 function parse(j) { try { return j ? JSON.parse(j) : {}; } catch { return {}; } }
 function syncBind() {
@@ -104,25 +127,54 @@ function syncDrill() { props.element.drillJson = JSON.stringify(drill); store.pu
 // propValue 是节点上的响应式对象,mutate 即生效;仅需标脏 + 记快照
 function syncProp() { store.pushSnapshotDebounced(); }
 
-/** 探测所选数据源的列名(供数值列下拉)——best effort:缺上下文参数(43010)等失败时静默清空,仍可手输 */
+/**
+ * 探测已保存数据源的列名（供数值列下拉）。
+ *
+ * 设计器没有发布包 block 身份，绝不能借 /screen/data schemaVersion=1 读取列；统一走
+ * 已保存数据源的独立高危 probe-columns 端点，并把原因/测试组交给服务端审计与范围校验。
+ */
 async function probeColumns() {
   colOptions.value = [];
   if (!needValueCol.value || !bind.dsId) return;
+  const datasource = selectedDatasource.value;
+  if (!datasource) { ElMessage.warning('请先选择已保存的数据源'); return; }
+  let body;
   try {
-    const d = await queryScreenData({
-      dsId: bind.dsId,
+    body = buildDatasourceProbeRequest(datasource, {
       period: bind.period || 'LATEST',
-      contextParams: { orgCode: null, empId: null }
+      dateFrom: null,
+      dateTo: null,
+      contextParams: { orgCode: null, empId: null },
+      testOrgGroupCode: probe.testOrgGroupCode,
+      reason: probe.reason
     });
+  } catch (error) {
+    ElMessage.warning(error?.message || '列探测参数不合法');
+    return;
+  }
+  probe.running = true;
+  try {
+    const d = await probeScreenDatasourceColumns(bind.dsId, body);
     colOptions.value = d?.columns || [];
-  } catch { /* 探测失败不打扰配置流程 */ }
+  } finally {
+    probe.running = false;
+  }
 }
-watch(() => bind.dsId, probeColumns);
+watch(() => bind.dsId, () => {
+  // 切换数据源后既不能复用另一个数据源的列，也不能复用另一个范围模式的测试组。
+  colOptions.value = [];
+  probe.testOrgGroupCode = '';
+});
 onMounted(async () => {
   datasources.value = await listScreenDatasources();
-  probeColumns();
+  try {
+    const groups = await listOrgGroups({ status: 'ACTIVE', purpose: 'REPORT_SCREEN' });
+    const rows = Array.isArray(groups) ? groups : (groups?.records || []);
+    probeOrgGroups.value = filterActiveOrgGroups(filterReportScreenOrgGroups(rows));
+  } catch { probeOrgGroups.value = []; }
 });
 </script>
 <style scoped>
 .attr-hint { width: 100%; font-size: 12px; color: #7d9bc9; line-height: 1.5; margin-top: 2px; }
+.probe-box { width: 100%; display: flex; flex-direction: column; gap: 6px; }
 </style>

@@ -32,6 +32,13 @@ public class ScreenTryRunReqDTO {
     /** orgCode / empId */
     private Map<String, String> contextParams;
 
+    /**
+     * NAMED_GROUP 数据源试跑时必须显式指定待验证的机构组；服务端只取该组有效成员，
+     * 不信任 contextParams 中的 orgCode。
+     */
+    private String testOrgGroupCode;
+
     /** 审计原因（高危） */
+    @NotBlank
     private String reason;
 }

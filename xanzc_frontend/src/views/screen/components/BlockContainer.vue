@@ -10,7 +10,8 @@
         <el-icon class="scr-block-guide-icon"><InfoFilled /></el-icon>
         <span>{{ guide }}</span>
       </div>
-      <DrillTrend v-else-if="drillItem" :bind="bind" :context="context"
+      <DrillTrend v-else-if="drillItem" :bind="bind"
+                  :context="{ ...context, blockId: block.id ?? block.blockId }"
                   :item="drillItem" :periods="drill.drillPeriods || ['LAST_10D']" />
       <component v-else-if="data" :is="componentMap[block.componentType]"
                  :columns="data.columns" :rows="data.rows"
@@ -24,6 +25,7 @@ import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { InfoFilled } from '@element-plus/icons-vue';
 import { queryScreenData } from '@/api/screen';
+import { buildScreenDataRequest } from '@/utils/screenScope';
 import { GLOBAL_PERIOD_INJECT_KEY, resolveBlockPeriod, shouldApplyGlobalPeriod } from '@/utils/globalPeriod';
 import MetricCard from './MetricCard.vue';
 import LineTrend from './LineTrend.vue';
@@ -105,29 +107,58 @@ function periodCtx() {
 async function load() {
   // FIX-4: 未选数据源（新建区块 bindJson='{}' → dsId undefined）时不发请求。
   // 否则 dsId 缺失会被后端 @NotNull 拦成 400，用户看到与业务无关的"请求失败(400)"；直接渲染引导占位。
-  if (!bind.value.dsId) {
+  // 服务端响应协议值必须保持原生 JSON 整数；这里禁止 Number('2') 这类宽松转换，
+  // 否则脏响应会被误当成可信 v2 发布包继续取数。
+  const schemaVersion = props.context?.schemaVersion ?? props.context?.runtimeSchemaVersion ?? 1;
+  const blockId = props.block.id ?? props.block.blockId;
+  if (![1, 2].includes(schemaVersion)) {
+    loading.value = false;
+    data.value = null;
+    guide.value = '';
+    error.value = '大屏运行协议版本不受支持，已拒绝取数';
+    return;
+  }
+  if (schemaVersion < 2 && !bind.value.dsId) {
     loading.value = false;
     error.value = '';
     data.value = null;
     guide.value = '请先选择数据源';
     return;
   }
+  if (schemaVersion === 2 && (!String(props.context?.screenCode || '').trim()
+    || !Number.isSafeInteger(blockId) || blockId <= 0)) {
+    loading.value = false;
+    data.value = null;
+    guide.value = '';
+    error.value = '大屏运行协议缺少 screenCode 或 blockId，已拒绝取数';
+    return;
+  }
   loading.value = true;
   error.value = '';
   guide.value = '';
   try {
-    data.value = await queryScreenData({
+    data.value = await queryScreenData(buildScreenDataRequest({
+      schemaVersion,
+      screenCode: props.context.screenCode,
+      blockId,
       dsId: bind.value.dsId,
       // 时序数据源且未豁免时被全局周期覆盖,否则维持自身 bind.period(缺省 LATEST,现状不变)
       period: resolveBlockPeriod(periodCtx()),
+      dateFrom: props.context.dateFrom,
+      dateTo: props.context.dateTo,
       contextParams: { orgCode: props.context.orgCode || null, empId: props.context.empId || null }
-    });
+    }));
   } catch (e) {
     // 缺必填上下文参数（RPT-43010）不是真错误，是"还没给取数条件"，渲染引导占位而非红字报错；
     // 周期非法(43011)/SQL 执行失败(43008)/其他仍按错误态红字展示
     if (e?.code === 'RPT-43010') {
       data.value = null;
       guide.value = '请提供 orgCode / empId 后查看数据';
+    } else if (e?.code === 'RPT-43023') {
+      // v1 只能使用当前可信已发布 bindSnapshots；缺失时严禁根据 dsId 自动降级探测。
+      data.value = null;
+      guide.value = '';
+      error.value = '当前发布绑定快照不可用，需受控迁移或重新发布';
     } else {
       error.value = e?.message || '取数失败';
     }
@@ -157,7 +188,9 @@ function onItemClick({ col, label, row }) {
 // 未 provide(设计器态)时 globalPeriod 为 null,不注册 watch,零行为差异
 if (globalPeriod) {
   watch(globalPeriod, val => {
-    if (!bind.value.dsId) return; // 未绑数据源的引导态区块无数可取
+    const currentSchema = props.context?.schemaVersion ?? props.context?.runtimeSchemaVersion ?? 1;
+    if (![1, 2].includes(currentSchema)) return; // 协议非法时保持 Fail Close，不因筛选器再次尝试。
+    if (currentSchema === 1 && !bind.value.dsId) return; // 未绑数据源的引导态区块无数可取
     if (shouldApplyGlobalPeriod({ ...periodCtx(), globalPeriod: val })) load();
   });
 }

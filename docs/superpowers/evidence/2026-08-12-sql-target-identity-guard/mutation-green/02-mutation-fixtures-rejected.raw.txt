@@ -1,0 +1,76 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T19:27:58.943905Z
+COMMAND python3 docs/superpowers/scripts/tests/sql-target-identity-guard/test_mutations.py --mode hardened-rejection
+SHA256 c57ed579666dbf3fe28554582e9a4e22341691807603fecf11076d1911b8bf79 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.sh
+SHA256 503d9b704bc151108d72bd09753b93bf21ffa098431f2f16b6c33f2609a2cffc /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.py
+SHA256 9cdda5c67bddcd7ca602d70dc71862c4ede8ed25733e3d57aa639f872493783f /home/djdev/leid/yiti/docs/superpowers/scripts/tests/sql-target-identity-guard/test_mutations.py
+SHA256 8fa9e252264e9ea341784d0f9836f8e537dff6f6b2c0db787d1566c998a6e63b /home/djdev/leid/yiti/docs/superpowers/scripts/tests/sql-target-identity-guard/mutation-fixtures.json
+SHA256 adc6485f27b7889947c67c58f0aa49a6701e73fb114fbb08155f3b4f004f4ed8 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql
+SHA256 81310dbb0232f23e5374207c93d427512429dad7012ce08ea39d6e4a1dc33349 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql
+SHA256 5c1b22ecdd8c74480e0607237d58316a71e762383cab1dead4c7cfe20798d500 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql
+EXIT_CODE 0
+UTC_FINISHED 2026-08-11T19:27:59.720477Z
+--- RAW_STDOUT_STDERR ---
+MODE hardened-rejection (每个 mutation fixture 必须被拒绝)
+CHECKER_SHA256 c57ed579666dbf3fe28554582e9a4e22341691807603fecf11076d1911b8bf79 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.sh
+FIXTURE_SHA256 token-only-in-string 88b781018a44a1d5eec83a3ceb20f695ba752c5478754ff477aeffaca0e20797 /tmp/sql-guard-hardened-i0qioim7/token-only-in-string.sql
+HARDENED_RESULT token-only-in-string exit=1
+STATIC TARGET IDENTITY GUARD STRUCTURAL CHECK (no database connection)
+PARSER: Python-stdlib lexer excludes strings, --/#/block comments; validates CASE/IF/PREPARE/EXECUTE/write ordering.
+FAIL /tmp/sql-guard-hardened-i0qioim7/token-only-in-string.sql: 审批身份分支缺少可执行条件：@APPROVED_TARGET_SERVER_UUID IS NULL
+RESULT: FAIL (1 violation(s))
+FIXTURE_SHA256 token-only-in-block-comment ea5a93456d039aeb789b228ce8a2273aed64bb1bc0f687a95ef4ef6086d949fb /tmp/sql-guard-hardened-i0qioim7/token-only-in-block-comment.sql
+HARDENED_RESULT token-only-in-block-comment exit=1
+STATIC TARGET IDENTITY GUARD STRUCTURAL CHECK (no database connection)
+PARSER: Python-stdlib lexer excludes strings, --/#/block comments; validates CASE/IF/PREPARE/EXECUTE/write ordering.
+FAIL /tmp/sql-guard-hardened-i0qioim7/token-only-in-block-comment.sql: 精确匹配分支缺少可执行条件：BINARY @APPROVED_TARGET_PORT <> BINARY CAST ( @@PORT AS CHAR )
+RESULT: FAIL (1 violation(s))
+FIXTURE_SHA256 token-only-in-hash-comment 647310bef65d278d638e108ccfd314ce27e337a4695b92cf1bed89a575e27890 /tmp/sql-guard-hardened-i0qioim7/token-only-in-hash-comment.sql
+HARDENED_RESULT token-only-in-hash-comment exit=1
+STATIC TARGET IDENTITY GUARD STRUCTURAL CHECK (no database connection)
+PARSER: Python-stdlib lexer excludes strings, --/#/block comments; validates CASE/IF/PREPARE/EXECUTE/write ordering.
+FAIL /tmp/sql-guard-hardened-i0qioim7/token-only-in-hash-comment.sql: 精确匹配分支缺少可执行条件：BINARY @APPROVED_TARGET_SCHEMA <> BINARY DATABASE ( )
+RESULT: FAIL (1 violation(s))
+FIXTURE_SHA256 identity-when-zero-dead-branch 1b8993c9d1eac4c8c0785b3e2676b1ac04311461f8defd006146fd9ab57fef3e /tmp/sql-guard-hardened-i0qioim7/identity-when-zero-dead-branch.sql
+HARDENED_RESULT identity-when-zero-dead-branch exit=1
+STATIC TARGET IDENTITY GUARD STRUCTURAL CHECK (no database connection)
+PARSER: Python-stdlib lexer excludes strings, --/#/block comments; validates CASE/IF/PREPARE/EXECUTE/write ordering.
+FAIL /tmp/sql-guard-hardened-i0qioim7/identity-when-zero-dead-branch.sql: 审批身份分支为静态死分支（第 141 行）
+RESULT: FAIL (1 violation(s))
+FIXTURE_SHA256 reset-preflight-error-before-guard ebc0c69944ba5c345fdf190f002642ae749fcd4759ffa46754f73b23f859d8c6 /tmp/sql-guard-hardened-i0qioim7/reset-preflight-error-before-guard.sql
+HARDENED_RESULT reset-preflight-error-before-guard exit=1
+STATIC TARGET IDENTITY GUARD STRUCTURAL CHECK (no database connection)
+PARSER: Python-stdlib lexer excludes strings, --/#/block comments; validates CASE/IF/PREPARE/EXECUTE/write ordering.
+FAIL /tmp/sql-guard-hardened-i0qioim7/reset-preflight-error-before-guard.sql: guard 执行前重置 @RPT_SEED_PREFLIGHT_ERROR 为 NULL（第 392 行）
+RESULT: FAIL (1 violation(s))
+FIXTURE_SHA256 guard-success-condition-tautology a9efcacf8f92aecc59e2f5feb61f135014fc6b291f31c410ecbebd8edf9fdc2f /tmp/sql-guard-hardened-i0qioim7/guard-success-condition-tautology.sql
+HARDENED_RESULT guard-success-condition-tautology exit=1
+STATIC TARGET IDENTITY GUARD STRUCTURAL CHECK (no database connection)
+PARSER: Python-stdlib lexer excludes strings, --/#/block comments; validates CASE/IF/PREPARE/EXECUTE/write ordering.
+FAIL /tmp/sql-guard-hardened-i0qioim7/guard-success-condition-tautology.sql: hard-stop IF 条件必须精确为 @AUTH_PREFLIGHT_ERROR IS NULL，实际为 1 = 1
+RESULT: FAIL (1 violation(s))
+FIXTURE_SHA256 first-ddl-lowercase cc516a282fd207d607f568308bb4110e82018c03491980d33d929cc1e4224ae1 /tmp/sql-guard-hardened-i0qioim7/first-ddl-lowercase.sql
+HARDENED_RESULT first-ddl-lowercase exit=1
+STATIC TARGET IDENTITY GUARD STRUCTURAL CHECK (no database connection)
+PARSER: Python-stdlib lexer excludes strings, --/#/block comments; validates CASE/IF/PREPARE/EXECUTE/write ordering.
+FAIL /tmp/sql-guard-hardened-i0qioim7/first-ddl-lowercase.sql: guard EXECUTE 前出现写语句 DROP（第 396 行）
+RESULT: FAIL (1 violation(s))
+FIXTURE_SHA256 first-ddl-split-lines 7cd86bbcf087b34384a5af55f2381e45a62eb268ce70467b2210b31124202dd3 /tmp/sql-guard-hardened-i0qioim7/first-ddl-split-lines.sql
+HARDENED_RESULT first-ddl-split-lines exit=1
+STATIC TARGET IDENTITY GUARD STRUCTURAL CHECK (no database connection)
+PARSER: Python-stdlib lexer excludes strings, --/#/block comments; validates CASE/IF/PREPARE/EXECUTE/write ordering.
+FAIL /tmp/sql-guard-hardened-i0qioim7/first-ddl-split-lines.sql: guard EXECUTE 前出现写语句 DROP（第 408 行）
+RESULT: FAIL (1 violation(s))
+FIXTURE_SHA256 dml-before-guard 17ec7b13783336cf6d962dde939b411d6a5e13fe29bb09526b8f2dd7d7a550fd /tmp/sql-guard-hardened-i0qioim7/dml-before-guard.sql
+HARDENED_RESULT dml-before-guard exit=1
+STATIC TARGET IDENTITY GUARD STRUCTURAL CHECK (no database connection)
+PARSER: Python-stdlib lexer excludes strings, --/#/block comments; validates CASE/IF/PREPARE/EXECUTE/write ordering.
+FAIL /tmp/sql-guard-hardened-i0qioim7/dml-before-guard.sql: guard EXECUTE 前出现写语句 UPDATE（第 408 行）
+RESULT: FAIL (1 violation(s))
+FIXTURE_SHA256 call-before-guard 7628be5a908f55939e28a6ac7f41a1bae8c176928f04eec59b6ab30033b8d6f5 /tmp/sql-guard-hardened-i0qioim7/call-before-guard.sql
+HARDENED_RESULT call-before-guard exit=1
+STATIC TARGET IDENTITY GUARD STRUCTURAL CHECK (no database connection)
+PARSER: Python-stdlib lexer excludes strings, --/#/block comments; validates CASE/IF/PREPARE/EXECUTE/write ordering.
+FAIL /tmp/sql-guard-hardened-i0qioim7/call-before-guard.sql: guard EXECUTE 前出现写语句 CALL（第 396 行）
+RESULT: FAIL (1 violation(s))
+RESULT PASS (所有 mutation fixture 均被 fail-close 拒绝)

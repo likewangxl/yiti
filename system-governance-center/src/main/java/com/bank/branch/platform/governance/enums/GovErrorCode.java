@@ -53,6 +53,9 @@ public enum GovErrorCode {
     JOB_PAUSE_FAILED("GOV-50005", "Job 暂停失败"),
     JOB_RESUME_FAILED("GOV-50006", "Job 恢复失败"),
 
+    /** OBS 外联被运行环境显式关闭。 */
+    OBS_DISABLED("GOV-50301", "OBS 对象存储已禁用"),
+
     /** Cron 表达式非法 (V1.7). */
     JOB_CRON_INVALID("GOV-50010", "cron 表达式非法"),
 

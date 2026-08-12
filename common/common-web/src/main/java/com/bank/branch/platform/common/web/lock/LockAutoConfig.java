@@ -4,14 +4,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 
 /**
- * 分布式锁自动配置：注册 JdbcLockManager Bean + 定时清理过期锁。
+ * 分布式锁自动配置：注册 JdbcLockManager Bean + 可独立关闭的定时过期锁清理。
  * <p>不在此处 @EnableScheduling —— 各业务模块（如 performance-engine-center）已配；
- * 本类的 @Scheduled 由那里的 TaskScheduler 接管即可。</p>
+ * 本类的 @Scheduled 由那里的 TaskScheduler 接管即可。业务锁 Bean 始终装配；
+ * {@code platform.lock.cleanup.enabled=false} 仅关闭会写 PT_LOCK 的后台清理，缺省保持启用。</p>
  */
 @AutoConfiguration
 @ConditionalOnClass(JdbcTemplate.class)
@@ -25,6 +27,8 @@ public class LockAutoConfig {
     }
 
     @Bean
+    @ConditionalOnProperty(prefix = "platform.lock.cleanup", name = "enabled",
+            havingValue = "true", matchIfMissing = true)
     public LockCleanupJob lockCleanupJob(JdbcTemplate jdbcTemplate) {
         return new LockCleanupJob(jdbcTemplate);
     }

@@ -9,6 +9,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class NoopAuditLogHandler implements AuditLogHandler {
     @Override
+    public boolean isPersistent() {
+        return false;
+    }
+
+    @Override
     public void handle(AuditLogEvent event) {
         log.info("审计日志(noop): action={}, resourceType={}, resourceId={}, operator={}",
             event.action(), event.resourceType(), event.resourceId(), event.operatorEmpId());

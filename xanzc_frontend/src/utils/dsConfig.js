@@ -10,7 +10,8 @@
 //   - fieldMeta（全 source_kind 通用）：col 非空且不重复、role ∈ DIM|METRIC 必填
 //   - WIDE_TABLE aggregation：groupBy ∈ NONE|SUBJECT|DATE（DATE→TIMESERIES 否则 SINGLE，后端强制）、
 //     agg ∈ SUM|AVG|MAX|MIN|COUNT；filters 的 op 白名单，IN 的 value 为逗号分隔字符串（后端拆成多 ? 绑定）
-//   - scopeMode ∈ SUBJECT|GLOBAL（缺省 SUBJECT；GLOBAL 表示全省聚合类，查询需 ALL/省级数据范围）
+//   - scopeMode ∈ SUBJECT|GLOBAL|NAMED_GROUP（缺省 SUBJECT；NAMED_GROUP 仅机构宽表且试跑须显式测试组）
+import { BIZ_LINES } from './screenScope';
 
 // ===== 枚举常量（与后端白名单一致，模板下拉复用） =====
 export const FIELD_ROLES = ['DIM', 'METRIC'];
@@ -18,7 +19,7 @@ export const AGG_GROUP_BYS = ['NONE', 'SUBJECT', 'DATE'];
 export const AGG_FUNCS = ['SUM', 'AVG', 'MAX', 'MIN', 'COUNT'];
 export const FILTER_OPS = ['EQ', 'NE', 'IN', 'GT', 'GE', 'LT', 'LE'];
 export const KPI_VALUE_COLS = ['score', 'completeRate'];
-export const SCOPE_MODES = ['SUBJECT', 'GLOBAL'];
+export const SCOPE_MODES = ['SUBJECT', 'GLOBAL', 'NAMED_GROUP'];
 /** 预设周期模板（与设计器周期下拉一致） */
 export const TIME_PARAM_PRESETS = ['LATEST', 'LAST_10D', 'LAST_1M', 'LAST_6M_EOM'];
 
@@ -26,6 +27,8 @@ export const TIME_PARAM_PRESETS = ['LATEST', 'LAST_10D', 'LAST_1M', 'LAST_6M_EOM
 export function defaultDsModel() {
   return {
     sourceKind: 'WIDE_TABLE',
+    // 新建必须由管理员显式选择；COMMON 是有效值而不是隐式默认。
+    bizLine: '',
     // 仅 CUSTOM_SQL 由用户选择；其余类型由 deriveDsType 按配置推导（只读展示）
     dsType: 'SINGLE',
     wide: { table: 'EMP_INDEX_RESULT', metricCodes: [], slotCols: [], timeParams: [...TIME_PARAM_PRESETS] },
@@ -164,6 +167,7 @@ export function parseConfigJson(sourceKind, cfg, timeParamJson) {
   const c = cfg || {};
   const base = defaultDsModel();
   const patch = {
+    bizLine: 'COMMON',
     fieldMeta: fieldMetaToRows(c.fieldMeta),
     scopeMode: SCOPE_MODES.includes(c.scopeMode) ? c.scopeMode : 'SUBJECT',
     aggEnabled: false
@@ -217,6 +221,7 @@ export function parseConfigJson(sourceKind, cfg, timeParamJson) {
  */
 export function validateDsModel(model) {
   const errors = [];
+  if (!BIZ_LINES.some(x => x.value === model.bizLine)) errors.push('业务条线必须选择公司/对公、零售或共用');
   switch (model.sourceKind) {
     case 'WIDE_TABLE':
       if (!model.wide.metricCodes.length) errors.push('请至少选择一个指标');
@@ -270,8 +275,94 @@ export function validateDsModel(model) {
       if (!Number.isInteger(n) || n < 0) errors.push(`字段元数据第 ${i + 1} 行小数位必须是非负整数`);
     }
   });
-  if (!SCOPE_MODES.includes(model.scopeMode)) errors.push('数据范围模式只能是 SUBJECT 或 GLOBAL');
+  if (!SCOPE_MODES.includes(model.scopeMode)) errors.push('数据范围模式只能是 SUBJECT、GLOBAL 或 NAMED_GROUP');
+  if (model.scopeMode === 'NAMED_GROUP') {
+    // NAMED_GROUP 的成员集合由后端受控注入，只允许机构宽表的 org_code 主体语义；
+    // LEGACY_CONTEXT 继续兼容 CUSTOM_SQL，不能把这条限制误扩展到旧上下文。
+    if (model.sourceKind !== 'WIDE_TABLE') {
+      errors.push('NAMED_GROUP 只允许 WIDE_TABLE（ORG_INDEX_RESULT + org_code）');
+    } else if (model.wide?.table !== 'ORG_INDEX_RESULT') {
+      errors.push('NAMED_GROUP 只允许 ORG_INDEX_RESULT + org_code 主体宽表');
+    }
+  }
   return errors;
+}
+
+/**
+ * 读取试跑所需的数据范围模式。存量 config_json 缺 scopeMode 时仅显式兼容为 SUBJECT；
+ * 解析失败或未知值不能被当作普通试跑继续执行，避免绕过 NAMED_GROUP 的测试组选择。
+ */
+export function datasourceTryRunScopeMode(configJson) {
+  let config;
+  try {
+    config = typeof configJson === 'string' ? JSON.parse(configJson || '{}') : (configJson || {});
+  } catch {
+    throw new Error('数据源配置无法解析，已拒绝试跑');
+  }
+  const mode = String(config.scopeMode || 'SUBJECT').toUpperCase();
+  if (!SCOPE_MODES.includes(mode)) throw new Error('数据源范围模式不受支持，已拒绝试跑');
+  return mode;
+}
+
+/**
+ * 构建与 ScreenTryRunReqDTO 一致的试跑请求。NAMED_GROUP 只有显式测试组才允许发送，
+ * 禁止由 orgCode/empId 或旧 config 的默认值扩大试跑范围。
+ */
+export function buildDatasourceTryRunRequest(row = {}, input = {}) {
+  const scopeMode = datasourceTryRunScopeMode(row.configJson);
+  const reason = String(input.reason || '').trim();
+  if (!reason) throw new Error('高危试跑必须填写原因');
+  const body = {
+    sourceKind: row.sourceKind,
+    dsType: row.dsType,
+    configJson: row.configJson,
+    period: input.period || 'LATEST',
+    dateFrom: input.dateFrom || null,
+    dateTo: input.dateTo || null,
+    contextParams: { orgCode: input.orgCode || null, empId: input.empId || null },
+    reason
+  };
+  if (scopeMode === 'NAMED_GROUP') {
+    const testOrgGroupCode = String(input.testOrgGroupCode || '').trim();
+    if (!testOrgGroupCode) throw new Error('命名机构组试跑必须选择测试机构组');
+    body.testOrgGroupCode = testOrgGroupCode;
+  }
+  return body;
+}
+
+/**
+ * 已保存数据源列探测请求（ScreenDatasourceProbeReqDTO）。
+ *
+ * 与配置态 try-run 不同：它不允许客户端重复提交 sourceKind/configJson，必须以 URL 中的
+ * 已保存数据源 id 为准；这也是设计器禁止借 /screen/data schemaVersion=1 探列的前端边界。
+ */
+export function buildDatasourceProbeRequest(row = {}, input = {}) {
+  const scopeMode = datasourceTryRunScopeMode(row.configJson);
+  const reason = String(input.reason || '').trim();
+  if (!reason) throw new Error('列探测必须填写原因');
+  const suppliedContext = input.contextParams && typeof input.contextParams === 'object'
+    ? input.contextParams : {};
+  const normalizeContextValue = value => {
+    if (value === null || value === undefined) return null;
+    const text = String(value).trim();
+    return text || null;
+  };
+  const body = {
+    period: input.period || 'LATEST',
+    dateFrom: input.dateFrom ?? null,
+    dateTo: input.dateTo ?? null,
+    contextParams: {
+      orgCode: normalizeContextValue(suppliedContext.orgCode ?? input.orgCode),
+      empId: normalizeContextValue(suppliedContext.empId ?? input.empId)
+    },
+    reason
+  };
+  if (scopeMode === 'NAMED_GROUP') {
+    const testOrgGroupCode = String(input.testOrgGroupCode || '').trim();
+    if (!testOrgGroupCode) throw new Error('命名机构组列探测必须选择测试机构组');
+    body.testOrgGroupCode = testOrgGroupCode;
+  }
+  return body;
 }
 
 /**

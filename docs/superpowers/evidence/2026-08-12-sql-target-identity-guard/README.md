@@ -39,5 +39,29 @@ manifest 与 fake `mysql`，证明默认/`--validate-only` 不启动客户端、
 没有受控部署根时 `--execute` 在 helper/mysql 之前以 64 fail-close。因此此前 fake-client 记录仅保留为
 历史静态契约证据，不能表示当前仓库可执行 SQL。
 
+第十轮补齐目标 `@*_preflight_error` 的 `SELECT ... :=`、`DO ... :=` 与嵌套表达式赋值追踪，
+同时禁止 mysql client `SOURCE`、`\\.`、`SYSTEM`、`\\!`，并将过程体外顶层 statement 与
+`DELIMITER` 收紧为三份实际脚本所需的受限 grammar。Red
+`mutation-red/06-round10-current-checker-unexpected-accept.raw.txt` 证明修复前新增 **10/10** 均被错误放行；
+权威 Green 为 `mutation-green/05-round10-real-sql-client-command-grammar.raw.txt`（真实 SQL **3/3 PASS**）和
+`mutation-green/06-round10-all-28-mutations-rejected.raw.txt`（累计 **28/28 fail-close**）。三份记录都含 UTC、
+实际命令、退出码和参与文件 SHA-256，且仅执行静态 checker/文本 fixture，不连接数据库、不执行 SQL。
+
 历史根目录的 `RED.raw.txt` 和 `GREEN.raw.txt` 是加固前文本检查器的早期证据，不应被误解为本轮结构
 解析结论；本 README 列出的子目录记录才是本轮最终证据链。
+
+第十轮 runner 启动链、在线 receipt claim、A2 proof 和 mysql 单进程约束的 TDD Red 为
+`runner-round10-red/01-launcher-claim-a2-mysql-tdd-red.raw.txt`：新增覆盖在旧实现上得到 **7 failures + 9 errors**，
+即 **16** 个未闭合缺口。开发过程保留在 `runner-round10-development/`；权威 Green 是
+`runner-round10-green/01-runner-unit-tests.raw.txt`，纯 mock 单元测试 **36/36 PASS**，不创建 socket，
+不调用真实 mysql、systemd、网络或数据库。它覆盖 shell execute 永久拒绝、unit/净化环境静态契约、
+root launcher sealed PID/starttime proof、在线 claim 成功/已消费/撤销/断线、A2 重复键/签名/目标/状态/绑定、
+以及完整 mock 子进程序列中仅有 checker、claim helper 与一个 mysql，且没有 mysql version/help 探测。
+
+同目录的 `02-python-syntax.raw.txt`、`03-shell-syntax.raw.txt`、`04-json-contracts.raw.txt`、
+`05-static-execute-contract.raw.txt` 和 `07-diff-check.raw.txt` 分别记录 Python/Shell 语法、9 个 JSON
+协议/fixture、双轮/无 mysql probe/固定 unit 契约和目标文件 diff 检查。`06-shell-execute-rejected.raw.txt`
+真实执行普通 shell `--execute`，返回预期 **64**，在 Python、claim helper 和 mysql 之前拒绝。
+
+生产 execute 仍以仓库外 root 部署、root-only key/pin、安装的 unit、service account 和在线原子 claim
+服务为信任边界；这些条件缺失时设计上必须 fail-close，不以本地 fixture 或本记录替代真实审批服务。

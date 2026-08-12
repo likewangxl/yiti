@@ -163,6 +163,11 @@ public class ScreenQueryEngine {
     /** 包级可见，供单测注入固定 today */
     BuiltQuery build(String sourceKind, String configJson, ScreenDataReqDTO req, int limit, LocalDate today) {
         JsonNode cfg = readConfig(configJson);
+        if (isNamedGroup(cfg, req) && !"WIDE_TABLE".equals(sourceKind)) {
+            // 本期只为内置机构宽表建立了可证明的机构范围约束；CUSTOM_SQL 延期，不能留下
+            // 看似有标记/外层包装但无法长期审计等价性的旁路。
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
         return switch (sourceKind == null ? "" : sourceKind) {
             case "WIDE_TABLE" -> buildWideTableQuery(cfg, req, limit, today);
             case "KPI_RESULT" -> buildKpiQuery(cfg, req, limit, today);
@@ -197,6 +202,10 @@ public class ScreenQueryEngine {
         if (meta == null) {
             throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
         }
+        if (isNamedGroup(cfg, req) && !"ORG_INDEX_RESULT".equals(table)) {
+            // org_code 由内置 WIDE_TABLES 元数据推导，而不是信任 configJson 中可伪造的 subjectCol。
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
         JsonNode metrics = cfg.path("metrics");
         if (!metrics.isArray() || metrics.isEmpty()) {
             throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
@@ -205,8 +214,6 @@ public class ScreenQueryEngine {
             // 有 aggregation → 聚合形态（跨主体，不再要求主体上下文参数）；无则明细行为完全不变
             return buildWideTableAggQuery(cfg, meta, table, req, limit, today);
         }
-        String subjectVal = ctxParam(req, meta[1]);
-
         StringBuilder cols = new StringBuilder("data_date");
         for (JsonNode m : metrics) {
             int slot = m.path("slot").asInt();
@@ -218,14 +225,20 @@ public class ScreenQueryEngine {
             cols.append(", val_").append(slot).append(" AS `").append(alias).append("`");
         }
 
-        ResolvedPeriod p = ScreenPeriodResolver.resolve(req.getPeriod(), req.getDateFrom(), req.getDateTo(), today);
+        List<Object> params = new ArrayList<>();
         StringBuilder sql = new StringBuilder("SELECT ").append(cols)
                 .append(" FROM ").append(table)
-                .append(" WHERE ").append(meta[0]).append(" = ?")
-                .append(" AND version = COALESCE((SELECT current_version FROM SYS_CONTROL WHERE scope_dim = '")
+                .append(" WHERE 1=1");
+        if (isNamedGroup(cfg, req)) {
+            appendOrgScopePredicate(sql, params, meta[0], req);
+        } else {
+            String subjectVal = ctxParam(req, meta[1]);
+            sql.append(" AND ").append(meta[0]).append(" = ?");
+            params.add(subjectVal);
+        }
+        sql.append(" AND version = COALESCE((SELECT current_version FROM SYS_CONTROL WHERE scope_dim = '")
                 .append(meta[2]).append("' AND is_valid = 1 ORDER BY latest_data_date DESC LIMIT 1), 'V1')");
-        List<Object> params = new ArrayList<>();
-        params.add(subjectVal);
+        ResolvedPeriod p = ScreenPeriodResolver.resolve(req.getPeriod(), req.getDateFrom(), req.getDateTo(), today);
         if (p.latestOnly()) {
             sql.append(" ORDER BY data_date DESC LIMIT 1");
         } else {
@@ -293,6 +306,9 @@ public class ScreenQueryEngine {
                 .append(" WHERE ").append(versionCond);
 
         List<Object> params = new ArrayList<>();
+        if (isNamedGroup(cfg, req)) {
+            appendOrgScopePredicate(sql, params, meta[0], req);
+        }
         ResolvedPeriod p = ScreenPeriodResolver.resolve(req.getPeriod(), req.getDateFrom(), req.getDateTo(), today);
         if (p.latestOnly()) {
             sql.append(" AND data_date = (SELECT MAX(data_date) FROM ").append(table)
@@ -484,8 +500,6 @@ public class ScreenQueryEngine {
 
     private BuiltQuery buildCustomQuery(JsonNode cfg, ScreenDataReqDTO req, int limit, LocalDate today) {
         String template = cfg.path("sql").asText();
-        validateCustomSql(template);
-        ScreenSqlTemplate.Parsed parsed = ScreenSqlTemplate.parse(template);
         ResolvedPeriod p = ScreenPeriodResolver.resolve(req.getPeriod(), req.getDateFrom(), req.getDateTo(), today);
 
         Map<String, Object> vals = new HashMap<>();
@@ -495,6 +509,8 @@ public class ScreenQueryEngine {
         vals.put("dateTo", p.to());
 
         List<Object> params = new ArrayList<>();
+        validateCustomSql(template);
+        ScreenSqlTemplate.Parsed parsed = ScreenSqlTemplate.parse(template);
         for (String name : parsed.paramNames()) {
             Object v = vals.get(name);
             if (v == null) {
@@ -503,8 +519,30 @@ public class ScreenQueryEngine {
             }
             params.add(v);
         }
-        String sql = "SELECT * FROM (" + parsed.jdbcSql() + ") rpt_scr_q LIMIT " + limit;
+        String jdbcSql = parsed.jdbcSql();
+        String sql = "SELECT * FROM (" + jdbcSql + ") rpt_scr_q LIMIT " + limit;
         return new BuiltQuery(sql, params);
+    }
+
+    private boolean isNamedGroup(JsonNode cfg, ScreenDataReqDTO req) {
+        return "NAMED_GROUP".equalsIgnoreCase(cfg.path("scopeMode").asText())
+                || req.isNamedGroup();
+    }
+
+    /** 追加服务端机构范围谓词，机构编码永不拼接到 SQL。 */
+    private void appendOrgScopePredicate(StringBuilder sql, List<Object> params,
+                                         String subjectCol, ScreenDataReqDTO req) {
+        if (!"org_code".equals(subjectCol)) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        List<String> codes = req.getServerOrgCodes();
+        if (codes == null || codes.isEmpty()) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        sql.append(" AND ").append(subjectCol).append(" IN (")
+                .append(String.join(", ", java.util.Collections.nCopies(codes.size(), "?")))
+                .append(")");
+        params.addAll(codes);
     }
 
     private String ctxParam(ScreenDataReqDTO req, String name) {

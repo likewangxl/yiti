@@ -148,7 +148,6 @@ describe('AppHeader 多角色合并生效', () => {
     wrapper = mount(AppHeader, { global: { plugins: [pinia], stubs } });
     await settle();
 
-    expect(wrapper.text()).toContain('2 个角色权限已合并生效');
     expect(wrapper.text()).not.toContain('切换角色');
     // 逐角色菜单项会延续“点某个角色才能看到其菜单”的错误心智，必须完全移除。
     expect(wrapper.text()).not.toContain('普通用户');

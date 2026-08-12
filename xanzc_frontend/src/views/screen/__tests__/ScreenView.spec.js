@@ -18,9 +18,9 @@ vi.mock('@/api/screen', () => ({ getScreenView: (...args) => getScreenViewMock(.
 import ScreenView from '../ScreenView.vue';
 
 const stubs = {
-  ScreenRenderer: {
+    ScreenRenderer: {
     template: '<div class="stub-renderer" :data-pkg="JSON.stringify(renderPackage)" '
-      + ':data-points="JSON.stringify(mapPoints)" />',
+      + ':data-points="JSON.stringify(mapPoints)" :data-context="JSON.stringify(context)" />',
     props: ['renderPackage', 'mapPoints', 'context']
   }
 };
@@ -41,6 +41,16 @@ describe('ScreenView.vue', () => {
     expect(getScreenViewMock).toHaveBeenCalledWith('SCR_TEST', 'draft');
   });
 
+  it('返回入口是真实 button，具备键盘原生语义而不是可点击 span', async () => {
+    getScreenViewMock.mockResolvedValue({ screenName: 'X', renderPackageJson: null, mapPoints: [] });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    const back = wrapper.find('button.scr-back');
+    expect(back.exists()).toBe(true);
+    expect(back.attributes('type')).toBe('button');
+    expect(back.attributes('aria-label')).toBe('返回上一页');
+  });
+
   it('renderPackageJson 有值时 JSON.parse 后连同 mapPoints 一并传给 ScreenRenderer', async () => {
     getScreenViewMock.mockResolvedValue({
       screenName: 'X', renderPackageJson: '{"components":[{"id":"a"}]}', mapPoints: [{ orgCode: 'O1' }]
@@ -59,6 +69,16 @@ describe('ScreenView.vue', () => {
     await flushPromises();
     expect(wrapper.find('.stub-renderer').exists()).toBe(false);
     expect(wrapper.text()).toContain('该大屏尚未发布');
+  });
+
+  it('无地图的 NAMED_GROUP 屏仍向区块传 schemaVersion=2', async () => {
+    getScreenViewMock.mockResolvedValue({
+      screenName: '无地图范围屏', orgScopeMode: 'NAMED_GROUP',
+      renderPackageJson: '{"components":[]}', mapPoints: []
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(JSON.parse(wrapper.find('.stub-renderer').attributes('data-context')).schemaVersion).toBe(2);
   });
 
   it('接口失败时展示 loadError 文案而非白屏', async () => {

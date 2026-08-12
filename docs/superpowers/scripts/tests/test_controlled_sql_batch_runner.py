@@ -7,10 +7,14 @@
 
 from __future__ import annotations
 
+import base64
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import importlib.util
 import inspect
+import json
 from pathlib import Path
+import stat
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -22,6 +26,15 @@ THIS_FILE = Path(__file__).resolve()
 REPO_ROOT = THIS_FILE.parents[4]
 RUNNER_SHELL = REPO_ROOT / "docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh"
 RUNNER_PYTHON = REPO_ROOT / "docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.py"
+ROOT_LAUNCHER = REPO_ROOT / "docs/superpowers/scripts/2026-08-12-controlled-sql-root-managed-launcher.py"
+SYSTEMD_UNIT_TEMPLATE = REPO_ROOT / "docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner@.service.template"
+CLAIM_SCHEMA = REPO_ROOT / "docs/superpowers/sql/2026-08-12-controlled-sql-receipt-claim-token.schema.json"
+A2_PROOF_SCHEMA = REPO_ROOT / "docs/superpowers/sql/2026-08-12-controlled-sql-a2-recovery-proof.schema.json"
+CLAIM_FIXTURE = REPO_ROOT / "docs/superpowers/scripts/tests/fixtures/controlled-sql-receipt-claim-token.fixture.json"
+A2_PROOF_FIXTURE = REPO_ROOT / "docs/superpowers/scripts/tests/fixtures/controlled-sql-a2-recovery-proof.fixture.json"
+MYSQL_RELEASE_CONTRACT = REPO_ROOT / "docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.json"
+MYSQL_RELEASE_CONTRACT_SCHEMA = REPO_ROOT / "docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.schema.json"
+TRUST_README = REPO_ROOT / "docs/superpowers/sql/controlled-batch-manifest-trust/README.md"
 
 
 def import_runner():
@@ -30,6 +43,18 @@ def import_runner():
     spec = importlib.util.spec_from_file_location(module_name, RUNNER_PYTHON)
     if spec is None or spec.loader is None:
         raise AssertionError("无法加载受测 runner")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def import_root_launcher():
+    """从源码路径导入 root launcher；不触发 CLI、systemd 或 openssl。"""
+    module_name = "controlled_sql_root_managed_launcher_round11_test_subject"
+    spec = importlib.util.spec_from_file_location(module_name, ROOT_LAUNCHER)
+    if spec is None or spec.loader is None:
+        raise AssertionError("无法加载受测 root launcher")
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
@@ -204,6 +229,7 @@ class ControlledSqlBatchRunnerTrustTest(unittest.TestCase):
             "--ssl-mode=VERIFY_IDENTITY",
             f"--ssl-ca={self.runner.MYSQL_CA_FILE}",
             "--batch",
+            "--binary-mode",
             "--skip-reconnect",
         ):
             self.assertIn(argument, command)
@@ -222,27 +248,12 @@ class ControlledSqlBatchRunnerTrustTest(unittest.TestCase):
         self.assertIn("pwd.getpwuid", source)
         self.assertIn("require_login_path_isolation", source)
 
-    def test_receipt_requires_short_window_nonce_and_a2_signed_proof_binding(self):
-        manifest = self.approved_manifest()
-        now = datetime(2030, 1, 1, 0, 1, tzinfo=timezone.utc)
-        claims = self.receipt_claims(manifest)
-        self.runner.validate_receipt_claims(claims, manifest, now)
-
-        expired = dict(claims)
-        expired["expires_at_utc"] = "2030-01-01T00:00:30Z"
-        with self.assertRaises(self.runner.ValidationError):
-            self.runner.validate_receipt_claims(expired, manifest, now)
-
-        mismatch = dict(claims)
-        mismatch["a2_recovery_point"] = dict(claims["a2_recovery_point"])
-        mismatch["a2_recovery_point"]["signed_proof_sha256"] = "e" * 64
-        with self.assertRaises(self.runner.ValidationError):
-            self.runner.validate_receipt_claims(mismatch, manifest, now)
-
-        long_window = dict(claims)
-        long_window["expires_at_utc"] = "2030-01-01T02:00:00Z"
-        with self.assertRaises(self.runner.ValidationError):
-            self.runner.validate_receipt_claims(long_window, manifest, now)
+    def test_receipt_has_no_static_local_execution_fallback(self):
+        source = RUNNER_PYTHON.read_text(encoding="utf-8")
+        self.assertNotIn("DEPLOYMENT_RECEIPT_DIRECTORY", source)
+        self.assertNotIn("validate_execution_receipt", source)
+        self.assertIn("claim_receipt_atomically", source)
+        self.assertIn("在线 receipt claim", source)
 
     def test_manifest_window_rejects_future_expired_and_long_lived_authorizations(self):
         now = datetime(2030, 1, 1, 0, 1, tzinfo=timezone.utc)
@@ -270,10 +281,11 @@ class ControlledSqlBatchRunnerTrustTest(unittest.TestCase):
                     self.runner.execute_approved_manifest(manifest)
                 mysql.assert_not_called()
 
-        with mock.patch.object(self.runner, "require_execution_environment", return_value=None):
+        launcher = SimpleNamespace(proof_sha256="1" * 64, expires_at="2030-01-01T00:05:00Z")
+        with mock.patch.object(self.runner, "require_execution_environment", return_value=launcher):
             with mock.patch.object(
                 self.runner,
-                "validate_execution_receipt",
+                "claim_receipt_atomically",
                 side_effect=self.runner.ValidationError("receipt unavailable"),
             ):
                 with mock.patch.object(self.runner, "execute_mysql_once") as mysql:
@@ -292,8 +304,8 @@ class ControlledSqlBatchRunnerTrustTest(unittest.TestCase):
 
     def test_fixed_two_rounds_use_exactly_one_mocked_mysql_subprocess_and_never_log_password(self):
         manifest = self.approved_manifest()
-        with mock.patch.object(self.runner, "require_login_path_isolation", return_value=None):
-            with mock.patch.object(self.runner, "verify_mysql_option_contract", return_value=None):
+        with mock.patch.object(self.runner, "require_approved_mysql_binary", return_value=None):
+            with mock.patch.object(self.runner, "require_login_path_isolation", return_value=None):
                 with mock.patch.object(self.runner, "validate_defaults_file", return_value=self.runner.DEFAULTS_FILE):
                     with mock.patch.object(
                         self.runner.subprocess,
@@ -357,6 +369,533 @@ class ControlledSqlBatchRunnerTrustTest(unittest.TestCase):
         self.assertNotIn("SQL_GUARD_MYSQL_DEFAULTS_EXTRA_FILE", source)
         self.assertNotIn("source_directive", source)
         self.assertNotIn("--double-run", source)
+
+
+class ControlledSqlBatchRunnerRound10Test(unittest.TestCase):
+    """第十轮：所有外部边界均 mock，禁止创建 socket、服务或数据库连接。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.runner = import_runner()
+
+    def protocol_manifest(self):
+        """构造已完成 manifest 验签后的协议输入，避免测试依赖真实部署根。"""
+        return SimpleNamespace(
+            manifest_sha256="a" * 64,
+            change_ticket="CHG-ROUND10-TEST",
+            not_before="2030-01-01T00:00:00Z",
+            expiry="2030-01-01T00:10:00Z",
+            execution_nonce="b" * 32,
+            receipt_id="22222222-3333-4444-5555-666666666666",
+            connect_host="isolated-mysql.example.test",
+            connect_port=3306,
+            server_uuid="11111111-2222-3333-4444-555555555555",
+            server_hostname="isolated-mysql-01",
+            schema="yiti_isolated",
+            recovery_reference="A2-ROUND10-RECOVERY",
+            recovery_sha256="c" * 64,
+            a2_proof_id="33333333-4444-5555-6666-777777777777",
+            a2_proof_sha256="d" * 64,
+            claim_helper_sha256="e" * 64,
+            sql_batches=(b"SELECT 1;\n",),
+            artifact_hashes={
+                "runner_python": "f" * 64,
+                "root_managed_launcher": "1" * 64,
+                "systemd_unit_template": "2" * 64,
+            },
+            protocol_contracts={
+                "receipt_claim": {
+                    "$defs": {
+                        "claimHelperResponse": {"type": "object"},
+                        "claimToken": {"type": "object"},
+                    }
+                }
+            },
+        )
+
+    @staticmethod
+    def launcher_proof():
+        return SimpleNamespace(
+            proof_sha256="3" * 64,
+            launch_id="11111111-2222-3333-4444-555555555555",
+            expires_at="2030-01-01T00:05:00Z",
+        )
+
+    def claim_token_claims(self, manifest, launcher):
+        return {
+            "claim_version": 1,
+            "issuer": "bank-controlled-sql-approval-service",
+            "claim_id": "44444444-5555-6666-7777-888888888888",
+            "receipt_id": manifest.receipt_id,
+            "manifest_sha256": manifest.manifest_sha256,
+            "change_ticket": manifest.change_ticket,
+            "execution_nonce": manifest.execution_nonce,
+            "launcher_proof_sha256": launcher.proof_sha256,
+            "issued_at_utc": "2030-01-01T00:00:00Z",
+            "expires_at_utc": "2030-01-01T00:05:00Z",
+        }
+
+    @staticmethod
+    def claim_helper_response(token_bytes: bytes) -> bytes:
+        return json.dumps(
+            {
+                "response_version": 1,
+                "status": "claimed",
+                "claim_token_b64": base64.b64encode(token_bytes).decode("ascii"),
+                "claim_signature_b64": base64.b64encode(b"mock-claim-signature").decode("ascii"),
+            },
+            separators=(",", ":"),
+        ).encode("ascii")
+
+    def claimed_receipt(self, manifest, launcher):
+        claims = self.claim_token_claims(manifest, launcher)
+        raw = json.dumps(claims, sort_keys=True, separators=(",", ":")).encode("ascii")
+        return SimpleNamespace(
+            claim_id=claims["claim_id"],
+            token_sha256=self.runner.sha256_bytes(raw),
+            issued_at=claims["issued_at_utc"],
+            expiry=claims["expires_at_utc"],
+        )
+
+    def a2_proof_claims(self, manifest, claim):
+        return {
+            "proof_version": 1,
+            "issuer": "bank-a2-recovery-attestation-service",
+            "proof_id": manifest.a2_proof_id,
+            "manifest_sha256": manifest.manifest_sha256,
+            "claim_id": claim.claim_id,
+            "claim_token_sha256": claim.token_sha256,
+            "issued_at_utc": "2030-01-01T00:00:00Z",
+            "expires_at_utc": "2030-01-01T00:05:00Z",
+            "target_quartet": {
+                "server_uuid": manifest.server_uuid,
+                "server_hostname": manifest.server_hostname,
+                "connect_port": manifest.connect_port,
+                "schema": manifest.schema,
+            },
+            "recovery": {
+                "reference": manifest.recovery_reference,
+                "state": "VERIFIED",
+                "recovery_point_sha256": manifest.recovery_sha256,
+            },
+        }
+
+    def test_shell_execute_is_permanently_rejected_and_validate_path_is_isolated(self):
+        shell = RUNNER_SHELL.read_text(encoding="utf-8")
+        execute_arm = shell.split("--execute|--execute=*)", 1)[1].split(";;", 1)[0]
+        self.assertIn("die", execute_arm)
+        self.assertNotIn("mode='execute'", shell)
+        self.assertNotIn('"$DEPLOYED_HELPER" --manifest "$manifest" --execute', shell)
+        self.assertIn("exec /usr/bin/python3.10 -I", shell)
+        self.assertIn("普通 shell 入口永久拒绝", shell)
+
+    def test_systemd_unit_declares_strict_pre_interpreter_environment_and_service_contract(self):
+        self.assertTrue(SYSTEMD_UNIT_TEMPLATE.is_file(), "必须提交 root-managed systemd unit 模板")
+        unit = SYSTEMD_UNIT_TEMPLATE.read_text(encoding="utf-8")
+        for token in (
+            "ExecStart=/usr/bin/python3.10 -I",
+            "UnsetEnvironment=BASH_ENV",
+            "UnsetEnvironment=ENV",
+            "LD_PRELOAD",
+            "LD_LIBRARY_PATH",
+            "PYTHONPATH",
+            "PYTHONHOME",
+            "LC_ALL",
+            "Environment=HOME=/var/empty/controlled-sql-runner",
+            "Environment=PATH=/usr/bin:/bin",
+            "NoNewPrivileges=yes",
+            "ProtectSystem=strict",
+            "ReadOnlyPaths=",
+            "ProtectHome=yes",
+            "PrivateTmp=yes",
+            "User=root",
+        ):
+            self.assertIn(token, unit, f"unit 缺少严格执行契约：{token}")
+        self.assertNotIn("/usr/bin/env ", unit)
+        self.assertNotIn("EnvironmentFile=", unit)
+
+    def test_root_launcher_produces_sealed_pid_bound_proof_and_drops_to_no_login_account(self):
+        self.assertTrue(ROOT_LAUNCHER.is_file(), "必须提交 root-managed launcher 模板")
+        launcher = ROOT_LAUNCHER.read_text(encoding="utf-8")
+        for token in (
+            "os.memfd_create",
+            "F_ADD_SEALS",
+            "F_SEAL_WRITE",
+            "os.setgroups",
+            "os.setgid",
+            "os.setuid",
+            "os.execve",
+            "-I",
+            "pid_start_time",
+            "SYSTEMD_INVOCATION_ID",
+            "bank-controlled-sql-batch-runner@",
+            "SERVICE_ACCOUNT",
+            "/usr/sbin/nologin",
+        ):
+            self.assertIn(token, launcher, f"launcher 缺少不可伪造部署证明契约：{token}")
+        self.assertNotIn("#!/usr/bin/env", launcher)
+
+    def test_runner_requires_signed_sealed_launcher_proof_not_an_environment_marker(self):
+        source = inspect.getsource(self.runner)
+        for token in (
+            "LAUNCHER_PROOF_FD",
+            "LAUNCHER_PROOF_SIGNATURE_FD",
+            "F_GET_SEALS",
+            "ROOT_LAUNCHER_PROOF_PUBLIC_KEY_RELATIVE",
+            "validate_root_launcher_proof_claims",
+            "pid_start_time",
+            "root-managed launcher",
+        ):
+            self.assertIn(token, source, f"runner 缺少 launcher proof 边界：{token}")
+        self.assertNotIn("LAUNCHER_PROOF_ENV", source)
+
+    def test_new_protocol_schemas_and_nonexecutable_fixtures_are_checked_in(self):
+        for path, expected_id in (
+            (CLAIM_SCHEMA, "controlled-sql-receipt-claim-token-v1"),
+            (A2_PROOF_SCHEMA, "controlled-sql-a2-recovery-proof-v1"),
+        ):
+            self.assertTrue(path.is_file(), f"缺少协议 schema：{path.name}")
+            parsed = json.loads(path.read_text(encoding="utf-8"))
+            self.assertIn(expected_id, parsed.get("$id", ""))
+            self.assertFalse(parsed.get("additionalProperties", True))
+        for fixture in (CLAIM_FIXTURE, A2_PROOF_FIXTURE):
+            self.assertTrue(fixture.is_file(), f"缺少协议 fixture：{fixture.name}")
+            self.assertIsInstance(json.loads(fixture.read_text(encoding="utf-8")), dict)
+
+    def test_claim_helper_success_is_signed_and_bound_to_launcher_and_manifest(self):
+        manifest = self.protocol_manifest()
+        launcher = self.launcher_proof()
+        token = json.dumps(self.claim_token_claims(manifest, launcher), separators=(",", ":")).encode("ascii")
+        response = self.claim_helper_response(token)
+        now = datetime(2030, 1, 1, 0, 1, tzinfo=timezone.utc)
+        with mock.patch.object(self.runner, "require_claim_helper_contract", return_value=None):
+            with mock.patch.object(self.runner, "verify_claim_token_signature", return_value=None):
+                with mock.patch.object(
+                    self.runner.subprocess,
+                    "run",
+                    return_value=SimpleNamespace(returncode=0, stdout=response, stderr=b""),
+                ) as child:
+                    claim = self.runner.claim_receipt_atomically(manifest, launcher, now=now)
+        self.assertEqual("44444444-5555-6666-7777-888888888888", claim.claim_id)
+        command = child.call_args.args[0]
+        self.assertEqual(str(self.runner.CLAIM_HELPER_PATH), command[0])
+        self.assertIn("--claim-once", command)
+        self.assertNotIn(b"password", child.call_args.kwargs["input"].lower())
+
+    def test_claim_helper_consumed_revoked_or_offline_reply_is_fail_closed_without_echo(self):
+        manifest = self.protocol_manifest()
+        launcher = self.launcher_proof()
+        now = datetime(2030, 1, 1, 0, 1, tzinfo=timezone.utc)
+        for label, return_code in (("already-consumed", 75), ("revoked", 76), ("offline", 1)):
+            with self.subTest(label=label):
+                with mock.patch.object(self.runner, "require_claim_helper_contract", return_value=None):
+                    with mock.patch.object(
+                        self.runner.subprocess,
+                        "run",
+                        return_value=SimpleNamespace(
+                            returncode=return_code,
+                            stdout=b"operator-secret-must-not-echo",
+                            stderr=b"operator-secret-must-not-echo",
+                        ),
+                    ):
+                        with self.assertRaises(self.runner.ValidationError) as captured:
+                            self.runner.claim_receipt_atomically(manifest, launcher, now=now)
+                self.assertNotIn("operator-secret-must-not-echo", str(captured.exception))
+
+    def test_claim_token_rejects_duplicate_replay_style_fields_and_wrong_launcher_binding(self):
+        manifest = self.protocol_manifest()
+        launcher = self.launcher_proof()
+        now = datetime(2030, 1, 1, 0, 1, tzinfo=timezone.utc)
+        with self.assertRaises(self.runner.ValidationError):
+            self.runner.strict_json_loads(
+                b'{"claim_version":1,"claim_version":1}',
+                "receipt claim token",
+            )
+        claims = self.claim_token_claims(manifest, launcher)
+        self.runner.validate_claim_token_claims(claims, manifest, launcher, now=now)
+        replay = dict(claims)
+        replay["launcher_proof_sha256"] = "9" * 64
+        with self.assertRaises(self.runner.ValidationError):
+            self.runner.validate_claim_token_claims(replay, manifest, launcher, now=now)
+
+    def test_a2_proof_rejects_duplicate_keys_target_state_and_claim_manifest_bind_failures(self):
+        manifest = self.protocol_manifest()
+        launcher = self.launcher_proof()
+        claim = self.claimed_receipt(manifest, launcher)
+        now = datetime(2030, 1, 1, 0, 1, tzinfo=timezone.utc)
+        with self.assertRaises(self.runner.ValidationError):
+            self.runner.strict_json_loads(b'{"proof_version":1,"proof_version":1}', "A2 proof")
+        proof = self.a2_proof_claims(manifest, claim)
+        self.runner.validate_a2_proof_claims(proof, manifest, claim, now=now)
+        for mutate in (
+            lambda item: item["target_quartet"].__setitem__("connect_port", 3307),
+            lambda item: item["recovery"].__setitem__("state", "PENDING"),
+            lambda item: item.__setitem__("claim_id", "55555555-6666-7777-8888-999999999999"),
+            lambda item: item.__setitem__("manifest_sha256", "8" * 64),
+        ):
+            changed = json.loads(json.dumps(proof))
+            mutate(changed)
+            with self.assertRaises(self.runner.ValidationError):
+                self.runner.validate_a2_proof_claims(changed, manifest, claim, now=now)
+
+    def test_a2_signature_boundary_fails_before_mysql(self):
+        manifest = self.protocol_manifest()
+        launcher = self.launcher_proof()
+        claim = self.claimed_receipt(manifest, launcher)
+        with mock.patch.object(self.runner, "require_execution_environment", return_value=launcher):
+            with mock.patch.object(self.runner, "claim_receipt_atomically", return_value=claim):
+                with mock.patch.object(
+                    self.runner,
+                    "load_and_validate_a2_recovery_proof",
+                    side_effect=self.runner.ValidationError("A2 detached signature invalid"),
+                ):
+                    with mock.patch.object(self.runner, "execute_mysql_once") as mysql:
+                        with self.assertRaises(self.runner.ValidationError):
+                            self.runner.execute_approved_manifest(manifest)
+                        mysql.assert_not_called()
+
+    def test_a2_loader_declares_same_fd_strict_schema_and_independent_pin(self):
+        source = inspect.getsource(self.runner)
+        for token in (
+            "A2_PROOF_PUBLIC_KEY_RELATIVE",
+            "PINNED_A2_PROOF_PUBLIC_KEY_SHA256",
+            "A2_PROOF_DIRECTORY",
+            "load_and_validate_a2_recovery_proof",
+            "strict_json_loads(proof_file.data",
+            "verify_detached_signature(proof_file.data",
+            "validate_a2_proof_claims",
+        ):
+            self.assertIn(token, source, f"A2 proof 缺少受信边界：{token}")
+
+    def test_mysql_runtime_contract_is_signed_release_data_not_version_or_help_probe(self):
+        source = RUNNER_PYTHON.read_text(encoding="utf-8")
+        for token in (
+            "MYSQL_RELEASE_CONTRACT_RELATIVE",
+            "require_approved_mysql_binary",
+            "mysql_client_release_contract",
+            "MYSQL_FIXED_OPTION_CONTRACT",
+            "sbom_sha256",
+            "manpage_sha256",
+        ):
+            self.assertIn(token, source, f"mysql release 契约缺少：{token}")
+        self.assertNotIn("verify_mysql_option_contract", source)
+        self.assertNotIn("MYSQL_TOOL =", source)
+
+    def test_complete_execute_mock_sequence_allows_only_checker_claim_and_one_mysql(self):
+        manifest = self.protocol_manifest()
+        launcher = self.launcher_proof()
+        claim_token = json.dumps(self.claim_token_claims(manifest, launcher), separators=(",", ":")).encode("ascii")
+        claim_response = self.claim_helper_response(claim_token)
+        commands = []
+
+        def child(command, **_kwargs):
+            commands.append(command)
+            return SimpleNamespace(returncode=0, stdout=claim_response, stderr=b"")
+
+        with mock.patch.object(self.runner, "require_approved_binary", return_value=None):
+            with mock.patch.object(self.runner, "require_claim_helper_contract", return_value=None):
+                with mock.patch.object(self.runner, "verify_claim_token_signature", return_value=None):
+                    with mock.patch.object(self.runner, "validate_claim_token_claims", return_value=SimpleNamespace()):
+                        with mock.patch.object(self.runner, "require_execution_environment", return_value=launcher):
+                            with mock.patch.object(self.runner, "load_and_validate_a2_recovery_proof", return_value=SimpleNamespace()):
+                                with mock.patch.object(self.runner, "require_approved_mysql_binary", return_value=None):
+                                    with mock.patch.object(self.runner, "require_login_path_isolation", return_value=None):
+                                        with mock.patch.object(
+                                            self.runner,
+                                            "validate_defaults_file",
+                                            return_value=self.runner.DEFAULTS_FILE,
+                                        ):
+                                            with mock.patch.object(self.runner.subprocess, "run", side_effect=child):
+                                                self.runner.run_static_guard_checker()
+                                                self.assertEqual(0, self.runner.execute_approved_manifest(manifest))
+
+        self.assertEqual(
+            [
+                str(self.runner.PYTHON_PATH),
+                str(self.runner.CLAIM_HELPER_PATH),
+                str(self.runner.MYSQL_PATH),
+            ],
+            [command[0] for command in commands],
+        )
+        flattened = [argument for command in commands for argument in command]
+        self.assertFalse(any(argument in {"--version", "--help"} for argument in flattened))
+        mysql_commands = [command for command in commands if command[0] == str(self.runner.MYSQL_PATH)]
+        self.assertEqual(1, len(mysql_commands))
+        self.assertIn("--binary-mode", mysql_commands[0])
+
+    def test_missing_root_launcher_deployment_proof_fails_closed_before_claim_or_mysql(self):
+        manifest = self.protocol_manifest()
+        with mock.patch.object(self.runner, "claim_receipt_atomically") as claim:
+            with mock.patch.object(self.runner, "execute_mysql_once") as mysql:
+                with self.assertRaises(self.runner.ValidationError):
+                    self.runner.require_execution_environment(manifest)
+                claim.assert_not_called()
+                mysql.assert_not_called()
+
+
+class ControlledSqlBatchRunnerRound11Test(unittest.TestCase):
+    """第十一轮：私钥仅 root 可读，mysql binary mode 由签名 release 契约冻结。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.runner = import_runner()
+        cls.launcher = import_root_launcher()
+
+    @contextmanager
+    def mocked_root_only_metadata(self, key: Path, *, key_mode: int, parent_modes: dict[Path, int] | None = None):
+        """以真实临时 inode 配合 mock stat 模拟 root 安装，测试不需要 root 权限。"""
+        parent_modes = parent_modes or {}
+        original_lstat = self.launcher.os.lstat
+        original_fstat = self.launcher.os.fstat
+
+        def mode_for(path: Path, metadata) -> int:
+            candidate = Path(path)
+            if candidate == key:
+                return key_mode
+            if stat.S_ISDIR(metadata.st_mode):
+                return parent_modes.get(candidate, 0o700)
+            return stat.S_IMODE(metadata.st_mode)
+
+        def root_owned_lstat(path):
+            metadata = original_lstat(path)
+            return SimpleNamespace(
+                st_mode=stat.S_IFMT(metadata.st_mode) | mode_for(Path(path), metadata),
+                st_uid=0,
+            )
+
+        def root_owned_fstat(descriptor):
+            metadata = original_fstat(descriptor)
+            fd_path = Path(self.launcher.os.readlink(f"/proc/self/fd/{descriptor}"))
+            return SimpleNamespace(
+                st_mode=stat.S_IFMT(metadata.st_mode) | mode_for(fd_path, metadata),
+                st_uid=0,
+            )
+
+        with mock.patch.object(self.launcher.os, "lstat", side_effect=root_owned_lstat):
+            with mock.patch.object(self.launcher.os, "fstat", side_effect=root_owned_fstat):
+                yield
+
+    @contextmanager
+    def private_key_tree(self, mode: int = 0o400):
+        """建立实际常规文件和目录；所有 owner/mode 断言由上面的 stat mock 表达。"""
+        with tempfile.TemporaryDirectory(prefix="runner-round11-private-key-") as directory:
+            root = Path(directory)
+            private_directory = root / "root-only"
+            private_directory.mkdir()
+            key = private_directory / "launcher-attestation-private.pem"
+            key.write_bytes(b"test-attestation-private-key")
+            key.chmod(mode)
+            yield key, private_directory
+
+    def test_sign_payload_rejects_group_or_other_readable_private_key_before_openssl(self):
+        """0644 与 0440 当前会穿透旧的仅拒绝 group/other write 检查，必须成为 Red。"""
+        for key_mode in (0o644, 0o440):
+            with self.subTest(key_mode=oct(key_mode)):
+                with self.private_key_tree(key_mode) as (key, _private_directory):
+                    with mock.patch.object(self.launcher, "ATTESTATION_PRIVATE_KEY", key):
+                        with self.mocked_root_only_metadata(key, key_mode=key_mode):
+                            with mock.patch.object(
+                                self.launcher.subprocess,
+                                "run",
+                                return_value=SimpleNamespace(returncode=0, stdout=b"signature"),
+                            ) as openssl:
+                                with self.assertRaises(self.launcher.LauncherError):
+                                    self.launcher.sign_payload(b"round11-payload")
+                            openssl.assert_not_called()
+
+    def test_sign_payload_rejects_group_or_other_traversable_private_key_parent_before_openssl(self):
+        """0755/0711 父目录泄露私钥路径并允许非 root 遍历，必须 fail-close。"""
+        for parent_mode in (0o755, 0o711):
+            with self.subTest(parent_mode=oct(parent_mode)):
+                with self.private_key_tree() as (key, private_directory):
+                    with mock.patch.object(self.launcher, "ATTESTATION_PRIVATE_KEY", key):
+                        with self.mocked_root_only_metadata(
+                            key,
+                            key_mode=0o400,
+                            parent_modes={private_directory: parent_mode},
+                        ):
+                            with mock.patch.object(
+                                self.launcher.subprocess,
+                                "run",
+                                return_value=SimpleNamespace(returncode=0, stdout=b"signature"),
+                            ) as openssl:
+                                with self.assertRaises(self.launcher.LauncherError):
+                                    self.launcher.sign_payload(b"round11-payload")
+                            openssl.assert_not_called()
+
+    def test_private_key_reader_rejects_actual_symlink(self):
+        """最终 key 使用 O_NOFOLLOW，真实符号链接不能被签名器接收。"""
+        with self.private_key_tree() as (key, private_directory):
+            link = private_directory / "launcher-attestation-private-link.pem"
+            link.symlink_to(key)
+            with mock.patch.object(self.launcher, "ATTESTATION_PRIVATE_KEY", link):
+                with self.mocked_root_only_metadata(link, key_mode=0o400):
+                    with self.assertRaises(self.launcher.LauncherError):
+                        with self.launcher.open_attestation_private_key():
+                            pass
+
+    def test_private_key_reader_accepts_0400_and_0600_with_root_only_ancestors(self):
+        """合法私钥仅接受 root-owned regular 0400/0600；元数据由 mock 提供。"""
+        for key_mode in (0o400, 0o600):
+            with self.subTest(key_mode=oct(key_mode)):
+                with self.private_key_tree(key_mode) as (key, _private_directory):
+                    with mock.patch.object(self.launcher, "ATTESTATION_PRIVATE_KEY", key):
+                        with self.mocked_root_only_metadata(key, key_mode=key_mode):
+                            with self.launcher.open_attestation_private_key() as descriptor:
+                                self.assertTrue(stat.S_ISREG(self.launcher.os.fstat(descriptor).st_mode))
+
+    def test_sign_payload_passes_the_opened_private_key_fd_via_proc_without_path_reopen(self):
+        """签名 argv 只能引用 inherited FD，不能重新把私钥 pathname 交给 openssl。"""
+        with self.private_key_tree() as (key, _private_directory):
+            descriptor = self.launcher.os.open(key, self.launcher.os.O_RDONLY | self.launcher.os.O_CLOEXEC)
+
+            @contextmanager
+            def opened_private_key():
+                try:
+                    yield descriptor
+                finally:
+                    self.launcher.os.close(descriptor)
+
+            try:
+                with mock.patch.object(self.launcher, "ATTESTATION_PRIVATE_KEY", key):
+                    with mock.patch.object(self.launcher, "open_attestation_private_key", opened_private_key):
+                        with mock.patch.object(
+                            self.launcher.subprocess,
+                            "run",
+                            return_value=SimpleNamespace(returncode=0, stdout=b"signature"),
+                        ) as openssl:
+                            self.assertEqual(b"signature", self.launcher.sign_payload(b"round11-payload"))
+                command = openssl.call_args.args[0]
+                self.assertEqual(f"/proc/self/fd/{descriptor}", command[-1])
+                self.assertNotIn(str(key), command)
+                self.assertEqual((descriptor,), openssl.call_args.kwargs["pass_fds"])
+            finally:
+                try:
+                    self.launcher.os.close(descriptor)
+                except OSError:
+                    pass
+
+    def test_binary_mode_is_frozen_by_signed_release_contract_schema_and_example(self):
+        """runner argv、schema 和签名 example 必须绑定同一 binary-mode option 契约。"""
+        expected_contract = "fixed-defaults-file-tcp-verify-identity-binary-mode"
+        schema = json.loads(MYSQL_RELEASE_CONTRACT_SCHEMA.read_text(encoding="utf-8"))
+        example = json.loads(MYSQL_RELEASE_CONTRACT.read_text(encoding="utf-8"))
+        self.assertEqual(
+            expected_contract,
+            schema["properties"]["mysql_client_release_contract"]["properties"]["option_contract"]["const"],
+        )
+        self.assertEqual(expected_contract, example["mysql_client_release_contract"]["option_contract"])
+        self.assertEqual(expected_contract, self.runner.MYSQL_FIXED_OPTION_CONTRACT)
+
+    def test_unit_and_trust_readme_require_root_only_private_key_installation_validation(self):
+        """部署材料必须明示私钥本体、所有祖先目录及只读安装核验方式。"""
+        unit = SYSTEMD_UNIT_TEMPLATE.read_text(encoding="utf-8")
+        readme = TRUST_README.read_text(encoding="utf-8")
+        combined = unit + "\n" + readme
+        for token in ("root:root", "0400", "0600", "mode & 0o077 == 0", "逐级", "符号链接"):
+            self.assertIn(token, combined, f"安装材料缺少私钥 root-only 契约：{token}")
+        for token in ("namei -l", "stat -c", "安装验证"):
+            self.assertIn(token, readme, f"README 缺少只读安装验证：{token}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bank.branch.platform/schemas/controlled-sql-a2-recovery-proof-v1.json",
+  "title": "Controlled SQL A2 recovery proof v1",
+  "description": "由独立 A2 issuer 签名的短时恢复证明，必须绑定 manifest 与已在线消费的 claim token。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "proof_version",
+    "issuer",
+    "proof_id",
+    "manifest_sha256",
+    "claim_id",
+    "claim_token_sha256",
+    "issued_at_utc",
+    "expires_at_utc",
+    "target_quartet",
+    "recovery"
+  ],
+  "properties": {
+    "proof_version": {"type": "integer", "const": 1},
+    "issuer": {"type": "string", "const": "bank-a2-recovery-attestation-service"},
+    "proof_id": {"$ref": "#/$defs/uuid"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "claim_id": {"$ref": "#/$defs/uuid"},
+    "claim_token_sha256": {"$ref": "#/$defs/sha256"},
+    "issued_at_utc": {"$ref": "#/$defs/utc"},
+    "expires_at_utc": {"$ref": "#/$defs/utc"},
+    "target_quartet": {"$ref": "#/$defs/targetQuartet"},
+    "recovery": {"$ref": "#/$defs/recovery"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+    },
+    "utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "ticket": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,99}$"
+    },
+    "targetQuartet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["server_uuid", "server_hostname", "connect_port", "schema"],
+      "properties": {
+        "server_uuid": {"$ref": "#/$defs/uuid"},
+        "server_hostname": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$"
+        },
+        "connect_port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]{1,64}$"
+        }
+      }
+    },
+    "recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "state", "recovery_point_sha256"],
+      "properties": {
+        "reference": {"$ref": "#/$defs/ticket"},
+        "state": {"type": "string", "const": "VERIFIED"},
+        "recovery_point_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

@@ -20,6 +20,9 @@ public class ScreenDatasourceSaveReqDTO {
     @NotBlank
     private String sourceKind;
 
+    /** 数据归属条线：CORP / RETAIL / COMMON。新建客户端应显式提交。 */
+    private String bizLine;
+
     /** 类型化配置 JSON（三形态见计划头部契约） */
     @NotBlank
     private String configJson;
@@ -33,6 +36,7 @@ public class ScreenDatasourceSaveReqDTO {
     /** 备注 */
     private String remark;
 
-    /** CUSTOM_SQL 高危保存的审计原因 */
+    /** 新建/更新数据源均会改变可执行配置，必须填写审计原因。 */
+    @NotBlank
     private String reason;
 }

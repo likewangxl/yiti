@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "issuer": "bank-controlled-sql-release-signing",
+  "mysql_client_release_contract": {
+    "path": "/usr/bin/mysql",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "version": "REPLACE-WITH-AUDITED-MYSQL-VERSION",
+    "option_contract": "fixed-defaults-file-tcp-verify-identity-binary-mode",
+    "sbom_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manpage_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

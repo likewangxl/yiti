@@ -5,6 +5,7 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO;
+import com.bank.branch.platform.report.dto.req.ScreenCanvasDiscardReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenCanvasRollbackReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenCanvasSaveReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenCanvasEditorRespDTO;
@@ -74,9 +75,8 @@ public class ScreenCanvasAdminController {
     @PostMapping("/discard")
     @BizAuth(bizType = BizType.REPORT, action = BizAction.WRITE)
     @Operation(summary = "放弃草稿(发布态覆盖草稿)")
-    public ResponseWrapper<Void> discard(@RequestBody ScreenCanvasRollbackReqDTO req) {
-        // 复用 ScreenCanvasRollbackReqDTO 的 screenId(publishLogId 忽略);仅需 screenId
-        canvasService.discardDraft(req.getScreenId());
+    public ResponseWrapper<Void> discard(@Valid @RequestBody ScreenCanvasDiscardReqDTO req) {
+        canvasService.discardDraft(req);
         return ResponseWrapper.success();
     }
 

@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -23,9 +24,14 @@ import java.util.List;
  *
  * <p>触发时机：{@link ApplicationRunner} 启动扫一次 + {@code @Scheduled} 每 5 分钟扫一次
  * （复用 {@code PerformanceSchedulingConfig} 的 {@code @EnableScheduling}）。</p>
+ *
+ * <p>{@code perf.eval.import.compensation.enabled=false} 时本组件不会装配，
+ * 从而同时关闭启动补偿和定时补偿；缺省保持既有启用行为。</p>
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(prefix = "perf.eval.import.compensation", name = "enabled",
+        havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class EvalImportCompensation implements ApplicationRunner {
 

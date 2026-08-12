@@ -1,0 +1,82 @@
+Command template (exit 0; information_schema SELECT only; password masked):
+env MYSQL_PWD='***' mysql --protocol=TCP -h127.0.0.1 -P3306 -uroot --database=yiti_test \
+  --batch --raw -e '<information_schema.tables category/name SELECT>'
+
+Raw stdout:
+category	TABLE_NAME
+audit	AUDIT_LOG
+eval_import_compensation_candidate	EVAL_ASSIGN_BATCH
+eval_import_compensation_candidate	EVAL_ASSIGN_ITEM
+eval_import_compensation_candidate	EVAL_REWARD_ITEM
+eval_import_compensation_candidate	EVAL_RULE
+eval_import_compensation_candidate	EVAL_RULE_GROUP
+eval_import_compensation_candidate	EVAL_SCORE
+eval_import_compensation_candidate	EVAL_TAG
+eval_import_compensation_candidate	EVAL_TASK
+eval_import_compensation_candidate	EVAL_TASK_TARGET
+eval_import_compensation_candidate	EVAL_USER_SETTING
+eval_import_compensation_candidate	EVAL_USER_TAG
+eval_import_compensation_candidate	LEAD_IMPORT_BATCH
+eval_import_compensation_candidate	PERF_IMPORT_BATCH
+file_or_relation_candidate	ANNOUNCEMENT_FILE
+file_or_relation_candidate	BIZ_FILE_REL
+file_or_relation_candidate	CUST_ALLOC_RELATION
+file_or_relation_candidate	CUST_PERFORMANCE_RELATION_SNAPSHOT
+file_or_relation_candidate	DATALAKE_XAN_CRM_C06_INDIV_ALLOT_RELA
+file_or_relation_candidate	FILE_OBJECT
+file_or_relation_candidate	PT_ORG_PROFILE
+file_or_relation_candidate	RE_SUBMIT_FILE
+flowable_repository	ACT_RE_DEPLOYMENT
+flowable_repository	ACT_RE_MODEL
+flowable_repository	ACT_RE_PROCDEF
+flowable_runtime_job	ACT_RU_DEADLETTER_JOB
+flowable_runtime_job	ACT_RU_EXTERNAL_JOB
+flowable_runtime_job	ACT_RU_HISTORY_JOB
+flowable_runtime_job	ACT_RU_JOB
+flowable_runtime_job	ACT_RU_SUSPENDED_JOB
+flowable_runtime_job	ACT_RU_TIMER_JOB
+job_config_log	SYS_JOB_CONF
+job_config_log	SYS_JOB_RUN_LOG
+platform_lock	PT_LOCK
+quartz	QRTZ_BLOB_TRIGGERS
+quartz	QRTZ_CALENDARS
+quartz	QRTZ_CRON_TRIGGERS
+quartz	QRTZ_FIRED_TRIGGERS
+quartz	QRTZ_JOB_DETAILS
+quartz	QRTZ_LOCKS
+quartz	QRTZ_PAUSED_TRIGGER_GRPS
+quartz	QRTZ_SCHEDULER_STATE
+quartz	QRTZ_SIMPLE_TRIGGERS
+quartz	QRTZ_SIMPROP_TRIGGERS
+quartz	QRTZ_TRIGGERS
+screen_config_org_group_candidate	PT_ORG_GROUP
+screen_config_org_group_candidate	PT_ORG_GROUP_MEMBER
+screen_config_org_group_candidate	PT_ROLE_ORG_GROUP
+screen_config_org_group_candidate	RPT_SCREEN
+screen_config_org_group_candidate	RPT_SCREEN_ACCESS_ROLE
+screen_config_org_group_candidate	RPT_SCREEN_BLOCK
+screen_config_org_group_candidate	RPT_SCREEN_DATASOURCE
+screen_config_org_group_candidate	RPT_SCREEN_MAP_POINT
+screen_config_org_group_candidate	RPT_SCREEN_PUBLISH_LOG
+screen_config_org_group_candidate	SYS_CONFIG_KV
+spring_session	SPRING_SESSION
+spring_session	SPRING_SESSION_ATTRIBUTES
+
+Additional confirmed screen/config/auth tables (separate information_schema SELECT, exit 0):
+PT_ORG_GROUP
+PT_ORG_GROUP_MEMBER
+PT_ORG_PROFILE
+PT_RESOURCE
+PT_ROLE
+PT_ROLE_ORG_GROUP
+PT_ROLE_RESOURCE
+PT_USER
+RPT_SCREEN
+RPT_SCREEN_ACCESS_ROLE
+RPT_SCREEN_BLOCK
+RPT_SCREEN_DATASOURCE
+RPT_SCREEN_MAP_POINT
+RPT_SCREEN_PUBLISH_LOG
+SYS_CONFIG_KV
+
+Compensation-focused confirmation (separate information_schema SELECT, exit 0): no table name containing COMP exists; `EVAL_ASSIGN_BATCH` is the table used by the profile-disabled `EvalImportCompensation` component, and its companion `EVAL_ASSIGN_ITEM` is included in the exact-count baseline.

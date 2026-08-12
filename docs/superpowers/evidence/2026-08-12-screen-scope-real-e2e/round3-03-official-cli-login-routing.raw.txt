@@ -1,0 +1,42 @@
+# Round 3 官方 CLI、前置登录和路由（忠实选择性转录）
+
+这是相关 CLI 输出的完整短摘要；没有复制凭据值、Cookie、Session 或 Authorization。
+
+~~~text
+$ xanzc_frontend/node_modules/.bin/playwright-cli --version
+0.1.18
+
+$ playwright-cli --session screen-scope-real-e2e-round3 \
+  open http://127.0.0.1:8092/#/login?normal
+Chromium distribution 'chrome' is not found
+~~~
+
+上面的默认浏览器选择在页面加载前失败，无 API 流量。随后仍使用同一个项目内官方 CLI，显式选择已安装的 Chromium：
+
+~~~text
+$ playwright-cli --session screen-scope-real-e2e-round3 \
+  open http://127.0.0.1:8092/#/login?normal --browser chromium
+Page URL: http://127.0.0.1:8092/#/login?normal
+
+$ playwright-cli route-list
+No active routes
+~~~
+
+前置登录只执行一次。测试账号由子进程环境读取，CLI stdout 未输出账号或密码；这不是登录功能验收。唯一登录请求为：
+
+~~~text
+POST http://127.0.0.1:8092/api/auth/login => 200
+~~~
+
+最终、关闭浏览器前再次执行：
+
+~~~text
+$ playwright-cli route-list
+No active routes
+
+$ playwright-cli console
+Total messages: 0 (Errors: 0, Warnings: 0)
+~~~
+
+除这一个前置登录 POST 外，所有被纳入本轮大屏范围的请求都是 GET；完整方法清单见 round3-08-console-and-request-methods.md。
+

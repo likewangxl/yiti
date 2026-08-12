@@ -5,7 +5,9 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.report.dto.req.MapPointDTO;
-import com.bank.branch.platform.report.dto.req.ScreenSaveReqDTO;
+import com.bank.branch.platform.report.dto.req.ScreenCreateReqDTO;
+import com.bank.branch.platform.report.dto.req.ScreenMetadataUpdateReqDTO;
+import com.bank.branch.platform.report.dto.req.ScreenAccessRoleSaveReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDetailRespDTO;
 import com.bank.branch.platform.report.service.screen.ScreenConfigService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,12 +28,12 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 大屏布局/区块/地图点位配置管理（管理端）.
+ * 大屏元数据、画布入口与地图点位配置管理（管理端）.
  */
 @Slf4j
 @RestController
 @RequestMapping("/api/screen/admin")
-@Tag(name = "大屏-布局配置", description = "屏/区块整体保存 + 地图点位维护")
+@Tag(name = "大屏-布局配置", description = "屏元数据、独立画布保存与地图点位维护")
 @Validated
 @RequiredArgsConstructor
 public class ScreenConfigAdminController {
@@ -54,9 +56,17 @@ public class ScreenConfigAdminController {
 
     @PostMapping("/screens")
     @BizAuth(bizType = BizType.REPORT, action = BizAction.WRITE)
-    @Operation(summary = "大屏整体保存（屏 + 区块，upsert）")
-    public ResponseWrapper<Long> saveScreen(@Valid @RequestBody ScreenSaveReqDTO req) {
-        return ResponseWrapper.success(configService.saveScreen(req));
+    @Operation(summary = "新建大屏元数据（空画布）")
+    public ResponseWrapper<Long> createScreen(@Valid @RequestBody ScreenCreateReqDTO req) {
+        return ResponseWrapper.success(configService.createScreen(req));
+    }
+
+    @PutMapping("/screens/{id}/metadata")
+    @BizAuth(bizType = BizType.REPORT, action = BizAction.WRITE)
+    @Operation(summary = "更新大屏元数据与机构范围（不修改画布区块）")
+    public ResponseWrapper<Long> updateMetadata(@PathVariable Long id,
+                                                 @Valid @RequestBody ScreenMetadataUpdateReqDTO req) {
+        return ResponseWrapper.success(configService.updateScreenMetadata(id, req));
     }
 
     @DeleteMapping("/screens/{id}")
@@ -79,6 +89,22 @@ public class ScreenConfigAdminController {
     @Operation(summary = "地图点位整表覆盖保存")
     public ResponseWrapper<Void> saveMapPoints(@Valid @RequestBody List<MapPointDTO> points) {
         configService.saveMapPoints(points);
+        return ResponseWrapper.success();
+    }
+
+    @GetMapping("/screens/{id}/access-roles")
+    @BizAuth(bizType = BizType.REPORT, action = BizAction.READ)
+    @Operation(summary = "查询大屏查看角色白名单")
+    public ResponseWrapper<List<String>> listAccessRoles(@PathVariable Long id) {
+        return ResponseWrapper.success(configService.listAccessRoleCodes(id));
+    }
+
+    @PutMapping("/screens/{id}/access-roles")
+    @BizAuth(bizType = BizType.REPORT, action = BizAction.PERMISSION_CHANGE)
+    @Operation(summary = "覆盖保存大屏查看角色白名单")
+    public ResponseWrapper<Void> saveAccessRoles(@PathVariable Long id,
+                                                   @Valid @RequestBody ScreenAccessRoleSaveReqDTO req) {
+        configService.saveAccessRoleCodes(id, req.getRoleCodes(), req.getReason(), req.getExpectedVersion());
         return ResponseWrapper.success();
     }
 }

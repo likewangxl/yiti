@@ -1,0 +1,42 @@
+只读摘录：`bootstrap/src/main/resources/application-screen-scope-e2e.yml` 与本次 C-3 运行时日志。
+
+```yaml
+flowable:
+  database-schema-update: false
+  check-process-definitions: false
+  async-executor-activate: false
+  async-history-executor-activate: false
+obs:
+  enabled: false
+platform:
+  soap:
+    netty:
+      enabled: false
+  sidecar:
+    registration:
+      enabled: false
+  lock:
+    cleanup:
+      enabled: false
+perf:
+  scheduler:
+    health-check:
+      enabled: false
+    startup-sync:
+      enabled: false
+  eval:
+    import:
+      compensation:
+        enabled: false
+```
+
+对应本次运行时事实（完整最小片段见 `10-d-policy-violations-minimal-redacted.raw.txt`）：
+
+```text
+The following 1 profile is active: "screen-scope-e2e"
+[ObsStorageClient] 初始化完成 ...
+[Sidecar] 调用 http://127.0.0.1:8089/isready 失败/超时 ...
+SELECT ... FROM EVAL_ASSIGN_BATCH WHERE (status = ?)
+```
+
+本文件仅记录“静态隔离意图与观察到的运行时行为不一致”。根因（例如属性优先级、环境覆盖、装配路径或产物一致性）未在本验收任务中修改或推断。

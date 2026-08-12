@@ -1,0 +1,80 @@
+Round 2 recovery build and runtime-artifact gates. No product source was changed by this step.
+
+Initial ordinary-sandbox command (exit 1 before any module build):
+
+```bash
+mvn -Dstyle.color=never clean install -DskipTests
+```
+
+Relevant raw failure:
+
+```text
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-install-plugin:2.4:install (default-install) on project branch-platform: Failed to install artifact com.bank.branch.platform:branch-platform:pom:1.0.0-SNAPSHOT: /home/djdev/.m2/repository/com/bank/branch/platform/branch-platform/1.0.0-SNAPSHOT/branch-platform-1.0.0-SNAPSHOT.pom (Read-only file system)
+```
+
+After the explicitly authorized controlled re-run, the same command completed with exit 0. Tool-captured final reactor summary:
+
+```text
+[INFO] Branch Platform .................................... SUCCESS [  0.284 s]
+[INFO] Common ............................................. SUCCESS [  0.016 s]
+[INFO] Common Web ......................................... SUCCESS [  1.587 s]
+[INFO] Common Trace ....................................... SUCCESS [  0.176 s]
+[INFO] Common Security .................................... SUCCESS [  0.537 s]
+[INFO] Common AOP ......................................... SUCCESS [  0.445 s]
+[INFO] Common DB .......................................... SUCCESS [  0.553 s]
+[INFO] Auth Permission Center ............................. SUCCESS [  2.926 s]
+[INFO] System Governance Center ........................... SUCCESS [  2.251 s]
+[INFO] Workflow Center .................................... SUCCESS [  2.739 s]
+[INFO] Portal Content Center .............................. SUCCESS [  2.574 s]
+[INFO] Customer Marketing Center .......................... SUCCESS [  2.154 s]
+[INFO] Business Application Center ........................ SUCCESS [  2.683 s]
+[INFO] Performance Engine Center .......................... SUCCESS [  6.356 s]
+[INFO] Report Analytics Center ............................ SUCCESS [  3.046 s]
+[INFO] Red Engine Center .................................. SUCCESS [  0.842 s]
+[INFO] SOAP Gateway Center ................................ SUCCESS [  0.827 s]
+[INFO] Bootstrap .......................................... SUCCESS [  0.957 s]
+[INFO] BUILD SUCCESS
+[INFO] Total time:  31.098 s
+[INFO] Finished at: 2026-08-12T15:53:56+08:00
+```
+
+Hash command (each line hashes the same class from `target/classes`, module target jar, and the local `.m2` runtime jar):
+
+```bash
+sha256sum <target/classes class>
+unzip -p <target jar> <class entry> | sha256sum
+unzip -p <m2 jar> <class entry> | sha256sum
+```
+
+Raw stdout:
+
+```text
+system-governance-center target/classes: d9ec0813c52d92335b84fb7318a224caa2ce22ffd76da282053751a6e69e4831
+system-governance-center target-jar: d9ec0813c52d92335b84fb7318a224caa2ce22ffd76da282053751a6e69e4831
+system-governance-center m2-jar: d9ec0813c52d92335b84fb7318a224caa2ce22ffd76da282053751a6e69e4831
+soap-gateway-center target/classes: 3b1a0b0707c920d9d873a282ce736a30674c59f15e4674f98388a111c1186ece
+soap-gateway-center target-jar: 3b1a0b0707c920d9d873a282ce736a30674c59f15e4674f98388a111c1186ece
+soap-gateway-center m2-jar: 3b1a0b0707c920d9d873a282ce736a30674c59f15e4674f98388a111c1186ece
+performance-engine-center target/classes: 74e32d2e01b3366e8780b7b32884a4dd59d3707ff2d1986610079a7823745159
+performance-engine-center target-jar: 74e32d2e01b3366e8780b7b32884a4dd59d3707ff2d1986610079a7823745159
+performance-engine-center m2-jar: 74e32d2e01b3366e8780b7b32884a4dd59d3707ff2d1986610079a7823745159
+```
+
+`javap -c -p -v` gate results, independently repeated for target classes and the matching `.m2` jar:
+
+```text
+ObsStorageClient:
+  @Value("${obs.enabled:true}") is present on `enabled`.
+  `init()` reads `enabled`, returns when false, and contains the exact message
+  "[ObsStorageClient] obs.enabled=false，跳过 OBS 客户端初始化".
+  All object operations call `requireClient`, which contains the disabled rejection string.
+
+SidecarRegistrationChecker:
+  @ConditionalOnProperty(name=["platform.sidecar.registration.enabled"], havingValue="true", matchIfMissing=true)
+
+EvalImportCompensation:
+  @ConditionalOnProperty(prefix="perf.eval.import.compensation", name=["enabled"], havingValue="true", matchIfMissing=true)
+```
+
+Gate conclusion: all three current source-compatible runtime artifacts are identical across the three locations, and all three isolation gates are present. This supersedes the pre-install stale-jar mismatch and permits a controlled `screen-scope-e2e` start.
+

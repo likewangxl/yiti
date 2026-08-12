@@ -1,0 +1,19 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T21:05:04.047041Z
+COMMAND bash docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.sh
+SHA256 73701fdfdf25da4861aaf031c1f8891aca09e6d684583cad68b461e40735c760 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.sh
+SHA256 7044a687516b5a587eb546186a13c6b67123b7523ac56a9333b51d0dac8bd362 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.py
+SHA256 9cdda5c67bddcd7ca602d70dc71862c4ede8ed25733e3d57aa639f872493783f /home/djdev/leid/yiti/docs/superpowers/scripts/tests/sql-target-identity-guard/test_mutations.py
+SHA256 09b69c382092f5da9dfb050add062ffce7b3a57becfc20ee2e5a512342820ae7 /home/djdev/leid/yiti/docs/superpowers/scripts/tests/sql-target-identity-guard/mutation-fixtures.json
+SHA256 adc6485f27b7889947c67c58f0aa49a6701e73fb114fbb08155f3b4f004f4ed8 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql
+SHA256 81310dbb0232f23e5374207c93d427512429dad7012ce08ea39d6e4a1dc33349 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql
+SHA256 5c1b22ecdd8c74480e0607237d58316a71e762383cab1dead4c7cfe20798d500 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql
+EXIT_CODE 0
+UTC_FINISHED 2026-08-11T21:05:04.178561Z
+--- RAW_STDOUT_STDERR ---
+STATIC TARGET IDENTITY GUARD STRUCTURAL CHECK (no database connection)
+RESTRICTED_GRAMMAR: only the three approved scripts' CASE/IF/error-flow/top-level/client/DELIMITER forms; not a general MySQL parser.
+PASS docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql: profile=auth, parsed restricted fail-close CASE/IF/error-flow/top-level client grammar and guard-before-write ordering
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql: profile=rpt_align, parsed restricted fail-close CASE/IF/error-flow/top-level client grammar and guard-before-write ordering
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql: profile=rpt_seed, parsed restricted fail-close CASE/IF/error-flow/top-level client grammar and guard-before-write ordering
+RESULT: PASS (all target identity guards match the restricted grammar and fail-close before DDL/DML/CALL)

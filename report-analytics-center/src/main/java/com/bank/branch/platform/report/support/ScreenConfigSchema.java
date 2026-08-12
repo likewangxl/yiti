@@ -32,6 +32,12 @@ public final class ScreenConfigSchema {
         if (root instanceof ObjectNode obj) {
             if (!obj.hasNonNull("schemaVersion")) {
                 obj.put("schemaVersion", DEFAULT_SCHEMA_VERSION);
+            } else {
+                JsonNode version = obj.path("schemaVersion");
+                if (!version.canConvertToInt() || (version.asInt() != 1 && version.asInt() != 2)) {
+                    // 仅“字段缺失”属于历史 v1；显式未知版本必须 fail-close，不能悄然按 v1 执行。
+                    throw new IllegalArgumentException("unsupported screen datasource schemaVersion");
+                }
             }
             if (!obj.hasNonNull("scopeMode")) {
                 obj.put("scopeMode", DEFAULT_SCOPE_MODE);

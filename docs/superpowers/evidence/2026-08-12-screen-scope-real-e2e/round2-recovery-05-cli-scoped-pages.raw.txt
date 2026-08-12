@@ -1,0 +1,118 @@
+Round 2 recovery — official playwright-cli scoped-page transcripts.
+
+Every command below used xanzc_frontend/node_modules/.bin/playwright-cli with session screen-scope-real-e2e-round2. The browser command buffer was cleared between pages. No save/publish/preview/try-run/probe/create/update/delete/member-management control was clicked.
+
+Designer navigation command:
+
+goto http://127.0.0.1:8092/#/screen-admin/designer
+
+Raw observable designer facts from the CLI snapshot:
+
+Page URL: http://127.0.0.1:8092/#/screen-admin/designer
+Page Title: 银行营销 · 业务执行 · 绩效平台
+Console: 0 errors, 13 warnings
+设计态未加载机构画像，暂不生成假点位；请先配置并授权机构画像。
+组织分布示意，非地理比例
+屏级角色与机构组角色必须由同一角色同时命中；前端仅展示配置，不代替后端校验。
+草稿预览仍须通过屏白名单、机构组、同一角色及画布读取门禁；SYS_ADMIN 不存在大屏业务旁路。
+
+The only two designer dialog interactions were `编辑范围` and `管理查看角色`; both were closed/cancelled without a submit. The displayed scope was `命名机构组` / `全辖一级经营机构 (ORG_GRP_PRIMARY_OPERATING_UNITS)`, version 0. The displayed whitelist tag was `零售大屏查看 (R_SCREEN_RETAIL_VIEWER)` with change preview `新增 0` / `移除 0`.
+
+Raw designer API request summary:
+
+1. [GET] http://127.0.0.1:8092/api/auth/permissions => [200] OK
+152. [GET] http://127.0.0.1:8092/api/screen/admin/screens => [200] OK
+153. [GET] http://127.0.0.1:8092/api/screen/admin/canvas/9105 => [200] OK
+154. [GET] http://127.0.0.1:8092/api/admin/org-groups => [200] OK
+155. [GET] http://127.0.0.1:8092/api/admin/roles/all?recordStatus=0 => [200] OK
+156. [GET] http://127.0.0.1:8092/api/admin/org-profiles => [200] OK
+157. [GET] http://127.0.0.1:8092/api/admin/org-groups => [200] OK
+158. [GET] http://127.0.0.1:8092/api/admin/roles/all?recordStatus=0 => [200] OK
+159. [GET] http://127.0.0.1:8092/api/admin/org-profiles => [200] OK
+160. [GET] http://127.0.0.1:8092/api/admin/org-groups => [200] OK
+161. [GET] http://127.0.0.1:8092/api/admin/roles/all?recordStatus=0 => [200] OK
+162. [GET] http://127.0.0.1:8092/api/admin/org-profiles => [200] OK
+163. [GET] http://127.0.0.1:8092/api/screen/admin/screens/9105/access-roles => [200] OK
+164. [GET] http://127.0.0.1:8092/api/screen/admin/canvas/9105 => [200] OK
+
+Designer screenshots:
+
+- round2-recovery-05-designer-readonly.png
+- round2-recovery-06-designer-scope-readonly.png
+- round2-recovery-07-designer-roles-readonly.png
+
+Datasources navigation command:
+
+goto http://127.0.0.1:8092/#/screen-admin/datasources
+
+Raw page state:
+
+Page URL: http://127.0.0.1:8092/#/screen-admin/datasources
+Page Title: 银行营销 · 业务执行 · 绩效平台
+Console: 0 errors, 13 warnings
+
+The listing was observed only. In particular, its visible `试跑`, `探测列`, `新建数据源`, `编辑`, and `新建副本` controls were not used.
+
+Raw API request summary:
+
+4. [GET] http://127.0.0.1:8092/api/screen/admin/datasources => [200] OK
+5. [GET] http://127.0.0.1:8092/api/perf/metrics?pageSize=100 => [200] OK
+6. [GET] http://127.0.0.1:8092/api/screen/admin/kpi-schemes => [200] OK
+7. [GET] http://127.0.0.1:8092/api/admin/org-groups => [200] OK
+
+Screenshot: round2-recovery-08-datasources-readonly.png
+
+Org-groups navigation command:
+
+goto http://127.0.0.1:8092/#/screen-admin/org-groups
+
+Raw page state:
+
+Page URL: http://127.0.0.1:8092/#/screen-admin/org-groups
+Page Title: 银行营销 · 业务执行 · 绩效平台
+Console: 0 errors, 13 warnings
+命名机构组保存的是明确机构成员快照；筛选条件不会自动跟随组织变化
+
+No new/edit/member/role/save control was selected. Raw API request summary:
+
+3. [GET] http://127.0.0.1:8092/api/admin/org-groups => [200] OK
+4. [GET] http://127.0.0.1:8092/api/admin/org-profiles => [200] OK
+5. [GET] http://127.0.0.1:8092/api/admin/roles/all?recordStatus=0 => [200] OK
+
+Screenshot: round2-recovery-09-org-groups-readonly.png
+
+Org-profiles navigation command:
+
+goto http://127.0.0.1:8092/#/screen-admin/org-profiles
+
+Raw page state:
+
+Page URL: http://127.0.0.1:8092/#/screen-admin/org-profiles
+Page Title: 银行营销 · 业务执行 · 绩效平台
+Console: 0 errors, 13 warnings
+机构经营画像机构外部同步字段只读；以下为本地经营属性，不回写上游机构系统
+
+No edit or save control was selected. Raw API request summary:
+
+3. [GET] http://127.0.0.1:8092/api/admin/org-profiles => [200] OK
+
+Screenshot: round2-recovery-10-org-profiles-readonly.png
+
+Raw console output captured after each scoped navigation was structurally identical: 0 errors, 13 warnings. The complete repeated warning set (and no `[api fallback]` output) was:
+
+Total messages: 13 (Errors: 0, Warnings: 13)
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/list" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/leads/new" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/leads/approval" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/tags" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/tags/approval" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/pool/available" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/pool/claimed" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/cross-org" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/touches/mine" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/touches/overview" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/transfer-log" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/bizexec/loans" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/bizexec/supports" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+
+These are pre-existing sidebar route-registration warnings outside the scoped routes. They are recorded as a caveat, not ignored; there were no CLI console errors and no page/API failure for the four scoped pages.

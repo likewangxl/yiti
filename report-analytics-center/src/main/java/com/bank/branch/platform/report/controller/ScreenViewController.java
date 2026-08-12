@@ -34,11 +34,8 @@ public class ScreenViewController {
     public ResponseWrapper<ScreenRenderRespDTO> view(
             @PathVariable String screenCode,
             @RequestParam(required = false) String preview) {
-        // preview=draft:草稿预览。如实描述现状:后端目前仅执行 @BizAuth(REPORT, READ)校验,
-        // 与 published 分支同一权限位,未额外校验"屏管理权限"——"前端仅从管理端设计器
-        // (R_RPT_SCR_CV_* 菜单门禁)入口触发预览"只是前端约定,不是服务端强制边界。
-        // 该已知缺口本期可接受(草稿内容当前非敏感,3 屏均为开发测试态);收敛计划留 Task 10/V1.1:
-        // 若后续草稿承载敏感数据,需补独立管理端渲染端点做服务端强校验。
+        // preview=draft 除整屏读取资源外，服务层还会校验 R_RPT_SCR_CV_GET
+        // 管理端读取资源；普通查看者不能借用 published 端点读取草稿。
         String state = "draft".equalsIgnoreCase(preview) ? "draft" : "published";
         return ResponseWrapper.success(configService.getRenderByCode(screenCode, state));
     }

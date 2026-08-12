@@ -1,0 +1,39 @@
+# Round 3 命名机构组交互（忠实选择性 CLI 转录）
+
+打开 #/screen-admin/org-groups 后，两个 seed 机构组均可见且为“启用”：
+
+~~~text
+全辖一级经营机构  ORG_GRP_PRIMARY_OPERATING_UNITS
+对公部门组          ORG_GRP_CORP_DEPARTMENTS
+~~~
+
+截图：
+
+- round3-org-groups-list.png
+- round3-org-groups-primary-selected.png
+- round3-org-groups-corporate-selected.png
+- round3-org-groups-filtered-corporate.png
+
+对“对公”进行了本地筛选，随后清空复位。分别选择两个组后，应用提供的是内联“直接成员”和“角色绑定”面板，不是独立的编辑、成员管理、角色管理对话框；这是与预期操作形式不同的实际 UI 状态，已如实记录。
+
+两个所选组的内联面板均显示：
+
+~~~text
+成员变更：新增 0，移除 0
+已选 0 个直接成员
+角色变更：新增 0，移除 0
+已选 0 个角色
+~~~
+
+面板有“覆盖保存成员”和“覆盖保存角色”按钮，但均未点击；未新建、未编辑、未选择成员或角色，也没有弹出可取消的成员/角色管理对话框。
+
+初始加载 CLI 请求摘要：
+
+~~~text
+GET /api/admin/org-groups => 200
+GET /api/admin/org-profiles => 200
+GET /api/admin/roles/all?recordStatus=0 => 200
+~~~
+
+选择与本地筛选未见额外 API。该阶段 console 为 0 errors、0 warnings，无 PUT/POST/DELETE。
+

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bank.branch.platform/schemas/controlled-sql-mysql-release-contract-v1.json",
+  "title": "Controlled SQL MySQL release contract v1",
+  "description": "签名 release 对固定 mysql 文件、版本、SBOM 和 mysql(1) option 契约 hash 的冻结声明；option_contract 明确冻结 --binary-mode，runner 只 hash mysql 文件，不运行 mysql probe。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "issuer", "mysql_client_release_contract"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "issuer": {"type": "string", "const": "bank-controlled-sql-release-signing"},
+    "mysql_client_release_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "version", "option_contract", "sbom_sha256", "manpage_sha256"],
+      "properties": {
+        "path": {"type": "string", "const": "/usr/bin/mysql"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "option_contract": {"type": "string", "const": "fixed-defaults-file-tcp-verify-identity-binary-mode"},
+        "sbom_sha256": {"$ref": "#/$defs/sha256"},
+        "manpage_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{64}$"
+    }
+  }
+}

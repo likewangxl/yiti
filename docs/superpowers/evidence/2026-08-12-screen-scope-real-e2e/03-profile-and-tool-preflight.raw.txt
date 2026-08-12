@@ -1,0 +1,19 @@
+Command 1 (exit 0):
+rg -n 'url: jdbc:mysql://127\\.0\\.0\\.1:3306/yiti_test|username: \\$\\{YITI_SCREEN_SCOPE_DB_USERNAME\\}|password: \\$\\{YITI_SCREEN_SCOPE_DB_PASSWORD\\}|server:|address:|port: \\$\\{SERVER_PORT' bootstrap/src/main/resources/application-screen-scope-e2e.yml
+
+Raw stdout:
+8:server:
+9:  address: 127.0.0.1
+11:  port: ${SERVER_PORT:0}
+17:    url: jdbc:mysql://127.0.0.1:3306/yiti_test?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&sessionVariables=time_zone%3D%27%2B08%3A00%27
+18:    username: ${YITI_SCREEN_SCOPE_DB_USERNAME}
+19:    password: ${YITI_SCREEN_SCOPE_DB_PASSWORD}
+45:      url: jdbc:mysql://127.0.0.1:3306/yiti_test?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&sessionVariables=time_zone%3D%27%2B08%3A00%27
+46:      username: ${YITI_SCREEN_SCOPE_DB_USERNAME}
+47:      password: ${YITI_SCREEN_SCOPE_DB_PASSWORD}
+
+Command 2 (exit 0):
+xanzc_frontend/node_modules/.bin/playwright-cli --version
+
+Raw stdout:
+0.1.18

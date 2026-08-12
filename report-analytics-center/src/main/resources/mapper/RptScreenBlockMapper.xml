@@ -9,4 +9,13 @@
          WHERE JSON_EXTRACT(bind_json, '$.dsId') = #{dsId}
     </select>
 
+    <delete id="deleteByScreenIdAndIds">
+        DELETE FROM RPT_SCREEN_BLOCK
+         WHERE screen_id = #{screenId}
+           AND id IN
+        <foreach collection="blockIds" item="blockId" open="(" separator="," close=")">
+            #{blockId}
+        </foreach>
+    </delete>
+
 </mapper>

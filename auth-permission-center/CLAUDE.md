@@ -10,7 +10,7 @@
 
 **Maven 坐标**: `com.bank.branch.platform:auth-permission-center`
 
-**对外契约**: 一组 `*Api` 接口（`AuthApi`/`CurrentUserApi`/`ResourceApi`/`BizScopeApi`/`OrgApi`/`RoleApi`/`UserApi`），供所有业务模块依赖。具体方法签名以源码 `api/` 目录和 `docs/modules/auth-permission-center/04-对外API契约.md` 为准。
+**对外契约**: 一组 `*Api` 接口（`AuthApi`/`CurrentUserApi`/`ResourceApi`/`BizScopeApi`/`OrgApi`/`RoleApi`/`UserApi`/`OrgGroupApi`），供所有业务模块依赖。具体方法签名以源码 `api/` 目录和 `docs/modules/auth-permission-center/04-对外API契约.md` 为准。
 
 ## 依赖关系
 
@@ -62,6 +62,13 @@
 - `RoleResourceService.replaceMenus` 会在删除旧绑定前逐个校验资源存在、`STATUS=0` 且 `ISMENU=1`；任一不存在、禁用或接口资源 ID 都整体拒绝且不改变原绑定。校验通过后只删除并重建菜单绑定。
 - `ISMENU=0` 的 API 绑定必须通过显式权限配置维护；菜单替换不会删除已有 API，也不会根据菜单父子关系或“公共接口”自动授予 API。
 
+### 机构画像与命名机构组（2026-08-11）
+
+- `PT_ORG_PROFILE` 是 auth 自有的本地经营画像，不回写外部同步表 `EXT_ORG_INFO`；画像保存前必须校验外部机构有效、经营等级和坐标声明。`SUBORDINATE` 必须显式绑定祖先链上的有效 `PRIMARY` 机构，`DEPARTMENT + PRIMARY` 与 `SECONDARY_BRANCH + PRIMARY` 均为合法组合。
+- `PT_ORG_GROUP`/`PT_ORG_GROUP_MEMBER`/`PT_ROLE_ORG_GROUP` 只表达直接机构成员和角色绑定，不自动展开组织子树。运行时有效机构集合为“直接成员 ∩ EXT_ORG_INFO 有效 ∩ PT_ORG_PROFILE ACTIVE”。
+- `OrgGroupApi.resolveAuthorizedScope` 强制求“员工全部有效角色 ∩ 屏级角色白名单 ∩ 机构组有效绑定角色”，不得跨角色拼接权限；组不存在、停用、空组、画像缺失或查询异常均 Fail Close。
+- 四张新增表的手工对齐 SQL 为 `docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql`，管理端画像、成员和角色覆盖接口使用独立 `PT_RESOURCE`、`@BizAuth` 与 `@AuditLog`。
+
 ### UIAS 统一认证单点登录（`uniauth` 包）
 
 - `UniAuthSidecarClient` + `UniAuthProperties`：调用行内 UIAS 认证边车（SOAP，`S120030044` 查授权）。
@@ -78,7 +85,7 @@
 
 - 控制器/Service/Mapper/实体的完整清单以 `src/main/java/com/bank/branch/platform/auth/` 源码目录为准，不在本文件维护。
 - 端点契约、请求/响应报文以 `docs/modules/auth-permission-center/03-接口设计与报文.md`、`04-对外API契约.md` 为准，每次接口变更同步更新这两份文档。
-- 表结构见 `docs/modules/auth-permission-center/05-表结构DDL.md`；核心表为 `PT_USER`/`PT_ROLE`/`PT_USER_ROLE`/`PT_RESOURCE`/`PT_ROLE_RESOURCE`/`PT_ROLE_BIZ_SCOPE`（平台表）+ `EXT_ORG_INFO`/`EXT_USER_ORG`（外部只读同步表）。
+- 表结构见 `docs/modules/auth-permission-center/05-表结构DDL.md`；核心表为 `PT_USER`/`PT_ROLE`/`PT_USER_ROLE`/`PT_RESOURCE`/`PT_ROLE_RESOURCE`/`PT_ROLE_BIZ_SCOPE`（平台表）+ `EXT_ORG_INFO`/`EXT_USER_ORG`（外部只读同步表）+ `PT_ORG_PROFILE`/`PT_ORG_GROUP`/`PT_ORG_GROUP_MEMBER`/`PT_ROLE_ORG_GROUP`（auth 本地配置表）。
 - 示例代码统一登记在 `docs/code-examples.md`，本文件不复制代码片段。
 
 ## 测试指引

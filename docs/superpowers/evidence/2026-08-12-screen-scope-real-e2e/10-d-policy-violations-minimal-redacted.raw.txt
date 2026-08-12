@@ -1,0 +1,37 @@
+来源：仅本次 C-3 的 `/tmp/yiti-screen-scope-real-e2e-20260812/log-home-attempt3/branch-platform.log`。完整日志未归档，因为启动配置可能携带外部联系信息；以下是为证明停止条件所需的最小、逐字时间/类/消息片段。外部 OBS endpoint 和 bucket 已脱敏。
+
+1. OBS 客户端初始化（违反“无 OBS init”门禁）：
+
+```text
+2026-08-12 14:20:05.424 [main] [] INFO  com.obs.services.AbstractClient - Storage|1|HTTP+XML|ObsClient||||2026-08-12 14:20:05|2026-08-12 14:20:05|||0|
+2026-08-12 14:20:05.425 [main] [] WARN  com.obs.services.AbstractClient - [OBS SDK Version=3.24.3];[Endpoint=<REDACTED_EXTERNAL_OBS_ENDPOINT>];[Access Mode=Virtul Hosting]
+2026-08-12 14:20:05.425 [main] [] INFO  c.b.b.p.g.storage.ObsStorageClient - [ObsStorageClient] 初始化完成 endPoint=<REDACTED_EXTERNAL_OBS_ENDPOINT>, bucket=<REDACTED_BUCKET>
+```
+
+2. sidecar 注册/停机探测（违反“无 sidecar register/连接”门禁）：
+
+```text
+2026-08-12 14:20:17.837 [sidecar-registration-check] [] WARN  c.b.b.p.soap.config.HttpSidecarProbe - [Sidecar] 调用 http://127.0.0.1:8089/isready 失败/超时: request timed out
+2026-08-12 14:20:17.837 [sidecar-registration-check] [] INFO  c.b.b.p.s.c.SidecarRegistrationChecker - [Sidecar] 边车未就绪（/isready≠0 或超时），2000ms 后重试
+2026-08-12 14:20:29.839 [sidecar-registration-check] [] WARN  c.b.b.p.soap.config.HttpSidecarProbe - [Sidecar] 调用 http://127.0.0.1:8089/isready 失败/超时: request timed out
+2026-08-12 14:20:30.149 [SpringApplicationShutdownHook] [] WARN  c.b.b.p.soap.config.HttpSidecarProbe - [Sidecar] 调用 http://127.0.0.1:8089/down 失败/超时: request timed out
+```
+
+3. 评价导入补偿扫描查询（违反“无 eval compensation”门禁）：
+
+```text
+2026-08-12 14:20:07.813 [main] [] DEBUG c.b.b.p.p.e.m.E.selectList - ==>  Preparing: SELECT batch_id,batch_name,task_type,source,deadline,status,total_rows,imported_count,error_summary,create_by,create_time FROM EVAL_ASSIGN_BATCH WHERE (status = ?)
+2026-08-12 14:20:07.819 [main] [] DEBUG c.b.b.p.p.e.m.E.selectList - ==> Parameters: 3(Integer)
+2026-08-12 14:20:07.825 [main] [] DEBUG c.b.b.p.p.e.m.E.selectList - <==      Total: 0
+```
+
+静态源码只读交叉核对：`EvalImportCompensation#compensateStaleImporting()` 的唯一 `EVAL_ASSIGN_BATCH` `selectList` 过滤条件正是 `status = 3`；因此上述启动期查询可归因于该补偿器。查询结果为 0，且后续 61 表 diff 没有任何变化，但这不消除“启动期补偿器已运行”的门禁失败。
+
+同轮正常/非违规观察（只为避免误报）：
+
+```text
+2026-08-12 14:20:04.892 [main] [] INFO  o.f.e.impl.cmd.ValidateV5EntitiesCmd - Total of v5 deployments found: 0
+2026-08-12 14:20:05.044 [main] [] WARN  c.b.b.p.g.service.JobService - [JobService.syncJobsOnStartup] Scheduler bean 不可用（测试或禁用 Quartz 场景），跳过启动同步
+2026-08-12 14:20:07.781 [main] [] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 18082 (http) with context path ''
+2026-08-12 14:20:07.793 [main] [] INFO  c.b.b.p.BranchPlatformApplication - Started BranchPlatformApplication in 6.697 seconds (process running for 6.916)
+```

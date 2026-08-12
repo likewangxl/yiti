@@ -68,8 +68,33 @@ class GovAuditLogHandlerTest {
     }
 
     @Test
-    @DisplayName("handle: service 抛出异常时不向上抛出，保证业务流程不中断")
-    void handle_serviceThrows_doesNotRethrow() {
+    @DisplayName("handle: 将结构化快照和集合差异透传到持久化命令")
+    void handle_convertsStructuredSnapshotsToCmd() {
+        AuditLogEvent event = new AuditLogEvent(
+                "ORG_GROUP_MEMBER_CHANGE", "PT_ORG_GROUP_MEMBER", "G_PRIMARY", null,
+                "E10001", "ORG-001", Instant.now(), "192.168.1.100", "Mozilla/5.0",
+                "{\"orgCodes\":[\"OLD\"]}", "{\"orgCodes\":[\"NEW\"]}", "范围调整",
+                "SYS_CONFIG", "/api/admin/org-groups/G_PRIMARY/members", "PUT", null,
+                12L, "trace-structured-001", 200, null,
+                "PT_ORG_GROUP_MEMBER", "G_PRIMARY", "[\"NEW\"]", "[\"OLD\"]");
+
+        govAuditLogHandler.handle(event);
+
+        ArgumentCaptor<AuditLogCmd> captor = ArgumentCaptor.forClass(AuditLogCmd.class);
+        verify(auditLogService).log(captor.capture());
+        AuditLogCmd cmd = captor.getValue();
+        assertThat(cmd.getTargetType()).isEqualTo("PT_ORG_GROUP_MEMBER");
+        assertThat(cmd.getTargetId()).isEqualTo("G_PRIMARY");
+        assertThat(cmd.getBeforeSnapshot()).contains("OLD");
+        assertThat(cmd.getAfterSnapshot()).contains("NEW");
+        assertThat(cmd.getAddedItems()).contains("NEW");
+        assertThat(cmd.getRemovedItems()).contains("OLD");
+        assertThat(cmd.getTraceId()).isEqualTo("trace-structured-001");
+    }
+
+    @Test
+    @DisplayName("handle: service 抛出异常时向上抛出，以便高危配置事务回滚")
+    void handle_serviceThrows_rethrowsForSynchronousHighRiskAudit() {
         // given
         AuditLogEvent event = new AuditLogEvent(
                 "UPDATE", "CUSTOMER", "/api/customer/1", "BK-002",
@@ -78,8 +103,9 @@ class GovAuditLogHandlerTest {
         );
         doThrow(new RuntimeException("DB连接失败")).when(auditLogService).log(any(AuditLogCmd.class));
 
-        // when & then — 不应抛出异常
-        assertThatCode(() -> govAuditLogHandler.handle(event))
-                .doesNotThrowAnyException();
+        // when & then — 调用方可在同一事务中回滚高危配置变更
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> govAuditLogHandler.handle(event))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("DB连接失败");
     }
 }

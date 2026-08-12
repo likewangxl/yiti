@@ -14,6 +14,11 @@ public enum AuthErrorCode {
     // 400 参数错误
     OLD_PASSWORD_MISMATCH("AUTH-40001", "旧密码不正确"),
     INVALID_USER_IDS("AUTH-40002", "用户ID列表为空或超出上限"),
+    ORG_PROFILE_INVALID("AUTH-40012", "机构画像配置不合法"),
+    ORG_GROUP_INVALID("AUTH-40013", "机构组配置不合法"),
+    ORG_GROUP_MEMBER_INVALID("AUTH-40014", "机构组成员不合法"),
+    ORG_GROUP_ROLE_INVALID("AUTH-40015", "机构组角色绑定不合法"),
+    ORG_CONFIG_VERSION_REQUIRED("AUTH-40016", "更新配置必须提供版本"),
 
     // 401 认证失败
     LOGIN_FAILED("AUTH-40101", "用户名或密码错误"),
@@ -33,6 +38,7 @@ public enum AuthErrorCode {
     STATUS_CONSTRAINT_DENIED("AUTH-40306", "状态约束拒绝"),
     HIGH_RISK_ACTION_MISSING_REASON("AUTH-40307", "高危动作缺少原因"),
     PERMISSION_CACHE_UNAVAILABLE("AUTH-40308", "权限缓存不可用"),
+    ORG_GROUP_UNAUTHORIZED("AUTH-40309", "当前用户无机构组授权"),
 
     // 404 资源不存在
     ROLE_NOT_FOUND("AUTH-40401", "角色不存在"),
@@ -40,6 +46,8 @@ public enum AuthErrorCode {
     USER_NOT_FOUND("AUTH-40403", "用户不存在"),
     ORG_NOT_FOUND("AUTH-40404", "机构不存在"),
     BIZ_SCOPE_NOT_FOUND("AUTH-40405", "BizScope配置不存在"),
+    ORG_PROFILE_NOT_FOUND("AUTH-40406", "机构画像不存在"),
+    ORG_GROUP_NOT_FOUND("AUTH-40407", "机构组不存在"),
 
     // 409 冲突
     ROLE_CODE_DUPLICATE("AUTH-40901", "角色编码已存在"),
@@ -47,10 +55,13 @@ public enum AuthErrorCode {
     BIZ_SCOPE_DUPLICATE("AUTH-40903", "BizScope配置已存在"),
     USER_ID_DUPLICATE("AUTH-40904", "用户ID已存在"),
     USERNAME_DUPLICATE("AUTH-40905", "用户名已存在"),
+    ORG_GROUP_VERSION_CONFLICT("AUTH-40906", "机构组配置已被其他管理员修改"),
+    ORG_PROFILE_VERSION_CONFLICT("AUTH-40907", "机构画像配置已被其他管理员修改"),
 
     // 500 内部错误
     INTERNAL_ERROR("AUTH-50001", "权限服务内部错误"),
     CACHE_ERROR("AUTH-50002", "缓存服务异常"),
+    ORG_CONFIG_AUDIT_FAILED("AUTH-50003", "高危机构配置审计写入失败，变更已回滚"),
 
     // 503 服务暂不可用
     AUTH_SERVICE_UNAVAILABLE("AUTH-50301", "认证服务暂不可用，请稍后重试");

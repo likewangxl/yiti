@@ -1,0 +1,11 @@
+Command (exit 0):
+ss -ltnp '( sport = :18080 or sport = :18081 or sport = :18082 or sport = :8090 or sport = :8091 or sport = :8092 or sport = :30522 or sport = :30523 )'
+
+Raw stdout:
+State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+LISTEN 0      511          0.0.0.0:8091       0.0.0.0:*    users:(("node",pid=3721113,fd=22))
+LISTEN 0      511          0.0.0.0:8090       0.0.0.0:*    users:(("node",pid=3165612,fd=23))
+LISTEN 0      100                *:18080            *:*    users:(("java",pid=3802137,fd=214))
+LISTEN 0      256                *:30522            *:*    users:(("java",pid=3802137,fd=228))
+
+Interpretation (not raw output): no listener was reported for 18081, 18082, 8092, or 30523. Existing PID command lines were intentionally not inspected because they could contain secrets; no existing process was reused, signalled, or stopped.

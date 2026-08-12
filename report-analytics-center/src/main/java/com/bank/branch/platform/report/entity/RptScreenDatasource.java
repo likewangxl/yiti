@@ -33,6 +33,9 @@ public class RptScreenDatasource {
     /** 来源：WIDE_TABLE / KPI_RESULT / CUSTOM_SQL */
     private String sourceKind;
 
+    /** 数据归属条线：CORP / RETAIL / COMMON；不得由名称推断。 */
+    private String bizLine;
+
     /** 类型化配置 JSON（三形态见 spec §5） */
     private String configJson;
 
@@ -47,6 +50,9 @@ public class RptScreenDatasource {
 
     /** 创建人工号 */
     private String createdBy;
+
+    /** 最近一次更新人工号。 */
+    private String updatedBy;
 
     /** 创建时间 */
     private LocalDateTime createdTime;

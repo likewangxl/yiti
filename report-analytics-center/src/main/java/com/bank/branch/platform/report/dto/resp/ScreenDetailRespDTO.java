@@ -20,6 +20,14 @@ public class ScreenDetailRespDTO {
 
     private String viewLevel;
 
+    private String bizLine;
+
+    private String orgScopeMode;
+
+    private String orgGroupCode;
+
+    private List<String> allowedRoleCodes;
+
     private String themeJson;
 
     private String status;

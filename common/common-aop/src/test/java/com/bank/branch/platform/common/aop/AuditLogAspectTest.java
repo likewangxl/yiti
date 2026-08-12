@@ -46,6 +46,21 @@ class AuditLogAspectTest {
         assertEquals("ok", result);
     }
 
+    @Test void shouldNotDuplicateServiceManagedAudit() throws Throwable {
+        AuditLogHandler handler = mock(AuditLogHandler.class);
+        AuditLogAspect aspect = new AuditLogAspect(handler);
+
+        ProceedingJoinPoint pjp = mock(ProceedingJoinPoint.class);
+        MethodSignature sig = mock(MethodSignature.class);
+        when(pjp.getSignature()).thenReturn(sig);
+        when(sig.getMethod()).thenReturn(
+            AuditLogAspectTest.class.getDeclaredMethod("serviceManagedAnnotatedMethod"));
+        when(pjp.proceed()).thenReturn("ok");
+
+        assertEquals("ok", aspect.around(pjp));
+        verifyNoInteractions(handler);
+    }
+
     @AfterEach void cleanup() { DataScopeContext.clear(); }
 
     @Test void shouldCaptureActionAndResourceTypeFromAnnotation() throws Throwable {
@@ -114,4 +129,7 @@ class AuditLogAspectTest {
 
     @AuditLog(action = "TEST", resourceType = "UNIT")
     void annotatedMethod() {}
+
+    @AuditLog(action = "TEST_SERVICE_MANAGED", resourceType = "UNIT", serviceManaged = true)
+    void serviceManagedAnnotatedMethod() {}
 }

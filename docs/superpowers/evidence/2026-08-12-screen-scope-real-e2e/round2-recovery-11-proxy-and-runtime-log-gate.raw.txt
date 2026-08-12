@@ -1,0 +1,22 @@
+Round 2 recovery — 8092 to 18082 proxy proof and runtime-log gate.
+
+The CLI request summaries in round2-recovery-05 show 200 responses through 127.0.0.1:8092/api. The following selected raw application-log lines show those same in-scope handlers executing on the controlled 127.0.0.1:18082 Tomcat executor. Request/response payloads are intentionally not copied.
+
+887:2026-08-12 16:00:33.564 [http-nio-127.0.0.1-18082-exec-3] [pc-1786521633541-315110] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786521633541-315110] >>> ScreenConfigAdminController.listScreens() args=[]
+933:2026-08-12 16:00:33.612 [http-nio-127.0.0.1-18082-exec-4] [pc-1786521633591-230190] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786521633591-230190] >>> ScreenCanvasAdminController.load(..) args=[9105]
+967:2026-08-12 16:00:33.672 [http-nio-127.0.0.1-18082-exec-5] [pc-1786521633652-306424] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786521633652-306424] >>> OrgGroupController.listGroups() args=[]
+1049:2026-08-12 16:00:33.736 [http-nio-127.0.0.1-18082-exec-9] [pc-1786521633718-588433] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786521633718-588433] >>> OrgGroupController.listProfiles(..) args=[null, null]
+1337:2026-08-12 16:02:36.091 [http-nio-127.0.0.1-18082-exec-5] [pc-1786521756065-77913] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786521756065-77913] >>> ScreenCanvasAdminController.load(..) args=[9105]
+1345:2026-08-12 16:02:36.092 [http-nio-127.0.0.1-18082-exec-4] [pc-1786521756065-222752] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786521756065-222752] >>> ScreenConfigAdminController.listAccessRoles(..) args=[9105]
+1406:2026-08-12 16:03:43.775 [http-nio-127.0.0.1-18082-exec-10] [pc-1786521823754-929429] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786521823754-929429] >>> ScreenDatasourceAdminController.list(..) args=[null, null]
+1772:2026-08-12 16:03:43.831 [http-nio-127.0.0.1-18082-exec-8] [pc-1786521823812-740058] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786521823812-740058] >>> ScreenDatasourceAdminController.listKpiSchemes() args=[]
+2001:2026-08-12 16:04:15.593 [http-nio-127.0.0.1-18082-exec-6] [pc-1786521855572-362160] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786521855572-362160] >>> OrgGroupController.listProfiles(..) args=[null, null]
+2040:2026-08-12 16:04:15.598 [http-nio-127.0.0.1-18082-exec-7] [pc-1786521855572-320081] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786521855572-320081] >>> OrgGroupController.listGroups() args=[]
+2089:2026-08-12 16:04:47.577 [http-nio-127.0.0.1-18082-exec-3] [pc-1786521887560-738840] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786521887560-738840] >>> OrgGroupController.listProfiles(..) args=[null, null]
+
+Runtime forbidden-activity scan command and actual result:
+
+rg -n -i 'SidecarRegistrationChecker|HttpSidecarProbe|EvalImportCompensation|EVAL_ASSIGN_BATCH|PT_LOCK|QRTZ' /tmp/yiti-screen-scope-round2-Erv2w0/branch-platform.log
+exit 1; stdout empty.
+
+The log scan result is consistent with the zero-delta final counts for Flowable runtime, Quartz, locks, files, and evaluation tables. The only client-side console messages recorded in round2-recovery-05 are 13 Vue Router warnings; there is no `[api fallback]` line.

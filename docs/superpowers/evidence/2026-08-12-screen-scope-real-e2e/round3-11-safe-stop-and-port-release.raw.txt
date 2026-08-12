@@ -1,0 +1,22 @@
+# Round 3 安全停机与端口释放（忠实选择性转录）
+
+本文件保留全部停机结果和精确端口检查输出；不复制应用日志正文。
+
+~~~text
+$ playwright-cli close
+Browser 'screen-scope-real-e2e-round3' closed
+
+$ <Vite PTY> Ctrl-C
+exit=1
+
+$ <Maven/Spring PTY> Ctrl-C
+SpringApplicationShutdownHook: data sources closed
+BUILD SUCCESS
+exit=0
+
+$ ss -ltnp '( sport = :18082 or sport = :8092 or sport = :30523 )'
+State Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+~~~
+
+Vite 的 exit=1 是 Ctrl-C 中断后的 PTY 返回码；后端以正常 shutdown hook 和 Maven BUILD SUCCESS 退出。最终 18082、8092、30523 均无监听或连接。
+

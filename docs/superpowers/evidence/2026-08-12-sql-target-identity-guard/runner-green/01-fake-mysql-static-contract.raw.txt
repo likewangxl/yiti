@@ -1,0 +1,23 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T19:28:21.062650Z
+COMMAND python3 docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py
+SHA256 92fd8c192f988fccabb9c7450ce27c0d19cdfa60a5f882456f371ea0c55c62f7 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh
+SHA256 3e24d6a4f20a4dfa621194091dcc4e7eb08cbaf111db1ba57dd58fafc22abf0a /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.py
+SHA256 6a116bf7634e880fc94710f3738cb4ba9b54d6c141b75881d57f1e166bfb0d74 /home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py
+SHA256 c57ed579666dbf3fe28554582e9a4e22341691807603fecf11076d1911b8bf79 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.sh
+SHA256 503d9b704bc151108d72bd09753b93bf21ffa098431f2f16b6c33f2609a2cffc /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.py
+SHA256 fa3fef04c3fb754feaccbbba19b331b113005304a9fc8747586668ecf0da1e95 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-12-controlled-sql-batch-manifest.schema.json
+SHA256 adc6485f27b7889947c67c58f0aa49a6701e73fb114fbb08155f3b4f004f4ed8 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql
+SHA256 81310dbb0232f23e5374207c93d427512429dad7012ce08ea39d6e4a1dc33349 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql
+SHA256 5c1b22ecdd8c74480e0607237d58316a71e762383cab1dead4c7cfe20798d500 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql
+EXIT_CODE 0
+UTC_FINISHED 2026-08-11T19:28:22.311209Z
+--- RAW_STDOUT_STDERR ---
+TEST_MANIFEST_SHA256 fae77949acee4d0d06563ae326a78e3b3950f168f3d756e90ee1e7f468d3e2b7
+TEST_TRUSTED_PUBLIC_KEY_SHA256 f4f677362ef754393d8d714f565e8a9c48a935f8f4d2352339b716d7697cf79a
+PASS runner default/--validate-only/--help：未启动 fake mysql
+PASS runner 单进程：--batch/--skip-reconnect、六变量、auth→align→seed、无 --force
+PASS runner 双跑：同一 mysql 进程内第二次 auth→align→seed
+PASS runner：拒绝 --force/CLI target override/defaults force/无效 detached signature，均未启动 fake mysql
+PASS runner：fake mysql 非零退出码原样返回，未重试或启动第二进程
+RESULT PASS controlled SQL batch runner fake-mysql static contract

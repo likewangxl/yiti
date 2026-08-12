@@ -868,3 +868,33 @@ public class PermissionCacheInvalidatedEvent {
 **消费方处理**：
 - 按 `changeType` 和 `affectedRoleIds` 清除对应的 Redis 缓存 Key
 - 按 `eventId` 做幂等去重，避免重复处理
+
+## 11. OrgGroupApi -- 机构画像与命名机构组 API（2026-08-11）
+
+`report-analytics-center` 只能依赖本接口及 `api.dto`，不得访问 auth 的 Mapper、Entity 或 Service。接口实现为本地 Spring Bean 调用。
+
+```java
+public interface OrgGroupApi {
+    OrgGroupDTO getGroup(String groupCode);
+    Set<String> listActiveMemberCodes(String groupCode);
+    OrgGroupScopeDTO resolveAuthorizedScope(
+            String empId, String groupCode, Collection<String> allowedRoleCodes);
+    OrgGroupRoleCheckDTO checkRoleBindings(
+            String groupCode, Collection<String> roleCodes);
+    Map<String, OrgProfileDTO> getActiveProfiles(Collection<String> orgCodes);
+}
+```
+
+### 11.1 调用语义
+
+| 方法 | 语义与安全边界 |
+|:---|:---|
+| `getGroup` | 返回机构组基本信息、直接成员和有效角色编码；绑定表的 `ROLE_ID` 必须先解析为规范化 `ROLE_CODE`，不存在返回 `null` |
+| `listActiveMemberCodes` | 返回直接成员与有效 `EXT_ORG_INFO`、ACTIVE 画像的交集；异常返回空集 |
+| `resolveAuthorizedScope` | 求员工当前全部有效角色、屏级白名单、组绑定角色三方交集；失败 Fail Close，不拼接不同角色权限 |
+| `checkRoleBindings` | 返回有效、未绑定、非法角色编码以及 `satisfiable` 发布校验结果 |
+| `getActiveProfiles` | 返回请求机构编码中外部机构有效且画像 ACTIVE 的画像索引 |
+
+`OrgGroupDTO.memberCodes()` 是 `memberOrgCodes` 的只读集合视图，供发布校验等调用方安全读取直接成员；不会展开组织子树。`OrgGroupScopeDTO.deniedReasonCode` 仅用于内部审计/诊断，不得向普通用户暴露角色或绑定细节。组停用、无成员、画像缺失、机构停用和任一查询异常均不能返回全量范围。
+
+`report-analytics-center` 是只读消费者：它只能调用上述 `OrgGroupApi` 并传递/接收规范化 `ROLE_CODE`，不得调用 `AuditLogHandler`、治理 `AuditLogService` 或 auth 的 Mapper/Entity 来补写审计。配置写入接口在 auth 服务事务内自行持久化审计。

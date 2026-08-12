@@ -1,0 +1,19 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T20:14:37.350995Z
+COMMAND bash docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.sh
+SHA256 73701fdfdf25da4861aaf031c1f8891aca09e6d684583cad68b461e40735c760 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.sh
+SHA256 ed5b931c28371e97c02e52e98bfe0474d0691570d276c779a5e9151272657e21 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.py
+SHA256 57985a3f81a08d93e176152091fc66e7d409c7438f08fb3623a0a6d350ee9432 /home/djdev/leid/yiti/docs/superpowers/scripts/tests/sql-target-identity-guard/mutation-fixtures.json
+SHA256 9cdda5c67bddcd7ca602d70dc71862c4ede8ed25733e3d57aa639f872493783f /home/djdev/leid/yiti/docs/superpowers/scripts/tests/sql-target-identity-guard/test_mutations.py
+SHA256 adc6485f27b7889947c67c58f0aa49a6701e73fb114fbb08155f3b4f004f4ed8 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql
+SHA256 81310dbb0232f23e5374207c93d427512429dad7012ce08ea39d6e4a1dc33349 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql
+SHA256 5c1b22ecdd8c74480e0607237d58316a71e762383cab1dead4c7cfe20798d500 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql
+EXIT_CODE 0
+UTC_FINISHED 2026-08-11T20:14:37.473519Z
+--- RAW_STDOUT_STDERR ---
+STATIC TARGET IDENTITY GUARD STRUCTURAL CHECK (no database connection)
+RESTRICTED_GRAMMAR: only the three approved scripts' CASE/IF/error-flow/PREPARE/EXECUTE forms; not a general MySQL parser.
+PASS docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql: profile=auth, parsed restricted fail-close CASE/IF/error-flow and guard-before-write ordering
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql: profile=rpt_align, parsed restricted fail-close CASE/IF/error-flow and guard-before-write ordering
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql: profile=rpt_seed, parsed restricted fail-close CASE/IF/error-flow and guard-before-write ordering
+RESULT: PASS (all target identity guards match the restricted grammar and fail-close before DDL/DML/CALL)

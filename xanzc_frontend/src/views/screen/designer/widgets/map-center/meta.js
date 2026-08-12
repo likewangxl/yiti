@@ -1,7 +1,6 @@
-// MapCenter(陕西地图,省级屏专属)——复用运行时 @/views/screen/components/MapCenter.vue,
-// 一期不进入 materialMetas 拖拽面板(见 widgets/index.js 说明),此 meta 仅供内部/未来引用取默认位置。
+// MapCenter——兼容陕西 v1 与西安复合 v2，进入组件面板；真实点位由机构画像运行时注入。
 export default {
-  component: 'MapCenter', label: '陕西地图', group: 'material', icon: '🗺',
+  component: 'MapCenter', label: '经营地图', group: 'material', icon: '🗺',
   defaultStyle: { top: 96, left: 640, width: 640, height: 880 },
   defaultProps: {}
 };

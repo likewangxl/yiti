@@ -1,0 +1,38 @@
+# Round 3 本轮敏感临时日志精确删除（完整非内容输出）
+
+停机后仅列出本轮独立临时目录顶层文件名：
+
+~~~text
+branch-platform-error.log
+branch-platform.log
+ishealth.body
+~~~
+
+为避免复制日志内容，仅对两个精确路径进行认证字段存在性检测，输出如下：
+
+~~~text
+SENSITIVE /tmp/yiti-screen-scope-round3-ZfsDc5/branch-platform.log
+NO_SENSITIVE_MATCH /tmp/yiti-screen-scope-round3-ZfsDc5/branch-platform-error.log
+~~~
+
+因此只执行了一个精确删除命令：
+
+~~~text
+rm -f /tmp/yiti-screen-scope-round3-ZfsDc5/branch-platform.log
+~~~
+
+删除后验证：
+
+~~~text
+branch-platform-error.log
+ishealth.body
+SENSITIVE_LOG_REMOVED=0
+~~~
+
+未删除目录、glob、error log、health body 或任何其他临时/既有日志。已删除的 branch-platform.log 含认证字段，未复制进证据且不可恢复。
+
+新增 Round 3 文本的值型敏感模式扫描（password=非占位值、Authorization、Cookie、token=非占位值）结果：
+
+~~~text
+ROUND3_TEXT_SENSITIVE_VALUE_PATTERN_SCAN=clean
+~~~

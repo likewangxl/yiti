@@ -104,6 +104,36 @@ class AuditLogServiceTest {
         assertThat(entity.getId()).hasSize(32);
     }
 
+    @Test
+    void log_persistsStructuredSnapshotsAndDeltas() {
+        AuditLogCmd cmd = AuditLogCmd.builder()
+                .traceId("trace-structured-001")
+                .empId("E10001")
+                .bizType("SYS_CONFIG")
+                .bizAction("ORG_GROUP_MEMBER_CHANGE")
+                .targetType("PT_ORG_GROUP_MEMBER")
+                .targetId("G_PRIMARY")
+                .beforeSnapshot("{\"orgCodes\":[\"OLD\"]}")
+                .afterSnapshot("{\"orgCodes\":[\"NEW\"]}")
+                .addedItems("[\"NEW\"]")
+                .removedItems("[\"OLD\"]")
+                .reason("范围调整")
+                .build();
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
+
+        auditLogService.log(cmd);
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogMapper).insert(captor.capture());
+        AuditLog entity = captor.getValue();
+        assertThat(entity.getTargetType()).isEqualTo("PT_ORG_GROUP_MEMBER");
+        assertThat(entity.getTargetId()).isEqualTo("G_PRIMARY");
+        assertThat(entity.getBeforeSnapshot()).contains("OLD");
+        assertThat(entity.getAfterSnapshot()).contains("NEW");
+        assertThat(entity.getAddedItems()).contains("NEW");
+        assertThat(entity.getRemovedItems()).contains("OLD");
+    }
+
     /**
      * 测试 queryLogs() 方法：验证带筛选条件时正确传递参数给 mapper
      */

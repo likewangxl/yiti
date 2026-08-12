@@ -76,6 +76,8 @@ export function findAttr(component) { return componentsMap[component + 'Attr'] |
 export function newComponentFromMeta(component, innerType) {
   const meta = component === 'ChartWidget'
     ? chartWidgetMeta
+    : component === 'MapCenter'
+      ? mapCenterMeta
     : materialMetas.find(m => m.component === component);
   const base = meta || { defaultStyle: { top: 0, left: 0, width: 200, height: 120 }, defaultProps: {} };
   const node = {
@@ -99,6 +101,10 @@ export function newComponentFromMeta(component, innerType) {
     node.bindJson = '{}';
     node.styleJson = JSON.stringify({ title: '未命名图表', refreshSec: 60 });
     node.drillJson = '{}';
+  }
+  if (component === 'MapCenter') {
+    // 地图配置进入组件树；v1 默认保持旧陕西地图，切换到 v2 由属性面板显式完成。
+    node.propValue = { schemaVersion: 1, mode: 'SHAANXI_LEGACY', baseRegion: 'SHAANXI' };
   }
   return node;
 }

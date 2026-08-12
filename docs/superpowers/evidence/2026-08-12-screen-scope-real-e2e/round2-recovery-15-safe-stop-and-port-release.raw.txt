@@ -1,0 +1,32 @@
+Round 2 recovery — safe stop and port release.
+
+No logout request was sent. The official browser was closed first, then only the Vite and Maven processes started by this recovery were sent Ctrl-C. No existing process was signalled, killed, inspected, or reused.
+
+Raw CLI close output:
+
+Browser 'screen-scope-real-e2e-round2' closed
+
+Raw Vite process result after Ctrl-C:
+
+exit 130
+
+Selected raw backend shutdown tail:
+
+2026-08-12 16:09:49.227 [SpringApplicationShutdownHook] [] INFO  c.alibaba.druid.pool.DruidDataSource - {dataSource-0} closing ...
+2026-08-12 16:09:49.241 [SpringApplicationShutdownHook] [] INFO  c.alibaba.druid.pool.DruidDataSource - {dataSource-1} closing ...
+2026-08-12 16:09:49.244 [SpringApplicationShutdownHook] [] INFO  c.alibaba.druid.pool.DruidDataSource - {dataSource-1} closed
+[INFO] BUILD SUCCESS
+[INFO] Total time:  13:51 min
+[INFO] Finished at: 2026-08-12T16:09:49+08:00
+
+Read-only post-stop port command:
+
+ss -ltnp '( sport = :18082 or sport = :8092 or sport = :30523 )'
+ss -tnp '( dport = :18082 or sport = :18082 or dport = :8092 or sport = :8092 or dport = :30523 or sport = :30523 )'
+
+Raw stdout:
+
+State Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+State Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+
+Conclusion: no listener and no TCP connection was reported for 18082, 8092, or 30523 after the controlled stop.

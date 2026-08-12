@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bank.branch.platform/schemas/controlled-sql-batch-manifest-v2.json",
-  "title": "Controlled SQL batch execution manifest v2",
-  "description": "受控执行授权的严格 JSON 契约。runner 实际加载本文件、拒绝重复键和 bool 伪装 integer，并另外验证两类 detached signature。",
+  "$id": "https://bank.branch.platform/schemas/controlled-sql-batch-manifest-v3.json",
+  "title": "Controlled SQL batch execution manifest v3",
+  "description": "严格 JSON 受控执行授权。runner 实际加载本文件，并分别验证 root launcher proof、在线 receipt claim token、A2 proof 和 mysql release contract。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -14,13 +14,14 @@
     "target",
     "a2_recovery_point",
     "approval_receipt",
+    "receipt_claim_helper",
     "sql_sha256",
     "artifact_sha256"
   ],
   "properties": {
     "schema_version": {
       "type": "integer",
-      "const": 2
+      "const": 3
     },
     "change_ticket": {
       "$ref": "#/$defs/ticket"
@@ -69,6 +70,9 @@
     "approval_receipt": {
       "$ref": "#/$defs/approvalReceiptReference"
     },
+    "receipt_claim_helper": {
+      "$ref": "#/$defs/claimHelper"
+    },
     "sql_sha256": {
       "type": "object",
       "additionalProperties": false,
@@ -95,26 +99,30 @@
       "required": [
         "runner_shell",
         "runner_python",
+        "root_managed_launcher",
+        "systemd_unit_template",
         "preflight_checker_shell",
         "preflight_checker_python",
-        "manifest_schema"
+        "manifest_schema",
+        "receipt_claim_schema",
+        "a2_proof_schema",
+        "launcher_proof_schema",
+        "mysql_release_contract_schema",
+        "mysql_release_contract"
       ],
       "properties": {
-        "runner_shell": {
-          "$ref": "#/$defs/artifact"
-        },
-        "runner_python": {
-          "$ref": "#/$defs/artifact"
-        },
-        "preflight_checker_shell": {
-          "$ref": "#/$defs/artifact"
-        },
-        "preflight_checker_python": {
-          "$ref": "#/$defs/artifact"
-        },
-        "manifest_schema": {
-          "$ref": "#/$defs/artifact"
-        }
+        "runner_shell": {"$ref": "#/$defs/artifact"},
+        "runner_python": {"$ref": "#/$defs/artifact"},
+        "root_managed_launcher": {"$ref": "#/$defs/artifact"},
+        "systemd_unit_template": {"$ref": "#/$defs/artifact"},
+        "preflight_checker_shell": {"$ref": "#/$defs/artifact"},
+        "preflight_checker_python": {"$ref": "#/$defs/artifact"},
+        "manifest_schema": {"$ref": "#/$defs/artifact"},
+        "receipt_claim_schema": {"$ref": "#/$defs/artifact"},
+        "a2_proof_schema": {"$ref": "#/$defs/artifact"},
+        "launcher_proof_schema": {"$ref": "#/$defs/artifact"},
+        "mysql_release_contract_schema": {"$ref": "#/$defs/artifact"},
+        "mysql_release_contract": {"$ref": "#/$defs/artifact"}
       }
     }
   },
@@ -134,17 +142,15 @@
     "a2RecoveryPoint": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["reference", "sha256", "signed_proof_sha256"],
+      "required": ["reference", "recovery_point_sha256", "proof_id", "proof_sha256"],
       "properties": {
-        "reference": {
-          "$ref": "#/$defs/ticket"
+        "reference": {"$ref": "#/$defs/ticket"},
+        "recovery_point_sha256": {"$ref": "#/$defs/sha256"},
+        "proof_id": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
         },
-        "sha256": {
-          "$ref": "#/$defs/sha256"
-        },
-        "signed_proof_sha256": {
-          "$ref": "#/$defs/sha256"
-        }
+        "proof_sha256": {"$ref": "#/$defs/sha256"}
       }
     },
     "approvalReceiptReference": {
@@ -158,65 +164,16 @@
         }
       }
     },
-    "approvalReceiptPayload": {
+    "claimHelper": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "receipt_version",
-        "approval_service",
-        "receipt_id",
-        "manifest_sha256",
-        "change_ticket",
-        "issued_at_utc",
-        "not_before_utc",
-        "expires_at_utc",
-        "execution_nonce",
-        "nonce_policy",
-        "revocation_epoch",
-        "a2_recovery_point"
-      ],
+      "required": ["path", "sha256"],
       "properties": {
-        "receipt_version": {
-          "type": "integer",
-          "const": 1
-        },
-        "approval_service": {
+        "path": {
           "type": "string",
-          "const": "bank-controlled-sql-approval-service"
+          "const": "/usr/local/libexec/bank-controlled-sql-receipt-claim-helper"
         },
-        "receipt_id": {
-          "type": "string",
-          "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
-        },
-        "manifest_sha256": {
-          "$ref": "#/$defs/sha256"
-        },
-        "change_ticket": {
-          "$ref": "#/$defs/ticket"
-        },
-        "issued_at_utc": {
-          "$ref": "#/$defs/utcTimestamp"
-        },
-        "not_before_utc": {
-          "$ref": "#/$defs/utcTimestamp"
-        },
-        "expires_at_utc": {
-          "$ref": "#/$defs/utcTimestamp"
-        },
-        "execution_nonce": {
-          "type": "string",
-          "pattern": "^[0-9A-Fa-f]{32,128}$"
-        },
-        "nonce_policy": {
-          "type": "string",
-          "const": "single_use"
-        },
-        "revocation_epoch": {
-          "$ref": "#/$defs/ticket"
-        },
-        "a2_recovery_point": {
-          "$ref": "#/$defs/a2RecoveryPoint"
-        }
+        "sha256": {"$ref": "#/$defs/sha256"}
       }
     },
     "artifact": {
@@ -226,11 +183,9 @@
       "properties": {
         "path": {
           "type": "string",
-          "pattern": "^docs/superpowers/(scripts|sql)/[A-Za-z0-9_./-]+$"
+          "pattern": "^docs/superpowers/(scripts|sql)/[A-Za-z0-9_./@-]+$"
         },
-        "sha256": {
-          "$ref": "#/$defs/sha256"
-        }
+        "sha256": {"$ref": "#/$defs/sha256"}
       }
     }
   }

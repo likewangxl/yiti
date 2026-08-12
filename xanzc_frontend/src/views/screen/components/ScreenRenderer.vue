@@ -8,9 +8,13 @@
       <BlockContainer v-if="c.component === 'ChartWidget' && blockOf(c)" :block="blockOf(c)" :context="context"
                       :prop-value="c.propValue || {}" />
       <div v-else-if="c.component === 'ChartWidget'" class="scr-abs-empty">暂无预览数据</div>
-      <!-- MapCenter 走独立分支:其 props 契约是 mapPoints 数组(来自 ScreenRenderRespDTO.mapPoints，
-           PROVINCE 屏实时回填)，与素材类 widgets 的 element/propValue 签名不同，不经 widgetOf 通用注册。 -->
-      <MapCenter v-else-if="c.component === 'MapCenter'" :map-points="mapPoints" />
+      <!-- MapCenter 走独立分支：v1 读取旧 mapPoints，v2 读取机构画像/复合地图配置；
+           orgGroupCode 不从组件 JSON 取，后端响应的 mapPayload 已按屏绑定组过滤。 -->
+      <MapCenter v-else-if="c.component === 'MapCenter'"
+                 :map-points="mapPoints"
+                 :map-config="mapConfig || c.propValue"
+                 :profiles="profiles"
+                 :map-payload="mapPayload" />
       <component v-else :is="widgetOf(c.component)" :element="c" mode="runtime" />
     </div>
   </div>
@@ -28,6 +32,9 @@ import { canvasBackgroundStyle, componentBackgroundStyle } from '@/views/screen/
 const props = defineProps({
   renderPackage: { type: Object, default: () => ({ components: [], bindSnapshots: {}, canvasStyle: {} }) },
   mapPoints: { type: Array, default: () => [] },
+  mapConfig: { type: Object, default: null },
+  profiles: { type: Array, default: () => [] },
+  mapPayload: { type: Object, default: null },
   context: { type: Object, default: () => ({}) }
 });
 /**

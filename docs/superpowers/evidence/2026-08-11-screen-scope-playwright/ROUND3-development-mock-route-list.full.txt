@@ -1,0 +1,22 @@
+官方 playwright-cli 干净会话 screen-round3-proof-clean 的完整 route pattern 清单。
+每一条的可直接复跑、未截断 status/content-type/body 命令见同目录 ROUND3-development-mock-routes.sh；该脚本是本清单的完整 body manifest。
+
+01. **/favicon.svg | status=200 | content-type=image/svg+xml
+02. **/api/auth/current-user | status=200 | content-type=application/json
+03. **/api/auth/my-menus | status=200 | content-type=application/json
+04. **/api/auth/permissions | status=200 | content-type=application/json
+05. **/api/notifications/unread-count | status=200 | content-type=application/json
+06. **/api/perf/metrics* | status=200 | content-type=application/json
+07. **/api/screen/admin/kpi-schemes | status=200 | content-type=application/json
+08. **/api/admin/org-groups | status=200 | content-type=application/json
+09. **/api/screen/admin/datasources* | status=200 | content-type=application/json
+10. **/api/screen/admin/screens | status=200 | content-type=application/json
+11. **/api/screen/admin/canvas/101 | status=200 | content-type=application/json
+12. **/api/screen/admin/canvas/save | status=200 | content-type=application/json
+13. **/api/screen/admin/canvas/publish | status=200 | content-type=application/json
+14. **/api/screen/admin/canvas/rollback | status=200 | content-type=application/json
+15. **/api/screen/admin/canvas/101/publish-logs | status=200 | content-type=application/json
+16. **/api/screen/admin/screens/101/metadata | status=200 | content-type=application/json
+17. **/api/admin/org-profiles* | status=200 | content-type=application/json
+18. **/api/admin/roles/all* | status=200 | content-type=application/json
+19. **/api/screen/admin/screens/101/access-roles | status=200 | content-type=application/json

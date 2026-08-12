@@ -1,0 +1,46 @@
+Round 2 recovery — exact sensitive temporary-log removal.
+
+Precondition: the controlled browser, Vite, and Maven/backend processes had already been stopped. A read-only listener check for 18082/8092/30523 reported no listener before this step.
+
+Only the exact directory created by this recovery was inspected:
+
+/tmp/yiti-screen-scope-round2-Erv2w0
+
+File-name/size listing before removal (content not printed):
+
+branch-platform-error.log	0 bytes
+branch-platform.log	738450 bytes
+ishealth.body	1 bytes
+
+Exact non-printing pattern scan command:
+
+rg -l -i 'password=|token=|authorization:|cookie:|loginreqdto|authcontroller\.login' /tmp/yiti-screen-scope-round2-Erv2w0/*
+
+Raw stdout (file name only):
+
+/tmp/yiti-screen-scope-round2-Erv2w0/branch-platform.log
+
+The matched log content was not copied into evidence. Under explicit authorization, only that exact file was removed; no directory, glob, unrelated file, or existing process was touched:
+
+rm -f /tmp/yiti-screen-scope-round2-Erv2w0/branch-platform.log
+test ! -e /tmp/yiti-screen-scope-round2-Erv2w0/branch-platform.log
+
+Post-removal file-name/size listing:
+
+branch-platform-error.log	0 bytes
+ishealth.body	1 bytes
+
+The removed path no longer exists and is not recoverable from this controlled temporary directory. The remaining 0-byte error log and 1-byte health body did not match the non-printing authentication-field scan.
+
+Final read-only port check raw stdout:
+
+State Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+State Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+
+Conclusion: 18082, 8092, and 30523 had no listener or TCP connection after stop and after exact log removal.
+
+Final textual evidence value-bearing sensitive-pattern scan (file names only, no matching content printed):
+
+rg --pcre2 -l -i 'password=(?!<present>|present\b)[A-Za-z0-9]{4,}|username=(?!<present>|present\b)[A-Za-z0-9]{4,}|token=[A-Za-z0-9_-]{8,}|(?:set-cookie|cookie|authorization):[[:space:]]*[A-Za-z0-9]|jsessionid=[A-Za-z0-9_-]+' docs/superpowers/evidence/2026-08-12-screen-scope-real-e2e/round2-recovery-*
+
+Raw result: exit 1; stdout empty. This scan covers the added Round 2 textual evidence. Screenshots were captured before credential submission or on read-only in-scope pages and contain no Cookie/session/password overlay.

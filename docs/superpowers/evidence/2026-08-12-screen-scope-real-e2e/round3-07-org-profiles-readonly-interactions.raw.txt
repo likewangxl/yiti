@@ -1,0 +1,24 @@
+# Round 3 机构经营画像交互（忠实选择性 CLI 转录）
+
+打开 #/screen-admin/org-profiles 后，页面列出外部机构行；但本地画像字段为空，机构性质、经营等级、城市和 GCJ-02 坐标均显示空值。最小数据库快照中 PT_ORG_PROFILE COUNT(*)=0，因此这不是已有本地画像记录；它解释了设计器地图的 fail-close。
+
+截图：
+
+- round3-org-profiles-initial.png
+- round3-org-profiles-filtered.png
+- round3-org-profiles-edit-dialog.png
+
+对“西安分行”做筛选：
+
+~~~text
+GET /api/admin/org-profiles?keyword=<URL 编码的本地筛选词> => 200
+~~~
+
+随后打开一条“编辑画像”对话框，仅查看。对话框显示外部机构字段只读、本地字段和“变更原因”为空、坐标系固定为 GCJ-02。未改字段、未填变更原因、点击“取消”。之后清空筛选并点击查询复位：
+
+~~~text
+GET /api/admin/org-profiles => 200
+~~~
+
+打开编辑弹窗时 console 有 2 条 Element Plus radio deprecated warnings，均为 warning；全程 0 errors。没有保存或其他写请求。
+

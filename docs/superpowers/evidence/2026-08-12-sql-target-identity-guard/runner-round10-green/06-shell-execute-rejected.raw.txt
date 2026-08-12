@@ -1,0 +1,8 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T21:43:52.289791Z
+COMMAND /usr/bin/bash docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh --manifest /tmp/round10-no-manifest.json --execute
+SHA256 9e53b6c5b4b475f10d5fb591d416855504599780d8a9d2e1556b38e13d4dcb6a /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh
+EXIT_CODE 64
+UTC_FINISHED 2026-08-11T21:43:52.291665Z
+--- RAW_STDOUT_STDERR ---
+FAIL-CLOSED: 普通 shell 入口永久拒绝 --execute；请由 root-managed systemd unit 启动

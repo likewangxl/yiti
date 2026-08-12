@@ -3,6 +3,7 @@ package com.bank.branch.platform.soap.config;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -15,9 +16,13 @@ import org.springframework.stereotype.Component;
  * {@code "0"} 才视为成功——{@code "1"} / 超时 / 未知均按间隔重试，成功后日志输出「微服务注册成功」。</p>
  *
  * <p>检查在独立守护线程异步执行，<b>不阻塞</b> Spring 启动完成回调与 Netty 端口监听。</p>
+ *
+ * <p>当 {@code platform.sidecar.registration.enabled=false} 时不装配本组件，从而不会创建
+ * 注册重试线程，也不会在停机时调用边车 {@code /down}；属性缺省时保持既有注册行为。</p>
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "platform.sidecar.registration.enabled", havingValue = "true", matchIfMissing = true)
 public class SidecarRegistrationChecker {
 
     private final SidecarProbe probe;
