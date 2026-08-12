@@ -1,34 +1,65 @@
 <template>
-  <div class="ab-page">
-    <div class="page-h">
-      <PageTitle><span class="sub">模糊搜索 · 60 天未更新提醒 · 勾选产品反向更新产品库</span></PageTitle>
-      <div class="actions">
-        <el-button @click="downloadTemplate">📥 下载模板</el-button>
-        <el-upload ref="importUploaderRef" :auto-upload="false" :show-file-list="false" accept=".xlsx,.xls" :on-change="onImportPick" style="display:inline-block">
-          <el-button :loading="importing">📤 导入</el-button>
+  <main class="bp-crud ab-page" aria-labelledby="address-book-title">
+    <header class="page-h">
+      <PageTitle id="address-book-title"><span class="sub">模糊搜索、60 天未更新提醒，负责产品会反向更新产品库</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="通讯录操作">
+        <el-button @click="downloadTemplate">下载模板</el-button>
+        <el-upload
+          ref="importUploaderRef"
+          :auto-upload="false"
+          :show-file-list="false"
+          :disabled="importing"
+          accept=".xlsx,.xls"
+          :on-change="onImportPick"
+          style="display:inline-block"
+        >
+          <el-button aria-label="导入通讯录文件" :loading="importing" :disabled="importing">导入</el-button>
         </el-upload>
         <el-button @click="exportData">导出</el-button>
       </div>
-    </div>
+    </header>
 
-    <div class="card-section">
-      <el-form :inline="true" class="filter-bar">
+    <section class="card-section filter-bar" aria-label="通讯录筛选">
+      <el-form class="filter-form" :inline="true" aria-label="通讯录筛选">
         <el-form-item label="搜索">
-          <el-input v-model="filters.keyword" placeholder="姓名 / 工号 / 联系方式" clearable style="width:220px"
-                    @keyup.enter="reload" @clear="reload" />
+          <el-input
+            v-model="filters.keyword"
+            aria-label="按姓名工号或联系方式筛选"
+            placeholder="姓名 / 工号 / 联系方式"
+            clearable
+            style="width:220px"
+            @keyup.enter="reload"
+            @clear="reload"
+          />
         </el-form-item>
         <el-form-item label="组织节点">
-          <el-tree-select v-model="filters.orgCode" :data="orgTree" check-strictly clearable
-                          filterable :filter-node-method="orgFilter"
-                          :props="{ label: 'name', value: 'code', children: 'children' }"
-                          placeholder="选择 / 输入机构编号或名称" style="width:240px" @change="reload" />
+          <el-tree-select
+            v-model="filters.orgCode"
+            aria-label="按组织节点筛选"
+            :data="orgTree"
+            check-strictly
+            clearable
+            filterable
+            :filter-node-method="orgFilter"
+            :props="{ label: 'name', value: 'code', children: 'children' }"
+            placeholder="选择 / 输入机构编号或名称"
+            style="width:240px"
+            @change="reload"
+          />
         </el-form-item>
         <el-form-item label="岗位">
-          <el-input v-model="filters.position" placeholder="全部" clearable style="width:150px"
-                    @keyup.enter="reload" @clear="reload" />
+          <el-input
+            v-model="filters.position"
+            aria-label="按岗位筛选"
+            placeholder="全部"
+            clearable
+            style="width:150px"
+            @keyup.enter="reload"
+            @clear="reload"
+          />
         </el-form-item>
         <el-form-item label="负责产品">
-          <el-select v-model="filters.productId" placeholder="全部" clearable filterable style="width:180px">
+          <el-select v-model="filters.productId" aria-label="按负责产品筛选" placeholder="全部" clearable filterable style="width:180px">
             <el-option v-for="p in products" :key="p.id" :value="p.id" :label="p.productName" />
           </el-select>
         </el-form-item>
@@ -40,13 +71,34 @@
           <el-button @click="resetFilters">重置</el-button>
         </el-form-item>
       </el-form>
-    </div>
+    </section>
 
-    <div class="card-section">
-      <el-table :data="viewRows" v-loading="loading" empty-text="暂无员工">
+    <section
+      class="card-section data-panel"
+      aria-label="通讯录列表"
+      aria-describedby="address-book-state"
+      :aria-busy="loading ? 'true' : 'false'"
+    >
+      <div class="toolbar">
+        <div>
+          <h2 id="address-book-heading" class="section-title">通讯录列表</h2>
+          <p class="hint">联系方式、自我描述和负责产品可在编辑抽屉中维护。</p>
+        </div>
+        <p id="address-book-state" class="table-state" role="status" aria-live="polite">
+          {{ loading ? '通讯录列表加载中' : viewRows.length ? `当前页展示 ${viewRows.length} 名员工` : '暂无员工数据' }}
+        </p>
+      </div>
+
+      <el-table
+        :data="viewRows"
+        v-loading="loading"
+        empty-text="暂无员工数据"
+        aria-labelledby="address-book-heading"
+        aria-describedby="address-book-state"
+      >
         <el-table-column label="姓名" width="150">
           <template #default="{row}">
-            <span class="avatar">{{ (row.empName || '?').charAt(0) }}</span>
+            <span class="avatar" aria-hidden="true">{{ (row.empName || '?').charAt(0) }}</span>
             <span class="name">{{ row.empName }}</span>
           </template>
         </el-table-column>
@@ -72,7 +124,7 @@
         <el-table-column label="更新时间" width="180">
           <template #default="{row}">
             {{ fmtDate(row.updatedTime) }}
-            <el-tag v-if="isStale(row.updatedTime)" type="warning" effect="plain" size="small">60天未更新</el-tag>
+            <el-tag v-if="isStale(row.updatedTime)" class="tag-warning" effect="plain" size="small">60天未更新</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right">
@@ -81,18 +133,29 @@
           </template>
         </el-table-column>
       </el-table>
-      <div class="pager">
-        <el-pagination v-model:current-page="pgNo" v-model:page-size="pgSize" :page-sizes="[10,20,50]"
-                       :total="total" background layout="total, sizes, prev, pager, next" @change="reload" />
-      </div>
-    </div>
+      <nav class="pager" aria-label="通讯录列表分页">
+        <el-pagination
+          v-model:current-page="pgNo"
+          v-model:page-size="pgSize"
+          :page-sizes="[10,20,50]"
+          :total="total"
+          background
+          layout="total, sizes, prev, pager, next"
+          @change="reload"
+        />
+      </nav>
+    </section>
 
-    <!-- 编辑抽屉 -->
-    <el-drawer v-model="drawer" :title="`编辑通讯录 · ${cur?.empName || ''}`" size="840px">
+    <el-drawer v-model="drawer" class="bp-crud-dialog" :title="`编辑通讯录 · ${cur?.empName || ''}`" size="840px">
       <div v-if="cur" class="drawer-body">
-        <el-alert type="info" :closable="false" show-icon
-                  title="勾选「负责产品」将自动反向更新产品资料库的「产品负责人」字段。" style="margin-bottom:16px" />
-        <div class="sec-title">基本信息（只读）</div>
+        <el-alert
+          class="drawer-alert"
+          type="info"
+          :closable="false"
+          show-icon
+          title="勾选“负责产品”将自动反向更新产品资料库的“产品负责人”字段。"
+        />
+        <h2 class="sec-title">基本信息（只读）</h2>
         <el-descriptions :column="2" border size="small" class="ro-info">
           <el-descriptions-item label="工号">{{ cur.empId }}</el-descriptions-item>
           <el-descriptions-item label="姓名">{{ cur.empName }}</el-descriptions-item>
@@ -100,29 +163,36 @@
           <el-descriptions-item label="岗位">{{ cur.positionDesc || cur.position || '-' }}</el-descriptions-item>
         </el-descriptions>
 
-        <div class="sec-title">联系方式（可编辑）</div>
+        <h2 class="sec-title">联系方式（可编辑）</h2>
         <el-form :model="ef" label-width="60px">
           <el-row :gutter="12">
-            <el-col :span="12"><el-form-item label="电话"><el-input v-model="ef.mobile" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="邮箱"><el-input v-model="ef.email" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="电话"><el-input v-model="ef.mobile" aria-label="联系电话" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="邮箱"><el-input v-model="ef.email" aria-label="联系邮箱" /></el-form-item></el-col>
           </el-row>
         </el-form>
 
-        <div class="sec-title">负责产品（多选）</div>
-        <el-checkbox-group v-model="ef.responsibleProductIds" class="prod-checks">
+        <h2 class="sec-title">负责产品（多选）</h2>
+        <el-checkbox-group v-model="ef.responsibleProductIds" class="prod-checks" aria-label="负责产品">
           <el-checkbox v-for="p in products" :key="p.id" :value="p.id" border>{{ p.productName }}</el-checkbox>
         </el-checkbox-group>
 
-        <div class="sec-title">自我描述</div>
-        <el-input v-model="ef.selfDesc" type="textarea" :rows="4" maxlength="500" show-word-limit
-                  placeholder="个人专长等" />
+        <h2 class="sec-title">自我描述</h2>
+        <el-input
+          v-model="ef.selfDesc"
+          aria-label="自我描述"
+          type="textarea"
+          :rows="4"
+          maxlength="500"
+          show-word-limit
+          placeholder="个人专长等"
+        />
       </div>
       <template #footer>
-        <el-button @click="drawer = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+        <el-button :disabled="saving" @click="drawer = false">取消</el-button>
+        <el-button type="primary" :loading="saving" :disabled="saving" @click="save">保存</el-button>
       </template>
     </el-drawer>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -153,14 +223,12 @@ function isStale(v) {
   return (Date.now() - d.getTime()) > 60 * 24 * 3600 * 1000;
 }
 
-// 产品 id → {id, productName} 映射（products 由 supportAvailableProducts 加载）
 const productById = computed(() => {
-  const m = {};
-  for (const p of products.value) m[p.id] = p;
-  return m;
+  const map = {};
+  for (const product of products.value) map[product.id] = product;
+  return map;
 });
-// 列表「负责产品」展示：列表接口只回 responsibleProductIds（不回 responsibleProducts），
-// 故用已加载的 products 把 id 映射成名称；若后端已带 responsibleProducts 则优先用之。
+
 function rowProducts(row) {
   if (row.responsibleProducts && row.responsibleProducts.length) return row.responsibleProducts;
   return (row.responsibleProductIds || [])
@@ -168,21 +236,19 @@ function rowProducts(row) {
     .filter(Boolean);
 }
 
-// 重置筛选条件并重新查询
 function resetFilters() {
   filters.value = { keyword: '', orgCode: '', position: '', productId: '', stale60: false };
   pgNo.value = 1;
   reload();
 }
 
-// 客户端附加过滤（负责产品 / 60天未更新）—— 后端查询参不含这两项
 const viewRows = computed(() => {
   let list = rows.value;
   if (filters.value.productId) {
-    list = list.filter(r => (r.responsibleProductIds || []).includes(filters.value.productId));
+    list = list.filter(row => (row.responsibleProductIds || []).includes(filters.value.productId));
   }
   if (filters.value.stale60) {
-    list = list.filter(r => isStale(r.updatedTime));
+    list = list.filter(row => isStale(row.updatedTime));
   }
   return list;
 });
@@ -194,7 +260,8 @@ async function reload() {
       keyword: filters.value.keyword || undefined,
       orgCode: filters.value.orgCode || undefined,
       position: filters.value.position || undefined,
-      pageNo: pgNo.value, pageSize: pgSize.value
+      pageNo: pgNo.value,
+      pageSize: pgSize.value
     });
     rows.value = Array.isArray(r) ? r : (r?.records || []);
     total.value = Array.isArray(r) ? r.length : (r?.total ?? 0);
@@ -206,17 +273,16 @@ async function loadRefs() {
   try { orgTree.value = await getOrgTree() || []; } catch { orgTree.value = []; }
 }
 
-// 组织树过滤：按机构编号(code) 或 名称(name) 模糊匹配
 function orgFilter(value, data) {
   if (!value) return true;
-  const v = String(value).toLowerCase();
-  return (data.name || '').toLowerCase().includes(v) || (data.code || '').toLowerCase().includes(v);
+  const keyword = String(value).toLowerCase();
+  return (data.name || '').toLowerCase().includes(keyword) || (data.code || '').toLowerCase().includes(keyword);
 }
 
-// ---- 模板 / 导入 / 导出 ----
 function downloadTemplate() {
   window.open('/api/employees/template', '_blank');
 }
+
 function exportData() {
   const p = new URLSearchParams();
   if (filters.value.keyword) p.append('keyword', filters.value.keyword);
@@ -224,26 +290,26 @@ function exportData() {
   if (filters.value.position) p.append('position', filters.value.position);
   window.open('/api/employees/export?' + p.toString(), '_blank');
 }
+
 async function onImportPick(file) {
-  if (!file?.raw) return;
+  if (importing.value || !file?.raw) return;
   importing.value = true;
   try {
-    const n = await importEmployeesFile(file.raw);
-    ElMessage.success(`导入成功 ${n ?? ''} 条`);
+    const count = await importEmployeesFile(file.raw);
+    ElMessage.success(`导入成功 ${count ?? ''} 条`);
     reload();
   } catch (e) {
-    // 后端原子校验失败：err.message 含「第 N 行：原因」
     ElMessageBox.alert(e?.message || '导入失败', '导入失败', { type: 'error', confirmButtonText: '知道了' });
   } finally {
     importing.value = false;
-    importUploaderRef.value?.clearFiles(); // 清空已选文件，保证可重复选同名/不同文件
+    importUploaderRef.value?.clearFiles();
   }
 }
 
-// ---- 编辑抽屉 ----
 const drawer = ref(false);
 const cur = ref(null);
 const ef = ref({ mobile: '', email: '', selfDesc: '', responsibleProductIds: [] });
+
 function openEdit(row) {
   cur.value = row;
   ef.value = {
@@ -254,13 +320,15 @@ function openEdit(row) {
   };
   drawer.value = true;
 }
+
 async function save() {
+  if (saving.value || !cur.value) return;
   saving.value = true;
   try {
     await updateEmployee(cur.value.empId, {
       mobile: ef.value.mobile,
       email: ef.value.email,
-      position: cur.value.position, // 岗位只读，原值回传
+      position: cur.value.position,
       selfDesc: ef.value.selfDesc,
       responsibleProductIds: ef.value.responsibleProductIds
     });
@@ -274,20 +342,15 @@ onMounted(() => { loadRefs(); reload(); });
 </script>
 
 <style scoped>
-.ab-page { }
-.page-h h1 { font-size: 18px; margin: 0; }
-.page-h .sub { font-size: 12px; color: #909399; font-weight: normal; margin-left: 8px; }
-.filter-bar { margin: 0; }
-.avatar { display: inline-flex; width: 26px; height: 26px; border-radius: 50%; background: var(--el-color-primary); color: #fff; align-items: center; justify-content: center; font-size: 12px; margin-right: 8px; vertical-align: middle; }
+.avatar { align-items: center; background: var(--color-brand-700); color: var(--color-surface); display: inline-flex; font-size: 12px; height: 26px; justify-content: center; margin-right: var(--space-2); vertical-align: middle; width: 26px; }
 .name { vertical-align: middle; }
-.muted { color: #909399; font-size: 12px; }
-.prod-tag { margin: 0 4px 4px 0; }
-.pager { margin-top: 12px; text-align: right; }
-.sec-title { font-size: 13px; font-weight: 600; color: #303133; margin: 16px 0 10px; }
-.ro-info { margin-bottom: 4px; }
-/* 基本信息两列等宽：固定布局 + 统一 label 宽度，两个 content 单元格平分剩余宽度 */
+.muted { color: var(--color-text-muted); font-size: 12px; line-height: 18px; }
+.prod-tag { margin: 0 var(--space-1) var(--space-1) 0; }
+.drawer-alert { margin-bottom: var(--space-4); }
+.sec-title { color: var(--color-text-strong); font-size: 14px; font-weight: 600; line-height: 22px; margin: var(--space-4) 0 var(--space-2); }
+.ro-info { margin-bottom: var(--space-1); }
 .ro-info :deep(.el-descriptions__table) { table-layout: fixed; width: 100%; }
 .ro-info :deep(.el-descriptions__label) { width: 90px; }
-.prod-checks { display: flex; flex-wrap: wrap; gap: 8px; }
+.prod-checks { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .prod-checks :deep(.el-checkbox) { margin-right: 0; }
 </style>
