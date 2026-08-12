@@ -28,9 +28,9 @@
       </div>
 
       <div class="nav-groups" aria-labelledby="nav-hub-heading">
-        <section v-for="g in groups" :key="g.category" class="nav-group" :aria-labelledby="`nav-group-${g.category || 'ungrouped'}`">
+        <section v-for="(g, groupIndex) in groups" :key="g.category" class="nav-group" :aria-labelledby="`nav-group-${groupIndex + 1}`">
           <div class="group-h">
-            <h3 :id="`nav-group-${g.category || 'ungrouped'}`" class="group-name">{{ g.category || '未分组' }}</h3>
+            <h3 :id="`nav-group-${groupIndex + 1}`" class="group-name">{{ g.category || '未分组' }}</h3>
             <span class="group-count">{{ g.navs.length }} 个网址</span>
           </div>
           <div class="card-grid">
