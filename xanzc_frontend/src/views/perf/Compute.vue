@@ -1,23 +1,23 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle><span class="sub">手工触发 / 回算 / 快照</span></PageTitle>
-      <div class="actions">
-        <el-button @click="reload">刷新</el-button>
-        <el-button type="primary" @click="openTrigger">▶ 触发计算</el-button>
+  <main class="bp-crud perf-compute-page" aria-labelledby="perf-compute-page-title" :aria-busy="logLoading || trgDlg.saving ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="perf-compute-page-title"><span class="sub">手工触发 / 回算 / 快照 · 运行审计与结果追踪</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="绩效计算操作">
+        <el-button :loading="logLoading" :disabled="logLoading || trgDlg.saving" @click="reload">刷新</el-button>
+        <el-button type="primary" :disabled="trgDlg.saving" @click="openTrigger">触发计算</el-button>
       </div>
-    </div>
+    </header>
 
-    <div class="stats">
+    <section class="stats" aria-label="KPI 计算概览" aria-live="polite">
       <div class="stat"><div class="label">本月计算任务</div><div class="value">{{ s.tasks }}</div></div>
-      <div class="stat"><div class="label">成功</div><div class="value" style="color:#16A34A">{{ s.ok }}</div></div>
-      <div class="stat"><div class="label">失败</div><div class="value" style="color:#DC2626">{{ s.fail }}</div></div>
+      <div class="stat stat-success"><div class="label">最近成功</div><div class="value">{{ s.ok }}</div></div>
+      <div class="stat stat-danger"><div class="label">最近失败</div><div class="value">{{ s.fail }}</div></div>
       <div class="stat"><div class="label">最近耗时</div><div class="value">{{ s.lastDuration }}</div></div>
-    </div>
+    </section>
 
     <!-- 查询条件：数据日期 + KPI方案 -->
-    <div class="card-section">
-      <el-form :inline="true" size="default">
+    <section class="card-section data-panel filter-bar" aria-label="KPI 计算记录筛选">
+      <el-form :inline="true" size="default" aria-label="KPI 计算记录筛选">
         <el-form-item label="数据日期">
           <el-date-picker v-model="logQuery.dataDate" type="date" value-format="YYYY-MM-DD"
             placeholder="选择数据日期" clearable style="width:180px" />
@@ -32,10 +32,24 @@
           <el-button @click="onResetLogs">重置</el-button>
         </el-form-item>
       </el-form>
-    </div>
+    </section>
 
-    <div class="card-section">
-      <el-table ref="logTableRef" :data="logRows" size="default" v-loading="logLoading" empty-text="暂无记录"
+    <section class="card-section data-panel" aria-label="KPI 计算记录" aria-labelledby="perf-compute-log-heading"
+      aria-describedby="perf-compute-log-state" :aria-busy="logLoading ? 'true' : 'false'">
+      <div class="toolbar">
+        <div>
+          <h2 id="perf-compute-log-heading" class="section-title">KPI 计算记录</h2>
+          <p class="hint">按方案查看结果；勾选同一批记录后可批量触发重算。</p>
+        </div>
+        <p id="perf-compute-log-state" class="table-state" role="status" aria-live="polite">{{ logState }}</p>
+      </div>
+      <div v-if="logError" class="table-error" role="alert">
+        <span>{{ logError }}</span>
+        <el-button link type="primary" @click="loadLogs">重新加载</el-button>
+      </div>
+      <el-table ref="logTableRef" :data="logRows" size="default" v-loading="logLoading"
+        :empty-text="logError ? '加载失败，请重新加载' : '暂无计算记录'"
+        aria-labelledby="perf-compute-log-heading" aria-describedby="perf-compute-log-state"
         @selection-change="onLogSelChange">
         <el-table-column type="selection" width="45" />
         <el-table-column label="数据日期" width="120">
@@ -83,15 +97,15 @@
           <template #default="{row}">{{ fmtTime(row.endTime) }}</template>
         </el-table-column>
       </el-table>
-      <div class="pager">
+      <nav class="pager" aria-label="KPI 计算记录分页">
         <el-pagination v-model:current-page="logPgNo" v-model:page-size="logPgSize" :page-sizes="[10,20,50]"
           :total="logTotal" background layout="total, sizes, prev, pager, next"
           @current-change="loadLogs" @size-change="onLogSizeChange" />
-      </div>
-    </div>
+      </nav>
+    </section>
 
     <!-- 触发计算 弹框：KPI方案取自列表勾选行（去重），确认数据日期 + 触发原因 → 逐方案调 KPI 计算服务（先记审计日志再计算） -->
-    <el-dialog v-model="trgDlg.show" title="确认触发 KPI 计算" width="520px" :close-on-click-modal="false">
+    <el-dialog v-model="trgDlg.show" class="bp-crud-dialog" title="确认触发 KPI 计算" width="520px" :close-on-click-modal="false" :close-on-press-escape="!trgDlg.saving" aria-label="确认触发 KPI 计算">
       <el-alert type="warning" :closable="false" show-icon style="margin-bottom:14px"
         :title="`该操作将基于所选数据日期的指标结果与目标值，批量重算已勾选的 ${trgDlg.schemes.length} 个 KPI 方案得分。`" />
       <el-form :model="trgDlg.form" label-position="top" size="default">
@@ -152,7 +166,7 @@
       </template>
     </el-dialog>
 
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -236,6 +250,14 @@ const logTotal = ref(0);
 const logPgNo = ref(1);
 const logPgSize = ref(20);
 const logLoading = ref(false);
+const logError = ref('');
+const logState = computed(() => logLoading.value
+  ? 'KPI 计算记录加载中'
+  : logError.value
+    ? 'KPI 计算记录加载失败'
+    : logRows.value.length
+      ? `共 ${logTotal.value} 条计算记录`
+      : '暂无计算记录');
 const schemeSelOptions = ref([]);
 const schemeNameMap = ref({});
 // 列表勾选：批量触发计算的数据源（方案编码从勾选行去重得到）
@@ -263,6 +285,7 @@ async function loadSchemeOptions() {
 }
 async function loadLogs() {
   logLoading.value = true;
+  logError.value = '';
   try {
     const r = await listKpiCalcLogs({
       dataDate: logQuery.dataDate || undefined,
@@ -271,7 +294,11 @@ async function loadLogs() {
     });
     logRows.value = r?.records || [];
     logTotal.value = r?.total ?? logRows.value.length;
-  } catch {} finally { logLoading.value = false; }
+  } catch (error) {
+    logRows.value = [];
+    logTotal.value = 0;
+    logError.value = `KPI 计算记录加载失败：${error?.message || '请稍后重试'}`;
+  } finally { logLoading.value = false; }
 }
 function onQueryLogs() { logPgNo.value = 1; loadLogs(); }
 function onResetLogs() { logQuery.dataDate = ''; logQuery.schemeCode = ''; logPgNo.value = 1; loadLogs(); }
@@ -461,7 +488,14 @@ onMounted(async () => { loadSchemeOptions(); await initDefaultLogDate(); reload(
 
 <style lang="scss" scoped>
 .page-h h1 .sub { font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400; }
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-3); }
+.stat-success .value { color: var(--color-success-fg); }
+.stat-danger .value { color: var(--color-danger-fg); }
+.toolbar { align-items: flex-start; display: flex; justify-content: space-between; gap: var(--space-4); padding-bottom: var(--space-3); }
+.section-title { color: var(--color-text-strong); font-size: 16px; font-weight: 600; line-height: 24px; margin: 0; }
+.hint { color: var(--color-text-muted); font-size: 12px; line-height: 18px; margin: 4px 0 0; }
+.table-state { color: var(--color-text-muted); font-size: 12px; margin: 2px 0 0; white-space: nowrap; }
+.table-error { align-items: center; background: var(--color-danger-bg); border-left: 3px solid var(--color-danger-fg); color: var(--color-danger-fg); display: flex; font-size: 12px; gap: var(--space-3); justify-content: space-between; margin-bottom: var(--space-3); padding: var(--space-2) var(--space-3); }
 
 .snap-h {
   font-size: 14px; font-weight: 600; color: $text-1;
@@ -479,4 +513,7 @@ onMounted(async () => { loadSchemeOptions(); await initDefaultLogDate(); reload(
 }
 .pager { display: flex; justify-content: flex-end; padding: 12px 0; }
 .pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
+@media (prefers-reduced-motion: reduce) {
+  :where(.perf-compute-page) :deep(*) { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
 </style>

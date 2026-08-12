@@ -1,19 +1,19 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle><span class="sub">指标重算任务 · 按指标汇总 / 执行 / 历史</span></PageTitle>
-      <div class="actions">
-        <el-button @click="reload">刷新</el-button>
-        <el-button type="primary" @click="openAdd">新增</el-button>
-        <el-button type="warning" :disabled="selected.length === 0" @click="openBatch">
+  <main class="bp-crud perf-task-monitor-page" aria-labelledby="perf-task-monitor-page-title" :aria-busy="loading || execDlg.submitting || batchDlg.submitting ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="perf-task-monitor-page-title"><span class="sub">指标重算任务 · 按指标汇总 / 执行 / 历史</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="指标重算任务操作">
+        <el-button :loading="loading" :disabled="loading || execDlg.submitting || batchDlg.submitting" @click="reload">刷新</el-button>
+        <el-button type="primary" :disabled="execDlg.submitting || batchDlg.submitting" @click="openAdd">新增</el-button>
+        <el-button type="warning" :disabled="selected.length === 0 || execDlg.submitting || batchDlg.submitting" @click="openBatch">
           批量执行{{ selected.length ? `（${selected.length}）` : '' }}
         </el-button>
       </div>
-    </div>
+    </header>
 
     <!-- 过滤：任务类型（字典）+ 指标关键字 -->
-    <div class="card-section">
-      <el-form :inline="true" size="default">
+    <section class="card-section data-panel filter-bar" aria-label="指标重算任务筛选">
+      <el-form :inline="true" size="default" aria-label="指标重算任务筛选">
         <el-form-item label="任务类型">
           <el-select v-model="query.taskType" style="width:160px">
             <el-option v-for="t in taskTypes" :key="t.value" :label="t.label" :value="t.value" />
@@ -28,10 +28,24 @@
           <el-button @click="onReset">重置</el-button>
         </el-form-item>
       </el-form>
-    </div>
+    </section>
 
-    <div class="card-section table">
-      <el-table ref="tableRef" :data="rows" size="default" v-loading="loading" empty-text="暂无任务记录"
+    <section class="card-section data-panel table" aria-label="指标重算任务列表" aria-labelledby="perf-task-monitor-table-heading"
+      aria-describedby="perf-task-monitor-table-state" :aria-busy="loading ? 'true' : 'false'">
+      <div class="toolbar">
+        <div>
+          <h2 id="perf-task-monitor-table-heading" class="section-title">指标重算任务</h2>
+          <p class="hint">批量操作会写入审计日志；执行进度可在对应指标的历史中查看。</p>
+        </div>
+        <p id="perf-task-monitor-table-state" class="table-state" role="status" aria-live="polite">{{ taskState }}</p>
+      </div>
+      <div v-if="loadError" class="table-error" role="alert">
+        <span>{{ loadError }}</span>
+        <el-button link type="primary" @click="reload">重新加载</el-button>
+      </div>
+      <el-table ref="tableRef" :data="rows" size="default" v-loading="loading"
+        :empty-text="loadError ? '加载失败，请重新加载' : '暂无任务记录'"
+        aria-labelledby="perf-task-monitor-table-heading" aria-describedby="perf-task-monitor-table-state"
         @selection-change="onSelectionChange" row-key="metricCode">
         <el-table-column type="selection" width="46" reserve-selection />
         <el-table-column label="指标" min-width="280" show-overflow-tooltip>
@@ -53,7 +67,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <div class="pager">
+      <nav class="pager" aria-label="指标重算任务分页">
         <el-pagination
           v-model:current-page="pageNo"
           v-model:page-size="pageSize"
@@ -64,8 +78,8 @@
           @current-change="reload"
           @size-change="() => { pageNo = 1; reload(); }"
         />
-      </div>
-    </div>
+      </nav>
+    </section>
 
     <!-- 新增 / 执行 共用对话框 -->
     <el-dialog v-model="execDlg.show" :title="execDlg.lockMetric ? '执行' : '新增'"
@@ -91,11 +105,11 @@
         <el-form-item label="原因" required>
           <el-input v-model="execDlg.reason" type="textarea" :rows="3" placeholder="高危操作，必填原因" />
         </el-form-item>
-        <div class="audit-hint">⚠ 提交后由后台执行，进度见「历史」；将写入 run_task 并记入审计日志</div>
+        <div class="audit-hint">提示：提交后由后台执行，进度见「历史」；将写入 run_task 并记入审计日志</div>
       </el-form>
       <template #footer>
         <el-button @click="execDlg.show = false">取消</el-button>
-        <el-button type="primary" :loading="execDlg.submitting" @click="confirmExecute">确认执行</el-button>
+        <el-button type="primary" :loading="execDlg.submitting" :disabled="execDlg.submitting" @click="confirmExecute">确认执行</el-button>
       </template>
     </el-dialog>
 
@@ -112,11 +126,11 @@
         <el-form-item label="原因" required>
           <el-input v-model="batchDlg.reason" type="textarea" :rows="3" placeholder="一条原因套用整批，高危必填" />
         </el-form-item>
-        <div class="audit-hint">⚠ 逐指标提交后台执行，整批记入一条审计</div>
+        <div class="audit-hint">提示：逐指标提交后台执行，整批记入一条审计</div>
       </el-form>
       <template #footer>
         <el-button @click="batchDlg.show = false">取消</el-button>
-        <el-button type="primary" :loading="batchDlg.submitting" @click="confirmBatch">确认执行</el-button>
+        <el-button type="primary" :loading="batchDlg.submitting" :disabled="batchDlg.submitting" @click="confirmBatch">确认执行</el-button>
       </template>
     </el-dialog>
 
@@ -153,11 +167,11 @@
         />
       </div>
     </el-drawer>
-  </div>
+  </main>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { listMetricSummary, batchExecuteMetrics, executeMetric, listMetrics, listRunTasks } from '@/api/perf';
 import { listDictItems } from '@/api/system';
@@ -195,15 +209,24 @@ const query = reactive({ taskType: 'METRIC_RECALC', keyword: '' });
 const rows = ref([]);
 const total = ref(0);
 const loading = ref(false);
+const loadError = ref('');
 const pageNo = ref(1);
 const pageSize = ref(20);
 const selected = ref([]);
 const tableRef = ref(null);
 
 function onSelectionChange(sel) { selected.value = sel; }
+const taskState = computed(() => loading.value
+  ? '指标重算任务加载中'
+  : loadError.value
+    ? '指标重算任务加载失败'
+    : rows.value.length
+      ? `共 ${total.value} 个指标任务`
+      : '暂无指标重算任务');
 
 async function reload() {
   loading.value = true;
+  loadError.value = '';
   try {
     const r = await listMetricSummary({
       taskType: TASK_TYPE_TO_BACKEND[query.taskType] || 'METRIC_RUN',
@@ -213,7 +236,11 @@ async function reload() {
     });
     rows.value = r?.records || [];
     total.value = r?.total ?? rows.value.length;
-  } catch { /* http 拦截器已提示 */ } finally { loading.value = false; }
+  } catch (error) {
+    rows.value = [];
+    total.value = 0;
+    loadError.value = `指标重算任务加载失败：${error?.message || '请稍后重试'}`;
+  } finally { loading.value = false; }
 }
 function onSearch() { pageNo.value = 1; reload(); }
 function onReset() { query.taskType = 'METRIC_RECALC'; query.keyword = ''; pageNo.value = 1; reload(); }
@@ -333,10 +360,18 @@ onMounted(async () => {
 <style lang="scss" scoped>
 .page-h h1 .sub { font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400; }
 .table { padding: 0; padding-bottom: 12px; }
+.toolbar { align-items: flex-start; display: flex; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) var(--space-4) var(--space-3); }
+.section-title { color: var(--color-text-strong); font-size: 16px; font-weight: 600; line-height: 24px; margin: 0; }
+.hint { color: var(--color-text-muted); font-size: 12px; line-height: 18px; margin: 4px 0 0; }
+.table-state { color: var(--color-text-muted); font-size: 12px; margin: 2px 0 0; white-space: nowrap; }
+.table-error { align-items: center; background: var(--color-danger-bg); border-left: 3px solid var(--color-danger-fg); color: var(--color-danger-fg); display: flex; font-size: 12px; gap: var(--space-3); justify-content: space-between; margin: 0 var(--space-4) var(--space-3); padding: var(--space-2) var(--space-3); }
 .pager { display: flex; justify-content: flex-end; padding: 12px 14px; }
 .pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; background: $bg-soft; padding: 2px 6px; border-radius: 3px; }
 .sub-name { color: $text-2; font-size: 13px; }
 .audit-hint { font-size: 12px; color: #999; margin-left: 100px; }
 .err-inline { color: #991b1b; font-size: 12px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: reduce) {
+  :where(.perf-task-monitor-page) :deep(*) { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
 </style>
