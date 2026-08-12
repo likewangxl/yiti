@@ -1,0 +1,89 @@
+{
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "count": 4,
+  "rows": [
+    {
+      "path": "/eval/user-tags",
+      "finalUrl": "http://127.0.0.1:8091/#/eval/user-tags",
+      "h1": [
+        "人员标签每人单选一个评价角色，并控制是否参与评价"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/eval/rules",
+      "finalUrl": "http://127.0.0.1:8091/#/eval/rules",
+      "h1": [
+        "评价规则按评价对象配置评价人组、权重和评分方式"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/eval/tasks",
+      "finalUrl": "http://127.0.0.1:8091/#/eval/tasks",
+      "h1": [
+        "评价任务发起评价活动并管理任务生命周期"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/eval/my-tasks",
+      "finalUrl": "http://127.0.0.1:8091/#/eval/my-tasks",
+      "h1": [
+        "我的评价按部门汇总待办，并逐人完成评价或奖励分配"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    }
+  ]
+}

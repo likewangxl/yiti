@@ -1,0 +1,89 @@
+{
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "count": 4,
+  "rows": [
+    {
+      "path": "/system/config",
+      "finalUrl": "http://127.0.0.1:8091/#/system/config",
+      "h1": [
+        "流程配置维护已部署流程的节点候选人、表单字段与 SLA 阈值。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/files",
+      "finalUrl": "http://127.0.0.1:8091/#/system/files",
+      "h1": [
+        "文件管理集中查看已上传的业务附件；上传仍在所属业务单据中完成。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/timeout-rules",
+      "finalUrl": "http://127.0.0.1:8091/#/system/timeout-rules",
+      "h1": [
+        "超时规则管理业务流程节点的预警与超时阈值，时间单位为工作小时。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/announcements",
+      "finalUrl": "http://127.0.0.1:8091/#/system/announcements",
+      "h1": [
+        "公告管理"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    }
+  ]
+}

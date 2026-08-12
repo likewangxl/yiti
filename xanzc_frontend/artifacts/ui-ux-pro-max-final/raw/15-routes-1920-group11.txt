@@ -1,0 +1,153 @@
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/system/config
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 1 errors, 185 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-30-28-150Z.log#L1-L15
+{
+  "path": "/system/config",
+  "finalUrl": "http://127.0.0.1:8091/#/system/config",
+  "h1": [
+    "流程配置维护已部署流程的节点候选人、表单字段与 SLA 阈值。"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 1920,
+  "clientWidth": 1920,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}
+### ROUTE /system/files
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/system/files');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/system/files
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 1 errors, 185 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-30-31-262Z.yml)
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/system/files
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 1 errors, 180 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-30-31-234Z.log#L1-L15
+{
+  "path": "/system/files",
+  "finalUrl": "http://127.0.0.1:8091/#/system/files",
+  "h1": [
+    "文件管理集中查看已上传的业务附件；上传仍在所属业务单据中完成。"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 1920,
+  "clientWidth": 1920,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}
+### ROUTE /system/timeout-rules
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/system/timeout-rules');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/system/timeout-rules
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 1 errors, 180 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-30-33-826Z.yml)
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/system/timeout-rules
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 1 errors, 195 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-30-33-801Z.log#L1-L15
+{
+  "path": "/system/timeout-rules",
+  "finalUrl": "http://127.0.0.1:8091/#/system/timeout-rules",
+  "h1": [
+    "超时规则管理业务流程节点的预警与超时阈值，时间单位为工作小时。"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 1920,
+  "clientWidth": 1920,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}
+### ROUTE /system/announcements
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/system/announcements');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/system/announcements
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 1 errors, 195 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-30-36-376Z.yml)
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/system/announcements
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 1 errors, 190 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-30-36-354Z.log#L1-L15
+{
+  "path": "/system/announcements",
+  "finalUrl": "http://127.0.0.1:8091/#/system/announcements",
+  "h1": [
+    "公告管理"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 1920,
+  "clientWidth": 1920,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}

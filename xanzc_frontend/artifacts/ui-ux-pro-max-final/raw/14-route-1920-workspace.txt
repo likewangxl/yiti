@@ -1,0 +1,36 @@
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/workspace');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/workspace
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 187 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-24-39-295Z.yml)
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-24-39-275Z.log#L1-L15
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+{
+  "path": "/workspace",
+  "finalUrl": "http://127.0.0.1:8091/#/workspace",
+  "h1": [
+    "工作台"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 1920,
+  "clientWidth": 1920,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}

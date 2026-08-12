@@ -1,0 +1,112 @@
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/system/workflow-flows
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 1 errors, 195 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-38-55-809Z.log#L1-L15
+{
+  "path": "/system/workflow-flows",
+  "finalUrl": "http://127.0.0.1:8091/#/system/workflow-flows",
+  "h1": [
+    "审批流程发布会生成影子流程；现有线上审批的切换与生效范围不在此页自动变更。"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 2560,
+  "clientWidth": 2560,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}
+### ROUTE /system/workflow-monitor
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/system/workflow-monitor');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/system/workflow-monitor
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 1 errors, 195 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-38-58-408Z.yml)
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/system/workflow-monitor
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 1 errors, 190 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-38-58-387Z.log#L1-L15
+{
+  "path": "/system/workflow-monitor",
+  "finalUrl": "http://127.0.0.1:8091/#/system/workflow-monitor",
+  "h1": [
+    "审批流监控秘书岗按本机构、行长按全行查看进行中和已完成的审批流实例。"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 2560,
+  "clientWidth": 2560,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}
+### ROUTE /system/person-tags
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/system/person-tags');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/system/person-tags
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 1 errors, 190 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-39-00-987Z.yml)
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/system/person-tags
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 1 errors, 185 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-39-00-951Z.log#L1-L15
+{
+  "path": "/system/person-tags",
+  "finalUrl": "http://127.0.0.1:8091/#/system/person-tags",
+  "h1": [
+    "业务标签维护可复用的员工与机构标签，支持精确成员维护和带校验的批量导入。"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 2560,
+  "clientWidth": 2560,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}

@@ -1,0 +1,89 @@
+{
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "count": 4,
+  "rows": [
+    {
+      "path": "/perf/kpi-rules",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/kpi-rules",
+      "h1": [
+        "KPI 规则配置方案、权重、计分边界与员工标签范围"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/perf/targets",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/targets",
+      "h1": [
+        "目标管理统一维护目标方案、待办审批和审批留痕"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/perf/target-values",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/target-values",
+      "h1": [
+        "目标值管理方案：MB0724 · 0724测试目标方案"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/perf/import",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/import",
+      "h1": [
+        "数据导入指标结果 / KPI 结果 · 文件导入与批次追踪"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    }
+  ]
+}

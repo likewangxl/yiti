@@ -1,0 +1,20 @@
+{
+  "path": "/workspace",
+  "finalUrl": "http://127.0.0.1:8091/#/workspace",
+  "h1": [
+    "工作台"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 1920,
+  "clientWidth": 1920,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}

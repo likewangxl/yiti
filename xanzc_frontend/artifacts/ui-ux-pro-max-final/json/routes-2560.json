@@ -1,0 +1,949 @@
+{
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "count": 47,
+  "rows": [
+    {
+      "path": "/workspace",
+      "finalUrl": "http://127.0.0.1:8091/#/workspace",
+      "h1": [
+        "工作台"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/workspace/announcements",
+      "finalUrl": "http://127.0.0.1:8091/#/workspace/announcements",
+      "h1": [
+        "公告列表"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/workspace/notifications",
+      "finalUrl": "http://127.0.0.1:8091/#/workspace/notifications",
+      "h1": [
+        "通知列表"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/info/nav",
+      "finalUrl": "http://127.0.0.1:8091/#/info/nav",
+      "h1": [
+        "网址导航科技部可新增、编辑、删除和排序网址导航"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/info/address-book",
+      "finalUrl": "http://127.0.0.1:8091/#/info/address-book",
+      "h1": [
+        "通讯录模糊搜索、60 天未更新提醒，负责产品会反向更新产品库"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/info/products",
+      "finalUrl": "http://127.0.0.1:8091/#/info/products",
+      "h1": [
+        "产品资料库中后台组织维护，产品负责人由通讯录反向关联"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/info/documents",
+      "finalUrl": "http://127.0.0.1:8091/#/info/documents",
+      "h1": [
+        "常用文档科技部维护常用文档及分类"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/perf/metrics",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/metrics",
+      "h1": [
+        "指标库定义、验证并维护绩效指标口径"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/perf/kpi-rules",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/kpi-rules",
+      "h1": [
+        "KPI 规则配置方案、权重、计分边界与员工标签范围"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/perf/targets",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/targets",
+      "h1": [
+        "目标管理统一维护目标方案、待办审批和审批留痕"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/perf/target-values",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/target-values",
+      "h1": [
+        "目标值管理方案：MB0724 · 0724测试目标方案"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/perf/import",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/import",
+      "h1": [
+        "数据导入指标结果 / KPI 结果 · 文件导入与批次追踪"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/perf/adjust",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/adjust",
+      "h1": [
+        "业绩调整比例之和 = 100% · 单行 ≥ 1% · 同一员工不重复"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/perf/compute",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/compute",
+      "h1": [
+        "考核计算手工触发 / 回算 / 快照 · 运行审计与结果追踪"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/perf/task-monitor",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/task-monitor",
+      "h1": [
+        "任务监控指标重算任务 · 按指标汇总 / 执行 / 历史"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/eval/tags",
+      "finalUrl": "http://127.0.0.1:8091/#/eval/tags",
+      "h1": [
+        "标签管理维护可用于规则和人员评价的标签"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/eval/user-tags",
+      "finalUrl": "http://127.0.0.1:8091/#/eval/user-tags",
+      "h1": [
+        "人员标签每人单选一个评价角色，并控制是否参与评价"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/eval/rules",
+      "finalUrl": "http://127.0.0.1:8091/#/eval/rules",
+      "h1": [
+        "评价规则按评价对象配置评价人组、权重和评分方式"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/eval/tasks",
+      "finalUrl": "http://127.0.0.1:8091/#/eval/tasks",
+      "h1": [
+        "评价任务发起评价活动并管理任务生命周期"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/eval/my-tasks",
+      "finalUrl": "http://127.0.0.1:8091/#/eval/my-tasks",
+      "h1": [
+        "我的评价按部门汇总待办，并逐人完成评价或奖励分配"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/report/dynamic",
+      "finalUrl": "http://127.0.0.1:8091/#/report/dynamic",
+      "h1": [
+        "动态指标查询"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/report/dashboard",
+      "finalUrl": "http://127.0.0.1:8091/#/report/dashboard",
+      "h1": [
+        "行长仪表盘"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/report/presets",
+      "finalUrl": "http://127.0.0.1:8091/#/report/presets",
+      "h1": [
+        "预置报表"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/report/free",
+      "finalUrl": "http://127.0.0.1:8091/#/report/free",
+      "h1": [
+        "数据公式"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/report/sql",
+      "finalUrl": "http://127.0.0.1:8091/#/report/sql",
+      "h1": [
+        "SQL 探查"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/report/amas-approvals",
+      "finalUrl": "http://127.0.0.1:8091/#/report/amas-approvals",
+      "h1": [
+        "业绩分配查询"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/guarantee/query",
+      "finalUrl": "http://127.0.0.1:8091/#/guarantee/query",
+      "h1": [
+        "担保查询"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/guarantee/data-import",
+      "finalUrl": "http://127.0.0.1:8091/#/guarantee/data-import",
+      "h1": [
+        "数据导入查询"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/guarantee/notice",
+      "finalUrl": "http://127.0.0.1:8091/#/guarantee/notice",
+      "h1": [
+        "公告查询"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/history/price-approval",
+      "finalUrl": "http://127.0.0.1:8091/#/history/price-approval",
+      "h1": [
+        "定价审批查询"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/history/perf-adjust",
+      "finalUrl": "http://127.0.0.1:8091/#/history/perf-adjust",
+      "h1": [
+        "业绩调整查询"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/users",
+      "finalUrl": "http://127.0.0.1:8091/#/system/users",
+      "h1": [
+        "用户管理按机构筛选 · 启停/锁解/重置密码 · 分配角色"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/roles",
+      "finalUrl": "http://127.0.0.1:8091/#/system/roles",
+      "h1": [
+        "角色管理角色 CRUD · 已绑用户查看 · 资源/数据范围请去【权限配置】"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/resources",
+      "finalUrl": "http://127.0.0.1:8091/#/system/resources",
+      "h1": [
+        "资源/菜单维护菜单层级；叶子菜单可单独配置角色访问范围。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/permission",
+      "finalUrl": "http://127.0.0.1:8091/#/system/permission",
+      "h1": [
+        "权限配置角色、资源与数据范围均以当前选中角色为准；保存会覆盖该角色原有资源绑定。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/dict",
+      "finalUrl": "http://127.0.0.1:8091/#/system/dict",
+      "h1": [
+        "字典管理按类型维护统一字典项；状态变更会立即影响引用该字典的业务页面。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/calendar",
+      "finalUrl": "http://127.0.0.1:8091/#/system/calendar",
+      "h1": [
+        "工作日历2026 年 8 月 · 仅可修改今日之后的日期。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/jobs",
+      "finalUrl": "http://127.0.0.1:8091/#/system/jobs",
+      "h1": [
+        "任务调度查看调度状态与执行日志；暂停、恢复和手动触发均直接影响线上调度。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/audit",
+      "finalUrl": "http://127.0.0.1:8091/#/system/audit",
+      "h1": [
+        "审计日志只读审计流水，保留 TraceId、请求资源、原因和原始错误信息的追溯路径。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/notifications",
+      "finalUrl": "http://127.0.0.1:8091/#/system/notifications",
+      "h1": [
+        "通知消息共 16 条通知，其中 2 条未读。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/config",
+      "finalUrl": "http://127.0.0.1:8091/#/system/config",
+      "h1": [
+        "流程配置维护已部署流程的节点候选人、表单字段与 SLA 阈值。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/files",
+      "finalUrl": "http://127.0.0.1:8091/#/system/files",
+      "h1": [
+        "文件管理集中查看已上传的业务附件；上传仍在所属业务单据中完成。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/timeout-rules",
+      "finalUrl": "http://127.0.0.1:8091/#/system/timeout-rules",
+      "h1": [
+        "超时规则管理业务流程节点的预警与超时阈值，时间单位为工作小时。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/announcements",
+      "finalUrl": "http://127.0.0.1:8091/#/system/announcements",
+      "h1": [
+        "公告管理"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/workflow-flows",
+      "finalUrl": "http://127.0.0.1:8091/#/system/workflow-flows",
+      "h1": [
+        "审批流程发布会生成影子流程；现有线上审批的切换与生效范围不在此页自动变更。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/workflow-monitor",
+      "finalUrl": "http://127.0.0.1:8091/#/system/workflow-monitor",
+      "h1": [
+        "审批流监控秘书岗按本机构、行长按全行查看进行中和已完成的审批流实例。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/person-tags",
+      "finalUrl": "http://127.0.0.1:8091/#/system/person-tags",
+      "h1": [
+        "业务标签维护可复用的员工与机构标签，支持精确成员维护和带校验的批量导入。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    }
+  ]
+}

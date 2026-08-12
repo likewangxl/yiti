@@ -1,0 +1,89 @@
+{
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "count": 4,
+  "rows": [
+    {
+      "path": "/guarantee/notice",
+      "finalUrl": "http://127.0.0.1:8091/#/guarantee/notice",
+      "h1": [
+        "公告查询"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/history/price-approval",
+      "finalUrl": "http://127.0.0.1:8091/#/history/price-approval",
+      "h1": [
+        "定价审批查询"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/history/perf-adjust",
+      "finalUrl": "http://127.0.0.1:8091/#/history/perf-adjust",
+      "h1": [
+        "业绩调整查询"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/users",
+      "finalUrl": "http://127.0.0.1:8091/#/system/users",
+      "h1": [
+        "用户管理按机构筛选 · 启停/锁解/重置密码 · 分配角色"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    }
+  ]
+}

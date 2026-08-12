@@ -1,0 +1,14 @@
+
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/workspace');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/workspace
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 30 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-40-20-126Z.yml)
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-40-20-105Z.log#L1-L15
+### Result

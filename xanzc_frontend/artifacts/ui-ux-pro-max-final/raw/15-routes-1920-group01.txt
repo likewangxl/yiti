@@ -1,0 +1,135 @@
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+{
+  "path": "/workspace",
+  "finalUrl": "http://127.0.0.1:8091/#/workspace",
+  "h1": [
+    "工作台"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 1920,
+  "clientWidth": 1920,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}
+### ROUTE /workspace/announcements
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/workspace/announcements');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/workspace/announcements
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 197 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-27-14-614Z.yml)
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-27-14-578Z.log#L1-L15
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+{
+  "path": "/workspace/announcements",
+  "finalUrl": "http://127.0.0.1:8091/#/workspace/announcements",
+  "h1": [
+    "公告列表"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 1920,
+  "clientWidth": 1920,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}
+### ROUTE /workspace/notifications
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/workspace/notifications');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/workspace/notifications
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 192 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-27-17-183Z.yml)
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-27-17-154Z.log#L1-L15
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+{
+  "path": "/workspace/notifications",
+  "finalUrl": "http://127.0.0.1:8091/#/workspace/notifications",
+  "h1": [
+    "通知列表"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 1920,
+  "clientWidth": 1920,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}
+### ROUTE /info/nav
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/info/nav');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/info/nav
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 187 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-27-19-740Z.yml)
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-27-19-717Z.log#L1-L15
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+{
+  "path": "/info/nav",
+  "finalUrl": "http://127.0.0.1:8091/#/info/nav",
+  "h1": [
+    "网址导航科技部可新增、编辑、删除和排序网址导航"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 1920,
+  "clientWidth": 1920,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}

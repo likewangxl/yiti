@@ -1,0 +1,25 @@
+### Browser `uiux-login1920` opened with pid 423874.
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/login?normal');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/login?normal
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-41-45-722Z.yml)
+### Ran Playwright code
+```js
+await page.setViewportSize({ width: 1920, height: 1080 });
+```
+### Result
+- [Screenshot of viewport](artifacts/ui-ux-pro-max-final/screenshots/login-1920x1080.png)
+### Ran Playwright code
+```js
+// Screenshot viewport and save it as artifacts/ui-ux-pro-max-final/screenshots/login-1920x1080.png
+await page.screenshot({
+  path: 'artifacts/ui-ux-pro-max-final/screenshots/login-1920x1080.png',
+  scale: 'css',
+  type: 'png'
+});
+```

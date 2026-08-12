@@ -1,0 +1,89 @@
+{
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "count": 4,
+  "rows": [
+    {
+      "path": "/report/dynamic",
+      "finalUrl": "http://127.0.0.1:8091/#/report/dynamic",
+      "h1": [
+        "动态指标查询"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/report/dashboard",
+      "finalUrl": "http://127.0.0.1:8091/#/report/dashboard",
+      "h1": [
+        "行长仪表盘"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/report/presets",
+      "finalUrl": "http://127.0.0.1:8091/#/report/presets",
+      "h1": [
+        "预置报表"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/report/free",
+      "finalUrl": "http://127.0.0.1:8091/#/report/free",
+      "h1": [
+        "数据公式"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    }
+  ]
+}
