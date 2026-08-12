@@ -401,6 +401,7 @@ function deriveCycle(scheme) {
   return { cycleType: 'QUARTERLY', cycleDateFrom: s, cycleDateTo: s };
 }
 async function onConfirmTrigger() {
+  if (trgDlg.saving) return;
   // 数据日期不能大于当前日期（兜底，防止绕过 disabled-date）
   const today = new Date().toISOString().slice(0, 10);
   if (!trgDlg.form.dataDate) return ElMessage.warning('请选择数据日期');
@@ -455,6 +456,7 @@ async function openSnapshot(row) {
 
 // === 错误 ===
 const errDlg = reactive({ show: false, row: null, errMsg: '' });
+const retryingBatch = ref('');
 async function openError(row) {
   errDlg.row = row;
   errDlg.errMsg = '加载中...';
@@ -468,12 +470,16 @@ async function openError(row) {
 }
 async function onRetry(row) {
   if (!row) return;
+  const key = String(row.rawId || row.batch || '');
+  if (!key || retryingBatch.value === key) return;
+  retryingBatch.value = key;
   try {
     await triggerCompute({ batch: row.batch, retry: true });
     ElMessage.success('已重试');
     errDlg.show = false;
     reload();
   } catch { ElMessage.error('重试失败'); }
+  finally { retryingBatch.value = ''; }
 }
 
 // 进入页面：数据日期默认取计算记录中的最大日期，并展示该日期的数据列表

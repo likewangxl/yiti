@@ -217,6 +217,8 @@ async function loadSchemes() {
 const uploaderRef = ref(null);
 const picked = ref(null);
 const uploading = ref(false);
+const retryingBatchId = ref('');
+const deletingBatchId = ref('');
 function onFilePick(file) {
   // file 是 element-plus 包装：{ name, size, raw: File }
   if (!file?.raw) return;
@@ -228,6 +230,7 @@ function onFilePick(file) {
   picked.value = file.raw;
 }
 async function onUpload(archive = true) {
+  if (uploading.value) return;
   if (!picked.value) return ElMessage.warning('请先选择文件');
   // V1.12 微调：METRIC_RESULT 必填 dataDate（前端 picker 默认今天），缺失提前拦截避免后端 422
   if (kind.value === 'METRIC_RESULT' && !date.value) {
@@ -277,18 +280,28 @@ async function onDownloadErrors(row) {
   } catch { ElMessage.error('下载错误明细失败'); }
 }
 async function onRetry(row) {
+  const batchId = row?.batchId || row?.id;
+  const key = String(batchId || '');
+  if (!key || retryingBatchId.value === key) return;
+  retryingBatchId.value = key;
   try {
-    await retryImport(row.batchId || row.id);
+    await retryImport(batchId);
     ElMessage.success('已触发重试');
     reload();
   } catch { ElMessage.error('重试失败'); }
+  finally { retryingBatchId.value = ''; }
 }
 async function onDelete(row) {
+  const batchId = row?.batchId || row?.id;
+  const key = String(batchId || '');
+  if (!key || deletingBatchId.value === key) return;
+  deletingBatchId.value = key;
   try {
-    await deleteImportBatch(row.batchId || row.id, '前端列表删除');
+    await deleteImportBatch(batchId, '前端列表删除');
     ElMessage.success('已删除');
     reload();
   } catch { ElMessage.error('删除失败'); }
+  finally { deletingBatchId.value = ''; }
 }
 
 async function downloadTpl() {

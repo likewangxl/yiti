@@ -269,6 +269,7 @@ function openExecute(row) {
     metricCode: row.metricCode, dataDate: '', reason: '', submitting: false });
 }
 async function confirmExecute() {
+  if (execDlg.submitting) return;
   if (!execDlg.metricCode) return ElMessage.warning('请选择指标');
   if (!execDlg.dataDate) return ElMessage.warning('执行时间必填');
   if (execDlg.dataDate > today()) return ElMessage.warning(`执行时间不能大于今天（${today()}）`);
@@ -297,6 +298,7 @@ function openBatch() {
   batchDlg.dataDate = ''; batchDlg.reason = ''; batchDlg.submitting = false; batchDlg.show = true;
 }
 async function confirmBatch() {
+  if (batchDlg.submitting) return;
   if (!batchDlg.metricCodes.length) return ElMessage.warning('未选择指标');
   if (!batchDlg.dataDate) return ElMessage.warning('数据日期必填');
   if (batchDlg.dataDate > today()) return ElMessage.warning(`数据日期不能大于今天（${today()}）`);
