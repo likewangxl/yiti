@@ -210,33 +210,67 @@ function mapDashboardParams(params = {}) {
   return finalDate != null ? { ...rest, dataDate: finalDate } : rest;
 }
 
-// 后端 PresidentDashboardRespDTO 的字段名与前端 mock / Dashboard.vue 模板的字段名不一致，
-// 这里把后端响应翻译成前端期望的同形格式：
-//   后端 dataDate                    → 前端 date
-//   后端 depositTrend / loanTrend   → 前端 trend.{months, deposit, loan}
-//   后端 orgRanking[]                → 前端 ranking[]{org, val, color}
-//   后端无 org 字段                  → 前端 org 给占位文案
-// stats 数组（V1.14 # 2 已对齐）原样透传。
-// 命中条件：响应是后端真接口（不含 mock 标志 trend.months）才适配。
+// 后端 PresidentDashboardRespDTO 的字段名与 Dashboard.vue 消费模型不同。
+// 适配层只统一容器结构，业务字段必须原样保留：趋势系列的 name/unit 和排名的
+// rank/orgName/achievementRate/target/actual 都由页面直接消费，避免把 actual 误当达成率。
+function normalizeChart(chart) {
+  if (!chart || typeof chart !== 'object') return { xAxis: [], series: [] };
+  return {
+    xAxis: Array.isArray(chart.xAxis) ? chart.xAxis : (Array.isArray(chart.xaxis) ? chart.xaxis : []),
+    series: Array.isArray(chart.series) ? chart.series.map(series => ({ ...series })) : []
+  };
+}
+
+function normalizeLegacyTrend(trend) {
+  const xAxis = Array.isArray(trend?.xAxis) ? trend.xAxis : (Array.isArray(trend?.months) ? trend.months : []);
+  if (Array.isArray(trend?.series)) {
+    return { xAxis, series: trend.series.map(series => ({ ...series })) };
+  }
+  // 仅兼容历史 mock 结构；真实接口始终优先使用带 name/unit 的 series。
+  const series = [];
+  if (Array.isArray(trend?.deposit)) series.push({ name: '存款', unit: trend.depositUnit || '', data: trend.deposit });
+  if (Array.isArray(trend?.loan)) series.push({ name: '贷款', unit: trend.loanUnit || '', data: trend.loan });
+  return { xAxis, series };
+}
+
+function normalizeRanking(items) {
+  return (Array.isArray(items) ? items : []).map((item, index) => ({
+    ...item,
+    rank: item.rank ?? (index + 1),
+    orgName: item.orgName ?? item.org ?? '',
+    achievementRate: item.achievementRate ?? null,
+    target: item.target ?? null,
+    actual: item.actual ?? item.val ?? null,
+    // 当前后端 DTO 未固定 unit 字段；一旦后端补充，页面使用其真实单位而不臆造金额单位。
+    unit: item.unit ?? item.actualUnit ?? item.targetUnit ?? ''
+  }));
+}
+
 function adaptDashboardResp(r) {
   if (!r || typeof r !== 'object') return r;
-  // mock 数据本身已是前端格式（trend.months 数组），直接返回不适配
-  if (r.trend && Array.isArray(r.trend.months)) return r;
-  // 后端真实响应：把 DTO 字段映射成前端约定字段
+  if (r.trend) {
+    return {
+      ...r,
+      date: r.dataDate || r.date || '',
+      trend: normalizeLegacyTrend(r.trend),
+      ranking: normalizeRanking(r.ranking)
+    };
+  }
+
+  const depositTrend = normalizeChart(r.depositTrend);
+  const loanTrend = normalizeChart(r.loanTrend);
+  // 存款与贷款趋势通常使用同一时间轴；当其中一项为空时，使用另一项的有效时间轴。
+  const xAxis = depositTrend.xAxis.length ? depositTrend.xAxis : loanTrend.xAxis;
+
   return {
     org: r.org || '总行',
     date: r.dataDate || r.date || '',
     stats: Array.isArray(r.stats) ? r.stats : [],
     trend: {
-      months: r.depositTrend?.xaxis || r.depositTrend?.xAxis || [],
-      deposit: r.depositTrend?.series?.[0]?.data || [],
-      loan: r.loanTrend?.series?.[0]?.data || []
+      xAxis,
+      series: [...depositTrend.series, ...loanTrend.series]
     },
-    ranking: (r.orgRanking || []).map((o, i) => ({
-      org: o.orgName || o.orgId || o.orgCode || '',
-      val: Number(o.actual ?? o.val ?? 0),
-      color: i < 2 ? 'g' : i < 4 ? 'y' : 'r'
-    })),
+    ranking: normalizeRanking(r.orgRanking),
     // 透传后端原字段，方便其他组件按需消费（含 V1.14 # 2 stats 元数据）
     summaryMetrics: r.summaryMetrics,
     topCustomers: r.topCustomers,
