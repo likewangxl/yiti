@@ -33,17 +33,17 @@
               :aria-expanded="isGroupOpen(m.resourceId) ? 'true' : 'false'"
               :aria-label="m.menuName"
               :title="m.menuName"
-              @click="toggle(m.resourceId)"
+              @click="toggle(m.resourceId, $event)"
             >
               <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M4 6h16M4 12h16M4 18h16" /></svg></span>
               <span class="item-label">{{ m.menuName }}</span>
               <span class="chev" aria-hidden="true">▸</span>
             </button>
             <div
+              v-if="!props.collapsed"
               v-show="isGroupOpen(m.resourceId)"
               :id="groupPanelId(m.resourceId)"
               class="children"
-              :class="{ 'children--flyout': props.collapsed }"
               role="group"
               :aria-label="`${m.menuName}子菜单`"
             >
@@ -60,6 +60,31 @@
                 <span class="item-label">{{ c.menuName }}</span>
               </router-link>
             </div>
+            <!-- 浮出菜单 Teleport 到 body，避免被侧栏的纵向滚动容器横向裁切。 -->
+            <Teleport v-else to="body">
+              <div
+                v-if="isGroupOpen(m.resourceId)"
+                :id="groupPanelId(m.resourceId)"
+                :ref="setCollapsedFlyoutElement"
+                class="children children--flyout"
+                :style="collapsedFlyoutStyle"
+                role="group"
+                :aria-label="`${m.menuName}子菜单`"
+              >
+                <router-link
+                  v-for="c in m.children" :key="c.resourceId"
+                  :to="c.resourceUrl"
+                  class="item"
+                  :class="{ active: isCurrentMenu(c) }"
+                  :aria-current="isCurrentMenu(c) ? 'page' : undefined"
+                  :aria-label="c.menuName"
+                  :title="c.menuName"
+                >
+                  <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="3" /></svg></span>
+                  <span class="item-label">{{ c.menuName }}</span>
+                </router-link>
+              </div>
+            </Teleport>
           </div>
         </template>
       </div>
@@ -68,7 +93,7 @@
 </template>
 
 <script setup>
-import { reactive, computed, onMounted, ref, watch } from 'vue';
+import { reactive, computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useMenuStore } from '@/stores/menu';
 
@@ -82,6 +107,10 @@ const menus = computed(() => menuStore.tree);
 const loading = computed(() => menuStore.loading);
 const openMap = reactive({});
 const collapsedGroupId = ref(null);
+const collapsedFlyoutElement = ref(null);
+const collapsedFlyoutStyle = ref({});
+const collapsedTriggerElement = ref(null);
+const FLYOUT_VIEWPORT_GUTTER = 8;
 
 function findCurrentResourceId(nodes) {
   for (const node of nodes || []) {
@@ -112,19 +141,64 @@ onMounted(() => {
   menuStore.load().catch(() => {
     // store 已清空旧菜单并记录错误；侧栏保持空态，等待下一次显式重试。
   });
+  window.addEventListener('resize', updateCollapsedFlyoutPosition);
+  // scroll 事件不冒泡，使用捕获阶段可同时响应侧栏与页面上的滚动容器。
+  document.addEventListener('scroll', updateCollapsedFlyoutPosition, true);
 });
-watch(() => menuStore.tree, initOpen, { immediate: true });
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateCollapsedFlyoutPosition);
+  document.removeEventListener('scroll', updateCollapsedFlyoutPosition, true);
+});
+watch(() => menuStore.tree, () => {
+  initOpen();
+  nextTick(updateCollapsedFlyoutPosition);
+}, { immediate: true });
 watch(() => props.collapsed, (collapsed) => {
-  if (!collapsed) collapsedGroupId.value = null;
+  if (!collapsed) {
+    collapsedGroupId.value = null;
+    collapsedTriggerElement.value = null;
+    collapsedFlyoutStyle.value = {};
+  }
 });
 
 function isGroupOpen(id) {
   return props.collapsed ? collapsedGroupId.value === id : Boolean(openMap[id]);
 }
 
-function toggle(id) {
+function setCollapsedFlyoutElement(element) {
+  collapsedFlyoutElement.value = element;
+}
+
+function updateCollapsedFlyoutPosition() {
+  if (!props.collapsed || collapsedGroupId.value == null || !collapsedTriggerElement.value) return;
+
+  const triggerRect = collapsedTriggerElement.value.getBoundingClientRect();
+  const viewportHeight = window.innerHeight;
+  const maxHeight = Math.max(0, viewportHeight - FLYOUT_VIEWPORT_GUTTER * 2);
+  const flyoutHeight = Math.min(collapsedFlyoutElement.value?.getBoundingClientRect().height || 0, maxHeight);
+  const top = Math.max(
+    FLYOUT_VIEWPORT_GUTTER,
+    Math.min(triggerRect.top, viewportHeight - FLYOUT_VIEWPORT_GUTTER - flyoutHeight)
+  );
+
+  collapsedFlyoutStyle.value = {
+    top: `${top}px`,
+    left: `${Math.max(FLYOUT_VIEWPORT_GUTTER, triggerRect.right + FLYOUT_VIEWPORT_GUTTER)}px`,
+    maxHeight: `${maxHeight}px`
+  };
+}
+
+function toggle(id, event) {
   if (props.collapsed) {
-    collapsedGroupId.value = collapsedGroupId.value === id ? null : id;
+    if (collapsedGroupId.value === id) {
+      collapsedGroupId.value = null;
+      collapsedTriggerElement.value = null;
+      collapsedFlyoutStyle.value = {};
+      return;
+    }
+    collapsedGroupId.value = id;
+    collapsedTriggerElement.value = event.currentTarget;
+    nextTick(updateCollapsedFlyoutPosition);
     return;
   }
   openMap[id] = !openMap[id];
@@ -207,12 +281,12 @@ function toggle(id) {
   svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 }
 .children--flyout {
-  position: absolute;
-  top: 0;
-  left: var(--layout-sidebar-collapsed-width);
+  position: fixed;
   z-index: var(--z-popover);
   width: var(--layout-sidebar-width);
   padding: var(--space-2) 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: var(--color-sidebar-bg);
   border: 1px solid var(--color-sidebar-border);
   box-shadow: var(--shadow-popover);
@@ -224,8 +298,6 @@ function toggle(id) {
   .logo-name,
   .item-label,
   .chev { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-  .children--flyout .item-label { position: static; width: auto; height: auto; padding: initial; margin: initial; overflow: visible; clip: auto; white-space: nowrap; border: initial; }
-  .children--flyout .item { justify-content: flex-start; padding-left: 30px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

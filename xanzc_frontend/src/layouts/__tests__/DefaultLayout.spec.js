@@ -4,8 +4,17 @@
 // padding 16×2,设计器超高 64px 导致整页滚动条。修复契约分两半:
 // ①设计器路由声明 meta.fullBleed;②DefaultLayout 对 fullBleed 路由去掉内容区 padding,
 // 设计器自身高度改为撑满父容器。本文件锁这两半契约。
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { nextTick, reactive } from 'vue';
+
+const routeState = reactive({ path: '/x', fullPath: '/x', meta: {} });
+
+vi.mock('vue-router', async () => {
+  const actual = await vi.importActual('vue-router');
+  return { ...actual, useRoute: () => routeState };
+});
+
 import DefaultLayout from '../DefaultLayout.vue';
 
 const stubs = {
@@ -25,11 +34,37 @@ const stubs = {
   'router-view': true
 };
 
-function mountWithMeta(meta) {
-  return mount(DefaultLayout, {
-    global: { stubs, mocks: { $route: { meta, fullPath: '/x' } } }
+const mountedWrappers = [];
+function mountWithMeta(meta, options = {}) {
+  routeState.path = '/x';
+  routeState.fullPath = '/x';
+  routeState.meta = meta;
+  const wrapper = mount(DefaultLayout, {
+    attachTo: options.attachTo ? document.body : undefined,
+    global: { stubs, mocks: { $route: routeState } }
   });
+  mountedWrappers.push(wrapper);
+  return wrapper;
 }
+
+function createFocusProbe() {
+  const probe = document.createElement('button');
+  probe.type = 'button';
+  probe.className = 'layout-focus-probe';
+  document.body.appendChild(probe);
+  probe.focus();
+  return probe;
+}
+
+async function flushRouteFocus() {
+  await nextTick();
+  await nextTick();
+}
+
+afterEach(() => {
+  mountedWrappers.splice(0).forEach(wrapper => wrapper.unmount());
+  document.querySelectorAll('.layout-focus-probe').forEach(probe => probe.remove());
+});
 
 describe('DefaultLayout.vue full-bleed 内容区', () => {
   it('面包屑下渲染工作区页签栏，且页签栏不属于 content padding 契约', () => {
@@ -72,6 +107,50 @@ describe('DefaultLayout.vue 侧栏壳层状态', () => {
 
     const fresh = mountWithMeta({ title: '工作台' });
     expect(fresh.find('.sidebar-stub').attributes('data-collapsed')).toBe('false');
+  });
+});
+
+describe('DefaultLayout.vue 路由焦点管理', () => {
+  it('初始挂载不抢占已有焦点', async () => {
+    const probe = createFocusProbe();
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+    focusSpy.mockClear();
+
+    mountWithMeta({ title: '工作台' }, { attachTo: true });
+    await nextTick();
+
+    expect(document.activeElement).toBe(probe);
+    expect(focusSpy).not.toHaveBeenCalled();
+    focusSpy.mockRestore();
+  });
+
+  it('path 或 fullPath 变化后聚焦主内容，并保留全出血与侧栏折叠状态', async () => {
+    const probe = createFocusProbe();
+    const wrapper = mountWithMeta({ title: '工作台' }, { attachTo: true });
+    const main = wrapper.find('main#app-main').element;
+    const focusSpy = vi.spyOn(main, 'focus');
+
+    await wrapper.find('.header-stub').trigger('click');
+    probe.focus();
+    focusSpy.mockClear();
+    routeState.path = '/screen/admin/designer';
+    routeState.fullPath = '/screen/admin/designer?mode=edit';
+    routeState.meta = { fullBleed: true };
+    await flushRouteFocus();
+
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    expect(document.activeElement).toBe(main);
+    expect(wrapper.find('.content').classes()).toContain('content--full');
+    expect(wrapper.find('.sidebar-stub').attributes('data-collapsed')).toBe('true');
+
+    probe.focus();
+    focusSpy.mockClear();
+    routeState.fullPath = '/screen/admin/designer?mode=preview';
+    await flushRouteFocus();
+
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    expect(document.activeElement).toBe(main);
+    focusSpy.mockRestore();
   });
 });
 

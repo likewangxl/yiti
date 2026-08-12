@@ -5,7 +5,7 @@
       <AppHeader :sidebar-collapsed="sidebarCollapsed" @toggle-sidebar="toggleSidebar" />
       <AppBreadcrumb />
       <WorkspaceTabs />
-      <main id="app-main" class="content" :class="{ 'content--full': $route.meta.fullBleed }" tabindex="-1">
+      <main ref="mainElement" id="app-main" class="content" :class="{ 'content--full': $route.meta.fullBleed }" tabindex="-1">
         <router-view :key="$route.fullPath" v-slot="{ Component }">
           <transition name="page">
             <component :is="Component" />
@@ -17,7 +17,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { nextTick, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppHeader from '@/components/AppHeader.vue';
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue';
@@ -25,9 +26,17 @@ import WorkspaceTabs from '@/components/WorkspaceTabs.vue';
 
 // 折叠态只属于当前壳层实例，避免不同登录会话或浏览器标签页互相串状态。
 const sidebarCollapsed = ref(false);
+const mainElement = ref(null);
+const route = useRoute();
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value;
 }
+
+// 不使用 immediate，避免初始挂载时从登录跳转或浏览器已有焦点中强行夺取焦点。
+watch(() => [route.path, route.fullPath], async () => {
+  await nextTick();
+  mainElement.value?.focus({ preventScroll: true });
+});
 </script>
 
 <style lang="scss" scoped>

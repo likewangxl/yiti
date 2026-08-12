@@ -84,14 +84,33 @@ describe('AppSidebar 主导航', () => {
     expect(sidebar.find('[data-menu-group="M_CUSTOMER"]').attributes('aria-expanded')).toBe('false');
   });
 
-  it('折叠状态保留每个已授权入口的可访问名称和原生 tooltip', () => {
+  it('折叠状态将打开的二级菜单渲染到侧栏滚动容器之外，保留可访问入口', async () => {
     const sidebar = mountSidebar({ collapsed: true });
 
     expect(sidebar.find('aside').classes()).toContain('side--collapsed');
-    for (const label of ['工作台', '客户营销', '线索管理', '客户池']) {
+    for (const label of ['工作台', '客户营销']) {
       const item = sidebar.find(`[aria-label="${label}"]`);
       expect(item.exists(), `${label} 入口应保留`).toBe(true);
       expect(item.attributes('title')).toBe(label);
     }
+
+    const group = sidebar.find('[data-menu-group="M_CUSTOMER"]');
+    await group.trigger('click');
+    await nextTick();
+
+    expect(group.attributes('aria-expanded')).toBe('true');
+    const flyout = document.body.querySelector('#sidebar-group-M_CUSTOMER');
+    expect(flyout).not.toBeNull();
+    expect(flyout.closest('#app-sidebar')).toBeNull();
+    expect(flyout.getAttribute('role')).toBe('group');
+
+    for (const [label, href] of [['线索管理', '/customer/leads'], ['客户池', '/customer/pool']]) {
+      const item = flyout.querySelector(`[aria-label="${label}"]`);
+      expect(item, `${label} 入口应显示在浮出菜单中`).not.toBeNull();
+      expect(item.tagName).toBe('A');
+      expect(item.getAttribute('href')).toBe(href);
+      expect(item.getAttribute('title')).toBe(label);
+    }
+    expect(flyout.querySelector('[aria-current="page"]')?.getAttribute('aria-label')).toBe('线索管理');
   });
 });
