@@ -1,6 +1,6 @@
 <template>
   <!-- 条件构造器：编辑一条连线的分支条件，v-model 绑定 {logic, conditions:[{field,op,value}]} 或 null -->
-  <div class="condition-builder">
+  <div class="condition-builder" role="group" aria-label="连线条件规则">
 
     <!-- 逻辑关系（仅多条件时显示） -->
     <div v-if="localConditions.length > 1" class="logic-row">
@@ -26,10 +26,10 @@
       <el-select
         v-model="cond.field"
         style="width: 140px; flex-shrink: 0"
-        placeholder="选择或输入变量"
+        placeholder="选择变量"
         filterable
-        allow-create
-        default-first-option
+        aria-label="条件变量"
+        :disabled="variables.length === 0"
         @change="emitUpdate"
       >
         <el-option
@@ -45,6 +45,7 @@
         v-model="cond.op"
         style="width: 130px; flex-shrink: 0"
         placeholder="运算符"
+        aria-label="条件运算符"
         @change="emitUpdate"
       >
         <el-option label="等于"      value="EQ"       />
@@ -62,6 +63,7 @@
       <el-input
         v-model="cond.value"
         style="flex: 1 1 200px; min-width: 200px"
+        aria-label="条件值"
         :placeholder="isMultiValue(cond.op)
           ? '多个值逗号分隔，如 CORP,PER'
           : '请输入值'"
@@ -73,6 +75,7 @@
         type="danger"
         text
         style="flex-shrink: 0; margin-left: 4px"
+        :aria-label="`删除第 ${idx + 1} 条条件`"
         @click="removeCondition(idx)"
       >删除</el-button>
     </div>
@@ -81,9 +84,10 @@
     <el-button
       type="primary"
       text
-      style="margin-top: 6px"
+      class="add-condition"
+      :disabled="variables.length === 0"
       @click="addCondition"
-    >+ 添加条件</el-button>
+    >添加条件</el-button>
 
   </div>
 </template>
@@ -191,13 +195,13 @@ function emitUpdate() {
 .logic-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
 .logic-label {
   font-size: 13px;
-  color: #606266;
+  color: var(--color-text);
   white-space: nowrap;
 }
 
@@ -206,14 +210,15 @@ function emitUpdate() {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 
 /* variables 为空提示 */
 .empty-hint {
   font-size: 12px;
-  color: #909399;
-  margin-bottom: 8px;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
 }
+.add-condition { margin-top: var(--space-2); }
 </style>

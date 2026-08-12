@@ -1,8 +1,8 @@
 <template>
   <!-- 右栏-选中连线：编辑动态条件分支参数（默认分支 + 条件增删改） -->
-  <div class="edge-panel" v-if="edge">
+  <section v-if="edge" class="edge-panel" aria-label="流程连线属性">
     <div class="panel-head">
-      <span class="panel-title">流转连线</span>
+      <h3 class="panel-title">流转连线</h3>
       <el-button
         v-if="!readonly"
         link
@@ -13,7 +13,7 @@
     </div>
 
     <!-- 起止节点（只读展示）-->
-    <div class="edge-route">
+    <div class="edge-route" role="status" aria-live="polite">
       <span class="route-node">{{ fromLabel }}</span>
       <span class="route-arrow">→</span>
       <span class="route-node">{{ toLabel }}</span>
@@ -52,7 +52,7 @@
         />
       </el-form-item>
     </el-form>
-  </div>
+  </section>
 </template>
 
 <script setup>
@@ -105,22 +105,22 @@ function onDefaultChange(val) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
-.panel-title { font-size: 15px; font-weight: 600; color: $text-1; }
+.panel-title { color: var(--color-text-strong); font-size: 15px; font-weight: 600; margin: 0; }
 .edge-route {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  margin-bottom: 14px;
-  background: $bg-soft;
-  border: 1px solid $border-2;
-  border-radius: 6px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-4);
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
   font-size: 13px;
 }
-.route-node { font-weight: 600; color: $text-1; }
-.route-arrow { color: #2563eb; }
-.field-hint { font-size: 11px; color: $text-3; line-height: 1.5; margin-top: 2px; }
-.cond-text { font-size: 13px; color: $text-2; }
+.route-node { color: var(--color-text-strong); font-weight: 600; }
+.route-arrow { color: var(--color-brand-700); }
+.field-hint { color: var(--color-text-muted); font-size: 12px; line-height: 18px; margin-top: var(--space-1); }
+.cond-text { color: var(--color-text); font-size: 13px; }
 </style>

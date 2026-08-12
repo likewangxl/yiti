@@ -1,8 +1,8 @@
 <template>
   <!-- 右栏-选中节点：编辑审批环节参数（名称/类型/审批模式/审批人） -->
-  <div class="node-panel" v-if="node">
+  <section v-if="node" class="node-panel" :aria-label="`${nodeTypeLabel(node.nodeType)}节点属性`">
     <div class="panel-head">
-      <span class="panel-title">{{ nodeTypeLabel(node.nodeType) }}节点</span>
+      <h3 class="panel-title">{{ nodeTypeLabel(node.nodeType) }}节点</h3>
       <el-button
         v-if="!readonly"
         link
@@ -58,7 +58,7 @@
         </div>
       </el-form-item>
     </el-form>
-  </div>
+  </section>
 </template>
 
 <script setup>
@@ -77,7 +77,7 @@ defineEmits(['delete']);
 const NODE_TYPE_LABEL = { START: '开始', APPROVAL: '审批', GATEWAY: '网关', END: '结束' };
 function nodeTypeLabel(t) { return NODE_TYPE_LABEL[t] || t; }
 
-const APPROVER_TYPE_LABEL = { ROLE: '角色', ORG: '机构', USER: '指定人' };
+const APPROVER_TYPE_LABEL = { LEVEL_ROLE: '层级角色', ORG_ROLE: '机构角色', USER: '指定人', VAR: '流程变量', ROLE: '角色', ORG: '机构' };
 function approverTypeLabel(t) { return APPROVER_TYPE_LABEL[t] || t; }
 
 // START/END 端点不允许改类型
@@ -99,10 +99,10 @@ function onTypeChange() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
-.panel-title { font-size: 15px; font-weight: 600; color: $text-1; }
-.field-hint { font-size: 11px; color: $text-3; line-height: 1.5; margin-top: 2px; }
+.panel-title { color: var(--color-text-strong); font-size: 15px; font-weight: 600; margin: 0; }
+.field-hint { color: var(--color-text-muted); font-size: 12px; line-height: 18px; margin-top: var(--space-1); }
 .apv-wrap { width: 100%; }
-.apv-ro-row { font-size: 13px; color: $text-2; padding: 2px 0; }
+.apv-ro-row { color: var(--color-text); font-size: 13px; padding: var(--space-1) 0; }
 </style>

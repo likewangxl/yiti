@@ -13,8 +13,15 @@
   <el-dialog
     :model-value="modelValue"
     @update:model-value="v => emit('update:modelValue', v)"
-    :title="isAssign ? '指派任务' : '转交任务'" width="480px" :close-on-click-modal="false" :destroy-on-close="true">
-    <div class="task-brief" v-if="task">
+    class="bp-crud-dialog transfer-dialog"
+    :title="isAssign ? '指派任务' : '转交任务'"
+    width="520px"
+    :close-on-click-modal="false"
+    :close-on-press-escape="!submitting"
+    :show-close="!submitting"
+    :destroy-on-close="true"
+  >
+    <div v-if="task" class="task-brief" role="status" aria-live="polite">
       <div class="tb-row"><span class="tb-key">节点：</span>{{ task.nodeName || task.taskName || '-' }}</div>
       <div class="tb-row" v-if="task.businessKey"><span class="tb-key">业务键：</span><code class="mono">{{ task.businessKey }}</code></div>
       <div class="tb-row" v-if="isAssign">
@@ -27,8 +34,10 @@
           v-model="form.toEmpId"
           filterable
           placeholder="选择本机构人员"
+          aria-label="选择具备当前节点办理资格的接收人"
           style="width:100%"
           :loading="candidatesLoading"
+          :disabled="submitting"
           no-data-text="该节点在本机构暂无其他可办理人员">
           <el-option
             v-for="u in candidates"
@@ -37,7 +46,8 @@
             :value="u.empId"
           />
         </el-select>
-        <div class="form-hint">仅列出本机构（{{ orgLabel }}）中具备该节点办理资格的人员</div>
+        <div class="form-hint">仅列出本机构（{{ orgLabel }}）中具备该节点办理资格的人员。</div>
+        <p v-if="candidatesError" class="candidate-error" role="alert">{{ candidatesError }} <el-button link type="primary" :disabled="submitting" @click="loadCandidates">重试</el-button></p>
       </el-form-item>
       <el-form-item :label="isAssign ? '指派原因' : '转交原因'" prop="reason">
         <el-input
@@ -46,13 +56,14 @@
           :rows="3"
           maxlength="500"
           show-word-limit
+          :disabled="submitting"
           :placeholder="isAssign ? '请填写指派原因（必填）' : '请填写转交原因（必填）'"
         />
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="onCancel">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="onSubmit">提交</el-button>
+      <el-button :disabled="submitting" @click="onCancel">取消</el-button>
+      <el-button type="primary" :loading="submitting" :disabled="submitting" @click="onSubmit">{{ isAssign ? '确认指派' : '确认转交' }}</el-button>
     </template>
   </el-dialog>
 </template>
@@ -82,17 +93,24 @@ const rules = {
   reason: [{ required: true, message: '请填写原因', trigger: 'blur' }]
 };
 
+const taskId = computed(() => props.task?.taskId || props.task?.id || '');
+// 任务无当前处理人 = 候选组任务尚未签收 → 本次是「指派」而非「转交」，仅影响文案，接口同一个
+const isAssign = computed(() => !props.task?.currentAssignee);
+
 const candidates = ref([]);
 const candidatesLoading = ref(false);
+const candidatesError = ref('');
+const submitting = ref(false);
 // 候选人完全由后端给定：机构过滤、节点办理资格、排除自己与原办理人都在 listCandidates 内完成，
 // 前端不再做任何二次过滤——任何前端侧过滤都会与后端 initiate 的判定产生分叉。
 async function loadCandidates() {
-  if (!taskId.value) { candidates.value = []; return; }
+  if (!taskId.value || candidatesLoading.value || submitting.value) { candidates.value = taskId.value ? candidates.value : []; return; }
   candidatesLoading.value = true;
+  candidatesError.value = '';
   try {
     candidates.value = await transferCandidates(taskId.value);
-  } catch {
-    ElMessage.warning('可选接收人加载失败');
+  } catch (error) {
+    candidatesError.value = `可选接收人加载失败：${error?.message || '请重试'}`;
     candidates.value = [];
   } finally {
     candidatesLoading.value = false;
@@ -104,27 +122,25 @@ watch(() => props.modelValue, (v) => {
   if (v) {
     form.toEmpId = '';
     form.reason = '';
+    candidatesError.value = '';
     formRef.value?.clearValidate?.();
     loadCandidates();
   }
-});
+}, { immediate: true });
 
-const taskId = computed(() => props.task?.taskId || props.task?.id || '');
-// 任务无当前处理人 = 候选组任务尚未签收 → 本次是「指派」而非「转交」，仅影响文案，接口同一个
-const isAssign = computed(() => !props.task?.currentAssignee);
-
-const submitting = ref(false);
 async function onSubmit() {
+  if (submitting.value) return;
   if (!taskId.value) {
     ElMessage.error(isAssign.value ? '缺少任务信息，无法指派' : '缺少任务信息，无法转交');
     return;
   }
+  submitting.value = true;
   try {
     await formRef.value?.validate();
   } catch {
+    submitting.value = false;
     return;
   }
-  submitting.value = true;
   try {
     await transferInitiate(taskId.value, { toEmpId: form.toEmpId, reason: form.reason.trim() });
     ElMessage.success(isAssign.value ? '指派已发起，等待接收人认领' : '转交已发起，等待接收人认领');
@@ -138,21 +154,24 @@ async function onSubmit() {
 }
 
 function onCancel() {
+  if (submitting.value) return;
   emit('update:modelValue', false);
 }
 </script>
 
 <style scoped>
 .task-brief {
-  background: var(--el-fill-color-light, #f5f7fa);
-  border-radius: 4px;
-  padding: 10px 12px;
-  margin-bottom: 14px;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
   font-size: 13px;
 }
-.tb-row { line-height: 1.8; color: var(--el-text-color-regular, #606266); }
-.tb-key { color: var(--el-text-color-secondary, #909399); }
-.tb-hint { color: var(--el-color-warning, #e6a23c); }
-.mono { font-family: ui-monospace, monospace; font-size: 12px; }
-.form-hint { font-size: 12px; color: var(--el-text-color-secondary, #909399); margin-top: 4px; line-height: 1.5; }
+.tb-row { color: var(--color-text); line-height: 24px; }
+.tb-key { color: var(--color-text-muted); }
+.tb-hint { color: var(--color-warning-fg); }
+.mono { color: var(--color-text-strong); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; }
+.form-hint { color: var(--color-text-muted); font-size: 12px; line-height: 18px; margin: var(--space-1) 0 0; }
+.candidate-error { color: var(--color-danger-fg); font-size: 12px; line-height: 18px; margin: var(--space-2) 0 0; }
 </style>

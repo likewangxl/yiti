@@ -4,7 +4,7 @@
             机构角色 {approverType:'ORG_ROLE', approverValue=机构码, roleCode?}
             指定人  {approverType:'USER', approverValue=工号}
             流程变量 {approverType:'VAR', approverValue=变量名} -->
-  <div class="approver-picker">
+  <div class="approver-picker" role="group" aria-label="审批人规则">
     <div
       v-for="(row, idx) in localList"
       :key="idx"
@@ -15,6 +15,7 @@
         <el-select
           v-model="row.approverType"
           style="flex: 1"
+          aria-label="审批人类型"
           placeholder="审批人类型"
           @change="onTypeChange(idx)"
         >
@@ -28,7 +29,8 @@
           :icon="Delete"
           circle
           size="small"
-          title="删除"
+          aria-label="删除该审批人规则"
+          title="删除该审批人规则"
           @click="removeRow(idx)"
         />
       </div>
@@ -38,6 +40,7 @@
         <el-select
           v-model="row.orgScope"
           class="ab-ctrl"
+          aria-label="机构层级"
           placeholder="层级（空=不限机构层级）"
           clearable
           @change="onValueChange"
@@ -49,6 +52,7 @@
         <el-select
           v-model="row.approverValue"
           class="ab-ctrl"
+          aria-label="角色"
           placeholder="选择角色"
           filterable
           @change="onValueChange"
@@ -62,6 +66,7 @@
         <el-select
           v-model="row.approverValue"
           class="ab-ctrl"
+          aria-label="机构"
           placeholder="选择机构"
           filterable
           @change="onValueChange"
@@ -76,6 +81,7 @@
         <el-select
           v-model="row.roleCode"
           class="ab-ctrl"
+          aria-label="机构角色"
           placeholder="角色（可选，空=该机构任一角色）"
           clearable
           filterable
@@ -90,6 +96,7 @@
         v-else-if="row.approverType === 'USER'"
         v-model="row.approverValue"
         class="ab-ctrl"
+        aria-label="指定审批人"
         placeholder="输入姓名/工号搜索"
         filterable
         remote
@@ -110,6 +117,7 @@
         v-else-if="row.approverType === 'VAR'"
         v-model="row.approverValue"
         class="ab-ctrl"
+        aria-label="流程变量审批人"
         placeholder="选择流程变量"
         filterable
         @change="onValueChange"
@@ -124,7 +132,7 @@
     </div>
 
     <!-- 添加一行 -->
-    <el-button type="primary" text style="margin-top: 6px" @click="addRow">+ 添加审批人</el-button>
+    <el-button type="primary" text class="add-approver" @click="addRow">添加审批人</el-button>
   </div>
 </template>
 
@@ -183,16 +191,21 @@ function flattenOrgTree(nodes, result = []) {
 
 const userSearchOptions = ref([]);
 const userSearchLoading = ref(false);
+let userSearchVersion = 0;
 async function onUserSearch(keyword) {
-  if (!keyword?.trim()) { userSearchOptions.value = []; return; }
+  const version = ++userSearchVersion;
+  if (!keyword?.trim()) { userSearchOptions.value = []; userSearchLoading.value = false; return; }
   userSearchLoading.value = true;
   try {
-    userSearchOptions.value = await searchEmployees(keyword.trim());
+    const result = await searchEmployees(keyword.trim());
+    if (version === userSearchVersion) userSearchOptions.value = Array.isArray(result) ? result : [];
   } catch {
-    ElMessage.warning('员工搜索失败，请重试');
-    userSearchOptions.value = [];
+    if (version === userSearchVersion) {
+      ElMessage.warning('员工搜索失败，请重试');
+      userSearchOptions.value = [];
+    }
   } finally {
-    userSearchLoading.value = false;
+    if (version === userSearchVersion) userSearchLoading.value = false;
   }
 }
 
@@ -250,22 +263,24 @@ function emitUpdate() {
 .approver-picker { width: 100%; }
 /* 每个审批人一块，块内竖排 */
 .approver-block {
-  padding: 8px;
-  margin-bottom: 10px;
-  border: 1px solid var(--el-border-color, #dcdfe6);
-  border-radius: 6px;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2);
 }
 .ab-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 /* 块内每个控件独占一行 */
 .ab-ctrl {
   display: block;
   width: 100%;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 .ab-ctrl:last-child { margin-bottom: 0; }
+.add-approver { margin-top: var(--space-2); }
 </style>

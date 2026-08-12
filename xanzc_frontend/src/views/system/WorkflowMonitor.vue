@@ -1,20 +1,20 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle><span class="sub">秘书岗按本机构、行长按全行查看进行中/已完成的审批流实例</span></PageTitle>
-      <div class="actions">
+  <main class="bp-crud workflow-monitor-page" aria-labelledby="workflow-monitor-page-title" :aria-busy="loading ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="workflow-monitor-page-title"><span class="sub">秘书岗按本机构、行长按全行查看进行中和已完成的审批流实例。</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="审批流监控操作">
         <el-button @click="reload">刷新</el-button>
       </div>
-    </div>
+    </header>
 
+    <section class="card-section filter-bar monitor-filter" aria-label="审批流监控筛选">
     <el-tabs v-model="query.status" class="monitor-tabs" @tab-change="onSearch">
       <el-tab-pane label="进行中" name="RUNNING" />
       <el-tab-pane label="已完成" name="COMPLETED" />
     </el-tabs>
 
     <!-- 过滤区：业务类型 / 关键字 / 发起人 -->
-    <div class="card-section">
-      <el-form :inline="true" size="default">
+      <el-form class="filter-form" :inline="true" size="default" aria-label="审批流监控筛选条件" @submit.prevent="onSearch">
         <el-form-item label="业务类型">
           <el-select v-model="query.bizType" clearable placeholder="全部" style="width:160px">
             <el-option v-for="o in BIZ_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
@@ -33,10 +33,18 @@
           <el-button @click="onReset">重置</el-button>
         </el-form-item>
       </el-form>
-    </div>
+    </section>
 
-    <div class="card-section table">
-      <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无流程记录">
+    <section class="card-section data-panel monitor-table-panel" aria-label="审批流实例列表" aria-labelledby="workflow-monitor-heading" aria-describedby="workflow-monitor-state" :aria-busy="loading ? 'true' : 'false'">
+      <div class="toolbar">
+        <div>
+          <h2 id="workflow-monitor-heading" class="section-title">流程实例</h2>
+          <p class="hint">转交仅适用于存在活跃任务的运行中流程；候选组任务未签收时显示“指派”。</p>
+        </div>
+        <p id="workflow-monitor-state" class="table-state" role="status" aria-live="polite">{{ loading ? '审批流实例加载中' : rows.length ? `共 ${total} 条流程实例` : '暂无流程记录' }}</p>
+      </div>
+      <p v-if="loadError" class="error-state" role="alert">{{ loadError }} <el-button link type="primary" @click="reload">重试</el-button></p>
+      <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无流程记录" aria-labelledby="workflow-monitor-heading" aria-describedby="workflow-monitor-state">
         <el-table-column label="流程 · 标题" min-width="240" show-overflow-tooltip>
           <template #default="{row}">
             <code class="mono">{{ row.businessKey || '-' }}</code>
@@ -74,16 +82,19 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{row}">
-            <el-button link type="primary" size="small" @click="openDetail(row)">查看</el-button>
-            <el-button
-              link type="primary" size="small"
-              :disabled="!canTransfer(row)"
-              :title="canTransfer(row) ? '' : '流程已结束或暂无活跃任务，不可转交/指派'"
-              @click="openTransfer(row)">{{ transferLabel(row) }}</el-button>
+            <div class="row-actions" role="group" :aria-label="`${row.title || row.businessKey || '流程实例'} 操作`">
+              <el-button link type="primary" size="small" @click="openDetail(row)">查看</el-button>
+              <el-button
+                link type="primary" size="small"
+                :disabled="!canTransfer(row)"
+                :title="canTransfer(row) ? '' : '流程已结束或暂无活跃任务，不可转交/指派'"
+                @click="openTransfer(row)"
+              >{{ transferLabel(row) }}</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
-      <div class="pager">
+      <nav class="pager" aria-label="审批流监控分页">
         <el-pagination
           v-model:current-page="pageNo"
           v-model:page-size="pageSize"
@@ -94,8 +105,8 @@
           @current-change="reload"
           @size-change="() => { pageNo = 1; reload(); }"
         />
-      </div>
-    </div>
+      </nav>
+    </section>
 
     <!--
       详情抽屉：基础信息 + 流程节点 + 审批历史 + 转交历史。
@@ -104,8 +115,9 @@
       设计器生成的与静态部署的都一样），getProcessDiagram 恒返回 null → 接口恒 500，该图从未成功
       渲染过。节点进度信息由下方「流程节点」表格承载，不再保留一个必然失败的入口。
     -->
-    <el-drawer v-model="detail.show" :title="`流程详情 · ${detail.row?.businessKey || ''}`" size="56%" :destroy-on-close="true">
+    <el-drawer v-model="detail.show" :title="`流程详情 · ${detail.row?.businessKey || ''}`" size="56%" :destroy-on-close="true" :aria-busy="detail.loading ? 'true' : 'false'">
       <div v-loading="detail.loading">
+        <p v-if="detail.error" class="error-state" role="alert">{{ detail.error }} <el-button link type="primary" @click="openDetail(detail.row)">重试</el-button></p>
         <el-descriptions v-if="detail.info" :column="2" border size="default">
           <el-descriptions-item label="流程实例ID" :span="2">{{ detail.info.processInstanceId || '-' }}</el-descriptions-item>
           <el-descriptions-item label="业务类型">{{ bizTypeLabel(detail.info.bizType) }}</el-descriptions-item>
@@ -239,7 +251,7 @@
 
     <!-- 转交弹窗：秘书岗/行长把该行当前活跃任务转交给本机构其他人（待认领后生效） -->
     <TransferDialog v-model="transferDlg.show" :task="transferDlg.task" @success="reload" />
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -308,11 +320,15 @@ const query = reactive({ status: 'RUNNING', bizType: '', keyword: '', startedBy:
 const rows = ref([]);
 const total = ref(0);
 const loading = ref(false);
+const loadError = ref('');
 const pageNo = ref(1);
 const pageSize = ref(20);
+let listRequestVersion = 0;
 
 async function reload() {
+  const requestVersion = ++listRequestVersion;
   loading.value = true;
+  loadError.value = '';
   try {
     const r = await monitorProcesses({
       status: query.status,
@@ -322,10 +338,18 @@ async function reload() {
       pageNo: pageNo.value,
       pageSize: pageSize.value
     });
+    if (requestVersion !== listRequestVersion) return;
     const arr = r?.records || (Array.isArray(r) ? r : []);
     rows.value = arr;
     total.value = r?.total ?? arr.length;
-  } catch { /* call 内部已提示 */ } finally { loading.value = false; }
+  } catch (error) {
+    if (requestVersion !== listRequestVersion) return;
+    rows.value = [];
+    total.value = 0;
+    loadError.value = `审批流实例加载失败：${error?.message || '请稍后重试'}`;
+  } finally {
+    if (requestVersion === listRequestVersion) loading.value = false;
+  }
 }
 
 function onSearch() { pageNo.value = 1; reload(); }
@@ -362,6 +386,7 @@ function transferLabel(row) {
 
 const transferDlg = reactive({ show: false, task: null });
 function openTransfer(row) {
+  if (!canTransfer(row)) return;
   transferDlg.task = {
     taskId: row.currentTaskId,
     nodeName: row.title || row.businessKey,
@@ -375,16 +400,20 @@ function openTransfer(row) {
 // 详情抽屉：并行拉取实例详情 / 审批历史 / 节点 / 转交历史
 const detail = reactive({
   show: false, loading: false, row: null,
-  processInstanceId: '', info: null, nodes: [], history: [], transfers: []
+  processInstanceId: '', info: null, nodes: [], history: [], transfers: [], error: ''
 });
+let detailRequestVersion = 0;
 
 async function openDetail(row) {
+  if (!row?.processInstanceId) return;
+  const requestVersion = ++detailRequestVersion;
   detail.row = row;
   detail.processInstanceId = row.processInstanceId;
   detail.info = null;
   detail.nodes = [];
   detail.history = [];
   detail.transfers = [];
+  detail.error = '';
   detail.show = true;
   detail.loading = true;
   try {
@@ -394,38 +423,39 @@ async function openDetail(row) {
       getProcessNodes(row.processInstanceId),
       processTransferHistory(row.processInstanceId)
     ]);
+    if (requestVersion !== detailRequestVersion) return;
     detail.info = info || null;
     detail.history = Array.isArray(history) ? history : [];
     detail.nodes = Array.isArray(nodesResp?.nodes) ? nodesResp.nodes : [];
     detail.transfers = Array.isArray(transfers) ? transfers : [];
-  } catch { /* call 内部已提示 */ } finally {
-    detail.loading = false;
+  } catch (error) {
+    if (requestVersion !== detailRequestVersion) return;
+    detail.error = `流程详情加载失败：${error?.message || '请稍后重试'}`;
+  } finally {
+    if (requestVersion === detailRequestVersion) detail.loading = false;
   }
 }
 </script>
 
 <style lang="scss" scoped>
-.page-h h1 .sub { font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400; }
-.monitor-tabs { margin-bottom: 12px; }
+.monitor-tabs { margin-bottom: var(--space-3); }
 .monitor-tabs :deep(.el-tabs__header) { margin-bottom: 0; }
-.table { padding: 0; padding-bottom: 12px; }
-.pager { display: flex; justify-content: flex-end; padding: 12px 14px; }
-.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
-.mono { font-family: ui-monospace, monospace; font-size: 12px; background: $bg-soft; padding: 2px 6px; border-radius: 3px; }
-.sub-name { color: $text-2; font-size: 13px; margin-top: 2px; }
-.sub-id { color: $text-3; font-size: 12px; }
+.monitor-tabs :deep(.el-tabs__nav-wrap)::after { background: var(--color-border); }
+.row-actions { display: flex; justify-content: flex-end; gap: var(--space-1); }
+.mono { background: var(--color-surface-soft); border: 1px solid var(--color-border); border-radius: var(--radius-control); color: var(--color-text); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; padding: 2px 6px; }
+.sub-name { color: var(--color-text); font-size: 13px; margin-top: var(--space-1); }
+.sub-id { color: var(--color-text-muted); font-size: 12px; }
 
-.d-block { margin-top: 20px; }
-.d-title { font-size: 14px; font-weight: 600; color: $text-1; margin-bottom: 8px; }
-.d-empty { color: $text-3; font-size: 13px; }
+.d-block { margin-top: var(--space-6); }
+.d-title { color: var(--color-text-strong); font-size: 14px; font-weight: 600; margin-bottom: var(--space-2); }
+.d-empty { color: var(--color-text-muted); font-size: 13px; }
 .tr-reason { line-height: 1.5; word-break: break-all; }
-.tr-reject { color: $danger; }
+.tr-reject { color: var(--color-danger-fg); }
 
-.approval-line { display: flex; align-items: center; gap: 8px; }
-.approval-line .node { font-size: 13px; color: $text-1; font-weight: 500; }
-.approval-meta { margin-top: 4px; font-size: 12px; color: $text-2; }
-.approval-meta .meta-key { color: $text-3; }
-.approval-meta .meta-sep { margin: 0 6px; color: $text-3; }
-.sub-id-inline { color: $text-3; }
-.approval-opinion { margin-top: 4px; font-size: 13px; color: $text-1; }
+.approval-line { align-items: center; display: flex; gap: var(--space-2); }
+.approval-line .node { color: var(--color-text-strong); font-size: 13px; font-weight: 500; }
+.approval-meta { color: var(--color-text); font-size: 12px; margin-top: var(--space-1); }
+.approval-meta .meta-key, .approval-meta .meta-sep, .sub-id-inline { color: var(--color-text-muted); }
+.approval-meta .meta-sep { margin: 0 var(--space-2); }
+.approval-opinion { color: var(--color-text-strong); font-size: 13px; margin-top: var(--space-1); }
 </style>
