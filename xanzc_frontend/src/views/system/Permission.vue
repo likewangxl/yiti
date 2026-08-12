@@ -94,21 +94,21 @@
                 <el-checkbox
                   :model-value="group.all.allChecked"
                   :indeterminate="group.all.indeterminate"
-                  :disabled="group.all.total === 0"
+                  :disabled="resourceEditBlocked || group.all.total === 0"
                   aria-label="切换整个资源组"
                   @change="(value) => toggleGroupSide(group, 'all', value)"
                 >整组</el-checkbox>
                 <el-checkbox
                   :model-value="group.r.allChecked"
                   :indeterminate="group.r.indeterminate"
-                  :disabled="group.r.items.length === 0"
+                  :disabled="resourceEditBlocked || group.r.items.length === 0"
                   aria-label="切换本组全部读取资源"
                   @change="(value) => toggleGroupSide(group, 'r', value)"
                 >读</el-checkbox>
                 <el-checkbox
                   :model-value="group.w.allChecked"
                   :indeterminate="group.w.indeterminate"
-                  :disabled="group.w.items.length === 0"
+                  :disabled="resourceEditBlocked || group.w.items.length === 0"
                   aria-label="切换本组全部写入资源"
                   @change="(value) => toggleGroupSide(group, 'w', value)"
                 >写</el-checkbox>
@@ -122,6 +122,7 @@
                 </div>
                 <el-checkbox
                   :model-value="checkedIds.has(resource.resourceId)"
+                  :disabled="resourceEditBlocked"
                   :aria-label="`切换资源 ${resource.menuName || resource.resourceId}`"
                   @change="(value) => toggleOne(resource.resourceId, value)"
                 >{{ rwSide(resource) === 'r' ? '读取' : '写入' }}</el-checkbox>
@@ -134,8 +135,8 @@
         <div class="resource-foot">
           <p class="hint" role="status" aria-live="polite">{{ dirty ? `资源绑定有 ${pendingDelta} 项改动，保存后将全量替换。` : '当前资源绑定已同步。' }}</p>
           <div class="action-group" role="group" aria-label="资源绑定操作">
-            <el-button :disabled="!dirty || saving" @click="resetChecked">还原</el-button>
-            <el-button type="primary" :loading="saving" :disabled="!dirty || saving || !pickedRoleId" @click="onSaveResources">保存资源绑定</el-button>
+            <el-button :disabled="resourceEditBlocked || !dirty || saving" @click="resetChecked">还原</el-button>
+            <el-button type="primary" :loading="saving" :disabled="resourceEditBlocked || !dirty || saving || !pickedRoleId" @click="onSaveResources">保存资源绑定</el-button>
           </div>
         </div>
       </section>
@@ -325,12 +326,14 @@ const groupedRes = computed(() => {
 });
 
 function toggleOne(id, value) {
+  if (resourceEditBlocked.value) return;
   const next = new Set(checkedIds.value);
   if (value) next.add(id);
   else next.delete(id);
   checkedIds.value = next;
 }
 function toggleGroupSide(group, side, value) {
+  if (resourceEditBlocked.value) return;
   const next = new Set(checkedIds.value);
   const items = side === 'all' ? group.allItems : group[side].items;
   for (const resource of items) {
@@ -347,6 +350,7 @@ function toggleCollapse(key) {
   collapsedKeys.value = next;
 }
 function resetChecked() {
+  if (resourceEditBlocked.value) return;
   checkedIds.value = new Set(initialChecked.value);
 }
 
@@ -393,7 +397,7 @@ async function onSaveScope() {
 
 const saving = ref(false);
 async function onSaveResources() {
-  if (saving.value || !dirty.value || !pickedRoleId.value) return;
+  if (resourceEditBlocked.value || saving.value || !dirty.value || !pickedRoleId.value) return;
   saving.value = true;
   const ids = Array.from(checkedIds.value);
   try {
@@ -431,6 +435,12 @@ async function onSaveResources() {
 }
 
 const loadError = ref('');
+const resourceCatalogError = ref(false);
+const roleResourceError = ref(false);
+const resourceEditBlocked = computed(() => resourcesLoading.value
+  || resourceCatalogError.value
+  || roleResourceError.value
+  || !pickedRoleId.value);
 const pageLoading = computed(() => rolesLoading.value || resourcesLoading.value || scopeLoading.value);
 function recordLoadError(scope, error) {
   loadError.value = `${scope}加载失败：${error?.message || '请检查权限或稍后重试'}`;
@@ -459,11 +469,13 @@ function flattenTree(nodes, out = []) {
 }
 async function loadResources() {
   resourcesLoading.value = true;
+  resourceCatalogError.value = false;
   try {
     const result = await listResources();
     resources.value = Array.isArray(result) ? flattenTree(result) : [];
   } catch (error) {
     resources.value = [];
+    resourceCatalogError.value = true;
     recordLoadError('资源', error);
   } finally {
     resourcesLoading.value = false;
@@ -471,19 +483,20 @@ async function loadResources() {
 }
 async function loadRoleChecked(roleId) {
   if (!roleId) {
+    roleResourceError.value = false;
     initialChecked.value = new Set();
     checkedIds.value = new Set();
     return;
   }
   resourcesLoading.value = true;
+  roleResourceError.value = false;
   try {
     const ids = await getRoleResourceIds(roleId);
     const selected = new Set(Array.isArray(ids) ? ids : []);
     initialChecked.value = selected;
     checkedIds.value = new Set(selected);
   } catch (error) {
-    initialChecked.value = new Set();
-    checkedIds.value = new Set();
+    roleResourceError.value = true;
     recordLoadError('角色资源', error);
   } finally {
     resourcesLoading.value = false;

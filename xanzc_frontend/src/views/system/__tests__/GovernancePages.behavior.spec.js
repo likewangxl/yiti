@@ -135,6 +135,25 @@ describe('系统治理与 RBAC 写操作保护', () => {
     await Promise.all([first, second]);
   });
 
+  it('权限资源读取失败：保留已知绑定并冻结勾选、还原和保存', async () => {
+    wrapper = mountPage(Permission);
+    await settle();
+
+    getRoleResourceIds.mockRejectedValueOnce(new Error('资源绑定读取失败'));
+    await wrapper.vm.loadRoleChecked('role-1');
+    await settle();
+
+    expect(wrapper.vm.loadError).toContain('角色资源加载失败');
+    expect([...wrapper.vm.checkedIds]).toEqual(['P_1']);
+
+    wrapper.vm.toggleOne('P_2', true);
+    wrapper.vm.resetChecked();
+    expect([...wrapper.vm.checkedIds]).toEqual(['P_1']);
+
+    await wrapper.vm.onSaveResources();
+    expect(replaceRoleResources).not.toHaveBeenCalled();
+  });
+
   it('工作日历初始化：取消确认时绝不调用初始化接口', async () => {
     wrapper = mountPage(Calendar);
     await settle();
