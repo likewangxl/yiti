@@ -1,7 +1,7 @@
 <!-- 编辑查询方案 —— 改 维度/名称/指标/对象。后端 updateSavedQuery 乐观锁(expectedVersion)。 -->
 <template>
-  <el-dialog :model-value="visible" @update:model-value="$emit('update:visible', $event)"
-             title="编辑查询方案" width="640px" :close-on-click-modal="false">
+  <el-dialog class="bp-crud-dialog" :model-value="visible" @update:model-value="$emit('update:visible', $event)"
+             title="编辑查询方案" width="640px" :close-on-click-modal="false" :close-on-press-escape="!saving" aria-label="编辑查询方案">
     <el-form label-position="top" size="default">
       <el-form-item label="维度">
         <el-radio-group :model-value="form.dim" @update:model-value="onDimChange">
@@ -13,17 +13,17 @@
         <el-input v-model="form.name" maxlength="200" />
       </el-form-item>
       <el-form-item :label="`指标 (已选 ${form.metrics.length})`">
-        <div class="tags click" @click="metricPickerVisible = true">
+        <div class="tags">
           <el-tag v-for="c in form.metrics" :key="c" closable type="info" effect="plain"
                   @close.stop="form.metrics = form.metrics.filter(x => x !== c)">{{ c }}</el-tag>
-          <el-tag class="add" effect="plain">+ 添加</el-tag>
+          <el-button link type="primary" @click="metricPickerVisible = true">选择指标</el-button>
         </div>
       </el-form-item>
       <el-form-item :label="`对象 (已选 ${form.subjects.length}，不选=查全部)`">
-        <div class="tags click" @click="subjectPickerVisible = true">
+        <div class="tags">
           <el-tag v-for="s in form.subjects" :key="s.id" closable effect="plain"
                   @close.stop="form.subjects = form.subjects.filter(x => x.id !== s.id)">{{ s.name }}</el-tag>
-          <el-tag class="add" effect="plain">+ 选择</el-tag>
+          <el-button link type="primary" @click="subjectPickerVisible = true">选择对象</el-button>
         </div>
       </el-form-item>
     </el-form>
@@ -32,8 +32,8 @@
     <SubjectPicker v-model:visible="subjectPickerVisible" v-model="form.subjects" :dim="form.dim" />
 
     <template #footer>
-      <el-button @click="$emit('update:visible', false)">取消</el-button>
-      <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+      <el-button :disabled="saving" @click="$emit('update:visible', false)">取消</el-button>
+      <el-button type="primary" :loading="saving" :disabled="saving" @click="save">保存</el-button>
     </template>
   </el-dialog>
 </template>
@@ -82,6 +82,7 @@ async function onDimChange(next) {
 }
 
 async function save() {
+  if (saving.value) return;
   if (!form.name.trim()) { ElMessage.warning('请填写方案名称'); return; }
   if (!form.metrics.length) { ElMessage.warning('请至少选择 1 个指标'); return; }
   saving.value = true;
@@ -105,8 +106,7 @@ defineExpose({ form, save, onDimChange });
 </script>
 
 <style lang="scss" scoped>
-.req { color: $danger; }
+.req { color: var(--color-danger-fg); }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; min-height: 36px;
-  border: 1px solid $border-2; border-radius: 4px; align-items: center;
-  &.click { cursor: pointer; } .add { cursor: pointer; border-style: dashed; color: $primary-400; } }
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-control); align-items: center; }
 </style>

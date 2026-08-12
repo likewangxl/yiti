@@ -7,32 +7,31 @@
   导出三 endpoint 各对应 /export POST 异步任务
 -->
 <template>
-  <div class="rpt-presets">
-    <div class="page-h">
-      <PageTitle />
+  <main class="bp-crud rpt-presets" aria-labelledby="presets-report-title" :aria-busy="loading || exporting ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="presets-report-title" />
       <span class="desc">点击卡片打开对应汇总报表</span>
-    </div>
+    </header>
 
-    <div class="grid">
-      <div v-for="c in CARDS" :key="c.type" class="card-item" @click="openCard(c)">
-        <div class="ico">{{ c.icon }}</div>
-        <div class="t">{{ c.title }}</div>
-        <div class="d">{{ c.desc }}</div>
-        <div class="f">
-          <span class="v">{{ c.endpoint }}</span>
-          <a class="more">查看 →</a>
-        </div>
-      </div>
-    </div>
+    <section class="grid" aria-label="预置报表类型">
+      <button v-for="card in CARDS" :key="card.type" type="button" class="card-item" :aria-label="`查看${card.title}`" @click="openCard(card)">
+        <el-icon class="ico" aria-hidden="true"><component :is="card.icon" /></el-icon>
+        <span class="t">{{ card.title }}</span>
+        <span class="d">{{ card.desc }}</span>
+        <span class="f"><span class="v">{{ card.endpoint }}</span><span class="more">查看报表</span></span>
+      </button>
+    </section>
 
     <!-- 通用汇总抽屉：按 type 切换表单/表格 -->
     <el-drawer
       v-model="drawer.show"
+      class="bp-crud-dialog"
       :title="drawer.title"
-      size="1100px"
+      size="1100px" aria-label="预置报表查询"
       :destroy-on-close="true">
       <!-- 参数表单 -->
-      <el-form :model="form" inline label-width="80px" size="default" class="filter-form">
+      <section class="card-section filter-bar" aria-label="预置报表筛选">
+      <el-form :model="form" inline label-width="80px" size="default" class="filter-form" @submit.prevent>
         <!-- 绩效汇总 -->
         <template v-if="drawer.type === 'perf'">
           <el-form-item label="维度" required>
@@ -73,13 +72,17 @@
           </el-form-item>
         </template>
         <el-form-item>
-          <el-button type="primary" :loading="loading" @click="loadData">查询</el-button>
-          <el-button :loading="exporting" :disabled="!rows.length" @click="doExport">导出</el-button>
+          <el-button type="primary" :loading="loading" :disabled="loading" @click="loadData">查询</el-button>
+          <el-button :loading="exporting" :disabled="!rows.length || exporting" @click="doExport">导出</el-button>
         </el-form-item>
       </el-form>
+      </section>
 
       <!-- 数据表（用通用 columns 自适应后端返回字段）-->
-      <el-table :data="rows" size="small" v-loading="loading" border max-height="540" empty-text="暂无数据">
+      <section class="card-section data-panel" aria-labelledby="preset-table-title" :aria-busy="loading ? 'true' : 'false'">
+      <div class="toolbar"><div><h2 id="preset-table-title" class="section-title">{{ drawer.title || '汇总结果' }}</h2><p class="hint">按当前筛选条件读取真实汇总数据。</p></div><p class="table-state" role="status" aria-live="polite">{{ errorMessage || (loading ? '正在加载汇总数据' : rows.length ? `共 ${total} 条数据` : '暂无数据') }}</p></div>
+      <div v-if="errorMessage" class="error-state" role="alert"><span>{{ errorMessage }}</span><el-button link type="primary" @click="loadData">重试</el-button></div>
+      <el-table :data="rows" size="default" v-loading="loading" border max-height="540" empty-text="暂无数据" aria-labelledby="preset-table-title">
         <el-table-column v-for="col in autoColumns" :key="col" :prop="col" :label="prettyCol(col)" min-width="120" />
       </el-table>
 
@@ -96,22 +99,24 @@
           @current-change="loadData"
         />
       </div>
+      </section>
     </el-drawer>
-  </div>
+  </main>
 </template>
 
 <script setup>
 import { ref, reactive, computed } from 'vue';
 import { ElMessage } from 'element-plus';
+import { DataAnalysis, Promotion, UserFilled } from '@element-plus/icons-vue';
 import {
   getPerfSummary, getCustPoolSummary, getTouchSummary,
   exportPerfSummary, exportCustPoolSummary, exportTouchSummary
 } from '@/api/report';
 
 const CARDS = [
-  { type: 'perf',  icon: '📈', title: '绩效汇总',   desc: '按员工/机构/客户维度汇总 KPI 得分与完成率',          endpoint: 'GET /reports/perf-summary' },
-  { type: 'cust',  icon: '👥', title: '客户池汇总', desc: '各机构客户池：总量 / VIP / 普通 / 潜力',              endpoint: 'GET /reports/customer-pool-summary' },
-  { type: 'touch', icon: '📞', title: '机构触达汇总', desc: '指定时间窗口内各机构触达任务执行情况',              endpoint: 'GET /reports/touch-task-summary' }
+  { type: 'perf',  icon: DataAnalysis, title: '绩效汇总',   desc: '按员工、机构或客户维度汇总 KPI 得分与完成率', endpoint: 'GET /reports/perf-summary' },
+  { type: 'cust',  icon: UserFilled, title: '客户池汇总', desc: '查询各机构客户池总量及 VIP、普通、潜力客户分布', endpoint: 'GET /reports/customer-pool-summary' },
+  { type: 'touch', icon: Promotion, title: '机构触达汇总', desc: '统计指定时间窗口内各机构触达任务的执行情况', endpoint: 'GET /reports/touch-task-summary' }
 ];
 
 const drawer = reactive({ show: false, type: '', title: '' });
@@ -126,6 +131,7 @@ const pageNo = ref(1);
 const pageSize = ref(20);
 const loading = ref(false);
 const exporting = ref(false);
+const errorMessage = ref('');
 
 // 自动从第一行 keys 派生表头；后端返回字段不固定时这样最稳
 const autoColumns = computed(() => {
@@ -185,21 +191,25 @@ function buildParams() {
 }
 
 async function loadData() {
+  if (loading.value) return;
   const p = buildParams();
   if (p._err) return ElMessage.warning(p._err);
   loading.value = true;
+  errorMessage.value = '';
   try {
     const fn = { perf: getPerfSummary, cust: getCustPoolSummary, touch: getTouchSummary }[drawer.type];
     const r = await fn(p);
     rows.value = Array.isArray(r) ? r : (r?.records || []);
     total.value = r?.total ?? rows.value.length;
   } catch (e) {
-    ElMessage.error('查询失败：' + (e?.message || e));
+    errorMessage.value = e?.message || '预置报表查询失败，请稍后重试';
+    ElMessage.error('查询失败：' + errorMessage.value);
     rows.value = [];
   } finally { loading.value = false; }
 }
 
 async function doExport() {
+  if (exporting.value) return;
   exporting.value = true;
   try {
     const p = buildParams();
@@ -219,29 +229,21 @@ async function doExport() {
 
 <style lang="scss" scoped>
 .rpt-presets {
-  .page-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px;
-    h1 { font-size: 18px; font-weight: 600; color: $text-1; }
-    .desc { color: $text-3; font-size: 12px; }
-  }
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
   .card-item {
-    background: #fff;
-    border: 1px solid $border-1;
-    border-radius: 4px;
-    padding: 22px 22px 18px;
-    cursor: pointer;
-    transition: .15s;
-    &:hover { border-color: $primary-400; box-shadow: 0 4px 12px rgba(30,91,186,.15); transform: translateY(-2px); }
-    .ico { font-size: 32px; margin-bottom: 10px; }
-    .t { font-size: 16px; font-weight: 600; color: $text-1; margin-bottom: 8px; }
-    .d { font-size: 13px; color: $text-3; line-height: 1.6; min-height: 42px; }
-    .f { margin-top: 14px; display: flex; align-items: center; padding-top: 12px; border-top: 1px dashed $border-1;
-      .v { font-size: 11px; color: $text-3; font-family: ui-monospace, monospace; }
-      .more { margin-left: auto; color: $primary; font-size: 13px; }
+    align-items: flex-start; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-control); color: var(--color-text); cursor: pointer; display: flex; flex-direction: column; min-height: 192px; padding: var(--space-6); text-align: left;
+    transition: border-color 180ms ease-out, box-shadow 180ms ease-out, transform 180ms ease-out;
+    &:hover { border-color: var(--color-brand-500); box-shadow: var(--shadow-surface); transform: translateY(-1px); }
+    .ico { color: var(--color-brand-700); font-size: 24px; margin-bottom: var(--space-3); }
+    .t { color: var(--color-text-strong); font-size: 16px; font-weight: 600; margin-bottom: var(--space-2); }
+    .d { color: var(--color-text); font-size: 14px; line-height: 22px; min-height: 44px; }
+    .f { align-items: center; border-top: 1px solid var(--color-border); display: flex; margin-top: auto; padding-top: var(--space-3); width: 100%;
+      .v { color: var(--color-text-muted); font-family: ui-monospace, monospace; font-size: 12px; }
+      .more { color: var(--color-brand-700); font-size: 14px; font-weight: 500; margin-left: auto; }
     }
   }
 }
-.filter-form { margin-bottom: 12px; }
 .pager { margin-top: 12px; display: flex; justify-content: flex-end; }
 .pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
+.error-state { align-items: center; background: var(--color-danger-bg); border: 1px solid var(--color-border); color: var(--color-danger-fg); display: flex; gap: var(--space-3); justify-content: space-between; margin-bottom: var(--space-3); padding: var(--space-3); }
 </style>

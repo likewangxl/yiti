@@ -3,10 +3,11 @@
      共享方案目前后端未实现，列表全部为本人 PERSONAL 方案。 -->
 <template>
   <el-dialog
+    class="bp-crud-dialog"
     :model-value="visible"
     @update:model-value="$emit('update:visible', $event)"
     title="我的查询方案"
-    width="780px"
+    width="780px" :close-on-click-modal="false" aria-label="我的查询方案"
   >
     <el-table :data="schemes" v-loading="loading" size="default" stripe empty-text="暂无已保存方案">
       <el-table-column prop="name" label="方案名" min-width="240" />
@@ -18,11 +19,11 @@
       </el-table-column>
       <el-table-column label="操作" width="180">
         <template #default="{ row }">
-          <el-button type="primary" link size="small" @click="load(row)">载入</el-button>
+          <el-button type="primary" link size="small" :disabled="removingId === row.id" @click="load(row)">载入</el-button>
           <el-divider direction="vertical" />
-          <el-button link size="small" @click="openEdit(row)">编辑</el-button>
+          <el-button link size="small" :disabled="removingId === row.id" @click="openEdit(row)">编辑</el-button>
           <el-divider direction="vertical" />
-          <el-button type="danger" link size="small" @click="remove(row)">删除</el-button>
+          <el-button type="danger" link size="small" :loading="removingId === row.id" :disabled="!!removingId" @click="remove(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -45,6 +46,7 @@ const emit = defineEmits(['update:visible', 'load']);
 const schemes = ref([]);
 const loading = ref(false);
 const editVisible = ref(false);
+const removingId = ref('');
 const editScheme = ref({ id: '', name: '', dim: 'EMP', metrics: [], subjects: [], version: 0 });
 
 const DIM_LABEL = { EMP: '员工', ORG: '机构', CUST: '客户' };
@@ -59,8 +61,10 @@ function formatTime(t) {
 watch(() => props.visible, (v) => { if (v) refresh(); });
 
 async function refresh() {
+  if (loading.value) return;
   loading.value = true;
   try { schemes.value = await listSavedQueries() || []; }
+  catch { schemes.value = []; }
   finally { loading.value = false; }
 }
 
@@ -71,14 +75,16 @@ function load(row) {
 }
 
 async function remove(row) {
+  if (removingId.value) return;
   try {
     await ElMessageBox.confirm(`确认删除方案"${row.name}"？`, '确认', { type: 'warning' });
   } catch { return; }
+  removingId.value = row.id;
   try {
     await deleteSavedQuery(row.id);
     ElMessage.success('删除成功');
     refresh();
-  } catch (e) {}
+  } catch (e) {} finally { removingId.value = ''; }
 }
 
 // 编辑：先取详情(列表 DTO 不含 metrics/subjects/version)→ 预填并打开编辑弹框

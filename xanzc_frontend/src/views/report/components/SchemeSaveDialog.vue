@@ -3,11 +3,14 @@
      api/report.js 在 saveQuery() 内部把数组序列化，本组件只需收集 name 即可。 -->
 <template>
   <el-dialog
+    class="bp-crud-dialog"
     :model-value="visible"
     @update:model-value="$emit('update:visible', $event)"
     title="保存查询方案"
     width="520px"
     :close-on-click-modal="false"
+    :close-on-press-escape="!saving"
+    aria-label="保存查询方案"
   >
     <el-form label-position="top" size="default">
       <el-form-item required>
@@ -19,8 +22,8 @@
       当前条件：维度 <b>{{ context.dim }}</b> · 指标 <b>{{ context.metrics }}</b> 项 · 对象 <b>{{ context.objects }}</b> 个
     </el-alert>
     <template #footer>
-      <el-button @click="$emit('update:visible', false)">取消</el-button>
-      <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+      <el-button :disabled="saving" @click="$emit('update:visible', false)">取消</el-button>
+      <el-button type="primary" :loading="saving" :disabled="saving" @click="save">保存</el-button>
     </template>
   </el-dialog>
 </template>
@@ -49,6 +52,7 @@ watch(() => props.visible, (v) => {
 });
 
 async function save() {
+  if (saving.value) return;
   if (!form.name.trim()) { ElMessage.warning('请填写方案名称'); return; }
   const p = props.context.payload || {};
   if (!Array.isArray(p.metrics)  || !p.metrics.length)  { ElMessage.warning('请先选择至少 1 个指标'); return; }
@@ -73,6 +77,6 @@ async function save() {
 </script>
 
 <style lang="scss" scoped>
-.req { color: $danger; }
+.req { color: var(--color-danger-fg); }
 .meta { margin-top: 4px; }
 </style>

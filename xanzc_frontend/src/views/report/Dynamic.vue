@@ -14,19 +14,19 @@
     GET   /api/perf/metrics?status=ACTIVE&pageNo=1&pageSize=100 —— listMetrics    (指标 code→name 映射 + 默认选中)
 -->
 <template>
-  <div class="rpt-dyn">
-    <div class="page-h">
-      <PageTitle />
+  <main class="bp-crud rpt-dyn" aria-labelledby="dynamic-report-title" :aria-busy="querying || exporting ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="dynamic-report-title" />
       <span class="desc">维度 → 指标 → 对象 → 日期 · 支持保存方案 / 部门共享</span>
-      <div class="actions">
+      <div class="actions action-group" role="group" aria-label="动态指标查询操作">
         <el-button :icon="Folder"   @click="schemeListVisible = true">我的方案</el-button>
         <el-button :icon="Plus"     @click="openSaveScheme">保存为方案</el-button>
-        <el-button :icon="Download" @click="onExport" :loading="exporting">导出</el-button>
+        <el-button :icon="Download" @click="onExport" :loading="exporting" :disabled="exporting">导出</el-button>
       </div>
-    </div>
+    </header>
 
     <!-- 查询条件卡 -->
-    <div class="card-section query">
+    <section class="card-section query" aria-label="动态指标查询条件">
       <div class="row">
         <div class="col">
           <div class="lab">① 维度</div>
@@ -37,25 +37,23 @@
 
         <div class="col grow">
           <div class="lab">② 指标 (已选 {{ pickedMetrics.length }} 个)</div>
-          <div class="tags click" @click="pickerVisible = true">
+          <div class="tags">
             <el-tag v-for="c in pickedMetrics" :key="c" closable type="info" effect="plain" @close.stop="removeMetric(c)">
               {{ metricLabel(c) }}
             </el-tag>
-            <el-tag class="add" effect="plain">+ 添加</el-tag>
+            <el-button link type="primary" @click="pickerVisible = true">选择指标</el-button>
           </div>
         </div>
 
         <div class="col grow">
           <div class="lab">③ 对象 (已选 {{ subjects.length }}，不选=查全部可见对象)</div>
-          <div class="tags" :class="{ click: !selfOnlyPicker }"
-               @click="!selfOnlyPicker && (subjectDlgVisible = true)">
+          <div class="tags">
             <el-tag v-for="s in subjects" :key="s.id" closable effect="plain" @close.stop="subjects = subjects.filter(x => x !== s)">
               {{ subjectLabel(s) }}
             </el-tag>
             <!-- SELF 范围只能看本人：不让选对象，默认查本人。客户维度不限范围，不受此限 -->
             <el-tag v-if="selfOnlyPicker" type="info" effect="plain">仅本人</el-tag>
-            <el-tag v-else-if="!subjects.length" class="add" effect="plain">+ 选择（默认全部）</el-tag>
-            <el-tag v-else class="add" effect="plain">+ 选择</el-tag>
+            <el-button v-else type="primary" link @click="subjectDlgVisible = true">{{ subjects.length ? '调整对象' : '选择对象（默认全部）' }}</el-button>
           </div>
         </div>
 
@@ -67,20 +65,28 @@
 
       <div class="row-actions">
         <el-button @click="reset">重置</el-button>
-        <el-button type="primary" :loading="querying" @click="doQuery">查询</el-button>
+        <el-button type="primary" :loading="querying" :disabled="querying" @click="doQuery">查询</el-button>
       </div>
-    </div>
+    </section>
 
     <!-- 结果卡：始终展示，未查询时给空表框 + 提示，避免维度下方空荡荡 -->
-    <div class="card-section result">
-      <div class="card-h">
-        <div class="title">查询结果（{{ rows.length }} 行 × {{ pickedMetrics.length }} 指标）</div>
-        <div class="chart-tabs">
-          <el-button :type="view === 'table' ? 'primary' : ''" :icon="Grid"        circle size="small" @click="view='table'" />
-          <el-button :type="view === 'bar'   ? 'primary' : ''" :icon="Histogram"   circle size="small" @click="view='bar'"   />
-          <el-button :type="view === 'line'  ? 'primary' : ''" :icon="TrendCharts" circle size="small" @click="view='line'"  />
-          <el-button :type="view === 'pie'   ? 'primary' : ''" :icon="PieChart"    circle size="small" @click="view='pie'"   />
+    <section class="card-section data-panel result" aria-labelledby="dynamic-result-heading" aria-describedby="dynamic-result-state">
+      <div class="toolbar">
+        <div>
+          <h2 id="dynamic-result-heading" class="section-title">查询结果</h2>
+          <p class="hint">{{ rows.length }} 行 × {{ pickedMetrics.length }} 个指标；不选择对象时按数据范围查询全部可见对象。</p>
         </div>
+        <div class="chart-tabs action-group" role="group" aria-label="结果视图">
+          <el-button :type="view === 'table' ? 'primary' : ''" :icon="Grid"        circle size="small" aria-label="表格视图" title="表格视图" @click="view='table'" />
+          <el-button :type="view === 'bar'   ? 'primary' : ''" :icon="Histogram"   circle size="small" aria-label="柱状图视图" title="柱状图视图" @click="view='bar'"   />
+          <el-button :type="view === 'line'  ? 'primary' : ''" :icon="TrendCharts" circle size="small" aria-label="折线图视图" title="折线图视图" @click="view='line'"  />
+          <el-button :type="view === 'pie'   ? 'primary' : ''" :icon="PieChart"    circle size="small" aria-label="饼图视图" title="饼图视图" @click="view='pie'"   />
+        </div>
+      </div>
+
+      <p id="dynamic-result-state" class="table-state" role="status" aria-live="polite">{{ queryError || (querying ? '正在查询数据' : hasResult ? (rows.length ? `共 ${resultTotal} 个对象` : '无符合条件的数据') : '请选择指标后发起查询') }}</p>
+      <div v-if="queryError" class="error-state" role="alert">
+        <span>{{ queryError }}</span><el-button link type="primary" @click="doQuery">重试</el-button>
       </div>
 
       <el-table v-if="view === 'table'" :data="rows" size="default" stripe
@@ -106,8 +112,8 @@
         />
       </div>
 
-      <v-chart v-else class="chart" :option="chartOption" autoresize />
-    </div>
+      <v-chart v-else class="chart" :option="chartOption" autoresize aria-label="动态指标图表" />
+    </section>
 
     <!-- 对象选择：抽取为可复用组件 SubjectPicker -->
     <SubjectPicker v-model:visible="subjectDlgVisible" v-model="subjects" :dim="dim" />
@@ -126,7 +132,7 @@
       v-model:visible="schemeListVisible"
       @load="onSchemeLoad"
     />
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -138,7 +144,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { BarChart, LineChart, PieChart as EPie } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
-import { queryDynamic, exportDynamicFile, getPickerScope, getQueryDimensions, getSavedQuery } from '@/api/report';
+import { queryDynamic, exportDynamicFile, getPickerScope, getSavedQuery } from '@/api/report';
 import { listMetrics } from '@/api/metrics';
 import MetricPicker from './components/MetricPicker.vue';
 import SubjectPicker from './components/SubjectPicker.vue';
@@ -162,6 +168,7 @@ const date = ref(LATEST_DATA_DATE);
 const view = ref('table');
 const querying = ref(false);
 const exporting = ref(false);
+const queryError = ref('');
 const hasResult = ref(true);
 
 // 结果数据 —— 初始为空，点查询后由后端返回填充；查询失败一律清空（不回退假数据）
@@ -186,6 +193,7 @@ function reset() {
   subjects.value = [];
   date.value = LATEST_DATA_DATE;
   hasResult.value = false;
+  queryError.value = '';
 }
 
 // ============ 对象选择 dialog（弹框逻辑已抽到 components/SubjectPicker.vue）============
@@ -238,8 +246,10 @@ function onPageSizeChange(s) { resultPageSize.value = s; resultPageNo.value = 1;
 
 // 实际发起查询（服务端分页）。不选对象=按数据范围查"能看到的全部对象"，故不再强制选对象。
 async function runQuery() {
+  if (querying.value) return;
   if (!pickedMetrics.value.length) { ElMessage.warning('请至少选择 1 个指标'); return; }
   querying.value = true;
+  queryError.value = '';
   try {
     const r = await queryDynamic({
       dim: dim.value,
@@ -262,12 +272,14 @@ async function runQuery() {
     rows.value = [];
     resultTotal.value = 0;
     hasResult.value = false;
+    queryError.value = e?.message || '动态指标查询失败，请检查条件后重试';
   } finally {
     querying.value = false;
   }
 }
 
 async function onExport() {
+  if (exporting.value) return;
   if (!pickedMetrics.value.length) { ElMessage.warning('请至少选择 1 个指标'); return; }
   // 不选对象=导出数据范围内全部对象（导出不分页，后端返回全量）
   exporting.value = true;
@@ -402,26 +414,16 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .rpt-dyn {
-  .page-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px;
-    h1 { font-size: 18px; font-weight: 600; color: $text-1; }
-    .desc { color: $text-3; font-size: 12px; }
-    .actions { margin-left: auto; display: flex; gap: 8px; }
-  }
   .query .row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
   .query .col { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
   .query .col.grow { flex: 1; min-width: 240px; }
   .query .lab { font-size: 12px; color: $text-3; }
-  .query .tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; min-height: 36px; border: 1px solid $border-2; border-radius: 4px; align-items: center;
-    &.click { cursor: pointer; }
-    .add { cursor: pointer; border-style: dashed; color: $primary-400; }
+  .query .tags { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2); min-height: 40px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-control); align-items: center;
   }
   .row-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
-  .result { padding: 16px 20px; }
-  .card-h { display: flex; align-items: center; padding: 0 0 12px; border-bottom: 1px solid $border-1; margin-bottom: 14px;
-    .title { font-size: 14px; font-weight: 600; }
-    .chart-tabs { margin-left: auto; display: flex; gap: 4px; }
-  }
+  .result { min-height: 360px; }
+  .chart-tabs { margin-left: auto; }
   .chart { height: 360px; }
   .obj-pool { max-height: 240px; overflow: auto; margin-top: 8px;
     .obj-row { display: flex; padding: 6px 8px; cursor: pointer; border-radius: 4px; font-size: 13px;
@@ -430,25 +432,8 @@ onMounted(async () => {
     }
   }
 
-  .subject-picker {
-    display: flex; gap: 16px; min-height: 400px;
-    .picker-left { flex: 1; border-right: 1px solid $border-2; padding-right: 16px; overflow: auto; }
-    .picker-right { flex: 1; overflow: auto; }
-    .picker-title { font-size: 13px; font-weight: 600; color: $text-2; margin-bottom: 8px; }
-    .emp-results {
-      max-height: 180px; overflow: auto; border: 1px solid $border-3; border-radius: 4px;
-      .emp-row {
-        display: flex; justify-content: space-between; padding: 6px 10px; cursor: pointer; font-size: 13px;
-        &:hover { background: $primary-50; }
-        .muted { color: $text-4; font-size: 12px; }
-      }
-    }
-    .selected-list {
-      max-height: 200px; overflow: auto; padding: 6px; border: 1px solid $border-3; border-radius: 4px;
-    }
-    .obj-empty { color: $text-4; font-size: 12px; padding: 12px; text-align: center; }
-  }
 }
 .pager { display: flex; justify-content: flex-end; padding: 12px 0; }
 .pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
+.error-state { align-items: center; background: var(--color-danger-bg); border: 1px solid var(--color-border); color: var(--color-danger-fg); display: flex; gap: var(--space-3); justify-content: space-between; margin-bottom: var(--space-3); padding: var(--space-3); }
 </style>

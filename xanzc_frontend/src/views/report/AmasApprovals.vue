@@ -5,15 +5,16 @@
   点击「详情」→ /report/amas-approvals/:perfAdjustNo
 -->
 <template>
-  <div class="amas-approvals">
-    <div class="page-h">
-      <PageTitle />
+  <main class="bp-crud amas-approvals" aria-labelledby="amas-approvals-title" :aria-busy="loading || loading2 ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="amas-approvals-title" />
       <span class="desc">历史业绩调整（AMAS）与业绩调整（平台）两类申请查询，按申请时间倒序</span>
-    </div>
+    </header>
 
+    <section class="card-section tab-panel" aria-label="业绩分配审批查询">
     <el-tabs v-model="activeTab" class="page-tabs">
     <el-tab-pane label="业绩调整" name="adjust">
-      <el-form :model="q2" inline class="filter-form" @submit.prevent>
+      <el-form :model="q2" inline class="filter-form" aria-label="业绩调整筛选" @submit.prevent>
         <el-form-item label="申请人工号">
           <el-input v-model="q2.applicant" placeholder="精确" clearable style="width:150px" />
         </el-form-item>
@@ -34,12 +35,14 @@
             start-placeholder="起" end-placeholder="止" style="width:240px" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="onSearch2">查询</el-button>
+          <el-button type="primary" :loading="loading2" :disabled="loading2" @click="onSearch2">查询</el-button>
           <el-button @click="onReset2">重置</el-button>
         </el-form-item>
       </el-form>
 
-      <el-table :data="rows2" v-loading="loading2" border stripe size="default">
+      <div class="table-toolbar"><h2 class="section-title">业绩调整申请</h2><p class="table-state" role="status" aria-live="polite">{{ error2 || (loading2 ? '正在加载业绩调整申请' : rows2.length ? `共 ${total2} 条记录` : '暂无业绩调整申请') }}</p></div>
+      <div v-if="error2" class="error-state" role="alert"><span>{{ error2 }}</span><el-button link type="primary" @click="load2">重试</el-button></div>
+      <el-table :data="rows2" v-loading="loading2" border stripe size="default" empty-text="暂无业绩调整申请" aria-label="业绩调整申请列表">
         <el-table-column type="index" label="序号" width="60" />
         <el-table-column label="申请人" min-width="130">
           <template #default="{ row }">
@@ -82,7 +85,7 @@
 
     <el-tab-pane label="历史业绩调整" name="history">
     <!-- 顶部查询项 -->
-    <el-form :model="q" inline class="filter-form" @submit.prevent>
+    <el-form :model="q" inline class="filter-form" aria-label="历史业绩调整筛选" @submit.prevent>
       <el-form-item label="申请人工号">
         <el-input v-model="q.applyUsername" placeholder="精确" clearable style="width:150px" />
       </el-form-item>
@@ -102,12 +105,14 @@
           start-placeholder="起" end-placeholder="止" style="width:240px" />
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" @click="onSearch">查询</el-button>
+        <el-button type="primary" :loading="loading" :disabled="loading" @click="onSearch">查询</el-button>
         <el-button @click="onReset">重置</el-button>
       </el-form-item>
     </el-form>
 
-    <el-table :data="rows" v-loading="loading" border stripe size="default">
+    <div class="table-toolbar"><h2 class="section-title">历史业绩调整</h2><p class="table-state" role="status" aria-live="polite">{{ errorMessage || (loading ? '正在加载历史业绩调整' : rows.length ? `共 ${total} 条记录` : '暂无历史业绩调整') }}</p></div>
+    <div v-if="errorMessage" class="error-state" role="alert"><span>{{ errorMessage }}</span><el-button link type="primary" @click="load">重试</el-button></div>
+    <el-table :data="rows" v-loading="loading" border stripe size="default" empty-text="暂无历史业绩调整" aria-label="历史业绩调整列表">
       <el-table-column type="index" label="序号" width="60" />
       <el-table-column label="申请人" min-width="130">
         <template #default="{ row }">
@@ -147,10 +152,11 @@
     </div>
     </el-tab-pane>
     </el-tabs>
+    </section>
 
     <!-- 查看调整申请（共享只读组件，业绩调整页与本页共用，内容一致） -->
     <AllocAdjustViewDialog v-model="viewShow" :apply-id="viewId" />
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -180,6 +186,7 @@ const page = reactive({ pageNo: 1, pageSize: 20 });
 const rows = ref([]);
 const total = ref(0);
 const loading = ref(false);
+const errorMessage = ref('');
 
 // ---- 业绩调整 Tab 状态 ----
 const q2 = reactive({ applicant: '', custKeyword: '', status: '' });
@@ -188,6 +195,7 @@ const page2 = reactive({ pageNo: 1, pageSize: 20 });
 const rows2 = ref([]);
 const total2 = ref(0);
 const loading2 = ref(false);
+const error2 = ref('');
 let loaded1 = false; // 历史业绩调整 懒加载标志
 let loaded2 = false; // 业绩调整 懒加载标志
 
@@ -236,6 +244,7 @@ async function load() {
   loaded1 = true;
   syncUrl();
   loading.value = true;
+  errorMessage.value = '';
   try {
     const params = {
       pageNo: page.pageNo, pageSize: page.pageSize,
@@ -248,6 +257,10 @@ async function load() {
     const r = await listAmasApprovals(params);
     rows.value = r?.records || [];
     total.value = r?.total || 0;
+  } catch (e) {
+    rows.value = [];
+    total.value = 0;
+    errorMessage.value = e?.message || '历史业绩调整加载失败，请重试';
   } finally {
     loading.value = false;
   }
@@ -268,6 +281,7 @@ async function load2() {
   loaded2 = true;
   syncUrl();
   loading2.value = true;
+  error2.value = '';
   try {
     const params = {
       pageNo: page2.pageNo, pageSize: page2.pageSize,
@@ -280,6 +294,10 @@ async function load2() {
     const r = await listAllocAdjustApplies(params);
     rows2.value = r?.records || [];
     total2.value = r?.total || 0;
+  } catch (e) {
+    rows2.value = [];
+    total2.value = 0;
+    error2.value = e?.message || '业绩调整申请加载失败，请重试';
   } finally {
     loading2.value = false;
   }
@@ -295,6 +313,7 @@ function onSize2(s) { page2.pageSize = s; page2.pageNo = 1; load2(); }
 const viewShow = ref(false);
 const viewId = ref('');
 function goAllocDetail(row) {
+  if (!row?.id) return;
   viewId.value = row.id;
   viewShow.value = true;
 }
@@ -313,16 +332,11 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.amas-approvals { padding: 4px 2px; }
-.page-h { margin-bottom: 12px;
-  h1 { font-size: 18px; margin: 0; display: inline-block; }
-  .desc { font-size: 12px; color: #909399; margin-left: 12px; }
-}
-.filter-form { margin-bottom: 8px; }
-.sub { color: #909399; font-size: 12px; }
+.amas-approvals { min-width: 0; }
+.tab-panel { padding: var(--space-4); }
+.filter-form { margin-bottom: var(--space-4); }
+.table-toolbar { align-items: flex-start; display: flex; justify-content: space-between; margin-bottom: var(--space-3); }
+.sub { color: var(--color-text-muted); font-size: 12px; }
 .pager { margin-top: 12px; display: flex; justify-content: flex-end; }
-.sec-t { font-size: 14px; margin: 16px 0 8px; padding-left: 8px; border-left: 3px solid #409eff; }
-.node { margin-left: 8px; color: #303133; font-weight: 500; }
-.approval-meta { font-size: 12px; color: #606266; margin-top: 4px; }
-.approval-opinion { font-size: 12px; color: #303133; margin-top: 2px; }
+.error-state { align-items: center; background: var(--color-danger-bg); border: 1px solid var(--color-border); color: var(--color-danger-fg); display: flex; gap: var(--space-3); justify-content: space-between; margin-bottom: var(--space-3); padding: var(--space-3); }
 </style>

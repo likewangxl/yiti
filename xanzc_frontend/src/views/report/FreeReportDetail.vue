@@ -1,15 +1,15 @@
 <template>
-  <div>
-    <div class="page-h">
-      <h1>{{ batchInfo.reportName || '报表详情' }}</h1>
+  <main class="bp-crud free-report-detail" aria-labelledby="free-report-detail-title" :aria-busy="loading || metaLoading ? 'true' : 'false'">
+    <header class="page-h">
+      <h1 id="free-report-detail-title" class="page-title">{{ batchInfo.reportName || '报表详情' }}</h1>
       <span class="sub">{{ batchInfo.fileName }} · {{ fmtTime(batchInfo.importTime) }} · {{ batchInfo.rowCount || 0 }} 行</span>
-      <div class="actions">
-        <el-button @click="$router.push('/report/free')">← 返回列表</el-button>
+      <div class="actions action-group" role="group" aria-label="报表详情操作">
+        <el-button @click="$router.push('/report/free')">返回列表</el-button>
       </div>
-    </div>
+    </header>
 
-    <div class="card-section">
-      <el-form inline size="default">
+    <section class="card-section filter-bar" aria-label="自由报表数据筛选">
+      <el-form inline size="default" class="filter-form" @submit.prevent>
         <el-form-item label="工号">
           <el-input v-model="searchCol1" placeholder="按工号搜索" clearable style="width:180px"
                     @keyup.enter="reload" />
@@ -19,15 +19,17 @@
                     @keyup.enter="reload" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="reload">查询</el-button>
+          <el-button type="primary" :loading="loading" :disabled="loading" @click="onSearch">查询</el-button>
           <el-button @click="searchCol1 = ''; searchCol2 = ''; reload()">重置</el-button>
         </el-form-item>
       </el-form>
-    </div>
+    </section>
 
-    <div class="card-section table">
+    <section class="card-section data-panel" aria-labelledby="free-report-detail-table-title" aria-describedby="free-report-detail-state" :aria-busy="loading ? 'true' : 'false'">
+      <div class="toolbar"><div><h2 id="free-report-detail-table-title" class="section-title">导入数据</h2><p class="hint">按前两列工号、姓名筛选；点击数据单元格可查看完整原始值。</p></div><p id="free-report-detail-state" class="table-state" role="status" aria-live="polite">{{ loadError || (loading ? '正在加载报表数据' : rows.length ? `共 ${total} 行` : '暂无数据') }}</p></div>
+      <div v-if="metaError || loadError" class="error-state" role="alert"><span>{{ metaError || loadError }}</span><el-button link type="primary" @click="reload">重试</el-button></div>
       <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无数据" stripe border
-                max-height="560" style="width:100%">
+                max-height="560" style="width:100%" aria-labelledby="free-report-detail-table-title">
         <el-table-column type="index" label="序号" width="60" fixed />
         <el-table-column v-if="columns.length > 0" :prop="columns[0].key" :label="columns[0].label"
                          width="150" fixed />
@@ -59,12 +61,12 @@
           :total="total"
           background
           layout="total, sizes, prev, pager, next, jumper"
-          @size-change="reload"
+          @size-change="onSizeChange"
           @current-change="reload"
         />
       </div>
-    </div>
-  </div>
+    </section>
+  </main>
 </template>
 
 <script setup>
@@ -87,6 +89,9 @@ const searchCol2 = ref('');
 const col1Label = computed(() => columns.value[0]?.label || '第一列');
 const col2Label = computed(() => columns.value[1]?.label || '第二列');
 const loading = ref(false);
+const metaLoading = ref(false);
+const loadError = ref('');
+const metaError = ref('');
 
 const dynamicCols = computed(() => columns.value.slice(2));
 
@@ -100,18 +105,20 @@ async function loadBatchInfo() {
     const list = await listFreeReportBatches();
     const arr = Array.isArray(list) ? list : [];
     batchInfo.value = arr.find(b => b.id === batchId) || {};
-  } catch {}
+  } catch (e) { metaError.value = e?.message || '报表批次信息加载失败'; }
 }
 
 async function loadColumns() {
   try {
     const cols = await getFreeReportColumns(batchId);
     columns.value = Array.isArray(cols) ? cols : [];
-  } catch { columns.value = []; }
+  } catch (e) { columns.value = []; metaError.value = e?.message || '报表列定义加载失败'; }
 }
 
 async function reload() {
+  if (loading.value) return;
   loading.value = true;
+  loadError.value = '';
   try {
     const r = await queryFreeReportData({
       batchId,
@@ -122,14 +129,20 @@ async function reload() {
     });
     rows.value = r?.records || [];
     total.value = r?.total || 0;
-  } catch {
+  } catch (e) {
     rows.value = [];
     total.value = 0;
+    loadError.value = e?.message || '报表数据加载失败，请重试';
   } finally { loading.value = false; }
 }
 
+function onSearch() { pageNo.value = 1; reload(); }
+function onSizeChange() { pageNo.value = 1; reload(); }
+
 onMounted(async () => {
+  metaLoading.value = true;
   await Promise.all([loadBatchInfo(), loadColumns()]);
+  metaLoading.value = false;
   reload();
 });
 </script>
@@ -140,13 +153,8 @@ onMounted(async () => {
 .cell-full-label { color: #999; font-size: 12px; margin-bottom: 4px; }
 .cell-full-val { font-family: ui-monospace, monospace; word-break: break-all; }
 
-.page-h {
-  display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px;
-  h1 { font-size: 18px; font-weight: 600; }
-  .sub { color: #999; font-size: 12px; }
-  .actions { margin-left: auto; }
-}
-.table { padding: 0; padding-bottom: 12px; }
 .pager { padding: 12px 20px; display: flex; justify-content: flex-end; }
 .pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
+.cell-full-label { color: var(--color-text-muted); }
+.error-state { align-items: center; background: var(--color-danger-bg); border: 1px solid var(--color-border); color: var(--color-danger-fg); display: flex; gap: var(--space-3); justify-content: space-between; margin-bottom: var(--space-3); padding: var(--space-3); }
 </style>
