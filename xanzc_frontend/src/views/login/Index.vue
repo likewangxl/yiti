@@ -1,18 +1,17 @@
 <template>
   <div class="login-page">
-    <!-- 左：品牌渐变面板（与 sidebar 头像、workspace hero 同源色板） -->
-    <aside class="brand">
-      <div class="bg-deco">
+    <aside class="brand" aria-labelledby="brand-title">
+      <div class="bg-deco" aria-hidden="true">
         <span class="ring r1"></span>
         <span class="ring r2"></span>
         <span class="ring r3"></span>
       </div>
       <div class="brand-inner">
-        <div class="logo">
-          <span class="mark">银</span>
+        <div class="logo" aria-label="银行营销平台">
+          <span class="mark" aria-hidden="true">银</span>
           <span class="logo-text">银行营销平台</span>
         </div>
-        <h1 class="title">银行营销 · 业务执行 · 绩效平台</h1>
+        <h1 id="brand-title" class="brand-title">银行营销 · 业务执行 · 绩效平台</h1>
         <p class="tagline">Branch Marketing · Workflow · Performance</p>
         <ul class="hl">
           <li><span class="dot"></span>客户营销 · 线索管理 · 触达任务</li>
@@ -25,13 +24,13 @@
       </div>
     </aside>
 
-    <!-- 右：表单 -->
-    <main class="form-wrap">
+    <main class="form-wrap" aria-labelledby="login-title">
       <div class="form-card">
-        <div class="form-h">
-          <div class="welcome">欢迎登录</div>
-          <div class="hint">{{ showNormal ? '请使用账号登录后台' : '请使用统一认证登录' }}</div>
-        </div>
+        <header class="form-h">
+          <p class="eyebrow">BRANCH PLATFORM / ACCESS</p>
+          <h2 id="login-title" class="login-title">欢迎登录</h2>
+          <p class="hint">{{ showNormal ? '请使用账号登录后台' : '请使用统一认证登录' }}</p>
+        </header>
 
         <el-form
           ref="formRef"
@@ -39,29 +38,40 @@
           :rules="rules"
           size="large"
           class="form"
+          aria-labelledby="login-title"
           @keyup.enter="onSubmit"
         >
-          <template v-if="showNormal">
+          <div v-if="showNormal" class="normal-login">
             <el-form-item prop="username">
+              <label class="field-label" for="login-username">用户名</label>
               <el-input
+                id="login-username"
                 v-model="form.username"
-                placeholder="用户名"
+                placeholder="请输入用户名"
                 clearable
                 autocomplete="username"
+                aria-required="true"
               >
-                <template #prefix><span class="ico">👤</span></template>
+                <template #prefix>
+                  <span class="field-icon field-icon--user" aria-hidden="true"></span>
+                </template>
               </el-input>
             </el-form-item>
 
             <el-form-item prop="password">
+              <label class="field-label" for="login-password">密码</label>
               <el-input
+                id="login-password"
                 v-model="form.password"
                 type="password"
-                placeholder="密码"
+                placeholder="请输入密码"
                 show-password
                 autocomplete="current-password"
+                aria-required="true"
               >
-                <template #prefix><span class="ico">🔒</span></template>
+                <template #prefix>
+                  <span class="field-icon field-icon--lock" aria-hidden="true"></span>
+                </template>
               </el-input>
             </el-form-item>
 
@@ -69,17 +79,23 @@
               type="primary"
               class="btn-login"
               :loading="loading"
+              :disabled="loading"
+              native-type="button"
               @click="onSubmit"
             >
               {{ loading ? '登录中...' : '登 录' }}
             </el-button>
-          </template>
+          </div>
 
-          <!-- 统一认证登录入口：直接 302 到后端 /api/auth/uniauth/redirect → UIAS 单点登录页 -->
-          <div v-if="showUias" class="alt-login">
-            <span v-if="showNormal" class="divider">或</span>
-            <el-button class="btn-uniauth" @click="onUniAuthClick">
-              🛡️ 统一认证登录
+          <div v-if="showUias" class="uias-login">
+            <div class="uias-intro" role="note">
+              <span class="uias-icon" aria-hidden="true"></span>
+              <p>使用统一身份认证安全访问平台，登录后将返回工作台。</p>
+            </div>
+            <!-- 统一认证登录入口：直接 302 到后端 /api/auth/uniauth/redirect → UIAS 单点登录页 -->
+            <el-button class="btn-uniauth" native-type="button" @click="onUniAuthClick">
+              <span class="button-icon button-icon--arrow" aria-hidden="true"></span>
+              <span>统一认证登录</span>
             </el-button>
           </div>
         </el-form>
@@ -93,10 +109,9 @@
 import { ref, reactive, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { login, uniAuthLogin } from '@/api/auth';
+import { login } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
 import { useMenuStore } from '@/stores/menu';
-import { USE_MOCK } from '@/api/http';
 
 const router = useRouter();
 const route  = useRoute();
@@ -184,191 +199,421 @@ if (route.query.error) {
   height: 100vh;
   width: 100%;
   display: grid;
-  grid-template-columns: 1fr 480px;
-  background: $bg-page;
+  grid-template-columns: minmax(0, 1fr) 520px;
+  background: var(--color-page);
+  color: var(--color-text-strong);
   overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
 }
 
 /* === 左侧品牌面板 === */
 .brand {
   position: relative;
-  background: linear-gradient(135deg, $primary 0%, $primary-400 60%, #2d6fd1 100%);
-  color: #fff;
+  background: linear-gradient(135deg, var(--color-sidebar-bg) 0%, var(--color-brand-700) 62%, var(--color-brand-500) 100%);
+  color: var(--color-surface);
   overflow: hidden;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
 }
+
 .bg-deco {
-  position: absolute; inset: 0; pointer-events: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
   .ring {
-    position: absolute; border-radius: 50%;
-    border: 1px solid rgba(255,255,255,.12);
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, var(--color-surface) 14%, transparent);
   }
+
   .r1 { width: 520px; height: 520px; top: -160px; right: -180px; }
-  .r2 { width: 360px; height: 360px; bottom: -120px; left: -120px; border-color: rgba(255,255,255,.08); }
-  .r3 { width: 180px; height: 180px; top: 60%; right: 12%; border-color: rgba(255,255,255,.18); }
+  .r2 {
+    width: 360px;
+    height: 360px;
+    bottom: -120px;
+    left: -120px;
+    border-color: color-mix(in srgb, var(--color-surface) 9%, transparent);
+  }
+  .r3 {
+    width: 180px;
+    height: 180px;
+    top: 60%;
+    right: 12%;
+    border-color: color-mix(in srgb, var(--color-surface) 18%, transparent);
+  }
 }
+
 .brand-inner {
   position: relative;
-  padding: 56px 64px;
-  max-width: 540px;
+  box-sizing: border-box;
   width: 100%;
+  max-width: 680px;
+  min-height: 100%;
+  padding: 64px clamp(48px, 6vw, 88px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
+
 .logo {
-  display: flex; align-items: center; gap: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 56px;
+
   .mark {
-    width: 36px; height: 36px; border-radius: 6px;
-    background: rgba(255,255,255,.18);
-    backdrop-filter: blur(6px);
-    display: grid; place-items: center;
-    color: #fff; font-size: 16px; font-weight: 700;
+    width: 36px;
+    height: 36px;
+    border: 1px solid color-mix(in srgb, var(--color-surface) 25%, transparent);
+    border-radius: var(--radius-control);
+    background: color-mix(in srgb, var(--color-surface) 14%, transparent);
+    display: grid;
+    place-items: center;
+    color: var(--color-surface);
+    font-size: 16px;
+    font-weight: 700;
   }
-  .logo-text { font-size: 15px; font-weight: 500; letter-spacing: .5px; opacity: .92; }
+
+  .logo-text {
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: .5px;
+    opacity: .92;
+  }
 }
-.title {
-  font-size: 32px; line-height: 1.3;
-  font-weight: 600; margin: 0 0 12px;
+
+.brand-title {
+  max-width: 620px;
+  margin: 0 0 12px;
+  font-size: 32px;
+  line-height: 1.3;
+  font-weight: 600;
   letter-spacing: 1px;
 }
+
 .tagline {
-  font-size: 13px; opacity: .6;
   margin: 0 0 48px;
+  color: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  font-size: 13px;
   letter-spacing: 1px;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
 }
+
 .hl {
-  list-style: none; padding: 0; margin: 0;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
   li {
-    font-size: 13.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
     padding: 10px 0;
-    opacity: .9;
-    display: flex; align-items: center; gap: 10px;
-    .dot {
-      width: 5px; height: 5px; border-radius: 50%;
-      background: #93c5fd;
-      box-shadow: 0 0 0 4px rgba(147,197,253,.18);
-    }
+    font-size: 14px;
+    line-height: 22px;
+    color: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  }
+
+  .dot {
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-brand-100);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-brand-100) 18%, transparent);
   }
 }
+
 .copy {
-  position: absolute; bottom: 32px; left: 64px;
-  font-size: 11px; opacity: .5;
+  position: absolute;
+  bottom: 32px;
+  left: clamp(48px, 6vw, 88px);
+  color: color-mix(in srgb, var(--color-surface) 64%, transparent);
+  font-size: 12px;
   letter-spacing: .5px;
 }
 
 /* === 右侧表单面板 === */
 .form-wrap {
-  background: #fff;
+  box-sizing: border-box;
+  min-width: 0;
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
   display: grid;
   place-items: center;
-  padding: 0 56px;
+  padding: 48px 72px;
 }
+
 .form-card {
   width: 100%;
-  max-width: 360px;
+  max-width: 392px;
 }
+
 .form-h {
-  margin-bottom: 36px;
-  .welcome {
-    font-size: 24px; font-weight: 600;
-    color: $text-1;
-    margin-bottom: 6px;
-  }
-  .hint {
-    font-size: 13px;
-    color: $text-3;
-  }
-}
-.form {
-  :deep(.el-form-item) { margin-bottom: 22px; }
-  :deep(.el-input__wrapper) {
-    box-shadow: none;
-    border-bottom: 1px solid $border-2;
-    border-radius: 0;
-    padding-left: 0; padding-right: 0;
-    transition: border-color .15s;
-    &:hover { border-bottom-color: $primary-400; }
-    &.is-focus { border-bottom-color: $primary; box-shadow: none; }
-  }
-  :deep(.el-input__inner) { font-size: 14px; height: 38px; }
-  .ico { font-size: 14px; opacity: .65; margin-right: 6px; }
-}
-.btn-login {
-  width: 100%;
-  height: 42px;
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 4px;
-  background: linear-gradient(135deg, $primary 0%, $primary-400 100%);
-  border: none;
-  border-radius: 4px;
-  margin-top: 8px;
-  &:hover, &:focus {
-    background: linear-gradient(135deg, $primary-400 0%, $primary 100%);
-  }
-}
-.alt-login {
-  margin-top: 14px;
-  text-align: center;
-  .divider {
-    display: block;
-    color: $text-3;
+  margin-bottom: 32px;
+
+  .eyebrow {
+    margin: 0 0 12px;
+    color: var(--color-brand-500);
     font-size: 12px;
-    margin: 12px 0;
-    position: relative;
-    &::before, &::after {
-      content: '';
-      position: absolute; top: 50%;
-      width: 38%; height: 1px;
-      background: $border-2;
-    }
-    &::before { left: 0; }
-    &::after  { right: 0; }
+    font-weight: 600;
+    letter-spacing: 1.2px;
   }
-  .btn-uniauth {
-    width: 100%; height: 40px;
-    font-size: 13px;
-    border: 1px solid $border-2;
-    background: #fff;
-    color: $text-1;
-    border-radius: 4px;
-    &:hover {
-      border-color: $primary;
-      color: $primary;
-    }
+
+  .login-title {
+    margin: 0 0 8px;
+    color: var(--color-text-strong);
+    font-size: 30px;
+    line-height: 40px;
+    font-weight: 600;
   }
-}
-.uni-tip {
-  background: $bg-soft;
-  border-left: 3px solid $primary-400;
-  padding: 8px 12px;
-  font-size: 12px;
-  color: $text-3;
-  line-height: 1.6;
-  margin-bottom: 16px;
-  border-radius: 2px;
-}
-.tip {
-  margin-top: 20px;
-  font-size: 12px;
-  color: $text-3;
-  text-align: center;
-  code {
-    background: $bg-soft;
-    padding: 1px 5px;
-    border-radius: 3px;
-    font-family: ui-monospace, monospace;
-    font-size: 11.5px;
-    color: $primary;
+
+  .hint {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 14px;
+    line-height: 22px;
   }
 }
 
-/* 响应式：窄屏只保留右侧表单 */
-@media (max-width: 900px) {
-  .login-page { grid-template-columns: 1fr; }
-  .brand { display: none; }
-  .form-wrap { padding: 0 24px; }
+.form {
+  :deep(.el-form-item) {
+    margin-bottom: 20px;
+  }
+
+  .field-label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--color-text-strong);
+    font-size: 14px;
+    line-height: 22px;
+    font-weight: 500;
+  }
+
+  :deep(.el-input) {
+    width: 100%;
+  }
+
+  :deep(.el-input__wrapper) {
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 0 12px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-control);
+    background: var(--color-surface-soft);
+    box-shadow: none;
+    transition: border-color var(--motion-fast) var(--ease-enter),
+      box-shadow var(--motion-fast) var(--ease-enter),
+      background-color var(--motion-fast) var(--ease-enter);
+
+    &:hover {
+      border-color: var(--color-brand-500);
+      background: var(--color-surface);
+    }
+
+    &.is-focus {
+      border-color: var(--color-focus);
+      background: var(--color-surface);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-focus) 18%, transparent);
+    }
+  }
+
+  :deep(.el-input__inner) {
+    height: 42px;
+    color: var(--color-text-strong);
+    font-size: 14px;
+  }
+}
+
+.field-icon,
+.button-icon,
+.uias-icon {
+  display: inline-block;
+  position: relative;
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+}
+
+.field-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+}
+
+.field-icon--user::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 5px;
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+.field-icon--user::after {
+  content: '';
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  left: 1px;
+  height: 7px;
+  border: 1.5px solid currentColor;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+}
+
+.field-icon--lock::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 4px;
+  width: 7px;
+  height: 8px;
+  border: 1.5px solid currentColor;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+}
+
+.field-icon--lock::after {
+  content: '';
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  left: 1px;
+  height: 9px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+}
+
+.btn-login,
+.btn-uniauth {
+  width: 100%;
+  min-height: 44px;
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background-color var(--motion-fast) var(--ease-enter),
+    border-color var(--motion-fast) var(--ease-enter),
+    color var(--motion-fast) var(--ease-enter),
+    box-shadow var(--motion-fast) var(--ease-enter);
+}
+
+.btn-login {
+  margin-top: 4px;
+  border: 1px solid var(--color-brand-700);
+  background: linear-gradient(135deg, var(--color-brand-700), var(--color-brand-500));
+  color: var(--color-surface);
+  letter-spacing: 4px;
+
+  &:hover {
+    border-color: var(--color-brand-500);
+    background: var(--color-brand-500);
+  }
+
+  &:active {
+    background: var(--color-brand-700);
+  }
+
+  &.is-disabled,
+  &:disabled {
+    border-color: var(--color-border-strong);
+    background: var(--color-border-strong);
+    color: var(--color-surface);
+  }
+}
+
+.uias-login {
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-soft);
+}
+
+.uias-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 20px;
+
+  p {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 14px;
+    line-height: 22px;
+  }
+}
+
+.uias-icon {
+  width: 22px;
+  height: 24px;
+  margin-top: 1px;
+  border: 1.5px solid var(--color-brand-500);
+  border-radius: 5px 5px 9px 9px;
+  background: var(--color-brand-100);
+}
+
+.uias-icon::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 5px;
+  bottom: 5px;
+  left: 5px;
+  border: 1px solid var(--color-brand-500);
+  border-radius: 50%;
+}
+
+.btn-uniauth {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--color-brand-700);
+  background: var(--color-surface);
+  color: var(--color-brand-700);
+
+  &:hover {
+    border-color: var(--color-brand-500);
+    background: var(--color-brand-100);
+    color: var(--color-brand-700);
+  }
+}
+
+.button-icon--arrow {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+.button-icon--arrow::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 3px;
+  width: 5px;
+  height: 5px;
+  border-top: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+
+:deep(button:focus-visible),
+:deep(input:focus-visible) {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-page *,
+  .login-page *::before,
+  .login-page *::after {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 </style>
