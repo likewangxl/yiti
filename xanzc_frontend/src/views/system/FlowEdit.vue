@@ -10,8 +10,8 @@
       </PageTitle>
       <div class="actions action-group" role="group" aria-label="流程设计操作">
         <el-button :disabled="saving || publishing" @click="goBack">返回列表</el-button>
-        <el-button :disabled="readonly || loading || publishing" :loading="saving" @click="doSave">保存草稿</el-button>
-        <el-button type="primary" :disabled="readonly || loading || saving" :loading="publishing" @click="doPublish">发布</el-button>
+        <el-button :disabled="readonly || loading || !loadConfirmed || publishing" :loading="saving" @click="doSave">保存草稿</el-button>
+        <el-button type="primary" :disabled="readonly || loading || !loadConfirmed || saving" :loading="publishing" @click="doPublish">发布</el-button>
       </div>
     </header>
 
@@ -125,6 +125,7 @@ const variables = ref([]);
 const approverVariables = ref([]);
 const readonly = ref(false);
 const loading = ref(false);
+const loadConfirmed = ref(false);
 const loadError = ref('');
 const saving = ref(false);
 const publishing = ref(false);
@@ -146,6 +147,7 @@ const designerState = computed(() => {
 async function loadGraph() {
   if (loading.value) return;
   loading.value = true;
+  loadConfirmed.value = false;
   loadError.value = '';
   try {
     const model = (await getFlow(id)) || {};
@@ -176,6 +178,7 @@ async function loadGraph() {
     variables.value = flowVariables.status === 'fulfilled' && Array.isArray(flowVariables.value) ? flowVariables.value : [];
     approverVariables.value = approverVariableList.status === 'fulfilled' && Array.isArray(approverVariableList.value) ? approverVariableList.value : [];
     clearSelection();
+    loadConfirmed.value = true;
   } catch (error) {
     loadError.value = `流程模型加载失败：${error?.message || '请稍后重试'}`;
     ElMessage.error(loadError.value);
@@ -294,9 +297,12 @@ function validateGraph() {
 
 function goBack() { router.push('/system/workflow-flows'); }
 async function doSave() {
-  if (readonly.value || loading.value || saving.value || publishing.value) return;
+  if (readonly.value || loading.value || !loadConfirmed.value || saving.value || publishing.value) return;
   const errors = validateGraph();
-  if (errors.length) ElMessage.warning(`草稿存在待修正项：${errors.join('；')}`);
+  if (errors.length) {
+    ElMessage.warning(`草稿存在待修正项：${errors.join('；')}`);
+    return;
+  }
   saving.value = true;
   try {
     await saveFlow(id, buildPayload());
@@ -308,7 +314,7 @@ async function doSave() {
   }
 }
 async function doPublish() {
-  if (readonly.value || loading.value || saving.value || publishing.value) return;
+  if (readonly.value || loading.value || !loadConfirmed.value || saving.value || publishing.value) return;
   const errors = validateGraph();
   if (errors.length) {
     await ElMessageBox.alert(errors.map((error) => `· ${error}`).join('<br/>'), '无法发布：请先修正以下问题', {
