@@ -80,6 +80,7 @@ python3 /home/djdev/leid/yiti/.agents/skills/ui-ux-pro-max/scripts/search.py \
 ```css
 :root {
   --layout-sidebar-width: 220px;
+  --layout-sidebar-collapsed-width: 64px;
   --layout-header-height: 52px;
   --layout-breadcrumb-height: 40px;
   --layout-workspace-tabs-height: 76px;
@@ -92,6 +93,7 @@ python3 /home/djdev/leid/yiti/.agents/skills/ui-ux-pro-max/scripts/search.py \
 壳层行为：
 
 - 侧栏加载菜单时保留可解释的加载态；权限/菜单加载失败时清空旧菜单并 fail-close，不展示上一个用户的菜单。
+- 桌面侧栏支持 `220px` ↔ `64px` 折叠；折叠态只收窄视觉区域，保留权限菜单的图标入口，并为每项提供完整 `aria-label` 与 tooltip。折叠不隐藏已授权菜单，也不改变 `fullBleed` 路由的内容契约。
 - 侧栏分组用真实按钮/可访问的控制元素表达展开收起，`aria-expanded` 随状态变化；当前路由使用 `aria-current="page"` 或等价语义。
 - 当前页签是唯一高亮项；页签关闭后回到 store 选定的相邻页签，不能静默跳回首页。
 - 账户、通知、弹窗等悬浮层不依赖 hover 才能发现；所有 icon-only 控件都有可读的 `aria-label` 和 tooltip/title。
@@ -210,7 +212,7 @@ font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei"
 - 用户管理采用“机构树 + 右侧筛选/表格”的双栏结构；树筛选、表格筛选、批量操作和分页顺序固定，选择状态清晰。
 - 表格默认高密度但保留 40px 左右行高、14px 正文和 8px 组间距；操作列固定在右侧时不得遮挡关键数据。
 - 状态 tag 同时输出“启用/停用/正常/锁定”等文本；排序、分页、表格选中状态提供键盘和读屏语义。
-- 页签使用 `role="tablist"`/`role="tab"`/`aria-selected`；关闭按钮有“关闭 + 页签标题”的 label，长标题使用 tooltip 展开完整文本。
+- 页签使用 `<nav aria-label="工作区页签">` 路由导航语义；每个页签对应独立 URL，当前入口使用 `aria-current="page"`。不要伪装成 `role="tablist"`/`role="tab"`，也不要把路由页签包装成单一 tabpanel。关闭按钮有“关闭 + 页签标题”的 label，长标题使用 tooltip 展开完整文本。
 
 ## 9. 页面节点规则
 
