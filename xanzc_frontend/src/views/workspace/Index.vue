@@ -156,7 +156,7 @@
         <el-table-column label="操作" class-name="operation-cell" width="120" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" :loading="row._acting" :disabled="row._acting" @click="acceptTransfer(row)">认领</el-button>
-            <el-dropdown trigger="click" popper-class="bp-crud-menu">
+            <el-dropdown v-if="row.status === 'PENDING_ACCEPT'" trigger="click" popper-class="bp-crud-menu">
               <el-button link size="small" :disabled="row._acting" aria-label="更多转交操作">更多</el-button>
               <template #dropdown><el-dropdown-menu><el-dropdown-item divided class="danger-item" :disabled="row._acting" @click="declineTransfer(row)">拒绝</el-dropdown-item></el-dropdown-menu></template>
             </el-dropdown>
@@ -193,9 +193,9 @@
         <el-table-column label="操作" class-name="operation-cell" width="120" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewOutboxRow(row)">查看</el-button>
-            <el-dropdown trigger="click" popper-class="bp-crud-menu">
+            <el-dropdown v-if="row.status === 'PENDING_ACCEPT'" trigger="click" popper-class="bp-crud-menu">
               <el-button link size="small" :disabled="row._acting" aria-label="更多转出记录操作">更多</el-button>
-              <template #dropdown><el-dropdown-menu><el-dropdown-item v-if="row.status === 'PENDING_ACCEPT'" divided class="danger-item" :disabled="row._acting" @click="cancelTransfer(row)">撤回</el-dropdown-item></el-dropdown-menu></template>
+              <template #dropdown><el-dropdown-menu><el-dropdown-item divided class="danger-item" :disabled="row._acting" @click="cancelTransfer(row)">撤回</el-dropdown-item></el-dropdown-menu></template>
             </el-dropdown>
           </template>
         </el-table-column>

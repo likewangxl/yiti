@@ -50,8 +50,8 @@
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button>
             <el-dropdown trigger="click" popper-class="bp-crud-menu">
-              <el-button link size="small" :disabled="isDeletingTag(row.tagId)" aria-label="更多人员标签操作">更多</el-button>
-              <template #dropdown><el-dropdown-menu><el-dropdown-item @click="openEdit(row)">编辑</el-dropdown-item><el-dropdown-item divided class="danger-item" :disabled="isDeletingTag(row.tagId)" @click="onDeleteTag(row)">删除</el-dropdown-item></el-dropdown-menu></template>
+              <el-button link size="small" aria-label="更多人员标签操作">更多</el-button>
+              <template #dropdown><el-dropdown-menu><el-dropdown-item @click="openEdit(row)">编辑</el-dropdown-item><el-dropdown-item divided class="danger-item" :disabled="isDeletingTag(row.tagId)" @click="onDeleteTag(row)">{{ isDeletingTag(row.tagId) ? '删除中…' : '删除' }}</el-dropdown-item></el-dropdown-menu></template>
             </el-dropdown>
           </template>
         </el-table-column>

@@ -47,12 +47,12 @@
             <div class="row-actions" role="group" :aria-label="`${row.jobName || row.jobKey} 操作`">
               <el-button link type="primary" size="small" @click="openLogs(row)">日志</el-button>
               <el-dropdown trigger="click" popper-class="bp-crud-menu">
-                <el-button link size="small" :disabled="isJobPending(row.id)" aria-label="更多调度任务操作">更多</el-button>
+                <el-button link size="small" aria-label="更多调度任务操作">更多</el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item v-if="row.status === 'ACTIVE'" :disabled="isJobPending(row.id)" @click="onPause(row)">{{ isJobPending(row.id) ? '暂停中…' : '暂停' }}</el-dropdown-item>
                     <el-dropdown-item v-else :disabled="isJobPending(row.id)" @click="onResume(row)">{{ isJobPending(row.id) ? '恢复中…' : '恢复' }}</el-dropdown-item>
-                    <el-dropdown-item v-if="row.allowManualTrigger" divided class="warning-item" :disabled="isJobPending(row.id)" @click="onTrigger(row)">手动触发</el-dropdown-item>
+                    <el-dropdown-item v-if="row.allowManualTrigger" divided class="warning-item" @click="onTrigger(row)">手动触发</el-dropdown-item>
                     <el-dropdown-item v-else disabled>不允许手动触发</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>

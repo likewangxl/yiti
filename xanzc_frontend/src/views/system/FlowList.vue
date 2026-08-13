@@ -60,12 +60,12 @@
             <div class="row-actions" role="group" :aria-label="`${row.name || '审批流程'} 操作`">
               <el-button link type="primary" size="small" @click="goEdit(row)">编辑</el-button>
               <el-dropdown trigger="click" popper-class="bp-crud-menu">
-                <el-button link size="small" :disabled="isPublishing(row.id) || isCloning(row.id) || isDeleting(row.id)" aria-label="更多审批流程操作">更多</el-button>
+                <el-button link size="small" aria-label="更多审批流程操作">更多</el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item :disabled="isPublishing(row.id)" @click="doPublish(row)">{{ isPublishing(row.id) ? '发布中…' : '发布' }}</el-dropdown-item>
                     <el-dropdown-item :disabled="isCloning(row.id)" @click="doClone(row)">{{ isCloning(row.id) ? '克隆中…' : '克隆' }}</el-dropdown-item>
-                    <el-dropdown-item v-if="row.status === 'DRAFT' && row.isReadonlyImport != 1" divided class="danger-item" :disabled="isDeleting(row.id)" @click="doDelete(row)">删除</el-dropdown-item>
+                    <el-dropdown-item v-if="row.status === 'DRAFT' && row.isReadonlyImport != 1" divided class="danger-item" :disabled="isDeleting(row.id)" @click="doDelete(row)">{{ isDeleting(row.id) ? '删除中…' : '删除' }}</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>

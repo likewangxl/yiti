@@ -89,12 +89,20 @@
             <el-table-column label="操作" class-name="operation-cell" width="180" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="openSharedView(row)">查看</el-button>
-                <el-dropdown trigger="click" popper-class="bp-crud-menu">
+                <el-dropdown v-if="row.status === 'DRAFT' || canWithdraw(row.status)" trigger="click" popper-class="bp-crud-menu">
                   <el-button link size="small" aria-label="更多业绩调整申请操作">更多</el-button>
                   <template #dropdown>
                     <el-dropdown-menu>
                       <el-dropdown-item v-if="row.status === 'DRAFT'" @click="openEdit(row)">编辑</el-dropdown-item>
-                      <el-dropdown-item v-if="canWithdraw(row.status)" divided class="danger-item" @click="onWithdraw(row)">撤回</el-dropdown-item>
+                      <el-popconfirm
+                        v-if="canWithdraw(row.status)"
+                        :title="`确认撤回申请 ${row.applyNo || row.id}？`"
+                        @confirm="onWithdraw(row)"
+                      >
+                        <template #reference>
+                          <el-dropdown-item divided class="danger-item">撤回</el-dropdown-item>
+                        </template>
+                      </el-popconfirm>
                     </el-dropdown-menu>
                   </template>
                 </el-dropdown>

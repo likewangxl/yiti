@@ -171,13 +171,16 @@ a { color: inherit; text-decoration: none; }
   padding: 0 var(--space-2);
 }
 
-.bp-crud :where(.el-table .cell) {
+.bp-crud .el-table .cell {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.bp-crud :where(.operation-cell .cell, .el-table-fixed-column--right.operation-cell .cell, .el-table-fixed-column--right .operation-cell .cell, .el-table__fixed-right .operation-cell .cell) {
+.bp-crud .el-table td.operation-cell .cell,
+.bp-crud .el-table td.el-table-fixed-column--right.operation-cell .cell,
+.bp-crud .el-table .el-table-fixed-column--right .operation-cell .cell,
+.bp-crud .el-table__fixed-right td.operation-cell .cell {
   overflow: visible;
   text-overflow: clip;
   white-space: nowrap;

@@ -53,7 +53,7 @@
           <template #default="{ row }">
             <div class="row-actions" role="group" :aria-label="`${row.title || '通知'} 操作`">
               <el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button>
-              <el-dropdown trigger="click" popper-class="bp-crud-menu">
+              <el-dropdown v-if="!row.isRead || row.linkUrl || row.bizId" trigger="click" popper-class="bp-crud-menu">
                 <el-button link size="small" aria-label="更多通知操作">更多</el-button>
                 <template #dropdown>
                   <el-dropdown-menu>

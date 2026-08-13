@@ -15,7 +15,7 @@ function scopedBaseline() {
 }
 
 describe('共享 CRUD 页面基线样式', () => {
-  it('以显式 bp-crud 命名空间和低特异度选择器覆盖页面结构', () => {
+  it('以显式 bp-crud 命名空间和受控选择器覆盖页面结构', () => {
     const scoped = scopedBaseline();
 
     expect(scoped).toMatch(/\.bp-crud\s*\{/);
@@ -53,8 +53,10 @@ describe('共享 CRUD 页面基线样式', () => {
     expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-input__wrapper,\s*\.el-select__wrapper,\s*\.el-button\)\s*\{[\s\S]*min-height:\s*32px;/);
     expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-table\s+th\.el-table__cell,\s*\.el-table\s+td\.el-table__cell\)\s*\{[\s\S]*height:\s*40px;/);
     expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-table\s+\.el-tag\)\s*\{[\s\S]*min-height:\s*24px;/);
-    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-table\s+\.cell\)\s*\{[\s\S]*text-overflow:\s*ellipsis;/);
-    expect(scoped).toMatch(/\.bp-crud\s+:where\([\s\S]*\.operation-cell\s+\.cell[\s\S]*\)\s*\{[\s\S]*overflow:\s*visible;[\s\S]*text-overflow:\s*clip;[\s\S]*white-space:\s*nowrap;/);
+    // Element Plus 的 .el-table .cell 为 0,2,0；:where() 的内部选择器不贡献特异度。
+    // 这里必须使用足以覆盖组件默认值的主平台作用域，不能仅靠 selector 文本存在。
+    expect(scoped).toMatch(/\.bp-crud\s+\.el-table\s+\.cell\s*\{[\s\S]*overflow:\s*hidden;[\s\S]*text-overflow:\s*ellipsis;[\s\S]*white-space:\s*nowrap;/);
+    expect(scoped).toMatch(/\.bp-crud\s+\.el-table\s+td\.operation-cell\s+\.cell[\s\S]*\{[\s\S]*overflow:\s*visible;[\s\S]*text-overflow:\s*clip;[\s\S]*white-space:\s*nowrap;/);
     expect(scoped).toMatch(/\.el-table-fixed-column--right\.operation-cell\s+\.cell/);
     expect(scoped).not.toMatch(/\.el-table-fixed-column--right\s+\.cell\s*\{/);
     expect(scoped).toMatch(/\.bp-crud-menu\s+\.danger-item/);

@@ -99,12 +99,12 @@
             <div class="row-actions" role="group" :aria-label="`${row.menuName} 操作`">
               <el-button link type="primary" size="small" @click.stop="openEdit(row)">编辑</el-button>
               <el-dropdown trigger="click" popper-class="bp-crud-menu">
-                <el-button link size="small" :disabled="isDeleting(row.resourceId)" aria-label="更多菜单操作">更多</el-button>
+                <el-button link size="small" aria-label="更多菜单操作">更多</el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item @click="openCreate(row)">新增子菜单</el-dropdown-item>
-                    <el-dropdown-item v-if="row.menuEndFlag === '1'" @click="openAssign(row)">分配角色</el-dropdown-item>
-                    <el-dropdown-item divided class="danger-item" :disabled="isDeleting(row.resourceId)" @click="confirmDelete(row)">删除</el-dropdown-item>
+                    <el-dropdown-item @click.stop="openCreate(row)">新增子菜单</el-dropdown-item>
+                    <el-dropdown-item v-if="row.menuEndFlag === '1'" @click.stop="openAssign(row)">分配角色</el-dropdown-item>
+                    <el-dropdown-item divided class="danger-item" :disabled="isDeleting(row.resourceId)" @click.stop="confirmDelete(row)">删除</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>

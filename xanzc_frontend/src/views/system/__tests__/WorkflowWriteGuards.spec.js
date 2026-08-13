@@ -40,6 +40,9 @@ const commonStubs = {
   'el-button': { name: 'ElButton', props: ['loading', 'disabled'], emits: ['click'], template: '<button :disabled="loading || disabled" @click="$emit(\'click\')"><slot /></button>' },
   'el-table': passthrough('ElTable'),
   'el-table-column': empty('ElTableColumn'),
+  'el-dropdown': { name: 'ElDropdown', template: '<div><slot /><slot name="dropdown" /></div>' },
+  'el-dropdown-menu': passthrough('ElDropdownMenu'),
+  'el-dropdown-item': { name: 'ElDropdownItem', props: ['disabled'], emits: ['click'], template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>' },
   'el-tag': passthrough('ElTag'),
   'el-dialog': passthrough('ElDialog'),
   'el-form': passthrough('ElForm'),
@@ -68,7 +71,7 @@ describe('流程关键写操作防重复提交', () => {
   it('发布同一流程时，确认后的重复触发只提交一次', async () => {
     const request = deferred();
     publishFlow.mockReturnValueOnce(request.promise);
-    wrapper = mount(FlowList, { global: { stubs: commonStubs, directives: { loading: { mounted() {}, updated() {} } } } });
+    wrapper = mount(FlowList, { global: { stubs: commonStubs, directives: { loading: { mounted() {}, updated() {} }, 'bp-overflow-tooltip': {} } } });
     await flushPromises();
 
     const row = { id: 'FLOW_1', name: '业绩调整流程' };

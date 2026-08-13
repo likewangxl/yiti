@@ -72,14 +72,12 @@
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openEdit(row, true)">查看</el-button>
             <!-- 复制版本/编辑仅资财部人员可见可操作；启用/禁用仍在编辑弹框内。 -->
-            <el-dropdown trigger="click" popper-class="bp-crud-menu">
+            <el-dropdown v-if="isCaizai" trigger="click" popper-class="bp-crud-menu">
               <el-button link size="small" aria-label="更多KPI方案操作">更多</el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <template v-if="isCaizai">
-                    <el-dropdown-item :disabled="isDisabled(row)" @click="onCloneVersion(row)">复制版本</el-dropdown-item>
-                    <el-dropdown-item v-if="row.createdByMe" :disabled="isDisabled(row)" @click="openEdit(row, false)">编辑</el-dropdown-item>
-                  </template>
+                  <el-dropdown-item :disabled="isDisabled(row)" @click="onCloneVersion(row)">复制版本</el-dropdown-item>
+                  <el-dropdown-item v-if="row.createdByMe" :disabled="isDisabled(row)" @click="openEdit(row, false)">编辑</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
