@@ -16,4 +16,14 @@ describe('大屏路由资源契约', () => {
         .toBe(requiredResource);
     }
   });
+
+  it('设计器是顶层独立窗口路由，不再经过 DefaultLayout', async () => {
+    const { default: router } = await import('@/router');
+    const resolved = router.resolve('/screen-admin/designer');
+
+    expect(resolved.name).toBe('ScreenAdminDesigner');
+    expect(resolved.matched).toHaveLength(1);
+    expect(resolved.matched[0].path).toBe('/screen-admin/designer');
+    expect(resolved.meta.public).not.toBe(true);
+  });
 });

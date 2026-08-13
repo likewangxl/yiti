@@ -23,6 +23,19 @@ const routes = [
     component: () => import('@/views/screen/ScreenView.vue'),
     meta: { title: '经营大屏', requiredResource: '/api/screen/view/*' }
   },
+  // 大屏设计器：同运行态一样是顶层独立路由，不渲染主平台 sidebar/header/工作区页签。
+  // 保留原路径和权限资源，刷新、直达和会话恢复仍经全局守卫 Fail Close。
+  {
+    path: '/screen-admin/designer',
+    name: 'ScreenAdminDesigner',
+    component: () => import('@/views/screen/designer/DesignerV2.vue'),
+    meta: {
+      title: '大屏设计器',
+      group: '报表分析',
+      fullBleed: true,
+      requiredResource: '/api/screen/admin/screens'
+    }
+  },
   {
     path: '/no-access',
     name: 'NoAccess',
@@ -114,9 +127,6 @@ const routes = [
       { path: 'screen-admin/datasources', name: 'ScreenAdminDs',       component: () => import('@/views/screen/admin/Datasources.vue'), meta: { title: '大屏数据源', group: '报表分析', requiredResource: '/api/screen/admin/datasources' } },
       { path: 'screen-admin/org-profiles', name: 'ScreenAdminOrgProfiles', component: () => import('@/views/screen/admin/OrgProfiles.vue'), meta: { title: '机构经营画像', group: '报表分析', requiredResource: '/api/admin/org-profiles' } },
       { path: 'screen-admin/org-groups', name: 'ScreenAdminOrgGroups', component: () => import('@/views/screen/admin/OrgGroups.vue'), meta: { title: '命名机构组', group: '报表分析', requiredResource: '/api/admin/org-groups' } },
-      // fullBleed:设计器需要整块内容区(去 padding),高度契约见 DefaultLayout .content--full
-      { path: 'screen-admin/designer',    name: 'ScreenAdminDesigner', component: () => import('@/views/screen/designer/DesignerV2.vue'),    meta: { title: '大屏设计器', group: '报表分析', fullBleed: true, requiredResource: '/api/screen/admin/screens' } },
-
       // 历史数据查询
       { path: 'guarantee/query',  name: 'GuaranteeQuery', component: () => import('@/views/guarantee/Query.vue'), meta: { title: '担保查询', group: '历史数据查询' } },
       { path: 'guarantee/data-import', name: 'HistoryDataImport', component: () => import('@/views/guarantee/DataImport.vue'), meta: { title: '数据导入查询', group: '历史数据查询' } },
