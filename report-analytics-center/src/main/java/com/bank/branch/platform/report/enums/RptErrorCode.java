@@ -154,6 +154,34 @@ public enum RptErrorCode {
     /** 取数 DATA_SCOPE 行级权限拒绝（2026-07-17 spec §4）：主体参数越权 / GLOBAL 数据源 scope 不足 / fail-close 兜底 */
     SCREEN_DATA_SCOPE_DENIED("RPT-43013", "数据范围不允许"),
 
+    /** 屏与数据源的业务条线不兼容。 */
+    SCREEN_BIZ_LINE_MISMATCH("RPT-43014", "大屏与数据源业务条线不兼容"),
+
+    /** 命名机构组缺失、停用、为空或无法解析。 */
+    SCREEN_SCOPE_INVALID("RPT-43015", "大屏机构范围配置无效"),
+
+    /** 命名机构组屏发布时必须配置有效查看角色。 */
+    SCREEN_ACCESS_ROLE_REQUIRED("RPT-43016", "大屏未配置有效查看角色"),
+
+    /** 当前用户未通过屏级角色与机构组的同角色联合门禁。 */
+    SCREEN_ACCESS_DENIED("RPT-43017", "无权访问该大屏"),
+
+    /** schemaVersion=2 取数区块不属于当前发布快照。 */
+    SCREEN_BLOCK_NOT_PUBLISHED("RPT-43018", "大屏区块不属于当前发布版本"),
+
+    /** 复合地图配置非法或机构点位缺失。 */
+    SCREEN_MAP_INVALID("RPT-43019", "复合地图配置非法"),
+
+    /** 命名机构组自定义 SQL 未声明安全机构范围标记。 */
+    SCREEN_NAMED_GROUP_SQL_INVALID("RPT-43020", "命名机构组 SQL 缺少安全机构谓词"),
+
+    /** 复合地图节点重复或未唯一落位。 */
+    SCREEN_MAP_PLACEMENT_INVALID("RPT-43021", "复合地图机构落位不唯一"),
+    SCREEN_AUDIT_REASON_REQUIRED("RPT-43022", "大屏权限配置变更必须填写原因"),
+
+    /** 已发布包或归档缺少可验证的不可变图表绑定快照，不能继续运行、回滚或改写关联配置。 */
+    SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED("RPT-43023", "已发布大屏缺少可信不可变绑定快照"),
+
     // =============================================
     // 500xx 系统错误（3 条）
     // =============================================

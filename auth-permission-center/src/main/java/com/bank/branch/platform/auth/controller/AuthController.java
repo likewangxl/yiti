@@ -239,15 +239,17 @@ public class AuthController {
     }
 
     /**
-     * 切换当前角色（仅本次会话生效）
+     * 兼容旧客户端的角色切换接口（无副作用）。
      *
      * @param req     含目标角色ID（必须是当前用户已分配角色）
      * @param session HttpSession
-     * @return 切换后的当前角色
+     * @return 经校验的目标角色
+     * @deprecated 权限已采用全部有效角色并集，不再需要角色切换
      */
+    @Deprecated(since = "2026-08", forRemoval = true)
     @PostMapping("/switch-role")
-    @Operation(summary = "切换当前角色",
-            description = "切换本次会话的当前角色（仅会话内生效，重新登录回到主角色）；切换后菜单、接口权限、数据范围、工作流待办均按新角色")
+    @Operation(summary = "校验角色（兼容旧版角色切换）", deprecated = true,
+            description = "仅校验目标角色属于当前用户并返回角色信息，不修改会话或权限")
     public ResponseWrapper<RoleSimpleDTO> switchRole(
             @Valid @RequestBody com.bank.branch.platform.auth.api.dto.SwitchRoleReqDTO req,
             HttpSession session) {
@@ -296,15 +298,25 @@ public class AuthController {
         }
         dto.setOrgLevel(ctx.orgLevel());
         dto.setIsSystemAdmin(ctx.systemAdmin());
-        dto.setActiveRoleId(ctx.activeRoleId());
-        // 填充 roles: 当前用户全部已分配角色（前端角色下拉用），并标记当前激活角色
-        List<PtRole> roles = userRoleMapper.selectRolesByUserId(ctx.empId());
+        dto.setActiveRoleId(null);
+        // 填充 roles: 当前用户全部有效角色；primary 仅表示 DEFAULT_ASSIGN 默认展示角色
+        List<PtRole> queriedRoles = userRoleMapper.selectRolesByUserId(ctx.empId());
+        List<PtRole> roles = queriedRoles == null ? List.of() : queriedRoles;
+        String configuredPrimaryRoleId = roles.isEmpty()
+                ? null
+                : userRoleMapper.selectPrimaryRoleId(ctx.empId());
+        String primaryRoleId = configuredPrimaryRoleId;
+        if (roles != null && !roles.isEmpty()
+                && roles.stream().noneMatch(r -> r.getRoleId().equals(configuredPrimaryRoleId))) {
+            primaryRoleId = roles.get(0).getRoleId();
+        }
+        final String defaultRoleId = primaryRoleId;
         dto.setRoles(roles.stream().map(r -> {
             RoleSimpleDTO rd = new RoleSimpleDTO();
             rd.setRoleId(r.getRoleId());
             rd.setRoleCode(r.getRoleCode());
             rd.setRoleChName(r.getRoleChName());
-            rd.setPrimary(r.getRoleId().equals(ctx.activeRoleId()));
+            rd.setPrimary(r.getRoleId().equals(defaultRoleId));
             return rd;
         }).collect(Collectors.toList()));
 

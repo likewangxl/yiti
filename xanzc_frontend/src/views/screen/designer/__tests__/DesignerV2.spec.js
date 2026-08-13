@@ -12,7 +12,12 @@ import { createPinia, setActivePinia } from 'pinia';
 vi.mock('@/api/screen', () => ({
   listScreens: vi.fn().mockResolvedValue([]),
   getScreenCanvas: vi.fn(),
-  saveScreen: vi.fn(),
+  saveScreenMetadata: vi.fn(),
+  listScreenAccessRoles: vi.fn(),
+  saveScreenAccessRoles: vi.fn(),
+  listScreenRoles: vi.fn().mockResolvedValue([]),
+  listOrgGroups: vi.fn().mockResolvedValue([]),
+  listOrgProfiles: vi.fn().mockResolvedValue([]),
   saveScreenCanvas: vi.fn(),
   publishScreenCanvas: vi.fn(),
   rollbackScreenCanvas: vi.fn(),
@@ -20,7 +25,16 @@ vi.mock('@/api/screen', () => ({
   listScreenPublishLogs: vi.fn()
 }));
 
-import { listScreens, getScreenCanvas, saveScreen } from '@/api/screen';
+vi.mock('element-plus', () => ({
+  ElMessage: { success: vi.fn(), warning: vi.fn(), info: vi.fn() },
+  ElMessageBox: { confirm: vi.fn().mockResolvedValue() }
+}));
+
+import {
+  listScreens, getScreenCanvas, saveScreenMetadata,
+  listScreenAccessRoles, saveScreenAccessRoles, discardScreenCanvas,
+  saveScreenCanvas, publishScreenCanvas, rollbackScreenCanvas, listScreenPublishLogs
+} from '@/api/screen';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import DesignerV2 from '../DesignerV2.vue';
 
@@ -35,8 +49,25 @@ const ElInputStub = {
   name: 'ElInput', props: ['modelValue'], emits: ['update:modelValue'],
   template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />'
 };
+const ElSelectStub = {
+  name: 'ElSelect', props: ['modelValue', 'multiple'], emits: ['update:modelValue', 'change'],
+  methods: {
+    update(event) {
+      const value = this.multiple
+        ? Array.from(event.target.selectedOptions).map(option => option.value)
+        : event.target.value;
+      this.$emit('update:modelValue', value);
+      this.$emit('change', value);
+    }
+  },
+  template: '<select :multiple="multiple" :value="modelValue" @change="update"><slot /></select>'
+};
+const ElOptionStub = {
+  name: 'ElOption', props: ['value', 'label'],
+  template: '<option :value="value">{{ label }}</option>'
+};
 const stubs = {
-  'el-select': true, 'el-option': true,
+  'el-select': ElSelectStub, 'el-option': ElOptionStub,
   'el-button-group': { template: '<div><slot /></div>' },
   'el-button': ElButtonStub,
   'el-dialog': ElDialogStub,
@@ -81,7 +112,7 @@ describe('DesignerV2.vue 新建大屏', () => {
     vi.clearAllMocks();
   });
 
-  it('工具条有「新建」按钮,提交后调 saveScreen 并刷新列表加载新屏画布', async () => {
+  it('工具条有「新建」按钮，必须显式选择业务条线和机构范围后才提交元数据', async () => {
     listScreens.mockResolvedValueOnce([]); // 初始空列表
     const wrapper = mount(DesignerV2, { global: { stubs } });
     await flushPromises();
@@ -90,23 +121,29 @@ describe('DesignerV2.vue 新建大屏', () => {
     expect(createBtn).toBeTruthy();
     await createBtn.trigger('click');
 
-    // 弹框出现,填屏名(viewLevel 走表单默认 BRANCH)后确定
+    // 弹框出现，除查看视角外的范围字段没有静默默认值，必须由操作者选择。
     const dlg = wrapper.find('.dlg-stub');
     expect(dlg.exists()).toBe(true);
     await dlg.find('input').setValue('测试新屏');
+    const selects = dlg.findAll('select');
+    await selects[1].setValue('COMMON');
+    await selects[2].setValue('LEGACY_CONTEXT');
 
-    saveScreen.mockResolvedValueOnce(99); // 后端返回新屏 id
+    saveScreenMetadata.mockResolvedValueOnce(99); // 后端返回新屏 id
     listScreens.mockResolvedValueOnce([{ id: 99, screenName: '测试新屏', viewLevel: 'BRANCH' }]);
     getScreenCanvas.mockResolvedValueOnce(editorResp(99, 'SCR_NEW'));
     await findButton(wrapper, '确定').trigger('click');
     await flushPromises();
 
-    expect(saveScreen).toHaveBeenCalledWith({ screenName: '测试新屏', viewLevel: 'BRANCH' });
+    expect(saveScreenMetadata).toHaveBeenCalledWith({
+      screenName: '测试新屏', viewLevel: 'BRANCH', bizLine: 'COMMON',
+      orgScopeMode: 'LEGACY_CONTEXT', orgGroupCode: null
+    });
     expect(getScreenCanvas).toHaveBeenCalledWith(99); // 新建后自动选中并加载新屏
     expect(wrapper.find('.dlg-stub').exists()).toBe(false); // 成功后弹框关闭
   });
 
-  it('屏名为空时不提交(saveScreen 不被调用,弹框保持打开)', async () => {
+  it('屏名为空时不提交(saveScreenMetadata 不被调用,弹框保持打开)', async () => {
     listScreens.mockResolvedValueOnce([]);
     const wrapper = mount(DesignerV2, { global: { stubs } });
     await flushPromises();
@@ -115,8 +152,148 @@ describe('DesignerV2.vue 新建大屏', () => {
     await findButton(wrapper, '确定').trigger('click');
     await flushPromises();
 
-    expect(saveScreen).not.toHaveBeenCalled();
+    expect(saveScreenMetadata).not.toHaveBeenCalled();
     expect(wrapper.find('.dlg-stub').exists()).toBe(true);
+  });
+
+  it('编辑范围只提交元数据/范围的 CAS+原因，不夹带区块或角色白名单', async () => {
+    const existing = {
+      id: 7, screenCode: 'SCR_EXISTING', screenName: '现有屏', viewLevel: 'PROVINCE',
+      bizLine: 'RETAIL', orgScopeMode: 'NAMED_GROUP', orgGroupCode: 'G1',
+      allowedRoleCodes: ['R1'], themeJson: '{"theme":"dark"}', status: 'ACTIVE'
+    };
+    const blocks = [{ id: 11, region: 'LEFT', rowNo: 1, colNo: 1, widthPct: 100, heightPct: 100,
+      componentType: 'METRIC_CARD', bindJson: '{"dsId":2}', styleJson: '{}', drillJson: '{}' }];
+    listScreens.mockResolvedValueOnce([existing]);
+    getScreenCanvas.mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), blocks });
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+    await findButton(wrapper, '编辑范围').trigger('click');
+    const dlg = wrapper.find('.dlg-stub');
+    await dlg.findAll('input')[1].setValue('调整命名机构组范围');
+    saveScreenMetadata.mockResolvedValueOnce(7);
+    listScreens.mockResolvedValueOnce([existing]);
+    getScreenCanvas.mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), blocks });
+    await findButton(wrapper, '确定').trigger('click');
+    await flushPromises();
+    expect(saveScreenMetadata).toHaveBeenCalledWith({
+      id: 7, screenCode: 'SCR_EXISTING', screenName: '现有屏', viewLevel: 'PROVINCE',
+      bizLine: 'RETAIL', orgScopeMode: 'NAMED_GROUP', orgGroupCode: 'G1',
+      themeJson: '{"theme":"dark"}', status: 'ACTIVE', expectedVersion: 0, reason: '调整命名机构组范围'
+    });
+  });
+
+  it('放弃草稿必须显示版本与原因，提交独立 discard CAS 请求', async () => {
+    const existing = { id: 7, screenCode: 'SCR_EXISTING', screenName: '现有屏', viewLevel: 'BRANCH' };
+    listScreens.mockResolvedValueOnce([existing]);
+    getScreenCanvas
+      .mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 4 })
+      .mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 5 });
+    discardScreenCanvas.mockResolvedValueOnce();
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+    await findButton(wrapper, '放弃草稿').trigger('click');
+    const dlg = wrapper.find('.dlg-stub');
+    expect(dlg.text()).toContain('版本 4');
+    await dlg.find('input').setValue('撤回误改草稿');
+    await findButton(wrapper, '确认放弃草稿').trigger('click');
+    await flushPromises();
+    expect(discardScreenCanvas).toHaveBeenCalledWith(7, { expectedVersion: 4, reason: '撤回误改草稿' });
+  });
+
+  it('放弃草稿遇到 CAS 冲突时不重试旧版本，而是重载最新画布', async () => {
+    const existing = { id: 7, screenCode: 'SCR_EXISTING', screenName: '现有屏', viewLevel: 'BRANCH' };
+    listScreens.mockResolvedValueOnce([existing]);
+    getScreenCanvas
+      .mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 4 })
+      .mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 5 });
+    discardScreenCanvas.mockRejectedValueOnce({ code: 'RPT-43012' });
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+    await findButton(wrapper, '放弃草稿').trigger('click');
+    const dlg = wrapper.find('.dlg-stub');
+    await dlg.find('input').setValue('并发保存后放弃');
+    await findButton(wrapper, '确认放弃草稿').trigger('click');
+    await flushPromises();
+
+    expect(discardScreenCanvas).toHaveBeenCalledTimes(1);
+    expect(getScreenCanvas).toHaveBeenCalledTimes(2);
+    expect(useScreenDesignerStore().canvasVersion).toBe(5);
+  });
+
+  it('角色白名单只通过高危独立端点提交真实 added/removed、reason 和 canvas 版本', async () => {
+    const existing = {
+      id: 7, screenCode: 'SCR_EXISTING', screenName: '现有屏', viewLevel: 'PROVINCE',
+      bizLine: 'RETAIL', orgScopeMode: 'NAMED_GROUP', orgGroupCode: 'G1'
+    };
+    listScreens.mockResolvedValueOnce([existing]);
+    getScreenCanvas
+      .mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 4 })
+      .mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 4 })
+      .mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 5 });
+    listScreenAccessRoles.mockResolvedValueOnce(['R_OLD']);
+    // 前端候选只是操作体验，保存仍通过服务端 PERMISSION_CHANGE 二次校验。
+    const screenApi = await import('@/api/screen');
+    screenApi.listScreenRoles.mockResolvedValue([{ roleCode: 'R_NEW', roleChName: '新角色' }]);
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+    await findButton(wrapper, '管理查看角色').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('版本 4');
+    const roleDialog = wrapper.find('.dlg-stub');
+    // 直接发出组件 v-model 事件，避免 happy-dom 对 multiple select 的 selectedOptions 实现差异。
+    roleDialog.findComponent(ElSelectStub).vm.$emit('update:modelValue', ['R_NEW']);
+    await flushPromises();
+    expect(wrapper.text()).toContain('新增 1：R_NEW');
+    expect(wrapper.text()).toContain('移除 1：R_OLD');
+    await roleDialog.find('input').setValue('职责调整');
+    saveScreenAccessRoles.mockResolvedValueOnce();
+    await findButton(wrapper, '保存角色变更').trigger('click');
+    await flushPromises();
+    expect(saveScreenAccessRoles).toHaveBeenCalledWith(7, {
+      roleCodes: ['R_NEW'], reason: '职责调整', expectedVersion: 4
+    });
+  });
+
+  it('发布必须先打开独立原因对话框，确认后只提交 screenId/expectedVersion/reason', async () => {
+    const existing = { id: 7, screenCode: 'SCR_EXISTING', screenName: '现有屏', viewLevel: 'BRANCH' };
+    listScreens.mockResolvedValueOnce([existing]);
+    getScreenCanvas.mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 4 });
+    saveScreenCanvas.mockResolvedValueOnce({ canvasVersion: 4 });
+    publishScreenCanvas.mockResolvedValueOnce();
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+
+    await wrapper.vm.onPublish();
+    expect(wrapper.vm.publishDialog).toMatchObject({ show: true, expectedVersion: 4, reason: '' });
+    expect(publishScreenCanvas).not.toHaveBeenCalled();
+
+    wrapper.vm.publishDialog.reason = '月末版本发布';
+    await wrapper.vm.confirmPublish();
+    expect(publishScreenCanvas).toHaveBeenCalledWith({ screenId: 7, expectedVersion: 4, reason: '月末版本发布' });
+  });
+
+  it('回滚必须先打开独立原因对话框，CAS 冲突时重载而不以旧版本重试', async () => {
+    const existing = { id: 7, screenCode: 'SCR_EXISTING', screenName: '现有屏', viewLevel: 'BRANCH' };
+    listScreens.mockResolvedValueOnce([existing]);
+    getScreenCanvas
+      .mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 4 })
+      .mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 5 });
+    listScreenPublishLogs.mockResolvedValueOnce([{ id: 99, publishedAt: '2026-08-12 09:00:00' }]);
+    rollbackScreenCanvas.mockRejectedValueOnce({ code: 'RPT-43012' });
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+
+    await wrapper.vm.onRollback();
+    expect(wrapper.vm.rollbackDialog).toMatchObject({ show: true, publishLogId: 99, expectedVersion: 4, reason: '' });
+    expect(rollbackScreenCanvas).not.toHaveBeenCalled();
+
+    wrapper.vm.rollbackDialog.reason = '回退异常发布';
+    await wrapper.vm.confirmRollback();
+    expect(rollbackScreenCanvas).toHaveBeenCalledWith({ screenId: 7, publishLogId: 99, expectedVersion: 4, reason: '回退异常发布' });
+    expect(getScreenCanvas).toHaveBeenCalledTimes(2);
+    expect(useScreenDesignerStore().canvasVersion).toBe(5);
   });
 });
 

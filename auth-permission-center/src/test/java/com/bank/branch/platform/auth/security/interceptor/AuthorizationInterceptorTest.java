@@ -104,6 +104,21 @@ class AuthorizationInterceptorTest {
     }
 
     @Test
+    void preHandle_authenticatedSelfServiceResources_skipRoleBindingCheck() throws Exception {
+        for (String resourceId : Set.of("A_CURR_USER", "A_MY_MENUS", "A_PERMS")) {
+            when(resourceMatcher.match(any(), any())).thenReturn(Optional.of(makeResource(resourceId)));
+
+            boolean result = interceptor.preHandle(request, response, handler);
+
+            assertThat(result).as(resourceId).isTrue();
+            com.bank.branch.platform.common.security.context.DataScopeContext.clear();
+        }
+        verify(rbacAuthorizer, never()).authorize(any(), any());
+        verify(bizMetaResolver, never()).resolve(any());
+        verifyNoInteractions(bizScopeApi);
+    }
+
+    @Test
     void preHandle_noBizAuthAnnotation_allowsRequestAndBuildsMinimalContext() throws Exception {
         PtResource res = makeResource("RES_01");
         when(resourceMatcher.match(any(), any())).thenReturn(Optional.of(res));

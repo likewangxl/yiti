@@ -94,7 +94,7 @@ import { ref, reactive, computed, inject, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getRanking, getOrgTree, generateAnnual, archiveSettlement, exportData } from '@/api/redengine'
 
-const canSee = inject('canSee', () => true)
+const canSee = inject('canSee', () => false)
 const canGenerate = computed(() => canSee({ res: '/api/re/cockpit/archive/generate/*' }))
 
 const loading = ref(false)

@@ -135,20 +135,26 @@ class AuthControllerTest {
         // given
         CurrentUserContext ctx = new CurrentUserContext(
                 "emp001", "testUser", "测试用户", "ORG001", "总行", 1,
-                Set.of("R_001"), Set.of("CUST_MGR"), Set.of("ROLE:CUST_MGR"), false);
+                Set.of("R_001", "R_002"), Set.of("CUST_MGR", "PARTY_REPORTER"),
+                Set.of("ROLE:CUST_MGR", "ROLE:PARTY_REPORTER"), false, null);
         when(authService.getCurrentUser(any(HttpSession.class))).thenReturn(ctx);
 
         PtRole role = new PtRole();
         role.setRoleId("R_001");
         role.setRoleCode("CUST_MGR");
         role.setRoleChName("客户经理");
-        when(userRoleMapper.selectRolesByUserId("emp001")).thenReturn(List.of(role));
+        PtRole reporter = new PtRole();
+        reporter.setRoleId("R_002");
+        reporter.setRoleCode("PARTY_REPORTER");
+        reporter.setRoleChName("党建报送员");
+        when(userRoleMapper.selectRolesByUserId("emp001")).thenReturn(List.of(role, reporter));
+        when(userRoleMapper.selectPrimaryRoleId("emp001")).thenReturn("R_002");
 
         PermissionSetRespDTO permSet = new PermissionSetRespDTO();
         permSet.setResourceUrls(Set.of("/api/leads", "/api/customers"));
         permSet.setBizScopes(Map.of("LEAD", "SELF_CREATED"));
-        permSet.setRoleIds(Set.of("R_001"));
-        permSet.setRoleCodes(Set.of("CUST_MGR"));
+        permSet.setRoleIds(Set.of("R_001", "R_002"));
+        permSet.setRoleCodes(Set.of("CUST_MGR", "PARTY_REPORTER"));
         permSet.setIsSystemAdmin(false);
         when(authService.getUserPermissions("emp001")).thenReturn(permSet);
 
@@ -157,9 +163,31 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.empId").value("emp001"))
+                .andExpect(jsonPath("$.data.activeRoleId").doesNotExist())
                 .andExpect(jsonPath("$.data.roles[0].roleCode").value("CUST_MGR"))
+                .andExpect(jsonPath("$.data.roles[0].primary").value(false))
+                .andExpect(jsonPath("$.data.roles[1].roleCode").value("PARTY_REPORTER"))
+                .andExpect(jsonPath("$.data.roles[1].primary").value(true))
                 .andExpect(jsonPath("$.data.permissions", org.hamcrest.Matchers.hasItems("/api/leads", "/api/customers")))
                 .andExpect(jsonPath("$.data.bizScopes.LEAD").value("SELF_CREATED"));
+    }
+
+    @Test
+    void getCurrentUser_nullRoles_shouldReturnEmptyRoleList() throws Exception {
+        CurrentUserContext ctx = new CurrentUserContext(
+                "emp001", "testUser", "测试用户", "ORG001", "总行", 1,
+                Set.of("R_STALE"), Set.of("STALE"), Set.of("ROLE:STALE"), false, null);
+        when(authService.getCurrentUser(any(HttpSession.class))).thenReturn(ctx);
+        when(userRoleMapper.selectRolesByUserId("emp001")).thenReturn(null);
+        PermissionSetRespDTO permSet = new PermissionSetRespDTO();
+        permSet.setResourceUrls(Set.of());
+        permSet.setBizScopes(Map.of());
+        when(authService.getUserPermissions("emp001")).thenReturn(permSet);
+
+        mockMvc.perform(get("/api/auth/current-user"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.roles").isEmpty());
     }
 
     // ── L2 错误路径测试 ──────────────────────────────────────────

@@ -6,10 +6,11 @@
 -->
 <template>
   <el-dialog
+    class="bp-crud-dialog"
     :model-value="visible"
     @update:model-value="$emit('update:visible', $event)"
     :title="dim === 'EMP' ? '选择员工' : dim === 'CUST' ? '选择客户' : '选择机构'"
-    width="720px" :close-on-click-modal="false"
+    width="720px" :close-on-click-modal="false" aria-label="选择报表查询对象"
   >
     <div class="subject-picker">
       <!-- 客户维度不用机构树，只用右侧搜索框 -->
@@ -31,6 +32,8 @@
           @check-change="onOrgCheckChange"
           style="max-height:360px;overflow:auto"
         />
+        <p v-if="treeLoading" class="search-empty" role="status">正在加载机构树</p>
+        <p v-else-if="treeError" class="search-empty error-text" role="alert">{{ treeError }}</p>
       </div>
       <div class="picker-right">
         <template v-if="dim === 'EMP'">
@@ -40,10 +43,11 @@
             <template #append><el-button @click="onEmpSearch">搜索</el-button></template>
           </el-input>
           <div class="emp-results">
-            <div v-for="e in subjectDlg.empSearchResults" :key="e.id" class="emp-row" @click="addSubjectFromSearch(e)">
+            <button v-for="e in subjectDlg.empSearchResults" :key="e.id" type="button" class="emp-row" :aria-label="`选择员工 ${e.name}`" @click="addSubjectFromSearch(e)">
               <span>{{ e.name }}</span>
               <span class="muted">{{ e.org }}</span>
-            </div>
+            </button>
+            <p v-if="subjectDlg.empKw && !subjectDlg.empSearchResults.length" class="search-empty">未找到匹配员工</p>
           </div>
         </template>
         <template v-else-if="dim === 'CUST'">
@@ -53,10 +57,11 @@
             <template #append><el-button @click="onCustSearch">搜索</el-button></template>
           </el-input>
           <div class="emp-results">
-            <div v-for="c in subjectDlg.custSearchResults" :key="c.id" class="emp-row" @click="addSubjectFromSearch(c)">
+            <button v-for="c in subjectDlg.custSearchResults" :key="c.id" type="button" class="emp-row" :aria-label="`选择客户 ${c.name}`" @click="addSubjectFromSearch(c)">
               <span>{{ c.name }}</span>
               <span class="muted">{{ c.org }}</span>
-            </div>
+            </button>
+            <p v-if="subjectDlg.custKw && !subjectDlg.custSearchResults.length" class="search-empty">未找到匹配客户</p>
           </div>
         </template>
         <div class="picker-title" style="margin-top:12px">已选 ({{ subjectDlg.selected.length }})</div>
@@ -94,6 +99,8 @@ const subjectTreeRef = ref(null);
 const orgTreeData = ref([]);
 // 对象选择数据范围（按角色）：ALL 不限 / ORG_SUBTREE 本机构子树 / SELF 仅本人
 const pickerScope = ref({ mode: 'ALL', selfEmpId: '', selfName: '', orgCodes: [] });
+const treeLoading = ref(false);
+const treeError = ref('');
 
 function scopedOrgTree() {
   const sc = pickerScope.value;
@@ -298,10 +305,12 @@ async function loadPickerScope() {
 watch(() => props.dim, () => { loadPickerScope(); });
 
 onMounted(async () => {
+  treeLoading.value = true;
   await Promise.all([
-    getOrgTree().then(tree => { orgTreeData.value = tree; }).catch(() => {}),
+    getOrgTree().then(tree => { orgTreeData.value = tree; }).catch((e) => { treeError.value = e?.message || '机构树加载失败'; }),
     loadPickerScope()
   ]);
+  treeLoading.value = false;
 });
 
 defineExpose({ confirmSubjects });
@@ -309,21 +318,23 @@ defineExpose({ confirmSubjects });
 
 <style lang="scss" scoped>
 .subject-picker {
-  display: flex; gap: 16px; min-height: 400px;
-  .picker-left { flex: 1; border-right: 1px solid $border-2; padding-right: 16px; overflow: auto; }
+  display: flex; gap: var(--space-4); min-height: 400px;
+  .picker-left { border-right: 1px solid var(--color-border); flex: 1; padding-right: var(--space-4); overflow: auto; }
   .picker-right { flex: 1; overflow: auto; }
-  .picker-title { font-size: 13px; font-weight: 600; color: $text-2; margin-bottom: 8px; }
+  .picker-title { color: var(--color-text-strong); font-size: 14px; font-weight: 600; margin-bottom: var(--space-2); }
   .emp-results {
-    max-height: 180px; overflow: auto; border: 1px solid $border-3; border-radius: 4px;
+    border: 1px solid var(--color-border); border-radius: var(--radius-control); max-height: 180px; overflow: auto;
     .emp-row {
-      display: flex; justify-content: space-between; padding: 6px 10px; cursor: pointer; font-size: 13px;
-      &:hover { background: $primary-50; }
-      .muted { color: $text-4; font-size: 12px; }
+      background: transparent; border: 0; color: var(--color-text-strong); cursor: pointer; display: flex; font-size: 13px; justify-content: space-between; padding: 6px 10px; text-align: left; width: 100%;
+      &:hover { background: var(--color-brand-100); }
+      .muted { color: var(--color-text-muted); font-size: 12px; }
     }
   }
+  .search-empty { color: var(--color-text-muted); font-size: 12px; padding: var(--space-3); text-align: center; }
+  .error-text { color: var(--color-danger-fg); }
   .selected-list {
-    max-height: 200px; overflow: auto; padding: 6px; border: 1px solid $border-3; border-radius: 4px;
+    border: 1px solid var(--color-border); border-radius: var(--radius-control); max-height: 200px; overflow: auto; padding: 6px;
   }
-  .obj-empty { color: $text-4; font-size: 12px; padding: 12px; text-align: center; }
+  .obj-empty { color: var(--color-text-muted); font-size: 12px; padding: 12px; text-align: center; }
 }
 </style>

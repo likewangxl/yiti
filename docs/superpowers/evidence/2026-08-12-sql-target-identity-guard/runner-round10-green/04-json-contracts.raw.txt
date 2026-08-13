@@ -1,0 +1,14 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T21:43:31.571283Z
+COMMAND /usr/bin/python3.10 -c 'import json; from pathlib import Path; files=("docs/superpowers/sql/2026-08-12-controlled-sql-batch-manifest.schema.json", "docs/superpowers/sql/2026-08-12-controlled-sql-batch-manifest.example.json", "docs/superpowers/sql/2026-08-12-controlled-sql-receipt-claim-token.schema.json", "docs/superpowers/sql/2026-08-12-controlled-sql-a2-recovery-proof.schema.json", "docs/superpowers/sql/2026-08-12-controlled-sql-root-launcher-proof.schema.json", "docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.schema.json", "docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.json", "docs/superpowers/scripts/tests/fixtures/controlled-sql-receipt-claim-token.fixture.json", "docs/superpowers/scripts/tests/fixtures/controlled-sql-a2-recovery-proof.fixture.json"); parsed=[json.loads(Path(name).read_text(encoding="utf-8")) for name in files]; assert all(isinstance(item, dict) for item in parsed); print("validated_json_files", len(parsed))'
+SHA256 9cbe4e7bbfecadb834b261e8989d3834e3816ddbf501b9468cc2db170184df42 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-12-controlled-sql-batch-manifest.schema.json
+SHA256 ceffbe0a02d1a8d34930160f4ce8134b20f4d33da99028a24d1ac19c611d146b /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-12-controlled-sql-batch-manifest.example.json
+SHA256 9447dd6d5deb78cdcb2c7dac62c22f5f781e9ba19c5a7510b6b98cef21c3bb16 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-12-controlled-sql-receipt-claim-token.schema.json
+SHA256 02330328a408d48df7c4b3adc341a510afcbf158963321e1ddc928bfe3979506 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-12-controlled-sql-a2-recovery-proof.schema.json
+SHA256 a00eb826cda7212d100dac09af627ed17ed57765c676a4f6a193d21550acf579 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-12-controlled-sql-root-launcher-proof.schema.json
+SHA256 d497c48b3f892b26315843c407df0c3230b557d74097eae1812b7afecbd23ff8 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.schema.json
+SHA256 4f9c567856da362e84873f4d8fd6eddd42b2aae7bd76911ffd3b074eba3bb24c /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.json
+EXIT_CODE 0
+UTC_FINISHED 2026-08-11T21:43:31.588344Z
+--- RAW_STDOUT_STDERR ---
+validated_json_files 9

@@ -1,0 +1,102 @@
+# 大屏范围真实联调专用隔离 profile。
+#
+# 用法：
+#   SERVER_PORT=... YITI_SCREEN_SCOPE_DB_USERNAME=... YITI_SCREEN_SCOPE_DB_PASSWORD=... \
+#     mvn -pl bootstrap spring-boot:run -Dspring-boot.run.profiles=screen-scope-e2e
+#
+# 本文件只允许本机 loopback 入口和 yiti_test 数据库；不在此处保存任何凭据。
+server:
+  address: 127.0.0.1
+  # 默认由 OS 选择空闲端口；SERVER_PORT 或 --server.port 可覆盖，避免与已有实例冲突。
+  port: ${SERVER_PORT:0}
+
+spring:
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/yiti_test?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&sessionVariables=time_zone%3D%27%2B08%3A00%27
+    username: ${YITI_SCREEN_SCOPE_DB_USERNAME}
+    password: ${YITI_SCREEN_SCOPE_DB_PASSWORD}
+  sql:
+    init:
+      # 真实联调库不得由启动过程执行 schema.sql 或 data.sql。
+      mode: never
+  session:
+    jdbc:
+      initialize-schema: never
+      # JdbcIndexedSessionRepository 对 "-" 不注册 cleanup 定时任务，保留 JDBC Session 本身可用。
+      cleanup-cron: "-"
+  quartz:
+    enabled: false
+    auto-startup: false
+    jdbc:
+      initialize-schema: never
+  autoconfigure:
+    exclude:
+      # QuartzAutoConfiguration 不读取 spring.quartz.enabled；排除后无 Scheduler。
+      # JobService 的 Scheduler 为 required=false，null 时 syncJobsOnStartup 直接跳过。
+      - org.springframework.boot.autoconfigure.quartz.QuartzAutoConfiguration
+
+# RptReadOnlyDataSourceConfig 会回退到主数据源；这里仍显式声明，防止 profile 合并时误连其他库。
+rpt:
+  datasource:
+    read-only:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://127.0.0.1:3306/yiti_test?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&sessionVariables=time_zone%3D%27%2B08%3A00%27
+      username: ${YITI_SCREEN_SCOPE_DB_USERNAME}
+      password: ${YITI_SCREEN_SCOPE_DB_PASSWORD}
+
+flowable:
+  # 保留流程引擎供只读大屏链路装配，但禁止 schema 写入、BPMN 自动部署与所有异步获取线程。
+  database-schema-update: false
+  check-process-definitions: false
+  async-executor-activate: false
+  async-history-executor-activate: false
+  process:
+    async:
+      executor:
+        async-job-acquisition-enabled: false
+        timer-job-acquisition-enabled: false
+    async-history:
+      executor:
+        async-job-acquisition-enabled: false
+        timer-job-acquisition-enabled: false
+  # 非 process 引擎均不用于本次范围，显式保持关闭。
+  app:
+    enabled: false
+  eventregistry:
+    enabled: false
+  dmn:
+    enabled: false
+  cmmn:
+    enabled: false
+  form:
+    enabled: false
+  idm:
+    enabled: false
+
+obs:
+  # ObsStorageClient 保留 Bean，但不创建真实 ObsClient；误调用明确 fail-close。
+  enabled: false
+
+platform:
+  soap:
+    netty:
+      enabled: false
+  sidecar:
+    registration:
+      enabled: false
+  lock:
+    cleanup:
+      enabled: false
+
+perf:
+  scheduler:
+    health-check:
+      enabled: false
+    startup-sync:
+      enabled: false
+  eval:
+    import:
+      compensation:
+        enabled: false

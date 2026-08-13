@@ -31,6 +31,15 @@ public class RptException extends BizException {
         this.errorCode = errorCode;
     }
 
+    /**
+     * 保持错误码稳定，同时返回经服务端排序、可供前端直接展示的安全补充信息。
+     * 仅用于不含敏感数据的冲突上下文（例如已发布引用屏编码）。
+     */
+    public RptException(RptErrorCode errorCode, String message) {
+        super(errorCode.getCode(), message);
+        this.errorCode = errorCode;
+    }
+
     public RptErrorCode getErrorCode() {
         return errorCode;
     }

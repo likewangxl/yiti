@@ -1,38 +1,54 @@
 <template>
-  <div class="rules-page">
-    <!-- 页头 -->
-    <div class="page-h">
-      <PageTitle />
-      <span class="desc">为每类评价对象配置评价人组及权重</span>
-      <div class="actions">
+  <main class="bp-crud eval-rules-page" aria-labelledby="eval-rules-page-title" :aria-busy="tableLoading ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="eval-rules-page-title"><span class="sub">按评价对象配置评价人组、权重和评分方式</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="评价规则操作">
+        <el-button :loading="tableLoading" @click="loadList">刷新</el-button>
         <el-button type="primary" @click="openCreateDialog">新建规则</el-button>
       </div>
-    </div>
+    </header>
 
-    <!-- 筛选栏 -->
-    <div class="filter-bar">
-      <el-input
-        v-model="queryParams.keyword"
-        placeholder="搜索规则名称"
-        clearable
-        style="width: 240px"
-        @clear="handleSearch"
-        @keyup.enter="handleSearch"
+    <section class="card-section filter-bar" aria-label="评价规则筛选">
+      <el-form class="filter-form" inline aria-label="评价规则筛选">
+        <el-form-item label="规则名称">
+          <el-input
+            v-model="queryParams.keyword"
+            aria-label="按规则名称筛选"
+            placeholder="搜索规则名称"
+            clearable
+            class="keyword-input"
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+          >
+            <template #prefix><el-icon><Search /></el-icon></template>
+          </el-input>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="handleSearch">查询</el-button>
+          <el-button @click="handleReset">重置</el-button>
+        </el-form-item>
+      </el-form>
+    </section>
+
+    <section class="card-section data-panel" aria-label="评价规则列表" aria-describedby="eval-rules-table-state">
+      <div class="toolbar">
+        <div>
+          <h2 id="eval-rules-table-heading" class="section-title">评价规则列表</h2>
+          <p class="hint">规则保存前会校验评价人组完整性和权重合计。</p>
+        </div>
+        <p id="eval-rules-table-state" class="table-state" role="status" aria-live="polite">
+          {{ tableLoading ? '评价规则列表加载中' : loadError || (tableData.length ? `共 ${total} 条规则` : '暂无评价规则数据') }}
+        </p>
+      </div>
+      <el-table
+        v-loading="tableLoading"
+        :data="tableData"
+        border
+        stripe
+        empty-text="暂无评价规则数据"
+        aria-labelledby="eval-rules-table-heading"
+        aria-describedby="eval-rules-table-state"
       >
-        <template #prefix><el-icon><Search /></el-icon></template>
-      </el-input>
-      <el-button @click="handleSearch">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
-    </div>
-
-    <!-- 规则列表表格 -->
-    <el-table
-      v-loading="tableLoading"
-      :data="tableData"
-      border
-      stripe
-      style="width: 100%; margin-top: 16px"
-    >
       <el-table-column prop="ruleId" label="规则ID" width="80" />
       <el-table-column prop="ruleName" label="规则名称" min-width="160" />
       <el-table-column label="评价对象标签" min-width="140">
@@ -52,13 +68,12 @@
         <template #default="{ row }">
           <el-button link type="primary" @click="openDetailDialog(row.ruleId)">详情</el-button>
           <el-button link type="primary" @click="openEditDialog(row.ruleId)">编辑</el-button>
-          <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button link type="danger" :loading="deletingId === row.ruleId" :disabled="deletingId !== null" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
 
-    <!-- 分页 -->
-    <div class="pagination-bar">
+      <nav class="pager" aria-label="评价规则列表分页">
       <el-pagination
         v-model:current-page="queryParams.pageNo"
         v-model:page-size="queryParams.pageSize"
@@ -68,12 +83,14 @@
         @size-change="loadList"
         @current-change="loadList"
       />
-    </div>
+      </nav>
+    </section>
 
     <!-- 新建/编辑弹窗 -->
     <el-dialog
       v-model="formDialog.visible"
       :title="formDialog.isEdit ? '编辑规则' : '新建规则'"
+      class="bp-crud-dialog"
       width="700px"
       :close-on-click-modal="false"
       @closed="resetFormDialog"
@@ -187,7 +204,7 @@
               style="margin-top: 8px; width: 100%"
               @click="addGroup"
             >
-              + 添加评价人组
+              添加评价人组
             </el-button>
             <!-- 权重合计提示 -->
             <div :class="['weight-total', weightTotalClass]">
@@ -208,6 +225,7 @@
     <el-dialog
       v-model="detailDialog.visible"
       title="规则详情"
+      class="bp-crud-dialog"
       width="700px"
       :close-on-click-modal="false"
     >
@@ -256,7 +274,7 @@
         <el-button @click="detailDialog.visible = false">关闭</el-button>
       </template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -313,10 +331,13 @@ const tableData = ref([])
 const total = ref(0)
 /** 表格加载状态 */
 const tableLoading = ref(false)
+const loadError = ref('')
+const deletingId = ref(null)
 
 /** 加载规则列表 */
 const loadList = async () => {
   tableLoading.value = true
+  loadError.value = ''
   try {
     const res = await listRules({
       keyword: queryParams.keyword,
@@ -326,6 +347,9 @@ const loadList = async () => {
     tableData.value = res?.records ?? []
     total.value = res?.total ?? 0
   } catch (e) {
+    tableData.value = []
+    total.value = 0
+    loadError.value = '评价规则加载失败，请刷新重试'
     ElMessage.error('加载规则列表失败：' + (e?.message ?? '未知错误'))
   } finally {
     tableLoading.value = false
@@ -440,6 +464,7 @@ const removeGroup = (index) => {
 
 /** 保存（新建/编辑） */
 const handleSave = async () => {
+  if (formDialog.saving) return
   // 1. 基础表单校验
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
@@ -492,18 +517,22 @@ const handleSave = async () => {
  * @param {Object} row 规则行数据
  */
 const handleDelete = (row) => {
+  if (deletingId.value !== null) return
   ElMessageBox.confirm(
     `确定要删除规则「${row.ruleName}」吗？删除后不可恢复。`,
     '删除确认',
     { confirmButtonText: '确定删除', cancelButtonText: '取消', type: 'warning' }
   )
     .then(async () => {
+      deletingId.value = row.ruleId
       try {
         await deleteRule(row.ruleId)
         ElMessage.success('规则已删除')
         loadList()
       } catch (e) {
         ElMessage.error('删除失败：' + (e?.message ?? '未知错误'))
+      } finally {
+        deletingId.value = null
       }
     })
     .catch(() => {
@@ -546,143 +575,56 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
-/* SCSS 变量（与项目主题对齐） */
-$text-1: #1a1a1a;
-$text-2: #595959;
-$text-3: #8c8c8c;
-$border-1: #e0e0e0;
-$bg-soft: #f7f8fa;
-$primary: #2563eb;
-$danger: #dc2626;
-
-/* 页头 */
-.page-h {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-
-  h1 {
-    margin: 0;
-    font-size: 20px;
-    font-weight: 600;
-    color: $text-1;
-  }
-
-  .desc {
-    font-size: 13px;
-    color: $text-3;
-  }
-
-  .actions {
-    margin-left: auto;
-    display: flex;
-    gap: 8px;
-  }
-}
-
-/* 筛选栏 */
-.filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: $bg-soft;
-  border-radius: 6px;
-}
-
-/* 分页 */
-.pagination-bar {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-}
-
-/* 状态标签 */
-.tag-success {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  background: #ecfdf5;
-  color: #059669;
-  border: 1px solid #a7f3d0;
-}
-
-.tag-info {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  background: #f3f4f6;
-  color: $text-3;
-  border: 1px solid $border-1;
-}
-
-.tag-warning {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  background: #fffbeb;
-  color: #d97706;
-  border: 1px solid #fde68a;
-}
-
-/* 评价人组表格区域 */
+.keyword-input { width: 240px; }
 .group-table-wrap {
   width: 100%;
 
   .weight-cell {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-1);
   }
 
   .weight-unit {
-    font-size: 13px;
-    color: $text-2;
+    font-size: 14px;
+    color: var(--color-text);
     flex-shrink: 0;
   }
 }
 
-/* 权重合计 */
 .weight-total {
-  margin-top: 8px;
-  font-size: 13px;
+  margin-top: var(--space-2);
+  font-size: 14px;
   font-weight: 500;
 
   &--ok {
-    color: #059669;
+    color: var(--color-success-fg);
   }
 
   &--error {
-    color: $danger;
+    color: var(--color-danger-fg);
   }
 
   .weight-warn {
     font-size: 12px;
-    margin-left: 4px;
+    margin-left: var(--space-1);
   }
 }
 
-/* 表单字段提示 */
 .field-hint {
   font-size: 12px;
-  color: $text-3;
+  color: var(--color-text-muted);
   margin-top: 4px;
-  line-height: 1.4;
+  line-height: 18px;
 }
 
-/* 详情弹窗分组标题 */
 .detail-group-title {
-  margin-top: 20px;
-  margin-bottom: 4px;
-  font-size: 14px;
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-1);
+  font-size: 16px;
   font-weight: 600;
-  color: $text-1;
-  padding-left: 8px;
-  border-left: 3px solid $primary;
+  color: var(--color-text-strong);
+  padding-left: var(--space-2);
+  border-left: 3px solid var(--color-brand-700);
 }
-.pagination-bar :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

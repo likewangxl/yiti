@@ -1,0 +1,89 @@
+{
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "count": 4,
+  "rows": [
+    {
+      "path": "/perf/adjust",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/adjust",
+      "h1": [
+        "业绩调整比例之和 = 100% · 单行 ≥ 1% · 同一员工不重复"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/perf/compute",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/compute",
+      "h1": [
+        "考核计算手工触发 / 回算 / 快照 · 运行审计与结果追踪"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/perf/task-monitor",
+      "finalUrl": "http://127.0.0.1:8091/#/perf/task-monitor",
+      "h1": [
+        "任务监控指标重算任务 · 按指标汇总 / 执行 / 历史"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/eval/tags",
+      "finalUrl": "http://127.0.0.1:8091/#/eval/tags",
+      "h1": [
+        "标签管理维护可用于规则和人员评价的标签"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    }
+  ]
+}

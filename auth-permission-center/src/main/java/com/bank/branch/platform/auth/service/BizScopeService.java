@@ -60,7 +60,7 @@ public class BizScopeService {
      * @throws PermissionDeniedException 用户角色未配置该 BizType 的数据范围时
      */
     public DataScopeType resolveScope(String empId, BizType bizType) {
-        // 按「本次请求生效角色」解析数据范围：会话切换角色后只取当前角色的范围
+        // 按数据库中的全部有效角色合并数据范围
         Set<String> roleIds = cacheService.getEffectiveRoleIds(empId);
         DataScopeType result = null;
         int maxPriority = -1;
@@ -138,7 +138,7 @@ public class BizScopeService {
      * @return BizType -> DataScopeType 映射
      */
     public Map<BizType, DataScopeType> getUserBizScopes(String empId) {
-        // 按「本次请求生效角色」合并数据范围：会话切换角色后只反映当前角色
+        // 按数据库中的全部有效角色合并数据范围
         Set<String> roleIds = cacheService.getEffectiveRoleIds(empId);
         // 按优先级合并：key=BizType, value=最高优先级的DataScopeType
         Map<BizType, Integer> priorityMap = new HashMap<>();

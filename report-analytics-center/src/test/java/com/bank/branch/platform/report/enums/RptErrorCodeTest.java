@@ -7,7 +7,7 @@ import java.util.Arrays;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * RptErrorCode 46 条错误码守护测试（M0.3.1 基线 25 条 + 历史扩展 8 条 + 大屏子域 13 条）.
+ * RptErrorCode 56 条错误码守护测试（M0.3.1 基线 25 条 + 历史扩展 8 条 + 大屏子域 23 条）.
  *
  * <p>权威来源：02-后端架构.md §6.5 + 03 §J.4 + 大屏需求 43xxx 子域
  * <ul>
@@ -20,19 +20,21 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>500xx 系统 3 条（含 plan F1 漏项 50002 / 50003 EXPORT_START_FAILED）</li>
  * </ul>
  *
- * <p>本测试守护 V1 合计"恰好 46 条"，新增需同步更新本测试。
+ * <p>本测试守护当前合计"恰好 56 条"，新增需同步更新本测试。
  */
 class RptErrorCodeTest {
 
     @Test
-    void shouldHaveExactly46ErrorCodes() {
-        // 46 条：基线 25 + M5.4.1 扩展 5 + AMAS_APPROVAL_NOT_FOUND 1 + ALLOC_ADJUST_APPLY_NOT_FOUND 1
+    void shouldHaveExactly56ErrorCodes() {
+        // 55 条：基线 25 + M5.4.1 扩展 5 + AMAS_APPROVAL_NOT_FOUND 1 + ALLOC_ADJUST_APPLY_NOT_FOUND 1
         // + NOTICE_NOT_FOUND 1（此前断言遗漏该项，实际已是 33，此次一并订正 32→33）
         // + 大屏子域 9 条（RPT-43001~43009）= 42
         // + FIX-1 错误码语义分离 2 条（RPT-43010 缺必填上下文参数 / RPT-43011 周期参数非法）= 44
         // + 画布保存冲突 RPT-43012 = 45
         // + 取数 DATA_SCOPE 行级权限拒绝 RPT-43013（2026-07-17 spec §4）= 46
-        assertThat(RptErrorCode.values()).hasSize(46);
+        // + 机构组/矩阵/schema2/地图/SQL 安全门禁 RPT-43014~43022 = 55
+        // + 已发布包缺少可信 immutable bindSnapshots RPT-43023 = 56
+        assertThat(RptErrorCode.values()).hasSize(56);
     }
 
     /** 2026-07-17 取数 DATA_SCOPE：越权取数统一拒绝码 RPT-43013（fail-close）. */
@@ -99,6 +101,7 @@ class RptErrorCodeTest {
         assertThat(RptErrorCode.SCREEN_PERIOD_INVALID.getCode()).isEqualTo("RPT-43011");
         // 一期画布设计器新增:43012 画布保存冲突(真乐观锁)
         assertThat(RptErrorCode.SCREEN_CANVAS_CONFLICT.getCode()).isEqualTo("RPT-43012");
+        assertThat(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED.getCode()).isEqualTo("RPT-43023");
     }
 
     @Test
@@ -117,7 +120,7 @@ class RptErrorCodeTest {
             .distinct()
             .count();
         assertThat(distinct)
-            .as("RPT 46 条错误码必须唯一无重复")
-            .isEqualTo(46);
+            .as("RPT 56 条错误码必须唯一无重复")
+            .isEqualTo(56);
     }
 }

@@ -1,0 +1,21 @@
+{
+  "proof_version": 1,
+  "issuer": "bank-a2-recovery-attestation-service",
+  "proof_id": "33333333-4444-5555-6666-777777777777",
+  "manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "claim_id": "44444444-5555-6666-7777-888888888888",
+  "claim_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "issued_at_utc": "2030-01-01T00:00:00Z",
+  "expires_at_utc": "2030-01-01T00:05:00Z",
+  "target_quartet": {
+    "server_uuid": "11111111-2222-3333-4444-555555555555",
+    "server_hostname": "isolated-mysql-01",
+    "connect_port": 3306,
+    "schema": "yiti_isolated"
+  },
+  "recovery": {
+    "reference": "A2-ROUND10-RECOVERY",
+    "state": "VERIFIED",
+    "recovery_point_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  }
+}

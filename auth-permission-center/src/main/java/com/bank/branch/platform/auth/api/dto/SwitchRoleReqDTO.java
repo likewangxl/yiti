@@ -5,9 +5,12 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * 切换当前角色请求DTO
- * <p>切换本次会话的当前激活角色（仅会话内生效），目标角色必须是当前用户已分配的角色。</p>
+ * 旧版角色切换请求 DTO。
+ * <p>兼容端点只校验目标角色属于当前用户，不再修改会话或权限。</p>
+ *
+ * @deprecated 权限已采用全部有效角色并集
  */
+@Deprecated(since = "2026-08", forRemoval = true)
 @Data
 public class SwitchRoleReqDTO {
 

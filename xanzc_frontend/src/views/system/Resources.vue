@@ -1,32 +1,67 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle><span class="sub">PT_RESOURCE.IS_MENU=1 的菜单节点；接口资源在「资源管理」单独维护</span></PageTitle>
-      <div class="actions">
-        <el-input
-          v-model="keyword"
-          placeholder="按菜单名 / 路径 模糊搜索"
-          :prefix-icon="Search"
-          clearable
-          size="default"
-          class="search-box"
-        />
-        <el-button @click="reload" :icon="Refresh">刷新</el-button>
-        <el-button type="primary" @click="openCreate(null)" :icon="Plus">新增一级菜单</el-button>
+  <main class="bp-crud resources-page" aria-labelledby="resources-page-title">
+    <header class="page-h">
+      <PageTitle id="resources-page-title">
+        <span class="sub">维护菜单层级；叶子菜单可单独配置角色访问范围。</span>
+      </PageTitle>
+      <div class="actions action-group" role="group" aria-label="资源管理操作">
+        <el-button :icon="Refresh" @click="reload">刷新</el-button>
+        <el-button type="primary" :icon="Plus" @click="openCreate(null)">新增一级菜单</el-button>
       </div>
-    </div>
+    </header>
 
-    <div class="card-section menu-card">
+    <section class="card-section filter-bar" aria-label="菜单筛选">
+      <el-form class="filter-form" inline size="default" aria-label="菜单筛选条件" @submit.prevent="reload">
+        <el-form-item label="关键字">
+          <el-input
+            v-model="keyword"
+            :prefix-icon="Search"
+            clearable
+            placeholder="菜单名称 / 路由路径"
+            aria-label="按菜单名称或路由路径筛选"
+            style="width:280px"
+            @keyup.enter="reload"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="reload">查询</el-button>
+          <el-button @click="resetFilters">重置</el-button>
+        </el-form-item>
+      </el-form>
+    </section>
+
+    <section
+      class="card-section data-panel menu-card"
+      aria-label="菜单资源树"
+      aria-labelledby="resources-table-heading"
+      aria-describedby="resources-table-state"
+      :aria-busy="loading ? 'true' : 'false'"
+    >
+      <div class="toolbar">
+        <div>
+          <h2 id="resources-table-heading" class="section-title">菜单资源树</h2>
+          <p class="hint">目录用于分组；叶子菜单必须关联已注册的前端路由。</p>
+        </div>
+        <p id="resources-table-state" class="table-state" role="status" aria-live="polite">
+          {{ loading ? '菜单资源加载中' : filteredTreeData.length ? `显示 ${filteredTreeData.length} 个一级节点` : '暂无菜单资源' }}
+        </p>
+      </div>
+      <p v-if="loadError" class="error-state" role="alert">
+        {{ loadError }} <el-button link type="primary" @click="reload">重试</el-button>
+      </p>
+
       <el-table
         :data="filteredTreeData"
         row-key="resourceId"
         :tree-props="{ children: 'children' }"
         default-expand-all
         v-loading="loading"
-        empty-text="暂无菜单"
+        empty-text="暂无菜单资源"
         class="menu-table"
         size="default"
         :indent="22"
+        aria-labelledby="resources-table-heading"
+        aria-describedby="resources-table-state"
       >
         <el-table-column label="菜单名称" min-width="240">
           <template #default="{ row }">
@@ -36,9 +71,10 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="路由路径" min-width="220">
+        <el-table-column label="路由路径" min-width="250">
           <template #default="{ row }">
-            <code class="path-chip">{{ row.resourceUrl }}</code>
+            <code v-if="row.resourceUrl" class="path-chip">{{ row.resourceUrl }}</code>
+            <span v-else class="hint">目录节点</span>
           </template>
         </el-table-column>
 
@@ -49,105 +85,107 @@
               effect="plain"
               :class="row.menuEndFlag === '1' ? 'tag-info' : 'tag-success'"
             >
-              {{ row.menuEndFlag === '1' ? '叶子' : '分组' }}
+              {{ row.menuEndFlag === '1' ? '叶子菜单' : '分组目录' }}
             </el-tag>
           </template>
         </el-table-column>
 
-        <el-table-column label="排序" width="80" align="center">
-          <template #default="{ row }">
-            <span class="rank-num">{{ row.menuRankNo ?? 0 }}</span>
-          </template>
+        <el-table-column label="排序" width="90" align="center">
+          <template #default="{ row }"><span class="rank-num">{{ row.menuRankNo ?? 0 }}</span></template>
         </el-table-column>
 
         <el-table-column label="操作" width="300" align="right" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click.stop="openCreate(row)">+ 子菜单</el-button>
-            <el-button link type="primary" size="small" @click.stop="openEdit(row)">编辑</el-button>
-            <el-button
-              v-if="row.menuEndFlag === '1'"
-              link type="primary" size="small" @click.stop="openAssign(row)">分配角色</el-button>
-            <el-popconfirm
-              :title="`确认删除「${row.menuName}」？子菜单会一并失效，操作不可逆。`"
-              @confirm="doDelete(row)"
-            >
-              <template #reference>
-                <el-button link type="danger" size="small" @click.stop>删除</el-button>
-              </template>
-            </el-popconfirm>
+            <div class="row-actions" role="group" :aria-label="`${row.menuName} 操作`">
+              <el-button link type="primary" size="small" @click.stop="openCreate(row)">新增子菜单</el-button>
+              <el-button link type="primary" size="small" @click.stop="openEdit(row)">编辑</el-button>
+              <el-button
+                v-if="row.menuEndFlag === '1'"
+                link
+                type="primary"
+                size="small"
+                @click.stop="openAssign(row)"
+              >分配角色</el-button>
+              <el-popconfirm
+                :title="`确认删除「${row.menuName}」？子菜单会一并失效，操作不可逆。`"
+                confirm-button-text="确认删除"
+                cancel-button-text="取消"
+                @confirm="doDelete(row)"
+              >
+                <template #reference>
+                  <el-button
+                    link
+                    type="danger"
+                    size="small"
+                    :loading="isDeleting(row.resourceId)"
+                    :disabled="isDeleting(row.resourceId)"
+                    @click.stop
+                  >删除</el-button>
+                </template>
+              </el-popconfirm>
+            </div>
           </template>
         </el-table-column>
       </el-table>
-    </div>
+    </section>
 
-    <!-- 新增 / 编辑弹窗 -->
     <el-dialog
       v-model="dlg.show"
+      class="bp-crud-dialog"
       :title="dlg.editing ? '编辑菜单' : (dlg.parent ? `在「${dlg.parent.menuName}」下新增子菜单` : '新增一级菜单')"
       width="600px"
+      :close-on-click-modal="false"
     >
       <el-form ref="dlgFormRef" :model="dlg.form" :rules="dlg.rules" label-width="90px" label-position="right">
         <el-form-item label="名称" prop="menuName">
           <el-input v-model="dlg.form.menuName" placeholder="如：客户管理" maxlength="64" />
         </el-form-item>
-
         <el-form-item label="路由路径" prop="resourceUrl" :required="dlg.form.menuEndFlag === '1'">
           <el-select
             v-model="dlg.form.resourceUrl"
-            :placeholder="dlg.form.menuEndFlag === '1' ? '叶子菜单必选：从已注册前端路由中选择' : '父节点/目录可不选'"
+            :placeholder="dlg.form.menuEndFlag === '1' ? '叶子菜单必须选择已注册路由' : '目录节点可不选择路由'"
             filterable
             clearable
             style="width:100%"
           >
-            <el-option
-              v-for="r in routeOptions"
-              :key="r.value"
-              :value="r.value"
-              :label="r.label"
-            >
-              <span>{{ r.label }}</span>
-              <span class="route-mono">{{ r.value }}</span>
+            <el-option v-for="route in routeOptions" :key="route.value" :value="route.value" :label="route.label">
+              <span>{{ route.label }}</span><span class="route-mono">{{ route.value }}</span>
             </el-option>
           </el-select>
         </el-form-item>
-
         <el-form-item label="节点形态" prop="menuEndFlag">
           <el-radio-group v-model="dlg.form.menuEndFlag">
-            <el-radio v-for="o in END_FLAG_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</el-radio>
+            <el-radio v-for="option in END_FLAG_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</el-radio>
           </el-radio-group>
         </el-form-item>
-
         <el-form-item label="排序号" prop="menuRankNo">
           <el-input-number v-model="dlg.form.menuRankNo" :min="0" :step="1" />
-          <span class="hint">数字越小越靠前</span>
+          <span class="hint inline-hint">数字越小越靠前</span>
         </el-form-item>
-
         <el-form-item label="隐藏菜单">
           <el-switch v-model="dlg.form.status" :active-value="1" :inactive-value="0" />
-          <span class="hint" style="margin-left:8px">开启后所有用户不可见</span>
+          <span class="hint inline-hint">开启后所有用户不可见</span>
         </el-form-item>
-
         <el-form-item label="父节点">
-          <span v-if="dlg.editing" class="hint">编辑模式不可改父节点</span>
-          <span v-else-if="dlg.parent" class="hint">
-            {{ dlg.parent.menuName }} <code class="mono">({{ dlg.parent.resourceId }})</code>
-          </span>
+          <span v-if="dlg.editing" class="hint">编辑模式不可变更父节点</span>
+          <span v-else-if="dlg.parent" class="hint">{{ dlg.parent.menuName }} <code class="mono">({{ dlg.parent.resourceId }})</code></span>
           <span v-else class="hint">无（作为一级菜单）</span>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dlg.show = false">取消</el-button>
-        <el-button type="primary" :loading="dlg.saving" @click="saveDlg">保存</el-button>
+        <el-button :disabled="dlg.saving" @click="dlg.show = false">取消</el-button>
+        <el-button type="primary" :loading="dlg.saving" :disabled="dlg.saving" @click="saveDlg">保存</el-button>
       </template>
     </el-dialog>
 
-    <!-- 分配角色弹窗（仅叶子菜单）-->
     <el-dialog
       v-model="assign.show"
-      :title="`分配角色 —— ${assign.menuName}`"
+      class="bp-crud-dialog"
+      :title="`分配角色 · ${assign.menuName}`"
       width="560px"
+      :close-on-click-modal="false"
     >
-      <div class="assign-tip">为该菜单选择可访问的角色，保存后立即生效（落库 PT_ROLE_RESOURCE）。</div>
+      <p class="assign-tip">保存后立即替换该叶子菜单已绑定的角色范围，并记录权限变更审计。</p>
       <el-select
         v-model="assign.roleIds"
         multiple
@@ -156,30 +194,30 @@
         placeholder="选择角色（默认显示已绑定角色）"
         style="width:100%"
         v-loading="assign.loading"
+        aria-label="选择可访问该菜单的角色"
       >
         <el-option
-          v-for="r in roleOptions"
-          :key="r.roleId"
-          :value="r.roleId"
-          :label="r.roleChName || r.roleCode || r.roleId"
+          v-for="role in roleOptions"
+          :key="role.roleId"
+          :value="role.roleId"
+          :label="role.roleChName || role.roleCode || role.roleId"
         >
-          <span>{{ r.roleChName || r.roleCode || r.roleId }}</span>
-          <span class="route-mono">{{ r.roleCode }}</span>
+          <span>{{ role.roleChName || role.roleCode || role.roleId }}</span><span class="route-mono">{{ role.roleCode }}</span>
         </el-option>
       </el-select>
       <template #footer>
-        <el-button @click="assign.show = false">取消</el-button>
-        <el-button type="primary" :loading="assign.saving" @click="saveAssign">保存</el-button>
+        <el-button :disabled="assign.saving" @click="assign.show = false">取消</el-button>
+        <el-button type="primary" :loading="assign.saving" :disabled="assign.saving" @click="saveAssign">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { Search, Refresh, Plus } from '@element-plus/icons-vue';
+import { Plus, Refresh, Search } from '@element-plus/icons-vue';
 import {
   listResourceTree, createResource, updateResource, deleteResource,
   getResourceRoles, assignResourceRoles,
@@ -189,61 +227,67 @@ import { listAllRoles } from '@/api/system';
 import { useMenuStore } from '@/stores/menu';
 
 const router = useRouter();
-// 资源改名/增删后强制刷新菜单树，使侧边栏/面包屑/页面标题即时同步
 const menuStore = useMenuStore();
-// 菜单 URL 强制下拉选 — 选项来自 router 已注册路由扁平化
-// 业务约束：新建菜单只能指向真存在的前端页面，避免点进去空白
+
 const routeOptions = computed(() => {
   const result = [];
-  const layout = router.options.routes.find(r => r.path === '/' && r.children?.length);
-  for (const r of layout?.children || []) {
-    if (!r.path || !r.meta?.title) continue;
-    if (r.meta?.hidden) continue;
-    result.push({ value: '/' + r.path, label: r.meta.title });
+  const layout = router.options.routes.find(route => route.path === '/' && route.children?.length);
+  for (const route of layout?.children || []) {
+    if (!route.path || !route.meta?.title || route.meta?.hidden) continue;
+    result.push({ value: '/' + route.path, label: route.meta.title });
   }
   return result.sort((a, b) => a.value.localeCompare(b.value));
 });
 
-// === 数据 ===
 const rawTree = ref([]);
 const loading = ref(false);
+const loadError = ref('');
 const keyword = ref('');
+const tableState = computed(() => {
+  if (loading.value) return '菜单资源加载中';
+  if (!filteredTreeData.value.length) return '暂无菜单资源';
+  return `显示 ${filteredTreeData.value.length} 个一级节点`;
+});
 
 async function reload() {
   loading.value = true;
+  loadError.value = '';
   try {
-    rawTree.value = await listResourceTree({});
-  } catch { rawTree.value = []; }
-  finally { loading.value = false; }
+    const tree = await listResourceTree({});
+    rawTree.value = Array.isArray(tree) ? tree : [];
+  } catch (error) {
+    rawTree.value = [];
+    loadError.value = `菜单资源加载失败：${error?.message || '请稍后重试'}`;
+  } finally {
+    loading.value = false;
+  }
 }
 
-// 菜单管理只展示 IS_MENU=1 节点；接口资源（IS_MENU=0）剪掉
+function resetFilters() {
+  keyword.value = '';
+  reload();
+}
+
 function pruneMenusOnly(nodes) {
-  const walk = (n) => {
-    const children = (n.children || []).map(walk).filter(Boolean);
-    if (n.isMenu === 1) return { ...n, children };
-    return null;
+  const walk = (node) => {
+    const children = (node.children || []).map(walk).filter(Boolean);
+    return node.isMenu === 1 ? { ...node, children } : null;
   };
-  return nodes.map(walk).filter(Boolean);
+  return (nodes || []).map(walk).filter(Boolean);
 }
 const treeData = computed(() => pruneMenusOnly(rawTree.value));
-
-// 关键字过滤：递归剪枝，命中节点 + 命中节点的祖先链保留
 const filteredTreeData = computed(() => {
-  const q = String(keyword.value || '').toLowerCase().trim();
-  if (!q) return treeData.value;
-  const walk = (n) => {
-    const childMatches = (n.children || []).map(walk).filter(Boolean);
-    const selfMatch =
-      String(n.menuName || '').toLowerCase().includes(q) ||
-      String(n.resourceUrl || '').toLowerCase().includes(q);
-    if (selfMatch || childMatches.length) return { ...n, children: childMatches };
-    return null;
+  const query = String(keyword.value || '').toLowerCase().trim();
+  if (!query) return treeData.value;
+  const walk = (node) => {
+    const children = (node.children || []).map(walk).filter(Boolean);
+    const selfMatch = String(node.menuName || '').toLowerCase().includes(query)
+      || String(node.resourceUrl || '').toLowerCase().includes(query);
+    return selfMatch || children.length ? { ...node, children } : null;
   };
   return treeData.value.map(walk).filter(Boolean);
 });
 
-// === 新增 / 编辑 ===
 const dlgFormRef = ref(null);
 const dlg = reactive({
   show: false, editing: null, parent: null, saving: false,
@@ -252,31 +296,26 @@ const dlg = reactive({
     isMenu: 1, menuEndFlag: '1', menuRankNo: 0, sysCode: ''
   },
   rules: {
-    menuName:    [{ required: true, message: '菜单名必填', trigger: 'blur' }, { max: 64, message: '不超过 64 位', trigger: 'blur' }],
-    // 路由路径：仅「叶子节点」必填；父节点/目录（含一级菜单）只做分组、不跳转，可不选
+    menuName: [{ required: true, message: '菜单名必填', trigger: 'blur' }, { max: 64, message: '不超过 64 位', trigger: 'blur' }],
     resourceUrl: [{
-      validator: (rule, value, cb) =>
-        (dlg.form.menuEndFlag === '1' && !value)
-          ? cb(new Error('叶子菜单必须选择路由路径'))
-          : cb(),
+      validator: (_rule, value, callback) => (dlg.form.menuEndFlag === '1' && !value
+        ? callback(new Error('叶子菜单必须选择路由路径')) : callback()),
       trigger: 'change'
     }],
     menuEndFlag: [{ required: true, message: '请选择节点形态', trigger: 'change' }]
   }
 });
+
 function openCreate(parent) {
   dlg.editing = null;
   dlg.parent = parent || null;
   dlg.form = {
-    menuName: '', resourceUrl: '',
-    resourceMethod: 'MENU',
-    isMenu: 1,
-    menuEndFlag: parent ? '1' : '0',
-    menuRankNo: 0,
-    sysCode: parent?.sysCode || ''
+    menuName: '', resourceUrl: '', resourceMethod: 'MENU', isMenu: 1,
+    menuEndFlag: parent ? '1' : '0', menuRankNo: 0, sysCode: parent?.sysCode || ''
   };
   dlg.show = true;
 }
+
 function openEdit(row) {
   dlg.editing = row.resourceId;
   dlg.parent = null;
@@ -292,48 +331,65 @@ function openEdit(row) {
   };
   dlg.show = true;
 }
+
 async function saveDlg() {
-  try { await dlgFormRef.value?.validate(); } catch { return; }
+  if (dlg.saving) return;
+  try {
+    await dlgFormRef.value?.validate();
+  } catch {
+    return;
+  }
   dlg.saving = true;
   try {
-    // 后端 ResourceUpdateReqDTO 严格反序列化，剥离 sysCode（DB 有但 DTO 无）
-    // eslint-disable-next-line no-unused-vars
+    // 严格保持后端 DTO 白名单：sysCode 仅用于前端继承，不得作为写入字段。
     const { sysCode, ...rest } = dlg.form;
     if (dlg.editing) {
       await updateResource(dlg.editing, rest);
-      ElMessage.success('已更新');
-      menuStore.load(true);
+      ElMessage.success('菜单已更新');
     } else {
-      // ResourceCreateReqDTO 白名单不含 status（创建不支持设隐藏菜单），剥离以免后端严格反序列化报错
-      // eslint-disable-next-line no-unused-vars
+      // 创建 DTO 不接收 status，避免严格反序列化时把“隐藏菜单”误传给后端。
       const { status, ...payload } = rest;
       if (dlg.parent) payload.parentResourceId = dlg.parent.resourceId;
       await createResource(payload);
-      ElMessage.success('已创建');
-      menuStore.load(true);
+      ElMessage.success('菜单已创建');
     }
+    menuStore.load(true);
     dlg.show = false;
     await reload();
-  } catch (e) {
-    ElMessage.error((dlg.editing ? '更新失败：' : '创建失败：') + (e?.message || e));
-  } finally { dlg.saving = false; }
-}
-
-async function doDelete(row) {
-  try {
-    await deleteResource(row.resourceId, '前端删除');
-    ElMessage.success('已删除');
-    menuStore.load(true);
-    await reload();
-  } catch (e) {
-    ElMessage.error('删除失败：' + (e?.message || e));
+  } catch (error) {
+    ElMessage.error(`${dlg.editing ? '更新' : '创建'}失败：${error?.message || error}`);
+  } finally {
+    dlg.saving = false;
   }
 }
 
-// === 分配角色（仅叶子菜单）===
+const deletingIds = ref(new Set());
+const isDeleting = (id) => deletingIds.value.has(String(id));
+function setDeleting(id, value) {
+  const next = new Set(deletingIds.value);
+  if (value) next.add(String(id));
+  else next.delete(String(id));
+  deletingIds.value = next;
+}
+
+async function doDelete(row) {
+  const id = row?.resourceId;
+  if (id == null || isDeleting(id)) return;
+  setDeleting(id, true);
+  try {
+    await deleteResource(id, '前端删除');
+    ElMessage.success('菜单已删除');
+    menuStore.load(true);
+    await reload();
+  } catch (error) {
+    ElMessage.error(`删除失败：${error?.message || error}`);
+  } finally {
+    setDeleting(id, false);
+  }
+}
+
 const rawRoles = ref([]);
-// 下拉只显示「状态=可用」的角色（recordStatus=0），停用角色不可选
-const roleOptions = computed(() => rawRoles.value.filter(r => Number(r.recordStatus) === 0));
+const roleOptions = computed(() => rawRoles.value.filter(role => Number(role.recordStatus) === 0));
 const assign = reactive({ show: false, saving: false, loading: false, resourceId: '', menuName: '', roleIds: [] });
 
 async function openAssign(row) {
@@ -343,28 +399,28 @@ async function openAssign(row) {
   assign.show = true;
   assign.loading = true;
   try {
-    // 角色全量列表（缓存复用）+ 该资源已绑定角色（默认勾选）
     const [roles, bound] = await Promise.all([
       rawRoles.value.length ? Promise.resolve(rawRoles.value) : listAllRoles({}),
       getResourceRoles(row.resourceId)
     ]);
     rawRoles.value = Array.isArray(roles) ? roles : (roles?.records || []);
     assign.roleIds = (bound || []).map(String);
-  } catch (e) {
-    ElMessage.error('加载角色失败：' + (e?.message || e));
+  } catch (error) {
+    ElMessage.error(`角色加载失败：${error?.message || error}`);
   } finally {
     assign.loading = false;
   }
 }
 
 async function saveAssign() {
+  if (assign.saving || !assign.resourceId) return;
   assign.saving = true;
   try {
     await assignResourceRoles(assign.resourceId, assign.roleIds, '菜单分配角色');
-    ElMessage.success('已保存');
+    ElMessage.success('角色范围已保存');
     assign.show = false;
-  } catch (e) {
-    ElMessage.error('保存失败：' + (e?.message || e));
+  } catch (error) {
+    ElMessage.error(`保存失败：${error?.message || error}`);
   } finally {
     assign.saving = false;
   }
@@ -374,55 +430,46 @@ onMounted(reload);
 </script>
 
 <style lang="scss" scoped>
-.page-h h1 .sub { font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400; }
-.page-h .actions { display: flex; align-items: center; gap: 10px; }
-.search-box { width: 260px; }
-
-.menu-card { padding: 4px 8px 8px; }
-
-// 表格层级缩进留出更宽，菜单名带组样式，路径走 mono chip
-.menu-table {
-  :deep(.el-table__row) td { padding: 10px 0; }
-  :deep(.el-table__row:hover > td) { background: $bg-soft; }
-  :deep(.el-table__placeholder) { width: 16px; }
-}
-
-.menu-name {
-  color: $text-1;
-  font-size: 13px;
-  &.is-group { font-weight: 600; color: $text-1; }
-}
-
-.path-chip {
-  display: inline-block;
-  padding: 2px 8px;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 12px;
-  color: $text-2;
-  background: $bg-soft;
-  border-radius: 3px;
-  border: 1px solid $border-1;
-}
-
-.rank-num {
-  display: inline-block;
-  min-width: 28px;
-  padding: 0 6px;
-  height: 20px; line-height: 20px;
-  font-size: 12px;
-  color: $text-3;
-  background: $bg-soft;
-  border-radius: 10px;
-}
-
+.resources-page { min-width: 0; }
+.menu-card { min-width: 0; }
+.menu-table :deep(.el-table__row > td) { padding-block: var(--space-2); }
+.menu-table :deep(.el-table__row:hover > td) { background: var(--color-brand-100); }
+.menu-table :deep(.el-table__placeholder) { width: var(--space-4); }
+.menu-name { color: var(--color-text-strong); font-size: 14px; }
+.menu-name.is-group { font-weight: 600; }
+.path-chip,
+.mono,
 .route-mono {
-  margin-left: 8px;
-  color: #9CA3AF;
-  font-size: 11px;
-  font-family: ui-monospace, monospace;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
-
-.hint { color: $text-3; font-size: 12px; margin-left: 8px; }
-.mono { font-family: ui-monospace, monospace; font-size: 12px; }
-.assign-tip { color: $text-3; font-size: 12px; margin-bottom: 10px; }
+.path-chip {
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text);
+  display: inline-block;
+  font-size: 12px;
+  padding: 2px var(--space-2);
+}
+.rank-num {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.row-actions { display: flex; gap: var(--space-1); justify-content: flex-end; }
+.route-mono { color: var(--color-text-muted); float: right; font-size: 12px; }
+.inline-hint { margin-left: var(--space-2); }
+.assign-tip,
+.error-state {
+  color: var(--color-text);
+  font-size: 12px;
+  line-height: 18px;
+}
+.assign-tip { margin-bottom: var(--space-3); }
+.error-state {
+  background: var(--color-danger-bg);
+  border-left: 3px solid var(--color-danger-fg);
+  color: var(--color-danger-fg);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
 </style>

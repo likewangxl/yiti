@@ -52,4 +52,22 @@ public class AuditLogCmd {
 
     /** 操作原因（TRANSFER/DELETE/IMPORT/RECALC/CONFIG/JOB_TRIGGER 时必填） */
     private String reason;
+
+    /** 结构化审计目标类型（如 PT_ORG_GROUP_MEMBER）。 */
+    private String targetType;
+
+    /** 结构化审计目标业务标识（如机构组编码）。 */
+    private String targetId;
+
+    /** 变更前快照（JSON）。 */
+    private String beforeSnapshot;
+
+    /** 变更后快照（JSON）。 */
+    private String afterSnapshot;
+
+    /** 新增项集合（JSON 数组）。 */
+    private String addedItems;
+
+    /** 移除项集合（JSON 数组）。 */
+    private String removedItems;
 }

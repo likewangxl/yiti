@@ -74,7 +74,7 @@ async function settle() {
 
 describe('年度考核归档(ArchiveView) - 生成原因必填', () => {
   it('点击「生成年度报告」未填原因直接确认，不应发起 generateAnnual 请求', async () => {
-    wrapper = mount(ArchiveView, { global: { stubs } });
+    wrapper = mount(ArchiveView, { global: { stubs, provide: { canSee: () => true } } });
     await settle();
 
     const genBtn = wrapper.findAll('button').find((b) => b.text().includes('生成年度报告'));
@@ -92,7 +92,7 @@ describe('年度考核归档(ArchiveView) - 生成原因必填', () => {
 
   it('填写生成原因后确认，应携带 reason 调用 generateAnnual', async () => {
     generateAnnual.mockResolvedValue({});
-    wrapper = mount(ArchiveView, { global: { stubs } });
+    wrapper = mount(ArchiveView, { global: { stubs, provide: { canSee: () => true } } });
     await settle();
 
     const genBtn = wrapper.findAll('button').find((b) => b.text().includes('生成年度报告'));

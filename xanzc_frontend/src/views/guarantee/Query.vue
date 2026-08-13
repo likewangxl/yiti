@@ -1,28 +1,47 @@
 <template>
-  <div>
+  <main class="bp-crud guarantee-query" aria-labelledby="guarantee-query-title">
     <div class="page-h">
-      <PageTitle />
-      <div class="actions">
-        <el-button :loading="exporting" @click="onExport">导出</el-button>
+      <PageTitle id="guarantee-query-title" />
+      <div class="actions action-group" role="group" aria-label="担保信息操作">
+        <el-button :loading="exporting" aria-label="导出担保信息" @click="onExport">导出</el-button>
         <el-button type="primary" @click="openCreate">新增</el-button>
         <el-button type="danger" :disabled="!selection.length" @click="onBatchDelete">
-          删除{{ selection.length ? `（${selection.length}）` : '' }}
+          删除{{ selection.length ? `（${selection.length}）` : '（已选 0 条）' }}
         </el-button>
       </div>
     </div>
 
     <!-- 查询栏：客户名称 + 查询/重置 同一行 -->
-    <div class="card-section" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-      <span class="lab" style="white-space:nowrap;">客户名称</span>
-      <el-input v-model="f.clientName" clearable placeholder="请输入客户名称"
-        style="width:240px" @keyup.enter="onSearch" />
-      <el-button type="primary" @click="onSearch">查询</el-button>
-      <el-button @click="onReset">重置</el-button>
-    </div>
+    <section class="card-section filter-bar" aria-label="担保信息筛选">
+      <el-form class="filter-form" inline size="default" aria-label="担保信息筛选" @submit.prevent>
+        <el-form-item label="客户名称">
+          <el-input v-model="f.clientName" clearable aria-label="按客户名称筛选" placeholder="请输入客户名称"
+            style="width:240px" @keyup.enter="onSearch" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="onSearch">查询</el-button>
+          <el-button @click="onReset">重置</el-button>
+        </el-form-item>
+      </el-form>
+    </section>
 
     <!-- 数据列表 -->
-    <div class="card-section table">
+    <section class="card-section data-panel" aria-label="担保信息列表" aria-describedby="guarantee-table-state" :aria-busy="loading ? 'true' : 'false'">
+      <div class="toolbar">
+        <div>
+          <h2 id="guarantee-table-heading" class="section-title">担保信息列表</h2>
+          <p class="hint">查看担保额度、经办人及最近变更时间。</p>
+        </div>
+        <p id="guarantee-table-state" class="table-state" role="status" aria-live="polite">
+          {{ errorMessage || (loading ? '担保信息列表加载中' : rows.length ? `共 ${total} 条记录` : '暂无担保信息') }}
+        </p>
+      </div>
+      <div v-if="errorMessage" class="error-state" role="alert">
+        <span>{{ errorMessage }}</span>
+        <el-button link type="primary" @click="load">重试</el-button>
+      </div>
       <el-table :data="rows" size="default" empty-text="暂无担保信息" v-loading="loading"
+                aria-labelledby="guarantee-table-heading" aria-describedby="guarantee-table-state"
                 @selection-change="onSelectionChange" row-key="id">
         <el-table-column type="selection" width="45" reserve-selection />
         <el-table-column label="序号" type="index" width="64"
@@ -35,7 +54,7 @@
         <el-table-column label="经办人" min-width="130">
           <template #default="{ row }">
             <div>{{ row.userDisplayName || row.userName || '-' }}</div>
-            <div v-if="row.userName" style="color:#909399;font-size:12px;">{{ row.userName }}</div>
+            <div v-if="row.userName" class="sub-id">{{ row.userName }}</div>
           </template>
         </el-table-column>
         <el-table-column label="数据变动日期" prop="createTime" min-width="170" />
@@ -59,10 +78,10 @@
           @size-change="onSizeChange"
         />
       </div>
-    </div>
+    </section>
 
     <!-- 新增 / 编辑 弹窗 -->
-    <el-dialog v-model="dlg.show" :title="dlg.editId ? '编辑担保信息' : '新增担保信息'"
+    <el-dialog v-model="dlg.show" class="bp-crud-dialog" :title="dlg.editId ? '编辑担保信息' : '新增担保信息'"
                width="560px" :close-on-click-modal="false">
       <el-form ref="formRef" :model="dlg.form" :rules="rules" label-width="150px">
         <el-form-item label="客户名称" prop="clientName">
@@ -91,7 +110,7 @@
         <el-button type="primary" :loading="dlg.saving" @click="onSave">确定</el-button>
       </template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -106,6 +125,7 @@ const f = reactive({ clientName: '' });
 const rows = ref([]);
 const total = ref(0);
 const loading = ref(false);
+const errorMessage = ref('');
 const exporting = ref(false);
 const selection = ref([]);
 const pager = reactive({ pageNo: 1, pageSize: 20 });
@@ -143,6 +163,7 @@ const rules = {
 
 async function load() {
   loading.value = true;
+  errorMessage.value = '';
   try {
     const r = await listGuarantees({
       clientName: f.clientName || undefined,
@@ -153,6 +174,7 @@ async function load() {
     total.value = r?.total || 0;
   } catch (e) {
     rows.value = []; total.value = 0;
+    errorMessage.value = '担保信息加载失败，请重试';
   } finally {
     loading.value = false;
   }
@@ -253,3 +275,24 @@ async function onExport() {
 
 load();
 </script>
+
+<style lang="scss" scoped>
+.guarantee-query {
+  min-width: 0;
+}
+.guarantee-query :deep(.sub-id) {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.error-state {
+  align-items: center;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-danger-fg);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+</style>

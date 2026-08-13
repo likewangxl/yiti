@@ -1,0 +1,12 @@
+manifest_format=controlled-sql-local-minimum-v1
+change_ticket=LOCAL-YITI-TEST-SCREEN-SCOPE-20260812-01
+authorization_scope=parent-authorized-yiti_test-only
+production_authorization=not-granted
+target_database=yiti_test
+target_server_uuid=d3a209c4-42bd-11f1-bb1f-000c299f5629
+target_hostname=ubuntu
+target_port=3306
+auth_sql_sha256=900407245a163246939b1cba15606c68a612e3093fd700b3c3c6a713b8d86554
+align_sql_sha256=2688292af5dcdd5b59acf3dab0cd08a9648dbd6047abab1febcf8da8b2cb51f7
+seed_sql_sha256=5c1b22ecdd8c74480e0607237d58316a71e762383cab1dead4c7cfe20798d500
+execution_plan=seed-first-then-auth-align-seed-rerun

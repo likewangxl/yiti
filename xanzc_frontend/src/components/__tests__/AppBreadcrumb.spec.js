@@ -20,6 +20,10 @@ describe('AppBreadcrumb.vue', () => {
     expect(text).toContain('数据公式');
     expect(text).toContain('报表分析');
     expect(text).not.toContain('自由报表');
+    expect(w.find('nav').attributes('aria-label')).toBe('面包屑');
+    const current = w.findAll('[aria-current="page"]');
+    expect(current).toHaveLength(1);
+    expect(current[0].text()).toBe('数据公式');
   });
 
   it('未命中菜单：退回 meta.title / meta.group', () => {

@@ -6,7 +6,9 @@
     <sql id="BASE_COLUMNS">
         id, trace_id, emp_id, emp_name, biz_type, biz_action,
         resource_url, request_method, request_params, response_status,
-        error_msg, ip_address, user_agent, execution_time, reason, created_time
+        error_msg, ip_address, user_agent, execution_time, reason,
+        target_type, target_id, before_snapshot, after_snapshot, added_items, removed_items,
+        created_time
     </sql>
 
     <!-- 动态 WHERE 条件片段 -->

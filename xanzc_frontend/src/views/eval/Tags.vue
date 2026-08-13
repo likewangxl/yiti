@@ -1,23 +1,23 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle />
-      <span class="desc">评价标签</span>
-      <div class="actions">
+  <main class="bp-crud eval-tags-page" aria-labelledby="eval-tags-page-title" :aria-busy="loading ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="eval-tags-page-title"><span class="sub">维护可用于规则和人员评价的标签</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="评价标签操作">
         <el-button @click="reload">刷新</el-button>
-        <el-button type="primary" @click="openCreate">+ 新建标签</el-button>
+        <el-button type="primary" @click="openCreate">新建标签</el-button>
       </div>
-    </div>
+    </header>
 
     <!-- 筛选栏 -->
-    <div class="card-section filter-section">
-      <el-form inline size="default" class="filter-form">
+    <section class="card-section filter-bar" aria-label="评价标签筛选">
+      <el-form inline size="default" class="filter-form" aria-label="评价标签筛选">
         <el-form-item label="关键词">
           <el-input
             v-model="filters.keyword"
+            aria-label="按标签名称筛选"
             placeholder="搜索标签名称"
             clearable
-            style="width:220px"
+            class="keyword-input"
             @keyup.enter="reload"
           />
         </el-form-item>
@@ -26,11 +26,21 @@
           <el-button @click="resetFilters">重置</el-button>
         </el-form-item>
       </el-form>
-    </div>
+    </section>
 
     <!-- 数据表格 -->
-    <div class="card-section">
-      <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无标签数据">
+    <section class="card-section data-panel" aria-label="评价标签列表" aria-describedby="eval-tags-table-state">
+      <div class="toolbar">
+        <div>
+          <h2 id="eval-tags-table-heading" class="section-title">评价标签列表</h2>
+          <p class="hint">标签状态会同步影响人员标签选择和评价规则配置。</p>
+        </div>
+        <p id="eval-tags-table-state" class="table-state" role="status" aria-live="polite">
+          {{ loading ? '评价标签列表加载中' : loadError || (rows.length ? `共 ${pager.total} 个标签` : '暂无标签数据') }}
+        </p>
+      </div>
+      <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无标签数据"
+        aria-labelledby="eval-tags-table-heading" aria-describedby="eval-tags-table-state">
         <el-table-column prop="tagId" label="TAG_ID" width="100">
           <template #default="{ row }">
             <code class="mono">{{ row.tagId }}</code>
@@ -52,13 +62,12 @@
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button link type="danger" size="small" :loading="deleting" :disabled="deleting" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <!-- 分页 -->
-      <div class="pager">
+      <nav class="pager" aria-label="评价标签列表分页">
         <el-pagination
           v-model:current-page="pager.pageNo"
           v-model:page-size="pager.pageSize"
@@ -69,11 +78,11 @@
           @size-change="reload"
           @current-change="reload"
         />
-      </div>
-    </div>
+      </nav>
+    </section>
 
     <!-- 新建弹窗 -->
-    <el-dialog v-model="createDlg.show" title="新建标签" width="480px" @closed="resetCreateForm">
+    <el-dialog v-model="createDlg.show" class="bp-crud-dialog" title="新建标签" width="480px" :close-on-click-modal="false" @closed="resetCreateForm">
       <el-form
         ref="createFormRef"
         :model="createDlg.form"
@@ -92,12 +101,12 @@
       </el-form>
       <template #footer>
         <el-button @click="createDlg.show = false">取消</el-button>
-        <el-button type="primary" :loading="createDlg.saving" @click="saveCreate">保存</el-button>
+        <el-button type="primary" :loading="createDlg.saving" :disabled="createDlg.saving" @click="saveCreate">保存</el-button>
       </template>
     </el-dialog>
 
     <!-- 编辑弹窗 -->
-    <el-dialog v-model="editDlg.show" title="编辑标签" width="480px" @closed="resetEditForm">
+    <el-dialog v-model="editDlg.show" class="bp-crud-dialog" title="编辑标签" width="480px" :close-on-click-modal="false" @closed="resetEditForm">
       <el-form
         ref="editFormRef"
         :model="editDlg.form"
@@ -123,10 +132,10 @@
       </el-form>
       <template #footer>
         <el-button @click="editDlg.show = false">取消</el-button>
-        <el-button type="primary" :loading="editDlg.saving" @click="saveEdit">保存</el-button>
+        <el-button type="primary" :loading="editDlg.saving" :disabled="editDlg.saving" @click="saveEdit">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -137,6 +146,7 @@ import { listTags, createTag, updateTag, deleteTag } from '@/api/eval';
 // === 列表状态 ===
 const rows = ref([]);
 const loading = ref(false);
+const loadError = ref('');
 const filters = reactive({ keyword: '' });
 const pager = reactive({ pageNo: 1, pageSize: 20, total: 0 });
 
@@ -150,6 +160,7 @@ function resetFilters() {
 /** 加载标签列表 */
 async function reload() {
   loading.value = true;
+  loadError.value = '';
   try {
     const params = {
       pageNo: pager.pageNo,
@@ -162,6 +173,7 @@ async function reload() {
     pager.total = r?.total ?? 0;
   } catch {
     rows.value = [];
+    loadError.value = '评价标签加载失败，请刷新重试';
   } finally {
     loading.value = false;
   }
@@ -169,6 +181,7 @@ async function reload() {
 
 // === 新建弹窗 ===
 const createFormRef = ref(null);
+const deleting = ref(false);
 const createDlg = reactive({
   show: false,
   saving: false,
@@ -264,6 +277,7 @@ async function saveEdit() {
 // === 删除 ===
 /** 确认后删除标签 */
 async function handleDelete(row) {
+  if (deleting.value) return;
   try {
     await ElMessageBox.confirm(
       `确认删除标签「${row.tagName}」？删除后不可恢复。`,
@@ -273,12 +287,15 @@ async function handleDelete(row) {
   } catch {
     return;
   }
+  deleting.value = true;
   try {
     await deleteTag(row.tagId);
     ElMessage.success('标签已删除');
     await reload();
   } catch {
     ElMessage.error('删除失败，请重试');
+  } finally {
+    deleting.value = false;
   }
 }
 
@@ -286,25 +303,10 @@ onMounted(reload);
 </script>
 
 <style lang="scss" scoped>
-.filter-section {
-  padding: 16px 18px 4px;
-  margin-bottom: 12px;
-}
-.card-section {
-  padding: 16px 18px;
-}
-.filter-form {
-  margin-bottom: 0;
-}
-.pager {
-  margin-top: 14px;
-  display: flex;
-  justify-content: flex-end;
-}
-.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
+.keyword-input { width: 220px; }
 .mono {
   font-family: ui-monospace, monospace;
   font-size: 12px;
-  color: $text-2;
+  color: var(--color-text-muted);
 }
 </style>

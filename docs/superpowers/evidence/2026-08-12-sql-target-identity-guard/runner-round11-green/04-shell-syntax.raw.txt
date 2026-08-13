@@ -1,0 +1,8 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T22:14:32.002144Z
+COMMAND /usr/bin/bash -n docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh
+SHA256 9e53b6c5b4b475f10d5fb591d416855504599780d8a9d2e1556b38e13d4dcb6a /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh
+EXIT_CODE 0
+UTC_FINISHED 2026-08-11T22:14:32.004041Z
+--- RAW_STDOUT_STDERR ---
+

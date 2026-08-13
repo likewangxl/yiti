@@ -5,16 +5,18 @@
 -->
 <template>
   <el-dialog
+    class="bp-crud-dialog"
     :model-value="visible"
     @update:model-value="$emit('update:visible', $event)"
     title="选择指标"
     width="820px"
     :close-on-click-modal="false"
+    aria-label="选择指标"
   >
     <div class="picker">
       <div class="col">
-        <h4>指标库</h4>
-        <el-input v-model="kw" placeholder="🔍 搜索指标" clearable size="default" />
+        <h4 id="metric-library-title">指标库</h4>
+        <el-input v-model="kw" aria-label="搜索指标" placeholder="按名称或编码搜索指标" clearable size="default" />
         <div class="tree-wrap">
           <el-tree
             ref="treeRef"
@@ -33,6 +35,8 @@
               </span>
             </template>
           </el-tree>
+          <p v-if="loading" class="state-text" role="status">正在加载指标库</p>
+          <p v-else-if="loadError" class="state-text error-text" role="alert">{{ loadError }}</p>
         </div>
       </div>
 
@@ -43,7 +47,7 @@
           <div v-for="(c, i) in picked" :key="c" class="pill" :class="{ alt: i % 2 }">
             <span class="mono muted">{{ c }}</span>
             <span class="lbl">{{ codeLabel(c) }}</span>
-            <a class="op danger" @click="remove(c)">移除</a>
+            <el-button class="op" link type="danger" size="small" :aria-label="`移除指标 ${codeLabel(c)}`" @click="remove(c)">移除</el-button>
           </div>
         </div>
       </div>
@@ -71,6 +75,8 @@ const emit = defineEmits(['update:visible', 'update:modelValue', 'confirm']);
 
 const tree = ref([]);
 const kw = ref('');
+const loading = ref(false);
+const loadError = ref('');
 const picked = ref([...props.modelValue]);
 const treeRef = ref(null);
 
@@ -90,12 +96,16 @@ function filterNode(value, data) {
 }
 
 async function loadTree() {
+  if (loading.value) return;
+  loading.value = true;
+  loadError.value = '';
   try {
     const data = await getMetricsTree();
     tree.value = normalize(data);
   } catch (e) {
     tree.value = [];
-  }
+    loadError.value = e?.message || '指标库加载失败，请关闭后重试';
+  } finally { loading.value = false; }
 }
 
 // 把 mock 的 {id, label, children} 规整成 tree 需要的结构 —— 叶子节点用 code 作 key
@@ -150,19 +160,21 @@ onMounted(() => { if (props.visible) loadTree(); });
 </script>
 
 <style lang="scss" scoped>
-.picker { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; min-height: 380px; }
-.col h4 { margin: 0 0 8px; font-size: 13px; color: $text-2; font-weight: 600; }
-.tree-wrap { margin-top: 8px; max-height: 360px; overflow: auto; border: 1px solid $border-1; border-radius: 4px; padding: 6px; }
-.node { display: flex; align-items: center; gap: 6px; .mono.muted { font-size: 11px; color: $text-4; margin-left: auto; } }
+.picker { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); min-height: 380px; }
+.col h4 { color: var(--color-text-strong); font-size: 14px; font-weight: 600; margin: 0 0 var(--space-2); }
+.tree-wrap { border: 1px solid var(--color-border); border-radius: var(--radius-control); margin-top: var(--space-2); max-height: 360px; overflow: auto; padding: var(--space-2); }
+.node { display: flex; align-items: center; gap: 6px; .mono.muted { color: var(--color-text-muted); font-size: 11px; margin-left: auto; } }
+.state-text { color: var(--color-text-muted); font-size: 12px; padding: var(--space-3); text-align: center; }
+.error-text { color: var(--color-danger-fg); }
 .picked {
-  border: 1px solid $border-1; border-radius: 4px; max-height: 396px; overflow: auto; padding: 8px;
-  .empty { color: $text-4; text-align: center; font-size: 13px; padding: 40px 0; }
+  border: 1px solid var(--color-border); border-radius: var(--radius-control); max-height: 396px; overflow: auto; padding: var(--space-2);
+  .empty { color: var(--color-text-muted); text-align: center; font-size: 13px; padding: 40px 0; }
   .pill {
     display: flex; align-items: center; padding: 6px 10px; gap: 10px; border-radius: 4px;
-    .mono.muted { color: $text-4; font-size: 11px; min-width: 50px; }
-    .lbl { flex: 1; font-size: 13px; color: $text-1; }
-    .op.danger { color: $danger; cursor: pointer; font-size: 12px; }
-    &.alt { background: $bg-soft; }
+    .mono.muted { color: var(--color-text-muted); font-size: 11px; min-width: 50px; }
+    .lbl { color: var(--color-text-strong); flex: 1; font-size: 13px; }
+    .op { min-height: 28px; }
+    &.alt { background: var(--color-surface-soft); }
   }
 }
 .mono { font-family: Menlo, Consolas, monospace; }

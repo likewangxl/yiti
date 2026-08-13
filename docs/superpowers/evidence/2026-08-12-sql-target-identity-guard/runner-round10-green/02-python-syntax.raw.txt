@@ -1,0 +1,9 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T21:43:13.197317Z
+COMMAND /usr/bin/python3.10 -m py_compile docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.py docs/superpowers/scripts/2026-08-12-controlled-sql-root-managed-launcher.py
+SHA256 1365dc9f43588b5cb2409e809fb204ad130107c285f17dc4b10e2b514c5fde8a /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.py
+SHA256 3b628704322d876704dda503645b6cddd05b5ca049e12abaa6254eb76b535099 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-root-managed-launcher.py
+EXIT_CODE 0
+UTC_FINISHED 2026-08-11T21:43:13.227856Z
+--- RAW_STDOUT_STDERR ---
+

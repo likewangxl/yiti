@@ -1,7 +1,7 @@
 # 红色引擎（党建管理）— 对外 API 契约
 
 > 版本：v1.0
-> 最后更新：2026-07-19
+> 最后更新：2026-08-10
 > 模块编码：red-engine-center
 > 本文以代码为准核实：本模块**是否**对外暴露 `*Api`/`*QueryApi`、本模块消费上游哪些 `*Api`、字典/事件约定
 > 结论已 grep `red-engine-center/src/main/java` 全量核实，无凭空补写
@@ -58,11 +58,21 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 
 **使用位置**：
 - `ReSubmitController`（`private final CurrentUserApi currentUserApi;`）——`createSubmit`/`getMySubmits` 取 `currentUserApi.getCurrentEmpId()` 作为提交人/查询过滤主体
-- `ReReviewController`（同上）——`approve`/`reject` 取当前登录审核人工号回填 `RE_SUBMIT.reviewerId`
+- `ReReviewController`（同上）——`approve`/`reject` 取当前登录审核人工号；`ReReviewService`
+  除回填 `RE_SUBMIT.reviewerId` 外，还会与持久化 `submitterId` 比较并以 `RE-40008` 拒绝本人自审
 
 **用到的方法**：仅 `getCurrentEmpId()`（`CurrentUserApi` 接口另有 `getCurrentUserContext`/`getCurrentOrgCode`/`getCurrentRoleIds`/`getCurrentRoleCodes`/`getCurrentCandidateGroupKeys`/`isSystemAdmin`，本模块均未调用）。
 
-**未使用 `BizScopeApi`**：本模块数据范围统一走 `PT_ROLE_BIZ_SCOPE.BIZ_TYPE='RED_ENGINE'` 且 `DATA_SCOPE='ALL'`（5 角色恒全量），组织维度隔离靠模块内 `RE_USER_PARTY_MAP` 自行实现（`ReUserPartyMapService.getRequiredPartyOrgId`），未接入平台 `BizScopeApi`/`DataScopeContext` 的机构子树等通用数据范围能力（`grep BizScopeApi red-engine-center/src/main/java` 结果为空）。
+角色授权由平台拦截链按用户全部启用角色的资源并集完成；兼容期
+`POST /api/auth/switch-role` 只是 no-op，本模块不调用也不依赖该接口。
+权限并集只授予端点调用资格：同时具备报送和审核角色的用户仍受 `ReReviewService` 实体级
+职责分离约束，不能 approve/reject 自己创建的记录。
+
+**未使用 `BizScopeApi`**：本模块一期数据范围仍统一走
+`PT_ROLE_BIZ_SCOPE.BIZ_TYPE='RED_ENGINE'`、`DATA_SCOPE='ALL'`（4 党建角色 + SYS_ADMIN）。
+`RE_USER_PARTY_MAP` 只在创建/“我的上报”场景派生党组织，并非通用数据范围实现；模块未接入
+`BizScopeApi`/`DataScopeContext` 的机构子树或复合范围能力。复合 DataScope 的精确 OR 并集及
+原 redengine 的党组织审核隔离延期为独立安全改造。
 
 ### 2.2 `FileApi`（`system-governance-center`）
 
@@ -72,7 +82,7 @@ import com.bank.branch.platform.governance.api.FileApi;
 
 **使用位置**：`ReSubmitService`（`private final FileApi fileApi;`）
 
-**用到的方法**：`bindFile(String bizType, String bizId, String fileObjectId, String fileRole)`——`createSubmit` 内对 `req.getFileObjectIds()` 逐个调用，把材料上报的附件（前端已通过 governance `POST /api/files/upload` 直传拿到 `fileObjectId`）与业务对象（上报记录）建立关联登记，同时写本模块自有的 `RE_SUBMIT_FILE` 表落业务侧元数据。**未调用** `FileApi.upload`/`getFileContent`/`getDownloadUrl`/`listBizFiles`/`deleteFile`/`getFileName(s)`/`getFileSizes` 等其余方法——上传动作完全由前端直连 governance 端点完成，本模块服务端只做"绑定登记"这一步。
+**用到的方法**：`bindFile(String bizType, String bizId, String fileObjectId, String fileRole)`——`createSubmit` 内对 `req.getFileObjectIds()` 逐个调用，把材料上报的附件（前端已通过 governance `POST /api/files/upload` 直传拿到 `fileObjectId`）与业务对象（上报记录）建立关联登记，同时写本模块自有的 `RE_SUBMIT_FILE` 表落业务侧元数据。**未调用** `FileApi.upload`/`getFileContent`/`getDownloadUrl`/`listBizFiles`/`deleteFile`/`getFileName(s)`/`getFileSizes` 等其余方法——上传动作完全由前端直连 governance 端点完成，本模块服务端只做"绑定登记"这一步。该直连上传端点对应共享资源 `G_FILE_UPLOAD`，只显式授予 `R_RE_REPORT`/`R_RE_SECR`。
 
 ### 2.3 未消费的其他上游 `*Api`
 
@@ -94,7 +104,7 @@ import com.bank.branch.platform.governance.api.FileApi;
 | `RE_SUBMIT_STATUS` | 上报状态 | 3 | pending/approved/rejected（**注意**：字典项值为英文小写字面量，与 `RE_SUBMIT.status` 实际的整型 `0/1/2/3` 编码不是同一套值域，前端展示需自行映射，非直接可用的 `status` 整型翻译表） |
 | `RE_ITEM_CODE` | 考核项编码 | 8 | 1.1/1.2/1.3/2.1/2.2/4.1/4.2/sup，`remark` 字段携带各项满分上限提示（如"最高35分"） |
 
-`ReUserPartyMap.partyRole` 四个字符串字面量（`ORG_REVIEWER`/`BRANCH_REVIEWER`/`SECRETARY`/`REPORTER`）**不在**上述任何字典内，属硬编码字面量，无字典/枚举校验，也未走前端 `useDict()`。
+`ReUserPartyMap.partyRole` 四个字符串字面量（`ORG_REVIEWER`/`BRANCH_REVIEWER`/`SECRETARY`/`REPORTER`）**不在**上述任何字典内，属硬编码兼容描述字段，无字典/枚举校验，也未走前端 `useDict()`。它不是授权字段；多角色权限唯一来源为平台 `PT_ROLE`/`PT_USER_ROLE`/`PT_ROLE_RESOURCE`。
 
 字典种子权威来源：`docs/superpowers/sql/2026-07-18-redengine-seed.sql` 第 6 段（`governance` 模块的 `DictApi`/`SysDict` 实体只读写 `SYS_DICT` 单表，`SYS_DICT_ITEM` 全平台未被任何代码读取，故第 6 段已改为拍平写法，不落 `SYS_DICT_ITEM`，详见该脚本文件头「修复记录」）。
 

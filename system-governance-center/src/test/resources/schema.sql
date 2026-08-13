@@ -61,6 +61,12 @@ CREATE TABLE IF NOT EXISTS AUDIT_LOG (
     user_agent VARCHAR(500) DEFAULT NULL,
     execution_time INT DEFAULT NULL,
     reason VARCHAR(500) DEFAULT NULL,
+    target_type VARCHAR(100) DEFAULT NULL,
+    target_id VARCHAR(128) DEFAULT NULL,
+    before_snapshot TEXT,
+    after_snapshot TEXT,
+    added_items TEXT,
+    removed_items TEXT,
     created_time DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

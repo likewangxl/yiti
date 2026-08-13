@@ -8,6 +8,7 @@ import { clampRect } from '@/views/screen/designer/utils/scale';
 import { normalizeCanvasStyle } from '@/views/screen/designer/utils/background';
 import { alignRects, distributeRects } from '@/views/screen/designer/utils/align';
 import { makeGroup, ungroup } from '@/views/screen/designer/utils/group';
+import { normalizeScreenScope } from '@/utils/screenScope';
 
 /**
  * 大屏设计器 store(setup-store 写法,对齐 stores/user.js)。
@@ -19,6 +20,10 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
   const screenId = ref(null);
   const screenCode = ref('');
   const viewLevel = ref('BRANCH');
+  const bizLine = ref('COMMON');
+  const orgScopeMode = ref('LEGACY_CONTEXT');
+  const orgGroupCode = ref('');
+  const allowedRoleCodes = ref([]);
   const canvasVersion = ref(0);
   const publishStatus = ref(0);
   // 背景增强(2026-07-17):backgroundType 纯色/渐变/图片三选一 + bgGradient/bgImage,
@@ -97,6 +102,11 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
     screenId.value = resp.screenId;
     screenCode.value = resp.screenCode || '';
     viewLevel.value = resp.viewLevel || 'BRANCH';
+    const scope = normalizeScreenScope(resp);
+    bizLine.value = scope.bizLine;
+    orgScopeMode.value = scope.orgScopeMode;
+    orgGroupCode.value = scope.orgGroupCode;
+    allowedRoleCodes.value = [...scope.allowedRoleCodes];
     canvasVersion.value = resp.canvasVersion ?? 0;
     publishStatus.value = resp.publishStatus ?? 0;
     blocks.value = resp.blocks || [];
@@ -115,7 +125,6 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
     return {
       screenId: screenId.value,
       expectedVersion: canvasVersion.value,
-      schemaVersion: draftSchemaVersion.value,
       canvasStyle: deepClone(canvasStyle.value),
       // ChartWidget 携带 bind/style/drill(供后端 upsert block);素材组件带 propValue
       components: componentData.value.map(c => deepClone(c))
@@ -123,6 +132,14 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
   }
   function adoptSaveResult(resp) {
     canvasVersion.value = resp.canvasVersion;
+    if (resp.bizLine || resp.orgScopeMode || resp.orgGroupCode || resp.allowedRoleCodes) {
+      const scope = normalizeScreenScope(resp);
+      viewLevel.value = scope.viewLevel;
+      bizLine.value = scope.bizLine;
+      orgScopeMode.value = scope.orgScopeMode;
+      orgGroupCode.value = scope.orgGroupCode;
+      allowedRoleCodes.value = [...scope.allowedRoleCodes];
+    }
     const draft = parse(resp.canvasDraftJson, { components: [] });
     draftSchemaVersion.value = draft.schemaVersion ?? draftSchemaVersion.value;
     componentData.value = Array.isArray(draft.components) ? draft.components : componentData.value;
@@ -317,7 +334,7 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
   }
 
   return {
-    screenId, screenCode, viewLevel, canvasVersion, publishStatus,
+    screenId, screenCode, viewLevel, bizLine, orgScopeMode, orgGroupCode, allowedRoleCodes, canvasVersion, publishStatus,
     canvasStyle, draftSchemaVersion, componentData, curComponent, curIndex, curComponents, blocks, scale, dirty,
     canUndo, canRedo,
     loadFromEditor, toSavePayload, adoptSaveResult,

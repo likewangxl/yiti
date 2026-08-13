@@ -1,0 +1,19 @@
+执行时点：本次 C-3 受控后端已优雅停止之后。
+
+Command (exit 0; read-only):
+
+```bash
+ss -ltnp '( sport = :18082 or sport = :8092 or sport = :30523 or sport = :8089 or sport = :11003 )'
+ss -tnp '( dport = :18082 or sport = :18082 or dport = :8089 or sport = :8089 or dport = :11003 or sport = :11003 or dport = :30523 or sport = :30523 )'
+```
+
+Raw stdout:
+
+```text
+State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+LISTEN 0      4096         0.0.0.0:8089      0.0.0.0:*
+LISTEN 0      4096            [::]:8089         [::]:*
+State Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+```
+
+Interpretation: `18082`、`8092`、`30523` 和 `11003` 未出现在停机后监听清单，且没有匹配的 TCP 连接。`8089` 是停机后仍存在的未知监听；本次没有停止、复用或归属该进程，且无法仅凭停机后快照判断其创建时点。启动日志已经证明本次后端曾向该端口发起探测，这是阶段 D 失败依据之一。

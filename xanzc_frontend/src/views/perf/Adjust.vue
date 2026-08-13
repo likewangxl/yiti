@@ -1,18 +1,18 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle><span class="sub">比例之和 = 100% · 单行 ≥ 1% · 同一员工不重复</span></PageTitle>
-      <div class="actions">
-        <el-button @click="reload">刷新</el-button>
-        <el-button v-if="activeTab==='mine'" type="primary" @click="openCreate">+ 新建调整申请</el-button>
+  <main class="bp-crud perf-adjust-page" aria-labelledby="perf-adjust-page-title" :aria-busy="loading || todoLoading || doneLoading || dlg.saving || dlg.reviewSaving || batchDlg.saving ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="perf-adjust-page-title"><span class="sub">比例之和 = 100% · 单行 ≥ 1% · 同一员工不重复</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="业绩调整操作">
+        <el-button :loading="loading || todoLoading || doneLoading" :disabled="loading || todoLoading || doneLoading || dlg.saving || dlg.reviewSaving || batchDlg.saving" @click="reload">刷新</el-button>
+        <el-button v-if="activeTab==='mine'" type="primary" :disabled="dlg.saving || dlg.draftSaving" @click="openCreate">新建调整申请</el-button>
       </div>
-    </div>
+    </header>
 
-    <el-tabs v-model="activeTab" @tab-change="reload" class="adjust-tabs">
+    <el-tabs v-model="activeTab" @tab-change="reload" class="adjust-tabs" aria-label="业绩调整工作区">
       <!-- ============ 我的申请 ============ -->
       <el-tab-pane label="我的申请" name="mine">
-        <div class="card-section">
-          <el-form inline size="default">
+        <section class="card-section data-panel filter-bar" aria-label="我的申请筛选">
+          <el-form inline size="default" aria-label="我的申请筛选">
             <el-form-item label="关键字">
               <el-input v-model="mineFilters.keyword" placeholder="申请编号 / 客户 ID" clearable
                         style="width:200px" @keyup.enter="onMineFilterChange" />
@@ -50,9 +50,19 @@
               <el-button @click="resetMineFilters">重置</el-button>
             </el-form-item>
           </el-form>
-        </div>
-        <div class="card-section table">
-          <el-table :data="rows" size="default" empty-text="暂无调整申请" v-loading="loading">
+        </section>
+        <section class="card-section data-panel table" aria-label="我的业绩调整申请" aria-labelledby="perf-adjust-mine-heading"
+          aria-describedby="perf-adjust-mine-state" :aria-busy="loading ? 'true' : 'false'">
+          <div class="toolbar">
+            <div>
+              <h2 id="perf-adjust-mine-heading" class="section-title">我的申请</h2>
+              <p class="hint">查看申请进度、编辑草稿或撤回尚未完成审批的申请。</p>
+            </div>
+            <p id="perf-adjust-mine-state" class="table-state" role="status" aria-live="polite">{{ mineState }}</p>
+          </div>
+          <div v-if="mineError" class="table-error" role="alert"><span>{{ mineError }}</span><el-button link type="primary" @click="reloadMine">重新加载</el-button></div>
+          <el-table :data="rows" size="default" :empty-text="mineError ? '加载失败，请重新加载' : '暂无调整申请'" v-loading="loading"
+            aria-labelledby="perf-adjust-mine-heading" aria-describedby="perf-adjust-mine-state">
             <el-table-column label="申请编号" width="170">
               <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
@@ -91,7 +101,7 @@
               </template>
             </el-table-column>
           </el-table>
-          <div class="pager">
+          <nav class="pager" aria-label="我的业绩调整申请分页">
             <el-pagination
               v-model:current-page="minePager.pageNo"
               v-model:page-size="minePager.pageSize"
@@ -102,14 +112,14 @@
               @size-change="reloadMine"
               @current-change="reloadMine"
             />
-          </div>
-        </div>
+          </nav>
+        </section>
       </el-tab-pane>
 
       <!-- ============ 待我审批 ============ -->
       <el-tab-pane v-if="canApprove" label="待我审批" name="todo">
-        <div class="card-section">
-          <el-form inline size="default">
+        <section class="card-section data-panel filter-bar" aria-label="待我审批筛选">
+          <el-form inline size="default" aria-label="待我审批筛选">
             <el-form-item label="关键字">
               <el-input v-model="todoFilters.keyword" placeholder="申请编号 / 客户 ID" clearable
                         style="width:200px" @keyup.enter="onTodoFilterChange" />
@@ -139,9 +149,19 @@
                          @click="openBatchReview">批量审批{{ todoSelection.length ? `（${todoSelection.length}）` : '' }}</el-button>
             </el-form-item>
           </el-form>
-        </div>
-        <div class="card-section table">
-          <el-table :data="todos" row-key="taskId" size="default" empty-text="无符合条件的待审批" v-loading="todoLoading"
+        </section>
+        <section class="card-section data-panel table" aria-label="待我审批列表" aria-labelledby="perf-adjust-todo-heading"
+          aria-describedby="perf-adjust-todo-state" :aria-busy="todoLoading ? 'true' : 'false'">
+          <div class="toolbar">
+            <div>
+              <h2 id="perf-adjust-todo-heading" class="section-title">待我审批</h2>
+              <p class="hint">先签收候选任务，再提交审批意见；批量审批需选择同一审批环节。</p>
+            </div>
+            <p id="perf-adjust-todo-state" class="table-state" role="status" aria-live="polite">{{ todoState }}</p>
+          </div>
+          <div v-if="todoError" class="table-error" role="alert"><span>{{ todoError }}</span><el-button link type="primary" @click="reloadTodo">重新加载</el-button></div>
+          <el-table :data="todos" row-key="taskId" size="default" :empty-text="todoError ? '加载失败，请重新加载' : '无符合条件的待审批'" v-loading="todoLoading"
+                    aria-labelledby="perf-adjust-todo-heading" aria-describedby="perf-adjust-todo-state"
                     @selection-change="onTodoSelectionChange">
             <el-table-column type="selection" width="48" />
             <el-table-column label="申请编号" width="170">
@@ -185,7 +205,7 @@
               </template>
             </el-table-column>
           </el-table>
-          <div class="pager">
+          <nav class="pager" aria-label="待我审批分页">
             <el-pagination
               v-model:current-page="todoPager.pageNo"
               v-model:page-size="todoPager.pageSize"
@@ -196,14 +216,14 @@
               @size-change="reloadTodo"
               @current-change="reloadTodo"
             />
-          </div>
-        </div>
+          </nav>
+        </section>
       </el-tab-pane>
 
       <!-- ============ 已审批 ============ -->
       <el-tab-pane v-if="canApprove" label="已审批" name="done">
-        <div class="card-section">
-          <el-form inline size="default">
+        <section class="card-section data-panel filter-bar" aria-label="已审批筛选">
+          <el-form inline size="default" aria-label="已审批筛选">
             <el-form-item label="关键字">
               <el-input v-model="doneFilters.keyword" placeholder="申请编号 / 客户 ID" clearable
                         style="width:200px" @keyup.enter="onDoneFilterChange" />
@@ -231,9 +251,19 @@
               <el-button @click="resetDoneFilters">重置</el-button>
             </el-form-item>
           </el-form>
-        </div>
-        <div class="card-section table">
-          <el-table :data="dones" size="default" empty-text="无符合条件的已审批" v-loading="doneLoading">
+        </section>
+        <section class="card-section data-panel table" aria-label="已审批列表" aria-labelledby="perf-adjust-done-heading"
+          aria-describedby="perf-adjust-done-state" :aria-busy="doneLoading ? 'true' : 'false'">
+          <div class="toolbar">
+            <div>
+              <h2 id="perf-adjust-done-heading" class="section-title">已审批</h2>
+              <p class="hint">仅展示已完成审批的申请，可打开查看申请资料和审批流记录。</p>
+            </div>
+            <p id="perf-adjust-done-state" class="table-state" role="status" aria-live="polite">{{ doneState }}</p>
+          </div>
+          <div v-if="doneError" class="table-error" role="alert"><span>{{ doneError }}</span><el-button link type="primary" @click="reloadDone">重新加载</el-button></div>
+          <el-table :data="dones" size="default" :empty-text="doneError ? '加载失败，请重新加载' : '无符合条件的已审批'" v-loading="doneLoading"
+            aria-labelledby="perf-adjust-done-heading" aria-describedby="perf-adjust-done-state">
             <el-table-column label="申请编号" width="170">
               <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
@@ -269,7 +299,7 @@
               </template>
             </el-table-column>
           </el-table>
-          <div class="pager">
+          <nav class="pager" aria-label="已审批分页">
             <el-pagination
               v-model:current-page="donePager.pageNo"
               v-model:page-size="donePager.pageSize"
@@ -280,8 +310,8 @@
               @size-change="reloadDone"
               @current-change="reloadDone"
             />
-          </div>
-        </div>
+          </nav>
+        </section>
       </el-tab-pane>
     </el-tabs>
 
@@ -391,7 +421,7 @@
         <div class="preview-section" v-loading="preview.loading">
           <div class="card-h">
             <div class="title">原业绩分配</div>
-            <el-button v-if="!dlg.readOnly && !hasOriginalOwners" size="small" type="primary" plain @click="addOriginalRow">+ 添加原业绩分配</el-button>
+            <el-button v-if="!dlg.readOnly && !hasOriginalOwners" size="small" type="primary" plain @click="addOriginalRow">添加原业绩分配</el-button>
           </div>
           <!-- 历史审批通过分配（自动查到）：只读 -->
           <el-table v-if="hasOriginalOwners" :data="preview.data.allocList || []" size="small" border style="margin-bottom:12px" empty-text="暂无审批通过的分配记录">
@@ -490,7 +520,7 @@
             </template>
           </el-table-column>
         </el-table>
-        <el-button v-if="!dlg.readOnly" plain @click="addItemRow" style="margin-top:10px">+ 添加分配人</el-button>
+          <el-button v-if="!dlg.readOnly" plain @click="addItemRow" style="margin-top:10px">添加分配人</el-button>
 
         <el-form-item label="申请原因" prop="reason" required style="margin-top:14px">
           <el-input v-model="dlg.form.reason" :disabled="dlg.readOnly" type="textarea" :rows="2" maxlength="500" show-word-limit
@@ -610,7 +640,7 @@
 
     <!-- 查看调整申请（共享只读组件，与业绩分配查询页共用） -->
     <AllocAdjustViewDialog v-model="viewDialog.show" :apply-id="viewDialog.applyId" />
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -713,6 +743,7 @@ async function loadCanApprove() {
 // ============ 我的申请 ============
 const rows = ref([]);
 const loading = ref(false);
+const mineError = ref('');
 const mineFilters = reactive({
   keyword: '',
   allocDim: '',
@@ -727,6 +758,7 @@ const minePager = reactive({
 });
 async function reloadMine() {
   loading.value = true;
+  mineError.value = '';
   try {
     const params = {
       keyword: mineFilters.keyword || undefined,
@@ -745,6 +777,7 @@ async function reloadMine() {
     console.error('[reloadMine] failed', err);
     rows.value = [];
     minePager.total = 0;
+    mineError.value = `我的申请加载失败：${err?.message || '请稍后重试'}`;
   } finally {
     loading.value = false;
   }
@@ -766,6 +799,7 @@ function onMineFilterChange() {
 // ============ 待我审批 ============
 const todos = ref([]);
 const todoLoading = ref(false);
+const todoError = ref('');
 const todoFilters = reactive({
   keyword: '',
   allocDim: '',
@@ -779,6 +813,7 @@ const todoPager = reactive({
 });
 async function reloadTodo() {
   todoLoading.value = true;
+  todoError.value = '';
   try {
     const params = {
       keyword: todoFilters.keyword || undefined,
@@ -797,6 +832,7 @@ async function reloadTodo() {
     console.error('[reloadTodo] failed', err);
     todos.value = [];
     todoPager.total = 0;
+    todoError.value = `待我审批加载失败：${err?.message || '请稍后重试'}`;
   } finally {
     todoLoading.value = false;
   }
@@ -817,6 +853,7 @@ function onTodoFilterChange() {
 // ============ 已审批（已办） ============
 const dones = ref([]);
 const doneLoading = ref(false);
+const doneError = ref('');
 const doneFilters = reactive({
   keyword: '',
   allocDim: '',
@@ -830,6 +867,7 @@ const donePager = reactive({
 });
 async function reloadDone() {
   doneLoading.value = true;
+  doneError.value = '';
   try {
     const params = {
       keyword: doneFilters.keyword || undefined,
@@ -847,6 +885,7 @@ async function reloadDone() {
     console.error('[reloadDone] failed', err);
     dones.value = [];
     donePager.total = 0;
+    doneError.value = `已审批加载失败：${err?.message || '请稍后重试'}`;
   } finally {
     doneLoading.value = false;
   }
@@ -870,6 +909,28 @@ function reload() {
   else if (activeTab.value === 'done') reloadDone();
   else reloadMine();
 }
+
+const mineState = computed(() => loading.value
+  ? '我的申请加载中'
+  : mineError.value
+    ? '我的申请加载失败'
+    : rows.value.length
+      ? `共 ${minePager.total} 条申请`
+      : '暂无我的申请');
+const todoState = computed(() => todoLoading.value
+  ? '待我审批加载中'
+  : todoError.value
+    ? '待我审批加载失败'
+    : todos.value.length
+      ? `共 ${todoPager.total} 条待审批任务`
+      : '暂无待审批任务');
+const doneState = computed(() => doneLoading.value
+  ? '已审批加载中'
+  : doneError.value
+    ? '已审批加载失败'
+    : dones.value.length
+      ? `共 ${donePager.total} 条已审批记录`
+      : '暂无已审批记录');
 
 async function openTodoDetail(row) {
   // businessKey 形如 ALLOC_ADJUST:{applyId}
@@ -1811,6 +1872,11 @@ onMounted(async () => {
 .page-h h1 .sub { font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400; }
 .adjust-tabs { :deep(.el-tabs__nav-wrap)::after { background: $border-1; } }
 .table { padding: 0; padding-bottom: 12px; }
+.toolbar { align-items: flex-start; display: flex; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) var(--space-4) var(--space-3); }
+.section-title { color: var(--color-text-strong); font-size: 16px; font-weight: 600; line-height: 24px; margin: 0; }
+.hint { color: var(--color-text-muted); font-size: 12px; line-height: 18px; margin: 4px 0 0; }
+.table-state { color: var(--color-text-muted); font-size: 12px; margin: 2px 0 0; white-space: nowrap; }
+.table-error { align-items: center; background: var(--color-danger-bg); border-left: 3px solid var(--color-danger-fg); color: var(--color-danger-fg); display: flex; font-size: 12px; gap: var(--space-3); justify-content: space-between; margin: 0 var(--space-4) var(--space-3); padding: var(--space-2) var(--space-3); }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
 .sub-id { font-size: 12px; color: $text-3; margin-left: 4px; }
 
@@ -1873,4 +1939,7 @@ onMounted(async () => {
   }
 }
 .pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
+@media (prefers-reduced-motion: reduce) {
+  :where(.perf-adjust-page) :deep(*) { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
 </style>

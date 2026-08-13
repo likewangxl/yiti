@@ -1,14 +1,20 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle><span class="sub">指标结果 / KPI 结果</span></PageTitle>
-      <div class="actions">
-        <el-button @click="reload">刷新</el-button>
+  <main class="bp-crud perf-import-page" aria-labelledby="perf-import-page-title" :aria-busy="loading || uploading ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="perf-import-page-title"><span class="sub">指标结果 / KPI 结果 · 文件导入与批次追踪</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="绩效导入操作">
+        <el-button :loading="loading" :disabled="loading || uploading" @click="reload">刷新</el-button>
       </div>
-    </div>
+    </header>
 
-    <div class="card-section">
-      <el-form label-width="100px" size="default">
+    <section class="card-section data-panel import-config" aria-label="绩效文件导入" aria-labelledby="perf-import-form-heading">
+      <div class="toolbar">
+        <div>
+          <h2 id="perf-import-form-heading" class="section-title">导入数据</h2>
+          <p class="hint">选择数据类型、日期和文件后提交；提交结果会生成可追踪的批次号。</p>
+        </div>
+      </div>
+      <el-form label-width="100px" size="default" aria-label="绩效文件导入表单">
         <el-form-item label="导入类型">
           <el-radio-group v-model="kind">
             <el-radio value="METRIC_RESULT">指标结果</el-radio>
@@ -25,7 +31,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button @click="downloadTpl">📥 下载导入模板</el-button>
+          <el-button aria-label="下载当前导入类型模板" @click="downloadTpl">下载导入模板</el-button>
         </el-form-item>
       </el-form>
 
@@ -39,8 +45,8 @@
         :limit="1"
         :on-change="onFilePick"
         accept=".xlsx,.xls"
-        style="margin-top:12px">
-        <el-icon style="font-size:48px;color:#1E5BBA"><upload-filled /></el-icon>
+        style="margin-top:12px" :disabled="uploading" aria-label="选择绩效导入文件">
+        <el-icon aria-hidden="true" class="upload-icon"><upload-filled /></el-icon>
         <div class="el-upload__text">
           点击或拖拽 <em>.xlsx</em> 到此处
         </div>
@@ -49,14 +55,26 @@
 
       <div v-if="picked" class="picked">
         已选择：<strong>{{ picked.name }}</strong>（{{ fmtSize(picked.size) }}）
-        <el-button type="primary" :loading="uploading" @click="onUpload(true)" style="margin-left:12px">立即上传</el-button>
-        <el-button @click="picked = null; uploaderRef?.clearFiles()">取消</el-button>
+        <el-button type="primary" :loading="uploading" :disabled="uploading" @click="onUpload(true)" style="margin-left:12px">立即上传</el-button>
+        <el-button :disabled="uploading" @click="picked = null; uploaderRef?.clearFiles()">取消</el-button>
       </div>
-    </div>
+    </section>
 
-    <div class="card-section">
-      <div class="section-title">最近导入</div>
-      <el-table :data="rows" size="default" empty-text="暂无导入记录" v-loading="loading">
+    <section class="card-section data-panel" aria-label="最近导入批次" aria-labelledby="perf-import-table-heading"
+      aria-describedby="perf-import-table-state" :aria-busy="loading ? 'true' : 'false'">
+      <div class="toolbar">
+        <div>
+          <h2 id="perf-import-table-heading" class="section-title">最近导入</h2>
+          <p class="hint">批次状态会随后台处理更新；失败批次可下载错误明细后重试。</p>
+        </div>
+        <p id="perf-import-table-state" class="table-state" role="status" aria-live="polite">{{ importsState }}</p>
+      </div>
+      <div v-if="loadError" class="table-error" role="alert">
+        <span>{{ loadError }}</span>
+        <el-button link type="primary" @click="reload">重新加载</el-button>
+      </div>
+      <el-table :data="rows" size="default" :empty-text="loadError ? '加载失败，请重新加载' : '暂无导入记录'" v-loading="loading"
+        aria-labelledby="perf-import-table-heading" aria-describedby="perf-import-table-state">
         <el-table-column prop="batchId" label="批次号" width="220">
           <template #default="{row}"><code class="mono">{{ row.batchId || row.id }}</code></template>
         </el-table-column>
@@ -91,15 +109,15 @@
           </template>
         </el-table-column>
       </el-table>
-      <div class="pager">
+      <nav class="pager" aria-label="导入批次分页">
         <el-pagination v-model:current-page="pgNo" v-model:page-size="pgSize" :page-sizes="[10,20,50]" :total="total" background layout="total, sizes, prev, pager, next" />
-      </div>
-    </div>
-  </div>
+      </nav>
+    </section>
+  </main>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { fmtDateTimeCol } from '@/utils/datetime';
 import { UploadFilled } from '@element-plus/icons-vue';
@@ -118,6 +136,7 @@ watch(kind, (k) => {
   if (k === 'METRIC_RESULT') plan.value = '';
 }, { immediate: true });
 const loading = ref(false);
+const loadError = ref('');
 const pgNo = ref(1);
 const pgSize = ref(20);
 const total = ref(0);
@@ -140,9 +159,17 @@ const statusCls = (s) => ({
   PENDING: 'tag-info'
 }[s] || 'tag-info');
 const fmtSize = (n) => n ? (n > 1024*1024 ? (n/1024/1024).toFixed(2) + ' MB' : (n/1024).toFixed(0) + ' KB') : '-';
+const importsState = computed(() => loading.value
+  ? '导入批次加载中'
+  : loadError.value
+    ? '导入批次加载失败'
+    : rows.value.length
+      ? `共 ${total.value} 条导入批次`
+      : '暂无导入批次');
 
 async function reload() {
   loading.value = true;
+  loadError.value = '';
   try {
     const r = await listImports({ pageNo: pgNo.value, pageSize: pgSize.value });
     const records = Array.isArray(r) ? r : (r?.records || []);
@@ -160,7 +187,11 @@ async function reload() {
       time: b.createdTime
     }));
     total.value = Array.isArray(r) ? records.length : (r?.total ?? records.length);
-  } catch { rows.value = []; total.value = 0; } finally { loading.value = false; }
+  } catch (error) {
+    rows.value = [];
+    total.value = 0;
+    loadError.value = `导入批次加载失败：${error?.message || '请稍后重试'}`;
+  } finally { loading.value = false; }
 }
 
 // 下载源文件（旧数据无 sourceObjectKey 时按钮已置灰，这里再兜底）
@@ -186,6 +217,8 @@ async function loadSchemes() {
 const uploaderRef = ref(null);
 const picked = ref(null);
 const uploading = ref(false);
+const retryingBatchId = ref('');
+const deletingBatchId = ref('');
 function onFilePick(file) {
   // file 是 element-plus 包装：{ name, size, raw: File }
   if (!file?.raw) return;
@@ -197,6 +230,7 @@ function onFilePick(file) {
   picked.value = file.raw;
 }
 async function onUpload(archive = true) {
+  if (uploading.value) return;
   if (!picked.value) return ElMessage.warning('请先选择文件');
   // V1.12 微调：METRIC_RESULT 必填 dataDate（前端 picker 默认今天），缺失提前拦截避免后端 422
   if (kind.value === 'METRIC_RESULT' && !date.value) {
@@ -246,18 +280,28 @@ async function onDownloadErrors(row) {
   } catch { ElMessage.error('下载错误明细失败'); }
 }
 async function onRetry(row) {
+  const batchId = row?.batchId || row?.id;
+  const key = String(batchId || '');
+  if (!key || retryingBatchId.value === key) return;
+  retryingBatchId.value = key;
   try {
-    await retryImport(row.batchId || row.id);
+    await retryImport(batchId);
     ElMessage.success('已触发重试');
     reload();
   } catch { ElMessage.error('重试失败'); }
+  finally { retryingBatchId.value = ''; }
 }
 async function onDelete(row) {
+  const batchId = row?.batchId || row?.id;
+  const key = String(batchId || '');
+  if (!key || deletingBatchId.value === key) return;
+  deletingBatchId.value = key;
   try {
-    await deleteImportBatch(row.batchId || row.id, '前端列表删除');
+    await deleteImportBatch(batchId, '前端列表删除');
     ElMessage.success('已删除');
     reload();
   } catch { ElMessage.error('删除失败'); }
+  finally { deletingBatchId.value = ''; }
 }
 
 async function downloadTpl() {
@@ -306,11 +350,20 @@ onMounted(() => { reload(); loadSchemes(); });
 
 <style lang="scss" scoped>
 .page-h h1 .sub { font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400; }
-.hint { color: $text-3; font-size: 12px; margin-left: 8px; }
-.picked { padding: 12px 16px; background: $bg-soft; border-radius: 4px; margin-top: 12px; font-size: 13px; }
-.empty-tip { color: $text-3; font-size: 12px; padding: 10px 16px; }
-.section-title { font-size: 14px; font-weight: 600; color: $text-1; padding: 14px 16px 10px; }
+.hint { color: var(--color-text-muted); font-size: 12px; margin: 4px 0 0; }
+.toolbar { align-items: flex-start; display: flex; justify-content: space-between; gap: var(--space-4); padding: 0 0 var(--space-3); }
+.section-title { color: var(--color-text-strong); font-size: 16px; font-weight: 600; line-height: 24px; margin: 0; }
+.table-state { color: var(--color-text-muted); font-size: 12px; margin: 2px 0 0; white-space: nowrap; }
+.table-error { align-items: center; background: var(--color-danger-bg); border-left: 3px solid var(--color-danger-fg); color: var(--color-danger-fg); display: flex; font-size: 12px; gap: var(--space-3); justify-content: space-between; margin-bottom: var(--space-3); padding: var(--space-2) var(--space-3); }
+.picked { align-items: center; background: var(--color-surface-soft); border: 1px solid var(--color-border); border-radius: var(--radius-control); display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); padding: var(--space-3) var(--space-4); font-size: 13px; }
+.upload-icon { color: var(--color-brand-500); font-size: 48px; }
+.empty-tip { color: var(--color-text-muted); font-size: 12px; padding: 10px 16px; }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
 .pager { display: flex; justify-content: flex-end; padding: 12px 0; }
 .pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
+:where(.perf-import-page) :deep(.el-upload-dragger) { border-color: var(--color-border-strong); border-radius: var(--radius-control); }
+:where(.perf-import-page) :deep(.el-upload-dragger:hover) { border-color: var(--color-brand-500); }
+@media (prefers-reduced-motion: reduce) {
+  :where(.perf-import-page) :deep(*) { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
 </style>

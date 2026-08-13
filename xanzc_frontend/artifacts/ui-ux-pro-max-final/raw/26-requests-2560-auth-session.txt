@@ -1,0 +1,47 @@
+### Browser `uiux-req2560` opened with pid 423128.
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/login?normal');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/login?normal
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-41-21-786Z.yml)
+### Result
+Storage state restored from /tmp/yiti-uiux-auth-state.json
+### Ran Playwright code
+```js
+await page.context().setStorageState('/tmp/yiti-uiux-auth-state.json');
+```
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/workspace');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/workspace
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-41-22-258Z.yml)
+### Ran Playwright code
+```js
+await page.setViewportSize({ width: 2560, height: 1440 });
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/workspace
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 15 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-41-22-249Z.log#L1-L15
+### Result
+1. [GET] http://127.0.0.1:8091/api/auth/current-user => [200] OK
+3. [GET] http://127.0.0.1:8091/api/auth/my-menus => [200] OK
+9. [GET] http://127.0.0.1:8091/api/notifications/unread-count => [200] OK
+10. [GET] http://127.0.0.1:8091/api/workflow/tasks?pageSize=20 => [200] OK
+11. [GET] http://127.0.0.1:8091/api/portal/announcements/recent?limit=3 => [200] OK
+12. [GET] http://127.0.0.1:8091/api/notifications?pageNo=1&pageSize=3 => [200] OK
+13. [GET] http://127.0.0.1:8091/api/notifications/unread-count => [200] OK
+14. [GET] http://127.0.0.1:8091/api/workflow/transfers/inbox => [200] OK
+15. [GET] http://127.0.0.1:8091/api/workflow/transfers/outbox => [200] OK
+
+Note: 6 static requests not shown, run with --static option to see them.

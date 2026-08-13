@@ -2,6 +2,7 @@ package com.bank.branch.platform.report;
 
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.OrgGroupApi;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
@@ -63,6 +64,15 @@ public class TestUpstreamApiMockConfig {
     @Bean
     public CurrentUserApi currentUserApi() {
         return Mockito.mock(CurrentUserApi.class);
+    }
+
+    /**
+     * ScreenScopeAuthorizationService 新增的命名机构组跨模块依赖；report 单模块测试不加载 auth 实现，
+     * 以兜底 mock 保证只验证 report 自身的控制器/Mapper 时上下文仍可启动。
+     */
+    @Bean
+    public OrgGroupApi orgGroupApi() {
+        return Mockito.mock(OrgGroupApi.class);
     }
 
     @Bean

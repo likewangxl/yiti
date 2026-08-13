@@ -2,12 +2,13 @@
   <div class="screen-root">
     <div class="scr-stage" :style="{ transform: `translate(-50%, -50%) scale(${scale})` }">
       <div class="scr-header">
-        <span class="scr-back" @click="goBack">‹ 返回</span>
+        <button type="button" class="scr-back" aria-label="返回上一页" @click="goBack">‹ 返回</button>
         <span class="scr-title">{{ view?.screenName || '经营管理大屏' }}</span>
         <span class="scr-clock"><span class="scr-live-dot" /> {{ clock }}</span>
       </div>
       <div class="scr-body" v-if="view && view.renderPackage">
-        <ScreenRenderer :render-package="view.renderPackage" :map-points="view.mapPoints" :context="context" />
+        <ScreenRenderer :render-package="view.renderPackage" :map-points="view.mapPoints"
+                        :map-payload="view.mapPackage" :context="context" />
       </div>
       <!-- 屏从未发布时后端 renderPackageJson=null(已知行为,本期不改)——判空渲染引导态，不裸 JSON.parse(null) -->
       <div v-else-if="view && !view.renderPackage" class="scr-guide-empty" style="margin:auto">
@@ -26,6 +27,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { getScreenView } from '@/api/screen';
 import { stageStyle } from '@/views/screen/designer/utils/scale';
 import { GLOBAL_PERIOD_INJECT_KEY } from '@/utils/globalPeriod';
+import { runtimeSchemaVersion } from '@/utils/screenScope';
 import ScreenRenderer from './components/ScreenRenderer.vue';
 
 const route = useRoute();
@@ -44,8 +46,11 @@ const clock = ref('');
 
 // 路由参数即取数上下文：同一份屏配置服务所有支行/员工
 const context = computed(() => ({
+  screenCode: route.params.screenCode || '',
   orgCode: route.query.orgCode || '',
-  empId: route.query.empId || ''
+  empId: route.query.empId || '',
+  // 运行时契约版本独立于 canvasStyle/draft schema；无地图命名机构组也必须进入 schema2。
+  schemaVersion: runtimeSchemaVersion(view.value || {})
 }));
 
 async function load() {

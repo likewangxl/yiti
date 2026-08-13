@@ -20,6 +20,7 @@ import { LineChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 import { queryScreenData } from '@/api/screen';
+import { buildScreenDataRequest } from '@/utils/screenScope';
 import { SCR_COLOR, scrAxisLabel, scrAxisLine, scrSplitLine, scrTooltipStyle } from '@/styles/screenChartTheme';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent]);
@@ -42,11 +43,15 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    data.value = await queryScreenData({
+    data.value = await queryScreenData(buildScreenDataRequest({
+      // 运行接口不再允许省略协议版本；未携带发布包上下文时只显式走 v1 兼容分支。
+      schemaVersion: props.context.schemaVersion ?? props.context.runtimeSchemaVersion ?? 1,
+      screenCode: props.context.screenCode,
+      blockId: props.context.blockId || props.bind.blockId || props.bind.id,
       dsId: props.bind.dsId,
       period: period.value,
       contextParams: { orgCode: props.context.orgCode || null, empId: props.context.empId || null }
-    });
+    }));
   } catch (e) {
     error.value = e?.message || '取数失败';
   } finally {

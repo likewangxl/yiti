@@ -89,7 +89,7 @@
 // - F2: 源工程 userStore.login() 内部走 JWT + localStorage token，本次移植全部删除，
 //   改调平台 @/api/auth.js 的 login(username, password)（POST /api/auth/login），
 //   登录态由 yiti session cookie 维持（@/api/http.js 已 withCredentials: true）
-// - F3: 登录成功后跳转路径由源工程 /dashboard 改为 /redengine/dashboard
+// - F3: 登录成功后按平台授权菜单选择落点（合法 redirect → workspace → 首个菜单 → no-access）
 // - 参考 xanzc_frontend/src/views/login/Index.vue 137 行的做法：登录成功后把后端返回的
 //   LoginRespDTO 写入平台 userStore，供 RedEngineLayout 顶栏展示 displayName / 后续鉴权判断
 // 注：下方"演示账号"区块的 admin/wang/zhangsh/xiaoli 账号密码是源红色引擎工程（red-engine-server）
@@ -103,13 +103,15 @@
 // 这是"模板逐字节保真"要求下唯一必要的偏离：保留文字但让图标在新环境里不可见，不是真正的保真，
 // 故对这两处做最小必要改动（属性名/绑定符号不变，只把值从字符串字面量换成导入的图标组件对象）。
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
+import { useMenuStore } from '@/stores/menu';
 import { ElMessage } from 'element-plus';
 import { Star, User, Lock } from '@element-plus/icons-vue';
 import { login } from '@/api/auth';
 
 const router = useRouter();
+const route = useRoute();
 const userStore = useUserStore();
 
 const formRef = ref(null);
@@ -135,7 +137,7 @@ const fillAccount = (username, password) => {
   loginForm.value.password = password;
 };
 
-// 登录：改调平台 session 登录（POST /api/auth/login），成功后写入 userStore 并进红色引擎工作台
+// 登录：改调平台 session 登录，成功后写入 userStore，并按平台授权菜单选择安全落点。
 const handleLogin = async () => {
   if (!formRef.value) return;
 
@@ -151,8 +153,19 @@ const handleLogin = async () => {
   try {
     const user = await login(loginForm.value.username, loginForm.value.password);
     userStore.setUser(user);
+    const menuStore = useMenuStore();
+    let landingPath = '/no-access';
+    try {
+      await menuStore.load(true);
+      landingPath = menuStore.resolveLandingPath(
+        route.query.redirect && String(route.query.redirect),
+        { preferredUrl: '/redengine/dashboard' }
+      );
+    } catch (_) {
+      // 登录成功但菜单权限不可用时保持 fail-close，不直接进入红色引擎。
+    }
     ElMessage.success('登录成功');
-    router.push('/redengine/dashboard');
+    router.replace(landingPath);
   } catch (error) {
     console.error('Login error:', error);
     ElMessage.error(error?.message || '登录失败，请检查用户名和密码');

@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bank.branch.platform/schemas/controlled-sql-receipt-claim-token-v1.json",
+  "title": "Controlled SQL online receipt claim protocol v1",
+  "description": "root-owned helper 在线原子消费 receipt 后返回的签名 token 与 response 契约；本 schema 不定义任何离线 receipt 文件。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {},
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+    },
+    "ticket": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,99}$"
+    },
+    "utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "claimToken": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_version",
+        "issuer",
+        "claim_id",
+        "receipt_id",
+        "manifest_sha256",
+        "change_ticket",
+        "execution_nonce",
+        "launcher_proof_sha256",
+        "issued_at_utc",
+        "expires_at_utc"
+      ],
+      "properties": {
+        "claim_version": {"type": "integer", "const": 1},
+        "issuer": {"type": "string", "const": "bank-controlled-sql-approval-service"},
+        "claim_id": {"$ref": "#/$defs/uuid"},
+        "receipt_id": {"$ref": "#/$defs/uuid"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "change_ticket": {"$ref": "#/$defs/ticket"},
+        "execution_nonce": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{32,128}$"
+        },
+        "launcher_proof_sha256": {"$ref": "#/$defs/sha256"},
+        "issued_at_utc": {"$ref": "#/$defs/utc"},
+        "expires_at_utc": {"$ref": "#/$defs/utc"}
+      }
+    },
+    "claimHelperResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["response_version", "status", "claim_token_b64", "claim_signature_b64"],
+      "properties": {
+        "response_version": {"type": "integer", "const": 1},
+        "status": {"type": "string", "const": "claimed"},
+        "claim_token_b64": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+        },
+        "claim_signature_b64": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+        }
+      }
+    }
+  }
+}

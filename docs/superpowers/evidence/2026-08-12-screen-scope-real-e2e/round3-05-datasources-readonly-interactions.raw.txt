@@ -1,0 +1,36 @@
+# Round 3 大屏数据源交互（忠实选择性 CLI 转录）
+
+打开 #/screen-admin/datasources 后列表有 11 条 seed 数据源。可见业务线列（BIZ_LINE）及已发布引用；引用展示包含所测零售、对公总览。初始截图：
+
+- round3-datasources-initial.png
+
+业务线下拉选项为“公司/对公”、“零售”、“共用”。选择“零售”并点击筛选后，界面显示“暂无数据”，截图：
+
+- round3-datasources-retail-filter.png
+
+随后选择“共用”恢复可见数据源。打开第一条的“编辑”弹窗后，仅查看如下冻结提示并点击取消：
+
+~~~text
+发布/归档引用已冻结查询语义
+请新建副本→改草稿绑定→重新发布
+~~~
+
+业务线“共用”、数据源类型 WIDE_TABLE、范围模式“全省聚合”等在该弹窗中不可编辑。未改字段、未填写原因、未点击保存。截图：
+
+- round3-datasources-edit-dialog-cancelled.png
+
+刻意没有点击试跑、探测列、保存、新建、复制确认或删除。
+
+CLI 请求摘要（完整保留大屏数据源所需的非静态 API 行）：
+
+~~~text
+GET /api/screen/admin/datasources => 200
+GET /api/perf/metrics?pageSize=100 => 200
+GET /api/screen/admin/kpi-schemes => 200
+GET /api/admin/org-groups => 200
+GET /api/screen/admin/datasources => 200
+GET /api/screen/admin/datasources => 200
+~~~
+
+该阶段 console 为 0 errors；打开编辑弹窗时有 9 条 Element Plus radio deprecated warnings，未出现 error。方法结论见 round3-08-console-and-request-methods.md。
+

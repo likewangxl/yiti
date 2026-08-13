@@ -1,0 +1,69 @@
+{
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "count": 3,
+  "rows": [
+    {
+      "path": "/system/workflow-flows",
+      "finalUrl": "http://127.0.0.1:8091/#/system/workflow-flows",
+      "h1": [
+        "审批流程发布会生成影子流程；现有线上审批的切换与生效范围不在此页自动变更。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/workflow-monitor",
+      "finalUrl": "http://127.0.0.1:8091/#/system/workflow-monitor",
+      "h1": [
+        "审批流监控秘书岗按本机构、行长按全行查看进行中和已完成的审批流实例。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/person-tags",
+      "finalUrl": "http://127.0.0.1:8091/#/system/person-tags",
+      "h1": [
+        "业务标签维护可复用的员工与机构标签，支持精确成员维护和带校验的批量导入。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    }
+  ]
+}

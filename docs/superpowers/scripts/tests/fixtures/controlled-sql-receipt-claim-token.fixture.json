@@ -1,0 +1,12 @@
+{
+  "claim_version": 1,
+  "issuer": "bank-controlled-sql-approval-service",
+  "claim_id": "44444444-5555-6666-7777-888888888888",
+  "receipt_id": "22222222-3333-4444-5555-666666666666",
+  "manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "change_ticket": "CHG-ROUND10-FIXTURE",
+  "execution_nonce": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "launcher_proof_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+  "issued_at_utc": "2030-01-01T00:00:00Z",
+  "expires_at_utc": "2030-01-01T00:05:00Z"
+}

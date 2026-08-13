@@ -23,6 +23,8 @@ logs/
 .omc/
 .claude/
 .worktrees/
+.agents/
+.playwright-cli/
 
 # Node / 前端构建产物
 node_modules/

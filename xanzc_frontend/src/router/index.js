@@ -1,9 +1,12 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { useUserStore } from '@/stores/user';
+import { useMenuStore } from '@/stores/menu';
+import { usePermissionStore } from '@/stores/permission';
 import http from '@/api/http';
 import { ElMessage } from 'element-plus';
 import { createRouteProgress } from './routeProgress';
+import { hasRouteAccessRequirements, resolveRouteAccess } from './access';
 
 const routes = [
   // 登录页：顶层路由，不进 DefaultLayout（无 sidebar / header）
@@ -18,7 +21,13 @@ const routes = [
     path: '/screen/:screenCode',
     name: 'ScreenView',
     component: () => import('@/views/screen/ScreenView.vue'),
-    meta: { title: '经营大屏' }
+    meta: { title: '经营大屏', requiredResource: '/api/screen/view/*' }
+  },
+  {
+    path: '/no-access',
+    name: 'NoAccess',
+    component: () => import('@/views/NoAccess.vue'),
+    meta: { title: '暂无访问权限' }
   },
   // 红色引擎（党建）：独立登录页复用平台 Session，业务页面保持独立红色布局
   {
@@ -31,19 +40,20 @@ const routes = [
     path: '/redengine',
     component: () => import('@/views/redengine/layout/RedEngineLayout.vue'),
     redirect: '/redengine/dashboard',
+    meta: { requiredMenu: '/redengine/dashboard' },
     children: [
       { path: 'dashboard', name: 'RedEngineDashboard', component: () => import('@/views/redengine/dashboard/DashboardView.vue'), meta: { title: '工作台' } },
-      { path: 'report', name: 'RedEngineReport', component: () => import('@/views/redengine/report/JointView.vue'), meta: { title: '四大维度材料上报' } },
-      { path: 'records', name: 'RedEngineRecords', component: () => import('@/views/redengine/records/RecordsView.vue'), meta: { title: '上报记录' } },
-      { path: 'branch-review', name: 'RedEngineBranchReview', component: () => import('@/views/redengine/branch-review/BranchReviewView.vue'), meta: { title: '支部审核工作台' } },
-      { path: 'cockpit', name: 'RedEngineCockpit', component: () => import('@/views/redengine/cockpit/CockpitView.vue'), meta: { title: '全局数据驾驶舱' } },
-      { path: 'warning', name: 'RedEngineWarning', component: () => import('@/views/redengine/warning/WarningView.vue'), meta: { title: '红黄牌预警池' } },
-      { path: 'review', name: 'RedEngineReview', component: () => import('@/views/redengine/review/ReviewView.vue'), meta: { title: '沉浸式审核工作台' } },
-      { path: 'archive', name: 'RedEngineArchive', component: () => import('@/views/redengine/archive/ArchiveView.vue'), meta: { title: '年度考核归档' } },
-      { path: 'export', name: 'RedEngineExport', component: () => import('@/views/redengine/export/ExportView.vue'), meta: { title: '数据导出' } },
+      { path: 'report', name: 'RedEngineReport', component: () => import('@/views/redengine/report/JointView.vue'), meta: { title: '四大维度材料上报', requiredResource: '/api/re/submits' } },
+      { path: 'records', name: 'RedEngineRecords', component: () => import('@/views/redengine/records/RecordsView.vue'), meta: { title: '上报记录', requiredResource: '/api/re/submits/my' } },
+      { path: 'branch-review', name: 'RedEngineBranchReview', component: () => import('@/views/redengine/branch-review/BranchReviewView.vue'), meta: { title: '支部审核工作台', requiredResource: '/api/re/reviews/**' } },
+      { path: 'cockpit', name: 'RedEngineCockpit', component: () => import('@/views/redengine/cockpit/CockpitView.vue'), meta: { title: '全局数据驾驶舱', requiredResource: '/api/re/cockpit/**' } },
+      { path: 'warning', name: 'RedEngineWarning', component: () => import('@/views/redengine/warning/WarningView.vue'), meta: { title: '红黄牌预警池', requiredResource: '/api/re/cockpit/**' } },
+      { path: 'review', name: 'RedEngineReview', component: () => import('@/views/redengine/review/ReviewView.vue'), meta: { title: '沉浸式审核工作台', requiredResource: '/api/re/reviews/**' } },
+      { path: 'archive', name: 'RedEngineArchive', component: () => import('@/views/redengine/archive/ArchiveView.vue'), meta: { title: '年度考核归档', requiredResource: '/api/re/cockpit/**' } },
+      { path: 'export', name: 'RedEngineExport', component: () => import('@/views/redengine/export/ExportView.vue'), meta: { title: '数据导出', requiredResource: '/api/re/export/*' } },
       // Task 15 新增：党组织管理（org-manage，Task 13 起菜单数组已声明该项但路由此前未接）+ 用户党组织映射（user-map，新建）
-      { path: 'org-manage', name: 'RedEngineOrgManage', component: () => import('@/views/redengine/system/OrgManageView.vue'), meta: { title: '党组织管理' } },
-      { path: 'user-map', name: 'RedEngineUserMap', component: () => import('@/views/redengine/system/UserMapView.vue'), meta: { title: '用户党组织映射' } }
+      { path: 'org-manage', name: 'RedEngineOrgManage', component: () => import('@/views/redengine/system/OrgManageView.vue'), meta: { title: '党组织管理', requiredResource: '/api/re/orgs' } },
+      { path: 'user-map', name: 'RedEngineUserMap', component: () => import('@/views/redengine/system/UserMapView.vue'), meta: { title: '用户党组织映射', requiredResource: '/api/re/user-party-maps' } }
     ]
   },
   {
@@ -52,7 +62,17 @@ const routes = [
     redirect: '/workspace',
     children: [
       // 工作台
-      { path: 'workspace', name: 'Workspace', component: () => import('@/views/workspace/Index.vue'), meta: { title: '工作台', icon: '🏠' } },
+      {
+        path: 'workspace',
+        name: 'Workspace',
+        component: () => import('@/views/workspace/Index.vue'),
+        meta: {
+          title: '工作台',
+          icon: '🏠',
+          requiredMenu: '/workspace',
+          fallbackToAuthorizedMenu: true
+        }
+      },
       { path: 'workspace/announcements', name: 'AnnouncementList', component: () => import('@/views/workspace/AnnouncementList.vue'), meta: { title: '公告列表', group: '工作台' } },
       { path: 'announcement/:id', name: 'AnnouncementDetail', component: () => import('@/views/system/AnnouncementDetail.vue'), meta: { title: '公告详情' } },
       { path: 'workspace/notifications', name: 'NotificationList', component: () => import('@/views/workspace/NotificationList.vue'), meta: { title: '通知列表', group: '工作台' } },
@@ -91,9 +111,11 @@ const routes = [
       { path: 'report/sql',       name: 'ReportSql',     component: () => import('@/views/report/Sql.vue'),       meta: { title: 'SQL 探查',     group: '报表分析' } },
       { path: 'report/amas-approvals', name: 'ReportAmasApprovals', component: () => import('@/views/report/AmasApprovals.vue'), meta: { title: '业绩分配查询', group: '报表分析' } },
       { path: 'report/amas-approvals/:perfAdjustNo', name: 'ReportAmasApprovalDetail', component: () => import('@/views/report/AmasApprovalDetail.vue'), meta: { title: '业绩分配审批详情', group: '报表分析', hideInMenu: true } },
-      { path: 'screen-admin/datasources', name: 'ScreenAdminDs',       component: () => import('@/views/screen/admin/Datasources.vue'), meta: { title: '大屏数据源', group: '报表分析' } },
+      { path: 'screen-admin/datasources', name: 'ScreenAdminDs',       component: () => import('@/views/screen/admin/Datasources.vue'), meta: { title: '大屏数据源', group: '报表分析', requiredResource: '/api/screen/admin/datasources' } },
+      { path: 'screen-admin/org-profiles', name: 'ScreenAdminOrgProfiles', component: () => import('@/views/screen/admin/OrgProfiles.vue'), meta: { title: '机构经营画像', group: '报表分析', requiredResource: '/api/admin/org-profiles' } },
+      { path: 'screen-admin/org-groups', name: 'ScreenAdminOrgGroups', component: () => import('@/views/screen/admin/OrgGroups.vue'), meta: { title: '命名机构组', group: '报表分析', requiredResource: '/api/admin/org-groups' } },
       // fullBleed:设计器需要整块内容区(去 padding),高度契约见 DefaultLayout .content--full
-      { path: 'screen-admin/designer',    name: 'ScreenAdminDesigner', component: () => import('@/views/screen/designer/DesignerV2.vue'),    meta: { title: '大屏设计器', group: '报表分析', fullBleed: true } },
+      { path: 'screen-admin/designer',    name: 'ScreenAdminDesigner', component: () => import('@/views/screen/designer/DesignerV2.vue'),    meta: { title: '大屏设计器', group: '报表分析', fullBleed: true, requiredResource: '/api/screen/admin/screens' } },
 
       // 历史数据查询
       { path: 'guarantee/query',  name: 'GuaranteeQuery', component: () => import('@/views/guarantee/Query.vue'), meta: { title: '担保查询', group: '历史数据查询' } },
@@ -134,6 +156,11 @@ const progress = createRouteProgress({
   }
 });
 
+function checkDeclaredRouteAccess(to) {
+  if (!hasRouteAccessRequirements(to)) return true;
+  return resolveRouteAccess(to, useMenuStore(), usePermissionStore());
+}
+
 // 全局守卫：未登录访问业务路由 → 跳 /login？redirect=...
 // store 没 user 时先试一次 /api/auth/current-user：
 //   - 200 → 后端 session 还在（UIAS 回调 / F5 刷新 sessionStorage 清空场景）→ setUser 后放行
@@ -142,13 +169,15 @@ router.beforeEach(async (to) => {
   progress.start();
   const store = useUserStore();
   if (to.meta?.public) return true;
-  if (store.isLoggedIn) return true;
+  if (store.isLoggedIn) {
+    return checkDeclaredRouteAccess(to);
+  }
 
   try {
     const user = await http.get('/api/auth/current-user');
     if (user && user.empId) {
       store.setUser(user);
-      return true;
+      return checkDeclaredRouteAccess(to);
     }
   } catch (_) {
     // http.js 401 拦截器自己会清 sessionStorage；这里不重复

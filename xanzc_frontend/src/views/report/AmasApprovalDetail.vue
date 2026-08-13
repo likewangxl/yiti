@@ -4,17 +4,21 @@
   内容：① 申请/审批主信息 ② 业绩分配数据(AMAS_PERFORMANCE_ALLOCATION) ③ 审批流程(AMAS_APPR_RECORD，序号倒序)
 -->
 <template>
-  <div class="amas-detail" v-loading="loading">
-    <div class="page-h">
+  <main class="bp-crud amas-detail" aria-labelledby="amas-detail-title" :aria-busy="loading ? 'true' : 'false'">
+    <header class="page-h">
       <div class="left">
-        <h1>业绩分配审批详情</h1>
+        <h1 id="amas-detail-title" class="page-title">业绩分配审批详情</h1>
         <span class="desc">{{ perfAdjustNo }}</span>
       </div>
-      <el-button link @click="goBack">← 返回</el-button>
-    </div>
+      <el-button @click="goBack">返回查询</el-button>
+    </header>
+
+    <div v-if="errorMessage" class="error-state" role="alert"><span>{{ errorMessage }}</span><el-button link type="primary" @click="loadDetail">重试</el-button></div>
 
     <!-- ① 申请/审批主信息 -->
-    <el-descriptions title="申请信息" :column="3" border size="default" class="block">
+    <section class="card-section data-panel" aria-labelledby="amas-application-title">
+    <h2 id="amas-application-title" class="section-title">申请信息</h2>
+    <el-descriptions :column="3" border size="default" v-loading="loading">
       <el-descriptions-item label="业绩调整编号">{{ a.perfAdjustNo || '-' }}</el-descriptions-item>
       <el-descriptions-item label="申请人">{{ a.applyFullname || '-' }}（{{ a.applyUsername || '-' }}）</el-descriptions-item>
       <el-descriptions-item label="调整类型">{{ APPLY_TYPE[a.applyType] || a.applyType || '-' }}</el-descriptions-item>
@@ -33,11 +37,12 @@
       <el-descriptions-item label="年日均">{{ a.avgYear || '-' }}</el-descriptions-item>
       <el-descriptions-item label="调整理由" :span="3">{{ a.adjustExplain || '-' }}</el-descriptions-item>
     </el-descriptions>
+    </section>
 
     <!-- ② 业绩分配数据 -->
-    <div class="block">
-      <h3 class="sec-t">业绩分配数据</h3>
-      <el-table :data="allocations" border stripe size="default" empty-text="无分配数据">
+    <section class="card-section data-panel" aria-labelledby="amas-allocation-title">
+      <h2 id="amas-allocation-title" class="section-title">业绩分配数据</h2>
+      <el-table :data="allocations" border stripe size="default" empty-text="无分配数据" aria-labelledby="amas-allocation-title">
         <el-table-column type="index" label="序号" width="60" />
         <el-table-column prop="username" label="分配人工号" width="130" />
         <el-table-column prop="fullname" label="姓名" width="110" />
@@ -51,12 +56,12 @@
           <template #default="{ row }">{{ ALLOC_STATUS[row.apprStatus] || row.apprStatus || '-' }}</template>
         </el-table-column>
       </el-table>
-    </div>
+    </section>
 
     <!-- ③ 审批流程数据（序号倒序） -->
-    <div class="block">
-      <h3 class="sec-t">审批流程</h3>
-      <el-table :data="apprRecords" border stripe size="default" empty-text="无审批记录">
+    <section class="card-section data-panel" aria-labelledby="amas-record-title">
+      <h2 id="amas-record-title" class="section-title">审批流程</h2>
+      <el-table :data="apprRecords" border stripe size="default" empty-text="无审批记录" aria-labelledby="amas-record-title">
         <el-table-column prop="apprSeq" label="序号" width="80" />
         <el-table-column prop="apprName" label="审批节点" min-width="140" />
         <el-table-column label="审批人" min-width="130">
@@ -74,8 +79,8 @@
         <el-table-column prop="apprTime" label="审批时间" width="170" />
         <el-table-column prop="apprOpinion" label="审批意见" min-width="200" show-overflow-tooltip />
       </el-table>
-    </div>
-  </div>
+    </section>
+  </main>
 </template>
 
 <script setup>
@@ -99,27 +104,32 @@ const a = computed(() => detail.value.approval || {});
 const allocations = computed(() => detail.value.allocations || []);
 const apprRecords = computed(() => detail.value.apprRecords || []);
 const loading = ref(false);
+const errorMessage = ref('');
 
 function goBack() { router.back(); }
 
-onMounted(async () => {
+async function loadDetail() {
   loading.value = true;
+  errorMessage.value = '';
   try {
     detail.value = await getAmasApprovalDetail(perfAdjustNo);
+  } catch (e) {
+    detail.value = { approval: {}, allocations: [], apprRecords: [] };
+    errorMessage.value = e?.message || '审批详情加载失败，请重试';
   } finally {
     loading.value = false;
   }
-});
+}
+
+onMounted(loadDetail);
 </script>
 
 <style lang="scss" scoped>
-.amas-detail { padding: 4px 2px; }
-.page-h { margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;
+.amas-detail { min-width: 0; }
+.page-h { display: flex; align-items: center; justify-content: space-between;
   .left { display: flex; align-items: baseline; }
-  h1 { font-size: 18px; margin: 0; display: inline-block; }
-  .desc { font-size: 12px; color: #909399; margin-left: 12px; }
+  .desc { font-size: 12px; color: var(--color-text-muted); margin-left: var(--space-3); }
 }
-.block { margin-bottom: 18px; }
-.sec-t { font-size: 14px; margin: 0 0 8px; padding-left: 8px; border-left: 3px solid #409eff; }
-.sub { color: #909399; font-size: 12px; }
+.sub { color: var(--color-text-muted); font-size: 12px; }
+.error-state { align-items: center; background: var(--color-danger-bg); border: 1px solid var(--color-border); color: var(--color-danger-fg); display: flex; gap: var(--space-3); justify-content: space-between; padding: var(--space-3); }
 </style>

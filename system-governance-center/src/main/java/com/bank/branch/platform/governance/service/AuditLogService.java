@@ -84,6 +84,12 @@ public class AuditLogService {
         // V1.6 修复：reason 为空时按动作类型自动生成默认描述，避免审计列表大量"—"。
         // 真高危动作（DELETE/EXECUTE 等）reason 由前端 prompt 必填，到这一步通常已带值。
         entity.setReason(defaultReason(cmd.getReason(), cmd.getBizAction()));
+        entity.setTargetType(cmd.getTargetType());
+        entity.setTargetId(cmd.getTargetId());
+        entity.setBeforeSnapshot(cmd.getBeforeSnapshot());
+        entity.setAfterSnapshot(cmd.getAfterSnapshot());
+        entity.setAddedItems(cmd.getAddedItems());
+        entity.setRemovedItems(cmd.getRemovedItems());
         // V1.6 修复：明确使用业务时区（Asia/Shanghai）写入，避免 JVM 默认时区为 UTC/PDT 导致差 8 小时。
         entity.setCreatedTime(LocalDateTime.now(BIZ_ZONE));
 
@@ -152,6 +158,12 @@ public class AuditLogService {
         dto.setIpAddress(entity.getIpAddress());
         dto.setExecutionTime(entity.getExecutionTime());
         dto.setReason(entity.getReason());
+        dto.setTargetType(entity.getTargetType());
+        dto.setTargetId(entity.getTargetId());
+        dto.setBeforeSnapshot(entity.getBeforeSnapshot());
+        dto.setAfterSnapshot(entity.getAfterSnapshot());
+        dto.setAddedItems(entity.getAddedItems());
+        dto.setRemovedItems(entity.getRemovedItems());
         dto.setCreatedTime(entity.getCreatedTime() != null ? entity.getCreatedTime().format(DT_FMT) : null);
         return dto;
     }

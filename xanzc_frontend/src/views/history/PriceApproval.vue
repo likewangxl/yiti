@@ -6,14 +6,15 @@
   列表行已含全字段（custInfo/necessExplain/files），“申请资料”弹窗与“操作-下载”直接用行内数据，无需再查详情。
 -->
 <template>
-  <div class="price-approval">
+  <main class="bp-crud price-approval" aria-labelledby="price-approval-title">
     <div class="page-h">
-      <PageTitle />
+      <PageTitle id="price-approval-title" />
       <span class="desc">AMAS 定价审批数据查询，按申请时间倒序</span>
     </div>
 
     <!-- 顶部查询项 -->
-    <el-form :model="q" inline class="filter-form" @submit.prevent>
+    <section class="card-section filter-bar" aria-label="定价审批筛选">
+    <el-form :model="q" inline class="filter-form" aria-label="定价审批筛选" @submit.prevent>
       <el-form-item label="客户名称">
         <el-input v-model="q.custName" placeholder="模糊匹配" clearable style="width:180px" @keyup.enter="onSearch" />
       </el-form-item>
@@ -37,8 +38,24 @@
         <el-button @click="onReset">重置</el-button>
       </el-form-item>
     </el-form>
+    </section>
 
-    <el-table :data="rows" v-loading="loading" border stripe size="default" empty-text="暂无数据">
+    <section class="card-section data-panel" aria-label="定价审批列表" aria-describedby="price-approval-table-state" :aria-busy="loading ? 'true' : 'false'">
+      <div class="toolbar">
+        <div>
+          <h2 id="price-approval-table-heading" class="section-title">定价审批列表</h2>
+          <p class="hint">查看历史审批状态、业务信息和申请资料。</p>
+        </div>
+        <p id="price-approval-table-state" class="table-state" role="status" aria-live="polite">
+          {{ errorMessage || (loading ? '定价审批列表加载中' : rows.length ? `共 ${total} 条记录` : '暂无定价审批数据') }}
+        </p>
+      </div>
+      <div v-if="errorMessage" class="error-state" role="alert">
+        <span>{{ errorMessage }}</span>
+        <el-button link type="primary" @click="load">重试</el-button>
+      </div>
+    <el-table :data="rows" v-loading="loading" border stripe size="default" empty-text="暂无定价审批数据"
+              aria-labelledby="price-approval-table-heading" aria-describedby="price-approval-table-state">
       <el-table-column type="index" label="序号" width="56" fixed="left" />
       <el-table-column label="申请人" min-width="120" fixed="left">
         <template #default="{ row }">
@@ -55,7 +72,7 @@
       </el-table-column>
       <el-table-column label="状态" width="90">
         <template #default="{ row }">
-          <el-tag :type="STATUS_TAG[row.apprStatus] || 'info'" size="small">
+          <el-tag :class="STATUS_TAG[row.apprStatus] || 'tag-info'" size="small">
             {{ APPR_STATUS[row.apprStatus] || row.apprStatus || '-' }}
           </el-tag>
         </template>
@@ -89,16 +106,18 @@
       </el-table-column>
     </el-table>
 
-    <div class="pager">
+    <div class="pager" aria-label="定价审批列表分页">
       <el-pagination
         background layout="total, prev, pager, next, sizes"
         :total="total" :current-page="page.pageNo" :page-size="page.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         @current-change="onPage" @size-change="onSize" />
     </div>
+    </section>
 
     <!-- 申请资料子页面 -->
-    <el-dialog v-model="material.show" title="申请资料" width="640px" append-to-body>
+    <el-dialog v-model="material.show" class="bp-crud-dialog" title="申请资料" width="640px" append-to-body>
+      <section class="detail-section" aria-label="申请资料详情">
       <el-descriptions :column="1" border label-width="150px">
         <el-descriptions-item label="客户背景资料">{{ material.row.custInfo || '-' }}</el-descriptions-item>
         <el-descriptions-item label="原因必要性说明">{{ material.row.necessExplain || '-' }}</el-descriptions-item>
@@ -106,13 +125,14 @@
           <template v-if="attachments(material.row.files).length">
             <a
               v-for="(f, i) in attachments(material.row.files)" :key="i"
-              class="att-link" @click="downloadAttachment(f)">{{ f.name }}</a>
+              class="att-link" href="#" @click.prevent="downloadAttachment(f)">{{ f.name }}</a>
           </template>
           <span v-else>-</span>
         </el-descriptions-item>
       </el-descriptions>
+      </section>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -121,7 +141,7 @@ import { ElMessage } from 'element-plus';
 import { listPriceApprovals } from '@/api/report';
 
 const APPR_STATUS = { '0': '待审批', '1': '已通过', '2': '未通过' };
-const STATUS_TAG = { '0': 'warning', '1': 'success', '2': 'danger' };
+const STATUS_TAG = { '0': 'tag-warning', '1': 'tag-success', '2': 'tag-danger' };
 // 对公/零售：数字 1=对公、2=零售（兼容历史 CORP/RETAIL 字面值）
 const OR_RETAIL = { '1': '对公', '2': '零售', CORP: '对公', RETAIL: '零售' };
 
@@ -173,9 +193,11 @@ const page = reactive({ pageNo: 1, pageSize: 20 });
 const rows = ref([]);
 const total = ref(0);
 const loading = ref(false);
+const errorMessage = ref('');
 
 async function load() {
   loading.value = true;
+  errorMessage.value = '';
   try {
     const params = {
       pageNo: page.pageNo, pageSize: page.pageSize,
@@ -188,6 +210,10 @@ async function load() {
     const r = await listPriceApprovals(params);
     rows.value = r?.records || [];
     total.value = r?.total || 0;
+  } catch {
+    rows.value = [];
+    total.value = 0;
+    errorMessage.value = '定价审批列表加载失败，请重试';
   } finally {
     loading.value = false;
   }
@@ -204,18 +230,23 @@ onMounted(load);
 </script>
 
 <style lang="scss" scoped>
-.price-approval { padding: 4px 2px; }
-.page-h { margin-bottom: 12px;
-  h1 { font-size: 18px; margin: 0; display: inline-block; }
-  .desc { font-size: 12px; color: #909399; margin-left: 12px; }
-}
-.filter-form { margin-bottom: 8px; }
-.main { color: #303133; }
-.sub { color: #909399; font-size: 12px; }
+.price-approval { min-width: 0; }
+.main { color: var(--color-text-strong); }
+.sub { color: var(--color-text-muted); font-size: 12px; }
 .link-cell { cursor: pointer; display: block; }
-.link-cell .main { color: #409eff; }
+.link-cell .main { color: var(--color-brand-500); }
 .link-cell:hover .main { text-decoration: underline; }
-.att-link { color: #409eff; cursor: pointer; display: inline-block; margin-right: 14px; }
+.att-link { color: var(--color-brand-500); cursor: pointer; display: inline-block; margin-right: var(--space-4); }
 .att-link:hover { text-decoration: underline; }
-.pager { margin-top: 12px; display: flex; justify-content: flex-end; }
+.error-state {
+  align-items: center;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-danger-fg);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
 </style>

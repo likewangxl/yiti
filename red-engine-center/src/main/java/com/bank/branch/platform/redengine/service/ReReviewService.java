@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 红色引擎-两级审核服务。
@@ -39,6 +40,11 @@ public class ReReviewService {
 
     /** 考核项未配置 maxScore 时的兜底满分上限（照抄源 approveSubmit 60-62 行的回退逻辑） */
     private static final BigDecimal DEFAULT_MAX_SCORE = new BigDecimal("100");
+
+    /** 创建人与审核人相同时拒绝自审，避免多角色权限并集绕过业务职责分离。 */
+    private static final String SELF_REVIEW_ERROR_CODE = "RE-40008";
+
+    private static final String SELF_REVIEW_ERROR_MESSAGE = "禁止审核本人提交的记录";
 
     private final ReSubmitMapper reSubmitMapper;
     private final ReScoreMapper reScoreMapper;
@@ -92,6 +98,7 @@ public class ReReviewService {
      * @param empId    当前登录审核人平台工号（源系统未记录，本次补齐，见类注释）
      * @throws BizException code=RE-40003，上报记录不存在
      * @throws BizException code=RE-40004，累计得分超出该考核项上限
+     * @throws BizException code=RE-40008，审核人与上报创建人相同
      */
     @Transactional(rollbackFor = Exception.class)
     public void approve(Long submitId, BigDecimal score, String feedback, String empId) {
@@ -99,6 +106,7 @@ public class ReReviewService {
         if (existing == null) {
             throw new BizException("RE-40003", "提交记录不存在");
         }
+        rejectSelfReview(existing, empId);
 
         if (score != null && score.compareTo(BigDecimal.ZERO) > 0) {
             insertScoreWithLimitCheck(existing, score, feedback);
@@ -160,17 +168,21 @@ public class ReReviewService {
 
     /**
      * 审核驳回。
-     * <p>照抄源 {@code rejectSubmit}：不校验上报是否存在（与源系统一致——源实现直接
-     * {@code new BizSubmit(); setId(submitId); updateById(...)}，对不存在的 id 静默影响0行、
-     * 不抛异常，本次移植原样保真），直接把状态推进为 3(已驳回)，回填审核意见(reviewFeedback)/
+     * <p>先读 RE_SUBMIT 做创建人与审核人二次校验；命中自审时以 RE-40008 fail-close，且不更新实体。
+     * 不存在记录仍保留源系统契约：继续执行按 id 更新并静默影响 0 行，不新增不存在异常。
+     * 非自审时也不增加 status 前置条件，直接推进为 3(已驳回)，回填审核意见(reviewFeedback)/
      * 审核人(reviewerId)/审核时间(reviewDate=now)。</p>
      *
      * @param submitId 上报ID
      * @param feedback 驳回原因
      * @param empId    当前登录审核人平台工号（源系统未记录，本次补齐，见类注释）
+     * @throws BizException code=RE-40008，审核人与上报创建人相同
      */
     @Transactional(rollbackFor = Exception.class)
     public void reject(Long submitId, String feedback, String empId) {
+        ReSubmit existing = reSubmitMapper.selectById(submitId);
+        rejectSelfReview(existing, empId);
+
         ReSubmit update = new ReSubmit();
         update.setId(submitId);
         update.setStatus(3);
@@ -179,5 +191,16 @@ public class ReReviewService {
         update.setReviewDate(LocalDateTime.now());
         reSubmitMapper.updateById(update);
         log.info("[ReReviewService.reject] submitId={}, empId={}", submitId, empId);
+    }
+
+    /**
+     * 基于持久化实体而非角色/请求参数执行职责分离校验。
+     * <p>多角色采用权限并集后，同一用户可能同时拥有上报和审核资源；RBAC 只能回答“能否调用审核接口”，
+     * 不能回答“能否审核这条记录”，因此必须在写入 RE_SCORE/RE_SUBMIT 前按 submitterId 再次拒绝自审。</p>
+     */
+    private void rejectSelfReview(ReSubmit existing, String empId) {
+        if (existing != null && Objects.equals(existing.getSubmitterId(), empId)) {
+            throw new BizException(SELF_REVIEW_ERROR_CODE, SELF_REVIEW_ERROR_MESSAGE);
+        }
     }
 }

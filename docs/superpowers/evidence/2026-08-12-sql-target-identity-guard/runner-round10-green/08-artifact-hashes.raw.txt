@@ -1,0 +1,22 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T21:44:46.294634Z
+COMMAND /usr/bin/sha256sum docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.py docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh docs/superpowers/scripts/2026-08-12-controlled-sql-root-managed-launcher.py docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner@.service.template docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py docs/superpowers/sql/2026-08-12-controlled-sql-batch-manifest.schema.json docs/superpowers/sql/2026-08-12-controlled-sql-batch-manifest.example.json docs/superpowers/sql/2026-08-12-controlled-sql-receipt-claim-token.schema.json docs/superpowers/sql/2026-08-12-controlled-sql-a2-recovery-proof.schema.json docs/superpowers/sql/2026-08-12-controlled-sql-root-launcher-proof.schema.json docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.schema.json docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.json docs/superpowers/sql/controlled-batch-manifest-trust/README.md docs/superpowers/evidence/2026-08-12-sql-target-identity-guard/README.md docs/superpowers/scripts/tests/fixtures/controlled-sql-receipt-claim-token.fixture.json docs/superpowers/scripts/tests/fixtures/controlled-sql-a2-recovery-proof.fixture.json
+EXIT_CODE 0
+UTC_FINISHED 2026-08-11T21:44:46.296499Z
+--- RAW_STDOUT_STDERR ---
+1365dc9f43588b5cb2409e809fb204ad130107c285f17dc4b10e2b514c5fde8a  docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.py
+9e53b6c5b4b475f10d5fb591d416855504599780d8a9d2e1556b38e13d4dcb6a  docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh
+3b628704322d876704dda503645b6cddd05b5ca049e12abaa6254eb76b535099  docs/superpowers/scripts/2026-08-12-controlled-sql-root-managed-launcher.py
+d9a3562bd89185a8627a085887fbe8c944de9f7d403a1f30de3f63d906c323b5  docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner@.service.template
+4ba10944aaa93a3f7a647aad0c40f8384d19d9cf95742fded8c57b38347469c2  docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py
+9cbe4e7bbfecadb834b261e8989d3834e3816ddbf501b9468cc2db170184df42  docs/superpowers/sql/2026-08-12-controlled-sql-batch-manifest.schema.json
+ceffbe0a02d1a8d34930160f4ce8134b20f4d33da99028a24d1ac19c611d146b  docs/superpowers/sql/2026-08-12-controlled-sql-batch-manifest.example.json
+9447dd6d5deb78cdcb2c7dac62c22f5f781e9ba19c5a7510b6b98cef21c3bb16  docs/superpowers/sql/2026-08-12-controlled-sql-receipt-claim-token.schema.json
+02330328a408d48df7c4b3adc341a510afcbf158963321e1ddc928bfe3979506  docs/superpowers/sql/2026-08-12-controlled-sql-a2-recovery-proof.schema.json
+a00eb826cda7212d100dac09af627ed17ed57765c676a4f6a193d21550acf579  docs/superpowers/sql/2026-08-12-controlled-sql-root-launcher-proof.schema.json
+d497c48b3f892b26315843c407df0c3230b557d74097eae1812b7afecbd23ff8  docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.schema.json
+4f9c567856da362e84873f4d8fd6eddd42b2aae7bd76911ffd3b074eba3bb24c  docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.json
+d9906ab3f129b5e99aff3b5c9784703025bdf110ec064516165188e683d22ca3  docs/superpowers/sql/controlled-batch-manifest-trust/README.md
+087834181a32bcda24e9e5317c1feb67ed91201e4190138a515222ac5a34eeae  docs/superpowers/evidence/2026-08-12-sql-target-identity-guard/README.md
+c89362bc8565dab1006b1c7bc6d06eb07d98746a644b459f062ddcff45abae39  docs/superpowers/scripts/tests/fixtures/controlled-sql-receipt-claim-token.fixture.json
+12e4f23d0e1fcc4bf3a01e810281a0b2c3a31cfe1a7bffa5b6adeffc26203cf0  docs/superpowers/scripts/tests/fixtures/controlled-sql-a2-recovery-proof.fixture.json

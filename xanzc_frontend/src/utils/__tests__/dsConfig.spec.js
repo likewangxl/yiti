@@ -7,13 +7,16 @@
 import { describe, it, expect } from 'vitest';
 import {
   defaultDsModel, deriveDsType, buildConfigJson, buildTimeParamJson,
-  parseConfigJson, validateDsModel, buildPreviewColumns, formatPreviewCell
+  parseConfigJson, validateDsModel, buildPreviewColumns, formatPreviewCell,
+  datasourceTryRunScopeMode, buildDatasourceTryRunRequest, buildDatasourceProbeRequest
 } from '../dsConfig';
 
 /** 快速构造一个在 defaultDsModel 基础上打补丁的模型 */
 function model(patch = {}) {
   const m = defaultDsModel();
-  return { ...m, ...patch };
+  // 除专门验证“新建不得静默默认”的测试外，其余纯配置测试显式声明共用条线，
+  // 避免无关的必填字段遮蔽各自要验证的配置规则。
+  return { ...m, bizLine: 'COMMON', ...patch };
 }
 
 describe('deriveDsType —— ds_type 随配置联动（与后端强制规则一致）', () => {
@@ -242,6 +245,17 @@ describe('parseConfigJson —— config_json → 表单模型补丁（读时兼�
 });
 
 describe('validateDsModel —— 与后端 43009 校验规则对齐的前置校验', () => {
+  it('新建模型不为 bizLine 静默补值；NAMED_GROUP 仅在 ORG_INDEX_RESULT + org_code 宽表下合法', () => {
+    const fresh = defaultDsModel();
+    expect(fresh.bizLine).toBe('');
+    expect(validateDsModel(fresh)).toEqual(expect.arrayContaining([expect.stringContaining('业务条线')])) ;
+    fresh.bizLine = 'COMMON';
+    fresh.scopeMode = 'NAMED_GROUP';
+    fresh.wide.table = 'ORG_INDEX_RESULT';
+    fresh.wide.metricCodes = ['M0001'];
+    expect(validateDsModel(fresh)).toEqual([]);
+  });
+
   it('KPI_DETAIL：方案必填；TREND 必须至少选一个指标', () => {
     const m = model({ sourceKind: 'KPI_DETAIL' });
     m.kpiDetail.schemeCode = '';
@@ -330,5 +344,69 @@ describe('试跑预览增强 —— columnsMeta 列头与单元格格式化', ()
     expect(formatPreviewCell(98.456, { decimals: 2 })).toBe('98.46');
     expect(formatPreviewCell(98.456, null)).toBe(98.456);
     expect(formatPreviewCell('ORG001', { decimals: 2 })).toBe('ORG001');
+  });
+});
+
+describe('命名机构组试跑请求 —— ScreenTryRunReqDTO', () => {
+  const namedGroupRow = {
+    sourceKind: 'WIDE_TABLE', dsType: 'TIMESERIES',
+    configJson: JSON.stringify({ schemaVersion: 2, scopeMode: 'NAMED_GROUP', table: 'ORG_INDEX_RESULT' })
+  };
+
+  it('NAMED_GROUP 必须显式选择测试组，并只把选中组作为 testOrgGroupCode 发给后端', () => {
+    expect(() => buildDatasourceTryRunRequest(namedGroupRow, { reason: '验证范围' }))
+      .toThrow(/测试机构组/);
+    expect(buildDatasourceTryRunRequest(namedGroupRow, {
+      period: 'LAST_1M', orgCode: 'O1', empId: 'E1', testOrgGroupCode: 'G_REPORT', reason: '验证范围'
+    })).toEqual({
+      sourceKind: 'WIDE_TABLE', dsType: 'TIMESERIES', configJson: namedGroupRow.configJson,
+      period: 'LAST_1M', dateFrom: null, dateTo: null,
+      contextParams: { orgCode: 'O1', empId: 'E1' }, testOrgGroupCode: 'G_REPORT', reason: '验证范围'
+    });
+  });
+
+  it('损坏或未知范围模式的 configJson Fail Close，不伪装成 SUBJECT 继续试跑', () => {
+    expect(() => datasourceTryRunScopeMode('{bad json')).toThrow(/无法解析/);
+    expect(() => datasourceTryRunScopeMode('{"scopeMode":"ALL_ORGS"}')).toThrow(/不受支持/);
+    expect(datasourceTryRunScopeMode('{}')).toBe('SUBJECT'); // 仅存量配置的显式兼容口径
+  });
+});
+
+describe('已保存数据源列探测请求 —— ScreenDatasourceProbeReqDTO', () => {
+  const namedGroupRow = {
+    id: 72, sourceKind: 'WIDE_TABLE', dsType: 'TIMESERIES',
+    configJson: JSON.stringify({ schemaVersion: 2, scopeMode: 'NAMED_GROUP', table: 'ORG_INDEX_RESULT' })
+  };
+
+  it('NAMED_GROUP probe 必须有审计原因与显式测试组，且不泄露 sourceKind/configJson 到 body', () => {
+    expect(() => buildDatasourceProbeRequest(namedGroupRow, { reason: '探测数值列' }))
+      .toThrow(/测试机构组/);
+    const body = buildDatasourceProbeRequest(namedGroupRow, {
+      period: 'LAST_1M', contextParams: { orgCode: 'O1', empId: null },
+      testOrgGroupCode: 'G_REPORT', reason: '探测数值列'
+    });
+    expect(body).toEqual({
+      period: 'LAST_1M', dateFrom: null, dateTo: null,
+      contextParams: { orgCode: 'O1', empId: null },
+      testOrgGroupCode: 'G_REPORT', reason: '探测数值列'
+    });
+    expect(body).not.toHaveProperty('configJson');
+    expect(body).not.toHaveProperty('sourceKind');
+  });
+});
+
+describe('NAMED_GROUP 数据源来源约束', () => {
+  it('只允许 ORG_INDEX_RESULT 的 WIDE_TABLE + org_code，CUSTOM_SQL 及其他来源 Fail Close', () => {
+    const customSql = model({ sourceKind: 'CUSTOM_SQL', scopeMode: 'NAMED_GROUP' });
+    customSql.sql = { text: 'SELECT 1', dateCol: '' };
+    expect(validateDsModel(customSql)).toEqual(expect.arrayContaining([expect.stringMatching(/NAMED_GROUP.*WIDE_TABLE/)]));
+
+    const empWide = model({ sourceKind: 'WIDE_TABLE', scopeMode: 'NAMED_GROUP' });
+    empWide.wide = { ...empWide.wide, table: 'EMP_INDEX_RESULT', metricCodes: ['M1'] };
+    expect(validateDsModel(empWide)).toEqual(expect.arrayContaining([expect.stringMatching(/ORG_INDEX_RESULT.*org_code/)]));
+
+    const orgWide = model({ sourceKind: 'WIDE_TABLE', scopeMode: 'NAMED_GROUP' });
+    orgWide.wide = { ...orgWide.wide, table: 'ORG_INDEX_RESULT', metricCodes: ['M1'] };
+    expect(validateDsModel(orgWide)).toEqual([]);
   });
 });

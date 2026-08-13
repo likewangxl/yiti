@@ -1,4 +1,4 @@
-import http, { API_BASE, USE_MOCK, call } from './http';
+import http, { API_BASE, USE_MOCK } from './http';
 
 /**
  * 登录
@@ -46,33 +46,26 @@ export function logout() {
 }
 
 /**
- * 切换当前角色（仅本次会话生效）
- * 后端 POST /api/auth/switch-role，切换后菜单/接口权限/数据范围/工作流待办均按新角色。
- * 调用方切换成功后应刷新页面，确保所有数据按新角色重新拉取。
- */
-export function switchRole(roleId) {
-  if (USE_MOCK) return Promise.resolve({ roleId, roleChName: '切换角色(mock)' });
-  return http.post(API_BASE + '/auth/switch-role', { roleId });
-}
-
-/**
  * 取当前用户（用于页面刷新后恢复 store）
- * mock 模式下返回 mock 用户；真模式下走 call() 的 fallback 机制更稳
+ * 显式 mock 模式仍返回固定用户；真实请求失败必须原样抛出，不能把 403 伪装成 mock 用户。
  */
 export function getCurrentUser() {
-  return call('get', '/auth/current-user', {}, {
+  if (USE_MOCK) return Promise.resolve({
     empId: 'mock', username: 'mock', displayName: '张三',
     mainOrgCode: '0010', mainOrgName: '南山支行',
     roles: [{ roleId: 'R_CM', roleCode: 'CM', roleChName: '客户经理' }]
   });
+  return http.get(API_BASE + '/auth/current-user');
 }
 
 export function getMyPermissions() {
-  return call('get', '/auth/permissions', {}, { resources: [], scopes: [] });
+  if (USE_MOCK) return Promise.resolve({ resourceUrls: [], bizScopes: {}, roleIds: [], roleCodes: [] });
+  return http.get(API_BASE + '/auth/permissions');
 }
 
 // 当前用户可访问的菜单树（前端 sidebar 渲染左侧导航用）
 // 后端：GET /api/auth/my-menus → List<ResourceTreeNodeDTO>{ resourceId, resourceUrl, menuName, children }
 export function getMyMenus() {
-  return call('get', '/auth/my-menus', {}, []);
+  if (USE_MOCK) return Promise.resolve([]);
+  return http.get(API_BASE + '/auth/my-menus');
 }

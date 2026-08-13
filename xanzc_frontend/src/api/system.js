@@ -127,7 +127,7 @@ export function deleteFile(fileId) {
 // === 权限编辑器写接口 ===
 // 拉某角色已勾选的资源 ID 集合
 export function getRoleResourceIds(roleId) {
-  return call('get', `/admin/roles/${roleId}/resources`, {}, []);
+  return call('get', `/admin/roles/${roleId}/resources`, {});
 }
 // 全量替换该角色资源绑定（PUT）
 export function replaceRoleResources(roleId, resourceIds, reason) {

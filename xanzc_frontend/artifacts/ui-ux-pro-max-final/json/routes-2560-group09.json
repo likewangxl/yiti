@@ -1,0 +1,89 @@
+{
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "count": 4,
+  "rows": [
+    {
+      "path": "/system/roles",
+      "finalUrl": "http://127.0.0.1:8091/#/system/roles",
+      "h1": [
+        "角色管理角色 CRUD · 已绑用户查看 · 资源/数据范围请去【权限配置】"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/resources",
+      "finalUrl": "http://127.0.0.1:8091/#/system/resources",
+      "h1": [
+        "资源/菜单维护菜单层级；叶子菜单可单独配置角色访问范围。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/permission",
+      "finalUrl": "http://127.0.0.1:8091/#/system/permission",
+      "h1": [
+        "权限配置角色、资源与数据范围均以当前选中角色为准；保存会覆盖该角色原有资源绑定。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    },
+    {
+      "path": "/system/dict",
+      "finalUrl": "http://127.0.0.1:8091/#/system/dict",
+      "h1": [
+        "字典管理按类型维护统一字典项；状态变更会立即影响引用该字典的业务页面。"
+      ],
+      "h1Count": 1,
+      "mainCount": 1,
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "domHorizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "pageErrorTexts": [],
+      "loginRedirect": false,
+      "noAccess": false,
+      "elapsedMs": 900
+    }
+  ]
+}

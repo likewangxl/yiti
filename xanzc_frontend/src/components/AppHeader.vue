@@ -1,39 +1,34 @@
 <template>
   <header class="hdr">
-    <div class="toggle">☰</div>
-    <div class="search">
-      <el-input v-model="kw" placeholder="搜索客户 / 线索 / 任务编号 / 报表..." size="default">
-        <template #prefix><span>🔍</span></template>
-      </el-input>
-    </div>
+    <button
+      type="button"
+      class="shell-toggle"
+      data-testid="sidebar-toggle"
+      :aria-label="props.sidebarCollapsed ? '展开侧边导航' : '折叠侧边导航'"
+      :aria-expanded="props.sidebarCollapsed ? 'false' : 'true'"
+      aria-controls="app-sidebar"
+      :title="props.sidebarCollapsed ? '展开侧边导航' : '折叠侧边导航'"
+      @click="emit('toggle-sidebar')"
+    >
+      <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+        <path d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+    </button>
     <div class="spacer" />
 
     <el-dropdown trigger="click" @command="onCommand">
-      <div class="role-pick">
+      <div class="account-pick">
         <div class="avatar">{{ avatarLetter }}</div>
         <div class="meta">
           <b>{{ store.displayName }}</b>
-          <small>{{ store.orgName || store.roleName || '—' }}</small>
+          <small>{{ store.orgName || store.roleSummary || '—' }}</small>
         </div>
-        <span style="font-size:10px;opacity:.5">▾</span>
+        <span class="account-caret" aria-hidden="true">▾</span>
       </div>
       <template #dropdown>
         <el-dropdown-menu>
           <el-dropdown-item disabled>
             <span style="color:#9CA3AF;font-size:12px">{{ store.user?.username }} · {{ store.user?.deptNo || store.user?.mainOrgCode || '—' }}</span>
-          </el-dropdown-item>
-          <el-dropdown-item divided disabled>
-            <span style="color:#9CA3AF;font-size:12px">切换角色</span>
-          </el-dropdown-item>
-          <el-dropdown-item
-            v-for="r in store.roles"
-            :key="r.roleId"
-            :command="`role:${r.roleId}`"
-          >
-            <span :style="{ fontWeight: r.roleId === store.activeRoleId ? 600 : 400, minWidth: '120px', display: 'inline-flex', justifyContent: 'space-between', alignItems: 'center' }">
-              <span>{{ r.roleChName }}</span>
-              <span v-if="r.roleId === store.activeRoleId" style="color:#22c55e;margin-left:12px">✓</span>
-            </span>
           </el-dropdown-item>
           <el-dropdown-item divided command="changePassword">修改密码</el-dropdown-item>
           <el-dropdown-item command="logout">退出登录</el-dropdown-item>
@@ -41,9 +36,19 @@
       </template>
     </el-dropdown>
 
-    <div class="icon-btn" @click="$router.push('/system/notifications')" title="通知中心" style="cursor:pointer">
-      <el-badge :value="unread" :max="99" :hidden="!unread">🔔</el-badge>
-    </div>
+    <button
+      type="button"
+      class="icon-btn"
+      aria-label="通知中心"
+      title="通知中心"
+      @click="$router.push('/system/notifications')"
+    >
+      <el-badge :value="unread" :max="99" :hidden="!unread">
+        <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+          <path d="M18 10a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 22h4" />
+        </svg>
+      </el-badge>
+    </button>
 
     <!-- 修改密码弹窗（用户改自己的密码，要求旧密码） -->
     <el-dialog v-model="pwdDlg.show" title="修改密码" width="440px" :close-on-click-modal="false">
@@ -68,17 +73,18 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
-import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useUserStore } from '@/stores/user';
-import { logout, switchRole, getCurrentUser } from '@/api/auth';
+import { logout } from '@/api/auth';
 import { getUnreadCount } from '@/api/workspace';
 import { changeMyPassword } from '@/api/users';
 
-const kw = ref('');
+const props = defineProps({
+  sidebarCollapsed: { type: Boolean, default: false }
+});
+const emit = defineEmits(['toggle-sidebar']);
 const unread = ref(0);
 const store = useUserStore();
-const router = useRouter();
 
 async function refreshUnread() {
   try { const n = await getUnreadCount(); if (typeof n === 'number') unread.value = n; } catch {}
@@ -97,43 +103,15 @@ const avatarLetter = computed(() => {
 });
 
 async function onCommand(cmd) {
-  if (typeof cmd === 'string' && cmd.startsWith('role:')) {
-    const roleId = cmd.slice(5);
-    if (roleId === store.activeRoleId) return; // 已是当前角色
-    const r = store.roles.find(x => x.roleId === roleId);
-    try {
-      await ElMessageBox.confirm(
-        `确认切换到角色「${r?.roleChName || roleId}」？切换后菜单、业务操作将按该角色权限显示与处理。`,
-        '切换角色', { type: 'warning', confirmButtonText: '确认切换', cancelButtonText: '取消' });
-    } catch { return; }
-    try {
-      await switchRole(roleId);
-      // 切换后重新拉取后端「权威」当前用户（已激活新角色：roles 主标记、activeRoleId 等均为服务端真值），
-      // 全量覆盖本地 store，避免整页刷新后路由守卫「有 user 就不再拉 current-user」而沿用登录时旧缓存。
-      // 拉取失败再退回仅 patch activeRoleId，保证切换不被网络抖动卡死。
-      try {
-        const fresh = await getCurrentUser();
-        if (fresh && fresh.empId && fresh.empId !== 'mock') store.setUser(fresh);
-        else store.setActiveRole(roleId);
-      } catch { store.setActiveRole(roleId); }
-      ElMessage.success(`已切换到「${r?.roleChName || roleId}」，正在进入工作台`);
-      // 跳转工作台并整页刷新，确保菜单/权限/数据范围/待办全部按新角色重新拉取
-      await router.push('/workspace').catch(() => {});
-      window.location.reload();
-    } catch (e) {
-      ElMessage.error('切换角色失败：' + (e?.message || e));
-    }
-    return;
-  }
   if (cmd === 'logout') {
     try {
       await ElMessageBox.confirm('确定退出登录？', '提示', { type: 'warning' });
     } catch { return; }
     try { await logout(); } catch { /* yiti session 后端清不掉也无所谓，前端继续清 */ }
     store.clear();
-    // 整页跳转（对齐切换角色的 location.reload 做法）：router.replace 是 SPA 内跳转，
+    // 整页跳转：SPA 内跳转不会销毁全部运行时状态，
     // menu store 等 Pinia 内存态会残留给下一个登录用户（旧菜单/旧索引）
-    window.location.replace('/login');
+    window.location.replace('/#/login');
   } else if (cmd === 'changePassword') {
     pwdDlg.oldPassword = '';
     pwdDlg.newPassword = '';
@@ -160,7 +138,7 @@ async function onChangePassword() {
     setTimeout(async () => {
       try { await logout(); } catch {}
       store.clear();
-      router.replace('/login');
+      window.location.replace('/#/login');
     }, 600);
   } catch (e) {
     ElMessage.error('修改失败：' + (e?.message || e));
@@ -170,50 +148,48 @@ async function onChangePassword() {
 
 <style lang="scss" scoped>
 .hdr {
-  background: #fff;
-  border-bottom: 1px solid $border-1;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   display: flex; align-items: center;
-  padding: 0 16px;
-  gap: 16px;
-  height: $header-h;
+  padding: 0 var(--space-4);
+  gap: var(--space-4);
+  height: var(--layout-header-height);
   flex-shrink: 0;
 }
-.toggle {
-  width: 32px; height: 32px;
+.shell-toggle,
+.icon-btn {
+  width: 40px; height: 40px;
   display: grid; place-items: center;
-  border-radius: 4px;
-  color: $text-2;
+  padding: 0;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
   cursor: pointer;
-  &:hover { background: $bg-soft; }
+  transition: color var(--motion-fast) var(--ease-enter), background-color var(--motion-fast) var(--ease-enter);
+
+  &:hover { color: var(--color-brand-700); background: var(--color-surface-soft); }
+  svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 }
-.search { width: 360px; }
 .spacer { flex: 1; }
-.role-pick {
-  display: flex; align-items: center; gap: 8px;
-  padding: 4px 10px;
-  border: 1px solid $border-1;
-  border-radius: 16px;
-  background: $bg-soft;
+.account-pick {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface-soft);
   cursor: pointer;
-  outline: none;
-  &:hover { border-color: $primary-400; }
+  &:hover { border-color: var(--color-brand-500); }
   .avatar {
     width: 28px; height: 28px; border-radius: 50%;
-    background: linear-gradient(135deg, $primary-400, $primary);
-    color: #fff; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--color-brand-500), var(--color-brand-700));
+    color: var(--color-surface); display: grid; place-items: center;
     font-size: 12px; font-weight: 600;
   }
   .meta { font-size: 12px; line-height: 1.2;
     b { display: block; font-weight: 600; font-size: 12px; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    small { color: $text-3; font-size: 11px; }
+    small { color: var(--color-text-muted); font-size: 11px; }
   }
 }
-.icon-btn {
-  width: 32px; height: 32px;
-  display: grid; place-items: center;
-  border-radius: 4px;
-  color: $text-2;
-  cursor: pointer;
-  &:hover { background: $bg-soft; color: $primary; }
-}
+.account-caret { font-size: 10px; opacity: .5; }
 </style>

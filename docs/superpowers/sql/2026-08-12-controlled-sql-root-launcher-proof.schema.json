@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bank.branch.platform/schemas/controlled-sql-root-launcher-proof-v1.json",
+  "title": "Controlled SQL root launcher proof v1",
+  "description": "由 root-managed launcher 对当前 PID/starttime 签发并通过密封继承 fd 传递的部署证明。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "proof_version",
+    "issuer",
+    "launch_id",
+    "mode",
+    "manifest_sha256",
+    "subject_uid",
+    "pid",
+    "pid_start_time",
+    "issued_at_utc",
+    "expires_at_utc",
+    "runner_sha256",
+    "root_launcher_sha256",
+    "systemd_unit_sha256",
+    "claim_helper_sha256"
+  ],
+  "properties": {
+    "proof_version": {"type": "integer", "const": 1},
+    "issuer": {"type": "string", "const": "bank-controlled-sql-root-launcher"},
+    "launch_id": {"$ref": "#/$defs/uuid"},
+    "mode": {"type": "string", "const": "execute"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "subject_uid": {"type": "integer", "minimum": 1},
+    "pid": {"type": "integer", "minimum": 1},
+    "pid_start_time": {"type": "string", "pattern": "^[0-9]+$"},
+    "issued_at_utc": {"$ref": "#/$defs/utc"},
+    "expires_at_utc": {"$ref": "#/$defs/utc"},
+    "runner_sha256": {"$ref": "#/$defs/sha256"},
+    "root_launcher_sha256": {"$ref": "#/$defs/sha256"},
+    "systemd_unit_sha256": {"$ref": "#/$defs/sha256"},
+    "claim_helper_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+    },
+    "utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}

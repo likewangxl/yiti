@@ -1,33 +1,56 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle />
-      <span class="desc">维护人员评价角色（每人单选一个）</span>
-    </div>
+  <main class="bp-crud eval-user-tags-page" aria-labelledby="eval-user-tags-page-title" :aria-busy="loading ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="eval-user-tags-page-title"><span class="sub">每人单选一个评价角色，并控制是否参与评价</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="人员评价角色操作">
+        <el-button :loading="loading" @click="reload">刷新</el-button>
+      </div>
+    </header>
 
-    <div class="card-section">
-      <div class="toolbar">
-        <el-input
-          v-model="keyword"
-          placeholder="搜索姓名或工号"
-          clearable
-          size="small"
-          class="kw-input"
-          @keyup.enter="doSearch"
-          @clear="doSearch"
-        />
-        <el-select v-model="evalEnabledFilter" size="small" style="width:140px" @change="doSearch">
+    <section class="card-section filter-bar" aria-label="人员评价角色筛选">
+      <el-form class="filter-form" inline aria-label="人员评价角色筛选">
+        <el-form-item label="人员">
+          <el-input
+            v-model="keyword"
+            aria-label="按姓名或工号筛选"
+            placeholder="搜索姓名或工号"
+            clearable
+            class="kw-input"
+            @keyup.enter="doSearch"
+            @clear="doSearch"
+          />
+        </el-form-item>
+        <el-form-item label="参与评价">
+          <el-select v-model="evalEnabledFilter" aria-label="按是否参与评价筛选" style="width:140px" @change="doSearch">
           <el-option label="参与：是" value="1" />
           <el-option label="参与：否" value="0" />
           <el-option label="全部" value="all" />
-        </el-select>
-        <el-button type="primary" size="small" @click="doSearch">查询</el-button>
-        <el-button size="small" @click="resetSearch">重置</el-button>
-        <el-button size="small" @click="openImport">导入</el-button>
-        <el-button size="small" :loading="exporting" @click="doExport">下载</el-button>
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="doSearch">查询</el-button>
+          <el-button @click="resetSearch">重置</el-button>
+        </el-form-item>
+        <el-form-item class="filter-actions">
+          <el-button @click="openImport">导入</el-button>
+          <el-button :loading="exporting" :disabled="exporting" @click="doExport">导出</el-button>
+        </el-form-item>
+      </el-form>
+    </section>
+
+    <section class="card-section data-panel" aria-label="人员评价角色列表" aria-describedby="eval-user-tags-table-state">
+      <div class="toolbar">
+        <div>
+          <h2 id="eval-user-tags-table-heading" class="section-title">人员评价角色列表</h2>
+          <p class="hint">导入采用全量校验；编辑保存会覆盖当前人员的评价角色和参与状态。</p>
+        </div>
+        <p id="eval-user-tags-table-state" class="table-state" role="status" aria-live="polite">
+          {{ loading ? '人员评价角色列表加载中' : loadError || (rows.length ? `共 ${total} 人` : '暂无人员评价角色数据') }}
+        </p>
       </div>
 
-      <el-table :data="rows" v-loading="loading" border size="small" style="width: 100%">
+      <el-table :data="rows" v-loading="loading" border size="default" empty-text="暂无人员评价角色数据"
+        aria-labelledby="eval-user-tags-table-heading" aria-describedby="eval-user-tags-table-state">
         <el-table-column prop="userName" label="姓名" min-width="100" />
         <el-table-column prop="userId" label="工号" min-width="110" />
         <el-table-column prop="orgName" label="部门" min-width="140">
@@ -58,7 +81,7 @@
         </el-table-column>
       </el-table>
 
-      <div class="pager">
+      <nav class="pager" aria-label="人员评价角色列表分页">
         <el-pagination
           background
           layout="total, prev, pager, next"
@@ -67,11 +90,11 @@
           :current-page="page"
           @current-change="onPageChange"
         />
-      </div>
+      </nav>
 
-      <el-dialog v-model="importVisible" title="导入人员评价角色" width="640px">
+      <el-dialog v-model="importVisible" class="bp-crud-dialog" title="导入人员评价角色" width="640px" :close-on-click-modal="false">
         <div class="imp-tip">
-          <el-button size="small" @click="doDownloadTpl">📥 下载导入模板</el-button>
+          <el-button @click="doDownloadTpl">下载导入模板</el-button>
           <span class="muted">模板列：工号 / 角色 / 是否参与评价。全部校验通过才会导入。</span>
         </div>
         <el-upload
@@ -98,13 +121,13 @@
 
         <template #footer>
           <el-button @click="importVisible = false">取消</el-button>
-          <el-button type="primary" :loading="importing" :disabled="!impFile" @click="doImport">开始导入</el-button>
+          <el-button type="primary" :loading="importing" :disabled="!impFile || importing" @click="doImport">开始导入</el-button>
         </template>
       </el-dialog>
-    </div>
+    </section>
 
     <!-- 编辑弹窗 -->
-    <el-dialog v-model="editVisible" title="编辑人员评价角色" width="520px" @closed="onDialogClosed">
+    <el-dialog v-model="editVisible" class="bp-crud-dialog" title="编辑人员评价角色" width="520px" :close-on-click-modal="false" @closed="onDialogClosed">
       <div v-if="editing" class="edit-info">
         <div class="info-row"><span class="info-k">姓名</span><span>{{ editing.userName }}</span></div>
         <div class="info-row"><span class="info-k">工号</span><span>{{ editing.userId }}</span></div>
@@ -129,10 +152,10 @@
 
       <template #footer>
         <el-button @click="editVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button type="primary" :loading="saving" :disabled="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -159,6 +182,7 @@ const pageSize = ref(20);
 const keyword = ref('');
 const evalEnabledFilter = ref('1'); // 默认只看启用=是
 const loading = ref(false);
+const loadError = ref('');
 let searchTimer = null;
 const exporting = ref(false);
 const importVisible = ref(false);
@@ -169,6 +193,7 @@ const importErrors = ref([]);
 
 async function reload() {
   loading.value = true;
+  loadError.value = '';
   try {
     const r = await pageUserRoles({ keyword: keyword.value.trim() || undefined, evalEnabled: evalEnabledFilter.value, page: page.value, pageSize: pageSize.value });
     rows.value = Array.isArray(r) ? r : (r?.records || []);
@@ -176,6 +201,7 @@ async function reload() {
   } catch {
     rows.value = [];
     total.value = 0;
+    loadError.value = '人员评价角色加载失败，请刷新重试';
   } finally {
     loading.value = false;
   }
@@ -202,7 +228,7 @@ function onImpFilePick(uploadFile) {
   impFile.value = uploadFile.raw || null;
 }
 async function doImport() {
-  if (!impFile.value) return;
+  if (!impFile.value || importing.value) return;
   importing.value = true;
   importErrors.value = [];
   try {
@@ -239,6 +265,7 @@ async function doDownloadTpl() {
   } catch (e) { /* 已提示 */ }
 }
 async function doExport() {
+  if (exporting.value) return;
   exporting.value = true;
   try {
     const blob = await exportUserRoles(keyword.value, evalEnabledFilter.value);
@@ -276,7 +303,7 @@ function onDialogClosed() {
 }
 
 async function handleSave() {
-  if (!editing.value) return;
+  if (!editing.value || saving.value) return;
   saving.value = true;
   try {
     await saveUserRoles(editing.value.userId, form.tagId ?? null, form.evalEnabled);
@@ -297,41 +324,31 @@ onMounted(async () => {
 </script>
 
 <style lang="scss" scoped>
-.toolbar {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 12px;
-}
 .kw-input {
   width: 240px;
 }
-.pager {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 12px;
-}
-.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 .muted {
-  color: $text-3;
+  color: var(--color-text-muted);
 }
 .edit-info {
-  background: $bg-soft;
-  border: 1px solid $border-1;
-  border-radius: 4px;
-  padding: 10px 14px;
-  margin-bottom: 16px;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
 }
 .info-row {
   display: flex;
-  gap: 8px;
-  font-size: 13px;
-  line-height: 1.9;
+  gap: var(--space-2);
+  font-size: 14px;
+  line-height: 22px;
 }
 .info-k {
   width: 40px;
-  color: $text-3;
+  color: var(--color-text-muted);
 }
 .edit-form {
-  padding-right: 8px;
+  padding-right: var(--space-2);
 }
+.filter-actions { margin-left: auto; }
 </style>

@@ -8,6 +8,7 @@ import * as kpi from './kpi';
 import * as employees from './employees';
 import * as orgs from './orgs';
 import * as customers from './customers';
+import * as screen from './screen';
 
-export default { workspace, perf, report, system, auth, metrics, kpi, employees, orgs, customers };
-export { workspace, perf, report, system, auth, metrics, kpi, employees, orgs, customers };
+export default { workspace, perf, report, system, auth, metrics, kpi, employees, orgs, customers, screen };
+export { workspace, perf, report, system, auth, metrics, kpi, employees, orgs, customers, screen };

@@ -1,0 +1,78 @@
+UI UX Pro Max 官方 playwright-cli 验收命令清单（2026-08-12，Asia/Shanghai）
+
+所有本地服务与 CLI 命令均在 require_escalated 权限下执行；工作目录为 /home/djdev/leid/yiti/xanzc_frontend。命令中的认证 state 只读加载，未复制、未保存、未读取 cookie/storage/body。
+
+环境变量前缀（每条 CLI 命令均使用）：
+NO_UPDATE_NOTIFIER=1 PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright
+CLI：node_modules/.bin/playwright-cli
+CLI version：0.1.18
+
+服务真实性探测：
+curl --noproxy 127.0.0.1 -sS -m 5 -o /dev/null -w 'frontend_8091 %{http_code} %{time_total}\\n' http://127.0.0.1:8091/
+curl --noproxy 127.0.0.1 -sS -m 5 -o /dev/null -w 'backend_current_user_18081 %{http_code} %{time_total}\\n' http://127.0.0.1:18081/api/auth/current-user
+
+认证流程（两尺寸会话均执行 open -> state-load -> goto；不提交凭据）：
+playwright-cli -s=uiux-1920 open 'http://127.0.0.1:8091/#/login?normal' --browser=chromium
+playwright-cli -s=uiux-1920 state-load /tmp/yiti-uiux-auth-state.json
+playwright-cli -s=uiux-1920 goto 'http://127.0.0.1:8091/#/workspace'
+playwright-cli -s=uiux-1920 resize 1920 1080
+playwright-cli -s=uiux-2560 open 'http://127.0.0.1:8091/#/login?normal' --browser=chromium
+playwright-cli -s=uiux-2560 state-load /tmp/yiti-uiux-auth-state.json
+playwright-cli -s=uiux-2560 goto 'http://127.0.0.1:8091/#/workspace'
+playwright-cli -s=uiux-2560 resize 2560 1440
+
+无 mock 证明（两会话均执行）：
+playwright-cli -s=uiux-1920 route-list
+playwright-cli -s=uiux-1920 requests --filter='/api/' --clear
+playwright-cli -s=uiux-2560 route-list
+playwright-cli -s=uiux-2560 requests --filter='/api/' --clear
+
+路由结构巡检（每组均为官方 CLI goto + run-code 等待 + eval；实际 DOM eval 函数见 scripts/eval-route.js；无业务写操作）：
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-1920 /workspace /workspace/announcements /workspace/notifications /info/nav
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-1920 /info/address-book /info/products /info/documents /perf/metrics
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-1920 /perf/kpi-rules /perf/targets /perf/target-values /perf/import
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-1920 /perf/adjust /perf/compute /perf/task-monitor /eval/tags
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-1920 /eval/user-tags /eval/rules /eval/tasks /eval/my-tasks
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-1920 /report/dynamic /report/dashboard /report/presets /report/free
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-1920 /report/sql /report/amas-approvals /guarantee/query /guarantee/data-import
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-1920 /guarantee/notice /history/price-approval /history/perf-adjust /system/users
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-1920 /system/roles /system/resources /system/permission /system/dict
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-1920 /system/calendar /system/jobs /system/audit /system/notifications
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-1920 /system/config /system/files /system/timeout-rules /system/announcements
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-1920 /system/workflow-flows /system/workflow-monitor /system/person-tags
+
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-2560 /workspace /workspace/announcements /workspace/notifications /info/nav
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-2560 /info/address-book /info/products /info/documents /perf/metrics
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-2560 /perf/kpi-rules /perf/targets /perf/target-values /perf/import
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-2560 /perf/adjust /perf/compute /perf/task-monitor /eval/tags
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-2560 /eval/user-tags /eval/rules /eval/tasks /eval/my-tasks
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-2560 /report/dynamic /report/dashboard /report/presets /report/free
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-2560 /report/sql /report/amas-approvals /guarantee/query /guarantee/data-import
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-2560 /guarantee/notice /history/price-approval /history/perf-adjust /system/users
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-2560 /system/roles /system/resources /system/permission /system/dict
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-2560 /system/calendar /system/jobs /system/audit /system/notifications
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-2560 /system/config /system/files /system/timeout-rules /system/announcements
+bash artifacts/ui-ux-pro-max-final/scripts/run-cli-route-batch.sh uiux-2560 /system/workflow-flows /system/workflow-monitor /system/person-tags
+
+console/requests（清空后读取；仅归档 console 与 URL/status 摘要，不调用 request、request-body、response-body）：
+playwright-cli -s=uiux-1920 console --clear; playwright-cli -s=uiux-1920 goto 'http://127.0.0.1:8091/#/workspace'; playwright-cli -s=uiux-1920 console error; playwright-cli -s=uiux-1920 console warning
+playwright-cli -s=uiux-req1920 requests --filter='/api/'
+playwright-cli -s=uiux-2560 console --clear; playwright-cli -s=uiux-2560 goto 'http://127.0.0.1:8091/#/workspace'; playwright-cli -s=uiux-2560 console error; playwright-cli -s=uiux-2560 console warning
+playwright-cli -s=uiux-req2560 requests --filter='/api/'
+
+安全截图（未登录、空业务数据）：
+playwright-cli -s=uiux-login1920 open 'http://127.0.0.1:8091/#/login?normal' --browser=chromium; playwright-cli -s=uiux-login1920 resize 1920 1080; playwright-cli -s=uiux-login1920 screenshot --filename=artifacts/ui-ux-pro-max-final/screenshots/login-1920x1080.png
+playwright-cli -s=uiux-login2560 open 'http://127.0.0.1:8091/#/login?normal' --browser=chromium; playwright-cli -s=uiux-login2560 resize 2560 1440; playwright-cli -s=uiux-login2560 screenshot --filename=artifacts/ui-ux-pro-max-final/screenshots/login-2560x1440.png
+
+只读交互：
+playwright-cli -s=uiux-1920 click 'button[aria-label="折叠侧边导航"]'; playwright-cli -s=uiux-1920 eval "$(<artifacts/ui-ux-pro-max-final/scripts/eval-sidebar.js)"; playwright-cli -s=uiux-1920 click 'button[aria-label="展开侧边导航"]'; playwright-cli -s=uiux-1920 eval "$(<artifacts/ui-ux-pro-max-final/scripts/eval-sidebar.js)"
+playwright-cli -s=uiux-1920 goto 'http://127.0.0.1:8091/#/workspace/announcements'; playwright-cli -s=uiux-1920 click 'nav[aria-label="工作区页签"] button:has-text("公告列表"):not(:has-text("关闭"))'; playwright-cli -s=uiux-1920 eval "$(<artifacts/ui-ux-pro-max-final/scripts/eval-tabs.js)"
+
+已知联调失败复核（已执行，原始证据为 raw/35-known-audit-500-2560.txt）：
+playwright-cli -s=uiux-audit-final open 'http://127.0.0.1:8091/#/login?normal' --browser=chromium
+playwright-cli -s=uiux-audit-final state-load /tmp/yiti-uiux-auth-state.json
+playwright-cli -s=uiux-audit-final resize 2560 1440
+playwright-cli -s=uiux-audit-final goto 'http://127.0.0.1:8091/#/system/audit'
+playwright-cli -s=uiux-audit-final run-code "async page => { await page.waitForTimeout(1200); }"
+playwright-cli -s=uiux-audit-final console error
+playwright-cli -s=uiux-audit-final requests --filter='/api/'

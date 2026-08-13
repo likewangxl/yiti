@@ -1,0 +1,114 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T22:11:03.929955Z
+COMMAND /usr/bin/python3 docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py ControlledSqlBatchRunnerRound11Test
+SHA256 507e24ed595a054ba5a9904c8d7f56f767ab93a2e5589ac67f212abb143779e3 /home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py
+SHA256 3b628704322d876704dda503645b6cddd05b5ca049e12abaa6254eb76b535099 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-root-managed-launcher.py
+SHA256 1365dc9f43588b5cb2409e809fb204ad130107c285f17dc4b10e2b514c5fde8a /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.py
+SHA256 d497c48b3f892b26315843c407df0c3230b557d74097eae1812b7afecbd23ff8 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.schema.json
+SHA256 4f9c567856da362e84873f4d8fd6eddd42b2aae7bd76911ffd3b074eba3bb24c /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.json
+EXIT_CODE 1
+UTC_FINISHED 2026-08-11T22:11:04.000737Z
+--- RAW_STDOUT_STDERR ---
+test_binary_mode_is_frozen_by_signed_release_contract_schema_and_example (__main__.ControlledSqlBatchRunnerRound11Test)
+runner argv、schema 和签名 example 必须绑定同一 binary-mode option 契约。 ... FAIL
+test_private_key_reader_accepts_0400_and_0600_with_root_only_ancestors (__main__.ControlledSqlBatchRunnerRound11Test)
+合法私钥仅接受 root-owned regular 0400/0600；元数据由 mock 提供。 ... test_private_key_reader_rejects_actual_symlink (__main__.ControlledSqlBatchRunnerRound11Test)
+最终 key 使用 O_NOFOLLOW，真实符号链接不能被签名器接收。 ... ERROR
+test_sign_payload_passes_the_opened_private_key_fd_via_proc_without_path_reopen (__main__.ControlledSqlBatchRunnerRound11Test)
+签名 argv 只能引用 inherited FD，不能重新把私钥 pathname 交给 openssl。 ... ERROR
+test_sign_payload_rejects_group_or_other_readable_private_key_before_openssl (__main__.ControlledSqlBatchRunnerRound11Test)
+0644 与 0440 当前会穿透旧的仅拒绝 group/other write 检查，必须成为 Red。 ... test_sign_payload_rejects_group_or_other_traversable_private_key_parent_before_openssl (__main__.ControlledSqlBatchRunnerRound11Test)
+0755/0711 父目录泄露私钥路径并允许非 root 遍历，必须 fail-close。 ... 
+======================================================================
+ERROR: test_private_key_reader_accepts_0400_and_0600_with_root_only_ancestors (__main__.ControlledSqlBatchRunnerRound11Test) (key_mode='0o400')
+合法私钥仅接受 root-owned regular 0400/0600；元数据由 mock 提供。
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py", line 843, in test_private_key_reader_accepts_0400_and_0600_with_root_only_ancestors
+    with self.launcher.open_attestation_private_key() as descriptor:
+AttributeError: module 'controlled_sql_root_managed_launcher_round11_test_subject' has no attribute 'open_attestation_private_key'
+
+======================================================================
+ERROR: test_private_key_reader_accepts_0400_and_0600_with_root_only_ancestors (__main__.ControlledSqlBatchRunnerRound11Test) (key_mode='0o600')
+合法私钥仅接受 root-owned regular 0400/0600；元数据由 mock 提供。
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py", line 843, in test_private_key_reader_accepts_0400_and_0600_with_root_only_ancestors
+    with self.launcher.open_attestation_private_key() as descriptor:
+AttributeError: module 'controlled_sql_root_managed_launcher_round11_test_subject' has no attribute 'open_attestation_private_key'
+
+======================================================================
+ERROR: test_private_key_reader_rejects_actual_symlink (__main__.ControlledSqlBatchRunnerRound11Test)
+最终 key 使用 O_NOFOLLOW，真实符号链接不能被签名器接收。
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py", line 833, in test_private_key_reader_rejects_actual_symlink
+    with self.launcher.open_attestation_private_key():
+AttributeError: module 'controlled_sql_root_managed_launcher_round11_test_subject' has no attribute 'open_attestation_private_key'
+
+======================================================================
+ERROR: test_sign_payload_passes_the_opened_private_key_fd_via_proc_without_path_reopen (__main__.ControlledSqlBatchRunnerRound11Test)
+签名 argv 只能引用 inherited FD，不能重新把私钥 pathname 交给 openssl。
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py", line 860, in test_sign_payload_passes_the_opened_private_key_fd_via_proc_without_path_reopen
+    with mock.patch.object(self.launcher, "open_attestation_private_key", opened_private_key):
+  File "/usr/lib/python3.10/unittest/mock.py", line 1447, in __enter__
+    original, local = self.get_original()
+  File "/usr/lib/python3.10/unittest/mock.py", line 1420, in get_original
+    raise AttributeError(
+AttributeError: <module 'controlled_sql_root_managed_launcher_round11_test_subject' from '/home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-root-managed-launcher.py'> does not have the attribute 'open_attestation_private_key'
+
+======================================================================
+FAIL: test_binary_mode_is_frozen_by_signed_release_contract_schema_and_example (__main__.ControlledSqlBatchRunnerRound11Test)
+runner argv、schema 和签名 example 必须绑定同一 binary-mode option 契约。
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py", line 882, in test_binary_mode_is_frozen_by_signed_release_contract_schema_and_example
+    self.assertEqual(
+AssertionError: 'fixed-defaults-file-tcp-verify-identity-binary-mode' != 'fixed-defaults-file-tcp-verify-identity'
+- fixed-defaults-file-tcp-verify-identity-binary-mode
+?                                        ------------
++ fixed-defaults-file-tcp-verify-identity
+
+
+======================================================================
+FAIL: test_sign_payload_rejects_group_or_other_readable_private_key_before_openssl (__main__.ControlledSqlBatchRunnerRound11Test) (key_mode='0o644')
+0644 与 0440 当前会穿透旧的仅拒绝 group/other write 检查，必须成为 Red。
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py", line 801, in test_sign_payload_rejects_group_or_other_readable_private_key_before_openssl
+    with self.assertRaises(self.launcher.LauncherError):
+AssertionError: LauncherError not raised
+
+======================================================================
+FAIL: test_sign_payload_rejects_group_or_other_readable_private_key_before_openssl (__main__.ControlledSqlBatchRunnerRound11Test) (key_mode='0o440')
+0644 与 0440 当前会穿透旧的仅拒绝 group/other write 检查，必须成为 Red。
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py", line 801, in test_sign_payload_rejects_group_or_other_readable_private_key_before_openssl
+    with self.assertRaises(self.launcher.LauncherError):
+AssertionError: LauncherError not raised
+
+======================================================================
+FAIL: test_sign_payload_rejects_group_or_other_traversable_private_key_parent_before_openssl (__main__.ControlledSqlBatchRunnerRound11Test) (parent_mode='0o755')
+0755/0711 父目录泄露私钥路径并允许非 root 遍历，必须 fail-close。
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py", line 821, in test_sign_payload_rejects_group_or_other_traversable_private_key_parent_before_openssl
+    with self.assertRaises(self.launcher.LauncherError):
+AssertionError: LauncherError not raised
+
+======================================================================
+FAIL: test_sign_payload_rejects_group_or_other_traversable_private_key_parent_before_openssl (__main__.ControlledSqlBatchRunnerRound11Test) (parent_mode='0o711')
+0755/0711 父目录泄露私钥路径并允许非 root 遍历，必须 fail-close。
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py", line 821, in test_sign_payload_rejects_group_or_other_traversable_private_key_parent_before_openssl
+    with self.assertRaises(self.launcher.LauncherError):
+AssertionError: LauncherError not raised
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.011s
+
+FAILED (failures=5, errors=4)

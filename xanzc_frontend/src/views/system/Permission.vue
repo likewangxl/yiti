@@ -1,171 +1,201 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle />
-      <span class="desc">RBAC 角色 × 资源 × 数据范围 — 与 project_ana §4.6.1 对齐</span>
-      <div class="actions">
-        <el-button @click="reload">刷新</el-button>
+  <main class="bp-crud permission-page" aria-labelledby="permission-page-title" :aria-busy="pageLoading ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="permission-page-title">
+        <span class="sub">角色、资源与数据范围均以当前选中角色为准；保存会覆盖该角色原有资源绑定。</span>
+      </PageTitle>
+      <div class="actions action-group" role="group" aria-label="权限配置操作">
+        <el-button @click="reload">刷新权限数据</el-button>
       </div>
-    </div>
+    </header>
 
-    <div class="three-cols">
-      <!-- ============= 左：角色列表 ============= -->
-      <div class="card-section col">
-        <div class="col-h">
-          <div>角色 ({{ roles.length }})</div>
-          <el-input v-model="kw" size="small" placeholder="搜索" style="width:120px" clearable />
+    <section class="card-section filter-bar" aria-label="权限配置筛选">
+      <el-form class="filter-form" inline size="default" aria-label="权限配置筛选条件">
+        <el-form-item label="角色">
+          <el-input v-model="kw" clearable placeholder="角色名称 / 编码" aria-label="按角色名称或编码筛选" style="width:230px" />
+        </el-form-item>
+        <el-form-item label="资源">
+          <el-input v-model="resKw" clearable placeholder="资源名称 / URL / ID" aria-label="按资源信息筛选" style="width:260px" />
+        </el-form-item>
+        <el-form-item>
+          <el-button @click="resetFilters">清除筛选</el-button>
+        </el-form-item>
+      </el-form>
+    </section>
+
+    <p v-if="loadError" class="error-state" role="alert">
+      {{ loadError }} <el-button link type="primary" @click="reload">重试</el-button>
+    </p>
+
+    <section class="permission-grid" aria-label="角色资源和数据范围矩阵">
+      <section
+        class="card-section data-panel permission-col role-col"
+        aria-label="角色列表"
+        aria-labelledby="permission-roles-heading"
+        :aria-busy="rolesLoading ? 'true' : 'false'"
+      >
+        <div class="toolbar compact-toolbar">
+          <div>
+            <h2 id="permission-roles-heading" class="section-title">角色</h2>
+            <p class="hint">选择一个角色后编辑其资源和数据范围。</p>
+          </div>
+          <p class="table-state" role="status" aria-live="polite">{{ rolesLoading ? '角色加载中' : `共 ${filteredRoles.length} 个` }}</p>
         </div>
-        <div class="role-list">
-          <div
-            v-for="r in filteredRoles" :key="r.roleId"
-            :class="['role', { active: r.roleId === pickedRoleId, disabled: r.recordStatus !== 0 }]"
-            @click="onPickRole(r.roleId)"
+        <div class="role-list" role="list" aria-labelledby="permission-roles-heading">
+          <button
+            v-for="role in filteredRoles"
+            :key="role.roleId"
+            type="button"
+            :class="['role-option', { active: role.roleId === pickedRoleId, disabled: role.recordStatus !== 0 }]"
+            :aria-pressed="role.roleId === pickedRoleId ? 'true' : 'false'"
+            :aria-label="`选择角色 ${role.roleChName || role.roleId}`"
+            @click="onPickRole(role.roleId)"
           >
-            <div class="r-info">
-              <div class="r-name">👤 {{ r.roleChName || r.roleId }}<el-tag v-if="r.recordStatus !== 0" type="info" size="small" effect="plain" class="r-status-tag">停用</el-tag></div>
-              <div class="r-code"><code>{{ r.roleCode }}</code></div>
-            </div>
-            <span class="cnt">{{ r.userCount != null ? r.userCount + ' 人' : '-' }}</span>
-          </div>
+            <span class="role-info">
+              <span class="role-name">{{ role.roleChName || role.roleId }}</span>
+              <code class="role-code">{{ role.roleCode || '-' }}</code>
+            </span>
+            <span class="role-meta">
+              <el-tag v-if="role.recordStatus !== 0" class="tag-warning" effect="plain" size="small">停用</el-tag>
+              <span>{{ role.userCount != null ? `${role.userCount} 人` : '-' }}</span>
+            </span>
+          </button>
+          <p v-if="!rolesLoading && !filteredRoles.length" class="empty-state">暂无可配置角色</p>
         </div>
-      </div>
+      </section>
 
-      <!-- ============= 中：资源（按业务模块 + R/W 双勾选） ============= -->
-      <div class="card-section col">
-        <div class="col-h">
-          <div>资源 ({{ pickedRole?.roleChName || '-' }} · 已勾 {{ checkedIds.size }} / {{ resources.length }})</div>
-          <el-input v-model="resKw" size="small" placeholder="搜索" style="width:150px" clearable />
+      <section
+        class="card-section data-panel permission-col resource-col"
+        aria-label="资源授权矩阵"
+        aria-labelledby="permission-resources-heading"
+        :aria-busy="resourcesLoading ? 'true' : 'false'"
+      >
+        <div class="toolbar compact-toolbar">
+          <div>
+            <h2 id="permission-resources-heading" class="section-title">资源授权</h2>
+            <p class="hint">{{ pickedRole?.roleChName || '请先选择角色' }} · 已授权 {{ checkedIds.size }} / {{ resources.length }} 项</p>
+          </div>
+          <p class="table-state" role="status" aria-live="polite">{{ resourcesLoading ? '资源加载中' : dirty ? `${pendingDelta} 项待保存` : '已同步' }}</p>
         </div>
-        <div class="res-list">
-          <div v-for="g in groupedRes" :key="g.key" class="res-group-block">
-            <div class="res-group">
-              <span class="caret" @click="toggleCollapse(g.key)" :title="collapsedKeys.has(g.key) ? '展开' : '折叠'">{{ collapsedKeys.has(g.key) ? '▶' : '▼' }}</span>
-              <span class="ico">{{ g.icon }}</span>
-              <span class="g-name" @click="toggleCollapse(g.key)" style="cursor:pointer">{{ g.name }}</span>
-              <span class="cnt">R {{ g.r.checked }}/{{ g.r.items.length }} · W {{ g.w.checked }}/{{ g.w.items.length }}</span>
-              <span class="rw-all">
+
+        <div class="resource-list" aria-labelledby="permission-resources-heading">
+          <section v-for="group in groupedRes" :key="group.key" class="resource-group">
+            <div class="resource-group-head">
+              <button
+                type="button"
+                class="collapse-toggle"
+                :aria-expanded="collapsedKeys.has(group.key) ? 'false' : 'true'"
+                :aria-label="`${collapsedKeys.has(group.key) ? '展开' : '收起'} ${group.name} 资源组`"
+                @click="toggleCollapse(group.key)"
+              >{{ collapsedKeys.has(group.key) ? '展开' : '收起' }}</button>
+              <span class="group-name">{{ group.name }}</span>
+              <span class="group-count">读 {{ group.r.checked }}/{{ group.r.items.length }} · 写 {{ group.w.checked }}/{{ group.w.items.length }}</span>
+              <span class="group-checks">
                 <el-checkbox
-                  :model-value="g.all.allChecked"
-                  :indeterminate="g.all.indeterminate"
-                  :disabled="g.all.total === 0"
-                  @change="(v) => toggleGroupSide(g, 'all', v)"
-                  size="small"
-                  title="整组 R+W 一键勾选 / 取消"
-                />
-                <span class="g-all-label">整组</span>
-              </span>
-              <span class="rw-h">
+                  :model-value="group.all.allChecked"
+                  :indeterminate="group.all.indeterminate"
+                  :disabled="resourceEditBlocked || group.all.total === 0"
+                  aria-label="切换整个资源组"
+                  @change="(value) => toggleGroupSide(group, 'all', value)"
+                >整组</el-checkbox>
                 <el-checkbox
-                  :model-value="g.r.allChecked"
-                  :indeterminate="g.r.indeterminate"
-                  :disabled="g.r.items.length === 0"
-                  @change="(v) => toggleGroupSide(g, 'r', v)"
-                  size="small"
-                  title="全选 R（GET 接口）"
-                />
-                <span style="color:#16A34A">R</span>
+                  :model-value="group.r.allChecked"
+                  :indeterminate="group.r.indeterminate"
+                  :disabled="resourceEditBlocked || group.r.items.length === 0"
+                  aria-label="切换本组全部读取资源"
+                  @change="(value) => toggleGroupSide(group, 'r', value)"
+                >读</el-checkbox>
                 <el-checkbox
-                  :model-value="g.w.allChecked"
-                  :indeterminate="g.w.indeterminate"
-                  :disabled="g.w.items.length === 0"
-                  @change="(v) => toggleGroupSide(g, 'w', v)"
-                  size="small"
-                  title="全选 W（POST/PUT/DELETE 接口）"
-                />
-                <span style="color:#D97706">W</span>
+                  :model-value="group.w.allChecked"
+                  :indeterminate="group.w.indeterminate"
+                  :disabled="resourceEditBlocked || group.w.items.length === 0"
+                  aria-label="切换本组全部写入资源"
+                  @change="(value) => toggleGroupSide(group, 'w', value)"
+                >写</el-checkbox>
               </span>
             </div>
-            <div v-for="r in g.allItems" :key="r.resourceId" v-show="!collapsedKeys.has(g.key)" class="res-item">
-              <div class="res-meta">
-                <span class="res-name">{{ r.menuName || r.resourceId }}</span>
-                <code class="res-url"><el-tag size="small" :class="methodCls(r.resourceMethod)" effect="plain" disable-transitions>{{ r.resourceMethod }}</el-tag> {{ r.resourceUrl }}</code>
+            <div v-show="!collapsedKeys.has(group.key)" class="resource-items">
+              <div v-for="resource in group.allItems" :key="resource.resourceId" class="resource-item">
+                <div class="resource-meta">
+                  <span class="resource-name">{{ resource.menuName || resource.resourceId }}</span>
+                  <code class="resource-url"><el-tag size="small" :class="methodCls(resource.resourceMethod)" effect="plain" disable-transitions>{{ resource.resourceMethod }}</el-tag>{{ resource.resourceUrl }}</code>
+                </div>
+                <el-checkbox
+                  :model-value="checkedIds.has(resource.resourceId)"
+                  :disabled="resourceEditBlocked"
+                  :aria-label="`切换资源 ${resource.menuName || resource.resourceId}`"
+                  @change="(value) => toggleOne(resource.resourceId, value)"
+                >{{ rwSide(resource) === 'r' ? '读取' : '写入' }}</el-checkbox>
               </div>
-              <span class="rw-cell">
-                <el-checkbox
-                  v-if="rwSide(r) === 'r'"
-                  :model-value="checkedIds.has(r.resourceId)"
-                  @change="(v) => toggleOne(r.resourceId, v)"
-                  size="small"
-                />
-                <span v-else class="dash">—</span>
-                <el-checkbox
-                  v-if="rwSide(r) === 'w'"
-                  :model-value="checkedIds.has(r.resourceId)"
-                  @change="(v) => toggleOne(r.resourceId, v)"
-                  size="small"
-                />
-                <span v-if="rwSide(r) !== 'w'" class="dash">—</span>
-              </span>
             </div>
-          </div>
-          <div v-if="groupedRes.length === 0" class="empty">暂无资源</div>
+          </section>
+          <p v-if="!resourcesLoading && !groupedRes.length" class="empty-state">暂无匹配资源</p>
         </div>
-        <div class="col-foot">
-          <span class="dirty" v-if="dirty">⚠ {{ pendingDelta }} 条改动未保存</span>
-          <span class="dirty ok" v-else>✓ 已同步</span>
-          <el-button size="small" @click="resetChecked" :disabled="!dirty">还原</el-button>
-          <el-button size="small" type="primary" @click="onSaveResources" :loading="saving" :disabled="!dirty">保存绑定</el-button>
-        </div>
-      </div>
 
-      <!-- ============= 右：数据范围矩阵（BizType × DataScope） ============= -->
-      <div class="card-section col">
-        <div class="col-h">
-          <div>数据范围（{{ pickedRole?.roleChName || '-' }}）</div>
-          <el-tag v-if="scopeLoading" effect="plain" class="tag-info" size="small">加载中</el-tag>
+        <div class="resource-foot">
+          <p class="hint" role="status" aria-live="polite">{{ dirty ? `资源绑定有 ${pendingDelta} 项改动，保存后将全量替换。` : '当前资源绑定已同步。' }}</p>
+          <div class="action-group" role="group" aria-label="资源绑定操作">
+            <el-button :disabled="resourceEditBlocked || !dirty || saving" @click="resetChecked">还原</el-button>
+            <el-button type="primary" :loading="saving" :disabled="resourceEditBlocked || !dirty || saving || !pickedRoleId" @click="onSaveResources">保存资源绑定</el-button>
+          </div>
         </div>
-        <el-table :data="scopeRows" size="small" empty-text="无 BizType 配置" :max-height="999">
-          <el-table-column label="BizType" min-width="130">
+      </section>
+
+      <section
+        class="card-section data-panel permission-col scope-col"
+        aria-label="数据范围矩阵"
+        aria-labelledby="permission-scopes-heading"
+        :aria-busy="scopeLoading ? 'true' : 'false'"
+      >
+        <div class="toolbar compact-toolbar">
+          <div>
+            <h2 id="permission-scopes-heading" class="section-title">数据范围</h2>
+            <p class="hint">{{ pickedRole?.roleChName || '请先选择角色' }} 的业务数据访问边界。</p>
+          </div>
+          <p class="table-state" role="status" aria-live="polite">{{ scopeLoading ? '范围加载中' : `${scopeRows.length} 个业务域` }}</p>
+        </div>
+        <el-table :data="scopeRows" size="small" empty-text="无 BizType 配置" v-loading="scopeLoading" aria-labelledby="permission-scopes-heading">
+          <el-table-column label="业务域" min-width="150">
             <template #default="{ row }">
-              <div class="bt-name">{{ row.bizTypeLabel }}</div>
-              <div class="bt-code">{{ row.bizType }}</div>
+              <div class="biz-type-name">{{ row.bizTypeLabel }}</div>
+              <code class="biz-type-code">{{ row.bizType }}</code>
             </template>
           </el-table-column>
-          <el-table-column label="DataScope" width="96">
-            <template #default="{row}">
-              <el-tag :class="scopeCls(row.dataScope)" effect="plain">{{ scopeLabel(row.dataScope) }}</el-tag>
-            </template>
+          <el-table-column label="数据范围" width="112">
+            <template #default="{ row }"><el-tag :class="scopeCls(row.dataScope)" effect="plain">{{ scopeLabel(row.dataScope) }}</el-tag></template>
           </el-table-column>
-          <el-table-column label="操作" width="62" fixed="right">
-            <template #default="{row}"><el-button link type="primary" size="small" @click="openScopeEditor(row)">修改</el-button></template>
+          <el-table-column label="操作" width="72" fixed="right">
+            <template #default="{ row }"><el-button link type="primary" size="small" @click="openScopeEditor(row)">修改</el-button></template>
           </el-table-column>
         </el-table>
-        <div class="legend">
-          <code>SELF</code> 本人 · <code>SELF_CREATED</code> 我创建 · <code>ORG</code> 本机构 · <code>ORG_SUBTREE</code> 本机构及下属 · <code>ALL</code> 全行 · <code>NONE</code> 无权限<br>
-          <span style="color:#D97706">⚠ 修改 ALL/ORG_SUBTREE 为高危（PERMISSION_CHANGE 审计）</span>
-        </div>
-      </div>
-    </div>
+        <p class="scope-legend">SELF 本人；SELF_CREATED 我创建；ORG 本机构；ORG_SUBTREE 本机构及下属；ALL 全行；NONE 无权限。变更 ALL 或 ORG_SUBTREE 属高风险操作。</p>
+      </section>
+    </section>
 
-    <!-- 数据范围编辑 dialog -->
-    <el-dialog v-model="scopeDlg.show" title="编辑数据范围" width="440px">
+    <el-dialog v-model="scopeDlg.show" class="bp-crud-dialog" title="编辑数据范围" width="440px" :close-on-click-modal="false">
       <el-form label-width="84px">
-        <el-form-item label="角色"><el-input :value="pickedRole?.roleChName" disabled /></el-form-item>
-        <el-form-item label="BizType"><el-input :value="scopeDlg.bizType" disabled /></el-form-item>
-        <el-form-item label="DataScope">
-          <el-select v-model="scopeDlg.dataScope" style="width:100%">
-            <el-option v-for="s in SCOPE_OPTIONS" :key="s.value" :value="s.value">
-              <span>{{ s.value }}</span>
-              <span style="color:#9CA3AF;font-size:11px;margin-left:8px">{{ s.label }}</span>
-            </el-option>
+        <el-form-item label="角色"><el-input :model-value="pickedRole?.roleChName" disabled /></el-form-item>
+        <el-form-item label="BizType"><el-input :model-value="scopeDlg.bizType" disabled /></el-form-item>
+        <el-form-item label="数据范围">
+          <el-select v-model="scopeDlg.dataScope" style="width:100%" aria-label="选择数据范围">
+            <el-option v-for="scope in SCOPE_OPTIONS" :key="scope.value" :value="scope.value" :label="`${scope.value} · ${scope.label}`" />
           </el-select>
         </el-form-item>
-        <el-form-item label="原因">
-          <el-input v-model="scopeDlg.reason" type="textarea" :rows="2" placeholder="变更原因（写入审计日志）" />
+        <el-form-item label="变更原因" required>
+          <el-input v-model="scopeDlg.reason" type="textarea" :rows="2" placeholder="必填，写入权限变更审计日志" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="scopeDlg.show = false">取消</el-button>
-        <el-button type="primary" :loading="scopeDlg.saving" @click="onSaveScope">保存</el-button>
+        <el-button :disabled="scopeDlg.saving" @click="scopeDlg.show = false">取消</el-button>
+        <el-button type="primary" :loading="scopeDlg.saving" :disabled="scopeDlg.saving" @click="onSaveScope">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { sysRoles, sysResources, sysScopeMatrix } from '@/mock';
 import {
   listAllRoles, listResources, getScopeMatrix,
   getRoleResourceIds, replaceRoleResources, saveBizScope
@@ -182,197 +212,164 @@ const SCOPE_OPTIONS = [
   { value: 'WORKFLOW_PARTICIPANT', label: '流程参与者' }
 ];
 
-// ============= URL 前缀 → 业务模块映射（与原型菜单分类对齐） =============
-// 顺序敏感：从最具体的前缀往最宽匹配
 const MODULE_RULES = [
-  { prefix: '/api/portal',          name: '工作台',         icon: '🏠' },
-  { prefix: '/api/admin/nav',       name: '工作台',         icon: '🏠' },
-  { prefix: '/api/nav',             name: '工作台',         icon: '🏠' },
-  { prefix: '/api/notifications',   name: '工作台',         icon: '🏠' },
-  { prefix: '/api/employees',       name: '组织架构',       icon: '👥' },
-  { prefix: '/api/orgs',            name: '组织架构',       icon: '👥' },
-  { prefix: '/api/products',        name: '产品资料库',     icon: '📦' },
-  { prefix: '/api/admin/products',  name: '产品资料库',     icon: '📦' },
-  { prefix: '/api/documents',       name: '文档下载',       icon: '📄' },
-  { prefix: '/api/admin/documents', name: '文档下载',       icon: '📄' },
-  { prefix: '/api/tags',            name: '客户营销',       icon: '🎯' },
-  { prefix: '/api/cust-leads',      name: '客户营销',       icon: '🎯' },
-  { prefix: '/api/leads',           name: '客户营销',       icon: '🎯' },
-  { prefix: '/api/customers',       name: '客户营销',       icon: '🎯' },
-  { prefix: '/api/cust-pool',       name: '客户营销',       icon: '🎯' },
-  { prefix: '/api/customer-pool',   name: '客户营销',       icon: '🎯' },
-  { prefix: '/api/cust-tags',       name: '客户营销',       icon: '🎯' },
-  { prefix: '/api/cust-claims',     name: '客户营销',       icon: '🎯' },
-  { prefix: '/api/claims',          name: '客户营销',       icon: '🎯' },
-  { prefix: '/api/my-claims',       name: '客户营销',       icon: '🎯' },
-  { prefix: '/api/touch-tasks',     name: '触达任务',       icon: '📞' },
-  { prefix: '/api/touch-reports',   name: '触达任务',       icon: '📞' },
-  { prefix: '/api/loan',            name: '业务执行',       icon: '🏦' },
-  { prefix: '/api/business-application', name: '业务执行',  icon: '🏦' },
-  { prefix: '/api/support',         name: '中场支持',       icon: '🤝' },
-  { prefix: '/api/workflow',        name: '工作流',         icon: '🔄' },
-  { prefix: '/api/perf',            name: '绩效与考核',     icon: '📈' },
-  { prefix: '/api/admin/perf',      name: '绩效与考核',     icon: '📈' },
-  { prefix: '/api/reports',         name: '报表分析',       icon: '📊' },
-  { prefix: '/api/rpt',             name: '报表分析',       icon: '📊' },
-  { prefix: '/api/dynamic-query',   name: '报表分析',       icon: '📊' },
-  { prefix: '/api/data-task',       name: '报表分析',       icon: '📊' },
-  { prefix: '/api/admin/sql-probe', name: '数据探查',       icon: '🔍' },
-  { prefix: '/api/admin/sys/files', name: '文件管理',       icon: '📎' },
-  { prefix: '/api/files',           name: '文件管理',       icon: '📎' },
-  { prefix: '/api/admin/biz-scopes',name: '权限管理',       icon: '🔐' },
-  { prefix: '/api/admin/roles',     name: '权限管理',       icon: '🔐' },
-  { prefix: '/api/admin/resources', name: '权限管理',       icon: '🔐' },
-  { prefix: '/api/admin/users',     name: '权限管理',       icon: '🔐' },
-  { prefix: '/api/auth',            name: '认证',           icon: '🔑' },
-  { prefix: '/api/admin/sys',       name: '系统治理',       icon: '⚙️' },
-  { prefix: '/api/sys',             name: '系统治理',       icon: '⚙️' },
-  { prefix: '/api/admin',           name: '管理后台',       icon: '🛠' }
+  { prefix: '/api/portal', name: '工作台' },
+  { prefix: '/api/admin/nav', name: '工作台' },
+  { prefix: '/api/nav', name: '工作台' },
+  { prefix: '/api/notifications', name: '工作台' },
+  { prefix: '/api/employees', name: '组织架构' },
+  { prefix: '/api/orgs', name: '组织架构' },
+  { prefix: '/api/products', name: '产品资料库' },
+  { prefix: '/api/admin/products', name: '产品资料库' },
+  { prefix: '/api/documents', name: '文档下载' },
+  { prefix: '/api/admin/documents', name: '文档下载' },
+  { prefix: '/api/tags', name: '客户营销' },
+  { prefix: '/api/cust-leads', name: '客户营销' },
+  { prefix: '/api/leads', name: '客户营销' },
+  { prefix: '/api/customers', name: '客户营销' },
+  { prefix: '/api/cust-pool', name: '客户营销' },
+  { prefix: '/api/customer-pool', name: '客户营销' },
+  { prefix: '/api/cust-tags', name: '客户营销' },
+  { prefix: '/api/cust-claims', name: '客户营销' },
+  { prefix: '/api/claims', name: '客户营销' },
+  { prefix: '/api/my-claims', name: '客户营销' },
+  { prefix: '/api/touch-tasks', name: '触达任务' },
+  { prefix: '/api/touch-reports', name: '触达任务' },
+  { prefix: '/api/loan', name: '业务执行' },
+  { prefix: '/api/business-application', name: '业务执行' },
+  { prefix: '/api/support', name: '中场支持' },
+  { prefix: '/api/workflow', name: '工作流' },
+  { prefix: '/api/perf', name: '绩效与考核' },
+  { prefix: '/api/admin/perf', name: '绩效与考核' },
+  { prefix: '/api/reports', name: '报表分析' },
+  { prefix: '/api/rpt', name: '报表分析' },
+  { prefix: '/api/dynamic-query', name: '报表分析' },
+  { prefix: '/api/data-task', name: '报表分析' },
+  { prefix: '/api/admin/sql-probe', name: '数据探查' },
+  { prefix: '/api/admin/sys/files', name: '文件管理' },
+  { prefix: '/api/files', name: '文件管理' },
+  { prefix: '/api/admin/biz-scopes', name: '权限管理' },
+  { prefix: '/api/admin/roles', name: '权限管理' },
+  { prefix: '/api/admin/resources', name: '权限管理' },
+  { prefix: '/api/admin/users', name: '权限管理' },
+  { prefix: '/api/auth', name: '认证' },
+  { prefix: '/api/admin/sys', name: '系统治理' },
+  { prefix: '/api/sys', name: '系统治理' },
+  { prefix: '/api/admin', name: '管理后台' }
 ];
+
 function moduleOf(url) {
-  const u = (url || '').toLowerCase();
-  for (const r of MODULE_RULES) {
-    if (u.startsWith(r.prefix)) return r;
-  }
-  return { name: '其它', icon: '📌' };
+  const normalized = (url || '').toLowerCase();
+  return MODULE_RULES.find(rule => normalized.startsWith(rule.prefix)) || { name: '其它' };
 }
-function rwSide(r) {
-  return (r.resourceMethod || '').toUpperCase() === 'GET' ? 'r' : 'w';
+function rwSide(resource) {
+  return (resource.resourceMethod || '').toUpperCase() === 'GET' ? 'r' : 'w';
 }
-function methodCls(m) {
-  const k = (m || '').toUpperCase();
-  if (k === 'GET') return 'tag-success';
-  if (k === 'POST') return 'tag-info';
-  if (k === 'PUT') return 'tag-warning';
-  if (k === 'DELETE') return 'tag-danger';
-  return 'tag-info';
+function methodCls(method) {
+  return ({ GET: 'tag-success', POST: 'tag-info', PUT: 'tag-warning', DELETE: 'tag-danger' }[(method || '').toUpperCase()] || 'tag-info');
 }
 
-// ============= 角色列 =============
 const roles = ref([]);
 const pickedRoleId = ref(null);
 const kw = ref('');
+const rolesLoading = ref(false);
+const switchingRole = ref(false);
 const filteredRoles = computed(() => {
-  const k = kw.value.trim().toLowerCase();
-  if (!k) return roles.value;
-  return roles.value.filter(r =>
-    (r.roleChName || '').toLowerCase().includes(k) ||
-    (r.roleCode || '').toLowerCase().includes(k) ||
-    (r.roleId || '').toLowerCase().includes(k));
+  const query = kw.value.trim().toLowerCase();
+  if (!query) return roles.value;
+  return roles.value.filter(role => [role.roleChName, role.roleCode, role.roleId]
+    .some(value => String(value || '').toLowerCase().includes(query)));
 });
-const pickedRole = computed(() => roles.value.find(r => r.roleId === pickedRoleId.value));
+const pickedRole = computed(() => roles.value.find(role => role.roleId === pickedRoleId.value));
 
-// ============= 资源列 =============
 const resources = ref([]);
+const resourcesLoading = ref(false);
 const resKw = ref('');
 const checkedIds = ref(new Set());
 const initialChecked = ref(new Set());
-const dirty = computed(() => {
-  if (checkedIds.value.size !== initialChecked.value.size) return true;
-  for (const id of checkedIds.value) if (!initialChecked.value.has(id)) return true;
-  return false;
-});
+const dirty = computed(() => checkedIds.value.size !== initialChecked.value.size
+  || [...checkedIds.value].some(id => !initialChecked.value.has(id)));
 const pendingDelta = computed(() => {
-  let d = 0;
-  for (const id of checkedIds.value) if (!initialChecked.value.has(id)) d++;
-  for (const id of initialChecked.value) if (!checkedIds.value.has(id)) d++;
-  return d;
+  let count = 0;
+  for (const id of checkedIds.value) if (!initialChecked.value.has(id)) count += 1;
+  for (const id of initialChecked.value) if (!checkedIds.value.has(id)) count += 1;
+  return count;
 });
 
 const groupedRes = computed(() => {
-  const k = resKw.value.trim().toLowerCase();
-  const filt = k
-    ? resources.value.filter(r =>
-        (r.resourceUrl || '').toLowerCase().includes(k) ||
-        (r.menuName || '').toLowerCase().includes(k) ||
-        (r.resourceId || '').toLowerCase().includes(k))
+  const query = resKw.value.trim().toLowerCase();
+  const matched = query
+    ? resources.value.filter(resource => [resource.resourceUrl, resource.menuName, resource.resourceId]
+      .some(value => String(value || '').toLowerCase().includes(query)))
     : resources.value;
-  const map = new Map();
-  for (const r of filt) {
-    const m = moduleOf(r.resourceUrl);
-    const key = m.name;
-    if (!map.has(key)) map.set(key, { key, name: m.name, icon: m.icon, allItems: [], r: { items: [], checked: 0 }, w: { items: [], checked: 0 } });
-    const g = map.get(key);
-    g.allItems.push(r);
-    const side = rwSide(r);
-    g[side].items.push(r);
+  const groups = new Map();
+  for (const resource of matched) {
+    const { name } = moduleOf(resource.resourceUrl);
+    if (!groups.has(name)) groups.set(name, { key: name, name, allItems: [], r: { items: [], checked: 0 }, w: { items: [], checked: 0 } });
+    const group = groups.get(name);
+    group.allItems.push(resource);
+    group[rwSide(resource)].items.push(resource);
   }
-  // 排序内部 + 计算勾选
-  const groups = [];
-  for (const g of map.values()) {
-    g.allItems.sort((a, b) => (a.resourceUrl || '').localeCompare(b.resourceUrl || ''));
-    g.r.checked  = g.r.items.filter(r => checkedIds.value.has(r.resourceId)).length;
-    g.w.checked  = g.w.items.filter(r => checkedIds.value.has(r.resourceId)).length;
-    g.r.allChecked = g.r.items.length > 0 && g.r.checked === g.r.items.length;
-    g.r.indeterminate = g.r.checked > 0 && g.r.checked < g.r.items.length;
-    g.w.allChecked = g.w.items.length > 0 && g.w.checked === g.w.items.length;
-    g.w.indeterminate = g.w.checked > 0 && g.w.checked < g.w.items.length;
-    // 整组 R+W 合计，给「一键勾选整组菜单」主复选框用
-    const allTotal = g.r.items.length + g.w.items.length;
-    const allChecked = g.r.checked + g.w.checked;
-    g.all = {
-      total: allTotal,
-      checked: allChecked,
-      allChecked: allTotal > 0 && allChecked === allTotal,
-      indeterminate: allChecked > 0 && allChecked < allTotal,
-    };
-    groups.push(g);
-  }
-  // 按 MODULE_RULES 顺序排
-  const order = ['工作台','客户营销','触达任务','业务执行','中场支持','工作流','绩效与考核','报表分析','组织架构','产品资料库','文档下载','文件管理','数据探查','权限管理','认证','系统治理','管理后台','其它'];
-  groups.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
-  return groups;
+  const order = ['工作台', '客户营销', '触达任务', '业务执行', '中场支持', '工作流', '绩效与考核', '报表分析', '组织架构', '产品资料库', '文档下载', '文件管理', '数据探查', '权限管理', '认证', '系统治理', '管理后台', '其它'];
+  return [...groups.values()].map(group => {
+    group.allItems.sort((a, b) => String(a.resourceUrl || '').localeCompare(String(b.resourceUrl || '')));
+    for (const side of ['r', 'w']) {
+      group[side].checked = group[side].items.filter(resource => checkedIds.value.has(resource.resourceId)).length;
+      group[side].allChecked = group[side].items.length > 0 && group[side].checked === group[side].items.length;
+      group[side].indeterminate = group[side].checked > 0 && group[side].checked < group[side].items.length;
+    }
+    const total = group.allItems.length;
+    const checked = group.r.checked + group.w.checked;
+    group.all = { total, checked, allChecked: total > 0 && checked === total, indeterminate: checked > 0 && checked < total };
+    return group;
+  }).sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
 });
 
-function toggleOne(id, v) {
+function toggleOne(id, value) {
+  if (resourceEditBlocked.value) return;
   const next = new Set(checkedIds.value);
-  if (v) next.add(id); else next.delete(id);
+  if (value) next.add(id);
+  else next.delete(id);
   checkedIds.value = next;
 }
-function toggleGroupSide(g, side, v) {
+function toggleGroupSide(group, side, value) {
+  if (resourceEditBlocked.value) return;
   const next = new Set(checkedIds.value);
-  // side='all' 时整组 R+W 一起切；保留 'r'/'w' 单侧切作为细粒度
-  const items = side === 'all' ? g.allItems : g[side].items;
-  for (const r of items) {
-    if (v) next.add(r.resourceId); else next.delete(r.resourceId);
+  const items = side === 'all' ? group.allItems : group[side].items;
+  for (const resource of items) {
+    if (value) next.add(resource.resourceId);
+    else next.delete(resource.resourceId);
   }
   checkedIds.value = next;
 }
-// 折叠/展开整个业务模块分组，让长资源列表的浏览体验更接近"按菜单整体浏览"
 const collapsedKeys = ref(new Set());
 function toggleCollapse(key) {
   const next = new Set(collapsedKeys.value);
-  if (next.has(key)) next.delete(key); else next.add(key);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
   collapsedKeys.value = next;
 }
 function resetChecked() {
+  if (resourceEditBlocked.value) return;
   checkedIds.value = new Set(initialChecked.value);
 }
 
-// ============= 数据范围列 =============
 const scopeMatrix = ref(null);
 const scopeLoading = ref(false);
 const scopeRows = computed(() => {
-  if (!scopeMatrix.value) return [];
-  const { bizTypes, matrix, bizTypeLabels } = scopeMatrix.value;
-  const rid = pickedRoleId.value;
-  const cell = matrix?.[rid] || {};
-  const labels = bizTypeLabels || {};
-  return (bizTypes || []).map(bt => ({
-    bizType: bt,
-    bizTypeLabel: labels[bt] || bt, // 中文名来自后端 matrix.bizTypeLabels（BizType 枚举 description，单一真相源）
-    dataScope: cell[bt] || 'NONE',
-    reason: '' // 后端 matrix 接口未返回 reason，编辑时再带
+  if (!scopeMatrix.value || !pickedRoleId.value) return [];
+  const { bizTypes = [], matrix = {}, bizTypeLabels = {} } = scopeMatrix.value;
+  const cells = matrix[pickedRoleId.value] || {};
+  return bizTypes.map(bizType => ({
+    bizType,
+    bizTypeLabel: bizTypeLabels[bizType] || bizType,
+    dataScope: cells[bizType] || 'NONE'
   }));
 });
-const scopeCls = (s) => {
-  if (s === 'ALL' || s === 'ORG_SUBTREE') return 'tag-warning';
-  if (s === 'NONE') return 'tag-danger';
-  return 'tag-info';
-};
-const scopeLabel = (s) => SCOPE_OPTIONS.find(o => o.value === s)?.label || s || '-';
-
+const scopeCls = (scope) => (scope === 'ALL' || scope === 'ORG_SUBTREE' ? 'tag-warning' : scope === 'NONE' ? 'tag-danger' : 'tag-info');
+const scopeLabel = (scope) => SCOPE_OPTIONS.find(option => option.value === scope)?.label || scope || '-';
 const scopeDlg = reactive({ show: false, bizType: '', dataScope: 'SELF', reason: '', saving: false });
+
 function openScopeEditor(row) {
   scopeDlg.bizType = row.bizType;
   scopeDlg.dataScope = row.dataScope || 'SELF';
@@ -380,225 +377,292 @@ function openScopeEditor(row) {
   scopeDlg.show = true;
 }
 async function onSaveScope() {
-  if (!scopeDlg.reason.trim()) { ElMessage.warning('请填写变更原因（PERMISSION_CHANGE 审计要求）'); return; }
+  if (scopeDlg.saving || !pickedRoleId.value) return;
+  if (!scopeDlg.reason.trim()) {
+    ElMessage.warning('请填写变更原因（PERMISSION_CHANGE 审计要求）');
+    return;
+  }
   scopeDlg.saving = true;
   try {
     await saveBizScope(pickedRoleId.value, scopeDlg.bizType, scopeDlg.dataScope, scopeDlg.reason.trim());
     ElMessage.success('数据范围已更新');
     scopeDlg.show = false;
     await loadScope(pickedRoleId.value);
-  } catch (e) { /* http.js 已弹错 */ } finally { scopeDlg.saving = false; }
+  } catch (error) {
+    ElMessage.error(`数据范围保存失败：${error?.message || error}`);
+  } finally {
+    scopeDlg.saving = false;
+  }
 }
 
-// ============= 保存资源绑定 =============
 const saving = ref(false);
 async function onSaveResources() {
+  if (resourceEditBlocked.value || saving.value || !dirty.value || !pickedRoleId.value) return;
+  saving.value = true;
   const ids = Array.from(checkedIds.value);
   try {
     await ElMessageBox.confirm(
-      `将把 ${ids.length} 个资源全量授权给【${pickedRole.value?.roleChName}】，覆盖原有 ${initialChecked.value.size} 个绑定。`,
-      '确认保存（PERMISSION_CHANGE）', { type: 'warning' }
+      `将把 ${ids.length} 个资源全量授权给【${pickedRole.value?.roleChName || pickedRoleId.value}】，覆盖原有 ${initialChecked.value.size} 个绑定。`,
+      '确认保存（PERMISSION_CHANGE）',
+      { type: 'warning', confirmButtonText: '确认保存', cancelButtonText: '取消' }
     );
-  } catch { return; }
+  } catch {
+    saving.value = false;
+    return;
+  }
   let reason;
   try {
-    const r = await ElMessageBox.prompt('变更原因（审计）', '提示', {
-      inputPattern: /\S+/, inputErrorMessage: '原因不能为空'
+    const result = await ElMessageBox.prompt('变更原因（写入权限变更审计日志）', '填写变更原因', {
+      inputPattern: /\S+/,
+      inputErrorMessage: '原因不能为空',
+      confirmButtonText: '继续保存',
+      cancelButtonText: '取消'
     });
-    reason = r.value;
-  } catch { return; }
-
-  saving.value = true;
+    reason = result.value.trim();
+  } catch {
+    saving.value = false;
+    return;
+  }
   try {
     await replaceRoleResources(pickedRoleId.value, ids, reason);
     initialChecked.value = new Set(ids);
-    ElMessage.success(`已保存（${ids.length} 个资源）`);
-  } catch (e) { /* http.js 已弹错 */ } finally { saving.value = false; }
+    ElMessage.success(`资源绑定已保存（${ids.length} 项）`);
+  } catch (error) {
+    ElMessage.error(`资源绑定保存失败：${error?.message || error}`);
+  } finally {
+    saving.value = false;
+  }
 }
 
-// ============= 数据加载 =============
-async function loadRoles() {
-  try {
-    const r = await listAllRoles();
-    const arr = r?.records || (Array.isArray(r) ? r : []);
-    if (arr.length) {
-      roles.value = arr;
-      if (!pickedRoleId.value) pickedRoleId.value = arr[0].roleId;
-    } else {
-      roles.value = sysRoles.map(x => ({
-        roleId: x.id || x.roleId, roleChName: x.name || x.roleChName,
-        roleCode: x.code || x.roleCode, userCount: x.count
-      }));
-      pickedRoleId.value = roles.value[0]?.roleId;
-    }
-  } catch {}
+const loadError = ref('');
+const resourceCatalogError = ref(false);
+const roleResourceError = ref(false);
+const resourceEditBlocked = computed(() => resourcesLoading.value
+  || resourceCatalogError.value
+  || roleResourceError.value
+  || !pickedRoleId.value);
+const pageLoading = computed(() => rolesLoading.value || resourcesLoading.value || scopeLoading.value);
+function recordLoadError(scope, error) {
+  loadError.value = `${scope}加载失败：${error?.message || '请检查权限或稍后重试'}`;
 }
-// 把后端 /api/admin/resources/tree 的树形结构拍扁
-// 后端 buildTree 按 PARENT_RESOURCE_ID 把接口资源挂在菜单下，本页只读"哪些资源（接口+菜单）可勾选"，
-// 树关系无关，全部扁平后由 groupedRes 按 URL 前缀重新归组。
+async function loadRoles() {
+  rolesLoading.value = true;
+  try {
+    const result = await listAllRoles();
+    const rows = result?.records || (Array.isArray(result) ? result : []);
+    roles.value = rows;
+    if (!rows.some(role => role.roleId === pickedRoleId.value)) pickedRoleId.value = rows[0]?.roleId || null;
+  } catch (error) {
+    roles.value = [];
+    pickedRoleId.value = null;
+    recordLoadError('角色', error);
+  } finally {
+    rolesLoading.value = false;
+  }
+}
 function flattenTree(nodes, out = []) {
-  for (const n of nodes || []) {
-    out.push(n);
-    if (Array.isArray(n.children) && n.children.length) {
-      flattenTree(n.children, out);
-    }
+  for (const node of nodes || []) {
+    out.push(node);
+    if (Array.isArray(node.children) && node.children.length) flattenTree(node.children, out);
   }
   return out;
 }
 async function loadResources() {
+  resourcesLoading.value = true;
+  resourceCatalogError.value = false;
   try {
-    const r = await listResources();
-    if (Array.isArray(r) && r.length) {
-      resources.value = flattenTree(r);
-    } else {
-      const flat = [];
-      for (const g of sysResources) {
-        flat.push({ resourceId: g.id, menuName: g.label, resourceUrl: '/' + g.id, resourceMethod: 'GET' });
-        for (const c of (g.children || [])) {
-          flat.push({ resourceId: c.id, menuName: c.label, resourceUrl: '/' + c.id, resourceMethod: 'GET' });
-        }
-      }
-      resources.value = flat;
-    }
-  } catch {}
+    const result = await listResources();
+    resources.value = Array.isArray(result) ? flattenTree(result) : [];
+  } catch (error) {
+    resources.value = [];
+    resourceCatalogError.value = true;
+    recordLoadError('资源', error);
+  } finally {
+    resourcesLoading.value = false;
+  }
 }
 async function loadRoleChecked(roleId) {
-  if (!roleId) return;
-  try {
-    const ids = await getRoleResourceIds(roleId);
-    const set = new Set(Array.isArray(ids) ? ids : []);
-    initialChecked.value = set;
-    checkedIds.value = new Set(set);
-  } catch {
+  if (!roleId) {
+    roleResourceError.value = false;
     initialChecked.value = new Set();
     checkedIds.value = new Set();
+    return;
+  }
+  resourcesLoading.value = true;
+  roleResourceError.value = false;
+  try {
+    const ids = await getRoleResourceIds(roleId);
+    const selected = new Set(Array.isArray(ids) ? ids : []);
+    initialChecked.value = selected;
+    checkedIds.value = new Set(selected);
+  } catch (error) {
+    roleResourceError.value = true;
+    recordLoadError('角色资源', error);
+  } finally {
+    resourcesLoading.value = false;
   }
 }
 async function loadScope(roleId) {
-  if (!roleId) return;
+  if (!roleId) {
+    scopeMatrix.value = null;
+    return;
+  }
   scopeLoading.value = true;
   try {
-    const r = await getScopeMatrix(roleId);
-    if (r && r.bizTypes) scopeMatrix.value = r;
-    else scopeMatrix.value = { roles: [], bizTypes: [], matrix: {} };
-  } catch { scopeMatrix.value = { roles: [], bizTypes: [], matrix: {} }; }
-  finally { scopeLoading.value = false; }
+    const result = await getScopeMatrix(roleId);
+    scopeMatrix.value = result?.bizTypes ? result : { bizTypes: [], matrix: {} };
+  } catch (error) {
+    scopeMatrix.value = { bizTypes: [], matrix: {} };
+    recordLoadError('数据范围', error);
+  } finally {
+    scopeLoading.value = false;
+  }
 }
-
 async function onPickRole(id) {
-  if (id === pickedRoleId.value) return;
-  if (dirty.value) {
-    try { await ElMessageBox.confirm('当前角色有未保存改动，切换会丢失，确定？', '提示', { type: 'warning' }); }
-    catch { return; }
+  if (switchingRole.value || id === pickedRoleId.value) return;
+  switchingRole.value = true;
+  try {
+    if (dirty.value) {
+      await ElMessageBox.confirm('当前角色有未保存改动，切换后会丢失。是否继续？', '确认切换角色', {
+        type: 'warning', confirmButtonText: '继续切换', cancelButtonText: '取消'
+      });
+    }
+    pickedRoleId.value = id;
+  } catch {
+    // 用户取消切换时保留当前角色与未保存的资源勾选。
+  } finally {
+    switchingRole.value = false;
   }
-  pickedRoleId.value = id;
 }
-
 async function reload() {
+  loadError.value = '';
   await Promise.all([loadRoles(), loadResources()]);
-  if (pickedRoleId.value) {
-    await Promise.all([loadRoleChecked(pickedRoleId.value), loadScope(pickedRoleId.value)]);
-  }
+  if (pickedRoleId.value) await Promise.all([loadRoleChecked(pickedRoleId.value), loadScope(pickedRoleId.value)]);
+}
+function resetFilters() {
+  kw.value = '';
+  resKw.value = '';
 }
 
 watch(pickedRoleId, async (id) => {
   if (id) await Promise.all([loadRoleChecked(id), loadScope(id)]);
 });
-
 onMounted(reload);
 </script>
 
 <style lang="scss" scoped>
-.three-cols { display: grid; grid-template-columns: 1fr 1.5fr 1.1fr; gap: 12px; }
-.col { padding: 0; height: calc(100vh - 160px); display: flex; flex-direction: column; overflow: hidden; }
-.col-h {
-  padding: 12px 14px; border-bottom: 1px solid $border-1; background: $bg-strip;
-  font-weight: 500; font-size: 13px;
-  display: flex; align-items: center; gap: 8px;
-  > div:first-child { flex: 1; }
-}
-.col-foot {
-  padding: 10px 14px; border-top: 1px solid $border-1;
-  display: flex; align-items: center; gap: 8px;
-  .dirty { font-size: 12px; color: $warning; flex: 1;
-    &.ok { color: $success; }
-  }
-}
-.role-list, .res-list { flex: 1; overflow: auto; }
-/* 已禁用角色置灰 */
-.role.disabled {
-  .r-name { color: #c0c4cc; }
-  .r-code code { color: #c0c4cc; }
-  .cnt { color: #c0c4cc; }
-}
-.r-status-tag { margin-left: 6px; }
-.bt-name { color: #303133; }
-.bt-code { color: #909399; font-size: 12px; }
-
-.role {
-  padding: 10px 14px; display: flex; align-items: center; cursor: pointer;
-  border-left: 3px solid transparent;
-  &:hover { background: $bg-soft; }
-  &.active {
-    background: $primary-100; border-left-color: $primary;
-    .r-name { color: $primary; font-weight: 500; }
-  }
-  .r-info { flex: 1; min-width: 0;
-    .r-name { font-size: 13px; }
-    .r-code { font-size: 11px; color: $text-3; margin-top: 2px;
-      code { font-family: ui-monospace, monospace; background: rgba(0,0,0,.04); padding: 0 4px; border-radius: 2px; }
-    }
-  }
-  .cnt { color: $text-3; font-size: 11px; white-space: nowrap; }
-  &.active .cnt { color: $primary; }
-}
-
-.res-group-block { border-bottom: 1px solid $border-3; }
-.res-group {
-  padding: 8px 14px; font-size: 12.5px; font-weight: 500;
-  background: $bg-soft; position: sticky; top: 0; z-index: 1;
-  display: flex; align-items: center; gap: 8px;
-  .caret { cursor: pointer; user-select: none; font-size: 10px; color: $text-3;
-    width: 14px; text-align: center; transition: color .12s;
-    &:hover { color: $primary; }
-  }
-  .ico { font-size: 14px; }
-  .g-name { flex: 1; }
-  .cnt { color: $text-3; font-size: 11px; font-weight: normal; }
-  .rw-h { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
-    .el-checkbox { margin-right: 0; }
-  }
-  .rw-all { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700;
-    padding-right: 8px; margin-right: 4px; border-right: 1px solid $border-3;
-    .g-all-label { color: $primary; }
-    .el-checkbox { margin-right: 0; }
-  }
-}
-.res-item {
-  padding: 6px 14px;
+.permission-page { min-width: 0; }
+.permission-grid {
   display: grid;
-  grid-template-columns: 1fr 60px;
-  align-items: center; gap: 8px; font-size: 13px;
-  &:hover { background: $bg-soft; }
-  .res-meta { min-width: 0;
-    .res-name { font-size: 12.5px; }
-    .res-url {
-      display: flex; align-items: center; gap: 6px;
-      margin-top: 3px;
-      color: $text-3; font-size: 11px;
-      font-family: ui-monospace, monospace;
-      :deep(.el-tag) { font-family: ui-monospace, monospace; padding: 0 5px; height: 18px; line-height: 18px; font-size: 10.5px; }
-    }
-  }
-  .rw-cell { display: flex; align-items: center; justify-content: space-around; gap: 4px;
-    .dash { color: $text-4; font-size: 13px; width: 14px; text-align: center; }
-  }
+  gap: var(--space-4);
+  grid-template-columns: minmax(250px, .78fr) minmax(520px, 1.55fr) minmax(330px, 1fr);
+  min-height: min(680px, calc(100vh - 274px));
 }
-.empty { padding: 30px 14px; text-align: center; color: $text-3; font-size: 12px; }
-
-.legend {
-  padding: 10px 14px; border-top: 1px solid $border-1;
-  font-size: 11px; color: $text-3; line-height: 1.7;
-  code { font-family: ui-monospace, monospace; background: rgba(0,0,0,.04); padding: 0 4px; border-radius: 2px; color: $text-2; }
+.permission-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: var(--space-4);
+}
+.compact-toolbar { align-items: flex-start; flex: 0 0 auto; }
+.role-list,
+.resource-list { flex: 1; min-height: 0; overflow: auto; }
+.role-list { margin-inline: calc(var(--space-4) * -1); }
+.role-option {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-left: 3px solid transparent;
+  color: var(--color-text-strong);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: var(--space-2);
+  justify-content: space-between;
+  min-height: 60px;
+  padding: var(--space-2) var(--space-4);
+  text-align: left;
+  width: 100%;
+}
+.role-option:hover { background: var(--color-surface-soft); }
+.role-option.active { background: var(--color-brand-100); border-left-color: var(--color-brand-700); }
+.role-option.disabled { color: var(--color-text-muted); }
+.role-info { display: grid; gap: var(--space-1); min-width: 0; }
+.role-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role-code,
+.biz-type-code,
+.resource-url {
+  color: var(--color-text-muted);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+.role-meta { align-items: flex-end; display: grid; font-size: 12px; gap: var(--space-1); white-space: nowrap; }
+.resource-list { border-top: 1px solid var(--color-border); }
+.resource-group { border-bottom: 1px solid var(--color-border); }
+.resource-group-head {
+  align-items: center;
+  background: var(--color-surface-soft);
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: auto minmax(92px, 1fr) auto auto;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+}
+.collapse-toggle {
+  background: transparent;
+  border: 0;
+  color: var(--color-brand-700);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: var(--space-1);
+}
+.group-name { color: var(--color-text-strong); font-size: 13px; font-weight: 600; }
+.group-count { color: var(--color-text-muted); font-size: 12px; white-space: nowrap; }
+.group-checks { align-items: center; display: flex; gap: var(--space-2); white-space: nowrap; }
+.group-checks :deep(.el-checkbox) { margin-right: 0; }
+.resource-item {
+  align-items: center;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 54px;
+  padding: var(--space-2) var(--space-3);
+}
+.resource-item:hover { background: var(--color-surface-soft); }
+.resource-meta { display: grid; gap: var(--space-1); min-width: 0; }
+.resource-name { color: var(--color-text-strong); font-size: 13px; }
+.resource-url { align-items: center; display: flex; gap: var(--space-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.resource-url :deep(.el-tag) { font-family: inherit; flex: 0 0 auto; }
+.resource-foot {
+  align-items: center;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-3);
+  justify-content: space-between;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+}
+.resource-foot .hint { margin: 0; }
+.scope-legend {
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+}
+.biz-type-name { color: var(--color-text-strong); font-size: 13px; }
+.empty-state { color: var(--color-text-muted); font-size: 12px; padding: var(--space-6) var(--space-4); text-align: center; }
+.error-state {
+  background: var(--color-danger-bg);
+  border-left: 3px solid var(--color-danger-fg);
+  color: var(--color-danger-fg);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
 }
 </style>

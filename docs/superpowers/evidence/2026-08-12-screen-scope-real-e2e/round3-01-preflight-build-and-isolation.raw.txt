@@ -1,0 +1,66 @@
+# Round 3 预启动门禁（忠实选择性转录）
+
+本文件是选择性转录；所有 COUNT 行和 hash 值完整保留，构建的 Maven 进度行省略。
+
+## 精确端口与数据库身份
+
+~~~text
+$ ss -ltnp '( sport = :18082 or sport = :8092 or sport = :30523 )'
+State Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+
+$ <受控环境变量> mysql -h127.0.0.1 -P3306 -uroot -D yiti_test -N -B -e 'SELECT DATABASE()'
+yiti_test
+~~~
+
+没有监听或连接占用 18082、8092、30523。上述数据库命令仅连接 yiti_test。
+
+## 三个隔离闸门的 artifact hash
+
+初检发现 target/classes、模块 jar 与本地 Maven runtime jar 不一致，按授权仅执行根目录构建：
+
+~~~text
+$ mvn -Dstyle.color=never clean install -DskipTests
+18 reactor modules: SUCCESS
+exit=0
+~~~
+
+构建后对每一项的 target/classes、模块 target/*.jar、对应 .m2 runtime jar 复算 SHA-256；每组三处完全一致：
+
+~~~text
+system-governance-center / ObsStorageClient.class
+d9ec0813c52d92335b84fb7318a224caa2ce22ffd76da282053751a6e69e4831
+
+soap-gateway-center / SidecarRegistrationChecker.class
+3b1a0b0707c920d9d873a282ce736a30674c59f15e4674f98388a111c1186ece
+
+performance-engine-center / EvalImportCompensation.class
+74e32d2e01b3366e8780b7b32884a4dd59d3707ff2d1986610079a7823745159
+~~~
+
+## 初始最小目标 COUNT(*) 基线
+
+~~~text
+DATABASE=yiti_test
+RPT_SCREEN                     5
+RPT_SCREEN_DATASOURCE          11
+RPT_SCREEN_ACCESS_ROLE         2
+RPT_SCREEN_MAP_POINT           3
+PT_ORG_PROFILE                 0
+PT_ORG_GROUP                   2
+PT_ORG_GROUP_MEMBER            0
+PT_ROLE_ORG_GROUP              0
+PT_LOCK                        0
+ACT_RE_DEPLOYMENT              145
+ACT_RU_JOB                     0
+ACT_RU_TIMER_JOB               0
+ACT_RU_DEADLETTER_JOB          0
+ACT_RU_EXTERNAL_JOB            0
+ACT_RU_HISTORY_JOB             0
+ACT_RU_SUSPENDED_JOB           0
+QRTZ_FIRED_TRIGGERS            0
+QRTZ_SCHEDULER_STATE           0
+QRTZ_TRIGGERS                  0
+~~~
+
+这是只含 COUNT(*) 的最小快照；没有导出业务行。
+

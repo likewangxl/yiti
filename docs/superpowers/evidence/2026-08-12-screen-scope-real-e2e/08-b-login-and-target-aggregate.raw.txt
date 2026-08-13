@@ -1,0 +1,17 @@
+Command template (exit 0; SELECT aggregate only; no account/person/business detail; password masked):
+env MYSQL_PWD='***' mysql --protocol=TCP -h127.0.0.1 -P3306 -uroot --database=yiti_test \
+  --batch --raw --skip-column-names -e '<PT_USER aggregate and target code count SELECTs>'
+
+Raw stdout:
+pt_user_login_aggregate	90	0	0	89	0	56
+target_screen_code	SCR_CORP_OVERVIEW	1
+target_screen_code	SCR_RETAIL_OVERVIEW	1
+target_org_group_code	ORG_GRP_CORP_DEPARTMENTS	1
+target_org_group_code	ORG_GRP_PRIMARY_OPERATING_UNITS	1
+target_resource_id	R_RPT_SCR_AR_LIST	1
+target_resource_id	R_RPT_SCR_AR_SAVE	1
+target_resource_id	R_RPT_SCR_DS_PROBE	1
+target_resource_id	R_RPT_SCR_META_SAVE	1
+
+Column order for `pt_user_login_aggregate`:
+metric, total_users, pass_wrong_count_sum, locked_users, disabled_users, null_update_time_users, null_pwd_update_time_users.

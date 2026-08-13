@@ -1,0 +1,17 @@
+46. [GET] http://127.0.0.1:18194/api/auth/current-user => [200] OK
+47. [GET] http://127.0.0.1:18194/api/auth/my-menus => [200] OK
+49. [GET] http://127.0.0.1:18194/api/auth/permissions => [200] OK
+200. [GET] http://127.0.0.1:18194/api/notifications/unread-count => [200] OK
+201. [GET] http://127.0.0.1:18194/api/screen/admin/screens => [200] OK
+202. [GET] http://127.0.0.1:18194/api/screen/admin/canvas/101 => [200] OK
+203. [GET] http://127.0.0.1:18194/api/admin/org-groups => [200] OK
+204. [GET] http://127.0.0.1:18194/api/admin/roles/all?recordStatus=0 => [200] OK
+205. [GET] http://127.0.0.1:18194/api/admin/org-profiles => [200] OK
+206. [POST] http://127.0.0.1:18194/api/screen/admin/canvas/save => [200] OK
+207. [POST] http://127.0.0.1:18194/api/screen/admin/canvas/publish => [200] OK
+208. [GET] http://127.0.0.1:18194/api/screen/admin/canvas/101 => [200] OK
+209. [GET] http://127.0.0.1:18194/api/screen/admin/canvas/101/publish-logs => [200] OK
+210. [POST] http://127.0.0.1:18194/api/screen/admin/canvas/rollback => [200] OK
+211. [GET] http://127.0.0.1:18194/api/screen/admin/canvas/101 => [200] OK
+
+Note: 196 static requests not shown, run with --static option to see them.

@@ -6,6 +6,8 @@ import com.bank.branch.platform.auth.mapper.RoleBizScopeMapper;
 import com.bank.branch.platform.auth.mapper.ResourceMapper;
 import com.bank.branch.platform.auth.mapper.RoleResourceMapper;
 import com.bank.branch.platform.auth.mapper.UserRoleMapper;
+import com.bank.branch.platform.auth.security.context.CurrentUserProvider;
+import com.bank.branch.platform.common.security.context.CurrentUserContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -31,6 +33,7 @@ class PermissionCacheServiceTest {
     @Mock RoleResourceMapper roleResourceMapper;
     @Mock UserRoleMapper userRoleMapper;
     @Mock RoleBizScopeMapper roleBizScopeMapper;
+    @Mock CurrentUserProvider currentUserProvider;
     @InjectMocks PermissionCacheService cacheService;
 
     // ── 直接读 DB（去 Redis）──────────────────────────────────────
@@ -53,6 +56,48 @@ class PermissionCacheServiceTest {
         Set<String> roleIds = cacheService.getRoleIdsByEmpId("E999");
 
         assertThat(roleIds).isEmpty();
+    }
+
+    @Test
+    void getEffectiveRoleIds_returnsAllValidAssignmentsFromDatabase() {
+        when(userRoleMapper.selectRoleIdsByUserId("E001"))
+                .thenReturn(List.of("R_REPORTER", "R_REVIEWER"));
+
+        Set<String> roleIds = cacheService.getEffectiveRoleIds("E001");
+
+        assertThat(roleIds).containsExactlyInAnyOrder("R_REPORTER", "R_REVIEWER");
+        verify(userRoleMapper).selectRoleIdsByUserId("E001");
+    }
+
+    @Test
+    void getEffectiveRoleIds_currentUser_reusesRefreshedUnionAndIgnoresLegacyActiveRole() {
+        CurrentUserContext ctx = new CurrentUserContext(
+                "E001", "user", "测试用户", "ORG001", "机构", 2,
+                Set.of("R_REPORTER", "R_REVIEWER"),
+                Set.of("PARTY_REPORTER", "PARTY_REVIEWER"),
+                Set.of("ROLE:PARTY_REPORTER", "ROLE:PARTY_REVIEWER"),
+                false, "R_REPORTER");
+        when(currentUserProvider.get()).thenReturn(ctx);
+
+        Set<String> roleIds = cacheService.getEffectiveRoleIds("E001");
+
+        assertThat(roleIds).containsExactlyInAnyOrder("R_REPORTER", "R_REVIEWER");
+        verifyNoInteractions(userRoleMapper);
+    }
+
+    @Test
+    void getEffectiveRoleIds_otherUser_doesNotReuseCurrentThreadContext() {
+        CurrentUserContext ctx = new CurrentUserContext(
+                "E001", "user", "测试用户", "ORG001", "机构", 2,
+                Set.of("R_REPORTER"), Set.of("PARTY_REPORTER"),
+                Set.of("ROLE:PARTY_REPORTER"), false, null);
+        when(currentUserProvider.get()).thenReturn(ctx);
+        when(userRoleMapper.selectRoleIdsByUserId("E002")).thenReturn(List.of("R_OTHER"));
+
+        Set<String> roleIds = cacheService.getEffectiveRoleIds("E002");
+
+        assertThat(roleIds).containsExactly("R_OTHER");
+        verify(userRoleMapper).selectRoleIdsByUserId("E002");
     }
 
     @Test

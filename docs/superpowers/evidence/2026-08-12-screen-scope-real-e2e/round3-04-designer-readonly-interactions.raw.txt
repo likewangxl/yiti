@@ -1,0 +1,74 @@
+# Round 3 大屏设计器交互（忠实选择性 CLI 转录）
+
+本文件省略无关 sidebar DOM；每个以下 UI 文案、请求方法和截图均来自本轮官方 CLI。
+
+## 加载、屏列表和切换
+
+桌面视口固定为 1440x900。加载 #/screen-admin/designer 后，下拉列表可见：
+
+~~~text
+零售经营总览（全辖）
+对公经营总览（全辖）
+个人业绩详情（个人）
+支行经营详情（机构）
+省分行经营总览（全辖）
+~~~
+
+UI 未显示 SCR_RETAIL_OVERVIEW / SCR_CORP_OVERVIEW 代码，因此按可见名称分别切换到所要求的零售/对公 seed 屏。CLI 请求摘要：
+
+~~~text
+GET /api/screen/admin/screens => 200
+GET /api/screen/admin/canvas/9105 => 200
+GET /api/screen/admin/canvas/9104 => 200
+GET /api/screen/admin/canvas/9105 => 200
+~~~
+
+对公屏画布标题为“对公经营总览”；零售屏含“西安复合经营地图”组件。截图：
+
+- round3-designer-corporate-selected.png
+- round3-designer-retail-map-fail-close.png
+
+## 范围、查看角色：只打开后取消
+
+对公“编辑范围”显示：全辖、业务线“公司/对公”、命名机构组“对公部门组（ORG_GRP_CORP_DEPARTMENTS）”、版本 0；未填变更原因，点击取消。
+
+对公“管理查看角色”显示唯一白名单“对公大屏查看（R_SCREEN_CORP_VIEWER）”、版本 0、新增 0/移除 0；点击取消。
+
+零售“编辑范围”显示：全辖、业务线“零售”、命名机构组“全辖一级经营机构（ORG_GRP_PRIMARY_OPERATING_UNITS）”、版本 0；未填变更原因，点击取消。
+
+零售“管理查看角色”显示唯一白名单“零售大屏查看（R_SCREEN_RETAIL_VIEWER）”、版本 0、新增 0/移除 0；点击取消。
+
+相应截图：
+
+- round3-designer-corporate-scope-dialog.png
+- round3-designer-corporate-roles-dialog.png
+- round3-designer-retail-scope-dialog.png
+- round3-designer-retail-roles-dialog.png
+
+相应读取请求：
+
+~~~text
+GET /api/admin/org-groups => 200
+GET /api/admin/roles/all?recordStatus=0 => 200
+GET /api/admin/org-profiles => 200
+GET /api/screen/admin/screens/9104/access-roles => 200
+GET /api/screen/admin/screens/9105/access-roles => 200
+~~~
+
+没有点击保存、预览、发布、回滚、丢弃，或任何会发送写请求的按钮。
+
+## 零售复合地图：真实 fail-close 与配置
+
+画布设计态显示：
+
+~~~text
+设计态未加载机构画像，暂不生成假点位；请先配置并授权机构画像。
+组织分布示意，非地理比例
+~~~
+
+本轮初末 PT_ORG_PROFILE COUNT(*)=0，故没有伪造本地点位；这是预期 fail-close，见 round3-designer-retail-map-fail-close.png。
+
+仅选中组件以只读查看属性，截图 round3-designer-retail-map-selected-properties.png。可见“西安复合经营地图”模式、城市 610100 / PRIMARY / GCJ-02 本地筛选，以及四个卫星配置：宝鸡（左）、渭南（右）、咸阳（上）、榆林（远上），均指向 SCR_BRANCH。未修改属性。
+
+设计器各阶段 console 为 0 errors；页面初载有 13 条既有 sidebar 路由 warnings，选择地图属性时另见 5 条 Element Plus radio deprecated warnings。详见 round3-08-console-and-request-methods.md。
+

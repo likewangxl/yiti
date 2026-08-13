@@ -1,0 +1,10 @@
+### Browser `uiux-1920` opened with pid 386217.
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/login?normal');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/login?normal
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-17-49-422Z.yml)

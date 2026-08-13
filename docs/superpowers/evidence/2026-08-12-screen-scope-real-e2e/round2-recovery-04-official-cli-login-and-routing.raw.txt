@@ -1,0 +1,33 @@
+Round 2 recovery — official playwright-cli login precondition and routing evidence.
+
+No browser state or test source was reused from Playwright Test, MCP, or Vitest. The only browser tool was the project-owned executable:
+
+xanzc_frontend/node_modules/.bin/playwright-cli
+
+Exact controlled frontend command (the command contains no credential):
+
+env VITE_USE_MOCK=false VITE_API_BASE=/api VITE_DEV_HOST=127.0.0.1 VITE_DEV_PORT=8092 VITE_DEV_STRICT_PORT=true VITE_PROXY_TARGET=http://127.0.0.1:18082 npm run dev
+
+Raw Vite readiness excerpt:
+
+VITE v4.5.14  ready in 308 ms
+➜  Local:   http://127.0.0.1:8092/
+
+CLI session: screen-scope-real-e2e-round2
+Opened URL: http://127.0.0.1:8092/#/login?normal
+
+Initial route-list raw output:
+
+No active routes
+
+Credential handling: the username and password were supplied only to the interactive CLI process. Password fill output was deliberately not collected, and no Cookie/session/token was printed or copied. One login button click was made solely to reach the in-scope pages. Raw request summary:
+
+1. [POST] http://127.0.0.1:8092/api/auth/login => [200] OK
+
+The resulting page URL was http://127.0.0.1:8092/#/workspace. No login behavior, permissions, menus, or unrelated module were accepted as a test result. Automatic workspace bootstrap GETs were neither independently exercised nor asserted.
+
+Final route-list raw output, after all four scoped pages:
+
+No active routes
+
+The two route-list results prove the CLI session registered no mock/interception route. The request records in round2-recovery-05-cli-scoped-pages.raw.txt use the Vite origin 127.0.0.1:8092; matching application log entries from http-nio-127.0.0.1-18082-exec-* are preserved in round2-recovery-11-proxy-and-runtime-log-gate.raw.txt.

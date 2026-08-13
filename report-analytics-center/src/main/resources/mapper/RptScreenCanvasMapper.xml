@@ -10,18 +10,59 @@
             canvas_draft_json = #{draftJson},
             canvas_version    = canvas_version + 1,
             publish_status    = CASE WHEN publish_status = 1 THEN 2 ELSE publish_status END,
+            updated_by        = #{empId},
             updated_time      = NOW()
         WHERE id = #{id} AND canvas_version = #{expected} AND deleted = 0
     </update>
 
     <!-- 发布态整体更新 -->
-    <update id="applyPublished">
+    <update id="applyPublishedCas">
         UPDATE RPT_SCREEN
         SET canvas_published_json = #{publishedJson},
             publish_status        = #{publishStatus},
+            canvas_version        = canvas_version + 1,
             published_at          = NOW(),
             published_by          = #{empId},
+            updated_by            = #{empId},
             updated_time          = NOW()
-        WHERE id = #{id} AND deleted = 0
+        WHERE id = #{id} AND canvas_version = #{expected} AND deleted = 0
+    </update>
+
+    <!-- 权限白名单等元数据变更的 CAS；保持发布包/草稿原样，只推进版本并写操作人。 -->
+    <update id="bumpConfigVersion">
+        UPDATE RPT_SCREEN
+        SET canvas_version = canvas_version + 1,
+            updated_by     = #{empId},
+            updated_time   = NOW()
+        WHERE id = #{id} AND canvas_version = #{expected} AND deleted = 0
+    </update>
+
+    <!-- 元数据/范围专用 allowlist 更新。不得替换为 updateById：后者会把请求对象以外的
+         draft/published/canvas 状态一起覆盖，破坏已发布快照不变性。 -->
+    <update id="updateMetadataCas">
+        UPDATE RPT_SCREEN
+        SET screen_code    = #{screen.screenCode},
+            screen_name    = #{screen.screenName},
+            view_level     = #{screen.viewLevel},
+            biz_line       = #{screen.bizLine},
+            org_scope_mode = #{screen.orgScopeMode},
+            org_group_code = #{screen.orgGroupCode},
+            theme_json     = #{screen.themeJson},
+            status         = #{screen.status},
+            canvas_version = canvas_version + 1,
+            updated_by     = #{empId},
+            updated_time   = NOW()
+        WHERE id = #{screen.id} AND canvas_version = #{expected} AND deleted = 0
+    </update>
+
+    <!-- 放弃草稿仅覆盖编辑态组件树和状态机；发布渲染包保持不可变。 -->
+    <update id="discardDraftCas">
+        UPDATE RPT_SCREEN
+        SET canvas_draft_json = #{draftJson},
+            publish_status    = 1,
+            canvas_version    = canvas_version + 1,
+            updated_by        = #{empId},
+            updated_time      = NOW()
+        WHERE id = #{id} AND canvas_version = #{expected} AND deleted = 0
     </update>
 </mapper>

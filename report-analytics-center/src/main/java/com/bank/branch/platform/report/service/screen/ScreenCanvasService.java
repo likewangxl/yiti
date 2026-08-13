@@ -21,8 +21,8 @@ public interface ScreenCanvasService {
     /** 从归档回滚指定一次发布到 PUBLISHED_JSON */
     void rollbackCanvas(com.bank.branch.platform.report.dto.req.ScreenCanvasRollbackReqDTO req);
 
-    /** 放弃草稿:发布态组件树覆盖 DRAFT_JSON */
-    void discardDraft(Long screenId);
+    /** 放弃草稿:以版本 CAS 把发布态组件树覆盖 DRAFT_JSON，并恢复缺失发布 block。 */
+    void discardDraft(com.bank.branch.platform.report.dto.req.ScreenCanvasDiscardReqDTO req);
 
     /** 发布归档列表(回滚选择用) */
     java.util.List<com.bank.branch.platform.report.dto.resp.ScreenPublishLogRespDTO> listPublishLogs(Long screenId);

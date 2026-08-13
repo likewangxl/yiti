@@ -1,0 +1,153 @@
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/perf/adjust
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 192 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-36-48-886Z.log#L1-L15
+{
+  "path": "/perf/adjust",
+  "finalUrl": "http://127.0.0.1:8091/#/perf/adjust",
+  "h1": [
+    "业绩调整比例之和 = 100% · 单行 ≥ 1% · 同一员工不重复"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 2560,
+  "clientWidth": 2560,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}
+### ROUTE /perf/compute
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/perf/compute');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/perf/compute
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 192 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-36-51-490Z.yml)
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/perf/compute
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 187 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-36-51-454Z.log#L1-L15
+{
+  "path": "/perf/compute",
+  "finalUrl": "http://127.0.0.1:8091/#/perf/compute",
+  "h1": [
+    "考核计算手工触发 / 回算 / 快照 · 运行审计与结果追踪"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 2560,
+  "clientWidth": 2560,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}
+### ROUTE /perf/task-monitor
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/perf/task-monitor');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/perf/task-monitor
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 187 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-36-54-064Z.yml)
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/perf/task-monitor
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 182 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-36-54-028Z.log#L1-L15
+{
+  "path": "/perf/task-monitor",
+  "finalUrl": "http://127.0.0.1:8091/#/perf/task-monitor",
+  "h1": [
+    "任务监控指标重算任务 · 按指标汇总 / 执行 / 历史"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 2560,
+  "clientWidth": 2560,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}
+### ROUTE /eval/tags
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/eval/tags');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/eval/tags
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 182 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-36-56-624Z.yml)
+### Ran Playwright code
+```js
+await (async page => { await page.waitForTimeout(900); })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/eval/tags
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 197 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-36-56-593Z.log#L1-L15
+{
+  "path": "/eval/tags",
+  "finalUrl": "http://127.0.0.1:8091/#/eval/tags",
+  "h1": [
+    "标签管理维护可用于规则和人员评价的标签"
+  ],
+  "h1Count": 1,
+  "mainCount": 1,
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "domHorizontalOverflow": false,
+  "scrollWidth": 2560,
+  "clientWidth": 2560,
+  "pageErrorTexts": [],
+  "loginRedirect": false,
+  "noAccess": false,
+  "elapsedMs": 900
+}

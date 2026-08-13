@@ -47,7 +47,7 @@ src/main/java/com/bank/branch/platform/redengine/
 src/test/java/com/bank/branch/platform/redengine/
 ├── support/           # RedEngineTestApp + RedEngineMapperTestBase（同构复制 performance-engine-center 的隔离测试基座模式）
 ├── mapper/            # RePartyOrgMapperIT（failsafe，连 onepl_test_bootstrap）
-└── service/           # 6 个纯 Mockito *Test.java（surefire），合计 50 case 全绿
+└── service/           # 6 个纯 Mockito *Test.java（surefire），合计 56 case 全绿
 ```
 
 > bootstrap 侧另有 `bootstrap/src/test/java/com/bank/branch/platform/it/RedEngineSmokeIT.java`（`redengine-smoke` profile，激活真实 RBAC 鉴权链路，见「测试」节）。
@@ -57,7 +57,7 @@ src/test/java/com/bank/branch/platform/redengine/
 | 表 | 实体 | 说明 |
 |----|------|------|
 | `RE_PARTY_ORG` | `RePartyOrg` | 党组织树（`org_level` 1=分行党委 2=党支部；`secretary_id VARCHAR(50)` 书记工号；无唯一键，靠 `parent_id` 递归组装） |
-| `RE_USER_PARTY_MAP` | `ReUserPartyMap` | 用户 ↔ 党组织 + 党内角色映射（`user_id`/`party_org_id`/`party_role`，`uk_user` 唯一键，`bind()` upsert） |
+| `RE_USER_PARTY_MAP` | `ReUserPartyMap` | 用户 ↔ 党组织映射（`user_id` 必须是 `PT_USER.USER_ID`；`party_role` 仅兼容描述、不得参与授权；`uk_user` 唯一键，`bind()` upsert） |
 | `RE_SUBMIT` | `ReSubmit` | 四大维度材料上报（`dimension`(dim1~4)/`item_code`/`max_score`/`status`，见「RE_SUBMIT 状态机」） |
 | `RE_SUBMIT_FILE` | `ReSubmitFile` | 上报附件业务关联（`file_object_id` 对接 governance `FileApi`；**唯一无 `update_time` 列**的实体） |
 | `RE_SCORE` | `ReScore` | 支部评分（`org_id`+`submit_id`+`item_code`+`score_year`，`base_score`/`deduction_score`/`final_score` 均 `DECIMAL(10,2)`） |
@@ -82,8 +82,8 @@ src/test/java/com/bank/branch/platform/redengine/
 | 9 | `P_RE_SUBMIT_MY` | GET | `/api/re/submits/my` | 我的上报分页 | R_RE_REPORT, R_RE_SECR, R_RE_BRREV | 不含 R_RE_ORGREV |
 | 10 | `P_RE_SUBMIT_GET` | GET | `/api/re/submits/*` | 上报详情 | 全部 4 角色 | `MENU_RANK_NO=10`，同 #2 理由（与 #9 同 METHOD） |
 | 11 | `P_RE_REVIEW_Q` | GET | `/api/re/reviews/**` | 待审队列 + 审核预览 | R_RE_BRREV, R_RE_ORGREV | Task 9 由字面量 `/api/re/reviews/queue` 放宽为通配符，复用覆盖 `GET .../queue` 与 `GET .../{id}/preview` 两端点，未新增资源 |
-| 12 | `P_RE_REVIEW_APPR` | POST | `/api/re/reviews/*/approve` | 审核通过 + 评分 | R_RE_BRREV, R_RE_ORGREV | 超上限抛 `RE-40004` |
-| 13 | `P_RE_REVIEW_REJ` | POST | `/api/re/reviews/*/reject` | 审核驳回 | R_RE_BRREV, R_RE_ORGREV | 无前置状态校验（源系统同款保真） |
+| 12 | `P_RE_REVIEW_APPR` | POST | `/api/re/reviews/*/approve` | 审核通过 + 评分 | R_RE_BRREV, R_RE_ORGREV | 超上限抛 `RE-40004`；本人创建记录抛 `RE-40008` |
+| 13 | `P_RE_REVIEW_REJ` | POST | `/api/re/reviews/*/reject` | 审核驳回 | R_RE_BRREV, R_RE_ORGREV | 本人创建记录抛 `RE-40008`；无前置状态校验 |
 | 14 | `P_RE_CKPT_VIEW` | GET | `/api/re/cockpit/**` | 驾驶舱只读（overview/ranking/overdue/warning/settlement，6 端点复用） | R_RE_ORGREV, R_RE_SECR | |
 | 15 | `P_RE_CKPT_EXEC` | POST | `/api/re/cockpit/overdue/execute` | 执行逾期扣分（高危） | 仅 R_RE_ORGREV | `reasonRequired=true`；上报不存在抛 `RE-40005` |
 | 16 | `P_RE_CKPT_ANNUAL` | POST | `/api/re/cockpit/archive/generate/*` | 生成年度归档（高危） | 仅 R_RE_ORGREV | `reasonRequired=true`（2026-07-19 修复，此前遗漏，见「技术债」④） |
@@ -92,7 +92,14 @@ src/test/java/com/bank/branch/platform/redengine/
 上述 17 条均为 `SYS_CODE='RE'`、`ISMENU=0` 的 API 资源。2026-07-29 新增平台菜单资源
 `M_RE_ENGINE`（`/redengine/dashboard`、`ISMENU=1`、顶层叶子），并把 17 条 `P_RE_*`
 的 `PARENT_RESOURCE_ID` 对齐为该菜单；入口变更脚本为
-`docs/superpowers/sql/2026-07-29-redengine-platform-menu-align.sql`。角色-资源绑定行数见下方「党建角色权限矩阵」。
+`docs/superpowers/sql/2026-07-29-redengine-platform-menu-align.sql`。父子关系只用于资源归类；
+菜单可见性与 API 授权现已解耦，勾选 `M_RE_ENGINE` 不会自动增加或删除 `P_RE_*` 绑定。
+角色-资源绑定行数见下方「党建角色权限矩阵」。
+
+材料上报还依赖 governance 的共享资源 `G_FILE_UPLOAD`（`POST /api/files/upload`）。
+`2026-08-10-redengine-auth-data-align.sql` 仅将该共享资源显式授予同样拥有
+`P_RE_SUBMIT_ADD` 的 `R_RE_REPORT`/`R_RE_SECR`，不授予两个纯审核角色；它不计入上述
+17 条 `P_RE_*` API 数量。
 
 ## 4 党建角色权限矩阵
 
@@ -100,8 +107,8 @@ src/test/java/com/bank/branch/platform/redengine/
 |---|---|---|---|
 | `RE_ROLE_1` | `R_RE_ORGREV` | 党建组织审核员 | 11（10 API + 1 菜单） |
 | `RE_ROLE_2` | `R_RE_BRREV` | 党建支部审核员 | 8（7 API + 1 菜单） |
-| `RE_ROLE_3` | `R_RE_SECR` | 党建支部书记 | 8（7 API + 1 菜单） |
-| `RE_ROLE_4` | `R_RE_REPORT` | 党建报送员 | 6（5 API + 1 菜单） |
+| `RE_ROLE_3` | `R_RE_SECR` | 党建支部书记 | 8 个 RE 资源（7 API + 1 菜单）+ `G_FILE_UPLOAD` |
+| `RE_ROLE_4` | `R_RE_REPORT` | 党建报送员 | 6 个 RE 资源（5 API + 1 菜单）+ `G_FILE_UPLOAD` |
 
 | 能力 | R_RE_REPORT 报送员 | R_RE_SECR 支部书记 | R_RE_BRREV 支部审核员 | R_RE_ORGREV 组织审核员 | SYS_ADMIN |
 |---|---|---|---|---|---|
@@ -109,6 +116,7 @@ src/test/java/com/bank/branch/platform/redengine/
 | 新增/修改/删除党组织 | ❌ | ❌ | ❌ | ❌ | ✅ |
 | 用户-党组织映射管理 | ❌ | ❌ | ❌ | ❌ | ✅ |
 | 新建上报 | ✅ | ✅ | ❌ | ❌ | ✅ |
+| 上传上报附件（共享 `G_FILE_UPLOAD`） | ✅ | ✅ | ❌ | ❌ | ✅ |
 | 我的上报分页 | ✅ | ✅ | ✅ | ❌ | ✅ |
 | 上报详情 | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 待审队列 + 预览 | ❌ | ❌ | ✅ | ✅ | ✅ |
@@ -118,9 +126,22 @@ src/test/java/com/bank/branch/platform/redengine/
 | 生成年度归档（高危） | ❌ | ❌ | ❌ | ✅ | ✅ |
 | 数据导出 | ❌ | ✅ | ❌ | ✅ | ✅ |
 
-数据范围：`PT_ROLE_BIZ_SCOPE.BIZ_TYPE='RED_ENGINE'`，4 党建角色 + SYS_ADMIN 共 5 行，`DATA_SCOPE='ALL'`（党组织维度隔离在模块内经 `RE_USER_PARTY_MAP` 自行实现，不复用平台行政组织 `DATA_SCOPE`）。
+授权唯一来源是平台 `PT_ROLE`/`PT_USER_ROLE`/`PT_ROLE_RESOURCE`：用户拥有多个启用角色时，
+红色引擎能力取这些角色资源的并集，不读取 `RE_USER_PARTY_MAP.party_role` 做授权。
+资源并集只决定“能否调用端点”，不替代实体级职责分离：`ReReviewService.approve/reject`
+均先读取持久化 `RE_SUBMIT.submitter_id`，若与当前审核人 `empId` 相同则以 `RE-40008`
+fail-close，且不写 `RE_SCORE`/`RE_SUBMIT`。因此同时具备报送与审核角色也不能审核本人上报。
+兼容期 `POST /api/auth/switch-role`/`A_SWITCH_ROLE` 暂保留一个版本周期，但只校验目标角色并
+返回展示信息，是不会修改 Session、不会收窄权限的 no-op；红色引擎页面不得依赖它。
 
-`ReUserPartyMap.partyRole` 四个字符串字面量（无字典/枚举校验）：`ORG_REVIEWER` / `BRANCH_REVIEWER` / `SECRETARY` / `REPORTER`，与上表角色概念一一对应但命名空间独立。
+数据范围一期边界：`PT_ROLE_BIZ_SCOPE.BIZ_TYPE='RED_ENGINE'` 的 4 党建角色 + SYS_ADMIN
+共 5 行仍统一为单值 `DATA_SCOPE='ALL'`。`RE_USER_PARTY_MAP` 当前仅供创建/“我的上报”派生
+党组织，不等价于平台复合 DataScope。多种不可比较 DataScope 的精确 OR 并集，以及恢复原
+redengine 对支部审核队列的党组织隔离，均延期为独立安全改造，本轮不实现。
+
+`ReUserPartyMap.partyRole` 四个字符串字面量（无字典/枚举校验）：`ORG_REVIEWER` /
+`BRANCH_REVIEWER` / `SECRETARY` / `REPORTER`。该字段与平台角色概念名称相似但命名空间独立，
+且一行只能存一个值，无法表达多角色并集，因此明确降级为兼容描述字段，不得用于鉴权。
 
 ## RE_SUBMIT 状态机（四态）
 
@@ -137,8 +158,9 @@ src/test/java/com/bank/branch/platform/redengine/
 
 - `status=0`（草稿）为 DDL 遗留默认值，**当前无任何代码路径可产生该状态**——`createSubmit` 落库直接写 `status=1`，源系统"先存草稿后提交"两段式语义已废弃（YAGNI，简报授权）。
 - `approve`/`reject` 均**不校验**"仅 status=1 才可审核"（源系统同款保真，非遗漏，见技术债②）。
+- 两条审核命令均先做实体所有权校验；`submitterId == empId` 时抛 `RE-40008`，不能进入状态流转。
 
-## 错误码（RE-40001..40007）
+## 错误码（RE-40001..40008）
 
 | 错误码 | 语义 | 抛出方 |
 |---|---|---|
@@ -149,12 +171,13 @@ src/test/java/com/bank/branch/platform/redengine/
 | `RE-40005` | 上报记录不存在 | `ReCockpitService.executeOverdue`（源系统静默 `return false`，本次改抛异常加固） |
 | `RE-40006` | 导出类型非法，仅支持 submit/score | `ReExportService.exportData` |
 | `RE-40007` | 导出数据超过上限，请缩小范围 | `ReExportService.exportData`（简报初拟 `RE-40005`，因与 Task 10 冲突已纠偏为 `RE-40007`） |
+| `RE-40008` | 禁止审核本人提交的记录 | `ReReviewService.approve/reject`（实体级职责分离） |
 
 裸字符串错误码，未建 `ReErrorCode` 枚举，`common-dev-guide.md` 附录 B 错误码前缀表未收录 `RE-` 前缀——见「技术债」⑤。
 
 ## 字典
 
-`SYS_DICT`（拍平惯例，非 `SYS_DICT_ITEM` 两级设计，见「技术债」⑨），均 `RE_` 前缀命名空间：`RE_ORG_TYPE`/`RE_DIMENSION`/`RE_SUBMIT_STATUS`/`RE_ITEM_CODE`。前端未走 `useDict()` 的地方（如 `partyRole`）是因为该字段本身**不在**上述字典内，属硬编码字面量（见上文角色矩阵节）。
+`SYS_DICT`（拍平惯例，非 `SYS_DICT_ITEM` 两级设计，见「技术债」⑨），均 `RE_` 前缀命名空间：`RE_ORG_TYPE`/`RE_DIMENSION`/`RE_SUBMIT_STATUS`/`RE_ITEM_CODE`。前端未走 `useDict()` 的地方（如 `partyRole`）是因为该字段本身**不在**上述字典内，属硬编码兼容描述字面量且不参与授权（见上文角色矩阵节）。
 
 ## 与源系统差异清单
 
@@ -166,7 +189,7 @@ src/test/java/com/bank/branch/platform/redengine/
 | 红黄牌阈值 | 项目文档口径"75 分"（弃用） | **以代码为准**：`final_score<60` 红牌，`60≤final_score<80` 黄牌 |
 | 逾期规则 | 项目文档口径"迟 1 天 -1 分、≥3 天清零"（弃用，自动累进） | **以代码为准**：`submitDate+7 天` 且 `status∈{0,1}` 判定逾期，人工在预警池逐条调用执行、默认扣 5 分 |
 | `orgId`/`submitterId` | 前端可传，源系统可被伪造越权 | 服务端从登录人 `empId` 经 `RE_USER_PARTY_MAP` 强制派生，修复越权隐患 |
-| `reviewerId` | 无此字段 | 补齐，`approve`/`reject` 均回填当前审核人工号 |
+| `reviewerId` | 无此字段 | 补齐，`approve`/`reject` 均回填当前审核人工号；写入前按持久化 `submitterId` 拒绝本人自审（`RE-40008`） |
 | `generateAnnualResult` 维度聚合 | 死代码（`putIfAbsent` 只建键，从未写入维度分值，四维恒为 0） | 补全：`RE_SCORE` 关联 `RE_SUBMIT.dimension` 内存 join 分组求和 |
 | `executeOverdue` 上报不存在 | 静默 `return false` | 改抛 `RE-40005`（平台惯例加固） |
 | 导出 | hutool-poi，源码未见类型/行数上限 | EasyExcel，仅 submit/score 两类，`RE-40006`/`RE-40007`；表头字段逐字保真 |
@@ -177,10 +200,10 @@ src/test/java/com/bank/branch/platform/redengine/
 
 ## 测试
 
-- **单元测试**：6 个纯 Mockito `*Test.java`（`RePartyOrgServiceTest` 8 / `ReUserPartyMapServiceTest` 5 / `ReSubmitServiceTest` 5 / `ReReviewServiceTest` 8 / `ReCockpitServiceTest` 17 / `ReExportServiceTest` 7），合计 **50 case 全绿**，均不连库
+- **Service 单元测试**：6 个纯 Mockito `*Test.java`（`RePartyOrgServiceTest` 8 / `ReUserPartyMapServiceTest` 5 / `ReSubmitServiceTest` 5 / `ReReviewServiceTest` 12 / `ReCockpitServiceTest` 19 / `ReExportServiceTest` 7），合计 **56 case 全绿**，均不连库；其中审核测试覆盖 approve/reject 自审均 `RE-40008`、拒绝前零写入，以及 reject 不存在仍静默更新 0 行的兼容契约
 - **Controller 单元测试**（2026-07-19 新增，TDD 覆盖三处审计/校验缺口修复）：`ReOrgControllerTest`（9 case：deleteOrg 带/缺 reason、RE-40002 守卫不回归、addOrg/updateOrg 校验+树查询）/ `ReCockpitControllerTest`（3 case：generateAnnualResult 带/缺 reason）；均 `MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new GlobalExceptionHandler())` 纯单元测试（同构 `workflow-center` `ProcessCommandControllerTest`/`auth-permission-center` `OrgControllerTest` 既有惯例），不连库、不起 Spring 容器
 - **Mapper 集成测试**：`RePartyOrgMapperIT`（failsafe，`onepl_test_bootstrap`），基座 `RedEngineTestApp` + `RedEngineMapperTestBase` 同构复制 `performance-engine-center` 的隔离测试模式（`@ActiveProfiles("test")` + `@Transactional` + `@Rollback`）
-- **bootstrap 冒烟 IT**：`RedEngineSmokeIT`（`redengine-smoke` profile，激活真实鉴权链路 `AuthenticationFilter`+`AuthorizationInterceptor`，而非 `test` profile 下被 `@Profile("!test")` 关闭的 `WebMvcAuthConfig`），3 case：无 session 401 / admin 登录 200+树 10 节点 / 无 `P_RE_*` 绑定角色 403，全部真实 RBAC 日志亲验
+- **bootstrap 冒烟 IT**：`RedEngineSmokeIT`（`redengine-smoke` profile，激活真实鉴权链路 `AuthenticationFilter`+`AuthorizationInterceptor`，而非 `test` profile 下被 `@Profile("!test")` 关闭的 `WebMvcAuthConfig`），共 10 case：基础 401/200/403、仅报送/仅支部审核负例、仅报送创建正例、“报送员+支部审核员”无需 switch 的并集正反例，以及并集用户 approve/reject 本人上报均 `RE-40008`；类级 SQL 用固定所有权标记创建并精确清理 `RE_IT_*` 临时用户/映射/评分/上报/审计数据，固定 ID/USERNAME 被非夹具数据占用时 setup fail-close。
 - **Playwright 全链路（2026-07-18 历史验收）**：原独立登录页 → 上报 → 审核通过 → 驾驶舱 → 预警池 → 导出 xlsx，权限矩阵三项（报送员 403 / 无映射 `RE-40001` / admin 全通）均实测通过。2026-07-29 起入口改为平台 `/login` → 动态菜单“红色引擎”，独立登录页已删除。
 - **演示数据**（仅 `yiti_test`，`docs/superpowers/sql/` 2026-07-18 demo 脚本，显式主键 + `INSERT IGNORE` 幂等）：16 条上报 + 16 条评分 + 4 条逾期扣分，4 支部（org 2-5）各 4 项 × 15 分 = 60 分，`dim_clean`/`CLEAN_PROJECT` 源编码不翻译到平台 `dim1~4`/`RE_ITEM_CODE`（仅用于验证列表/统计出数，年度归档聚合会丢弃这批数据，属预期）
 
@@ -209,6 +232,8 @@ src/test/java/com/bank/branch/platform/redengine/
 - DDL：`docs/superpowers/sql/2026-07-18-redengine-tables.sql`
 - 权限/字典/党组织种子：`docs/superpowers/sql/2026-07-18-redengine-seed.sql`
 - 平台菜单入口对齐：`docs/superpowers/sql/2026-07-29-redengine-platform-menu-align.sql`
+- 无切换一期权限/映射对齐：`docs/superpowers/sql/2026-08-10-redengine-auth-data-align.sql`
+- 上述对齐的只读验收：`docs/superpowers/sql/2026-08-10-redengine-auth-data-verify.sql`
 - `yiti` 正式同步编排：`docs/superpowers/sql/2026-07-29-redengine-sync-yiti.sql`（先备份；
   不包含 `yiti_test` 专用演示业务数据）
 - 共享开发规范：`docs/common-dev-guide.md`

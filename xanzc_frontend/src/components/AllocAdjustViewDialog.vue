@@ -5,9 +5,15 @@
 -->
 <template>
   <el-dialog
+    class="bp-crud-dialog"
     :model-value="modelValue"
     @update:model-value="v => emit('update:modelValue', v)"
-    title="查看调整申请" width="900px" :close-on-click-modal="false">
+    title="查看调整申请" width="900px" :close-on-click-modal="false"
+    aria-label="查看调整申请" :aria-busy="loading || approvalLoading || preview.loading ? 'true' : 'false'">
+    <div v-if="loadError" class="dialog-error" role="alert">
+      <span>{{ loadError }}</span>
+      <el-button link type="primary" @click="retryLoad">重新加载</el-button>
+    </div>
     <div v-loading="loading">
       <el-form label-position="top" size="default">
         <!-- 申请信息条 -->
@@ -89,6 +95,7 @@
           <div class="card-h">
             <div class="title">原业绩分配</div>
           </div>
+          <div v-if="previewError" class="inline-error" role="alert">{{ previewError }}</div>
           <el-table v-if="hasOriginalOwners" :data="preview.data.allocList || []" size="small" border style="margin-bottom:12px" empty-text="暂无审批通过的分配记录">
             <el-table-column prop="acctNo" label="账号" min-width="150" show-overflow-tooltip>
               <template #default="{row}">{{ row.acctNo || '-' }}</template>
@@ -151,6 +158,10 @@
         <span class="sub-tip">按时间倒序 · 最新在上</span>
       </div>
       <div v-loading="approvalLoading" class="approval-wrap">
+        <div v-if="approvalError" class="inline-error" role="alert">
+          <span>{{ approvalError }}</span>
+          <el-button link type="primary" @click="retryApproval">重新加载</el-button>
+        </div>
         <el-empty v-if="!approvalLoading && (!approvalLogs || approvalLogs.length === 0)"
           description="暂无审批记录" :image-size="60" />
         <el-timeline v-else>
@@ -190,6 +201,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue']);
 
 const loading = ref(false);
+const loadError = ref('');
 const applyNo = ref('');
 const createdBy = ref('');
 const createdByName = ref('');
@@ -200,8 +212,10 @@ const form = reactive({ custType: '', custId: '', custName: '', allocDim: '', bi
 const custIdx = reactive({ MC_001: null, MC_002: null, MC_003: null, MC_004: null });
 const custIdxLoan = reactive({ MC_005: null, MC_006: null, MC_007: null, MC_008: null });
 const preview = reactive({ loading: false, data: null });
+const previewError = ref('');
 const approvalLogs = ref([]);
 const approvalLoading = ref(false);
+const approvalError = ref('');
 const bizKindOptions = ref([]);
 
 const noFetch = (q, cb) => cb && cb([]);
@@ -262,13 +276,17 @@ async function loadBizKindDict() {
 }
 async function loadPreview(statisDt) {
   if (!form.custId) { preview.data = null; return; }
+  previewError.value = '';
   preview.loading = true;
   try {
     preview.data = await getAllocPreview({
       custType: form.custType, custNo: form.custId, allocDim: form.allocDim,
       accountNo: form.accountNo || undefined, statisDt,
     });
-  } catch { preview.data = null; } finally { preview.loading = false; }
+  } catch (error) {
+    preview.data = null;
+    previewError.value = `原业绩分配加载失败：${error?.message || '请稍后重试'}`;
+  } finally { preview.loading = false; }
 }
 
 function resetAll() {
@@ -276,7 +294,10 @@ function resetAll() {
   Object.assign(custIdx, { MC_001: null, MC_002: null, MC_003: null, MC_004: null });
   Object.assign(custIdxLoan, { MC_005: null, MC_006: null, MC_007: null, MC_008: null });
   preview.data = null;
+  previewError.value = '';
   approvalLogs.value = [];
+  approvalError.value = '';
+  loadError.value = '';
   applyNo.value = ''; createdBy.value = ''; createdByName.value = ''; createdByUsername.value = ''; createdByOrgName.value = ''; createdTime.value = null;
 }
 
@@ -307,14 +328,36 @@ async function load(id) {
     let dt;
     if (d.createdTime) { const ad = new Date(d.createdTime); ad.setDate(ad.getDate() - 1); dt = ad.toISOString().slice(0, 10); }
     loadPreview(dt);
+  } catch (error) {
+    loadError.value = `调整申请加载失败：${error?.message || '请稍后重试'}`;
+    return;
   } finally {
     loading.value = false;
   }
   approvalLoading.value = true;
+  approvalError.value = '';
   try {
     const list = await getAdjustApprovalHistory(id);
     approvalLogs.value = Array.isArray(list) ? list : [];
-  } catch { approvalLogs.value = []; } finally { approvalLoading.value = false; }
+  } catch (error) {
+    approvalLogs.value = [];
+    approvalError.value = `审批流记录加载失败：${error?.message || '请稍后重试'}`;
+  } finally { approvalLoading.value = false; }
+}
+
+function retryLoad() {
+  if (props.applyId) load(props.applyId);
+}
+
+function retryApproval() {
+  if (props.applyId) {
+    approvalError.value = '';
+    approvalLoading.value = true;
+    getAdjustApprovalHistory(props.applyId)
+      .then((list) => { approvalLogs.value = Array.isArray(list) ? list : []; })
+      .catch((error) => { approvalError.value = `审批流记录加载失败：${error?.message || '请稍后重试'}`; })
+      .finally(() => { approvalLoading.value = false; });
+  }
 }
 
 watch(() => [props.modelValue, props.applyId], ([show, id]) => {
@@ -346,5 +389,22 @@ watch(() => [props.modelValue, props.applyId], ([show, id]) => {
   .approval-meta { margin-top: 4px; font-size: 12px; color: $text-2;
     .meta-key { color: $text-3; } .meta-sep { margin: 0 8px; color: $text-3; } }
   .approval-opinion { margin-top: 4px; font-size: 12px; color: $text-2; background: $bg-soft; padding: 6px 8px; border-radius: 4px; word-break: break-all; }
+}
+.dialog-error,
+.inline-error {
+  align-items: center;
+  background: var(--color-danger-bg);
+  border-left: 3px solid var(--color-danger-fg);
+  color: var(--color-danger-fg);
+  display: flex;
+  font-size: 12px;
+  gap: var(--space-3);
+  justify-content: space-between;
+  line-height: 18px;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(.bp-crud-dialog) :deep(*) { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
 </style>

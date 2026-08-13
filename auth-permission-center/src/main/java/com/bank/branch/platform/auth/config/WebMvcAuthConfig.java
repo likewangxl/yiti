@@ -7,6 +7,7 @@ import com.bank.branch.platform.auth.security.interceptor.AuthorizationIntercept
 import com.bank.branch.platform.auth.security.matcher.ResourceMatcher;
 import com.bank.branch.platform.auth.security.resolver.BizMetaResolver;
 import com.bank.branch.platform.auth.security.resolver.RbacAuthorizer;
+import com.bank.branch.platform.auth.service.AuthService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -33,6 +34,7 @@ public class WebMvcAuthConfig implements WebMvcConfigurer {
     private final BizScopeApi bizScopeApi;
     private final ObjectMapper objectMapper;
     private final com.bank.branch.platform.auth.mapper.UserMapper userMapper;
+    private final AuthService authService;
 
     /**
      * 将 AuthenticationFilter 注册为 Servlet Filter
@@ -40,7 +42,8 @@ public class WebMvcAuthConfig implements WebMvcConfigurer {
      */
     @Bean
     public FilterRegistrationBean<AuthenticationFilter> authenticationFilterBean() {
-        AuthenticationFilter filter = new AuthenticationFilter(currentUserProvider, objectMapper, userMapper);
+        AuthenticationFilter filter = new AuthenticationFilter(
+                currentUserProvider, objectMapper, userMapper, authService);
         FilterRegistrationBean<AuthenticationFilter> bean = new FilterRegistrationBean<>(filter);
         // 只拦截 API 路径，静态资源（/index.html, /assets/*）不过认证
         bean.addUrlPatterns("/api/*");

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { resetAuthorizationSnapshots } from './authorizationSnapshot';
 
 const STORAGE_KEY = 'xanzc:user';
 
@@ -15,41 +16,43 @@ export const useUserStore = defineStore('user', () => {
   const isLoggedIn = computed(() => !!user.value);
   const displayName = computed(() => user.value?.displayName || '未登录');
   const orgName = computed(() => user.value?.mainOrgName || '');
-  // 用户全部已分配角色（角色下拉用）
+  // 用户全部已分配角色；取消会话角色切换后，权限由这些角色共同生效。
   const roles = computed(() => user.value?.roles || []);
-  // 当前激活角色ID：切换后为所切角色，否则回退主角色 / 第一个角色
-  const activeRoleId = computed(() =>
-    user.value?.activeRoleId || user.value?.primaryRoleId || user.value?.roles?.[0]?.roleId || '');
-  // 当前角色名（顶栏显示），跟随激活角色
-  const roleName = computed(() => {
-    const rs = user.value?.roles || [];
-    const r = rs.find(x => x.roleId === activeRoleId.value) || rs[0];
-    return r?.roleChName || '';
-  });
-  // 是否系统管理员：当前激活角色为 SYS_ADMIN（与角色切换/后端 RBAC 口径一致）
+  const roleSummary = computed(() => roles.value
+    .map((role) => typeof role === 'string' ? role : (role.roleChName || role.roleCode || role.roleId))
+    .filter(Boolean)
+    .join('、'));
+  // 兼容既有展示调用；语义已由“当前角色”改为“全部已分配角色摘要”。
+  const roleName = computed(() => roleSummary.value);
+
+  function hasRoleCode(...expectedCodes) {
+    const expected = new Set(expectedCodes.flat().filter(Boolean));
+    return roles.value.some((role) => {
+      if (typeof role === 'string') return expected.has(role);
+      return expected.has(role.roleCode) || expected.has(role.roleId);
+    });
+  }
+
+  // 全角色并集语义下，只要任一已分配角色是 SYS_ADMIN 即按管理员展示。
   const isSystemAdmin = computed(() => {
     if (user.value?.isSystemAdmin === true) return true;
-    const rs = user.value?.roles || [];
-    const r = rs.find(x => x.roleId === activeRoleId.value) || rs[0];
-    return (r?.roleCode || '') === 'SYS_ADMIN';
+    return hasRoleCode('SYS_ADMIN');
   });
 
   function setUser(u) {
+    // 登录（包括同一账号重新登录）和换用户都必须让旧菜单/资源快照及在途请求失效。
+    resetAuthorizationSnapshots();
     user.value = u;
     if (u) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(u));
     else sessionStorage.removeItem(STORAGE_KEY);
-  }
-
-  // 切换当前激活角色（写回持久化，配合页面刷新后菜单/权限按新角色重取）
-  function setActiveRole(roleId) {
-    if (!user.value) return;
-    user.value = { ...user.value, activeRoleId: roleId };
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(user.value));
   }
 
   function clear() {
     setUser(null);
   }
 
-  return { user, isLoggedIn, displayName, orgName, roles, activeRoleId, roleName, isSystemAdmin, setUser, setActiveRole, clear };
+  return {
+    user, isLoggedIn, displayName, orgName, roles, roleSummary, roleName,
+    isSystemAdmin, hasRoleCode, setUser, clear
+  };
 });

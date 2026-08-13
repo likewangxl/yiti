@@ -17,6 +17,10 @@
 | 6 | PT_ROLE_BIZ_SCOPE | 角色业务范围表 | UUID 主键 ID | 新增扩展表 | 数百 |
 | 7 | EXT_ORG_INFO | 机构表 | 自增主键 ID + 唯一键 ORG_CODE | 定制框架 | 数十 ~ 数百 |
 | 8 | EXT_USER_ORG | 用户机构关联表 | 联合主键 (USER_ID, ORG_CODE) | 定制框架 | 数百 ~ 数千 |
+| 9 | PT_ORG_PROFILE | 机构本地经营画像 | 自然主键 ORG_CODE | auth 扩展表 | 数十 ~ 数百 |
+| 10 | PT_ORG_GROUP | 命名机构组 | 自增主键 ID + 唯一键 GROUP_CODE | auth 扩展表 | 数十 |
+| 11 | PT_ORG_GROUP_MEMBER | 机构组直接成员 | 自增主键 ID + UK(GROUP_CODE, ORG_CODE) | auth 扩展表 | 数百 |
+| 12 | PT_ROLE_ORG_GROUP | 角色-机构组授权 | 自增主键 ID + UK(ROLE_ID, GROUP_CODE) | auth 扩展表 | 数百 |
 
 ---
 
@@ -51,7 +55,7 @@
 | 字段名 | 数据类型 | 允许NULL | 默认值 | 说明 |
 |:---|:---|:---|:---|:---|
 | ROLE_ID | varchar(50) | NOT NULL | - | 角色ID，主键 |
-| ROLE_CODE | varchar(10) | NOT NULL | - | 角色编码（大写字母+下划线） |
+| ROLE_CODE | varchar(50) | NOT NULL | - | 角色业务编码（大写字母+下划线）；部署脚本要求全局唯一 |
 | ROLE_CHNAME | varchar(100) | NOT NULL | - | 角色中文名 |
 | RECORD_STATUS | int | NULL | 0 | 0可用 / 1不可用（逻辑删除） |
 | SYS_CODE | varchar(10) | NULL | 'PLATFORM' | 系统编号 |
@@ -61,7 +65,7 @@
 | UPDATE_USER | varchar(50) | NULL | NULL | 更新人工号 |
 | REMARK | varchar(100) | NULL | NULL | 备注 |
 
-**主键**：`PRIMARY KEY (ROLE_ID)`
+**主键**：`PRIMARY KEY (ROLE_ID)`；机构组对齐脚本会在无重复历史数据时补充 `UNIQUE KEY UK_PT_ROLE_ROLE_CODE (ROLE_CODE)`，角色绑定表始终保存 `ROLE_ID`，外部契约始终使用规范化 `ROLE_CODE`。
 
 ---
 
@@ -278,3 +282,18 @@
 - 字符集：`utf8mb4`
 - 排序规则：`utf8mb4_general_ci`
 - 存储引擎：`InnoDB`
+
+---
+
+## 9. 机构画像与命名机构组扩展表（2026-08-11）
+
+四张扩展表及 `AUDIT_LOG` 结构化审计列的可执行手工 SQL 位于 `docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql`，不由 Flyway 或应用启动自动执行。脚本会先校验已有表/索引、角色和资源业务身份；任何残缺或冲突均 fail-fast。`EXT_ORG_INFO` 仍为外部同步只读表。
+
+| 表 | 关键约束 |
+|:---|:---|
+| `PT_ORG_PROFILE` | `ORG_CODE` 主键；`ORG_NATURE` 与 `OPERATING_LEVEL` 分离；SUBORDINATE 必须指向祖先链上的 ACTIVE PRIMARY；坐标成对出现且使用 GCJ02；`STATUS` 与外部机构状态共同决定运行时有效性 |
+| `PT_ORG_GROUP` | `GROUP_CODE` 唯一；用途固定 `REPORT_SCREEN`；`VERSION` 用于乐观锁 |
+| `PT_ORG_GROUP_MEMBER` | `(GROUP_CODE, ORG_CODE)` 唯一；只保存直接成员，不展开组织子树 |
+| `PT_ROLE_ORG_GROUP` | `(ROLE_ID, GROUP_CODE)` 唯一；仅绑定 `PT_ROLE.RECORD_STATUS=0` 的有效角色 |
+
+运行时机构集合固定为：`PT_ORG_GROUP_MEMBER` ACTIVE 直接成员 ∩ `EXT_ORG_INFO.ORGAN_STATE=0` ∩ `PT_ORG_PROFILE.STATUS=ACTIVE`。角色授权固定为当前有效角色、屏级白名单和 `PT_ROLE_ORG_GROUP` 有效绑定的同一角色交集。

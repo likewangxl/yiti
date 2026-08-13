@@ -1,0 +1,10 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T21:43:46.972216Z
+COMMAND /usr/bin/python3.10 -c 'from pathlib import Path; runner=Path("docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.py").read_text(encoding="utf-8"); shell=Path("docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh").read_text(encoding="utf-8"); unit=Path("docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner@.service.template").read_text(encoding="utf-8"); forbidden=("MYSQL_TOOL =", "verify_mysql_option_contract", "[str(MYSQL_PATH), \"--version\"", "[str(MYSQL_PATH), \"--help\""); assert not any(token in runner for token in forbidden); assert "for _round in range(2):" in runner; assert "--execute|--execute=*)" in shell and "普通 shell 入口永久拒绝" in shell; assert "ExecStart=/usr/bin/python3.10 -I" in unit and "NoNewPrivileges=yes" in unit and "ProtectSystem=strict" in unit; print("static_execute_contract_ok")'
+SHA256 1365dc9f43588b5cb2409e809fb204ad130107c285f17dc4b10e2b514c5fde8a /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.py
+SHA256 9e53b6c5b4b475f10d5fb591d416855504599780d8a9d2e1556b38e13d4dcb6a /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh
+SHA256 d9a3562bd89185a8627a085887fbe8c944de9f7d403a1f30de3f63d906c323b5 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner@.service.template
+EXIT_CODE 0
+UTC_FINISHED 2026-08-11T21:43:46.988027Z
+--- RAW_STDOUT_STDERR ---
+static_execute_contract_ok

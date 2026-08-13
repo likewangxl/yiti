@@ -1,0 +1,66 @@
+Command template (exit 0; all 61 branches are exact SELECT COUNT(*) against tables first confirmed in `06-b-table-discovery.raw.txt`; password masked):
+env MYSQL_PWD='***' mysql --protocol=TCP -h127.0.0.1 -P3306 -uroot --database=yiti_test \
+  --batch --raw --skip-column-names -e '<UNION ALL of exact COUNT(*) baselines>'
+
+Raw stdout:
+flowable_repository	ACT_RE_DEPLOYMENT	145
+flowable_repository	ACT_RE_MODEL	0
+flowable_repository	ACT_RE_PROCDEF	633
+flowable_runtime_job	ACT_RU_DEADLETTER_JOB	0
+flowable_runtime_job	ACT_RU_EXTERNAL_JOB	0
+flowable_runtime_job	ACT_RU_HISTORY_JOB	0
+flowable_runtime_job	ACT_RU_JOB	0
+flowable_runtime_job	ACT_RU_SUSPENDED_JOB	0
+flowable_runtime_job	ACT_RU_TIMER_JOB	0
+quartz	QRTZ_BLOB_TRIGGERS	0
+quartz	QRTZ_CALENDARS	0
+quartz	QRTZ_CRON_TRIGGERS	0
+quartz	QRTZ_FIRED_TRIGGERS	0
+quartz	QRTZ_JOB_DETAILS	0
+quartz	QRTZ_LOCKS	2
+quartz	QRTZ_PAUSED_TRIGGER_GRPS	0
+quartz	QRTZ_SCHEDULER_STATE	0
+quartz	QRTZ_SIMPLE_TRIGGERS	0
+quartz	QRTZ_SIMPROP_TRIGGERS	0
+quartz	QRTZ_TRIGGERS	0
+job_config_log	SYS_JOB_CONF	9
+job_config_log	SYS_JOB_RUN_LOG	2864
+spring_session	SPRING_SESSION	0
+spring_session	SPRING_SESSION_ATTRIBUTES	0
+platform_lock	PT_LOCK	0
+audit	AUDIT_LOG	852
+file_or_relation	ANNOUNCEMENT_FILE	5
+file_or_relation	BIZ_FILE_REL	1
+file_or_relation	CUST_ALLOC_RELATION	660
+file_or_relation	CUST_PERFORMANCE_RELATION_SNAPSHOT	0
+file_or_relation	DATALAKE_XAN_CRM_C06_INDIV_ALLOT_RELA	2
+file_or_relation	FILE_OBJECT	0
+file_or_relation	RE_SUBMIT_FILE	0
+eval_import_compensation	EVAL_ASSIGN_BATCH	11
+eval_import_compensation	EVAL_ASSIGN_ITEM	100
+eval_import_compensation	EVAL_REWARD_ITEM	10
+eval_import_compensation	EVAL_RULE	1
+eval_import_compensation	EVAL_RULE_GROUP	2
+eval_import_compensation	EVAL_SCORE	0
+eval_import_compensation	EVAL_TAG	6
+eval_import_compensation	EVAL_TASK	0
+eval_import_compensation	EVAL_TASK_TARGET	0
+eval_import_compensation	EVAL_USER_SETTING	1
+eval_import_compensation	EVAL_USER_TAG	2
+eval_import_compensation	LEAD_IMPORT_BATCH	0
+eval_import_compensation	PERF_IMPORT_BATCH	14
+screen_config_org_group	PT_ORG_PROFILE	0
+screen_config_org_group	PT_ORG_GROUP	2
+screen_config_org_group	PT_ORG_GROUP_MEMBER	0
+screen_config_org_group	PT_ROLE_ORG_GROUP	0
+screen_config_org_group	RPT_SCREEN	5
+screen_config_org_group	RPT_SCREEN_ACCESS_ROLE	2
+screen_config_org_group	RPT_SCREEN_BLOCK	18
+screen_config_org_group	RPT_SCREEN_DATASOURCE	11
+screen_config_org_group	RPT_SCREEN_MAP_POINT	3
+screen_config_org_group	RPT_SCREEN_PUBLISH_LOG	6
+screen_config_org_group	SYS_CONFIG_KV	5
+auth_access_config	PT_USER	90
+auth_access_config	PT_ROLE	43
+auth_access_config	PT_RESOURCE	570
+auth_access_config	PT_ROLE_RESOURCE	7579

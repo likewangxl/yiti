@@ -5,14 +5,15 @@
   查询：客户名称 / 申请人姓名 模糊。状态列可点击 → 弹出子页面（原/调整分配比例 + 申请信息 + 审批流程）。
 -->
 <template>
-  <div class="perf-adjust">
+  <main class="bp-crud perf-adjust" aria-labelledby="perf-adjust-title">
     <div class="page-h">
-      <PageTitle />
+      <PageTitle id="perf-adjust-title" />
       <span class="desc">AMAS 业绩调整审批数据查询，按申请时间倒序</span>
     </div>
 
     <!-- 顶部查询项 -->
-    <el-form :model="q" inline class="filter-form" @submit.prevent>
+    <section class="card-section filter-bar" aria-label="业绩调整筛选">
+    <el-form :model="q" inline class="filter-form" aria-label="业绩调整筛选" @submit.prevent>
       <el-form-item label="客户名称">
         <el-input v-model="q.custName" placeholder="模糊匹配" clearable style="width:180px" @keyup.enter="onSearch" />
       </el-form-item>
@@ -31,8 +32,24 @@
         <el-button @click="onReset">重置</el-button>
       </el-form-item>
     </el-form>
+    </section>
 
-    <el-table :data="rows" v-loading="loading" border stripe size="default" empty-text="暂无数据">
+    <section class="card-section data-panel" aria-label="业绩调整列表" aria-describedby="perf-adjust-table-state" :aria-busy="loading ? 'true' : 'false'">
+      <div class="toolbar">
+        <div>
+          <h2 id="perf-adjust-table-heading" class="section-title">业绩调整列表</h2>
+          <p class="hint">查看申请人、客户、审批状态及分配调整详情。</p>
+        </div>
+        <p id="perf-adjust-table-state" class="table-state" role="status" aria-live="polite">
+          {{ errorMessage || (loading ? '业绩调整列表加载中' : rows.length ? `共 ${total} 条记录` : '暂无业绩调整数据') }}
+        </p>
+      </div>
+      <div v-if="errorMessage" class="error-state" role="alert">
+        <span>{{ errorMessage }}</span>
+        <el-button link type="primary" @click="load">重试</el-button>
+      </div>
+    <el-table :data="rows" v-loading="loading" border stripe size="default" empty-text="暂无业绩调整数据"
+              aria-labelledby="perf-adjust-table-heading" aria-describedby="perf-adjust-table-state">
       <el-table-column type="index" label="序号" width="56" />
       <el-table-column label="申请人" min-width="120">
         <template #default="{ row }">
@@ -56,7 +73,7 @@
       </el-table-column>
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
-          <el-tag :type="STATUS_TAG[row.apprStatus] || 'info'" size="small">
+          <el-tag :class="STATUS_TAG[row.apprStatus] || 'tag-info'" size="small">
             {{ APPR_STATUS[row.apprStatus] || row.apprStatus || '-' }}
           </el-tag>
         </template>
@@ -68,16 +85,19 @@
       </el-table-column>
     </el-table>
 
-    <div class="pager">
+    <div class="pager" aria-label="业绩调整列表分页">
       <el-pagination
         background layout="total, prev, pager, next, sizes"
         :total="total" :current-page="page.pageNo" :page-size="page.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         @current-change="onPage" @size-change="onSize" />
     </div>
+    </section>
 
     <!-- 业绩调整详情子页面 -->
-    <el-dialog v-model="dlg.show" title="业绩调整详情" width="900px" top="6vh" append-to-body v-loading="dlg.loading">
+    <el-dialog v-model="dlg.show" class="bp-crud-dialog" title="业绩调整详情" width="900px" top="6vh" append-to-body v-loading="dlg.loading">
+      <section class="detail-section" aria-label="业绩调整详情" :aria-busy="dlg.loading ? 'true' : 'false'">
+      <p v-if="dlg.errorMessage" class="error-state" role="alert">{{ dlg.errorMessage }}</p>
       <!-- 原分配比例 -->
       <h3 class="sec-t">原分配比例</h3>
       <el-table :data="origAlloc" border stripe size="small" empty-text="无原分配数据">
@@ -120,7 +140,7 @@
         </el-table-column>
         <el-table-column label="审批状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="REC_STATUS_TAG[row.apprStatus] || 'info'" size="small">
+            <el-tag :class="REC_STATUS_TAG[row.apprStatus] || 'tag-info'" size="small">
               {{ REC_STATUS[row.apprStatus] || row.apprStatus || '-' }}
             </el-tag>
           </template>
@@ -128,8 +148,9 @@
         <el-table-column prop="apprTime" label="审批时间" width="170" :formatter="dash" />
         <el-table-column prop="apprOpinion" label="审批意见" min-width="180" show-overflow-tooltip :formatter="dash" />
       </el-table>
+      </section>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -142,10 +163,10 @@ const APPLY_TYPE = { '1': '公司业绩调整', '2': '零售业绩调整' };
 const BUSINESS_TYPE = { '1': '存款', '2': '贷款', '3': '中收', '4': '结构性' };
 // 主表审批状态：0,待审批；1,已通过；2,已拒绝
 const APPR_STATUS = { '0': '待审批', '1': '已通过', '2': '已拒绝' };
-const STATUS_TAG = { '0': 'warning', '1': 'success', '2': 'danger' };
+const STATUS_TAG = { '0': 'tag-warning', '1': 'tag-success', '2': 'tag-danger' };
 // 审批记录状态：0,待审批；1,通过；2,未通过
 const REC_STATUS = { '0': '待审批', '1': '通过', '2': '未通过' };
-const REC_STATUS_TAG = { '0': 'warning', '1': 'success', '2': 'danger' };
+const REC_STATUS_TAG = { '0': 'tag-warning', '1': 'tag-success', '2': 'tag-danger' };
 
 // 空值统一显示 “-”
 const dash = (row, col, v) => (v === null || v === undefined || v === '' ? '-' : v);
@@ -162,9 +183,11 @@ const page = reactive({ pageNo: 1, pageSize: 20 });
 const rows = ref([]);
 const total = ref(0);
 const loading = ref(false);
+const errorMessage = ref('');
 
 async function load() {
   loading.value = true;
+  errorMessage.value = '';
   try {
     const params = {
       pageNo: page.pageNo, pageSize: page.pageSize,
@@ -175,6 +198,10 @@ async function load() {
     const r = await listAmasApprovals(params);
     rows.value = r?.records || [];
     total.value = r?.total || 0;
+  } catch {
+    rows.value = [];
+    total.value = 0;
+    errorMessage.value = '业绩调整列表加载失败，请重试';
   } finally {
     loading.value = false;
   }
@@ -188,7 +215,7 @@ function onPage(p) { page.pageNo = p; load(); }
 function onSize(s) { page.pageSize = s; page.pageNo = 1; load(); }
 
 // ── 详情弹窗 ──────────────────────────────────────────────
-const dlg = reactive({ show: false, loading: false });
+const dlg = reactive({ show: false, loading: false, errorMessage: '' });
 const detail = ref({ approval: {}, allocations: [], apprRecords: [] });
 const a = computed(() => detail.value.approval || {});
 const apprRecords = computed(() => detail.value.apprRecords || []);
@@ -197,11 +224,15 @@ const origAlloc = computed(() => (detail.value.allocations || []).filter(x => St
 const adjustAlloc = computed(() => (detail.value.allocations || []).filter(x => String(x.isOriginal) === '2'));
 
 async function openDetail(row) {
-  if (!row?.perfAdjustNo) return;
+  if (!row?.perfAdjustNo || dlg.loading) return;
   dlg.show = true;
   dlg.loading = true;
+  dlg.errorMessage = '';
   try {
     detail.value = (await getAmasApprovalDetail(row.perfAdjustNo)) || { approval: {}, allocations: [], apprRecords: [] };
+  } catch {
+    detail.value = { approval: {}, allocations: [], apprRecords: [] };
+    dlg.errorMessage = '业绩调整详情加载失败，请重试';
   } finally {
     dlg.loading = false;
   }
@@ -211,17 +242,22 @@ load();
 </script>
 
 <style lang="scss" scoped>
-.perf-adjust { padding: 4px 2px; }
-.page-h { margin-bottom: 12px;
-  h1 { font-size: 18px; margin: 0; display: inline-block; }
-  .desc { font-size: 12px; color: #909399; margin-left: 12px; }
-}
-.filter-form { margin-bottom: 8px; }
-.main { color: #303133; }
-.sub { color: #909399; font-size: 12px; }
+.perf-adjust { min-width: 0; }
+.main { color: var(--color-text-strong); }
+.sub { color: var(--color-text-muted); font-size: 12px; }
 .link-cell { cursor: pointer; display: inline-block; }
 .link-cell:hover { text-decoration: underline; }
-.sec-t { font-size: 14px; margin: 14px 0 8px; padding-left: 8px; border-left: 3px solid #409eff; }
+.sec-t { color: var(--color-text-strong); font-size: 14px; margin: var(--space-4) 0 var(--space-2); padding-left: var(--space-2); border-left: 3px solid var(--color-brand-500); }
 .sec-t:first-child { margin-top: 0; }
-.pager { margin-top: 12px; display: flex; justify-content: flex-end; }
+.error-state {
+  align-items: center;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-danger-fg);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
 </style>

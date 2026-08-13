@@ -1,0 +1,81 @@
+Round 2 recovery preflight. Credentials were supplied only to the child process and are not printed here.
+
+Port command (exit 0; read-only):
+ss -ltnp '( sport = :18082 or sport = :8092 or sport = :30523 )'
+ss -tnp '( dport = :18082 or sport = :18082 or dport = :8092 or sport = :8092 or dport = :30523 or sport = :30523 )'
+
+Raw stdout:
+State Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+State Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+
+Interpretation: no listener or TCP connection was reported for 18082, 8092, or 30523. No existing process was stopped, signalled, inspected, or reused.
+
+Database command template (exit 0; yiti_test only; exact identity SELECT followed by 61 exact COUNT(*) SELECT branches; credentials redacted):
+MYSQL_PWD='***' mysql -h127.0.0.1 -P3306 -u'***' --database=yiti_test --batch --raw --skip-column-names -e '<identity SELECT; 61 exact COUNT(*) SELECT branches>'
+
+Raw stdout:
+mysql: [Warning] Using a password on the command line interface can be insecure.
+yiti_test	d3a209c4-42bd-11f1-bb1f-000c299f5629	ubuntu	3306	<CURRENT_USER redacted>
+flowable_repository	ACT_RE_DEPLOYMENT	145
+flowable_repository	ACT_RE_MODEL	0
+flowable_repository	ACT_RE_PROCDEF	633
+flowable_runtime_job	ACT_RU_DEADLETTER_JOB	0
+flowable_runtime_job	ACT_RU_EXTERNAL_JOB	0
+flowable_runtime_job	ACT_RU_HISTORY_JOB	0
+flowable_runtime_job	ACT_RU_JOB	0
+flowable_runtime_job	ACT_RU_SUSPENDED_JOB	0
+flowable_runtime_job	ACT_RU_TIMER_JOB	0
+quartz	QRTZ_BLOB_TRIGGERS	0
+quartz	QRTZ_CALENDARS	0
+quartz	QRTZ_CRON_TRIGGERS	0
+quartz	QRTZ_FIRED_TRIGGERS	0
+quartz	QRTZ_JOB_DETAILS	0
+quartz	QRTZ_LOCKS	2
+quartz	QRTZ_PAUSED_TRIGGER_GRPS	0
+quartz	QRTZ_SCHEDULER_STATE	0
+quartz	QRTZ_SIMPLE_TRIGGERS	0
+quartz	QRTZ_SIMPROP_TRIGGERS	0
+quartz	QRTZ_TRIGGERS	0
+job_config_log	SYS_JOB_CONF	9
+job_config_log	SYS_JOB_RUN_LOG	2864
+spring_session	SPRING_SESSION	1
+spring_session	SPRING_SESSION_ATTRIBUTES	1
+platform_lock	PT_LOCK	0
+audit	AUDIT_LOG	852
+file_or_relation	ANNOUNCEMENT_FILE	5
+file_or_relation	BIZ_FILE_REL	1
+file_or_relation	CUST_ALLOC_RELATION	660
+file_or_relation	CUST_PERFORMANCE_RELATION_SNAPSHOT	0
+file_or_relation	DATALAKE_XAN_CRM_C06_INDIV_ALLOT_RELA	2
+file_or_relation	FILE_OBJECT	0
+file_or_relation	RE_SUBMIT_FILE	0
+eval_import_compensation	EVAL_ASSIGN_BATCH	11
+eval_import_compensation	EVAL_ASSIGN_ITEM	100
+eval_import_compensation	EVAL_REWARD_ITEM	10
+eval_import_compensation	EVAL_RULE	1
+eval_import_compensation	EVAL_RULE_GROUP	2
+eval_import_compensation	EVAL_SCORE	0
+eval_import_compensation	EVAL_TAG	6
+eval_import_compensation	EVAL_TASK	0
+eval_import_compensation	EVAL_TASK_TARGET	0
+eval_import_compensation	EVAL_USER_SETTING	1
+eval_import_compensation	EVAL_USER_TAG	2
+eval_import_compensation	LEAD_IMPORT_BATCH	0
+eval_import_compensation	PERF_IMPORT_BATCH	14
+screen_config_org_group	PT_ORG_PROFILE	0
+screen_config_org_group	PT_ORG_GROUP	2
+screen_config_org_group	PT_ORG_GROUP_MEMBER	0
+screen_config_org_group	PT_ROLE_ORG_GROUP	0
+screen_config_org_group	RPT_SCREEN	5
+screen_config_org_group	RPT_SCREEN_ACCESS_ROLE	2
+screen_config_org_group	RPT_SCREEN_BLOCK	18
+screen_config_org_group	RPT_SCREEN_DATASOURCE	11
+screen_config_org_group	RPT_SCREEN_MAP_POINT	3
+screen_config_org_group	RPT_SCREEN_PUBLISH_LOG	6
+screen_config_org_group	SYS_CONFIG_KV	5
+auth_access_config	PT_USER	90
+auth_access_config	PT_ROLE	43
+auth_access_config	PT_RESOURCE	570
+auth_access_config	PT_ROLE_RESOURCE	7579
+
+Baseline note: the pre-existing Spring Session counts are 1/1. They were retained as the current baseline; this recovery did not delete or modify either session table.

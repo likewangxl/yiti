@@ -1,0 +1,37 @@
+### Page
+- Page URL: http://127.0.0.1:8091/#/system/permission
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/workspace');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/workspace
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 15 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-40-11-237Z.yml)
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-40-11-193Z.log#L1-L15
+### Result
+Total messages: 15 (Errors: 0, Warnings: 15)
+Returning 0 messages for level "error"
+
+### Result
+Total messages: 15 (Errors: 0, Warnings: 15)
+
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/list" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/leads/new" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/leads/approval" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/tags" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/tags/approval" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/pool/available" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/pool/claimed" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/cross-org" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/touches/mine" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/touches/overview" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/transfer-log" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/bizexec/loans" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/bizexec/supports" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/yundun/accountability-violations" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[WARNING] [Vue Router warn]: No match found for location with path "/yundun/credit-violations" @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52

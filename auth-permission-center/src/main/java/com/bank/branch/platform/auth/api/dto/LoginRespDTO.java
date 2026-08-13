@@ -20,7 +20,7 @@ public class LoginRespDTO {
     private String deptNo;
     private List<RoleSimpleDTO> roles;
     private String token;
-    /** 主角色（当前登录角色）信息，roles 列表中亦以主角色置于首位 */
+    /** 默认展示角色信息，roles 列表中置于首位，但不收窄权限 */
     private String primaryRoleId;
     private String primaryRoleCode;
     private String primaryRoleName;

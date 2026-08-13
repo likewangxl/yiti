@@ -1,0 +1,85 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T19:04:11.538628Z
+COMMAND python3 docs/superpowers/scripts/tests/sql-target-identity-guard/test_mutations.py --mode legacy-acceptance
+SHA256 6ce2129d9ea8d72fd2f4a4055379e06006c5dd665acef19eb45ddf1515843d05 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.sh
+SHA256 9cdda5c67bddcd7ca602d70dc71862c4ede8ed25733e3d57aa639f872493783f /home/djdev/leid/yiti/docs/superpowers/scripts/tests/sql-target-identity-guard/test_mutations.py
+SHA256 182cc37a24744fcb6b26f5c3bf6dba0c898d198300b2870848bf652e92d3240f /home/djdev/leid/yiti/docs/superpowers/scripts/tests/sql-target-identity-guard/mutation-fixtures.json
+SHA256 dd855eb5ac986d36d5916586e039a692fd216e822ba5585c227c521dc3324a7f /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql
+SHA256 ae2235cee580e8898eb13d1296838ae7d3fe7c46b089d4fb974e31814be81e61 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql
+SHA256 a07b862f58db8b0212c0a12e903225ad5772e3052d1b4d5cb321e846599f1557 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql
+EXIT_CODE 0
+UTC_FINISHED 2026-08-11T19:04:14.238431Z
+--- RAW_STDOUT_STDERR ---
+MODE legacy-acceptance (必须证明旧 checker 错误接受每个 mutation fixture)
+CHECKER_SHA256 6ce2129d9ea8d72fd2f4a4055379e06006c5dd665acef19eb45ddf1515843d05 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.sh
+FIXTURE_SHA256 token-only-in-string f84e159ceddc818a227067938b92b37f8077214919c608895db1e5ed1ce133e2 docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql
+LEGACY_RESULT token-only-in-string exit=0
+STATIC TARGET IDENTITY GUARD CHECK (no database connection)
+PASS docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql: guard PREPARE line 528, EXECUTE line 529, first DDL line 534
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql: guard PREPARE line 407, EXECUTE line 408, first DDL line 414
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql: guard PREPARE line 395, EXECUTE line 396, first DDL line 402
+RESULT: PASS (all target identity guards are fail-close before DDL)
+FIXTURE_SHA256 token-only-in-block-comment de349579e0b68e10fdafb97545950794abebcc49b6a5ac640827cd411def01f8 docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql
+LEGACY_RESULT token-only-in-block-comment exit=0
+STATIC TARGET IDENTITY GUARD CHECK (no database connection)
+PASS docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql: guard PREPARE line 528, EXECUTE line 529, first DDL line 534
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql: guard PREPARE line 407, EXECUTE line 408, first DDL line 414
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql: guard PREPARE line 395, EXECUTE line 396, first DDL line 402
+RESULT: PASS (all target identity guards are fail-close before DDL)
+FIXTURE_SHA256 token-only-in-hash-comment 04d73f0d96f883e0f8fe360d5d83bc9992d5af71769793d51af7f63ea041ef3c docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql
+LEGACY_RESULT token-only-in-hash-comment exit=0
+STATIC TARGET IDENTITY GUARD CHECK (no database connection)
+PASS docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql: guard PREPARE line 528, EXECUTE line 529, first DDL line 534
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql: guard PREPARE line 407, EXECUTE line 408, first DDL line 414
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql: guard PREPARE line 395, EXECUTE line 396, first DDL line 402
+RESULT: PASS (all target identity guards are fail-close before DDL)
+FIXTURE_SHA256 identity-when-zero-dead-branch 4195c217f0e86efcb7fb51f22ccee09e34ddcbbf003bc1c42332fbe316511692 docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql
+LEGACY_RESULT identity-when-zero-dead-branch exit=0
+STATIC TARGET IDENTITY GUARD CHECK (no database connection)
+PASS docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql: guard PREPARE line 528, EXECUTE line 529, first DDL line 534
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql: guard PREPARE line 407, EXECUTE line 408, first DDL line 414
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql: guard PREPARE line 395, EXECUTE line 396, first DDL line 402
+RESULT: PASS (all target identity guards are fail-close before DDL)
+FIXTURE_SHA256 reset-preflight-error-before-guard f11ab219465d9322e88861c330657c5986fe5b97ae53b6b1bb04c59570188681 docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql
+LEGACY_RESULT reset-preflight-error-before-guard exit=0
+STATIC TARGET IDENTITY GUARD CHECK (no database connection)
+PASS docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql: guard PREPARE line 528, EXECUTE line 529, first DDL line 534
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql: guard PREPARE line 407, EXECUTE line 408, first DDL line 414
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql: guard PREPARE line 396, EXECUTE line 397, first DDL line 403
+RESULT: PASS (all target identity guards are fail-close before DDL)
+FIXTURE_SHA256 guard-success-condition-tautology 268a1b1b2b3addf992580827e691ac4c521a3a9a77d75cafd0cfd26f223485e3 docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql
+LEGACY_RESULT guard-success-condition-tautology exit=0
+STATIC TARGET IDENTITY GUARD CHECK (no database connection)
+PASS docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql: guard PREPARE line 528, EXECUTE line 529, first DDL line 534
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql: guard PREPARE line 407, EXECUTE line 408, first DDL line 414
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql: guard PREPARE line 395, EXECUTE line 396, first DDL line 402
+RESULT: PASS (all target identity guards are fail-close before DDL)
+FIXTURE_SHA256 first-ddl-lowercase ad2f26986627d513bae5f2a25b330b81fd058b326982072565eff6672f6830cb docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql
+LEGACY_RESULT first-ddl-lowercase exit=0
+STATIC TARGET IDENTITY GUARD CHECK (no database connection)
+PASS docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql: guard PREPARE line 528, EXECUTE line 529, first DDL line 534
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql: guard PREPARE line 407, EXECUTE line 408, first DDL line 414
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql: guard PREPARE line 395, EXECUTE line 396, first DDL line 404
+RESULT: PASS (all target identity guards are fail-close before DDL)
+FIXTURE_SHA256 first-ddl-split-lines c1aed6bf531d92d366d98bc7e9b411da973cb7117cc77ec5fc1f5c429b14e9c9 docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql
+LEGACY_RESULT first-ddl-split-lines exit=0
+STATIC TARGET IDENTITY GUARD CHECK (no database connection)
+PASS docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql: guard PREPARE line 528, EXECUTE line 529, first DDL line 534
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql: guard PREPARE line 407, EXECUTE line 408, first DDL line 417
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql: guard PREPARE line 395, EXECUTE line 396, first DDL line 402
+RESULT: PASS (all target identity guards are fail-close before DDL)
+FIXTURE_SHA256 dml-before-guard 7e32831c085e1bb822b1f2f9a1e96b48c07b9c8a04242152e04520cf8ee6d64f docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql
+LEGACY_RESULT dml-before-guard exit=0
+STATIC TARGET IDENTITY GUARD CHECK (no database connection)
+PASS docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql: guard PREPARE line 528, EXECUTE line 529, first DDL line 534
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql: guard PREPARE line 408, EXECUTE line 409, first DDL line 415
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql: guard PREPARE line 395, EXECUTE line 396, first DDL line 402
+RESULT: PASS (all target identity guards are fail-close before DDL)
+FIXTURE_SHA256 call-before-guard 2ba7ab18c8ff91ab58930e455d9a85aac9ca721bbd496102724aaea8ef16823f docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql
+LEGACY_RESULT call-before-guard exit=0
+STATIC TARGET IDENTITY GUARD CHECK (no database connection)
+PASS docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql: guard PREPARE line 528, EXECUTE line 529, first DDL line 534
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql: guard PREPARE line 407, EXECUTE line 408, first DDL line 414
+PASS docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql: guard PREPARE line 396, EXECUTE line 397, first DDL line 403
+RESULT: PASS (all target identity guards are fail-close before DDL)
+RESULT PASS (旧 checker 对全部 mutation fixture 均错误返回 0；这正是加固前的 Red 基线)

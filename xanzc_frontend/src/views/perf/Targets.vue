@@ -1,334 +1,113 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle><span class="sub">方案级管理：新增方案 / 进入子页维护目标值</span></PageTitle>
-      <div class="actions">
-        <el-button @click="reload" :loading="loadingPlans || todoLoading || doneLoading">刷新</el-button>
-        <el-button v-if="activeTab==='plans' && canCreatePlan" @click="downloadPlanTpl">下载模板</el-button>
-        <el-button v-if="activeTab==='plans' && canCreatePlan" :loading="importing" @click="triggerImportPlan">导入目标方案</el-button>
-        <el-button v-if="activeTab==='plans' && canCreatePlan" type="primary" @click="openCreatePlan">+ 新增方案</el-button>
+  <main class="bp-crud targets-page" aria-labelledby="targets-page-title">
+    <header class="page-h">
+      <PageTitle id="targets-page-title"><span class="sub">统一维护目标方案、待办审批和审批留痕</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="目标管理操作">
+        <el-button :loading="loadingPlans || todoLoading || doneLoading" @click="reload">刷新</el-button>
+        <el-button v-if="activeTab === 'plans' && canCreatePlan" @click="downloadPlanTpl">下载模板</el-button>
+        <el-button v-if="activeTab === 'plans' && canCreatePlan" :loading="importing" :disabled="importing" @click="triggerImportPlan">导入目标方案</el-button>
+        <el-button v-if="activeTab === 'plans' && canCreatePlan" type="primary" @click="openCreatePlan">新增方案</el-button>
       </div>
-    </div>
-    <!-- 隐藏的文件选择框：导入目标方案 -->
-    <input ref="importPlanInput" type="file" accept=".xlsx,.xls" style="display:none"
-      @change="onImportPlanFile" />
+    </header>
+    <input ref="importPlanInput" class="file-input" type="file" accept=".xlsx,.xls" aria-label="导入目标方案文件" @change="onImportPlanFile" />
 
-    <el-tabs v-model="activeTab" @tab-change="onTabChange" class="targets-tabs">
-      <!-- ============ 目标方案 ============ -->
+    <el-tabs v-model="activeTab" class="targets-tabs" aria-label="目标管理工作区" @tab-change="onTabChange">
       <el-tab-pane label="目标方案" name="plans">
-        <!-- 筛选栏（2 列：方案搜索 / 状态）。表格基于 f 即时过滤 -->
-        <div class="card-section filter-grid">
-          <div>
-            <div class="lab">方案搜索</div>
-            <el-input v-model="f.keyword" clearable placeholder="方案编码 / 名称"
-              style="width:100%" @keyup.enter="reload" />
-          </div>
-          <div>
-            <div class="lab">状态</div>
-            <el-select v-model="f.status" clearable placeholder="全部" style="width:100%">
-              <el-option label="启用" value="ACTIVE" />
-              <el-option label="停用" value="DISABLED" />
-            </el-select>
-          </div>
-          <div class="filter-actions">
-            <el-button type="primary" @click="reload">查询</el-button>
-            <el-button @click="resetFilters">重置</el-button>
-          </div>
-        </div>
+        <section class="card-section filter-bar" aria-label="目标方案筛选">
+          <el-form class="filter-form" inline aria-label="目标方案筛选">
+            <el-form-item label="方案搜索"><el-input v-model="f.keyword" clearable placeholder="方案编码 / 名称" aria-label="按方案编码或名称筛选" @keyup.enter="reload" /></el-form-item>
+            <el-form-item label="状态"><el-select v-model="f.status" clearable placeholder="全部" aria-label="按方案状态筛选"><el-option label="启用" value="ACTIVE" /><el-option label="停用" value="DISABLED" /></el-select></el-form-item>
+            <el-form-item><el-button type="primary" @click="reload">查询</el-button><el-button @click="resetFilters">重置</el-button></el-form-item>
+          </el-form>
+        </section>
 
-        <!-- 主表（方案级，每行 1 个方案） -->
-        <div class="card-section table">
-          <el-table :data="pagedPlans" size="default" empty-text="暂无目标方案" v-loading="loadingPlans">
-            <el-table-column label="目标方案" min-width="260">
-              <template #default="{row}">
-                <div>{{ row.planName || row.planCode || '-' }}</div>
-                <div v-if="row.planCode" style="color:#909399;font-size:12px;">{{ row.planCode }}</div>
-              </template>
-            </el-table-column>
-            <el-table-column label="创建时间" min-width="170">
-              <template #default="{row}">{{ fmtDateTime(row.createdTime) || '-' }}</template>
-            </el-table-column>
-            <el-table-column label="创建人" min-width="180">
-              <template #default="{row}">
-                <!-- 创建人姓名/工号由后端目标方案列表解析返回（createdByName/createdByUsername），不再依赖管理员 /admin/users -->
-                <div>{{ row.createdByName || row.createdByUsername || row.createdBy || '-' }}</div>
-                <div v-if="row.createdByUsername" style="color:#909399;font-size:12px;">{{ row.createdByUsername }}</div>
-              </template>
-            </el-table-column>
-            <el-table-column label="状态" width="80">
-              <template #default="{row}">
-                <el-tag :class="statusCls(row.status)" effect="plain">{{ statusLabel(row.status) }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="200" fixed="right">
-              <template #default="{row}">
-                <el-button link type="primary" size="small" @click="openValues(row)">目标值</el-button>
-                <!-- 仅创建人可编辑/删除：业务规则 - 资财人员可看全行方案（ALL scope），但只能改自己的 -->
-                <el-button v-if="row.createdBy === userStore.user?.empId" link type="primary" size="small" @click="openEditPlan(row)">编辑</el-button>
-                <el-button v-if="row.createdBy === userStore.user?.empId" link type="danger" size="small" @click="onDeletePlan(row)">删除</el-button>
-              </template>
-            </el-table-column>
+        <section class="card-section data-panel" aria-label="目标方案列表" aria-describedby="targets-plans-state" :aria-busy="loadingPlans ? 'true' : 'false'">
+          <div class="toolbar">
+            <div><h2 id="targets-plans-heading" class="section-title">目标方案列表</h2><p class="hint">目标方案进入目标值子页后，继续沿用当前方案与权限范围。</p></div>
+            <p id="targets-plans-state" class="table-state" role="status" aria-live="polite">{{ plansState }}</p>
+          </div>
+          <div v-if="plansError" class="table-error" role="alert"><span>{{ plansError }}</span><el-button link type="primary" @click="loadPlans">重新加载</el-button></div>
+          <el-table :data="pagedPlans" size="default" :empty-text="plansError ? '加载失败，请重新加载' : '暂无目标方案数据'" v-loading="loadingPlans" aria-labelledby="targets-plans-heading" aria-describedby="targets-plans-state">
+            <el-table-column label="目标方案" min-width="260" show-overflow-tooltip><template #default="{ row }"><div>{{ row.planName || row.planCode || '-' }}</div><div v-if="row.planCode" class="cell-meta">{{ row.planCode }}</div></template></el-table-column>
+            <el-table-column label="创建时间" min-width="170"><template #default="{ row }">{{ fmtDateTime(row.createdTime) || '-' }}</template></el-table-column>
+            <el-table-column label="创建人" min-width="180" show-overflow-tooltip><template #default="{ row }"><div>{{ row.createdByName || row.createdByUsername || row.createdBy || '-' }}</div><div v-if="row.createdByUsername" class="cell-meta">{{ row.createdByUsername }}</div></template></el-table-column>
+            <el-table-column label="状态" width="96"><template #default="{ row }"><el-tag :class="statusCls(row.status)" effect="plain" size="small">{{ statusLabel(row.status) }}</el-tag></template></el-table-column>
+            <el-table-column label="操作" width="220" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openValues(row)">目标值</el-button><el-button v-if="row.createdBy === userStore.user?.empId" link type="primary" size="small" @click="openEditPlan(row)">编辑</el-button><el-button v-if="row.createdBy === userStore.user?.empId" link type="danger" size="small" @click="onDeletePlan(row)">删除</el-button></template></el-table-column>
           </el-table>
-
-          <div class="pager">
-            <el-pagination
-              v-model:current-page="pager.pageNo"
-              v-model:page-size="pager.pageSize"
-              :page-sizes="[10, 20, 50, 100]"
-              :total="filteredPlans.length"
-              background
-              layout="total, sizes, prev, pager, next, jumper"
-            />
-          </div>
-        </div>
+          <nav class="pager" aria-label="目标方案列表分页"><el-pagination v-model:current-page="pager.pageNo" v-model:page-size="pager.pageSize" :page-sizes="[10, 20, 50, 100]" :total="filteredPlans.length" background layout="total, sizes, prev, pager, next, jumper" /></nav>
+        </section>
       </el-tab-pane>
 
-      <!-- ============ 待我审批（TARGET_ADJUST 流程任务） ============ -->
       <el-tab-pane v-if="canApprove" label="待我审批" name="todo">
-        <div class="card-section table">
-          <div class="tab-actions">
-            <el-button type="primary" @click="openBatchReview">
-              批量审批{{ todoSelection.length ? `（已选 ${todoSelection.length}）` : '' }}
-            </el-button>
-          </div>
-          <el-table :data="pagedTodos" size="default" empty-text="暂无待审批任务" v-loading="todoLoading"
-                    @selection-change="onTodoSelectionChange">
+        <section class="card-section data-panel" aria-label="待我审批列表" aria-describedby="targets-todo-state" :aria-busy="todoLoading ? 'true' : 'false'">
+          <div class="toolbar"><div><h2 id="targets-todo-heading" class="section-title">待我审批</h2><p class="hint">审批意见必填；候选任务会先按原有流程认领，再提交审批结果。</p></div><div class="approval-summary"><p id="targets-todo-state" class="table-state" role="status" aria-live="polite">{{ todoState }}</p><el-button type="primary" :disabled="!todoSelection.length || batchDlg.saving" @click="openBatchReview">批量审批（已选 {{ todoSelection.length }} 条）</el-button></div></div>
+          <div v-if="todoError" class="table-error" role="alert"><span>{{ todoError }}</span><el-button link type="primary" @click="loadTodos">重新加载</el-button></div>
+          <el-table :data="pagedTodos" size="default" :empty-text="todoError ? '加载失败，请重新加载' : '暂无待审批任务'" v-loading="todoLoading" aria-labelledby="targets-todo-heading" aria-describedby="targets-todo-state" @selection-change="onTodoSelectionChange">
             <el-table-column type="selection" width="45" />
-            <el-table-column label="方案编号" min-width="150">
-              <template #default="{row}"><code class="mono">{{ planOfTodo(row)?.planCode || '-' }}</code></template>
-            </el-table-column>
-            <el-table-column label="方案名称" min-width="180">
-              <template #default="{row}">{{ planOfTodo(row)?.planName || '-' }}</template>
-            </el-table-column>
-            <el-table-column label="关联KPI方案" min-width="180">
-              <template #default="{row}">{{ planOfTodo(row) ? kpiLabelOf(planOfTodo(row).kpiSchemeId) : '-' }}</template>
-            </el-table-column>
-            <el-table-column label="当前节点" width="160">
-              <template #default="{row}">{{ row.taskName || row.nodeKey || '-' }}</template>
-            </el-table-column>
-            <el-table-column label="发起人" width="140">
-              <template #default="{row}">{{ row.startUserName || row.startUser || '-' }}</template>
-            </el-table-column>
-            <el-table-column label="提交时间" width="170">
-              <template #default="{row}">{{ fmtDateTime(row.startTime) }}</template>
-            </el-table-column>
-            <el-table-column label="操作" width="110" fixed="right">
-              <template #default="{row}">
-                <el-button link type="primary" size="small" @click="openReview(row)">审批</el-button>
-              </template>
-            </el-table-column>
+            <el-table-column label="方案编号" min-width="150"><template #default="{ row }"><code class="mono">{{ planOfTodo(row)?.planCode || '-' }}</code></template></el-table-column>
+            <el-table-column label="方案名称" min-width="180" show-overflow-tooltip><template #default="{ row }">{{ planOfTodo(row)?.planName || '-' }}</template></el-table-column>
+            <el-table-column label="关联KPI方案" min-width="180" show-overflow-tooltip><template #default="{ row }">{{ planOfTodo(row) ? kpiLabelOf(planOfTodo(row).kpiSchemeId) : '-' }}</template></el-table-column>
+            <el-table-column label="当前节点" width="160"><template #default="{ row }">{{ row.taskName || row.nodeKey || '-' }}</template></el-table-column>
+            <el-table-column label="发起人" width="140"><template #default="{ row }">{{ row.startUserName || row.startUser || '-' }}</template></el-table-column>
+            <el-table-column label="提交时间" width="170"><template #default="{ row }">{{ fmtDateTime(row.startTime) }}</template></el-table-column>
+            <el-table-column label="操作" width="110" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openReview(row)">审批</el-button></template></el-table-column>
           </el-table>
-          <div class="pager">
-            <el-pagination
-              v-model:current-page="todoPager.pageNo"
-              v-model:page-size="todoPager.pageSize"
-              :page-sizes="[10, 20, 50]"
-              :total="todos.length"
-              background
-              layout="total, sizes, prev, pager, next, jumper"
-            />
-          </div>
-        </div>
+          <nav class="pager" aria-label="待我审批分页"><el-pagination v-model:current-page="todoPager.pageNo" v-model:page-size="todoPager.pageSize" :page-sizes="[10, 20, 50]" :total="todos.length" background layout="total, sizes, prev, pager, next, jumper" /></nav>
+        </section>
       </el-tab-pane>
 
-      <!-- ============ 已审批（从业务表查 APPROVED/REJECTED，不含 IN_APPROVAL） ============ -->
       <el-tab-pane v-if="canApprove" label="已审批" name="done">
-        <div class="card-section table">
-          <el-table :data="pagedDones" size="default" empty-text="暂无已审批记录" v-loading="doneLoading">
-            <el-table-column label="方案编号" min-width="150">
-              <template #default="{row}"><code class="mono">{{ planOfDone(row)?.planCode || '-' }}</code></template>
-            </el-table-column>
-            <el-table-column label="方案名称" min-width="180">
-              <template #default="{row}">{{ planOfDone(row)?.planName || '-' }}</template>
-            </el-table-column>
-            <el-table-column label="关联KPI方案" min-width="180">
-              <template #default="{row}">{{ planOfDone(row) ? kpiLabelOf(planOfDone(row).kpiSchemeId) : '-' }}</template>
-            </el-table-column>
-            <el-table-column label="发起人" width="160">
-              <template #default="{row}">{{ row.createdByName || row.createdBy || '-' }}</template>
-            </el-table-column>
-            <el-table-column label="申请时间" width="170">
-              <template #default="{row}">{{ fmtDateTime(row.createdTime) }}</template>
-            </el-table-column>
-            <el-table-column label="审批时间" width="170">
-              <template #default="{row}">{{ fmtDateTime(row.updatedTime) }}</template>
-            </el-table-column>
-            <el-table-column label="结果" width="80">
-              <template #default="{row}">
-                <el-tag v-if="row.status==='APPROVED'" class="tag-success" effect="plain">通过</el-tag>
-                <el-tag v-else-if="row.status==='REJECTED'" class="tag-danger" effect="plain">驳回</el-tag>
-                <span v-else>-</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="110" fixed="right">
-              <template #default="{row}">
-                <el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button>
-              </template>
-            </el-table-column>
+        <section class="card-section data-panel" aria-label="已审批列表" aria-describedby="targets-done-state" :aria-busy="doneLoading ? 'true' : 'false'">
+          <div class="toolbar"><div><h2 id="targets-done-heading" class="section-title">已审批</h2><p class="hint">只显示已通过或已驳回的目标修正申请，可查看审批记录与原因。</p></div><p id="targets-done-state" class="table-state" role="status" aria-live="polite">{{ doneState }}</p></div>
+          <div v-if="doneError" class="table-error" role="alert"><span>{{ doneError }}</span><el-button link type="primary" @click="loadDones">重新加载</el-button></div>
+          <el-table :data="pagedDones" size="default" :empty-text="doneError ? '加载失败，请重新加载' : '暂无已审批记录'" v-loading="doneLoading" aria-labelledby="targets-done-heading" aria-describedby="targets-done-state">
+            <el-table-column label="方案编号" min-width="150"><template #default="{ row }"><code class="mono">{{ planOfDone(row)?.planCode || '-' }}</code></template></el-table-column>
+            <el-table-column label="方案名称" min-width="180" show-overflow-tooltip><template #default="{ row }">{{ planOfDone(row)?.planName || '-' }}</template></el-table-column>
+            <el-table-column label="关联KPI方案" min-width="180" show-overflow-tooltip><template #default="{ row }">{{ planOfDone(row) ? kpiLabelOf(planOfDone(row).kpiSchemeId) : '-' }}</template></el-table-column>
+            <el-table-column label="发起人" width="160"><template #default="{ row }">{{ row.createdByName || row.createdBy || '-' }}</template></el-table-column>
+            <el-table-column label="申请时间" width="170"><template #default="{ row }">{{ fmtDateTime(row.createdTime) }}</template></el-table-column>
+            <el-table-column label="审批时间" width="170"><template #default="{ row }">{{ fmtDateTime(row.updatedTime) }}</template></el-table-column>
+            <el-table-column label="结果" width="90"><template #default="{ row }"><el-tag v-if="row.status === 'APPROVED'" class="tag-success" effect="plain" size="small">通过</el-tag><el-tag v-else-if="row.status === 'REJECTED'" class="tag-danger" effect="plain" size="small">驳回</el-tag><span v-else>-</span></template></el-table-column>
+            <el-table-column label="操作" width="110" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button></template></el-table-column>
           </el-table>
-          <div class="pager">
-            <el-pagination
-              v-model:current-page="donePager.pageNo"
-              v-model:page-size="donePager.pageSize"
-              :page-sizes="[10, 20, 50]"
-              :total="dones.length"
-              background
-              layout="total, sizes, prev, pager, next, jumper"
-            />
-          </div>
-        </div>
+          <nav class="pager" aria-label="已审批分页"><el-pagination v-model:current-page="donePager.pageNo" v-model:page-size="donePager.pageSize" :page-sizes="[10, 20, 50]" :total="dones.length" background layout="total, sizes, prev, pager, next, jumper" /></nav>
+        </section>
       </el-tab-pane>
     </el-tabs>
 
-    <!-- 审批弹窗（仅"待我审批"tab 用：通过 / 驳回 + 审批意见） -->
-    <el-dialog v-model="reviewDlg.show" :title="reviewTitle" width="560px" :close-on-click-modal="false">
-      <div class="review-meta">
-        <div><span class="lab">申请编号：</span><code>{{ reviewDlg.row?.businessKey || reviewDlg.row?.bizId || '-' }}</code></div>
-        <div><span class="lab">发起人：</span>{{ reviewDlg.row?.startUserName || reviewDlg.row?.startUser || '-' }}</div>
-        <div><span class="lab">提交时间：</span>{{ fmtDateTime(reviewDlg.row?.startTime) }}</div>
-      </div>
-      <!-- 修正详情（从 PERF_TARGET_ADJUST_APPLY.remark JSON 解析） -->
-      <div class="review-detail" v-if="reviewDlg.detail" v-loading="reviewDlg.detailLoading">
-        <div v-for="(adj, i) in reviewDlg.detail.adjustments" :key="i" class="adj-item">
-          <div><span class="lab">指标：</span>{{ metricLabel(adj.metricCode) }}</div>
-          <div>
-            <span class="lab">原目标值：</span><strong>{{ fmtNum(adj.oldValue) }}</strong>
-            <span class="sep">→</span>
-            <span class="lab">新目标值：</span><strong class="new-val">{{ fmtNum(adj.newValue) }}</strong>
-          </div>
-          <div v-if="adj.oldBaseValue != null || adj.newBaseValue != null">
-            <span class="lab">原基础值：</span><strong>{{ adj.oldBaseValue != null ? fmtNum(adj.oldBaseValue) : '-' }}</strong>
-            <span class="sep">→</span>
-            <span class="lab">新基础值：</span><strong class="new-val">{{ adj.newBaseValue != null ? fmtNum(adj.newBaseValue) : '-' }}</strong>
-          </div>
-        </div>
-        <div><span class="lab">修正原因：</span>{{ reviewDlg.detail.reason || '-' }}</div>
-      </div>
-      <div v-else-if="reviewDlg.detailLoading" v-loading="true" style="height:60px"></div>
-      <el-form :model="reviewDlg" label-position="top" size="default" style="margin-top:12px">
-        <el-form-item label="审批意见" required>
-          <el-input v-model="reviewDlg.opinion" type="textarea" :rows="3"
-                    placeholder="请填写审批意见（必填，将记入审批日志）" />
-        </el-form-item>
-      </el-form>
-      <el-alert type="info" :closable="false" show-icon
-                title="通过 → 触发目标值更新；驳回 → 申请记录置为驳回，目标值不变。" />
-      <template #footer>
-        <el-button @click="reviewDlg.show = false">取消</el-button>
-        <el-button type="danger" :loading="reviewDlg.saving" @click="submitReview('REJECT')">驳回</el-button>
-        <el-button type="primary" :loading="reviewDlg.saving" @click="submitReview('APPROVE')">通过</el-button>
-      </template>
+    <el-dialog v-model="reviewDlg.show" class="bp-crud-dialog" :title="reviewTitle" width="560px" :close-on-click-modal="false" :close-on-press-escape="!reviewDlg.saving" aria-label="目标修正审批确认">
+      <div class="review-meta"><div><span class="lab">申请编号：</span><code>{{ reviewDlg.row?.businessKey || reviewDlg.row?.bizId || '-' }}</code></div><div><span class="lab">发起人：</span>{{ reviewDlg.row?.startUserName || reviewDlg.row?.startUser || '-' }}</div><div><span class="lab">提交时间：</span>{{ fmtDateTime(reviewDlg.row?.startTime) }}</div></div>
+      <div v-if="reviewDlg.detail" class="review-detail" v-loading="reviewDlg.detailLoading"><div v-for="(adj, i) in reviewDlg.detail.adjustments" :key="i" class="adj-item"><div><span class="lab">指标：</span>{{ metricLabel(adj.metricCode) }}</div><div><span class="lab">原目标值：</span><strong>{{ fmtNum(adj.oldValue) }}</strong><span class="change-text">调整为</span><span class="lab">新目标值：</span><strong class="new-val">{{ fmtNum(adj.newValue) }}</strong></div><div v-if="adj.oldBaseValue != null || adj.newBaseValue != null"><span class="lab">原基础值：</span><strong>{{ adj.oldBaseValue != null ? fmtNum(adj.oldBaseValue) : '-' }}</strong><span class="change-text">调整为</span><span class="lab">新基础值：</span><strong class="new-val">{{ adj.newBaseValue != null ? fmtNum(adj.newBaseValue) : '-' }}</strong></div></div><div><span class="lab">调整原因：</span>{{ reviewDlg.detail.reason || '-' }}</div></div>
+      <div v-else-if="reviewDlg.detailLoading" class="detail-loading" v-loading="true"></div>
+      <el-form :model="reviewDlg" class="review-form" label-position="top" size="default"><el-form-item label="审批意见" required><el-input v-model="reviewDlg.opinion" type="textarea" :rows="3" placeholder="请填写审批意见（必填，将记入审批日志）" /></el-form-item></el-form>
+      <el-alert class="dialog-alert" type="info" :closable="false" show-icon title="通过后更新目标值；驳回后保留原目标值。审批意见会写入审批日志。" />
+      <template #footer><el-button :disabled="reviewDlg.saving" @click="reviewDlg.show = false">取消</el-button><el-button type="danger" :loading="reviewDlg.saving" :disabled="reviewDlg.saving" @click="submitReview('REJECT')">确认驳回</el-button><el-button type="primary" :loading="reviewDlg.saving" :disabled="reviewDlg.saving" @click="submitReview('APPROVE')">确认通过</el-button></template>
     </el-dialog>
 
-    <!-- 批量审批弹窗：对所选的多条待审批记录统一通过 / 驳回 -->
-    <el-dialog v-model="batchDlg.show" title="批量审批" width="520px" :close-on-click-modal="false">
-      <el-alert type="info" :closable="false" show-icon style="margin-bottom:12px"
-                :title="`已选 ${todoSelection.length} 条记录，将对全部所选记录统一处理。`" />
-      <el-form :model="batchDlg" label-position="top" size="default">
-        <el-form-item label="审批意见" required>
-          <el-input v-model="batchDlg.opinion" type="textarea" :rows="3"
-                    placeholder="请填写审批意见（必填，将记入每条审批日志）" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="batchDlg.show = false">取消</el-button>
-        <el-button type="danger" :loading="batchDlg.saving" @click="submitBatchReview('REJECT')">驳回</el-button>
-        <el-button type="primary" :loading="batchDlg.saving" @click="submitBatchReview('APPROVE')">通过</el-button>
-      </template>
+    <el-dialog v-model="batchDlg.show" class="bp-crud-dialog" title="批量审批确认" width="520px" :close-on-click-modal="false" :close-on-press-escape="!batchDlg.saving" aria-label="批量审批确认">
+      <el-alert class="dialog-alert" type="info" :closable="false" show-icon :title="`已选 ${todoSelection.length} 条记录，将对全部所选记录统一处理。`" />
+      <el-form :model="batchDlg" class="review-form" label-position="top" size="default"><el-form-item label="审批意见" required><el-input v-model="batchDlg.opinion" type="textarea" :rows="3" placeholder="请填写审批意见（必填，将记入每条审批日志）" /></el-form-item></el-form>
+      <template #footer><el-button :disabled="batchDlg.saving" @click="batchDlg.show = false">取消</el-button><el-button type="danger" :loading="batchDlg.saving" :disabled="batchDlg.saving" @click="submitBatchReview('REJECT')">确认驳回</el-button><el-button type="primary" :loading="batchDlg.saving" :disabled="batchDlg.saving" @click="submitBatchReview('APPROVE')">确认通过</el-button></template>
     </el-dialog>
 
-    <!-- 已审批详情弹窗（只读） -->
-    <el-dialog v-model="detailDlg.show" :title="detailTitle" width="580px" :close-on-click-modal="true">
-      <div class="review-meta">
-        <div><span class="lab">申请编号：</span><code>{{ detailDlg.row?.businessKey || detailDlg.row?.id || '-' }}</code></div>
-        <div><span class="lab">发起人：</span>{{ detailDlg.row?.createdByName || detailDlg.row?.createdBy || '-' }}</div>
-        <div><span class="lab">申请时间：</span>{{ fmtDateTime(detailDlg.row?.createdTime) }}</div>
-        <div><span class="lab">审批结果：</span>
-          <el-tag v-if="detailDlg.row?.status==='APPROVED'" class="tag-success" effect="plain">通过</el-tag>
-          <el-tag v-else-if="detailDlg.row?.status==='REJECTED'" class="tag-danger" effect="plain">驳回</el-tag>
-          <span v-else>-</span>
-        </div>
-      </div>
-      <!-- 修正详情 -->
-      <div class="review-detail" v-if="detailDlg.detail" v-loading="detailDlg.loading">
-        <div v-for="(adj, i) in detailDlg.detail.adjustments" :key="i" class="adj-item">
-          <div><span class="lab">指标：</span>{{ metricLabel(adj.metricCode) }}</div>
-          <div>
-            <span class="lab">原目标值：</span><strong>{{ fmtNum(adj.oldValue) }}</strong>
-            <span class="sep">→</span>
-            <span class="lab">新目标值：</span><strong class="new-val">{{ fmtNum(adj.newValue) }}</strong>
-          </div>
-          <div v-if="adj.oldBaseValue != null || adj.newBaseValue != null">
-            <span class="lab">原基础值：</span><strong>{{ adj.oldBaseValue != null ? fmtNum(adj.oldBaseValue) : '-' }}</strong>
-            <span class="sep">→</span>
-            <span class="lab">新基础值：</span><strong class="new-val">{{ adj.newBaseValue != null ? fmtNum(adj.newBaseValue) : '-' }}</strong>
-          </div>
-        </div>
-        <div><span class="lab">修正原因：</span>{{ detailDlg.detail.reason || '-' }}</div>
-      </div>
-      <!-- 审批记录（按时间倒序，申请提交节点显示"申请人"、审批节点显示"审批人"） -->
-      <div class="review-history" v-if="detailDlg.history.length" style="margin-top:12px">
-        <div class="history-title">审批记录</div>
-        <div v-for="(log, i) in sortedHistory" :key="i" class="history-item">
-          <span class="lab">{{ log.action === 'SUBMIT' ? '申请人' : '审批人' }}：</span>{{ log.operatorName || log.operatorEmpNo || log.operator || '-' }}<span v-if="log.operatorEmpNo">（{{ log.operatorEmpNo }}）</span>
-          <span class="sep">|</span>
-          <span class="lab">节点：</span>{{ log.nodeName || log.nodeKey || '-' }}
-          <span class="sep">|</span>
-          <span class="lab">时间：</span>{{ fmtDateTime(log.operateTime) }}
-          <div v-if="log.opinion"><span class="lab">意见：</span>{{ log.opinion }}</div>
-        </div>
-      </div>
-      <template #footer>
-        <el-button type="primary" @click="detailDlg.show = false">关闭</el-button>
-      </template>
+    <el-dialog v-model="detailDlg.show" class="bp-crud-dialog" :title="detailTitle" width="580px" aria-label="目标修正审批详情">
+      <div class="review-meta"><div><span class="lab">申请编号：</span><code>{{ detailDlg.row?.businessKey || detailDlg.row?.id || '-' }}</code></div><div><span class="lab">发起人：</span>{{ detailDlg.row?.createdByName || detailDlg.row?.createdBy || '-' }}</div><div><span class="lab">申请时间：</span>{{ fmtDateTime(detailDlg.row?.createdTime) }}</div><div><span class="lab">审批结果：</span><el-tag v-if="detailDlg.row?.status === 'APPROVED'" class="tag-success" effect="plain" size="small">通过</el-tag><el-tag v-else-if="detailDlg.row?.status === 'REJECTED'" class="tag-danger" effect="plain" size="small">驳回</el-tag><span v-else>-</span></div></div>
+      <div v-if="detailDlg.detail" class="review-detail" v-loading="detailDlg.loading"><div v-for="(adj, i) in detailDlg.detail.adjustments" :key="i" class="adj-item"><div><span class="lab">指标：</span>{{ metricLabel(adj.metricCode) }}</div><div><span class="lab">原目标值：</span><strong>{{ fmtNum(adj.oldValue) }}</strong><span class="change-text">调整为</span><span class="lab">新目标值：</span><strong class="new-val">{{ fmtNum(adj.newValue) }}</strong></div><div v-if="adj.oldBaseValue != null || adj.newBaseValue != null"><span class="lab">原基础值：</span><strong>{{ adj.oldBaseValue != null ? fmtNum(adj.oldBaseValue) : '-' }}</strong><span class="change-text">调整为</span><span class="lab">新基础值：</span><strong class="new-val">{{ adj.newBaseValue != null ? fmtNum(adj.newBaseValue) : '-' }}</strong></div></div><div><span class="lab">调整原因：</span>{{ detailDlg.detail.reason || '-' }}</div></div>
+      <div v-if="detailDlg.history.length" class="review-history"><h3 class="history-title">审批记录</h3><div v-for="(log, i) in sortedHistory" :key="i" class="history-item"><span class="lab">{{ log.action === 'SUBMIT' ? '申请人' : '审批人' }}：</span>{{ log.operatorName || log.operatorEmpNo || log.operator || '-' }}<span v-if="log.operatorEmpNo">（{{ log.operatorEmpNo }}）</span><span class="history-separator">|</span><span class="lab">节点：</span>{{ log.nodeName || log.nodeKey || '-' }}<span class="history-separator">|</span><span class="lab">时间：</span>{{ fmtDateTime(log.operateTime) }}<div v-if="log.opinion"><span class="lab">意见：</span>{{ log.opinion }}</div></div></div>
+      <template #footer><el-button type="primary" @click="detailDlg.show = false">关闭</el-button></template>
     </el-dialog>
 
-    <!-- 新增方案对话框（资财部限定，由 canCreatePlan 控制可见） -->
-    <el-dialog v-model="planDlg.show" :title="planDlg.editing ? '编辑目标方案' : '新增目标方案'" width="560px" :close-on-click-modal="false">
-      <el-form ref="planFormRef" :model="planDlg.form" :rules="planRules" label-width="120px" size="default">
-        <el-form-item label="方案编码" prop="planCode">
-          <el-input v-model="planDlg.form.planCode" :disabled="!!planDlg.editing" placeholder="大写字母开头，如 TP_2026_Q2" />
-        </el-form-item>
-        <el-form-item label="方案名称" prop="planName">
-          <el-input v-model="planDlg.form.planName" placeholder="如 2026 年度目标方案" />
-        </el-form-item>
-        <!-- 关联KPI方案/目标维度/起止日期 均不在 UI 暴露：
-             目标维度固定 EMP；关联KPI方案留空（后端放开校验）；生效日期后端为空时默认当天 -->
-      </el-form>
-      <template #footer>
-        <el-button @click="planDlg.show = false">取消</el-button>
-        <template v-if="planDlg.editing">
-          <el-button v-if="planDlg.form._status==='ACTIVE'" type="warning" @click="togglePlanStatus(planDlg.editing,'DISABLED')">禁用</el-button>
-          <el-button v-else type="success" @click="togglePlanStatus(planDlg.editing,'ACTIVE')">启用</el-button>
-        </template>
-        <el-button type="primary" :loading="planDlg.saving" @click="onSavePlan">保存</el-button>
-      </template>
+    <el-dialog v-model="planDlg.show" class="bp-crud-dialog" :title="planDlg.editing ? '编辑目标方案' : '新增目标方案'" width="560px" :close-on-click-modal="false" :close-on-press-escape="!planDlg.saving" aria-label="目标方案编辑">
+      <el-form ref="planFormRef" :model="planDlg.form" :rules="planRules" label-width="120px" size="default"><el-form-item label="方案编码" prop="planCode"><el-input v-model="planDlg.form.planCode" :disabled="!!planDlg.editing" placeholder="大写字母开头，如 TP_2026_Q2" /></el-form-item><el-form-item label="方案名称" prop="planName"><el-input v-model="planDlg.form.planName" placeholder="如 2026 年度目标方案" /></el-form-item></el-form>
+      <template #footer><el-button :disabled="planDlg.saving" @click="planDlg.show = false">取消</el-button><template v-if="planDlg.editing"><el-button v-if="planDlg.form._status === 'ACTIVE'" type="warning" :disabled="planDlg.saving" @click="togglePlanStatus(planDlg.editing, 'DISABLED')">禁用</el-button><el-button v-else type="success" :disabled="planDlg.saving" @click="togglePlanStatus(planDlg.editing, 'ACTIVE')">启用</el-button></template><el-button type="primary" :loading="planDlg.saving" :disabled="planDlg.saving" @click="onSavePlan">保存</el-button></template>
     </el-dialog>
 
-    <!-- 触发 KPI 计算：KPI方案锁定为该目标方案关联的方案，仅选数据日期 + 触发原因 -->
-    <el-dialog v-model="kpiTrgDlg.show" title="确认触发 KPI 计算" width="520px" :close-on-click-modal="false">
-      <el-alert type="warning" :closable="false" show-icon style="margin-bottom:14px"
-        title="该操作将基于所选数据日期的指标结果与目标值，重算该目标方案关联的 KPI 方案得分。" />
-      <el-form ref="kpiTrgFormRef" :model="kpiTrgDlg.form" :rules="kpiTrgRules" label-position="top" size="default">
-        <el-form-item label="数据日期" prop="dataDate">
-          <el-date-picker v-model="kpiTrgDlg.form.dataDate" type="date"
-            value-format="YYYY-MM-DD" style="width:100%" placeholder="选择数据日期" />
-        </el-form-item>
-        <el-form-item label="KPI方案">
-          <el-input :model-value="kpiTrgDlg.form.schemeLabel" disabled />
-        </el-form-item>
-        <el-form-item label="触发原因" prop="reason">
-          <el-input v-model="kpiTrgDlg.form.reason" type="textarea" :rows="3" maxlength="500" show-word-limit
-            placeholder="请说明触发 KPI 计算的原因（将记入审计日志）" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="kpiTrgDlg.show = false">取消</el-button>
-        <el-button type="primary" :loading="kpiTrgDlg.saving" @click="onConfirmPlanTrigger">确认执行</el-button>
-      </template>
+    <el-dialog v-model="kpiTrgDlg.show" class="bp-crud-dialog" title="确认触发 KPI 计算" width="520px" :close-on-click-modal="false" :close-on-press-escape="!kpiTrgDlg.saving" aria-label="触发KPI计算确认">
+      <el-alert class="dialog-alert" type="warning" :closable="false" show-icon title="该操作将基于所选数据日期的指标结果与目标值，重算关联 KPI 方案得分。" />
+      <el-form ref="kpiTrgFormRef" :model="kpiTrgDlg.form" class="review-form" :rules="kpiTrgRules" label-position="top" size="default"><el-form-item label="数据日期" prop="dataDate"><el-date-picker v-model="kpiTrgDlg.form.dataDate" class="field-control" type="date" value-format="YYYY-MM-DD" placeholder="选择数据日期" /></el-form-item><el-form-item label="KPI方案"><el-input :model-value="kpiTrgDlg.form.schemeLabel" disabled /></el-form-item><el-form-item label="触发原因" prop="reason"><el-input v-model="kpiTrgDlg.form.reason" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="请说明触发 KPI 计算的原因（将记入审计日志）" /></el-form-item></el-form>
+      <template #footer><el-button :disabled="kpiTrgDlg.saving" @click="kpiTrgDlg.show = false">取消</el-button><el-button type="primary" :loading="kpiTrgDlg.saving" :disabled="kpiTrgDlg.saving" @click="onConfirmPlanTrigger">确认执行</el-button></template>
     </el-dialog>
-
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -493,6 +272,7 @@ function resetFilters() {
 }
 const plans = ref([]);
 const loadingPlans = ref(false);
+const plansError = ref('');
 
 // 创建人/发起人姓名一律用后端返回的 createdByName：
 // 目标方案 TargetPlanService#425、目标调整 TargetAdjustService#289 均已解析填充。
@@ -504,6 +284,7 @@ const loadingPlans = ref(false);
 
 async function loadPlans() {
   loadingPlans.value = true;
+  plansError.value = '';
   try {
     const r = await listTargets({ pageSize: 100 });
     // listTargets 走 unwrapPage：分页响应返回 { records: [...], total } 形态；
@@ -511,6 +292,7 @@ async function loadPlans() {
     plans.value = Array.isArray(r) ? r : (r?.records || []);
   } catch {
     plans.value = [];
+    plansError.value = '目标方案加载失败，请检查网络或权限后重新加载。';
   } finally {
     loadingPlans.value = false;
   }
@@ -537,8 +319,13 @@ const pagedPlans = computed(() => {
   const start = (pager.pageNo - 1) * pager.pageSize;
   return filteredPlans.value.slice(start, start + pager.pageSize);
 });
+const plansState = computed(() => {
+  if (loadingPlans.value) return '目标方案列表加载中';
+  if (plansError.value) return '目标方案列表加载失败';
+  return filteredPlans.value.length ? `共 ${filteredPlans.value.length} 个目标方案` : '暂无目标方案数据';
+});
 
-// 「🔄 刷新」按钮的处理：重拉一次方案数据 + 回第 1 页（筛选条件由 filteredPlans 即时生效，不需再 apply）
+// “刷新”按钮：重拉一次方案数据并回到第 1 页（筛选条件由 filteredPlans 即时生效，不需再 apply）。
 async function onSearch() {
   pager.pageNo = 1;
   await loadPlans();
@@ -573,6 +360,7 @@ function fmtDateTime(v) {
 // === 待我审批（TARGET_ADJUST bizType） ===
 const todos = ref([]);
 const todoLoading = ref(false);
+const todoError = ref('');
 const todoPager = reactive({ pageNo: 1, pageSize: 10 });
 const pagedTodos = computed(() => {
   const start = (todoPager.pageNo - 1) * todoPager.pageSize;
@@ -580,6 +368,7 @@ const pagedTodos = computed(() => {
 });
 async function loadTodos() {
   todoLoading.value = true;
+  todoError.value = '';
   try {
     const r = await listTodoTasks({ pageSize: 50, bizType: 'TARGET_ADJUST' });
     // listTodoTasks 经 unwrapPage 返回 {records,total}（非数组），必须取 records
@@ -587,13 +376,22 @@ async function loadTodos() {
     todoPager.pageNo = 1;
     // 刷新申请索引，保证待审批行能按 businessKey 反查到方案信息
     loadApplyIndex();
-  } catch { todos.value = []; }
+  } catch {
+    todos.value = [];
+    todoError.value = '待我审批加载失败，请刷新后重试。';
+  }
   finally { todoLoading.value = false; }
 }
+const todoState = computed(() => {
+  if (todoLoading.value) return '待我审批加载中';
+  if (todoError.value) return '待我审批加载失败';
+  return todos.value.length ? `待处理 ${todos.value.length} 条` : '暂无待审批任务';
+});
 
 // === 已审批（TARGET_ADJUST bizType） ===
 const dones = ref([]);
 const doneLoading = ref(false);
+const doneError = ref('');
 const donePager = reactive({ pageNo: 1, pageSize: 10 });
 const pagedDones = computed(() => {
   const start = (donePager.pageNo - 1) * donePager.pageSize;
@@ -601,6 +399,7 @@ const pagedDones = computed(() => {
 });
 async function loadDones() {
   doneLoading.value = true;
+  doneError.value = '';
   try {
     // 从业务表拉已完结的修正申请（APPROVED / REJECTED），不从 workflow done-tasks 拉
     // 避免未审批完的中间节点 task 混入"已审批"列表
@@ -609,9 +408,17 @@ async function loadDones() {
     const all = Array.isArray(r) ? r : (r?.records || []);
     dones.value = all.filter(d => d.status === 'APPROVED' || d.status === 'REJECTED');
     donePager.pageNo = 1;
-  } catch { dones.value = []; }
+  } catch {
+    dones.value = [];
+    doneError.value = '已审批记录加载失败，请刷新后重试。';
+  }
   finally { doneLoading.value = false; }
 }
+const doneState = computed(() => {
+  if (doneLoading.value) return '已审批列表加载中';
+  if (doneError.value) return '已审批列表加载失败';
+  return dones.value.length ? `共 ${dones.value.length} 条已审批记录` : '暂无已审批记录';
+});
 // === 已审批详情弹窗（只读） ===
 const detailDlg = reactive({ show: false, loading: false, row: null, detail: null, history: [] });
 const detailTitle = computed(() => {
@@ -648,7 +455,7 @@ async function openDetail(row) {
 }
 
 
-// 「🔄 刷新」全局按钮：按当前 tab 路由
+// 全局“刷新”按钮按当前页签路由。
 async function reload() {
   if (activeTab.value === 'plans') return onSearch();
   if (activeTab.value === 'todo')  return loadTodos();
@@ -686,13 +493,45 @@ async function openReview(row) {
   }
   reviewDlg.detailLoading = false;
 }
-// 候选组任务（assignee=null, claimable=true）必须先 claim 才能 approve/reject
+// 候选组任务（assignee=null, claimable=true）必须先 claim 才能 approve/reject。
+// 同一 taskId 共用进行中的 claim Promise，避免双击或批量审批与单条审批并发时重复认领。
+const claimedTaskIds = new Set();
+const claimInFlight = new Map();
+const decisionInFlight = new Set();
 async function ensureClaimed(row) {
-  if (row.claimable && row.taskId) {
-    await claimTask(row.taskId);
+  const taskId = row?.taskId;
+  if (!row?.claimable || !taskId || claimedTaskIds.has(taskId)) return;
+  if (!claimInFlight.has(taskId)) {
+    const request = claimTask(taskId)
+      .then((result) => {
+        claimedTaskIds.add(taskId);
+        row.claimable = false;
+        return result;
+      })
+      .finally(() => claimInFlight.delete(taskId));
+    claimInFlight.set(taskId, request);
+  }
+  return claimInFlight.get(taskId);
+}
+
+async function submitDecision(row, action, opinion) {
+  const taskId = row?.taskId;
+  if (!taskId || decisionInFlight.has(taskId)) return false;
+  decisionInFlight.add(taskId);
+  try {
+    await ensureClaimed(row);
+    if (action === 'APPROVE') {
+      await approveTask(taskId, opinion);
+    } else {
+      await rejectTask(taskId, opinion);
+    }
+    return true;
+  } finally {
+    decisionInFlight.delete(taskId);
   }
 }
 async function submitReview(action) {
+  if (reviewDlg.saving) return;
   if (!reviewDlg.opinion || !reviewDlg.opinion.trim()) {
     return ElMessage.warning('请填写审批意见');
   }
@@ -701,14 +540,9 @@ async function submitReview(action) {
   }
   reviewDlg.saving = true;
   try {
-    await ensureClaimed(reviewDlg.row);
-    if (action === 'APPROVE') {
-      await approveTask(reviewDlg.row.taskId, reviewDlg.opinion);
-      ElMessage.success('已通过');
-    } else {
-      await rejectTask(reviewDlg.row.taskId, reviewDlg.opinion);
-      ElMessage.success('已驳回');
-    }
+    const submitted = await submitDecision(reviewDlg.row, action, reviewDlg.opinion);
+    if (!submitted) return;
+    ElMessage.success(action === 'APPROVE' ? '已通过' : '已驳回');
     reviewDlg.show = false;
     await loadTodos();
     dones.value = [];
@@ -735,6 +569,7 @@ function openBatchReview() {
 }
 // 对所选全部记录统一通过/驳回；审批意见必填；逐条提交，统计成功/失败
 async function submitBatchReview(action) {
+  if (batchDlg.saving) return;
   if (!batchDlg.opinion || !batchDlg.opinion.trim()) {
     return ElMessage.warning('请填写审批意见');
   }
@@ -747,13 +582,8 @@ async function submitBatchReview(action) {
   let fail = 0;
   for (const row of rows) {
     try {
-      await ensureClaimed(row);
-      if (action === 'APPROVE') {
-        await approveTask(row.taskId, batchDlg.opinion);
-      } else {
-        await rejectTask(row.taskId, batchDlg.opinion);
-      }
-      ok++;
+      const submitted = await submitDecision(row, action, batchDlg.opinion);
+      if (submitted) ok++;
     } catch (e) {
       fail++;
     }
@@ -806,6 +636,7 @@ function triggerImportPlan() {
 }
 // 选中文件后上传：importType=TARGET_PLAN，整批 all-or-none（后端校验不通过会抛错回显）
 async function onImportPlanFile(ev) {
+  if (importing.value) return;
   const file = ev?.target?.files?.[0];
   if (!file) return;
   importing.value = true;
@@ -860,6 +691,7 @@ async function openEditPlan(row) {
   } catch { planDlg.hasValues = false; }
 }
 async function onSavePlan() {
+  if (planDlg.saving) return;
   try { await planFormRef.value.validate(); } catch { return; }
   if (planDlg.form.startDate && planDlg.form.endDate
       && planDlg.form.startDate > planDlg.form.endDate) {
@@ -949,46 +781,126 @@ onMounted(async () => {
 </script>
 
 <style lang="scss" scoped>
-.lock-hint { font-size: 12px; color: $text-4; margin-top: 4px; line-height: 1.4; }
-.page-h h1 .sub {
-  font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400;
-  em { color: $text-4; font-style: normal; }
+.targets-page {
+  min-width: 0;
 }
-.filter-grid {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
-  .lab { font-size: 13px; color: $text-2; margin-bottom: 6px; }
-  .filter-actions { display: flex; align-items: flex-end; }
+
+.file-input {
+  block-size: 1px;
+  clip: rect(0 0 0 0);
+  inline-size: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
 }
-.table { padding: 14px 16px 12px; }
-.pager { margin-top: 12px; display: flex; justify-content: flex-end; }
-.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
-.tab-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-/* 取消审批后只保留「目标方案」，隐藏 tab 栏（待我审批/已审批不再使用） */
-.targets-tabs :deep(.el-tabs__header) { display: none; }
-.review-meta {
-  background: rgba(64, 158, 255, 0.04);
-  border-left: 3px solid #409eff;
-  padding: 10px 14px; border-radius: 4px;
-  font-size: 13px; line-height: 1.9;
-  .lab { color: $text-3; margin-right: 4px; }
+
+.cell-meta {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 18px;
 }
+
+.mono {
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.approval-summary {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.table-error {
+  align-items: center;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-fg);
+  color: var(--color-danger-fg);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+
+.review-meta,
 .review-detail {
-  margin-top: 10px; padding: 10px 14px; border-radius: 4px;
-  background: rgba(245, 158, 11, 0.06);
-  border-left: 3px solid #f59e0b;
-  font-size: 13px; line-height: 1.9;
-  .lab { color: $text-3; margin-right: 4px; }
-  .sep { margin: 0 6px; color: $text-4; }
-  .new-val { color: #e65100; }
-  .adj-item { margin-bottom: 2px; }
+  border-left: 3px solid var(--color-info-fg);
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 22px;
+  padding: var(--space-3) var(--space-4);
 }
+
+.review-meta {
+  background: var(--color-info-bg);
+}
+
+.review-detail {
+  background: var(--color-warning-bg);
+  border-left-color: var(--color-warning-fg);
+  margin-top: var(--space-3);
+}
+
+.review-meta .lab,
+.review-detail .lab,
+.review-history .lab {
+  color: var(--color-text-muted);
+  margin-right: var(--space-1);
+}
+
+.change-text,
+.history-separator {
+  color: var(--color-text-muted);
+  margin: 0 var(--space-2);
+}
+
+.new-val {
+  color: var(--color-warning-fg);
+}
+
+.adj-item + .adj-item {
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+.detail-loading {
+  min-height: 64px;
+}
+
+.review-form {
+  margin-top: var(--space-3);
+}
+
+.dialog-alert {
+  margin-top: var(--space-3);
+}
+
 .review-history {
-  .history-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: $text-1; }
-  .history-item {
-    padding: 8px 12px; margin-bottom: 6px; border-radius: 4px;
-    background: rgba(0, 0, 0, 0.02); font-size: 13px; line-height: 1.8;
-    .lab { color: $text-3; margin-right: 4px; }
-    .sep { margin: 0 6px; color: $text-4; }
-  }
+  margin-top: var(--space-3);
+}
+
+.history-title {
+  color: var(--color-text-strong);
+  font-size: 14px;
+  line-height: 22px;
+  margin-bottom: var(--space-2);
+}
+
+.history-item {
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  font-size: 14px;
+  line-height: 22px;
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
+.field-control {
+  width: 100%;
 }
 </style>

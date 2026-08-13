@@ -9,13 +9,14 @@
     POST /api/reports/sql-probe/execute          —— executeSqlProbe
 -->
 <template>
-  <div class="rpt-sql">
-    <div class="page-h">
-      <PageTitle />
+  <main class="bp-crud rpt-sql" aria-labelledby="sql-report-title" :aria-busy="running || exporting || historyLoading || exportTasksLoading ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="sql-report-title" />
       <span class="desc">仅 SELECT · 30s 超时 · 全程审计 · 传输加密</span>
-    </div>
+    </header>
 
-    <div class="card-section input">
+    <section class="card-section input" aria-label="SQL 探查执行区">
+      <el-alert class="risk-alert" type="warning" :closable="false" show-icon title="高风险只读操作：仅允许白名单表 SELECT，执行原因将写入审计记录。" />
       <div class="row">
         <div class="col grow">
           <div class="lab"><span class="req">*</span> 执行原因</div>
@@ -32,32 +33,33 @@
 
       <el-alert v-if="errors.length" type="error" :closable="false" class="vresult">
         <template #title>
-          ✗ 校验失败：
+          校验失败：
           <div v-for="(e, i) in errors" :key="i">· {{ e }}</div>
         </template>
       </el-alert>
       <el-alert v-else-if="reason.trim()" type="success" :closable="false" class="vresult">
         <template #title>
-          ✓ 校验通过 · 引用表：<span class="mono">{{ usedTables.join(', ') || '-' }}</span>
+          校验通过 · 引用表：<span class="mono">{{ usedTables.join(', ') || '-' }}</span>
         </template>
       </el-alert>
 
       <div class="ops">
         <el-button @click="formatSql">格式化</el-button>
+        <el-button @click="whitelistVisible = true">查看白名单</el-button>
         <el-button :icon="List"   @click="historyVisible = true">查看历史</el-button>
-        <el-button :icon="Download" :loading="exporting" :disabled="!valid" @click="createExport" class="run">
+        <el-button :icon="Download" :loading="exporting" :disabled="!valid || exporting || running" @click="createExport" class="run">
           下载
         </el-button>
-        <el-button type="primary" :loading="running" :disabled="!valid" @click="run">
-          ▶ 执行
+        <el-button type="primary" :loading="running" :disabled="!valid || running" @click="run">
+          执行
         </el-button>
       </div>
-    </div>
+    </section>
 
     <!-- 异步导出任务列表：点「下载」后任务进这里，轮询进度，成功后点「下载文件」 -->
-    <div v-if="exportTasks.length" class="card-section export-tasks">
-      <div class="card-h">
-        <div class="title">下载任务</div>
+    <section v-if="exportTasks.length" class="card-section data-panel export-tasks" aria-labelledby="sql-export-title">
+      <div class="toolbar">
+        <div><h2 id="sql-export-title" class="section-title">下载任务</h2><p class="hint">任务处理中自动刷新，最长两分钟；到达上限可手动刷新。</p></div>
         <el-button link type="primary" size="small" @click="refreshExportTasks" :loading="exportTasksLoading" style="margin-left:auto">刷新</el-button>
       </div>
       <el-table :data="exportTasks" size="default" stripe>
@@ -91,17 +93,20 @@
             <el-tooltip v-else-if="row.status === 'FAILED'" :content="row.errorMsg || '执行失败'" placement="top">
               <span class="fail-hint">失败</span>
             </el-tooltip>
-            <span v-else class="mono" style="color:#999">处理中…</span>
+            <span v-else class="mono pending-text">处理中…</span>
           </template>
         </el-table-column>
       </el-table>
-    </div>
+    </section>
 
-    <div v-if="result && !running" class="card-section result">
-      <div class="card-h">
-        <div class="title">
+    <section v-if="result && !running" class="card-section data-panel result" aria-labelledby="sql-result-title">
+      <div class="toolbar">
+        <div>
+          <h2 id="sql-result-title" class="section-title">
           查询结果（{{ result.rows }} 行 · 用时 {{ result.time }}
-          <span class="audit">· ✓ 已写入审计 TraceId {{ result.traceId }}</span>）
+          <span class="audit">· 已写入审计 TraceId {{ result.traceId }}</span>）
+          </h2>
+          <p class="hint">结果只在当前浏览器会话中展示；下载请使用独立异步任务。</p>
         </div>
       </div>
       <el-table :data="pagedData" size="default" stripe border max-height="480">
@@ -129,10 +134,10 @@
           layout="total, sizes, prev, pager, next"
         />
       </div>
-    </div>
+    </section>
 
     <!-- 历史记录 Dialog —— 点击行回填到 SQL 编辑器 -->
-    <el-dialog v-model="historyVisible" title="SQL 探查历史" width="900px">
+    <el-dialog v-model="historyVisible" class="bp-crud-dialog" title="SQL 探查历史" width="900px" aria-label="SQL 探查历史">
       <el-alert type="info" :closable="false" style="margin-bottom:8px">
         点击任一行可载入到上方编辑器（仅回填 SQL 与原因，不会自动执行）。
       </el-alert>
@@ -179,7 +184,7 @@
     </el-dialog>
 
     <!-- 表白名单 Dialog -->
-    <el-dialog v-model="whitelistVisible" title="表白名单" width="520px">
+    <el-dialog v-model="whitelistVisible" class="bp-crud-dialog" title="表白名单" width="520px" aria-label="SQL 探查表白名单">
       <el-alert type="info" :closable="false" style="margin-bottom:12px">
         以下为 SQL 探查可访问的全部表，仅允许 SELECT。
       </el-alert>
@@ -187,7 +192,7 @@
         <li v-for="t in whitelist" :key="t" class="mono">{{ t }}</li>
       </ul>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -283,7 +288,7 @@ onMounted(async () => {
 });
 
 async function run() {
-  if (!valid.value) { ElMessage.warning('请先通过校验'); return; }
+  if (running.value || !valid.value) { ElMessage.warning('请先通过校验'); return; }
   running.value = true;
   result.value = null;
   try {
@@ -358,7 +363,7 @@ async function refreshExportTasks() {
 }
 
 async function createExport() {
-  if (!valid.value) { ElMessage.warning('请先通过校验'); return; }
+  if (exporting.value || running.value || !valid.value) { ElMessage.warning('请先通过校验'); return; }
   exporting.value = true;
   try {
     // 与执行一致：sql 加密后提交，后端解密；后台异步生成
@@ -437,35 +442,28 @@ function formatCell(v) {
 
 <style lang="scss" scoped>
 .rpt-sql {
-  .page-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px;
-    h1 { font-size: 18px; font-weight: 600; color: $text-1; }
-    .desc { color: $text-3; font-size: 12px; }
-  }
-  .warn { margin-bottom: 12px; }
-  .input { padding: 16px 20px; }
+  .risk-alert { margin-bottom: var(--space-4); }
   .row { display: flex; gap: 16px; flex-wrap: wrap; }
   .col { display: flex; flex-direction: column; gap: 6px; min-width: 160px;
     &.grow { flex: 1; min-width: 240px; }
   }
-  .lab { font-size: 12px; color: $text-3;
-    .req { color: $danger; margin-right: 4px; }
+  .lab { font-size: 12px; color: var(--color-text);
+    .req { color: var(--color-danger-fg); margin-right: 4px; }
   }
-  .sql-area :deep(textarea) { font-family: Menlo, Consolas, monospace; font-size: 12px; background: #fafafa; }
+  .sql-area :deep(textarea) { background: var(--color-surface-soft); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
   .vresult { margin-top: 8px; }
   .ops { display: flex; gap: 8px; margin-top: 12px;
     .run { margin-left: auto; }
   }
-  .result { padding: 16px 20px;
-    .audit { color: $success; font-weight: 400; font-size: 12px; }
+  .result {
+    .audit { color: var(--color-success-fg); font-weight: 400; font-size: 12px; }
   }
-  .export-tasks { padding: 16px 20px;
-    .fail-hint { color: $danger; cursor: default; }
+  .export-tasks {
+    .fail-hint { color: var(--color-danger-fg); cursor: default; }
   }
-  .card-h { display: flex; align-items: center; padding: 0 0 12px; border-bottom: 1px solid $border-1; margin-bottom: 12px;
-    .title { font-size: 14px; font-weight: 600; }
-  }
-  .mono { font-family: Menlo, Consolas, monospace; font-size: 12px; }
-  .wl { padding: 0 0 0 18px; line-height: 1.9; color: $text-2; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+  .pending-text { color: var(--color-text-muted); }
+  .wl { color: var(--color-text); line-height: 1.9; padding: 0 0 0 18px; }
 }
 .pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

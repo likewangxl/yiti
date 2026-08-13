@@ -66,9 +66,8 @@ describe('screenDesigner store', () => {
     expect(store.canRedo).toBe(true);
   });
 
-  // Important-2(评审):toSavePayload 缺 CANVAS_DRAFT_JSON 契约的顶层 schemaVersion,
-  // loadFromEditor 把 draft.schemaVersion 丢弃,导致往返序列化丢字段。
-  it('toSavePayload 输出顶层 schemaVersion,与 loadFromEditor 装载的 draft.schemaVersion 对齐(Important-2)', () => {
+  // 画布保存与元数据/角色保存是三个独立契约：不能把草稿读取字段或高危角色字段夹带到画布保存。
+  it('toSavePayload 仅输出画布保存契约，不夹带 schema/元数据/角色(Important-2)', () => {
     const store = useScreenDesignerStore();
     store.loadFromEditor({
       screenId: 9, canvasVersion: 1, publishStatus: 0,
@@ -77,7 +76,11 @@ describe('screenDesigner store', () => {
       blocks: []
     });
     const payload = store.toSavePayload();
-    expect(payload.schemaVersion).toBe(1);
+    expect(payload).toEqual(expect.objectContaining({ screenId: 9, expectedVersion: 1, components: [] }));
+    expect(payload).not.toHaveProperty('schemaVersion');
+    expect(payload).not.toHaveProperty('bizLine');
+    expect(payload).not.toHaveProperty('orgScopeMode');
+    expect(payload).not.toHaveProperty('allowedRoleCodes');
   });
 });
 

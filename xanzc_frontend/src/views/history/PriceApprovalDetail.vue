@@ -3,16 +3,22 @@
   后端：GET /api/reports/amas-price-approvals/{priceApprId}
 -->
 <template>
-  <div class="price-detail" v-loading="loading">
+  <main class="bp-crud price-detail" aria-labelledby="price-approval-detail-title" :aria-busy="loading ? 'true' : 'false'">
     <div class="page-h">
-      <h1>定价审批详情</h1>
-      <el-tag :type="STATUS_TAG[d.apprStatus] || 'info'" size="small" class="st-tag">
+      <PageTitle id="price-approval-detail-title" title="定价审批详情" />
+      <el-tag :class="STATUS_TAG[d.apprStatus] || 'tag-info'" size="small" class="st-tag">
         {{ APPR_STATUS[d.apprStatus] || d.apprStatus || '-' }}
       </el-tag>
-      <el-button link class="back-btn" @click="$router.back()">← 返回</el-button>
+      <el-button link class="back-btn" aria-label="返回定价审批列表" @click="$router.back()">返回</el-button>
     </div>
 
-    <el-descriptions :column="2" border size="default" class="desc-block">
+    <section class="card-section data-panel detail-section" aria-label="定价审批详情">
+      <div v-if="errorMessage" class="error-state" role="alert">
+        <span>{{ errorMessage }}</span>
+        <el-button link type="primary" @click="load">重试</el-button>
+      </div>
+      <p v-else-if="loading" class="table-state" role="status" aria-live="polite">定价审批详情加载中</p>
+    <el-descriptions :column="2" border size="default" class="desc-block" :class="{ 'is-muted': loading }">
       <el-descriptions-item label="价格审批编号">{{ d.priceApprId || '-' }}</el-descriptions-item>
       <el-descriptions-item label="申请时间">{{ d.applyTime || '-' }}</el-descriptions-item>
       <el-descriptions-item label="申请人姓名">{{ d.applyFullname || '-' }}</el-descriptions-item>
@@ -42,7 +48,8 @@
       <el-descriptions-item label="附件" :span="2">{{ d.files || '-' }}</el-descriptions-item>
       <el-descriptions-item label="备注" :span="2">{{ d.remark || '-' }}</el-descriptions-item>
     </el-descriptions>
-  </div>
+    </section>
+  </main>
 </template>
 
 <script setup>
@@ -52,16 +59,21 @@ import { getPriceApprovalDetail } from '@/api/report';
 
 const route = useRoute();
 const APPR_STATUS = { '0': '待审批', '1': '已通过', '2': '未通过' };
-const STATUS_TAG = { '0': 'warning', '1': 'success', '2': 'danger' };
+const STATUS_TAG = { '0': 'tag-warning', '1': 'tag-success', '2': 'tag-danger' };
 const OR_RETAIL = { '1': '对公', '2': '零售', CORP: '对公', RETAIL: '零售' };
 
 const d = ref({});
 const loading = ref(false);
+const errorMessage = ref('');
 
 async function load() {
   loading.value = true;
+  errorMessage.value = '';
   try {
     d.value = (await getPriceApprovalDetail(route.params.priceApprId)) || {};
+  } catch {
+    d.value = {};
+    errorMessage.value = '定价审批详情加载失败，请重试';
   } finally {
     loading.value = false;
   }
@@ -70,11 +82,21 @@ onMounted(load);
 </script>
 
 <style lang="scss" scoped>
-.price-detail { padding: 4px 2px; }
-.page-h { margin-bottom: 12px; display: flex; align-items: center; gap: 12px;
-  h1 { font-size: 18px; margin: 0; }
-}
-.st-tag { margin-left: 4px; }
+.price-detail { min-width: 0; }
+.page-h { align-items: center; }
+.st-tag { margin-left: var(--space-1); }
 .back-btn { margin-left: auto; }
-.desc-block { margin-top: 8px; }
+.desc-block { margin-top: var(--space-2); }
+.is-muted { opacity: .72; }
+.error-state {
+  align-items: center;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-danger-fg);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
 </style>

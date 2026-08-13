@@ -9,7 +9,12 @@
     ref="canvasRef"
     class="flow-canvas"
     :class="{ 'is-readonly': readonly }"
+    role="region"
+    tabindex="0"
+    aria-label="流程设计画布"
+    :aria-describedby="nodes.length ? undefined : 'flow-canvas-empty'"
     @mousedown.self="onBlankMouseDown"
+    @keydown.stop="onKeyDown"
     @dragover.prevent
     @drop="onDrop"
   >
@@ -19,12 +24,12 @@
         <!-- 普通箭头 -->
         <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3"
                 orient="auto" markerUnits="strokeWidth">
-          <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8" />
+          <path d="M0,0 L8,3 L0,6 Z" fill="var(--color-text-muted)" />
         </marker>
         <!-- 选中态箭头 -->
         <marker id="arrow-active" markerWidth="10" markerHeight="10" refX="8" refY="3"
                 orient="auto" markerUnits="strokeWidth">
-          <path d="M0,0 L8,3 L0,6 Z" fill="#2563eb" />
+          <path d="M0,0 L8,3 L0,6 Z" fill="var(--color-focus)" />
         </marker>
       </defs>
 
@@ -34,7 +39,12 @@
         <path
           :d="e.d"
           class="edge-hit"
+          role="button"
+          tabindex="0"
+          :aria-label="edgeAriaLabel(idx)"
           @mousedown.stop="selectEdge(idx)"
+          @keydown.enter.prevent.stop="selectEdge(idx)"
+          @keydown.space.prevent.stop="selectEdge(idx)"
         />
         <path
           :d="e.d"
@@ -71,7 +81,13 @@
         { selected: isNodeSelected(node.nodeKey) }
       ]"
       :style="nodeStyle(node)"
+      role="button"
+      tabindex="0"
+      :aria-label="nodeAriaLabel(node)"
+      :aria-pressed="isNodeSelected(node.nodeKey) ? 'true' : 'false'"
       @mousedown.stop="onNodeMouseDown($event, node)"
+      @keydown.enter.prevent.stop="selectNode(node)"
+      @keydown.space.prevent.stop="selectNode(node)"
     >
       <!-- 节点主体内容 -->
       <div class="node-inner">
@@ -83,16 +99,18 @@
       </div>
 
       <!-- 出边锚点（START/APPROVAL/GATEWAY 有出边；END 无）-->
-      <div
+      <button
         v-if="!readonly && node.nodeType !== 'END'"
+        type="button"
         class="node-anchor"
+        :aria-label="`从${node.name || nodeTypeLabel(node.nodeType)}开始创建连线`"
         title="从此处拖拽到目标节点建立流转连线"
         @mousedown.stop="onAnchorMouseDown($event, node)"
-      />
+      ></button>
     </div>
 
     <!-- 空态提示 -->
-    <div v-if="!nodes.length" class="canvas-empty">
+    <div v-if="!nodes.length" id="flow-canvas-empty" class="canvas-empty" role="status">
       从左侧拖入节点，或点击「+ 添加节点」开始绘制审批流程图
     </div>
   </div>
@@ -187,9 +205,25 @@ watch(() => props.nodes.length, ensureLayout);
 function isNodeSelected(key) { return props.selection?.type === 'node' && props.selection?.key === key; }
 function isEdgeSelected(idx) { return props.selection?.type === 'edge' && props.selection?.key === idx; }
 
+function nodeAriaLabel(node) {
+  const parts = [`${nodeTypeLabel(node.nodeType)}节点`, node.name || node.nodeKey || '未命名'];
+  if (node.nodeType === 'APPROVAL') parts.push(node.approveMode === 'ALL' ? '会签' : '或签', `审批人 ${(node.approvers || []).length} 名`);
+  return parts.join('，');
+}
+function edgeAriaLabel(idx) {
+  const edge = props.edges[idx];
+  if (!edge) return '选择流程连线';
+  const from = nodeByKey.value[edge.fromNodeKey];
+  const to = nodeByKey.value[edge.toNodeKey];
+  return `选择连线：${from?.name || edge.fromNodeKey || '-'} 到 ${to?.name || edge.toNodeKey || '-'}`;
+}
+
 function selectEdge(idx) {
   if (props.readonly) return;
   emit('select', { type: 'edge', key: idx });
+}
+function selectNode(node) {
+  emit('select', { type: 'node', key: node.nodeKey });
 }
 function onBlankMouseDown() {
   // 点击空白：清空选中
@@ -400,17 +434,18 @@ defineExpose({
   height: 100%;        /* 占满父容器（流程图编辑区填满剩余高度）*/
   min-height: 420px;
   overflow: auto;
-  background-color: #fafbfc;
+  background-color: var(--color-surface-soft);
   // 流程图网格底纹
   background-image:
-    linear-gradient(#eef1f5 1px, transparent 1px),
-    linear-gradient(90deg, #eef1f5 1px, transparent 1px);
+    linear-gradient(var(--color-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border) 1px, transparent 1px);
   background-size: 20px 20px;
-  border: 1px solid $border-2;
-  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
   user-select: none;
 }
 .flow-canvas.is-readonly { cursor: default; }
+.flow-canvas:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 
 .edge-layer {
   position: absolute;
@@ -427,13 +462,13 @@ defineExpose({
 }
 .edge-line {
   fill: none;
-  stroke: #94a3b8;
+  stroke: var(--color-text-muted);
   stroke-width: 2;
   pointer-events: none;
-  transition: stroke .15s;
+  transition: stroke 180ms ease-out;
 }
-.edge-line.active { stroke: #2563eb; stroke-width: 2.5; }
-.edge-line.linking { stroke: #2563eb; stroke-dasharray: 5 4; }
+.edge-line.active { stroke: var(--color-focus); stroke-width: 2.5; }
+.edge-line.linking { stroke: var(--color-focus); stroke-dasharray: 5 4; }
 
 .edge-badge-fo { overflow: visible; pointer-events: none; }
 .edge-badge {
@@ -443,16 +478,16 @@ defineExpose({
   padding: 1px 8px;
   font-size: 12px;
   line-height: 18px;
-  color: $text-2;
+  color: var(--color-text);
   text-align: center;
-  background: #fff;
-  border: 1px solid $border-2;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 9px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.edge-badge.active { color: #2563eb; border-color: #2563eb; }
+.edge-badge.active { color: var(--color-brand-700); border-color: var(--color-focus); }
 
 // ---- 节点 ----
 .flow-node {
@@ -462,53 +497,55 @@ defineExpose({
   justify-content: center;
   box-sizing: border-box;
   padding: 4px 10px;
-  background: #fff;
-  border: 1.5px solid #cbd5e1;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
+  appearance: none;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-surface);
   cursor: move;
-  transition: box-shadow .15s, border-color .15s;
+  transition: box-shadow 180ms ease-out, border-color 180ms ease-out;
   z-index: 2;
 }
-.flow-node:hover { box-shadow: 0 2px 8px rgba(15, 23, 42, .16); }
+.flow-node:hover { border-color: var(--color-brand-500); box-shadow: var(--shadow-popover); }
+.flow-node:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .flow-node.selected {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, .18);
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 3px var(--color-brand-100);
   z-index: 3;
 }
 .node-inner { display: flex; flex-direction: column; align-items: center; gap: 2px; overflow: hidden; }
 .node-name {
   font-size: 13px;
   font-weight: 600;
-  color: $text-1;
+  color: var(--color-text-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
 }
 .node-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; }
-.mode-tag { padding: 0 5px; color: #b45309; background: #fef3c7; border-radius: 4px; }
-.apv-cnt { color: $text-3; }
+.mode-tag { background: var(--color-warning-bg); border-radius: var(--radius-control); color: var(--color-warning-fg); padding: 0 5px; }
+.apv-cnt { color: var(--color-text-muted); }
 
 // START / END：胶囊
-.flow-node.type-start { border-color: #16a34a; background: #f0fdf4; border-radius: 22px; }
-.flow-node.type-start .node-name { color: #15803d; }
-.flow-node.type-end { border-color: #dc2626; background: #fef2f2; border-radius: 22px; }
-.flow-node.type-end .node-name { color: #b91c1c; }
+.flow-node.type-start { background: var(--color-success-bg); border-color: var(--color-success-fg); border-radius: 22px; }
+.flow-node.type-start .node-name { color: var(--color-success-fg); }
+.flow-node.type-end { background: var(--color-danger-bg); border-color: var(--color-danger-fg); border-radius: 22px; }
+.flow-node.type-end .node-name { color: var(--color-danger-fg); }
 
 // APPROVAL：矩形卡片（默认样式即矩形）
-.flow-node.type-approval { border-color: #3b82f6; }
+.flow-node.type-approval { border-color: var(--color-brand-500); }
 
 // GATEWAY：菱形（用旋转盒子，内容反向旋转保持正立）
 .flow-node.type-gateway {
-  border-color: #f59e0b;
-  background: #fffbeb;
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-fg);
   transform: rotate(45deg);
   border-radius: 8px;
 }
 .flow-node.type-gateway .node-inner { transform: rotate(-45deg); }
-.flow-node.type-gateway .node-name { color: #b45309; font-size: 12px; }
-.flow-node.type-gateway.selected { box-shadow: 0 0 0 3px rgba(37, 99, 235, .18); }
+.flow-node.type-gateway .node-name { color: var(--color-warning-fg); font-size: 12px; }
+.flow-node.type-gateway.selected { box-shadow: 0 0 0 3px var(--color-brand-100); }
 
 // 出边锚点
 .node-anchor {
@@ -518,15 +555,17 @@ defineExpose({
   width: 12px;
   height: 12px;
   margin-left: -6px;
-  background: #2563eb;
-  border: 2px solid #fff;
+  appearance: none;
+  background: var(--color-focus);
+  border: 2px solid var(--color-surface);
   border-radius: 50%;
   cursor: crosshair;
   opacity: 0;
-  transition: opacity .15s;
+  transition: opacity 180ms ease-out;
   z-index: 4;
 }
 .flow-node:hover .node-anchor { opacity: 1; }
+.flow-node:focus-within .node-anchor { opacity: 1; }
 // 网关锚点：盒子被旋转 45°，锚点需补偿回正
 .flow-node.type-gateway .node-anchor { transform: rotate(-45deg); bottom: 6px; left: 6px; }
 
@@ -535,8 +574,12 @@ defineExpose({
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  color: $text-3;
+  color: var(--color-text-muted);
   font-size: 14px;
   pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge-line, .flow-node, .node-anchor { transition-duration: 0ms; }
 }
 </style>

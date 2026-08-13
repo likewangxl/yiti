@@ -53,7 +53,7 @@
 // 红色引擎（党建）独立布局：移植自 redengine/red-engine-web/src/layout/
 // MainLayout.vue + Sidebar.vue + SidebarItem.vue + TopNav.vue，合并为单文件组件。
 // 变换要点（见 Task 13 简报 F1-F6）：
-// - F1: 平台侧 API 调用一律走 @/api/http（本文件仅直接用 http.get 拉权限集合，业务 API 见 Task 14 的 @/api/redengine.js）
+// - F1: 平台侧 API 调用一律走统一 API 层；权限由 permission store 严格加载，业务 API 见 @/api/redengine.js
 // - F2: 源工程的 JWT/localStorage token 逻辑全部不移植，登录态完全靠 yiti session cookie（http.js withCredentials:true）
 // - F3: 路由路径统一加 /redengine 前缀，登出后整页跳转 /#/redengine/login
 // - F5: 源工程的 v-permission 指令替换为本组件维护的 canSee()，经 provide/inject 供 Task 14 子视图使用
@@ -62,9 +62,8 @@
 // - 源工程 MainLayout 的侧栏折叠开关（Sidebar @toggle-collapse / TopNav @toggle-sidebar）在源码里两端均未真正
 //   emit 事件（Sidebar.vue 只是 defineExpose 了一个方法，从未被调用），是无效代码；本次移植未保留这段死代码，
 //   侧栏宽度固定为 275px（对齐源 MainLayout.vue 展开态默认值 sidebarWidth=ref('275px')，审查返工按建议对齐）。
-// - Task 15 重构（非行为变更）：menuItems 数据源 + canSee() 判断逻辑抽到同目录 canSee.js 纯函数模块，
-//   供 Vitest 直接单测（RedEngineMenuFilter.spec.js），本文件改为 import 复用，逻辑与取值完全未变。
-import { ref, computed, provide, onMounted } from 'vue';
+// - menuItems 数据源 + canSee() 判断逻辑位于同目录 canSee.js，供布局、子视图和 Vitest 复用。
+import { computed, provide, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   Star,
@@ -80,13 +79,14 @@ import {
   Setting,
   Connection
 } from '@element-plus/icons-vue';
-import http from '@/api/http';
 import { logout } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
+import { usePermissionStore } from '@/stores/permission';
 import { menuItems, canSee as canSeeImpl } from './canSee';
 
 const route = useRoute();
 const userStore = useUserStore();
+const permissionStore = usePermissionStore();
 
 // 平台未做图标全局注册（main.js 只 app.use(ElementPlus)，未 app.component 逐个注册图标），
 // 故按平台既有用法（如 views/report/Dynamic.vue）本地 import 后建 name → 组件映射，供 <component :is> 用
@@ -104,15 +104,14 @@ const iconMap = {
   Connection
 };
 
-// 当前用户可访问的资源 URL 集合；null = 尚未成功拉取（含拉取失败），此时降级为全放行，交由后端 403 兜底
-const resourceUrls = ref(null);
-
 /**
- * 判断某菜单项/子视图内某资源对当前用户是否可见（实现见 ./canSee.js，本处仅绑定当前
- * resourceUrls.value，保持原有 canSee(item) 单参签名不变，供模板与 provide 复用）。
+ * 判断某菜单项/子视图内某资源对当前用户是否可见；绑定共享权限 store，供模板与 provide 复用。
  */
 function canSee(item) {
-  return canSeeImpl(item, resourceUrls.value);
+  if (!item?.res) return true;
+  if (!permissionStore.loaded) return false;
+  if (permissionStore.isSystemAdmin) return true;
+  return canSeeImpl(item, permissionStore.resourceUrls);
 }
 
 // 供 Task 14 子视图通过 inject('canSee') 复用同一份鉴权判断
@@ -122,14 +121,12 @@ const visibleMenuItems = computed(() => menuItems.filter(canSee));
 
 const displayName = computed(() => userStore.displayName);
 
-// 拉取当前用户完整权限集合（GET /api/auth/permissions → PermissionSetRespDTO{resourceUrls,...}），
-// 用于过滤侧边栏菜单；接口异常时保持 resourceUrls=null（降级全显示，不阻塞页面渲染）
+// 路由守卫与布局复用同一个权限 store；load() 会合并并发请求，失败时保持 fail-close。
 onMounted(async () => {
   try {
-    const perm = await http.get('/api/auth/permissions');
-    resourceUrls.value = new Set(perm?.resourceUrls || []);
+    await permissionStore.load();
   } catch (e) {
-    console.warn('[RedEngineLayout] 拉取 /api/auth/permissions 失败，菜单降级全显示', e?.message);
+    console.warn('[RedEngineLayout] 拉取 /api/auth/permissions 失败，敏感菜单保持隐藏', e?.message);
   }
 });
 
@@ -142,7 +139,7 @@ async function handleLogout() {
     // 登出接口异常也继续清本地态、跳登录页，避免用户卡在原页面
   }
   userStore.clear();
-  window.location.replace('/#/redengine/login');
+  window.location.replace('/#/login');
 }
 </script>
 

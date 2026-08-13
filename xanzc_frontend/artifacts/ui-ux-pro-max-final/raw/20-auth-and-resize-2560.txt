@@ -1,0 +1,25 @@
+### Result
+Storage state restored from /tmp/yiti-uiux-auth-state.json
+### Ran Playwright code
+```js
+await page.context().setStorageState('/tmp/yiti-uiux-auth-state.json');
+```
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/workspace');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/workspace
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-35-39-647Z.yml)
+### Ran Playwright code
+```js
+await page.setViewportSize({ width: 2560, height: 1440 });
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/workspace
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 15 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-35-39-637Z.log#L1-L15

@@ -35,6 +35,11 @@ public class AuditLogAspect {
 
     @Around("@annotation(com.bank.branch.platform.common.aop.annotation.AuditLog)")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
+        AuditLog annotation = ((MethodSignature) pjp.getSignature()).getMethod().getAnnotation(AuditLog.class);
+        if (annotation != null && annotation.serviceManaged()) {
+            // 高危配置变更必须在业务事务内写入完整快照；切面不再补一条 before/after 为空的记录。
+            return pjp.proceed();
+        }
         long t0 = System.currentTimeMillis();
         Throwable thrown = null;
         Object result = null;

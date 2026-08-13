@@ -1,4 +1,79 @@
-// 设计 token —— 与 _-_.html 截图色板对齐
+// 设计 token —— 主平台浅色桌面壳层的唯一视觉真源。
+// 组件使用 CSS 语义 token；Sass 变量仅保留给既有样式兼容层。
+@mixin semantic-tokens {
+  :root {
+    --color-brand-700: #003D7A;
+    --color-brand-500: #1E5BBA;
+    --color-brand-100: #E6EEF7;
+    --color-page: #F5F7FA;
+    --color-surface: #FFFFFF;
+    --color-surface-soft: #F9FAFB;
+    --color-workspace-strip: #EEF2F6;
+    --color-text-strong: #1F2937;
+    --color-text: #4B5563;
+    --color-text-muted: #6B7280;
+    --color-border: #E5E7EB;
+    --color-border-strong: #D1D5DB;
+    --color-focus: #1E5BBA;
+    --color-success-fg: #166534;
+    --color-success-bg: #ECFDF5;
+    --color-warning-fg: #92400E;
+    --color-warning-bg: #FFFBEB;
+    --color-danger-fg: #B91C1C;
+    --color-danger-bg: #FEF2F2;
+    --color-info-fg: #0E7490;
+    --color-info-bg: #ECFEFF;
+    --color-sidebar-bg: #001A33;
+    --color-sidebar-border: #00264D;
+    --color-sidebar-hover: #00264D;
+    --color-sidebar-active: #003D7A;
+    --color-sidebar-text: #CBD5E1;
+
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --radius-control: 4px;
+    --shadow-surface: 0 1px 2px rgba(15, 23, 42, .06);
+    --shadow-popover: 0 4px 12px rgba(15, 23, 42, .16);
+
+    --layout-sidebar-width: 220px;
+    --layout-sidebar-collapsed-width: 64px;
+    --layout-header-height: 52px;
+    --layout-breadcrumb-height: 40px;
+    --layout-workspace-tabs-height: 76px;
+    --layout-content-max-width: 2240px;
+    --layout-content-gutter: 24px;
+    --layout-content-gutter-wide: 32px;
+
+    --motion-fast: 180ms;
+    --motion-panel: 240ms;
+    --ease-enter: ease-out;
+    --ease-exit: ease-in;
+    --z-base: 0;
+    --z-sticky: 10;
+    --z-dropdown: 20;
+    --z-popover: 30;
+    --z-dialog: 40;
+    --z-toast: 50;
+
+    --el-color-primary: var(--color-brand-700);
+    --el-color-primary-light-3: var(--color-brand-500);
+    --el-bg-color-page: var(--color-page);
+    --el-bg-color: var(--color-surface);
+    --el-border-color: var(--color-border);
+    --el-border-color-hover: var(--color-border-strong);
+    --el-text-color-primary: var(--color-text-strong);
+    --el-text-color-regular: var(--color-text);
+    --el-text-color-secondary: var(--color-text-muted);
+    --el-border-radius-base: var(--radius-control);
+  }
+}
+
+// 设计 token —— 与既有截图色板对齐的 Sass 兼容层。
 $primary: #003D7A;
 $primary-400: #1E5BBA;
 $primary-100: #E6EEF7;
@@ -29,5 +104,6 @@ $side-bg-3:  #003D7A;
 $side-text:  #cbd5e1;
 
 $side-w:    220px;
+$side-w-collapsed: 64px;
 $header-h:  52px;
 $crumb-h:   40px;

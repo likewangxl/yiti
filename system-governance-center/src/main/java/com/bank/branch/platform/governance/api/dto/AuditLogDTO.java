@@ -50,6 +50,24 @@ public class AuditLogDTO {
     /** 操作原因（高危动作必填） */
     private String reason;
 
+    /** 结构化审计目标类型。 */
+    private String targetType;
+
+    /** 结构化审计目标标识。 */
+    private String targetId;
+
+    /** 变更前快照（JSON）。 */
+    private String beforeSnapshot;
+
+    /** 变更后快照（JSON）。 */
+    private String afterSnapshot;
+
+    /** 新增项集合（JSON）。 */
+    private String addedItems;
+
+    /** 移除项集合（JSON）。 */
+    private String removedItems;
+
     /** 操作时间 */
     private String createdTime;
 }

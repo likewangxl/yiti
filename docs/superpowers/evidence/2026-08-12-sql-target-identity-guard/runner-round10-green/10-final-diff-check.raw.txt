@@ -1,0 +1,7 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T21:45:09.713563Z
+COMMAND /usr/bin/git diff --check -- docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.py docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh docs/superpowers/scripts/2026-08-12-controlled-sql-root-managed-launcher.py docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner@.service.template docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py docs/superpowers/sql/2026-08-12-controlled-sql-batch-manifest.schema.json docs/superpowers/sql/2026-08-12-controlled-sql-batch-manifest.example.json docs/superpowers/sql/2026-08-12-controlled-sql-receipt-claim-token.schema.json docs/superpowers/sql/2026-08-12-controlled-sql-a2-recovery-proof.schema.json docs/superpowers/sql/2026-08-12-controlled-sql-root-launcher-proof.schema.json docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.schema.json docs/superpowers/sql/2026-08-12-controlled-sql-mysql-release-contract.json docs/superpowers/sql/controlled-batch-manifest-trust/README.md docs/superpowers/evidence/2026-08-12-sql-target-identity-guard/README.md
+EXIT_CODE 0
+UTC_FINISHED 2026-08-11T21:45:09.717981Z
+--- RAW_STDOUT_STDERR ---
+

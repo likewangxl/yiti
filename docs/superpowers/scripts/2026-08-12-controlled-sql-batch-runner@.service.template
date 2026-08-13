@@ -1,0 +1,98 @@
+# 安装目标：/etc/systemd/system/bank-controlled-sql-batch-runner@.service
+# 必须 root:root 0644；release、launcher、私钥和 helper 的部署/哈希核验由 root 发布流程负责。
+# launcher attestation 私钥本体必须 root:root regular 0400 或 0600，且 mode & 0o077 == 0；
+# 从 / 根锚点之后到私钥父目录的每一级必须 root:root、逐级 mode & 0o077 == 0，禁止符号链接。
+# 安装验证仅由 root 发布流程做只读元数据核验（namei -l / stat -c）；不以本 unit 启动替代验证。
+# 此 unit 是唯一允许 execute 的入口；%i 只能是 root 创建的 manifest 标识，不接受路径。
+[Unit]
+Description=Bank controlled SQL batch execution (%i)
+After=network-online.target
+Wants=network-online.target
+ConditionPathIsReadOnly=/opt/bank/controlled-sql-batch-runner/release
+
+[Service]
+Type=exec
+# launcher 需要先以 root 读取 root-only attestation key，随后显式降权为 controlled-sql-runner。
+User=root
+Group=root
+WorkingDirectory=/
+UMask=0077
+
+# 必须在 bash/Python/dynamic loader 启动前清除可注入环境；禁止 EnvironmentFile。
+UnsetEnvironment=BASH_ENV
+UnsetEnvironment=ENV
+UnsetEnvironment=LD_PRELOAD
+UnsetEnvironment=LD_LIBRARY_PATH
+UnsetEnvironment=LD_AUDIT
+UnsetEnvironment=LD_DEBUG
+UnsetEnvironment=LD_BIND_NOW
+UnsetEnvironment=LD_ORIGIN_PATH
+UnsetEnvironment=PYTHONHOME
+UnsetEnvironment=PYTHONPATH
+UnsetEnvironment=PYTHONSTARTUP
+UnsetEnvironment=PYTHONUSERBASE
+UnsetEnvironment=PYTHONINSPECT
+UnsetEnvironment=PYTHONWARNINGS
+UnsetEnvironment=PYTHONHASHSEED
+UnsetEnvironment=PYTHONIOENCODING
+UnsetEnvironment=PYTHONUTF8
+UnsetEnvironment=LANG
+UnsetEnvironment=LANGUAGE
+UnsetEnvironment=LC_ALL
+UnsetEnvironment=LC_CTYPE
+UnsetEnvironment=LC_COLLATE
+UnsetEnvironment=LC_MESSAGES
+UnsetEnvironment=LC_MONETARY
+UnsetEnvironment=LC_NUMERIC
+UnsetEnvironment=LC_TIME
+UnsetEnvironment=TZ
+UnsetEnvironment=HOME
+UnsetEnvironment=PATH
+UnsetEnvironment=SHELL
+UnsetEnvironment=USER
+UnsetEnvironment=LOGNAME
+UnsetEnvironment=XDG_CONFIG_HOME
+UnsetEnvironment=XDG_DATA_HOME
+UnsetEnvironment=XDG_CACHE_HOME
+Environment=HOME=/var/empty/controlled-sql-runner
+Environment=PATH=/usr/bin:/bin
+Environment=LC_ALL=C
+Environment=LANG=C
+Environment=LANGUAGE=C
+Environment=TZ=UTC
+Environment=PYTHONSAFEPATH=1
+
+# ExecStart 没有 shell，且直接以固定解释器 isolated mode 调 root-managed launcher。
+ExecStart=/usr/bin/python3.10 -I /opt/bank/controlled-sql-batch-runner/release/docs/superpowers/scripts/2026-08-12-controlled-sql-root-managed-launcher.py --manifest-id %i
+
+# launcher 完成 setgroups/setgid/setuid 后，最终 runner 使用 nologin 的 controlled-sql-runner。
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID
+AmbientCapabilities=
+# 不设 RestrictSUIDSGID：root launcher 必须先执行唯一一次 setgroups/setgid/setuid 降权；
+# 降权后 runner 受 NoNewPrivileges 与其余沙箱约束，不能重新取得权限。
+ProtectSystem=strict
+ReadOnlyPaths=/opt/bank/controlled-sql-batch-runner/release
+ReadOnlyPaths=/usr/bin/python3.10
+ReadOnlyPaths=/usr/bin/openssl
+ReadOnlyPaths=/usr/bin/mysql
+ReadOnlyPaths=/usr/local/libexec/bank-controlled-sql-receipt-claim-helper
+ReadOnlyPaths=/etc/passwd
+ReadOnlyPaths=/etc/group
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+ProtectHostname=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

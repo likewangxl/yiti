@@ -18,10 +18,17 @@ public class ScreenRenderRespDTO {
     private String screenCode;
     private String screenName;
     private String viewLevel;
+    /** 屏机构范围模式；运行时取数契约需要在顶层显式返回，避免客户端从画布内容猜测。 */
+    private String orgScopeMode;
+    /** 运行时取数契约版本：1=兼容 dsId，2=服务端按 screenCode+blockId 解析。 */
+    private Integer runtimeSchemaVersion;
     /** 渲染包 JSON(canvasStyle + components + bindSnapshots) */
     private String renderPackageJson;
     /** 状态:published / draft */
     private String state;
     /** PROVINCE 屏地图点位(非 PROVINCE 屏为空列表) */
     private List<MapPointDTO> mapPoints;
+
+    /** schemaVersion=2 复合地图服务端渲染包；schemaVersion=1 时为空。 */
+    private ScreenMapRenderPackageDTO mapPackage;
 }

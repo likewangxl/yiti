@@ -1,0 +1,52 @@
+# Round 3 隔离启动、健康检查和代理链路（忠实选择性转录）
+
+本文件是选择性转录：不复制含认证字段的完整应用日志，仅保留启动期的非敏感状态行与扫描结论。
+
+## 后端
+
+~~~text
+$ env LOG_HOME=/tmp/yiti-screen-scope-round3-ZfsDc5 \
+  SERVER_PORT=18082 \
+  SPRING_PROFILES_ACTIVE=screen-scope-e2e \
+  YITI_SCREEN_SCOPE_DB_USERNAME=<仅进程环境注入> \
+  YITI_SCREEN_SCOPE_DB_PASSWORD=<仅进程环境注入> \
+  mvn -Dstyle.color=never -pl bootstrap spring-boot:run \
+  -Dspring-boot.run.profiles=screen-scope-e2e
+
+The following 1 profile is active: "screen-scope-e2e"
+RptPrimaryDataSource ... yiti_test
+ObsStorageClient ... obs.enabled=false, skip initialization
+MetricScheduler ... startup sync false, skip
+Tomcat started on port 18082 (http) with context path ''
+~~~
+
+~~~text
+$ curl --noproxy 127.0.0.1 -sS -m 5 -D - http://127.0.0.1:18082/ishealth
+HTTP/1.1 200
+...
+0
+~~~
+
+启动和 health 后只扫描本轮 /tmp/yiti-screen-scope-round3-ZfsDc5/branch-platform.log 的 Sidecar/OBS 初始化/Eval 补偿/Flowable deploy/Quartz/lock 关键字；输出为空。最终再扫描同一文件的上述关键字和 [api fallback]：
+
+~~~text
+NO_FORBIDDEN_RUNTIME_LOG_MATCHES
+~~~
+
+该日志后来被确认含认证字段，未归档且已删除；精确处置见 round3-12-sensitive-temp-log-removal.raw.txt。
+
+## 前端和 8092 -> 18082
+
+~~~text
+$ env VITE_USE_MOCK=false VITE_API_BASE=/api \
+  VITE_DEV_HOST=127.0.0.1 VITE_DEV_PORT=8092 \
+  VITE_DEV_STRICT_PORT=true \
+  VITE_PROXY_TARGET=http://127.0.0.1:18082 \
+  npm run dev
+
+VITE v4.5.14 ready
+Local: http://127.0.0.1:8092/
+~~~
+
+官方 CLI 对 http://127.0.0.1:8092/api/... 的大屏相关请求均返回 200；启动命令明确把唯一 Vite /api 代理目标设为本轮唯一后端监听 127.0.0.1:18082，而端口预检和最终端口检查均排除了另一服务。由此可确认这些 8092 API 请求经此受控 Vite proxy 到达本轮 18082 handler。该结论是由代理配置、唯一监听和实际 200 响应组成的运行态链路推断；请求明细见 round3-08-console-and-request-methods.md。
+

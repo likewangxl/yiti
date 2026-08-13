@@ -115,7 +115,7 @@ import { ref, reactive, computed, inject, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getRedWarning, getYellowWarning, getOverdueList, executeOverdue, getOrgTree } from '@/api/redengine'
 
-const canSee = inject('canSee', () => true)
+const canSee = inject('canSee', () => false)
 const canExecute = computed(() => canSee({ res: '/api/re/cockpit/overdue/execute' }))
 
 const loading = ref(false)

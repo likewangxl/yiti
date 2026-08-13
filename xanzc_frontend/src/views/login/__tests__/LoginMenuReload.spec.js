@@ -8,11 +8,12 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 
+const testState = vi.hoisted(() => ({ routeQuery: { normal: '' } }));
 const routerReplace = vi.fn();
 vi.mock('vue-router', () => ({
   useRouter: () => ({ replace: routerReplace, push: vi.fn() }),
   // ?normal → 普通账号密码登录模式
-  useRoute: () => ({ query: { normal: '' } })
+  useRoute: () => ({ query: testState.routeQuery })
 }));
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), warning: vi.fn(), error: vi.fn() }
@@ -46,6 +47,8 @@ let wrapper;
 let pinia;
 beforeEach(() => {
   vi.clearAllMocks();
+  sessionStorage.clear();
+  testState.routeQuery = { normal: '' };
   pinia = createPinia();
   setActivePinia(pinia);
 });
@@ -67,7 +70,7 @@ describe('登录成功后菜单强制重拉（换用户菜单残留回归）', (
     expect(menuStore.tree[0].menuName).toBe('A的菜单');
 
     // 后端按新用户 B 的角色返回新菜单
-    getMyMenus.mockResolvedValue([{ menuName: 'B的菜单', resourceUrl: '/b' }]);
+    getMyMenus.mockResolvedValue([{ menuName: '工作台', resourceUrl: '/workspace', children: [] }]);
 
     wrapper = mount(Login, { global: { plugins: [pinia], stubs } });
     const inputs = wrapper.findAll('.inp-stub');
@@ -77,7 +80,72 @@ describe('登录成功后菜单强制重拉（换用户菜单残留回归）', (
     await settle();
 
     // 修复前：load() 无 force 被 loaded=true 拦下，tree 仍是 A 的菜单
-    expect(menuStore.tree[0].menuName, '登录成功后应强制重拉当前用户菜单').toBe('B的菜单');
+    expect(menuStore.tree[0].menuName, '登录成功后应强制重拉当前用户菜单').toBe('工作台');
     expect(routerReplace).toHaveBeenCalledWith('/workspace');
+  });
+
+  it('仅有红色引擎菜单时直接进入红色引擎，而非无权限的工作台', async () => {
+    getMyMenus.mockResolvedValue([
+      { resourceId: 'M_RE_ENGINE', menuName: '红色引擎', resourceUrl: '/redengine/dashboard', children: [] }
+    ]);
+
+    wrapper = mount(Login, { global: { plugins: [pinia], stubs } });
+    const inputs = wrapper.findAll('.inp-stub');
+    await inputs[0].setValue('userB');
+    await inputs[1].setValue('pwd123456');
+    await wrapper.findAll('button').find(b => b.text().includes('登')).trigger('click');
+    await settle();
+
+    expect(routerReplace).toHaveBeenCalledWith('/redengine/dashboard');
+  });
+
+  it('无授权菜单时进入 no-access，同源但未授权的 redirect 也不能绕过', async () => {
+    getMyMenus.mockResolvedValue([]);
+    wrapper = mount(Login, { global: { plugins: [pinia], stubs } });
+    let inputs = wrapper.findAll('.inp-stub');
+    await inputs[0].setValue('userB');
+    await inputs[1].setValue('pwd123456');
+    await wrapper.findAll('button').find(b => b.text().includes('登')).trigger('click');
+    await settle();
+    expect(routerReplace).toHaveBeenLastCalledWith('/no-access');
+
+    wrapper.unmount();
+    testState.routeQuery = { normal: '', redirect: '/redengine/records' };
+    wrapper = mount(Login, { global: { plugins: [pinia], stubs } });
+    inputs = wrapper.findAll('.inp-stub');
+    await inputs[0].setValue('userB');
+    await inputs[1].setValue('pwd123456');
+    await wrapper.findAll('button').find(b => b.text().includes('登')).trigger('click');
+    await settle();
+    expect(routerReplace).toHaveBeenLastCalledWith('/no-access');
+  });
+
+  it('只恢复精确菜单、菜单详情子路径或已获模块入口的红色路由', async () => {
+    testState.routeQuery = { normal: '', redirect: '/report/free/42?tab=detail' };
+    getMyMenus.mockResolvedValue([
+      { resourceId: 'M_REPORT', resourceUrl: '/report', menuName: '报表', children: [
+        { resourceId: 'M_REPORT_FREE', resourceUrl: '/report/free', menuName: '数据公式', children: [] }
+      ] }
+    ]);
+    wrapper = mount(Login, { global: { plugins: [pinia], stubs } });
+    let inputs = wrapper.findAll('.inp-stub');
+    await inputs[0].setValue('userB');
+    await inputs[1].setValue('pwd123456');
+    await wrapper.findAll('button').find(b => b.text().includes('登')).trigger('click');
+    await settle();
+    expect(routerReplace).toHaveBeenLastCalledWith('/report/free/42?tab=detail');
+
+    wrapper.unmount();
+    testState.routeQuery = { normal: '', redirect: '/redengine/review' };
+    getMyMenus.mockResolvedValue([
+      { resourceId: 'M_RE_ENGINE', resourceUrl: '/redengine/dashboard', menuName: '红色引擎', children: [] }
+    ]);
+    wrapper = mount(Login, { global: { plugins: [pinia], stubs } });
+    inputs = wrapper.findAll('.inp-stub');
+    await inputs[0].setValue('userB');
+    await inputs[1].setValue('pwd123456');
+    await wrapper.findAll('button').find(b => b.text().includes('登')).trigger('click');
+    await settle();
+    expect(routerReplace).toHaveBeenLastCalledWith('/redengine/review');
   });
 });

@@ -1,0 +1,6 @@
+### Result
+Storage state restored from /tmp/yiti-uiux-auth-state.json
+### Ran Playwright code
+```js
+await page.context().setStorageState('/tmp/yiti-uiux-auth-state.json');
+```

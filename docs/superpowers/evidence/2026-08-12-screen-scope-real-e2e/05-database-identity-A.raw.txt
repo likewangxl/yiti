@@ -1,0 +1,20 @@
+Credential source: session-provided local test credentials, confirmed by the main agent. Values were injected only into the controlled child command process and are not recorded here.
+
+Presence check command template (exit 0; no values printed):
+env YITI_SCREEN_SCOPE_DB_USERNAME='***' YITI_SCREEN_SCOPE_DB_PASSWORD='***' \
+    YITI_TEST_USERNAME='***' YITI_TEST_PASSWORD='***' \
+    bash -lc 'for v in YITI_SCREEN_SCOPE_DB_USERNAME YITI_SCREEN_SCOPE_DB_PASSWORD YITI_TEST_USERNAME YITI_TEST_PASSWORD; do test -n "${!v-}" && printf "%s=present\\n" "$v" || printf "%s=missing\\n" "$v"; done'
+
+Presence result:
+YITI_SCREEN_SCOPE_DB_USERNAME=present
+YITI_SCREEN_SCOPE_DB_PASSWORD=present
+YITI_TEST_USERNAME=present
+YITI_TEST_PASSWORD=present
+
+Identity command template (exit 0; only SELECT; password masked):
+env MYSQL_PWD='***' mysql --protocol=TCP -h127.0.0.1 -P3306 -uroot \
+  --database=yiti_test --batch --raw --skip-column-names \
+  -e 'SELECT DATABASE(), @@server_uuid, @@hostname, @@port, CURRENT_USER();'
+
+Raw stdout:
+yiti_test	d3a209c4-42bd-11f1-bb1f-000c299f5629	ubuntu	3306	root@localhost

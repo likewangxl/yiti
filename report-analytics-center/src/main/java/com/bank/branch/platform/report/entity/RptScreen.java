@@ -28,6 +28,15 @@ public class RptScreen {
     /** 视角：PROVINCE / BRANCH / PERSON */
     private String viewLevel;
 
+    /** 业务条线：CORP / RETAIL / COMMON；存量数据兼容默认 COMMON。 */
+    private String bizLine;
+
+    /** 机构范围模式：LEGACY_CONTEXT / NAMED_GROUP。 */
+    private String orgScopeMode;
+
+    /** 命名机构组编码；NAMED_GROUP 时必填。 */
+    private String orgGroupCode;
+
     /** 主题变量覆盖 JSON（一期留空） */
     private String themeJson;
 
@@ -54,6 +63,9 @@ public class RptScreen {
 
     /** 最近一次发布人工号 */
     private String publishedBy;
+
+    /** 最近一次配置更新人工号。 */
+    private String updatedBy;
 
     /** 创建人工号 */
     private String createdBy;

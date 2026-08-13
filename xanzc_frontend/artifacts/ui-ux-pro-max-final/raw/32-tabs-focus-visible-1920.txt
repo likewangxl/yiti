@@ -1,0 +1,38 @@
+### Ran Playwright code
+```js
+await page.goto('http://127.0.0.1:8091/#/workspace/announcements');
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/workspace/announcements
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 75 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-43-41-446Z.yml)
+### Events
+- New console entries: .playwright-cli/console-2026-08-12T14-43-41-404Z.log#L1-L15
+{
+  "navVisible": true,
+  "navWidth": 1700,
+  "tabButtonCount": 93,
+  "focusedInsideTabNav": false,
+  "focusedTag": "DIV",
+  "focusedVisible": true
+}
+### Ran Playwright code
+```js
+await page.locator('nav[aria-label="工作区页签"] button:has-text("公告列表"):not(:has-text("关闭"))').click();
+```
+### Page
+- Page URL: http://127.0.0.1:8091/#/workspace/announcements
+- Page Title: 银行营销 · 业务执行 · 绩效平台
+- Console: 0 errors, 75 warnings
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-08-12T14-43-42-904Z.yml)
+{
+  "navVisible": true,
+  "navWidth": 1700,
+  "tabButtonCount": 93,
+  "focusedInsideTabNav": true,
+  "focusedTag": "BUTTON",
+  "focusedVisible": true
+}

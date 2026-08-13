@@ -1,0 +1,25 @@
+UTC 2026-08-11T20:16:01Z
+COMMAND /usr/bin/python3.10 docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py
+EXIT 1
+SHA256 ecdf0a6bd5160338a6304dbb6f6812edf146e387eb6a1bf7a9284e47de907dc8 docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py
+SHA256 3e24d6a4f20a4dfa621194091dcc4e7eb08cbaf111db1ba57dd58fafc22abf0a docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.py
+SHA256 f93843e6a262f5369c770653cdf7e18d5ab4167c613153530b1ed0d590636dbd docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh
+
+ACTUAL TEST RESULT
+Ran 16 tests in 0.006s
+FAILED (failures=6, errors=21)
+
+DECISIVE FAILURES FROM THE ACTUAL OUTPUT
+- shell shebang was '#!/usr/bin/env bash', not the required absolute interpreter.
+- runner used shutil.which for openssl/bash/mysql and had no ToolSpec/hash/version contract.
+- strict_json_loads, validate_against_schema, parse_mysql_defaults_bytes,
+  require_managed_manifest_path, read_trusted_file_bytes, receipt validation,
+  fixed two-round byte stdin, and fixed mysql command were absent.
+- legacy SQL_GUARD_MYSQL_DEFAULTS_EXTRA_FILE, SOURCE rereads, and --double-run
+  were still present.
+- the old manifest model lacked not_before, nonce, signed A2 proof, receipt id,
+  and approved SQL bytes.
+
+TEST ISOLATION
+This command only imported the runner and used unittest/mock/temporary files. It did not
+start mysql, openssl, bash, a socket, a database connection, or execute SQL.

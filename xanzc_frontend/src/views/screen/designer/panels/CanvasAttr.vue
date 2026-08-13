@@ -5,9 +5,9 @@
         <!-- 三选一:纯色(现状)/线性渐变(双色+角度)/图片 URL;canvas_style_json 读时兼容由
              store.loadFromEditor 的 normalizeCanvasStyle 统一补默认,此处可直接绑定新字段 -->
         <el-radio-group v-model="store.canvasStyle.backgroundType" @change="touch">
-          <el-radio-button label="solid">纯色</el-radio-button>
-          <el-radio-button label="gradient">渐变</el-radio-button>
-          <el-radio-button label="image">图片</el-radio-button>
+          <el-radio-button value="solid">纯色</el-radio-button>
+          <el-radio-button value="gradient">渐变</el-radio-button>
+          <el-radio-button value="image">图片</el-radio-button>
         </el-radio-group>
       </el-form-item>
       <el-form-item v-if="store.canvasStyle.backgroundType === 'solid'" label="背景色">

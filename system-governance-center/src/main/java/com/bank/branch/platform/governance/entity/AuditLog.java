@@ -64,6 +64,24 @@ public class AuditLog {
     /** 操作原因（高危动作必填），对应 reason */
     private String reason;
 
+    /** 结构化审计目标类型，对应 target_type。 */
+    private String targetType;
+
+    /** 结构化审计目标标识，对应 target_id。 */
+    private String targetId;
+
+    /** 变更前快照（JSON），对应 before_snapshot。 */
+    private String beforeSnapshot;
+
+    /** 变更后快照（JSON），对应 after_snapshot。 */
+    private String afterSnapshot;
+
+    /** 新增项集合（JSON），对应 added_items。 */
+    private String addedItems;
+
+    /** 移除项集合（JSON），对应 removed_items。 */
+    private String removedItems;
+
     /** 创建时间，对应 created_time（审计日志不可变，无 updated_time） */
     private LocalDateTime createdTime;
 }

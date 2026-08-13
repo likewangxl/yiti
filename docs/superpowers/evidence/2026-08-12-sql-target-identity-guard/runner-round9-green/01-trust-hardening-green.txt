@@ -1,0 +1,28 @@
+UTC 2026-08-11T20:36:10Z
+COMMAND /usr/bin/python3.10 docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py
+COMMAND /usr/bin/bash -n docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh
+COMMAND /usr/bin/python3.10 -c 'json parse manifest schema and example'
+COMMAND ! rg --fixed-strings -- '--double-run' runner.sh runner.py
+COMMAND docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh --manifest /tmp/runner-no-deployment-root.json --execute
+
+SHA256 8ae1bc6e08cb7cd5c871738f85f87d53c034cf910195c8499307dc7623ee6c73 docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh
+SHA256 6ae018a3da3d3b69aee07c6cb57435a566c253c8d0bf684d8942dd1999e6d43b docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.py
+SHA256 ea0bbc96cda972a1c46cc1ed82db3f4bfcedd5b24d5dfe7d4908c5da2d516ca3 docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py
+SHA256 2fd628eadb4a52d5cc8b0009b5c0df83215b6256ce5ea696eec58bf9bfdb5953 docs/superpowers/sql/2026-08-12-controlled-sql-batch-manifest.schema.json
+SHA256 450b1223292fae9a02872fa745c1bc29d30de49ec612127b63784440114fed62 docs/superpowers/sql/2026-08-12-controlled-sql-batch-manifest.example.json
+SHA256 e6d5b55b8a2bc5d25255e035ac6244b35aaae9ad342c52452e7968b8bf97e5ce docs/superpowers/sql/controlled-batch-manifest-trust/README.md
+
+RESULT
+RUNNER_UNIT_TEST_EXIT 0
+Ran 22 tests in 0.011s
+OK
+BASH_SYNTAX_EXIT 0
+JSON_PARSE_EXIT 0
+LEGACY_PATH_SCAN_EXIT 0
+MISSING_TRUST_ROOT_EXECUTE_EXIT 64
+FAIL-CLOSED: 固定受信部署 helper 不存在或为符号链接
+
+COVERAGE
+- 单元测试只 import runner；所有 mysql 子进程断言均为 unittest.mock，未启动 mysql、openssl、bash、socket、数据库连接或 SQL。
+- 覆盖绝对解释器/工具 pin、受信目录 owner/mode、O_NOFOLLOW/fstat、symlink 与读取中元数据变化、重复 JSON key、bool/integer、schema 实际执行、TTL/not-before、receipt nonce/revocation/A2 signed proof、defaults 注入、固定 TCP/VERIFY_IDENTITY、固定两轮/单一 mocked subprocess、凭据不进入 argv/stdin/错误、validate-only 不可达执行路径。
+- 最后一条 CLI 检查只命中不存在的固定部署 helper，因此在 Python helper/mysql 前 fail-close；没有数据库副作用。

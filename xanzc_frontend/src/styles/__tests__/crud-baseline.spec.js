@@ -1,0 +1,47 @@
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+
+const source = readFileSync(new URL('../index.scss', import.meta.url), 'utf8');
+const marker = '/* Scoped CRUD page baseline */';
+const endMarker = '/* End scoped CRUD page baseline */';
+
+function scopedBaseline() {
+  const start = source.indexOf(marker);
+  const end = source.indexOf(endMarker);
+
+  expect(start, '应声明可审计的 CRUD 基线边界').toBeGreaterThanOrEqual(0);
+  expect(end, 'CRUD 基线应有明确结束边界').toBeGreaterThan(start);
+  return source.slice(start, end + endMarker.length);
+}
+
+describe('共享 CRUD 页面基线样式', () => {
+  it('以显式 bp-crud 命名空间和低特异度选择器覆盖页面结构', () => {
+    const scoped = scopedBaseline();
+
+    expect(scoped).toMatch(/\.bp-crud\s*\{/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.page-h\)/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.card-section\)/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.filter-bar,\s*\.filter-form\)/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.toolbar\)/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.pager\)/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.hint\)/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.table-state\)/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.data-panel\)/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.action-group\)/);
+  });
+
+  it('仅消费既有语义 token，且不向独立子系统或裸组件泄漏', () => {
+    const scoped = scopedBaseline();
+
+    for (const token of [
+      '--color-surface', '--color-border', '--color-text-muted', '--space-4', '--shadow-surface'
+    ]) {
+      expect(scoped).toContain(`var(${token})`);
+    }
+
+    expect(scoped).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    expect(scoped).not.toMatch(/\.(?:re-|redengine|screen|scr-)[\w-]*/i);
+    expect(scoped).not.toMatch(/(?:^|[,{]\s*)\.el-(?:table|dialog)\b/m);
+    expect(scoped).not.toMatch(/(?:^|[,{]\s*)body\b/m);
+  });
+});

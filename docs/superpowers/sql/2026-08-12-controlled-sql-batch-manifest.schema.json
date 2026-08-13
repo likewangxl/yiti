@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bank.branch.platform/schemas/controlled-sql-batch-manifest-v3.json",
+  "title": "Controlled SQL batch execution manifest v3",
+  "description": "严格 JSON 受控执行授权。runner 实际加载本文件，并分别验证 root launcher proof、在线 receipt claim token、A2 proof 和 mysql release contract。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "change_ticket",
+    "not_before_utc",
+    "expires_at_utc",
+    "execution_nonce",
+    "target",
+    "a2_recovery_point",
+    "approval_receipt",
+    "receipt_claim_helper",
+    "sql_sha256",
+    "artifact_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 3
+    },
+    "change_ticket": {
+      "$ref": "#/$defs/ticket"
+    },
+    "not_before_utc": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
+    "expires_at_utc": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
+    "execution_nonce": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{32,128}$"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["connect_host", "connect_port", "server_uuid", "server_hostname", "schema"],
+      "properties": {
+        "connect_host": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$"
+        },
+        "connect_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "server_uuid": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+        },
+        "server_hostname": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$"
+        },
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]{1,64}$"
+        }
+      }
+    },
+    "a2_recovery_point": {
+      "$ref": "#/$defs/a2RecoveryPoint"
+    },
+    "approval_receipt": {
+      "$ref": "#/$defs/approvalReceiptReference"
+    },
+    "receipt_claim_helper": {
+      "$ref": "#/$defs/claimHelper"
+    },
+    "sql_sha256": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql",
+        "docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql",
+        "docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql"
+      ],
+      "properties": {
+        "docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql": {
+          "$ref": "#/$defs/sha256"
+        },
+        "docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql": {
+          "$ref": "#/$defs/sha256"
+        },
+        "docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "artifact_sha256": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runner_shell",
+        "runner_python",
+        "root_managed_launcher",
+        "systemd_unit_template",
+        "preflight_checker_shell",
+        "preflight_checker_python",
+        "manifest_schema",
+        "receipt_claim_schema",
+        "a2_proof_schema",
+        "launcher_proof_schema",
+        "mysql_release_contract_schema",
+        "mysql_release_contract"
+      ],
+      "properties": {
+        "runner_shell": {"$ref": "#/$defs/artifact"},
+        "runner_python": {"$ref": "#/$defs/artifact"},
+        "root_managed_launcher": {"$ref": "#/$defs/artifact"},
+        "systemd_unit_template": {"$ref": "#/$defs/artifact"},
+        "preflight_checker_shell": {"$ref": "#/$defs/artifact"},
+        "preflight_checker_python": {"$ref": "#/$defs/artifact"},
+        "manifest_schema": {"$ref": "#/$defs/artifact"},
+        "receipt_claim_schema": {"$ref": "#/$defs/artifact"},
+        "a2_proof_schema": {"$ref": "#/$defs/artifact"},
+        "launcher_proof_schema": {"$ref": "#/$defs/artifact"},
+        "mysql_release_contract_schema": {"$ref": "#/$defs/artifact"},
+        "mysql_release_contract": {"$ref": "#/$defs/artifact"}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{64}$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "ticket": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,99}$"
+    },
+    "a2RecoveryPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "recovery_point_sha256", "proof_id", "proof_sha256"],
+      "properties": {
+        "reference": {"$ref": "#/$defs/ticket"},
+        "recovery_point_sha256": {"$ref": "#/$defs/sha256"},
+        "proof_id": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+        },
+        "proof_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "approvalReceiptReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["receipt_id"],
+      "properties": {
+        "receipt_id": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+        }
+      }
+    },
+    "claimHelper": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "const": "/usr/local/libexec/bank-controlled-sql-receipt-claim-helper"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^docs/superpowers/(scripts|sql)/[A-Za-z0-9_./@-]+$"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

@@ -22,19 +22,24 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 授权拦截器
  * 执行 RBAC 资源授权 + BizType 数据范围解析，按以下顺序检查：
  * 1. ResourceMatcher: URL + Method -> PT_RESOURCE（未注册 → 403 AUTH-40302）
- * 2. RbacAuthorizer:  角色资源授权校验（失败 → 403 AUTH-40301，SYS_ADMIN 跳过）
- * 3. BizMetaResolver: @BizAuth 注解解析（未声明 → 403 AUTH-40304）
+ * 2. RbacAuthorizer:  角色资源授权校验（失败 → 403 AUTH-40301，SYS_ADMIN 和认证自服务资源跳过）
+ * 3. BizMetaResolver: @BizAuth 注解解析（未声明时构建最小上下文）
  * 4. BizScopeApi:     构建 DataScopeContext 并放入 ThreadLocal
  * afterCompletion 中清理 DataScopeContext ThreadLocal。
  */
 @Slf4j
 @RequiredArgsConstructor
 public class AuthorizationInterceptor implements HandlerInterceptor {
+
+    /** 已认证用户读取自身登录态所必需的资源，不依赖角色资源绑定。 */
+    private static final Set<String> AUTHENTICATED_SELF_SERVICE_RESOURCE_IDS = Set.of(
+            "A_CURR_USER", "A_MY_MENUS", "A_PERMS");
 
     private final ResourceMatcher resourceMatcher;
     private final RbacAuthorizer rbacAuthorizer;
@@ -61,8 +66,16 @@ public class AuthorizationInterceptor implements HandlerInterceptor {
         CurrentUserContext userCtx = currentUserProvider.get();
         String empId = userCtx.empId();
 
+        // 已认证用户自服务资源只依赖 AuthenticationFilter 建立的登录态，不依赖任何角色或 BizScope 配置
+        boolean selfServiceResource = AUTHENTICATED_SELF_SERVICE_RESOURCE_IDS.contains(resourceId);
+        if (selfServiceResource) {
+            setMinimalDataScopeContext(userCtx);
+            log.debug("[AuthInterceptor] 已认证用户自服务接口放行 empId={}, resourceId={}", empId, resourceId);
+            return true;
+        }
+
         // Step 2: RBAC 校验（SYS_ADMIN 跳过）
-        if (!userCtx.systemAdmin()) {
+        if (!Boolean.TRUE.equals(userCtx.systemAdmin())) {
             if (!rbacAuthorizer.authorize(empId, resourceId)) {
                 writeForbidden(response, AuthErrorCode.RBAC_DENIED.getCode(),
                     AuthErrorCode.RBAC_DENIED.getMessage());
@@ -73,12 +86,7 @@ public class AuthorizationInterceptor implements HandlerInterceptor {
         // Step 3: 解析 @BizAuth 元数据（缺失时放行，使用仅包含 empId 的最小上下文）
         Optional<BizMeta> bizMetaOpt = bizMetaResolver.resolve(handler);
         if (bizMetaOpt.isEmpty()) {
-            com.bank.branch.platform.common.security.context.DataScopeContext minCtx =
-                new com.bank.branch.platform.common.security.context.DataScopeContext();
-            minCtx.setEmpId(empId);
-            minCtx.setOrgCode(userCtx.mainOrgCode());
-            minCtx.setCandidateGroupKeys(userCtx.candidateGroupKeys());
-            com.bank.branch.platform.common.security.context.DataScopeContext.set(minCtx);
+            setMinimalDataScopeContext(userCtx);
             log.debug("[AuthInterceptor] 接口未声明@BizAuth，放行 empId={}, resourceId={}", empId, resourceId);
             return true;
         }
@@ -102,6 +110,16 @@ public class AuthorizationInterceptor implements HandlerInterceptor {
     }
 
     // ── 私有方法 ──────────────────────────────────────────────────
+
+    /** 为无需业务数据范围的接口建立最小请求上下文。 */
+    private void setMinimalDataScopeContext(CurrentUserContext userCtx) {
+        com.bank.branch.platform.common.security.context.DataScopeContext minCtx =
+                new com.bank.branch.platform.common.security.context.DataScopeContext();
+        minCtx.setEmpId(userCtx.empId());
+        minCtx.setOrgCode(userCtx.mainOrgCode());
+        minCtx.setCandidateGroupKeys(userCtx.candidateGroupKeys());
+        com.bank.branch.platform.common.security.context.DataScopeContext.set(minCtx);
+    }
 
     /**
      * 将 auth 模块的 DataScopeContext DTO record 转换为 common-security 的 DataScopeContext（ThreadLocal 版本）

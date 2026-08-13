@@ -19,6 +19,9 @@ describe('filterTreeByCodes', () => {
   it('命中集合为空则返回空数组', () => {
     expect(filterTreeByCodes(tree, new Set())).toEqual([]);
   });
+  it('未提供范围集合时 fail-close 返回空数组', () => {
+    expect(filterTreeByCodes(tree)).toEqual([]);
+  });
   it('祖先本身命中也保留', () => {
     const out = filterTreeByCodes(tree, new Set(['B']));
     expect(out.map(n => n.code)).toEqual(['B']);

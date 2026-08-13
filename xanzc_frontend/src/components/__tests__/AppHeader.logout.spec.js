@@ -2,7 +2,7 @@
 // 退出登录必须整页跳转回归测试。
 // 根因：logout 用 router.replace('/login')（SPA 内跳转），Pinia 常驻内存，
 // menu store 等上一个用户的状态全部残留，下一个用户登录后看到旧菜单/旧状态。
-// 修复：与切换角色流程对齐，logout 改 window.location.replace('/login') 整页导航清空内存态。
+// logout 使用 window.location.replace('/#/login') 整页导航清空内存态。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
@@ -20,17 +20,19 @@ vi.mock('@/api/auth', () => ({
   logout: vi.fn().mockResolvedValue('OK'),
   switchRole: vi.fn(),
   getCurrentUser: vi.fn(),
-  getMyMenus: vi.fn()
+  getMyMenus: vi.fn(),
+  getMyPermissions: vi.fn()
 }));
 vi.mock('@/api/workspace', () => ({ getUnreadCount: vi.fn().mockResolvedValue(0) }));
-vi.mock('@/api/users', () => ({ changeMyPassword: vi.fn() }));
+vi.mock('@/api/users', () => ({ changeMyPassword: vi.fn().mockResolvedValue(undefined) }));
 
-import { logout } from '@/api/auth';
+import { logout, switchRole } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
+import { useMenuStore } from '@/stores/menu';
+import { usePermissionStore } from '@/stores/permission';
 import AppHeader from '../AppHeader.vue';
 
 const passthrough = (name) => ({ name, template: '<div><slot /></div>' });
-const empty = (name) => ({ name, template: '<div />' });
 const stubs = {
   'el-dropdown': { name: 'ElDropdown', emits: ['command'], template: '<div><slot /><slot name="dropdown" /></div>' },
   'el-dropdown-menu': passthrough('ElDropdownMenu'),
@@ -38,7 +40,12 @@ const stubs = {
   'el-dialog': { name: 'ElDialog', template: '<div><slot /><slot name="footer" /></div>' },
   'el-form': passthrough('ElForm'),
   'el-form-item': passthrough('ElFormItem'),
-  'el-input': empty('ElInput'),
+  'el-input': {
+    name: 'ElInput',
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+    template: '<input class="input-stub" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />'
+  },
   'el-badge': passthrough('ElBadge'),
   // 必须声明 emits，否则父级 @click 经 attrs 透传到原生 button 后与 $emit 叠加，处理器被调两次
   'el-button': { name: 'ElButton', emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' }
@@ -68,9 +75,15 @@ async function settle() {
 }
 
 describe('AppHeader 退出登录', () => {
-  it('确认退出后清用户态并整页跳转 /login（而非 SPA 内路由跳转）', async () => {
+  it('确认退出后清用户与授权快照，并按 hash 地址整页跳转登录页', async () => {
     const userStore = useUserStore();
+    const menuStore = useMenuStore();
+    const permissionStore = usePermissionStore();
     userStore.setUser({ empId: 'A001', username: 'userA', displayName: '用户A', roles: [] });
+    await menuStore.load();
+    await permissionStore.load();
+    expect(menuStore.loaded).toBe(true);
+    expect(permissionStore.loaded).toBe(true);
 
     wrapper = mount(AppHeader, { global: { plugins: [pinia], stubs } });
     await settle();
@@ -80,7 +93,70 @@ describe('AppHeader 退出登录', () => {
     expect(logout).toHaveBeenCalled();
     expect(userStore.user).toBeNull();
     // 修复前：router.replace('/login') SPA 内跳转，Pinia 内存态（菜单等）残留给下一个用户
-    expect(locationReplace, '退出必须整页跳转以清空内存态').toHaveBeenCalledWith('/login');
+    expect(menuStore.loaded).toBe(false);
+    expect(permissionStore.loaded).toBe(false);
+    expect(locationReplace, '退出必须整页跳转以清空内存态').toHaveBeenCalledWith('/#/login');
     expect(routerReplace).not.toHaveBeenCalledWith('/login');
+  });
+
+  it('修改密码成功后同样清理授权快照并整页重登', async () => {
+    vi.useFakeTimers();
+    try {
+      const userStore = useUserStore();
+      const menuStore = useMenuStore();
+      const permissionStore = usePermissionStore();
+      userStore.setUser({ empId: 'A001', username: 'userA', displayName: '用户A', roles: [] });
+      await menuStore.load();
+      await permissionStore.load();
+      wrapper = mount(AppHeader, { global: { plugins: [pinia], stubs } });
+      wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'changePassword');
+      await nextTick();
+
+      const inputs = wrapper.findAll('.input-stub').slice(-3);
+      await inputs[0].setValue('old-pass');
+      await inputs[1].setValue('new-pass');
+      await inputs[2].setValue('new-pass');
+      await wrapper.findAll('button').find((button) => button.text() === '确认').trigger('click');
+      await flushPromises();
+      await vi.advanceTimersByTimeAsync(600);
+      await flushPromises();
+
+      expect(userStore.user).toBeNull();
+      expect(menuStore.loaded).toBe(false);
+      expect(permissionStore.loaded).toBe(false);
+      expect(locationReplace).toHaveBeenCalledWith('/#/login');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('AppHeader 多角色合并生效', () => {
+  it('账号菜单只说明角色已合并生效，不再渲染逐角色菜单项', async () => {
+    const userStore = useUserStore();
+    userStore.setUser({
+      empId: 'A001',
+      username: 'userA',
+      displayName: '用户A',
+      mainOrgName: '测试机构',
+      roles: [
+        { roleId: 'R1', roleCode: 'NORMAL', roleChName: '普通用户' },
+        { roleId: 'R2', roleCode: 'R_RE_REPORT', roleChName: '党建报送员' }
+      ]
+    });
+
+    wrapper = mount(AppHeader, { global: { plugins: [pinia], stubs } });
+    await settle();
+
+    expect(wrapper.text()).not.toContain('切换角色');
+    // 逐角色菜单项会延续“点某个角色才能看到其菜单”的错误心智，必须完全移除。
+    expect(wrapper.text()).not.toContain('普通用户');
+    expect(wrapper.text()).not.toContain('党建报送员');
+
+    // 即使旧调用方仍发出历史 role:* command，也必须被忽略。
+    wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'role:R2');
+    await settle();
+    expect(switchRole).not.toHaveBeenCalled();
+    expect(window.location.reload).not.toHaveBeenCalled();
   });
 });

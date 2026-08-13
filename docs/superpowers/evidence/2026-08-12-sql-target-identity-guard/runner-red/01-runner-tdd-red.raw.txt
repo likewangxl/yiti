@@ -1,0 +1,25 @@
+STATIC-EVIDENCE-V1
+UTC_STARTED 2026-08-11T19:18:28.183968Z
+COMMAND python3 docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py
+SHA256 ee55d62a81d87d4b538f438c26526d7002090eddd96b3018d572357157546d78 /home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py
+SHA256 c57ed579666dbf3fe28554582e9a4e22341691807603fecf11076d1911b8bf79 /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.sh
+SHA256 503d9b704bc151108d72bd09753b93bf21ffa098431f2f16b6c33f2609a2cffc /home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-verify-sql-target-identity-guard.py
+SHA256 adc6485f27b7889947c67c58f0aa49a6701e73fb114fbb08155f3b4f004f4ed8 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-auth-org-profile-group.sql
+SHA256 81310dbb0232f23e5374207c93d427512429dad7012ce08ea39d6e4a1dc33349 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-screen-scope-map-align.sql
+SHA256 5c1b22ecdd8c74480e0607237d58316a71e762383cab1dead4c7cfe20798d500 /home/djdev/leid/yiti/docs/superpowers/sql/2026-08-11-screen-scope-map-seed.sql
+EXIT_CODE 1
+UTC_FINISHED 2026-08-11T19:18:28.240685Z
+--- RAW_STDOUT_STDERR ---
+Traceback (most recent call last):
+  File "/home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py", line 316, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py", line 284, in main
+    temp, temp_repo, private_key, _public_key = setup_temp_repo()
+                                                ~~~~~~~~~~~~~~~^^
+  File "/home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py", line 130, in setup_temp_repo
+    require_file(REPO_ROOT / relative)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/djdev/leid/yiti/docs/superpowers/scripts/tests/test_controlled_sql_batch_runner.py", line 56, in require_file
+    raise AssertionError(f"缺少受测 runner 产物：{path}")
+AssertionError: 缺少受测 runner 产物：/home/djdev/leid/yiti/docs/superpowers/scripts/2026-08-12-controlled-sql-batch-runner.sh
