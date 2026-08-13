@@ -52,7 +52,7 @@ describe('共享 CRUD 页面基线样式', () => {
     expect(scoped).toMatch(/\.bp-crud\s+:where\(\.filter-form\)\s*\{[\s\S]*display:\s*grid;/);
     expect(scoped).toMatch(/\.bp-crud\s+:where\(\.filter-form\s+\.el-form-item:last-child\)\s*\{[\s\S]*justify-self:\s*end;/);
     expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-input__wrapper,\s*\.el-select__wrapper,\s*\.el-button\)\s*\{[\s\S]*min-height:\s*32px;/);
-    expect(scoped).toMatch(/\.bp-crud\s+\.el-table\s+th\.el-table__cell,\s*\.bp-crud\s+\.el-table\s+td\.el-table__cell\s*\{[\s\S]*height:\s*40px;/);
+    expect(scoped).toMatch(/\.bp-crud\s+\.el-table\s+th\.el-table__cell,\s*\.bp-crud\s+\.el-table\s+td\.el-table__cell\s*\{[\s\S]*border-bottom:\s*1px solid[\s\S]*box-sizing:\s*border-box;[\s\S]*height:\s*39px;/);
     expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-table\s+\.el-tag\)\s*\{[\s\S]*min-height:\s*24px;/);
     // Element Plus 的 .el-table .cell 为 0,2,0；:where() 的内部选择器不贡献特异度。
     // 这里必须使用足以覆盖组件默认值的主平台作用域，不能仅靠 selector 文本存在。
@@ -76,16 +76,16 @@ describe('共享 CRUD 页面基线样式', () => {
   it('用可覆盖 Element Plus 的特异度落实 40px 表头和数据行', () => {
     const scoped = scopedBaseline();
 
-    expect(scoped).toMatch(/\.bp-crud\s+\.el-table\s+th\.el-table__cell,\s*\.bp-crud\s+\.el-table\s+td\.el-table__cell\s*\{[\s\S]*height:\s*40px;[\s\S]*padding:\s*0;/);
+    expect(scoped).toMatch(/\.bp-crud\s+\.el-table\s+th\.el-table__cell,\s*\.bp-crud\s+\.el-table\s+td\.el-table__cell\s*\{[\s\S]*border-bottom:\s*1px solid[\s\S]*box-sizing:\s*border-box;[\s\S]*height:\s*39px;[\s\S]*padding:\s*0;/);
     expect(scoped).toMatch(/\.bp-crud\s+\.el-table\s+tr\s*\{[\s\S]*height:\s*40px;/);
     expect(scoped).toMatch(/td\.compact-clamp-cell\s+\.cell[\s\S]*display:\s*-webkit-box;[\s\S]*-webkit-line-clamp:\s*2;[\s\S]*line-height:\s*18px;[\s\S]*max-height:\s*36px;/);
-    expect(scoped).toMatch(/td\.compact-stack-cell\s+\.cell[\s\S]*display:\s*grid;[\s\S]*grid-auto-rows:\s*18px;[\s\S]*height:\s*40px;/);
-    expect(scoped).toMatch(/td\.compact-status-cell\s+\.cell[\s\S]*grid-template-rows:\s*24px\s+16px;/);
+    expect(scoped).toMatch(/td\.compact-stack-cell\s+\.cell[\s\S]*display:\s*grid;[\s\S]*grid-auto-rows:\s*18px;[\s\S]*height:\s*39px;/);
+    expect(scoped).toMatch(/td\.compact-status-cell\s+\.cell[\s\S]*grid-template-rows:\s*24px\s+15px;/);
   });
 
   it('设计规范明确 CLI 可执行的横滚动、行高与真实悬停验收门禁', () => {
     expect(designSystem).toMatch(/document、`\.content` 和 main 均不得出现非预期横向滚动/);
-    expect(designSystem).toMatch(/实载表格的表头和数据行计算高度为 40px/);
+    expect(designSystem).toMatch(/实载表格的表头和数据行总 border-box 高度为 40px[\s\S]*39px 内容预算 \+ 1px 可见下边框/);
     expect(designSystem).toMatch(/`compact-clamp-cell`[\s\S]*最多两行[\s\S]*真实溢出时由受控 mouseover/);
     expect(designSystem).toMatch(/必须在真实 mouseover 后校验 title/);
   });

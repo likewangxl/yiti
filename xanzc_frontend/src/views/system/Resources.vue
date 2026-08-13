@@ -426,7 +426,6 @@ onMounted(reload);
 <style lang="scss" scoped>
 .resources-page { min-width: 0; }
 .menu-card { min-width: 0; }
-.menu-table :deep(.el-table__row > td) { padding-block: var(--space-2); }
 .menu-table :deep(.el-table__row:hover > td) { background: var(--color-brand-100); }
 .menu-table :deep(.el-table__placeholder) { width: var(--space-4); }
 .menu-name { color: var(--color-text-strong); font-size: 14px; }

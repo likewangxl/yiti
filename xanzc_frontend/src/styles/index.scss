@@ -183,7 +183,8 @@ a { color: inherit; text-decoration: none; }
 .bp-crud .el-table td.el-table__cell {
   border-bottom: 1px solid var(--color-border);
   border-right: 1px solid var(--color-border);
-  height: 40px;
+  box-sizing: border-box;
+  height: 39px;
   padding: 0;
 }
 
@@ -222,14 +223,14 @@ a { color: inherit; text-decoration: none; }
   word-break: break-word;
 }
 
-/* 双行主/辅信息必须显式接入：两行各 18px，在 40px 行内完整呈现。 */
+/* 双行主/辅信息必须显式接入：两行各 18px，加 1px 边框后总行高为 40px。 */
 .bp-crud .el-table td.compact-stack-cell .cell,
 .bp-crud-dialog .el-table td.compact-stack-cell .cell {
   align-content: center;
   box-sizing: border-box;
   display: grid;
   grid-auto-rows: 18px;
-  height: 40px;
+  height: 39px;
   line-height: 18px;
 }
 
@@ -248,10 +249,10 @@ a { color: inherit; text-decoration: none; }
   padding-block: 0;
 }
 
-/* 状态 + 详情使用 24px tag 与 16px 辅助行，合计仍为 40px。 */
+/* 状态 + 详情使用 24px tag 与 15px 辅助行，再加 1px 边框合计 40px。 */
 .bp-crud .el-table td.compact-status-cell .cell,
 .bp-crud-dialog .el-table td.compact-status-cell .cell {
-  grid-template-rows: 24px 16px;
+  grid-template-rows: 24px 15px;
 }
 
 .bp-crud .compact-status-cell .el-tag,
@@ -264,8 +265,11 @@ a { color: inherit; text-decoration: none; }
 
 .bp-crud .compact-status-cell .cell > :not(.el-tag),
 .bp-crud-dialog .compact-status-cell .cell > :not(.el-tag) {
-  height: 16px;
-  line-height: 16px;
+  height: 15px;
+  line-height: 15px;
+  margin-block: 0;
+  margin-bottom: 0;
+  margin-top: 0;
 }
 
 .bp-crud .el-table td.operation-cell .cell,
@@ -286,7 +290,7 @@ a { color: inherit; text-decoration: none; }
   align-content: center;
   display: grid;
   grid-auto-rows: 18px;
-  height: 40px;
+  height: 39px;
 }
 
 .bp-crud .el-table th.compact-stack-header .compact-header-lines > *,
