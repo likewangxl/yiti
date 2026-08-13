@@ -41,6 +41,7 @@ import { Close } from '@element-plus/icons-vue';
 import { useMenuStore } from '@/stores/menu';
 import { resolveTabKey, useWorkspaceTabsStore } from '@/stores/workspaceTabs';
 
+const NAVIGATION_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End']);
 const route = useRoute();
 const router = useRouter();
 const menuStore = useMenuStore();
@@ -83,6 +84,12 @@ function selectTab(tab) {
  */
 function handleTabKeydown(event, tab) {
   const key = event.key;
+  if (!NAVIGATION_KEYS.has(key)) return;
+
+  // 即使已经位于首尾，也要阻止页面滚动和上层快捷键接管路由页签按键。
+  event.preventDefault();
+  event.stopPropagation();
+
   const currentIndex = tabs.value.findIndex((item) => item.key === tab.key);
   if (currentIndex < 0) return;
 
@@ -93,26 +100,36 @@ function handleTabKeydown(event, tab) {
   if (key === 'End') targetIndex = tabs.value.length - 1;
   if (targetIndex === currentIndex) return;
 
-  event.preventDefault();
   const labels = tabsListRef.value?.querySelectorAll('.workspace-tabs__label');
   labels?.[targetIndex]?.focus();
 }
 
-/** 关闭页签后，仅在关闭当前页签时导航到 store 选出的相邻页签。 */
+/** 在 DOM 更新后把焦点交给指定页签，避免关闭按钮移除后焦点落到 document.body。 */
+function focusTab(tab) {
+  if (!tab?.key) return;
+  nextTick(() => {
+    const labels = tabsListRef.value?.querySelectorAll('.workspace-tabs__label');
+    const target = Array.from(labels || []).find(
+      (label) => label.closest('[data-tab-key]')?.dataset.tabKey === tab.key
+    );
+    target?.focus();
+  });
+}
+
+/** 关闭页签后，当前页签回退到相邻项，后台页签保持当前项并恢复其焦点。 */
 function closeTab(tab) {
   if (!tab?.closable) return;
   const wasActive = tab.key === activeKey.value;
   const fallback = tabsStore.close(tab.key);
   if (wasActive && fallback) router.push(fallback.fullPath);
+  focusTab(wasActive ? fallback : tabs.value.find((item) => item.key === activeKey.value) || fallback);
 }
 </script>
 
 <style lang="scss" scoped>
 .workspace-tabs {
-  // 组件局部 token 覆盖历史全局默认值，保证壳层总高稳定为 48px。
-  --workspace-tabs-height: 48px;
-  height: var(--workspace-tabs-height);
-  flex: 0 0 var(--workspace-tabs-height);
+  height: var(--layout-workspace-tabs-height);
+  flex: 0 0 var(--layout-workspace-tabs-height);
   min-width: 0;
   overflow: hidden;
   background: var(--color-workspace-strip);
@@ -173,8 +190,11 @@ function closeTab(tab) {
 }
 
 .workspace-tabs__label {
+  display: flex;
+  align-items: center;
   min-width: 0;
   flex: 1;
+  height: 40px;
   overflow: hidden;
   padding: 0;
   color: inherit;

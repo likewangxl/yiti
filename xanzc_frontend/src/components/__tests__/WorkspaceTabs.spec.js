@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } 
 import { mount } from '@vue/test-utils';
 import { nextTick, reactive } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const routeRef = reactive({
   path: '/workspace',
@@ -142,13 +144,38 @@ describe('WorkspaceTabs.vue', () => {
     visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
     await nextTick();
 
+    const metricsLabel = wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__label');
+    const metricsFocus = vi.spyOn(metricsLabel.element, 'focus');
+
     await wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__label').trigger('click');
     expect(routerMock.push).toHaveBeenCalledWith('/perf/metrics');
 
     routerMock.push.mockClear();
     await wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__close').trigger('click');
+    await nextTick();
     expect(routerMock.push).toHaveBeenCalledWith('/perf/metrics');
+    expect(metricsFocus).toHaveBeenCalledTimes(1);
     expect(wrapper.find('[data-tab-key="/system/users"]').exists()).toBe(false);
+  });
+
+  it('关闭后台非当前页签后保留当前路由，并把焦点交给当前页签', async () => {
+    const wrapper = mountTabs();
+
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
+    await nextTick();
+
+    const currentLabel = wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__label');
+    const currentFocus = vi.spyOn(currentLabel.element, 'focus');
+    routerMock.push.mockClear();
+
+    await wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__close').trigger('click');
+    await nextTick();
+
+    expect(routerMock.push).not.toHaveBeenCalled();
+    expect(currentFocus).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[data-tab-key="/perf/metrics"]').exists()).toBe(false);
   });
 
   it('页签切换保留记录时的完整 fullPath 与查询参数，并且当前项使用页面导航语义', async () => {
@@ -202,10 +229,60 @@ describe('WorkspaceTabs.vue', () => {
     expect(metricsFocus).toHaveBeenCalledTimes(1);
     await metricsLabel.trigger('keydown', { key: 'ArrowRight' });
     expect(usersFocus).toHaveBeenCalledTimes(1);
+    await usersLabel.trigger('keydown', { key: 'ArrowLeft' });
+    expect(metricsFocus).toHaveBeenCalledTimes(2);
     await usersLabel.trigger('keydown', { key: 'Home' });
     expect(workspaceFocus).toHaveBeenCalledTimes(1);
     await workspaceLabel.trigger('keydown', { key: 'End' });
     expect(usersFocus).toHaveBeenCalledTimes(2);
+  });
+
+  it('四类页签导航键在首尾也阻止默认滚动并阻断 window 快捷键冒泡', async () => {
+    const wrapper = mountTabs();
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
+    await nextTick();
+
+    const firstLabel = wrapper.find('[data-tab-key="/workspace"] .workspace-tabs__label');
+    const lastLabel = wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__label');
+    const windowKeydown = vi.fn();
+    window.addEventListener('keydown', windowKeydown);
+
+    const dispatch = (label, key) => {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      label.element.dispatchEvent(event);
+      return event;
+    };
+
+    const firstBoundaryEvents = [
+      dispatch(firstLabel, 'ArrowLeft'),
+      dispatch(firstLabel, 'Home')
+    ];
+    const lastBoundaryEvents = [
+      dispatch(lastLabel, 'ArrowRight'),
+      dispatch(lastLabel, 'End')
+    ];
+
+    expect(firstBoundaryEvents.every((event) => event.defaultPrevented)).toBe(true);
+    expect(lastBoundaryEvents.every((event) => event.defaultPrevented)).toBe(true);
+    expect(windowKeydown).not.toHaveBeenCalled();
+    window.removeEventListener('keydown', windowKeydown);
+  });
+
+  it('页签尺寸只由全局 token 提供，标题和关闭按钮均保持 40px 命中高度', () => {
+    const componentSource = readFileSync(resolve(process.cwd(), 'src/components/WorkspaceTabs.vue'), 'utf8');
+    const tokenSource = readFileSync(resolve(process.cwd(), 'src/styles/tokens.scss'), 'utf8');
+
+    expect(tokenSource).toMatch(/--layout-workspace-tabs-height:\s*48px;/);
+    expect(componentSource).toContain('height: var(--layout-workspace-tabs-height);');
+    expect(componentSource).toContain('flex: 0 0 var(--layout-workspace-tabs-height);');
+    expect(componentSource).not.toContain('--workspace-tabs-height');
+    expect(componentSource).toMatch(/\.workspace-tabs__tab\s*\{[\s\S]*?min-width:\s*112px;[\s\S]*?max-width:\s*200px;[\s\S]*?height:\s*40px;/);
+    expect(componentSource).toContain('gap: var(--space-2);');
+    expect(componentSource).toContain('font-size: 14px;');
+    expect(componentSource).toMatch(/\.workspace-tabs__label\s*\{[\s\S]*?height:\s*40px;/);
+    expect(componentSource).toMatch(/\.workspace-tabs__close\s*\{[\s\S]*?width:\s*40px;[\s\S]*?height:\s*40px;/);
   });
 });
 
