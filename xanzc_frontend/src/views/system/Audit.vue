@@ -45,7 +45,7 @@
         <el-table-column label="原因" min-width="180" show-overflow-tooltip><template #default="{ row }">{{ row.reason || '-' }}</template></el-table-column>
         <el-table-column label="耗时" width="86" align="right"><template #default="{ row }">{{ row.executionTime != null ? `${row.executionTime} ms` : '-' }}</template></el-table-column>
         <el-table-column label="状态" width="78" align="center"><template #default="{ row }"><el-tag v-if="row.responseStatus == null" class="tag-info" effect="plain" size="small">-</el-tag><el-tag v-else-if="row.responseStatus < 400" class="tag-success" effect="plain" size="small">{{ row.responseStatus }}</el-tag><el-tag v-else class="tag-warning" effect="plain" size="small">{{ row.responseStatus }}</el-tag></template></el-table-column>
-        <el-table-column label="操作" width="80" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button></template></el-table-column>
+        <el-table-column label="操作" class-name="operation-cell" width="80" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button></template></el-table-column>
       </el-table>
       <nav class="pager" aria-label="审计日志分页">
         <el-pagination

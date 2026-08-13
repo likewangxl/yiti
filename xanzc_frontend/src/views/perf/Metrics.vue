@@ -186,10 +186,15 @@
             <el-table-column label="更新" width="110" align="center">
               <template #default>{{ today }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="120" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="120" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="onPick(row.metricCode)">查看</el-button>
-                <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+                <el-dropdown trigger="click" popper-class="bp-crud-menu">
+                  <el-button link size="small" aria-label="更多指标操作">更多</el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu><el-dropdown-item @click="openEdit(row)">编辑</el-dropdown-item></el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </template>
             </el-table-column>
           </el-table>

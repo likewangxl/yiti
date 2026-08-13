@@ -74,7 +74,7 @@
             <el-table-column prop="nodeKey" label="节点 Key" min-width="190"><template #default="{ row }"><code class="mono">{{ row.nodeKey }}</code></template></el-table-column>
             <el-table-column prop="candidateType" label="候选类型" width="120"><template #default="{ row }"><el-tag class="tag-info" effect="plain" size="small">{{ row.candidateType }}</el-tag></template></el-table-column>
             <el-table-column prop="candidateValue" label="候选值" min-width="260" show-overflow-tooltip />
-            <el-table-column label="操作" width="90" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
               <template #default="{ row }"><el-button link type="primary" size="small" @click="openCandidateDlg(row)">编辑</el-button></template>
             </el-table-column>
           </el-table>
@@ -96,7 +96,7 @@
             <el-table-column prop="nodeKey" label="节点 Key" min-width="190"><template #default="{ row }"><code class="mono">{{ row.nodeKey }}</code></template></el-table-column>
             <el-table-column prop="formFields" label="表单字段定义" min-width="300" show-overflow-tooltip />
             <el-table-column prop="readableFields" label="只读字段" min-width="180" show-overflow-tooltip />
-            <el-table-column label="操作" width="90" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
               <template #default="{ row }"><el-button link type="primary" size="small" @click="openFormDlg(row)">编辑</el-button></template>
             </el-table-column>
           </el-table>
@@ -118,7 +118,7 @@
             <el-table-column prop="nodeKey" label="节点 Key" min-width="190"><template #default="{ row }"><code class="mono">{{ row.nodeKey }}</code></template></el-table-column>
             <el-table-column prop="warningHours" label="黄灯（工作小时）" width="150" align="right"><template #default="{ row }"><el-tag class="tag-warning" effect="plain" size="small">{{ row.warningHours }} h</el-tag></template></el-table-column>
             <el-table-column prop="timeoutHours" label="红灯（工作小时）" width="150" align="right"><template #default="{ row }"><el-tag class="tag-danger" effect="plain" size="small">{{ row.timeoutHours }} h</el-tag></template></el-table-column>
-            <el-table-column label="操作" width="90" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
               <template #default="{ row }"><el-button link type="primary" size="small" @click="openTimeoutDlg(row)">编辑</el-button></template>
             </el-table-column>
           </el-table>

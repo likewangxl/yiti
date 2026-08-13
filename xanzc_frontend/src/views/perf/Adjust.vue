@@ -86,18 +86,18 @@
             <el-table-column label="申请时间" width="160">
               <template #default="{row}">{{ fmtDateTime(row.createdTime || row.time) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="180" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="180" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="openSharedView(row)">查看</el-button>
-                <el-button v-if="row.status === 'DRAFT'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-popconfirm
-                  v-if="canWithdraw(row.status)"
-                  :title="`确认撤回申请 ${row.applyNo || row.id}？`"
-                  @confirm="onWithdraw(row)">
-                  <template #reference>
-                    <el-button link type="danger" size="small">撤回</el-button>
+                <el-dropdown trigger="click" popper-class="bp-crud-menu">
+                  <el-button link size="small" aria-label="更多业绩调整申请操作">更多</el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item v-if="row.status === 'DRAFT'" @click="openEdit(row)">编辑</el-dropdown-item>
+                      <el-dropdown-item v-if="canWithdraw(row.status)" divided class="danger-item" @click="onWithdraw(row)">撤回</el-dropdown-item>
+                    </el-dropdown-menu>
                   </template>
-                </el-popconfirm>
+                </el-dropdown>
               </template>
             </el-table-column>
           </el-table>
@@ -199,7 +199,7 @@
                 <el-tag :class="slaCls(row.slaStatus)" effect="plain">{{ slaLabel(row.slaStatus) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="100" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="100" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="openTodoReview(row)">审批</el-button>
               </template>
@@ -293,7 +293,7 @@
             <el-table-column label="申请时间" width="160">
               <template #default="{row}">{{ fmt(row.createdTime) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="120" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="120" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="openSharedView(row)">查看申请</el-button>
               </template>
@@ -468,7 +468,7 @@
                 <span v-else>{{ row.ratio != null && row.ratio !== '' ? row.ratio + '%' : '-' }}</span>
               </template>
             </el-table-column>
-            <el-table-column v-if="!dlg.readOnly" label="操作" width="70" align="center" fixed="right">
+            <el-table-column v-if="!dlg.readOnly" label="操作" class-name="operation-cell" width="70" align="center" fixed="right">
               <template #default="{ $index }">
                 <el-button link type="danger" size="small" @click="removeOriginalRow($index)">删除</el-button>
               </template>
@@ -514,7 +514,7 @@
               <el-input v-model="row.remark" :disabled="dlg.readOnly" size="small" />
             </template>
           </el-table-column>
-          <el-table-column v-if="!dlg.readOnly" label="操作" width="80" align="center" fixed="right">
+          <el-table-column v-if="!dlg.readOnly" label="操作" class-name="operation-cell" width="80" align="center" fixed="right">
             <template #default="{$index}">
               <el-button link type="danger" size="small" @click="dlg.form.items.splice($index, 1)">删除</el-button>
             </template>

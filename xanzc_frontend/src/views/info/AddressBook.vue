@@ -127,7 +127,7 @@
             <el-tag v-if="isStale(row.updatedTime)" class="tag-warning" effect="plain" size="small">60天未更新</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="90" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
           </template>

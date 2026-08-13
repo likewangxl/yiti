@@ -99,7 +99,7 @@
           <el-button link type="primary" @click="openMaterial(row)">查看</el-button>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="90" fixed="right">
+      <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="downloadRow(row)">下载</el-button>
         </template>

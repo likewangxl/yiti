@@ -5,19 +5,29 @@ const CELL_SELECTOR = '.el-table__body .cell, .el-table__header .cell';
 function syncOverflowTitle(cell) {
   const text = cell.textContent?.trim() || '';
   const isOverflowing = cell.scrollWidth > cell.clientWidth || cell.scrollHeight > cell.clientHeight;
-  const isGenerated = cell.getAttribute(GENERATED_TITLE_ATTR) === 'true';
+  const generatedTitle = cell.getAttribute(GENERATED_TITLE_ATTR);
+  // 标记中保存上次由指令写入的值，才能区分“仍归指令所有”与业务后来改写的 title。
+  const ownsCurrentTitle = generatedTitle !== null && cell.getAttribute('title') === generatedTitle;
 
-  // 已有业务专用 title 时不覆盖，避免破坏页面已有的字段说明。
-  if (cell.hasAttribute('title') && !isGenerated) return;
-
-  if (isOverflowing && text) {
-    cell.setAttribute('title', text);
-    cell.setAttribute(GENERATED_TITLE_ATTR, 'true');
+  // 已有业务专用 title 时不覆盖、也不清除。若业务在指令写入后改写 title，
+  // 先移除归属标记，后续悬停也不会把业务文案再覆盖回单元格文本。
+  if (cell.hasAttribute('title') && !ownsCurrentTitle) {
+    cell.removeAttribute(GENERATED_TITLE_ATTR);
     return;
   }
 
-  if (isGenerated) {
+  if (isOverflowing && text) {
+    cell.setAttribute('title', text);
+    cell.setAttribute(GENERATED_TITLE_ATTR, text);
+    return;
+  }
+
+  // 仅删除仍与本指令最后一次写入内容一致的 title，动态渲染/业务逻辑
+  // 后续写入的 title 始终保留。
+  if (ownsCurrentTitle) {
     cell.removeAttribute('title');
+    cell.removeAttribute(GENERATED_TITLE_ATTR);
+  } else if (generatedTitle !== null) {
     cell.removeAttribute(GENERATED_TITLE_ATTR);
   }
 }

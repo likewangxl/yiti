@@ -59,7 +59,7 @@
         </el-table-column>
         <el-table-column label="数据变动日期" prop="createTime" min-width="170" />
         <el-table-column label="变更日期" prop="updateTime" min-width="170" />
-        <el-table-column label="操作" width="90" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
           </template>

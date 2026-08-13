@@ -106,11 +106,18 @@
             <el-tag :class="apprCls(row.approvalStatus)" effect="plain" size="small">{{ apprLabel(row.approvalStatus) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="190" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="190" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="canTargetAdjust" link type="primary" size="small" @click="openAdjust(row)">调整</el-button>
             <el-button link type="primary" size="small" @click="openEditRow(row)">修改</el-button>
-            <el-button link type="danger" size="small" @click="onDelete(row)">删除</el-button>
+            <el-dropdown trigger="click" popper-class="bp-crud-menu">
+              <el-button link size="small" aria-label="更多目标值操作">更多</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="canTargetAdjust" @click="openAdjust(row)">调整</el-dropdown-item>
+                  <el-dropdown-item divided class="danger-item" @click="onDelete(row)">删除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </template>
         </el-table-column>
       </el-table>

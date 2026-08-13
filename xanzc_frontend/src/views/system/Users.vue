@@ -145,12 +145,12 @@
             <el-table-column label="操作" class-name="operation-cell" width="160" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-dropdown trigger="click" @command="command => onRowMoreCommand(command, row)">
+                <el-dropdown trigger="click" popper-class="bp-crud-menu" @command="command => onRowMoreCommand(command, row)">
                   <el-button link size="small" aria-label="更多用户操作">更多</el-button>
                   <template #dropdown>
                     <el-dropdown-menu>
                       <el-dropdown-item command="roles">分配角色</el-dropdown-item>
-                      <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                      <el-dropdown-item command="delete" divided class="danger-item">删除</el-dropdown-item>
                     </el-dropdown-menu>
                   </template>
                 </el-dropdown>

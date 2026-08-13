@@ -94,35 +94,20 @@
           <template #default="{ row }"><span class="rank-num">{{ row.menuRankNo ?? 0 }}</span></template>
         </el-table-column>
 
-        <el-table-column label="操作" width="300" align="right" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="300" align="right" fixed="right">
           <template #default="{ row }">
             <div class="row-actions" role="group" :aria-label="`${row.menuName} 操作`">
-              <el-button link type="primary" size="small" @click.stop="openCreate(row)">新增子菜单</el-button>
               <el-button link type="primary" size="small" @click.stop="openEdit(row)">编辑</el-button>
-              <el-button
-                v-if="row.menuEndFlag === '1'"
-                link
-                type="primary"
-                size="small"
-                @click.stop="openAssign(row)"
-              >分配角色</el-button>
-              <el-popconfirm
-                :title="`确认删除「${row.menuName}」？子菜单会一并失效，操作不可逆。`"
-                confirm-button-text="确认删除"
-                cancel-button-text="取消"
-                @confirm="doDelete(row)"
-              >
-                <template #reference>
-                  <el-button
-                    link
-                    type="danger"
-                    size="small"
-                    :loading="isDeleting(row.resourceId)"
-                    :disabled="isDeleting(row.resourceId)"
-                    @click.stop
-                  >删除</el-button>
+              <el-dropdown trigger="click" popper-class="bp-crud-menu">
+                <el-button link size="small" :disabled="isDeleting(row.resourceId)" aria-label="更多菜单操作">更多</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item @click="openCreate(row)">新增子菜单</el-dropdown-item>
+                    <el-dropdown-item v-if="row.menuEndFlag === '1'" @click="openAssign(row)">分配角色</el-dropdown-item>
+                    <el-dropdown-item divided class="danger-item" :disabled="isDeleting(row.resourceId)" @click="confirmDelete(row)">删除</el-dropdown-item>
+                  </el-dropdown-menu>
                 </template>
-              </el-popconfirm>
+              </el-dropdown>
             </div>
           </template>
         </el-table-column>
@@ -216,7 +201,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Refresh, Search } from '@element-plus/icons-vue';
 import {
   listResourceTree, createResource, updateResource, deleteResource,
@@ -386,6 +371,15 @@ async function doDelete(row) {
   } finally {
     setDeleting(id, false);
   }
+}
+
+async function confirmDelete(row) {
+  try {
+    await ElMessageBox.confirm(`确认删除「${row.menuName}」？子菜单会一并失效，操作不可逆。`, '删除确认', {
+      type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消'
+    });
+  } catch { return; }
+  await doDelete(row);
 }
 
 const rawRoles = ref([]);

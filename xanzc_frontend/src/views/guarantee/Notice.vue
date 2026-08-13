@@ -59,7 +59,7 @@
         </el-table-column>
         <el-table-column prop="createTime" label="创建时间" width="180" />
         <el-table-column prop="seqNo" label="序号" width="90" align="right" />
-        <el-table-column label="操作" width="90" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openDetail(row)">查看</el-button>
           </template>

@@ -164,7 +164,7 @@
           <el-table-column label="数据范围" width="112">
             <template #default="{ row }"><el-tag :class="scopeCls(row.dataScope)" effect="plain">{{ scopeLabel(row.dataScope) }}</el-tag></template>
           </el-table-column>
-          <el-table-column label="操作" width="72" fixed="right">
+          <el-table-column label="操作" class-name="operation-cell" width="72" fixed="right">
             <template #default="{ row }"><el-button link type="primary" size="small" @click="openScopeEditor(row)">修改</el-button></template>
           </el-table-column>
         </el-table>

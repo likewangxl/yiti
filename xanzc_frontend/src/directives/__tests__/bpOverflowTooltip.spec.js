@@ -78,4 +78,38 @@ describe('bpOverflowTooltip 受控表格溢出提示', () => {
 
     expect(cell.getAttribute('title')).toBe('导入批次异常原因过长');
   });
+
+  it('动态内容变化时只更新自己维护的 title', () => {
+    const { cell } = mountTable({ text: '第一版机构名称', width: 80, scrollWidth: 180 });
+
+    cell.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(cell.getAttribute('title')).toBe('第一版机构名称');
+
+    cell.querySelector('span').textContent = '第二版机构名称';
+    cell.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+
+    expect(cell.getAttribute('title')).toBe('第二版机构名称');
+    expect(cell.getAttribute('data-bp-overflow-tooltip')).toBe('第二版机构名称');
+  });
+
+  it('业务后来写入 title 时不再覆盖或删除该业务文案', () => {
+    const { cell } = mountTable({ width: 80, scrollWidth: 180 });
+
+    cell.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(cell.getAttribute('title')).toBe('西安高新支行名称过长');
+
+    cell.setAttribute('title', '业务字段专用说明');
+    cell.querySelector('span').textContent = '业务更新后的单元格文本';
+    cell.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(cell.getAttribute('title')).toBe('业务字段专用说明');
+
+    Object.defineProperties(cell, {
+      clientWidth: { configurable: true, value: 180 },
+      scrollWidth: { configurable: true, value: 80 }
+    });
+    cell.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+
+    expect(cell.getAttribute('title')).toBe('业务字段专用说明');
+    expect(cell.hasAttribute('data-bp-overflow-tooltip')).toBe(false);
+  });
 });

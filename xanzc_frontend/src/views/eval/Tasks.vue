@@ -76,13 +76,20 @@
         <template #default="{ row }">{{ row.itemCount != null ? row.itemCount : '—' }}</template>
       </el-table-column>
       <el-table-column prop="createBy" label="创建人" width="110" align="center" />
-      <el-table-column label="操作" width="240" align="center" fixed="right">
+      <el-table-column label="操作" class-name="operation-cell" width="240" align="center" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link @click="openDetail(row)">详情</el-button>
-          <el-button v-if="row.status === 2" type="success" link :loading="isPending('publish', row.sourceId)" :disabled="isPending('publish', row.sourceId)" @click="handlePublish(row)">发布</el-button>
-          <el-button v-if="row.sourceType === 'AUTO' && row.status === 0" type="danger" link :loading="isPending('close', row.sourceId)" :disabled="isPending('close', row.sourceId)" @click="handleCloseTask(row)">关闭</el-button>
-          <el-button type="primary" link :loading="isPending('export', row.sourceId)" :disabled="isPending('export', row.sourceId)" @click="handleExport(row)">导出</el-button>
-          <el-button v-if="row.status === 0 || row.status === 2 || row.status === 4 || isDeadlinePassed(row)" type="danger" link :loading="isPending('delete', row.sourceId)" :disabled="isPending('delete', row.sourceId)" @click="handleDelete(row)">删除</el-button>
+          <el-dropdown trigger="click" popper-class="bp-crud-menu">
+            <el-button link aria-label="更多评价任务操作">更多</el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item v-if="row.status === 2" class="success-item" :disabled="isPending('publish', row.sourceId)" @click="handlePublish(row)">发布</el-dropdown-item>
+                <el-dropdown-item v-if="row.sourceType === 'AUTO' && row.status === 0" divided class="danger-item" :disabled="isPending('close', row.sourceId)" @click="handleCloseTask(row)">关闭</el-dropdown-item>
+                <el-dropdown-item :disabled="isPending('export', row.sourceId)" @click="handleExport(row)">导出</el-dropdown-item>
+                <el-dropdown-item v-if="row.status === 0 || row.status === 2 || row.status === 4 || isDeadlinePassed(row)" divided class="danger-item" :disabled="isPending('delete', row.sourceId)" @click="handleDelete(row)">删除</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </el-table-column>
       </el-table>

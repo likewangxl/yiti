@@ -99,17 +99,18 @@
         <el-table-column label="更新时间" width="170">
           <template #default="{row}">{{ fmtDate(row.updatedTime) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="180" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" :disabled="deletingId === row.id" @click="openEdit(row)">编辑</el-button>
-            <el-tooltip :disabled="!row.fileObjectId" :content="row.fileName || '下载附件'" placement="top">
-              <el-button link type="primary" size="small" :disabled="!row.fileObjectId || deletingId === row.id" @click="downloadAttach(row)">附件</el-button>
-            </el-tooltip>
-            <el-popconfirm :title="`确认删除「${row.productName}」？删除后无法恢复。`" @confirm="onDelete(row)">
-              <template #reference>
-                <el-button link type="danger" size="small" :loading="deletingId === row.id">删除</el-button>
+            <el-dropdown trigger="click" popper-class="bp-crud-menu">
+              <el-button link size="small" :disabled="deletingId === row.id" aria-label="更多产品资料操作">更多</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item :disabled="!row.fileObjectId || deletingId === row.id" :title="row.fileObjectId ? (row.fileName || '下载附件') : '暂无附件'" @click="downloadAttach(row)">附件</el-dropdown-item>
+                  <el-dropdown-item divided class="danger-item" :disabled="deletingId === row.id" @click="confirmDelete(row)">删除</el-dropdown-item>
+                </el-dropdown-menu>
               </template>
-            </el-popconfirm>
+            </el-dropdown>
           </template>
         </el-table-column>
       </el-table>
@@ -188,7 +189,7 @@
 
 <script setup>
 import { ref, onMounted, nextTick } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { fmtDateTime } from '@/utils/datetime';
 import { call } from '@/api/http';
 import { listProducts, createProduct, updateProduct, deleteProduct } from '@/api/products';
@@ -331,6 +332,15 @@ async function onDelete(row) {
     ElMessage.success('已删除');
     reload();
   } catch (e) { ElMessage.error(e?.message || '删除失败'); } finally { deletingId.value = null; }
+}
+
+async function confirmDelete(row) {
+  try {
+    await ElMessageBox.confirm(`确认删除「${row.productName}」？删除后无法恢复。`, '删除确认', {
+      type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消'
+    });
+  } catch { return; }
+  await onDelete(row);
 }
 
 onMounted(() => { loadOrg(); reload(); });

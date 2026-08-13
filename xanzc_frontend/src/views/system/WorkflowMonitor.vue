@@ -80,16 +80,14 @@
             <el-tag :class="statusCls(row.processStatus)" effect="plain" size="small">{{ statusLabel(row.processStatus) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="150" fixed="right">
           <template #default="{row}">
             <div class="row-actions" role="group" :aria-label="`${row.title || row.businessKey || '流程实例'} 操作`">
               <el-button link type="primary" size="small" @click="openDetail(row)">查看</el-button>
-              <el-button
-                link type="primary" size="small"
-                :disabled="!canTransfer(row)"
-                :title="canTransfer(row) ? '' : '流程已结束或暂无活跃任务，不可转交/指派'"
-                @click="openTransfer(row)"
-              >{{ transferLabel(row) }}</el-button>
+              <el-dropdown trigger="click" popper-class="bp-crud-menu">
+                <el-button link size="small" aria-label="更多流程实例操作">更多</el-button>
+                <template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="!canTransfer(row)" :title="canTransfer(row) ? '' : '流程已结束或暂无活跃任务，不可转交/指派'" @click="openTransfer(row)">{{ transferLabel(row) }}</el-dropdown-item></el-dropdown-menu></template>
+              </el-dropdown>
             </div>
           </template>
         </el-table-column>

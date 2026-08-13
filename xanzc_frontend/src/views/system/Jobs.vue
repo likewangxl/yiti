@@ -42,30 +42,21 @@
         <el-table-column label="允许手动" width="104" align="center"><template #default="{ row }">{{ row.allowManualTrigger ? '允许' : '不允许' }}</template></el-table-column>
         <el-table-column prop="lastRunTime" label="上次执行" width="170" :formatter="fmtDateTimeCol" />
         <el-table-column prop="nextFireTime" label="下次执行" width="170" :formatter="fmtDateTimeCol" />
-        <el-table-column label="操作" width="258" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="258" fixed="right">
           <template #default="{ row }">
             <div class="row-actions" role="group" :aria-label="`${row.jobName || row.jobKey} 操作`">
               <el-button link type="primary" size="small" @click="openLogs(row)">日志</el-button>
-              <el-button
-                v-if="row.status === 'ACTIVE'"
-                link
-                type="primary"
-                size="small"
-                :loading="isJobPending(row.id)"
-                :disabled="isJobPending(row.id)"
-                @click="onPause(row)"
-              >暂停</el-button>
-              <el-button
-                v-else
-                link
-                type="primary"
-                size="small"
-                :loading="isJobPending(row.id)"
-                :disabled="isJobPending(row.id)"
-                @click="onResume(row)"
-              >恢复</el-button>
-              <el-button v-if="row.allowManualTrigger" link type="warning" size="small" @click="onTrigger(row)">手动触发</el-button>
-              <span v-else class="disabled-op">不允许手动触发</span>
+              <el-dropdown trigger="click" popper-class="bp-crud-menu">
+                <el-button link size="small" :disabled="isJobPending(row.id)" aria-label="更多调度任务操作">更多</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-if="row.status === 'ACTIVE'" :disabled="isJobPending(row.id)" @click="onPause(row)">{{ isJobPending(row.id) ? '暂停中…' : '暂停' }}</el-dropdown-item>
+                    <el-dropdown-item v-else :disabled="isJobPending(row.id)" @click="onResume(row)">{{ isJobPending(row.id) ? '恢复中…' : '恢复' }}</el-dropdown-item>
+                    <el-dropdown-item v-if="row.allowManualTrigger" divided class="warning-item" :disabled="isJobPending(row.id)" @click="onTrigger(row)">手动触发</el-dropdown-item>
+                    <el-dropdown-item v-else disabled>不允许手动触发</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </template>
         </el-table-column>

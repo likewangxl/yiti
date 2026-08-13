@@ -79,15 +79,14 @@ describe('普通后台路由 CRUD 审计矩阵', () => {
     expect(mainSource).not.toMatch(/table:\s*\{\s*showOverflowTooltip:\s*true\s*\}/);
   });
 
-  it('普通后台表格的操作列固定在右侧，避免操作在窄列换行', () => {
+  it('普通后台表格的操作列固定在右侧并标记 operation-cell，避免操作在窄列换行', () => {
     const violations = normalRoutes
-      .filter(route => !independentPageNames.has(route.name))
       .flatMap(route => {
         const source = readFileSync(new URL(`../../${route.view}`, import.meta.url), 'utf8');
         const operationColumns = [...source.matchAll(/<el-table-column\b[^>]*\blabel=(?:"操作"|'操作')[^>]*>/g)];
 
         return operationColumns
-          .filter(([column]) => !/(?:\:)?fixed=(?:"right"|'right')/.test(column))
+          .filter(([column]) => !/(?:\:)?fixed=(?:"right"|'right')/.test(column) || !/class-name=(?:"[^"]*\boperation-cell\b[^"]*"|'[^']*\boperation-cell\b[^']*')/.test(column))
           .map(() => `${route.name} (${route.path})`);
       });
 

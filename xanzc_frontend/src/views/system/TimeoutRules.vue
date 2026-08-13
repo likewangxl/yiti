@@ -70,7 +70,7 @@
         <el-table-column label="黄灯阈值" width="150" align="right"><template #default="{ row }"><el-tag class="tag-warning" effect="plain">{{ row.warningHours }} h</el-tag></template></el-table-column>
         <el-table-column label="红灯阈值" width="150" align="right"><template #default="{ row }"><el-tag class="tag-danger" effect="plain">{{ row.timeoutHours }} h</el-tag></template></el-table-column>
         <el-table-column prop="updatedTime" label="更新时间" width="180" :formatter="fmtDateTimeCol" />
-        <el-table-column label="操作" width="88" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button></template></el-table-column>
+        <el-table-column label="操作" class-name="operation-cell" width="88" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button></template></el-table-column>
       </el-table>
     </section>
 

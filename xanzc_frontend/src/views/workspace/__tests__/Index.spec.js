@@ -67,6 +67,9 @@ const stubs = {
   },
   'el-radio-group': passthrough('ElRadioGroup'),
   'el-radio-button': passthrough('ElRadioButton'),
+  'el-dropdown': { name: 'ElDropdown', template: '<div><slot /><slot name="dropdown" /></div>' },
+  'el-dropdown-menu': passthrough('ElDropdownMenu'),
+  'el-dropdown-item': { name: 'ElDropdownItem', emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' },
   'el-table': passthrough('ElTable'),
   'el-table-column': empty('ElTableColumn'),
   'el-tag': passthrough('ElTag')
@@ -88,7 +91,7 @@ function mountPage() {
   return mount(Workspace, {
     global: {
       stubs,
-      directives: { loading: {} }
+      directives: { loading: {}, 'bp-overflow-tooltip': {} }
     }
   });
 }

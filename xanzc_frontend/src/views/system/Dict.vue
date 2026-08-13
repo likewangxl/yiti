@@ -72,11 +72,14 @@
           <el-table-column label="状态" width="100">
             <template #default="{ row }"><el-tag :class="isActive(row) ? 'tag-success' : 'tag-warning'" effect="plain">{{ isActive(row) ? '启用' : '禁用' }}</el-tag></template>
           </el-table-column>
-          <el-table-column label="操作" width="180" fixed="right">
+          <el-table-column label="操作" class-name="operation-cell" width="180" fixed="right">
             <template #default="{ row }">
               <div class="row-actions" role="group" :aria-label="`${row.dictLabel || row.label} 操作`">
                 <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button link type="primary" size="small" :loading="isToggling(row)" :disabled="isToggling(row)" @click="onToggle(row)">{{ isActive(row) ? '禁用' : '启用' }}</el-button>
+                <el-dropdown trigger="click" popper-class="bp-crud-menu">
+                  <el-button link size="small" :disabled="isToggling(row)" aria-label="更多字典项操作">更多</el-button>
+                  <template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="isToggling(row)" @click="onToggle(row)">{{ isToggling(row) ? '处理中…' : (isActive(row) ? '禁用' : '启用') }}</el-dropdown-item></el-dropdown-menu></template>
+                </el-dropdown>
               </div>
             </template>
           </el-table-column>

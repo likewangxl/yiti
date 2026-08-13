@@ -68,17 +68,21 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="210" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="210" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openEdit(row, true)">查看</el-button>
-            <!-- 复制版本/编辑/删除 仅资财部人员可见可操作 -->
-            <template v-if="isCaizai">
-              <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="onCloneVersion(row)">复制版本</el-button>
-              <!-- 编辑：仅当前用户创建的方案才显示可操作（启用/禁用已移入编辑弹框） -->
-              <template v-if="row.createdByMe">
-                <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="openEdit(row, false)">编辑</el-button>
+            <!-- 复制版本/编辑仅资财部人员可见可操作；启用/禁用仍在编辑弹框内。 -->
+            <el-dropdown trigger="click" popper-class="bp-crud-menu">
+              <el-button link size="small" aria-label="更多KPI方案操作">更多</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <template v-if="isCaizai">
+                    <el-dropdown-item :disabled="isDisabled(row)" @click="onCloneVersion(row)">复制版本</el-dropdown-item>
+                    <el-dropdown-item v-if="row.createdByMe" :disabled="isDisabled(row)" @click="openEdit(row, false)">编辑</el-dropdown-item>
+                  </template>
+                </el-dropdown-menu>
               </template>
-            </template>
+            </el-dropdown>
           </template>
         </el-table-column>
       </el-table>
@@ -221,7 +225,7 @@
             <el-input-number v-model="row.minScore" :disabled="dlg.readOnly" :precision="0" :controls="false" style="width:100%" />
           </template>
         </el-table-column>
-        <el-table-column v-if="!dlg.readOnly" label="操作" width="70" align="center" fixed="right">
+        <el-table-column v-if="!dlg.readOnly" label="操作" class-name="operation-cell" width="70" align="center" fixed="right">
           <template #default="{$index}">
             <el-button link type="danger" size="small" @click="dlg.items.splice($index, 1)">删除</el-button>
           </template>

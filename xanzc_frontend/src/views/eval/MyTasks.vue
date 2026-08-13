@@ -42,7 +42,7 @@
         <el-table-column label="评价截止时间" width="180" align="center">
           <template #default="{ row }">{{ formatDateTime(row.deadline) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="110" align="center" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="110" align="center" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link @click="enterProcess(row)">处理</el-button>
           </template>
@@ -138,7 +138,7 @@
             </el-select>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="110" align="center" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="110" align="center" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="row.submitted !== 1"

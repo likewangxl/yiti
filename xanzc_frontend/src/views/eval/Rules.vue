@@ -64,11 +64,18 @@
         </template>
       </el-table-column>
       <el-table-column prop="createTime" label="创建时间" width="180" />
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column label="操作" class-name="operation-cell" width="200" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openDetailDialog(row.ruleId)">详情</el-button>
-          <el-button link type="primary" @click="openEditDialog(row.ruleId)">编辑</el-button>
-            <el-button link type="danger" :loading="deletingId === row.ruleId" :disabled="deletingId !== null" @click="handleDelete(row)">删除</el-button>
+          <el-dropdown trigger="click" popper-class="bp-crud-menu">
+            <el-button link aria-label="更多评价规则操作">更多</el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item @click="openEditDialog(row.ruleId)">编辑</el-dropdown-item>
+                <el-dropdown-item divided class="danger-item" :disabled="deletingId !== null" @click="handleDelete(row)">删除</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </el-table-column>
       </el-table>
@@ -192,7 +199,7 @@
                   />
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="70" fixed="right">
+              <el-table-column label="操作" class-name="operation-cell" width="70" fixed="right">
                 <template #default="{ $index }">
                   <el-button link type="danger" size="small" @click="removeGroup($index)">删除</el-button>
                 </template>

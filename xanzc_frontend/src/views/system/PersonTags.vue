@@ -46,11 +46,13 @@
         <el-table-column prop="createTime" label="创建时间" width="170">
           <template #default="{ row }">{{ formatTime(row.createTime) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="200" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button>
-            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="danger" size="small" :loading="isDeletingTag(row.tagId)" :disabled="isDeletingTag(row.tagId)" @click="onDeleteTag(row)">删除</el-button>
+            <el-dropdown trigger="click" popper-class="bp-crud-menu">
+              <el-button link size="small" :disabled="isDeletingTag(row.tagId)" aria-label="更多人员标签操作">更多</el-button>
+              <template #dropdown><el-dropdown-menu><el-dropdown-item @click="openEdit(row)">编辑</el-dropdown-item><el-dropdown-item divided class="danger-item" :disabled="isDeletingTag(row.tagId)" @click="onDeleteTag(row)">删除</el-dropdown-item></el-dropdown-menu></template>
+            </el-dropdown>
           </template>
         </el-table-column>
       </el-table>
@@ -143,10 +145,10 @@
         <el-table-column prop="displayName" label="员工姓名" min-width="200">
           <template #default="{ row }">{{ row.displayName || '—' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="130" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="130" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openMemberEdit(row)">修改</el-button>
-            <el-button link type="danger" size="small" @click="onRemoveMember(row)">删除</el-button>
+            <el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多标签成员操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item divided class="danger-item" @click="onRemoveMember(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
           </template>
         </el-table-column>
       </el-table>
@@ -157,10 +159,10 @@
         <el-table-column prop="orgName" label="机构名称" min-width="200">
           <template #default="{ row }">{{ row.orgName || '—' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="130" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="130" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openMemberEdit(row)">修改</el-button>
-            <el-button link type="danger" size="small" @click="onRemoveMember(row)">删除</el-button>
+            <el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多标签成员操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item divided class="danger-item" @click="onRemoveMember(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
           </template>
         </el-table-column>
       </el-table>

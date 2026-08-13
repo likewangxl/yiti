@@ -69,7 +69,7 @@
             <el-tag v-else class="tag-success" size="small" effect="plain">已发布</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="80" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="80" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="goDetail(row)">详情</el-button>
           </template>

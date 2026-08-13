@@ -66,12 +66,12 @@
             <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button link @click="openTryRun(row)">试跑</el-button>
             <el-button link @click="openProbeColumns(row)">探测列</el-button>
-            <el-dropdown trigger="click" @command="command => onMoreCommand(command, row)">
+            <el-dropdown trigger="click" popper-class="bp-crud-menu" @command="command => onMoreCommand(command, row)">
               <el-button link aria-label="更多数据源操作">更多</el-button>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item v-if="referenceState(row).semanticFrozen" command="copy">新建副本</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided :disabled="referenceState(row).deleteBlocked"
+                  <el-dropdown-item command="delete" divided class="danger-item" :disabled="referenceState(row).deleteBlocked"
                                     :title="referenceState(row).guidance || undefined">删除</el-dropdown-item>
                 </el-dropdown-menu>
               </template>

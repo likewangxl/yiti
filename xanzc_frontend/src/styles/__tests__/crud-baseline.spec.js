@@ -41,7 +41,7 @@ describe('共享 CRUD 页面基线样式', () => {
 
     expect(scoped).not.toMatch(/#[0-9a-f]{3,8}\b/i);
     expect(scoped).not.toMatch(/\.(?:re-|redengine|screen|scr-)[\w-]*/i);
-    expect(scoped).not.toMatch(/^\s*\.el-(?:table|dialog)\b/m);
+    expect(scoped).not.toMatch(/(?:^|\})\s*\.el-(?:table|dialog)\b/m);
     expect(scoped).not.toMatch(/(?:^|[,{]\s*)body\b/m);
   });
 
@@ -54,6 +54,9 @@ describe('共享 CRUD 页面基线样式', () => {
     expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-table\s+th\.el-table__cell,\s*\.el-table\s+td\.el-table__cell\)\s*\{[\s\S]*height:\s*40px;/);
     expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-table\s+\.el-tag\)\s*\{[\s\S]*min-height:\s*24px;/);
     expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-table\s+\.cell\)\s*\{[\s\S]*text-overflow:\s*ellipsis;/);
-    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-table__fixed-right\s+\.cell,\s*\.operation-cell\)\s*\{[\s\S]*white-space:\s*nowrap;/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\([\s\S]*\.operation-cell\s+\.cell[\s\S]*\)\s*\{[\s\S]*overflow:\s*visible;[\s\S]*text-overflow:\s*clip;[\s\S]*white-space:\s*nowrap;/);
+    expect(scoped).toMatch(/\.el-table-fixed-column--right\.operation-cell\s+\.cell/);
+    expect(scoped).not.toMatch(/\.el-table-fixed-column--right\s+\.cell\s*\{/);
+    expect(scoped).toMatch(/\.bp-crud-menu\s+\.danger-item/);
   });
 });

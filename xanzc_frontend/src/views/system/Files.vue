@@ -38,11 +38,14 @@
         <el-table-column label="MD5" width="132"><template #default="{ row }"><code v-if="row.md5Hash" class="mono">{{ row.md5Hash.slice(0, 10) }}…</code><span v-else>-</span></template></el-table-column>
         <el-table-column label="上传人" width="150"><template #default="{ row }">{{ row.uploadedBy || row.by || '-' }}</template></el-table-column>
         <el-table-column label="上传时间" width="180"><template #default="{ row }">{{ row.uploadedTime || row.time || '-' }}</template></el-table-column>
-        <el-table-column label="操作" width="176" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="176" fixed="right">
           <template #default="{ row }">
             <div class="row-actions" role="group" :aria-label="`${row.fileName || row.name || '文件'} 操作`">
               <el-button link type="primary" size="small" @click="onDownload(row)">下载</el-button>
-              <el-button link type="danger" size="small" :loading="isDeleting(row.id)" :disabled="isDeleting(row.id)" @click="onDelete(row)">删除</el-button>
+              <el-dropdown trigger="click" popper-class="bp-crud-menu">
+                <el-button link size="small" :disabled="isDeleting(row.id)" aria-label="更多文件操作">更多</el-button>
+                <template #dropdown><el-dropdown-menu><el-dropdown-item divided class="danger-item" :disabled="isDeleting(row.id)" @click="onDelete(row)">删除</el-dropdown-item></el-dropdown-menu></template>
+              </el-dropdown>
             </div>
           </template>
         </el-table-column>

@@ -55,19 +55,19 @@
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
         <el-table-column prop="createTime" label="创建时间" width="160" :formatter="fmtDateTime" />
-        <el-table-column label="操作" width="320" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="320" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="primary" size="small" @click="openMenuDlg(row)">分配菜单</el-button>
-            <el-button link type="primary" size="small" @click="openUsers(row)">已绑用户</el-button>
-            <el-popconfirm
-              :title="`确认删除角色 ${row.roleChName}？已绑用户将解绑。`"
-              @confirm="doDelete(row)"
-            >
-              <template #reference>
-                <el-button link type="danger" size="small">删除</el-button>
+            <el-dropdown trigger="click" popper-class="bp-crud-menu">
+              <el-button link size="small" aria-label="更多角色操作">更多</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="openMenuDlg(row)">分配菜单</el-dropdown-item>
+                  <el-dropdown-item @click="openUsers(row)">已绑用户</el-dropdown-item>
+                  <el-dropdown-item divided class="danger-item" @click="confirmDelete(row)">删除</el-dropdown-item>
+                </el-dropdown-menu>
               </template>
-            </el-popconfirm>
+            </el-dropdown>
           </template>
         </el-table-column>
       </el-table>
@@ -198,7 +198,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   listRoles, createRole, updateRole, deleteRole, listRoleUsers,
   getMenuTree, getRoleMenuIds, replaceRoleMenus
@@ -311,6 +311,15 @@ async function doDelete(row) {
   } catch (e) {
     ElMessage.error('删除失败：' + (e?.message || e));
   }
+}
+
+async function confirmDelete(row) {
+  try {
+    await ElMessageBox.confirm(`确认删除角色 ${row.roleChName}？已绑用户将解绑。`, '删除确认', {
+      type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消'
+    });
+  } catch { return; }
+  await doDelete(row);
 }
 
 // === 分配菜单弹窗 ===

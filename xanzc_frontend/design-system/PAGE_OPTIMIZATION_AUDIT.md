@@ -1,7 +1,7 @@
 # 主平台页面优化审计与后续设计规范
 
 > 审计日期：2026-08-13
-> 范围：`src/router/index.js` 中由 `DefaultLayout` 承载的普通后台命名路由，以及三个普通浅色的大屏管理页。
+> 范围：`src/router/index.js` 中的普通后台命名路由，以及三个普通浅色的大屏管理页；其中 Login、NoAccess 为独立信息架构，不由 `DefaultLayout` 承载。
 > 排除：12 个 `/redengine/**` 路由、大屏运行态 `/screen/:screenCode`、大屏设计器 `/screen-admin/designer`、未注册废弃页面。
 > 本文只记录前端呈现与交互规则；不改变 API URL、HTTP method、payload、权限或数据口径。
 
@@ -90,6 +90,74 @@
 | `PerfTargets`、`EvalRules`、`ReportSql`、`ScreenAdminDs`、`SysConfig`、`SysWorkflowMonitor`、`SysPersonTags` | 适用：各 3 张表 |
 | `PerfMetrics`、`HistoryPerfAdjust` | 适用：各 4 张表 |
 | `PerfAdjust`、`EvalTasks` | 适用：各 6 张表 |
+
+### 2.2 行级操作收纳矩阵
+
+每个纳入范围的路由均已逐页复核。`主直出`为行内唯一常显操作；`更多`中的危险项以分隔线和 danger 语义呈现，保留既有权限条件、禁用/单飞和二次确认。`—`表示该页面没有行级表格操作，而非遗漏。唯一冻结例外是数据源页的“编辑 / 试跑 / 探测”，按已确认需求保持三项直出。
+
+| 路由名 | 主直出 | 更多收纳 / 说明 |
+|---|---|---|
+| `Login` | — | 独立登录信息架构，无表格 |
+| `NoAccess` | — | 独立无权限信息架构，无表格 |
+| `Workspace` | 办理或详情；认领；查看 | 待认领转交：拒绝；我发起的转交：撤回 |
+| `AnnouncementList` | 详情 | — |
+| `AnnouncementDetail` | — | 详情页无行级表格操作 |
+| `NotificationList` | — | 通知卡片入口，无行级表格操作 |
+| `InfoNav` | — | 导航页无行级表格操作 |
+| `InfoAddressBook` | 查看 | — |
+| `InfoProducts` | 编辑 | 附件；删除 |
+| `InfoDocuments` | 下载 | 编辑；删除 |
+| `PerfMetrics` | 查看 | 编辑 |
+| `PerfKpiRules` | 查看 | 复制版本；编辑（原资财部/创建人条件不变） |
+| `PerfTargets` | 目标值 | 编辑；删除（原创建人条件和确认不变）；审批/已审批表仍各自直出单项 |
+| `PerfTargetValues` | 修改 | 调整（原权限条件）；删除 |
+| `PerfImport` | 刷新 | 下载文件；下载错误；重试；删除 |
+| `PerfAdjust` | 查看 | 编辑（草稿）；撤回（原原因输入不变）；待办和历史表均为单项 |
+| `PerfCompute` | — | 无行级表格操作 |
+| `PerfTaskMonitor` | 执行 | 历史 |
+| `PerfKpiScoreDetail` | — | 无行级表格操作 |
+| `EvalTags` | 编辑 | 删除 |
+| `EvalUserTags` | 编辑 | — |
+| `EvalRules` | 详情 | 编辑；删除；规则组弹窗内删除为单项 |
+| `EvalTasks` | 详情 | 发布、关闭、导出、删除（原状态互斥和禁用条件不变） |
+| `EvalMyTasks` | 处理；提交 | 各表均为单项 |
+| `ReportDynamic` | — | 无行级表格操作 |
+| `ReportDash` | — | 独立仪表盘信息架构，无行级表格操作 |
+| `ReportPresets` | — | 无行级表格操作 |
+| `ReportFree` | 查看 | 下载；启用/禁用（原状态互斥）；删除 |
+| `ReportFreeDetail` | — | 详情页无行级表格操作 |
+| `ReportSql` | 方案对话框：载入 | 编辑；删除 |
+| `ReportAmasApprovals` | 详情 | 两张审批表均为单项 |
+| `ReportAmasApprovalDetail` | — | 详情页无行级表格操作 |
+| `ScreenAdminDs` | 编辑；试跑；探测 | 新建副本；删除（冻结例外） |
+| `ScreenAdminOrgProfiles` | 编辑 | — |
+| `ScreenAdminOrgGroups` | — | 无行级表格操作 |
+| `GuaranteeQuery` | 编辑 | — |
+| `HistoryDataImport` | 查看 | 下载 |
+| `HistoryNotice` | 查看 | — |
+| `HistoryPriceApproval` | 下载 | 申请资料查看仍为独立信息列 |
+| `HistoryPriceApprovalDetail` | — | 详情页无行级表格操作 |
+| `HistoryPerfAdjust` | — | 无行级表格操作 |
+| `SysUsers` | 编辑 | 分配角色；删除 |
+| `SysRoles` | 编辑 | 分配菜单；已绑用户；删除 |
+| `SysResources` | 编辑 | 新增子菜单；分配角色（叶子菜单）；删除 |
+| `SysPermission` | 编辑 | — |
+| `SysDict` | 编辑 | 启用或禁用（原状态互斥与确认不变） |
+| `SysCalendar` | — | 日历页无行级表格操作 |
+| `SysJobs` | 日志 | 暂停或恢复（原状态互斥）；手动触发（原允许条件） |
+| `SysAudit` | 详情 | — |
+| `SysNotifications` | 详情 | 标记已读（未读时）；跳转（有关联时） |
+| `SysConfig` | 编辑 | 三张配置表均为单项 |
+| `SysFiles` | 下载 | 删除 |
+| `SysTimeoutRules` | 编辑 | — |
+| `SysAnnouncements` | 详情 | — |
+| `SysAnnouncementDetail` | — | 详情页无行级表格操作 |
+| `SysWorkflowFlows` | 编辑 | 发布；克隆；删除（草稿且非只读导入时） |
+| `SysWorkflowFlowEdit` | — | 编辑页无行级表格操作 |
+| `SysWorkflowMonitor` | 查看 | 转交或指派（原流程状态条件不变） |
+| `SysPersonTags` | 标签表：详情；成员表：修改 | 标签表：编辑、删除；员工/机构成员表：删除 |
+
+静态门禁位于 `src/views/__tests__/row-action-audit.spec.js`：它会检查所有 59 个普通命名路由中每个操作列至多一个直出按钮（数据源冻结例外除外），并逐项验证上表的主操作与收纳项；`ReportSql` 的方案对话框也被单独纳入矩阵。
 
 ## 3. 已修复的问题类型
 
