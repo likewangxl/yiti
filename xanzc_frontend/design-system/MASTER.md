@@ -222,7 +222,7 @@ font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei"
 - 实载表格的表头和数据行总 border-box 高度为 40px（39px 内容预算 + 1px 可见下边框）；同时抽查 24px tag、32px 控件和右侧 sticky 操作列不被截断。
 - 主信息 + 辅助信息双行单元格必须显式使用 `compact-stack-cell`：两行各 18px、无额外纵向 margin，在 39px 内容预算内完整保留；状态 + 详情使用 24px tag + 15px 辅助行，连同 1px 可见下边框总高 40px。不得用 `overflow: hidden`、固定高度或 `display: none` 裁掉第二行；子行横向省略时仍须由受控 mouseover 提供两行完整值。
 - 说明类长文本必须显式使用 `compact-clamp-cell`：最多两行、每行 18px、总内容高度不超过 36px，超出部分仅在单元格内省略；原始全文必须保留在 DOM，且仅在真实溢出时由受控 mouseover 写入完整 `title`，短文本不得误加 `title`。禁止通过隐藏整表或页面横向溢出来实现省略。
-- 长文本不以初始无 `title` 判失败；必须对真实溢出单元格执行 mouseover，并必须在真实 mouseover 后校验 title 等于完整文本，未溢出单元格不得生成 title。
+- 长文本不以初始无 `title` 判失败；必须对真实溢出单元格执行 mouseover，并必须在真实 mouseover 后校验 title 等于完整文本，未溢出单元格不得生成 title。浏览器 `scrollWidth/scrollHeight` 与 `clientWidth/clientHeight` 的差值恰为 1px 时按布局舍入处理，横向或纵向差值达到 2px 才判定为真实溢出；不得用文本长度猜测。
 
 ## 9. 页面节点规则
 

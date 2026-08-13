@@ -133,6 +133,34 @@ describe('bpOverflowTooltip 受控表格溢出提示', () => {
     expect(cell.hasAttribute('data-bp-overflow-tooltip')).toBe(false);
   });
 
+  it('浏览器横向尺寸相差 1px 视为舍入误差，达到 2px 才生成 title', () => {
+    const onePixel = mountTable({ text: '短产品名称', width: 199, scrollWidth: 200 });
+    onePixel.cell.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(onePixel.cell.hasAttribute('title')).toBe(false);
+
+    const twoPixels = mountTable({ text: '横向确有截断', width: 198, scrollWidth: 200 });
+    twoPixels.cell.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(twoPixels.cell.getAttribute('title')).toBe('横向确有截断');
+  });
+
+  it('浏览器纵向尺寸相差 1px 视为舍入误差，达到 2px 才生成 title', () => {
+    const onePixel = mountTable({ text: '短产品说明', width: 270, scrollWidth: 270 });
+    Object.defineProperties(onePixel.cell, {
+      clientHeight: { configurable: true, value: 18 },
+      scrollHeight: { configurable: true, value: 19 }
+    });
+    onePixel.cell.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(onePixel.cell.hasAttribute('title')).toBe(false);
+
+    const twoPixels = mountTable({ text: '纵向确有截断', width: 270, scrollWidth: 270 });
+    Object.defineProperties(twoPixels.cell, {
+      clientHeight: { configurable: true, value: 18 },
+      scrollHeight: { configurable: true, value: 20 }
+    });
+    twoPixels.cell.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(twoPixels.cell.getAttribute('title')).toBe('纵向确有截断');
+  });
+
   it('真实 mouseover 能识别紧凑双行中单个子行的横向溢出并给出两行完整值', () => {
     const { cell } = mountTable({ text: '', width: 180, scrollWidth: 180 });
     cell.innerHTML = '<div>西安高新支行客户名称</div><div>A001</div>';
@@ -185,7 +213,7 @@ describe('bpOverflowTooltip 受控表格溢出提示', () => {
     short.cell.parentElement.classList.add('compact-clamp-cell');
     Object.defineProperties(short.cell, {
       clientHeight: { configurable: true, value: 18 },
-      scrollHeight: { configurable: true, value: 18 }
+      scrollHeight: { configurable: true, value: 19 }
     });
 
     short.cell.querySelector('span').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
