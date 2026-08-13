@@ -28,7 +28,10 @@
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
         </el-form-item>
-        <el-form-item><el-button type="primary" @click="handleFilterChange">查询</el-button></el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="handleFilterChange">查询</el-button>
+          <el-button @click="resetFilters">重置</el-button>
+        </el-form-item>
       </el-form>
     </section>
 
@@ -406,6 +409,13 @@ async function loadList() {
 }
 
 function handleFilterChange() {
+  pager.pageNo = 1
+  loadList()
+}
+
+function resetFilters() {
+  filter.status = ''
+  filter.keyword = ''
   pager.pageNo = 1
   loadList()
 }

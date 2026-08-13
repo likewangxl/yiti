@@ -112,4 +112,83 @@ describe('bpOverflowTooltip 受控表格溢出提示', () => {
     expect(cell.getAttribute('title')).toBe('业务字段专用说明');
     expect(cell.hasAttribute('data-bp-overflow-tooltip')).toBe(false);
   });
+
+  it('真实 mouseover 同时识别纵向截断，内容恢复后只清理指令自有 title', () => {
+    const { cell } = mountTable({ text: '多行审批意见', width: 180, scrollWidth: 180 });
+    Object.defineProperties(cell, {
+      clientHeight: { configurable: true, value: 22 },
+      scrollHeight: { configurable: true, value: 44 }
+    });
+
+    cell.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(cell.getAttribute('title')).toBe('多行审批意见');
+
+    Object.defineProperties(cell, {
+      clientHeight: { configurable: true, value: 44 },
+      scrollHeight: { configurable: true, value: 44 }
+    });
+    cell.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+
+    expect(cell.hasAttribute('title')).toBe(false);
+    expect(cell.hasAttribute('data-bp-overflow-tooltip')).toBe(false);
+  });
+
+  it('真实 mouseover 能识别紧凑双行中单个子行的横向溢出并给出两行完整值', () => {
+    const { cell } = mountTable({ text: '', width: 180, scrollWidth: 180 });
+    cell.innerHTML = '<div>西安高新支行客户名称</div><div>A001</div>';
+    const primary = cell.firstElementChild;
+    Object.defineProperties(primary, {
+      clientWidth: { configurable: true, value: 80 },
+      scrollWidth: { configurable: true, value: 180 },
+      clientHeight: { configurable: true, value: 18 },
+      scrollHeight: { configurable: true, value: 18 }
+    });
+
+    primary.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+
+    expect(cell.getAttribute('title')).toBe('西安高新支行客户名称 / A001');
+  });
+
+  it('nested span 溢出时仍保留业务 title，并撤销指令旧 title 的所有权标记', () => {
+    const { cell } = mountTable({ text: '', width: 180, scrollWidth: 180 });
+    cell.innerHTML = '<div><span>客户名称</span></div><div><span>A001</span></div>';
+    const primary = cell.firstElementChild;
+    Object.defineProperties(primary, {
+      clientWidth: { configurable: true, value: 60 },
+      scrollWidth: { configurable: true, value: 120 }
+    });
+
+    primary.firstElementChild.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(cell.getAttribute('title')).toBe('客户名称 / A001');
+    expect(cell.getAttribute('data-bp-overflow-tooltip')).toBe('客户名称 / A001');
+
+    cell.setAttribute('title', '业务专用客户说明');
+    primary.firstElementChild.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+
+    expect(cell.getAttribute('title')).toBe('业务专用客户说明');
+    expect(cell.hasAttribute('data-bp-overflow-tooltip')).toBe(false);
+  });
+
+  it('ProductLib 两行省略的真实长文本 mouseover 写入全文，短文本不误加 title', () => {
+    const fullText = '面向核心企业上下游客户提供覆盖采购生产销售环节的综合融资与结算服务方案';
+    const long = mountTable({ text: fullText, width: 270, scrollWidth: 270 });
+    long.cell.parentElement.classList.add('compact-clamp-cell');
+    Object.defineProperties(long.cell, {
+      clientHeight: { configurable: true, value: 36 },
+      scrollHeight: { configurable: true, value: 72 }
+    });
+
+    long.cell.querySelector('span').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(long.cell.getAttribute('title')).toBe(fullText);
+
+    const short = mountTable({ text: '流动资金贷款', width: 270, scrollWidth: 120 });
+    short.cell.parentElement.classList.add('compact-clamp-cell');
+    Object.defineProperties(short.cell, {
+      clientHeight: { configurable: true, value: 18 },
+      scrollHeight: { configurable: true, value: 18 }
+    });
+
+    short.cell.querySelector('span').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(short.cell.hasAttribute('title')).toBe(false);
+  });
 });

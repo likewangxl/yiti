@@ -67,7 +67,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="触发人" width="130">
+        <el-table-column label="触发人" width="130" class-name="compact-stack-cell">
           <template #default="{row}">
             <template v-if="row.triggerBy">
               <div>{{ row.triggerByName || row.triggerBy }}</div>

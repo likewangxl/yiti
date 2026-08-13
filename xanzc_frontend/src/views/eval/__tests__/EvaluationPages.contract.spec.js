@@ -197,6 +197,26 @@ describe('Tasks.vue 发布与关闭行为', () => {
     request.resolve({ ok: true })
     await Promise.all([first, second])
   })
+
+  it('重置清空状态和关键词、回到首页并按无筛选参数重新查询', async () => {
+    wrapper = mountPage(Tasks)
+    await settle()
+    evalApi.listUnifiedTasks.mockClear()
+    wrapper.vm.filter.status = 0
+    wrapper.vm.filter.keyword = '季度评价'
+    wrapper.vm.pager.pageNo = 3
+    await wrapper.vm.$nextTick()
+
+    const reset = wrapper.findAll('button').find((button) => button.text() === '重置')
+    expect(reset).toBeTruthy()
+    await reset.trigger('click')
+    await settle()
+
+    expect(wrapper.vm.filter).toMatchObject({ status: '', keyword: '' })
+    expect(wrapper.vm.pager.pageNo).toBe(1)
+    expect(evalApi.listUnifiedTasks).toHaveBeenCalledTimes(1)
+    expect(evalApi.listUnifiedTasks).toHaveBeenCalledWith({ page: 1, pageSize: 20 })
+  })
 })
 
 describe('MyTasks.vue 批量评分行为', () => {

@@ -49,8 +49,8 @@ describe('行级更多菜单可见性与原始交互门禁', () => {
 
   it('撤回仍是确认后再收集原因的两阶段链路，确认前不直连 onWithdraw', () => {
     const source = sourceOf('perf/Adjust.vue');
-    expect(source).toMatch(/<el-popconfirm\b[^>]*:title="`确认撤回申请 \$\{row\.applyNo \|\| row\.id\}？`"[\s\S]*?@confirm="onWithdraw\(row\)"/);
-    expect(source).toMatch(/<el-dropdown-item\b[^>]*class="danger-item"[^>]*>撤回<\/el-dropdown-item>/);
+    expect(source).toMatch(/<el-dropdown-item\b(?=[^>]*class="danger-item")(?=[^>]*@click="confirmWithdraw\(row\)")[^>]*>撤回<\/el-dropdown-item>/);
+    expect(source).toMatch(/async function confirmWithdraw\(row\)[\s\S]*?ElMessageBox\.confirm\(`确认撤回申请 \$\{row\.applyNo \|\| row\.id\}？`[\s\S]*?await onWithdraw\(row\);/);
     expect(source).not.toMatch(/<el-dropdown-item\b[^>]*@click="onWithdraw\(row\)"/);
   });
 

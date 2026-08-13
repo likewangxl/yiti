@@ -76,9 +76,9 @@
         aria-describedby="product-lib-state"
       >
         <el-table-column type="index" label="序号" width="60" align="center" :index="indexMethod" />
-        <el-table-column prop="productDeptOrgName" label="产品部门" width="190" class-name="wrap-cell" />
-        <el-table-column prop="productName" label="产品名称" width="200" class-name="wrap-cell" />
-        <el-table-column prop="description" label="产品说明" min-width="270" class-name="wrap-cell" />
+        <el-table-column prop="productDeptOrgName" label="产品部门" width="190" class-name="compact-clamp-cell" />
+        <el-table-column prop="productName" label="产品名称" width="200" class-name="compact-clamp-cell" />
+        <el-table-column prop="description" label="产品说明" min-width="270" class-name="compact-clamp-cell" />
         <el-table-column label="中场支持" width="100" align="center">
           <template #default="{row}">
             <el-tag :class="row.supportForSupportRequest ? 'tag-success' : 'tag-info'" effect="plain">
@@ -348,7 +348,6 @@ onMounted(() => { loadOrg(); reload(); });
 
 <style scoped>
 .support-hint { margin-left: var(--space-2); }
-.wrap-cell :deep(.cell) { line-height: 1.5; white-space: normal; word-break: break-word; }
 :deep(.el-upload-list__item-name) { overflow: visible; text-overflow: clip; white-space: normal; word-break: break-all; }
 :deep(.el-upload-list__item) { height: auto; }
 </style>

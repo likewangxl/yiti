@@ -70,7 +70,16 @@ a { color: inherit; text-decoration: none; }
 .bp-crud {
   display: grid;
   gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  max-width: 100%;
   width: 100%;
+}
+
+.bp-crud > * {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .bp-crud :where(.page-h) {
@@ -113,6 +122,7 @@ a { color: inherit; text-decoration: none; }
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
   gap: var(--space-2) var(--space-4);
+  min-width: 0;
   width: 100%;
 }
 
@@ -150,19 +160,40 @@ a { color: inherit; text-decoration: none; }
   padding: var(--space-4);
 }
 
-.bp-crud :where(.el-table) {
+.bp-crud .el-table {
   --el-table-border-color: var(--color-border);
   --el-table-header-bg-color: var(--color-surface-soft);
   --el-table-row-hover-bg-color: var(--color-brand-100);
   border: 1px solid var(--color-border);
   font-size: 14px;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
 }
 
-.bp-crud :where(.el-table th.el-table__cell, .el-table td.el-table__cell) {
+.bp-crud .el-table .el-scrollbar__wrap {
+  overflow: auto;
+}
+
+.bp-crud .el-table tr {
+  height: 40px;
+}
+
+.bp-crud .el-table th.el-table__cell,
+.bp-crud .el-table td.el-table__cell {
   border-bottom: 1px solid var(--color-border);
   border-right: 1px solid var(--color-border);
   height: 40px;
   padding: 0;
+}
+
+.bp-crud .el-descriptions__table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.bp-crud .el-descriptions__content {
+  overflow-wrap: anywhere;
 }
 
 .bp-crud :where(.el-table .el-tag) {
@@ -177,12 +208,90 @@ a { color: inherit; text-decoration: none; }
   white-space: nowrap;
 }
 
+/* 说明类长文本显式接入：最多两行各 18px，全文仍留在 DOM 并由受控 mouseover 提供。 */
+.bp-crud .el-table td.compact-clamp-cell .cell,
+.bp-crud-dialog .el-table td.compact-clamp-cell .cell {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 18px;
+  max-height: 36px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* 双行主/辅信息必须显式接入：两行各 18px，在 40px 行内完整呈现。 */
+.bp-crud .el-table td.compact-stack-cell .cell,
+.bp-crud-dialog .el-table td.compact-stack-cell .cell {
+  align-content: center;
+  box-sizing: border-box;
+  display: grid;
+  grid-auto-rows: 18px;
+  height: 40px;
+  line-height: 18px;
+}
+
+.bp-crud .el-table td.compact-stack-cell .cell > *,
+.bp-crud-dialog .el-table td.compact-stack-cell .cell > * {
+  line-height: 18px;
+  margin-block: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bp-crud .el-table td.compact-stack-cell .cell > code,
+.bp-crud-dialog .el-table td.compact-stack-cell .cell > code {
+  padding-block: 0;
+}
+
+/* 状态 + 详情使用 24px tag 与 16px 辅助行，合计仍为 40px。 */
+.bp-crud .el-table td.compact-status-cell .cell,
+.bp-crud-dialog .el-table td.compact-status-cell .cell {
+  grid-template-rows: 24px 16px;
+}
+
+.bp-crud .compact-status-cell .el-tag,
+.bp-crud-dialog .compact-status-cell .el-tag {
+  height: 24px;
+  justify-self: start;
+  line-height: 22px;
+  min-height: 24px;
+}
+
+.bp-crud .compact-status-cell .cell > :not(.el-tag),
+.bp-crud-dialog .compact-status-cell .cell > :not(.el-tag) {
+  height: 16px;
+  line-height: 16px;
+}
+
 .bp-crud .el-table td.operation-cell .cell,
 .bp-crud .el-table td.el-table-fixed-column--right.operation-cell .cell,
 .bp-crud .el-table .el-table-fixed-column--right .operation-cell .cell,
 .bp-crud .el-table__fixed-right td.operation-cell .cell {
   overflow: visible;
   text-overflow: clip;
+  white-space: nowrap;
+}
+
+.bp-crud .el-table td.el-table-fixed-column--right.operation-cell {
+  position: sticky;
+}
+
+.bp-crud .el-table th.compact-stack-header .compact-header-lines,
+.bp-crud-dialog .el-table th.compact-stack-header .compact-header-lines {
+  align-content: center;
+  display: grid;
+  grid-auto-rows: 18px;
+  height: 40px;
+}
+
+.bp-crud .el-table th.compact-stack-header .compact-header-lines > *,
+.bp-crud-dialog .el-table th.compact-stack-header .compact-header-lines > * {
+  line-height: 18px;
   white-space: nowrap;
 }
 

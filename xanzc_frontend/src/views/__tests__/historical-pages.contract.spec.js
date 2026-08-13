@@ -55,4 +55,12 @@ describe('历史查询页面 scoped CRUD 结构契约', () => {
     expect(source).toMatch(/var\(--color-(?:page|surface|border|text-strong|text-muted|brand-700)/);
     expect(source).not.toMatch(/#[0-9a-f]{3,8}\b/i);
   });
+
+  it('业绩调整详情的 loading 指令落在真实元素，不作用于 Teleport 对话框组件', () => {
+    const source = sourceOf('history/PerfAdjustQuery.vue');
+    const dialog = source.match(/<el-dialog\b[\s\S]*?<\/el-dialog>/)?.[0] || '';
+
+    expect(dialog).not.toMatch(/<el-dialog\b[^>]*\bv-loading=/);
+    expect(dialog).toMatch(/<section\b[^>]*\bv-loading="dlg\.loading"/);
+  });
 });

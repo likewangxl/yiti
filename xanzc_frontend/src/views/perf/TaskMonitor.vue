@@ -138,7 +138,7 @@
     </el-dialog>
 
     <!-- 历史抽屉（右侧）-->
-    <el-drawer v-model="hist.show" :title="`执行历史 · ${hist.metricCode || ''}`" size="52%"
+    <el-drawer v-model="hist.show" class="bp-crud-dialog" :title="`执行历史 · ${hist.metricCode || ''}`" size="52%"
       :destroy-on-close="true">
       <el-table :data="hist.rows" size="default" v-loading="hist.loading" empty-text="暂无执行记录">
         <el-table-column label="数据日期" width="130">
@@ -150,7 +150,7 @@
         <el-table-column label="结束时间" width="170">
           <template #default="{row}">{{ fmtTime(row.endTime) }}</template>
         </el-table-column>
-        <el-table-column label="计算状态" min-width="160">
+        <el-table-column label="计算状态" min-width="160" class-name="compact-stack-cell compact-status-cell">
           <template #default="{row}">
             <el-tag :class="statusCls(row.status)" effect="plain" size="small">{{ statusLabel(row.status) }}</el-tag>
             <div v-if="row.errorMsg" class="err-inline" :title="row.errorMsg">{{ row.errorMsg }}</div>

@@ -73,4 +73,12 @@ describe('OrgProfiles.vue 查询契约', () => {
     expect(source).toMatch(/@click="resetFilters"[^>]*>重置/);
     expect(source).toMatch(/function resetFilters\(\)/);
   });
+
+  it('状态单选按钮改用 value 并保持 ACTIVE/DISABLED 模型值', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/OrgProfiles.vue'), 'utf8');
+
+    expect(source).toContain('<el-radio-button value="ACTIVE">启用</el-radio-button>');
+    expect(source).toContain('<el-radio-button value="DISABLED">停用</el-radio-button>');
+    expect(source).not.toMatch(/<el-radio-button\b[^>]*\blabel=/);
+  });
 });

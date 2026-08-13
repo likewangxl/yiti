@@ -155,7 +155,7 @@
           <p class="table-state" role="status" aria-live="polite">{{ scopeLoading ? '范围加载中' : `${scopeRows.length} 个业务域` }}</p>
         </div>
         <el-table :data="scopeRows" size="small" empty-text="无 BizType 配置" v-loading="scopeLoading" aria-labelledby="permission-scopes-heading">
-          <el-table-column label="业务域" min-width="150">
+          <el-table-column label="业务域" min-width="150" class-name="compact-stack-cell">
             <template #default="{ row }">
               <div class="biz-type-name">{{ row.bizTypeLabel }}</div>
               <code class="biz-type-code">{{ row.bizType }}</code>

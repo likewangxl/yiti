@@ -51,7 +51,7 @@
         <el-table-column label="剩余额度（万元）" prop="occupyNotionalAmount" min-width="160" align="right" />
         <el-table-column label="融资额度（万元）" prop="usableNominalSum" min-width="160" align="right" />
         <el-table-column label="授信到期日" prop="lastExpire" min-width="120" />
-        <el-table-column label="经办人" min-width="130">
+        <el-table-column label="经办人" min-width="130" class-name="compact-stack-cell">
           <template #default="{ row }">
             <div>{{ row.userDisplayName || row.userName || '-' }}</div>
             <div v-if="row.userName" class="sub-id">{{ row.userName }}</div>

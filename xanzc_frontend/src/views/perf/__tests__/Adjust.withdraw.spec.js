@@ -14,12 +14,12 @@ const api = vi.hoisted(() => ({
   suggestOrgs: vi.fn().mockResolvedValue([])
 }));
 const ui = vi.hoisted(() => ({
-  success: vi.fn(), warning: vi.fn(), error: vi.fn(), prompt: vi.fn()
+  success: vi.fn(), warning: vi.fn(), error: vi.fn(), prompt: vi.fn(), confirm: vi.fn()
 }));
 
 vi.mock('element-plus', () => ({
   ElMessage: { success: ui.success, warning: ui.warning, error: ui.error },
-  ElMessageBox: { prompt: ui.prompt, confirm: vi.fn() }
+  ElMessageBox: { prompt: ui.prompt, confirm: ui.confirm }
 }));
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }) }));
 vi.mock('@/components/AllocAdjustViewDialog.vue', () => ({ default: { template: '<div />' } }));
@@ -86,19 +86,51 @@ afterEach(() => {
 });
 
 describe('Adjust 撤回二阶段确认', () => {
-  it('未触发 Popconfirm 的确认事件时不收集原因也不发撤回；确认后才进入原因输入和写请求', async () => {
+  it('更多菜单使用元素节点承载撤回，确认后才进入原因输入和写请求', async () => {
+    ui.confirm.mockResolvedValue('confirm');
     ui.prompt.mockResolvedValue({ value: '提交信息有误' });
     wrapper = mount(Adjust, { global: { stubs, directives: { loading: {}, 'bp-overflow-tooltip': {} } } });
     await flushPromises();
 
-    expect(wrapper.find('.withdraw-confirm').exists()).toBe(true);
+    expect(wrapper.find('.withdraw-confirm').exists()).toBe(false);
     expect(ui.prompt).not.toHaveBeenCalled();
     expect(api.withdrawAdjust).not.toHaveBeenCalled();
 
-    await wrapper.get('.withdraw-confirm-accept').trigger('click');
+    const withdraw = wrapper.findAll('.dropdown-item').find((item) => item.text() === '撤回');
+    expect(withdraw).toBeTruthy();
+    await withdraw.trigger('click');
     await flushPromises();
 
+    expect(ui.confirm).toHaveBeenCalledWith('确认撤回申请 ADJ-1？', '确认撤回', expect.objectContaining({ type: 'warning' }));
     expect(ui.prompt).toHaveBeenCalledWith('请填写撤回原因', '撤回申请', expect.objectContaining({ type: 'warning' }));
     expect(api.withdrawAdjust).toHaveBeenCalledWith('ADJ-1', '提交信息有误');
+  });
+
+  it('取消第一阶段确认时不打开原因输入也不发写请求', async () => {
+    ui.confirm.mockRejectedValue('cancel');
+    wrapper = mount(Adjust, { global: { stubs, directives: { loading: {}, 'bp-overflow-tooltip': {} } } });
+    await flushPromises();
+
+    const withdraw = wrapper.findAll('.dropdown-item').find((item) => item.text() === '撤回');
+    await withdraw.trigger('click');
+    await flushPromises();
+
+    expect(ui.prompt).not.toHaveBeenCalled();
+    expect(api.withdrawAdjust).not.toHaveBeenCalled();
+  });
+
+  it('第一阶段确认后取消填写撤回原因时不发写请求', async () => {
+    ui.confirm.mockResolvedValue('confirm');
+    ui.prompt.mockRejectedValue('cancel');
+    wrapper = mount(Adjust, { global: { stubs, directives: { loading: {}, 'bp-overflow-tooltip': {} } } });
+    await flushPromises();
+
+    const withdraw = wrapper.findAll('.dropdown-item').find((item) => item.text() === '撤回');
+    await withdraw.trigger('click');
+    await flushPromises();
+
+    expect(ui.confirm).toHaveBeenCalledTimes(1);
+    expect(ui.prompt).toHaveBeenCalledTimes(1);
+    expect(api.withdrawAdjust).not.toHaveBeenCalled();
   });
 });

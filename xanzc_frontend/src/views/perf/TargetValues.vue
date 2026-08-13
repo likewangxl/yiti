@@ -76,13 +76,13 @@
         <el-table-column label="维度" width="90">
           <template #default="{ row }">{{ subjectTypeLabel(row.subjectType) || '-' }}</template>
         </el-table-column>
-        <el-table-column label="对象" min-width="190" show-overflow-tooltip>
+        <el-table-column label="对象" min-width="190" show-overflow-tooltip class-name="compact-stack-cell">
           <template #default="{ row }">
             <div>{{ row.subjectName || '-' }}</div>
             <div class="cell-meta">{{ row.subjectDisplayId || row.subjectId || '-' }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="指标" min-width="190" show-overflow-tooltip>
+        <el-table-column label="指标" min-width="190" show-overflow-tooltip class-name="compact-stack-cell">
           <template #default="{ row }">
             <div>{{ row.metricName || row.metricCode || '-' }}</div>
             <div class="cell-meta">{{ row.metricCode }}</div>

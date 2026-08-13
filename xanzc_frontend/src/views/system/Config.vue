@@ -3,7 +3,7 @@
     v-bp-overflow-tooltip
     class="bp-crud workflow-config-page"
     aria-labelledby="workflow-config-page-title"
-    :aria-busy="loading ? 'true' : 'false'"
+    :aria-busy="loading || resetting ? 'true' : 'false'"
   >
     <header class="page-h">
       <PageTitle id="workflow-config-page-title" title="流程配置">
@@ -32,6 +32,7 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :disabled="!selectedPd" @click="reload">查询</el-button>
+          <el-button :disabled="loading || resetting" @click="resetFilters">重置</el-button>
           <el-button @click="loadProcessDefs">刷新流程定义</el-button>
         </el-form-item>
       </el-form>
@@ -191,6 +192,7 @@ const processDefs = ref([]);
 const selectedPd = ref('');
 const activeTab = ref('candidates');
 const loading = ref(false);
+const resetting = ref(false);
 const loadError = ref('');
 
 const candidates = ref([]);
@@ -240,6 +242,21 @@ async function reload() {
     loadError.value = `${activeMeta.value.title}加载失败：${error?.message || '请稍后重试'}`;
   } finally {
     loading.value = false;
+  }
+}
+
+async function resetFilters() {
+  if (loading.value || resetting.value) return;
+  resetting.value = true;
+  try {
+    selectedPd.value = '';
+    candidates.value = [];
+    forms.value = [];
+    timeoutRules.value = [];
+    await loadProcessDefs();
+    if (selectedPd.value) await reload();
+  } finally {
+    resetting.value = false;
   }
 }
 

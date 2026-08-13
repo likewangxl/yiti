@@ -107,7 +107,7 @@
         <el-table-column label="岗位" width="120">
           <template #default="{row}"><el-tag effect="plain">{{ row.positionDesc || row.position || '-' }}</el-tag></template>
         </el-table-column>
-        <el-table-column label="联系方式" min-width="200">
+        <el-table-column label="联系方式" min-width="200" class-name="compact-stack-cell">
           <template #default="{row}">
             <div>{{ row.mobile || '—' }}</div>
             <div class="muted">{{ row.email || '' }}</div>

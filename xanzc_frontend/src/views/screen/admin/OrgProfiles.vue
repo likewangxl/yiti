@@ -87,7 +87,7 @@
         <el-form-item label="经度"><el-input-number v-model="dialog.form.lng" :min="-180" :max="180" :precision="6" controls-position="right" /></el-form-item>
         <el-form-item label="纬度"><el-input-number v-model="dialog.form.lat" :min="-90" :max="90" :precision="6" controls-position="right" /></el-form-item>
         <el-form-item label="坐标系"><el-input model-value="GCJ-02" disabled /><span class="hint">本期固定 GCJ-02，禁止混用 WGS-84/BD-09。</span></el-form-item>
-        <el-form-item label="状态"><el-radio-group v-model="dialog.form.status"><el-radio-button label="ACTIVE">启用</el-radio-button><el-radio-button label="DISABLED">停用</el-radio-button></el-radio-group></el-form-item>
+        <el-form-item label="状态"><el-radio-group v-model="dialog.form.status"><el-radio-button value="ACTIVE">启用</el-radio-button><el-radio-button value="DISABLED">停用</el-radio-button></el-radio-group></el-form-item>
         <el-form-item label="口径说明"><el-input v-model="dialog.form.remark" type="textarea" maxlength="500" /></el-form-item>
         <el-form-item label="变更原因" required><el-input v-model="dialog.form.reason" maxlength="500" placeholder="请填写本次画像调整原因" /></el-form-item>
       </el-form>

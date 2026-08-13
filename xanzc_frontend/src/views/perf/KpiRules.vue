@@ -59,7 +59,7 @@
             <el-tag :class="statusCls(row.status)" effect="plain">{{ statusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="创建人" min-width="140">
+        <el-table-column label="创建人" min-width="140" class-name="compact-stack-cell">
           <template #default="{row}">
             <template v-if="row.createdByName || row.createdByUsername || row.createdBy">
               <div>{{ row.createdByName || row.createdByUsername || row.createdBy }}</div>

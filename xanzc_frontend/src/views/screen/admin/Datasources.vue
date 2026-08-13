@@ -92,8 +92,8 @@
         </el-form-item>
         <el-form-item label="状态" required>
           <el-radio-group v-model="dlg.status" data-testid="datasource-status">
-            <el-radio label="ACTIVE">启用 ACTIVE</el-radio>
-            <el-radio label="DISABLED">停用 DISABLED</el-radio>
+            <el-radio value="ACTIVE">启用 ACTIVE</el-radio>
+            <el-radio value="DISABLED">停用 DISABLED</el-radio>
           </el-radio-group>
           <span class="hint">只允许 ACTIVE 或 DISABLED；编辑时会显式保留当前合法状态。</span>
         </el-form-item>
@@ -112,10 +112,10 @@
         </el-form-item>
         <el-form-item label="来源类型" required>
           <el-radio-group v-model="dlg.m.sourceKind" :disabled="semanticFrozen || !!dlg.editing">
-            <el-radio-button label="WIDE_TABLE">指标宽表(引导式)</el-radio-button>
-            <el-radio-button label="KPI_RESULT" :disabled="namedGroupMode">KPI结果(引导式)</el-radio-button>
-            <el-radio-button label="KPI_DETAIL" :disabled="namedGroupMode">KPI细项(引导式)</el-radio-button>
-            <el-radio-button label="CUSTOM_SQL" :disabled="namedGroupMode">自定义 SQL</el-radio-button>
+            <el-radio-button value="WIDE_TABLE">指标宽表(引导式)</el-radio-button>
+            <el-radio-button value="KPI_RESULT" :disabled="namedGroupMode">KPI结果(引导式)</el-radio-button>
+            <el-radio-button value="KPI_DETAIL" :disabled="namedGroupMode">KPI细项(引导式)</el-radio-button>
+            <el-radio-button value="CUSTOM_SQL" :disabled="namedGroupMode">自定义 SQL</el-radio-button>
           </el-radio-group>
         </el-form-item>
 
@@ -185,8 +185,8 @@
         <template v-else-if="dlg.m.sourceKind === 'KPI_RESULT'">
           <el-form-item label="周期类型" required>
             <el-radio-group v-model="dlg.m.kpi.cycleType" :disabled="semanticFrozen">
-              <el-radio label="MONTHLY">月度</el-radio>
-              <el-radio label="QUARTERLY">季度</el-radio>
+              <el-radio value="MONTHLY">月度</el-radio>
+              <el-radio value="QUARTERLY">季度</el-radio>
             </el-radio-group>
           </el-form-item>
         </template>
@@ -202,14 +202,14 @@
           </el-form-item>
           <el-form-item label="主体类型" required>
             <el-radio-group v-model="dlg.m.kpiDetail.subjectType" :disabled="semanticFrozen" @change="dlg.m.kpiDetail.metrics = []">
-              <el-radio label="EMP">员工（个人屏 empId）</el-radio>
-              <el-radio label="ORG">机构（支行屏 orgCode）</el-radio>
+              <el-radio value="EMP">员工（个人屏 empId）</el-radio>
+              <el-radio value="ORG">机构（支行屏 orgCode）</el-radio>
             </el-radio-group>
           </el-form-item>
           <el-form-item label="模式" required>
             <el-radio-group v-model="dlg.m.kpiDetail.mode" :disabled="semanticFrozen">
-              <el-radio label="SNAPSHOT">细项快照（最新一日全部细项：目标/实际/完成率/缺口/得分）</el-radio>
-              <el-radio label="TREND">细项趋势（按日期返回所选细项的得分或完成率）</el-radio>
+              <el-radio value="SNAPSHOT">细项快照（最新一日全部细项：目标/实际/完成率/缺口/得分）</el-radio>
+              <el-radio value="TREND">细项趋势（按日期返回所选细项的得分或完成率）</el-radio>
             </el-radio-group>
           </el-form-item>
           <template v-if="dlg.m.kpiDetail.mode === 'TREND'">
@@ -221,8 +221,8 @@
             </el-form-item>
             <el-form-item label="取值列" required>
               <el-radio-group v-model="dlg.m.kpiDetail.valueCol" :disabled="semanticFrozen">
-                <el-radio label="score">得分（score）</el-radio>
-                <el-radio label="completeRate">完成率（completeRate）</el-radio>
+                <el-radio value="score">得分（score）</el-radio>
+                <el-radio value="completeRate">完成率（completeRate）</el-radio>
               </el-radio-group>
             </el-form-item>
             <el-form-item label="允许的预设周期（存 timeParamJson，供设计器周期下拉参考）">
@@ -241,8 +241,8 @@
           </el-form-item>
           <el-form-item label="能力标签" required>
             <el-radio-group v-model="dlg.m.dsType" :disabled="semanticFrozen">
-              <el-radio label="SINGLE">单值型（仅最新统计结果）</el-radio>
-              <el-radio label="TIMESERIES">时序型（须声明日期列）</el-radio>
+              <el-radio value="SINGLE">单值型（仅最新统计结果）</el-radio>
+              <el-radio value="TIMESERIES">时序型（须声明日期列）</el-radio>
             </el-radio-group>
           </el-form-item>
           <el-form-item v-if="dlg.m.dsType === 'TIMESERIES'" label="日期列名" required>
@@ -304,9 +304,9 @@
         <!-- 数据范围模式（spec §4） -->
         <el-form-item label="数据范围模式">
           <el-radio-group v-model="dlg.m.scopeMode" :disabled="semanticFrozen" @change="onScopeModeChange">
-            <el-radio label="SUBJECT">主体范围（按 empId/orgCode 校验查看者数据范围，默认）</el-radio>
-            <el-radio label="GLOBAL">全省聚合（无主体参数的全省类数据；查看需 ALL/省级数据范围权限）</el-radio>
-            <el-radio label="NAMED_GROUP">命名机构组（仅机构宽表；服务端按已授权组成员取数）</el-radio>
+            <el-radio value="SUBJECT">主体范围（按 empId/orgCode 校验查看者数据范围，默认）</el-radio>
+            <el-radio value="GLOBAL">全省聚合（无主体参数的全省类数据；查看需 ALL/省级数据范围权限）</el-radio>
+            <el-radio value="NAMED_GROUP">命名机构组（仅机构宽表；服务端按已授权组成员取数）</el-radio>
           </el-radio-group>
           <span v-if="namedGroupMode" class="hint">NAMED_GROUP 仅允许 WIDE_TABLE 的 ORG_INDEX_RESULT + org_code；CUSTOM_SQL 仅保留给 LEGACY_CONTEXT。</span>
         </el-form-item>

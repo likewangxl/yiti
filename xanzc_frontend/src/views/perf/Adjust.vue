@@ -66,7 +66,7 @@
             <el-table-column label="申请编号" width="170">
               <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
-            <el-table-column label="客户" min-width="190">
+            <el-table-column label="客户" min-width="190" class-name="compact-stack-cell">
               <template #default="{row}">
                 <div>{{ row.custName || '-' }}</div>
                 <div v-if="row.custId" class="cust-name-sub">{{ row.custId }}</div>
@@ -94,15 +94,12 @@
                   <template #dropdown>
                     <el-dropdown-menu>
                       <el-dropdown-item v-if="row.status === 'DRAFT'" @click="openEdit(row)">编辑</el-dropdown-item>
-                      <el-popconfirm
+                      <el-dropdown-item
                         v-if="canWithdraw(row.status)"
-                        :title="`确认撤回申请 ${row.applyNo || row.id}？`"
-                        @confirm="onWithdraw(row)"
-                      >
-                        <template #reference>
-                          <el-dropdown-item divided class="danger-item">撤回</el-dropdown-item>
-                        </template>
-                      </el-popconfirm>
+                        divided
+                        class="danger-item"
+                        @click="confirmWithdraw(row)"
+                      >撤回</el-dropdown-item>
                     </el-dropdown-menu>
                   </template>
                 </el-dropdown>
@@ -175,19 +172,19 @@
             <el-table-column label="申请编号" width="170">
               <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
-            <el-table-column label="客户" min-width="190">
+            <el-table-column label="客户" min-width="190" class-name="compact-stack-cell">
               <template #default="{row}">
                 <div>{{ row.custName || '-' }}</div>
                 <div v-if="row.custId" class="cust-name-sub">{{ row.custId }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="发起人" width="160">
+            <el-table-column label="发起人" width="160" class-name="compact-stack-cell">
               <template #default="{row}">
                 <div>{{ row.startUserName || row.startUserEmpNo || row.startUser || '-' }}</div>
                 <div v-if="row.startUserEmpNo" class="sub-id">{{ row.startUserEmpNo }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="发起机构" width="220">
+            <el-table-column label="发起机构" width="220" class-name="compact-stack-cell">
               <template #default="{row}">
                 <template v-if="row.startOrgName || row.startOrgDeptNo || row.startOrgId">
                   <div>{{ row.startOrgName || '-' }}</div>
@@ -275,7 +272,7 @@
             <el-table-column label="申请编号" width="170">
               <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
-            <el-table-column label="客户" min-width="190">
+            <el-table-column label="客户" min-width="190" class-name="compact-stack-cell">
               <template #default="{row}">
                 <div>{{ row.custName || '-' }}</div>
                 <div v-if="row.custId" class="cust-name-sub">{{ row.custId }}</div>
@@ -292,7 +289,7 @@
                 <el-tag :class="statusCls(row.status)" effect="plain">{{ statusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="申请人" width="160">
+            <el-table-column label="申请人" width="160" class-name="compact-stack-cell">
               <template #default="{row}">
                 <div>{{ row.startUserName || row.createdByName || row.startUserEmpNo || row.createdBy || '-' }}</div>
                 <div v-if="row.startUserEmpNo" class="sub-id">{{ row.startUserEmpNo }}</div>
@@ -1755,6 +1752,17 @@ async function onWithdraw(row) {
   } catch (err) {
     ElMessage.error(err?.bizMsg || err?.message || '撤回失败');
   }
+}
+
+async function confirmWithdraw(row) {
+  try {
+    await ElMessageBox.confirm(`确认撤回申请 ${row.applyNo || row.id}？`, '确认撤回', {
+      type: 'warning', confirmButtonText: '确认撤回', cancelButtonText: '取消'
+    });
+  } catch {
+    return;
+  }
+  await onWithdraw(row);
 }
 
 // 客户编号变化时查询客户名称

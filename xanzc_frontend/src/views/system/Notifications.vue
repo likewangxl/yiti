@@ -39,7 +39,7 @@
       </div>
       <p v-if="loadError" class="error-state" role="alert">{{ loadError }} <el-button link type="primary" @click="reload">重试</el-button></p>
       <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无通知" aria-labelledby="notifications-table-heading" aria-describedby="notifications-table-state">
-        <el-table-column label="标题 / 内容" min-width="340">
+        <el-table-column label="标题 / 内容" min-width="340" class-name="compact-stack-cell">
           <template #default="{ row }">
             <div class="notification-title" :class="{ unread: !row.isRead }"><span v-if="!row.isRead" class="unread-dot" aria-label="未读"></span>{{ row.title || '-' }}</div>
             <div v-if="row.content" class="notification-content">{{ row.content }}</div>

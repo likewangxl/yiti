@@ -39,7 +39,7 @@
         aria-labelledby="notification-list-heading"
         aria-describedby="notification-list-state"
       >
-        <el-table-column label="内容" min-width="300">
+        <el-table-column label="内容" min-width="300" class-name="compact-stack-cell">
           <template #default="{ row }">
             <div>{{ row.content || row.title || '-' }}</div>
             <div class="ntf-meta">{{ row.bizType }} · {{ fmtDate(row.createdTime || row.sentTime) }}</div>

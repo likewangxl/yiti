@@ -3,8 +3,14 @@ const GENERATED_TITLE_ATTR = 'data-bp-overflow-tooltip';
 const CELL_SELECTOR = '.el-table__body .cell, .el-table__header .cell';
 
 function syncOverflowTitle(cell) {
-  const text = cell.textContent?.trim() || '';
-  const isOverflowing = cell.scrollWidth > cell.clientWidth || cell.scrollHeight > cell.clientHeight;
+  const childTexts = [...cell.children].map((child) => child.textContent?.trim()).filter(Boolean);
+  const text = childTexts.length > 1 ? childTexts.join(' / ') : (cell.textContent?.trim() || '');
+  const isElementOverflowing = (element) => (
+    element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight
+  );
+  // 紧凑双行由两个独立子行各自省略，父 .cell 的 scrollWidth 可能仍等于 clientWidth；
+  // 同时检查直接子行，确保 mouseover 仍能暴露完整的主/辅信息。
+  const isOverflowing = isElementOverflowing(cell) || [...cell.children].some(isElementOverflowing);
   const generatedTitle = cell.getAttribute(GENERATED_TITLE_ATTR);
   // 标记中保存上次由指令写入的值，才能区分“仍归指令所有”与业务后来改写的 title。
   const ownsCurrentTitle = generatedTitle !== null && cell.getAttribute('title') === generatedTitle;
