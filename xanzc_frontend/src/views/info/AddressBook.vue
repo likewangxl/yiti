@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud ab-page" aria-labelledby="address-book-title">
+<main v-bp-overflow-tooltip class="bp-crud ab-page" aria-labelledby="address-book-title">
     <header class="page-h">
       <PageTitle id="address-book-title"><span class="sub">模糊搜索、60 天未更新提醒，负责产品会反向更新产品库</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="通讯录操作">

@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud target-values-page" aria-labelledby="target-values-page-title">
+<main v-bp-overflow-tooltip class="bp-crud target-values-page" aria-labelledby="target-values-page-title">
     <header class="page-h">
       <PageTitle id="target-values-page-title">
         <span class="sub" v-if="currentPlan">方案：<em>{{ currentPlanLabel }}</em></span>

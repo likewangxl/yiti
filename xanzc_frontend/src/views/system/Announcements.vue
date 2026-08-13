@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud announcements-page" aria-labelledby="announcements-title">
+  <main v-bp-overflow-tooltip class="bp-crud announcements-page" aria-labelledby="announcements-title">
     <header class="page-h">
       <PageTitle id="announcements-title" />
       <div v-if="userStore.isSystemAdmin" class="actions action-group" role="group" aria-label="公告管理操作">

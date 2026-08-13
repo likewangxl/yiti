@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud eval-rules-page" aria-labelledby="eval-rules-page-title" :aria-busy="tableLoading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud eval-rules-page" aria-labelledby="eval-rules-page-title" :aria-busy="tableLoading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="eval-rules-page-title"><span class="sub">按评价对象配置评价人组、权重和评分方式</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="评价规则操作">

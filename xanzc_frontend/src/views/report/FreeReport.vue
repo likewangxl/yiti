@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud free-report" aria-labelledby="free-report-title" :aria-busy="loading || importDlg.uploading || !!mutatingId ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud free-report" aria-labelledby="free-report-title" :aria-busy="loading || importDlg.uploading || !!mutatingId ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="free-report-title" />
       <div class="actions action-group" role="group" aria-label="自由报表操作">

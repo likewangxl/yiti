@@ -4,7 +4,7 @@
   后端：GET /api/reports/data-imports（列表） / GET /api/reports/data-imports/{batchNum}（透视数据）
 -->
 <template>
-  <main class="bp-crud data-import" aria-labelledby="data-import-title">
+<main v-bp-overflow-tooltip class="bp-crud data-import" aria-labelledby="data-import-title">
     <div class="page-h">
       <PageTitle id="data-import-title" />
       <span class="desc">导入批次列表，点击「查看数据」展示该批次的导入数据</span>

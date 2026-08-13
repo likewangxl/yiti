@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud workflow-monitor-page" aria-labelledby="workflow-monitor-page-title" :aria-busy="loading ? 'true' : 'false'">
+  <main v-bp-overflow-tooltip class="bp-crud workflow-monitor-page" aria-labelledby="workflow-monitor-page-title" :aria-busy="loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="workflow-monitor-page-title"><span class="sub">秘书岗按本机构、行长按全行查看进行中和已完成的审批流实例。</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="审批流监控操作">

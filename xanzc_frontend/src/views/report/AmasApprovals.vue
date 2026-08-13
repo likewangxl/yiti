@@ -5,7 +5,7 @@
   点击「详情」→ /report/amas-approvals/:perfAdjustNo
 -->
 <template>
-  <main class="bp-crud amas-approvals" aria-labelledby="amas-approvals-title" :aria-busy="loading || loading2 ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud amas-approvals" aria-labelledby="amas-approvals-title" :aria-busy="loading || loading2 ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="amas-approvals-title" />
       <span class="desc">历史业绩调整（AMAS）与业绩调整（平台）两类申请查询，按申请时间倒序</span>

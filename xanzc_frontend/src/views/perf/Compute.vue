@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud perf-compute-page" aria-labelledby="perf-compute-page-title" :aria-busy="logLoading || trgDlg.saving ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud perf-compute-page" aria-labelledby="perf-compute-page-title" :aria-busy="logLoading || trgDlg.saving ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="perf-compute-page-title"><span class="sub">手工触发 / 回算 / 快照 · 运行审计与结果追踪</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="绩效计算操作">

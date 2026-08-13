@@ -1,5 +1,6 @@
 <template>
   <main
+    v-bp-overflow-tooltip
     class="bp-crud timeout-rules-page"
     aria-labelledby="timeout-rules-page-title"
     :aria-busy="loading ? 'true' : 'false'"

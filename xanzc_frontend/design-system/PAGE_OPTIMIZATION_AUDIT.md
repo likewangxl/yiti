@@ -1,0 +1,167 @@
+# 主平台页面优化审计与后续设计规范
+
+> 审计日期：2026-08-13
+> 范围：`src/router/index.js` 中由 `DefaultLayout` 承载的普通后台命名路由，以及三个普通浅色的大屏管理页。
+> 排除：12 个 `/redengine/**` 路由、大屏运行态 `/screen/:screenCode`、大屏设计器 `/screen-admin/designer`、未注册废弃页面。
+> 本文只记录前端呈现与交互规则；不改变 API URL、HTTP method、payload、权限或数据口径。
+
+## 1. 审计结论
+
+- 路由表静态解析后，普通后台范围精确为 **59** 个命名路由。
+- 其中 **55** 个是 CRUD、详情或配置工作面，统一接入受控 `.bp-crud` 基线；**4** 个是独立信息架构，不能套用 CRUD 表格规则：登录、无权限、工作台、行长仪表盘。
+- 范围内有 **50** 个页面包含 Element Plus 表格，其中 49 个标准页面共 **89** 张表接入 `v-bp-overflow-tooltip`；共享基线统一表格正文 14px、表头/数据行 40px、状态标签最小高 24px、单元格省略和右侧操作列不换行。
+- `v-bp-overflow-tooltip` 只会在根 `.bp-crud` 挂载时监听，且只对实际溢出的 `.el-table .cell` 写入原生 `title`；不覆盖页面已有业务 `title`。两个 `append-to-body` 弹窗以 `.bp-crud-dialog` 显式延续同一范围。红色引擎、运行态、设计器没有指令使用，零 DOM/交互影响。
+- 命名路由审计由 `src/views/__tests__/crud-route-audit.spec.js` 固化：若新增普通后台路由但未接入 `.bp-crud` 或受控提示，测试会失败；红色引擎、运行态、设计器不会进入该断言。
+
+## 2. 59 路由矩阵
+
+| 路由名 | 路径 | 页面 | 处理 |
+|---|---|---|---|
+| `Login` | `/login` | `views/login/Index.vue` | 独立信息架构 |
+| `NoAccess` | `/no-access` | `views/NoAccess.vue` | 独立信息架构 |
+| `Workspace` | `/workspace` | `views/workspace/Index.vue` | 独立信息架构 |
+| `AnnouncementList` | `/workspace/announcements` | `views/workspace/AnnouncementList.vue` | CRUD 基线 |
+| `AnnouncementDetail` | `/announcement/:id` | `views/system/AnnouncementDetail.vue` | CRUD 基线 |
+| `NotificationList` | `/workspace/notifications` | `views/workspace/NotificationList.vue` | CRUD 基线 |
+| `InfoNav` | `/info/nav` | `views/info/NavHub.vue` | CRUD 基线 |
+| `InfoAddressBook` | `/info/address-book` | `views/info/AddressBook.vue` | CRUD 基线 |
+| `InfoProducts` | `/info/products` | `views/info/ProductLib.vue` | CRUD 基线 |
+| `InfoDocuments` | `/info/documents` | `views/info/DocCenter.vue` | CRUD 基线 |
+| `PerfMetrics` | `/perf/metrics` | `views/perf/Metrics.vue` | CRUD 基线 |
+| `PerfKpiRules` | `/perf/kpi-rules` | `views/perf/KpiRules.vue` | CRUD 基线 |
+| `PerfTargets` | `/perf/targets` | `views/perf/Targets.vue` | CRUD 基线 |
+| `PerfTargetValues` | `/perf/target-values` | `views/perf/TargetValues.vue` | CRUD 基线 |
+| `PerfImport` | `/perf/import` | `views/perf/Import.vue` | CRUD 基线 |
+| `PerfAdjust` | `/perf/adjust` | `views/perf/Adjust.vue` | CRUD 基线 |
+| `PerfCompute` | `/perf/compute` | `views/perf/Compute.vue` | CRUD 基线 |
+| `PerfTaskMonitor` | `/perf/task-monitor` | `views/perf/TaskMonitor.vue` | CRUD 基线 |
+| `PerfKpiScoreDetail` | `/perf/kpi-score-detail` | `views/perf/KpiScoreDetail.vue` | CRUD 基线 |
+| `EvalTags` | `/eval/tags` | `views/eval/Tags.vue` | CRUD 基线 |
+| `EvalUserTags` | `/eval/user-tags` | `views/eval/UserTags.vue` | CRUD 基线 |
+| `EvalRules` | `/eval/rules` | `views/eval/Rules.vue` | CRUD 基线 |
+| `EvalTasks` | `/eval/tasks` | `views/eval/Tasks.vue` | CRUD 基线 |
+| `EvalMyTasks` | `/eval/my-tasks` | `views/eval/MyTasks.vue` | CRUD 基线 |
+| `ReportDynamic` | `/report/dynamic` | `views/report/Dynamic.vue` | CRUD 基线 |
+| `ReportDash` | `/report/dashboard` | `views/report/Dashboard.vue` | 独立信息架构 |
+| `ReportPresets` | `/report/presets` | `views/report/Presets.vue` | CRUD 基线 |
+| `ReportFree` | `/report/free` | `views/report/FreeReport.vue` | CRUD 基线 |
+| `ReportFreeDetail` | `/report/free/:batchId` | `views/report/FreeReportDetail.vue` | CRUD 基线 |
+| `ReportSql` | `/report/sql` | `views/report/Sql.vue` | CRUD 基线 |
+| `ReportAmasApprovals` | `/report/amas-approvals` | `views/report/AmasApprovals.vue` | CRUD 基线 |
+| `ReportAmasApprovalDetail` | `/report/amas-approvals/:perfAdjustNo` | `views/report/AmasApprovalDetail.vue` | CRUD 基线 |
+| `ScreenAdminDs` | `/screen-admin/datasources` | `views/screen/admin/Datasources.vue` | CRUD 基线和点名修复 |
+| `ScreenAdminOrgProfiles` | `/screen-admin/org-profiles` | `views/screen/admin/OrgProfiles.vue` | CRUD 基线和点名修复 |
+| `ScreenAdminOrgGroups` | `/screen-admin/org-groups` | `views/screen/admin/OrgGroups.vue` | CRUD 基线和点名修复 |
+| `GuaranteeQuery` | `/guarantee/query` | `views/guarantee/Query.vue` | CRUD 基线 |
+| `HistoryDataImport` | `/guarantee/data-import` | `views/guarantee/DataImport.vue` | CRUD 基线 |
+| `HistoryNotice` | `/guarantee/notice` | `views/guarantee/Notice.vue` | CRUD 基线 |
+| `HistoryPriceApproval` | `/history/price-approval` | `views/history/PriceApproval.vue` | CRUD 基线 |
+| `HistoryPriceApprovalDetail` | `/history/price-approval/:priceApprId` | `views/history/PriceApprovalDetail.vue` | CRUD 基线 |
+| `HistoryPerfAdjust` | `/history/perf-adjust` | `views/history/PerfAdjustQuery.vue` | CRUD 基线 |
+| `SysUsers` | `/system/users` | `views/system/Users.vue` | CRUD 基线和点名修复 |
+| `SysRoles` | `/system/roles` | `views/system/Roles.vue` | CRUD 基线 |
+| `SysResources` | `/system/resources` | `views/system/Resources.vue` | CRUD 基线 |
+| `SysPermission` | `/system/permission` | `views/system/Permission.vue` | CRUD 基线 |
+| `SysDict` | `/system/dict` | `views/system/Dict.vue` | CRUD 基线 |
+| `SysCalendar` | `/system/calendar` | `views/system/Calendar.vue` | CRUD 基线 |
+| `SysJobs` | `/system/jobs` | `views/system/Jobs.vue` | CRUD 基线 |
+| `SysAudit` | `/system/audit` | `views/system/Audit.vue` | CRUD 基线 |
+| `SysNotifications` | `/system/notifications` | `views/system/Notifications.vue` | CRUD 基线 |
+| `SysConfig` | `/system/config` | `views/system/Config.vue` | CRUD 基线 |
+| `SysFiles` | `/system/files` | `views/system/Files.vue` | CRUD 基线 |
+| `SysTimeoutRules` | `/system/timeout-rules` | `views/system/TimeoutRules.vue` | CRUD 基线 |
+| `SysAnnouncements` | `/system/announcements` | `views/system/Announcements.vue` | CRUD 基线 |
+| `SysAnnouncementDetail` | `/system/announcements/:id` | `views/system/AnnouncementDetail.vue` | CRUD 基线 |
+| `SysWorkflowFlows` | `/system/workflow-flows` | `views/system/FlowList.vue` | CRUD 基线 |
+| `SysWorkflowFlowEdit` | `/system/workflow-flows/:id` | `views/system/FlowEdit.vue` | CRUD 基线 |
+| `SysWorkflowMonitor` | `/system/workflow-monitor` | `views/system/WorkflowMonitor.vue` | CRUD 基线 |
+| `SysPersonTags` | `/system/person-tags` | `views/system/PersonTags.vue` | CRUD 基线 |
+
+### 2.1 长文本适用矩阵
+
+“适用”表示页面根节点显式挂载 `v-bp-overflow-tooltip`，因此该页面所有表格单元格会在**真实溢出**时显示完整原生提示；表格内已有 `show-overflow-tooltip` 仍保留。数量是静态模板中的 `el-table` 数，包含弹窗/抽屉内表格。
+
+| 路由名 | 长文本完整值策略 |
+|---|---|
+| `Login`、`NoAccess`、`Workspace`、`ReportDash` | 不适用：独立信息架构，不接入 CRUD 指令 |
+| `AnnouncementDetail`、`InfoNav`、`HistoryPriceApprovalDetail`、`SysCalendar`、`SysAnnouncementDetail`、`SysWorkflowFlowEdit` | 不适用：页面无 `el-table` |
+| `AnnouncementList`、`NotificationList`、`InfoAddressBook`、`InfoProducts`、`InfoDocuments`、`PerfTargetValues`、`PerfImport`、`PerfKpiScoreDetail`、`EvalTags`、`ReportDynamic`、`ReportPresets`、`ReportFree`、`ReportFreeDetail`、`ScreenAdminOrgProfiles`、`ScreenAdminOrgGroups`、`GuaranteeQuery`、`HistoryNotice`、`HistoryPriceApproval`、`SysUsers`、`SysResources`、`SysPermission`、`SysDict`、`SysAudit`、`SysNotifications`、`SysFiles`、`SysTimeoutRules`、`SysAnnouncements`、`SysWorkflowFlows` | 适用：各 1 张表 |
+| `PerfKpiRules`、`PerfCompute`、`PerfTaskMonitor`、`EvalUserTags`、`EvalMyTasks`、`ReportAmasApprovals`、`ReportAmasApprovalDetail`、`HistoryDataImport`、`SysRoles`、`SysJobs` | 适用：各 2 张表 |
+| `PerfTargets`、`EvalRules`、`ReportSql`、`ScreenAdminDs`、`SysConfig`、`SysWorkflowMonitor`、`SysPersonTags` | 适用：各 3 张表 |
+| `PerfMetrics`、`HistoryPerfAdjust` | 适用：各 4 张表 |
+| `PerfAdjust`、`EvalTasks` | 适用：各 6 张表 |
+
+## 3. 已修复的问题类型
+
+| 问题类型 | 统一裁决 | 实现边界 |
+|---|---|---|
+| 筛选条件松散、查询按钮漂移 | `.filter-form` 为显式弹性栅格；最后一个操作项右对齐 | 仅 `.bp-crud` |
+| 控件、表格密度不一致 | 正文/表单/表格 14px；常规控件最小 32px；行高 40px | 仅 `.bp-crud` |
+| 状态标签尺度不一 | 状态标签最小高 24px，使用已有语义 tag class | 仅 `.bp-crud` |
+| 长字段挤压布局 | 默认单行省略；`v-bp-overflow-tooltip` 仅在真实溢出时提供完整原生提示，已有 `show-overflow-tooltip` 保留 | 仅 `.bp-crud`，不强制截断操作列 |
+| 操作按钮换行或超出 | 操作列固定右侧，`.operation-cell` 不换行；每行保留一个主操作，低频/危险操作进入“更多” | 需要页面 API 不变 |
+| 数据源页面 | 编辑/试跑/探测列常显；副本/删除进入更多；补筛选重置；状态语义化 | `/screen-admin/datasources` |
+| 机构经营画像 | 筛选栅格和重置；列表状态、完整值提示和编辑弹窗样式统一 | `/screen-admin/org-profiles` |
+| 命名机构组状态越界 | 组名、编码、状态在固定网格内截断；仅 `ACTIVE`/`DISABLED` 显示为启停，未知值显式标为“未知状态” | `/screen-admin/org-groups` |
+| 用户管理 | 保留机构树与批量工具栏；筛选保持明确栅格；行内只留编辑，角色/删除进更多 | `/system/users` |
+| 评价标签和人员角色 | 两表均为有边框高密度表格；标签名称列固定 220px 且完整值提示；人员角色导入/导出移至页头 | `/eval/tags`、`/eval/user-tags` |
+
+## 4. 后续页面设计规范
+
+### 4.1 使用范围
+
+新建或重构的主平台 CRUD、查询、配置、详情工作面，根节点使用：
+
+```vue
+<main v-bp-overflow-tooltip class="bp-crud feature-page" aria-labelledby="feature-page-title">
+```
+
+不得将 `.bp-crud` 加到红色引擎、大屏运行态或大屏设计器。独立信息架构页面可遵守 token、焦点和无障碍规则，但不强制采用表格筛选框架。
+
+### 4.2 页面骨架
+
+```vue
+<main v-bp-overflow-tooltip class="bp-crud feature-page" aria-labelledby="feature-page-title">
+  <header class="page-h">
+    <PageTitle id="feature-page-title" />
+    <div class="actions action-group" role="group" aria-label="页面操作">
+      <!-- 一个主操作；刷新/导出等次级操作在此处 -->
+    </div>
+  </header>
+
+  <section class="card-section filter-bar" aria-label="筛选条件">
+    <el-form class="filter-form" inline>
+      <!-- 可见 label 的字段 -->
+      <el-form-item>
+        <el-button type="primary">查询</el-button>
+        <el-button>重置</el-button>
+      </el-form-item>
+    </el-form>
+  </section>
+
+  <section class="card-section data-panel" aria-label="列表">
+    <div class="toolbar"><!-- 标题、口径提示、数量/加载状态 --></div>
+    <el-table border size="default"><!-- 表头、数据和固定操作列 --></el-table>
+    <nav class="pager" aria-label="列表分页"><el-pagination /></nav>
+  </section>
+</main>
+```
+
+### 4.3 规则清单
+
+1. 使用 `--color-*`、`--space-*`、`--radius-control` 和 `--shadow-*`，页面样式不新增原始色值。
+2. 筛选字段有可见 label；查询与重置为同一末尾操作项。筛选条件超过一行时，由栅格自然换行，操作仍右对齐。
+3. 数据表默认 `border size="default"`。表头和数据行约 40px，正文 14px；数值、时间、业务键优先使用合适固定列宽或等宽数字。
+4. 表格页面根节点必须显式使用 `v-bp-overflow-tooltip`，它会对实际溢出的单元格提供完整原生提示；特别复杂的字段可额外使用 `show-overflow-tooltip`。操作列不可截断或换行。
+5. 操作列 `fixed="right" class-name="operation-cell"`。一项最常用动作直接展示；删除、覆盖、复制、分配、下载等低频/高风险动作使用 `el-dropdown` 的“更多”。危险操作仍保留现有确认和审计原因。
+6. 状态必须有文本，不可仅用颜色。只对已知后端枚举映射“启用/停用”等语义；未知值必须显式显示“未知状态”，不能默认当作成功。
+7. 弹窗/抽屉使用 `class="bp-crud-dialog"`，尤其 `append-to-body` 时作为受控提示边界；保留取消出口、加载禁用与原有校验/确认语义。
+8. 异步读取必须区分加载、空数据和错误；异步写入保持单飞、禁用重复操作以及明确的错误恢复。
+9. 提交前新增静态/组件测试；变更后运行受影响测试、普通后台路由审计、构建和真实页面验收。真实浏览器只走查询、打开和取消路径，避免验收产生业务写入。
+
+## 5. 验收与维护
+
+- 静态范围门禁：`npm test -- --run src/views/__tests__/crud-route-audit.spec.js`。
+- 共享基线门禁：`npm test -- --run src/styles/__tests__/crud-baseline.spec.js`。
+- 页面契约：各业务目录下 `__tests__` 的定向用例。
+- 视觉验收：真实登录 `/#/login?normal`，账号 `admin/123456`；在 1920×1080 与 2560×1440 检查筛选栅格、表格列、固定操作列、完整值提示与弹窗。仅执行查询、打开和取消，不执行保存、删除、导入或其他写操作。

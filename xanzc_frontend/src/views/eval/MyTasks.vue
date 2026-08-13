@@ -1,6 +1,6 @@
 <template>
   <!-- 待处理任务（用户端） -->
-  <main class="bp-crud eval-my-tasks-page" aria-labelledby="eval-my-tasks-page-title" :aria-busy="loading || processView.loading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud eval-my-tasks-page" aria-labelledby="eval-my-tasks-page-title" :aria-busy="loading || processView.loading ? 'true' : 'false'">
 
     <!-- ===== 汇总列表视图 ===== -->
     <template v-if="!processView.active && !rewardView.active">

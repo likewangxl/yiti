@@ -19,7 +19,7 @@ function source(name) {
 describe('报表查询页桌面后台结构契约', () => {
   it.each(pageFiles)('%s 使用语义化 bp-crud 主区域和可读 busy 状态', (name) => {
     const content = source(name);
-    expect(content).toMatch(/<main\s+class="bp-crud[^"]*"/);
+    expect(content).toMatch(/<main\b(?=[^>]*class="bp-crud\b[^"]*")[^>]*>/);
     expect(content).toMatch(/aria-labelledby=/);
     expect(content).toMatch(/:aria-busy=/);
   });

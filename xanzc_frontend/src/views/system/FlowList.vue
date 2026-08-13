@@ -1,5 +1,6 @@
 <template>
   <main
+    v-bp-overflow-tooltip
     class="bp-crud flow-list-page"
     aria-labelledby="flow-list-page-title"
     :aria-busy="loading ? 'true' : 'false'"

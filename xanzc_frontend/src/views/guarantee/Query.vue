@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud guarantee-query" aria-labelledby="guarantee-query-title">
+<main v-bp-overflow-tooltip class="bp-crud guarantee-query" aria-labelledby="guarantee-query-title">
     <div class="page-h">
       <PageTitle id="guarantee-query-title" />
       <div class="actions action-group" role="group" aria-label="担保信息操作">

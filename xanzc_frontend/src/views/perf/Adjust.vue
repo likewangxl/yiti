@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud perf-adjust-page" aria-labelledby="perf-adjust-page-title" :aria-busy="loading || todoLoading || doneLoading || dlg.saving || dlg.reviewSaving || batchDlg.saving ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud perf-adjust-page" aria-labelledby="perf-adjust-page-title" :aria-busy="loading || todoLoading || doneLoading || dlg.saving || dlg.reviewSaving || batchDlg.saving ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="perf-adjust-page-title"><span class="sub">比例之和 = 100% · 单行 ≥ 1% · 同一员工不重复</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="业绩调整操作">
@@ -468,7 +468,7 @@
                 <span v-else>{{ row.ratio != null && row.ratio !== '' ? row.ratio + '%' : '-' }}</span>
               </template>
             </el-table-column>
-            <el-table-column v-if="!dlg.readOnly" label="操作" width="70" align="center">
+            <el-table-column v-if="!dlg.readOnly" label="操作" width="70" align="center" fixed="right">
               <template #default="{ $index }">
                 <el-button link type="danger" size="small" @click="removeOriginalRow($index)">删除</el-button>
               </template>
@@ -514,7 +514,7 @@
               <el-input v-model="row.remark" :disabled="dlg.readOnly" size="small" />
             </template>
           </el-table-column>
-          <el-table-column v-if="!dlg.readOnly" label="操作" width="80" align="center">
+          <el-table-column v-if="!dlg.readOnly" label="操作" width="80" align="center" fixed="right">
             <template #default="{$index}">
               <el-button link type="danger" size="small" @click="dlg.form.items.splice($index, 1)">删除</el-button>
             </template>

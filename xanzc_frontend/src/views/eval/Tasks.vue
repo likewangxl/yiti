@@ -1,6 +1,6 @@
 <template>
   <!-- 评价任务管理页面（管理端：统一列表 = 规则任务 + 导入批次） -->
-  <main class="bp-crud eval-tasks-page" aria-labelledby="eval-tasks-page-title" :aria-busy="tableLoading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud eval-tasks-page" aria-labelledby="eval-tasks-page-title" :aria-busy="tableLoading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="eval-tasks-page-title"><span class="sub">发起评价活动并管理任务生命周期</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="评价任务操作">

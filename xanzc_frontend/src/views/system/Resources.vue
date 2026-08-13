@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud resources-page" aria-labelledby="resources-page-title">
+<main v-bp-overflow-tooltip class="bp-crud resources-page" aria-labelledby="resources-page-title">
     <header class="page-h">
       <PageTitle id="resources-page-title">
         <span class="sub">维护菜单层级；叶子菜单可单独配置角色访问范围。</span>

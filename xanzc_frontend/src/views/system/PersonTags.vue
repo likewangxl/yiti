@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud person-tags-page" aria-labelledby="person-tags-page-title" :aria-busy="loading ? 'true' : 'false'">
+  <main v-bp-overflow-tooltip class="bp-crud person-tags-page" aria-labelledby="person-tags-page-title" :aria-busy="loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="person-tags-page-title"><span class="sub">维护可复用的员工与机构标签，支持精确成员维护和带校验的批量导入。</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="人员标签操作">

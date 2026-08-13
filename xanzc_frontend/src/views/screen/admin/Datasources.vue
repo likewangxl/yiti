@@ -1,25 +1,40 @@
 <template>
-  <div>
-    <div class="page-h">
-      <PageTitle />
-      <div class="actions">
+<main v-bp-overflow-tooltip class="bp-crud datasource-page" aria-labelledby="datasource-page-title" :aria-busy="loading ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="datasource-page-title" />
+      <div class="actions action-group" role="group" aria-label="大屏数据源操作">
         <el-button @click="reload">刷新</el-button>
         <el-button type="primary" @click="openCreate">+ 新建数据源</el-button>
       </div>
-    </div>
+    </header>
 
-    <div class="card-section" v-loading="loading">
-      <el-form inline size="small" class="ds-filter">
+    <section class="card-section filter-bar" aria-label="大屏数据源筛选">
+      <el-form inline size="default" class="filter-form ds-filter" aria-label="大屏数据源筛选">
         <el-form-item label="业务条线">
           <el-select v-model="filters.bizLine" clearable placeholder="全部" style="width:140px">
             <el-option v-for="line in BIZ_LINES" :key="line.value" :label="line.label" :value="line.value" />
           </el-select>
         </el-form-item>
-        <el-form-item><el-button type="primary" @click="reload">筛选</el-button></el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="reload">查询</el-button>
+          <el-button @click="resetFilters">重置</el-button>
+        </el-form-item>
       </el-form>
-      <el-table :data="list" size="default" stripe border>
+    </section>
+
+    <section class="card-section data-panel" v-loading="loading" aria-label="大屏数据源列表" aria-describedby="datasource-table-state">
+      <div class="toolbar">
+        <div>
+          <h2 id="datasource-table-heading" class="section-title">大屏数据源列表</h2>
+          <p class="hint">编辑、试跑和列探测直接可达；副本与删除按风险收纳在“更多”中。</p>
+        </div>
+        <p id="datasource-table-state" class="table-state" role="status" aria-live="polite">
+          {{ loading ? '大屏数据源列表加载中' : (list.length ? `共 ${list.length} 个数据源` : '暂无大屏数据源') }}
+        </p>
+      </div>
+      <el-table :data="list" size="default" stripe border aria-labelledby="datasource-table-heading" aria-describedby="datasource-table-state">
         <el-table-column prop="id" label="ID" width="70" />
-        <el-table-column prop="dsCode" label="编码" width="140" />
+        <el-table-column prop="dsCode" label="编码" width="140" show-overflow-tooltip />
         <el-table-column prop="dsName" label="名称" min-width="160" />
         <el-table-column label="业务条线" width="110">
           <template #default="{ row }">
@@ -41,22 +56,33 @@
         <el-table-column label="引用大屏" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">{{ referenceLabel(row) }}</template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="90" />
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="状态" width="96">
+          <template #default="{ row }">
+            <el-tag :class="datasourceStatus(row).className" effect="plain" size="small">{{ datasourceStatus(row).label }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" class-name="operation-cell" width="300" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button link @click="openTryRun(row)">试跑</el-button>
             <el-button link @click="openProbeColumns(row)">探测列</el-button>
-            <el-button v-if="referenceState(row).semanticFrozen" link type="warning" @click="openCopy(row)">新建副本</el-button>
-            <el-button link type="danger" :disabled="referenceState(row).deleteBlocked"
-                       :title="referenceState(row).guidance || undefined" @click="onDelete(row)">删除</el-button>
+            <el-dropdown trigger="click" @command="command => onMoreCommand(command, row)">
+              <el-button link aria-label="更多数据源操作">更多</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="referenceState(row).semanticFrozen" command="copy">新建副本</el-dropdown-item>
+                  <el-dropdown-item command="delete" divided :disabled="referenceState(row).deleteBlocked"
+                                    :title="referenceState(row).guidance || undefined">删除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </template>
         </el-table-column>
       </el-table>
-    </div>
+    </section>
 
     <!-- 新建/编辑 -->
-    <el-dialog v-model="dlg.show" :title="dlg.editing ? '编辑数据源' : '新建数据源'" width="760px" top="4vh">
+    <el-dialog v-model="dlg.show" class="bp-crud-dialog" :title="dlg.editing ? '编辑数据源' : '新建数据源'" width="760px" top="4vh">
       <el-form label-position="top">
         <el-form-item label="名称" required>
           <el-input v-model="dlg.dsName" maxlength="100" />
@@ -292,7 +318,7 @@
     </el-dialog>
 
     <!-- 删除是独立高危操作：原因进入 DELETE query 供服务端审计，不能用无原因确认框替代。 -->
-    <el-dialog v-model="deleteDialog.show" title="删除数据源" width="420px" :close-on-click-modal="false">
+    <el-dialog v-model="deleteDialog.show" class="bp-crud-dialog" title="删除数据源" width="420px" :close-on-click-modal="false">
       <el-form label-width="84px" size="small">
         <el-form-item label="数据源"><span>{{ deleteDialog.row?.dsName || '-' }}</span></el-form-item>
         <el-form-item label="删除原因" required>
@@ -308,7 +334,7 @@
     </el-dialog>
 
     <!-- 试跑预览 -->
-    <el-dialog v-model="tr.show" :title="tr.mode === 'probe' ? '列探测预览（前 10 行）' : '试跑预览（前 10 行）'" width="760px">
+    <el-dialog v-model="tr.show" class="bp-crud-dialog" :title="tr.mode === 'probe' ? '列探测预览（前 10 行）' : '试跑预览（前 10 行）'" width="760px">
       <el-form inline>
         <el-form-item label="orgCode"><el-input v-model="tr.orgCode" style="width:140px" /></el-form-item>
         <el-form-item label="empId"><el-input v-model="tr.empId" style="width:140px" /></el-form-item>
@@ -334,7 +360,7 @@
         </el-table-column>
       </el-table>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -421,6 +447,19 @@ function referenceLabel(row) {
 }
 function referenceState(row) {
   return datasourceReferenceState(row);
+}
+
+/** 列表状态只认服务端显式枚举，未知值不得伪装成“启用”。 */
+function datasourceStatus(row) {
+  if (row?.status === 'ACTIVE') return { label: '启用', className: 'tag-success' };
+  if (row?.status === 'DISABLED') return { label: '停用', className: 'tag-warning' };
+  return { label: row?.status ? `未知：${row.status}` : '未知状态', className: 'tag-danger' };
+}
+
+/** 清空仅影响列表筛选条件，不改变数据源 API 契约或当前数据口径。 */
+function resetFilters() {
+  filters.bizLine = '';
+  reload();
 }
 
 async function reload() {
@@ -536,6 +575,12 @@ function onDelete(row) {
   deleteDialog.saving = false;
   deleteDialog.row = row;
   deleteDialog.reason = '';
+}
+
+/** 将低频或高风险动作集中在更多菜单，仍复用既有处理函数和审计流程。 */
+function onMoreCommand(command, row) {
+  if (command === 'copy') openCopy(row);
+  if (command === 'delete') onDelete(row);
 }
 async function confirmDelete() {
   const row = deleteDialog.row;

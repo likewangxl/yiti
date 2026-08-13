@@ -6,7 +6,7 @@
   列表行已含全字段（custInfo/necessExplain/files），“申请资料”弹窗与“操作-下载”直接用行内数据，无需再查详情。
 -->
 <template>
-  <main class="bp-crud price-approval" aria-labelledby="price-approval-title">
+<main v-bp-overflow-tooltip class="bp-crud price-approval" aria-labelledby="price-approval-title">
     <div class="page-h">
       <PageTitle id="price-approval-title" />
       <span class="desc">AMAS 定价审批数据查询，按申请时间倒序</span>

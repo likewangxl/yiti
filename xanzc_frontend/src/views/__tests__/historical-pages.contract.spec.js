@@ -19,7 +19,7 @@ describe('历史查询页面 scoped CRUD 结构契约', () => {
   it.each(listPages)('%s 使用主区域、页头、筛选卡、数据面板和分页语义', (path) => {
     const source = sourceOf(path);
 
-    expect(source).toMatch(/<main\s+class="bp-crud\b/);
+    expect(source).toMatch(/<main\b(?=[^>]*class="bp-crud\b)[^>]*>/);
     expect(source).toMatch(/<PageTitle\b/);
     expect(source).toMatch(/class="page-h"/);
     expect(source).toMatch(/class="[^"]*filter-bar[^"]*"/);
@@ -33,7 +33,7 @@ describe('历史查询页面 scoped CRUD 结构契约', () => {
   it('定价审批详情使用 bp-crud 页头、数据面板和详情 section', () => {
     const source = sourceOf('history/PriceApprovalDetail.vue');
 
-    expect(source).toMatch(/<main\s+class="bp-crud\b/);
+    expect(source).toMatch(/<main\b(?=[^>]*class="bp-crud\b)[^>]*>/);
     expect(source).toMatch(/<PageTitle\b/);
     expect(source).toMatch(/class="page-h"/);
     expect(source).toMatch(/class="[^"]*data-panel[^"]*"/);

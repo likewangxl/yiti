@@ -4,7 +4,7 @@
   后端：GET /api/reports/notices（列表） / GET /api/reports/notices/{id}（详情）
 -->
 <template>
-  <main class="bp-crud notice-query" aria-labelledby="notice-query-title">
+<main v-bp-overflow-tooltip class="bp-crud notice-query" aria-labelledby="notice-query-title">
     <div class="page-h">
       <PageTitle id="notice-query-title" />
       <span class="desc">通知公告查询，按序号倒序</span>

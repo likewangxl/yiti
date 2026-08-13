@@ -110,13 +110,27 @@ a { color: inherit; text-decoration: none; }
 }
 
 .bp-crud :where(.filter-form) {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
   gap: var(--space-2) var(--space-4);
+  width: 100%;
 }
 
 .bp-crud :where(.filter-form .el-form-item) {
   margin-bottom: 0;
+  min-width: 0;
+}
+
+.bp-crud :where(.filter-form .el-form-item:last-child) {
+  justify-self: end;
+}
+
+.bp-crud :where(.filter-form .filter-actions) {
+  justify-self: end;
+}
+
+.bp-crud :where(.el-input__wrapper, .el-select__wrapper, .el-button) {
+  min-height: 32px;
 }
 
 .bp-crud :where(.toolbar) {
@@ -136,18 +150,46 @@ a { color: inherit; text-decoration: none; }
   padding: var(--space-4);
 }
 
-.bp-crud :where(.data-panel .el-table) {
+.bp-crud :where(.el-table) {
   --el-table-border-color: var(--color-border);
   --el-table-header-bg-color: var(--color-surface-soft);
   --el-table-row-hover-bg-color: var(--color-brand-100);
+  border: 1px solid var(--color-border);
+  font-size: 14px;
+}
+
+.bp-crud :where(.el-table th.el-table__cell, .el-table td.el-table__cell) {
+  border-bottom: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+  height: 40px;
+  padding: 0;
+}
+
+.bp-crud :where(.el-table .el-tag) {
+  line-height: 22px;
+  min-height: 24px;
+  padding: 0 var(--space-2);
+}
+
+.bp-crud :where(.el-table .cell) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bp-crud :where(.el-table__fixed-right .cell, .operation-cell) {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 
 .bp-crud :where(.action-group) {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--space-2);
   justify-content: flex-end;
   margin-left: auto;
+  white-space: nowrap;
 }
 
 .bp-crud :where(.action-group .el-button, .toolbar .el-button) {

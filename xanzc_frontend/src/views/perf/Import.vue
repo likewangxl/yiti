@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud perf-import-page" aria-labelledby="perf-import-page-title" :aria-busy="loading || uploading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud perf-import-page" aria-labelledby="perf-import-page-title" :aria-busy="loading || uploading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="perf-import-page-title"><span class="sub">指标结果 / KPI 结果 · 文件导入与批次追踪</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="绩效导入操作">

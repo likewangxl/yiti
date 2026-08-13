@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud jobs-page" aria-labelledby="jobs-page-title" :aria-busy="loading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud jobs-page" aria-labelledby="jobs-page-title" :aria-busy="loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="jobs-page-title"><span class="sub">查看调度状态与执行日志；暂停、恢复和手动触发均直接影响线上调度。</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="任务调度操作">

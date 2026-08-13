@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud kpi-rules-page" aria-labelledby="kpi-rules-page-title">
+<main v-bp-overflow-tooltip class="bp-crud kpi-rules-page" aria-labelledby="kpi-rules-page-title">
     <header class="page-h">
       <PageTitle id="kpi-rules-page-title"><span class="sub">配置方案、权重、计分边界与员工标签范围</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="KPI方案操作">

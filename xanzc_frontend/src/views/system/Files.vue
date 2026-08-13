@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud files-page" aria-labelledby="files-page-title" :aria-busy="loading ? 'true' : 'false'">
+  <main v-bp-overflow-tooltip class="bp-crud files-page" aria-labelledby="files-page-title" :aria-busy="loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="files-page-title"><span class="sub">集中查看已上传的业务附件；上传仍在所属业务单据中完成。</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="文件管理操作">

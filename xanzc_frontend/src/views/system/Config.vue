@@ -1,5 +1,6 @@
 <template>
   <main
+    v-bp-overflow-tooltip
     class="bp-crud workflow-config-page"
     aria-labelledby="workflow-config-page-title"
     :aria-busy="loading ? 'true' : 'false'"

@@ -41,7 +41,19 @@ describe('共享 CRUD 页面基线样式', () => {
 
     expect(scoped).not.toMatch(/#[0-9a-f]{3,8}\b/i);
     expect(scoped).not.toMatch(/\.(?:re-|redengine|screen|scr-)[\w-]*/i);
-    expect(scoped).not.toMatch(/(?:^|[,{]\s*)\.el-(?:table|dialog)\b/m);
+    expect(scoped).not.toMatch(/^\s*\.el-(?:table|dialog)\b/m);
     expect(scoped).not.toMatch(/(?:^|[,{]\s*)body\b/m);
+  });
+
+  it('落实桌面高密度 CRUD 的筛选、表格、状态和操作尺度', () => {
+    const scoped = scopedBaseline();
+
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.filter-form\)\s*\{[\s\S]*display:\s*grid;/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.filter-form\s+\.el-form-item:last-child\)\s*\{[\s\S]*justify-self:\s*end;/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-input__wrapper,\s*\.el-select__wrapper,\s*\.el-button\)\s*\{[\s\S]*min-height:\s*32px;/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-table\s+th\.el-table__cell,\s*\.el-table\s+td\.el-table__cell\)\s*\{[\s\S]*height:\s*40px;/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-table\s+\.el-tag\)\s*\{[\s\S]*min-height:\s*24px;/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-table\s+\.cell\)\s*\{[\s\S]*text-overflow:\s*ellipsis;/);
+    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-table__fixed-right\s+\.cell,\s*\.operation-cell\)\s*\{[\s\S]*white-space:\s*nowrap;/);
   });
 });

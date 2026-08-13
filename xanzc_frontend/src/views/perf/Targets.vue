@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud targets-page" aria-labelledby="targets-page-title">
+<main v-bp-overflow-tooltip class="bp-crud targets-page" aria-labelledby="targets-page-title">
     <header class="page-h">
       <PageTitle id="targets-page-title"><span class="sub">统一维护目标方案、待办审批和审批留痕</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="目标管理操作">

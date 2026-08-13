@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud permission-page" aria-labelledby="permission-page-title" :aria-busy="pageLoading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud permission-page" aria-labelledby="permission-page-title" :aria-busy="pageLoading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="permission-page-title">
         <span class="sub">角色、资源与数据范围均以当前选中角色为准；保存会覆盖该角色原有资源绑定。</span>

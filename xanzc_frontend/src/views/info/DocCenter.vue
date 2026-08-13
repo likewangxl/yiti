@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud doc-page" aria-labelledby="doc-center-title">
+<main v-bp-overflow-tooltip class="bp-crud doc-page" aria-labelledby="doc-center-title">
     <header class="page-h">
       <PageTitle id="doc-center-title"><span class="sub">科技部维护常用文档及分类</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="文档中心操作">

@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud perf-kpi-score-detail-page" aria-labelledby="perf-kpi-score-detail-page-title" :aria-busy="loading || exporting ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud perf-kpi-score-detail-page" aria-labelledby="perf-kpi-score-detail-page-title" :aria-busy="loading || exporting ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="perf-kpi-score-detail-page-title">
         <span class="sub">数据日期 {{ dataDate || '-' }} · 方案 {{ schemeCode || '-' }}</span>

@@ -5,7 +5,7 @@
   查询：客户名称 / 申请人姓名 模糊。状态列可点击 → 弹出子页面（原/调整分配比例 + 申请信息 + 审批流程）。
 -->
 <template>
-  <main class="bp-crud perf-adjust" aria-labelledby="perf-adjust-title">
+<main v-bp-overflow-tooltip class="bp-crud perf-adjust" aria-labelledby="perf-adjust-title">
     <div class="page-h">
       <PageTitle id="perf-adjust-title" />
       <span class="desc">AMAS 业绩调整审批数据查询，按申请时间倒序</span>

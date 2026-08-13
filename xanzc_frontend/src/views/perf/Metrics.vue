@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud metrics-page" aria-labelledby="metrics-page-title">
+<main v-bp-overflow-tooltip class="bp-crud metrics-page" aria-labelledby="metrics-page-title">
     <header class="page-h">
       <PageTitle id="metrics-page-title"><span class="sub">定义、验证并维护绩效指标口径</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="指标库操作">

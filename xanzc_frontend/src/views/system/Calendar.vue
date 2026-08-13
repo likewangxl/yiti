@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud calendar-page" aria-labelledby="calendar-page-title" :aria-busy="loading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud calendar-page" aria-labelledby="calendar-page-title" :aria-busy="loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="calendar-page-title"><span class="sub">{{ year }} 年 {{ month }} 月 · 仅可修改今日之后的日期。</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="工作日历操作">

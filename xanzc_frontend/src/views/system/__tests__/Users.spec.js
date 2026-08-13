@@ -101,7 +101,10 @@ const stubs = {
     name: 'ElTableColumn',
     props: ['type', 'label', 'prop'],
     template: '<div class="col-stub" :data-type="type || \'\'" :data-label="label || \'\'" :data-prop="prop || \'\'" />'
-  }
+  },
+  'el-dropdown': passthrough('ElDropdown'),
+  'el-dropdown-menu': passthrough('ElDropdownMenu'),
+  'el-dropdown-item': passthrough('ElDropdownItem')
 };
 
 const defaultRows = () => ({
@@ -115,7 +118,7 @@ function mountPage() {
     global: {
       stubs,
       // v-loading 是 Element Plus 指令；测试替身须注册以避免无关 warning 干扰断言。
-      directives: { loading: { mounted() {}, updated() {} } }
+      directives: { loading: { mounted() {}, updated() {} }, 'bp-overflow-tooltip': {} }
     }
   });
   return wrapper;
@@ -181,7 +184,7 @@ describe('Users.vue 用户管理工作区', () => {
     mountPage();
     await settle();
 
-    expect(wrapper.find('main[aria-labelledby="users-page-title"]').exists()).toBe(true);
+    expect(wrapper.find('main.bp-crud[aria-labelledby="users-page-title"]').exists()).toBe(true);
     expect(wrapper.find('h1#users-page-title').text()).toContain('用户管理');
     expect(wrapper.find('input[aria-label="搜索机构"]').exists()).toBe(true);
     expect(wrapper.find('form[aria-label="用户筛选"]').exists()).toBe(true);

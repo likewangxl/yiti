@@ -85,7 +85,7 @@ const stubs = {
 function mountPage(component, props = {}) {
   return mount(component, {
     props,
-    global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    global: { stubs, directives: { loading: { mounted() {}, updated() {} }, 'bp-overflow-tooltip': {} } }
   })
 }
 
@@ -111,6 +111,28 @@ describe('内部评价页面 bp-crud 结构契约', () => {
     expect(source).toMatch(/(?:aria-busy|table-state|empty)/i)
     expect(source).not.toMatch(/[📥📤✅❌⚠️🔒]/u)
     expect(source).not.toMatch(/#[0-9a-f]{3,8}\b/i)
+  })
+})
+
+describe('评价标签列表的字段和工具栏密度', () => {
+  it('标签名称使用固定列宽，避免在宽屏无意义拉伸并保留完整值提示', () => {
+    const source = readFileSync(`${process.cwd()}/src/views/eval/Tags.vue`, 'utf8')
+
+    expect(source).toMatch(/<el-table-column\s+prop="tagName"\s+label="标签名称"\s+width="\d+"\s+show-overflow-tooltip/)
+    expect(source).not.toMatch(/<el-table-column\s+prop="tagName"\s+label="标签名称"\s+min-width=/)
+  })
+
+  it('人员评价角色将导入、导出移至页头，筛选区只保留筛选和查询操作', () => {
+    const source = readFileSync(`${process.cwd()}/src/views/eval/UserTags.vue`, 'utf8')
+    const filterStart = source.indexOf('<section class="card-section filter-bar"')
+    const filterEnd = source.indexOf('</section>', filterStart)
+    const header = source.slice(0, filterStart)
+    const filter = source.slice(filterStart, filterEnd)
+
+    expect(header).toMatch(/@click="openImport"/)
+    expect(header).toMatch(/@click="doExport"/)
+    expect(filter).not.toMatch(/@click="openImport"/)
+    expect(filter).not.toMatch(/@click="doExport"/)
   })
 })
 

@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud roles-page" aria-labelledby="roles-page-title">
+<main v-bp-overflow-tooltip class="bp-crud roles-page" aria-labelledby="roles-page-title">
     <header class="page-h">
       <PageTitle id="roles-page-title"><span class="sub">角色 CRUD · 已绑用户查看 · 资源/数据范围请去【权限配置】</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="角色管理操作">

@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud dict-page" aria-labelledby="dict-page-title" :aria-busy="typesLoading || loading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud dict-page" aria-labelledby="dict-page-title" :aria-busy="typesLoading || loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="dict-page-title"><span class="sub">按类型维护统一字典项；状态变更会立即影响引用该字典的业务页面。</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="字典管理操作">

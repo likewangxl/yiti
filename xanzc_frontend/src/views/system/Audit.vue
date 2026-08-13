@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud audit-page" aria-labelledby="audit-page-title" :aria-busy="loading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud audit-page" aria-labelledby="audit-page-title" :aria-busy="loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="audit-page-title"><span class="sub">只读审计流水，保留 TraceId、请求资源、原因和原始错误信息的追溯路径。</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="审计日志快捷筛选">

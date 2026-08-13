@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud free-report-detail" aria-labelledby="free-report-detail-title" :aria-busy="loading || metaLoading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud free-report-detail" aria-labelledby="free-report-detail-title" :aria-busy="loading || metaLoading ? 'true' : 'false'">
     <header class="page-h">
       <h1 id="free-report-detail-title" class="page-title">{{ batchInfo.reportName || '报表详情' }}</h1>
       <span class="sub">{{ batchInfo.fileName }} · {{ fmtTime(batchInfo.importTime) }} · {{ batchInfo.rowCount || 0 }} 行</span>

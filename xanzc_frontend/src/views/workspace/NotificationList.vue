@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud notification-list-page" aria-labelledby="notification-list-title">
+<main v-bp-overflow-tooltip class="bp-crud notification-list-page" aria-labelledby="notification-list-title">
     <header class="page-h">
       <PageTitle id="notification-list-title" />
       <div class="actions action-group" role="group" aria-label="通知列表操作">

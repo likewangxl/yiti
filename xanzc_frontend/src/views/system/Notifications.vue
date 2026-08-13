@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud notifications-page" aria-labelledby="notifications-page-title" :aria-busy="loading ? 'true' : 'false'">
+  <main v-bp-overflow-tooltip class="bp-crud notifications-page" aria-labelledby="notifications-page-title" :aria-busy="loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="notifications-page-title"><span class="sub">共 {{ pager.total }} 条通知，其中 {{ unreadCount }} 条未读。</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="通知中心操作">

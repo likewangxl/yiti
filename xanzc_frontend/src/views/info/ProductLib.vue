@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud pl-page" aria-labelledby="product-lib-title">
+<main v-bp-overflow-tooltip class="bp-crud pl-page" aria-labelledby="product-lib-title">
     <header class="page-h">
       <PageTitle id="product-lib-title"><span class="sub">中后台组织维护，产品负责人由通讯录反向关联</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="产品资料库操作">

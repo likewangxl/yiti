@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud perf-task-monitor-page" aria-labelledby="perf-task-monitor-page-title" :aria-busy="loading || execDlg.submitting || batchDlg.submitting ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud perf-task-monitor-page" aria-labelledby="perf-task-monitor-page-title" :aria-busy="loading || execDlg.submitting || batchDlg.submitting ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="perf-task-monitor-page-title"><span class="sub">指标重算任务 · 按指标汇总 / 执行 / 历史</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="指标重算任务操作">
