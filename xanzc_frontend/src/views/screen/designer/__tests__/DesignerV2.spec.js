@@ -41,6 +41,7 @@ import {
   listScreenAccessRoles, saveScreenAccessRoles, discardScreenCanvas,
   saveScreenCanvas, publishScreenCanvas, rollbackScreenCanvas, listScreenPublishLogs
 } from '@/api/screen';
+import { ElMessageBox } from 'element-plus';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import DesignerV2 from '../DesignerV2.vue';
 
@@ -244,7 +245,7 @@ describe('DesignerV2.vue 未保存保护与返回', () => {
     closeSpy.mockRestore();
   });
 
-  it('CAS 冲突即使完成后续处理也不自动关闭', async () => {
+  it('保存并关闭遇 CAS 立即停止：仅写一次、不进入强制覆盖/重载且保留可恢复状态', async () => {
     const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => {});
     const wrapper = mount(DesignerV2, { global: { stubs } });
     await flushPromises();
@@ -252,16 +253,46 @@ describe('DesignerV2.vue 未保存保护与返回', () => {
     await flushPromises();
     await findButton(wrapper, '返回').trigger('click');
 
+    saveScreenCanvas.mockRejectedValueOnce({ code: 'RPT-43012' });
+    await findButton(wrapper, '保存并关闭').trigger('click');
+    await flushPromises();
+
+    expect(saveScreenCanvas).toHaveBeenCalledTimes(1);
+    expect(getScreenCanvas).toHaveBeenCalledTimes(1); // 仅初始加载，不读最新版本进入强制覆盖
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled();
+    expect(wrapper.vm.isDirty).toBe(true);
+    expect(wrapper.vm.exitDialog).toMatchObject({ show: true, saving: false });
+    expect(wrapper.find('[aria-label="未保存修改"]').exists()).toBe(true);
+    expect(closeSpy).not.toHaveBeenCalled();
+    expect(routerReplace).not.toHaveBeenCalled();
+
+    // 冲突后可取消回到画布，也可再次打开退出选择；不会偷偷重试写入。
+    await findButton(wrapper, '取消').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[aria-label="未保存修改"]').exists()).toBe(false);
+    await findButton(wrapper, '返回').trigger('click');
+    expect(wrapper.find('[aria-label="未保存修改"]').exists()).toBe(true);
+    expect(saveScreenCanvas).toHaveBeenCalledTimes(1);
+    closeSpy.mockRestore();
+  });
+
+  it('工具栏普通保存遇 CAS 仍保留既有强制覆盖流程', async () => {
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+    markCanvasDirty('#686868');
+    await flushPromises();
+
     saveScreenCanvas
       .mockRejectedValueOnce({ code: 'RPT-43012' })
       .mockResolvedValueOnce({ canvasVersion: 2 });
     getScreenCanvas.mockResolvedValueOnce({ ...editorResp(1, 'SCR_A'), canvasVersion: 1 });
-    await findButton(wrapper, '保存并关闭').trigger('click');
+    await wrapper.vm.onSave();
     await flushPromises();
 
-    expect(closeSpy).not.toHaveBeenCalled();
-    expect(routerReplace).not.toHaveBeenCalled();
-    closeSpy.mockRestore();
+    expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1);
+    expect(saveScreenCanvas).toHaveBeenCalledTimes(2);
+    expect(saveScreenCanvas.mock.calls[1][0].expectedVersion).toBe(1);
+    expect(wrapper.vm.isDirty).toBe(false);
   });
 
   it('beforeunload 仅在脏状态阻止离开，卸载时清理监听', async () => {

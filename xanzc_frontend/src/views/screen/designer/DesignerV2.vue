@@ -449,24 +449,42 @@ async function loadCanvas() {
   resetDirtyBaseline();
   refreshDesignProfiles();
 }
-async function onSave() {
-  if (saving.value) return false;
+const SAVE_OUTCOME = Object.freeze({
+  saved: Object.freeze({ saved: true, conflict: false }),
+  failed: Object.freeze({ saved: false, conflict: false }),
+  conflict: Object.freeze({ saved: false, conflict: true })
+});
+const SAVE_OPTIONS = Object.freeze({
+  toolbar: Object.freeze({ resolveConflict: true }),
+  exit: Object.freeze({ resolveConflict: false })
+});
+
+/**
+ * 执行一次画布保存并返回结构化结果。
+ * 工具栏允许进入既有 CAS 强制覆盖/重载流程；退出保存在首个 CAS 立即停止，
+ * 避免“保存并关闭”暗中发出第二次覆盖写或丢弃本地修改。
+ */
+async function saveDraft(options = SAVE_OPTIONS.toolbar) {
+  if (saving.value) return SAVE_OUTCOME.failed;
   saving.value = true;
   try {
     const resp = await saveScreenCanvas(store.toSavePayload());
     store.adoptSaveResult(resp);
     resetDirtyBaseline();
     ElMessage.success('已保存草稿');
-    return true;
+    return SAVE_OUTCOME.saved;
   } catch (e) {
     if (e?.code === 'RPT-43012') {
+      if (!options.resolveConflict) return SAVE_OUTCOME.conflict;
       // 二次失败(如强制覆盖重发时又撞上新的并发保存)已由 http 拦截器统一 toast,
       // 这里只吞掉避免冒泡成未捕获 rejection,不重复弹错。
       try { await handleSaveConflict(); } catch { /* 已 toast,吞掉 */ }
+      return SAVE_OUTCOME.conflict;
     }
-    return false;
+    return SAVE_OUTCOME.failed;
   } finally { saving.value = false; }
 }
+async function onSave() { return saveDraft(SAVE_OPTIONS.toolbar); }
 /**
  * 43012 乐观锁冲突处理(规格 §9):二次确认给两个选择——
  * 「强制覆盖」:只取服务器最新 canvasVersion,本地组件树/样式原样重发,即以本地改动覆盖服务器
@@ -670,9 +688,9 @@ async function saveAndClose() {
   if (exitDialog.saving) return;
   exitDialog.saving = true;
   try {
-    const saved = await onSave();
+    const result = await saveDraft(SAVE_OPTIONS.exit);
     // 任何保存失败或 CAS 冲突都留在设计器，由用户检查后再决定。
-    if (!saved) return;
+    if (!result.saved) return;
     exitDialog.show = false;
     await closeDesigner();
   } finally {
