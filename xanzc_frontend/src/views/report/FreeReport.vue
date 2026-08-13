@@ -50,20 +50,18 @@
         </el-table-column>
         <el-table-column label="操作" class-name="operation-cell" width="260" fixed="right">
           <template #default="{row}">
-            <el-button link type="primary" size="small" :disabled="!!mutatingId" @click="$router.push(`/report/free/${row.id}`)">查看</el-button>
-            <el-dropdown trigger="click" popper-class="bp-crud-menu">
-              <el-button link size="small" :disabled="!!mutatingId" aria-label="更多自由报表操作">更多</el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item :disabled="!!mutatingId || downloadingId === row.id" @click="doDownload(row)">下载</el-dropdown-item>
-                  <template v-if="isOperator">
-                    <el-dropdown-item v-if="row.status === 'DISABLED'" class="success-item" :disabled="!!mutatingId" @click="doEnable(row)">启用</el-dropdown-item>
-                    <el-dropdown-item v-else divided class="warning-item" :disabled="!!mutatingId" @click="confirmDisable(row)">禁用</el-dropdown-item>
-                    <el-dropdown-item divided class="danger-item" :disabled="!!mutatingId" @click="confirmDelete(row)">删除</el-dropdown-item>
-                  </template>
-                </el-dropdown-menu>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" size="small" :disabled="!!mutatingId" @click="$router.push(`/report/free/${row.id}`)">查看</el-button></template>
+              <template #expanded>
+                <el-button link type="primary" size="small" :disabled="!!mutatingId || downloadingId === row.id" @click="doDownload(row)">下载</el-button>
+                <template v-if="isOperator">
+                  <el-button v-if="row.status === 'DISABLED'" class="success-item" link size="small" :disabled="!!mutatingId" @click="doEnable(row)">启用</el-button>
+                  <el-button v-else class="warning-item" link size="small" :disabled="!!mutatingId" @click="confirmDisable(row)">禁用</el-button>
+                  <el-button link type="danger" size="small" :disabled="!!mutatingId" @click="confirmDelete(row)">删除</el-button>
+                </template>
               </template>
-            </el-dropdown>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" :disabled="!!mutatingId" aria-label="更多自由报表操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="!!mutatingId || downloadingId === row.id" @click="doDownload(row)">下载</el-dropdown-item><template v-if="isOperator"><el-dropdown-item v-if="row.status === 'DISABLED'" class="success-item" :disabled="!!mutatingId" @click="doEnable(row)">启用</el-dropdown-item><el-dropdown-item v-else divided class="warning-item" :disabled="!!mutatingId" @click="confirmDisable(row)">禁用</el-dropdown-item><el-dropdown-item divided class="danger-item" :disabled="!!mutatingId" @click="confirmDelete(row)">删除</el-dropdown-item></template></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -96,6 +94,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import {
   importFreeReport, listFreeReportBatches, downloadFreeReportFile, deleteFreeReportBatch,
   disableFreeReportBatch, enableFreeReportBatch

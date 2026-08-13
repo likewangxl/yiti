@@ -26,7 +26,7 @@
       <div class="toolbar">
         <div>
           <h2 id="datasource-table-heading" class="section-title">大屏数据源列表</h2>
-          <p class="hint">编辑、试跑和列探测直接可达；副本与删除按风险收纳在“更多”中。</p>
+          <p class="hint">当前行操作会按列内空间自适应直出；空间不足时保留编辑，其他操作进入“更多”。</p>
         </div>
         <p id="datasource-table-state" class="table-state" role="status" aria-live="polite">
           {{ loading ? '大屏数据源列表加载中' : (list.length ? `共 ${list.length} 个数据源` : '暂无大屏数据源') }}
@@ -63,19 +63,26 @@
         </el-table-column>
         <el-table-column label="操作" class-name="operation-cell" width="300" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-            <el-button link @click="openTryRun(row)">试跑</el-button>
-            <el-button link @click="openProbeColumns(row)">探测列</el-button>
-            <el-dropdown trigger="click" popper-class="bp-crud-menu" @command="command => onMoreCommand(command, row)">
-              <el-button link aria-label="更多数据源操作">更多</el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item v-if="referenceState(row).semanticFrozen" command="copy">新建副本</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided class="danger-item" :disabled="referenceState(row).deleteBlocked"
-                                    :title="referenceState(row).guidance || undefined">删除</el-dropdown-item>
-                </el-dropdown-menu>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" @click="openEdit(row)">编辑</el-button></template>
+              <template #expanded>
+                <el-button link @click="openTryRun(row)">试跑</el-button>
+                <el-button link @click="openProbeColumns(row)">探测列</el-button>
+                <el-button v-if="referenceState(row).semanticFrozen" link @click="openCopy(row)">新建副本</el-button>
+                <el-button link type="danger" :disabled="referenceState(row).deleteBlocked" :title="referenceState(row).guidance || undefined" @click="onDelete(row)">删除</el-button>
               </template>
-            </el-dropdown>
+              <template #compact>
+                <el-dropdown trigger="click" popper-class="bp-crud-menu" @command="command => onMoreCommand(command, row)">
+                  <el-button link aria-label="更多数据源操作">更多</el-button>
+                  <template #dropdown><el-dropdown-menu>
+                    <el-dropdown-item command="try">试跑</el-dropdown-item>
+                    <el-dropdown-item command="probe">探测列</el-dropdown-item>
+                    <el-dropdown-item v-if="referenceState(row).semanticFrozen" command="copy">新建副本</el-dropdown-item>
+                    <el-dropdown-item command="delete" divided class="danger-item" :disabled="referenceState(row).deleteBlocked" :title="referenceState(row).guidance || undefined">删除</el-dropdown-item>
+                  </el-dropdown-menu></template>
+                </el-dropdown>
+              </template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -366,6 +373,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import {
   listScreenDatasources, saveScreenDatasource, updateScreenDatasource,
   deleteScreenDatasource, tryRunScreenDatasource, probeScreenDatasourceColumns, listKpiSchemes, listOrgGroups
@@ -577,8 +585,10 @@ function onDelete(row) {
   deleteDialog.reason = '';
 }
 
-/** 将低频或高风险动作集中在更多菜单，仍复用既有处理函数和审计流程。 */
+/** 紧凑态命令仍复用全直出态的处理函数和审计流程。 */
 function onMoreCommand(command, row) {
+  if (command === 'try') openTryRun(row);
+  if (command === 'probe') openProbeColumns(row);
   if (command === 'copy') openCopy(row);
   if (command === 'delete') onDelete(row);
 }

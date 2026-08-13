@@ -70,17 +70,23 @@
         </el-table-column>
         <el-table-column label="操作" class-name="operation-cell" width="210" fixed="right">
           <template #default="{row}">
-            <el-button link type="primary" size="small" @click="openEdit(row, true)">查看</el-button>
-            <!-- 复制版本/编辑仅资财部人员可见可操作；启用/禁用仍在编辑弹框内。 -->
-            <el-dropdown v-if="isCaizai" trigger="click" popper-class="bp-crud-menu">
-              <el-button link size="small" aria-label="更多KPI方案操作">更多</el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item :disabled="isDisabled(row)" @click="onCloneVersion(row)">复制版本</el-dropdown-item>
-                  <el-dropdown-item v-if="row.createdByMe" :disabled="isDisabled(row)" @click="openEdit(row, false)">编辑</el-dropdown-item>
-                </el-dropdown-menu>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" size="small" @click="openEdit(row, true)">查看</el-button></template>
+              <!-- 复制版本/编辑仅资财部人员可见可操作；启用/禁用仍在编辑弹框内。 -->
+              <template #expanded>
+                <el-button v-if="isCaizai" link type="primary" size="small" :disabled="isDisabled(row)" @click="onCloneVersion(row)">复制版本</el-button>
+                <el-button v-if="isCaizai && row.createdByMe" link type="primary" size="small" :disabled="isDisabled(row)" @click="openEdit(row, false)">编辑</el-button>
               </template>
-            </el-dropdown>
+              <template #compact>
+                <el-dropdown v-if="isCaizai" trigger="click" popper-class="bp-crud-menu">
+                  <el-button link size="small" aria-label="更多KPI方案操作">更多</el-button>
+                  <template #dropdown><el-dropdown-menu>
+                    <el-dropdown-item :disabled="isDisabled(row)" @click="onCloneVersion(row)">复制版本</el-dropdown-item>
+                    <el-dropdown-item v-if="row.createdByMe" :disabled="isDisabled(row)" @click="openEdit(row, false)">编辑</el-dropdown-item>
+                  </el-dropdown-menu></template>
+                </el-dropdown>
+              </template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -266,6 +272,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import {
   listKpiRules, getKpiSchemeDetail,
   createKpiScheme, updateKpiScheme, deleteKpiScheme, publishKpiScheme,

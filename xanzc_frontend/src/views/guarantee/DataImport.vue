@@ -57,15 +57,11 @@
         <el-table-column prop="dtExplain" label="说明" min-width="160" show-overflow-tooltip />
         <el-table-column label="操作" class-name="operation-cell" width="140" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openData(row)">查看</el-button>
-            <el-dropdown trigger="click" popper-class="bp-crud-menu">
-              <el-button link aria-label="更多导入批次操作">更多</el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item :disabled="row._downloading" @click="onDownload(row)">下载</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" @click="openData(row)">查看</el-button></template>
+              <template #expanded><el-button link type="primary" :disabled="row._downloading" @click="onDownload(row)">下载</el-button></template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link aria-label="更多导入批次操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="row._downloading" @click="onDownload(row)">下载</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -120,6 +116,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listDataImports, getDataImportData, exportDataImport } from '@/api/history';
 
 const loading = ref(false);

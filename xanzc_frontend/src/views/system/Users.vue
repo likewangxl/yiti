@@ -144,16 +144,11 @@
             <el-table-column prop="remark" label="备注" width="160" show-overflow-tooltip />
             <el-table-column label="操作" class-name="operation-cell" width="160" fixed="right">
               <template #default="{row}">
-                <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-dropdown trigger="click" popper-class="bp-crud-menu" @command="command => onRowMoreCommand(command, row)">
-                  <el-button link size="small" aria-label="更多用户操作">更多</el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="roles">分配角色</el-dropdown-item>
-                      <el-dropdown-item command="delete" divided class="danger-item">删除</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
+                <BpAdaptiveRowActions>
+                  <template #primary><el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button></template>
+                  <template #expanded><el-button link type="primary" size="small" @click="openAssignRoles(row)">分配角色</el-button><el-button link type="danger" size="small" @click="batch('delete', [row.userId])">删除</el-button></template>
+                  <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu" @command="command => onRowMoreCommand(command, row)"><el-button link size="small" aria-label="更多用户操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item command="roles">分配角色</el-dropdown-item><el-dropdown-item command="delete" divided class="danger-item">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+                </BpAdaptiveRowActions>
               </template>
             </el-table-column>
           </el-table>
@@ -350,6 +345,7 @@
 import { ref, reactive, watch, onMounted, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Search } from '@element-plus/icons-vue';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import {
   listUsers, getUser, createUser, updateUser,
   deleteUsers, resetUsersPassword, activeUsers, inactiveUsers, lockUsers, unlockUsers,
@@ -634,7 +630,7 @@ async function openAssignRoles(user) {
   }
 }
 
-/** 列表行只保留编辑主操作；角色与删除经“更多”进入既有业务流程。 */
+/** 紧凑态命令仍复用全直出态的角色分配和批量删除业务流程。 */
 function onRowMoreCommand(command, row) {
   if (command === 'roles') openAssignRoles(row);
   if (command === 'delete') batch('delete', [row.userId]);

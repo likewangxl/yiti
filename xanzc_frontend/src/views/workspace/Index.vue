@@ -155,11 +155,11 @@
         </el-table-column>
         <el-table-column label="操作" class-name="operation-cell" width="120" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" :loading="row._acting" :disabled="row._acting" @click="acceptTransfer(row)">认领</el-button>
-            <el-dropdown v-if="row.status === 'PENDING_ACCEPT'" trigger="click" popper-class="bp-crud-menu">
-              <el-button link size="small" :disabled="row._acting" aria-label="更多转交操作">更多</el-button>
-              <template #dropdown><el-dropdown-menu><el-dropdown-item divided class="danger-item" :disabled="row._acting" @click="declineTransfer(row)">拒绝</el-dropdown-item></el-dropdown-menu></template>
-            </el-dropdown>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button type="primary" link size="small" :loading="row._acting" :disabled="row._acting" @click="acceptTransfer(row)">认领</el-button></template>
+              <template #expanded><el-button v-if="row.status === 'PENDING_ACCEPT'" type="danger" link size="small" :disabled="row._acting" @click="declineTransfer(row)">拒绝</el-button></template>
+              <template #compact><el-dropdown v-if="row.status === 'PENDING_ACCEPT'" trigger="click" popper-class="bp-crud-menu"><el-button link size="small" :disabled="row._acting" aria-label="更多转交操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item divided class="danger-item" :disabled="row._acting" @click="declineTransfer(row)">拒绝</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -192,11 +192,11 @@
         </el-table-column>
         <el-table-column label="操作" class-name="operation-cell" width="120" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="viewOutboxRow(row)">查看</el-button>
-            <el-dropdown v-if="row.status === 'PENDING_ACCEPT'" trigger="click" popper-class="bp-crud-menu">
-              <el-button link size="small" :disabled="row._acting" aria-label="更多转出记录操作">更多</el-button>
-              <template #dropdown><el-dropdown-menu><el-dropdown-item divided class="danger-item" :disabled="row._acting" @click="cancelTransfer(row)">撤回</el-dropdown-item></el-dropdown-menu></template>
-            </el-dropdown>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button type="primary" link size="small" @click="viewOutboxRow(row)">查看</el-button></template>
+              <template #expanded><el-button v-if="row.status === 'PENDING_ACCEPT'" type="danger" link size="small" :disabled="row._acting" @click="cancelTransfer(row)">撤回</el-button></template>
+              <template #compact><el-dropdown v-if="row.status === 'PENDING_ACCEPT'" trigger="click" popper-class="bp-crud-menu"><el-button link size="small" :disabled="row._acting" aria-label="更多转出记录操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item divided class="danger-item" :disabled="row._acting" @click="cancelTransfer(row)">撤回</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -210,6 +210,7 @@ import { computed, onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useRouter } from 'vue-router';
 import PageTitle from '@/components/PageTitle.vue';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { fmtDateTime } from '@/utils/datetime';
 import { useUserStore } from '@/stores/user';
 import { getUnreadNotificationCount, listNotifications, markRead } from '@/api/workspace';

@@ -51,18 +51,11 @@
         <el-table-column label="状态" width="94" align="center"><template #default="{ row }"><el-tag v-if="row.isRead" size="small" effect="plain" class="tag-info">已读</el-tag><el-tag v-else size="small" effect="plain" class="tag-danger">未读</el-tag></template></el-table-column>
         <el-table-column label="操作" class-name="operation-cell" width="210" fixed="right">
           <template #default="{ row }">
-            <div class="row-actions" role="group" :aria-label="`${row.title || '通知'} 操作`">
-              <el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button>
-              <el-dropdown v-if="!row.isRead || row.linkUrl || row.bizId" trigger="click" popper-class="bp-crud-menu">
-                <el-button link size="small" aria-label="更多通知操作">更多</el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item v-if="!row.isRead" :disabled="isMarking(row.id)" @click="onMarkRead(row)">{{ isMarking(row.id) ? '标记中…' : '标记已读' }}</el-dropdown-item>
-                    <el-dropdown-item v-if="row.linkUrl || row.bizId" @click="onJump(row)">跳转</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
+            <BpAdaptiveRowActions role="group" :aria-label="`${row.title || '通知'} 操作`">
+              <template #primary><el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button></template>
+              <template #expanded><el-button v-if="!row.isRead" link size="small" :disabled="isMarking(row.id)" @click="onMarkRead(row)">{{ isMarking(row.id) ? '标记中…' : '标记已读' }}</el-button><el-button v-if="row.linkUrl || row.bizId" link size="small" @click="onJump(row)">跳转</el-button></template>
+              <template #compact><el-dropdown v-if="!row.isRead || row.linkUrl || row.bizId" trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多通知操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item v-if="!row.isRead" :disabled="isMarking(row.id)" @click="onMarkRead(row)">{{ isMarking(row.id) ? '标记中…' : '标记已读' }}</el-dropdown-item><el-dropdown-item v-if="row.linkUrl || row.bizId" @click="onJump(row)">跳转</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -103,6 +96,7 @@ import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { fmtDateTime } from '@/utils/datetime';
 import { parseApprovalNode } from '@/utils/notify';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listNotifications, markRead, markAllRead, getUnreadNotificationCount } from '@/api/workspace';
 
 const router = useRouter();

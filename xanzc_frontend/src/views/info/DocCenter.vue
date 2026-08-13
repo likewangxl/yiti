@@ -88,16 +88,22 @@
           </el-table-column>
           <el-table-column label="操作" class-name="operation-cell" width="160" fixed="right">
             <template #default="{row}">
-              <el-button link type="primary" size="small" :disabled="deletingId === row.id" @click="onDownload(row)">下载</el-button>
-              <el-dropdown trigger="click" popper-class="bp-crud-menu">
-                <el-button link size="small" :disabled="deletingId === row.id" aria-label="更多文档操作">更多</el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item :disabled="deletingId === row.id" @click="openEdit(row)">编辑</el-dropdown-item>
-                    <el-dropdown-item divided class="danger-item" :disabled="deletingId === row.id" @click="confirmDelete(row)">删除</el-dropdown-item>
-                  </el-dropdown-menu>
+              <BpAdaptiveRowActions>
+                <template #primary><el-button link type="primary" size="small" :disabled="deletingId === row.id" @click="onDownload(row)">下载</el-button></template>
+                <template #expanded>
+                  <el-button link type="primary" size="small" :disabled="deletingId === row.id" @click="openEdit(row)">编辑</el-button>
+                  <el-button link type="danger" size="small" :disabled="deletingId === row.id" @click="confirmDelete(row)">删除</el-button>
                 </template>
-              </el-dropdown>
+                <template #compact>
+                  <el-dropdown trigger="click" popper-class="bp-crud-menu">
+                    <el-button link size="small" :disabled="deletingId === row.id" aria-label="更多文档操作">更多</el-button>
+                    <template #dropdown><el-dropdown-menu>
+                      <el-dropdown-item :disabled="deletingId === row.id" @click="openEdit(row)">编辑</el-dropdown-item>
+                      <el-dropdown-item divided class="danger-item" :disabled="deletingId === row.id" @click="confirmDelete(row)">删除</el-dropdown-item>
+                    </el-dropdown-menu></template>
+                  </el-dropdown>
+                </template>
+              </BpAdaptiveRowActions>
             </template>
           </el-table-column>
         </el-table>
@@ -166,6 +172,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { fmtDateTime } from '@/utils/datetime';
 import { call } from '@/api/http';
 import { listDocuments, createDocument, updateDocument, deleteDocument, downloadDocument } from '@/api/documents';

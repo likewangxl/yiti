@@ -62,11 +62,11 @@
         </el-table-column>
         <el-table-column label="操作" class-name="operation-cell" width="150" fixed="right">
           <template #default="{row}">
-            <el-button link type="primary" size="small" @click="openExecute(row)">执行</el-button>
-            <el-dropdown trigger="click" popper-class="bp-crud-menu">
-              <el-button link size="small" aria-label="更多指标重算任务操作">更多</el-button>
-              <template #dropdown><el-dropdown-menu><el-dropdown-item @click="openHistory(row)">历史</el-dropdown-item></el-dropdown-menu></template>
-            </el-dropdown>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" size="small" @click="openExecute(row)">执行</el-button></template>
+              <template #expanded><el-button link type="primary" size="small" @click="openHistory(row)">历史</el-button></template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多指标重算任务操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="openHistory(row)">历史</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -176,6 +176,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listMetricSummary, batchExecuteMetrics, executeMetric, listMetrics, listRunTasks } from '@/api/perf';
 import { listDictItems } from '@/api/system';
 

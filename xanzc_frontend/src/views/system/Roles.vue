@@ -57,17 +57,11 @@
         <el-table-column prop="createTime" label="创建时间" width="160" :formatter="fmtDateTime" />
         <el-table-column label="操作" class-name="operation-cell" width="320" fixed="right">
           <template #default="{row}">
-            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-dropdown trigger="click" popper-class="bp-crud-menu">
-              <el-button link size="small" aria-label="更多角色操作">更多</el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item @click="openMenuDlg(row)">分配菜单</el-dropdown-item>
-                  <el-dropdown-item @click="openUsers(row)">已绑用户</el-dropdown-item>
-                  <el-dropdown-item divided class="danger-item" @click="confirmDelete(row)">删除</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button></template>
+              <template #expanded><el-button link type="primary" size="small" @click="openMenuDlg(row)">分配菜单</el-button><el-button link type="primary" size="small" @click="openUsers(row)">已绑用户</el-button><el-button link type="danger" size="small" @click="confirmDelete(row)">删除</el-button></template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多角色操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="openMenuDlg(row)">分配菜单</el-dropdown-item><el-dropdown-item @click="openUsers(row)">已绑用户</el-dropdown-item><el-dropdown-item divided class="danger-item" @click="confirmDelete(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -199,6 +193,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import {
   listRoles, createRole, updateRole, deleteRole, listRoleUsers,
   getMenuTree, getRoleMenuIds, replaceRoleMenus

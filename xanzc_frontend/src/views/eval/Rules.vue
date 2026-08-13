@@ -66,16 +66,11 @@
       <el-table-column prop="createTime" label="创建时间" width="180" />
       <el-table-column label="操作" class-name="operation-cell" width="200" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="openDetailDialog(row.ruleId)">详情</el-button>
-          <el-dropdown trigger="click" popper-class="bp-crud-menu">
-            <el-button link aria-label="更多评价规则操作">更多</el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item @click="openEditDialog(row.ruleId)">编辑</el-dropdown-item>
-                <el-dropdown-item divided class="danger-item" :disabled="deletingId !== null" @click="handleDelete(row)">删除</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <BpAdaptiveRowActions>
+            <template #primary><el-button link type="primary" @click="openDetailDialog(row.ruleId)">详情</el-button></template>
+            <template #expanded><el-button link type="primary" @click="openEditDialog(row.ruleId)">编辑</el-button><el-button link type="danger" :disabled="deletingId !== null" @click="handleDelete(row)">删除</el-button></template>
+            <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link aria-label="更多评价规则操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="openEditDialog(row.ruleId)">编辑</el-dropdown-item><el-dropdown-item divided class="danger-item" :disabled="deletingId !== null" @click="handleDelete(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+          </BpAdaptiveRowActions>
         </template>
       </el-table-column>
       </el-table>
@@ -287,6 +282,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue'
 import { Search } from '@element-plus/icons-vue'
 import {
   listAllTags,

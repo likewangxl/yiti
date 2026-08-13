@@ -88,21 +88,14 @@
             </el-table-column>
             <el-table-column label="操作" class-name="operation-cell" width="180" fixed="right">
               <template #default="{row}">
-                <el-button link type="primary" size="small" @click="openSharedView(row)">查看</el-button>
-                <el-dropdown v-if="row.status === 'DRAFT' || canWithdraw(row.status)" trigger="click" popper-class="bp-crud-menu">
-                  <el-button link size="small" aria-label="更多业绩调整申请操作">更多</el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item v-if="row.status === 'DRAFT'" @click="openEdit(row)">编辑</el-dropdown-item>
-                      <el-dropdown-item
-                        v-if="canWithdraw(row.status)"
-                        divided
-                        class="danger-item"
-                        @click="confirmWithdraw(row)"
-                      >撤回</el-dropdown-item>
-                    </el-dropdown-menu>
+                <BpAdaptiveRowActions>
+                  <template #primary><el-button link type="primary" size="small" @click="openSharedView(row)">查看</el-button></template>
+                  <template #expanded>
+                    <el-button v-if="row.status === 'DRAFT'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+                    <el-button v-if="canWithdraw(row.status)" link type="danger" size="small" @click="confirmWithdraw(row)">撤回</el-button>
                   </template>
-                </el-dropdown>
+                  <template #compact><el-dropdown v-if="row.status === 'DRAFT' || canWithdraw(row.status)" trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多业绩调整申请操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item v-if="row.status === 'DRAFT'" @click="openEdit(row)">编辑</el-dropdown-item><el-dropdown-item v-if="canWithdraw(row.status)" divided class="danger-item" @click="confirmWithdraw(row)">撤回</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+                </BpAdaptiveRowActions>
               </template>
             </el-table-column>
           </el-table>
@@ -651,6 +644,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import AllocAdjustViewDialog from '@/components/AllocAdjustViewDialog.vue';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { useRoute } from 'vue-router';
 import { fmtDateTime } from '@/utils/datetime';
 import { ElMessage, ElMessageBox } from 'element-plus';

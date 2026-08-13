@@ -74,13 +74,11 @@
           </el-table-column>
           <el-table-column label="操作" class-name="operation-cell" width="180" fixed="right">
             <template #default="{ row }">
-              <div class="row-actions" role="group" :aria-label="`${row.dictLabel || row.label} 操作`">
-                <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-dropdown trigger="click" popper-class="bp-crud-menu">
-                  <el-button link size="small" :disabled="isToggling(row)" aria-label="更多字典项操作">更多</el-button>
-                  <template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="isToggling(row)" @click="onToggle(row)">{{ isToggling(row) ? '处理中…' : (isActive(row) ? '禁用' : '启用') }}</el-dropdown-item></el-dropdown-menu></template>
-                </el-dropdown>
-              </div>
+              <BpAdaptiveRowActions role="group" :aria-label="`${row.dictLabel || row.label} 操作`">
+                <template #primary><el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button></template>
+                <template #expanded><el-button link size="small" :disabled="isToggling(row)" @click="onToggle(row)">{{ isToggling(row) ? '处理中…' : (isActive(row) ? '禁用' : '启用') }}</el-button></template>
+                <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" :disabled="isToggling(row)" aria-label="更多字典项操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="isToggling(row)" @click="onToggle(row)">{{ isToggling(row) ? '处理中…' : (isActive(row) ? '禁用' : '启用') }}</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+              </BpAdaptiveRowActions>
             </template>
           </el-table-column>
         </el-table>
@@ -106,6 +104,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listDictTypes, listDictItems } from '@/api/system';
 import { call } from '@/api/http';
 

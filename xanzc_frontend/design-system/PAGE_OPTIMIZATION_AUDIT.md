@@ -91,11 +91,15 @@
 | `PerfMetrics`、`HistoryPerfAdjust` | 适用：各 4 张表 |
 | `PerfAdjust`、`EvalTasks` | 适用：各 6 张表 |
 
-### 2.2 行级操作收纳矩阵
+### 2.2 行级操作自适应矩阵
 
-每个纳入范围的路由均已逐页复核。`主直出`为行内唯一常显操作；`更多`中的危险项以分隔线和 danger 语义呈现，保留既有权限条件、禁用/单飞和二次确认。`—`表示该页面没有行级表格操作，而非遗漏。唯一冻结例外是数据源页的“编辑 / 试跑 / 探测”，按已确认需求保持三项直出。
+全量盘点共 **58 个物理操作列**（含 `SchemeListDialog`，也含 3 个 screen-admin CRUD），其中 **30 个多操作列**接入 `BpAdaptiveRowActions`，其余 28 个单操作列保持原行为。自适应只依据当前行实际渲染后的按钮总宽、8px 间距和操作列真实可用宽度，不按文字长度、源码动作总数或视口宽度猜测：空间充足时按原键盘顺序直出全部可见操作，包括危险操作；空间不足或尺寸不可用时 fail-close 为既有主操作直出、其他可见操作进入“更多”。危险操作仍使用 danger 语义，权限/状态条件、disabled/loading、二次确认、原因输入、事件参数和 API/审计链不变。
 
-| 路由名 | 主直出 | 更多收纳 / 说明 |
+`—`表示该页面没有行级表格操作，而非遗漏。下表的“紧凑态主操作”始终直出；“自适应次级操作”在宽度足够时全部直出，在宽度不足时全部进入“更多”。
+
+物理列计数矩阵（`页面 × 操作列数`）：`EvalMyTasks×2`、`EvalRules×2`、`EvalTags×1`、`EvalTasks×1`、`EvalUserTags×1`、`GuaranteeDataImport×1`、`GuaranteeNotice×1`、`GuaranteeQuery×1`、`HistoryPriceApproval×1`、`InfoAddressBook×1`、`InfoDocuments×1`、`InfoProducts×1`、`PerfAdjust×5`、`PerfImport×1`、`PerfKpiRules×2`、`PerfMetrics×1`、`PerfTargetValues×1`、`PerfTargets×3`、`PerfTaskMonitor×1`、`ReportAmasApprovals×2`、`ReportFree×1`、`ReportSql×1`、`SchemeListDialog×1`、`ScreenAdminDs×1`、`ScreenAdminOrgProfiles×1`、`SysAnnouncements×1`、`SysAudit×1`、`SysConfig×3`、`SysDict×1`、`SysFiles×1`、`SysWorkflowFlows×1`、`SysJobs×1`、`SysNotifications×1`、`SysPermission×1`、`SysPersonTags×3`、`SysResources×1`、`SysRoles×1`、`SysTimeoutRules×1`、`SysUsers×1`、`SysWorkflowMonitor×1`、`AnnouncementList×1`、`Workspace×3`，合计 58 列。
+
+| 路由名 | 紧凑态主操作 | 自适应次级操作 / 说明 |
 |---|---|---|
 | `Login` | — | 独立登录信息架构，无表格 |
 | `NoAccess` | — | 独立无权限信息架构，无表格 |
@@ -104,7 +108,7 @@
 | `AnnouncementDetail` | — | 详情页无行级表格操作 |
 | `NotificationList` | — | 通知卡片入口，无行级表格操作 |
 | `InfoNav` | — | 导航页无行级表格操作 |
-| `InfoAddressBook` | 查看 | — |
+| `InfoAddressBook` | 编辑 | — |
 | `InfoProducts` | 编辑 | 附件；删除 |
 | `InfoDocuments` | 下载 | 编辑；删除 |
 | `PerfMetrics` | 查看 | 编辑 |
@@ -126,10 +130,10 @@
 | `ReportPresets` | — | 无行级表格操作 |
 | `ReportFree` | 查看 | 下载；启用/禁用（原状态互斥）；删除 |
 | `ReportFreeDetail` | — | 详情页无行级表格操作 |
-| `ReportSql` | 方案对话框：载入 | 编辑；删除 |
+| `ReportSql` | 主表：下载文件；方案对话框：载入 | 方案对话框：编辑；删除 |
 | `ReportAmasApprovals` | 详情 | 两张审批表均为单项 |
 | `ReportAmasApprovalDetail` | — | 详情页无行级表格操作 |
-| `ScreenAdminDs` | 编辑；试跑；探测 | 新建副本；删除（冻结例外） |
+| `ScreenAdminDs` | 编辑 | 试跑；探测列；新建副本；删除 |
 | `ScreenAdminOrgProfiles` | 编辑 | — |
 | `ScreenAdminOrgGroups` | — | 无行级表格操作 |
 | `GuaranteeQuery` | 编辑 | — |
@@ -141,7 +145,7 @@
 | `SysUsers` | 编辑 | 分配角色；删除 |
 | `SysRoles` | 编辑 | 分配菜单；已绑用户；删除 |
 | `SysResources` | 编辑 | 新增子菜单；分配角色（叶子菜单）；删除 |
-| `SysPermission` | 编辑 | — |
+| `SysPermission` | 修改 | — |
 | `SysDict` | 编辑 | 启用或禁用（原状态互斥与确认不变） |
 | `SysCalendar` | — | 日历页无行级表格操作 |
 | `SysJobs` | 日志 | 暂停或恢复（原状态互斥）；手动触发（原允许条件） |
@@ -157,7 +161,7 @@
 | `SysWorkflowMonitor` | 查看 | 转交或指派（原流程状态条件不变） |
 | `SysPersonTags` | 标签表：详情；成员表：修改 | 标签表：编辑、删除；员工/机构成员表：删除 |
 
-静态门禁位于 `src/views/__tests__/row-action-audit.spec.js`：它会检查所有 59 个普通命名路由中每个操作列至多一个直出按钮（数据源冻结例外除外），并逐项验证上表的主操作与收纳项；`ReportSql` 的方案对话框也被单独纳入矩阵。
+静态门禁位于 `src/views/__tests__/row-action-audit.spec.js`：它会检查 59 个普通命名路由与 58 个物理操作列的精确矩阵，逐列验证 30 个多操作列同时保留主操作、宽度足够时的全直出分支和 fail-close“更多”分支；`ReportSql` 的 `SchemeListDialog` 也单独纳入。真实 DOM/ResizeObserver 门禁位于 `row-action-responsive.spec.js`，覆盖未知尺寸 fail-close、宽度足够（含危险操作）与缩窄恢复，以及测量副本退出读屏和键盘顺序。
 
 ## 3. 已修复的问题类型
 
@@ -167,8 +171,8 @@
 | 控件、表格密度不一致 | 正文/表单/表格 14px；常规控件最小 32px；行高 40px | 仅 `.bp-crud` |
 | 状态标签尺度不一 | 状态标签最小高 24px，使用已有语义 tag class | 仅 `.bp-crud` |
 | 长字段挤压布局 | 默认单行省略；`v-bp-overflow-tooltip` 仅在真实溢出时提供完整原生提示，已有 `show-overflow-tooltip` 保留 | 仅 `.bp-crud`，不强制截断操作列 |
-| 操作按钮换行或超出 | 操作列固定右侧，`.operation-cell` 不换行；每行保留一个主操作，低频/危险操作进入“更多” | 需要页面 API 不变 |
-| 数据源页面 | 编辑/试跑/探测列常显；副本/删除进入更多；补筛选重置；状态语义化 | `/screen-admin/datasources` |
+| 操作按钮换行或超出 | 操作列固定右侧，`.operation-cell` 不换行；空间足够时全部直出，空间不足时保留主操作、其余进入“更多” | 需要页面 API 不变 |
+| 数据源页面 | 纳入统一自适应契约；宽度足够时编辑/试跑/探测/副本/删除全部直出；补筛选重置；状态语义化 | `/screen-admin/datasources` |
 | 机构经营画像 | 筛选栅格和重置；列表状态、完整值提示和编辑弹窗样式统一 | `/screen-admin/org-profiles` |
 | 命名机构组状态越界 | 组名、编码、状态在固定网格内截断；仅 `ACTIVE`/`DISABLED` 显示为启停，未知值显式标为“未知状态” | `/screen-admin/org-groups` |
 | 用户管理 | 保留机构树与批量工具栏；筛选保持明确栅格；行内只留编辑，角色/删除进更多 | `/system/users` |
@@ -221,7 +225,7 @@
 2. 筛选字段有可见 label；查询与重置为同一末尾操作项。筛选条件超过一行时，由栅格自然换行，操作仍右对齐。
 3. 数据表默认 `border size="default"`。表头和数据行约 40px，正文 14px；数值、时间、业务键优先使用合适固定列宽或等宽数字。
 4. 表格页面根节点必须显式使用 `v-bp-overflow-tooltip`，它会对实际溢出的单元格提供完整原生提示；特别复杂的字段可额外使用 `show-overflow-tooltip`。操作列不可截断或换行。
-5. 操作列 `fixed="right" class-name="operation-cell"`。一项最常用动作直接展示；删除、覆盖、复制、分配、下载等低频/高风险动作使用 `el-dropdown` 的“更多”。“更多”仅在至少一项次级操作满足当前权限/状态时渲染，不能出现空菜单；危险操作仍保留现有确认和审计原因。
+5. 操作列 `fixed="right" class-name="operation-cell"`。多操作列使用 `BpAdaptiveRowActions`：按当前行实际可见操作的真实渲染宽度判断，全部操作及间距可容纳时全部直出（危险操作也直出并保留 danger）；不可容纳或无法可靠测量时只直出最常用主操作，其余进入“更多”。“更多”仅在至少一项次级操作满足当前权限/状态时渲染，不能出现空菜单；不得用文字长度、源码总动作数或视口断点代替测量，也不得改变确认和审计原因。
 6. 状态必须有文本，不可仅用颜色。只对已知后端枚举映射“启用/停用”等语义；未知值必须显式显示“未知状态”，不能默认当作成功。
 7. 弹窗/抽屉使用 `class="bp-crud-dialog"`，尤其 `append-to-body` 时作为受控提示边界；保留取消出口、加载禁用与原有校验/确认语义。
 8. 异步读取必须区分加载、空数据和错误；异步写入保持单飞、禁用重复操作以及明确的错误恢复。多个次级操作共用“更多”时，每一项只继承自身原有的 loading/disabled 条件，不得因另一项 pending 而封锁仍可执行的操作。

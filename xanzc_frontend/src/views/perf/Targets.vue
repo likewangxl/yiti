@@ -32,7 +32,7 @@
             <el-table-column label="创建时间" min-width="170"><template #default="{ row }">{{ fmtDateTime(row.createdTime) || '-' }}</template></el-table-column>
             <el-table-column label="创建人" min-width="180" show-overflow-tooltip class-name="compact-stack-cell"><template #default="{ row }"><div>{{ row.createdByName || row.createdByUsername || row.createdBy || '-' }}</div><div v-if="row.createdByUsername" class="cell-meta">{{ row.createdByUsername }}</div></template></el-table-column>
             <el-table-column label="状态" width="96"><template #default="{ row }"><el-tag :class="statusCls(row.status)" effect="plain" size="small">{{ statusLabel(row.status) }}</el-tag></template></el-table-column>
-            <el-table-column label="操作" class-name="operation-cell" width="160" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openValues(row)">目标值</el-button><el-dropdown v-if="row.createdBy === userStore.user?.empId" trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多目标方案操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="openEditPlan(row)">编辑</el-dropdown-item><el-dropdown-item divided class="danger-item" @click="onDeletePlan(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template></el-table-column>
+            <el-table-column label="操作" class-name="operation-cell" width="160" fixed="right"><template #default="{ row }"><BpAdaptiveRowActions><template #primary><el-button link type="primary" size="small" @click="openValues(row)">目标值</el-button></template><template #expanded><el-button v-if="row.createdBy === userStore.user?.empId" link type="primary" size="small" @click="openEditPlan(row)">编辑</el-button><el-button v-if="row.createdBy === userStore.user?.empId" link type="danger" size="small" @click="onDeletePlan(row)">删除</el-button></template><template #compact><el-dropdown v-if="row.createdBy === userStore.user?.empId" trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多目标方案操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="openEditPlan(row)">编辑</el-dropdown-item><el-dropdown-item divided class="danger-item" @click="onDeletePlan(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template></BpAdaptiveRowActions></template></el-table-column>
           </el-table>
           <nav class="pager" aria-label="目标方案列表分页"><el-pagination v-model:current-page="pager.pageNo" v-model:page-size="pager.pageSize" :page-sizes="[10, 20, 50, 100]" :total="filteredPlans.length" background layout="total, sizes, prev, pager, next, jumper" /></nav>
         </section>
@@ -114,6 +114,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listTargets, createTargetPlan, updateTargetPlan, deleteTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory, listTargetValues, listMetrics, calcKpiScore, uploadImportFile } from '@/api/perf';
 import { listTodoTasks, listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';

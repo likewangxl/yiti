@@ -94,18 +94,16 @@
         <el-table-column prop="time" label="时间" width="170" :formatter="fmtDateTimeCol" />
         <el-table-column label="操作" class-name="operation-cell" width="360" fixed="right">
           <template #default="{row}">
-            <el-button link type="primary" size="small" @click="onRefreshOne(row)">刷新</el-button>
-            <el-dropdown trigger="click" popper-class="bp-crud-menu">
-              <el-button link size="small" aria-label="更多导入批次操作">更多</el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item :disabled="!row.sourceObjectKey" :title="row.sourceObjectKey ? '' : '无源文件'" @click="onDownloadSource(row)">下载文件</el-dropdown-item>
-                  <el-dropdown-item @click="onDownloadErrors(row)">下载错误</el-dropdown-item>
-                  <el-dropdown-item v-if="row.status === 'FAILED'" :disabled="retryingBatchId === String(row.batchId || row.id)" @click="onRetry(row)">重试</el-dropdown-item>
-                  <el-dropdown-item divided class="danger-item" :disabled="deletingBatchId === String(row.batchId || row.id)" @click="confirmDelete(row)">删除</el-dropdown-item>
-                </el-dropdown-menu>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" size="small" @click="onRefreshOne(row)">刷新</el-button></template>
+              <template #expanded>
+                <el-button link type="primary" size="small" :disabled="!row.sourceObjectKey" :title="row.sourceObjectKey ? '' : '无源文件'" @click="onDownloadSource(row)">下载文件</el-button>
+                <el-button link type="primary" size="small" @click="onDownloadErrors(row)">下载错误</el-button>
+                <el-button v-if="row.status === 'FAILED'" link type="primary" size="small" :disabled="retryingBatchId === String(row.batchId || row.id)" @click="onRetry(row)">重试</el-button>
+                <el-button link type="danger" size="small" :disabled="deletingBatchId === String(row.batchId || row.id)" @click="confirmDelete(row)">删除</el-button>
               </template>
-            </el-dropdown>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多导入批次操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="!row.sourceObjectKey" :title="row.sourceObjectKey ? '' : '无源文件'" @click="onDownloadSource(row)">下载文件</el-dropdown-item><el-dropdown-item @click="onDownloadErrors(row)">下载错误</el-dropdown-item><el-dropdown-item v-if="row.status === 'FAILED'" :disabled="retryingBatchId === String(row.batchId || row.id)" @click="onRetry(row)">重试</el-dropdown-item><el-dropdown-item divided class="danger-item" :disabled="deletingBatchId === String(row.batchId || row.id)" @click="confirmDelete(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -121,6 +119,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fmtDateTimeCol } from '@/utils/datetime';
 import { UploadFilled } from '@element-plus/icons-vue';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import {
   listImports, uploadImportFile,
   refreshImportStatus, retryImport, deleteImportBatch, downloadImportErrors,

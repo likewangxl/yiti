@@ -101,16 +101,22 @@
         </el-table-column>
         <el-table-column label="操作" class-name="operation-cell" width="180" fixed="right">
           <template #default="{row}">
-            <el-button link type="primary" size="small" :disabled="deletingId === row.id" @click="openEdit(row)">编辑</el-button>
-            <el-dropdown trigger="click" popper-class="bp-crud-menu">
-              <el-button link size="small" :disabled="deletingId === row.id" aria-label="更多产品资料操作">更多</el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item :disabled="!row.fileObjectId || deletingId === row.id" :title="row.fileObjectId ? (row.fileName || '下载附件') : '暂无附件'" @click="downloadAttach(row)">附件</el-dropdown-item>
-                  <el-dropdown-item divided class="danger-item" :disabled="deletingId === row.id" @click="confirmDelete(row)">删除</el-dropdown-item>
-                </el-dropdown-menu>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" size="small" :disabled="deletingId === row.id" @click="openEdit(row)">编辑</el-button></template>
+              <template #expanded>
+                <el-button link type="primary" size="small" :disabled="!row.fileObjectId || deletingId === row.id" :title="row.fileObjectId ? (row.fileName || '下载附件') : '暂无附件'" @click="downloadAttach(row)">附件</el-button>
+                <el-button link type="danger" size="small" :disabled="deletingId === row.id" @click="confirmDelete(row)">删除</el-button>
               </template>
-            </el-dropdown>
+              <template #compact>
+                <el-dropdown trigger="click" popper-class="bp-crud-menu">
+                  <el-button link size="small" :disabled="deletingId === row.id" aria-label="更多产品资料操作">更多</el-button>
+                  <template #dropdown><el-dropdown-menu>
+                    <el-dropdown-item :disabled="!row.fileObjectId || deletingId === row.id" :title="row.fileObjectId ? (row.fileName || '下载附件') : '暂无附件'" @click="downloadAttach(row)">附件</el-dropdown-item>
+                    <el-dropdown-item divided class="danger-item" :disabled="deletingId === row.id" @click="confirmDelete(row)">删除</el-dropdown-item>
+                  </el-dropdown-menu></template>
+                </el-dropdown>
+              </template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -190,6 +196,7 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { fmtDateTime } from '@/utils/datetime';
 import { call } from '@/api/http';
 import { listProducts, createProduct, updateProduct, deleteProduct } from '@/api/products';

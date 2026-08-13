@@ -57,19 +57,11 @@
         <el-table-column label="最后更新" width="180"><template #default="{ row }">{{ fmtDateTime(row.updatedTime) }}</template></el-table-column>
         <el-table-column label="操作" class-name="operation-cell" width="280" fixed="right" align="right">
           <template #default="{ row }">
-            <div class="row-actions" role="group" :aria-label="`${row.name || '审批流程'} 操作`">
-              <el-button link type="primary" size="small" @click="goEdit(row)">编辑</el-button>
-              <el-dropdown trigger="click" popper-class="bp-crud-menu">
-                <el-button link size="small" aria-label="更多审批流程操作">更多</el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item :disabled="isPublishing(row.id)" @click="doPublish(row)">{{ isPublishing(row.id) ? '发布中…' : '发布' }}</el-dropdown-item>
-                    <el-dropdown-item :disabled="isCloning(row.id)" @click="doClone(row)">{{ isCloning(row.id) ? '克隆中…' : '克隆' }}</el-dropdown-item>
-                    <el-dropdown-item v-if="row.status === 'DRAFT' && row.isReadonlyImport != 1" divided class="danger-item" :disabled="isDeleting(row.id)" @click="doDelete(row)">{{ isDeleting(row.id) ? '删除中…' : '删除' }}</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
+            <BpAdaptiveRowActions role="group" :aria-label="`${row.name || '审批流程'} 操作`">
+              <template #primary><el-button link type="primary" size="small" @click="goEdit(row)">编辑</el-button></template>
+              <template #expanded><el-button link size="small" :disabled="isPublishing(row.id)" @click="doPublish(row)">{{ isPublishing(row.id) ? '发布中…' : '发布' }}</el-button><el-button link size="small" :disabled="isCloning(row.id)" @click="doClone(row)">{{ isCloning(row.id) ? '克隆中…' : '克隆' }}</el-button><el-button v-if="row.status === 'DRAFT' && row.isReadonlyImport != 1" link type="danger" size="small" :disabled="isDeleting(row.id)" @click="doDelete(row)">{{ isDeleting(row.id) ? '删除中…' : '删除' }}</el-button></template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多审批流程操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="isPublishing(row.id)" @click="doPublish(row)">{{ isPublishing(row.id) ? '发布中…' : '发布' }}</el-dropdown-item><el-dropdown-item :disabled="isCloning(row.id)" @click="doClone(row)">{{ isCloning(row.id) ? '克隆中…' : '克隆' }}</el-dropdown-item><el-dropdown-item v-if="row.status === 'DRAFT' && row.isReadonlyImport != 1" divided class="danger-item" :disabled="isDeleting(row.id)" @click="doDelete(row)">{{ isDeleting(row.id) ? '删除中…' : '删除' }}</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -98,6 +90,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fmtDateTime } from '@/utils/datetime';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listFlows, getFlow, createFlow, publishFlow, deleteFlow, importExistingFlows } from '@/api/flowDesign';
 
 const router = useRouter();

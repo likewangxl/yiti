@@ -61,15 +61,11 @@
         <el-table-column prop="createTime" label="创建时间" width="170" />
         <el-table-column label="操作" class-name="operation-cell" width="160" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-dropdown trigger="click" popper-class="bp-crud-menu">
-              <el-button link size="small" :disabled="deleting" aria-label="更多评价标签操作">更多</el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item divided class="danger-item" :disabled="deleting" @click="handleDelete(row)">删除</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button></template>
+              <template #expanded><el-button link type="danger" size="small" :disabled="deleting" @click="handleDelete(row)">删除</el-button></template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" :disabled="deleting" aria-label="更多评价标签操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item divided class="danger-item" :disabled="deleting" @click="handleDelete(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -148,6 +144,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listTags, createTag, updateTag, deleteTag } from '@/api/eval';
 
 // === 列表状态 ===

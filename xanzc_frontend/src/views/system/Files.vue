@@ -40,13 +40,11 @@
         <el-table-column label="上传时间" width="180"><template #default="{ row }">{{ row.uploadedTime || row.time || '-' }}</template></el-table-column>
         <el-table-column label="操作" class-name="operation-cell" width="176" fixed="right">
           <template #default="{ row }">
-            <div class="row-actions" role="group" :aria-label="`${row.fileName || row.name || '文件'} 操作`">
-              <el-button link type="primary" size="small" @click="onDownload(row)">下载</el-button>
-              <el-dropdown trigger="click" popper-class="bp-crud-menu">
-                <el-button link size="small" :disabled="isDeleting(row.id)" aria-label="更多文件操作">更多</el-button>
-                <template #dropdown><el-dropdown-menu><el-dropdown-item divided class="danger-item" :disabled="isDeleting(row.id)" @click="onDelete(row)">删除</el-dropdown-item></el-dropdown-menu></template>
-              </el-dropdown>
-            </div>
+            <BpAdaptiveRowActions role="group" :aria-label="`${row.fileName || row.name || '文件'} 操作`">
+              <template #primary><el-button link type="primary" size="small" @click="onDownload(row)">下载</el-button></template>
+              <template #expanded><el-button link type="danger" size="small" :disabled="isDeleting(row.id)" @click="onDelete(row)">删除</el-button></template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" :disabled="isDeleting(row.id)" aria-label="更多文件操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item divided class="danger-item" :disabled="isDeleting(row.id)" @click="onDelete(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -69,6 +67,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listFiles, deleteFile } from '@/api/system';
 import { API_BASE } from '@/api/http';
 
