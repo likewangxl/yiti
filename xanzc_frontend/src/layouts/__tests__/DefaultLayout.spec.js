@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // 全出血(full-bleed)布局回归——修复大屏设计器高度错位:DesignerV2 原先写死
-// calc(100vh - 60px),但 DefaultLayout 实际是 header 52px + 面包屑 40px + 内容区
-// padding 16×2,设计器超高 64px 导致整页滚动条。修复契约分两半:
+// calc(100vh - 60px),而 DefaultLayout 的壳层高度由 header、工作区页签和内容区共同决定。
+// 设计器超高会导致整页滚动条。修复契约分两半:
 // ①设计器路由声明 meta.fullBleed;②DefaultLayout 对 fullBleed 路由去掉内容区 padding,
 // 设计器自身高度改为撑满父容器。本文件锁这两半契约。
 import { afterEach, describe, it, expect, vi } from 'vitest';
@@ -29,7 +29,7 @@ const stubs = {
     emits: ['toggle-sidebar'],
     template: '<button class="header-stub" :data-collapsed="String(sidebarCollapsed)" @click="$emit(\'toggle-sidebar\')" />'
   },
-  AppBreadcrumb: true,
+  AppBreadcrumb: { template: '<div class="breadcrumb-stub" />' },
   WorkspaceTabs: { template: '<div class="workspace-tabs-stub" />' },
   'router-view': true
 };
@@ -67,8 +67,9 @@ afterEach(() => {
 });
 
 describe('DefaultLayout.vue full-bleed 内容区', () => {
-  it('面包屑下渲染工作区页签栏，且页签栏不属于 content padding 契约', () => {
+  it('全局壳层不挂载面包屑，工作区页签栏直接位于 Header 后且不属于 content padding 契约', () => {
     const wrapper = mountWithMeta({ title: '工作台' });
+    expect(wrapper.find('.breadcrumb-stub').exists()).toBe(false);
     expect(wrapper.find('.workspace-tabs-stub').exists()).toBe(true);
     expect(wrapper.find('.content').element.previousElementSibling.className)
       .toBe('workspace-tabs-stub');

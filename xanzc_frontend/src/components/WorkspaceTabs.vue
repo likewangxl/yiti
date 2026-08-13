@@ -15,6 +15,7 @@
             :title="tab.title"
             :aria-current="tab.key === activeKey ? 'page' : undefined"
             @click="selectTab(tab)"
+            @keydown="handleTabKeydown($event, tab)"
           >
             {{ tab.title }}
           </button>
@@ -76,6 +77,27 @@ function selectTab(tab) {
   router.push(tab.fullPath);
 }
 
+/**
+ * 在路由页签之间提供方向键导航，Home/End 直达首尾页签。
+ * 页签仍是普通按钮，不伪装成 tablist；Enter/Space 继续使用按钮原生激活行为。
+ */
+function handleTabKeydown(event, tab) {
+  const key = event.key;
+  const currentIndex = tabs.value.findIndex((item) => item.key === tab.key);
+  if (currentIndex < 0) return;
+
+  let targetIndex = currentIndex;
+  if (key === 'ArrowLeft') targetIndex = Math.max(0, currentIndex - 1);
+  if (key === 'ArrowRight') targetIndex = Math.min(tabs.value.length - 1, currentIndex + 1);
+  if (key === 'Home') targetIndex = 0;
+  if (key === 'End') targetIndex = tabs.value.length - 1;
+  if (targetIndex === currentIndex) return;
+
+  event.preventDefault();
+  const labels = tabsListRef.value?.querySelectorAll('.workspace-tabs__label');
+  labels?.[targetIndex]?.focus();
+}
+
 /** 关闭页签后，仅在关闭当前页签时导航到 store 选出的相邻页签。 */
 function closeTab(tab) {
   if (!tab?.closable) return;
@@ -87,19 +109,20 @@ function closeTab(tab) {
 
 <style lang="scss" scoped>
 .workspace-tabs {
-  height: var(--layout-workspace-tabs-height);
-  flex: 0 0 var(--layout-workspace-tabs-height);
+  // 组件局部 token 覆盖历史全局默认值，保证壳层总高稳定为 48px。
+  --workspace-tabs-height: 48px;
+  height: var(--workspace-tabs-height);
+  flex: 0 0 var(--workspace-tabs-height);
   min-width: 0;
   overflow: hidden;
   background: var(--color-workspace-strip);
   border-bottom: 1px solid var(--color-border);
-  // 对齐截图：页签本体 44px，下方留出更宽的工作区分隔带。
-  padding: 9px var(--layout-content-gutter) 22px;
+  padding: 4px var(--layout-content-gutter) 3px;
 }
 
 .workspace-tabs__scroll {
   width: 100%;
-  height: 44px;
+  height: 40px;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -123,9 +146,9 @@ function closeTab(tab) {
 .workspace-tabs__tab {
   display: inline-flex;
   align-items: center;
-  min-width: 124px;
-  max-width: 220px;
-  height: 100%;
+  min-width: 112px;
+  max-width: 200px;
+  height: 40px;
   padding: 0 var(--space-1) 0 var(--space-3);
   color: var(--color-text);
   font-size: 14px;

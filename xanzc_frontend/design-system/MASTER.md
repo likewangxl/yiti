@@ -7,7 +7,7 @@
 ### 覆盖范围
 
 - **全部主平台页面**：除下述明确排除项外，`src/views/` 下由 `DefaultLayout` 承载的全部主平台路由视图都遵守本契约，而不是只覆盖少数首期页面。
-- **全局壳层与认证**：`DefaultLayout`、`AppSidebar`、`AppHeader`、`AppBreadcrumb`、`WorkspaceTabs`、通用内容区，以及 `/login` 的 UIAS 与 `?normal` 账号密码入口。
+- **全局壳层与认证**：`DefaultLayout`、`AppSidebar`、`AppHeader`、`WorkspaceTabs`、通用内容区，以及 `/login` 的 UIAS 与 `?normal` 账号密码入口。`AppBreadcrumb` 源码保留供局部场景复用，但不再由 `DefaultLayout` 全局挂载。
 - **门户、信息与业务协作**：`/workspace`、公告、通知、待办、转交、门户信息及客户营销、业务申请等主平台业务页面。
 - **绩效与考核**：指标、目标、计算、评价、奖励分配、审批任务及相关导入、导出、详情页面。
 - **报表查询与历史数据**：行长仪表盘、动态/预置/自由报表、SQL 探查、业绩分配审批查询，以及各类历史查询与详情页面。
@@ -17,8 +17,9 @@
 
 - 仅设计 **主平台浅色体系**；本阶段不产出暗色主题，也不为暗色预留第二套页面稿。
 - 仅验证 **1920×1080** 与 **2560×1440** 两种桌面分辨率；不做手机、平板或移动端断点方案。
-- `src/views/redengine/**` 是独立红色引擎，沿用自己的布局和 `re-` 样式隔离，不继承本文件。
-- `src/views/screen/**` 是全屏大屏/设计器子系统，不继承本文件的卡片、图表或壳层密度规则。
+- `src/views/redengine/**` 是独立红色引擎，完全排除在本规范之外，沿用自己的布局和 `re-` 样式隔离。
+- `src/views/screen/admin/Datasources.vue`、`OrgProfiles.vue`、`OrgGroups.vue` 对应三个浅色 CRUD 管理页，是主平台规范的明确例外，遵守本文件的桌面浅色 CRUD 基线。
+- `src/views/screen/**` 的运行态与设计器是独立大屏/设计器子系统，不继承本文件的卡片、图表或壳层密度规则；上述三个管理页除外。
 - 顶栏搜索当前没有检索逻辑：第一阶段隐藏搜索输入及其占位，不保留空白槽位，不新增搜索 API，也不伪造可用的搜索 affordance。
 
 ## 2. 依据、校准与决策记录
@@ -74,8 +75,8 @@ python3 /home/djdev/leid/yiti/.agents/skills/ui-ux-pro-max/scripts/search.py \
 
 - `AppSidebar`：宽度 `220px`，动态消费 `menuStore.tree`，分组可展开，当前路由有明确 active 状态。
 - `AppHeader`：高度 `52px`，保留账户下拉、通知入口和必要的壳层操作；无逻辑搜索隐藏且不占位。
-- `AppBreadcrumb`：高度 `40px`，展示动态菜单分组和页面标题。
-- `WorkspaceTabs`：高度 `76px`，页签支持当前态、关闭、键盘语义和长标题截断提示。
+- `AppBreadcrumb`：源码保留，但不再占用全局壳层高度；详情页使用 `PageTitle` 与既有返回路径定位，不新增全局面包屑。
+- `WorkspaceTabs`：总高 `48px`；单页签高 `40px`、字号 `14px`、页签间距 `8px`、宽 `112–200px`，关闭按钮命中区 `40×40px`。页签支持横向滚动、当前项自动滚入可视区、方向键/Home/End 键盘导航、关闭和长标题截断提示。
 - `DefaultLayout` 内容区：主滚动区域独立滚动，普通页面使用内边距；`fullBleed` 仅供大屏设计器等明确的特殊路由使用，不套用主平台卡片规则。
 
 ```css
@@ -83,8 +84,8 @@ python3 /home/djdev/leid/yiti/.agents/skills/ui-ux-pro-max/scripts/search.py \
   --layout-sidebar-width: 220px;
   --layout-sidebar-collapsed-width: 64px;
   --layout-header-height: 52px;
-  --layout-breadcrumb-height: 40px;
-  --layout-workspace-tabs-height: 76px;
+  --layout-breadcrumb-height: 40px; /* AppBreadcrumb 源码兼容值，不是 DefaultLayout 占位 */
+  --layout-workspace-tabs-height: 48px;
   --layout-content-max-width: 2240px;
   --layout-content-gutter: 24px;
   --layout-content-gutter-wide: 32px;
@@ -213,7 +214,7 @@ font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei"
 - 用户管理采用“机构树 + 右侧筛选/表格”的双栏结构；树筛选、表格筛选、批量操作和分页顺序固定，选择状态清晰。
 - 表格默认高密度但保留 40px 左右行高、14px 正文和 8px 组间距；操作列固定在右侧时不得遮挡关键数据。
 - 状态 tag 同时输出“启用/停用/正常/锁定”等文本；排序、分页、表格选中状态提供键盘和读屏语义。
-- 页签使用 `<nav aria-label="工作区页签">` 路由导航语义；每个页签对应独立 URL，当前入口使用 `aria-current="page"`。不要伪装成 `role="tablist"`/`role="tab"`，也不要把路由页签包装成单一 tabpanel。关闭按钮有“关闭 + 页签标题”的 label，长标题使用 tooltip 展开完整文本。
+- 页签使用 `<nav aria-label="工作区页签">` 路由导航语义；每个页签对应独立 URL，当前入口使用 `aria-current="page"`。不要伪装成 `role="tablist"`/`role="tab"`，也不要把路由页签包装成单一 tabpanel。方向键在页签间移动焦点，Home/End 定位首尾，Enter/Space 仍按普通按钮激活路由。关闭按钮有“关闭 + 页签标题”的 label，长标题使用 tooltip 展开完整文本。
 
 ## 9. 页面节点规则
 
@@ -281,7 +282,7 @@ font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei"
 
 - 不得用 `outline: none` 消除焦点而没有同等或更强替代；焦点环与相邻背景保持可见。
 - Tab 顺序遵循视觉和业务顺序；路由切换后把焦点移到主内容标题/`main`，弹窗关闭后回到触发元素。
-- 菜单展开、下拉、页签、表格排序和分页均提供键盘路径；图标按钮有明确 label。
+- 菜单展开、下拉、页签（方向键、Home/End、Enter/Space）、表格排序和分页均提供键盘路径；图标按钮有明确 label。
 
 ### 动效
 
@@ -310,7 +311,7 @@ font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei"
 
 ## 11. 验收清单
 
-- [ ] 覆盖全部主平台页面：壳层与登录、门户信息与业务协作、绩效考核、报表查询、历史数据、系统治理与流程；没有把规则带入 `redengine` 或 `screen`。
+- [ ] 覆盖全部主平台页面：壳层与登录、门户信息与业务协作、绩效考核、报表查询、历史数据、系统治理与流程；`screen/admin` 三个浅色 CRUD 例外遵守本规范，screen 运行态/设计器与 `redengine` 保持独立。
 - [ ] 在 1920×1080 与 2560×1440 检查侧栏、内容 gutter、表格、图表和弹窗；不以移动端断点作为本阶段验收条件。
 - [ ] 只使用中文本地系统字体；没有 Google Fonts、网络字体或 Fira 字体依赖。
 - [ ] `src/main.js` 继续全量注册 Element Plus 与中文 locale；主题通过语义 token/Element Plus 变量映射。

@@ -182,6 +182,31 @@ describe('WorkspaceTabs.vue', () => {
     expect(routerMock.push).toHaveBeenCalledWith('/workspace');
     expect(wrapper.find('[data-tab-key="/workspace"] .workspace-tabs__close').exists()).toBe(false);
   });
+
+  it('支持用左右方向键在路由页签间移动焦点，并用 Home/End 定位首尾页签', async () => {
+    const wrapper = mountTabs();
+
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
+    await nextTick();
+
+    const workspaceLabel = wrapper.find('[data-tab-key="/workspace"] .workspace-tabs__label');
+    const metricsLabel = wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__label');
+    const usersLabel = wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__label');
+    const metricsFocus = vi.spyOn(metricsLabel.element, 'focus');
+    const workspaceFocus = vi.spyOn(workspaceLabel.element, 'focus');
+    const usersFocus = vi.spyOn(usersLabel.element, 'focus');
+
+    await workspaceLabel.trigger('keydown', { key: 'ArrowRight' });
+    expect(metricsFocus).toHaveBeenCalledTimes(1);
+    await metricsLabel.trigger('keydown', { key: 'ArrowRight' });
+    expect(usersFocus).toHaveBeenCalledTimes(1);
+    await usersLabel.trigger('keydown', { key: 'Home' });
+    expect(workspaceFocus).toHaveBeenCalledTimes(1);
+    await workspaceLabel.trigger('keydown', { key: 'End' });
+    expect(usersFocus).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('workspaceTabs store', () => {

@@ -3,7 +3,6 @@
     <AppSidebar :collapsed="sidebarCollapsed" />
     <div class="main">
       <AppHeader :sidebar-collapsed="sidebarCollapsed" @toggle-sidebar="toggleSidebar" />
-      <AppBreadcrumb />
       <WorkspaceTabs />
       <div ref="mainElement" id="app-main" class="content" :class="{ 'content--full': $route.meta.fullBleed }" tabindex="-1">
         <router-view :key="$route.fullPath" v-slot="{ Component }">
@@ -21,7 +20,6 @@ import { nextTick, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppHeader from '@/components/AppHeader.vue';
-import AppBreadcrumb from '@/components/AppBreadcrumb.vue';
 import WorkspaceTabs from '@/components/WorkspaceTabs.vue';
 
 // 折叠态只属于当前壳层实例，避免不同登录会话或浏览器标签页互相串状态。
