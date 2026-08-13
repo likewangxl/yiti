@@ -1,4 +1,4 @@
-<!-- Generated: 2026-04-26 | Updated: 2026-08-11 -->
+<!-- Generated: 2026-04-26 | Updated: 2026-08-13 -->
 
 # AGENTS.md
 
@@ -203,8 +203,15 @@ com.bank.branch.platform.<module>/
 
 ### Flyway 禁令（绝对红线）
 - **本项目已彻底废弃 Flyway**：禁止引入 `flyway-core` / `flyway-mysql` 任何版本依赖；禁止在 `application*.yml` 出现 `spring.flyway.*` 配置；禁止新增 `V*__*.sql` / `U*__*.sql` 命名风格的迁移脚本；禁止编写 `*FlywayIT` / `*FlywayTestBase` 类。
-- **schema 变更走 SQL 直接执行**：所有 DDL/DML 由开发或 DBA 直接在目标库执行（手工或 CI 脚本），不再依赖任何"按版本号自动 migrate"框架。
+- **schema 变更由 DBA 直接实施**：所有结构变更由 DBA 按审批结果在目标库直接操作，不生成或提交 DDL `.sql` 文件；DML 交付文件必须遵守下方内容规范，所有数据库变更均不再依赖任何"按版本号自动 migrate"框架。
 - **历史迁移脚本已全部删除**：`onepl` 与 `yiti` 当前 schema 即为唯一真相，未来如需 fresh deploy 请用 `mysqldump` 从生产库导出 baseline。
+
+### 可执行 SQL 文件内容规范（绝对红线）
+- **语句白名单**：所有新增或修改的可执行 `.sql` 文件，其可执行语句只能是事务控制语句（`START TRANSACTION`、`COMMIT`、`ROLLBACK`）以及 `INSERT`、`UPDATE` DML；不得包含 `DELETE` 或其他 SQL 语句。
+- **禁止混入检查 SQL**：不得包含独立的检查、盘点或验收语句（如 `SELECT`、`SHOW`、`DESCRIBE`、`EXPLAIN`、`CHECKSUM`）；`SELECT` 子句仅可作为 `INSERT`/`UPDATE` 语句的组成部分使用，不得独立成句。
+- **禁止扩展对象和结构操作**：不得包含存储过程、存储函数、触发器、事件等数据库对象定义或调用，不得包含任何 DDL，也不得查询或引用 `INFORMATION_SCHEMA`。
+- **禁止弃用写法**：MySQL upsert 禁止使用已弃用的 `VALUES(col)` 写法，必须使用行别名或显式更新表达式。
+- **检查证据外置**：执行前盘点、执行后验收及幂等性检查必须通过测试脚本或只读命令完成，原始结果归档到证据文件，不得混入交付 `.sql` 文件。
 
 ### MyBatis-Plus 规范（新增功能绝对红线，2026-06-10 起）
 - **所有新增功能涉及的数据库访问统一使用 MyBatis-Plus**：Mapper 接口必须 `extends BaseMapper<T>`；单条 CRUD（`insert`/`selectById`/`updateById`/`deleteById` 等）直接用 BaseMapper 内置方法，**禁止**为这些方法重复写 XML；动态/简单条件查询优先 `LambdaQueryWrapper`/`LambdaUpdateWrapper`。
