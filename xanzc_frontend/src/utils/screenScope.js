@@ -71,6 +71,10 @@ function pick(value, ...keys) {
   return undefined;
 }
 
+function hasOwn(value, key) {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
 function active(value) {
   return value === undefined || value === null || value === '' || value === 'ACTIVE' || value === 0 || value === '0' || value === true;
 }
@@ -250,11 +254,14 @@ export function orgScopeModeLabel(value) {
  * disclaimer 对 v2 固定展示，调用方不应根据空文案隐藏它。
  */
 export function normalizeMapConfig(raw = {}) {
-  const source = typeof raw === 'string' ? safeJson(raw, {}) : (raw || {});
-  // 地图包也属于运行时响应：只认原生 JSON 整数，字符串 "2" 不能被 Number() 悄悄放行为 v2。
-  const schemaVersion = source.schemaVersion === undefined || source.schemaVersion === null || source.schemaVersion === ''
-    ? 1 : source.schemaVersion;
-  if (schemaVersion === 1) {
+  const source = typeof raw === 'string' ? safeJson(raw, null) : raw;
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    return { schemaVersion: null, mode: 'UNSUPPORTED' };
+  }
+  const hasSchemaVersion = hasOwn(source, 'schemaVersion');
+  const hasMode = hasOwn(source, 'mode');
+  // 只有两个字段都完全缺失的历史组件才按 v1 兼容；出现任一个字段就不再猜测另一个。
+  if (!hasSchemaVersion && !hasMode) {
     return {
       ...source,
       schemaVersion: 1,
@@ -262,14 +269,25 @@ export function normalizeMapConfig(raw = {}) {
       baseRegion: source.baseRegion || 'SHAANXI'
     };
   }
-  if (schemaVersion !== 2) {
-    return { ...source, schemaVersion, mode: 'UNSUPPORTED' };
+  // schema=1 只接受明确的陕西模式或历史省略 mode；v1 + XIAN 不能借 mode 提升为六区。
+  if (source.schemaVersion === 1 && (!hasMode || source.mode === 'SHAANXI_LEGACY')) {
+    return {
+      ...source,
+      schemaVersion: 1,
+      mode: 'SHAANXI_LEGACY',
+      baseRegion: source.baseRegion || 'SHAANXI'
+    };
+  }
+  // 地图包属于运行时不可信输入：必须是原生整数 2 且 mode 精确为 XIAN_COMPOSITE。
+  // 字符串 "2"、只给 mode、只给 schema 或其他冲突组合全部 Fail Close。
+  if (source.schemaVersion !== 2 || source.mode !== 'XIAN_COMPOSITE') {
+    return { ...source, mode: 'UNSUPPORTED' };
   }
   const nodes = Array.isArray(source.satelliteNodes) ? source.satelliteNodes.map(x => ({ ...x })) : [];
   return {
     ...source,
     schemaVersion: 2,
-    mode: source.mode || 'XIAN_COMPOSITE',
+    mode: 'XIAN_COMPOSITE',
     baseRegion: source.baseRegion || 'XIAN_OUTLINE',
     localSelector: { cityCode: '610100', operatingLevel: 'PRIMARY', ...(source.localSelector || {}) },
     satelliteNodes: nodes,

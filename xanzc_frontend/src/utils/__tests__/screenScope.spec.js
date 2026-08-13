@@ -60,6 +60,16 @@ describe('screenScope 业务条线、机构范围与地图配置契约', () => {
     });
   });
 
+  it('地图 schema 与 mode 必须同时精确声明，缺失、冲突或宽松字符串一律拒绝', () => {
+    expect(normalizeMapConfig({ mode: 'XIAN_COMPOSITE' })).toMatchObject({ mode: 'UNSUPPORTED' });
+    expect(normalizeMapConfig({ schemaVersion: 2 })).toMatchObject({ schemaVersion: 2, mode: 'UNSUPPORTED' });
+    expect(normalizeMapConfig({ schemaVersion: 1, mode: 'XIAN_COMPOSITE' })).toMatchObject({ schemaVersion: 1, mode: 'UNSUPPORTED' });
+    expect(normalizeMapConfig({ schemaVersion: '2', mode: 'XIAN_COMPOSITE' })).toMatchObject({ schemaVersion: '2', mode: 'UNSUPPORTED' });
+    expect(normalizeMapConfig({ schemaVersion: 2, mode: 'SHAANXI_LEGACY' })).toMatchObject({ schemaVersion: 2, mode: 'UNSUPPORTED' });
+    expect(normalizeMapConfig({ schemaVersion: null, mode: 'XIAN_COMPOSITE' })).toMatchObject({ mode: 'UNSUPPORTED' });
+    expect(normalizeMapConfig({ schemaVersion: 1 })).toMatchObject({ schemaVersion: 1, mode: 'SHAANXI_LEGACY' });
+  });
+
   it('v2 运行时请求只提交 screenCode + blockId，不接受 dsId/orgCodes 覆盖', () => {
     expect(buildScreenDataRequest({ screenCode: 'SCR_RETAIL', blockId: 8, period: 'LATEST',
       dateFrom: null, dateTo: null, contextParams: { orgCode: 'O1' }, schemaVersion: 2,

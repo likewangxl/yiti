@@ -8,6 +8,7 @@
 - 不修改大屏设计器、已发布画布 JSON、接口、数据库或权限契约。本期将运行态展示语义硬编码在前端。
 - `XIAN_OUTLINE` 仍是既有持久化配置值；运行态 schema v2 实际注册并渲染 `xian-six-districts`，不得以改写历史配置完成迁移。
 - 陕西 schema v1 地图继续使用既有 `shaanxi.json`，不得因本规范改变旧屏行为。
+- 六区激活的唯一条件是运行包中 `schemaVersion === 2`（原生 JSON 整数）且 `mode === 'XIAN_COMPOSITE'`。运行态存在授权 `mapPayload` 时必须以该包为准，不能用伴随画布配置掩盖其缺字段；不得由 `mode` 推断版本，也不得为 schema v2 缺失的 `mode` 补默认值。只给其中一个字段、`1 + XIAN_COMPOSITE`、字符串版本号或任一冲突值均须拒绝渲染，不能回退为陕西图或六区图。
 
 ## 2. 行政区范围
 
@@ -31,7 +32,7 @@
 | 项目 | 约定 |
 |---|---|
 | 几何来源 | OpenStreetMap contributors；通过 Nominatim `lookup` 一次性读取上表六个 relation 的 GeoJSON。 |
-| 许可 | [ODbL 1.0](https://www.openstreetmap.org/copyright)；运行态必须显示“边界数据：© OpenStreetMap contributors（ODbL）”。 |
+| 许可 | [ODbL 1.0](https://www.openstreetmap.org/copyright)；运行态必须将“边界数据：© OpenStreetMap contributors（ODbL）”链接至官方版权页，外链使用 `target="_blank" rel="noopener noreferrer"`。 |
 | 获取日期 | 2026-08-13 |
 | 原始坐标系 | WGS84 / EPSG:4326 |
 | 交付坐标系 | GCJ-02；为了与既有机构画像 GCJ-02 点位处于同一坐标空间。 |
@@ -63,12 +64,13 @@
 
 - 大屏沿用 `scr-*` 运行态隔离，不接入主平台浅色卡片/表格规范。
 - 六区边界显示区名；焦点、节点、边界高亮不能只通过颜色表达。
-- 二级分行和本地机构使用真实 `<button>`，鼠标 click、`Enter`、`Space` 等效；焦点环必须可见。
+- 仅运行态的二级分行和本地机构使用真实 `<button>`，鼠标 click、`Enter`、`Space` 等效；焦点环必须可见。
+- 设计态仅展示位置和名称，不得钻取：全部地图节点必须禁用、移出 Tab 序列并标记 `aria-disabled="true"`；即使脚本派发 click/键盘事件，导航函数也必须拒绝跳转。
 - 二级分行的近似位置与本地真实点位使用不同空间模型：前者为 anchor，后者为 ECharts geo 坐标；不得把两者混为同一地理比例含义。
 - 动效遵循现有 ECharts 效果配置；需要新增动效时仅使用 transform/opacity，并在 `prefers-reduced-motion` 下保留可理解状态。
 
 ## 6. 验收基线
 
-1. 单测覆盖六区名称/代码/relation ID、来源与坐标系元数据、四个二级分行的编码/锚点/目标、授权交集、键盘钻取和 redengine 隔离。
+1. 单测覆盖六区名称/代码/relation ID、来源与坐标系元数据、四个二级分行的编码/锚点/目标、授权交集、键盘钻取和 redengine 隔离；另覆盖 mode-only、schema-only、v1+XIAN、字符串版本号、非法/缺字段的 Fail Close，以及设计态不可钻取。
 2. 真实运行页使用 `/#/login?normal` 登录后，在 1920×1080 和 2560×1440 查看西安运行屏；仅执行查看与点击导航，不执行保存、发布、删除或导入。
 3. 验收记录必须保留真实请求摘要、console、截图和路由结果；不得把 mock 数据或手工改写截图作为真实页面证据。

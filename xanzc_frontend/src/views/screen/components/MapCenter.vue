@@ -9,8 +9,9 @@
 
         <!-- ECharts canvas 无法自然获得焦点，本地机构补充可读的键盘入口；经纬度仍只进入 geo 数据。 -->
         <button v-for="(point, index) in localNodes" :key="`local-${point.orgCode}`"
-                class="mp-local-node" :style="localStyle(point, index)" tabindex="0"
-                :aria-label="`${point.orgName}，西安本地一级经营机构`"
+                class="mp-local-node" :style="localStyle(point, index)" :tabindex="isInteractive ? 0 : -1"
+                :disabled="!isInteractive" :aria-disabled="String(!isInteractive)"
+                :aria-label="localAriaLabel(point)"
                 @click="navigate(point)" @keydown.enter.prevent="navigate(point)"
                 @keydown.space.prevent="navigate(point)">
           <span class="mp-node-dot" aria-hidden="true" />
@@ -19,7 +20,8 @@
 
         <!-- 示意节点使用 anchor 绝对布局，不把锚点转换成伪造经纬度。 -->
         <button v-for="node in satelliteNodes" :key="`sat-${node.orgCode}-${node.anchor}`"
-                class="mp-satellite-node" :data-anchor="node.anchor" :style="node.position" tabindex="0"
+                class="mp-satellite-node" :data-anchor="node.anchor" :style="node.position" :tabindex="isInteractive ? 0 : -1"
+                :disabled="!isInteractive" :aria-disabled="String(!isInteractive)"
                 :aria-label="satelliteAriaLabel(node)"
                 @click="navigate(node)" @keydown.enter.prevent="navigate(node)"
                 @keydown.space.prevent="navigate(node)">
@@ -29,7 +31,9 @@
       </div>
       <!-- 该声明是复合地图契约的一部分，不能由配置隐藏。 -->
       <div class="mp-disclaimer" role="note">{{ XIAN_SECONDARY_BRANCH_DISCLAIMER }}</div>
-      <div class="mp-attribution" role="note">{{ XIAN_SIX_DISTRICTS_ATTRIBUTION }}</div>
+      <div class="mp-attribution" role="note">
+        <a class="mp-attribution-link" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">{{ XIAN_SIX_DISTRICTS_ATTRIBUTION }}</a>
+      </div>
     </template>
     <v-chart v-else class="mp-chart" :option="option" autoresize @click="onChartClick" />
   </div>
@@ -67,18 +71,21 @@ const router = useRouter();
 const injectedProfiles = inject('screenProfiles', null);
 
 const rawConfig = computed(() => {
+  // 运行态一旦收到授权 mapPayload，就必须按该包自身的 schema/mode 判定，不能由画布配置掩盖缺字段。
+  if (props.mode !== 'design' && props.mapPayload) return props.mapPayload;
   if (props.mapConfig) return props.mapConfig;
   if (props.mapPayload?.mapConfig) return props.mapPayload.mapConfig;
   if (props.mapPayload?.config) return props.mapPayload.config;
-  // 后端 ScreenMapRenderPackageDTO 已经是授权后的 schema2 渲染包。
-  if (props.mapPayload?.mode === 'XIAN_COMPOSITE') {
-    return { ...props.mapPayload, schemaVersion: 2, satelliteNodes: props.mapPayload.satelliteNodes || [] };
-  }
+  // 后端 ScreenMapRenderPackageDTO 必须自行携带原生 schemaVersion=2 与显式 mode；不从 mode 推断版本。
+  if (props.mapPayload) return props.mapPayload;
   return props.element?.propValue || {};
 });
 const mapConfig = computed(() => normalizeMapConfig(rawConfig.value));
 const isComposite = computed(() => mapConfig.value.schemaVersion === 2 && mapConfig.value.mode === 'XIAN_COMPOSITE');
-const unsupportedSchema = computed(() => ![1, 2].includes(mapConfig.value.schemaVersion));
+const runtimePayloadContractValid = computed(() => props.mode === 'design' || !props.mapPayload
+  || (props.mapPayload.schemaVersion === 2 && props.mapPayload.mode === 'XIAN_COMPOSITE'));
+const unsupportedSchema = computed(() => !runtimePayloadContractValid.value || mapConfig.value.mode === 'UNSUPPORTED');
+const isInteractive = computed(() => props.mode !== 'design');
 const profileList = computed(() => {
   if (props.profiles.length) return props.profiles;
   const fromPayload = props.mapPayload?.profiles || props.mapPayload?.orgProfiles || props.mapPayload?.localPoints;
@@ -174,7 +181,15 @@ const option = computed(() => ({
 }));
 
 function satelliteAriaLabel(node) {
-  return `${node.orgName}，${XIAN_SECONDARY_BRANCH_DISCLAIMER}，按 Enter 或空格进入机构详情屏`;
+  return isInteractive.value
+    ? `${node.orgName}，${XIAN_SECONDARY_BRANCH_DISCLAIMER}，按 Enter 或空格进入机构详情屏`
+    : `${node.orgName}，${XIAN_SECONDARY_BRANCH_DISCLAIMER}，设计预览不可钻取`;
+}
+
+function localAriaLabel(point) {
+  return isInteractive.value
+    ? `${point.orgName}，西安本地一级经营机构，按 Enter 或空格进入机构详情屏`
+    : `${point.orgName}，西安本地一级经营机构，设计预览不可钻取`;
 }
 
 // 仅用于键盘入口的视觉定位；真实经纬度仍保存在 ECharts geo value。
@@ -188,7 +203,7 @@ function localStyle(point, index) {
 }
 
 function navigate(node) {
-  if (!node?.orgCode) return;
+  if (!isInteractive.value || !node?.orgCode) return;
   router.push({ path: `/screen/${node.targetScreenCode || node.target || 'SCR_BRANCH'}`, query: { orgCode: node.orgCode } });
 }
 
@@ -224,4 +239,6 @@ function onChartClick(params) {
 .mp-disclaimer, .mp-attribution { flex: none; text-align: center; color: #9bb6df; font-size: 11px; letter-spacing: .5px; }
 .mp-disclaimer { line-height: 20px; }
 .mp-attribution { color: #7898c4; line-height: 16px; padding-bottom: 3px; }
+.mp-attribution-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.mp-satellite-node:disabled, .mp-local-node:disabled { cursor: default; opacity: .82; }
 </style>

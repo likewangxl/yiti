@@ -58,6 +58,11 @@ describe('MapCenter schema v1/v2', () => {
     expect(wrapper.text()).toContain('西安六区经营地图');
     expect(wrapper.text()).toContain('二级分行示意位置，非地理比例');
     expect(wrapper.text()).toContain('边界数据：© OpenStreetMap contributors（ODbL）');
+    expect(wrapper.find('.mp-attribution a').attributes()).toMatchObject({
+      href: 'https://www.openstreetmap.org/copyright',
+      target: '_blank',
+      rel: 'noopener noreferrer'
+    });
     expect(wrapper.findAll('[data-anchor]').map(x => x.attributes('data-anchor'))).toEqual(['LEFT', 'RIGHT', 'TOP', 'FAR_TOP']);
     expect(wrapper.findAll('button[tabindex="0"]').length).toBe(5); // 4 示意节点 + 1 个本地真实点位
     expect(wrapper.findComponent({ name: 'VChart' }).props('option').geo).toMatchObject({
@@ -70,6 +75,31 @@ describe('MapCenter schema v1/v2', () => {
     const wrapper = mount(MapCenter, { props: { mapPoints: [{ orgCode: 'O1', orgName: '旧支行', lng: 108, lat: 34 }] } });
     expect(wrapper.text()).not.toContain('组织分布示意，非地理比例');
     expect(wrapper.find('.mp-chart').exists()).toBe(true);
+    expect(wrapper.findComponent({ name: 'VChart' }).props('option').geo.map).toBe('shaanxi');
+  });
+
+  it.each([
+    ['mode-only', { mode: 'XIAN_COMPOSITE' }],
+    ['schema-only', { schemaVersion: 2 }],
+    ['v1-xian-conflict', { schemaVersion: 1, mode: 'XIAN_COMPOSITE' }],
+    ['string-schema', { schemaVersion: '2', mode: 'XIAN_COMPOSITE' }],
+    ['illegal-mode', { schemaVersion: 2, mode: 'SHAANXI_LEGACY' }],
+    ['missing-schema', { schemaVersion: null, mode: 'XIAN_COMPOSITE' }],
+    ['missing-all-contract-fields', {}]
+  ])('运行包 %s 缺少精确 schema/mode 契约时 Fail Close', (_name, mapPayload) => {
+    const wrapper = mount(MapCenter, { props: { mapPayload } });
+    expect(wrapper.find('[role="alert"]').text()).toContain('已拒绝渲染');
+    expect(wrapper.find('.mp-chart').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('西安六区经营地图');
+  });
+
+  it('运行态以授权 mapPayload 为准，不能由伴随组件配置掩盖其缺失 schema', () => {
+    const wrapper = mount(MapCenter, { props: {
+      mapConfig: { schemaVersion: 2, mode: 'XIAN_COMPOSITE' },
+      mapPayload: { mode: 'XIAN_COMPOSITE', localPoints: [], satelliteNodes: [] }
+    } });
+    expect(wrapper.find('[role="alert"]').text()).toContain('已拒绝渲染');
+    expect(wrapper.find('.mp-chart').exists()).toBe(false);
   });
 
   it('消费后端已授权的 mapPackage(localPoints/satelliteNodes) 时不再要求画像 selector 字段', () => {
@@ -133,6 +163,28 @@ describe('MapCenter schema v1/v2', () => {
     });
     expect(wrapper.findAll('.mp-local-node')).toHaveLength(1);
     expect(wrapper.find('.mp-config-gap').exists()).toBe(false);
+  });
+
+  it('设计态只预览地图，所有本地和二级分行节点均不可聚焦或钻取', async () => {
+    const wrapper = mount(MapCenter, { props: {
+      mode: 'design',
+      mapConfig: { schemaVersion: 2, mode: 'XIAN_COMPOSITE', satelliteNodes: [{ orgCode: '128', anchor: 'LEFT' }] },
+      profiles: [
+        { orgCode: 'XA-001', orgName: '西安本地机构', cityCode: '610100', operatingLevel: 'PRIMARY', lng: 108.95, lat: 34.25, coordSys: 'GCJ02', status: 'ACTIVE' },
+        { orgCode: '128', orgName: '宝鸡分行', operatingLevel: 'PRIMARY', status: 'ACTIVE' }
+      ]
+    } });
+    const nodes = wrapper.findAll('.mp-local-node, .mp-satellite-node');
+    expect(nodes).toHaveLength(2);
+    for (const node of nodes) {
+      expect(node.attributes('tabindex')).toBe('-1');
+      expect(node.attributes('aria-disabled')).toBe('true');
+      expect(node.attributes('disabled')).toBeDefined();
+      await node.trigger('click');
+      await node.trigger('keydown.enter');
+      await node.trigger('keydown.space');
+    }
+    expect(routerPush).not.toHaveBeenCalled();
   });
 
   it('四个二级分行均可键盘导航至机构详情屏，且运行态绝不跳转红色引擎', async () => {
