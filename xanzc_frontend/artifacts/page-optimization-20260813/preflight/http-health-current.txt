@@ -1,0 +1,8 @@
+页面优化真实 QA 当前前置健康检查（2026-08-13）
+
+8091-login-page 200
+18081-current-user-unauth 401
+18081-v3-api-docs-first-attempt 000 timeout-after-5s
+18081-v3-api-docs-retry 000 timeout-after-20s
+
+说明：未认证 current-user 返回 401 为预期。API 文档检查两次超时，未读取响应正文。

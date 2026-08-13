@@ -1,0 +1,4 @@
+### Result
+1. [POST] http://127.0.0.1:8091/api/auth/login => [FAILED] net::ERR_ABORTED
+
+说明：请求/响应正文、headers、Cookie 与 Authorization 未归档。

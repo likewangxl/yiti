@@ -1,0 +1,4 @@
+### Result
+48. [POST] http://127.0.0.1:8091/api/auth/login => [FAILED] net::ERR_ABORTED
+
+Note: 47 static requests not shown, run with --static option to see them.

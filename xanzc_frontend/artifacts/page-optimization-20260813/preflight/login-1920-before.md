@@ -1,0 +1,28 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - generic "银行营销平台" [ref=e6]: 银
+      - heading "银行营销 · 业务执行 · 绩效平台" [level=1] [ref=e9]
+      - paragraph [ref=e10]: Branch Marketing · Workflow · Performance
+      - list [ref=e11]:
+        - listitem [ref=e12]: 客户营销 · 线索管理 · 触达任务
+        - listitem [ref=e14]: 流程审批 · 多级回调 · SLA 管控
+        - listitem [ref=e16]: 绩效计算 · 报表分析 · 数据范围
+      - generic [ref=e18]: © 2026 Branch Platform · v1.0
+  - main [ref=e19]:
+    - generic [ref=e20]:
+      - generic [ref=e21]:
+        - paragraph [ref=e22]: BRANCH PLATFORM / ACCESS
+        - heading "欢迎登录" [level=2] [ref=e23]
+        - paragraph [ref=e24]: 请使用账号登录后台
+      - form "欢迎登录" [ref=e25]:
+        - generic [ref=e26]:
+          - generic [ref=e28]:
+            - generic [ref=e29]: 用户名
+            - textbox "用户名" [ref=e34]:
+              - /placeholder: 请输入用户名
+          - generic [ref=e36]:
+            - generic [ref=e37]: 密码
+            - textbox "密码" [ref=e42]:
+              - /placeholder: 请输入密码
+          - button "登 录" [ref=e43] [cursor=pointer]

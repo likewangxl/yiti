@@ -1,0 +1,11 @@
+1. [POST] http://127.0.0.1:8091/api/auth/login => [200] OK
+2. [GET] http://127.0.0.1:8091/api/auth/my-menus => [200] OK
+8. [GET] http://127.0.0.1:8091/api/notifications/unread-count => [200] OK
+9. [GET] http://127.0.0.1:8091/api/workflow/tasks?pageSize=20 => [200] OK
+10. [GET] http://127.0.0.1:8091/api/portal/announcements/recent?limit=3 => [200] OK
+11. [GET] http://127.0.0.1:8091/api/notifications?pageNo=1&pageSize=3 => [200] OK
+12. [GET] http://127.0.0.1:8091/api/notifications/unread-count => [200] OK
+13. [GET] http://127.0.0.1:8091/api/workflow/transfers/inbox => [200] OK
+14. [GET] http://127.0.0.1:8091/api/workflow/transfers/outbox => [200] OK
+
+Note: 6 static requests not shown, run with --static option to see them.
