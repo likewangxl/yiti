@@ -34,6 +34,7 @@ import AppHeader from '../AppHeader.vue';
 
 const passthrough = (name) => ({ name, template: '<div><slot /></div>' });
 const stubs = {
+  WorkspaceTabs: { name: 'WorkspaceTabs', template: '<nav aria-label="工作区页签" />' },
   'el-dropdown': { name: 'ElDropdown', emits: ['command'], template: '<div><slot /><slot name="dropdown" /></div>' },
   'el-dropdown-menu': passthrough('ElDropdownMenu'),
   'el-dropdown-item': passthrough('ElDropdownItem'),

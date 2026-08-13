@@ -1,9 +1,8 @@
 <template>
   <div class="layout" :class="{ 'layout--sidebar-collapsed': sidebarCollapsed }">
-    <AppSidebar :collapsed="sidebarCollapsed" />
+    <AppSidebar :collapsed="sidebarCollapsed" @toggle-sidebar="toggleSidebar" />
     <div class="main">
-      <AppHeader :sidebar-collapsed="sidebarCollapsed" @toggle-sidebar="toggleSidebar" />
-      <WorkspaceTabs />
+      <AppHeader />
       <div ref="mainElement" id="app-main" class="content" :class="{ 'content--full': $route.meta.fullBleed }" tabindex="-1">
         <router-view :key="$route.fullPath" v-slot="{ Component }">
           <transition name="page">
@@ -20,7 +19,6 @@ import { nextTick, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppHeader from '@/components/AppHeader.vue';
-import WorkspaceTabs from '@/components/WorkspaceTabs.vue';
 
 // 折叠态只属于当前壳层实例，避免不同登录会话或浏览器标签页互相串状态。
 const sidebarCollapsed = ref(false);

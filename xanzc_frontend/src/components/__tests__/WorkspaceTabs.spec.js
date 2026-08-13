@@ -270,13 +270,14 @@ describe('WorkspaceTabs.vue', () => {
     window.removeEventListener('keydown', windowKeydown);
   });
 
-  it('页签尺寸只由全局 token 提供，标题和关闭按钮均保持 40px 命中高度', () => {
+  it('页签嵌入 Header 后横向伸展但不再占独立行，标题和关闭按钮均保持 40px 命中高度', () => {
     const componentSource = readFileSync(resolve(process.cwd(), 'src/components/WorkspaceTabs.vue'), 'utf8');
     const tokenSource = readFileSync(resolve(process.cwd(), 'src/styles/tokens.scss'), 'utf8');
 
     expect(tokenSource).toMatch(/--layout-workspace-tabs-height:\s*48px;/);
     expect(componentSource).toContain('height: var(--layout-workspace-tabs-height);');
-    expect(componentSource).toContain('flex: 0 0 var(--layout-workspace-tabs-height);');
+    expect(componentSource).toContain('flex: 1 1 0;');
+    expect(componentSource).not.toContain('flex: 0 0 var(--layout-workspace-tabs-height);');
     expect(componentSource).not.toContain('--workspace-tabs-height');
     expect(componentSource).toMatch(/\.workspace-tabs__tab\s*\{[\s\S]*?min-width:\s*112px;[\s\S]*?max-width:\s*200px;[\s\S]*?height:\s*40px;/);
     expect(componentSource).toContain('gap: var(--space-2);');

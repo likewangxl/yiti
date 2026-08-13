@@ -21,13 +21,12 @@ const stubs = {
   AppSidebar: {
     name: 'AppSidebar',
     props: ['collapsed'],
-    template: '<aside class="sidebar-stub" :data-collapsed="String(collapsed)" />'
+    emits: ['toggle-sidebar'],
+    template: '<aside class="sidebar-stub" :data-collapsed="String(collapsed)"><button class="sidebar-toggle-stub" @click="$emit(\'toggle-sidebar\')" /></aside>'
   },
   AppHeader: {
     name: 'AppHeader',
-    props: ['sidebarCollapsed'],
-    emits: ['toggle-sidebar'],
-    template: '<button class="header-stub" :data-collapsed="String(sidebarCollapsed)" @click="$emit(\'toggle-sidebar\')" />'
+    template: '<header class="header-stub" />'
   },
   AppBreadcrumb: { template: '<div class="breadcrumb-stub" />' },
   WorkspaceTabs: { template: '<div class="workspace-tabs-stub" />' },
@@ -67,12 +66,12 @@ afterEach(() => {
 });
 
 describe('DefaultLayout.vue full-bleed 内容区', () => {
-  it('全局壳层不挂载面包屑，工作区页签栏直接位于 Header 后且不属于 content padding 契约', () => {
+  it('全局壳层不挂载面包屑或独立页签行，内容区直接跟在内嵌页签的 Header 后', () => {
     const wrapper = mountWithMeta({ title: '工作台' });
     expect(wrapper.find('.breadcrumb-stub').exists()).toBe(false);
-    expect(wrapper.find('.workspace-tabs-stub').exists()).toBe(true);
+    expect(wrapper.find('.workspace-tabs-stub').exists()).toBe(false);
     expect(wrapper.find('.content').element.previousElementSibling.className)
-      .toBe('workspace-tabs-stub');
+      .toBe('header-stub');
   });
 
   it('路由声明 meta.fullBleed 时内容区带 content--full(去 padding)', () => {
@@ -87,22 +86,20 @@ describe('DefaultLayout.vue full-bleed 内容区', () => {
 });
 
 describe('DefaultLayout.vue 侧栏壳层状态', () => {
-  it('默认展开，切换时向 Header 与 Sidebar 同步 220px/64px 壳层状态', async () => {
+  it('默认展开，由 Sidebar 常驻按钮切换并同步 220px/64px 壳层状态', async () => {
     const wrapper = mountWithMeta({ title: '工作台' });
 
     expect(wrapper.find('.layout').classes()).not.toContain('layout--sidebar-collapsed');
     expect(wrapper.find('.sidebar-stub').attributes('data-collapsed')).toBe('false');
-    expect(wrapper.find('.header-stub').attributes('data-collapsed')).toBe('false');
 
-    await wrapper.find('.header-stub').trigger('click');
+    await wrapper.find('.sidebar-toggle-stub').trigger('click');
     expect(wrapper.find('.layout').classes()).toContain('layout--sidebar-collapsed');
     expect(wrapper.find('.sidebar-stub').attributes('data-collapsed')).toBe('true');
-    expect(wrapper.find('.header-stub').attributes('data-collapsed')).toBe('true');
   });
 
   it('侧栏折叠态仅属于当前 Layout 实例，不会跨重新挂载持久化', async () => {
     const first = mountWithMeta({ title: '工作台' });
-    await first.find('.header-stub').trigger('click');
+    await first.find('.sidebar-toggle-stub').trigger('click');
     expect(first.find('.sidebar-stub').attributes('data-collapsed')).toBe('true');
     first.unmount();
 
@@ -139,7 +136,7 @@ describe('DefaultLayout.vue 路由焦点管理', () => {
     const content = wrapper.find('#app-main').element;
     const focusSpy = vi.spyOn(content, 'focus');
 
-    await wrapper.find('.header-stub').trigger('click');
+    await wrapper.find('.sidebar-toggle-stub').trigger('click');
     probe.focus();
     focusSpy.mockClear();
     routeState.path = '/screen/admin/designer';

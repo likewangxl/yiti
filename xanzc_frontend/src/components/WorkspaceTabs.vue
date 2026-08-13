@@ -129,12 +129,11 @@ function closeTab(tab) {
 <style lang="scss" scoped>
 .workspace-tabs {
   height: var(--layout-workspace-tabs-height);
-  flex: 0 0 var(--layout-workspace-tabs-height);
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
-  background: var(--color-workspace-strip);
-  border-bottom: 1px solid var(--color-border);
-  padding: 4px var(--layout-content-gutter) 3px;
+  background: transparent;
+  padding: 4px 0 3px;
 }
 
 .workspace-tabs__scroll {
