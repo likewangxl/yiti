@@ -111,7 +111,14 @@ function handleTabKeydown(event, tab) {
  */
 async function restoreClosedTabFocus(tab, navigation, source, intent) {
   if (!tab?.key) return;
-  if (navigation) await navigation;
+  if (navigation) {
+    try {
+      await navigation;
+    } catch {
+      // 导航未完成时目标页签并非稳定落点；结束本次关闭焦点意图，同时消费异步拒绝。
+      return;
+    }
+  }
   await nextTick();
   await new Promise((resolve) => requestAnimationFrame(resolve));
   if (intent !== closeFocusIntent) return;

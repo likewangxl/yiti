@@ -80,6 +80,16 @@ async function flushCloseFocus() {
   await nextTick();
 }
 
+function createDeferred() {
+  let resolvePromise;
+  let rejectPromise;
+  const promise = new Promise((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+  return { promise, resolve: resolvePromise, reject: rejectPromise };
+}
+
 const mountedWrappers = [];
 const mountedNodes = [];
 
@@ -220,6 +230,98 @@ describe('WorkspaceTabs.vue', () => {
     expect(document.activeElement).not.toBe(main);
     expect(document.activeElement).toBe(adjacentLabel.element);
     main.remove();
+  });
+
+  it('关闭当前页签的路由导航被拒绝时不产生 unhandled rejection，也不恢复目标焦点', async () => {
+    const wrapper = mountTabs({ attachTo: document.body });
+
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
+    await nextTick();
+
+    const navigationError = new Error('navigation rejected');
+    const targetLabel = wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__label');
+    const targetFocus = vi.spyOn(targetLabel.element, 'focus');
+    let unhandledReason;
+    const recordUnhandled = (reason) => {
+      if (reason === navigationError) unhandledReason = reason;
+    };
+    process.on('unhandledRejection', recordUnhandled);
+    routerMock.push.mockRejectedValueOnce(navigationError);
+
+    try {
+      const closeButton = wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__close');
+      closeButton.element.focus();
+      closeButton.element.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await nextTick();
+
+      expect(unhandledReason).toBeUndefined();
+      expect(targetFocus).not.toHaveBeenCalled();
+    } finally {
+      process.off('unhandledRejection', recordUnhandled);
+    }
+  });
+
+  it('快速连续关闭且导航延迟时只允许最后一次关闭意图恢复焦点', async () => {
+    const wrapper = mountTabs({ attachTo: document.body });
+
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
+    await nextTick();
+
+    const firstNavigation = createDeferred();
+    const lastNavigation = createDeferred();
+    routerMock.push
+      .mockReturnValueOnce(firstNavigation.promise)
+      .mockReturnValueOnce(lastNavigation.promise);
+    const staleTarget = wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__label');
+    const staleFocus = vi.spyOn(staleTarget.element, 'focus');
+    const finalTarget = wrapper.find('[data-tab-key="/workspace"] .workspace-tabs__label');
+    const finalFocus = vi.spyOn(finalTarget.element, 'focus');
+
+    await wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__close').trigger('click');
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    await wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__close').trigger('click');
+    visit({ path: '/workspace', name: 'Workspace', meta: { title: '工作台' } });
+    await nextTick();
+
+    firstNavigation.resolve();
+    await flushCloseFocus();
+    expect(staleFocus).not.toHaveBeenCalled();
+    expect(finalFocus).not.toHaveBeenCalled();
+
+    lastNavigation.resolve();
+    await flushCloseFocus();
+    await flushCloseFocus();
+    expect(finalFocus).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(finalTarget.element);
+    expect(routerMock.push.mock.calls).toEqual([['/perf/metrics'], ['/workspace']]);
+  });
+
+  it('关闭导航 pending 期间组件卸载，导航完成后不回焦且不访问已卸载节点', async () => {
+    const wrapper = mountTabs({ attachTo: document.body });
+
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
+    await nextTick();
+
+    const navigation = createDeferred();
+    routerMock.push.mockReturnValueOnce(navigation.promise);
+    const targetLabel = wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__label');
+    const targetFocus = vi.spyOn(targetLabel.element, 'focus');
+
+    await wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__close').trigger('click');
+    wrapper.unmount();
+    navigation.resolve();
+    await flushCloseFocus();
+
+    expect(targetFocus).not.toHaveBeenCalled();
+    expect(targetLabel.element.isConnected).toBe(false);
   });
 
   it('关闭后台非当前页签后保留当前路由，并把焦点交给当前页签', async () => {
