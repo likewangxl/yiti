@@ -92,6 +92,17 @@ describe('screenScope 业务条线、机构范围与地图配置契约', () => {
       schemaVersion: 2, screenCode: 'SCR_RETAIL', blockId: 8, period: 'RANGE',
       dateFrom: '2026-08-01', dateTo: '2026-08-13', contextParams: { orgCode: '128', empId: 'E001' }
     });
+    for (const value of [0, false, '']) {
+      expect(buildScreenDataRequest({ schemaVersion: 1, screenCode: 'SCR_BRANCH', dsId: 9002,
+        contextParams: { orgCode: value, empId: value } }).contextParams)
+        .toEqual({ orgCode: value, empId: value });
+      expect(buildScreenDataRequest({ schemaVersion: 2, screenCode: 'SCR_RETAIL', blockId: 8,
+        contextParams: { orgCode: value, empId: value } }).contextParams)
+        .toEqual({ orgCode: value, empId: value });
+    }
+    expect(buildScreenDataRequest({ schemaVersion: 1, screenCode: 'SCR_BRANCH', dsId: 9002,
+      dateFrom: null, dateTo: undefined, contextParams: { orgCode: null, empId: undefined } }))
+      .toEqual({ schemaVersion: 1, screenCode: 'SCR_BRANCH', dsId: 9002, period: 'LATEST', contextParams: {} });
   });
 
   it('schema2 缺少 screenCode/blockId 或未知版本时 Fail Close，不降级为 v1 请求', () => {

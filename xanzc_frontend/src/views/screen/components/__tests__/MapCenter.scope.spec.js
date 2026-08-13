@@ -20,6 +20,17 @@ describe('MapCenter schema v1/v2', () => {
     expect(design.find('.mp-composite').attributes('style') || '').not.toContain('padding-top');
   });
 
+  it('陕西 v1 与非 XIAN 拒绝态即使收到安全区也不得产生 padding', () => {
+    const legacy = mount(MapCenter, { props: {
+      mapConfig: { schemaVersion: 1, mode: 'SHAANXI_LEGACY' }, runtimeHeaderInset: 72
+    } });
+    const nonXian = mount(MapCenter, { props: {
+      mapConfig: { schemaVersion: 2, mode: 'SHAANXI_LEGACY' }, runtimeHeaderInset: 72
+    } });
+    expect(legacy.find('.mp-block').attributes('style') || '').not.toContain('padding');
+    expect(nonXian.find('.mp-block').attributes('style') || '').not.toContain('padding');
+  });
+
   it('六区边界资产只包含约定行政区，并记录可再分发来源、代码、坐标系与裁剪方式', () => {
     expect(xianSixDistricts.type).toBe('FeatureCollection');
     expect(xianSixDistricts.features.map(feature => ({

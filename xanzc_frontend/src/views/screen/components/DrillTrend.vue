@@ -50,7 +50,8 @@ async function load() {
       blockId: props.context.blockId || props.bind.blockId || props.bind.id,
       dsId: props.bind.dsId,
       period: period.value,
-      contextParams: { orgCode: props.context.orgCode || null, empId: props.context.empId || null }
+      // 与普通区块共用 builder 的 nullish 过滤，调用方只负责原样透传运行上下文。
+      contextParams: { orgCode: props.context.orgCode, empId: props.context.empId }
     }));
   } catch (e) {
     error.value = e?.message || '取数失败';
