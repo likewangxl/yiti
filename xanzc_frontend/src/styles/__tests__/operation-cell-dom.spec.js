@@ -76,12 +76,62 @@ const ProductClampTable = defineComponent({
     </main>`
 });
 
+const SmallTagDensityTable = defineComponent({
+  template: `
+    <main class="bp-crud metrics-page">
+      <el-table :data="[{ logic: 'SQL', status: 'ACTIVE' }]">
+        <el-table-column label="计算" width="90">
+          <template #default="{ row }"><el-tag effect="plain" size="small">{{ row.logic }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }"><el-tag effect="plain" size="small">{{ row.status }}</el-tag></template>
+        </el-table-column>
+      </el-table>
+    </main>`
+});
+
+const NonCrudSmallTagTable = defineComponent({
+  template: `
+    <main class="independent-subsystem">
+      <el-table :data="[{ status: 'ACTIVE' }]">
+        <el-table-column label="状态">
+          <template #default><el-tag effect="plain" size="small">ACTIVE</el-tag></template>
+        </el-table-column>
+      </el-table>
+    </main>`
+});
+
+const WorkflowMonitorCodeDensityTable = defineComponent({
+  template: `
+    <main class="bp-crud" data-v-workflow-monitor-fixture>
+      <el-table :data="[{ businessKey: 'FLOW-20260813-0001', title: '流程标题' }]">
+        <el-table-column label="流程 / 标题" class-name="compact-stack-cell" width="240">
+          <template #default="{ row }">
+            <code class="mono" data-v-workflow-monitor-fixture>{{ row.businessKey }}</code>
+            <div class="sub-name" data-v-workflow-monitor-fixture>{{ row.title }}</div>
+          </template>
+        </el-table-column>
+      </el-table>
+    </main>`
+});
+
+const metricsPageSource = readFileSync(resolve(process.cwd(), 'src/views/perf/Metrics.vue'), 'utf8');
+const workflowMonitorSource = readFileSync(resolve(process.cwd(), 'src/views/system/WorkflowMonitor.vue'), 'utf8');
+
 let wrapper;
 let crudBaselineStyle;
+let elementPlusResolvedTagStyle;
 let taskMonitorScopedStyle;
 let resourcesScopedStyle;
+let workflowMonitorScopedStyle;
 
 const px = (value) => Number.parseFloat(value) || 0;
+const resolvedTagHeight = (element) => {
+  const style = getComputedStyle(element);
+  // happy-dom 不会解析 Element Plus `height: var(--el-tag-height)`，但会保留
+  // 组件尺寸变量；项目若以显式 height 覆盖，computed height 则直接可读。
+  return px(style.height) || px(style.getPropertyValue('--el-tag-height'));
+};
 const tableCellMetrics = () => {
   const declaration = crudBaselineStyle.textContent.match(
     /\.bp-crud \.el-table th\.el-table__cell,\s*\.bp-crud \.el-table td\.el-table__cell\s*\{([^}]*)\}/
@@ -120,6 +170,12 @@ const compileScopedSfcStyle = (relativePath, scopeId) => {
 beforeEach(() => {
   // Element Plus 官方样式先由上方真实入口加载，项目 SCSS 后注入。
   // 断言通过 DOM 的 getComputedStyle 验证两者的实际层叠结果，而非只匹配源码文本。
+  // happy-dom 不解析 Element Plus `height: var(--el-tag-height)`；用官方 small
+  // 标签变量的最终值 20px 等价展开该一条声明，保留真实选择器与级联关系。
+  elementPlusResolvedTagStyle = document.createElement('style');
+  elementPlusResolvedTagStyle.textContent = '.el-tag.el-tag--small { height: 20px; }';
+  document.head.append(elementPlusResolvedTagStyle);
+
   crudBaselineStyle = document.createElement('style');
   crudBaselineStyle.textContent = compile(resolve(process.cwd(), 'src/styles/index.scss')).css;
   document.head.append(crudBaselineStyle);
@@ -138,17 +194,28 @@ beforeEach(() => {
     'data-v-resources-fixture'
   );
   document.head.append(resourcesScopedStyle);
+
+  workflowMonitorScopedStyle = document.createElement('style');
+  workflowMonitorScopedStyle.textContent = compileScopedSfcStyle(
+    'src/views/system/WorkflowMonitor.vue',
+    'data-v-workflow-monitor-fixture'
+  );
+  document.head.append(workflowMonitorScopedStyle);
 });
 
 afterEach(() => {
   wrapper?.unmount();
   wrapper = undefined;
+  elementPlusResolvedTagStyle?.remove();
+  elementPlusResolvedTagStyle = undefined;
   crudBaselineStyle?.remove();
   crudBaselineStyle = undefined;
   taskMonitorScopedStyle?.remove();
   taskMonitorScopedStyle = undefined;
   resourcesScopedStyle?.remove();
   resourcesScopedStyle = undefined;
+  workflowMonitorScopedStyle?.remove();
+  workflowMonitorScopedStyle = undefined;
 });
 
 describe('操作列真实 DOM 基线', () => {
@@ -246,6 +313,72 @@ describe('操作列真实 DOM 基线', () => {
     expect(getComputedStyle(table).maxWidth).toBe('100%');
     const scrollerStyle = getComputedStyle(tableScroller);
     expect(['auto', 'scroll']).toContain(scrollerStyle.overflowX || scrollerStyle.overflow);
+  });
+
+  it('Metrics 页面 small 标签在 bp-crud 表格内提升到 24px，仍留在 40px 单行并不影响独立子系统', async () => {
+    expect(metricsPageSource).toMatch(/<main[^>]*class="bp-crud metrics-page"/);
+    expect(metricsPageSource).toMatch(/<el-tag[^>]*size="small"/);
+
+    wrapper = mount(SmallTagDensityTable, { attachTo: document.body, global: { plugins: [ElementPlus] } });
+    await nextTick();
+    await nextTick();
+
+    const row = wrapper.get('tbody tr.el-table__row').element;
+    const cells = wrapper.findAll('tbody td.el-table__cell');
+    const tags = wrapper.findAll('tbody .el-tag--small');
+    expect(tags).toHaveLength(2);
+    expect(tags.map((tag) => resolvedTagHeight(tag.element))).toEqual([24, 24]);
+    expect(tags.every((tag) => getComputedStyle(tag.element).verticalAlign === 'middle')).toBe(true);
+    expect(getComputedStyle(row).height).toBe('40px');
+    expect(cells.every((cell) => getComputedStyle(cell.element).height === '39px')).toBe(true);
+    wrapper.unmount();
+
+    wrapper = mount(NonCrudSmallTagTable, { attachTo: document.body, global: { plugins: [ElementPlus] } });
+    await nextTick();
+    await nextTick();
+    expect(resolvedTagHeight(wrapper.get('.el-tag--small').element)).toBe(20);
+  });
+
+  it('WorkflowMonitor 双行 code.mono 保留可见边框，并把文字内容完整放进 18px 轨道', async () => {
+    expect(workflowMonitorSource).toMatch(/class-name="compact-stack-cell"[\s\S]*?<code class="mono">/);
+    expect(workflowMonitorSource).toMatch(/\.mono\s*\{[^}]*border:\s*1px solid/);
+
+    wrapper = mount(WorkflowMonitorCodeDensityTable, { attachTo: document.body, global: { plugins: [ElementPlus] } });
+    await nextTick();
+    await nextTick();
+
+    const cell = wrapper.get('td.compact-stack-cell .cell').element;
+    const code = wrapper.get('td.compact-stack-cell code.mono').element;
+    const cellStyle = getComputedStyle(cell);
+    const codeStyle = getComputedStyle(code);
+    const trackHeight = px(cellStyle.gridAutoRows);
+    // happy-dom 对含 var() 颜色的 border shorthand 不返回 borderWidth；从同一份
+    // WorkflowMonitor 编译 CSS 读取 1px 可见边框，再用真实 DOM 的最终行高建模。
+    const scopedMonoDeclaration = workflowMonitorScopedStyle.textContent.match(
+      /\.mono\[data-v-workflow-monitor-fixture\]\s*\{([^}]*)\}/
+    )?.[1] || '';
+    const borderWidth = px(scopedMonoDeclaration.match(/border:\s*([\d.]+)px\s+solid/i)?.[1]);
+    const borderHeight = borderWidth * 2;
+    const compactCodeDeclaration = crudBaselineStyle.textContent.match(
+      /\.bp-crud \.el-table td\.compact-stack-cell \.cell > code,[\s\S]*?\{([^}]*)\}/
+    )?.[1] || '';
+    // 项目选择器特异度高于后加载页面 `.mono[data-v-*]`；happy-dom 不完整实现
+    // shorthand 与逻辑属性的特异度级联，因此直接校验生产用同一编译声明。
+    expect(compactCodeDeclaration).toMatch(/padding-block:\s*0/);
+    const paddingHeight = 0;
+    const modeledRectHeight = trackHeight;
+    const modeledClientHeight = modeledRectHeight - borderHeight;
+    const modeledScrollHeight = px(codeStyle.lineHeight) + paddingHeight;
+
+    expect(contentWithCellBorderHeight(cell)).toBe(40);
+    expect(codeStyle.boxSizing).toBe('border-box');
+    expect(borderHeight).toBe(2);
+    expect(paddingHeight).toBe(0);
+    expect({ modeledRectHeight, modeledClientHeight, modeledScrollHeight }).toEqual({
+      modeledRectHeight: 18,
+      modeledClientHeight: 16,
+      modeledScrollHeight: 16
+    });
   });
 
   it('Resources 后加载 scoped 样式不恢复单元格 padding，真实表格外框仍为 40px', async () => {

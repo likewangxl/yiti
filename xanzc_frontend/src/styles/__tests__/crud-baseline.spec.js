@@ -53,7 +53,7 @@ describe('共享 CRUD 页面基线样式', () => {
     expect(scoped).toMatch(/\.bp-crud\s+:where\(\.filter-form\s+\.el-form-item:last-child\)\s*\{[\s\S]*justify-self:\s*end;/);
     expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-input__wrapper,\s*\.el-select__wrapper,\s*\.el-button\)\s*\{[\s\S]*min-height:\s*32px;/);
     expect(scoped).toMatch(/\.bp-crud\s+\.el-table\s+th\.el-table__cell,\s*\.bp-crud\s+\.el-table\s+td\.el-table__cell\s*\{[\s\S]*border-bottom:\s*1px solid[\s\S]*box-sizing:\s*border-box;[\s\S]*height:\s*39px;/);
-    expect(scoped).toMatch(/\.bp-crud\s+:where\(\.el-table\s+\.el-tag\)\s*\{[\s\S]*min-height:\s*24px;/);
+    expect(scoped).toMatch(/\.bp-crud\s+\.el-table\s+\.el-tag\s*\{[\s\S]*height:\s*24px;[\s\S]*min-height:\s*24px;[\s\S]*vertical-align:\s*middle;/);
     // Element Plus 的 .el-table .cell 为 0,2,0；:where() 的内部选择器不贡献特异度。
     // 这里必须使用足以覆盖组件默认值的主平台作用域，不能仅靠 selector 文本存在。
     expect(scoped).toMatch(/\.bp-crud\s+\.el-table\s+\.cell\s*\{[\s\S]*overflow:\s*hidden;[\s\S]*text-overflow:\s*ellipsis;[\s\S]*white-space:\s*nowrap;/);
@@ -80,6 +80,7 @@ describe('共享 CRUD 页面基线样式', () => {
     expect(scoped).toMatch(/\.bp-crud\s+\.el-table\s+tr\s*\{[\s\S]*height:\s*40px;/);
     expect(scoped).toMatch(/td\.compact-clamp-cell\s+\.cell[\s\S]*display:\s*-webkit-box;[\s\S]*-webkit-line-clamp:\s*2;[\s\S]*line-height:\s*18px;[\s\S]*max-height:\s*36px;/);
     expect(scoped).toMatch(/td\.compact-stack-cell\s+\.cell[\s\S]*display:\s*grid;[\s\S]*grid-auto-rows:\s*18px;[\s\S]*height:\s*39px;/);
+    expect(scoped).toMatch(/td\.compact-stack-cell\s+\.cell\s*>\s*code\.mono,[\s\S]*box-sizing:\s*border-box;[\s\S]*line-height:\s*16px;/);
     expect(scoped).toMatch(/td\.compact-status-cell\s+\.cell[\s\S]*grid-template-rows:\s*24px\s+15px;/);
   });
 
