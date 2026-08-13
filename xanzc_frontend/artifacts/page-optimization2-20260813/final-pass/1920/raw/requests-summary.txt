@@ -1,0 +1,10 @@
+All request observations came from the official Chromium session with route-list = No active routes.
+
+Phase                                      observed  failed/HTTP>=400  writes
+59 route scan                             156       0                 0
+shell/tabs/actions                         27       0                 0
+designer read-only                         36       0                 0
+focus-only diagnostics                      -       0                 0
+danger confirmation open + cancel           -       0                 0
+
+The complete sanitized request/response records are embedded in the corresponding JSON evidence. Query values and numeric resource identifiers are redacted. The danger visual probe and focus-only probes also retained explicit zero-write/zero-failure summaries.

@@ -1,0 +1,400 @@
+{
+  "gitHead": "4f5d9ceb7ef5a53b39b02f79bfd3c9abd6039eb4",
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "fixedWindowName": "yiti-screen-designer",
+  "popupOpen": {
+    "mainBefore": {
+      "url": "/#/system/config",
+      "pageCount": 1,
+      "tabCount": 50
+    },
+    "mainAfter": {
+      "url": "/#/system/config",
+      "pageCount": 2,
+      "tabCount": 50
+    },
+    "popup": {
+      "url": "/#/screen-admin/designer",
+      "name": "yiti-screen-designer",
+      "hasOpener": true,
+      "hasFocus": true,
+      "layout": 0,
+      "sidebar": 0,
+      "header": 0,
+      "workspaceTabs": 0,
+      "designer": 1,
+      "dirtyText": "已保存"
+    },
+    "returnAriaLabel": "返回工作区",
+    "tools": {
+      "新建": 1,
+      "编辑范围": 1,
+      "管理查看角色": 1,
+      "撤销": 1,
+      "重做": 1,
+      "适应窗口": 1,
+      "预览草稿": 1,
+      "放弃草稿": 1,
+      "回滚": 1,
+      "保存": 1,
+      "发布": 1,
+      "返回工作区": 1
+    }
+  },
+  "popupReuse": {
+    "pagesBefore": 2,
+    "pagesAfter": 2,
+    "samePopupStillOpen": true,
+    "popup": {
+      "url": "/#/screen-admin/designer",
+      "name": "yiti-screen-designer",
+      "hasOpener": true,
+      "hasFocus": true,
+      "layout": 0,
+      "sidebar": 0,
+      "header": 0,
+      "workspaceTabs": 0,
+      "designer": 1,
+      "dirtyText": "已保存"
+    }
+  },
+  "cleanReturn": {
+    "before": {
+      "url": "/#/screen-admin/designer",
+      "name": "yiti-screen-designer",
+      "hasOpener": true,
+      "hasFocus": true,
+      "layout": 0,
+      "sidebar": 0,
+      "header": 0,
+      "workspaceTabs": 0,
+      "designer": 1,
+      "dirtyText": "已保存"
+    },
+    "after": {
+      "closed": true,
+      "mainUrl": "/#/system/config",
+      "writeDelta": 0
+    }
+  },
+  "directUrlFallback": {
+    "before": {
+      "url": "/#/screen-admin/designer",
+      "name": "",
+      "hasOpener": false,
+      "hasFocus": true,
+      "layout": 0,
+      "sidebar": 0,
+      "header": 0,
+      "workspaceTabs": 0,
+      "designer": 1,
+      "dirtyText": "已保存"
+    },
+    "after": {
+      "closed": false,
+      "url": "/#/workspace",
+      "workspaceShell": 1,
+      "mainFocus": false
+    }
+  },
+  "dirtyCancel": {
+    "activeBackgroundType": "纯色",
+    "changedTo": "渐变",
+    "dirtyText": "有未保存修改",
+    "exitButtons": {
+      "取消": 1,
+      "放弃并关闭": 1,
+      "保存并关闭": 1
+    },
+    "initialFocusText": "取消",
+    "after": {
+      "open": true,
+      "dirtyText": "有未保存修改",
+      "focusAriaLabel": "返回工作区",
+      "writeDelta": 0
+    }
+  },
+  "dirtyDiscard": {
+    "closed": true,
+    "writeDelta": 0,
+    "saveEndpointCalls": 0
+  },
+  "beforeUnloadProbe": {
+    "syntheticLocalDirtyOnly": true,
+    "defaultPrevented": true,
+    "dispatchResult": false,
+    "returnValue": false
+  },
+  "network": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "/api/admin/workflow/process-definitions",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/admin/workflow/node-candidates?processDefinitionKey=<redacted>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/src/api/http.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/src/api/auth.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/src/api/workspace.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/src/api/users.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/auth/my-menus",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/auth/permissions",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/src/api/screen.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/screen/admin/screens",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/screen/admin/canvas/<redacted-id>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/admin/org-groups",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/admin/roles/all?recordStatus=<redacted>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/admin/org-profiles",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/screen/admin/screens",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/screen/admin/canvas/<redacted-id>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/admin/org-groups",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/admin/roles/all?recordStatus=<redacted>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/admin/org-profiles",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/notifications/unread-count",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/workflow/tasks?pageSize=<redacted>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/portal/announcements/recent?limit=<redacted>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/notifications?pageNo=<redacted>&pageSize=<redacted>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/notifications/unread-count",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/workflow/transfers/inbox",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/workflow/transfers/outbox",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/src/api/http.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/src/api/auth.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/src/api/workspace.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/src/api/users.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/auth/my-menus",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/auth/permissions",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/src/api/screen.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/screen/admin/screens",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/screen/admin/canvas/<redacted-id>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/admin/org-groups",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/admin/roles/all?recordStatus=<redacted>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "/api/admin/org-profiles",
+        "status": 200,
+        "failure": null
+      }
+    ],
+    "badCount": 0,
+    "writeCount": 0
+  },
+  "console": {
+    "errors": [],
+    "fallbacks": [],
+    "nonDynamicWarnings": [],
+    "browserCloseWarnings": [
+      {
+        "page": "main",
+        "type": "warning",
+        "text": "Scripts may close only the windows that were opened by them."
+      }
+    ],
+    "dynamicWarningCount": 30
+  },
+  "summary": {
+    "popupFixedName": true,
+    "mainUnchangedOnOpen": true,
+    "independentNoShell": true,
+    "allToolsPresent": true,
+    "popupReusedAndFocused": true,
+    "cleanReturnClosed": true,
+    "directUrlFallbackWorkspace": true,
+    "beforeUnloadBlockedWhenDirty": true,
+    "dirtyCancelPassed": true,
+    "dirtyDiscardNoSave": true,
+    "consoleErrors": 0,
+    "fallbacks": 0,
+    "nonDynamicWarnings": 0,
+    "badNetwork": 0,
+    "unexpectedWrites": 0,
+    "browserCloseWarnings": 1
+  },
+  "evidenceSanitized": true,
+  "credentialsArchived": false,
+  "responseBodiesArchived": false,
+  "realEntityIdsArchived": false
+}

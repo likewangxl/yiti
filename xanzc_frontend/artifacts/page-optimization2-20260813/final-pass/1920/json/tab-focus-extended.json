@@ -1,0 +1,103 @@
+{
+  "gitHead": "4f5d9ceb7ef5a53b39b02f79bfd3c9abd6039eb4",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "ordinaryNavigation": {
+    "label": "ordinary-route-navigation-stable",
+    "hash": "#/system/config",
+    "activeText": "系统配置",
+    "activeTabKey": "/system/config",
+    "focus": {
+      "tag": "DIV",
+      "id": "app-main",
+      "className": "content",
+      "ariaLabel": null,
+      "text": "流程配置维护已部署流程的节点候选人、表单字段与 SLA 阈值。流程定义<redacted-flow-name>（<redacted-flow-code>）查询重置刷"
+    },
+    "focusIsActiveLabel": false,
+    "focusIsMain": true,
+    "activeFullyVisible": true,
+    "scrollLeft": 5857,
+    "scrollClientWidth": 1465,
+    "scrollWidth": 7322
+  },
+  "backgroundClose": {
+    "backgroundExisted": true,
+    "before": {
+      "label": "before-background-close",
+      "hash": "#/system/audit",
+      "activeText": "审计日志",
+      "activeTabKey": "/system/audit",
+      "focus": {
+        "tag": "DIV",
+        "id": "app-main",
+        "className": "content",
+        "ariaLabel": null,
+        "text": "审计日志只读审计流水，保留 TraceId、请求资源、原因和原始错误信息的追溯路径。仅看高危绩效模块刷新关键字操作人动作全部业务域全部时间范围至查询重置操作流水"
+      },
+      "focusIsActiveLabel": false,
+      "focusIsMain": true,
+      "activeFullyVisible": true,
+      "scrollLeft": 5857,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7322
+    },
+    "after": {
+      "label": "background-close-stable",
+      "hash": "#/system/audit",
+      "activeText": "审计日志",
+      "activeTabKey": "/system/audit",
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "className": "workspace-tabs__label",
+        "ariaLabel": null,
+        "text": "审计日志"
+      },
+      "focusIsActiveLabel": true,
+      "focusIsMain": false,
+      "activeFullyVisible": true,
+      "scrollLeft": 5731,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7196
+    }
+  },
+  "userFocusOverride": {
+    "syntheticFocusOnly": true,
+    "action": {
+      "exercised": true,
+      "activeKey": "/system/config",
+      "backgroundKey": "/workspace/announcements",
+      "focusTarget": "sidebar-toggle"
+    },
+    "after": {
+      "label": "user-focus-override-stable",
+      "hash": "#/system/config",
+      "activeText": "系统配置",
+      "activeTabKey": "/system/config",
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "className": "shell-toggle",
+        "ariaLabel": "折叠侧边导航",
+        "text": ""
+      },
+      "focusIsActiveLabel": false,
+      "focusIsMain": false,
+      "activeFullyVisible": true,
+      "scrollLeft": 5605,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7070
+    }
+  },
+  "summary": {
+    "consoleErrors": 0,
+    "nonDynamicWarnings": 0,
+    "writes": 0,
+    "ordinaryNavigationMain": true,
+    "backgroundCloseCurrent": true,
+    "userFocusNotStolen": true
+  }
+}
