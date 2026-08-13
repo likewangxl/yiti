@@ -13,7 +13,8 @@
 #
 # 日志位置: logs/bootstrap-YYYY-MM-DD.log
 # PID 位置: logs/bootstrap.pid
-# 端口:     18080 (固定，与 application.yml 一致)
+# 端口:     18080（由脚本显式传给 Spring，可用 BOOTSTRAP_PORT 覆盖）
+# SOAP端口: 30522
 # Profile:  dev (可由 BOOTSTRAP_PROFILE 环境变量覆盖)
 # ============================================================
 set -uo pipefail
@@ -26,8 +27,11 @@ PID_FILE="${LOG_DIR}/bootstrap.pid"
 LOG_FILE="${LOG_DIR}/bootstrap-$(date +%Y-%m-%d).log"
 
 PORT="${BOOTSTRAP_PORT:-18080}"
+SOAP_PORT="${BOOTSTRAP_SOAP_PORT:-30522}"
 PROFILE="${BOOTSTRAP_PROFILE:-dev}"
-MVN_CMD=(mvn -f "${ROOT_DIR}/bootstrap/pom.xml" -Dspring-boot.run.profiles="${PROFILE}" -DskipTests spring-boot:run)
+CHECKOUT_ID="$(basename "$(dirname "${ROOT_DIR}")")-$(basename "${ROOT_DIR}")"
+MAVEN_REPO_LOCAL="${BOOTSTRAP_MAVEN_REPO:-${HOME}/.m2-${CHECKOUT_ID}/repository}"
+MVN_CMD=(mvn -Dmaven.repo.local="${MAVEN_REPO_LOCAL}" -f "${ROOT_DIR}/bootstrap/pom.xml" -Dspring-boot.run.profiles="${PROFILE}" -DskipTests spring-boot:run)
 
 # ---------- 颜色（仅在 TTY 输出） ----------
 if [[ -t 1 ]]; then
@@ -73,8 +77,9 @@ cmd_start() {
     return 1
   fi
 
-  log_info "启动中  | profile=${PROFILE} | port=${PORT}"
+  log_info "启动中  | profile=${PROFILE} | port=${PORT} | soapPort=${SOAP_PORT}"
   log_info "工作目录 ${ROOT_DIR}"
+  log_info "Maven仓库 ${MAVEN_REPO_LOCAL}"
   log_info "日志文件 ${LOG_FILE}"
 
   # 写一行启动分隔，方便回看
@@ -82,7 +87,8 @@ cmd_start() {
          "$(date '+%Y-%m-%d %H:%M:%S')" "${PROFILE}" >> "${LOG_FILE}"
 
   # nohup 后台跑；用 setsid 防 SIGHUP 关掉
-  nohup setsid "${MVN_CMD[@]}" >>"${LOG_FILE}" 2>&1 &
+  nohup env SERVER_PORT="${PORT}" PLATFORM_SOAP_NETTY_PORT="${SOAP_PORT}" \
+    setsid "${MVN_CMD[@]}" >>"${LOG_FILE}" 2>&1 &
   local mvn_pid=$!
   echo "${mvn_pid}" > "${PID_FILE}"
   log_info "已派发 mvn (PID ${mvn_pid})，等待 ${PORT} 监听 (上限 120s)..."
@@ -167,6 +173,8 @@ cmd_status() {
   echo "  PID_FILE : ${PID_FILE}"
   echo "  PROFILE  : ${PROFILE}"
   echo "  PORT     : ${PORT}"
+  echo "  SOAP_PORT: ${SOAP_PORT}"
+  echo "  MVN_REPO : ${MAVEN_REPO_LOCAL}"
   echo
   if is_pid_alive "${pid}"; then
     echo "  PID      : ${pid} ${C_GREEN}(alive)${C_RESET}"
