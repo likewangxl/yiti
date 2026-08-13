@@ -1,0 +1,6 @@
+2560 final evidence recursive redaction audit
+scope=json, raw, commands, README and screenshot filenames
+rules=malformed placeholder fragments; known dynamic entity endpoint segments; entity query identifiers; actualPath parameters; UUID/opaque IDs; credentials/session values; historical failure files
+files_scanned=32
+findings=0
+result=PASS

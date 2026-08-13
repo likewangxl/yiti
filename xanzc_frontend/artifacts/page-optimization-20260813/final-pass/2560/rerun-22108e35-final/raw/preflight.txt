@@ -1,0 +1,17 @@
+2560x1440 final preflight
+date=2026-08-13 Asia/Shanghai
+git_head=22108e35edb4f859c2d806ec4b1868d7aac274f6
+bf330852_ancestor=true
+16c74710_ancestor=true
+22108e35_ancestor=true
+frontend_listener=127.0.0.1:8091 pid=1090703
+frontend_cwd=/home/djdev/leid/yiti/xanzc_frontend
+frontend_home_http=200
+frontend_proxy_current_user_http=401
+backend_listener=*:18081 pid=944783
+backend_cwd=/home/djdev/leid/yiti/bootstrap
+backend_current_user_http=401
+browser_sessions_before_open=(no browsers)
+start_route_list=No active routes
+mock_or_route_registration=none
+service_action=none

@@ -1,0 +1,91 @@
+{
+  "status": "pass",
+  "viewport": [
+    2560,
+    1440
+  ],
+  "gitHead": "22108e35edb4f859c2d806ec4b1868d7aac274f6",
+  "requiredCommits": {
+    "bf330852": true,
+    "16c74710": true,
+    "22108e35": true
+  },
+  "ordinaryRoutes": {
+    "expected": 59,
+    "passed": 59,
+    "failed": 0,
+    "documentOverflow": 0,
+    "contentOverflow": 0,
+    "mainOverflow": 0,
+    "tables": 48,
+    "dataRows40": 630,
+    "dataCells40": 4553,
+    "headerRows40": 48,
+    "headerCells40": 341,
+    "controls32": 150,
+    "tags24": 524,
+    "stickyOperationCells": 554,
+    "requests": 166,
+    "writes": 0,
+    "failedRequests": 0,
+    "badResponses": 0,
+    "consoleErrors": 0,
+    "nonDynamicWarnings": 0,
+    "fallbacks": 0,
+    "realIdRoutes": 6,
+    "cancellations": 6,
+    "resets": 2,
+    "warningTargetsZero": 4
+  },
+  "targeted": {
+    "perfMetrics": {
+      "realTags": 14,
+      "height": 24,
+      "passed": true
+    },
+    "workflowCode": {
+      "selector": "main.bp-crud td.compact-stack-cell .cell > code.mono",
+      "realNodes": 20,
+      "rectHeight": 18,
+      "clientHeight": 16,
+      "scrollHeight": 16,
+      "borderTop": "1px",
+      "borderBottom": "1px",
+      "lineHeight": "16px",
+      "verticalClipping": 0,
+      "realOverflowSamples": 0,
+      "shortHoverSamples": 94,
+      "shortHoverWithoutTitle": 94,
+      "passed": true
+    }
+  },
+  "xian": {
+    "overview": "pass",
+    "visibleDistrictLabels": [
+      "未央区",
+      "莲湖区",
+      "新城区",
+      "碑林区",
+      "雁塔区",
+      "长安区"
+    ],
+    "internalRegionsProbe": "not_available_vue_echarts_encapsulation",
+    "draftHttpStatus": 200,
+    "draftCode": "0",
+    "schemaVersion": 2,
+    "mode": "XIAN_COMPOSITE",
+    "titleGapPx": 1.3,
+    "runtimeHeaderInsetDesignPx": 72,
+    "branchesPassed": 4,
+    "branchesExpected": 4,
+    "screenDataRequests": 20,
+    "screenData200Code0": 20,
+    "screenDataBodiesWithoutNull": 20,
+    "unexpectedWrites": 0,
+    "consoleErrors": 0,
+    "redengineElements": 0
+  },
+  "mockRoutes": 0,
+  "credentialsArchived": false,
+  "firstProductError": null
+}

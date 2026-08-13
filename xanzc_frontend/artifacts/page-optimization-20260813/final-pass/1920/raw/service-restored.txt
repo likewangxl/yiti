@@ -1,0 +1,31 @@
+1920x1080 final-pass service restore
+captured_at_start=2026-08-13T15:50:33+08:00
+captured_at_end=2026-08-13T15:51:03+08:00
+
+backend_18081_cwd=/home/djdev/leid/yiti/bootstrap
+backend_current_user_status=401
+backend_current_user_code=AUTH-40105
+backend_current_user_body_archived=false
+backend_openapi_status=200
+backend_doc_html_status=500
+
+frontend_start_command=VITE_USE_MOCK=false VITE_API_BASE=/api VITE_DEV_HOST=127.0.0.1 VITE_DEV_PORT=8091 VITE_DEV_STRICT_PORT=true VITE_PROXY_TARGET=http://127.0.0.1:18081 npm run dev
+frontend_pid=1090703
+frontend_cwd=/home/djdev/leid/yiti/xanzc_frontend
+frontend_cmdline=node /home/djdev/leid/yiti/xanzc_frontend/node_modules/.bin/vite
+frontend_listener=127.0.0.1:8091
+
+stability_probe_interval_seconds=5
+stability_probe_count=7
+stability_probe_duration_seconds=30
+probe_1=2026-08-13T15:50:33+08:00 index=200 auth=401
+probe_2=2026-08-13T15:50:38+08:00 index=200 auth=401
+probe_3=2026-08-13T15:50:43+08:00 index=200 auth=401
+probe_4=2026-08-13T15:50:48+08:00 index=200 auth=401
+probe_5=2026-08-13T15:50:53+08:00 index=200 auth=401
+probe_6=2026-08-13T15:50:58+08:00 index=200 auth=401
+probe_7=2026-08-13T15:51:03+08:00 index=200 auth=401
+
+mock_mode=false
+proxy_target=http://127.0.0.1:18081
+ownership_and_stability=PASS

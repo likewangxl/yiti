@@ -1,0 +1,23 @@
+session=final1920xianfinal
+backend=real 127.0.0.1:18081 through 8091 /api proxy
+mock_routes=0
+response_bodies_archived=false
+real_parameter_ids_archived=false
+real_dsId_values_archived=false
+
+ordinary_admin_routes:
+- 59/59 routes passed
+- parameter discovery GET: 6/6 HTTP 200 with values found; values not archived
+- unexpected writes after login: 0
+- failed requests: 0
+- bad API responses: 0
+- full per-route sanitized request list: ../json/route-dom-probes-1920-22108e35.json
+
+XIAN:
+- GET /api/screen/view/SCR_RETAIL_OVERVIEW?preview=<redacted>: HTTP 200/code 0
+- GET /api/screen/view/SCR_BRANCH: 4/4 HTTP 200
+- POST /api/screen/data: 20/20 HTTP 200/code 0 (read-only runtime data query)
+- other writes: 0
+- request body contract only: schemaVersion/screenCode/dsId type+validity/period/context keys/null paths
+- full request and response bodies were not persisted
+- full per-phase sanitized request list: ../json/xian-final-1920-22108e35.json

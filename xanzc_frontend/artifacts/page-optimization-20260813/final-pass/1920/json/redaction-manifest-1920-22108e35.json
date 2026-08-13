@@ -1,0 +1,288 @@
+{
+  "schemaVersion": 1,
+  "artifact": "json/route-dom-probes-1920-22108e35.json",
+  "operation": "mechanical-redaction-only-no-browser-rerun",
+  "sourceSha256": "81e74e0d559648ea6e9bb6785dccc7bd6ad61029123fabfbf729f0d26ff8a2d6",
+  "publishedSha256": "b19b43bfa124edeec1af3df2c45eaab2613905b5ade0413d8a13172f9217043d",
+  "parameterRoutes": [
+    {
+      "route": "AnnouncementDetail",
+      "source": "announcement",
+      "template": "/announcement/:id",
+      "parameter": ":id",
+      "redaction": "template-path"
+    },
+    {
+      "route": "ReportFreeDetail",
+      "source": "freeBatch",
+      "template": "/report/free/:batchId",
+      "parameter": ":batchId",
+      "redaction": "template-path"
+    },
+    {
+      "route": "ReportAmasApprovalDetail",
+      "source": "amasApproval",
+      "template": "/report/amas-approvals/:perfAdjustNo",
+      "parameter": ":perfAdjustNo",
+      "redaction": "template-path"
+    },
+    {
+      "route": "HistoryPriceApprovalDetail",
+      "source": "priceApproval",
+      "template": "/history/price-approval/:priceApprId",
+      "parameter": ":priceApprId",
+      "redaction": "template-path"
+    },
+    {
+      "route": "SysAnnouncementDetail",
+      "source": "sysAnnouncement",
+      "template": "/system/announcements/:id",
+      "parameter": ":id",
+      "redaction": "template-path"
+    },
+    {
+      "route": "SysWorkflowFlowEdit",
+      "source": "workflowFlow",
+      "template": "/system/workflow-flows/:id",
+      "parameter": ":id",
+      "redaction": "template-path"
+    }
+  ],
+  "changedValueCount": 44,
+  "changedValues": [
+    {
+      "pointer": "$.routes[4].dom.actualPath",
+      "beforeType": "string",
+      "after": "/announcement/:id"
+    },
+    {
+      "pointer": "$.routes[4].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/portal/announcements/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[10].network.requests[4].url",
+      "beforeType": "string",
+      "after": "/api/perf/metrics/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[3].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[4].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[5].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[6].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[7].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[8].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[9].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[10].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[11].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[12].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[13].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[14].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[15].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[16].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[17].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[18].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[19].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[20].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[21].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[11].network.requests[22].url",
+      "beforeType": "string",
+      "after": "/api/perf/kpi-schemes/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[15].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "pointer": "$.routes[17].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "pointer": "$.routes[22].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "pointer": "$.routes[22].network.requests[1].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "pointer": "$.routes[28].dom.actualPath",
+      "beforeType": "string",
+      "after": "/report/free/:batchId"
+    },
+    {
+      "pointer": "$.routes[31].dom.actualPath",
+      "beforeType": "string",
+      "after": "/report/amas-approvals/:perfAdjustNo"
+    },
+    {
+      "pointer": "$.routes[31].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/reports/amas-approvals/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[39].dom.actualPath",
+      "beforeType": "string",
+      "after": "/history/price-approval/:priceApprId"
+    },
+    {
+      "pointer": "$.routes[39].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/reports/amas-price-approvals/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[41].network.requests[2].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "pointer": "$.routes[41].network.requests[4].url",
+      "beforeType": "string",
+      "after": "/api/admin/users/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[44].network.requests[2].url",
+      "beforeType": "string",
+      "after": "/api/admin/roles/<redacted-id>/resources"
+    },
+    {
+      "pointer": "$.routes[44].network.requests[4].url",
+      "beforeType": "string",
+      "after": "/api/admin/roles/<redacted-id>/resources"
+    },
+    {
+      "pointer": "$.routes[45].network.requests[1].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "pointer": "$.routes[48].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "pointer": "$.routes[48].network.requests[1].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "pointer": "$.routes[54].dom.actualPath",
+      "beforeType": "string",
+      "after": "/system/announcements/:id"
+    },
+    {
+      "pointer": "$.routes[54].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/portal/announcements/<redacted-id>"
+    },
+    {
+      "pointer": "$.routes[56].dom.actualPath",
+      "beforeType": "string",
+      "after": "/system/workflow-flows/:id"
+    },
+    {
+      "pointer": "$.routes[56].network.requests[1].url",
+      "beforeType": "string",
+      "after": "/api/admin/workflow/flows/<redacted-id>"
+    }
+  ],
+  "invariants": {
+    "summaryPreserved": true,
+    "routeNamesAndStatusesPreserved": true,
+    "responseStatusesPreserved": true,
+    "domNumericAndBooleanMetricsPreserved": true,
+    "routeCount": 59,
+    "parameterRouteCount": 6
+  },
+  "publicationRules": {
+    "routeActualPath": "templatePath",
+    "entityPathSegment": "<redacted-id>",
+    "queryValue": "<redacted>",
+    "realIdsRetained": false
+  }
+}

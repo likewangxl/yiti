@@ -1,0 +1,52 @@
+{
+  "httpStatus": 200,
+  "code": "0",
+  "screenCode": "SCR_RETAIL_OVERVIEW",
+  "screenName": "零售经营总览",
+  "renderPackage": {
+    "canvasAdaptor": "keepProportion",
+    "mapComponent": {
+      "present": true,
+      "top": 0,
+      "width": 1920,
+      "height": 1080
+    }
+  },
+  "mapPackage": {
+    "schemaVersion": 2,
+    "mode": "XIAN_COMPOSITE",
+    "baseRegion": "XIAN_OUTLINE",
+    "localCount": 0,
+    "satelliteNodes": [
+      {
+        "orgCode": "128",
+        "anchor": "LEFT"
+      },
+      {
+        "orgCode": "191",
+        "anchor": "RIGHT"
+      },
+      {
+        "orgCode": "169",
+        "anchor": "TOP"
+      },
+      {
+        "orgCode": "129",
+        "anchor": "FAR_TOP"
+      }
+    ]
+  },
+  "visibleEvidence": {
+    "title": "西安六区经营地图",
+    "labels": [
+      "未央区",
+      "莲湖区",
+      "新城区",
+      "碑林区",
+      "雁塔区",
+      "长安区"
+    ],
+    "screenshot": "../screenshots/XIAN-overview-2560.png"
+  },
+  "internalRegionsProbe": "not_available_vue_echarts_encapsulation"
+}

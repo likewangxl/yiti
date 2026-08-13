@@ -1,0 +1,3157 @@
+{
+  "status": "pass",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "session": "final1920xianfinal",
+  "gitHead": "22108e35edb4f859c2d806ec4b1868d7aac274f6",
+  "generatedAt": "2026-08-13T09:02:16.290Z",
+  "authentication": {
+    "mode": "normal",
+    "credentialsArchived": false
+  },
+  "safety": {
+    "mockRoutesAtStart": "No active routes",
+    "mockRoutesRegistered": 0,
+    "allowedWrites": [
+      "POST /api/screen/data (read-only runtime query)"
+    ],
+    "requestBodiesArchived": false,
+    "responseBodiesArchived": false,
+    "dsIdValuesArchived": false
+  },
+  "overview": {
+    "status": "pass",
+    "issues": [],
+    "network": {
+      "triggerError": null,
+      "settled": true,
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/api/auth/permissions",
+          "status": 200,
+          "code": "0",
+          "body": null,
+          "viewContract": null
+        },
+        {
+          "method": "GET",
+          "url": "/src/api/screen.js",
+          "status": 200,
+          "code": null,
+          "body": null,
+          "viewContract": null
+        },
+        {
+          "method": "GET",
+          "url": "/api/screen/view/SCR_RETAIL_OVERVIEW?preview=<redacted>",
+          "status": 200,
+          "code": "0",
+          "body": null,
+          "viewContract": {
+            "screenCode": "SCR_RETAIL_OVERVIEW",
+            "screenName": "零售经营总览",
+            "schemaVersion": 2,
+            "mode": "XIAN_COMPOSITE",
+            "baseRegion": "XIAN_OUTLINE",
+            "localCount": 0,
+            "satelliteNodes": [
+              {
+                "orgCode": "128",
+                "anchor": "LEFT"
+              },
+              {
+                "orgCode": "191",
+                "anchor": "RIGHT"
+              },
+              {
+                "orgCode": "169",
+                "anchor": "TOP"
+              },
+              {
+                "orgCode": "129",
+                "anchor": "FAR_TOP"
+              }
+            ]
+          }
+        }
+      ],
+      "dataRequests": [],
+      "unexpectedWrites": [],
+      "bad": [],
+      "console": {
+        "errors": 0,
+        "nonDynamicWarnings": 0,
+        "dynamicMenuWarnings": 0,
+        "fallback": 0,
+        "entries": []
+      }
+    },
+    "dom": {
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "route": "/screen/SCR_RETAIL_OVERVIEW?preview=draft",
+      "outerTitle": "零售经营总览",
+      "innerTitle": "西安六区经营地图",
+      "outerRect": {
+        "left": 784,
+        "top": 13,
+        "right": 1136,
+        "bottom": 58,
+        "width": 352,
+        "height": 45
+      },
+      "innerRect": {
+        "left": 1,
+        "top": 73,
+        "right": 1919,
+        "bottom": 101,
+        "width": 1918,
+        "height": 28
+      },
+      "titleOverlap": false,
+      "chart": {
+        "found": true,
+        "width": 1918,
+        "height": 939,
+        "geoMap": "xian-six-districts",
+        "regionNames": [
+          "未央区",
+          "莲湖区",
+          "新城区",
+          "碑林区",
+          "雁塔区",
+          "长安区"
+        ]
+      },
+      "satelliteNodes": [
+        {
+          "name": "宝鸡分行",
+          "ariaLabel": "宝鸡分行，二级分行示意位置，非地理比例，按 Enter 或空格进入机构详情屏",
+          "anchor": "LEFT",
+          "disabled": false,
+          "tabIndex": 0,
+          "rect": {
+            "left": 9,
+            "top": 557.5,
+            "right": 83.015625,
+            "bottom": 583.5,
+            "width": 74.015625,
+            "height": 26
+          }
+        },
+        {
+          "name": "渭南分行",
+          "ariaLabel": "渭南分行，二级分行示意位置，非地理比例，按 Enter 或空格进入机构详情屏",
+          "anchor": "RIGHT",
+          "disabled": false,
+          "tabIndex": 0,
+          "rect": {
+            "left": 1762.96875,
+            "top": 557.5,
+            "right": 1836.984375,
+            "bottom": 583.5,
+            "width": 74.015625,
+            "height": 26
+          }
+        },
+        {
+          "name": "咸阳分行",
+          "ariaLabel": "咸阳分行，二级分行示意位置，非地理比例，按 Enter 或空格进入机构详情屏",
+          "anchor": "TOP",
+          "disabled": false,
+          "tabIndex": 0,
+          "rect": {
+            "left": 922.9921875,
+            "top": 149,
+            "right": 997.0078125,
+            "bottom": 175,
+            "width": 74.015625,
+            "height": 26
+          }
+        },
+        {
+          "name": "榆林分行",
+          "ariaLabel": "榆林分行，二级分行示意位置，非地理比例，按 Enter 或空格进入机构详情屏",
+          "anchor": "FAR_TOP",
+          "disabled": false,
+          "tabIndex": 0,
+          "rect": {
+            "left": 922.9921875,
+            "top": 109,
+            "right": 997.0078125,
+            "bottom": 135,
+            "width": 74.015625,
+            "height": 26
+          }
+        }
+      ],
+      "localNodeCount": 0,
+      "disclaimer": "二级分行示意位置，非地理比例",
+      "attribution": {
+        "href": "https://www.openstreetmap.org/copyright",
+        "target": "_blank",
+        "relTokens": [
+          "noopener",
+          "noreferrer"
+        ]
+      },
+      "documentOverflowX": false,
+      "configGap": "",
+      "loadError": "",
+      "redengineElements": 0
+    }
+  },
+  "branches": [
+    {
+      "name": "宝鸡分行",
+      "orgCode": "128",
+      "anchor": "LEFT",
+      "action": "click",
+      "status": "pass",
+      "issues": [],
+      "route": "/screen/SCR_BRANCH?orgCode=128",
+      "network": {
+        "triggerError": null,
+        "settled": true,
+        "requests": [
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_BRANCH",
+            "status": 200,
+            "code": "0",
+            "body": null,
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LAST_1M",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          }
+        ],
+        "dataRequests": [
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LAST_1M",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          }
+        ],
+        "unexpectedWrites": [],
+        "bad": [],
+        "console": {
+          "errors": 0,
+          "nonDynamicWarnings": 0,
+          "dynamicMenuWarnings": 0,
+          "fallback": 0,
+          "entries": []
+        }
+      },
+      "dataRequestCount": 5,
+      "dataContracts": [
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "128",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LAST_1M",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "128",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "128",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "128",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "128",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        }
+      ],
+      "dom": {
+        "outerTitle": "支行经营详情",
+        "viewport": [
+          1920,
+          1080
+        ],
+        "document": [
+          1920,
+          1920
+        ],
+        "blockCount": 5,
+        "visibleBlockCount": 5,
+        "redengineElements": 0,
+        "loadError": "",
+        "guide": ""
+      }
+    },
+    {
+      "name": "渭南分行",
+      "orgCode": "191",
+      "anchor": "RIGHT",
+      "action": "Enter",
+      "status": "pass",
+      "issues": [],
+      "route": "/screen/SCR_BRANCH?orgCode=191",
+      "network": {
+        "triggerError": null,
+        "settled": true,
+        "requests": [
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_RETAIL_OVERVIEW?preview=<redacted>",
+            "status": 200,
+            "code": "0",
+            "body": null,
+            "viewContract": {
+              "screenCode": "SCR_RETAIL_OVERVIEW",
+              "screenName": "零售经营总览",
+              "schemaVersion": 2,
+              "mode": "XIAN_COMPOSITE",
+              "baseRegion": "XIAN_OUTLINE",
+              "localCount": 0,
+              "satelliteNodes": [
+                {
+                  "orgCode": "128",
+                  "anchor": "LEFT"
+                },
+                {
+                  "orgCode": "191",
+                  "anchor": "RIGHT"
+                },
+                {
+                  "orgCode": "169",
+                  "anchor": "TOP"
+                },
+                {
+                  "orgCode": "129",
+                  "anchor": "FAR_TOP"
+                }
+              ]
+            }
+          },
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_BRANCH",
+            "status": 200,
+            "code": "0",
+            "body": null,
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LAST_1M",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          }
+        ],
+        "dataRequests": [
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LAST_1M",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          }
+        ],
+        "unexpectedWrites": [],
+        "bad": [],
+        "console": {
+          "errors": 0,
+          "nonDynamicWarnings": 0,
+          "dynamicMenuWarnings": 0,
+          "fallback": 0,
+          "entries": []
+        }
+      },
+      "dataRequestCount": 5,
+      "dataContracts": [
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "191",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LAST_1M",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "191",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "191",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "191",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "191",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        }
+      ],
+      "dom": {
+        "outerTitle": "支行经营详情",
+        "viewport": [
+          1920,
+          1080
+        ],
+        "document": [
+          1920,
+          1920
+        ],
+        "blockCount": 5,
+        "visibleBlockCount": 5,
+        "redengineElements": 0,
+        "loadError": "",
+        "guide": ""
+      }
+    },
+    {
+      "name": "咸阳分行",
+      "orgCode": "169",
+      "anchor": "TOP",
+      "action": "Space",
+      "status": "pass",
+      "issues": [],
+      "route": "/screen/SCR_BRANCH?orgCode=169",
+      "network": {
+        "triggerError": null,
+        "settled": true,
+        "requests": [
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_RETAIL_OVERVIEW?preview=<redacted>",
+            "status": 200,
+            "code": "0",
+            "body": null,
+            "viewContract": {
+              "screenCode": "SCR_RETAIL_OVERVIEW",
+              "screenName": "零售经营总览",
+              "schemaVersion": 2,
+              "mode": "XIAN_COMPOSITE",
+              "baseRegion": "XIAN_OUTLINE",
+              "localCount": 0,
+              "satelliteNodes": [
+                {
+                  "orgCode": "128",
+                  "anchor": "LEFT"
+                },
+                {
+                  "orgCode": "191",
+                  "anchor": "RIGHT"
+                },
+                {
+                  "orgCode": "169",
+                  "anchor": "TOP"
+                },
+                {
+                  "orgCode": "129",
+                  "anchor": "FAR_TOP"
+                }
+              ]
+            }
+          },
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_BRANCH",
+            "status": 200,
+            "code": "0",
+            "body": null,
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LAST_1M",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          }
+        ],
+        "dataRequests": [
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LAST_1M",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          }
+        ],
+        "unexpectedWrites": [],
+        "bad": [],
+        "console": {
+          "errors": 0,
+          "nonDynamicWarnings": 0,
+          "dynamicMenuWarnings": 0,
+          "fallback": 0,
+          "entries": []
+        }
+      },
+      "dataRequestCount": 5,
+      "dataContracts": [
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "169",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LAST_1M",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "169",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "169",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "169",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "169",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        }
+      ],
+      "dom": {
+        "outerTitle": "支行经营详情",
+        "viewport": [
+          1920,
+          1080
+        ],
+        "document": [
+          1920,
+          1920
+        ],
+        "blockCount": 5,
+        "visibleBlockCount": 5,
+        "redengineElements": 0,
+        "loadError": "",
+        "guide": ""
+      }
+    },
+    {
+      "name": "榆林分行",
+      "orgCode": "129",
+      "anchor": "FAR_TOP",
+      "action": "click",
+      "status": "pass",
+      "issues": [],
+      "route": "/screen/SCR_BRANCH?orgCode=129",
+      "network": {
+        "triggerError": null,
+        "settled": true,
+        "requests": [
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_RETAIL_OVERVIEW?preview=<redacted>",
+            "status": 200,
+            "code": "0",
+            "body": null,
+            "viewContract": {
+              "screenCode": "SCR_RETAIL_OVERVIEW",
+              "screenName": "零售经营总览",
+              "schemaVersion": 2,
+              "mode": "XIAN_COMPOSITE",
+              "baseRegion": "XIAN_OUTLINE",
+              "localCount": 0,
+              "satelliteNodes": [
+                {
+                  "orgCode": "128",
+                  "anchor": "LEFT"
+                },
+                {
+                  "orgCode": "191",
+                  "anchor": "RIGHT"
+                },
+                {
+                  "orgCode": "169",
+                  "anchor": "TOP"
+                },
+                {
+                  "orgCode": "129",
+                  "anchor": "FAR_TOP"
+                }
+              ]
+            }
+          },
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_BRANCH",
+            "status": 200,
+            "code": "0",
+            "body": null,
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LAST_1M",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          }
+        ],
+        "dataRequests": [
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LAST_1M",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "dsId": {
+                "present": true,
+                "valueArchived": false,
+                "valueType": "number",
+                "positiveSafeInteger": true
+              },
+              "period": {
+                "present": true,
+                "value": "LATEST",
+                "valueType": "string",
+                "nonEmpty": true
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empId": {
+                  "present": true,
+                  "valueType": "string",
+                  "emptyString": true,
+                  "emptyStringIsValid": true
+                }
+              },
+              "nullPaths": [],
+              "undefinedPaths": []
+            },
+            "viewContract": null
+          }
+        ],
+        "unexpectedWrites": [],
+        "bad": [],
+        "console": {
+          "errors": 0,
+          "nonDynamicWarnings": 0,
+          "dynamicMenuWarnings": 0,
+          "fallback": 0,
+          "entries": []
+        }
+      },
+      "dataRequestCount": 5,
+      "dataContracts": [
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "129",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LAST_1M",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "129",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "129",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "129",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "dsId": {
+            "present": true,
+            "valueArchived": false,
+            "valueType": "number",
+            "positiveSafeInteger": true
+          },
+          "period": {
+            "present": true,
+            "value": "LATEST",
+            "valueType": "string",
+            "nonEmpty": true
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "129",
+            "orgCodeType": "string",
+            "empId": {
+              "present": true,
+              "valueType": "string",
+              "emptyString": true,
+              "emptyStringIsValid": true
+            }
+          },
+          "nullPaths": [],
+          "undefinedPaths": []
+        }
+      ],
+      "dom": {
+        "outerTitle": "支行经营详情",
+        "viewport": [
+          1920,
+          1080
+        ],
+        "document": [
+          1920,
+          1920
+        ],
+        "blockCount": 5,
+        "visibleBlockCount": 5,
+        "redengineElements": 0,
+        "loadError": "",
+        "guide": ""
+      }
+    }
+  ],
+  "summary": {
+    "overview": "pass",
+    "branchesPassed": 4,
+    "branchesExpected": 4,
+    "identicalBranchLayout": true,
+    "screenDataRequests": 20,
+    "screenData200Code0": 20,
+    "screenDataBodiesWithoutNullOrUndefined": 20,
+    "screenDataWithValidDsIdAndPeriod": 20,
+    "empIdEmptyStringAccepted": 20,
+    "unexpectedWrites": 0,
+    "consoleErrors": 0,
+    "redengineElements": 0
+  },
+  "firstError": null
+}

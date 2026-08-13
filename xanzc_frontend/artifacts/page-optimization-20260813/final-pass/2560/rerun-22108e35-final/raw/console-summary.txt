@@ -1,0 +1,5 @@
+official CLI final console error query
+Total messages: 182 (Errors: 0, Warnings: 182)
+Returning 0 messages for level "error"
+
+The 182 warnings are the pre-existing allow-listed Vue Router dynamic-menu no-match warnings accumulated during repeated navigation. Per-route non-dynamic warnings, fallback markers and errors are all 0 in json/routes-59.json. XIAN drill console errors and non-dynamic warnings are 0 in json/xian-drill.json.

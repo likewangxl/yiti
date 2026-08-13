@@ -1,0 +1,30 @@
+session=final1920xianfinal
+Total messages: 192
+Errors: 0
+Warnings: 192
+Non-dynamic warnings: 0
+API fallback markers: 0
+
+All warnings were repeated known dynamic-menu Vue Router messages for these 15 unavailable menu paths:
+/bizexec/loans
+/bizexec/supports
+/customers/list
+/customers/leads/new
+/customers/leads/approval
+/customers/tags
+/customers/tags/approval
+/customers/pool/available
+/customers/pool/claimed
+/customers/cross-org
+/touches/mine
+/touches/overview
+/customers/transfer-log
+/yundun/accountability-violations
+/yundun/credit-violations
+
+Official CLI `console error` result:
+Total messages: 192 (Errors: 0, Warnings: 192)
+Returning 0 messages for level "error"
+
+Per-route raw console entries and their classification are preserved in json/route-dom-probes-1920-22108e35.json.
+Per-phase XIAN console entries and their classification are preserved in json/xian-final-1920-22108e35.json.
