@@ -49,6 +49,7 @@ const tabsStore = useWorkspaceTabsStore();
 const tabsListRef = ref(null);
 const tabs = computed(() => tabsStore.tabs);
 const activeKey = computed(() => resolveTabKey(route));
+let closeFocusIntent = 0;
 
 /** 页签较多时保证当前页签始终可见，不干扰页面纵向滚动。 */
 function scrollActiveTabIntoView() {
@@ -104,25 +105,43 @@ function handleTabKeydown(event, tab) {
   labels?.[targetIndex]?.focus();
 }
 
-/** 在 DOM 更新后把焦点交给指定页签，避免关闭按钮移除后焦点落到 document.body。 */
-function focusTab(tab) {
+/**
+ * 关闭意图完成后再恢复页签焦点：路由先让主内容按默认合同获得焦点，下一帧才由关闭操作接回。
+ * 若期间用户已主动移到其他控件、发生了更新的关闭操作或目标节点已卸载，则不再抢夺焦点。
+ */
+async function restoreClosedTabFocus(tab, navigation, source, intent) {
   if (!tab?.key) return;
-  nextTick(() => {
-    const labels = tabsListRef.value?.querySelectorAll('.workspace-tabs__label');
-    const target = Array.from(labels || []).find(
-      (label) => label.closest('[data-tab-key]')?.dataset.tabKey === tab.key
-    );
-    target?.focus();
-  });
+  if (navigation) await navigation;
+  await nextTick();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  if (intent !== closeFocusIntent) return;
+
+  const currentFocus = document.activeElement;
+  const focusStillOwnedByClose = currentFocus === source
+    || currentFocus === document.body
+    || currentFocus?.id === 'app-main'
+    || !currentFocus?.isConnected;
+  if (!focusStillOwnedByClose) return;
+
+  const labels = tabsListRef.value?.querySelectorAll('.workspace-tabs__label');
+  const target = Array.from(labels || []).find(
+    (label) => label.closest('[data-tab-key]')?.dataset.tabKey === tab.key
+  );
+  if (target?.isConnected) target.focus();
 }
 
 /** 关闭页签后，当前页签回退到相邻项，后台页签保持当前项并恢复其焦点。 */
 function closeTab(tab) {
   if (!tab?.closable) return;
+  const source = document.activeElement;
+  const intent = ++closeFocusIntent;
   const wasActive = tab.key === activeKey.value;
   const fallback = tabsStore.close(tab.key);
-  if (wasActive && fallback) router.push(fallback.fullPath);
-  focusTab(wasActive ? fallback : tabs.value.find((item) => item.key === activeKey.value) || fallback);
+  const navigation = wasActive && fallback ? router.push(fallback.fullPath) : null;
+  const focusTarget = wasActive
+    ? fallback
+    : tabs.value.find((item) => item.key === activeKey.value) || fallback;
+  restoreClosedTabFocus(focusTarget, navigation, source, intent);
 }
 </script>
 
