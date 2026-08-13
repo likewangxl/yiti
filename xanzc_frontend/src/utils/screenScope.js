@@ -415,10 +415,16 @@ export function validateCompositeMapConfig(rawConfig, profiles = [], memberOrgCo
 
 /** schema2 请求白名单；schema1 只保留 screenCode + dsId 的受限历史契约。 */
 export function buildScreenDataRequest(input = {}) {
-  const contextParams = {
-    orgCode: input.contextParams?.orgCode || null,
-    empId: input.contextParams?.empId || null
-  };
+  // 后端运行时 DTO 使用严格 String/Map<String, String> 反序列化：可选字段缺省会保留
+  // null 业务语义，但显式 JSON null 会在进入服务前按 VALID_005 拒绝。这里只剔除 nullish
+  // 可选值；非空（含显式空字符串）值原样保留，不改写身份、周期或路由上下文。
+  const contextParams = {};
+  if (input.contextParams?.orgCode !== undefined && input.contextParams?.orgCode !== null) {
+    contextParams.orgCode = input.contextParams.orgCode;
+  }
+  if (input.contextParams?.empId !== undefined && input.contextParams?.empId !== null) {
+    contextParams.empId = input.contextParams.empId;
+  }
   const schemaVersion = input.schemaVersion;
   if (typeof schemaVersion !== 'number' || !Number.isInteger(schemaVersion)) {
     throw new Error('运行时 schemaVersion 必须为 JSON 整数 1 或 2');
@@ -428,15 +434,16 @@ export function buildScreenDataRequest(input = {}) {
     const blockId = input.blockId;
     if (!screenCode) throw new Error('schema2 运行请求缺少 screenCode');
     if (!Number.isSafeInteger(blockId) || blockId <= 0) throw new Error('schema2 运行请求缺少有效 blockId');
-    return {
+    const request = {
       schemaVersion: 2,
       screenCode,
       blockId,
       period: input.period || 'LATEST',
-      dateFrom: input.dateFrom ?? null,
-      dateTo: input.dateTo ?? null,
       contextParams
     };
+    if (input.dateFrom !== undefined && input.dateFrom !== null) request.dateFrom = input.dateFrom;
+    if (input.dateTo !== undefined && input.dateTo !== null) request.dateTo = input.dateTo;
+    return request;
   }
   if (schemaVersion !== 1) {
     throw new Error(`未知运行时 schemaVersion: ${String(input.schemaVersion)}`);
@@ -446,15 +453,16 @@ export function buildScreenDataRequest(input = {}) {
   if (!Number.isSafeInteger(input.dsId) || input.dsId <= 0) {
     throw new Error('schema1 历史运行请求缺少有效 dsId');
   }
-  return {
+  const request = {
     schemaVersion: 1,
     screenCode,
     dsId: input.dsId,
     period: input.period || 'LATEST',
-    dateFrom: input.dateFrom ?? null,
-    dateTo: input.dateTo ?? null,
     contextParams
   };
+  if (input.dateFrom !== undefined && input.dateFrom !== null) request.dateFrom = input.dateFrom;
+  if (input.dateTo !== undefined && input.dateTo !== null) request.dateTo = input.dateTo;
+  return request;
 }
 
 export function anchorStyle(anchor) {

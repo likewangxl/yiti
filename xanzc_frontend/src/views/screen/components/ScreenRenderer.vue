@@ -14,7 +14,8 @@
                  :map-points="mapPoints"
                  :map-config="mapConfig || c.propValue"
                  :profiles="profiles"
-                 :map-payload="mapPayload" />
+                 :map-payload="mapPayload"
+                 :runtime-header-inset="runtimeHeaderInset(c)" />
       <component v-else :is="widgetOf(c.component)" :element="c" mode="runtime" />
     </div>
   </div>
@@ -37,6 +38,7 @@ const props = defineProps({
   mapPayload: { type: Object, default: null },
   context: { type: Object, default: () => ({}) }
 });
+const RUNTIME_HEADER_HEIGHT = 72;
 /**
  * 渲染列表:Group 成组节点(设计器多选成组产物)在运行时只是坐标容器,无自身视觉——
  * 展开为"绝对坐标子节点"(组左上角 + 子相对坐标,透明度相乘)后走既有按 component 分派分支,
@@ -74,6 +76,12 @@ function absStyle(c) {
     opacity: s.opacity ?? 1,
     // 组件级背景(CommonAttr 外观区:透明/纯色/渐变),缺省空对象与现状零差异
     ...componentBackgroundStyle(s) };
+}
+// 外层运行态标题是 y=0..72 的浮层；仅顶部复合地图按组件自身 top 补齐剩余安全区。
+// 使用设计稿坐标而非视口像素，1920 与 2560 的整体 stage scale 会同步缩放两者。
+function runtimeHeaderInset(c) {
+  const top = Number(c?.style?.top);
+  return Math.max(0, RUNTIME_HEADER_HEIGHT - (Number.isFinite(top) ? top : 0));
 }
 function widgetOf(component) { return findWidget(component); }
 /** 从 bindSnapshots 合成 BlockContainer 需要的 block(bindJson/styleJson/drillJson 字符串);

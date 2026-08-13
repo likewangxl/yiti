@@ -63,14 +63,17 @@
 ## 5. 视觉与可访问性交互
 
 - 大屏沿用 `scr-*` 运行态隔离，不接入主平台浅色卡片/表格规范。
+- 运行态外层 `.scr-header` 占据 1920×1080 设计稿的顶部 72px 浮层。西安复合地图组件落入该区域时，须按组件 `top` 补足剩余安全区，使 `.mp-title` 从浮层下方开始；安全区随舞台整体缩放，适用于 1920×1080 与 2560×1440。该偏移不得应用到设计态预览或陕西 schema v1 地图。
 - 六区边界显示区名；焦点、节点、边界高亮不能只通过颜色表达。
 - 仅运行态的二级分行和本地机构使用真实 `<button>`，鼠标 click、`Enter`、`Space` 等效；焦点环必须可见。
 - 设计态仅展示位置和名称，不得钻取：全部地图节点必须禁用、移出 Tab 序列并标记 `aria-disabled="true"`；即使脚本派发 click/键盘事件，导航函数也必须拒绝跳转。
 - 二级分行的近似位置与本地真实点位使用不同空间模型：前者为 anchor，后者为 ECharts geo 坐标；不得把两者混为同一地理比例含义。
 - 动效遵循现有 ECharts 效果配置；需要新增动效时仅使用 transform/opacity，并在 `prefers-reduced-motion` 下保留可理解状态。
 
+运行态区块取数仍遵守既有 `/api/screen/data` 版本身份：schema v1 保留 `schemaVersion + screenCode + dsId`，schema v2 保留 `schemaVersion + screenCode + blockId`。`dateFrom`、`dateTo`、`contextParams.orgCode`、`contextParams.empId` 仅在值非 `null`/`undefined` 时序列化；不得把可选 String 显式序列化为 JSON `null`，也不得借清理空值改写任何非空 payload。
+
 ## 6. 验收基线
 
-1. 单测覆盖六区名称/代码/relation ID、来源与坐标系元数据、四个二级分行的编码/锚点/目标、授权交集、键盘钻取和 redengine 隔离；另覆盖 mode-only、schema-only、v1+XIAN、字符串版本号、非法/缺字段的 Fail Close，以及设计态不可钻取。
+1. 单测覆盖六区名称/代码/relation ID、来源与坐标系元数据、四个二级分行的编码/锚点/目标、授权交集、键盘钻取和 redengine 隔离；另覆盖 mode-only、schema-only、v1+XIAN、字符串版本号、非法/缺字段的 Fail Close、设计态不可钻取、schema v1/v2 空值序列化，以及双分辨率标题安全区。
 2. 真实运行页使用 `/#/login?normal` 登录后，在 1920×1080 和 2560×1440 查看西安运行屏；仅执行查看与点击导航，不执行保存、发布、删除或导入。
 3. 验收记录必须保留真实请求摘要、console、截图和路由结果；不得把 mock 数据或手工改写截图作为真实页面证据。

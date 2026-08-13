@@ -11,6 +11,39 @@ import BlockContainer from '../BlockContainer.vue';
 describe('schemaVersion 2 区块取数', () => {
   beforeEach(() => { queryMock.mockClear(); });
 
+  it('SCR_BRANCH 的 5 个 schema1 区块只提交非空日期/上下文，保留 orgCode=128 与既有身份契约', async () => {
+    const bindings = [
+      { dsId: 9002, period: 'LATEST' },
+      { dsId: 9002, period: 'LAST_1M' },
+      { dsId: 9011, period: 'LATEST' },
+      { dsId: 9011, period: 'LATEST' },
+      { dsId: 9011, period: 'LATEST' }
+    ];
+    const wrappers = bindings.map((bind, index) => mount(BlockContainer, {
+      props: {
+        block: {
+          id: 101 + index,
+          componentType: 'METRIC_CARD',
+          bindJson: JSON.stringify(bind),
+          styleJson: JSON.stringify({ refreshSec: 0 }),
+          drillJson: '{}'
+        },
+        context: { screenCode: 'SCR_BRANCH', schemaVersion: 1, orgCode: '128', empId: '' }
+      },
+      global: { stubs: { 'el-icon': true, InfoFilled: true }, directives: { loading: {} } }
+    }));
+
+    await vi.waitFor(() => expect(queryMock).toHaveBeenCalledTimes(5));
+    expect(queryMock.mock.calls.map(([body]) => body)).toEqual(bindings.map(bind => ({
+      schemaVersion: 1,
+      screenCode: 'SCR_BRANCH',
+      dsId: bind.dsId,
+      period: bind.period,
+      contextParams: { orgCode: '128' }
+    })));
+    wrappers.forEach(item => item.unmount());
+  });
+
   it('根据 screenCode + blockId 取数，不提交客户端 dsId/orgGroupCode/orgCodes', async () => {
     mount(BlockContainer, {
       props: {
@@ -21,7 +54,10 @@ describe('schemaVersion 2 区块取数', () => {
     });
     await vi.waitFor(() => expect(queryMock).toHaveBeenCalled());
     const body = queryMock.mock.calls[0][0];
-    expect(body).toMatchObject({ schemaVersion: 2, screenCode: 'SCR_RETAIL', blockId: 12, period: 'LATEST', contextParams: { orgCode: 'O1', empId: null } });
+    expect(body).toMatchObject({ schemaVersion: 2, screenCode: 'SCR_RETAIL', blockId: 12, period: 'LATEST', contextParams: { orgCode: 'O1' } });
+    expect(body.dateFrom).toBeUndefined();
+    expect(body.dateTo).toBeUndefined();
+    expect(body.contextParams.empId).toBeUndefined();
     expect(body.dsId).toBeUndefined();
     expect(body.orgGroupCode).toBeUndefined();
     expect(body.orgCodes).toBeUndefined();

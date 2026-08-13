@@ -1,5 +1,5 @@
 <template>
-  <div class="scr-block mp-block" :class="{ 'mp-composite': isComposite }">
+  <div class="scr-block mp-block" :class="{ 'mp-composite': isComposite }" :style="runtimeRootStyle">
     <div v-if="unsupportedSchema" class="mp-config-gap" role="alert">地图配置版本不受支持，已拒绝渲染</div>
     <template v-else-if="isComposite">
       <div class="mp-title">西安六区经营地图</div>
@@ -65,7 +65,9 @@ const props = defineProps({
   profiles: { type: Array, default: () => [] },
   mapPayload: { type: Object, default: null },
   element: { type: Object, default: null },
-  mode: { type: String, default: 'runtime' }
+  mode: { type: String, default: 'runtime' },
+  // ScreenRenderer 根据组件在 1920×1080 设计稿中的 top 计算；设计态与陕西 v1 均忽略。
+  runtimeHeaderInset: { type: Number, default: 0 }
 });
 const router = useRouter();
 const injectedProfiles = inject('screenProfiles', null);
@@ -82,6 +84,10 @@ const rawConfig = computed(() => {
 });
 const mapConfig = computed(() => normalizeMapConfig(rawConfig.value));
 const isComposite = computed(() => mapConfig.value.schemaVersion === 2 && mapConfig.value.mode === 'XIAN_COMPOSITE');
+const runtimeRootStyle = computed(() => {
+  if (props.mode === 'design' || !isComposite.value || props.runtimeHeaderInset <= 0) return {};
+  return { paddingTop: `${props.runtimeHeaderInset}px`, boxSizing: 'border-box' };
+});
 const runtimePayloadContractValid = computed(() => props.mode === 'design' || !props.mapPayload
   || (props.mapPayload.schemaVersion === 2 && props.mapPayload.mode === 'XIAN_COMPOSITE'));
 const unsupportedSchema = computed(() => !runtimePayloadContractValid.value || mapConfig.value.mode === 'UNSUPPORTED');

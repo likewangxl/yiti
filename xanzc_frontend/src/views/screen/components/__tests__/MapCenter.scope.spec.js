@@ -12,6 +12,14 @@ import xianSixDistricts, { XIAN_SIX_DISTRICTS_METADATA } from '@/assets/geo/xian
 describe('MapCenter schema v1/v2', () => {
   beforeEach(() => routerPush.mockClear());
 
+  it('运行态复合地图消费外层标题安全区，设计态预览不偏移', () => {
+    const config = { schemaVersion: 2, mode: 'XIAN_COMPOSITE', satelliteNodes: [] };
+    const runtime = mount(MapCenter, { props: { mapConfig: config, runtimeHeaderInset: 72 } });
+    const design = mount(MapCenter, { props: { mode: 'design', mapConfig: config, runtimeHeaderInset: 72 } });
+    expect(runtime.find('.mp-composite').attributes('style')).toContain('padding-top: 72px');
+    expect(design.find('.mp-composite').attributes('style') || '').not.toContain('padding-top');
+  });
+
   it('六区边界资产只包含约定行政区，并记录可再分发来源、代码、坐标系与裁剪方式', () => {
     expect(xianSixDistricts.type).toBe('FeatureCollection');
     expect(xianSixDistricts.features.map(feature => ({
