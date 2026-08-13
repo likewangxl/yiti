@@ -1,9 +1,7 @@
 // @vitest-environment happy-dom
-// 全出血(full-bleed)布局回归——修复大屏设计器高度错位:DesignerV2 原先写死
-// calc(100vh - 60px),而 DefaultLayout 的壳层高度由 header、工作区页签和内容区共同决定。
-// 设计器超高会导致整页滚动条。修复契约分两半:
-// ①设计器路由声明 meta.fullBleed;②DefaultLayout 对 fullBleed 路由去掉内容区 padding,
-// 设计器自身高度改为撑满父容器。本文件锁这两半契约。
+// DefaultLayout 通用壳层回归：Header 内嵌唯一工作区页签，内容区独立滚动；
+// 对仍由该壳层承载的特殊路由，meta.fullBleed 继续作为去除内容内边距的兼容契约。
+// 顶层独立窗口路由是否脱离 DefaultLayout 由 router 专项测试负责。
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick, reactive } from 'vue';
@@ -139,8 +137,8 @@ describe('DefaultLayout.vue 路由焦点管理', () => {
     await wrapper.find('.sidebar-toggle-stub').trigger('click');
     probe.focus();
     focusSpy.mockClear();
-    routeState.path = '/screen/admin/designer';
-    routeState.fullPath = '/screen/admin/designer?mode=edit';
+    routeState.path = '/special/full-bleed';
+    routeState.fullPath = '/special/full-bleed?mode=edit';
     routeState.meta = { fullBleed: true };
     await flushRouteFocus();
 
@@ -151,7 +149,7 @@ describe('DefaultLayout.vue 路由焦点管理', () => {
 
     probe.focus();
     focusSpy.mockClear();
-    routeState.fullPath = '/screen/admin/designer?mode=preview';
+    routeState.fullPath = '/special/full-bleed?mode=preview';
     await flushRouteFocus();
 
     expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
@@ -160,8 +158,8 @@ describe('DefaultLayout.vue 路由焦点管理', () => {
   });
 });
 
-describe('大屏设计器路由 full-bleed 声明', () => {
-  it('ScreenAdminDesigner 路由 meta.fullBleed 为 true', async () => {
+describe('fullBleed 路由元数据兼容', () => {
+  it('保留已有特殊路由的 meta.fullBleed 兼容声明', async () => {
     const { default: router } = await import('@/router');
     const route = router.getRoutes().find(r => r.name === 'ScreenAdminDesigner');
     expect(route).toBeTruthy();

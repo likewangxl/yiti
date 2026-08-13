@@ -1,12 +1,12 @@
 # Branch Platform 主平台 UI 设计系统
 
-> 本文档是第一阶段主平台浅色桌面界面的视觉与交互契约。实现页面前先读本文件；若后续新增 `design-system/pages/[page].md`，页面文件只允许在本文件基础上做明确的局部覆盖。
+> 本文档是主平台浅色桌面界面的视觉与交互契约，并纳入“页面优化2”的最终裁决。实现页面前先读本文件；若后续新增 `design-system/pages/[page].md`，页面文件只允许在本文件基础上做明确的局部覆盖。
 
 ## 1. 范围与硬边界
 
 ### 覆盖范围
 
-- **全部主平台页面**：除下述明确排除项外，`src/views/` 下由 `DefaultLayout` 承载的全部主平台路由视图都遵守本契约，而不是只覆盖少数首期页面。
+- **全部主平台页面**：除下述明确排除项外，`src/views/` 下由 `DefaultLayout` 承载的全部主平台路由视图都遵守本契约，而不是只覆盖少数首期页面；三个 `screen-admin` 浅色 CRUD 管理页也明确纳入。
 - **全局壳层与认证**：`DefaultLayout`、`AppSidebar`、`AppHeader`、`WorkspaceTabs`、通用内容区，以及 `/login` 的 UIAS 与 `?normal` 账号密码入口。`AppBreadcrumb` 源码保留供局部场景复用，但不再由 `DefaultLayout` 全局挂载。
 - **门户、信息与业务协作**：`/workspace`、公告、通知、待办、转交、门户信息及客户营销、业务申请等主平台业务页面。
 - **绩效与考核**：指标、目标、计算、评价、奖励分配、审批任务及相关导入、导出、详情页面。
@@ -19,7 +19,7 @@
 - 仅验证 **1920×1080** 与 **2560×1440** 两种桌面分辨率；不做手机、平板或移动端断点方案。
 - `src/views/redengine/**` 是独立红色引擎，完全排除在本规范之外，沿用自己的布局和 `re-` 样式隔离。
 - `src/views/screen/admin/Datasources.vue`、`OrgProfiles.vue`、`OrgGroups.vue` 对应三个浅色 CRUD 管理页，是主平台规范的明确例外，遵守本文件的桌面浅色 CRUD 基线。
-- `src/views/screen/**` 的运行态与设计器是独立大屏/设计器子系统，不继承本文件的卡片、图表或壳层密度规则；上述三个管理页除外。
+- `src/views/screen/**` 的运行态与设计器是独立大屏/设计器子系统，不继承本文件的卡片、图表或主平台壳层密度规则；上述三个管理页除外。设计器只遵守本文件“设计器独立窗口”专节及自身规范，运行态继续遵守 `SCREEN_MAP_SPEC.md` 等 `scr-*` 隔离契约。
 - 顶栏搜索当前没有检索逻辑：第一阶段隐藏搜索输入及其占位，不保留空白槽位，不新增搜索 API，也不伪造可用的搜索 affordance。
 
 ## 2. 依据、校准与决策记录
@@ -49,6 +49,12 @@ python3 /home/djdev/leid/yiti/.agents/skills/ui-ux-pro-max/scripts/search.py \
 - 生成器给出的 GSAP scroll reveal 不作为壳层依赖；路由、面板、弹窗只使用 CSS/Element Plus 的轻量过渡，并遵守 reduced-motion。
 - Vue 栈查询的“使用语义元素、动态绑定 ARIA”与 UX 查询的“可见焦点、加载反馈、避免任意超大 z-index”是强制实现约束。
 
+### 页面优化2最终裁决
+
+- 表格操作列按**当前行真实可见操作集合**和**真实渲染宽度**自适应：可容纳时全部直出，包括危险操作；空间不足或宽度未知时 fail-close 为“主操作 + 更多”。权限、状态、危险色、禁用/加载、确认、原因和审计语义均不得改变。
+- `WorkspaceTabs` 移入 `AppHeader` 原侧栏折叠入口区域，不再占用独立页签行；侧栏折叠按钮移入 `AppSidebar` 的 Logo 行并在展开、折叠两态常驻。
+- 大屏设计器由固定命名窗口打开并复用，路由为顶层独立视觉；保留全套工具，增加返回与未保存保护。退出保存遇 CAS 冲突必须停留在设计器，不能暗中强制覆盖、重载或关闭。
+
 ## 3. 设计原则
 
 1. **业务优先**：先呈现待办、指标、状态和下一步操作；装饰不能抢夺数据层级。
@@ -73,11 +79,11 @@ python3 /home/djdev/leid/yiti/.agents/skills/ui-ux-pro-max/scripts/search.py \
 
 仓库当前壳层已经使用以下结构事实，后续页面应保持一致：
 
-- `AppSidebar`：宽度 `220px`，动态消费 `menuStore.tree`，分组可展开，当前路由有明确 active 状态。
-- `AppHeader`：高度 `52px`，保留账户下拉、通知入口和必要的壳层操作；无逻辑搜索隐藏且不占位。
+- `AppSidebar`：宽度 `220px`，动态消费 `menuStore.tree`，分组可展开，当前路由有明确 active 状态；折叠按钮与品牌标识位于同一 Logo 行。
+- `AppHeader`：高度 `52px`，左侧直接承载 `WorkspaceTabs`，右侧保留账户下拉、通知入口和必要的壳层操作；无逻辑搜索隐藏且不占位。
 - `AppBreadcrumb`：源码保留，但不再占用全局壳层高度；详情页使用 `PageTitle` 与既有返回路径定位，不新增全局面包屑。
-- `WorkspaceTabs`：总高 `48px`；单页签高 `40px`、字号 `14px`、页签间距 `8px`、宽 `112–200px`，关闭按钮命中区 `40×40px`。页签支持横向滚动、当前项自动滚入可视区、方向键/Home/End 键盘导航、关闭和长标题截断提示。
-- `DefaultLayout` 内容区：主滚动区域独立滚动，普通页面使用内边距；`fullBleed` 仅供大屏设计器等明确的特殊路由使用，不套用主平台卡片规则。
+- `WorkspaceTabs`：在 Header 内横向伸展，高 `48px`；单页签高 `40px`、字号 `14px`、页签间距 `8px`、宽 `112–200px`，关闭按钮命中区 `40×40px`。页签支持横向滚动、当前项自动滚入可视区、方向键/Home/End 键盘导航、关闭和长标题截断提示；全局只能挂载一份，不得恢复 Header 下方的独立空行。
+- `DefaultLayout` 内容区：Header 后直接进入独立主滚动区域，普通页面使用内边距；`meta.fullBleed` 作为通用兼容契约，只用于仍由 `DefaultLayout` 承载且明确需要去除内边距的特殊路由。顶层大屏设计器不再由 `DefaultLayout` 承载。
 
 ```css
 :root {
@@ -95,9 +101,10 @@ python3 /home/djdev/leid/yiti/.agents/skills/ui-ux-pro-max/scripts/search.py \
 壳层行为：
 
 - 侧栏加载菜单时保留可解释的加载态；权限/菜单加载失败时清空旧菜单并 fail-close，不展示上一个用户的菜单。
-- 桌面侧栏支持 `220px` ↔ `64px` 折叠；折叠态只收窄视觉区域，保留权限菜单的图标入口，并为每项提供完整 `aria-label` 与 tooltip。折叠不隐藏已授权菜单，也不改变 `fullBleed` 路由的内容契约。
+- 桌面侧栏支持 `220px` ↔ `64px` 折叠。展开为 `220px` 时 Logo 行显示品牌标识、名称及右侧折叠按钮；折叠为 `64px` 时 Logo 行只显示居中的展开按钮。按钮两态常驻，使用真实 `button`，同步 `aria-expanded`、`aria-label`、`aria-controls` 和可见 `focus-visible`；折叠不隐藏已授权菜单，也不改变通用 `fullBleed` 兼容契约。
 - 侧栏分组用真实按钮/可访问的控制元素表达展开收起，`aria-expanded` 随状态变化；当前路由使用 `aria-current="page"` 或等价语义。
 - 当前页签是唯一高亮项；页签关闭后回到 store 选定的相邻页签，不能静默跳回首页。
+- 设计器菜单是唯一的新窗口导航例外：点击后不得改变当前工作区路由或登记设计器页签；其他菜单继续使用原路由行为。
 - 账户、通知、弹窗等悬浮层不依赖 hover 才能发现；所有 icon-only 控件都有可读的 `aria-label` 和 tooltip/title。
 
 ## 5. 颜色与语义 token
@@ -201,6 +208,9 @@ font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei"
 - 异步提交时按钮 `loading + disabled`，禁止重复点击；完成后给出可读成功/失败反馈，失败包含恢复路径。
 - 按钮、链接、树节点、页签使用真实 `button`/`a`/`nav`/`main` 等语义元素，不用可点击 `div` 冒充控件。
 - hover/pressed/disabled/focus 状态要互相可区分，但不改变布局尺寸、不造成表格或页签抖动。
+- 物理操作列有多个操作时使用统一自适应契约。测量对象必须是当前行经过权限与状态条件后实际渲染的可见操作集合，判断依据是按钮真实渲染总宽、`8px` 间距和操作列真实可用宽度；禁止按文字长度、源码动作总数、固定视口断点或动作危险级别猜测。
+- 当真实宽度足够时，按原键盘顺序直出当前行全部可见操作，危险操作也直出并保留 danger 语义；当宽度不足、为零、不可用或尚未可靠测量时，必须 fail-close 为一个既有主操作直出，其余实际可见操作进入“更多”。“更多”没有可见次级项时不得渲染空菜单。
+- 自适应只改变呈现位置，不得改变操作文本、权限/状态条件、`disabled`/`loading`、单飞、二次确认、原因输入、事件参数、API 或审计链；从直出切换到“更多”后仍是同一业务操作。
 
 ### 表单、弹窗与筛选
 
@@ -213,6 +223,7 @@ font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei"
 
 - 用户管理采用“机构树 + 右侧筛选/表格”的双栏结构；树筛选、表格筛选、批量操作和分页顺序固定，选择状态清晰。
 - 表格默认高密度但保留 40px 左右行高、14px 正文和 8px 组间距；操作列固定在右侧时不得遮挡关键数据。
+- 操作列使用 `fixed="right"` 与 `operation-cell`，保持单行且不裁切；多操作列接入 `BpAdaptiveRowActions`，单操作列保持原有直接入口。三个 `screen-admin` 浅色 CRUD 管理页采用同一规则，不设危险操作或数据源页面的额外直出例外。
 - 状态 tag 同时输出“启用/停用/正常/锁定”等文本；排序、分页、表格选中状态提供键盘和读屏语义。
 - 页签使用 `<nav aria-label="工作区页签">` 路由导航语义；每个页签对应独立 URL，当前入口使用 `aria-current="page"`。不要伪装成 `role="tablist"`/`role="tab"`，也不要把路由页签包装成单一 tabpanel。方向键在页签间移动焦点，Home/End 定位首尾，Enter/Space 仍按普通按钮激活路由。关闭按钮有“关闭 + 页签标题”的 label，长标题使用 tooltip 展开完整文本。
 
@@ -223,6 +234,7 @@ font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei"
 - 主信息 + 辅助信息双行单元格必须显式使用 `compact-stack-cell`：两行各 18px、无额外纵向 margin，在 39px 内容预算内完整保留；状态 + 详情使用 24px tag + 15px 辅助行，连同 1px 可见下边框总高 40px。不得用 `overflow: hidden`、固定高度或 `display: none` 裁掉第二行；子行横向省略时仍须由受控 mouseover 提供两行完整值。
 - 说明类长文本必须显式使用 `compact-clamp-cell`：最多两行、每行 18px、总内容高度不超过 36px，超出部分仅在单元格内省略；原始全文必须保留在 DOM，且仅在真实溢出时由受控 mouseover 写入完整 `title`，短文本不得误加 `title`。禁止通过隐藏整表或页面横向溢出来实现省略。
 - 长文本不以初始无 `title` 判失败；必须对真实溢出单元格执行 mouseover，并必须在真实 mouseover 后校验 title 等于完整文本，未溢出单元格不得生成 title。浏览器 `scrollWidth/scrollHeight` 与 `clientWidth/clientHeight` 的差值恰为 1px 时按布局舍入处理，横向或纵向差值达到 2px 才判定为真实溢出；不得用文本长度猜测。
+- 操作列必须用真实行数据分别验证“宽度充足时全部直出（含危险操作）”和“宽度不足或未知时主操作 + 更多”，并确认两态的可见集合、键盘顺序和业务语义一致。
 
 ## 9. 页面节点规则
 
@@ -277,6 +289,15 @@ font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei"
 - 流程监控、任务转交、审批与流程设计保留业务状态、只读边界、节点/连线/审批人等可理解文本；发布、停用、删除、转交等写操作必须防重复并明确后果。
 - 表格、树、画布周边面板和弹窗均提供键盘路径、焦点回收、加载/错误提示；复杂流程页面在 1920 与 2560 宽度下优先保证主工作区与关键操作可读。
 
+### 大屏设计器 `/screen-admin/designer`
+
+- 主平台侧栏菜单使用固定安全窗口名 `yiti-screen-designer` 打开 `/#/screen-admin/designer`；重复点击复用并聚焦已有窗口。`window.open` 只传 URL 与名称，使用浏览器默认尺寸；弹窗被阻止或安全策略抛错时给出明确 Element Plus 错误提示，不自动回退到当前页，也不得在当前工作区登记设计器页签。
+- 该路由保留 `/api/screen/admin/screens` 资源守卫，但作为顶层独立路由渲染；设计器窗口不挂载 `DefaultLayout`、主平台侧栏、Header 或 `WorkspaceTabs`，仅展示设计器自身全视口视觉。
+- 工具能力不得因独立窗口而裁剪：保留“新建、编辑范围、管理查看角色、撤销、重做、缩放/适应窗口、预览草稿、放弃草稿、回滚、保存、发布”以及既有画布/组件/属性工具，并新增键盘可达、可见焦点的“返回”按钮。
+- dirty 基线只比较可保存的 `screenId + canvasStyle + components`；初始加载不脏，画布样式或组件树变化后变脏，恢复基线或保存成功后清除。选区、缩放、面板切换和 CAS `expectedVersion` 不计入 dirty；dirty 状态使用可读文本并通过 `beforeunload` 保护，组件卸载时移除监听。
+- dirty 时点击返回必须提供“保存并关闭 / 放弃并关闭 / 取消”三个明确分支：取消不写请求并把焦点还给返回按钮；放弃并关闭只放弃本地未保存修改，不调用后端“放弃服务端草稿”端点；保存并关闭只在保存成功后尝试关窗。无 dirty 时直接尝试关窗。
+- 退出场景的保存使用单次 CAS：首个冲突或任何保存失败都必须保持 dirty、保留退出对话框并停留在设计器，不进入工具栏保存的“强制覆盖 / 放弃本地并重载”流程，不发第二次写请求，也不关闭窗口。工具栏普通保存继续保留既有显式冲突处理。窗口关闭被浏览器拒绝或直接访问 URL 时，才降级 `router.replace('/workspace')`。
+
 ## 10. 可访问性、动效与加载
 
 ### 焦点与键盘
@@ -320,7 +341,7 @@ font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei"
 ## 11. 验收清单
 
 - [ ] 覆盖全部主平台页面：壳层与登录、门户信息与业务协作、绩效考核、报表查询、历史数据、系统治理与流程；`screen/admin` 三个浅色 CRUD 例外遵守本规范，screen 运行态/设计器与 `redengine` 保持独立。
-- [ ] 在 1920×1080 与 2560×1440 检查侧栏、内容 gutter、表格、图表和弹窗；不以移动端断点作为本阶段验收条件。
+- [ ] 所有前端功能、交互和样式改动必须使用官方 `playwright-cli` 在真实运行页面完成 1920×1080 与 2560×1440 验收；检查侧栏双态、Header 内唯一页签、内容高度、表格操作列两态、设计器独立窗口/返回保护、图表和弹窗，不以移动端断点作为本阶段验收条件。
 - [ ] 只使用中文本地系统字体；没有 Google Fonts、网络字体或 Fira 字体依赖。
 - [ ] `src/main.js` 继续全量注册 Element Plus 与中文 locale；主题通过语义 token/Element Plus 变量映射。
 - [ ] 正文/控件颜色满足 WCAG AA 4.5:1；状态颜色同时有文本或图标；图表有图例、tooltip、摘要或表格替代。
@@ -328,3 +349,4 @@ font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei"
 - [ ] 动效在 150-300ms 内，并验证 `prefers-reduced-motion`；加载超过 300ms 有 skeleton/spinner，按钮防重复提交。
 - [ ] 所有间距回到 8px 主节奏；没有 emoji 结构图标、任意超大 z-index、布局抖动或隐藏关键操作。
 - [ ] 查询、导入导出、审批、转交、计算、发布、启停、删除等异步写操作均有 loading + disabled、防重复、错误恢复及与风险相称的确认；只读数据不以仿真结果替代真实失败。
+- [ ] CLI 证据归档真实命令、路由/拦截器清单、原始 console、原始请求/响应摘要和双分辨率截图；无 mock 验收必须证明未注册 mock route 且请求到达目标服务。不得用 Vitest、Playwright Test、MCP、手工日志或截图代替官方 CLI 验收。
