@@ -7,11 +7,37 @@ const routerPush = vi.hoisted(() => vi.fn());
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: routerPush }) }));
 
 import MapCenter from '../MapCenter.vue';
+import xianSixDistricts, { XIAN_SIX_DISTRICTS_METADATA } from '@/assets/geo/xian-six-districts';
 
 describe('MapCenter schema v1/v2', () => {
   beforeEach(() => routerPush.mockClear());
 
-  it('v2 显示西安复合地图、四锚点语义和不可隐藏声明', () => {
+  it('六区边界资产只包含约定行政区，并记录可再分发来源、代码、坐标系与裁剪方式', () => {
+    expect(xianSixDistricts.type).toBe('FeatureCollection');
+    expect(xianSixDistricts.features.map(feature => ({
+      name: feature.properties.name,
+      adcode: feature.properties.adcode,
+      osmRelationId: feature.properties.osmRelationId
+    }))).toEqual([
+      { name: '未央区', adcode: '610112', osmRelationId: 3226095 },
+      { name: '莲湖区', adcode: '610104', osmRelationId: 3226093 },
+      { name: '新城区', adcode: '610102', osmRelationId: 3226096 },
+      { name: '碑林区', adcode: '610103', osmRelationId: 3226088 },
+      { name: '雁塔区', adcode: '610113', osmRelationId: 3226098 },
+      { name: '长安区', adcode: '610116', osmRelationId: 3226089 }
+    ]);
+    expect(XIAN_SIX_DISTRICTS_METADATA).toMatchObject({
+      sourceName: 'OpenStreetMap contributors',
+      license: 'ODbL 1.0',
+      sourceCoordinateSystem: 'WGS84 / EPSG:4326',
+      deliveredCoordinateSystem: 'GCJ-02',
+      deliveredContentSha256: 'fb3980443aada65db8703c1c29399ba065f91a34959b9072ebf6d373a086e389'
+    });
+    expect(XIAN_SIX_DISTRICTS_METADATA.cropMethod).toContain('仅保留');
+    expect(XIAN_SIX_DISTRICTS_METADATA.districts).toHaveLength(6);
+  });
+
+  it('v2 显示西安六区地图、四个二级分行语义和不可隐藏声明', () => {
     const wrapper = mount(MapCenter, {
       props: {
         mapConfig: { schemaVersion: 2, mode: 'XIAN_COMPOSITE', satelliteNodes: [
@@ -29,10 +55,15 @@ describe('MapCenter schema v1/v2', () => {
         ]
       }
     });
-    expect(wrapper.text()).toContain('西安复合经营地图');
-    expect(wrapper.text()).toContain('组织分布示意，非地理比例');
+    expect(wrapper.text()).toContain('西安六区经营地图');
+    expect(wrapper.text()).toContain('二级分行示意位置，非地理比例');
+    expect(wrapper.text()).toContain('边界数据：© OpenStreetMap contributors（ODbL）');
     expect(wrapper.findAll('[data-anchor]').map(x => x.attributes('data-anchor'))).toEqual(['LEFT', 'RIGHT', 'TOP', 'FAR_TOP']);
     expect(wrapper.findAll('button[tabindex="0"]').length).toBe(5); // 4 示意节点 + 1 个本地真实点位
+    expect(wrapper.findComponent({ name: 'VChart' }).props('option').geo).toMatchObject({
+      map: 'xian-six-districts',
+      label: { show: true }
+    });
   });
 
   it('v1 仍使用陕西地图，不要求画像或新机构组', () => {
@@ -46,10 +77,16 @@ describe('MapCenter schema v1/v2', () => {
       mapPayload: { schemaVersion: 2, mode: 'XIAN_COMPOSITE', baseRegion: 'XIAN_OUTLINE',
         disclaimer: '组织分布示意，非地理比例',
         localPoints: [{ orgCode: 'X1', orgName: '本地机构', lng: 108.9, lat: 34.2 }],
-        satelliteNodes: [{ orgCode: '128', orgName: '宝鸡分行', anchor: 'LEFT' }] }
+        satelliteNodes: [
+          { orgCode: '128', orgName: '伪造名称', anchor: 'RIGHT', targetScreenCode: 'OTHER' },
+          { orgCode: 'NOT_AUTHORIZED', orgName: '越权节点', anchor: 'LEFT' }
+        ] }
     } });
     expect(wrapper.findAll('[data-anchor]')).toHaveLength(1);
     expect(wrapper.findAll('.mp-local-node')).toHaveLength(1);
+    const baoji = wrapper.find('[data-anchor="LEFT"]');
+    expect(baoji.text()).toContain('宝鸡分行');
+    expect(baoji.attributes('aria-label')).toContain('示意位置，非地理比例');
   });
 
   it('后端异常锚点不会落到左上角，前端只渲染固定四种示意布局', () => {
@@ -98,13 +135,46 @@ describe('MapCenter schema v1/v2', () => {
     expect(wrapper.find('.mp-config-gap').exists()).toBe(false);
   });
 
-  it('复合地图锚点可通过键盘 Enter 导航，并携带机构编码', async () => {
+  it('四个二级分行均可键盘导航至机构详情屏，且运行态绝不跳转红色引擎', async () => {
     const wrapper = mount(MapCenter, { props: {
       mapPayload: { schemaVersion: 2, mode: 'XIAN_COMPOSITE', localPoints: [],
-        satelliteNodes: [{ orgCode: '128', orgName: '宝鸡分行', anchor: 'LEFT', targetScreenCode: 'SCR_BRANCH' }] }
+        satelliteNodes: [
+          { orgCode: '128', anchor: 'RIGHT', targetScreenCode: 'OTHER' },
+          { orgCode: '191', anchor: 'LEFT' },
+          { orgCode: '169', anchor: 'FAR_TOP' },
+          { orgCode: '129', anchor: 'TOP' }
+        ] }
     } });
-    await wrapper.find('[data-anchor="LEFT"]').trigger('keydown.enter');
-    expect(routerPush).toHaveBeenCalledWith({ path: '/screen/SCR_BRANCH', query: { orgCode: '128' } });
+    for (const node of wrapper.findAll('[data-anchor]')) await node.trigger('keydown.enter');
+    expect(routerPush.mock.calls.map(([target]) => target)).toEqual([
+      { path: '/screen/SCR_BRANCH', query: { orgCode: '128' } },
+      { path: '/screen/SCR_BRANCH', query: { orgCode: '191' } },
+      { path: '/screen/SCR_BRANCH', query: { orgCode: '169' } },
+      { path: '/screen/SCR_BRANCH', query: { orgCode: '129' } }
+    ]);
+    expect(routerPush.mock.calls.every(([target]) => !target.path.startsWith('/redengine'))).toBe(true);
+  });
+
+  it('二级分行的空格键与鼠标点击同样进入机构详情屏', async () => {
+    const wrapper = mount(MapCenter, { props: {
+      mapPayload: { schemaVersion: 2, mode: 'XIAN_COMPOSITE', localPoints: [],
+        satelliteNodes: [{ orgCode: '128', anchor: 'LEFT' }] }
+    } });
+    const baoji = wrapper.find('[data-anchor="LEFT"]');
+    await baoji.trigger('keydown.space');
+    await baoji.trigger('click');
+    expect(routerPush).toHaveBeenNthCalledWith(1, { path: '/screen/SCR_BRANCH', query: { orgCode: '128' } });
+    expect(routerPush).toHaveBeenNthCalledWith(2, { path: '/screen/SCR_BRANCH', query: { orgCode: '128' } });
+  });
+
+  it('已授权的西安本地真实机构仍沿用既有详情屏点击行为', async () => {
+    const wrapper = mount(MapCenter, { props: {
+      mapPayload: { schemaVersion: 2, mode: 'XIAN_COMPOSITE',
+        localPoints: [{ orgCode: 'XA-001', orgName: '西安本地机构', lng: 108.95, lat: 34.25 }],
+        satelliteNodes: [] }
+    } });
+    await wrapper.find('.mp-local-node').trigger('click');
+    expect(routerPush).toHaveBeenCalledWith({ path: '/screen/SCR_BRANCH', query: { orgCode: 'XA-001' } });
   });
 
   it('FAR_TOP 固定映射榆林，使用容器内 top 定位并保持 button 键盘入口', () => {

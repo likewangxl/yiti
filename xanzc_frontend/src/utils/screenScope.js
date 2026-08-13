@@ -37,6 +37,22 @@ export const FIXED_SATELLITE_ORG_CODES = Object.freeze({
   FAR_TOP: '129'
 });
 
+/**
+ * 西安运行态的二级分行只使用这四个真实机构语义。
+ *
+ * 本期明确为前端硬编码：发布包中的 satelliteNodes 只能作为已授权机构的出现
+ * 许可，不能篡改机构名称、锚点或目标屏，也不能注入新的机构编码。这样继续消费
+ * 后端已裁剪的授权渲染包，同时不把展示配置误作权限依据。
+ */
+export const XIAN_SECONDARY_BRANCHES = Object.freeze([
+  Object.freeze({ orgCode: '128', orgName: '宝鸡分行', anchor: 'LEFT', targetScreenCode: 'SCR_BRANCH' }),
+  Object.freeze({ orgCode: '191', orgName: '渭南分行', anchor: 'RIGHT', targetScreenCode: 'SCR_BRANCH' }),
+  Object.freeze({ orgCode: '169', orgName: '咸阳分行', anchor: 'TOP', targetScreenCode: 'SCR_BRANCH' }),
+  Object.freeze({ orgCode: '129', orgName: '榆林分行', anchor: 'FAR_TOP', targetScreenCode: 'SCR_BRANCH' })
+]);
+
+export const XIAN_SECONDARY_BRANCH_DISCLAIMER = '二级分行示意位置，非地理比例';
+
 // 百分比坐标只用于示意节点布局，不是经纬度，也不编码指标数值。
 export const ANCHOR_POSITIONS = Object.freeze({
   LEFT: Object.freeze({ left: '8px', top: '50%' }),
@@ -312,6 +328,20 @@ export function resolveCompositeMapNodes(rawConfig, profiles = []) {
     // 把下属网点/社区支行当作独立经营节点展示。
     && String(byCode.get(node.orgCode)?.operatingLevel || '').toUpperCase() === 'PRIMARY');
   return { local, satellite, config };
+}
+
+/**
+ * 把后端授权渲染包中的二级分行出现许可映射为本期冻结的运行态语义。
+ *
+ * 空数组表示调用方没有提供包时的本地/设计态；此时由既有 profile 适配路径处理。
+ * 非空包严格按其中已授权 orgCode 取交集，避免前端绕过服务端授权扩大展示范围。
+ */
+export function resolveXianSecondaryBranches(authorizedNodes = []) {
+  const source = Array.isArray(authorizedNodes) ? authorizedNodes : [];
+  const authorizedCodes = new Set(source.map(node => String(node?.orgCode || '')).filter(Boolean));
+  return XIAN_SECONDARY_BRANCHES
+    .filter(node => authorizedCodes.has(node.orgCode))
+    .map(node => ({ ...node, position: { ...ANCHOR_POSITIONS[node.anchor] } }));
 }
 
 /** 发布前的前端提示校验；服务端仍需重做全部校验。 */

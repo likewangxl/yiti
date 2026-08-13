@@ -5,12 +5,15 @@ import {
   ORG_SCOPE_MODES,
   ANCHOR_POSITIONS,
   FIXED_SATELLITE_ORG_CODES,
+  XIAN_SECONDARY_BRANCHES,
+  XIAN_SECONDARY_BRANCH_DISCLAIMER,
   normalizeScreenScope,
   validateScreenScope,
   isDatasourceCompatible,
   normalizeMapConfig,
   buildScreenDataRequest,
   resolveCompositeMapNodes,
+  resolveXianSecondaryBranches,
   validateCompositeMapConfig,
   runtimeSchemaVersion,
   filterActiveOrgGroups,
@@ -202,6 +205,24 @@ describe('screenScope 业务条线、机构范围与地图配置契约', () => {
     expect(ANCHOR_POSITIONS.FAR_TOP).toEqual({ left: '50%', top: '8px' });
     expect(ANCHOR_POSITIONS.TOP).toEqual({ left: '50%', top: '48px' });
     expect(FIXED_SATELLITE_ORG_CODES).toEqual({ LEFT: '128', RIGHT: '191', TOP: '169', FAR_TOP: '129' });
+  });
+
+  it('运行态将四个二级分行固定为真实机构语义与 SCR_BRANCH 目标，配置不能改写身份或目标屏', () => {
+    expect(XIAN_SECONDARY_BRANCH_DISCLAIMER).toBe('二级分行示意位置，非地理比例');
+    expect(XIAN_SECONDARY_BRANCHES).toEqual([
+      { orgCode: '128', orgName: '宝鸡分行', anchor: 'LEFT', targetScreenCode: 'SCR_BRANCH' },
+      { orgCode: '191', orgName: '渭南分行', anchor: 'RIGHT', targetScreenCode: 'SCR_BRANCH' },
+      { orgCode: '169', orgName: '咸阳分行', anchor: 'TOP', targetScreenCode: 'SCR_BRANCH' },
+      { orgCode: '129', orgName: '榆林分行', anchor: 'FAR_TOP', targetScreenCode: 'SCR_BRANCH' }
+    ]);
+    expect(resolveXianSecondaryBranches([
+      { orgCode: '128', orgName: '伪造名称', anchor: 'RIGHT', targetScreenCode: 'OTHER' },
+      { orgCode: '191', anchor: 'LEFT' },
+      { orgCode: 'NOT_AUTHORIZED', orgName: '越权节点', anchor: 'TOP' }
+    ])).toEqual([
+      { orgCode: '128', orgName: '宝鸡分行', anchor: 'LEFT', targetScreenCode: 'SCR_BRANCH', position: { left: '8px', top: '50%' } },
+      { orgCode: '191', orgName: '渭南分行', anchor: 'RIGHT', targetScreenCode: 'SCR_BRANCH', position: { right: '8px', top: '50%' } }
+    ]);
   });
 
   it('示意锚点也只允许 PRIMARY 机构，坏配置不能把下属网点渲染成经营节点', () => {
