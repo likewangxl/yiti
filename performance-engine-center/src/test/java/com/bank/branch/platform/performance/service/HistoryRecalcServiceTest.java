@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -95,6 +96,21 @@ class HistoryRecalcServiceTest {
         // 父 task 更新为 RUNNING → SUCCESS（状态机）
         verify(perfRunTaskMapper).updateStatus(eq(parentTaskId), eq("RUNNING"), any());
         verify(perfRunTaskMapper).updateStatus(eq(parentTaskId), eq("SUCCESS"), any());
+    }
+
+    @Test
+    @DisplayName("date×metric 预检失败：父任务尚未创建且不执行子任务")
+    void recalc_preflightFailure_beforeParentTask() {
+        LocalDate date = LocalDate.of(2026, 8, 10);
+        PerfException tooOld = new PerfException(PerfErrorCode.METRIC_RECALC_DATE_TOO_OLD);
+        doThrow(tooOld).when(metricCalcService).preflightMetric("M_BAD", date);
+
+        assertThatThrownBy(() -> historyRecalcService.recalc(
+                date, date, List.of("M_BAD"), "v1", "invalid date", "op"))
+                .isSameAs(tooOld);
+
+        verify(perfRunTaskMapper, never()).insert(any(PerfRunTask.class));
+        verify(metricCalcService, never()).calcMetric(anyString(), any(), anyString(), anyString());
     }
 
     @Test

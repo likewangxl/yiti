@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -103,21 +102,61 @@ public class CascadeRefresher {
      */
     public String refreshCascade(String rootMetricCode, LocalDate dataDate, String version,
                                  LocalDate allocDate, String rootPresetTaskId) {
+        CascadePlan plan = resolveExecutionPlan(rootMetricCode);
+
+        // 执行前再次全量预检，覆盖绕过 Facade 直接调用级联服务的入口。
+        preflight(plan, dataDate);
+
+        // 按拓扑顺序调用 calcMetric；记录根的 taskId 返回
+        Set<String> fired = new HashSet<>();
+        String rootTaskId = null;
+        for (String code : plan.executionOrder()) {
+            if (fired.add(code)) {
+                log.info("[CascadeRefresher] 刷新指标 {} （date={}, version={}, allocDate={}）",
+                        code, dataDate, version, allocDate);
+                // triggerType 沿用原 3 参 calcMetric 的默认 MANUAL；allocDate 透传到整条级联
+                // 根指标复用预建行（仅异步链路会传），其余一律走原 calcMetric 自建任务行
+                boolean reusePreset = rootPresetTaskId != null && rootMetricCode.equals(code);
+                String taskId = reusePreset
+                        ? metricCalcService.calcMetricWithStats(
+                                code, dataDate, version, "MANUAL", allocDate, rootPresetTaskId).runTaskId()
+                        : metricCalcService.calcMetric(code, dataDate, version, "MANUAL", allocDate);
+                if (rootMetricCode.equals(code) && rootTaskId == null) {
+                    rootTaskId = taskId;
+                }
+            }
+        }
+        return rootTaskId;
+    }
+
+    /**
+     * 级联入口的无副作用预检：先解析完整受影响子图，再逐个校验定义与日期，期间不创建任务。
+     * Facade 在异步创建根 PENDING 前调用；refreshCascade 执行层也会再次兜底。
+     */
+    public void preflightCascade(String rootMetricCode, LocalDate dataDate) {
+        preflight(resolveExecutionPlan(rootMetricCode), dataDate);
+    }
+
+    private void preflight(CascadePlan plan, LocalDate dataDate) {
+        for (String code : plan.executionOrder()) {
+            metricCalcService.preflightMetric(code, dataDate);
+        }
+    }
+
+    /** 收集完整下游集合并按先底层后上层生成确定性的执行顺序。 */
+    private CascadePlan resolveExecutionPlan(String rootMetricCode) {
         int maxDepth = Math.max(1, perfEngineProperties.getCascadeMaxDepth());
 
-        // 1. BFS 收集下游集合（含根）+ 深度检查
         Set<String> affectedNodes = new LinkedHashSet<>();
         List<PerfMetricRef> allEdges = new ArrayList<>();
         affectedNodes.add(rootMetricCode);
 
         Deque<String[]> queue = new ArrayDeque<>(); // [metricCode, depth]
         queue.offer(new String[]{rootMetricCode, "0"});
-
         while (!queue.isEmpty()) {
             String[] node = queue.poll();
             String cur = node[0];
             int depth = Integer.parseInt(node[1]);
-            // 根（depth=0）不参与深度判定；depth>maxDepth 才算越界
             if (depth > maxDepth) {
                 throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                         "级联深度超过 " + maxDepth + "：当前指标 " + cur + " 深度=" + depth);
@@ -135,52 +174,20 @@ public class CascadeRefresher {
             }
         }
 
-        // 2. 对受影响子图做拓扑排序
-        List<String> order;
-        if (allEdges.isEmpty()) {
-            // 只有根节点，没有下游
-            order = new ArrayList<>(List.of(rootMetricCode));
-        } else {
-            order = dependencyGraphBuilder.topologicalOrder(allEdges);
-            // 根可能不在 edges 中（无上游），手工加入
-            if (!order.contains(rootMetricCode)) {
-                order.add(0, rootMetricCode);
-            }
-            // 过滤：仅计算在 affectedNodes 内的节点（其他节点与根无关）
-            order.retainAll(affectedNodes);
+        List<String> topoOrder = allEdges.isEmpty()
+                ? new ArrayList<>(List.of(rootMetricCode))
+                : dependencyGraphBuilder.topologicalOrder(allEdges);
+        if (!topoOrder.contains(rootMetricCode)) {
+            topoOrder.add(0, rootMetricCode);
         }
+        topoOrder.retainAll(affectedNodes);
 
-        // 3. 按拓扑顺序调用 calcMetric；记录根的 taskId 返回
-        Set<String> fired = new HashSet<>();
-        String rootTaskId = null;
-        for (String code : order) {
-            if (fired.add(code)) {
-                log.info("[CascadeRefresher] 刷新指标 {} （date={}, version={}, allocDate={}）",
-                        code, dataDate, version, allocDate);
-                // triggerType 沿用原 3 参 calcMetric 的默认 MANUAL；allocDate 透传到整条级联
-                // 根指标复用预建行（仅异步链路会传），其余一律走原 calcMetric 自建任务行
-                boolean reusePreset = rootPresetTaskId != null && rootMetricCode.equals(code);
-                String taskId = reusePreset
-                        ? metricCalcService.calcMetricWithStats(
-                                code, dataDate, version, "MANUAL", allocDate, rootPresetTaskId).runTaskId()
-                        : metricCalcService.calcMetric(code, dataDate, version, "MANUAL", allocDate);
-                if (rootMetricCode.equals(code) && rootTaskId == null) {
-                    rootTaskId = taskId;
-                }
-            }
-        }
+        // 防御拓扑排序遗漏：将受影响节点追加到末尾，保证“全量预检”与实际执行集合一致。
+        LinkedHashSet<String> executionOrder = new LinkedHashSet<>(topoOrder);
+        executionOrder.addAll(affectedNodes);
+        return new CascadePlan(new ArrayList<>(executionOrder));
+    }
 
-        // 未被 topo 覆盖但确实需要刷新的节点（理论上不应出现；防御式）
-        for (String code : affectedNodes) {
-            if (fired.add(code)) {
-                log.warn("[CascadeRefresher] 拓扑遗漏节点补算 {}", code);
-                String taskId = metricCalcService.calcMetric(code, dataDate, version, "MANUAL", allocDate);
-                if (rootMetricCode.equals(code) && rootTaskId == null) {
-                    rootTaskId = taskId;
-                }
-            }
-        }
-        Collections.emptyList();
-        return rootTaskId;
+    private record CascadePlan(List<String> executionOrder) {
     }
 }

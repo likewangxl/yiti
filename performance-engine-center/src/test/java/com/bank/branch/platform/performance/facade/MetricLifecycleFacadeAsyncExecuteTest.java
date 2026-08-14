@@ -5,6 +5,8 @@ import com.bank.branch.platform.performance.controller.dto.BatchExecuteRespDTO;
 import com.bank.branch.platform.performance.controller.dto.RunTaskInfoDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.entity.SysControl;
+import com.bank.branch.platform.performance.enums.PerfErrorCode;
+import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
 import com.bank.branch.platform.performance.service.CascadeRefresher;
 import com.bank.branch.platform.performance.service.MetricAsyncRunner;
@@ -14,8 +16,10 @@ import com.bank.branch.platform.performance.service.MetricRefService;
 import com.bank.branch.platform.performance.service.MetricSlotService;
 import com.bank.branch.platform.performance.service.MetricTrialService;
 import com.bank.branch.platform.performance.service.SysControlService;
+import com.bank.branch.platform.performance.service.engine.StatShowSqlRouter;
 import com.bank.branch.platform.performance.support.PerformanceServiceTestBase;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -25,6 +29,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -65,6 +70,8 @@ class MetricLifecycleFacadeAsyncExecuteTest extends PerformanceServiceTestBase {
     private MetricRefService metricRefService;
     @Mock
     private MetricAsyncRunner metricAsyncRunner;
+    @Mock
+    private StatShowSqlRouter statShowSqlRouter;
 
     @InjectMocks
     private MetricLifecycleFacade facade;
@@ -77,6 +84,7 @@ class MetricLifecycleFacadeAsyncExecuteTest extends PerformanceServiceTestBase {
         def.setMetricCode("M1");
         def.setBaseDim("EMP");
         lenient().when(metricDefService.getByCode("M1")).thenReturn(def);
+        lenient().when(metricDefService.getByCodeOrNull("M1")).thenReturn(def);
         SysControl ctl = new SysControl();
         ctl.setCurrentVersion("v1");
         lenient().when(sysControlService.getCurrentVersion("EMP")).thenReturn(ctl);
@@ -100,6 +108,32 @@ class MetricLifecycleFacadeAsyncExecuteTest extends PerformanceServiceTestBase {
         verify(cascadeRefresher, never()).refreshCascade(anyString(), any(), anyString(), any(), any());
         // 计算交给后台 runner，并复用预建的 taskId（不得再建第二行）
         verify(metricAsyncRunner).runAsync("M1", D, "v1", false, null, "T_PRE");
+    }
+
+    @Test
+    @DisplayName("异步执行：日期预检失败时不创建 PENDING 任务并透传精确业务错误")
+    void executeMetric_async_preflightFails_beforePendingTask() {
+        PerfException tooOld = new PerfException(PerfErrorCode.METRIC_RECALC_DATE_TOO_OLD);
+        doThrow(tooOld).when(metricCalcService).preflightMetric("M1", D);
+
+        assertThatThrownBy(() -> facade.executeMetric("M1", D, Boolean.FALSE, null, Boolean.TRUE))
+                .isSameAs(tooOld);
+
+        verify(metricCalcService, never()).createPendingTask(anyString(), any(), anyString(), anyString());
+        verify(metricAsyncRunner, never()).runAsync(anyString(), any(), anyString(), anyBooleanArg(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("异步级联：先预检全链路，再创建根 PENDING 任务")
+    void executeMetric_asyncCascade_preflightsBeforePendingTask() {
+        when(metricCalcService.createPendingTask("M1", D, "v1", "MANUAL")).thenReturn("T_CASCADE");
+
+        facade.executeMetric("M1", D, Boolean.TRUE, null, Boolean.TRUE);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(cascadeRefresher, metricCalcService, metricAsyncRunner);
+        order.verify(cascadeRefresher).preflightCascade("M1", D);
+        order.verify(metricCalcService).createPendingTask("M1", D, "v1", "MANUAL");
+        order.verify(metricAsyncRunner).runAsync("M1", D, "v1", true, null, "T_CASCADE");
     }
 
     /** 异步提交（cascade=true）：同样立刻返回，级联在后台跑。 */

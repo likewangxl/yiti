@@ -17,6 +17,7 @@ import com.bank.branch.platform.performance.service.engine.DateMacroResolver;
 import com.bank.branch.platform.performance.service.engine.GroovyExecutor;
 import com.bank.branch.platform.performance.service.engine.MetricRefTokenParser;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
+import com.bank.branch.platform.performance.service.engine.StatShowSqlRouter;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -81,6 +82,7 @@ public class MetricCalcService {
 
     private final MetricDefService metricDefService;
     private final SqlExecutor sqlExecutor;
+    private final StatShowSqlRouter statShowSqlRouter;
     private final GroovyExecutor groovyExecutor;
     private final EmpIndexResultMapper empIndexResultMapper;
     private final OrgIndexResultMapper orgIndexResultMapper;
@@ -98,6 +100,7 @@ public class MetricCalcService {
     @Autowired
     public MetricCalcService(MetricDefService metricDefService,
                              SqlExecutor sqlExecutor,
+                             StatShowSqlRouter statShowSqlRouter,
                              GroovyExecutor groovyExecutor,
                              EmpIndexResultMapper empIndexResultMapper,
                              OrgIndexResultMapper orgIndexResultMapper,
@@ -109,6 +112,7 @@ public class MetricCalcService {
                              CurrentUserApi currentUserApi) {
         this.metricDefService = metricDefService;
         this.sqlExecutor = sqlExecutor;
+        this.statShowSqlRouter = statShowSqlRouter;
         this.groovyExecutor = groovyExecutor;
         this.empIndexResultMapper = empIndexResultMapper;
         this.orgIndexResultMapper = orgIndexResultMapper;
@@ -118,6 +122,21 @@ public class MetricCalcService {
         this.subjectFetcher = subjectFetcher;
         this.eventPublisher = eventPublisher;
         this.currentUserApi = currentUserApi;
+    }
+
+    /**
+     * 无副作用预检指标执行请求。
+     *
+     * <p>只读取指标定义并校验日期/统计展示表路由，不创建或更新 run_task；Facade、级联
+     * 和历史回算入口应在创建任务前调用。正式执行阶段仍由 {@link #executeSqlAndPersist}
+     * 再次路由，防止绕过入口直接调用计算服务时执行未改写 SQL。
+     */
+    public void preflightMetric(String metricCode, LocalDate dataDate) {
+        statShowSqlRouter.validateRecalcDate(dataDate);
+        PerfMetricDef def = loadCalcableDef(metricCode);
+        if ("SQL".equalsIgnoreCase(def.getCalcLogicType())) {
+            statShowSqlRouter.route(def.getSqlText(), dataDate);
+        }
     }
 
     /**
@@ -299,7 +318,9 @@ public class MetricCalcService {
         params.putIfAbsent("objectId", null);
         Duration timeout = Duration.ofSeconds(perfEngineProperties == null
                 ? 30 : Math.max(1, perfEngineProperties.getSqlTimeoutSeconds()));
-        Map<String, BigDecimal> values = sqlExecutor.execute(def.getSqlText(), params, timeout);
+        // 路由只产生新的 SQL 字符串，不修改指标定义中保存的原始 SQL。
+        String routedSql = statShowSqlRouter.route(def.getSqlText(), dataDate);
+        Map<String, BigDecimal> values = sqlExecutor.execute(routedSql, params, timeout);
         persistValues(def, values, dataDate, version);
         return SubjectStats.allSuccess(values.size(), jobKey, triggerType);
     }

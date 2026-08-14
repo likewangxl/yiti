@@ -6,6 +6,7 @@ import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.mapper.PerfMetricCalcLogMapper;
 import com.bank.branch.platform.performance.mapper.PerfMetricCalcTaskMapper;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
+import com.bank.branch.platform.performance.service.engine.StatShowSqlRouter;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ public class MetricBatchCalcService {
     private final PerfMetricDefMapper metricDefMapper;
     private final MetricCalcService metricCalcService;
     private final com.bank.branch.platform.performance.mapper.PerfRunTaskMapper perfRunTaskMapper;
+    private final StatShowSqlRouter statShowSqlRouter;
 
     /**
      * 执行指定级别的指标批量计算（旧入口：自动生成 task id）.
@@ -70,6 +72,8 @@ public class MetricBatchCalcService {
         if (metricLevel < 1 || metricLevel > 3) {
             throw new IllegalArgumentException("指标级别必须为 1/2/3，当前值: " + metricLevel);
         }
+        // LEVEL1/2/3 批量入口在登记任务前统一拒绝当天/未来日期。
+        statShowSqlRouter.validateRecalcDate(dataDate);
         // task.id 复用本次运行日志 id（SYS_JOB_RUN_LOG.id），便于与执行日志关联；为空回退 UUID
         String taskId = (runLogId != null && !runLogId.isBlank())
                 ? runLogId.trim()

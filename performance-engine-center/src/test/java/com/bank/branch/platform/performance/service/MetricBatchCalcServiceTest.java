@@ -2,10 +2,13 @@ package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.performance.entity.PerfMetricCalcTask;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
+import com.bank.branch.platform.performance.enums.PerfErrorCode;
+import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfMetricCalcLogMapper;
 import com.bank.branch.platform.performance.mapper.PerfMetricCalcTaskMapper;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
+import com.bank.branch.platform.performance.service.engine.StatShowSqlRouter;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
@@ -27,6 +30,7 @@ import java.util.Collections;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 /**
@@ -49,6 +53,8 @@ class MetricBatchCalcServiceTest {
     private MetricCalcService metricCalcService;
     @Mock
     private PerfRunTaskMapper perfRunTaskMapper;
+    @Mock
+    private StatShowSqlRouter statShowSqlRouter;
 
     @InjectMocks
     private MetricBatchCalcService service;
@@ -115,6 +121,20 @@ class MetricBatchCalcServiceTest {
 
         verify(taskMapper).insert(cap.capture());
         assertThat(cap.getValue().getId()).hasSize(32);
+    }
+
+    @Test
+    @DisplayName("LEVEL1/2/3 批量：当天日期在登记批量任务前被全局拒绝")
+    void execute_todayDate_rejectedBeforeTaskInsert() {
+        LocalDate today = LocalDate.of(2026, 8, 14);
+        doThrow(new PerfException(PerfErrorCode.METRIC_RECALC_DATE_INVALID))
+                .when(statShowSqlRouter).validateRecalcDate(today);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.execute(3, today))
+                .isInstanceOf(PerfException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerfErrorCode.METRIC_RECALC_DATE_INVALID);
+        verify(taskMapper, org.mockito.Mockito.never()).insert(any(PerfMetricCalcTask.class));
     }
 
     @Test

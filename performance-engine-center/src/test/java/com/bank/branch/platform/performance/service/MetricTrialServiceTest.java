@@ -8,6 +8,7 @@ import com.bank.branch.platform.performance.service.dto.MetricTrialResult;
 import com.bank.branch.platform.performance.service.engine.DateMacroResolver;
 import com.bank.branch.platform.performance.service.engine.GroovyExecutor;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
+import com.bank.branch.platform.performance.service.engine.StatShowSqlRouter;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,7 +30,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -64,8 +67,62 @@ class MetricTrialServiceTest {
     @Mock
     private MetricCalcService metricCalcService;
 
+    @Mock
+    private StatShowSqlRouter statShowSqlRouter;
+
     @InjectMocks
     private MetricTrialService metricTrialService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void configureRouter() {
+        lenient().when(statShowSqlRouter.route(anyString(), any(LocalDate.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @Test
+    @DisplayName("保存 SQL 与 adhoc SQL 均先路由，且 SqlExecutor 收到改写 SQL")
+    void trial_sqlAndAdhoc_routeBeforeExecutor() {
+        PerfMetricDef def = buildSqlMetric();
+        def.setMetricCode("TEST_TRIAL_ROUTE");
+        def.setSqlText("SELECT 1 AS base_key, 2 AS metric_value FROM XAN_M98_CUST_STAT_SHOW3");
+        when(metricDefService.getByCodeOrNull("TEST_TRIAL_ROUTE")).thenReturn(def);
+        when(perfEngineProperties.getSqlTimeoutSeconds()).thenReturn(30);
+        when(statShowSqlRouter.route(def.getSqlText(), LocalDate.of(2026, 8, 14)))
+                .thenReturn("SELECT 1 AS base_key, 2 AS metric_value FROM XAN_M98_CUST_STAT_SHOW3_H2");
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(Map.of());
+
+        metricTrialService.trial("TEST_TRIAL_ROUTE", LocalDate.of(2026, 8, 14), 10, null);
+        metricTrialService.trialAdhoc("SQL", "CUST",
+                "SELECT 1 AS base_key, 2 AS metric_value FROM XAN_M98_EMP_STAT_SHOW3",
+                null, LocalDate.of(2026, 8, 14), 10, null);
+
+        verify(sqlExecutor).execute(
+                eq("SELECT 1 AS base_key, 2 AS metric_value FROM XAN_M98_CUST_STAT_SHOW3_H2"),
+                anyMap(), any(Duration.class));
+        verify(statShowSqlRouter).route(def.getSqlText(), LocalDate.of(2026, 8, 14));
+        verify(statShowSqlRouter).route(
+                eq("SELECT 1 AS base_key, 2 AS metric_value FROM XAN_M98_EMP_STAT_SHOW3"),
+                eq(LocalDate.of(2026, 8, 14)));
+    }
+
+    @Test
+    @DisplayName("请求 dataDate 覆盖用户 params 中同名值")
+    void trial_requestDataDate_overridesUserParam() {
+        PerfMetricDef def = buildSqlMetric();
+        def.setMetricCode("TEST_TRIAL_DATE_OVERRIDE");
+        when(metricDefService.getByCodeOrNull("TEST_TRIAL_DATE_OVERRIDE")).thenReturn(def);
+        when(perfEngineProperties.getSqlTimeoutSeconds()).thenReturn(30);
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(Map.of());
+
+        LocalDate requested = LocalDate.of(2026, 8, 14);
+        Map<String, Object> params = new HashMap<>();
+        params.put("dataDate", LocalDate.of(2099, 1, 1));
+        metricTrialService.trial("TEST_TRIAL_DATE_OVERRIDE", requested, 10, params);
+
+        ArgumentCaptor<Map<String, Object>> captured = ArgumentCaptor.captor();
+        verify(sqlExecutor).execute(anyString(), captured.capture(), any(Duration.class));
+        assertThat(captured.getValue()).containsEntry("dataDate", requested);
+    }
 
     @Test
     @DisplayName("SQL 试运行：返回 baseKey->value 样本，包含 totalRows / executionMillis，不调任何宽表")

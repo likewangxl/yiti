@@ -2,6 +2,7 @@ package com.bank.branch.platform.performance.job.quartz;
 
 import com.bank.branch.platform.performance.service.MetricCalcService;
 import com.bank.branch.platform.performance.service.SysControlService;
+import com.bank.branch.platform.performance.service.engine.StatShowSqlRouter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ class MetricExecuteQuartzJobTest {
 
     private MetricCalcService metricCalcService;
     private SysControlService sysControlService;
+    private StatShowSqlRouter statShowSqlRouter;
     private MetricExecuteQuartzJob job;
     private JobExecutionContext context;
 
@@ -34,9 +36,11 @@ class MetricExecuteQuartzJobTest {
     void setup() {
         metricCalcService = mock(MetricCalcService.class);
         sysControlService = mock(SysControlService.class);
+        statShowSqlRouter = mock(StatShowSqlRouter.class);
         job = new MetricExecuteQuartzJob();
         ReflectionTestUtils.setField(job, "metricCalcService", metricCalcService);
         ReflectionTestUtils.setField(job, "sysControlService", sysControlService);
+        ReflectionTestUtils.setField(job, "statShowSqlRouter", statShowSqlRouter);
         context = mock(JobExecutionContext.class);
         JobDetail detail = mock(JobDetail.class);
         when(context.getJobDetail()).thenReturn(detail);
@@ -57,6 +61,20 @@ class MetricExecuteQuartzJobTest {
 
         // Then: calcMetric 被调用一次，triggerType = "SCHEDULED"
         verify(metricCalcService).calcMetric(eq("M_A"), any(LocalDate.class), eq("v1"), eq("SCHEDULED"));
+    }
+
+    @Test
+    @DisplayName("execute: 使用 JobTriggerParams 中手选 dataDate，不被 T-1 覆盖")
+    void execute_usesSelectedDataDateFromJobContext() throws Exception {
+        JobDataMap data = new JobDataMap();
+        data.put("metricCode", "M_A");
+        data.put("dataDate", "2026-08-01");
+        when(context.getMergedJobDataMap()).thenReturn(data);
+
+        job.execute(context);
+
+        verify(sysControlService).getActiveVersionOrFallback(eq(LocalDate.of(2026, 8, 1)));
+        verify(metricCalcService).calcMetric("M_A", LocalDate.of(2026, 8, 1), "v1", "SCHEDULED");
     }
 
     @Test

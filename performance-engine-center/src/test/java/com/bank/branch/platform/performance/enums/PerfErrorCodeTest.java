@@ -48,6 +48,11 @@ class PerfErrorCodeTest {
     void k3_422xxCodes_alignWithDoc03SectionK() {
         assertThat(PerfErrorCode.VALIDATION_FAILED.getCode()).isEqualTo("PERF-42200");
         assertThat(PerfErrorCode.METRIC_CALC_LOGIC_INVALID.getCode()).isEqualTo("PERF-42201");
+        assertThat(PerfErrorCode.METRIC_RECALC_DATE_INVALID.getCode()).isEqualTo("PERF-42213");
+        assertThat(PerfErrorCode.METRIC_RECALC_DATE_INVALID.getMessage())
+                .isEqualTo("当天及未来日期不可重算");
+        assertThat(PerfErrorCode.METRIC_RECALC_DATE_TOO_OLD.getCode()).isEqualTo("PERF-42214");
+        assertThat(PerfErrorCode.METRIC_RECALC_DATE_TOO_OLD.getMessage()).isEqualTo("超过20天只能选择月末");
         assertThat(PerfErrorCode.KPI_WEIGHT_SUM_INVALID.getCode()).isEqualTo("PERF-42202");
         assertThat(PerfErrorCode.IMPORT_COLUMN_MAPPING_INVALID.getCode()).isEqualTo("PERF-42203");
         assertThat(PerfErrorCode.TRIAL_RUN_TIMEOUT.getCode()).isEqualTo("PERF-42205");
@@ -82,7 +87,7 @@ class PerfErrorCodeTest {
         // V1.7 P2 新增 4 条：METRIC_CALC_FREQ_INVALID(40021) / METRIC_SUBJECT_SQL_REQUIRED(40022)
         // / KPI_CYCLE_TYPE_INVALID(40023) / METRIC_SUBJECT_SQL_FAILED(50004)，总数由 30 升至 34
         // V1.9 新增 1 条：IMPORT_BATCH_ALL_OR_NONE_FAILED(42211)，总数升至 35
-        assertThat(PerfErrorCode.values()).hasSize(63);
+        assertThat(PerfErrorCode.values()).hasSize(65);
     }
 
     /**
@@ -120,7 +125,7 @@ class PerfErrorCodeTest {
     void enumSize_equalsSectionKTotal() {
         // §K 共 34 条编码（K.1: 15 + K.2: 4 + K.3: 11 + K.4: 4，含 V1.7 新增 4 条 + V1.9 新增 1 条 PERF-42211）
         // METRIC_SLOT_CONFLICT 复用 40901，独立常量 +1 = 35
-        assertThat(PerfErrorCode.values()).hasSize(63);
+        assertThat(PerfErrorCode.values()).hasSize(65);
     }
 
     /**
@@ -141,6 +146,8 @@ class PerfErrorCodeTest {
             "PERF-42205", "PERF-42206", "PERF-42207", "PERF-42208", "PERF-42209", "PERF-42210",
             // V1.9 新增 K.3 段位 1 条：IMPORT_BATCH_ALL_OR_NONE_FAILED 指标定义导入整批 all-or-none 校验失败
             "PERF-42211",
+            // 统计展示表历史路由：日期当天/未来与超过 20 天非月末
+            "PERF-42213", "PERF-42214",
             "PERF-50002", "PERF-50003",
             // V1.7 P2 新增 K.4 段位 1 条
             "PERF-50004",
