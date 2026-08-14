@@ -39,9 +39,9 @@ class StatShowArchiveJobTest {
         assertThat(inserted).isEqualTo(4);
         InOrder order = inOrder(mapper);
         order.verify(mapper).deleteByTableDate(CUST + "_H2", "2026-08-14");
-        order.verify(mapper).insertFromTmpByDate(CUST + "_H2", CUST + "_tmp", "2026-08-14");
+        order.verify(mapper).insertFromTmpByDate(CUST + "_H2", CUST + "_TMP", "2026-08-14");
         order.verify(mapper).deleteByTableDate(EMP + "_H2", "2026-08-14");
-        order.verify(mapper).insertFromTmpByDate(EMP + "_H2", EMP + "_tmp", "2026-08-14");
+        order.verify(mapper).insertFromTmpByDate(EMP + "_H2", EMP + "_TMP", "2026-08-14");
         verify(mapper, never()).truncateTable(anyString());
         verify(mapper, never()).deleteByTableDate(eq(CUST), anyString());
         verify(mapper, never()).deleteByTableDate(eq(EMP), anyString());
@@ -55,9 +55,9 @@ class StatShowArchiveJobTest {
 
         InOrder order = inOrder(mapper);
         order.verify(mapper).truncateTable(CUST + "_H2");
-        order.verify(mapper).insertFromTmpByDate(CUST + "_H2", CUST + "_tmp", "2026-08-10");
+        order.verify(mapper).insertFromTmpByDate(CUST + "_H2", CUST + "_TMP", "2026-08-10");
         order.verify(mapper).truncateTable(EMP + "_H2");
-        order.verify(mapper).insertFromTmpByDate(EMP + "_H2", EMP + "_tmp", "2026-08-10");
+        order.verify(mapper).insertFromTmpByDate(EMP + "_H2", EMP + "_TMP", "2026-08-10");
         verify(mapper, never()).deleteByTableDate(eq(CUST + "_H2"), anyString());
         verify(mapper, never()).deleteByTableDate(eq(EMP + "_H2"), anyString());
     }
@@ -68,9 +68,9 @@ class StatShowArchiveJobTest {
 
         InOrder order = inOrder(mapper);
         order.verify(mapper).truncateTable(CUST + "_H3");
-        order.verify(mapper).insertFromTmpByDate(CUST + "_H3", CUST + "_tmp", "2026-08-20");
+        order.verify(mapper).insertFromTmpByDate(CUST + "_H3", CUST + "_TMP", "2026-08-20");
         order.verify(mapper).truncateTable(EMP + "_H3");
-        order.verify(mapper).insertFromTmpByDate(EMP + "_H3", EMP + "_tmp", "2026-08-20");
+        order.verify(mapper).insertFromTmpByDate(EMP + "_H3", EMP + "_TMP", "2026-08-20");
     }
 
     @Test
@@ -82,12 +82,12 @@ class StatShowArchiveJobTest {
         assertThat(inserted).isEqualTo(16);
         InOrder order = inOrder(mapper);
         order.verify(mapper).truncateTable(CUST + "_H1");
-        order.verify(mapper).insertFromTmpByDate(CUST + "_H1", CUST + "_tmp", "2026-07-31");
+        order.verify(mapper).insertFromTmpByDate(CUST + "_H1", CUST + "_TMP", "2026-07-31");
         order.verify(mapper).deleteByTableDate(CUST, "2026-07-31");
-        order.verify(mapper).insertFromTmpByDate(CUST, CUST + "_tmp", "2026-07-31");
+        order.verify(mapper).insertFromTmpByDate(CUST, CUST + "_TMP", "2026-07-31");
         order.verify(mapper).truncateTable(EMP + "_H1");
-        order.verify(mapper).insertFromTmpByDate(EMP + "_H1", EMP + "_tmp", "2026-07-31");
+        order.verify(mapper).insertFromTmpByDate(EMP + "_H1", EMP + "_TMP", "2026-07-31");
         order.verify(mapper).deleteByTableDate(EMP, "2026-07-31");
-        order.verify(mapper).insertFromTmpByDate(EMP, EMP + "_tmp", "2026-07-31");
+        order.verify(mapper).insertFromTmpByDate(EMP, EMP + "_TMP", "2026-07-31");
     }
 }

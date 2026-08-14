@@ -27,7 +27,7 @@ public class StatShowArchiveJob {
             "XAN_M98_EMP_STAT_SHOW3"
     };
 
-    private static final String TMP_SUFFIX = "_tmp";
+    private static final String TMP_SUFFIX = "_TMP";
 
     private final StatShowArchiveMapper mapper;
 

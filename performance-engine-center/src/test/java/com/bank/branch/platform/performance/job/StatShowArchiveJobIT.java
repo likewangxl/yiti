@@ -54,7 +54,7 @@ class StatShowArchiveJobIT {
         }
         try (Connection c = DriverManager.getConnection(URL, USER, PWD); Statement s = c.createStatement()) {
             for (String main : MAINS) {
-                for (String table : new String[]{main, main + "_tmp", main + "_H1", main + "_H2", main + "_H3"}) {
+                for (String table : new String[]{main, main + "_TMP", main + "_H1", main + "_H2", main + "_H3"}) {
                     s.execute("DROP TABLE IF EXISTS " + table);
                     s.execute("CREATE TABLE " + table
                             + " (STATIS_DT VARCHAR(10), ID VARCHAR(32), VAL VARCHAR(64))");
@@ -86,7 +86,7 @@ class StatShowArchiveJobIT {
     void truncateAll() throws Exception {
         try (Connection c = DriverManager.getConnection(URL, USER, PWD); Statement s = c.createStatement()) {
             for (String main : MAINS) {
-                for (String table : new String[]{main, main + "_tmp", main + "_H1", main + "_H2", main + "_H3"}) {
+                for (String table : new String[]{main, main + "_TMP", main + "_H1", main + "_H2", main + "_H3"}) {
                     s.execute("TRUNCATE TABLE " + table);
                 }
             }
@@ -104,7 +104,7 @@ class StatShowArchiveJobIT {
 
     private void seedBothTmp(String dt, int n) throws Exception {
         for (String main : MAINS) {
-            seed(main + "_tmp", dt, n);
+            seed(main + "_TMP", dt, n);
         }
     }
 
