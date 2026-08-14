@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 对应 {@code PT_RESOURCE} 早已登记的 {@code RES_ALLOC_PREVIEW}
  * （{@code GET /api/report/alloc-preview}，见 {@code docs/superpowers/sql/yiti_deploy_20260605.sql}）。
  * 修复前该 Controller 完全没有标注 {@code @BizAuth}，鉴权 AOP 因此不拦截本端点——
- * 详见模块 CLAUDE.md「关键实现要点与踩坑」历史记录。类级
+ * 详见模块 AGENTS.md 的接口兼容约束。类级
  * {@code @RequestMapping} 与方法级路径拆分后总 URL 与修复前完全一致
  * （仍是历史遗留的单数 {@code /api/report/}，未随本次修复改为 {@code /api/reports/}，
  * 避免连带影响前端与 PT_RESOURCE 登记 URL）。

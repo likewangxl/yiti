@@ -1,28 +1,24 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-14 | Updated: 2026-07-12 -->
 
-# docs/modules/system-governance-center/AGENTS.md
+# system-governance-center 文档维护指导
 
-本文件约束 `docs/modules/system-governance-center/` 下的治理域文档，统一使用 UTF-8。
+本文件约束 `docs/modules/system-governance-center/`，继承上级文档规则。
 
 ## 目录职责
 
-- 本目录记录字典、通知、文件、工作日历、审计、系统配置、任务调度等治理能力，共 10 份文档：`01-功能规格.md` ~ `09-依赖契约摘要.md`（9 份编号文档）+ `09-运维Runbook.md`（sys_job_conf / Quartz 集群调度运维权威指南，V1.9 整合新增，与 `09-依赖契约摘要.md` 编号重复但主题不同，引用时需按文件名全称区分）。
-- 该模块是 `workflow-center`、`portal-content-center`、`performance-engine-center` 等模块的重要上游。
+- 记录字典、配置、日历、审计、通知、文件和 Quartz/`sys_job_conf` 调度治理。
+- governance 依赖 auth，并通过公开 API 向 workflow、portal、customer、business、performance、report 等模块提供能力。
 
 ## 阅读顺序
 
-- `01-功能规格.md`：理解治理域职责。
-- `04-对外API契约.md`：跨模块调用治理能力时的首选文档。
-- `09-依赖契约摘要.md`：查看上下游依赖与调用强度。
-- `09-运维Runbook.md`：定时任务（sys_job_conf）与 Quartz 集群调度的运维操作手册。
+1. `01-功能规格.md`：治理能力和所有权。
+2. `04-对外API契约.md`：业务模块调用治理能力的首选入口。
+3. `06-并发与事务策略.md`、`07-审计要求.md`：锁、任务和审计一致性。
+4. `09-依赖契约摘要.md`：上下游关系；`09-运维Runbook.md`：Quartz 与任务运维。
 
-## 维护要求
+## 契约同步与边界
 
-- `CalendarApi`、`NotifyApi`、`FileApi` 等接口变更时，必须同步检查 `workflow-center`、`portal-content-center` 和 `performance-engine-center` 的文档描述。
-- 治理域文档应清楚区分共享组件、管理后台能力与被业务模块复用的对外接口。
-- Quartz 相关运维操作（QRTZ_* 表、job_key 排障）以 `09-运维Runbook.md` 为权威来源，不要在其他文档中重复维护过时的运维步骤。
-
-## 覆盖关系
-
-- 继承 `../AGENTS.md` 与 `../../AGENTS.md`。
+- `DictApi`、`FileApi`、`NotifyApi`、`AuditApi`、`JobApi` 等变化时，同步 `04`、`09` 和实际消费者文档。
+- 业务模块只能通过治理公开 API 使用文件、通知、审计和任务能力，不得文档化为直连内部 Service 或对象存储客户端。
+- Quartz 表、job key、集群排障和调度恢复以 `09-运维Runbook.md` 集中维护，其他文档只链接，不复制现场步骤。
+- 调度配置或数据模型变化由 DBA/运维按审批实施；`05`、`08` 仅记录核实后的模型与配置要求。

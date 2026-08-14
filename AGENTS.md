@@ -1,233 +1,133 @@
-<!-- Generated: 2026-04-26 | Updated: 2026-08-13 -->
-
 # AGENTS.md
 
-本文件为 AI 编码代理提供项目上下文和开发指导。后续所有回答全部使用中文，打开和编辑文件时全部使用UTF-8编码。
+本文件是仓库级 AI 开发指导。后续所有回答使用中文，读取和编辑文本统一使用 UTF-8。
 
-## 项目概述
+`AGENTS.md` 是唯一权威的代理指导文件：进入子目录工作时，必须继续读取该目录及其父级适用的 `AGENTS.md`；不再创建或维护其他代理指导副本。
 
-**Branch Platform (分行业务平台)** - 模块化单体架构的银行分行业务运营系统
-**业务目标**: 为银行分行提供客户营销、工作流审批、绩效计算、报表分析的一体化解决方案
-**核心价值**: 模块化设计、权限精细化控制、工作流集成、数据强一致性
+## 项目与权威来源
 
-## 技术栈
+Branch Platform（分行业务平台）采用 Spring Boot 模块化单体后端和 Vue/Vite 前端：
 
-- **后端**: Spring Boot 3.2.3 + JDK 17、MyBatis 3.0.3（新增功能一律 MyBatis-Plus，见下文红线）、Flowable 7.0.1（嵌入式）、MySQL 8.0 + Druid、Spring Session JDBC（session 落 MySQL `SPRING_SESSION` 表，**2026-05 已去 Redis**）、Knife4j 4.4.0、MinIO 8.5.7
-- **前端** (`xanzc_frontend/`): Vue 3 + Vite 4 + Element Plus + Pinia
-- **构建**: Maven 多模块项目；版本控制 Git
+- 根 `pom.xml` 是 Maven 聚合模块、依赖与版本的权威来源；`bootstrap` 是唯一 Spring Boot 启动入口。
+- `bootstrap/src/main/resources/application*.yml` 是后端端口、数据源、Session、Flowable、Quartz、MyBatis-Plus、OBS 等运行配置的权威来源。
+- `xanzc_frontend/vite.config.js` 及其环境变量是前端开发端口和代理目标的权威来源。
+- 实现行为以源码和测试为准；接口契约见 `docs/modules/<模块>/03-接口设计*`、`04-对外API契约*`，表结构以目标库实际 schema 及获准的权威文档为准。
+- 不在本文件固化依赖版本、端口、口令、机器进程或类/端点数量。执行命令前现场读取配置，禁止擅自修改或回退本地端口、代理、数据库连接和外联配置。
 
-## 开发指令
+## 模块边界
+
+根 POM 聚合以下后端工程：
+
+| 工程 | 职责 |
+|---|---|
+| `common` | web、trace、安全、AOP、数据库公共基础设施 |
+| `auth-permission-center` | 认证、RBAC、数据范围、组织与角色配置 |
+| `system-governance-center` | 字典、配置、审计、通知、文件、Quartz 调度 |
+| `workflow-center` | Flowable 工作流能力 |
+| `portal-content-center` | 门户与内容 |
+| `customer-marketing-center` | 客户营销 |
+| `business-application-center` | 业务申请 |
+| `performance-engine-center` | 绩效计算与评价 |
+| `report-analytics-center` | 报表、导出、自由报表和大屏 |
+| `red-engine-center` | 红色引擎党建管理 |
+| `soap-gateway-center` | SOAP/callpu 外部渠道网关 |
+| `bootstrap` | 聚合全部后端模块并启动 |
+
+`xanzc_frontend/` 是独立 npm 工程，不在 Maven 聚合内。
+
+### 必须遵守的依赖规则
+
+1. 跨模块只依赖对方 `api/` 中的 `*Api`、`*QueryApi` 及 DTO；禁止引用其他模块的 `mapper`、`entity`、内部 `service` 或实现类，禁止跨模块直接 join 对方私有表。
+2. `auth-permission-center` 只依赖 common，不反向依赖业务模块。
+3. `system-governance-center` 是平台 Quartz 集成点；`workflow-center` 是唯一可直接调用 Flowable API 的模块。
+4. `report-analytics-center` 对上游业务域只读，但可维护自身的查询定义、导出任务、自由报表、大屏配置和发布状态；“只读”不等于本模块数据库无写操作。业务模块不得依赖 report，report 也不作为跨模块查询中转层。
+5. `red-engine-center` 自管审核状态机，不接 Flowable；`soap-gateway-center` 是外部渠道适配层。实际 Maven 依赖始终以各模块 `pom.xml` 为准，不在本文复制完整依赖图。
+6. 文件对象实际由 `system-governance-center` 的 `ObsStorageClient` 存入华为云 OBS。源码中残留的 “MinIO” 名称或注释不代表当前实现；不得据此重新引入 MinIO。
+
+## 认证、权限与数据边界
+
+- 认证/RBAC 白名单以 `AuthenticationFilter.WHITELIST` 和 `WebMvcAuthConfig` 为准，两处必须保持一致。白名单只表示跳过相应认证或 RBAC 环节，不代表任意未标注 `@BizAuth` 的接口都是公开接口。
+- 新增非白名单 REST 端点必须登记 `PT_RESOURCE`，业务 Controller 公共方法必须声明匹配的 `@BizAuth`。已有认证自服务等例外按源码、资源配置和测试处理，不得扩展成通用豁免。
+- `SYS_ADMIN` 只在明确实现的 RBAC 环节享有跳过能力，不自动绕过屏级角色白名单、命名机构组、机构画像、数据范围或其他业务专属门禁；未知、空值和查询异常一律 Fail Close。
+- 所有写操作必须在 Service 层基于目标实体做二次权限校验；所有读、详情和导出接口都必须应用统一数据范围，不能只在前端隐藏入口。
+- 高危操作必须使用独立 URL、独立资源授权并独立审计。日志中的手机号、证件号、账号、金额和凭据必须脱敏。
+- Session 使用 Spring Session JDBC；共享锁使用 `LockManager`/`PT_LOCK`。不要为这两类能力重新引入 Redis。
+
+## 代码与契约规范
+
+- 包结构遵循 `api`、`controller`、`facade`、`service`、`mapper`、`entity`、`config` 分层；跨模块实现放在 `facade`，内部实现使用 `*ServiceImpl`。
+- Service 类和 public 方法必须有注释；复杂逻辑说明“为什么”。禁止用 `Object` 等通用容器规避清晰类型契约。
+- API 入参、出参、traceId 与耗时由统一基础设施记录；新增能力优先复用 common 自动配置，不得另建平行实现。
+- 改动 `controller/`、`api/`、DTO、错误码或 `@BizAuth` 时，同步更新对应模块接口文档和 `PT_RESOURCE` 数据，并运行 `scripts/check-contract-docs.sh`。
+- 规范实现位置统一登记在 `docs/code-examples.md`；共通响应、分页、鉴权、数据范围、审计、事件与日志规范见 `docs/common-dev-guide.md`。
+
+## 构建与测试
 
 ```bash
-mvn clean install -DskipTests        # 安装/刷新全部模块到本地 .m2（跨模块改动后必跑）
-cd bootstrap && mvn spring-boot:run  # 启动开发服务器
-mvn test                             # 运行单元测试（surefire）
-mvn verify                           # 全量测试含 IT（failsafe）
-mvn clean package                    # 构建打包
+mvn clean install -DskipTests
+mvn test
+mvn verify
+mvn clean package
+cd bootstrap && mvn spring-boot:run
 ```
 
-## 测试 / IT 执行注意事项
+- 跨模块改动或 bootstrap 测试依赖上游最新类时，先执行 `mvn clean install -DskipTests` 刷新本地 SNAPSHOT，再运行目标测试，避免 stale jar 造成假故障。
+- `*Test.java`/`*Tests.java` 由 Surefire 执行；`*IT.java` 由 Failsafe 在 `verify` 阶段执行。新集成测试使用 `*IT.java`。
+- 测试编码已由 Maven 统一为 UTF-8，不要在单个 `@Sql` 重复配置编码。
+- 运行任何真库测试前必须读取测试 profile 的实际数据源。配置指向 `yiti` 或其他非隔离库时，不得因“测试会回滚”而默认执行。
 
-- **Stale jar**：bootstrap 的 `@SpringBootTest` 依赖其他模块最新类时，必须先 `mvn clean install -DskipTests` 再 `mvn test -pl bootstrap`，否则旧 jar 会引发 `ConflictingBeanDefinitionException` 等怪错。
-- **Surefire vs Failsafe**：`*Test.java`/`*Tests.java` → surefire（`mvn test`）；`*IT.java` → failsafe（`mvn verify`）；新集成测试按 `*IT.java` 命名。
-- **UTF-8 已全局配置**：surefire/failsafe argLine 已含 `-Dfile.encoding=UTF-8`，无需在 `@Sql` 上加 `@SqlConfig(encoding="UTF-8")`。
+### TDD（绝对红线）
 
-## 模块结构与依赖
+- 一切特性开发和 Bug 修复必须完成 Red-Green-Refactor：先添加能稳定失败的测试，再写最小实现使其通过，最后重构。
+- 禁止先堆实现、事后补测试凑覆盖率。
 
-全部 9 个业务模块 + bootstrap 均已交付，无尚未实现模块。各模块细节见对应模块的 AGENTS.md / CLAUDE.md，此处不重复维护。
+## 数据库与 SQL（绝对红线）
 
-| 模块 | 包名 | 说明 |
-|------|------|------|
-| `common` | com.bank.branch.platform.common.* | 公共基础设施 (web/trace/security/aop/db 5 个子模块) |
-| `auth-permission-center` | com.bank.branch.platform.auth | 认证授权中心 (RBAC + 数据范围) |
-| `system-governance-center` | com.bank.branch.platform.governance | 系统治理中心 (含 sys_job_conf / Quartz 集群调度) |
-| `workflow-center` | com.bank.branch.platform.workflow | 工作流中心 (Flowable 集成) |
-| `customer-marketing-center` | com.bank.branch.platform.customer | 客户营销中心 |
-| `business-application-center` | com.bank.branch.platform.bizapp | 业务申请中心 |
-| `portal-content-center` | com.bank.branch.platform.portal | 门户与内容中心 |
-| `performance-engine-center` | com.bank.branch.platform.performance | 绩效计算中心 (含 eval 考核评价/奖励分配) |
-| `report-analytics-center` | com.bank.branch.platform.report | 报表分析中心 (只读) |
-| `bootstrap` | com.bank.branch.platform | 唯一的 Spring Boot 启动入口 |
+### Flyway 禁令
 
-此外还有两个工程：
+- 禁止引入 `flyway-core`/`flyway-mysql`，禁止添加 `spring.flyway.*`，禁止新增 `V*__*.sql`/`U*__*.sql`，禁止编写 `*FlywayIT`/`*FlywayTestBase`。
+- schema 变更由 DBA 按审批结果在目标库直接实施，不生成或提交 DDL `.sql` 文件，不依赖自动 migrate 框架。
+- 当前目标库 schema 是事实来源；fresh deploy baseline 只能从获准来源导出并按安全流程处理。
 
-- `soap-gateway-center/` — 外部渠道 SOAP/callpu 网关（包名 `...platform.soap`）：随 bootstrap 同 JVM 启动，`SoapNettyServer` 额外监听独立 Netty 端口；另提供 `POST /api/callpu` HTTP 入口
-- `xanzc_frontend/` — Vue 3 + Vite 前端（npm 工程，不在 Maven 聚合内，`npm run dev` 启动）
+### 可执行 SQL 文件
 
-### 当前模块依赖图
+- 新增或修改的可执行 `.sql` 只能包含 `START TRANSACTION`、`COMMIT`、`ROLLBACK` 以及 `INSERT`、`UPDATE`；禁止 `DELETE`、DDL 和其他独立语句。
+- 禁止混入独立 `SELECT`、`SHOW`、`DESCRIBE`、`EXPLAIN`、`CHECKSUM`；`SELECT` 只能作为 `INSERT`/`UPDATE` 的组成部分。
+- 禁止定义或调用存储过程、函数、触发器、事件，禁止引用 `INFORMATION_SCHEMA`。
+- MySQL upsert 禁止使用已弃用的 `VALUES(col)`，使用行别名或显式更新表达式。
+- 执行前盘点、执行后验收、幂等检查通过只读命令或测试脚本完成，原始证据外置归档，不得塞入交付 SQL。
 
-```
-common (common-web → common-trace → common-security → common-aop → common-db)
-  ↑
-auth-permission-center (无其他业务模块依赖)
-  ↑
-system-governance-center (依赖 auth)  ← 被 workflow 依赖
-  ↑
-workflow-center (依赖 auth + governance)
-  ↑
-portal-content-center (依赖 auth + governance + workflow，通用域不持有核心域状态)
-customer-marketing-center (依赖 auth + governance + workflow)
-business-application-center (依赖 auth + governance + workflow + customer-marketing + portal)
-performance-engine-center (依赖 auth + governance + workflow + customer-marketing)
+### MyBatis-Plus
 
-report-analytics-center (只读，依赖 auth/governance/performance/customer 的 *Api，不被业务模块依赖)
+- 新增数据库访问统一使用 MyBatis-Plus：Mapper `extends BaseMapper<T>`；单条 CRUD 使用 BaseMapper；动态简单条件优先 `LambdaQueryWrapper`/`LambdaUpdateWrapper`。
+- XML 只用于 BaseMapper 覆盖不到的自定义 SQL，例如批量写入、跨表 JOIN、聚合或带乐观条件的批更新。
+- 新实体使用适配真实表结构的 `@TableName`、`@TableId` 等注解。公共分页与 MyBatis-Plus 配置位于 `common-db`；不要在各业务模块重复创建平行配置。
+- 既有纯 MyBatis/XML 可保留，不以“统一”为由无关重写；新功能不得沿用遗留写法。
 
-bootstrap (依赖所有业务模块，是唯一的 Spring Boot 启动入口)
-```
+## 前端与数据库验证门禁（绝对红线）
 
-### 模块间依赖规则
-
-**严格遵守以下规则**:
-
-1. 模块间只通过 `*Api` 接口交互，**禁止**直接依赖 `mapper`/`entity`/`serviceImpl`
-2. 所有接口必须注册到 `PT_RESOURCE` 表并使用 `@BizAuth` 注解
-3. `workflow-center` 是**唯一**直接调用 Flowable API 的模块
-4. 跨模块查询使用 `*QueryApi`，避免直接 join 其他模块的表
-5. `auth-permission-center` 可被所有模块依赖，但不依赖任何业务模块
-6. `report-analytics-center` 只读，**不允许**被业务模块依赖
-
-### 包结构规范
-
-强制：使用多module进行开发结构如下
-```
-com.bank.branch.platform.<module>/
-├── api/              # 对外接口 (唯一可跨模块依赖)
-│   ├── *Api.java
-│   ├── *QueryApi.java
-│   └── dto/
-├── controller/       # REST 控制器
-├── facade/           # 对外编排实现
-├── service/          # 业务逻辑
-├── mapper/           # MyBatis Mapper (模块私有)
-├── entity/           # 数据库实体 (模块私有)
-├── config/           # 模块配置
-└── ...
-```
-
-### 命名约定
-
-- **接口**: `*Api`, `*QueryApi`
-- **实现类**: `*Facade` (对外), `*ServiceImpl` (内部)
-- **实体**: 驼峰命名，对应表名
-- **Mapper**: `*Mapper` (接口) + `*Mapper.xml`
-- **控制器**: `*Controller`
-- **常量**: `SCREAMING_SNAKE_CASE`
-
-### 代码风格
-
-- 所有 Service 类和 public 方法必须有注释
-- 复杂业务逻辑必须有行注释（说明"为什么"而非"做什么"）
-- 禁止使用 `any` 类型的等价物（如 Object 作为通用参数）
-- 所有接口必须记录入参/出参、traceId 和耗时
-
-### 核心设计原则
-
-1. **显式优于隐式**: 不使用魔法约定，所有配置显式声明
-2. **简单优于复杂**: 使用贫血模型 (Service + DAO + Entity)，避免过度设计
-3. **无状态设计**: 所有模块无状态，Session 经 Spring Session JDBC 落 MySQL 共享（已去 Redis，分布式锁用 `LockManager`/`PT_LOCK` 表）
-4. **Fail Close**: 权限缓存失效时默认拒绝访问
-5. **全链路追踪**: 所有跨模块调用携带 TraceID
-
-## 性能和安全规范
-
-- 所有 API 响应时间 < 500ms (目标)；慢查询 > 5s 必须告警
-- 数据库查询优化（索引 + 缓存）；分页懒加载（默认 pageSize=20，最大 100）
-- 所有用户输入必须验证和清理；敏感数据加密存储（密码 BCrypt）
-- 基于 `PT_RESOURCE` 的 RBAC 权限控制
-- 高危操作必须独立 URL、单独授权、单独审计
-- 敏感字段日志脱敏（手机号、身份证、账号、金额）
-
-## 环境配置
-
-### 开发环境
-
-- **数据库**: MySQL 8.0 本地实例 (`localhost:3306/yiti 用户:root, 密码 djdev`)
-- **对象存储**: MinIO 本地服务
-- **日志级别**: DEBUG (com.bank.platform), INFO (root)
-
-### 配置文件
-
-- 配置: `src/main/resources/application.yml`
-- Session 超时: 7200 秒 (2 小时)
-- Flowable history level: `audit`
-- MyBatis mapper 位置: `classpath*:mapper/**/*Mapper.xml`
-
-### 端口与 API 文档
-
-- 后端 `server.port`: **18081**；SOAP 网关 Netty 端口: 30523（`platform.soap.netty.port`）
-- 前端 dev server: 8090（`/api` 代理到 `http://localhost:18081`）
-- Knife4j UI: `http://localhost:18081/doc.html` (启动后访问)
-
-## 开发 Checklist
-
-开发新功能时必须遵守以下规则:
-
-1. ✅ 新增接口前确定归属模块，禁止"顺手写到别的模块"
-2. ✅ 每个新接口必须登记到 `PT_RESOURCE` 并声明 `@BizAuth`
-3. ✅ 跨模块调用必须走 `*Api`/`*QueryApi`，禁止直连 `mapper`/`entity`
-4. ✅ 所有写操作必须在 Service 层基于实体做二次权限校验
-5. ✅ 所有读接口、导出接口必须应用统一 `DATA_SCOPE`
-6. ✅ 高危操作必须独立 URL、单独授权、单独审计
-7. ✅ 所有流程类业务必须维护 `business_key` 和 `biz_process_map`
-8. ✅ 所有 Service 类与 public 方法必须补齐注释
-9. ✅ 所有接口记录入参/出参、traceId 和耗时
-
-## 重要文件路径
-
-### 项目规划与设计
-- **设计文档**: `project_ana_技术方案与架构拆分.md`
-- **功能文档**: `project_ana.md`
-- **docs 目录**: 各模块详细设计文档 + DDL + 共享开发规范 (见 `docs/AGENTS.md`)
-- **运维 Runbook**: `docs/modules/system-governance-center/09-运维Runbook.md` — sys_job_conf / Quartz 集群调度运维权威指南（V1.9 整合）
-
-### 模块级 AGENTS.md (开发时必须参考)
-- **公共基础设施**: [common/AGENTS.md](common/AGENTS.md)
-- **认证授权**: [auth-permission-center/AGENTS.md](auth-permission-center/AGENTS.md)
-- **系统治理**: [system-governance-center/AGENTS.md](system-governance-center/AGENTS.md)
-- **工作流**: [workflow-center/AGENTS.md](workflow-center/AGENTS.md)
-- **客户营销**: [customer-marketing-center/AGENTS.md](customer-marketing-center/AGENTS.md)
-- **业务申请**: [business-application-center/AGENTS.md](business-application-center/AGENTS.md)
-- **门户与内容**: [portal-content-center/AGENTS.md](portal-content-center/AGENTS.md)
-- **绩效计算**: [performance-engine-center/AGENTS.md](performance-engine-center/AGENTS.md)
-- **报表分析**: [report-analytics-center/AGENTS.md](report-analytics-center/AGENTS.md)
-- **启动入口**: [bootstrap/AGENTS.md](bootstrap/AGENTS.md)
-- **外部渠道网关（SOAP/callpu）**: [soap-gateway-center/AGENTS.md](soap-gateway-center/AGENTS.md)
-- **前端**: [xanzc_frontend/AGENTS.md](xanzc_frontend/AGENTS.md)
-
-### 共享开发规范
-- **[docs/common-dev-guide.md](docs/common-dev-guide.md)** — 统一响应模型、错误码规范、分页标准、鉴权链路、数据范围 SQL 模板、审计规范、事件发布、数据传输、日志规范 (所有模块必须遵守)
-
-### TDD (测试驱动开发) 绝对红线
-- **红-绿-重构 (Red-Green-Refactor) 闭环**：一切特性的开发或者 Bug 修复，必须先写测试（让他失败，Red），再写最简代码让他通过（Green），最后重构优化（Refactor）。
-- **禁止事后狂补测试**：严禁无视 TDD，先凭直觉写完一大堆业务逻辑再去凑测试的行为。
-
-### Flyway 禁令（绝对红线）
-- **本项目已彻底废弃 Flyway**：禁止引入 `flyway-core` / `flyway-mysql` 任何版本依赖；禁止在 `application*.yml` 出现 `spring.flyway.*` 配置；禁止新增 `V*__*.sql` / `U*__*.sql` 命名风格的迁移脚本；禁止编写 `*FlywayIT` / `*FlywayTestBase` 类。
-- **schema 变更由 DBA 直接实施**：所有结构变更由 DBA 按审批结果在目标库直接操作，不生成或提交 DDL `.sql` 文件；DML 交付文件必须遵守下方内容规范，所有数据库变更均不再依赖任何"按版本号自动 migrate"框架。
-- **历史迁移脚本已全部删除**：`onepl` 与 `yiti` 当前 schema 即为唯一真相，未来如需 fresh deploy 请用 `mysqldump` 从生产库导出 baseline。
-
-### 可执行 SQL 文件内容规范（绝对红线）
-- **语句白名单**：所有新增或修改的可执行 `.sql` 文件，其可执行语句只能是事务控制语句（`START TRANSACTION`、`COMMIT`、`ROLLBACK`）以及 `INSERT`、`UPDATE` DML；不得包含 `DELETE` 或其他 SQL 语句。
-- **禁止混入检查 SQL**：不得包含独立的检查、盘点或验收语句（如 `SELECT`、`SHOW`、`DESCRIBE`、`EXPLAIN`、`CHECKSUM`）；`SELECT` 子句仅可作为 `INSERT`/`UPDATE` 语句的组成部分使用，不得独立成句。
-- **禁止扩展对象和结构操作**：不得包含存储过程、存储函数、触发器、事件等数据库对象定义或调用，不得包含任何 DDL，也不得查询或引用 `INFORMATION_SCHEMA`。
-- **禁止弃用写法**：MySQL upsert 禁止使用已弃用的 `VALUES(col)` 写法，必须使用行别名或显式更新表达式。
-- **检查证据外置**：执行前盘点、执行后验收及幂等性检查必须通过测试脚本或只读命令完成，原始结果归档到证据文件，不得混入交付 `.sql` 文件。
-
-### MyBatis-Plus 规范（新增功能绝对红线，2026-06-10 起）
-- **所有新增功能涉及的数据库访问统一使用 MyBatis-Plus**：Mapper 接口必须 `extends BaseMapper<T>`；单条 CRUD（`insert`/`selectById`/`updateById`/`deleteById` 等）直接用 BaseMapper 内置方法，**禁止**为这些方法重复写 XML；动态/简单条件查询优先 `LambdaQueryWrapper`/`LambdaUpdateWrapper`。
-- **XML 只写 BaseMapper 覆盖不到的自定义 SQL**：批量插入、跨表 JOIN、GROUP BY 聚合、带乐观条件的批更新等才落 `*Mapper.xml`（命名空间指向该 BaseMapper 接口）。
-- **实体**用 MyBatis-Plus 注解 `@TableName` / `@TableId(type = IdType.AUTO)`；**配置**已就绪（root 依赖 `mybatis-plus-spring-boot3-starter` 3.5.7、`map-underscore-to-camel-case: true`、各模块 `@MapperScan` + `MybatisPlusConfig`），新 Mapper 开箱即用，无需额外配置。
-- 既有遗留的纯 MyBatis 写法不强制回改，但**新增**一律按本规范。
-
-### 子代理派遣规范（绝对红线）
-- **派遣任何 subagent（Agent 工具）时，model 参数必须 ≥ sonnet（即只能是 `sonnet` 或 `opus`），禁止使用 `haiku`**。
-- 即使 plan 文档建议"机械任务用 cheap model"，也要降级到 sonnet 而非 haiku。
-- 此规则适用于全部 subagent 类型（executor、explore、code-reviewer、debugger 等），无例外。理
-
-### 前端与数据库验证门禁（绝对红线）
 - 任何前端功能、交互、样式或 API 契约改动，除单元测试和构建外，必须使用官方 `playwright-cli` 对真实运行页面验证关键流程；不得用 Vitest、Playwright Test 或 MCP 替代 CLI 浏览器验收。
-- 每次 CLI 验收必须归档真实执行命令、路由/拦截器注册清单、原始 console 输出、原始 requests/response 摘要及截图。无 mock 验收须同时证明未注册 mock route、请求实际到达目标服务；开发态 mock 必须逐条列出 route 与响应、显著标注“仅开发态 mock，非联调”，不得以占位伪代码、手工改写日志或截图替代原始证据。
-- 任何 DDL、DML 或数据库脚本开始前，必须先对现有 `yiti_test` 做只读盘点。覆盖、清空、重建或从 `yiti` 克隆到 `yiti_test` 均属于破坏性操作，必须先取得明确确认；不得把“测试验证”或“备份”视为隐含授权，更不得直接改动 `yiti`。
-- 备份仅针对获准操作的目标库：须保存受控访问的备份文件、表/行数清单与 checksum 清单，并在独立隔离实例完成可恢复性演练和校验。备份、diff、日志、截图和工单不得暴露生产敏感数据；需要时先脱敏、最小化导出并限定留存与访问人员。
-- 获准克隆后，`yiti_test` 必须隔离 `SPRING_SESSION`、`PT_LOCK`、Quartz/`sys_job_conf` 调度、消息消费者/生产者、缓存命名空间、对象存储和所有外联凭据/回调；禁用调度和外发，使用独立实例标识。仅可在该隔离环境验证结构、数据、约束、真实查询、幂等复跑、执行前后 diff 与恢复演练。
-- `yiti_test` 验证失败不得进入 `yiti`；验证通过后须先报告完整证据，并再次取得对 `yiti` 的明确执行确认，方可执行。任何未确认、隔离不完整或证据缺失均为停止条件。
+- 每次 CLI 验收必须归档真实命令、路由/拦截器注册清单、原始 console、原始 request/response 摘要和截图。无 mock 验收要证明未注册 mock route 且请求到达目标服务；开发态 mock 必须逐条列明路由和响应，并标注“仅开发态 mock，非联调”。
+- 任何 DDL、DML 或数据库脚本开始前，必须先对现有 `yiti_test` 做只读盘点。覆盖、清空、重建或从 `yiti` 克隆到 `yiti_test` 均属破坏性操作，必须先取得明确确认；“测试验证”或“备份”不构成隐含授权，严禁直接改动 `yiti`。
+- 备份只针对获准操作的目标库：保存受控访问的备份文件、表/行数清单和 checksum 清单，并在独立隔离实例完成恢复演练。备份、diff、日志、截图和工单必须脱敏、最小化并限制留存与访问。
+- 获准克隆后，`yiti_test` 必须隔离 `SPRING_SESSION`、`PT_LOCK`、Quartz/`sys_job_conf`、消息收发、缓存命名空间、对象存储、外联凭据和回调；禁用调度与外发并使用独立实例标识。只在该隔离环境验证结构、数据、约束、真实查询、幂等复跑、执行前后 diff 和恢复。
+- `yiti_test` 验证失败不得进入 `yiti`；验证通过后先报告完整证据，再次取得对 `yiti` 的明确执行确认后方可执行。未确认、隔离不完整或证据缺失均为停止条件。
+
+## 子目录指导
+
+开发前读取目标模块的 `AGENTS.md`：
+
+- [common/AGENTS.md](common/AGENTS.md)
+- [auth-permission-center/AGENTS.md](auth-permission-center/AGENTS.md)
+- [system-governance-center/AGENTS.md](system-governance-center/AGENTS.md)
+- [workflow-center/AGENTS.md](workflow-center/AGENTS.md)
+- [portal-content-center/AGENTS.md](portal-content-center/AGENTS.md)
+- [customer-marketing-center/AGENTS.md](customer-marketing-center/AGENTS.md)
+- [business-application-center/AGENTS.md](business-application-center/AGENTS.md)
+- [performance-engine-center/AGENTS.md](performance-engine-center/AGENTS.md)
+- [report-analytics-center/AGENTS.md](report-analytics-center/AGENTS.md)
+- [red-engine-center/AGENTS.md](red-engine-center/AGENTS.md)
+- [soap-gateway-center/AGENTS.md](soap-gateway-center/AGENTS.md)
+- [bootstrap/AGENTS.md](bootstrap/AGENTS.md)
+- [xanzc_frontend/AGENTS.md](xanzc_frontend/AGENTS.md)
+- [docs/AGENTS.md](docs/AGENTS.md)

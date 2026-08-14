@@ -175,7 +175,7 @@
 
     <!-- 删除确认弹窗：删除原因必填（高危操作审计留痕，对齐后端 ReOrgDeleteReqDTO.reason @NotBlank +
          @AuditLog(reasonRequired=true)）。2026-07-19 修复：原实现仅 ElMessageBox 二次确认、无任何
-         reason 承载通道，见 red-engine-center/CLAUDE.md「技术债」④（已修复） -->
+         reason 承载通道，见 red-engine-center/AGENTS.md「权限与数据边界」 -->
     <el-dialog v-model="deleteDialog.show" title="删除党组织" width="480px">
       <div class="delete-desc">确定删除组织"{{ deleteDialog.node?.orgName }}"吗？此操作不可恢复。</div>
       <el-form ref="deleteFormRef" :model="deleteDialog.form" :rules="deleteRules" label-width="90px">
@@ -210,7 +210,7 @@
 // - 删除交互（2026-07-19 修复）：由源系统 el-popconfirm / 早期迁移阶段的 ElMessageBox.confirm 二次确认，
 //   改为「删除原因」弹窗必填——后端 DELETE /api/re/orgs/{id} 已补齐 ReOrgDeleteReqDTO.reason
 //   （@NotBlank）+ @AuditLog(reasonRequired=true) 强制审计留痕（原缺口见
-//   red-engine-center/CLAUDE.md「技术债」④，本次同步修复该文档标记）；删除失败（如 RE-40002
+//   red-engine-center/AGENTS.md「权限与数据边界」）；删除失败（如 RE-40002
 //   存在下级党组织不可删除）的错误提示走平台 http.js 既有拦截器，本组件 catch 仅吞掉避免
 //   unhandled rejection，不重复弹窗。
 import { ref, reactive, onMounted } from 'vue';

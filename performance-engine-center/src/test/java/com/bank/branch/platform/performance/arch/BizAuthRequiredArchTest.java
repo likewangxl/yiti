@@ -33,7 +33,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
  * 一并修复的盲区之一——本测试改为同时扫描两个包。
  *
  * <p><b>为什么不直接把 eval.controller 并入 BizAuthConsistencyArchTest 的扫描范围</b>：
- * 该测试断言"bizType 必须是 PERF_CONFIG 或 KPI_CALC"，而 eval 子域按模块 CLAUDE.md
+ * 该测试断言"bizType 必须是 PERF_CONFIG 或 KPI_CALC"，而 eval 子域按模块 AGENTS.md
  * 记载的既定设计统一使用 {@code BizType.EVAL}，是刻意分裂的两套体系，合并扫描会把
  * eval 的合法用法误判为违规。因此"必须声明 @BizAuth"这条新规则单独成测，扫描范围可以
  * 覆盖两个包，而 bizType 取值的单档校验规则保持不动。

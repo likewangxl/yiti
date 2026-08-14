@@ -1,28 +1,23 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-07-19 -->
 
-# docs/modules/red-engine-center/AGENTS.md
+# red-engine-center 文档维护指导
 
-本文件约束 `docs/modules/red-engine-center/` 下的红色引擎（党建管理）文档，统一使用 UTF-8。
+本文件约束 `docs/modules/red-engine-center/`，继承上级文档规则。
 
 ## 目录职责
 
-- 本目录记录红色引擎的接口设计与对外契约，当前 2 份文档（`03-接口设计与报文.md`/`04-对外API契约.md`），编号沿用平台惯例但未补齐 01/02/05~09（该模块由独立 `redengine` 系统整体移植合并，文档以「接口/契约」为优先交付项，其余编号文档暂缺，非遗漏计划外补齐）。
-- 该模块已于 **2026-07-18** 整体落地交付（6 Controller / 23 REST 端点 / 17 条 API `PT_RESOURCE`，50 单元测试用例全绿）；2026-07-29 新增 1 条平台菜单资源 `M_RE_ENGINE`，文档需以当前实现态为准。
+- 记录红色引擎的 REST 接口、DTO、权限及跨模块契约；目录缺少某些编号文档时，以实际文件为准，不在索引中承诺补齐时间。
+- 领域覆盖党组织、材料上报、两级审核、评分、驾驶舱/预警、年度归档和导出。
 
-## 维护要求
+## 阅读顺序
 
-- 本模块**当前无对外 `*Api`/`*QueryApi`**（`api/` 包下只有 `dto/`），`04-对外API契约.md` 的核心结论是"无对外契约 + 消费上游 `CurrentUserApi`/`FileApi`"——若后续新增跨模块查询能力，必须同步更新该文档，不要留空。
-- 本模块**不接 Flowable**，审核流是自管两级状态机（`RE_SUBMIT.status` 字段流转），涉及审核/流程的表述禁止套用 `workflow-center` 的 `businessKey`/`BIZ_PROCESS_MAP`/流程实例等术语。
-- 17 条 API PT_RESOURCE 与角色权限矩阵的基础来源是 `docs/superpowers/sql/2026-07-18-redengine-seed.sql`；平台菜单入口及 API 父子关系的最新对齐来源是 `docs/superpowers/sql/2026-07-29-redengine-platform-menu-align.sql`；正式同步到 `yiti` 必须使用 `docs/superpowers/sql/2026-07-29-redengine-sync-yiti.sql` 编排并先备份，禁止混入 `yiti_test` 专用演示数据。`03-接口设计与报文.md` 变更时必须与这些脚本的分层职责保持一致，不要凭记忆改动资源 ID/URL。
-- 字段级 DTO 校验注解、错误码语义变更时，优先核实 `red-engine-center/src/main/java/.../api/dto/` 与 `service/` 源码，不要照抄旧简报口径（模块 CLAUDE.md 已记录多处"简报口径 vs 代码实际"的纠偏案例，如红黄牌阈值、逾期规则）。
+1. `../../../red-engine-center/AGENTS.md`：模块边界、状态机、权限和测试规则。
+2. `03-接口设计与报文.md`：REST、字段校验和自管审核状态。
+3. `04-对外API契约.md`：上游消费与当前对外能力。
 
-## 推荐阅读
+## 契约同步与边界
 
-- `../../../red-engine-center/CLAUDE.md`：模块权威上下文（包结构/数据库表/权限矩阵/技术债/与源系统差异清单），本目录文档的背景信息一律以此为准不重复维护。
-- `03-接口设计与报文.md`：REST 接口全量端点、状态机、两级审核流转。
-- `04-对外API契约.md`：跨模块依赖边界（消费方/被消费方）。
-
-## 覆盖关系
-
-- 继承 `../AGENTS.md` 与 `../../AGENTS.md`。
+- red-engine 依赖 auth、governance，审核状态机自管，不接 Flowable；文档禁止套用流程实例、businessKey 或 `BIZ_PROCESS_MAP`。
+- 当前是否暴露 `*Api`/`*QueryApi` 以模块 `api/` 源码为准；新增公开契约时同步 `04` 和消费者文档。
+- DTO、错误码、审核状态、数据范围、资源或导出变化时，同步 `03`、`04` 并核对当前源码、`PT_RESOURCE`/角色绑定和测试。
+- 历史种子/对齐 SQL 只用于追溯当时资源关系，不能作为当前权限矩阵或执行入口；现状通过数据库只读查询核实。

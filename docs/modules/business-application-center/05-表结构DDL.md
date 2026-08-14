@@ -660,7 +660,7 @@ business-application-center (loan_apply / support_request)  ← 本模块
 
 ## 13. 参考文档
 
-- [common/CLAUDE.md](../../../common/CLAUDE.md) — 公共组件规范
+- [common/AGENTS.md](../../../common/AGENTS.md) — 公共组件规范
 - [docs/common-dev-guide.md](../../common-dev-guide.md) — 通用开发规范
 - [docs/modules/system-governance-center/05-表结构DDL.md](../system-governance-center/05-表结构DDL.md) — biz_file_rel 定义
 - [docs/modules/workflow-center/05-表结构DDL.md](../workflow-center/05-表结构DDL.md) — wf_node_form_conf 定义

@@ -1,13 +1,14 @@
 # 09 — sys_job_conf / Quartz 集群调度运维 Runbook
 
 **版本**: V1.9（整合 V1.6→V1.8 调度知识，2026-05-01）｜**归属模块**: system-governance-center
-**权威源**: 本文件是 sys_job_conf / Quartz 集群调度运维的**唯一入口**，各模块 CLAUDE.md 保留摘要+指针。
+**权威源**: 本文件是 sys_job_conf / Quartz 集群调度运维的**唯一入口**；模块级 `AGENTS.md`
+只保留稳定边界，具体运维步骤集中在本页。
 
-> ⚠️ **Flyway 已彻底废弃**（详见根 [CLAUDE.md](../../../CLAUDE.md) "Flyway 禁令"红线）。
+> ⚠️ **Flyway 已彻底废弃**（详见根 [AGENTS.md](../../../AGENTS.md) "Flyway 禁令"红线）。
 > 本文件下方 § 2 历史"启用前置检查"段中提到的 `mvn flyway:migrate` / `flyway_schema_history` /
 > `V1_7_0FlywayIT` 等内容仅作**历史档案**保留，对应迁移脚本与 IT 测试基类已从源码中删除。
-> 当前 schema 变更操作流程：DBA/开发者直接将 SQL 在目标库执行（`mysql -u... < ddl.sql`
-> 或 source 命令），不再使用任何"按版本号自动 migrate"框架。
+> 当前 schema 变更只能由 DBA 按审批结果在目标库直接实施，不生成或提交 DDL `.sql`
+> 文件，也不使用任何“按版本号自动 migrate”框架。
 
 ---
 
@@ -69,7 +70,8 @@ trigger_type 取值：`SCHEDULED`（cron 触发）/ `MANUAL`（JobController 手
 | `QRTZ_LOCKS` | 集群行锁防重，含 `TRIGGER_ACCESS` / `STATE_ACCESS` 两把锁 |
 | `QRTZ_SCHEDULER_STATE` | 各节点心跳，LAST_CHECKIN_TIME 可判断节点存活 |
 
-来源：system-governance-center/CLAUDE.md「数据库表」段 + docs/schema/ddl-governance.sql + docs/schema/ddl-quartz.sql 头部注释
+本节字段与状态语义以 `SysJobConf`、`JobExecutionLogger` 的当前实现及
+`docs/schema/ddl-governance.sql`、`docs/schema/ddl-quartz.sql` 历史基线交叉核对。
 
 ---
 
@@ -98,8 +100,6 @@ WHERE job_key = 'LEAD_CALLBACK_COMPENSATE';
 **期望结果**：无结果（首次）或 cron_expr = `0 */5 * * * ?`（每 5 分钟扫描一次未回调线索）。
 
 **失败处理**：若存在行但 cron_expr 不正确，手工 UPDATE 后重跑。
-
-来源：customer-marketing-center/CLAUDE.md「V1.8 改动进度」段
 
 ---
 
@@ -144,8 +144,6 @@ WHERE job_key LIKE 'PERF_METRIC_%';
 **失败处理**：若 V1.7 schema 变更 SQL 执行失败，按 MySQL 报错定位后修复（如冲突列、索引、数据），
 再 source 一次。严禁跳过当前版本直接执行后续 SQL，否则 schema 状态不一致。
 
-来源：performance-engine-center/CLAUDE.md「V1.7 启用前置检查」段
-
 ---
 
 ### 2.3 V1.4（2026-04-24）— perf Target 字段扩展
@@ -181,8 +179,6 @@ WHERE created_by IS NOT NULL;
 
 **失败处理**：undo 脚本 `U1_4_0__perf_target_owner_cols.sql` 可 DROP 两列；
 undo 前确认 Service 已退回到 V1.3 的 created_by 配置，否则查询会报"未知列"。
-
-来源：performance-engine-center/CLAUDE.md「V1.4 启用前置检查」段
 
 ---
 
@@ -222,8 +218,6 @@ HAVING COUNT(*) > 1;
 2. 重新 source 当期 ALTER 脚本
 3. **严禁**直接跳到下个版本的 SQL，否则 schema 状态不一致
 
-来源：performance-engine-center/CLAUDE.md「V1.3 启用前置检查」段
-
 ---
 
 ### 2.5 V1.6（2026-04-25）— Quartz 基础设施初始化
@@ -256,7 +250,8 @@ spring:
       org.quartz.jobStore.isClustered: true
 ```
 
-来源：system-governance-center/CLAUDE.md「Quartz 集群调度」段 + ddl-quartz.sql 头部注释
+当前运行边界参见 `system-governance-center/AGENTS.md`“Quartz 动态调度”小节；
+QRTZ 表的历史基线见 `docs/schema/ddl-quartz.sql`。
 
 ---
 
@@ -345,7 +340,8 @@ perf:
 需要重启。**影响范围**：仅停止每 10 分钟扫描的指标调度补偿检查，不影响 Quartz 正式调度。
 **回滚成本**：中——改配置 + 重启。
 
-来源：performance-engine-center/CLAUDE.md「紧急停止」段 + system-governance-center/CLAUDE.md「集群与防重」段
+当前调度边界参见 `performance-engine-center/AGENTS.md`“调度、评价与文件规则”和
+`system-governance-center/AGENTS.md`“Quartz 动态调度”小节。
 
 ---
 
@@ -372,7 +368,7 @@ perf:
 |---|---|---|
 | `MetricSchedulerHealthCheck` | 每 10 分钟 | V1.7 spec § 7 明确论证：补偿器不依赖 Quartz，故意不 Quartz 化（V1.9 永久关闭该迁移计划） |
 
-来源：performance-engine-center/CLAUDE.md「3 个定时任务调度（V1.6 quartz 整合后）」段 + customer-marketing-center/CLAUDE.md「V1.8 改动进度」段
+本清单以本页 § 4 表格中列出的当前 Job 类与实际 `sys_job_conf` 只读盘点结果为准。
 
 ---
 
@@ -504,7 +500,8 @@ WHERE s.job_key IS NULL
 **清理方式**（手工）：若确认为孤儿 Job，调用 JobController 的 unregisterJob 端点，
 或直接通过 Quartz API 删除 JobDetail + Trigger（级联删除）。
 
-来源：system-governance-center/CLAUDE.md「集群与防重」段 + V1.9 spec § 1.1（# 3 关闭决策）
+本故障场景的运行态边界以本页 § 1.1 和 § 5.5 为准；历史决策见
+`docs/superpowers/specs/2026-05-01-v1.9-runbook-and-case-consistency-design.md`。
 
 ---
 
@@ -600,9 +597,8 @@ WHERE s.job_key IS NULL
 | @Scheduled 残留 | 仅 MetricSchedulerHealthCheck（设计意图保留） |
 | ACTIVE Quartz Job 数 | 3 固定（SYSCONTROL_CLEANUP / PERF_RUN_TASK_CLEANUP / LEAD_CALLBACK_COMPENSATE）+ N 指标级动态 Job |
 
-来源：performance-engine-center/CLAUDE.md「V1.6/V1.7/V1.8」段 +
-customer-marketing-center/CLAUDE.md「V1.8 改动进度」段 +
-V1.9 spec docs/superpowers/specs/2026-05-01-v1.9-runbook-and-case-consistency-design.md
+本总结由本页 § 4 业务 Job 清单、§ 6.2–§ 6.4 调度演进史与当前实现交叉核对；
+历史决策见 `docs/superpowers/specs/2026-05-01-v1.9-runbook-and-case-consistency-design.md`。
 
 ---
 
@@ -615,7 +611,7 @@ V1.10 合一后平台测试 mysql 库**唯一为 `onepl_test_bootstrap`**：
 - perf 模块 IT 用
 - report 模块 IT 用
 
-> Flyway 已彻底废弃（详见根 CLAUDE.md "Flyway 禁令"红线），原 perf/report 的 `*FlywayTestBase` /
+> Flyway 已彻底废弃（详见根 AGENTS.md "Flyway 禁令"红线），原 perf/report 的 `*FlywayTestBase` /
 > `*FlywayIT` 测试基类已从源码中删除。
 
 ### v103 库废弃

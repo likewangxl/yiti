@@ -649,8 +649,8 @@ graph TD
 | 增量/对齐/回归 SQL | `docs/superpowers/sql/`（日期前缀） |
 | 会话与决策存档 | `docs/superpowers/sessions/` |
 | 运维 Runbook（调度/任务） | `docs/modules/system-governance-center/09-运维Runbook.md` |
-| 各模块上下文摘要 | `<模块名>/CLAUDE.md`（开发时必读） |
+| 各模块上下文摘要 | `<模块名>/AGENTS.md`（开发时必读） |
 
 ---
 
-> **维护约定**：本文档为总体设计的单一入口，内容随模块 `CLAUDE.md` / `docs/modules` 演进而更新；新增模块或重大架构调整时同步修订本文（架构图、模块依赖图、数据模型图、交易流图）。
+> **维护约定**：本文档为总体设计的单一入口，内容随模块 `AGENTS.md` / `docs/modules` 演进而更新；新增模块或重大架构调整时同步修订本文（架构图、模块依赖图、数据模型图、交易流图）。

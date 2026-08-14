@@ -37,7 +37,7 @@
 | `business-application-center` | 核心域（待开发） | ✅ 2 个（A.8/C.7） | ✅ **已规范化** | 完成 2026-04-10 | 03 附录 H，接口分别引用 §H.7.1 / §H.7.2 |
 | `performance-engine-center` | 核心域（待开发） | ✅ 4 个（07 列出但 03 原缺失） | ✅ **已规范化 + 补齐缺失接口** | 完成 2026-04-10 | 03 附录 J，同时补齐 `/kpi-results/export`、`/metric-results/export`、`/cust-alloc/export`（最高风险）、`/kpi-results/detail-batch/export` 的 HTTP 定义 |
 | `report-analytics-center` | 支撑域（待开发） | ✅ 多个（A.3 主路径 + E.1/E.2 状态下载，V2 预留 4 个） | ✅ **已规范化** | 完成 2026-04-10 | 03 附录 I，强制异步、硬上限 500000 行、动态列头生成规则 |
-| `red-engine-center`（2026-07-18 新增，第 10 个模块） | 核心域（党建垂直业务，已完成） | ✅ 1 个（`GET /api/re/export/{type}`，仅 submit/score 两类） | ⚠️ 无独立 `docs/modules/red-engine-center/03-接口设计与报文.md`，规范记于 `red-engine-center/CLAUDE.md` | **迁移期例外，不在本文档 §1 规则常规覆盖范围** | **同步导出**（`ResponseEntity<byte[]>` 全量物化，全平台唯一此类实现），行数上限 **10000**（偏离本文档"5000 行必须异步"MUST 线），超限抛 `RE-40007`，type 非法抛 `RE-40006`；决策依据：党建业务量级小（当前演示数据仅 16/16/4 行）+ 源系统本无上限 + 迁移期过渡防呆，非长期规范，待数据量增长后应补齐异步导出改造 |
+| `red-engine-center`（2026-07-18 新增，第 10 个模块） | 核心域（党建垂直业务，已完成） | ✅ 1 个（`GET /api/re/export/{type}`，仅 submit/score 两类） | ⚠️ 无独立 `docs/modules/red-engine-center/03-接口设计与报文.md`，规范记于 `red-engine-center/AGENTS.md` | **迁移期例外，不在本文档 §1 规则常规覆盖范围** | **同步导出**（`ResponseEntity<byte[]>` 全量物化，全平台唯一此类实现），行数上限 **10000**（偏离本文档"5000 行必须异步"MUST 线），超限抛 `RE-40007`，type 非法抛 `RE-40006`；决策依据：党建业务量级小（当前演示数据仅 16/16/4 行）+ 源系统本无上限 + 迁移期过渡防呆，非长期规范，待数据量增长后应补齐异步导出改造 |
 
 **统计**：
 - ✅ 5 个待开发模块已全部完成导出规范补充

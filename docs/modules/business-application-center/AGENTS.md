@@ -1,27 +1,24 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-14 | Updated: 2026-07-12 -->
 
-# docs/modules/business-application-center/AGENTS.md
+# business-application-center 文档维护指导
 
-本文件约束 `docs/modules/business-application-center/` 下的业务申请文档，统一使用 UTF-8。
+本文件约束 `docs/modules/business-application-center/`，继承上级文档规则。
 
 ## 目录职责
 
-- 本目录记录资产投放申请与中场支持申请设计，共 9 份文档。
-- 模块已完整交付（60 Java + 26 测试，0 UOE），文档必须以当前实现态为准，并清楚标注 workflow 依赖中哪些能力已经落地、哪些仍是目标契约。
+- 记录资产投放申请和中场支持申请的接口、状态、权限、事务和依赖。
+- `LOAN_APPLY`、`SUPPORT_REQUEST` 及业务状态由本模块持有，外部只能通过公开契约访问。
 
-## 维护要求
+## 阅读顺序
 
-- 当前 `workflow-center` 对外 Java 契约已包含 `WorkflowApi` 与 `WorkflowQueryApi`（均为正式 Bean）；涉及参与者判定、流程结束扩展事件等仍未落地的能力时，必须显式写明“待 workflow-center 补齐”。
-- 若文档使用 `WorkflowProcessCompletedEvent` 之类扩展 DTO，需要同时注明当前实现中的最小事件载荷与补齐路径。
-- 中场支持场景 A/B 的流程 key、businessKey 规则、状态回写说明，要与 workflow-center 当前实现态保持可映射关系。
+1. `01-功能规格.md`：Loan/Support 状态机和中场场景 A/B。
+2. `03-接口设计与报文.md`、`04-对外API契约.md`：REST、公开 API 和事件。
+3. `06-并发与事务策略.md`：提交、回调和条件更新幂等。
+4. `07-审计要求.md`、`09-依赖契约摘要.md`：双视图权限与上下游。
 
-## 推荐阅读
+## 契约同步与边界
 
-- `01-功能规格.md`：场景 A/B 和状态机。
-- `04-对外API契约.md`：业务申请模块自身的对外契约和上游事件假设。
-- `09-依赖契约摘要.md`：当前实现态与规划态依赖差异。
-
-## 覆盖关系
-
-- 继承 `../AGENTS.md` 与 `../../AGENTS.md`。
+- business 依赖 auth、governance、workflow、customer、portal；不得直连这些模块的 mapper/entity/内部 Service。
+- Support 发起侧与承接侧共享表但使用不同 BizType 和数据范围；文档必须分别说明 owner/creator 与 department/assignee 口径。
+- 中场路由、多产品拆单、submitGroupId、状态转移或回调事务变化时，同步 `01`、`03`、`06`。
+- 工作流只通过公开 API/`ProcessCompletedEvent`；businessKey 和结果映射必须与当前源码一致，规划字段明确标注。

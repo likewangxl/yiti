@@ -1,28 +1,24 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-14 | Updated: 2026-07-12 -->
 
-# docs/modules/workflow-center/AGENTS.md
+# workflow-center 文档维护指导
 
-本文件约束 `docs/modules/workflow-center/` 下的工作流文档，统一使用 UTF-8。
+本文件约束 `docs/modules/workflow-center/`，继承上级文档规则。
 
 ## 目录职责
 
-- 本目录记录 Flowable 工作流中心设计与接口，共 9 份文档。
-- 当前目录中，`04-对外API契约.md` 必须以**代码实现态**为准；历史规划稿中的接口名称若未落地，必须显式标注为“规划态”。
+- 记录流程启动、任务操作、候选人、表单、SLA、流程查询、业务映射和公开事件。
+- workflow 是唯一允许直接调用 Flowable 的模块；其他模块只能使用公开 API/事件。
 
 ## 阅读顺序
 
-- `01-功能规格.md`：先看工作流职责和流程能力边界。
-- `03-接口设计与报文.md`：查看 REST 入口与报文结构。
-- `04-对外API契约.md`：查看当前对外 Java 契约、REST 契约、内部事件与实现差异。
-- `08-初始化数据清单.md` 与 `09-依赖契约摘要.md`：查看流程种子、节点配置和上下游关系。
+1. `01-功能规格.md`：流程能力和状态边界。
+2. `03-接口设计与报文.md`：REST 操作与校验。
+3. `04-对外API契约.md`：`WorkflowApi`、`WorkflowQueryApi` 及公开事件。
+4. `06-并发与事务策略.md`、`08-初始化数据清单.md`、`09-依赖契约摘要.md`：回调、配置和消费者。
 
-## 维护要求
+## 契约同步与边界
 
-- 当前真正公开的跨模块 Java 契约包括 `WorkflowApi` 与 `WorkflowQueryApi`；若文档提到 `WorkflowConfigApi`、`WorkflowParticipantService`，必须注明其仍处于规划态。
-- 修改控制器、DTO、事件、权限资源或种子数据时，至少同步 `03`、`04`、`08`、`09` 四份文档。
-- 若流程终态、事件载荷或 REST 路径变更，要同步检查依赖模块文档。
-
-## 覆盖关系
-
-- 继承 `../AGENTS.md` 与 `../../AGENTS.md`。
+- 文档中的 Java 接口、Bean、事件字段和 businessKey 必须能在当前 `api/` 源码定位；未来设想明确标为规划态。
+- 流程终态、事件载荷、候选人解析或 REST 路径变化时，同步 `03`、`04`、`06`、`09` 及 customer/business/performance/portal 消费文档。
+- 公开事件放在 `api.event`；不得要求消费者监听 workflow 内部 Service 事件或查询内部 mapper/entity。
+- `08` 描述流程配置要求，不授权执行历史 seed；实际数据操作服从数据库门禁。

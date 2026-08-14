@@ -791,7 +791,7 @@ public class TouchCompletedEvent {
 
 #### 8.2.1 ~~customer.lead.approved.v1~~ — 已删除（V1.11.1，2026-05-01）
 **订正**：`LeadApprovedEvent` 类及其监听器 `LeadApprovedListener` 已在 V1.11.1（方向 C 修复，见
-`customer-marketing-center/CLAUDE.md`「线索审批回调」一节）**删除**，不再以事件形式存在。
+`customer-marketing-center/AGENTS.md` 的线索审批回调说明）**删除**，不再以事件形式存在。
 根因：`@TransactionalEventListener(AFTER_COMMIT)` 嵌套 `@Transactional(REQUIRES_NEW)` 子链路下，
 INSERT 显示 commit 成功但实际未持久化（详见 `docs/superpowers/sessions/2026-05-01-v1.11-1-d0-isolation-diagnosis.md`）。
 
