@@ -3,22 +3,22 @@ package com.bank.branch.platform.performance.job;
 import com.bank.branch.platform.performance.mapper.StatShowArchiveMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * StatShowArchiveJob 编排单测（Mockito）：日增量幂等、旬边界按天清理、1 号按天瘦身、两表处理。
- */
+/** StatShowArchiveJob 编排单测：tmp 单日归档、边界 truncate、1 号主表幂等写入。 */
 @ExtendWith(MockitoExtension.class)
 class StatShowArchiveJobTest {
 
@@ -30,96 +30,64 @@ class StatShowArchiveJobTest {
     @InjectMocks
     private StatShowArchiveJob job;
 
-    // 昨天=2026-08-14（属 11~20 旬→_H3），旬首=08-11；应逐日 sync 08-11..08-14
     @Test
-    void daily_gapFillsSliceStartToYesterday_intoRoutedHist() {
-        when(mapper.countByTableDate(anyString(), anyString())).thenReturn(100L); // main
-        when(mapper.countByTableDate(eq(CUST + "_H3"), anyString())).thenReturn(0L);
-        when(mapper.countByTableDate(eq(EMP + "_H3"), anyString())).thenReturn(0L);
+    void ordinaryDay_deletesTargetDateThenCopiesTMinusOneFromTmp() {
+        when(mapper.insertFromTmpByDate(anyString(), anyString(), anyString())).thenReturn(2);
 
-        job.run(LocalDate.of(2026, 8, 15)); // 昨天 08-14
+        int inserted = job.run(LocalDate.of(2026, 8, 15)); // dataDate=08-14, run day 15 -> H2
 
-        for (String main : new String[]{CUST, EMP}) {
-            String h3 = main + "_H3";
-            for (String d : new String[]{"2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14"}) {
-                verify(mapper).deleteHistByDate(h3, d);
-                verify(mapper).insertHistByDate(h3, main, d);
-            }
-        }
+        assertThat(inserted).isEqualTo(4);
+        InOrder order = inOrder(mapper);
+        order.verify(mapper).deleteByTableDate(CUST + "_H2", "2026-08-14");
+        order.verify(mapper).insertFromTmpByDate(CUST + "_H2", CUST + "_tmp", "2026-08-14");
+        order.verify(mapper).deleteByTableDate(EMP + "_H2", "2026-08-14");
+        order.verify(mapper).insertFromTmpByDate(EMP + "_H2", EMP + "_tmp", "2026-08-14");
+        verify(mapper, never()).truncateTable(anyString());
+        verify(mapper, never()).deleteByTableDate(eq(CUST), anyString());
+        verify(mapper, never()).deleteByTableDate(eq(EMP), anyString());
     }
 
-    // 源未就绪：main count=0 → 跳过，不删不插
     @Test
-    void daily_whenMainEmpty_skips() {
-        when(mapper.countByTableDate(anyString(), anyString())).thenReturn(0L);
+    void boundaryEleventh_truncatesCurrentHThenCopiesOnlyTMinusOne() {
+        when(mapper.insertFromTmpByDate(anyString(), anyString(), anyString())).thenReturn(3);
 
-        job.run(LocalDate.of(2026, 8, 15));
+        job.run(LocalDate.of(2026, 8, 11)); // dataDate=08-10, run day 11 -> H2
 
-        verify(mapper, never()).insertHistByDate(anyString(), anyString(), anyString());
-        verify(mapper, never()).deleteHistByDate(anyString(), anyString());
+        InOrder order = inOrder(mapper);
+        order.verify(mapper).truncateTable(CUST + "_H2");
+        order.verify(mapper).insertFromTmpByDate(CUST + "_H2", CUST + "_tmp", "2026-08-10");
+        order.verify(mapper).truncateTable(EMP + "_H2");
+        order.verify(mapper).insertFromTmpByDate(EMP + "_H2", EMP + "_tmp", "2026-08-10");
+        verify(mapper, never()).deleteByTableDate(eq(CUST + "_H2"), anyString());
+        verify(mapper, never()).deleteByTableDate(eq(EMP + "_H2"), anyString());
     }
 
-    // 已同步：hist count == main count → 跳过插入
     @Test
-    void daily_whenAlreadySynced_skipsInsert() {
-        when(mapper.countByTableDate(anyString(), anyString())).thenReturn(100L); // main 与 hist 都 100
+    void boundaryTwentyFirst_truncatesH3() {
+        job.run(LocalDate.of(2026, 8, 21)); // dataDate=08-20, run day 21 -> H3
 
-        job.run(LocalDate.of(2026, 8, 15));
-
-        verify(mapper, never()).insertHistByDate(anyString(), anyString(), anyString());
+        InOrder order = inOrder(mapper);
+        order.verify(mapper).truncateTable(CUST + "_H3");
+        order.verify(mapper).insertFromTmpByDate(CUST + "_H3", CUST + "_tmp", "2026-08-20");
+        order.verify(mapper).truncateTable(EMP + "_H3");
+        order.verify(mapper).insertFromTmpByDate(EMP + "_H3", EMP + "_tmp", "2026-08-20");
     }
 
-    // 边界 11 号：按天分批清 _H2 的上月 1~10
     @Test
-    void boundary_on11_deletesPrevMonth1To10_dayByDay() {
-        when(mapper.countByTableDate(anyString(), anyString())).thenReturn(0L); // 让日增量跳过，聚焦清理
-        job.run(LocalDate.of(2026, 8, 11));
+    void firstDay_truncatesH1AndUpsertsPreviousMonthEndIntoMain() {
+        when(mapper.insertFromTmpByDate(anyString(), anyString(), anyString())).thenReturn(4);
 
-        for (String main : new String[]{CUST, EMP}) {
-            String h2 = main + "_H2";
-            verify(mapper).deleteHistByDate(h2, "2026-07-01");
-            verify(mapper).deleteHistByDate(h2, "2026-07-05");
-            verify(mapper).deleteHistByDate(h2, "2026-07-10");
-        }
-    }
+        int inserted = job.run(LocalDate.of(2026, 8, 1)); // dataDate=07-31, run day 1 -> H1
 
-    // 边界 1 号：清 _H1 上上月 21~末（按天） + 主表瘦身
-    @Test
-    void boundary_on1_cleansH1TwoMonthsAgo_andPrunesMain() {
-        when(mapper.countByTableDate(anyString(), anyString())).thenReturn(0L);
-        when(mapper.selectMaxStatisDt(anyString(), eq("2026-07-01"), eq("2026-07-31"))).thenReturn("2026-07-31");
-
-        job.run(LocalDate.of(2026, 8, 1));
-
-        for (String main : new String[]{CUST, EMP}) {
-            verify(mapper).deleteHistByDate(main + "_H1", "2026-06-21");
-            verify(mapper).deleteHistByDate(main + "_H1", "2026-06-30");
-            verify(mapper).selectMaxStatisDt(main, "2026-07-01", "2026-07-31");
-            verify(mapper).deleteMainByDate(main, "2026-07-01");
-            verify(mapper).deleteMainByDate(main, "2026-07-30");
-            verify(mapper, never()).deleteMainByDate(main, "2026-07-31"); // 保留月末
-        }
-    }
-
-    // 瘦身保护：上月无数据(MAX null) → 不删主表
-    @Test
-    void prune_whenNoMax_skips() {
-        when(mapper.countByTableDate(anyString(), anyString())).thenReturn(0L);
-        lenient().when(mapper.selectMaxStatisDt(anyString(), anyString(), anyString())).thenReturn(null);
-
-        job.run(LocalDate.of(2026, 8, 1));
-
-        verify(mapper, never()).deleteMainByDate(anyString(), anyString());
-    }
-
-    // 非边界日：不清理、不瘦身
-    @Test
-    void nonBoundaryDay_noCleanupNoPrune() {
-        when(mapper.countByTableDate(anyString(), anyString())).thenReturn(0L);
-
-        job.run(LocalDate.of(2026, 8, 15));
-
-        verify(mapper, never()).deleteMainByDate(anyString(), anyString());
-        verify(mapper, never()).selectMaxStatisDt(anyString(), anyString(), anyString());
+        assertThat(inserted).isEqualTo(16);
+        InOrder order = inOrder(mapper);
+        order.verify(mapper).truncateTable(CUST + "_H1");
+        order.verify(mapper).insertFromTmpByDate(CUST + "_H1", CUST + "_tmp", "2026-07-31");
+        order.verify(mapper).deleteByTableDate(CUST, "2026-07-31");
+        order.verify(mapper).insertFromTmpByDate(CUST, CUST + "_tmp", "2026-07-31");
+        order.verify(mapper).truncateTable(EMP + "_H1");
+        order.verify(mapper).insertFromTmpByDate(EMP + "_H1", EMP + "_tmp", "2026-07-31");
+        order.verify(mapper).deleteByTableDate(EMP, "2026-07-31");
+        order.verify(mapper).insertFromTmpByDate(EMP, EMP + "_tmp", "2026-07-31");
     }
 }
