@@ -343,6 +343,9 @@ function toggleGroupSide(group, side, value) {
   checkedIds.value = next;
 }
 const collapsedKeys = ref(new Set());
+function collapseAllResourceGroups(items) {
+  collapsedKeys.value = new Set((items || []).map(resource => moduleOf(resource.resourceUrl).name));
+}
 function toggleCollapse(key) {
   const next = new Set(collapsedKeys.value);
   if (next.has(key)) next.delete(key);
@@ -473,8 +476,10 @@ async function loadResources() {
   try {
     const result = await listResources();
     resources.value = Array.isArray(result) ? flattenTree(result) : [];
+    collapseAllResourceGroups(resources.value);
   } catch (error) {
     resources.value = [];
+    collapseAllResourceGroups([]);
     resourceCatalogError.value = true;
     recordLoadError('资源', error);
   } finally {

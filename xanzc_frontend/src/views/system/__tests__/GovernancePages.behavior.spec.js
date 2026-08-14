@@ -114,6 +114,31 @@ beforeEach(() => {
 afterEach(() => wrapper?.unmount());
 
 describe('系统治理与 RBAC 写操作保护', () => {
+  it('资源加载完成后默认收起每个资源大类，逐类展开互不影响', async () => {
+    listResources.mockResolvedValueOnce([
+      { resourceId: 'P_WORKSPACE', menuName: '工作台查询', resourceUrl: '/api/portal/home', resourceMethod: 'GET' },
+      { resourceId: 'P_CUSTOMER', menuName: '客户查询', resourceUrl: '/api/customers', resourceMethod: 'GET' }
+    ]);
+
+    wrapper = mountPage(Permission);
+    await settle();
+
+    expect(wrapper.vm.groupedRes.map(group => group.name)).toEqual(['工作台', '客户营销']);
+    expect([...wrapper.vm.collapsedKeys]).toEqual(['工作台', '客户营销']);
+
+    const toggles = wrapper.findAll('button.collapse-toggle');
+    expect(toggles).toHaveLength(2);
+    expect(toggles[0].attributes('aria-expanded')).toBe('false');
+    expect(toggles[1].attributes('aria-expanded')).toBe('false');
+
+    await toggles[0].trigger('click');
+
+    expect(wrapper.vm.collapsedKeys.has('工作台')).toBe(false);
+    expect(wrapper.vm.collapsedKeys.has('客户营销')).toBe(true);
+    expect(wrapper.findAll('button.collapse-toggle')[0].attributes('aria-expanded')).toBe('true');
+    expect(wrapper.findAll('button.collapse-toggle')[1].attributes('aria-expanded')).toBe('false');
+  });
+
   it('权限资源保存：取消确认不请求，确认后同一提交只发送一次且保留完整负载', async () => {
     wrapper = mountPage(Permission);
     await settle();
