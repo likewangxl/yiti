@@ -4,6 +4,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
+import dayjs from 'dayjs';
+import { METRIC_RECALC_DATE_MESSAGES } from '@/utils/metricRecalcDate';
 
 const mocks = vi.hoisted(() => ({
   listComputeBatches: vi.fn().mockResolvedValue([]),
@@ -86,7 +88,8 @@ const stubs = {
   'upload-filled': empty('UploadFilled')
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => dayjs().format('YYYY-MM-DD');
+const yesterday = () => dayjs().subtract(1, 'day').format('YYYY-MM-DD');
 const deferred = () => {
   let resolve;
   const promise = new Promise((done) => { resolve = done; });
@@ -152,7 +155,7 @@ describe('绩效计算与任务执行同步防重', () => {
     const gate = deferred();
     executeMetric.mockImplementation(() => gate.promise);
     wrapper.vm.execDlg.metricCode = 'M001';
-    wrapper.vm.execDlg.dataDate = today();
+    wrapper.vm.execDlg.dataDate = yesterday();
     wrapper.vm.execDlg.reason = '补跑指标';
 
     const first = wrapper.vm.confirmExecute();
@@ -160,7 +163,7 @@ describe('绩效计算与任务执行同步防重', () => {
 
     expect(executeMetric).toHaveBeenCalledTimes(1);
     expect(executeMetric).toHaveBeenCalledWith('M001', {
-      dataDate: today(), cascade: true, async: true, reason: '补跑指标'
+      dataDate: yesterday(), cascade: true, async: true, reason: '补跑指标'
     });
     gate.resolve({});
     await Promise.all([first, second]);
@@ -171,7 +174,7 @@ describe('绩效计算与任务执行同步防重', () => {
     const gate = deferred();
     batchExecuteMetrics.mockImplementation(() => gate.promise);
     wrapper.vm.batchDlg.metricCodes = ['M001', 'M002'];
-    wrapper.vm.batchDlg.dataDate = today();
+    wrapper.vm.batchDlg.dataDate = yesterday();
     wrapper.vm.batchDlg.reason = '批量补跑';
 
     const first = wrapper.vm.confirmBatch();
@@ -179,10 +182,49 @@ describe('绩效计算与任务执行同步防重', () => {
 
     expect(batchExecuteMetrics).toHaveBeenCalledTimes(1);
     expect(batchExecuteMetrics).toHaveBeenCalledWith({
-      metricCodes: ['M001', 'M002'], dataDate: today(), async: true, reason: '批量补跑'
+      metricCodes: ['M001', 'M002'], dataDate: yesterday(), async: true, reason: '批量补跑'
     });
     gate.resolve({ success: 2, failed: 0, results: [] });
     await Promise.all([first, second]);
+  });
+
+  it('单项和批量提交均拒绝当天日期，并保留原 single-flight 边界', async () => {
+    const wrapper = await mountPage(TaskMonitor);
+    const current = today();
+    wrapper.vm.execDlg.metricCode = 'M001';
+    wrapper.vm.execDlg.dataDate = current;
+    wrapper.vm.execDlg.reason = '当天重算';
+    wrapper.vm.batchDlg.metricCodes = ['M001', 'M002'];
+    wrapper.vm.batchDlg.dataDate = current;
+    wrapper.vm.batchDlg.reason = '当天批量重算';
+    executeMetric.mockClear();
+    batchExecuteMetrics.mockClear();
+    mocks.message.warning.mockClear();
+
+    await wrapper.vm.confirmExecute();
+    await wrapper.vm.confirmBatch();
+
+    expect(executeMetric).not.toHaveBeenCalled();
+    expect(batchExecuteMetrics).not.toHaveBeenCalled();
+    expect(mocks.message.warning).toHaveBeenCalledWith(METRIC_RECALC_DATE_MESSAGES.TODAY_OR_FUTURE);
+  });
+
+  it('日期控件和提交兜底都拒绝超过20天的非月末日期', async () => {
+    const wrapper = await mountPage(TaskMonitor);
+    const old = dayjs().subtract(21, 'day');
+    const nonMonthEnd = old.isSame(old.endOf('month'), 'day') ? old.subtract(1, 'day') : old;
+    const date = nonMonthEnd.format('YYYY-MM-DD');
+    expect(wrapper.vm.disabledFuture(nonMonthEnd.toDate())).toBe(true);
+    wrapper.vm.execDlg.metricCode = 'M001';
+    wrapper.vm.execDlg.dataDate = date;
+    wrapper.vm.execDlg.reason = '历史重算';
+    executeMetric.mockClear();
+    mocks.message.warning.mockClear();
+
+    await wrapper.vm.confirmExecute();
+
+    expect(executeMetric).not.toHaveBeenCalled();
+    expect(mocks.message.warning).toHaveBeenCalledWith(METRIC_RECALC_DATE_MESSAGES.OLDER_THAN_20_NON_MONTH_END);
   });
 });
 

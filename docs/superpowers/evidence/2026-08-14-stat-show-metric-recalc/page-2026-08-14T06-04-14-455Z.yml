@@ -1,0 +1,120 @@
+- generic [ref=f6e4]:
+  - complementary [ref=f6e5]:
+    - generic [ref=f6e6]:
+      - generic [ref=f6e7]: 银
+      - generic [ref=f6e8]: 银行营销平台
+    - navigation "主导航" [ref=f6e9]
+  - generic [ref=f6e11]:
+    - banner [ref=f6e12]:
+      - button "折叠侧边导航" [expanded] [ref=f6e13] [cursor=pointer]
+      - button "P Playwright CLI 验收会话" [ref=f6e17] [cursor=pointer]:
+        - generic [ref=f6e18]: P
+        - generic [ref=f6e19]:
+          - generic [ref=f6e20]: Playwright CLI
+          - text: 验收会话
+        - generic [ref=f6e21]: ▾
+      - button "通知中心" [ref=f6e22] [cursor=pointer]
+    - navigation "面包屑" [ref=f6e26]:
+      - list [ref=f6e27]:
+        - listitem [ref=f6e28]
+        - listitem [ref=f6e31]: / 绩效与考核
+        - listitem [ref=f6e462]: / 任务监控
+    - navigation "工作区页签" [ref=f6e33]:
+      - generic [ref=f6e35]:
+        - button "工作台" [ref=f6e37] [cursor=pointer]
+        - generic [ref=f6e38]:
+          - button "指标库" [ref=f6e39] [cursor=pointer]
+          - button "关闭 指标库" [ref=f6e40] [cursor=pointer]
+        - generic [ref=f6e463]:
+          - button "任务监控" [ref=f6e464] [cursor=pointer]
+          - button "关闭 任务监控" [ref=f6e465] [cursor=pointer]
+    - main [ref=f6e468]:
+      - generic [ref=f6e469]:
+        - heading "任务监控指标重算任务 · 按指标汇总 / 执行 / 历史" [level=1] [ref=f6e470]
+        - group "指标重算任务操作" [ref=f6e471]:
+          - button "刷新" [ref=f6e472] [cursor=pointer]
+          - button "新增" [ref=f6e474] [cursor=pointer]
+          - button "批量执行" [disabled] [ref=f6e476]
+      - region "指标重算任务筛选" [ref=f6e478]:
+        - form "指标重算任务筛选" [ref=f6e479]:
+          - generic [ref=f6e480]:
+            - generic [ref=f6e481]: 任务类型
+            - generic [ref=f6e484] [cursor=pointer]:
+              - generic:
+                - combobox "任务类型" [ref=f6e486]
+                - generic [ref=f6e487]: 指标重算
+          - generic [ref=f6e492]:
+            - generic [ref=f6e493]: 指标
+            - textbox "指标" [ref=f6e497]:
+              - /placeholder: 指标编码/名称
+          - generic [ref=f6e499]:
+            - button "查询" [ref=f6e500] [cursor=pointer]
+            - button "重置" [ref=f6e502] [cursor=pointer]
+      - region [ref=f6e504]:
+        - generic [ref=f6e505]:
+          - generic [ref=f6e506]:
+            - heading "指标重算任务" [level=2] [ref=f6e507]
+            - paragraph [ref=f6e508]: 批量操作会写入审计日志；执行进度可在对应指标的历史中查看。
+          - status [ref=f6e509]: 暂无指标重算任务
+        - generic "指标重算任务" [ref=f6e510]:
+          - generic [ref=f6e511]:
+            - table [ref=f6e513]:
+              - rowgroup [ref=f6e520]:
+                - row [ref=f6e521]:
+                  - columnheader [ref=f6e522]:
+                    - generic "选择所有行" [ref=f6e524]:
+                      - generic [ref=f6e525] [cursor=pointer]:
+                        - checkbox "选择所有行" [disabled]
+                  - columnheader "指标" [ref=f6e527]
+                  - columnheader "创建时间" [ref=f6e529]
+                  - columnheader "计算次数" [ref=f6e531]
+                  - columnheader "操作" [ref=f6e533]
+            - generic [ref=f6e538]:
+              - table:
+                - rowgroup
+              - generic [ref=f6e539]: 暂无任务记录
+        - navigation "指标重算任务分页" [ref=f6e541]:
+          - generic [ref=f6e542]:
+            - generic [ref=f6e543]: 共 0 条
+            - generic [ref=f6e546] [cursor=pointer]:
+              - generic:
+                - combobox [ref=f6e548]
+                - generic [ref=f6e549]: 20条/页
+            - button "上一页" [disabled] [ref=f6e554]
+            - list [ref=f6e555]:
+              - listitem "第 1 页" [ref=f6e556]: "1"
+            - button "下一页" [disabled] [ref=f6e557]
+            - generic [ref=f6e558]:
+              - generic [ref=f6e559]: 前往
+              - spinbutton "页" [ref=f6e562]: "1"
+              - generic [ref=f6e563]: 页
+      - dialog "新增" [ref=f6e565]:
+        - generic [active] [ref=f6e566]:
+          - generic [ref=f6e567]:
+            - heading "新增" [level=2] [ref=f6e568]
+            - button "关闭此对话框" [ref=f6e569] [cursor=pointer]
+          - generic [ref=f6e574]:
+            - generic [ref=f6e575]:
+              - generic [ref=f6e576]: 任务类型
+              - generic [ref=f6e579] [cursor=pointer]:
+                - generic:
+                  - combobox "任务类型" [ref=f6e581]
+                  - generic [ref=f6e582]: 指标重算
+            - generic [ref=f6e587]:
+              - generic [ref=f6e588]: "* 指标"
+              - generic [ref=f6e591]:
+                - generic:
+                  - combobox "* 指标" [ref=f6e593]
+                  - generic [ref=f6e594]: 输入编码/名称模糊搜索
+                - generic [ref=f6e596] [cursor=pointer]
+            - generic [ref=f6e599]:
+              - generic [ref=f6e600]: "* 数据日期"
+              - combobox "* 数据日期" [ref=f6e608]
+            - generic [ref=f6e609]:
+              - generic [ref=f6e610]: "* 原因"
+              - textbox "* 原因" [ref=f6e613]:
+                - /placeholder: 高危操作，必填原因
+            - generic [ref=f6e614]: 提示：提交后由后台执行，进度见「历史」；将写入 run_task 并记入审计日志
+          - generic [ref=f6e615]:
+            - button "取消" [ref=f6e616] [cursor=pointer]
+            - button "确认执行" [ref=f6e618] [cursor=pointer]

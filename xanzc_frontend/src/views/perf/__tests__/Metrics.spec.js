@@ -8,6 +8,16 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
+import dayjs from 'dayjs';
+
+const { message } = vi.hoisted(() => ({
+  message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() }
+}));
+
+vi.mock('element-plus', () => ({
+  ElMessage: message,
+  ElMessageBox: { prompt: vi.fn() }
+}));
 
 // vi.mock 工厂被提升到文件顶部，故 mock 数据需用 vi.hoisted 一并提升后再引用
 const { L1, L2 } = vi.hoisted(() => ({
@@ -37,6 +47,7 @@ vi.mock('@/api/perf', () => ({
 
 import Metrics from '../Metrics.vue';
 import { executeMetric, listMetrics, trialRunMetric } from '@/api/perf';
+import { METRIC_RECALC_DATE_MESSAGES } from '@/utils/metricRecalcDate';
 
 // el-* 统一打桩：渲染默认插槽的用透传 div；带作用域插槽(tree/table)的渲染空 div 避免解构报错；
 // el-button 渲染原生 button 并把原生点击转成组件 click 事件，供详情区「编辑」按钮触发 openEdit。
@@ -161,12 +172,13 @@ describe('Metrics.vue 编辑二级指标 Groovy 表达式渲染', () => {
 
     expect(wrapper.vm.dlg.form.sqlText).toBe('SELECT :dataDate');
 
-    wrapper.vm.dlg.trialDate = '2026-08-11';
+    const trialDate = dayjs().subtract(2, 'day').format('YYYY-MM-DD');
+    wrapper.vm.dlg.trialDate = trialDate;
     wrapper.vm.dlg.trialSubject = 'E100';
     await wrapper.vm.onTrialFromDialog();
 
     expect(trialRunMetric).toHaveBeenCalledWith('M_L1', expect.objectContaining({
-      dataDate: '2026-08-11',
+      dataDate: trialDate,
       calcLogicType: 'SQL',
       baseDim: 'EMP',
       sqlText: 'SELECT :dataDate',
@@ -180,17 +192,69 @@ describe('Metrics.vue 编辑二级指标 Groovy 表达式渲染', () => {
     await settle();
 
     wrapper.vm.onExecute();
-    wrapper.vm.execDlg.dataDate = '2026-08-11';
-    wrapper.vm.execDlg.allocDate = '2026-08-10';
+    wrapper.vm.execDlg.dataDate = dayjs().subtract(2, 'day').format('YYYY-MM-DD');
+    wrapper.vm.execDlg.allocDate = dayjs().subtract(3, 'day').format('YYYY-MM-DD');
     wrapper.vm.execDlg.reason = '补跑日终指标';
     await wrapper.vm.confirmExecute();
 
     expect(executeMetric).toHaveBeenCalledWith('M_L2', {
-      dataDate: '2026-08-11',
-      allocDate: '2026-08-10',
+      dataDate: dayjs().subtract(2, 'day').format('YYYY-MM-DD'),
+      allocDate: dayjs().subtract(3, 'day').format('YYYY-MM-DD'),
       cascade: true,
       async: true,
       reason: '补跑日终指标'
     });
+  });
+
+  it('试运行拒绝当天日期，并在日期控件上禁用当天和超期非月末日期', async () => {
+    wrapper = mount(Metrics, { global: globalOptions });
+    await settle();
+    wrapper.vm.openEdit(L1);
+    await settle();
+    wrapper.vm.dlg.form.calcLogicType = 'SQL';
+    wrapper.vm.dlg.form.sqlText = 'SELECT 1';
+    wrapper.vm.dlg.trialDate = dayjs().format('YYYY-MM-DD');
+    trialRunMetric.mockClear();
+    message.warning.mockClear();
+
+    await wrapper.vm.onTrialFromDialog();
+
+    expect(trialRunMetric).not.toHaveBeenCalled();
+    expect(message.warning).toHaveBeenCalledWith(METRIC_RECALC_DATE_MESSAGES.TODAY_OR_FUTURE);
+    expect(wrapper.vm.disabledMetricRecalcDate(dayjs().toDate())).toBe(true);
+  });
+
+  it('立即执行同时拒绝当天数据日期和未来业绩分配日期', async () => {
+    wrapper = mount(Metrics, { global: globalOptions });
+    await settle();
+    wrapper.vm.onExecute();
+    wrapper.vm.execDlg.dataDate = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+    wrapper.vm.execDlg.allocDate = dayjs().add(1, 'day').format('YYYY-MM-DD');
+    wrapper.vm.execDlg.reason = '补跑指标';
+    executeMetric.mockClear();
+    message.warning.mockClear();
+
+    await wrapper.vm.confirmExecute();
+
+    expect(executeMetric).not.toHaveBeenCalled();
+    expect(message.warning).toHaveBeenCalledWith(`业绩分配日期不能大于今天（${dayjs().format('YYYY-MM-DD')}）`);
+  });
+
+  it('业绩分配日期只保留未来限制，不套用重算日期的20天/月末规则', async () => {
+    wrapper = mount(Metrics, { global: globalOptions });
+    await settle();
+    wrapper.vm.onExecute();
+    const old = dayjs().subtract(21, 'day');
+    const nonMonthEnd = old.isSame(old.endOf('month'), 'day') ? old.subtract(1, 'day') : old;
+    const dataDate = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+    const allocDate = nonMonthEnd.format('YYYY-MM-DD');
+    wrapper.vm.execDlg.dataDate = dataDate;
+    wrapper.vm.execDlg.allocDate = allocDate;
+    wrapper.vm.execDlg.reason = '补跑分配';
+    executeMetric.mockClear();
+
+    await wrapper.vm.confirmExecute();
+
+    expect(executeMetric).toHaveBeenCalledWith('M_L2', expect.objectContaining({ dataDate, allocDate }));
   });
 });

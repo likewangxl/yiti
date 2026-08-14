@@ -2,6 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
+import dayjs from 'dayjs';
+import { METRIC_RECALC_DATE_MESSAGES } from '@/utils/metricRecalcDate';
+import { ElMessage } from 'element-plus';
 
 const { messageBox } = vi.hoisted(() => ({
   messageBox: { confirm: vi.fn(), prompt: vi.fn() }
@@ -43,7 +46,8 @@ import {
   listJobs,
   listResources,
   pauseJob,
-  replaceRoleResources
+  replaceRoleResources,
+  triggerJob
 } from '@/api/system';
 import Permission from '../Permission.vue';
 import Calendar from '../Calendar.vue';
@@ -179,5 +183,76 @@ describe('系统治理与 RBAC 写操作保护', () => {
 
     request.resolve({ ok: true });
     await Promise.all([first, second]);
+  });
+
+  it('指标类任务手动触发默认昨日，并拒绝当天和超期非月末日期', async () => {
+    wrapper = mountPage(Jobs);
+    await settle();
+    wrapper.vm.onTrigger({ id: 11, jobKey: 'LEVEL1_METRIC_CALC' });
+    expect(wrapper.vm.trgDlg.dataDate).toBe(dayjs().subtract(1, 'day').format('YYYY-MM-DD'));
+    expect(wrapper.vm.trgDlg.disabledDate(dayjs().toDate())).toBe(true);
+
+    wrapper.vm.trgDlg.dataDate = dayjs().format('YYYY-MM-DD');
+    wrapper.vm.trgDlg.reason = '当天重算';
+    triggerJob.mockClear();
+    ElMessage.warning.mockClear();
+    await wrapper.vm.confirmTrigger();
+
+    expect(triggerJob).not.toHaveBeenCalled();
+    expect(ElMessage.warning).toHaveBeenCalledWith(METRIC_RECALC_DATE_MESSAGES.TODAY_OR_FUTURE);
+  });
+
+  it('非指标系统任务保持今天默认和原有未来日期规则', async () => {
+    wrapper = mountPage(Jobs);
+    await settle();
+    wrapper.vm.onTrigger({ id: 12, jobKey: 'SYS_SESSION_CLEAN' });
+    expect(wrapper.vm.trgDlg.dataDate).toBe(dayjs().format('YYYY-MM-DD'));
+    expect(wrapper.vm.trgDlg.disabledDate(dayjs().toDate())).toBe(false);
+    wrapper.vm.trgDlg.reason = '手动维护';
+    triggerJob.mockClear();
+    await wrapper.vm.confirmTrigger();
+
+    expect(triggerJob).toHaveBeenCalledWith(12, '手动维护', dayjs().format('YYYY-MM-DD'), undefined);
+
+    wrapper.vm.trgDlg.dataDate = dayjs().add(1, 'day').format('YYYY-MM-DD');
+    triggerJob.mockClear();
+    ElMessage.warning.mockClear();
+    await wrapper.vm.confirmTrigger();
+    expect(triggerJob).not.toHaveBeenCalled();
+    expect(ElMessage.warning).toHaveBeenCalledWith(`数据日期不能大于今天（${dayjs().format('YYYY-MM-DD')}）`);
+  });
+
+  it('指标类任务超过20天的非月末日期给出专用提示且不提交', async () => {
+    wrapper = mountPage(Jobs);
+    await settle();
+    wrapper.vm.onTrigger({ id: 13, jobKey: 'PERF_METRIC_DAILY' });
+    const old = dayjs().subtract(21, 'day');
+    const nonMonthEnd = old.isSame(old.endOf('month'), 'day') ? old.subtract(1, 'day') : old;
+    wrapper.vm.trgDlg.dataDate = nonMonthEnd.format('YYYY-MM-DD');
+    wrapper.vm.trgDlg.reason = '历史重算';
+    triggerJob.mockClear();
+    ElMessage.warning.mockClear();
+    await wrapper.vm.confirmTrigger();
+
+    expect(triggerJob).not.toHaveBeenCalled();
+    expect(ElMessage.warning).toHaveBeenCalledWith(METRIC_RECALC_DATE_MESSAGES.OLDER_THAN_20_NON_MONTH_END);
+  });
+
+  it('指标调度的业绩分配日期只受未来限制，不套用重算日期规则', async () => {
+    wrapper = mountPage(Jobs);
+    await settle();
+    wrapper.vm.onTrigger({ id: 14, jobKey: 'LEVEL1_METRIC_CALC' });
+    const old = dayjs().subtract(21, 'day');
+    const nonMonthEnd = old.isSame(old.endOf('month'), 'day') ? old.subtract(1, 'day') : old;
+    const allocDate = nonMonthEnd.format('YYYY-MM-DD');
+    wrapper.vm.trgDlg.allocDate = allocDate;
+    wrapper.vm.trgDlg.reason = '补跑分配';
+    triggerJob.mockClear();
+    ElMessage.warning.mockClear();
+
+    await wrapper.vm.confirmTrigger();
+
+    expect(wrapper.vm.trgDlg.disabledAllocDate(nonMonthEnd.toDate())).toBe(false);
+    expect(triggerJob).toHaveBeenCalledWith(14, '补跑分配', dayjs().subtract(1, 'day').format('YYYY-MM-DD'), allocDate);
   });
 });

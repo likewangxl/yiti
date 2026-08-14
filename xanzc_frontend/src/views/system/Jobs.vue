@@ -118,8 +118,8 @@
       <el-alert type="warning" :closable="false" show-icon title="手动触发属于高危操作；计算类任务会按所选数据日期启动计算。" />
       <el-form label-width="110px" size="default" class="trigger-form">
         <el-form-item label="任务"><el-input :model-value="trgDlg.jobKey" disabled /></el-form-item>
-        <el-form-item label="数据日期" required><el-date-picker v-model="trgDlg.dataDate" type="date" value-format="YYYY-MM-DD" style="width:100%" placeholder="选择不晚于今天的日期" :disabled-date="trgDlg.disabledDate" /></el-form-item>
-        <el-form-item v-if="trgDlg.jobKey === 'LEVEL1_METRIC_CALC'" label="业绩分配日期"><el-date-picker v-model="trgDlg.allocDate" type="date" value-format="YYYY-MM-DD" style="width:100%" clearable placeholder="可选，留空默认使用数据日期" :disabled-date="trgDlg.disabledDate" /></el-form-item>
+        <el-form-item label="数据日期" required><el-date-picker v-model="trgDlg.dataDate" type="date" value-format="YYYY-MM-DD" style="width:100%" :placeholder="isMetricJobKey(trgDlg.jobKey) ? '选择重算日期（昨天至20天前或月末）' : '选择不晚于今天的日期'" :disabled-date="trgDlg.disabledDate" /></el-form-item>
+        <el-form-item v-if="trgDlg.jobKey === 'LEVEL1_METRIC_CALC'" label="业绩分配日期"><el-date-picker v-model="trgDlg.allocDate" type="date" value-format="YYYY-MM-DD" style="width:100%" clearable placeholder="可选，留空默认使用数据日期" :disabled-date="trgDlg.disabledAllocDate" /></el-form-item>
         <el-form-item label="触发原因" required><el-input v-model="trgDlg.reason" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="必填，将写入审计日志" /></el-form-item>
       </el-form>
       <template #footer>
@@ -135,6 +135,15 @@ import { onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { fmtDateTimeCol } from '@/utils/datetime';
 import { listJobs, pauseJob, resumeJob, triggerJob, listJobLogs } from '@/api/system';
+import {
+  getMetricRecalcDateError,
+  isFutureDate,
+  isFutureDateDisabled,
+  isMetricJobKey,
+  isMetricRecalcDateDisabled,
+  todayDate,
+  yesterdayDate
+} from '@/utils/metricRecalcDate';
 
 const statusCls = (status) => ({ ACTIVE: 'tag-success', PAUSED: 'tag-warning', DISABLED: 'tag-danger' }[status] || 'tag-info');
 const statusLabel = (status) => ({ ACTIVE: '运行中', PAUSED: '已暂停', DISABLED: '已禁用' }[status] || status || '-');
@@ -209,24 +218,32 @@ async function onResume(row) {
 
 const trgDlg = reactive({
   show: false, saving: false, jobId: '', jobKey: '',
-  dataDate: new Date().toISOString().slice(0, 10), allocDate: '', reason: '',
-  disabledDate: (date) => { const today = new Date(); today.setHours(0, 0, 0, 0); return date.getTime() > today.getTime(); }
+  dataDate: todayDate(), allocDate: '', reason: '',
+  disabledDate: (date) => isMetricJobKey(trgDlg.jobKey)
+    ? isMetricRecalcDateDisabled(date)
+    : isFutureDateDisabled(date),
+  disabledAllocDate: (date) => isFutureDateDisabled(date)
 });
 function onTrigger(row) {
   if (trgDlg.saving) return;
   trgDlg.jobId = row.id;
   trgDlg.jobKey = row.jobKey;
-  trgDlg.dataDate = new Date().toISOString().slice(0, 10);
+  trgDlg.dataDate = isMetricJobKey(row.jobKey) ? yesterdayDate() : todayDate();
   trgDlg.allocDate = '';
   trgDlg.reason = '';
   trgDlg.show = true;
 }
 async function confirmTrigger() {
   if (trgDlg.saving) return;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDate();
   if (!trgDlg.dataDate) return ElMessage.warning('请选择数据日期');
-  if (trgDlg.dataDate > today) return ElMessage.warning(`数据日期不能大于今天（${today}）`);
-  if (trgDlg.allocDate && trgDlg.allocDate > today) return ElMessage.warning(`业绩分配日期不能大于今天（${today}）`);
+  if (isMetricJobKey(trgDlg.jobKey)) {
+    const dateError = getMetricRecalcDateError(trgDlg.dataDate);
+    if (dateError) return ElMessage.warning(dateError);
+  } else if (isFutureDate(trgDlg.dataDate)) {
+    return ElMessage.warning(`数据日期不能大于今天（${today}）`);
+  }
+  if (trgDlg.allocDate && isFutureDate(trgDlg.allocDate)) return ElMessage.warning(`业绩分配日期不能大于今天（${today}）`);
   if (!trgDlg.reason.trim()) return ElMessage.warning('请填写触发原因');
   trgDlg.saving = true;
   try {
