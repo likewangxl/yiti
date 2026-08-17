@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud ab-page" aria-labelledby="address-book-title">
+<main v-bp-overflow-tooltip class="bp-crud ab-page" aria-labelledby="address-book-title">
     <header class="page-h">
       <PageTitle id="address-book-title"><span class="sub">模糊搜索、60 天未更新提醒，负责产品会反向更新产品库</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="通讯录操作">
@@ -107,7 +107,7 @@
         <el-table-column label="岗位" width="120">
           <template #default="{row}"><el-tag effect="plain">{{ row.positionDesc || row.position || '-' }}</el-tag></template>
         </el-table-column>
-        <el-table-column label="联系方式" min-width="200">
+        <el-table-column label="联系方式" min-width="200" class-name="compact-stack-cell">
           <template #default="{row}">
             <div>{{ row.mobile || '—' }}</div>
             <div class="muted">{{ row.email || '' }}</div>
@@ -127,7 +127,7 @@
             <el-tag v-if="isStale(row.updatedTime)" class="tag-warning" effect="plain" size="small">60天未更新</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="90" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
           </template>

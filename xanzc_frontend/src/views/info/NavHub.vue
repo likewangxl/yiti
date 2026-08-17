@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud nav-page" aria-labelledby="nav-hub-title">
+<main v-bp-overflow-tooltip class="bp-crud nav-page" aria-labelledby="nav-hub-title">
     <header class="page-h">
       <PageTitle id="nav-hub-title"><span class="sub">科技部可新增、编辑、删除和排序网址导航</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="网址导航操作">

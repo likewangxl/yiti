@@ -1,0 +1,13 @@
+# Executed from /home/djdev/leid/yiti
+# Product code/config/DB were not changed. Credentials were entered with CLI but are omitted here.
+xanzc_frontend/node_modules/.bin/playwright-cli -s=final1920xianfinal open --browser chromium 'http://127.0.0.1:8091/#/login?normal'
+xanzc_frontend/node_modules/.bin/playwright-cli -s=final1920xianfinal resize 1920 1080
+xanzc_frontend/node_modules/.bin/playwright-cli -s=final1920xianfinal route-list
+xanzc_frontend/node_modules/.bin/playwright-cli -s=final1920xianfinal <normal-login-with-authorized-credentials-not-archived>
+xanzc_frontend/node_modules/.bin/playwright-cli -s=final1920xianfinal run-code --filename xanzc_frontend/artifacts/page-optimization-20260813/final-pass/1920/raw/xian-final-1920.js
+xanzc_frontend/node_modules/.bin/playwright-cli -s=final1920xianfinal run-code --filename xanzc_frontend/artifacts/page-optimization-20260813/final-pass/1920/raw/final-scan-1920.js
+xanzc_frontend/node_modules/.bin/playwright-cli -s=final1920xianfinal console error
+xanzc_frontend/node_modules/.bin/playwright-cli -s=final1920xianfinal console warning
+xanzc_frontend/node_modules/.bin/playwright-cli -s=final1920xianfinal requests
+xanzc_frontend/node_modules/.bin/playwright-cli -s=final1920xianfinal route-list
+xanzc_frontend/node_modules/.bin/playwright-cli -s=final1920xianfinal close

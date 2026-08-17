@@ -17,13 +17,13 @@
       <el-table-column label="更新时间" width="180">
         <template #default="{ row }">{{ formatTime(row.updatedTime || row.createdTime) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="180">
+      <el-table-column label="操作" class-name="operation-cell" width="150" fixed="right">
         <template #default="{ row }">
-          <el-button type="primary" link size="small" :disabled="removingId === row.id" @click="load(row)">载入</el-button>
-          <el-divider direction="vertical" />
-          <el-button link size="small" :disabled="removingId === row.id" @click="openEdit(row)">编辑</el-button>
-          <el-divider direction="vertical" />
-          <el-button type="danger" link size="small" :loading="removingId === row.id" :disabled="!!removingId" @click="remove(row)">删除</el-button>
+          <BpAdaptiveRowActions>
+            <template #primary><el-button type="primary" link size="small" :disabled="removingId === row.id" @click="load(row)">载入</el-button></template>
+            <template #expanded><el-button type="primary" link size="small" :disabled="removingId === row.id" @click="openEdit(row)">编辑</el-button><el-button type="danger" link size="small" :disabled="!!removingId" @click="remove(row)">删除</el-button></template>
+            <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" :disabled="removingId === row.id" aria-label="更多查询方案操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="removingId === row.id" @click="openEdit(row)">编辑</el-dropdown-item><el-dropdown-item divided class="danger-item" :disabled="!!removingId" @click="remove(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+          </BpAdaptiveRowActions>
         </template>
       </el-table-column>
     </el-table>
@@ -39,6 +39,7 @@ import { ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { listSavedQueries, deleteSavedQuery, getSavedQuery } from '@/api/report';
 import SchemeEditDialog from './SchemeEditDialog.vue';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 
 const props = defineProps({ visible: Boolean });
 const emit = defineEmits(['update:visible', 'load']);

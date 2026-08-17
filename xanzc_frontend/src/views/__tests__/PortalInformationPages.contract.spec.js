@@ -20,7 +20,7 @@ describe('门户公告与信息聚合页结构契约', () => {
   it.each(pages)('%s 显式使用主平台 bp-crud 页面边界和 PageTitle', (page) => {
     const source = sourceOf(page);
 
-    expect(source).toMatch(/<main\s+class="bp-crud\b[^\"]*"[^>]*aria-labelledby=/);
+    expect(source).toMatch(/<main\b(?=[^>]*class="bp-crud\b[^\"]*")(?=[^>]*aria-labelledby=)[^>]*>/);
     expect(source).toMatch(/<header\s+class="page-h"/);
     expect(source).toMatch(/<PageTitle\b/);
     expect(source).toMatch(/<(?:section|article)\b/);

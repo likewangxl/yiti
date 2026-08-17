@@ -6,7 +6,7 @@
   列表行已含全字段（custInfo/necessExplain/files），“申请资料”弹窗与“操作-下载”直接用行内数据，无需再查详情。
 -->
 <template>
-  <main class="bp-crud price-approval" aria-labelledby="price-approval-title">
+<main v-bp-overflow-tooltip class="bp-crud price-approval" aria-labelledby="price-approval-title">
     <div class="page-h">
       <PageTitle id="price-approval-title" />
       <span class="desc">AMAS 定价审批数据查询，按申请时间倒序</span>
@@ -57,14 +57,14 @@
     <el-table :data="rows" v-loading="loading" border stripe size="default" empty-text="暂无定价审批数据"
               aria-labelledby="price-approval-table-heading" aria-describedby="price-approval-table-state">
       <el-table-column type="index" label="序号" width="56" fixed="left" />
-      <el-table-column label="申请人" min-width="120" fixed="left">
+      <el-table-column label="申请人" min-width="120" fixed="left" class-name="compact-stack-cell">
         <template #default="{ row }">
           <div class="main">{{ row.applyFullname || row.applyUsername || '-' }}</div>
           <div class="sub" v-if="row.applyUsername">{{ row.applyUsername }}</div>
         </template>
       </el-table-column>
       <el-table-column prop="applyTime" label="申请时间" width="160" :formatter="dash" />
-      <el-table-column label="客户" min-width="160">
+      <el-table-column label="客户" min-width="160" class-name="compact-stack-cell">
         <template #default="{ row }">
           <div class="main">{{ row.custName || '-' }}</div>
           <div class="sub" v-if="row.custId">{{ row.custId }}</div>
@@ -84,11 +84,11 @@
       <el-table-column prop="executeRate" label="执行利率" width="100" align="right" :formatter="dash" />
       <el-table-column prop="slidScale" label="浮动利率(BP)" width="120" align="right" :formatter="dash" />
       <el-table-column prop="localRate" label="当地同业利率" width="120" align="right" :formatter="dash" />
-      <el-table-column prop="promiseAmount" width="150" align="right" :formatter="dash">
-        <template #header>承诺存款新增金额<br />(年日均:万元)</template>
+      <el-table-column prop="promiseAmount" width="150" align="right" :formatter="dash" label-class-name="compact-stack-header">
+        <template #header><span class="compact-header-lines"><span>承诺存款新增金额</span><span>(年日均:万元)</span></span></template>
       </el-table-column>
-      <el-table-column prop="promiseTime" width="160" align="right" :formatter="dash">
-        <template #header>承诺完成时间<br />(1~12选择 单位:月)</template>
+      <el-table-column prop="promiseTime" width="160" align="right" :formatter="dash" label-class-name="compact-stack-header">
+        <template #header><span class="compact-header-lines"><span>承诺完成时间</span><span>(1~12选择 单位:月)</span></span></template>
       </el-table-column>
       <el-table-column label="对公/零售" width="100">
         <template #default="{ row }">{{ OR_RETAIL[row.businOrRetail] || row.businOrRetail || '-' }}</template>
@@ -99,7 +99,7 @@
           <el-button link type="primary" @click="openMaterial(row)">查看</el-button>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="90" fixed="right">
+      <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="downloadRow(row)">下载</el-button>
         </template>

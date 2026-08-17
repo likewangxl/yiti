@@ -36,7 +36,7 @@ red-engine-center/src/main/java/com/bank/branch/platform/redengine/api/dto/ReSub
 red-engine-center/src/main/java/com/bank/branch/platform/redengine/api/dto/ReScoreExportRow.java
 ```
 
-这些 DTO 都只是 REST 端点的请求/响应报文载体（供 `03-接口设计与报文.md` 描述的 REST Controller 使用），**不构成跨模块 Java 契约**——没有任何其他业务模块 `import` 本模块的 `api.dto.*` 或依赖本模块的 `mapper`/`entity`（`red-engine-center/CLAUDE.md`「模块概述」「依赖关系」节已如此定性，本文再次以 grep 独立核实一致）。
+这些 DTO 都只是 REST 端点的请求/响应报文载体（供 `03-接口设计与报文.md` 描述的 REST Controller 使用），**不构成跨模块 Java 契约**——没有任何其他业务模块 `import` 本模块的 `api.dto.*` 或依赖本模块的 `mapper`/`entity`（`red-engine-center/AGENTS.md`「模块定位」已如此定性，本文再次以 grep 独立核实一致）。
 
 **原因**：本模块是党建垂直业务的核心域，当前无其他模块需要查询党建数据的产品需求（YAGNI）。红黄牌预警、驾驶舱统计、上报/评分等能力均只服务本模块自有的前端页面（`xanzc_frontend/src/views/redengine/**`）。
 
@@ -89,7 +89,7 @@ import com.bank.branch.platform.governance.api.FileApi;
 以下平台常见 `*Api` **未被本模块 import/使用**（grep 确认为空）：
 - `DictApi`（`system-governance-center`）——本模块字典（`RE_ORG_TYPE`/`RE_DIMENSION`/`RE_SUBMIT_STATUS`/`RE_ITEM_CODE`）走的是种子 SQL 直接落 `SYS_DICT` 表，前端读取走通用字典查询端点，**Java 代码层面本模块无需也未调用 `DictApi`**（见 §3）
 - `BizScopeApi`（`auth-permission-center`）——见 2.1 说明
-- `WorkflowApi`/`WorkflowQueryApi`（`workflow-center`）——本模块**不接 Flowable**，审核流是自管两级状态机（`RE_SUBMIT.status` 字段流转），不依赖 `workflow-center` 模块（根 CLAUDE.md 模块依赖图已明确标注"不依赖 workflow-center"）
+- `WorkflowApi`/`WorkflowQueryApi`（`workflow-center`）——本模块**不接 Flowable**，审核流是自管两级状态机（`RE_SUBMIT.status` 字段流转），不依赖 `workflow-center` 模块（模块根 AGENTS.md 已明确该边界）
 
 ---
 
@@ -136,7 +136,7 @@ import com.bank.branch.platform.governance.api.FileApi;
 
 | 文档 | 说明 |
 |---|---|
-| `red-engine-center/CLAUDE.md` | 模块权威上下文：依赖关系、包结构、数据库表、技术债 |
+| `red-engine-center/AGENTS.md` | 模块权威上下文：依赖关系、状态机、安全约束与已知限制 |
 | `03-接口设计与报文.md` | REST 接口全量端点契约 |
 | `AGENTS.md` | 本目录文档维护规则 |
 | `auth-permission-center/04-对外API契约.md` | `CurrentUserApi` 完整接口定义 |

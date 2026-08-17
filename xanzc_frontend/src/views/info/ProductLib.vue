@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud pl-page" aria-labelledby="product-lib-title">
+<main v-bp-overflow-tooltip class="bp-crud pl-page" aria-labelledby="product-lib-title">
     <header class="page-h">
       <PageTitle id="product-lib-title"><span class="sub">中后台组织维护，产品负责人由通讯录反向关联</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="产品资料库操作">
@@ -76,9 +76,9 @@
         aria-describedby="product-lib-state"
       >
         <el-table-column type="index" label="序号" width="60" align="center" :index="indexMethod" />
-        <el-table-column prop="productDeptOrgName" label="产品部门" width="190" class-name="wrap-cell" />
-        <el-table-column prop="productName" label="产品名称" width="200" class-name="wrap-cell" />
-        <el-table-column prop="description" label="产品说明" min-width="270" class-name="wrap-cell" />
+        <el-table-column prop="productDeptOrgName" label="产品部门" width="190" class-name="compact-clamp-cell" />
+        <el-table-column prop="productName" label="产品名称" width="200" class-name="compact-clamp-cell" />
+        <el-table-column prop="description" label="产品说明" min-width="270" class-name="compact-clamp-cell" />
         <el-table-column label="中场支持" width="100" align="center">
           <template #default="{row}">
             <el-tag :class="row.supportForSupportRequest ? 'tag-success' : 'tag-info'" effect="plain">
@@ -99,17 +99,24 @@
         <el-table-column label="更新时间" width="170">
           <template #default="{row}">{{ fmtDate(row.updatedTime) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="180" fixed="right">
           <template #default="{row}">
-            <el-button link type="primary" size="small" :disabled="deletingId === row.id" @click="openEdit(row)">编辑</el-button>
-            <el-tooltip :disabled="!row.fileObjectId" :content="row.fileName || '下载附件'" placement="top">
-              <el-button link type="primary" size="small" :disabled="!row.fileObjectId || deletingId === row.id" @click="downloadAttach(row)">附件</el-button>
-            </el-tooltip>
-            <el-popconfirm :title="`确认删除「${row.productName}」？删除后无法恢复。`" @confirm="onDelete(row)">
-              <template #reference>
-                <el-button link type="danger" size="small" :loading="deletingId === row.id">删除</el-button>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" size="small" :disabled="deletingId === row.id" @click="openEdit(row)">编辑</el-button></template>
+              <template #expanded>
+                <el-button link type="primary" size="small" :disabled="!row.fileObjectId || deletingId === row.id" :title="row.fileObjectId ? (row.fileName || '下载附件') : '暂无附件'" @click="downloadAttach(row)">附件</el-button>
+                <el-button link type="danger" size="small" :disabled="deletingId === row.id" @click="confirmDelete(row)">删除</el-button>
               </template>
-            </el-popconfirm>
+              <template #compact>
+                <el-dropdown trigger="click" popper-class="bp-crud-menu">
+                  <el-button link size="small" :disabled="deletingId === row.id" aria-label="更多产品资料操作">更多</el-button>
+                  <template #dropdown><el-dropdown-menu>
+                    <el-dropdown-item :disabled="!row.fileObjectId || deletingId === row.id" :title="row.fileObjectId ? (row.fileName || '下载附件') : '暂无附件'" @click="downloadAttach(row)">附件</el-dropdown-item>
+                    <el-dropdown-item divided class="danger-item" :disabled="deletingId === row.id" @click="confirmDelete(row)">删除</el-dropdown-item>
+                  </el-dropdown-menu></template>
+                </el-dropdown>
+              </template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -188,7 +195,8 @@
 
 <script setup>
 import { ref, onMounted, nextTick } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { fmtDateTime } from '@/utils/datetime';
 import { call } from '@/api/http';
 import { listProducts, createProduct, updateProduct, deleteProduct } from '@/api/products';
@@ -333,12 +341,20 @@ async function onDelete(row) {
   } catch (e) { ElMessage.error(e?.message || '删除失败'); } finally { deletingId.value = null; }
 }
 
+async function confirmDelete(row) {
+  try {
+    await ElMessageBox.confirm(`确认删除「${row.productName}」？删除后无法恢复。`, '删除确认', {
+      type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消'
+    });
+  } catch { return; }
+  await onDelete(row);
+}
+
 onMounted(() => { loadOrg(); reload(); });
 </script>
 
 <style scoped>
 .support-hint { margin-left: var(--space-2); }
-.wrap-cell :deep(.cell) { line-height: 1.5; white-space: normal; word-break: break-word; }
 :deep(.el-upload-list__item-name) { overflow: visible; text-overflow: clip; white-space: normal; word-break: break-all; }
 :deep(.el-upload-list__item) { height: auto; }
 </style>

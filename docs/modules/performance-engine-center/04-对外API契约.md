@@ -92,7 +92,7 @@ public interface MetricApi {
      * <p><b>业务规划（非技术债）：</b>
      * <ul>
      *   <li>员工-KPI 方案个人绑定（当前仍是 ACTIVE 方案并集）。
-     *       详见模块 CLAUDE.md 技术债章节，V1.5 后无技术债遗留。</li>
+     *       详见模块 AGENTS.md 的已知边界说明，V1.5 后无技术债遗留。</li>
      * </ul>
      *
      * @param empId 员工工号

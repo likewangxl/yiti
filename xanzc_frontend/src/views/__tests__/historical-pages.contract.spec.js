@@ -19,7 +19,7 @@ describe('历史查询页面 scoped CRUD 结构契约', () => {
   it.each(listPages)('%s 使用主区域、页头、筛选卡、数据面板和分页语义', (path) => {
     const source = sourceOf(path);
 
-    expect(source).toMatch(/<main\s+class="bp-crud\b/);
+    expect(source).toMatch(/<main\b(?=[^>]*class="bp-crud\b)[^>]*>/);
     expect(source).toMatch(/<PageTitle\b/);
     expect(source).toMatch(/class="page-h"/);
     expect(source).toMatch(/class="[^"]*filter-bar[^"]*"/);
@@ -33,7 +33,7 @@ describe('历史查询页面 scoped CRUD 结构契约', () => {
   it('定价审批详情使用 bp-crud 页头、数据面板和详情 section', () => {
     const source = sourceOf('history/PriceApprovalDetail.vue');
 
-    expect(source).toMatch(/<main\s+class="bp-crud\b/);
+    expect(source).toMatch(/<main\b(?=[^>]*class="bp-crud\b)[^>]*>/);
     expect(source).toMatch(/<PageTitle\b/);
     expect(source).toMatch(/class="page-h"/);
     expect(source).toMatch(/class="[^"]*data-panel[^"]*"/);
@@ -54,5 +54,13 @@ describe('历史查询页面 scoped CRUD 结构契约', () => {
     expect(source).toMatch(/退出登录/);
     expect(source).toMatch(/var\(--color-(?:page|surface|border|text-strong|text-muted|brand-700)/);
     expect(source).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+  });
+
+  it('业绩调整详情的 loading 指令落在真实元素，不作用于 Teleport 对话框组件', () => {
+    const source = sourceOf('history/PerfAdjustQuery.vue');
+    const dialog = source.match(/<el-dialog\b[\s\S]*?<\/el-dialog>/)?.[0] || '';
+
+    expect(dialog).not.toMatch(/<el-dialog\b[^>]*\bv-loading=/);
+    expect(dialog).toMatch(/<section\b[^>]*\bv-loading="dlg\.loading"/);
   });
 });

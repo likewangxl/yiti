@@ -1,16 +1,17 @@
 <template>
-  <div class="scr-block mp-block" :class="{ 'mp-composite': isComposite }">
+  <div class="scr-block mp-block" :class="{ 'mp-composite': isComposite }" :style="runtimeRootStyle">
     <div v-if="unsupportedSchema" class="mp-config-gap" role="alert">地图配置版本不受支持，已拒绝渲染</div>
     <template v-else-if="isComposite">
-      <div class="mp-title">西安复合经营地图</div>
+      <div class="mp-title">西安六区经营地图</div>
       <div v-if="configurationGap" class="mp-config-gap" role="alert">{{ configurationGap }}</div>
       <div class="mp-composite-canvas">
         <v-chart class="mp-chart mp-xian-chart" :option="option" autoresize @click="onChartClick" />
 
         <!-- ECharts canvas 无法自然获得焦点，本地机构补充可读的键盘入口；经纬度仍只进入 geo 数据。 -->
         <button v-for="(point, index) in localNodes" :key="`local-${point.orgCode}`"
-                class="mp-local-node" :style="localStyle(point, index)" tabindex="0"
-                :aria-label="`${point.orgName}，西安本地一级经营机构`"
+                class="mp-local-node" :style="localStyle(point, index)" :tabindex="isInteractive ? 0 : -1"
+                :disabled="!isInteractive" :aria-disabled="String(!isInteractive)"
+                :aria-label="localAriaLabel(point)"
                 @click="navigate(point)" @keydown.enter.prevent="navigate(point)"
                 @keydown.space.prevent="navigate(point)">
           <span class="mp-node-dot" aria-hidden="true" />
@@ -19,8 +20,9 @@
 
         <!-- 示意节点使用 anchor 绝对布局，不把锚点转换成伪造经纬度。 -->
         <button v-for="node in satelliteNodes" :key="`sat-${node.orgCode}-${node.anchor}`"
-                class="mp-satellite-node" :data-anchor="node.anchor" :style="node.position" tabindex="0"
-                :aria-label="`${node.orgName}，${anchorLabel(node.anchor)}示意导航节点`"
+                class="mp-satellite-node" :data-anchor="node.anchor" :style="node.position" :tabindex="isInteractive ? 0 : -1"
+                :disabled="!isInteractive" :aria-disabled="String(!isInteractive)"
+                :aria-label="satelliteAriaLabel(node)"
                 @click="navigate(node)" @keydown.enter.prevent="navigate(node)"
                 @keydown.space.prevent="navigate(node)">
           <span class="mp-node-dot" aria-hidden="true" />
@@ -28,7 +30,10 @@
         </button>
       </div>
       <!-- 该声明是复合地图契约的一部分，不能由配置隐藏。 -->
-      <div class="mp-disclaimer" role="note">{{ mapConfig.disclaimer }}</div>
+      <div class="mp-disclaimer" role="note">{{ XIAN_SECONDARY_BRANCH_DISCLAIMER }}</div>
+      <div class="mp-attribution" role="note">
+        <a class="mp-attribution-link" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">{{ XIAN_SIX_DISTRICTS_ATTRIBUTION }}</a>
+      </div>
     </template>
     <v-chart v-else class="mp-chart" :option="option" autoresize @click="onChartClick" />
   </div>
@@ -43,13 +48,14 @@ import { GeoComponent, TooltipComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 import { useRouter } from 'vue-router';
 import shaanxiGeo from '@/assets/geo/shaanxi.json';
-import xianOutline from '@/assets/geo/xian-outline';
+import xianSixDistricts, { XIAN_SIX_DISTRICTS_ATTRIBUTION } from '@/assets/geo/xian-six-districts';
 import { SCR_COLOR, scrTooltipStyle } from '@/styles/screenChartTheme';
-import { MAP_ANCHORS, anchorStyle, normalizeMapConfig, resolveCompositeMapNodes } from '@/utils/screenScope';
+import { MAP_ANCHORS, normalizeMapConfig, resolveCompositeMapNodes, resolveXianSecondaryBranches,
+  XIAN_SECONDARY_BRANCH_DISCLAIMER } from '@/utils/screenScope';
 
 use([CanvasRenderer, MapChart, EffectScatterChart, GeoComponent, TooltipComponent]);
 registerMap('shaanxi', shaanxiGeo);
-registerMap('xian-outline', xianOutline);
+registerMap('xian-six-districts', xianSixDistricts);
 
 const props = defineProps({
   // v1 发布包：服务端旧 mapPoints 结构。
@@ -59,24 +65,33 @@ const props = defineProps({
   profiles: { type: Array, default: () => [] },
   mapPayload: { type: Object, default: null },
   element: { type: Object, default: null },
-  mode: { type: String, default: 'runtime' }
+  mode: { type: String, default: 'runtime' },
+  // ScreenRenderer 根据组件在 1920×1080 设计稿中的 top 计算；设计态与陕西 v1 均忽略。
+  runtimeHeaderInset: { type: Number, default: 0 }
 });
 const router = useRouter();
 const injectedProfiles = inject('screenProfiles', null);
 
 const rawConfig = computed(() => {
+  // 运行态一旦收到授权 mapPayload，就必须按该包自身的 schema/mode 判定，不能由画布配置掩盖缺字段。
+  if (props.mode !== 'design' && props.mapPayload) return props.mapPayload;
   if (props.mapConfig) return props.mapConfig;
   if (props.mapPayload?.mapConfig) return props.mapPayload.mapConfig;
   if (props.mapPayload?.config) return props.mapPayload.config;
-  // 后端 ScreenMapRenderPackageDTO 已经是授权后的 schema2 渲染包。
-  if (props.mapPayload?.mode === 'XIAN_COMPOSITE') {
-    return { ...props.mapPayload, schemaVersion: 2, satelliteNodes: props.mapPayload.satelliteNodes || [] };
-  }
+  // 后端 ScreenMapRenderPackageDTO 必须自行携带原生 schemaVersion=2 与显式 mode；不从 mode 推断版本。
+  if (props.mapPayload) return props.mapPayload;
   return props.element?.propValue || {};
 });
 const mapConfig = computed(() => normalizeMapConfig(rawConfig.value));
 const isComposite = computed(() => mapConfig.value.schemaVersion === 2 && mapConfig.value.mode === 'XIAN_COMPOSITE');
-const unsupportedSchema = computed(() => ![1, 2].includes(mapConfig.value.schemaVersion));
+const runtimeRootStyle = computed(() => {
+  if (props.mode === 'design' || !isComposite.value || props.runtimeHeaderInset <= 0) return {};
+  return { paddingTop: `${props.runtimeHeaderInset}px`, boxSizing: 'border-box' };
+});
+const runtimePayloadContractValid = computed(() => props.mode === 'design' || !props.mapPayload
+  || (props.mapPayload.schemaVersion === 2 && props.mapPayload.mode === 'XIAN_COMPOSITE'));
+const unsupportedSchema = computed(() => !runtimePayloadContractValid.value || mapConfig.value.mode === 'UNSUPPORTED');
+const isInteractive = computed(() => props.mode !== 'design');
 const profileList = computed(() => {
   if (props.profiles.length) return props.profiles;
   const fromPayload = props.mapPayload?.profiles || props.mapPayload?.orgProfiles || props.mapPayload?.localPoints;
@@ -94,11 +109,9 @@ const localNodes = computed(() => {
 });
 const satelliteNodes = computed(() => {
   if (props.mapPayload?.mode === 'XIAN_COMPOSITE' && Array.isArray(props.mapPayload.satelliteNodes)) {
-    return props.mapPayload.satelliteNodes.filter(node => node?.orgCode && MAP_ANCHORS.includes(node?.anchor)).map(node => ({
-      ...node, targetScreenCode: node.targetScreenCode || 'SCR_BRANCH', position: anchorPosition(node.anchor)
-    }));
+    return resolveXianSecondaryBranches(props.mapPayload.satelliteNodes);
   }
-  return resolved.value.satellite;
+  return resolveXianSecondaryBranches(resolved.value.satellite);
 });
 const configurationGap = computed(() => {
   if (props.mode !== 'design' || !isComposite.value) return '';
@@ -131,7 +144,7 @@ const legacyPoints = computed(() => {
   return props.mapPoints;
 });
 
-const mapName = computed(() => isComposite.value ? 'xian-outline' : 'shaanxi');
+const mapName = computed(() => isComposite.value ? 'xian-six-districts' : 'shaanxi');
 const points = computed(() => isComposite.value ? localNodes.value : legacyPoints.value);
 
 const option = computed(() => ({
@@ -141,7 +154,7 @@ const option = computed(() => ({
     roam: false,
     layoutCenter: ['50%', '53%'],
     layoutSize: isComposite.value ? '72%' : '92%',
-    label: { show: !isComposite.value, color: '#7d9bc9', fontSize: 12 },
+    label: { show: true, color: '#a9c7f5', fontSize: isComposite.value ? 11 : 12 },
     itemStyle: {
       areaColor: 'rgba(13, 40, 96, .8)',
       borderColor: 'rgba(0, 229, 255, .6)',
@@ -173,11 +186,16 @@ const option = computed(() => ({
   }]
 }));
 
-const ANCHOR_LABELS = { LEFT: '左侧', RIGHT: '右侧', TOP: '上方', FAR_TOP: '远上方' };
-function anchorLabel(anchor) { return ANCHOR_LABELS[anchor] || anchor; }
-function anchorPosition(anchor) {
-  // 通过归一化工具返回副本，避免对后端响应对象写入 UI 状态。
-  return { ...anchorStyle(anchor) };
+function satelliteAriaLabel(node) {
+  return isInteractive.value
+    ? `${node.orgName}，${XIAN_SECONDARY_BRANCH_DISCLAIMER}，按 Enter 或空格进入机构详情屏`
+    : `${node.orgName}，${XIAN_SECONDARY_BRANCH_DISCLAIMER}，设计预览不可钻取`;
+}
+
+function localAriaLabel(point) {
+  return isInteractive.value
+    ? `${point.orgName}，西安本地一级经营机构，按 Enter 或空格进入机构详情屏`
+    : `${point.orgName}，西安本地一级经营机构，设计预览不可钻取`;
 }
 
 // 仅用于键盘入口的视觉定位；真实经纬度仍保存在 ECharts geo value。
@@ -191,7 +209,7 @@ function localStyle(point, index) {
 }
 
 function navigate(node) {
-  if (!node?.orgCode) return;
+  if (!isInteractive.value || !node?.orgCode) return;
   router.push({ path: `/screen/${node.targetScreenCode || node.target || 'SCR_BRANCH'}`, query: { orgCode: node.orgCode } });
 }
 
@@ -224,5 +242,9 @@ function onChartClick(params) {
 .mp-satellite-node:focus-visible, .mp-local-node:focus-visible { outline: 2px solid #00e5ff; outline-offset: 2px; }
 .mp-node-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: #ffd76a; box-shadow: 0 0 8px rgba(255,215,106,.9); }
 .mp-node-label { max-width: 128px; overflow: hidden; text-overflow: ellipsis; }
-.mp-disclaimer { flex: none; text-align: center; color: #9bb6df; font-size: 11px; line-height: 25px; letter-spacing: .5px; }
+.mp-disclaimer, .mp-attribution { flex: none; text-align: center; color: #9bb6df; font-size: 11px; letter-spacing: .5px; }
+.mp-disclaimer { line-height: 20px; }
+.mp-attribution { color: #7898c4; line-height: 16px; padding-bottom: 3px; }
+.mp-attribution-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.mp-satellite-node:disabled, .mp-local-node:disabled { cursor: default; opacity: .82; }
 </style>

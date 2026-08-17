@@ -50,10 +50,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 403）。数据源仍与 "test" profile 一致，指向本地真实 {@code onepl_test_bootstrap}（Task 3/4 红色引擎
  * 种子已在此库：RE_PARTY_ORG 10 行 + 17 条 P_RE_* PT_RESOURCE）。</p>
  *
- * <p><strong>case③ 账号选择</strong>：{@code tech_wu}（USER_ID=E40002，角色 R_BACK_TECH，密码
- * {@code 123456}，见 {@code docs/CLAUDE.md} "10 个测试账户统一密码 123456" 章节）——已用 SQL 核实其
- * ISENABLED=0(启用)/ISLOCKED=0(未锁)，且唯一角色 R_BACK_TECH 在 PT_ROLE_RESOURCE 里没有任何
- * {@code P_RE_%} 资源绑定。</p>
+ * <p><strong>case③ 账号选择</strong>：{@code tech_wu}（USER_ID=E40002，角色 R_BACK_TECH）
+ * 是 {@code redengine-smoke} 隔离环境中的受控测试账号。运行前需核实该账号已启用、未锁定，
+ * 且角色 R_BACK_TECH 在 PT_ROLE_RESOURCE 中没有任何 {@code P_RE_%} 资源绑定；
+ * 所需测试凭据仅限该隔离测试环境使用，不写入代理指导文档。</p>
  *
  * <p><strong>2026-08-10 无角色切换回归</strong>：类级 SQL 创建三个临时用户：仅报送员、
  * 仅支部审核员，以及同时拥有两个角色的并集用户。并集用户故意把支部审核员设为默认角色，

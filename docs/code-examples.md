@@ -1,7 +1,7 @@
 # 示例代码索引（Canonical Examples）
 
 > **用途**：开发某类功能时，按本索引直接打开"最规范的现成实现"照着写，而不是从零发明或模仿碰巧看到的旧代码。
-> **维护约定**：新增/替换某类规范实现时同步更新本文件；各级 CLAUDE.md 只引用本索引，不复制内容。范例失效（文件被删/模式被废弃）时必须删行或改指向。
+> **维护约定**：新增/替换某类规范实现时同步更新本文件；各级 AGENTS.md 只引用本索引，不复制内容。范例失效（文件被删/模式被废弃）时必须删行或改指向。
 > 盘点基准：2026-07-19（全部路径已核实存在）。
 
 ## 后端
@@ -61,7 +61,7 @@
 ### EasyExcel 导出（含行数上限保护）
 - 首选（异步任务 + 预检行数 + 硬上限 + OBS 上传一体）：`performance-engine-center/.../performance/service/export/impl/KpiExportStrategy.java`（countForExport 预检，超限抛 PERF-42207）
 - 异步导出任务框架（状态机 PENDING→RUNNING→SUCCESS/FAILED + 策略路由）：`report-analytics-center/.../report/export/impl/RptExportServiceImpl.java`
-- ⚠️ `red-engine-center/.../ReExportService.java` 的同步导出是迁移期例外（其 CLAUDE.md 已标注偏离"超 5000 行必须异步"的平台 MUST 线），新功能勿模仿
+- ⚠️ `red-engine-center/.../ReExportService.java` 的同步导出是迁移期例外（其 AGENTS.md 已标注偏离"超 5000 行必须异步"的平台 MUST 线），新功能勿模仿
 
 ### 事件发布 / 监听（Spring Event）
 - 事件 + 分布式锁联动：`performance-engine-center/.../performance/listener/KpiCascadeListener.java` — `@Async` + `@TransactionalEventListener(AFTER_COMMIT, fallbackExecution = true)` + LockManager 防重

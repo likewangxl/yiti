@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud notifications-page" aria-labelledby="notifications-page-title" :aria-busy="loading ? 'true' : 'false'">
+  <main v-bp-overflow-tooltip class="bp-crud notifications-page" aria-labelledby="notifications-page-title" :aria-busy="loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="notifications-page-title"><span class="sub">共 {{ pager.total }} 条通知，其中 {{ unreadCount }} 条未读。</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="通知中心操作">
@@ -39,7 +39,7 @@
       </div>
       <p v-if="loadError" class="error-state" role="alert">{{ loadError }} <el-button link type="primary" @click="reload">重试</el-button></p>
       <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无通知" aria-labelledby="notifications-table-heading" aria-describedby="notifications-table-state">
-        <el-table-column label="标题 / 内容" min-width="340">
+        <el-table-column label="标题 / 内容" min-width="340" class-name="compact-stack-cell">
           <template #default="{ row }">
             <div class="notification-title" :class="{ unread: !row.isRead }"><span v-if="!row.isRead" class="unread-dot" aria-label="未读"></span>{{ row.title || '-' }}</div>
             <div v-if="row.content" class="notification-content">{{ row.content }}</div>
@@ -49,13 +49,13 @@
         <el-table-column label="关联业务" width="190" show-overflow-tooltip><template #default="{ row }"><template v-if="row.bizId"><el-tag v-if="row.bizType" size="small" effect="plain" class="tag-info">{{ row.bizType }}</el-tag><code class="mono">{{ row.bizId }}</code></template><span v-else class="text-muted">-</span></template></el-table-column>
         <el-table-column label="时间" width="176"><template #default="{ row }">{{ fmtDateTime(row.createdTime) }}</template></el-table-column>
         <el-table-column label="状态" width="94" align="center"><template #default="{ row }"><el-tag v-if="row.isRead" size="small" effect="plain" class="tag-info">已读</el-tag><el-tag v-else size="small" effect="plain" class="tag-danger">未读</el-tag></template></el-table-column>
-        <el-table-column label="操作" width="210" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="210" fixed="right">
           <template #default="{ row }">
-            <div class="row-actions" role="group" :aria-label="`${row.title || '通知'} 操作`">
-              <el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button>
-              <el-button v-if="!row.isRead" link type="primary" size="small" :loading="isMarking(row.id)" :disabled="isMarking(row.id)" @click="onMarkRead(row)">标记已读</el-button>
-              <el-button v-if="row.linkUrl || row.bizId" link type="primary" size="small" @click="onJump(row)">跳转</el-button>
-            </div>
+            <BpAdaptiveRowActions role="group" :aria-label="`${row.title || '通知'} 操作`">
+              <template #primary><el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button></template>
+              <template #expanded><el-button v-if="!row.isRead" link size="small" :disabled="isMarking(row.id)" @click="onMarkRead(row)">{{ isMarking(row.id) ? '标记中…' : '标记已读' }}</el-button><el-button v-if="row.linkUrl || row.bizId" link size="small" @click="onJump(row)">跳转</el-button></template>
+              <template #compact><el-dropdown v-if="!row.isRead || row.linkUrl || row.bizId" trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多通知操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item v-if="!row.isRead" :disabled="isMarking(row.id)" @click="onMarkRead(row)">{{ isMarking(row.id) ? '标记中…' : '标记已读' }}</el-dropdown-item><el-dropdown-item v-if="row.linkUrl || row.bizId" @click="onJump(row)">跳转</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -96,6 +96,7 @@ import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { fmtDateTime } from '@/utils/datetime';
 import { parseApprovalNode } from '@/utils/notify';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listNotifications, markRead, markAllRead, getUnreadNotificationCount } from '@/api/workspace';
 
 const router = useRouter();

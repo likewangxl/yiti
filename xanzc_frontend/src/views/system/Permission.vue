@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud permission-page" aria-labelledby="permission-page-title" :aria-busy="pageLoading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud permission-page" aria-labelledby="permission-page-title" :aria-busy="pageLoading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="permission-page-title">
         <span class="sub">角色、资源与数据范围均以当前选中角色为准；保存会覆盖该角色原有资源绑定。</span>
@@ -155,7 +155,7 @@
           <p class="table-state" role="status" aria-live="polite">{{ scopeLoading ? '范围加载中' : `${scopeRows.length} 个业务域` }}</p>
         </div>
         <el-table :data="scopeRows" size="small" empty-text="无 BizType 配置" v-loading="scopeLoading" aria-labelledby="permission-scopes-heading">
-          <el-table-column label="业务域" min-width="150">
+          <el-table-column label="业务域" min-width="150" class-name="compact-stack-cell">
             <template #default="{ row }">
               <div class="biz-type-name">{{ row.bizTypeLabel }}</div>
               <code class="biz-type-code">{{ row.bizType }}</code>
@@ -164,7 +164,7 @@
           <el-table-column label="数据范围" width="112">
             <template #default="{ row }"><el-tag :class="scopeCls(row.dataScope)" effect="plain">{{ scopeLabel(row.dataScope) }}</el-tag></template>
           </el-table-column>
-          <el-table-column label="操作" width="72" fixed="right">
+          <el-table-column label="操作" class-name="operation-cell" width="72" fixed="right">
             <template #default="{ row }"><el-button link type="primary" size="small" @click="openScopeEditor(row)">修改</el-button></template>
           </el-table-column>
         </el-table>

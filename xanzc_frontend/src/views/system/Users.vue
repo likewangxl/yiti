@@ -1,11 +1,11 @@
 <template>
-  <main class="users-page" aria-labelledby="users-page-title">
+<main v-bp-overflow-tooltip class="bp-crud users-page" aria-labelledby="users-page-title">
     <header class="page-h users-page-head">
       <div class="page-heading">
         <PageTitle id="users-page-title" title="用户管理"><span class="sub">按机构筛选 · 启停/锁解/重置密码 · 分配角色</span></PageTitle>
         <p class="page-desc">先限定机构范围，再按工号、姓名与状态查询用户。</p>
       </div>
-      <div class="actions" aria-label="用户管理操作">
+      <div class="actions action-group" role="group" aria-label="用户管理操作">
         <el-button @click="reload">刷新</el-button>
         <el-button @click="exportUsers">导出</el-button>
         <el-button type="primary" @click="openCreate">+ 新增用户</el-button>
@@ -48,7 +48,7 @@
       </section>
 
       <!-- 右：用户列表 -->
-      <section class="card-section detail-col" aria-labelledby="user-list-title">
+      <section class="card-section data-panel detail-col" aria-labelledby="user-list-title">
         <div class="detail-head">
           <div>
             <h2 id="user-list-title">用户列表</h2>
@@ -142,18 +142,13 @@
             <!-- 部门：后端 EXT_USER_ORG ⋈ EXT_ORG_INFO 联查返回的 ORG_NAME（多机构以「、」连接） -->
             <el-table-column prop="deptName" label="部门" width="150" show-overflow-tooltip />
             <el-table-column prop="remark" label="备注" width="160" show-overflow-tooltip />
-            <el-table-column label="操作" width="220" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="160" fixed="right">
               <template #default="{row}">
-                <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button link type="primary" size="small" @click="openAssignRoles(row)">分配角色</el-button>
-                <el-popconfirm
-                  :title="`确认删除用户 ${row.username}？`"
-                  @confirm="batch('delete', [row.userId])"
-                >
-                  <template #reference>
-                    <el-button link type="danger" size="small">删除</el-button>
-                  </template>
-                </el-popconfirm>
+                <BpAdaptiveRowActions>
+                  <template #primary><el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button></template>
+                  <template #expanded><el-button link type="primary" size="small" @click="openAssignRoles(row)">分配角色</el-button><el-button link type="danger" size="small" @click="batch('delete', [row.userId])">删除</el-button></template>
+                  <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu" @command="command => onRowMoreCommand(command, row)"><el-button link size="small" aria-label="更多用户操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item command="roles">分配角色</el-dropdown-item><el-dropdown-item command="delete" divided class="danger-item">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+                </BpAdaptiveRowActions>
               </template>
             </el-table-column>
           </el-table>
@@ -176,7 +171,7 @@
     </div>
 
     <!-- 新增 / 编辑弹窗 -->
-    <el-dialog v-model="dlg.show" :title="dlg.editing ? '编辑用户' : '新增用户'" width="640px">
+    <el-dialog v-model="dlg.show" class="bp-crud-dialog" :title="dlg.editing ? '编辑用户' : '新增用户'" width="640px">
       <el-form ref="dlgFormRef" :model="dlg.form" :rules="dlg.rules" label-width="100px">
         <!-- 用户ID：编辑时只读展示，新增时不显示（后端自动生成） -->
         <el-form-item v-if="dlg.editing" label="用户ID">
@@ -223,7 +218,7 @@
     </el-dialog>
 
     <!-- 分配角色弹窗 -->
-    <el-dialog v-model="roleDlg.show" :title="`分配角色 · ${roleDlg.user?.username || ''}`" width="720px">
+    <el-dialog v-model="roleDlg.show" class="bp-crud-dialog" :title="`分配角色 · ${roleDlg.user?.username || ''}`" width="720px">
       <div class="role-dlg-tip">已选中作为最终状态提交：差量由前端计算（新增 + 解绑）。</div>
       <el-transfer
         v-model="roleDlg.value"
@@ -263,7 +258,7 @@
     </el-dialog>
 
     <!-- 机构维护弹窗 -->
-    <el-dialog v-model="orgDlg.show" title="机构维护" width="780px">
+    <el-dialog v-model="orgDlg.show" class="bp-crud-dialog" title="机构维护" width="780px">
       <div class="org-dlg-body">
         <div class="tree-pane">
           <el-button size="small" @click="orgDlgNewRoot">+ 新建根机构</el-button>
@@ -350,6 +345,7 @@
 import { ref, reactive, watch, onMounted, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Search } from '@element-plus/icons-vue';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import {
   listUsers, getUser, createUser, updateUser,
   deleteUsers, resetUsersPassword, activeUsers, inactiveUsers, lockUsers, unlockUsers,
@@ -632,6 +628,12 @@ async function openAssignRoles(user) {
     roleDlg.value = [];
     roleDlg.primaryRoleId = '';
   }
+}
+
+/** 紧凑态命令仍复用全直出态的角色分配和批量删除业务流程。 */
+function onRowMoreCommand(command, row) {
+  if (command === 'roles') openAssignRoles(row);
+  if (command === 'delete') batch('delete', [row.userId]);
 }
 async function saveRoles() {
   if (!roleDlg.reason || !roleDlg.reason.trim()) {

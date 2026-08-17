@@ -14,7 +14,7 @@
     GET   /api/perf/metrics?status=ACTIVE&pageNo=1&pageSize=100 —— listMetrics    (指标 code→name 映射 + 默认选中)
 -->
 <template>
-  <main class="bp-crud rpt-dyn" aria-labelledby="dynamic-report-title" :aria-busy="querying || exporting ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud rpt-dyn" aria-labelledby="dynamic-report-title" :aria-busy="querying || exporting ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="dynamic-report-title" />
       <span class="desc">维度 → 指标 → 对象 → 日期 · 支持保存方案 / 部门共享</span>

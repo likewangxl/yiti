@@ -5,7 +5,10 @@ import { nextTick } from 'vue';
 
 const routerPush = vi.fn();
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: routerPush }) }));
-vi.mock('element-plus', () => ({ ElMessage: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('element-plus', () => ({
+  ElMessage: { success: vi.fn(), error: vi.fn() },
+  ElMessageBox: { confirm: vi.fn().mockResolvedValue('confirm') }
+}));
 vi.mock('@/api/system', () => ({
   listRoles: vi.fn(),
   createRole: vi.fn(),
@@ -89,6 +92,9 @@ const stubs = {
     template: '<div><slot /></div>'
   },
   'el-tag': passthrough('ElTag'),
+  'el-dropdown': { name: 'ElDropdown', template: '<div><slot /><slot name="dropdown" /></div>' },
+  'el-dropdown-menu': passthrough('ElDropdownMenu'),
+  'el-dropdown-item': { name: 'ElDropdownItem', emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' },
   'el-popconfirm': passthrough('ElPopconfirm')
 };
 
@@ -107,7 +113,7 @@ async function settle() {
 
 function mountPage() {
   return mount(Roles, {
-    global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    global: { stubs, directives: { loading: { mounted() {}, updated() {} }, 'bp-overflow-tooltip': {} } }
   });
 }
 

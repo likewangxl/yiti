@@ -3,7 +3,7 @@
   后端：GET /api/reports/amas-price-approvals/{priceApprId}
 -->
 <template>
-  <main class="bp-crud price-detail" aria-labelledby="price-approval-detail-title" :aria-busy="loading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud price-detail" aria-labelledby="price-approval-detail-title" :aria-busy="loading ? 'true' : 'false'">
     <div class="page-h">
       <PageTitle id="price-approval-detail-title" title="定价审批详情" />
       <el-tag :class="STATUS_TAG[d.apprStatus] || 'tag-info'" size="small" class="st-tag">

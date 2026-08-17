@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } 
 import { mount } from '@vue/test-utils';
 import { nextTick, reactive } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const routeRef = reactive({
   path: '/workspace',
@@ -40,13 +42,56 @@ function visit(route) {
   });
 }
 
-function mountTabs() {
-  const wrapper = mount(WorkspaceTabs);
+function mountTabs(options) {
+  const wrapper = mount(WorkspaceTabs, options);
   mountedWrappers.push(wrapper);
   return wrapper;
 }
 
+function installDefaultLayoutRouteFocus() {
+  const main = document.createElement('div');
+  main.id = 'app-main';
+  main.tabIndex = -1;
+  document.body.appendChild(main);
+  mountedNodes.push(main);
+
+  routerMock.push.mockImplementation(async (fullPath) => {
+    const routeByPath = {
+      '/perf/metrics': { name: 'PerfMetrics', title: '指标库' },
+      '/system/users': { name: 'SysUsers', title: '用户管理' }
+    };
+    const nextRoute = routeByPath[fullPath];
+    visit({ path: fullPath, fullPath, name: nextRoute.name, meta: { title: nextRoute.title } });
+    // 复现 DefaultLayout 的 route watch：路由 DOM 刷新后把焦点交给 main。
+    await nextTick();
+    main.focus({ preventScroll: true });
+  });
+  return main;
+}
+
+async function waitForStableFocus() {
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await nextTick();
+}
+
+async function flushCloseFocus() {
+  await nextTick();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await nextTick();
+}
+
+function createDeferred() {
+  let resolvePromise;
+  let rejectPromise;
+  const promise = new Promise((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+  return { promise, resolve: resolvePromise, reject: rejectPromise };
+}
+
 const mountedWrappers = [];
+const mountedNodes = [];
 
 beforeAll(() => {
   originalScrollIntoViewDescriptor = Object.getOwnPropertyDescriptor(
@@ -73,7 +118,8 @@ afterAll(() => {
 
 beforeEach(() => {
   setActivePinia(createPinia());
-  routerMock.push.mockClear();
+  routerMock.push.mockReset();
+  routerMock.push.mockResolvedValue(undefined);
   scrollIntoViewMock.mockClear();
   for (const path of Object.keys(menuTitles)) delete menuTitles[path];
   visit({ path: '/workspace', name: 'Workspace', meta: { title: '工作台' } });
@@ -81,6 +127,7 @@ beforeEach(() => {
 
 afterEach(() => {
   mountedWrappers.splice(0).forEach((wrapper) => wrapper.unmount());
+  mountedNodes.splice(0).forEach((node) => node.remove());
 });
 
 describe('WorkspaceTabs.vue', () => {
@@ -135,20 +182,187 @@ describe('WorkspaceTabs.vue', () => {
   });
 
   it('点击页签切换路由，关闭当前页签后跳转到左侧相邻页签', async () => {
-    const wrapper = mountTabs();
+    const wrapper = mountTabs({ attachTo: document.body });
 
     visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
     await nextTick();
     visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
     await nextTick();
 
+    const metricsLabel = wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__label');
+    const metricsFocus = vi.spyOn(metricsLabel.element, 'focus');
+
     await wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__label').trigger('click');
     expect(routerMock.push).toHaveBeenCalledWith('/perf/metrics');
 
     routerMock.push.mockClear();
     await wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__close').trigger('click');
+    await flushCloseFocus();
     expect(routerMock.push).toHaveBeenCalledWith('/perf/metrics');
+    expect(metricsFocus).toHaveBeenCalledTimes(1);
     expect(wrapper.find('[data-tab-key="/system/users"]').exists()).toBe(false);
+  });
+
+  it.each([
+    ['鼠标点击关闭按钮', async (closeButton) => closeButton.trigger('click')],
+    ['关闭按钮聚焦后按 Enter', async (closeButton) => {
+      closeButton.element.focus();
+      const keydown = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      closeButton.element.dispatchEvent(keydown);
+      if (!keydown.defaultPrevented) closeButton.element.click();
+    }]
+  ])('%s：DefaultLayout 聚焦 main 后仍将焦点恢复到相邻激活页签', async (_label, activateClose) => {
+    const wrapper = mountTabs({ attachTo: document.body });
+
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
+    await nextTick();
+
+    const main = installDefaultLayoutRouteFocus();
+    const closeButton = wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__close');
+    await activateClose(closeButton);
+    await waitForStableFocus();
+
+    const adjacentLabel = wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__label');
+    expect(routerMock.push).toHaveBeenCalledWith('/perf/metrics');
+    expect(adjacentLabel.attributes('aria-current')).toBe('page');
+    expect(document.activeElement).not.toBe(main);
+    expect(document.activeElement).toBe(adjacentLabel.element);
+    main.remove();
+  });
+
+  it('关闭当前页签的路由导航被拒绝时不产生 unhandled rejection，也不恢复目标焦点', async () => {
+    const wrapper = mountTabs({ attachTo: document.body });
+
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
+    await nextTick();
+
+    const navigationError = new Error('navigation rejected');
+    const targetLabel = wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__label');
+    const targetFocus = vi.spyOn(targetLabel.element, 'focus');
+    let unhandledReason;
+    const recordUnhandled = (reason) => {
+      if (reason === navigationError) unhandledReason = reason;
+    };
+    process.on('unhandledRejection', recordUnhandled);
+    routerMock.push.mockRejectedValueOnce(navigationError);
+
+    try {
+      const closeButton = wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__close');
+      closeButton.element.focus();
+      closeButton.element.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await nextTick();
+
+      expect(unhandledReason).toBeUndefined();
+      expect(targetFocus).not.toHaveBeenCalled();
+    } finally {
+      process.off('unhandledRejection', recordUnhandled);
+    }
+  });
+
+  it('快速连续关闭且导航延迟时只允许最后一次关闭意图恢复焦点', async () => {
+    const wrapper = mountTabs({ attachTo: document.body });
+
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
+    await nextTick();
+
+    const firstNavigation = createDeferred();
+    const lastNavigation = createDeferred();
+    routerMock.push
+      .mockReturnValueOnce(firstNavigation.promise)
+      .mockReturnValueOnce(lastNavigation.promise);
+    const staleTarget = wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__label');
+    const staleFocus = vi.spyOn(staleTarget.element, 'focus');
+    const finalTarget = wrapper.find('[data-tab-key="/workspace"] .workspace-tabs__label');
+    const finalFocus = vi.spyOn(finalTarget.element, 'focus');
+
+    await wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__close').trigger('click');
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    await wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__close').trigger('click');
+    visit({ path: '/workspace', name: 'Workspace', meta: { title: '工作台' } });
+    await nextTick();
+
+    firstNavigation.resolve();
+    await flushCloseFocus();
+    expect(staleFocus).not.toHaveBeenCalled();
+    expect(finalFocus).not.toHaveBeenCalled();
+
+    lastNavigation.resolve();
+    await flushCloseFocus();
+    await flushCloseFocus();
+    expect(finalFocus).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(finalTarget.element);
+    expect(routerMock.push.mock.calls).toEqual([['/perf/metrics'], ['/workspace']]);
+  });
+
+  it('关闭导航 pending 期间组件卸载，导航完成后不回焦且不访问已卸载节点', async () => {
+    const wrapper = mountTabs({ attachTo: document.body });
+
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
+    await nextTick();
+
+    const navigation = createDeferred();
+    routerMock.push.mockReturnValueOnce(navigation.promise);
+    const targetLabel = wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__label');
+    const targetFocus = vi.spyOn(targetLabel.element, 'focus');
+
+    await wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__close').trigger('click');
+    wrapper.unmount();
+    navigation.resolve();
+    await flushCloseFocus();
+
+    expect(targetFocus).not.toHaveBeenCalled();
+    expect(targetLabel.element.isConnected).toBe(false);
+  });
+
+  it('关闭后台非当前页签后保留当前路由，并把焦点交给当前页签', async () => {
+    const wrapper = mountTabs({ attachTo: document.body });
+
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
+    await nextTick();
+
+    const currentLabel = wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__label');
+    const currentFocus = vi.spyOn(currentLabel.element, 'focus');
+    routerMock.push.mockClear();
+
+    await wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__close').trigger('click');
+    await flushCloseFocus();
+
+    expect(routerMock.push).not.toHaveBeenCalled();
+    expect(currentFocus).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[data-tab-key="/perf/metrics"]').exists()).toBe(false);
+  });
+
+  it('关闭后台页签后若用户已主动聚焦其他控件，不再抢回页签焦点', async () => {
+    const wrapper = mountTabs({ attachTo: document.body });
+
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
+    await nextTick();
+
+    const userTarget = document.createElement('button');
+    document.body.appendChild(userTarget);
+    mountedNodes.push(userTarget);
+    await wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__close').trigger('click');
+    userTarget.focus();
+    await flushCloseFocus();
+
+    expect(document.activeElement).toBe(userTarget);
+    expect(wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__label').attributes('aria-current'))
+      .toBe('page');
+    userTarget.remove();
   });
 
   it('页签切换保留记录时的完整 fullPath 与查询参数，并且当前项使用页面导航语义', async () => {
@@ -181,6 +395,82 @@ describe('WorkspaceTabs.vue', () => {
     await wrapper.find('[data-tab-key="/workspace"] .workspace-tabs__label').trigger('click');
     expect(routerMock.push).toHaveBeenCalledWith('/workspace');
     expect(wrapper.find('[data-tab-key="/workspace"] .workspace-tabs__close').exists()).toBe(false);
+  });
+
+  it('支持用左右方向键在路由页签间移动焦点，并用 Home/End 定位首尾页签', async () => {
+    const wrapper = mountTabs();
+
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
+    await nextTick();
+
+    const workspaceLabel = wrapper.find('[data-tab-key="/workspace"] .workspace-tabs__label');
+    const metricsLabel = wrapper.find('[data-tab-key="/perf/metrics"] .workspace-tabs__label');
+    const usersLabel = wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__label');
+    const metricsFocus = vi.spyOn(metricsLabel.element, 'focus');
+    const workspaceFocus = vi.spyOn(workspaceLabel.element, 'focus');
+    const usersFocus = vi.spyOn(usersLabel.element, 'focus');
+
+    await workspaceLabel.trigger('keydown', { key: 'ArrowRight' });
+    expect(metricsFocus).toHaveBeenCalledTimes(1);
+    await metricsLabel.trigger('keydown', { key: 'ArrowRight' });
+    expect(usersFocus).toHaveBeenCalledTimes(1);
+    await usersLabel.trigger('keydown', { key: 'ArrowLeft' });
+    expect(metricsFocus).toHaveBeenCalledTimes(2);
+    await usersLabel.trigger('keydown', { key: 'Home' });
+    expect(workspaceFocus).toHaveBeenCalledTimes(1);
+    await workspaceLabel.trigger('keydown', { key: 'End' });
+    expect(usersFocus).toHaveBeenCalledTimes(2);
+  });
+
+  it('四类页签导航键在首尾也阻止默认滚动并阻断 window 快捷键冒泡', async () => {
+    const wrapper = mountTabs();
+    visit({ path: '/perf/metrics', name: 'PerfMetrics', meta: { title: '指标库' } });
+    await nextTick();
+    visit({ path: '/system/users', name: 'SysUsers', meta: { title: '用户管理' } });
+    await nextTick();
+
+    const firstLabel = wrapper.find('[data-tab-key="/workspace"] .workspace-tabs__label');
+    const lastLabel = wrapper.find('[data-tab-key="/system/users"] .workspace-tabs__label');
+    const windowKeydown = vi.fn();
+    window.addEventListener('keydown', windowKeydown);
+
+    const dispatch = (label, key) => {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      label.element.dispatchEvent(event);
+      return event;
+    };
+
+    const firstBoundaryEvents = [
+      dispatch(firstLabel, 'ArrowLeft'),
+      dispatch(firstLabel, 'Home')
+    ];
+    const lastBoundaryEvents = [
+      dispatch(lastLabel, 'ArrowRight'),
+      dispatch(lastLabel, 'End')
+    ];
+
+    expect(firstBoundaryEvents.every((event) => event.defaultPrevented)).toBe(true);
+    expect(lastBoundaryEvents.every((event) => event.defaultPrevented)).toBe(true);
+    expect(windowKeydown).not.toHaveBeenCalled();
+    window.removeEventListener('keydown', windowKeydown);
+  });
+
+  it('页签嵌入 Header 后横向伸展但不再占独立行，标题和关闭按钮均保持 40px 命中高度', () => {
+    const componentSource = readFileSync(resolve(process.cwd(), 'src/components/WorkspaceTabs.vue'), 'utf8');
+    const tokenSource = readFileSync(resolve(process.cwd(), 'src/styles/tokens.scss'), 'utf8');
+
+    expect(tokenSource).toMatch(/--layout-workspace-tabs-height:\s*48px;/);
+    expect(componentSource).toContain('height: var(--layout-workspace-tabs-height);');
+    expect(componentSource).toContain('flex: 1 1 0;');
+    expect(componentSource).not.toContain('flex: 0 0 var(--layout-workspace-tabs-height);');
+    expect(componentSource).not.toContain('--workspace-tabs-height');
+    expect(componentSource).toMatch(/\.workspace-tabs__tab\s*\{[\s\S]*?min-width:\s*112px;[\s\S]*?max-width:\s*200px;[\s\S]*?height:\s*40px;/);
+    expect(componentSource).toContain('gap: var(--space-2);');
+    expect(componentSource).toContain('font-size: 14px;');
+    expect(componentSource).toMatch(/\.workspace-tabs__label\s*\{[\s\S]*?height:\s*40px;/);
+    expect(componentSource).toMatch(/\.workspace-tabs__close\s*\{[\s\S]*?width:\s*40px;[\s\S]*?height:\s*40px;/);
   });
 });
 

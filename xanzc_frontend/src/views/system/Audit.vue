@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud audit-page" aria-labelledby="audit-page-title" :aria-busy="loading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud audit-page" aria-labelledby="audit-page-title" :aria-busy="loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="audit-page-title"><span class="sub">只读审计流水，保留 TraceId、请求资源、原因和原始错误信息的追溯路径。</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="审计日志快捷筛选">
@@ -45,7 +45,7 @@
         <el-table-column label="原因" min-width="180" show-overflow-tooltip><template #default="{ row }">{{ row.reason || '-' }}</template></el-table-column>
         <el-table-column label="耗时" width="86" align="right"><template #default="{ row }">{{ row.executionTime != null ? `${row.executionTime} ms` : '-' }}</template></el-table-column>
         <el-table-column label="状态" width="78" align="center"><template #default="{ row }"><el-tag v-if="row.responseStatus == null" class="tag-info" effect="plain" size="small">-</el-tag><el-tag v-else-if="row.responseStatus < 400" class="tag-success" effect="plain" size="small">{{ row.responseStatus }}</el-tag><el-tag v-else class="tag-warning" effect="plain" size="small">{{ row.responseStatus }}</el-tag></template></el-table-column>
-        <el-table-column label="操作" width="80" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button></template></el-table-column>
+        <el-table-column label="操作" class-name="operation-cell" width="80" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button></template></el-table-column>
       </el-table>
       <nav class="pager" aria-label="审计日志分页">
         <el-pagination

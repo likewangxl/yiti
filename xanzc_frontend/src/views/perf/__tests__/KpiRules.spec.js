@@ -81,6 +81,9 @@ const stubs = {
   'el-pagination': empty('ElPagination'),
   'el-tag': passthrough('ElTag'),
   'el-tooltip': passthrough('ElTooltip'),
+  'el-dropdown': { name: 'ElDropdown', template: '<div><slot /><slot name="dropdown" /></div>' },
+  'el-dropdown-menu': passthrough('ElDropdownMenu'),
+  'el-dropdown-item': { name: 'ElDropdownItem', emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' },
   'el-popconfirm': passthrough('ElPopconfirm'),
   'el-switch': empty('ElSwitch'),
   'el-radio-group': passthrough('ElRadioGroup'),
@@ -93,7 +96,7 @@ const stubs = {
 
 function mountPage() {
   return mount(KpiRules, {
-    global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    global: { stubs, directives: { loading: { mounted() {}, updated() {} }, 'bp-overflow-tooltip': {} } }
   });
 }
 

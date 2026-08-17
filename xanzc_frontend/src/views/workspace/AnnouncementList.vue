@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud announcement-list-page" aria-labelledby="announcement-list-title">
+<main v-bp-overflow-tooltip class="bp-crud announcement-list-page" aria-labelledby="announcement-list-title">
     <header class="page-h">
       <PageTitle id="announcement-list-title" />
     </header>
@@ -54,7 +54,7 @@
         <el-table-column label="发布人" width="140">
           <template #default="{ row }">{{ row.publisherName || row.publisherId || '-' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="100" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="goDetail(row)">详情</el-button>
           </template>

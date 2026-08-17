@@ -1,0 +1,28 @@
+{
+  "gitHead": "4f5d9ceb7ef5a53b39b02f79bfd3c9abd6039eb4",
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "tool": "@playwright/cli 0.1.18",
+  "browser": "chromium",
+  "session": "pageopt2-pass-2560-4f5d9ceb",
+  "frontend": {
+    "url": "/",
+    "pid": 1282172,
+    "cwd": "/home/djdev/leid/yiti/xanzc_frontend",
+    "httpStatus": 200
+  },
+  "backend": {
+    "url": "http://127.0.0.1:18081/api/auth/current-user",
+    "pid": 1344733,
+    "cwd": "/home/djdev/leid/yiti/bootstrap",
+    "unauthenticatedHttpStatus": 401
+  },
+  "servicesRestarted": false,
+  "mockRoutes": 0,
+  "evidenceSanitized": true,
+  "credentialsArchived": false,
+  "responseBodiesArchived": false,
+  "realEntityIdsArchived": false
+}

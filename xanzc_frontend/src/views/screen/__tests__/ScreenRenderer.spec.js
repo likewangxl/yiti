@@ -17,8 +17,9 @@ const stubs = {
     props: ['block', 'context']
   },
   MapCenter: {
-    template: '<div class="stub-map" :data-points="JSON.stringify(mapPoints)" />',
-    props: ['mapPoints']
+    template: '<div class="stub-map" :data-points="JSON.stringify(mapPoints)" '
+      + ':data-runtime-header-inset="runtimeHeaderInset" />',
+    props: ['mapPoints', 'runtimeHeaderInset']
   }
 };
 
@@ -93,6 +94,21 @@ describe('ScreenRenderer.vue', () => {
     const stub = wrapper.find('.stub-map');
     expect(stub.exists()).toBe(true);
     expect(JSON.parse(stub.attributes('data-points'))).toEqual(points);
+  });
+
+  it.each([
+    ['1920x1080', 1],
+    ['2560x1440', 2560 / 1920]
+  ])('%s 运行态复合地图标题必须避开外层 72px 标题浮层', (_viewport, stageScale) => {
+    const c = { id: 'map-top', component: 'MapCenter', style: { top: 0, left: 0, width: 1920, height: 1080 }, isShow: true };
+    const wrapper = mount(ScreenRenderer, {
+      props: { renderPackage: pkg([c]) },
+      global: { stubs }
+    });
+    const inset = Number(wrapper.find('.stub-map').attributes('data-runtime-header-inset') || 0);
+    const outerHeaderBottom = 72 * stageScale;
+    const innerTitleTop = (c.style.top + inset) * stageScale;
+    expect(innerTitleTop).toBeGreaterThanOrEqual(outerHeaderBottom);
   });
 
   it('canvasStyle.background 缺省时舞台透明', () => {

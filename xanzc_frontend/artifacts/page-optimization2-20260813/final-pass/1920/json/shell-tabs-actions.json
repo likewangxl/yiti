@@ -1,0 +1,6228 @@
+{
+  "batch": "page-optimization2-final-1920-shell-tabs-actions",
+  "gitHead": "4f5d9ceb7ef5a53b39b02f79bfd3c9abd6039eb4",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "syntheticLayoutOnly": {
+    "status": "synthetic-layout-only",
+    "target": "InfoProducts first real visible host parent cell",
+    "before": {
+      "mode": "expanded",
+      "available": 155,
+      "required": 106,
+      "visible": [
+        "编辑",
+        "附件",
+        "删除"
+      ]
+    },
+    "narrowed": {
+      "mode": "compact",
+      "available": 48,
+      "required": 106,
+      "visible": [
+        "编辑",
+        "更多"
+      ]
+    },
+    "restored": {
+      "mode": "expanded",
+      "available": 155,
+      "required": 106,
+      "visible": [
+        "编辑",
+        "附件",
+        "删除"
+      ]
+    },
+    "sourceOrDataChanged": false,
+    "requestCountDelta": 0
+  },
+  "dangerCancel": {
+    "status": "opened_and_cancelled",
+    "source": "expanded visible danger button",
+    "writeRequestDelta": 0
+  },
+  "focusRoutes": {
+    "InfoProducts": {
+      "hosts": [
+        {
+          "index": 0,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 155,
+          "required": 106,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "附件",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 1,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 155,
+          "required": 106,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "附件",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 2,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 155,
+          "required": 106,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "附件",
+              "ariaLabel": null,
+              "disabled": true,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "operationCellsVisible": 3
+    },
+    "EvalTasks": {
+      "hosts": [
+        {
+          "index": 0,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 215,
+          "required": 118,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "导出",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 1,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 215,
+          "required": 118,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "导出",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 2,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 215,
+          "required": 118,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "导出",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 3,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 215,
+          "required": 118,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "导出",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 4,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 215,
+          "required": 118,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "导出",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 5,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 215,
+          "required": 118,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "导出",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 6,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 215,
+          "required": 118,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "导出",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 7,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 215,
+          "required": 118,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "导出",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 8,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 215,
+          "required": 160,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "发布",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "导出",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 9,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 215,
+          "required": 160,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "发布",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "导出",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 10,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 215,
+          "required": 118,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "导出",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "operationCellsVisible": 11
+    },
+    "SysUsers": {
+      "hosts": [
+        {
+          "index": 0,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 1,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 2,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 3,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 4,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 5,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 6,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 7,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 8,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 9,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 10,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 11,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 12,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 13,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 14,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 15,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 16,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 17,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 18,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 19,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 135,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "operationCellsVisible": 20
+    },
+    "SysJobs": {
+      "hosts": [
+        {
+          "index": 0,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 233,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "日志",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "暂停",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "手动触发",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 1,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 233,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "日志",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "暂停",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "手动触发",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 2,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 233,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "日志",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "暂停",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "手动触发",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 3,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 233,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "日志",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "暂停",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "手动触发",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 4,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 233,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "日志",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "暂停",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "手动触发",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 5,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 233,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "日志",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "暂停",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "手动触发",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 6,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 233,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "日志",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "暂停",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "手动触发",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 7,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 233,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "日志",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "暂停",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "手动触发",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 8,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 233,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "日志",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "暂停",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "手动触发",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "operationCellsVisible": 9
+    },
+    "SysNotifications": {
+      "hosts": [
+        {
+          "index": 0,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "标记已读",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 1,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 2,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "标记已读",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 3,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 4,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 5,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 6,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 7,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 8,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 9,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 10,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 11,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 130,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "标记已读",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 12,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 13,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 14,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 15,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 16,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 17,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 185,
+          "required": 68,
+          "visibleItems": [
+            {
+              "text": "详情",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "跳转",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "operationCellsVisible": 18
+    },
+    "SysResources": {
+      "hosts": [
+        {
+          "index": 0,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 1,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 142,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 2,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 3,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 4,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 5,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 6,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 142,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 7,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 8,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 9,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 142,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 10,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 11,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 12,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 13,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 14,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 15,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 16,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 17,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 18,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 19,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 20,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 21,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 142,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 22,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 23,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 24,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 25,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 26,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 27,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 28,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 29,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 142,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 30,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 31,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 32,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 33,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 34,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 35,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 142,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 36,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 37,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 38,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 39,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 40,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 41,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 42,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 43,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 44,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 45,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 46,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 142,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 47,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 48,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 49,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 50,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 51,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 52,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 53,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 54,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 55,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 56,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 57,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 58,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 59,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 60,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 61,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 62,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 142,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 63,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 64,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 65,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 66,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 67,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 68,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 69,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 142,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 70,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 71,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 204,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新增子菜单",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "分配角色",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "operationCellsVisible": 72
+    },
+    "ScreenAdminDs": {
+      "hosts": [
+        {
+          "index": 0,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 244,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "试跑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "探测列",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新建副本",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": true,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 1,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 244,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "试跑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "探测列",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新建副本",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": true,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 2,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 244,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "试跑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "探测列",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新建副本",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": true,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 3,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 244,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "试跑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "探测列",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新建副本",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": true,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 4,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 244,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "试跑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "探测列",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新建副本",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": true,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 5,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 244,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "试跑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "探测列",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新建副本",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": true,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 6,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 244,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "试跑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "探测列",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新建副本",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": true,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 7,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 244,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "试跑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "探测列",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新建副本",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": true,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 8,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 244,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "试跑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "探测列",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新建副本",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": true,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 9,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 244,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "试跑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "探测列",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新建副本",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": true,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "index": 10,
+          "mode": "expanded",
+          "measured": "true",
+          "available": 275,
+          "required": 244,
+          "visibleItems": [
+            {
+              "text": "编辑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "试跑",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "探测列",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "新建副本",
+              "ariaLabel": null,
+              "disabled": false,
+              "danger": false
+            },
+            {
+              "text": "删除",
+              "ariaLabel": null,
+              "disabled": true,
+              "danger": true
+            }
+          ],
+          "probe": {
+            "ariaHidden": "true",
+            "inert": true,
+            "pointerEvents": "none",
+            "visibility": "hidden",
+            "descendantTabIndexes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "operationCellsVisible": 11
+    },
+    "ReportSql": {
+      "hosts": [],
+      "operationCellsVisible": 4
+    }
+  },
+  "schemeDialog": {
+    "title": "我的查询方案",
+    "realRows": 2,
+    "hosts": [
+      {
+        "index": 0,
+        "mode": "expanded",
+        "measured": "true",
+        "available": 125,
+        "required": 106,
+        "visibleItems": [
+          {
+            "text": "载入",
+            "ariaLabel": null,
+            "disabled": false,
+            "danger": false
+          },
+          {
+            "text": "编辑",
+            "ariaLabel": null,
+            "disabled": false,
+            "danger": false
+          },
+          {
+            "text": "删除",
+            "ariaLabel": null,
+            "disabled": false,
+            "danger": true
+          }
+        ],
+        "probe": {
+          "ariaHidden": "true",
+          "inert": true,
+          "pointerEvents": "none",
+          "visibility": "hidden",
+          "descendantTabIndexes": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "index": 1,
+        "mode": "expanded",
+        "measured": "true",
+        "available": 125,
+        "required": 106,
+        "visibleItems": [
+          {
+            "text": "载入",
+            "ariaLabel": null,
+            "disabled": false,
+            "danger": false
+          },
+          {
+            "text": "编辑",
+            "ariaLabel": null,
+            "disabled": false,
+            "danger": false
+          },
+          {
+            "text": "删除",
+            "ariaLabel": null,
+            "disabled": false,
+            "danger": true
+          }
+        ],
+        "probe": {
+          "ariaHidden": "true",
+          "inert": true,
+          "pointerEvents": "none",
+          "visibility": "hidden",
+          "descendantTabIndexes": [
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    ],
+    "status": "exercised_real_rows"
+  },
+  "shell": {
+    "expanded": {
+      "headerHeight": 52,
+      "sidebarWidth": 220,
+      "logoHeight": 52,
+      "logoMarkVisible": true,
+      "logoNameVisible": true,
+      "toggle": {
+        "tag": "BUTTON",
+        "ariaExpanded": "true",
+        "ariaLabel": "折叠侧边导航",
+        "ariaControls": "app-sidebar",
+        "width": 40,
+        "height": 40,
+        "outlineStyle": "none",
+        "outlineWidth": "3px"
+      },
+      "workspaceNavGlobalCount": 1,
+      "workspaceNavInHeaderCount": 1,
+      "workspaceNavHeight": 48,
+      "contentTop": 52,
+      "oldStandalone48RowPresent": false
+    },
+    "collapsed": {
+      "sidebarWidth": 64,
+      "logoMarkVisible": false,
+      "logoNameVisible": false,
+      "ariaExpanded": "false",
+      "ariaLabel": "展开侧边导航",
+      "ariaControls": "app-sidebar",
+      "toggleCenteredDelta": 0
+    }
+  },
+  "tabs": {
+    "initial": {
+      "count": 57,
+      "activeCount": 1,
+      "ariaCurrentCount": 1,
+      "horizontalOverflow": true,
+      "activeVisible": false,
+      "itemHeights": [
+        40
+      ],
+      "longTruncatedCount": 0,
+      "allLabelsHaveFullTitle": true
+    },
+    "afterHomeFocus": {
+      "text": "工作台",
+      "first": true
+    },
+    "afterEndFocus": {
+      "text": "业务标签",
+      "last": true
+    },
+    "afterArrowLeftFocus": {
+      "text": "审批流监控",
+      "index": 55,
+      "total": 57
+    },
+    "afterClose": {
+      "hash": "#/system/workflow-monitor",
+      "focusText": "审批流监控",
+      "activeText": "审批流监控",
+      "count": 56
+    }
+  },
+  "fatalIssue": {
+    "issues": [
+      "tabs-keyboard-focus"
+    ]
+  },
+  "summary": {
+    "consoleErrors": 0,
+    "fallbacks": 0,
+    "nonDynamicWarnings": 0,
+    "resizeObserverLoops": 0,
+    "requestCount": 27,
+    "badNetwork": 0,
+    "unexpectedWrites": 0
+  }
+}

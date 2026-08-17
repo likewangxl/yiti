@@ -15,6 +15,7 @@
             :title="tab.title"
             :aria-current="tab.key === activeKey ? 'page' : undefined"
             @click="selectTab(tab)"
+            @keydown="handleTabKeydown($event, tab)"
           >
             {{ tab.title }}
           </button>
@@ -40,6 +41,7 @@ import { Close } from '@element-plus/icons-vue';
 import { useMenuStore } from '@/stores/menu';
 import { resolveTabKey, useWorkspaceTabsStore } from '@/stores/workspaceTabs';
 
+const NAVIGATION_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End']);
 const route = useRoute();
 const router = useRouter();
 const menuStore = useMenuStore();
@@ -47,6 +49,7 @@ const tabsStore = useWorkspaceTabsStore();
 const tabsListRef = ref(null);
 const tabs = computed(() => tabsStore.tabs);
 const activeKey = computed(() => resolveTabKey(route));
+let closeFocusIntent = 0;
 
 /** 页签较多时保证当前页签始终可见，不干扰页面纵向滚动。 */
 function scrollActiveTabIntoView() {
@@ -76,30 +79,92 @@ function selectTab(tab) {
   router.push(tab.fullPath);
 }
 
-/** 关闭页签后，仅在关闭当前页签时导航到 store 选出的相邻页签。 */
+/**
+ * 在路由页签之间提供方向键导航，Home/End 直达首尾页签。
+ * 页签仍是普通按钮，不伪装成 tablist；Enter/Space 继续使用按钮原生激活行为。
+ */
+function handleTabKeydown(event, tab) {
+  const key = event.key;
+  if (!NAVIGATION_KEYS.has(key)) return;
+
+  // 即使已经位于首尾，也要阻止页面滚动和上层快捷键接管路由页签按键。
+  event.preventDefault();
+  event.stopPropagation();
+
+  const currentIndex = tabs.value.findIndex((item) => item.key === tab.key);
+  if (currentIndex < 0) return;
+
+  let targetIndex = currentIndex;
+  if (key === 'ArrowLeft') targetIndex = Math.max(0, currentIndex - 1);
+  if (key === 'ArrowRight') targetIndex = Math.min(tabs.value.length - 1, currentIndex + 1);
+  if (key === 'Home') targetIndex = 0;
+  if (key === 'End') targetIndex = tabs.value.length - 1;
+  if (targetIndex === currentIndex) return;
+
+  const labels = tabsListRef.value?.querySelectorAll('.workspace-tabs__label');
+  labels?.[targetIndex]?.focus();
+}
+
+/**
+ * 关闭意图完成后再恢复页签焦点：路由先让主内容按默认合同获得焦点，下一帧才由关闭操作接回。
+ * 若期间用户已主动移到其他控件、发生了更新的关闭操作或目标节点已卸载，则不再抢夺焦点。
+ */
+async function restoreClosedTabFocus(tab, navigation, source, intent) {
+  if (!tab?.key) return;
+  if (navigation) {
+    try {
+      await navigation;
+    } catch {
+      // 导航未完成时目标页签并非稳定落点；结束本次关闭焦点意图，同时消费异步拒绝。
+      return;
+    }
+  }
+  await nextTick();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  if (intent !== closeFocusIntent) return;
+
+  const currentFocus = document.activeElement;
+  const focusStillOwnedByClose = currentFocus === source
+    || currentFocus === document.body
+    || currentFocus?.id === 'app-main'
+    || !currentFocus?.isConnected;
+  if (!focusStillOwnedByClose) return;
+
+  const labels = tabsListRef.value?.querySelectorAll('.workspace-tabs__label');
+  const target = Array.from(labels || []).find(
+    (label) => label.closest('[data-tab-key]')?.dataset.tabKey === tab.key
+  );
+  if (target?.isConnected) target.focus();
+}
+
+/** 关闭页签后，当前页签回退到相邻项，后台页签保持当前项并恢复其焦点。 */
 function closeTab(tab) {
   if (!tab?.closable) return;
+  const source = document.activeElement;
+  const intent = ++closeFocusIntent;
   const wasActive = tab.key === activeKey.value;
   const fallback = tabsStore.close(tab.key);
-  if (wasActive && fallback) router.push(fallback.fullPath);
+  const navigation = wasActive && fallback ? router.push(fallback.fullPath) : null;
+  const focusTarget = wasActive
+    ? fallback
+    : tabs.value.find((item) => item.key === activeKey.value) || fallback;
+  restoreClosedTabFocus(focusTarget, navigation, source, intent);
 }
 </script>
 
 <style lang="scss" scoped>
 .workspace-tabs {
   height: var(--layout-workspace-tabs-height);
-  flex: 0 0 var(--layout-workspace-tabs-height);
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
-  background: var(--color-workspace-strip);
-  border-bottom: 1px solid var(--color-border);
-  // 对齐截图：页签本体 44px，下方留出更宽的工作区分隔带。
-  padding: 9px var(--layout-content-gutter) 22px;
+  background: transparent;
+  padding: 4px 0 3px;
 }
 
 .workspace-tabs__scroll {
   width: 100%;
-  height: 44px;
+  height: 40px;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -123,9 +188,9 @@ function closeTab(tab) {
 .workspace-tabs__tab {
   display: inline-flex;
   align-items: center;
-  min-width: 124px;
-  max-width: 220px;
-  height: 100%;
+  min-width: 112px;
+  max-width: 200px;
+  height: 40px;
   padding: 0 var(--space-1) 0 var(--space-3);
   color: var(--color-text);
   font-size: 14px;
@@ -150,8 +215,11 @@ function closeTab(tab) {
 }
 
 .workspace-tabs__label {
+  display: flex;
+  align-items: center;
   min-width: 0;
   flex: 1;
+  height: 40px;
   overflow: hidden;
   padding: 0;
   color: inherit;

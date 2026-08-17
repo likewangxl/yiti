@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud perf-task-monitor-page" aria-labelledby="perf-task-monitor-page-title" :aria-busy="loading || execDlg.submitting || batchDlg.submitting ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud perf-task-monitor-page" aria-labelledby="perf-task-monitor-page-title" :aria-busy="loading || execDlg.submitting || batchDlg.submitting ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="perf-task-monitor-page-title"><span class="sub">指标重算任务 · 按指标汇总 / 执行 / 历史</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="指标重算任务操作">
@@ -60,10 +60,13 @@
         <el-table-column label="计算次数" width="110" align="right">
           <template #default="{row}">{{ row.runCount ?? 0 }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="150" fixed="right">
           <template #default="{row}">
-            <el-button link type="primary" size="small" @click="openExecute(row)">执行</el-button>
-            <el-button link type="primary" size="small" @click="openHistory(row)">历史</el-button>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" size="small" @click="openExecute(row)">执行</el-button></template>
+              <template #expanded><el-button link type="primary" size="small" @click="openHistory(row)">历史</el-button></template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多指标重算任务操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="openHistory(row)">历史</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -135,7 +138,7 @@
     </el-dialog>
 
     <!-- 历史抽屉（右侧）-->
-    <el-drawer v-model="hist.show" :title="`执行历史 · ${hist.metricCode || ''}`" size="52%"
+    <el-drawer v-model="hist.show" class="bp-crud-dialog" :title="`执行历史 · ${hist.metricCode || ''}`" size="52%"
       :destroy-on-close="true">
       <el-table :data="hist.rows" size="default" v-loading="hist.loading" empty-text="暂无执行记录">
         <el-table-column label="数据日期" width="130">
@@ -147,7 +150,7 @@
         <el-table-column label="结束时间" width="170">
           <template #default="{row}">{{ fmtTime(row.endTime) }}</template>
         </el-table-column>
-        <el-table-column label="计算状态" min-width="160">
+        <el-table-column label="计算状态" min-width="160" class-name="compact-stack-cell compact-status-cell">
           <template #default="{row}">
             <el-tag :class="statusCls(row.status)" effect="plain" size="small">{{ statusLabel(row.status) }}</el-tag>
             <div v-if="row.errorMsg" class="err-inline" :title="row.errorMsg">{{ row.errorMsg }}</div>
@@ -173,6 +176,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listMetricSummary, batchExecuteMetrics, executeMetric, listMetrics, listRunTasks } from '@/api/perf';
 import { listDictItems } from '@/api/system';
 import {

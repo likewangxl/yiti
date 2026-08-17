@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud perf-adjust-page" aria-labelledby="perf-adjust-page-title" :aria-busy="loading || todoLoading || doneLoading || dlg.saving || dlg.reviewSaving || batchDlg.saving ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud perf-adjust-page" aria-labelledby="perf-adjust-page-title" :aria-busy="loading || todoLoading || doneLoading || dlg.saving || dlg.reviewSaving || batchDlg.saving ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="perf-adjust-page-title"><span class="sub">比例之和 = 100% · 单行 ≥ 1% · 同一员工不重复</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="业绩调整操作">
@@ -66,7 +66,7 @@
             <el-table-column label="申请编号" width="170">
               <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
-            <el-table-column label="客户" min-width="190">
+            <el-table-column label="客户" min-width="190" class-name="compact-stack-cell">
               <template #default="{row}">
                 <div>{{ row.custName || '-' }}</div>
                 <div v-if="row.custId" class="cust-name-sub">{{ row.custId }}</div>
@@ -86,18 +86,16 @@
             <el-table-column label="申请时间" width="160">
               <template #default="{row}">{{ fmtDateTime(row.createdTime || row.time) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="180" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="180" fixed="right">
               <template #default="{row}">
-                <el-button link type="primary" size="small" @click="openSharedView(row)">查看</el-button>
-                <el-button v-if="row.status === 'DRAFT'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-popconfirm
-                  v-if="canWithdraw(row.status)"
-                  :title="`确认撤回申请 ${row.applyNo || row.id}？`"
-                  @confirm="onWithdraw(row)">
-                  <template #reference>
-                    <el-button link type="danger" size="small">撤回</el-button>
+                <BpAdaptiveRowActions>
+                  <template #primary><el-button link type="primary" size="small" @click="openSharedView(row)">查看</el-button></template>
+                  <template #expanded>
+                    <el-button v-if="row.status === 'DRAFT'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+                    <el-button v-if="canWithdraw(row.status)" link type="danger" size="small" @click="confirmWithdraw(row)">撤回</el-button>
                   </template>
-                </el-popconfirm>
+                  <template #compact><el-dropdown v-if="row.status === 'DRAFT' || canWithdraw(row.status)" trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多业绩调整申请操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item v-if="row.status === 'DRAFT'" @click="openEdit(row)">编辑</el-dropdown-item><el-dropdown-item v-if="canWithdraw(row.status)" divided class="danger-item" @click="confirmWithdraw(row)">撤回</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+                </BpAdaptiveRowActions>
               </template>
             </el-table-column>
           </el-table>
@@ -167,19 +165,19 @@
             <el-table-column label="申请编号" width="170">
               <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
-            <el-table-column label="客户" min-width="190">
+            <el-table-column label="客户" min-width="190" class-name="compact-stack-cell">
               <template #default="{row}">
                 <div>{{ row.custName || '-' }}</div>
                 <div v-if="row.custId" class="cust-name-sub">{{ row.custId }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="发起人" width="160">
+            <el-table-column label="发起人" width="160" class-name="compact-stack-cell">
               <template #default="{row}">
                 <div>{{ row.startUserName || row.startUserEmpNo || row.startUser || '-' }}</div>
                 <div v-if="row.startUserEmpNo" class="sub-id">{{ row.startUserEmpNo }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="发起机构" width="220">
+            <el-table-column label="发起机构" width="220" class-name="compact-stack-cell">
               <template #default="{row}">
                 <template v-if="row.startOrgName || row.startOrgDeptNo || row.startOrgId">
                   <div>{{ row.startOrgName || '-' }}</div>
@@ -199,7 +197,7 @@
                 <el-tag :class="slaCls(row.slaStatus)" effect="plain">{{ slaLabel(row.slaStatus) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="100" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="100" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="openTodoReview(row)">审批</el-button>
               </template>
@@ -267,7 +265,7 @@
             <el-table-column label="申请编号" width="170">
               <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
-            <el-table-column label="客户" min-width="190">
+            <el-table-column label="客户" min-width="190" class-name="compact-stack-cell">
               <template #default="{row}">
                 <div>{{ row.custName || '-' }}</div>
                 <div v-if="row.custId" class="cust-name-sub">{{ row.custId }}</div>
@@ -284,7 +282,7 @@
                 <el-tag :class="statusCls(row.status)" effect="plain">{{ statusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="申请人" width="160">
+            <el-table-column label="申请人" width="160" class-name="compact-stack-cell">
               <template #default="{row}">
                 <div>{{ row.startUserName || row.createdByName || row.startUserEmpNo || row.createdBy || '-' }}</div>
                 <div v-if="row.startUserEmpNo" class="sub-id">{{ row.startUserEmpNo }}</div>
@@ -293,7 +291,7 @@
             <el-table-column label="申请时间" width="160">
               <template #default="{row}">{{ fmt(row.createdTime) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="120" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="120" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="openSharedView(row)">查看申请</el-button>
               </template>
@@ -468,7 +466,7 @@
                 <span v-else>{{ row.ratio != null && row.ratio !== '' ? row.ratio + '%' : '-' }}</span>
               </template>
             </el-table-column>
-            <el-table-column v-if="!dlg.readOnly" label="操作" width="70" align="center">
+            <el-table-column v-if="!dlg.readOnly" label="操作" class-name="operation-cell" width="70" align="center" fixed="right">
               <template #default="{ $index }">
                 <el-button link type="danger" size="small" @click="removeOriginalRow($index)">删除</el-button>
               </template>
@@ -514,7 +512,7 @@
               <el-input v-model="row.remark" :disabled="dlg.readOnly" size="small" />
             </template>
           </el-table-column>
-          <el-table-column v-if="!dlg.readOnly" label="操作" width="80" align="center">
+          <el-table-column v-if="!dlg.readOnly" label="操作" class-name="operation-cell" width="80" align="center" fixed="right">
             <template #default="{$index}">
               <el-button link type="danger" size="small" @click="dlg.form.items.splice($index, 1)">删除</el-button>
             </template>
@@ -646,6 +644,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import AllocAdjustViewDialog from '@/components/AllocAdjustViewDialog.vue';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { useRoute } from 'vue-router';
 import { fmtDateTime } from '@/utils/datetime';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -1747,6 +1746,17 @@ async function onWithdraw(row) {
   } catch (err) {
     ElMessage.error(err?.bizMsg || err?.message || '撤回失败');
   }
+}
+
+async function confirmWithdraw(row) {
+  try {
+    await ElMessageBox.confirm(`确认撤回申请 ${row.applyNo || row.id}？`, '确认撤回', {
+      type: 'warning', confirmButtonText: '确认撤回', cancelButtonText: '取消'
+    });
+  } catch {
+    return;
+  }
+  await onWithdraw(row);
 }
 
 // 客户编号变化时查询客户名称

@@ -3,9 +3,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick, reactive, ref } from 'vue';
 
+const { errorMessage } = vi.hoisted(() => ({ errorMessage: vi.fn() }));
+vi.mock('element-plus', () => ({ ElMessage: { error: errorMessage } }));
+
 const routeRef = reactive({ path: '/customer/leads' });
 const menuTree = ref([]);
 const load = vi.fn().mockResolvedValue(undefined);
+const routerLinkNavigate = vi.fn();
 
 vi.mock('vue-router', () => ({ useRoute: () => routeRef }));
 vi.mock('@/stores/menu', () => ({
@@ -22,7 +26,12 @@ import AppSidebar from '../AppSidebar.vue';
 const RouterLinkStub = {
   name: 'RouterLink',
   props: ['to'],
-  template: '<a :href="to"><slot /></a>'
+  template: '<a :href="to" @click="navigate"><slot /></a>',
+  methods: {
+    navigate(event) {
+      if (!event.defaultPrevented) routerLinkNavigate(this.to);
+    }
+  }
 };
 
 function buildTree(groupName = '客户营销') {
@@ -36,7 +45,8 @@ function buildTree(groupName = '客户营销') {
         { resourceId: 'M_CUSTOMER_LEADS', resourceUrl: '/customer/leads', menuName: '线索管理', children: [] },
         { resourceId: 'M_CUSTOMER_POOL', resourceUrl: '/customer/pool', menuName: '客户池', children: [] }
       ]
-    }
+    },
+    { resourceId: 'M_SCREEN_DESIGNER', resourceUrl: '/screen-admin/designer', menuName: '大屏设计器', children: [] }
   ];
 }
 
@@ -50,13 +60,39 @@ function mountSidebar(props = {}) {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   load.mockClear();
   routeRef.path = '/customer/leads';
   menuTree.value = buildTree();
 });
-afterEach(() => wrapper?.unmount());
+afterEach(() => {
+  wrapper?.unmount();
+  if (typeof window.open?.mockRestore === 'function') window.open.mockRestore();
+});
 
 describe('AppSidebar 主导航', () => {
+  it('Logo 行右侧常驻折叠按钮，并按展开/折叠两态同步 ARIA 与可读名称', async () => {
+    const sidebar = mountSidebar();
+    const logo = sidebar.find('.logo');
+    const toggle = logo.find('[data-testid="sidebar-toggle"]');
+
+    expect(toggle.exists()).toBe(true);
+    expect(toggle.element.tagName).toBe('BUTTON');
+    expect(toggle.attributes('aria-controls')).toBe('app-sidebar');
+    expect(toggle.attributes('aria-expanded')).toBe('true');
+    expect(toggle.attributes('aria-label')).toBe('折叠侧边导航');
+    await toggle.trigger('click');
+    expect(sidebar.emitted('toggle-sidebar')).toHaveLength(1);
+
+    sidebar.unmount();
+    wrapper = undefined;
+    const collapsed = mountSidebar({ collapsed: true });
+    const collapsedToggle = collapsed.find('.logo [data-testid="sidebar-toggle"]');
+    expect(collapsedToggle.attributes('aria-expanded')).toBe('false');
+    expect(collapsedToggle.attributes('aria-label')).toBe('展开侧边导航');
+    expect(collapsed.find('.logo').classes()).toContain('logo--collapsed');
+  });
+
   it('使用侧栏与导航语义，并且当前路由只标记一个菜单项', () => {
     const sidebar = mountSidebar();
 
@@ -112,5 +148,53 @@ describe('AppSidebar 主导航', () => {
       expect(item.getAttribute('title')).toBe(label);
     }
     expect(flyout.querySelector('[aria-current="page"]')?.getAttribute('aria-label')).toBe('线索管理');
+  });
+
+  it('点击大屏设计器时阻止当前工作区导航，使用固定命名窗口并聚焦', async () => {
+    const focus = vi.fn();
+    const open = vi.spyOn(window, 'open').mockReturnValue({ focus });
+    const sidebar = mountSidebar();
+    const designer = sidebar.find('[aria-label="大屏设计器"]');
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+
+    designer.element.dispatchEvent(event);
+    await nextTick();
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(open).toHaveBeenCalledWith('/#/screen-admin/designer', 'yiti-screen-designer');
+    expect(open.mock.calls[0]).toHaveLength(2);
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(routerLinkNavigate).not.toHaveBeenCalled();
+    expect(errorMessage).not.toHaveBeenCalled();
+  });
+
+  it('设计器弹窗被阻止时给出明确错误且不降级为当前页打开', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const sidebar = mountSidebar();
+    const designer = sidebar.find('[aria-label="大屏设计器"]');
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+
+    designer.element.dispatchEvent(event);
+    await nextTick();
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(errorMessage).toHaveBeenCalledWith('大屏设计器窗口打开失败，请允许浏览器弹出窗口后重试');
+    expect(routerLinkNavigate).not.toHaveBeenCalled();
+  });
+
+  it('其他菜单保持普通路由链接行为，不调用新窗口', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const sidebar = mountSidebar();
+    const workspace = sidebar.find('[aria-label="工作台"]');
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+
+    workspace.element.dispatchEvent(event);
+    await nextTick();
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(open).not.toHaveBeenCalled();
+    expect(routerLinkNavigate).toHaveBeenCalledWith('/workspace');
+    expect(errorMessage).not.toHaveBeenCalled();
   });
 });

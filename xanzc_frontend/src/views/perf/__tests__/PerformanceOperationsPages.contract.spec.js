@@ -16,7 +16,7 @@ const pages = [
 describe('绩效运营页面 bp-crud 结构契约', () => {
   it.each(pages)('%s 使用主平台浅色工作区语义、加载态和恢复态', (file, pageClass, titleId, stateId) => {
     const source = read(file);
-    expect(source).toMatch(new RegExp(`<main\\s+class="bp-crud ${pageClass}"[^>]*aria-labelledby="${titleId}"`));
+    expect(source).toMatch(new RegExp(`<main\\b(?=[^>]*class="bp-crud ${pageClass}"[^>]*)(?=[^>]*aria-labelledby="${titleId}")[^>]*>`));
     expect(source).toMatch(new RegExp(`aria-describedby="${stateId}"`));
     expect(source).toMatch(/aria-live="polite"/);
     expect(source).toMatch(/:aria-busy=/);

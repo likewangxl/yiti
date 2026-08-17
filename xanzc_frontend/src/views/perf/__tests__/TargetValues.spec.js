@@ -62,6 +62,9 @@ const stubs = {
   'el-option': empty('ElOption'),
   'el-autocomplete': { name: 'ElAutocomplete', template: '<div><slot :item="{ value: \'\', label: \'\', display: \'\' }" /></div>' },
   'el-date-picker': empty('ElDatePicker'),
+  'el-dropdown': { name: 'ElDropdown', template: '<div><slot /><slot name="dropdown" /></div>' },
+  'el-dropdown-menu': passthrough('ElDropdownMenu'),
+  'el-dropdown-item': { name: 'ElDropdownItem', emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' },
   'el-table': { name: 'ElTable', props: ['data'], template: '<div><slot /></div>' },
   'el-table-column': empty('ElTableColumn'),
   'el-pagination': empty('ElPagination'),
@@ -92,7 +95,7 @@ function deferred() {
 
 describe('TargetValues.vue 目标值工作区', () => {
   it('以 bp-crud 页面骨架公开筛选、目标值表格和加载语义', async () => {
-    wrapper = mount(TargetValues, { global: { stubs, directives: { loading: { mounted() {}, updated() {} } } } });
+    wrapper = mount(TargetValues, { global: { stubs, directives: { loading: { mounted() {}, updated() {} }, 'bp-overflow-tooltip': {} } } });
     await settle();
 
     expect(wrapper.find('main.bp-crud.target-values-page[aria-labelledby="target-values-page-title"]').exists()).toBe(true);
@@ -104,7 +107,7 @@ describe('TargetValues.vue 目标值工作区', () => {
   });
 
   it('取消文件选择不会启动遮罩或提交批量导入', async () => {
-    wrapper = mount(TargetValues, { global: { stubs, directives: { loading: { mounted() {}, updated() {} } } } });
+    wrapper = mount(TargetValues, { global: { stubs, directives: { loading: { mounted() {}, updated() {} }, 'bp-overflow-tooltip': {} } } });
     await settle();
 
     await wrapper.vm.onImportFileSelected({ target: { files: [] } });
@@ -116,7 +119,7 @@ describe('TargetValues.vue 目标值工作区', () => {
   it('目标修正在保存中互斥，且保持原有 submitTargetAdjust 请求体', async () => {
     const pending = deferred();
     submitTargetAdjust.mockReturnValueOnce(pending.promise);
-    wrapper = mount(TargetValues, { global: { stubs, directives: { loading: { mounted() {}, updated() {} } } } });
+    wrapper = mount(TargetValues, { global: { stubs, directives: { loading: { mounted() {}, updated() {} }, 'bp-overflow-tooltip': {} } } });
     await settle();
 
     wrapper.vm.adjDlg.row = {

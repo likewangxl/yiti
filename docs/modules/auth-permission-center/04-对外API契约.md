@@ -4,7 +4,7 @@
 > 所有 Api 接口在模块化单体中为本地方法调用（Spring Bean 注入），无 RPC 开销。
 > 所有 Api 方法都是同步强依赖（S）。
 
-> **2026-07-19 回填说明**：2026-04-14 版遗漏 `RoleApi`（1 个方法）与 `UserApi`（全部 14 个方法）两个已在源码 `api/` 目录落地的接口，均按源码 Javadoc 逐字核实补齐为「6. RoleApi」「7. UserApi」，原「6. DTO 定义」「7. 调用约束」「8. 领域事件」相应顺延为「8」「9」「10」；同时补齐 `UserApi` 引用的 `UserDTO`（新增 8.7）。顺带在「9.2 缓存策略」加注：该表所述 Redis TTL/Key 为历史设计，项目已于 2026-05-20 去 Redis 改直查库，详情见 `auth-permission-center/CLAUDE.md`（表内容本身未删改，仅作提醒，全面重写留待后续专项更新）。
+> **2026-07-19 回填说明**：2026-04-14 版遗漏 `RoleApi`（1 个方法）与 `UserApi`（全部 14 个方法）两个已在源码 `api/` 目录落地的接口，均按源码 Javadoc 逐字核实补齐为「6. RoleApi」「7. UserApi」，原「6. DTO 定义」「7. 调用约束」「8. 领域事件」相应顺延为「8」「9」「10」；同时补齐 `UserApi` 引用的 `UserDTO`（新增 8.7）。顺带在「9.2 缓存策略」加注：该表所述 Redis TTL/Key 为历史设计，项目已于 2026-05-20 去 Redis 改直查库，详情见 `auth-permission-center/AGENTS.md`（表内容本身未删改，仅作提醒，全面重写留待后续专项更新）。
 
 ---
 
@@ -570,7 +570,7 @@ public interface UserApi {
 ```
 
 **调用约束：**
-- 全部 14 个方法均为「显式传参 empId/username/roleCode 等」的**无会话方法**，不依赖登录态 ThreadLocal；供 `workflow-center` 候选人解析、`customer-marketing-center` 数据导入导出、`soap-gateway-center`（SOAP/callpu 网关）等**无登录态**场景直接调用——调用方需自行完成上游鉴权，本模块不做二次校验（与 `auth-permission-center/CLAUDE.md`「模块概述」一致）
+- 全部 14 个方法均为「显式传参 empId/username/roleCode 等」的**无会话方法**，不依赖登录态 ThreadLocal；供 `workflow-center` 候选人解析、`customer-marketing-center` 数据导入导出、`soap-gateway-center`（SOAP/callpu 网关）等**无登录态**场景直接调用——调用方需自行完成上游鉴权，本模块不做二次校验（与 `auth-permission-center/AGENTS.md` 的模块边界一致）
 - `getUserRoleCodes()` 当前**不走缓存**（2026-04-29 性能说明）：每次调用直接 `PT_USER_ROLE JOIN PT_ROLE`；auth 模块既有 `auth:user-roles:{empId}` 缓存的是 roleIds（非 roleCodes），语义不同无法复用；高频场景需调用方自行加应用层缓存
 - 批量存在性校验/归一化场景**优先使用** `filterExistingUsernames()` / `mapUsernamesToEmpId()` / `mapEmpIdsToUsername()`（仅单次/分片 IN 查询，不逐人装配机构等 DTO）而非 `getUsersByUsernames()` / `getUserByEmpIds()`（后两者对每条记录回调单条查询，大批量场景存在 N+1 风险，5 万行导入可触发约 15 万次查询）
 - `pageUsers()`：`pageNo<1` 归一为 1，`pageSize<1` 归一为 20，`pageSize>100` 截断为 100，与 auth 模块内部分页参数口径一致
@@ -789,7 +789,7 @@ public class UserDTO {
 
 ### 9.2 缓存策略
 
-> **2026-07-19 核实提醒（超出本次回填范围，留待后续专项更新）**：本表描述的是 Redis Cache-Aside 设计。`auth-permission-center/CLAUDE.md`"关键实现要点与踩坑"一节记录**项目已于 2026-05-20 去 Redis**：`PermissionCacheService` 现直接查库（`PT_USER_ROLE`/`PT_ROLE_RESOURCE` 均主键索引点查，约 0.1ms），`evictXxxCache` 系列方法保留签名但改为 NoOp。下表 TTL/Key 已不代表当前实现，仅作历史设计参考；权限变更后的"缓存失效"现状即为"当次即查最新"，天然 Fail Close。RoleApi/UserApi 全部方法均**不**在下表范围内（详见各自小节"调用约束"）。
+> **2026-07-19 核实提醒（超出本次回填范围，留待后续专项更新）**：本表描述的是 Redis Cache-Aside 设计。`auth-permission-center/AGENTS.md` 记录**项目已于 2026-05-20 去 Redis**：`PermissionCacheService` 现直接查库（`PT_USER_ROLE`/`PT_ROLE_RESOURCE` 均主键索引点查，约 0.1ms），`evictXxxCache` 系列方法保留签名但改为 NoOp。下表 TTL/Key 已不代表当前实现，仅作历史设计参考；权限变更后的"缓存失效"现状即为"当次即查最新"，天然 Fail Close。RoleApi/UserApi 全部方法均**不**在下表范围内（详见各自小节"调用约束"）。
 
 | 方法 | 是否缓存（历史设计，现状见上方提醒） | 缓存 TTL | 缓存 Key |
 |:---|:---|:---|:---|

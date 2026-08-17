@@ -7,7 +7,7 @@
   导出三 endpoint 各对应 /export POST 异步任务
 -->
 <template>
-  <main class="bp-crud rpt-presets" aria-labelledby="presets-report-title" :aria-busy="loading || exporting ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud rpt-presets" aria-labelledby="presets-report-title" :aria-busy="loading || exporting ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="presets-report-title" />
       <span class="desc">点击卡片打开对应汇总报表</span>

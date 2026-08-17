@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 
@@ -41,6 +43,9 @@ const stubs = {
   'el-table': passthrough,
   // 表格列的 scoped slot 依赖 Element Plus 提供 row；本测试聚焦弹框/动作状态，不在 stub 中渲染列内容。
   'el-table-column': { template: '<div />' },
+  'el-dropdown': { emits: ['command'], template: '<div><slot /><slot name="dropdown" /></div>' },
+  'el-dropdown-menu': passthrough,
+  'el-dropdown-item': { template: '<button><slot /></button>' },
   'el-tag': passthrough,
   'el-alert': { props: ['title', 'description'], template: '<div v-bind="$attrs">{{ title }} {{ description }}</div>' },
   'el-dialog': { props: ['modelValue'], template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>' }
@@ -50,7 +55,7 @@ async function mountPage() {
   api.listScreenDatasources.mockResolvedValue([frozenRow]);
   api.listKpiSchemes.mockResolvedValue([]);
   api.listOrgGroups.mockResolvedValue([]);
-  const wrapper = mount(Datasources, { global: { stubs, directives: { loading: {} } } });
+  const wrapper = mount(Datasources, { global: { stubs, directives: { loading: {}, 'bp-overflow-tooltip': {} } } });
   await flushPromises();
   await flushPromises();
   return wrapper;
@@ -134,5 +139,26 @@ describe('Datasources.vue 最终契约', () => {
     expect(wrapper.vm.deleteDialog).toMatchObject({ show: true, row: deletable, reason: '' });
     expect(wrapper.find('[data-testid="datasource-delete-reason"]').exists()).toBe(true);
     expect(api.deleteScreenDatasource).not.toHaveBeenCalled();
+  });
+
+  it('接入普通后台基线，筛选可重置且低频动作收纳在更多菜单', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
+
+    expect(source).toMatch(/<main\b[^>]*class="[^\"]*\bbp-crud\b[^\"]*"/);
+    expect(source).toMatch(/@click="resetFilters"[^>]*>重置/);
+    expect(source).toMatch(/<el-dropdown[\s\S]*?<el-dropdown-menu/);
+    expect(source).toMatch(/新建副本/);
+    expect(source).toMatch(/确认删除/);
+  });
+
+  it('Element Plus 单选项使用 value 契约并保持原模型字符串', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
+    const radios = [...source.matchAll(/<el-radio(?:-button)?(?=\s|>)[^>]*>/g)].map((match) => match[0]);
+
+    expect(radios.length).toBeGreaterThan(0);
+    expect(radios.every((radio) => /\bvalue="[^"]+"/.test(radio))).toBe(true);
+    expect(radios.every((radio) => !/\blabel="/.test(radio))).toBe(true);
+    expect(source).toContain('<el-radio value="ACTIVE">启用 ACTIVE</el-radio>');
+    expect(source).toContain('<el-radio-button value="WIDE_TABLE">');
   });
 });

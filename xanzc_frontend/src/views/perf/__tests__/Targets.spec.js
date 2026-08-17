@@ -73,6 +73,9 @@ const stubs = {
   'el-input': { name: 'ElInput', props: ['modelValue'], emits: ['update:modelValue'], template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />' },
   'el-select': passthrough('ElSelect'),
   'el-option': empty('ElOption'),
+  'el-dropdown': { name: 'ElDropdown', template: '<div><slot /><slot name="dropdown" /></div>' },
+  'el-dropdown-menu': passthrough('ElDropdownMenu'),
+  'el-dropdown-item': { name: 'ElDropdownItem', emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' },
   'el-table': { name: 'ElTable', props: ['data'], emits: ['selection-change'], template: '<div><slot /></div>' },
   'el-table-column': empty('ElTableColumn'),
   'el-pagination': empty('ElPagination'),
@@ -104,7 +107,7 @@ function deferred() {
 
 describe('Targets.vue 目标管理工作区', () => {
   it('以 bp-crud 页面骨架呈现三类工作区、筛选和可读的列表状态', async () => {
-    wrapper = mount(Targets, { global: { stubs, directives: { loading: { mounted() {}, updated() {} } } } });
+    wrapper = mount(Targets, { global: { stubs, directives: { loading: { mounted() {}, updated() {} }, 'bp-overflow-tooltip': {} } } });
     await settle();
 
     expect(wrapper.find('main.bp-crud.targets-page[aria-labelledby="targets-page-title"]').exists()).toBe(true);
@@ -121,7 +124,7 @@ describe('Targets.vue 目标管理工作区', () => {
     const claimPending = deferred();
     claimTask.mockReturnValueOnce(claimPending.promise);
     approveTask.mockResolvedValueOnce({ ok: true });
-    wrapper = mount(Targets, { global: { stubs, directives: { loading: { mounted() {}, updated() {} } } } });
+    wrapper = mount(Targets, { global: { stubs, directives: { loading: { mounted() {}, updated() {} }, 'bp-overflow-tooltip': {} } } });
     await settle();
 
     wrapper.vm.reviewDlg.row = { taskId: 'TASK-1', claimable: true };

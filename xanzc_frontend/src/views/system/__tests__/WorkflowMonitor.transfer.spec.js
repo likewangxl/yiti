@@ -36,6 +36,9 @@ const stubs = {
   'el-select': empty('ElSelect'),
   'el-option': empty('ElOption'),
   'el-date-picker': empty('ElDatePicker'),
+  'el-dropdown': { name: 'ElDropdown', template: '<div><slot /><slot name="dropdown" /></div>' },
+  'el-dropdown-menu': passthrough('ElDropdownMenu'),
+  'el-dropdown-item': { name: 'ElDropdownItem', emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' },
   'el-table': { name: 'ElTable', props: ['data'], template: '<div><slot /></div>' },
   'el-table-column': empty('ElTableColumn'),
   'el-pagination': empty('ElPagination'),
@@ -51,7 +54,7 @@ const stubs = {
 };
 
 function mountPage() {
-  return mount(WorkflowMonitor, { global: { stubs } });
+  return mount(WorkflowMonitor, { global: { stubs, directives: { loading: {}, 'bp-overflow-tooltip': {} } } });
 }
 
 /** 未签收的候选组任务行（机构负责人会签，尚无人认领） */

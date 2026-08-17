@@ -1,0 +1,107 @@
+{
+  "status": "PASS",
+  "gitHead": "4f5d9ceb7ef5a53b39b02f79bfd3c9abd6039eb4",
+  "viewport": "2560x1440",
+  "routes": {
+    "expected": 59,
+    "passed": 59,
+    "failed": 0,
+    "notExercised": 0
+  },
+  "shell": {
+    "headerCount": 1,
+    "workspaceTabsInHeader": 1,
+    "oldStandaloneRow": 0,
+    "sidebarWidths": [
+      220,
+      64,
+      220
+    ]
+  },
+  "tabs": {
+    "status": "PASS",
+    "longTabCount": 55,
+    "covered": [
+      "ArrowLeft",
+      "ArrowRight",
+      "Home",
+      "End",
+      "scrollIntoView",
+      "active close by Enter",
+      "active close by mouse",
+      "ordinary navigation main focus",
+      "background close current-tab focus",
+      "user focus not stolen",
+      "continuous close latest intent"
+    ]
+  },
+  "rowActions": {
+    "status": "PASS",
+    "staticPhysicalColumns": 58,
+    "staticAdaptiveColumns": 30,
+    "focusRoutes": 8,
+    "runtimeRows": 146,
+    "syntheticLayoutRoutes": 7,
+    "schemeRows": 2,
+    "schemeSyntheticLayout": true,
+    "dangerConfirmCancelled": true,
+    "dangerWriteDelta": 0,
+    "resizeObserverLoops": 0,
+    "reportSqlRuntimeRow": "not_exercised_no_runtime_row_conditional_export_task"
+  },
+  "designer": {
+    "status": "PASS",
+    "namedPopupReusedAndFocused": true,
+    "mainRouteAndTabsUnchanged": true,
+    "independentNoShell": true,
+    "allToolsPresent": true,
+    "cleanReturnClosed": true,
+    "directUrlFallbackWorkspace": true,
+    "dirtyCancelPassed": true,
+    "dirtyDiscardNoSave": true,
+    "beforeUnloadBlockedWhenDirty": true,
+    "savePublishCasExercised": false,
+    "popupBlockedBranch": "not_exercised_uncontrollable_browser_setting"
+  },
+  "network": {
+    "allowedLoginWrites": 1,
+    "businessWrites": 0,
+    "badApi": 0
+  },
+  "firstProductError": null,
+  "archiveReview": {
+    "productFlowRerun": false,
+    "pngReviewMethod": "manual visual inspection of every PNG; no automated PNG content scan claimed",
+    "pngReviewed": 25,
+    "pngDeleted": 10,
+    "pngRetained": 15,
+    "deletedScreenshots": [
+      "72-designer-independent-popup.png",
+      "73-designer-direct-url-fallback-workspace.png",
+      "74-designer-dirty-three-branches.png",
+      "ReportSql.png",
+      "SysUsers.png",
+      "Workspace.png",
+      "danger-confirm-cancel.png",
+      "focus-SysUsers.png",
+      "shell-collapsed.png",
+      "tabs-focus-intents-pass.png"
+    ],
+    "retainedScreenshotPurpose": "login controls, empty/loading table structures, masked action-column structures, and empty scheme dialog",
+    "sensitiveBusinessDetailsArchived": false,
+    "realEntityIdsArchived": false,
+    "businessRowBodiesArchived": false,
+    "pageDatesAndAggregateCountsArchived": true,
+    "authorizedQaIdentityLabelsArchived": true,
+    "qaIdentityLabels": [
+      "系统管理员",
+      "西安分行"
+    ],
+    "functionalMetricsChanged": false
+  },
+  "evidenceSanitized": true,
+  "credentialsArchived": false,
+  "responseBodiesArchived": false,
+  "realEntityIdsArchived": false,
+  "authorizedQaIdentityLabelsArchived": true
+}

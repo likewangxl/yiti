@@ -20,6 +20,9 @@
       <el-button size="small" @click="onRollback">回滚</el-button>
       <el-button size="small" type="primary" :loading="saving" @click="onSave">保存</el-button>
       <el-button size="small" type="danger" :loading="publishing" @click="onPublish">发布</el-button>
+      <span class="dirty-state" role="status" aria-live="polite">{{ isDirty ? '有未保存修改' : '已保存' }}</span>
+      <el-button ref="returnButton" size="small" aria-label="返回工作区"
+                 :disabled="saving || publishing || exitDialog.saving" @click="onReturn">返回</el-button>
     </div>
     <!-- 三栏 -->
     <div class="dsn2-cols">
@@ -154,6 +157,19 @@
       </template>
     </el-dialog>
 
+    <!-- 独立窗口返回的三分支保护：三个选择都是真实按钮，不把关闭图标暗当第三分支。 -->
+    <el-dialog v-model="exitDialog.show" title="未保存修改" width="460px"
+               :close-on-click-modal="false" :close-on-press-escape="!exitDialog.saving"
+               :show-close="!exitDialog.saving" @opened="focusExitCancel">
+      <p class="exit-dialog-copy">当前画布有未保存修改。你可以保存后关闭，或放弃这些修改后关闭。</p>
+      <template #footer>
+        <el-button ref="exitCancelButton" size="small" :disabled="exitDialog.saving" @click="cancelReturn">取消</el-button>
+        <el-button size="small" :disabled="exitDialog.saving" @click="discardAndClose">放弃并关闭</el-button>
+        <el-button size="small" type="primary" :loading="exitDialog.saving"
+                   :disabled="exitDialog.saving" @click="saveAndClose">保存并关闭</el-button>
+      </template>
+    </el-dialog>
+
     <div class="screen-security-hint">草稿预览仍须通过屏白名单、机构组、同一角色及画布读取门禁；SYS_ADMIN 不存在大屏业务旁路。</div>
   </div>
 </template>
@@ -161,7 +177,8 @@
 // 设计器 V2 组装页——三栏(组件/图层 | 画布 | 属性)+ 顶部工具条(屏选择/undo-redo/缩放/预览/放弃/回滚/保存/发布)
 // + 全局快捷键。数据流:loadCanvas 拉编辑器快照灌 store → 画布/面板直接读写 store → 保存/发布把 store
 // 序列化回 toSavePayload() 打给后端。旧 admin/Designer.vue 与运行时行/块渲染分支已在渲染层切换任务删除。
-import { computed, ref, reactive, nextTick, onMounted, onBeforeUnmount, provide } from 'vue';
+import { computed, ref, reactive, nextTick, onMounted, onBeforeUnmount, provide, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { listScreens, getScreenCanvas, saveScreenMetadata, saveScreenCanvas, publishScreenCanvas,
   discardScreenCanvas, rollbackScreenCanvas, listScreenPublishLogs, listOrgGroups, listScreenRoles,
@@ -169,6 +186,7 @@ import { listScreens, getScreenCanvas, saveScreenMetadata, saveScreenCanvas, pub
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import { fitScale } from '@/views/screen/designer/utils/scale';
 import { cloneComponentForClipboard, pasteFromClipboard } from '@/views/screen/designer/utils/clipboard';
+import { closeWindowOrFallback } from '@/views/screen/designer/utils/closeWindow';
 import { findAttr } from '@/views/screen/designer/widgets';
 import {
   BIZ_LINES, ORG_SCOPE_MODES, VIEW_LEVELS, normalizeScreenScope,
@@ -181,6 +199,7 @@ import CanvasAttr from './panels/CanvasAttr.vue';
 import MultiSelectBar from './panels/MultiSelectBar.vue';
 
 const store = useScreenDesignerStore();
+const router = useRouter();
 const designProfiles = ref([]);
 const allDesignProfiles = ref([]);
 // CanvasCore 下的 MapCenter 通过同一响应式引用读取已配置画像；运行时不会继承此注入。
@@ -190,6 +209,10 @@ const curId = ref(null);
 const leftTab = ref('comp');
 const saving = ref(false);
 const publishing = ref(false);
+const isDirty = ref(false);
+const dirtyBaseline = ref(null);
+const returnButton = ref(null);
+const exitCancelButton = ref(null);
 const scalePct = ref(50);
 const clipboard = ref(null); // Ctrl+C/V 本地剪贴板,与 ContextMenu.vue 右键复制粘贴各自独立持有
 provide('previewContext', { orgCode: '', empId: '' }); // 设计态预览上下文(空→43010 引导态)
@@ -219,7 +242,32 @@ const rollbackDialog = reactive({
 const accessRoleDialog = reactive({
   show: false, saving: false, roleCodes: [], initialRoleCodes: [], reason: '', expectedVersion: null
 });
+const exitDialog = reactive({ show: false, saving: false });
 const accessRoleDiff = computed(() => diffCodes(accessRoleDialog.initialRoleCodes, accessRoleDialog.roleCodes));
+
+/**
+ * dirty 只以画布保存契约为准，不把选区、缩放、面板 tab 等纯视图状态误判为未保存。
+ * expectedVersion 是 CAS 快照而非用户编辑内容，同样不进基线。
+ */
+function currentDraftSignature() {
+  const payload = store.toSavePayload();
+  return JSON.stringify({
+    screenId: payload.screenId,
+    canvasStyle: payload.canvasStyle,
+    components: payload.components
+  });
+}
+function resetDirtyBaseline() {
+  dirtyBaseline.value = currentDraftSignature();
+  isDirty.value = false;
+}
+watch(
+  [() => store.canvasStyle, () => store.componentData],
+  () => {
+    isDirty.value = dirtyBaseline.value !== null && currentDraftSignature() !== dirtyBaseline.value;
+  },
+  { deep: true, flush: 'sync' }
+);
 
 function groupMembers(group) {
   return group?.memberOrgCodes || group?.orgCodes || (group?.members || []).map(item => item.orgCode || item);
@@ -398,22 +446,45 @@ async function loadCanvas() {
   // 避免编辑命名机构组屏时因 canvas DTO 缺字段而静默回退 LEGACY_CONTEXT。
   const screenMeta = screens.value.find(s => s.id === curId.value) || {};
   store.loadFromEditor({ ...screenMeta, ...resp });
+  resetDirtyBaseline();
   refreshDesignProfiles();
 }
-async function onSave() {
+const SAVE_OUTCOME = Object.freeze({
+  saved: Object.freeze({ saved: true, conflict: false }),
+  failed: Object.freeze({ saved: false, conflict: false }),
+  conflict: Object.freeze({ saved: false, conflict: true })
+});
+const SAVE_OPTIONS = Object.freeze({
+  toolbar: Object.freeze({ resolveConflict: true }),
+  exit: Object.freeze({ resolveConflict: false })
+});
+
+/**
+ * 执行一次画布保存并返回结构化结果。
+ * 工具栏允许进入既有 CAS 强制覆盖/重载流程；退出保存在首个 CAS 立即停止，
+ * 避免“保存并关闭”暗中发出第二次覆盖写或丢弃本地修改。
+ */
+async function saveDraft(options = SAVE_OPTIONS.toolbar) {
+  if (saving.value) return SAVE_OUTCOME.failed;
   saving.value = true;
   try {
     const resp = await saveScreenCanvas(store.toSavePayload());
     store.adoptSaveResult(resp);
+    resetDirtyBaseline();
     ElMessage.success('已保存草稿');
+    return SAVE_OUTCOME.saved;
   } catch (e) {
     if (e?.code === 'RPT-43012') {
+      if (!options.resolveConflict) return SAVE_OUTCOME.conflict;
       // 二次失败(如强制覆盖重发时又撞上新的并发保存)已由 http 拦截器统一 toast,
       // 这里只吞掉避免冒泡成未捕获 rejection,不重复弹错。
       try { await handleSaveConflict(); } catch { /* 已 toast,吞掉 */ }
+      return SAVE_OUTCOME.conflict;
     }
+    return SAVE_OUTCOME.failed;
   } finally { saving.value = false; }
 }
+async function onSave() { return saveDraft(SAVE_OPTIONS.toolbar); }
 /**
  * 43012 乐观锁冲突处理(规格 §9):二次确认给两个选择——
  * 「强制覆盖」:只取服务器最新 canvasVersion,本地组件树/样式原样重发,即以本地改动覆盖服务器
@@ -438,6 +509,7 @@ async function handleSaveConflict() {
     const latest = await getScreenCanvas(store.screenId);
     const resp = await saveScreenCanvas({ ...store.toSavePayload(), expectedVersion: latest.canvasVersion });
     store.adoptSaveResult(resp);
+    resetDirtyBaseline();
     ElMessage.success('已强制覆盖保存');
   } else if (action === 'reload') {
     await loadCanvas();
@@ -468,6 +540,7 @@ async function confirmPublish() {
     // 先存后发，发布 CAS 必须使用保存成功后服务端返回的最新版本，不能继续使用弹框打开时的旧版本。
     const saved = await saveScreenCanvas(store.toSavePayload());
     store.adoptSaveResult(saved);
+    resetDirtyBaseline();
     if (!Number.isSafeInteger(store.canvasVersion) || store.canvasVersion < 0) {
       throw new Error('保存后未返回有效版本，已拒绝发布');
     }
@@ -575,6 +648,61 @@ function onPreview() {
   window.open(`#/screen/${store.screenCode}?preview=draft`, '_blank');
 }
 
+function focusElement(componentRef) {
+  const element = componentRef?.$el || componentRef;
+  element?.focus?.();
+}
+function focusExitCancel() { focusElement(exitCancelButton.value); }
+async function closeDesigner() {
+  await closeWindowOrFallback(window, () => router.replace('/workspace'));
+}
+async function onReturn() {
+  if (saving.value || publishing.value || exitDialog.saving) return;
+  if (!isDirty.value) {
+    await closeDesigner();
+    return;
+  }
+  exitDialog.show = true;
+  await nextTick();
+  focusExitCancel();
+}
+async function cancelReturn() {
+  if (exitDialog.saving) return;
+  exitDialog.show = false;
+  await nextTick();
+  focusElement(returnButton.value);
+}
+async function discardAndClose() {
+  if (exitDialog.saving) return;
+  exitDialog.saving = true;
+  // “放弃”是放弃本地未保存修改，不调用后端“放弃服务端草稿”的高危审计端点。
+  isDirty.value = false;
+  exitDialog.show = false;
+  try {
+    await closeDesigner();
+  } finally {
+    exitDialog.saving = false;
+  }
+}
+async function saveAndClose() {
+  if (exitDialog.saving) return;
+  exitDialog.saving = true;
+  try {
+    const result = await saveDraft(SAVE_OPTIONS.exit);
+    // 任何保存失败或 CAS 冲突都留在设计器，由用户检查后再决定。
+    if (!result.saved) return;
+    exitDialog.show = false;
+    await closeDesigner();
+  } finally {
+    exitDialog.saving = false;
+  }
+}
+function onBeforeUnload(event) {
+  if (!isDirty.value) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+
 // 快捷键(弹框打开时禁用,对齐 DeShortcutKey.checkDialog)
 function onKey(e) {
   if (document.querySelector('.el-overlay')) return; // 有弹框则禁用
@@ -605,23 +733,27 @@ function onKey(e) {
 }
 onMounted(async () => {
   window.addEventListener('keydown', onKey);
+  window.addEventListener('beforeunload', onBeforeUnload);
   await loadScreens();
   await loadScopeChoices();
   // 首屏加载完自动适应窗口:默认 50% 缩放与中栏尺寸无关,首屏观感差(设计器页面整改 #3)
   await nextTick();
   fitWindow();
 });
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey);
+  window.removeEventListener('beforeunload', onBeforeUnload);
+});
 </script>
 <style scoped lang="scss">
 @use '@/styles/screen-theme' as theme;
-// 高度撑满 DefaultLayout 的 .content--full(路由 meta.fullBleed 去 padding 后恰好铺满),
-// 不再写死 calc(100vh - Npx) 猜壳层高度——header 52 + 面包屑 40 + padding 32 曾致超高 64px 整页滚动
+// 顶层独立路由直接撑满 #app，不再依赖 DefaultLayout 的壳层高度。
 .dsn2 { display: flex; flex-direction: column; height: 100%; background: #03081c; }
 .scr-surface-host { @include theme.scr-theme-vars; } // 供画布内复用 .scr-* 视觉变量
 .dsn2-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
   border-bottom: 1px solid rgba(0,229,255,.2); }
 .dsn2-toolbar .spacer { flex: 1; }
+.dirty-state { color: #9bb3d8; font-size: 12px; line-height: 20px; white-space: nowrap; }
 .dsn2-cols { flex: 1; display: flex; min-height: 0; }
 .dsn2-left, .dsn2-right { width: 260px; flex: none; overflow: auto; background: #050e2b;
   border-right: 1px solid rgba(0,229,255,.15); }
@@ -630,4 +762,5 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .scope-hint { color: #7d9bc9; font-size: 12px; line-height: 1.5; margin-top: 4px; }
 .role-change-preview { display: flex; flex-direction: column; gap: 3px; color: #7d9bc9; font-size: 12px; line-height: 1.5; }
 .screen-security-hint { padding: 4px 12px 8px; color: #7d9bc9; font-size: 12px; line-height: 1.5; }
+.exit-dialog-copy { margin: 0; color: #334155; font-size: 14px; line-height: 1.7; }
 </style>

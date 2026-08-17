@@ -6,12 +6,9 @@ import lombok.Data;
 
 /**
  * 党组织新增/修改请求 DTO。
- * <p>此前 {@code ReOrgController.addOrg}/{@code updateOrg} 直接接收裸实体
- * {@link com.bank.branch.platform.redengine.entity.RePartyOrg} 且无 {@code @Valid}，与本模块
- * 其余端点"实体不跨层暴露 + DTO 校验"的惯例不一致（历史遗留写法，见 red-engine-center/CLAUDE.md
- * 「技术债」）。本次修复新建独立请求 DTO，{@link #orgName} 对齐 DDL {@code RE_PARTY_ORG.org_name}
- * 的 {@code NOT NULL} 约束标注 {@code @NotBlank}；其余字段库表本身可空，不做过度校验（前端表单已有
- * orgCode/orgType 必填的 UI 侧校验，属产品交互层面的更严格要求，不在后端重复强制，避免过度设计）。</p>
+ * <p>使用独立请求 DTO 避免 Controller 直接接收并暴露持久化实体。
+ * {@link #orgName} 对齐 {@code RE_PARTY_ORG.org_name} 的 {@code NOT NULL} 约束标注
+ * {@code @NotBlank}；其余字段按当前表结构允许为空，不在此处追加超出服务端契约的强制校验。</p>
  */
 @Data
 @Schema(description = "党组织新增/修改请求")

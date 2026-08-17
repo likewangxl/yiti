@@ -5,12 +5,15 @@ import {
   ORG_SCOPE_MODES,
   ANCHOR_POSITIONS,
   FIXED_SATELLITE_ORG_CODES,
+  XIAN_SECONDARY_BRANCHES,
+  XIAN_SECONDARY_BRANCH_DISCLAIMER,
   normalizeScreenScope,
   validateScreenScope,
   isDatasourceCompatible,
   normalizeMapConfig,
   buildScreenDataRequest,
   resolveCompositeMapNodes,
+  resolveXianSecondaryBranches,
   validateCompositeMapConfig,
   runtimeSchemaVersion,
   filterActiveOrgGroups,
@@ -57,13 +60,49 @@ describe('screenScope 业务条线、机构范围与地图配置契约', () => {
     });
   });
 
+  it('地图 schema 与 mode 必须同时精确声明，缺失、冲突或宽松字符串一律拒绝', () => {
+    expect(normalizeMapConfig({ mode: 'XIAN_COMPOSITE' })).toMatchObject({ mode: 'UNSUPPORTED' });
+    expect(normalizeMapConfig({ schemaVersion: 2 })).toMatchObject({ schemaVersion: 2, mode: 'UNSUPPORTED' });
+    expect(normalizeMapConfig({ schemaVersion: 1, mode: 'XIAN_COMPOSITE' })).toMatchObject({ schemaVersion: 1, mode: 'UNSUPPORTED' });
+    expect(normalizeMapConfig({ schemaVersion: '2', mode: 'XIAN_COMPOSITE' })).toMatchObject({ schemaVersion: '2', mode: 'UNSUPPORTED' });
+    expect(normalizeMapConfig({ schemaVersion: 2, mode: 'SHAANXI_LEGACY' })).toMatchObject({ schemaVersion: 2, mode: 'UNSUPPORTED' });
+    expect(normalizeMapConfig({ schemaVersion: null, mode: 'XIAN_COMPOSITE' })).toMatchObject({ mode: 'UNSUPPORTED' });
+    expect(normalizeMapConfig({ schemaVersion: 1 })).toMatchObject({ schemaVersion: 1, mode: 'SHAANXI_LEGACY' });
+  });
+
   it('v2 运行时请求只提交 screenCode + blockId，不接受 dsId/orgCodes 覆盖', () => {
     expect(buildScreenDataRequest({ screenCode: 'SCR_RETAIL', blockId: 8, period: 'LATEST',
       dateFrom: null, dateTo: null, contextParams: { orgCode: 'O1' }, schemaVersion: 2,
       dsId: 999, orgCodes: ['EVIL'], orgGroupCode: 'EVIL' })).toEqual({
-      schemaVersion: 2, screenCode: 'SCR_RETAIL', blockId: 8, period: 'LATEST', dateFrom: null, dateTo: null,
-      contextParams: { orgCode: 'O1', empId: null }
+      schemaVersion: 2, screenCode: 'SCR_RETAIL', blockId: 8, period: 'LATEST',
+      contextParams: { orgCode: 'O1' }
     });
+  });
+
+  it('v1/v2 运行时请求剔除 nullish 可选字段，但所有非空日期与上下文原样保留', () => {
+    expect(buildScreenDataRequest({ schemaVersion: 1, screenCode: 'SCR_BRANCH', dsId: 9002,
+      period: 'RANGE', dateFrom: '2026-08-01', dateTo: '2026-08-13',
+      contextParams: { orgCode: '128', empId: 'E001' } })).toEqual({
+      schemaVersion: 1, screenCode: 'SCR_BRANCH', dsId: 9002, period: 'RANGE',
+      dateFrom: '2026-08-01', dateTo: '2026-08-13', contextParams: { orgCode: '128', empId: 'E001' }
+    });
+    expect(buildScreenDataRequest({ schemaVersion: 2, screenCode: 'SCR_RETAIL', blockId: 8,
+      period: 'RANGE', dateFrom: '2026-08-01', dateTo: '2026-08-13',
+      contextParams: { orgCode: '128', empId: 'E001' } })).toEqual({
+      schemaVersion: 2, screenCode: 'SCR_RETAIL', blockId: 8, period: 'RANGE',
+      dateFrom: '2026-08-01', dateTo: '2026-08-13', contextParams: { orgCode: '128', empId: 'E001' }
+    });
+    for (const value of [0, false, '']) {
+      expect(buildScreenDataRequest({ schemaVersion: 1, screenCode: 'SCR_BRANCH', dsId: 9002,
+        contextParams: { orgCode: value, empId: value } }).contextParams)
+        .toEqual({ orgCode: value, empId: value });
+      expect(buildScreenDataRequest({ schemaVersion: 2, screenCode: 'SCR_RETAIL', blockId: 8,
+        contextParams: { orgCode: value, empId: value } }).contextParams)
+        .toEqual({ orgCode: value, empId: value });
+    }
+    expect(buildScreenDataRequest({ schemaVersion: 1, screenCode: 'SCR_BRANCH', dsId: 9002,
+      dateFrom: null, dateTo: undefined, contextParams: { orgCode: null, empId: undefined } }))
+      .toEqual({ schemaVersion: 1, screenCode: 'SCR_BRANCH', dsId: 9002, period: 'LATEST', contextParams: {} });
   });
 
   it('schema2 缺少 screenCode/blockId 或未知版本时 Fail Close，不降级为 v1 请求', () => {
@@ -202,6 +241,24 @@ describe('screenScope 业务条线、机构范围与地图配置契约', () => {
     expect(ANCHOR_POSITIONS.FAR_TOP).toEqual({ left: '50%', top: '8px' });
     expect(ANCHOR_POSITIONS.TOP).toEqual({ left: '50%', top: '48px' });
     expect(FIXED_SATELLITE_ORG_CODES).toEqual({ LEFT: '128', RIGHT: '191', TOP: '169', FAR_TOP: '129' });
+  });
+
+  it('运行态将四个二级分行固定为真实机构语义与 SCR_BRANCH 目标，配置不能改写身份或目标屏', () => {
+    expect(XIAN_SECONDARY_BRANCH_DISCLAIMER).toBe('二级分行示意位置，非地理比例');
+    expect(XIAN_SECONDARY_BRANCHES).toEqual([
+      { orgCode: '128', orgName: '宝鸡分行', anchor: 'LEFT', targetScreenCode: 'SCR_BRANCH' },
+      { orgCode: '191', orgName: '渭南分行', anchor: 'RIGHT', targetScreenCode: 'SCR_BRANCH' },
+      { orgCode: '169', orgName: '咸阳分行', anchor: 'TOP', targetScreenCode: 'SCR_BRANCH' },
+      { orgCode: '129', orgName: '榆林分行', anchor: 'FAR_TOP', targetScreenCode: 'SCR_BRANCH' }
+    ]);
+    expect(resolveXianSecondaryBranches([
+      { orgCode: '128', orgName: '伪造名称', anchor: 'RIGHT', targetScreenCode: 'OTHER' },
+      { orgCode: '191', anchor: 'LEFT' },
+      { orgCode: 'NOT_AUTHORIZED', orgName: '越权节点', anchor: 'TOP' }
+    ])).toEqual([
+      { orgCode: '128', orgName: '宝鸡分行', anchor: 'LEFT', targetScreenCode: 'SCR_BRANCH', position: { left: '8px', top: '50%' } },
+      { orgCode: '191', orgName: '渭南分行', anchor: 'RIGHT', targetScreenCode: 'SCR_BRANCH', position: { right: '8px', top: '50%' } }
+    ]);
   });
 
   it('示意锚点也只允许 PRIMARY 机构，坏配置不能把下属网点渲染成经营节点', () => {

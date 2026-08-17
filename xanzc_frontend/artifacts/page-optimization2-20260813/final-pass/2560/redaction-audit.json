@@ -1,0 +1,83 @@
+{
+  "auditVersion": 3,
+  "scope": {
+    "png": {
+      "method": "manual visual inspection of every PNG; no automated PNG content scan claimed",
+      "reviewed": 25,
+      "deleted": 10,
+      "retained": 15,
+      "deletedFiles": [
+        "screenshots/72-designer-independent-popup.png",
+        "screenshots/73-designer-direct-url-fallback-workspace.png",
+        "screenshots/74-designer-dirty-three-branches.png",
+        "screenshots/ReportSql.png",
+        "screenshots/SysUsers.png",
+        "screenshots/Workspace.png",
+        "screenshots/danger-confirm-cancel.png",
+        "screenshots/focus-SysUsers.png",
+        "screenshots/shell-collapsed.png",
+        "screenshots/tabs-focus-intents-pass.png"
+      ],
+      "retainedFiles": [
+        "screenshots/EvalTasks.png",
+        "screenshots/InfoProducts.png",
+        "screenshots/Login.png",
+        "screenshots/ScreenAdminDs.png",
+        "screenshots/SysJobs.png",
+        "screenshots/SysNotifications.png",
+        "screenshots/SysResources.png",
+        "screenshots/focus-EvalTasks.png",
+        "screenshots/focus-InfoProducts.png",
+        "screenshots/focus-ReportSql.png",
+        "screenshots/focus-ScreenAdminDs.png",
+        "screenshots/focus-SysJobs.png",
+        "screenshots/focus-SysNotifications.png",
+        "screenshots/focus-SysResources.png",
+        "screenshots/scheme-row-actions.png"
+      ],
+      "retainedPurposes": [
+        "blank login controls without entered credentials",
+        "shell, headers, empty states, loading masks, and control structures",
+        "action-column structures whose business cells are covered by loading masks",
+        "empty scheme dialog structure"
+      ],
+      "authorizedQaIdentityLabelsArchived": true,
+      "qaIdentityLabels": [
+        "系统管理员",
+        "西安分行"
+      ],
+      "identityLabelScope": "user-authorized normal-admin QA generic labels only; no password, user ID, token, cookie, specific user record, or detailed organization tree retained"
+    },
+    "text": {
+      "method": "recursive pattern scan followed by candidate review",
+      "checkedFiles": 17,
+      "excludedGeneratedFiles": [
+        "redaction-audit.json",
+        "manifest.sha256"
+      ],
+      "patterns": [
+        "literal credentials and password assignments",
+        "HTTP authorization-header values",
+        "Cookie, Set-Cookie, JSESSIONID, or SPRING_SESSION values",
+        "JWT values",
+        "UUID, long numeric, long hexadecimal, and business-code-shaped dynamic identifiers",
+        "non-redacted query values in archived URLs and request summaries"
+      ],
+      "reviewedAllowlist": [
+        "git HEAD 4f5d9ceb7ef5a53b39b02f79bfd3c9abd6039eb4",
+        "non-business Playwright npx cache fingerprint in commands.md",
+        "static test-script source parameters pageNo, pageSize, and normal; these are not archived runtime entity/query values"
+      ],
+      "unresolvedHits": []
+    }
+  },
+  "pass": true,
+  "credentialsArchived": false,
+  "responseBodiesArchived": false,
+  "sensitiveBusinessDetailsArchived": false,
+  "realEntityIdsArchived": false,
+  "businessRowBodiesArchived": false,
+  "pageDatesAndAggregateCountsArchived": true,
+  "authorizedQaIdentityLabelsArchived": true,
+  "pngAutomatedScanClaimed": false
+}

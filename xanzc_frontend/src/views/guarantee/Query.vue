@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud guarantee-query" aria-labelledby="guarantee-query-title">
+<main v-bp-overflow-tooltip class="bp-crud guarantee-query" aria-labelledby="guarantee-query-title">
     <div class="page-h">
       <PageTitle id="guarantee-query-title" />
       <div class="actions action-group" role="group" aria-label="担保信息操作">
@@ -51,7 +51,7 @@
         <el-table-column label="剩余额度（万元）" prop="occupyNotionalAmount" min-width="160" align="right" />
         <el-table-column label="融资额度（万元）" prop="usableNominalSum" min-width="160" align="right" />
         <el-table-column label="授信到期日" prop="lastExpire" min-width="120" />
-        <el-table-column label="经办人" min-width="130">
+        <el-table-column label="经办人" min-width="130" class-name="compact-stack-cell">
           <template #default="{ row }">
             <div>{{ row.userDisplayName || row.userName || '-' }}</div>
             <div v-if="row.userName" class="sub-id">{{ row.userName }}</div>
@@ -59,7 +59,7 @@
         </el-table-column>
         <el-table-column label="数据变动日期" prop="createTime" min-width="170" />
         <el-table-column label="变更日期" prop="updateTime" min-width="170" />
-        <el-table-column label="操作" width="90" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
           </template>

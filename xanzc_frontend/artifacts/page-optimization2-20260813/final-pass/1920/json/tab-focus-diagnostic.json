@@ -1,0 +1,494 @@
+{
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "routeSwitchTimeline": [
+    {
+      "label": "before-switch",
+      "hash": "#/report/dynamic",
+      "scrollLeft": 1510,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7448,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "动态指标查询",
+      "activeRect": {
+        "left": 1555.171875,
+        "right": 1701.171875,
+        "width": 146
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "className": "el-button",
+        "text": "我的方案"
+      },
+      "activeElementIsCurrentLabel": false
+    },
+    {
+      "label": "immediate-after-hash",
+      "hash": "#/system/person-tags",
+      "scrollLeft": 6109,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7574,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "业务标签",
+      "activeRect": {
+        "left": 1583.15625,
+        "right": 1701.15625,
+        "width": 118
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "DIV",
+        "className": "content",
+        "text": "业务标签维护可复用的员工与机构标签，支持精确成员维护和带校验的批量导入。刷新导入新建标签标签名称查询重置业务标签删除标签会级联删除该标签下的成员关联；成员导入按"
+      },
+      "activeElementIsCurrentLabel": false
+    },
+    {
+      "label": "after-microtask",
+      "hash": "#/system/person-tags",
+      "scrollLeft": 6109,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7574,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "业务标签",
+      "activeRect": {
+        "left": 1583.15625,
+        "right": 1701.15625,
+        "width": 118
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "DIV",
+        "className": "content",
+        "text": "业务标签维护可复用的员工与机构标签，支持精确成员维护和带校验的批量导入。刷新导入新建标签标签名称查询重置业务标签删除标签会级联删除该标签下的成员关联；成员导入按"
+      },
+      "activeElementIsCurrentLabel": false
+    },
+    {
+      "label": "after-two-animation-frames",
+      "hash": "#/system/person-tags",
+      "scrollLeft": 6109,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7574,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "业务标签",
+      "activeRect": {
+        "left": 1583.15625,
+        "right": 1701.15625,
+        "width": 118
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "DIV",
+        "className": "content",
+        "text": "业务标签维护可复用的员工与机构标签，支持精确成员维护和带校验的批量导入。刷新导入新建标签标签名称查询重置业务标签删除标签会级联删除该标签下的成员关联；成员导入按"
+      },
+      "activeElementIsCurrentLabel": false
+    },
+    {
+      "label": "after-100ms",
+      "hash": "#/system/person-tags",
+      "scrollLeft": 6109,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7574,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "业务标签",
+      "activeRect": {
+        "left": 1583.15625,
+        "right": 1701.15625,
+        "width": 118
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "DIV",
+        "className": "content",
+        "text": "业务标签维护可复用的员工与机构标签，支持精确成员维护和带校验的批量导入。刷新导入新建标签标签名称查询重置业务标签删除标签会级联删除该标签下的成员关联；成员导入按"
+      },
+      "activeElementIsCurrentLabel": false
+    },
+    {
+      "label": "after-600ms",
+      "hash": "#/system/person-tags",
+      "scrollLeft": 6109,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7574,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "业务标签",
+      "activeRect": {
+        "left": 1583.15625,
+        "right": 1701.15625,
+        "width": 118
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "DIV",
+        "className": "content",
+        "text": "业务标签维护可复用的员工与机构标签，支持精确成员维护和带校验的批量导入。刷新导入新建标签标签名称查询重置业务标签删除标签会级联删除该标签下的成员关联；成员导入按"
+      },
+      "activeElementIsCurrentLabel": false
+    },
+    {
+      "label": "after-1200ms",
+      "hash": "#/system/person-tags",
+      "scrollLeft": 6109,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7574,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "业务标签",
+      "activeRect": {
+        "left": 1583.15625,
+        "right": 1701.15625,
+        "width": 118
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "DIV",
+        "className": "content",
+        "text": "业务标签维护可复用的员工与机构标签，支持精确成员维护和带校验的批量导入。刷新导入新建标签标签名称查询重置业务标签删除标签会级联删除该标签下的成员关联；成员导入按"
+      },
+      "activeElementIsCurrentLabel": false
+    }
+  ],
+  "clickCloseTimeline": [
+    {
+      "label": "label-focused-before-click-close",
+      "hash": "#/system/person-tags",
+      "scrollLeft": 6109,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7574,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "业务标签",
+      "activeRect": {
+        "left": 1583.15625,
+        "right": 1701.15625,
+        "width": 118
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "className": "workspace-tabs__label",
+        "text": "业务标签"
+      },
+      "activeElementIsCurrentLabel": true
+    },
+    {
+      "label": "immediate-after-click-close",
+      "hash": "#/system/workflow-monitor",
+      "scrollLeft": 5983,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7448,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "审批流监控",
+      "activeRect": {
+        "left": 1569.15625,
+        "right": 1701.15625,
+        "width": 132
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "className": "workspace-tabs__label",
+        "text": "审批流监控"
+      },
+      "activeElementIsCurrentLabel": true
+    },
+    {
+      "label": "after-two-animation-frames",
+      "hash": "#/system/workflow-monitor",
+      "scrollLeft": 5983,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7448,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "审批流监控",
+      "activeRect": {
+        "left": 1569.15625,
+        "right": 1701.15625,
+        "width": 132
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "className": "workspace-tabs__label",
+        "text": "审批流监控"
+      },
+      "activeElementIsCurrentLabel": true
+    },
+    {
+      "label": "after-100ms",
+      "hash": "#/system/workflow-monitor",
+      "scrollLeft": 5983,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7448,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "审批流监控",
+      "activeRect": {
+        "left": 1569.15625,
+        "right": 1701.15625,
+        "width": 132
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "className": "workspace-tabs__label",
+        "text": "审批流监控"
+      },
+      "activeElementIsCurrentLabel": true
+    },
+    {
+      "label": "after-600ms",
+      "hash": "#/system/workflow-monitor",
+      "scrollLeft": 5983,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7448,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "审批流监控",
+      "activeRect": {
+        "left": 1569.15625,
+        "right": 1701.15625,
+        "width": 132
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "className": "workspace-tabs__label",
+        "text": "审批流监控"
+      },
+      "activeElementIsCurrentLabel": true
+    },
+    {
+      "label": "after-1200ms",
+      "hash": "#/system/workflow-monitor",
+      "scrollLeft": 5983,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7448,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "审批流监控",
+      "activeRect": {
+        "left": 1569.15625,
+        "right": 1701.15625,
+        "width": 132
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "className": "workspace-tabs__label",
+        "text": "审批流监控"
+      },
+      "activeElementIsCurrentLabel": true
+    }
+  ],
+  "keyboardCloseTimeline": [
+    {
+      "label": "close-button-focused-before-enter",
+      "hash": "#/system/notifications",
+      "scrollLeft": 5983,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7448,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "通知消息",
+      "activeRect": {
+        "left": 533.15625,
+        "right": 651.15625,
+        "width": 118
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "className": "workspace-tabs__close",
+        "text": ""
+      },
+      "activeElementIsCurrentLabel": false
+    },
+    {
+      "label": "immediate-after-enter",
+      "hash": "#/system/audit",
+      "scrollLeft": 5857,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7322,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "审计日志",
+      "activeRect": {
+        "left": 533.15625,
+        "right": 651.15625,
+        "width": 118
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "className": "workspace-tabs__label",
+        "text": "审计日志"
+      },
+      "activeElementIsCurrentLabel": true
+    },
+    {
+      "label": "after-two-animation-frames",
+      "hash": "#/system/audit",
+      "scrollLeft": 5857,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7322,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "审计日志",
+      "activeRect": {
+        "left": 533.15625,
+        "right": 651.15625,
+        "width": 118
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "className": "workspace-tabs__label",
+        "text": "审计日志"
+      },
+      "activeElementIsCurrentLabel": true
+    },
+    {
+      "label": "after-100ms",
+      "hash": "#/system/audit",
+      "scrollLeft": 5857,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7322,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "审计日志",
+      "activeRect": {
+        "left": 533.15625,
+        "right": 651.15625,
+        "width": 118
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "className": "workspace-tabs__label",
+        "text": "审计日志"
+      },
+      "activeElementIsCurrentLabel": true
+    },
+    {
+      "label": "after-600ms",
+      "hash": "#/system/audit",
+      "scrollLeft": 5857,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7322,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "审计日志",
+      "activeRect": {
+        "left": 533.15625,
+        "right": 651.15625,
+        "width": 118
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "className": "workspace-tabs__label",
+        "text": "审计日志"
+      },
+      "activeElementIsCurrentLabel": true
+    },
+    {
+      "label": "after-1200ms",
+      "hash": "#/system/audit",
+      "scrollLeft": 5857,
+      "scrollClientWidth": 1465,
+      "scrollWidth": 7322,
+      "scrollRect": {
+        "left": 236,
+        "right": 1700.953125,
+        "width": 1464.953125
+      },
+      "activeText": "审计日志",
+      "activeRect": {
+        "left": 533.15625,
+        "right": 651.15625,
+        "width": 118
+      },
+      "activeFullyVisible": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "className": "workspace-tabs__label",
+        "text": "审计日志"
+      },
+      "activeElementIsCurrentLabel": true
+    }
+  ],
+  "conclusion": {
+    "routeSwitchStableVisible": true,
+    "clickCloseStableFocusedAdjacent": true,
+    "keyboardCloseStableFocusedAdjacent": true,
+    "stableClickFocusClass": "workspace-tabs__label",
+    "stableKeyboardFocusClass": "workspace-tabs__label"
+  }
+}

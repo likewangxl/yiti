@@ -1,0 +1,9 @@
+session=final1920xianfinal
+viewport=1920x1080
+gitHead=22108e35edb4f859c2d806ec4b1868d7aac274f6
+phase=start
+No active routes
+phase=end-after-XIAN-and-59
+No active routes
+browser=closed
+frontend_8091=kept_running

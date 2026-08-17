@@ -1,0 +1,2634 @@
+{
+  "status": "pass",
+  "viewport": [
+    2560,
+    1440
+  ],
+  "session": "pageopt-final-2560-22108e35",
+  "gitHead": "22108e35edb4f859c2d806ec4b1868d7aac274f6",
+  "overview": {
+    "status": "pass",
+    "evidence": [
+      "visible-canvas-screenshot-six-labels",
+      "schema2-XIAN_COMPOSITE-draft-contract",
+      "four-satellite-buttons",
+      "OSM-attribution",
+      "title-gap-positive"
+    ],
+    "internalRegionsProbe": "not_available_vue_echarts_encapsulation"
+  },
+  "branches": [
+    {
+      "name": "宝鸡分行",
+      "orgCode": "128",
+      "anchor": "LEFT",
+      "action": "click",
+      "status": "pass",
+      "issues": [],
+      "route": "/screen/SCR_BRANCH?orgCode=128",
+      "network": {
+        "settled": true,
+        "requests": [
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_RETAIL_OVERVIEW?preview=<redacted>",
+            "status": 200,
+            "code": "0",
+            "body": null
+          },
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_BRANCH",
+            "status": 200,
+            "code": "0",
+            "body": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          }
+        ],
+        "dataRequests": [
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "128",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          }
+        ],
+        "unexpectedWrites": [],
+        "bad": [],
+        "console": {
+          "errors": 0,
+          "nonDynamicWarnings": 0,
+          "fallback": 0
+        }
+      },
+      "dataRequestCount": 5,
+      "dataContracts": [
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "128",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "128",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "128",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "128",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "128",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        }
+      ],
+      "dom": {
+        "outerTitle": "支行经营详情",
+        "document": [
+          2560,
+          2560
+        ],
+        "redengineElements": 0,
+        "loadError": "",
+        "guide": ""
+      }
+    },
+    {
+      "name": "渭南分行",
+      "orgCode": "191",
+      "anchor": "RIGHT",
+      "action": "Enter",
+      "status": "pass",
+      "issues": [],
+      "route": "/screen/SCR_BRANCH?orgCode=191",
+      "network": {
+        "settled": true,
+        "requests": [
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_RETAIL_OVERVIEW?preview=<redacted>",
+            "status": 200,
+            "code": "0",
+            "body": null
+          },
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_BRANCH",
+            "status": 200,
+            "code": "0",
+            "body": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          }
+        ],
+        "dataRequests": [
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "191",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          }
+        ],
+        "unexpectedWrites": [],
+        "bad": [],
+        "console": {
+          "errors": 0,
+          "nonDynamicWarnings": 0,
+          "fallback": 0
+        }
+      },
+      "dataRequestCount": 5,
+      "dataContracts": [
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "191",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "191",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "191",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "191",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "191",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        }
+      ],
+      "dom": {
+        "outerTitle": "支行经营详情",
+        "document": [
+          2560,
+          2560
+        ],
+        "redengineElements": 0,
+        "loadError": "",
+        "guide": ""
+      }
+    },
+    {
+      "name": "咸阳分行",
+      "orgCode": "169",
+      "anchor": "TOP",
+      "action": "Space",
+      "status": "pass",
+      "issues": [],
+      "route": "/screen/SCR_BRANCH?orgCode=169",
+      "network": {
+        "settled": true,
+        "requests": [
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_RETAIL_OVERVIEW?preview=<redacted>",
+            "status": 200,
+            "code": "0",
+            "body": null
+          },
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_BRANCH",
+            "status": 200,
+            "code": "0",
+            "body": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          }
+        ],
+        "dataRequests": [
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "169",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          }
+        ],
+        "unexpectedWrites": [],
+        "bad": [],
+        "console": {
+          "errors": 0,
+          "nonDynamicWarnings": 0,
+          "fallback": 0
+        }
+      },
+      "dataRequestCount": 5,
+      "dataContracts": [
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "169",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "169",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "169",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "169",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "169",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        }
+      ],
+      "dom": {
+        "outerTitle": "支行经营详情",
+        "document": [
+          2560,
+          2560
+        ],
+        "redengineElements": 0,
+        "loadError": "",
+        "guide": ""
+      }
+    },
+    {
+      "name": "榆林分行",
+      "orgCode": "129",
+      "anchor": "FAR_TOP",
+      "action": "click",
+      "status": "pass",
+      "issues": [],
+      "route": "/screen/SCR_BRANCH?orgCode=129",
+      "network": {
+        "settled": true,
+        "requests": [
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_RETAIL_OVERVIEW?preview=<redacted>",
+            "status": 200,
+            "code": "0",
+            "body": null
+          },
+          {
+            "method": "GET",
+            "url": "/api/screen/view/SCR_BRANCH",
+            "status": 200,
+            "code": "0",
+            "body": null
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          }
+        ],
+        "dataRequests": [
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/screen/data",
+            "status": 200,
+            "code": "0",
+            "body": {
+              "keys": [
+                "contextParams",
+                "dsId",
+                "period",
+                "schemaVersion",
+                "screenCode"
+              ],
+              "schemaVersion": 1,
+              "screenCode": "SCR_BRANCH",
+              "identity": {
+                "field": "dsId",
+                "present": true,
+                "value": "<redacted>",
+                "valueType": "number"
+              },
+              "dateFrom": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "dateTo": {
+                "present": false,
+                "valueType": "undefined"
+              },
+              "contextParams": {
+                "keys": [
+                  "empId",
+                  "orgCode"
+                ],
+                "orgCode": "129",
+                "orgCodeType": "string",
+                "empIdPresent": true,
+                "empIdType": "string"
+              },
+              "nullPaths": []
+            }
+          }
+        ],
+        "unexpectedWrites": [],
+        "bad": [],
+        "console": {
+          "errors": 0,
+          "nonDynamicWarnings": 0,
+          "fallback": 0
+        }
+      },
+      "dataRequestCount": 5,
+      "dataContracts": [
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "129",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "129",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "129",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "129",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        },
+        {
+          "keys": [
+            "contextParams",
+            "dsId",
+            "period",
+            "schemaVersion",
+            "screenCode"
+          ],
+          "schemaVersion": 1,
+          "screenCode": "SCR_BRANCH",
+          "identity": {
+            "field": "dsId",
+            "present": true,
+            "value": "<redacted>",
+            "valueType": "number"
+          },
+          "dateFrom": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "dateTo": {
+            "present": false,
+            "valueType": "undefined"
+          },
+          "contextParams": {
+            "keys": [
+              "empId",
+              "orgCode"
+            ],
+            "orgCode": "129",
+            "orgCodeType": "string",
+            "empIdPresent": true,
+            "empIdType": "string"
+          },
+          "nullPaths": []
+        }
+      ],
+      "dom": {
+        "outerTitle": "支行经营详情",
+        "document": [
+          2560,
+          2560
+        ],
+        "redengineElements": 0,
+        "loadError": "",
+        "guide": ""
+      }
+    }
+  ],
+  "summary": {
+    "overview": "pass",
+    "branchesPassed": 4,
+    "branchesExpected": 4,
+    "screenDataRequests": 20,
+    "screenData200Code0": 20,
+    "screenDataBodiesWithoutNull": 20,
+    "unexpectedWrites": 0,
+    "consoleErrors": 0,
+    "redengineElements": 0
+  },
+  "firstError": null
+}

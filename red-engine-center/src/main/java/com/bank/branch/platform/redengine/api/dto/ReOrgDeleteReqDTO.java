@@ -12,7 +12,7 @@ import lombok.Data;
  * {@code @Valid}；{@link com.bank.branch.platform.common.aop.AuditLogAspect#extractReason}
  * 再通过反射从 Controller 方法入参（含本 DTO）里找 {@code getReason()} 回填审计事件。
  * 原为遗留缺口——{@code ReOrgController.deleteOrg} 此前仅 {@code @PathVariable Long id}，
- * 路径变量无处挂载 {@code reason}，本次修复补齐（见 red-engine-center/CLAUDE.md「技术债」④，
+ * 路径变量无处挂载 {@code reason}，本次修复补齐（见 red-engine-center/AGENTS.md「权限与数据边界」，
  * 2026-07-19 已修复）。</p>
  */
 @Data

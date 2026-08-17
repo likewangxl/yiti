@@ -1,0 +1,4 @@
+### Result
+1. [POST] http://127.0.0.1:8091/api/auth/login => [FAILED] net::ERR_ABORTED
+
+说明：该条为清空 console/network 后、明确 locator 的唯一 UI 登录重试后读取到的请求摘要；未归档请求正文、响应正文、Cookie 或 Authorization。

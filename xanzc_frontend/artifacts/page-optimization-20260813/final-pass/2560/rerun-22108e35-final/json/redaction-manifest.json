@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 1,
+  "operation": "mechanical-redaction-only-no-browser-rerun",
+  "files": [
+    {
+      "artifact": "json/final-summary.json",
+      "sourceSha256": "ea3136eddb8abe44628fbea5fd0a8ac946b1006f62cb991c1799e7ff07754eb7",
+      "publishedSha256": "0d08a4cbb762caa27403a36b3f3c9f00b3532ce37a6e482de3b72c27a5813ae7",
+      "changedValueCount": 0
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "sourceSha256": "2455e08374b7e6fc91bba1595f6d01bdedf77e787bddedd56d6e635119be32c7",
+      "publishedSha256": "87e87abc6582c0b90cb0d3f65652974da1af6d67971783d1d3ebf3b5fb46b00a",
+      "changedValueCount": 15
+    },
+    {
+      "artifact": "json/targeted-regression.json",
+      "sourceSha256": "afb672fbd6b63edf685439d58bb7b0957a8c6b21085dac39b40e578389d09e61",
+      "publishedSha256": "4e7a431038c69cdee5e2b88e8851a43e5932f103f133ea8a934b85d6aeae8ee1",
+      "changedValueCount": 0
+    },
+    {
+      "artifact": "json/xian-draft-contract.json",
+      "sourceSha256": "dacb5621f1c370def4f1da68dabf287d8192f4291704ea64d2e87f3d58946e34",
+      "publishedSha256": "06684076568981fbf65dd931ef650c86d3f1181b8918a9b40d8ba85db65a42a6",
+      "changedValueCount": 0
+    },
+    {
+      "artifact": "json/xian-drill.json",
+      "sourceSha256": "bf17eb398d79d14fb74172a71f17261d94e02ea6b11dfdf8c67c2d2052b2437d",
+      "publishedSha256": "675ea9e8e1482b89662b19660c5eeaf2e5b733b99f0eb33927253f84651c700a",
+      "changedValueCount": 0
+    }
+  ],
+  "changedValueCount": 15,
+  "changedValues": [
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[4].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/portal/announcements/<redacted-id>"
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[11].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[15].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[17].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[22].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[22].network.requests[1].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[31].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/reports/amas-approvals/<redacted-id>"
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[39].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/reports/amas-price-approvals/<redacted-id>"
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[41].network.requests[2].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[41].network.requests[3].url",
+      "beforeType": "string",
+      "after": "/api/admin/users/<redacted-id>"
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[45].network.requests[1].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[48].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[48].network.requests[1].url",
+      "beforeType": "string",
+      "after": "/api/sys/dicts/<redacted-id>/items"
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[54].network.requests[0].url",
+      "beforeType": "string",
+      "after": "/api/portal/announcements/<redacted-id>"
+    },
+    {
+      "artifact": "json/routes-59.json",
+      "pointer": "$.routes[56].network.requests[1].url",
+      "beforeType": "string",
+      "after": "/api/admin/workflow/flows/<redacted-id>"
+    }
+  ],
+  "parameterRoutes": [
+    {
+      "route": "AnnouncementDetail",
+      "template": "/announcement/:id",
+      "redaction": "template-and-endpoint-segment"
+    },
+    {
+      "route": "ReportFreeDetail",
+      "template": "/report/free/:batchId",
+      "redaction": "template-and-endpoint-segment"
+    },
+    {
+      "route": "ReportAmasApprovalDetail",
+      "template": "/report/amas-approvals/:perfAdjustNo",
+      "redaction": "template-and-endpoint-segment"
+    },
+    {
+      "route": "HistoryPriceApprovalDetail",
+      "template": "/history/price-approval/:priceApprId",
+      "redaction": "template-and-endpoint-segment"
+    },
+    {
+      "route": "SysAnnouncementDetail",
+      "template": "/system/announcements/:id",
+      "redaction": "template-and-endpoint-segment"
+    },
+    {
+      "route": "SysWorkflowFlowEdit",
+      "template": "/system/workflow-flows/:id",
+      "redaction": "template-and-endpoint-segment"
+    }
+  ],
+  "invariants": {
+    "routeSummaryHttpDomPreserved": true,
+    "xianSummaryHttpBodyPreserved": true,
+    "routeCount": 59,
+    "passedRouteCount": 59,
+    "xianRequestCount": 20
+  },
+  "publicationRules": {
+    "actualPath": "route-template-when-present",
+    "entityPathSegment": "<redacted-id>",
+    "queryValue": "<redacted>",
+    "originalIdsRetained": false,
+    "singleIdHashesRetained": false
+  }
+}

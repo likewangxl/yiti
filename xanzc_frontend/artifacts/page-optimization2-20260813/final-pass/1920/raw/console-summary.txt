@@ -1,0 +1,20 @@
+Official CLI final command:
+  playwright-cli -s=pageopt2finalpass1920 console error
+
+Raw result:
+  Total messages: 190 (Errors: 0, Warnings: 190)
+  Returning 0 messages for level "error"
+
+Structured per-phase raw console events are retained in:
+  ../json/scan-59-and-actions.json
+  ../json/shell-tabs-actions.json
+  ../json/tab-focus-extended.json
+  ../json/designer-readonly.json
+
+Classification:
+  product errors: 0
+  api fallbacks: 0
+  ResizeObserver loops: 0
+  non-dynamic/non-browser-policy warnings: 0
+  distinct dynamic-menu warnings: 15
+  designer direct-URL browser close-policy warnings: 1

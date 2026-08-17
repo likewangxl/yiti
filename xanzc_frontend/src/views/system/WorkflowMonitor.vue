@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud workflow-monitor-page" aria-labelledby="workflow-monitor-page-title" :aria-busy="loading ? 'true' : 'false'">
+  <main v-bp-overflow-tooltip class="bp-crud workflow-monitor-page" aria-labelledby="workflow-monitor-page-title" :aria-busy="loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="workflow-monitor-page-title"><span class="sub">秘书岗按本机构、行长按全行查看进行中和已完成的审批流实例。</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="审批流监控操作">
@@ -45,7 +45,7 @@
       </div>
       <p v-if="loadError" class="error-state" role="alert">{{ loadError }} <el-button link type="primary" @click="reload">重试</el-button></p>
       <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无流程记录" aria-labelledby="workflow-monitor-heading" aria-describedby="workflow-monitor-state">
-        <el-table-column label="流程 · 标题" min-width="240" show-overflow-tooltip>
+        <el-table-column label="流程 · 标题" min-width="240" show-overflow-tooltip class-name="compact-stack-cell">
           <template #default="{row}">
             <code class="mono">{{ row.businessKey || '-' }}</code>
             <div class="sub-name">{{ row.title || '-' }}</div>
@@ -54,7 +54,7 @@
         <el-table-column label="业务类型" width="110">
           <template #default="{row}">{{ bizTypeLabel(row.bizType) }}</template>
         </el-table-column>
-        <el-table-column label="当前处理人" width="170">
+        <el-table-column label="当前处理人" width="170" class-name="compact-stack-cell">
           <template #default="{row}">
             <template v-if="row.currentAssignee">
               <div>{{ row.currentAssignee }}</div>
@@ -63,7 +63,7 @@
             <template v-else>-</template>
           </template>
         </el-table-column>
-        <el-table-column label="发起人" width="170">
+        <el-table-column label="发起人" width="170" class-name="compact-stack-cell">
           <template #default="{row}">
             <template v-if="row.startUser">
               <div>{{ row.startUser }}</div>
@@ -80,17 +80,13 @@
             <el-tag :class="statusCls(row.processStatus)" effect="plain" size="small">{{ statusLabel(row.processStatus) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="150" fixed="right">
           <template #default="{row}">
-            <div class="row-actions" role="group" :aria-label="`${row.title || row.businessKey || '流程实例'} 操作`">
-              <el-button link type="primary" size="small" @click="openDetail(row)">查看</el-button>
-              <el-button
-                link type="primary" size="small"
-                :disabled="!canTransfer(row)"
-                :title="canTransfer(row) ? '' : '流程已结束或暂无活跃任务，不可转交/指派'"
-                @click="openTransfer(row)"
-              >{{ transferLabel(row) }}</el-button>
-            </div>
+            <BpAdaptiveRowActions role="group" :aria-label="`${row.title || row.businessKey || '流程实例'} 操作`">
+              <template #primary><el-button link type="primary" size="small" @click="openDetail(row)">查看</el-button></template>
+              <template #expanded><el-button link size="small" :disabled="!canTransfer(row)" :title="canTransfer(row) ? '' : '流程已结束或暂无活跃任务，不可转交/指派'" @click="openTransfer(row)">{{ transferLabel(row) }}</el-button></template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多流程实例操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="!canTransfer(row)" :title="canTransfer(row) ? '' : '流程已结束或暂无活跃任务，不可转交/指派'" @click="openTransfer(row)">{{ transferLabel(row) }}</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -115,7 +111,7 @@
       设计器生成的与静态部署的都一样），getProcessDiagram 恒返回 null → 接口恒 500，该图从未成功
       渲染过。节点进度信息由下方「流程节点」表格承载，不再保留一个必然失败的入口。
     -->
-    <el-drawer v-model="detail.show" :title="`流程详情 · ${detail.row?.businessKey || ''}`" size="56%" :destroy-on-close="true" :aria-busy="detail.loading ? 'true' : 'false'">
+    <el-drawer v-model="detail.show" class="bp-crud-dialog" :title="`流程详情 · ${detail.row?.businessKey || ''}`" size="56%" :destroy-on-close="true" :aria-busy="detail.loading ? 'true' : 'false'">
       <div v-loading="detail.loading">
         <p v-if="detail.error" class="error-state" role="alert">{{ detail.error }} <el-button link type="primary" @click="openDetail(detail.row)">重试</el-button></p>
         <el-descriptions v-if="detail.info" :column="2" border size="default">
@@ -229,7 +225,7 @@
                 <el-tag :class="transferStatusCls(row.status)" effect="plain" size="small">{{ transferStatusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="原因" min-width="180">
+            <el-table-column label="原因" min-width="180" class-name="compact-stack-cell">
               <template #default="{row}">
                 <div class="tr-reason">转交：{{ row.transferReason || '-' }}</div>
                 <div v-if="row.rejectReason" class="tr-reason tr-reject">拒绝：{{ row.rejectReason }}</div>
@@ -260,6 +256,7 @@ import { useRoute } from 'vue-router';
 import { monitorProcesses, getProcessInfo, getProcessHistory, getProcessNodes, processTransferHistory } from '@/api/workflow';
 import { fmtDateTime } from '@/utils/datetime';
 import TransferDialog from '@/components/TransferDialog.vue';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 
 const route = useRoute();
 

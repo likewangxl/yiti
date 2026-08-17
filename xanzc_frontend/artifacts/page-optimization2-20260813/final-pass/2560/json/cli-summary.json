@@ -1,0 +1,26 @@
+{
+  "routeListStart": "No active routes",
+  "routeListEnd": "No active routes",
+  "console": {
+    "total": 194,
+    "errors": 0,
+    "warnings": 194,
+    "allowedDynamicVueRouterWarnings": 194,
+    "unexpectedWarnings": 0,
+    "fallbacks": 0,
+    "resizeObserverLoops": 0
+  },
+  "requests": {
+    "allowedLoginWrites": 1,
+    "allowedLoginEndpoint": "POST /api/auth/login => 200",
+    "businessWrites": 0,
+    "failedApi": 0,
+    "scriptEvidenceRequestSummaries": 227,
+    "officialCliDefaultRequestOutputOmittedStatic": 414,
+    "responseBodiesArchived": false
+  },
+  "evidenceSanitized": true,
+  "credentialsArchived": false,
+  "responseBodiesArchived": false,
+  "realEntityIdsArchived": false
+}

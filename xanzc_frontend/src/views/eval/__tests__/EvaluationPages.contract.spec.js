@@ -61,6 +61,9 @@ const stubs = {
   },
   'el-table': { name: 'ElTable', inheritAttrs: false, props: ['data'], template: '<div v-bind="$attrs"><slot /><slot name="empty" /></div>' },
   'el-table-column': empty('ElTableColumn'),
+  'el-dropdown': { name: 'ElDropdown', template: '<div><slot /><slot name="dropdown" /></div>' },
+  'el-dropdown-menu': passthrough('ElDropdownMenu'),
+  'el-dropdown-item': { name: 'ElDropdownItem', emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' },
   'el-pagination': passthrough('ElPagination'),
   'el-dialog': { name: 'ElDialog', props: ['modelValue'], template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>' },
   'el-form': { name: 'ElForm', methods: { validate: () => Promise.resolve(true) }, template: '<form><slot /></form>' },
@@ -85,7 +88,7 @@ const stubs = {
 function mountPage(component, props = {}) {
   return mount(component, {
     props,
-    global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    global: { stubs, directives: { loading: { mounted() {}, updated() {} }, 'bp-overflow-tooltip': {} } }
   })
 }
 
@@ -111,6 +114,28 @@ describe('内部评价页面 bp-crud 结构契约', () => {
     expect(source).toMatch(/(?:aria-busy|table-state|empty)/i)
     expect(source).not.toMatch(/[📥📤✅❌⚠️🔒]/u)
     expect(source).not.toMatch(/#[0-9a-f]{3,8}\b/i)
+  })
+})
+
+describe('评价标签列表的字段和工具栏密度', () => {
+  it('标签名称使用固定列宽，避免在宽屏无意义拉伸并保留完整值提示', () => {
+    const source = readFileSync(`${process.cwd()}/src/views/eval/Tags.vue`, 'utf8')
+
+    expect(source).toMatch(/<el-table-column\s+prop="tagName"\s+label="标签名称"\s+width="\d+"\s+show-overflow-tooltip/)
+    expect(source).not.toMatch(/<el-table-column\s+prop="tagName"\s+label="标签名称"\s+min-width=/)
+  })
+
+  it('人员评价角色将导入、导出移至页头，筛选区只保留筛选和查询操作', () => {
+    const source = readFileSync(`${process.cwd()}/src/views/eval/UserTags.vue`, 'utf8')
+    const filterStart = source.indexOf('<section class="card-section filter-bar"')
+    const filterEnd = source.indexOf('</section>', filterStart)
+    const header = source.slice(0, filterStart)
+    const filter = source.slice(filterStart, filterEnd)
+
+    expect(header).toMatch(/@click="openImport"/)
+    expect(header).toMatch(/@click="doExport"/)
+    expect(filter).not.toMatch(/@click="openImport"/)
+    expect(filter).not.toMatch(/@click="doExport"/)
   })
 })
 
@@ -171,6 +196,26 @@ describe('Tasks.vue 发布与关闭行为', () => {
     expect(evalApi.closeTask).toHaveBeenCalledWith('T1')
     request.resolve({ ok: true })
     await Promise.all([first, second])
+  })
+
+  it('重置清空状态和关键词、回到首页并按无筛选参数重新查询', async () => {
+    wrapper = mountPage(Tasks)
+    await settle()
+    evalApi.listUnifiedTasks.mockClear()
+    wrapper.vm.filter.status = 0
+    wrapper.vm.filter.keyword = '季度评价'
+    wrapper.vm.pager.pageNo = 3
+    await wrapper.vm.$nextTick()
+
+    const reset = wrapper.findAll('button').find((button) => button.text() === '重置')
+    expect(reset).toBeTruthy()
+    await reset.trigger('click')
+    await settle()
+
+    expect(wrapper.vm.filter).toMatchObject({ status: '', keyword: '' })
+    expect(wrapper.vm.pager.pageNo).toBe(1)
+    expect(evalApi.listUnifiedTasks).toHaveBeenCalledTimes(1)
+    expect(evalApi.listUnifiedTasks).toHaveBeenCalledWith({ page: 1, pageSize: 20 })
   })
 })
 

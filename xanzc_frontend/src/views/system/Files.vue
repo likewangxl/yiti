@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud files-page" aria-labelledby="files-page-title" :aria-busy="loading ? 'true' : 'false'">
+  <main v-bp-overflow-tooltip class="bp-crud files-page" aria-labelledby="files-page-title" :aria-busy="loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="files-page-title"><span class="sub">集中查看已上传的业务附件；上传仍在所属业务单据中完成。</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="文件管理操作">
@@ -38,12 +38,13 @@
         <el-table-column label="MD5" width="132"><template #default="{ row }"><code v-if="row.md5Hash" class="mono">{{ row.md5Hash.slice(0, 10) }}…</code><span v-else>-</span></template></el-table-column>
         <el-table-column label="上传人" width="150"><template #default="{ row }">{{ row.uploadedBy || row.by || '-' }}</template></el-table-column>
         <el-table-column label="上传时间" width="180"><template #default="{ row }">{{ row.uploadedTime || row.time || '-' }}</template></el-table-column>
-        <el-table-column label="操作" width="176" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="176" fixed="right">
           <template #default="{ row }">
-            <div class="row-actions" role="group" :aria-label="`${row.fileName || row.name || '文件'} 操作`">
-              <el-button link type="primary" size="small" @click="onDownload(row)">下载</el-button>
-              <el-button link type="danger" size="small" :loading="isDeleting(row.id)" :disabled="isDeleting(row.id)" @click="onDelete(row)">删除</el-button>
-            </div>
+            <BpAdaptiveRowActions role="group" :aria-label="`${row.fileName || row.name || '文件'} 操作`">
+              <template #primary><el-button link type="primary" size="small" @click="onDownload(row)">下载</el-button></template>
+              <template #expanded><el-button link type="danger" size="small" :disabled="isDeleting(row.id)" @click="onDelete(row)">删除</el-button></template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" :disabled="isDeleting(row.id)" aria-label="更多文件操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item divided class="danger-item" :disabled="isDeleting(row.id)" @click="onDelete(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -66,6 +67,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listFiles, deleteFile } from '@/api/system';
 import { API_BASE } from '@/api/http';
 

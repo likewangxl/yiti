@@ -1,8 +1,22 @@
 <template>
   <aside id="app-sidebar" class="side" :class="{ 'side--collapsed': props.collapsed }">
-    <div class="logo" :title="props.collapsed ? '银行营销平台' : undefined">
-      <span class="mark">银</span>
+    <div class="logo" :class="{ 'logo--collapsed': props.collapsed }">
+      <span class="mark" aria-hidden="true">银</span>
       <span class="logo-name" :aria-hidden="props.collapsed ? 'true' : undefined">银行营销平台</span>
+      <button
+        type="button"
+        class="shell-toggle"
+        data-testid="sidebar-toggle"
+        :aria-label="props.collapsed ? '展开侧边导航' : '折叠侧边导航'"
+        :aria-expanded="props.collapsed ? 'false' : 'true'"
+        aria-controls="app-sidebar"
+        :title="props.collapsed ? '展开侧边导航' : '折叠侧边导航'"
+        @click="emit('toggle-sidebar')"
+      >
+        <svg :class="{ 'shell-toggle__icon--collapsed': props.collapsed }" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+          <path d="m15 6-6 6 6 6" />
+        </svg>
+      </button>
     </div>
 
     <nav class="side-nav" aria-label="主导航" :aria-busy="loading ? 'true' : undefined">
@@ -17,6 +31,7 @@
             :aria-current="isCurrentMenu(m) ? 'page' : undefined"
             :aria-label="m.menuName"
             :title="m.menuName"
+            @click.capture="handleMenuClick($event, m)"
           >
             <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M5 5h14v14H5zM8 9h8M8 13h8" /></svg></span>
             <span class="item-label">{{ m.menuName }}</span>
@@ -55,6 +70,7 @@
                 :aria-current="isCurrentMenu(c) ? 'page' : undefined"
                 :aria-label="c.menuName"
                 :title="c.menuName"
+                @click.capture="handleMenuClick($event, c)"
               >
                 <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="3" /></svg></span>
                 <span class="item-label">{{ c.menuName }}</span>
@@ -79,6 +95,7 @@
                   :aria-current="isCurrentMenu(c) ? 'page' : undefined"
                   :aria-label="c.menuName"
                   :title="c.menuName"
+                  @click.capture="handleMenuClick($event, c)"
                 >
                   <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="3" /></svg></span>
                   <span class="item-label">{{ c.menuName }}</span>
@@ -95,13 +112,19 @@
 <script setup>
 import { reactive, computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import { ElMessage } from 'element-plus';
 import { useMenuStore } from '@/stores/menu';
+import {
+  SCREEN_DESIGNER_ROUTE_PATH,
+  openScreenDesignerWindow
+} from '@/utils/screenDesignerWindow';
 
 const route = useRoute();
 const menuStore = useMenuStore();
 const props = defineProps({
   collapsed: { type: Boolean, default: false }
 });
+const emit = defineEmits(['toggle-sidebar']);
 // 直接消费共享 store 的菜单树；与面包屑/PageTitle 同源，改名 force 刷新后一并更新
 const menus = computed(() => menuStore.tree);
 const loading = computed(() => menuStore.loading);
@@ -128,6 +151,16 @@ function isCurrentMenu(menu) {
 
 function groupPanelId(resourceId) {
   return `sidebar-group-${String(resourceId)}`;
+}
+
+/** 设计器使用独立命名窗口，当前工作区保持原路由与页签不变。 */
+function handleMenuClick(event, menu) {
+  if (menu?.resourceUrl !== SCREEN_DESIGNER_ROUTE_PATH) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (!openScreenDesignerWindow()) {
+    ElMessage.error('大屏设计器窗口打开失败，请允许浏览器弹出窗口后重试');
+  }
 }
 
 // 默认展开全部分组节点（按 resourceId）；tree 变化（首次加载/改名刷新）后重建展开态
@@ -221,7 +254,7 @@ function toggle(id, event) {
 .logo {
   height: var(--layout-header-height);
   display: flex; align-items: center; gap: 10px;
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-2) 0 var(--space-4);
   color: var(--color-surface); font-weight: 600; font-size: 14px;
   border-bottom: 1px solid var(--color-sidebar-border);
   letter-spacing: .3px;
@@ -233,6 +266,41 @@ function toggle(id, event) {
     color: var(--color-surface); font-size: 13px; font-weight: 700;
     flex-shrink: 0;
   }
+  .logo-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+.shell-toggle {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  padding: 0;
+  color: var(--color-sidebar-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-enter), background-color var(--motion-fast) var(--ease-enter);
+
+  &:hover { color: var(--color-surface); background: var(--color-sidebar-hover); }
+  &:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -3px; }
+  svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform var(--motion-fast) var(--ease-enter);
+  }
+  .shell-toggle__icon--collapsed { transform: rotate(180deg); }
 }
 .side-nav { min-height: 0; }
 .side-nav__content { padding: var(--space-2) 0; }
@@ -292,15 +360,22 @@ function toggle(id, event) {
   box-shadow: var(--shadow-popover);
 }
 .side--collapsed {
-  .logo,
+  .logo {
+    justify-content: center;
+    padding: 0;
+  }
+  .logo .mark,
+  .logo-name { display: none; }
+  .shell-toggle { margin-left: 0; }
   .parent,
   .root-item { justify-content: center; padding-right: var(--space-2); padding-left: var(--space-2); }
-  .logo-name,
   .item-label,
   .chev { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .parent .chev { transition-duration: 1ms; }
+  .parent .chev,
+  .shell-toggle,
+  .shell-toggle svg { transition-duration: 1ms; }
 }
 </style>

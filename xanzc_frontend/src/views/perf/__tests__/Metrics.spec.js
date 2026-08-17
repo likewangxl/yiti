@@ -81,13 +81,16 @@ const stubs = {
   'el-radio': passthrough('ElRadio'),
   'el-tag': passthrough('ElTag'),
   'el-tree': { name: 'ElTree', inheritAttrs: false, template: '<div class="tree-stub" v-bind="$attrs" />' },
+  'el-dropdown': { name: 'ElDropdown', template: '<div><slot /><slot name="dropdown" /></div>' },
+  'el-dropdown-menu': passthrough('ElDropdownMenu'),
+  'el-dropdown-item': { name: 'ElDropdownItem', emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' },
   'el-table': { name: 'ElTable', inheritAttrs: false, template: '<div class="table-stub" v-bind="$attrs"><slot /></div>' },
   'el-table-column': empty('ElTableColumn'),
   'el-date-picker': empty('ElDatePicker')
 };
 const globalOptions = {
   stubs,
-  directives: { loading: { mounted() {}, updated() {} } }
+  directives: { loading: { mounted() {}, updated() {} }, 'bp-overflow-tooltip': {} }
 };
 
 let wrapper;

@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud announcement-detail-page" aria-labelledby="announcement-detail-title">
+<main v-bp-overflow-tooltip class="bp-crud announcement-detail-page" aria-labelledby="announcement-detail-title">
     <header class="page-h">
       <PageTitle id="announcement-detail-title" />
       <div class="actions action-group" role="group" aria-label="公告详情操作">

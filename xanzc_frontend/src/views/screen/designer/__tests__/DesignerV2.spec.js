@@ -9,6 +9,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 
+const routerReplace = vi.hoisted(() => vi.fn());
+
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ replace: routerReplace })
+}));
+
 vi.mock('@/api/screen', () => ({
   listScreens: vi.fn().mockResolvedValue([]),
   getScreenCanvas: vi.fn(),
@@ -35,15 +41,21 @@ import {
   listScreenAccessRoles, saveScreenAccessRoles, discardScreenCanvas,
   saveScreenCanvas, publishScreenCanvas, rollbackScreenCanvas, listScreenPublishLogs
 } from '@/api/screen';
+import { ElMessageBox } from 'element-plus';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import DesignerV2 from '../DesignerV2.vue';
 
 // el-button/el-dialog/el-input 用渲染 slot 的自定义 stub:新建大屏流程测试需要按钮文本可寻、
 // 弹框内容可见、输入框可 setValue;其余 element-plus 组件保持哑 stub(不关心内部渲染)。
-const ElButtonStub = { name: 'ElButton', emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' };
+const ElButtonStub = {
+  name: 'ElButton',
+  props: ['disabled', 'loading'],
+  emits: ['click'],
+  template: '<button :disabled="disabled || loading" @click="$emit(\'click\')"><slot /></button>'
+};
 const ElDialogStub = {
-  name: 'ElDialog', props: ['modelValue'], emits: ['update:modelValue'],
-  template: '<div v-if="modelValue" class="dlg-stub"><slot /><slot name="footer" /></div>'
+  name: 'ElDialog', props: ['modelValue', 'title'], emits: ['update:modelValue', 'opened'],
+  template: '<div v-if="modelValue" class="dlg-stub" role="dialog" :aria-label="title"><slot /><slot name="footer" /></div>'
 };
 const ElInputStub = {
   name: 'ElInput', props: ['modelValue'], emits: ['update:modelValue'],
@@ -88,8 +100,15 @@ function findButton(wrapper, text) {
   return wrapper.findAll('button').find(b => b.text() === text);
 }
 
+function markCanvasDirty(background) {
+  useScreenDesignerStore().canvasStyle.background = background;
+}
+
 describe('DesignerV2.vue 挂载冒烟测试', () => {
-  beforeEach(() => setActivePinia(createPinia()));
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
 
   it('mount 不抛错', () => {
     expect(() => mount(DesignerV2, { global: { stubs } })).not.toThrow();
@@ -103,6 +122,202 @@ describe('DesignerV2.vue 挂载冒烟测试', () => {
   it('卸载不抛错(keydown 监听器能正常移除)', () => {
     const wrapper = mount(DesignerV2, { global: { stubs } });
     expect(() => wrapper.unmount()).not.toThrow();
+  });
+
+  it('保留全部现有设计器工具，并新增键盘可达的返回入口', async () => {
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+
+    for (const label of ['新建', '编辑范围', '管理查看角色', '撤销', '重做', '适应窗口', '预览草稿', '放弃草稿', '回滚', '保存', '发布', '返回']) {
+      expect(findButton(wrapper, label), label).toBeTruthy();
+    }
+    expect(findButton(wrapper, '返回').attributes('aria-label')).toBe('返回工作区');
+  });
+});
+
+describe('DesignerV2.vue 未保存保护与返回', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    listScreens.mockResolvedValue([{ id: 1, screenName: 'A屏', viewLevel: 'BRANCH' }]);
+    getScreenCanvas.mockResolvedValue(editorResp(1, 'SCR_A'));
+    routerReplace.mockResolvedValue();
+  });
+
+  it('无未保存修改时直接尝试关闭，受限则回到 workspace', async () => {
+    const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => {});
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+
+    await findButton(wrapper, '返回').trigger('click');
+    await flushPromises();
+
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+    expect(saveScreenCanvas).not.toHaveBeenCalled();
+    expect(wrapper.find('[aria-label="未保存修改"]').exists()).toBe(false);
+    expect(routerReplace).toHaveBeenCalledWith('/workspace');
+    closeSpy.mockRestore();
+  });
+
+  it('初始加载不脏，用户改变布局后变脏，保存成功重置基线', async () => {
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+    expect(wrapper.vm.isDirty).toBe(false);
+
+    markCanvasDirty('#111111');
+    await flushPromises();
+    expect(wrapper.vm.isDirty).toBe(true);
+
+    saveScreenCanvas.mockResolvedValue({ canvasVersion: 1 });
+    await wrapper.vm.onSave();
+    await flushPromises();
+    expect(wrapper.vm.isDirty).toBe(false);
+  });
+
+  it('保存失败保持脏状态，不关闭也不返回工作区', async () => {
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+    markCanvasDirty('#222222');
+    await flushPromises();
+    await findButton(wrapper, '返回').trigger('click');
+
+    saveScreenCanvas.mockRejectedValueOnce(new Error('network failed'));
+    await findButton(wrapper, '保存并关闭').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.vm.isDirty).toBe(true);
+    expect(routerReplace).not.toHaveBeenCalled();
+    expect(wrapper.find('[aria-label="未保存修改"]').exists()).toBe(true);
+  });
+
+  it('有未保存修改时展示三个明确分支；取消不写请求并恢复返回按钮焦点', async () => {
+    const wrapper = mount(DesignerV2, { attachTo: document.body, global: { stubs } });
+    await flushPromises();
+    markCanvasDirty('#333333');
+    await flushPromises();
+    await findButton(wrapper, '返回').trigger('click');
+
+    const dialog = wrapper.find('[aria-label="未保存修改"]');
+    expect(dialog.exists()).toBe(true);
+    for (const label of ['保存并关闭', '放弃并关闭', '取消']) {
+      expect(findButton(wrapper, label), label).toBeTruthy();
+    }
+
+    await findButton(wrapper, '取消').trigger('click');
+    await flushPromises();
+    expect(saveScreenCanvas).not.toHaveBeenCalled();
+    expect(routerReplace).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(findButton(wrapper, '返回').element);
+    wrapper.unmount();
+  });
+
+  it('放弃并关闭不保存，窗口无法关闭时降级返回 workspace', async () => {
+    const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => {});
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+    markCanvasDirty('#444444');
+    await flushPromises();
+    await findButton(wrapper, '返回').trigger('click');
+    await findButton(wrapper, '放弃并关闭').trigger('click');
+    await flushPromises();
+
+    expect(saveScreenCanvas).not.toHaveBeenCalled();
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+    expect(routerReplace).toHaveBeenCalledWith('/workspace');
+    closeSpy.mockRestore();
+  });
+
+  it('保存并关闭成功才尝试关闭，并在关闭受限时降级', async () => {
+    const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => {});
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+    markCanvasDirty('#555555');
+    await flushPromises();
+    await findButton(wrapper, '返回').trigger('click');
+
+    saveScreenCanvas.mockResolvedValueOnce({ canvasVersion: 1 });
+    await findButton(wrapper, '保存并关闭').trigger('click');
+    await flushPromises();
+
+    expect(saveScreenCanvas).toHaveBeenCalledTimes(1);
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+    expect(routerReplace).toHaveBeenCalledWith('/workspace');
+    closeSpy.mockRestore();
+  });
+
+  it('保存并关闭遇 CAS 立即停止：仅写一次、不进入强制覆盖/重载且保留可恢复状态', async () => {
+    const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => {});
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+    markCanvasDirty('#666666');
+    await flushPromises();
+    await findButton(wrapper, '返回').trigger('click');
+
+    saveScreenCanvas.mockRejectedValueOnce({ code: 'RPT-43012' });
+    await findButton(wrapper, '保存并关闭').trigger('click');
+    await flushPromises();
+
+    expect(saveScreenCanvas).toHaveBeenCalledTimes(1);
+    expect(getScreenCanvas).toHaveBeenCalledTimes(1); // 仅初始加载，不读最新版本进入强制覆盖
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled();
+    expect(wrapper.vm.isDirty).toBe(true);
+    expect(wrapper.vm.exitDialog).toMatchObject({ show: true, saving: false });
+    expect(wrapper.find('[aria-label="未保存修改"]').exists()).toBe(true);
+    expect(closeSpy).not.toHaveBeenCalled();
+    expect(routerReplace).not.toHaveBeenCalled();
+
+    // 冲突后可取消回到画布，也可再次打开退出选择；不会偷偷重试写入。
+    await findButton(wrapper, '取消').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[aria-label="未保存修改"]').exists()).toBe(false);
+    await findButton(wrapper, '返回').trigger('click');
+    expect(wrapper.find('[aria-label="未保存修改"]').exists()).toBe(true);
+    expect(saveScreenCanvas).toHaveBeenCalledTimes(1);
+    closeSpy.mockRestore();
+  });
+
+  it('工具栏普通保存遇 CAS 仍保留既有强制覆盖流程', async () => {
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+    markCanvasDirty('#686868');
+    await flushPromises();
+
+    saveScreenCanvas
+      .mockRejectedValueOnce({ code: 'RPT-43012' })
+      .mockResolvedValueOnce({ canvasVersion: 2 });
+    getScreenCanvas.mockResolvedValueOnce({ ...editorResp(1, 'SCR_A'), canvasVersion: 1 });
+    await wrapper.vm.onSave();
+    await flushPromises();
+
+    expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1);
+    expect(saveScreenCanvas).toHaveBeenCalledTimes(2);
+    expect(saveScreenCanvas.mock.calls[1][0].expectedVersion).toBe(1);
+    expect(wrapper.vm.isDirty).toBe(false);
+  });
+
+  it('beforeunload 仅在脏状态阻止离开，卸载时清理监听', async () => {
+    const addSpy = vi.spyOn(window, 'addEventListener');
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+    const handler = addSpy.mock.calls.find(([type]) => type === 'beforeunload')?.[1];
+    expect(handler).toBeTypeOf('function');
+
+    const cleanEvent = { preventDefault: vi.fn(), returnValue: undefined };
+    handler(cleanEvent);
+    expect(cleanEvent.preventDefault).not.toHaveBeenCalled();
+
+    markCanvasDirty('#777777');
+    await flushPromises();
+    const dirtyEvent = { preventDefault: vi.fn(), returnValue: undefined };
+    handler(dirtyEvent);
+    expect(dirtyEvent.preventDefault).toHaveBeenCalledTimes(1);
+    expect(dirtyEvent.returnValue).toBe('');
+
+    wrapper.unmount();
+    expect(removeSpy).toHaveBeenCalledWith('beforeunload', handler);
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
   });
 });
 

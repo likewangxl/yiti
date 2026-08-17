@@ -4,7 +4,7 @@
   内容：① 申请/审批主信息 ② 业绩分配数据(AMAS_PERFORMANCE_ALLOCATION) ③ 审批流程(AMAS_APPR_RECORD，序号倒序)
 -->
 <template>
-  <main class="bp-crud amas-detail" aria-labelledby="amas-detail-title" :aria-busy="loading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud amas-detail" aria-labelledby="amas-detail-title" :aria-busy="loading ? 'true' : 'false'">
     <header class="page-h">
       <div class="left">
         <h1 id="amas-detail-title" class="page-title">业绩分配审批详情</h1>

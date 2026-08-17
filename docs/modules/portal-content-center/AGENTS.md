@@ -1,27 +1,24 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-14 | Updated: 2026-07-12 -->
 
-# docs/modules/portal-content-center/AGENTS.md
+# portal-content-center 文档维护指导
 
-本文件约束 `docs/modules/portal-content-center/` 下的门户模块文档，统一使用 UTF-8。
+本文件约束 `docs/modules/portal-content-center/`，继承上级文档规则。
 
 ## 目录职责
 
-- 本目录记录工作台聚合、导航、通讯录、产品资料库等设计，共 9 份文档。
-- 门户模块已完整交付（108 Java + 38 测试，0 UOE；V1.13 # 1 已解绑 yiti 开发库），文档需同时区分“当前已实现代码路径”和“目标设计路径”。
+- 记录工作台聚合、导航、快捷方式、通讯录、产品、文档、担保和公告设计。
+- portal 可以维护门户内容和用户配置，但不持有客户、业务申请、绩效或报表核心状态。
 
-## 维护要求
+## 阅读顺序
 
-- `workflow-center` 的 `WorkflowQueryApi` 已落地为正式 Bean；portal 文档需描述“正式 QueryApi + `WorkflowQueryAdapter` 降级封装”的当前实现，不要再写成纯占位方案。
-- 涉及工作台聚合、待办数量、最近待办的章节，要优先和 `portal-content-center` 现有代码保持一致。
-- 性能模块仍属弱依赖，文档中必须保留降级策略说明。
+1. `01-功能规格.md`：门户行为和内容边界。
+2. `02-后端架构.md`：Adapter、Service、Facade 和降级方式。
+3. `03-接口设计与报文.md`、`04-对外API契约.md`：REST 与通讯录/产品等公开契约。
+4. `09-依赖契约摘要.md`：工作台聚合的上下游与降级。
 
-## 推荐阅读
+## 契约同步与边界
 
-- `01-功能规格.md`：产品行为与展示范围。
-- `02-后端架构.md`：当前实现分层和依赖适配方式。
-- `09-依赖契约摘要.md`：跨模块依赖的真实现状与降级策略。
-
-## 覆盖关系
-
-- 继承 `../AGENTS.md` 与 `../../AGENTS.md`。
+- portal 直接依赖 auth、governance、workflow；不直接依赖核心业务域。绩效工作台数据由 bootstrap 桥接，不在 portal POM 增加 performance 依赖。
+- business 和 performance 通过 portal 公开 API 使用通讯录/产品能力；契约变化时同步消费者文档。
+- 待办聚合使用正式 `WorkflowQueryApi` 并由 Adapter 封装降级；不得文档化为读取 workflow 私表。
+- 文件统一经 governance `FileApi`，通知经 `NotifyApi`；现存边界例外只能标为技术债，不作为设计范例。

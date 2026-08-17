@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud free-report" aria-labelledby="free-report-title" :aria-busy="loading || importDlg.uploading || !!mutatingId ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud free-report" aria-labelledby="free-report-title" :aria-busy="loading || importDlg.uploading || !!mutatingId ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="free-report-title" />
       <div class="actions action-group" role="group" aria-label="自由报表操作">
@@ -48,23 +48,20 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="260" fixed="right">
           <template #default="{row}">
-            <el-button link type="primary" size="small" :disabled="!!mutatingId" @click="$router.push(`/report/free/${row.id}`)">查看</el-button>
-            <el-button link type="primary" size="small" :loading="downloadingId === row.id" :disabled="!!mutatingId" @click="doDownload(row)">下载</el-button>
-            <template v-if="isOperator">
-              <el-button v-if="row.status === 'DISABLED'" link type="success" size="small" :loading="mutatingId === row.id" :disabled="!!mutatingId" @click="doEnable(row)">启用</el-button>
-              <el-popconfirm v-else :title="`禁用后其他人将无法查看「${row.reportName}」，确认禁用？`" @confirm="doDisable(row)">
-                <template #reference>
-                  <el-button link type="warning" size="small" :disabled="!!mutatingId">禁用</el-button>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" size="small" :disabled="!!mutatingId" @click="$router.push(`/report/free/${row.id}`)">查看</el-button></template>
+              <template #expanded>
+                <el-button link type="primary" size="small" :disabled="!!mutatingId || downloadingId === row.id" @click="doDownload(row)">下载</el-button>
+                <template v-if="isOperator">
+                  <el-button v-if="row.status === 'DISABLED'" class="success-item" link size="small" :disabled="!!mutatingId" @click="doEnable(row)">启用</el-button>
+                  <el-button v-else class="warning-item" link size="small" :disabled="!!mutatingId" @click="confirmDisable(row)">禁用</el-button>
+                  <el-button link type="danger" size="small" :disabled="!!mutatingId" @click="confirmDelete(row)">删除</el-button>
                 </template>
-              </el-popconfirm>
-              <el-popconfirm :title="`确认删除「${row.reportName}」？数据将不可恢复。`" @confirm="doDelete(row)">
-                <template #reference>
-                  <el-button link type="danger" size="small" :disabled="!!mutatingId">删除</el-button>
-                </template>
-              </el-popconfirm>
-            </template>
+              </template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" :disabled="!!mutatingId" aria-label="更多自由报表操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="!!mutatingId || downloadingId === row.id" @click="doDownload(row)">下载</el-dropdown-item><template v-if="isOperator"><el-dropdown-item v-if="row.status === 'DISABLED'" class="success-item" :disabled="!!mutatingId" @click="doEnable(row)">启用</el-dropdown-item><el-dropdown-item v-else divided class="warning-item" :disabled="!!mutatingId" @click="confirmDisable(row)">禁用</el-dropdown-item><el-dropdown-item divided class="danger-item" :disabled="!!mutatingId" @click="confirmDelete(row)">删除</el-dropdown-item></template></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -96,7 +93,8 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import {
   importFreeReport, listFreeReportBatches, downloadFreeReportFile, deleteFreeReportBatch,
   disableFreeReportBatch, enableFreeReportBatch
@@ -229,6 +227,15 @@ async function doDelete(row) {
   } catch { ElMessage.error('删除失败'); } finally { mutatingId.value = ''; }
 }
 
+async function confirmDelete(row) {
+  try {
+    await ElMessageBox.confirm(`确认删除「${row.reportName}」？数据将不可恢复。`, '删除确认', {
+      type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消'
+    });
+  } catch { return; }
+  await doDelete(row);
+}
+
 async function doDisable(row) {
   if (mutatingId.value) return;
   mutatingId.value = row.id;
@@ -237,6 +244,15 @@ async function doDisable(row) {
     ElMessage.success('已禁用，其他人将无法查看');
     reload();
   } catch (e) { ElMessage.error('禁用失败：' + (e?.message || '')); } finally { mutatingId.value = ''; }
+}
+
+async function confirmDisable(row) {
+  try {
+    await ElMessageBox.confirm(`禁用后其他人将无法查看「${row.reportName}」，确认禁用？`, '禁用确认', {
+      type: 'warning', confirmButtonText: '确认禁用', cancelButtonText: '取消'
+    });
+  } catch { return; }
+  await doDisable(row);
 }
 
 async function doEnable(row) {

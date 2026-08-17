@@ -1,0 +1,13 @@
+官方 playwright-cli 当前登录页安全状态快照（不记录字段值）
+
+{
+  "url": "http://127.0.0.1:8091/#/login?normal",
+  "loginNormal": true,
+  "usernameFieldPresent": true,
+  "passwordFieldPresent": true,
+  "usernameFilled": true,
+  "passwordFilled": true,
+  "submitEnabled": true
+}
+
+说明：登录前页面结构截图见 login-1920-before.md / login-1920-before.png；字段实际值不归档。

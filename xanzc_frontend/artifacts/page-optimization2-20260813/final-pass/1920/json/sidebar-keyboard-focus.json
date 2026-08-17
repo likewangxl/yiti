@@ -1,0 +1,33 @@
+{
+  "gitHead": "4f5d9ceb7ef5a53b39b02f79bfd3c9abd6039eb4",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "input": "official playwright-cli keyboard Tab after temporary focus-only body normalization",
+  "sequence": [
+    {
+      "tag": "BUTTON",
+      "testId": "sidebar-toggle",
+      "ariaLabel": "折叠侧边导航",
+      "focusVisible": true
+    }
+  ],
+  "result": {
+    "active": true,
+    "focusVisible": true,
+    "ariaLabel": "折叠侧边导航",
+    "ariaExpanded": "true",
+    "ariaControls": "app-sidebar",
+    "outlineStyle": "solid",
+    "outlineWidth": "2px",
+    "outlineColor": "rgb(30, 91, 186)",
+    "outlineOffset": "-3px"
+  },
+  "summary": {
+    "reachedToggle": true,
+    "keyboardFocusVisible": true,
+    "visibleTwoPixelOutline": true,
+    "ariaComplete": true
+  }
+}

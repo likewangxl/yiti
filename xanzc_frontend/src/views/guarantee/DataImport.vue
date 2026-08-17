@@ -4,7 +4,7 @@
   后端：GET /api/reports/data-imports（列表） / GET /api/reports/data-imports/{batchNum}（透视数据）
 -->
 <template>
-  <main class="bp-crud data-import" aria-labelledby="data-import-title">
+<main v-bp-overflow-tooltip class="bp-crud data-import" aria-labelledby="data-import-title">
     <div class="page-h">
       <PageTitle id="data-import-title" />
       <span class="desc">导入批次列表，点击「查看数据」展示该批次的导入数据</span>
@@ -55,10 +55,13 @@
         <el-table-column prop="createTime" label="创建时间" width="170" />
         <el-table-column prop="columnCount" label="列数" width="80" align="right" />
         <el-table-column prop="dtExplain" label="说明" min-width="160" show-overflow-tooltip />
-        <el-table-column label="操作" width="140" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="140" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openData(row)">查看</el-button>
-            <el-button link type="primary" :loading="row._downloading" @click="onDownload(row)">下载</el-button>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" @click="openData(row)">查看</el-button></template>
+              <template #expanded><el-button link type="primary" :disabled="row._downloading" @click="onDownload(row)">下载</el-button></template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link aria-label="更多导入批次操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="row._downloading" @click="onDownload(row)">下载</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -113,6 +116,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listDataImports, getDataImportData, exportDataImport } from '@/api/history';
 
 const loading = ref(false);

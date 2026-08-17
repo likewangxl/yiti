@@ -1,0 +1,15 @@
+start:
+No active routes
+
+registered by scan:
+0
+
+end:
+No active routes
+
+session close:
+Browser 'pageopt-final-2560-22108e35' closed
+
+post-close list:
+pageopt-final-2560-22108e35 is absent.
+final1920xian remains open and belongs to the parallel 1920 validation; it was not touched.

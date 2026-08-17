@@ -1,0 +1,384 @@
+{
+  "gitHead": "4f5d9ceb7ef5a53b39b02f79bfd3c9abd6039eb4",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "fixedWindowName": "yiti-screen-designer",
+  "popupOpen": {
+    "mainBefore": {
+      "url": "http://127.0.0.1:8091/#/system/config",
+      "pageCount": 1,
+      "tabCount": 53
+    },
+    "mainAfter": {
+      "url": "http://127.0.0.1:8091/#/system/config",
+      "pageCount": 2,
+      "tabCount": 53
+    },
+    "popup": {
+      "url": "http://127.0.0.1:8091/#/screen-admin/designer",
+      "name": "yiti-screen-designer",
+      "hasOpener": true,
+      "hasFocus": true,
+      "layout": 0,
+      "sidebar": 0,
+      "header": 0,
+      "workspaceTabs": 0,
+      "designer": 1,
+      "dirtyText": "已保存"
+    },
+    "returnAriaLabel": "返回工作区",
+    "tools": {
+      "新建": 1,
+      "编辑范围": 1,
+      "管理查看角色": 1,
+      "撤销": 1,
+      "重做": 1,
+      "适应窗口": 1,
+      "预览草稿": 1,
+      "放弃草稿": 1,
+      "回滚": 1,
+      "保存": 1,
+      "发布": 1,
+      "返回工作区": 1
+    }
+  },
+  "popupReuse": {
+    "pagesBefore": 2,
+    "pagesAfter": 2,
+    "samePopupStillOpen": true,
+    "popup": {
+      "url": "http://127.0.0.1:8091/#/screen-admin/designer",
+      "name": "yiti-screen-designer",
+      "hasOpener": true,
+      "hasFocus": true,
+      "layout": 0,
+      "sidebar": 0,
+      "header": 0,
+      "workspaceTabs": 0,
+      "designer": 1,
+      "dirtyText": "已保存"
+    }
+  },
+  "cleanReturn": {
+    "before": {
+      "url": "http://127.0.0.1:8091/#/screen-admin/designer",
+      "name": "yiti-screen-designer",
+      "hasOpener": true,
+      "hasFocus": true,
+      "layout": 0,
+      "sidebar": 0,
+      "header": 0,
+      "workspaceTabs": 0,
+      "designer": 1,
+      "dirtyText": "已保存"
+    },
+    "after": {
+      "closed": true,
+      "mainUrl": "http://127.0.0.1:8091/#/system/config",
+      "writeDelta": 0
+    }
+  },
+  "directUrlFallback": {
+    "before": {
+      "url": "http://127.0.0.1:8091/#/screen-admin/designer",
+      "name": "",
+      "hasOpener": false,
+      "hasFocus": true,
+      "layout": 0,
+      "sidebar": 0,
+      "header": 0,
+      "workspaceTabs": 0,
+      "designer": 1,
+      "dirtyText": "已保存"
+    },
+    "after": {
+      "closed": false,
+      "url": "http://127.0.0.1:8091/#/workspace",
+      "workspaceShell": 1,
+      "mainFocus": false
+    }
+  },
+  "dirtyCancel": {
+    "activeBackgroundType": "纯色",
+    "changedTo": "渐变",
+    "dirtyText": "有未保存修改",
+    "exitButtons": {
+      "取消": 1,
+      "放弃并关闭": 1,
+      "保存并关闭": 1
+    },
+    "initialFocusText": "未保存修改当前画布有未保存修改。你可以保存后关闭，或放弃这些修改后关闭。取消放弃并关闭保存并关闭",
+    "after": {
+      "open": true,
+      "dirtyText": "有未保存修改",
+      "focusAriaLabel": "返回工作区",
+      "writeDelta": 0
+    }
+  },
+  "dirtyDiscard": {
+    "closed": true,
+    "writeDelta": 0,
+    "saveEndpointCalls": 0
+  },
+  "beforeUnloadProbe": {
+    "syntheticLocalDirtyOnly": true,
+    "defaultPrevented": true,
+    "dispatchResult": false,
+    "returnValue": false
+  },
+  "network": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/src/api/http.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/src/api/auth.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/src/api/workspace.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/src/api/users.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/auth/my-menus",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/auth/permissions",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/src/api/screen.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/screen/admin/screens",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/screen/admin/canvas/<redacted-id>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/admin/org-groups",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/admin/roles/all?recordStatus=<redacted>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/admin/org-profiles",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/screen/admin/screens",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/screen/admin/canvas/<redacted-id>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/admin/org-groups",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/admin/roles/all?recordStatus=<redacted>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/admin/org-profiles",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/notifications/unread-count",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/workflow/tasks?pageSize=<redacted>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/portal/announcements/recent?limit=<redacted>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/notifications?pageNo=<redacted>&pageSize=<redacted>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/notifications/unread-count",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/workflow/transfers/inbox",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/workflow/transfers/outbox",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/src/api/http.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/src/api/auth.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/src/api/workspace.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/src/api/users.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/auth/my-menus",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/auth/permissions",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/src/api/screen.js",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/screen/admin/screens",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/screen/admin/canvas/<redacted-id>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/admin/org-groups",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/admin/roles/all?recordStatus=<redacted>",
+        "status": 200,
+        "failure": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8091/api/admin/org-profiles",
+        "status": 200,
+        "failure": null
+      }
+    ],
+    "badCount": 0,
+    "writeCount": 0
+  },
+  "console": {
+    "errors": [],
+    "fallbacks": [],
+    "nonDynamicWarnings": [],
+    "browserCloseWarnings": [
+      {
+        "page": "main",
+        "type": "warning",
+        "text": "Scripts may close only the windows that were opened by them."
+      }
+    ],
+    "dynamicWarningCount": 15
+  },
+  "summary": {
+    "popupFixedName": true,
+    "mainUnchangedOnOpen": true,
+    "independentNoShell": true,
+    "allToolsPresent": true,
+    "popupReusedAndFocused": true,
+    "cleanReturnClosed": true,
+    "directUrlFallbackWorkspace": true,
+    "beforeUnloadBlockedWhenDirty": true,
+    "dirtyCancelPassed": true,
+    "dirtyDiscardNoSave": true,
+    "consoleErrors": 0,
+    "fallbacks": 0,
+    "nonDynamicWarnings": 0,
+    "badNetwork": 0,
+    "unexpectedWrites": 0,
+    "browserCloseWarnings": 1
+  }
+}

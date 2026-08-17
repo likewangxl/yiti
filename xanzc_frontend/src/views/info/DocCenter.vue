@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud doc-page" aria-labelledby="doc-center-title">
+<main v-bp-overflow-tooltip class="bp-crud doc-page" aria-labelledby="doc-center-title">
     <header class="page-h">
       <PageTitle id="doc-center-title"><span class="sub">科技部维护常用文档及分类</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="文档中心操作">
@@ -86,13 +86,24 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="160" fixed="right">
+          <el-table-column label="操作" class-name="operation-cell" width="160" fixed="right">
             <template #default="{row}">
-              <el-button link type="primary" size="small" :disabled="deletingId === row.id" @click="onDownload(row)">下载</el-button>
-              <el-button link type="primary" size="small" :disabled="deletingId === row.id" @click="openEdit(row)">编辑</el-button>
-              <el-popconfirm :title="`确认删除「${row.docTitle}」？删除后无法恢复。`" @confirm="onDelete(row)">
-                <template #reference><el-button link type="danger" size="small" :loading="deletingId === row.id">删除</el-button></template>
-              </el-popconfirm>
+              <BpAdaptiveRowActions>
+                <template #primary><el-button link type="primary" size="small" :disabled="deletingId === row.id" @click="onDownload(row)">下载</el-button></template>
+                <template #expanded>
+                  <el-button link type="primary" size="small" :disabled="deletingId === row.id" @click="openEdit(row)">编辑</el-button>
+                  <el-button link type="danger" size="small" :disabled="deletingId === row.id" @click="confirmDelete(row)">删除</el-button>
+                </template>
+                <template #compact>
+                  <el-dropdown trigger="click" popper-class="bp-crud-menu">
+                    <el-button link size="small" :disabled="deletingId === row.id" aria-label="更多文档操作">更多</el-button>
+                    <template #dropdown><el-dropdown-menu>
+                      <el-dropdown-item :disabled="deletingId === row.id" @click="openEdit(row)">编辑</el-dropdown-item>
+                      <el-dropdown-item divided class="danger-item" :disabled="deletingId === row.id" @click="confirmDelete(row)">删除</el-dropdown-item>
+                    </el-dropdown-menu></template>
+                  </el-dropdown>
+                </template>
+              </BpAdaptiveRowActions>
             </template>
           </el-table-column>
         </el-table>
@@ -160,7 +171,8 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { fmtDateTime } from '@/utils/datetime';
 import { call } from '@/api/http';
 import { listDocuments, createDocument, updateDocument, deleteDocument, downloadDocument } from '@/api/documents';
@@ -294,6 +306,15 @@ async function onDelete(row) {
     reload();
     loadCategories();
   } catch (e) { ElMessage.error(e?.message || '删除失败'); } finally { deletingId.value = null; }
+}
+
+async function confirmDelete(row) {
+  try {
+    await ElMessageBox.confirm(`确认删除「${row.docTitle}」？删除后无法恢复。`, '删除确认', {
+      type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消'
+    });
+  } catch { return; }
+  await onDelete(row);
 }
 
 onMounted(() => { loadCategories(); reload(); });

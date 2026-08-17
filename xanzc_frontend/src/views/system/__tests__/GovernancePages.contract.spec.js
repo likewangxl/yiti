@@ -20,7 +20,7 @@ describe('系统治理与 RBAC 页面桌面 CRUD 契约', () => {
   it.each(pages)('%s 使用 bp-crud 页面边界、可访问页头与稳定数据面板', (_name, path, pageClass, titleId) => {
     const source = sourceOf(path);
 
-    expect(source).toMatch(new RegExp(`<main\\s+class="bp-crud ${pageClass}"[^>]*aria-labelledby="${titleId}"`));
+    expect(source).toMatch(new RegExp(`<main\\b(?=[^>]*class="bp-crud ${pageClass}"[^>]*)(?=[^>]*aria-labelledby="${titleId}")[^>]*>`));
     expect(source).toContain('<header class="page-h">');
     expect(source).toContain(`id="${titleId}"`);
     expect(source).toContain('filter-bar');

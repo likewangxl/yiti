@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud eval-tags-page" aria-labelledby="eval-tags-page-title" :aria-busy="loading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud eval-tags-page" aria-labelledby="eval-tags-page-title" :aria-busy="loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="eval-tags-page-title"><span class="sub">维护可用于规则和人员评价的标签</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="评价标签操作">
@@ -39,14 +39,14 @@
           {{ loading ? '评价标签列表加载中' : loadError || (rows.length ? `共 ${pager.total} 个标签` : '暂无标签数据') }}
         </p>
       </div>
-      <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无标签数据"
+      <el-table :data="rows" size="default" border v-loading="loading" empty-text="暂无标签数据"
         aria-labelledby="eval-tags-table-heading" aria-describedby="eval-tags-table-state">
         <el-table-column prop="tagId" label="TAG_ID" width="100">
           <template #default="{ row }">
             <code class="mono">{{ row.tagId }}</code>
           </template>
         </el-table-column>
-        <el-table-column prop="tagName" label="标签名称" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="tagName" label="标签名称" width="220" show-overflow-tooltip />
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag
@@ -59,10 +59,13 @@
           </template>
         </el-table-column>
         <el-table-column prop="createTime" label="创建时间" width="170" />
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="160" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="danger" size="small" :loading="deleting" :disabled="deleting" @click="handleDelete(row)">删除</el-button>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button></template>
+              <template #expanded><el-button link type="danger" size="small" :disabled="deleting" @click="handleDelete(row)">删除</el-button></template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" :disabled="deleting" aria-label="更多评价标签操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item divided class="danger-item" :disabled="deleting" @click="handleDelete(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -141,6 +144,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listTags, createTag, updateTag, deleteTag } from '@/api/eval';
 
 // === 列表状态 ===

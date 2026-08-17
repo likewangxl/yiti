@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud notification-list-page" aria-labelledby="notification-list-title">
+<main v-bp-overflow-tooltip class="bp-crud notification-list-page" aria-labelledby="notification-list-title">
     <header class="page-h">
       <PageTitle id="notification-list-title" />
       <div class="actions action-group" role="group" aria-label="通知列表操作">
@@ -39,7 +39,7 @@
         aria-labelledby="notification-list-heading"
         aria-describedby="notification-list-state"
       >
-        <el-table-column label="内容" min-width="300">
+        <el-table-column label="内容" min-width="300" class-name="compact-stack-cell">
           <template #default="{ row }">
             <div>{{ row.content || row.title || '-' }}</div>
             <div class="ntf-meta">{{ row.bizType }} · {{ fmtDate(row.createdTime || row.sentTime) }}</div>

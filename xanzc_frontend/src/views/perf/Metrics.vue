@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud metrics-page" aria-labelledby="metrics-page-title">
+<main v-bp-overflow-tooltip class="bp-crud metrics-page" aria-labelledby="metrics-page-title">
     <header class="page-h">
       <PageTitle id="metrics-page-title"><span class="sub">定义、验证并维护绩效指标口径</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="指标库操作">
@@ -186,10 +186,13 @@
             <el-table-column label="更新" width="110" align="center">
               <template #default>{{ today }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="120" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="120" fixed="right">
               <template #default="{row}">
-                <el-button link type="primary" size="small" @click="onPick(row.metricCode)">查看</el-button>
-                <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+                <BpAdaptiveRowActions>
+                  <template #primary><el-button link type="primary" size="small" @click="onPick(row.metricCode)">查看</el-button></template>
+                  <template #expanded><el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button></template>
+                  <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多指标操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="openEdit(row)">编辑</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+                </BpAdaptiveRowActions>
               </template>
             </el-table-column>
           </el-table>
@@ -421,6 +424,7 @@ import { Search } from '@element-plus/icons-vue';
 import { fmtDateTimeCol } from '@/utils/datetime';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import {
   listMetrics, listMetricCategories, getMetricDetail,
   createMetric, updateMetric, deleteMetric,

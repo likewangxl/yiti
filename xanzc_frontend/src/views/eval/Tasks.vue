@@ -1,6 +1,6 @@
 <template>
   <!-- 评价任务管理页面（管理端：统一列表 = 规则任务 + 导入批次） -->
-  <main class="bp-crud eval-tasks-page" aria-labelledby="eval-tasks-page-title" :aria-busy="tableLoading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud eval-tasks-page" aria-labelledby="eval-tasks-page-title" :aria-busy="tableLoading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="eval-tasks-page-title"><span class="sub">发起评价活动并管理任务生命周期</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="评价任务操作">
@@ -28,7 +28,10 @@
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
         </el-form-item>
-        <el-form-item><el-button type="primary" @click="handleFilterChange">查询</el-button></el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="handleFilterChange">查询</el-button>
+          <el-button @click="resetFilters">重置</el-button>
+        </el-form-item>
       </el-form>
     </section>
 
@@ -76,13 +79,18 @@
         <template #default="{ row }">{{ row.itemCount != null ? row.itemCount : '—' }}</template>
       </el-table-column>
       <el-table-column prop="createBy" label="创建人" width="110" align="center" />
-      <el-table-column label="操作" width="240" align="center" fixed="right">
+      <el-table-column label="操作" class-name="operation-cell" width="240" align="center" fixed="right">
         <template #default="{ row }">
-          <el-button type="primary" link @click="openDetail(row)">详情</el-button>
-          <el-button v-if="row.status === 2" type="success" link :loading="isPending('publish', row.sourceId)" :disabled="isPending('publish', row.sourceId)" @click="handlePublish(row)">发布</el-button>
-          <el-button v-if="row.sourceType === 'AUTO' && row.status === 0" type="danger" link :loading="isPending('close', row.sourceId)" :disabled="isPending('close', row.sourceId)" @click="handleCloseTask(row)">关闭</el-button>
-          <el-button type="primary" link :loading="isPending('export', row.sourceId)" :disabled="isPending('export', row.sourceId)" @click="handleExport(row)">导出</el-button>
-          <el-button v-if="row.status === 0 || row.status === 2 || row.status === 4 || isDeadlinePassed(row)" type="danger" link :loading="isPending('delete', row.sourceId)" :disabled="isPending('delete', row.sourceId)" @click="handleDelete(row)">删除</el-button>
+          <BpAdaptiveRowActions>
+            <template #primary><el-button type="primary" link @click="openDetail(row)">详情</el-button></template>
+            <template #expanded>
+              <el-button v-if="row.status === 2" class="success-item" link :disabled="isPending('publish', row.sourceId)" @click="handlePublish(row)">发布</el-button>
+              <el-button v-if="row.sourceType === 'AUTO' && row.status === 0" type="danger" link :disabled="isPending('close', row.sourceId)" @click="handleCloseTask(row)">关闭</el-button>
+              <el-button link :disabled="isPending('export', row.sourceId)" @click="handleExport(row)">导出</el-button>
+              <el-button v-if="row.status === 0 || row.status === 2 || row.status === 4 || isDeadlinePassed(row)" type="danger" link :disabled="isPending('delete', row.sourceId)" @click="handleDelete(row)">删除</el-button>
+            </template>
+            <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link aria-label="更多评价任务操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item v-if="row.status === 2" class="success-item" :disabled="isPending('publish', row.sourceId)" @click="handlePublish(row)">发布</el-dropdown-item><el-dropdown-item v-if="row.sourceType === 'AUTO' && row.status === 0" divided class="danger-item" :disabled="isPending('close', row.sourceId)" @click="handleCloseTask(row)">关闭</el-dropdown-item><el-dropdown-item :disabled="isPending('export', row.sourceId)" @click="handleExport(row)">导出</el-dropdown-item><el-dropdown-item v-if="row.status === 0 || row.status === 2 || row.status === 4 || isDeadlinePassed(row)" divided class="danger-item" :disabled="isPending('delete', row.sourceId)" @click="handleDelete(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+          </BpAdaptiveRowActions>
         </template>
       </el-table-column>
       </el-table>
@@ -346,6 +354,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue'
 import { Search } from '@element-plus/icons-vue'
 import {
   listUnifiedTasks, getTaskDetail, createTask, closeTask,
@@ -399,6 +408,13 @@ async function loadList() {
 }
 
 function handleFilterChange() {
+  pager.pageNo = 1
+  loadList()
+}
+
+function resetFilters() {
+  filter.status = ''
+  filter.keyword = ''
   pager.pageNo = 1
   loadList()
 }

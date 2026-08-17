@@ -1,0 +1,840 @@
+{
+  "batch": "page-optimization2-final-pass-2560-tabs",
+  "gitHead": "4f5d9ceb7ef5a53b39b02f79bfd3c9abd6039eb4",
+  "viewport": {
+    "width": 2560,
+    "height": 1440
+  },
+  "steps": [
+    {
+      "label": "initial-last-active",
+      "hash": "#/system/person-tags",
+      "count": 55,
+      "scroll": {
+        "left": 5217,
+        "width": 2105,
+        "total": 7322,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/person-tags",
+        "text": "业务标签",
+        "left": 2223.15625,
+        "right": 2341.15625,
+        "fullyVisible": true
+      },
+      "focus": {
+        "tag": "DIV",
+        "id": "app-main",
+        "class": "content",
+        "text": null,
+        "left": 220,
+        "right": 2560,
+        "fullyVisible": false,
+        "sameAsActiveLabel": false
+      }
+    },
+    {
+      "label": "home-focus",
+      "hash": "#/system/person-tags",
+      "count": 55,
+      "scroll": {
+        "left": 0,
+        "width": 2105,
+        "total": 7322,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/person-tags",
+        "text": "业务标签",
+        "left": 7440.15625,
+        "right": 7558.15625,
+        "fullyVisible": false
+      },
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "class": "workspace-tabs__label",
+        "text": "工作台",
+        "left": 249,
+        "right": 343,
+        "fullyVisible": true,
+        "sameAsActiveLabel": false
+      }
+    },
+    {
+      "label": "arrow-right-focus",
+      "hash": "#/system/person-tags",
+      "count": 55,
+      "scroll": {
+        "left": 0,
+        "width": 2105,
+        "total": 7322,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/person-tags",
+        "text": "业务标签",
+        "left": 7440.15625,
+        "right": 7558.15625,
+        "fullyVisible": false
+      },
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "class": "workspace-tabs__label",
+        "text": "通知列表",
+        "left": 369,
+        "right": 425,
+        "fullyVisible": true,
+        "sameAsActiveLabel": false
+      }
+    },
+    {
+      "label": "arrow-left-focus",
+      "hash": "#/system/person-tags",
+      "count": 55,
+      "scroll": {
+        "left": 0,
+        "width": 2105,
+        "total": 7322,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/person-tags",
+        "text": "业务标签",
+        "left": 7440.15625,
+        "right": 7558.15625,
+        "fullyVisible": false
+      },
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "class": "workspace-tabs__label",
+        "text": "工作台",
+        "left": 249,
+        "right": 343,
+        "fullyVisible": true,
+        "sameAsActiveLabel": false
+      }
+    },
+    {
+      "label": "end-focus",
+      "hash": "#/system/person-tags",
+      "count": 55,
+      "scroll": {
+        "left": 5217,
+        "width": 2105,
+        "total": 7322,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/person-tags",
+        "text": "业务标签",
+        "left": 2223.15625,
+        "right": 2341.15625,
+        "fullyVisible": true
+      },
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "class": "workspace-tabs__label",
+        "text": "业务标签",
+        "left": 2236.15625,
+        "right": 2292.15625,
+        "fullyVisible": true,
+        "sameAsActiveLabel": true
+      }
+    },
+    {
+      "label": "enter-activates-last",
+      "hash": "#/system/person-tags",
+      "count": 55,
+      "scroll": {
+        "left": 5217,
+        "width": 2105,
+        "total": 7322,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/person-tags",
+        "text": "业务标签",
+        "left": 2223.15625,
+        "right": 2341.15625,
+        "fullyVisible": true
+      },
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "class": "workspace-tabs__label",
+        "text": "业务标签",
+        "left": 2236.15625,
+        "right": 2292.15625,
+        "fullyVisible": true,
+        "sameAsActiveLabel": true
+      }
+    },
+    {
+      "label": "keyboard-close-focused",
+      "hash": "#/system/person-tags",
+      "count": 55,
+      "scroll": {
+        "left": 5217,
+        "width": 2105,
+        "total": 7322,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/person-tags",
+        "text": "业务标签",
+        "left": 2223.15625,
+        "right": 2341.15625,
+        "fullyVisible": true
+      },
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "class": "workspace-tabs__close",
+        "text": null,
+        "left": 2296.15625,
+        "right": 2336.15625,
+        "fullyVisible": true,
+        "sameAsActiveLabel": false
+      }
+    },
+    {
+      "label": "keyboard-close-2raf",
+      "hash": "#/system/workflow-monitor",
+      "count": 54,
+      "scroll": {
+        "left": 5091,
+        "width": 2105,
+        "total": 7196,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/workflow-monitor",
+        "text": "审批流监控",
+        "left": 2209.15625,
+        "right": 2341.15625,
+        "fullyVisible": true
+      },
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "class": "workspace-tabs__label",
+        "text": "审批流监控",
+        "left": 2222.15625,
+        "right": 2292.15625,
+        "fullyVisible": true,
+        "sameAsActiveLabel": true
+      }
+    },
+    {
+      "label": "keyboard-close-900ms",
+      "hash": "#/system/workflow-monitor",
+      "count": 54,
+      "scroll": {
+        "left": 5091,
+        "width": 2105,
+        "total": 7196,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/workflow-monitor",
+        "text": "审批流监控",
+        "left": 2209.15625,
+        "right": 2341.15625,
+        "fullyVisible": true
+      },
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "class": "workspace-tabs__label",
+        "text": "审批流监控",
+        "left": 2222.15625,
+        "right": 2292.15625,
+        "fullyVisible": true,
+        "sameAsActiveLabel": true
+      }
+    },
+    {
+      "label": "mouse-close-prepared",
+      "hash": "#/system/person-tags",
+      "count": 55,
+      "scroll": {
+        "left": 5217,
+        "width": 2105,
+        "total": 7322,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/person-tags",
+        "text": "业务标签",
+        "left": 2223.15625,
+        "right": 2341.15625,
+        "fullyVisible": true
+      },
+      "focus": {
+        "tag": "DIV",
+        "id": "app-main",
+        "class": "content",
+        "text": null,
+        "left": 220,
+        "right": 2560,
+        "fullyVisible": false,
+        "sameAsActiveLabel": false
+      }
+    },
+    {
+      "label": "mouse-close-2raf",
+      "hash": "#/system/workflow-monitor",
+      "count": 54,
+      "scroll": {
+        "left": 5091,
+        "width": 2105,
+        "total": 7196,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/workflow-monitor",
+        "text": "审批流监控",
+        "left": 2209.15625,
+        "right": 2341.15625,
+        "fullyVisible": true
+      },
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "class": "workspace-tabs__label",
+        "text": "审批流监控",
+        "left": 2222.15625,
+        "right": 2292.15625,
+        "fullyVisible": true,
+        "sameAsActiveLabel": true
+      }
+    },
+    {
+      "label": "mouse-close-900ms",
+      "hash": "#/system/workflow-monitor",
+      "count": 54,
+      "scroll": {
+        "left": 5091,
+        "width": 2105,
+        "total": 7196,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/workflow-monitor",
+        "text": "审批流监控",
+        "left": 2209.15625,
+        "right": 2341.15625,
+        "fullyVisible": true
+      },
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "class": "workspace-tabs__label",
+        "text": "审批流监控",
+        "left": 2222.15625,
+        "right": 2292.15625,
+        "fullyVisible": true,
+        "sameAsActiveLabel": true
+      }
+    },
+    {
+      "label": "ordinary-navigation-main",
+      "hash": "#/system/users",
+      "count": 54,
+      "scroll": {
+        "left": 5015,
+        "width": 2105,
+        "total": 7196,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/users",
+        "text": "用户管理",
+        "left": 235.65625,
+        "right": 353.65625,
+        "fullyVisible": true
+      },
+      "focus": {
+        "tag": "DIV",
+        "id": "app-main",
+        "class": "content",
+        "text": null,
+        "left": 220,
+        "right": 2560,
+        "fullyVisible": false,
+        "sameAsActiveLabel": false
+      }
+    },
+    {
+      "label": "background-close",
+      "hash": "#/system/users",
+      "count": 53,
+      "scroll": {
+        "left": 3877,
+        "width": 2105,
+        "total": 7070,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/users",
+        "text": "用户管理",
+        "left": 1247.65625,
+        "right": 1365.65625,
+        "fullyVisible": true
+      },
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "class": "workspace-tabs__label",
+        "text": "用户管理",
+        "left": 1260.65625,
+        "right": 1316.65625,
+        "fullyVisible": true,
+        "sameAsActiveLabel": true
+      },
+      "closedKey": "/workspace/notifications"
+    },
+    {
+      "label": "background-close-user-moved-focus",
+      "hash": "#/system/users",
+      "count": 52,
+      "scroll": {
+        "left": 0,
+        "width": 2105,
+        "total": 6944,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/users",
+        "text": "用户管理",
+        "left": 4998.65625,
+        "right": 5116.65625,
+        "fullyVisible": false
+      },
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "class": "shell-toggle",
+        "text": null,
+        "left": 171,
+        "right": 211,
+        "fullyVisible": false,
+        "sameAsActiveLabel": false
+      },
+      "exercised": true
+    },
+    {
+      "label": "continuous-close-intents",
+      "hash": "#/system/users",
+      "count": 50,
+      "scroll": {
+        "left": 3505,
+        "width": 2105,
+        "total": 6698,
+        "viewLeft": 236,
+        "viewRight": 2340.953125
+      },
+      "active": {
+        "key": "/system/users",
+        "text": "用户管理",
+        "left": 1247.65625,
+        "right": 1365.65625,
+        "fullyVisible": true
+      },
+      "focus": {
+        "tag": "BUTTON",
+        "id": "",
+        "class": "workspace-tabs__label",
+        "text": "用户管理",
+        "left": 1260.65625,
+        "right": 1316.65625,
+        "fullyVisible": true,
+        "sameAsActiveLabel": true
+      },
+      "exercised": true,
+      "keys": [
+        "/info/address-book",
+        "/info/documents"
+      ]
+    }
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "url": "/api/admin/sys/person-tags?pageNo=<redacted>&pageSize=<redacted>",
+      "status": 200,
+      "failure": null
+    },
+    {
+      "method": "GET",
+      "url": "/api/workflow/monitor/processes?pageSize=<redacted>&status=<redacted>&pageNo=<redacted>",
+      "status": 200,
+      "failure": null
+    },
+    {
+      "method": "GET",
+      "url": "/api/admin/sys/person-tags?pageNo=<redacted>&pageSize=<redacted>",
+      "status": 200,
+      "failure": null
+    },
+    {
+      "method": "GET",
+      "url": "/api/workflow/monitor/processes?pageSize=<redacted>&status=<redacted>&pageNo=<redacted>",
+      "status": 200,
+      "failure": null
+    },
+    {
+      "method": "GET",
+      "url": "/api/orgs/tree",
+      "status": 200,
+      "failure": null
+    },
+    {
+      "method": "GET",
+      "url": "/api/admin/users?pageNo=<redacted>&pageSize=<redacted>",
+      "status": 200,
+      "failure": null
+    },
+    {
+      "method": "GET",
+      "url": "/api/sys/dicts/USER_TYPE/items",
+      "status": 200,
+      "failure": null
+    }
+  ],
+  "console": [
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/bizexec/loans\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/bizexec/supports\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/list\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/leads/new\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/leads/approval\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/tags\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/tags/approval\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/pool/available\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/pool/claimed\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/cross-org\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/touches/mine\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/touches/overview\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/transfer-log\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/yundun/accountability-violations\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/yundun/credit-violations\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/bizexec/loans\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/bizexec/supports\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/list\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/leads/new\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/leads/approval\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/tags\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/tags/approval\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/pool/available\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/pool/claimed\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/cross-org\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/touches/mine\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/touches/overview\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/transfer-log\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/yundun/accountability-violations\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/yundun/credit-violations\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/bizexec/loans\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/bizexec/supports\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/list\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/leads/new\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/leads/approval\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/tags\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/tags/approval\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/pool/available\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/pool/claimed\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/cross-org\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/touches/mine\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/touches/overview\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/transfer-log\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/yundun/accountability-violations\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/yundun/credit-violations\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/bizexec/loans\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/bizexec/supports\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/list\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/leads/new\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/leads/approval\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/tags\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/tags/approval\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/pool/available\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/pool/claimed\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/cross-org\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/touches/mine\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/touches/overview\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/transfer-log\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/yundun/accountability-violations\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/yundun/credit-violations\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/bizexec/loans\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/bizexec/supports\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/list\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/leads/new\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/leads/approval\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/tags\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/tags/approval\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/pool/available\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/pool/claimed\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/cross-org\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/touches/mine\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/touches/overview\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/customers/transfer-log\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/yundun/accountability-violations\""
+    },
+    {
+      "type": "warning",
+      "text": "[Vue Router warn]: No match found for location with path \"/yundun/credit-violations\""
+    }
+  ],
+  "fatalIssue": null,
+  "summary": {
+    "status": "pass",
+    "initialCount": 55,
+    "finalCount": 50,
+    "badConsole": 0,
+    "badNetwork": 0,
+    "unexpectedWrites": 0
+  },
+  "evidenceSanitized": true,
+  "credentialsArchived": false,
+  "responseBodiesArchived": false,
+  "realEntityIdsArchived": false
+}

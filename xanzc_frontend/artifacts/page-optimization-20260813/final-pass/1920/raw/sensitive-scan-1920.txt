@@ -1,0 +1,33 @@
+1920 final evidence sensitive scan
+scope=entire final-pass/1920 directory
+browser_rerun=false
+product_code_changed=false
+result=PASS_WITH_EXPLAINED_NON_SECRET_TERMS
+
+Scan classes
+1. Credential literals: the authorized six-digit password literal, password/passwd/pwd, username-admin-near-password.
+2. Transport secrets: Authorization, Bearer, Cookie/Set-Cookie, JSESSIONID/session ID, access/refresh token.
+3. Dynamic entity identifiers: UUID36, hex32, hex16, unredacted entity path segments.
+4. Full payload indicators: response.json logic, response/request body archive flags, traceId/timestamp, numeric dsId values.
+5. Session/auth terms: CLI session labels, authentication metadata and /api/auth endpoint names.
+6. Binary screenshot metadata: strings(1) output scanned for credentials, transport secrets, UUID36.
+
+Results and explanations
+- Literal credential values: 0. The three password-pattern hits are `hasPassword` boolean/selector names used to prove the login control exists; no password value is present.
+- Authorization/Bearer/Cookie/JSESSIONID/access-token/refresh-token values: 0. README and this report name those categories only; neither contains a header or token value.
+- CLI session/auth-term hits: `final1920xianfinal`, `authentication`, and `/api/auth/permissions`. These are a public browser-session label, boolean/status metadata, and endpoint path; no HTTP session identifier or auth secret is present.
+- UUID36, hex32 and hex16 dynamic-ID candidates outside SHA-256 fields: 0.
+- Six ordinary parameter routes: all `dom.actualPath` values equal their template path; corresponding URL segments are `<redacted-id>` or query values `<redacted>`.
+- Numeric/entity API candidates were reviewed. `/announcements/recent`, `/metrics/categories`, `/roles/all`, and `/roles/` are fixed collection/static endpoints, not entity IDs. All user, role-resource, workflow-flow, KPI-scheme, metric, announcement-detail, AMAS-detail and dictionary entity segments are `<redacted-id>`.
+- Full response bodies: 0 published. `response.json()` hits occur only in the preserved validation scripts, which parse live responses in browser memory. `requestBodiesArchived:false`, `responseBodiesArchived:false`, and `backend_current_user_body_archived=false` explicitly record non-publication. The `TraceId` hit is page heading text from the audit-log UI, not a trace value. No timestamp field/value or numeric dsId value was found.
+- XIAN fixed values 128, 191, 169 and 129 remain intentionally. They are user-approved public business orgCode contracts for the four named secondary branches, not dynamically discovered ordinary detail IDs. Screenshot filenames using these four values follow the same approved contract.
+- Screenshot binary metadata scan: 0 credential, token, Cookie, UUID36 or password-pattern hits. Business page pixels are separately masked as described in README.
+- Historical failed-batch files: 0 remain in the final root. Old 41px diagnosis, three failed JSON batches, old route/console/request evidence, and 44 old-batch screenshots were removed with explicit targets; only clean `g-*` and XIAN screenshots remain.
+
+Authoritative publication checks
+- route summary remains 59 recorded / 59 passed / 0 failed / stoppedEarly false.
+- redaction manifest invariants: route names/statuses, response status vectors and DOM numeric/boolean metric fingerprint preserved.
+- redaction manifest stores no original ID, no ID hash, and no recoverable mapping.
+- SHA-256 publication list: ../SHA256SUMS.txt (all final files except the checksum list itself).
+
+The scan report itself contains category words such as password, Cookie, Authorization and session solely to document that those patterns were checked; these are not values.

@@ -146,7 +146,8 @@ async function load() {
       period: resolveBlockPeriod(periodCtx()),
       dateFrom: props.context.dateFrom,
       dateTo: props.context.dateTo,
-      contextParams: { orgCode: props.context.orgCode || null, empId: props.context.empId || null }
+      // 空值清理由唯一请求适配点处理；这里不能用 truthy 判断抹掉合法的 0/false/空字符串。
+      contextParams: { orgCode: props.context.orgCode, empId: props.context.empId }
     }));
   } catch (e) {
     // 缺必填上下文参数（RPT-43010）不是真错误，是"还没给取数条件"，渲染引导占位而非红字报错；

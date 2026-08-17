@@ -1,5 +1,6 @@
 <template>
   <main
+    v-bp-overflow-tooltip
     class="bp-crud flow-list-page"
     aria-labelledby="flow-list-page-title"
     :aria-busy="loading ? 'true' : 'false'"
@@ -54,22 +55,13 @@
         <el-table-column label="版本" width="86" align="center"><template #default="{ row }"><span class="version-num">{{ row.version ?? '-' }}</span></template></el-table-column>
         <el-table-column label="类型标记" width="118"><template #default="{ row }"><el-tag v-if="row.isReadonlyImport == 1" class="tag-warning" effect="plain" size="small">只读导入</el-tag><span v-else class="hint">-</span></template></el-table-column>
         <el-table-column label="最后更新" width="180"><template #default="{ row }">{{ fmtDateTime(row.updatedTime) }}</template></el-table-column>
-        <el-table-column label="操作" width="280" fixed="right" align="right">
+        <el-table-column label="操作" class-name="operation-cell" width="280" fixed="right" align="right">
           <template #default="{ row }">
-            <div class="row-actions" role="group" :aria-label="`${row.name || '审批流程'} 操作`">
-              <el-button link type="primary" size="small" @click="goEdit(row)">编辑</el-button>
-              <el-button link type="primary" size="small" :loading="isPublishing(row.id)" :disabled="isPublishing(row.id)" @click="doPublish(row)">发布</el-button>
-              <el-button link type="primary" size="small" :loading="isCloning(row.id)" :disabled="isCloning(row.id)" @click="doClone(row)">克隆</el-button>
-              <el-button
-                v-if="row.status === 'DRAFT' && row.isReadonlyImport != 1"
-                link
-                type="danger"
-                size="small"
-                :loading="isDeleting(row.id)"
-                :disabled="isDeleting(row.id)"
-                @click="doDelete(row)"
-              >删除</el-button>
-            </div>
+            <BpAdaptiveRowActions role="group" :aria-label="`${row.name || '审批流程'} 操作`">
+              <template #primary><el-button link type="primary" size="small" @click="goEdit(row)">编辑</el-button></template>
+              <template #expanded><el-button link size="small" :disabled="isPublishing(row.id)" @click="doPublish(row)">{{ isPublishing(row.id) ? '发布中…' : '发布' }}</el-button><el-button link size="small" :disabled="isCloning(row.id)" @click="doClone(row)">{{ isCloning(row.id) ? '克隆中…' : '克隆' }}</el-button><el-button v-if="row.status === 'DRAFT' && row.isReadonlyImport != 1" link type="danger" size="small" :disabled="isDeleting(row.id)" @click="doDelete(row)">{{ isDeleting(row.id) ? '删除中…' : '删除' }}</el-button></template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多审批流程操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="isPublishing(row.id)" @click="doPublish(row)">{{ isPublishing(row.id) ? '发布中…' : '发布' }}</el-dropdown-item><el-dropdown-item :disabled="isCloning(row.id)" @click="doClone(row)">{{ isCloning(row.id) ? '克隆中…' : '克隆' }}</el-dropdown-item><el-dropdown-item v-if="row.status === 'DRAFT' && row.isReadonlyImport != 1" divided class="danger-item" :disabled="isDeleting(row.id)" @click="doDelete(row)">{{ isDeleting(row.id) ? '删除中…' : '删除' }}</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -98,6 +90,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fmtDateTime } from '@/utils/datetime';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listFlows, getFlow, createFlow, publishFlow, deleteFlow, importExistingFlows } from '@/api/flowDesign';
 
 const router = useRouter();

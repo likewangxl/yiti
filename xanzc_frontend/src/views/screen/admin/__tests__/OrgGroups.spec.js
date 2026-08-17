@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 
@@ -59,7 +61,7 @@ async function mountPage() {
   api.listOrgGroups.mockResolvedValue(groups);
   api.listOrgProfiles.mockResolvedValue(profiles);
   api.listScreenRoles.mockResolvedValue(roles);
-  wrapper = mount(OrgGroups, { global: { stubs, directives: { loading: {} } } });
+  wrapper = mount(OrgGroups, { global: { stubs, directives: { loading: {}, 'bp-overflow-tooltip': {} } } });
   await settle();
   await wrapper.find('.group-item').trigger('click');
   await settle();
@@ -102,5 +104,13 @@ describe('OrgGroups.vue 覆盖保存契约', () => {
     expect(wrapper.text()).toContain('移除：西安机构（X1）');
     expect(wrapper.text()).toContain('新增：零售查看角色（R2）');
     expect(wrapper.text()).toContain('移除：大屏查看角色（R1）');
+  });
+
+  it('接入 CRUD 基线，且状态未知时不被错误渲染为启用', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/OrgGroups.vue'), 'utf8');
+
+    expect(source).toMatch(/<main\b[^>]*class="[^\"]*\bbp-crud\b[^\"]*"/);
+    expect(source).toMatch(/function groupStatus\(/);
+    expect(source).toMatch(/未知状态/);
   });
 });

@@ -9,7 +9,7 @@
     POST /api/reports/sql-probe/execute          —— executeSqlProbe
 -->
 <template>
-  <main class="bp-crud rpt-sql" aria-labelledby="sql-report-title" :aria-busy="running || exporting || historyLoading || exportTasksLoading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud rpt-sql" aria-labelledby="sql-report-title" :aria-busy="running || exporting || historyLoading || exportTasksLoading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="sql-report-title" />
       <span class="desc">仅 SELECT · 30s 超时 · 全程审计 · 传输加密</span>
@@ -62,7 +62,7 @@
         <div><h2 id="sql-export-title" class="section-title">下载任务</h2><p class="hint">任务处理中自动刷新，最长两分钟；到达上限可手动刷新。</p></div>
         <el-button link type="primary" size="small" @click="refreshExportTasks" :loading="exportTasksLoading" style="margin-left:auto">刷新</el-button>
       </div>
-      <el-table :data="exportTasks" size="default" stripe>
+      <el-table :data="exportTasks" size="default" stripe border>
         <el-table-column prop="createdTime" label="时间" width="160" :formatter="fmtDateTimeCol" />
         <el-table-column label="SQL（节选）" show-overflow-tooltip>
           <template #default="{ row }">{{ (row.sqlText || '').slice(0, 80) }}</template>
@@ -87,7 +87,7 @@
         <el-table-column prop="rowCount" label="行数" width="80" align="right">
           <template #default="{ row }">{{ row.rowCount != null ? row.rowCount : '-' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="110">
+        <el-table-column label="操作" class-name="operation-cell" width="110" fixed="right">
           <template #default="{ row }">
             <el-button v-if="row.status === 'SUCCESS'" type="primary" link size="small" @click="downloadFile(row)">下载文件</el-button>
             <el-tooltip v-else-if="row.status === 'FAILED'" :content="row.errorMsg || '执行失败'" placement="top">

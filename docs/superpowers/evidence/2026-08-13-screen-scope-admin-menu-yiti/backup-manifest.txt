@@ -1,0 +1,11 @@
+target_database=yiti
+tables=PT_RESOURCE,PT_ROLE_RESOURCE
+backup_file=/tmp/yiti-screen-menu-backup-0iMHhs/yiti-pt-resource-role-resource-before.sql
+backup_sha256=844542d56a2172598128f49ad25638667a74f4e853fcb19459e971d0191bd0d5
+PT_RESOURCE.rows=587
+PT_RESOURCE.checksum=1805193823
+PT_ROLE_RESOURCE.rows=7596
+PT_ROLE_RESOURCE.checksum=1437972731
+restore_database=yiti_menu_restore_20260813_0imh
+restore_result=counts_and_checksums_match
+restore_database_cleanup=dropped

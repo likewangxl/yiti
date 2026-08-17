@@ -1,0 +1,11 @@
+页面优化真实 QA 进程归属核验（2026-08-13）
+
+8091
+- 进程：node vite
+- cwd：/home/djdev/leid/yiti/xanzc_frontend
+
+18081
+- 进程：com.bank.branch.platform.BranchPlatformApplication
+- cwd：/home/djdev/leid/yiti
+
+结论：前端和后端监听进程均来自当前 checkout。

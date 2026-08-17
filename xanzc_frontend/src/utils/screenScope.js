@@ -37,6 +37,22 @@ export const FIXED_SATELLITE_ORG_CODES = Object.freeze({
   FAR_TOP: '129'
 });
 
+/**
+ * 西安运行态的二级分行只使用这四个真实机构语义。
+ *
+ * 本期明确为前端硬编码：发布包中的 satelliteNodes 只能作为已授权机构的出现
+ * 许可，不能篡改机构名称、锚点或目标屏，也不能注入新的机构编码。这样继续消费
+ * 后端已裁剪的授权渲染包，同时不把展示配置误作权限依据。
+ */
+export const XIAN_SECONDARY_BRANCHES = Object.freeze([
+  Object.freeze({ orgCode: '128', orgName: '宝鸡分行', anchor: 'LEFT', targetScreenCode: 'SCR_BRANCH' }),
+  Object.freeze({ orgCode: '191', orgName: '渭南分行', anchor: 'RIGHT', targetScreenCode: 'SCR_BRANCH' }),
+  Object.freeze({ orgCode: '169', orgName: '咸阳分行', anchor: 'TOP', targetScreenCode: 'SCR_BRANCH' }),
+  Object.freeze({ orgCode: '129', orgName: '榆林分行', anchor: 'FAR_TOP', targetScreenCode: 'SCR_BRANCH' })
+]);
+
+export const XIAN_SECONDARY_BRANCH_DISCLAIMER = '二级分行示意位置，非地理比例';
+
 // 百分比坐标只用于示意节点布局，不是经纬度，也不编码指标数值。
 export const ANCHOR_POSITIONS = Object.freeze({
   LEFT: Object.freeze({ left: '8px', top: '50%' }),
@@ -53,6 +69,10 @@ function pick(value, ...keys) {
     if (value?.[key] !== undefined && value?.[key] !== null) return value[key];
   }
   return undefined;
+}
+
+function hasOwn(value, key) {
+  return Object.prototype.hasOwnProperty.call(value, key);
 }
 
 function active(value) {
@@ -234,11 +254,14 @@ export function orgScopeModeLabel(value) {
  * disclaimer 对 v2 固定展示，调用方不应根据空文案隐藏它。
  */
 export function normalizeMapConfig(raw = {}) {
-  const source = typeof raw === 'string' ? safeJson(raw, {}) : (raw || {});
-  // 地图包也属于运行时响应：只认原生 JSON 整数，字符串 "2" 不能被 Number() 悄悄放行为 v2。
-  const schemaVersion = source.schemaVersion === undefined || source.schemaVersion === null || source.schemaVersion === ''
-    ? 1 : source.schemaVersion;
-  if (schemaVersion === 1) {
+  const source = typeof raw === 'string' ? safeJson(raw, null) : raw;
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    return { schemaVersion: null, mode: 'UNSUPPORTED' };
+  }
+  const hasSchemaVersion = hasOwn(source, 'schemaVersion');
+  const hasMode = hasOwn(source, 'mode');
+  // 只有两个字段都完全缺失的历史组件才按 v1 兼容；出现任一个字段就不再猜测另一个。
+  if (!hasSchemaVersion && !hasMode) {
     return {
       ...source,
       schemaVersion: 1,
@@ -246,14 +269,25 @@ export function normalizeMapConfig(raw = {}) {
       baseRegion: source.baseRegion || 'SHAANXI'
     };
   }
-  if (schemaVersion !== 2) {
-    return { ...source, schemaVersion, mode: 'UNSUPPORTED' };
+  // schema=1 只接受明确的陕西模式或历史省略 mode；v1 + XIAN 不能借 mode 提升为六区。
+  if (source.schemaVersion === 1 && (!hasMode || source.mode === 'SHAANXI_LEGACY')) {
+    return {
+      ...source,
+      schemaVersion: 1,
+      mode: 'SHAANXI_LEGACY',
+      baseRegion: source.baseRegion || 'SHAANXI'
+    };
+  }
+  // 地图包属于运行时不可信输入：必须是原生整数 2 且 mode 精确为 XIAN_COMPOSITE。
+  // 字符串 "2"、只给 mode、只给 schema 或其他冲突组合全部 Fail Close。
+  if (source.schemaVersion !== 2 || source.mode !== 'XIAN_COMPOSITE') {
+    return { ...source, mode: 'UNSUPPORTED' };
   }
   const nodes = Array.isArray(source.satelliteNodes) ? source.satelliteNodes.map(x => ({ ...x })) : [];
   return {
     ...source,
     schemaVersion: 2,
-    mode: source.mode || 'XIAN_COMPOSITE',
+    mode: 'XIAN_COMPOSITE',
     baseRegion: source.baseRegion || 'XIAN_OUTLINE',
     localSelector: { cityCode: '610100', operatingLevel: 'PRIMARY', ...(source.localSelector || {}) },
     satelliteNodes: nodes,
@@ -314,6 +348,20 @@ export function resolveCompositeMapNodes(rawConfig, profiles = []) {
   return { local, satellite, config };
 }
 
+/**
+ * 把后端授权渲染包中的二级分行出现许可映射为本期冻结的运行态语义。
+ *
+ * 空数组表示调用方没有提供包时的本地/设计态；此时由既有 profile 适配路径处理。
+ * 非空包严格按其中已授权 orgCode 取交集，避免前端绕过服务端授权扩大展示范围。
+ */
+export function resolveXianSecondaryBranches(authorizedNodes = []) {
+  const source = Array.isArray(authorizedNodes) ? authorizedNodes : [];
+  const authorizedCodes = new Set(source.map(node => String(node?.orgCode || '')).filter(Boolean));
+  return XIAN_SECONDARY_BRANCHES
+    .filter(node => authorizedCodes.has(node.orgCode))
+    .map(node => ({ ...node, position: { ...ANCHOR_POSITIONS[node.anchor] } }));
+}
+
 /** 发布前的前端提示校验；服务端仍需重做全部校验。 */
 export function validateCompositeMapConfig(rawConfig, profiles = [], memberOrgCodes = []) {
   const config = normalizeMapConfig(rawConfig);
@@ -367,10 +415,16 @@ export function validateCompositeMapConfig(rawConfig, profiles = [], memberOrgCo
 
 /** schema2 请求白名单；schema1 只保留 screenCode + dsId 的受限历史契约。 */
 export function buildScreenDataRequest(input = {}) {
-  const contextParams = {
-    orgCode: input.contextParams?.orgCode || null,
-    empId: input.contextParams?.empId || null
-  };
+  // 后端运行时 DTO 使用严格 String/Map<String, String> 反序列化：可选字段缺省会保留
+  // null 业务语义，但显式 JSON null 会在进入服务前按 VALID_005 拒绝。这里只剔除 nullish
+  // 可选值；非空（含显式空字符串）值原样保留，不改写身份、周期或路由上下文。
+  const contextParams = {};
+  if (input.contextParams?.orgCode !== undefined && input.contextParams?.orgCode !== null) {
+    contextParams.orgCode = input.contextParams.orgCode;
+  }
+  if (input.contextParams?.empId !== undefined && input.contextParams?.empId !== null) {
+    contextParams.empId = input.contextParams.empId;
+  }
   const schemaVersion = input.schemaVersion;
   if (typeof schemaVersion !== 'number' || !Number.isInteger(schemaVersion)) {
     throw new Error('运行时 schemaVersion 必须为 JSON 整数 1 或 2');
@@ -380,15 +434,16 @@ export function buildScreenDataRequest(input = {}) {
     const blockId = input.blockId;
     if (!screenCode) throw new Error('schema2 运行请求缺少 screenCode');
     if (!Number.isSafeInteger(blockId) || blockId <= 0) throw new Error('schema2 运行请求缺少有效 blockId');
-    return {
+    const request = {
       schemaVersion: 2,
       screenCode,
       blockId,
       period: input.period || 'LATEST',
-      dateFrom: input.dateFrom ?? null,
-      dateTo: input.dateTo ?? null,
       contextParams
     };
+    if (input.dateFrom !== undefined && input.dateFrom !== null) request.dateFrom = input.dateFrom;
+    if (input.dateTo !== undefined && input.dateTo !== null) request.dateTo = input.dateTo;
+    return request;
   }
   if (schemaVersion !== 1) {
     throw new Error(`未知运行时 schemaVersion: ${String(input.schemaVersion)}`);
@@ -398,15 +453,16 @@ export function buildScreenDataRequest(input = {}) {
   if (!Number.isSafeInteger(input.dsId) || input.dsId <= 0) {
     throw new Error('schema1 历史运行请求缺少有效 dsId');
   }
-  return {
+  const request = {
     schemaVersion: 1,
     screenCode,
     dsId: input.dsId,
     period: input.period || 'LATEST',
-    dateFrom: input.dateFrom ?? null,
-    dateTo: input.dateTo ?? null,
     contextParams
   };
+  if (input.dateFrom !== undefined && input.dateFrom !== null) request.dateFrom = input.dateFrom;
+  if (input.dateTo !== undefined && input.dateTo !== null) request.dateTo = input.dateTo;
+  return request;
 }
 
 export function anchorStyle(anchor) {

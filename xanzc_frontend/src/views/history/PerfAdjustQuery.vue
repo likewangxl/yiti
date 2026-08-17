@@ -5,7 +5,7 @@
   查询：客户名称 / 申请人姓名 模糊。状态列可点击 → 弹出子页面（原/调整分配比例 + 申请信息 + 审批流程）。
 -->
 <template>
-  <main class="bp-crud perf-adjust" aria-labelledby="perf-adjust-title">
+<main v-bp-overflow-tooltip class="bp-crud perf-adjust" aria-labelledby="perf-adjust-title">
     <div class="page-h">
       <PageTitle id="perf-adjust-title" />
       <span class="desc">AMAS 业绩调整审批数据查询，按申请时间倒序</span>
@@ -51,14 +51,14 @@
     <el-table :data="rows" v-loading="loading" border stripe size="default" empty-text="暂无业绩调整数据"
               aria-labelledby="perf-adjust-table-heading" aria-describedby="perf-adjust-table-state">
       <el-table-column type="index" label="序号" width="56" />
-      <el-table-column label="申请人" min-width="120">
+      <el-table-column label="申请人" min-width="120" class-name="compact-stack-cell">
         <template #default="{ row }">
           <div class="main">{{ row.applyFullname || row.applyUsername || '-' }}</div>
           <div class="sub" v-if="row.applyUsername">{{ row.applyUsername }}</div>
         </template>
       </el-table-column>
       <el-table-column prop="applyTime" label="申请时间" width="170" :formatter="dash" />
-      <el-table-column label="客户" min-width="170">
+      <el-table-column label="客户" min-width="170" class-name="compact-stack-cell">
         <template #default="{ row }">
           <div class="main">{{ row.custName || '-' }}</div>
           <div class="sub" v-if="row.custId">{{ row.custId }}</div>
@@ -95,8 +95,8 @@
     </section>
 
     <!-- 业绩调整详情子页面 -->
-    <el-dialog v-model="dlg.show" class="bp-crud-dialog" title="业绩调整详情" width="900px" top="6vh" append-to-body v-loading="dlg.loading">
-      <section class="detail-section" aria-label="业绩调整详情" :aria-busy="dlg.loading ? 'true' : 'false'">
+    <el-dialog v-model="dlg.show" class="bp-crud-dialog" title="业绩调整详情" width="900px" top="6vh" append-to-body>
+      <section v-loading="dlg.loading" class="detail-section" aria-label="业绩调整详情" :aria-busy="dlg.loading ? 'true' : 'false'">
       <p v-if="dlg.errorMessage" class="error-state" role="alert">{{ dlg.errorMessage }}</p>
       <!-- 原分配比例 -->
       <h3 class="sec-t">原分配比例</h3>
@@ -132,7 +132,7 @@
       <h3 class="sec-t">审批流程</h3>
       <el-table :data="apprRecords" border stripe size="small" empty-text="无审批记录">
         <el-table-column prop="apprName" label="审批名称" min-width="140" show-overflow-tooltip :formatter="dash" />
-        <el-table-column label="审批人" min-width="130">
+        <el-table-column label="审批人" min-width="130" class-name="compact-stack-cell">
           <template #default="{ row }">
             <div class="main">{{ row.apprFullname || row.apprUsername || '-' }}</div>
             <div class="sub" v-if="row.apprUsername">{{ row.apprUsername }}</div>

@@ -2,7 +2,7 @@
 # 契约文档新鲜度检查
 #
 # 用途:守护"接口契约同步红线"——凡改动模块 controller/、api/ 包,必须同一提交内
-# 更新 docs/modules/<模块>/03-接口设计*、04-对外API契约*(见根 CLAUDE.md 文档维护约定)。
+# 更新 docs/modules/<模块>/03-接口设计*、04-对外API契约*(见根 AGENTS.md 文档维护约定)。
 #
 # 判定逻辑(两层):
 #   1. 已提交层:模块 controller/api 目录的最后提交时间晚于其 03/04 文档 → STALE
@@ -14,7 +14,7 @@
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 2
 
-# 模块 → 契约文档位置。soap-gateway-center 无 docs/modules 目录,契约收口在其 CLAUDE.md;
+# 模块 → 契约文档位置。soap-gateway-center 无 docs/modules 目录,契约收口在其 AGENTS.md;
 # common 无 REST 端点,契约文档为 03-关键组件设计(无 04),仅比对该文件。
 MODULES=(
   "auth-permission-center|docs/modules/auth-permission-center"
@@ -43,7 +43,7 @@ for entry in "${MODULES[@]}"; do
 
   # 契约文档面
   if [ "$mod" = "soap-gateway-center" ]; then
-    docs=("$mod/CLAUDE.md")
+    docs=("$mod/AGENTS.md")
   elif [ "$mod" = "common" ]; then
     docs=("$docdir"/03-*.md)
   else

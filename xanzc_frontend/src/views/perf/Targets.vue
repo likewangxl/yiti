@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud targets-page" aria-labelledby="targets-page-title">
+<main v-bp-overflow-tooltip class="bp-crud targets-page" aria-labelledby="targets-page-title">
     <header class="page-h">
       <PageTitle id="targets-page-title"><span class="sub">统一维护目标方案、待办审批和审批留痕</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="目标管理操作">
@@ -28,11 +28,11 @@
           </div>
           <div v-if="plansError" class="table-error" role="alert"><span>{{ plansError }}</span><el-button link type="primary" @click="loadPlans">重新加载</el-button></div>
           <el-table :data="pagedPlans" size="default" :empty-text="plansError ? '加载失败，请重新加载' : '暂无目标方案数据'" v-loading="loadingPlans" aria-labelledby="targets-plans-heading" aria-describedby="targets-plans-state">
-            <el-table-column label="目标方案" min-width="260" show-overflow-tooltip><template #default="{ row }"><div>{{ row.planName || row.planCode || '-' }}</div><div v-if="row.planCode" class="cell-meta">{{ row.planCode }}</div></template></el-table-column>
+            <el-table-column label="目标方案" min-width="260" show-overflow-tooltip class-name="compact-stack-cell"><template #default="{ row }"><div>{{ row.planName || row.planCode || '-' }}</div><div v-if="row.planCode" class="cell-meta">{{ row.planCode }}</div></template></el-table-column>
             <el-table-column label="创建时间" min-width="170"><template #default="{ row }">{{ fmtDateTime(row.createdTime) || '-' }}</template></el-table-column>
-            <el-table-column label="创建人" min-width="180" show-overflow-tooltip><template #default="{ row }"><div>{{ row.createdByName || row.createdByUsername || row.createdBy || '-' }}</div><div v-if="row.createdByUsername" class="cell-meta">{{ row.createdByUsername }}</div></template></el-table-column>
+            <el-table-column label="创建人" min-width="180" show-overflow-tooltip class-name="compact-stack-cell"><template #default="{ row }"><div>{{ row.createdByName || row.createdByUsername || row.createdBy || '-' }}</div><div v-if="row.createdByUsername" class="cell-meta">{{ row.createdByUsername }}</div></template></el-table-column>
             <el-table-column label="状态" width="96"><template #default="{ row }"><el-tag :class="statusCls(row.status)" effect="plain" size="small">{{ statusLabel(row.status) }}</el-tag></template></el-table-column>
-            <el-table-column label="操作" width="220" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openValues(row)">目标值</el-button><el-button v-if="row.createdBy === userStore.user?.empId" link type="primary" size="small" @click="openEditPlan(row)">编辑</el-button><el-button v-if="row.createdBy === userStore.user?.empId" link type="danger" size="small" @click="onDeletePlan(row)">删除</el-button></template></el-table-column>
+            <el-table-column label="操作" class-name="operation-cell" width="160" fixed="right"><template #default="{ row }"><BpAdaptiveRowActions><template #primary><el-button link type="primary" size="small" @click="openValues(row)">目标值</el-button></template><template #expanded><el-button v-if="row.createdBy === userStore.user?.empId" link type="primary" size="small" @click="openEditPlan(row)">编辑</el-button><el-button v-if="row.createdBy === userStore.user?.empId" link type="danger" size="small" @click="onDeletePlan(row)">删除</el-button></template><template #compact><el-dropdown v-if="row.createdBy === userStore.user?.empId" trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多目标方案操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="openEditPlan(row)">编辑</el-dropdown-item><el-dropdown-item divided class="danger-item" @click="onDeletePlan(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template></BpAdaptiveRowActions></template></el-table-column>
           </el-table>
           <nav class="pager" aria-label="目标方案列表分页"><el-pagination v-model:current-page="pager.pageNo" v-model:page-size="pager.pageSize" :page-sizes="[10, 20, 50, 100]" :total="filteredPlans.length" background layout="total, sizes, prev, pager, next, jumper" /></nav>
         </section>
@@ -50,7 +50,7 @@
             <el-table-column label="当前节点" width="160"><template #default="{ row }">{{ row.taskName || row.nodeKey || '-' }}</template></el-table-column>
             <el-table-column label="发起人" width="140"><template #default="{ row }">{{ row.startUserName || row.startUser || '-' }}</template></el-table-column>
             <el-table-column label="提交时间" width="170"><template #default="{ row }">{{ fmtDateTime(row.startTime) }}</template></el-table-column>
-            <el-table-column label="操作" width="110" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openReview(row)">审批</el-button></template></el-table-column>
+            <el-table-column label="操作" class-name="operation-cell" width="110" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openReview(row)">审批</el-button></template></el-table-column>
           </el-table>
           <nav class="pager" aria-label="待我审批分页"><el-pagination v-model:current-page="todoPager.pageNo" v-model:page-size="todoPager.pageSize" :page-sizes="[10, 20, 50]" :total="todos.length" background layout="total, sizes, prev, pager, next, jumper" /></nav>
         </section>
@@ -68,7 +68,7 @@
             <el-table-column label="申请时间" width="170"><template #default="{ row }">{{ fmtDateTime(row.createdTime) }}</template></el-table-column>
             <el-table-column label="审批时间" width="170"><template #default="{ row }">{{ fmtDateTime(row.updatedTime) }}</template></el-table-column>
             <el-table-column label="结果" width="90"><template #default="{ row }"><el-tag v-if="row.status === 'APPROVED'" class="tag-success" effect="plain" size="small">通过</el-tag><el-tag v-else-if="row.status === 'REJECTED'" class="tag-danger" effect="plain" size="small">驳回</el-tag><span v-else>-</span></template></el-table-column>
-            <el-table-column label="操作" width="110" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button></template></el-table-column>
+            <el-table-column label="操作" class-name="operation-cell" width="110" fixed="right"><template #default="{ row }"><el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button></template></el-table-column>
           </el-table>
           <nav class="pager" aria-label="已审批分页"><el-pagination v-model:current-page="donePager.pageNo" v-model:page-size="donePager.pageSize" :page-sizes="[10, 20, 50]" :total="dones.length" background layout="total, sizes, prev, pager, next, jumper" /></nav>
         </section>
@@ -114,6 +114,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listTargets, createTargetPlan, updateTargetPlan, deleteTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory, listTargetValues, listMetrics, calcKpiScore, uploadImportFile } from '@/api/perf';
 import { listTodoTasks, listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';

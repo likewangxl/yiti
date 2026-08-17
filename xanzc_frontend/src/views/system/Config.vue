@@ -1,8 +1,9 @@
 <template>
   <main
+    v-bp-overflow-tooltip
     class="bp-crud workflow-config-page"
     aria-labelledby="workflow-config-page-title"
-    :aria-busy="loading ? 'true' : 'false'"
+    :aria-busy="loading || resetting ? 'true' : 'false'"
   >
     <header class="page-h">
       <PageTitle id="workflow-config-page-title" title="流程配置">
@@ -31,6 +32,7 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :disabled="!selectedPd" @click="reload">查询</el-button>
+          <el-button :disabled="loading || resetting" @click="resetFilters">重置</el-button>
           <el-button @click="loadProcessDefs">刷新流程定义</el-button>
         </el-form-item>
       </el-form>
@@ -73,7 +75,7 @@
             <el-table-column prop="nodeKey" label="节点 Key" min-width="190"><template #default="{ row }"><code class="mono">{{ row.nodeKey }}</code></template></el-table-column>
             <el-table-column prop="candidateType" label="候选类型" width="120"><template #default="{ row }"><el-tag class="tag-info" effect="plain" size="small">{{ row.candidateType }}</el-tag></template></el-table-column>
             <el-table-column prop="candidateValue" label="候选值" min-width="260" show-overflow-tooltip />
-            <el-table-column label="操作" width="90" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
               <template #default="{ row }"><el-button link type="primary" size="small" @click="openCandidateDlg(row)">编辑</el-button></template>
             </el-table-column>
           </el-table>
@@ -95,7 +97,7 @@
             <el-table-column prop="nodeKey" label="节点 Key" min-width="190"><template #default="{ row }"><code class="mono">{{ row.nodeKey }}</code></template></el-table-column>
             <el-table-column prop="formFields" label="表单字段定义" min-width="300" show-overflow-tooltip />
             <el-table-column prop="readableFields" label="只读字段" min-width="180" show-overflow-tooltip />
-            <el-table-column label="操作" width="90" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
               <template #default="{ row }"><el-button link type="primary" size="small" @click="openFormDlg(row)">编辑</el-button></template>
             </el-table-column>
           </el-table>
@@ -117,7 +119,7 @@
             <el-table-column prop="nodeKey" label="节点 Key" min-width="190"><template #default="{ row }"><code class="mono">{{ row.nodeKey }}</code></template></el-table-column>
             <el-table-column prop="warningHours" label="黄灯（工作小时）" width="150" align="right"><template #default="{ row }"><el-tag class="tag-warning" effect="plain" size="small">{{ row.warningHours }} h</el-tag></template></el-table-column>
             <el-table-column prop="timeoutHours" label="红灯（工作小时）" width="150" align="right"><template #default="{ row }"><el-tag class="tag-danger" effect="plain" size="small">{{ row.timeoutHours }} h</el-tag></template></el-table-column>
-            <el-table-column label="操作" width="90" fixed="right">
+            <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
               <template #default="{ row }"><el-button link type="primary" size="small" @click="openTimeoutDlg(row)">编辑</el-button></template>
             </el-table-column>
           </el-table>
@@ -190,6 +192,7 @@ const processDefs = ref([]);
 const selectedPd = ref('');
 const activeTab = ref('candidates');
 const loading = ref(false);
+const resetting = ref(false);
 const loadError = ref('');
 
 const candidates = ref([]);
@@ -239,6 +242,21 @@ async function reload() {
     loadError.value = `${activeMeta.value.title}加载失败：${error?.message || '请稍后重试'}`;
   } finally {
     loading.value = false;
+  }
+}
+
+async function resetFilters() {
+  if (loading.value || resetting.value) return;
+  resetting.value = true;
+  try {
+    selectedPd.value = '';
+    candidates.value = [];
+    forms.value = [];
+    timeoutRules.value = [];
+    await loadProcessDefs();
+    if (selectedPd.value) await reload();
+  } finally {
+    resetting.value = false;
   }
 }
 

@@ -1,16 +1,16 @@
 <template>
-  <div class="org-group-page">
-    <div class="page-h">
-      <PageTitle><span class="sub">保存的是明确机构成员快照；筛选条件不会自动跟随组织变化</span></PageTitle>
-      <div class="actions"><el-button @click="reload">刷新</el-button><el-button type="primary" @click="openCreate">+ 新建机构组</el-button></div>
-    </div>
+<main v-bp-overflow-tooltip class="bp-crud org-group-page" aria-labelledby="org-group-page-title" :aria-busy="loading ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="org-group-page-title"><span class="sub">保存的是明确机构成员快照；筛选条件不会自动跟随组织变化</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="命名机构组操作"><el-button @click="reload">刷新</el-button><el-button type="primary" @click="openCreate">+ 新建机构组</el-button></div>
+    </header>
     <div class="group-layout" v-loading="loading">
       <section class="card-section group-list">
         <div class="section-title">机构组</div>
         <el-input v-model="keyword" clearable placeholder="搜索编码/名称" class="group-search" />
-        <button v-for="group in filteredGroups" :key="group.groupCode" class="group-item" :class="{ selected: selected?.groupCode === group.groupCode }" @click="selectGroup(group)">
-          <span>{{ group.groupName }}</span><code>{{ group.groupCode }}</code>
-          <el-tag size="small" :type="group.status === 'DISABLED' ? 'info' : 'success'">{{ group.status === 'DISABLED' ? '停用' : '启用' }}</el-tag>
+        <button v-for="group in filteredGroups" :key="group.groupCode" class="group-item" :class="{ selected: selected?.groupCode === group.groupCode }" :aria-pressed="selected?.groupCode === group.groupCode" @click="selectGroup(group)">
+          <span class="group-name" :title="group.groupName">{{ group.groupName }}</span><code class="group-code" :title="group.groupCode">{{ group.groupCode }}</code>
+          <span class="group-status" :title="groupStatus(group).label"><el-tag size="small" effect="plain" :class="groupStatus(group).className">{{ groupStatus(group).label }}</el-tag></span>
         </button>
         <div v-if="!filteredGroups.length" class="empty">暂无机构组</div>
       </section>
@@ -18,13 +18,13 @@
       <section class="card-section member-panel">
         <template v-if="selected">
           <div class="section-title">{{ selected.groupName }} · 直接成员</div>
-          <el-form inline size="small" class="member-filters">
-            <el-input v-model="memberKeyword" clearable placeholder="机构编码/名称" />
-            <el-select v-model="memberNature" clearable placeholder="机构性质"><el-option v-for="item in NATURES" :key="item.value" :label="item.label" :value="item.value" /></el-select>
-            <el-select v-model="memberLevel" clearable placeholder="经营等级"><el-option v-for="item in LEVELS" :key="item.value" :label="item.label" :value="item.value" /></el-select>
-            <el-input v-model="memberCity" clearable placeholder="城市编码/名称" />
+          <el-form inline size="default" class="filter-form member-filters" aria-label="机构组成员筛选">
+            <el-form-item label="机构"><el-input v-model="memberKeyword" clearable aria-label="按机构编码或名称筛选" placeholder="机构编码/名称" /></el-form-item>
+            <el-form-item label="机构性质"><el-select v-model="memberNature" clearable aria-label="按机构性质筛选" placeholder="全部"><el-option v-for="item in NATURES" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+            <el-form-item label="经营等级"><el-select v-model="memberLevel" clearable aria-label="按经营等级筛选" placeholder="全部"><el-option v-for="item in LEVELS" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+            <el-form-item label="城市"><el-input v-model="memberCity" clearable aria-label="按城市编码或名称筛选" placeholder="城市编码/名称" /></el-form-item>
           </el-form>
-          <el-table ref="memberTable" :data="filteredProfiles" row-key="orgCode" size="small" height="460" @selection-change="onSelectionChange">
+          <el-table ref="memberTable" :data="filteredProfiles" row-key="orgCode" size="default" border height="460" @selection-change="onSelectionChange">
             <el-table-column type="selection" reserve-selection width="45" />
             <el-table-column prop="orgName" label="机构" min-width="150" />
             <el-table-column prop="orgCode" label="编码" width="110" />
@@ -70,11 +70,11 @@
       </section>
     </div>
 
-    <el-dialog v-model="createDialog.show" title="新建命名机构组" width="520px">
+    <el-dialog v-model="createDialog.show" class="bp-crud-dialog" title="新建命名机构组" width="520px">
       <el-form label-width="100px"><el-form-item label="组编码" required><el-input v-model="createDialog.form.groupCode" maxlength="64" /></el-form-item><el-form-item label="组名称" required><el-input v-model="createDialog.form.groupName" maxlength="100" /></el-form-item><el-form-item label="用途"><el-input model-value="REPORT_SCREEN" disabled /></el-form-item><el-form-item label="口径说明"><el-input v-model="createDialog.form.remark" type="textarea" /></el-form-item><el-form-item label="创建原因" required><el-input v-model="createDialog.form.reason" maxlength="500" placeholder="请填写本次机构组创建原因" /></el-form-item></el-form>
       <template #footer><el-button @click="createDialog.show = false">取消</el-button><el-button type="primary" @click="create">保存</el-button></template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -111,6 +111,13 @@ const memberDiff = computed(() => diffCodes(initialSelectedCodes.value, selected
 const roleDiff = computed(() => diffCodes(initialRoleCodes.value, roleCodes.value));
 function natureLabel(v) { return NATURES.find(x => x.value === v)?.label || v || '-'; }
 function levelLabel(v) { return LEVELS.find(x => x.value === v)?.label || v || '-'; }
+/** 机构组状态只接受服务端 ACTIVE/DISABLED 枚举，未知值必须显式暴露。 */
+function groupStatus(group) {
+  const status = String(group?.status || '').toUpperCase();
+  if (status === 'ACTIVE') return { label: '启用', className: 'tag-success' };
+  if (status === 'DISABLED') return { label: '停用', className: 'tag-info' };
+  return { label: status ? `未知状态：${status}` : '未知状态', className: 'tag-warning' };
+}
 function profileName(code) { return profiles.value.find(x => String(x.orgCode) === String(code))?.orgName || code; }
 function profileLabel(code) {
   const profile = profiles.value.find(x => String(x.orgCode) === String(code));
@@ -207,23 +214,25 @@ onMounted(reload);
 </script>
 
 <style scoped>
-.group-layout { display: grid; grid-template-columns: 250px minmax(420px, 1fr) 280px; gap: 12px; min-height: 620px; }
+.group-layout { display: grid; grid-template-columns: 250px minmax(420px, 1fr) 280px; gap: var(--space-4); min-height: 620px; }
 .group-list, .member-panel, .role-panel { min-width: 0; }
-.section-title { color: #1f2d3d; font-weight: 600; margin-bottom: 10px; }
-.group-search { margin-bottom: 8px; }
-.group-item { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 3px 6px; text-align: left; padding: 9px; border: 1px solid #ebeef5; background: #fff; cursor: pointer; color: #303133; }
-.group-item.selected { border-color: #409eff; background: #ecf5ff; }
-.group-item code { color: #909399; font-size: 11px; }
-.group-item :deep(.el-tag) { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
-.member-filters { display: flex; gap: 8px; margin-bottom: 8px; }
-.member-filters .el-input { width: 160px; }
-.member-filters .el-select { width: 130px; }
-.save-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; color: #606266; font-size: 12px; }
-.role-hint { color: #7d9bc9; font-size: 12px; line-height: 1.6; margin-top: 12px; }
-.change-hint { color: #606266; font-size: 12px; margin-top: 8px; }
-.diff-values { display: grid; gap: 3px; margin-top: 4px; color: #7d9bc9; overflow-wrap: anywhere; }
-.selected-members { display: flex; flex-wrap: wrap; gap: 6px; min-height: 42px; margin-bottom: 18px; align-content: flex-start; }
-.empty-inline { color: #909399; font-size: 12px; line-height: 24px; }
-.empty { color: #909399; text-align: center; padding: 60px 0; }
+.section-title { color: var(--color-text-strong); font-weight: 600; margin-bottom: var(--space-3); }
+.group-search { margin-bottom: var(--space-2); }
+.group-item { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 88px); gap: var(--space-1) var(--space-2); text-align: left; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-strong); cursor: pointer; }
+.group-item:hover, .group-item.selected { border-color: var(--color-brand-500); background: var(--color-brand-100); }
+.group-name, .group-code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-code { color: var(--color-text-muted); font-size: 12px; }
+.group-status { grid-column: 2; grid-row: 1 / span 2; display: flex; min-width: 0; align-items: center; justify-content: flex-end; overflow: hidden; }
+.group-status :deep(.el-tag) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-filters { margin-bottom: var(--space-2); }
+.member-filters :deep(.el-input), .member-filters :deep(.el-select) { width: 100%; }
+.save-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-3); color: var(--color-text); font-size: 12px; }
+.role-hint { color: var(--color-text-muted); font-size: 12px; line-height: 18px; margin-top: var(--space-3); }
+.change-hint { color: var(--color-text); font-size: 12px; margin-top: var(--space-2); }
+.diff-values { display: grid; gap: var(--space-1); margin-top: var(--space-1); color: var(--color-text-muted); overflow-wrap: anywhere; }
+.selected-members { display: flex; flex-wrap: wrap; gap: var(--space-2); min-height: 42px; margin-bottom: var(--space-4); align-content: flex-start; }
+.empty-inline, .empty { color: var(--color-text-muted); font-size: 12px; }
+.empty-inline { line-height: 24px; }
+.empty { text-align: center; padding: 60px 0; }
 @media (max-width: 1200px) { .group-layout { grid-template-columns: 220px minmax(360px, 1fr); } .role-panel { grid-column: 1 / -1; } }
 </style>

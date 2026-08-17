@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud dict-page" aria-labelledby="dict-page-title" :aria-busy="typesLoading || loading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud dict-page" aria-labelledby="dict-page-title" :aria-busy="typesLoading || loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="dict-page-title"><span class="sub">按类型维护统一字典项；状态变更会立即影响引用该字典的业务页面。</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="字典管理操作">
@@ -72,12 +72,13 @@
           <el-table-column label="状态" width="100">
             <template #default="{ row }"><el-tag :class="isActive(row) ? 'tag-success' : 'tag-warning'" effect="plain">{{ isActive(row) ? '启用' : '禁用' }}</el-tag></template>
           </el-table-column>
-          <el-table-column label="操作" width="180" fixed="right">
+          <el-table-column label="操作" class-name="operation-cell" width="180" fixed="right">
             <template #default="{ row }">
-              <div class="row-actions" role="group" :aria-label="`${row.dictLabel || row.label} 操作`">
-                <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button link type="primary" size="small" :loading="isToggling(row)" :disabled="isToggling(row)" @click="onToggle(row)">{{ isActive(row) ? '禁用' : '启用' }}</el-button>
-              </div>
+              <BpAdaptiveRowActions role="group" :aria-label="`${row.dictLabel || row.label} 操作`">
+                <template #primary><el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button></template>
+                <template #expanded><el-button link size="small" :disabled="isToggling(row)" @click="onToggle(row)">{{ isToggling(row) ? '处理中…' : (isActive(row) ? '禁用' : '启用') }}</el-button></template>
+                <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" :disabled="isToggling(row)" aria-label="更多字典项操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="isToggling(row)" @click="onToggle(row)">{{ isToggling(row) ? '处理中…' : (isActive(row) ? '禁用' : '启用') }}</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+              </BpAdaptiveRowActions>
             </template>
           </el-table-column>
         </el-table>
@@ -103,6 +104,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listDictTypes, listDictItems } from '@/api/system';
 import { call } from '@/api/http';
 

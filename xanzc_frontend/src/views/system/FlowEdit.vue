@@ -1,5 +1,6 @@
 <template>
   <main
+    v-bp-overflow-tooltip
     class="bp-crud flow-edit-page"
     aria-labelledby="flow-edit-page-title"
     :aria-busy="loading || saving || publishing ? 'true' : 'false'"

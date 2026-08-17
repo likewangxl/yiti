@@ -94,6 +94,9 @@ const stubs = {
   'el-radio-group': passthrough('ElRadioGroup'),
   'el-radio-button': passthrough('ElRadioButton'),
   'el-upload': passthrough('ElUpload'),
+  'el-dropdown': { name: 'ElDropdown', template: '<div><slot /><slot name="dropdown" /></div>' },
+  'el-dropdown-menu': passthrough('ElDropdownMenu'),
+  'el-dropdown-item': { name: 'ElDropdownItem', emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' },
   'el-pagination': empty('ElPagination'),
   'el-table': { name: 'ElTable', props: ['data'], template: '<div class="tbl-stub"><slot /></div>' },
   'el-table-column': {
@@ -104,7 +107,7 @@ const stubs = {
 };
 
 function mountPage() {
-  return mount(PersonTags, { global: { stubs } });
+  return mount(PersonTags, { global: { stubs, directives: { loading: {}, 'bp-overflow-tooltip': {} } } });
 }
 
 // 注意：不能用 vi.restoreAllMocks()——它会把 vi.mock 工厂里的 mockResolvedValue 实现一并清掉

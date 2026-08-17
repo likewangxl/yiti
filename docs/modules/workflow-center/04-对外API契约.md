@@ -212,7 +212,7 @@ public interface WorkflowApi {
 - 其他模块**只能**依赖正式 `WorkflowApi` / `WorkflowQueryApi` / `TodoQueryApi`，不得直接注入内部 `service`、`mapper`、`entity`。
 - `startProcess()` 与调用方业务事务共享数据库事务边界。
 - 其他模块读取待办、任务详情、流程历史、流程节点图时，应优先依赖 `WorkflowQueryApi`，不得直接注入 `TodoQueryService` / `ProcessQueryService`。
-- 无会话方法（`approveByEmp`/`rejectByEmp`/`TodoQueryApi` 的 `*ByEmp` 系列）不依赖登录态、不做鉴权与候选人可见性校验，调用方必须自行完成鉴权后再调用，避免越权（见 `workflow-center/CLAUDE.md`）。
+- 无会话方法（`approveByEmp`/`rejectByEmp`/`TodoQueryApi` 的 `*ByEmp` 系列）不依赖登录态、不做鉴权与候选人可见性校验，调用方必须自行完成鉴权后再调用，避免越权（见 `workflow-center/AGENTS.md`）。
 
 ---
 

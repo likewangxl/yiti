@@ -1,9 +1,11 @@
 <template>
-  <main class="bp-crud eval-user-tags-page" aria-labelledby="eval-user-tags-page-title" :aria-busy="loading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud eval-user-tags-page" aria-labelledby="eval-user-tags-page-title" :aria-busy="loading ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="eval-user-tags-page-title"><span class="sub">每人单选一个评价角色，并控制是否参与评价</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="人员评价角色操作">
         <el-button :loading="loading" @click="reload">刷新</el-button>
+        <el-button @click="openImport">导入</el-button>
+        <el-button :loading="exporting" :disabled="exporting" @click="doExport">导出</el-button>
       </div>
     </header>
 
@@ -30,10 +32,6 @@
         <el-form-item>
           <el-button type="primary" @click="doSearch">查询</el-button>
           <el-button @click="resetSearch">重置</el-button>
-        </el-form-item>
-        <el-form-item class="filter-actions">
-          <el-button @click="openImport">导入</el-button>
-          <el-button :loading="exporting" :disabled="exporting" @click="doExport">导出</el-button>
         </el-form-item>
       </el-form>
     </section>
@@ -74,7 +72,7 @@
             <el-tag v-else type="info" effect="plain" size="small">否</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="90" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
           </template>

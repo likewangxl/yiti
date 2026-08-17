@@ -1,9 +1,7 @@
 // @vitest-environment happy-dom
-// 全出血(full-bleed)布局回归——修复大屏设计器高度错位:DesignerV2 原先写死
-// calc(100vh - 60px),但 DefaultLayout 实际是 header 52px + 面包屑 40px + 内容区
-// padding 16×2,设计器超高 64px 导致整页滚动条。修复契约分两半:
-// ①设计器路由声明 meta.fullBleed;②DefaultLayout 对 fullBleed 路由去掉内容区 padding,
-// 设计器自身高度改为撑满父容器。本文件锁这两半契约。
+// DefaultLayout 通用壳层回归：Header 内嵌唯一工作区页签，内容区独立滚动；
+// 对仍由该壳层承载的特殊路由，meta.fullBleed 继续作为去除内容内边距的兼容契约。
+// 顶层独立窗口路由是否脱离 DefaultLayout 由 router 专项测试负责。
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick, reactive } from 'vue';
@@ -21,15 +19,14 @@ const stubs = {
   AppSidebar: {
     name: 'AppSidebar',
     props: ['collapsed'],
-    template: '<aside class="sidebar-stub" :data-collapsed="String(collapsed)" />'
+    emits: ['toggle-sidebar'],
+    template: '<aside class="sidebar-stub" :data-collapsed="String(collapsed)"><button class="sidebar-toggle-stub" @click="$emit(\'toggle-sidebar\')" /></aside>'
   },
   AppHeader: {
     name: 'AppHeader',
-    props: ['sidebarCollapsed'],
-    emits: ['toggle-sidebar'],
-    template: '<button class="header-stub" :data-collapsed="String(sidebarCollapsed)" @click="$emit(\'toggle-sidebar\')" />'
+    template: '<header class="header-stub" />'
   },
-  AppBreadcrumb: true,
+  AppBreadcrumb: { template: '<div class="breadcrumb-stub" />' },
   WorkspaceTabs: { template: '<div class="workspace-tabs-stub" />' },
   'router-view': true
 };
@@ -67,11 +64,12 @@ afterEach(() => {
 });
 
 describe('DefaultLayout.vue full-bleed 内容区', () => {
-  it('面包屑下渲染工作区页签栏，且页签栏不属于 content padding 契约', () => {
+  it('全局壳层不挂载面包屑或独立页签行，内容区直接跟在内嵌页签的 Header 后', () => {
     const wrapper = mountWithMeta({ title: '工作台' });
-    expect(wrapper.find('.workspace-tabs-stub').exists()).toBe(true);
+    expect(wrapper.find('.breadcrumb-stub').exists()).toBe(false);
+    expect(wrapper.find('.workspace-tabs-stub').exists()).toBe(false);
     expect(wrapper.find('.content').element.previousElementSibling.className)
-      .toBe('workspace-tabs-stub');
+      .toBe('header-stub');
   });
 
   it('路由声明 meta.fullBleed 时内容区带 content--full(去 padding)', () => {
@@ -86,22 +84,20 @@ describe('DefaultLayout.vue full-bleed 内容区', () => {
 });
 
 describe('DefaultLayout.vue 侧栏壳层状态', () => {
-  it('默认展开，切换时向 Header 与 Sidebar 同步 220px/64px 壳层状态', async () => {
+  it('默认展开，由 Sidebar 常驻按钮切换并同步 220px/64px 壳层状态', async () => {
     const wrapper = mountWithMeta({ title: '工作台' });
 
     expect(wrapper.find('.layout').classes()).not.toContain('layout--sidebar-collapsed');
     expect(wrapper.find('.sidebar-stub').attributes('data-collapsed')).toBe('false');
-    expect(wrapper.find('.header-stub').attributes('data-collapsed')).toBe('false');
 
-    await wrapper.find('.header-stub').trigger('click');
+    await wrapper.find('.sidebar-toggle-stub').trigger('click');
     expect(wrapper.find('.layout').classes()).toContain('layout--sidebar-collapsed');
     expect(wrapper.find('.sidebar-stub').attributes('data-collapsed')).toBe('true');
-    expect(wrapper.find('.header-stub').attributes('data-collapsed')).toBe('true');
   });
 
   it('侧栏折叠态仅属于当前 Layout 实例，不会跨重新挂载持久化', async () => {
     const first = mountWithMeta({ title: '工作台' });
-    await first.find('.header-stub').trigger('click');
+    await first.find('.sidebar-toggle-stub').trigger('click');
     expect(first.find('.sidebar-stub').attributes('data-collapsed')).toBe('true');
     first.unmount();
 
@@ -138,11 +134,11 @@ describe('DefaultLayout.vue 路由焦点管理', () => {
     const content = wrapper.find('#app-main').element;
     const focusSpy = vi.spyOn(content, 'focus');
 
-    await wrapper.find('.header-stub').trigger('click');
+    await wrapper.find('.sidebar-toggle-stub').trigger('click');
     probe.focus();
     focusSpy.mockClear();
-    routeState.path = '/screen/admin/designer';
-    routeState.fullPath = '/screen/admin/designer?mode=edit';
+    routeState.path = '/special/full-bleed';
+    routeState.fullPath = '/special/full-bleed?mode=edit';
     routeState.meta = { fullBleed: true };
     await flushRouteFocus();
 
@@ -153,7 +149,7 @@ describe('DefaultLayout.vue 路由焦点管理', () => {
 
     probe.focus();
     focusSpy.mockClear();
-    routeState.fullPath = '/screen/admin/designer?mode=preview';
+    routeState.fullPath = '/special/full-bleed?mode=preview';
     await flushRouteFocus();
 
     expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
@@ -162,8 +158,8 @@ describe('DefaultLayout.vue 路由焦点管理', () => {
   });
 });
 
-describe('大屏设计器路由 full-bleed 声明', () => {
-  it('ScreenAdminDesigner 路由 meta.fullBleed 为 true', async () => {
+describe('fullBleed 路由元数据兼容', () => {
+  it('保留已有特殊路由的 meta.fullBleed 兼容声明', async () => {
     const { default: router } = await import('@/router');
     const route = router.getRoutes().find(r => r.name === 'ScreenAdminDesigner');
     expect(route).toBeTruthy();

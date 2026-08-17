@@ -1,12 +1,12 @@
 <template>
-  <div class="org-profile-page">
-    <div class="page-h">
-      <PageTitle><span class="sub">机构外部同步字段只读；以下为本地经营属性，不回写上游机构系统</span></PageTitle>
-      <div class="actions"><el-button @click="reload">刷新</el-button></div>
-    </div>
+<main v-bp-overflow-tooltip class="bp-crud org-profile-page" aria-labelledby="org-profile-page-title" :aria-busy="loading ? 'true' : 'false'">
+    <header class="page-h">
+      <PageTitle id="org-profile-page-title"><span class="sub">机构外部同步字段只读；以下为本地经营属性，不回写上游机构系统</span></PageTitle>
+      <div class="actions action-group" role="group" aria-label="机构经营画像操作"><el-button @click="reload">刷新</el-button></div>
+    </header>
 
-    <div class="card-section filters">
-      <el-form inline size="small">
+    <section class="card-section filter-bar filters" aria-label="机构经营画像筛选">
+      <el-form inline size="default" class="filter-form" aria-label="机构经营画像筛选">
         <el-form-item label="机构">
           <el-input v-model="filters.keyword" clearable placeholder="机构编码或名称" @keyup.enter="reload" />
         </el-form-item>
@@ -23,13 +23,25 @@
         <el-form-item label="城市">
           <el-input v-model="filters.city" clearable placeholder="城市编码或名称" @keyup.enter="reload" />
         </el-form-item>
-        <el-form-item><el-button type="primary" @click="reload">查询</el-button></el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="reload">查询</el-button>
+          <el-button @click="resetFilters">重置</el-button>
+        </el-form-item>
       </el-form>
-    </div>
+    </section>
 
-    <div class="card-section" v-loading="loading">
-      <el-table :data="rows" stripe border empty-text="暂无机构画像">
-        <el-table-column prop="orgCode" label="机构编码" width="120" />
+    <section class="card-section data-panel" v-loading="loading" aria-label="机构经营画像列表" aria-describedby="org-profile-table-state">
+      <div class="toolbar">
+        <div>
+          <h2 id="org-profile-table-heading" class="section-title">机构经营画像列表</h2>
+          <p class="hint">外部同步字段保持只读；本地画像仅服务经营范围、地图和命名机构组配置。</p>
+        </div>
+        <p id="org-profile-table-state" class="table-state" role="status" aria-live="polite">
+          {{ loading ? '机构经营画像列表加载中' : (rows.length ? `共 ${rows.length} 个机构` : '暂无机构画像') }}
+        </p>
+      </div>
+      <el-table :data="rows" size="default" stripe border empty-text="暂无机构画像" aria-labelledby="org-profile-table-heading" aria-describedby="org-profile-table-state">
+        <el-table-column prop="orgCode" label="机构编码" width="120" show-overflow-tooltip />
         <el-table-column prop="orgName" label="机构名称" min-width="150" show-overflow-tooltip />
         <el-table-column label="机构性质" width="120">
           <template #default="{ row }">{{ natureLabel(row.orgNature) }}</template>
@@ -37,7 +49,7 @@
         <el-table-column label="经营管理等级" width="130">
           <template #default="{ row }">{{ levelLabel(row.operatingLevel) }}</template>
         </el-table-column>
-        <el-table-column label="归属一级经营机构" min-width="150">
+        <el-table-column label="归属一级经营机构" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">{{ row.ownerOperatingOrgName || row.ownerOperatingOrgCode || '-' }}</template>
         </el-table-column>
         <el-table-column label="城市" width="110">
@@ -46,16 +58,16 @@
         <el-table-column label="GCJ-02 坐标" width="180">
           <template #default="{ row }">{{ row.lng ?? '-' }}, {{ row.lat ?? '-' }}</template>
         </el-table-column>
-        <el-table-column label="画像状态" width="95">
-          <template #default="{ row }"><el-tag size="small" :type="active(row) ? 'success' : 'info'">{{ active(row) ? '启用' : '停用' }}</el-tag></template>
+        <el-table-column label="画像状态" width="96">
+          <template #default="{ row }"><el-tag size="small" effect="plain" :class="active(row) ? 'tag-success' : 'tag-info'">{{ active(row) ? '启用' : '停用' }}</el-tag></template>
         </el-table-column>
-        <el-table-column label="操作" width="90" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="96" fixed="right">
           <template #default="{ row }"><el-button link type="primary" @click="openEdit(row)">编辑画像</el-button></template>
         </el-table-column>
       </el-table>
-    </div>
+    </section>
 
-    <el-dialog v-model="dialog.show" title="编辑机构本地画像" width="620px">
+    <el-dialog v-model="dialog.show" class="bp-crud-dialog" title="编辑机构本地画像" width="620px">
       <div class="readonly-tip">外部机构名称、层级和状态只读；本地经营属性仅服务大屏机构组与地图。</div>
       <el-form label-width="130px" size="small">
         <el-form-item label="机构"><span>{{ dialog.form.orgName }}（{{ dialog.form.orgCode }}）</span></el-form-item>
@@ -75,13 +87,13 @@
         <el-form-item label="经度"><el-input-number v-model="dialog.form.lng" :min="-180" :max="180" :precision="6" controls-position="right" /></el-form-item>
         <el-form-item label="纬度"><el-input-number v-model="dialog.form.lat" :min="-90" :max="90" :precision="6" controls-position="right" /></el-form-item>
         <el-form-item label="坐标系"><el-input model-value="GCJ-02" disabled /><span class="hint">本期固定 GCJ-02，禁止混用 WGS-84/BD-09。</span></el-form-item>
-        <el-form-item label="状态"><el-radio-group v-model="dialog.form.status"><el-radio-button label="ACTIVE">启用</el-radio-button><el-radio-button label="DISABLED">停用</el-radio-button></el-radio-group></el-form-item>
+        <el-form-item label="状态"><el-radio-group v-model="dialog.form.status"><el-radio-button value="ACTIVE">启用</el-radio-button><el-radio-button value="DISABLED">停用</el-radio-button></el-radio-group></el-form-item>
         <el-form-item label="口径说明"><el-input v-model="dialog.form.remark" type="textarea" maxlength="500" /></el-form-item>
         <el-form-item label="变更原因" required><el-input v-model="dialog.form.reason" maxlength="500" placeholder="请填写本次画像调整原因" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="dialog.show = false">取消</el-button><el-button type="primary" :loading="dialog.saving" @click="save">保存</el-button></template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -114,6 +126,15 @@ function levelLabel(v) { return LEVELS.find(x => x.value === v)?.label || v || '
 function optionalQueryText(value) {
   const normalized = String(value || '').trim();
   return normalized || undefined;
+}
+
+/** 还原全部筛选条件后重新查询，不修改后端参数语义。 */
+function resetFilters() {
+  filters.keyword = '';
+  filters.orgNature = '';
+  filters.operatingLevel = '';
+  filters.city = '';
+  reload();
 }
 
 async function reload() {
@@ -168,7 +189,7 @@ onMounted(reload);
 </script>
 
 <style scoped>
-.filters { padding-bottom: 4px; }
-.readonly-tip { color: #9bb6df; font-size: 12px; margin-bottom: 12px; }
-.hint { display: block; color: #7d9bc9; font-size: 12px; line-height: 1.5; }
+.filters { padding-bottom: var(--space-3); }
+.readonly-tip { color: var(--color-text-muted); font-size: 12px; margin-bottom: var(--space-3); }
+.hint { display: block; color: var(--color-text-muted); font-size: 12px; line-height: 18px; }
 </style>

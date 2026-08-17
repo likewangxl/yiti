@@ -1,20 +1,6 @@
 <template>
   <header class="hdr">
-    <button
-      type="button"
-      class="shell-toggle"
-      data-testid="sidebar-toggle"
-      :aria-label="props.sidebarCollapsed ? '展开侧边导航' : '折叠侧边导航'"
-      :aria-expanded="props.sidebarCollapsed ? 'false' : 'true'"
-      aria-controls="app-sidebar"
-      :title="props.sidebarCollapsed ? '展开侧边导航' : '折叠侧边导航'"
-      @click="emit('toggle-sidebar')"
-    >
-      <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
-        <path d="M4 6h16M4 12h16M4 18h16" />
-      </svg>
-    </button>
-    <div class="spacer" />
+    <WorkspaceTabs />
 
     <el-dropdown trigger="click" @command="onCommand">
       <div class="account-pick">
@@ -74,15 +60,12 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import WorkspaceTabs from '@/components/WorkspaceTabs.vue';
 import { useUserStore } from '@/stores/user';
 import { logout } from '@/api/auth';
 import { getUnreadCount } from '@/api/workspace';
 import { changeMyPassword } from '@/api/users';
 
-const props = defineProps({
-  sidebarCollapsed: { type: Boolean, default: false }
-});
-const emit = defineEmits(['toggle-sidebar']);
 const unread = ref(0);
 const store = useUserStore();
 
@@ -156,7 +139,6 @@ async function onChangePassword() {
   height: var(--layout-header-height);
   flex-shrink: 0;
 }
-.shell-toggle,
 .icon-btn {
   width: 40px; height: 40px;
   display: grid; place-items: center;
@@ -171,7 +153,6 @@ async function onChangePassword() {
   &:hover { color: var(--color-brand-700); background: var(--color-surface-soft); }
   svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 }
-.spacer { flex: 1; }
 .account-pick {
   display: flex; align-items: center; gap: var(--space-2);
   padding: var(--space-1) 10px;

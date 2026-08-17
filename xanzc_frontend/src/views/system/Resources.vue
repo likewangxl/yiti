@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud resources-page" aria-labelledby="resources-page-title">
+<main v-bp-overflow-tooltip class="bp-crud resources-page" aria-labelledby="resources-page-title">
     <header class="page-h">
       <PageTitle id="resources-page-title">
         <span class="sub">维护菜单层级；叶子菜单可单独配置角色访问范围。</span>
@@ -94,36 +94,13 @@
           <template #default="{ row }"><span class="rank-num">{{ row.menuRankNo ?? 0 }}</span></template>
         </el-table-column>
 
-        <el-table-column label="操作" width="300" align="right" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="300" align="right" fixed="right">
           <template #default="{ row }">
-            <div class="row-actions" role="group" :aria-label="`${row.menuName} 操作`">
-              <el-button link type="primary" size="small" @click.stop="openCreate(row)">新增子菜单</el-button>
-              <el-button link type="primary" size="small" @click.stop="openEdit(row)">编辑</el-button>
-              <el-button
-                v-if="row.menuEndFlag === '1'"
-                link
-                type="primary"
-                size="small"
-                @click.stop="openAssign(row)"
-              >分配角色</el-button>
-              <el-popconfirm
-                :title="`确认删除「${row.menuName}」？子菜单会一并失效，操作不可逆。`"
-                confirm-button-text="确认删除"
-                cancel-button-text="取消"
-                @confirm="doDelete(row)"
-              >
-                <template #reference>
-                  <el-button
-                    link
-                    type="danger"
-                    size="small"
-                    :loading="isDeleting(row.resourceId)"
-                    :disabled="isDeleting(row.resourceId)"
-                    @click.stop
-                  >删除</el-button>
-                </template>
-              </el-popconfirm>
-            </div>
+            <BpAdaptiveRowActions role="group" :aria-label="`${row.menuName} 操作`">
+              <template #primary><el-button link type="primary" size="small" @click.stop="openEdit(row)">编辑</el-button></template>
+              <template #expanded><el-button link type="primary" size="small" @click.stop="openCreate(row)">新增子菜单</el-button><el-button v-if="row.menuEndFlag === '1'" link type="primary" size="small" @click.stop="openAssign(row)">分配角色</el-button><el-button link type="danger" size="small" :disabled="isDeleting(row.resourceId)" @click.stop="confirmDelete(row)">删除</el-button></template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多菜单操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click.stop="openCreate(row)">新增子菜单</el-dropdown-item><el-dropdown-item v-if="row.menuEndFlag === '1'" @click.stop="openAssign(row)">分配角色</el-dropdown-item><el-dropdown-item divided class="danger-item" :disabled="isDeleting(row.resourceId)" @click.stop="confirmDelete(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -216,8 +193,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Refresh, Search } from '@element-plus/icons-vue';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import {
   listResourceTree, createResource, updateResource, deleteResource,
   getResourceRoles, assignResourceRoles,
@@ -388,6 +366,15 @@ async function doDelete(row) {
   }
 }
 
+async function confirmDelete(row) {
+  try {
+    await ElMessageBox.confirm(`确认删除「${row.menuName}」？子菜单会一并失效，操作不可逆。`, '删除确认', {
+      type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消'
+    });
+  } catch { return; }
+  await doDelete(row);
+}
+
 const rawRoles = ref([]);
 const roleOptions = computed(() => rawRoles.value.filter(role => Number(role.recordStatus) === 0));
 const assign = reactive({ show: false, saving: false, loading: false, resourceId: '', menuName: '', roleIds: [] });
@@ -432,7 +419,6 @@ onMounted(reload);
 <style lang="scss" scoped>
 .resources-page { min-width: 0; }
 .menu-card { min-width: 0; }
-.menu-table :deep(.el-table__row > td) { padding-block: var(--space-2); }
 .menu-table :deep(.el-table__row:hover > td) { background: var(--color-brand-100); }
 .menu-table :deep(.el-table__placeholder) { width: var(--space-4); }
 .menu-name { color: var(--color-text-strong); font-size: 14px; }

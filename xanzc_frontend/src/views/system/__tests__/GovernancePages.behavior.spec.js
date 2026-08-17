@@ -69,6 +69,9 @@ const stubs = {
   },
   'el-select': passthrough('ElSelect'),
   'el-option': empty('ElOption'),
+  'el-dropdown': { name: 'ElDropdown', template: '<div><slot /><slot name="dropdown" /></div>' },
+  'el-dropdown-menu': passthrough('ElDropdownMenu'),
+  'el-dropdown-item': { name: 'ElDropdownItem', emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' },
   'el-checkbox': { name: 'ElCheckbox', props: ['modelValue'], emits: ['change'], template: '<input type="checkbox" :checked="modelValue" @change="$emit(\'change\', $event.target.checked)" />' },
   'el-table': { name: 'ElTable', props: { data: Array }, template: '<div><slot /></div>' },
   'el-table-column': empty('ElTableColumn'),
@@ -94,7 +97,7 @@ async function settle() {
 
 function mountPage(component) {
   return mount(component, {
-    global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    global: { stubs, directives: { loading: { mounted() {}, updated() {} }, 'bp-overflow-tooltip': {} } }
   });
 }
 

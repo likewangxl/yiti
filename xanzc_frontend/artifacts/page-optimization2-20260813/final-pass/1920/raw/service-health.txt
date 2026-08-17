@@ -1,0 +1,11 @@
+END GATE 2026-08-13T19:32:25+08:00
+
+LISTEN 0.0.0.0:8091 node pid=1282172 cwd=/home/djdev/leid/yiti/xanzc_frontend
+LISTEN *:18081 java pid=1344733 cwd=/home/djdev/leid/yiti/bootstrap
+
+8091 index                         HTTP 200
+8091 proxy /api/auth/current-user HTTP 401
+18081 /api/auth/current-user      HTTP 401
+18081 /v3/api-docs                HTTP 200
+
+Services were hosted by the dedicated service agent and were neither started, restarted, nor stopped by this validation.

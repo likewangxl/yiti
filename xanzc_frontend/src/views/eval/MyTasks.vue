@@ -1,6 +1,6 @@
 <template>
   <!-- 待处理任务（用户端） -->
-  <main class="bp-crud eval-my-tasks-page" aria-labelledby="eval-my-tasks-page-title" :aria-busy="loading || processView.loading ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud eval-my-tasks-page" aria-labelledby="eval-my-tasks-page-title" :aria-busy="loading || processView.loading ? 'true' : 'false'">
 
     <!-- ===== 汇总列表视图 ===== -->
     <template v-if="!processView.active && !rewardView.active">
@@ -42,7 +42,7 @@
         <el-table-column label="评价截止时间" width="180" align="center">
           <template #default="{ row }">{{ formatDateTime(row.deadline) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="110" align="center" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="110" align="center" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link @click="enterProcess(row)">处理</el-button>
           </template>
@@ -138,7 +138,7 @@
             </el-select>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="110" align="center" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="110" align="center" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="row.submitted !== 1"

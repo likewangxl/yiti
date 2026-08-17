@@ -1,5 +1,5 @@
 <template>
-  <main class="bp-crud target-values-page" aria-labelledby="target-values-page-title">
+<main v-bp-overflow-tooltip class="bp-crud target-values-page" aria-labelledby="target-values-page-title">
     <header class="page-h">
       <PageTitle id="target-values-page-title">
         <span class="sub" v-if="currentPlan">方案：<em>{{ currentPlanLabel }}</em></span>
@@ -76,13 +76,13 @@
         <el-table-column label="维度" width="90">
           <template #default="{ row }">{{ subjectTypeLabel(row.subjectType) || '-' }}</template>
         </el-table-column>
-        <el-table-column label="对象" min-width="190" show-overflow-tooltip>
+        <el-table-column label="对象" min-width="190" show-overflow-tooltip class-name="compact-stack-cell">
           <template #default="{ row }">
             <div>{{ row.subjectName || '-' }}</div>
             <div class="cell-meta">{{ row.subjectDisplayId || row.subjectId || '-' }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="指标" min-width="190" show-overflow-tooltip>
+        <el-table-column label="指标" min-width="190" show-overflow-tooltip class-name="compact-stack-cell">
           <template #default="{ row }">
             <div>{{ row.metricName || row.metricCode || '-' }}</div>
             <div class="cell-meta">{{ row.metricCode }}</div>
@@ -106,11 +106,16 @@
             <el-tag :class="apprCls(row.approvalStatus)" effect="plain" size="small">{{ apprLabel(row.approvalStatus) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="190" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="190" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="canTargetAdjust" link type="primary" size="small" @click="openAdjust(row)">调整</el-button>
-            <el-button link type="primary" size="small" @click="openEditRow(row)">修改</el-button>
-            <el-button link type="danger" size="small" @click="onDelete(row)">删除</el-button>
+            <BpAdaptiveRowActions>
+              <template #primary><el-button link type="primary" size="small" @click="openEditRow(row)">修改</el-button></template>
+              <template #expanded>
+                <el-button v-if="canTargetAdjust" link type="primary" size="small" @click="openAdjust(row)">调整</el-button>
+                <el-button link type="danger" size="small" @click="onDelete(row)">删除</el-button>
+              </template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多目标值操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item v-if="canTargetAdjust" @click="openAdjust(row)">调整</el-dropdown-item><el-dropdown-item divided class="danger-item" @click="onDelete(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+            </BpAdaptiveRowActions>
           </template>
         </el-table-column>
       </el-table>
@@ -164,6 +169,7 @@
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
+import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import {
   listTargets, listTargetValues, listTargetValueSubjects, listTargetValueStageNames, upsertTargetValue, batchUpsertTargetValues,
   submitTargetAdjust, listMetrics, deleteTargetValue,
