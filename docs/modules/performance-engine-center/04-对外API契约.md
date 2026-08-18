@@ -1525,3 +1525,39 @@ public class SysControlUpdatedEvent extends PerfDomainEvent {
 - 目标修正申请流程 (`TargetAdjustService`)
 
 这些能力的触发必须经由 Controller 或 facade 层, 或由内部事件驱动。
+
+---
+
+## 17. system-governance-center.JobApi（按级别重算调度依赖）
+
+绩效模块不直接依赖治理中心的 mapper、entity、JobService 或 Quartz Scheduler；按级别重算以及
+数据就绪协调器的任务触发只能经治理公开 `JobApi`。绩效服务层负责把业务级别映射为固定任务键，
+调用方（包括前端）不得传入任意 `jobKey`/`jobId`。
+
+```java
+JobTriggerRespDTO triggerJobByKey(
+    String jobKey,
+    String triggerType,     // MANUAL / AUTO
+    String reason,
+    String dataDate,
+    String allocDate,
+    String operatorEmpId);  // AUTO 可空
+
+boolean isJobRunning(String jobKey);
+```
+
+### 17.1 级别白名单
+
+| 业务级别 | 允许的 `jobKey` |
+|:---:|:---|
+| 1 | `LEVEL1_METRIC_CALC` |
+| 2 | `LEVEL2_METRIC_CALC` |
+| 3 | `LEVEL3_METRIC_CALC` |
+
+`triggerJobByKey` 由治理层再次检查任务存在、`allow_manual_trigger=1` 和 Scheduler 可用，
+然后使用 Quartz `triggerJob(JobKey, JobDataMap)` 异步触发；`JobExecutionLogger` 负责统一写入
+`SYS_JOB_RUN_LOG`。`MANUAL` 触发需由 REST 层校验 `reason` 并提供操作人工号；`AUTO` 触发可省略
+操作人工号，但必须明确传入 `triggerType=AUTO`，避免被记录为手动操作。
+
+`isJobRunning(jobKey)` 仅返回治理执行日志中是否存在 `RUNNING` 记录，供协调器避免同一任务重复排队；
+返回 false 不构成跨节点锁，最终并发语义由 Quartz JobDetail 的 `@DisallowConcurrentExecution` 保证。
