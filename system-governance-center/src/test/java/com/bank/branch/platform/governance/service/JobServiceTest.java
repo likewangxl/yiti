@@ -487,6 +487,69 @@ class JobServiceTest {
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40302"));
     }
 
+    @Test
+    void triggerJobByKey_existingJob_callsScheduler_withTriggerType() throws Exception {
+        SysJobConf conf = makeJobConf("JOB_L1", "LEVEL1_METRIC_CALC", "1级指标计算");
+        when(jobConfMapper.selectByJobKey("LEVEL1_METRIC_CALC")).thenReturn(conf);
+        Scheduler scheduler = mock(Scheduler.class);
+        ReflectionTestUtils.setField(jobService, "scheduler", scheduler);
+
+        JobTriggerRespDTO resp = jobService.triggerJobByKey("LEVEL1_METRIC_CALC", "MANUAL", "补算",
+                "2026-08-17", "2026-08-16", "EMP001");
+
+        ArgumentCaptor<JobKey> keyCap = ArgumentCaptor.forClass(JobKey.class);
+        ArgumentCaptor<JobDataMap> dataCap = ArgumentCaptor.forClass(JobDataMap.class);
+        verify(scheduler).triggerJob(keyCap.capture(), dataCap.capture());
+        assertThat(keyCap.getValue()).isEqualTo(JobKey.jobKey("LEVEL1_METRIC_CALC", "DEFAULT"));
+        assertThat(dataCap.getValue().getString("triggerType")).isEqualTo("MANUAL");
+        assertThat(dataCap.getValue().getString("dataDate")).isEqualTo("2026-08-17");
+        assertThat(dataCap.getValue().getString("allocDate")).isEqualTo("2026-08-16");
+        assertThat(resp.getJobKey()).isEqualTo("LEVEL1_METRIC_CALC");
+    }
+
+    @Test
+    void triggerJobByKey_auto_allowsNullOperator_andMarksAuto() throws Exception {
+        SysJobConf conf = makeJobConf("JOB_L3", "LEVEL3_METRIC_CALC", "3级指标计算");
+        when(jobConfMapper.selectByJobKey("LEVEL3_METRIC_CALC")).thenReturn(conf);
+        Scheduler scheduler = mock(Scheduler.class);
+        ReflectionTestUtils.setField(jobService, "scheduler", scheduler);
+
+        jobService.triggerJobByKey("LEVEL3_METRIC_CALC", "AUTO", null, "2026-08-17", null, null);
+
+        ArgumentCaptor<JobDataMap> dataCap = ArgumentCaptor.forClass(JobDataMap.class);
+        verify(scheduler).triggerJob(any(JobKey.class), dataCap.capture());
+        assertThat(dataCap.getValue().getString("triggerType")).isEqualTo("AUTO");
+        assertThat(dataCap.getValue().containsKey("operatorEmpId")).isFalse();
+    }
+
+    @Test
+    void triggerJobByKey_notFound_throwsGov40004() {
+        when(jobConfMapper.selectByJobKey("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> jobService.triggerJobByKey("NOT_EXIST", "MANUAL", "原因",
+                null, null, "EMP001"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40004"));
+    }
+
+    @Test
+    void isJobRunning_byJobKey_delegatesToRunLogMapper() {
+        SysJobConf conf = makeJobConf("JOB_RUNNING", "LEVEL1_METRIC_CALC", "1级指标计算");
+        when(jobConfMapper.selectByJobKey("LEVEL1_METRIC_CALC")).thenReturn(conf);
+        when(jobRunLogMapper.existsRunningByJobId("JOB_RUNNING")).thenReturn(true);
+
+        assertThat(jobService.isJobRunning("LEVEL1_METRIC_CALC")).isTrue();
+        verify(jobRunLogMapper).existsRunningByJobId("JOB_RUNNING");
+    }
+
+    @Test
+    void isJobRunning_missingJob_returnsFalse() {
+        when(jobConfMapper.selectByJobKey("NOT_EXIST")).thenReturn(null);
+
+        assertThat(jobService.isJobRunning("NOT_EXIST")).isFalse();
+        verifyNoInteractions(jobRunLogMapper);
+    }
+
     // ── applyMisfirePolicy (P3.5: misfire 策略映射单测) ────────────
 
     /**

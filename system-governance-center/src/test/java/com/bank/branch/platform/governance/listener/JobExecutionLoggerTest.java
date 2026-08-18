@@ -87,6 +87,7 @@ class JobExecutionLoggerTest {
         JobDataMap mergedData = new JobDataMap();
         mergedData.put("triggerType", "MANUAL");
         mergedData.put("operatorEmpId", "EMP_001");
+        mergedData.put("triggerReason", "补算一级指标");
 
         when(context.getJobDetail()).thenReturn(jobDetail);
         when(jobDetail.getKey()).thenReturn(JobKey.jobKey("DAILY_KPI_CALC", "DEFAULT"));
@@ -101,6 +102,7 @@ class JobExecutionLoggerTest {
         SysJobRunLog inserted = captor.getValue();
         assertThat(inserted.getTriggerType()).isEqualTo("MANUAL");
         assertThat(inserted.getCreatedBy()).isEqualTo("EMP_001");
+        assertThat(inserted.getReason()).isEqualTo("补算一级指标");
     }
 
     @Test

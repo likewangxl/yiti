@@ -2,6 +2,7 @@ package com.bank.branch.platform.performance.job;
 
 import com.bank.branch.platform.performance.service.MetricBatchCalcService;
 import lombok.extern.slf4j.Slf4j;
+import org.quartz.DisallowConcurrentExecution;
 import org.quartz.JobExecutionContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.quartz.QuartzJobBean;
@@ -17,6 +18,7 @@ import java.time.LocalDate;
  * 触发器进 ERROR、从未成功调起。对齐 MetricExecuteQuartzJob 写法。
  */
 @Slf4j
+@DisallowConcurrentExecution
 public class Level1MetricCalcJob extends QuartzJobBean {
 
     @Autowired

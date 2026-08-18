@@ -2,8 +2,10 @@ package com.bank.branch.platform.performance.job;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.quartz.DisallowConcurrentExecution;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Level1/2/3 指标批量计算定时任务实例化守护测试.
@@ -22,5 +24,13 @@ class LevelMetricCalcJobTest {
         assertThatCode(() -> Level1MetricCalcJob.class.getDeclaredConstructor()).doesNotThrowAnyException();
         assertThatCode(() -> Level2MetricCalcJob.class.getDeclaredConstructor()).doesNotThrowAnyException();
         assertThatCode(() -> Level3MetricCalcJob.class.getDeclaredConstructor()).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("Level1/2/3MetricCalcJob 的同一 JobDetail 不得并发执行")
+    void levelJobs_disallowConcurrentExecution() {
+        assertThat(Level1MetricCalcJob.class.isAnnotationPresent(DisallowConcurrentExecution.class)).isTrue();
+        assertThat(Level2MetricCalcJob.class.isAnnotationPresent(DisallowConcurrentExecution.class)).isTrue();
+        assertThat(Level3MetricCalcJob.class.isAnnotationPresent(DisallowConcurrentExecution.class)).isTrue();
     }
 }

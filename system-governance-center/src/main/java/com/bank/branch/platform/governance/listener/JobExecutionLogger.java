@@ -74,11 +74,13 @@ public class JobExecutionLogger implements JobListener {
                     .getOrDefault("triggerType", "SCHEDULED");
             String operatorEmpId = (String) context.getMergedJobDataMap()
                     .getOrDefault("operatorEmpId", SYSTEM_TRIGGER);
+            String triggerReason = (String) context.getMergedJobDataMap().get("triggerReason");
 
             SysJobRunLog runLog = new SysJobRunLog();
             runLog.setId(UUID.randomUUID().toString().replace("-", ""));
             runLog.setJobId(jobConf.getId());
             runLog.setTriggerType(triggerType);
+            runLog.setReason(triggerReason);
             runLog.setStatus("RUNNING");
             LocalDateTime now = LocalDateTime.now();
             runLog.setStartTime(now);
