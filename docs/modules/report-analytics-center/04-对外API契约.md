@@ -262,6 +262,7 @@ public class DashboardServiceImpl implements DashboardService {
 | `SavedQueryCreateReqDTO` | 创建查询方案 |
 | `SavedQueryUpdateReqDTO` | 更新查询方案 |
 | `SqlProbeExecuteReqDTO` | SQL 探查执行 |
+| `SqlProbeExportReqDTO` | SQL 探查异步导出（含下载条数） |
 | `SqlProbeHistoryQueryReqDTO` | SQL 探查历史查询 |
 | `TouchTaskSummaryReqDTO` | 触达任务汇总查询 |
 | `PerfSummaryReqDTO` | 绩效汇总查询 |
