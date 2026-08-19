@@ -1,8 +1,11 @@
 package com.bank.branch.platform.customer.service;
 
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.dto.req.ReTouchReqDTO;
+import com.bank.branch.platform.customer.dto.resp.ClaimedCustomerRespDTO;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.entity.CustMaster;
 import com.bank.branch.platform.customer.entity.TouchTask;
@@ -12,6 +15,7 @@ import com.bank.branch.platform.customer.event.ClaimCancelledEvent;
 import com.bank.branch.platform.customer.mapper.CustClaimMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
 import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
+import com.bank.branch.platform.governance.api.DictApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -21,17 +25,20 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
  * 客户认领业务服务。
  * <p>
  * 负责客户认领的创建（争抢式）、取消以及个人认领列表查询。
- * 认领依赖 uk(cust_id, org_id) 唯一索引做数据库级别的并发安全保障，
+ * 认领依赖 uk_cust_claim_emp(cust_id, claimed_by) 唯一索引做数据库级别的并发安全保障，
  * 并发抢认领时通过 catch {@link DuplicateKeyException} 转为 CUSTOMER_ALREADY_CLAIMED 业务异常。
- * 认领成功后同步调用 {@link TouchTaskService#createFromClaim} 创建首次触达任务
- * （V1.11#1 起从事件驱动改为同步），取消后发布 {@link ClaimCancelledEvent}。
+ * 认领只建立员工与客户的关系；首次触达由员工在已认领客户页手动发起。
+ * 取消后发布 {@link ClaimCancelledEvent}。
  * </p>
  */
 @Slf4j
@@ -44,12 +51,14 @@ public class ClaimService {
     private final TouchTaskMapper touchTaskMapper;
     private final TouchTaskService touchTaskService;
     private final ApplicationEventPublisher eventPublisher;
+    private final DictApi dictApi;
+    private final OrgApi orgApi;
 
     /**
      * 认领客户（争抢式）。
      * <p>
      * 先校验客户存在，然后 INSERT 认领记录。
-     * 若唯一索引 uk(cust_id, org_id) 冲突（并发认领 / 重复认领），
+     * 若唯一索引 uk_cust_claim_emp(cust_id, claimed_by) 冲突（同一员工并发 / 重复认领），
      * 捕获 {@link DuplicateKeyException} 并抛出 CUSTOMER_ALREADY_CLAIMED 业务异常。
      * 认领时 maintainerEmpId 默认等于 claimedBy。
      * </p>
@@ -86,17 +95,31 @@ public class ClaimService {
         try {
             claimMapper.insert(entity);
         } catch (DuplicateKeyException e) {
-            // 唯一索引冲突 = 该机构已认领此客户
-            log.warn("[ClaimService.claim] duplicate claim detected, custId={}, orgId={}", custId, orgId);
+            // 唯一索引冲突 = 当前员工已认领此客户
+            log.warn("[ClaimService.claim] duplicate claim detected, custId={}, empId={}", custId, empId);
             throw new BizException(CustomerErrorCode.CUSTOMER_ALREADY_CLAIMED.getCode(),
                     CustomerErrorCode.CUSTOMER_ALREADY_CLAIMED.getMessage());
         }
 
-        // 同步创建首次触达任务（V1.11#1 方向 C：消除嵌套 @TransactionalEventListener 导致 INSERT 不持久化）
-        touchTaskService.createFromClaim(custId, orgId, empId);
-
         log.info("[ClaimService.claim] claim created, claimId={}", entity.getId());
         return entity;
+    }
+
+    /**
+     * 对本人有效认领关系手动发起首次触达。
+     */
+    @Transactional
+    public TouchTask startTouch(String claimId, String planFinishTime,
+                                String operatorEmpId, String operatorOrgCode) {
+        CustClaim claim = requireOwnedActiveClaim(claimId, operatorEmpId, operatorOrgCode);
+        List<TouchTask> active = touchTaskMapper.selectActiveByCustAndAssignee(
+                claim.getCustId(), claim.getMaintainerEmpId());
+        if (!active.isEmpty()) {
+            throw new BizException(CustomerErrorCode.RE_TOUCH_HAS_RUNNING.getCode(),
+                    CustomerErrorCode.RE_TOUCH_HAS_RUNNING.getMessage());
+        }
+        return touchTaskService.createFirstTouchTask(
+                claim.getCustId(), claim.getOrgId(), claim.getMaintainerEmpId(), planFinishTime);
     }
 
     /**
@@ -179,6 +202,58 @@ public class ClaimService {
         return PageResult.of(pageNo, pageSize, total, records);
     }
 
+    /** 查询本人已认领客户，附带最近触达任务，供页面直接展示。 */
+    public PageResult<ClaimedCustomerRespDTO> listMyClaimedCustomers(String empId, int pageNo, int pageSize) {
+        int offset = (pageNo - 1) * pageSize;
+        List<ClaimedCustomerRespDTO> records = claimMapper.selectMyClaimedCustomerPage(empId, offset, pageSize);
+        fillDisplayNames(records);
+        return PageResult.of(pageNo, pageSize, claimMapper.countMyClaimsPage(empId), records);
+    }
+
+    /** 回填已认领客户列表的字典名称与来源机构名称。 */
+    private void fillDisplayNames(List<ClaimedCustomerRespDTO> records) {
+        if (records == null || records.isEmpty()) {
+            return;
+        }
+        List<String> orgCodes = records.stream()
+                .map(ClaimedCustomerRespDTO::getOwnerOrgId)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+        Map<String, String> orgNames = new HashMap<>();
+        if (!orgCodes.isEmpty()) {
+            List<OrgDTO> orgs = orgApi.getOrgsByCodes(orgCodes);
+            if (orgs != null) {
+                orgs.stream()
+                        .filter(Objects::nonNull)
+                        .filter(org -> StringUtils.hasText(org.getOrgCode()))
+                        .forEach(org -> orgNames.put(org.getOrgCode(), org.getOrgName()));
+            }
+        }
+        Map<String, String> industryNames = new HashMap<>();
+        Map<String, String> customerTypeNames = new HashMap<>();
+        records.forEach(row -> {
+            String industry = row.getIndustry();
+            if (StringUtils.hasText(industry)
+                    && !industryNames.containsKey(industry)) {
+                industryNames.put(industry, translatedLabel("INDUSTRY", industry));
+            }
+            String customerType = row.getCustomerType();
+            if (StringUtils.hasText(customerType)
+                    && !customerTypeNames.containsKey(customerType)) {
+                customerTypeNames.put(customerType, translatedLabel("CUSTOMER_TYPE", customerType));
+            }
+            row.setIndustryName(industryNames.get(industry));
+            row.setCustomerTypeName(customerTypeNames.get(customerType));
+            row.setOwnerOrgName(orgNames.get(row.getOwnerOrgId()));
+        });
+    }
+
+    private String translatedLabel(String dictType, String code) {
+        String label = dictApi.getDictLabel(dictType, code);
+        return StringUtils.hasText(label) && !code.equals(label) ? label : null;
+    }
+
     /**
      * 对已认领客户重新发起一次触达（FOLLOW_UP 类型）。
      * <p>
@@ -202,21 +277,11 @@ public class ClaimService {
     public TouchTask reTouch(String claimId, ReTouchReqDTO req, String operatorEmpId, String operatorOrgCode) {
         log.info("[ClaimService.reTouch] claimId={}, operator={}, orgCode={}", claimId, operatorEmpId, operatorOrgCode);
 
-        CustClaim claim = claimMapper.selectById(claimId);
-        if (claim == null) {
-            throw new BizException(CustomerErrorCode.CLAIM_NOT_FOUND.getCode(),
-                    CustomerErrorCode.CLAIM_NOT_FOUND.getMessage());
-        }
-
-        if (!claim.getOrgId().equals(operatorOrgCode)) {
-            log.warn("[ClaimService.reTouch] cross-org operation denied, claimOrg={}, operatorOrg={}",
-                    claim.getOrgId(), operatorOrgCode);
-            throw new BizException(CustomerErrorCode.CLAIM_ORG_FORBIDDEN.getCode(),
-                    CustomerErrorCode.CLAIM_ORG_FORBIDDEN.getMessage());
-        }
+        CustClaim claim = requireOwnedActiveClaim(claimId, operatorEmpId, operatorOrgCode);
 
         // 当前客户不允许有任何在途触达（PENDING/IN_PROGRESS），由 mapper 自身查询条件保证
-        List<TouchTask> active = touchTaskMapper.selectActiveByCust(claim.getCustId());
+        List<TouchTask> active = touchTaskMapper.selectActiveByCustAndAssignee(
+                claim.getCustId(), claim.getMaintainerEmpId());
         if (!active.isEmpty()) {
             log.warn("[ClaimService.reTouch] running touch task exists, custId={}, count={}",
                     claim.getCustId(), active.size());
@@ -230,5 +295,23 @@ public class ClaimService {
 
         log.info("[ClaimService.reTouch] follow-up task created, claimId={}, newTaskId={}", claimId, created.getId());
         return created;
+    }
+
+    private CustClaim requireOwnedActiveClaim(String claimId, String operatorEmpId, String operatorOrgCode) {
+        CustClaim claim = claimMapper.selectById(claimId);
+        if (claim == null) {
+            throw new BizException(CustomerErrorCode.CLAIM_NOT_FOUND.getCode(),
+                    CustomerErrorCode.CLAIM_NOT_FOUND.getMessage());
+        }
+        if (!java.util.Objects.equals(claim.getOrgId(), operatorOrgCode)) {
+            throw new BizException(CustomerErrorCode.CLAIM_ORG_FORBIDDEN.getCode(),
+                    CustomerErrorCode.CLAIM_ORG_FORBIDDEN.getMessage());
+        }
+        if (!ClaimStatus.CLAIMED.getCode().equals(claim.getClaimStatus())
+                || !java.util.Objects.equals(claim.getMaintainerEmpId(), operatorEmpId)) {
+            throw new BizException(CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getCode(),
+                    CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getMessage());
+        }
+        return claim;
     }
 }

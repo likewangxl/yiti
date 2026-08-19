@@ -66,6 +66,29 @@ public class TouchLogService {
     @Transactional
     public TouchLog addLog(String touchTaskId, String clientUuid, String logContent,
                            String photoUrls, String operatorEmpId, String orgId) {
+        return addLog(touchTaskId, clientUuid, logContent, photoUrls,
+                LocalDateTime.now(), "OTHER", null, null, null,
+                operatorEmpId, orgId, false, false);
+    }
+
+    /**
+     * 新版触达日志入口，补齐触达时间、方式、协同人员、分类照片与定位。
+     */
+    @Transactional
+    public TouchLog addLog(String touchTaskId, String clientUuid, String logContent,
+                           String photoUrls, LocalDateTime touchTime, String touchMethod,
+                           String participantEmpIds, String photoGroups, String operatorLocation,
+                           String operatorEmpId, String orgId, boolean operatorIsAdmin) {
+        return addLog(touchTaskId, clientUuid, logContent, photoUrls, touchTime, touchMethod,
+                participantEmpIds, photoGroups, operatorLocation,
+                operatorEmpId, orgId, operatorIsAdmin, true);
+    }
+
+    private TouchLog addLog(String touchTaskId, String clientUuid, String logContent,
+                            String photoUrls, LocalDateTime touchTime, String touchMethod,
+                            String participantEmpIds, String photoGroups, String operatorLocation,
+                            String operatorEmpId, String orgId, boolean operatorIsAdmin,
+                            boolean photoRequired) {
         log.info("[TouchLogService.addLog] touchTaskId={}, clientUuid={}, operatorEmpId={}",
                 touchTaskId, clientUuid, operatorEmpId);
 
@@ -74,6 +97,10 @@ public class TouchLogService {
 
         // 照片数量与格式校验（CUST-42207 / CUST-42208）：photoUrls 非空时解析 JSON 数组
         List<String> photos = parsePhotoUrls(photoUrls);
+        if (photoRequired && photos.isEmpty()) {
+            throw new BizException(CustomerErrorCode.TOUCH_LOG_PHOTO_REQUIRED.getCode(),
+                    CustomerErrorCode.TOUCH_LOG_PHOTO_REQUIRED.getMessage());
+        }
         assertPhotoCountWithinLimit(photos);
         assertPhotoFormatsAllowed(photos);
 
@@ -87,6 +114,15 @@ public class TouchLogService {
             // 终态任务（SUCCESS/CANCELLED）不允许再提交日志
             throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getCode(),
                     CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getMessage());
+        }
+        // 会议纪要明确：日志只能由任务执行人本人填写，系统管理员也只能查看、不能代录。
+        if (!java.util.Objects.equals(task.getAssigneeEmpId(), operatorEmpId)) {
+            throw new BizException(CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getCode(),
+                    CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getMessage());
+        }
+        if (!operatorIsAdmin && !java.util.Objects.equals(task.getOrgId(), orgId)) {
+            throw new BizException(CustomerErrorCode.CLAIM_ORG_FORBIDDEN.getCode(),
+                    CustomerErrorCode.CLAIM_ORG_FORBIDDEN.getMessage());
         }
 
         // 幂等检查：先查是否已存在相同 (touchTaskId, clientUuid) 的日志
@@ -104,9 +140,13 @@ public class TouchLogService {
         entity.setTouchTaskId(touchTaskId);
         entity.setClientUuid(clientUuid);
         entity.setLogContent(logContent);
+        entity.setTouchMethod(touchMethod);
+        entity.setParticipantEmpIds(participantEmpIds);
         entity.setPhotoUrls(photoUrls);
-        entity.setLogTime(now);
-        entity.setOwnerOrgId(orgId);
+        entity.setPhotoGroups(photoGroups);
+        entity.setOperatorLocation(operatorLocation);
+        entity.setLogTime(touchTime == null ? now : touchTime);
+        entity.setOwnerOrgId(task.getOrgId());
         entity.setCreatedBy(operatorEmpId);
         entity.setCreatedTime(now);
 
@@ -140,6 +180,21 @@ public class TouchLogService {
      */
     public List<TouchLog> listByTaskId(String touchTaskId) {
         log.info("[TouchLogService.listByTaskId] touchTaskId={}", touchTaskId);
+        return logMapper.selectByTaskId(touchTaskId);
+    }
+
+    /** 同机构可查看历史，跨机构隔离；系统管理员可查看。 */
+    public List<TouchLog> listVisibleByTaskId(String touchTaskId, String operatorOrgCode,
+                                              boolean operatorIsAdmin) {
+        TouchTask task = taskMapper.selectById(touchTaskId);
+        if (task == null) {
+            throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode(),
+                    CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getMessage());
+        }
+        if (!operatorIsAdmin && !java.util.Objects.equals(task.getOrgId(), operatorOrgCode)) {
+            throw new BizException(CustomerErrorCode.HISTORY_ACCESS_FORBIDDEN.getCode(),
+                    CustomerErrorCode.HISTORY_ACCESS_FORBIDDEN.getMessage());
+        }
         return logMapper.selectByTaskId(touchTaskId);
     }
 

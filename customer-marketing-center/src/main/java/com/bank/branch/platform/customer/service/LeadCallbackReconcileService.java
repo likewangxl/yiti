@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 /**
  * 线索回调对账 Service —— 抽离 {@code WorkflowCallbackListener} 中
  * APPROVED/REJECTED 推进 + 同步处理的公共逻辑，供 listener 主路径与
@@ -19,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <strong>幂等保护</strong>：两条 reconcile 路径均通过
  * {@code conditionalUpdateStatus(IN_APPROVAL → 目标态)} 实现 CAS-like 推进，
  * 重复进入或并发推进时第二次返回 0 行受影响并提前返回，<strong>不</strong>再
- * 触发下游处理，避免 cust_master 重复创建 / 失效。
+ * 触发下游处理，避免 CUSTOMER_MARKET_CUSTOMER 重复创建 / 失效。
  * </p>
  * <p>
  * <strong>V1.11#1 方向 C 改造</strong>：reconcileApproved 内原 publishEvent
@@ -93,7 +95,7 @@ public class LeadCallbackReconcileService {
      * {@link LeadRejectedEvent}（V1 暂无下游消费，保留扩展点）。
      * <p>
      * 与原 {@code WorkflowCallbackListener.handleRejected} 内联实现完全一致：
-     * 驳回路径既不创建 cust_master（CREATE/UPDATE 时）也不失效（DELETE 时），
+     * 驳回路径既不创建 CUSTOMER_MARKET_CUSTOMER（CREATE/UPDATE 时）也不失效（DELETE 时），
      * 仅推进线索状态并发布事件。
      * </p>
      * <p>
@@ -120,6 +122,17 @@ public class LeadCallbackReconcileService {
         }
         log.info("[LeadCallbackReconcileService] 线索 {} 审批驳回，状态更新为 REJECTED，processInstanceId={}",
                 leadId, processInstanceId);
+
+        // 事件不携带最终办理人工号，先以 SYSTEM 固化回调时间和驳回原因；
+        // 具体办理人仍可从工作流已办明细查询。
+        CustLead reviewSnapshot = new CustLead();
+        reviewSnapshot.setId(leadId);
+        reviewSnapshot.setReviewedBy("SYSTEM");
+        reviewSnapshot.setReviewedTime(LocalDateTime.now());
+        reviewSnapshot.setRejectReason(rejectReason);
+        reviewSnapshot.setUpdatedBy("SYSTEM");
+        reviewSnapshot.setUpdatedTime(LocalDateTime.now());
+        leadMapper.updateById(reviewSnapshot);
 
         // 发布 LeadRejectedEvent（V1 暂无下游消费，保留扩展点）
         LeadRejectedEvent rejectedEvent = new LeadRejectedEvent(

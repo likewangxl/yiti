@@ -40,6 +40,9 @@ public class CustomerDTO {
     /** 客户类型 */
     private String customerType;
 
+    /** 客户类型名称 (字典翻译) */
+    private String customerTypeName;
+
     /** 是否重点客户 */
     private Boolean isKeystone;
 
@@ -66,6 +69,30 @@ public class CustomerDTO {
 
     /** 关联来源线索 ID */
     private String leadId;
+
+    /** 当前生效线索版本 */
+    private String currentLeadId;
+
+    /** 当前主办客户经理 */
+    private String mainManagerId;
+
+    private String mainManagerName;
+
+    /** 当前主办机构 */
+    private String mainOrgId;
+
+    private String mainOrgName;
+
+    /** 主办状态 */
+    private String ownershipStatus;
+
+    /** 最近有效触达时间 */
+    private LocalDateTime lastTouchTime;
+
+    /** 主数据来源 */
+    private String sourceSystem;
+
+    private LocalDateTime sourceUpdatedTime;
 
     /** 客户状态: VALID / DELETED */
     private String status;

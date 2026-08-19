@@ -7,10 +7,12 @@ import com.bank.branch.platform.customer.api.dto.CustomerFilterDTO;
 import com.bank.branch.platform.customer.api.dto.RunningFlowDTO;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.entity.CustMaster;
+import com.bank.branch.platform.customer.entity.M98CustMaster;
 import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.enums.ClaimStatus;
 import com.bank.branch.platform.customer.mapper.CustClaimMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
+import com.bank.branch.platform.customer.mapper.M98CustMasterMapper;
 import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +45,9 @@ class CustomerQueryApiImplTest {
 
     @Mock
     private CustMasterMapper custMasterMapper;
+
+    @Mock
+    private M98CustMasterMapper m98CustMasterMapper;
 
     @Mock
     private CustClaimMapper custClaimMapper;
@@ -89,7 +94,7 @@ class CustomerQueryApiImplTest {
 
     @Test
     void getCustomerByCustNo_returnsOptionalEmptyWhenNotFound() {
-        when(custMasterMapper.selectByCustNo("NA-NO")).thenReturn(null);
+        when(m98CustMasterMapper.selectByCustNo("NA-NO")).thenReturn(null);
 
         Optional<CustomerDTO> result = customerQueryApiImpl.getCustomerByCustNo("NA-NO");
 
@@ -98,11 +103,11 @@ class CustomerQueryApiImplTest {
 
     @Test
     void getCustomerByCustNo_returnsMappedDTOWithInternalId() {
-        CustMaster e = new CustMaster();
+        M98CustMaster e = new M98CustMaster();
         e.setId("C1");
         e.setCustNo("CN-001");
         e.setCustName("测试公司");
-        when(custMasterMapper.selectByCustNo("CN-001")).thenReturn(e);
+        when(m98CustMasterMapper.selectByCustNo("CN-001")).thenReturn(e);
 
         Optional<CustomerDTO> result = customerQueryApiImpl.getCustomerByCustNo("CN-001");
 
@@ -110,7 +115,7 @@ class CustomerQueryApiImplTest {
         assertThat(result.get().getId()).isEqualTo("C1");
         assertThat(result.get().getCustNo()).isEqualTo("CN-001");
         assertThat(result.get().getCustName()).isEqualTo("测试公司");
-        verify(custMasterMapper).selectByCustNo("CN-001");
+        verify(m98CustMasterMapper).selectByCustNo("CN-001");
     }
 
     // ==================== listCustomers ====================

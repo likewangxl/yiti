@@ -1,9 +1,11 @@
 package com.bank.branch.platform.customer.dto.req;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * 新建线索请求 DTO。
@@ -11,11 +13,19 @@ import java.math.BigDecimal;
 @Data
 public class LeadCreateReqDTO {
 
+    /** 线索类型：NEW_ACCOUNT/EXISTING_MARKETING */
+    private String leadType = "NEW_ACCOUNT";
+
+    /** CCRM客户号；新客户可为空 */
+    private String custNo;
+
     /** 客户名称（必填） */
     @NotBlank(message = "客户名称不能为空")
     private String custName;
 
-    /** 统一社会信用代码 */
+    /** 统一社会信用代码（一期客户幂等键） */
+    @NotBlank(message = "统一社会信用代码不能为空")
+    @Pattern(regexp = "^[0-9A-Z]{18}$", message = "统一社会信用代码必须为18位大写字母或数字")
     private String unifiedCreditCode;
 
     /** 联系人姓名 */
@@ -59,6 +69,21 @@ public class LeadCreateReqDTO {
 
     /** 标签ID列表（JSON数组，如 ["TAG_001","TAG_002"]） */
     private String tagIds;
+
+    /** 标签ID列表，V2以关系表快照为准 */
+    private List<String> tagIdList;
+
+    /** 分配方式：PUBLIC/SCOPE/OWNER */
+    private String distributionMode = "PUBLIC";
+
+    /** OWNER方式的主办客户经理，由存量客户查询结果带入 */
+    private String mainManagerId;
+
+    /** SCOPE方式的指定客户经理工号列表 */
+    private List<String> managerScopeIds;
+
+    /** 已上传且待绑定的附件文件ID列表 */
+    private List<String> attachmentIds;
 
     /** 备注 */
     private String remark;

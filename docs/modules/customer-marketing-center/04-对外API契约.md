@@ -1,7 +1,7 @@
 # 客户营销中心 — 对外 API 契约
 
-> 版本：v1.1
-> 最后更新：2026-07-19
+> 版本：v1.2
+> 最后更新：2026-08-11
 > 模块编码：customer-marketing-center
 > 本文约束 `customer-marketing-center` 对外暴露的所有 API 接口、DTO 结构、调用约束、领域事件
 > 所有外部模块（business-application-center / performance-engine-center / report-analytics-center / workflow-center）必须通过本文定义的接口访问本模块数据
@@ -42,6 +42,23 @@
 - 批量查询方法的 `ids` 参数最大长度 500，超限抛 `COMMON-40000`
 - 搜索方法的 `limit` 参数最大 50
 - 所有 Api 方法调用必须走 AOP 日志 + 耗时统计
+
+### 0.5 2026-08-11 一期 REST 契约变更
+
+本次不新增跨模块 `*Api`，直接扩展 `customer-marketing-center` REST 契约：
+
+| 端点 | 权限 | 契约 |
+|---|---|---|
+| `GET /api/customers` | `CUSTOMER/LIST` | 返回 `BizScopeApi` 数据权限内全部未删除客户，不按开户状态/客户号过滤 |
+| `GET /api/leads` | `LEAD/LIST` | PUBLIC 全行可见；创建人、主办人、指定范围及 LEAD 机构数据范围内可见 |
+| `GET /api/leads/main-manager` | `LEAD/READ` | 按信用代码优先、客户名称其次查询存量客户主办权 |
+| `POST/PUT /api/leads[/{id}]` | `LEAD/WRITE` | 支持 `PUBLIC`/`SCOPE`/`OWNER`、标签快照、附件；支行层级及以下录入强制归属本人 |
+| `GET /api/leads/{id}` | `LEAD/READ` | 在与列表相同的可见范围内返回 `LeadRespDTO`，包含授信、分配、标签、附件和审批结果 |
+| `GET /api/lead-approvals` | `LEAD/LIST` | `PENDING`/其他值查待办，`HISTORY` 查已办；返回 `PageResp<TaskRespDTO>` |
+| `GET /api/lead-approvals/{leadId}` | `LEAD/READ` | 与录入详情共用 `LeadRespDTO` 和数据范围谓词 |
+| `GET /api/lead-approvals/export` | `LEAD/EXPORT` | 在 LEAD 数据范围内导出全部匹配的 `APPROVED`/`REJECTED` 最新版线索 Excel，独立授权并审计，无需填写原因 |
+
+请求/响应字段级定义以 `03-接口设计与报文.md` B.2~B.13、D.1 为准。
 
 ---
 
@@ -305,14 +322,6 @@ public interface TagApi {
     List<TagDTO> listEnabledTags();
 
     /**
-     * 按 tagCode 获取标签
-     *
-     * @param tagCode 标签编码
-     * @return 标签 DTO
-     */
-    Optional<TagDTO> getTagByCode(String tagCode);
-
-    /**
      * 获取客户的标签列表
      *
      * 只返回启用状态的标签
@@ -559,7 +568,16 @@ public class CustomerDTO {
     private String ownerOrgId;                // 来源机构 ID（仅展示用）
     private String ownerOrgName;              // 来源机构名称
     private String leadId;                    // 关联来源线索 ID
-    private String status;                    // VALID/DELETED
+    private String currentLeadId;             // 当前生效线索版本
+    private String mainManagerId;             // 当前主办客户经理
+    private String mainManagerName;           // 当前主办客户经理名称
+    private String mainOrgId;                 // 当前主办机构
+    private String mainOrgName;               // 当前主办机构名称
+    private String ownershipStatus;           // UNASSIGNED/ASSIGNED/WAITING_CLAIM/MULTI_CLAIMED
+    private LocalDateTime lastTouchTime;      // 最近有效触达时间
+    private String sourceSystem;              // 主数据来源
+    private LocalDateTime sourceUpdatedTime;  // 源系统更新时间
+    private String status;                    // ACTIVE/INACTIVE
     private List<String> tagIds;              // 标签 ID 列表
     private LocalDateTime createdAt;          // 创建时间
     private LocalDateTime updatedAt;          // 更新时间
@@ -603,7 +621,6 @@ public class LeadDTO {
 public class TagDTO {
     private String id;                        // 标签 ID
     private String tagName;                   // 标签名称
-    private String tagCode;                   // 标签编码
     private String tagCategory;               // 标签分类
     private Integer tagPriority;              // 优先级
     private String status;                    // ENABLED/DISABLED

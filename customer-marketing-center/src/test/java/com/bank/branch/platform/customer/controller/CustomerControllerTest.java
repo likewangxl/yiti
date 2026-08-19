@@ -14,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Collections;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -54,7 +55,12 @@ class CustomerControllerTest extends AbstractControllerIntegrationTest {
         dto.setStatus("ACTIVE");
         PageResult<CustomerDTO> page = PageResult.of(1, 20, 1L, Collections.singletonList(dto));
 
-        when(customerService.listPageAsDTO(isNull(), isNull(), eq(1), eq(20))).thenReturn(page);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
+        when(bizScopeApi.resolveScope("E10001", com.bank.branch.platform.common.security.enums.BizType.CUSTOMER))
+                .thenReturn(DataScopeType.SELF);
+        when(customerService.listVisiblePageAsDTO(isNull(), isNull(), eq(1), eq(20),
+                eq("E10001"), eq("ORG001"), eq(DataScopeType.SELF))).thenReturn(page);
 
         mockMvc.perform(get("/api/customers")
                         .param("pageNo", "1")

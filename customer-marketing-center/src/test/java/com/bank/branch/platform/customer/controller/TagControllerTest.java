@@ -50,7 +50,6 @@ class TagControllerTest extends AbstractControllerIntegrationTest {
         CustTag tag = new CustTag();
         tag.setId("tag-001");
         tag.setTagName("VIP客户");
-        tag.setTagCode("VIP_CUSTOMER");
         PageResult<CustTag> page = PageResult.of(1, 20, 1L, List.of(tag));
 
         when(tagService.listPage(isNull(), isNull(), eq(1), eq(20))).thenReturn(page);
@@ -61,7 +60,26 @@ class TagControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.page.total").value(1))
-                .andExpect(jsonPath("$.page.records[0].tagCode").value("VIP_CUSTOMER"));
+                .andExpect(jsonPath("$.page.records[0].tagCode").doesNotExist());
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
+    void listPage_historyShouldUseCurrentEmployeeAsReviewerScope() throws Exception {
+        PageResult<CustTag> page = PageResult.of(1, 20, 0L, List.of());
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(tagService.listReviewPage(isNull(), eq("HISTORY"), eq(1), eq(20), eq("E10001")))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/tags")
+                        .param("approvalStatus", "HISTORY")
+                        .param("pageNo", "1")
+                        .param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
+
+        org.mockito.Mockito.verify(tagService)
+                .listReviewPage(null, "HISTORY", 1, 20, "E10001");
     }
 
     // ==================== GET /api/tags/enabled ====================
@@ -96,13 +114,12 @@ class TagControllerTest extends AbstractControllerIntegrationTest {
         CustTag createdTag = new CustTag();
         createdTag.setId("new-tag-001");
         createdTag.setTagName("新标签");
-        createdTag.setTagCode("NEW_TAG");
 
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
-        when(tagService.createTag(anyString(), anyString(), any(), any(), any(), anyString()))
+        when(tagService.createTag(anyString(), any(), any(), any(), any(), any(), any(), anyString()))
                 .thenReturn(createdTag);
 
-        String body = "{\"tagName\":\"新标签\",\"tagCode\":\"NEW_TAG\",\"description\":\"测试标签\"}";
+        String body = "{\"tagName\":\"新标签\",\"description\":\"测试标签\"}";
 
         mockMvc.perform(post("/api/tags")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -122,10 +139,10 @@ class TagControllerTest extends AbstractControllerIntegrationTest {
         updatedTag.setTagName("更新标签名");
 
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
-        when(tagService.updateTag(eq("tag-001"), any(), any(), any(), any(), any(), anyString()))
+        when(tagService.updateTag(eq("tag-001"), any(), any(), any(), any(), anyString()))
                 .thenReturn(updatedTag);
 
-        String body = "{\"tagName\":\"更新标签名\",\"tagCode\":\"VIP_CUSTOMER\"}";
+        String body = "{\"tagName\":\"更新标签名\"}";
 
         mockMvc.perform(put("/api/tags/tag-001")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -149,5 +166,35 @@ class TagControllerTest extends AbstractControllerIntegrationTest {
                         .content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
+    void batchDisable_shouldReturn200() throws Exception {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+
+        mockMvc.perform(post("/api/tags/batch-disable")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ids\":[\"tag-001\",\"tag-002\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
+
+        org.mockito.Mockito.verify(tagService)
+                .batchDisable(List.of("tag-001", "tag-002"), "E10001");
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
+    void batchDelete_shouldReturn200() throws Exception {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+
+        mockMvc.perform(post("/api/tags/batch-delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ids\":[\"tag-001\",\"tag-002\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
+
+        org.mockito.Mockito.verify(tagService)
+                .batchDelete(List.of("tag-001", "tag-002"), "E10001");
     }
 }

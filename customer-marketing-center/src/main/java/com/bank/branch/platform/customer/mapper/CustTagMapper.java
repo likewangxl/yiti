@@ -38,20 +38,12 @@ public interface CustTagMapper extends BaseMapper<CustTag> {
     CustTag selectByTagName(@Param("tagName") String tagName);
 
     /**
-     * 按标签编码查询（用于业务代码引用）。
-     *
-     * @param tagCode 标签编码
-     * @return 标签实体，不存在或已删除时返回 null
-     */
-    CustTag selectByTagCode(@Param("tagCode") String tagCode);
-
-    /**
      * 分页查询标签列表。
      * <p>
-     * keyword 模糊搜索 tag_name 和 tag_code，status 精确匹配。
+     * keyword 模糊搜索 tag_name，status 精确匹配。
      * </p>
      *
-     * @param keyword 关键词（搜索 tag_name 和 tag_code），可为 null
+     * @param keyword 关键词（搜索 tag_name），可为 null
      * @param status  状态过滤（ACTIVE/DISABLED），可为 null
      * @param offset  偏移量
      * @param limit   每页条数
@@ -71,6 +63,18 @@ public interface CustTagMapper extends BaseMapper<CustTag> {
      */
     long countPage(@Param("keyword") String keyword,
                    @Param("status") String status);
+
+    /** 标签审核页按待审核/本人审核记录查询。 */
+    List<CustTag> selectReviewPage(@Param("keyword") String keyword,
+                                   @Param("reviewTab") String reviewTab,
+                                   @Param("reviewerEmpId") String reviewerEmpId,
+                                   @Param("offset") int offset,
+                                   @Param("limit") int limit);
+
+    /** 与 {@link #selectReviewPage} 完全相同过滤条件的总数查询。 */
+    long countReviewPage(@Param("keyword") String keyword,
+                         @Param("reviewTab") String reviewTab,
+                         @Param("reviewerEmpId") String reviewerEmpId);
 
     /**
      * 查询所有启用状态的标签（用于打标选择列表）。

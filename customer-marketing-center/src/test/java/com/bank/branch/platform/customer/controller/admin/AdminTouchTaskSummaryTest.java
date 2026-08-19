@@ -27,7 +27,7 @@ class AdminTouchTaskSummaryTest extends AbstractControllerIntegrationTest {
     TouchTaskQueryApi touchTaskQueryApi;
 
     @Test
-    @WithMockEmpContext(empId = "ADMIN001", roleCodes = {"R_ADMIN"})
+    @WithMockEmpContext(empId = "ADMIN001", roleCodes = {"R_ADMIN"}, systemAdmin = true)
     void summary_validOrg_returns200WithCounts() throws Exception {
         TouchTaskSummaryDTO summary = new TouchTaskSummaryDTO();
         summary.setOrgId("ORG_SZ_001");
@@ -56,7 +56,7 @@ class AdminTouchTaskSummaryTest extends AbstractControllerIntegrationTest {
     }
 
     @Test
-    @WithMockEmpContext(empId = "ADMIN001", roleCodes = {"R_ADMIN"})
+    @WithMockEmpContext(empId = "ADMIN001", roleCodes = {"R_ADMIN"}, systemAdmin = true)
     void summary_withDateRange_passesParametersThrough() throws Exception {
         TouchTaskSummaryDTO summary = new TouchTaskSummaryDTO();
         summary.setOrgId("ORG_SZ_001");
@@ -76,7 +76,21 @@ class AdminTouchTaskSummaryTest extends AbstractControllerIntegrationTest {
     }
 
     @Test
-    @WithMockEmpContext(empId = "ADMIN001", roleCodes = {"R_ADMIN"})
+    @WithMockEmpContext(empId = "M10001", orgCode = "ORG001")
+    void summary_nonAdminManager_shouldForceCurrentOrgScope() throws Exception {
+        TouchTaskSummaryDTO summary = new TouchTaskSummaryDTO();
+        summary.setOrgId("ORG001");
+        when(touchTaskQueryApi.getOrgTouchSummary(eq("ORG001"), eq(null), eq(null)))
+                .thenReturn(summary);
+
+        mockMvc.perform(get("/api/admin/touch-tasks/summary")
+                        .param("orgCode", "ORG_OTHER"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.orgId").value("ORG001"));
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "ADMIN001", roleCodes = {"R_ADMIN"}, systemAdmin = true)
     void summary_missingOrgCode_returns400() throws Exception {
         // orgCode 是 @RequestParam 默认 required=true，缺省返回真 HTTP 400
         mockMvc.perform(get("/api/admin/touch-tasks/summary"))

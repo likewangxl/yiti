@@ -68,7 +68,7 @@ class TouchTaskServiceTest {
         assertThat(result.getAssigneeEmpId()).isEqualTo("E10001");
         assertThat(result.getTaskType()).isEqualTo(TouchTaskType.FIRST_TOUCH.getCode());
         assertThat(result.getTaskStatus()).isEqualTo(TouchTaskStatus.PENDING.getCode());
-        assertThat(result.getSlaStatus()).isEqualTo(SlaStatus.GREEN.getCode());
+        assertThat(result.getSlaStatus()).isEqualTo(SlaStatus.BLUE.getCode());
         assertThat(result.getPlanFinishTime()).isNotNull();
         assertThat(result.getWarningTime()).isNotNull();
         // 计划完成时间应在预警时间之后

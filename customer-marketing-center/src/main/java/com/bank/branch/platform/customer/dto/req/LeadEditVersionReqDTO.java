@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 @Data
 public class LeadEditVersionReqDTO {
 
-    /** 源客户ID（cust_master.id，必填） */
+    /** 源客户ID（CUSTOMER_MARKET_CUSTOMER.id，必填） */
     @NotBlank(message = "源客户ID不能为空")
     private String sourceCustId;
 

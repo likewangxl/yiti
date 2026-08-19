@@ -68,7 +68,8 @@ class ClaimServiceReTouchTest {
     @Test
     void reTouch_success_createsFollowUpTask() {
         when(claimMapper.selectById("claim-001")).thenReturn(claimFixture("ORG_SZ_001"));
-        when(touchTaskMapper.selectActiveByCust("cust-001")).thenReturn(Collections.emptyList());
+        when(touchTaskMapper.selectActiveByCustAndAssignee("cust-001", "E10001"))
+                .thenReturn(Collections.emptyList());
         TouchTask created = new TouchTask();
         created.setId("touch-new-001");
         when(touchTaskService.createFollowUpTask(eq("cust-001"), eq("ORG_SZ_001"),
@@ -111,7 +112,8 @@ class ClaimServiceReTouchTest {
         when(claimMapper.selectById("claim-001")).thenReturn(claimFixture("ORG_SZ_001"));
         TouchTask running = new TouchTask();
         running.setTaskStatus(TouchTaskStatus.PENDING.getCode());
-        when(touchTaskMapper.selectActiveByCust("cust-001")).thenReturn(List.of(running));
+        when(touchTaskMapper.selectActiveByCustAndAssignee("cust-001", "E10001"))
+                .thenReturn(List.of(running));
 
         assertThatThrownBy(() -> claimService.reTouch("claim-001", buildReq(), "E10001", "ORG_SZ_001"))
                 .isInstanceOf(BizException.class)

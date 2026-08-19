@@ -18,9 +18,6 @@ public class TagDTO {
     /** 标签名称 */
     private String tagName;
 
-    /** 标签编码 */
-    private String tagCode;
-
     /** 标签分类 */
     private String tagCategory;
 

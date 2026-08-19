@@ -4,8 +4,9 @@
 
     <!-- TOUCH_LOG 全列查询片段 -->
     <sql id="BASE_COLUMNS">
-        id, touch_task_id, log_time, client_uuid, log_content,
-        photo_urls, owner_org_id, created_by, created_time
+        id, touch_task_id, log_time, client_uuid, log_content, touch_method,
+        participant_emp_ids, photo_urls, photo_groups, operator_location,
+        owner_org_id, created_by, created_time
     </sql>
 
     <!-- 按触达任务ID查询该任务的所有日志（按 log_time 降序） -->

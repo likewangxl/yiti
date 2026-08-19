@@ -1,15 +1,20 @@
 package com.bank.branch.platform.customer.service;
 
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.entity.CustMaster;
+import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.enums.ClaimStatus;
+import com.bank.branch.platform.customer.dto.resp.ClaimedCustomerRespDTO;
 import com.bank.branch.platform.customer.enums.CustomerErrorCode;
 import com.bank.branch.platform.customer.event.ClaimCancelledEvent;
 import com.bank.branch.platform.customer.mapper.CustClaimMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
 import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
+import com.bank.branch.platform.governance.api.DictApi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -53,6 +58,12 @@ class ClaimServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private OrgApi orgApi;
+
+    @Mock
+    private DictApi dictApi;
+
     @InjectMocks
     private ClaimService claimService;
 
@@ -83,8 +94,47 @@ class ClaimServiceTest {
 
         verify(claimMapper).insert(any(CustClaim.class));
 
-        // 验证同步调用了 touchTaskService.createFromClaim（V1.11#1 方向 C）
-        verify(touchTaskService).createFromClaim("cust-001", "ORG_SZ_001", "E10001");
+        // 最新会议口径：认领只建立个人关系，不自动创建触达任务
+        verify(touchTaskService, never()).createFromClaim(any(), any(), any());
+    }
+
+    @Test
+    void startTouch_shouldCreateFirstTouchForClaimOwner() {
+        CustClaim claim = new CustClaim();
+        claim.setId("claim-001");
+        claim.setCustId("cust-001");
+        claim.setOrgId("ORG_SZ_001");
+        claim.setClaimedBy("E10001");
+        claim.setMaintainerEmpId("E10001");
+        claim.setClaimStatus(ClaimStatus.CLAIMED.getCode());
+        when(claimMapper.selectById("claim-001")).thenReturn(claim);
+        when(touchTaskMapper.selectActiveByCustAndAssignee("cust-001", "E10001")).thenReturn(List.of());
+        TouchTask created = new TouchTask();
+        created.setId("task-001");
+        when(touchTaskService.createFirstTouchTask("cust-001", "ORG_SZ_001", "E10001", null))
+                .thenReturn(created);
+
+        TouchTask result = claimService.startTouch("claim-001", null, "E10001", "ORG_SZ_001");
+
+        assertThat(result.getId()).isEqualTo("task-001");
+        verify(touchTaskService).createFirstTouchTask("cust-001", "ORG_SZ_001", "E10001", null);
+    }
+
+    @Test
+    void startTouch_shouldRejectSameOrgNonOwner() {
+        CustClaim claim = new CustClaim();
+        claim.setId("claim-001");
+        claim.setCustId("cust-001");
+        claim.setOrgId("ORG_SZ_001");
+        claim.setMaintainerEmpId("E10001");
+        claim.setClaimStatus(ClaimStatus.CLAIMED.getCode());
+        when(claimMapper.selectById("claim-001")).thenReturn(claim);
+
+        assertThatThrownBy(() -> claimService.startTouch("claim-001", null, "E10002", "ORG_SZ_001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getCode());
+
+        verify(touchTaskService, never()).createFirstTouchTask(any(), any(), any(), any());
     }
 
     @Test
@@ -93,7 +143,7 @@ class ClaimServiceTest {
         CustMaster customer = new CustMaster();
         customer.setId("cust-001");
         when(masterMapper.selectById("cust-001")).thenReturn(customer);
-        doThrow(new DuplicateKeyException("uk_cust_org")).when(claimMapper).insert(any(CustClaim.class));
+        doThrow(new DuplicateKeyException("uk_cust_claim_emp")).when(claimMapper).insert(any(CustClaim.class));
 
         // when/then
         assertThatThrownBy(() -> claimService.claim("cust-001", "ORG_SZ_001", "E10001"))
@@ -214,5 +264,33 @@ class ClaimServiceTest {
         // 验证 offset 计算正确：(2-1)*10=10
         verify(claimMapper).selectMyClaimsPage("E10001", 10, 10);
         verify(claimMapper).countMyClaimsPage("E10001");
+    }
+
+    @Test
+    void listMyClaimedCustomers_shouldReturnCustomerAndLatestTask() {
+        ClaimedCustomerRespDTO row = new ClaimedCustomerRespDTO();
+        row.setClaimId("claim-001");
+        row.setCustName("测试客户A");
+        row.setIndustry("IT");
+        row.setCustomerType("CORP");
+        row.setOwnerOrgId("ORG001");
+        row.setLatestTaskStatus("IN_PROGRESS");
+        when(claimMapper.selectMyClaimedCustomerPage("E10001", 0, 20)).thenReturn(List.of(row));
+        when(claimMapper.countMyClaimsPage("E10001")).thenReturn(1L);
+        when(dictApi.getDictLabel("INDUSTRY", "IT")).thenReturn("信息技术业");
+        when(dictApi.getDictLabel("CUSTOMER_TYPE", "CORP")).thenReturn("公司客户");
+        OrgDTO org = new OrgDTO();
+        org.setOrgCode("ORG001");
+        org.setOrgName("西安分行营业部");
+        when(orgApi.getOrgsByCodes(List.of("ORG001"))).thenReturn(List.of(org));
+
+        PageResult<ClaimedCustomerRespDTO> result = claimService.listMyClaimedCustomers("E10001", 1, 20);
+
+        assertThat(result.getRecords()).singleElement()
+                .extracting(ClaimedCustomerRespDTO::getCustName,
+                        ClaimedCustomerRespDTO::getIndustryName,
+                        ClaimedCustomerRespDTO::getCustomerTypeName,
+                        ClaimedCustomerRespDTO::getOwnerOrgName)
+                .containsExactly("测试客户A", "信息技术业", "公司客户", "西安分行营业部");
     }
 }

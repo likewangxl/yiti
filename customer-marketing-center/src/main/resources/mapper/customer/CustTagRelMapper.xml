@@ -4,7 +4,8 @@
 
     <!-- CUST_TAG_REL 全列查询片段 -->
     <sql id="BASE_COLUMNS">
-        id, cust_id, tag_id, created_by, created_time
+        id, cust_id, tag_id, created_by, created_time,
+        active, effective_time, expired_time, updated_by, updated_time
     </sql>
 
     <!-- 查询某客户的所有标签关联 -->
@@ -13,6 +14,7 @@
             <include refid="BASE_COLUMNS"/>
         FROM CUST_TAG_REL
         WHERE cust_id = #{custId}
+          AND (active = 1 OR active IS NULL)
         ORDER BY created_time DESC
     </select>
 
@@ -35,6 +37,18 @@
         LIMIT 1
     </select>
 
+    <!-- 标签导入前批量查询已有关系，避免逐客户 SELECT -->
+    <select id="selectByTagIdAndCustIds" resultType="com.bank.branch.platform.customer.entity.CustTagRel">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM CUST_TAG_REL
+        WHERE tag_id = #{tagId}
+          AND cust_id IN
+        <foreach collection="custIds" item="custId" open="(" separator="," close=")">
+            #{custId}
+        </foreach>
+    </select>
+
     <!-- 物理删除指定客户与指定标签的关联记录 -->
     <delete id="deleteByCustIdAndTagId">
         DELETE FROM CUST_TAG_REL
@@ -47,6 +61,26 @@
         DELETE FROM CUST_TAG_REL
         WHERE tag_id = #{tagId}
     </delete>
+
+    <update id="expireActiveByTagId">
+        UPDATE CUST_TAG_REL
+        SET active = 0, expired_time = #{expiredTime}, updated_by = #{operatorEmpId}, updated_time = #{expiredTime}
+        WHERE tag_id = #{tagId} AND (active = 1 OR active IS NULL)
+    </update>
+
+    <!-- 恢复历史关系，或在 REPLACE 失效旧名单后恢复本次名单 -->
+    <update id="reactivateBatch">
+        UPDATE CUST_TAG_REL
+        SET active = 1,
+            effective_time = COALESCE(effective_time, #{effectiveTime}),
+            expired_time = NULL,
+            updated_by = #{operatorEmpId},
+            updated_time = #{effectiveTime}
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
 
     <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
 
@@ -78,10 +112,12 @@
     <!-- 批量插入关联记录 -->
     <insert id="insertBatch">
         INSERT INTO CUST_TAG_REL (
-            id, cust_id, tag_id, created_by, created_time
+            id, cust_id, tag_id, created_by, created_time, active, effective_time, updated_by, updated_time
         ) VALUES
         <foreach collection="list" item="item" separator=",">
-            (#{item.id}, #{item.custId}, #{item.tagId}, #{item.createdBy}, #{item.createdTime})
+            (#{item.id}, #{item.custId}, #{item.tagId}, #{item.createdBy}, #{item.createdTime},
+             COALESCE(#{item.active}, 1), COALESCE(#{item.effectiveTime}, #{item.createdTime}),
+             #{item.updatedBy}, #{item.updatedTime})
         </foreach>
     </insert>
 

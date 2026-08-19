@@ -15,7 +15,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -62,29 +61,6 @@ class TagApiImplTest {
         List<TagDTO> list = tagApiImpl.listEnabledTags();
 
         assertThat(list).isEmpty();
-    }
-
-    // ==================== getTagByCode ====================
-
-    @Test
-    void getTagByCode_returnsOptionalWhenFound() {
-        CustTag tag = buildTag("t1", "T", "ACTIVE", 10);
-        tag.setTagCode("CODE1");  // 覆盖辅助方法生成的默认编码
-        when(custTagMapper.selectByTagCode("CODE1")).thenReturn(tag);
-
-        Optional<TagDTO> result = tagApiImpl.getTagByCode("CODE1");
-
-        assertThat(result).isPresent();
-        assertThat(result.get().getTagCode()).isEqualTo("CODE1");
-    }
-
-    @Test
-    void getTagByCode_returnsEmptyWhenNotFound() {
-        when(custTagMapper.selectByTagCode("UNKNOWN")).thenReturn(null);
-
-        Optional<TagDTO> result = tagApiImpl.getTagByCode("UNKNOWN");
-
-        assertThat(result).isEmpty();
     }
 
     // ==================== getCustomerTags ====================
@@ -198,7 +174,6 @@ class TagApiImplTest {
         CustTag tag = new CustTag();
         tag.setId(id);
         tag.setTagName(name);
-        tag.setTagCode(id.toUpperCase() + "_CODE");
         tag.setStatus(status);
         tag.setTagPriority(priority);
         return tag;

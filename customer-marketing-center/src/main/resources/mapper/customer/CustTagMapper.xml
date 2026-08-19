@@ -4,8 +4,10 @@
 
     <!-- CUST_TAG 全列查询片段 -->
     <sql id="BASE_COLUMNS">
-        id, tag_name, tag_code, tag_category, tag_priority, description,
-        status, created_by, created_time, updated_by, updated_time, deleted
+        id, tag_name, tag_category, tag_priority, description,
+        status, tag_type, approval_status, expires_at, owner_org_id,
+        reviewed_by, reviewed_time, reject_reason,
+        created_by, created_time, updated_by, updated_time, deleted
     </sql>
 
     <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
@@ -20,16 +22,6 @@
         LIMIT 1
     </select>
 
-    <!-- 按标签编码查询（业务代码引用） -->
-    <select id="selectByTagCode" resultType="com.bank.branch.platform.customer.entity.CustTag">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM CUST_TAG
-        WHERE tag_code = #{tagCode}
-          AND deleted = 0
-        LIMIT 1
-    </select>
-
     <!-- 分页查询标签列表 -->
     <select id="selectPage" resultType="com.bank.branch.platform.customer.entity.CustTag">
         SELECT
@@ -37,8 +29,7 @@
         FROM CUST_TAG
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
-            AND (tag_name LIKE CONCAT('%', #{keyword}, '%')
-                 OR tag_code LIKE CONCAT('%', #{keyword}, '%'))
+            AND tag_name LIKE CONCAT('%', #{keyword}, '%')
         </if>
         <if test="status != null and status != ''">
             AND status = #{status}
@@ -52,12 +43,47 @@
         SELECT COUNT(*) FROM CUST_TAG
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
-            AND (tag_name LIKE CONCAT('%', #{keyword}, '%')
-                 OR tag_code LIKE CONCAT('%', #{keyword}, '%'))
+            AND tag_name LIKE CONCAT('%', #{keyword}, '%')
         </if>
         <if test="status != null and status != ''">
             AND status = #{status}
         </if>
+    </select>
+
+    <sql id="TAG_REVIEW_FILTER">
+        <if test="keyword != null and keyword != ''">
+            AND tag_name LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        <choose>
+            <when test="reviewTab == 'PENDING'">
+                AND approval_status = 'PENDING'
+            </when>
+            <when test="reviewTab == 'HISTORY' and reviewerEmpId != null and reviewerEmpId != ''">
+                AND approval_status IN ('APPROVED', 'REJECTED')
+                AND reviewed_by = #{reviewerEmpId}
+            </when>
+            <otherwise>
+                AND 1 = 0
+            </otherwise>
+        </choose>
+    </sql>
+
+    <!-- 标签审核页：审核记录必须由后端限定为当前审核人。 -->
+    <select id="selectReviewPage" resultType="com.bank.branch.platform.customer.entity.CustTag">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM CUST_TAG
+        WHERE deleted = 0
+        <include refid="TAG_REVIEW_FILTER"/>
+        ORDER BY tag_priority DESC, created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countReviewPage" resultType="long">
+        SELECT COUNT(*)
+        FROM CUST_TAG
+        WHERE deleted = 0
+        <include refid="TAG_REVIEW_FILTER"/>
     </select>
 
     <!-- 查询所有启用状态的标签 -->
@@ -66,6 +92,7 @@
             <include refid="BASE_COLUMNS"/>
         FROM CUST_TAG
         WHERE status = 'ACTIVE'
+          AND (approval_status = 'APPROVED' OR approval_status IS NULL)
           AND deleted = 0
         ORDER BY tag_priority DESC, tag_name
     </select>
@@ -76,6 +103,7 @@
             <include refid="BASE_COLUMNS"/>
         FROM CUST_TAG
         WHERE status = 'ACTIVE'
+          AND (approval_status = 'APPROVED' OR approval_status IS NULL)
           AND deleted = 0
         ORDER BY tag_priority ASC, tag_name ASC
     </select>
@@ -87,6 +115,7 @@
         FROM CUST_TAG
         WHERE deleted = 0
           AND status = 'ACTIVE'
+          AND (approval_status = 'APPROVED' OR approval_status IS NULL)
           AND id IN
         <foreach collection="ids" item="id" open="(" separator="," close=")">
             #{id}

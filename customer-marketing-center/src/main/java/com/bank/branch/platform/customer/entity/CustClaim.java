@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
  * 客户认领关系实体，对应 cust_claim 表。
  * <p>
  * 记录机构与客户的认领关系，支持多机构认领同一客户（多对多）。
- * 唯一索引 uk_cust_org(cust_id, org_id) 防止同一机构重复认领。
+ * 唯一索引 uk_cust_claim_emp(cust_id, claimed_by) 防止同一员工重复认领。
  * claim_status 枚举：CLAIMED-已认领/CANCELLED-已取消。
  * 注意：该表无 created_by/updated_by 字段，也无 deleted 字段。
  * </p>
@@ -24,7 +24,7 @@ public class CustClaim {
     @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
-    /** 客户ID（关联 cust_master.id），对应 cust_id */
+    /** 客户ID（关联 CUSTOMER_MARKET_CUSTOMER.id），对应 cust_id */
     private String custId;
 
     /** 认领机构代码，对应 org_id */

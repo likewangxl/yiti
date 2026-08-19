@@ -17,4 +17,7 @@ public class TagCustomerImportReqDTO {
     /** 待导入的客户 ID 列表（覆盖式，不能为空） */
     @NotEmpty(message = "客户ID列表不能为空")
     private List<String> custIds;
+
+    /** 导入模式：APPEND-追加/REPLACE-全量替换；默认 REPLACE。 */
+    private String mode = "REPLACE";
 }

@@ -37,8 +37,20 @@ public class TouchLog {
     /** 触达内容（文字描述），对应 log_content */
     private String logContent;
 
+    /** 触达方式，对应 touch_method */
+    private String touchMethod;
+
+    /** 协同人员工工号 JSON 数组，对应 participant_emp_ids */
+    private String participantEmpIds;
+
     /** 照片URL列表（JSON数组，最多9张），对应 photo_urls */
     private String photoUrls;
+
+    /** 三类照片 JSON 对象，对应 photo_groups */
+    private String photoGroups;
+
+    /** 办理定位，对应 operator_location */
+    private String operatorLocation;
 
     /** 归属机构代码，对应 owner_org_id */
     private String ownerOrgId;

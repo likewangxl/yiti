@@ -44,7 +44,7 @@ class AdminTouchTaskControllerTest extends AbstractControllerIntegrationTest {
     // ==================== GET /api/admin/touch-tasks ====================
 
     @Test
-    @WithMockEmpContext(empId = "E10001")
+    @WithMockEmpContext(empId = "E10001", systemAdmin = true)
     void listAll_shouldReturn200WithPageResult() throws Exception {
         // given: 管理后台全局列表，不限机构
         TouchTask task1 = buildTask("task-001", "cust-001", "ORG001");
@@ -63,7 +63,7 @@ class AdminTouchTaskControllerTest extends AbstractControllerIntegrationTest {
     }
 
     @Test
-    @WithMockEmpContext(empId = "E10001")
+    @WithMockEmpContext(empId = "E10001", systemAdmin = true)
     void listAll_withFilters_shouldPassFiltersToService() throws Exception {
         // given: 带关键词、状态、机构过滤
         PageResult<TouchTask> page = PageResult.of(1, 20, 0L, List.of());
@@ -81,10 +81,25 @@ class AdminTouchTaskControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(jsonPath("$.code").value("0"));
     }
 
+    @Test
+    @WithMockEmpContext(empId = "M10001", orgCode = "ORG001")
+    void listAll_nonAdminManager_shouldForceCurrentOrgScope() throws Exception {
+        PageResult<TouchTask> page = PageResult.of(1, 20, 0L, List.of());
+        when(touchTaskService.listPageAdmin(isNull(), isNull(), isNull(), eq("ORG001"), eq(1), eq(20)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/admin/touch-tasks")
+                        .param("orgId", "ORG_OTHER")
+                        .param("pageNo", "1")
+                        .param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
+    }
+
     // ==================== GET /api/admin/touch-tasks/export ====================
 
     @Test
-    @WithMockEmpContext(empId = "E10001")
+    @WithMockEmpContext(empId = "E10001", systemAdmin = true)
     void exportAll_shouldReturnCsvContent() throws Exception {
         // given: 导出数据
         TouchTask task1 = buildTask("task-001", "cust-001", "ORG001");

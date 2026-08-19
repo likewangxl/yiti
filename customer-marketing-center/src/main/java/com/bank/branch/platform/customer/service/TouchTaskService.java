@@ -25,7 +25,7 @@ import java.util.UUID;
  * <p>
  * 负责触达任务的创建（由认领事件驱动）、完成、取消、查询及 SLA 状态刷新。
  * 任务生命周期：PENDING → SUCCESS（完成） | CANCELLED（取消）。
- * SLA 状态由定时任务周期性刷新：GREEN → YELLOW（到预警时间）→ RED（超计划完成时间且未完成）。
+ * SLA 状态由治理中心调度刷新：BLUE → YELLOW（到预警时间）→ RED（超计划完成时间且未完成）。
  * </p>
  */
 @Slf4j
@@ -52,6 +52,17 @@ public class TouchTaskService {
      */
     @Transactional
     public TouchTask createFromClaim(String custId, String orgId, String assigneeEmpId) {
+        return createFirstTouchTask(custId, orgId, assigneeEmpId, null);
+    }
+
+    /**
+     * 手动发起首次触达任务。认领本身不再自动建任务。
+     *
+     * @param planFinishTime 可选计划完成时间，格式 yyyy-MM-dd HH:mm:ss
+     */
+    @Transactional
+    public TouchTask createFirstTouchTask(String custId, String orgId, String assigneeEmpId,
+                                           String planFinishTime) {
         log.info("[TouchTaskService.createFromClaim] custId={}, orgId={}, assigneeEmpId={}",
                 custId, orgId, assigneeEmpId);
 
@@ -72,10 +83,11 @@ public class TouchTaskService {
         entity.setAssigneeEmpId(assigneeEmpId);
         entity.setTaskType(TouchTaskType.FIRST_TOUCH.getCode());
         entity.setTaskStatus(TouchTaskStatus.PENDING.getCode());
-        entity.setSlaStatus(SlaStatus.GREEN.getCode());
-        // 计划完成时间：7 天后；预警时间：5 天后（到预警时间变黄）
-        entity.setPlanFinishTime(now.plusDays(7));
-        entity.setWarningTime(now.plusDays(5));
+        entity.setSlaStatus(SlaStatus.BLUE.getCode());
+        entity.setSlaWarning(false);
+        LocalDateTime planTime = parsePlanFinishTimeOrDefault(planFinishTime, now);
+        entity.setPlanFinishTime(planTime);
+        entity.setWarningTime(planTime.minusDays(2));
         // businessKey 格式: TOUCH:{taskId}
         entity.setBusinessKey("TOUCH:" + taskId);
         entity.setCreatedTime(now);
@@ -121,7 +133,8 @@ public class TouchTaskService {
         entity.setAssigneeEmpId(assigneeEmpId);
         entity.setTaskType(TouchTaskType.FOLLOW_UP.getCode());
         entity.setTaskStatus(TouchTaskStatus.PENDING.getCode());
-        entity.setSlaStatus(SlaStatus.GREEN.getCode());
+        entity.setSlaStatus(SlaStatus.BLUE.getCode());
+        entity.setSlaWarning(false);
 
         LocalDateTime planTime = parsePlanFinishTimeOrDefault(planFinishTime, now);
         entity.setPlanFinishTime(planTime);
@@ -287,6 +300,19 @@ public class TouchTaskService {
         if (task == null) {
             throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode(),
                     CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getMessage());
+        }
+        return task;
+    }
+
+    /** 同机构可查看，跨机构不可查看；系统管理员可跨机构查看。 */
+    public TouchTask getVisibleById(String id, String operatorEmpId, String operatorOrgCode,
+                                    boolean operatorIsAdmin) {
+        TouchTask task = getById(id);
+        if (!operatorIsAdmin && (operatorOrgCode == null || !operatorOrgCode.equals(task.getOrgId()))) {
+            log.warn("[TouchTaskService.getVisibleById] cross-org denied, taskId={}, taskOrg={}, operatorOrg={}",
+                    id, task.getOrgId(), operatorOrgCode);
+            throw new BizException(CustomerErrorCode.HISTORY_ACCESS_FORBIDDEN.getCode(),
+                    CustomerErrorCode.HISTORY_ACCESS_FORBIDDEN.getMessage());
         }
         return task;
     }

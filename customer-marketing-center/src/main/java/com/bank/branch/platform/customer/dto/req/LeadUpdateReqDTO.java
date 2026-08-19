@@ -3,6 +3,7 @@ package com.bank.branch.platform.customer.dto.req;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * 编辑线索请求 DTO。
@@ -12,6 +13,10 @@ import java.math.BigDecimal;
  */
 @Data
 public class LeadUpdateReqDTO {
+
+    private String leadType;
+
+    private String custNo;
 
     /** 客户名称 */
     private String custName;
@@ -60,6 +65,16 @@ public class LeadUpdateReqDTO {
 
     /** 标签ID列表（JSON数组） */
     private String tagIds;
+
+    private List<String> tagIdList;
+
+    private String distributionMode;
+
+    private String mainManagerId;
+
+    private List<String> managerScopeIds;
+
+    private List<String> attachmentIds;
 
     /** 备注 */
     private String remark;

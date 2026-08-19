@@ -1,5 +1,7 @@
 package com.bank.branch.platform.customer.service;
 
+import com.bank.branch.platform.auth.api.BizScopeApi;
+import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.entity.CustLead;
@@ -11,6 +13,7 @@ import com.bank.branch.platform.customer.mapper.LeadImportBatchMapper;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,6 +33,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,8 +57,17 @@ class LeadServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private BizScopeApi bizScopeApi;
+
     @InjectMocks
     private LeadService leadService;
+
+    @BeforeEach
+    void allowLeadWritesByDefault() {
+        lenient().when(bizScopeApi.checkWritePermission(
+                anyString(), eq(BizType.LEAD), anyString(), anyString())).thenReturn(true);
+    }
 
     // ==================== createDraft ====================
 
@@ -142,6 +155,24 @@ class LeadServiceTest {
         verify(leadMapper, never()).updateById(any(CustLead.class));
     }
 
+    @Test
+    void updateDraft_shouldRejectOperatorOutsideWriteScope() {
+        CustLead existing = buildDraftLead("lead-001");
+        when(leadMapper.selectById("lead-001")).thenReturn(existing);
+        when(bizScopeApi.checkWritePermission(
+                "E999", BizType.LEAD, "ORG001", "E001")).thenReturn(false);
+
+        assertThatThrownBy(() -> leadService.updateDraft(
+                "lead-001", "越权修改", null, null, null,
+                null, null, null, null, null, null, null,
+                null, null, null, null, null, null, "E999"
+        ))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.LEAD_WRITE_FORBIDDEN.getCode());
+
+        verify(leadMapper, never()).updateById(any(CustLead.class));
+    }
+
     // ==================== deleteDraft ====================
 
     @Test
@@ -158,6 +189,20 @@ class LeadServiceTest {
         ArgumentCaptor<CustLead> captor = ArgumentCaptor.forClass(CustLead.class);
         verify(leadMapper).updateById(captor.capture());
         assertThat(captor.getValue().getDeleted()).isEqualTo(1);
+    }
+
+    @Test
+    void deleteDraft_shouldRejectOperatorOutsideWriteScope() {
+        CustLead existing = buildDraftLead("lead-001");
+        when(leadMapper.selectById("lead-001")).thenReturn(existing);
+        when(bizScopeApi.checkWritePermission(
+                "E999", BizType.LEAD, "ORG001", "E001")).thenReturn(false);
+
+        assertThatThrownBy(() -> leadService.deleteDraft("lead-001", "E999"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.LEAD_WRITE_FORBIDDEN.getCode());
+
+        verify(leadMapper, never()).updateById(any(CustLead.class));
     }
 
     // ==================== submitForApproval ====================
@@ -196,6 +241,21 @@ class LeadServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.LEAD_NOT_SUBMITTABLE.getCode());
 
+        verify(workflowApi, never()).startProcess(any());
+    }
+
+    @Test
+    void submitForApproval_shouldRejectOperatorOutsideWriteScope() {
+        CustLead existing = buildDraftLead("lead-001");
+        when(leadMapper.selectForUpdate("lead-001")).thenReturn(existing);
+        when(bizScopeApi.checkWritePermission(
+                "E999", BizType.LEAD, "ORG001", "E001")).thenReturn(false);
+
+        assertThatThrownBy(() -> leadService.submitForApproval("lead-001", "E999", "ORG999"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.LEAD_WRITE_FORBIDDEN.getCode());
+
+        verify(leadMapper, never()).updateStatusById(anyString(), anyString(), anyString());
         verify(workflowApi, never()).startProcess(any());
     }
 

@@ -1,9 +1,12 @@
 package com.bank.branch.platform.customer.service;
 
+import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
+import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.customer.dto.resp.CustomerCrossOrgHistoryVO;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.entity.CustLead;
@@ -71,6 +74,9 @@ class CustomerServiceTest {
     @Mock
     private UserApi userApi;
 
+    @Mock
+    private OrgApi orgApi;
+
     @InjectMocks
     private CustomerService customerService;
 
@@ -127,6 +133,28 @@ class CustomerServiceTest {
         verify(masterMapper).selectPage(null, null, 10, 10);
     }
 
+    @Test
+    void listVisiblePageAsDTO_orgSubtreeShowsAllExistingCustomersWithinScope() {
+        CustMaster master = new CustMaster();
+        master.setId("cust-001");
+        master.setCustName("未开户存量客户也应展示");
+        master.setIsAccountOpened(0);
+        master.setMainOrgId("SUB001");
+        when(orgApi.getOrgSubtreeCodes("BR001")).thenReturn(Set.of("BR001", "SUB001"));
+        when(masterMapper.selectVisiblePage(null, null, "ORG_SUBTREE", "E001",
+                Set.of("BR001", "SUB001"), 0, 20)).thenReturn(List.of(master));
+        when(masterMapper.countVisiblePage(null, null, "ORG_SUBTREE", "E001",
+                Set.of("BR001", "SUB001"))).thenReturn(1L);
+
+        PageResult<CustomerDTO> result = customerService.listVisiblePageAsDTO(
+                null, null, 1, 20, "E001", "BR001", DataScopeType.ORG_SUBTREE);
+
+        assertThat(result.getRecords()).singleElement()
+                .extracting(CustomerDTO::getIsAccountOpened).isEqualTo(false);
+        verify(masterMapper).selectVisiblePage(null, null, "ORG_SUBTREE", "E001",
+                Set.of("BR001", "SUB001"), 0, 20);
+    }
+
     // ==================== transfer ====================
 
     @Test
@@ -147,8 +175,8 @@ class CustomerServiceTest {
         claim.setClaimStatus(ClaimStatus.CLAIMED.getCode());
         when(claimMapper.selectById(claimId)).thenReturn(claim);
         when(claimMapper.updateById(any(CustClaim.class))).thenReturn(1);
-        // P1C 接收人校验：toEmpId 含 R_RM 角色 + mainOrgCode 匹配
-        when(userApi.getUserRoleCodes(toEmpId)).thenReturn(Set.of("R_RM"));
+        // 接收人校验：toEmpId 含专用客户营销客户经理角色 + mainOrgCode 匹配
+        when(userApi.getUserRoleCodes(toEmpId)).thenReturn(Set.of("CUST_MARKETING_MANAGER"));
         UserDTO receiver = new UserDTO();
         receiver.setEmpId(toEmpId);
         receiver.setMainOrgCode("ORG_SZ_001");

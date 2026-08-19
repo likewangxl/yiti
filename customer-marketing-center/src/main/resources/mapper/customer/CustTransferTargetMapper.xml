@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.CustTransferTargetMapper">
+    <insert id="insertBatch">
+        INSERT INTO CUST_TRANSFER_TARGET
+        (id, transfer_id, target_emp_id, target_org_id, target_role, sort_no, created_time)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.transferId}, #{item.targetEmpId}, #{item.targetOrgId},
+             #{item.targetRole}, #{item.sortNo}, #{item.createdTime})
+        </foreach>
+    </insert>
+    <select id="selectByTransferIds" resultType="com.bank.branch.platform.customer.entity.CustTransferTarget">
+        SELECT id, transfer_id, target_emp_id, target_org_id, target_role, sort_no, created_time
+        FROM CUST_TRANSFER_TARGET
+        WHERE transfer_id IN
+        <foreach collection="transferIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ORDER BY transfer_id, sort_no
+    </select>
+</mapper>

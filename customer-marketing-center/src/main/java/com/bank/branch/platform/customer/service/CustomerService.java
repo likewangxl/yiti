@@ -8,6 +8,7 @@ import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.customer.api.converter.CustClaimDTOConverter;
 import com.bank.branch.platform.customer.api.converter.CustomerDTOConverter;
 import com.bank.branch.platform.customer.api.converter.TouchTaskDTOConverter;
@@ -19,6 +20,7 @@ import com.bank.branch.platform.customer.entity.CustMaster;
 import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.enums.ClaimStatus;
 import com.bank.branch.platform.customer.enums.CustomerErrorCode;
+import com.bank.branch.platform.customer.enums.CustomerRoleCode;
 import com.bank.branch.platform.customer.enums.LeadOp;
 import com.bank.branch.platform.customer.enums.LeadStatus;
 import com.bank.branch.platform.customer.event.ClaimTransferredEvent;
@@ -135,6 +137,69 @@ public class CustomerService {
     }
 
     /**
+     * 0811 一期客户列表：查询当前业务数据范围内全部存量客户，不限定开户状态。
+     */
+    public PageResult<CustomerDTO> listVisiblePageAsDTO(String keyword, String status,
+                                                        int pageNo, int pageSize,
+                                                        String empId, String orgCode,
+                                                        DataScopeType scopeType) {
+        int safePageNo = Math.max(pageNo, 1);
+        int safePageSize = Math.min(Math.max(pageSize, 1), 100);
+        DataScopeType safeScope = scopeType == null ? DataScopeType.SELF : scopeType;
+        Set<String> orgCodes = resolveOrgCodes(safeScope, orgCode);
+        int offset = (safePageNo - 1) * safePageSize;
+        List<CustMaster> records = masterMapper.selectVisiblePage(keyword, status,
+                safeScope.getCode(), empId, orgCodes, offset, safePageSize);
+        long total = masterMapper.countVisiblePage(keyword, status,
+                safeScope.getCode(), empId, orgCodes);
+        List<CustomerDTO> dtos = CustomerDTOConverter.toDTOList(records);
+        fillCustomerDisplayNames(dtos);
+        return PageResult.of(safePageNo, safePageSize, total, dtos);
+    }
+
+    private Set<String> resolveOrgCodes(DataScopeType scopeType, String orgCode) {
+        if (scopeType == DataScopeType.ORG_SUBTREE && StringUtils.hasText(orgCode)) {
+            Set<String> codes = orgApi.getOrgSubtreeCodes(orgCode);
+            return codes == null ? Set.of() : codes;
+        }
+        if (scopeType == DataScopeType.ORG && StringUtils.hasText(orgCode)) {
+            return Set.of(orgCode);
+        }
+        return Set.of();
+    }
+
+    private void fillCustomerDisplayNames(List<CustomerDTO> dtos) {
+        fillOwnerOrgNames(dtos);
+        if (dtos == null || dtos.isEmpty()) {
+            return;
+        }
+        List<String> empIds = dtos.stream().map(CustomerDTO::getMainManagerId)
+                .filter(StringUtils::hasText).distinct().toList();
+        Map<String, String> userNames = new HashMap<>();
+        if (!empIds.isEmpty()) {
+            List<UserDTO> users = userApi.getUserByEmpIds(empIds);
+            if (users != null) {
+                users.stream().filter(Objects::nonNull)
+                        .forEach(user -> userNames.put(user.getEmpId(), user.getDisplayName()));
+            }
+        }
+        List<String> mainOrgIds = dtos.stream().map(CustomerDTO::getMainOrgId)
+                .filter(StringUtils::hasText).distinct().toList();
+        Map<String, String> orgNames = new HashMap<>();
+        if (!mainOrgIds.isEmpty()) {
+            List<OrgDTO> orgs = orgApi.getOrgsByCodes(mainOrgIds);
+            if (orgs != null) {
+                orgs.stream().filter(Objects::nonNull)
+                        .forEach(org -> orgNames.put(org.getOrgCode(), org.getOrgName()));
+            }
+        }
+        dtos.forEach(dto -> {
+            dto.setMainManagerName(userNames.get(dto.getMainManagerId()));
+            dto.setMainOrgName(orgNames.get(dto.getMainOrgId()));
+        });
+    }
+
+    /**
      * 批量回填 CustomerDTO.ownerOrgName。
      * <p>
      * CustomerDTOConverter 显式将 ownerOrgName 置 null，由本方法在 Service 层补充。
@@ -198,10 +263,10 @@ public class CustomerService {
                     CustomerErrorCode.TRANSFER_REASON_REQUIRED.getMessage());
         }
 
-        // P1C 接收人资格校验：接收人须具备客户经理角色 R_RM（CUST-40306），
+        // 接收人资格校验：接收人须具备专用或历史客户经理角色（CUST-40306），
         // 且其主机构须与客户当前所属机构一致（CUST-40307），防止越权 / 跨机构转交
         Set<String> receiverRoles = userApi.getUserRoleCodes(toEmpId);
-        if (receiverRoles == null || !receiverRoles.contains("R_RM")) {
+        if (!CustomerRoleCode.isCustomerManager(receiverRoles)) {
             throw new BizException(CustomerErrorCode.TRANSFER_ROLE_MISMATCH.getCode(),
                     CustomerErrorCode.TRANSFER_ROLE_MISMATCH.getMessage());
         }

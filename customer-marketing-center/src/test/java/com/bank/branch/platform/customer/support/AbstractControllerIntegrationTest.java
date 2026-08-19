@@ -9,6 +9,7 @@ import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
+import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import org.junit.jupiter.api.Tag;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -66,4 +67,5 @@ public abstract class AbstractControllerIntegrationTest {
     @MockBean protected NotifyApi notifyApi;
     @MockBean protected AuditApi auditApi;
     @MockBean protected WorkflowApi workflowApi;
+    @MockBean protected WorkflowQueryApi workflowQueryApi;
 }

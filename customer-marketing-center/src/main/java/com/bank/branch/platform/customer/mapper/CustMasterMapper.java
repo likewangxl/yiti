@@ -7,9 +7,10 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.util.Set;
 
 /**
- * 客户主档 Mapper 接口，操作 cust_master 表。
+ * 客户营销主档 Mapper 接口，操作 CUSTOMER_MARKET_CUSTOMER 表。
  * <p>
  * 所有查询默认过滤逻辑删除记录（deleted = 0）。
  * 客户可见性通过 cust_claim 认领关系判定，非 owner_org_id 字段。
@@ -40,19 +41,6 @@ public interface CustMasterMapper extends BaseMapper<CustMaster> {
     CustMaster selectByCustNo(@Param("custNo") String custNo);
 
     /**
-     * 客户信息同步：把外部统计表 {@code XAN_M98_CUST_STAT_SHOW3} 中、指定统计日期下、
-     * 客户编号在 {@code CUST_MASTER} 不存在的客户，按 CUST_ID/CUST_NAME 去重后插入客户主档，
-     * 并记录统计日期(statis_dt)与创建时间(created_time)。
-     * <p>
-     * 客户编号已存在的由 NOT EXISTS 过滤；客户名称唯一键(uk_cust_name)冲突由 INSERT IGNORE 静默跳过。
-     * </p>
-     *
-     * @param statisDt 统计日期（yyyy-MM-dd），匹配 STATIS_DT
-     * @return 实际新增的客户主档记录数
-     */
-    int syncNewCustomersFromStat(@Param("statisDt") String statisDt);
-
-    /**
      * 分页查询客户主档列表（含逻辑删除过滤）。
      * <p>
      * keyword 模糊搜索 cust_name 和 unified_credit_code，status 精确匹配。
@@ -79,6 +67,22 @@ public interface CustMasterMapper extends BaseMapper<CustMaster> {
     long countPage(@Param("keyword") String keyword,
                    @Param("status") String status);
 
+    /** 按业务数据范围查询客户列表；不以是否开户作为过滤条件。 */
+    List<CustMaster> selectVisiblePage(@Param("keyword") String keyword,
+                                       @Param("status") String status,
+                                       @Param("scopeType") String scopeType,
+                                       @Param("empId") String empId,
+                                       @Param("orgCodes") Set<String> orgCodes,
+                                       @Param("offset") int offset,
+                                       @Param("limit") int limit);
+
+    /** 与 {@link #selectVisiblePage} 完全相同条件的总数查询。 */
+    long countVisiblePage(@Param("keyword") String keyword,
+                          @Param("status") String status,
+                          @Param("scopeType") String scopeType,
+                          @Param("empId") String empId,
+                          @Param("orgCodes") Set<String> orgCodes);
+
     // insert(T) 和 updateById(T) 由 MyBatis-Plus BaseMapper 提供
 
     /**
@@ -91,6 +95,9 @@ public interface CustMasterMapper extends BaseMapper<CustMaster> {
      * @return 客户主档列表
      */
     List<CustMaster> selectByIds(@Param("ids") List<String> ids);
+
+    /** 按统一社会信用代码批量查询，用于客户标签 Excel 导入校验。 */
+    List<CustMaster> selectByUnifiedCreditCodes(@Param("codes") List<String> codes);
 
     /**
      * 按关键词模糊搜索客户主档（匹配 cust_name / cust_no / unified_credit_code）。

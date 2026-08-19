@@ -1,12 +1,18 @@
 package com.bank.branch.platform.customer.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.bank.branch.platform.customer.entity.CustLead;
+import com.bank.branch.platform.customer.entity.CustLeadManagerScope;
 import com.bank.branch.platform.customer.entity.CustMaster;
+import com.bank.branch.platform.customer.entity.CustClaim;
+import com.bank.branch.platform.customer.enums.ClaimStatus;
 import com.bank.branch.platform.customer.enums.CustMasterStatus;
 import com.bank.branch.platform.customer.enums.LeadOp;
 import com.bank.branch.platform.customer.event.CustomerDeletedEvent;
 import com.bank.branch.platform.customer.mapper.CustLeadMapper;
+import com.bank.branch.platform.customer.mapper.CustLeadManagerScopeMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
+import com.bank.branch.platform.customer.mapper.CustClaimMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -14,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
@@ -36,7 +43,10 @@ public class CustMasterAssemblerService {
 
     private final CustMasterMapper masterMapper;
     private final CustLeadMapper leadMapper;
+    private final CustLeadManagerScopeMapper managerScopeMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final CustClaimMapper claimMapper;
+    private final TouchTaskService touchTaskService;
 
     /**
      * 从审批通过的线索装配客户主档。
@@ -81,7 +91,8 @@ public class CustMasterAssemblerService {
      */
     private void handleCreate(CustLead lead) {
         LocalDateTime now = LocalDateTime.now();
-        String custNo = generateCustNo();
+        String custNo = lead.getCustNo() == null || lead.getCustNo().isBlank()
+                ? generateCustNo() : lead.getCustNo();
         String id = UUID.randomUUID().toString().replace("-", "");
 
         CustMaster master = new CustMaster();
@@ -89,6 +100,13 @@ public class CustMasterAssemblerService {
         master.setCustNo(custNo);
         copyLeadFieldsToMaster(lead, master);
         master.setLeadId(lead.getId());
+        master.setCurrentLeadId(lead.getId());
+        master.setMainManagerId(lead.getMainManagerId());
+        master.setMainOrgId(lead.getMainManagerOrgId());
+        master.setOwnershipStatus(ownershipStatus(lead));
+        master.setSourceSystem("LOCAL");
+        master.setSourceUpdatedTime(now);
+        master.setLockVersion(0);
         master.setOwnerOrgId(lead.getOwnerOrgId());
         master.setStatus(CustMasterStatus.ACTIVE.getCode());
         master.setDeleted(0);
@@ -96,8 +114,54 @@ public class CustMasterAssemblerService {
         master.setUpdatedTime(now);
 
         masterMapper.insert(master);
+        if ("OWNER".equals(lead.getDistributionMode())
+                && lead.getMainManagerId() != null && !lead.getMainManagerId().isBlank()) {
+            createOwnerClaimAndTask(master, lead, now);
+        } else if ("SCOPE".equals(lead.getDistributionMode())) {
+            createScopeClaims(master, lead, now);
+        }
         log.info("[CustMasterAssemblerService.handleCreate] 新建客户主档 custId={}, custNo={}, leadId={}",
                 id, custNo, lead.getId());
+    }
+
+    /** 主办专属线索通过后，直接建立主办人认领关系并生成首次触达任务。 */
+    private void createOwnerClaimAndTask(CustMaster master, CustLead lead, LocalDateTime now) {
+        CustClaim claim = new CustClaim();
+        claim.setId(UUID.randomUUID().toString().replace("-", ""));
+        claim.setCustId(master.getId());
+        claim.setOrgId(lead.getMainManagerOrgId());
+        claim.setClaimedBy(lead.getMainManagerId());
+        claim.setMaintainerEmpId(lead.getMainManagerId());
+        claim.setClaimStatus(ClaimStatus.CLAIMED.getCode());
+        claim.setClaimTime(now);
+        claim.setCreatedTime(now);
+        claim.setUpdatedTime(now);
+        claimMapper.insert(claim);
+        touchTaskService.createFirstTouchTask(
+                master.getId(), lead.getMainManagerOrgId(), lead.getMainManagerId(), null);
+    }
+
+    /** 指定客户经理范围的线索通过后，为每位指定经理直接建立认领关系，不生成触达任务。 */
+    private void createScopeClaims(CustMaster master, CustLead lead, LocalDateTime now) {
+        List<CustLeadManagerScope> scopes = managerScopeMapper.selectList(
+                new LambdaQueryWrapper<CustLeadManagerScope>()
+                        .eq(CustLeadManagerScope::getLeadId, lead.getId())
+                        .eq(CustLeadManagerScope::getAssignmentType, "SCOPE")
+                        .orderByDesc(CustLeadManagerScope::getIsPrimary)
+                        .orderByAsc(CustLeadManagerScope::getCreatedTime));
+        for (CustLeadManagerScope scope : scopes) {
+            CustClaim claim = new CustClaim();
+            claim.setId(UUID.randomUUID().toString().replace("-", ""));
+            claim.setCustId(master.getId());
+            claim.setOrgId(scope.getManagerOrgId());
+            claim.setClaimedBy(scope.getManagerEmpId());
+            claim.setMaintainerEmpId(scope.getManagerEmpId());
+            claim.setClaimStatus(ClaimStatus.CLAIMED.getCode());
+            claim.setClaimTime(now);
+            claim.setCreatedTime(now);
+            claim.setUpdatedTime(now);
+            claimMapper.insert(claim);
+        }
     }
 
     /**
@@ -113,6 +177,12 @@ public class CustMasterAssemblerService {
         CustMaster updateEntity = new CustMaster();
         updateEntity.setId(custId);
         copyLeadFieldsToMaster(lead, updateEntity);
+        updateEntity.setCurrentLeadId(lead.getId());
+        updateEntity.setMainManagerId(lead.getMainManagerId());
+        updateEntity.setMainOrgId(lead.getMainManagerOrgId());
+        updateEntity.setOwnershipStatus(ownershipStatus(lead));
+        updateEntity.setSourceSystem("LOCAL");
+        updateEntity.setSourceUpdatedTime(LocalDateTime.now());
         updateEntity.setUpdatedTime(LocalDateTime.now());
 
         masterMapper.updateById(updateEntity);
@@ -184,5 +254,15 @@ public class CustMasterAssemblerService {
     private String generateCustNo() {
         int random4 = new Random().nextInt(9000) + 1000;
         return "CUST_" + System.currentTimeMillis() + "_" + random4;
+    }
+
+    private String ownershipStatus(CustLead lead) {
+        if (lead.getMainManagerId() != null && !lead.getMainManagerId().isBlank()) {
+            return "ASSIGNED";
+        }
+        if ("SCOPE".equals(lead.getDistributionMode())) {
+            return "MULTI_CLAIMED";
+        }
+        return "WAITING_CLAIM";
     }
 }

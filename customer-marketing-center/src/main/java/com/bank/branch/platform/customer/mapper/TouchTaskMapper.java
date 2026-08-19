@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.customer.entity.TouchTask;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Update;
+
+import java.time.LocalDateTime;
 
 import java.util.List;
 
@@ -21,6 +24,11 @@ import java.util.List;
  */
 @Mapper
 public interface TouchTaskMapper extends BaseMapper<TouchTask> {
+
+    /** 客户转交时关闭该客户全部未完成触达任务。 */
+    @Update("UPDATE TOUCH_TASK SET task_status='CANCELLED', cancel_time=#{cancelTime}, updated_time=#{cancelTime} " +
+            "WHERE cust_id=#{custId} AND task_status IN ('PENDING','IN_PROGRESS')")
+    int cancelActiveByCust(@Param("custId") String custId, @Param("cancelTime") LocalDateTime cancelTime);
 
     /**
      * 按 id 查询触达任务。
@@ -103,6 +111,10 @@ public interface TouchTaskMapper extends BaseMapper<TouchTask> {
      * @return 在途触达任务列表
      */
     List<TouchTask> selectActiveByCust(@Param("custId") String custId);
+
+    /** 查询指定客户、指定执行人的在途任务。 */
+    List<TouchTask> selectActiveByCustAndAssignee(@Param("custId") String custId,
+                                                   @Param("assigneeEmpId") String assigneeEmpId);
 
     // ===================== 契约 §5 扩展方法 =====================
 

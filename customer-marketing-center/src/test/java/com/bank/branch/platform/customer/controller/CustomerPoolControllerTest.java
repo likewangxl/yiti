@@ -51,7 +51,8 @@ class CustomerPoolControllerTest extends AbstractControllerIntegrationTest {
         c2.setCustNo("C002");
 
         PageResult<CustomerDTO> page = PageResult.of(1, 20, 2L, Arrays.asList(c1, c2));
-        when(customerPoolService.listPoolAsDTO(isNull(), eq(1), eq(20))).thenReturn(page);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(customerPoolService.listPoolAsDTO(isNull(), eq("E10001"), eq(1), eq(20))).thenReturn(page);
 
         mockMvc.perform(get("/api/customer-pool")
                         .param("pageNo", "1")
@@ -69,7 +70,8 @@ class CustomerPoolControllerTest extends AbstractControllerIntegrationTest {
     @WithMockEmpContext(empId = "E10001")
     void listPool_shouldPassKeywordToService() throws Exception {
         PageResult<CustomerDTO> emptyPage = PageResult.of(1, 20, 0L, Collections.emptyList());
-        when(customerPoolService.listPoolAsDTO(eq("关键词"), eq(1), eq(20))).thenReturn(emptyPage);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(customerPoolService.listPoolAsDTO(eq("关键词"), eq("E10001"), eq(1), eq(20))).thenReturn(emptyPage);
 
         // when/then
         mockMvc.perform(get("/api/customer-pool")

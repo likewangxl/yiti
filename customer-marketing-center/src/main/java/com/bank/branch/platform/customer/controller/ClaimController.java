@@ -10,6 +10,8 @@ import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.customer.dto.req.CancelClaimReqDTO;
 import com.bank.branch.platform.customer.dto.req.ClaimReqDTO;
 import com.bank.branch.platform.customer.dto.req.ReTouchReqDTO;
+import com.bank.branch.platform.customer.dto.req.StartTouchReqDTO;
+import com.bank.branch.platform.customer.dto.resp.ClaimedCustomerRespDTO;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.service.ClaimService;
@@ -48,7 +50,7 @@ public class ClaimController {
     /**
      * 认领客户（争抢式）。
      * <p>
-     * 若同一机构已认领该客户，返回 CUSTOMER_ALREADY_CLAIMED 业务异常。
+     * 若当前员工已认领该客户，返回 CUSTOMER_ALREADY_CLAIMED 业务异常。
      * </p>
      *
      * @param req 认领请求 DTO（包含 custId）
@@ -113,6 +115,20 @@ public class ClaimController {
         return ResponseWrapper.success(result);
     }
 
+    /** 从本人已认领客户手动发起首次触达。 */
+    @PostMapping("/{claimId}/touch")
+    @BizAuth(bizType = BizType.CLAIM, action = BizAction.WRITE)
+    @AuditLog(action = "START_FIRST_TOUCH", resourceType = "CLAIM")
+    @Operation(summary = "手动发起首次触达")
+    public ResponseWrapper<TouchTask> startTouch(@PathVariable String claimId,
+                                                 @RequestBody(required = false) StartTouchReqDTO req) {
+        String empId = currentUserApi.getCurrentEmpId();
+        String orgCode = currentUserApi.getCurrentOrgCode();
+        TouchTask result = claimService.startTouch(
+                claimId, req == null ? null : req.getPlanFinishTime(), empId, orgCode);
+        return ResponseWrapper.success(result);
+    }
+
     /**
      * 查询我的认领列表。
      *
@@ -129,6 +145,18 @@ public class ClaimController {
         log.info("[ClaimController.listMyClaims] pageNo={}, pageSize={}", pageNo, pageSize);
         String empId = currentUserApi.getCurrentEmpId();
         PageResult<CustClaim> result = claimService.listMyClaims(empId, pageNo, pageSize);
+        return ResponseWrapper.page(result);
+    }
+
+    /** 查询已认领客户及最近触达状态。 */
+    @GetMapping("/mine/customers")
+    @BizAuth(bizType = BizType.CLAIM, action = BizAction.LIST)
+    @Operation(summary = "查询我的已认领客户")
+    public ResponseWrapper<ClaimedCustomerRespDTO> listMyClaimedCustomers(
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        PageResult<ClaimedCustomerRespDTO> result = claimService.listMyClaimedCustomers(
+                currentUserApi.getCurrentEmpId(), pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 }

@@ -25,7 +25,6 @@ class TagDTOConverterTest {
         CustTag entity = new CustTag();
         entity.setId("tag-001");
         entity.setTagName("VIP客户");
-        entity.setTagCode("VIP_CUSTOMER");
         entity.setTagCategory("价值类");
         entity.setTagPriority(10);
         entity.setStatus("ACTIVE");
@@ -43,7 +42,6 @@ class TagDTOConverterTest {
         assertThat(dto).isNotNull();
         assertThat(dto.getId()).isEqualTo("tag-001");
         assertThat(dto.getTagName()).isEqualTo("VIP客户");
-        assertThat(dto.getTagCode()).isEqualTo("VIP_CUSTOMER");
         assertThat(dto.getTagCategory()).isEqualTo("价值类");
         assertThat(dto.getTagPriority()).isEqualTo(10);
         assertThat(dto.getStatus()).isEqualTo("ACTIVE");
@@ -61,7 +59,6 @@ class TagDTOConverterTest {
         CustTag entity = new CustTag();
         entity.setId("tag-002");
         entity.setTagName("测试标签");
-        entity.setTagCode("TEST_TAG");
         entity.setTagCategory(null);
         entity.setTagPriority(null);
         entity.setDescription(null);
@@ -81,11 +78,9 @@ class TagDTOConverterTest {
         // given
         CustTag e1 = new CustTag();
         e1.setId("tag-001");
-        e1.setTagCode("CODE_A");
 
         CustTag e2 = new CustTag();
         e2.setId("tag-002");
-        e2.setTagCode("CODE_B");
 
         List<CustTag> list = Arrays.asList(e1, null, e2);
 
@@ -95,7 +90,6 @@ class TagDTOConverterTest {
         // then
         assertThat(dtos).hasSize(2);
         assertThat(dtos.get(0).getId()).isEqualTo("tag-001");
-        assertThat(dtos.get(0).getTagCode()).isEqualTo("CODE_A");
         assertThat(dtos.get(1).getId()).isEqualTo("tag-002");
     }
 

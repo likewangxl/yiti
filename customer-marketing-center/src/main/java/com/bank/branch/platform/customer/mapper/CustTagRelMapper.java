@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.time.LocalDateTime;
 
 /**
  * 客户-标签关联 Mapper 接口，操作 cust_tag_rel 表。
@@ -44,6 +45,10 @@ public interface CustTagRelMapper extends BaseMapper<CustTagRel> {
      */
     CustTagRel selectByCustIdAndTagId(@Param("custId") String custId, @Param("tagId") String tagId);
 
+    /** 按标签和客户 ID 批量查询已有关系，用于导入时避免 N+1。 */
+    List<CustTagRel> selectByTagIdAndCustIds(@Param("tagId") String tagId,
+                                             @Param("custIds") List<String> custIds);
+
     /**
      * 物理删除指定客户与指定标签的关联记录（取消打标）。
      *
@@ -61,12 +66,22 @@ public interface CustTagRelMapper extends BaseMapper<CustTagRel> {
      */
     int deleteByTagId(@Param("tagId") String tagId);
 
+    /** 将标签当前有效关系批量置为历史失效。 */
+    int expireActiveByTagId(@Param("tagId") String tagId,
+                            @Param("operatorEmpId") String operatorEmpId,
+                            @Param("expiredTime") LocalDateTime expiredTime);
+
+    /** 批量恢复已有关系，单次 IDs 由 Service 限制在 500 个以内。 */
+    int reactivateBatch(@Param("ids") List<String> ids,
+                        @Param("operatorEmpId") String operatorEmpId,
+                        @Param("effectiveTime") LocalDateTime effectiveTime);
+
     // insert(T) 由 MyBatis-Plus BaseMapper 提供
 
     /**
      * 批量插入关联记录（批量打标时使用）。
      *
-     * @param list 关联实体列表
+     * @param list 关联实体列表，调用方必须限制一次最多 500 行
      * @return 受影响行数
      */
     int insertBatch(@Param("list") List<CustTagRel> list);

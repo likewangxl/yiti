@@ -1,5 +1,7 @@
 package com.bank.branch.platform.customer.service;
 
+import com.bank.branch.platform.auth.api.BizScopeApi;
+import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.entity.CustLead;
@@ -41,6 +43,7 @@ public class LeadService {
     private final LeadImportBatchMapper batchMapper;
     private final WorkflowApi workflowApi;
     private final ApplicationEventPublisher eventPublisher;
+    private final BizScopeApi bizScopeApi;
 
     private static final String PROCESS_DEFINITION_KEY = "lead_approve_v1";
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
@@ -168,6 +171,7 @@ public class LeadService {
         log.info("[LeadService.updateDraft] id={}, operator={}", id, operatorEmpId);
 
         CustLead existing = requireExistsAndDraft(id);
+        assertWritePermission(existing, operatorEmpId);
 
         // 只更新非 null 字段
         CustLead updateEntity = new CustLead();
@@ -213,7 +217,8 @@ public class LeadService {
     public void deleteDraft(String id, String operatorEmpId) {
         log.info("[LeadService.deleteDraft] id={}, operator={}", id, operatorEmpId);
 
-        requireExistsAndDraft(id);
+        CustLead existing = requireExistsAndDraft(id);
+        assertWritePermission(existing, operatorEmpId);
 
         CustLead updateEntity = new CustLead();
         updateEntity.setId(id);
@@ -251,6 +256,7 @@ public class LeadService {
             throw new BizException(CustomerErrorCode.LEAD_NOT_SUBMITTABLE.getCode(),
                     CustomerErrorCode.LEAD_NOT_SUBMITTABLE.getMessage());
         }
+        assertWritePermission(lead, operatorEmpId);
 
         // 先更新为 SUBMITTED 状态
         leadMapper.updateStatusById(id, LeadStatus.SUBMITTED.getCode(), operatorEmpId);
@@ -273,6 +279,8 @@ public class LeadService {
         updateEntity.setId(id);
         updateEntity.setProcessInstanceId(launchResp.getProcessInstanceId());
         updateEntity.setBusinessKey(businessKey);
+        updateEntity.setSubmittedBy(operatorEmpId);
+        updateEntity.setSubmittedTime(LocalDateTime.now());
         updateEntity.setUpdatedBy(operatorEmpId);
         updateEntity.setUpdatedTime(LocalDateTime.now());
         leadMapper.updateById(updateEntity);
@@ -345,6 +353,15 @@ public class LeadService {
                     CustomerErrorCode.LEAD_EDIT_FORBIDDEN.getMessage());
         }
         return lead;
+    }
+
+    /** 写操作必须同时满足 LEAD 业务数据范围。 */
+    private void assertWritePermission(CustLead lead, String operatorEmpId) {
+        if (!bizScopeApi.checkWritePermission(operatorEmpId, BizType.LEAD,
+                lead.getOwnerOrgId(), lead.getCreatedBy())) {
+            throw new BizException(CustomerErrorCode.LEAD_WRITE_FORBIDDEN.getCode(),
+                    CustomerErrorCode.LEAD_WRITE_FORBIDDEN.getMessage());
+        }
     }
 
     /**

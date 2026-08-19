@@ -1,5 +1,6 @@
 package com.bank.branch.platform.customer.controller;
 
+import com.alibaba.excel.EasyExcel;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
@@ -7,6 +8,8 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.customer.dto.req.TagCustomerImportReqDTO;
+import com.bank.branch.platform.customer.dto.req.TagCustomerImportRow;
+import com.bank.branch.platform.customer.dto.resp.TagCustomerImportResultDTO;
 import com.bank.branch.platform.customer.entity.CustMaster;
 import com.bank.branch.platform.customer.entity.CustTagRel;
 import com.bank.branch.platform.customer.service.TagCustomerService;
@@ -17,15 +20,21 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -65,8 +74,42 @@ public class TagCustomerController {
                                                   @Valid @RequestBody TagCustomerImportReqDTO req) {
         log.info("[TagCustomerController.importCustomers] tagId={}, custCount={}", tagId, req.getCustIds().size());
         String empId = currentUserApi.getCurrentEmpId();
-        tagCustomerService.importCustomers(tagId, req.getCustIds(), empId);
+        tagCustomerService.importCustomers(tagId, req.getCustIds(), req.getMode(), empId);
         return ResponseWrapper.success();
+    }
+
+    /**
+     * 上传 Excel 完成追加或全量替换导入。
+     */
+    @PostMapping(value = "/{tagId}/customers/import-file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @BizAuth(bizType = BizType.TAG, action = BizAction.IMPORT)
+    @AuditLog(action = "IMPORT", resourceType = "TAG_CUSTOMER")
+    @Operation(summary = "客户标签 Excel 追加/全量替换导入")
+    public ResponseWrapper<TagCustomerImportResultDTO> importCustomersFile(
+            @PathVariable String tagId,
+            @RequestPart("file") MultipartFile file,
+            @RequestParam(value = "mode", defaultValue = "APPEND") String mode) {
+        String empId = currentUserApi.getCurrentEmpId();
+        log.info("[TagCustomerController.importCustomersFile] tagId={}, mode={}, fileName={}",
+                tagId, mode, file != null ? file.getOriginalFilename() : null);
+        return ResponseWrapper.success(tagCustomerService.importCustomersFile(tagId, file, mode, empId));
+    }
+
+    /**
+     * 下载当前标签的 Excel 导入模板。模板中预填当前标签名称和说明。
+     */
+    @GetMapping("/{tagId}/customers/import-template")
+    @BizAuth(bizType = BizType.TAG, action = BizAction.IMPORT)
+    @Operation(summary = "下载客户标签导入模板")
+    public void downloadImportTemplate(@PathVariable String tagId,
+                                       HttpServletResponse response) throws IOException {
+        TagCustomerImportRow templateRow = tagCustomerService.getImportTemplateRow(tagId);
+        String fileName = "客户标签导入模板_" + templateRow.getTagName() + ".xlsx";
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''"
+                + URLEncoder.encode(fileName, StandardCharsets.UTF_8));
+        EasyExcel.write(response.getOutputStream(), TagCustomerImportRow.class)
+                .sheet("客户标签导入").doWrite(List.of(templateRow));
     }
 
     /**

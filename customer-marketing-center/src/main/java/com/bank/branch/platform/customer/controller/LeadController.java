@@ -13,7 +13,10 @@ import com.bank.branch.platform.customer.dto.req.LeadDeleteVersionReqDTO;
 import com.bank.branch.platform.customer.dto.req.LeadEditVersionReqDTO;
 import com.bank.branch.platform.customer.dto.req.LeadSubmitReqDTO;
 import com.bank.branch.platform.customer.dto.req.LeadUpdateReqDTO;
+import com.bank.branch.platform.customer.dto.resp.LeadRespDTO;
+import com.bank.branch.platform.customer.dto.resp.MainManagerLookupRespDTO;
 import com.bank.branch.platform.customer.entity.CustLead;
+import com.bank.branch.platform.customer.service.LeadEntryService;
 import com.bank.branch.platform.customer.service.LeadService;
 import com.bank.branch.platform.customer.service.LeadVersionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -50,6 +53,7 @@ import java.util.List;
 public class LeadController {
 
     private final LeadService leadService;
+    private final LeadEntryService leadEntryService;
     private final LeadVersionService leadVersionService;
     private final CurrentUserApi currentUserApi;
     private final LeadApi leadApi;
@@ -75,7 +79,9 @@ public class LeadController {
             @RequestParam(defaultValue = "20") int pageSize) {
         log.info("[LeadController.listPage] keyword={}, status={}, ownerOrgId={}, pageNo={}, pageSize={}",
                 keyword, status, ownerOrgId, pageNo, pageSize);
-        PageResult<CustLead> result = leadService.listPage(keyword, status, ownerOrgId, pageNo, pageSize);
+        PageResult<CustLead> result = leadEntryService.listCreatedPage(
+                keyword, status, ownerOrgId, pageNo, pageSize,
+                currentUserApi.getCurrentEmpId());
         return ResponseWrapper.page(result);
     }
 
@@ -88,10 +94,20 @@ public class LeadController {
     @GetMapping("/{id}")
     @BizAuth(bizType = BizType.LEAD, action = BizAction.READ)
     @Operation(summary = "查询线索详情")
-    public ResponseWrapper<CustLead> getById(@PathVariable String id) {
+    public ResponseWrapper<LeadRespDTO> getById(@PathVariable String id) {
         log.info("[LeadController.getById] id={}", id);
-        CustLead lead = leadService.getById(id);
-        return ResponseWrapper.success(lead);
+        return ResponseWrapper.success(leadEntryService.getCreatedDetail(
+                id, currentUserApi.getCurrentEmpId()));
+    }
+
+    /** 查询存量客户及当前主办权，供录入页确定分配方式。 */
+    @GetMapping("/main-manager")
+    @BizAuth(bizType = BizType.LEAD, action = BizAction.READ)
+    @Operation(summary = "查询存量客户主办权")
+    public ResponseWrapper<MainManagerLookupRespDTO> lookupMainManager(
+            @RequestParam(required = false) String unifiedCreditCode,
+            @RequestParam(required = false) String custName) {
+        return ResponseWrapper.success(leadEntryService.lookupMainManager(unifiedCreditCode, custName));
     }
 
     /**
@@ -107,16 +123,7 @@ public class LeadController {
         log.info("[LeadController.create] custName={}", req.getCustName());
         String empId = currentUserApi.getCurrentEmpId();
         String orgCode = currentUserApi.getCurrentOrgCode();
-        CustLead lead = leadService.createDraft(
-                req.getCustName(), req.getUnifiedCreditCode(),
-                req.getContactPerson(), req.getContactMobile(),
-                req.getIndustry(), req.getGroupType(), req.getCustomerType(),
-                req.getIsKeystone(), req.getEnterpriseType(), req.getGroupName(),
-                req.getIsAccountOpened(), req.getCustomerDesc(),
-                req.getCreditAmount(), req.getCreditExposureAmount(),
-                req.getLeadSource(), req.getTagIds(), req.getRemark(),
-                empId, orgCode
-        );
+        CustLead lead = leadEntryService.createDraft(req, empId, orgCode, currentUserApi.isSystemAdmin());
         return ResponseWrapper.success(lead.getId());
     }
 
@@ -134,17 +141,8 @@ public class LeadController {
                                         @RequestBody LeadUpdateReqDTO req) {
         log.info("[LeadController.update] id={}", id);
         String empId = currentUserApi.getCurrentEmpId();
-        leadService.updateDraft(
-                id,
-                req.getCustName(), req.getUnifiedCreditCode(),
-                req.getContactPerson(), req.getContactMobile(),
-                req.getIndustry(), req.getGroupType(), req.getCustomerType(),
-                req.getIsKeystone(), req.getEnterpriseType(), req.getGroupName(),
-                req.getIsAccountOpened(), req.getCustomerDesc(),
-                req.getCreditAmount(), req.getCreditExposureAmount(),
-                req.getLeadSource(), req.getTagIds(), req.getRemark(),
-                empId
-        );
+        leadEntryService.updateDraft(id, req, empId, currentUserApi.getCurrentOrgCode(),
+                currentUserApi.isSystemAdmin());
         return ResponseWrapper.success();
     }
 
