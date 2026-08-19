@@ -95,6 +95,10 @@
         </dependency>
         <dependency>
             <groupId>com.bank.branch.platform</groupId>
+            <artifactId>yundun-application-center</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
             <artifactId>soap-gateway-center</artifactId>
         </dependency>
 

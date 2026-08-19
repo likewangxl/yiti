@@ -22,6 +22,7 @@
         <module>performance-engine-center</module>
         <module>report-analytics-center</module>
         <module>red-engine-center</module>
+        <module>yundun-application-center</module>
         <module>soap-gateway-center</module>
         <module>bootstrap</module>
     </modules>
@@ -153,6 +154,13 @@
             <dependency>
                 <groupId>com.bank.branch.platform</groupId>
                 <artifactId>red-engine-center</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- yundun-application-center（浦爱云盾） -->
+            <dependency>
+                <groupId>com.bank.branch.platform</groupId>
+                <artifactId>yundun-application-center</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
