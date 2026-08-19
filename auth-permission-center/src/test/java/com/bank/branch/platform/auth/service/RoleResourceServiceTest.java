@@ -201,18 +201,20 @@ class RoleResourceServiceTest {
         when(resourceMapper.selectById("M_PERF_METRICS"))
                 .thenReturn(makeResource("M_PERF_METRICS", 0, 1));
         when(roleResourceMapper.insert(any(PtRoleResource.class))).thenReturn(1);
-        // REPORT 已存在；其余 7 个 bizType 不存在
+        // REPORT 已存在；其余 8 个 bizType 不存在
         PtRoleBizScope existing = new PtRoleBizScope();
         existing.setRoleId("R_RM"); existing.setBizType("REPORT"); existing.setDataScope("ORG_SUBTREE");
         when(roleBizScopeMapper.selectByRoleIdAndBizType("R_RM", "REPORT")).thenReturn(existing);
-        // 其余 7 个返回 null（mockito 默认就是 null，可省略）
+        // 其余 8 个返回 null（mockito 默认就是 null，可省略）
 
         roleResourceService.replaceMenus("R_RM", List.of("M_PERF_METRICS"), "分配菜单");
 
         // 已存在的 REPORT 绝不调 saveBizScope
         verify(bizScopeService, never()).saveBizScope(eq("R_RM"), eq("REPORT"), anyString(), anyString());
-        // 不存在的 7 个仍会自动配 SELF
-        verify(bizScopeService, times(7)).saveBizScope(eq("R_RM"), anyString(), eq("SELF"), anyString());
+        // 新增的违规管理必须随菜单分配自动补齐 SELF 数据范围
+        verify(bizScopeService).saveBizScope("R_RM", "VIOLATION", "SELF", "菜单分配自动配置");
+        // 不存在的 8 个仍会自动配 SELF
+        verify(bizScopeService, times(8)).saveBizScope(eq("R_RM"), anyString(), eq("SELF"), anyString());
     }
 
     @Test
