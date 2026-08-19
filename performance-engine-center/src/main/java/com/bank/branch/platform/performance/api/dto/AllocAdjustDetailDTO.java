@@ -50,7 +50,21 @@ public class AllocAdjustDetailDTO {
      * 末节点显示「流程结束」，终态显示「无」）。
      */
     private String nextNode;
+    /** 当前未审核活动节点可审批员工；已审核节点/终态为空。 */
+    @Builder.Default
+    private List<CurrentNodeApprover> currentNodeApprovers = List.of();
     private List<AllocItem> allocaters;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CurrentNodeApprover {
+        /** 员工工号（PT_USER.USERNAME）。 */
+        private String employeeNo;
+        /** 员工姓名。 */
+        private String employeeName;
+    }
 
     @Data
     @Builder

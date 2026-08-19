@@ -12,6 +12,7 @@ import com.bank.branch.platform.performance.service.adjust.AllocAdjustTodoServic
 import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramNodeDTO;
+import com.bank.branch.platform.workflow.api.dto.TaskCandidateUserDTO;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -97,6 +98,23 @@ class PerfApprovalQueryFacadeNodeProgressTest {
     }
 
     @Test
+    void inApproval_returnsCurrentNodeApproverNameAndEmployeeNo() {
+        PerfAllocAdjustApply a = apply("IN_APPROVAL", "CORP", "PID_1");
+        stubLoad(a);
+        when(workflowQueryApi.getProcessNodes("PID_1"))
+                .thenReturn(diagramWithActive("finance_review", "资财部经办审批"));
+        when(workflowQueryApi.getActiveTaskCandidates("PID_1"))
+                .thenReturn(List.of(new TaskCandidateUserDTO("E001", "10001", "张三")));
+
+        AllocAdjustDetailDTO d = facade.getAllocAdjustDetail("PA_1", "U001");
+
+        assertThat(d.getCurrentNodeApprovers()).singleElement().satisfies(approver -> {
+            assertThat(approver.getEmployeeName()).isEqualTo("张三");
+            assertThat(approver.getEmployeeNo()).isEqualTo("10001");
+        });
+    }
+
+    @Test
     void inApproval_corp_lastNode_nextIsFlowEnd() {
         PerfAllocAdjustApply a = apply("IN_APPROVAL", "CORP", "PID_1");
         stubLoad(a);
@@ -120,6 +138,7 @@ class PerfApprovalQueryFacadeNodeProgressTest {
         assertThat(d.getCurrentNode()).isEqualTo("已完成");
         assertThat(d.getCurrentNodeKey()).isNull();
         assertThat(d.getNextNode()).isEqualTo("无");
+        assertThat(d.getCurrentNodeApprovers()).isEmpty();
     }
 
     @Test
