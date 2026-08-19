@@ -2,6 +2,7 @@ package com.bank.branch.platform.report.service;
 
 import com.bank.branch.platform.common.web.PageRequest;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.report.dto.req.SqlProbeExportReqDTO;
 import com.bank.branch.platform.report.dto.req.SqlProbeExecuteReqDTO;
 import com.bank.branch.platform.report.dto.resp.SchemaWhitelistRespDTO;
 import com.bank.branch.platform.report.dto.resp.SqlProbeExecuteRespDTO;
@@ -27,7 +28,7 @@ public interface SqlProbeService {
     /**
      * D.1 执行 SQL 探查.
      *
-     * @param req 入参（含 sql + remark）
+     * @param req 入参（含 sql + remark + exportCount）
      * @return 执行结果（含 historyId / rows / columns / executionTimeMs）
      */
     SqlProbeExecuteRespDTO execute(SqlProbeExecuteReqDTO req);
@@ -59,12 +60,12 @@ public interface SqlProbeService {
      * D.5 创建 SQL 探查「异步下载」任务.
      *
      * <p>访问控制交由菜单授权；SQL 校验标准化通过后插入 RUNNING 任务并提交后台线程执行，
-     * 立即返回任务 ID，前端凭此轮询任务列表。生成的 xlsx 存任务表 FILE_CONTENT。</p>
+     * 立即返回任务 ID，前端凭此轮询任务列表。成品上传治理中心 OBS，FILE_CONTENT 仅保存兼容引用。</p>
      *
      * @param req 入参（含 sql + remark）
      * @return 任务 ID
      */
-    String createExport(SqlProbeExecuteReqDTO req);
+    String createExport(SqlProbeExportReqDTO req);
 
     /**
      * D.6 查询本人 SQL 探查导出任务列表（按创建时间 DESC，最多近 N 条；不含文件内容）.

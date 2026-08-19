@@ -3,8 +3,13 @@ package com.bank.branch.platform.report.service;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.AuditApi;
+import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
+import com.bank.branch.platform.report.dto.req.SqlProbeExportReqDTO;
 import com.bank.branch.platform.report.dto.req.SqlProbeExecuteReqDTO;
+import com.bank.branch.platform.report.entity.SqlProbeExportTask;
 import com.bank.branch.platform.report.entity.SqlProbeHistory;
 import com.bank.branch.platform.report.mapper.SqlProbeHistoryMapper;
 import com.bank.branch.platform.report.service.impl.SqlProbeServiceImpl;
@@ -16,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -24,9 +30,15 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.SQLTimeoutException;
-import java.sql.Statement;
+import java.io.ByteArrayInputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.ZipInputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -73,6 +85,9 @@ class SqlProbeServiceTest {
     @Mock
     private AuditApi auditApi;
 
+    @Mock
+    private FileApi fileApi;
+
     @Mock(name = "readOnlyDataSource")
     private DataSource readOnlyDataSource;
 
@@ -99,6 +114,8 @@ class SqlProbeServiceTest {
 
     private SqlProbeServiceImpl service;
 
+    private byte[] lastUploadedContent;
+
     @BeforeEach
     void setUp() throws SQLException {
         // 手动构造（@InjectMocks 不支持含 @Value 多参数构造器）
@@ -107,6 +124,7 @@ class SqlProbeServiceTest {
                 historyMapper,
                 currentUserApi,
                 auditApi,
+                fileApi,
                 readOnlyDataSource,
                 List.of("cust_master", "kpi_result"),
                 List.of("DROP", "DELETE", "UPDATE", "INSERT"),
@@ -123,6 +141,15 @@ class SqlProbeServiceTest {
         // DataSource 链路默认 mock
         lenient().when(readOnlyDataSource.getConnection()).thenReturn(connection);
         lenient().when(connection.prepareStatement(anyString())).thenReturn(statement);
+        lenient().when(exportTaskMapper.updateById(any(SqlProbeExportTask.class))).thenReturn(1);
+        FileObjectDTO uploaded = new FileObjectDTO();
+        uploaded.setId("FILE_SQL_PROBE_001");
+        uploaded.setNewlyCreated(true);
+        lenient().when(fileApi.upload(any(MultipartFile.class), anyString(), anyString()))
+                .thenAnswer(invocation -> {
+                    lastUploadedContent = invocation.<MultipartFile>getArgument(0).getBytes();
+                    return uploaded;
+                });
     }
 
     @Test
@@ -227,7 +254,7 @@ class SqlProbeServiceTest {
         when(resultSet.next()).thenReturn(true, true, false);
         when(resultSet.getObject(1)).thenReturn(1, 2);
 
-        SqlProbeExecuteReqDTO req = buildReq("SELECT id FROM CUST_MASTER", "导出客户");
+        SqlProbeExportReqDTO req = buildExportReq("SELECT id FROM CUST_MASTER", "导出客户", 1000);
 
         String taskId = service.createExport(req);
         assertThat(taskId).isNotBlank();
@@ -247,7 +274,12 @@ class SqlProbeServiceTest {
         assertThat(updCap.getValue().getRowCount()).isEqualTo(2);
         assertThat(updCap.getValue().getFileName()).endsWith(".xlsx");
         assertThat(updCap.getValue().getFileContent()).isNotNull();
-        assertThat(updCap.getValue().getFileContent().length).isGreaterThan(0);
+        assertThat(new String(updCap.getValue().getFileContent(), java.nio.charset.StandardCharsets.UTF_8))
+                .isEqualTo("OBS_FILE_ID:FILE_SQL_PROBE_001");
+        verify(fileApi).upload(any(MultipartFile.class), eq("E_TECH001"), eq(FileCategory.EXPORT_SQL_PROBE));
+        verify(fileApi).bindFile("SQL_PROBE_EXPORT", insertCap.getValue().getId(),
+                "FILE_SQL_PROBE_001", "RESULT");
+        verify(statement).setMaxRows(1000);
         // 不再做角色校验：不应触碰 getCurrentRoleCodes
         verify(currentUserApi, org.mockito.Mockito.never()).getCurrentRoleCodes();
     }
@@ -255,7 +287,7 @@ class SqlProbeServiceTest {
     @Test
     void createExport_queryFails_marksTaskFailed_notThrowFromBackgroundRun() throws SQLException {
         when(statement.executeQuery()).thenThrow(new SQLException("table missing"));
-        SqlProbeExecuteReqDTO req = buildReq("SELECT id FROM CUST_MASTER", "导出排查");
+        SqlProbeExportReqDTO req = buildExportReq("SELECT id FROM CUST_MASTER", "导出排查", 1000);
 
         String taskId = service.createExport(req); // 后台 run 吞异常，createExport 本身不抛
         assertThat(taskId).isNotBlank();
@@ -265,6 +297,136 @@ class SqlProbeServiceTest {
         verify(exportTaskMapper).updateById(updCap.capture());
         assertThat(updCap.getValue().getStatus()).isEqualTo("FAILED");
         assertThat(updCap.getValue().getFileContent()).isNull();
+    }
+
+    @Test
+    void createExport_terminalWriteFailure_deletesOnlyNewlyCreatedObsFile() throws SQLException {
+        when(statement.executeQuery()).thenReturn(resultSet);
+        when(resultSet.getMetaData()).thenReturn(metaData);
+        when(metaData.getColumnCount()).thenReturn(1);
+        when(metaData.getColumnLabel(1)).thenReturn("id");
+        when(resultSet.next()).thenReturn(false);
+        when(exportTaskMapper.updateById(any(SqlProbeExportTask.class))).thenReturn(0, 1);
+
+        service.createExport(buildExportReq("SELECT id FROM CUST_MASTER", "写库失败", 1000));
+
+        verify(fileApi).deleteFile("FILE_SQL_PROBE_001");
+        verify(exportTaskMapper, org.mockito.Mockito.times(2)).updateById(any(SqlProbeExportTask.class));
+    }
+
+    @Test
+    void createExport_terminalWriteFailure_keepsDeduplicatedObsFile() throws SQLException {
+        when(statement.executeQuery()).thenReturn(resultSet);
+        when(resultSet.getMetaData()).thenReturn(metaData);
+        when(metaData.getColumnCount()).thenReturn(1);
+        when(metaData.getColumnLabel(1)).thenReturn("id");
+        when(resultSet.next()).thenReturn(false);
+        FileObjectDTO shared = new FileObjectDTO();
+        shared.setId("FILE_SHARED");
+        shared.setNewlyCreated(false);
+        when(fileApi.upload(any(MultipartFile.class), anyString(), anyString())).thenReturn(shared);
+        when(exportTaskMapper.updateById(any(SqlProbeExportTask.class))).thenReturn(0, 1);
+
+        service.createExport(buildExportReq("SELECT id FROM CUST_MASTER", "共享文件", 1000));
+
+        verify(fileApi, org.mockito.Mockito.never()).deleteFile("FILE_SHARED");
+        verify(fileApi).bindFile(eq("SQL_PROBE_EXPORT"), org.mockito.ArgumentMatchers.anyString(),
+                eq("FILE_SHARED"), eq("RESULT"));
+    }
+
+    @Test
+    void createExport_usesRequestedExportCountAsJdbcMaxRows() throws SQLException {
+        when(statement.executeQuery()).thenReturn(resultSet);
+        when(resultSet.getMetaData()).thenReturn(metaData);
+        when(metaData.getColumnCount()).thenReturn(1);
+        when(metaData.getColumnLabel(1)).thenReturn("id");
+        when(resultSet.next()).thenReturn(false);
+
+        SqlProbeExportReqDTO req = buildExportReq("SELECT id FROM CUST_MASTER", "限制条数", 321);
+
+        service.createExport(req);
+
+        verify(statement).setMaxRows(321);
+    }
+
+    @Test
+    void createExport_10000Rows_keepsSingleXlsx() throws Exception {
+        stubRows(10_000);
+
+        SqlProbeExportReqDTO req = buildExportReq("SELECT id FROM CUST_MASTER", "一万行", 10_000);
+        service.createExport(req);
+
+        ArgumentCaptor<com.bank.branch.platform.report.entity.SqlProbeExportTask> updCap =
+                ArgumentCaptor.forClass(com.bank.branch.platform.report.entity.SqlProbeExportTask.class);
+        verify(exportTaskMapper).updateById(updCap.capture());
+        var task = updCap.getValue();
+        assertThat(task.getStatus()).isEqualTo("SUCCESS");
+        assertThat(task.getRowCount()).isEqualTo(10_000);
+        assertThat(task.getFileName()).endsWith(".xlsx");
+        assertThat(task.getFileContent()).isNotNull();
+        ArgumentCaptor<MultipartFile> uploadCap = ArgumentCaptor.forClass(MultipartFile.class);
+        verify(fileApi).upload(uploadCap.capture(), eq("E_TECH001"), eq(FileCategory.EXPORT_SQL_PROBE));
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
+                     new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                             new ByteArrayInputStream(lastUploadedContent))) {
+            assertThat(workbook.getNumberOfSheets()).isEqualTo(1);
+            assertThat(workbook.getSheetAt(0).getLastRowNum()).isEqualTo(10_000);
+        }
+    }
+
+    @Test
+    void createExport_10001Rows_returnsZipWithTwoXlsxEntries() throws Exception {
+        Path systemTemp = Paths.get(System.getProperty("java.io.tmpdir"));
+        Set<Path> tempBefore = tempExportDirs(systemTemp);
+        stubRows(10_001);
+
+        SqlProbeExportReqDTO req = buildExportReq("SELECT id FROM CUST_MASTER", "一万零一行", 50_000);
+        service.createExport(req);
+
+        ArgumentCaptor<com.bank.branch.platform.report.entity.SqlProbeExportTask> updCap =
+                ArgumentCaptor.forClass(com.bank.branch.platform.report.entity.SqlProbeExportTask.class);
+        verify(exportTaskMapper).updateById(updCap.capture());
+        var task = updCap.getValue();
+        assertThat(task.getStatus()).isEqualTo("SUCCESS");
+        assertThat(task.getRowCount()).isEqualTo(10_001);
+        assertThat(task.getFileName()).endsWith(".zip");
+        ArgumentCaptor<MultipartFile> uploadCap = ArgumentCaptor.forClass(MultipartFile.class);
+        verify(fileApi).upload(uploadCap.capture(), eq("E_TECH001"), eq(FileCategory.EXPORT_SQL_PROBE));
+
+        Set<String> entries = new HashSet<>();
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(lastUploadedContent))) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                entries.add(entry.getName());
+            }
+        }
+        assertThat(entries).hasSize(2);
+        assertThat(entries).allMatch(name -> name.endsWith(".xlsx"));
+        assertThat(tempExportDirs(systemTemp)).containsExactlyInAnyOrderElementsOf(tempBefore);
+    }
+
+    @Test
+    void getExportFile_decodesObsReference_andKeepsLegacyBlobCompatibility() {
+        SqlProbeExportTask task = new SqlProbeExportTask();
+        task.setId("TASK_OBS");
+        task.setEmpId("E_TECH001");
+        task.setStatus("SUCCESS");
+        task.setFileName("SQL探查导出_TASK_OBS.zip");
+        task.setFileContent("OBS_FILE_ID:FILE_SQL_PROBE_001"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        when(exportTaskMapper.selectById("TASK_OBS")).thenReturn(task);
+
+        var obsFile = service.getExportFile("TASK_OBS");
+        assertThat(obsFile.getFileId()).isEqualTo("FILE_SQL_PROBE_001");
+        assertThat(obsFile.getContent()).isNull();
+        assertThat(obsFile.getContentType()).isEqualTo("application/zip");
+
+        byte[] legacy = new byte[]{80, 75, 3, 4};
+        task.setFileName("SQL探查导出_TASK_OBS.xlsx");
+        task.setFileContent(legacy);
+        var legacyFile = service.getExportFile("TASK_OBS");
+        assertThat(legacyFile.getFileId()).isNull();
+        assertThat(legacyFile.getContent()).isEqualTo(legacy);
     }
 
     @Test
@@ -290,5 +452,30 @@ class SqlProbeServiceTest {
         req.setSql(sql);
         req.setRemark(remark);
         return req;
+    }
+
+    private SqlProbeExportReqDTO buildExportReq(String sql, String remark, int exportCount) {
+        SqlProbeExportReqDTO req = new SqlProbeExportReqDTO();
+        req.setSql(sql);
+        req.setRemark(remark);
+        req.setExportCount(exportCount);
+        return req;
+    }
+
+    private void stubRows(int rowCount) throws SQLException {
+        when(statement.executeQuery()).thenReturn(resultSet);
+        when(resultSet.getMetaData()).thenReturn(metaData);
+        when(metaData.getColumnCount()).thenReturn(1);
+        when(metaData.getColumnLabel(1)).thenReturn("id");
+        AtomicInteger index = new AtomicInteger();
+        when(resultSet.next()).thenAnswer(invocation -> index.getAndIncrement() < rowCount);
+        when(resultSet.getObject(1)).thenAnswer(invocation -> index.get());
+    }
+
+    private Set<Path> tempExportDirs(Path tempDir) throws Exception {
+        try (var paths = Files.list(tempDir)) {
+            return paths.filter(path -> path.getFileName().toString().startsWith("sql-probe-export-"))
+                    .collect(java.util.stream.Collectors.toSet());
+        }
     }
 }

@@ -4,8 +4,11 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.report.BaseControllerIT;
 import com.bank.branch.platform.report.dto.resp.SchemaWhitelistRespDTO;
 import com.bank.branch.platform.report.dto.resp.SqlProbeExecuteRespDTO;
+import com.bank.branch.platform.report.dto.resp.SqlProbeExportFileDTO;
 import com.bank.branch.platform.report.dto.resp.SqlProbeHistoryRespDTO;
+import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.report.service.SqlProbeService;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.mock.mockito.MockBean;
 
@@ -15,6 +18,8 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -40,6 +45,9 @@ class RptSqlProbeControllerIT extends BaseControllerIT {
 
     @MockBean
     private SqlProbeService sqlProbeService;
+
+    @MockBean
+    private FileApi fileApi;
 
     @Test
     void execute_returns200_withTaskId() throws Exception {
@@ -127,5 +135,55 @@ class RptSqlProbeControllerIT extends BaseControllerIT {
                 .andExpect(jsonPath("$.data.tables[0]").value("cust_master"))
                 .andExpect(jsonPath("$.data.maxRows").value(1000))
                 .andExpect(jsonPath("$.data.maxSubqueryDepth").value(3));
+    }
+
+    @Test
+    void createExport_defaultsExportCountTo1000() throws Exception {
+        when(sqlProbeService.createExport(any())).thenReturn("TASK001");
+
+        mvc.perform(post("/api/reports/sql-probe/export")
+                        .contentType("application/json")
+                        .content("{\"sql\":\"SELECT id FROM CUST_MASTER\",\"remark\":\"导出\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.taskId").value("TASK001"));
+
+        ArgumentCaptor<com.bank.branch.platform.report.dto.req.SqlProbeExportReqDTO> captor =
+                ArgumentCaptor.forClass(com.bank.branch.platform.report.dto.req.SqlProbeExportReqDTO.class);
+        verify(sqlProbeService).createExport(captor.capture());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getExportCount()).isEqualTo(1000);
+    }
+
+    @Test
+    void createExport_rejectsExportCountOutsideRange() throws Exception {
+        String prefix = "{\"sql\":\"SELECT id FROM CUST_MASTER\",\"remark\":\"导出\",\"exportCount\":";
+
+        mvc.perform(post("/api/reports/sql-probe/export")
+                        .contentType("application/json")
+                        .content(prefix + "0}"))
+                .andExpect(status().is4xxClientError());
+        mvc.perform(post("/api/reports/sql-probe/export")
+                        .contentType("application/json")
+                        .content(prefix + "50001}"))
+                .andExpect(status().is4xxClientError());
+
+        verify(sqlProbeService, never()).createExport(any());
+    }
+
+    @Test
+    void downloadExport_setsZipContentTypeForZipFile() throws Exception {
+        when(sqlProbeService.getExportFile("TASK001")).thenReturn(SqlProbeExportFileDTO.builder()
+                .fileName("SQL探查导出_TASK001.zip")
+                .fileId("FILE_SQL_PROBE_001")
+                .build());
+
+        mvc.perform(get("/api/reports/sql-probe/export/TASK001/download"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .content().contentTypeCompatibleWith("application/zip"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("Content-Disposition",
+                                org.hamcrest.Matchers.containsString(".zip")));
+        verify(fileApi).writeFileContent(anyString(), any(java.io.OutputStream.class));
     }
 }

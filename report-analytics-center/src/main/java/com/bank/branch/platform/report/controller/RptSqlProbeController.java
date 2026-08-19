@@ -6,6 +6,8 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageRequest;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.report.dto.req.SqlProbeExportReqDTO;
 import com.bank.branch.platform.report.dto.req.SqlProbeExecuteReqDTO;
 import com.bank.branch.platform.report.dto.resp.SchemaWhitelistRespDTO;
 import com.bank.branch.platform.report.dto.resp.SqlProbeExecuteRespDTO;
@@ -50,6 +52,8 @@ import java.util.List;
 public class RptSqlProbeController {
 
     private final SqlProbeService sqlProbeService;
+
+    private final FileApi fileApi;
 
     /**
      * D.1 执行 SQL 探查（高危：仅 R_BACK_TECH 角色 + reason 必填 + 双写审计）.
@@ -106,7 +110,7 @@ public class RptSqlProbeController {
     @PostMapping("/export")
     @BizAuth(bizType = BizType.REPORT, action = BizAction.EXECUTE_SQL)
     @Operation(summary = "D.5 创建 SQL 探查异步导出任务")
-    public ResponseWrapper<java.util.Map<String, String>> createExport(@Valid @RequestBody SqlProbeExecuteReqDTO req) {
+    public ResponseWrapper<java.util.Map<String, String>> createExport(@Valid @RequestBody SqlProbeExportReqDTO req) {
         // 前端传的 sql 为 AES 加密 Base64，先解密（与 execute 一致）
         try {
             req.setSql(com.bank.branch.platform.report.support.SqlCryptoUtil.decrypt(req.getSql()));
@@ -136,13 +140,22 @@ public class RptSqlProbeController {
     public void downloadExport(@PathVariable @NotBlank(message = "taskId 不能为空") String taskId,
                                HttpServletResponse response) throws java.io.IOException {
         SqlProbeExportFileDTO file = sqlProbeService.getExportFile(taskId);
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        String fileName = file.getFileName() != null ? file.getFileName() : "sql-export.xlsx";
+        boolean zip = fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".zip");
+        response.setContentType(zip
+                ? "application/zip"
+                : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setCharacterEncoding("utf-8");
-        String fileName = java.net.URLEncoder.encode(
-                file.getFileName() != null ? file.getFileName() : "sql-export.xlsx",
+        String encodedFileName = java.net.URLEncoder.encode(
+                fileName,
                 java.nio.charset.StandardCharsets.UTF_8).replaceAll("\\+", "%20");
-        response.setHeader("Content-Disposition", "attachment;filename*=utf-8''" + fileName);
-        response.getOutputStream().write(file.getContent());
+        response.setHeader("Content-Disposition", "attachment;filename*=utf-8''" + encodedFileName);
+        if (file.getFileId() != null) {
+            fileApi.writeFileContent(file.getFileId(), response.getOutputStream());
+        } else if (file.getContent() != null) {
+            // 兼容迁移前 FILE_CONTENT 直接保存完整 BLOB 的历史任务。
+            response.getOutputStream().write(file.getContent());
+        }
         response.getOutputStream().flush();
     }
 }

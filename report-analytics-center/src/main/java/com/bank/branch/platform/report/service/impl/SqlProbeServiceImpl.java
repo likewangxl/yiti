@@ -5,7 +5,11 @@ import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.common.web.PageRequest;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.governance.api.AuditApi;
+import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
+import com.bank.branch.platform.report.dto.req.SqlProbeExportReqDTO;
 import com.bank.branch.platform.report.dto.req.SqlProbeExecuteReqDTO;
 import com.bank.branch.platform.report.dto.resp.SchemaWhitelistRespDTO;
 import com.bank.branch.platform.report.dto.resp.SqlProbeExecuteRespDTO;
@@ -20,6 +24,7 @@ import com.bank.branch.platform.report.mapper.SqlProbeHistoryMapper;
 import com.bank.branch.platform.report.service.SqlProbeService;
 import com.bank.branch.platform.report.support.SqlSafeResult;
 import com.bank.branch.platform.report.support.SqlSafeValidator;
+import com.bank.branch.platform.report.support.PathMultipartFile;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,15 +38,24 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.SQLTimeoutException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
+import java.util.Comparator;
+import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * {@link SqlProbeService} 实现（Task M4.2.1，Green）.
@@ -67,6 +81,16 @@ public class SqlProbeServiceImpl implements SqlProbeService {
 
     private static final int QUERY_TIMEOUT_SEC = 30;
 
+    private static final int DEFAULT_EXPORT_COUNT = 1000;
+
+    private static final int MAX_EXPORT_COUNT = 50000;
+
+    private static final int EXCEL_CHUNK_ROWS = 10000;
+
+    private static final String SQL_PROBE_FILE_CATEGORY = FileCategory.EXPORT_SQL_PROBE;
+
+    private static final String OBS_FILE_REFERENCE_MAGIC = "OBS_FILE_ID:";
+
     private final SqlSafeValidator validator;
 
     private final SqlProbeHistoryMapper historyMapper;
@@ -74,6 +98,8 @@ public class SqlProbeServiceImpl implements SqlProbeService {
     private final CurrentUserApi currentUserApi;
 
     private final AuditApi auditApi;
+
+    private final FileApi fileApi;
 
     private final DataSource readOnlyDataSource;
 
@@ -107,6 +133,7 @@ public class SqlProbeServiceImpl implements SqlProbeService {
             SqlProbeHistoryMapper historyMapper,
             CurrentUserApi currentUserApi,
             AuditApi auditApi,
+            FileApi fileApi,
             @Qualifier("rptReadOnlyDataSource") DataSource readOnlyDataSource,
             @Value("#{'${rpt.sql.probe.whitelist-tables:CUST_MASTER,CUST_LEAD,CUST_TAG,touch_record,EMP_INDEX_RESULT,ORG_INDEX_RESULT,CUST_INDEX_RESULT,KPI_RESULT,metric_def,SYS_DICT,sys_dict_item,EXT_ORG_INFO,EXT_USER_ORG}'.split(',')}") List<String> whitelistTablesView,
             @Value("#{'${rpt.sql.probe.forbidden-keywords:DROP,DELETE,UPDATE,INSERT,TRUNCATE,ALTER,CREATE,RENAME,REPLACE,GRANT,REVOKE,LOCK,UNLOCK,SET,CALL,EXEC,EXECUTE,LOAD,SHUTDOWN,USE,DESCRIBE,EXPLAIN,SHOW,COMMIT,ROLLBACK,SAVEPOINT,DECLARE,HANDLER,SIGNAL,RESIGNAL}'.split(',')}") List<String> forbiddenKeywordsView,
@@ -120,6 +147,7 @@ public class SqlProbeServiceImpl implements SqlProbeService {
         this.historyMapper = historyMapper;
         this.currentUserApi = currentUserApi;
         this.auditApi = auditApi;
+        this.fileApi = fileApi;
         this.readOnlyDataSource = readOnlyDataSource;
         this.whitelistTablesView = whitelistTablesView;
         this.forbiddenKeywordsView = forbiddenKeywordsView;
@@ -275,9 +303,10 @@ public class SqlProbeServiceImpl implements SqlProbeService {
     }
 
     @Override
-    public String createExport(SqlProbeExecuteReqDTO req) {
+    public String createExport(SqlProbeExportReqDTO req) {
         // 访问控制交由菜单授权（@BizAuth）；不再做角色白名单校验
         String empId = currentUserApi.getCurrentEmpId();
+        int exportCount = normalizeExportCount(req.getExportCount());
 
         // 校验 + 标准化 SQL（失败直接抛，不建任务）
         SqlSafeResult safe = validator.validateAndNormalize(req.getSql());
@@ -296,7 +325,7 @@ public class SqlProbeServiceImpl implements SqlProbeService {
 
         // 提交后台线程异步执行（提交失败兜底标记 FAILED）
         try {
-            exportExecutor.execute(() -> runExport(taskId, empId, normalizedSql, req.getRemark()));
+            exportExecutor.execute(() -> runExport(taskId, empId, normalizedSql, req.getRemark(), exportCount));
         } catch (RuntimeException e) {
             log.error("[SqlProbeService.createExport] 任务提交失败 taskId={}", taskId, e);
             updateExportTerminal(taskId, "FAILED", null, null, null, "任务启动失败：" + e.getMessage());
@@ -307,16 +336,21 @@ public class SqlProbeServiceImpl implements SqlProbeService {
     }
 
     /**
-     * 后台执行 SQL 导出：跑查询（无行数限制，仅 30s 超时）→ SXSSF 流式写 xlsx → 存任务表 FILE_CONTENT.
+     * 后台执行 SQL 导出：按请求上限跑查询 → 以 ResultSet 分批写临时 xlsx/zip → 上传治理中心 OBS，
+     * 任务表 FILE_CONTENT 仅保存文件 ID 引用。
      * <p>任何异常都吞掉并落 FAILED，避免线程池工作线程因未捕获异常中断。</p>
      */
-    void runExport(String taskId, String empId, String normalizedSql, String remark) {
+    void runExport(String taskId, String empId, String normalizedSql, String remark, int exportCount) {
         long startMs = System.currentTimeMillis();
         if (!semaphore.tryAcquire()) {
             log.warn("[SqlProbeService.runExport] 并发数超限（{}），taskId={}", CONCURRENT_LIMIT, taskId);
             updateExportTerminal(taskId, "FAILED", null, null, null, "并发数超限，请稍后重试");
             return;
         }
+        ExportBuildResult built = null;
+        String uploadedFileId = null;
+        boolean uploadedFileNewlyCreated = false;
+        boolean taskReferenceSaved = false;
         // 分阶段日志：内网若卡住，日志能定位卡在 取连接/查询/写Excel/写库 哪一步
         try (Connection conn = readOnlyDataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(normalizedSql)) {
@@ -327,25 +361,54 @@ public class SqlProbeServiceImpl implements SqlProbeService {
                 // 部分实现不支持，忽略
             }
             stmt.setQueryTimeout(QUERY_TIMEOUT_SEC);
+            stmt.setMaxRows(exportCount);
             try (ResultSet rs = stmt.executeQuery()) {
                 List<String> columns = readColumns(rs);
-                List<Map<String, Object>> rows = readRows(rs, columns);
-                log.info("[SqlProbeService.runExport] taskId={} 查询完成 rows={} ({}ms)", taskId, rows.size(), System.currentTimeMillis() - startMs);
-                byte[] excel = buildExcelBytes(columns, rows);
-                log.info("[SqlProbeService.runExport] taskId={} Excel生成 bytes={} ({}ms)", taskId, excel.length, System.currentTimeMillis() - startMs);
-                String fileName = "SQL探查导出_" + taskId.substring(0, 8) + ".xlsx";
-                updateExportTerminal(taskId, "SUCCESS", rows.size(), fileName, excel, null);
+                built = buildExportFile(rs, columns, exportCount);
+                log.info("[SqlProbeService.runExport] taskId={} 查询完成 rows={} ({}ms)", taskId,
+                        built.rowCount(), System.currentTimeMillis() - startMs);
+                String suffix = built.chunkCount() > 1 ? ".zip" : ".xlsx";
+                String fileName = "SQL探查导出_" + taskId.substring(0, 8) + suffix;
+                String contentType = contentTypeForFileName(fileName);
+                PathMultipartFile uploadFile = new PathMultipartFile(
+                        built.contentPath(), "file", fileName, contentType);
+                FileObjectDTO uploaded = fileApi.upload(uploadFile, empId, SQL_PROBE_FILE_CATEGORY);
+                if (uploaded == null || !StringUtils.hasText(uploaded.getId())) {
+                    throw new IllegalStateException("治理中心未返回 SQL 探查导出文件 ID");
+                }
+                uploadedFileId = uploaded.getId();
+                uploadedFileNewlyCreated = Boolean.TRUE.equals(uploaded.getNewlyCreated());
+                // 先建立业务关联：FileApi 按 MD5 去重，未知对象是否为本次新建，不能无条件 deleteFile。
+                fileApi.bindFile("SQL_PROBE_EXPORT", taskId, uploadedFileId, "RESULT");
+                byte[] fileReference = encodeObsFileReference(uploadedFileId);
+                if (!updateExportTerminal(taskId, "SUCCESS", built.rowCount(), fileName,
+                        fileReference, null)) {
+                    throw new IllegalStateException("SQL 探查导出任务终态写库失败");
+                }
+                taskReferenceSaved = true;
                 safelyAudit(empId, taskId, "SUCCESS", remark, normalizedSql, null);
-                log.info("[SqlProbeService.runExport] 导出成功 taskId={} rows={} bytes={} elapsedMs={}",
-                        taskId, rows.size(), excel.length, System.currentTimeMillis() - startMs);
+                log.info("[SqlProbeService.runExport] 导出成功 taskId={} rows={} chunks={} bytes={} elapsedMs={}",
+                        taskId, built.rowCount(), built.chunkCount(),
+                        Files.size(built.contentPath()), System.currentTimeMillis() - startMs);
             }
         } catch (Throwable ex) {
             // 捕获 Throwable（含 Error，如 OOM/临时盘问题），确保任何失败都落 FAILED 而非永久 RUNNING
             log.warn("[SqlProbeService.runExport] 导出失败 taskId={} ({}ms) cause={}",
                     taskId, System.currentTimeMillis() - startMs, ex.toString());
+            if (uploadedFileId != null && !taskReferenceSaved) {
+                if (uploadedFileNewlyCreated) {
+                    safelyDeleteUploadedFile(uploadedFileId);
+                } else {
+                    log.error("[SqlProbeService.runExport] 任务终态写库失败，保留已绑定 OBS 文件以避免误删共享对象 "
+                                    + "taskId={} fileId={}", taskId, uploadedFileId);
+                }
+            }
             updateExportTerminal(taskId, "FAILED", null, null, null, String.valueOf(ex.getMessage()));
             safelyAudit(empId, taskId, "FAILED", remark, normalizedSql, ex.getMessage());
         } finally {
+            if (built != null) {
+                cleanupTempDir(built.tempDir());
+            }
             semaphore.release();
         }
     }
@@ -381,12 +444,26 @@ public class SqlProbeServiceImpl implements SqlProbeService {
             throw new RptException(RptErrorCode.EXPORT_TASK_NOT_READY);
         }
         String fileName = StringUtils.hasText(task.getFileName()) ? task.getFileName() : "sql-export.xlsx";
-        return SqlProbeExportFileDTO.builder().fileName(fileName).content(task.getFileContent()).build();
+        String fileId = decodeObsFileReference(task.getFileContent());
+        if (fileId != null) {
+            return SqlProbeExportFileDTO.builder()
+                    .fileName(fileName)
+                    .fileId(fileId)
+                    .contentType(contentTypeForFileName(fileName))
+                    .build();
+        }
+        // 兼容迁移前任务：FILE_CONTENT 仍是完整 BLOB 时由 Controller 直接回写。
+        return SqlProbeExportFileDTO.builder()
+                .fileName(fileName)
+                .contentType(contentTypeForFileName(fileName))
+                .fileSize((long) task.getFileContent().length)
+                .content(task.getFileContent())
+                .build();
     }
 
-    /** 更新导出任务终态（updateById NOT_NULL 策略：null 字段不覆盖）. */
-    private void updateExportTerminal(String taskId, String status, Integer rowCount,
-                                      String fileName, byte[] fileContent, String errorMsg) {
+    /** 更新导出任务终态（updateById NOT_NULL 策略：null 字段不覆盖）。 */
+    private boolean updateExportTerminal(String taskId, String status, Integer rowCount,
+                                         String fileName, byte[] fileContent, String errorMsg) {
         try {
             SqlProbeExportTask upd = new SqlProbeExportTask();
             upd.setId(taskId);
@@ -396,10 +473,11 @@ public class SqlProbeServiceImpl implements SqlProbeService {
             upd.setFileContent(fileContent);
             upd.setErrorMsg(errorMsg != null && errorMsg.length() > 500 ? errorMsg.substring(0, 500) : errorMsg);
             upd.setFinishedTime(LocalDateTime.now());
-            exportTaskMapper.updateById(upd);
+            return exportTaskMapper.updateById(upd) > 0;
         } catch (RuntimeException e) {
             log.error("[SqlProbeService.updateExportTerminal] 更新失败 taskId={} status={} cause={}",
                     taskId, status, e.getMessage());
+            return false;
         }
     }
 
@@ -425,28 +503,155 @@ public class SqlProbeServiceImpl implements SqlProbeService {
      * 辅助方法
      * ===================================================================== */
 
-    /** 把列定义 + 行数据写成 xlsx 字节（动态列：表头=查询结果列名）。
-     *  用纯内存 XSSF（不落临时盘）——文件最终整体存 DB BLOB，本就全量在内存；
-     *  且规避 SXSSF 在服务端写/读临时文件（低熵 SecureRandom、临时盘只读/满）导致的卡死。 */
-    private byte[] buildExcelBytes(List<String> columns, List<Map<String, Object>> rows) throws java.io.IOException {
-        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
-             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
-            org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("查询结果");
+    /**
+     * 直接从 ResultSet 分批构建导出文件，避免先把所有结果行装入 List/Map。
+     * 每个工作簿最多 10000 行数据；单个工作簿直接返回 xlsx，多个工作簿合并为 zip。
+     */
+    private ExportBuildResult buildExportFile(ResultSet rs, List<String> columns, int exportCount)
+            throws SQLException, IOException {
+        List<Path> tempParts = new ArrayList<>();
+        Path tempDir = Files.createTempDirectory("sql-probe-export-");
+        try {
+            // 每个工作簿直接写受控临时文件；最终成品也留在同一临时目录供 FileApi 流式上传。
+            Path firstPart = Files.createTempFile(tempDir, "part-001-", ".xlsx");
+            tempParts.add(firstPart);
+            boolean hasCurrentRow = rs.next();
+            ChunkBuildState first;
+            try (OutputStream out = Files.newOutputStream(firstPart)) {
+                first = writeExcelChunk(rs, columns, exportCount, 0, hasCurrentRow, out);
+            }
+            int rowCount = first.rowCount();
+            hasCurrentRow = first.hasCurrentRow();
+            // 不超过一万行（含空结果）直接使用单个 xlsx 临时文件。
+            if (!hasCurrentRow) {
+                return new ExportBuildResult(rowCount, 1, firstPart, tempDir);
+            }
+
+            int partNo = 2;
+            while (hasCurrentRow && rowCount < exportCount) {
+                Path part = Files.createTempFile(tempDir, String.format("part-%03d-", partNo), ".xlsx");
+                tempParts.add(part);
+                try (OutputStream out = Files.newOutputStream(part, StandardOpenOption.TRUNCATE_EXISTING)) {
+                    ChunkBuildState state = writeExcelChunk(rs, columns, exportCount, rowCount,
+                            hasCurrentRow, out);
+                    rowCount = state.rowCount();
+                    hasCurrentRow = state.hasCurrentRow();
+                }
+                partNo++;
+            }
+            Path zipPath = tempDir.resolve("sql-probe-export.zip");
+            zipTempParts(tempParts, zipPath);
+            return new ExportBuildResult(rowCount, tempParts.size(), zipPath, tempDir);
+        } catch (IOException | SQLException | RuntimeException | Error ex) {
+            cleanupTempDir(tempDir);
+            throw ex;
+        }
+    }
+
+    /** 将当前 ResultSet 游标开始的至多一万行直接写入给定输出流。 */
+    private ChunkBuildState writeExcelChunk(ResultSet rs, List<String> columns, int exportCount,
+                                            int rowCount, boolean hasCurrentRow, OutputStream out)
+            throws SQLException, IOException {
+        int chunkRows = 0;
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
+                     new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("查询结果");
             org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
             for (int c = 0; c < columns.size(); c++) {
                 header.createCell(c).setCellValue(columns.get(c));
             }
-            int rIdx = 1;
-            for (Map<String, Object> row : rows) {
-                org.apache.poi.ss.usermodel.Row r = sheet.createRow(rIdx++);
+            while (hasCurrentRow && chunkRows < EXCEL_CHUNK_ROWS && rowCount < exportCount) {
+                org.apache.poi.ss.usermodel.Row row = sheet.createRow(chunkRows + 1);
                 for (int c = 0; c < columns.size(); c++) {
-                    Object v = row.get(columns.get(c));
-                    r.createCell(c).setCellValue(v != null ? String.valueOf(v) : "");
+                    Object value = rs.getObject(c + 1);
+                    row.createCell(c).setCellValue(value != null ? String.valueOf(value) : "");
                 }
+                chunkRows++;
+                rowCount++;
+                // 达到请求上限时不再向 ResultSet 前移；JDBC setMaxRows 仍是第一层限制。
+                hasCurrentRow = rowCount < exportCount && rs.next();
             }
-            wb.write(out);
-            return out.toByteArray();
+            workbook.write(out);
         }
+        return new ChunkBuildState(rowCount, hasCurrentRow);
+    }
+
+    private void zipTempParts(List<Path> parts, Path zipPath) throws IOException {
+        try (OutputStream out = Files.newOutputStream(zipPath);
+             ZipOutputStream zip = new ZipOutputStream(out)) {
+            for (int i = 0; i < parts.size(); i++) {
+                zip.putNextEntry(new ZipEntry("SQL探查导出_" + (i + 1) + ".xlsx"));
+                try (InputStream in = Files.newInputStream(parts.get(i))) {
+                    in.transferTo(zip);
+                }
+                zip.closeEntry();
+            }
+            zip.finish();
+        }
+    }
+
+    private void cleanupTempDir(Path tempDir) {
+        if (tempDir != null) {
+            try (Stream<Path> paths = Files.walk(tempDir)) {
+                paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (IOException e) {
+                        log.warn("[SqlProbeService.runExport] 临时文件清理失败 path={} cause={}",
+                                path, e.getMessage());
+                    }
+                });
+            } catch (IOException e) {
+                log.warn("[SqlProbeService.runExport] 临时目录扫描失败 path={} cause={}",
+                        tempDir, e.getMessage());
+            }
+        }
+    }
+
+    private void safelyDeleteUploadedFile(String fileId) {
+        try {
+            fileApi.deleteFile(fileId);
+        } catch (RuntimeException cleanupFailure) {
+            log.error("[SqlProbeService.runExport] 新建 OBS 文件补偿删除失败 fileId={}",
+                    fileId, cleanupFailure);
+        }
+    }
+
+    private int normalizeExportCount(Integer exportCount) {
+        int count = exportCount == null ? DEFAULT_EXPORT_COUNT : exportCount;
+        if (count < 1 || count > MAX_EXPORT_COUNT) {
+            throw new RptException(RptErrorCode.EXPORT_START_FAILED,
+                    "exportCount 必须在 1 到 " + MAX_EXPORT_COUNT + " 之间");
+        }
+        return count;
+    }
+
+    private byte[] encodeObsFileReference(String fileId) {
+        return (OBS_FILE_REFERENCE_MAGIC + fileId).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private String decodeObsFileReference(byte[] content) {
+        if (content == null || content.length <= OBS_FILE_REFERENCE_MAGIC.length()) {
+            return null;
+        }
+        String value = new String(content, java.nio.charset.StandardCharsets.UTF_8);
+        if (!value.startsWith(OBS_FILE_REFERENCE_MAGIC)) {
+            return null;
+        }
+        String fileId = value.substring(OBS_FILE_REFERENCE_MAGIC.length()).trim();
+        return StringUtils.hasText(fileId) ? fileId : null;
+    }
+
+    private String contentTypeForFileName(String fileName) {
+        return fileName != null && fileName.toLowerCase(Locale.ROOT).endsWith(".zip")
+                ? "application/zip"
+                : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    }
+
+    private record ExportBuildResult(int rowCount, int chunkCount, Path contentPath, Path tempDir) {
+    }
+
+    private record ChunkBuildState(int rowCount, boolean hasCurrentRow) {
     }
 
     private List<String> readColumns(ResultSet rs) throws SQLException {
