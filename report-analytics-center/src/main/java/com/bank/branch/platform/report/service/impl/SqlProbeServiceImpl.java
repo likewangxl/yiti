@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.common.web.PageRequest;
 import com.bank.branch.platform.common.web.PageResult;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
@@ -122,9 +123,6 @@ public class SqlProbeServiceImpl implements SqlProbeService {
 
     /** SQL 探查异步导出专用线程池. */
     private final java.util.concurrent.Executor exportExecutor;
-
-    /** 列表最多返回的导出任务条数. */
-    private static final int EXPORT_TASK_LIST_LIMIT = 50;
 
     private final Semaphore semaphore = new Semaphore(CONCURRENT_LIMIT);
 
@@ -414,8 +412,9 @@ public class SqlProbeServiceImpl implements SqlProbeService {
     }
 
     @Override
-    public List<SqlProbeExportTaskRespDTO> listExportTasks() {
+    public PageResult<SqlProbeExportTaskRespDTO> listExportTasks(PageRequest page) {
         String empId = currentUserApi.getCurrentEmpId();
+        Page<SqlProbeExportTask> mapperPage = new Page<>(page.getPageNo(), page.getPageSize());
         com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SqlProbeExportTask> qw =
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
         // 列表只取轻量列，显式排除 FILE_CONTENT 大字段，避免把每行 xlsx 字节读进内存
@@ -424,9 +423,12 @@ public class SqlProbeServiceImpl implements SqlProbeService {
                   SqlProbeExportTask::getFileName, SqlProbeExportTask::getErrorMsg,
                   SqlProbeExportTask::getCreatedTime, SqlProbeExportTask::getFinishedTime)
           .eq(SqlProbeExportTask::getEmpId, empId)
-          .orderByDesc(SqlProbeExportTask::getCreatedTime)
-          .last("LIMIT " + EXPORT_TASK_LIST_LIMIT);
-        return exportTaskMapper.selectList(qw).stream().map(this::toExportDto).toList();
+          .orderByDesc(SqlProbeExportTask::getCreatedTime);
+        Page<SqlProbeExportTask> result = exportTaskMapper.selectPage(mapperPage, qw);
+        List<SqlProbeExportTaskRespDTO> records = result.getRecords().stream()
+                .map(this::toExportDto)
+                .toList();
+        return PageResult.of(page.getPageNo(), page.getPageSize(), result.getTotal(), records);
     }
 
     @Override

@@ -30,8 +30,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
 /**
  * SQL 探查 REST 控制器（D 章 4 接口，M4.2 / M4.3 阶段）.
  *
@@ -127,8 +125,8 @@ public class RptSqlProbeController {
     @GetMapping("/export/tasks")
     @BizAuth(bizType = BizType.REPORT, action = BizAction.LIST)
     @Operation(summary = "D.6 SQL 探查导出任务列表")
-    public ResponseWrapper<List<SqlProbeExportTaskRespDTO>> listExportTasks() {
-        return ResponseWrapper.success(sqlProbeService.listExportTasks());
+    public ResponseWrapper<SqlProbeExportTaskRespDTO> listExportTasks(@Valid PageRequest page) {
+        return ResponseWrapper.page(sqlProbeService.listExportTasks(page));
     }
 
     /**

@@ -1,7 +1,12 @@
 package com.bank.branch.platform.report.service;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.web.PageRequest;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
@@ -11,6 +16,7 @@ import com.bank.branch.platform.report.dto.req.SqlProbeExportReqDTO;
 import com.bank.branch.platform.report.dto.req.SqlProbeExecuteReqDTO;
 import com.bank.branch.platform.report.entity.SqlProbeExportTask;
 import com.bank.branch.platform.report.entity.SqlProbeHistory;
+import com.bank.branch.platform.report.dto.resp.SqlProbeExportTaskRespDTO;
 import com.bank.branch.platform.report.mapper.SqlProbeHistoryMapper;
 import com.bank.branch.platform.report.service.impl.SqlProbeServiceImpl;
 import com.bank.branch.platform.report.support.SqlSafeValidator;
@@ -445,6 +451,43 @@ class SqlProbeServiceTest {
 
         assertThat(page.getRecords()).hasSize(1);
         assertThat(page.getRecords().get(0).getEmpName()).isEqualTo("张三");
+    }
+
+    @Test
+    void listExportTasks_returnsRequestedPage_forCurrentUserInCreatedTimeDescOrder() {
+        SqlProbeExportTask task = new SqlProbeExportTask();
+        task.setId("TASK_PAGE_006");
+        task.setEmpId("E_TECH001");
+        task.setSqlText("SELECT 1");
+        task.setStatus("SUCCESS");
+
+        Page<SqlProbeExportTask> mapperPage = new Page<>(2, 5);
+        mapperPage.setTotal(11);
+        mapperPage.setRecords(List.of(task));
+        when(exportTaskMapper.selectPage(any(IPage.class), any())).thenReturn(mapperPage);
+
+        PageRequest request = new PageRequest();
+        request.setPageNo(2);
+        request.setPageSize(5);
+
+        PageResult<SqlProbeExportTaskRespDTO> result = service.listExportTasks(request);
+
+        assertThat(result.getPageNo()).isEqualTo(2);
+        assertThat(result.getPageSize()).isEqualTo(5);
+        assertThat(result.getTotal()).isEqualTo(11);
+        assertThat(result.getRecords()).extracting(SqlProbeExportTaskRespDTO::getId)
+                .containsExactly("TASK_PAGE_006");
+
+        ArgumentCaptor<IPage<SqlProbeExportTask>> pageCaptor = ArgumentCaptor.forClass(IPage.class);
+        ArgumentCaptor<LambdaQueryWrapper<SqlProbeExportTask>> wrapperCaptor =
+                ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(exportTaskMapper).selectPage(pageCaptor.capture(), wrapperCaptor.capture());
+        assertThat(pageCaptor.getValue().getCurrent()).isEqualTo(2);
+        assertThat(pageCaptor.getValue().getSize()).isEqualTo(5);
+        assertThat(wrapperCaptor.getValue().getSqlSegment().toUpperCase())
+                .contains("ORDER BY CREATED_TIME DESC");
+        assertThat(wrapperCaptor.getValue().getParamNameValuePairs().values())
+                .contains("E_TECH001");
     }
 
     private SqlProbeExecuteReqDTO buildReq(String sql, String remark) {

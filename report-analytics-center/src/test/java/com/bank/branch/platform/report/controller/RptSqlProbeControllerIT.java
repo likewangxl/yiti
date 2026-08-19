@@ -5,6 +5,7 @@ import com.bank.branch.platform.report.BaseControllerIT;
 import com.bank.branch.platform.report.dto.resp.SchemaWhitelistRespDTO;
 import com.bank.branch.platform.report.dto.resp.SqlProbeExecuteRespDTO;
 import com.bank.branch.platform.report.dto.resp.SqlProbeExportFileDTO;
+import com.bank.branch.platform.report.dto.resp.SqlProbeExportTaskRespDTO;
 import com.bank.branch.platform.report.dto.resp.SqlProbeHistoryRespDTO;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.report.service.SqlProbeService;
@@ -185,5 +186,32 @@ class RptSqlProbeControllerIT extends BaseControllerIT {
                         .header().string("Content-Disposition",
                                 org.hamcrest.Matchers.containsString(".zip")));
         verify(fileApi).writeFileContent(anyString(), any(java.io.OutputStream.class));
+    }
+
+    @Test
+    void listExportTasks_returnsPagedPage_andPassesPageRequestToService() throws Exception {
+        SqlProbeExportTaskRespDTO task = SqlProbeExportTaskRespDTO.builder()
+                .id("TASK_PAGE_006")
+                .status("SUCCESS")
+                .build();
+        PageResult<SqlProbeExportTaskRespDTO> page =
+                PageResult.of(2, 5, 11L, List.of(task));
+        when(sqlProbeService.listExportTasks(any())).thenReturn(page);
+
+        mvc.perform(get("/api/reports/sql-probe/export/tasks")
+                        .param("pageNo", "2")
+                        .param("pageSize", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.page.pageNo").value(2))
+                .andExpect(jsonPath("$.page.pageSize").value(5))
+                .andExpect(jsonPath("$.page.total").value(11))
+                .andExpect(jsonPath("$.page.records[0].id").value("TASK_PAGE_006"));
+
+        ArgumentCaptor<com.bank.branch.platform.common.web.PageRequest> captor =
+                ArgumentCaptor.forClass(com.bank.branch.platform.common.web.PageRequest.class);
+        verify(sqlProbeService).listExportTasks(captor.capture());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getPageNo()).isEqualTo(2);
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getPageSize()).isEqualTo(5);
     }
 }

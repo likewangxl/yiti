@@ -10,8 +10,6 @@ import com.bank.branch.platform.report.dto.resp.SqlProbeExportFileDTO;
 import com.bank.branch.platform.report.dto.resp.SqlProbeExportTaskRespDTO;
 import com.bank.branch.platform.report.dto.resp.SqlProbeHistoryRespDTO;
 
-import java.util.List;
-
 /**
  * SQL 探查服务（D 章 4 接口，Task M4.2.1 + M4.3.x）.
  *
@@ -68,11 +66,12 @@ public interface SqlProbeService {
     String createExport(SqlProbeExportReqDTO req);
 
     /**
-     * D.6 查询本人 SQL 探查导出任务列表（按创建时间 DESC，最多近 N 条；不含文件内容）.
+     * D.6 分页查询本人 SQL 探查导出任务（按创建时间 DESC；不含文件内容）.
      *
-     * @return 任务列表
+     * @param page 分页参数
+     * @return 分页任务列表
      */
-    List<SqlProbeExportTaskRespDTO> listExportTasks();
+    PageResult<SqlProbeExportTaskRespDTO> listExportTasks(PageRequest page);
 
     /**
      * D.7 下载导出文件：校验归属（仅本人）+ 状态（成功）后取出 xlsx 字节.
