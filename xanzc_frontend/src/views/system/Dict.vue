@@ -10,8 +10,8 @@
 
     <section class="card-section filter-bar" aria-label="字典筛选">
       <el-form class="filter-form" inline size="default" aria-label="字典筛选条件">
-        <el-form-item label="字典类型">
-          <el-input v-model="typeKeyword" clearable placeholder="类型编码 / 名称" aria-label="按字典类型筛选" style="width:230px" />
+        <el-form-item class="dict-type-filter" label="字典类型">
+          <el-input class="dict-type-search" v-model="typeKeyword" clearable placeholder="类型编码 / 名称" aria-label="按字典类型筛选" style="width:230px" />
         </el-form-item>
         <el-form-item label="字典项">
           <el-input v-model="itemKeyword" clearable placeholder="编码 / 标签 / 值" aria-label="按字典项筛选" style="width:230px" />
@@ -279,11 +279,18 @@ onMounted(loadTypes);
 </script>
 
 <style lang="scss" scoped>
-.dict-workspace { display: grid; gap: var(--space-4); grid-template-columns: minmax(260px, .72fr) minmax(0, 1.8fr); min-height: min(620px, calc(100vh - 270px)); }
-.dict-types,
-.dict-items { min-width: 0; }
-.dict-types { display: flex; flex-direction: column; overflow: hidden; }
-.type-list { flex: 1; margin: 0 calc(var(--space-4) * -1) calc(var(--space-4) * -1); overflow: auto; }
+.dict-workspace {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(260px, .72fr) minmax(0, 1.8fr);
+  height: min(620px, calc(100vh - 270px));
+  min-height: 0;
+}
+.dict-type-filter :deep(.el-form-item__label) { color: var(--color-brand-700); font-weight: 600; }
+.dict-types { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.dict-items { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.type-list { flex: 1; min-height: 0; margin: 0 calc(var(--space-4) * -1) calc(var(--space-4) * -1); overflow: auto; }
+.dict-items :deep(.el-table) { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .type-option {
   background: transparent;
   border: 0;
@@ -313,5 +320,12 @@ onMounted(loadTypes);
   line-height: 18px;
   margin-bottom: var(--space-3);
   padding: var(--space-2) var(--space-3);
+}
+
+@media (max-width: 760px) {
+  .dict-workspace { grid-template-columns: 1fr; height: auto; max-height: none; }
+  .dict-types { max-height: 360px; }
+  .dict-items { min-height: 360px; }
+  .dict-items :deep(.el-table) { flex: 0 0 auto; max-height: 520px; }
 }
 </style>

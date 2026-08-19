@@ -29,6 +29,19 @@
           <el-descriptions-item label="申请时间" :span="3">{{ fmt(createdTime) }}</el-descriptions-item>
         </el-descriptions>
 
+        <div v-if="showCurrentNodeApprovers" class="current-node-approvers">
+          <span class="approver-label">当前节点可审批员工</span>
+          <div class="approver-list">
+            <el-tag
+              v-for="approver in currentNodeApprovers"
+              :key="approver.employeeNo"
+              effect="plain"
+              size="small">
+              {{ approver.employeeName || '-' }}（{{ approver.employeeNo || '-' }}）
+            </el-tag>
+          </div>
+        </div>
+
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="客户类型">
@@ -208,7 +221,7 @@ const createdByName = ref('');
 const createdByUsername = ref('');
 const createdByOrgName = ref('');
 const createdTime = ref(null);
-const form = reactive({ custType: '', custId: '', custName: '', allocDim: '', bizKind: [], accountNo: '', reason: '', items: [], originalItems: [] });
+const form = reactive({ status: '', custType: '', custId: '', custName: '', allocDim: '', bizKind: [], accountNo: '', reason: '', items: [], originalItems: [] });
 const custIdx = reactive({ MC_001: null, MC_002: null, MC_003: null, MC_004: null });
 const custIdxLoan = reactive({ MC_005: null, MC_006: null, MC_007: null, MC_008: null });
 const preview = reactive({ loading: false, data: null });
@@ -217,6 +230,7 @@ const approvalLogs = ref([]);
 const approvalLoading = ref(false);
 const approvalError = ref('');
 const bizKindOptions = ref([]);
+const currentNodeApprovers = ref([]);
 
 const noFetch = (q, cb) => cb && cb([]);
 
@@ -234,6 +248,7 @@ function bizKindLabel(k) { return bizKindMap.value[k] || BIZ_KIND_FALLBACK[k] ||
 const showDepositBal = computed(() => (form.bizKind || []).some(k => bizKindLabel(k).includes('存')));
 const showLoanBal = computed(() => (form.bizKind || []).some(k => bizKindLabel(k).includes('贷')));
 const hasOriginalOwners = computed(() => (preview.data && preview.data.allocList && preview.data.allocList.length) > 0);
+const showCurrentNodeApprovers = computed(() => form.status === 'IN_APPROVAL' && currentNodeApprovers.value.length > 0);
 
 const ACTION_LABEL = { SUBMIT: '提交', APPROVE: '通过', REJECT: '驳回', CLAIM: '签收', TRANSFER: '转办' };
 const actionLabel = (a) => ACTION_LABEL[a] || a || '-';
@@ -290,7 +305,7 @@ async function loadPreview(statisDt) {
 }
 
 function resetAll() {
-  Object.assign(form, { custType: '', custId: '', custName: '', allocDim: '', bizKind: [], accountNo: '', reason: '', items: [], originalItems: [] });
+  Object.assign(form, { status: '', custType: '', custId: '', custName: '', allocDim: '', bizKind: [], accountNo: '', reason: '', items: [], originalItems: [] });
   Object.assign(custIdx, { MC_001: null, MC_002: null, MC_003: null, MC_004: null });
   Object.assign(custIdxLoan, { MC_005: null, MC_006: null, MC_007: null, MC_008: null });
   preview.data = null;
@@ -298,6 +313,7 @@ function resetAll() {
   approvalLogs.value = [];
   approvalError.value = '';
   loadError.value = '';
+  currentNodeApprovers.value = [];
   applyNo.value = ''; createdBy.value = ''; createdByName.value = ''; createdByUsername.value = ''; createdByOrgName.value = ''; createdTime.value = null;
 }
 
@@ -309,6 +325,7 @@ async function load(id) {
   try {
     const d = (await getAdjustDetail(id)) || {};
     Object.assign(form, {
+      status: d.status || '',
       custType: inferCustType(d.custType, d.bizKind),
       custId: d.custId || '', custName: d.custName || '', allocDim: d.allocDim || '',
       bizKind: d.bizKind ? (typeof d.bizKind === 'string' ? d.bizKind.split(',') : d.bizKind) : [],
@@ -316,6 +333,12 @@ async function load(id) {
       items: (d.items || []).filter(it => (it.itemKind || 'NEW') === 'NEW').map(it => ({ empLabel: empLabelOf(it), pct: it.pct ?? it.ratio, remark: it.remark || '' })),
       originalItems: originalItemsFromDetail(d),
     });
+    currentNodeApprovers.value = Array.isArray(d.currentNodeApprovers)
+      ? d.currentNodeApprovers.map(approver => ({
+        employeeNo: approver.employeeNo || '',
+        employeeName: approver.employeeName || '',
+      }))
+      : [];
     Object.assign(custIdx, { MC_001: d.currBal ?? null, MC_002: d.mAvgBal ?? null, MC_003: d.qAvgBal ?? null, MC_004: d.yAvgBal ?? null });
     Object.assign(custIdxLoan, { MC_005: d.loanCurrBal ?? null, MC_006: d.loanMAvgBal ?? null, MC_007: d.loanQAvgBal ?? null, MC_008: d.loanYAvgBal ?? null });
     applyNo.value = d.applyNo || '';
@@ -381,6 +404,13 @@ watch(() => [props.modelValue, props.applyId], ([show, id]) => {
   margin: 4px 0 16px;
   :deep(.el-descriptions__label) { width: 90px; }
   code.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+}
+.current-node-approvers {
+  display: flex; align-items: flex-start; gap: 12px;
+  margin: -4px 0 16px; padding: 10px 12px;
+  border: 1px solid $border-1; border-radius: 4px; background: $bg-soft;
+  .approver-label { flex: none; font-size: 13px; font-weight: 600; color: $text-2; line-height: 24px; }
+  .approver-list { display: flex; flex-wrap: wrap; gap: 8px; }
 }
 .approval-wrap {
   padding: 4px 0 4px 6px; min-height: 80px;
