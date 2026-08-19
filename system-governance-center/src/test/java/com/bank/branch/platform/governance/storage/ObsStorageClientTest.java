@@ -13,7 +13,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -53,12 +55,38 @@ class ObsStorageClientTest {
     }
 
     @Test
+    void putObject_streamsInputToBucketWithKey() {
+        store.putObject(new ByteArrayInputStream("hello".getBytes(StandardCharsets.UTF_8)), "zybb/k1.xlsx");
+
+        ArgumentCaptor<String> bucket = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
+        verify(obsClient).putObject(bucket.capture(), key.capture(), any(InputStream.class));
+        assertThat(bucket.getValue()).isEqualTo("test-bucket");
+        assertThat(key.getValue()).isEqualTo("zybb/k1.xlsx");
+    }
+
+    @Test
     void getBytes_readsObjectContent() {
         ObsObject obj = mock(ObsObject.class);
         when(obj.getObjectContent()).thenReturn(new ByteArrayInputStream("data".getBytes()));
         when(obsClient.getObject("test-bucket", "k2")).thenReturn(obj);
 
         assertThat(store.getBytes("k2")).isEqualTo("data".getBytes());
+    }
+
+    @Test
+    void writeTo_streamsObjectContentAndClosesObsInputButNotCallerOutput() {
+        ObsObject obj = mock(ObsObject.class);
+        TrackingInputStream input = new TrackingInputStream("streamed".getBytes(StandardCharsets.UTF_8));
+        when(obj.getObjectContent()).thenReturn(input);
+        when(obsClient.getObject("test-bucket", "k-stream")).thenReturn(obj);
+
+        TrackingOutputStream output = new TrackingOutputStream();
+        store.writeTo("k-stream", output);
+
+        assertThat(output.toString(StandardCharsets.UTF_8)).isEqualTo("streamed");
+        assertThat(input.closed).isTrue();
+        assertThat(output.closed).isFalse();
     }
 
     @Test
@@ -74,5 +102,27 @@ class ObsStorageClientTest {
         when(obsClient.createTemporarySignature(any(TemporarySignatureRequest.class))).thenReturn(resp);
 
         assertThat(store.generatePresignedUrl("k4")).isEqualTo("https://obs/test-bucket/k4?sig=x");
+    }
+
+    private static final class TrackingInputStream extends ByteArrayInputStream {
+        private boolean closed;
+
+        private TrackingInputStream(byte[] data) {
+            super(data);
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+    }
+
+    private static final class TrackingOutputStream extends ByteArrayOutputStream {
+        private boolean closed;
+
+        @Override
+        public void close() {
+            closed = true;
+        }
     }
 }

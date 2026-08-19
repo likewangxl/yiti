@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.OutputStream;
 import java.util.List;
 
 /**
@@ -49,6 +50,11 @@ public class FileFacade implements FileApi {
     @Override
     public byte[] getFileContent(String fileId) {
         return fileService.getFileContent(fileId);
+    }
+
+    @Override
+    public void writeFileContent(String fileId, OutputStream outputStream) {
+        fileService.writeFileContent(fileId, outputStream);
     }
 
     /**

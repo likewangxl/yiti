@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 
 /**
  * 华为云 OBS 读写工具类（仿参考 PdObsClient 的调用习惯）。
@@ -79,6 +80,17 @@ public class ObsStorageClient {
         }
     }
 
+    /** 写：输入流 → OBS 对象；该方法负责关闭输入流。 */
+    public void putObject(InputStream input, String key) {
+        ObsClient client = requireClient("上传对象");
+        try (InputStream in = input) {
+            client.putObject(bucketName, key, in);
+        } catch (Exception e) {
+            log.error("[ObsStorageClient] putObject(stream) 失败 key={}", key, e);
+            throw new BizException("GOV-50001", "OBS 上传失败: " + e.getMessage(), e);
+        }
+    }
+
     /** 读：OBS 对象 → 字节数组。 */
     public byte[] getBytes(String key) {
         ObsClient client = requireClient("读取对象");
@@ -89,6 +101,22 @@ public class ObsStorageClient {
             }
         } catch (Exception e) {
             log.error("[ObsStorageClient] getBytes 失败 key={}", key, e);
+            throw new BizException("GOV-50001", "OBS 读取失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 读：OBS 对象 → 调用方输出流；只关闭 OBS 返回的输入流，不关闭调用方输出流。
+     */
+    public void writeTo(String key, OutputStream outputStream) {
+        ObsClient client = requireClient("读取对象");
+        try {
+            ObsObject object = client.getObject(bucketName, key);
+            try (InputStream input = object.getObjectContent()) {
+                input.transferTo(outputStream);
+            }
+        } catch (Exception e) {
+            log.error("[ObsStorageClient] writeTo 失败 key={}", key, e);
             throw new BizException("GOV-50001", "OBS 读取失败: " + e.getMessage(), e);
         }
     }

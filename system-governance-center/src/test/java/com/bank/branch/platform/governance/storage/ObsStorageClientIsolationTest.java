@@ -7,6 +7,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -35,7 +38,9 @@ class ObsStorageClientIsolationTest {
 
         assertThat(ReflectionTestUtils.getField(store, "obsClient")).isNull();
         assertDisabled(() -> store.putObject("content".getBytes(), "isolated/file.txt"));
+        assertDisabled(() -> store.putObject(new ByteArrayInputStream("content".getBytes()), "isolated/file.txt"));
         assertDisabled(() -> store.getBytes("isolated/file.txt"));
+        assertDisabled(() -> store.writeTo("isolated/file.txt", new ByteArrayOutputStream()));
         assertDisabled(() -> store.deleteByKey("isolated/file.txt"));
         assertDisabled(() -> store.generatePresignedUrl("isolated/file.txt"));
     }

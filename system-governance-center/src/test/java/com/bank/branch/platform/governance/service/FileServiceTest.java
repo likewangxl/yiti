@@ -16,6 +16,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Collections;
 import java.util.List;
 
@@ -70,6 +73,21 @@ class FileServiceTest {
     }
 
     @Test
+    void upload_multipartFileStreamsContentWithoutCallingGetBytes() throws Exception {
+        MockMultipartFile source = new MockMultipartFile(
+                "file", "streamed.pdf", "application/pdf", "streamed-content".getBytes());
+        MockMultipartFile file = spy(source);
+        when(fileObjectMapper.selectByMd5Hash(anyString())).thenReturn(null);
+
+        FileObjectDTO result = fileService.upload(file, "EMP001", null, null);
+
+        assertThat(result).isNotNull();
+        verify(file, never()).getBytes();
+        verify(file, times(2)).getInputStream();
+        verify(obsStorageClient).putObject(any(InputStream.class), anyString());
+    }
+
+    @Test
     void upload_duplicateMd5_returnsExisting() {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "test.pdf", "application/pdf", "hello".getBytes());
@@ -85,7 +103,9 @@ class FileServiceTest {
         FileObjectDTO result = fileService.upload(file, "EMP001", null, null);
 
         assertThat(result.getId()).isEqualTo("F_EXISTING");
-        verify(obsStorageClient, never()).putObject(any(), anyString());
+        assertThat(result.getNewlyCreated()).isFalse();
+        verify(obsStorageClient, never()).putObject(any(byte[].class), anyString());
+        verify(obsStorageClient, never()).putObject(any(InputStream.class), anyString());
         verify(fileObjectMapper, never()).insert((FileObject) any());
     }
 
@@ -99,7 +119,7 @@ class FileServiceTest {
         FileObjectDTO dto = fileService.upload(file, "U1", null, null, FileCategory.FREE_REPORT);
 
         ArgumentCaptor<String> keyCap = ArgumentCaptor.forClass(String.class);
-        verify(obsStorageClient).putObject(any(byte[].class), keyCap.capture());
+        verify(obsStorageClient).putObject(any(InputStream.class), keyCap.capture());
         assertThat(keyCap.getValue()).matches("\\d{4}/\\d{2}/\\d{2}/zybb_[0-9a-f]+\\.xlsx");
 
         ArgumentCaptor<FileObject> foCap = ArgumentCaptor.forClass(FileObject.class);
@@ -107,6 +127,7 @@ class FileServiceTest {
         assertThat(foCap.getValue().getStoragePath()).isEqualTo(keyCap.getValue());
         assertThat(foCap.getValue().getBucketName()).isEqualTo("obs");
         assertThat(dto.getFileName()).isEqualTo("r.xlsx");
+        assertThat(dto.getNewlyCreated()).isTrue();
     }
 
     @Test
@@ -121,6 +142,24 @@ class FileServiceTest {
         verify(obsStorageClient).putObject(any(byte[].class), keyCap.capture());
         assertThat(keyCap.getValue()).matches("\\d{4}/\\d{2}/\\d{2}/jxkpi_[0-9a-f]+\\.xlsx");
         assertThat(dto).isNotNull();
+        assertThat(dto.getNewlyCreated()).isTrue();
+    }
+
+    @Test
+    void uploadBytes_metadataInsertFailure_deletesOnlyNewlyUploadedObject() {
+        when(fileObjectMapper.selectByMd5Hash(anyString())).thenReturn(null);
+        doThrow(new IllegalStateException("metadata insert failed"))
+                .when(fileObjectMapper).insert(any(FileObject.class));
+
+        ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
+        assertThatThrownBy(() -> fileService.upload("data".getBytes(), "failed.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "U2", FileCategory.EXPORT_KPI))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("metadata insert failed");
+
+        verify(obsStorageClient).putObject(any(byte[].class), keyCaptor.capture());
+        verify(obsStorageClient).deleteByKey(keyCaptor.getValue());
     }
 
     @Test
@@ -163,6 +202,37 @@ class FileServiceTest {
                 .isInstanceOf(BizException.class)
                 .extracting("code")
                 .isEqualTo("GOV-40005");
+    }
+
+    @Test
+    void writeFileContent_streamsToCallerOutputStreamWithoutClosingIt() {
+        FileObject fo = new FileObject();
+        fo.setId("F_003");
+        fo.setStoragePath("k-stream");
+        when(fileObjectMapper.selectById("F_003")).thenReturn(fo);
+        doAnswer(invocation -> {
+            OutputStream output = invocation.getArgument(1);
+            output.write("streamed".getBytes());
+            return null;
+        }).when(obsStorageClient).writeTo(eq("k-stream"), any(OutputStream.class));
+
+        TrackingOutputStream output = new TrackingOutputStream();
+        fileService.writeFileContent("F_003", output);
+
+        assertThat(output.toString()).isEqualTo("streamed");
+        assertThat(output.closed).isFalse();
+        verify(obsStorageClient).writeTo("k-stream", output);
+    }
+
+    @Test
+    void writeFileContent_notFound_throwsGov40005() {
+        when(fileObjectMapper.selectById("NO_STREAM")).thenReturn(null);
+
+        assertThatThrownBy(() -> fileService.writeFileContent("NO_STREAM", new ByteArrayOutputStream()))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("GOV-40005");
+        verifyNoInteractions(obsStorageClient);
     }
 
     @Test
@@ -296,6 +366,16 @@ class FileServiceTest {
         FileObjectDTO result = fileService.upload(file, "EMP001", null, null);
 
         assertThat(result).isNotNull();
-        verify(obsStorageClient).putObject(any(byte[].class), anyString());
+        assertThat(result.getNewlyCreated()).isTrue();
+        verify(obsStorageClient).putObject(any(InputStream.class), anyString());
+    }
+
+    private static final class TrackingOutputStream extends ByteArrayOutputStream {
+        private boolean closed;
+
+        @Override
+        public void close() {
+            closed = true;
+        }
     }
 }
