@@ -348,8 +348,8 @@ export function getSqlHistoryItem(id) {
 export function createSqlExport(payload) {
   return call('post', '/reports/sql-probe/export', { data: payload }, { taskId: 'mock' });
 }
-export function listSqlExportTasks() {
-  return call('get', '/reports/sql-probe/export/tasks', {}, []);
+export function listSqlExportTasks(params = {}) {
+  return call('get', '/reports/sql-probe/export/tasks', { params }, { records: [], total: 0 });
 }
 // 下载：responseType=blob 直接拿字节（拦截器对非 envelope 原样返回 blob），调用方用临时 <a download> 触发，不跳转
 export function downloadSqlExportBlob(taskId) {

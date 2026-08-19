@@ -120,7 +120,7 @@ beforeEach(() => {
 afterEach(() => wrapper?.unmount());
 
 describe('Sql.vue SQL 探查历史与异步下载', () => {
-  it('历史记录固定每页 5 条，切页仍按 pageSize=5 请求且不提供 page-size 选择', async () => {
+  it('历史记录固定每页 10 条，切页仍按 pageSize=10 请求且不提供 page-size 选择', async () => {
     getSqlHistoryMock.mockResolvedValue({
       records: [{ id: 'H1', sqlText: 'SELECT 1', remark: '核对' }],
       total: 11
@@ -131,16 +131,91 @@ describe('Sql.vue SQL 探查历史与异步下载', () => {
     await buttonByText(wrapper, '查看历史').trigger('click');
     await settle();
 
-    expect(getSqlHistoryMock).toHaveBeenNthCalledWith(1, { pageNo: 1, pageSize: 5 });
+    expect(getSqlHistoryMock).toHaveBeenNthCalledWith(1, { pageNo: 1, pageSize: 10 });
     const pagination = wrapper.findComponent({ name: 'ElPagination' });
-    expect(pagination.props('pageSize')).toBe(5);
+    expect(pagination.props('pageSize')).toBe(10);
     expect(pagination.props('pageSizes')).toBeUndefined();
     expect(pagination.props('layout')).toBe('total, prev, pager, next');
 
     pagination.vm.$emit('update:currentPage', 2);
     pagination.vm.$emit('current-change', 2);
     await settle();
-    expect(getSqlHistoryMock).toHaveBeenNthCalledWith(2, { pageNo: 2, pageSize: 5 });
+    expect(getSqlHistoryMock).toHaveBeenNthCalledWith(2, { pageNo: 2, pageSize: 10 });
+  });
+
+  it('下载任务固定每页 5 条，切页按当前页请求并展示总数', async () => {
+    listSqlExportTasksMock.mockResolvedValue({
+      records: [{ id: 'EXP-1', status: 'SUCCESS', fileName: 'sql-result.xlsx' }],
+      total: 11
+    });
+
+    wrapper = mountSql();
+    await settle();
+
+    expect(listSqlExportTasksMock).toHaveBeenNthCalledWith(1, { pageNo: 1, pageSize: 5 });
+    const pagination = wrapper.findComponent({ name: 'ElPagination' });
+    expect(pagination.props('pageSize')).toBe(5);
+    expect(pagination.props('total')).toBe(11);
+    expect(pagination.props('pageSizes')).toBeUndefined();
+    expect(pagination.props('layout')).toBe('total, prev, pager, next');
+
+    pagination.vm.$emit('update:currentPage', 2);
+    pagination.vm.$emit('current-change', 2);
+    await settle();
+    expect(listSqlExportTasksMock).toHaveBeenNthCalledWith(2, { pageNo: 2, pageSize: 5 });
+  });
+
+  it('轮询保持当前页，并只根据当前页的处理中任务决定是否继续', async () => {
+    vi.useFakeTimers();
+    listSqlExportTasksMock
+      .mockResolvedValueOnce({ records: [{ id: 'EXP-1', status: 'SUCCESS' }], total: 11 })
+      .mockResolvedValueOnce({ records: [{ id: 'EXP-2', status: 'RUNNING' }], total: 11 })
+      .mockResolvedValue({ records: [{ id: 'EXP-2', status: 'SUCCESS' }], total: 11 });
+
+    try {
+      wrapper = mountSql();
+      await settle();
+      const pagination = wrapper.findComponent({ name: 'ElPagination' });
+      pagination.vm.$emit('update:currentPage', 2);
+      pagination.vm.$emit('current-change', 2);
+      await settle();
+      expect(listSqlExportTasksMock).toHaveBeenNthCalledWith(2, { pageNo: 2, pageSize: 5 });
+
+      vi.advanceTimersByTime(3000);
+      await settle();
+      expect(listSqlExportTasksMock).toHaveBeenNthCalledWith(3, { pageNo: 2, pageSize: 5 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('创建下载任务后回到第一页刷新任务列表', async () => {
+    listSqlExportTasksMock
+      .mockResolvedValueOnce({ records: [{ id: 'EXP-1', status: 'SUCCESS' }], total: 11 })
+      .mockResolvedValueOnce({ records: [{ id: 'EXP-2', status: 'SUCCESS' }], total: 11 })
+      .mockResolvedValueOnce({ records: [{ id: 'EXP-3', status: 'RUNNING' }], total: 12 });
+
+    wrapper = mountSql();
+    await settle();
+    const pagination = wrapper.findComponent({ name: 'ElPagination' });
+    pagination.vm.$emit('update:currentPage', 2);
+    pagination.vm.$emit('current-change', 2);
+    await settle();
+    expect(listSqlExportTasksMock).toHaveBeenNthCalledWith(2, { pageNo: 2, pageSize: 5 });
+
+    wrapper.vm.reason = '导出核对';
+    await nextTick();
+    await buttonByText(wrapper, '下载').trigger('click');
+    await nextTick();
+    await buttonByText(wrapper, '确定').trigger('click');
+    await settle();
+
+    expect(createSqlExportMock).toHaveBeenCalledWith({
+      sql: 'encrypted:SELECT cust_no, cust_name, industry, customer_type\nFROM CUST_MASTER\nORDER BY cust_no\nLIMIT 10',
+      remark: '导出核对',
+      exportCount: 1000
+    });
+    expect(listSqlExportTasksMock).toHaveBeenNthCalledWith(3, { pageNo: 1, pageSize: 5 });
   });
 
   it('点击下载先打开条数选项，默认 1000，取消不提交', async () => {
