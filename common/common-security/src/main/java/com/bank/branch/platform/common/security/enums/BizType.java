@@ -21,6 +21,7 @@ public enum BizType {
     CLAIM("CLAIM", "认领管理"),
     TOUCH_TASK("TOUCH_TASK", "触达任务"),
     TOUCH_REPORT("TOUCH_REPORT", "触达报告"),
+    CROSS_ORG_MARKETING("CROSS_ORG_MARKETING", "跨机构客户营销"),
     LOAN("LOAN", "贷款业务"),
     SUPPORT("SUPPORT", "支撑类业务"),
     SUPPORT_DEPT("SUPPORT_DEPT", "支撑部门管理"),
@@ -33,6 +34,7 @@ public enum BizType {
     ORG("ORG", "组织机构"),
     EVAL("EVAL", "内部评价"),
     WORKFLOW_MONITOR("WORKFLOW_MONITOR", "工作流监控"),
+    VIOLATION("VIOLATION", "违规管理"),
     RED_ENGINE("RED_ENGINE", "党建红色引擎");
 
     private final String code;

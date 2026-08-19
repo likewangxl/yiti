@@ -6,9 +6,13 @@ import org.junit.jupiter.params.provider.EnumSource;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BizTypeTest {
-    @Test void shouldHave24Values() { assertEquals(24, BizType.values().length); }
+    @Test void shouldHave26Values() { assertEquals(26, BizType.values().length); }
+    @Test void crossOrgMarketingShouldHaveCorrectCode() {
+        assertEquals("CROSS_ORG_MARKETING", BizType.CROSS_ORG_MARKETING.getCode());
+    }
     @Test void navShouldHaveCorrectCode() { assertEquals("NAV", BizType.NAV.getCode()); }
     @Test void sysConfigShouldHaveCorrectCode() { assertEquals("SYS_CONFIG", BizType.SYS_CONFIG.getCode()); }
+    @Test void violationShouldHaveCorrectCode() { assertEquals("VIOLATION", BizType.VIOLATION.getCode()); }
 
     @ParameterizedTest
     @EnumSource(BizType.class)
