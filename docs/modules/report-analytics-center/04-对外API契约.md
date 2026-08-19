@@ -293,6 +293,7 @@ public class DashboardServiceImpl implements DashboardService {
 | `CustomerLayerDTO` | 客户分层 |
 | `SqlProbeExecuteRespDTO` | SQL 探查结果 |
 | `SqlProbeHistoryRespDTO` | SQL 探查历史 |
+| `SqlProbeExportTaskRespDTO` | SQL 探查异步下载任务分页记录 |
 | `SchemaWhitelistRespDTO` | Schema 白名单 |
 | `TableSchemaDTO` | 表结构 |
 | `ColumnSchemaDTO` | 列结构 |
