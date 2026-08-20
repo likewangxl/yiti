@@ -41,3 +41,5 @@ lerna-debug.log*
 # Claude Code / OMC 本地 session 状态（不要提交）
 .omc/
 .claude/
+
+/artifacts/
