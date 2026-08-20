@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         classes = ReportTestApplication.class,
         properties = {
                 "spring.datasource.druid.filter.stat.enabled=true",
-                "spring.datasource.druid.filter.slf4j.enabled=true"
+                "spring.datasource.druid.filter.slf4j.enabled=false"
         }
 )
 @ActiveProfiles("test")
@@ -49,11 +49,11 @@ class RptReadOnlyDataSourceConfigTest {
     private DataSource rptReadOnlyDataSource;
 
     @Test
-    void primaryDataSourceShouldUseWrapperAndAttachMonitoringFilters() {
+    void primaryDataSourceShouldUseWrapperAndAttachOnlyStatFilter() {
         assertThat(primaryDataSource).isInstanceOf(DruidDataSourceWrapper.class);
         DruidDataSource druid = (DruidDataSource) primaryDataSource;
         assertThat(druid.getProxyFilters().stream().anyMatch(StatFilter.class::isInstance)).isTrue();
-        assertThat(druid.getProxyFilters().stream().anyMatch(Slf4jLogFilter.class::isInstance)).isTrue();
+        assertThat(druid.getProxyFilters().stream().anyMatch(Slf4jLogFilter.class::isInstance)).isFalse();
     }
 
     @Test

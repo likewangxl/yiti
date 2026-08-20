@@ -1,5 +1,6 @@
 package com.bank.branch.platform.auth.facade;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
@@ -334,6 +335,38 @@ public class UserFacade implements UserApi {
             items.add(dto);
         }
         return PageResult.of(p, s, total, items);
+    }
+
+    @Override
+    public List<UserDTO> findUsersByUsernameAndDisplayName(String username, String displayName) {
+        String normalizedUsername = normalizeText(username);
+        String normalizedDisplayName = normalizeText(displayName);
+        if (normalizedUsername == null && normalizedDisplayName == null) {
+            return Collections.emptyList();
+        }
+
+        LambdaQueryWrapper<PtUser> wrapper = new LambdaQueryWrapper<PtUser>()
+                .like(normalizedUsername != null, PtUser::getUsername, normalizedUsername)
+                .like(normalizedDisplayName != null, PtUser::getUserchnname, normalizedDisplayName)
+                .orderByAsc(PtUser::getUserId);
+        List<PtUser> rows = userMapper.selectList(wrapper);
+        if (rows == null || rows.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<UserDTO> result = new ArrayList<>(rows.size());
+        for (PtUser row : rows) {
+            UserDTO dto = new UserDTO();
+            dto.setEmpId(row.getUserId());
+            dto.setUsername(row.getUsername());
+            dto.setDisplayName(row.getUserchnname());
+            result.add(dto);
+        }
+        return result;
+    }
+
+    /** 将查询文本去除首尾空白，空白串按未传处理。 */
+    private String normalizeText(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     @Override

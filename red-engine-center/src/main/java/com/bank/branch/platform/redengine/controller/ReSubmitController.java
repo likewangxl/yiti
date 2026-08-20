@@ -48,9 +48,9 @@ public class ReSubmitController {
     @BizAuth(bizType = BizType.RED_ENGINE, action = BizAction.WRITE)
     @AuditLog(action = "RE_SUBMIT_ADD", resourceType = "RE_SUBMIT")
     public ResponseWrapper<Long> createSubmit(@Valid @RequestBody ReSubmitCreateReqDTO req) {
-        String empId = currentUserApi.getCurrentEmpId();
-        Long id = reSubmitService.createSubmit(req, empId);
-        log.info("[ReSubmitController.createSubmit] id={}, empId={}", id, empId);
+        String userId = currentUserApi.getCurrentEmpId();
+        Long id = reSubmitService.createSubmit(req, userId);
+        log.info("[ReSubmitController.createSubmit] id={}, userId={}", id, userId);
         return ResponseWrapper.success(id);
     }
 
@@ -60,9 +60,9 @@ public class ReSubmitController {
     public ResponseWrapper<PageResult<ReSubmit>> getMySubmits(
             @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
             @RequestParam(value = "pageSize", defaultValue = "10") int pageSize) {
-        String empId = currentUserApi.getCurrentEmpId();
-        PageResult<ReSubmit> result = reSubmitService.getMySubmits(empId, pageNo, pageSize);
-        log.info("[ReSubmitController.getMySubmits] empId={}, total={}", empId, result.getTotal());
+        String userId = currentUserApi.getCurrentEmpId();
+        PageResult<ReSubmit> result = reSubmitService.getMySubmits(userId, pageNo, pageSize);
+        log.info("[ReSubmitController.getMySubmits] userId={}, total={}", userId, result.getTotal());
         return ResponseWrapper.success(result);
     }
 

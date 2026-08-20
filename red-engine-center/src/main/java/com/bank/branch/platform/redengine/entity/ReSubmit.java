@@ -18,7 +18,7 @@ public class ReSubmit {
     private Long id;
     /** 党组织ID */
     private Long orgId;
-    /** 提交人平台工号 */
+    /** 提交人平台用户ID（PT_USER.USER_ID） */
     private String submitterId;
     /** 考核维度(dim1~dim4) */
     private String dimension;

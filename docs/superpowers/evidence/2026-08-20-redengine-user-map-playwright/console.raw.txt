@@ -1,0 +1,12 @@
+### Result
+Total messages: 3 (Errors: 0, Warnings: 1)
+Returning 1 messages for level "info"
+
+[WARNING] [Vue Router warn]: <router-view> can no longer be used directly inside <transition> or <keep-alive>.
+Use slot props instead:
+
+<router-view v-slot="{ Component }">
+  <transition>
+    <component :is="Component" />
+  </transition>
+</router-view> @ http://127.0.0.1:8091/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52

@@ -167,6 +167,17 @@ public interface UserApi {
     PageResult<UserDTO> pageUsers(String keyword, int pageNo, int pageSize);
 
     /**
+     * 按登录工号与中文姓名查询用户，两个非空条件之间为 AND，各字段均为包含式模糊匹配。
+     * <p>用于跨模块先形成候选 USER_ID 集合，再在消费模块自己的数据表内做分页，避免跨模块
+     * 直接关联 PT_USER。两个条件均为空时返回空列表，防止误触发无条件全量查询。</p>
+     *
+     * @param username    登录工号（PT_USER.USERNAME，null/空表示不限制）
+     * @param displayName 中文姓名（PT_USER.USERCHNNAME，null/空表示不限制）
+     * @return 匹配用户的最小展示信息（empId/username/displayName）；无匹配返回空列表
+     */
+    List<UserDTO> findUsersByUsernameAndDisplayName(String username, String displayName);
+
+    /**
      * 批量查询多个用户的角色简要列表，避免逐用户 N+1。
      *
      * @param userIds 用户ID（工号）列表

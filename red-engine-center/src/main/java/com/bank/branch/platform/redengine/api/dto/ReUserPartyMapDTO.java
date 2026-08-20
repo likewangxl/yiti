@@ -9,8 +9,8 @@ import java.time.LocalDateTime;
 
 /**
  * 用户党组织映射 DTO。
- * <p>同时承载管理端列表响应（含 id/createTime/updateTime）与绑定请求体
- * （仅需 userId/partyOrgId/partyRole，id/createTime/updateTime 由服务端回填/忽略）。</p>
+ * <p>同时承载管理端列表响应（含 username/displayName/id/createTime/updateTime）与绑定请求体
+ * （仅需 userId/partyOrgId/partyRole，其余展示字段由服务端回填/忽略）。</p>
  */
 @Data
 @Schema(description = "用户党组织映射")
@@ -20,10 +20,18 @@ public class ReUserPartyMapDTO {
     @Schema(description = "映射ID（响应字段，绑定请求可不传）")
     private Long id;
 
-    /** 平台用户工号(PT_USER.USER_ID) */
-    @Schema(description = "平台用户工号", requiredMode = Schema.RequiredMode.REQUIRED)
+    /** 平台用户ID(PT_USER.USER_ID) */
+    @Schema(description = "平台用户ID", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "userId 不能为空")
     private String userId;
+
+    /** 平台用户工号(PT_USER.USERNAME，仅响应展示，绑定请求忽略) */
+    @Schema(description = "平台用户工号（PT_USER.USERNAME，仅响应展示）")
+    private String username;
+
+    /** 平台用户中文姓名(PT_USER.USERCHNNAME，仅响应展示，绑定请求忽略) */
+    @Schema(description = "平台用户中文姓名（PT_USER.USERCHNNAME，仅响应展示）")
+    private String displayName;
 
     /** 党组织ID(RE_PARTY_ORG.id) */
     @Schema(description = "党组织ID", requiredMode = Schema.RequiredMode.REQUIRED)

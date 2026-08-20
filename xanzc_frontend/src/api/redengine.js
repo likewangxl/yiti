@@ -15,7 +15,7 @@ export const updateOrg = (id, data) => call('put', `/re/orgs/${id}`, { data });
 export const deleteOrg = (id, reason) => call('delete', `/re/orgs/${id}`, { data: { reason } });
 
 // ── 用户党组织映射 ──
-export const listUserMaps = () => call('get', '/re/user-party-maps');
+export const listUserMaps = (params = {}) => call('get', '/re/user-party-maps', { params });
 export const bindUserMap = (data) => call('post', '/re/user-party-maps', { data });
 
 // ── 上报 ──

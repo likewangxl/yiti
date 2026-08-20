@@ -13,7 +13,8 @@ import java.util.List;
  * 材料上报-新建请求 DTO。
  * <p>对应源 redengine {@code SubmitController.SubmitRequest}（内嵌 {@code BizSubmit} + fileUrls），
  * 拍平为单一请求体；{@code orgId}/{@code submitterId} 不由前端传入，由 {@code ReSubmitService.createSubmit}
- * 依据当前登录人 empId 通过 {@code ReUserPartyMapService.getRequiredPartyOrgId} 解析（防止越权指定他人组织）。
+ * 依据当前登录人 userId（PT_USER.USER_ID）通过 {@code ReUserPartyMapService.getRequiredPartyOrgId}
+ * 解析（防止越权指定他人组织）。
  * 附件不再传旧版 {@code fileUrls}，改传 {@link #fileObjectIds}——前端先调用 governance
  * {@code POST /api/files/upload} 直传拿到平台文件ID，再随本请求提交，由服务端逐个写
  * {@code RE_SUBMIT_FILE} 并调用 {@code FileApi.bindFile} 完成业务关联登记。</p>
