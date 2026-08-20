@@ -305,7 +305,8 @@
         <el-form-item label="试运行">
           <div class="trial-row">
             <el-date-picker v-model="dlg.trialDate" type="date" value-format="YYYY-MM-DD"
-              placeholder="数据日期（传给 SQL :dataDate）" style="flex:1; min-width:220px" />
+              placeholder="数据日期（昨天至20天前或月末）" :disabled-date="disabledMetricRecalcDate"
+              style="flex:1; min-width:220px" />
             <!-- 对象值：普通输入框，输入什么传什么，直接映射 SQL :objectId（不做联想） -->
             <el-input
               v-model="dlg.trialSubject"
@@ -389,7 +390,7 @@
             v-model="execDlg.dataDate"
             type="date"
             value-format="YYYY-MM-DD"
-            placeholder="选择数据日期（不能大于今天）"
+            placeholder="选择重算日期（昨天至20天前或月末）"
             :disabled-date="execDlg.disabledDate"
             style="width: 100%"
           />
@@ -400,6 +401,7 @@
             type="date"
             value-format="YYYY-MM-DD"
             placeholder="SQL 的 :allocDate（留空默认=数据日期）"
+            :disabled-date="disabledFutureDate"
             style="width: 100%"
           />
         </el-form-item>
@@ -430,13 +432,23 @@ import {
   uploadImportFile
 } from '@/api/perf';
 import { listAuditLogs } from '@/api/system';
+import {
+  getMetricRecalcDateError,
+  isFutureDate,
+  isFutureDateDisabled,
+  isMetricRecalcDateDisabled,
+  todayDate,
+  yesterdayDate
+} from '@/utils/metricRecalcDate';
 
 const router = useRouter();
 
 // === 常量 ===
 const CATEGORY_OPTIONS = ['规模类', '效益类', '质量类', '合规类'];
 const SLOT_TYPES = ['DATE', 'STRING', 'STRING[]', 'INTEGER', 'DECIMAL'];
-const today = new Date().toISOString().slice(0, 10);
+const today = todayDate();
+const disabledMetricRecalcDate = (date) => isMetricRecalcDateDisabled(date);
+const disabledFutureDate = (date) => isFutureDateDisabled(date);
 
 // 后端真实枚举：ACTIVE / DRAFT / DISABLED；INACTIVE 是历史遗留兼容
 const statusCls = (s) => ({ ACTIVE: 'tag-success', DRAFT: 'tag-info', DISABLED: 'tag-warning', INACTIVE: 'tag-warning' }[s] || 'tag-info');
@@ -1203,9 +1215,11 @@ async function onTrialFromDialog() {
     const opErr = checkExprOperator(exprText);
     if (opErr) return ElMessage.warning(opErr);
   }
-  const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+  const yesterday = yesterdayDate();
   // 单日期模式：dlg.trialDate 是 'YYYY-MM-DD' 字符串，作为后端 :dataDate 占位符的值
   const dataDate = dlg.trialDate || yesterday;
+  const dateError = getMetricRecalcDateError(dataDate);
+  if (dateError) return ElMessage.warning(dateError);
   // 对象值：普通输入框手输原值，直接映射后端 SQL :objectId（始终下发，未填则 null）
   const objectId = (dlg.trialSubject || '').trim() || null;
   // Groovy 引用了其它指标(M_xxxx)时必须有对象值，才能按维度+日期+对象值从宽表取数；否则引用指标全为 0
@@ -1253,7 +1267,7 @@ async function onTrialFromDialog() {
 // === 详情侧动作 ===
 async function onTrialRun() {
   // dataDate 默认昨天（T-1 是 perf 模块习惯）
-  const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+  const yesterday = yesterdayDate();
   resetDetailTrial();
   detailTrial.loading = true;
   const t0 = Date.now();
@@ -1282,7 +1296,7 @@ async function onTrialRun() {
 // 立即执行：打开 execDlg 让用户在同一页选日期 (el-date-picker) + 填原因
 function onExecute() {
   execDlg.metricCode = detail.value.metricCode;
-  execDlg.dataDate = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);  // 默认昨日
+  execDlg.dataDate = yesterdayDate();  // 默认昨日
   execDlg.allocDate = '';   // 业绩分配日期（留空默认=数据日期，由后端兜底）
   execDlg.reason = '';
   execDlg.submitting = false;
@@ -1291,9 +1305,13 @@ function onExecute() {
 
 // execDlg "确认执行" 按钮：校验 dataDate / reason 后真正调用后端
 async function confirmExecute() {
-  const today = new Date().toISOString().slice(0, 10);
   if (!execDlg.dataDate)                              return ElMessage.warning('数据日期必填');
-  if (execDlg.dataDate > today)                       return ElMessage.warning(`数据日期不能大于今天（${today}）`);
+  const dateError = getMetricRecalcDateError(execDlg.dataDate);
+  if (dateError)                                      return ElMessage.warning(dateError);
+  const currentDate = todayDate();
+  if (execDlg.allocDate && isFutureDate(execDlg.allocDate)) {
+    return ElMessage.warning(`业绩分配日期不能大于今天（${currentDate}）`);
+  }
   if (!execDlg.reason || !execDlg.reason.trim())      return ElMessage.warning('执行原因必填');
 
   execDlg.submitting = true;
@@ -1364,11 +1382,8 @@ const execDlg = reactive({
   allocDate: '',   // 业绩分配日期（SQL :allocDate；留空默认=数据日期）
   reason: '',
   submitting: false,
-  // el-date-picker disabled-date：禁选今天之后的日期（含 0 点比较）
-  disabledDate: (d) => {
-    const t = new Date(); t.setHours(0, 0, 0, 0);
-    return d.getTime() > t.getTime();
-  }
+  // 指标重算只能选择昨日、近 20 天或更早的自然月末。
+  disabledDate: disabledMetricRecalcDate
 });
 async function onShowVersions() {
   versionDlg.show = true;

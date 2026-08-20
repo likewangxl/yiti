@@ -5,6 +5,7 @@ import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -31,7 +32,7 @@ class JobTriggerParamsTest {
     @Test
     void dataDate_absent_fallsBackToYesterday() {
         assertThat(JobTriggerParams.dataDate(ctxWith(new JobDataMap())))
-                .isEqualTo(LocalDate.now().minusDays(1));
+                .isEqualTo(LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1));
     }
 
     @Test
@@ -39,7 +40,7 @@ class JobTriggerParamsTest {
         JobDataMap data = new JobDataMap();
         data.put("dataDate", "not-a-date");
         assertThat(JobTriggerParams.dataDate(ctxWith(data)))
-                .isEqualTo(LocalDate.now().minusDays(1));
+                .isEqualTo(LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1));
     }
 
     @Test

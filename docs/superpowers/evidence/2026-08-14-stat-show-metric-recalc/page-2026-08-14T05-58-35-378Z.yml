@@ -1,0 +1,146 @@
+- generic [ref=f6e4]:
+  - complementary [ref=f6e5]:
+    - generic [ref=f6e6]:
+      - generic [ref=f6e7]: 银
+      - generic [ref=f6e8]: 银行营销平台
+    - navigation "主导航" [ref=f6e9]
+  - generic [ref=f6e11]:
+    - banner [ref=f6e12]:
+      - button "折叠侧边导航" [expanded] [ref=f6e13] [cursor=pointer]
+      - button "P Playwright CLI 验收会话" [ref=f6e17] [cursor=pointer]:
+        - generic [ref=f6e18]: P
+        - generic [ref=f6e19]:
+          - generic [ref=f6e20]: Playwright CLI
+          - text: 验收会话
+        - generic [ref=f6e21]: ▾
+      - button "通知中心" [ref=f6e22] [cursor=pointer]
+    - navigation "面包屑" [ref=f6e26]:
+      - list [ref=f6e27]:
+        - listitem [ref=f6e28]
+        - listitem [ref=f6e31]: / 绩效与考核
+        - listitem [ref=f6e32]: / 指标库
+    - navigation "工作区页签" [ref=f6e33]:
+      - generic [ref=f6e35]:
+        - button "工作台" [ref=f6e37] [cursor=pointer]
+        - generic [ref=f6e38]:
+          - button "指标库" [ref=f6e39] [cursor=pointer]
+          - button "关闭 指标库" [ref=f6e40] [cursor=pointer]
+    - main [ref=f6e44]:
+      - generic [ref=f6e45]:
+        - heading "指标库定义、验证并维护绩效指标口径" [level=1] [ref=f6e46]
+        - group "指标库操作" [ref=f6e47]:
+          - button "刷新" [ref=f6e48] [cursor=pointer]
+          - button "导入指标" [ref=f6e50] [cursor=pointer]
+          - button "下载模板" [ref=f6e52] [cursor=pointer]
+          - button "新增指标" [ref=f6e54] [cursor=pointer]
+      - generic "指标库双栏工作区" [ref=f6e56]:
+        - region [ref=f6e57]:
+          - generic [ref=f6e58]:
+            - generic [ref=f6e59]:
+              - heading "指标层级" [level=2] [ref=f6e60]
+              - paragraph [ref=f6e61]: 按分类、维度与层级浏览指标定义。
+            - status [ref=f6e62]: 共 1 项指标
+          - form "指标树筛选" [ref=f6e63]:
+            - textbox "按指标名称、编号或分类搜索" [ref=f6e70]:
+              - /placeholder: 搜索：指标名称 / 编号 / 分类
+          - tree "指标层级" [ref=f6e71]:
+            - treeitem "员工" [expanded] [ref=f6e72]:
+              - generic [ref=f6e77] [cursor=pointer]:
+                - generic [ref=f6e78]: 分类
+                - generic [ref=f6e79]: 员工
+              - group [ref=f6e80]:
+                - treeitem "规模类" [expanded] [ref=f6e81]:
+                  - generic [ref=f6e86] [cursor=pointer]:
+                    - generic [ref=f6e87]: 分类
+                    - generic [ref=f6e88]: 规模类
+                  - group [ref=f6e89]:
+                    - treeitem "1 Playwright验证指标 已发布" [ref=f6e90]:
+                      - generic [ref=f6e92] [cursor=pointer]:
+                        - generic [ref=f6e93]: "1"
+                        - generic [ref=f6e94]: Playwright验证指标
+                        - generic [ref=f6e95]: 已发布
+        - region [ref=f6e97]:
+          - generic [ref=f6e98]:
+            - generic [ref=f6e99]:
+              - heading "指标详情 · Playwright验证指标" [level=2] [ref=f6e100]
+              - paragraph [ref=f6e101]: 查看计算逻辑、版本记录和同分类指标。
+            - status [ref=f6e102]: 已选中 Playwright验证指标
+          - generic [ref=f6e103]:
+            - generic [ref=f6e104]: 已发布
+            - generic [ref=f6e106]: v1
+          - table [ref=f6e107]:
+            - row [ref=f6e108]:
+              - cell "编码" [ref=f6e109]
+              - cell [ref=f6e110]:
+                - code [ref=f6e111]: M_PW
+              - cell "分类" [ref=f6e112]
+              - cell "规模类" [ref=f6e113]
+            - row [ref=f6e114]:
+              - cell "维度" [ref=f6e115]
+              - cell "员工" [ref=f6e116]
+              - cell "层级" [ref=f6e117]
+              - cell "1 级" [ref=f6e118]
+            - row [ref=f6e119]:
+              - cell "宽表槽位" [ref=f6e120]
+              - cell "-" [ref=f6e121]
+              - cell "计算方式" [ref=f6e122]
+              - cell "手动" [ref=f6e123]
+            - row [ref=f6e124]:
+              - cell "计算逻辑" [ref=f6e125]
+              - cell "SQL" [ref=f6e126]
+              - cell "创建人" [ref=f6e129]
+              - cell "-" [ref=f6e130]
+            - row [ref=f6e131]:
+              - cell "更新人" [ref=f6e132]
+              - cell "-" [ref=f6e133]
+              - cell "更新时间" [ref=f6e134]
+              - cell "-" [ref=f6e135]
+          - heading "SQL 表达式" [level=3] [ref=f6e136]
+          - generic [ref=f6e137]: SELECT * FROM XAN_M98_CUST_STAT_SHOW3 WHERE STATIS_DT=:dataDate
+          - group "指标详情操作" [ref=f6e138]:
+            - button "编辑" [ref=f6e139] [cursor=pointer]
+            - button "立即执行" [ref=f6e141] [cursor=pointer]
+            - button "查看版本历史" [ref=f6e143] [cursor=pointer]
+            - button "查看审计" [ref=f6e145] [cursor=pointer]
+            - button "停用" [ref=f6e147] [cursor=pointer]
+          - note [ref=f6e149]: 立即执行、编辑和状态变更均属高危动作，会自动写入「系统设置 → 审计日志」。
+          - heading "同分类指标" [level=3] [ref=f6e150]
+          - generic "同分类指标列表" [ref=f6e151]:
+            - generic [ref=f6e152]:
+              - table [ref=f6e154]:
+                - rowgroup [ref=f6e163]:
+                  - row [ref=f6e164]:
+                    - columnheader "编码" [ref=f6e165]
+                    - columnheader "名称" [ref=f6e167]
+                    - columnheader "计算" [ref=f6e169]
+                    - columnheader "状态" [ref=f6e171]
+                    - columnheader "版本" [ref=f6e173]
+                    - columnheader "更新" [ref=f6e175]
+                    - columnheader "操作" [ref=f6e177]
+              - generic [ref=f6e182]:
+                - table:
+                  - rowgroup
+                - generic [ref=f6e183]: 暂无同分类指标
+      - dialog "立即执行" [ref=f6e187]:
+        - generic [active] [ref=f6e188]:
+          - generic [ref=f6e189]:
+            - heading "立即执行" [level=2] [ref=f6e190]
+            - button "关闭此对话框" [ref=f6e191] [cursor=pointer]
+          - generic [ref=f6e196]:
+            - generic [ref=f6e197]:
+              - generic [ref=f6e198]: 指标编码
+              - textbox "指标编码" [ref=f6e202]: M_PW
+            - generic [ref=f6e203]:
+              - generic [ref=f6e204]: "* 数据日期"
+              - combobox "* 数据日期" [ref=f6e212]: 2026-08-13
+            - generic [ref=f6e213]:
+              - generic [ref=f6e214]: 业绩分配日期
+              - combobox "业绩分配日期" [ref=f6e222]
+            - generic [ref=f6e223]:
+              - generic [ref=f6e224]: "* 执行原因"
+              - textbox "* 执行原因" [ref=f6e227]:
+                - /placeholder: 高危操作，必填执行原因
+            - note [ref=f6e228]: 将写入宽表和 run_task，并自动记入审计日志。
+          - generic [ref=f6e229]:
+            - button "取消" [ref=f6e230] [cursor=pointer]
+            - button "确认执行" [ref=f6e232] [cursor=pointer]

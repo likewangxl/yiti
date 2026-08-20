@@ -2,14 +2,13 @@ package com.bank.branch.platform.performance.job;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
 
 /**
- * 统计展示表旬度归档「日期逻辑」纯计算器（无副作用、无依赖，便于单测）.
+ * 统计展示表归档日期纯函数。
  *
- * <p>旬归属：1~10→_H2，11~20→_H3，21~月末→_H1。日期一律 yyyy-MM-dd 定宽字符串。
+ * <p>历史表归属以「运行日」为准：1~10 日写 {@code _H1}，11~20 日写 {@code _H2}，
+ * 21 日至月末写 {@code _H3}。指标计算传入的是数据日（T-1），因此数据日路由必须
+ * 先加一天还原归档运行日。
  */
 public final class StatShowArchiveDates {
 
@@ -18,84 +17,40 @@ public final class StatShowArchiveDates {
     private StatShowArchiveDates() {
     }
 
-    /** 边界清理区间：历史表后缀 + 闭区间 [start, end]. */
-    public record CleanupRange(String histSuffix, LocalDate start, LocalDate end) {
-    }
-
-    /** 主表瘦身月区间：闭区间 [start, end]. */
-    public record MonthRange(LocalDate start, LocalDate end) {
-    }
-
-    /** 某日所属旬的历史表后缀（_H2 / _H3 / _H1）. */
-    public static String histSuffix(LocalDate d) {
-        int day = d.getDayOfMonth();
+    /** 按归档运行日选择历史表后缀。 */
+    public static String histSuffixForRunDate(LocalDate runDate) {
+        int day = runDate.getDayOfMonth();
         if (day <= 10) {
+            return "_H1";
+        }
+        if (day <= 20) {
             return "_H2";
         }
-        if (day <= 20) {
-            return "_H3";
-        }
-        return "_H1";
-    }
-
-    /** 某日所属旬的旬首日（1 / 11 / 21 号）. */
-    public static LocalDate sliceStart(LocalDate d) {
-        int day = d.getDayOfMonth();
-        if (day <= 10) {
-            return d.withDayOfMonth(1);
-        }
-        if (day <= 20) {
-            return d.withDayOfMonth(11);
-        }
-        return d.withDayOfMonth(21);
+        return "_H3";
     }
 
     /**
-     * 旬边界清理区间：仅当 today 为 1/11/21 号返回「上一代」旧旬；否则 empty.
-     * 11→上月1~10(_H2)；21→上月11~20(_H3)；1→上上月21~末(_H1，因该旬跨月上一代前推两月).
+     * 按指标数据日选择历史表后缀。
+     *
+     * <p>归档任务在运行日写入前一日数据，所以 dataDate+1 才是旬归属运行日。
      */
-    public static Optional<CleanupRange> boundaryCleanup(LocalDate today) {
-        return switch (today.getDayOfMonth()) {
-            case 11 -> {
-                LocalDate pm = today.minusMonths(1);
-                yield Optional.of(new CleanupRange("_H2", pm.withDayOfMonth(1), pm.withDayOfMonth(10)));
-            }
-            case 21 -> {
-                LocalDate pm = today.minusMonths(1);
-                yield Optional.of(new CleanupRange("_H3", pm.withDayOfMonth(11), pm.withDayOfMonth(20)));
-            }
-            case 1 -> {
-                LocalDate p2 = today.minusMonths(2);
-                yield Optional.of(new CleanupRange("_H1", p2.withDayOfMonth(21), monthEnd(p2)));
-            }
-            default -> Optional.empty();
-        };
+    public static String histSuffixForDataDate(LocalDate dataDate) {
+        return histSuffixForRunDate(dataDate.plusDays(1));
     }
 
-    /** 主表瘦身月：仅 today 为 1 号返回上月整月区间；否则 empty. */
-    public static Optional<MonthRange> pruneMonth(LocalDate today) {
-        if (today.getDayOfMonth() != 1) {
-            return Optional.empty();
-        }
-        LocalDate pm = today.minusMonths(1);
-        return Optional.of(new MonthRange(pm.withDayOfMonth(1), monthEnd(pm)));
+    /** 兼容旧调用名：参数语义为运行日。 */
+    public static String histSuffix(LocalDate runDate) {
+        return histSuffixForRunDate(runDate);
     }
 
-    /** 闭区间 [start, end] 的所有日期，升序. */
-    public static List<LocalDate> datesInclusive(LocalDate start, LocalDate end) {
-        List<LocalDate> list = new ArrayList<>();
-        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
-            list.add(d);
-        }
-        return list;
+    /** 运行日是否为旬切换日。 */
+    public static boolean isBoundaryRunDate(LocalDate runDate) {
+        int day = runDate.getDayOfMonth();
+        return day == 1 || day == 11 || day == 21;
     }
 
-    /** yyyy-MM-dd. */
-    public static String fmt(LocalDate d) {
-        return d.format(DT);
-    }
-
-    private static LocalDate monthEnd(LocalDate m) {
-        return m.withDayOfMonth(m.lengthOfMonth());
+    /** yyyy-MM-dd。 */
+    public static String fmt(LocalDate date) {
+        return date.format(DT);
     }
 }

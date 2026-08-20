@@ -10,6 +10,7 @@ import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
 import com.bank.branch.platform.performance.service.engine.GroovyExecutor;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
+import com.bank.branch.platform.performance.service.engine.StatShowSqlRouter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,7 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -85,12 +87,49 @@ class MetricCalcServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private StatShowSqlRouter statShowSqlRouter;
+
     @InjectMocks
     private MetricCalcService metricCalcService;
 
     @BeforeEach
     void configureDefaults() {
         // 测试 ExecutorService 超时的默认值不依赖 PerfEngineProperties，这里省略配置注入
+        // 保持既有 SQL 断言聚焦执行参数；路由行为在专门用例中验证。
+        lenient().when(statShowSqlRouter.route(anyString(), any(LocalDate.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @Test
+    @DisplayName("SQL 正式执行：先经统计展示表路由，再把改写 SQL 交给 SqlExecutor，定义文本不变")
+    void calcMetric_sqlRoutesBeforeExecutor_withoutMutatingDefinition() {
+        PerfMetricDef def = buildEmpSqlMetric();
+        String original = "SELECT emp_id AS base_key, v AS metric_value FROM XAN_M98_EMP_STAT_SHOW3";
+        String routed = "SELECT emp_id AS base_key, v AS metric_value FROM XAN_M98_EMP_STAT_SHOW3_H2";
+        def.setSqlText(original);
+        when(metricDefService.getByCodeOrNull("TEST_CALC_ROUTE")).thenReturn(def);
+        when(statShowSqlRouter.route(original, LocalDate.of(2026, 8, 14))).thenReturn(routed);
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(Map.of());
+
+        metricCalcService.calcMetric("TEST_CALC_ROUTE", LocalDate.of(2026, 8, 14), "v1");
+
+        verify(statShowSqlRouter).route(original, LocalDate.of(2026, 8, 14));
+        verify(sqlExecutor).execute(eq(routed), anyMap(), any(Duration.class));
+        assertThat(def.getSqlText()).isEqualTo(original);
+    }
+
+    @Test
+    @DisplayName("无副作用预检：只读取并校验定义/日期，不创建 run_task")
+    void preflightMetric_doesNotCreateRunTask() {
+        PerfMetricDef def = buildEmpSqlMetric();
+        def.setSqlText("SELECT 1 FROM XAN_M98_EMP_STAT_SHOW3");
+        when(metricDefService.getByCodeOrNull("TEST_CALC_PREFLIGHT")).thenReturn(def);
+
+        metricCalcService.preflightMetric("TEST_CALC_PREFLIGHT", LocalDate.of(2026, 8, 14));
+
+        verify(statShowSqlRouter).route(def.getSqlText(), LocalDate.of(2026, 8, 14));
+        verify(perfRunTaskMapper, never()).insert(any(PerfRunTask.class));
     }
 
     @Test

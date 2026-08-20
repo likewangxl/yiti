@@ -105,13 +105,20 @@ public class HistoryRecalcService {
         // 3. 建立日期列表（闭区间 [start, end]）
         List<LocalDate> dates = buildDateList(startDate, endDate);
 
-        // 4. 插入父 run_task（PENDING → RUNNING）
+        // 4. 父任务落库前预检全部 date × metric，避免非法日期/SQL 路由请求留下孤立父任务。
+        for (LocalDate date : dates) {
+            for (String metricCode : effectiveMetricCodes) {
+                metricCalcService.preflightMetric(metricCode, date);
+            }
+        }
+
+        // 5. 插入父 run_task（PENDING → RUNNING）
         String parentTaskId = generateTaskId();
         insertParentTask(parentTaskId, startDate, endDate, version, operator, reason,
                 effectiveMetricCodes.size(), dates.size(), cycleType);
         perfRunTaskMapper.updateStatus(parentTaskId, "RUNNING", null);
 
-        // 5. 外层循环：日期；内层循环：指标——调用 MetricCalcService.calcMetric
+        // 6. 外层循环：日期；内层循环：指标——调用 MetricCalcService.calcMetric
         List<String> childTaskIds = new ArrayList<>();
         int successCount = 0;
         int failureCount = 0;
@@ -141,14 +148,14 @@ public class HistoryRecalcService {
             }
         }
 
-        // 6. 持久化 childTaskIds 到父 task 的 result_preview_json（V1.1 P8 Task C.1）
+        // 7. 持久化 childTaskIds 到父 task 的 result_preview_json（V1.1 P8 Task C.1）
         //    用手工拼接 JSON 数组避免额外引入 ObjectMapper 依赖；childTaskId 由 UUID 生成，
         //    字符集合法，不含 " \ 等需转义字符。
         //    终态更新前执行，保证即使后续 updateStatus 抛异常 result_preview_json 也已落库。
         String childTaskIdsJson = toJsonArray(childTaskIds);
         perfRunTaskMapper.updateResultPreviewJson(parentTaskId, childTaskIdsJson);
 
-        // 7. 聚合父 task 终态
+        // 8. 聚合父 task 终态
         String finalStatus = resolveFinalStatus(successCount, failureCount);
         String aggregatedMsg = buildAggregatedMessage(successCount, failureCount, failureDetails);
         perfRunTaskMapper.updateStatus(parentTaskId, finalStatus, aggregatedMsg);

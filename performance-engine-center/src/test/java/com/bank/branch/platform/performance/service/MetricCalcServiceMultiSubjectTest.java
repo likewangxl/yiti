@@ -8,6 +8,7 @@ import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
 import com.bank.branch.platform.performance.service.engine.GroovyExecutor;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
+import com.bank.branch.platform.performance.service.engine.StatShowSqlRouter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -70,8 +71,9 @@ class MetricCalcServiceMultiSubjectTest {
         runTaskMapper = mock(PerfRunTaskMapper.class);
         subjectFetcher = mock(SubjectFetcher.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
-        service = new MetricCalcService(metricDefService, sqlExecutor, groovyExecutor,
-            empMapper, orgMapper, custMapper, runTaskMapper, null, subjectFetcher, eventPublisher, null);
+        service = new MetricCalcService(metricDefService, sqlExecutor, new StatShowSqlRouter(),
+            groovyExecutor, empMapper, orgMapper, custMapper, runTaskMapper,
+            null, subjectFetcher, eventPublisher, null);
     }
 
     @Test

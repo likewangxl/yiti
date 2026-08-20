@@ -22,6 +22,7 @@ import com.bank.branch.platform.performance.service.SysControlService;
 import com.bank.branch.platform.performance.service.cmd.CreateMetricDefCmd;
 import com.bank.branch.platform.performance.service.cmd.UpdateMetricDefCmd;
 import com.bank.branch.platform.performance.service.dto.MetricTrialResult;
+import com.bank.branch.platform.performance.service.engine.StatShowSqlRouter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.bank.branch.platform.common.web.lock.LockManager;
@@ -65,6 +66,8 @@ public class MetricLifecycleFacade {
     private final MetricRefService metricRefService;
     /** 2026-07-22：指标执行改「提交即返回」后的后台执行体. */
     private final MetricAsyncRunner metricAsyncRunner;
+    /** 重算入口共享日期边界校验（上海时区）。 */
+    private final StatShowSqlRouter statShowSqlRouter;
 
     /**
      * 在基础维度级别申请锁后创建指标.
@@ -287,6 +290,9 @@ public class MetricLifecycleFacade {
         // 预校验指标存在性：不存在时抛 PERF-40001，避免产生孤立 run_task
         PerfMetricDef def = metricDefService.getByCode(metricCode);
 
+        // 所有同步/异步重算入口统一先校验日期与受影响指标，确保任何 PENDING 创建前请求已被拒绝。
+        statShowSqlRouter.validateRecalcDate(dataDate);
+
         // 解析版本：从 SYS_CONTROL 当前生效版本读取（可为空时使用兜底版本）
         String version;
         try {
@@ -301,6 +307,12 @@ public class MetricLifecycleFacade {
 
         boolean cascade = cascadeInput == null ? Boolean.TRUE : cascadeInput;
         boolean async = asyncInput == null || asyncInput;
+
+        if (cascade) {
+            cascadeRefresher.preflightCascade(metricCode, dataDate);
+        } else {
+            metricCalcService.preflightMetric(metricCode, dataDate);
+        }
 
         if (async) {
             return submitAsync(metricCode, dataDate, version, cascade, allocDate);

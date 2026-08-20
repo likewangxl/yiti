@@ -3,30 +3,21 @@ package com.bank.branch.platform.performance.mapper;
 import org.apache.ibatis.annotations.Param;
 
 /**
- * 统计展示表旬度归档 Mapper（XAN_M98_CUST/EMP_STAT_SHOW3 及其历史表 _H1/_H2/_H3）.
+ * 统计展示表 T-1 归档 Mapper。
  *
- * <p>表名为固定白名单字面量（来自 StatShowArchiveJob.MAIN_TABLES + 后缀，非用户输入），用 ${} 拼接；
- * STATIS_DT 一律 #{} 占位。外部表无主键、非 MyBatis-Plus 实体，故用原生 XML。所有方法按单日操作，
- * 每次 ≤ 一天数据量（约 200 万），逐日提交避免巨型事务。
+ * <p>表名只由 {@code StatShowArchiveJob} 的固定白名单和固定后缀生成，因此使用 ${} 拼接；
+ * 日期条件一律使用 #{}。每次调用只处理 tmp 中的一个 STATIS_DT，不做数据边界预查询。
  */
 public interface StatShowArchiveMapper {
 
-    /** 统计某表在某 STATIS_DT 的行数（main/hist 通用，用于幂等 count 比对）. */
-    long countByTableDate(@Param("table") String table, @Param("dt") String dt);
+    /** 清空旬边界对应的固定历史表。 */
+    int truncateTable(@Param("table") String table);
 
-    /** 将主表某 STATIS_DT 的数据整行插入历史表（历史表与主表列同构，SELECT * 安全）. */
-    int insertHistByDate(@Param("histTable") String histTable,
-                         @Param("mainTable") String mainTable,
-                         @Param("dt") String dt);
+    /** 删除目标表的单日数据，供普通日及 1 号主表写入幂等使用。 */
+    int deleteByTableDate(@Param("table") String table, @Param("dt") String dt);
 
-    /** 删除历史表某 STATIS_DT 的数据. */
-    int deleteHistByDate(@Param("histTable") String histTable, @Param("dt") String dt);
-
-    /** 取主表指定闭区间内的 MAX(STATIS_DT)（作为「该月最后一天」），无数据返回 null. */
-    String selectMaxStatisDt(@Param("mainTable") String mainTable,
-                             @Param("start") String start,
-                             @Param("end") String end);
-
-    /** 删除主表某 STATIS_DT 的数据（瘦身按天分批用）. */
-    int deleteMainByDate(@Param("mainTable") String mainTable, @Param("dt") String dt);
+    /** 将 tmp 表单日 T-1 数据整行写入目标表。 */
+    int insertFromTmpByDate(@Param("targetTable") String targetTable,
+                            @Param("tmpTable") String tmpTable,
+                            @Param("dt") String dt);
 }

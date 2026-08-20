@@ -103,7 +103,7 @@
         </el-form-item>
         <el-form-item label="数据日期" required>
           <el-date-picker v-model="execDlg.dataDate" type="date" value-format="YYYY-MM-DD"
-            placeholder="选择数据日期（不能大于今天）" :disabled-date="disabledFuture" style="width:100%" />
+            placeholder="选择重算日期（昨天至20天前或月末）" :disabled-date="disabledFuture" style="width:100%" />
         </el-form-item>
         <el-form-item label="原因" required>
           <el-input v-model="execDlg.reason" type="textarea" :rows="3" placeholder="高危操作，必填原因" />
@@ -124,7 +124,7 @@
         </el-form-item>
         <el-form-item label="数据日期" required>
           <el-date-picker v-model="batchDlg.dataDate" type="date" value-format="YYYY-MM-DD"
-            placeholder="选择数据日期（不能大于今天）" :disabled-date="disabledFuture" style="width:100%" />
+            placeholder="选择重算日期（昨天至20天前或月末）" :disabled-date="disabledFuture" style="width:100%" />
         </el-form-item>
         <el-form-item label="原因" required>
           <el-input v-model="batchDlg.reason" type="textarea" :rows="3" placeholder="一条原因套用整批，高危必填" />
@@ -179,6 +179,11 @@ import { ElMessage } from 'element-plus';
 import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import { listMetricSummary, batchExecuteMetrics, executeMetric, listMetrics, listRunTasks } from '@/api/perf';
 import { listDictItems } from '@/api/system';
+import {
+  getMetricRecalcDateError,
+  isMetricRecalcDateDisabled,
+  todayDate
+} from '@/utils/metricRecalcDate';
 
 // 状态字典 + badge 配色
 const STATUS_MAP = {
@@ -198,10 +203,9 @@ function fmtTime(t) {
   return String(t).replace('T', ' ').slice(0, 19);
 }
 const today = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return todayDate();
 };
-const disabledFuture = (d) => { const t = new Date(); t.setHours(0, 0, 0, 0); return d.getTime() > t.getTime(); };
+const disabledFuture = (d) => isMetricRecalcDateDisabled(d);
 
 // 任务类型字典（默认兜底一项，字典拉到后覆盖）
 const taskTypes = ref([{ value: 'METRIC_RECALC', label: '指标重算' }]);
@@ -276,7 +280,8 @@ async function confirmExecute() {
   if (execDlg.submitting) return;
   if (!execDlg.metricCode) return ElMessage.warning('请选择指标');
   if (!execDlg.dataDate) return ElMessage.warning('执行时间必填');
-  if (execDlg.dataDate > today()) return ElMessage.warning(`执行时间不能大于今天（${today()}）`);
+  const dateError = getMetricRecalcDateError(execDlg.dataDate);
+  if (dateError) return ElMessage.warning(dateError);
   if (!execDlg.reason || !execDlg.reason.trim()) return ElMessage.warning('原因必填');
   execDlg.submitting = true;
   try {
@@ -305,7 +310,8 @@ async function confirmBatch() {
   if (batchDlg.submitting) return;
   if (!batchDlg.metricCodes.length) return ElMessage.warning('未选择指标');
   if (!batchDlg.dataDate) return ElMessage.warning('数据日期必填');
-  if (batchDlg.dataDate > today()) return ElMessage.warning(`数据日期不能大于今天（${today()}）`);
+  const dateError = getMetricRecalcDateError(batchDlg.dataDate);
+  if (dateError) return ElMessage.warning(dateError);
   if (!batchDlg.reason || !batchDlg.reason.trim()) return ElMessage.warning('原因必填');
   batchDlg.submitting = true;
   try {

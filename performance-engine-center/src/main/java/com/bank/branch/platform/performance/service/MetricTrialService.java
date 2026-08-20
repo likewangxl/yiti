@@ -9,6 +9,7 @@ import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.service.dto.MetricTrialResult;
 import com.bank.branch.platform.performance.service.engine.GroovyExecutor;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
+import com.bank.branch.platform.performance.service.engine.StatShowSqlRouter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -56,6 +57,7 @@ public class MetricTrialService {
 
     private final MetricDefService metricDefService;
     private final SqlExecutor sqlExecutor;
+    private final StatShowSqlRouter statShowSqlRouter;
     private final GroovyExecutor groovyExecutor;
     private final PerfEngineProperties perfEngineProperties;
     /** EXPR 试运行时按 baseDim 选宽表加载 M_xxx 引用指标值，复用调度态绑定逻辑. */
@@ -66,12 +68,14 @@ public class MetricTrialService {
     @Autowired
     public MetricTrialService(MetricDefService metricDefService,
                               SqlExecutor sqlExecutor,
+                              StatShowSqlRouter statShowSqlRouter,
                               GroovyExecutor groovyExecutor,
                               PerfEngineProperties perfEngineProperties,
                               MetricCalcService metricCalcService,
                               SysControlService sysControlService) {
         this.metricDefService = metricDefService;
         this.sqlExecutor = sqlExecutor;
+        this.statShowSqlRouter = statShowSqlRouter;
         this.groovyExecutor = groovyExecutor;
         this.perfEngineProperties = perfEngineProperties;
         this.metricCalcService = metricCalcService;
@@ -156,6 +160,10 @@ public class MetricTrialService {
     /** 共用：按 def（已保存或临时构造）按 calcLogicType 分派执行试运行. */
     private MetricTrialResult runByDef(PerfMetricDef def, LocalDate dataDate,
                                        Integer sampleSize, Map<String, Object> params, LocalDate allocDate) {
+        // trial-run 也是重算入口：今天/未来日期全局禁止；保留 null 的旧调用兼容，正式 DTO 由校验层保证非空。
+        if (dataDate != null) {
+            statShowSqlRouter.validateRecalcDate(dataDate);
+        }
         int effectiveSample = resolveSampleSize(sampleSize);
         int timeoutSeconds = perfEngineProperties == null
                 ? 30 : Math.max(1, perfEngineProperties.getSqlTimeoutSeconds());
@@ -191,7 +199,8 @@ public class MetricTrialService {
         if (params != null) {
             mergedParams.putAll(params);
         }
-        mergedParams.putIfAbsent("dataDate", dataDate);
+        // 请求日期是系统边界，必须覆盖用户 params 中同名值，避免 SQL 实际绑定到另一日期。
+        mergedParams.put("dataDate", dataDate);
         if (dataDate != null) {
             mergedParams.putAll(DateMacroResolver.resolve(dataDate));
         }
@@ -201,7 +210,11 @@ public class MetricTrialService {
         // 对象id占位符 :objectId —— 由试运行的"对象值"输入框经 params 传入；未输入时绑 null，避免 SQL 含 :objectId 时绑定缺失报错
         mergedParams.putIfAbsent("objectId", null);
 
-        Map<String, BigDecimal> all = sqlExecutor.execute(def.getSqlText(), mergedParams, timeout);
+        // dataDate 按 API 约定必填；保留 null 兼容试运行旧调用方，非 null 时统一走路由。
+        String routedSql = dataDate == null
+                ? def.getSqlText()
+                : statShowSqlRouter.route(def.getSqlText(), dataDate);
+        Map<String, BigDecimal> all = sqlExecutor.execute(routedSql, mergedParams, timeout);
         int total = all == null ? 0 : all.size();
         List<Map<String, Object>> samples = new ArrayList<>();
         if (all != null) {
