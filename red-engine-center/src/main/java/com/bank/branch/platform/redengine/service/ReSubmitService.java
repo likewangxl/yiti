@@ -41,23 +41,23 @@ public class ReSubmitService {
 
     /**
      * 创建材料上报（含附件绑定）。
-     * <p>orgId 不由前端传入，而是依据当前登录人 empId 通过
+     * <p>orgId 不由前端传入，而是依据当前登录人 userId（PT_USER.USER_ID）通过
      * {@link ReUserPartyMapService#getRequiredPartyOrgId} 解析当前用户归属的党组织，
      * 防止越权把上报记录挂到别的党组织名下；未绑定党组织时该调用直接抛 RE-40001，
      * 本方法不做兜底吞掉，事务连同已执行的写操作一并回滚。</p>
      *
      * @param req   创建请求（考核维度/项目/日期等表单字段 + 附件 fileObjectId 列表）
-     * @param empId 当前登录人平台工号（提交人）
+     * @param userId 当前登录人平台用户ID（提交人）
      * @return 新建上报记录ID
      * @throws com.bank.branch.platform.common.web.exception.BizException code=RE-40001，当前用户未绑定党组织
      */
     @Transactional(rollbackFor = Exception.class)
-    public Long createSubmit(ReSubmitCreateReqDTO req, String empId) {
-        Long orgId = reUserPartyMapService.getRequiredPartyOrgId(empId);
+    public Long createSubmit(ReSubmitCreateReqDTO req, String userId) {
+        Long orgId = reUserPartyMapService.getRequiredPartyOrgId(userId);
 
         ReSubmit submit = new ReSubmit();
         submit.setOrgId(orgId);
-        submit.setSubmitterId(empId);
+        submit.setSubmitterId(userId);
         submit.setDimension(req.getDimension());
         submit.setItemCode(req.getItemCode());
         submit.setItemName(req.getItemName());
@@ -84,7 +84,7 @@ public class ReSubmitService {
         }
 
         log.info("[ReSubmitService.createSubmit] id={}, orgId={}, submitterId={}, fileCount={}",
-                submit.getId(), orgId, empId, fileObjectIds == null ? 0 : fileObjectIds.size());
+                submit.getId(), orgId, userId, fileObjectIds == null ? 0 : fileObjectIds.size());
         return submit.getId();
     }
 
@@ -93,14 +93,14 @@ public class ReSubmitService {
      * <p>按当前登录人映射的党组织(orgId)过滤——与源系统一致，语义是"本党组织的上报记录"，
      * 而非"本人提交的记录"，供支部内报送员/书记/审核员共同查看同一党组织的上报进度。</p>
      *
-     * @param empId    当前登录人平台工号
+     * @param userId   当前登录人平台用户ID（PT_USER.USER_ID）
      * @param pageNo   页码（从1开始）
      * @param pageSize 每页大小
      * @return 分页结果
      * @throws com.bank.branch.platform.common.web.exception.BizException code=RE-40001，当前用户未绑定党组织
      */
-    public PageResult<ReSubmit> getMySubmits(String empId, int pageNo, int pageSize) {
-        Long orgId = reUserPartyMapService.getRequiredPartyOrgId(empId);
+    public PageResult<ReSubmit> getMySubmits(String userId, int pageNo, int pageSize) {
+        Long orgId = reUserPartyMapService.getRequiredPartyOrgId(userId);
 
         LambdaQueryWrapper<ReSubmit> wrapper = new LambdaQueryWrapper<ReSubmit>()
                 .eq(ReSubmit::getOrgId, orgId)

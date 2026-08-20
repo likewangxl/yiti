@@ -10,7 +10,8 @@
 
 允许的跨模块依赖只有平台基础模块，以及：
 
-- `auth-permission-center` 的 `CurrentUserApi`，用于取得当前登录人工号；
+- `auth-permission-center` 的 `CurrentUserApi`，用于取得当前登录人 `PT_USER.USER_ID`；
+- `auth-permission-center` 的 `UserApi`，用于校验用户映射中的 `USER_ID` 并批量补充展示用 `USERNAME`；
 - `system-governance-center` 的 `FileApi`，用于附件绑定。
 
 ## 代码与持久化
