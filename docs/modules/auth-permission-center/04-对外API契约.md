@@ -512,7 +512,7 @@ public interface UserApi {
      * 批量过滤出「确实存在」的用户名（工号），用于大批量存在性校验.
      *
      * <p>与 {@link #getUsersByUsernames(List)} 不同：本方法**只做存在性判断**，单次/分片 IN 查询，
-     * 不装配机构等 DTO 信息，避免逐人 N+1（导入 5 万行时 getUsersByUsernames 会触发约 15 万次查询）。
+     * 不装配机构等 DTO 信息，适合只需存在性结果的大批量场景。
      *
      * @param usernames 待校验用户名列表（null/空 → 返回空）
      * @return 其中在 PT_USER 中存在的用户名子集（去重，顺序不保证）
@@ -523,8 +523,8 @@ public interface UserApi {
      * 批量查询「用户名 → USER_ID」映射，用于大批量导入时的存在性校验 + 工号归一。
      *
      * <p>与 {@link #getUsersByUsernames(List)} 不同：本方法**只做单次/分片 IN 查询**，
-     * 仅取 USERNAME / USER_ID 两列，**不逐人装配机构/角色等 DTO**，因此不会触发 N+1
-     * （{@code getUsersByUsernames} 对每个用户回调 {@code getUserByEmpId}，导入 5 万行约 15 万次查询）。
+     * 仅取 USERNAME / USER_ID 两列，不装配机构等完整 DTO。{@code getUsersByUsernames}
+     * 当前同样使用批量用户查询和批量机构装配，不存在逐用户回调导致的 N+1；本方法的优势是返回字段更少。
      *
      * <p>典型场景：评价任务/分配明细导入时，Excel「员工编号」列填登录用户名，
      * 需一次性校验是否为系统有效员工，并把用户名归一为 USER_ID 存储。
@@ -538,8 +538,9 @@ public interface UserApi {
      * 批量查询「USER_ID → 用户名(工号 USERNAME)」映射，用于大批量导出时按 USER_ID 反查登录名。
      *
      * <p>与 {@link #getUserByEmpIds(List)} 不同：本方法**只做单次/分片 IN 查询**，
-     * 仅取 USER_ID / USERNAME 两列，**不逐人装配机构/角色等 DTO**，因此不会触发 N+1
-     * （{@code getUserByEmpIds} 对每个 USER_ID 回调 {@code getUserByEmpId}，每人 3 次查询）。
+     * 仅取 USER_ID / USERNAME 两列，不装配机构等完整 DTO。{@code getUserByEmpIds}
+     * 当前使用 {@code selectByUserIds} 批量查用户，再由 {@code buildUserDtos} 批量查主机构关联和机构名称，
+     * 不存在逐 USER_ID 回调 {@code getUserByEmpId} 导致的 N+1；本方法的优势是返回字段更少。
      *
      * <p>典型场景：评价明细 Excel 导出（20 万行）时，去重 USER_ID 后一次性反查工号展示，
      * 由于一个批次的去重人数有限（打分人+被打分人），分片查询次数 ≈ 去重数/1000。
@@ -560,6 +561,17 @@ public interface UserApi {
     PageResult<UserDTO> pageUsers(String keyword, int pageNo, int pageSize);
 
     /**
+     * 按登录工号与中文姓名查询用户，两个非空条件之间为 AND，各字段均为包含式模糊匹配。
+     * <p>用于跨模块先形成候选 USER_ID 集合，再在消费模块自己的数据表内做分页，避免跨模块
+     * 直接关联 PT_USER。两个条件均为空时返回空列表，防止误触发无条件全量查询。</p>
+     *
+     * @param username    登录工号（PT_USER.USERNAME，null/空表示不限制）
+     * @param displayName 中文姓名（PT_USER.USERCHNNAME，null/空表示不限制）
+     * @return 匹配用户的最小展示信息（empId/username/displayName）；无匹配返回空列表
+     */
+    List<UserDTO> findUsersByUsernameAndDisplayName(String username, String displayName);
+
+    /**
      * 批量查询多个用户的角色简要列表，避免逐用户 N+1。
      *
      * @param userIds 用户ID（工号）列表
@@ -570,10 +582,13 @@ public interface UserApi {
 ```
 
 **调用约束：**
-- 全部 14 个方法均为「显式传参 empId/username/roleCode 等」的**无会话方法**，不依赖登录态 ThreadLocal；供 `workflow-center` 候选人解析、`customer-marketing-center` 数据导入导出、`soap-gateway-center`（SOAP/callpu 网关）等**无登录态**场景直接调用——调用方需自行完成上游鉴权，本模块不做二次校验（与 `auth-permission-center/AGENTS.md` 的模块边界一致）
+- 全部方法均为「显式传参 empId/username/roleCode 等」的**无会话方法**，不依赖登录态 ThreadLocal；供 `workflow-center` 候选人解析、`customer-marketing-center` 数据导入导出、`red-engine-center` 用户映射筛选、`soap-gateway-center`（SOAP/callpu 网关）等**无登录态**场景直接调用——调用方需自行完成上游鉴权，本模块不做二次校验（与 `auth-permission-center/AGENTS.md` 的模块边界一致）
 - `getUserRoleCodes()` 当前**不走缓存**（2026-04-29 性能说明）：每次调用直接 `PT_USER_ROLE JOIN PT_ROLE`；auth 模块既有 `auth:user-roles:{empId}` 缓存的是 roleIds（非 roleCodes），语义不同无法复用；高频场景需调用方自行加应用层缓存
-- 批量存在性校验/归一化场景**优先使用** `filterExistingUsernames()` / `mapUsernamesToEmpId()` / `mapEmpIdsToUsername()`（仅单次/分片 IN 查询，不逐人装配机构等 DTO）而非 `getUsersByUsernames()` / `getUserByEmpIds()`（后两者对每条记录回调单条查询，大批量场景存在 N+1 风险，5 万行导入可触发约 15 万次查询）
+- 批量存在性校验/归一化场景**优先使用** `filterExistingUsernames()` / `mapUsernamesToEmpId()` / `mapEmpIdsToUsername()`，因为它们仅返回存在性或 ID 映射，不装配机构等完整 DTO。`getUsersByUsernames()` / `getUserByEmpIds()` 当前也是批量查用户、批量装配机构，不存在逐用户回调造成的 N+1；需要完整 `UserDTO` 时可直接使用
 - `pageUsers()`：`pageNo<1` 归一为 1，`pageSize<1` 归一为 20，`pageSize>100` 截断为 100，与 auth 模块内部分页参数口径一致
+- `findUsersByUsernameAndDisplayName()`：`username` 与 `displayName` 先 trim，非空条件分别对
+  `PT_USER.USERNAME`/`PT_USER.USERCHNNAME` 做包含式模糊查询，同时传入时用 AND 组合；两者均空时
+  直接返回空列表且不访问数据库。返回 DTO 只装配 `empId`/`username`/`displayName`，不装配机构和角色。
 - `getRolesByUserIds()`：批量查询避免逐用户 N+1；入参为空返回空 Map，无角色的 userId 不在返回 Map 中（而非补 null）
 - `UserDTO` 字段结构见本文档「8. DTO 定义」补充；`RoleSimpleDTO` 字段结构见 `03-接口设计与报文.md` A.1
 

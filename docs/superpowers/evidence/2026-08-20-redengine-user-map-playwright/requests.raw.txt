@@ -1,0 +1,43 @@
+### Request list
+46. [GET] http://127.0.0.1:8091/api/auth/current-user => [200] OK
+47. [GET] http://127.0.0.1:8091/api/auth/my-menus => [200] OK
+49. [GET] http://127.0.0.1:8091/api/auth/permissions => [200] OK
+56. [GET] http://127.0.0.1:8091/api/re/user-party-maps => [200] OK
+57. [GET] http://127.0.0.1:8091/api/re/orgs/tree => [200] OK
+58. [GET] http://127.0.0.1:8091/api/admin/users?pageNo=1&pageSize=100 => [200] OK
+59. [GET] http://127.0.0.1:8091/api/admin/users?pageNo=1&pageSize=100 => [200] OK
+60. [POST] http://127.0.0.1:8091/api/re/user-party-maps => [200] OK
+61. [GET] http://127.0.0.1:8091/api/re/user-party-maps => [200] OK
+62. [GET] http://127.0.0.1:8091/api/re/orgs/tree => [200] OK
+
+Note: 52 static requests not shown, run with --static option to see them.
+
+### Request #60 details
+#60 [POST] http://127.0.0.1:8091/api/re/user-party-maps
+
+  General
+    status:    [200] OK
+    duration:  2ms
+    type:      xhr
+    mimeType:  application/json
+
+  Request headers
+    accept: application/json, text/plain, */*
+    content-type: application/json
+    origin: http://127.0.0.1:8091
+    referer: http://127.0.0.1:8091/
+    user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36
+    x-trace-id: pc-1787212897226-35004
+    sec-ch-ua: "Not?A_Brand";v="24", "Chromium";v="152"
+    sec-ch-ua-mobile: ?0
+    sec-ch-ua-platform: "Linux"
+
+  Response headers
+    content-type: application/json
+    content-length: 232
+
+### request-body 60
+{"userId":"PT_USER_ID_1002","partyOrgId":2,"partyRole":"REPORTER"}
+
+### response-body 60
+{"code":"0","message":"success","traceId":"mock-user-maps","data":[{"id":1,"userId":"PT_USER_ID_1001","username":"EMP001","partyOrgId":2,"partyRole":"REPORTER","createTime":"2026-08-20 10:00:00","updateTime":"2026-08-20 10:00:00"}]}

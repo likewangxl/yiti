@@ -1,5 +1,8 @@
 package com.bank.branch.platform.auth.facade;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.auth.api.dto.UserRoleItemDTO;
@@ -10,20 +13,32 @@ import com.bank.branch.platform.auth.mapper.UserOrgMapper;
 import com.bank.branch.platform.auth.mapper.UserRoleMapper;
 import com.bank.branch.platform.common.web.PageResult;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
 
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class UserFacadePageRolesTest {
+
+    @BeforeAll
+    static void initTableInfo() {
+        TableInfoHelper.initTableInfo(
+                new MapperBuilderAssistant(new MybatisConfiguration(), ""), PtUser.class);
+    }
 
     @Mock private UserMapper userMapper;
     @Mock private UserOrgMapper userOrgMapper;
@@ -60,6 +75,38 @@ class UserFacadePageRolesTest {
 
         assertThat(r.getPageNo()).isEqualTo(1);
         assertThat(r.getPageSize()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("按登录工号和中文姓名 AND 模糊查询，返回跨模块可用的用户标识与展示字段")
+    void findUsersByUsernameAndDisplayName_returnsMinimalUserDtos() {
+        PtUser u = new PtUser();
+        u.setUserId("PT_USER_ID_1001");
+        u.setUsername("zhangsan");
+        u.setUserchnname("张三");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<LambdaQueryWrapper<PtUser>> wrapperCaptor = ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        when(userMapper.selectList(wrapperCaptor.capture())).thenReturn(List.of(u));
+
+        List<UserDTO> result = userFacade.findUsersByUsernameAndDisplayName(" zhang ", " 张 ");
+
+        assertThat(result).singleElement().satisfies(dto -> {
+            assertThat(dto.getEmpId()).isEqualTo("PT_USER_ID_1001");
+            assertThat(dto.getUsername()).isEqualTo("zhangsan");
+            assertThat(dto.getDisplayName()).isEqualTo("张三");
+        });
+        verify(userMapper).selectList(any());
+        wrapperCaptor.getValue().getTargetSql();
+        assertThat(wrapperCaptor.getValue().getParamNameValuePairs().values())
+                .contains("%zhang%", "%张%");
+    }
+
+    @Test
+    @DisplayName("登录工号和中文姓名均为空时不允许无界查询")
+    void findUsersByUsernameAndDisplayName_blankCriteria_returnsEmptyWithoutDbQuery() {
+        assertThat(userFacade.findUsersByUsernameAndDisplayName("  ", null)).isEmpty();
+
+        verify(userMapper, never()).selectList(any());
     }
 
     @Test

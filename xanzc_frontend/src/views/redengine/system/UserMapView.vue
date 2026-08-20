@@ -12,8 +12,32 @@
         </div>
       </template>
 
+      <el-form class="query-form" :model="queryForm" label-position="top" @keyup.enter="handleSearch">
+        <el-form-item label="用户工号">
+          <el-input v-model="queryForm.username" placeholder="请输入用户工号" clearable />
+        </el-form-item>
+        <el-form-item label="姓名">
+          <el-input v-model="queryForm.displayName" placeholder="请输入姓名" clearable />
+        </el-form-item>
+        <el-form-item label="党组织">
+          <el-select v-model="queryForm.partyOrgId" placeholder="请选择党组织" clearable filterable>
+            <el-option v-for="opt in orgOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="党内角色">
+          <el-select v-model="queryForm.partyRole" placeholder="请选择党内角色" clearable>
+            <el-option v-for="opt in partyRoleOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+          </el-select>
+        </el-form-item>
+        <div class="query-actions">
+          <el-button type="primary" @click="handleSearch">查询</el-button>
+          <el-button @click="handleReset">重置</el-button>
+        </div>
+      </el-form>
+
       <el-table :data="mapList" stripe style="width: 100%">
-        <el-table-column prop="userId" label="用户工号" width="140" />
+        <el-table-column prop="username" label="用户工号" width="140" />
+        <el-table-column prop="displayName" label="姓名" width="140" />
         <el-table-column label="党组织" min-width="180">
           <template #default="{ row }">
             {{ orgNameOf(row.partyOrgId) }}
@@ -34,6 +58,19 @@
       </el-table>
 
       <el-empty v-if="!loading && mapList.length === 0" description="暂无映射数据" />
+
+      <div class="pagination-wrap">
+        <el-pagination
+          v-model:current-page="pageNo"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50]"
+          :total="total"
+          layout="total, sizes, prev, pager, next, jumper"
+          background
+          @current-change="handleCurrentChange"
+          @size-change="handleSizeChange"
+        />
+      </div>
     </el-card>
 
     <!-- 新增/编辑（绑定）对话框：后端只有 bind()（POST /api/re/user-party-maps，按 userId upsert），
@@ -41,7 +78,27 @@
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑映射' : '新增映射'" width="480px" @close="handleDialogClose">
       <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px">
         <el-form-item label="用户工号" prop="userId">
-          <el-input v-model="formData.userId" placeholder="请输入平台用户工号" :disabled="isEdit" />
+          <el-select
+            v-model="formData.userId"
+            placeholder="请选择平台用户工号"
+            filterable
+            remote
+            reserve-keyword
+            :remote-method="loadUserOptions"
+            :loading="userLoading"
+            :disabled="isEdit"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="user in userOptions"
+              :key="user.userId"
+              :label="userOptionLabel(user)"
+              :value="user.userId"
+            >
+              <span class="user-option-code">{{ user.username || '-' }}</span>
+              <span class="user-option-name">{{ user.userchnname || '姓名未维护' }}</span>
+            </el-option>
+          </el-select>
         </el-form-item>
 
         <el-form-item label="党组织" prop="partyOrgId">
@@ -86,11 +143,17 @@
 import { ref, onMounted, computed } from 'vue';
 import { ElMessage } from 'element-plus';
 import { listUserMaps, bindUserMap, getOrgTree } from '@/api/redengine';
+import { listUsers } from '@/api/users';
 
 const loading = ref(false);
 const submitting = ref(false);
+const userLoading = ref(false);
 const mapList = ref([]);
 const orgTree = ref([]);
+const userOptions = ref([]);
+const pageNo = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
 const dialogVisible = ref(false);
 const isEdit = ref(false);
 const formRef = ref(null);
@@ -107,8 +170,13 @@ function emptyForm() {
 }
 const formData = ref(emptyForm());
 
+function emptyQuery() {
+  return { username: '', displayName: '', partyOrgId: null, partyRole: '' };
+}
+const queryForm = ref(emptyQuery());
+
 const rules = {
-  userId: [{ required: true, message: '请输入用户工号', trigger: 'blur' }],
+  userId: [{ required: true, message: '请选择用户工号', trigger: 'change' }],
   partyOrgId: [{ required: true, message: '请选择党组织', trigger: 'change' }],
   partyRole: [{ required: true, message: '请选择党内角色', trigger: 'change' }]
 };
@@ -141,26 +209,101 @@ function roleLabelOf(code) {
   return hit ? hit.label : (code || '-');
 }
 
-async function loadAll() {
+function buildMapQuery() {
+  const params = { pageNo: pageNo.value, pageSize: pageSize.value };
+  const username = String(queryForm.value.username || '').trim();
+  const displayName = String(queryForm.value.displayName || '').trim();
+  if (username) params.username = username;
+  if (displayName) params.displayName = displayName;
+  if (queryForm.value.partyOrgId !== null && queryForm.value.partyOrgId !== '') {
+    params.partyOrgId = Number(queryForm.value.partyOrgId);
+  }
+  if (queryForm.value.partyRole) params.partyRole = queryForm.value.partyRole;
+  return params;
+}
+
+async function loadMappings() {
   loading.value = true;
   try {
-    const [maps, tree] = await Promise.all([listUserMaps(), getOrgTree()]);
-    mapList.value = maps || [];
-    orgTree.value = tree || [];
+    const result = await listUserMaps(buildMapQuery());
+    if (Array.isArray(result)) {
+      mapList.value = result;
+      total.value = result.length;
+      return;
+    }
+    mapList.value = result?.records || [];
+    total.value = Number(result?.total || 0);
+    if (Number.isFinite(Number(result?.pageNo))) pageNo.value = Number(result.pageNo);
   } finally {
     loading.value = false;
   }
 }
+
+async function loadAll() {
+  const [, tree] = await Promise.all([loadMappings(), getOrgTree()]);
+  orgTree.value = tree || [];
+}
 onMounted(loadAll);
+
+async function handleSearch() {
+  pageNo.value = 1;
+  await loadMappings();
+}
+
+async function handleReset() {
+  queryForm.value = emptyQuery();
+  pageNo.value = 1;
+  await loadMappings();
+}
+
+async function handleCurrentChange(nextPage) {
+  pageNo.value = nextPage;
+  await loadMappings();
+}
+
+async function handleSizeChange(nextPageSize) {
+  pageSize.value = nextPageSize;
+  pageNo.value = 1;
+  await loadMappings();
+}
+
+let userSearchSequence = 0;
+async function loadUserOptions(keyword = '') {
+  const sequence = ++userSearchSequence;
+  userLoading.value = true;
+  try {
+    const params = { pageNo: 1, pageSize: 100 };
+    const normalizedKeyword = String(keyword || '').trim();
+    if (normalizedKeyword) params.username = normalizedKeyword;
+    const result = await listUsers(params);
+    if (sequence !== userSearchSequence) return;
+    userOptions.value = Array.isArray(result) ? result : (result?.records || []);
+  } finally {
+    if (sequence === userSearchSequence) userLoading.value = false;
+  }
+}
+
+function userOptionLabel(user) {
+  const username = user?.username || '-';
+  const displayName = user?.userchnname || '姓名未维护';
+  return `${username} · ${displayName}`;
+}
 
 const handleAdd = () => {
   isEdit.value = false;
   formData.value = emptyForm();
+  void loadUserOptions();
   dialogVisible.value = true;
 };
 
 const handleEdit = (row) => {
   isEdit.value = true;
+  if (!userOptions.value.some((user) => user.userId === row.userId)) {
+    userOptions.value = [
+      { userId: row.userId, username: row.username, userchnname: row.displayName },
+      ...userOptions.value
+    ];
+  }
   formData.value = { userId: row.userId, partyOrgId: row.partyOrgId, partyRole: row.partyRole };
   dialogVisible.value = true;
 };
@@ -177,7 +320,7 @@ const handleFormSubmit = () => {
       await bindUserMap({ ...formData.value });
       ElMessage.success(isEdit.value ? '映射已更新' : '映射已绑定');
       dialogVisible.value = false;
-      await loadAll();
+      await loadMappings();
     } catch (e) {
       // http.js 响应拦截器已对业务失败弹出错误提示，这里不重复
     } finally {
@@ -206,6 +349,66 @@ const handleFormSubmit = () => {
         font-weight: 600;
       }
     }
+
+    .query-form {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 18px;
+
+      :deep(.el-form-item) {
+        margin-bottom: 0;
+      }
+
+      :deep(.el-select) {
+        width: 100%;
+      }
+    }
+
+    .query-actions {
+      display: flex;
+      align-items: center;
+      padding-bottom: 1px;
+      white-space: nowrap;
+    }
+
+    .pagination-wrap {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 18px;
+
+      :deep(.el-pagination) {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        row-gap: 8px;
+      }
+    }
+  }
+
+  .user-option-code {
+    font-weight: 600;
+  }
+
+  .user-option-name {
+    margin-left: 12px;
+    color: var(--el-text-color-secondary);
+  }
+}
+
+@media (max-width: 1100px) {
+  .user-map-container .list-card .query-form {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .user-map-container .list-card .query-form {
+    grid-template-columns: 1fr;
+  }
+
+  .user-map-container .list-card .query-actions {
+    justify-content: flex-end;
   }
 }
 </style>

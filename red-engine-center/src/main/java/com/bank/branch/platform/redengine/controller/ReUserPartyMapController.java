@@ -5,6 +5,7 @@ import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.redengine.api.dto.ReUserPartyMapDTO;
 import com.bank.branch.platform.redengine.service.ReUserPartyMapService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,9 +17,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 /**
  * 红色引擎-用户党组织映射管理端点。
@@ -37,9 +37,17 @@ public class ReUserPartyMapController {
     @Operation(summary = "用户党组织映射列表")
     @GetMapping
     @BizAuth(bizType = BizType.RED_ENGINE, action = BizAction.LIST)
-    public ResponseWrapper<List<ReUserPartyMapDTO>> list() {
-        List<ReUserPartyMapDTO> result = reUserPartyMapService.list();
-        log.info("[ReUserPartyMapController.list] size={}", result.size());
+    public ResponseWrapper<PageResult<ReUserPartyMapDTO>> list(
+            @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
+            @RequestParam(value = "pageSize", defaultValue = "10") int pageSize,
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "displayName", required = false) String displayName,
+            @RequestParam(value = "partyOrgId", required = false) Long partyOrgId,
+            @RequestParam(value = "partyRole", required = false) String partyRole) {
+        PageResult<ReUserPartyMapDTO> result = reUserPartyMapService.page(
+                pageNo, pageSize, username, displayName, partyOrgId, partyRole);
+        log.info("[ReUserPartyMapController.list] pageNo={}, pageSize={}, total={}",
+                result.getPageNo(), result.getPageSize(), result.getTotal());
         return ResponseWrapper.success(result);
     }
 

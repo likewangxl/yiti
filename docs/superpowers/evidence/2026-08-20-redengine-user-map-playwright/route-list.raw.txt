@@ -1,0 +1,7 @@
+1. **/api/auth/current-user (status=200, body={"code":"0","message":"success","traceId":"mock-cu..., contentType=application/json)
+2. **/api/auth/my-menus (status=200, body={"code":"0","message":"success","traceId":"mock-me..., contentType=application/json)
+3. **/api/auth/permissions (status=200, body={"code":"0","message":"success","traceId":"mock-pe..., contentType=application/json)
+4. **/api/re/user-party-maps (status=200, body={"code":"0","message":"success","traceId":"mock-us..., contentType=application/json)
+5. **/api/re/orgs/tree (status=200, body={"code":"0","message":"success","traceId":"mock-or..., contentType=application/json)
+6. **/api/admin/users* (status=200, body={"code":"0","message":"success","traceId":"mock-au..., contentType=application/json)
+7. **/api/notifications/unread-count (status=200, body={"code":"0","message":"success","traceId":"mock-no..., contentType=application/json)

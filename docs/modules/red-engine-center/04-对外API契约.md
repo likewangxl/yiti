@@ -1,7 +1,7 @@
 # 红色引擎（党建管理）— 对外 API 契约
 
 > 版本：v1.0
-> 最后更新：2026-08-10
+> 最后更新：2026-08-20
 > 模块编码：red-engine-center
 > 本文以代码为准核实：本模块**是否**对外暴露 `*Api`/`*QueryApi`、本模块消费上游哪些 `*Api`、字典/事件约定
 > 结论已 grep `red-engine-center/src/main/java` 全量核实，无凭空补写
@@ -74,7 +74,31 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 `BizScopeApi`/`DataScopeContext` 的机构子树或复合范围能力。复合 DataScope 的精确 OR 并集及
 原 redengine 的党组织审核隔离延期为独立安全改造。
 
-### 2.2 `FileApi`（`system-governance-center`）
+### 2.2 `UserApi`（`auth-permission-center`）
+
+```java
+import com.bank.branch.platform.auth.api.UserApi;
+```
+
+**使用位置**：`ReUserPartyMapService`（`private final UserApi userApi;`）。
+
+**用到的方法**：
+- `getUserByEmpId(userId)`：绑定前确认请求中的值是真实 `PT_USER.USER_ID`；不存在时抛
+  `RE-40009`，不写 `RE_USER_PARTY_MAP`。
+- `findUsersByUsernameAndDisplayName(username, displayName)`：映射查询分页前，按
+  `PT_USER.USERNAME`/工号和 `PT_USER.USERCHNNAME`/姓名做包含式模糊查询，两条件同时传入时为
+  AND；两者均空返回空列表，防止误触发无界全量查询。返回的 `empId` 作为本域分页的候选
+  `USER_ID`。
+- `getUserByEmpIds(userIds)`：对映射当页的 `PT_USER.USER_ID` 批量回填 `PT_USER.USERNAME`
+  与 `PT_USER.USERCHNNAME`，避免逐行调用单用户 API。
+- `mapEmpIdsToUsername(userIds)`：保留给未分页的内部兼容列表辅助方法，不是当前 REST 分页端点的
+  回填路径。
+
+红色引擎只保存 `USER_ID`，`USERNAME`/`USERCHNNAME` 仅作为
+`ReUserPartyMapDTO.username`/`displayName` 响应字段展示；前端 auth 用户下拉同时展示工号与姓名，
+仅提交 `USER_ID`。
+
+### 2.3 `FileApi`（`system-governance-center`）
 
 ```java
 import com.bank.branch.platform.governance.api.FileApi;
@@ -125,7 +149,7 @@ import com.bank.branch.platform.governance.api.FileApi;
 | 契约方向 | 结论 |
 |---|---|
 | 本模块对外暴露的 `*Api`/`*QueryApi` | 无（`api/` 包下只有 `dto/`） |
-| 本模块消费的上游 `*Api` | `auth-permission-center.CurrentUserApi`（仅 `getCurrentEmpId()`）、`system-governance-center.FileApi`（仅 `bindFile(...)`） |
+| 本模块消费的上游 `*Api` | `auth-permission-center.CurrentUserApi`（仅 `getCurrentEmpId()`）、`auth-permission-center.UserApi`（`getUserByEmpId`、`findUsersByUsernameAndDisplayName`、`getUserByEmpIds`，及内部兼容辅助方法的 `mapEmpIdsToUsername`）、`system-governance-center.FileApi`（仅 `bindFile(...)`） |
 | 字典读取方式 | `SYS_DICT`（`RE_` 前缀命名空间，4 类 18 项），Java 代码不调用 `DictApi`，前端走通用字典查询端点 |
 | Spring 领域事件 | 无发布 |
 | 被本模块依赖但未使用的常见上游 API | `BizScopeApi`、`DictApi`、`WorkflowApi`/`WorkflowQueryApi`（均未 import） |
@@ -139,5 +163,5 @@ import com.bank.branch.platform.governance.api.FileApi;
 | `red-engine-center/AGENTS.md` | 模块权威上下文：依赖关系、状态机、安全约束与已知限制 |
 | `03-接口设计与报文.md` | REST 接口全量端点契约 |
 | `AGENTS.md` | 本目录文档维护规则 |
-| `auth-permission-center/04-对外API契约.md` | `CurrentUserApi` 完整接口定义 |
+| `auth-permission-center/04-对外API契约.md` | `CurrentUserApi`、`UserApi` 完整接口定义 |
 | `system-governance-center/04-对外API契约.md` | `FileApi` 完整接口定义 |
