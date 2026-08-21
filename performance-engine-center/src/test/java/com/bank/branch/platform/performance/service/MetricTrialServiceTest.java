@@ -125,6 +125,50 @@ class MetricTrialServiceTest {
     }
 
     @Test
+    @DisplayName("SQL 试运行：对象值 trim 后保留 EMP_ID 谓词并绑定规范参数")
+    void trial_sqlObjectId_isTrimmedAndBound() {
+        PerfMetricDef def = buildSqlMetric();
+        def.setMetricCode("TEST_TRIAL_OBJECT_FILTER");
+        def.setSqlText("SELECT EMP_ID AS base_key, 1 AS metric_value FROM h3 "
+                + "WHERE STATIS_DT = :dataDate AND e.EMP_ID = :objectId");
+        when(metricDefService.getByCodeOrNull("TEST_TRIAL_OBJECT_FILTER")).thenReturn(def);
+        when(perfEngineProperties.getSqlTimeoutSeconds()).thenReturn(30);
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(Map.of());
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("objectId", " 11045575 ");
+        metricTrialService.trial("TEST_TRIAL_OBJECT_FILTER", LocalDate.of(2026, 8, 20), 10, params);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Map<String, Object>> paramsCaptor = ArgumentCaptor.captor();
+        verify(sqlExecutor).execute(sqlCaptor.capture(), paramsCaptor.capture(), any(Duration.class));
+        assertThat(sqlCaptor.getValue()).contains("e.EMP_ID = :objectId");
+        assertThat(paramsCaptor.getValue()).containsEntry("objectId", "11045575");
+    }
+
+    @Test
+    @DisplayName("SQL 试运行：空白对象值移除 EMP_ID 谓词并绑定 null")
+    void trial_sqlBlankObjectId_removesObjectPredicate() {
+        PerfMetricDef def = buildSqlMetric();
+        def.setMetricCode("TEST_TRIAL_BLANK_OBJECT_FILTER");
+        def.setSqlText("SELECT EMP_ID AS base_key, 1 AS metric_value FROM h3 "
+                + "WHERE STATIS_DT = :dataDate AND EMP_ID = :objectId");
+        when(metricDefService.getByCodeOrNull("TEST_TRIAL_BLANK_OBJECT_FILTER")).thenReturn(def);
+        when(perfEngineProperties.getSqlTimeoutSeconds()).thenReturn(30);
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(Map.of());
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("objectId", " \t");
+        metricTrialService.trial("TEST_TRIAL_BLANK_OBJECT_FILTER", LocalDate.of(2026, 8, 20), 10, params);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Map<String, Object>> paramsCaptor = ArgumentCaptor.captor();
+        verify(sqlExecutor).execute(sqlCaptor.capture(), paramsCaptor.capture(), any(Duration.class));
+        assertThat(sqlCaptor.getValue()).doesNotContain("AND EMP_ID = :objectId");
+        assertThat(paramsCaptor.getValue()).containsEntry("objectId", null);
+    }
+
+    @Test
     @DisplayName("SQL 试运行：返回 baseKey->value 样本，包含 totalRows / executionMillis，不调任何宽表")
     void trial_sqlMetric_returnsSamples() {
         PerfMetricDef def = buildSqlMetric();
