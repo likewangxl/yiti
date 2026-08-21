@@ -1,6 +1,8 @@
 package com.bank.branch.platform.performance.job;
 
+import com.bank.branch.platform.performance.entity.StatShowArchiveStatus;
 import com.bank.branch.platform.performance.mapper.StatShowArchiveMapper;
+import com.bank.branch.platform.performance.mapper.StatShowArchiveStatusMapper;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.io.Resources;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.mockito.Mockito;
 
 import java.io.InputStream;
 import java.sql.Connection;
@@ -69,7 +72,10 @@ class StatShowArchiveJobIT {
         }
         SqlSessionFactory factory = new SqlSessionFactoryBuilder().build(config);
         session = factory.openSession(true);
-        job = new StatShowArchiveJob(session.getMapper(StatShowArchiveMapper.class));
+        StatShowArchiveStatusMapper statusMapper = Mockito.mock(StatShowArchiveStatusMapper.class);
+        Mockito.when(statusMapper.selectList(Mockito.any())).thenReturn(java.util.List.of());
+        Mockito.when(statusMapper.insert(Mockito.any(StatShowArchiveStatus.class))).thenReturn(1);
+        job = new StatShowArchiveJob(session.getMapper(StatShowArchiveMapper.class), statusMapper);
     }
 
     @AfterAll
