@@ -15,6 +15,50 @@
       <div class="attr-hint">大屏上的周期过滤器默认联动全部时序(TIMESERIES)图表;开启后本图表维持自身周期不被覆盖</div>
     </el-form-item>
 
+    <el-form-item label="视觉预设">
+      <el-select v-model="styleCfg.visualPreset" data-testid="chart-visual-preset" @change="syncStyle">
+        <el-option label="Aurora 极光" value="aurora" />
+        <el-option label="Graphite 石墨" value="graphite" />
+        <el-option label="Vivid 明彩" value="vivid" />
+      </el-select>
+    </el-form-item>
+
+    <!-- 线/面积/柱图共用的展示开关；值进入 styleJson，旧节点缺省时只在面板内补默认。 -->
+    <template v-if="showSeriesVisualControls">
+      <el-form-item label="图例">
+        <el-switch v-model="styleCfg.showLegend" data-testid="chart-show-legend" @change="syncStyle" />
+      </el-form-item>
+      <el-form-item label="数据标签">
+        <el-switch v-model="styleCfg.showLabels" data-testid="chart-show-labels" @change="syncStyle" />
+      </el-form-item>
+      <el-form-item label="辅助标记">
+        <el-switch v-model="styleCfg.showMarks" data-testid="chart-show-marks" @change="syncStyle" />
+      </el-form-item>
+      <el-form-item v-if="showSmoothControl" label="曲线平滑">
+        <el-switch v-model="styleCfg.smooth" data-testid="chart-smooth" @change="syncStyle" />
+      </el-form-item>
+    </template>
+
+    <el-form-item v-if="innerType === 'PIE_SHARE'" label="饼图形态">
+      <el-radio-group v-model="styleCfg.pieShape" data-testid="pie-shape" @change="syncStyle">
+        <el-radio-button label="donut">环形</el-radio-button>
+        <el-radio-button label="rose">玫瑰</el-radio-button>
+        <el-radio-button label="solid">实心</el-radio-button>
+      </el-radio-group>
+    </el-form-item>
+
+    <el-form-item v-if="innerType === 'METRIC_CARD'" label="指标卡形态">
+      <el-radio-group v-model="styleCfg.cardVariant" data-testid="card-variant" @change="syncStyle">
+        <el-radio-button label="glow">辉光</el-radio-button>
+        <el-radio-button label="glass">玻璃</el-radio-button>
+        <el-radio-button label="outline">描边</el-radio-button>
+      </el-radio-group>
+    </el-form-item>
+    <el-form-item v-if="innerType === 'METRIC_CARD'" label="较上期趋势">
+      <el-switch v-model="styleCfg.showTrend" data-testid="chart-show-trend" @change="syncStyle" />
+      <div class="attr-hint">仅在明确开启时计算最近两行的较上期变化</div>
+    </el-form-item>
+
     <!-- 柱状对比三形态 -->
     <el-form-item v-if="innerType === 'BAR_COMPARE'" label="柱形">
       <el-radio-group v-model="propValue.barMode" @change="syncProp">
@@ -96,6 +140,27 @@ if (propValue.ignoreGlobalPeriod == null) propValue.ignoreGlobalPeriod = false;
 
 const innerType = computed(() => props.element.innerType);
 const chartMeta = computed(() => chartMetas.find(c => c.innerType === innerType.value) || null);
+const showSeriesVisualControls = computed(() => ['LINE_TREND', 'AREA_STACK', 'BAR_COMPARE'].includes(innerType.value));
+const showSmoothControl = computed(() => ['LINE_TREND', 'AREA_STACK'].includes(innerType.value));
+
+// 只给面板回显补默认，不立即改写 styleJson；用户第一次修改任一视觉项时才整体持久化，
+// 这样旧节点的未知字段和已有标题/刷新配置都不会被覆盖。
+const visualDefaults = {
+  visualPreset: 'aurora', showLegend: true, showLabels: false, showMarks: true, smooth: true,
+  pieShape: 'donut', cardVariant: 'glow', showTrend: false
+};
+if (styleCfg.visualPreset == null) styleCfg.visualPreset = visualDefaults.visualPreset;
+if (showSeriesVisualControls.value) {
+  for (const key of ['showLegend', 'showLabels', 'showMarks']) {
+    if (styleCfg[key] == null) styleCfg[key] = visualDefaults[key];
+  }
+  if (showSmoothControl.value && styleCfg.smooth == null) styleCfg.smooth = visualDefaults.smooth;
+}
+if (innerType.value === 'PIE_SHARE' && styleCfg.pieShape == null) styleCfg.pieShape = visualDefaults.pieShape;
+if (innerType.value === 'METRIC_CARD') {
+  if (styleCfg.cardVariant == null) styleCfg.cardVariant = visualDefaults.cardVariant;
+  if (styleCfg.showTrend == null) styleCfg.showTrend = visualDefaults.showTrend;
+}
 // 数据源联动过滤:needTimeseries → 仅 TIMESERIES;needKinds → 仅对应 source_kind
 const screenScope = computed(() => {
   const scope = {};

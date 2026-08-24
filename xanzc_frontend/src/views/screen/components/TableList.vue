@@ -1,5 +1,5 @@
 <template>
-  <div ref="wrapEl" class="tl-wrap" :class="{ 'tl-static': !carouselOn }">
+  <div ref="wrapEl" class="tl-wrap" :class="{ 'tl-static': !carouselOn }" :style="themeVars">
     <table v-if="rows.length" class="tl-table">
       <thead>
         <tr>
@@ -26,6 +26,7 @@
 // propValue.carousel 开关 = 自动滚动轮播——行数超出可视区时按环形窗口逐行推进（纯自研，零新增依赖）。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { DocumentRemove } from '@element-plus/icons-vue';
+import { resolveChartTheme } from '@/styles/screenChartTheme';
 import { displayName, metaOf, fmtNum } from './utils/chartData';
 import { visibleCount, shouldCarousel, nextStart, windowIndices } from './utils/carousel';
 
@@ -53,6 +54,18 @@ const shownIndices = computed(() =>
   carouselOn.value
     ? windowIndices(start.value, visible.value, props.rows.length)
     : props.rows.map((_, i) => i));
+const theme = computed(() => resolveChartTheme(props.styleCfg));
+const themeVars = computed(() => ({
+  '--tl-accent': theme.value.tokens.accent,
+  '--tl-accent-strong': theme.value.tokens.accentStrong,
+  '--tl-text': theme.value.tokens.text,
+  '--tl-number': theme.value.tokens.number,
+  '--tl-muted': theme.value.tokens.textDim,
+  '--tl-border': theme.value.tokens.border,
+  '--tl-up': theme.value.tokens.up,
+  '--tl-down': theme.value.tokens.down,
+  '--tl-bg': theme.value.tokens.bgDeep
+}));
 
 /** 表头：别名替换 + 单位并入（如 "一般性存款(万元)"） */
 function headerOf(col) {
@@ -97,7 +110,7 @@ watch(() => props.rows, () => { start.value = 0; });
   overflow: hidden;
   &.tl-static { overflow-y: auto; }
   &::-webkit-scrollbar { width: 4px; }
-  &::-webkit-scrollbar-thumb { background: rgba(0, 229, 255, .3); border-radius: 2px; }
+  &::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--tl-accent, var(--scr-cyan)) 30%, transparent); border-radius: 2px; }
 }
 .tl-table {
   width: 100%;
@@ -110,25 +123,25 @@ watch(() => props.rows, () => { start.value = 0; });
     padding: 0 8px;
     font-weight: 600;
     text-align: left;
-    color: var(--scr-cyan);
+    color: var(--tl-accent, var(--scr-cyan));
     letter-spacing: 1px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    background: linear-gradient(180deg, rgba(0, 229, 255, .14), rgba(0, 229, 255, .04));
-    border-bottom: 1px solid var(--scr-border);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--tl-accent, var(--scr-cyan)) 14%, transparent), color-mix(in srgb, var(--tl-accent, var(--scr-cyan)) 4%, transparent));
+    border-bottom: 1px solid var(--tl-border, var(--scr-border));
   }
   td {
     height: 30px; // = ROW_H
     padding: 0 8px;
-    color: var(--scr-text);
+    color: var(--tl-text, var(--tl-muted, var(--scr-text)));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    border-bottom: 1px solid rgba(125, 155, 201, .12);
-    &.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--scr-num); }
+    border-bottom: 1px solid color-mix(in srgb, var(--tl-border, var(--scr-border)) 45%, transparent);
+    &.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--tl-number, var(--scr-num)); }
   }
   tbody tr:nth-child(even) { background: rgba(10, 32, 74, .35); }
-  tbody tr:hover { background: rgba(0, 229, 255, .08); }
+  tbody tr:hover { background: color-mix(in srgb, var(--tl-accent, var(--scr-cyan)) 8%, transparent); }
 }
 </style>

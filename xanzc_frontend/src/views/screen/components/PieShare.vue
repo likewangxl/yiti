@@ -9,7 +9,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { PieChart as EPie } from 'echarts/charts';
 import { TooltipComponent, LegendComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
-import { SCR_COLOR, SCR_PALETTE_WIDE, scrAxisLabel } from '@/styles/screenChartTheme';
+import { resolveChartTheme, scrAxisLabel, scrTooltipStyle } from '@/styles/screenChartTheme';
 
 use([CanvasRenderer, EPie, TooltipComponent, LegendComponent]);
 
@@ -27,15 +27,35 @@ const pieData = computed(() => {
   if (ni < 0 || vi < 0) return [];
   return props.rows.slice(0, 10).map(r => ({ name: String(r[ni]), value: Number(r[vi]) || 0 }));
 });
+const theme = computed(() => resolveChartTheme(props.styleCfg));
+const palette = computed(() => props.styleCfg.colors?.length ? props.styleCfg.colors : theme.value.palette);
+const showLegend = computed(() => props.styleCfg.showLegend !== false);
+const showLabels = computed(() => props.styleCfg.showLabels !== false);
+const shape = computed(() => ['donut', 'rose', 'solid'].includes(props.styleCfg.pieShape)
+  ? props.styleCfg.pieShape : 'donut');
+const total = computed(() => pieData.value.reduce((sum, item) => sum + (Number(item.value) || 0), 0));
+const radius = computed(() => shape.value === 'rose'
+  ? ['18%', '68%']
+  : shape.value === 'solid' ? ['0%', '68%'] : ['40%', '68%']);
 
 const option = computed(() => ({
-  color: SCR_PALETTE_WIDE,
-  tooltip: { trigger: 'item', backgroundColor: 'rgba(5,14,43,.9)', textStyle: { color: SCR_COLOR.text } },
-  legend: { orient: 'vertical', right: 4, top: 'middle', textStyle: { ...scrAxisLabel(), fontSize: 12 } },
+  color: palette.value,
+  tooltip: { trigger: 'item', ...scrTooltipStyle(theme.value) },
+  legend: { show: showLegend.value, orient: 'vertical', right: 4, top: 'middle', textStyle: { ...scrAxisLabel(theme.value), fontSize: 12 } },
+  graphic: shape.value === 'donut' ? [
+    { type: 'text', left: '38%', top: '43%', style: { text: '合计', fill: theme.value.tokens.textDim, fontSize: 11, textAlign: 'center' } },
+    { type: 'text', left: '38%', top: '50%', style: { text: String(total.value), fill: theme.value.tokens.text, fontSize: 18, fontWeight: 700, textAlign: 'center' } }
+  ] : [],
   series: [{
-    type: 'pie', radius: ['38%', '68%'], center: ['38%', '50%'],
-    label: { color: SCR_COLOR.text, formatter: '{b}\n{d}%' },
-    itemStyle: { borderColor: SCR_COLOR.bgDeep, borderWidth: 2 },
+    type: 'pie', radius: radius.value, center: ['38%', '50%'],
+    ...(shape.value === 'rose' ? { roseType: 'radius' } : {}),
+    label: { show: showLabels.value, color: theme.value.tokens.text, formatter: '{b}\n{d}%' },
+    labelLine: { show: showLabels.value, length: 10, length2: 8, lineStyle: { color: theme.value.tokens.textDim } },
+    itemStyle: { borderColor: theme.value.tokens.bgDeep, borderWidth: 2 },
+    emphasis: {
+      scale: true, scaleSize: 5,
+      itemStyle: { shadowBlur: 18, shadowColor: theme.value.tokens.accent }
+    },
     data: pieData.value
   }]
 }));
