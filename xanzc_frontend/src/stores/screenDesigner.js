@@ -140,9 +140,19 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
       orgGroupCode.value = scope.orgGroupCode;
       allowedRoleCodes.value = [...scope.allowedRoleCodes];
     }
+    // 保存响应会把新 ChartWidget 的 null blockId 解析为服务端生成的真实 ID；
+    // 先记住选择的业务语义(id)，再替换组件树，避免 curComponent/curComponents 继续指向旧对象。
+    const selectedIds = curComponents.value.map(c => c?.id).filter(id => id !== undefined && id !== null);
+    if (!selectedIds.length && curComponent.value?.id !== undefined) selectedIds.push(curComponent.value.id);
     const draft = parse(resp.canvasDraftJson, { components: [] });
     draftSchemaVersion.value = draft.schemaVersion ?? draftSchemaVersion.value;
-    componentData.value = Array.isArray(draft.components) ? draft.components : componentData.value;
+    if (Array.isArray(draft.components)) {
+      componentData.value = draft.components;
+      // 保存响应没有重复回吐 blocks，按已解析的组件树同步本地区块行；
+      // 这样新图表无需重载即可让设计态预览拿到刚生成的 blockId。
+      blocks.value = reconcileChartBlocks(componentData.value, blocks.value);
+    }
+    setCurComponents(selectedIds);
     dirty.value = false;
   }
 
@@ -331,6 +341,40 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
 
   function parse(json, fallback) {
     try { return json ? JSON.parse(json) : fallback; } catch { return fallback; }
+  }
+
+  /** 递归收集组件树中的 ChartWidget（Group 子节点也可能持有 blockId）。 */
+  function collectChartNodes(nodes, output = []) {
+    for (const node of Array.isArray(nodes) ? nodes : []) {
+      if (node?.component === 'ChartWidget') output.push(node);
+      collectChartNodes(node?.children, output);
+    }
+    return output;
+  }
+
+  /**
+   * 将保存响应中的 resolved blockId 与本地 block 行对齐。
+   * 仅保留当前草稿实际引用的区块，避免旧块在设计态被误当成新绑定。
+   */
+  function reconcileChartBlocks(nodes, existingBlocks = []) {
+    const previous = new Map(
+      (Array.isArray(existingBlocks) ? existingBlocks : [])
+        .filter(block => Number.isSafeInteger(block?.id) && block.id > 0)
+        .map(block => [block.id, block])
+    );
+    return collectChartNodes(nodes)
+      .filter(node => Number.isSafeInteger(node?.blockId) && node.blockId > 0)
+      .map(node => {
+        const old = previous.get(node.blockId) || {};
+        return {
+          ...old,
+          id: node.blockId,
+          componentType: node.innerType || old.componentType,
+          bindJson: node.bindJson ?? old.bindJson ?? '{}',
+          styleJson: node.styleJson ?? old.styleJson ?? '{}',
+          drillJson: node.drillJson ?? old.drillJson ?? '{}'
+        };
+      });
   }
 
   return {

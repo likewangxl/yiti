@@ -8,6 +8,7 @@ import {
   updateOrgProfile,
   listOrgGroups,
   listScreenDatasources,
+  listScreenMapRegionMetrics,
   createOrgGroup,
   updateOrgGroup,
   saveOrgGroupMembers,
@@ -161,6 +162,13 @@ describe('大屏范围与机构配置 API', () => {
     expect(call).toHaveBeenLastCalledWith('post', '/screen/data', {
       data: { screenCode: 'SCR_RETAIL', blockId: 9, period: 'LATEST', schemaVersion: 2 }, silent: true
     }, null);
+  });
+
+  it('设计器地图指标为可选请求且静默处理屏级无权限，不改变后端 fail-close', async () => {
+    await listScreenMapRegionMetrics(12);
+    expect(call).toHaveBeenLastCalledWith(
+      'get', '/screen/admin/screens/12/map-region-metrics', { silent: true }, []
+    );
   });
 
   it('运行接口拒绝隐式 v1、未知版本和缺少 schema2 发布包身份的请求', () => {

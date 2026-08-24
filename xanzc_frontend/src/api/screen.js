@@ -143,6 +143,11 @@ export function listMapPoints() {
 export function saveMapPoints(points) {
   return call('put', '/screen/admin/map-points', { data: points });
 }
+/** 设计器地图指标只读快照；服务端按当前屏权限和机构范围返回，不在前端补模拟值。 */
+export function listScreenMapRegionMetrics(screenId) {
+  // 设计器只把指标作为可选地图增强；屏级无权限由后端 fail-close，前端不弹整屏 toast。
+  return call('get', `/screen/admin/screens/${encodeURIComponent(screenId)}/map-region-metrics`, { silent: true }, []);
+}
 
 // 屏级查看角色白名单：与 auth 机构组角色绑定分别校验，不能在前端拼接权限。
 export function listScreenAccessRoles(screenId) {

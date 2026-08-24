@@ -1,0 +1,16 @@
+仅开发态 mock，非联调。
+
+1. **/api/auth/current-user
+2. **/api/auth/my-menus
+3. **/api/auth/permissions
+4. **/api/screen/admin/screens
+5. **/api/screen/admin/canvas/9105
+6. **/api/screen/admin/screens/9105/map-region-metrics
+   response: {"code":"RPT-43017","message":"无权访问该大屏","data":null}
+7. **/api/screen/admin/datasources*
+8. **/api/admin/org-groups*
+9. **/api/admin/org-profiles*
+10. **/api/admin/roles/all*
+11. **/api/screen/admin/screens/9105/access-roles
+12. **/api/screen/admin/canvas/save
+13. **/api/screen/data
