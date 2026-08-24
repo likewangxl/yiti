@@ -77,6 +77,7 @@ import { filterActiveOrgGroups, filterReportScreenOrgGroups } from '@/utils/scre
 const props = defineProps({ element: { type: Object, required: true } });
 const store = useScreenDesignerStore();
 const datasources = ref([]);
+const datasourcesLoaded = ref(false);
 const colOptions = ref([]);   // 数值列下拉候选（按数据源探测，探测失败仍可 allow-create 手输）
 const probeOrgGroups = ref([]);
 const probe = reactive({ reason: '', testOrgGroupCode: '', running: false });
@@ -96,13 +97,25 @@ if (propValue.ignoreGlobalPeriod == null) propValue.ignoreGlobalPeriod = false;
 const innerType = computed(() => props.element.innerType);
 const chartMeta = computed(() => chartMetas.find(c => c.innerType === innerType.value) || null);
 // 数据源联动过滤:needTimeseries → 仅 TIMESERIES;needKinds → 仅对应 source_kind
-const filteredDs = computed(() => filterDatasourcesByMeta(datasources.value, chartMeta.value));
+const screenScope = computed(() => {
+  const scope = {};
+  const bizLine = readStoreValue(store.bizLine);
+  const orgScopeMode = readStoreValue(store.orgScopeMode);
+  if (bizLine !== undefined && bizLine !== null && bizLine !== '') scope.bizLine = bizLine;
+  if (orgScopeMode !== undefined && orgScopeMode !== null && orgScopeMode !== '') {
+    scope.orgScopeMode = orgScopeMode;
+  }
+  return scope;
+});
+const filteredDs = computed(() => filterDatasourcesByMeta(datasources.value, chartMeta.value, screenScope.value));
 const dsHint = computed(() => {
   const m = chartMeta.value;
-  if (!m) return '';
   const parts = [];
-  if (m.needTimeseries) parts.push('仅时序型(TIMESERIES)数据源');
-  if (Array.isArray(m.needKinds) && m.needKinds.length) parts.push(`仅 ${m.needKinds.join('/')} 类数据源`);
+  if (m?.needTimeseries) parts.push('仅时序型(TIMESERIES)数据源');
+  if (Array.isArray(m?.needKinds) && m.needKinds.length) parts.push(`仅 ${m.needKinds.join('/')} 类数据源`);
+  if (isNamedGroupScope.value) {
+    parts.push('命名机构组仅允许机构宽表（ORG_INDEX_RESULT / org_code）');
+  }
   return parts.join('，');
 });
 const needValueCol = computed(() => innerType.value === 'GAUGE' || innerType.value === 'LIQUID_PROGRESS');
@@ -113,12 +126,16 @@ const probeRequiresNamedGroup = computed(() => {
 });
 
 function parse(j) { try { return j ? JSON.parse(j) : {}; } catch { return {}; } }
+function readStoreValue(value) { return value?.value ?? value; }
+const isNamedGroupScope = computed(() => String(readStoreValue(store.orgScopeMode) || '').toUpperCase() === 'NAMED_GROUP');
+
 function syncBind() {
   // 落 dsType 快照:运行时 BlockContainer 判定"是否响应全屏周期过滤器联动"依赖它
   // (utils/globalPeriod.isTimeseriesBlock;快照缺失的历史区块按时序专属图表类型兜底)。
   // 幂等刷新:数据源列表未加载时保留旧值,不误清
   const d = datasources.value.find(x => x.id === bind.dsId);
   if (d) bind.dsType = d.dsType;
+  else if (datasourcesLoaded.value) delete bind.dsType;
   props.element.bindJson = JSON.stringify(bind);
   store.pushSnapshotDebounced();
 }
@@ -165,8 +182,37 @@ watch(() => bind.dsId, () => {
   colOptions.value = [];
   probe.testOrgGroupCode = '';
 });
+
+/** 数据源列表/屏范围变化后，清理已不再属于候选集合的历史绑定。 */
+function reconcileBinding() {
+  // listScreenDatasources 的 GET 失败会以 [] fallback；空目录不等价于“无候选”，
+  // 避免暂时不可用/无权限时破坏已有绑定。只有非空目录才执行失效绑定清理。
+  if (!datasourcesLoaded.value || !datasources.value.length
+      || bind.dsId === undefined || bind.dsId === null || bind.dsId === '') return;
+  const stillCandidate = filteredDs.value.some(d => String(d.id) === String(bind.dsId));
+  if (stillCandidate) return;
+
+  delete bind.dsId;
+  delete bind.dsType;
+  props.element.bindJson = JSON.stringify(bind);
+  store.pushSnapshotDebounced();
+  const message = isNamedGroupScope.value
+    ? '当前绑定数据源不符合命名机构组安全范围，已清除绑定；请重新选择机构宽表（ORG_INDEX_RESULT / org_code）。'
+    : '当前绑定数据源不符合本屏业务条线或图表类型，已清除绑定；请重新选择候选数据源。';
+  ElMessage.warning(message);
+}
+
+watch([
+  () => readStoreValue(store.bizLine),
+  () => readStoreValue(store.orgScopeMode),
+  datasources
+], reconcileBinding);
+
 onMounted(async () => {
-  datasources.value = await listScreenDatasources();
+  const rows = await listScreenDatasources();
+  datasources.value = Array.isArray(rows) ? rows : [];
+  datasourcesLoaded.value = true;
+  reconcileBinding();
   try {
     const groups = await listOrgGroups({ status: 'ACTIVE', purpose: 'REPORT_SCREEN' });
     const rows = Array.isArray(groups) ? groups : (groups?.records || []);

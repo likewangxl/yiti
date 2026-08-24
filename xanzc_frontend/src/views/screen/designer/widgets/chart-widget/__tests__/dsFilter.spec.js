@@ -10,6 +10,13 @@ const DS = [
   { id: 5, dsName: '自定义SQL', dsType: 'SINGLE', sourceKind: 'CUSTOM_SQL' }
 ];
 
+const SCOPED_DS = [
+  { id: 10, dsName: '零售宽表', dsType: 'TIMESERIES', sourceKind: 'WIDE_TABLE', bizLine: 'RETAIL' },
+  { id: 11, dsName: '共用宽表', dsType: 'TIMESERIES', sourceKind: 'WIDE_TABLE', bizLine: 'COMMON' },
+  { id: 12, dsName: '对公宽表', dsType: 'TIMESERIES', sourceKind: 'WIDE_TABLE', bizLine: 'CORP' },
+  { id: 13, dsName: '存量共用宽表', dsType: 'TIMESERIES', sourceKind: 'WIDE_TABLE' }
+];
+
 describe('chart-widget dsFilter（属性面板数据源下拉按图表元数据过滤）', () => {
   it('needTimeseries → 仅 TIMESERIES', () => {
     const r = filterDatasourcesByMeta(DS, { needTimeseries: true });
@@ -27,5 +34,37 @@ describe('chart-widget dsFilter（属性面板数据源下拉按图表元数据�
     expect(filterDatasourcesByMeta(DS, { needTimeseries: false }).length).toBe(5);
     expect(filterDatasourcesByMeta(DS, null).length).toBe(5);
     expect(filterDatasourcesByMeta(null, { needTimeseries: true })).toEqual([]);
+  });
+
+  it('同时按屏幕业务条线兼容矩阵过滤数据源', () => {
+    const r = filterDatasourcesByMeta(SCOPED_DS, null, { bizLine: 'RETAIL' });
+    expect(r.map(d => d.id)).toEqual([10, 11, 13]);
+  });
+
+  it('命名机构组只允许机构宽表 ORG_INDEX_RESULT + org_code，解析失败也拒绝', () => {
+    const rows = [
+      {
+        id: 20, sourceKind: 'WIDE_TABLE', bizLine: 'RETAIL',
+        configJson: JSON.stringify({ table: 'ORG_INDEX_RESULT', subjectCol: 'org_code' })
+      },
+      {
+        id: 21, sourceKind: 'WIDE_TABLE', bizLine: 'RETAIL',
+        configJson: JSON.stringify({ table: 'EMP_INDEX_RESULT', subjectCol: 'org_code' })
+      },
+      {
+        id: 22, sourceKind: 'WIDE_TABLE', bizLine: 'RETAIL',
+        configJson: JSON.stringify({ table: 'ORG_INDEX_RESULT', subjectCol: 'emp_code' })
+      },
+      {
+        id: 23, sourceKind: 'KPI_DETAIL', bizLine: 'RETAIL',
+        configJson: JSON.stringify({ table: 'ORG_INDEX_RESULT', subjectCol: 'org_code' })
+      },
+      { id: 24, sourceKind: 'WIDE_TABLE', bizLine: 'RETAIL', configJson: '{not-json' }
+    ];
+
+    const r = filterDatasourcesByMeta(rows, null, {
+      bizLine: 'RETAIL', orgScopeMode: 'NAMED_GROUP'
+    });
+    expect(r.map(d => d.id)).toEqual([20]);
   });
 });
