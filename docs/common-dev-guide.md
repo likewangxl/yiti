@@ -246,6 +246,7 @@ public class ResponseWrapper<T> {
 | `BIZ` | business-application-center | 业务申请中心 |
 | `PERF` | performance-engine-center | 绩效计算中心 |
 | `RPT` | report-analytics-center | 报表分析中心 |
+| `YD` | yundun-application-center | 浦爱云盾应用中心 |
 
 ### 2.3 通用错误码（SYS）
 
@@ -319,10 +320,15 @@ public class ResponseWrapper<T> {
 |---|---|
 | `CUST-40401` | 客户记录不存在 |
 | `CUST-40901` | 客户已被其他客户经理认领 |
+| `CUST-40308` | 无权编辑不在数据范围内的线索 |
+| `CUST-40913` | 统一社会信用代码已存在有效新客户线索 |
+| `CUST-42209` ~ `CUST-42212` | 线索分配、客户经理、主办或审批筛选参数不合法 |
 | `WF-40001` | 流程定义不存在 |
 | `WF-40901` | 流程任务已被签收 |
 | `PERF-40001` | 绩效规则配置不完整 |
 | `RPT-50001` | 报表生成超时 |
+| `YD-40001` ~ `YD-40005` | 违规台账导入/导出参数或文件错误 |
+| `YD-40401` ~ `YD-40402` | 人员违规或信贷风险记录不存在 |
 
 ### 2.7 错误码使用规范
 
@@ -1888,3 +1894,4 @@ public class TraceIdFilter implements Filter {
 | 业务申请中心 | BIZ | `com.bank.branch.platform.business` |
 | 绩效计算中心 | PERF | `com.bank.branch.platform.performance` |
 | 报表分析中心 | RPT | `com.bank.branch.platform.report` |
+| 浦爱云盾应用中心 | YD | `com.bank.branch.platform.yundun` |

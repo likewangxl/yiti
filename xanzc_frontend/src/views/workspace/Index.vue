@@ -446,6 +446,14 @@ function resolveTaskRoute(row, mode) {
   const id = row.taskId || row.id;
   if (!id) return null;
   const isDetail = mode === 'detail';
+  if (row.bizType === 'LOAN') {
+    const loanId = row.bizId || row.loanId || (String(row.businessKey || '').startsWith('LOAN:') ? String(row.businessKey).slice(5) : '');
+    if (!loanId) return null;
+    return {
+      path: '/bizexec/loans',
+      query: { tab: isDetail ? 'done' : 'todo', loanId, taskId: id }
+    };
+  }
   if (row.bizType === 'TARGET_ADJUST') {
     return isDetail
       ? { path: '/perf/targets', query: { tab: 'done', taskId: id, bizKey: row.businessKey } }

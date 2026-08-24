@@ -115,7 +115,7 @@ public class LoanWorkflowListener {
                         event.reason()
                 ));
                 notifyApplicant(loan, "驳回",
-                        "您的资产投放申请已被驳回" + (event.reason() != null ? "：" + event.reason() : "") + "。");
+                        "您的资产立项申请已被驳回" + (event.reason() != null ? "：" + event.reason() : "") + "。");
             } else {
                 // 审批通过
                 eventPublisher.publishEvent(new LoanApprovedEvent(
@@ -125,7 +125,7 @@ public class LoanWorkflowListener {
                         loan.getOwnerOrgId(),
                         loan.getCreditAmount()
                 ));
-                notifyApplicant(loan, "通过", "您的资产投放申请已审批通过。");
+                notifyApplicant(loan, "通过", "您的资产立项申请已审批通过。");
             }
 
         } catch (Exception e) {
@@ -145,7 +145,7 @@ public class LoanWorkflowListener {
         try {
             notifyApi.sendNotification(com.bank.branch.platform.governance.api.dto.NotificationCmd.builder()
                     .targetEmpId(loan.getCreatedBy())
-                    .title("资产投放审批" + result)
+                    .title("资产立项审批" + result)
                     .content(content + "（申请编号：" + loan.getApplyNo() + "）")
                     .notifyType("WORKFLOW")
                     .bizType("LOAN")

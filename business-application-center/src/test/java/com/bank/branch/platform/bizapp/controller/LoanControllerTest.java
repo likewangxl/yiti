@@ -216,13 +216,28 @@ class LoanControllerTest extends AbstractControllerIntegrationTest {
 
     @Test
     @WithMockEmpContext(empId = "E10001")
-    void cancel_shouldReturn200() throws Exception {
+    @DisplayName("POST /api/loans/{id}/cancel 接收撤回原因并透传给服务")
+    void cancel_shouldReturn200WithReason() throws Exception {
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
-        doNothing().when(loanService).cancelApply(eq("L001"), anyString());
+        doNothing().when(loanService).cancelApply(eq("L001"), eq("客户主动放弃"), eq("E10001"));
 
-        mockMvc.perform(post("/api/loans/L001/cancel"))
+        mockMvc.perform(post("/api/loans/L001/cancel")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"客户主动放弃\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
+    @DisplayName("POST /api/loans/{id}/cancel 缺少 reason 返回参数校验错误")
+    void cancel_withoutReason_shouldReturn400() throws Exception {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+
+        mockMvc.perform(post("/api/loans/L001/cancel")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
     }
 
     // ==================== GET /api/loans/export ====================

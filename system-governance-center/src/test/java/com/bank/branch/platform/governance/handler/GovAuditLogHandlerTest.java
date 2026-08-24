@@ -108,4 +108,21 @@ class GovAuditLogHandlerTest {
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("DB连接失败");
     }
+
+    @Test
+    @DisplayName("handle: 审计依赖发生 LinkageError 时不影响业务流程")
+    void handle_auditDependencyLinkageError_doesNotRethrow() {
+        // given
+        AuditLogEvent event = new AuditLogEvent(
+                "UPDATE", "VIOLATION", "/api/yundun/credit-violations/11", "11",
+                "admin", "ORG-001", Instant.now(),
+                "127.0.0.1", "Mozilla/5.0", null, null, null
+        );
+        doThrow(new NoClassDefFoundError("AuditLogCmd$AuditLogCmdBuilder"))
+                .when(auditLogService).log(any(AuditLogCmd.class));
+
+        // when & then — 审计组件类链接失败也不能改变主业务接口结果
+        assertThatCode(() -> govAuditLogHandler.handle(event))
+                .doesNotThrowAnyException();
+    }
 }

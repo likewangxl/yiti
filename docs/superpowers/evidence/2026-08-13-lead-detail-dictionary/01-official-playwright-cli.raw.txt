@@ -1,0 +1,97 @@
+# 官方 playwright-cli 真实页面验收原始输出
+
+工具：/home/djdev/.npm/_npx/9b853437c4cd15c0/node_modules/.bin/playwright-cli
+版本：0.1.18
+会话：lead-detail-dict-clean-20260813
+
+前置认证状态由同一官方 CLI 的已登录会话通过 state-save/state-load 传递；凭据填充输出未归档。
+
+执行命令：
+
+  playwright-cli -s=lead-detail-dict-clean-20260813 open 'http://127.0.0.1:8090/#/login?normal' --browser chromium
+  playwright-cli -s=lead-detail-dict-clean-20260813 state-load /tmp/yiti-lead-detail-auth-20260813.json
+  playwright-cli -s=lead-detail-dict-clean-20260813 goto 'http://127.0.0.1:8090/#/customers/leads/new'
+  playwright-cli -s=lead-detail-dict-clean-20260813 snapshot
+  playwright-cli -s=lead-detail-dict-clean-20260813 click e578
+  playwright-cli -s=lead-detail-dict-clean-20260813 route-list
+  playwright-cli -s=lead-detail-dict-clean-20260813 requests
+  playwright-cli -s=lead-detail-dict-clean-20260813 console
+  playwright-cli -s=lead-detail-dict-clean-20260813 find --regex '信息技术|对公客户|非集团客户|民营|自行挖掘'
+  playwright-cli -s=lead-detail-dict-clean-20260813 resize 1440 900
+  playwright-cli -s=lead-detail-dict-clean-20260813 screenshot --filename ../docs/superpowers/evidence/2026-08-13-lead-detail-dictionary/lead-detail-dictionary-chinese.png
+
+route-list 原始输出：
+
+No active routes
+
+requests 原始输出：
+
+### Result
+1. [GET] http://127.0.0.1:8090/api/auth/current-user => [200] OK
+12. [GET] http://127.0.0.1:8090/api/leads?pageNo=1&pageSize=20 => [200] OK
+13. [GET] http://127.0.0.1:8090/api/auth/my-menus => [200] OK
+14. [GET] http://127.0.0.1:8090/api/notifications/unread-count => [200] OK
+15. [GET] http://127.0.0.1:8090/api/sys/dicts/INDUSTRY/items => [200] OK
+16. [GET] http://127.0.0.1:8090/api/sys/dicts/GROUP_TYPE/items => [200] OK
+17. [GET] http://127.0.0.1:8090/api/sys/dicts/CUSTOMER_TYPE/items => [200] OK
+18. [GET] http://127.0.0.1:8090/api/sys/dicts/ENTERPRISE_TYPE/items => [200] OK
+19. [GET] http://127.0.0.1:8090/api/sys/dicts/LEAD_SOURCE/items => [200] OK
+20. [GET] http://127.0.0.1:8090/api/sys/dicts/INDUSTRY/items => [200] OK
+21. [GET] http://127.0.0.1:8090/api/sys/dicts/GROUP_TYPE/items => [200] OK
+22. [GET] http://127.0.0.1:8090/api/sys/dicts/CUSTOMER_TYPE/items => [200] OK
+23. [GET] http://127.0.0.1:8090/api/sys/dicts/ENTERPRISE_TYPE/items => [200] OK
+24. [GET] http://127.0.0.1:8090/api/sys/dicts/LEAD_SOURCE/items => [200] OK
+25. [GET] http://127.0.0.1:8090/api/leads/709962d626d446c8a35022603ccb161b => [200] OK
+
+Note: 10 static requests not shown, run with --static option to see them.
+
+console 原始输出：
+
+### Result
+Total messages: 4 (Errors: 0, Warnings: 2)
+Returning 2 messages for level "info"
+
+[WARNING] [Vue Router warn]: No match found for location with path "/bizexec/loans" @ http://127.0.0.1:8090/node_modules/.vite/deps/vue-router.js?v=7de43bc9:52
+[WARNING] [Vue Router warn]: No match found for location with path "/bizexec/supports" @ http://127.0.0.1:8090/node_modules/.vite/deps/vue-router.js?v=7de43bc9:52
+
+find 原始输出：
+
+### Result
+Found 5 matches for /信息技术|对公客户|非集团客户|民营|自行挖掘/:
+
+- generic [ref=e46]:
+  - generic [ref=e425]:
+    - generic [ref=e459]:
+      - dialog "客户线索详情" [ref=e599]:
+        - generic [ref=e606]:
+          - generic [ref=e638]:
+            - table [ref=e642]:
+              - rowgroup [ref=e643]:
+                - row [ref=e644]:
+                  - cell "所属行业" [ref=e645]
+                  - cell "信息技术" [ref=e646]
+                  - cell "客户类型" [ref=e647]
+                  - cell "对公客户" [ref=e648]
+                - row [ref=e649]:
+                  - cell "集团类型" [ref=e650]
+                  - cell "非集团客户" [ref=e651]
+                  - cell "所属集团" [ref=e652]
+                  - cell "-" [ref=e653]
+                - row [ref=e654]:
+                  - cell "企业类型" [ref=e655]
+                  - cell "民营" [ref=e656]
+                  - cell "基石客户" [ref=e657]
+                  - cell "否" [ref=e658]
+                - row [ref=e659]:
+                  - cell "是否开户" [ref=e660]
+                  - cell "否" [ref=e661]
+                  - cell "线索来源" [ref=e662]
+                  - cell "自行挖掘" [ref=e663]
+                - row [ref=e664]:
+                  - cell "授信金额" [ref=e665]
+                  - cell "-" [ref=e666]
+
+screenshot 原始输出：
+
+### Result
+- [Screenshot of viewport](../docs/superpowers/evidence/2026-08-13-lead-detail-dictionary/lead-detail-dictionary-chinese.png)

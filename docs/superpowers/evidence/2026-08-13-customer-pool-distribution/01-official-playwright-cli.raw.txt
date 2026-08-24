@@ -1,0 +1,94 @@
+# 官方 playwright-cli 真实页面验收原始记录
+
+工具：/home/djdev/.npm/_npx/9b853437c4cd15c0/node_modules/.bin/playwright-cli
+会话：customer-pool-flow-20260813
+页面：http://127.0.0.1:8090/#/customers/pool/available
+
+## 实际执行命令
+
+playwright-cli -s=customer-pool-flow-20260813 route-list
+playwright-cli -s=customer-pool-flow-20260813 console --clear
+playwright-cli -s=customer-pool-flow-20260813 requests --clear
+playwright-cli -s=customer-pool-flow-20260813 goto 'http://127.0.0.1:8090/#/customers/pool/available'
+playwright-cli -s=customer-pool-flow-20260813 snapshot
+playwright-cli -s=customer-pool-flow-20260813 find '展示审批通过后进入全行公开认领的客户'
+playwright-cli -s=customer-pool-flow-20260813 find '暂无数据'
+playwright-cli -s=customer-pool-flow-20260813 eval '() => ({url: location.href, heading: document.querySelector(".page-head span")?.textContent?.trim(), tableRows: document.querySelectorAll(".el-table__body tbody tr").length, emptyText: document.querySelector(".el-table__empty-text")?.textContent?.trim()})'
+playwright-cli -s=customer-pool-flow-20260813 route-list
+playwright-cli -s=customer-pool-flow-20260813 console
+playwright-cli -s=customer-pool-flow-20260813 requests --filter '/api/'
+playwright-cli -s=customer-pool-flow-20260813 request 5
+playwright-cli -s=customer-pool-flow-20260813 response-body 5
+playwright-cli -s=customer-pool-flow-20260813 resize 1440 900
+playwright-cli -s=customer-pool-flow-20260813 screenshot --filename ../docs/superpowers/evidence/2026-08-13-customer-pool-distribution/customer-pool-public-only.png
+
+认证建立使用本地开发账号，口令命令因凭据安全不归档；下列验收命令均在真实认证会话中执行。
+
+## route-list（验收前）
+
+No active routes
+
+## 页面文本
+
+Found 1 match for "展示审批通过后进入全行公开认领的客户":
+
+- heading "待认领线索池"
+- generic: 展示审批通过后进入全行公开认领的客户
+
+Found 1 match for "暂无数据":
+
+- generic: 暂无数据
+- generic: 共 0 条
+
+## 页面状态 eval
+
+{
+  "url": "http://127.0.0.1:8090/#/customers/pool/available",
+  "heading": "展示审批通过后进入全行公开认领的客户",
+  "tableRows": 0,
+  "emptyText": "暂无数据"
+}
+
+## route-list（请求后）
+
+No active routes
+
+## console 原始输出
+
+Total messages: 2 (Errors: 0, Warnings: 2)
+
+[WARNING] [Vue Router warn]: No match found for location with path "/bizexec/loans" @ http://127.0.0.1:8090/node_modules/.vite/deps/vue-router.js?v=7de43bc9:52
+[WARNING] [Vue Router warn]: No match found for location with path "/bizexec/supports" @ http://127.0.0.1:8090/node_modules/.vite/deps/vue-router.js?v=7de43bc9:52
+
+## requests 原始输出
+
+5. [GET] http://127.0.0.1:8090/api/customer-pool?pageNo=1&pageSize=20 => [200] OK
+
+Note: 4 static requests not shown, run with --static option to see them.
+
+## request 5 原始摘要
+
+#5 [GET] http://127.0.0.1:8090/api/customer-pool?pageNo=1&pageSize=20
+
+General
+  status:    [200] OK
+  duration:  51ms
+  type:      xhr
+  mimeType:  application/json
+
+Request headers
+  referer: http://127.0.0.1:8090/
+  accept: application/json, text/plain, */*
+  x-trace-id: pc-1786609656738-903967
+
+Response headers
+  content-type: application/json
+  x-trace-id: pc-1786609656738-903967
+
+## response-body 5 原始输出
+
+{"code":"0","message":"success","traceId":"pc-1786609656738-903967","page":{"pageNo":1,"pageSize":20,"total":0,"records":[],"totalPages":0},"timestamp":"2026-08-13T08:27:36.782790400Z"}
+
+## 截图原始输出
+
+- [Screenshot of viewport](../docs/superpowers/evidence/2026-08-13-customer-pool-distribution/customer-pool-public-only.png)

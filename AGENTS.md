@@ -93,6 +93,7 @@ cd bootstrap && mvn spring-boot:run
 
 - 新增或修改的可执行 `.sql` 只能包含 `START TRANSACTION`、`COMMIT`、`ROLLBACK` 以及 `INSERT`、`UPDATE`；禁止 `DELETE`、DDL 和其他独立语句。
 - 禁止混入独立 `SELECT`、`SHOW`、`DESCRIBE`、`EXPLAIN`、`CHECKSUM`；`SELECT` 只能作为 `INSERT`/`UPDATE` 的组成部分。
+- 生产数据初始化、资源授权或数据修复脚本中，禁止为向目标表写数据而创建或使用临时表、中转表（包括 `CREATE TEMPORARY TABLE`、`*_TMP`、`TMP_*`）；不得先写临时对象再回填业务/权限表。一次性投产应直接用目标表的 `INSERT ... SELECT`、`UPDATE` 等白名单操作完成，避免遗留难管理的临时对象。
 - 禁止定义或调用存储过程、函数、触发器、事件，禁止引用 `INFORMATION_SCHEMA`。
 - MySQL upsert 禁止使用已弃用的 `VALUES(col)`，使用行别名或显式更新表达式。
 - 执行前盘点、执行后验收、幂等检查通过只读命令或测试脚本完成，原始证据外置归档，不得塞入交付 SQL。

@@ -16,6 +16,9 @@ import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.customer.api.dto.TouchTaskDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
+import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
+import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
+import com.bank.branch.platform.workflow.api.dto.ProcessDiagramNodeDTO;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -48,6 +52,7 @@ public class LoanService {
     private final BizStateMachine bizStateMachine;
     private final BizNoGenerator bizNoGenerator;
     private final WorkflowApi workflowApi;
+    private final WorkflowQueryApi workflowQueryApi;
     private final CustomerQueryApi customerQueryApi;
     private final TouchTaskQueryApi touchTaskQueryApi;
     private final ApplicationEventPublisher eventPublisher;
@@ -87,6 +92,16 @@ public class LoanService {
                     BizAppErrorCode.CUSTOMER_NOT_VALID.getMessage()
             );
         }
+        CustomerDTO customer = customerQueryApi.getCustomer(custId).orElseThrow(() -> new BizException(
+                BizAppErrorCode.CUSTOMER_NOT_VALID.getCode(),
+                BizAppErrorCode.CUSTOMER_NOT_VALID.getMessage()
+        ));
+        if (!Set.of("CORP", "COMPANY", "CORPORATE").contains(customer.getCustomerType())) {
+            throw new BizException(
+                    BizAppErrorCode.CUSTOMER_NOT_VALID.getCode(),
+                    BizAppErrorCode.CUSTOMER_NOT_VALID.getMessage()
+            );
+        }
 
         // 2. 校验机构已认领该客户
         if (!customerQueryApi.isClaimedByOrg(custId, orgCode)) {
@@ -104,6 +119,12 @@ public class LoanService {
                             BizAppErrorCode.NOT_TOUCH_TASK_ASSIGNEE.getCode(),
                             BizAppErrorCode.NOT_TOUCH_TASK_ASSIGNEE.getMessage()
                     ));
+            if (!custId.equals(task.getCustId())) {
+                throw new BizException(
+                        BizAppErrorCode.TOUCH_TASK_CUSTOMER_MISMATCH.getCode(),
+                        BizAppErrorCode.TOUCH_TASK_CUSTOMER_MISMATCH.getMessage()
+                );
+            }
             if (!operatorEmpId.equals(task.getAssigneeEmpId())) {
                 throw new BizException(
                         BizAppErrorCode.NOT_TOUCH_TASK_ASSIGNEE.getCode(),
@@ -266,7 +287,7 @@ public class LoanService {
         cmd.setProcessDefinitionKey(PROCESS_DEFINITION_KEY);
         cmd.setStartUser(operatorEmpId);
         cmd.setStartOrgId(orgCode);
-        cmd.setTitle("贷款申请审批-" + existing.getApplyNo());
+        cmd.setTitle("资产立项审批-" + existing.getApplyNo());
 
         WorkflowLaunchResp resp;
         try {
@@ -299,23 +320,130 @@ public class LoanService {
     }
 
     /**
-     * 撤回贷款申请。
+     * 撤回资产立项申请。
      * <p>
-     * 撤回允许在 IN_APPROVAL 状态，由创建人操作。
+     * 撤回只允许在 IN_APPROVAL 状态且流程仍停留在 branch_approve 或 corp_review
+     * 的 ACTIVE 用户节点，由创建人操作。流程节点查询或撤回失败时 Fail Close，
+     * 不能在无法确认节点状态时取消流程。
      * </p>
      *
-     * @param id            申请ID
+     * @param id            资产立项申请ID
+     * @param reason        撤回原因（必填，透传流程和审计）
      * @param operatorEmpId 操作人工号
      */
     @Transactional
-    public void cancelApply(String id, String operatorEmpId) {
+    public void cancelApply(String id, String reason, String operatorEmpId) {
         log.info("[LoanService.cancelApply] id={}, operator={}", id, operatorEmpId);
 
-        LoanApply existing = selectByIdOrThrow(id);
+        if (!org.springframework.util.StringUtils.hasText(reason)) {
+            throw new BizException(
+                    BizAppErrorCode.CANCEL_REASON_REQUIRED.getCode(),
+                    BizAppErrorCode.CANCEL_REASON_REQUIRED.getMessage()
+            );
+        }
+
+        // 锁住业务行，确保节点校验、撤回流程和状态条件更新位于同一串行事务。
+        LoanApply existing = loanMapper.selectForUpdate(id);
+        if (existing == null) {
+            throw new BizException(
+                    BizAppErrorCode.APPLY_NOT_FOUND.getCode(),
+                    BizAppErrorCode.APPLY_NOT_FOUND.getMessage()
+            );
+        }
+
+        // 保留状态机校验作为领域规则入口，并显式守住 IN_APPROVAL，避免测试替身或未来状态机配置
+        // 漂移时把草稿/终态误当成可撤回状态。
         bizStateMachine.validateLoanTransition(existing.getStatus(), LoanStatus.CANCELLED.getCode());
+        if (!LoanStatus.IN_APPROVAL.getCode().equals(existing.getStatus())) {
+            throw new BizException(
+                    BizAppErrorCode.INVALID_STATUS_TRANSITION.getCode(),
+                    BizAppErrorCode.INVALID_STATUS_TRANSITION.getMessage()
+            );
+        }
+
         validateCreator(existing, operatorEmpId);
 
-        loanMapper.updateStatusById(id, LoanStatus.CANCELLED.getCode(), operatorEmpId);
+        String processInstanceId = existing.getProcessInstanceId();
+        if (!org.springframework.util.StringUtils.hasText(processInstanceId)) {
+            throw workflowCallError("资产立项缺少流程实例，拒绝撤回");
+        }
+
+        ensureCancellableNode(processInstanceId);
+
+        try {
+            // 先取消 Flowable，再用 IN_APPROVAL 前置条件回写业务状态；两者处于同一事务，
+            // 任一步失败都会整体回滚，避免出现流程已取消但业务仍可操作的半状态。
+            workflowApi.cancelProcess(processInstanceId, reason);
+        } catch (Exception e) {
+            log.error("[LoanService.cancelApply] 取消资产立项流程失败 id={}, processInstanceId={}",
+                    id, processInstanceId, e);
+            throw workflowCallError(null);
+        }
+
+        int updated = loanMapper.conditionalUpdateStatus(
+                id,
+                LoanStatus.IN_APPROVAL.getCode(),
+                LoanStatus.CANCELLED.getCode(),
+                operatorEmpId
+        );
+        if (updated != 1) {
+            throw new BizException(
+                    BizAppErrorCode.INVALID_STATUS_TRANSITION.getCode(),
+                    BizAppErrorCode.INVALID_STATUS_TRANSITION.getMessage()
+            );
+        }
+    }
+
+    private static final Set<String> CANCELLABLE_NODE_KEYS = Set.of("branch_approve", "corp_review");
+    private static final Set<String> NON_CANCELLABLE_NODE_KEYS = Set.of("credit_check", "credit_approval");
+
+    /**
+     * 只允许在已确认的早期审批节点撤回；流程节点为空、未知或查询异常均 Fail Close。
+     */
+    private void ensureCancellableNode(String processInstanceId) {
+        ProcessDiagramDTO diagram;
+        try {
+            diagram = workflowQueryApi.getProcessNodes(processInstanceId);
+        } catch (BizException e) {
+            log.warn("[LoanService.cancelApply] 查询资产立项流程节点返回业务异常 processInstanceId={}, code={}",
+                    processInstanceId, e.getCode());
+            throw workflowCallError(null);
+        } catch (Exception e) {
+            log.warn("[LoanService.cancelApply] 查询资产立项流程节点失败 processInstanceId={}", processInstanceId, e);
+            throw workflowCallError(null);
+        }
+
+        if (diagram == null || diagram.getNodes() == null) {
+            throw workflowCallError("无法确认资产立项当前审批节点，拒绝撤回");
+        }
+
+        List<ProcessDiagramNodeDTO> activeUserTasks = diagram.getNodes().stream()
+                .filter(Objects::nonNull)
+                .filter(node -> "ACTIVE".equals(node.getStatus()))
+                .filter(node -> "userTask".equals(node.getNodeType()))
+                .toList();
+        if (activeUserTasks.size() != 1) {
+            throw workflowCallError("当前资产立项审批节点不允许撤回");
+        }
+
+        String activeNodeKey = activeUserTasks.get(0).getNodeKey();
+        if (NON_CANCELLABLE_NODE_KEYS.contains(activeNodeKey)) {
+            throw new BizException(
+                    BizAppErrorCode.CANNOT_CANCEL_AFTER_CORP_REVIEW.getCode(),
+                    BizAppErrorCode.CANNOT_CANCEL_AFTER_CORP_REVIEW.getMessage()
+            );
+        }
+        if (!CANCELLABLE_NODE_KEYS.contains(activeNodeKey)) {
+            throw workflowCallError("当前资产立项审批节点不允许撤回");
+        }
+    }
+
+    private BizException workflowCallError(String detail) {
+        String message = BizAppErrorCode.WORKFLOW_CALL_ERROR.getMessage();
+        if (detail != null && !detail.isBlank()) {
+            message = detail;
+        }
+        return new BizException(BizAppErrorCode.WORKFLOW_CALL_ERROR.getCode(), message);
     }
 
     /**
@@ -471,7 +599,7 @@ public class LoanService {
      * 校验操作人是创建人，否则抛出 BIZ-40305。
      */
     private void validateCreator(LoanApply entity, String operatorEmpId) {
-        if (!operatorEmpId.equals(entity.getCreatedBy())) {
+        if (operatorEmpId == null || !operatorEmpId.equals(entity.getCreatedBy())) {
             throw new BizException(
                     BizAppErrorCode.NOT_APPLY_CREATOR.getCode(),
                     BizAppErrorCode.NOT_APPLY_CREATOR.getMessage()

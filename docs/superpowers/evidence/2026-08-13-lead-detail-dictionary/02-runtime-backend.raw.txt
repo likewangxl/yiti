@@ -1,0 +1,29 @@
+# 8090 运行时代理与 18080 后端到达证据
+
+命令：
+
+  tr '\0' '\n' </proc/591623/environ | rg '^(VITE_|PORT=|npm_config_|PWD=)'
+  tr '\0' ' ' </proc/591623/cmdline
+  readlink -f /proc/591623/cwd
+
+相关原始输出：
+
+VITE_DEV_PORT=8090
+VITE_PROXY_TARGET=http://127.0.0.1:18080
+VITE_DEV_STRICT_PORT=true
+PWD=/home/djdev/lijh/yiti/xanzc_frontend
+node /home/djdev/lijh/yiti/xanzc_frontend/node_modules/.bin/vite
+/home/djdev/lijh/yiti/xanzc_frontend
+
+后端日志文件：/home/djdev/lijh/yiti/logs/bootstrap-2026-08-13.log
+
+与 clean CLI 会话时间一致的后端原始调用行：
+
+2026-08-13 15:27:25.779 [http-nio-18080-exec-10] [pc-1786606045757-318384] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786606045757-318384] >>> DictController.getDictItems(..) args=[INDUSTRY]
+2026-08-13 15:27:25.780 [http-nio-18080-exec-4] [pc-1786606045757-286360] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786606045757-286360] >>> DictController.getDictItems(..) args=[CUSTOMER_TYPE]
+2026-08-13 15:27:25.786 [http-nio-18080-exec-8] [pc-1786606045757-31727] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786606045757-31727] >>> DictController.getDictItems(..) args=[GROUP_TYPE]
+2026-08-13 15:27:25.801 [http-nio-18080-exec-2] [pc-1786606045757-406885] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786606045757-406885] >>> DictController.getDictItems(..) args=[LEAD_SOURCE]
+2026-08-13 15:27:25.801 [http-nio-18080-exec-3] [pc-1786606045757-24041] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786606045757-24041] >>> DictController.getDictItems(..) args=[ENTERPRISE_TYPE]
+2026-08-13 15:27:38.450 [http-nio-18080-exec-8] [pc-1786606058430-588901] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786606058430-588901] >>> LeadController.getById(..) args=[709962d626d446c8a35022603ccb161b]
+
+对应 HTTP 200 响应摘要见 `01-official-playwright-cli.raw.txt`。上述线程名明确为 `http-nio-18080-*`，与运行时 Vite 代理目标一致。

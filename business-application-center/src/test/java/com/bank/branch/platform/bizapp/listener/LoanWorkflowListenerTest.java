@@ -5,6 +5,8 @@ import com.bank.branch.platform.bizapp.enums.LoanStatus;
 import com.bank.branch.platform.bizapp.event.LoanApprovedEvent;
 import com.bank.branch.platform.bizapp.event.LoanRejectedEvent;
 import com.bank.branch.platform.bizapp.mapper.LoanApplyMapper;
+import com.bank.branch.platform.governance.api.NotifyApi;
+import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,6 +43,9 @@ class LoanWorkflowListenerTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private NotifyApi notifyApi;
+
     @InjectMocks
     private LoanWorkflowListener loanWorkflowListener;
 
@@ -70,6 +75,11 @@ class LoanWorkflowListenerTest {
         assertThat(captor.getValue()).isInstanceOf(LoanApprovedEvent.class);
         LoanApprovedEvent approvedEvent = (LoanApprovedEvent) captor.getValue();
         assertThat(approvedEvent.getLoanId()).isEqualTo("LOAN001");
+
+        ArgumentCaptor<NotificationCmd> notification = ArgumentCaptor.forClass(NotificationCmd.class);
+        verify(notifyApi).sendNotification(notification.capture());
+        assertThat(notification.getValue().getTitle()).isEqualTo("资产立项审批通过");
+        assertThat(notification.getValue().getContent()).contains("您的资产立项申请已审批通过");
     }
 
     // ==================== REJECTED 分支 ====================

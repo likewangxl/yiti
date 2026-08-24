@@ -1774,7 +1774,6 @@ DELETE FROM `cust_master`;
 CREATE TABLE IF NOT EXISTS `cust_tag` (
   `id` varchar(32) COLLATE utf8mb4_general_ci NOT NULL COMMENT '标签ID',
   `tag_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '标签名称',
-  `tag_code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '标签编码',
   `tag_category` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '标签分类',
   `tag_priority` int NOT NULL DEFAULT '0' COMMENT '标签优先级(数字越大越靠前)',
   `description` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '标签描述',
@@ -1785,7 +1784,6 @@ CREATE TABLE IF NOT EXISTS `cust_tag` (
   `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` tinyint(1) DEFAULT '0' COMMENT '是否删除：0-否, 1-是',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_tag_code` (`tag_code`),
   UNIQUE KEY `uk_tag_name` (`tag_name`),
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户标签表';

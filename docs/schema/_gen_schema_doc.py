@@ -493,14 +493,12 @@ TABLES_CUSTOMER = [
     ("CUST_TAG", "客户标签表", ["id"], [
         ("id",            "varchar(32)",  False, None, "标签ID"),
         ("tag_name",      "varchar(100)", False, None, "标签名称"),
-        ("tag_code",      "varchar(100)", False, None, "标签编码"),
         ("tag_category",  "varchar(50)",  True,  None, "标签分类"),
         ("tag_priority",  "int(11)",      False, "0",  "优先级(数字越大越靠前)"),
         ("description",   "varchar(500)", True,  None, "标签描述"),
         ("status",        "varchar(20)",  True,  "ACTIVE","ACTIVE/DISABLED"),
         *_audit_cols(deleted=True),
     ], [
-        ("uk_tag_code", "UK", ["tag_code"], "标签编码唯一"),
         ("uk_tag_name", "UK", ["tag_name"], "标签名称唯一"),
         ("idx_status",  "IDX",["status"],   "按状态查"),
     ]),

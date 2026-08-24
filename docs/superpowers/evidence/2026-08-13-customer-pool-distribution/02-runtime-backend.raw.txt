@@ -1,0 +1,40 @@
+# 后端运行与查询原始摘录
+
+## 启动
+
+2026-08-13 16:25:27.606 [main] [] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 18080 (http) with context path ''
+2026-08-13 16:25:27.730 [main] [] INFO  c.b.b.p.soap.config.SoapNettyServer - SOAP Netty server started on port 30522
+2026-08-13 16:25:27.741 [main] [] INFO  c.b.b.p.BranchPlatformApplication - Started BranchPlatformApplication in 10.395 seconds (process running for 10.766)
+
+## 健康检查命令与结果
+
+curl --noproxy '*' http://127.0.0.1:18080/api/auth/current-user
+current-user http=401
+
+curl --noproxy '*' http://127.0.0.1:18080/v3/api-docs
+api-docs http=200
+
+## 待认领池真实 SQL（traceId pc-1786609703485-579665）
+
+select cm.id, cm.cust_no, cm.cust_name, cm.unified_credit_code, cm.contact_person
+    , cm.contact_mobile, cm.industry, cm.group_type, cm.customer_type, cm.is_keystone
+    , cm.enterprise_type, cm.group_name, cm.is_account_opened, cm.customer_desc, cm.credit_amount
+    , cm.credit_exposure_amount, cm.owner_org_id, cm.lead_id, cm.status, cm.deleted
+    , cm.created_time, cm.updated_time
+from CUSTOMER_MARKET_CUSTOMER cm
+    join CUST_LEAD cl on cl.id = COALESCE(cm.current_lead_id, cm.lead_id)
+    left join CUST_CLAIM cc
+    on cc.cust_id = cm.id
+        and cc.claimed_by = 'admin'
+        and cc.claim_status = 'CLAIMED'
+where cm.deleted = 0
+    and cm.status = 'ACTIVE'
+    and cc.id is null
+    and cl.lead_status = 'APPROVED'
+    and cl.distribution_mode = 'PUBLIC'
+order by cm.created_time desc
+limit 0, 20
+
+2026-08-13 16:28:23.549 [http-nio-18080-exec-5] [pc-1786609703485-579665] DEBUG c.b.b.p.c.m.C.selectPoolPage - <==      Total: 0
+2026-08-13 16:28:23.557 [http-nio-18080-exec-5] [pc-1786609703485-579665] INFO  c.b.b.p.c.s.CustomerPoolService - [CustomerPoolService.listPool] total=0
+2026-08-13 16:28:23.557 [http-nio-18080-exec-5] [pc-1786609703485-579665] INFO  c.b.b.p.common.aop.ApiLogAspect - [pc-1786609703485-579665] <<< CustomerPoolController.listPool(..) result=ResponseWrapper(code=0, message=success, traceId=pc-1786609703485-579665, data=null, page=PageResult(pageNo=1, pageSize=20, total=0, records=[]), timestamp=2026-08-13T08:28:23.557227805Z) (14ms)

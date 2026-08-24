@@ -1660,6 +1660,10 @@ INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`,
   ('WFTRF_BFN_OUT','R_BACK_FINANCE','RES_WF_TRF_OUTBOX','PLATFORM','2026-07-13 00:00:00'),
   ('WFTRF_BFN_CAN','R_BACK_FINANCE','RES_WF_TRF_CANCEL','PLATFORM','2026-07-13 00:00:00');
 
+-- 2026-08-11 客户营销一期菜单/API资源不再追加到历史 seed。
+-- 目标库请执行 docs/superpowers/sql/2026-08-11-customer-phase1-resource-align.sql，
+-- 由该幂等事务脚本清理历史客户营销资源和角色绑定后，重建一期资源树。
+
 -- ============================================================================
 -- END OF seed-v1.sql
 -- ============================================================================

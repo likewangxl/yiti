@@ -2,6 +2,7 @@ package com.bank.branch.platform.bizapp.controller;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.bizapp.api.dto.LoanApplyListItemDTO;
+import com.bank.branch.platform.bizapp.dto.req.CancelLoanReq;
 import com.bank.branch.platform.bizapp.dto.req.CreateLoanReq;
 import com.bank.branch.platform.bizapp.dto.req.UpdateLoanReq;
 import com.bank.branch.platform.bizapp.dto.resp.LoanDetailResp;
@@ -32,7 +33,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 资产投放申请 REST 控制器。
+ * 资产立项申请 REST 控制器。
  * <p>
  * 提供贷款申请的 CRUD、提交审批、撤回及节点表单查询接口。
  * 所有写操作需要 {@link BizAction#WRITE} 权限，查询需要 {@link BizAction#LIST} 权限。
@@ -43,7 +44,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/api/loans")
 @Validated
-@Tag(name = "资产投放申请管理")
+@Tag(name = "资产立项申请管理")
 public class LoanController {
 
     private final LoanService loanService;
@@ -62,7 +63,7 @@ public class LoanController {
      */
     @GetMapping
     @BizAuth(bizType = BizType.LOAN, action = BizAction.LIST)
-    @Operation(summary = "分页查询贷款申请列表")
+    @Operation(summary = "分页查询资产立项申请列表")
     public ResponseWrapper<LoanApplyListItemDTO> listPage(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
@@ -76,7 +77,7 @@ public class LoanController {
     }
 
     /**
-     * 查询贷款申请详情（富化版，含 custInfo 和 canOperate）。
+     * 查询资产立项申请详情（富化版，含 custInfo 和 canOperate）。
      * <p>
      * 通过 {@link LoanService#getDetail} 补充客户基础信息和当前用户操作权限，
      * 前端据此控制按钮可见性。
@@ -87,7 +88,7 @@ public class LoanController {
      */
     @GetMapping("/{id}")
     @BizAuth(bizType = BizType.LOAN, action = BizAction.READ)
-    @Operation(summary = "查询贷款申请详情")
+    @Operation(summary = "查询资产立项申请详情")
     public ResponseWrapper<LoanDetailResp> getById(@PathVariable String id) {
         String empId = currentUserApi.getCurrentEmpId();
         log.info("[LoanController.getById] id={}, empId={}", id, empId);
@@ -96,7 +97,7 @@ public class LoanController {
     }
 
     /**
-     * 创建贷款申请草稿。
+     * 创建资产立项申请草稿。
      *
      * @param req 创建请求
      * @return 创建后的申请详情
@@ -104,7 +105,7 @@ public class LoanController {
     @PostMapping
     @BizAuth(bizType = BizType.LOAN, action = BizAction.WRITE)
     @AuditLog(action = "CREATE_LOAN_APPLY", resourceType = "LOAN_APPLY")
-    @Operation(summary = "创建贷款申请草稿")
+    @Operation(summary = "创建资产立项申请草稿")
     public ResponseWrapper<LoanDetailResp> create(@RequestBody @Valid CreateLoanReq req) {
         String empId = currentUserApi.getCurrentEmpId();
         String orgCode = currentUserApi.getCurrentOrgCode();
@@ -119,7 +120,7 @@ public class LoanController {
     }
 
     /**
-     * 更新贷款申请草稿。
+     * 更新资产立项申请草稿。
      *
      * @param id  申请ID
      * @param req 更新请求
@@ -128,7 +129,7 @@ public class LoanController {
     @PutMapping("/{id}")
     @BizAuth(bizType = BizType.LOAN, action = BizAction.WRITE)
     @AuditLog(action = "UPDATE_LOAN_APPLY", resourceType = "LOAN_APPLY")
-    @Operation(summary = "更新贷款申请草稿")
+    @Operation(summary = "更新资产立项申请草稿")
     public ResponseWrapper<LoanDetailResp> update(@PathVariable String id,
                                                    @RequestBody @Valid UpdateLoanReq req) {
         String empId = currentUserApi.getCurrentEmpId();
@@ -141,7 +142,7 @@ public class LoanController {
     }
 
     /**
-     * 提交贷款申请审批。
+     * 提交资产立项申请审批。
      * <p>
      * 返回 {@link SubmitRespDTO}，含 processInstanceId，供前端跳转流程详情页使用。
      * </p>
@@ -152,7 +153,7 @@ public class LoanController {
     @PostMapping("/{id}/submit")
     @BizAuth(bizType = BizType.LOAN, action = BizAction.WRITE)
     @AuditLog(action = "SUBMIT_LOAN_APPLY", resourceType = "LOAN_APPLY")
-    @Operation(summary = "提交贷款申请审批")
+    @Operation(summary = "提交资产立项申请审批")
     public ResponseWrapper<SubmitRespDTO> submit(@PathVariable String id) {
         String empId = currentUserApi.getCurrentEmpId();
         String orgCode = currentUserApi.getCurrentOrgCode();
@@ -162,7 +163,7 @@ public class LoanController {
     }
 
     /**
-     * 逻辑删除贷款申请草稿。
+     * 逻辑删除资产立项申请草稿。
      *
      * @param id 申请ID
      * @return 成功响应
@@ -170,7 +171,7 @@ public class LoanController {
     @DeleteMapping("/{id}")
     @BizAuth(bizType = BizType.LOAN, action = BizAction.WRITE)
     @AuditLog(action = "DELETE_LOAN_APPLY", resourceType = "LOAN_APPLY")
-    @Operation(summary = "删除贷款申请草稿")
+    @Operation(summary = "删除资产立项申请草稿")
     public ResponseWrapper<Void> delete(@PathVariable String id) {
         String empId = currentUserApi.getCurrentEmpId();
         log.info("[LoanController.delete] id={}, operator={}", id, empId);
@@ -179,31 +180,33 @@ public class LoanController {
     }
 
     /**
-     * 撤回贷款申请。
+     * 撤回资产立项申请。
      *
      * @param id 申请ID
+     * @param req 撤回请求（包含必填 reason）
      * @return 成功响应
      */
     @PostMapping("/{id}/cancel")
     @BizAuth(bizType = BizType.LOAN, action = BizAction.WRITE)
     @AuditLog(action = "CANCEL_LOAN_APPLY", resourceType = "LOAN_APPLY", reasonRequired = true)
-    @Operation(summary = "撤回贷款申请")
-    public ResponseWrapper<Void> cancel(@PathVariable String id) {
+    @Operation(summary = "撤回资产立项申请")
+    public ResponseWrapper<Void> cancel(@PathVariable String id,
+                                        @RequestBody @Valid CancelLoanReq req) {
         String empId = currentUserApi.getCurrentEmpId();
         log.info("[LoanController.cancel] id={}, operator={}", id, empId);
-        loanService.cancelApply(id, empId);
+        loanService.cancelApply(id, req.getReason(), empId);
         return ResponseWrapper.success();
     }
 
     /**
-     * 导出贷款申请列表（V1 未实现，返回 501）。
+     * 导出资产立项申请列表（V1 未实现，返回 501）。
      *
      * @return 501 未实现响应
      */
     @GetMapping("/export")
     @BizAuth(bizType = BizType.LOAN, action = BizAction.EXPORT)
     @AuditLog(action = "EXPORT_LOAN_APPLY", resourceType = "LOAN_APPLY", reasonRequired = true)
-    @Operation(summary = "导出贷款申请列表（待实现）")
+    @Operation(summary = "导出资产立项申请列表（待实现）")
     public ResponseWrapper<?> export() {
         log.info("[LoanController.export] V1 暂未实现导出功能");
         return ResponseWrapper.error("501", "Not Implemented");
