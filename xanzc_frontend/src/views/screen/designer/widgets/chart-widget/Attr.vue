@@ -30,7 +30,19 @@
         <el-option v-for="item in metricColumnOptions" :key="item.col"
                    :label="item.label" :value="item.col" />
       </el-select>
-      <div class="attr-hint">可多选指标列；数据项绑定使用接口原始列名，展示名称取数据源别名。</div>
+      <div v-if="metricItemEditorRows.length" class="metric-item-editor" data-testid="chart-metric-item-editor">
+        <div v-for="item in metricItemEditorRows" :key="item.col"
+             class="metric-item-row" data-testid="chart-metric-item-row">
+          <div class="metric-item-col" data-testid="chart-metric-item-col">
+            <span class="metric-item-caption">数据项</span>
+            <span class="metric-item-value">{{ item.col }}</span>
+          </div>
+          <el-input :model-value="item.label" data-testid="chart-metric-item-label"
+                    aria-label="指标展示名称" placeholder="请输入展示名称"
+                    @update:modelValue="value => updateMetricItemLabel(item.col, value)" />
+        </div>
+      </div>
+      <div class="attr-hint">可多选指标列；数据项使用接口原始列名，展示名称可按当前组件单独编辑。</div>
     </el-form-item>
 
     <!-- 全屏周期过滤器联动豁免(spec §5.3):仅时序数据源会被联动,豁免后维持自身周期 -->
@@ -323,6 +335,25 @@ const metricColumnOptions = computed(() => {
   });
 });
 
+const metricItemEditorRows = computed(() => {
+  if (!showMetricItems.value || !Array.isArray(bind.items)) return [];
+
+  const optionByCol = new Map(metricColumnOptions.value.map(item => [item.col, item]));
+  const seen = new Set();
+  return bind.items.reduce((rows, item) => {
+    const col = String(item?.col || '').trim();
+    if (!col || seen.has(col)) return rows;
+    seen.add(col);
+    const option = optionByCol.get(col);
+    rows.push({
+      col,
+      // 旧节点可能只有 col；面板仍展示数据源 alias/原列名作为可编辑兜底。
+      label: String(item?.label || '').trim() || option?.label || col
+    });
+    return rows;
+  }, []);
+});
+
 const metricItemCols = computed({
   get() {
     if (!Array.isArray(bind.items)) return [];
@@ -343,6 +374,18 @@ const metricItemCols = computed({
     store.pushSnapshotDebounced();
   }
 });
+
+function updateMetricItemLabel(col, value) {
+  const item = Array.isArray(bind.items)
+    ? bind.items.find(candidate => String(candidate?.col || '').trim() === col)
+    : null;
+  if (!item) return;
+
+  const option = metricColumnOptions.value.find(candidate => candidate.col === col);
+  item.label = String(value ?? '').trim() || option?.label || col;
+  props.element.bindJson = JSON.stringify(bind);
+  store.pushSnapshotDebounced();
+}
 
 function syncStyle() { props.element.styleJson = JSON.stringify(styleCfg); store.pushSnapshotDebounced(); }
 function syncDrill() { props.element.drillJson = JSON.stringify(drill); store.pushSnapshotDebounced(); }
@@ -433,6 +476,12 @@ onMounted(async () => {
 </script>
 <style scoped>
 .attr-hint { width: 100%; font-size: 12px; color: #7d9bc9; line-height: 1.5; margin-top: 2px; }
+.metric-item-editor { width: 100%; display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
+.metric-item-row { display: flex; flex-direction: column; gap: 4px; padding: 7px 8px;
+  border: 1px solid rgba(125, 155, 201, .24); border-radius: 6px; background: rgba(12, 25, 49, .38); }
+.metric-item-col { display: flex; align-items: baseline; gap: 6px; min-width: 0; color: #c7d5ea; font-size: 12px; line-height: 1.4; }
+.metric-item-caption { color: #7d9bc9; flex: 0 0 auto; }
+.metric-item-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e8f1ff; }
 .probe-box { width: 100%; display: flex; flex-direction: column; gap: 6px; }
 .attr-scope-conflict { display: flex; width: 100%; flex-direction: column; gap: 3px; margin-top: 7px;
   padding: 8px 10px; border: 1px solid rgba(229, 154, 145, .34); border-radius: 7px;

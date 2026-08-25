@@ -73,10 +73,11 @@ const TestChartAttr = {
     const bind = JSON.parse(props.element.bindJson || '{}');
     return {
       initialDsId: bind.dsId,
-      initialMetricCols: Array.isArray(bind.items) ? bind.items.map(item => item.col).join(',') : ''
+      initialMetricCols: Array.isArray(bind.items) ? bind.items.map(item => item.col).join(',') : '',
+      initialMetricLabels: Array.isArray(bind.items) ? bind.items.map(item => item.label).join(',') : ''
     };
   },
-  template: '<div><div data-testid="test-datasource">{{ initialDsId }}</div><div data-testid="test-metric-columns">{{ initialMetricCols }}</div></div>'
+  template: '<div><div data-testid="test-datasource">{{ initialDsId }}</div><div data-testid="test-metric-columns">{{ initialMetricCols }}</div><div data-testid="test-metric-labels">{{ initialMetricLabels }}</div></div>'
 };
 
 // el-button/el-dialog/el-input 用渲染 slot 的自定义 stub:新建大屏流程测试需要按钮文本可寻、
@@ -251,11 +252,13 @@ describe('DesignerV2.vue 挂载冒烟测试', () => {
     await nextTick();
     expect(wrapper.find('[data-testid="test-datasource"]').text()).toBe('101');
     expect(wrapper.find('[data-testid="test-metric-columns"]').text()).toBe('metric-a');
+    expect(wrapper.find('[data-testid="test-metric-labels"]').text()).toBe('指标 A');
 
     designerStore.selectComponent('chart-b');
     await nextTick();
     expect(wrapper.find('[data-testid="test-datasource"]').text()).toBe('202');
     expect(wrapper.find('[data-testid="test-metric-columns"]').text()).toBe('metric-b');
+    expect(wrapper.find('[data-testid="test-metric-labels"]').text()).toBe('指标 B');
   });
 });
 

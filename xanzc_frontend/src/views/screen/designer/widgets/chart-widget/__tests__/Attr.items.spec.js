@@ -160,6 +160,88 @@ describe('ChartWidget Attr 指标列绑定', () => {
     ]);
   });
 
+  it('选中两列后为每个数据项显示原始列名和可编辑 label', async () => {
+    const element = {
+      innerType: 'METRIC_CARD',
+      bindJson: JSON.stringify({ dsId: 9010, period: 'LATEST', dsType: 'SINGLE' }),
+      styleJson: '{}', drillJson: '{}', propValue: {}
+    };
+    const wrapper = await mountAttr(element, [datasource(9010, '全省存款聚合', {
+      fieldMeta: [
+        { col: 'metric_a', alias: '指标 A', role: 'METRIC' },
+        { col: 'metric_b', alias: '指标 B', role: 'METRIC' }
+      ]
+    })]);
+
+    await chooseMetricColumns(wrapper, ['metric_a', 'metric_b']);
+
+    const rows = wrapper.findAll('[data-testid="chart-metric-item-row"]');
+    expect(rows).toHaveLength(2);
+    expect(rows.map(row => row.find('.metric-item-value').text())).toEqual([
+      'metric_a', 'metric_b'
+    ]);
+    expect(rows.map(row => row.find('[data-testid="chart-metric-item-label"]').element.value)).toEqual([
+      '指标 A', '指标 B'
+    ]);
+  });
+
+  it('修改 label 时只更新对应 item，保留 col、其他 item 和绑定字段', async () => {
+    const element = {
+      innerType: 'METRIC_CARD',
+      bindJson: JSON.stringify({
+        dsId: 9010, period: 'LATEST', dsType: 'SINGLE', valueCol: 'keep',
+        items: [
+          { col: 'metric_a', label: '指标 A' },
+          { col: 'metric_b', label: '指标 B' }
+        ]
+      }),
+      styleJson: '{}', drillJson: '{}', propValue: {}
+    };
+    const wrapper = await mountAttr(element, [datasource(9010, '全省存款聚合', {
+      fieldMeta: [
+        { col: 'metric_a', alias: '指标 A', role: 'METRIC' },
+        { col: 'metric_b', alias: '指标 B', role: 'METRIC' }
+      ]
+    })]);
+
+    const rows = wrapper.findAll('[data-testid="chart-metric-item-row"]');
+    await rows[0].find('[data-testid="chart-metric-item-label"]').setValue('自定义标题');
+
+    expect(JSON.parse(element.bindJson)).toMatchObject({
+      dsId: 9010, period: 'LATEST', dsType: 'SINGLE', valueCol: 'keep',
+      items: [
+        { col: 'metric_a', label: '自定义标题' },
+        { col: 'metric_b', label: '指标 B' }
+      ]
+    });
+  });
+
+  it('已有自定义 label 在编辑器中回显，旧 item 无 label 时显示 alias 兜底', async () => {
+    const element = {
+      innerType: 'METRIC_CARD',
+      bindJson: JSON.stringify({
+        dsId: 9010,
+        items: [
+          { col: 'metric_a', label: '历史自定义标题' },
+          { col: 'metric_b' }
+        ]
+      }),
+      styleJson: '{}', drillJson: '{}', propValue: {}
+    };
+    const wrapper = await mountAttr(element, [datasource(9010, '全省存款聚合', {
+      fieldMeta: [
+        { col: 'metric_a', alias: '指标 A', role: 'METRIC' },
+        { col: 'metric_b', alias: '指标 B', role: 'METRIC' }
+      ]
+    })]);
+
+    const rows = wrapper.findAll('[data-testid="chart-metric-item-row"]');
+    expect(rows).toHaveLength(2);
+    expect(rows.map(row => row.find('[data-testid="chart-metric-item-label"]').element.value)).toEqual([
+      '历史自定义标题', '指标 B'
+    ]);
+  });
+
   it('指标列编辑器覆盖五种支持显式 items 的图表类型', async () => {
     for (const innerType of ['METRIC_CARD', 'LINE_TREND', 'AREA_STACK', 'BAR_COMPARE', 'COMBO_CHART']) {
       const element = {
