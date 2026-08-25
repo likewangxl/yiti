@@ -2,6 +2,7 @@ package com.bank.branch.platform.performance.facade;
 
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustSubmitCmd;
+import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustService;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitAllocAdjustCmd;
 import com.bank.branch.platform.workflow.api.TodoQueryApi;
@@ -142,6 +143,36 @@ class PerfApprovalCmdFacadeTest {
 
         Map<String, Object> vars = captureApproveVars("T1", "同意");
         assertThat(vars).containsEntry("corpRouteTo", "OWNER").doesNotContainKey("finRouteTo");
+    }
+
+    @Test
+    void approveAllocAdjust_newDimension_blankRouteTo_fallsBackToLeaderWithoutOriginalOwner() {
+        when(todoQueryApi.findTaskRespByBusinessKeysByEmp("E001", List.of(BIZ_KEY)))
+                .thenReturn(Map.of(BIZ_KEY, task("T1", "biz_dept_review")));
+        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
+        apply.setAllocDim("NEW");
+        when(allocAdjustService.getById("A1"))
+                .thenReturn(new AllocAdjustService.ApplyWithItems(apply, List.of()));
+
+        facade.approveAllocAdjust("A1", "E001", "1", "同意", null);
+
+        Map<String, Object> vars = captureApproveVars("T1", "同意");
+        assertThat(vars).containsEntry("corpRouteTo", "LEADER").doesNotContainKey("finRouteTo");
+    }
+
+    @Test
+    void approveAllocAdjust_newDimension_explicitOwnerRoute_isRejected() {
+        when(todoQueryApi.findTaskRespByBusinessKeysByEmp("E001", List.of(BIZ_KEY)))
+                .thenReturn(Map.of(BIZ_KEY, task("T1", "biz_dept_review")));
+        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
+        apply.setAllocDim("NEW");
+        when(allocAdjustService.getById("A1"))
+                .thenReturn(new AllocAdjustService.ApplyWithItems(apply, List.of()));
+
+        assertThatThrownBy(() -> facade.approveAllocAdjust("A1", "E001", "1", "同意", "OWNER"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("NEW");
+        verify(workflowApi, never()).approveByEmp(any(), any(), any(), any());
     }
 
     @Test

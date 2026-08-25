@@ -64,7 +64,7 @@ import java.util.UUID;
 public class AllocAdjustService {
 
     /** 合法分配维度. */
-    private static final Set<String> ALLOWED_ALLOC_DIMS = Set.of("RULE", "ACCOUNT");
+    private static final Set<String> ALLOWED_ALLOC_DIMS = Set.of("RULE", "ACCOUNT", "NEW");
 
     /** RULE 维度下 ratio 合计上限（100%）. */
     private static final BigDecimal RULE_RATIO_MAX = new BigDecimal("100");
@@ -139,7 +139,10 @@ public class AllocAdjustService {
                 if (u == null) {
                     continue;
                 }
-                result.add(new EmpSuggestRespDTO(u.getEmpId(), u.getUsername(), u.getDisplayName()));
+                EmpSuggestRespDTO dto = new EmpSuggestRespDTO(
+                        u.getEmpId(), u.getUsername(), u.getDisplayName(),
+                        u.getMainOrgCode(), u.getMainOrgName());
+                result.add(dto);
             }
         }
         return result;
@@ -165,10 +168,11 @@ public class AllocAdjustService {
         // 同客户同维度去重：审批中(IN_APPROVAL)已存在则拒绝重复提交，避免并行调整相互覆盖。
         checkNoInApprovalDuplicate(custId, cmd.getAllocDim());
 
-        // 原业绩分配会签名单：历史审批通过分配优先，查不到则回退本次手工录入。提交审批必须非空。
-        List<String> originalOwnerEmpIds = resolveOriginalOwnerEmpIds(
-                custId, cmd.getAllocDim(), cmd.getOriginalAllocList());
-        if (originalOwnerEmpIds.isEmpty()) {
+        // NEW（新开户）没有原业绩分配，不要求原分配会签；其他维度仍按历史/手工原分配取会签名单。
+        List<String> originalOwnerEmpIds = "NEW".equals(cmd.getAllocDim())
+                ? new ArrayList<>()
+                : resolveOriginalOwnerEmpIds(custId, cmd.getAllocDim(), cmd.getOriginalAllocList());
+        if (!"NEW".equals(cmd.getAllocDim()) && originalOwnerEmpIds.isEmpty()) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "至少需要一条原业绩分配记录");
         }
 
@@ -269,9 +273,10 @@ public class AllocAdjustService {
         validateBasic(cmd);
         validateItems(cmd);
         checkNoInApprovalDuplicate(cmd.getCustId(), cmd.getAllocDim());
-        List<String> originalOwnerEmpIds = resolveOriginalOwnerEmpIds(
-                cmd.getCustId(), cmd.getAllocDim(), cmd.getOriginalAllocList());
-        if (originalOwnerEmpIds.isEmpty()) {
+        List<String> originalOwnerEmpIds = "NEW".equals(cmd.getAllocDim())
+                ? new ArrayList<>()
+                : resolveOriginalOwnerEmpIds(cmd.getCustId(), cmd.getAllocDim(), cmd.getOriginalAllocList());
+        if (!"NEW".equals(cmd.getAllocDim()) && originalOwnerEmpIds.isEmpty()) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "至少需要一条原业绩分配记录");
         }
         // 起流程并回写状态（草稿明细已在库，不重插）
@@ -365,6 +370,7 @@ public class AllocAdjustService {
             PerfAllocAdjustItem entity = new PerfAllocAdjustItem();
             entity.setId(UUID.randomUUID().toString().replace("-", ""));
             entity.setApplyId(applyId);
+            entity.setItemKind("NEW");
             entity.setEmpId(it.getEmpId());
             com.bank.branch.platform.auth.api.dto.UserDTO u = userMap.get(it.getEmpId());
             // username 解析不到时回退工号，避免空白；中文名/部门解析不到留空
@@ -376,58 +382,50 @@ public class AllocAdjustService {
             entity.setRemark(it.getRemark());
             items.add(entity);
         }
+        // 原业绩分配作为同一申请的 ORIGIN 快照落 PERF_ALLOC_ADJUST_ITEM；
+        // 前端使用自动预览但未回传 originalAllocList 时，后端从当前关系复制快照，保证草稿编辑可持久化修改。
+        List<SubmitAllocAdjustCmd.OriginalItem> originals = resolveOriginalItemsForPersist(cmd);
+        List<PerfAllocAdjustItem> originItems = buildOriginalItems(applyId, originals);
+        items.addAll(originItems);
         if (!items.isEmpty()) {
             itemMapper.batchInsert(items);
-        }
-        // 原业绩分配（手工录入）不再落 PERF_ALLOC_ADJUST_ITEM（item_kind 已废弃）；
-        // 直接 seed 到 cust_alloc_relation（当前生效 is_original='2'）。buildOriginalItems 仅做工号→姓名/部门补全。
-        List<PerfAllocAdjustItem> originItems = buildOriginalItems(applyId, cmd.getOriginalAllocList());
-        if (!originItems.isEmpty()) {
-            seedOriginalAllocRelations(cmd, originItems);
         }
     }
 
     /**
-     * 手工录入的原业绩分配同步落库 {@code cust_alloc_relation}（当前生效，{@code is_original='2'}）.
-     *
-     * <p>仅当该客户当前<b>无</b> is_original='2' 分配时写入——即确为「手工录入」场景
-     * （预填回写来自既有 is_original='2'，再写会重复），对应需求「如果没有数据手工输入」。
-     *
-     * <p>字段：{@code source_batch_id=null} / {@code source_process_date=null} / {@code is_original='2'}；
-     * 姓名、部门取手工录入快照（fullname / dept_no / dept_name）；cust_type 取审批申请。
+     * 解析需要保存的原分配快照。
+     * <p>NEW 不要求原分配；RULE/ACCOUNT 在请求未携带原分配时，回退读取当前预览并转为申请快照，
+     * 这样保存草稿后详情仍可编辑，而不会把草稿内容绑定到实时客户关系。</p>
      */
-    private void seedOriginalAllocRelations(SubmitAllocAdjustCmd cmd, List<PerfAllocAdjustItem> originItems) {
-        List<CustAllocRelation> existing =
-                allocRelationMapper.selectCurrentOriginalByCust(cmd.getCustId(), cmd.getAllocDim());
-        if (existing != null && !existing.isEmpty()) {
-            return; // 已有当前生效分配（预填场景），不重复写入
+    private List<SubmitAllocAdjustCmd.OriginalItem> resolveOriginalItemsForPersist(
+            SubmitAllocAdjustCmd cmd) {
+        if (cmd.getOriginalAllocList() != null && !cmd.getOriginalAllocList().isEmpty()) {
+            return cmd.getOriginalAllocList();
         }
-        java.time.LocalDate today = java.time.LocalDate.now();
-        String operator = !isBlank(cmd.getApplicant()) ? cmd.getApplicant() : null;
-        for (PerfAllocAdjustItem it : originItems) {
-            CustAllocRelation rel = new CustAllocRelation();
-            rel.setId(UUID.randomUUID().toString().replace("-", ""));
-            rel.setCustId(cmd.getCustId());
-            rel.setCustType(cmd.getCustType());
-            rel.setAllocDim(cmd.getAllocDim());
-            rel.setBizKind(cmd.getBizKind());
-            rel.setAccountNo(!isBlank(it.getAcctNo()) ? it.getAcctNo() : cmd.getAccountNo());
-            rel.setEmpId(it.getEmpId());
-            rel.setFullname(it.getEmpChnName());
-            rel.setDeptNo(it.getOrgCode());
-            rel.setDeptName(it.getOrgName());
-            rel.setRatio(it.getRatio());
-            // 手工录入即当前生效分配
-            rel.setIsOriginal("2");
-            rel.setEffectiveDate(today);
-            rel.setEndDate(null);
-            // 手工录入无来源批次/业务日期
-            rel.setSourceBatchId(null);
-            rel.setSourceProcessDate(null);
-            rel.setCreatedBy(operator);
-            rel.setUpdatedBy(operator);
-            allocRelationMapper.insert(rel);
+        if (isBlank(cmd.getAllocDim()) || "NEW".equals(cmd.getAllocDim())) {
+            return java.util.Collections.emptyList();
         }
+        List<com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO> current =
+                allocAdjustPreviewService.getLastApprovedAllocPreview(cmd.getCustId(), cmd.getAllocDim());
+        if (current == null || current.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        List<SubmitAllocAdjustCmd.OriginalItem> result = new ArrayList<>(current.size());
+        for (com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO src : current) {
+            if (src == null || isBlank(src.getEmpId())) {
+                continue;
+            }
+            result.add(SubmitAllocAdjustCmd.OriginalItem.builder()
+                    .acctNo(src.getAccountNo())
+                    .empId(src.getEmpId())
+                    .username(src.getUsername())
+                    .empChnName(src.getEmpChnName())
+                    .orgCode(src.getOrgCode())
+                    .orgName(src.getOrgName())
+                    .ratio(src.getRatio())
+                    .build());
+        }
+        return result;
     }
 
     /**
@@ -451,17 +449,23 @@ public class AllocAdjustService {
         vars.put("custNo", custId);
         vars.put("bizKind", cmd.getBizKind());
         vars.put("allocDim", cmd.getAllocDim());
-        // 单人指派候选（original_owner_approve 的 assignee 兜底）：历史当前分配优先，否则取会签名单首位。
-        String originalOwnerEmpId = resolveOriginalOwnerEmpId(custId, cmd.getBizKind());
-        if (isBlank(originalOwnerEmpId)) {
-            originalOwnerEmpId = originalOwnerEmpIds.get(0);
+        // 单人指派候选（旧流程兼容）：NEW 无原业绩分配时保持安全空值，禁止 get(0) 触发异常。
+        String originalOwnerEmpId = null;
+        if (originalOwnerEmpIds != null && !originalOwnerEmpIds.isEmpty()) {
+            originalOwnerEmpId = resolveOriginalOwnerEmpId(custId, cmd.getBizKind());
+            if (isBlank(originalOwnerEmpId)) {
+                originalOwnerEmpId = originalOwnerEmpIds.get(0);
+            }
         }
         vars.put("originalOwnerEmpId", originalOwnerEmpId);
-        // 原业绩分配会签名单（corp_v1 并行多实例 collection），前面已校验非空。
-        vars.put("originalOwnerEmpIds", originalOwnerEmpIds);
+        // 原业绩分配会签名单（corp_v1 并行多实例 collection）；NEW 为空列表。
+        vars.put("originalOwnerEmpIds", originalOwnerEmpIds == null
+                ? java.util.Collections.emptyList() : originalOwnerEmpIds);
         // 原业绩所属机构负责人会签名单：original_owner_approve 节点候选已切换为该变量
         // （每个原分配人主机构上溯至 2 级机构后取 BRANCH_HEAD 持有者并集，缺失则 fail-fast 阻断发起）
-        vars.put("originalOwnerOrgLeaderEmpIds", resolveOriginalOwnerOrgLeaderEmpIds(originalOwnerEmpIds));
+        vars.put("originalOwnerOrgLeaderEmpIds", originalOwnerEmpIds == null || originalOwnerEmpIds.isEmpty()
+                ? java.util.Collections.emptyList()
+                : resolveOriginalOwnerOrgLeaderEmpIds(originalOwnerEmpIds));
         // 设计器流程网关分流：种入发起机构级别等启动变量（corpRouteTo/finRouteTo 由审批 formData 提供，不在此种）
         buildStartVariables(cmd.getOwnerOrgId(), vars);
         // 前置校验：业绩分配调整仅限 2级/3级机构员工发起。
@@ -517,16 +521,27 @@ public class AllocAdjustService {
     private SubmitAllocAdjustCmd rebuildCmdFromPersisted(PerfAllocAdjustApply apply,
             List<PerfAllocAdjustItem> persisted, String operator) {
         List<SubmitAllocAdjustCmd.Item> items = new ArrayList<>();
-        // PERF_ALLOC_ADJUST_ITEM 现仅存调整明细（item_kind 已废弃）；原业绩分配在 cust_alloc_relation，
-        // 会签名单由 resolveOriginalOwnerEmpIds 改读 cust_alloc_relation，这里 originalAllocList 留空即可。
         List<SubmitAllocAdjustCmd.OriginalItem> origins = new ArrayList<>();
         if (persisted != null) {
             for (PerfAllocAdjustItem it : persisted) {
-                items.add(SubmitAllocAdjustCmd.Item.builder()
-                        .empId(it.getEmpId())
-                        .ratio(it.getRatio())
-                        .remark(it.getRemark())
-                        .build());
+                if ("ORIGIN".equals(it.getItemKind())) {
+                    origins.add(SubmitAllocAdjustCmd.OriginalItem.builder()
+                            .acctNo(it.getAcctNo())
+                            .empId(it.getEmpId())
+                            .username(it.getUsername())
+                            .empChnName(it.getEmpChnName())
+                            .orgCode(it.getOrgCode())
+                            .orgName(it.getOrgName())
+                            .ratio(it.getRatio())
+                            .build());
+                } else {
+                    // item_kind 为空的历史明细按 NEW 兼容处理。
+                    items.add(SubmitAllocAdjustCmd.Item.builder()
+                            .empId(it.getEmpId())
+                            .ratio(it.getRatio())
+                            .remark(it.getRemark())
+                            .build());
+                }
             }
         }
         return SubmitAllocAdjustCmd.builder()
@@ -736,7 +751,7 @@ public class AllocAdjustService {
         }
         dto.setCurrentNodeApprovers(resolveCurrentNodeApprovers(bundle.getApply()));
         // 明细员工 username/中文名/部门 已在 toRespDto 直接读 item 快照字段，无需再关联 PT_USER/机构表
-        // R2：「原业绩分配」从当前生效分配(is_original='2')反显；为空回退持久化 ORIGIN 快照
+        // 优先展示申请内保存的 ORIGIN 快照；仅老数据没有 item_kind/ORIGIN 快照时回退当前关系。
         reflectOriginalAllocFromCurrent(dto, bundle.getApply());
         return dto;
     }
@@ -773,12 +788,19 @@ public class AllocAdjustService {
     }
 
     /**
-     * 编辑/查看「原业绩分配」改从 {@code cust_alloc_relation} 当前生效分配（{@code is_original='2'}）反显.
-     *
-     * <p>命中当前生效分配时：保留 NEW 明细，ORIGIN 明细整体替换为当前生效分配；
-     * 未命中（无 is_original='2'）时：保留持久化的 ORIGIN 快照不变（避免老数据视图空白）。
+     * 编辑/查看优先使用申请内 {@code ORIGIN} 快照；旧申请没有快照时，才从
+     * {@code cust_alloc_relation} 当前生效分配（{@code is_original='2'}）兼容反显。
      */
     private void reflectOriginalAllocFromCurrent(AllocAdjustRespDTO dto, PerfAllocAdjustApply apply) {
+        if (dto.getItems() != null && dto.getItems().stream()
+                .anyMatch(it -> "ORIGIN".equals(it.getItemKind()))) {
+            return;
+        }
+        // 非 NEW 申请没有保存 ORIGIN 快照时，兼容旧数据及历史草稿，回退当前关系。
+        // NEW 明确没有原业绩分配，不能把其他实时关系误显示为原分配。
+        if ("NEW".equals(apply.getAllocDim())) {
+            return;
+        }
         List<com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO> current =
                 allocAdjustPreviewService.getLastApprovedAllocPreview(apply.getCustId(), apply.getAllocDim());
         if (current == null || current.isEmpty()) {
@@ -872,7 +894,7 @@ public class AllocAdjustService {
     }
 
     /**
-     * 计算「原业绩分配模块」会签名单：取该客户当前维度上次审批通过的分配明细员工，
+     * 计算「原业绩分配模块」会签名单：请求中有申请快照时以快照为准；没有快照时读取客户当前分配，
      * 归一到工号(USER_ID) 去重，作为 corp_v1 {@code original_owner_approve} 并行多实例 collection.
      *
      * <p>emp_id 历史可能存登录名，归一到工号才能与待办（按当前用户工号匹配）对齐；解析不到则保留原值。
@@ -881,21 +903,23 @@ public class AllocAdjustService {
      */
     private List<String> resolveOriginalOwnerEmpIds(String custId, String allocDim,
             List<SubmitAllocAdjustCmd.OriginalItem> manual) {
-        List<com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO> owners =
-                allocAdjustPreviewService.getLastApprovedAllocPreview(custId, allocDim);
         java.util.LinkedHashSet<String> rawEmpIds = new java.util.LinkedHashSet<>();
-        if (owners != null) {
-            for (com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO o : owners) {
-                if (o != null && !isBlank(o.getEmpId())) {
-                    rawEmpIds.add(o.getEmpId());
-                }
-            }
-        }
-        // 历史审批通过分配查不到 → 回退本次手工录入的原业绩分配工号
-        if (rawEmpIds.isEmpty() && manual != null) {
+        if (manual != null) {
             for (SubmitAllocAdjustCmd.OriginalItem m : manual) {
                 if (m != null && !isBlank(m.getEmpId())) {
                     rawEmpIds.add(m.getEmpId());
+                }
+            }
+        }
+        // 新建时前端未回传自动预览；此时再从当前有效关系解析原分配会签人。
+        if (rawEmpIds.isEmpty()) {
+            List<com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO> owners =
+                    allocAdjustPreviewService.getLastApprovedAllocPreview(custId, allocDim);
+            if (owners != null) {
+                for (com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO o : owners) {
+                    if (o != null && !isBlank(o.getEmpId())) {
+                        rawEmpIds.add(o.getEmpId());
+                    }
                 }
             }
         }
@@ -938,6 +962,7 @@ public class AllocAdjustService {
             PerfAllocAdjustItem e = new PerfAllocAdjustItem();
             e.setId(UUID.randomUUID().toString().replace("-", ""));
             e.setApplyId(applyId);
+            e.setItemKind("ORIGIN");
             e.setAcctNo(o.getAcctNo());
             e.setEmpId(o.getEmpId());
             e.setUsername(!isBlank(o.getUsername()) ? o.getUsername()
@@ -1033,9 +1058,8 @@ public class AllocAdjustService {
             for (PerfAllocAdjustItem it : items) {
                 AllocAdjustRespDTO.Item iDto = new AllocAdjustRespDTO.Item();
                 iDto.setId(it.getId());
-                // PERF_ALLOC_ADJUST_ITEM 现仅存调整明细，统一标 NEW；原业绩分配(ORIGIN)由
-                // getByIdDto 的 reflectOriginalAllocFromCurrent 从 cust_alloc_relation 反显追加
-                iDto.setItemKind("NEW");
+                // item_kind 为空的旧数据兼容按 NEW 展示；新数据保留 NEW/ORIGIN 类型。
+                iDto.setItemKind(isBlank(it.getItemKind()) ? "NEW" : it.getItemKind());
                 iDto.setAcctNo(it.getAcctNo());
                 iDto.setEmpId(it.getEmpId());
                 // 直接读提交时快照的员工/部门字段，不再关联 PT_USER/机构表；

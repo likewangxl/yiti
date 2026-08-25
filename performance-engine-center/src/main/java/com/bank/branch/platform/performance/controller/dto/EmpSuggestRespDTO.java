@@ -22,4 +22,10 @@ public class EmpSuggestRespDTO {
 
     /** 中文姓名（PT_USER.USERCHNNAME）. */
     private String empChnName;
+
+    /** 员工主机构编码（EXT_ORG_INFO.ORG_CODE）. */
+    private String mainOrgCode;
+
+    /** 员工主机构名称（EXT_ORG_INFO.ORG_NAME）. */
+    private String mainOrgName;
 }

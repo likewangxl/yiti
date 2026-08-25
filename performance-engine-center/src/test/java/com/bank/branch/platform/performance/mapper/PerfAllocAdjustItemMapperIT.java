@@ -18,9 +18,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>对齐生产 DDL：
  * <ul>
- *   <li>字段：id / apply_id / emp_id / ratio / created_time</li>
+ *   <li>字段：id / apply_id / item_kind / emp_id / ratio / created_time</li>
  *   <li>UK：(apply_id, emp_id) 防止同一申请同员工重复登记</li>
- *   <li>仅记录调整后的 (emp_id, ratio)，非"新老对比"结构</li>
+ *   <li>NEW/ORIGIN 分开保存，避免审批落地把 ORIGIN 快照当作新分配</li>
  * </ul>
  *
  * <p>覆盖方法：batchInsert / selectByApplyId / deleteByApplyId.
@@ -30,10 +30,11 @@ class PerfAllocAdjustItemMapperIT extends PerformanceMapperTestBase {
     @Autowired
     private PerfAllocAdjustItemMapper mapper;
 
-    private PerfAllocAdjustItem item(String applyId, String empId, String ratio) {
+    private PerfAllocAdjustItem item(String applyId, String itemKind, String empId, String ratio) {
         PerfAllocAdjustItem i = new PerfAllocAdjustItem();
         i.setId("TEST_AI_" + UUID.randomUUID().toString().replace("-", "").substring(0, 20));
         i.setApplyId(applyId);
+        i.setItemKind(itemKind);
         i.setEmpId(empId);
         i.setRatio(new BigDecimal(ratio));
         return i;
@@ -43,8 +44,8 @@ class PerfAllocAdjustItemMapperIT extends PerformanceMapperTestBase {
     @DisplayName("batchInsert + selectByApplyId 顺序 / 比例回读一致")
     void batchInsert_and_selectByApplyId_ok() {
         String applyId = "TEST_AI_APP_" + UUID.randomUUID().toString().substring(0, 8);
-        PerfAllocAdjustItem it1 = item(applyId, "EMP_A", "60.00");
-        PerfAllocAdjustItem it2 = item(applyId, "EMP_B", "40.00");
+        PerfAllocAdjustItem it1 = item(applyId, "NEW", "EMP_A", "60.00");
+        PerfAllocAdjustItem it2 = item(applyId, "ORIGIN", "EMP_B", "40.00");
         int rows = mapper.batchInsert(Arrays.asList(it1, it2));
         assertThat(rows).isEqualTo(2);
 
@@ -52,6 +53,8 @@ class PerfAllocAdjustItemMapperIT extends PerformanceMapperTestBase {
         assertThat(items).hasSize(2);
         assertThat(items).extracting(PerfAllocAdjustItem::getEmpId)
                 .containsExactlyInAnyOrder("EMP_A", "EMP_B");
+        assertThat(items).extracting(PerfAllocAdjustItem::getItemKind)
+                .containsExactlyInAnyOrder("NEW", "ORIGIN");
 
         BigDecimal total = BigDecimal.ZERO;
         for (PerfAllocAdjustItem it : items) {
@@ -65,8 +68,8 @@ class PerfAllocAdjustItemMapperIT extends PerformanceMapperTestBase {
     void deleteByApplyId_ok() {
         String applyId = "TEST_AI_DEL_" + UUID.randomUUID().toString().substring(0, 8);
         mapper.batchInsert(Arrays.asList(
-                item(applyId, "EMP_D1", "50.00"),
-                item(applyId, "EMP_D2", "50.00")));
+                item(applyId, "NEW", "EMP_D1", "50.00"),
+                item(applyId, "NEW", "EMP_D2", "50.00")));
 
         int deleted = mapper.deleteByApplyId(applyId);
         assertThat(deleted).isEqualTo(2);

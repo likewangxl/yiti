@@ -113,7 +113,8 @@ public class PerfApprovalCmdFacade implements PerfApprovalCmdApi {
             // 选择下一步去向（biz_dept_review→corpRouteTo: LEADER/OWNER；finance_review→finRouteTo: LEADER/END）。
             // 未传选择（老渠道）时按默认走最全链路（corp→OWNER、fin→LEADER），保证排他网关有分支命中，
             // 否则 complete() 抛异常、流程到不了 <end>、状态无法回写 APPROVED。
-            Map<String, Object> routeVars = buildRouteVars(task.getNodeKey(), routeTo);
+            boolean newDimension = isNewDimension(perfAdjustNo);
+            Map<String, Object> routeVars = buildRouteVars(task.getNodeKey(), routeTo, newDimension);
             workflowApi.approveByEmp(taskId, empId, op, routeVars);
             log.info("[PerfApprovalCmdFacade.approveAllocAdjust] 通过 perfAdjustNo={}, empId={}, taskId={}, "
                             + "nodeKey={}, routeVars={}",
@@ -139,18 +140,38 @@ public class PerfApprovalCmdFacade implements PerfApprovalCmdApi {
      * </ul>
      * 经办节点未传 {@code routeTo} 时回退默认（corp→OWNER、fin→LEADER）。
      */
-    private Map<String, Object> buildRouteVars(String nodeKey, String routeTo) {
+    private Map<String, Object> buildRouteVars(String nodeKey, String routeTo, boolean newDimension) {
         Map<String, Object> routeVars = new HashMap<>();
         if (NODE_BIZ_DEPT_REVIEW.equals(nodeKey)) {
-            routeVars.put(VAR_CORP_ROUTE_TO, StringUtils.hasText(routeTo) ? routeTo : DEFAULT_CORP_ROUTE);
+            if (newDimension && StringUtils.hasText(routeTo) && !"LEADER".equals(routeTo)) {
+                throw new IllegalArgumentException("NEW（新开户）维度不支持OWNER原业绩分配审批路由");
+            }
+            routeVars.put(VAR_CORP_ROUTE_TO,
+                    StringUtils.hasText(routeTo) ? routeTo : (newDimension ? "LEADER" : DEFAULT_CORP_ROUTE));
         } else if (NODE_FINANCE_REVIEW.equals(nodeKey)) {
             routeVars.put(VAR_FIN_ROUTE_TO, StringUtils.hasText(routeTo) ? routeTo : DEFAULT_FIN_ROUTE);
         } else if (!StringUtils.hasText(nodeKey)) {
             // nodeKey 缺失：无法定位当前网关，按老逻辑同时下发两默认变量兜底
-            routeVars.put(VAR_CORP_ROUTE_TO, DEFAULT_CORP_ROUTE);
+            routeVars.put(VAR_CORP_ROUTE_TO, newDimension ? "LEADER" : DEFAULT_CORP_ROUTE);
             routeVars.put(VAR_FIN_ROUTE_TO, DEFAULT_FIN_ROUTE);
         }
         return routeVars;
+    }
+
+    /**
+     * 查询申请维度，供无原业绩分配的 NEW 申请选择安全审批路由。
+     * 查询异常时保守按旧数据处理，避免改变既有渠道审批行为；NEW 申请由已落库的申请快照明确识别。
+     */
+    private boolean isNewDimension(String perfAdjustNo) {
+        try {
+            AllocAdjustService.ApplyWithItems loaded = allocAdjustService.getById(perfAdjustNo);
+            return loaded != null && loaded.getApply() != null
+                    && "NEW".equals(loaded.getApply().getAllocDim());
+        } catch (RuntimeException ex) {
+            log.warn("[PerfApprovalCmdFacade.isNewDimension] 查询申请维度失败 perfAdjustNo={}, err={}",
+                    perfAdjustNo, ex.toString());
+            return false;
+        }
     }
 
     /** 按员工工号反查其主机构编码（查不到返回 null，由下游按缺失处理）。 */

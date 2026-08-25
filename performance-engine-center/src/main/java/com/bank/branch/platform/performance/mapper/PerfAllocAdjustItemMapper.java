@@ -40,6 +40,16 @@ public interface PerfAllocAdjustItemMapper extends BaseMapper<PerfAllocAdjustIte
     List<PerfAllocAdjustItem> selectByApplyId(@Param("applyId") String applyId);
 
     /**
+     * 按申请 ID + 明细类型查询明细，供审批落地只取 NEW，避免把 ORIGIN 快照当作新分配。
+     *
+     * @param applyId 申请 ID
+     * @param itemKind 明细类型（NEW/ORIGIN）
+     * @return 明细列表（按 created_time 升序）
+     */
+    List<PerfAllocAdjustItem> selectByApplyIdAndKind(@Param("applyId") String applyId,
+                                                     @Param("itemKind") String itemKind);
+
+    /**
      * 按申请 ID 清空明细（DRAFT 状态下更新申请可复用，IN_APPROVAL 后禁止调用）.
      *
      * @param applyId 申请 ID

@@ -99,9 +99,14 @@ class AllocAdjustCompletedListenerTest {
     }
 
     private PerfAllocAdjustItem item(String empId, String ratio) {
+        return item(empId, ratio, null);
+    }
+
+    private PerfAllocAdjustItem item(String empId, String ratio, String itemKind) {
         PerfAllocAdjustItem i = new PerfAllocAdjustItem();
         i.setId("IT_" + empId);
         i.setApplyId("APP_001");
+        i.setItemKind(itemKind);
         i.setEmpId(empId);
         i.setRatio(new BigDecimal(ratio));
         return i;
@@ -275,6 +280,44 @@ class AllocAdjustCompletedListenerTest {
                 ArgumentCaptor.forClass(AllocationAdjustmentApprovedEvent.class);
         verify(eventPublisher).publish(evCap.capture());
         assertThat(evCap.getValue().getItemCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("APPROVED 只把 NEW 明细落地，ORIGIN 仅作为申请快照保留")
+    void approved_filtersOriginItems_beforePersistingRelations() {
+        when(itemMapper.selectByApplyId("APP_001"))
+                .thenReturn(Arrays.asList(
+                        item("EMP_NEW", "100.00", "NEW"),
+                        item("EMP_ORIGIN", "100.00", "ORIGIN")));
+
+        listener.onProcessCompleted(
+                new ProcessCompletedEvent("PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", null));
+
+        ArgumentCaptor<CustAllocRelation> cap = ArgumentCaptor.forClass(CustAllocRelation.class);
+        verify(allocRelationMapper).insert(cap.capture());
+        assertThat(cap.getValue().getEmpId()).isEqualTo("EMP_NEW");
+        verify(allocRelationMapper).markAllOriginalByCustId(
+                eq("CUST_001"), isNull(), eq(LocalDate.now()));
+        ArgumentCaptor<AllocationAdjustmentApprovedEvent> eventCap =
+                ArgumentCaptor.forClass(AllocationAdjustmentApprovedEvent.class);
+        verify(eventPublisher).publish(eventCap.capture());
+        assertThat(eventCap.getValue().getItemCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("NEW 维度审批通过不标记旧当前分配，仅写入 NEW 明细")
+    void approved_newDimension_skipsMarkingOldCurrentRelations() {
+        PerfAllocAdjustApply apply = buildApply();
+        apply.setAllocDim("NEW");
+        when(applyMapper.selectByBusinessKey("ALLOC_ADJUST:APP_001")).thenReturn(apply);
+        when(itemMapper.selectByApplyId("APP_001"))
+                .thenReturn(List.of(item("EMP_NEW", "100.00", "NEW")));
+
+        listener.onProcessCompleted(
+                new ProcessCompletedEvent("PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", null));
+
+        verify(allocRelationMapper).insert(any(CustAllocRelation.class));
+        verify(allocRelationMapper, never()).markAllOriginalByCustId(any(), any(), any());
     }
 
     @Test

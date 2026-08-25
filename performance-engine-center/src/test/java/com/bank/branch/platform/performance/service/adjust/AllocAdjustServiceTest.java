@@ -38,6 +38,7 @@ import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -295,6 +296,27 @@ class AllocAdjustServiceTest {
     }
 
     @Test
+    @DisplayName("NEW（新开户）维度无原业绩分配也可提交，流程变量使用空安全值")
+    void submit_newDimension_withoutOriginal_startsWithSafeEmptyOwnerVariables() {
+        when(workflowApi.startProcess(any(StartProcessCmd.class)))
+                .thenReturn(new WorkflowLaunchResp("PI_NEW", null, null));
+        SubmitAllocAdjustCmd cmd = baseCmd("CORP_LOAN");
+        cmd.setAllocDim("NEW");
+        cmd.setOriginalAllocList(Collections.emptyList());
+        when(allocAdjustPreviewService.getLastApprovedAllocPreview("CN-001", "NEW"))
+                .thenReturn(Collections.emptyList());
+
+        service.submit(cmd);
+
+        ArgumentCaptor<StartProcessCmd> cap = ArgumentCaptor.forClass(StartProcessCmd.class);
+        verify(workflowApi).startProcess(cap.capture());
+        Map<String, Object> vars = cap.getValue().getVariables();
+        assertThat(vars.get("originalOwnerEmpId")).isNull();
+        assertThat(vars.get("originalOwnerEmpIds")).isEqualTo(Collections.emptyList());
+        assertThat(vars.get("originalOwnerOrgLeaderEmpIds")).isEqualTo(Collections.emptyList());
+    }
+
+    @Test
     @DisplayName("submit → 写 originalOwnerEmpIds 会签名单：原业绩分配员工归一到工号、去重保序")
     void submit_setsOriginalOwnerEmpIdsNormalizedToUserId() {
         when(workflowApi.startProcess(any(StartProcessCmd.class)))
@@ -465,13 +487,20 @@ class AllocAdjustServiceTest {
         verify(itemMapper).batchInsert(cap.capture());
 
         List<PerfAllocAdjustItem> items = cap.getValue();
-        assertThat(items).hasSize(2);
-        PerfAllocAdjustItem a = items.stream().filter(i -> "EMP_A".equals(i.getEmpId())).findFirst().orElseThrow();
+        assertThat(items).hasSize(3);
+        assertThat(items).filteredOn(i -> "ORIGIN".equals(i.getItemKind()))
+                .extracting(PerfAllocAdjustItem::getEmpId)
+                .containsExactly("rm_zhang");
+        PerfAllocAdjustItem a = items.stream()
+                .filter(i -> "NEW".equals(i.getItemKind()) && "EMP_A".equals(i.getEmpId()))
+                .findFirst().orElseThrow();
         assertThat(a.getUsername()).isEqualTo("u_a");
         assertThat(a.getEmpChnName()).isEqualTo("员工甲");
         assertThat(a.getOrgCode()).isEqualTo("D01");
         assertThat(a.getOrgName()).isEqualTo("一部");
-        PerfAllocAdjustItem b = items.stream().filter(i -> "EMP_B".equals(i.getEmpId())).findFirst().orElseThrow();
+        PerfAllocAdjustItem b = items.stream()
+                .filter(i -> "NEW".equals(i.getItemKind()) && "EMP_B".equals(i.getEmpId()))
+                .findFirst().orElseThrow();
         assertThat(b.getUsername()).isEqualTo("EMP_B");   // 解析不到 → 回退工号
         assertThat(b.getEmpChnName()).isNull();
     }
@@ -509,6 +538,71 @@ class AllocAdjustServiceTest {
         // 快照为空 → username 回退工号
         assertThat(dto.getItems().get(1).getUsername()).isEqualTo("E10002");
         assertThat(dto.getItems().get(1).getEmpChnName()).isNull();
+    }
+
+    @Test
+    @DisplayName("getByIdDto 优先返回已保存 ORIGIN 快照，不被当前关系覆盖")
+    void getByIdDto_prefersPersistedOriginSnapshot() {
+        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
+        apply.setId("APPLY_ORIGIN");
+        apply.setCustId("CUST_ORIGIN");
+        apply.setAllocDim("RULE");
+        apply.setStatus("DRAFT");
+        when(applyMapper.selectByAllocApplyId("APPLY_ORIGIN")).thenReturn(apply);
+
+        PerfAllocAdjustItem newer = new PerfAllocAdjustItem();
+        newer.setItemKind("NEW");
+        newer.setEmpId("EMP_NEW");
+        newer.setRatio(new BigDecimal("100"));
+        PerfAllocAdjustItem origin = new PerfAllocAdjustItem();
+        origin.setItemKind("ORIGIN");
+        origin.setEmpId("EMP_SAVED_ORIGIN");
+        origin.setEmpChnName("保存的原分配人");
+        origin.setRatio(new BigDecimal("100"));
+        when(itemMapper.selectByApplyId("APPLY_ORIGIN")).thenReturn(Arrays.asList(newer, origin));
+
+        com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO current =
+                new com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO();
+        current.setEmpId("EMP_CURRENT");
+        current.setRatio(new BigDecimal("100"));
+        when(allocAdjustPreviewService.getLastApprovedAllocPreview("CUST_ORIGIN", "RULE"))
+                .thenReturn(List.of(current));
+
+        AllocAdjustRespDTO dto = service.getByIdDto("APPLY_ORIGIN");
+
+        assertThat(dto.getItems()).extracting(AllocAdjustRespDTO.Item::getItemKind,
+                        AllocAdjustRespDTO.Item::getEmpId)
+                .containsExactly(tuple("NEW", "EMP_NEW"), tuple("ORIGIN", "EMP_SAVED_ORIGIN"));
+    }
+
+    @Test
+    @DisplayName("getByIdDto 老数据无 item_kind/ORIGIN 快照时回退当前关系")
+    void getByIdDto_legacyWithoutOriginSnapshot_fallsBackToCurrentRelation() {
+        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
+        apply.setId("APPLY_LEGACY");
+        apply.setCustId("CUST_LEGACY");
+        apply.setAllocDim("RULE");
+        apply.setStatus("APPROVED");
+        when(applyMapper.selectByAllocApplyId("APPLY_LEGACY")).thenReturn(apply);
+
+        PerfAllocAdjustItem legacyNew = new PerfAllocAdjustItem();
+        legacyNew.setEmpId("EMP_NEW");
+        legacyNew.setRatio(new BigDecimal("100"));
+        when(itemMapper.selectByApplyId("APPLY_LEGACY")).thenReturn(List.of(legacyNew));
+
+        com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO current =
+                new com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO();
+        current.setEmpId("EMP_LEGACY_ORIGIN");
+        current.setEmpChnName("历史原分配人");
+        current.setRatio(new BigDecimal("100"));
+        when(allocAdjustPreviewService.getLastApprovedAllocPreview("CUST_LEGACY", "RULE"))
+                .thenReturn(List.of(current));
+
+        AllocAdjustRespDTO dto = service.getByIdDto("APPLY_LEGACY");
+
+        assertThat(dto.getItems()).extracting(AllocAdjustRespDTO.Item::getItemKind,
+                        AllocAdjustRespDTO.Item::getEmpId)
+                .containsExactly(tuple("NEW", "EMP_NEW"), tuple("ORIGIN", "EMP_LEGACY_ORIGIN"));
     }
 
     @Test
@@ -656,9 +750,14 @@ class AllocAdjustServiceTest {
     @Test
     @DisplayName("suggestEmployees: 委托 userApi.pageUsers，映射 empId/username/中文名")
     void suggestEmployees_mapsUsernameAndChnName() {
+        UserDTO first = userDto("E10001", "rm_zhang", "张客户经理");
+        first.setMainOrgCode("ORG-001");
+        first.setMainOrgName("第一机构");
+        UserDTO second = userDto("E30001", "corp_zhao", "赵公司部审核");
+        second.setMainOrgCode("ORG-002");
+        second.setMainOrgName("第二机构");
         when(userApi.pageUsers("zh", 1, 20)).thenReturn(PageResult.of(1, 20, 2, Arrays.asList(
-                userDto("E10001", "rm_zhang", "张客户经理"),
-                userDto("E30001", "corp_zhao", "赵公司部审核"))));
+                first, second)));
 
         List<com.bank.branch.platform.performance.controller.dto.EmpSuggestRespDTO> result =
                 service.suggestEmployees("zh", null);
@@ -667,7 +766,11 @@ class AllocAdjustServiceTest {
         assertThat(result.get(0).getEmpId()).isEqualTo("E10001");
         assertThat(result.get(0).getUsername()).isEqualTo("rm_zhang");
         assertThat(result.get(0).getEmpChnName()).isEqualTo("张客户经理");
+        assertThat(result.get(0).getMainOrgCode()).isEqualTo("ORG-001");
+        assertThat(result.get(0).getMainOrgName()).isEqualTo("第一机构");
         assertThat(result.get(1).getUsername()).isEqualTo("corp_zhao");
+        assertThat(result.get(1).getMainOrgCode()).isEqualTo("ORG-002");
+        assertThat(result.get(1).getMainOrgName()).isEqualTo("第二机构");
     }
 
     @Test
@@ -807,6 +910,56 @@ class AllocAdjustServiceTest {
     }
 
     @Test
+    @DisplayName("saveDraft 同时持久化 NEW/ORIGIN 明细，不写入客户当前分配关系")
+    void saveDraft_persistsNewAndOriginItems_withoutSeedingCurrentRelation() {
+        SubmitAllocAdjustCmd cmd = baseCmd("CORP_LOAN");
+        cmd.setOriginalAllocList(List.of(SubmitAllocAdjustCmd.OriginalItem.builder()
+                .empId("EMP_ORIGIN").empChnName("原分配人").orgCode("ORG_O")
+                .orgName("原机构").ratio(new BigDecimal("100")).build()));
+        when(allocAdjustPreviewService.getLastApprovedAllocPreview("CN-001", "RULE"))
+                .thenReturn(Collections.emptyList());
+
+        service.saveDraft(cmd, null);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<PerfAllocAdjustItem>> cap = ArgumentCaptor.forClass(List.class);
+        verify(itemMapper).batchInsert(cap.capture());
+        assertThat(cap.getValue()).extracting(PerfAllocAdjustItem::getItemKind,
+                        PerfAllocAdjustItem::getEmpId)
+                .containsExactly(tuple("NEW", "EMP_A"), tuple("NEW", "EMP_B"),
+                        tuple("ORIGIN", "EMP_ORIGIN"));
+        verify(allocRelationMapper, never()).insert(any(com.bank.branch.platform.performance.entity.CustAllocRelation.class));
+        verify(allocRelationMapper, never()).selectCurrentOriginalByCust(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("saveDraft 未回传原分配但存在自动预览时，复制当前预览为 ORIGIN 快照")
+    void saveDraft_autoPreview_isSnapshottedAsOrigin() {
+        SubmitAllocAdjustCmd cmd = baseCmd("CORP_LOAN");
+        cmd.setOriginalAllocList(Collections.emptyList());
+        com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO preview =
+                new com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO();
+        preview.setEmpId("EMP_PREVIEW");
+        preview.setUsername("preview_user");
+        preview.setEmpChnName("预览原分配人");
+        preview.setOrgCode("ORG_PREVIEW");
+        preview.setOrgName("预览机构");
+        preview.setRatio(new BigDecimal("100"));
+        when(allocAdjustPreviewService.getLastApprovedAllocPreview("CN-001", "RULE"))
+                .thenReturn(List.of(preview));
+
+        service.saveDraft(cmd, null);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<PerfAllocAdjustItem>> cap = ArgumentCaptor.forClass(List.class);
+        verify(itemMapper).batchInsert(cap.capture());
+        PerfAllocAdjustItem origin = cap.getValue().stream()
+                .filter(it -> "ORIGIN".equals(it.getItemKind())).findFirst().orElseThrow();
+        assertThat(origin.getEmpId()).isEqualTo("EMP_PREVIEW");
+        assertThat(origin.getOrgCode()).isEqualTo("ORG_PREVIEW");
+    }
+
+    @Test
     @DisplayName("saveDraft 编辑非草稿（IN_APPROVAL）→ 抛 VALIDATION_FAILED，不更新")
     void saveDraft_updateNonDraft_throws() {
         PerfAllocAdjustApply existing = new PerfAllocAdjustApply();
@@ -854,6 +1007,46 @@ class AllocAdjustServiceTest {
         verify(applyMapper).updateStatus("D2", "IN_APPROVAL", "PI_D2");
         // 不应新建（既有草稿原地提交）
         verify(applyMapper, never()).insert(any(PerfAllocAdjustApply.class));
+    }
+
+    @Test
+    @DisplayName("submitDraft 从已保存 ORIGIN 明细重建原分配会签名单，且不被当前关系覆盖")
+    void submitDraft_rebuildsPersistedOriginItems() {
+        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
+        apply.setId("D_NEW");
+        apply.setApplyNo("AA-D-NEW");
+        apply.setStatus("DRAFT");
+        apply.setCustId("CN-001");
+        apply.setCustType("CORP");
+        apply.setAllocDim("RULE");
+        apply.setBizKind("CORP_LOAN");
+        apply.setOwnerOrgId("ORG_001");
+        apply.setCreatedBy("admin");
+        when(applyMapper.selectByAllocApplyId("D_NEW")).thenReturn(apply);
+        PerfAllocAdjustItem newer = new PerfAllocAdjustItem();
+        newer.setItemKind("NEW");
+        newer.setEmpId("EMP_A");
+        newer.setRatio(new BigDecimal("100"));
+        PerfAllocAdjustItem origin = new PerfAllocAdjustItem();
+        origin.setItemKind("ORIGIN");
+        origin.setEmpId("EMP_ORIGIN");
+        origin.setRatio(new BigDecimal("100"));
+        when(itemMapper.selectByApplyId("D_NEW")).thenReturn(Arrays.asList(newer, origin));
+        var current = new com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO();
+        current.setEmpId("EMP_CURRENT");
+        when(allocAdjustPreviewService.getLastApprovedAllocPreview("CN-001", "RULE"))
+                .thenReturn(List.of(current));
+        when(workflowApi.startProcess(any(StartProcessCmd.class)))
+                .thenReturn(new WorkflowLaunchResp("PI_D_NEW", null, null));
+
+        service.submitDraft("D_NEW", "admin");
+
+        ArgumentCaptor<StartProcessCmd> cap = ArgumentCaptor.forClass(StartProcessCmd.class);
+        verify(workflowApi).startProcess(cap.capture());
+        assertThat(cap.getValue().getVariables().get("originalOwnerEmpIds"))
+                .isEqualTo(List.of("EMP_ORIGIN"));
+        verify(allocAdjustPreviewService, never())
+                .getLastApprovedAllocPreview("CN-001", "RULE");
     }
 
     @Test

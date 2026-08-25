@@ -111,15 +111,17 @@ public class AllocAdjustCompletedListener {
      * 审批通过：插入新分配关系 + 更新状态 + 发事件.
      */
     private void handleApproved(PerfAllocAdjustApply apply) {
-        // PERF_ALLOC_ADJUST_ITEM 现仅存调整明细（item_kind 已废弃，原业绩分配在 cust_alloc_relation），
-        // 全部落地为生效分配关系。
-        List<PerfAllocAdjustItem> items = itemMapper.selectByApplyId(apply.getId());
+        // 仅 NEW 明细落地为生效分配关系；ORIGIN 只是申请内的原分配快照，不能再次写入当前关系。
+        // item_kind 为空的历史明细按 NEW 兼容处理。
+        List<PerfAllocAdjustItem> items = itemMapper.selectByApplyId(apply.getId()).stream()
+                .filter(it -> !"ORIGIN".equals(it.getItemKind()))
+                .collect(java.util.stream.Collectors.toList());
         LocalDate effectiveDate = LocalDate.now();
 
         // cust_id 即客户编号（cust_no 字段已并入 cust_id），提交侧恒有值，直接作为分配关系客户键。
         String relCustId = apply.getCustId();
 
-        if (!items.isEmpty()) {
+        if (!items.isEmpty() && !"NEW".equals(apply.getAllocDim())) {
             // 插入新分配前：把该客户(cust_id)名下、与审批账号(account_no)匹配的全部 is_original=2 存量
             // 分配置为「原分配」(is_original=1)，并把失效日期 end_date 置为当天，确保插入完成后只有本次
             // 新增的 is_original=2 行是当前分配。account_no 取自审批申请（RULE 维度为 null → 按 IS NULL）。
