@@ -1,0 +1,32 @@
+Playwright CLI: requests --filter '/api/'
+
+1.   [GET]  /api/auth/permissions                                  => [200] OK
+166. [GET]  /api/screen/admin/screens                              => [200] OK
+167. [GET]  /api/screen/admin/canvas/9105                          => [200] OK
+168. [GET]  /api/screen/admin/screens/9105/map-region-metrics      => [403] Forbidden
+169. [GET]  /api/admin/org-groups                                  => [200] OK
+170. [GET]  /api/admin/roles/all?recordStatus=0                    => [200] OK
+171. [GET]  /api/admin/org-profiles                                => [200] OK
+172. [GET]  /api/screen/admin/canvas/9101                          => [200] OK
+173. [GET]  /api/screen/admin/screens/9101/map-region-metrics      => [403] Forbidden
+174. [POST] /api/screen/data                                       => [200] OK
+175. [POST] /api/screen/data                                       => [200] OK
+176. [POST] /api/screen/data                                       => [200] OK
+177. [POST] /api/screen/data                                       => [200] OK
+178. [POST] /api/screen/data                                       => [200] OK
+
+#168 response summary
+status: 403 Forbidden
+duration: 19ms
+type: xhr
+mimeType: application/json
+traceId: pc-1787564470848-6473
+body: {"code":"AUTH-40302","message":"资源未登记","traceId":"pc-1787564470848-6473","timestamp":"2026-08-24T09:41:10.860574500Z"}
+
+#173 response summary
+status: 403 Forbidden
+duration: 18ms
+type: xhr
+mimeType: application/json
+traceId: pc-1787564501165-609595
+body: {"code":"AUTH-40302","message":"资源未登记","traceId":"pc-1787564501165-609595","timestamp":"2026-08-24T09:41:41.179643700Z"}

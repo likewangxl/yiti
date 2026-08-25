@@ -14,6 +14,7 @@
                  :map-points="mapPoints"
                  :map-config="mapConfig || c.propValue"
                  :profiles="profiles"
+                 :region-metrics="mapRegionMetrics"
                  :map-payload="mapPayload"
                  :runtime-header-inset="runtimeHeaderInset(c)" />
       <component v-else :is="widgetOf(c.component)" :element="c" mode="runtime" />
@@ -35,6 +36,7 @@ const props = defineProps({
   mapPoints: { type: Array, default: () => [] },
   mapConfig: { type: Object, default: null },
   profiles: { type: Array, default: () => [] },
+  mapRegionMetrics: { type: Array, default: () => [] },
   mapPayload: { type: Object, default: null },
   context: { type: Object, default: () => ({}) }
 });

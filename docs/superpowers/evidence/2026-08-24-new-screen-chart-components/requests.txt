@@ -1,0 +1,22 @@
+### Result
+1. [GET] http://127.0.0.1:8091/api/auth/permissions => [200] OK
+185. [GET] http://127.0.0.1:8091/api/screen/admin/screens => [200] OK
+186. [GET] http://127.0.0.1:8091/api/screen/admin/canvas/9105 => [200] OK
+187. [GET] http://127.0.0.1:8091/api/screen/admin/screens/9105/map-region-metrics => [403] Forbidden
+188. [GET] http://127.0.0.1:8091/api/admin/org-groups => [200] OK
+189. [GET] http://127.0.0.1:8091/api/admin/roles/all?recordStatus=0 => [200] OK
+190. [GET] http://127.0.0.1:8091/api/admin/org-profiles => [200] OK
+191. [GET] http://127.0.0.1:8091/api/screen/admin/datasources => [200] OK
+193. [GET] http://127.0.0.1:8091/api/screen/admin/canvas/9101 => [200] OK
+194. [GET] http://127.0.0.1:8091/api/screen/admin/screens/9101/map-region-metrics => [403] Forbidden
+195-201. [POST] http://127.0.0.1:8091/api/screen/data => [200] OK
+202. [GET] http://127.0.0.1:8091/api/screen/admin/datasources => [200] OK
+204-208. [POST] http://127.0.0.1:8091/api/screen/data => [200] OK
+439. [GET] http://127.0.0.1:8091/api/screen/admin/screens => [200] OK
+440. [GET] http://127.0.0.1:8091/api/screen/admin/canvas/9105 => [200] OK
+441. [GET] http://127.0.0.1:8091/api/screen/admin/screens/9105/map-region-metrics => [403] Forbidden
+445. [GET] http://127.0.0.1:8091/api/screen/admin/canvas/9101 => [200] OK
+446. [GET] http://127.0.0.1:8091/api/screen/admin/screens/9101/map-region-metrics => [403] Forbidden
+447-451. [POST] http://127.0.0.1:8091/api/screen/data => [200] OK
+
+Note: static asset requests were omitted by the CLI default request summary.

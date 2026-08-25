@@ -13,13 +13,13 @@ import { computed } from 'vue';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { BarChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
+import { GridComponent, TooltipComponent, LegendComponent, MarkPointComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 import { DocumentRemove } from '@element-plus/icons-vue';
-import { SCR_PALETTE, scrAxisLabel, scrAxisLine, scrSplitLine, scrTooltipStyle, scrWithAlpha } from '@/styles/screenChartTheme';
+import { resolveChartTheme, scrAxisLabel, scrAxisLine, scrSplitLine, scrTooltipStyle, scrWithAlpha } from '@/styles/screenChartTheme';
 import { rowsToSeries, displayName } from './utils/chartData';
 
-use([CanvasRenderer, BarChart, GridComponent, TooltipComponent, LegendComponent]);
+use([CanvasRenderer, BarChart, GridComponent, TooltipComponent, LegendComponent, MarkPointComponent]);
 
 const props = defineProps({
   columns: { type: Array, default: () => [] },
@@ -35,6 +35,11 @@ const mode = computed(() => props.propValue?.barMode || 'basic');
 const parsed = computed(() =>
   rowsToSeries(props.columns, props.rows, (props.bind.items || []).map(i => i.col)));
 const series = computed(() => parsed.value.series);
+const theme = computed(() => resolveChartTheme(props.styleCfg));
+const palette = computed(() => props.styleCfg.colors?.length ? props.styleCfg.colors : theme.value.palette);
+const showLegend = computed(() => props.styleCfg.showLegend !== false);
+const showLabels = computed(() => props.styleCfg.showLabels === true);
+const showMarks = computed(() => props.styleCfg.showMarks !== false);
 
 /** 渐变柱体：沿柱体方向由主色渐隐（横向模式渐变轴转 90°），发光描边呼应深色大屏风格 */
 function barItemStyle(color, horizontal) {
@@ -55,14 +60,14 @@ function barItemStyle(color, horizontal) {
 
 const option = computed(() => {
   const horizontal = mode.value === 'horizontal';
-  const catAxis = { type: 'category', data: parsed.value.categories, axisLine: scrAxisLine(), axisLabel: scrAxisLabel() };
-  const valAxis = { type: 'value', axisLabel: scrAxisLabel(), splitLine: scrSplitLine() };
-  const palette = props.styleCfg.colors?.length ? props.styleCfg.colors : SCR_PALETTE;
+  const catAxis = { type: 'category', data: parsed.value.categories, axisLine: scrAxisLine(theme.value), axisLabel: scrAxisLabel(theme.value) };
+  const valAxis = { type: 'value', axisLabel: scrAxisLabel(theme.value), splitLine: scrSplitLine(theme.value) };
   return {
-    color: palette,
+    color: palette.value,
+    animation: true,
     grid: { top: 34, right: 16, bottom: 26, left: horizontal ? 90 : 56 },
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, ...scrTooltipStyle() },
-    legend: { top: 4, textStyle: scrAxisLabel() },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, ...scrTooltipStyle(theme.value) },
+    legend: { show: showLegend.value, top: 4, textStyle: scrAxisLabel(theme.value) },
     xAxis: horizontal ? valAxis : catAxis,
     yAxis: horizontal ? catAxis : valAxis,
     series: series.value.map((s, i) => ({
@@ -71,7 +76,10 @@ const option = computed(() => {
       stack: mode.value === 'stack' ? 'total' : undefined,
       barMaxWidth: 26,
       data: s.data,
-      itemStyle: barItemStyle(palette[i % palette.length], horizontal)
+      label: { show: showLabels.value, color: theme.value.tokens.text, position: horizontal ? 'right' : 'top' },
+      emphasis: { focus: 'series', itemStyle: { shadowBlur: 14, shadowColor: scrWithAlpha(palette.value[i % palette.value.length], .45) } },
+      ...(showMarks.value ? { markPoint: { data: [{ type: 'max', name: '最大' }], label: { color: theme.value.tokens.text } } } : {}),
+      itemStyle: barItemStyle(palette.value[i % palette.value.length], horizontal)
     }))
   };
 });

@@ -1,0 +1,29 @@
+{
+  "screenId": 9105,
+  "expectedVersion": 1,
+  "canvasStyle": {
+    "adaptor": "keepProportion",
+    "bgGradient": { "from": "#050e2b", "to": "#0a1f4e", "angle": 135 },
+    "schemaVersion": 2,
+    "designWidth": 1920,
+    "background": "#03081c",
+    "designHeight": 1080,
+    "backgroundType": "solid",
+    "bgImage": ""
+  },
+  "components": [
+    {
+      "id": "mock-invalid-chart",
+      "component": "ChartWidget",
+      "innerType": "BAR_COMPARE",
+      "blockId": 29,
+      "bindJson": "{\"dsId\":9002,\"dsType\":\"TIMESERIES\"}",
+      "styleJson": "{\"title\":\"非法个人数据源图表\",\"refreshSec\":60}",
+      "drillJson": "{}",
+      "propValue": { "ignoreGlobalPeriod": false, "barMode": "basic" },
+      "style": { "left": 120, "top": 120, "width": 600, "height": 320 },
+      "isLock": false,
+      "isShow": true
+    }
+  ]
+}

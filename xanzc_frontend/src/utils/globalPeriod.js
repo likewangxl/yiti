@@ -15,7 +15,7 @@ export const PERIOD_LABELS = { LATEST: '最新', LAST_10D: '近10天', LAST_1M: 
  * 时序专属图表类型：后端 RPT-43005（组件数据源不匹配）保证 needTimeseries 图表只能绑
  * TIMESERIES 数据源 → 旧区块 bind 快照缺 dsType 时可按组件类型兜底判定为时序区块。
  */
-export const TIMESERIES_ONLY_COMPONENT_TYPES = ['LINE_TREND', 'AREA_STACK'];
+export const TIMESERIES_ONLY_COMPONENT_TYPES = ['LINE_TREND', 'AREA_STACK', 'SPARKLINE_CARD'];
 
 /** 周期合法性：仅接受预设周期模板字符串（防脏值透传后端触发 RPT-43011） */
 export function isValidGlobalPeriod(period) {

@@ -1,0 +1,19 @@
+Playwright CLI console info 摘要
+================================
+Total messages: 27 (Errors: 3, Warnings: 22)
+
+[ERROR] GET /api/auth/current-user => 401 Unauthorized
+说明：从未登录页面首次进入设计器时产生；随后在正常登录页登录成功。
+
+[ERROR] GET /api/screen/admin/screens/9105/map-region-metrics => 403 Forbidden
+[WARNING] [api fallback] GET /screen/admin/screens/9105/map-region-metrics 失败，使用 mock 兜底：资源未登记
+
+[ERROR] GET /api/screen/admin/screens/9101/map-region-metrics => 403 Forbidden
+[WARNING] [api fallback] GET /screen/admin/screens/9101/map-region-metrics 失败，使用 mock 兜底：资源未登记
+
+其余警告：
+- 15 条既有 Vue Router 未匹配业务路由警告。
+- 2 条 ECharts 容器初始宽高为 0 的警告。
+- 3 条 Element Plus el-radio label-as-value 弃用警告。
+
+本次图表数据请求没有 4xx/5xx；上述地图 403 是既有资源登记问题，开发态 GET fallback 与 Playwright route mock 无关。

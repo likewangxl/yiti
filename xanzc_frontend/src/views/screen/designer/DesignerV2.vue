@@ -1,39 +1,85 @@
 <template>
   <div class="dsn2 scr-surface-host">
-    <!-- 顶部工具条 -->
-    <div class="dsn2-toolbar">
-      <el-select v-model="curId" placeholder="选择大屏" size="small" style="width:260px" @change="loadCanvas">
-        <el-option v-for="s in screens" :key="s.id" :label="`${s.screenName}（${viewLevelLabel(s.viewLevel)}）`" :value="s.id" />
-      </el-select>
-      <el-button size="small" @click="openCreate">新建</el-button>
-      <el-button size="small" :disabled="!curId" @click="openEditScope">编辑范围</el-button>
-      <el-button size="small" :disabled="!curId" @click="openAccessRoleDialog">管理查看角色</el-button>
-      <span class="spacer" />
-      <el-button-group size="small">
-        <el-button :disabled="!store.canUndo" @click="store.undo()">撤销</el-button>
-        <el-button :disabled="!store.canRedo" @click="store.redo()">重做</el-button>
-      </el-button-group>
-      <el-slider v-model="scalePct" :min="50" :max="150" :step="10" style="width:120px" @input="onScale" />
-      <el-button size="small" @click="fitWindow">适应窗口</el-button>
-      <el-button size="small" :disabled="!curId" @click="onPreview">预览草稿</el-button>
-      <el-button size="small" :disabled="!curId" @click="onDiscard">放弃草稿</el-button>
-      <el-button size="small" @click="onRollback">回滚</el-button>
-      <el-button size="small" type="primary" :loading="saving" @click="onSave">保存</el-button>
-      <el-button size="small" type="danger" :loading="publishing" @click="onPublish">发布</el-button>
-      <span class="dirty-state" role="status" aria-live="polite">{{ isDirty ? '有未保存修改' : '已保存' }}</span>
-      <el-button ref="returnButton" size="small" aria-label="返回工作区"
-                 :disabled="saving || publishing || exitDialog.saving" @click="onReturn">返回</el-button>
-    </div>
+    <!-- 顶部工具条：按屏上下文、编辑历史、草稿和发布动作分组，保留既有按钮与事件。 -->
+    <header class="dsn2-toolbar" aria-label="大屏设计器工具栏">
+      <div class="dsn2-toolbar__brand" data-testid="dsn2-product">
+        <span class="dsn2-brand-mark" aria-hidden="true">▦</span>
+        <div class="dsn2-brand-copy">
+          <strong>大屏设计器</strong>
+          <span>经营分析工作台</span>
+        </div>
+      </div>
+
+      <div class="dsn2-toolbar__cluster dsn2-toolbar__screen" data-testid="dsn2-screen-context">
+        <div class="dsn2-toolbar__context-label">当前大屏</div>
+        <el-select v-model="curId" class="dsn2-screen-select" placeholder="选择大屏" size="small"
+                   aria-label="选择大屏" @change="loadCanvas">
+          <el-option v-for="s in screens" :key="s.id" :label="`${s.screenName}（${viewLevelLabel(s.viewLevel)}）`" :value="s.id" />
+        </el-select>
+        <span class="dsn2-screen-code">{{ activeScreen?.screenCode || store.screenCode || (curId ? `屏幕 #${curId}` : '未选择屏幕') }}</span>
+      </div>
+
+      <div class="dsn2-toolbar__cluster" data-testid="dsn2-screen-actions" aria-label="屏幕范围操作">
+        <el-button size="small" @click="openCreate">新建</el-button>
+        <el-button size="small" :disabled="!curId" @click="openEditScope">编辑范围</el-button>
+        <el-button size="small" :disabled="!curId" @click="openAccessRoleDialog">管理查看角色</el-button>
+      </div>
+
+      <div class="dsn2-toolbar__cluster dsn2-toolbar__history" data-testid="dsn2-history-actions" aria-label="编辑历史与缩放">
+        <el-button-group size="small">
+          <el-button :disabled="!store.canUndo" @click="store.undo()">撤销</el-button>
+          <el-button :disabled="!store.canRedo" @click="store.redo()">重做</el-button>
+        </el-button-group>
+        <div class="dsn2-zoom-control">
+          <span class="dsn2-zoom-label">{{ scalePct }}%</span>
+          <el-slider v-model="scalePct" :min="50" :max="150" :step="10" aria-label="画布缩放" @input="onScale" />
+        </div>
+        <el-button size="small" @click="fitWindow">适应窗口</el-button>
+      </div>
+
+      <div class="dsn2-toolbar__cluster" data-testid="dsn2-draft-actions" aria-label="草稿操作">
+        <el-button size="small" :disabled="!curId" @click="onPreview">预览草稿</el-button>
+        <el-button size="small" :disabled="!curId" @click="onDiscard">放弃草稿</el-button>
+        <el-button size="small" @click="onRollback">回滚</el-button>
+      </div>
+
+      <div class="dsn2-toolbar__cluster dsn2-toolbar__publish" data-testid="dsn2-publish-actions" aria-label="保存发布操作">
+        <span class="dirty-state" :class="isDirty ? 'is-dirty' : 'is-saved'" role="status" aria-live="polite"
+              data-testid="dsn2-save-state">
+          <span class="dirty-state__dot" aria-hidden="true"></span>{{ isDirty ? '有未保存修改' : '已保存' }}
+        </span>
+        <el-button size="small" type="primary" :loading="saving" @click="onSave">保存</el-button>
+        <el-button size="small" type="danger" :loading="publishing" @click="onPublish">发布</el-button>
+        <el-button ref="returnButton" size="small" aria-label="返回工作区"
+                   :disabled="saving || publishing || exitDialog.saving" @click="onReturn">返回</el-button>
+      </div>
+    </header>
     <!-- 三栏 -->
     <div class="dsn2-cols">
       <div class="dsn2-left">
+        <header class="dsn2-panel-heading" data-testid="dsn2-left-heading">
+          <div>
+            <span class="dsn2-panel-kicker">工作区</span>
+            <h2>组件与图层</h2>
+            <p data-testid="dsn2-left-subtitle">拖入组件，组织画布层级</p>
+          </div>
+          <span class="dsn2-panel-indicator" aria-hidden="true">●</span>
+        </header>
         <el-tabs v-model="leftTab">
           <el-tab-pane label="组件" name="comp"><ComponentPanel /></el-tab-pane>
           <el-tab-pane label="图层" name="layer"><LayerPanel /></el-tab-pane>
         </el-tabs>
       </div>
       <CanvasCore class="dsn2-center" />
-      <div class="dsn2-right">
+      <div class="dsn2-right dsn2-inspector">
+        <header class="dsn2-panel-heading dsn2-inspector-heading" data-testid="dsn2-right-heading">
+          <div>
+            <span class="dsn2-panel-kicker">检查器</span>
+            <h2>{{ inspectorMeta.title }}</h2>
+            <p data-testid="dsn2-right-subtitle">{{ inspectorMeta.subtitle }}</p>
+          </div>
+          <span class="dsn2-panel-indicator" aria-hidden="true">●</span>
+        </header>
         <!-- 右栏三态:多选=多选工具条(对齐/分布/成组);单选=组件属性面板;未选=画布全局设置 -->
         <MultiSelectBar v-if="store.curComponents.length > 1" />
         <component v-else-if="store.curComponent" :is="attrOf(store.curComponent.component)" :element="store.curComponent" />
@@ -143,7 +189,16 @@
 
     <el-dialog v-model="rollbackDialog.show" title="回滚大屏" width="420px" :close-on-click-modal="false">
       <el-form label-width="84px" size="small">
-        <el-form-item label="目标归档"><span>{{ rollbackDialog.publishedAt || '-' }}</span></el-form-item>
+        <el-form-item label="目标归档" required>
+          <el-select v-model="rollbackDialog.publishLogId" filterable clearable style="width:100%"
+                     placeholder="请选择要回滚的发布归档" aria-label="目标发布归档"
+                     @change="onRollbackArchiveChange">
+            <el-option v-for="archive in rollbackDialog.archives" :key="archive.id" :value="archive.id"
+                       :label="rollbackArchiveLabel(archive)" />
+          </el-select>
+          <div class="scope-hint">最多展示最近 10 条归档。必须显式选择目标版本，系统不会默认回滚到最新版本。</div>
+        </el-form-item>
+        <el-form-item label="归档时间"><span>{{ rollbackDialog.publishedAt || '-' }}</span></el-form-item>
         <el-form-item label="当前版本"><span>版本 {{ rollbackDialog.expectedVersion ?? '-' }}</span></el-form-item>
         <el-form-item label="回滚原因" required>
           <el-input v-model="rollbackDialog.reason" maxlength="500" type="textarea"
@@ -182,7 +237,7 @@ import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { listScreens, getScreenCanvas, saveScreenMetadata, saveScreenCanvas, publishScreenCanvas,
   discardScreenCanvas, rollbackScreenCanvas, listScreenPublishLogs, listOrgGroups, listScreenRoles,
-  listOrgProfiles, listScreenAccessRoles, saveScreenAccessRoles } from '@/api/screen';
+  listOrgProfiles, listScreenAccessRoles, saveScreenAccessRoles, listScreenMapRegionMetrics } from '@/api/screen';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import { fitScale } from '@/views/screen/designer/utils/scale';
 import { cloneComponentForClipboard, pasteFromClipboard } from '@/views/screen/designer/utils/clipboard';
@@ -202,8 +257,10 @@ const store = useScreenDesignerStore();
 const router = useRouter();
 const designProfiles = ref([]);
 const allDesignProfiles = ref([]);
+const designRegionMetrics = ref([]);
 // CanvasCore 下的 MapCenter 通过同一响应式引用读取已配置画像；运行时不会继承此注入。
 provide('screenProfiles', designProfiles);
+provide('screenRegionMetrics', designRegionMetrics);
 const screens = ref([]);
 const curId = ref(null);
 const leftTab = ref('comp');
@@ -221,6 +278,17 @@ provide('previewContext', previewContext);
 watch(() => store.screenCode, screenCode => {
   previewContext.screenCode = screenCode || '';
 }, { immediate: true });
+
+const activeScreen = computed(() => screens.value.find(screen => screen.id === curId.value) || null);
+const inspectorMeta = computed(() => {
+  if (store.curComponents.length > 1) {
+    return { title: '批量编辑', subtitle: `已选 ${store.curComponents.length} 个组件` };
+  }
+  if (store.curComponent) {
+    return { title: '组件属性', subtitle: store.curComponent.component || '当前选中组件' };
+  }
+  return { title: '画布设置', subtitle: '配置画布尺寸与主题' };
+});
 
 function attrOf(component) { return findAttr(component); }
 function onScale(v) { store.scale = v / 100; }
@@ -242,7 +310,7 @@ const metadataEdit = reactive({ expectedVersion: null, reason: '' });
 const discardDialog = reactive({ show: false, saving: false, expectedVersion: null, reason: '' });
 const publishDialog = reactive({ show: false, saving: false, expectedVersion: null, reason: '' });
 const rollbackDialog = reactive({
-  show: false, saving: false, publishLogId: null, publishedAt: '', expectedVersion: null, reason: ''
+  show: false, saving: false, publishLogId: null, publishedAt: '', expectedVersion: null, reason: '', archives: []
 });
 const accessRoleDialog = reactive({
   show: false, saving: false, roleCodes: [], initialRoleCodes: [], reason: '', expectedVersion: null
@@ -446,7 +514,12 @@ async function saveAccessRoles() {
   } finally { accessRoleDialog.saving = false; }
 }
 async function loadCanvas() {
-  const resp = await getScreenCanvas(curId.value);
+  const [resp, regionMetrics] = await Promise.all([
+    getScreenCanvas(curId.value),
+    typeof listScreenMapRegionMetrics === 'function'
+      ? listScreenMapRegionMetrics(curId.value).catch(() => []) : Promise.resolve([])
+  ]);
+  designRegionMetrics.value = Array.isArray(regionMetrics) ? regionMetrics : [];
   // 画布编辑接口为历史独立契约，新增屏范围字段来自屏列表/详情；合并后再灌 store，
   // 避免编辑命名机构组屏时因 canvas DTO 缺字段而静默回退 LEGACY_CONTEXT。
   const screenMeta = screens.value.find(s => s.id === curId.value) || {};
@@ -606,19 +679,28 @@ async function onRollback() {
     return;
   }
   const logs = await listScreenPublishLogs(store.screenId);
-  if (!logs.length) { ElMessage.info('暂无发布归档'); return; }
-  // 简化:回滚到最近一次归档(完整版可弹选择列表)
-  const latest = logs[0];
-  if (!Number.isSafeInteger(latest?.id) || latest.id <= 0) {
-    ElMessage.warning('发布归档标识无效，不能回滚');
-    return;
-  }
+  const archives = Array.isArray(logs)
+    ? logs.filter(item => Number.isSafeInteger(item?.id) && item.id > 0).slice(0, 10)
+    : [];
+  if (!archives.length) { ElMessage.info('暂无发布归档'); return; }
   rollbackDialog.show = true;
   rollbackDialog.saving = false;
-  rollbackDialog.publishLogId = latest.id;
-  rollbackDialog.publishedAt = latest.publishedAt || '';
+  rollbackDialog.archives = archives;
+  // 不预选任何版本，避免用户在没有确认目标归档的情况下误回滚。
+  rollbackDialog.publishLogId = null;
+  rollbackDialog.publishedAt = '';
   rollbackDialog.expectedVersion = store.canvasVersion;
   rollbackDialog.reason = '';
+}
+function rollbackArchiveLabel(archive) {
+  const id = Number.isSafeInteger(archive?.id) ? `归档 #${archive.id}` : '无效归档';
+  const time = archive?.publishedAt || '时间未知';
+  const by = archive?.publishedBy ? ` · ${archive.publishedBy}` : '';
+  return `${id} · ${time}${by}`;
+}
+function onRollbackArchiveChange(value) {
+  const archive = rollbackDialog.archives.find(item => item.id === value);
+  rollbackDialog.publishedAt = archive?.publishedAt || '';
 }
 async function confirmRollback() {
   const reason = String(rollbackDialog.reason || '').trim();
@@ -753,24 +835,290 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 @use '@/styles/screen-theme' as theme;
 // 顶层独立路由直接撑满 #app，不再依赖 DefaultLayout 的壳层高度。
-.dsn2 { display: flex; flex-direction: column; height: 100%; background: #03081c; }
+// 令牌只挂在 .dsn2 内，避免把设计器工作台的深色视觉泄漏到普通平台页面。
+.dsn2 {
+  --dsn2-bg: #0a1020;
+  --dsn2-bg-deep: #070c17;
+  --dsn2-bg-panel: #0d1628;
+  --dsn2-bg-elevated: #111c31;
+  --dsn2-border: #263751;
+  --dsn2-border-soft: rgba(124, 154, 190, .2);
+  --dsn2-text: #e8eef8;
+  --dsn2-muted: #8797ae;
+  --dsn2-accent: #52c7c3;
+  --dsn2-accent-strong: #79e0d5;
+  --dsn2-danger: #e08a8a;
+  --dsn2-radius: 10px;
+  --dsn2-shadow: 0 14px 36px rgba(0, 0, 0, .2);
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex-direction: column;
+  background: radial-gradient(circle at 50% -20%, #152541 0, var(--dsn2-bg) 46%, var(--dsn2-bg-deep) 100%);
+  color: var(--dsn2-text);
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
 .scr-surface-host { @include theme.scr-theme-vars; } // 供画布内复用 .scr-* 视觉变量
 .scr-surface-host :deep(.scr-block-h) {
   color: var(--scr-text, #f5fbff);
   font-weight: 600;
   text-shadow: 0 0 10px rgba(0, 229, 255, .35);
 }
-.dsn2-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
-  border-bottom: 1px solid rgba(0,229,255,.2); }
-.dsn2-toolbar .spacer { flex: 1; }
-.dirty-state { color: #9bb3d8; font-size: 12px; line-height: 20px; white-space: nowrap; }
-.dsn2-cols { flex: 1; display: flex; min-height: 0; }
-.dsn2-left, .dsn2-right { width: 260px; flex: none; overflow: auto; background: #050e2b;
-  border-right: 1px solid rgba(0,229,255,.15); }
-.dsn2-right { width: 300px; border-right: none; border-left: 1px solid rgba(0,229,255,.15); } // 右栏 260→300:容纳两列数字输入与图表取数表单
-.dsn2-center { flex: 1; min-width: 0; }
-.scope-hint { color: #7d9bc9; font-size: 12px; line-height: 1.5; margin-top: 4px; }
-.role-change-preview { display: flex; flex-direction: column; gap: 3px; color: #7d9bc9; font-size: 12px; line-height: 1.5; }
-.screen-security-hint { padding: 4px 12px 8px; color: #7d9bc9; font-size: 12px; line-height: 1.5; }
+.dsn2-toolbar {
+  z-index: 2;
+  display: flex;
+  min-width: 0;
+  min-height: 64px;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--dsn2-border);
+  background: rgba(10, 16, 32, .88);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .14);
+}
+.dsn2-toolbar__brand {
+  display: flex;
+  min-width: 154px;
+  align-items: center;
+  gap: 9px;
+  margin-right: 4px;
+}
+.dsn2-brand-mark {
+  display: inline-flex;
+  width: 31px;
+  height: 31px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--dsn2-accent) 46%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--dsn2-accent) 10%, transparent);
+  color: var(--dsn2-accent-strong);
+  font-size: 18px;
+  box-shadow: inset 0 0 12px color-mix(in srgb, var(--dsn2-accent) 8%, transparent);
+}
+.dsn2-brand-copy { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.dsn2-brand-copy strong { color: var(--dsn2-text); font-size: 14px; font-weight: 650; letter-spacing: .02em; white-space: nowrap; }
+.dsn2-brand-copy span { color: var(--dsn2-muted); font-size: 10px; white-space: nowrap; }
+.dsn2-toolbar__cluster {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+  border: 1px solid var(--dsn2-border-soft);
+  border-radius: var(--dsn2-radius);
+  background: rgba(17, 28, 49, .54);
+}
+.dsn2-toolbar__screen { min-width: 218px; flex: 1 1 218px; flex-direction: column; align-items: stretch; gap: 2px; }
+.dsn2-toolbar__context-label { color: var(--dsn2-muted); font-size: 10px; line-height: 1.1; }
+.dsn2-screen-select { width: 100%; }
+.dsn2-screen-code { overflow: hidden; color: var(--dsn2-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.dsn2-toolbar__history { flex: 0 1 auto; }
+.dsn2-toolbar__publish { margin-left: auto; }
+.dsn2-zoom-control { display: flex; min-width: 102px; align-items: center; gap: 7px; }
+.dsn2-zoom-label { min-width: 32px; color: var(--dsn2-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.dsn2-zoom-control :deep(.el-slider) { width: 70px; }
+.dsn2-toolbar :deep(.el-button) {
+  --el-button-text-color: var(--dsn2-text);
+  --el-button-bg-color: transparent;
+  --el-button-border-color: var(--dsn2-border);
+  --el-button-hover-text-color: var(--dsn2-accent-strong);
+  --el-button-hover-bg-color: rgba(82, 199, 195, .1);
+  --el-button-hover-border-color: color-mix(in srgb, var(--dsn2-accent) 58%, var(--dsn2-border));
+  --el-button-active-bg-color: rgba(82, 199, 195, .14);
+  border-radius: 7px;
+  font-size: 12px;
+}
+.dsn2-toolbar :deep(.el-button--primary) {
+  --el-button-bg-color: var(--dsn2-accent);
+  --el-button-border-color: var(--dsn2-accent);
+  --el-button-hover-bg-color: var(--dsn2-accent-strong);
+  --el-button-hover-border-color: var(--dsn2-accent-strong);
+  --el-button-text-color: #081516;
+}
+.dsn2-toolbar :deep(.el-button--danger) {
+  --el-button-bg-color: rgba(224, 138, 138, .12);
+  --el-button-border-color: rgba(224, 138, 138, .48);
+  --el-button-text-color: #f0b6b6;
+  --el-button-hover-bg-color: rgba(224, 138, 138, .2);
+}
+.dsn2-toolbar :deep(.el-select__wrapper), .dsn2-toolbar :deep(.el-input__wrapper) {
+  min-height: 29px;
+  background: var(--dsn2-bg-elevated);
+  box-shadow: 0 0 0 1px var(--dsn2-border) inset;
+  color: var(--dsn2-text);
+}
+.dsn2-toolbar :deep(.el-select__placeholder), .dsn2-toolbar :deep(.el-select__selected-item) { color: var(--dsn2-text); font-size: 12px; }
+.dirty-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 27px;
+  padding: 0 8px;
+  border: 1px solid var(--dsn2-border-soft);
+  border-radius: 99px;
+  color: var(--dsn2-muted);
+  font-size: 11px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.dirty-state__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dsn2-muted); }
+.dirty-state.is-saved { border-color: rgba(82, 199, 195, .3); color: #9dd5cf; }
+.dirty-state.is-saved .dirty-state__dot { background: var(--dsn2-accent); }
+.dirty-state.is-dirty { border-color: rgba(224, 181, 112, .4); color: #e6c58f; }
+.dirty-state.is-dirty .dirty-state__dot { background: #e0b570; }
+.dsn2-cols { display: flex; min-height: 0; flex: 1; }
+.dsn2-left, .dsn2-right {
+  width: 264px;
+  min-width: 168px;
+  flex: 0 1 264px;
+  overflow: auto;
+  background: rgba(13, 22, 40, .94);
+  border-right: 1px solid var(--dsn2-border);
+}
+.dsn2-right { width: 308px; flex-basis: 308px; border-right: none; border-left: 1px solid var(--dsn2-border); } // 右栏容纳两列数字输入与图表取数表单
+.dsn2-panel-heading {
+  display: flex;
+  min-height: 76px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 14px 12px;
+  border-bottom: 1px solid var(--dsn2-border-soft);
+  background: linear-gradient(145deg, rgba(17, 28, 49, .9), rgba(13, 22, 40, .72));
+}
+.dsn2-panel-heading h2 { margin: 4px 0 3px; color: var(--dsn2-text); font-size: 14px; font-weight: 650; letter-spacing: .01em; }
+.dsn2-panel-heading p { margin: 0; color: var(--dsn2-muted); font-size: 11px; line-height: 1.4; }
+.dsn2-panel-kicker { color: var(--dsn2-accent); font-size: 10px; font-weight: 650; letter-spacing: .1em; }
+.dsn2-panel-indicator { color: var(--dsn2-accent); font-size: 9px; opacity: .75; }
+.dsn2-left :deep(.el-tabs__header) { margin: 0; padding: 0 12px; background: rgba(10, 16, 32, .35); }
+.dsn2-left :deep(.el-tabs__nav-wrap::after) { background: var(--dsn2-border-soft); }
+.dsn2-left :deep(.el-tabs__item) { height: 38px; color: var(--dsn2-muted); font-size: 12px; }
+.dsn2-left :deep(.el-tabs__item.is-active) { color: var(--dsn2-accent-strong); }
+.dsn2-left :deep(.el-tabs__active-bar) { background: var(--dsn2-accent); }
+.dsn2-center { min-width: 280px; flex: 1 1 280px; }
+// 属性栏统一接管 Element Plus 的浅色默认值，使标题、标签、输入区和左侧素材栏属于同一套深色视觉系统。
+.dsn2-inspector {
+  --dsn-inspector-font-size: 12px;
+  --el-bg-color: #071735;
+  --el-bg-color-overlay: #0a1d40;
+  --el-fill-color-blank: #0a1d40;
+  --el-fill-color-light: #0d2851;
+  --el-fill-color: #0b2348;
+  --el-border-color: rgba(55, 160, 211, .34);
+  --el-border-color-light: rgba(55, 160, 211, .24);
+  --el-border-color-lighter: rgba(55, 160, 211, .16);
+  --el-text-color-primary: #d7e8ff;
+  --el-text-color-regular: #b2c8e7;
+  --el-text-color-secondary: #86a7cf;
+  color: var(--el-text-color-regular);
+  font-size: var(--dsn-inspector-font-size);
+}
+.dsn2-inspector :deep(.el-collapse) { border: 0; background: transparent; }
+.dsn2-inspector :deep(.el-collapse-item__header) {
+  height: 42px; padding: 0 12px; border-bottom: 1px solid rgba(0, 229, 255, .14);
+  background: #071735; color: #d7e8ff; font-size: 13px; font-weight: 600;
+}
+.dsn2-inspector :deep(.el-collapse-item__wrap) {
+  border-bottom: 1px solid rgba(0, 229, 255, .14); background: #050e2b;
+}
+.dsn2-inspector :deep(.el-collapse-item__content) {
+  padding: 12px 4px 14px; color: #b2c8e7; font-size: var(--dsn-inspector-font-size);
+}
+.dsn2-inspector :deep(.el-form-item) { margin-bottom: 12px; }
+.dsn2-inspector :deep(.el-form-item__label) {
+  color: #9bb8dc; font-size: var(--dsn-inspector-font-size); line-height: 28px;
+}
+.dsn2-inspector :deep(.el-input__wrapper),
+.dsn2-inspector :deep(.el-select__wrapper),
+.dsn2-inspector :deep(.el-textarea__inner) {
+  background: #0a1d40; box-shadow: 0 0 0 1px rgba(55, 160, 211, .34) inset;
+  color: #d7e8ff; font-size: var(--dsn-inspector-font-size);
+}
+.dsn2-inspector :deep(.el-input__inner),
+.dsn2-inspector :deep(.el-textarea__inner) { color: #d7e8ff; }
+.dsn2-inspector :deep(.el-input__inner::placeholder),
+.dsn2-inspector :deep(.el-textarea__inner::placeholder) { color: #6686af; }
+.dsn2-inspector :deep(.el-input-number__increase),
+.dsn2-inspector :deep(.el-input-number__decrease) {
+  border-color: rgba(55, 160, 211, .28); background: #0d2851; color: #91b9e4;
+}
+.dsn2-inspector :deep(.el-radio-button__inner) {
+  border-color: rgba(55, 160, 211, .28); background: #0a1d40; color: #a9c3e4;
+  font-size: var(--dsn-inspector-font-size); box-shadow: none;
+}
+.dsn2-inspector :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  border-color: #1c8bd1; background: #0b4f8d; color: #f2f8ff; box-shadow: -1px 0 0 0 #1c8bd1;
+}
+.dsn2-inspector :deep(.el-slider__runway) { background: #18365e; }
+.dsn2-inspector :deep(.el-slider__bar) { background: #168fcd; }
+.dsn2-inspector :deep(.el-slider__button) { border-color: #30bde9; background: #dff7ff; }
+.dsn2-inspector :deep(.el-button) { font-size: var(--dsn-inspector-font-size); }
+.dsn2-inspector { background: var(--dsn2-bg-panel); }
+.dsn2-inspector :deep(.el-collapse-item__header) { background: var(--dsn2-bg-elevated); border-color: var(--dsn2-border-soft); color: var(--dsn2-text); }
+.dsn2-inspector :deep(.el-collapse-item__wrap) { background: var(--dsn2-bg-panel); border-color: var(--dsn2-border-soft); }
+.dsn2-inspector :deep(.el-input__wrapper),
+.dsn2-inspector :deep(.el-select__wrapper),
+.dsn2-inspector :deep(.el-textarea__inner) {
+  background: var(--dsn2-bg-elevated);
+  box-shadow: 0 0 0 1px var(--dsn2-border) inset;
+  color: var(--dsn2-text);
+}
+.dsn2-inspector :deep(.el-button) {
+  --el-button-text-color: var(--dsn2-text);
+  --el-button-bg-color: transparent;
+  --el-button-border-color: var(--dsn2-border);
+  --el-button-hover-text-color: var(--dsn2-accent-strong);
+  --el-button-hover-bg-color: rgba(82, 199, 195, .1);
+  --el-button-hover-border-color: var(--dsn2-accent);
+  border-radius: 7px;
+}
+.dsn2 :deep(button:focus-visible),
+.dsn2 :deep(input:focus-visible),
+.dsn2 :deep(textarea:focus-visible),
+.dsn2 :deep(.el-button:focus-visible),
+.dsn2 :deep(.el-select:focus-within),
+.dsn2 :deep(.el-slider:focus-within) {
+  outline: 2px solid var(--dsn2-accent-strong);
+  outline-offset: 2px;
+}
+.dsn2 :deep(.el-button:focus:not(:focus-visible)) { outline: none; }
+.scope-hint { color: var(--dsn2-muted, #7d9bc9); font-size: 12px; line-height: 1.5; margin-top: 4px; }
+.role-change-preview { display: flex; flex-direction: column; gap: 3px; color: var(--dsn2-muted, #7d9bc9); font-size: 12px; line-height: 1.5; }
+.screen-security-hint { padding: 4px 12px 8px; color: var(--dsn2-muted, #7d9bc9); font-size: 12px; line-height: 1.5; }
 .exit-dialog-copy { margin: 0; color: #334155; font-size: 14px; line-height: 1.7; }
+@media (max-width: 1280px) {
+  .dsn2-toolbar { flex-wrap: wrap; }
+  .dsn2-toolbar__brand { min-width: 142px; }
+  .dsn2-toolbar__screen { flex: 1 1 190px; }
+  .dsn2-toolbar__publish { margin-left: 0; }
+  .dsn2-left { width: 220px; flex-basis: 220px; }
+  .dsn2-right { width: 270px; flex-basis: 270px; }
+}
+@media (max-width: 900px) {
+  .dsn2-toolbar { align-items: stretch; padding: 8px 10px; }
+  .dsn2-toolbar__brand { min-width: 130px; }
+  .dsn2-brand-copy span { display: none; }
+  .dsn2-toolbar__cluster { flex: 1 1 auto; }
+  .dsn2-toolbar__screen { min-width: 180px; }
+  .dsn2-left { width: 190px; flex-basis: 190px; }
+  .dsn2-right { width: 246px; flex-basis: 246px; }
+}
+@media (max-width: 680px) {
+  .dsn2-toolbar { max-height: 132px; overflow: auto; }
+  .dsn2-toolbar__brand { min-width: 124px; }
+  .dsn2-toolbar__cluster { padding: 3px 5px; }
+  .dsn2-toolbar__screen { min-width: 160px; }
+  .dsn2-left { width: 168px; flex-basis: 168px; }
+  .dsn2-right { width: 214px; flex-basis: 214px; }
+  .dsn2-center { min-width: 280px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dsn2 *, .dsn2 *::before, .dsn2 *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}
 </style>

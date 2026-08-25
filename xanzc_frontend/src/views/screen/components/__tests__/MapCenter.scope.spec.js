@@ -97,6 +97,135 @@ describe('MapCenter schema v1/v2', () => {
     expect(wrapper.findComponent({ name: 'VChart' }).props('option').geo.map).toBe('shaanxi');
   });
 
+  it('陕西地图按十个地市稳定分色，并用静默偏移图层形成拟 3D 厚度', () => {
+    const wrapper = mount(MapCenter, { props: { mapPoints: [] } });
+    const option = wrapper.findComponent({ name: 'VChart' }).props('option');
+    const regions = option.geo.regions;
+    expect(regions.map(region => region.name)).toEqual([
+      '西安市', '铜川市', '宝鸡市', '咸阳市', '渭南市',
+      '延安市', '汉中市', '榆林市', '安康市', '商洛市'
+    ]);
+    expect(new Set(regions.map(region => region.itemStyle.areaColor)).size).toBe(10);
+    expect(regions.every(region => region.emphasis?.itemStyle?.areaColor)).toBe(true);
+
+    const depthLayers = option.series.filter(series => series.type === 'map' && series.silent === true);
+    expect(depthLayers).toHaveLength(3);
+    expect(depthLayers.every(series => series.map === 'shaanxi')).toBe(true);
+    expect(depthLayers.map(series => series.layoutCenter[1])).toEqual(['56%', '55%', '54%']);
+  });
+
+  it('无真实指标时明确启用稳定模拟数据，不把演示值伪装成数据库数据', () => {
+    const wrapper = mount(MapCenter, { props: { mapPoints: [] } });
+    expect(wrapper.find('.mp-demo-badge').text()).toContain('模拟演示');
+    const option = wrapper.findComponent({ name: 'VChart' }).props('option');
+    expect(option.geo.label.formatter({ name: '西安市' })).toMatch(/\d+\.\d%/);
+    expect(option.geo.label.formatter({ name: '西安市' }))
+      .toBe(option.geo.label.formatter({ name: '西安市' }));
+    expect(option.tooltip.formatter({ name: '西安市' })).toContain('模拟指标');
+  });
+
+  it('点击区县后列出数据库机构画像位置，并明确标识缺失指标使用模拟值', async () => {
+    const wrapper = mount(MapCenter, { props: {
+      mode: 'design',
+      mapConfig: { schemaVersion: 2, mode: 'XIAN_COMPOSITE', satelliteNodes: [] },
+      profiles: [
+        { orgCode: 'XA-001', orgName: '未央支行', cityCode: '610100', operatingLevel: 'PRIMARY',
+          lng: 108.917593, lat: 34.342883, coordSys: 'GCJ02', status: 'ACTIVE' },
+        { orgCode: 'BJ-001', orgName: '宝鸡支行', cityCode: '610300', operatingLevel: 'PRIMARY',
+          lng: 107.238, lat: 34.362, coordSys: 'GCJ02', status: 'ACTIVE' }
+      ]
+    } });
+    wrapper.findComponent({ name: 'VChart' }).vm.$emit('click', { componentType: 'geo', name: '未央区' });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.mp-region-detail').text()).toContain('未央区支行指标明细');
+    expect(wrapper.find('.mp-region-detail').text()).toContain('未央支行');
+    expect(wrapper.find('.mp-region-detail').text()).toContain('108.917593, 34.342883');
+    expect(wrapper.find('.mp-region-detail').text()).toContain('模拟指标');
+    expect(wrapper.find('.mp-region-detail').text()).not.toContain('宝鸡支行');
+  });
+
+  it('点击区域但数据库没有带坐标机构时展示真实空态', async () => {
+    const wrapper = mount(MapCenter, { props: { mapPoints: [], profiles: [] } });
+    wrapper.findComponent({ name: 'VChart' }).vm.$emit('click', { componentType: 'geo', name: '西安市' });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.mp-region-empty').text()).toContain('数据库中暂无带坐标的支行画像');
+  });
+
+  it('地图指标模式默认按综合达成率着色，标签直显达成率且无数据保持中性', () => {
+    const wrapper = mount(MapCenter, { props: {
+      mapPoints: [
+        { orgCode: '128', orgName: '宝鸡分行', lng: 107.237974, lat: 34.361979 },
+        { orgCode: '169', orgName: '咸阳分行', lng: 108.708991, lat: 34.329605 }
+      ],
+      regionMetrics: [
+        { orgCode: '128', orgName: '宝鸡分行', dataDate: '2026-08-23', metricValues: {
+          KPI_ACHIEVE_RATE_ORG: 86.2, DEP_ACHIEVE_RATE_ORG: 92, M_0265: 86200
+        } },
+        { orgCode: '169', orgName: '咸阳分行', dataDate: '2026-08-23', metricValues: {
+          KPI_ACHIEVE_RATE_ORG: 103.4, DEP_ACHIEVE_RATE_ORG: 98, M_0265: 103400
+        } }
+      ]
+    } });
+    expect(wrapper.find('.mp-kpi-toolbar').text()).toContain('综合达成');
+    const option = wrapper.findComponent({ name: 'VChart' }).props('option');
+    const baoji = option.geo.regions.find(region => region.name === '宝鸡市');
+    const xian = option.geo.regions.find(region => region.name === '西安市');
+    expect(baoji.itemStyle.areaColor).toBe('#b9852f');
+    expect(xian.itemStyle.areaColor).toBe('#27364f');
+    expect(option.geo.label.formatter({ name: '宝鸡市' })).toContain('86.2%');
+    expect(option.geo.label.formatter({ name: '西安市' })).toContain('--');
+  });
+
+  it('切换存款达成后同步更新地图颜色、排名与包含目标缺口的悬浮卡', async () => {
+    const wrapper = mount(MapCenter, { props: {
+      mapPoints: [{ orgCode: '128', orgName: '宝鸡分行', lng: 107.237974, lat: 34.361979 }],
+      regionMetrics: [{ orgCode: '128', orgName: '宝鸡分行', dataDate: '2026-08-23', metricValues: {
+        KPI_ACHIEVE_RATE_ORG: 86.2, DEP_ACHIEVE_RATE_ORG: 92, M_0265: 92000,
+        DEP_BAL_YOY_RATE: 6.3, DEP_BAL_MOM_RATE: -1.2
+      } }]
+    } });
+    await wrapper.get('button[data-metric="DEP_ACHIEVE_RATE_ORG"]').trigger('click');
+    const option = wrapper.findComponent({ name: 'VChart' }).props('option');
+    expect(option.geo.regions.find(region => region.name === '宝鸡市').itemStyle.areaColor).toBe('#236b8e');
+    const tooltip = option.tooltip.formatter({ name: '宝鸡市' });
+    expect(tooltip).toContain('存款达成率');
+    expect(tooltip).toContain('92.0%');
+    expect(tooltip).toContain('目标值');
+    expect(tooltip).toContain('缺口');
+    expect(tooltip).toContain('同比 +6.3%');
+    expect(tooltip).toContain('环比 -1.2%');
+    expect(tooltip).toContain('第 1');
+  });
+
+  it('西安复合地图按六个行政区稳定分色，并保留悬停强调色', () => {
+    const wrapper = mount(MapCenter, { props: {
+      mode: 'design',
+      mapConfig: { schemaVersion: 2, mode: 'XIAN_COMPOSITE', satelliteNodes: [] }
+    } });
+    const regions = wrapper.findComponent({ name: 'VChart' }).props('option').geo.regions;
+    expect(regions.map(region => region.name)).toEqual([
+      '未央区', '莲湖区', '新城区', '碑林区', '雁塔区', '长安区'
+    ]);
+    expect(new Set(regions.map(region => region.itemStyle.areaColor)).size).toBe(6);
+    expect(regions.every(region => region.emphasis?.itemStyle?.areaColor)).toBe(true);
+  });
+
+  it('选择陕西地市后展示对应区县地图、区县名称和稳定分色', () => {
+    const wrapper = mount(MapCenter, { props: {
+      mode: 'design',
+      mapConfig: { schemaVersion: 1, mode: 'SHAANXI_LEGACY', regionCode: '610300' }
+    } });
+    expect(wrapper.text()).toContain('宝鸡市区县经营地图');
+    const option = wrapper.findComponent({ name: 'VChart' }).props('option');
+    expect(option.geo.map).toBe('shaanxi-city-610300');
+    expect(option.geo.regions.map(region => region.name)).toEqual([
+      '渭滨区', '金台区', '陈仓区', '凤翔区', '岐山县', '扶风县',
+      '眉县', '陇县', '千阳县', '麟游县', '凤县', '太白县'
+    ]);
+    expect(new Set(option.geo.regions.map(region => region.itemStyle.areaColor)).size).toBe(12);
+    expect(option.series.filter(series => series.type === 'map').every(series => series.map === 'shaanxi-city-610300')).toBe(true);
+  });
+
   it.each([
     ['mode-only', { mode: 'XIAN_COMPOSITE' }],
     ['schema-only', { schemaVersion: 2 }],
@@ -182,6 +311,38 @@ describe('MapCenter schema v1/v2', () => {
     });
     expect(wrapper.findAll('.mp-local-node')).toHaveLength(1);
     expect(wrapper.find('.mp-config-gap').exists()).toBe(false);
+  });
+
+  it('本地网点名称和完成率在地图两侧均衡排布，并以引导线连接真实点位', () => {
+    const localPoints = Array.from({ length: 12 }, (_, index) => ({
+      orgCode: `XA-${String(index + 1).padStart(3, '0')}`,
+      orgName: `西安测试支行${index + 1}`,
+      lng: 108.84 + (index % 4) * 0.07,
+      lat: 34.42 - index * 0.025
+    }));
+    const wrapper = mount(MapCenter, { props: {
+      mapPayload: { schemaVersion: 2, mode: 'XIAN_COMPOSITE', localPoints, satelliteNodes: [] }
+    } });
+    const callouts = wrapper.findAll('.mp-local-node.mp-callout');
+    expect(callouts).toHaveLength(12);
+    expect(wrapper.findAll('.mp-leader-line')).toHaveLength(12);
+    expect(wrapper.findAll('.mp-callout.side-left')).toHaveLength(6);
+    expect(wrapper.findAll('.mp-callout.side-right')).toHaveLength(6);
+    expect(wrapper.find('.mp-callout.side-left').attributes('style')).toContain('left: 24%');
+    expect(wrapper.find('.mp-callout.side-right').attributes('style')).toContain('right: 24%');
+    for (const side of ['left', 'right']) {
+      const tops = wrapper.findAll(`.mp-callout.side-${side}`).map(node => node.attributes('style').match(/top:\s*([^;]+)/)?.[1]);
+      expect(new Set(tops).size).toBe(6);
+    }
+    expect(callouts[0].text()).toMatch(/西安测试支行\d+.*%/);
+    expect(callouts[0].attributes('aria-label')).toContain('完成率');
+    expect(wrapper.find('.mp-leader-line').attributes('style')).toMatch(/left:.*top:.*width:.*transform:/);
+    const leaderWidths = wrapper.findAll('.mp-leader-line').map(line => Number(line.attributes('style').match(/width:\s*([\d.]+)%/)?.[1]));
+    expect(Math.max(...leaderWidths)).toBeLessThanOrEqual(26);
+    const scatter = wrapper.findComponent({ name: 'VChart' }).props('option').series
+      .find(series => series.type === 'effectScatter');
+    expect(scatter.label.show).toBe(false);
+    expect(wrapper.findComponent({ name: 'VChart' }).props('option').geo.layoutSize).toBe('46%');
   });
 
   it('设计态只预览地图，所有本地和二级分行节点均不可聚焦或钻取', async () => {

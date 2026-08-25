@@ -18,8 +18,8 @@ const stubs = {
   },
   MapCenter: {
     template: '<div class="stub-map" :data-points="JSON.stringify(mapPoints)" '
-      + ':data-runtime-header-inset="runtimeHeaderInset" />',
-    props: ['mapPoints', 'runtimeHeaderInset']
+      + ':data-region-metrics="JSON.stringify(regionMetrics)" :data-runtime-header-inset="runtimeHeaderInset" />',
+    props: ['mapPoints', 'regionMetrics', 'runtimeHeaderInset']
   }
 };
 
@@ -94,6 +94,16 @@ describe('ScreenRenderer.vue', () => {
     const stub = wrapper.find('.stub-map');
     expect(stub.exists()).toBe(true);
     expect(JSON.parse(stub.attributes('data-points'))).toEqual(points);
+  });
+
+  it('MapCenter 接收服务端授权后的地图机构指标，不从画布 JSON 猜测指标数据', () => {
+    const c = { id: 'w-map-kpi', component: 'MapCenter', style: { top: 0, left: 0, width: 640, height: 880 }, isShow: true };
+    const metrics = [{ orgCode: '128', metricValues: { KPI_ACHIEVE_RATE_ORG: 86.2 } }];
+    const wrapper = mount(ScreenRenderer, {
+      props: { renderPackage: pkg([c]), mapRegionMetrics: metrics },
+      global: { stubs }
+    });
+    expect(JSON.parse(wrapper.find('.stub-map').attributes('data-region-metrics'))).toEqual(metrics);
   });
 
   it.each([

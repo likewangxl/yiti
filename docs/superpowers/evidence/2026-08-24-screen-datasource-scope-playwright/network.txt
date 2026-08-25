@@ -1,0 +1,3 @@
+### Result
+1. [POST] http://127.0.0.1:8092/api/screen/admin/canvas/save => [200] OK
+2. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK

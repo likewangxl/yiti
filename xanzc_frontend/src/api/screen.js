@@ -143,6 +143,11 @@ export function listMapPoints() {
 export function saveMapPoints(points) {
   return call('put', '/screen/admin/map-points', { data: points });
 }
+/** 设计器地图指标只读快照；服务端按当前屏权限和机构范围返回，不在前端补模拟值。 */
+export function listScreenMapRegionMetrics(screenId) {
+  // 设计器只把指标作为可选地图增强；屏级无权限由后端 fail-close，前端不弹整屏 toast。
+  return call('get', `/screen/admin/screens/${encodeURIComponent(screenId)}/map-region-metrics`, { silent: true }, []);
+}
 
 // 屏级查看角色白名单：与 auth 机构组角色绑定分别校验，不能在前端拼接权限。
 export function listScreenAccessRoles(screenId) {
@@ -204,7 +209,8 @@ export function getScreenView(screenCode, preview) {
 
 /**
  * /screen/data 的版本边界。后端已取消“根据 dsId/屏编码猜版本”的降级：
- * v1 只能由显式 schemaVersion=1 + dsId 进入，v2 只接受发布包身份。
+ * 发布态 v1 只能由显式 schemaVersion=1 + dsId 进入，v2 只接受发布包身份；
+ * 草稿态统一由 previewState=draft + screenCode + blockId 让服务端复核当前草稿绑定。
  * 这里再做一次前端 Fail Close，避免新调用方绕开 BlockContainer 重新引入隐式协议。
  */
 function normalizeScreenDataBody(body = {}) {
@@ -214,6 +220,21 @@ function normalizeScreenDataBody(body = {}) {
   const schemaVersion = body.schemaVersion;
   if (typeof schemaVersion !== 'number' || !Number.isInteger(schemaVersion)) {
     throw new Error('schemaVersion 必须为 JSON 整数 1 或 2');
+  }
+  if (body.previewState !== undefined && body.previewState !== 'draft') {
+    throw new Error('previewState 仅允许显式值 draft');
+  }
+  if (body.previewState === 'draft') {
+    if (![1, 2].includes(schemaVersion)) {
+      throw new Error('草稿数据请求的 schemaVersion 必须为 1 或 2');
+    }
+    const screenCode = String(body.screenCode || '').trim();
+    const blockId = body.blockId;
+    if (!screenCode || !Number.isSafeInteger(blockId) || blockId <= 0) {
+      throw new Error('草稿数据请求必须显式携带 screenCode 和 blockId');
+    }
+    const { dsId, orgCodes, orgGroupCode, ...payload } = body;
+    return { ...payload, previewState: 'draft', schemaVersion, screenCode, blockId };
   }
   if (schemaVersion === 1) {
     const screenCode = String(body.screenCode || '').trim();

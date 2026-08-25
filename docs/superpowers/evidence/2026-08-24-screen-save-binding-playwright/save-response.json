@@ -1,0 +1,11 @@
+{
+  "code": "0",
+  "message": "success",
+  "data": {
+    "screenId": 9105,
+    "screenCode": "SCR_QA_SAVE",
+    "canvasVersion": 8,
+    "publishStatus": 0,
+    "canvasDraftJson": "{\"schemaVersion\":1,\"components\":[{\"id\":\"chart-new\",\"component\":\"ChartWidget\",\"innerType\":\"METRIC_CARD\",\"name\":\"新建指标卡\",\"blockId\":77001,\"bindJson\":\"{\\\"dsId\\\":9009,\\\"period\\\":\\\"LATEST\\\"}\",\"styleJson\":\"{\\\"title\\\":\\\"绑定验证\\\",\\\"refreshSec\\\":0}\",\"drillJson\":\"{}\",\"style\":{\"top\":120,\"left\":260,\"width\":420,\"height\":220},\"isLock\":false,\"isShow\":true}]}"
+  }
+}

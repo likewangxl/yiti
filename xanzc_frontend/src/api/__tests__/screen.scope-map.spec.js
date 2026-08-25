@@ -8,6 +8,7 @@ import {
   updateOrgProfile,
   listOrgGroups,
   listScreenDatasources,
+  listScreenMapRegionMetrics,
   createOrgGroup,
   updateOrgGroup,
   saveOrgGroupMembers,
@@ -163,6 +164,13 @@ describe('大屏范围与机构配置 API', () => {
     }, null);
   });
 
+  it('设计器地图指标为可选请求且静默处理屏级无权限，不改变后端 fail-close', async () => {
+    await listScreenMapRegionMetrics(12);
+    expect(call).toHaveBeenLastCalledWith(
+      'get', '/screen/admin/screens/12/map-region-metrics', { silent: true }, []
+    );
+  });
+
   it('运行接口拒绝隐式 v1、未知版本和缺少 schema2 发布包身份的请求', () => {
     expect(() => queryScreenData({ dsId: 9 })).toThrow(/schemaVersion=1/);
     expect(() => queryScreenData({ schemaVersion: '1', screenCode: 'SCR_LEGACY', dsId: 9 })).toThrow(/整数/);
@@ -170,6 +178,20 @@ describe('大屏范围与机构配置 API', () => {
     expect(() => queryScreenData({ schemaVersion: 3, dsId: 9 })).toThrow(/未知/);
     expect(() => queryScreenData({ schemaVersion: 2, screenCode: 'SCR_RETAIL' })).toThrow(/blockId/);
     expect(() => queryScreenData({ schemaVersion: 1, dsId: 9 })).toThrow(/screenCode/);
+  });
+
+  it('草稿取数只保留服务端可复核的 screenCode + blockId，不发送 dsId', async () => {
+    await queryScreenData({
+      schemaVersion: 1, previewState: 'draft', screenCode: 'SCR_DRAFT', blockId: 19,
+      dsId: 9002, period: 'LATEST', contextParams: { orgCode: '128' }
+    });
+    expect(call).toHaveBeenLastCalledWith('post', '/screen/data', {
+      data: {
+        schemaVersion: 1, previewState: 'draft', screenCode: 'SCR_DRAFT', blockId: 19,
+        period: 'LATEST', contextParams: { orgCode: '128' }
+      },
+      silent: true
+    }, null);
   });
 
   it('已保存数据源列探测只走独立 probe 资源，body 含原因与测试机构组', async () => {

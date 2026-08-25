@@ -34,7 +34,7 @@ import ChartWidget from './chart-widget/Component.vue';
 import ChartWidgetAttr from './chart-widget/Attr.vue';
 import chartWidgetMeta from './chart-widget/meta';
 // MapCenter:省级屏地图,复用运行时组件(props 是 mapPoints 数组,与素材类 element/propValue 签名不同)。
-// 只登记进 componentsMap 供 findWidget/findAttr 查得到；不并入 materialMetas——见下方 mapCenterMeta 注释。
+// 只登记进 componentsMap 供 findWidget/findAttr 查得到；组件面板用独立的“地图组件”分组提供拖拽入口。
 import MapCenter from '@/views/screen/components/MapCenter.vue';
 import MapCenterAttr from './map-center/Attr.vue';
 import mapCenterMeta from './map-center/meta';
@@ -60,12 +60,11 @@ const componentsMap = {
 
 export const materialMetas = [textLabelMeta, imageBoxMeta, rectShapeMeta, borderDecorMeta, clockWidgetMeta,
   titleBarMeta, decorLineMeta, marqueeMeta, periodFilterMeta];
-// mapCenterMeta 故意不并入上面的 materialMetas:它驱动 ComponentPanel 的拖拽入口，而 MapCenter
-// 一期不开放拖拽创建(运行时由 ScreenRenderer 按 component==='MapCenter' 走独立分支注入 mapPoints，
-// 不经拖拽面板/newComponentFromMeta 生成节点；地图组件由屏配置直投渲染包 components 节点)。
+// mapCenterMeta 故意不并入上面的 materialMetas：ComponentPanel 以独立“地图组件”分组展示它，
+// 拖入后仍由 ScreenRenderer 按 component==='MapCenter' 的独立分支注入运行时地图数据。
 export { mapCenterMeta };
 
-// 图表类型自动扫描注册(eager 同步纳入):13 个 charts/*.js(9 基础 + 4 个 KPI 专属)
+// 图表类型自动扫描注册(eager 同步纳入):19 个 charts/*.js（基础/KPI + 六种常用扩展图表）
 const chartModules = import.meta.glob('./chart-widget/charts/*.js', { eager: true });
 export const chartMetas = Object.values(chartModules).map(m => m.default);
 

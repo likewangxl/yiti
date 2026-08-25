@@ -84,6 +84,7 @@ public class ScreenDataReqDTODeserializer extends StdDeserializer<ScreenDataReqD
             case "screenCode" -> request.setScreenCode(context.readValue(parser, String.class));
             case "blockId" -> request.setBlockId(
                     valueToken == JsonToken.VALUE_NULL ? null : STRICT_LONG.deserialize(parser, context));
+            case "previewState" -> request.setPreviewState(context.readValue(parser, String.class));
             case "period" -> request.setPeriod(context.readValue(parser, String.class));
             case "dateFrom" -> request.setDateFrom(context.readValue(parser, String.class));
             case "dateTo" -> request.setDateTo(context.readValue(parser, String.class));

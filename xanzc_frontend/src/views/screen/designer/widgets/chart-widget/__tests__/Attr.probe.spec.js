@@ -104,6 +104,7 @@ describe('ChartWidget Attr 列探测', () => {
     });
     await flushPromises();
 
-    expect(wrapper.findAll('option').map(option => option.text())).toEqual(['机构宽表']);
+    const datasourceSelect = wrapper.find('select');
+    expect(datasourceSelect.findAll('option').map(option => option.text())).toEqual(['机构宽表']);
   });
 });

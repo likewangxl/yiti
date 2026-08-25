@@ -412,9 +412,9 @@ class ScreenCanvasServiceTest {
                 .hasFieldOrPropertyWithValue("code", "RPT-43006");
     }
 
-    // ===== 图表 innerType 白名单扩充（spec 2026-07-17 §5.1，8 种新图表）=====
+    // ===== 图表 innerType 白名单扩充（六种常用图表）=====
 
-    /** 8 种新图表 innerType 必须全部进入画布保存白名单（占位启用 4 种 + KPI 专属 4 种）. */
+    /** 新增六种图表 innerType 必须全部进入画布保存白名单. */
     @Test
     void save_newChartInnerTypes_allAccepted() {
         when(screenMapper.selectById(7L)).thenReturn(screen(7L, 0));
@@ -427,7 +427,9 @@ class ScreenCanvasServiceTest {
         }).when(blockMapper).insert(any(RptScreenBlock.class));
 
         for (String innerType : List.of("BAR_COMPARE", "AREA_STACK", "GAUGE", "TABLE_LIST",
-                "KPI_DETAIL_TABLE", "KPI_RADAR", "LIQUID_PROGRESS", "PROGRESS_LIST")) {
+                "KPI_DETAIL_TABLE", "KPI_RADAR", "LIQUID_PROGRESS", "PROGRESS_LIST",
+                "COMBO_CHART", "FUNNEL_CHART", "SCATTER_BUBBLE", "HEATMAP_MATRIX",
+                "SUNBURST_CHART", "SPARKLINE_CARD")) {
             CanvasComponentDTO c = comp("ChartWidget", innerType,
                     Map.of("top", 10, "left", 10, "width", 100, "height", 40));
             var resp = service.saveCanvas(req(7L, 0, c));
@@ -463,6 +465,16 @@ class ScreenCanvasServiceTest {
         when(dsMapper.selectById(1L)).thenReturn(datasource(1L, "SINGLE", "WIDE_TABLE"));
 
         assertThatThrownBy(() -> service.saveCanvas(req(7L, 0, boundChart("LINE_TREND", 1L))))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43005");
+    }
+
+    @Test
+    void save_sparklineCardOnSingleDatasource_throws43005() {
+        when(screenMapper.selectById(7L)).thenReturn(screen(7L, 0));
+        when(dsMapper.selectById(1L)).thenReturn(datasource(1L, "SINGLE", "WIDE_TABLE"));
+
+        assertThatThrownBy(() -> service.saveCanvas(req(7L, 0, boundChart("SPARKLINE_CARD", 1L))))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43005");
     }

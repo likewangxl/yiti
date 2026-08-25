@@ -1,6 +1,7 @@
 package com.bank.branch.platform.report.service.screen;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.ResourceApi;
 import com.bank.branch.platform.common.trace.MdcUtils;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
@@ -105,6 +106,10 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
 
     @Autowired(required = false)
     private ScreenScopeAuthorizationService scopeAuthorizationService;
+
+    /** 草稿实时取数与草稿渲染共用画布管理读取资源，缺失时 fail-close。 */
+    @Autowired(required = false)
+    private ResourceApi resourceApi;
 
     public ScreenDatasourceServiceImpl(RptScreenDatasourceMapper dsMapper,
                                        RptScreenBlockMapper blockMapper,
@@ -333,6 +338,7 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
     @Override
     public ScreenDataRespDTO queryData(ScreenDataReqDTO req) {
         try {
+            validatePreviewState(req);
             RptScreen screen = resolveRuntimeScreen(req);
             RptScreenDatasource ds = resolveRuntimeDatasource(req, screen);
             // 状态入库统一大写；运行时仍按规范化值判断，避免历史小写 disabled 被当作 ACTIVE 绕过。
@@ -649,6 +655,9 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
     }
 
     private RptScreenDatasource resolveRuntimeDatasource(ScreenDataReqDTO req, RptScreen screen) {
+        if ("draft".equalsIgnoreCase(req.getPreviewState())) {
+            return resolveDraftDatasource(req, screen);
+        }
         boolean schemaV2 = requiresSchemaV2(screen);
         if (schemaV2) {
             if (!Integer.valueOf(2).equals(req.getSchemaVersion())) {
@@ -683,6 +692,91 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
             throw new RptException(RptErrorCode.SCREEN_BLOCK_NOT_PUBLISHED);
         }
         return dsMapper.selectById(req.getDsId());
+    }
+
+    /**
+     * 草稿预览取数只接受显式 screenCode + blockId：身份来自当前屏草稿组件树和本屏 block 行，
+     * 客户端 dsId 即使传入也完全不参与解析。该支路不读取发布包，避免改绑/新增草稿被旧快照身份覆盖。
+     */
+    private RptScreenDatasource resolveDraftDatasource(ScreenDataReqDTO req, RptScreen screen) {
+        if (resourceApi == null
+                || !resourceApi.hasResourcePermission(currentUserApi.getCurrentEmpId(), "R_RPT_SCR_CV_GET")) {
+            throw new RptException(RptErrorCode.SCREEN_ACCESS_DENIED);
+        }
+        // 草稿是未发布配置，除画布读取资源外仍必须复用屏级角色白名单门禁；
+        // LEGACY_CONTEXT 也不能因为继续使用旧 DATA_SCOPE 就跳过屏自身的访问角色。
+        if (scopeAuthorizationService == null) {
+            throw new RptException(RptErrorCode.SCREEN_ACCESS_DENIED);
+        }
+        scopeAuthorizationService.authorize(screen);
+        if (req.getScreenCode() == null || req.getScreenCode().isBlank() || req.getBlockId() == null
+                || req.getBlockId() <= 0) {
+            throw new RptException(RptErrorCode.SCREEN_BLOCK_NOT_PUBLISHED);
+        }
+        // 草稿协议版本必须由当前草稿决定，不能沿用旧发布包；否则发布 v1 的屏
+        // 在草稿加入 V2 MapCenter 后会被错误要求继续提交 schemaVersion=1。
+        int requiredSchemaVersion = requiresDraftSchemaV2(screen) ? 2 : 1;
+        if (!Integer.valueOf(requiredSchemaVersion).equals(req.getSchemaVersion())) {
+            throw new RptException(RptErrorCode.SCREEN_BLOCK_NOT_PUBLISHED);
+        }
+        Set<Long> draftBlockIds = new HashSet<>();
+        try {
+            JsonNode draft = objectMapper.readTree(screen.getCanvasDraftJson() == null
+                    ? "{}" : screen.getCanvasDraftJson());
+            collectDraftChartBlockIds(draft.path("components"), draftBlockIds);
+        } catch (RptException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, e);
+        }
+        if (!draftBlockIds.contains(req.getBlockId())) {
+            throw new RptException(RptErrorCode.SCREEN_BLOCK_NOT_PUBLISHED);
+        }
+        List<RptScreenBlock> rows = blockMapper.selectList(new LambdaQueryWrapper<RptScreenBlock>()
+                .eq(RptScreenBlock::getScreenId, screen.getId()));
+        RptScreenBlock block = rows.stream()
+                .filter(row -> screen.getId().equals(row.getScreenId()))
+                .filter(row -> req.getBlockId().equals(row.getId()))
+                .findFirst()
+                .orElseThrow(() -> new RptException(RptErrorCode.SCREEN_BLOCK_NOT_PUBLISHED));
+        Long dsId = readBlockDatasourceId(block.getBindJson());
+        if (dsId == null) {
+            throw new RptException(RptErrorCode.SCREEN_BLOCK_BIND_MISMATCH);
+        }
+        return dsMapper.selectById(dsId);
+    }
+
+    /** previewState 是安全状态开关：只有精确小写 draft 才进入草稿支路，其余非空值拒绝。 */
+    private void validatePreviewState(ScreenDataReqDTO req) {
+        if (req != null && req.getPreviewState() != null && !"draft".equals(req.getPreviewState())) {
+            throw new RptException(RptErrorCode.SCREEN_BLOCK_NOT_PUBLISHED);
+        }
+    }
+
+    private Long readBlockDatasourceId(String bindJson) {
+        try {
+            JsonNode bind = objectMapper.readTree(bindJson == null ? "{}" : bindJson);
+            JsonNode dsId = bind.path("dsId");
+            return dsId.isIntegralNumber() && dsId.asLong() > 0 ? dsId.asLong() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void collectDraftChartBlockIds(JsonNode components, Set<Long> out) {
+        if (components == null || !components.isArray()) {
+            return;
+        }
+        for (JsonNode node : components) {
+            if ("ChartWidget".equals(node.path("component").asText())) {
+                JsonNode blockId = node.path("blockId");
+                if (!blockId.isIntegralNumber() || !blockId.canConvertToLong()
+                        || blockId.longValue() <= 0 || !out.add(blockId.longValue())) {
+                    throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+                }
+            }
+            collectDraftChartBlockIds(node.path("children"), out);
+        }
     }
 
     /**
@@ -851,6 +945,12 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
     private boolean requiresSchemaV2(RptScreen screen) {
         return "NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())
                 || isSchemaV2(screen.getCanvasPublishedJson());
+    }
+
+    /** 草稿取数的协议版本只看当前草稿（命名机构组仍固定为 schema2）。 */
+    private boolean requiresDraftSchemaV2(RptScreen screen) {
+        return "NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())
+                || isSchemaV2(screen.getCanvasDraftJson());
     }
 
     private boolean isPublishedOrDrafting(Integer publishStatus) {

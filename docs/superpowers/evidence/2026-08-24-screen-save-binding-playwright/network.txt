@@ -1,0 +1,9 @@
+已在点击保存前执行 requests --clear。
+
+1. [POST] http://127.0.0.1:8092/api/screen/admin/canvas/save => [200] OK
+2. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+
+页面断言：
+{"status":"已保存","savedToast":0,"pending":0,"noAccess":0}
+
+说明：toast 在等待 1.8 秒后已自动关闭；保存请求和响应正文分别见 save-request.json、save-response.json。

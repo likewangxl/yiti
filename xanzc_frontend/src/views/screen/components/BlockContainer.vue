@@ -41,6 +41,12 @@ import KpiDetailTable from './KpiDetailTable.vue';
 import KpiRadar from './KpiRadar.vue';
 import LiquidProgress from './LiquidProgress.vue';
 import ProgressList from './ProgressList.vue';
+import ComboChart from './ComboChart.vue';
+import FunnelChart from './FunnelChart.vue';
+import ScatterBubble from './ScatterBubble.vue';
+import HeatmapMatrix from './HeatmapMatrix.vue';
+import SunburstChart from './SunburstChart.vue';
+import SparklineCard from './SparklineCard.vue';
 
 const props = defineProps({
   block: { type: Object, required: true },
@@ -64,13 +70,21 @@ const componentMap = {
   KPI_DETAIL_TABLE: KpiDetailTable,
   KPI_RADAR: KpiRadar,
   LIQUID_PROGRESS: LiquidProgress,
-  PROGRESS_LIST: ProgressList
+  PROGRESS_LIST: ProgressList,
+  COMBO_CHART: ComboChart,
+  FUNNEL_CHART: FunnelChart,
+  SCATTER_BUBBLE: ScatterBubble,
+  HEATMAP_MATRIX: HeatmapMatrix,
+  SUNBURST_CHART: SunburstChart,
+  SPARKLINE_CARD: SparklineCard
 };
 // 新一代图表额外消费 propValue + columnsMeta（/api/screen/data 可选扩展字段，缺失容错）；
 // 旧 5 类图表不声明这两个 props，避免对象透传落成 DOM attribute，按类型白名单条件绑定
 const EXTENDED_TYPES = new Set([
   'BAR_COMPARE', 'AREA_STACK', 'GAUGE', 'TABLE_LIST',
-  'KPI_DETAIL_TABLE', 'KPI_RADAR', 'LIQUID_PROGRESS', 'PROGRESS_LIST'
+  'KPI_DETAIL_TABLE', 'KPI_RADAR', 'LIQUID_PROGRESS', 'PROGRESS_LIST',
+  'COMBO_CHART', 'FUNNEL_CHART', 'SCATTER_BUBBLE', 'HEATMAP_MATRIX',
+  'SUNBURST_CHART', 'SPARKLINE_CARD'
 ]);
 
 function parse(json, fallback = {}) {
@@ -139,6 +153,7 @@ async function load() {
   try {
     data.value = await queryScreenData(buildScreenDataRequest({
       schemaVersion,
+      previewState: props.context?.previewState === 'draft' ? 'draft' : undefined,
       screenCode: props.context.screenCode,
       blockId,
       dsId: bind.value.dsId,

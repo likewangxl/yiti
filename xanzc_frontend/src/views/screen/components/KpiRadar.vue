@@ -16,7 +16,7 @@ import { RadarChart } from 'echarts/charts';
 import { RadarComponent, TooltipComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 import { DocumentRemove } from '@element-plus/icons-vue';
-import { SCR_COLOR, scrTooltipStyle, scrWithAlpha } from '@/styles/screenChartTheme';
+import { resolveChartTheme, scrTooltipStyle, scrWithAlpha } from '@/styles/screenChartTheme';
 import { parseKpiRows, kpiRadarData } from './utils/kpiDetail';
 
 use([CanvasRenderer, RadarChart, RadarComponent, TooltipComponent]);
@@ -33,18 +33,21 @@ const props = defineProps({
 const valueField = computed(() => (props.propValue?.valueField === 'rate' ? 'rate' : 'score'));
 const radar = computed(() => kpiRadarData(parseKpiRows(props.columns, props.rows), valueField.value));
 const seriesName = computed(() => (valueField.value === 'rate' ? '完成率' : '得分'));
+const theme = computed(() => resolveChartTheme(props.styleCfg));
+const palette = computed(() => props.styleCfg.colors?.length ? props.styleCfg.colors : theme.value.palette);
 
 const option = computed(() => ({
-  tooltip: { trigger: 'item', ...scrTooltipStyle() },
+  color: palette.value,
+  tooltip: { trigger: 'item', ...scrTooltipStyle(theme.value) },
   radar: {
     indicator: radar.value.indicators,
     radius: '68%',
     center: ['50%', '52%'],
-    axisName: { color: SCR_COLOR.textDim, fontSize: 12 },
-    axisLine: { lineStyle: { color: 'rgba(125,155,201,.3)' } },
-    splitLine: { lineStyle: { color: 'rgba(125,155,201,.2)' } },
+    axisName: { color: theme.value.tokens.textDim, fontSize: 12 },
+    axisLine: { lineStyle: { color: theme.value.tokens.border } },
+    splitLine: { lineStyle: { color: theme.value.tokens.grid } },
     // 深浅交替暗环，替代默认亮色 splitArea，贴合深色大屏
-    splitArea: { areaStyle: { color: ['rgba(10,32,74,.3)', 'rgba(5,14,43,.3)'] } }
+    splitArea: { areaStyle: { color: [scrWithAlpha(theme.value.tokens.bgDeep, .3), scrWithAlpha(theme.value.tokens.bgDeep, .55)] } }
   },
   series: [{
     type: 'radar',
@@ -53,14 +56,14 @@ const option = computed(() => ({
     data: [{
       name: seriesName.value,
       value: radar.value.values,
-      lineStyle: { color: SCR_COLOR.cyan, width: 2, shadowBlur: 10, shadowColor: scrWithAlpha(SCR_COLOR.cyan, 0.6) },
-      itemStyle: { color: SCR_COLOR.cyan },
+      lineStyle: { color: palette.value[0], width: 2, shadowBlur: 10, shadowColor: scrWithAlpha(palette.value[0], 0.6) },
+      itemStyle: { color: palette.value[0] },
       areaStyle: {
         color: {
           type: 'radial', x: 0.5, y: 0.5, r: 0.8,
           colorStops: [
-            { offset: 0, color: scrWithAlpha(SCR_COLOR.cyan, 0.35) },
-            { offset: 1, color: scrWithAlpha(SCR_COLOR.blue, 0.08) }
+            { offset: 0, color: scrWithAlpha(palette.value[0], 0.35) },
+            { offset: 1, color: scrWithAlpha(palette.value[1] || palette.value[0], 0.08) }
           ]
         }
       }
