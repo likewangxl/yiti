@@ -12,7 +12,8 @@ vi.mock('@/api/system', () => ({
   listDictItems: vi.fn().mockResolvedValue([]),
 }));
 
-import { getAdjustDetail } from '@/api/perf';
+import { getAdjustDetail, getAllocPreview } from '@/api/perf';
+import { listDictItems } from '@/api/system';
 import AllocAdjustViewDialog from '../AllocAdjustViewDialog.vue';
 
 const passthrough = (name) => ({ name, template: '<div><slot /></div>' });
@@ -36,6 +37,7 @@ const stubs = {
   'el-timeline': passthrough('ElTimeline'),
   'el-timeline-item': passthrough('ElTimelineItem'),
   'el-tag': passthrough('ElTag'),
+  'el-button': passthrough('ElButton'),
 };
 
 let wrapper;
@@ -80,5 +82,42 @@ describe('AllocAdjustViewDialog 当前节点审批员工', () => {
     });
 
     expect(view.find('.current-node-approvers').exists()).toBe(false);
+  });
+});
+
+describe('AllocAdjustViewDialog 分配维度与原分配快照', () => {
+  it('从 PERF_ALLOC_DIM 加载 NEW 维度，且 NEW 不查询原分配', async () => {
+    listDictItems.mockImplementation((dictType) => Promise.resolve(dictType === 'PERF_ALLOC_DIM' ? [
+      { dictCode: 'RULE', dictLabel: '按规则分配' },
+      { dictCode: 'ACCOUNT', dictLabel: '按账户分配' },
+      { dictCode: 'NEW', dictLabel: '新客户' },
+    ] : []));
+
+    const view = await mountDialog({
+      status: 'DRAFT', custId: 'C-NEW', allocDim: 'NEW', items: [],
+    });
+
+    expect(view.vm.allocDimOptions).toEqual([
+      { value: 'RULE', label: '按规则分配' },
+      { value: 'ACCOUNT', label: '按账户分配' },
+      { value: 'NEW', label: '新客户' },
+    ]);
+    expect(getAllocPreview).not.toHaveBeenCalled();
+    expect(view.find('.preview-section').exists()).toBe(false);
+  });
+
+  it('优先展示申请内已保存的 ORIGIN 快照，不再查询当前关系覆盖', async () => {
+    const view = await mountDialog({
+      status: 'DRAFT', custId: 'C-001', allocDim: 'RULE',
+      items: [
+        { itemKind: 'NEW', empId: 'E-NEW', ratio: 60 },
+        { itemKind: 'ORIGIN', empId: 'E-ORIGIN', username: 'origin', orgCode: 'ORG-1', ratio: 40 },
+      ],
+    });
+
+    expect(getAllocPreview).not.toHaveBeenCalled();
+    expect(view.vm.displayedOriginalItems).toEqual([
+      expect.objectContaining({ empId: 'E-ORIGIN', username: 'origin', orgCode: 'ORG-1', ratio: 40 }),
+    ]);
   });
 });

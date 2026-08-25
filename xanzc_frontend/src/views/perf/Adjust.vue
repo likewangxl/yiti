@@ -20,8 +20,7 @@
             <el-form-item label="维度">
               <el-select v-model="mineFilters.allocDim" clearable placeholder="全部" style="width:140px"
                          @change="onMineFilterChange">
-                <el-option value="RULE" label="按规则" />
-                <el-option value="ACCOUNT" label="按账户" />
+                <el-option v-for="o in allocDimOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
             <el-form-item label="业务类型">
@@ -73,7 +72,7 @@
               </template>
             </el-table-column>
             <el-table-column label="维度" width="100">
-              <template #default="{row}"><el-tag class="tag-info" effect="plain">{{ { RULE: '按规则', ACCOUNT: '按账户' }[row.allocDim] || row.allocDim || '-' }}</el-tag></template>
+              <template #default="{row}"><el-tag class="tag-info" effect="plain">{{ allocDimLabel(row.allocDim) }}</el-tag></template>
             </el-table-column>
             <el-table-column label="业务类型" width="160">
               <template #default="{row}">{{ fmtBizKind(row.bizKind) }}</template>
@@ -125,8 +124,7 @@
             <el-form-item label="维度">
               <el-select v-model="todoFilters.allocDim" clearable placeholder="全部"
                          style="width:140px" @change="onTodoFilterChange">
-                <el-option value="RULE" label="按规则" />
-                <el-option value="ACCOUNT" label="按账户" />
+                <el-option v-for="o in allocDimOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
             <el-form-item label="业务类型">
@@ -229,8 +227,7 @@
             <el-form-item label="维度">
               <el-select v-model="doneFilters.allocDim" clearable placeholder="全部" style="width:140px"
                          @change="onDoneFilterChange">
-                <el-option value="RULE" label="按规则" />
-                <el-option value="ACCOUNT" label="按账户" />
+                <el-option v-for="o in allocDimOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
             <el-form-item label="业务类型">
@@ -272,7 +269,7 @@
               </template>
             </el-table-column>
             <el-table-column label="维度" width="100">
-              <template #default="{row}"><el-tag class="tag-info" effect="plain">{{ { RULE: '按规则', ACCOUNT: '按账户' }[row.allocDim] || row.allocDim || '-' }}</el-tag></template>
+              <template #default="{row}"><el-tag class="tag-info" effect="plain">{{ allocDimLabel(row.allocDim) }}</el-tag></template>
             </el-table-column>
             <el-table-column label="业务类型" width="160">
               <template #default="{row}">{{ fmtBizKind(row.bizKind) }}</template>
@@ -342,7 +339,7 @@
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="客户类型" prop="custType" required>
-              <el-select v-model="dlg.form.custType" :disabled="dlg.readOnly" style="width:100%">
+              <el-select v-model="dlg.form.custType" :disabled="dlg.readOnly" style="width:100%" @change="onCustTypeChange">
                 <el-option label="对公客户" value="CORP" />
                 <el-option label="零售客户" value="RETAIL" />
               </el-select>
@@ -364,8 +361,7 @@
             <el-form-item label="分配维度" prop="allocDim" required>
               <el-select v-model="dlg.form.allocDim" :disabled="dlg.readOnly" style="width:100%"
                          @change="onAllocDimChange">
-                <el-option label="按规则分配" value="RULE" />
-                <el-option label="按账户分配" value="ACCOUNT" />
+                <el-option v-for="o in allocDimOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -415,8 +411,8 @@
           </el-row>
         </template>
 
-        <!-- 原业绩分配：常驻显示（不做动态显隐，仅内容动态更新）；自动查到历史审批通过分配→只读展示；查不到→手工录入（除账号外必填，至少 1 条）-->
-        <div class="preview-section" v-loading="preview.loading">
+        <!-- 原业绩分配：RULE/ACCOUNT 显示；NEW 不依赖原分配关系；自动查到历史审批通过分配→只读展示；查不到→手工录入（除账号外必填，至少 1 条）-->
+        <div v-if="showOriginalAllocation" class="preview-section" v-loading="preview.loading">
           <div class="card-h">
             <div class="title">原业绩分配</div>
             <el-button v-if="!dlg.readOnly && !hasOriginalOwners" size="small" type="primary" plain @click="addOriginalRow">添加原业绩分配</el-button>
@@ -1036,10 +1032,12 @@ async function openApprove(row) {
     approveDlg.saving = false;
     // 原业绩分配为空时禁用「交原业绩所属人审批」分支：拉取该客户当前维度的原业绩分配判断有无所属人
     approveDlg.hasOwners = false;
-    try {
-      const p = await getAllocPreview({ custNo: row.custId, allocDim: row.allocDim });
-      approveDlg.hasOwners = !!(p && p.allocList && p.allocList.length);
-    } catch { approveDlg.hasOwners = false; }
+    if (row.allocDim !== 'NEW') {
+      try {
+        const p = await getAllocPreview({ custNo: row.custId, allocDim: row.allocDim });
+        approveDlg.hasOwners = !!(p && p.allocList && p.allocList.length);
+      } catch { approveDlg.hasOwners = false; }
+    }
     approveDlg.branches = branches;
     approveDlg.branchIdx = firstSelectableBranch(branches, approveDlg.hasOwners);
     approveDlg.show = true;
@@ -1205,6 +1203,33 @@ async function onBatchReviewAction(action) {
 }
 
 // ============ 业务类型字典 ============
+const ALLOC_DIM_FALLBACK = [
+  { value: 'RULE', label: '按规则分配' },
+  { value: 'ACCOUNT', label: '按账户分配' },
+  { value: 'NEW', label: '新开户分配' }
+];
+// 分配维度是字典配置项，列表筛选、列表标签和表单下拉共用这一组数据。
+// 字典接口不可用时保留三项基础能力，避免页面因配置中心短暂故障而无法操作。
+const allocDimOptions = ref(ALLOC_DIM_FALLBACK.map(item => ({ ...item })));
+const allocDimMap = computed(() => Object.fromEntries(allocDimOptions.value.map(item => [item.value, item.label])));
+function allocDimLabel(value) {
+  return allocDimMap.value[value] || value || '-';
+}
+async function loadAllocDimDict() {
+  try {
+    const items = await listDictItems('PERF_ALLOC_DIM');
+    const merged = new Map(ALLOC_DIM_FALLBACK.map(item => [item.value, item.label]));
+    for (const item of (Array.isArray(items) ? items : [])) {
+      const value = item?.dictCode || item?.dictValue || item?.value;
+      const label = item?.dictLabel || item?.label || value;
+      if (value) merged.set(value, label || value);
+    }
+    allocDimOptions.value = [...merged].map(([value, label]) => ({ value, label }));
+  } catch {
+    allocDimOptions.value = ALLOC_DIM_FALLBACK.map(item => ({ ...item }));
+  }
+}
+
 const bizKindOptions = ref([]);
 const bizKindMap = computed(() => {
   const m = {};
@@ -1287,21 +1312,32 @@ function custStatStatisDt() {
   return base.toISOString().slice(0, 10);
 }
 const preview = reactive({ loaded: false, loading: false, data: null });
-// 原业绩分配是否有数据（决定审批时能否选"交原业绩所属人审批"）
-const hasOriginalOwners = computed(() => (preview.data && preview.data.allocList && preview.data.allocList.length) > 0);
 // 本次申请明细表是否存在 item_kind=ORIGIN 记录（手工录入的原业绩分配，openTodoDetail 已拆入 dlg.form.originalItems）
 const hasOriginItems = computed(() => (dlg.form.originalItems?.length || 0) > 0);
-// 能否走"交原业绩所属人审批"：历史审批通过分配 OR 本次申请手工录入的原业绩分配；
-// 与后端 resolveOriginalOwnerEmpIds(preview 优先、否则回退手工 ORIGIN) 的会签名单来源一致
-const canRouteOwner = computed(() => hasOriginalOwners.value || hasOriginItems.value);
+// 新开户不依赖原分配关系；详情中已有 ORIGIN 行时，以已保存的行作为权威来源，
+// 避免后续预览请求命中当前关系后把草稿编辑态切回只读预览表。
+const showOriginalAllocation = computed(() => dlg.form.allocDim !== 'NEW');
+// 原业绩分配是否有数据（决定审批时能否选"交原业绩所属人审批"）。
+// 详情已经返回 ORIGIN 时优先展示 originalItems（草稿可编辑、查看只读），不被 preview 覆盖。
+const hasOriginalOwners = computed(() => showOriginalAllocation.value
+  && !hasOriginItems.value
+  && (preview.data && preview.data.allocList && preview.data.allocList.length) > 0);
+// 能否走"交原业绩所属人审批"：当前关系预览 OR 申请内已保存的 ORIGIN 快照；
+// 后端在有申请快照时以快照为准，新建未回传自动预览时才读取当前关系。
+const canRouteOwner = computed(() => showOriginalAllocation.value && (hasOriginalOwners.value || hasOriginItems.value));
 function fmtAmt(v) {
   if (v == null) return '-';
   return Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 async function loadPreview(statisDt) {
   const f = dlg.form;
-  // 原业绩分配按客户编号取 RULE/ACCOUNT 审批通过的最后一条，故只要有客户编号即可加载
-  if (!f.custId) return;
+  // NEW 不需要原分配关系；详情已有 ORIGIN 行时也不再以当前关系覆盖申请快照。
+  if (f.allocDim === 'NEW' || hasOriginItems.value || !f.custId) {
+    preview.loaded = false;
+    preview.loading = false;
+    preview.data = null;
+    return;
+  }
   preview.loaded = true;
   preview.loading = true;
   // 新建时传昨日，查看/审批时由调用方传入申请日期-1
@@ -1398,9 +1434,21 @@ function onOrigEmpSelect(row, item) {
   row.username = item.username || '';
   row.empChnName = item.empChnName || '';
   row.empLabel = item.label || row.empId;
+  // emp-suggest 返回员工主机构快照；回填后机构仍可通过下方机构联想框改选。
+  const mainOrgCode = item.mainOrgCode || item.orgCode || item.deptNo || '';
+  const mainOrgName = item.mainOrgName || item.orgName || '';
+  if (mainOrgCode) row.orgCode = mainOrgCode;
+  if (mainOrgName) row.orgName = mainOrgName;
+  if (row.orgCode || row.orgName) {
+    row.orgLabel = row.orgName ? `${row.orgCode}（${row.orgName}）` : row.orgCode;
+  }
 }
 function onOrigEmpInput(row, val) {
-  if (!val) { row.empId = ''; row.username = ''; row.empChnName = ''; return; }
+  if (!val) {
+    row.empId = ''; row.username = ''; row.empChnName = '';
+    row.orgCode = ''; row.orgName = ''; row.orgLabel = '';
+    return;
+  }
   if (!String(val).includes('（')) { row.empId = String(val).trim(); row.username = String(val).trim(); }
 }
 // 原业绩分配-机构下拉联想（按机构号/部门号/名称模糊匹配，展示 DEPT_NO + 机构名称）
@@ -1475,6 +1523,14 @@ async function loadApprovalHistory(applyId) {
   }
 }
 
+function onCustTypeChange(val) {
+  // 零售客户默认按账户分配，但分配维度下拉仍由字典提供 RULE/ACCOUNT/NEW，用户可继续改选。
+  // 详情回显使用 Object.assign，不调用此事件，避免加载已有零售草稿时误覆盖其维度。
+  if (!dlg.readOnly && val === 'RETAIL') {
+    dlg.form.allocDim = 'ACCOUNT';
+    onAllocDimChange('ACCOUNT');
+  }
+}
 function onAllocDimChange(val) {
   if (val === 'ACCOUNT') {
     // 按账户分配：业务类型固定为「存款」且不可修改
@@ -1647,8 +1703,8 @@ async function onSubmit() {
   }
   if (totalPct.value !== 100) return ElMessage.warning(`分配比例合计须为 100%，当前 ${totalPct.value}%`);
 
-  // 原业绩分配校验：自动查到历史分配则免手工；查不到则要求手工至少 1 条（除账号外必填）
-  if (!hasOriginalOwners.value) {
+  // 原业绩分配校验：NEW 不要求；自动查到历史分配则免手工；查不到则要求手工至少 1 条（除账号外必填）
+  if (showOriginalAllocation.value && !hasOriginalOwners.value) {
     const origs = dlg.form.originalItems || [];
     if (!origs.length) return ElMessage.warning('未查到原业绩分配，请手工录入至少 1 条原业绩分配记录');
     for (let i = 0; i < origs.length; i++) {
@@ -1702,12 +1758,14 @@ function buildAdjustPayload() {
     reason:     dlg.form.reason,
     // 仅送已填员工号的明细行（草稿可能含空行）
     items: (dlg.form.items || []).filter(it => it.empId).map(it => ({ empId: it.empId, ratio: Number(it.pct), remark: it.remark || '' })),
-    // 原业绩分配（手工录入）；自动查到历史分配时不送，后端用历史会签名单
-    originalAllocList: hasOriginalOwners.value ? [] : (dlg.form.originalItems || []).filter(o => o.empId).map(o => ({
-      acctNo: o.acctNo || null, empId: o.empId,
-      username: o.username || null, empChnName: o.empChnName || null,
-      orgCode: o.orgCode, orgName: o.orgName || null, ratio: Number(o.ratio)
-    }))
+    // NEW 不需要原分配；详情带 ORIGIN 时优先送可编辑快照，避免预览关系覆盖草稿修改。
+    originalAllocList: dlg.form.allocDim === 'NEW' || hasOriginalOwners.value
+      ? []
+      : (dlg.form.originalItems || []).filter(o => o.empId).map(o => ({
+        acctNo: o.acctNo || null, empId: o.empId,
+        username: o.username || null, empChnName: o.empChnName || null,
+        orgCode: o.orgCode, orgName: o.orgName || null, ratio: Number(o.ratio)
+      }))
   };
 }
 
@@ -1813,6 +1871,7 @@ watch(
 );
 
 onMounted(async () => {
+  loadAllocDimDict();
   loadBizKindDict();
   await loadCanApprove();
   // 没审批资格强制回到"我的申请"，避免 URL/路由复用残留 activeTab='todo' 的边角

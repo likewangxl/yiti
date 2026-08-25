@@ -64,8 +64,7 @@
           <el-col :span="8">
             <el-form-item label="分配维度">
               <el-select v-model="form.allocDim" disabled style="width:100%">
-                <el-option label="按规则分配" value="RULE" />
-                <el-option label="按账户分配" value="ACCOUNT" />
+                <el-option v-for="o in allocDimOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -104,12 +103,12 @@
         </template>
 
         <!-- 原业绩分配 -->
-        <div class="preview-section" v-loading="preview.loading">
+        <div v-if="form.allocDim !== 'NEW'" class="preview-section" v-loading="preview.loading">
           <div class="card-h">
             <div class="title">原业绩分配</div>
           </div>
           <div v-if="previewError" class="inline-error" role="alert">{{ previewError }}</div>
-          <el-table v-if="hasOriginalOwners" :data="preview.data.allocList || []" size="small" border style="margin-bottom:12px" empty-text="暂无审批通过的分配记录">
+          <el-table v-if="hasOriginalOwners" :data="displayedOriginalItems" size="small" border style="margin-bottom:12px" empty-text="暂无有效的分配记录">
             <el-table-column prop="acctNo" label="账号" min-width="150" show-overflow-tooltip>
               <template #default="{row}">{{ row.acctNo || '-' }}</template>
             </el-table-column>
@@ -230,6 +229,11 @@ const approvalLogs = ref([]);
 const approvalLoading = ref(false);
 const approvalError = ref('');
 const bizKindOptions = ref([]);
+const allocDimOptions = ref([
+  { value: 'RULE', label: '按规则分配' },
+  { value: 'ACCOUNT', label: '按账户分配' },
+  { value: 'NEW', label: '新开户分配' },
+]);
 const currentNodeApprovers = ref([]);
 
 const noFetch = (q, cb) => cb && cb([]);
@@ -247,7 +251,11 @@ const bizKindMap = computed(() => {
 function bizKindLabel(k) { return bizKindMap.value[k] || BIZ_KIND_FALLBACK[k] || k || ''; }
 const showDepositBal = computed(() => (form.bizKind || []).some(k => bizKindLabel(k).includes('存')));
 const showLoanBal = computed(() => (form.bizKind || []).some(k => bizKindLabel(k).includes('贷')));
-const hasOriginalOwners = computed(() => (preview.data && preview.data.allocList && preview.data.allocList.length) > 0);
+const displayedOriginalItems = computed(() => {
+  if (form.originalItems.length > 0) return form.originalItems;
+  return preview.data?.allocList || [];
+});
+const hasOriginalOwners = computed(() => displayedOriginalItems.value.length > 0);
 const showCurrentNodeApprovers = computed(() => form.status === 'IN_APPROVAL' && currentNodeApprovers.value.length > 0);
 
 const ACTION_LABEL = { SUBMIT: '提交', APPROVE: '通过', REJECT: '驳回', CLAIM: '签收', TRANSFER: '转办' };
@@ -289,8 +297,20 @@ async function loadBizKindDict() {
     bizKindOptions.value = (Array.isArray(items) ? items : []).map(d => ({ label: d.dictLabel, value: d.dictCode }));
   } catch { bizKindOptions.value = []; }
 }
+async function loadAllocDimDict() {
+  try {
+    const items = await listDictItems('PERF_ALLOC_DIM');
+    const dictOptions = (Array.isArray(items) ? items : [])
+      .filter(d => d.dictCode)
+      .map(d => ({ label: d.dictLabel || d.dictCode, value: d.dictCode }));
+    if (dictOptions.length > 0) allocDimOptions.value = dictOptions;
+  } catch { /* 保留兜底维度 */ }
+}
 async function loadPreview(statisDt) {
-  if (!form.custId) { preview.data = null; return; }
+  if (!form.custId || form.allocDim === 'NEW' || form.originalItems.length > 0) {
+    preview.data = null;
+    return;
+  }
   previewError.value = '';
   preview.loading = true;
   try {
@@ -321,6 +341,7 @@ async function load(id) {
   resetAll();
   if (!id) return;
   loadBizKindDict();
+  loadAllocDimDict();
   loading.value = true;
   try {
     const d = (await getAdjustDetail(id)) || {};
