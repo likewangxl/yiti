@@ -92,6 +92,12 @@ export const importTagCustomersFile = (id, file, mode) => {
   return call('post', `/tags/${id}/customers/import-file`, { data }, null);
 };
 
+// 客户触达周期限制
+export const listTouchLimitRules = (params = {}) =>
+  call('get', '/touch-limit-rules', { params }, { records: [], total: 0 });
+export const updateTouchLimitRule = (tagId, data) =>
+  call('put', `/touch-limit-rules/${encodeURIComponent(tagId)}`, { data });
+
 // 跨机构客户营销申请
 export const validateCrossOrgMarketing = custId =>
   call('get', '/cross-org-marketing/validate', { params: { custId } }, null);

@@ -158,6 +158,7 @@ const routes = [
       { path: 'customers/pool/available', name: 'CustomerPoolAvailable', component: () => import('@/views/customerMarketing/AvailablePool.vue'), meta: { title: '待认领客户', group: '客户营销' } },
       { path: 'customers/tags', name: 'CustomerTags', component: () => import('@/views/customerMarketing/CustomerTags.vue'), meta: { title: '客户标签管理', group: '客户营销' } },
       { path: 'customers/tags/approval', name: 'CustomerTagApproval', component: () => import('@/views/customerMarketing/TagApproval.vue'), meta: { title: '客户标签审核', group: '客户营销' } },
+      { path: 'customers/touch-limits', name: 'CustomerTouchLimits', component: () => import('@/views/customerMarketing/TouchLimitManagement.vue'), meta: { title: '客户触达周期管理', group: '客户营销', requiredResource: '/api/touch-limit-rules' } },
       { path: 'customers/cross-org', name: 'CrossOrgMarketing', component: () => import('@/views/customerMarketing/CrossOrgMarketing.vue'), meta: { title: '跨机构营销申请', group: '客户营销' } },
       { path: 'customers/transfer-log', name: 'CustomerTransfers', component: () => import('@/views/customerMarketing/CustomerTransfers.vue'), meta: { title: '客户转交记录', group: '客户营销' } },
       { path: 'customers/pool/claimed', name: 'CustomerPoolClaimed', component: () => import('@/views/customerMarketing/ClaimedPool.vue'), meta: { title: '已认领客户', group: '客户营销' } },
