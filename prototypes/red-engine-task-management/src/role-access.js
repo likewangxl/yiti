@@ -12,23 +12,25 @@ const ALL_STANDARD_MENUS = [
   "processing",
 ];
 
+const REPORTER_MENUS = ["home", "materials", "records", "processing"];
+
 export const ROLE_OPTIONS = [
   { value: "admin", label: "组织管理员" },
-  { value: "employee", label: "一线员工" },
+  { value: "reporter", label: "报送员" },
   { value: "branchSecretary", label: "支部书记" },
   { value: "orgReviewer", label: "组织审核员" },
 ];
 
 const ROLE_MENU_KEYS = {
   admin: ALL_STANDARD_MENUS,
-  employee: ["home", "materials", "records", "processing"],
-  branchSecretary: ["review"],
-  orgReviewer: ["workbench"],
+  reporter: REPORTER_MENUS,
+  branchSecretary: [...REPORTER_MENUS, "review"],
+  orgReviewer: [...ALL_STANDARD_MENUS, "workbench"],
 };
 
 const ROLE_DEFAULT_VIEWS = {
   admin: "management",
-  employee: "home",
+  reporter: "home",
   branchSecretary: "review",
   orgReviewer: "workbench",
 };

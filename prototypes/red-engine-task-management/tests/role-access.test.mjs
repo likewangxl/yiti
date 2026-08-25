@@ -14,26 +14,36 @@ test("支部审核员合并为支部书记，演示身份中不再保留支部�
   assert.equal(labels.includes("支部审核员"), false);
 });
 
-test("支部书记只进入支部审核工作台", () => {
-  assert.deepEqual(getVisibleMenuKeys("branchSecretary"), ["review"]);
+test("支部书记继承报送员权限并增加支部审核工作台", () => {
+  const reporterMenus = getVisibleMenuKeys("reporter");
+  const secretaryMenus = getVisibleMenuKeys("branchSecretary");
+
+  assert.deepEqual(
+    secretaryMenus,
+    [...reporterMenus, "review"],
+  );
   assert.equal(getDefaultView("branchSecretary"), "review");
-
-  for (const role of ["admin", "employee", "orgReviewer"]) {
-    assert.equal(getVisibleMenuKeys(role).includes("review"), false);
-  }
+  assert.equal(reporterMenus.includes("review"), false);
 });
 
-test("原沉浸式审核工作台改为工作台且只对组织审核员开放", () => {
-  assert.deepEqual(getVisibleMenuKeys("orgReviewer"), ["workbench"]);
+test("组织审核员继承组织管理员权限并增加工作台", () => {
+  const adminMenus = getVisibleMenuKeys("admin");
+  const reviewerMenus = getVisibleMenuKeys("orgReviewer");
+
+  assert.deepEqual(
+    reviewerMenus,
+    [...adminMenus, "workbench"],
+  );
   assert.equal(getDefaultView("orgReviewer"), "workbench");
-
-  for (const role of ["admin", "employee", "branchSecretary"]) {
-    assert.equal(getVisibleMenuKeys(role).includes("workbench"), false);
-  }
+  assert.equal(adminMenus.includes("workbench"), false);
 });
 
-test("一线员工首页待办入口与审核工作台分离", () => {
-  assert.equal(getDefaultView("employee"), "home");
-  assert.equal(getVisibleMenuKeys("employee").includes("home"), true);
-  assert.equal(getVisibleMenuKeys("employee").includes("review"), false);
+test("原型使用报送员业务角色，首页待办入口与审核工作台分离", () => {
+  const labels = ROLE_OPTIONS.map((role) => role.label);
+
+  assert.equal(labels.includes("报送员"), true);
+  assert.equal(labels.includes("一线员工"), false);
+  assert.equal(getDefaultView("reporter"), "home");
+  assert.equal(getVisibleMenuKeys("reporter").includes("home"), true);
+  assert.equal(getVisibleMenuKeys("reporter").includes("review"), false);
 });

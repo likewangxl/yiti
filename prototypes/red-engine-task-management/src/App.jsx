@@ -308,7 +308,7 @@ function App() {
   };
 
   const currentTitle = menuItems.find((item) => item.key === view)?.label;
-  const employeeCount = getEmployeeTasks(tasks, new Date());
+  const reporterTasks = getEmployeeTasks(tasks, new Date());
   const visibleMenuKeys = getVisibleMenuKeys(role);
   const visibleMenuItems = menuItems.filter((item) => visibleMenuKeys.includes(item.key));
 
@@ -343,7 +343,7 @@ function App() {
           {view === "management" && <TaskManagementPage tasks={tasks} onAdd={() => go("new")} onView={(task) => openTask(task, true)} />}
           {view === "new" && <NewTaskPage onBack={() => go("management")} onPublish={handlePublished} />}
           {view === "processing" && <TaskProcessingPage tasks={tasks} onOpen={openTask} />}
-          {view === "home" && <HomePage tasks={employeeCount} onOpen={openTask} role={role} />}
+          {view === "home" && <HomePage tasks={reporterTasks} onOpen={openTask} role={role} />}
           {view === "detail" && selectedTask && <TaskDetailPage task={selectedTask} readonly={detailReadonly} onBack={() => go(role === "admin" ? "management" : "processing")} onComplete={finishTask} />}
           {view === "materials-entry" && selectedTask && <MaterialsEntryPage task={selectedTask} onBack={() => go("home")} />}
           {["materials", "records", "review", "dashboard", "warning", "workbench", "archive", "export", "org", "mapping"].includes(view) && <LegacyPage title={currentTitle} role={role} view={view} />}
@@ -476,9 +476,9 @@ function EmptyState({ title, description }) {
 
 function LegacyPage({ title, role, view }) {
   const description = view === "review"
-    ? "支部书记专属审核入口；原支部审核员职责已合并至支部书记。"
+    ? "支部书记继承报送员全部权限，并在此基础上增加支部审核工作台。"
     : view === "workbench"
-      ? "原沉浸式审核工作台已更名为工作台，仅组织审核员可使用。"
+      ? "组织审核员继承组织管理员全部权限，并增加由原沉浸式审核工作台更名的工作台。"
       : "本次原型仅新增任务管理与任务处理相关页面，原有页面保持现状。";
   return <div className="page-wrap"><PageHeading title={title} subtitle={`当前身份：${getRoleLabel(role)}`} /><section className="panel-card legacy-card"><Building2 size={28} /><h2>{title}</h2><p>{description}</p></section></div>;
 }
