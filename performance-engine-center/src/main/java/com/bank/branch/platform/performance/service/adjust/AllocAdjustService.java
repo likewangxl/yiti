@@ -115,6 +115,31 @@ public class AllocAdjustService {
     private static final int EMP_SUGGEST_MAX_LIMIT = 50;
 
     /**
+     * 提交前预检结果。流程路由、机构层级和原分配审批人均在首次写库前解析一次，
+     * 起流程时复用同一份命令，避免校验通过后再次查询导致前后结果不一致。
+     */
+    private static final class SubmissionPreflight {
+        private final StartProcessCmd startCmd;
+
+        private SubmissionPreflight(StartProcessCmd startCmd) {
+            this.startCmd = startCmd;
+        }
+    }
+
+    /** 提交/草稿保存后用于组装 DTO 响应的最小结果，不依赖写事务内二次详情查询。 */
+    private static final class SubmitResult {
+        private final String id;
+        private final String applyNo;
+        private final String status;
+
+        private SubmitResult(String id, String applyNo, String status) {
+            this.id = id;
+            this.applyNo = applyNo;
+            this.status = status;
+        }
+    }
+
+    /**
      * 分配明细员工号输入框自动补齐：按关键字模糊匹配 PT_USER 工号/登录名/中文名.
      *
      * <p>委托 {@link UserApi#pageUsers(String, int, int)}（OR 模糊匹配 USER_ID / USERNAME /
@@ -160,8 +185,17 @@ public class AllocAdjustService {
      */
     @Transactional(rollbackFor = Exception.class)
     public String submit(SubmitAllocAdjustCmd cmd) {
+        return submitInternal(cmd).id;
+    }
+
+    /**
+     * 直接提交的实际写入逻辑。调用方必须已建立事务边界；所有会抛业务异常的流程前置校验
+     * 在 apply/item 首次 INSERT 之前完成。
+     */
+    private SubmitResult submitInternal(SubmitAllocAdjustCmd cmd) {
         validateBasic(cmd);
         validateItems(cmd);
+        // NEW（新开户）不要求原分配；其它维度保留原有会签名单解析口径。
         // cust_id 直接存用户输入的客户编号（原 cust_no 字段已废弃，统一并入 cust_id）
         String custId = cmd.getCustId();
 
@@ -179,16 +213,21 @@ public class AllocAdjustService {
         String applyId = genApplyId();
         String applyNo = genApplyNo();
 
+        // 流程路由、发起机构级别、原分配所属机构负责人等所有起流程前置校验在此完成，
+        // 此处尚未执行任何申请主表/明细 INSERT。
+        SubmissionPreflight preflight = prepareSubmissionPreflight(
+                applyId, applyNo, custId, cmd, originalOwnerEmpIds);
+
         // 1. 落地主表（status=IN_APPROVAL，尚无 processInstanceId）+ 明细
         PerfAllocAdjustApply apply = buildApply(applyId, applyNo, cmd, "IN_APPROVAL");
         applyMapper.insert(apply);
         persistItems(applyId, cmd);
 
         // 2. 启动 Flowable 流程并回写 processInstanceId（异常冒泡回滚，避免残留无 pid 的 apply）
-        String pid = startApprovalWorkflow(applyId, applyNo, custId, cmd, originalOwnerEmpIds);
+        String pid = startApprovalWorkflow(preflight);
         applyMapper.updateStatus(applyId, "IN_APPROVAL", pid);
         log.info("[AllocAdjustService.submit] applyId={}, applyNo={}, pid={}", applyId, applyNo, pid);
-        return applyId;
+        return new SubmitResult(applyId, applyNo, "IN_APPROVAL");
     }
 
     /**
@@ -208,6 +247,11 @@ public class AllocAdjustService {
      */
     @Transactional(rollbackFor = Exception.class)
     public String saveDraft(SubmitAllocAdjustCmd cmd, String id) {
+        return saveDraftInternal(cmd, id).id;
+    }
+
+    /** 草稿保存实际逻辑；保持既有宽松校验，不引入机构级别限制。 */
+    private SubmitResult saveDraftInternal(SubmitAllocAdjustCmd cmd, String id) {
         validateDraftBasic(cmd);
         String applyId;
         String applyNo;
@@ -240,7 +284,7 @@ public class AllocAdjustService {
         persistItems(applyId, cmd);
         log.info("[AllocAdjustService.saveDraft] applyId={}, applyNo={}, mode={}",
                 applyId, applyNo, isBlank(id) ? "CREATE" : "UPDATE");
-        return applyId;
+        return new SubmitResult(applyId, applyNo, "DRAFT");
     }
 
     /**
@@ -256,6 +300,11 @@ public class AllocAdjustService {
      */
     @Transactional(rollbackFor = Exception.class)
     public String submitDraft(String id, String operator) {
+        return submitDraftInternal(id, operator).id;
+    }
+
+    /** 草稿提交实际逻辑；完整预检必须先于状态 UPDATE 和流程启动。 */
+    private SubmitResult submitDraftInternal(String id, String operator) {
         if (isBlank(id)) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "id 为空");
         }
@@ -279,11 +328,13 @@ public class AllocAdjustService {
         if (!"NEW".equals(cmd.getAllocDim()) && originalOwnerEmpIds.isEmpty()) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "至少需要一条原业绩分配记录");
         }
+        SubmissionPreflight preflight = prepareSubmissionPreflight(
+                id, apply.getApplyNo(), cmd.getCustId(), cmd, originalOwnerEmpIds);
         // 起流程并回写状态（草稿明细已在库，不重插）
-        String pid = startApprovalWorkflow(id, apply.getApplyNo(), cmd.getCustId(), cmd, originalOwnerEmpIds);
+        String pid = startApprovalWorkflow(preflight);
         applyMapper.updateStatus(id, "IN_APPROVAL", pid);
         log.info("[AllocAdjustService.submitDraft] applyId={}, applyNo={}, pid={}", id, apply.getApplyNo(), pid);
-        return id;
+        return new SubmitResult(id, apply.getApplyNo(), "IN_APPROVAL");
     }
 
     /**
@@ -429,16 +480,22 @@ public class AllocAdjustService {
     }
 
     /**
-     * 启动审批流程，返回 processInstanceId（提交/草稿提交共用）。
-     * <p>businessKey 固定 {@code ALLOC_ADJUST:applyId}；流程变量含会签名单与单人兜底审批人。
+     * 在首次写库前完成起流程所需的所有前置解析与业务校验。
+     * <p>businessKey、流程定义、原分配会签人和发起机构层级均在此一次性解析，
+     * 返回的 {@link SubmissionPreflight} 直接供真正的 startProcess 调用复用。
      */
-    private String startApprovalWorkflow(String applyId, String applyNo, String custId,
-                                         SubmitAllocAdjustCmd cmd, List<String> originalOwnerEmpIds) {
+    private SubmissionPreflight prepareSubmissionPreflight(String applyId, String applyNo,
+            String custId, SubmitAllocAdjustCmd cmd, List<String> originalOwnerEmpIds) {
         StartProcessCmd startCmd = new StartProcessCmd();
         startCmd.setBizType(BIZ_TYPE);
         startCmd.setBizId(applyId);
         startCmd.setBusinessKey("ALLOC_ADJUST:" + applyId);
-        startCmd.setProcessDefinitionKey(resolveProcessKey(cmd.getCustType(), cmd.getBizKind()));
+        String processDefinitionKey = resolveProcessKey(cmd.getCustType(), cmd.getBizKind());
+        if (isBlank(processDefinitionKey)) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "未解析到已发布的分配调整审批流程");
+        }
+        startCmd.setProcessDefinitionKey(processDefinitionKey);
         startCmd.setStartUser(cmd.getApplicant());
         startCmd.setStartOrgId(cmd.getOwnerOrgId());
         // 标题用客户编号便于人工识别；流程变量 custId/custNo 均写客户编号（下游 BPMN/Listener 兼容读取）
@@ -480,8 +537,28 @@ public class AllocAdjustService {
                                                      : "（您所在机构为" + startOrgLevel + "级）"));
         }
         startCmd.setVariables(vars);
-        WorkflowLaunchResp resp = workflowApi.startProcess(startCmd);
+        return new SubmissionPreflight(startCmd);
+    }
+
+    /** 启动已完成预检的审批流程，返回 processInstanceId（提交/草稿提交共用）。 */
+    private String startApprovalWorkflow(SubmissionPreflight preflight) {
+        WorkflowLaunchResp resp = workflowApi.startProcess(preflight.startCmd);
+        if (resp == null || isBlank(resp.getProcessInstanceId())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "审批流程启动未返回流程实例");
+        }
         return resp.getProcessInstanceId();
+    }
+
+    /**
+     * 兼容已有反射单测/内部调用的起流程入口；正式提交路径使用预检上下文入口，
+     * 不会重复解析流程路由、机构层级或会签人。
+     */
+    private String startApprovalWorkflow(String applyId, String applyNo, String custId,
+                                         SubmitAllocAdjustCmd cmd, List<String> originalOwnerEmpIds) {
+        SubmissionPreflight preflight = prepareSubmissionPreflight(
+                applyId, applyNo, custId, cmd, originalOwnerEmpIds);
+        return startApprovalWorkflow(preflight);
     }
 
     /**
@@ -679,37 +756,33 @@ public class AllocAdjustService {
     /**
      * V1.3 R4.1：Controller 专用 DTO 版本 submit + 回显.
      */
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, String> submitDto(SubmitAllocAdjustCmd cmd) {
-        String id = submit(cmd);
-        ApplyWithItems loaded = getById(id);
-        return Map.of(
-                "id", loaded.getApply().getId(),
-                "applyNo", loaded.getApply().getApplyNo(),
-                "status", loaded.getApply().getStatus());
+        return toSubmitResponse(submitInternal(cmd));
     }
 
     /**
      * Controller 专用：保存为草稿 + 回显 {id, applyNo, status=DRAFT}.
      */
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, String> saveDraftDto(SubmitAllocAdjustCmd cmd, String id) {
-        String savedId = saveDraft(cmd, id);
-        ApplyWithItems loaded = getById(savedId);
-        return Map.of(
-                "id", loaded.getApply().getId(),
-                "applyNo", loaded.getApply().getApplyNo(),
-                "status", loaded.getApply().getStatus());
+        return toSubmitResponse(saveDraftInternal(cmd, id));
     }
 
     /**
      * Controller 专用：草稿提交审批 + 回显 {id, applyNo, status=IN_APPROVAL}.
      */
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, String> submitDraftDto(String id, String operator) {
-        String submittedId = submitDraft(id, operator);
-        ApplyWithItems loaded = getById(submittedId);
+        return toSubmitResponse(submitDraftInternal(id, operator));
+    }
+
+    /** 组装写操作响应，避免详情回显异常影响已经完成的业务写入。 */
+    private Map<String, String> toSubmitResponse(SubmitResult result) {
         return Map.of(
-                "id", loaded.getApply().getId(),
-                "applyNo", loaded.getApply().getApplyNo(),
-                "status", loaded.getApply().getStatus());
+                "id", result.id,
+                "applyNo", result.applyNo,
+                "status", result.status);
     }
 
     /**

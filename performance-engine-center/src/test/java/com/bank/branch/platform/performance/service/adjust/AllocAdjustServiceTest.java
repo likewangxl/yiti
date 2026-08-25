@@ -23,6 +23,12 @@ import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.TaskCandidateUserDTO;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,6 +55,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -414,6 +421,149 @@ class AllocAdjustServiceTest {
 
         assertThatThrownBy(() -> service.submit(cmd))
                 .isInstanceOf(PerfException.class);
+    }
+
+    @Test
+    @DisplayName("1级发起机构校验失败时，不能先写入申请主表/明细")
+    void submit_levelOneOrgRejectedBeforePersistence() {
+        OrgDTO levelOne = new OrgDTO();
+        levelOne.setOrgCode("ORG_L1");
+        levelOne.setOrgLevel(1);
+        when(orgApi.getOrg("ORG_001")).thenReturn(levelOne);
+
+        assertThatThrownBy(() -> service.submit(baseCmd("CORP_LOAN")))
+                .isInstanceOf(PerfException.class)
+                .hasMessageContaining("仅限2级、3级机构");
+
+        verify(applyMapper, never()).insert(any(PerfAllocAdjustApply.class));
+        verify(itemMapper, never()).batchInsert(anyList());
+        verify(workflowApi, never()).startProcess(any(StartProcessCmd.class));
+    }
+
+    @Test
+    @DisplayName("非法业务路由校验失败时，不能先写入申请主表/明细")
+    void submit_invalidRouteRejectedBeforePersistence() {
+        assertThatThrownBy(() -> service.submit(baseCmd("UNKNOWN_KIND")))
+                .isInstanceOf(PerfException.class)
+                .extracting(e -> ((PerfException) e).getErrorCode())
+                .isEqualTo(PerfErrorCode.BIZ_KIND_INVALID);
+
+        verify(applyMapper, never()).insert(any(PerfAllocAdjustApply.class));
+        verify(itemMapper, never()).batchInsert(anyList());
+        verify(workflowApi, never()).startProcess(any(StartProcessCmd.class));
+    }
+
+    @Test
+    @DisplayName("设计器流程定义解析失败时，不能先写入申请主表/明细")
+    void submit_designerProcessDefinitionResolutionFailsBeforePersistence() {
+        when(workflowApi.resolveDesignerProcDefKey("alloc_corp_designer"))
+                .thenThrow(new PerfException(PerfErrorCode.VALIDATION_FAILED, "流程未发布"));
+
+        assertThatThrownBy(() -> service.submit(baseCmd("CORP_LOAN")))
+                .isInstanceOf(PerfException.class)
+                .hasMessageContaining("流程未发布");
+
+        verify(applyMapper, never()).insert(any(PerfAllocAdjustApply.class));
+        verify(itemMapper, never()).batchInsert(anyList());
+        verify(workflowApi, never()).startProcess(any(StartProcessCmd.class));
+    }
+
+    @Test
+    @DisplayName("原分配人无主机构时，不能先写入申请主表/明细")
+    void submit_originalOwnerWithoutMainOrgRejectedBeforePersistence() {
+        when(orgApi.getUserMainOrg(anyString())).thenReturn(null);
+
+        assertThatThrownBy(() -> service.submit(baseCmd("CORP_LOAN")))
+                .isInstanceOf(PerfException.class)
+                .hasMessageContaining("无机构归属");
+
+        verify(applyMapper, never()).insert(any(PerfAllocAdjustApply.class));
+        verify(itemMapper, never()).batchInsert(anyList());
+        verify(workflowApi, never()).startProcess(any(StartProcessCmd.class));
+    }
+
+    @Test
+    @DisplayName("原分配所属机构未配置 BRANCH_HEAD 时，不能先写入申请主表/明细")
+    void submit_originalOwnerWithoutBranchHeadRejectedBeforePersistence() {
+        when(userApi.getEmpIdsByRoleCodeAndOrg(anyString(), anyString()))
+                .thenReturn(Collections.emptyList());
+
+        assertThatThrownBy(() -> service.submit(baseCmd("CORP_LOAN")))
+                .isInstanceOf(PerfException.class)
+                .hasMessageContaining("BRANCH_HEAD");
+
+        verify(applyMapper, never()).insert(any(PerfAllocAdjustApply.class));
+        verify(itemMapper, never()).batchInsert(anyList());
+        verify(workflowApi, never()).startProcess(any(StartProcessCmd.class));
+    }
+
+    @Test
+    @DisplayName("Controller DTO 入口必须建立真实事务边界，且回显不依赖写事务内二次查询")
+    void dtoWriteEntrypoints_areTransactional() throws Exception {
+        assertThat(AllocAdjustService.class
+                .getMethod("submitDto", SubmitAllocAdjustCmd.class)
+                .isAnnotationPresent(Transactional.class)).isTrue();
+        assertThat(AllocAdjustService.class
+                .getMethod("saveDraftDto", SubmitAllocAdjustCmd.class, String.class)
+                .isAnnotationPresent(Transactional.class)).isTrue();
+        assertThat(AllocAdjustService.class
+                .getMethod("submitDraftDto", String.class, String.class)
+                .isAnnotationPresent(Transactional.class)).isTrue();
+    }
+
+    @Test
+    @DisplayName("Controller submitDto 经事务代理调用时，工作流异常触发整体回滚")
+    void submitDto_proxyRollsBackWhenWorkflowStartFails() {
+        PlatformTransactionManager txManager = org.mockito.Mockito.mock(PlatformTransactionManager.class);
+        TransactionStatus txStatus = org.mockito.Mockito.mock(TransactionStatus.class);
+        when(txManager.getTransaction(any())).thenReturn(txStatus);
+        doThrow(new IllegalStateException("workflow unavailable"))
+                .when(workflowApi).startProcess(any(StartProcessCmd.class));
+
+        ProxyFactory proxyFactory = new ProxyFactory(service);
+        proxyFactory.setProxyTargetClass(true);
+        proxyFactory.addAdvice(new TransactionInterceptor(
+                txManager, new AnnotationTransactionAttributeSource()));
+        AllocAdjustService proxiedService = (AllocAdjustService) proxyFactory.getProxy();
+
+        assertThatThrownBy(() -> proxiedService.submitDto(baseCmd("CORP_LOAN")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("workflow unavailable");
+
+        verify(txManager).rollback(txStatus);
+        verify(txManager, never()).commit(txStatus);
+    }
+
+    @Test
+    @DisplayName("草稿提交的机构级别校验先于状态更新和流程启动")
+    void submitDraft_levelOneOrgRejectedBeforeStatusUpdate() {
+        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
+        apply.setId("D_LEVEL1");
+        apply.setApplyNo("AA-D-LEVEL1");
+        apply.setStatus("DRAFT");
+        apply.setCustId("CN-001");
+        apply.setCustType("CORP");
+        apply.setAllocDim("RULE");
+        apply.setBizKind("CORP_LOAN");
+        apply.setOwnerOrgId("ORG_001");
+        apply.setCreatedBy("admin");
+        when(applyMapper.selectByAllocApplyId("D_LEVEL1")).thenReturn(apply);
+        PerfAllocAdjustItem item = new PerfAllocAdjustItem();
+        item.setItemKind("NEW");
+        item.setEmpId("EMP_A");
+        item.setRatio(new BigDecimal("100"));
+        when(itemMapper.selectByApplyId("D_LEVEL1")).thenReturn(List.of(item));
+        OrgDTO levelOne = new OrgDTO();
+        levelOne.setOrgCode("ORG_L1");
+        levelOne.setOrgLevel(1);
+        when(orgApi.getOrg("ORG_001")).thenReturn(levelOne);
+
+        assertThatThrownBy(() -> service.submitDraft("D_LEVEL1", "admin"))
+                .isInstanceOf(PerfException.class)
+                .hasMessageContaining("仅限2级、3级机构");
+
+        verify(applyMapper, never()).updateStatus(anyString(), anyString(), any());
+        verify(workflowApi, never()).startProcess(any(StartProcessCmd.class));
     }
 
     // ========== 响应 DTO custId/custName 直接读 apply 快照 ==========
