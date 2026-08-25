@@ -306,6 +306,10 @@ describe('图表视觉预设与 option', () => {
     expect(option.series[0].data.map(item => item.value)).toEqual(rows.map(row => row[1]));
     expect(option.series[0].data.map(item => item.itemStyle.color.colorStops[1].color))
       .toEqual([...SCR_MORANDI_PALETTE, SCR_MORANDI_PALETTE[0]]);
+    triggerChartClick(wrapper, { componentType: 'series', seriesIndex: 0, dataIndex: 10 });
+    expect(wrapper.emitted('item-click')?.[0]?.[0]).toEqual({
+      col: 'value', label: '类别11', row: { name: '类别11', value: 11 }
+    });
   });
 
   it('BarCompare 横向多系列按 seriesIndex 加 dataIndex 错开颜色', () => {
