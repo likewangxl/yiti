@@ -166,7 +166,9 @@ watch(() => bind.dsId, () => {
   probe.testOrgGroupCode = '';
 });
 onMounted(async () => {
-  datasources.value = await listScreenDatasources();
+  const result = await listScreenDatasources();
+  const rows = Array.isArray(result) ? result : result?.records;
+  datasources.value = Array.isArray(rows) ? rows : [];
   try {
     const groups = await listOrgGroups({ status: 'ACTIVE', purpose: 'REPORT_SCREEN' });
     const rows = Array.isArray(groups) ? groups : (groups?.records || []);
