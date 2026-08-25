@@ -8,14 +8,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { inject, isReactive } from 'vue';
+import { inject, isReactive, nextTick } from 'vue';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const routerReplace = vi.hoisted(() => vi.fn());
+const findAttrMock = vi.hoisted(() => vi.fn());
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ replace: routerReplace })
+}));
+
+vi.mock('@/views/screen/designer/widgets', () => ({
+  findAttr: findAttrMock
 }));
 
 vi.mock('@/api/screen', () => ({
@@ -57,6 +62,18 @@ const CanvasCoreContextStub = {
     return {};
   },
   template: '<div class="canvas-core-context-stub" />'
+};
+
+// 只在 setup 中读取一次绑定值，模拟真实 ChartWidgetAttr 对旧 props 的初始化行为。
+// 如果同类型动态属性组件被 Vue 复用，这里会继续显示上一个节点的数据源。
+const TestChartAttr = {
+  name: 'TestChartAttr',
+  props: { element: { type: Object, required: true } },
+  setup(props) {
+    const bind = JSON.parse(props.element.bindJson || '{}');
+    return { initialDsId: bind.dsId };
+  },
+  template: '<div data-testid="test-datasource">{{ initialDsId }}</div>'
 };
 
 // el-button/el-dialog/el-input 用渲染 slot 的自定义 stub:新建大屏流程测试需要按钮文本可寻、
@@ -210,6 +227,24 @@ describe('DesignerV2.vue 挂载冒烟测试', () => {
     expect(source).toContain(':focus-visible');
     expect(source).toContain('prefers-reduced-motion');
     expect(source).toContain('.dsn2');
+  });
+
+  it('切换同类型图表后属性面板重建并回显当前数据源', async () => {
+    findAttrMock.mockReturnValue(TestChartAttr);
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    const designerStore = useScreenDesignerStore();
+    designerStore.componentData = [
+      { id: 'chart-a', component: 'ChartWidget', bindJson: JSON.stringify({ dsId: 101 }) },
+      { id: 'chart-b', component: 'ChartWidget', bindJson: JSON.stringify({ dsId: 202 }) }
+    ];
+
+    designerStore.selectComponent('chart-a');
+    await nextTick();
+    expect(wrapper.find('[data-testid="test-datasource"]').text()).toBe('101');
+
+    designerStore.selectComponent('chart-b');
+    await nextTick();
+    expect(wrapper.find('[data-testid="test-datasource"]').text()).toBe('202');
   });
 });
 

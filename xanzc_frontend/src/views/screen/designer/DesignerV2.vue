@@ -82,7 +82,8 @@
         </header>
         <!-- 右栏三态:多选=多选工具条(对齐/分布/成组);单选=组件属性面板;未选=画布全局设置 -->
         <MultiSelectBar v-if="store.curComponents.length > 1" />
-        <component v-else-if="store.curComponent" :is="attrOf(store.curComponent.component)" :element="store.curComponent" />
+        <component v-else-if="store.curComponent" :key="attrKey(store.curComponent)"
+                   :is="attrOf(store.curComponent.component)" :element="store.curComponent" />
         <CanvasAttr v-else />
       </div>
     </div>
@@ -291,6 +292,20 @@ const inspectorMeta = computed(() => {
 });
 
 function attrOf(component) { return findAttr(component); }
+
+// 同类型属性面板需要随选中节点切换重建；无 id 的历史节点用对象身份兜底，避免复用旧面板状态。
+const anonymousAttrKeys = new WeakMap();
+let anonymousAttrKeySeq = 0;
+function attrKey(element) {
+  if (!element || typeof element !== 'object') return 'attr:none';
+  if (element.id !== undefined && element.id !== null && element.id !== '') {
+    return `attr:${element.component || ''}:${element.id}`;
+  }
+  if (!anonymousAttrKeys.has(element)) {
+    anonymousAttrKeys.set(element, `attr:anonymous:${++anonymousAttrKeySeq}`);
+  }
+  return anonymousAttrKeys.get(element);
+}
 function onScale(v) { store.scale = v / 100; }
 function fitWindow() {
   const wrap = document.querySelector('.dsn2-center');
