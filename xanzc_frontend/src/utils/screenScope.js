@@ -27,6 +27,28 @@ export const MAP_MODES = [
   { value: 'XIAN_COMPOSITE', label: '西安复合经营地图' }
 ];
 
+/**
+ * 地图设计器可选地域。code 使用国家统计用行政区划代码，districtCount 只用于配置提示，
+ * 真正的区县名称仍以随包 GeoJSON 为准，避免把展示文案当作边界数据源。
+ */
+export const SHAANXI_MAP_REGIONS = Object.freeze([
+  Object.freeze({ code: '610000', label: '陕西省（全省概览）', shortName: '陕西省', districtCount: 10, level: 'PROVINCE' }),
+  Object.freeze({ code: '610100', label: '西安市（经营六区）', shortName: '西安市', districtCount: 6, level: 'CITY', composite: true }),
+  Object.freeze({ code: '610200', label: '铜川市', shortName: '铜川市', districtCount: 4, level: 'CITY' }),
+  Object.freeze({ code: '610300', label: '宝鸡市', shortName: '宝鸡市', districtCount: 12, level: 'CITY' }),
+  Object.freeze({ code: '610400', label: '咸阳市', shortName: '咸阳市', districtCount: 14, level: 'CITY' }),
+  Object.freeze({ code: '610500', label: '渭南市', shortName: '渭南市', districtCount: 11, level: 'CITY' }),
+  Object.freeze({ code: '610600', label: '延安市', shortName: '延安市', districtCount: 13, level: 'CITY' }),
+  Object.freeze({ code: '610700', label: '汉中市', shortName: '汉中市', districtCount: 11, level: 'CITY' }),
+  Object.freeze({ code: '610800', label: '榆林市', shortName: '榆林市', districtCount: 12, level: 'CITY' }),
+  Object.freeze({ code: '610900', label: '安康市', shortName: '安康市', districtCount: 10, level: 'CITY' }),
+  Object.freeze({ code: '611000', label: '商洛市', shortName: '商洛市', districtCount: 7, level: 'CITY' })
+]);
+
+const LEGACY_MAP_REGION_CODES = new Set(
+  SHAANXI_MAP_REGIONS.filter(region => !region.composite).map(region => region.code)
+);
+
 export const MAP_ANCHORS = ['LEFT', 'RIGHT', 'TOP', 'FAR_TOP'];
 
 /** 当前业务确认的异地经营节点映射；配置编辑器只允许调整目标屏，不允许改写机构身份。 */
@@ -266,16 +288,21 @@ export function normalizeMapConfig(raw = {}) {
       ...source,
       schemaVersion: 1,
       mode: 'SHAANXI_LEGACY',
-      baseRegion: source.baseRegion || 'SHAANXI'
+      baseRegion: 'SHAANXI',
+      regionCode: '610000'
     };
   }
   // schema=1 只接受明确的陕西模式或历史省略 mode；v1 + XIAN 不能借 mode 提升为六区。
   if (source.schemaVersion === 1 && (!hasMode || source.mode === 'SHAANXI_LEGACY')) {
+    const regionCode = LEGACY_MAP_REGION_CODES.has(String(source.regionCode || ''))
+      ? String(source.regionCode)
+      : '610000';
     return {
       ...source,
       schemaVersion: 1,
       mode: 'SHAANXI_LEGACY',
-      baseRegion: source.baseRegion || 'SHAANXI'
+      baseRegion: regionCode === '610000' ? 'SHAANXI' : 'CITY_DISTRICT',
+      regionCode
     };
   }
   // 地图包属于运行时不可信输入：必须是原生整数 2 且 mode 精确为 XIAN_COMPOSITE。
@@ -289,6 +316,7 @@ export function normalizeMapConfig(raw = {}) {
     schemaVersion: 2,
     mode: 'XIAN_COMPOSITE',
     baseRegion: source.baseRegion || 'XIAN_OUTLINE',
+    regionCode: '610100',
     localSelector: { cityCode: '610100', operatingLevel: 'PRIMARY', ...(source.localSelector || {}) },
     satelliteNodes: nodes,
     disclaimer: String(source.disclaimer || COMPOSITE_DISCLAIMER).trim() || COMPOSITE_DISCLAIMER
@@ -413,7 +441,7 @@ export function validateCompositeMapConfig(rawConfig, profiles = [], memberOrgCo
   return errors;
 }
 
-/** schema2 请求白名单；schema1 只保留 screenCode + dsId 的受限历史契约。 */
+/** 发布态 schema2 只认 blockId，schema1 只认发布 dsId；草稿态统一只认当前草稿 blockId。 */
 export function buildScreenDataRequest(input = {}) {
   // 后端运行时 DTO 使用严格 String/Map<String, String> 反序列化：可选字段缺省会保留
   // null 业务语义，但显式 JSON null 会在进入服务前按 VALID_005 拒绝。这里只剔除 nullish
@@ -428,6 +456,27 @@ export function buildScreenDataRequest(input = {}) {
   const schemaVersion = input.schemaVersion;
   if (typeof schemaVersion !== 'number' || !Number.isInteger(schemaVersion)) {
     throw new Error('运行时 schemaVersion 必须为 JSON 整数 1 或 2');
+  }
+  if (input.previewState !== undefined && input.previewState !== 'draft') {
+    throw new Error('previewState 仅允许显式值 draft');
+  }
+  if (input.previewState === 'draft') {
+    if (![1, 2].includes(schemaVersion)) throw new Error(`未知草稿 schemaVersion: ${String(schemaVersion)}`);
+    const screenCode = String(input.screenCode || '').trim();
+    const blockId = input.blockId;
+    if (!screenCode) throw new Error('草稿取数请求缺少 screenCode');
+    if (!Number.isSafeInteger(blockId) || blockId <= 0) throw new Error('草稿取数请求缺少有效 blockId');
+    const request = {
+      schemaVersion,
+      previewState: 'draft',
+      screenCode,
+      blockId,
+      period: input.period || 'LATEST',
+      contextParams
+    };
+    if (input.dateFrom !== undefined && input.dateFrom !== null) request.dateFrom = input.dateFrom;
+    if (input.dateTo !== undefined && input.dateTo !== null) request.dateTo = input.dateTo;
+    return request;
   }
   if (schemaVersion === 2) {
     const screenCode = String(input.screenCode || '').trim();

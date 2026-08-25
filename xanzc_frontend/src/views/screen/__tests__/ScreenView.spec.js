@@ -41,6 +41,17 @@ describe('ScreenView.vue', () => {
     expect(getScreenViewMock).toHaveBeenCalledWith('SCR_TEST', 'draft');
   });
 
+  it('只有后端确认 state=draft 时才向区块传草稿取数身份', async () => {
+    routeState.query = { preview: 'draft' };
+    getScreenViewMock.mockResolvedValue({
+      screenName: 'X', state: 'draft', runtimeSchemaVersion: 1,
+      renderPackageJson: '{"components":[]}', mapPoints: []
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(JSON.parse(wrapper.find('.stub-renderer').attributes('data-context')).previewState).toBe('draft');
+  });
+
   it('返回入口是真实 button，具备键盘原生语义而不是可点击 span', async () => {
     getScreenViewMock.mockResolvedValue({ screenName: 'X', renderPackageJson: null, mapPoints: [] });
     wrapper = mount(ScreenView, { global: { stubs } });

@@ -1,0 +1,26 @@
+Playwright CLI: console info
+Total messages: 23 (Errors: 2, Warnings: 19)
+
+[WARNING] [Vue Router warn]: No match found for location with path "/bizexec/loans"
+[WARNING] [Vue Router warn]: No match found for location with path "/bizexec/supports"
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/list"
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/leads/new"
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/leads/approval"
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/tags"
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/tags/approval"
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/pool/available"
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/pool/claimed"
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/cross-org"
+[WARNING] [Vue Router warn]: No match found for location with path "/touches/mine"
+[WARNING] [Vue Router warn]: No match found for location with path "/touches/overview"
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/transfer-log"
+[WARNING] [Vue Router warn]: No match found for location with path "/yundun/accountability-violations"
+[WARNING] [Vue Router warn]: No match found for location with path "/yundun/credit-violations"
+[ERROR] Failed to load resource: 403 Forbidden @ /api/screen/admin/screens/9105/map-region-metrics
+[WARNING] [api fallback] GET /screen/admin/screens/9105/map-region-metrics 失败，使用 mock 兜底 资源未登记 @ src/api/http.js:127
+[ERROR] Failed to load resource: 403 Forbidden @ /api/screen/admin/screens/9101/map-region-metrics
+[WARNING] [api fallback] GET /screen/admin/screens/9101/map-region-metrics 失败，使用 mock 兜底 资源未登记 @ src/api/http.js:127
+[WARNING] [ECharts] Can't get DOM width or height. Please check dom.clientWidth and dom.clientHeight. They should not be 0.
+[WARNING] [ECharts] Can't get DOM width or height. Please check dom.clientWidth and dom.clientHeight. They should not be 0.
+
+说明：以上为 CLI 在登录、工作台、进入设计器和切屏整个会话累计的原始消息摘要。路由警告来自工作台菜单解析；两条 ECharts 警告来自画布 50% 缩放装载阶段。两条 403 的响应体和 traceId 见 requests.txt。

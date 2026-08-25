@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.ResourceApi;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.AuditApi;
+import com.bank.branch.platform.performance.api.MetricApi;
 import com.bank.branch.platform.report.dto.req.ScreenCreateReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenMetadataUpdateReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenViewRespDTO;
@@ -60,6 +61,7 @@ class ScreenConfigServiceTest {
     @Mock private RptScreenAccessRoleMapper accessRoleMapper;
     @Mock private AuditApi auditApi;
     @Mock private ResourceApi resourceApi;
+    @Mock private MetricApi metricApi;
 
     private ScreenConfigServiceImpl service;
 
@@ -71,6 +73,7 @@ class ScreenConfigServiceTest {
         ReflectionTestUtils.setField(service, "accessRoleMapper", accessRoleMapper);
         ReflectionTestUtils.setField(service, "auditApi", auditApi);
         ReflectionTestUtils.setField(service, "resourceApi", resourceApi);
+        ReflectionTestUtils.setField(service, "metricApi", metricApi);
     }
 
     private ScreenCreateReqDTO createReq() {
@@ -300,6 +303,27 @@ class ScreenConfigServiceTest {
                 org.mockito.ArgumentMatchers.anyString());
     }
 
+    @Test
+    void updateMetadata_rejectsSparklinePublishedSnapshotOnSingleDatasource() {
+        RptScreen existing = configuredScreen(7L);
+        existing.setCanvasPublishedJson("{\"schemaVersion\":1,\"components\":[{\"component\":\"ChartWidget\",\"blockId\":101}],"
+                + "\"bindSnapshots\":{\"101\":{\"componentType\":\"SPARKLINE_CARD\",\"bind\":{\"dsId\":12},\"drill\":{}}}}");
+        RptScreenDatasource datasource = new RptScreenDatasource();
+        datasource.setId(12L);
+        datasource.setBizLine("COMMON");
+        datasource.setDsType("SINGLE");
+        datasource.setSourceKind("WIDE_TABLE");
+        when(screenMapper.selectById(7L)).thenReturn(existing);
+        when(blockMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
+        when(dsMapper.selectBatchIds(any())).thenReturn(List.of(datasource));
+
+        assertThatThrownBy(() -> service.updateScreenMetadata(7L, metadataReq()))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_BLOCK_BIND_MISMATCH.getCode());
+        verify(canvasMapper, never()).updateMetadataCas(any(RptScreen.class), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyString());
+    }
+
     /** 元数据变更不允许用当前可变 block 回填无 snapshot 发布包；必须先完成受控迁移/重新发布。 */
     @Test
     void updateMetadata_rejectsLegacyPublishedChartEvenWhenCurrentBlockMatches() {
@@ -422,6 +446,42 @@ class ScreenConfigServiceTest {
     }
 
     @Test
+    void getRenderByCode_provinceIncludesRealMapMetricsWithoutSyntheticFallback() {
+        RptScreen s = new RptScreen();
+        s.setId(10L);
+        s.setScreenCode("SCR_PROVINCE_KPI");
+        s.setScreenName("省分行经营总览");
+        s.setViewLevel("PROVINCE");
+        s.setStatus("ACTIVE");
+        s.setCanvasPublishedJson("{\"schemaVersion\":1,\"components\":[{\"component\":\"MapCenter\"}]}");
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(s));
+        RptScreenMapPoint p = new RptScreenMapPoint();
+        p.setOrgCode("128");
+        p.setOrgName("宝鸡分行");
+        p.setLng(new BigDecimal("107.237974"));
+        p.setLat(new BigDecimal("34.361979"));
+        p.setStatus("ACTIVE");
+        when(pointMapper.selectList(any(Wrapper.class))).thenReturn(List.of(p));
+        java.time.LocalDate dataDate = java.time.LocalDate.of(2026, 8, 23);
+        when(metricApi.getLatestDataDate("ORG")).thenReturn(dataDate);
+        when(metricApi.getOrgMetricValues(org.mockito.ArgumentMatchers.eq("128"),
+                org.mockito.ArgumentMatchers.eq(dataDate), org.mockito.ArgumentMatchers.anyList()))
+                .thenReturn(java.util.Map.of(
+                        "KPI_ACHIEVE_RATE_ORG", new BigDecimal("86.2"),
+                        "DEP_ACHIEVE_RATE_ORG", new BigDecimal("92.0"),
+                        "M_0265", new BigDecimal("86200")));
+
+        ScreenRenderRespDTO render = service.getRenderByCode(s.getScreenCode(), "published");
+
+        assertThat(render.getMapRegionMetrics()).hasSize(1);
+        assertThat(render.getMapRegionMetrics().get(0).getOrgCode()).isEqualTo("128");
+        assertThat(render.getMapRegionMetrics().get(0).getDataDate()).isEqualTo(dataDate);
+        assertThat(render.getMapRegionMetrics().get(0).getMetricValues())
+                .containsEntry("KPI_ACHIEVE_RATE_ORG", new BigDecimal("86.2"))
+                .containsEntry("M_0265", new BigDecimal("86200"));
+    }
+
+    @Test
     void getRenderByCode_namedGroupWithoutMap_advertisesSchema2() {
         RptScreen s = new RptScreen();
         s.setId(9L);
@@ -463,6 +523,40 @@ class ScreenConfigServiceTest {
         assertThat(audit.getValue().getResourceUrl()).isEqualTo("/api/screen/view/SCR_DRAFT_GUARD");
         assertThat(audit.getValue().getRequestMethod()).isEqualTo("GET");
         assertThat(audit.getValue().getReason()).isEqualTo(RptErrorCode.SCREEN_ACCESS_DENIED.getCode());
+    }
+
+    @Test
+    void getRenderByCode_draftBuildsTrustedSnapshotsFromCurrentScreenBlocksRecursively() throws Exception {
+        RptScreen s = configuredScreen(8L);
+        s.setCanvasDraftJson("{\"schemaVersion\":1,\"components\":["
+                + "{\"component\":\"ChartWidget\",\"blockId\":101},"
+                + "{\"component\":\"Group\",\"children\":[{\"component\":\"ChartWidget\",\"blockId\":102}]}]}" );
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(s));
+        when(resourceApi.hasResourcePermission("E001", "R_RPT_SCR_CV_GET")).thenReturn(true);
+
+        RptScreenBlock first = new RptScreenBlock();
+        first.setId(101L); first.setScreenId(8L); first.setComponentType("LINE_TREND");
+        first.setBindJson("{\"dsId\":12}"); first.setStyleJson("{\"color\":\"red\"}");
+        first.setDrillJson("{\"drillEnabled\":false}");
+        RptScreenBlock nested = new RptScreenBlock();
+        nested.setId(102L); nested.setScreenId(8L); nested.setComponentType("BAR_COMPARE");
+        nested.setBindJson("{\"dsId\":13}"); nested.setStyleJson("{}"); nested.setDrillJson("{}");
+        RptScreenBlock otherScreen = new RptScreenBlock();
+        otherScreen.setId(999L); otherScreen.setScreenId(99L); otherScreen.setComponentType("GAUGE");
+        otherScreen.setBindJson("{\"dsId\":999}"); otherScreen.setStyleJson("{}"); otherScreen.setDrillJson("{}");
+        when(blockMapper.selectList(any(Wrapper.class))).thenReturn(List.of(first, nested, otherScreen));
+
+        ScreenRenderRespDTO render = service.getRenderByCode(s.getScreenCode(), "draft");
+
+        com.fasterxml.jackson.databind.JsonNode pkg = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(render.getRenderPackageJson());
+        assertThat(pkg.path("bindSnapshots").fieldNames()).toIterable()
+                .containsExactlyInAnyOrder("101", "102");
+        assertThat(pkg.path("bindSnapshots").path("101").path("bind").path("dsId").asInt())
+                .isEqualTo(12);
+        assertThat(pkg.path("bindSnapshots").path("102").path("componentType").asText())
+                .isEqualTo("BAR_COMPARE");
+        assertThat(pkg.path("bindSnapshots").has("999")).isFalse();
     }
 
     @Test

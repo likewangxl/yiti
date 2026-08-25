@@ -180,6 +180,20 @@ describe('大屏范围与机构配置 API', () => {
     expect(() => queryScreenData({ schemaVersion: 1, dsId: 9 })).toThrow(/screenCode/);
   });
 
+  it('草稿取数只保留服务端可复核的 screenCode + blockId，不发送 dsId', async () => {
+    await queryScreenData({
+      schemaVersion: 1, previewState: 'draft', screenCode: 'SCR_DRAFT', blockId: 19,
+      dsId: 9002, period: 'LATEST', contextParams: { orgCode: '128' }
+    });
+    expect(call).toHaveBeenLastCalledWith('post', '/screen/data', {
+      data: {
+        schemaVersion: 1, previewState: 'draft', screenCode: 'SCR_DRAFT', blockId: 19,
+        period: 'LATEST', contextParams: { orgCode: '128' }
+      },
+      silent: true
+    }, null);
+  });
+
   it('已保存数据源列探测只走独立 probe 资源，body 含原因与测试机构组', async () => {
     await probeScreenDatasourceColumns(72, {
       period: 'LAST_1M', dateFrom: '2026-07-01', dateTo: '2026-07-31',

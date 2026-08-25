@@ -20,7 +20,13 @@ vi.mock('@/views/screen/designer/widgets', () => ({
     { innerType: 'PIE_SHARE', needTimeseries: false },
     { innerType: 'METRIC_CARD', needTimeseries: false },
     { innerType: 'BAR_COMPARE', needTimeseries: false },
-    { innerType: 'AREA_STACK', needTimeseries: true }
+    { innerType: 'AREA_STACK', needTimeseries: true },
+    { innerType: 'COMBO_CHART', needTimeseries: false },
+    { innerType: 'FUNNEL_CHART', needTimeseries: false },
+    { innerType: 'SCATTER_BUBBLE', needTimeseries: false },
+    { innerType: 'HEATMAP_MATRIX', needTimeseries: false },
+    { innerType: 'SUNBURST_CHART', needTimeseries: false },
+    { innerType: 'SPARKLINE_CARD', needTimeseries: true }
   ]
 }));
 vi.mock('element-plus', () => ({ ElMessage: { warning: vi.fn() } }));
@@ -104,5 +110,26 @@ describe('ChartWidget Attr 视觉预设', () => {
     expect(JSON.parse(card.styleJson).cardVariant).toBe('glass');
     await cardWrapper.find('[data-testid="chart-show-trend"]').setValue(true);
     expect(JSON.parse(card.styleJson).showTrend).toBe(true);
+  });
+
+  it('组合图展示一次辅助标记和曲线开关，四种扩展图展示一次数据标签开关', async () => {
+    const combo = { innerType: 'COMBO_CHART', bindJson: '{}', styleJson: '{}', drillJson: '{}', propValue: {} };
+    const comboWrapper = mount(Attr, { props: { element: combo }, global: { stubs } });
+    await flushPromises();
+    expect(comboWrapper.findAll('[data-testid="chart-show-marks"]')).toHaveLength(1);
+    expect(comboWrapper.findAll('[data-testid="chart-show-labels"]')).toHaveLength(1);
+    expect(comboWrapper.findAll('[data-testid="chart-smooth"]')).toHaveLength(1);
+
+    for (const [innerType, defaultLabels] of [
+      ['FUNNEL_CHART', true], ['SCATTER_BUBBLE', false],
+      ['HEATMAP_MATRIX', false], ['SUNBURST_CHART', true]
+    ]) {
+      const element = { innerType, bindJson: '{}', styleJson: '{}', drillJson: '{}', propValue: {} };
+      const wrapper = mount(Attr, { props: { element }, global: { stubs } });
+      await flushPromises();
+      expect(wrapper.findAll('[data-testid="chart-show-labels"]')).toHaveLength(1);
+      expect(wrapper.find('[data-testid="chart-show-labels"]').element.checked).toBe(defaultLabels);
+      expect(wrapper.findAll('[data-testid="chart-show-marks"]')).toHaveLength(0);
+    }
   });
 });

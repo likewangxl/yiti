@@ -7,6 +7,7 @@ import {
   FIXED_SATELLITE_ORG_CODES,
   XIAN_SECONDARY_BRANCHES,
   XIAN_SECONDARY_BRANCH_DISCLAIMER,
+  SHAANXI_MAP_REGIONS,
   normalizeScreenScope,
   validateScreenScope,
   isDatasourceCompatible,
@@ -58,6 +59,17 @@ describe('screenScope 业务条线、机构范围与地图配置契约', () => {
       schemaVersion: 2, mode: 'XIAN_COMPOSITE', baseRegion: 'XIAN_OUTLINE',
       disclaimer: '组织分布示意，非地理比例'
     });
+  });
+
+  it('陕西地图地域下拉固定包含全省和十个地市，市级选择落为可持久化 v1 配置', () => {
+    expect(SHAANXI_MAP_REGIONS.map(item => item.code)).toEqual([
+      '610000', '610100', '610200', '610300', '610400', '610500',
+      '610600', '610700', '610800', '610900', '611000'
+    ]);
+    expect(normalizeMapConfig({ schemaVersion: 1, mode: 'SHAANXI_LEGACY', regionCode: '610300' }))
+      .toMatchObject({ schemaVersion: 1, mode: 'SHAANXI_LEGACY', regionCode: '610300', baseRegion: 'CITY_DISTRICT' });
+    expect(normalizeMapConfig({ schemaVersion: 1, mode: 'SHAANXI_LEGACY', regionCode: '999999' }))
+      .toMatchObject({ regionCode: '610000', baseRegion: 'SHAANXI' });
   });
 
   it('地图 schema 与 mode 必须同时精确声明，缺失、冲突或宽松字符串一律拒绝', () => {

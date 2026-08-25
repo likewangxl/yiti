@@ -15,7 +15,7 @@ public class CanvasComponentDTO {
     private String name;
     /** 仅 Group(多选成组容器):子组件节点,style 为相对组左上角坐标;其余组件为 null */
     private List<CanvasComponentDTO> children;
-    /** 仅 ChartWidget:METRIC_CARD/LINE_TREND/PIE_SHARE/RANK_LIST/FLOW_STATUS */
+    /** 仅 ChartWidget：服务端白名单中的 19 种 innerType；未知类型保存时 Fail Close */
     private String innerType;
     /** 仅 ChartWidget:关联的区块 id;素材组件为 null */
     private Long blockId;

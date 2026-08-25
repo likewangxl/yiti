@@ -8,6 +8,7 @@
       </div>
       <div class="scr-body" v-if="view && view.renderPackage">
         <ScreenRenderer :render-package="view.renderPackage" :map-points="view.mapPoints"
+                        :map-region-metrics="view.mapRegionMetrics || []"
                         :map-payload="view.mapPackage" :context="context" />
       </div>
       <!-- 屏从未发布时后端 renderPackageJson=null(已知行为,本期不改)——判空渲染引导态，不裸 JSON.parse(null) -->
@@ -50,7 +51,9 @@ const context = computed(() => ({
   orgCode: route.query.orgCode || '',
   empId: route.query.empId || '',
   // 运行时契约版本独立于 canvasStyle/draft schema；无地图命名机构组也必须进入 schema2。
-  schemaVersion: runtimeSchemaVersion(view.value || {})
+  schemaVersion: runtimeSchemaVersion(view.value || {}),
+  // 只信任后端渲染响应确认的状态，不直接把可篡改 URL 参数当作草稿取数授权。
+  previewState: view.value?.state === 'draft' ? 'draft' : undefined
 }));
 
 async function load() {

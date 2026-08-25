@@ -8,6 +8,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const routerReplace = vi.hoisted(() => vi.fn());
 
@@ -24,6 +26,7 @@ vi.mock('@/api/screen', () => ({
   listScreenRoles: vi.fn().mockResolvedValue([]),
   listOrgGroups: vi.fn().mockResolvedValue([]),
   listOrgProfiles: vi.fn().mockResolvedValue([]),
+  listScreenMapRegionMetrics: vi.fn().mockResolvedValue([]),
   saveScreenCanvas: vi.fn(),
   publishScreenCanvas: vi.fn(),
   rollbackScreenCanvas: vi.fn(),
@@ -119,6 +122,17 @@ describe('DesignerV2.vue 挂载冒烟测试', () => {
     expect(wrapper.classes()).toContain('scr-surface-host');
   });
 
+  it('右侧属性检查器使用与左栏一致的深色字号和控件主题', () => {
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    expect(wrapper.find('.dsn2-right').classes()).toContain('dsn2-inspector');
+
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/designer/DesignerV2.vue'), 'utf8');
+    expect(source).toContain('--dsn-inspector-font-size: 12px');
+    expect(source).toContain(':deep(.el-collapse-item__header)');
+    expect(source).toContain(':deep(.el-form-item__label)');
+    expect(source).toContain(':deep(.el-input__wrapper)');
+  });
+
   it('卸载不抛错(keydown 监听器能正常移除)', () => {
     const wrapper = mount(DesignerV2, { global: { stubs } });
     expect(() => wrapper.unmount()).not.toThrow();
@@ -132,6 +146,43 @@ describe('DesignerV2.vue 挂载冒烟测试', () => {
       expect(findButton(wrapper, label), label).toBeTruthy();
     }
     expect(findButton(wrapper, '返回').attributes('aria-label')).toBe('返回工作区');
+  });
+
+  it('现代工作台壳层提供产品标识、当前大屏上下文和分组后的操作区', async () => {
+    listScreens.mockResolvedValueOnce([{ id: 9, screenName: '省分行经营总览', viewLevel: 'PROVINCE' }]);
+    getScreenCanvas.mockResolvedValueOnce(editorResp(9, 'SCR_PROVINCE'));
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="dsn2-product"]').text()).toContain('大屏设计器');
+    expect(wrapper.find('[data-testid="dsn2-screen-context"]').text()).toContain('省分行经营总览');
+    expect(wrapper.find('[data-testid="dsn2-screen-actions"]').text()).toContain('编辑范围');
+    expect(wrapper.find('[data-testid="dsn2-history-actions"]').text()).toContain('撤销');
+    expect(wrapper.find('[data-testid="dsn2-draft-actions"]').text()).toContain('预览草稿');
+    expect(wrapper.find('[data-testid="dsn2-publish-actions"]').text()).toContain('发布');
+  });
+
+  it('三栏工作区有语义标题、保存状态 badge 和右栏三态说明', async () => {
+    listScreens.mockResolvedValueOnce([{ id: 9, screenName: '省分行经营总览', viewLevel: 'PROVINCE' }]);
+    getScreenCanvas.mockResolvedValueOnce(editorResp(9, 'SCR_PROVINCE'));
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="dsn2-left-heading"]').text()).toContain('组件与图层');
+    expect(wrapper.find('[data-testid="dsn2-left-subtitle"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="dsn2-right-heading"]').text()).toContain('画布设置');
+    expect(wrapper.find('[data-testid="dsn2-right-subtitle"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="dsn2-save-state"]').attributes('role')).toBe('status');
+    expect(wrapper.find('[data-testid="dsn2-save-state"]').classes()).toContain('is-saved');
+  });
+
+  it('现代视觉令牌和键盘/动效降级约束仅作用于 dsn2 域', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/designer/DesignerV2.vue'), 'utf8');
+    expect(source).toContain('--dsn2-bg');
+    expect(source).toContain('--dsn2-accent');
+    expect(source).toContain(':focus-visible');
+    expect(source).toContain('prefers-reduced-motion');
+    expect(source).toContain('.dsn2');
   });
 });
 
@@ -495,13 +546,20 @@ describe('DesignerV2.vue 新建大屏', () => {
     getScreenCanvas
       .mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 4 })
       .mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 5 });
-    listScreenPublishLogs.mockResolvedValueOnce([{ id: 99, publishedAt: '2026-08-12 09:00:00' }]);
+    listScreenPublishLogs.mockResolvedValueOnce([
+      { id: 99, publishedAt: '2026-08-12 09:00:00', publishedBy: 'alice' },
+      { id: 98, publishedAt: '2026-08-11 09:00:00', publishedBy: 'bob' }
+    ]);
     rollbackScreenCanvas.mockRejectedValueOnce({ code: 'RPT-43012' });
     const wrapper = mount(DesignerV2, { global: { stubs } });
     await flushPromises();
 
     await wrapper.vm.onRollback();
-    expect(wrapper.vm.rollbackDialog).toMatchObject({ show: true, publishLogId: 99, expectedVersion: 4, reason: '' });
+    expect(wrapper.vm.rollbackDialog).toMatchObject({ show: true, publishLogId: null, expectedVersion: 4, reason: '' });
+    expect(wrapper.vm.rollbackDialog.archives).toHaveLength(2);
+    expect(wrapper.text()).toContain('2026-08-12 09:00:00');
+    expect(wrapper.text()).toContain('2026-08-11 09:00:00');
+    wrapper.vm.rollbackDialog.publishLogId = 99;
     expect(rollbackScreenCanvas).not.toHaveBeenCalled();
 
     wrapper.vm.rollbackDialog.reason = '回退异常发布';
@@ -509,6 +567,37 @@ describe('DesignerV2.vue 新建大屏', () => {
     expect(rollbackScreenCanvas).toHaveBeenCalledWith({ screenId: 7, publishLogId: 99, expectedVersion: 4, reason: '回退异常发布' });
     expect(getScreenCanvas).toHaveBeenCalledTimes(2);
     expect(useScreenDesignerStore().canvasVersion).toBe(5);
+  });
+
+  it('没有显式选择归档时不能提交回滚', async () => {
+    const existing = { id: 7, screenCode: 'SCR_EXISTING', screenName: '现有屏', viewLevel: 'BRANCH' };
+    listScreens.mockResolvedValueOnce([existing]);
+    getScreenCanvas.mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 4 });
+    listScreenPublishLogs.mockResolvedValueOnce([{ id: 99, publishedAt: '2026-08-12 09:00:00' }]);
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+
+    await wrapper.vm.onRollback();
+    wrapper.vm.rollbackDialog.reason = '误操作回退';
+    await wrapper.vm.confirmRollback();
+    expect(rollbackScreenCanvas).not.toHaveBeenCalled();
+    expect(wrapper.vm.rollbackDialog.show).toBe(true);
+  });
+
+  it('归档候选最多展示最近十条且保留后端顺序', async () => {
+    const existing = { id: 7, screenCode: 'SCR_EXISTING', screenName: '现有屏', viewLevel: 'BRANCH' };
+    listScreens.mockResolvedValueOnce([existing]);
+    getScreenCanvas.mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 4 });
+    listScreenPublishLogs.mockResolvedValueOnce(Array.from({ length: 12 }, (_, index) => ({
+      id: 120 - index, publishedAt: `2026-08-${String(12 - index).padStart(2, '0')} 09:00:00`
+    })));
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+    await wrapper.vm.onRollback();
+    expect(wrapper.vm.rollbackDialog.archives).toHaveLength(10);
+    expect(wrapper.vm.rollbackDialog.archives.map(item => item.id)).toEqual(
+      Array.from({ length: 10 }, (_, index) => 120 - index)
+    );
   });
 });
 

@@ -30,7 +30,7 @@ public class ScreenBlockDTO {
     @NotNull
     private Integer heightPct;
 
-    /** METRIC_CARD / LINE_TREND / PIE_SHARE / RANK_LIST / FLOW_STATUS */
+    /** 19 种大屏图表 innerType（含 COMBO_CHART/FUNNEL_CHART/SCATTER_BUBBLE/HEATMAP_MATRIX/SUNBURST_CHART/SPARKLINE_CARD） */
     @NotBlank
     private String componentType;
 

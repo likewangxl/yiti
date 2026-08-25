@@ -36,7 +36,7 @@ public class RptScreenBlock {
     /** 区域内行高百分比 1~100（同行取首块值） */
     private Integer heightPct;
 
-    /** METRIC_CARD / LINE_TREND / PIE_SHARE / RANK_LIST / FLOW_STATUS */
+    /** 大屏图表 innerType（当前 19 种；SPARKLINE_CARD 仅允许 TIMESERIES 绑定） */
     private String componentType;
 
     /** 数据绑定 JSON */

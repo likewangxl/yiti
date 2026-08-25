@@ -73,15 +73,17 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
 
     /** 全屏周期过滤器组件名(每屏最多 1 个的保存/发布双侧校验共用) */
     private static final String PERIOD_FILTER = "PeriodFilter";
-    /** ChartWidget 的 innerType 白名单(基础 5 图表 + spec 2026-07-17 §5.1 扩充 8 种:
-     * 占位启用 BAR_COMPARE/AREA_STACK/GAUGE/TABLE_LIST + KPI 专属 KPI_DETAIL_TABLE/KPI_RADAR/
-     * LIQUID_PROGRESS/PROGRESS_LIST;区块保存侧 component_type 白名单见 ScreenConfigServiceImpl 同步扩充) */
+    /** ChartWidget 的 innerType 白名单（基础图表、KPI 图表与常用扩展图表；
+     * 区块保存侧 component_type 白名单见 ScreenConfigServiceImpl 同步扩充）。 */
     private static final Set<String> INNER_TYPES = Set.of(
             "METRIC_CARD", "LINE_TREND", "PIE_SHARE", "RANK_LIST", "FLOW_STATUS",
             "BAR_COMPARE", "AREA_STACK", "GAUGE", "TABLE_LIST",
-            "KPI_DETAIL_TABLE", "KPI_RADAR", "LIQUID_PROGRESS", "PROGRESS_LIST");
+            "KPI_DETAIL_TABLE", "KPI_RADAR", "LIQUID_PROGRESS", "PROGRESS_LIST",
+            "COMBO_CHART", "FUNNEL_CHART", "SCATTER_BUBBLE", "HEATMAP_MATRIX",
+            "SUNBURST_CHART", "SPARKLINE_CARD");
     /** 时序图和启用钻取的图表只能绑定时序数据源。 */
-    private static final Set<String> TIMESERIES_ONLY_INNER_TYPES = Set.of("LINE_TREND", "AREA_STACK");
+    private static final Set<String> TIMESERIES_ONLY_INNER_TYPES =
+            Set.of("LINE_TREND", "AREA_STACK", "SPARKLINE_CARD");
     /** KPI 专属图表只能绑定 KPI_DETAIL 数据源。 */
     private static final Set<String> KPI_DETAIL_ONLY_INNER_TYPES =
             Set.of("KPI_DETAIL_TABLE", "KPI_RADAR", "PROGRESS_LIST");

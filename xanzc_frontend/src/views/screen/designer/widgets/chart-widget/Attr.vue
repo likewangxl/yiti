@@ -1,11 +1,26 @@
 <template>
   <CommonAttr :element="element">
     <el-form-item label="数据源">
-      <el-select v-model="bind.dsId" filterable @change="syncBind">
+      <el-select v-model="bind.dsId" filterable
+                 :aria-describedby="scopeConflict ? 'datasource-scope-conflict' : undefined"
+                 @change="syncBind">
         <el-option v-for="d in filteredDs" :key="d.id" :label="d.dsName" :value="d.id" />
+        <el-option v-for="d in scopeBlockedDs" :key="`scope-blocked-${d.id}`"
+                   data-testid="datasource-scope-blocked" disabled
+                   :label="`${d.dsName}（${scopeConflictHint}）`" :value="`__scope_blocked__${d.id}`" />
       </el-select>
       <!-- 联动过滤提示：needTimeseries/needKinds 元数据约束（后端另有 RPT-43005 等校验兜底） -->
       <div v-if="dsHint" class="attr-hint">{{ dsHint }}</div>
+      <div v-if="scopeConflict" id="datasource-scope-conflict" class="attr-scope-conflict"
+           data-testid="datasource-scope-conflict" role="status" aria-live="polite">
+        <strong>当前图表类型与本屏范围没有可用数据源</strong>
+        <span>范围冲突：{{ scopeConflictReason }}。</span>
+        <span>以下数据源符合图表类型，但当前不可选择：</span>
+        <ul>
+          <li v-for="d in scopeBlockedDs" :key="`scope-note-${d.id}`">{{ d.dsName }}（{{ scopeConflictHint }}）</li>
+        </ul>
+        <span>{{ scopeConflictAction }}</span>
+      </div>
     </el-form-item>
     <el-form-item label="周期"><el-input v-model="bind.period" placeholder="LATEST / LAST_10D" @input="syncBind" /></el-form-item>
 
@@ -38,6 +53,17 @@
         <el-switch v-model="styleCfg.smooth" data-testid="chart-smooth" @change="syncStyle" />
       </el-form-item>
     </template>
+    <el-form-item v-if="showStandaloneLabelControl" label="数据标签">
+      <el-switch v-model="styleCfg.showLabels" data-testid="chart-show-labels" @change="syncStyle" />
+    </el-form-item>
+    <el-form-item v-if="showSmoothControl && !showSeriesVisualControls" label="曲线平滑">
+      <el-switch v-model="styleCfg.smooth" data-testid="chart-smooth" @change="syncStyle" />
+    </el-form-item>
+
+    <el-form-item v-if="innerType === 'SPARKLINE_CARD'" label="较上期变化">
+      <el-switch v-model="styleCfg.showTrend" data-testid="sparkline-show-trend" @change="syncStyle" />
+      <div class="attr-hint">前值为 0 或非数值时自动隐藏百分比，避免 Infinity/NaN</div>
+    </el-form-item>
 
     <el-form-item v-if="innerType === 'PIE_SHARE'" label="饼图形态">
       <el-radio-group v-model="styleCfg.pieShape" data-testid="pie-shape" @change="syncStyle">
@@ -140,8 +166,9 @@ if (propValue.ignoreGlobalPeriod == null) propValue.ignoreGlobalPeriod = false;
 
 const innerType = computed(() => props.element.innerType);
 const chartMeta = computed(() => chartMetas.find(c => c.innerType === innerType.value) || null);
-const showSeriesVisualControls = computed(() => ['LINE_TREND', 'AREA_STACK', 'BAR_COMPARE'].includes(innerType.value));
-const showSmoothControl = computed(() => ['LINE_TREND', 'AREA_STACK'].includes(innerType.value));
+const showSeriesVisualControls = computed(() => ['LINE_TREND', 'AREA_STACK', 'BAR_COMPARE', 'COMBO_CHART'].includes(innerType.value));
+const showStandaloneLabelControl = computed(() => ['FUNNEL_CHART', 'SCATTER_BUBBLE', 'HEATMAP_MATRIX', 'SUNBURST_CHART'].includes(innerType.value));
+const showSmoothControl = computed(() => ['LINE_TREND', 'AREA_STACK', 'COMBO_CHART', 'SPARKLINE_CARD'].includes(innerType.value));
 
 // 只给面板回显补默认，不立即改写 styleJson；用户第一次修改任一视觉项时才整体持久化，
 // 这样旧节点的未知字段和已有标题/刷新配置都不会被覆盖。
@@ -154,13 +181,18 @@ if (showSeriesVisualControls.value) {
   for (const key of ['showLegend', 'showLabels', 'showMarks']) {
     if (styleCfg[key] == null) styleCfg[key] = visualDefaults[key];
   }
-  if (showSmoothControl.value && styleCfg.smooth == null) styleCfg.smooth = visualDefaults.smooth;
+}
+if (showSmoothControl.value && styleCfg.smooth == null) styleCfg.smooth = visualDefaults.smooth;
+if (showStandaloneLabelControl.value && styleCfg.showLabels == null) {
+  // 漏斗/旭日的运行时默认显示标签，散点/热力矩阵默认关闭，保持面板与组件一致。
+  styleCfg.showLabels = ['FUNNEL_CHART', 'SUNBURST_CHART'].includes(innerType.value);
 }
 if (innerType.value === 'PIE_SHARE' && styleCfg.pieShape == null) styleCfg.pieShape = visualDefaults.pieShape;
 if (innerType.value === 'METRIC_CARD') {
   if (styleCfg.cardVariant == null) styleCfg.cardVariant = visualDefaults.cardVariant;
   if (styleCfg.showTrend == null) styleCfg.showTrend = visualDefaults.showTrend;
 }
+if (innerType.value === 'SPARKLINE_CARD' && styleCfg.showTrend == null) styleCfg.showTrend = true;
 // 数据源联动过滤:needTimeseries → 仅 TIMESERIES;needKinds → 仅对应 source_kind
 const screenScope = computed(() => {
   const scope = {};
@@ -173,6 +205,25 @@ const screenScope = computed(() => {
   return scope;
 });
 const filteredDs = computed(() => filterDatasourcesByMeta(datasources.value, chartMeta.value, screenScope.value));
+// 先按图表类型计算候选，再与本屏范围求差集；只在交集为空时展示差集，避免改变有可用候选时的原有行为。
+const typeCompatibleDs = computed(() => filterDatasourcesByMeta(datasources.value, chartMeta.value));
+const scopeBlockedDs = computed(() => {
+  if (!datasourcesLoaded.value || filteredDs.value.length || !typeCompatibleDs.value.length) return [];
+  const candidateIds = new Set(filteredDs.value.map(d => String(d.id)));
+  return typeCompatibleDs.value.filter(d => !candidateIds.has(String(d.id)));
+});
+const scopeConflict = computed(() => scopeBlockedDs.value.length > 0);
+const scopeConflictReason = computed(() => {
+  if (isNamedGroupScope.value) return '命名机构组仅允许机构宽表（ORG_INDEX_RESULT / org_code）';
+  const bizLine = readStoreValue(store.bizLine);
+  if (bizLine) return `本屏业务条线为 ${bizLine}，数据源不在当前范围内`;
+  return '数据源不在当前屏范围内';
+});
+const scopeConflictHint = computed(() =>
+  isNamedGroupScope.value ? '需切换为传统上下文' : '不符合当前屏范围');
+const scopeConflictAction = computed(() => isNamedGroupScope.value
+  ? '请通过顶部“编辑范围”切换为传统上下文，或者换用机构宽表组件。'
+  : '请通过顶部“编辑范围”调整当前屏范围，或者换用符合范围的数据源。');
 const dsHint = computed(() => {
   const m = chartMeta.value;
   const parts = [];
@@ -288,4 +339,9 @@ onMounted(async () => {
 <style scoped>
 .attr-hint { width: 100%; font-size: 12px; color: #7d9bc9; line-height: 1.5; margin-top: 2px; }
 .probe-box { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.attr-scope-conflict { display: flex; width: 100%; flex-direction: column; gap: 3px; margin-top: 7px;
+  padding: 8px 10px; border: 1px solid rgba(229, 154, 145, .34); border-radius: 7px;
+  background: rgba(229, 154, 145, .08); color: #c7d5ea; font-size: 12px; line-height: 1.5; }
+.attr-scope-conflict strong { color: #f0b2a9; font-weight: 600; }
+.attr-scope-conflict ul { margin: 2px 0; padding-left: 18px; color: #e8c979; }
 </style>
