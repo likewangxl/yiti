@@ -243,7 +243,7 @@ import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import { fitScale } from '@/views/screen/designer/utils/scale';
 import { cloneComponentForClipboard, pasteFromClipboard } from '@/views/screen/designer/utils/clipboard';
 import { closeWindowOrFallback } from '@/views/screen/designer/utils/closeWindow';
-import { findAttr } from '@/views/screen/designer/widgets';
+import { chartMetas, findAttr } from '@/views/screen/designer/widgets';
 import {
   BIZ_LINES, ORG_SCOPE_MODES, VIEW_LEVELS, normalizeScreenScope,
   validateScreenScope, viewLevelLabel, filterActiveOrgGroups, filterReportScreenOrgGroups, diffCodes
@@ -286,6 +286,11 @@ const inspectorMeta = computed(() => {
     return { title: '批量编辑', subtitle: `已选 ${store.curComponents.length} 个组件` };
   }
   if (store.curComponent) {
+    if (store.curComponent.component === 'ChartWidget') {
+      const innerType = store.curComponent.innerType || 'UNKNOWN';
+      const chartMeta = chartMetas.find(meta => meta?.innerType === innerType);
+      return { title: '组件属性', subtitle: `${chartMeta?.label || '图表'}（${innerType}）` };
+    }
     return { title: '组件属性', subtitle: store.curComponent.component || '当前选中组件' };
   }
   return { title: '画布设置', subtitle: '配置画布尺寸与主题' };

@@ -20,7 +20,11 @@ vi.mock('vue-router', () => ({
 }));
 
 vi.mock('@/views/screen/designer/widgets', () => ({
-  findAttr: findAttrMock
+  findAttr: findAttrMock,
+  chartMetas: [
+    { innerType: 'BAR_COMPARE', label: '柱状对比' },
+    { innerType: 'LINE_TREND', label: '趋势折线' }
+  ]
 }));
 
 vi.mock('@/api/screen', () => ({
@@ -259,6 +263,33 @@ describe('DesignerV2.vue 挂载冒烟测试', () => {
     expect(wrapper.find('[data-testid="test-datasource"]').text()).toBe('202');
     expect(wrapper.find('[data-testid="test-metric-columns"]').text()).toBe('metric-b');
     expect(wrapper.find('[data-testid="test-metric-labels"]').text()).toBe('指标 B');
+  });
+
+  it('检查器单选图表显示注册表类型并随图表切换更新，未知类型安全兜底', async () => {
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    const designerStore = useScreenDesignerStore();
+    designerStore.componentData = [
+      { id: 'bar-chart', component: 'ChartWidget', innerType: 'BAR_COMPARE' },
+      { id: 'line-chart', component: 'ChartWidget', innerType: 'LINE_TREND' },
+      { id: 'unknown-chart', component: 'ChartWidget', innerType: 'UNREGISTERED_CHART' },
+      { id: 'text-label', component: 'TextLabel' }
+    ];
+
+    designerStore.selectComponent('bar-chart');
+    await nextTick();
+    expect(wrapper.find('[data-testid="dsn2-right-subtitle"]').text()).toBe('柱状对比（BAR_COMPARE）');
+
+    designerStore.selectComponent('line-chart');
+    await nextTick();
+    expect(wrapper.find('[data-testid="dsn2-right-subtitle"]').text()).toBe('趋势折线（LINE_TREND）');
+
+    designerStore.selectComponent('unknown-chart');
+    await nextTick();
+    expect(wrapper.find('[data-testid="dsn2-right-subtitle"]').text()).toBe('图表（UNREGISTERED_CHART）');
+
+    designerStore.selectComponent('text-label');
+    await nextTick();
+    expect(wrapper.find('[data-testid="dsn2-right-subtitle"]').text()).toBe('TextLabel');
   });
 });
 
