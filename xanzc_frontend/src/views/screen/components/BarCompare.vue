@@ -17,7 +17,10 @@ import { BarChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent, MarkPointComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 import { DocumentRemove } from '@element-plus/icons-vue';
-import { resolveChartTheme, scrAxisLabel, scrAxisLine, scrSplitLine, scrTooltipStyle, scrWithAlpha } from '@/styles/screenChartTheme';
+import {
+  resolveChartTheme, scrAxisLabel, scrAxisLine, scrSplitLine, scrTooltipStyle, scrWithAlpha,
+  SCR_MORANDI_PALETTE
+} from '@/styles/screenChartTheme';
 import { rowsToSeries, displayName } from './utils/chartData';
 
 use([CanvasRenderer, BarChart, GridComponent, TooltipComponent, LegendComponent, MarkPointComponent]);
@@ -73,7 +76,7 @@ const parsed = computed(() => {
 });
 const series = computed(() => parsed.value.series);
 const theme = computed(() => resolveChartTheme(props.styleCfg));
-const palette = computed(() => props.styleCfg.colors?.length ? props.styleCfg.colors : theme.value.palette);
+const palette = computed(() => props.styleCfg.colors?.length ? props.styleCfg.colors : SCR_MORANDI_PALETTE);
 const showLegend = computed(() => props.styleCfg.showLegend !== false);
 const showLabels = computed(() => props.styleCfg.showLabels === true);
 const showMarks = computed(() => props.styleCfg.showMarks !== false);
@@ -112,7 +115,13 @@ const option = computed(() => {
       type: 'bar',
       stack: mode.value === 'stack' ? 'total' : undefined,
       barMaxWidth: 26,
-      data: s.data,
+      // 单行多指标转置后只有一个 series，逐数据项覆盖颜色以区分每个指标。
+      data: isSingleRowMetricData.value
+        ? s.data.map((value, dataIndex) => ({
+          value,
+          itemStyle: barItemStyle(palette.value[dataIndex % palette.value.length], horizontal)
+        }))
+        : s.data,
       label: { show: showLabels.value, color: theme.value.tokens.text, position: horizontal ? 'right' : 'top' },
       emphasis: { focus: 'series', itemStyle: { shadowBlur: 14, shadowColor: scrWithAlpha(palette.value[i % palette.value.length], .45) } },
       ...(showMarks.value ? { markPoint: { data: [{ type: 'max', name: '最大' }], label: { color: theme.value.tokens.text } } } : {}),

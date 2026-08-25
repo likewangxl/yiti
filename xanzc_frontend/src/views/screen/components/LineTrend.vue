@@ -13,7 +13,8 @@ import {
 } from 'echarts/components';
 import VChart from 'vue-echarts';
 import {
-  resolveChartTheme, scrAxisLabel, scrAxisLine, scrSplitLine, scrTooltipStyle, scrWithAlpha
+  resolveChartTheme, scrAxisLabel, scrAxisLine, scrSplitLine, scrTooltipStyle, scrWithAlpha,
+  SCR_MORANDI_PALETTE
 } from '@/styles/screenChartTheme';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent, AxisPointerComponent,
@@ -32,7 +33,7 @@ const seriesCols = computed(() => {
   return its.length ? its.map(i => i.col) : props.columns.slice(1);
 });
 const theme = computed(() => resolveChartTheme(props.styleCfg));
-const palette = computed(() => props.styleCfg.colors?.length ? props.styleCfg.colors : theme.value.palette);
+const palette = computed(() => props.styleCfg.colors?.length ? props.styleCfg.colors : SCR_MORANDI_PALETTE);
 const showLegend = computed(() => props.styleCfg.showLegend !== false);
 const showLabels = computed(() => props.styleCfg.showLabels === true);
 const showMarks = computed(() => props.styleCfg.showMarks !== false);
@@ -54,12 +55,13 @@ const option = computed(() => ({
            axisLabel: scrAxisLabel(theme.value) },
   yAxis: { type: 'value', axisLabel: scrAxisLabel(theme.value),
            splitLine: scrSplitLine(theme.value) },
-  series: seriesCols.value.map(col => {
-    const color = palette.value[seriesCols.value.indexOf(col) % palette.value.length];
+  series: seriesCols.value.map((col, index) => {
+    const color = palette.value[index % palette.value.length];
     return {
       name: col, type: 'line', smooth: smooth.value, symbol: 'circle', symbolSize: 6,
       showSymbol: showLabels.value,
-      lineStyle: { width: 2, shadowBlur: 7, shadowColor: scrWithAlpha(color, .3) },
+      lineStyle: { width: 2, color, shadowBlur: 7, shadowColor: scrWithAlpha(color, .3) },
+      itemStyle: { color },
       areaStyle: {
         color: {
           type: 'linear', x: 0, y: 0, x2: 0, y2: 1,

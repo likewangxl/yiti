@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils';
 
 vi.mock('vue-echarts', () => ({
   default: {
+    name: 'VChart',
     props: { option: { type: Object, required: true } },
     template: '<div data-testid="chart-option" :data-option="JSON.stringify(option)"></div>'
   }
@@ -16,6 +17,7 @@ import RankList from '../RankList.vue';
 import FlowStatus from '../FlowStatus.vue';
 import BarCompare from '../BarCompare.vue';
 import AreaStack from '../AreaStack.vue';
+import { SCR_MORANDI_PALETTE, scrWithAlpha } from '@/styles/screenChartTheme';
 
 const chartStubs = {
   'el-icon': { template: '<span><slot /></span>' }
@@ -23,6 +25,13 @@ const chartStubs = {
 
 function optionOf(wrapper) {
   return JSON.parse(wrapper.find('[data-testid="chart-option"]').attributes('data-option'));
+}
+
+function triggerChartClick(wrapper, payload) {
+  const chart = wrapper.findComponent({ name: 'VChart' });
+  const listener = chart.vm.$attrs.onClick;
+  if (Array.isArray(listener)) listener[0](payload);
+  else listener(payload);
 }
 
 const lineProps = {
@@ -58,6 +67,42 @@ describe('图表视觉预设与 option', () => {
     expect(compactOption.series[0].markPoint).toBeUndefined();
     expect(compactOption.series[0].markLine).toBeUndefined();
     expect(compactOption.series[0].smooth).toBe(false);
+  });
+
+  it('LineTrend 多指标显式使用莫兰迪色，线/点/面积同色并按十色循环', () => {
+    const columns = ['month', ...Array.from({ length: 11 }, (_, i) => `metric_${i + 1}`)];
+    const wrapper = mount(LineTrend, {
+      props: {
+        columns,
+        rows: [['Jan', ...Array.from({ length: 11 }, (_, i) => i + 1)]],
+        bind: { items: columns.slice(1).map(col => ({ col })) },
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    const option = optionOf(wrapper);
+    expect(option.series).toHaveLength(11);
+    expect(option.series.map(series => series.lineStyle.color)).toEqual([
+      ...SCR_MORANDI_PALETTE, SCR_MORANDI_PALETTE[0]
+    ]);
+    expect(option.series.map(series => series.itemStyle.color)).toEqual([
+      ...SCR_MORANDI_PALETTE, SCR_MORANDI_PALETTE[0]
+    ]);
+    expect(option.series[0].areaStyle.color.colorStops[0].color)
+      .toBe(scrWithAlpha(SCR_MORANDI_PALETTE[0], .28));
+    expect(option.series[10].areaStyle.color.colorStops[0].color)
+      .toBe(scrWithAlpha(SCR_MORANDI_PALETTE[0], .28));
+
+    const custom = mount(LineTrend, {
+      props: {
+        columns: ['month', 'a', 'b', 'c'], rows: [['Jan', 1, 2, 3]],
+        bind: { items: [{ col: 'a' }, { col: 'b' }, { col: 'c' }] },
+        styleCfg: { colors: ['#112233', '#445566'] }
+      },
+      global: { stubs: chartStubs }
+    });
+    expect(optionOf(custom).series.map(series => series.lineStyle.color))
+      .toEqual(['#112233', '#445566', '#112233']);
   });
 
   it('PieShare 支持 donut/rose/solid，提供中心汇总、强调态和标签线', () => {
@@ -204,7 +249,44 @@ describe('图表视觉预设与 option', () => {
     const option = optionOf(wrapper);
     expect(option.xAxis.data).toEqual(['年日均存款', '年日均增长', 'annual_avg_no_alias']);
     expect(option.series).toHaveLength(1);
-    expect(option.series[0].data).toEqual([null, 42, 7]);
+    expect(option.series[0].data.map(item => item.value)).toEqual([null, 42, 7]);
+    expect(option.series[0].data.map(item => item.itemStyle.color.colorStops[1].color)).toEqual([
+      SCR_MORANDI_PALETTE[0], SCR_MORANDI_PALETTE[1], SCR_MORANDI_PALETTE[2]
+    ]);
+  });
+
+  it('BarCompare 单行多指标第十一柱循环色板且点击仍按 dataIndex 回传原始指标', () => {
+    const columns = Array.from({ length: 11 }, (_, i) => `metric_${i + 1}`);
+    const wrapper = mount(BarCompare, {
+      props: {
+        columns,
+        rows: [[null, ...Array.from({ length: 10 }, (_, i) => i + 1)]],
+        bind: { items: columns.map((col, i) => ({ col, label: `指标${i + 1}` })) },
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    const option = optionOf(wrapper);
+    expect(option.series[0].data).toHaveLength(11);
+    expect(option.series[0].data[10].itemStyle.color.colorStops[1].color).toBe(SCR_MORANDI_PALETTE[0]);
+    triggerChartClick(wrapper, { componentType: 'series', seriesIndex: 0, dataIndex: 10 });
+    expect(wrapper.emitted('item-click')?.[0]?.[0]).toMatchObject({
+      col: 'metric_11', label: '指标11', row: { metric_11: 10 }
+    });
+  });
+
+  it('BarCompare 常规多系列按指标着色并循环使用自定义色板', () => {
+    const wrapper = mount(BarCompare, {
+      props: {
+        columns: ['month', 'a', 'b', 'c'], rows: [['Jan', 10, 20, 30]],
+        bind: { items: [{ col: 'a' }, { col: 'b' }, { col: 'c' }] },
+        styleCfg: { colors: ['#112233', '#445566'] }
+      },
+      global: { stubs: chartStubs }
+    });
+    const option = optionOf(wrapper);
+    expect(option.series.map(series => series.itemStyle.color.colorStops[1].color))
+      .toEqual(['#112233', '#445566', '#112233']);
   });
 
   it('BarCompare 带独立维度列的多行数据仍按首列作为类目', () => {

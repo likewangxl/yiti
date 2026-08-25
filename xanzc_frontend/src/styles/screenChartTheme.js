@@ -17,6 +17,13 @@ export const SCR_COLOR = {
 // 折线图默认色板（对应 --scr-cyan/num/blue/up + 一个暖色点缀）
 export const SCR_PALETTE = [SCR_COLOR.cyan, SCR_COLOR.gold, SCR_COLOR.blue, SCR_COLOR.up, SCR_COLOR.orange];
 
+// 多指标柱/线图专用莫兰迪色板：低饱和但保持足够明度，适配深色大屏背景。
+// 图表组件按指标顺序消费，超过十项后从第一项循环使用。
+export const SCR_MORANDI_PALETTE = Object.freeze([
+  '#9bc1bc', '#a9b6ca', '#d6b477', '#7da99f', '#b5a2d8',
+  '#d79999', '#78909c', '#c3a6d8', '#d7a37c', '#92b7c6'
+]);
+
 // 饼图等类目较多的场景用扩展色板（前 5 与折线图色板一致，保持视觉连贯）
 export const SCR_PALETTE_WIDE = [
   SCR_COLOR.cyan, SCR_COLOR.blue, SCR_COLOR.gold, SCR_COLOR.up, SCR_COLOR.orange,

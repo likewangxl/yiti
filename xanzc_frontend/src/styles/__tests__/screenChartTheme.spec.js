@@ -2,12 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   SCR_COLOR,
   SCR_PALETTE,
+  SCR_MORANDI_PALETTE,
   SCR_CHART_PRESETS,
   resolveChartTheme,
   normalizeChartPreset
 } from '../screenChartTheme';
 
 describe('screenChartTheme 视觉预设', () => {
+  it('提供十种互不重复、适合深色大屏的莫兰迪指标色', () => {
+    expect(SCR_MORANDI_PALETTE).toHaveLength(10);
+    expect(new Set(SCR_MORANDI_PALETTE).size).toBe(10);
+    expect(SCR_MORANDI_PALETTE.every(color => /^#[0-9a-f]{6}$/i.test(color))).toBe(true);
+  });
+
   it('保留既有 SCR_COLOR/SCR_PALETTE API，并提供至少三套可解析 preset', () => {
     expect(SCR_COLOR).toHaveProperty('cyan');
     expect(Array.isArray(SCR_PALETTE)).toBe(true);
