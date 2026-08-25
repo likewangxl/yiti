@@ -180,4 +180,50 @@ describe('图表视觉预设与 option', () => {
     expect(areaOption.series[0].emphasis).toBeTruthy();
     expect(areaOption.series[0].markLine).toBeTruthy();
   });
+
+  it('BarCompare 单行多指标时使用 items label 作为类目，并保留空值柱', () => {
+    const wrapper = mount(BarCompare, {
+      props: {
+        columns: ['annual_avg_deposit', 'annual_avg_growth', 'annual_avg_no_alias'],
+        rows: [[null, 42, 7]],
+        bind: {
+          items: [
+            { col: 'annual_avg_deposit', label: '年日均存款' },
+            { col: 'annual_avg_growth', label: '' },
+            { col: 'annual_avg_no_alias', label: '  ' }
+          ]
+        },
+        columnsMeta: [
+          { col: 'annual_avg_deposit', alias: '年日均存款别名' },
+          { col: 'annual_avg_growth', alias: '年日均增长' }
+        ],
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    const option = optionOf(wrapper);
+    expect(option.xAxis.data).toEqual(['年日均存款', '年日均增长', 'annual_avg_no_alias']);
+    expect(option.series).toHaveLength(1);
+    expect(option.series[0].data).toEqual([null, 42, 7]);
+  });
+
+  it('BarCompare 带独立维度列的多行数据仍按首列作为类目', () => {
+    const wrapper = mount(BarCompare, {
+      props: {
+        columns: ['org_code', 'annual_avg_deposit', 'annual_avg_growth'],
+        rows: [['A', 10, 2], ['B', 20, 4]],
+        bind: {
+          items: [
+            { col: 'annual_avg_deposit', label: '年日均存款' },
+            { col: 'annual_avg_growth', label: '年日均增长' }
+          ]
+        },
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    const option = optionOf(wrapper);
+    expect(option.xAxis.data).toEqual(['A', 'B']);
+    expect(option.series.map(s => s.data)).toEqual([[10, 20], [2, 4]]);
+  });
 });

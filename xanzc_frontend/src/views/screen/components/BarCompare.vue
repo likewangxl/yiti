@@ -7,7 +7,8 @@
 </template>
 
 <script setup>
-// 柱状对比（BAR_COMPARE）：首列为类目（或 data_date），其余数值列为系列。
+// 柱状对比（BAR_COMPARE）：通常首列为类目（或 data_date），其余数值列为系列。
+// groupBy=NONE 的单行多指标响应没有独立类目列，此时按 bind.items 转置为指标类目。
 // propValue.barMode 三形态：basic 基础分组 | stack 堆叠 | horizontal 横向条形。
 import { computed } from 'vue';
 import { use } from 'echarts/core';
@@ -32,8 +33,44 @@ const props = defineProps({
 const emit = defineEmits(['item-click']);
 
 const mode = computed(() => props.propValue?.barMode || 'basic');
-const parsed = computed(() =>
-  rowsToSeries(props.columns, props.rows, (props.bind.items || []).map(i => i.col)));
+const boundCols = computed(() =>
+  Array.isArray(props.bind?.items) ? props.bind.items.map(item => item?.col) : []);
+const metricItems = computed(() => {
+  const columns = Array.isArray(props.columns) ? props.columns : [];
+  return (Array.isArray(props.bind?.items) ? props.bind.items : [])
+    .filter(item => item?.col != null && columns.includes(item.col));
+});
+// groupBy=NONE 的聚合结果为单行，首列若本身就是绑定指标，说明响应没有独立维度列。
+const isSingleRowMetricData = computed(() => {
+  const columns = Array.isArray(props.columns) ? props.columns : [];
+  const rows = Array.isArray(props.rows) ? props.rows : [];
+  return rows.length === 1 && columns.length > 0 && metricItems.value.some(item => item.col === columns[0]);
+});
+
+function chartNumber(value) {
+  if (value == null || value === '') return null;
+  const number = Number(value);
+  return Number.isNaN(number) ? null : number;
+}
+
+function metricLabel(item) {
+  const label = String(item?.label ?? '').trim();
+  return label || displayName(item.col, props.columnsMeta) || item.col;
+}
+
+const parsed = computed(() => {
+  if (!isSingleRowMetricData.value) {
+    return rowsToSeries(props.columns, props.rows, boundCols.value);
+  }
+  const row = props.rows[0] || [];
+  return {
+    categories: metricItems.value.map(metricLabel),
+    series: [{
+      name: '指标值',
+      data: metricItems.value.map(item => chartNumber(row[props.columns.indexOf(item.col)]))
+    }]
+  };
+});
 const series = computed(() => parsed.value.series);
 const theme = computed(() => resolveChartTheme(props.styleCfg));
 const palette = computed(() => props.styleCfg.colors?.length ? props.styleCfg.colors : theme.value.palette);
@@ -87,9 +124,12 @@ const option = computed(() => {
 function onChartClick(p) {
   if (!p || p.componentType !== 'series') return;
   const row = {};
-  props.columns.forEach((c, i) => { row[c] = props.rows[p.dataIndex]?.[i]; });
+  const sourceRow = isSingleRowMetricData.value ? props.rows[0] : props.rows[p.dataIndex];
+  props.columns.forEach((c, i) => { row[c] = sourceRow?.[i]; });
   // 回传原始列名（非别名），保持钻取/跳屏参数与数据契约一致
-  const col = series.value[p.seriesIndex]?.name;
+  const col = isSingleRowMetricData.value
+    ? metricItems.value[p.dataIndex]?.col
+    : series.value[p.seriesIndex]?.name;
   emit('item-click', { col, label: String(parsed.value.categories[p.dataIndex] ?? ''), row });
 }
 </script>
