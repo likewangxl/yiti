@@ -1,0 +1,11 @@
+### Result
+Total messages: 9 (Errors: 0, Warnings: 9)
+
+All 9 messages have the same existing warning text and stack origin:
+
+[WARNING] ElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+For more detail, please visit: https://element-plus.org/en-US/component/radio.html
+
+    at debugWarn (http://127.0.0.1:8091/node_modules/.vite/deps/element-plus.js?v=a2f5076f:10209:37)
+    at watch.immediate (http://127.0.0.1:8091/node_modules/.vite/deps/element-plus.js?v=a2f5076f:10254:7)
+    at useDeprecated (http://127.0.0.1:8091/node_modules/.vite/deps/element-plus.js?v=a2f5076f:10252:3)
