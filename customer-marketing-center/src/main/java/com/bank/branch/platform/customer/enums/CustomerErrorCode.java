@@ -76,6 +76,8 @@ public enum CustomerErrorCode {
     LEAD_APPROVAL_RESULT_INVALID("CUST-42212", "审批结果筛选仅支持APPROVED或REJECTED"),
     TAG_NOT_APPROVED("CUST-42214", "仅审核通过且启用的标签可以关联客户"),
     CROSS_ORG_VALIDATION_FAILED("CUST-42215", "当前客户不满足跨机构营销申请条件"),
+    TOUCH_RESTRICTED_ACCOUNT_OPENED("CUST-42216", "该企业经判定已开户，无法再创建工作日志"),
+    TOUCH_LIMIT_REACHED("CUST-42217", "客户触达次数已达到标签周期上限"),
 
     // 500 内部错误
     INTERNAL_ERROR("CUST-50001", "客户营销服务内部错误"),

@@ -52,6 +52,9 @@ public class CustomerDTO {
     /** 是否已开户 */
     private Boolean isAccountOpened;
 
+    /** 是否限制触达 */
+    private Boolean touchRestricted;
+
     /** 客户描述 */
     private String customerDesc;
 

@@ -77,12 +77,26 @@ class LeadEntryServiceTest {
         assertThat(result.getDistributionMode()).isEqualTo("OWNER");
         assertThat(result.getMainManagerId()).isEqualTo("E001");
         assertThat(result.getMainManagerOrgId()).isEqualTo("SUB001");
+        assertThat(result.getTouchRestricted()).isEqualTo(1);
         ArgumentCaptor<CustLeadManagerScope> scope = ArgumentCaptor.forClass(CustLeadManagerScope.class);
         verify(managerScopeMapper).insert(scope.capture());
         assertThat(scope.getValue().getManagerEmpId()).isEqualTo("E001");
         assertThat(scope.getValue().getAssignmentType()).isEqualTo("OWNER");
         assertThat(scope.getValue().getIsPrimary()).isEqualTo(1);
         verify(fileApi).bindFile("LEAD", result.getId(), "FILE-1", "ATTACHMENT");
+    }
+
+    @Test
+    void createDraft_shouldPersistExplicitTouchRestriction() {
+        LeadCreateReqDTO req = baseRequest();
+        req.setTouchRestricted(0);
+        when(orgApi.getOrg("SUB001")).thenReturn(org("SUB001", 3));
+        when(leadMapper.insert(any(CustLead.class))).thenReturn(1);
+        when(managerScopeMapper.insert(any(CustLeadManagerScope.class))).thenReturn(1);
+
+        CustLead result = service.createDraft(req, "E001", "SUB001", false);
+
+        assertThat(result.getTouchRestricted()).isEqualTo(0);
     }
 
     @Test

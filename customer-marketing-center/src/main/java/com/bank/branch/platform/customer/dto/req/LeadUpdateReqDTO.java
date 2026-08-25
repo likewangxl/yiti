@@ -1,5 +1,7 @@
 package com.bank.branch.platform.customer.dto.req;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -50,6 +52,11 @@ public class LeadUpdateReqDTO {
 
     /** 是否已开户：0-否/1-是 */
     private Integer isAccountOpened;
+
+    /** 是否限制触达：0-否/1-是，编辑时可选 */
+    @Min(value = 0, message = "是否触达限制只能为0或1")
+    @Max(value = 1, message = "是否触达限制只能为0或1")
+    private Integer touchRestricted;
 
     /** 客户描述 */
     private String customerDesc;

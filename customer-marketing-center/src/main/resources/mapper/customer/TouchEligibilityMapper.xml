@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.TouchEligibilityMapper">
+
+    <select id="countValidWorklogs" resultType="long">
+        SELECT COUNT(*)
+        FROM xa_touch_custom_worklogs w
+        INNER JOIN TOUCH_TASK t ON t.worklog_id = w.workLogId
+        WHERE t.cust_id = #{custId}
+          AND w.createTime &gt;= #{startTime}
+          AND w.createTime &lt; #{endTime}
+          AND (w.isDestroy IS NULL
+               OR (w.isDestroy &lt;&gt; '1' AND w.isDestroy &lt;&gt; 'Y' AND w.isDestroy &lt;&gt; 'TRUE'))
+    </select>
+
+</mapper>

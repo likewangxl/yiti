@@ -13,6 +13,8 @@
       <el-button :loading="loading" @click="load">刷新</el-button>
     </header>
 
+    <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon class="load-error" />
+
     <el-form inline class="filter-form" aria-label="客户触达周期筛选" @submit.prevent="search">
       <el-form-item label="标签名称">
         <el-input
@@ -110,7 +112,7 @@
           />
           <span class="unit-hint">次</span>
         </el-form-item>
-        <p class="form-hint">次数上限取值范围为 1-9999，保存后供后续触达校验使用，本阶段不执行触达拦截。</p>
+        <p class="form-hint">次数上限取值范围为 1-9999，保存后已用于发起触达校验。</p>
       </el-form>
       <template #footer>
         <el-button :disabled="saving" @click="dialogVisible = false">取消</el-button>
@@ -303,6 +305,10 @@ onMounted(load);
 }
 
 .filter-form {
+  margin-bottom: 14px;
+}
+
+.load-error {
   margin-bottom: 14px;
 }
 

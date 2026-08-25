@@ -93,6 +93,7 @@ public class LeadApprovalService {
         row.setKeystone(booleanText(lead.getIsKeystone()));
         row.setEnterpriseType(lead.getEnterpriseType());
         row.setAccountOpened(booleanText(lead.getIsAccountOpened()));
+        row.setTouchRestricted(booleanText(lead.getTouchRestricted()));
         row.setCustomerDesc(lead.getCustomerDesc());
         row.setCreditAmount(lead.getCreditAmount());
         row.setCreditExposureAmount(lead.getCreditExposureAmount());

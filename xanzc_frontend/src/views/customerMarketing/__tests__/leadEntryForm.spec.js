@@ -30,6 +30,14 @@ describe('线索录入表单', () => {
     expect(rules.distributionMode.some(rule => rule.required)).toBe(true);
   });
 
+  it('触达限制默认开启且必须明确选择是或否', () => {
+    const form = createLeadEntryInitialState();
+    const rules = createLeadEntryRules(form);
+
+    expect(form.touchRestricted).toBe(1);
+    expect(rules.touchRestricted.some(rule => rule.required)).toBe(true);
+  });
+
   it('指定客户经理范围提示审批通过后直接进入已认领客户池', () => {
     expect(getDistributionHelp('SCOPE')).toBe('审批通过后直接进入指定客户经理的已认领客户池。');
   });

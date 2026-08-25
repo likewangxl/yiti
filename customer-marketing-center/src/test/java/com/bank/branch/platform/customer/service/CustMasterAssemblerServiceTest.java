@@ -2,15 +2,19 @@ package com.bank.branch.platform.customer.service;
 
 import com.bank.branch.platform.customer.entity.CustLead;
 import com.bank.branch.platform.customer.entity.CustLeadManagerScope;
+import com.bank.branch.platform.customer.entity.CustLeadTagRel;
 import com.bank.branch.platform.customer.entity.CustMaster;
+import com.bank.branch.platform.customer.entity.CustTagRel;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.enums.CustMasterStatus;
 import com.bank.branch.platform.customer.enums.LeadOp;
 import com.bank.branch.platform.customer.event.CustomerDeletedEvent;
 import com.bank.branch.platform.customer.mapper.CustLeadMapper;
 import com.bank.branch.platform.customer.mapper.CustLeadManagerScopeMapper;
+import com.bank.branch.platform.customer.mapper.CustLeadTagRelMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
 import com.bank.branch.platform.customer.mapper.CustClaimMapper;
+import com.bank.branch.platform.customer.mapper.CustTagRelMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -52,6 +56,12 @@ class CustMasterAssemblerServiceTest {
     private CustClaimMapper claimMapper;
 
     @Mock
+    private CustLeadTagRelMapper leadTagRelMapper;
+
+    @Mock
+    private CustTagRelMapper tagRelMapper;
+
+    @Mock
     private TouchTaskService touchTaskService;
 
     @InjectMocks
@@ -86,6 +96,7 @@ class CustMasterAssemblerServiceTest {
         assertThat(created.getEnterpriseType()).isEqualTo(lead.getEnterpriseType());
         assertThat(created.getGroupName()).isEqualTo(lead.getGroupName());
         assertThat(created.getIsAccountOpened()).isEqualTo(lead.getIsAccountOpened());
+        assertThat(created.getTouchRestricted()).isEqualTo(lead.getTouchRestricted());
         assertThat(created.getCustomerDesc()).isEqualTo(lead.getCustomerDesc());
         assertThat(created.getCreditAmount()).isEqualByComparingTo(lead.getCreditAmount());
         assertThat(created.getCreditExposureAmount()).isEqualByComparingTo(lead.getCreditExposureAmount());
@@ -95,6 +106,52 @@ class CustMasterAssemblerServiceTest {
         assertThat(created.getDeleted()).isEqualTo(0);
         assertThat(created.getCreatedTime()).isNotNull();
         assertThat(created.getUpdatedTime()).isNotNull();
+    }
+
+    @Test
+    void assembleFromLead_CREATE_shouldAppendLeadTagSnapshotToCustomerTags() {
+        CustLead lead = buildLead("lead-tag", LeadOp.CREATE.getCode(), null);
+        CustLeadTagRel snapshot = new CustLeadTagRel();
+        snapshot.setLeadId(lead.getId());
+        snapshot.setTagId("tag-stock");
+        snapshot.setTagNameSnapshot("存量客户");
+        when(leadTagRelMapper.selectList(any())).thenReturn(List.of(snapshot));
+        when(tagRelMapper.selectByCustIdAndTagId(any(), org.mockito.ArgumentMatchers.eq("tag-stock")))
+                .thenReturn(null);
+        when(masterMapper.insert(any(CustMaster.class))).thenReturn(1);
+
+        assemblerService.assembleFromLead(lead);
+
+        ArgumentCaptor<CustTagRel> relationCaptor = ArgumentCaptor.forClass(CustTagRel.class);
+        verify(tagRelMapper).insert(relationCaptor.capture());
+        assertThat(relationCaptor.getValue().getCustId()).isNotBlank();
+        assertThat(relationCaptor.getValue().getTagId()).isEqualTo("tag-stock");
+        assertThat(relationCaptor.getValue().getActive()).isEqualTo(1);
+    }
+
+    @Test
+    void assembleFromLead_UPDATE_shouldReactivateExistingLeadTagSnapshot() {
+        String custId = "cust-tag-1";
+        CustLead lead = buildLead("lead-tag-update", LeadOp.UPDATE.getCode(), custId);
+        CustLeadTagRel snapshot = new CustLeadTagRel();
+        snapshot.setLeadId(lead.getId());
+        snapshot.setTagId("tag-stock");
+        when(masterMapper.selectById(custId)).thenReturn(new CustMaster());
+        when(leadTagRelMapper.selectList(any())).thenReturn(List.of(snapshot));
+        CustTagRel existing = new CustTagRel();
+        existing.setId("rel-1");
+        existing.setCustId(custId);
+        existing.setTagId("tag-stock");
+        existing.setActive(0);
+        when(tagRelMapper.selectByCustIdAndTagId(custId, "tag-stock")).thenReturn(existing);
+
+        assemblerService.assembleFromLead(lead);
+
+        ArgumentCaptor<CustTagRel> relationCaptor = ArgumentCaptor.forClass(CustTagRel.class);
+        verify(tagRelMapper).updateById(relationCaptor.capture());
+        assertThat(relationCaptor.getValue().getId()).isEqualTo("rel-1");
+        assertThat(relationCaptor.getValue().getActive()).isEqualTo(1);
+        assertThat(relationCaptor.getValue().getExpiredTime()).isNull();
     }
 
     @Test
@@ -241,6 +298,7 @@ class CustMasterAssemblerServiceTest {
         lead.setEnterpriseType("STATE_OWNED");
         lead.setGroupName("测试集团");
         lead.setIsAccountOpened(0);
+        lead.setTouchRestricted(1);
         lead.setCustomerDesc("测试客户描述");
         lead.setCreditAmount(new BigDecimal("1000000.00"));
         lead.setCreditExposureAmount(new BigDecimal("500000.00"));

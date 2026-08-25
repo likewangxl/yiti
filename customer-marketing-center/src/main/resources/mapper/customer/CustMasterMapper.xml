@@ -6,7 +6,7 @@
     <sql id="BASE_COLUMNS">
         id, cust_no, cust_name, unified_credit_code, contact_person, contact_mobile,
         industry, group_type, customer_type, is_keystone, enterprise_type, group_name,
-        is_account_opened, customer_desc, credit_amount, credit_exposure_amount,
+        is_account_opened, touch_restricted, customer_desc, credit_amount, credit_exposure_amount,
         owner_org_id, lead_id, current_lead_id, main_manager_id, main_org_id,
         ownership_status, last_touch_time, source_system, source_updated_time,
         status, deleted, created_time, updated_time, lock_version

@@ -57,6 +57,16 @@ export const createLead = data => call('post', '/leads', { data });
 export const updateLead = (id, data) => call('put', `/leads/${id}`, { data });
 export const deleteLead = id => call('delete', `/leads/${id}`, {});
 export const submitLead = id => call('post', `/leads/${id}/submit`, { data: {} });
+export const previewLeadImport = file => {
+  const data = new FormData();
+  data.append('file', file);
+  return call('post', '/leads/import/preview', {
+    data,
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+export const executeLeadImport = batchId =>
+  call('post', '/leads/import/execute', { data: { batchId } });
 export const createLeadEditVersion = data => call('post', '/leads/edit-version', { data });
 export const createLeadDeleteVersion = data => call('post', '/leads/delete-version', { data });
 export const listLeadVersions = id => call('get', `/leads/${id}/versions`, {}, []);

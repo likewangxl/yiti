@@ -46,6 +46,9 @@ class TouchTaskServiceTest {
     @Spy
     private TouchTaskStateMachineService stateMachine = new TouchTaskStateMachineService();
 
+    @Mock
+    private TouchEligibilityService touchEligibilityService;
+
     @InjectMocks
     private TouchTaskService touchTaskService;
 

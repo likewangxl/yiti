@@ -3,25 +3,32 @@ package com.bank.branch.platform.customer.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.bank.branch.platform.customer.entity.CustLead;
 import com.bank.branch.platform.customer.entity.CustLeadManagerScope;
+import com.bank.branch.platform.customer.entity.CustLeadTagRel;
 import com.bank.branch.platform.customer.entity.CustMaster;
 import com.bank.branch.platform.customer.entity.CustClaim;
+import com.bank.branch.platform.customer.entity.CustTagRel;
 import com.bank.branch.platform.customer.enums.ClaimStatus;
 import com.bank.branch.platform.customer.enums.CustMasterStatus;
 import com.bank.branch.platform.customer.enums.LeadOp;
 import com.bank.branch.platform.customer.event.CustomerDeletedEvent;
 import com.bank.branch.platform.customer.mapper.CustLeadMapper;
 import com.bank.branch.platform.customer.mapper.CustLeadManagerScopeMapper;
+import com.bank.branch.platform.customer.mapper.CustLeadTagRelMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
 import com.bank.branch.platform.customer.mapper.CustClaimMapper;
+import com.bank.branch.platform.customer.mapper.CustTagRelMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -47,6 +54,8 @@ public class CustMasterAssemblerService {
     private final ApplicationEventPublisher eventPublisher;
     private final CustClaimMapper claimMapper;
     private final TouchTaskService touchTaskService;
+    private final CustLeadTagRelMapper leadTagRelMapper;
+    private final CustTagRelMapper tagRelMapper;
 
     /**
      * 从审批通过的线索装配客户主档。
@@ -114,6 +123,7 @@ public class CustMasterAssemblerService {
         master.setUpdatedTime(now);
 
         masterMapper.insert(master);
+        syncLeadTagSnapshots(lead, master.getId(), lead.getCreatedBy());
         if ("OWNER".equals(lead.getDistributionMode())
                 && lead.getMainManagerId() != null && !lead.getMainManagerId().isBlank()) {
             createOwnerClaimAndTask(master, lead, now);
@@ -186,6 +196,7 @@ public class CustMasterAssemblerService {
         updateEntity.setUpdatedTime(LocalDateTime.now());
 
         masterMapper.updateById(updateEntity);
+        syncLeadTagSnapshots(lead, custId, lead.getCreatedBy());
         log.info("[CustMasterAssemblerService.handleUpdate] 更新客户主档 custId={}, leadId={}", custId, lead.getId());
     }
 
@@ -238,6 +249,7 @@ public class CustMasterAssemblerService {
         master.setEnterpriseType(lead.getEnterpriseType());
         master.setGroupName(lead.getGroupName());
         master.setIsAccountOpened(lead.getIsAccountOpened());
+        master.setTouchRestricted(lead.getTouchRestricted());
         master.setCustomerDesc(lead.getCustomerDesc());
         master.setCreditAmount(lead.getCreditAmount());
         master.setCreditExposureAmount(lead.getCreditExposureAmount());
@@ -254,6 +266,76 @@ public class CustMasterAssemblerService {
     private String generateCustNo() {
         int random4 = new Random().nextInt(9000) + 1000;
         return "CUST_" + System.currentTimeMillis() + "_" + random4;
+    }
+
+    /**
+     * 将审批通过线索上的标签快照幂等追加到客户当前标签关系。
+     * <p>审批不会删除客户原有的其他来源标签；已存在但失效的关系只重新激活。</p>
+     */
+    private void syncLeadTagSnapshots(CustLead lead, String custId, String operatorEmpId) {
+        if (leadTagRelMapper == null || tagRelMapper == null || lead == null
+                || lead.getId() == null || custId == null) {
+            return;
+        }
+        List<CustLeadTagRel> snapshots = leadTagRelMapper.selectList(
+                new LambdaQueryWrapper<CustLeadTagRel>()
+                        .eq(CustLeadTagRel::getLeadId, lead.getId())
+                        .orderByAsc(CustLeadTagRel::getCreatedTime));
+        if (snapshots == null || snapshots.isEmpty()) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        Set<String> syncedTagIds = new HashSet<>();
+        for (CustLeadTagRel snapshot : snapshots) {
+            if (snapshot == null || snapshot.getTagId() == null
+                    || !syncedTagIds.add(snapshot.getTagId())) {
+                continue;
+            }
+            CustTagRel existing = tagRelMapper.selectByCustIdAndTagId(custId, snapshot.getTagId());
+            if (existing == null) {
+                CustTagRel relation = new CustTagRel();
+                relation.setId(UUID.randomUUID().toString().replace("-", ""));
+                relation.setCustId(custId);
+                relation.setTagId(snapshot.getTagId());
+                relation.setCreatedBy(operatorEmpId);
+                relation.setCreatedTime(now);
+                relation.setActive(1);
+                relation.setEffectiveTime(now);
+                relation.setUpdatedBy(operatorEmpId);
+                relation.setUpdatedTime(now);
+                try {
+                    tagRelMapper.insert(relation);
+                } catch (DuplicateKeyException duplicateKey) {
+                    // 并发审批可能在查询后先插入同一关系；重读后按幂等激活处理。
+                    CustTagRel concurrent = tagRelMapper.selectByCustIdAndTagId(custId, snapshot.getTagId());
+                    if (concurrent != null) {
+                        reactivateTagRelationIfNeeded(concurrent, operatorEmpId, now);
+                    } else {
+                        throw duplicateKey;
+                    }
+                }
+                continue;
+            }
+            boolean active = existing.getActive() == null
+                    || Integer.valueOf(1).equals(existing.getActive());
+            boolean notExpired = existing.getExpiredTime() == null
+                    || existing.getExpiredTime().isAfter(now);
+            if (!active || !notExpired) {
+                reactivateTagRelationIfNeeded(existing, operatorEmpId, now);
+            }
+        }
+    }
+
+    private void reactivateTagRelationIfNeeded(CustTagRel existing, String operatorEmpId,
+                                               LocalDateTime now) {
+        CustTagRel update = new CustTagRel();
+        update.setId(existing.getId());
+        update.setActive(1);
+        update.setEffectiveTime(now);
+        update.setExpiredTime(null);
+        update.setUpdatedBy(operatorEmpId);
+        update.setUpdatedTime(now);
+        tagRelMapper.updateById(update);
     }
 
     private String ownershipStatus(CustLead lead) {

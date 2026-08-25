@@ -110,6 +110,7 @@ public class LeadService {
         entity.setEnterpriseType(enterpriseType);
         entity.setGroupName(groupName);
         entity.setIsAccountOpened(isAccountOpened);
+        entity.setTouchRestricted(1);
         entity.setCustomerDesc(customerDesc);
         entity.setCreditAmount(creditAmount);
         entity.setCreditExposureAmount(creditExposureAmount);

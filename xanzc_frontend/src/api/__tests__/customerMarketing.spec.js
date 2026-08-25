@@ -17,7 +17,8 @@ import {
   listCustomerTransfers, transferCustomer,
   listMarketingCustomers, getMarketingCustomer, exportMarketingCustomers,
   listLeads, getLead, createLead, updateLead, deleteLead, submitLead,
-  lookupLeadMainManager, listLeadApprovals, getLeadApproval, getAvailableCustomerLeadDetail, exportLeadApprovals
+  lookupLeadMainManager, listLeadApprovals, getLeadApproval, getAvailableCustomerLeadDetail, exportLeadApprovals,
+  previewLeadImport, executeLeadImport
 } from '../customerMarketing';
 
 describe('customer marketing APIs', () => {
@@ -131,6 +132,23 @@ describe('customer marketing APIs', () => {
     expect(call).toHaveBeenNthCalledWith(5, 'put', '/leads/L1', { data: payload });
     expect(call).toHaveBeenNthCalledWith(6, 'post', '/leads/L1/submit', { data: {} });
     expect(call).toHaveBeenNthCalledWith(7, 'delete', '/leads/L1', {});
+  });
+
+  it('线索批量导入使用预览 FormData 和批次执行接口', async () => {
+    const file = new File(['客户名称,是否触达限制\n华夏科技,是'], '线索导入.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+
+    await previewLeadImport(file);
+    await executeLeadImport('BATCH-1');
+
+    const previewConfig = call.mock.calls[0][2];
+    expect(call.mock.calls[0].slice(0, 2)).toEqual(['post', '/leads/import/preview']);
+    expect(previewConfig.data).toBeInstanceOf(FormData);
+    expect(previewConfig.data.get('file')).toBe(file);
+    expect(call).toHaveBeenNthCalledWith(2, 'post', '/leads/import/execute', {
+      data: { batchId: 'BATCH-1' }
+    });
   });
 
   it('线索审批页使用独立待办已办、详情和导出接口', async () => {

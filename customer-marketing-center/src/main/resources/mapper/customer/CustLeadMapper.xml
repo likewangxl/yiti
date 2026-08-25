@@ -7,7 +7,7 @@
         id, lead_no, lead_op, lead_type, source_cust_id, prev_lead_id, version_no, is_latest,
         cust_no, cust_name, unified_credit_code, tag_ids, contact_person, contact_mobile,
         industry, group_type, customer_type, is_keystone, enterprise_type, group_name,
-        is_account_opened, customer_desc, credit_amount, credit_exposure_amount,
+        is_account_opened, touch_restricted, customer_desc, credit_amount, credit_exposure_amount,
         lead_source, distribution_mode, main_manager_id, main_manager_org_id,
         lead_status, owner_org_id, assigned_to, created_by, submitted_by, submitted_time,
         business_key, import_batch_id, batch_row_no, process_instance_id,

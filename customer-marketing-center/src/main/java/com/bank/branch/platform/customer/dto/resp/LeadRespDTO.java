@@ -79,6 +79,9 @@ public class LeadRespDTO {
     /** 是否已开户：0-否/1-是 */
     private Integer isAccountOpened;
 
+    /** 是否限制触达：0-否/1-是 */
+    private Integer touchRestricted;
+
     /** 客户描述 */
     private String customerDesc;
 

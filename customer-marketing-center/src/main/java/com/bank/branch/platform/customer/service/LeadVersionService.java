@@ -84,6 +84,31 @@ public class LeadVersionService {
             String leadSource, String tagIds, String assignedTo, String remark,
             String operatorEmpId, String orgCode) {
 
+        return createEditVersion(
+                sourceCustId,
+                custName, unifiedCreditCode,
+                contactPerson, contactMobile,
+                industry, groupType, customerType,
+                isKeystone, enterpriseType, groupName,
+                isAccountOpened, null, customerDesc,
+                creditAmount, creditExposureAmount,
+                leadSource, tagIds, assignedTo, remark,
+                operatorEmpId, orgCode);
+    }
+
+    /** 创建修改版本，并允许显式覆盖触达限制字段。 */
+    @Transactional
+    public CustLead createEditVersion(
+            String sourceCustId,
+            String custName, String unifiedCreditCode,
+            String contactPerson, String contactMobile,
+            String industry, String groupType, String customerType,
+            Integer isKeystone, String enterpriseType, String groupName,
+            Integer isAccountOpened, Integer touchRestricted, String customerDesc,
+            BigDecimal creditAmount, BigDecimal creditExposureAmount,
+            String leadSource, String tagIds, String assignedTo, String remark,
+            String operatorEmpId, String orgCode) {
+
         log.info("[LeadVersionService.createEditVersion] sourceCustId={}, operator={}", sourceCustId, operatorEmpId);
 
         // 1. 查询客户主档，确认客户存在
@@ -103,7 +128,7 @@ public class LeadVersionService {
                 sourceCustId, prevLeadId, LeadOp.UPDATE.getCode(), newVersionNo,
                 master, custName, unifiedCreditCode, contactPerson, contactMobile,
                 industry, groupType, customerType, isKeystone, enterpriseType, groupName,
-                isAccountOpened, customerDesc, creditAmount, creditExposureAmount,
+                isAccountOpened, touchRestricted, customerDesc, creditAmount, creditExposureAmount,
                 leadSource, tagIds, assignedTo, remark, operatorEmpId, orgCode
         );
 
@@ -156,7 +181,7 @@ public class LeadVersionService {
                 sourceCustId, prevLeadId, LeadOp.DELETE.getCode(), newVersionNo,
                 master, null, null, null, null,
                 null, null, null, null, null, null,
-                null, null, null, null,
+                null, null, null, null, null,
                 null, null, null, null, operatorEmpId, orgCode
         );
 
@@ -192,7 +217,7 @@ public class LeadVersionService {
             String contactPerson, String contactMobile,
             String industry, String groupType, String customerType,
             Integer isKeystone, String enterpriseType, String groupName,
-            Integer isAccountOpened, String customerDesc,
+            Integer isAccountOpened, Integer touchRestricted, String customerDesc,
             BigDecimal creditAmount, BigDecimal creditExposureAmount,
             String leadSource, String tagIds, String assignedTo, String remark,
             String operatorEmpId, String orgCode) {
@@ -223,6 +248,7 @@ public class LeadVersionService {
         lead.setEnterpriseType(enterpriseType != null ? enterpriseType : master.getEnterpriseType());
         lead.setGroupName(groupName != null ? groupName : master.getGroupName());
         lead.setIsAccountOpened(isAccountOpened != null ? isAccountOpened : master.getIsAccountOpened());
+        lead.setTouchRestricted(touchRestricted != null ? touchRestricted : master.getTouchRestricted());
         lead.setCustomerDesc(customerDesc != null ? customerDesc : master.getCustomerDesc());
         lead.setCreditAmount(creditAmount != null ? creditAmount : master.getCreditAmount());
         lead.setCreditExposureAmount(creditExposureAmount != null ? creditExposureAmount : master.getCreditExposureAmount());

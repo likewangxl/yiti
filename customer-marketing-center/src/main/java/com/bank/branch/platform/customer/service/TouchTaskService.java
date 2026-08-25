@@ -36,6 +36,7 @@ public class TouchTaskService {
     private final TouchTaskMapper taskMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final TouchTaskStateMachineService stateMachine;
+    private final TouchEligibilityService touchEligibilityService;
 
     /**
      * 从认领事件创建首次触达任务。
@@ -66,6 +67,7 @@ public class TouchTaskService {
         log.info("[TouchTaskService.createFromClaim] custId={}, orgId={}, assigneeEmpId={}",
                 custId, orgId, assigneeEmpId);
 
+        touchEligibilityService.assertEligible(custId);
         LocalDateTime now = LocalDateTime.now();
 
         // 生成 taskNo: TOUCH_{timestamp}_{random4}
@@ -120,6 +122,7 @@ public class TouchTaskService {
         log.info("[TouchTaskService.createFollowUpTask] custId={}, orgId={}, assigneeEmpId={}, reason={}, planFinishTime={}",
                 custId, orgId, assigneeEmpId, reason, planFinishTime);
 
+        touchEligibilityService.assertEligible(custId);
         LocalDateTime now = LocalDateTime.now();
         String taskNo = "TOUCH_" + System.currentTimeMillis() + "_"
                 + String.format("%04d", new Random().nextInt(10000));

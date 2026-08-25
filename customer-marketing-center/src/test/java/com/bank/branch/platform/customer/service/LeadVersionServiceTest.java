@@ -96,6 +96,27 @@ class LeadVersionServiceTest {
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.CUSTOMER_NOT_FOUND.getCode());
     }
 
+    @Test
+    void createEditVersion_shouldOverrideTouchRestrictionWhenProvided() {
+        CustLead latestLead = buildApprovedLead("lead-001", "cust-001", 1);
+        CustMaster master = buildMaster("cust-001");
+        master.setTouchRestricted(1);
+        when(masterMapper.selectById("cust-001")).thenReturn(master);
+        when(leadMapper.selectLatestBySourceCustId("cust-001")).thenReturn(latestLead);
+        when(leadMapper.updateById(any(CustLead.class))).thenReturn(1);
+        when(leadMapper.insert(any(CustLead.class))).thenReturn(1);
+
+        CustLead result = leadVersionService.createEditVersion(
+                "cust-001",
+                "更新客户名", null, null, null,
+                null, null, null, null, null, null,
+                null, 0, null,
+                null, null, null, null, null, null,
+                "E001", "ORG001");
+
+        assertThat(result.getTouchRestricted()).isEqualTo(0);
+    }
+
     // ==================== createDeleteVersion ====================
 
     @Test

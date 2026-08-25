@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
  * <p>转换规则：
  * <ul>
  *   <li>标量字段直接映射，时间字段 createdTime/updatedTime → createdAt/updatedAt</li>
- *   <li>Integer isKeystone/isAccountOpened/isLatest → Boolean（1=true, 0=false, null=null）</li>
+ *   <li>Integer isKeystone/isAccountOpened/touchRestricted/isLatest → Boolean（1=true, 0=false, null=null）</li>
  *   <li>tagIds（JSON 字符串）、leadNo、assignedTo 等非 DTO 字段不映射（DTO 无对应字段）</li>
  * </ul>
  */
@@ -44,6 +44,7 @@ public final class LeadDTOConverter {
         dto.setIsKeystone(intToBoolean(entity.getIsKeystone()));
         dto.setEnterpriseType(entity.getEnterpriseType());
         dto.setIsAccountOpened(intToBoolean(entity.getIsAccountOpened()));
+        dto.setTouchRestricted(intToBoolean(entity.getTouchRestricted()));
         dto.setCustomerDesc(entity.getCustomerDesc());
         dto.setCreditAmount(entity.getCreditAmount());
         dto.setCreditExposureAmount(entity.getCreditExposureAmount());

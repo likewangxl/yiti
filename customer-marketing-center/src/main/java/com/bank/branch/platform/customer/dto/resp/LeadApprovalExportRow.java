@@ -23,6 +23,7 @@ public class LeadApprovalExportRow {
     @ExcelProperty("是否基石客户") private String keystone;
     @ExcelProperty("企业类型") private String enterpriseType;
     @ExcelProperty("是否开户") private String accountOpened;
+    @ExcelProperty("是否触达限制") private String touchRestricted;
     @ExcelProperty("客户说明") private String customerDesc;
     @ExcelProperty("授信金额(元)") private BigDecimal creditAmount;
     @ExcelProperty("授信敞口金额(元)") private BigDecimal creditExposureAmount;

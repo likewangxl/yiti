@@ -19,7 +19,7 @@ import TouchLimitManagement from '../TouchLimitManagement.vue';
 
 const stubs = {
   PageTitle: { template: '<h1><slot>客户触达周期管理</slot></h1>' },
-  'el-alert': { template: '<div><slot /></div>' },
+  'el-alert': { props: ['title'], template: '<div><span>{{ title }}</span><slot /></div>' },
   'el-button': { template: '<button @click="$emit(\'click\')"><slot /></button>' },
   'el-card': { template: '<section><slot /></section>' },
   'el-form': { template: '<form><slot /></form>' },
@@ -76,6 +76,7 @@ describe('客户触达周期管理页面', () => {
       approvalStatus: 'APPROVED',
     }));
     expect(wrapper.text()).toContain('客户触达周期管理');
+    expect(wrapper.text()).toContain('已用于发起触达校验');
     expect(wrapper.vm.openEdit).toBeTypeOf('function');
   });
 
@@ -95,5 +96,17 @@ describe('客户触达周期管理页面', () => {
 
     wrapper.vm.form.maxTouches = 10000;
     expect(wrapper.vm.validateForm()).toContain('1-9999');
+  });
+
+  it('查询失败展示可见错误状态并保留触达校验提示', async () => {
+    listMock.mockReset().mockRejectedValueOnce(new Error('规则接口暂不可用'));
+    wrapper = mount(TouchLimitManagement, {
+      global: { stubs, directives: { loading: () => {}, 'bp-overflow-tooltip': () => {} } },
+    });
+    await settle();
+
+    expect(wrapper.text()).toContain('规则接口暂不可用');
+    expect(wrapper.text()).toContain('已用于发起触达校验');
+    expect(wrapper.vm.loadError).toBe('规则接口暂不可用');
   });
 });
