@@ -43,6 +43,12 @@ import {
   validateTaskDraft,
   validateTaskSubmission,
 } from "./task-domain.js";
+import {
+  ROLE_OPTIONS,
+  getDefaultView,
+  getRoleLabel,
+  getVisibleMenuKeys,
+} from "./role-access.js";
 
 const PAGE_SIZE = 5;
 const PEOPLE = [
@@ -53,13 +59,13 @@ const PEOPLE = [
 ];
 
 const menuItems = [
-  { key: "workbench", label: "工作台", Icon: Home },
+  { key: "home", label: "首页", Icon: Home },
   { key: "materials", label: "四大维度材料上报", Icon: FilePenLine },
   { key: "records", label: "上报记录", Icon: FileText },
   { key: "review", label: "支部审核工作台", Icon: ClipboardCheck },
   { key: "dashboard", label: "全局数据驾驶舱", Icon: LayoutDashboard },
   { key: "warning", label: "红黄牌预警池", Icon: AlertCircle },
-  { key: "immersive", label: "沉浸式审核工作台", Icon: FileCheck2 },
+  { key: "workbench", label: "工作台", Icon: FileCheck2 },
   { key: "archive", label: "年度考核归档", Icon: Trophy },
   { key: "export", label: "数据导出", Icon: Download },
   { key: "org", label: "党组织管理", Icon: Settings },
@@ -286,7 +292,7 @@ function App() {
 
   const finishTask = (taskId) => {
     setTasks((current) => completeTask(current, taskId));
-    setNotice("任务已提交，已从工作台待办中移除");
+    setNotice("任务已提交，已从首页待办中移除");
     setView("processing");
     setSelectedTask(null);
   };
@@ -303,13 +309,15 @@ function App() {
 
   const currentTitle = menuItems.find((item) => item.key === view)?.label;
   const employeeCount = getEmployeeTasks(tasks, new Date());
+  const visibleMenuKeys = getVisibleMenuKeys(role);
+  const visibleMenuItems = menuItems.filter((item) => visibleMenuKeys.includes(item.key));
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark"><Star size={19} strokeWidth={1.8} /></span><span>红色引擎</span></div>
         <nav className="side-nav" aria-label="主导航">
-          {menuItems.map(({ key, label, Icon, isNew }) => (
+          {visibleMenuItems.map(({ key, label, Icon, isNew }) => (
             <button key={key} className={`side-nav-item ${view === key ? "is-active" : ""}`} onClick={() => go(key)}>
               <Icon size={16} strokeWidth={1.8} />
               <span>{label}</span>
@@ -325,7 +333,7 @@ function App() {
           <div className="system-title">红色引擎工程管理系统</div>
           <div className="topbar-right">
             <span className="prototype-label">原型演示</span>
-            <label className="role-switch"><span>演示身份</span><select value={role} onChange={(event) => { setRole(event.target.value); go(event.target.value === "admin" ? "management" : "workbench"); }} aria-label="演示身份"><option value="admin">组织管理员</option><option value="employee">一线员工</option></select></label>
+            <label className="role-switch"><span>演示身份</span><select value={role} onChange={(event) => { const nextRole = event.target.value; setRole(nextRole); go(getDefaultView(nextRole)); }} aria-label="演示身份">{ROLE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
             <button className="logout-button">退出</button>
           </div>
         </header>
@@ -335,10 +343,10 @@ function App() {
           {view === "management" && <TaskManagementPage tasks={tasks} onAdd={() => go("new")} onView={(task) => openTask(task, true)} />}
           {view === "new" && <NewTaskPage onBack={() => go("management")} onPublish={handlePublished} />}
           {view === "processing" && <TaskProcessingPage tasks={tasks} onOpen={openTask} />}
-          {view === "workbench" && <WorkbenchPage tasks={employeeCount} onOpen={openTask} role={role} />}
+          {view === "home" && <HomePage tasks={employeeCount} onOpen={openTask} role={role} />}
           {view === "detail" && selectedTask && <TaskDetailPage task={selectedTask} readonly={detailReadonly} onBack={() => go(role === "admin" ? "management" : "processing")} onComplete={finishTask} />}
-          {view === "materials-entry" && selectedTask && <MaterialsEntryPage task={selectedTask} onBack={() => go("workbench")} />}
-          {["materials", "records", "review", "dashboard", "warning", "immersive", "archive", "export", "org", "mapping"].includes(view) && <LegacyPage title={currentTitle} />}
+          {view === "materials-entry" && selectedTask && <MaterialsEntryPage task={selectedTask} onBack={() => go("home")} />}
+          {["materials", "records", "review", "dashboard", "warning", "workbench", "archive", "export", "org", "mapping"].includes(view) && <LegacyPage title={currentTitle} role={role} view={view} />}
         </main>
       </section>
     </div>
@@ -434,13 +442,13 @@ function TaskProcessingPage({ tasks, onOpen }) {
   const filtered = useMemo(() => employeeTasks.filter((task) => (!applied.title || task.title.includes(applied.title)) && (!applied.nature || task.nature === applied.nature) && (!applied.status || (task.status || "pending") === applied.status) && (!applied.cycle || task.cycle === applied.cycle)), [employeeTasks, applied]);
   const rows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const reset = () => { const next = { title: "", nature: "", status: "", cycle: "" }; setFilters(next); setApplied(next); setPage(1); };
-  return <div className="page-wrap"><PageHeading title="任务处理" subtitle="查看当前时间窗内收到的任务，提交后从工作台待办中移除" /><section className="filter-card panel-card"><div className="filter-row"><label className="filter-field"><span>任务标题</span><input value={filters.title} onChange={(event) => setFilters({ ...filters, title: event.target.value })} placeholder="请输入任务标题" /></label><label className="filter-field"><span>任务性质</span><select value={filters.nature} onChange={(event) => setFilters({ ...filters, nature: event.target.value })}><option value="">全部</option><option value="scheduled">定时任务</option><option value="temporary">临时任务</option></select></label><label className="filter-field"><span>任务状态</span><select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">全部</option><option value="pending">待处理</option><option value="completed">已完成</option></select></label><label className="filter-field"><span>周期</span><select value={filters.cycle} onChange={(event) => setFilters({ ...filters, cycle: event.target.value })}><option value="">全部</option>{CYCLES.map((cycle) => <option key={cycle.value} value={cycle.value}>{cycle.label}</option>)}</select></label><div className="filter-actions"><button className="primary-button compact" onClick={() => { setApplied({ ...filters }); setPage(1); }}><Search size={15} />查询</button><button className="plain-button compact" onClick={reset}><RotateCcw size={15} />重置</button></div></div></section><section className="panel-card table-card"><div className="card-title-row"><div><h2>我的任务</h2><span>任务标题可进入任务详情，四大维度材料任务将进入现有上报入口</span></div><span className="result-count">共 {filtered.length} 条</span></div><div className="table-scroll"><table><thead><tr><th>任务标题</th><th>任务说明</th><th>任务性质</th><th>周期 / 时间窗</th><th>截止时间</th><th>状态</th><th>操作</th></tr></thead><tbody>{rows.length ? rows.map((task) => <tr key={task.id}><td><button className="title-link" onClick={() => onOpen(task)}>{task.title}<ExternalLink size={13} /></button></td><td><span className="ellipsis" title={task.description}>{task.description}</span></td><td>{task.nature === "scheduled" ? "定时任务" : "临时任务"}</td><td>{task.nature === "scheduled" ? `${cycleLabel(task.cycle)} · ${task.window?.start} 至 ${task.window?.end}` : "临时任务"}</td><td>{task.nature === "scheduled" ? task.window?.end : task.endAt}</td><td><Tag tone={task.status === "completed" ? "green" : "blue"}>{task.status === "completed" ? "已完成" : "待处理"}</Tag></td><td><button className="link-button" onClick={() => onOpen(task)}>{task.status === "completed" ? "查看" : "处理"}</button></td></tr>) : <tr><td colSpan="7"><EmptyState title="暂无当前任务" description="当前时间窗内没有待处理任务" /></td></tr>}</tbody></table></div><Pagination page={page} total={filtered.length} onChange={setPage} /></section></div>;
+  return <div className="page-wrap"><PageHeading title="任务处理" subtitle="查看当前时间窗内收到的任务，提交后从首页待办中移除" /><section className="filter-card panel-card"><div className="filter-row"><label className="filter-field"><span>任务标题</span><input value={filters.title} onChange={(event) => setFilters({ ...filters, title: event.target.value })} placeholder="请输入任务标题" /></label><label className="filter-field"><span>任务性质</span><select value={filters.nature} onChange={(event) => setFilters({ ...filters, nature: event.target.value })}><option value="">全部</option><option value="scheduled">定时任务</option><option value="temporary">临时任务</option></select></label><label className="filter-field"><span>任务状态</span><select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">全部</option><option value="pending">待处理</option><option value="completed">已完成</option></select></label><label className="filter-field"><span>周期</span><select value={filters.cycle} onChange={(event) => setFilters({ ...filters, cycle: event.target.value })}><option value="">全部</option>{CYCLES.map((cycle) => <option key={cycle.value} value={cycle.value}>{cycle.label}</option>)}</select></label><div className="filter-actions"><button className="primary-button compact" onClick={() => { setApplied({ ...filters }); setPage(1); }}><Search size={15} />查询</button><button className="plain-button compact" onClick={reset}><RotateCcw size={15} />重置</button></div></div></section><section className="panel-card table-card"><div className="card-title-row"><div><h2>我的任务</h2><span>任务标题可进入任务详情，四大维度材料任务将进入现有上报入口</span></div><span className="result-count">共 {filtered.length} 条</span></div><div className="table-scroll"><table><thead><tr><th>任务标题</th><th>任务说明</th><th>任务性质</th><th>周期 / 时间窗</th><th>截止时间</th><th>状态</th><th>操作</th></tr></thead><tbody>{rows.length ? rows.map((task) => <tr key={task.id}><td><button className="title-link" onClick={() => onOpen(task)}>{task.title}<ExternalLink size={13} /></button></td><td><span className="ellipsis" title={task.description}>{task.description}</span></td><td>{task.nature === "scheduled" ? "定时任务" : "临时任务"}</td><td>{task.nature === "scheduled" ? `${cycleLabel(task.cycle)} · ${task.window?.start} 至 ${task.window?.end}` : "临时任务"}</td><td>{task.nature === "scheduled" ? task.window?.end : task.endAt}</td><td><Tag tone={task.status === "completed" ? "green" : "blue"}>{task.status === "completed" ? "已完成" : "待处理"}</Tag></td><td><button className="link-button" onClick={() => onOpen(task)}>{task.status === "completed" ? "查看" : "处理"}</button></td></tr>) : <tr><td colSpan="7"><EmptyState title="暂无当前任务" description="当前时间窗内没有待处理任务" /></td></tr>}</tbody></table></div><Pagination page={page} total={filtered.length} onChange={setPage} /></section></div>;
 }
 
-function WorkbenchPage({ tasks, onOpen, role }) {
+function HomePage({ tasks, onOpen, role }) {
   const pending = tasks.filter((task) => task.status === "pending");
   const completed = tasks.filter((task) => task.status === "completed");
-  return <div className="page-wrap workbench-page"><PageHeading title="工作台" subtitle={`欢迎回来，${role === "admin" ? "组织管理员" : "一线员工"}`} /><div className="metric-grid"><div className="metric-card"><div className="metric-icon red"><ListTodo size={19} /></div><div><span>待办事项</span><strong>{pending.length}</strong></div></div><div className="metric-card"><div className="metric-icon blue"><CheckCircle2 size={19} /></div><div><span>已完成任务</span><strong>{completed.length}</strong></div></div><div className="metric-card"><div className="metric-icon orange"><Users size={19} /></div><div><span>本组织任务</span><strong>{tasks.length}</strong></div></div></div><section className="panel-card todo-card"><div className="card-title-row"><div><h2>待办事项</h2><span>当前处于任务时间窗且尚未提交的任务</span></div><Tag tone="red">{pending.length} 项待处理</Tag></div>{pending.length ? <div className="todo-list">{pending.map((task) => <button className="todo-item" key={task.id} onClick={() => onOpen(task)}><div className={`todo-icon ${task.route === "materials-entry" ? "materials" : "task"}`}>{task.route === "materials-entry" ? <FilePenLine size={17} /> : <ListTodo size={17} />}</div><div className="todo-main"><strong>{task.title}</strong><span>{task.description}</span></div><div className="todo-meta"><Tag tone={task.route === "materials-entry" ? "red" : "blue"}>{task.route === "materials-entry" ? "材料上报入口" : task.type}</Tag><span>{task.nature === "scheduled" ? `${cycleLabel(task.cycle)} · ${task.window?.end}` : `截止 ${task.endAt}`}</span></div><ChevronRight className="todo-arrow" size={17} /></button>)}</div> : <EmptyState title="待办已清空" description="当前没有需要处理的任务" />}</section><div className="workbench-note"><Clock3 size={16} /><span>任务只在时间窗开始后出现在首页待办，提交后立即移除；四大维度材料任务继续由现有材料上报入口处理。</span></div></div>;
+  return <div className="page-wrap workbench-page"><PageHeading title="首页" subtitle={`欢迎回来，${getRoleLabel(role)}`} /><div className="metric-grid"><div className="metric-card"><div className="metric-icon red"><ListTodo size={19} /></div><div><span>待办事项</span><strong>{pending.length}</strong></div></div><div className="metric-card"><div className="metric-icon blue"><CheckCircle2 size={19} /></div><div><span>已完成任务</span><strong>{completed.length}</strong></div></div><div className="metric-card"><div className="metric-icon orange"><Users size={19} /></div><div><span>本组织任务</span><strong>{tasks.length}</strong></div></div></div><section className="panel-card todo-card"><div className="card-title-row"><div><h2>待办事项</h2><span>当前处于任务时间窗且尚未提交的任务</span></div><Tag tone="red">{pending.length} 项待处理</Tag></div>{pending.length ? <div className="todo-list">{pending.map((task) => <button className="todo-item" key={task.id} onClick={() => onOpen(task)}><div className={`todo-icon ${task.route === "materials-entry" ? "materials" : "task"}`}>{task.route === "materials-entry" ? <FilePenLine size={17} /> : <ListTodo size={17} />}</div><div className="todo-main"><strong>{task.title}</strong><span>{task.description}</span></div><div className="todo-meta"><Tag tone={task.route === "materials-entry" ? "red" : "blue"}>{task.route === "materials-entry" ? "材料上报入口" : task.type}</Tag><span>{task.nature === "scheduled" ? `${cycleLabel(task.cycle)} · ${task.window?.end}` : `截止 ${task.endAt}`}</span></div><ChevronRight className="todo-arrow" size={17} /></button>)}</div> : <EmptyState title="待办已清空" description="当前没有需要处理的任务" />}</section><div className="workbench-note"><Clock3 size={16} /><span>任务只在时间窗开始后出现在首页待办，提交后立即移除；四大维度材料任务继续由现有材料上报入口处理。</span></div></div>;
 }
 
 function TaskDetailPage({ task, readonly, onBack, onComplete }) {
@@ -455,19 +463,24 @@ function TaskDetailPage({ task, readonly, onBack, onComplete }) {
     setSubmitError("");
     setConfirming(true);
   };
-  return <div className="page-wrap detail-page"><PageHeading title={readonly ? "查看任务" : "处理任务"} action={<button className="plain-button" onClick={onBack}><ArrowLeft size={16} />返回列表</button>} /><section className="panel-card detail-card"><div className="detail-header"><div><div className="eyebrow">{task.type}</div><h2>{task.title}</h2></div><Tag tone={task.status === "completed" || task.employeeStatus === "completed" ? "green" : readonly ? "blue" : "blue"}>{task.status === "completed" || task.employeeStatus === "completed" ? "已完成" : readonly ? "已发布" : "待处理"}</Tag></div><div className="detail-meta-grid"><div><span>任务性质</span><strong>{task.nature === "scheduled" ? "定时任务" : "临时任务"}</strong></div><div><span>{task.nature === "scheduled" ? "周期" : "时间范围"}</span><strong>{task.nature === "scheduled" ? cycleLabel(task.cycle) : `${task.startAt} 至 ${task.endAt}`}</strong></div><div><span>任务对象</span><strong>{task.objectLabel}</strong></div><div><span>{task.nature === "scheduled" ? "时间窗" : "截止时间"}</span><strong>{task.nature === "scheduled" ? `${task.window?.start} 至 ${task.window?.end}` : task.endAt}</strong></div></div><div className="detail-divider" /><div className="detail-section"><h3>任务说明</h3><div className="description-content">{description.map((part, index) => part.type === "link" ? <a key={index} href={part.href} target={part.target} rel={part.rel}>{part.value}<ExternalLink size={13} /></a> : <span key={index}>{part.value}</span>)}</div></div>{task.requiresFile && <div className="detail-section upload-section"><div className="upload-title"><h3>附件上传</h3><span>允许类型：{task.fileTypes.join("、")}</span></div><label className={`upload-box ${readonly ? "is-readonly" : ""}`}><input type="file" disabled={readonly} onChange={handleFile} accept={task.fileTypes.map((type) => ({ PDF: ".pdf", Word: ".doc,.docx", Excel: ".xls,.xlsx", 图片: "image/*", 压缩包: ".zip,.rar,.7z" }[type] || "")).join(",")} /><UploadCloud size={26} /><strong>{fileName || (readonly ? "该任务要求上传文件" : "点击或拖拽上传文件")}</strong><span>{task.fileTypes.join("、")} 格式</span></label></div>}{!readonly && task.employeeStatus !== "completed" && <div className="detail-actions">{submitError && <div className="submit-error">{submitError}</div>}{confirming ? <div className="confirm-strip"><span>确认提交任务？提交后将从工作台待办中移除。</span><button className="plain-button compact" onClick={() => setConfirming(false)}>再想想</button><button className="primary-button compact" onClick={() => onComplete(task.id)}>确认提交</button></div> : <button className="primary-button" onClick={requestSubmit}><Check size={16} />提交任务</button>}</div>}</section></div>;
+  return <div className="page-wrap detail-page"><PageHeading title={readonly ? "查看任务" : "处理任务"} action={<button className="plain-button" onClick={onBack}><ArrowLeft size={16} />返回列表</button>} /><section className="panel-card detail-card"><div className="detail-header"><div><div className="eyebrow">{task.type}</div><h2>{task.title}</h2></div><Tag tone={task.status === "completed" || task.employeeStatus === "completed" ? "green" : readonly ? "blue" : "blue"}>{task.status === "completed" || task.employeeStatus === "completed" ? "已完成" : readonly ? "已发布" : "待处理"}</Tag></div><div className="detail-meta-grid"><div><span>任务性质</span><strong>{task.nature === "scheduled" ? "定时任务" : "临时任务"}</strong></div><div><span>{task.nature === "scheduled" ? "周期" : "时间范围"}</span><strong>{task.nature === "scheduled" ? cycleLabel(task.cycle) : `${task.startAt} 至 ${task.endAt}`}</strong></div><div><span>任务对象</span><strong>{task.objectLabel}</strong></div><div><span>{task.nature === "scheduled" ? "时间窗" : "截止时间"}</span><strong>{task.nature === "scheduled" ? `${task.window?.start} 至 ${task.window?.end}` : task.endAt}</strong></div></div><div className="detail-divider" /><div className="detail-section"><h3>任务说明</h3><div className="description-content">{description.map((part, index) => part.type === "link" ? <a key={index} href={part.href} target={part.target} rel={part.rel}>{part.value}<ExternalLink size={13} /></a> : <span key={index}>{part.value}</span>)}</div></div>{task.requiresFile && <div className="detail-section upload-section"><div className="upload-title"><h3>附件上传</h3><span>允许类型：{task.fileTypes.join("、")}</span></div><label className={`upload-box ${readonly ? "is-readonly" : ""}`}><input type="file" disabled={readonly} onChange={handleFile} accept={task.fileTypes.map((type) => ({ PDF: ".pdf", Word: ".doc,.docx", Excel: ".xls,.xlsx", 图片: "image/*", 压缩包: ".zip,.rar,.7z" }[type] || "")).join(",")} /><UploadCloud size={26} /><strong>{fileName || (readonly ? "该任务要求上传文件" : "点击或拖拽上传文件")}</strong><span>{task.fileTypes.join("、")} 格式</span></label></div>}{!readonly && task.employeeStatus !== "completed" && <div className="detail-actions">{submitError && <div className="submit-error">{submitError}</div>}{confirming ? <div className="confirm-strip"><span>确认提交任务？提交后将从首页待办中移除。</span><button className="plain-button compact" onClick={() => setConfirming(false)}>再想想</button><button className="primary-button compact" onClick={() => onComplete(task.id)}>确认提交</button></div> : <button className="primary-button" onClick={requestSubmit}><Check size={16} />提交任务</button>}</div>}</section></div>;
 }
 
 function MaterialsEntryPage({ task, onBack }) {
-  return <div className="page-wrap"><PageHeading title="四大维度材料上报" subtitle="该任务使用现有材料上报入口处理" action={<button className="plain-button" onClick={onBack}><ArrowLeft size={16} />返回工作台</button>} /><section className="panel-card branch-card"><div className="branch-icon"><FilePenLine size={24} /></div><Tag tone="red">四大维度材料上报</Tag><h2>{task.title}</h2><p>此类任务继续由现有四大维度材料上报页面处理，不进入通用任务详情填报流程。</p><div className="branch-task-summary"><div><span>任务周期</span><strong>{cycleLabel(task.cycle)} · {task.window?.start} 至 {task.window?.end}</strong></div><div><span>任务对象</span><strong>{task.objectLabel}</strong></div><div><span>允许上传</span><strong>{task.fileTypes.join("、")}</strong></div></div><button className="primary-button" onClick={() => alert("原有四大维度材料上报入口（原型说明，不重做原页面）")}><FilePenLine size={16} />进入现有材料上报入口</button><small className="branch-note">原型仅展示分支说明，不改动或重做原有页面。</small></section></div>;
+  return <div className="page-wrap"><PageHeading title="四大维度材料上报" subtitle="该任务使用现有材料上报入口处理" action={<button className="plain-button" onClick={onBack}><ArrowLeft size={16} />返回首页</button>} /><section className="panel-card branch-card"><div className="branch-icon"><FilePenLine size={24} /></div><Tag tone="red">四大维度材料上报</Tag><h2>{task.title}</h2><p>此类任务继续由现有四大维度材料上报页面处理，不进入通用任务详情填报流程。</p><div className="branch-task-summary"><div><span>任务周期</span><strong>{cycleLabel(task.cycle)} · {task.window?.start} 至 {task.window?.end}</strong></div><div><span>任务对象</span><strong>{task.objectLabel}</strong></div><div><span>允许上传</span><strong>{task.fileTypes.join("、")}</strong></div></div><button className="primary-button" onClick={() => alert("原有四大维度材料上报入口（原型说明，不重做原页面）")}><FilePenLine size={16} />进入现有材料上报入口</button><small className="branch-note">原型仅展示分支说明，不改动或重做原有页面。</small></section></div>;
 }
 
 function EmptyState({ title, description }) {
   return <div className="empty-state"><div className="empty-icon"><ClipboardList size={22} /></div><strong>{title}</strong><span>{description}</span></div>;
 }
 
-function LegacyPage({ title }) {
-  return <div className="page-wrap"><PageHeading title={title} /><section className="panel-card legacy-card"><Building2 size={28} /><h2>{title}</h2><p>本次原型仅新增任务管理与任务处理相关页面，原有页面保持现状。</p></section></div>;
+function LegacyPage({ title, role, view }) {
+  const description = view === "review"
+    ? "支部书记专属审核入口；原支部审核员职责已合并至支部书记。"
+    : view === "workbench"
+      ? "原沉浸式审核工作台已更名为工作台，仅组织审核员可使用。"
+      : "本次原型仅新增任务管理与任务处理相关页面，原有页面保持现状。";
+  return <div className="page-wrap"><PageHeading title={title} subtitle={`当前身份：${getRoleLabel(role)}`} /><section className="panel-card legacy-card"><Building2 size={28} /><h2>{title}</h2><p>{description}</p></section></div>;
 }
 
 export { App };
