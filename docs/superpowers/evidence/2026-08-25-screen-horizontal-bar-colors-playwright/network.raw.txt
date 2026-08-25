@@ -1,0 +1,17 @@
+After `requests --clear` and reload:
+
+46. GET http://127.0.0.1:8091/api/auth/my-menus => 200 OK
+47. GET http://127.0.0.1:8091/api/auth/permissions => 200 OK
+213. GET http://127.0.0.1:8091/api/screen/view/SCR_HORIZONTAL?preview=draft => 200 OK, 2ms, application/json
+214. POST http://127.0.0.1:8091/api/screen/data => 200 OK, 2ms, application/json
+
+Request #213 response summary:
+- state: draft
+- component: ChartWidget / BAR_COMPARE
+- propValue.barMode: horizontal
+- blockId: 6101
+
+Request #214 response body:
+{"code":"0","message":"success","data":{"columns":["category","value"],"rows":[["类别01",92],["类别02",84],["类别03",76],["类别04",68],["类别05",60],["类别06",52],["类别07",44],["类别08",36],["类别09",28],["类别10",20],["类别11",12]],"columnsMeta":[{"col":"category","alias":"类别"},{"col":"value","alias":"经营指标"}]}}
+
+No save or publish request was issued.
