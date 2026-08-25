@@ -1,0 +1,12 @@
+11 routes registered in browser context:
+**/api/auth/current-user
+**/api/auth/my-menus
+**/api/auth/permissions
+**/api/screen/admin/screens
+**/api/screen/admin/canvas/9101
+**/api/screen/admin/screens/9101/map-region-metrics
+**/api/screen/admin/datasources*
+**/api/admin/org-groups*
+**/api/admin/org-profiles*
+**/api/admin/roles/all*
+**/api/screen/data
