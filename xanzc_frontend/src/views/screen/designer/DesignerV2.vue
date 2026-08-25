@@ -755,6 +755,11 @@ onBeforeUnmount(() => {
 // 顶层独立路由直接撑满 #app，不再依赖 DefaultLayout 的壳层高度。
 .dsn2 { display: flex; flex-direction: column; height: 100%; background: #03081c; }
 .scr-surface-host { @include theme.scr-theme-vars; } // 供画布内复用 .scr-* 视觉变量
+.scr-surface-host :deep(.scr-block-h) {
+  color: var(--scr-text, #f5fbff);
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(0, 229, 255, .35);
+}
 .dsn2-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
   border-bottom: 1px solid rgba(0,229,255,.2); }
 .dsn2-toolbar .spacer { flex: 1; }
