@@ -24,6 +24,15 @@
     </el-form-item>
     <el-form-item label="周期"><el-input v-model="bind.period" placeholder="LATEST / LAST_10D" @input="syncBind" /></el-form-item>
 
+    <el-form-item v-if="showMetricItems" label="指标列">
+      <el-select v-model="metricItemCols" multiple filterable allow-create default-first-option
+                 data-testid="chart-metric-columns" placeholder="请选择指标列">
+        <el-option v-for="item in metricColumnOptions" :key="item.col"
+                   :label="item.label" :value="item.col" />
+      </el-select>
+      <div class="attr-hint">可多选指标列；数据项绑定使用接口原始列名，展示名称取数据源别名。</div>
+    </el-form-item>
+
     <!-- 全屏周期过滤器联动豁免(spec §5.3):仅时序数据源会被联动,豁免后维持自身周期 -->
     <el-form-item label="全局周期">
       <el-switch v-model="propValue.ignoreGlobalPeriod" active-text="忽略联动" @change="syncProp" />
@@ -141,7 +150,7 @@ import CommonAttr from '@/views/screen/designer/panels/CommonAttr.vue';
 import { listScreenDatasources, listOrgGroups, probeScreenDatasourceColumns } from '@/api/screen';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import { chartMetas } from '@/views/screen/designer/widgets';
-import { filterDatasourcesByMeta } from './dsFilter';
+import { filterDatasourcesByMeta, parseDatasourceConfig } from './dsFilter';
 import { buildDatasourceProbeRequest, datasourceTryRunScopeMode } from '@/utils/dsConfig';
 import { filterActiveOrgGroups, filterReportScreenOrgGroups } from '@/utils/screenScope';
 const props = defineProps({ element: { type: Object, required: true } });
@@ -166,6 +175,8 @@ if (propValue.ignoreGlobalPeriod == null) propValue.ignoreGlobalPeriod = false;
 
 const innerType = computed(() => props.element.innerType);
 const chartMeta = computed(() => chartMetas.find(c => c.innerType === innerType.value) || null);
+const metricItemTypes = new Set(['METRIC_CARD', 'LINE_TREND', 'AREA_STACK', 'BAR_COMPARE', 'COMBO_CHART']);
+const showMetricItems = computed(() => metricItemTypes.has(innerType.value));
 const showSeriesVisualControls = computed(() => ['LINE_TREND', 'AREA_STACK', 'BAR_COMPARE', 'COMBO_CHART'].includes(innerType.value));
 const showStandaloneLabelControl = computed(() => ['FUNNEL_CHART', 'SCATTER_BUBBLE', 'HEATMAP_MATRIX', 'SUNBURST_CHART'].includes(innerType.value));
 const showSmoothControl = computed(() => ['LINE_TREND', 'AREA_STACK', 'COMBO_CHART', 'SPARKLINE_CARD'].includes(innerType.value));
@@ -235,7 +246,7 @@ const dsHint = computed(() => {
   return parts.join('，');
 });
 const needValueCol = computed(() => innerType.value === 'GAUGE' || innerType.value === 'LIQUID_PROGRESS');
-const selectedDatasource = computed(() => datasources.value.find(item => item.id === bind.dsId) || null);
+const selectedDatasource = computed(() => datasources.value.find(item => String(item.id) === String(bind.dsId)) || null);
 const probeRequiresNamedGroup = computed(() => {
   try { return datasourceTryRunScopeMode(selectedDatasource.value?.configJson) === 'NAMED_GROUP'; }
   catch { return false; }
@@ -249,12 +260,90 @@ function syncBind() {
   // 落 dsType 快照:运行时 BlockContainer 判定"是否响应全屏周期过滤器联动"依赖它
   // (utils/globalPeriod.isTimeseriesBlock;快照缺失的历史区块按时序专属图表类型兜底)。
   // 幂等刷新:数据源列表未加载时保留旧值,不误清
-  const d = datasources.value.find(x => x.id === bind.dsId);
+  const d = datasources.value.find(x => String(x.id) === String(bind.dsId));
   if (d) bind.dsType = d.dsType;
   else if (datasourcesLoaded.value) delete bind.dsType;
   props.element.bindJson = JSON.stringify(bind);
   store.pushSnapshotDebounced();
 }
+
+/**
+ * 指标列候选只来自当前已选数据源的语义配置，不调用运行时取数或高危列探测。
+ * fieldMeta 是优先级更高的展示元数据；旧数据源没有 fieldMeta 时退化到 metrics 快照。
+ */
+function datasourceMetricColumns(datasource) {
+  const config = parseDatasourceConfig(datasource?.configJson);
+  if (!config) return [];
+
+  const fieldMeta = Array.isArray(config.fieldMeta)
+    ? config.fieldMeta
+      .filter(item => String(item?.role || '').toUpperCase() === 'METRIC')
+      .map(item => ({
+        col: String(item?.col || '').trim(),
+        label: String(item?.alias || item?.col || '').trim()
+      }))
+      .filter(item => item.col)
+    : [];
+  if (fieldMeta.length) return uniqueMetricColumns(fieldMeta);
+
+  const metrics = Array.isArray(config.metrics) ? config.metrics : [];
+  return uniqueMetricColumns(metrics.map(item => {
+    const col = String(item?.metricName || '').trim();
+    return { col, label: col };
+  }).filter(item => item.col));
+}
+
+function uniqueMetricColumns(columns) {
+  const seen = new Set();
+  return columns.filter(item => {
+    if (!item.col || seen.has(item.col)) return false;
+    seen.add(item.col);
+    return true;
+  });
+}
+
+const metricColumnOptions = computed(() => {
+  if (!showMetricItems.value) return [];
+
+  const options = datasourceMetricColumns(selectedDatasource.value);
+  const optionByCol = new Map(options.map(item => [item.col, item]));
+  const existingItems = Array.isArray(bind.items) ? bind.items : [];
+  for (const item of existingItems) {
+    const col = String(item?.col || '').trim();
+    if (!col || optionByCol.has(col)) continue;
+    const label = String(item?.label || '').trim() || col;
+    options.push({ col, label });
+    optionByCol.set(col, options[options.length - 1]);
+  }
+  // 已有绑定的 label 属于用户当前画布配置，不能因数据源配置刷新而覆盖。
+  return options.map(option => {
+    const existing = existingItems.find(item => String(item?.col || '').trim() === option.col);
+    const label = String(existing?.label || '').trim() || option.label || option.col;
+    return { col: option.col, label };
+  });
+});
+
+const metricItemCols = computed({
+  get() {
+    if (!Array.isArray(bind.items)) return [];
+    return uniqueMetricColumns(bind.items.map(item => ({ col: String(item?.col || '').trim() })))
+      .map(item => item.col);
+  },
+  set(columns) {
+    const selected = Array.isArray(columns) ? columns : [];
+    const existingItems = Array.isArray(bind.items) ? bind.items : [];
+    const optionByCol = new Map(metricColumnOptions.value.map(item => [item.col, item]));
+    bind.items = uniqueMetricColumns(selected.map(value => {
+      const col = String(value || '').trim();
+      const existing = existingItems.find(item => String(item?.col || '').trim() === col);
+      const option = optionByCol.get(col);
+      return { col, label: String(existing?.label || '').trim() || option?.label || col };
+    }).filter(item => item.col));
+    props.element.bindJson = JSON.stringify(bind);
+    store.pushSnapshotDebounced();
+  }
+});
+
 function syncStyle() { props.element.styleJson = JSON.stringify(styleCfg); store.pushSnapshotDebounced(); }
 function syncDrill() { props.element.drillJson = JSON.stringify(drill); store.pushSnapshotDebounced(); }
 // propValue 是节点上的响应式对象,mutate 即生效;仅需标脏 + 记快照
@@ -293,10 +382,15 @@ async function probeColumns() {
     probe.running = false;
   }
 }
-watch(() => bind.dsId, () => {
+watch(() => bind.dsId, (next, previous) => {
   // 切换数据源后既不能复用另一个数据源的列，也不能复用另一个范围模式的测试组。
   colOptions.value = [];
   probe.testOrgGroupCode = '';
+  if (String(next ?? '') !== String(previous ?? '')) {
+    bind.items = [];
+    props.element.bindJson = JSON.stringify(bind);
+    store.pushSnapshotDebounced();
+  }
 });
 
 /** 数据源列表/屏范围变化后，清理已不再属于候选集合的历史绑定。 */

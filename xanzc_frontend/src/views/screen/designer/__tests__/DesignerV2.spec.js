@@ -71,9 +71,12 @@ const TestChartAttr = {
   props: { element: { type: Object, required: true } },
   setup(props) {
     const bind = JSON.parse(props.element.bindJson || '{}');
-    return { initialDsId: bind.dsId };
+    return {
+      initialDsId: bind.dsId,
+      initialMetricCols: Array.isArray(bind.items) ? bind.items.map(item => item.col).join(',') : ''
+    };
   },
-  template: '<div data-testid="test-datasource">{{ initialDsId }}</div>'
+  template: '<div><div data-testid="test-datasource">{{ initialDsId }}</div><div data-testid="test-metric-columns">{{ initialMetricCols }}</div></div>'
 };
 
 // el-button/el-dialog/el-input 用渲染 slot 的自定义 stub:新建大屏流程测试需要按钮文本可寻、
@@ -234,17 +237,25 @@ describe('DesignerV2.vue 挂载冒烟测试', () => {
     const wrapper = mount(DesignerV2, { global: { stubs } });
     const designerStore = useScreenDesignerStore();
     designerStore.componentData = [
-      { id: 'chart-a', component: 'ChartWidget', bindJson: JSON.stringify({ dsId: 101 }) },
-      { id: 'chart-b', component: 'ChartWidget', bindJson: JSON.stringify({ dsId: 202 }) }
+      {
+        id: 'chart-a', component: 'ChartWidget',
+        bindJson: JSON.stringify({ dsId: 101, items: [{ col: 'metric-a', label: '指标 A' }] })
+      },
+      {
+        id: 'chart-b', component: 'ChartWidget',
+        bindJson: JSON.stringify({ dsId: 202, items: [{ col: 'metric-b', label: '指标 B' }] })
+      }
     ];
 
     designerStore.selectComponent('chart-a');
     await nextTick();
     expect(wrapper.find('[data-testid="test-datasource"]').text()).toBe('101');
+    expect(wrapper.find('[data-testid="test-metric-columns"]').text()).toBe('metric-a');
 
     designerStore.selectComponent('chart-b');
     await nextTick();
     expect(wrapper.find('[data-testid="test-datasource"]').text()).toBe('202');
+    expect(wrapper.find('[data-testid="test-metric-columns"]').text()).toBe('metric-b');
   });
 });
 
