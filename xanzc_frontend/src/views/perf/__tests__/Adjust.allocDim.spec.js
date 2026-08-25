@@ -22,7 +22,7 @@ const dict = vi.hoisted(() => ({
   listDictItems: vi.fn((type) => Promise.resolve(type === 'PERF_ALLOC_DIM'
     ? [
         { dictCode: 'RULE', dictLabel: '按规则分配' },
-        { dictCode: 'ACCOUNT', dictLabel: '按账户分配' },
+        { dictCode: 'ACCOUNT', dictLabel: '按台账分配' },
         { dictCode: 'NEW', dictLabel: '新客户' }
       ]
     : [
@@ -96,7 +96,7 @@ afterEach(() => {
   dict.listDictItems.mockImplementation((type) => Promise.resolve(type === 'PERF_ALLOC_DIM'
     ? [
         { dictCode: 'RULE', dictLabel: '按规则分配' },
-        { dictCode: 'ACCOUNT', dictLabel: '按账户分配' },
+        { dictCode: 'ACCOUNT', dictLabel: '按台账分配' },
         { dictCode: 'NEW', dictLabel: '新客户' }
       ]
     : [
@@ -118,7 +118,7 @@ describe('业绩调整分配维度与原分配关系', () => {
     expect(dict.listDictItems).toHaveBeenCalledWith('PERF_ALLOC_DIM');
     expect(wrapper.vm.allocDimOptions).toEqual([
       { value: 'RULE', label: '按规则分配' },
-      { value: 'ACCOUNT', label: '按账户分配' },
+      { value: 'ACCOUNT', label: '按账号分配' },
       { value: 'NEW', label: '新开户' }
     ]);
     expect(wrapper.vm.allocDimLabel('NEW')).toBe('新开户');
@@ -127,7 +127,7 @@ describe('业绩调整分配维度与原分配关系', () => {
     await wrapper.vm.loadAllocDimDict();
     expect(wrapper.vm.allocDimOptions).toEqual([
       { value: 'RULE', label: '按规则分配' },
-      { value: 'ACCOUNT', label: '按账户分配' },
+      { value: 'ACCOUNT', label: '按账号分配' },
       { value: 'NEW', label: '新开户' }
     ]);
   });

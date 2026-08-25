@@ -870,7 +870,7 @@ ORDER BY update_time DESC LIMIT 1;
 | | `ALLOC_RELATION` | 分配关系导入 |
 | `import_batch.status` | `PENDING` / `PARSING` / `PREVIEW` / `IMPORTING` / `SUCCESS` / `FAILED` / `PARTIAL` | 导入状态 |
 | `alloc_dim` | `RULE` | 按规则分配 |
-| | `ACCOUNT` | 按账户分配 |
+| | `ACCOUNT` | 按账号分配 |
 | | `RATIO` | 按比例分配 |
 
 ---

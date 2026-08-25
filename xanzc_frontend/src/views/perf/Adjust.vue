@@ -370,7 +370,7 @@
               <el-select v-model="dlg.form.bizKind"
                          :disabled="dlg.readOnly || dlg.form.allocDim === 'ACCOUNT'"
                          multiple style="width:100%"
-                         :placeholder="dlg.form.allocDim === 'ACCOUNT' ? '按账户分配固定为存款' : '请选择业务类型（存款/贷款，可多选）'">
+                         :placeholder="dlg.form.allocDim === 'ACCOUNT' ? '按账号分配固定为存款' : '请选择业务类型（存款/贷款，可多选）'">
                 <el-option v-for="o in bizKindFormOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
@@ -379,7 +379,7 @@
             <el-form-item label="账号" prop="accountNo" :required="dlg.form.allocDim === 'ACCOUNT'">
               <el-input v-model="dlg.form.accountNo"
                         :disabled="dlg.readOnly || dlg.form.allocDim !== 'ACCOUNT'"
-                        :placeholder="dlg.form.allocDim === 'ACCOUNT' ? '请输入账号（必填）' : '仅按账户分配时可输入'" />
+                        :placeholder="dlg.form.allocDim === 'ACCOUNT' ? '请输入账号（必填）' : '仅按账号分配时可输入'" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -1205,7 +1205,7 @@ async function onBatchReviewAction(action) {
 // ============ 业务类型字典 ============
 const ALLOC_DIM_FALLBACK = [
   { value: 'RULE', label: '按规则分配' },
-  { value: 'ACCOUNT', label: '按账户分配' },
+  { value: 'ACCOUNT', label: '按账号分配' },
   { value: 'NEW', label: '新开户' }
 ];
 // 分配维度是字典配置项，列表筛选、列表标签和表单下拉共用这一组数据。
@@ -1213,7 +1213,9 @@ const ALLOC_DIM_FALLBACK = [
 const allocDimOptions = ref(ALLOC_DIM_FALLBACK.map(item => ({ ...item })));
 const allocDimMap = computed(() => Object.fromEntries(allocDimOptions.value.map(item => [item.value, item.label])));
 function normalizeAllocDimLabel(value, label) {
-  return value === 'NEW' ? '新开户' : (label || value);
+  if (value === 'ACCOUNT') return '按账号分配';
+  if (value === 'NEW') return '新开户';
+  return label || value;
 }
 function allocDimLabel(value) {
   return allocDimMap.value[value] || value || '-';
@@ -1244,7 +1246,7 @@ const BIZ_DEPOSIT = 'CORP_DEPOSIT';
 const BIZ_LOAN = 'CORP_LOAN';
 // 新建申请弹框里业务类型可选项：
 // - 只读查看：展示全部（保证历史含中收/结构性等也能正常显示标签）
-// - 按账户分配(ACCOUNT)：仅「存款」（且默认固定为存款、不可改）
+// - 按账号分配(ACCOUNT)：仅「存款」（且默认固定为存款、不可改）
 // - 按规则分配(RULE)：全部 PERF_BIZ_KIND 字典项可选（默认选中存款+贷款，可多选可改）
 const bizKindFormOptions = computed(() => {
   if (dlg.readOnly) return bizKindOptions.value;
@@ -1527,7 +1529,7 @@ async function loadApprovalHistory(applyId) {
 }
 
 function onCustTypeChange(val) {
-  // 零售客户默认按账户分配，但分配维度下拉仍由字典提供 RULE/ACCOUNT/NEW，用户可继续改选。
+  // 零售客户默认按账号分配，但分配维度下拉仍由字典提供 RULE/ACCOUNT/NEW，用户可继续改选。
   // 详情回显使用 Object.assign，不调用此事件，避免加载已有零售草稿时误覆盖其维度。
   if (!dlg.readOnly && val === 'RETAIL') {
     dlg.form.allocDim = 'ACCOUNT';
@@ -1536,7 +1538,7 @@ function onCustTypeChange(val) {
 }
 function onAllocDimChange(val) {
   if (val === 'ACCOUNT') {
-    // 按账户分配：业务类型固定为「存款」且不可修改
+    // 按账号分配：业务类型固定为「存款」且不可修改
     dlg.form.bizKind = [BIZ_DEPOSIT];
   } else {
     dlg.form.accountNo = '';

@@ -89,7 +89,7 @@ describe('AllocAdjustViewDialog 分配维度与原分配快照', () => {
   it('从 PERF_ALLOC_DIM 加载 NEW 维度，且 NEW 不查询原分配', async () => {
     listDictItems.mockImplementation((dictType) => Promise.resolve(dictType === 'PERF_ALLOC_DIM' ? [
       { dictCode: 'RULE', dictLabel: '按规则分配' },
-      { dictCode: 'ACCOUNT', dictLabel: '按账户分配' },
+      { dictCode: 'ACCOUNT', dictLabel: '按台账分配' },
       { dictCode: 'NEW', dictLabel: '新客户' },
     ] : []));
 
@@ -99,7 +99,7 @@ describe('AllocAdjustViewDialog 分配维度与原分配快照', () => {
 
     expect(view.vm.allocDimOptions).toEqual([
       { value: 'RULE', label: '按规则分配' },
-      { value: 'ACCOUNT', label: '按账户分配' },
+      { value: 'ACCOUNT', label: '按账号分配' },
       { value: 'NEW', label: '新开户' },
     ]);
     expect(getAllocPreview).not.toHaveBeenCalled();
