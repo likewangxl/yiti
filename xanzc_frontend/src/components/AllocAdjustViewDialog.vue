@@ -232,7 +232,7 @@ const bizKindOptions = ref([]);
 const allocDimOptions = ref([
   { value: 'RULE', label: '按规则分配' },
   { value: 'ACCOUNT', label: '按账户分配' },
-  { value: 'NEW', label: '新开户分配' },
+  { value: 'NEW', label: '新开户' },
 ]);
 const currentNodeApprovers = ref([]);
 
@@ -302,7 +302,7 @@ async function loadAllocDimDict() {
     const items = await listDictItems('PERF_ALLOC_DIM');
     const dictOptions = (Array.isArray(items) ? items : [])
       .filter(d => d.dictCode)
-      .map(d => ({ label: d.dictLabel || d.dictCode, value: d.dictCode }));
+      .map(d => ({ label: d.dictCode === 'NEW' ? '新开户' : (d.dictLabel || d.dictCode), value: d.dictCode }));
     if (dictOptions.length > 0) allocDimOptions.value = dictOptions;
   } catch { /* 保留兜底维度 */ }
 }

@@ -23,7 +23,7 @@ const dict = vi.hoisted(() => ({
     ? [
         { dictCode: 'RULE', dictLabel: '按规则分配' },
         { dictCode: 'ACCOUNT', dictLabel: '按账户分配' },
-        { dictCode: 'NEW', dictLabel: '新开户分配' }
+        { dictCode: 'NEW', dictLabel: '新客户' }
       ]
     : [
         { dictCode: 'CORP_DEPOSIT', dictLabel: '对公存款' },
@@ -97,7 +97,7 @@ afterEach(() => {
     ? [
         { dictCode: 'RULE', dictLabel: '按规则分配' },
         { dictCode: 'ACCOUNT', dictLabel: '按账户分配' },
-        { dictCode: 'NEW', dictLabel: '新开户分配' }
+        { dictCode: 'NEW', dictLabel: '新客户' }
       ]
     : [
         { dictCode: 'CORP_DEPOSIT', dictLabel: '对公存款' },
@@ -119,16 +119,16 @@ describe('业绩调整分配维度与原分配关系', () => {
     expect(wrapper.vm.allocDimOptions).toEqual([
       { value: 'RULE', label: '按规则分配' },
       { value: 'ACCOUNT', label: '按账户分配' },
-      { value: 'NEW', label: '新开户分配' }
+      { value: 'NEW', label: '新开户' }
     ]);
-    expect(wrapper.vm.allocDimLabel('NEW')).toBe('新开户分配');
+    expect(wrapper.vm.allocDimLabel('NEW')).toBe('新开户');
 
     dict.listDictItems.mockRejectedValueOnce(new Error('dictionary unavailable'));
     await wrapper.vm.loadAllocDimDict();
     expect(wrapper.vm.allocDimOptions).toEqual([
       { value: 'RULE', label: '按规则分配' },
       { value: 'ACCOUNT', label: '按账户分配' },
-      { value: 'NEW', label: '新开户分配' }
+      { value: 'NEW', label: '新开户' }
     ]);
   });
 

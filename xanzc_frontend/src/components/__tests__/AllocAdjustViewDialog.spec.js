@@ -100,7 +100,7 @@ describe('AllocAdjustViewDialog 分配维度与原分配快照', () => {
     expect(view.vm.allocDimOptions).toEqual([
       { value: 'RULE', label: '按规则分配' },
       { value: 'ACCOUNT', label: '按账户分配' },
-      { value: 'NEW', label: '新客户' },
+      { value: 'NEW', label: '新开户' },
     ]);
     expect(getAllocPreview).not.toHaveBeenCalled();
     expect(view.find('.preview-section').exists()).toBe(false);

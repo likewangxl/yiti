@@ -1206,12 +1206,15 @@ async function onBatchReviewAction(action) {
 const ALLOC_DIM_FALLBACK = [
   { value: 'RULE', label: '按规则分配' },
   { value: 'ACCOUNT', label: '按账户分配' },
-  { value: 'NEW', label: '新开户分配' }
+  { value: 'NEW', label: '新开户' }
 ];
 // 分配维度是字典配置项，列表筛选、列表标签和表单下拉共用这一组数据。
 // 字典接口不可用时保留三项基础能力，避免页面因配置中心短暂故障而无法操作。
 const allocDimOptions = ref(ALLOC_DIM_FALLBACK.map(item => ({ ...item })));
 const allocDimMap = computed(() => Object.fromEntries(allocDimOptions.value.map(item => [item.value, item.label])));
+function normalizeAllocDimLabel(value, label) {
+  return value === 'NEW' ? '新开户' : (label || value);
+}
 function allocDimLabel(value) {
   return allocDimMap.value[value] || value || '-';
 }
@@ -1222,7 +1225,7 @@ async function loadAllocDimDict() {
     for (const item of (Array.isArray(items) ? items : [])) {
       const value = item?.dictCode || item?.dictValue || item?.value;
       const label = item?.dictLabel || item?.label || value;
-      if (value) merged.set(value, label || value);
+      if (value) merged.set(value, normalizeAllocDimLabel(value, label));
     }
     allocDimOptions.value = [...merged].map(([value, label]) => ({ value, label }));
   } catch {
