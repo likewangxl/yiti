@@ -115,11 +115,14 @@ const option = computed(() => {
       type: 'bar',
       stack: mode.value === 'stack' ? 'total' : undefined,
       barMaxWidth: 26,
-      // 单行多指标转置后只有一个 series，逐数据项覆盖颜色以区分每个指标。
-      data: isSingleRowMetricData.value
+      // 横向模式逐柱配色；单行多指标转置后也按指标逐柱配色。
+      data: horizontal || isSingleRowMetricData.value
         ? s.data.map((value, dataIndex) => ({
           value,
-          itemStyle: barItemStyle(palette.value[dataIndex % palette.value.length], horizontal)
+          itemStyle: barItemStyle(
+            palette.value[(horizontal ? i + dataIndex : dataIndex) % palette.value.length],
+            horizontal
+          )
         }))
         : s.data,
       label: { show: showLabels.value, color: theme.value.tokens.text, position: horizontal ? 'right' : 'top' },

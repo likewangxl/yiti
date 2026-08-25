@@ -287,6 +287,80 @@ describe('图表视觉预设与 option', () => {
     const option = optionOf(wrapper);
     expect(option.series.map(series => series.itemStyle.color.colorStops[1].color))
       .toEqual(['#112233', '#445566', '#112233']);
+    expect(option.series.map(series => series.data)).toEqual([[10], [20], [30]]);
+  });
+
+  it('BarCompare 横向单系列逐柱使用十色莫兰迪色并循环第十一柱', () => {
+    const columns = ['name', 'value'];
+    const rows = Array.from({ length: 11 }, (_, i) => [`类别${i + 1}`, i + 1]);
+    const wrapper = mount(BarCompare, {
+      props: {
+        columns, rows,
+        bind: { items: [{ col: 'value' }] },
+        propValue: { barMode: 'horizontal' },
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    const option = optionOf(wrapper);
+    expect(option.series[0].data.map(item => item.value)).toEqual(rows.map(row => row[1]));
+    expect(option.series[0].data.map(item => item.itemStyle.color.colorStops[1].color))
+      .toEqual([...SCR_MORANDI_PALETTE, SCR_MORANDI_PALETTE[0]]);
+  });
+
+  it('BarCompare 横向多系列按 seriesIndex 加 dataIndex 错开颜色', () => {
+    const wrapper = mount(BarCompare, {
+      props: {
+        columns: ['name', 'a', 'b'],
+        rows: [['A', 10, 1], ['B', 20, 2], ['C', 30, 3]],
+        bind: { items: [{ col: 'a' }, { col: 'b' }] },
+        propValue: { barMode: 'horizontal' },
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    const option = optionOf(wrapper);
+    expect(option.series.map(series => series.data.map(item => item.value)))
+      .toEqual([[10, 20, 30], [1, 2, 3]]);
+    expect(option.series.map(series => series.data.map(item => item.itemStyle.color.colorStops[1].color)))
+      .toEqual([
+        [SCR_MORANDI_PALETTE[0], SCR_MORANDI_PALETTE[1], SCR_MORANDI_PALETTE[2]],
+        [SCR_MORANDI_PALETTE[1], SCR_MORANDI_PALETTE[2], SCR_MORANDI_PALETTE[3]]
+      ]);
+  });
+
+  it('BarCompare 横向模式按自定义色板长度逐柱循环', () => {
+    const wrapper = mount(BarCompare, {
+      props: {
+        columns: ['name', 'value'],
+        rows: [['A', 10], ['B', 20], ['C', 30]],
+        bind: { items: [{ col: 'value' }] },
+        propValue: { barMode: 'horizontal' },
+        styleCfg: { colors: ['#112233', '#445566'] }
+      },
+      global: { stubs: chartStubs }
+    });
+    const option = optionOf(wrapper);
+    expect(option.series[0].data.map(item => item.itemStyle.color.colorStops[1].color))
+      .toEqual(['#112233', '#445566', '#112233']);
+  });
+
+  it('BarCompare 纵向堆叠模式仍按系列着色并保留数值数据', () => {
+    const wrapper = mount(BarCompare, {
+      props: {
+        columns: ['name', 'a', 'b'],
+        rows: [['A', 10, 1], ['B', 20, 2]],
+        bind: { items: [{ col: 'a' }, { col: 'b' }] },
+        propValue: { barMode: 'stack' },
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    const option = optionOf(wrapper);
+    expect(option.series.map(series => series.data)).toEqual([[10, 20], [1, 2]]);
+    expect(option.series.map(series => series.stack)).toEqual(['total', 'total']);
+    expect(option.series.map(series => series.itemStyle.color.colorStops[1].color))
+      .toEqual([SCR_MORANDI_PALETTE[0], SCR_MORANDI_PALETTE[1]]);
   });
 
   it('BarCompare 带独立维度列的多行数据仍按首列作为类目', () => {
