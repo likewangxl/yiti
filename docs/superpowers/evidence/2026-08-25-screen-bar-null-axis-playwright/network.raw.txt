@@ -1,0 +1,10 @@
+46. [GET] http://127.0.0.1:8091/api/auth/my-menus => [200] OK
+47. [GET] http://127.0.0.1:8091/api/auth/permissions => [200] OK
+213. [GET] http://127.0.0.1:8091/api/screen/view/SCR_PROVINCE?preview=draft => [200] OK
+214. [POST] http://127.0.0.1:8091/api/screen/data => [200] OK
+
+#214 request body:
+{"schemaVersion":1,"previewState":"draft","screenCode":"SCR_PROVINCE","blockId":32,"period":"LATEST","contextParams":{"orgCode":"","empId":""}}
+
+#214 response body:
+{"code":"0","message":"success","data":{"columns":["一般性存款年日均余额-机构","基础性存款年日均余额-机构","对公一般性存款年日均-机构","对公基础性存款年日均-机构","对公结算性存款年日均-机构","零售一般性存款年日均-机构","零售结算性存款年日均-机构"],"rows":[[null,513938777,508400754,509124020,539150711,506748587,526585821]]}}

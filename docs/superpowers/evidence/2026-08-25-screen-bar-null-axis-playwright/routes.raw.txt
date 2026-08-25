@@ -1,0 +1,8 @@
+1. **/api/auth/current-user
+2. **/api/auth/my-menus
+3. **/api/auth/permissions
+4. **/api/screen/view/SCR_PROVINCE*
+5. **/api/screen/data
+
+All five routes returned HTTP 200 application/json responses from the browser context.
+Only development-time mocks were registered; this is not backend integration evidence.
