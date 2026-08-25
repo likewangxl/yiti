@@ -10,6 +10,8 @@ import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
 import com.bank.branch.platform.workflow.mapper.WfTaskTransferMapper;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
+import org.flowable.identitylink.api.IdentityLink;
+import org.flowable.identitylink.api.IdentityLinkType;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
 import org.junit.jupiter.api.Test;
@@ -19,7 +21,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
@@ -188,6 +192,45 @@ class TaskOperationServiceTest {
                 .isEqualTo("WF-40903");
     }
 
+    /** 未分配任务允许命中候选审批角色的当前用户直接审批，无需先签收。 */
+    @Test
+    void approveTask_unassignedCandidate_completesWithoutClaim() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
+        when(currentUserApi.getCurrentCandidateGroupKeys()).thenReturn(Set.of("ROLE:CUST_LEAD_APPROVER"));
+        Task task = buildMockTask("TASK_001", "PID_001", null);
+        mockTaskQuery(task);
+        IdentityLink candidate = candidateGroup("ROLE:CUST_LEAD_APPROVER");
+        when(taskService.getIdentityLinksForTask("TASK_001"))
+                .thenReturn(List.of(candidate));
+
+        taskOperationService.approveTask("TASK_001", new ApproveReqDTO("同意", Map.of()));
+
+        verify(taskService, never()).claim(anyString(), anyString());
+        verify(taskService).setAssignee("TASK_001", "E001");
+        verify(taskService).complete(eq("TASK_001"), anyMap());
+    }
+
+    /** 仅有接口访问机会但不属于任务候选角色时，仍不得直接审批。 */
+    @Test
+    void approveTask_unassignedNonCandidate_throwsWf40903() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
+        when(currentUserApi.getCurrentCandidateGroupKeys()).thenReturn(Set.of("ROLE:OTHER"));
+        Task task = buildMockTask("TASK_001", "PID_001", null);
+        mockTaskQuery(task);
+        IdentityLink candidate = candidateGroup("ROLE:CUST_LEAD_APPROVER");
+        when(taskService.getIdentityLinksForTask("TASK_001"))
+                .thenReturn(List.of(candidate));
+
+        assertThatThrownBy(() -> taskOperationService.approveTask(
+                "TASK_001", new ApproveReqDTO("同意", Map.of())))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40903");
+
+        verify(taskService, never()).setAssignee(anyString(), anyString());
+        verify(taskService, never()).complete(anyString(), anyMap());
+    }
+
     /**
      * 审批成功：验证添加评论和完成任务被调用
      */
@@ -310,6 +353,24 @@ class TaskOperationServiceTest {
         verify(taskService).addComment("TASK_001", "PID_001", "REJECT", "资质不符合要求");
         verify(runtimeService).deleteProcessInstance(eq("PID_001"), anyString());
         verify(eventPublisher).publishEvent(any(TaskOperationService.TaskRejectedEvent.class));
+    }
+
+    /** 未分配任务允许命中候选审批角色的当前用户直接驳回，无需先签收。 */
+    @Test
+    void rejectTask_unassignedCandidate_rejectsWithoutClaim() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
+        when(currentUserApi.getCurrentCandidateGroupKeys()).thenReturn(Set.of("ROLE:CUST_LEAD_APPROVER"));
+        Task task = buildMockTask("TASK_001", "PID_001", null);
+        mockTaskQuery(task);
+        IdentityLink candidate = candidateGroup("ROLE:CUST_LEAD_APPROVER");
+        when(taskService.getIdentityLinksForTask("TASK_001"))
+                .thenReturn(List.of(candidate));
+
+        taskOperationService.rejectTask("TASK_001", new RejectReqDTO("不符合"));
+
+        verify(taskService, never()).claim(anyString(), anyString());
+        verify(taskService).setAssignee("TASK_001", "E001");
+        verify(runtimeService).deleteProcessInstance(eq("PID_001"), anyString());
     }
 
     /**
@@ -487,5 +548,12 @@ class TaskOperationServiceTest {
 
         verify(taskService).claim("TASK_001", "E001");
         verify(bizProcessMapMapper, never()).updateById(any(BizProcessMap.class));
+    }
+
+    private IdentityLink candidateGroup(String groupId) {
+        IdentityLink link = mock(IdentityLink.class);
+        when(link.getType()).thenReturn(IdentityLinkType.CANDIDATE);
+        when(link.getGroupId()).thenReturn(groupId);
+        return link;
     }
 }

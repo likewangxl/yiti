@@ -413,6 +413,7 @@ package com.bank.branch.platform.governance.api;
 import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
 
@@ -472,6 +473,14 @@ public interface FileApi {
      * @throws com.bank.branch.platform.common.web.exception.BizException GOV-40005 文件不存在（订正：原文误写 GOV-40404）
      */
     byte[] getFileContent(String fileId);
+
+    /**
+     * 将 OBS 文件内容流式写入调用方输出流，不关闭调用方输出流。
+     *
+     * @param fileId 文件对象 ID
+     * @param outputStream 调用方输出流
+     */
+    void writeFileContent(String fileId, OutputStream outputStream);
 
     /**
      * 获取文件下载URL（OBS 预签名临时 URL，订正：默认有效期 10 分钟——obs.presignExpireSeconds 默认 600 秒，非原文"1 小时"）
@@ -539,8 +548,10 @@ public interface FileApi {
 ```
 
 **调用约束：**
-- `upload()` 系列方法为同步操作，文件先上传到 OBS 再写数据库；三个 `upload` 重载区别仅在于是否指定 OBS 对象名前缀 `category` 及入参是 `MultipartFile` 还是 `byte[]`
+- `upload()` 系列方法为同步操作；`MultipartFile` 重载使用两次输入流，第一次流式计算 MD5，第二次流式上传 OBS，不再调用 `getBytes()`；`byte[]` 重载保留兼容
+- `FileObjectDTO.newlyCreated` 是不映射数据库的补偿标记：本次新建文件对象为 `true`，MD5 命中既有共享对象为 `false`；调用方只能补偿删除本次新建对象
 - `getFileContent()`：REST 层 `/api/files/{fileId}/download` 直接调用本方法读出全部字节后写响应流，**不做分片/断点续传**，大文件需调用方自行评估内存占用
+- `writeFileContent()`：直接将 OBS 对象输入流复制到调用方 `OutputStream`，只关闭 OBS 输入流，不关闭调用方输出流，适用于大文件 HTTP 流式下载
 - `getDownloadUrl()` 返回的预签名 URL 默认有效期 10 分钟（`obs.presignExpireSeconds`，可配置），调用方应在 URL 过期前使用
 - `bindFile()` 幂等：相同的 `bizType + bizId + fileObjectId` 不会重复创建关联
 - `deleteFile()` 需要注意：**当前实现无引用计数判断**，调用即无条件删除 OBS 物理文件 + `file_object` 记录 + 该文件全部业务关联，如果文件仍被其他业务对象引用会一并失效，调用方需自行确认没有其他引用后再调用（订正：原文描述的"若无其他引用则删除"逻辑当前源码未实现）
@@ -1247,6 +1258,7 @@ public class PersonTagDTO {
 | FileApi.upload(file, uploadedBy, category) | 同步 | 无 | 中 | MD5 去重；本文历史版本未收录 |
 | FileApi.upload(bytes, ...) | 同步 | 无 | 低 | 字节直传；本文历史版本未收录 |
 | FileApi.getFileContent() | 同步 | 无 | 中 | 供 REST 端点直接读字节流响应；本文历史版本未收录 |
+| FileApi.writeFileContent() | 同步流式 | 无 | 中 | OBS 输入流直接写调用方 OutputStream，不聚合完整字节 |
 | FileApi.getDownloadUrl() | 同步 | 无 | 中 | 预签名 URL 默认有效期 10 分钟（`obs.presignExpireSeconds`，可配置） |
 | FileApi.bindFile() | 同步 | 无 | 低 | 幂等操作 |
 | FileApi.listBizFiles() | 同步 | 无 | 中 | - |

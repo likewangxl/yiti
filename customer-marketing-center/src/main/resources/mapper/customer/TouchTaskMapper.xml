@@ -85,6 +85,16 @@
         ORDER BY created_time DESC
     </select>
 
+    <select id="selectActiveByCustAndAssignee" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM TOUCH_TASK
+        WHERE cust_id = #{custId}
+          AND assignee_emp_id = #{assigneeEmpId}
+          AND task_status IN ('PENDING', 'IN_PROGRESS')
+        ORDER BY created_time DESC
+    </select>
+
     <!-- 契约 §5 扩展 SQL -->
 
     <!-- 按工作流业务键查询触达任务 -->

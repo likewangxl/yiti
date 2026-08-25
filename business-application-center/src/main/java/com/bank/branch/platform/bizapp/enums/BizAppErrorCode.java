@@ -11,12 +11,16 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum BizAppErrorCode {
 
+    // 400 参数/业务错误
+    CANCEL_REASON_REQUIRED("BIZ-40001", "撤回原因不能为空"),
+
     // 403 权限错误
     CUSTOMER_NOT_VALID("BIZ-40301", "客户非有效公司客户"),
     NOT_TOUCH_TASK_ASSIGNEE("BIZ-40302", "非触达任务执行人"),
     CUSTOMER_NOT_CLAIMED_BY_ORG("BIZ-40303", "客户未被本机构认领"),
     NOT_SUPPORT_DEPT_MEMBER("BIZ-40304", "非承接部门人员/非当前承接人"),
     NOT_APPLY_CREATOR("BIZ-40305", "非申请创建人无权操作"),
+    TOUCH_TASK_CUSTOMER_MISMATCH("BIZ-40306", "触达任务与申请客户不匹配"),
 
     // 404 资源不存在
     APPLY_NOT_FOUND("BIZ-40401", "申请不存在"),
@@ -36,6 +40,7 @@ public enum BizAppErrorCode {
     EXPORT_ROW_LIMIT_EXCEEDED("BIZ-42207", "导出行数超上限"),
     INVALID_STATUS_TRANSITION("BIZ-42301", "非法状态迁移"),
     NOT_DRAFT_STATUS("BIZ-42303", "申请非草稿状态不可编辑"),
+    CANNOT_CANCEL_AFTER_CORP_REVIEW("BIZ-42304", "公司部审核通过后不可撤回"),
 
     // 500 内部错误
     WORKFLOW_CALL_ERROR("BIZ-50001", "工作流调用异常"),

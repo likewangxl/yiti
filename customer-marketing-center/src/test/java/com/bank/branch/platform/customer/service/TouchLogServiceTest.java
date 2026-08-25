@@ -130,7 +130,7 @@ class TouchLogServiceTest {
         when(logMapper.countByTaskId("T001")).thenReturn(1L);
 
         // when
-        touchLogService.addLog("T001", "UUID-1", "首次访谈", null, "E001", "ORG001");
+        touchLogService.addLog("T001", "UUID-1", "首次访谈", null, "E10001", "ORG_SZ_001");
 
         // then: 首次日志触发 PENDING → IN_PROGRESS
         verify(touchTaskService).markInProgress("T001");
@@ -146,7 +146,7 @@ class TouchLogServiceTest {
         when(logMapper.countByTaskId("T001")).thenReturn(2L);
 
         // when
-        touchLogService.addLog("T001", "UUID-2", "二次跟进", null, "E001", "ORG001");
+        touchLogService.addLog("T001", "UUID-2", "二次跟进", null, "E10001", "ORG_SZ_001");
 
         // then: 非首次日志不触发状态转移
         verify(touchTaskService, never()).markInProgress(anyString());
@@ -220,7 +220,7 @@ class TouchLogServiceTest {
         String photos = "[\"http://m/a.jpg\",\"http://m/b.JPEG\",\"http://m/c.png\",\"http://m/d.heic\",\"http://m/e.jpg?ts=1\"]";
 
         TouchLog result = touchLogService.addLog(
-                "task-mix", "uuid-mix", "内容", photos, "E001", "ORG001");
+                "task-mix", "uuid-mix", "内容", photos, "E10001", "ORG_SZ_001");
 
         assertThat(result).isNotNull();
         verify(logMapper).insert(any(TouchLog.class));
@@ -251,6 +251,58 @@ class TouchLogServiceTest {
         assertThat(result.get(1).getId()).isEqualTo("log-002");
 
         verify(logMapper).selectByTaskId("task-001");
+    }
+
+    @Test
+    void listVisibleByTaskId_shouldAllowSameOrg() {
+        TouchTask task = buildPendingTask("task-001");
+        when(taskMapper.selectById("task-001")).thenReturn(task);
+        when(logMapper.selectByTaskId("task-001")).thenReturn(List.of());
+
+        assertThat(touchLogService.listVisibleByTaskId("task-001", "ORG_SZ_001", false)).isEmpty();
+        verify(logMapper).selectByTaskId("task-001");
+    }
+
+    @Test
+    void listVisibleByTaskId_shouldRejectCrossOrg() {
+        TouchTask task = buildPendingTask("task-001");
+        when(taskMapper.selectById("task-001")).thenReturn(task);
+
+        assertThatThrownBy(() -> touchLogService.listVisibleByTaskId("task-001", "ORG_OTHER", false))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.HISTORY_ACCESS_FORBIDDEN.getCode());
+
+        verify(logMapper, never()).selectByTaskId(anyString());
+    }
+
+    @Test
+    void addLog_shouldRejectNonAssigneeEvenInSameOrg() {
+        TouchTask task = buildPendingTask("task-001");
+        when(taskMapper.selectById("task-001")).thenReturn(task);
+
+        assertThatThrownBy(() -> touchLogService.addLog(
+                "task-001", "uuid-1", "拜访记录", "[\"http://minio/a.jpg\"]",
+                LocalDateTime.now(), "VISIT", null, null, null,
+                "E10002", "ORG_SZ_001", false))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getCode());
+
+        verify(logMapper, never()).insert(any(TouchLog.class));
+    }
+
+    @Test
+    void addLog_shouldRejectNonAssigneeSystemAdmin() {
+        TouchTask task = buildPendingTask("task-001");
+        when(taskMapper.selectById("task-001")).thenReturn(task);
+
+        assertThatThrownBy(() -> touchLogService.addLog(
+                "task-001", "uuid-admin", "代录拜访记录", "[\"http://minio/a.jpg\"]",
+                LocalDateTime.now(), "VISIT", null, null, null,
+                "ADMIN001", "HEAD_OFFICE", true))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getCode());
+
+        verify(logMapper, never()).insert(any(TouchLog.class));
     }
 
     // ==================== 测试辅助方法 ====================

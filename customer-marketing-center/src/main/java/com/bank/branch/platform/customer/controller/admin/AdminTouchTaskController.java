@@ -1,5 +1,6 @@
 package com.bank.branch.platform.customer.controller.admin;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
@@ -46,6 +47,7 @@ public class AdminTouchTaskController {
 
     private final TouchTaskService touchTaskService;
     private final TouchTaskQueryApi touchTaskQueryApi;
+    private final CurrentUserApi currentUserApi;
 
     /**
      * 管理后台全局触达任务列表（不按机构过滤）。
@@ -73,9 +75,11 @@ public class AdminTouchTaskController {
             @RequestParam(required = false) String orgId,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
+        String effectiveOrgId = effectiveOrg(orgId);
         log.info("[AdminTouchTaskController.listAll] keyword={}, status={}, assigneeEmpId={}, orgId={}, pageNo={}, pageSize={}",
-                keyword, status, assigneeEmpId, orgId, pageNo, pageSize);
-        PageResult<TouchTask> result = touchTaskService.listPageAdmin(keyword, status, assigneeEmpId, orgId, pageNo, pageSize);
+                keyword, status, assigneeEmpId, effectiveOrgId, pageNo, pageSize);
+        PageResult<TouchTask> result = touchTaskService.listPageAdmin(
+                keyword, status, assigneeEmpId, effectiveOrgId, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 
@@ -99,8 +103,10 @@ public class AdminTouchTaskController {
             @RequestParam String orgCode,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate) {
-        log.info("[AdminTouchTaskController.summary] orgCode={}, startDate={}, endDate={}", orgCode, startDate, endDate);
-        TouchTaskSummaryDTO summary = touchTaskQueryApi.getOrgTouchSummary(orgCode, startDate, endDate);
+        String effectiveOrgCode = effectiveOrg(orgCode);
+        log.info("[AdminTouchTaskController.summary] orgCode={}, startDate={}, endDate={}",
+                effectiveOrgCode, startDate, endDate);
+        TouchTaskSummaryDTO summary = touchTaskQueryApi.getOrgTouchSummary(effectiveOrgCode, startDate, endDate);
         return ResponseWrapper.success(summary);
     }
 
@@ -118,21 +124,23 @@ public class AdminTouchTaskController {
      * @throws IOException 写入响应流异常
      */
     @GetMapping("/export")
-    @BizAuth(bizType = BizType.TOUCH_TASK, action = BizAction.READ)
-    @AuditLog(action = "EXPORT_ADMIN_TOUCH_TASKS", resourceType = "TOUCH_TASK", reasonRequired = true)
+    @BizAuth(bizType = BizType.TOUCH_TASK, action = BizAction.EXPORT)
+    @AuditLog(action = "EXPORT_ADMIN_TOUCH_TASKS", resourceType = "TOUCH_TASK")
     @Operation(summary = "管理后台触达任务导出（高危）")
     public void exportAll(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String orgId,
             HttpServletResponse response) throws IOException {
-        log.info("[AdminTouchTaskController.exportAll] keyword={}, status={}, orgId={}", keyword, status, orgId);
+        String effectiveOrgId = effectiveOrg(orgId);
+        log.info("[AdminTouchTaskController.exportAll] keyword={}, status={}, orgId={}",
+                keyword, status, effectiveOrgId);
 
         response.setContentType("text/csv; charset=UTF-8");
         response.setHeader("Content-Disposition",
                 "attachment; filename=\"admin_touch_tasks_" + System.currentTimeMillis() + ".csv\"");
 
-        List<TouchTask> list = touchTaskService.listAllForAdminExport(keyword, status, orgId, 10000);
+        List<TouchTask> list = touchTaskService.listAllForAdminExport(keyword, status, effectiveOrgId, 10000);
 
         try (PrintWriter out = response.getWriter()) {
             // BOM 头保证 Excel 打开 UTF-8 中文不乱码
@@ -186,5 +194,12 @@ public class AdminTouchTaskController {
     private static String quote(String s) {
         if (s == null) return "\"\"";
         return "\"" + s.replace("\"", "\"\"") + "\"";
+    }
+
+    /**
+     * 系统管理员可按传入机构筛选或查看全量；其他获授权的管理人员只能查看本机构。
+     */
+    private String effectiveOrg(String requestedOrg) {
+        return currentUserApi.isSystemAdmin() ? requestedOrg : currentUserApi.getCurrentOrgCode();
     }
 }

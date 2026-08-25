@@ -170,6 +170,25 @@ class MetricCalcServiceTest {
     }
 
     @Test
+    @DisplayName("SQL 正式执行：objectId=null 时移除直接 EMP_ID 谓词，避免 EMP_ID=NULL")
+    void calcMetric_sqlNullObjectId_removesDirectObjectPredicate() {
+        PerfMetricDef def = buildEmpSqlMetric();
+        def.setMetricCode("TEST_CALC_OBJECT_FILTER");
+        def.setSqlText("SELECT EMP_ID AS base_key, 1 AS metric_value FROM h3 "
+                + "WHERE STATIS_DT = :dataDate AND e.EMP_ID = :objectId");
+        when(metricDefService.getByCodeOrNull("TEST_CALC_OBJECT_FILTER")).thenReturn(def);
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(Map.of());
+
+        metricCalcService.calcMetric("TEST_CALC_OBJECT_FILTER", LocalDate.of(2026, 8, 20), "V1");
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Map<String, Object>> paramsCaptor = ArgumentCaptor.captor();
+        verify(sqlExecutor).execute(sqlCaptor.capture(), paramsCaptor.capture(), any(Duration.class));
+        assertThat(sqlCaptor.getValue()).doesNotContain("e.EMP_ID = :objectId");
+        assertThat(paramsCaptor.getValue()).containsEntry("objectId", null);
+    }
+
+    @Test
     @DisplayName("EXPR 指标 + baseDim=ORG：调 GroovyExecutor 并写 ORG 宽表（V1.7 多主体）")
     void calcMetric_exprOnOrg_writesOrgWideTable() {
         PerfMetricDef def = buildOrgExprMetric();

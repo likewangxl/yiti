@@ -1,8 +1,9 @@
 # 工作流中心 -- 对外 API 契约
 
 > 版本：V1.5
-> 最后更新：2026-07-19（V1.2 基线 2026-04-16 / 2026-04-24）
+> 最后更新：2026-08-11（V1.2 基线 2026-04-16 / 2026-04-24）
 > 本文档以 `workflow-center` 当前代码实现为准，用于说明真实可用的 Java 契约、REST 契约、内部事件与实现边界。
+> **2026-08-11 增量说明**：`WorkflowQueryApi` 新增 `getActiveTaskCandidates`，基于 Flowable 当前活动任务的实际 assignee/candidate 身份链接返回可审批员工；节点已审核或无活动任务时返回空列表。当前该查询的节点级消费按串行单活动 `userTask` 假设，返回值不含任务/节点分组；并行网关或多实例任务仅会被合并去重，不构成节点级审批人契约。
 > **2026-07-19 回填说明**：对照 `api/`（含 `api/dto/`、`api/event/`）与 `controller/` 源码全量核实，补齐 `WorkflowApi` 2026-04 之后新增的 5 个方法、此前完全未收录的 `TodoQueryApi`、`ProcessWithdrawnEvent`、审批流监控/两阶段任务转交/审批流程设计器三组 REST 控制器；并订正 `WorkflowQueryApi.queryParticipatedBusinessKeys` 签名、`ProcessCompletedEvent` 实际归属包、`TaskController` 旧转交端点下线等与代码不符的旧描述。
 
 ## 1. 当前实现边界
@@ -12,7 +13,7 @@
 | 能力 | 当前暴露形态 | 入口 | 说明 |
 |---|---|---|---|
 | 跨模块同步调用（流程控制） | Java `*Api` | `WorkflowApi` / `WorkflowFacade` | 流程启动/撤回/映射查询/审批结论补偿/无会话审批驳回/设计器流程 key 解析，当前已落地的跨模块 Java 契约 |
-| 跨模块同步调用（只读查询） | Java `*Api` | `WorkflowQueryApi` / `WorkflowQueryFacade` | 待办已办分页、任务详情、流程历史、流程节点图、流程映射、参与者 businessKey 查询 |
+| 跨模块同步调用（只读查询） | Java `*Api` | `WorkflowQueryApi` / `WorkflowQueryFacade` | 待办已办分页、任务详情、流程历史、流程节点图、当前活动任务可审批员工、流程映射、参与者 businessKey 查询 |
 | 跨模块同步调用（businessKey 反查） | Java `*Api` | `TodoQueryApi` / `TodoQueryFacade` | **2026-07-19 回填**：按 businessKey 批量反查任务元信息，含无会话（by-Emp）版本，此前文档完全未收录 |
 | 任务查询与办理 | REST | `TaskController` | 面向前端、联调和真实环境测试 |
 | 流程提交/撤回 | REST | `ProcessCommandController` | 与 `WorkflowApi` 共享底层 service |
@@ -227,6 +228,7 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
 import com.bank.branch.platform.workflow.api.dto.BizProcessMapDTO;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
+import com.bank.branch.platform.workflow.api.dto.TaskCandidateUserDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskDetailRespDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
 
@@ -248,6 +250,8 @@ public interface WorkflowQueryApi {
     List<ApprovalLogDTO> getProcessHistory(String processInstanceId);
 
     ProcessDiagramDTO getProcessNodes(String processInstanceId);
+
+    List<TaskCandidateUserDTO> getActiveTaskCandidates(String processInstanceId);
 
     BizProcessMapDTO getProcessByBusinessKey(String businessKey);
 
@@ -279,9 +283,24 @@ public interface WorkflowQueryApi {
 | `getTaskDetail(taskId, empId)` | `TodoQueryService.getTaskDetail(...)` | 获取任务详情与运行时办理信息 |
 | `getProcessHistory(processInstanceId)` | `ProcessQueryService.getProcessHistory(...)` | 获取审批历史日志 |
 | `getProcessNodes(processInstanceId)` | `ProcessQueryService.getProcessNodes(...)` | 获取流程节点图数据 |
+| `getActiveTaskCandidates(processInstanceId)` | Flowable `TaskService` + auth `UserApi` | 查询当前活动任务：已签收任务仅取 assignee，未签收任务按实际 candidate 身份链接展开 `USER:`/`ROLE:`/`ORG:` 组，去重后补齐姓名和工号；节点已审核、终态或无活动任务时返回空列表。当前按串行单活动 `userTask` 使用；并行/多实例时结果扁平合并，不提供节点级区分 |
 | `getProcessByBusinessKey(...)` | `ProcessStartService.getProcessByBusinessKey(...)` | 查询流程映射 |
 | `getProcessByBizTypeAndBizId(...)` | `ProcessStartService.getProcessByBizTypeAndBizId(...)` | 查询流程映射 |
 | `queryParticipatedBusinessKeys(empId, processDefinitionKeyPrefix, timeWindowDays, limit)` | Flowable `HistoricProcessInstanceQuery.involvedUser` 为主路径 + 当前登录用户候选组未领取任务为辅助路径 | 支撑 performance 模块 WORKFLOW_PARTICIPANT 数据范围语义。**"参与"定义（模式 B 简化版）**：主路径覆盖 assignee/owner/显式身份链接用户；若 `empId` 恰为当前登录用户，额外合并其候选组下未领取任务，`empId` 非当前登录用户时仅走主路径。`processDefinitionKeyPrefix` 在 Java 侧做 `startsWith` 过滤（Flowable 7 不支持 `keyLike`）。Fail-safe：`empId` 空返回空集；`timeWindowDays`/`limit` 为 `null`/`≤0` 时分别按"无限制"/"兜底 10000（`limit` 上限 10000）"处理 |
+
+### 3.3 `TaskCandidateUserDTO` 字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `empId` | String | `PT_USER.USER_ID`，Flowable 办理人内部标识 |
+| `employeeNo` | String | 展示用员工工号，取 `PT_USER.USERNAME` |
+| `employeeName` | String | 员工姓名，取 `PT_USER.USERCHNNAME` |
+
+### 3.4 当前活动任务候选人边界
+
+- 任务身份链接是候选范围的权威快照；查询不会重新读取节点配置来扩大候选人范围。
+- `USER:` 直接映射员工；`ROLE:` 和 `ORG:` 分别通过 auth 的 `UserApi.getEmpIdsByRoleCode`、`UserApi.getEmpIdsByOrg` 按当前目录展开。角色/机构目录变化不会改写已创建任务的身份链接，但查询展示会按当前目录补齐组成员。
+- 该 API 返回扁平列表，业务方只应在串行、同一时刻一个活动审批节点的流程中解释为“当前节点审批人”。并行网关、多实例或多个活动任务需要节点键、任务键分组等新契约，当前不作节点级正确性承诺。
 
 ---
 

@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.yundun.mapper.CreditViolationMapper">
+
+    <!--
+        id/create_time/update_time deliberately stay out of this INSERT:
+        id is AUTO_INCREMENT, while the two timestamp columns have database defaults.
+    -->
+    <insert id="insertBatch">
+        INSERT INTO t_credit_violation (
+            accountability_code,
+            operating_main_responsible_person_responsibility,
+            client_name,
+            iou_number,
+            insurance_principal,
+            estimated_loss,
+            is_responsibility,
+            is_audit_by_head_office,
+            is_microfinance_credit_business,
+            responsible_person_name,
+            employee_number,
+            position,
+            institution_name,
+            institutional_level,
+            affiliated_institution,
+            responsibility_determination,
+            subjective_intent,
+            major_negligence,
+            general_negligence,
+            coefficient_of_responsibility,
+            responsibility_ratio,
+            is_economic_deduction,
+            amount_withheld,
+            special_area_general_negligence_exemption,
+            general_negligence_small_amount_exemption,
+            department_salary_limit_condition,
+            recycle_and_return,
+            is_false_buckle,
+            other_processing,
+            general_handling,
+            disciplinary_action,
+            processing_type,
+            amount_withheld_2,
+            withholding_instructions,
+            name_and_number_of_accountability_document,
+            responsibility_determination_time,
+            whether_to_leave,
+            is_report_to_the_banking_regulatory_commission,
+            submission_time,
+            remark,
+            in_use
+        ) VALUES
+        <foreach collection="rows" item="row" separator=",">
+            (
+                #{row.accountabilityCode},
+                #{row.operatingMainResponsiblePersonResponsibility},
+                #{row.clientName},
+                #{row.iouNumber},
+                #{row.insurancePrincipal},
+                #{row.estimatedLoss},
+                #{row.isResponsibility},
+                #{row.isAuditByHeadOffice},
+                #{row.isMicrofinanceCreditBusiness},
+                #{row.responsiblePersonName},
+                #{row.employeeNumber},
+                #{row.position},
+                #{row.institutionName},
+                #{row.institutionalLevel},
+                #{row.affiliatedInstitution},
+                #{row.responsibilityDetermination},
+                #{row.subjectiveIntent},
+                #{row.majorNegligence},
+                #{row.generalNegligence},
+                #{row.coefficientOfResponsibility},
+                #{row.responsibilityRatio},
+                #{row.isEconomicDeduction},
+                #{row.amountWithheld},
+                #{row.specialAreaGeneralNegligenceExemption},
+                #{row.generalNegligenceSmallAmountExemption},
+                #{row.departmentSalaryLimitCondition},
+                #{row.recycleAndReturn},
+                #{row.isFalseBuckle},
+                #{row.otherProcessing},
+                #{row.generalHandling},
+                #{row.disciplinaryAction},
+                #{row.processingType},
+                #{row.amountWithheld2},
+                #{row.withholdingInstructions},
+                #{row.nameAndNumberOfAccountabilityDocument},
+                #{row.responsibilityDeterminationTime},
+                #{row.whetherToLeave},
+                #{row.isReportToTheBankingRegulatoryCommission},
+                #{row.submissionTime},
+                #{row.remark},
+                #{row.inUse}
+            )
+        </foreach>
+    </insert>
+</mapper>

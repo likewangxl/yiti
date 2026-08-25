@@ -1,12 +1,16 @@
 package com.bank.branch.platform.customer.service;
 
 import com.bank.branch.platform.customer.entity.CustLead;
+import com.bank.branch.platform.customer.entity.CustLeadManagerScope;
 import com.bank.branch.platform.customer.entity.CustMaster;
+import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.enums.CustMasterStatus;
 import com.bank.branch.platform.customer.enums.LeadOp;
 import com.bank.branch.platform.customer.event.CustomerDeletedEvent;
 import com.bank.branch.platform.customer.mapper.CustLeadMapper;
+import com.bank.branch.platform.customer.mapper.CustLeadManagerScopeMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
+import com.bank.branch.platform.customer.mapper.CustClaimMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -16,11 +20,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 /**
  * CustMasterAssemblerService 单元测试（TDD Red 阶段）
@@ -36,7 +43,16 @@ class CustMasterAssemblerServiceTest {
     private CustLeadMapper leadMapper;
 
     @Mock
+    private CustLeadManagerScopeMapper managerScopeMapper;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private CustClaimMapper claimMapper;
+
+    @Mock
+    private TouchTaskService touchTaskService;
 
     @InjectMocks
     private CustMasterAssemblerService assemblerService;
@@ -79,6 +95,58 @@ class CustMasterAssemblerServiceTest {
         assertThat(created.getDeleted()).isEqualTo(0);
         assertThat(created.getCreatedTime()).isNotNull();
         assertThat(created.getUpdatedTime()).isNotNull();
+    }
+
+    @Test
+    void assembleFromLead_OWNER_shouldCreateClaimAndFirstTouchTask() {
+        CustLead lead = buildLead("lead-owner", LeadOp.CREATE.getCode(), null);
+        lead.setDistributionMode("OWNER");
+        lead.setMainManagerId("E20001");
+        lead.setMainManagerOrgId("ORG_SH_001");
+        when(masterMapper.insert(any(CustMaster.class))).thenReturn(1);
+        when(claimMapper.insert(any(CustClaim.class))).thenReturn(1);
+
+        assemblerService.assembleFromLead(lead);
+
+        ArgumentCaptor<CustClaim> claimCaptor = ArgumentCaptor.forClass(CustClaim.class);
+        verify(claimMapper).insert(claimCaptor.capture());
+        CustClaim claim = claimCaptor.getValue();
+        assertThat(claim.getClaimedBy()).isEqualTo("E20001");
+        assertThat(claim.getOrgId()).isEqualTo("ORG_SH_001");
+        verify(touchTaskService).createFirstTouchTask(
+                claim.getCustId(), "ORG_SH_001", "E20001", null);
+    }
+
+    @Test
+    void assembleFromLead_SCOPE_shouldCreateClaimsForEveryScopedManagerWithoutTouchTask() {
+        CustLead lead = buildLead("lead-scope", LeadOp.CREATE.getCode(), null);
+        lead.setDistributionMode("SCOPE");
+
+        CustLeadManagerScope first = new CustLeadManagerScope();
+        first.setLeadId(lead.getId());
+        first.setManagerEmpId("E20001");
+        first.setManagerOrgId("ORG_SH_001");
+        first.setAssignmentType("SCOPE");
+        CustLeadManagerScope second = new CustLeadManagerScope();
+        second.setLeadId(lead.getId());
+        second.setManagerEmpId("E20002");
+        second.setManagerOrgId("ORG_SH_002");
+        second.setAssignmentType("SCOPE");
+
+        when(masterMapper.insert(any(CustMaster.class))).thenReturn(1);
+        when(managerScopeMapper.selectList(any())).thenReturn(List.of(first, second));
+        when(claimMapper.insert(any(CustClaim.class))).thenReturn(1);
+
+        assemblerService.assembleFromLead(lead);
+
+        ArgumentCaptor<CustClaim> claimCaptor = ArgumentCaptor.forClass(CustClaim.class);
+        verify(claimMapper, times(2)).insert(claimCaptor.capture());
+        assertThat(claimCaptor.getAllValues())
+                .extracting(CustClaim::getClaimedBy, CustClaim::getOrgId, CustClaim::getClaimStatus)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("E20001", "ORG_SH_001", "CLAIMED"),
+                        org.assertj.core.groups.Tuple.tuple("E20002", "ORG_SH_002", "CLAIMED"));
+        verifyNoInteractions(touchTaskService);
     }
 
     // ==================== UPDATE 操作 ====================

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.CustTransferLogMapper">
+    <select id="selectVisible" resultType="com.bank.branch.platform.customer.entity.CustTransferLog">
+        SELECT DISTINCT l.*
+        FROM CUST_TRANSFER_LOG l
+        LEFT JOIN CUST_TRANSFER_TARGET t ON t.transfer_id = l.id
+        LEFT JOIN CUSTOMER_MARKET_CUSTOMER c ON c.id = l.cust_id
+        WHERE 1=1
+        <if test="!allData">
+            AND (l.from_org_id = #{orgId} OR l.primary_to_org_id = #{orgId} OR t.target_org_id = #{orgId})
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (l.transfer_no LIKE CONCAT('%', #{keyword}, '%')
+              OR c.cust_name LIKE CONCAT('%', #{keyword}, '%')
+              OR l.from_manager_id LIKE CONCAT('%', #{keyword}, '%')
+              OR t.target_emp_id LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY l.created_time DESC
+    </select>
+</mapper>

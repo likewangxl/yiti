@@ -1,6 +1,7 @@
 package com.bank.branch.platform.customer.controller;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
@@ -42,6 +43,7 @@ public class CustomerController {
 
     private final CustomerService customerService;
     private final CurrentUserApi currentUserApi;
+    private final BizScopeApi bizScopeApi;
 
     /**
      * 分页查询客户主档列表。
@@ -62,7 +64,12 @@ public class CustomerController {
             @RequestParam(defaultValue = "20") int pageSize) {
         log.info("[CustomerController.listPage] keyword={}, status={}, pageNo={}, pageSize={}",
                 keyword, status, pageNo, pageSize);
-        PageResult<CustomerDTO> result = customerService.listPageAsDTO(keyword, status, pageNo, pageSize);
+        String empId = currentUserApi.getCurrentEmpId();
+        PageResult<CustomerDTO> result = customerService.listVisiblePageAsDTO(
+                keyword, status, pageNo, pageSize, empId, currentUserApi.getCurrentOrgCode(),
+                currentUserApi.isSystemAdmin()
+                        ? com.bank.branch.platform.common.security.enums.DataScopeType.ALL
+                        : bizScopeApi.resolveScope(empId, BizType.CUSTOMER));
         return ResponseWrapper.page(result);
     }
 

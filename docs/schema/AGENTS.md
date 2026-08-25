@@ -6,6 +6,7 @@
 
 - 当前数据库的真实结构以获准目标库的只读盘点为准，不以本目录任一 SQL、Excel、ER 图或 Markdown 为准。
 - 现有 `ddl-*.sql`、seed 文件、`migrations/` 和生产基线导出均为历史快照或档案，只用于追溯和理解，不能冒充当前迁移流程、fresh deploy 入口或执行授权。
+- 当前 `ddl-customer.sql` 快照记录 16 张相关表：15 张客户营销表（含 `CUSTOMER_MARKET_CUSTOMER`、线索、标签、跨机构营销、转交、认领和触达）以及 1 张仅承接 M98 T-1 同步的存量 `CUST_MASTER`；该数量和用途仍不替代目标库只读核实。
 - `yiti-schema.xlsx`、ER Markdown/DOT/图片等生成物反映其输入快照，不代表实时数据库；引用时说明快照属性。
 - `docs/exports/` 是另一套历史可视化产物链，和本目录生成脚本互不构成当前 schema 权威。
 

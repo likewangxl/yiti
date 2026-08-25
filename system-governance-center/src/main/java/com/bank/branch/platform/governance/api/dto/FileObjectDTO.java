@@ -31,4 +31,10 @@ public class FileObjectDTO {
 
     /** 上传时间（ISO 8601） */
     private String uploadedTime;
+
+    /**
+     * 本次 upload 是否新建了文件对象；MD5 命中已有对象时为 false。
+     * 该字段仅用于调用方安全补偿清理，不对应数据库列。
+     */
+    private Boolean newlyCreated;
 }

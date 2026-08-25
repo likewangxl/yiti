@@ -1,6 +1,6 @@
 package com.bank.branch.platform.customer.service;
 
-import com.bank.branch.platform.customer.mapper.CustMasterMapper;
+import com.bank.branch.platform.customer.mapper.M98CustMasterMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,7 +26,7 @@ import java.time.format.DateTimeFormatter;
 @RequiredArgsConstructor
 public class CustMasterSyncService {
 
-    private final CustMasterMapper custMasterMapper;
+    private final M98CustMasterMapper m98CustMasterMapper;
 
     /**
      * 同步昨日统计客户到客户主档（定时任务默认入口）。
@@ -52,7 +52,7 @@ public class CustMasterSyncService {
      */
     @Transactional(rollbackFor = Exception.class)
     public int syncByStatisDt(String statisDt) {
-        int inserted = custMasterMapper.syncNewCustomersFromStat(statisDt);
+        int inserted = m98CustMasterMapper.syncNewCustomersFromStat(statisDt);
         log.info("[CustMasterSync] 统计日期={} 同步新增客户主档 {} 条", statisDt, inserted);
         return inserted;
     }

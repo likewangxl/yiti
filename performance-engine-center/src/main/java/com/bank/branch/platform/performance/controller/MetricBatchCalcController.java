@@ -1,14 +1,21 @@
 package com.bank.branch.platform.performance.controller;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.governance.api.dto.JobTriggerRespDTO;
+import com.bank.branch.platform.performance.controller.dto.MetricLevelTriggerReqDTO;
 import com.bank.branch.platform.performance.service.MetricBatchCalcService;
+import com.bank.branch.platform.performance.service.MetricLevelTriggerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -42,6 +49,8 @@ import java.time.LocalDate;
 public class MetricBatchCalcController {
 
     private final MetricBatchCalcService metricBatchCalcService;
+    private final MetricLevelTriggerService metricLevelTriggerService;
+    private final CurrentUserApi currentUserApi;
 
     /**
      * 手动触发指定级别的指标批量计算
@@ -61,5 +70,21 @@ public class MetricBatchCalcController {
         log.info("[MetricBatchCalcController.trigger] level={}, dataDate={}", level, dt);
         metricBatchCalcService.execute(level, dt);
         return ResponseWrapper.success("执行完成，请查看 PERF_METRIC_CALC_TASK 表");
+    }
+
+    /**
+     * 提交按级别指标重算任务。
+     *
+     * <p>该入口只提交治理中心 Quartz 触发，真正的指标计算由对应 Level Job 异步执行；请求线程不得直接调用
+     * {@link MetricBatchCalcService#execute(int, LocalDate, LocalDate, String)}。</p>
+     */
+    @PostMapping("/level-trigger")
+    @Operation(summary = "按级别提交指标重算任务")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.EXECUTE)
+    @AuditLog(action = "PERF_METRIC_LEVEL_RECALC", resourceType = "PERF_METRIC_CALC_TASK", reasonRequired = true)
+    public ResponseWrapper<JobTriggerRespDTO> triggerLevel(@Valid @RequestBody MetricLevelTriggerReqDTO req) {
+        String operatorEmpId = currentUserApi.getCurrentEmpId();
+        JobTriggerRespDTO result = metricLevelTriggerService.trigger(req, operatorEmpId);
+        return ResponseWrapper.success(result);
     }
 }

@@ -13,14 +13,19 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
+import org.flowable.identitylink.api.IdentityLink;
+import org.flowable.identitylink.api.IdentityLinkType;
 import org.flowable.task.api.Task;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 任务操作服务
@@ -90,19 +95,20 @@ public class TaskOperationService {
     /**
      * 审批通过任务
      * <p>
-     * 当前办理人审批通过任务，添加审批意见并完成任务流转。
+     * 当前办理人或未分配任务的候选审批人直接审批通过，添加审批意见并完成任务流转。
      * </p>
      *
      * @param taskId 任务ID
      * @param req    审批请求DTO
      * @throws BizException WF-40403 任务不存在；WF-40903 非任务办理人
      */
+    @Transactional
     public void approveTask(String taskId, ApproveReqDTO req) {
-        // PC 管理端会话链路：empId 取当前登录用户，并校验其为任务办理人（须已签收）
+        // PC 管理端会话链路：已分配任务仅办理人可操作；未分配任务允许候选审批人直接办理。
         String empId = currentUserApi.getCurrentEmpId();
         Task task = queryTaskOrThrow(taskId);
         ensureNotTransferLocked(taskId);
-        verifyAssignee(task, empId);
+        verifyAssigneeOrCandidateAndRecordHandler(task, empId);
         doApprove(task, empId, req);
     }
 
@@ -158,19 +164,20 @@ public class TaskOperationService {
     /**
      * 驳回任务
      * <p>
-     * 当前办理人驳回任务，设置 approved=false 流程变量并完成任务。
+     * 当前办理人或未分配任务的候选审批人直接驳回任务，终止流程并记录意见。
      * </p>
      *
      * @param taskId 任务ID
      * @param req    驳回请求DTO（opinion 审批意见）
      * @throws BizException WF-40403 任务不存在；WF-40903 非任务办理人
      */
+    @Transactional
     public void rejectTask(String taskId, RejectReqDTO req) {
-        // PC 管理端会话链路：empId 取当前登录用户，并校验其为任务办理人（须已签收）
+        // PC 管理端会话链路：已分配任务仅办理人可操作；未分配任务允许候选审批人直接办理。
         String empId = currentUserApi.getCurrentEmpId();
         Task task = queryTaskOrThrow(taskId);
         ensureNotTransferLocked(taskId);
-        verifyAssignee(task, empId);
+        verifyAssigneeOrCandidateAndRecordHandler(task, empId);
         doReject(task, empId, req);
     }
 
@@ -273,14 +280,39 @@ public class TaskOperationService {
     }
 
     /**
-     * 校验当前用户是否为任务办理人，不是则抛出 WF-40903
+     * 校验当前用户是否可办理任务，并在未分配时记录实际审批人。
+     * <p>已分配任务仍只允许当前办理人；未分配任务必须命中任务实际 candidate 身份链接，
+     * 不能只凭接口访问权限放行。通过后仅写 assignee 留痕，不调用 claim，随后由审批/驳回立即结束当前任务。</p>
      */
-    private void verifyAssignee(Task task, String empId) {
-        if (!empId.equals(task.getAssignee())) {
-            throw new BizException(
-                    WfErrorCode.NOT_TASK_ASSIGNEE.getCode(),
-                    WfErrorCode.NOT_TASK_ASSIGNEE.getMessage());
+    private void verifyAssigneeOrCandidateAndRecordHandler(Task task, String empId) {
+        if (StringUtils.hasText(task.getAssignee())) {
+            if (empId.equals(task.getAssignee())) {
+                return;
+            }
+            throwNotTaskAssignee();
         }
+
+        Set<String> currentGroups = currentUserApi.getCurrentCandidateGroupKeys();
+        List<IdentityLink> links = taskService.getIdentityLinksForTask(task.getId());
+        boolean candidate = links != null && links.stream()
+                .filter(link -> IdentityLinkType.CANDIDATE.equals(link.getType()))
+                .anyMatch(link -> empId.equals(link.getUserId())
+                        || (link.getGroupId() != null
+                        && currentGroups != null
+                        && currentGroups.contains(link.getGroupId())));
+        if (!candidate) {
+            throwNotTaskAssignee();
+        }
+
+        // 不提供领取步骤，但历史已办仍需真实审批人；审批动作内记录后立即完成当前任务。
+        taskService.setAssignee(task.getId(), empId);
+        updateCurrentAssignee(task.getProcessInstanceId(), empId);
+    }
+
+    private void throwNotTaskAssignee() {
+        throw new BizException(
+                WfErrorCode.NOT_TASK_ASSIGNEE.getCode(),
+                WfErrorCode.NOT_TASK_ASSIGNEE.getMessage());
     }
 
     /**

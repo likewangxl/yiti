@@ -442,6 +442,12 @@ export function listMetricSummary(params = {}) {
 export function batchExecuteMetrics(payload) {
   return call('post', '/perf/metrics/batch-execute', { data: payload }, { total: 0, success: 0, failed: 0, results: [] });
 }
+// 按级别触发指标重算（Quartz 提交即返回，不代表计算已经完成）
+// payload: { level: 1|2|3, dataDate: 'YYYY-MM-DD', reason, allocDate? }
+// 写请求不提供 fallback，后端失败必须交给页面处理，不能伪装成已触发。
+export function triggerMetricLevelRecalc(payload) {
+  return call('post', '/perf/metric-calc/level-trigger', { data: payload });
+}
 // 考核计算统计：最后一次 KPI 计算任务(PERF_METRIC_CALC_TASK) 成功/失败/耗时 + 本月任务数
 export function getKpiScoreStats() {
   return call('get', '/perf/kpi-score/stats', {},

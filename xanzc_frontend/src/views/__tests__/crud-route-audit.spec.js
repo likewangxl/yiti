@@ -16,8 +16,8 @@ const normalRoutes = namedRoutes.filter(route =>
 );
 
 describe('普通后台路由 CRUD 审计矩阵', () => {
-  it('精确覆盖 59 个命名路由，并明确排除红色引擎和大屏运行/设计器', () => {
-    expect(normalRoutes).toHaveLength(59);
+  it('精确覆盖 75 个命名路由，并明确排除红色引擎和大屏运行/设计器', () => {
+    expect(normalRoutes).toHaveLength(75);
     expect(normalRoutes.some(route => route.view.includes('/redengine/'))).toBe(false);
     expect(normalRoutes.some(route => excludedScreenViews.has(route.view))).toBe(false);
   });
@@ -34,7 +34,7 @@ describe('普通后台路由 CRUD 审计矩阵', () => {
     expect(missingBaseline).toEqual([]);
   });
 
-  it('在 55 个标准页面根容器挂载受控溢出提示，覆盖其全部 89 张表', () => {
+  it('在标准页面根容器挂载受控溢出提示，覆盖其全部 110 张表', () => {
     const pagesWithoutTooltip = normalRoutes
       .filter(route => !independentPageNames.has(route.name))
       .flatMap(route => {
@@ -54,7 +54,7 @@ describe('普通后台路由 CRUD 审计矩阵', () => {
       }, 0);
 
     expect(pagesWithoutTooltip).toEqual([]);
-    expect(tableCount).toBe(89);
+    expect(tableCount).toBe(110);
   });
 
   it('append-to-body 对话框也带 bp-crud-dialog 边界，避免提示跨入红色引擎', () => {

@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -106,8 +107,22 @@ public class AllocAdjustRespDTO {
     /** 最近更新时间. */
     private LocalDateTime updatedTime;
 
+    /**
+     * 当前未审核活动节点可审批员工；节点已审核、流程终态或无活动任务时为空。
+     */
+    private List<CurrentNodeApprover> currentNodeApprovers = Collections.emptyList();
+
     /** 调整后明细（仅 getById 返回，list 视图为空列表以减压）. */
     private List<Item> items;
+
+    /** 当前节点可审批员工展示项。 */
+    @Data
+    public static class CurrentNodeApprover {
+        /** 员工工号（PT_USER.USERNAME）。 */
+        private String employeeNo;
+        /** 员工姓名。 */
+        private String employeeName;
+    }
 
     /**
      * 明细项.

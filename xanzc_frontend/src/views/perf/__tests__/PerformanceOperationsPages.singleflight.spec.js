@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   getLatestKpiCalcLogDate: vi.fn().mockResolvedValue(''),
   listMetricSummary: vi.fn().mockResolvedValue({ records: [], total: 0 }),
   batchExecuteMetrics: vi.fn().mockResolvedValue({ success: 0, failed: 0, results: [] }),
+  triggerMetricLevelRecalc: vi.fn().mockResolvedValue({ accepted: true }),
   executeMetric: vi.fn().mockResolvedValue({}),
   listMetrics: vi.fn().mockResolvedValue([]),
   listRunTasks: vi.fn().mockResolvedValue({ records: [], total: 0 }),
@@ -45,7 +46,15 @@ vi.mock('@/utils/datetime', () => ({ fmtDateTimeCol: vi.fn() }));
 import Compute from '../Compute.vue';
 import TaskMonitor from '../TaskMonitor.vue';
 import Import from '../Import.vue';
-import { batchExecuteMetrics, calcKpiScore, deleteImportBatch, executeMetric, retryImport, uploadImportFile } from '@/api/perf';
+import {
+  batchExecuteMetrics,
+  calcKpiScore,
+  deleteImportBatch,
+  executeMetric,
+  retryImport,
+  triggerMetricLevelRecalc,
+  uploadImportFile
+} from '@/api/perf';
 
 const passthrough = (name) => ({ name, template: '<div><slot /><slot name="tip" /><slot name="reference" /></div>' });
 const empty = (name) => ({ name, template: '<div />' });
@@ -186,6 +195,62 @@ describe('绩效计算与任务执行同步防重', () => {
     });
     gate.resolve({ success: 2, failed: 0, results: [] });
     await Promise.all([first, second]);
+  });
+
+  it('按级别重算默认昨日、仅一级展示分配日期，并且极快双调用只提交一次', async () => {
+    const wrapper = await mountPage(TaskMonitor);
+    wrapper.vm.openLevelTrigger();
+
+    expect(wrapper.vm.levelDlg.level).toBe(1);
+    expect(wrapper.vm.levelDlg.dataDate).toBe(yesterday());
+    expect(wrapper.vm.levelDlg.allocDate).toBe('');
+
+    const gate = deferred();
+    triggerMetricLevelRecalc.mockImplementation(() => gate.promise);
+    wrapper.vm.levelDlg.level = 1;
+    wrapper.vm.levelDlg.dataDate = yesterday();
+    wrapper.vm.levelDlg.allocDate = '2026-08-16';
+    wrapper.vm.levelDlg.reason = '补跑一级指标';
+
+    const first = wrapper.vm.confirmLevelTrigger();
+    const second = wrapper.vm.confirmLevelTrigger();
+
+    expect(triggerMetricLevelRecalc).toHaveBeenCalledTimes(1);
+    expect(triggerMetricLevelRecalc).toHaveBeenCalledWith({
+      level: 1,
+      dataDate: yesterday(),
+      reason: '补跑一级指标',
+      allocDate: '2026-08-16'
+    });
+    gate.resolve({ accepted: true });
+    await Promise.all([first, second]);
+  });
+
+  it('按级别重算二级不发送 allocDate，并拒绝当天日期与空原因', async () => {
+    const wrapper = await mountPage(TaskMonitor);
+    wrapper.vm.openLevelTrigger();
+    wrapper.vm.levelDlg.level = 2;
+    wrapper.vm.levelDlg.dataDate = yesterday();
+    wrapper.vm.levelDlg.allocDate = '2026-08-16';
+    wrapper.vm.levelDlg.reason = '补跑二级指标';
+    triggerMetricLevelRecalc.mockResolvedValueOnce({ accepted: true });
+
+    await wrapper.vm.confirmLevelTrigger();
+    expect(triggerMetricLevelRecalc).toHaveBeenCalledWith({
+      level: 2,
+      dataDate: yesterday(),
+      reason: '补跑二级指标'
+    });
+
+    triggerMetricLevelRecalc.mockClear();
+    wrapper.vm.levelDlg.dataDate = today();
+    await wrapper.vm.confirmLevelTrigger();
+    expect(triggerMetricLevelRecalc).not.toHaveBeenCalled();
+
+    wrapper.vm.levelDlg.dataDate = yesterday();
+    wrapper.vm.levelDlg.reason = '  ';
+    await wrapper.vm.confirmLevelTrigger();
+    expect(triggerMetricLevelRecalc).not.toHaveBeenCalled();
   });
 
   it('单项和批量提交均拒绝当天日期，并保留原 single-flight 边界', async () => {

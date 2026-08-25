@@ -68,10 +68,10 @@ public class TouchTaskController {
     public ResponseWrapper<TouchTask> listPage(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) String assigneeEmpId,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
-        log.info("[TouchTaskController.listPage] keyword={}, status={}, assigneeEmpId={}, pageNo={}, pageSize={}",
+        String assigneeEmpId = currentUserApi.getCurrentEmpId();
+        log.info("[TouchTaskController.listPage] keyword={}, status={}, currentAssignee={}, pageNo={}, pageSize={}",
                 keyword, status, assigneeEmpId, pageNo, pageSize);
         PageResult<TouchTask> result = touchTaskService.listPage(keyword, status, assigneeEmpId, pageNo, pageSize);
         return ResponseWrapper.page(result);
@@ -88,7 +88,9 @@ public class TouchTaskController {
     @Operation(summary = "查询触达任务详情")
     public ResponseWrapper<TouchTask> getById(@PathVariable String id) {
         log.info("[TouchTaskController.getById] id={}", id);
-        TouchTask task = touchTaskService.getById(id);
+        TouchTask task = touchTaskService.getVisibleById(
+                id, currentUserApi.getCurrentEmpId(), currentUserApi.getCurrentOrgCode(),
+                currentUserApi.isSystemAdmin());
         return ResponseWrapper.success(task);
     }
 
@@ -150,6 +152,7 @@ public class TouchTaskController {
      */
     @PostMapping("/{id}/logs")
     @BizAuth(bizType = BizType.TOUCH_TASK, action = BizAction.WRITE)
+    @AuditLog(action = "ADD_TOUCH_LOG", resourceType = "TOUCH_TASK")
     @Operation(summary = "新增触达日志")
     public ResponseWrapper<TouchLog> addLog(@PathVariable String id,
                                             @Valid @RequestBody TouchLogReqDTO req) {
@@ -159,17 +162,24 @@ public class TouchTaskController {
 
         // 将 List<String> photoUrls 序列化为 JSON 数组字符串
         String photoUrlsJson = null;
-        if (!CollectionUtils.isEmpty(req.getPhotoUrls())) {
+        List<String> allPhotos = req.getPhotoGroups() == null
+                ? req.getPhotoUrls() : req.getPhotoGroups().allPhotos();
+        if (!CollectionUtils.isEmpty(allPhotos)) {
             try {
-                photoUrlsJson = objectMapper.writeValueAsString(req.getPhotoUrls());
+                photoUrlsJson = objectMapper.writeValueAsString(allPhotos);
             } catch (JsonProcessingException e) {
                 log.warn("[TouchTaskController.addLog] failed to serialize photoUrls: {}", e.getMessage());
             }
         }
 
+        String participantEmpIdsJson = writeJson(req.getParticipantEmpIds());
+        String photoGroupsJson = writeJson(req.getPhotoGroups());
+
         TouchLog result = touchLogService.addLog(
                 id, req.getClientUuid(), req.getLogContent(),
-                photoUrlsJson, empId, orgId);
+                photoUrlsJson, req.getTouchTime(), req.getTouchMethod(),
+                participantEmpIdsJson, photoGroupsJson, req.getOperatorLocation(),
+                empId, orgId, currentUserApi.isSystemAdmin());
         return ResponseWrapper.success(result);
     }
 
@@ -184,7 +194,19 @@ public class TouchTaskController {
     @Operation(summary = "查询触达日志列表")
     public ResponseWrapper<List<TouchLog>> listLogs(@PathVariable String id) {
         log.info("[TouchTaskController.listLogs] taskId={}", id);
-        List<TouchLog> logs = touchLogService.listByTaskId(id);
+        List<TouchLog> logs = touchLogService.listVisibleByTaskId(
+                id, currentUserApi.getCurrentOrgCode(), currentUserApi.isSystemAdmin());
         return ResponseWrapper.success(logs);
+    }
+
+    private String writeJson(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("触达日志结构化字段序列化失败", e);
+        }
     }
 }

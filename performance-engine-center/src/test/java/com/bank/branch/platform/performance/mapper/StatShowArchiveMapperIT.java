@@ -94,4 +94,13 @@ class StatShowArchiveMapperIT extends PerformanceMapperTestBase {
 
         assertThat(cnt(HIST)).isZero();
     }
+
+    @Test
+    void countByTableDate_countsOnlySelectedDate() {
+        ins(TMP, "2026-07-05", "A", "1");
+        ins(TMP, "2026-07-05", "B", "1");
+        ins(TMP, "2026-07-06", "C", "1");
+
+        assertThat(mapper.countByTableDate(TMP, "2026-07-05")).isEqualTo(2);
+    }
 }

@@ -2,6 +2,7 @@ package com.bank.branch.platform.performance.job;
 
 import com.bank.branch.platform.performance.service.MetricBatchCalcService;
 import lombok.extern.slf4j.Slf4j;
+import org.quartz.DisallowConcurrentExecution;
 import org.quartz.JobExecutionContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.quartz.QuartzJobBean;
@@ -16,6 +17,7 @@ import java.time.LocalDate;
  * 构造器注入会使本类无无参构造 → 触发时抛 NoSuchMethodException: &lt;init&gt;()。
  */
 @Slf4j
+@DisallowConcurrentExecution
 public class Level2MetricCalcJob extends QuartzJobBean {
 
     @Autowired

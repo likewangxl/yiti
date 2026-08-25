@@ -16,14 +16,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
  * 标签对外接口实现。
  *
- * <p>实现 {@link TagApi} 契约定义的 6 个方法。直接依赖 Mapper，不通过 Service 层，
+ * <p>实现 {@link TagApi} 契约定义的 5 个方法。直接依赖 Mapper，不通过 Service 层，
  * 避免 API 层混入内部业务校验逻辑。</p>
  *
  * <p>对外 API 无写操作，全部只读。</p>
@@ -49,19 +48,6 @@ public class TagApiImpl implements TagApi {
         log.debug("[TagApiImpl.listEnabledTags] called");
         List<CustTag> tags = custTagMapper.selectEnabledSorted();
         return TagDTOConverter.toDTOList(tags);
-    }
-
-    /**
-     * 按 tagCode 获取标签。
-     *
-     * @param tagCode 标签编码
-     * @return Optional 包装的标签 DTO，不存在时返回 empty
-     */
-    @Override
-    public Optional<TagDTO> getTagByCode(String tagCode) {
-        log.debug("[TagApiImpl.getTagByCode] tagCode={}", tagCode);
-        CustTag tag = custTagMapper.selectByTagCode(tagCode);
-        return Optional.ofNullable(TagDTOConverter.toDTO(tag));
     }
 
     /**

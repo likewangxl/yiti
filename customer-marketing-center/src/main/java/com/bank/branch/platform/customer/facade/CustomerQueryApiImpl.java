@@ -10,10 +10,12 @@ import com.bank.branch.platform.customer.api.dto.CustomerFilterDTO;
 import com.bank.branch.platform.customer.api.dto.RunningFlowDTO;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.entity.CustMaster;
+import com.bank.branch.platform.customer.entity.M98CustMaster;
 import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.enums.ClaimStatus;
 import com.bank.branch.platform.customer.mapper.CustClaimMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
+import com.bank.branch.platform.customer.mapper.M98CustMasterMapper;
 import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +44,8 @@ public class CustomerQueryApiImpl implements CustomerQueryApi {
     private static final int MAX_SEARCH_LIMIT = 50;
 
     private final CustMasterMapper custMasterMapper;
+    /** 仅供绩效等存量业务按 M98 客户号反显客户名称。 */
+    private final M98CustMasterMapper m98CustMasterMapper;
     private final CustClaimMapper custClaimMapper;
     private final TouchTaskMapper touchTaskMapper;
 
@@ -64,8 +68,8 @@ public class CustomerQueryApiImpl implements CustomerQueryApi {
         if (custNo == null || custNo.isBlank()) {
             return Optional.empty();
         }
-        CustMaster entity = custMasterMapper.selectByCustNo(custNo);
-        return Optional.ofNullable(CustomerDTOConverter.toDTO(entity));
+        M98CustMaster entity = m98CustMasterMapper.selectByCustNo(custNo);
+        return Optional.ofNullable(CustomerDTOConverter.toDTOFromM98(entity));
     }
 
     /**

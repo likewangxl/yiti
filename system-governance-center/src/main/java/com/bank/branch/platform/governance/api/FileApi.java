@@ -3,6 +3,7 @@ package com.bank.branch.platform.governance.api;
 import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
 
@@ -58,6 +59,15 @@ public interface FileApi {
      * @throws com.bank.branch.platform.common.web.exception.BizException GOV-40005 文件不存在
      */
     byte[] getFileContent(String fileId);
+
+    /**
+     * 将文件内容流式写入调用方输出流，不关闭调用方输出流。
+     *
+     * @param fileId       文件对象ID
+     * @param outputStream 调用方输出流（由调用方负责关闭）
+     * @throws com.bank.branch.platform.common.web.exception.BizException GOV-40005 文件不存在
+     */
+    void writeFileContent(String fileId, OutputStream outputStream);
 
     /**
      * 获取文件下载URL（OBS 预签名临时 URL）

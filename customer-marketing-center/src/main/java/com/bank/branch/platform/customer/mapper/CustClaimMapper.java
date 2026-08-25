@@ -6,12 +6,13 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import com.bank.branch.platform.customer.dto.resp.ClaimedCustomerRespDTO;
 
 /**
  * 客户认领关系 Mapper 接口，操作 cust_claim 表。
  * <p>
  * 该表无逻辑删除字段，有效认领通过 claim_status='CLAIMED' 过滤。
- * 客户池查询：cust_master 中尚未被本机构认领的客户。
+ * 客户池查询：审批通过且全行公开、尚未被当前员工认领的客户。
  * </p>
  * <p>
  * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
@@ -56,18 +57,19 @@ public interface CustClaimMapper extends BaseMapper<CustClaim> {
     List<CustClaim> selectByClaimedBy(@Param("claimedBy") String claimedBy);
 
     /**
-     * 分页查询客户池（尚未被任何机构有效认领的客户）。
+     * 分页查询待认领池（审批通过且全行公开、当前员工尚未认领的客户）。
      * <p>
-     * LEFT JOIN cust_claim 过滤掉已认领客户，keyword 模糊搜索 cust_name。
+     * 按当前员工的有效认领关系过滤，keyword 模糊搜索 cust_name。
      * </p>
      *
      * @param keyword 关键词（搜索 cust_name），可为 null
      * @param offset  偏移量
      * @param limit   每页条数
-     * @return 未被认领的客户主档列表
+     * @return 当前员工可认领的全行公开客户主档列表
      */
     List<com.bank.branch.platform.customer.entity.CustMaster> selectPoolPage(
             @Param("keyword") String keyword,
+            @Param("empId") String empId,
             @Param("offset") int offset,
             @Param("limit") int limit);
 
@@ -77,7 +79,7 @@ public interface CustClaimMapper extends BaseMapper<CustClaim> {
      * @param keyword 关键词，可为 null
      * @return 未被认领的客户总数
      */
-    long countPoolPage(@Param("keyword") String keyword);
+    long countPoolPage(@Param("keyword") String keyword, @Param("empId") String empId);
 
     /**
      * 分页查询某员工的认领客户列表（我的客户）。
@@ -98,6 +100,11 @@ public interface CustClaimMapper extends BaseMapper<CustClaim> {
      * @return 该员工有效认领的客户总数
      */
     long countMyClaimsPage(@Param("empId") String empId);
+
+    /** 查询本人已认领客户及最近一条触达任务。 */
+    List<ClaimedCustomerRespDTO> selectMyClaimedCustomerPage(@Param("empId") String empId,
+                                                              @Param("offset") int offset,
+                                                              @Param("limit") int limit);
 
     // insert(T) 由 MyBatis-Plus BaseMapper 提供
 

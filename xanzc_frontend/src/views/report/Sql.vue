@@ -47,7 +47,7 @@
         <el-button @click="formatSql">格式化</el-button>
         <el-button @click="whitelistVisible = true">查看白名单</el-button>
         <el-button :icon="List"   @click="historyVisible = true">查看历史</el-button>
-        <el-button :icon="Download" :loading="exporting" :disabled="!valid || exporting || running" @click="createExport" class="run">
+        <el-button :icon="Download" :loading="exporting" :disabled="!valid || exporting || running" @click="openExportOptions" class="run">
           下载
         </el-button>
         <el-button type="primary" :loading="running" :disabled="!valid || running" @click="run">
@@ -57,7 +57,7 @@
     </section>
 
     <!-- 异步导出任务列表：点「下载」后任务进这里，轮询进度，成功后点「下载文件」 -->
-    <section v-if="exportTasks.length" class="card-section data-panel export-tasks" aria-labelledby="sql-export-title">
+    <section v-if="exportTasks.length || exportTotal" class="card-section data-panel export-tasks" aria-labelledby="sql-export-title">
       <div class="toolbar">
         <div><h2 id="sql-export-title" class="section-title">下载任务</h2><p class="hint">任务处理中自动刷新，最长两分钟；到达上限可手动刷新。</p></div>
         <el-button link type="primary" size="small" @click="refreshExportTasks" :loading="exportTasksLoading" style="margin-left:auto">刷新</el-button>
@@ -97,6 +97,16 @@
           </template>
         </el-table-column>
       </el-table>
+      <div class="pager" style="margin-top:12px">
+        <el-pagination
+          v-model:current-page="exportPageNo"
+          :page-size="exportPageSize"
+          :total="exportTotal"
+          background
+          layout="total, prev, pager, next"
+          @current-change="refreshExportTasks"
+        />
+      </div>
     </section>
 
     <section v-if="result && !running" class="card-section data-panel result" aria-labelledby="sql-result-title">
@@ -172,15 +182,34 @@
       <div class="pager" style="margin-top:12px">
         <el-pagination
           v-model:current-page="historyPageNo"
-          v-model:page-size="historyPageSize"
-          :page-sizes="[10, 20, 50]"
+          :page-size="historyPageSize"
           :total="historyTotal"
           background
-          layout="total, sizes, prev, pager, next"
-          @size-change="loadHistory"
+          layout="total, prev, pager, next"
           @current-change="loadHistory"
         />
       </div>
+    </el-dialog>
+
+    <!-- 下载条数 Dialog —— 只在确认后创建异步导出任务 -->
+    <el-dialog v-model="exportOptionsVisible" class="bp-crud-dialog" title="下载选项" width="420px" aria-label="SQL 探查下载选项">
+      <div class="export-option">
+        <div class="lab">下载条数</div>
+        <el-input-number
+          v-model="exportCount"
+          data-testid="export-count"
+          :min="1"
+          :max="50000"
+          :step="1000"
+          controls-position="right"
+          style="width:220px"
+        />
+        <p class="hint">请输入 1 至 50000 条，默认下载 1000 条。</p>
+      </div>
+      <template #footer>
+        <el-button @click="exportOptionsVisible = false">取消</el-button>
+        <el-button type="primary" :loading="exporting" @click="confirmExport">确定</el-button>
+      </template>
     </el-dialog>
 
     <!-- 表白名单 Dialog -->
@@ -265,12 +294,12 @@ const errors = computed(() => {
 const valid = computed(() => errors.value.length === 0 && reason.value.trim().length > 0);
 
 const historyPageNo = ref(1);
-const historyPageSize = ref(10);
+const historyPageSize = 10;
 const historyTotal = ref(0);
 async function loadHistory() {
   historyLoading.value = true;
   try {
-    const r = await getSqlHistory({ pageNo: historyPageNo.value, pageSize: historyPageSize.value });
+    const r = await getSqlHistory({ pageNo: historyPageNo.value, pageSize: historyPageSize });
     history.value = Array.isArray(r) ? r : (r?.records || []);
     historyTotal.value = r?.total ?? history.value.length;
   } catch { history.value = []; }
@@ -316,6 +345,11 @@ async function run() {
 const exporting = ref(false);
 const exportTasks = ref([]);
 const exportTasksLoading = ref(false);
+const exportPageNo = ref(1);
+const exportPageSize = 5;
+const exportTotal = ref(0);
+const exportOptionsVisible = ref(false);
+const exportCount = ref(1000);
 let pollTimer = null;
 let pollCount = 0;
 const MAX_POLLS = 40; // 轮询上限：40 × 3s = 2 分钟。即使后台任务卡死，也不会无限循环查询
@@ -328,10 +362,12 @@ function statusLabel(s) {
 async function loadExportTasks() {
   exportTasksLoading.value = true;
   try {
-    const r = await listSqlExportTasks();
+    const r = await listSqlExportTasks({ pageNo: exportPageNo.value, pageSize: exportPageSize });
     exportTasks.value = Array.isArray(r) ? r : (r?.records || []);
+    exportTotal.value = Array.isArray(r) ? exportTasks.value.length : (r?.total ?? exportTasks.value.length);
   } catch (e) {
     exportTasks.value = [];
+    exportTotal.value = 0;
   } finally {
     exportTasksLoading.value = false;
   }
@@ -360,6 +396,31 @@ function startPolling() {
 async function refreshExportTasks() {
   await loadExportTasks();
   if (exportTasks.value.some(t => t.status === 'RUNNING')) startPolling();
+  else stopPolling();
+}
+
+function openExportOptions() {
+  if (exporting.value || running.value || !valid.value) {
+    ElMessage.warning('请先通过校验');
+    return;
+  }
+  exportCount.value = 1000;
+  exportOptionsVisible.value = true;
+}
+
+function isValidExportCount() {
+  const count = Number(exportCount.value);
+  if (!Number.isInteger(count) || count < 1 || count > 50000) {
+    ElMessage.warning('下载条数须为 1 至 50000 的整数');
+    return false;
+  }
+  return true;
+}
+
+async function confirmExport() {
+  if (!isValidExportCount()) return;
+  exportOptionsVisible.value = false;
+  await createExport();
 }
 
 async function createExport() {
@@ -367,10 +428,14 @@ async function createExport() {
   exporting.value = true;
   try {
     // 与执行一致：sql 加密后提交，后端解密；后台异步生成
-    await createSqlExport({ sql: encryptSql(sql.value), remark: reason.value });
+    await createSqlExport({
+      sql: encryptSql(sql.value),
+      remark: reason.value,
+      exportCount: Number(exportCount.value)
+    });
     ElMessage.success('已提交下载任务，可在下方「下载任务」查看进度');
-    await loadExportTasks();
-    startPolling();
+    exportPageNo.value = 1;
+    await refreshExportTasks();
   } catch (e) {
     ElMessage.error('提交下载失败：' + (e?.message || '后端校验未通过'));
   } finally {
@@ -461,6 +526,7 @@ function formatCell(v) {
   .export-tasks {
     .fail-hint { color: var(--color-danger-fg); cursor: default; }
   }
+  .export-option { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
   .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
   .pending-text { color: var(--color-text-muted); }
   .wl { color: var(--color-text); line-height: 1.9; padding: 0 0 0 18px; }

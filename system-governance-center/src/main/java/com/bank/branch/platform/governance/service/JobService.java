@@ -37,6 +37,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -486,14 +487,61 @@ public class JobService {
         log.info("[JobService.triggerJob] jobId={}, reason={}, dataDate={}, allocDate={}, operatorEmpId={}",
                 jobId, reason, dataDate, allocDate, operatorEmpId);
 
-        // 1. 校验任务配置存在
         SysJobConf conf = jobConfMapper.selectById(jobId);
         if (conf == null) {
             throw new BizException(GovErrorCode.TASK_NOT_FOUND.getCode(),
                     GovErrorCode.TASK_NOT_FOUND.getMessage());
         }
 
-        // 2. 校验是否允许手动触发（P3.3 修复 P3.2 错误码语义错配：
+        return triggerConfiguredJob(conf, "MANUAL", reason, dataDate, allocDate, operatorEmpId);
+    }
+
+    /**
+     * 按 jobKey 触发 Quartz 任务。
+     *
+     * <p>此方法是跨模块 JobApi 的实现入口。jobKey 白名单由调用方业务模块负责，治理层不允许
+     * 绕过任务配置、手动触发开关或 Scheduler 可用性校验。</p>
+     *
+     * @param jobKey 任务唯一标识
+     * @param triggerType 触发类型 MANUAL/AUTO；空值按 MANUAL 兼容历史调用
+     * @param reason 触发原因
+     * @param dataDate 数据日期，可空
+     * @param allocDate 业绩分配日期，可空
+     * @param operatorEmpId 操作人工号，AUTO 可空
+     * @return Quartz 触发响应
+     */
+    public JobTriggerRespDTO triggerJobByKey(String jobKey, String triggerType, String reason,
+                                             String dataDate, String allocDate, String operatorEmpId) {
+        log.info("[JobService.triggerJobByKey] jobKey={}, triggerType={}, reason={}, dataDate={}, allocDate={}, operatorEmpId={}",
+                jobKey, triggerType, reason, dataDate, allocDate, operatorEmpId);
+        SysJobConf conf = jobConfMapper.selectByJobKey(jobKey);
+        if (conf == null) {
+            throw new BizException(GovErrorCode.TASK_NOT_FOUND.getCode(),
+                    GovErrorCode.TASK_NOT_FOUND.getMessage());
+        }
+        return triggerConfiguredJob(conf, triggerType, reason, dataDate, allocDate, operatorEmpId);
+    }
+
+    /**
+     * 查询任务是否已有运行中的执行日志。
+     *
+     * <p>按 jobKey 解析配置后使用执行日志表的任务主键查询，任务不存在时返回 false，避免
+     * 协调器为不存在的配置制造额外异常。</p>
+     */
+    public boolean isJobRunning(String jobKey) {
+        SysJobConf conf = jobConfMapper.selectByJobKey(jobKey);
+        return conf != null && jobRunLogMapper.existsRunningByJobId(conf.getId());
+    }
+
+    /**
+     * 统一执行治理校验并调用 Quartz。
+     */
+    private JobTriggerRespDTO triggerConfiguredJob(SysJobConf conf, String triggerType, String reason,
+                                                   String dataDate, String allocDate, String operatorEmpId) {
+        String normalizedTriggerType = normalizeTriggerType(triggerType);
+
+        // 校验是否允许业务触发（历史字段名称为 allow_manual_trigger，AUTO 协调触发同样受其保护）。
+        // P3.3 修复 P3.2 错误码语义错配：
         //    原误用 TASK_ALREADY_RUNNING (GOV-40903)，与抛出消息严重不符；
         //    改为新增的 JOB_MANUAL_NOT_ALLOWED (GOV-40302)，403 Forbidden 语义）
         if (conf.getAllowManualTrigger() == null || conf.getAllowManualTrigger() != 1) {
@@ -501,19 +549,21 @@ public class JobService {
                     GovErrorCode.JOB_MANUAL_NOT_ALLOWED.getMessage());
         }
 
-        // 3. scheduler null 守护：用户主动触发必须显式失败（不像 P3.1 启动同步可静默跳过）
+        // scheduler null 守护：触发请求必须显式失败（不像 P3.1 启动同步可静默跳过）
         if (scheduler == null) {
             throw new BizException(GovErrorCode.JOB_TRIGGER_FAILED.getCode(),
-                    "Scheduler 未启用，无法手动触发任务");
+                    "Scheduler 未启用，无法触发任务");
         }
 
-        // 4. 构造 JobDataMap：键名与 JobExecutionLogger 读取保持一致
+        // 构造 JobDataMap：键名与 JobExecutionLogger 读取保持一致
         JobDataMap data = new JobDataMap();
-        data.put("triggerType", "MANUAL");
-        data.put("operatorEmpId", operatorEmpId);
+        data.put("triggerType", normalizedTriggerType);
+        if (operatorEmpId != null && !operatorEmpId.isBlank()) {
+            data.put("operatorEmpId", operatorEmpId.trim());
+        }
         if (reason != null && !reason.isBlank()) {
             // reason 透传到 dataMap，JobListener 可写入 sys_job_run_log.reason
-            data.put("triggerReason", reason);
+            data.put("triggerReason", reason.trim());
         }
         if (dataDate != null && !dataDate.isBlank()) {
             // dataDate 透传到 dataMap：计算类 Quartz Job 读取后按指定数据日期启动计算
@@ -525,21 +575,31 @@ public class JobService {
             data.put("allocDate", allocDate.trim());
         }
 
-        // 5. 立即触发（JobKey 组与 P3.1 syncJobsOnStartup 一致：DEFAULT）
+        // 立即触发（组与启动同步/注册逻辑保持一致）
         try {
-            scheduler.triggerJob(JobKey.jobKey(conf.getJobKey(), "DEFAULT"), data);
+            scheduler.triggerJob(JobKey.jobKey(conf.getJobKey(), resolveGroup(conf.getJobKey())), data);
         } catch (SchedulerException e) {
-            log.error("[JobService.triggerJob] scheduler.triggerJob 失败 jobKey={}", conf.getJobKey(), e);
+            log.error("[JobService.triggerConfiguredJob] scheduler.triggerJob 失败 jobKey={}", conf.getJobKey(), e);
             throw new BizException(GovErrorCode.JOB_TRIGGER_FAILED.getCode(),
                     "触发失败: " + e.getMessage());
         }
 
         return JobTriggerRespDTO.builder()
-                .jobId(jobId)
-                .triggerType("MANUAL")
+                .jobId(conf.getId())
+                .triggerType(normalizedTriggerType)
                 .jobKey(conf.getJobKey())
                 .triggerTime(LocalDateTime.now().format(ISO_FORMATTER))
                 .build();
+    }
+
+    /** 只接受统一的手动/自动触发类型，避免治理日志出现任意伪造值。 */
+    private String normalizeTriggerType(String triggerType) {
+        String normalized = triggerType == null || triggerType.isBlank()
+                ? "MANUAL" : triggerType.trim().toUpperCase(Locale.ROOT);
+        if (!"MANUAL".equals(normalized) && !"AUTO".equals(normalized)) {
+            throw new IllegalArgumentException("triggerType 必须为 MANUAL 或 AUTO");
+        }
+        return normalized;
     }
 
     // ── V1.7 新增：声明式注册 / 注销 ─────────────────────────────────
@@ -682,6 +742,17 @@ public class JobService {
             .usingJobData(dataMap)
             .storeDurably()
             .build();
+        // V1.13 # 1i（2026-05-02）：scheduler.scheduleJob 不带覆盖语义，
+        // 已存在 JobKey 会抛 ObjectAlreadyExistsException → GOV-50012。
+        // V1.7 spec 要求"jobKey 已存在则覆盖（cron 变更场景）"，业务模块（如 perf 指标 update）
+        // 也是同 jobKey 重复 register 的场景。这里先 deleteJob 做 idempotent 前置，
+        // 让 register 真正满足"覆盖"语义（同等价于先 unregister 再 register）。
+        scheduler.deleteJob(JobKey.jobKey(conf.getJobKey(), group));
+        if (conf.getCronExpr() == null || conf.getCronExpr().isBlank()) {
+            // 数据就绪协调器使用的 JobDetail 只需可被 programmatic trigger，不能创建空 cron Trigger。
+            scheduler.addJob(detail, true);
+            return;
+        }
         CronScheduleBuilder cron = applyMisfirePolicy(
             CronScheduleBuilder.cronSchedule(conf.getCronExpr()), conf.getMisfirePolicy());
         CronTrigger trigger = TriggerBuilder.newTrigger()
@@ -689,12 +760,6 @@ public class JobService {
             .withSchedule(cron)
             .forJob(detail)
             .build();
-        // V1.13 # 1i（2026-05-02）：scheduler.scheduleJob 不带覆盖语义，
-        // 已存在 JobKey 会抛 ObjectAlreadyExistsException → GOV-50012。
-        // V1.7 spec 要求"jobKey 已存在则覆盖（cron 变更场景）"，业务模块（如 perf 指标 update）
-        // 也是同 jobKey 重复 register 的场景。这里先 deleteJob 做 idempotent 前置，
-        // 让 register 真正满足"覆盖"语义（同等价于先 unregister 再 register）。
-        scheduler.deleteJob(JobKey.jobKey(conf.getJobKey(), group));
         scheduler.scheduleJob(detail, trigger);
     }
 

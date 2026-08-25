@@ -39,20 +39,24 @@
         ORDER BY claim_time DESC
     </select>
 
-    <!-- 分页查询客户池（尚未被任何机构有效认领的客户） -->
-    <!-- LEFT JOIN CUST_CLAIM 过滤已有 CLAIMED 状态认领记录的客户 -->
+    <!-- 分页查询待认领池：仅审批通过且全行公开、当前员工尚未认领的客户 -->
     <select id="selectPoolPage" resultType="com.bank.branch.platform.customer.entity.CustMaster">
         SELECT cm.id, cm.cust_no, cm.cust_name, cm.unified_credit_code,
                cm.contact_person, cm.contact_mobile, cm.industry, cm.group_type,
                cm.customer_type, cm.is_keystone, cm.enterprise_type, cm.group_name,
                cm.is_account_opened, cm.customer_desc, cm.credit_amount,
                cm.credit_exposure_amount, cm.owner_org_id, cm.lead_id,
+               cm.current_lead_id,
                cm.status, cm.deleted, cm.created_time, cm.updated_time
-        FROM CUST_MASTER cm
-        LEFT JOIN CUST_CLAIM cc ON cc.cust_id = cm.id AND cc.claim_status = 'CLAIMED'
+        FROM CUSTOMER_MARKET_CUSTOMER cm
+        JOIN CUST_LEAD cl ON cl.id = COALESCE(cm.current_lead_id, cm.lead_id)
+        LEFT JOIN CUST_CLAIM cc ON cc.cust_id = cm.id
+            AND cc.claimed_by = #{empId} AND cc.claim_status = 'CLAIMED'
         WHERE cm.deleted = 0
           AND cm.status = 'ACTIVE'
           AND cc.id IS NULL
+          AND cl.lead_status = 'APPROVED'
+          AND cl.distribution_mode = 'PUBLIC'
         <if test="keyword != null and keyword != ''">
             AND cm.cust_name LIKE CONCAT('%', #{keyword}, '%')
         </if>
@@ -63,11 +67,15 @@
     <!-- 统计客户池分页总记录数 -->
     <select id="countPoolPage" resultType="long">
         SELECT COUNT(cm.id)
-        FROM CUST_MASTER cm
-        LEFT JOIN CUST_CLAIM cc ON cc.cust_id = cm.id AND cc.claim_status = 'CLAIMED'
+        FROM CUSTOMER_MARKET_CUSTOMER cm
+        JOIN CUST_LEAD cl ON cl.id = COALESCE(cm.current_lead_id, cm.lead_id)
+        LEFT JOIN CUST_CLAIM cc ON cc.cust_id = cm.id
+            AND cc.claimed_by = #{empId} AND cc.claim_status = 'CLAIMED'
         WHERE cm.deleted = 0
           AND cm.status = 'ACTIVE'
           AND cc.id IS NULL
+          AND cl.lead_status = 'APPROVED'
+          AND cl.distribution_mode = 'PUBLIC'
         <if test="keyword != null and keyword != ''">
             AND cm.cust_name LIKE CONCAT('%', #{keyword}, '%')
         </if>
@@ -89,6 +97,30 @@
         SELECT COUNT(*) FROM CUST_CLAIM
         WHERE claim_status = 'CLAIMED'
           AND (claimed_by = #{empId} OR maintainer_emp_id = #{empId})
+    </select>
+
+    <select id="selectMyClaimedCustomerPage"
+            resultType="com.bank.branch.platform.customer.dto.resp.ClaimedCustomerRespDTO">
+        SELECT cc.id AS claim_id, cc.cust_id, cm.cust_no, cm.cust_name,
+               cm.unified_credit_code, cm.contact_person, cm.contact_mobile,
+               cm.industry, cm.customer_type, cm.owner_org_id AS owner_org_id,
+               cc.org_id, cc.maintainer_emp_id,
+               cc.claim_time, cm.last_touch_time,
+               tt.id AS latest_task_id, tt.task_no AS latest_task_no,
+               tt.task_status AS latest_task_status, tt.sla_status AS latest_sla_status
+        FROM CUST_CLAIM cc
+        JOIN CUSTOMER_MARKET_CUSTOMER cm ON cm.id = cc.cust_id AND cm.deleted = 0
+        LEFT JOIN TOUCH_TASK tt ON tt.id = (
+            SELECT tt2.id FROM TOUCH_TASK tt2
+            WHERE tt2.cust_id = cc.cust_id
+              AND tt2.assignee_emp_id = cc.maintainer_emp_id
+            ORDER BY tt2.created_time DESC
+            LIMIT 1
+        )
+        WHERE cc.claim_status = 'CLAIMED'
+          AND (cc.claimed_by = #{empId} OR cc.maintainer_emp_id = #{empId})
+        ORDER BY cc.claim_time DESC
+        LIMIT #{offset}, #{limit}
     </select>
 
     <!-- 查询某员工维护的所有有效认领记录 (maintainer_emp_id 且 CLAIMED) -->

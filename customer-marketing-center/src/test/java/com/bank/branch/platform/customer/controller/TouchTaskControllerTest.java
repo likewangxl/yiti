@@ -62,7 +62,8 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
         TouchTask t2 = buildPendingTask("task-002");
         PageResult<TouchTask> page = PageResult.of(1, 20, 2L, Arrays.asList(t1, t2));
 
-        when(touchTaskService.listPage(isNull(), isNull(), isNull(), eq(1), eq(20))).thenReturn(page);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(touchTaskService.listPage(isNull(), isNull(), eq("E10001"), eq(1), eq(20))).thenReturn(page);
 
         // when/then
         mockMvc.perform(get("/api/touch-tasks")
@@ -81,7 +82,9 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
     void getTask_shouldReturn200() throws Exception {
         // given
         TouchTask task = buildPendingTask("task-001");
-        when(touchTaskService.getById("task-001")).thenReturn(task);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG_SZ_001");
+        when(touchTaskService.getVisibleById("task-001", "E10001", "ORG_SZ_001", false)).thenReturn(task);
 
         // when/then
         mockMvc.perform(get("/api/touch-tasks/task-001"))
@@ -95,7 +98,8 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
     @WithMockEmpContext(empId = "E10001")
     void getTask_shouldReturn404WhenNotFound() throws Exception {
         // given: 任务不存在
-        when(touchTaskService.getById("not-exist"))
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(touchTaskService.getVisibleById(eq("not-exist"), eq("E10001"), any(), eq(false)))
                 .thenThrow(new BizException(
                         CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode(),
                         CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getMessage()));
@@ -182,10 +186,13 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG_SZ_001");
         when(touchLogService.addLog(
                 eq("task-001"), eq("uuid-abc"), eq("今日拜访客户"),
-                any(), eq("E10001"), eq("ORG_SZ_001")))
+                any(), any(), eq("VISIT"), any(), any(), any(),
+                eq("E10001"), eq("ORG_SZ_001"), eq(false)))
                 .thenReturn(log);
 
-        String body = "{\"clientUuid\":\"uuid-abc\",\"logContent\":\"今日拜访客户\"}";
+        String body = "{\"clientUuid\":\"uuid-abc\",\"logContent\":\"今日拜访客户\"," +
+                "\"touchTime\":\"2026-08-11T10:00:00\",\"touchMethod\":\"VISIT\"," +
+                "\"photoGroups\":{\"keyPerson\":[\"http://minio/a.jpg\"],\"doorplate\":[],\"workplace\":[]}}";
 
         // when/then
         mockMvc.perform(post("/api/touch-tasks/task-001/logs")
@@ -224,7 +231,9 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
         log2.setTouchTaskId("task-001");
         log2.setLogContent("第二次拜访");
 
-        when(touchLogService.listByTaskId("task-001")).thenReturn(Arrays.asList(log1, log2));
+        when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG_SZ_001");
+        when(touchLogService.listVisibleByTaskId("task-001", "ORG_SZ_001", false))
+                .thenReturn(Arrays.asList(log1, log2));
 
         // when/then
         mockMvc.perform(get("/api/touch-tasks/task-001/logs"))

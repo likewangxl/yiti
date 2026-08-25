@@ -1,678 +1,212 @@
 # 客户营销中心 — 表结构 DDL
 
-> 本文档定义客户营销中心模块 (customer-marketing-center) 所有数据表的完整 DDL、索引、逻辑外键、取值枚举及关键设计。
-> 所有表使用 InnoDB 引擎 + utf8mb4_general_ci 字符集（与 docs/schema/ddl-customer.sql 一致）。
-> 主键策略：所有表使用 `varchar(32)` 存储 UUID（去掉连字符），应用层生成。
-> 时间字段：所有时间字段统一使用 `datetime(0)`。
-> 逻辑删除：使用 `deleted tinyint(1)` 字段，0=未删除，1=已删除。
+> 本文档仅描述 `customer-marketing-center` 已在目标库核实的数据模型，不是可执行 DDL 或迁移脚本。
+> 结构变更由 DBA 按审批结果直接实施，历史 `docs/schema` 与 `docs/superpowers/sql` 文件不能作为当前投产依据。
+>
+> V2 当前范围已扩展至客户标签管理/审核、跨机构营销和客户转交记录。输入来源为 `V2_DEMO/01_需求说明书_公司部_V1.2.docx`、`03_功能需求与业务设计.md`、对应 Vue 页面及 `0811-客户营销-会议纪要.docx`；存在冲突时，以会议纪要为准。
 
----
+## 1. 第一阶段设计结论
 
-## 1. 表清单
+1. 不新增后端模块，直接扩展现有 `customer-marketing-center`。
+2. V2 以统一社会信用代码作为客户幂等标识；客户名称只用于展示和模糊检索，不再强唯一。
+3. `CUSTOMER_MARKET_CUSTOMER.cust_no` 允许为空。客户列表返回数据权限范围内全部 `deleted=0` 客户，不以是否开户或客户号是否为空进行排除。
+4. 主办客户经理和主办机构落在 `CUSTOMER_MARKET_CUSTOMER`，用于客户经理/机构负责人数据范围过滤；`owner_org_id` 仍只是数据来源属性。
+5. 存量 `CUST_MASTER` 只承接 `XAN_M98_CUST_STAT_SHOW3` 的 T-1 客户同步及绩效等存量业务查询，不再承载客户营销数据。
+6. 线索的指定客户经理范围和标签均改为关系表。`assigned_to`/`tag_ids` 仅保留为旧版兼容字段，新实现不再以其为数据真相。
+7. 线索审批不新建 `CUST_LEAD_APPROVAL` 表。业务状态和最终决策快照落在 `CUST_LEAD`/`LEAD_IMPORT_BATCH`，流程映射与完整节点历史仍由 `BIZ_PROCESS_MAP` 及 Flowable `ACT_*` 表管理。
+8. 附件正文不进业务表，通过 `FileApi` 写入现有 `FILE_OBJECT`/`BIZ_FILE_REL`，`biz_type=LEAD`、`biz_id=CUST_LEAD.id`。
 
-| 序号 | 表名 | 说明 | 主键策略 | 所属域 |
-|---|---|---|---|---|
-| 1 | `CUST_TAG` | 客户标签表 | UUID(id) | 标签管理 |
-| 2 | `CUST_TAG_REL` | 客户-标签关联表 | UUID(id) | 标签管理 |
-| 3 | `CUST_LEAD` | 客户线索表（含版本管理） | UUID(id) | 线索管理 |
-| 4 | `LEAD_IMPORT_BATCH` | 线索导入批次表 | UUID(id) | 线索管理 |
-| 5 | `CUST_MASTER` | 客户主档表 | UUID(id) | 客户主档 |
-| 6 | `CUST_CLAIM` | 客户认领关系表 | UUID(id) | 客户池/认领 |
-| 7 | `TOUCH_TASK` | 触达任务表 | UUID(id) | 触达管理 |
-| 8 | `TOUCH_LOG` | 触达日志表 | UUID(id) | 触达管理 |
+## 2. 表清单
 
----
-
-## 2. 完整 DDL
-
-### 2.1 cust_tag — 客户标签表
-
-```sql
-CREATE TABLE `CUST_TAG` (
-  `id`             VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
-  `tag_name`       VARCHAR(100) NOT NULL COMMENT '标签名称（唯一）',
-  `tag_code`       VARCHAR(100) NOT NULL COMMENT '标签编码（唯一，业务使用）',
-  `tag_category`   VARCHAR(50)  DEFAULT NULL COMMENT '标签分类（如：价值类/行业类/风险类）',
-  `tag_priority`   INT(11)      NOT NULL DEFAULT 0 COMMENT '标签优先级（数字越大优先级越高，用于排序）',
-  `description`    VARCHAR(500) DEFAULT NULL COMMENT '标签描述',
-  `status`         VARCHAR(20)  DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE-启用/DISABLED-停用',
-  `created_by`     VARCHAR(32)  DEFAULT NULL COMMENT '创建人（员工工号）',
-  `created_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_by`     VARCHAR(32)  DEFAULT NULL COMMENT '最后更新人',
-  `updated_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
-  `deleted`        TINYINT(1)   DEFAULT 0 COMMENT '逻辑删除：0-未删除/1-已删除',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_tag_code` (`tag_code`),
-  UNIQUE KEY `uk_tag_name` (`tag_name`),
-  KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户标签表';
-```
-
-### 2.2 cust_tag_rel — 客户-标签关联表
-
-```sql
-CREATE TABLE `CUST_TAG_REL` (
-  `id`             VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
-  `cust_id`        VARCHAR(32)  NOT NULL COMMENT '客户ID（关联 cust_master.id）',
-  `tag_id`         VARCHAR(32)  NOT NULL COMMENT '标签ID（关联 cust_tag.id）',
-  `created_by`     VARCHAR(32)  DEFAULT NULL COMMENT '打标人（员工工号）',
-  `created_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '打标时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_cust_tag` (`cust_id`, `tag_id`),
-  KEY `idx_tag_id` (`tag_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户-标签关联表';
-```
-
-### 2.3 cust_lead — 客户线索表
-
-```sql
-CREATE TABLE `CUST_LEAD` (
-  `id`                      VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
-  `lead_no`                 VARCHAR(100) NOT NULL COMMENT '线索编号（对外展示，唯一）',
-  `lead_op`                 VARCHAR(20)  NOT NULL DEFAULT 'CREATE' COMMENT '线索操作类型：CREATE-新建/UPDATE-修改/DELETE-删除',
-  `source_cust_id`          VARCHAR(32)  DEFAULT NULL COMMENT '源客户ID（UPDATE/DELETE 时指向已有 cust_master.id）',
-  `prev_lead_id`            VARCHAR(32)  DEFAULT NULL COMMENT '上一版本线索ID（UPDATE 时指向被修订的 cust_lead.id）',
-  `version_no`              INT          NOT NULL DEFAULT 1 COMMENT '版本号（从 1 开始）',
-  `is_latest`               TINYINT(1)   NOT NULL DEFAULT 1 COMMENT '是否最新版本：0-否/1-是',
-  `cust_name`               VARCHAR(200) NOT NULL COMMENT '客户名称',
-  `unified_credit_code`     VARCHAR(50)  DEFAULT NULL COMMENT '统一社会信用代码',
-  `tag_ids`                 TEXT         DEFAULT NULL COMMENT '标签ID列表（JSON 数组，如 ["TAG_001","TAG_002"]）',
-  `contact_person`          VARCHAR(100) DEFAULT NULL COMMENT '联系人姓名',
-  `contact_mobile`          VARCHAR(20)  DEFAULT NULL COMMENT '联系人手机号',
-  `industry`                VARCHAR(100) DEFAULT NULL COMMENT '行业分类（字典 INDUSTRY）',
-  `group_type`              VARCHAR(50)  DEFAULT NULL COMMENT '集团类型（字典 GROUP_TYPE）',
-  `customer_type`           VARCHAR(50)  DEFAULT NULL COMMENT '客户类型（字典 CUSTOMER_TYPE）',
-  `is_keystone`             TINYINT(1)   DEFAULT NULL COMMENT '是否重点客户：0-否/1-是',
-  `enterprise_type`         VARCHAR(50)  DEFAULT NULL COMMENT '企业类型（字典 ENTERPRISE_TYPE）',
-  `group_name`              VARCHAR(200) DEFAULT NULL COMMENT '所属集团名称',
-  `is_account_opened`       TINYINT(1)   DEFAULT NULL COMMENT '是否已开户：0-否/1-是',
-  `customer_desc`           TEXT         DEFAULT NULL COMMENT '客户描述',
-  `credit_amount`           DECIMAL(20,4) DEFAULT NULL COMMENT '授信金额（元）',
-  `credit_exposure_amount`  DECIMAL(20,4) DEFAULT NULL COMMENT '授信敞口金额（元）',
-  `lead_source`             VARCHAR(50)  DEFAULT NULL COMMENT '线索来源（字典 LEAD_SOURCE）',
-  `lead_status`             VARCHAR(50)  DEFAULT 'DRAFT' COMMENT '线索状态：DRAFT/SUBMITTED/IN_APPROVAL/APPROVED/REJECTED',
-  `owner_org_id`            VARCHAR(50)  NOT NULL COMMENT '归属机构代码（来源，不承载可见性）',
-  `assigned_to`             VARCHAR(50)  DEFAULT NULL COMMENT '线索指派人（员工工号）',
-  `created_by`              VARCHAR(32)  NOT NULL COMMENT '创建人（员工工号）',
-  `business_key`            VARCHAR(100) DEFAULT NULL COMMENT '流程业务键（格式 LEAD:{leadId}）',
-  `import_batch_id`         VARCHAR(32)  DEFAULT NULL COMMENT '导入批次ID（关联 lead_import_batch.id）',
-  `process_instance_id`     VARCHAR(64)  DEFAULT NULL COMMENT '流程实例ID（Flowable）',
-  `remark`                  TEXT         DEFAULT NULL COMMENT '备注',
-  `created_time`            DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_by`              VARCHAR(32)  DEFAULT NULL COMMENT '最后更新人',
-  `updated_time`            DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
-  `deleted`                 TINYINT(4)   DEFAULT 0 COMMENT '逻辑删除：0-未删除/1-已删除',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_lead_no` (`lead_no`),
-  KEY `idx_owner_org` (`owner_org_id`),
-  KEY `idx_created_by` (`created_by`),
-  KEY `idx_business_key` (`business_key`),
-  KEY `idx_status` (`lead_status`),
-  KEY `idx_import_batch` (`import_batch_id`),
-  KEY `idx_cust_name` (`cust_name`),
-  KEY `idx_unified_credit_code` (`unified_credit_code`),
-  KEY `idx_source_cust` (`source_cust_id`),
-  KEY `idx_lead_op_status` (`lead_op`, `lead_status`),
-  KEY `idx_is_latest` (`is_latest`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户线索表（含版本管理）';
-```
-
-### 2.4 lead_import_batch — 线索导入批次表
-
-```sql
-CREATE TABLE `LEAD_IMPORT_BATCH` (
-  `id`                      VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
-  `batch_no`                VARCHAR(64)  NOT NULL COMMENT '批次号（对外展示，唯一）',
-  `source_file_name`        VARCHAR(255) DEFAULT NULL COMMENT '源文件名',
-  `file_md5`                VARCHAR(64)  DEFAULT NULL COMMENT '文件 MD5（用于去重校验）',
-  `status`                  VARCHAR(20)  NOT NULL DEFAULT 'CREATED' COMMENT '批次状态：CREATED/PENDING_APPROVAL/APPROVED/REJECTED',
-  `total_row_count`         INT(11)      NOT NULL DEFAULT 0 COMMENT '总行数',
-  `error_row_count`         INT(11)      NOT NULL DEFAULT 0 COMMENT '错误行数',
-  `error_summary`           VARCHAR(512) DEFAULT NULL COMMENT '错误摘要（JSON 字符串，超长时截断）',
-  `error_file_object_id`    VARCHAR(32)  DEFAULT NULL COMMENT '错误明细文件对象ID（MinIO）',
-  `business_key`            VARCHAR(100) DEFAULT NULL COMMENT '流程业务键（格式 LEAD:IMP_{batchId}）',
-  `process_instance_id`     VARCHAR(64)  DEFAULT NULL COMMENT '流程实例ID（Flowable）',
-  `owner_org_id`            VARCHAR(50)  NOT NULL COMMENT '归属机构代码',
-  `created_by`              VARCHAR(32)  NOT NULL COMMENT '创建人（员工工号）',
-  `created_time`            DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_by`              VARCHAR(32)  DEFAULT NULL COMMENT '最后更新人',
-  `updated_time`            DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_batch_no` (`batch_no`),
-  KEY `idx_owner_org` (`owner_org_id`),
-  KEY `idx_status` (`status`),
-  KEY `idx_created_time` (`created_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='线索导入批次表';
-```
-
-### 2.5 cust_master — 客户主档表
-
-```sql
-CREATE TABLE `CUST_MASTER` (
-  `id`                      VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
-  `cust_no`                 VARCHAR(100) NOT NULL COMMENT '客户编号（对外展示，唯一）',
-  `cust_name`               VARCHAR(200) NOT NULL COMMENT '客户名称（唯一）',
-  `unified_credit_code`     VARCHAR(50)  DEFAULT NULL COMMENT '统一社会信用代码',
-  `contact_person`          VARCHAR(100) DEFAULT NULL COMMENT '联系人姓名',
-  `contact_mobile`          VARCHAR(20)  DEFAULT NULL COMMENT '联系人手机号',
-  `industry`                VARCHAR(100) DEFAULT NULL COMMENT '行业分类（字典 INDUSTRY）',
-  `group_type`              VARCHAR(50)  DEFAULT NULL COMMENT '集团类型（字典 GROUP_TYPE）',
-  `customer_type`           VARCHAR(50)  DEFAULT NULL COMMENT '客户类型（字典 CUSTOMER_TYPE）',
-  `is_keystone`             TINYINT(1)   DEFAULT NULL COMMENT '是否重点客户：0-否/1-是',
-  `enterprise_type`         VARCHAR(50)  DEFAULT NULL COMMENT '企业类型（字典 ENTERPRISE_TYPE）',
-  `group_name`              VARCHAR(200) DEFAULT NULL COMMENT '所属集团名称',
-  `is_account_opened`       TINYINT(1)   DEFAULT NULL COMMENT '是否已开户：0-否/1-是',
-  `customer_desc`           TEXT         DEFAULT NULL COMMENT '客户描述',
-  `credit_amount`           DECIMAL(20,4) DEFAULT NULL COMMENT '授信金额',
-  `credit_exposure_amount`  DECIMAL(20,4) DEFAULT NULL COMMENT '授信敞口金额',
-  `owner_org_id`            VARCHAR(50)  DEFAULT NULL COMMENT '来源机构代码（不承载可见性，仅作来源属性）',
-  `lead_id`                 VARCHAR(32)  DEFAULT NULL COMMENT '来源线索ID（关联 cust_lead.id）',
-  `status`                  VARCHAR(20)  DEFAULT 'ACTIVE' COMMENT '客户状态：ACTIVE/INACTIVE',
-  `deleted`                 TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除/1-已删除',
-  `created_time`            DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_time`            DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_cust_no` (`cust_no`),
-  UNIQUE KEY `uk_cust_name` (`cust_name`),
-  KEY `idx_lead_id` (`lead_id`),
-  KEY `idx_unified_credit_code` (`unified_credit_code`),
-  KEY `idx_deleted` (`deleted`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户主档表';
-```
-
-### 2.6 cust_claim — 客户认领关系表
-
-```sql
-CREATE TABLE `CUST_CLAIM` (
-  `id`                      VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
-  `cust_id`                 VARCHAR(32)  NOT NULL COMMENT '客户ID（关联 cust_master.id）',
-  `org_id`                  VARCHAR(50)  NOT NULL COMMENT '认领机构代码',
-  `claimed_by`              VARCHAR(32)  NOT NULL COMMENT '认领人（员工工号）',
-  `maintainer_emp_id`       VARCHAR(32)  DEFAULT NULL COMMENT '维护人（员工工号，可转交）',
-  `claim_status`            VARCHAR(50)  DEFAULT 'CLAIMED' COMMENT '认领状态：CLAIMED-已认领/CANCELLED-已取消',
-  `claim_time`              DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '认领时间',
-  `cancel_time`             DATETIME     DEFAULT NULL COMMENT '取消时间',
-  `cancel_reason`           VARCHAR(500) DEFAULT NULL COMMENT '取消原因',
-  `created_time`            DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_time`            DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_cust_org` (`cust_id`, `org_id`),
-  KEY `idx_cust_id` (`cust_id`),
-  KEY `idx_org_id` (`org_id`),
-  KEY `idx_claimed_by` (`claimed_by`),
-  KEY `idx_maintainer` (`maintainer_emp_id`),
-  KEY `idx_status` (`claim_status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户认领关系表';
-```
-
-### 2.7 touch_task — 触达任务表
-
-```sql
-CREATE TABLE `TOUCH_TASK` (
-  `id`                      VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
-  `task_no`                 VARCHAR(100) NOT NULL COMMENT '任务编号（对外展示，唯一）',
-  `cust_id`                 VARCHAR(32)  NOT NULL COMMENT '客户ID（关联 cust_master.id）',
-  `org_id`                  VARCHAR(50)  NOT NULL COMMENT '所属机构代码',
-  `assignee_emp_id`         VARCHAR(32)  NOT NULL COMMENT '执行人（员工工号）',
-  `task_type`               VARCHAR(50)  DEFAULT NULL COMMENT '任务类型：FIRST_TOUCH-首次触达/FOLLOW_UP-后续跟进',
-  `task_status`             VARCHAR(50)  DEFAULT 'PENDING' COMMENT '任务状态：PENDING/IN_PROGRESS/SUCCESS/CANCELLED',
-  `plan_finish_time`        DATETIME     DEFAULT NULL COMMENT '计划完成时间',
-  `warning_time`            DATETIME     DEFAULT NULL COMMENT '预警时间（SLA 黄灯阈值）',
-  `sla_status`              VARCHAR(20)  DEFAULT NULL COMMENT 'SLA 状态：GREEN/YELLOW/RED',
-  `sla_warning`             TINYINT(1)   NOT NULL DEFAULT 0 COMMENT 'SLA 预警标记：0-否/1-是（sla_status 为 YELLOW/RED 时置 1）',
-  `business_key`            VARCHAR(100) DEFAULT NULL COMMENT '流程业务键（格式 TOUCH:{taskId}）',
-  `success_time`            DATETIME     DEFAULT NULL COMMENT '成功完成时间',
-  `cancel_time`             DATETIME     DEFAULT NULL COMMENT '取消时间',
-  `created_time`            DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_time`            DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_task_no` (`task_no`),
-  KEY `idx_cust_id` (`cust_id`),
-  KEY `idx_org_id` (`org_id`),
-  KEY `idx_assignee` (`assignee_emp_id`),
-  KEY `idx_status` (`task_status`),
-  KEY `idx_business_key` (`business_key`),
-  KEY `idx_assignee_status` (`assignee_emp_id`, `task_status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='触达任务表';
-```
-
-### 2.8 touch_log — 触达日志表
-
-```sql
-CREATE TABLE `TOUCH_LOG` (
-  `id`                      VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
-  `touch_task_id`           VARCHAR(32)  NOT NULL COMMENT '触达任务ID（关联 touch_task.id）',
-  `log_time`                DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '触达时间（业务时间）',
-  `client_uuid`             VARCHAR(64)  DEFAULT NULL COMMENT '客户端幂等键（防重复提交）',
-  `log_content`             TEXT         DEFAULT NULL COMMENT '触达内容（文字描述）',
-  `photo_urls`              TEXT         DEFAULT NULL COMMENT '照片URL列表（JSON 数组）',
-  `owner_org_id`            VARCHAR(50)  DEFAULT NULL COMMENT '归属机构代码',
-  `created_by`              VARCHAR(32)  DEFAULT NULL COMMENT '创建人（员工工号）',
-  `created_time`            DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_task_client_uuid` (`touch_task_id`, `client_uuid`),
-  KEY `idx_task_id` (`touch_task_id`),
-  KEY `idx_created_by` (`created_by`),
-  KEY `idx_task_log_time` (`touch_task_id`, `log_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='触达日志表';
-```
-
----
-
-## 3. 索引说明
-
-### 3.1 cust_tag 索引
-
-| 索引名 | 字段 | 类型 | 用途 |
-|---|---|---|---|
-| PRIMARY | id | PK | 主键查询 |
-| uk_tag_name | tag_name | UK | 标签名唯一约束，按名称快速查找 |
-| uk_tag_code | tag_code | UK | 标签编码唯一约束，业务代码引用 |
-| idx_status | status | KEY | 过滤启用标签列表 |
-
-### 3.2 cust_tag_rel 索引
-
-| 索引名 | 字段 | 类型 | 用途 |
-|---|---|---|---|
-| PRIMARY | id | PK | 主键查询 |
-| uk_cust_tag | (cust_id, tag_id) | UK | 防重复打标、快速查询某客户的标签 |
-| idx_tag_id | tag_id | KEY | 按标签反查客户列表（标签详情页） |
-
-### 3.3 cust_lead 索引
-
-| 索引名 | 字段 | 类型 | 用途 |
-|---|---|---|---|
-| PRIMARY | id | PK | 主键查询 |
-| uk_lead_no | lead_no | UK | 线索编号唯一、对外展示查询 |
-| idx_owner_org | owner_org_id | KEY | 按机构筛选线索列表 |
-| idx_created_by | created_by | KEY | 我创建的线索查询 |
-| idx_business_key | business_key | KEY | 通过业务键关联流程实例 |
-| idx_status | lead_status | KEY | 按状态筛选（DRAFT/IN_APPROVAL 等） |
-| idx_import_batch | import_batch_id | KEY | 按批次查询批量导入的线索 |
-| idx_cust_name | cust_name | KEY | 按客户名搜索 |
-| idx_unified_credit_code | unified_credit_code | KEY | 按统一信用代码查重 |
-| idx_source_cust | source_cust_id | KEY | 查询某客户的所有修订/删除线索 |
-| idx_lead_op_status | (lead_op, lead_status) | 组合KEY | 复合筛选：审批中的修改/删除线索 |
-| idx_is_latest | is_latest | KEY | 只查最新版本的线索 |
-
-### 3.4 lead_import_batch 索引
-
-| 索引名 | 字段 | 类型 | 用途 |
-|---|---|---|---|
-| PRIMARY | id | PK | 主键查询 |
-| uk_batch_no | batch_no | UK | 批次号唯一、对外展示 |
-| idx_owner_org | owner_org_id | KEY | 按机构查批次列表 |
-| idx_status | status | KEY | 按状态筛选（PENDING_APPROVAL 等） |
-| idx_created_time | created_time | KEY | 按创建时间倒序 |
-
-### 3.5 cust_master 索引
-
-| 索引名 | 字段 | 类型 | 用途 |
-|---|---|---|---|
-| PRIMARY | id | PK | 主键查询 |
-| uk_cust_no | cust_no | UK | 客户编号唯一 |
-| uk_cust_name | cust_name | UK | 客户名唯一（防重复） |
-| idx_lead_id | lead_id | KEY | 从线索反查客户 |
-| idx_unified_credit_code | unified_credit_code | KEY | 按统一信用代码查重 |
-| idx_deleted | deleted | KEY | 逻辑删除过滤 |
-
-### 3.6 cust_claim 索引
-
-| 索引名 | 字段 | 类型 | 用途 |
-|---|---|---|---|
-| PRIMARY | id | PK | 主键查询 |
-| uk_cust_org | (cust_id, org_id) | UK | 防同一客户被同一机构重复认领 |
-| idx_cust_id | cust_id | KEY | 查询某客户的所有认领机构 |
-| idx_org_id | org_id | KEY | 查询某机构认领的所有客户 |
-| idx_claimed_by | claimed_by | KEY | 查询某员工认领的客户 |
-| idx_maintainer | maintainer_emp_id | KEY | 按维护人筛选（我维护的客户） |
-| idx_status | claim_status | KEY | 只查有效认领 |
-
-### 3.7 touch_task 索引
-
-| 索引名 | 字段 | 类型 | 用途 |
-|---|---|---|---|
-| PRIMARY | id | PK | 主键查询 |
-| uk_task_no | task_no | UK | 任务编号唯一 |
-| idx_cust_id | cust_id | KEY | 按客户查任务列表 |
-| idx_org_id | org_id | KEY | 按机构查任务（管理员视图） |
-| idx_assignee | assignee_emp_id | KEY | 按执行人查任务 |
-| idx_status | task_status | KEY | 按状态筛选（PENDING 等） |
-| idx_business_key | business_key | KEY | 通过业务键关联流程实例 |
-| idx_assignee_status | (assignee_emp_id, task_status) | 组合KEY | 我的待办任务查询（高频） |
-
-### 3.8 touch_log 索引
-
-| 索引名 | 字段 | 类型 | 用途 |
-|---|---|---|---|
-| PRIMARY | id | PK | 主键查询 |
-| uk_task_client_uuid | (touch_task_id, client_uuid) | UK | 幂等防重，移动端重试安全 |
-| idx_task_id | touch_task_id | KEY | 按任务查日志列表 |
-| idx_created_by | created_by | KEY | 按员工查其提交的日志 |
-| idx_task_log_time | (touch_task_id, log_time) | 组合KEY | 按任务查日志时间线（倒序） |
-
----
-
-## 4. 逻辑外键
-
-> 说明：本项目不使用物理外键（便于分表、重构及性能），所有关联通过应用层校验。下表列出逻辑外键关系。
-
-| 表 | 字段 | 关联表 | 关联字段 | 说明 | 级联策略 |
-|---|---|---|---|---|---|
-| cust_tag_rel | cust_id | cust_master | id | 客户 | 删除客户时由应用层清理 |
-| cust_tag_rel | tag_id | cust_tag | id | 标签 | 标签停用时保留关联 |
-| cust_lead | source_cust_id | cust_master | id | 关联客户（UPDATE/DELETE） | 不级联 |
-| cust_lead | prev_lead_id | cust_lead | id | 上一版本线索 | 不级联 |
-| cust_lead | import_batch_id | lead_import_batch | id | 批次 | 不级联 |
-| cust_lead | owner_org_id | EXT_ORG_INFO | org_code | 归属机构 | 不级联 |
-| cust_lead | created_by | PT_USER | emp_id | 创建人 | 不级联 |
-| cust_lead | assigned_to | PT_USER | emp_id | 指派人 | 不级联 |
-| lead_import_batch | owner_org_id | EXT_ORG_INFO | org_code | 归属机构 | 不级联 |
-| lead_import_batch | created_by | PT_USER | emp_id | 创建人 | 不级联 |
-| lead_import_batch | error_file_object_id | PT_FILE_OBJECT | id | 错误文件 | 不级联 |
-| cust_master | lead_id | cust_lead | id | 来源线索 | 不级联 |
-| cust_master | owner_org_id | EXT_ORG_INFO | org_code | 来源机构（不承载可见性） | 不级联 |
-| cust_claim | cust_id | cust_master | id | 客户 | 客户删除时由应用层清理 |
-| cust_claim | org_id | EXT_ORG_INFO | org_code | 认领机构 | 不级联 |
-| cust_claim | claimed_by | PT_USER | emp_id | 认领人 | 不级联 |
-| cust_claim | maintainer_emp_id | PT_USER | emp_id | 维护人 | 不级联 |
-| touch_task | cust_id | cust_master | id | 客户 | 不级联 |
-| touch_task | org_id | EXT_ORG_INFO | org_code | 所属机构 | 不级联 |
-| touch_task | assignee_emp_id | PT_USER | emp_id | 执行人 | 不级联 |
-| touch_log | touch_task_id | touch_task | id | 触达任务 | 不级联 |
-| touch_log | created_by | PT_USER | emp_id | 创建人 | 不级联 |
-
----
-
-## 5. 关键字段取值枚举
-
-### 5.1 cust_tag.status（标签状态）
-
-| 值 | 说明 |
-|---|---|
-| ACTIVE | 启用（可被选择打标） |
-| DISABLED | 停用（历史数据保留，不再出现在选择列表） |
-
-### 5.2 cust_lead.lead_op（线索操作类型）
-
-| 值 | 说明 |
-|---|---|
-| CREATE | 新建客户线索（source_cust_id 为空） |
-| UPDATE | 修改已有客户（source_cust_id 指向 cust_master.id） |
-| DELETE | 删除已有客户（source_cust_id 指向 cust_master.id） |
-
-### 5.3 cust_lead.lead_status（线索状态）
-
-| 值 | 说明 | 可转移到 |
+| 表名 | 变更 | 主要用途 |
 |---|---|---|
-| DRAFT | 草稿 | SUBMITTED / 删除 |
-| SUBMITTED | 已提交 | IN_APPROVAL |
-| IN_APPROVAL | 审批中 | APPROVED / REJECTED |
-| APPROVED | 审批通过 | 终态 |
-| REJECTED | 审批驳回 | DRAFT（再编辑） |
+| `CUST_TAG` | 扩展 | 客户标签主数据与审核结果 |
+| `CUST_TAG_REL` | 扩展 | 当前及历史客户标签关系 |
+| `CROSS_ORG_MARKETING_RULE` | 新增 | 跨机构营销四项在线校验规则 |
+| `CROSS_ORG_MARKETING_APPLY` | 新增 | 跨机构营销申请、审核结果和任务投影 |
+| `CUST_LEAD` | 扩展 | 线索版本、表单快照、分配方式、审批结果 |
+| `CUST_LEAD_MANAGER_SCOPE` | 新增 | 指定客户经理范围/主办专属接收人 |
+| `CUST_LEAD_TAG_REL` | 新增 | 线索提交时的标签关系和名称快照 |
+| `LEAD_IMPORT_BATCH` | 扩展 | Excel 整批校验、整批审批、错误文件 |
+| `CUST_MASTER` | 收敛 | 仅承接 M98 T-1 客户号/名称同步及存量业务查询 |
+| `CUSTOMER_MARKET_CUSTOMER` | 新增 | 客户营销列表、主办关系、开户与最近触达快照 |
+| `CUST_PERFORMANCE_RELATION_SNAPSHOT` | 新增 | 客户业绩相关人/归属的日快照 |
+| `CUST_CLAIM` | 保留 | 机构认领和维护人关系 |
+| `CUST_TRANSFER_LOG` | 新增 | 客户主办/维护关系转交留痕 |
+| `CUST_TRANSFER_TARGET` | 新增 | 转交的主办与协办接收人 |
+| `TOUCH_TASK` | 保留 | 触达任务 |
+| `TOUCH_LOG` | 保留 | 触达日志 |
 
-### 5.4 lead_import_batch.status（批次状态）
+## 3. 关系模型
 
-| 值 | 说明 | 可转移到 |
+```mermaid
+erDiagram
+    CUSTOMER_MARKET_CUSTOMER ||--o{ CUST_LEAD : "source/current version"
+    CUST_LEAD ||--o{ CUST_LEAD_MANAGER_SCOPE : "assigned managers"
+    CUST_LEAD ||--o{ CUST_LEAD_TAG_REL : "tag snapshot"
+    LEAD_IMPORT_BATCH ||--o{ CUST_LEAD : "batch rows"
+    CUSTOMER_MARKET_CUSTOMER ||--o{ CUST_TAG_REL : "effective tags"
+    CUSTOMER_MARKET_CUSTOMER ||--o{ CROSS_ORG_MARKETING_APPLY : "cross-org applications"
+    CUSTOMER_MARKET_CUSTOMER ||--o{ CUST_PERFORMANCE_RELATION_SNAPSHOT : "performance ownership"
+    CUSTOMER_MARKET_CUSTOMER ||--o{ CUST_CLAIM : "claims"
+    CUSTOMER_MARKET_CUSTOMER ||--o{ CUST_TRANSFER_LOG : "transfer history"
+    CUST_TRANSFER_LOG ||--o{ CUST_TRANSFER_TARGET : "recipients"
+    CUSTOMER_MARKET_CUSTOMER ||--o{ TOUCH_TASK : "touch tasks"
+    TOUCH_TASK ||--o{ TOUCH_LOG : "touch logs"
+```
+
+> 项目不使用物理外键。上图均为逻辑外键，完整性由 Service 事务和唯一索引保证。
+
+## 4. 核心表设计
+
+### 4.1 `CUST_LEAD`
+
+`CUST_LEAD` 仍采用“一个版本一行”。修改已通过线索时创建新 `id`，通过 `prev_lead_id` 连接上一版，旧版 `is_latest=0`。
+
+| 字段组 | 核心字段 | 说明 |
 |---|---|---|
-| CREATED | 已创建 | PENDING_APPROVAL |
-| PENDING_APPROVAL | 待审批 | APPROVED / REJECTED |
-| APPROVED | 审批通过（终态） | - |
-| REJECTED | 审批驳回（终态） | - |
+| 版本 | `lead_no`, `lead_op`, `prev_lead_id`, `version_no`, `is_latest` | 保留现有版本链 |
+| 场景 | `lead_type` | `NEW_ACCOUNT` / `EXISTING_MARKETING` |
+| 身份 | `cust_no`, `cust_name`, `unified_credit_code` | 统一社会信用代码必填，校验 18 位数字或大写字母 |
+| 经营 | `industry`, `group_type`, `group_name`, `customer_type`, `is_keystone`, `enterprise_type` | 下拉项由 `DictApi` 校验 |
+| 财务 | `credit_amount`, `credit_exposure_amount` | 库内统一存“元”，前端以“万元”展示时在 DTO 层转换 |
+| 分配 | `distribution_mode`, `main_manager_id`, `main_manager_org_id` | `PUBLIC` / `SCOPE` / `OWNER` |
+| 批量 | `import_batch_id`, `batch_row_no` | 可还原源 Excel 行 |
+| 审批 | `submitted_by/time`, `business_key`, `process_instance_id`, `reviewed_by/time`, `reject_reason` | 仅保存业务投影和最终决策 |
+| 并发 | `lock_version` | 提交时仍需 `SELECT ... FOR UPDATE` |
 
-### 5.5 cust_master.status（客户状态）
+主要约束：
 
-| 值 | 说明 |
-|---|---|
-| ACTIVE | 正常 |
-| INACTIVE | 非活跃 |
+- `uk_lead_active_new_credit_code` 基于生成列 `active_new_credit_code`，保证同一统一社会信用代码只有一条最新的“新客户开户线索”。存量客户营销线索可正常复用客户代码。
+- `uk_lead_business_key` 和 `uk_lead_process_instance` 防止同一版本重复绑定流程。
+- `idx_lead_entry_list` 服务于“我的录入”；`idx_lead_approval_list` 服务于“待审批/审批记录”。
 
-### 5.6 cust_claim.claim_status（认领状态）
+### 4.2 `CUST_LEAD_MANAGER_SCOPE`
 
-| 值 | 说明 |
-|---|---|
-| CLAIMED | 已认领（有效） |
-| CANCELLED | 已取消 |
+- `PUBLIC` 方式不产生关系行。
+- `SCOPE` 至少一行，可多人，`assignment_type=SCOPE`。
+- `OWNER` 必须且只能一行，`assignment_type=OWNER` 且 `is_primary=1`；人员必须来自后端主办权查询，不接受前端自由输入。
+- 唯一键 `(lead_id, manager_emp_id)` 防止重复指定；`idx_manager_visible_leads` 支持指定范围客户池的可见性查询。
 
-### 5.7 touch_task.task_type（任务类型）
+### 4.3 `CUST_LEAD_TAG_REL`
 
-| 值 | 说明 |
-|---|---|
-| FIRST_TOUCH | 首次触达（认领后系统自动创建） |
-| FOLLOW_UP | 后续跟进（首次触达成功后创建，由业务规则触发） |
+线索每个版本独立保存标签关系，并写入 `tag_name_snapshot`，确保审批历史不受后续标签改名影响。提交时必须通过 `TagApi` 验证标签处于已审批且有效状态。
 
-### 5.8 touch_task.task_status（任务状态）
+### 4.4 `LEAD_IMPORT_BATCH`
 
-| 值 | 说明 | 可转移到 |
+| 状态 | 含义 | 允许后续动作 |
 |---|---|---|
-| PENDING | 待处理 | SUCCESS / CANCELLED |
-| SUCCESS | 成功完成（终态） | - |
-| CANCELLED | 已取消（终态） | - |
+| `CREATED` | 已创建批次头，整批校验通过 | 提交审批 |
+| `VALIDATION_FAILED` | 至少一行错误，未写入任何 `CUST_LEAD` | 下载错误明细；修正后新建批次 |
+| `PENDING_APPROVAL` | 已写入全部行级线索，且共用一个批次流程 | 整批通过/整批退回 |
+| `APPROVED` | 整批通过，终态 | 只读 |
+| `REJECTED` | 整批退回，终态 | 只读；需重新导入新批次 |
 
-### 5.9 touch_task.sla_status（SLA 状态）
+批次业务键固定为 `LEAD:IMP_{batchId}`。行级线索不各自启动流程，审批回调在一个事务内统一更新批次和所有行状态。
 
-| 值 | 说明 | 判定规则 |
-|---|---|---|
-| GREEN | 绿灯（正常） | now < warning_time |
-| YELLOW | 黄灯（预警） | warning_time <= now < plan_finish_time |
-| RED | 红灯（超时） | now >= plan_finish_time 且 task_status=PENDING |
+### 4.5 `CUSTOMER_MARKET_CUSTOMER`
 
----
+V2 新增的客户列表核心字段：
 
-## 6. 线索版本管理设计
-
-### 6.1 设计目标
-
-1. 支持对已审批通过并成为客户主档的线索进行修改和删除，所有修改需再次走审批流程。
-2. 保留所有历史版本，可审计追溯。
-3. 当前最新版本可快速查询，不影响原有线索列表性能。
-
-### 6.2 字段语义
-
-| 字段 | 语义 |
+| 字段 | 说明 |
 |---|---|
-| lead_op | 本条线索的操作类型：CREATE/UPDATE/DELETE |
-| source_cust_id | 指向已存在的 cust_master.id；CREATE 时为空 |
-| prev_lead_id | 指向被修订的上一版 cust_lead.id；第一版时为空 |
-| version_no | 版本号，从 1 开始递增 |
-| is_latest | 是否最新版本；每个 "线索链" 最多 1 条为 1 |
+| `current_lead_id` | 当前生效的审批通过线索版本 |
+| `main_manager_id`, `main_org_id` | 当前主办客户经理和机构，是客户列表数据范围依据 |
+| `ownership_status` | `UNASSIGNED` / `ASSIGNED` / `WAITING_CLAIM` / `MULTI_CLAIMED` |
+| `last_touch_time` | 最近有效触达的列表快照，触达日志仍是详细真相 |
+| `source_system`, `source_updated_time` | CCRM/YB0/CW35/本地数据的溯源信息；M98 的 `statis_dt` 仅保留在 `CUST_MASTER` |
+| `lock_version` | 主办变更和同步冲突的乐观锁 |
 
-### 6.3 场景示例
+唯一性口径：
 
-#### 场景 A — 新建线索
+- `cust_no` 非空时全局唯一，允许多个未开户客户为 `NULL`。
+- `unified_credit_code` 非空时全局唯一；为兼容现有 CCRM 历史数据，主档中允许暂时为 `NULL`。
+- `cust_name` 不唯一，保留普通索引。
 
-```
-INSERT cust_lead (id=L1, lead_op=CREATE, source_cust_id=NULL,
-                   prev_lead_id=NULL, version_no=1, is_latest=1, ...)
-```
-
-审批通过后生成 cust_master (M1, lead_id=L1)。
-
-#### 场景 B — 修改已有客户
-
-```
-步骤1 (同一事务):
-  UPDATE cust_lead SET is_latest=0 WHERE id=L1
-  INSERT cust_lead (id=L2, lead_op=UPDATE,
-                    source_cust_id=M1, prev_lead_id=L1,
-                    version_no=2, is_latest=1, ...)
-```
-
-L2 审批通过后更新 cust_master (M1) 字段，cust_master.lead_id 不改写（保留首次来源线索）。
-
-#### 场景 C — 删除已有客户
-
-```
-INSERT cust_lead (id=L3, lead_op=DELETE,
-                  source_cust_id=M1, prev_lead_id=L2,
-                  version_no=3, is_latest=1, ...)
-UPDATE cust_lead SET is_latest=0 WHERE id=L2
-```
-
-L3 审批通过后：
-- 更新 cust_master SET deleted=1 WHERE id=M1
-- 同时将 cust_claim 关联的所有认领置为 CANCELLED
-
-#### 场景 D — 审批驳回
-
-审批驳回不影响前一版本的 is_latest 标记（因为新版本创建时已将旧版置 0），需在驳回回调中：
-
-```
-UPDATE cust_lead SET is_latest=0 WHERE id=L3
-UPDATE cust_lead SET is_latest=1 WHERE id=L2
-```
-
-### 6.4 查询模板
+列表关键查询：
 
 ```sql
--- 查询某客户的所有线索版本（历史时间线）
-SELECT * FROM cust_lead
-WHERE source_cust_id = 'M1' OR id = (
-  SELECT lead_id FROM cust_master WHERE id = 'M1'
-)
-ORDER BY version_no ASC;
+-- 客户经理视角
+SELECT *
+  FROM CUSTOMER_MARKET_CUSTOMER
+ WHERE deleted = 0
+   AND (
+       main_manager_id = :currentEmpId
+       OR EXISTS (
+           SELECT 1 FROM CUST_CLAIM cc
+            WHERE cc.cust_id = CUSTOMER_MARKET_CUSTOMER.id
+              AND cc.claim_status = 'CLAIMED'
+              AND cc.maintainer_emp_id = :currentEmpId
+       )
+   )
+ ORDER BY updated_time DESC;
 
--- 查询所有最新版本的线索（线索列表页默认视图）
-SELECT * FROM cust_lead
-WHERE is_latest = 1 AND deleted = 0;
-
--- 查询审批中的修改/删除线索
-SELECT * FROM cust_lead
-WHERE lead_op IN ('UPDATE','DELETE')
-  AND lead_status = 'IN_APPROVAL'
-  AND is_latest = 1;
+-- 机构负责人视角（下属机构码由 OrgApi 展开）
+SELECT *
+  FROM CUSTOMER_MARKET_CUSTOMER
+ WHERE deleted = 0
+   AND (
+       main_org_id IN (:orgCodes)
+       OR EXISTS (
+           SELECT 1 FROM CUST_CLAIM cc
+            WHERE cc.cust_id = CUSTOMER_MARKET_CUSTOMER.id
+              AND cc.claim_status = 'CLAIMED'
+              AND cc.org_id IN (:orgCodes)
+       )
+   )
+ ORDER BY updated_time DESC;
 ```
 
-### 6.5 约束
+### 4.6 `CUST_PERFORMANCE_RELATION_SNAPSHOT`
 
-- 每个 `source_cust_id` 的线索链中，`is_latest=1` 的记录最多 1 条（应用层保证，无唯一约束）。
-- `CREATE` 线索链中，通过 `prev_lead_id` 链表追溯，`source_cust_id` 可为空。
-- `version_no` 在同一线索链内单调递增，用作乐观锁。
+该表是客户列表的查询快照，不是权限表。`subject_type + subject_id` 统一表示人员或机构归属，`source_batch_id` 保留每次抽取版本。仅有业绩关系的人员不因此获得客户详情、触达或资产投放权限。
 
----
+### 4.7 `CUST_TRANSFER_LOG` / `CUST_TRANSFER_TARGET`
 
-## 7. 客户可见性口径（V1 冻结）
+- 转交主表保存原主办、新主办、原因、开户状态快照和执行结果。
+- 接收人表支持前端“首位为新主办，其余为协办”的多人转交。
+- 实际转交在同一事务内保存转交快照、关闭原进行中触达任务、更新 `CUSTOMER_MARKET_CUSTOMER` 主办关系并为新主办创建首次触达任务；本阶段不自动改写业绩归属快照。
+- 转交是高危操作，除业务表留痕外还必须写平台 `AUDIT_LOG`。
 
-### 7.1 核心规则
+### 4.8 `CUST_CLAIM` / `TOUCH_TASK` / `TOUCH_LOG`
 
-- **CUSTOMER 业务类型的数据范围一律按 `CUST_CLAIM` 有效认领关系判定**
-- `cust_master.owner_org_id` **仅作来源属性，不承载可见性**
-- 跨机构全量历史访问通过**独立只读接口**（GET /api/customers/{id}/history），单独授权与审计
+- `CUST_CLAIM` 唯一键调整为 `uk_cust_claim_emp(cust_id, claimed_by)`：同一员工不能重复认领，同一客户可被不同员工分别认领。认领只建立关系，不自动创建任务。
+- `TOUCH_TASK` 新建任务的 SLA 初始值为 `BLUE`，预警为 `YELLOW`，逾期为 `RED`；历史 `GREEN` 仅兼容读取。进行中任务按 `(cust_id, assignee_emp_id, task_status)` 进行员工维度防重。
+- `TOUCH_LOG` 在原有日志内容、幂等键和照片 URL 基础上新增 `touch_method`、`participant_emp_ids`、`photo_groups`、`operator_location`。后三个结构化字段按 JSON 字符串保存。
+- 分类照片包含关键人合影、企业门牌、经营场所，每类最多 3 张且每次记录至少 1 张；任务执行人可写，同机构可读，系统管理员可读全量，跨机构隔离。
 
-### 7.2 CUSTOMER 数据范围 SQL 模板
+### 4.9 `CROSS_ORG_MARKETING_RULE` / `CROSS_ORG_MARKETING_APPLY`
 
-```sql
--- 基础过滤：只看本人主机构有效认领的客户
-SELECT DISTINCT cm.*
-FROM cust_master cm
-INNER JOIN cust_claim cc ON cc.cust_id = cm.id
-WHERE cm.deleted = 0
-  AND cc.claim_status = 'CLAIMED'
-  AND cc.org_id IN (<CURRENT_USER_ORG_SUBTREE>)
-  [AND (cc.maintainer_emp_id = <EMP_ID> OR cc.claimed_by = <EMP_ID>)]  -- PERSONAL 范围再加此过滤
-```
+- 规则表初始化四条冻结口径，`enabled` 可控制是否参与在线校验；无启用配置时服务使用同样的内置安全默认值。
+- 申请表保存客户、申请人、原主办快照、四项校验结果、审核结果和自动生成的触达任务 ID。
+- 审核通过只生成申请人的触达任务，不更新 `CUSTOMER_MARKET_CUSTOMER` 主办关系，也不授予客户资产权限。
 
-### 7.3 为什么不用 owner_org_id
+## 5. 线索审批存储边界
 
-- 客户可被多个机构认领（多对多关系），owner_org_id 只能表达单一来源
-- 认领/取消认领是高频操作，通过 cust_claim 判定天然跟随
-- 跨机构重复客户场景：不同机构基于各自认领关系独立运营
-
----
-
-## 8. JSON 字段说明
-
-### 8.1 cust_lead.tag_ids
-
-存储格式：JSON 数组，每个元素为标签ID字符串。
-
-```json
-["TAG_001","TAG_002","TAG_003"]
-```
-
-**查询建议**：
-- 使用 `JSON_CONTAINS(tag_ids, JSON_QUOTE('TAG_001'))` 查询包含某标签的线索
-- 或使用应用层过滤（标签数量较少时）
-- 不建议对该字段建 JSON 虚拟列索引（变更频繁）
-
-### 8.2 touch_log.photo_urls
-
-存储格式：JSON 数组，每个元素为 MinIO 文件对象的 URL 或对象 ID。
-
-```json
-[
-  "http://minio.bank.local/touch/202603/abc123.jpg",
-  "http://minio.bank.local/touch/202603/def456.jpg"
-]
-```
-
-**规范**：
-- 单条触达日志最多 9 张照片
-- URL 为 MinIO 签名 URL，有效期 7 天；过期后通过 FileApi 重新签名
-- 对象 ID 存储时通过 `/api/files/{objectId}/presign` 动态换取签名 URL
-
-### 8.3 lead_import_batch.error_summary
-
-存储格式：JSON 对象，包含错误类型统计与前 N 条错误行样例。
-
-```json
-{
-  "totalErrors": 5,
-  "errorTypes": {
-    "FIELD_REQUIRED": 2,
-    "DUPLICATE_NAME": 3
-  },
-  "samples": [
-    {"row": 3, "field": "cust_name", "error": "客户名称不能为空"},
-    {"row": 7, "field": "cust_name", "error": "客户名称已存在"}
-  ]
-}
-```
-
----
-
-## 9. 分区与归档建议
-
-### 9.1 touch_log 按月分区
-
-数据规模预估：每位客户经理每日 5~10 条日志，全行按 5 万客户经理预计，年增量约 1.5 亿行。
-
-**分区策略**：按 `log_time` 月度 RANGE 分区，保留近 6 个月在线数据。
-
-```sql
-ALTER TABLE touch_log
-PARTITION BY RANGE (TO_DAYS(log_time)) (
-  PARTITION p202601 VALUES LESS THAN (TO_DAYS('2026-02-01')),
-  PARTITION p202602 VALUES LESS THAN (TO_DAYS('2026-03-01')),
-  PARTITION p202603 VALUES LESS THAN (TO_DAYS('2026-04-01')),
-  -- ...
-  PARTITION p_max VALUES LESS THAN MAXVALUE
-);
-```
-
-**归档策略**：
-- 每月 1 日由定时任务导出前 7 月数据到归档表 `touch_log_archive`
-- 归档完成后 DROP 对应分区
-- 归档表独立数据库，不参与业务查询
-
-### 9.2 cust_lead 不分区
-
-- 线索数据规模较小（预估年增 100 万），无需分区。
-- 历史版本可通过 `is_latest = 0 AND updated_time < now() - 3年` 条件定期归档。
-- 归档前导出到 `cust_lead_archive` 表，保留线索链完整。
-
-### 9.3 cust_master 不分区
-
-- 客户主档数据规模中等（年增 20~30 万），采用逻辑删除保留历史。
-- 通过 `idx_deleted` 索引过滤，性能可控。
-- 五年以上的逻辑删除客户可归档到 `cust_master_archive`。
-
-### 9.4 其他表
-
-| 表 | 策略 |
+| 数据 | 真实来源 |
 |---|---|
-| cust_tag | 不分区、不归档（数据量小，标签需长期引用） |
-| cust_tag_rel | 不分区；随客户归档一起处理 |
-| lead_import_batch | 不分区；保留 3 年，超期归档 |
-| cust_claim | 不分区；CANCELLED 状态保留 3 年后可归档 |
-| touch_task | 不分区；SUCCESS/CANCELLED 终态保留 2 年后归档 |
+| 线索/批次当前业务状态 | `CUST_LEAD.lead_status` / `LEAD_IMPORT_BATCH.status` |
+| 最终通过人、时间、退回原因 | 两张业务表的 `reviewed_*` / `reject_reason` 快照 |
+| 业务与流程映射 | `BIZ_PROCESS_MAP` |
+| 当前待办、节点候选人 | Flowable `ACT_RU_*` |
+| 完整已办、节点意见、转交历史 | Flowable `ACT_HI_*` + `WorkflowQueryApi` |
+| 高危操作审计 | `AUDIT_LOG` |
+
+模块禁止直接查询 Flowable 表，必须通过 `WorkflowApi` / `WorkflowQueryApi` 访问。同时不建立另一张通用审批表，否则容易与 Flowable 历史产生状态漂移。
+
+## 6. 关键事务与并发约束
+
+1. **单条提交**：锁定 `CUST_LEAD`，校验 `DRAFT`，写 `SUBMITTED`，启动 `LEAD:{leadId}` 流程，再写 `IN_APPROVAL`。
+2. **整批导入**：文件所有行校验通过后，一个事务写入批次和所有线索行；任一行错误时只保留 `VALIDATION_FAILED` 批次头和错误文件。
+3. **最终回调**：依赖 `process_instance_id` 和业务当前状态幂等更新；重复回调不得重复生成客户、客户池或触达任务。
+4. **版本切换**：旧版 `is_latest=0` 和新版插入必须同事务；新版复制标签、分配范围和附件关系，不修改历史版本。
+5. **客户转交**：锁定客户和当前有效认领关系，用 `lock_version` 防止同步任务覆盖主办变更。
+6. **认领与首次触达**：认领关系和手动创建首次任务为两个独立事务入口；`OWNER` 线索审批回调是唯一自动建认领和首次任务的入口，并依赖认领/任务防重查询保证回调幂等。
+
+## 7. 兼容与后续实现清单
+
+- 本阶段已落地客户列表数据范围、线索单条录入/详情/主办查询、审批待办已办/详情/全量已处理 Excel 导出，以及待认领池、我的客户、首次/再次触达、触达记录和机构管理视图。
+- Excel 批量导入按 2026-08-11 会议纪要归入后续阶段；`LEAD_IMPORT_BATCH` 扩展仅作已预留的数据模型，不表示本期已交付完整导入流程。
+- 需将 `CustMasterAssemblerService` 的本地占位客户号改为：未开户客户 `cust_no=NULL`，开户后以 CCRM/CW35 回传客户号为准。
+- 新写入同时维护关系表和旧兼容字段；完成数据回填、双读校验后，再单独评估删除 `tag_ids` / `assigned_to` / `lead_id`。
+- 所有新 Mapper 必须继承 MyBatis-Plus `BaseMapper<T>`，单表 CRUD 不新写 XML。

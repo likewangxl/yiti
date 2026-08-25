@@ -4,7 +4,6 @@ import com.bank.branch.platform.customer.api.dto.TagDTO;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * 标签查询 API
@@ -23,14 +22,6 @@ public interface TagApi {
      * @return 启用状态的标签 DTO 列表
      */
     List<TagDTO> listEnabledTags();
-
-    /**
-     * 按 tagCode 获取标签。
-     *
-     * @param tagCode 标签编码
-     * @return 标签 DTO，不存在时返回 Optional.empty()
-     */
-    Optional<TagDTO> getTagByCode(String tagCode);
 
     /**
      * 获取客户的标签列表（只返回启用状态）。

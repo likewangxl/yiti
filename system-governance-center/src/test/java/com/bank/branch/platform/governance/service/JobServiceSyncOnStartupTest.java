@@ -22,6 +22,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.eq;
 
 /**
  * JobService.@PostConstruct.syncJobsOnStartup 单元测试（V1.6 quartz 整合 P3.1）.
@@ -121,6 +122,18 @@ class JobServiceSyncOnStartupTest {
 
         jobService.syncJobsOnStartup();
 
+        verify(scheduler, never()).scheduleJob(any(JobDetail.class), any(Trigger.class));
+    }
+
+    @Test
+    void sync_activeJobWithoutCron_addsDurableJobDetailWithoutTrigger() throws Exception {
+        SysJobConf job = makeJobConf("JOB_COORD", "LEVEL1_METRIC_CALC", null, "FIRE_ONCE_NOW");
+        job.setQuartzJobClass(SyncTestNoOpJob.class.getName());
+        when(jobConfMapper.selectByStatus("ACTIVE")).thenReturn(List.of(job));
+
+        jobService.syncJobsOnStartup();
+
+        verify(scheduler).addJob(any(JobDetail.class), eq(true));
         verify(scheduler, never()).scheduleJob(any(JobDetail.class), any(Trigger.class));
     }
 

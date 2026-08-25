@@ -40,7 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 1. 标签创建 + 标签客户导入
  * 2. 线索草稿创建 + 对外 LeadApi 查询
  * 3. 客户认领 + 对外 ClaimApi / CustomerQueryApi 查询
- * 4. 认领后自动创建触达任务 + 触达日志 + 完成任务
+ * 4. 认领后手动发起触达任务 + 触达日志 + 完成任务
  * </p>
  */
 @SpringBootTest
@@ -99,7 +99,6 @@ class CustomerMarketingCenterIT {
     void customerMinimalClosure_worksInBootstrap() {
         CustTag tag = tagService.createTag(
                 "Phase1 客群标签",
-                "PHASE1_TAG",
                 "roadmap phase1 customer gate",
                 "PHASE1",
                 10,
@@ -132,6 +131,9 @@ class CustomerMarketingCenterIT {
 
         CustClaim claim = claimService.claim(CUSTOMER_ID, OPERATOR_ORG_ID, OPERATOR_EMP_ID);
 
+        // 认领只建立客户关系，首次触达需由已认领员工手动发起。
+        claimService.startTouch(claim.getId(), null, OPERATOR_EMP_ID, OPERATOR_ORG_ID);
+
         String touchTaskId = jdbcTemplate.queryForObject(
                 "SELECT id FROM TOUCH_TASK WHERE cust_id = ? ORDER BY created_time DESC LIMIT 1",
                 String.class,
@@ -149,9 +151,7 @@ class CustomerMarketingCenterIT {
 
         touchTaskService.markSuccess(touchTaskId, OPERATOR_EMP_ID, false);
 
-        assertThat(tagApi.getTagByCode("PHASE1_TAG")).isPresent()
-                .get().extracting(com.bank.branch.platform.customer.api.dto.TagDTO::getTagCode)
-                .isEqualTo("PHASE1_TAG");
+        assertThat(tagApi.isTagNameExists("Phase1 客群标签")).isTrue();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM CUST_TAG_REL WHERE tag_id = ? AND cust_id = ?",
                 Long.class,

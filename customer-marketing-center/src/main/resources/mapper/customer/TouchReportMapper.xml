@@ -20,7 +20,7 @@
 
     <!--
         分页查询触达报告：
-        TOUCH_TASK LEFT JOIN CUST_MASTER 获取客户名称，
+        TOUCH_TASK LEFT JOIN CUSTOMER_MARKET_CUSTOMER 获取客户名称，
         子查询统计每个任务关联的触达日志数量。
     -->
     <select id="selectReportPage" resultType="com.bank.branch.platform.customer.dto.resp.TouchReportVO">
@@ -36,7 +36,7 @@
             t.success_time     AS successTime,
             (SELECT COUNT(*) FROM TOUCH_LOG tl WHERE tl.touch_task_id = t.id) AS logCount
         FROM TOUCH_TASK t
-        LEFT JOIN CUST_MASTER m ON t.cust_id = m.id AND m.deleted = 0
+        LEFT JOIN CUSTOMER_MARKET_CUSTOMER m ON t.cust_id = m.id AND m.deleted = 0
         <include refid="REPORT_WHERE"/>
         ORDER BY t.created_time DESC
         LIMIT #{offset}, #{limit}
@@ -46,7 +46,7 @@
     <select id="countReportPage" resultType="long">
         SELECT COUNT(*)
         FROM TOUCH_TASK t
-        LEFT JOIN CUST_MASTER m ON t.cust_id = m.id AND m.deleted = 0
+        LEFT JOIN CUSTOMER_MARKET_CUSTOMER m ON t.cust_id = m.id AND m.deleted = 0
         <include refid="REPORT_WHERE"/>
     </select>
 

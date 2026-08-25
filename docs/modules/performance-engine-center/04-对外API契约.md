@@ -4,7 +4,9 @@
 > 关联文档: `01-功能规格.md` / `02-后端架构.md` / `03-接口设计与报文.md`
 > 契约层: 所有跨模块调用必须通过本文件定义的 `*Api` 接口, 禁止直接访问本模块的 mapper/entity/serviceImpl
 > 契约位置: `com.bank.branch.platform.performance.api.*`
-> 最后更新: **2026-07-19**（此前一次实质更新 2026-04-25）
+> 最后更新: **2026-08-11**（此前一次实质更新 2026-07-19）
+
+> **2026-08-11 增量说明**：`PerfApprovalQueryApi.getAllocAdjustDetail` 的 `AllocAdjustDetailDTO` 新增 `currentNodeApprovers[]`，返回当前未审核活动节点可审批员工的姓名和工号；节点已审核或流程终态时为空列表。该字段的节点级解释按串行单活动审批节点假设；现有并行/多实例审批返回值不携带任务/节点分组。
 
 > **2026-07-19 回填说明**：`performance-engine-center` 模块实际共 11 个 `*Api`/`*QueryApi`（`api/` 目录，不含 `dto/` 子包），原文档仅收录 7 个（§1～§7），本次依据源码补齐缺失的 4 个：
 > - **§8 `CustStatQueryApi`**（客户财务统计展示表只读查询，面向 soap-gateway-center callpu `CASH_GETCUST_INFO`）
@@ -1114,9 +1116,10 @@ public interface PerfApprovalQueryApi {
 | `currentNode` | String | 当前所处审批节点中文名（IN_APPROVAL 取 Flowable 活动 userTask 名；终态显示"已完成/已拒绝/已撤回/草稿"） |
 | `currentNodeKey` | String | 当前活动节点 KEY（如 `biz_dept_review`/`finance_review`），供经办审批端决定"下一步审批"表单 |
 | `nextNode` | String | 下一审批节点中文名（按 callPu 硬编码路由的确定链路静态推算；末节点显示"流程结束"，终态显示"无"） |
+| `currentNodeApprovers` | List\<CurrentNodeApprover\> | 当前未审核活动节点可审批员工；元素为 `employeeName`/姓名、`employeeNo`/工号（`PT_USER.USERNAME`）；节点已审核、终态或无活动任务时为空列表。仅按串行单活动节点解释；`original_owner_approve` 等并行/多实例任务会扁平去重，不提供节点级区分 |
 | `allocaters` | List\<AllocItem\> | 分配明细：`empId`/`username`/`fullname`/`ratio`/`isOriginal`(1=原分配/2=调整后) |
 
-**调用约束：** 全部方法为只读同步调用；权限逻辑与 Web 端待办/已办完全一致（不重新实现一套权限判断）。
+**调用约束：** 全部方法为只读同步调用；权限逻辑与 Web 端待办/已办完全一致（不重新实现一套权限判断）。`currentNodeApprovers` 仅用于展示当前运行时任务的 assignee/candidate 身份链接；角色/机构候选按 workflow 依赖的 auth 当前目录展开，不重新解析节点配置。并行网关、多实例或多个活动任务需先扩展 workflow 的节点级查询契约。
 
 ---
 
@@ -1525,3 +1528,39 @@ public class SysControlUpdatedEvent extends PerfDomainEvent {
 - 目标修正申请流程 (`TargetAdjustService`)
 
 这些能力的触发必须经由 Controller 或 facade 层, 或由内部事件驱动。
+
+---
+
+## 17. system-governance-center.JobApi（按级别重算调度依赖）
+
+绩效模块不直接依赖治理中心的 mapper、entity、JobService 或 Quartz Scheduler；按级别重算以及
+数据就绪协调器的任务触发只能经治理公开 `JobApi`。绩效服务层负责把业务级别映射为固定任务键，
+调用方（包括前端）不得传入任意 `jobKey`/`jobId`。
+
+```java
+JobTriggerRespDTO triggerJobByKey(
+    String jobKey,
+    String triggerType,     // MANUAL / AUTO
+    String reason,
+    String dataDate,
+    String allocDate,
+    String operatorEmpId);  // AUTO 可空
+
+boolean isJobRunning(String jobKey);
+```
+
+### 17.1 级别白名单
+
+| 业务级别 | 允许的 `jobKey` |
+|:---:|:---|
+| 1 | `LEVEL1_METRIC_CALC` |
+| 2 | `LEVEL2_METRIC_CALC` |
+| 3 | `LEVEL3_METRIC_CALC` |
+
+`triggerJobByKey` 由治理层再次检查任务存在、`allow_manual_trigger=1` 和 Scheduler 可用，
+然后使用 Quartz `triggerJob(JobKey, JobDataMap)` 异步触发；`JobExecutionLogger` 负责统一写入
+`SYS_JOB_RUN_LOG`。`MANUAL` 触发需由 REST 层校验 `reason` 并提供操作人工号；`AUTO` 触发可省略
+操作人工号，但必须明确传入 `triggerType=AUTO`，避免被记录为手动操作。
+
+`isJobRunning(jobKey)` 仅返回治理执行日志中是否存在 `RUNNING` 记录，供协调器避免同一任务重复排队；
+返回 false 不构成跨节点锁，最终并发语义由 Quartz JobDetail 的 `@DisallowConcurrentExecution` 保证。

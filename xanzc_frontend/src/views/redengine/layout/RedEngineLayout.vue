@@ -139,7 +139,7 @@ async function handleLogout() {
     // 登出接口异常也继续清本地态、跳登录页，避免用户卡在原页面
   }
   userStore.clear();
-  window.location.replace('/#/login');
+  window.location.replace('/#/redengine/login');
 }
 </script>
 

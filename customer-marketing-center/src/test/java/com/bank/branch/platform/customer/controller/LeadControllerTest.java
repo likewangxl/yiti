@@ -7,7 +7,9 @@ import com.bank.branch.platform.customer.entity.CustLead;
 import com.bank.branch.platform.customer.enums.LeadOp;
 import com.bank.branch.platform.customer.enums.LeadStatus;
 import com.bank.branch.platform.customer.service.LeadService;
+import com.bank.branch.platform.customer.service.LeadEntryService;
 import com.bank.branch.platform.customer.service.LeadVersionService;
+import com.bank.branch.platform.customer.dto.resp.LeadRespDTO;
 import com.bank.branch.platform.customer.support.AbstractControllerIntegrationTest;
 import com.bank.branch.platform.customer.support.WithMockEmpContext;
 import org.junit.jupiter.api.Test;
@@ -50,6 +52,9 @@ class LeadControllerTest extends AbstractControllerIntegrationTest {
     LeadVersionService leadVersionService;
 
     @MockBean
+    LeadEntryService leadEntryService;
+
+    @MockBean
     LeadApi leadApi;
 
     // ==================== GET /api/leads ====================
@@ -60,7 +65,9 @@ class LeadControllerTest extends AbstractControllerIntegrationTest {
         CustLead lead = buildLead("lead-001");
         PageResult<CustLead> page = PageResult.of(1, 20, 1L, List.of(lead));
 
-        when(leadService.listPage(isNull(), isNull(), isNull(), eq(1), eq(20))).thenReturn(page);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(leadEntryService.listCreatedPage(
+                isNull(), isNull(), isNull(), eq(1), eq(20), eq("E10001"))).thenReturn(page);
 
         mockMvc.perform(get("/api/leads")
                         .param("pageNo", "1")
@@ -75,8 +82,11 @@ class LeadControllerTest extends AbstractControllerIntegrationTest {
     @Test
     @WithMockEmpContext(empId = "E10001")
     void getById_shouldReturn200() throws Exception {
-        CustLead lead = buildLead("lead-001");
-        when(leadService.getById("lead-001")).thenReturn(lead);
+        LeadRespDTO lead = new LeadRespDTO();
+        lead.setId("lead-001");
+        lead.setCustName("测试企业");
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(leadEntryService.getCreatedDetail("lead-001", "E10001")).thenReturn(lead);
 
         mockMvc.perform(get("/api/leads/lead-001"))
                 .andExpect(status().isOk())
@@ -93,10 +103,7 @@ class LeadControllerTest extends AbstractControllerIntegrationTest {
         CustLead lead = buildLead("new-lead-001");
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
-        when(leadService.createDraft(
-                anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(), any(), anyString(), anyString()
-        )).thenReturn(lead);
+        when(leadEntryService.createDraft(any(), anyString(), anyString(), eq(false))).thenReturn(lead);
 
         String body = "{\"custName\":\"测试企业\",\"unifiedCreditCode\":\"91110000123456789X\"}";
 
@@ -115,10 +122,9 @@ class LeadControllerTest extends AbstractControllerIntegrationTest {
     void update_shouldReturn200() throws Exception {
         CustLead lead = buildLead("lead-001");
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
-        when(leadService.updateDraft(
-                eq("lead-001"), any(), any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(), any(), any(), anyString()
-        )).thenReturn(lead);
+        when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
+        when(leadEntryService.updateDraft(eq("lead-001"), any(), anyString(), anyString(), eq(false)))
+                .thenReturn(lead);
 
         String body = "{\"custName\":\"更新企业名\"}";
 

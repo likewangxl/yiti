@@ -4,13 +4,15 @@
 
     <!-- CUST_LEAD 全列查询片段 -->
     <sql id="BASE_COLUMNS">
-        id, lead_no, lead_op, source_cust_id, prev_lead_id, version_no, is_latest,
-        cust_name, unified_credit_code, tag_ids, contact_person, contact_mobile,
+        id, lead_no, lead_op, lead_type, source_cust_id, prev_lead_id, version_no, is_latest,
+        cust_no, cust_name, unified_credit_code, tag_ids, contact_person, contact_mobile,
         industry, group_type, customer_type, is_keystone, enterprise_type, group_name,
         is_account_opened, customer_desc, credit_amount, credit_exposure_amount,
-        lead_source, lead_status, owner_org_id, assigned_to, created_by,
-        business_key, import_batch_id, process_instance_id, remark,
-        created_time, updated_by, updated_time, deleted
+        lead_source, distribution_mode, main_manager_id, main_manager_org_id,
+        lead_status, owner_org_id, assigned_to, created_by, submitted_by, submitted_time,
+        business_key, import_batch_id, batch_row_no, process_instance_id,
+        reviewed_by, reviewed_time, reject_reason, remark,
+        created_time, updated_by, updated_time, deleted, lock_version, active_new_credit_code
     </sql>
 
     <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
@@ -21,6 +23,192 @@
             <include refid="BASE_COLUMNS"/>
         FROM CUST_LEAD
         WHERE lead_no = #{leadNo}
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 已处理审批台账导出：不含草稿/审批中记录，按会议纪要返回全部匹配记录。 -->
+    <select id="selectReviewedForExport" resultType="com.bank.branch.platform.customer.entity.CustLead">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM CUST_LEAD
+        WHERE deleted = 0
+          AND is_latest = 1
+          AND lead_status IN ('APPROVED', 'REJECTED')
+        <if test="keyword != null and keyword != ''">
+            AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR unified_credit_code LIKE CONCAT('%', #{keyword}, '%')
+                 OR lead_no LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="result != null and result != ''">
+            AND lead_status = #{result}
+        </if>
+        <include refid="LEAD_APPROVAL_SCOPE"/>
+        ORDER BY reviewed_time DESC, updated_time DESC
+    </select>
+
+    <sql id="LEAD_APPROVAL_SCOPE">
+        <if test="scopeType != 'ALL'">
+            <choose>
+                <when test="scopeType == 'SELF' or scopeType == 'SELF_CREATED' or scopeType == 'SELF_ASSIGNED'">
+                    AND (
+                        created_by = #{empId}
+                        OR assigned_to = #{empId}
+                        OR main_manager_id = #{empId}
+                        OR EXISTS (
+                            SELECT 1 FROM CUST_LEAD_MANAGER_SCOPE es
+                            WHERE es.lead_id = CUST_LEAD.id
+                              AND es.manager_emp_id = #{empId}
+                        )
+                    )
+                </when>
+                <when test="scopeType == 'ORG' or scopeType == 'ORG_SUBTREE'">
+                    <choose>
+                        <when test="orgCodes != null and !orgCodes.isEmpty()">
+                            AND (
+                                owner_org_id IN
+                                <foreach collection="orgCodes" item="org" open="(" close=")" separator=",">
+                                    #{org}
+                                </foreach>
+                                OR main_manager_org_id IN
+                                <foreach collection="orgCodes" item="org" open="(" close=")" separator=",">
+                                    #{org}
+                                </foreach>
+                                OR EXISTS (
+                                    SELECT 1 FROM CUST_LEAD_MANAGER_SCOPE eos
+                                    WHERE eos.lead_id = CUST_LEAD.id
+                                      AND eos.manager_org_id IN
+                                    <foreach collection="orgCodes" item="org" open="(" close=")" separator=",">
+                                        #{org}
+                                    </foreach>
+                                )
+                            )
+                        </when>
+                        <otherwise>AND 1 = 0</otherwise>
+                    </choose>
+                </when>
+                <otherwise>AND 1 = 0</otherwise>
+            </choose>
+        </if>
+    </sql>
+
+    <sql id="LEAD_VISIBLE_FILTER">
+        <if test="keyword != null and keyword != ''">
+            AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR unified_credit_code LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != null and status != ''">
+            AND lead_status = #{status}
+        </if>
+        <if test="ownerOrgId != null and ownerOrgId != ''">
+            AND owner_org_id = #{ownerOrgId}
+        </if>
+        <include refid="LEAD_DISTRIBUTION_SCOPE"/>
+    </sql>
+
+    <sql id="LEAD_CREATED_FILTER">
+        AND created_by = #{empId}
+        <if test="keyword != null and keyword != ''">
+            AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR unified_credit_code LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != null and status != ''">
+            AND lead_status = #{status}
+        </if>
+        <if test="ownerOrgId != null and ownerOrgId != ''">
+            AND owner_org_id = #{ownerOrgId}
+        </if>
+    </sql>
+
+    <sql id="LEAD_DISTRIBUTION_SCOPE">
+        <if test="scopeType != 'ALL'">
+            AND (
+                distribution_mode = 'PUBLIC'
+                OR created_by = #{empId}
+                OR main_manager_id = #{empId}
+                OR EXISTS (
+                    SELECT 1 FROM CUST_LEAD_MANAGER_SCOPE ls
+                    WHERE ls.lead_id = CUST_LEAD.id
+                      AND ls.manager_emp_id = #{empId}
+                )
+                <if test="orgCodes != null and !orgCodes.isEmpty()">
+                    OR owner_org_id IN
+                    <foreach collection="orgCodes" item="org" open="(" close=")" separator=",">
+                        #{org}
+                    </foreach>
+                    OR main_manager_org_id IN
+                    <foreach collection="orgCodes" item="org" open="(" close=")" separator=",">
+                        #{org}
+                    </foreach>
+                    OR EXISTS (
+                        SELECT 1 FROM CUST_LEAD_MANAGER_SCOPE los
+                        WHERE los.lead_id = CUST_LEAD.id
+                          AND los.manager_org_id IN
+                        <foreach collection="orgCodes" item="org" open="(" close=")" separator=",">
+                            #{org}
+                        </foreach>
+                    )
+                </if>
+            )
+        </if>
+    </sql>
+
+    <!-- 线索录入台账：公开线索 + 本人相关线索 + 角色机构范围。 -->
+    <select id="selectVisiblePage" resultType="com.bank.branch.platform.customer.entity.CustLead">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM CUST_LEAD
+        WHERE is_latest = 1
+          AND deleted = 0
+        <include refid="LEAD_VISIBLE_FILTER"/>
+        ORDER BY created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countVisiblePage" resultType="long">
+        SELECT COUNT(*)
+        FROM CUST_LEAD
+        WHERE is_latest = 1
+          AND deleted = 0
+        <include refid="LEAD_VISIBLE_FILTER"/>
+    </select>
+
+    <select id="selectVisibleById" resultType="com.bank.branch.platform.customer.entity.CustLead">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM CUST_LEAD
+        WHERE id = #{id}
+          AND deleted = 0
+        <include refid="LEAD_DISTRIBUTION_SCOPE"/>
+        LIMIT 1
+    </select>
+
+    <!-- 线索录入页台账：无管理员例外，始终只返回当前员工本人录入的数据。 -->
+    <select id="selectCreatedPage" resultType="com.bank.branch.platform.customer.entity.CustLead">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM CUST_LEAD
+        WHERE is_latest = 1
+          AND deleted = 0
+        <include refid="LEAD_CREATED_FILTER"/>
+        ORDER BY created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countCreatedPage" resultType="long">
+        SELECT COUNT(*)
+        FROM CUST_LEAD
+        WHERE is_latest = 1
+          AND deleted = 0
+        <include refid="LEAD_CREATED_FILTER"/>
+    </select>
+
+    <select id="selectCreatedById" resultType="com.bank.branch.platform.customer.entity.CustLead">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM CUST_LEAD
+        WHERE id = #{id}
+          AND created_by = #{empId}
           AND deleted = 0
         LIMIT 1
     </select>
@@ -90,6 +278,8 @@
     <update id="conditionalUpdateStatus">
         UPDATE CUST_LEAD
         SET lead_status = #{targetStatus},
+            reviewed_by = CASE WHEN #{targetStatus} IN ('APPROVED', 'REJECTED') THEN #{updatedBy} ELSE reviewed_by END,
+            reviewed_time = CASE WHEN #{targetStatus} IN ('APPROVED', 'REJECTED') THEN NOW() ELSE reviewed_time END,
             updated_by = #{updatedBy},
             updated_time = NOW()
         WHERE id = #{id}

@@ -1,12 +1,15 @@
 package com.bank.branch.platform.workflow.facade;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
 import com.bank.branch.platform.workflow.api.dto.BizProcessMapDTO;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskDetailRespDTO;
+import com.bank.branch.platform.workflow.api.dto.TaskCandidateUserDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
 import com.bank.branch.platform.workflow.service.ProcessQueryService;
 import com.bank.branch.platform.workflow.service.ProcessStartService;
@@ -18,6 +21,7 @@ import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.history.HistoricProcessInstanceQuery;
 import org.flowable.task.api.Task;
+import org.flowable.identitylink.api.IdentityLink;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -25,7 +29,9 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -49,6 +55,7 @@ public class WorkflowQueryFacade implements WorkflowQueryApi {
     private final HistoryService historyService;
     private final TaskService taskService;
     private final CurrentUserApi currentUserApi;
+    private final UserApi userApi;
 
     /**
      * {@inheritDoc}
@@ -107,6 +114,85 @@ public class WorkflowQueryFacade implements WorkflowQueryApi {
     @Override
     public ProcessDiagramDTO getProcessNodes(String processInstanceId) {
         return processQueryService.getProcessNodes(processInstanceId);
+    }
+
+    @Override
+    public List<TaskCandidateUserDTO> getActiveTaskCandidates(String processInstanceId) {
+        if (isBlank(processInstanceId)) {
+            return Collections.emptyList();
+        }
+        List<Task> activeTasks = taskService.createTaskQuery()
+                .processInstanceId(processInstanceId)
+                .active()
+                .list();
+        if (activeTasks == null || activeTasks.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Set<String> empIds = new LinkedHashSet<>();
+        for (Task task : activeTasks) {
+            if (!isBlank(task.getAssignee())) {
+                // 已签收任务只允许当前 assignee 办理，候选组不再展示。
+                empIds.add(task.getAssignee());
+                continue;
+            }
+            List<IdentityLink> links = taskService.getIdentityLinksForTask(task.getId());
+            if (links == null) {
+                continue;
+            }
+            for (IdentityLink link : links) {
+                if (link == null || !"candidate".equals(link.getType())) {
+                    continue;
+                }
+                if (!isBlank(link.getUserId())) {
+                    empIds.add(link.getUserId());
+                }
+                expandCandidateGroup(link.getGroupId(), empIds);
+            }
+        }
+        if (empIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<UserDTO> users = userApi.getUserByEmpIds(List.copyOf(empIds));
+        Map<String, UserDTO> byEmpId = new LinkedHashMap<>();
+        if (users != null) {
+            for (UserDTO user : users) {
+                if (user != null && !isBlank(user.getEmpId())) {
+                    byEmpId.putIfAbsent(user.getEmpId(), user);
+                }
+            }
+        }
+        List<TaskCandidateUserDTO> result = new java.util.ArrayList<>();
+        for (String empId : empIds) {
+            UserDTO user = byEmpId.get(empId);
+            if (user != null) {
+                result.add(new TaskCandidateUserDTO(empId,
+                        isBlank(user.getUsername()) ? empId : user.getUsername(),
+                        user.getDisplayName()));
+            }
+        }
+        return result;
+    }
+
+    /** 将任务实际 candidate group 展开为员工；机构范围已在任务创建时固化到身份链接。 */
+    private void expandCandidateGroup(String groupId, Set<String> empIds) {
+        if (isBlank(groupId)) {
+            return;
+        }
+        if (groupId.startsWith("USER:")) {
+            empIds.add(groupId.substring("USER:".length()));
+        } else if (groupId.startsWith("ROLE:")) {
+            List<String> roleUsers = userApi.getEmpIdsByRoleCode(groupId.substring("ROLE:".length()));
+            if (roleUsers != null) {
+                empIds.addAll(roleUsers);
+            }
+        } else if (groupId.startsWith("ORG:")) {
+            List<String> orgUsers = userApi.getEmpIdsByOrg(groupId.substring("ORG:".length()));
+            if (orgUsers != null) {
+                empIds.addAll(orgUsers);
+            }
+        }
     }
 
     /**

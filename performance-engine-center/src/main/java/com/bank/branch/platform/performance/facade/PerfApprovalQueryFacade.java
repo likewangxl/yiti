@@ -15,6 +15,7 @@ import com.bank.branch.platform.performance.service.adjust.AllocAdjustTodoServic
 import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramNodeDTO;
+import com.bank.branch.platform.workflow.api.dto.TaskCandidateUserDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -230,6 +231,8 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
 
         // 当前/下一审批节点：IN_APPROVAL 取 Flowable 活动节点 + 静态链路推下一节点；终态走文案
         String[] nodes = resolveNodes(apply);
+        List<AllocAdjustDetailDTO.CurrentNodeApprover> currentNodeApprovers =
+                resolveCurrentNodeApprovers(apply);
 
         Map<String, String> empNameCache = new HashMap<>();
         return AllocAdjustDetailDTO.builder()
@@ -251,8 +254,39 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
                 .currentNode(nodes[0])
                 .currentNodeKey(nodes[2])
                 .nextNode(nodes[1])
+                .currentNodeApprovers(currentNodeApprovers)
                 .allocaters(allocaters)
                 .build();
+    }
+
+    /** 仅当前未审核活动节点返回可审批员工；终态或工作流查询失败均隐藏。 */
+    private List<AllocAdjustDetailDTO.CurrentNodeApprover> resolveCurrentNodeApprovers(
+            PerfAllocAdjustApply apply) {
+        if (!"IN_APPROVAL".equals(apply.getStatus())
+                || apply.getProcessInstanceId() == null || apply.getProcessInstanceId().isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            List<TaskCandidateUserDTO> candidates =
+                    workflowQueryApi.getActiveTaskCandidates(apply.getProcessInstanceId());
+            if (candidates == null || candidates.isEmpty()) {
+                return Collections.emptyList();
+            }
+            List<AllocAdjustDetailDTO.CurrentNodeApprover> result = new ArrayList<>(candidates.size());
+            for (TaskCandidateUserDTO candidate : candidates) {
+                if (candidate != null) {
+                    result.add(AllocAdjustDetailDTO.CurrentNodeApprover.builder()
+                            .employeeNo(candidate.getEmployeeNo())
+                            .employeeName(candidate.getEmployeeName())
+                            .build());
+                }
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("[PerfApprovalQueryFacade.resolveCurrentNodeApprovers] 查询当前节点审批人失败 pid={}, err={}",
+                    apply.getProcessInstanceId(), e.toString());
+            return Collections.emptyList();
+        }
     }
 
     /**

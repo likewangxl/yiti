@@ -27,7 +27,7 @@ public class TouchTask {
     /** 任务编号（对外展示，唯一），对应 task_no */
     private String taskNo;
 
-    /** 客户ID（关联 cust_master.id），对应 cust_id */
+    /** 客户ID（关联 CUSTOMER_MARKET_CUSTOMER.id），对应 cust_id */
     private String custId;
 
     /** 所属机构代码，对应 org_id */

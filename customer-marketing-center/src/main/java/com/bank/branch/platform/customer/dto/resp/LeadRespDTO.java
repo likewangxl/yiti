@@ -4,6 +4,8 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 
 /**
  * 线索详情响应 DTO。
@@ -23,6 +25,9 @@ public class LeadRespDTO {
     /** 线索操作类型：CREATE/UPDATE/DELETE */
     private String leadOp;
 
+    /** 线索类型：NEW_ACCOUNT/EXISTING_MARKETING */
+    private String leadType;
+
     /** 源客户ID（UPDATE/DELETE 时有值） */
     private String sourceCustId;
 
@@ -34,6 +39,9 @@ public class LeadRespDTO {
 
     /** 是否最新版本：0-否/1-是 */
     private Integer isLatest;
+
+    /** CCRM客户号 */
+    private String custNo;
 
     /** 客户名称 */
     private String custName;
@@ -47,7 +55,7 @@ public class LeadRespDTO {
     /** 联系人姓名 */
     private String contactPerson;
 
-    /** 联系人手机号（脱敏后） */
+    /** 联系人手机号 */
     private String contactMobile;
 
     /** 行业分类 */
@@ -83,6 +91,27 @@ public class LeadRespDTO {
     /** 线索来源 */
     private String leadSource;
 
+    /** 分配方式：PUBLIC/SCOPE/OWNER */
+    private String distributionMode;
+
+    /** 主办客户经理工号 */
+    private String mainManagerId;
+
+    private String mainManagerName;
+
+    private String mainManagerOrgId;
+
+    private String mainManagerOrgName;
+
+    /** 指定范围/主办专属人员快照 */
+    private List<LeadManagerScopeRespDTO> managerScopes;
+
+    /** 标签名称快照 */
+    private List<LeadTagRespDTO> tags;
+
+    /** 线索附件 */
+    private List<FileObjectDTO> attachments;
+
     /** 线索状态 */
     private String leadStatus;
 
@@ -95,14 +124,30 @@ public class LeadRespDTO {
     /** 创建人 */
     private String createdBy;
 
+    private String createdByName;
+
+    private String submittedBy;
+
+    private LocalDateTime submittedTime;
+
     /** 流程业务键 */
     private String businessKey;
 
     /** 导入批次ID */
     private String importBatchId;
 
+    private Integer batchRowNo;
+
     /** 流程实例ID */
     private String processInstanceId;
+
+    private String reviewedBy;
+
+    private String reviewedByName;
+
+    private LocalDateTime reviewedTime;
+
+    private String rejectReason;
 
     /** 备注 */
     private String remark;

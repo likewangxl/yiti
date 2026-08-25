@@ -10,8 +10,9 @@ import java.time.LocalDateTime;
 /**
  * SQL_PROBE_EXPORT_TASK 实体 —— SQL 探查「异步下载」任务.
  *
- * <p>用户点「下载」→ 后台线程跑 SQL（无行数限制，SXSSF 流式）→ 生成 xlsx 存 FILE_CONTENT →
- * 列表轮询状态/进度，成功后凭 FILE_CONTENT 下载。</p>
+ * <p>用户点「下载」→ 后台线程按请求上限跑 SQL → 每 10000 行生成一个 xlsx，超出后压缩为 zip，
+ * 成品上传 OBS；当前 schema 兼容过渡阶段，FILE_CONTENT 保存 {@code OBS_FILE_ID:<fileId>} 小引用，
+ * 旧任务仍可能保存完整 BLOB → 列表轮询状态/进度，成功后下载。</p>
  */
 @Data
 @TableName("SQL_PROBE_EXPORT_TASK")
@@ -39,7 +40,9 @@ public class SqlProbeExportTask {
     /** 下载文件名 */
     private String fileName;
 
-    /** 生成的 xlsx 文件字节 */
+    /**
+     * 过渡存储：新任务保存 {@code OBS_FILE_ID:<fileId>} 引用，旧任务保留完整 xlsx/zip BLOB。
+     */
     private byte[] fileContent;
 
     /** 失败原因 */

@@ -1,6 +1,6 @@
 package com.bank.branch.platform.customer.service;
 
-import com.bank.branch.platform.customer.mapper.CustMasterMapper;
+import com.bank.branch.platform.customer.mapper.M98CustMasterMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -26,31 +26,31 @@ import static org.mockito.Mockito.when;
 class CustMasterSyncServiceTest {
 
     @Mock
-    private CustMasterMapper custMasterMapper;
+    private M98CustMasterMapper m98CustMasterMapper;
 
     @InjectMocks
     private CustMasterSyncService custMasterSyncService;
 
     @Test
     void syncByStatisDt_delegatesToMapperAndReturnsInsertedCount() {
-        when(custMasterMapper.syncNewCustomersFromStat("2026-06-08")).thenReturn(3);
+        when(m98CustMasterMapper.syncNewCustomersFromStat("2026-06-08")).thenReturn(3);
 
         int inserted = custMasterSyncService.syncByStatisDt("2026-06-08");
 
         assertThat(inserted).isEqualTo(3);
-        verify(custMasterMapper).syncNewCustomersFromStat("2026-06-08");
+        verify(m98CustMasterMapper).syncNewCustomersFromStat("2026-06-08");
     }
 
     @Test
     void syncYesterday_usesYesterdayDate() {
         String yesterday = LocalDate.now().minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE);
-        when(custMasterMapper.syncNewCustomersFromStat(yesterday)).thenReturn(2);
+        when(m98CustMasterMapper.syncNewCustomersFromStat(yesterday)).thenReturn(2);
 
         int inserted = custMasterSyncService.syncYesterday();
 
         assertThat(inserted).isEqualTo(2);
         ArgumentCaptor<String> dateCaptor = ArgumentCaptor.forClass(String.class);
-        verify(custMasterMapper).syncNewCustomersFromStat(dateCaptor.capture());
+        verify(m98CustMasterMapper).syncNewCustomersFromStat(dateCaptor.capture());
         assertThat(dateCaptor.getValue()).isEqualTo(yesterday);
     }
 }

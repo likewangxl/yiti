@@ -2,6 +2,7 @@ package com.bank.branch.platform.customer.api.converter;
 
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.customer.entity.CustMaster;
+import com.bank.branch.platform.customer.entity.M98CustMaster;
 
 import java.util.Collections;
 import java.util.List;
@@ -50,6 +51,13 @@ public final class CustomerDTOConverter {
         dto.setCreditExposureAmount(entity.getCreditExposureAmount());
         dto.setOwnerOrgId(entity.getOwnerOrgId());
         dto.setLeadId(entity.getLeadId());
+        dto.setCurrentLeadId(entity.getCurrentLeadId());
+        dto.setMainManagerId(entity.getMainManagerId());
+        dto.setMainOrgId(entity.getMainOrgId());
+        dto.setOwnershipStatus(entity.getOwnershipStatus());
+        dto.setLastTouchTime(entity.getLastTouchTime());
+        dto.setSourceSystem(entity.getSourceSystem());
+        dto.setSourceUpdatedTime(entity.getSourceUpdatedTime());
         dto.setStatus(entity.getStatus());
         // 时间字段重命名映射
         dto.setCreatedAt(entity.getCreatedTime());
@@ -58,6 +66,28 @@ public final class CustomerDTOConverter {
         dto.setOwnerOrgName(null);   // 需 OrgApi 查询
         dto.setIndustryName(null);   // 需 DictApi 查询
         dto.setTagIds(null);          // 需查 cust_tag_rel 表
+        return dto;
+    }
+
+    /**
+     * 将存量 M98 客户主档转换为最小客户 DTO。
+     *
+     * <p>M98 主档只维护客户号、客户名称和统计日期，不伪造客户营销字段。</p>
+     *
+     * @param entity M98 客户主档，允许为 null
+     * @return 最小客户 DTO；entity 为 null 时返回 null
+     */
+    public static CustomerDTO toDTOFromM98(M98CustMaster entity) {
+        if (entity == null) {
+            return null;
+        }
+        CustomerDTO dto = new CustomerDTO();
+        dto.setId(entity.getId());
+        dto.setCustNo(entity.getCustNo());
+        dto.setCustName(entity.getCustName());
+        dto.setStatus(entity.getStatus());
+        dto.setCreatedAt(entity.getCreatedTime());
+        dto.setUpdatedAt(entity.getUpdatedTime());
         return dto;
     }
 

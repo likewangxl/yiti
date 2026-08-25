@@ -23,6 +23,8 @@ public final class FileCategory {
     public static final String EXPORT_DETAIL = "jxmx";
     /** 报表动态查询导出 */
     public static final String EXPORT_DYNAMIC = "bbdc";
+    /** SQL 探查导出 */
+    public static final String EXPORT_SQL_PROBE = "sqltc";
     /** 客户池汇总导出 */
     public static final String EXPORT_CUSTPOOL = "khchz";
     /** 触达汇总导出 */

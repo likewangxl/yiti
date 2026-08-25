@@ -15,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
@@ -82,22 +84,40 @@ public class FileService {
     public FileObjectDTO upload(MultipartFile file, String uploadedBy, String bizType, String bizId, String category) {
         log.info("[FileService.upload] fileName={}, size={}, uploadedBy={}, bizType={}, bizId={}, category={}",
                 file.getOriginalFilename(), file.getSize(), uploadedBy, bizType, bizId, category);
-        // 大文件早拒：避免把超限文件整体读进内存
-        if (file.getSize() > MAX_FILE_SIZE) {
-            throw new BizException(GovErrorCode.FILE_SIZE_EXCEEDED.getCode(),
-                    GovErrorCode.FILE_SIZE_EXCEEDED.getMessage());
+        String filename = file.getOriginalFilename();
+        String extension = validateExtension(filename);
+        validateFileSize(file.getSize());
+
+        // 第一遍只使用固定大小缓冲区计算 MD5，避免 MultipartFile.getBytes() 将文件整体读入堆内存。
+        UploadDigest digest = calculateDigest(file);
+        FileObject existing = fileObjectMapper.selectByMd5Hash(digest.md5Hash());
+        if (existing != null) {
+            log.info("[FileService.upload] MD5 重复，返回已有记录 id={}", existing.getId());
+            FileObjectDTO dto = toDTO(existing);
+            dto.setNewlyCreated(Boolean.FALSE);
+            bindIfNecessary(bizType, bizId, dto);
+            return dto;
         }
-        byte[] bytes;
-        try {
-            bytes = file.getBytes();
+
+        LocalDateTime now = LocalDateTime.now();
+        String objectKey = buildObjectKey(category, extension, now);
+        try (InputStream input = file.getInputStream()) {
+            // 第二遍重新打开输入流，OBS SDK 直接从流读取并上传。
+            obsStorageClient.putObject(input, objectKey);
         } catch (Exception e) {
-            throw new BizException(GovErrorCode.MINIO_ERROR.getCode(), "读取上传文件失败: " + e.getMessage(), e);
+            throw new BizException(GovErrorCode.MINIO_ERROR.getCode(), "读取或上传文件失败: " + e.getMessage(), e);
         }
-        FileObjectDTO dto = storeBytes(bytes, file.getOriginalFilename(), file.getContentType(), uploadedBy, category);
+
+        FileObjectDTO dto = saveUploadedFile(filename, digest.size(), file.getContentType(), uploadedBy,
+                digest.md5Hash(), objectKey, now);
+        bindIfNecessary(bizType, bizId, dto);
+        return dto;
+    }
+
+    private void bindIfNecessary(String bizType, String bizId, FileObjectDTO dto) {
         if (bizType != null && bizId != null && !bizType.isEmpty() && !bizId.isEmpty()) {
             bindFile(bizType, bizId, dto.getId(), null);
         }
-        return dto;
     }
 
     /**
@@ -119,17 +139,10 @@ public class FileService {
     private FileObjectDTO storeBytes(byte[] bytes, String filename, String contentType,
                                      String uploadedBy, String category) {
         // 1. 校验文件格式
-        String extension = getFileExtension(filename);
-        if (!ALLOWED_EXTENSIONS.contains(extension.toLowerCase())) {
-            throw new BizException(GovErrorCode.FILE_FORMAT_INVALID.getCode(),
-                    GovErrorCode.FILE_FORMAT_INVALID.getMessage());
-        }
+        String extension = validateExtension(filename);
 
         // 2. 校验文件大小
-        if (bytes.length > MAX_FILE_SIZE) {
-            throw new BizException(GovErrorCode.FILE_SIZE_EXCEEDED.getCode(),
-                    GovErrorCode.FILE_SIZE_EXCEEDED.getMessage());
-        }
+        validateFileSize(bytes.length);
 
         // 3. 计算 MD5
         String md5Hash;
@@ -144,34 +157,105 @@ public class FileService {
         FileObject existing = fileObjectMapper.selectByMd5Hash(md5Hash);
         if (existing != null) {
             log.info("[FileService.storeBytes] MD5 重复，返回已有记录 id={}", existing.getId());
-            return toDTO(existing);
+            FileObjectDTO dto = toDTO(existing);
+            dto.setNewlyCreated(Boolean.FALSE);
+            return dto;
         }
 
         // 5. 生成 OBS 对象 key：yyyy/MM/dd/{prefix}_{uuid}.ext（前缀便于在 OBS 区分类型）
         LocalDateTime now = LocalDateTime.now();
-        String prefix = (category == null || category.isBlank()) ? FileCategory.GENERAL : category;
-        String objectKey = now.format(PATH_DATE_FORMAT) + "/" + prefix + "_"
-                + UUID.randomUUID().toString().replace("-", "") + "." + extension;
+        String objectKey = buildObjectKey(category, extension, now);
 
         // 6. 写入 OBS
         obsStorageClient.putObject(bytes, objectKey);
 
-        // 7. 落库
+        // 7. 落库；若落库失败，仅清理本次新生成的对象 key，绝不触碰 MD5 命中的共享对象。
+        return saveUploadedFile(filename, bytes.length, contentType, uploadedBy, md5Hash, objectKey, now);
+    }
+
+    /**
+     * 将文件元数据落库；插入失败时清理本次上传产生的孤儿 OBS 对象。
+     */
+    private FileObjectDTO saveUploadedFile(String filename, long fileSize, String contentType,
+                                            String uploadedBy, String md5Hash, String objectKey,
+                                            LocalDateTime now) {
         String id = "F_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
         FileObject fileObject = new FileObject();
         fileObject.setId(id);
         fileObject.setFileName(filename);
-        fileObject.setFileSize((long) bytes.length);
+        fileObject.setFileSize(fileSize);
         fileObject.setFileType(contentType);
         fileObject.setStoragePath(objectKey);
         fileObject.setBucketName("obs");
         fileObject.setMd5Hash(md5Hash);
         fileObject.setUploadedBy(uploadedBy);
         fileObject.setUploadedTime(now);
-        fileObjectMapper.insert(fileObject);
+        try {
+            fileObjectMapper.insert(fileObject);
+        } catch (RuntimeException insertFailure) {
+            cleanupUploadedObject(objectKey, insertFailure);
+            throw insertFailure;
+        }
 
-        log.info("[FileService.storeBytes] 文件上传成功 id={}, key={}", id, objectKey);
-        return toDTO(fileObject);
+        log.info("[FileService.saveUploadedFile] 文件上传成功 id={}, key={}", id, objectKey);
+        FileObjectDTO dto = toDTO(fileObject);
+        dto.setNewlyCreated(Boolean.TRUE);
+        return dto;
+    }
+
+    private void cleanupUploadedObject(String objectKey, RuntimeException insertFailure) {
+        try {
+            obsStorageClient.deleteByKey(objectKey);
+        } catch (RuntimeException cleanupFailure) {
+            log.error("[FileService] 文件元数据落库失败且清理 OBS 对象失败 key={}", objectKey, cleanupFailure);
+            insertFailure.addSuppressed(cleanupFailure);
+        }
+    }
+
+    private String buildObjectKey(String category, String extension, LocalDateTime now) {
+        String prefix = (category == null || category.isBlank()) ? FileCategory.GENERAL : category;
+        return now.format(PATH_DATE_FORMAT) + "/" + prefix + "_"
+                + UUID.randomUUID().toString().replace("-", "") + "." + extension;
+    }
+
+    private String validateExtension(String filename) {
+        String extension = getFileExtension(filename);
+        if (!ALLOWED_EXTENSIONS.contains(extension)) {
+            throw new BizException(GovErrorCode.FILE_FORMAT_INVALID.getCode(),
+                    GovErrorCode.FILE_FORMAT_INVALID.getMessage());
+        }
+        return extension;
+    }
+
+    private void validateFileSize(long size) {
+        if (size > MAX_FILE_SIZE) {
+            throw new BizException(GovErrorCode.FILE_SIZE_EXCEEDED.getCode(),
+                    GovErrorCode.FILE_SIZE_EXCEEDED.getMessage());
+        }
+    }
+
+    private UploadDigest calculateDigest(MultipartFile file) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            long size = 0;
+            byte[] buffer = new byte[8192];
+            try (InputStream input = file.getInputStream()) {
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    size += read;
+                    validateFileSize(size);
+                    md.update(buffer, 0, read);
+                }
+            }
+            return new UploadDigest(String.format("%032x", new BigInteger(1, md.digest())), size);
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException(GovErrorCode.MINIO_ERROR.getCode(), "读取上传文件或计算 MD5 失败: " + e.getMessage(), e);
+        }
+    }
+
+    private record UploadDigest(String md5Hash, long size) {
     }
 
     /**
@@ -205,6 +289,22 @@ public class FileService {
                     GovErrorCode.FILE_NOT_FOUND.getMessage());
         }
         return obsStorageClient.getBytes(fileObject.getStoragePath());
+    }
+
+    /**
+     * 将文件内容流式写入调用方提供的输出流，不关闭调用方输出流。
+     *
+     * @param fileId       文件对象ID
+     * @param outputStream 调用方输出流（由调用方负责关闭）
+     * @throws BizException GOV-40005 文件不存在
+     */
+    public void writeFileContent(String fileId, OutputStream outputStream) {
+        FileObject fileObject = fileObjectMapper.selectById(fileId);
+        if (fileObject == null) {
+            throw new BizException(GovErrorCode.FILE_NOT_FOUND.getCode(),
+                    GovErrorCode.FILE_NOT_FOUND.getMessage());
+        }
+        obsStorageClient.writeTo(fileObject.getStoragePath(), outputStream);
     }
 
     /**

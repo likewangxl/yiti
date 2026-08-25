@@ -1,5 +1,6 @@
 package com.bank.branch.platform.customer.controller;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
@@ -20,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 客户池 REST 控制器。
  * <p>
- * 提供客户池分页查询接口，仅展示未被任何机构有效认领的客户，
+ * 提供客户池分页查询接口，仅展示审批通过且全行公开、当前员工尚未认领的客户，
  * 供客户经理浏览并发起认领操作。
  * </p>
  */
@@ -33,14 +34,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class CustomerPoolController {
 
     private final CustomerPoolService customerPoolService;
+    private final CurrentUserApi currentUserApi;
 
     /**
-     * 分页查询客户池（未被认领的客户）。
+     * 分页查询当前员工可认领的全行公开客户。
      *
      * @param keyword  关键词（模糊匹配客户名称），可为空
      * @param pageNo   页码，默认 1
      * @param pageSize 每页大小，默认 20
-     * @return 分页的未认领客户列表
+     * @return 分页的全行公开待认领客户列表
      */
     @GetMapping
     @BizAuth(bizType = BizType.CUSTOMER_POOL, action = BizAction.LIST)
@@ -50,7 +52,8 @@ public class CustomerPoolController {
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         log.info("[CustomerPoolController.listPool] keyword={}, pageNo={}, pageSize={}", keyword, pageNo, pageSize);
-        PageResult<CustomerDTO> result = customerPoolService.listPoolAsDTO(keyword, pageNo, pageSize);
+        PageResult<CustomerDTO> result = customerPoolService.listPoolAsDTO(
+                keyword, currentUserApi.getCurrentEmpId(), pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 }

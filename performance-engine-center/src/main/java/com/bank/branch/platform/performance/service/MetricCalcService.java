@@ -16,6 +16,7 @@ import com.bank.branch.platform.performance.service.dto.SubjectStats;
 import com.bank.branch.platform.performance.service.engine.DateMacroResolver;
 import com.bank.branch.platform.performance.service.engine.GroovyExecutor;
 import com.bank.branch.platform.performance.service.engine.MetricRefTokenParser;
+import com.bank.branch.platform.performance.service.engine.ObjectFilterSqlResolver;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
 import com.bank.branch.platform.performance.service.engine.StatShowSqlRouter;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -313,14 +314,15 @@ public class MetricCalcService {
         // 业绩分配日期 :allocDate —— 非派生入参；定时链路传 null 兜底为 dataDate（已是 T-1），
         // 手动执行 / 试运行由页面指定。放在 DateMacroResolver.resolve 之后，避免被派生宏覆盖。
         params.put("allocDate", allocDate != null ? allocDate : dataDate);
-        // 对象id占位符 :objectId —— 真实调度执行无单主体上下文，绑定 null；
-        // 生产 SQL 应写成 (:objectId IS NULL OR emp_id = :objectId)，使试运行(传值)与真实执行(null=全量)都成立
-        params.putIfAbsent("objectId", null);
+        // 正式批量执行没有单主体上下文；受控 EMP_ID 条件由 resolver 在执行前移除。
+        String objectId = null;
+        params.put("objectId", objectId);
         Duration timeout = Duration.ofSeconds(perfEngineProperties == null
                 ? 30 : Math.max(1, perfEngineProperties.getSqlTimeoutSeconds()));
         // 路由只产生新的 SQL 字符串，不修改指标定义中保存的原始 SQL。
         String routedSql = statShowSqlRouter.route(def.getSqlText(), dataDate);
-        Map<String, BigDecimal> values = sqlExecutor.execute(routedSql, params, timeout);
+        String resolvedSql = ObjectFilterSqlResolver.resolve(routedSql, objectId);
+        Map<String, BigDecimal> values = sqlExecutor.execute(resolvedSql, params, timeout);
         persistValues(def, values, dataDate, version);
         return SubjectStats.allSuccess(values.size(), jobKey, triggerType);
     }

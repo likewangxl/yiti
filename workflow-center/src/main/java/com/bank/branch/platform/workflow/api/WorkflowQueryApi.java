@@ -5,6 +5,7 @@ import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
 import com.bank.branch.platform.workflow.api.dto.BizProcessMapDTO;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskDetailRespDTO;
+import com.bank.branch.platform.workflow.api.dto.TaskCandidateUserDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
 
 import java.util.List;
@@ -84,6 +85,17 @@ public interface WorkflowQueryApi {
      * @return 流程进度节点图
      */
     ProcessDiagramDTO getProcessNodes(String processInstanceId);
+
+    /**
+     * 查询流程当前活动任务的可审批员工。
+     *
+     * <p>以运行时任务的 assignee / candidate 身份链接为准；流程已结束或当前节点
+     * 已审核、没有活动任务时返回空列表。</p>
+     *
+     * @param processInstanceId 流程实例 ID
+     * @return 去重后的员工姓名和工号列表
+     */
+    List<TaskCandidateUserDTO> getActiveTaskCandidates(String processInstanceId);
 
     /**
      * 根据业务键获取流程映射。

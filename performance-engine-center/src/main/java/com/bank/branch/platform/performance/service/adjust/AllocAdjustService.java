@@ -20,7 +20,9 @@ import com.bank.branch.platform.performance.mapper.PerfAllocAdjustItemMapper;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitAllocAdjustCmd;
 import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
+import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
+import com.bank.branch.platform.workflow.api.dto.TaskCandidateUserDTO;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -100,6 +102,7 @@ public class AllocAdjustService {
     private final PerfAllocAdjustItemMapper itemMapper;
     private final CustAllocRelationMapper allocRelationMapper;
     private final WorkflowApi workflowApi;
+    private final WorkflowQueryApi workflowQueryApi;
     private final CurrentUserApi currentUserApi;
     private final UserApi userApi;
     private final OrgApi orgApi;
@@ -731,10 +734,42 @@ public class AllocAdjustService {
                         createdBy, e.toString());
             }
         }
+        dto.setCurrentNodeApprovers(resolveCurrentNodeApprovers(bundle.getApply()));
         // 明细员工 username/中文名/部门 已在 toRespDto 直接读 item 快照字段，无需再关联 PT_USER/机构表
         // R2：「原业绩分配」从当前生效分配(is_original='2')反显；为空回退持久化 ORIGIN 快照
         reflectOriginalAllocFromCurrent(dto, bundle.getApply());
         return dto;
+    }
+
+    /** 仅审批中的当前活动节点返回候选员工；查询失败时不阻断详情。 */
+    private List<AllocAdjustRespDTO.CurrentNodeApprover> resolveCurrentNodeApprovers(
+            PerfAllocAdjustApply apply) {
+        if (!"IN_APPROVAL".equals(apply.getStatus()) || isBlank(apply.getProcessInstanceId())) {
+            return java.util.Collections.emptyList();
+        }
+        try {
+            List<TaskCandidateUserDTO> candidates =
+                    workflowQueryApi.getActiveTaskCandidates(apply.getProcessInstanceId());
+            if (candidates == null || candidates.isEmpty()) {
+                return java.util.Collections.emptyList();
+            }
+            List<AllocAdjustRespDTO.CurrentNodeApprover> result = new ArrayList<>(candidates.size());
+            for (TaskCandidateUserDTO candidate : candidates) {
+                if (candidate == null) {
+                    continue;
+                }
+                AllocAdjustRespDTO.CurrentNodeApprover approver =
+                        new AllocAdjustRespDTO.CurrentNodeApprover();
+                approver.setEmployeeNo(candidate.getEmployeeNo());
+                approver.setEmployeeName(candidate.getEmployeeName());
+                result.add(approver);
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("[AllocAdjustService.resolveCurrentNodeApprovers] 查询当前节点审批人失败 pid={}, err={}",
+                    apply.getProcessInstanceId(), e.toString());
+            return java.util.Collections.emptyList();
+        }
     }
 
     /**
@@ -1224,18 +1259,21 @@ public class AllocAdjustService {
 
     /** 仅供 resolveProcessKey 路由单测：除 workflowApi 外其余依赖置 null。 */
     static AllocAdjustService forRouteTest(WorkflowApi workflowApi) {
-        return new AllocAdjustService(null, null, null, workflowApi, null, null, null, null, null);
+        return new AllocAdjustService(null, null, null, workflowApi, null,
+                null, null, null, null, null);
     }
 
     /** 仅供 buildStartVariables 单测：除 orgApi 外其余依赖置 null。 */
     static AllocAdjustService forStartVarsTest(OrgApi orgApi) {
-        return new AllocAdjustService(null, null, null, null, null, null, orgApi, null, null);
+        return new AllocAdjustService(null, null, null, null, null,
+                null, null, orgApi, null, null);
     }
 
     /** 仅供 原业绩所属机构负责人解析/起流程变量装配 单测：其余依赖置 null。 */
     static AllocAdjustService forOrgLeaderTest(WorkflowApi workflowApi,
             CustAllocRelationMapper allocRelationMapper, UserApi userApi, OrgApi orgApi) {
-        return new AllocAdjustService(null, null, allocRelationMapper, workflowApi, null, userApi, orgApi, null, null);
+        return new AllocAdjustService(null, null, allocRelationMapper, workflowApi, null,
+                null, userApi, orgApi, null, null);
     }
 
     /**

@@ -14,6 +14,10 @@
         DELETE FROM ${table} WHERE STATIS_DT = #{dt}
     </delete>
 
+    <select id="countByTableDate" resultType="long">
+        SELECT COUNT(*) FROM ${table} WHERE STATIS_DT = #{dt}
+    </select>
+
     <insert id="insertFromTmpByDate">
         INSERT INTO ${targetTable}
         SELECT * FROM ${tmpTable}

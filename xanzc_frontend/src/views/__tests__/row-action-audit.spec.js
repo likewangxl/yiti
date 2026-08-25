@@ -18,6 +18,12 @@ function operationColumns(source) {
 }
 
 const physicalColumnMatrix = [
+  ['views/businessApplication/Index.vue', 2],
+  ['views/customerMarketing/AvailablePool.vue', 1], ['views/customerMarketing/ClaimedPool.vue', 1],
+  ['views/customerMarketing/CrossOrgMarketing.vue', 1], ['views/customerMarketing/CustomerList.vue', 1],
+  ['views/customerMarketing/CustomerTags.vue', 1], ['views/customerMarketing/LeadApproval.vue', 1],
+  ['views/customerMarketing/LeadEntry.vue', 1], ['views/customerMarketing/MyTouches.vue', 1],
+  ['views/customerMarketing/TagApproval.vue', 1], ['views/customerMarketing/TouchOverview.vue', 1],
   ['views/eval/MyTasks.vue', 2], ['views/eval/Rules.vue', 2], ['views/eval/Tags.vue', 1],
   ['views/eval/Tasks.vue', 1], ['views/eval/UserTags.vue', 1], ['views/guarantee/DataImport.vue', 1],
   ['views/guarantee/Notice.vue', 1], ['views/guarantee/Query.vue', 1], ['views/history/PriceApproval.vue', 1],
@@ -32,7 +38,8 @@ const physicalColumnMatrix = [
   ['views/system/Jobs.vue', 1], ['views/system/Notifications.vue', 1], ['views/system/Permission.vue', 1],
   ['views/system/PersonTags.vue', 3], ['views/system/Resources.vue', 1], ['views/system/Roles.vue', 1],
   ['views/system/TimeoutRules.vue', 1], ['views/system/Users.vue', 1], ['views/system/WorkflowMonitor.vue', 1],
-  ['views/workspace/AnnouncementList.vue', 1], ['views/workspace/Index.vue', 3]
+  ['views/workspace/AnnouncementList.vue', 1], ['views/workspace/Index.vue', 3],
+  ['views/yundun/ViolationManagement.vue', 1]
 ];
 
 const adaptiveMatrix = [
@@ -65,6 +72,7 @@ const adaptiveMatrix = [
   ['views/system/PersonTags.vue', 2, '修改', ['删除']],
   ['views/workspace/Index.vue', 1, '认领', ['拒绝']],
   ['views/workspace/Index.vue', 2, '查看', ['撤回']],
+  ['views/businessApplication/Index.vue', 0, '详情', ['编辑', '提交', '删除', '撤回']],
   ['views/report/components/SchemeListDialog.vue', 0, '载入', ['编辑', '删除']]
 ];
 
@@ -82,7 +90,8 @@ const conditionalMatrix = [
   ['views/system/FlowList.vue', 0, ["row.status === 'DRAFT' && row.isReadonlyImport != 1"]],
   ['views/system/Resources.vue', 0, ["row.menuEndFlag === '1'"]],
   ['views/workspace/Index.vue', 1, ["row.status === 'PENDING_ACCEPT'"]],
-  ['views/workspace/Index.vue', 2, ["row.status === 'PENDING_ACCEPT'"]]
+  ['views/workspace/Index.vue', 2, ["row.status === 'PENDING_ACCEPT'"]],
+  ['views/businessApplication/Index.vue', 0, ["row.status === 'DRAFT'", "row.status === 'IN_APPROVAL'"]]
 ];
 
 function slot(block, name) {
@@ -90,16 +99,16 @@ function slot(block, name) {
 }
 
 describe('普通后台行操作审计矩阵', () => {
-  it('59 普通命名路由精确盘点出 58 个物理操作列，SchemeListDialog 单独纳入', () => {
+  it('75 个普通命名路由精确盘点出 71 个物理操作列，SchemeListDialog 单独纳入', () => {
     const actual = new Map(namedRoutes.flatMap(route => {
       const count = operationColumns(sourceOf(route.view)).length;
       return count ? [[route.view, count]] : [];
     }));
     actual.set('views/report/components/SchemeListDialog.vue', operationColumns(sourceOf('views/report/components/SchemeListDialog.vue')).length);
 
-    expect(namedRoutes).toHaveLength(59);
+    expect(namedRoutes).toHaveLength(75);
     expect([...actual.entries()].sort()).toEqual([...physicalColumnMatrix].sort());
-    expect([...actual.values()].reduce((sum, count) => sum + count, 0)).toBe(58);
+    expect([...actual.values()].reduce((sum, count) => sum + count, 0)).toBe(71);
   });
 
   it('每个包含多个实际可见操作的物理列都接入同一自适应契约，单操作列保持原行为', () => {
@@ -109,7 +118,7 @@ describe('普通后台行操作审计矩阵', () => {
       .filter(Boolean)));
 
     expect(actual).toEqual(expected);
-    expect(actual.size).toBe(30);
+    expect(actual.size).toBe(31);
   });
 
   it.each(adaptiveMatrix)('%s 的第 %i 个多操作列具备主操作、全直出和 fail-close 更多三态', (view, index, primary, secondary) => {

@@ -2,7 +2,10 @@ package com.bank.branch.platform.customer.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
+import com.baomidou.mybatisplus.annotation.Version;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -31,7 +34,10 @@ public class CustLead {
     /** 线索操作类型：CREATE-新建/UPDATE-修改/DELETE-删除，对应 lead_op */
     private String leadOp;
 
-    /** 源客户ID（UPDATE/DELETE 时指向已有 cust_master.id），对应 source_cust_id */
+    /** 线索类型：NEW_ACCOUNT/EXISTING_MARKETING，对应 lead_type */
+    private String leadType;
+
+    /** 源客户ID（UPDATE/DELETE 时指向已有 CUSTOMER_MARKET_CUSTOMER.id），对应 source_cust_id */
     private String sourceCustId;
 
     /** 上一版本线索ID（UPDATE 时指向被修订的 cust_lead.id），对应 prev_lead_id */
@@ -42,6 +48,9 @@ public class CustLead {
 
     /** 是否最新版本：0-否/1-是，对应 is_latest */
     private Integer isLatest;
+
+    /** CCRM客户号；新客户未开户时为空，对应 cust_no */
+    private String custNo;
 
     /** 客户名称，对应 cust_name */
     private String custName;
@@ -91,6 +100,15 @@ public class CustLead {
     /** 线索来源（字典 LEAD_SOURCE），对应 lead_source */
     private String leadSource;
 
+    /** 分配方式：PUBLIC/SCOPE/OWNER，对应 distribution_mode */
+    private String distributionMode;
+
+    /** 主办专属客户经理工号，对应 main_manager_id */
+    private String mainManagerId;
+
+    /** 主办客户经理机构快照，对应 main_manager_org_id */
+    private String mainManagerOrgId;
+
     /** 线索状态：DRAFT/SUBMITTED/IN_APPROVAL/APPROVED/REJECTED，对应 lead_status */
     private String leadStatus;
 
@@ -103,14 +121,32 @@ public class CustLead {
     /** 创建人（员工工号），对应 created_by */
     private String createdBy;
 
+    /** 提交审批人工号，对应 submitted_by */
+    private String submittedBy;
+
+    /** 提交审批时间，对应 submitted_time */
+    private LocalDateTime submittedTime;
+
     /** 流程业务键（格式 LEAD:{leadId}），对应 business_key */
     private String businessKey;
 
     /** 导入批次ID（关联 lead_import_batch.id），对应 import_batch_id */
     private String importBatchId;
 
+    /** 批量导入源文件行号，对应 batch_row_no */
+    private Integer batchRowNo;
+
     /** 流程实例ID（Flowable），对应 process_instance_id */
     private String processInstanceId;
+
+    /** 最终审批人工号快照，对应 reviewed_by */
+    private String reviewedBy;
+
+    /** 最终审批时间，对应 reviewed_time */
+    private LocalDateTime reviewedTime;
+
+    /** 最终驳回原因，对应 reject_reason */
+    private String rejectReason;
 
     /** 备注，对应 remark */
     private String remark;
@@ -126,4 +162,12 @@ public class CustLead {
 
     /** 逻辑删除：0-未删除/1-已删除，对应 deleted */
     private Integer deleted;
+
+    /** 乐观锁版本，对应 lock_version */
+    @Version
+    private Integer lockVersion;
+
+    /** 数据库生成列：有效新客户统一社会信用代码幂等键 */
+    @TableField(insertStrategy = FieldStrategy.NEVER, updateStrategy = FieldStrategy.NEVER)
+    private String activeNewCreditCode;
 }

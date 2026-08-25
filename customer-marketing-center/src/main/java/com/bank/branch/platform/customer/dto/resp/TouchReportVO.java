@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 /**
  * 触达报告视图对象（聚合查询结果）。
  * <p>
- * 由 TouchReportMapper 通过 touch_task LEFT JOIN cust_master 聚合而来，
+ * 由 TouchReportMapper 通过 TOUCH_TASK LEFT JOIN CUSTOMER_MARKET_CUSTOMER 聚合而来，
  * 包含任务基本信息、客户名称以及该任务关联的日志条数。
  * </p>
  */
@@ -26,7 +26,7 @@ public class TouchReportVO {
     /** SLA 状态：GREEN/YELLOW/RED，对应 touch_task.sla_status */
     private String slaStatus;
 
-    /** 客户名称（来自 cust_master.cust_name，客户已删除则为 null） */
+    /** 客户名称（来自 CUSTOMER_MARKET_CUSTOMER.cust_name，客户已删除则为 null） */
     private String custName;
 
     /** 执行人工号，对应 touch_task.assignee_emp_id */

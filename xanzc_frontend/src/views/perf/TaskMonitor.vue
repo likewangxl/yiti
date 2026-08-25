@@ -1,13 +1,14 @@
 <template>
-<main v-bp-overflow-tooltip class="bp-crud perf-task-monitor-page" aria-labelledby="perf-task-monitor-page-title" :aria-busy="loading || execDlg.submitting || batchDlg.submitting ? 'true' : 'false'">
+<main v-bp-overflow-tooltip class="bp-crud perf-task-monitor-page" aria-labelledby="perf-task-monitor-page-title" :aria-busy="loading || execDlg.submitting || batchDlg.submitting || levelDlg.submitting ? 'true' : 'false'">
     <header class="page-h">
       <PageTitle id="perf-task-monitor-page-title"><span class="sub">指标重算任务 · 按指标汇总 / 执行 / 历史</span></PageTitle>
       <div class="actions action-group" role="group" aria-label="指标重算任务操作">
-        <el-button :loading="loading" :disabled="loading || execDlg.submitting || batchDlg.submitting" @click="reload">刷新</el-button>
-        <el-button type="primary" :disabled="execDlg.submitting || batchDlg.submitting" @click="openAdd">新增</el-button>
-        <el-button type="warning" :disabled="selected.length === 0 || execDlg.submitting || batchDlg.submitting" @click="openBatch">
+        <el-button :loading="loading" :disabled="loading || execDlg.submitting || batchDlg.submitting || levelDlg.submitting" @click="reload">刷新</el-button>
+        <el-button type="primary" :disabled="execDlg.submitting || batchDlg.submitting || levelDlg.submitting" @click="openAdd">新增</el-button>
+        <el-button type="warning" :disabled="selected.length === 0 || execDlg.submitting || batchDlg.submitting || levelDlg.submitting" @click="openBatch">
           批量执行{{ selected.length ? `（${selected.length}）` : '' }}
         </el-button>
+        <el-button type="success" :disabled="execDlg.submitting || batchDlg.submitting || levelDlg.submitting" @click="openLevelTrigger">按级别重算</el-button>
       </div>
     </header>
 
@@ -116,6 +117,33 @@
       </template>
     </el-dialog>
 
+    <!-- 按级别重算对话框：提交 Quartz 触发，不代表计算已经完成 -->
+    <el-dialog v-model="levelDlg.show" title="按级别重算" width="520px" :close-on-click-modal="false">
+      <el-form label-width="100px">
+        <el-form-item label="重算级别" required>
+          <el-select v-model="levelDlg.level" style="width:100%" @change="onLevelChange">
+            <el-option v-for="level in LEVEL_OPTIONS" :key="level.value" :label="level.label" :value="level.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="数据日期" required>
+          <el-date-picker v-model="levelDlg.dataDate" type="date" value-format="YYYY-MM-DD"
+            placeholder="选择重算日期（昨天至20天前或月末）" :disabled-date="disabledFuture" style="width:100%" />
+        </el-form-item>
+        <el-form-item v-if="levelDlg.level === 1" label="业绩分配日期">
+          <el-date-picker v-model="levelDlg.allocDate" type="date" value-format="YYYY-MM-DD"
+            clearable placeholder="可选，留空默认使用数据日期" :disabled-date="disabledLevelAllocDate" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="原因" required>
+          <el-input v-model="levelDlg.reason" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="必填，将写入审计日志" />
+        </el-form-item>
+        <div class="audit-hint">提示：仅提交后台 Quartz 触发；计算未必完成，进度请查看历史/任务日志</div>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="levelDlg.submitting" @click="levelDlg.show = false">取消</el-button>
+        <el-button type="primary" :loading="levelDlg.submitting" :disabled="levelDlg.submitting" @click="confirmLevelTrigger">确认触发</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 批量执行对话框 -->
     <el-dialog v-model="batchDlg.show" title="批量执行" width="520px" :close-on-click-modal="false">
       <el-form label-width="100px">
@@ -177,12 +205,21 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
-import { listMetricSummary, batchExecuteMetrics, executeMetric, listMetrics, listRunTasks } from '@/api/perf';
+import {
+  listMetricSummary,
+  batchExecuteMetrics,
+  triggerMetricLevelRecalc,
+  executeMetric,
+  listMetrics,
+  listRunTasks
+} from '@/api/perf';
 import { listDictItems } from '@/api/system';
 import {
   getMetricRecalcDateError,
+  isFutureDate,
   isMetricRecalcDateDisabled,
-  todayDate
+  todayDate,
+  yesterdayDate
 } from '@/utils/metricRecalcDate';
 
 // 状态字典 + badge 配色
@@ -206,6 +243,13 @@ const today = () => {
   return todayDate();
 };
 const disabledFuture = (d) => isMetricRecalcDateDisabled(d);
+const disabledLevelAllocDate = (d) => isFutureDate(d);
+
+const LEVEL_OPTIONS = Object.freeze([
+  { value: 1, label: '一级指标' },
+  { value: 2, label: '二级指标' },
+  { value: 3, label: '三级指标' }
+]);
 
 // 任务类型字典（默认兜底一项，字典拉到后覆盖）
 const taskTypes = ref([{ value: 'METRIC_RECALC', label: '指标重算' }]);
@@ -298,6 +342,62 @@ async function confirmExecute() {
     execDlg.show = false;
     reload();
   } catch { /* executeMetric 内部已提示 */ } finally { execDlg.submitting = false; }
+}
+
+// 按级别重算对话框
+const levelDlg = reactive({
+  show: false,
+  level: 1,
+  dataDate: '',
+  allocDate: '',
+  reason: '',
+  submitting: false
+});
+
+function openLevelTrigger() {
+  Object.assign(levelDlg, {
+    show: true,
+    level: 1,
+    dataDate: yesterdayDate(),
+    allocDate: '',
+    reason: '',
+    submitting: false
+  });
+}
+
+function onLevelChange(level) {
+  if (Number(level) !== 1) levelDlg.allocDate = '';
+}
+
+async function confirmLevelTrigger() {
+  if (levelDlg.submitting) return;
+  const level = Number(levelDlg.level);
+  if (![1, 2, 3].includes(level)) return ElMessage.warning('请选择重算级别');
+  if (!levelDlg.dataDate) return ElMessage.warning('数据日期必填');
+  const dateError = getMetricRecalcDateError(levelDlg.dataDate);
+  if (dateError) return ElMessage.warning(dateError);
+  if (level === 1 && levelDlg.allocDate && isFutureDate(levelDlg.allocDate)) {
+    return ElMessage.warning(`业绩分配日期不能大于今天（${todayDate()}）`);
+  }
+  if (!levelDlg.reason || !levelDlg.reason.trim()) return ElMessage.warning('原因必填');
+
+  levelDlg.submitting = true;
+  try {
+    const payload = {
+      level,
+      dataDate: levelDlg.dataDate,
+      reason: levelDlg.reason.trim()
+    };
+    if (level === 1 && levelDlg.allocDate) payload.allocDate = levelDlg.allocDate;
+    await triggerMetricLevelRecalc(payload);
+    ElMessage.success('已触发，进度看历史/任务日志');
+    levelDlg.show = false;
+    await reload();
+  } catch {
+    // triggerMetricLevelRecalc 不提供写请求 fallback；真实失败由 HTTP 拦截器提示，保留弹窗便于修正后重试。
+  } finally {
+    levelDlg.submitting = false;
+  }
 }
 
 // 批量执行对话框

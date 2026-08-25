@@ -2,12 +2,14 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.customer.mapper.CustMasterMapper">
 
-    <!-- CUST_MASTER 全列查询片段 -->
+    <!-- CUSTOMER_MARKET_CUSTOMER 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, cust_no, cust_name, unified_credit_code, contact_person, contact_mobile,
         industry, group_type, customer_type, is_keystone, enterprise_type, group_name,
         is_account_opened, customer_desc, credit_amount, credit_exposure_amount,
-        owner_org_id, lead_id, status, deleted, created_time, updated_time
+        owner_org_id, lead_id, current_lead_id, main_manager_id, main_org_id,
+        ownership_status, last_touch_time, source_system, source_updated_time,
+        status, deleted, created_time, updated_time, lock_version
     </sql>
 
     <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
@@ -16,17 +18,93 @@
     <select id="selectByCustNo" resultType="com.bank.branch.platform.customer.entity.CustMaster">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM CUST_MASTER
+        FROM CUSTOMER_MARKET_CUSTOMER
         WHERE cust_no = #{custNo}
           AND deleted = 0
         LIMIT 1
+    </select>
+
+    <sql id="VISIBLE_SCOPE_CONDITION">
+        <choose>
+            <when test="scopeType == 'ALL'">
+                <!-- 全部数据，不追加范围条件 -->
+            </when>
+            <when test="scopeType == 'SELF' or scopeType == 'SELF_ASSIGNED' or scopeType == 'SELF_CREATED'">
+                AND (
+                    main_manager_id = #{empId}
+                    OR EXISTS (
+                        SELECT 1 FROM CUST_CLAIM cc
+                        WHERE cc.cust_id = CUSTOMER_MARKET_CUSTOMER.id
+                          AND cc.claim_status = 'CLAIMED'
+                          AND cc.maintainer_emp_id = #{empId}
+                    )
+                )
+            </when>
+            <when test="scopeType == 'ORG' or scopeType == 'ORG_SUBTREE'">
+                <choose>
+                    <when test="orgCodes != null and !orgCodes.isEmpty()">
+                        AND (
+                            main_org_id IN
+                            <foreach collection="orgCodes" item="org" open="(" close=")" separator=",">
+                                #{org}
+                            </foreach>
+                            OR EXISTS (
+                                SELECT 1 FROM CUST_CLAIM cc
+                                WHERE cc.cust_id = CUSTOMER_MARKET_CUSTOMER.id
+                                  AND cc.claim_status = 'CLAIMED'
+                                  AND cc.org_id IN
+                                <foreach collection="orgCodes" item="org" open="(" close=")" separator=",">
+                                    #{org}
+                                </foreach>
+                            )
+                        )
+                    </when>
+                    <otherwise>AND 1 = 0</otherwise>
+                </choose>
+            </when>
+            <otherwise>AND 1 = 0</otherwise>
+        </choose>
+    </sql>
+
+    <!-- 0811会议口径：展示权限范围内全部存量客户，不限定is_account_opened。 -->
+    <select id="selectVisiblePage" resultType="com.bank.branch.platform.customer.entity.CustMaster">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM CUSTOMER_MARKET_CUSTOMER
+        WHERE deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR cust_no LIKE CONCAT('%', #{keyword}, '%')
+                 OR unified_credit_code LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <include refid="VISIBLE_SCOPE_CONDITION"/>
+        ORDER BY updated_time DESC, created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countVisiblePage" resultType="long">
+        SELECT COUNT(*)
+        FROM CUSTOMER_MARKET_CUSTOMER
+        WHERE deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR cust_no LIKE CONCAT('%', #{keyword}, '%')
+                 OR unified_credit_code LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <include refid="VISIBLE_SCOPE_CONDITION"/>
     </select>
 
     <!-- 分页查询客户主档列表 -->
     <select id="selectPage" resultType="com.bank.branch.platform.customer.entity.CustMaster">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM CUST_MASTER
+        FROM CUSTOMER_MARKET_CUSTOMER
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
@@ -41,7 +119,7 @@
 
     <!-- 统计分页查询总记录数 -->
     <select id="countPage" resultType="long">
-        SELECT COUNT(*) FROM CUST_MASTER
+        SELECT COUNT(*) FROM CUSTOMER_MARKET_CUSTOMER
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
@@ -58,7 +136,7 @@
     <select id="selectByIds" resultType="com.bank.branch.platform.customer.entity.CustMaster">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM CUST_MASTER
+        FROM CUSTOMER_MARKET_CUSTOMER
         WHERE deleted = 0
           AND id IN
         <foreach collection="ids" item="id" open="(" close=")" separator=",">
@@ -66,11 +144,23 @@
         </foreach>
     </select>
 
+    <!-- 统一社会信用代码是导入场景的客户唯一标识 -->
+    <select id="selectByUnifiedCreditCodes" resultType="com.bank.branch.platform.customer.entity.CustMaster">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM CUSTOMER_MARKET_CUSTOMER
+        WHERE deleted = 0
+          AND unified_credit_code IN
+        <foreach collection="codes" item="code" open="(" close=")" separator=",">
+            #{code}
+        </foreach>
+    </select>
+
     <!-- 按关键词模糊搜索客户主档（匹配 cust_name / cust_no / unified_credit_code） -->
     <select id="searchByKeyword" resultType="com.bank.branch.platform.customer.entity.CustMaster">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM CUST_MASTER
+        FROM CUSTOMER_MARKET_CUSTOMER
         WHERE deleted = 0
           AND (
               cust_name LIKE CONCAT('%', #{keyword}, '%')
@@ -83,7 +173,7 @@
 
     <!-- 按过滤条件统计客户数量 -->
     <select id="countByFilter" resultType="long">
-        SELECT COUNT(*) FROM CUST_MASTER
+        SELECT COUNT(*) FROM CUSTOMER_MARKET_CUSTOMER
         <where>
             deleted = 0
             <if test="filter.keyword != null and filter.keyword != ''">
@@ -122,26 +212,5 @@
             </if>
         </where>
     </select>
-
-    <!-- 客户信息同步：外部统计表 XAN_M98_CUST_STAT_SHOW3 中、指定统计日期(STATIS_DT)下、
-         客户编号在 CUST_MASTER 不存在的客户，按 CUST_ID/CUST_NAME 去重后插入客户主档，
-         记录统计日期(statis_dt)与创建时间(created_time)。
-         cust_no 已存在的由 NOT EXISTS 过滤；cust_name 唯一键冲突由 INSERT IGNORE 静默跳过。 -->
-    <insert id="syncNewCustomersFromStat">
-        INSERT IGNORE INTO CUST_MASTER
-            (id, cust_no, cust_name, status, deleted, statis_dt, created_time)
-        SELECT REPLACE(UUID(), '-', ''), t.cust_id, t.cust_name, 'ACTIVE', 0, #{statisDt}, NOW()
-        FROM (
-            SELECT s.CUST_ID AS cust_id, s.CUST_NAME AS cust_name
-            FROM XAN_M98_CUST_STAT_SHOW3 s
-            WHERE s.STATIS_DT = #{statisDt}
-              AND s.CUST_ID IS NOT NULL AND s.CUST_ID &lt;&gt; ''
-              AND NOT EXISTS (
-                  SELECT 1 FROM CUST_MASTER m
-                  WHERE m.cust_no = s.CUST_ID AND m.deleted = 0
-              )
-            GROUP BY s.CUST_ID, s.CUST_NAME
-        ) t
-    </insert>
 
 </mapper>

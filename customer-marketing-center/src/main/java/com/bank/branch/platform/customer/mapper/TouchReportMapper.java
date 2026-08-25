@@ -11,7 +11,7 @@ import java.util.List;
  * 触达报告聚合查询 Mapper 接口。
  * <p>
  * 区别于 {@link TouchTaskMapper}（单表 CRUD），本接口专为报告域设计：
- * 通过 touch_task LEFT JOIN cust_master 聚合客户名称，并统计每个任务的触达日志条数。
+ * 通过 TOUCH_TASK LEFT JOIN CUSTOMER_MARKET_CUSTOMER 聚合客户名称，并统计每个任务的触达日志条数。
  * 统计接口按 task_status 分组，供前端绘制状态分布图。
  * </p>
  */
@@ -19,9 +19,9 @@ import java.util.List;
 public interface TouchReportMapper {
 
     /**
-     * 分页查询触达报告（JOIN touch_task + cust_master）。
+     * 分页查询触达报告（JOIN TOUCH_TASK + CUSTOMER_MARKET_CUSTOMER）。
      * <p>
-     * keyword 模糊匹配 task_no 或 cust_master.cust_name；
+     * keyword 模糊匹配 task_no 或 CUSTOMER_MARKET_CUSTOMER.cust_name；
      * status 精确匹配 task_status；orgId 精确匹配 org_id。
      * </p>
      *

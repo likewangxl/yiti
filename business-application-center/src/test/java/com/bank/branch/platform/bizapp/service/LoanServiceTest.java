@@ -13,6 +13,9 @@ import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.customer.api.dto.TouchTaskDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
+import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
+import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
+import com.bank.branch.platform.workflow.api.dto.ProcessDiagramNodeDTO;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 import org.junit.jupiter.api.DisplayName;
@@ -35,7 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -60,6 +63,9 @@ class LoanServiceTest {
     private WorkflowApi workflowApi;
 
     @Mock
+    private WorkflowQueryApi workflowQueryApi;
+
+    @Mock
     private CustomerQueryApi customerQueryApi;
 
     @Mock
@@ -77,6 +83,7 @@ class LoanServiceTest {
     void createDraft_validInput_shouldInsertAndReturn() {
         // given
         when(customerQueryApi.isValidCustomer("CUST001")).thenReturn(true);
+        when(customerQueryApi.getCustomer("CUST001")).thenReturn(java.util.Optional.of(companyCustomer("CUST001")));
         when(customerQueryApi.isClaimedByOrg("CUST001", "ORG001")).thenReturn(true);
         when(bizNoGenerator.generateLoanNo()).thenReturn("LA20260414000001");
         when(loanMapper.insert(any(LoanApply.class))).thenReturn(1);
@@ -117,6 +124,7 @@ class LoanServiceTest {
     void createDraft_customerNotClaimedByOrg_shouldThrowBIZ40303() {
         // given
         when(customerQueryApi.isValidCustomer("CUST001")).thenReturn(true);
+        when(customerQueryApi.getCustomer("CUST001")).thenReturn(java.util.Optional.of(companyCustomer("CUST001")));
         when(customerQueryApi.isClaimedByOrg("CUST001", "ORG001")).thenReturn(false);
 
         // when & then
@@ -132,8 +140,10 @@ class LoanServiceTest {
     void createDraft_wrongTouchTaskAssignee_shouldThrowBIZ40302() {
         // given
         when(customerQueryApi.isValidCustomer("CUST001")).thenReturn(true);
+        when(customerQueryApi.getCustomer("CUST001")).thenReturn(java.util.Optional.of(companyCustomer("CUST001")));
         when(customerQueryApi.isClaimedByOrg("CUST001", "ORG001")).thenReturn(true);
         TouchTaskDTO task = new TouchTaskDTO();
+        task.setCustId("CUST001");
         task.setAssigneeEmpId("OTHER_EMP"); // 不是操作人
         when(touchTaskQueryApi.getTouchTask("TASK001")).thenReturn(java.util.Optional.of(task));
 
@@ -147,9 +157,44 @@ class LoanServiceTest {
     }
 
     @Test
+    void createDraft_retailCustomer_shouldThrowBIZ40301() {
+        when(customerQueryApi.isValidCustomer("CUST001")).thenReturn(true);
+        CustomerDTO retail = new CustomerDTO();
+        retail.setId("CUST001");
+        retail.setCustomerType("RETAIL");
+        when(customerQueryApi.getCustomer("CUST001")).thenReturn(java.util.Optional.of(retail));
+
+        assertThatThrownBy(() -> loanService.createDraft(
+                "CUST001", null, null, null, null, null, null, "E001", "ORG001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "BIZ-40301");
+
+        verify(loanMapper, never()).insert(any(LoanApply.class));
+    }
+
+    @Test
+    void createDraft_touchTaskCustomerMismatch_shouldThrowBIZ40306() {
+        when(customerQueryApi.isValidCustomer("CUST001")).thenReturn(true);
+        when(customerQueryApi.getCustomer("CUST001")).thenReturn(java.util.Optional.of(companyCustomer("CUST001")));
+        when(customerQueryApi.isClaimedByOrg("CUST001", "ORG001")).thenReturn(true);
+        TouchTaskDTO task = new TouchTaskDTO();
+        task.setCustId("OTHER_CUST");
+        task.setAssigneeEmpId("E001");
+        when(touchTaskQueryApi.getTouchTask("TASK001")).thenReturn(java.util.Optional.of(task));
+
+        assertThatThrownBy(() -> loanService.createDraft(
+                "CUST001", "TASK001", null, null, null, null, null, "E001", "ORG001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "BIZ-40306");
+
+        verify(loanMapper, never()).insert(any(LoanApply.class));
+    }
+
+    @Test
     void createDraft_exposureExceedsCredit_shouldThrowBIZ40905() {
         // given
         when(customerQueryApi.isValidCustomer("CUST001")).thenReturn(true);
+        when(customerQueryApi.getCustomer("CUST001")).thenReturn(java.util.Optional.of(companyCustomer("CUST001")));
         when(customerQueryApi.isClaimedByOrg("CUST001", "ORG001")).thenReturn(true);
 
         // when & then
@@ -161,6 +206,13 @@ class LoanServiceTest {
                 .hasFieldOrPropertyWithValue("code", "BIZ-40905");
 
         verify(loanMapper, never()).insert(any(LoanApply.class));
+    }
+
+    private static CustomerDTO companyCustomer(String id) {
+        CustomerDTO customer = new CustomerDTO();
+        customer.setId(id);
+        customer.setCustomerType("CORP");
+        return customer;
     }
 
     // ==================== updateDraft ====================
@@ -297,19 +349,187 @@ class LoanServiceTest {
     // ==================== cancelApply ====================
 
     @Test
-    void cancelApply_validInApproval_shouldCancel() {
+    void cancelApply_branchApproveActive_shouldCancelWorkflowBeforeBusinessStatus() {
         // given
         LoanApply existing = buildDraftLoan("L001", "E001");
         existing.setStatus(LoanStatus.IN_APPROVAL.getCode());
-        when(loanMapper.selectById("L001")).thenReturn(existing);
-        when(loanMapper.updateStatusById(anyString(), anyString(), anyString())).thenReturn(1);
+        existing.setProcessInstanceId("PI001");
+        when(loanMapper.selectForUpdate("L001")).thenReturn(existing);
+        when(workflowQueryApi.getProcessNodes("PI001"))
+                .thenReturn(processDiagram("PI001", "branch_approve", "ACTIVE"));
+        when(loanMapper.conditionalUpdateStatus("L001", LoanStatus.IN_APPROVAL.getCode(),
+                LoanStatus.CANCELLED.getCode(), "E001")).thenReturn(1);
 
         // when
-        loanService.cancelApply("L001", "E001");
+        loanService.cancelApply("L001", "客户主动放弃", "E001");
 
         // then
         verify(bizStateMachine).validateLoanTransition(LoanStatus.IN_APPROVAL.getCode(), LoanStatus.CANCELLED.getCode());
-        verify(loanMapper).updateStatusById(eq("L001"), eq(LoanStatus.CANCELLED.getCode()), eq("E001"));
+        verify(workflowApi).cancelProcess("PI001", "客户主动放弃");
+        verify(loanMapper).conditionalUpdateStatus("L001", LoanStatus.IN_APPROVAL.getCode(),
+                LoanStatus.CANCELLED.getCode(), "E001");
+
+        var order = inOrder(workflowApi, loanMapper);
+        order.verify(workflowApi).cancelProcess("PI001", "客户主动放弃");
+        order.verify(loanMapper).conditionalUpdateStatus("L001", LoanStatus.IN_APPROVAL.getCode(),
+                LoanStatus.CANCELLED.getCode(), "E001");
+    }
+
+    @Test
+    void cancelApply_corpReviewActive_shouldCancel() {
+        LoanApply existing = buildApprovalLoan("L001", "E001", "PI001");
+        when(loanMapper.selectForUpdate("L001")).thenReturn(existing);
+        when(workflowQueryApi.getProcessNodes("PI001"))
+                .thenReturn(processDiagram("PI001", "corp_review", "ACTIVE"));
+        when(loanMapper.conditionalUpdateStatus(anyString(), anyString(), anyString(), anyString())).thenReturn(1);
+
+        loanService.cancelApply("L001", "客户需求变化", "E001");
+
+        verify(workflowApi).cancelProcess("PI001", "客户需求变化");
+        verify(loanMapper).conditionalUpdateStatus("L001", LoanStatus.IN_APPROVAL.getCode(),
+                LoanStatus.CANCELLED.getCode(), "E001");
+    }
+
+    @Test
+    void cancelApply_creditCheckActive_shouldRejectWithDomainError() {
+        LoanApply existing = buildApprovalLoan("L001", "E001", "PI001");
+        when(loanMapper.selectForUpdate("L001")).thenReturn(existing);
+        when(workflowQueryApi.getProcessNodes("PI001"))
+                .thenReturn(processDiagram("PI001", "credit_check", "ACTIVE"));
+
+        assertThatThrownBy(() -> loanService.cancelApply("L001", "客户需求变化", "E001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "BIZ-42304");
+
+        verify(workflowApi, never()).cancelProcess(anyString(), anyString());
+        verify(loanMapper, never()).conditionalUpdateStatus(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void cancelApply_creditApprovalActive_shouldRejectWithDomainError() {
+        LoanApply existing = buildApprovalLoan("L001", "E001", "PI001");
+        when(loanMapper.selectForUpdate("L001")).thenReturn(existing);
+        when(workflowQueryApi.getProcessNodes("PI001"))
+                .thenReturn(processDiagram("PI001", "credit_approval", "ACTIVE"));
+
+        assertThatThrownBy(() -> loanService.cancelApply("L001", "客户需求变化", "E001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "BIZ-42304");
+
+        verify(workflowApi, never()).cancelProcess(anyString(), anyString());
+        verify(loanMapper, never()).conditionalUpdateStatus(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void cancelApply_multipleActiveUserTasks_shouldFailClose() {
+        LoanApply existing = buildApprovalLoan("L001", "E001", "PI001");
+        when(loanMapper.selectForUpdate("L001")).thenReturn(existing);
+        when(workflowQueryApi.getProcessNodes("PI001"))
+                .thenReturn(processDiagram("PI001", List.of(
+                        processNode("branch_approve", "ACTIVE", "userTask"),
+                        processNode("unknown_node", "ACTIVE", "userTask"))));
+
+        assertThatThrownBy(() -> loanService.cancelApply("L001", "客户需求变化", "E001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "BIZ-50001");
+
+        verify(workflowApi, never()).cancelProcess(anyString(), anyString());
+        verify(loanMapper, never()).conditionalUpdateStatus(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void cancelApply_unknownActiveNode_shouldFailClose() {
+        LoanApply existing = buildApprovalLoan("L001", "E001", "PI001");
+        when(loanMapper.selectForUpdate("L001")).thenReturn(existing);
+        when(workflowQueryApi.getProcessNodes("PI001"))
+                .thenReturn(processDiagram("PI001", "unknown_node", "ACTIVE"));
+
+        assertThatThrownBy(() -> loanService.cancelApply("L001", "客户需求变化", "E001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "BIZ-50001");
+
+        verify(workflowApi, never()).cancelProcess(anyString(), anyString());
+        verify(loanMapper, never()).conditionalUpdateStatus(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void cancelApply_workflowNodeQueryFailure_shouldFailClose() {
+        LoanApply existing = buildApprovalLoan("L001", "E001", "PI001");
+        when(loanMapper.selectForUpdate("L001")).thenReturn(existing);
+        when(workflowQueryApi.getProcessNodes("PI001")).thenThrow(new RuntimeException("query failed"));
+
+        assertThatThrownBy(() -> loanService.cancelApply("L001", "客户需求变化", "E001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "BIZ-50001");
+
+        verify(workflowApi, never()).cancelProcess(anyString(), anyString());
+        verify(loanMapper, never()).conditionalUpdateStatus(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void cancelApply_missingProcessInstanceId_shouldFailClose() {
+        LoanApply existing = buildApprovalLoan("L001", "E001", null);
+        when(loanMapper.selectForUpdate("L001")).thenReturn(existing);
+
+        assertThatThrownBy(() -> loanService.cancelApply("L001", "客户需求变化", "E001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "BIZ-50001");
+
+        verifyNoWorkflowCancelOrStatusUpdate();
+    }
+
+    @Test
+    void cancelApply_blankReason_shouldRejectBeforeQuery() {
+        assertThatThrownBy(() -> loanService.cancelApply("L001", "   ", "E001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "BIZ-40001");
+
+        verify(loanMapper, never()).selectForUpdate(anyString());
+        verifyNoWorkflowCancelOrStatusUpdate();
+    }
+
+    @Test
+    void cancelApply_nonCreator_shouldRejectBeforeWorkflowQuery() {
+        LoanApply existing = buildApprovalLoan("L001", "E001", "PI001");
+        when(loanMapper.selectForUpdate("L001")).thenReturn(existing);
+
+        assertThatThrownBy(() -> loanService.cancelApply("L001", "客户需求变化", "OTHER_EMP"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "BIZ-40305");
+
+        verifyNoWorkflowCancelOrStatusUpdate();
+        verify(workflowQueryApi, never()).getProcessNodes(anyString());
+    }
+
+    @Test
+    void cancelApply_nonApprovalStatus_shouldRejectBeforeWorkflowQuery() {
+        LoanApply existing = buildDraftLoan("L001", "E001");
+        existing.setProcessInstanceId("PI001");
+        when(loanMapper.selectForUpdate("L001")).thenReturn(existing);
+
+        assertThatThrownBy(() -> loanService.cancelApply("L001", "客户需求变化", "E001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "BIZ-42301");
+
+        verifyNoWorkflowCancelOrStatusUpdate();
+        verify(workflowQueryApi, never()).getProcessNodes(anyString());
+    }
+
+    @Test
+    void cancelApply_conditionalStatusUpdateConflict_shouldThrowAndKeepFailSafe() {
+        LoanApply existing = buildApprovalLoan("L001", "E001", "PI001");
+        when(loanMapper.selectForUpdate("L001")).thenReturn(existing);
+        when(workflowQueryApi.getProcessNodes("PI001"))
+                .thenReturn(processDiagram("PI001", "branch_approve", "ACTIVE"));
+        when(loanMapper.conditionalUpdateStatus(anyString(), anyString(), anyString(), anyString())).thenReturn(0);
+
+        assertThatThrownBy(() -> loanService.cancelApply("L001", "客户需求变化", "E001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "BIZ-42301");
+
+        verify(workflowApi).cancelProcess("PI001", "客户需求变化");
+        verify(loanMapper).conditionalUpdateStatus("L001", LoanStatus.IN_APPROVAL.getCode(),
+                LoanStatus.CANCELLED.getCode(), "E001");
     }
 
     // ==================== getById ====================
@@ -464,5 +684,36 @@ class LoanServiceTest {
         loan.setOwnerOrgId("ORG001");
         loan.setDeleted(0);
         return loan;
+    }
+
+    private LoanApply buildApprovalLoan(String id, String createdBy, String processInstanceId) {
+        LoanApply loan = buildDraftLoan(id, createdBy);
+        loan.setStatus(LoanStatus.IN_APPROVAL.getCode());
+        loan.setProcessInstanceId(processInstanceId);
+        return loan;
+    }
+
+    private ProcessDiagramDTO processDiagram(String processInstanceId, String nodeKey, String status) {
+        return processDiagram(processInstanceId, List.of(processNode(nodeKey, status, "userTask")));
+    }
+
+    private ProcessDiagramDTO processDiagram(String processInstanceId, List<ProcessDiagramNodeDTO> nodes) {
+        ProcessDiagramDTO diagram = new ProcessDiagramDTO();
+        diagram.setProcessInstanceId(processInstanceId);
+        diagram.setNodes(nodes);
+        return diagram;
+    }
+
+    private ProcessDiagramNodeDTO processNode(String nodeKey, String status, String nodeType) {
+        ProcessDiagramNodeDTO node = new ProcessDiagramNodeDTO();
+        node.setNodeKey(nodeKey);
+        node.setNodeType(nodeType);
+        node.setStatus(status);
+        return node;
+    }
+
+    private void verifyNoWorkflowCancelOrStatusUpdate() {
+        verify(workflowApi, never()).cancelProcess(anyString(), anyString());
+        verify(loanMapper, never()).conditionalUpdateStatus(anyString(), anyString(), anyString(), anyString());
     }
 }

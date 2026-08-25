@@ -1,6 +1,9 @@
 package com.bank.branch.platform.customer.service;
 
+import com.alibaba.excel.EasyExcel;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.customer.dto.req.TagCustomerImportRow;
+import com.bank.branch.platform.customer.dto.resp.TagCustomerImportResultDTO;
 import com.bank.branch.platform.customer.entity.CustMaster;
 import com.bank.branch.platform.customer.entity.CustTag;
 import com.bank.branch.platform.customer.entity.CustTagRel;
@@ -14,7 +17,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 
+import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 import java.util.List;
 
@@ -161,6 +166,10 @@ class TagCustomerServiceTest {
         rel2.setCustId("C002");
 
         when(tagRelMapper.selectByTagId("tag-001")).thenReturn(Arrays.asList(rel1, rel2));
+        CustMaster customer1 = customer("C001", "华夏科技", "91310000123456789A");
+        CustMaster customer2 = customer("C002", "华夏贸易", "91310000123456789B");
+        when(masterMapper.selectByIds(List.of("C001", "C002")))
+                .thenReturn(List.of(customer1, customer2));
 
         // when
         List<CustTagRel> result = tagCustomerService.listCustomersByTag("tag-001");
@@ -169,6 +178,8 @@ class TagCustomerServiceTest {
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getCustId()).isEqualTo("C001");
         assertThat(result.get(1).getCustId()).isEqualTo("C002");
+        assertThat(result.get(0).getUnifiedCreditCode()).isEqualTo("91310000123456789A");
+        assertThat(result.get(1).getUnifiedCreditCode()).isEqualTo("91310000123456789B");
         verify(tagRelMapper).selectByTagId("tag-001");
     }
 
@@ -269,5 +280,136 @@ class TagCustomerServiceTest {
         CustMaster m = new CustMaster();
         m.setId(custId);
         return m;
+    }
+
+    @Test
+    void importCustomersFile_shouldAppendResolvedCustomersFromExcel() {
+        CustTag tag = approvedTag();
+        when(tagMapper.selectById("tag-001")).thenReturn(tag);
+        CustMaster customer = customer("C001", "华夏科技有限公司", "91310000123456789A");
+        when(masterMapper.selectByUnifiedCreditCodes(List.of("91310000123456789A")))
+                .thenReturn(List.of(customer));
+
+        TagCustomerImportResultDTO result = tagCustomerService.importCustomersFile(
+                "tag-001", excel(row("华夏科技有限公司", "91310000123456789A", "重点项目")),
+                "APPEND", "E001");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getImportedCount()).isEqualTo(1);
+        verify(tagRelMapper, never()).expireActiveByTagId(anyString(), anyString(), any());
+        verify(tagRelMapper).insertBatch(argThat(list -> list.size() == 1
+                && "C001".equals(list.get(0).getCustId())
+                && "tag-001".equals(list.get(0).getTagId())));
+    }
+
+    @Test
+    void importCustomers_shouldSplitBatchInsertIntoAtMostFiveHundredRowsPerSql() {
+        when(tagMapper.selectById("tag-001")).thenReturn(approvedTag());
+        List<String> customerIds = java.util.stream.IntStream.rangeClosed(1, 1201)
+                .mapToObj(index -> "C" + index).toList();
+        when(masterMapper.selectByIds(customerIds))
+                .thenReturn(customerIds.stream().map(this::buildMaster).toList());
+        when(tagRelMapper.selectByTagIdAndCustIds(eq("tag-001"), anyList()))
+                .thenReturn(List.of());
+
+        tagCustomerService.importCustomers("tag-001", customerIds, "APPEND", "E001");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<CustTagRel>> batches = ArgumentCaptor.forClass(List.class);
+        verify(tagRelMapper, org.mockito.Mockito.times(3)).insertBatch(batches.capture());
+        assertThat(batches.getAllValues()).extracting(List::size)
+                .containsExactly(500, 500, 201);
+        assertThat(batches.getAllValues()).allSatisfy(batch -> assertThat(batch).hasSizeLessThanOrEqualTo(500));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<String>> queryBatches = ArgumentCaptor.forClass(List.class);
+        verify(tagRelMapper, org.mockito.Mockito.times(3))
+                .selectByTagIdAndCustIds(eq("tag-001"), queryBatches.capture());
+        assertThat(queryBatches.getAllValues()).extracting(List::size)
+                .containsExactly(500, 500, 201);
+        verify(tagRelMapper, never()).selectByCustIdAndTagId(anyString(), anyString());
+        verify(tagRelMapper, never()).insert(any(CustTagRel.class));
+    }
+
+    @Test
+    void importCustomers_shouldReactivateExistingRelationsInBatch() {
+        when(tagMapper.selectById("tag-001")).thenReturn(approvedTag());
+        List<String> customerIds = List.of("C001", "C002");
+        when(masterMapper.selectByIds(customerIds))
+                .thenReturn(customerIds.stream().map(this::buildMaster).toList());
+        CustTagRel first = existingRelation("R001", "C001", 0);
+        CustTagRel second = existingRelation("R002", "C002", 1);
+        when(tagRelMapper.selectByTagIdAndCustIds("tag-001", customerIds))
+                .thenReturn(List.of(first, second));
+
+        tagCustomerService.importCustomers("tag-001", customerIds, "REPLACE", "E001");
+
+        verify(tagRelMapper).expireActiveByTagId(eq("tag-001"), eq("E001"), any());
+        verify(tagRelMapper).reactivateBatch(eq(List.of("R001", "R002")), eq("E001"), any());
+        verify(tagRelMapper, never()).insertBatch(anyList());
+        verify(tagRelMapper, never()).updateById(any(CustTagRel.class));
+    }
+
+    @Test
+    void importCustomersFile_shouldValidateWholeBatchBeforeReplace() {
+        when(tagMapper.selectById("tag-001")).thenReturn(approvedTag());
+        CustMaster customer = customer("C001", "库内客户名称", "91310000123456789A");
+        when(masterMapper.selectByUnifiedCreditCodes(List.of("91310000123456789A")))
+                .thenReturn(List.of(customer));
+
+        TagCustomerImportResultDTO result = tagCustomerService.importCustomersFile(
+                "tag-001", excel(row("文件中错误名称", "91310000123456789A", "重点项目")),
+                "REPLACE", "E001");
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getErrors()).singleElement()
+                .satisfies(error -> {
+                    assertThat(error.getRow()).isEqualTo(2);
+                    assertThat(error.getMessage()).contains("客户名称与系统不一致");
+                });
+        verify(tagRelMapper, never()).expireActiveByTagId(anyString(), anyString(), any());
+        verify(tagRelMapper, never()).insertBatch(anyList());
+    }
+
+    private static CustTag approvedTag() {
+        CustTag tag = new CustTag();
+        tag.setId("tag-001");
+        tag.setTagName("重点项目");
+        tag.setDescription("重点项目客户");
+        tag.setApprovalStatus("APPROVED");
+        tag.setStatus("ACTIVE");
+        return tag;
+    }
+
+    private static CustMaster customer(String id, String name, String creditCode) {
+        CustMaster customer = new CustMaster();
+        customer.setId(id);
+        customer.setCustName(name);
+        customer.setUnifiedCreditCode(creditCode);
+        return customer;
+    }
+
+    private static CustTagRel existingRelation(String id, String custId, int active) {
+        CustTagRel relation = new CustTagRel();
+        relation.setId(id);
+        relation.setTagId("tag-001");
+        relation.setCustId(custId);
+        relation.setActive(active);
+        return relation;
+    }
+
+    private static TagCustomerImportRow row(String name, String creditCode, String tagName) {
+        TagCustomerImportRow row = new TagCustomerImportRow();
+        row.setCustName(name);
+        row.setUnifiedCreditCode(creditCode);
+        row.setTagName(tagName);
+        row.setTagDescription("重点项目客户");
+        return row;
+    }
+
+    private static MockMultipartFile excel(TagCustomerImportRow... rows) {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        EasyExcel.write(output, TagCustomerImportRow.class).sheet("导入数据").doWrite(Arrays.asList(rows));
+        return new MockMultipartFile("file", "tag-customers.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", output.toByteArray());
     }
 }

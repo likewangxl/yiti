@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 客户线索 Mapper 接口，操作 cust_lead 表。
@@ -16,8 +17,7 @@ import java.util.List;
  * </p>
  * <p>
  * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
- * {@code updateById(T)} 由 BaseMapper 提供。
- * selectById / insert / updateById 因签名含 @Param 或与原自定义方法共存，保留原 XML 实现。
+ * {@code updateById(T)} 由 BaseMapper 提供；复杂分页、数据范围和状态流转查询保留 XML 实现。
  * </p>
  */
 @Mapper
@@ -42,7 +42,7 @@ public interface CustLeadMapper extends BaseMapper<CustLead> {
     /**
      * 查询某客户的最新版本线索（is_latest=1）。
      *
-     * @param sourceCustId 源客户ID（cust_master.id）
+     * @param sourceCustId 源客户ID（CUSTOMER_MARKET_CUSTOMER.id）
      * @return 该客户的最新版本线索，不存在时返回 null
      */
     CustLead selectLatestBySourceCustId(@Param("sourceCustId") String sourceCustId);
@@ -77,6 +77,55 @@ public interface CustLeadMapper extends BaseMapper<CustLead> {
     long countPage(@Param("keyword") String keyword,
                    @Param("status") String status,
                    @Param("ownerOrgId") String ownerOrgId);
+
+    /** 线索录入台账仅查询当前员工创建的数据。 */
+    List<CustLead> selectCreatedPage(@Param("keyword") String keyword,
+                                     @Param("status") String status,
+                                     @Param("ownerOrgId") String ownerOrgId,
+                                     @Param("empId") String empId,
+                                     @Param("offset") int offset,
+                                     @Param("limit") int limit);
+
+    /** 与 {@link #selectCreatedPage} 完全相同过滤条件的总数查询。 */
+    long countCreatedPage(@Param("keyword") String keyword,
+                          @Param("status") String status,
+                          @Param("ownerOrgId") String ownerOrgId,
+                          @Param("empId") String empId);
+
+    /** 线索录入详情仅允许按当前员工创建人身份读取。 */
+    CustLead selectCreatedById(@Param("id") String id,
+                               @Param("empId") String empId);
+
+    /** 按分配关系和 LEAD 数据范围查询录入台账。 */
+    List<CustLead> selectVisiblePage(@Param("keyword") String keyword,
+                                     @Param("status") String status,
+                                     @Param("ownerOrgId") String ownerOrgId,
+                                     @Param("scopeType") String scopeType,
+                                     @Param("empId") String empId,
+                                     @Param("orgCodes") Set<String> orgCodes,
+                                     @Param("offset") int offset,
+                                     @Param("limit") int limit);
+
+    /** 与 {@link #selectVisiblePage} 完全相同过滤条件的总数查询。 */
+    long countVisiblePage(@Param("keyword") String keyword,
+                          @Param("status") String status,
+                          @Param("ownerOrgId") String ownerOrgId,
+                          @Param("scopeType") String scopeType,
+                          @Param("empId") String empId,
+                          @Param("orgCodes") Set<String> orgCodes);
+
+    /** 按与录入台账一致的可见性规则查询单条线索。 */
+    CustLead selectVisibleById(@Param("id") String id,
+                               @Param("scopeType") String scopeType,
+                               @Param("empId") String empId,
+                               @Param("orgCodes") Set<String> orgCodes);
+
+    /** 查询全部已处理线索（审批通过+驳回），用于一期审批台账导出。 */
+    List<CustLead> selectReviewedForExport(@Param("keyword") String keyword,
+                                           @Param("result") String result,
+                                           @Param("scopeType") String scopeType,
+                                           @Param("empId") String empId,
+                                           @Param("orgCodes") Set<String> orgCodes);
 
     // insert(T) 和 updateById(T) 由 MyBatis-Plus BaseMapper 提供
 

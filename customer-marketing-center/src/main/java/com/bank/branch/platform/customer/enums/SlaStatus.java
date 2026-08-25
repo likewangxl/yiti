@@ -10,6 +10,8 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum SlaStatus {
 
+    BLUE("BLUE", "正常"),
+    /** 兼容历史存量值，新任务统一使用 BLUE。 */
     GREEN("GREEN", "正常"),
     YELLOW("YELLOW", "预警"),
     RED("RED", "超期");

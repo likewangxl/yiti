@@ -19,7 +19,9 @@ import com.bank.branch.platform.performance.mapper.PerfAllocAdjustItemMapper;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitAllocAdjustCmd;
 import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
+import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
+import com.bank.branch.platform.workflow.api.dto.TaskCandidateUserDTO;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -40,6 +42,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -80,6 +83,9 @@ class AllocAdjustServiceTest {
 
     @Mock
     private WorkflowApi workflowApi;
+
+    @Mock
+    private WorkflowQueryApi workflowQueryApi;
 
     @Mock
     private CurrentUserApi currentUserApi;
@@ -406,6 +412,41 @@ class AllocAdjustServiceTest {
 
         assertThat(dto.getCustId()).isEqualTo("CN-X");
         assertThat(dto.getCustName()).isEqualTo("客户X");
+    }
+
+    @Test
+    @DisplayName("getByIdDto → 审批中仅返回当前活动节点可审批员工姓名和工号")
+    void getByIdDto_inApprovalReturnsCurrentNodeApprovers() {
+        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
+        apply.setId("APPLY_ACTIVE");
+        apply.setStatus("IN_APPROVAL");
+        apply.setProcessInstanceId("PI_ACTIVE");
+        when(applyMapper.selectByAllocApplyId("APPLY_ACTIVE")).thenReturn(apply);
+        when(itemMapper.selectByApplyId("APPLY_ACTIVE")).thenReturn(Collections.emptyList());
+        when(workflowQueryApi.getActiveTaskCandidates("PI_ACTIVE")).thenReturn(List.of(
+                new TaskCandidateUserDTO("E001", "10001", "张三"),
+                new TaskCandidateUserDTO("E002", "10002", "李四")));
+
+        AllocAdjustRespDTO dto = service.getByIdDto("APPLY_ACTIVE");
+
+        assertThat(dto.getCurrentNodeApprovers()).extracting("employeeName", "employeeNo")
+                .containsExactly(tuple("张三", "10001"), tuple("李四", "10002"));
+    }
+
+    @Test
+    @DisplayName("getByIdDto → 节点已审核的终态单据不返回可审批员工")
+    void getByIdDto_approvedDoesNotReturnCurrentNodeApprovers() {
+        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
+        apply.setId("APPLY_DONE");
+        apply.setStatus("APPROVED");
+        apply.setProcessInstanceId("PI_DONE");
+        when(applyMapper.selectByAllocApplyId("APPLY_DONE")).thenReturn(apply);
+        when(itemMapper.selectByApplyId("APPLY_DONE")).thenReturn(Collections.emptyList());
+
+        AllocAdjustRespDTO dto = service.getByIdDto("APPLY_DONE");
+
+        assertThat(dto.getCurrentNodeApprovers()).isEmpty();
+        verify(workflowQueryApi, never()).getActiveTaskCandidates(anyString());
     }
 
     @Test

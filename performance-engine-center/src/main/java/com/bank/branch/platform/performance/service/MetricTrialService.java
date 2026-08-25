@@ -8,6 +8,7 @@ import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.service.dto.MetricTrialResult;
 import com.bank.branch.platform.performance.service.engine.GroovyExecutor;
+import com.bank.branch.platform.performance.service.engine.ObjectFilterSqlResolver;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
 import com.bank.branch.platform.performance.service.engine.StatShowSqlRouter;
 import lombok.extern.slf4j.Slf4j;
@@ -207,14 +208,16 @@ public class MetricTrialService {
         // 业绩分配日期 :allocDate —— 非派生入参；试运行由页面指定，缺省时兜底为 dataDate。
         // 放在 DateMacroResolver.resolve 之后，避免被派生宏覆盖（put 强制覆盖用户/宏同名键）。
         mergedParams.put("allocDate", allocDate != null ? allocDate : dataDate);
-        // 对象id占位符 :objectId —— 由试运行的"对象值"输入框经 params 传入；未输入时绑 null，避免 SQL 含 :objectId 时绑定缺失报错
-        mergedParams.putIfAbsent("objectId", null);
+        // 对象值仅作为命名参数绑定；空白按未提供处理，并在执行前移除受控 EMP_ID 谓词。
+        String objectId = ObjectFilterSqlResolver.normalizeObjectId(mergedParams.get("objectId"));
+        mergedParams.put("objectId", objectId);
 
         // dataDate 按 API 约定必填；保留 null 兼容试运行旧调用方，非 null 时统一走路由。
         String routedSql = dataDate == null
                 ? def.getSqlText()
                 : statShowSqlRouter.route(def.getSqlText(), dataDate);
-        Map<String, BigDecimal> all = sqlExecutor.execute(routedSql, mergedParams, timeout);
+        String resolvedSql = ObjectFilterSqlResolver.resolve(routedSql, objectId);
+        Map<String, BigDecimal> all = sqlExecutor.execute(resolvedSql, mergedParams, timeout);
         int total = all == null ? 0 : all.size();
         List<Map<String, Object>> samples = new ArrayList<>();
         if (all != null) {

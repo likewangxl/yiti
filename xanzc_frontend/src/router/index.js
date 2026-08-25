@@ -90,6 +90,43 @@ const routes = [
       { path: 'announcement/:id', name: 'AnnouncementDetail', component: () => import('@/views/system/AnnouncementDetail.vue'), meta: { title: '公告详情' } },
       { path: 'workspace/notifications', name: 'NotificationList', component: () => import('@/views/workspace/NotificationList.vue'), meta: { title: '通知列表', group: '工作台' } },
 
+      // 业务申请：资产立项主菜单必须与后端实际菜单路径保持一致；新建/详情仅为同菜单下的隐藏入口。
+      {
+        path: 'bizexec/loans',
+        name: 'BusinessApplicationLoans',
+        component: () => import('@/views/businessApplication/Index.vue'),
+        meta: {
+          title: '资产立项',
+          group: '业务申请',
+          requiredMenu: '/bizexec/loans',
+          requiredResource: '/api/loans'
+        }
+      },
+      {
+        path: 'bizexec/loans/new',
+        name: 'BusinessApplicationLoanCreate',
+        component: () => import('@/views/businessApplication/Index.vue'),
+        meta: {
+          title: '新建资产立项',
+          group: '业务申请',
+          hideInMenu: true,
+          requiredMenu: '/bizexec/loans',
+          requiredResource: '/api/loans'
+        }
+      },
+      {
+        path: 'bizexec/loans/:id',
+        name: 'BusinessApplicationLoanDetail',
+        component: () => import('@/views/businessApplication/Index.vue'),
+        meta: {
+          title: '资产立项详情',
+          group: '业务申请',
+          hideInMenu: true,
+          requiredMenu: '/bizexec/loans',
+          requiredResource: '/api/loans'
+        }
+      },
+
       // 信息聚合
       { path: 'info/nav',          name: 'InfoNav',        component: () => import('@/views/info/NavHub.vue'),      meta: { title: '网址导航',     group: '信息聚合' } },
       { path: 'info/address-book', name: 'InfoAddressBook', component: () => import('@/views/info/AddressBook.vue'), meta: { title: '通讯录',       group: '信息聚合' } },
@@ -113,6 +150,23 @@ const routes = [
       { path: 'eval/rules',     name: 'EvalRules',    component: () => import('@/views/eval/Rules.vue'),    meta: { title: '评价规则', group: '内部评价' } },
       { path: 'eval/tasks',     name: 'EvalTasks',    component: () => import('@/views/eval/Tasks.vue'),    meta: { title: '评价任务', group: '内部评价' } },
       { path: 'eval/my-tasks',  name: 'EvalMyTasks',  component: () => import('@/views/eval/MyTasks.vue'),  meta: { title: '待处理任务', group: '内部评价' } },
+
+      // 客户营销
+      { path: 'customers/list', name: 'CustomerList', component: () => import('@/views/customerMarketing/CustomerList.vue'), meta: { title: '客户列表', group: '客户营销' } },
+      { path: 'customers/leads/new', name: 'LeadEntry', component: () => import('@/views/customerMarketing/LeadEntry.vue'), meta: { title: '线索录入', group: '客户营销' } },
+      { path: 'customers/leads/approval', name: 'LeadApproval', component: () => import('@/views/customerMarketing/LeadApproval.vue'), meta: { title: '线索审批', group: '客户营销' } },
+      { path: 'customers/pool/available', name: 'CustomerPoolAvailable', component: () => import('@/views/customerMarketing/AvailablePool.vue'), meta: { title: '待认领客户', group: '客户营销' } },
+      { path: 'customers/tags', name: 'CustomerTags', component: () => import('@/views/customerMarketing/CustomerTags.vue'), meta: { title: '客户标签管理', group: '客户营销' } },
+      { path: 'customers/tags/approval', name: 'CustomerTagApproval', component: () => import('@/views/customerMarketing/TagApproval.vue'), meta: { title: '客户标签审核', group: '客户营销' } },
+      { path: 'customers/cross-org', name: 'CrossOrgMarketing', component: () => import('@/views/customerMarketing/CrossOrgMarketing.vue'), meta: { title: '跨机构营销申请', group: '客户营销' } },
+      { path: 'customers/transfer-log', name: 'CustomerTransfers', component: () => import('@/views/customerMarketing/CustomerTransfers.vue'), meta: { title: '客户转交记录', group: '客户营销' } },
+      { path: 'customers/pool/claimed', name: 'CustomerPoolClaimed', component: () => import('@/views/customerMarketing/ClaimedPool.vue'), meta: { title: '已认领客户', group: '客户营销' } },
+      { path: 'touches/mine', name: 'MyTouchTasks', component: () => import('@/views/customerMarketing/MyTouches.vue'), meta: { title: '我的触达任务', group: '客户营销' } },
+      { path: 'touches/overview', name: 'TouchOverview', component: () => import('@/views/customerMarketing/TouchOverview.vue'), meta: { title: '触达任务一览', group: '客户营销' } },
+
+      // 浦爱云盾
+      { path: 'yundun/accountability-violations', name: 'YundunAccountabilityViolations', component: () => import('@/views/yundun/ViolationManagement.vue'), meta: { title: '人员违规信息', group: '浦爱云盾', violationKind: 'accountability' } },
+      { path: 'yundun/credit-violations', name: 'YundunCreditViolations', component: () => import('@/views/yundun/ViolationManagement.vue'), meta: { title: '信贷风险信息', group: '浦爱云盾', violationKind: 'credit' } },
 
       // 报表分析
       { path: 'report',           redirect: '/report/dynamic' },

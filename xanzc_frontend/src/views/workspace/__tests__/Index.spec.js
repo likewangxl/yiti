@@ -369,4 +369,30 @@ describe('Workspace Index', () => {
     expect(api.transferDecline).toHaveBeenCalledWith('TRANSFER_3', { reason: '工作安排冲突' });
     expect(ui.success).toHaveBeenCalledWith('已拒绝');
   });
+
+  it('LOAN 待办和已办均跳转资产立项页，并透传业务 id 与任务 id', async () => {
+    api.listTodoTasks.mockResolvedValue({
+      records: [{ taskId: 'TASK_LOAN_TODO', bizType: 'LOAN', bizId: 'LOAN-1', businessKey: 'LOAN:LOAN-1' }],
+      total: 1
+    });
+    api.listDoneTasks.mockResolvedValue({
+      records: [{ taskId: 'TASK_LOAN_DONE', bizType: 'LOAN', bizId: 'LOAN-2', businessKey: 'LOAN:LOAN-2' }],
+      total: 1
+    });
+
+    wrapper = mountPage();
+    await settle();
+
+    await wrapper.vm.goHandle({ taskId: 'TASK_LOAN_TODO', bizType: 'LOAN', bizId: 'LOAN-1', businessKey: 'LOAN:LOAN-1' });
+    expect(routerPush).toHaveBeenLastCalledWith({
+      path: '/bizexec/loans',
+      query: { tab: 'todo', loanId: 'LOAN-1', taskId: 'TASK_LOAN_TODO' }
+    });
+
+    await wrapper.vm.goDetail({ taskId: 'TASK_LOAN_DONE', bizType: 'LOAN', bizId: 'LOAN-2', businessKey: 'LOAN:LOAN-2' });
+    expect(routerPush).toHaveBeenLastCalledWith({
+      path: '/bizexec/loans',
+      query: { tab: 'done', loanId: 'LOAN-2', taskId: 'TASK_LOAN_DONE' }
+    });
+  });
 });

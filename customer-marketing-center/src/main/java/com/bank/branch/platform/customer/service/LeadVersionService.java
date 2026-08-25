@@ -42,14 +42,14 @@ public class LeadVersionService {
      * 为已存在的客户主档创建修改版本线索。
      * <p>
      * 步骤：
-     * 1. 查询 sourceCustId 对应的 cust_master（不存在则抛异常）
+     * 1. 查询 sourceCustId 对应的 CUSTOMER_MARKET_CUSTOMER（不存在则抛异常）
      * 2. 查询该客户最新版本线索
      * 3. 创建新 CustLead，leadOp=UPDATE，复制客户信息，versionNo=prev.versionNo+1，isLatest=1
      * 4. 将旧版本 isLatest 设为 0
      * 5. 返回新线索
      * </p>
      *
-     * @param sourceCustId         源客户ID（cust_master.id）
+     * @param sourceCustId         源客户ID（CUSTOMER_MARKET_CUSTOMER.id）
      * @param custName             客户名称（可覆盖原值）
      * @param unifiedCreditCode    统一社会信用代码
      * @param contactPerson        联系人姓名
