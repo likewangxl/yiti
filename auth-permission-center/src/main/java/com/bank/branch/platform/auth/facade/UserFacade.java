@@ -326,14 +326,7 @@ public class UserFacade implements UserApi {
         String kw = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
         List<PtUser> rows = userMapper.selectByKeywordPaged(kw, offset, s);
         long total = userMapper.countByKeyword(kw);
-        List<UserDTO> items = new ArrayList<>(rows.size());
-        for (PtUser u : rows) {
-            UserDTO dto = new UserDTO();
-            dto.setEmpId(u.getUserId());
-            dto.setUsername(u.getUsername());
-            dto.setDisplayName(u.getUserchnname());
-            items.add(dto);
-        }
+        List<UserDTO> items = buildUserDtos(rows);
         return PageResult.of(p, s, total, items);
     }
 
