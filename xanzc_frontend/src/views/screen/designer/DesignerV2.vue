@@ -215,7 +215,12 @@ const returnButton = ref(null);
 const exitCancelButton = ref(null);
 const scalePct = ref(50);
 const clipboard = ref(null); // Ctrl+C/V 本地剪贴板,与 ContextMenu.vue 右键复制粘贴各自独立持有
-provide('previewContext', { orgCode: '', empId: '' }); // 设计态预览上下文(空→43010 引导态)
+// 设计态按草稿绑定 dsId 查询，明确使用历史 v1 协议；screenCode 随当前加载的屏响应式更新。
+const previewContext = reactive({ schemaVersion: 1, screenCode: '', orgCode: '', empId: '' });
+provide('previewContext', previewContext);
+watch(() => store.screenCode, screenCode => {
+  previewContext.screenCode = screenCode || '';
+}, { immediate: true });
 
 function attrOf(component) { return findAttr(component); }
 function onScale(v) { store.scale = v / 100; }

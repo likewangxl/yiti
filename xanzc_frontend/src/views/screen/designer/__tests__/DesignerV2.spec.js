@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
+import { inject, isReactive } from 'vue';
 
 const routerReplace = vi.hoisted(() => vi.fn());
 
@@ -44,6 +45,16 @@ import {
 import { ElMessageBox } from 'element-plus';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import DesignerV2 from '../DesignerV2.vue';
+
+let capturedPreviewContext = null;
+const CanvasCoreContextStub = {
+  name: 'CanvasCoreContextStub',
+  setup() {
+    capturedPreviewContext = inject('previewContext');
+    return {};
+  },
+  template: '<div class="canvas-core-context-stub" />'
+};
 
 // el-button/el-dialog/el-input 用渲染 slot 的自定义 stub:新建大屏流程测试需要按钮文本可寻、
 // 弹框内容可见、输入框可 setValue;其余 element-plus 组件保持哑 stub(不关心内部渲染)。
@@ -117,6 +128,22 @@ describe('DesignerV2.vue 挂载冒烟测试', () => {
   it('挂载后根节点带 scr-surface-host(画布根主题变量挂载点,附加验收 #1)', () => {
     const wrapper = mount(DesignerV2, { global: { stubs } });
     expect(wrapper.classes()).toContain('scr-surface-host');
+  });
+
+  it('加载当前大屏后向画布提供响应式草稿预览上下文', async () => {
+    capturedPreviewContext = null;
+    listScreens.mockResolvedValueOnce([{
+      id: 1, screenCode: 'SCR_PROVINCE', screenName: '省分行经营总览', viewLevel: 'PROVINCE'
+    }]);
+    getScreenCanvas.mockResolvedValueOnce(editorResp(1, 'SCR_PROVINCE'));
+
+    mount(DesignerV2, { global: { stubs: { ...stubs, CanvasCore: CanvasCoreContextStub } } });
+    await flushPromises();
+
+    expect(isReactive(capturedPreviewContext)).toBe(true);
+    expect(capturedPreviewContext).toEqual({
+      schemaVersion: 1, screenCode: 'SCR_PROVINCE', orgCode: '', empId: ''
+    });
   });
 
   it('卸载不抛错(keydown 监听器能正常移除)', () => {
