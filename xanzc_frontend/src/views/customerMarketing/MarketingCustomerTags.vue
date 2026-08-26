@@ -1,5 +1,5 @@
 <template>
-  <main class="page bp-crud marketing-customer-tags">
+  <main v-bp-overflow-tooltip class="page bp-crud marketing-customer-tags">
     <div class="page-head"><PageTitle /><el-button type="primary" @click="openCreate">新增标签</el-button></div>
     <el-form inline><el-form-item label="标签名称"><el-input v-model="query.keyword" clearable /></el-form-item><el-form-item label="标签分类"><el-input v-model="query.category" clearable /></el-form-item><el-form-item label="审批状态"><el-select v-model="query.approvalStatus" clearable style="width:140px"><el-option label="待审批" value="PENDING"/><el-option label="已通过" value="APPROVED"/><el-option label="已驳回" value="REJECTED"/></el-select></el-form-item><el-button type="primary" @click="search">查询</el-button></el-form>
     <el-table :data="tags" v-loading="loading" border stripe>
@@ -9,7 +9,7 @@
       <el-table-column prop="customerCount" label="客户数量" width="100" />
       <el-table-column prop="approvalStatus" label="审批状态" width="110"><template #default="{row}"><el-tag>{{ approvalLabel(row.approvalStatus) }}</el-tag></template></el-table-column>
       <el-table-column prop="status" label="启用状态" width="100"><template #default="{row}">{{row.status==='ENABLED'?'启用':'停用'}}</template></el-table-column>
-      <el-table-column label="操作" min-width="270" fixed="right"><template #default="{row}"><el-button link type="primary" @click="showCustomers(row)">查看客户群</el-button><el-button link type="primary" @click="openImport(row,'APPEND')" :disabled="row.approvalStatus!=='APPROVED'">追加导入</el-button><el-button link type="warning" @click="openImport(row,'REPLACE')" :disabled="row.approvalStatus!=='APPROVED'">全量替换</el-button></template></el-table-column>
+      <el-table-column label="操作" min-width="270" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button link type="primary" @click="showCustomers(row)">查看客户群</el-button><el-button link type="primary" @click="openImport(row,'APPEND')" :disabled="row.approvalStatus!=='APPROVED'">追加导入</el-button><el-button link type="warning" @click="openImport(row,'REPLACE')" :disabled="row.approvalStatus!=='APPROVED'">全量替换</el-button></template></el-table-column>
     </el-table>
     <div class="pager"><el-pagination v-model:current-page="query.pageNo" :total="total" layout="total, prev, pager, next" @change="load"/></div>
 

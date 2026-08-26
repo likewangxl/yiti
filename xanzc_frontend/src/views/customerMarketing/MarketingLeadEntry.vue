@@ -1,5 +1,5 @@
 <template>
-  <main class="page bp-crud marketing-lead-entry">
+  <main v-bp-overflow-tooltip class="page bp-crud marketing-lead-entry">
     <PageTitle />
     <el-tabs v-model="activeTab" @tab-change="loadActive">
       <el-tab-pane label="线索录入记录" name="manual">
@@ -15,7 +15,7 @@
           <el-table-column prop="entryEmpId" label="录入人" width="110" />
           <el-table-column prop="entryTime" label="录入时间" min-width="165"><template #default="{row}">{{ formatTime(row.entryTime) }}</template></el-table-column>
           <el-table-column prop="leadStatus" label="状态" width="110"><template #default="{row}"><el-tag>{{ statusLabel(row.leadStatus) }}</el-tag></template></el-table-column>
-          <el-table-column label="操作" width="210" fixed="right"><template #default="{row}"><el-button link type="primary" @click="showLead(row)">详情</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="primary" @click="editLead(row)">编辑</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="success" @click="submitLead(row)">提交审批</el-button></template></el-table-column>
+          <el-table-column label="操作" width="210" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button link type="primary" @click="showLead(row)">详情</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="primary" @click="editLead(row)">编辑</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="success" @click="submitLead(row)">提交审批</el-button></template></el-table-column>
         </el-table>
         <div class="pager"><el-pagination v-model:current-page="leadQuery.pageNo" v-model:page-size="leadQuery.pageSize" :total="leadTotal" layout="total, prev, pager, next" @change="loadLeads" /></div>
       </el-tab-pane>
@@ -31,7 +31,7 @@
           <el-table-column prop="importEmpId" label="导入人" width="110" />
           <el-table-column label="导入情况" width="120"><template #default="{row}"><el-tag :type="batchType(row.importStatus)">{{ batchLabel(row.importStatus) }}</el-tag></template></el-table-column>
           <el-table-column label="统计" min-width="190"><template #default="{row}">总数 {{ row.totalCount || 0 }} / 成功 {{ row.validCount || 0 }} / 失败 {{ failureCount(row) }}</template></el-table-column>
-          <el-table-column label="操作" width="120"><template #default="{row}"><el-button link type="primary" @click="openBatch(row)">详情</el-button></template></el-table-column>
+          <el-table-column label="操作" width="120" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button link type="primary" @click="openBatch(row)">详情</el-button></template></el-table-column>
         </el-table>
         <div class="pager"><el-pagination v-model:current-page="batchQuery.pageNo" v-model:page-size="batchQuery.pageSize" :total="batchTotal" layout="total, prev, pager, next" @change="loadBatches" /></div>
       </el-tab-pane>

@@ -1,5 +1,5 @@
 <template>
-  <main class="page bp-crud marketing-lead-approval">
+  <main v-bp-overflow-tooltip class="page bp-crud marketing-lead-approval">
     <PageTitle />
     <el-tabs v-model="tab" @tab-change="load">
       <el-tab-pane label="待审批" name="pending" />
@@ -14,8 +14,8 @@
       <el-table-column label="开户状态" width="105"><template #default="{row}">{{ row.currentCustomer?.isAccountOpened === 1 ? '已开户' : '未开户' }}</template></el-table-column>
       <el-table-column label="当前主办" min-width="140"><template #default="{row}">{{ row.currentCustomer?.mainManagerId || '无主办' }}</template></el-table-column>
       <el-table-column label="当前节点" min-width="130"><template #default="{row}">{{ row.task?.taskName || row.task?.name || '-' }}</template></el-table-column>
-      <el-table-column v-if="tab==='pending'" label="操作" width="190" fixed="right"><template #default="{row}"><el-button link type="primary" @click="openDetail(row)">查看</el-button><el-button link type="success" @click="decide(row,true)">通过</el-button><el-button link type="danger" @click="decide(row,false)">驳回</el-button></template></el-table-column>
-      <el-table-column v-else label="操作" width="90"><template #default="{row}"><el-button link type="primary" @click="openDetail(row)">查看</el-button></template></el-table-column>
+      <el-table-column v-if="tab==='pending'" label="操作" width="190" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button link type="primary" @click="openDetail(row)">查看</el-button><el-button link type="success" @click="decide(row,true)">通过</el-button><el-button link type="danger" @click="decide(row,false)">驳回</el-button></template></el-table-column>
+      <el-table-column v-else label="操作" width="90" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button link type="primary" @click="openDetail(row)">查看</el-button></template></el-table-column>
     </el-table>
     <div class="pager"><el-pagination v-model:current-page="query.pageNo" :total="total" layout="total, prev, pager, next" @change="load" /></div>
     <el-drawer v-model="detailVisible" title="线索审批详情" size="min(860px,96vw)">

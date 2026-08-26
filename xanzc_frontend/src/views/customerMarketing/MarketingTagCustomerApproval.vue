@@ -1,5 +1,5 @@
 <template>
-  <main class="page bp-crud marketing-tag-customer-approval">
+  <main v-bp-overflow-tooltip class="page bp-crud marketing-tag-customer-approval">
     <PageTitle />
     <el-tabs v-model="tab" @tab-change="load"><el-tab-pane label="待审批" name="pending"/><el-tab-pane label="审批记录" name="history"/></el-tabs>
     <el-form inline><el-form-item label="关键词"><el-input v-model="query.keyword" clearable placeholder="标签 / 企业名称 / 统一社会信用代码"/></el-form-item><el-button type="primary" @click="search">查询</el-button></el-form>
@@ -12,13 +12,13 @@
       <el-table-column prop="pendingCustomerCount" label="待审批客户" width="120"/>
       <el-table-column prop="approvedCustomerCount" label="已通过" width="90"/>
       <el-table-column prop="rejectedCustomerCount" label="已拒绝" width="90"/>
-      <el-table-column v-if="tab==='pending'" label="操作" min-width="210" fixed="right"><template #default="{row}"><el-button v-if="row.tag?.approvalStatus==='PENDING'" link type="success" @click="approveTagOnly(row)">标签通过</el-button><el-button link type="primary" :disabled="!row.pendingCustomerCount" @click="openCustomers(row)">待审批客户</el-button></template></el-table-column>
+      <el-table-column v-if="tab==='pending'" label="操作" min-width="210" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button v-if="row.tag?.approvalStatus==='PENDING'" link type="success" @click="approveTagOnly(row)">标签通过</el-button><el-button link type="primary" :disabled="!row.pendingCustomerCount" @click="openCustomers(row)">待审批客户</el-button></template></el-table-column>
     </el-table>
     <div class="pager"><el-pagination v-model:current-page="query.pageNo" :total="total" layout="total, prev, pager, next" @change="load"/></div>
 
     <el-drawer v-model="drawerVisible" :title="`待审批客户 · ${selectedSummary?.tag?.tagName||''}`" size="min(1100px,97vw)">
       <div class="drawer-toolbar"><el-input v-model="customerKeyword" clearable placeholder="企业名称 / 统一社会信用代码" style="width:300px" @keyup.enter="loadCustomers"/><div><el-button :disabled="!selectedIds.length" type="success" @click="approveSelected(false)">批量通过</el-button><el-button :disabled="!selectedIds.length" type="danger" @click="rejectSelected(false)">批量驳回</el-button><el-button type="primary" @click="approveSelected(true)">全部通过</el-button></div></div>
-      <el-table :data="customers" v-loading="customerLoading" border stripe @selection-change="selectionChanged"><el-table-column type="selection" width="48"/><el-table-column prop="rowNo" label="原始行" width="80"/><el-table-column prop="custName" label="企业名称" min-width="170"/><el-table-column prop="unifiedCreditCode" label="统一社会信用代码" min-width="190"/><el-table-column prop="customerChangeType" label="客户匹配" width="145"/><el-table-column prop="approvalStatus" label="审批状态" width="100"/><el-table-column label="开户状态" width="100"><template #default="{row}">{{row.isAccountOpened===1?'已开户':'以主档为准'}}</template></el-table-column><el-table-column label="当前主办" min-width="130"><template #default="{row}">{{row.mainManagerId||'以主档为准'}}</template></el-table-column><el-table-column label="操作" width="150"><template #default="{row}"><el-button link type="success" @click="approveOne(row)">通过</el-button><el-button link type="danger" @click="rejectOne(row)">驳回</el-button></template></el-table-column></el-table>
+      <el-table :data="customers" v-loading="customerLoading" border stripe @selection-change="selectionChanged"><el-table-column type="selection" width="48"/><el-table-column prop="rowNo" label="原始行" width="80"/><el-table-column prop="custName" label="企业名称" min-width="170"/><el-table-column prop="unifiedCreditCode" label="统一社会信用代码" min-width="190"/><el-table-column prop="customerChangeType" label="客户匹配" width="145"/><el-table-column prop="approvalStatus" label="审批状态" width="100"/><el-table-column label="开户状态" width="100"><template #default="{row}">{{row.isAccountOpened===1?'已开户':'以主档为准'}}</template></el-table-column><el-table-column label="当前主办" min-width="130"><template #default="{row}">{{row.mainManagerId||'以主档为准'}}</template></el-table-column><el-table-column label="操作" width="150" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button link type="success" @click="approveOne(row)">通过</el-button><el-button link type="danger" @click="rejectOne(row)">驳回</el-button></template></el-table-column></el-table>
     </el-drawer>
   </main>
 </template>
