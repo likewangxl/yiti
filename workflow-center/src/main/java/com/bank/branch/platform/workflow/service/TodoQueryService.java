@@ -371,8 +371,9 @@ public class TodoQueryService {
             }
             if (e.getOutputName() != null) {
                 result.add(toBranchOption(e)); // 命名边直接作为分支
-            } else if ("GATEWAY".equals(typeByKey.get(e.getToNodeKey()))) {
-                // 穿透网关：把网关的命名出边作为分支选项
+            } else if (e.getCondition() == null
+                    && "GATEWAY".equals(typeByKey.get(e.getToNodeKey()))) {
+                // 仅无条件结构边穿透网关；带条件的无名边本身就是路由，不展示网关后的选项
                 String gwKey = e.getToNodeKey();
                 for (com.bank.branch.platform.workflow.api.dto.flow.FlowEdgeDTO ge : graph.getEdges()) {
                     if (gwKey.equals(ge.getFromNodeKey()) && ge.getOutputName() != null) {

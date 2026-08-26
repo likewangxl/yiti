@@ -1,0 +1,12 @@
+{
+  "code": "0",
+  "message": "success",
+  "data": {
+    "taskInfo": {
+      "taskName": "机构负责人审批·2级",
+      "nodeKey": "branch_approve_l2",
+      "assignee": "bjfzr"
+    },
+    "outgoingBranches": []
+  }
+}
