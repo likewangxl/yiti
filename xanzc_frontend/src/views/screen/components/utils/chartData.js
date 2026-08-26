@@ -1,16 +1,46 @@
 // 大屏图表通用数据变换纯函数（无 Vue 依赖，vitest 直测）。
-// 数据契约：POST /api/screen/data → { columns:[...], rows:[[...]], columnsMeta?:[{col,alias,role,unit,decimals}] }
+// 数据契约：POST /api/screen/data → { columns:[...], rows:[[...]], columnsMeta?:[{col,alias,role,amountScale,unit,decimals}] }
 // columnsMeta 是后端可选扩展，所有函数必须对其缺失容错（缺失时回退原列名/默认格式化）。
+import { AMOUNT_SCALE_OPTIONS, convertAmountScaleValue } from '@/utils/dsConfig';
 
 /** 按列名查 columnsMeta 行；columnsMeta 缺失或未命中返回 null */
 export function metaOf(col, columnsMeta) {
   if (!Array.isArray(columnsMeta)) return null;
-  return columnsMeta.find(m => m && m.col === col) || null;
+  const meta = columnsMeta.find(m => m && m.col === col) || null;
+  if (!meta || meta.role !== 'METRIC') return meta;
+  const preset = AMOUNT_SCALE_OPTIONS.find(option => option.value === meta.amountScale);
+  if (!preset) return meta;
+  // 后端只保存 amountScale；组件运行态派生单位/小数位，显式自定义值优先。
+  return {
+    ...meta,
+    unit: meta.unit || preset.unit,
+    decimals: meta.decimals ?? preset.decimals
+  };
 }
 
 /** 列显示名：columnsMeta.alias 优先，缺失回退原列名 */
 export function displayName(col, columnsMeta) {
   return metaOf(col, columnsMeta)?.alias || col;
+}
+
+/**
+ * 把接口按元返回的 rows 转为组件展示 rows。
+ * 只转换角色为 METRIC 且 amountScale 合法的列；原数组及空值/非数值均保持不变。
+ */
+export function convertAmountScaleRows(columns, rows, columnsMeta) {
+  const cols = Array.isArray(columns) ? columns : [];
+  const data = Array.isArray(rows) ? rows : [];
+  const factors = cols.map(col => {
+    const meta = metaOf(col, columnsMeta);
+    return meta?.role === 'METRIC' && meta.amountScale ? meta.amountScale : null;
+  });
+  return data.map(row => {
+    if (!Array.isArray(row)) return row;
+    return row.map((value, index) => {
+      const amountScale = factors[index];
+      return amountScale ? convertAmountScaleValue(value, amountScale) : value;
+    });
+  });
 }
 
 /**

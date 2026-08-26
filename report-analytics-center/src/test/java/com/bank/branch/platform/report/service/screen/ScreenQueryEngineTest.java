@@ -448,6 +448,7 @@ class ScreenQueryEngineTest {
         assertThat(resp.getColumnsMeta().get(1).getAlias()).isEqualTo("一般性存款");
         assertThat(resp.getColumnsMeta().get(1).getUnit()).isEqualTo("万元");
         assertThat(resp.getColumnsMeta().get(1).getDecimals()).isEqualTo(2);
+        assertThat(resp.getColumnsMeta().get(1).getAmountScale()).isNull();
     }
 
     @Test
@@ -456,5 +457,27 @@ class ScreenQueryEngineTest {
         ScreenDataRespDTO resp = new ScreenDataRespDTO(List.of("cnt"), List.of());
         engine.fillColumnsMeta(resp, "{\"table\":\"EMP_INDEX_RESULT\"}");
         assertThat(resp.getColumnsMeta()).isNull();
+    }
+
+    @Test
+    void fillColumnsMeta_amountScale_derivesUnitAndFixedDecimals_withoutScalingRows() {
+        String cfg = "{\"table\":\"EMP_INDEX_RESULT\",\"fieldMeta\":["
+                + "{\"col\":\"yuan\",\"role\":\"METRIC\",\"amountScale\":\"YUAN\"},"
+                + "{\"col\":\"tenK\",\"role\":\"METRIC\",\"amountScale\":\"TEN_THOUSAND_YUAN\"},"
+                + "{\"col\":\"hundredM\",\"role\":\"METRIC\",\"amountScale\":\"HUNDRED_MILLION_YUAN\"}]}";
+        List<List<Object>> rows = List.of(List.of(10000, 20000, 30000));
+        ScreenDataRespDTO resp = new ScreenDataRespDTO(
+                List.of("yuan", "tenK", "hundredM"), rows);
+
+        engine.fillColumnsMeta(resp, cfg);
+
+        assertThat(resp.getColumnsMeta()).extracting(ScreenDataRespDTO.ColumnMeta::getUnit)
+                .containsExactly("元", "万元", "亿元");
+        assertThat(resp.getColumnsMeta()).extracting(ScreenDataRespDTO.ColumnMeta::getDecimals)
+                .containsExactly(2, 2, 2);
+        assertThat(resp.getColumnsMeta()).extracting(ScreenDataRespDTO.ColumnMeta::getAmountScale)
+                .containsExactly("YUAN", "TEN_THOUSAND_YUAN", "HUNDRED_MILLION_YUAN");
+        assertThat(resp.getRows()).isSameAs(rows);
+        assertThat(resp.getRows()).containsExactly(List.of(10000, 20000, 30000));
     }
 }

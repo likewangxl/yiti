@@ -75,6 +75,10 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
     /** fieldMeta 角色枚举（spec 2026-07-17 §3.2，全 source_kind 通用） */
     private static final Set<String> FIELD_META_ROLES = Set.of("DIM", "METRIC");
 
+    /** 度量金额显示预设；仅作用于 fieldMeta 的 METRIC，展示时不换算 rows 原始值。 */
+    private static final Set<String> FIELD_META_AMOUNT_SCALES = Set.of(
+            "YUAN", "TEN_THOUSAND_YUAN", "HUNDRED_MILLION_YUAN");
+
     /** scopeMode 枚举（spec 2026-07-17 §4，全 source_kind 通用，缺省 SUBJECT 由 ScreenConfigSchema 补） */
     private static final Set<String> SCOPE_MODES = Set.of("SUBJECT", "GLOBAL", "NAMED_GROUP");
 
@@ -530,6 +534,8 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
 
     /**
      * 校验顶层可选 fieldMeta（spec 2026-07-17 §3.2）：col 非空且不重复、role 枚举合法，违规 43009.
+     * amountScale 只允许 METRIC 使用，且与手工 unit/decimals 互斥；该预设只改变展示元数据，
+     * 不改变查询 SQL 或 rows 原始值。
      */
     private void validateFieldMeta(JsonNode cfg) {
         JsonNode fieldMeta = cfg.path("fieldMeta");
@@ -545,8 +551,18 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
             if (col.isBlank() || !seenCols.add(col)) {
                 throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
             }
-            if (!FIELD_META_ROLES.contains(n.path("role").asText())) {
+            String role = n.path("role").asText();
+            if (!FIELD_META_ROLES.contains(role)) {
                 throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
+            if (n.hasNonNull("amountScale")) {
+                String amountScale = n.path("amountScale").asText();
+                if (!FIELD_META_AMOUNT_SCALES.contains(amountScale)
+                        || !"METRIC".equals(role)
+                        || n.has("unit")
+                        || n.has("decimals")) {
+                    throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+                }
             }
         }
     }

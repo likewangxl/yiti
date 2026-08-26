@@ -980,6 +980,19 @@ class ScreenDatasourceServiceTest {
     }
 
     @Test
+    void save_fieldMeta_amountScale_valid_preservedThroughWideTableRewrite() {
+        mockSlotEmp();
+        service.save(wideReqWith("{\"table\":\"EMP_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\"}],"
+                + "\"fieldMeta\":[{\"col\":\"存款余额\",\"role\":\"METRIC\","
+                + "\"amountScale\":\"TEN_THOUSAND_YUAN\"}]}"));
+
+        ArgumentCaptor<RptScreenDatasource> cap = ArgumentCaptor.forClass(RptScreenDatasource.class);
+        verify(dsMapper).insert(cap.capture());
+        assertThat(cap.getValue().getConfigJson()).contains("\"amountScale\":\"TEN_THOUSAND_YUAN\"");
+    }
+
+    @Test
     void save_fieldMeta_illegalRole_throws43009() {
         assertThatThrownBy(() -> service.save(wideReqWith("{\"table\":\"EMP_INDEX_RESULT\","
                 + "\"metrics\":[{\"metricCode\":\"M_0001\"}],"
@@ -1019,6 +1032,50 @@ class ScreenDatasourceServiceTest {
         assertThatThrownBy(() -> service.save(req))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43009");
+    }
+
+    @Test
+    void save_fieldMeta_amountScale_illegalEnum_throws43009() {
+        assertThatThrownBy(() -> service.save(wideReqWith("{\"table\":\"EMP_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\"}],"
+                + "\"fieldMeta\":[{\"col\":\"存款余额\",\"role\":\"METRIC\","
+                + "\"amountScale\":\"THOUSAND_YUAN\"}]}")))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+        verify(dsMapper, never()).insert(any(RptScreenDatasource.class));
+    }
+
+    @Test
+    void save_fieldMeta_amountScale_onDim_throws43009() {
+        assertThatThrownBy(() -> service.save(wideReqWith("{\"table\":\"EMP_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\"}],"
+                + "\"fieldMeta\":[{\"col\":\"data_date\",\"role\":\"DIM\","
+                + "\"amountScale\":\"YUAN\"}]}")))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+        verify(dsMapper, never()).insert(any(RptScreenDatasource.class));
+    }
+
+    @Test
+    void save_fieldMeta_amountScale_withUnit_throws43009() {
+        assertThatThrownBy(() -> service.save(wideReqWith("{\"table\":\"EMP_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\"}],"
+                + "\"fieldMeta\":[{\"col\":\"存款余额\",\"role\":\"METRIC\","
+                + "\"amountScale\":\"YUAN\",\"unit\":\"元\"}]}")))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+        verify(dsMapper, never()).insert(any(RptScreenDatasource.class));
+    }
+
+    @Test
+    void save_fieldMeta_amountScale_withDecimals_throws43009() {
+        assertThatThrownBy(() -> service.save(wideReqWith("{\"table\":\"EMP_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\"}],"
+                + "\"fieldMeta\":[{\"col\":\"存款余额\",\"role\":\"METRIC\","
+                + "\"amountScale\":\"YUAN\",\"decimals\":2}]}")))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+        verify(dsMapper, never()).insert(any(RptScreenDatasource.class));
     }
 
     // ===== WIDE_TABLE aggregation（spec 2026-07-17 §3.3）=====

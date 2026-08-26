@@ -14,7 +14,7 @@
                   :context="{ ...context, blockId: block.id ?? block.blockId }"
                   :item="drillItem" :periods="drill.drillPeriods || ['LAST_10D']" />
       <component v-else-if="data" :is="componentMap[block.componentType]"
-                 :columns="data.columns" :rows="data.rows"
+                 :columns="data.columns" :rows="displayRows"
                  :bind="bind" :style-cfg="styleCfg" v-bind="extraProps" @item-click="onItemClick" />
     </div>
   </div>
@@ -27,6 +27,7 @@ import { InfoFilled } from '@element-plus/icons-vue';
 import { queryScreenData } from '@/api/screen';
 import { buildScreenDataRequest } from '@/utils/screenScope';
 import { GLOBAL_PERIOD_INJECT_KEY, resolveBlockPeriod, shouldApplyGlobalPeriod } from '@/utils/globalPeriod';
+import { convertAmountScaleRows } from './utils/chartData';
 import MetricCard from './MetricCard.vue';
 import LineTrend from './LineTrend.vue';
 import PieShare from './PieShare.vue';
@@ -95,6 +96,10 @@ const styleCfg = computed(() => parse(props.block.styleJson));
 const drill = computed(() => parse(props.block.drillJson));
 
 const data = ref(null);
+// 接口 data 保留原始 rows；仅把按元计价的度量列转换为组件展示值，统一覆盖 19 类图表。
+const displayRows = computed(() => convertAmountScaleRows(
+  data.value?.columns, data.value?.rows, data.value?.columnsMeta
+));
 // 扩展 props 仅对新一代图表下发（columnsMeta 来自 /api/screen/data 响应可选字段，后端未上线时为 null）
 const extraProps = computed(() =>
   EXTENDED_TYPES.has(props.block.componentType)

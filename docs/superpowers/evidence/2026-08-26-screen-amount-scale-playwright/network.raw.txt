@@ -1,0 +1,23 @@
+# 运行态请求清单
+
+163. GET http://127.0.0.1:8091/api/screen/view/SCR_AMOUNT => 200 OK
+164. POST http://127.0.0.1:8091/api/screen/data => 200 OK
+165. POST http://127.0.0.1:8091/api/screen/data => 200 OK
+
+# 请求 #164
+
+POST /api/screen/data
+content-type: application/json
+
+{"schemaVersion":2,"screenCode":"SCR_AMOUNT","blockId":91,"period":"LATEST","contextParams":{"orgCode":"","empId":""}}
+
+# 响应 #164
+
+{"code":"0","message":"success","traceId":"mock-screen-data","data":{"columns":["机构","存款余额"],"rows":[["全省",100000000]],"columnsMeta":[{"col":"机构","role":"DIM"},{"col":"存款余额","alias":"全省存款余额","role":"METRIC","unit":"亿元","decimals":2,"amountScale":"HUNDRED_MILLION_YUAN"}]}}
+
+# 页面结果
+
+- 数值卡：`存款余额 1.00`
+- 明细表表头：`全省存款余额(亿元)`
+- 明细表单元格：`1.00`
+- 接口原始 rows 保持 `100000000`，页面展示按 `100000000 / 100000000 = 1.00` 计算。

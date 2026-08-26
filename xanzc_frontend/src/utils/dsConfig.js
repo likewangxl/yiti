@@ -7,7 +7,7 @@
 // 后端契约要点（report-analytics-center 已交付）：
 //   - KPI_DETAIL：SNAPSHOT 强制 ds_type=SINGLE、TREND 强制 TIMESERIES（显式传不一致会 43009）；
 //     TREND 必须携带 metrics 快照且每项 metricCode+metricName 非空；valueCol ∈ score|completeRate（可选，默认 score）
-//   - fieldMeta（全 source_kind 通用）：col 非空且不重复、role ∈ DIM|METRIC 必填
+//   - fieldMeta（全 source_kind 通用）：col 非空且不重复、role ∈ DIM|METRIC 必填；METRIC 可选 amountScale 预设
 //   - WIDE_TABLE aggregation：groupBy ∈ NONE|SUBJECT|DATE（DATE→TIMESERIES 否则 SINGLE，后端强制）、
 //     agg ∈ SUM|AVG|MAX|MIN|COUNT；filters 的 op 白名单，IN 的 value 为逗号分隔字符串（后端拆成多 ? 绑定）
 //   - scopeMode ∈ SUBJECT|GLOBAL|NAMED_GROUP（缺省 SUBJECT；NAMED_GROUP 仅机构宽表且试跑须显式测试组）
@@ -20,6 +20,18 @@ export const AGG_FUNCS = ['SUM', 'AVG', 'MAX', 'MIN', 'COUNT'];
 export const FILTER_OPS = ['EQ', 'NE', 'IN', 'GT', 'GE', 'LT', 'LE'];
 export const KPI_VALUE_COLS = ['score', 'completeRate'];
 export const SCOPE_MODES = ['SUBJECT', 'GLOBAL', 'NAMED_GROUP'];
+/** 度量字段金额量级预设：约定展示单位、固定 2 位小数及按元原始值的转换级别。 */
+export const AMOUNT_SCALE_OPTIONS = [
+  { value: 'YUAN', label: '元', unit: '元', decimals: 2 },
+  { value: 'TEN_THOUSAND_YUAN', label: '万元', unit: '万元', decimals: 2 },
+  { value: 'HUNDRED_MILLION_YUAN', label: '亿元', unit: '亿元', decimals: 2 }
+];
+const AMOUNT_SCALE_VALUES = AMOUNT_SCALE_OPTIONS.map(option => option.value);
+export const AMOUNT_SCALE_FACTORS = Object.freeze({
+  YUAN: 1,
+  TEN_THOUSAND_YUAN: 1 / 10000,
+  HUNDRED_MILLION_YUAN: 1 / 100000000
+});
 /** 预设周期模板（与设计器周期下拉一致） */
 export const TIME_PARAM_PRESETS = ['LATEST', 'LAST_10D', 'LAST_1M', 'LAST_6M_EOM'];
 
@@ -39,7 +51,7 @@ export function defaultDsModel() {
     },
     sql: { text: '', dateCol: '' },
     // ===== 全类型通用段 =====
-    fieldMeta: [],          // [{col, alias, role, unit, decimals}]
+    fieldMeta: [],          // [{col, alias, role, amountScale, unit, decimals}]
     aggEnabled: false,      // 仅 WIDE_TABLE：聚合开关（关闭时 aggregation 不落盘）
     aggregation: { groupBy: 'NONE', agg: 'SUM', filters: [] },
     scopeMode: 'SUBJECT'
@@ -70,7 +82,8 @@ export function deriveDsType(model) {
 /** 整行为空的 fieldMeta 行（用户点了"加一行"但没填）→ 组装/校验时统一跳过 */
 function isEmptyFieldMetaRow(r) {
   return !String(r.col || '').trim() && !String(r.alias || '').trim()
-    && !String(r.unit || '').trim() && (r.decimals === null || r.decimals === undefined || r.decimals === '');
+    && !String(r.amountScale || '').trim() && !String(r.unit || '').trim()
+    && (r.decimals === null || r.decimals === undefined || r.decimals === '');
 }
 
 /** fieldMeta 表单行 → 落盘形态：trim、空可选项不落键、decimals 数字化；无有效行返回 null */
@@ -81,9 +94,14 @@ function normalizeFieldMeta(rows) {
     const item = { col: String(r.col || '').trim() };
     if (String(r.alias || '').trim()) item.alias = String(r.alias).trim();
     item.role = r.role;  // role 后端必填校验，UI 上默认 METRIC 不会为空
-    if (String(r.unit || '').trim()) item.unit = String(r.unit).trim();
-    if (r.decimals !== null && r.decimals !== undefined && r.decimals !== '') {
-      item.decimals = Number(r.decimals);
+    // amountScale 是度量字段的互斥展示预设；非度量行即使残留脏值也不得落盘。
+    if (r.role === 'METRIC' && AMOUNT_SCALE_VALUES.includes(r.amountScale)) {
+      item.amountScale = r.amountScale;
+    } else {
+      if (String(r.unit || '').trim()) item.unit = String(r.unit).trim();
+      if (r.decimals !== null && r.decimals !== undefined && r.decimals !== '') {
+        item.decimals = Number(r.decimals);
+      }
     }
     out.push(item);
   }
@@ -153,10 +171,33 @@ export function buildTimeParamJson(model) {
 
 /** fieldMeta 落盘行 → 表单行（补齐可选字段默认值，便于 v-model 绑定） */
 function fieldMetaToRows(fieldMeta) {
-  return (Array.isArray(fieldMeta) ? fieldMeta : []).map(f => ({
-    col: f.col || '', alias: f.alias || '', role: f.role || 'METRIC',
-    unit: f.unit || '', decimals: f.decimals ?? null
-  }));
+  return (Array.isArray(fieldMeta) ? fieldMeta : []).map(f => {
+    const row = {
+      col: f.col || '', alias: f.alias || '', role: f.role || 'METRIC',
+      unit: f.unit || '', decimals: f.decimals ?? null
+    };
+    // 只为新配置回填有效预设；旧配置保持原表单形态，保证编辑兼容和最小 diff。
+    if (row.role === 'METRIC' && AMOUNT_SCALE_VALUES.includes(f.amountScale)) row.amountScale = f.amountScale;
+    return row;
+  });
+}
+
+/** amountScale 是度量展示预设：试跑预览读取其单位/小数位并转换展示值，不改接口原始值。 */
+function amountScaleDisplayOption(meta) {
+  if (!meta || meta.role !== 'METRIC') return null;
+  return AMOUNT_SCALE_OPTIONS.find(option => option.value === meta.amountScale) || null;
+}
+
+/** 将元计价原始值转换为金额量级展示值；空值/非数值按原值返回。 */
+export function convertAmountScaleValue(value, amountScale) {
+  const factor = AMOUNT_SCALE_FACTORS[amountScale];
+  if (factor === undefined || value === null || value === undefined || value === '') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value * factor : value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric * factor : value;
+  }
+  return value;
 }
 
 /**
@@ -270,6 +311,10 @@ export function validateDsModel(model) {
     if (seen.has(col)) errors.push(`字段元数据列名重复：${col}`);
     seen.add(col);
     if (!FIELD_ROLES.includes(r.role)) errors.push(`字段元数据第 ${i + 1} 行角色只能是 DIM 或 METRIC`);
+    if (r.role === 'METRIC' && AMOUNT_SCALE_VALUES.includes(r.amountScale)) return;
+    if (r.amountScale && !AMOUNT_SCALE_VALUES.includes(r.amountScale)) {
+      errors.push(`字段元数据第 ${i + 1} 行金额量级取值不受支持`);
+    }
     if (r.decimals !== null && r.decimals !== undefined && r.decimals !== '') {
       const n = Number(r.decimals);
       if (!Number.isInteger(n) || n < 0) errors.push(`字段元数据第 ${i + 1} 行小数位必须是非负整数`);
@@ -373,8 +418,10 @@ export function buildPreviewColumns(columns, columnsMeta) {
   const metaByCol = new Map((Array.isArray(columnsMeta) ? columnsMeta : []).map(m => [m.col, m]));
   return (columns || []).map(col => {
     const meta = metaByCol.get(col) || null;
+    const preset = amountScaleDisplayOption(meta);
+    const unit = preset?.unit || meta?.unit;
     let label = meta?.alias || col;
-    if (meta?.unit) label += `（${meta.unit}）`;
+    if (unit) label += `（${unit}）`;
     return { col, label, meta };
   });
 }
@@ -385,9 +432,12 @@ export function buildPreviewColumns(columns, columnsMeta) {
  */
 export function formatPreviewCell(value, meta) {
   if (value === null || value === undefined) return '—';
-  if (typeof value === 'number' && Number.isFinite(value)
-    && meta && meta.decimals !== null && meta.decimals !== undefined) {
-    return value.toFixed(meta.decimals);
+  const preset = amountScaleDisplayOption(meta);
+  const decimals = preset?.decimals ?? meta?.decimals;
+  const displayValue = preset ? convertAmountScaleValue(value, meta.amountScale) : value;
+  if (typeof displayValue === 'number' && Number.isFinite(displayValue)
+    && decimals !== null && decimals !== undefined) {
+    return displayValue.toFixed(decimals);
   }
-  return value;
+  return displayValue;
 }

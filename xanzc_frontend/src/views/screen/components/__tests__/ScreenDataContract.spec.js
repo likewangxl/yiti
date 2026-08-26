@@ -9,6 +9,7 @@ vi.mock('vue-echarts', () => ({ default: { name: 'VChart', props: ['option'], te
 
 import BlockContainer from '../BlockContainer.vue';
 import DrillTrend from '../DrillTrend.vue';
+import MetricCard from '../MetricCard.vue';
 
 const componentGlobals = { stubs: { 'el-icon': true, InfoFilled: true }, directives: { loading: {} } };
 
@@ -220,5 +221,44 @@ describe('大屏区块取数请求契约', () => {
       expect(wrapper.find('.scr-block-empty').exists()).toBe(false);
       wrapper.unmount();
     }
+  });
+
+  it('BlockContainer 统一转换金额量级后再下发旧图表，保留接口原始 rows 不变', async () => {
+    const payload = {
+      columns: ['机构', '存款余额'],
+      rows: [['甲行', 100000000]],
+      columnsMeta: [{ col: '存款余额', role: 'METRIC', amountScale: 'HUNDRED_MILLION_YUAN' }]
+    };
+    queryMock.mockResolvedValueOnce(payload);
+    const wrapper = mount(BlockContainer, {
+      props: {
+        block: { id: 91, componentType: 'METRIC_CARD', bindJson: JSON.stringify({ dsId: 9002 }), styleJson: '{}', drillJson: '{}' },
+        context: { schemaVersion: 1, screenCode: 'SCR_AMOUNT' }
+      },
+      global: componentGlobals
+    });
+
+    await vi.waitFor(() => expect(wrapper.findComponent(MetricCard).props('rows')).toEqual([['甲行', 1]]));
+    expect(payload.rows).toEqual([['甲行', 100000000]]);
+    wrapper.unmount();
+  });
+
+  it('DrillTrend 统一转换钻取指标的金额量级后生成趋势序列', async () => {
+    queryMock.mockResolvedValueOnce({
+      columns: ['data_date', '存款余额'],
+      rows: [['2026-08-01', 10000], ['2026-08-02', 20000]],
+      columnsMeta: [{ col: '存款余额', role: 'METRIC', amountScale: 'TEN_THOUSAND_YUAN' }]
+    });
+    const wrapper = mount(DrillTrend, {
+      props: {
+        bind: { dsId: 9002 }, context: { schemaVersion: 1, screenCode: 'SCR_AMOUNT', blockId: 92 },
+        item: { col: '存款余额', label: '存款余额' }, periods: ['LAST_10D']
+      },
+      global: componentGlobals
+    });
+
+    await vi.waitFor(() => expect(wrapper.findComponent({ name: 'VChart' }).props('option').series[0].data)
+      .toEqual([1, 2]));
+    wrapper.unmount();
   });
 });

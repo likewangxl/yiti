@@ -267,9 +267,9 @@
         <!-- 字段元数据（全类型通用可选段，spec §3.2） -->
         <el-form-item>
           <template #label>
-            字段元数据（可选：别名/角色/单位/小数位，组件展示时套用）
+            字段元数据（可选：别名/角色/金额量级/单位/小数位，组件展示时套用）
             <el-button size="small" style="margin-left:8px"
-                       @click="dlg.m.fieldMeta.push({ col: '', alias: '', role: 'METRIC', unit: '', decimals: null })">
+                       @click="addFieldMetaRow">
               + 加一行
             </el-button>
           </template>
@@ -293,11 +293,27 @@
                 </el-select>
               </template>
             </el-table-column>
+            <el-table-column label="金额量级" width="130">
+              <template #default="{ row }">
+                <el-select v-if="row.role === 'METRIC'" v-model="row.amountScale" clearable
+                           placeholder="自定义" style="width:100%">
+                  <el-option v-for="option in AMOUNT_SCALE_OPTIONS" :key="option.value"
+                             :label="option.label" :value="option.value" />
+                </el-select>
+                <span v-else class="hint">—</span>
+              </template>
+            </el-table-column>
             <el-table-column label="单位" width="90">
-              <template #default="{ row }"><el-input v-model="row.unit" /></template>
+              <template #default="{ row }">
+                <el-input :model-value="fieldMetaUnitDisplay(row)" :disabled="hasAmountScale(row)"
+                          @update:model-value="value => updateFieldMetaUnit(row, value)" />
+              </template>
             </el-table-column>
             <el-table-column label="小数位" width="80">
-              <template #default="{ row }"><el-input v-model="row.decimals" placeholder="如 2" /></template>
+              <template #default="{ row }">
+                <el-input :model-value="fieldMetaDecimalsDisplay(row)" :disabled="hasAmountScale(row)"
+                          placeholder="如 2" @update:model-value="value => updateFieldMetaDecimals(row, value)" />
+              </template>
             </el-table-column>
             <el-table-column label="" width="60">
               <template #default="{ $index }">
@@ -306,6 +322,7 @@
             </el-table-column>
           </el-table>
           <span v-else class="hint">未配置时组件按原始列名展示；先在列表页「试跑」一次可让列名支持下拉选择</span>
+          <span class="hint">选择金额量级会将按元返回的原始数值转换为对应单位并按 2 位小数展示，仅影响组件/试跑预览，不修改接口原始 rows、SQL 或数据库；清空后恢复自定义单位/小数位。</span>
         </el-form-item>
 
         <!-- 数据范围模式（spec §4） -->
@@ -382,7 +399,7 @@ import { listMetrics } from '@/api/metrics';
 import {
   defaultDsModel, deriveDsType, buildConfigJson, buildTimeParamJson,
   parseConfigJson, validateDsModel, buildPreviewColumns, formatPreviewCell,
-  AGG_FUNCS, FILTER_OPS, TIME_PARAM_PRESETS, datasourceTryRunScopeMode,
+  AGG_FUNCS, FILTER_OPS, TIME_PARAM_PRESETS, AMOUNT_SCALE_OPTIONS, datasourceTryRunScopeMode,
   buildDatasourceTryRunRequest, buildDatasourceProbeRequest
 } from '@/utils/dsConfig';
 import {
@@ -443,6 +460,37 @@ const filterColOptions = computed(() => {
   const subject = dlg.m.wide.table === 'ORG_INDEX_RESULT' ? 'org_code' : 'emp_id';
   return [subject, 'data_date', ...dlg.m.wide.slotCols];
 });
+
+function amountScaleOption(row) {
+  return AMOUNT_SCALE_OPTIONS.find(option => option.value === row?.amountScale) || null;
+}
+
+/** 已选择金额量级时仅锁定展示字段；row.unit/decimals 仍保留，清空预设即可恢复。 */
+function hasAmountScale(row) {
+  return row?.role === 'METRIC' && Boolean(amountScaleOption(row));
+}
+
+function fieldMetaUnitDisplay(row) {
+  const preset = hasAmountScale(row) ? amountScaleOption(row) : null;
+  return preset?.unit || row?.unit || '';
+}
+
+function fieldMetaDecimalsDisplay(row) {
+  const preset = hasAmountScale(row) ? amountScaleOption(row) : null;
+  return preset ? String(preset.decimals) : (row?.decimals ?? '');
+}
+
+function updateFieldMetaUnit(row, value) {
+  if (!hasAmountScale(row)) row.unit = value;
+}
+
+function updateFieldMetaDecimals(row, value) {
+  if (!hasAmountScale(row)) row.decimals = value;
+}
+
+function addFieldMetaRow() {
+  dlg.m.fieldMeta.push({ col: '', alias: '', role: 'METRIC', amountScale: '', unit: '', decimals: null });
+}
 
 function onWideTableChange() {
   // 换表后指标维度变化，清空已选指标与槽位缓存

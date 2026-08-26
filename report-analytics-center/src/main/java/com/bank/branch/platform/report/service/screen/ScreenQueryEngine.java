@@ -60,6 +60,15 @@ public class ScreenQueryEngine {
     // 缺 YEARLY 会导致个人屏 KPI 卡/趋势即使 empId 正确也永远空 rows（FIX-2）
     private static final Set<String> KPI_CYCLE_TYPES = Set.of("MONTHLY", "QUARTERLY", "YEARLY");
 
+    /** 金额展示预设到单位的映射；仅用于 columnsMeta，不对 rows 原始值做换算。 */
+    private static final Map<String, String> FIELD_META_AMOUNT_SCALE_UNITS = Map.of(
+            "YUAN", "元",
+            "TEN_THOUSAND_YUAN", "万元",
+            "HUNDRED_MILLION_YUAN", "亿元");
+
+    /** 金额展示预设固定保留 2 位小数。 */
+    private static final int FIELD_META_AMOUNT_SCALE_DECIMALS = 2;
+
     private final DataSource readOnlyDataSource;
     private final SqlSafeValidator validator;
     /** 大屏白名单（大写表名）——SqlSafeValidator 自 3f22660c 起不再做白名单拒绝（SQL 探查产品决策），大屏按 D1 决策在引擎侧自查 */
@@ -137,12 +146,27 @@ public class ScreenQueryEngine {
         Map<String, ScreenDataRespDTO.ColumnMeta> byCol = new HashMap<>();
         for (JsonNode n : fieldMeta) {
             String col = n.path("col").asText();
+            String role = n.hasNonNull("role") ? n.path("role").asText() : null;
+            String unit = n.hasNonNull("unit") ? n.path("unit").asText() : null;
+            Integer decimals = n.hasNonNull("decimals") ? n.path("decimals").asInt() : null;
+            String amountScale = n.hasNonNull("amountScale") ? n.path("amountScale").asText() : null;
+            if (n.hasNonNull("amountScale")) {
+                if (!FIELD_META_AMOUNT_SCALE_UNITS.containsKey(amountScale)
+                        || !"METRIC".equals(role)
+                        || n.has("unit")
+                        || n.has("decimals")) {
+                    throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+                }
+                unit = FIELD_META_AMOUNT_SCALE_UNITS.get(amountScale);
+                decimals = FIELD_META_AMOUNT_SCALE_DECIMALS;
+            }
             byCol.put(col, new ScreenDataRespDTO.ColumnMeta(
                     col,
                     n.hasNonNull("alias") ? n.path("alias").asText() : null,
-                    n.hasNonNull("role") ? n.path("role").asText() : null,
-                    n.hasNonNull("unit") ? n.path("unit").asText() : null,
-                    n.hasNonNull("decimals") ? n.path("decimals").asInt() : null));
+                    role,
+                    unit,
+                    decimals,
+                    amountScale));
         }
         List<ScreenDataRespDTO.ColumnMeta> metas = new ArrayList<>();
         for (String column : resp.getColumns()) {

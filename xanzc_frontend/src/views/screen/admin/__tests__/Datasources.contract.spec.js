@@ -166,4 +166,57 @@ describe('Datasources.vue 最终契约', () => {
     expect(source).toContain('<el-radio value="ACTIVE">启用 ACTIVE</el-radio>');
     expect(source).toContain('<el-radio-button value="WIDE_TABLE">');
   });
+
+  it('度量字段提供可清空的金额量级预设，并在选中时锁定单位/小数位', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
+
+    expect(source).toContain('金额量级');
+    expect(source).toContain('amountScale');
+    expect(source).toMatch(/v-if="row\.role === 'METRIC'"[\s\S]*?金额量级/);
+    expect(source).toContain('clearable');
+    expect(source).toMatch(/amountScale[\s\S]*?disabled/);
+    expect(source).toContain('AMOUNT_SCALE_OPTIONS');
+    expect(source).toContain('清空');
+  });
+
+  it('金额量级选择只转换组件/预览展示值，不修改接口原始数据', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
+    expect(source).toContain('仅影响组件/试跑预览');
+    expect(source).toContain('不修改接口原始 rows、SQL 或数据库');
+  });
+
+  it('选中金额量级时显示预设并保留自定义值，清空后恢复编辑', async () => {
+    const wrapper = await mountPage();
+    const row = { role: 'METRIC', amountScale: 'TEN_THOUSAND_YUAN', unit: '自定义单位', decimals: '4' };
+
+    expect(wrapper.vm.hasAmountScale(row)).toBe(true);
+    expect(wrapper.vm.fieldMetaUnitDisplay(row)).toBe('万元');
+    expect(wrapper.vm.fieldMetaDecimalsDisplay(row)).toBe('2');
+    wrapper.vm.updateFieldMetaUnit(row, '不应写入');
+    wrapper.vm.updateFieldMetaDecimals(row, '9');
+    expect(row).toMatchObject({ unit: '自定义单位', decimals: '4' });
+
+    row.amountScale = '';
+    expect(wrapper.vm.hasAmountScale(row)).toBe(false);
+    expect(wrapper.vm.fieldMetaUnitDisplay(row)).toBe('自定义单位');
+    expect(wrapper.vm.fieldMetaDecimalsDisplay(row)).toBe('4');
+    wrapper.vm.updateFieldMetaUnit(row, '元/户');
+    wrapper.vm.updateFieldMetaDecimals(row, '1');
+    expect(row).toMatchObject({ unit: '元/户', decimals: '1' });
+  });
+
+  it('金额量级行切换为 DIM 后不再显示预设值，单位和小数位恢复为自定义值并可编辑', async () => {
+    const wrapper = await mountPage();
+    const row = { role: 'METRIC', amountScale: 'TEN_THOUSAND_YUAN', unit: '自定义单位', decimals: '4' };
+
+    expect(wrapper.vm.fieldMetaUnitDisplay(row)).toBe('万元');
+    expect(wrapper.vm.fieldMetaDecimalsDisplay(row)).toBe('2');
+    row.role = 'DIM';
+    expect(wrapper.vm.hasAmountScale(row)).toBe(false);
+    expect(wrapper.vm.fieldMetaUnitDisplay(row)).toBe('自定义单位');
+    expect(wrapper.vm.fieldMetaDecimalsDisplay(row)).toBe('4');
+    wrapper.vm.updateFieldMetaUnit(row, '维度单位');
+    wrapper.vm.updateFieldMetaDecimals(row, '1');
+    expect(row).toMatchObject({ unit: '维度单位', decimals: '1' });
+  });
 });
