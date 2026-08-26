@@ -100,7 +100,7 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
     @Autowired(required = false)
     private RptScreenMapper screenMapper;
 
-    /** 发布归档仅用于数据源冻结扫描；v1 运行身份只认当前发布包，草稿 JSON 不参与证明。 */
+    /** 发布归档仅用于数据源引用与删除保护扫描；v1 运行身份只认当前发布包，草稿 JSON 不参与证明。 */
     @Autowired(required = false)
     private RptScreenPublishLogMapper publishLogMapper;
 
@@ -184,14 +184,9 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
 
         List<String> publishedReferences = referencedScreenCodes(id, true);
         Map<String, Object> before = datasourceSnapshot(existing, publishedReferences);
-        if (!publishedReferences.isEmpty() && hasQuerySemanticChange(existing, candidate)) {
-            // 当前发布包及归档都冻结数据源语义，归档不参与 v1 运行身份也不能被随意覆写。
-            // 管理员应复用 save 新建副本契约，再编辑/重新发布目标屏。
-            throw publishedDatasourceReferenceConflict(publishedReferences);
-        }
         if (hasQuerySemanticChange(existing, candidate)) {
-            // 草稿引用允许继续编辑，但仍须重新通过条线与 NAMED_GROUP 安全矩阵，不能因复制实体
-            // 而沿用旧数据源的校验结果。
+            // 已发布/归档引用也允许原地编辑查询语义；仍须重新通过条线与 NAMED_GROUP
+            // 安全矩阵，不能因复制实体而沿用旧数据源的校验结果。
             validateReferencedScreenLines(id, candidate);
         }
         dsMapper.updateById(candidate);
@@ -213,7 +208,7 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         requireAuditReason(reason);
         RptScreenDatasource before = requireDs(id);
         List<String> publishedReferences = referencedScreenCodes(id, true);
-        // 已发布/归档引用的冻结语义优先于草稿占用：两者同时存在时，前端必须拿到完整
+        // 已发布/归档引用的删除保护优先于草稿占用：两者同时存在时，前端必须拿到完整
         // 发布引用屏去执行“新建副本→重新绑定→重新发布”，不能被泛化草稿错误吞掉。
         if (!publishedReferences.isEmpty()) {
             throw publishedDatasourceReferenceConflict(publishedReferences);
@@ -1064,8 +1059,8 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
     }
 
     /**
-     * 已发布引用扫描覆盖当前发布包与归档包。归档不参与 v1 运行身份，却仍冻结数据源语义；
-     * 读取/解析失败保守判定为引用，避免误删或原地改写语义。
+     * 已发布引用扫描覆盖当前发布包与归档包。归档不参与 v1 运行身份，但仍属于删除保护和
+     * 编辑风险提示范围；读取/解析失败保守判定为引用，避免误删并确保安全矩阵复核。
      */
     private boolean publishedScreenReferences(RptScreen screen, Long dsId) {
         if (publishedPackageReferencesConservatively(screen, screen.getCanvasPublishedJson(), dsId)) {
@@ -1088,8 +1083,8 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
     }
 
     private boolean publishedPackageReferencesConservatively(RptScreen screen, String publishedJson, Long dsId) {
-        // 冻结扫描与运行时不同：归档无可信快照时无法证明某个 ds“不被引用”，因此对每个候选
-        // 数据源均保守视为引用，要求受控迁移或业务核对后重新发布。
+        // 删除保护扫描与运行时不同：归档无可信快照时无法证明某个 ds“不被引用”，因此对每个候选
+        // 数据源均保守视为引用，要求受控迁移或业务核对后重新发布后才能删除。
         PublishedPackageEvidence evidence = publishedPackageBindingEvidence(publishedJson, dsId);
         return evidence.untrusted() || evidence.bound();
     }
@@ -1239,7 +1234,7 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         return copy;
     }
 
-    /** 已发布引用只冻结查询语义；名称和备注等展示元数据仍可更正。 */
+    /** 查询语义变更的字段集合；名称和备注等展示元数据不触发引用屏安全矩阵复核。 */
     private boolean hasQuerySemanticChange(RptScreenDatasource before, RptScreenDatasource after) {
         return !java.util.Objects.equals(before.getDsType(), after.getDsType())
                 || !java.util.Objects.equals(before.getSourceKind(), after.getSourceKind())

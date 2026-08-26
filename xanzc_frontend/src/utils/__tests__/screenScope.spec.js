@@ -212,7 +212,7 @@ describe('screenScope 业务条线、机构范围与地图配置契约', () => {
     expect(datasourceReferenceLabel({})).toBe('未引用');
   });
 
-  it('数据源完整草稿/发布引用决定冻结与删除提示：发布引用冻结语义字段，任一引用禁止删除', () => {
+  it('数据源完整草稿/发布引用决定风险提示与删除保护：发布引用可编辑，任一引用禁止删除', () => {
     const state = datasourceReferenceState({
       draftReferenceScreenCodes: ['SCR_DRAFT_A', 'SCR_DRAFT_B'],
       publishedReferenceScreenCodes: ['SCR_LIVE_A', 'SCR_ARCHIVE_B']
@@ -220,10 +220,11 @@ describe('screenScope 业务条线、机构范围与地图配置契约', () => {
     expect(state).toMatchObject({
       draftCodes: ['SCR_DRAFT_A', 'SCR_DRAFT_B'],
       publishedCodes: ['SCR_LIVE_A', 'SCR_ARCHIVE_B'],
-      semanticFrozen: true,
+      publishedReferenced: true,
       deleteBlocked: true
     });
-    expect(state.guidance).toContain('新建副本→改草稿绑定→重新发布');
+    expect(state).not.toHaveProperty('semanticFrozen');
+    expect(state.guidance).toContain('直接影响引用该数据源的已发布大屏');
     expect(datasourceReferenceLabel({
       draftReferenceScreenCodes: state.draftCodes,
       publishedReferenceScreenCodes: state.publishedCodes

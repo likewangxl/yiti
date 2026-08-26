@@ -741,9 +741,9 @@ class ScreenDatasourceServiceTest {
         assertThat(cap.getValue().getDsName()).isEqualTo("更新后的名称");
     }
 
-    /** 已发布屏快照引用的数据源不得原地改变查询语义，错误必须带完整屏编码。 */
+    /** 已发布屏快照引用的数据源允许原地改变查询语义，但必须经过引用屏安全矩阵并完整审计。 */
     @Test
-    void update_publishedReferencesRejectSemanticChangeAndReturnAllScreenCodes() {
+    void update_publishedReferencesAllowsSemanticChangeAndAuditsAllScreenCodes() {
         RptScreenDatasource existing = new RptScreenDatasource();
         existing.setId(6L);
         existing.setDsCode("SCRDS_LOCKED");
@@ -772,15 +772,56 @@ class ScreenDatasourceServiceTest {
         req.setConfigJson("{\"cycleType\":\"QUARTERLY\"}");
         req.setReason("尝试改变查询周期");
 
-        assertThatThrownBy(() -> service.update(6L, req))
-                .isInstanceOf(BizException.class)
-                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_DS_IN_USE.getCode())
-                .hasMessageContaining("SCR_ALPHA")
-                .hasMessageContaining("SCR_BETA");
-        verify(dsMapper, never()).updateById(any(RptScreenDatasource.class));
+        service.update(6L, req);
+
+        ArgumentCaptor<RptScreenDatasource> updated = ArgumentCaptor.forClass(RptScreenDatasource.class);
+        verify(dsMapper).updateById(updated.capture());
+        assertThat(updated.getValue().getConfigJson()).contains("QUARTERLY");
+        ArgumentCaptor<com.bank.branch.platform.governance.api.dto.AuditLogCmd> audit =
+                ArgumentCaptor.forClass(com.bank.branch.platform.governance.api.dto.AuditLogCmd.class);
+        verify(auditApi).log(audit.capture());
+        assertThat(audit.getValue().getRequestParams())
+                .contains("publishedReferences")
+                .contains("SCR_ALPHA")
+                .contains("SCR_BETA");
     }
 
-    /** 已发布引用仅允许改名称/备注等非查询语义元数据。 */
+    /** 放开语义编辑不放松已发布引用屏的业务条线安全矩阵。 */
+    @Test
+    void update_publishedReferencesStillRejectsIncompatibleBizLine() {
+        RptScreenDatasource existing = new RptScreenDatasource();
+        existing.setId(6L);
+        existing.setDsCode("SCRDS_LOCKED");
+        existing.setDsName("零售指标");
+        existing.setDsType("TIMESERIES");
+        existing.setSourceKind("KPI_RESULT");
+        existing.setBizLine("COMMON");
+        existing.setStatus("ACTIVE");
+        existing.setConfigJson("{\"cycleType\":\"MONTHLY\"}");
+        when(dsMapper.selectById(6L)).thenReturn(existing);
+        RptScreen screen = new RptScreen();
+        screen.setId(71L);
+        screen.setScreenCode("SCR_RETAIL");
+        screen.setBizLine("RETAIL");
+        screen.setCanvasPublishedJson("{\"bindSnapshots\":{\"11\":{\"bind\":{\"dsId\":6}}}}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+
+        ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
+        req.setDsName("零售指标");
+        req.setSourceKind("KPI_RESULT");
+        req.setBizLine("CORP");
+        req.setStatus("ACTIVE");
+        req.setConfigJson("{\"cycleType\":\"QUARTERLY\"}");
+        req.setReason("验证条线安全矩阵");
+
+        assertThatThrownBy(() -> service.update(6L, req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_BIZ_LINE_MISMATCH.getCode());
+        verify(dsMapper, never()).updateById(any(RptScreenDatasource.class));
+        verify(auditApi, never()).log(any());
+    }
+
+    /** 已发布引用修改名称/备注等非查询语义元数据同样保留兼容。 */
     @Test
     void update_publishedReferencesAllowsCosmeticMetadataOnlyChange() {
         RptScreenDatasource existing = new RptScreenDatasource();
@@ -836,7 +877,7 @@ class ScreenDatasourceServiceTest {
         verify(dsMapper, never()).deleteById(6L);
     }
 
-    /** 无快照归档无法证明“不引用”任一数据源，因此冻结扫描必须保守拒绝删除并返回该屏编码。 */
+    /** 无快照归档无法证明“不引用”任一数据源，因此删除保护扫描必须保守拒绝并返回该屏编码。 */
     @Test
     void delete_untrustedArchivedPackageFailsClosedForUnknownReference() {
         RptScreenDatasource existing = new RptScreenDatasource();
@@ -859,7 +900,7 @@ class ScreenDatasourceServiceTest {
         verify(dsMapper, never()).deleteById(6L);
     }
 
-    /** 草稿也引用时不能先返回泛化错误而吞掉已发布引用屏；发布冻结优先级更高。 */
+    /** 草稿也引用时不能先返回泛化错误而吞掉已发布引用屏；发布删除保护优先级更高。 */
     @Test
     void delete_draftAndPublishedReferencesReturnsAllPublishedScreenCodes() {
         RptScreenDatasource existing = new RptScreenDatasource();

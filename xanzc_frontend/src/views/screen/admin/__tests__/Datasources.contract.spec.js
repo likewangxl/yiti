@@ -64,19 +64,24 @@ async function mountPage() {
 describe('Datasources.vue 最终契约', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('完整发布/归档引用会显示冻结指引，只允许展示字段编辑而不允许删除', async () => {
+  it('完整发布/归档引用允许编辑语义字段并显示影响已发布大屏的风险提示，但仍不允许删除', async () => {
     const wrapper = await mountPage();
     wrapper.vm.openEdit(frozenRow);
     await wrapper.vm.$nextTick();
 
-    expect(wrapper.vm.semanticFrozen).toBe(true);
+    expect(wrapper.vm.publishedReferenced).toBe(true);
     expect(wrapper.vm.referenceState(frozenRow)).toMatchObject({
       draftCodes: ['SCR_DRAFT_A', 'SCR_DRAFT_B'],
-      publishedCodes: ['SCR_LIVE_A', 'SCR_ARCHIVE_B'], deleteBlocked: true
+      publishedCodes: ['SCR_LIVE_A', 'SCR_ARCHIVE_B'], publishedReferenced: true, deleteBlocked: true
     });
     expect(wrapper.find('[data-testid="datasource-freeze-notice"]').text())
-      .toContain('新建副本→改草稿绑定→重新发布');
+      .toContain('直接影响引用该数据源的已发布大屏');
     expect(wrapper.vm.dlg.remark).toBe('原始备注');
+
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
+    expect(source).not.toContain(':disabled="publishedReferenced"');
+    expect(source).not.toContain(':disabled="semanticFrozen"');
+    expect(source).toContain('新建副本');
   });
 
   it('NAMED_GROUP 时 CUSTOM_SQL 在编辑器中不可选，LEGACY_CONTEXT 不受此限制', async () => {

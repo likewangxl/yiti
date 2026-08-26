@@ -218,22 +218,23 @@ export function datasourceReferenceLabel(row = {}) {
 /**
  * 数据源引用的管理端状态。
  *
- * 发布清单同时覆盖当前发布包与发布归档：存在时查询语义字段不能原地改动；
- * 草稿、发布或归档任一引用存在时均不得删除。这里仅驱动前端提示/禁用，服务端仍为最终安全边界。
+ * 发布清单同时覆盖当前发布包与发布归档：存在时允许编辑查询语义，但保存后会直接影响
+ * 引用该数据源的已发布大屏；草稿、发布或归档任一引用存在时均不得删除。这里仅驱动
+ * 前端提示/禁用，服务端仍为最终安全边界。
  */
 export function datasourceReferenceState(row = {}) {
   const codes = value => (Array.isArray(value) ? value : []).filter(Boolean).map(String);
   const draftCodes = codes(row.draftReferenceScreenCodes);
   const publishedCodes = codes(row.publishedReferenceScreenCodes);
-  const semanticFrozen = publishedCodes.length > 0;
-  const deleteBlocked = draftCodes.length > 0 || semanticFrozen;
+  const publishedReferenced = publishedCodes.length > 0;
+  const deleteBlocked = draftCodes.length > 0 || publishedReferenced;
   return {
     draftCodes,
     publishedCodes,
-    semanticFrozen,
+    publishedReferenced,
     deleteBlocked,
-    guidance: semanticFrozen
-      ? '该数据源存在发布/归档引用，查询语义字段已冻结；请新建副本→改草稿绑定→重新发布。'
+    guidance: publishedReferenced
+      ? '该数据源存在发布/归档引用；保存查询语义修改后会直接影响引用该数据源的已发布大屏。可选先新建副本，再改草稿绑定并重新发布。'
       : (deleteBlocked ? '该数据源仍被草稿引用，不能删除；请先解除草稿绑定。' : '')
   };
 }
