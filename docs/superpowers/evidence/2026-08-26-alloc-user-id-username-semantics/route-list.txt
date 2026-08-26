@@ -1,0 +1,12 @@
+1. http://127.0.0.1:8090/api/**
+   body={"code":0,"message":"success","data":[]}
+2. http://127.0.0.1:8090/api/auth/current-user
+   body contains empId=admin, mainOrgCode=1, isSystemAdmin=true
+3. http://127.0.0.1:8090/api/auth/permissions
+   body contains resourceUrls=[], isSystemAdmin=true
+4. http://127.0.0.1:8090/api/perf/alloc-adjust/my-applies*
+   body contains records=[], total=0, pageNo=1, pageSize=20
+5. http://127.0.0.1:8090/api/perf/alloc-adjust/emp-suggest*
+   body contains empId=2347, username=12038011, empChnName=刘鑫
+6. http://127.0.0.1:8090/api/perf/alloc-adjust/create
+   body contains id=ADJ-PW-USER-ID

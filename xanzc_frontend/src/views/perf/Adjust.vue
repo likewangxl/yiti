@@ -944,7 +944,11 @@ async function openTodoDetail(row) {
       bizKind: d.bizKind ? (typeof d.bizKind === 'string' ? d.bizKind.split(',') : d.bizKind) : [],
       accountNo: d.accountNo,
       ownerOrgId: d.ownerOrgId, reason: d.reason || d.remark,
-      items: (d.items || []).filter(it => (it.itemKind || 'NEW') === 'NEW').map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark, empLabel: empLabelOf(it) })),
+      items: (d.items || []).filter(it => (it.itemKind || 'NEW') === 'NEW').map(it => ({
+        empId: it.empId || '', username: it.username || '', empChnName: it.empChnName || '',
+        pct: it.pct ?? it.ratio, remark: it.remark, empLabel: empLabelOf(it),
+        _selectedEmpLabel: selectedEmpLabelOf(it)
+      })),
       originalItems: originalItemsFromDetail(d)
     });
     // 余额概览读快照（存款 MC_001..004 列复用：currBal=当前 / mAvgBal=较上日 / qAvgBal=年均 / yAvgBal=较上年均）
@@ -1373,7 +1377,7 @@ const dlg = reactive({
   form: {
     custType: 'CORP', custId: '', custName: '', allocDim: 'RULE', bizKind: 'CORP_DEPOSIT',
     accountNo: '', ownerOrgId: '', reason: '',
-    items: [{ empId: '', pct: 100, remark: '', empLabel: '' }],
+    items: [{ empId: '', pct: 100, remark: '', empLabel: '', _selectedEmpLabel: '' }],
     originalItems: []
   }
 });
@@ -1397,39 +1401,69 @@ const dlgRules = {
   ]
 };
 
-function defaultItem() { return { empId: '', pct: 0, remark: '', empLabel: '' }; }
+function defaultItem() { return { empId: '', pct: 0, remark: '', empLabel: '', _selectedEmpLabel: '' }; }
 function addItemRow() { dlg.form.items.push(defaultItem()); }
 
 // 分配明细员工号自动补齐：按工号/登录名/中文名模糊匹配 PT_USER
-// 下拉项 label = "username（中文名）"，作为输入框显示内容；empId 另存干净值用于提交
+// 下拉项 label = "username（中文名）"，作为输入框显示内容；empId 另存真实主键用于提交
 async function queryEmpSuggest(queryString, cb) {
   const kw = (queryString || '').trim();
   if (!kw) { cb([]); return; }
   try {
     const list = await suggestEmployees(kw);
     const arr = Array.isArray(list) ? list : [];
-    cb(arr.map(u => ({ ...u, label: u.empChnName ? `${u.username}（${u.empChnName}）` : u.username })));
+    cb(arr.map(u => ({
+      ...u,
+      label: u.empChnName
+        ? `${u.username || u.empId}（${u.empChnName}）`
+        : (u.username || u.empId)
+    })));
   } catch { cb([]); }
 }
-// 选中下拉项：输入框显示 label，empId 存登录名（干净值，供提交/校验/原业绩分配解析）
+// 选中下拉项：输入框显示 username/姓名，empId 存真实用户主键（供提交/校验/后端解析）
 function onEmpSelect(row, item) {
-  row.empId = item.username || item.empId || '';
-  row.empLabel = item.label || row.empId;
+  row.empId = item.empId || '';
+  row.username = item.username || '';
+  row.empChnName = item.empChnName || item.displayName || '';
+  row.empLabel = item.label || empDisplayLabel(item, row.empId);
+  row._selectedEmpLabel = row.empLabel;
 }
-// 自由输入（未从下拉选择）时同步 empId；已选项 label 含「（」则跳过，避免覆盖干净值
+// 自由输入未从下拉选择时清空主键，避免把 username 当作 empId；已选项原样回填时保持选择结果。
 function onEmpInput(row, val) {
-  if (!val) { row.empId = ''; return; }
-  if (!String(val).includes('（')) { row.empId = String(val).trim(); }
+  if (row.empId && String(val || '') === String(row._selectedEmpLabel || '')) return;
+  clearEmpSelection(row);
 }
 // 明细员工号显示文案：优先 username（中文名），无则回退工号（查看/审批页详情已带 username/empChnName）
 function empLabelOf(it) {
   if (it && it.username) return it.username + (it.empChnName ? '（' + it.empChnName + '）' : '');
   return (it && it.empId) || '';
 }
+function selectedEmpLabelOf(it) {
+  return it?.empId ? empLabelOf(it) : '';
+}
+function empDisplayLabel(item, fallbackEmpId = '') {
+  const username = item?.username || '';
+  const name = item?.empChnName || item?.displayName || '';
+  return username ? `${username}${name ? `（${name}）` : ''}` : (fallbackEmpId || item?.empId || '');
+}
+function clearEmpSelection(row) {
+  row.empId = '';
+  row._selectedEmpLabel = '';
+  if ('username' in row) row.username = '';
+  if ('empChnName' in row) row.empChnName = '';
+  if ('orgCode' in row) {
+    row.orgCode = '';
+    row.orgName = '';
+    row.orgLabel = '';
+  }
+}
 
 // === 原业绩分配（手工录入）===
 function origRow() {
-  return { acctNo: '', empId: '', empLabel: '', username: '', empChnName: '', orgCode: '', orgName: '', orgLabel: '', ratio: 0 };
+  return {
+    acctNo: '', empId: '', empLabel: '', _selectedEmpLabel: '', username: '', empChnName: '',
+    orgCode: '', orgName: '', orgLabel: '', ratio: 0
+  };
 }
 function addOriginalRow() { dlg.form.originalItems.push(origRow()); }
 function removeOriginalRow(i) { dlg.form.originalItems.splice(i, 1); }
@@ -1437,12 +1471,13 @@ function removeOriginalRow(i) { dlg.form.originalItems.splice(i, 1); }
 function originalOrgDisplay(row) {
   return row?.orgName || '-';
 }
-// 原业绩分配-员工下拉选中（empId 存登录名干净值，username/empChnName 留快照）
+// 原业绩分配-员工下拉选中（empId 存真实用户主键，username/empChnName 留展示快照）
 function onOrigEmpSelect(row, item) {
-  row.empId = item.username || item.empId || '';
+  row.empId = item.empId || '';
   row.username = item.username || '';
-  row.empChnName = item.empChnName || '';
-  row.empLabel = item.label || row.empId;
+  row.empChnName = item.empChnName || item.displayName || '';
+  row.empLabel = item.label || empDisplayLabel(item, row.empId);
+  row._selectedEmpLabel = row.empLabel;
   // emp-suggest 返回员工主机构快照；回填后机构仍可通过下方机构联想框改选。
   const mainOrgCode = item.mainOrgCode || item.orgCode || item.deptNo || '';
   const mainOrgName = item.mainOrgName || item.orgName || '';
@@ -1453,12 +1488,8 @@ function onOrigEmpSelect(row, item) {
   }
 }
 function onOrigEmpInput(row, val) {
-  if (!val) {
-    row.empId = ''; row.username = ''; row.empChnName = '';
-    row.orgCode = ''; row.orgName = ''; row.orgLabel = '';
-    return;
-  }
-  if (!String(val).includes('（')) { row.empId = String(val).trim(); row.username = String(val).trim(); }
+  if (row.empId && String(val || '') === String(row._selectedEmpLabel || '')) return;
+  clearEmpSelection(row);
 }
 // 原业绩分配-机构下拉联想（按机构号/部门号/名称模糊匹配，只展示机构名称）
 async function queryOrgSuggest(queryString, cb) {
@@ -1487,6 +1518,7 @@ function originalItemsFromDetail(d) {
     username: it.username || '', empChnName: it.empChnName || '',
     orgCode: it.orgCode || '', orgName: it.orgName || '',
     empLabel: empLabelOf(it),
+    _selectedEmpLabel: selectedEmpLabelOf(it),
     orgLabel: it.orgName || '',
     ratio: it.ratio
   }));
@@ -1560,7 +1592,7 @@ function openCreate() {
     // 默认按规则分配 → 业务类型默认存款+贷款
     custType: 'CORP', custId: '', custName: '', allocDim: 'RULE', bizKind: [BIZ_DEPOSIT, BIZ_LOAN],
     accountNo: '', ownerOrgId: '', reason: '',
-    items: [{ empId: '', pct: 100, remark: '', empLabel: '' }],
+    items: [{ empId: '', pct: 100, remark: '', empLabel: '', _selectedEmpLabel: '' }],
     originalItems: []
   });
   dlg.show = true;
@@ -1578,7 +1610,11 @@ async function openView(row) {
     accountNo: row.accountNo || '',
     ownerOrgId: row.ownerOrgId || '',
     reason: row.reason || row.remark || '',
-    items: row.items?.length ? row.items.map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '', empLabel: empLabelOf(it) })) : [{ empId: '', pct: 100, remark: '' }]
+    items: row.items?.length ? row.items.map(it => ({
+      empId: it.empId || '', username: it.username || '', empChnName: it.empChnName || '',
+      pct: it.pct ?? it.ratio, remark: it.remark || '', empLabel: empLabelOf(it),
+      _selectedEmpLabel: selectedEmpLabelOf(it)
+    })) : [{ empId: '', pct: 100, remark: '', empLabel: '', _selectedEmpLabel: '' }]
   });
   // 余额概览读快照（列复用：currBal=当前 / mAvgBal=较上日 / qAvgBal=年均 / yAvgBal=较上年均）
   custIdx.MC_001 = row.currBal ?? null;
@@ -1603,7 +1639,11 @@ async function openView(row) {
         custType: d.custType || '', custId: d.custId, allocDim: d.allocDim,
         bizKind: d.bizKind ? (typeof d.bizKind === 'string' ? d.bizKind.split(',') : d.bizKind) : [],
         accountNo: d.accountNo, ownerOrgId: d.ownerOrgId, reason: d.reason || d.remark || '',
-        items: (d.items || []).filter(it => (it.itemKind || 'NEW') === 'NEW').map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '', empLabel: empLabelOf(it) })),
+        items: (d.items || []).filter(it => (it.itemKind || 'NEW') === 'NEW').map(it => ({
+          empId: it.empId || '', username: it.username || '', empChnName: it.empChnName || '',
+          pct: it.pct ?? it.ratio, remark: it.remark || '', empLabel: empLabelOf(it),
+          _selectedEmpLabel: selectedEmpLabelOf(it)
+        })),
         originalItems: originalItemsFromDetail(d)
       });
       // 客户名称 + 余额概览以 detail 快照为准
@@ -1652,7 +1692,7 @@ async function openEdit(row) {
     bizKind: row.bizKind ? (typeof row.bizKind === 'string' ? row.bizKind.split(',') : row.bizKind) : [],
     accountNo: row.accountNo || '', ownerOrgId: row.ownerOrgId || '',
     reason: row.reason || row.remark || '',
-    items: [{ empId: '', pct: 100, remark: '', empLabel: '' }],
+    items: [{ empId: '', pct: 100, remark: '', empLabel: '', _selectedEmpLabel: '' }],
     originalItems: []
   });
   dlg.applyNo = row.applyNo || '';
@@ -1664,10 +1704,14 @@ async function openEdit(row) {
         custType: d.custType || 'CORP', custId: d.custId, allocDim: d.allocDim || 'RULE',
         bizKind: d.bizKind ? (typeof d.bizKind === 'string' ? d.bizKind.split(',') : d.bizKind) : [],
         accountNo: d.accountNo || '', ownerOrgId: d.ownerOrgId || '', reason: d.reason || d.remark || '',
-        items: (d.items || []).filter(it => (it.itemKind || 'NEW') === 'NEW').map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '', empLabel: empLabelOf(it) })),
+        items: (d.items || []).filter(it => (it.itemKind || 'NEW') === 'NEW').map(it => ({
+          empId: it.empId || '', username: it.username || '', empChnName: it.empChnName || '',
+          pct: it.pct ?? it.ratio, remark: it.remark || '', empLabel: empLabelOf(it),
+          _selectedEmpLabel: selectedEmpLabelOf(it)
+        })),
         originalItems: originalItemsFromDetail(d)
       });
-      if (!dlg.form.items.length) dlg.form.items = [{ empId: '', pct: 100, remark: '', empLabel: '' }];
+      if (!dlg.form.items.length) dlg.form.items = [{ empId: '', pct: 100, remark: '', empLabel: '', _selectedEmpLabel: '' }];
       if (d.custName) dlg.form.custName = d.custName;
       // 余额概览快照反显（列复用）
       custIdx.MC_001 = d.currBal ?? null;

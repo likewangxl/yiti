@@ -1,0 +1,19 @@
+All commands used the project-local CLI from xanzc_frontend and the session alloc-user-id-final.
+The NO_PROXY/empty proxy prefix was applied to every command.
+
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final open about:blank --browser firefox
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final resize 1440 900
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final route 'http://127.0.0.1:8090/api/**' --body '{"code":0,"message":"success","data":[]}' --content-type application/json
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final route 'http://127.0.0.1:8090/api/auth/current-user' --body '{"code":0,"message":"success","data":{"empId":"admin","username":"admin","displayName":"管理员","mainOrgCode":"1","mainOrgName":"西安分行","roles":[{"roleCode":"SYS_ADMIN"}],"isSystemAdmin":true}}' --content-type application/json
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final route 'http://127.0.0.1:8090/api/auth/permissions' --body '{"code":0,"message":"success","data":{"resourceUrls":[],"isSystemAdmin":true}}' --content-type application/json
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final route 'http://127.0.0.1:8090/api/perf/alloc-adjust/my-applies*' --body '{"code":0,"message":"success","data":{"records":[],"total":0,"pageNo":1,"pageSize":20}}' --content-type application/json
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final route 'http://127.0.0.1:8090/api/perf/alloc-adjust/emp-suggest*' --body '{"code":0,"message":"success","data":[{"empId":"2347","username":"12038011","empChnName":"刘鑫","mainOrgCode":"131","mainOrgName":"榆林分行府谷支行"}]}' --content-type application/json
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final route 'http://127.0.0.1:8090/api/perf/alloc-adjust/create' --body '{"code":0,"message":"success","data":{"id":"ADJ-PW-USER-ID"}}' --content-type application/json
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final goto 'http://127.0.0.1:8090/#/perf/adjust'
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final click/fill/snapshot/eval/screenshot
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final requests
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final request-body 68
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final response-body 68
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final console
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final route-list
+./node_modules/.bin/playwright-cli -s=alloc-user-id-final close

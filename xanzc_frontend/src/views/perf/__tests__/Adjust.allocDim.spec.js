@@ -165,10 +165,135 @@ describe('业绩调整分配维度与原分配关系', () => {
     const row = { empId: '', empLabel: '', username: '', empChnName: '', orgCode: '', orgName: '', orgLabel: '' };
 
     wrapper.vm.onOrigEmpSelect(row, {
-      username: 'E001', empChnName: '张三', mainOrgCode: 'ORG-01', mainOrgName: '南山支行', label: 'E001（张三）'
+      empId: 'E-001', username: 'E001', empChnName: '张三', mainOrgCode: 'ORG-01', mainOrgName: '南山支行', label: 'E001（张三）'
     });
 
-    expect(row).toMatchObject({ empId: 'E001', orgCode: 'ORG-01', orgName: '南山支行', orgLabel: '南山支行' });
+    expect(row).toMatchObject({ empId: 'E-001', orgCode: 'ORG-01', orgName: '南山支行', orgLabel: '南山支行' });
+  });
+
+  it('员工反查同时返回 empId/username 时，分配明细和原业绩分配提交 empId，展示 username', async () => {
+    await mountPage();
+    const employee = {
+      empId: '2347', username: '12038011', empChnName: '张三', label: '12038011（张三）'
+    };
+    api.suggestEmployees.mockResolvedValueOnce([employee]);
+    const suggestionCallback = vi.fn();
+    await wrapper.vm.queryEmpSuggest('12038011', suggestionCallback);
+    expect(suggestionCallback).toHaveBeenCalledWith([
+      expect.objectContaining({ empId: '2347', username: '12038011', label: '12038011（张三）' })
+    ]);
+    const selectedEmployee = suggestionCallback.mock.calls[0][0][0];
+    const itemRow = { empId: '', empLabel: '', pct: 100, remark: '' };
+    const originalRow = {
+      acctNo: '', empId: '', empLabel: '', username: '', empChnName: '',
+      orgCode: 'ORG-01', orgName: '南山支行', orgLabel: '南山支行', ratio: 100
+    };
+
+    wrapper.vm.onEmpSelect(itemRow, selectedEmployee);
+    wrapper.vm.onOrigEmpSelect(originalRow, selectedEmployee);
+    Object.assign(wrapper.vm.dlg.form, {
+      custType: 'CORP', custId: 'C-001', custName: '客户一', allocDim: 'RULE',
+      bizKind: ['CORP_DEPOSIT'], ownerOrgId: 'ORG-01', reason: '调整',
+      items: [itemRow], originalItems: [originalRow]
+    });
+
+    expect(itemRow).toMatchObject({ empId: '2347', empLabel: '12038011（张三）' });
+    expect(originalRow).toMatchObject({ empId: '2347', username: '12038011', empLabel: '12038011（张三）' });
+    expect(wrapper.vm.buildAdjustPayload()).toMatchObject({
+      items: [expect.objectContaining({ empId: '2347', ratio: 100 })],
+      originalAllocList: [expect.objectContaining({ empId: '2347', username: '12038011' })]
+    });
+  });
+
+  it('自由输入员工工号不会伪装成主键，只有重新选择反查项才写入 payload.empId', async () => {
+    await mountPage();
+    const employee = {
+      empId: '2347', username: '12038011', empChnName: '张三', label: '12038011（张三）'
+    };
+    const itemRow = {
+      empId: '2347', username: '12038011', empChnName: '张三', empLabel: '12038011（张三）', pct: 100, remark: ''
+    };
+    const originalRow = {
+      acctNo: '', empId: '2347', username: '12038011', empChnName: '张三', empLabel: '12038011（张三）',
+      orgCode: 'ORG-01', orgName: '南山支行', orgLabel: '南山支行', ratio: 100
+    };
+
+    wrapper.vm.onEmpInput(itemRow, '12038011');
+    wrapper.vm.onOrigEmpInput(originalRow, '12038011');
+    Object.assign(wrapper.vm.dlg.form, {
+      custType: 'CORP', custId: 'C-001', allocDim: 'RULE', bizKind: ['CORP_DEPOSIT'],
+      ownerOrgId: 'ORG-01', items: [itemRow], originalItems: [originalRow]
+    });
+
+    expect(itemRow.empId).toBe('');
+    expect(originalRow.empId).toBe('');
+    expect(wrapper.vm.buildAdjustPayload().items).toEqual([]);
+    expect(wrapper.vm.buildAdjustPayload().originalAllocList).toEqual([]);
+
+    wrapper.vm.onEmpSelect(itemRow, employee);
+    wrapper.vm.onOrigEmpSelect(originalRow, employee);
+    const payload = wrapper.vm.buildAdjustPayload();
+    expect(payload.items).toEqual([expect.objectContaining({ empId: '2347' })]);
+    expect(payload.originalAllocList).toEqual([expect.objectContaining({ empId: '2347', username: '12038011' })]);
+  });
+
+  it('员工输入事件先更新 v-model 后，编辑已选工号会清空主键，选中项回填不会误清', async () => {
+    await mountPage();
+    const employee = {
+      empId: '2347', username: '12038011', empChnName: '张三', label: '12038011（张三）'
+    };
+    const itemRow = {
+      empId: '2347', username: '12038011', empChnName: '张三', empLabel: '12038011（张三）', pct: 100
+    };
+    const originalRow = {
+      acctNo: '', empId: '2347', username: '12038011', empChnName: '张三', empLabel: '12038011（张三）',
+      orgCode: 'ORG-01', orgName: '南山支行', orgLabel: '南山支行', ratio: 100
+    };
+
+    // el-autocomplete 的 v-model 先变更，事件处理器拿到的 row.empLabel 已是新输入值。
+    itemRow.empLabel = '12038012';
+    originalRow.empLabel = '12038012';
+    wrapper.vm.onEmpInput(itemRow, '12038012');
+    wrapper.vm.onOrigEmpInput(originalRow, '12038012');
+
+    expect(itemRow.empId).toBe('');
+    expect(originalRow.empId).toBe('');
+
+    // 选择反查项后，组件可能再次触发 input/change；原样回填不应清掉刚写入的真实主键。
+    wrapper.vm.onEmpSelect(itemRow, employee);
+    wrapper.vm.onOrigEmpSelect(originalRow, employee);
+    wrapper.vm.onEmpInput(itemRow, itemRow.empLabel);
+    wrapper.vm.onOrigEmpInput(originalRow, originalRow.empLabel);
+
+    expect(itemRow.empId).toBe('2347');
+    expect(originalRow.empId).toBe('2347');
+  });
+
+  it('草稿详情回显保留真实 empId，员工号展示使用 username', async () => {
+    api.getAdjustDetail.mockResolvedValueOnce({
+      id: 'DRAFT-EMP', status: 'DRAFT', custType: 'CORP', custId: 'C-001', custName: '客户一',
+      allocDim: 'RULE', bizKind: 'CORP_DEPOSIT', ownerOrgId: 'ORG-01', reason: '调整',
+      items: [
+        { itemKind: 'NEW', empId: '2347', username: '12038011', empChnName: '张三', ratio: 100 },
+        { itemKind: 'ORIGIN', empId: '2347', username: '12038011', empChnName: '张三',
+          orgCode: 'ORG-01', orgName: '南山支行', ratio: 100 }
+      ]
+    });
+
+    await mountPage();
+    await wrapper.vm.openEdit({ id: 'DRAFT-EMP', status: 'DRAFT', custId: 'C-001', allocDim: 'RULE' });
+    await flushPromises();
+
+    expect(wrapper.vm.dlg.form.items[0]).toMatchObject({
+      empId: '2347', empLabel: '12038011（张三）', _selectedEmpLabel: '12038011（张三）'
+    });
+    expect(wrapper.vm.dlg.form.originalItems[0]).toMatchObject({
+      empId: '2347', username: '12038011', empLabel: '12038011（张三）', _selectedEmpLabel: '12038011（张三）'
+    });
+    expect(wrapper.vm.buildAdjustPayload()).toMatchObject({
+      items: [expect.objectContaining({ empId: '2347' })],
+      originalAllocList: [expect.objectContaining({ empId: '2347', username: '12038011' })]
+    });
   });
 
   it('原业绩分配的所属机构只展示机构名称，但仍保留机构号用于提交', async () => {
@@ -176,11 +301,11 @@ describe('业绩调整分配维度与原分配关系', () => {
     const row = { empId: '', empLabel: '', username: '', empChnName: '', orgCode: '', orgName: '', orgLabel: '' };
 
     wrapper.vm.onOrigEmpSelect(row, {
-      username: 'E001', empChnName: '张三', mainOrgCode: 'ORG-01', mainOrgName: '南山支行', label: 'E001（张三）'
+      empId: 'E-001', username: 'E001', empChnName: '张三', mainOrgCode: 'ORG-01', mainOrgName: '南山支行', label: 'E001（张三）'
     });
 
     expect(wrapper.vm.originalOrgDisplay(row)).toBe('南山支行');
-    expect(row).toMatchObject({ orgCode: 'ORG-01', orgName: '南山支行', orgLabel: '南山支行' });
+    expect(row).toMatchObject({ empId: 'E-001', orgCode: 'ORG-01', orgName: '南山支行', orgLabel: '南山支行' });
 
     wrapper.vm.onOrigOrgSelect(row, { deptNo: 'ORG-02', orgName: '福田支行', label: 'ORG-02（福田支行）' });
 
