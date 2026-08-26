@@ -243,6 +243,35 @@ describe('大屏区块取数请求契约', () => {
     wrapper.unmount();
   });
 
+  it('数值卡按指标元数据展示金额量级后的数值和单位', async () => {
+    const payload = {
+      columns: ['存款余额'],
+      rows: [[100000000]],
+      columnsMeta: [{ col: '存款余额', role: 'METRIC', amountScale: 'HUNDRED_MILLION_YUAN', unit: '亿元', decimals: 2 }]
+    };
+    queryMock.mockResolvedValueOnce(payload);
+    const wrapper = mount(BlockContainer, {
+      props: {
+        block: {
+          id: 93,
+          componentType: 'METRIC_CARD',
+          bindJson: JSON.stringify({ dsId: 9002, items: [{ col: '存款余额', label: '存款余额' }] }),
+          styleJson: JSON.stringify({ refreshSec: 0 }),
+          drillJson: '{}'
+        },
+        context: { schemaVersion: 1, screenCode: 'SCR_AMOUNT_CARD' }
+      },
+      global: componentGlobals
+    });
+
+    await vi.waitFor(() => expect(wrapper.find('.mc-value').exists()).toBe(true));
+    const valueText = wrapper.find('.mc-value').text();
+    expect(valueText).toContain('1.00');
+    expect(valueText).not.toContain('100,000,000.00');
+    expect(wrapper.find('.mc-unit').text()).toBe('亿元');
+    wrapper.unmount();
+  });
+
   it('DrillTrend 统一转换钻取指标的金额量级后生成趋势序列', async () => {
     queryMock.mockResolvedValueOnce({
       columns: ['data_date', '存款余额'],

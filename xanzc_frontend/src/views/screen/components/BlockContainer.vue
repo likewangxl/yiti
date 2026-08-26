@@ -80,7 +80,7 @@ const componentMap = {
   SPARKLINE_CARD: SparklineCard
 };
 // 新一代图表额外消费 propValue + columnsMeta（/api/screen/data 可选扩展字段，缺失容错）；
-// 旧 5 类图表不声明这两个 props，避免对象透传落成 DOM attribute，按类型白名单条件绑定
+// 数值卡只声明 columnsMeta；其余旧图表不声明元数据，避免对象透传落成 DOM attribute。
 const EXTENDED_TYPES = new Set([
   'BAR_COMPARE', 'AREA_STACK', 'GAUGE', 'TABLE_LIST',
   'KPI_DETAIL_TABLE', 'KPI_RADAR', 'LIQUID_PROGRESS', 'PROGRESS_LIST',
@@ -102,9 +102,11 @@ const displayRows = computed(() => convertAmountScaleRows(
 ));
 // 扩展 props 仅对新一代图表下发（columnsMeta 来自 /api/screen/data 响应可选字段，后端未上线时为 null）
 const extraProps = computed(() =>
-  EXTENDED_TYPES.has(props.block.componentType)
-    ? { propValue: props.propValue || {}, columnsMeta: data.value?.columnsMeta || null }
-    : {});
+  props.block.componentType === 'METRIC_CARD'
+    ? { columnsMeta: data.value?.columnsMeta || null }
+    : EXTENDED_TYPES.has(props.block.componentType)
+      ? { propValue: props.propValue || {}, columnsMeta: data.value?.columnsMeta || null }
+      : {});
 const loading = ref(false);
 const error = ref('');    // 真错误（红字）：周期非法 43011 / 执行失败 43008 / 其他
 const guide = ref('');    // 引导态（非报错）：缺必填上下文参数 43010，提示补 orgCode/empId

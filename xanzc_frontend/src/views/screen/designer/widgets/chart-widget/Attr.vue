@@ -281,7 +281,7 @@ function syncBind() {
 
 /**
  * 指标列候选只来自当前已选数据源的语义配置，不调用运行时取数或高危列探测。
- * fieldMeta 是优先级更高的展示元数据；旧数据源没有 fieldMeta 时退化到 metrics 快照。
+ * fieldMeta 是优先级更高的展示元数据，metrics 快照补充未被元数据覆盖的指标。
  */
 function datasourceMetricColumns(datasource) {
   const config = parseDatasourceConfig(datasource?.configJson);
@@ -296,13 +296,14 @@ function datasourceMetricColumns(datasource) {
       }))
       .filter(item => item.col)
     : [];
-  if (fieldMeta.length) return uniqueMetricColumns(fieldMeta);
 
   const metrics = Array.isArray(config.metrics) ? config.metrics : [];
-  return uniqueMetricColumns(metrics.map(item => {
+  const metricSnapshot = metrics.map(item => {
     const col = String(item?.metricName || '').trim();
     return { col, label: col };
-  }).filter(item => item.col));
+  }).filter(item => item.col);
+
+  return uniqueMetricColumns([...fieldMeta, ...metricSnapshot]);
 }
 
 function uniqueMetricColumns(columns) {
@@ -327,12 +328,12 @@ const metricColumnOptions = computed(() => {
     options.push({ col, label });
     optionByCol.set(col, options[options.length - 1]);
   }
-  // 已有绑定的 label 属于用户当前画布配置，不能因数据源配置刷新而覆盖。
-  return options.map(option => {
-    const existing = existingItems.find(item => String(item?.col || '').trim() === option.col);
-    const label = String(existing?.label || '').trim() || option.label || option.col;
-    return { col: option.col, label };
-  });
+  // 有效数据源候选的 label 是来源名称，不能被画布 item 的自定义 label 覆盖。
+  // 不在当前候选中的历史 item 已在上方补入，其已有 label 仍作为回显兜底。
+  return options.map(option => ({
+    col: option.col,
+    label: option.label || option.col
+  }));
 });
 
 const metricItemEditorRows = computed(() => {

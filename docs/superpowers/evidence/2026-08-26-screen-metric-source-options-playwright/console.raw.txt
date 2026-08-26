@@ -1,0 +1,11 @@
+playwright-cli console error
+
+Total messages: 8 (Errors: 0, Warnings: 6)
+Returning 0 messages for level "error"
+
+6 条 warning 内容相同，均为既有 Element Plus 弃用提示：
+
+[WARNING] ElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+For more detail, please visit: https://element-plus.org/en-US/component/radio.html
+
+另外 2 条为普通 info，不含 error 或 warning。

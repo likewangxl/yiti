@@ -120,7 +120,38 @@ describe('ChartWidget Attr 指标列绑定', () => {
     });
   });
 
-  it('fieldMeta 的 alias 只作为展示 label，col 保持原始列名', async () => {
+  it('fieldMeta 与 metrics 并存时合并候选，按 col 去重且 fieldMeta alias 优先', async () => {
+    const element = {
+      innerType: 'METRIC_CARD', bindJson: JSON.stringify({ dsId: 9010 }),
+      styleJson: '{}', drillJson: '{}', propValue: {}
+    };
+    const wrapper = await mountAttr(element, [datasource(9010, '聚合', {
+      metrics: [
+        { metricName: 'raw_metric' },
+        { metricName: 'metric_from_metrics' },
+        { metricName: 'duplicate_metric' },
+        { metricName: '' },
+        { metricName: '   ' }
+      ],
+      fieldMeta: [
+        { col: 'raw_metric', alias: '元数据展示', role: 'METRIC' },
+        { col: 'field_only', alias: '', role: 'METRIC' },
+        { col: 'duplicate_metric', alias: '字段别名', role: 'METRIC' },
+        { col: 'duplicate_metric', alias: '重复别名', role: 'METRIC' },
+        { col: 'dimension_col', alias: '维度', role: 'DIM' },
+        { col: '', alias: '空列', role: 'METRIC' }
+      ]
+    })]);
+
+    expect(wrapper.vm.metricColumnOptions).toEqual([
+      { col: 'raw_metric', label: '元数据展示' },
+      { col: 'field_only', label: 'field_only' },
+      { col: 'duplicate_metric', label: '字段别名' },
+      { col: 'metric_from_metrics', label: 'metric_from_metrics' }
+    ]);
+  });
+
+  it('fieldMeta 的 alias 作为展示 label，metrics 中未被覆盖的指标仍可选', async () => {
     const element = {
       innerType: 'METRIC_CARD', bindJson: JSON.stringify({ dsId: 9010 }),
       styleJson: '{}', drillJson: '{}', propValue: {}
@@ -134,7 +165,9 @@ describe('ChartWidget Attr 指标列绑定', () => {
     })]);
 
     const select = wrapper.find('[data-testid="chart-metric-columns"]');
-    expect(Array.from(select.element.options).map(option => option.textContent)).toEqual(['展示指标']);
+    expect(Array.from(select.element.options).map(option => option.textContent)).toEqual([
+      '展示指标', 'raw_metric_should_not_win'
+    ]);
     await chooseMetricColumns(wrapper, ['raw_metric']);
 
     expect(JSON.parse(element.bindJson).items).toEqual([{ col: 'raw_metric', label: '展示指标' }]);
@@ -150,13 +183,13 @@ describe('ChartWidget Attr 指标列绑定', () => {
       styleJson: '{}', drillJson: '{}', propValue: {}
     };
     const wrapper = await mountAttr(element, [datasource(9010, '聚合', {
-      metrics: [{ metricName: 'metric_a' }, { metricName: 'metric_b' }]
+      metrics: [{ metricName: 'metric_b' }]
     })]);
 
     expect(wrapper.vm.metricItemCols).toEqual(['metric_a']);
     expect(wrapper.vm.metricColumnOptions).toEqual([
-      { col: 'metric_a', label: '历史标题' },
-      { col: 'metric_b', label: 'metric_b' }
+      { col: 'metric_b', label: 'metric_b' },
+      { col: 'metric_a', label: '历史标题' }
     ]);
   });
 
@@ -182,6 +215,33 @@ describe('ChartWidget Attr 指标列绑定', () => {
     ]);
     expect(rows.map(row => row.find('[data-testid="chart-metric-item-label"]').element.value)).toEqual([
       '指标 A', '指标 B'
+    ]);
+  });
+
+  it('修改指标 label 不联动覆盖指标列候选的来源名称', async () => {
+    const element = {
+      innerType: 'METRIC_CARD',
+      bindJson: JSON.stringify({ dsId: 9010 }),
+      styleJson: '{}', drillJson: '{}', propValue: {}
+    };
+    const wrapper = await mountAttr(element, [datasource(9010, '聚合', {
+      fieldMeta: [
+        { col: 'core_balance', alias: '核心存款余额', role: 'METRIC' }
+      ]
+    })]);
+
+    await chooseMetricColumns(wrapper, ['core_balance']);
+    const row = wrapper.find('[data-testid="chart-metric-item-row"]');
+    await row.find('[data-testid="chart-metric-item-label"]').setValue('自定义卡片标题');
+
+    expect(wrapper.vm.metricColumnOptions).toEqual([
+      { col: 'core_balance', label: '核心存款余额' }
+    ]);
+    expect(Array.from(wrapper.find('[data-testid="chart-metric-columns"]').element.options)
+      .map(option => option.textContent)).toEqual(['核心存款余额']);
+    expect(row.find('[data-testid="chart-metric-item-label"]').element.value).toBe('自定义卡片标题');
+    expect(JSON.parse(element.bindJson).items).toEqual([
+      { col: 'core_balance', label: '自定义卡片标题' }
     ]);
   });
 

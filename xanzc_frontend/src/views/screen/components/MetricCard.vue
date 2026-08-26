@@ -4,7 +4,7 @@
          role="button" tabindex="0" @click="onClick(it)" @keydown.enter="onClick(it)" @keydown.space.prevent="onClick(it)">
       <div class="mc-label">{{ it.label || it.col }}</div>
       <div class="mc-value">
-        {{ fmt(valueOf(it.col)) }}<span class="mc-unit">{{ styleCfg.unit || '' }}</span>
+        {{ fmt(valueOf(it.col), it.col) }}<span class="mc-unit">{{ unitOf(it.col) }}</span>
       </div>
       <span v-if="trendOf(it.col)" class="mc-trend" :class="`trend-${trendOf(it.col).direction}`"
             data-testid="metric-trend" :aria-label="trendOf(it.col).ariaLabel">
@@ -22,10 +22,12 @@
 import { computed } from 'vue';
 import { Warning } from '@element-plus/icons-vue';
 import { resolveChartTheme } from '@/styles/screenChartTheme';
+import { metaOf } from './utils/chartData';
 
 const props = defineProps({
   columns: { type: Array, default: () => [] },
   rows: { type: Array, default: () => [] },
+  columnsMeta: { type: Array, default: () => [] },
   bind: { type: Object, default: () => ({}) },
   styleCfg: { type: Object, default: () => ({}) }
 });
@@ -51,11 +53,20 @@ function valueOf(col) {
   const idx = props.columns.indexOf(col);
   return idx >= 0 ? lastRow.value[idx] : null;
 }
-function fmt(v) {
+function metaFor(col) {
+  return metaOf(col, props.columnsMeta);
+}
+function unitOf(col) {
+  return metaFor(col)?.unit || props.styleCfg.unit || '';
+}
+function decimalsOf(col) {
+  return metaFor(col)?.decimals ?? props.styleCfg.decimals ?? 2;
+}
+function fmt(v, col) {
   if (v == null || v === '') return '—';
   const n = Number(v);
   if (Number.isNaN(n)) return String(v);
-  const d = props.styleCfg.decimals ?? 2;
+  const d = decimalsOf(col);
   return n.toLocaleString('zh-CN', { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 function trendOf(col) {

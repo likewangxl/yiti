@@ -1,0 +1,49 @@
+页面重新加载并选择数值卡片后的业务请求：
+
+46. [GET] http://127.0.0.1:8091/api/auth/my-menus => [200] OK
+47. [GET] http://127.0.0.1:8091/api/auth/permissions => [200] OK
+233. [GET] http://127.0.0.1:8091/api/screen/admin/screens => [200] OK
+234. [GET] http://127.0.0.1:8091/api/screen/admin/canvas/9201 => [200] OK
+235. [GET] http://127.0.0.1:8091/api/screen/admin/screens/9201/map-region-metrics => [200] OK
+236. [GET] http://127.0.0.1:8091/api/admin/org-groups => [200] OK
+237. [GET] http://127.0.0.1:8091/api/admin/roles/all?recordStatus=0 => [200] OK
+238. [GET] http://127.0.0.1:8091/api/admin/org-profiles => [200] OK
+239. [GET] http://127.0.0.1:8091/api/screen/admin/datasources => [200] OK
+240. [GET] http://127.0.0.1:8091/api/admin/org-groups => [200] OK
+
+#239 [GET] /api/screen/admin/datasources
+status: [200] OK
+duration: 4ms
+type: xhr
+mimeType: application/json
+
+响应正文：
+
+{"code":"0","message":"success","traceId":"mock-datasources","data":[{"id":9020,"dsCode":"DS_METRIC_MERGE","dsName":"全省存款指标数据源","dsType":"SINGLE","sourceKind":"WIDE_TABLE","bizLine":"COMMON","status":"ACTIVE","configJson":"{\"scopeMode\":\"GLOBAL\",\"table\":\"ORG_INDEX_RESULT\",\"metrics\":[{\"metricName\":\"存款余额\"},{\"metricName\":\"存款日均增量\"},{\"metricName\":\"存款客户数\"}],\"fieldMeta\":[{\"col\":\"存款余额\",\"alias\":\"核心存款余额\",\"role\":\"METRIC\"},{\"col\":\"机构\",\"alias\":\"机构名称\",\"role\":\"DIM\"}]}"}]}
+
+清空请求记录后的候选展开、选择和本地指标编辑阶段，`requests --filter '/api/'` 返回空；没有 POST、PUT、PATCH、DELETE 请求。
+
+补充会话 `screen-metric-label-amount`：
+
+46. [GET] /api/auth/current-user => [200] OK
+47. [GET] /api/auth/my-menus => [200] OK
+49. [GET] /api/auth/permissions => [200] OK
+234. [GET] /api/screen/admin/screens => [200] OK
+235. [GET] /api/screen/admin/canvas/9202 => [200] OK
+236. [GET] /api/screen/admin/screens/9202/map-region-metrics => [200] OK
+237. [POST] /api/screen/data => [200] OK（只读取数，非写操作）
+238. [GET] /api/admin/org-groups => [200] OK
+239. [GET] /api/admin/roles/all?recordStatus=0 => [200] OK
+240. [GET] /api/admin/org-profiles => [200] OK
+241. [GET] /api/screen/admin/datasources => [200] OK
+242. [GET] /api/admin/org-groups => [200] OK
+
+#237 请求正文：
+
+{"schemaVersion":1,"previewState":"draft","screenCode":"SCR_METRIC_AMOUNT","blockId":93,"period":"LATEST","contextParams":{"orgCode":"","empId":""}}
+
+#237 响应正文：
+
+{"code":"0","message":"success","traceId":"mock-screen-data","data":{"columns":["存款余额","存款日均增量","存款客户数"],"rows":[[100000000,3500000,1280]],"columnsMeta":[{"col":"存款余额","alias":"核心存款余额","role":"METRIC","amountScale":"HUNDRED_MILLION_YUAN","unit":"亿元","decimals":2}]}}
+
+修改 label 的交互只改变浏览器本地草稿，没有保存请求。
