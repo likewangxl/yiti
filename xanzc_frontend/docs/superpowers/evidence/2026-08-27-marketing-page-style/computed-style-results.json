@@ -1,0 +1,7 @@
+[
+  {"path":"#/customers/list","title":"我的客户","titleFont":"18px","descriptionFont":"12px","formLabelFont":"14px","tableCellFont":"14px","filterCard":true,"stripedTable":true,"paginationBackground":true},
+  {"path":"#/customers/leads/new","title":"线索录入","titleFont":"18px","descriptionFont":"12px","formLabelFont":"14px","tableCellFont":"14px","filterCard":true,"stripedTable":true,"paginationBackground":true},
+  {"path":"#/customers/leads/approval","title":"线索审批","titleFont":"18px","descriptionFont":"12px","formLabelFont":"14px","tableCellFont":"14px","filterCard":true,"stripedTable":true,"paginationBackground":true},
+  {"path":"#/customers/tags","title":"营销客户标签","titleFont":"18px","descriptionFont":"12px","formLabelFont":"14px","tableCellFont":"14px","filterCard":true,"stripedTable":true,"paginationBackground":true},
+  {"path":"#/customers/tags/approval","title":"标签客户审核","titleFont":"18px","descriptionFont":"12px","formLabelFont":"14px","tableCellFont":"14px","filterCard":true,"stripedTable":true,"paginationBackground":true}
+]

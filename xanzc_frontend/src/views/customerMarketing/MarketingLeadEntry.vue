@@ -1,13 +1,20 @@
 <template>
-  <main v-bp-overflow-tooltip class="page bp-crud marketing-lead-entry">
-    <PageTitle />
+  <main v-bp-overflow-tooltip class="page bp-crud marketing-lead-entry" aria-labelledby="marketing-lead-entry-title">
+    <header class="page-head">
+      <div>
+        <PageTitle id="marketing-lead-entry-title" />
+        <span>展示当前登录人的线索录入记录；支持单条录入和批量导入，存量客户会反显客户主档信息。</span>
+      </div>
+    </header>
     <el-tabs v-model="activeTab" @tab-change="loadActive">
       <el-tab-pane label="线索录入记录" name="manual">
-        <div class="toolbar">
-          <el-form inline><el-form-item label="关键词"><el-input v-model="leadQuery.keyword" clearable placeholder="线索编号 / 企业名称 / 统一社会信用代码" /></el-form-item><el-form-item label="状态"><el-select v-model="leadQuery.status" clearable style="width:140px"><el-option v-for="item in leadStatuses" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item><el-button type="primary" @click="searchLeads">查询</el-button></el-form>
-          <el-button type="primary" @click="openCreate">新增线索</el-button>
-        </div>
-        <el-table :data="leads" v-loading="leadLoading" border stripe>
+        <el-card shadow="never" class="filter-card">
+          <div class="toolbar">
+            <el-form inline @submit.prevent><el-form-item label="关键词"><el-input v-model="leadQuery.keyword" clearable placeholder="线索编号 / 企业名称 / 统一社会信用代码" /></el-form-item><el-form-item label="状态"><el-select v-model="leadQuery.status" clearable style="width:140px"><el-option v-for="item in leadStatuses" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item><el-button type="primary" @click="searchLeads">查询</el-button></el-form>
+            <el-button type="primary" @click="openCreate">新增线索</el-button>
+          </div>
+        </el-card>
+        <el-table :data="leads" v-loading="leadLoading" border stripe class="lead-entry-table">
           <el-table-column prop="leadNo" label="线索编号" min-width="160" />
           <el-table-column prop="custName" label="企业名称" min-width="180" />
           <el-table-column prop="unifiedCreditCode" label="统一社会信用代码" min-width="190" />
@@ -17,15 +24,17 @@
           <el-table-column prop="leadStatus" label="状态" width="110"><template #default="{row}"><el-tag>{{ statusLabel(row.leadStatus) }}</el-tag></template></el-table-column>
           <el-table-column label="操作" width="210" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button link type="primary" @click="showLead(row)">详情</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="primary" @click="editLead(row)">编辑</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="success" @click="submitLead(row)">提交审批</el-button></template></el-table-column>
         </el-table>
-        <div class="pager"><el-pagination v-model:current-page="leadQuery.pageNo" v-model:page-size="leadQuery.pageSize" :total="leadTotal" layout="total, prev, pager, next" @change="loadLeads" /></div>
+        <div class="pager"><el-pagination background layout="total, sizes, prev, pager, next" :total="leadTotal" v-model:current-page="leadQuery.pageNo" v-model:page-size="leadQuery.pageSize" :page-sizes="[10, 20, 50, 100]" @change="loadLeads" /></div>
       </el-tab-pane>
 
       <el-tab-pane label="批量导入" name="imports">
-        <div class="toolbar">
-          <el-form inline><el-form-item label="导入文件名"><el-input v-model="batchQuery.keyword" clearable /></el-form-item><el-form-item label="导入状态"><el-select v-model="batchQuery.status" clearable style="width:150px"><el-option label="待确认" value="WAITING_CONFIRM" /><el-option label="成功" value="COMPLETED" /><el-option label="失败" value="ALL_FAILED" /></el-select></el-form-item><el-button type="primary" @click="searchBatches">查询</el-button></el-form>
-          <el-upload :show-file-list="false" :auto-upload="false" accept=".xlsx,.xls,.csv" :on-change="importFile"><el-button type="primary" :loading="uploading">导入</el-button></el-upload>
-        </div>
-        <el-table :data="batches" v-loading="batchLoading" border stripe>
+        <el-card shadow="never" class="filter-card">
+          <div class="toolbar">
+            <el-form inline @submit.prevent><el-form-item label="导入文件名"><el-input v-model="batchQuery.keyword" clearable /></el-form-item><el-form-item label="导入状态"><el-select v-model="batchQuery.status" clearable style="width:150px"><el-option label="待确认" value="WAITING_CONFIRM" /><el-option label="成功" value="COMPLETED" /><el-option label="失败" value="ALL_FAILED" /></el-select></el-form-item><el-button type="primary" @click="searchBatches">查询</el-button></el-form>
+            <el-upload :show-file-list="false" :auto-upload="false" accept=".xlsx,.xls,.csv" :on-change="importFile"><el-button type="primary" :loading="uploading">导入</el-button></el-upload>
+          </div>
+        </el-card>
+        <el-table :data="batches" v-loading="batchLoading" border stripe class="lead-entry-table">
           <el-table-column prop="sourceFileName" label="导入文件名" min-width="220" />
           <el-table-column prop="importTime" label="导入时间" min-width="165"><template #default="{row}">{{ formatTime(row.importTime) }}</template></el-table-column>
           <el-table-column prop="importEmpId" label="导入人" width="110" />
@@ -33,7 +42,7 @@
           <el-table-column label="统计" min-width="190"><template #default="{row}">总数 {{ row.totalCount || 0 }} / 成功 {{ row.validCount || 0 }} / 失败 {{ failureCount(row) }}</template></el-table-column>
           <el-table-column label="操作" width="120" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button link type="primary" @click="openBatch(row)">详情</el-button></template></el-table-column>
         </el-table>
-        <div class="pager"><el-pagination v-model:current-page="batchQuery.pageNo" v-model:page-size="batchQuery.pageSize" :total="batchTotal" layout="total, prev, pager, next" @change="loadBatches" /></div>
+        <div class="pager"><el-pagination background layout="total, sizes, prev, pager, next" :total="batchTotal" v-model:current-page="batchQuery.pageNo" v-model:page-size="batchQuery.pageSize" :page-sizes="[10, 20, 50, 100]" @change="loadBatches" /></div>
       </el-tab-pane>
     </el-tabs>
 
@@ -106,5 +115,14 @@ loadLeads();
 </script>
 
 <style scoped lang="scss">
-.toolbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px}.pager{display:flex;justify-content:flex-end;margin-top:14px}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}@media(max-width:680px){.toolbar{flex-direction:column}.form-grid{grid-template-columns:1fr}}
+.page-head { align-items: flex-start; display: flex; justify-content: space-between; margin-bottom: 14px; }
+.page-head h1 { font-size: 18px; margin: 0; }
+.page-head span { color: #909399; display: block; font-size: 12px; margin-top: 4px; }
+.filter-card { margin-bottom: 14px; }
+.filter-card :deep(.el-card__body) { padding-bottom: 2px; }
+.toolbar { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; }
+.pager { display: flex; justify-content: flex-end; margin-top: 14px; }
+.lead-entry-table { width: 100%; }
+.form-grid { display: grid; gap: 0 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 680px) { .toolbar { flex-direction: column; } .form-grid { grid-template-columns: 1fr; } }
 </style>

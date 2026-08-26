@@ -1,9 +1,19 @@
 <template>
-  <main v-bp-overflow-tooltip class="page bp-crud marketing-tag-customer-approval">
-    <PageTitle />
+  <main v-bp-overflow-tooltip class="page bp-crud marketing-tag-customer-approval" aria-labelledby="marketing-tag-customer-approval-title">
+    <header class="page-head">
+      <div>
+        <PageTitle id="marketing-tag-customer-approval-title" />
+        <span>待审批按标签维度展示，同时支持标签审批与标签客户的单条、批量及全部审批；审批记录仅展示当前登录人的处理记录。</span>
+      </div>
+    </header>
     <el-tabs v-model="tab" @tab-change="load"><el-tab-pane label="待审批" name="pending"/><el-tab-pane label="审批记录" name="history"/></el-tabs>
-    <el-form inline><el-form-item label="关键词"><el-input v-model="query.keyword" clearable placeholder="标签 / 企业名称 / 统一社会信用代码"/></el-form-item><el-button type="primary" @click="search">查询</el-button></el-form>
-    <el-table :data="rows" v-loading="loading" border stripe>
+    <el-card shadow="never" class="filter-card">
+      <el-form inline @submit.prevent>
+        <el-form-item label="关键词"><el-input v-model="query.keyword" clearable placeholder="标签 / 企业名称 / 统一社会信用代码" @keyup.enter="search"/></el-form-item>
+        <el-form-item><el-button type="primary" @click="search">查询</el-button></el-form-item>
+      </el-form>
+    </el-card>
+    <el-table :data="rows" v-loading="loading" border stripe class="approval-table">
       <el-table-column label="标签名称" min-width="160"><template #default="{row}">{{row.tag?.tagName||row.tagName||'-'}}</template></el-table-column>
       <el-table-column label="标签分类" width="130"><template #default="{row}">{{row.tag?.tagCategory||'-'}}</template></el-table-column>
       <el-table-column label="导入模式" width="110"><template #default="{row}">{{batchOf(row)?.importMode||'-'}}</template></el-table-column>
@@ -14,7 +24,7 @@
       <el-table-column prop="rejectedCustomerCount" label="已拒绝" width="90"/>
       <el-table-column v-if="tab==='pending'" label="操作" min-width="210" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button v-if="row.tag?.approvalStatus==='PENDING'" link type="success" @click="approveTagOnly(row)">标签通过</el-button><el-button link type="primary" :disabled="!row.pendingCustomerCount" @click="openCustomers(row)">待审批客户</el-button></template></el-table-column>
     </el-table>
-    <div class="pager"><el-pagination v-model:current-page="query.pageNo" :total="total" layout="total, prev, pager, next" @change="load"/></div>
+    <div class="pager"><el-pagination background v-model:current-page="query.pageNo" v-model:page-size="query.pageSize" :page-sizes="[10, 20, 50, 100]" :total="total" layout="total, sizes, prev, pager, next" @change="load"/></div>
 
     <el-drawer v-model="drawerVisible" :title="`待审批客户 · ${selectedSummary?.tag?.tagName||''}`" size="min(1100px,97vw)">
       <div class="drawer-toolbar"><el-input v-model="customerKeyword" clearable placeholder="企业名称 / 统一社会信用代码" style="width:300px" @keyup.enter="loadCustomers"/><div><el-button :disabled="!selectedIds.length" type="success" @click="approveSelected(false)">批量通过</el-button><el-button :disabled="!selectedIds.length" type="danger" @click="rejectSelected(false)">批量驳回</el-button><el-button type="primary" @click="approveSelected(true)">全部通过</el-button></div></div>
@@ -47,4 +57,14 @@ async function rejectOne(row){try{const {value}=await ElMessageBox.prompt('请�
 void rejectCustomerTag;
 load();
 </script>
-<style scoped>.pager{display:flex;justify-content:flex-end;margin-top:14px}.drawer-toolbar{display:flex;justify-content:space-between;gap:14px;margin-bottom:14px}</style>
+<style scoped lang="scss">
+.page-head { align-items: flex-start; display: flex; justify-content: space-between; margin-bottom: 14px; }
+.page-head h1 { font-size: 18px; margin: 0; }
+.page-head span { color: #909399; display: block; font-size: 12px; margin-top: 4px; }
+.filter-card { margin-bottom: 14px; }
+.filter-card :deep(.el-card__body) { padding-bottom: 2px; }
+.approval-table { width: 100%; }
+.pager { display: flex; justify-content: flex-end; margin-top: 14px; }
+.drawer-toolbar { display: flex; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+@media (max-width: 620px) { .page-head { gap: 12px; } }
+</style>

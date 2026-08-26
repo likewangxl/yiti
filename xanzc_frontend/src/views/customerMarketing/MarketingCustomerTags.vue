@@ -1,8 +1,16 @@
 <template>
-  <main v-bp-overflow-tooltip class="page bp-crud marketing-customer-tags">
-    <div class="page-head"><PageTitle /><el-button type="primary" @click="openCreate">新增标签</el-button></div>
-    <el-form inline><el-form-item label="标签名称"><el-input v-model="query.keyword" clearable /></el-form-item><el-form-item label="标签分类"><el-input v-model="query.category" clearable /></el-form-item><el-form-item label="审批状态"><el-select v-model="query.approvalStatus" clearable style="width:140px"><el-option label="待审批" value="PENDING"/><el-option label="已通过" value="APPROVED"/><el-option label="已驳回" value="REJECTED"/></el-select></el-form-item><el-button type="primary" @click="search">查询</el-button></el-form>
-    <el-table :data="tags" v-loading="loading" border stripe>
+  <main v-bp-overflow-tooltip class="page bp-crud marketing-customer-tags" aria-labelledby="marketing-customer-tags-title">
+    <header class="page-head">
+      <div>
+        <PageTitle id="marketing-customer-tags-title" />
+        <span>按标签管理营销客户群；新增标签及客户导入均须审批通过后生效。</span>
+      </div>
+      <el-button type="primary" @click="openCreate">新增标签</el-button>
+    </header>
+    <el-card shadow="never" class="filter-card">
+      <el-form inline @submit.prevent><el-form-item label="标签名称"><el-input v-model="query.keyword" clearable /></el-form-item><el-form-item label="标签分类"><el-input v-model="query.category" clearable /></el-form-item><el-form-item label="审批状态"><el-select v-model="query.approvalStatus" clearable style="width:140px"><el-option label="待审批" value="PENDING"/><el-option label="已通过" value="APPROVED"/><el-option label="已驳回" value="REJECTED"/></el-select></el-form-item><el-button type="primary" @click="search">查询</el-button></el-form>
+    </el-card>
+    <el-table :data="tags" v-loading="loading" border stripe class="customer-tags-table">
       <el-table-column prop="tagName" label="标签名称" min-width="170" />
       <el-table-column prop="tagCategory" label="标签分类" width="130" />
       <el-table-column prop="tagType" label="标签类型" width="120" />
@@ -11,7 +19,7 @@
       <el-table-column prop="status" label="启用状态" width="100"><template #default="{row}">{{row.status==='ENABLED'?'启用':'停用'}}</template></el-table-column>
       <el-table-column label="操作" min-width="270" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button link type="primary" @click="showCustomers(row)">查看客户群</el-button><el-button link type="primary" @click="openImport(row,'APPEND')" :disabled="row.approvalStatus!=='APPROVED'">追加导入</el-button><el-button link type="warning" @click="openImport(row,'REPLACE')" :disabled="row.approvalStatus!=='APPROVED'">全量替换</el-button></template></el-table-column>
     </el-table>
-    <div class="pager"><el-pagination v-model:current-page="query.pageNo" :total="total" layout="total, prev, pager, next" @change="load"/></div>
+    <div class="pager"><el-pagination background layout="total, sizes, prev, pager, next" :total="total" v-model:current-page="query.pageNo" v-model:page-size="query.pageSize" :page-sizes="[10, 20, 50, 100]" @change="load"/></div>
 
     <el-dialog v-model="createVisible" title="新增营销客户标签" width="560px"><el-form :model="tagForm" label-position="top"><el-form-item label="标签名称" required><el-input v-model="tagForm.tagName"/></el-form-item><el-form-item label="标签分类"><el-input v-model="tagForm.tagCategory"/></el-form-item><el-form-item label="标签类型"><el-input v-model="tagForm.tagType"/></el-form-item><el-form-item label="优先级"><el-input-number v-model="tagForm.tagPriority" :min="0"/></el-form-item><el-form-item label="说明"><el-input v-model="tagForm.description" type="textarea"/></el-form-item></el-form><template #footer><el-button @click="createVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="createTag">提交审批</el-button></template></el-dialog>
 
@@ -45,4 +53,13 @@ async function showCustomers(tag){selectedTag.value=tag;customersVisible.value=t
 void listCustomerTagImportBatches; void getCustomerTagImportBatchDetails; void downloadCustomerTagImportSourceFile;
 load();
 </script>
-<style scoped>.page-head{display:flex;justify-content:space-between}.pager{display:flex;justify-content:flex-end;margin-top:14px}.drawer-table{margin-top:14px}</style>
+<style scoped lang="scss">
+.page-head { align-items: flex-start; display: flex; justify-content: space-between; margin-bottom: 14px; }
+.page-head h1 { font-size: 18px; margin: 0; }
+.page-head span { color: #909399; display: block; font-size: 12px; margin-top: 4px; }
+.filter-card { margin-bottom: 14px; }
+.filter-card :deep(.el-card__body) { padding-bottom: 2px; }
+.pager { display: flex; justify-content: flex-end; margin-top: 14px; }
+.customer-tags-table { width: 100%; }
+.drawer-table { margin-top: 14px; }
+</style>
