@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 
@@ -238,7 +240,7 @@ describe('图表视觉预设与 option', () => {
     expect(wrapper.find('[data-testid="metric-trend"]').exists()).toBe(false);
   });
 
-  it('RankList 增加前三名奖牌、占比文字和主题化条形，保持排序与点击事件', async () => {
+  it('RankList 只显示排名、类目和指标值，不显示色块与占比列', async () => {
     const wrapper = mount(RankList, {
       props: {
         columns: ['name', 'value'], rows: [['A', 10], ['B', 5], ['C', 3], ['D', 1]],
@@ -247,9 +249,12 @@ describe('图表视觉预设与 option', () => {
       }, global: { stubs: chartStubs }
     });
     expect(wrapper.findAll('.rl-rank-medal')).toHaveLength(3);
-    expect(wrapper.findAll('.rl-share')).toHaveLength(4);
-    expect(wrapper.find('.rl-share').text()).toContain('52.6%');
-    expect(wrapper.find('.rl-fill').attributes('style')).toContain('width: 100%');
+    expect(wrapper.find('.rl-bar').exists()).toBe(false);
+    expect(wrapper.find('.rl-fill').exists()).toBe(false);
+    expect(wrapper.find('.rl-share').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="rank-metric-value"]')).toHaveLength(4);
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/components/RankList.vue'), 'utf8');
+    expect(source).toMatch(/\.rl-name\s*\{[^}]*width:\s*140px/);
     const first = wrapper.findAll('.rl-row')[0];
     expect(first.attributes('role')).toBe('button');
     expect(first.attributes('tabindex')).toBe('0');
@@ -318,8 +323,6 @@ describe('图表视觉预设与 option', () => {
     await growthButton.trigger('click');
     expect(wrapper.find('[data-testid="rank-sort-status"]').text()).toBe('当前排序：增幅（正序）');
     expect(wrapper.findAll('.rl-name').map(node => node.text())).toEqual(['丁', '甲', '丙', '乙']);
-    expect(wrapper.findAll('.rl-fill')[0].attributes('style')).toContain('width: 13%');
-    expect(wrapper.findAll('.rl-fill')[3].attributes('style')).toContain('width: 100%');
 
     await wrapper.findAll('.rl-row')[0].trigger('click');
     expect(wrapper.emitted('item-click')?.at(-1)?.[0]).toMatchObject({ col: 'growth', label: '丁' });

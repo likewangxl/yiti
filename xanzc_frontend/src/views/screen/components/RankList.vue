@@ -19,8 +19,6 @@
         <span v-else>{{ r.rank }}</span>
       </span>
       <span class="rl-name">{{ r.name }}</span>
-      <div class="rl-bar"><div class="rl-fill" :style="{ width: r.pct + '%', '--rank-color': r.color }" /></div>
-      <span class="rl-share" :aria-label="`占比 ${r.sharePct.toFixed(1)}%`">占比 {{ r.sharePct.toFixed(1) }}%</span>
       <div class="rl-values" data-testid="rank-metric-values">
         <span v-for="metric in metricDefs" :key="metric.col"
               class="rl-metric-value" :class="{ 'rl-val': metric.col === activeMetricCol }"
@@ -168,19 +166,10 @@ const ranked = computed(() => {
     const diff = sortDesc.value ? b.numericValue - a.numericValue : a.numericValue - b.numericValue;
     return diff || a.originalIndex - b.originalIndex;
   });
-  const maxPositive = list.reduce((maxValue, item) =>
-    item.numericValue != null && item.numericValue > 0
-      ? Math.max(maxValue, item.numericValue) : maxValue, 0);
-  const max = maxPositive || 1;
-  const total = list.reduce((sum, x) => sum + (x.numericValue == null ? 0 : Math.max(0, x.numericValue)), 0);
-  const colors = props.styleCfg.colors?.length ? props.styleCfg.colors : theme.value.palette;
   return list.map((x, index) => ({
     ...x,
     rowKey: x.originalIndex,
-    rank: index + 1,
-    pct: x.numericValue == null ? 4 : Math.min(100, Math.max(4, Math.round((Math.max(0, x.numericValue) / max) * 100))),
-    sharePct: total > 0 && x.numericValue != null ? Math.max(0, x.numericValue) / total * 100 : 0,
-    color: colors[index % colors.length]
+    rank: index + 1
   }));
 });
 
@@ -244,16 +233,10 @@ watch(() => props.rows, () => { start.value = 0; });
   font-size: 13px; background: rgba(125, 155, 201, .2); color: var(--rl-muted, var(--scr-text-dim)); flex: none;
   &.top { background: color-mix(in srgb, var(--rl-accent, var(--scr-cyan)) 25%, transparent); color: var(--rl-number, var(--scr-num)); font-weight: 700; } }
 .rl-rank-medal { font-size: 15px; line-height: 1; }
-.rl-name { width: 82px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
-.rl-bar { flex: 1; height: 9px; background: rgba(125, 155, 201, .15); border-radius: 5px; overflow: hidden; }
-.rl-fill { height: 100%; background: linear-gradient(90deg, color-mix(in srgb, var(--rank-color, var(--scr-blue)) 70%, var(--rl-accent, var(--scr-cyan))), var(--rank-color, var(--rl-accent, var(--scr-cyan)))); border-radius: 5px; transition: width .28s ease; }
-.rl-share { width: 60px; color: var(--rl-muted, var(--scr-text-dim)); font-size: 10px; font-variant-numeric: tabular-nums; text-align: right; flex: none; }
-.rl-values { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; min-width: 0; flex: none; }
+.rl-name { width: 140px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
+.rl-values { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; min-width: 0; margin-left: auto; flex: none; }
 .rl-metric-value { min-width: 78px; text-align: right; font-size: 12px; color: var(--rl-muted, var(--scr-text-dim));
   font-variant-numeric: tabular-nums; white-space: nowrap; }
 .rl-val { color: var(--rl-number, var(--scr-num)); font-size: 13px;
   font-variant-numeric: tabular-nums; flex: none; }
-@media (prefers-reduced-motion: reduce) {
-  .rl-fill { transition: none; }
-}
 </style>

@@ -1,0 +1,16 @@
+仅开发态 mock，非联调。
+
+1. `**/api/auth/current-user` -> 200，SYS_ADMIN 验收用户
+2. `**/api/auth/my-menus` -> 200，空菜单
+3. `**/api/auth/permissions` -> 200，大屏设计器权限
+4. `**/api/screen/admin/screens` -> 200，大屏 `SCR_RANK_NO_SHARE`
+5. `**/api/screen/admin/canvas/9910` -> 200，含一个 `RANK_LIST` 组件及 block 77
+6. `**/api/screen/admin/screens/9910/map-region-metrics` -> 200，空数组
+7. `**/api/screen/admin/datasources*` -> 200，数据源 `DS_RANK_NO_SHARE`
+8. `**/api/admin/org-groups*` -> 200，空数组
+9. `**/api/admin/org-profiles*` -> 200，空数组
+10. `**/api/admin/roles/all*` -> 200，空数组
+11. `**/api/screen/data` -> 200，4 行类目 + 存款余额/增幅两指标
+12. `**/api/notifications/unread-count` -> 200，未读数 0
+
+未注册保存、发布、归档等写接口。`POST /api/screen/data` 为组件取数查询。
