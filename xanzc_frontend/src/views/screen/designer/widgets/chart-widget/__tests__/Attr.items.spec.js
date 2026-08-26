@@ -242,8 +242,8 @@ describe('ChartWidget Attr 指标列绑定', () => {
     ]);
   });
 
-  it('指标列编辑器覆盖五种支持显式 items 的图表类型', async () => {
-    for (const innerType of ['METRIC_CARD', 'LINE_TREND', 'AREA_STACK', 'BAR_COMPARE', 'COMBO_CHART']) {
+  it('指标列编辑器覆盖六种支持显式 items 的图表类型（含占比饼图）', async () => {
+    for (const innerType of ['METRIC_CARD', 'LINE_TREND', 'AREA_STACK', 'BAR_COMPARE', 'COMBO_CHART', 'PIE_SHARE']) {
       const element = {
         innerType, bindJson: JSON.stringify({ dsId: 9010 }),
         styleJson: '{}', drillJson: '{}', propValue: {}
@@ -280,7 +280,7 @@ describe('ChartWidget Attr 指标列绑定', () => {
 
   it('非指标列绑定图表不显示指标列编辑器', async () => {
     const element = {
-      innerType: 'PIE_SHARE', bindJson: JSON.stringify({ dsId: 9010 }),
+      innerType: 'FUNNEL_CHART', bindJson: JSON.stringify({ dsId: 9010 }),
       styleJson: '{}', drillJson: '{}', propValue: {}
     };
     const wrapper = await mountAttr(element, [datasource(9010, '聚合', {

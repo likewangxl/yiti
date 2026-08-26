@@ -137,6 +137,74 @@ describe('图表视觉预设与 option', () => {
     expect(solidOption.graphic).toHaveLength(0);
   });
 
+  it('PieShare 指标列绑定按 items 顺序取最新行，过滤未选列并使用 label', () => {
+    const wrapper = mount(PieShare, {
+      props: {
+        columns: ['month', 'sales', 'cost', 'other'],
+        rows: [['Jan', 10, 2, 99], ['Feb', 20, 4, 88]],
+        bind: {
+          items: [
+            { col: 'cost', label: '成本' },
+            { col: 'missing', label: '不存在' },
+            { col: 'sales', label: '' }
+          ]
+        },
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+
+    expect(optionOf(wrapper).series[0].data).toEqual([
+      { name: '成本', value: 4 },
+      { name: 'sales', value: 20 }
+    ]);
+  });
+
+  it('PieShare 指标列点击按 dataIndex 返回真实 col、label 和最新原始行，并最多显示十项', () => {
+    const columns = ['month', ...Array.from({ length: 11 }, (_, i) => `metric_${i + 1}`)];
+    const latest = ['Feb', ...Array.from({ length: 11 }, (_, i) => i + 10)];
+    const wrapper = mount(PieShare, {
+      props: {
+        columns,
+        rows: [['Jan', ...Array.from({ length: 11 }, (_, i) => i + 1)], latest],
+        bind: {
+          items: columns.slice(1).map((col, index) => ({ col, label: index === 1 ? '第二指标' : '' }))
+        },
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+
+    const option = optionOf(wrapper);
+    expect(option.series[0].data).toHaveLength(10);
+    expect(option.series[0].data[1]).toEqual({ name: '第二指标', value: 11 });
+    triggerChartClick(wrapper, { componentType: 'series', seriesIndex: 0, dataIndex: 1 });
+    expect(wrapper.emitted('item-click')?.[0]?.[0]).toEqual({
+      col: 'metric_2', label: '第二指标',
+      row: Object.fromEntries(columns.map((col, index) => [col, latest[index]]))
+    });
+  });
+
+  it('PieShare 未配置有效指标列时兼容 nameCol/valueCol，并按 dataIndex 找到重复名称的原始行', () => {
+    const wrapper = mount(PieShare, {
+      props: {
+        columns: ['name', 'value', 'memo'],
+        rows: [['A', 4, 'first'], ['A', 6, 'second']],
+        bind: { nameCol: 'name', valueCol: 'value', items: [{ col: 'missing' }] },
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+
+    expect(optionOf(wrapper).series[0].data).toEqual([
+      { name: 'A', value: 4 }, { name: 'A', value: 6 }
+    ]);
+    triggerChartClick(wrapper, { componentType: 'series', seriesIndex: 0, dataIndex: 1 });
+    expect(wrapper.emitted('item-click')?.[0]?.[0]).toEqual({
+      col: 'value', label: 'A', row: { name: 'A', value: 6, memo: 'second' }
+    });
+  });
+
   it('MetricCard 只在可安全计算时显示最近两行环比，并保持 item-click payload', async () => {
     const wrapper = mount(MetricCard, {
       props: {
