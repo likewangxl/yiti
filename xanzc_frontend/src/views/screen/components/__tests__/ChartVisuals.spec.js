@@ -242,7 +242,8 @@ describe('图表视觉预设与 option', () => {
     const wrapper = mount(RankList, {
       props: {
         columns: ['name', 'value'], rows: [['A', 10], ['B', 5], ['C', 3], ['D', 1]],
-        bind: { nameCol: 'name', valueCol: 'value' }, styleCfg: { visualPreset: 'graphite' }
+        bind: { nameCol: 'name', valueCol: 'value' }, styleCfg: { visualPreset: 'graphite' },
+        propValue: { carousel: false }
       }, global: { stubs: chartStubs }
     });
     expect(wrapper.findAll('.rl-rank-medal')).toHaveLength(3);
@@ -256,6 +257,104 @@ describe('图表视觉预设与 option', () => {
     await first.trigger('keydown.space');
     expect(wrapper.emitted('item-click')[0][0]).toMatchObject({ col: 'value', label: 'A' });
     expect(wrapper.emitted('item-click')).toHaveLength(2);
+  });
+
+  it('RankList 未配置 nameCol 时回退首个非指标列，且保留全量排序后的排名', () => {
+    const wrapper = mount(RankList, {
+      props: {
+        columns: ['org_name', 'org_code', 'balance'],
+        rows: [['机构甲', '001', 10], ['机构乙', '002', 30], ['机构丙', '003', 20]],
+        bind: { items: [{ col: 'balance', label: '余额' }] },
+        columnsMeta: [
+          { col: 'org_name', role: 'DIM' },
+          { col: 'org_code', role: 'DIM' },
+          { col: 'balance', role: 'METRIC' }
+        ],
+        styleCfg: {},
+        propValue: { carousel: false }
+      }, global: { stubs: chartStubs }
+    });
+
+    expect(wrapper.findAll('.rl-name').map(node => node.text())).toEqual(['机构乙', '机构丙', '机构甲']);
+    expect(wrapper.findAll('.rl-no').map(node => node.attributes('aria-label'))).toEqual([
+      '第1名', '第2名', '第3名'
+    ]);
+  });
+
+  it('RankList 多指标展示顶部按钮与当前排序注释，切换指标/方向后重排并点击回传当前指标', async () => {
+    const wrapper = mount(RankList, {
+      props: {
+        columns: ['org_name', 'balance', 'growth'],
+        rows: [
+          ['甲', 100, 2], ['乙', 80, 8], ['丙', 'invalid', 5], ['丁', 120, 1]
+        ],
+        bind: {
+          items: [{ col: 'balance', label: '存款余额' }, { col: 'growth', label: '增幅' }]
+        },
+        columnsMeta: [
+          { col: 'org_name', role: 'DIM', alias: '机构' },
+          { col: 'balance', role: 'METRIC', alias: '存款余额', decimals: 0 },
+          { col: 'growth', role: 'METRIC', alias: '增幅', decimals: 1 }
+        ],
+        styleCfg: {}, propValue: { carousel: false }
+      }, global: { stubs: chartStubs }
+    });
+
+    expect(wrapper.find('[data-testid="rank-sort-status"]').text()).toBe('当前排序：存款余额（倒序）');
+    expect(wrapper.findAll('[data-testid="rank-metric-button"]').map(node => node.text())).toEqual([
+      '存款余额', '增幅'
+    ]);
+    expect(wrapper.findAll('.rl-name').map(node => node.text())).toEqual(['丁', '甲', '乙', '丙']);
+    expect(wrapper.findAll('.rl-val').map(node => node.text())).toEqual(['120', '100', '80', '—']);
+    expect(wrapper.findAll('.rl-row')[0].findAll('[data-testid="rank-metric-value"]')
+      .map(node => node.text())).toEqual(['120', '1.0']);
+
+    const growthButton = wrapper.findAll('[data-testid="rank-metric-button"]')[1];
+    expect(growthButton.attributes('aria-label')).toContain('增幅');
+    await growthButton.trigger('click');
+    expect(wrapper.find('[data-testid="rank-sort-status"]').text()).toBe('当前排序：增幅（倒序）');
+    expect(wrapper.findAll('.rl-name').map(node => node.text())).toEqual(['乙', '丙', '甲', '丁']);
+
+    await growthButton.trigger('click');
+    expect(wrapper.find('[data-testid="rank-sort-status"]').text()).toBe('当前排序：增幅（正序）');
+    expect(wrapper.findAll('.rl-name').map(node => node.text())).toEqual(['丁', '甲', '丙', '乙']);
+    expect(wrapper.findAll('.rl-fill')[0].attributes('style')).toContain('width: 13%');
+    expect(wrapper.findAll('.rl-fill')[3].attributes('style')).toContain('width: 100%');
+
+    await wrapper.findAll('.rl-row')[0].trigger('click');
+    expect(wrapper.emitted('item-click')?.at(-1)?.[0]).toMatchObject({ col: 'growth', label: '丁' });
+  });
+
+  it('RankList 默认开启自动滚动，超过可视行数时每 2 秒逐行循环且名次按全量排序', async () => {
+    vi.useFakeTimers();
+    try {
+      const wrapper = mount(RankList, {
+        props: {
+          columns: ['name', 'value'],
+          rows: [['A', 10], ['B', 40], ['C', 30], ['D', 20]],
+          bind: { valueCol: 'value' }, styleCfg: {}, propValue: {}
+        }, global: { stubs: chartStubs }
+      });
+      Object.defineProperty(wrapper.find('.rl-wrap').element, 'clientHeight', { configurable: true, value: 154 });
+      wrapper.vm.containerH = 154;
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.findAll('.rl-row')).toHaveLength(3);
+      expect(wrapper.findAll('.rl-name').map(node => node.text())).toEqual(['B', 'C', 'D']);
+      expect(wrapper.findAll('.rl-no').map(node => node.attributes('aria-label'))).toEqual([
+        '第1名', '第2名', '第3名'
+      ]);
+
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(wrapper.findAll('.rl-name').map(node => node.text())).toEqual(['C', 'D', 'A']);
+      expect(wrapper.findAll('.rl-no').map(node => node.attributes('aria-label'))).toEqual([
+        '第2名', '第3名', '第4名'
+      ]);
+
+      wrapper.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('FlowStatus 增加状态视觉与占总量比例，同时保留点击事件', async () => {

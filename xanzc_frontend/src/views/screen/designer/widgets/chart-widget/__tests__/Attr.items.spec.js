@@ -23,7 +23,8 @@ vi.mock('@/views/screen/designer/widgets', () => ({
     { innerType: 'AREA_STACK', needTimeseries: true },
     { innerType: 'BAR_COMPARE', needTimeseries: false },
     { innerType: 'COMBO_CHART', needTimeseries: false },
-    { innerType: 'PIE_SHARE', needTimeseries: false }
+    { innerType: 'PIE_SHARE', needTimeseries: false },
+    { innerType: 'RANK_LIST', needTimeseries: false }
   ]
 }));
 vi.mock('element-plus', () => ({ ElMessage: { warning: vi.fn() } }));
@@ -88,8 +89,8 @@ async function chooseMetricColumns(wrapper, values) {
   await select.trigger('change');
 }
 
-async function chooseCategoryColumn(wrapper, value) {
-  const select = wrapper.find('[data-testid="chart-category-column"]');
+async function chooseCategoryColumn(wrapper, value, testId = 'chart-category-column') {
+  const select = wrapper.find(`[data-testid="${testId}"]`);
   await select.setValue(value);
 }
 
@@ -320,6 +321,75 @@ describe('ChartWidget Attr 指标列绑定', () => {
       expect(wrapper.find('[data-testid="chart-metric-columns"]').exists()).toBe(true);
       wrapper.unmount();
     }
+  });
+
+  it('RANK_LIST 指标列改为多选 items，类目列单选并兼容历史 valueCol/nameCol', async () => {
+    const element = {
+      innerType: 'RANK_LIST',
+      bindJson: JSON.stringify({ dsId: 9010, valueCol: 'metric_b', nameCol: 'org_name' }),
+      styleJson: '{}', drillJson: '{}', propValue: {}
+    };
+    const wrapper = await mountAttr(element, [datasource(9010, '排行榜数据源', {
+      fieldMeta: [
+        { col: 'metric_a', alias: '指标 A', role: 'METRIC' },
+        { col: 'metric_b', alias: '指标 B', role: 'METRIC' },
+        { col: 'org_code', alias: '机构编码', role: 'DIM' },
+        { col: 'org_name', alias: '机构', role: 'DIM' }
+      ],
+      metrics: [{ metricName: 'metric_c' }],
+      table: 'ORG_INDEX_RESULT',
+      aggregation: { groupBy: 'SUBJECT', agg: 'SUM' }
+    })]);
+
+    const metricSelect = wrapper.find('[data-testid="chart-metric-columns"]');
+    const categorySelect = wrapper.find('[data-testid="rank-category-column"]');
+    expect(metricSelect.exists()).toBe(true);
+    expect(categorySelect.exists()).toBe(true);
+    expect(wrapper.find('[data-testid="rank-metric-column"]').exists()).toBe(false);
+    expect(wrapper.vm.metricColumnOptions).toEqual([
+      { col: 'metric_a', label: '指标 A' },
+      { col: 'metric_b', label: '指标 B' },
+      { col: 'metric_c', label: 'metric_c' }
+    ]);
+    expect(wrapper.vm.metricItemCols).toEqual(['metric_b']);
+    expect(categorySelect.element.value).toBe('org_name');
+
+    await chooseMetricColumns(wrapper, ['metric_a', 'metric_c']);
+    await chooseCategoryColumn(wrapper, 'org_code', 'rank-category-column');
+    expect(JSON.parse(element.bindJson)).toMatchObject({
+      dsId: 9010,
+      categoryCol: 'org_code',
+      items: [
+        { col: 'metric_a', label: '指标 A' },
+        { col: 'metric_c', label: 'metric_c' }
+      ]
+    });
+    expect(JSON.parse(element.bindJson)).not.toHaveProperty('valueCol');
+  });
+
+  it('RANK_LIST 切换数据源时清空旧 valueCol', async () => {
+    const element = {
+      innerType: 'RANK_LIST',
+      bindJson: JSON.stringify({
+        dsId: 9010, valueCol: 'metric_a', categoryCol: 'org_name',
+        nameCol: 'org_name', items: [{ col: 'metric_a', label: '旧指标' }]
+      }),
+      styleJson: '{}', drillJson: '{}', propValue: {}
+    };
+    const wrapper = await mountAttr(element, [
+      datasource(9010, '旧排行榜数据源', { metrics: [{ metricName: 'metric_a' }] }),
+      datasource(9011, '新排行榜数据源', { metrics: [{ metricName: 'metric_b' }] })
+    ]);
+
+    wrapper.vm.bind.dsId = 9011;
+    await flushPromises();
+
+    const saved = JSON.parse(element.bindJson);
+    expect(saved).toMatchObject({ dsId: 9011 });
+    expect(saved.items).toEqual([]);
+    expect(saved).not.toHaveProperty('valueCol');
+    expect(saved).not.toHaveProperty('categoryCol');
+    expect(saved).not.toHaveProperty('nameCol');
   });
 
   it('TABLE_LIST 的机构主体聚合宽表候选自动增加 org_name，并可写回 items', async () => {

@@ -85,7 +85,7 @@ const EXTENDED_TYPES = new Set([
   'BAR_COMPARE', 'AREA_STACK', 'GAUGE', 'TABLE_LIST',
   'KPI_DETAIL_TABLE', 'KPI_RADAR', 'LIQUID_PROGRESS', 'PROGRESS_LIST',
   'COMBO_CHART', 'FUNNEL_CHART', 'SCATTER_BUBBLE', 'HEATMAP_MATRIX',
-  'SUNBURST_CHART', 'SPARKLINE_CARD'
+  'SUNBURST_CHART', 'SPARKLINE_CARD', 'RANK_LIST'
 ]);
 
 function parse(json, fallback = {}) {
@@ -231,6 +231,26 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer); });
 </script>
 
 <style scoped>
+/*
+ * 结构兜底：运行态由 screen shell 提供这些约束，设计器通过 ChartWidget 复用本组件时
+ * 不一定经过同一层 shell；只声明尺寸/溢出，不复制 screen 主题视觉。
+ */
+.scr-block {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.scr-block-h { flex: none; }
+.scr-block-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
 /* 引导占位态（缺必填上下文参数）——柔和青灰、非红字，与 .scr-block-err 错误态视觉区分；
    scoped 随组件 chunk 生效，设计器预览与全屏大屏两个入口均可读，不依赖 screen.scss 是否被引入 */
 .scr-block-guide {
