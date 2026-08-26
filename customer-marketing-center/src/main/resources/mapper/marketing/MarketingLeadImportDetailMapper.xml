@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.marketing.MarketingLeadImportDetailMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, batch_id, row_no, cust_no, cust_name, unified_credit_code, contact_person,
+        contact_mobile, registered_address, business_address, industry, customer_type,
+        credit_amount, credit_exposure_amount, raw_row_json, customer_match_status,
+        requested_manager_id, requested_manager_org_id, validation_status, warning_code,
+        warning_message, error_code, error_message, matched_customer_id, matched_lead_id,
+        matched_entry_emp_id, matched_entry_org_id, matched_entry_time, handling_status,
+        generated_lead_id, created_time
+    </sql>
+
+    <select id="selectByBatchIdOrderByFailure"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadImportDetail">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_LEAD_IMPORT_DETAIL
+        WHERE batch_id = #{batchId}
+        ORDER BY CASE validation_status
+            WHEN 'REJECTED' THEN 1
+            WHEN 'ERROR' THEN 2
+            WHEN 'WARNING' THEN 3
+            WHEN 'VALID' THEN 4
+            ELSE 5 END,
+            row_no ASC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countByBatchId" resultType="long">
+        SELECT COUNT(*) FROM MARKETING_LEAD_IMPORT_DETAIL WHERE batch_id = #{batchId}
+    </select>
+
+    <select id="selectByBatchAndValidationStatus"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadImportDetail">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_LEAD_IMPORT_DETAIL
+        WHERE batch_id = #{batchId} AND validation_status = #{validationStatus}
+        ORDER BY row_no ASC
+    </select>
+
+    <update id="updateHandlingIf">
+        UPDATE MARKETING_LEAD_IMPORT_DETAIL
+        SET handling_status = #{handlingStatus}, generated_lead_id = #{generatedLeadId}
+        WHERE id = #{id} AND handling_status = #{expectedStatus}
+    </update>
+</mapper>

@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerTagImportDetailMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, batch_id, row_no, cust_name, unified_credit_code,
+        contact_person, contact_mobile, registered_address, business_address,
+        raw_row_json, customer_change_type, matched_customer_id, generated_lead_id,
+        validation_status, error_code, error_message, approval_status,
+        reviewed_by, reviewed_time, reject_reason, loaded_flag, loaded_rel_id,
+        loaded_time, created_time
+    </sql>
+
+    <select id="selectPageByBatchId"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTagImportDetail">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_TAG_IMPORT_DETAIL
+        <where>
+            batch_id = #{batchId}
+            <if test="approvalStatus != null and approvalStatus != ''">
+              AND approval_status = #{approvalStatus}
+            </if>
+            <if test="keyword != null and keyword != ''">
+              AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
+                   OR unified_credit_code = #{keyword})
+            </if>
+        </where>
+        ORDER BY CASE validation_status
+                   WHEN 'ERROR' THEN 1
+                   WHEN 'REJECTED' THEN 2
+                   ELSE 3
+                 END,
+                 row_no ASC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countByBatchId" resultType="long">
+        SELECT COUNT(1)
+        FROM MARKETING_CUSTOMER_TAG_IMPORT_DETAIL
+        <where>
+            batch_id = #{batchId}
+            <if test="approvalStatus != null and approvalStatus != ''">
+              AND approval_status = #{approvalStatus}
+            </if>
+            <if test="keyword != null and keyword != ''">
+              AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
+                   OR unified_credit_code = #{keyword})
+            </if>
+        </where>
+    </select>
+
+    <select id="selectByBatchId"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTagImportDetail">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_TAG_IMPORT_DETAIL
+        WHERE batch_id = #{batchId}
+        ORDER BY row_no
+    </select>
+
+    <select id="selectPendingByTagId"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTagImportDetail">
+        SELECT d.*
+        FROM MARKETING_CUSTOMER_TAG_IMPORT_DETAIL d
+        JOIN MARKETING_CUSTOMER_TAG_IMPORT_BATCH b ON b.id = d.batch_id
+        WHERE b.tag_id = #{tagId}
+          AND b.record_status = 'ACTIVE'
+          AND d.validation_status = 'VALID'
+          AND d.approval_status = 'PENDING'
+        <if test="keyword != null and keyword != ''">
+          AND (d.cust_name LIKE CONCAT('%', #{keyword}, '%')
+               OR d.unified_credit_code = #{keyword})
+        </if>
+        ORDER BY b.import_time ASC, d.row_no ASC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="selectHistoryByReviewer"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTagImportDetail">
+        SELECT d.*
+        FROM MARKETING_CUSTOMER_TAG_IMPORT_DETAIL d
+        WHERE d.reviewed_by = #{reviewedBy}
+        <if test="keyword != null and keyword != ''">
+          AND (d.cust_name LIKE CONCAT('%', #{keyword}, '%')
+               OR d.unified_credit_code = #{keyword})
+        </if>
+        ORDER BY d.reviewed_time DESC, d.id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countHistoryByReviewer" resultType="long">
+        SELECT COUNT(1)
+        FROM MARKETING_CUSTOMER_TAG_IMPORT_DETAIL d
+        WHERE d.reviewed_by = #{reviewedBy}
+        <if test="keyword != null and keyword != ''">
+          AND (d.cust_name LIKE CONCAT('%', #{keyword}, '%')
+               OR d.unified_credit_code = #{keyword})
+        </if>
+    </select>
+
+    <select id="selectByBatchIdAndIds"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTagImportDetail">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_TAG_IMPORT_DETAIL
+        WHERE batch_id = #{batchId}
+          AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY row_no
+    </select>
+</mapper>

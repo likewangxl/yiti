@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.marketing.MarketingLeadInfoMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, lead_no, cust_id, lead_type, customer_match_status,
+        base_customer_profile_version, cust_no_snapshot, cust_name, unified_credit_code,
+        legal_representative, registered_capital, registered_address, business_address,
+        business_scope, contact_person, contact_mobile, industry, group_type, group_name,
+        customer_type, enterprise_type, is_keystone, is_account_opened_snapshot,
+        touch_restricted, customer_desc, credit_amount, credit_exposure_amount, lead_source,
+        distribution_mode, pool_status, main_manager_id_snapshot, main_org_id_snapshot,
+        entry_emp_id, entry_org_id, entry_time, lead_status, active_dedup_key, submitted_by,
+        submitted_time, business_key, process_instance_id, import_batch_id, batch_row_no,
+        tag_import_detail_id, reviewed_by, reviewed_time, reject_reason, remark, record_status,
+        created_by, created_time, updated_by, updated_time, lock_version
+    </sql>
+
+    <select id="selectManualPage" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_LEAD_INFO
+        WHERE record_status = 'ACTIVE'
+          AND lead_source = 'MANUAL'
+          AND entry_emp_id = #{entryEmpId}
+        <if test="keyword != null and keyword != ''">
+            AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR unified_credit_code LIKE CONCAT('%', #{keyword}, '%')
+                 OR lead_no LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != null and status != ''">
+            AND lead_status = #{status}
+        </if>
+        ORDER BY entry_time DESC, id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countManualPage" resultType="long">
+        SELECT COUNT(*)
+        FROM MARKETING_LEAD_INFO
+        WHERE record_status = 'ACTIVE'
+          AND lead_source = 'MANUAL'
+          AND entry_emp_id = #{entryEmpId}
+        <if test="keyword != null and keyword != ''">
+            AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR unified_credit_code LIKE CONCAT('%', #{keyword}, '%')
+                 OR lead_no LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != null and status != ''">
+            AND lead_status = #{status}
+        </if>
+    </select>
+
+    <select id="selectActiveByCreditCode" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_LEAD_INFO
+        WHERE record_status = 'ACTIVE'
+          AND active_dedup_key = #{creditCode}
+          AND lead_status IN ('DRAFT', 'SUBMITTED', 'IN_APPROVAL')
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectActiveById" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_LEAD_INFO
+        WHERE id = #{id} AND record_status = 'ACTIVE'
+        LIMIT 1
+    </select>
+
+    <select id="selectForUpdate" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_LEAD_INFO
+        WHERE id = #{id} AND record_status = 'ACTIVE'
+        FOR UPDATE
+    </select>
+
+    <select id="selectForUpdateByCreditCode" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_LEAD_INFO
+        WHERE record_status = 'ACTIVE'
+          AND active_dedup_key = #{creditCode}
+          AND lead_status IN ('DRAFT', 'SUBMITTED', 'IN_APPROVAL')
+        ORDER BY id DESC
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <update id="updateStatusIf">
+        UPDATE MARKETING_LEAD_INFO
+        SET lead_status = #{targetStatus},
+            active_dedup_key = CASE
+                WHEN #{targetStatus} IN ('APPROVED', 'REJECTED', 'CANCELLED') THEN NULL
+                ELSE active_dedup_key END,
+            reviewed_by = CASE
+                WHEN #{targetStatus} IN ('APPROVED', 'REJECTED') THEN #{updatedBy}
+                ELSE reviewed_by END,
+            reviewed_time = CASE
+                WHEN #{targetStatus} IN ('APPROVED', 'REJECTED') THEN NOW()
+                ELSE reviewed_time END,
+            reject_reason = CASE
+                WHEN #{targetStatus} = 'REJECTED' THEN #{rejectReason}
+                WHEN #{targetStatus} = 'APPROVED' THEN NULL
+                ELSE reject_reason END,
+            updated_by = #{updatedBy}, updated_time = NOW(),
+            lock_version = lock_version + 1
+        WHERE id = #{id}
+          AND lead_status = #{expectedStatus}
+          AND record_status = 'ACTIVE'
+    </update>
+
+    <select id="selectByImportBatchId" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_LEAD_INFO
+        WHERE import_batch_id = #{batchId} AND record_status = 'ACTIVE'
+        ORDER BY id ASC
+    </select>
+</mapper>

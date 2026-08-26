@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerTagImportBatchMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, batch_no, tag_id, tag_name_snapshot, import_mode,
+        source_file_name, source_file_id, file_checksum,
+        total_count, valid_count, error_count, pending_approval_count,
+        approved_count, rejected_count, loaded_count, tag_approval_required,
+        customer_approval_status, status, replace_block_reason,
+        import_emp_id, import_org_id, import_time, completed_time, record_status,
+        created_by, created_time, updated_by, updated_time, lock_version
+    </sql>
+
+    <select id="selectByBatchNo"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTagImportBatch">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_TAG_IMPORT_BATCH
+        WHERE batch_no = #{batchNo}
+        LIMIT 1
+    </select>
+
+    <select id="selectPage"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTagImportBatch">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_TAG_IMPORT_BATCH
+        <where>
+            record_status = 'ACTIVE'
+            <if test="keyword != null and keyword != ''">
+              AND (batch_no LIKE CONCAT('%', #{keyword}, '%')
+                   OR source_file_name LIKE CONCAT('%', #{keyword}, '%')
+                   OR tag_name_snapshot LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="tagId != null">AND tag_id = #{tagId}</if>
+            <if test="status != null and status != ''">AND status = #{status}</if>
+            <if test="importEmpId != null and importEmpId != ''">AND import_emp_id = #{importEmpId}</if>
+        </where>
+        ORDER BY import_time DESC, id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(1)
+        FROM MARKETING_CUSTOMER_TAG_IMPORT_BATCH
+        <where>
+            record_status = 'ACTIVE'
+            <if test="keyword != null and keyword != ''">
+              AND (batch_no LIKE CONCAT('%', #{keyword}, '%')
+                   OR source_file_name LIKE CONCAT('%', #{keyword}, '%')
+                   OR tag_name_snapshot LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="tagId != null">AND tag_id = #{tagId}</if>
+            <if test="status != null and status != ''">AND status = #{status}</if>
+            <if test="importEmpId != null and importEmpId != ''">AND import_emp_id = #{importEmpId}</if>
+        </where>
+    </select>
+
+    <select id="countInFlightReplace" resultType="long">
+        SELECT COUNT(1)
+          FROM MARKETING_CUSTOMER_TAG_IMPORT_BATCH
+         WHERE tag_id = #{tagId}
+           AND import_mode = 'REPLACE'
+           AND record_status = 'ACTIVE'
+           AND status NOT IN ('COMPLETED', 'CANCELLED', 'REPLACE_BLOCKED')
+        <if test="excludeBatchId != null">
+           AND id &lt;&gt; #{excludeBatchId}
+        </if>
+    </select>
+
+    <update id="updateStatusIf">
+        UPDATE MARKETING_CUSTOMER_TAG_IMPORT_BATCH
+           SET status = #{toStatus}, updated_by = #{updatedBy}, updated_time = CURRENT_TIMESTAMP
+         WHERE id = #{id} AND status = #{fromStatus} AND record_status = 'ACTIVE'
+    </update>
+
+    <update id="updateSummary">
+        UPDATE MARKETING_CUSTOMER_TAG_IMPORT_BATCH
+           SET customer_approval_status = #{customerApprovalStatus},
+               status = #{status},
+               pending_approval_count = #{pendingApprovalCount},
+               approved_count = #{approvedCount},
+               rejected_count = #{rejectedCount},
+               loaded_count = #{loadedCount},
+               completed_time = #{completedTime},
+               replace_block_reason = #{replaceBlockReason},
+               updated_by = #{updatedBy},
+               updated_time = CURRENT_TIMESTAMP
+         WHERE id = #{id} AND record_status = 'ACTIVE'
+    </update>
+</mapper>

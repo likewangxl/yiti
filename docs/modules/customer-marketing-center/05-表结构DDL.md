@@ -487,6 +487,7 @@ MARKETING_CUSTOMER_TAG_IMPORT_BATCH（一批次一标签）
 | created_time | DATETIME | 是 | 创建时间 |
 | updated_by | VARCHAR(32) | 是 | 最后修改人工号；系统任务可填写 SYSTEM |
 | updated_time | DATETIME | 是 | 最后修改时间 |
+| lock_version | INT | 是 | 导入确认操作的乐观锁版本 |
 
 主要约束与索引：PK(id)；UK(batch_no)；IDX(import_emp_id, import_time)；IDX(import_status, import_time)。原始文件和错误明细通过平台FileApi存取OBS文件，表中只保存文件对象ID；用户放弃并重传时保留原批次为ABANDONED，新文件必须创建新批次。
 
