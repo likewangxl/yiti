@@ -1,5 +1,6 @@
 package com.bank.branch.platform.report.service.screen;
 
+import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.report.dto.req.ScreenDataReqDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.report.enums.RptErrorCode;
@@ -11,12 +12,14 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 /** 命名机构组本期只允许可证明机构范围的 ORG_INDEX_RESULT 宽表。 */
 class ScreenQueryEngineNamedGroupTest {
 
     private final ScreenQueryEngine engine = new ScreenQueryEngine(
             null,
+            mock(OrgApi.class),
             List.of("ORG_INDEX_RESULT", "SYS_CONTROL"),
             List.of("DROP", "DELETE", "UPDATE", "INSERT", "TRUNCATE", "ALTER", "CREATE"),
             1000);

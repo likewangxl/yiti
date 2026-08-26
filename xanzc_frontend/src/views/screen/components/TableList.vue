@@ -3,13 +3,13 @@
     <table v-if="rows.length" class="tl-table">
       <thead>
         <tr>
-          <th v-for="c in columns" :key="c">{{ headerOf(c) }}</th>
+          <th v-for="column in visibleColumns" :key="column.col">{{ headerOf(column.col, column.label) }}</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="ri in shownIndices" :key="ri">
-          <td v-for="(c, ci) in columns" :key="c" :class="{ num: isNum(rows[ri][ci]) }">
-            {{ cellText(c, rows[ri][ci]) }}
+          <td v-for="column in visibleColumns" :key="column.col" :class="{ num: isNum(rows[ri][column.index]) }">
+            {{ cellText(column.col, rows[ri][column.index]) }}
           </td>
         </tr>
       </tbody>
@@ -67,9 +67,35 @@ const themeVars = computed(() => ({
   '--tl-bg': theme.value.tokens.bgDeep
 }));
 
+/**
+ * 绑定 items 只影响当前表格的展示列；历史配置没有有效绑定时回退全部响应列。
+ * 通过响应列下标读取值，避免按选中顺序调整表头后错位取值。
+ */
+const visibleColumns = computed(() => {
+  const responseColumns = Array.isArray(props.columns) ? props.columns : [];
+  const indexByColumn = new Map(responseColumns.map((col, index) => [col, index]));
+  const items = Array.isArray(props.bind?.items) ? props.bind.items : [];
+  const selected = [];
+  const seen = new Set();
+
+  for (const item of items) {
+    const col = String(item?.col || '').trim();
+    if (!col || seen.has(col) || !indexByColumn.has(col)) continue;
+    seen.add(col);
+    selected.push({
+      col,
+      index: indexByColumn.get(col),
+      label: String(item?.label || '').trim()
+    });
+  }
+
+  if (selected.length) return selected;
+  return responseColumns.map((col, index) => ({ col, index, label: '' }));
+});
+
 /** 表头：别名替换 + 单位并入（如 "一般性存款(万元)"） */
-function headerOf(col) {
-  const name = displayName(col, props.columnsMeta);
+function headerOf(col, itemLabel = '') {
+  const name = itemLabel || displayName(col, props.columnsMeta);
   const unit = metaOf(col, props.columnsMeta)?.unit;
   return unit ? `${name}(${unit})` : name;
 }

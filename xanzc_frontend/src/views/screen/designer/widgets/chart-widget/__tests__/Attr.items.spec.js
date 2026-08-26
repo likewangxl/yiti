@@ -67,9 +67,9 @@ const stubs = {
   'el-radio-button': true
 };
 
-function datasource(id, dsName, config, dsType = 'SINGLE') {
+function datasource(id, dsName, config, dsType = 'SINGLE', sourceKind = 'WIDE_TABLE') {
   return {
-    id, dsName, dsType, sourceKind: 'WIDE_TABLE',
+    id, dsName, dsType, sourceKind,
     configJson: JSON.stringify(config)
   };
 }
@@ -313,6 +313,57 @@ describe('ChartWidget Attr 指标列绑定', () => {
         metrics: [{ metricName: 'metric_a' }]
       }, dsType)]);
       expect(wrapper.find('[data-testid="chart-metric-columns"]').exists()).toBe(true);
+      wrapper.unmount();
+    }
+  });
+
+  it('TABLE_LIST 的机构主体聚合宽表候选自动增加 org_name，并可写回 items', async () => {
+    const element = {
+      innerType: 'TABLE_LIST',
+      bindJson: JSON.stringify({ dsId: 9010 }),
+      styleJson: '{}', drillJson: '{}', propValue: {}
+    };
+    const wrapper = await mountAttr(element, [datasource(9010, '机构聚合', {
+      table: 'ORG_INDEX_RESULT',
+      aggregation: { groupBy: 'SUBJECT', agg: 'SUM' },
+      metrics: [{ metricName: 'balance' }]
+    })]);
+
+    expect(wrapper.find('[data-testid="chart-metric-columns"]').exists()).toBe(true);
+    expect(wrapper.vm.metricColumnOptions).toEqual([
+      { col: 'balance', label: 'balance' },
+      { col: 'org_name', label: 'org_name' }
+    ]);
+
+    await chooseMetricColumns(wrapper, ['org_name']);
+    expect(JSON.parse(element.bindJson).items).toEqual([
+      { col: 'org_name', label: 'org_name' }
+    ]);
+  });
+
+  it('仅精确匹配机构主体聚合宽表时增加 org_name，其他配置不增加', async () => {
+    const cases = [
+      { table: 'ORG_INDEX_RESULT', aggregation: { groupBy: 'NONE', agg: 'SUM' } },
+      { table: 'ORG_INDEX_RESULT', aggregation: { groupBy: 'DATE', agg: 'SUM' } },
+      { table: 'ORG_INDEX_RESULT' },
+      { table: 'OTHER_TABLE', aggregation: { groupBy: 'SUBJECT', agg: 'SUM' } },
+      { table: 'ORG_INDEX_RESULT', aggregation: { groupBy: 'SUBJECT', agg: 'SUM' }, sourceKind: 'CUSTOM_SQL' }
+    ];
+
+    for (const [index, candidate] of cases.entries()) {
+      const element = {
+        innerType: 'TABLE_LIST',
+        bindJson: JSON.stringify({ dsId: 9100 + index }),
+        styleJson: '{}', drillJson: '{}', propValue: {}
+      };
+      const wrapper = await mountAttr(element, [datasource(
+        9100 + index,
+        `非目标数据源${index}`,
+        { table: candidate.table, aggregation: candidate.aggregation },
+        'SINGLE',
+        candidate.sourceKind || 'WIDE_TABLE'
+      )]);
+      expect(wrapper.vm.metricColumnOptions.some(item => item.col === 'org_name')).toBe(false);
       wrapper.unmount();
     }
   });

@@ -187,7 +187,7 @@ if (propValue.ignoreGlobalPeriod == null) propValue.ignoreGlobalPeriod = false;
 
 const innerType = computed(() => props.element.innerType);
 const chartMeta = computed(() => chartMetas.find(c => c.innerType === innerType.value) || null);
-const metricItemTypes = new Set(['METRIC_CARD', 'LINE_TREND', 'AREA_STACK', 'BAR_COMPARE', 'COMBO_CHART', 'PIE_SHARE']);
+const metricItemTypes = new Set(['METRIC_CARD', 'LINE_TREND', 'AREA_STACK', 'BAR_COMPARE', 'COMBO_CHART', 'PIE_SHARE', 'TABLE_LIST']);
 const showMetricItems = computed(() => metricItemTypes.has(innerType.value));
 const showSeriesVisualControls = computed(() => ['LINE_TREND', 'AREA_STACK', 'BAR_COMPARE', 'COMBO_CHART'].includes(innerType.value));
 const showStandaloneLabelControl = computed(() => ['FUNNEL_CHART', 'SCATTER_BUBBLE', 'HEATMAP_MATRIX', 'SUNBURST_CHART'].includes(innerType.value));
@@ -303,7 +303,14 @@ function datasourceMetricColumns(datasource) {
     return { col, label: col };
   }).filter(item => item.col);
 
-  return uniqueMetricColumns([...fieldMeta, ...metricSnapshot]);
+  const isOrgSubjectAggregate = String(datasource?.sourceKind || config.sourceKind || '').toUpperCase() === 'WIDE_TABLE'
+    && config.table === 'ORG_INDEX_RESULT'
+    && String(config.aggregation?.groupBy || '').toUpperCase() === 'SUBJECT';
+  const derivedColumns = isOrgSubjectAggregate
+    ? [{ col: 'org_name', label: 'org_name' }]
+    : [];
+
+  return uniqueMetricColumns([...fieldMeta, ...metricSnapshot, ...derivedColumns]);
 }
 
 function uniqueMetricColumns(columns) {

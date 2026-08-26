@@ -1,5 +1,7 @@
 package com.bank.branch.platform.report.service.screen;
 
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.report.dto.req.ScreenDataReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDataRespDTO;
@@ -28,6 +30,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -75,9 +79,11 @@ public class ScreenQueryEngine {
     private final Set<String> whitelistUpper;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final int maxRows;
+    private final OrgApi orgApi;
 
     public ScreenQueryEngine(
             @Qualifier("rptReadOnlyDataSource") DataSource readOnlyDataSource,
+            OrgApi orgApi,
             @Value("#{'${rpt.screen.whitelist-tables:EMP_INDEX_RESULT,ORG_INDEX_RESULT,CUST_INDEX_RESULT,"
                     + "KPI_RESULT,PERF_KPI_SCORE,PERF_KPI_SCHEME,PERF_METRIC_DEF,PERF_TARGET_VALUE,"
                     + "PERF_TARGET_PLAN,SYS_CONTROL,EXT_ORG_INFO,"
@@ -86,9 +92,10 @@ public class ScreenQueryEngine {
             @Value("#{'${rpt.screen.forbidden-keywords:DROP,DELETE,UPDATE,INSERT,TRUNCATE,ALTER,CREATE,RENAME,"
                     + "REPLACE,GRANT,REVOKE,LOCK,UNLOCK,CALL,EXEC,EXECUTE,LOAD,SHUTDOWN,USE,DESCRIBE,EXPLAIN,SHOW,"
                     + "COMMIT,ROLLBACK,SAVEPOINT,DECLARE,HANDLER,SIGNAL,RESIGNAL}'.split(',')}")
-                    List<String> forbiddenKeywords,
+            List<String> forbiddenKeywords,
             @Value("${rpt.screen.max-rows:1000}") int maxRows) {
         this.readOnlyDataSource = readOnlyDataSource;
+        this.orgApi = orgApi;
         this.maxRows = maxRows;
         this.validator = new SqlSafeValidator(whitelistTables, forbiddenKeywords, maxRows, 8000, 3);
         this.whitelistUpper = whitelistTables.stream()
@@ -181,7 +188,10 @@ public class ScreenQueryEngine {
     }
 
     /** 构造结果：最终 SQL（已含 LIMIT）+ 有序绑定参数 */
-    record BuiltQuery(String sql, List<Object> params) {
+    record BuiltQuery(String sql, List<Object> params, boolean enrichOrgNames) {
+        BuiltQuery(String sql, List<Object> params) {
+            this(sql, params, false);
+        }
     }
 
     /** 包级可见，供单测注入固定 today */
@@ -353,7 +363,8 @@ public class ScreenQueryEngine {
             case "DATE" -> sql.append(" GROUP BY data_date ORDER BY data_date LIMIT ").append(limit);
             default -> sql.append(" LIMIT ").append(limit);
         }
-        return new BuiltQuery(sql.toString(), params);
+        return new BuiltQuery(sql.toString(), params,
+                "ORG_INDEX_RESULT".equals(table) && "SUBJECT".equals(groupBy));
     }
 
     /** filters 逐条追加（col/op 白名单校验，违规 43009；值全部 ? 绑定，IN 逗号拆分多 ?） */
@@ -579,6 +590,7 @@ public class ScreenQueryEngine {
     }
 
     private ScreenDataRespDTO execute(BuiltQuery q) {
+        ScreenDataRespDTO response;
         try (Connection conn = readOnlyDataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(q.sql())) {
             stmt.setQueryTimeout(QUERY_TIMEOUT_SEC);
@@ -604,12 +616,92 @@ public class ScreenQueryEngine {
                     }
                     rows.add(row);
                 }
-                return new ScreenDataRespDTO(columns, rows);
+                response = new ScreenDataRespDTO(columns, rows);
             }
         } catch (SQLException e) {
             log.warn("[ScreenQueryEngine] 取数失败 sql={} cause={}", q.sql(), e.getMessage());
             throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED, e);
         }
+        return q.enrichOrgNames() ? appendOrgNames(response) : response;
+    }
+
+    /**
+     * 为机构主体聚合结果补充展示名称。
+     *
+     * <p>机构编码先按结果行顺序去空去重，再通过公开 OrgApi 一次批量查询；未命中的编码保持名称为
+     * {@code null}，不把编码当作名称兜底。该补充发生在统一执行出口，正式取数和试跑/探查共用。</p>
+     */
+    private ScreenDataRespDTO appendOrgNames(ScreenDataRespDTO response) {
+        try {
+            List<String> columns = response.getColumns();
+            if (columns == null) {
+                return response;
+            }
+            int orgCodeIndex = columns.indexOf("org_code");
+            if (orgCodeIndex < 0) {
+                return response;
+            }
+
+            LinkedHashSet<String> distinctCodes = new LinkedHashSet<>();
+            if (response.getRows() != null) {
+                for (List<Object> row : response.getRows()) {
+                    if (row != null && orgCodeIndex < row.size()) {
+                        String code = normalizeOrgCode(row.get(orgCodeIndex));
+                        if (code != null) {
+                            distinctCodes.add(code);
+                        }
+                    }
+                }
+            }
+
+            Map<String, String> orgNames = new LinkedHashMap<>();
+            if (!distinctCodes.isEmpty()) {
+                List<String> codes = new ArrayList<>(distinctCodes);
+                List<OrgDTO> orgs = orgApi.getOrgsByCodes(codes);
+                if (orgs != null) {
+                    for (OrgDTO org : orgs) {
+                        if (org == null) {
+                            continue;
+                        }
+                        String code = normalizeOrgCode(org.getOrgCode());
+                        if (code != null) {
+                            orgNames.putIfAbsent(code, org.getOrgName());
+                        }
+                    }
+                }
+            }
+
+            int orgNameIndex = orgCodeIndex + 1;
+            List<String> enrichedColumns = new ArrayList<>(columns);
+            enrichedColumns.add(orgNameIndex, "org_name");
+            List<List<Object>> enrichedRows = new ArrayList<>();
+            if (response.getRows() != null) {
+                for (List<Object> sourceRow : response.getRows()) {
+                    List<Object> row = sourceRow == null
+                            ? new ArrayList<>()
+                            : new ArrayList<>(sourceRow);
+                    String code = row.size() > orgCodeIndex
+                            ? normalizeOrgCode(row.get(orgCodeIndex))
+                            : null;
+                    row.add(Math.min(orgNameIndex, row.size()), code == null ? null : orgNames.get(code));
+                    enrichedRows.add(row);
+                }
+            }
+            response.setColumns(enrichedColumns);
+            response.setRows(enrichedRows);
+            return response;
+        } catch (Exception e) {
+            log.warn("[ScreenQueryEngine] 机构名称补充失败 cause={}", e.getMessage());
+            throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED, e);
+        }
+    }
+
+    private String normalizeOrgCode(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String code = String.valueOf(value).trim();
+        return code.isEmpty() ? null : code;
     }
 
     /** JDBC 值 → JSON 友好值（日期/时间戳转字符串，数值保持原样） */
