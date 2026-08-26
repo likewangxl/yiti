@@ -1,0 +1,41 @@
+playwright-cli requests --filter '/api/'
+
+46. [GET] http://127.0.0.1:8091/api/auth/current-user => [200] OK
+47. [GET] http://127.0.0.1:8091/api/auth/my-menus => [200] OK
+49. [GET] http://127.0.0.1:8091/api/auth/permissions => [200] OK
+234. [GET] http://127.0.0.1:8091/api/screen/admin/screens => [200] OK
+235. [GET] http://127.0.0.1:8091/api/screen/admin/canvas/9401 => [200] OK
+236. [GET] http://127.0.0.1:8091/api/screen/admin/screens/9401/map-region-metrics => [200] OK
+237. [GET] http://127.0.0.1:8091/api/admin/org-groups => [200] OK
+238. [GET] http://127.0.0.1:8091/api/admin/roles/all?recordStatus=0 => [200] OK
+239. [GET] http://127.0.0.1:8091/api/admin/org-profiles => [200] OK
+240. [GET] http://127.0.0.1:8091/api/screen/admin/datasources => [200] OK
+241. [GET] http://127.0.0.1:8091/api/admin/org-groups => [200] OK
+
+request 240
+
+#240 [GET] http://127.0.0.1:8091/api/screen/admin/datasources
+status: [200] OK
+duration: 4ms
+type: xhr
+mimeType: application/json
+x-trace-id: pc-1787716660611-105210
+
+response-body 240
+
+{"code":"0","message":"success","traceId":"mock-datasources","data":[{"id":9402,"dsCode":"DS_TABLE_FIELD_META","dsName":"明细表格字段元数据源","dsType":"SINGLE","sourceKind":"WIDE_TABLE","bizLine":"COMMON","status":"ACTIVE","configJson":"{\"scopeMode\":\"GLOBAL\",\"table\":\"ORG_INDEX_RESULT\",\"aggregation\":{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\"},\"fieldMeta\":[{\"col\":\"org_name\",\"alias\":\"机构名称\",\"role\":\"DIM\"},{\"col\":\"region_name\",\"alias\":\"区域\",\"role\":\"DIM\"},{\"col\":\"balance\",\"alias\":\"余额\",\"role\":\"METRIC\"}],\"metrics\":[{\"metricName\":\"balance\"},{\"metricName\":\"customer_count\"},{\"metricName\":\"org_name\"}]}"}]}
+
+request 235
+
+#235 [GET] http://127.0.0.1:8091/api/screen/admin/canvas/9401
+status: [200] OK
+duration: 2ms
+type: xhr
+mimeType: application/json
+x-trace-id: pc-1787716629714-760814
+
+response-body 235
+
+{"code":"0","message":"success","traceId":"mock-canvas","data":{"screenId":9401,"screenCode":"SCR_TABLE_FIELD_META","screenName":"明细表格字段元数据验收","canvasVersion":1,"publishStatus":0,"canvasDraftJson":"{\"schemaVersion\":1,\"components\":[{\"id\":\"table-field-meta\",\"component\":\"ChartWidget\",\"innerType\":\"TABLE_LIST\",\"blockId\":null,\"bindJson\":\"{\\\"dsId\\\":9402,\\\"dsType\\\":\\\"SINGLE\\\",\\\"period\\\":\\\"LATEST\\\",\\\"items\\\":[]}\"}]}","blocks":[]}}
+
+浏览器验收期间没有保存、发布、PUT、PATCH、POST 或 DELETE 请求。

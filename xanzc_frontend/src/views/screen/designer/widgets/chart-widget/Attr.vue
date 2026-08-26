@@ -289,7 +289,10 @@ function datasourceMetricColumns(datasource) {
 
   const fieldMeta = Array.isArray(config.fieldMeta)
     ? config.fieldMeta
-      .filter(item => String(item?.role || '').toUpperCase() === 'METRIC')
+      .filter(item => {
+        const role = String(item?.role || '').toUpperCase();
+        return role === 'METRIC' || (innerType.value === 'TABLE_LIST' && role === 'DIM');
+      })
       .map(item => ({
         col: String(item?.col || '').trim(),
         label: String(item?.alias || item?.col || '').trim()

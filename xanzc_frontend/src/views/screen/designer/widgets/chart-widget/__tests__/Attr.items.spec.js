@@ -341,6 +341,61 @@ describe('ChartWidget Attr 指标列绑定', () => {
     ]);
   });
 
+  it('TABLE_LIST 合并 DIM/METRIC 字段元数据，fieldMeta alias 优先且 DIM 可写回', async () => {
+    const element = {
+      innerType: 'TABLE_LIST',
+      bindJson: JSON.stringify({ dsId: 9010 }),
+      styleJson: '{}', drillJson: '{}', propValue: {}
+    };
+    const wrapper = await mountAttr(element, [datasource(9010, '机构聚合', {
+      table: 'ORG_INDEX_RESULT',
+      aggregation: { groupBy: 'SUBJECT', agg: 'SUM' },
+      fieldMeta: [
+        { col: 'org_name', alias: '机构名称', role: 'DIM' },
+        { col: 'balance', alias: '余额', role: 'METRIC' },
+        { col: 'dimension_only', alias: '区域', role: 'DIM' }
+      ],
+      metrics: [
+        { metricName: 'balance' },
+        { metricName: 'metric_only' },
+        { metricName: 'org_name' }
+      ]
+    })]);
+
+    expect(wrapper.vm.metricColumnOptions).toEqual([
+      { col: 'org_name', label: '机构名称' },
+      { col: 'balance', label: '余额' },
+      { col: 'dimension_only', label: '区域' },
+      { col: 'metric_only', label: 'metric_only' }
+    ]);
+
+    await chooseMetricColumns(wrapper, ['org_name', 'dimension_only']);
+    expect(JSON.parse(element.bindJson).items).toEqual([
+      { col: 'org_name', label: '机构名称' },
+      { col: 'dimension_only', label: '区域' }
+    ]);
+  });
+
+  it('数值图表指标列候选仍排除 DIM 字段元数据', async () => {
+    const element = {
+      innerType: 'METRIC_CARD',
+      bindJson: JSON.stringify({ dsId: 9010 }),
+      styleJson: '{}', drillJson: '{}', propValue: {}
+    };
+    const wrapper = await mountAttr(element, [datasource(9010, '聚合', {
+      fieldMeta: [
+        { col: 'org_name', alias: '机构名称', role: 'DIM' },
+        { col: 'balance', alias: '余额', role: 'METRIC' }
+      ],
+      metrics: [{ metricName: 'metric_only' }]
+    })]);
+
+    expect(wrapper.vm.metricColumnOptions).toEqual([
+      { col: 'balance', label: '余额' },
+      { col: 'metric_only', label: 'metric_only' }
+    ]);
+  });
+
   it('仅精确匹配机构主体聚合宽表时增加 org_name，其他配置不增加', async () => {
     const cases = [
       { table: 'ORG_INDEX_RESULT', aggregation: { groupBy: 'NONE', agg: 'SUM' } },
