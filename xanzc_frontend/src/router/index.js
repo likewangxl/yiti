@@ -152,12 +152,13 @@ const routes = [
       { path: 'eval/my-tasks',  name: 'EvalMyTasks',  component: () => import('@/views/eval/MyTasks.vue'),  meta: { title: '待处理任务', group: '内部评价' } },
 
       // 客户营销
-      { path: 'customers/list', name: 'CustomerList', component: () => import('@/views/customerMarketing/CustomerList.vue'), meta: { title: '客户列表', group: '客户营销' } },
-      { path: 'customers/leads/new', name: 'LeadEntry', component: () => import('@/views/customerMarketing/LeadEntry.vue'), meta: { title: '线索录入', group: '客户营销' } },
-      { path: 'customers/leads/approval', name: 'LeadApproval', component: () => import('@/views/customerMarketing/LeadApproval.vue'), meta: { title: '线索审批', group: '客户营销' } },
+      { path: 'customers/manage', name: 'MarketingCustomerList', component: () => import('@/views/customerMarketing/MarketingCustomerList.vue'), meta: { title: '营销客户列表', group: '客户营销', requiredResource: '/api/marketing/customers' } },
+      { path: 'customers/list', name: 'CustomerList', component: () => import('@/views/customerMarketing/MyCustomers.vue'), meta: { title: '我的客户', group: '客户营销', requiredResource: '/api/marketing/customers/mine' } },
+      { path: 'customers/leads/new', name: 'LeadEntry', component: () => import('@/views/customerMarketing/MarketingLeadEntry.vue'), meta: { title: '线索录入', group: '客户营销', requiredResource: '/api/marketing/leads' } },
+      { path: 'customers/leads/approval', name: 'LeadApproval', component: () => import('@/views/customerMarketing/MarketingLeadApproval.vue'), meta: { title: '线索审批', group: '客户营销', requiredResource: '/api/marketing/lead-approvals/**' } },
       { path: 'customers/pool/available', name: 'CustomerPoolAvailable', component: () => import('@/views/customerMarketing/AvailablePool.vue'), meta: { title: '待认领客户', group: '客户营销' } },
-      { path: 'customers/tags', name: 'CustomerTags', component: () => import('@/views/customerMarketing/CustomerTags.vue'), meta: { title: '客户标签管理', group: '客户营销' } },
-      { path: 'customers/tags/approval', name: 'CustomerTagApproval', component: () => import('@/views/customerMarketing/TagApproval.vue'), meta: { title: '客户标签审核', group: '客户营销' } },
+      { path: 'customers/tags', name: 'CustomerTags', component: () => import('@/views/customerMarketing/MarketingCustomerTags.vue'), meta: { title: '营销客户标签', group: '客户营销', requiredResource: '/api/marketing/customer-tags' } },
+      { path: 'customers/tags/approval', name: 'CustomerTagApproval', component: () => import('@/views/customerMarketing/MarketingTagCustomerApproval.vue'), meta: { title: '标签客户审核', group: '客户营销', requiredResource: '/api/marketing/customer-tag-approvals/**' } },
       { path: 'customers/touch-limits', name: 'CustomerTouchLimits', component: () => import('@/views/customerMarketing/TouchLimitManagement.vue'), meta: { title: '客户触达周期管理', group: '客户营销', requiredResource: '/api/touch-limit-rules' } },
       { path: 'customers/cross-org', name: 'CrossOrgMarketing', component: () => import('@/views/customerMarketing/CrossOrgMarketing.vue'), meta: { title: '跨机构营销申请', group: '客户营销' } },
       { path: 'customers/transfer-log', name: 'CustomerTransfers', component: () => import('@/views/customerMarketing/CustomerTransfers.vue'), meta: { title: '客户转交记录', group: '客户营销' } },

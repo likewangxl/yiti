@@ -22,6 +22,8 @@ export const listManualLeads = (params = {}) =>
   call('get', '/marketing/leads', { params: { ...params, leadSource: 'MANUAL' } }, null);
 export const getMarketingLead = id =>
   call('get', `/marketing/leads/${idPart(id)}`, {}, null);
+export const lookupMarketingCustomerByCreditCode = unifiedCreditCode =>
+  call('get', '/marketing/leads/lookup', { params: { unifiedCreditCode } }, null);
 export const createMarketingLead = data =>
   call('post', '/marketing/leads', { data });
 export const updateMarketingLead = (id, data) =>
