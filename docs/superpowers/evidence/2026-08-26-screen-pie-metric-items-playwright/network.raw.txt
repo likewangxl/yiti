@@ -1,0 +1,28 @@
+playwright-cli requests --filter '/api/'
+
+46.  [GET]  http://127.0.0.1:8091/api/auth/my-menus => [200] OK
+47.  [GET]  http://127.0.0.1:8091/api/auth/permissions => [200] OK
+213. [GET]  http://127.0.0.1:8091/api/screen/view/SCR_PIE_METRICS?preview=draft => [200] OK
+214. [POST] http://127.0.0.1:8091/api/screen/data => [200] OK
+
+请求 213 响应摘要
+
+- status: 200 OK
+- mimeType: application/json
+- state: draft
+- componentType: PIE_SHARE
+- blockId: 320
+- bind.items: [{"col":"deposit","label":"存款余额"},{"col":"loan","label":"贷款余额"}]
+- styleCfg: {"title":"业务结构占比","refreshSec":0,"pieShape":"donut"}
+
+请求 214 请求体（playwright-cli request-body 214）
+
+{"schemaVersion":1,"previewState":"draft","screenCode":"SCR_PIE_METRICS","blockId":320,"period":"LATEST","contextParams":{"orgCode":"","empId":""}}
+
+请求 214 响应体（playwright-cli response-body 214）
+
+{"code":"0","message":"success","data":{"columns":["month","deposit","loan","other"],"rows":[["2026-07",100,50,999],["2026-08",300,100,888]]}}
+
+视觉断言：运行页截图显示最新一行两个已选指标的 75% / 25%；`other=888` 未出现在图例和扇区中。
+
+以上请求均被开发态 mock route 拦截，未到达目标后端；`POST /api/screen/data` 是取数调用，没有保存、发布或数据库写入。
