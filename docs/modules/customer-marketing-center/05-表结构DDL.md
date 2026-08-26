@@ -6,9 +6,10 @@
 
 # 客户营销模块表结构及字段说明
 
-> 目标设计稿  v1.0；编制日期：2026年8月26日
+> 目标设计稿  v1.1；编制日期：2026年8月26日
 
 > **说明：** 本文件为业务与数据模型评审稿，不是可直接执行的DDL。字段长度、索引及数据库兼容性需经DBA评审。
+> 六个管理页面、角色权限、规划REST契约和后端事务逻辑见 [10-营销客户管理前后端功能设计.md](10-营销客户管理前后端功能设计.md)。
 
 ## 1. 设计范围与确认口径
 
@@ -37,6 +38,10 @@
 - 存量已开户客户仍可营销；有有效主办权时直接进入主办人的已认领客户池，不进入公共待认领池。再次录入时必须反显并提示当前主办归属。
 
 - 历史 xa_touch_* 表允许改名为 MARKETING_TOUCH_*，并按任务、日志、图片、参与人、团队和名单职责规范化。
+
+- 线索录入历史页以单条 MARKETING_LEAD_INFO 为数据粒度，不按客户聚合；手工录入与批量导入分Tab展示。
+
+- 标签客户导入必须先进入批次和客户明细待审区；标签与客户均满足审批条件后才能写入正式标签关系。全量替换采用延迟生效，不在逐条审批过程中修改正式客户群。
 
 ## 2. 统一技术规范
 
@@ -80,8 +85,10 @@
 | 21 | 触达域 | MARKETING_TOUCH_LIMIT_RULE | 按正式客户标签配置触达周期和次数限制。 |
 | 22 | 跨机构营销域 | MARKETING_CROSS_ORG_RULE | 跨机构营销申请的可配置校验规则。 |
 | 23 | 跨机构营销域 | MARKETING_CROSS_ORG_APPLY | 跨机构营销申请、四项校验快照、审批结果及生成触达任务。 |
+| 24 | 客户域 | MARKETING_CUSTOMER_TAG_IMPORT_BATCH | 单个标签的追加或全量替换导入批次，保存OBS文件、统计、审批汇总和生效状态。 |
+| 25 | 客户域 | MARKETING_CUSTOMER_TAG_IMPORT_DETAIL | 标签导入逐客户明细，保存校验、客户审批、线索关联和正式标签关系载入结果。 |
 
-本设计共包含 23 张营销模块自有表。待认领池和已认领池均为组合查询结果，不单独建设客户池实体表。
+本设计共包含 25 张营销模块自有表。待认领池和已认领池均为组合查询结果，不单独建设客户池实体表。表清单中的24、25为本次六页面设计新增；为保持已评审编号稳定，未重排原1至23的序号。
 
 ## 4. 主要业务关系
 
@@ -105,6 +112,12 @@ MARKETING_CUSTOMER_INFO
                    └─工作日志→ MARKETING_TOUCH_WORKLOG
                                   ├─图片→ MARKETING_TOUCH_WORKLOG_PICTURE
                                   └─参与人→ MARKETING_TOUCH_WORKLOG_PARTICIPANT
+
+MARKETING_CUSTOMER_TAG_IMPORT_BATCH（一批次一标签）
+    └─逐客户→ MARKETING_CUSTOMER_TAG_IMPORT_DETAIL
+                    ├─新客户或资料变更→ MARKETING_LEAD_INFO
+                    ├─审批通过→ MARKETING_CUSTOMER_INFO（新增/受控更新）
+                    └─批次满足生效条件→ MARKETING_CUSTOMER_TAG_REL
 ```
 
 ## 5. 详细数据字典
@@ -249,10 +262,11 @@ MARKETING_CUSTOMER_INFO
 | transfer_no | VARCHAR(64) | 是 | 转交编号，唯一 |
 | cust_id | BIGINT UNSIGNED | 是 | 营销客户ID |
 | claim_id | BIGINT UNSIGNED | 否 | 原认领关系ID |
+| transfer_action | VARCHAR(20) | 是 | 主办操作：ASSIGN首次指定、TRANSFER转交、UNASSIGN取消主办 |
 | from_manager_id | VARCHAR(32) | 否 | 原主办或维护人工号 |
 | from_org_id | VARCHAR(50) | 否 | 原机构 |
-| primary_to_manager_id | VARCHAR(32) | 是 | 新主办人工号 |
-| primary_to_org_id | VARCHAR(50) | 是 | 新主办机构 |
+| primary_to_manager_id | VARCHAR(32) | 否 | 新主办人工号；UNASSIGN时必须为空 |
+| primary_to_org_id | VARCHAR(50) | 否 | 新主办机构；UNASSIGN时必须为空 |
 | account_opened_snapshot | TINYINT | 否 | 转交时开户状态快照 |
 | transfer_source | VARCHAR(30) | 是 | 来源：ADMIN/LEAD/WORKFLOW/OPEN_ACCOUNT |
 | reason | VARCHAR(500) | 是 | 转交原因 |
@@ -263,7 +277,7 @@ MARKETING_CUSTOMER_INFO
 | created_time | DATETIME | 是 | 创建时间 |
 | updated_time | DATETIME | 是 | 更新时间 |
 
-主要约束与索引：PK(id)；UK(transfer_no)；IDX(cust_id, created_time)。
+主要约束与索引：PK(id)；UK(transfer_no)；IDX(cust_id, created_time)；ASSIGN/TRANSFER必须有且仅有一名PRIMARY接收人，UNASSIGN时两个主接收人字段必须为空且不生成MARKETING_CUSTOMER_TRANSFER_TARGET。明确取消主办时，客户主档写ownership_status=UNASSIGNED、ownership_source=MANUAL、ownership_maintain_mode=MANUAL，防止次日自动同步直接覆盖。
 
 ### 5.6 MARKETING_CUSTOMER_TRANSFER_TARGET
 
@@ -375,7 +389,7 @@ MARKETING_CUSTOMER_INFO
 | customer_desc | VARCHAR(2000) | 否 | 客户描述快照 |
 | credit_amount | DECIMAL(18,2) | 否 | 授信金额快照，单位元 |
 | credit_exposure_amount | DECIMAL(18,2) | 否 | 授信敞口快照，单位元 |
-| lead_source | VARCHAR(20) | 是 | 录入来源：MANUAL/IMPORT |
+| lead_source | VARCHAR(20) | 是 | 录入来源：MANUAL手工录入、LEAD_IMPORT线索批量导入、TAG_IMPORT标签客户导入 |
 | distribution_mode | VARCHAR(20) | 是 | 分配方式：PUBLIC/SCOPE/OWNER |
 | pool_status | VARCHAR(20) | 是 | 线索池状态：NOT_READY/AVAILABLE/CLAIMED/CLOSED |
 | main_manager_id_snapshot | VARCHAR(32) | 否 | 提交时主办客户经理快照 |
@@ -389,8 +403,9 @@ MARKETING_CUSTOMER_INFO
 | submitted_time | DATETIME | 否 | 提交时间 |
 | business_key | VARCHAR(100) | 否 | 流程业务键 |
 | process_instance_id | VARCHAR(64) | 否 | 流程实例ID |
-| import_batch_id | BIGINT UNSIGNED | 否 | 导入批次ID；手工录入为空 |
+| import_batch_id | BIGINT UNSIGNED | 否 | 线索批量导入批次ID；仅LEAD_IMPORT来源填写 |
 | batch_row_no | INT | 否 | Excel原始行号 |
+| tag_import_detail_id | BIGINT UNSIGNED | 否 | 标签客户导入明细ID；仅TAG_IMPORT来源填写 |
 | reviewed_by | VARCHAR(32) | 否 | 最终审批人工号 |
 | reviewed_time | DATETIME | 否 | 最终审批时间 |
 | reject_reason | VARCHAR(500) | 否 | 驳回原因 |
@@ -402,7 +417,7 @@ MARKETING_CUSTOMER_INFO
 | updated_time | DATETIME | 是 | 最后修改时间 |
 | lock_version | INT | 是 | 乐观锁版本 |
 
-主要约束与索引：PK(id)；UK(lead_no)；UK(active_dedup_key)，多个NULL可并存；UK(business_key)；UK(process_instance_id)；IDX(unified_credit_code, lead_status)；IDX(entry_emp_id, entry_time)；IDX(lead_status, distribution_mode, pool_status)。
+主要约束与索引：PK(id)；UK(lead_no)；UK(active_dedup_key)，多个NULL可并存；UK(business_key)；UK(process_instance_id)；UK(tag_import_detail_id)，允许多个NULL；IDX(unified_credit_code, lead_status)；IDX(entry_emp_id, lead_source, entry_time)；IDX(lead_status, distribution_mode, pool_status)。线索录入历史页直接按id分页，以entry_emp_id=当前人且lead_source=MANUAL过滤，不按cust_id或统一社会信用代码聚合。
 
 ### 5.10 MARKETING_LEAD_MANAGER_SCOPE
 
@@ -442,7 +457,7 @@ MARKETING_CUSTOMER_INFO
 ### 5.12 MARKETING_LEAD_IMPORT_BATCH
 
 所属领域：线索域
-表含义：一次Excel线索导入批次头，记录文件、统计、处理和审批状态。
+表含义：一次Excel线索导入批次头，记录OBS文件、校验统计、人工确认和各线索审批汇总；批次本身不作为整批审批单。
 
 | 字段名 | 建议类型 | 必填 | 字段含义 |
 | --- | --- | --- | --- |
@@ -453,13 +468,17 @@ MARKETING_CUSTOMER_INFO
 | file_checksum | VARCHAR(128) | 否 | 文件摘要，用于重复文件提示 |
 | total_count | INT | 是 | 总行数 |
 | valid_count | INT | 是 | 校验通过行数 |
+| warning_count | INT | 是 | 需导入人确认的告警行数，如文件主办人与客户主档冲突 |
 | rejected_count | INT | 是 | 业务拒绝行数 |
 | error_count | INT | 是 | 字段或企业身份异常行数 |
 | generated_lead_count | INT | 是 | 实际生成正式线索数 |
-| status | VARCHAR(30) | 是 | IMPORTING/VALIDATED/PARTIAL_SUCCESS/ALL_FAILED/SUBMITTED/IN_APPROVAL/APPROVED/REJECTED |
-| business_key | VARCHAR(100) | 否 | 批次审批流程业务键 |
-| process_instance_id | VARCHAR(64) | 否 | 批次审批流程实例ID |
+| import_status | VARCHAR(30) | 是 | IMPORTING/WAITING_CONFIRM/COMPLETED/ALL_FAILED/ABANDONED；仅表示导入处理结果 |
+| approval_summary_status | VARCHAR(30) | 是 | NOT_SUBMITTED/IN_APPROVAL/PARTIAL_FINISHED/ALL_APPROVED/HAS_REJECTED；由关联线索汇总 |
 | error_file_id | VARCHAR(64) | 否 | 导出错误明细文件ID |
+| confirm_action | VARCHAR(30) | 否 | WAITING_CONFIRM批次的选择：PROCESS_VALID仅处理正常行、ABANDON_REIMPORT放弃后修改文件重新导入 |
+| confirmed_by | VARCHAR(32) | 否 | 导入确认人；必须是原导入人或受权管理员 |
+| confirmed_time | DATETIME | 否 | 导入确认时间 |
+| confirm_remark | VARCHAR(500) | 否 | 确认说明 |
 | import_emp_id | VARCHAR(32) | 是 | 导入人工号 |
 | import_org_id | VARCHAR(50) | 是 | 导入机构 |
 | import_time | DATETIME | 是 | 导入时间 |
@@ -469,7 +488,7 @@ MARKETING_CUSTOMER_INFO
 | updated_by | VARCHAR(32) | 是 | 最后修改人工号；系统任务可填写 SYSTEM |
 | updated_time | DATETIME | 是 | 最后修改时间 |
 
-主要约束与索引：PK(id)；UK(batch_no)；UK(business_key)；UK(process_instance_id)；IDX(import_emp_id, import_time)。
+主要约束与索引：PK(id)；UK(batch_no)；IDX(import_emp_id, import_time)；IDX(import_status, import_time)。原始文件和错误明细通过平台FileApi存取OBS文件，表中只保存文件对象ID；用户放弃并重传时保留原批次为ABANDONED，新文件必须创建新批次。
 
 ### 5.13 MARKETING_LEAD_IMPORT_DETAIL
 
@@ -494,7 +513,11 @@ MARKETING_CUSTOMER_INFO
 | credit_exposure_amount | DECIMAL(18,2) | 否 | 文件中的敞口金额 |
 | raw_row_json | TEXT | 否 | 原始行完整字段快照，便于模板扩展和审计 |
 | customer_match_status | VARCHAR(40) | 否 | 新客户、存量未开户、存量已开户等匹配结果 |
-| validation_status | VARCHAR(20) | 是 | VALID/REJECTED/ERROR |
+| requested_manager_id | VARCHAR(32) | 否 | 导入文件携带的拟主办客户经理工号；仅用于校验和路由，不直接覆盖客户主档 |
+| requested_manager_org_id | VARCHAR(50) | 否 | 文件主办人的机构解析快照 |
+| validation_status | VARCHAR(20) | 是 | VALID/WARNING/REJECTED/ERROR |
+| warning_code | VARCHAR(50) | 否 | 待确认告警编码，如OWNER_CONFLICT |
+| warning_message | VARCHAR(500) | 否 | 待确认原因 |
 | error_code | VARCHAR(50) | 否 | 错误编码，如PENDING_LEAD_DUPLICATE |
 | error_message | VARCHAR(500) | 否 | 错误说明 |
 | matched_customer_id | BIGINT UNSIGNED | 否 | 命中的客户主档ID |
@@ -502,10 +525,11 @@ MARKETING_CUSTOMER_INFO
 | matched_entry_emp_id | VARCHAR(32) | 否 | 命中在途线索的原录入人工号 |
 | matched_entry_org_id | VARCHAR(50) | 否 | 命中在途线索的原录入机构 |
 | matched_entry_time | DATETIME | 否 | 命中在途线索的原录入时间 |
+| handling_status | VARCHAR(20) | 是 | PENDING/GENERATED/SKIPPED；区分尚未处理、已生成线索和确认后跳过 |
 | generated_lead_id | BIGINT UNSIGNED | 否 | 校验通过后生成的正式线索ID |
 | created_time | DATETIME | 是 | 创建时间 |
 
-主要约束与索引：PK(id)；UK(batch_id, row_no)；IDX(batch_id, validation_status)；IDX(unified_credit_code)；默认排序REJECTED→ERROR→VALID，同状态按row_no升序。
+主要约束与索引：PK(id)；UK(batch_id, row_no)；IDX(batch_id, validation_status)；IDX(unified_credit_code)；默认排序REJECTED→ERROR→WARNING→VALID，同状态按row_no升序。WAITING_CONFIRM期间不生成任何线索；选择PROCESS_VALID后重新校验VALID行并生成独立MARKETING_LEAD_INFO，WARNING/REJECTED/ERROR行统一置SKIPPED。
 
 ### 5.14 MARKETING_TOUCH_TASK
 
@@ -655,6 +679,8 @@ MARKETING_CUSTOMER_INFO
 所属领域：触达域
 表含义：预导入企业—标签名单来源；通过loaded_flag区分是否已载入正式客户标签关系，不替代MARKETING_CUSTOMER_TAG_REL。由原xa_touch_name_list_record改名。
 
+> 本表继续用于历史名单兼容和简单预载入，不承载新的标签客户导入审批流程。新导入、追加、全量替换及逐客户审批使用MARKETING_CUSTOMER_TAG_IMPORT_BATCH/DETAIL。
+
 | 字段名 | 建议类型 | 必填 | 字段含义 |
 | --- | --- | --- | --- |
 | id | BIGINT UNSIGNED AUTO_INCREMENT | 是 | 主键 |
@@ -755,6 +781,79 @@ MARKETING_CUSTOMER_INFO
 
 主要约束与索引：PK(id)；UK(apply_no)；UK(business_key)；UK(process_instance_id)；IDX(cust_id, status)。
 
+### 5.24 MARKETING_CUSTOMER_TAG_IMPORT_BATCH
+
+所属领域：客户域
+表含义：单个标签的追加或全量替换导入批次，保存OBS文件、统计、标签审批前置、客户审批汇总和正式关系生效状态。一个批次只能对应一个标签。
+
+| 字段名 | 建议类型 | 必填 | 字段含义 |
+| --- | --- | --- | --- |
+| id | BIGINT UNSIGNED AUTO_INCREMENT | 是 | 主键 |
+| batch_no | VARCHAR(64) | 是 | 标签客户导入批次号，唯一 |
+| tag_id | BIGINT UNSIGNED | 是 | 目标标签ID；新标签先创建PENDING记录再建批次 |
+| tag_name_snapshot | VARCHAR(100) | 是 | 导入时标签名称快照 |
+| import_mode | VARCHAR(20) | 是 | APPEND追加、REPLACE全量替换 |
+| source_file_name | VARCHAR(255) | 是 | 原始文件名 |
+| source_file_id | VARCHAR(64) | 是 | 平台文件对象ID，实际文件存放在OBS |
+| file_checksum | VARCHAR(128) | 否 | 文件摘要，用于重复文件提示 |
+| total_count | INT | 是 | 文件总行数 |
+| valid_count | INT | 是 | 校验通过数 |
+| error_count | INT | 是 | 校验失败数 |
+| pending_approval_count | INT | 是 | 待客户审批数 |
+| approved_count | INT | 是 | 客户审批通过数 |
+| rejected_count | INT | 是 | 客户审批拒绝数 |
+| loaded_count | INT | 是 | 已生效正式标签关系数 |
+| tag_approval_required | TINYINT | 是 | 是否需要先审批新标签：0否、1是 |
+| customer_approval_status | VARCHAR(30) | 是 | NOT_SUBMITTED/IN_APPROVAL/PARTIAL_FINISHED/ALL_APPROVED/HAS_REJECTED |
+| status | VARCHAR(30) | 是 | IMPORTING/VALIDATED/IN_APPROVAL/READY_TO_LOAD/REPLACE_BLOCKED/COMPLETED/CANCELLED |
+| replace_block_reason | VARCHAR(500) | 否 | REPLACE批次因客户被拒绝或并发变化无法生效时的原因 |
+| import_emp_id | VARCHAR(32) | 是 | 导入人工号 |
+| import_org_id | VARCHAR(50) | 是 | 导入机构 |
+| import_time | DATETIME | 是 | 导入时间 |
+| completed_time | DATETIME | 否 | 正式关系生效完成时间 |
+| record_status | VARCHAR(20) | 是 | 逻辑状态：ACTIVE/INACTIVE |
+| created_by | VARCHAR(32) | 是 | 创建人工号 |
+| created_time | DATETIME | 是 | 创建时间 |
+| updated_by | VARCHAR(32) | 是 | 最后修改人工号 |
+| updated_time | DATETIME | 是 | 最后修改时间 |
+| lock_version | INT | 是 | 乐观锁版本 |
+
+主要约束与索引：PK(id)；UK(batch_no)；IDX(tag_id, status)；IDX(import_emp_id, import_time)。应用层对tag_id加共享锁后检查，同一标签同一时刻只允许一个未结束REPLACE批次。REPLACE只有在标签已审批、全部有效客户均审批通过时才进入READY_TO_LOAD；任一客户被拒绝则进入REPLACE_BLOCKED，不修改已有正式关系。
+
+### 5.25 MARKETING_CUSTOMER_TAG_IMPORT_DETAIL
+
+所属领域：客户域
+表含义：标签导入逐客户待审明细，保存原始行快照、客户匹配、校验、客户审批、线索关联和正式标签关系载入结果。
+
+| 字段名 | 建议类型 | 必填 | 字段含义 |
+| --- | --- | --- | --- |
+| id | BIGINT UNSIGNED AUTO_INCREMENT | 是 | 主键 |
+| batch_id | BIGINT UNSIGNED | 是 | 标签导入批次ID |
+| row_no | INT | 是 | Excel原始行号 |
+| cust_name | VARCHAR(200) | 是 | 企业名称快照 |
+| unified_credit_code | CHAR(18) | 是 | 标准化统一社会信用代码 |
+| contact_person | VARCHAR(100) | 否 | 联系人快照 |
+| contact_mobile | VARCHAR(50) | 否 | 联系方式快照 |
+| registered_address | VARCHAR(500) | 否 | 注册地址快照 |
+| business_address | VARCHAR(500) | 否 | 经营地址快照 |
+| raw_row_json | TEXT | 否 | 原始行完整字段快照 |
+| customer_change_type | VARCHAR(30) | 是 | NEW_CUSTOMER/EXISTING_NO_CHANGE/EXISTING_UPDATE |
+| matched_customer_id | BIGINT UNSIGNED | 否 | 命中的营销客户ID |
+| generated_lead_id | BIGINT UNSIGNED | 否 | 新客户或存量资料变更时生成的MARKETING_LEAD_INFO.id |
+| validation_status | VARCHAR(20) | 是 | VALID/REJECTED/ERROR |
+| error_code | VARCHAR(50) | 否 | 校验错误编码 |
+| error_message | VARCHAR(500) | 否 | 校验失败原因 |
+| approval_status | VARCHAR(20) | 是 | NOT_REQUIRED/PENDING/APPROVED/REJECTED |
+| reviewed_by | VARCHAR(32) | 否 | 客户审批人工号 |
+| reviewed_time | DATETIME | 否 | 客户审批时间 |
+| reject_reason | VARCHAR(500) | 否 | 客户审批拒绝原因 |
+| loaded_flag | TINYINT | 是 | 是否已写入或恢复正式标签关系：0否、1是 |
+| loaded_rel_id | BIGINT UNSIGNED | 否 | 生效的MARKETING_CUSTOMER_TAG_REL.id |
+| loaded_time | DATETIME | 否 | 正式标签关系生效时间 |
+| created_time | DATETIME | 是 | 创建时间 |
+
+主要约束与索引：PK(id)；UK(batch_id, row_no)；UK(generated_lead_id)，允许多个NULL；IDX(batch_id, approval_status)；IDX(unified_credit_code)。新客户或存量资料变更通过generated_lead_id关联独立线索审批；存量资料无变化时仅审批标签客户关系，不重复更新客户主档。正式关系写source_type=IMPORT、source_ref_id=本表id。
+
 ## 6. 关键业务规则
 
 ### 6.1 线索重复录入与导入
@@ -767,7 +866,17 @@ MARKETING_CUSTOMER_INFO
 
 - 应用层预检查后仍必须依赖UK(active_dedup_key)处理并发，重复键统一转换为PENDING_LEAD_DUPLICATE。
 
-- 批量导入按行处理：拒绝/异常行只进入MARKETING_LEAD_IMPORT_DETAIL，正常行继续生成MARKETING_LEAD_INFO；不因一条失败拒绝整个文件。
+- 批量导入按行处理：拒绝/异常行只进入MARKETING_LEAD_IMPORT_DETAIL，不因一条失败拒绝整个文件。如果不存在WARNING，正常行可在完成二次校验后生成独立线索；存在WARNING时整个批次先进入WAITING_CONFIRM，未确认前不生成线索。
+
+- 导入人选择PROCESS_VALID后，后端只对VALID行重新校验并生成MARKETING_LEAD_INFO；选择ABANDON_REIMPORT时保留原批次和OBS文件证据，修改文件后创建新批次。导入成功仅表示线索生成，不等于线索审批通过。
+
+### 6.1.1 线索录入历史页粒度
+
+- 第一Tab每条MARKETING_LEAD_INFO手工录入记录展示一行，后端固定过滤entry_emp_id=当前登录人且lead_source=MANUAL，不做cust_id、客户号或统一社会信用代码聚合。
+
+- 同一企业在旧线索已进入终态后可以因新营销事项产生多条历史记录；详情只展示当前该条线索快照、审批信息及与当前客户主档的差异，不默认聚合企业全部历史线索。
+
+- 第二Tab以MARKETING_LEAD_IMPORT_BATCH.id为一行，点击详情后按batch_id展示全部MARKETING_LEAD_IMPORT_DETAIL，失败行排在前面。
 
 ### 6.2 客户主档更新
 
@@ -805,6 +914,30 @@ MARKETING_CUSTOMER_INFO
 - 全量快照无匹配时可将AUTO客户更新为UNASSIGNED；多主办、无效员工或机构解析失败时标记CONFLICT/UNKNOWN并通过任务日志告警，不自动建客户。
 
 - MANUAL客户每日同步跳过；管理员点击恢复自动同步时必须立即按最新全量快照校验并刷新。
+
+### 6.5 营销客户列表与我的客户
+
+- 营销客户列表的详情和条件查询以MARKETING_CUSTOMER_INFO为唯一主数据源。营销管理员修改可维护资料时使用profile_version/lock_version乐观校验并记录前后值审计。
+
+- 人工取消主办后，该客户对全行客户经理可见；可见不等于可修改、可认领或自动进入公共待认领池。
+
+- 我的客户固定按main_manager_id=当前登录人、ownership_status=ASSIGNED查询。客户经理只能转给另一名有效客户经理，不能转为无主办；转交后进入MANUAL维护模式，只有营销管理员可恢复AUTO。
+
+### 6.6 线索审批页
+
+- 待审批列表以MARKETING_LEAD_INFO.id为业务粒度，通过WorkflowApi只返回当前审批人有权办理的全部待办；审批记录通过WorkflowApi按当前登录人过滤历史任务。
+
+- 手工和批量导入线索均逐线索审批；MARKETING_LEAD_IMPORT_BATCH只保存导入结果和审批汇总，不启动一个覆盖全部有效行的整批审批流程。
+
+### 6.7 标签客户导入与审批
+
+- 一个MARKETING_CUSTOMER_TAG_IMPORT_BATCH只对应一个标签。新标签先创建MARKETING_CUSTOMER_TAG.approval_status=PENDING；已有标签直接关联原tag_id。
+
+- 所有校验通过的导入客户均产生客户审批事项。NEW_CUSTOMER和EXISTING_UPDATE通过MARKETING_LEAD_INFO保存完整快照并在审批通过后新增/更新主档；EXISTING_NO_CHANGE只审批标签关系，不重复改写客户主档。
+
+- 审批客户时如标签仍为PENDING，后端必须返回TAG_APPROVAL_REQUIRED；前端弹窗确认后重新提交原选中客户ID并带approveTag=true，后端先完成标签审批，再幂等处理原选中客户。
+
+- APPEND客户审批通过后可逐条写入或恢复MARKETING_CUSTOMER_TAG_REL。REPLACE必须等待标签已审批且批次全部有效客户通过，再以单个本地事务差异化失效旧关系并激活本批次关系。任一客户被拒绝时整个REPLACE进入REPLACE_BLOCKED，正式关系不变。
 
 ## 7. 外部及平台共享表
 
@@ -851,7 +984,9 @@ MARKETING_CUSTOMER_INFO
 
 - 确认目标数据库对生成列/可空唯一索引的兼容性；如不支持生成列，由应用事务维护active_dedup_key。
 
-- 确认批量导入采用本稿的按行部分成功口径，以及批次审批是一次审批全部有效行还是逐条审批。
+- 线索批量导入已确定为按行校验、在有WARNING时先由原导入人确认，最终生成的线索均逐条审批；实施前需校验新状态与历史批次状态的兼容映射。
+
+- 确认目标库对“同一标签仅一个在途REPLACE批次”的约束实现方式；如不使用可空唯一键，应通过LockManager共享锁和事务内再查保证。
 
 - 确认外部全量关系快照的刷新完成标志、数据日期、同一客户号唯一主办保证和员工机构解析接口。
 
