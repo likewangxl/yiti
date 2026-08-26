@@ -35,6 +35,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -523,6 +524,9 @@ public class AllocAdjustService {
         vars.put("originalOwnerOrgLeaderEmpIds", originalOwnerEmpIds == null || originalOwnerEmpIds.isEmpty()
                 ? java.util.Collections.emptyList()
                 : resolveOriginalOwnerOrgLeaderEmpIds(originalOwnerEmpIds));
+        // 分配明细中的每个分配对象也必须有可审批的 2 级机构负责人；只做提交前预检，
+        // 不改变现有流程变量，避免申请写入后才发现审批节点无人可批。
+        resolveAllocationTargetOrgLeaderEmpIds(extractAllocationTargetEmpIds(cmd.getItems()));
         // 设计器流程网关分流：种入发起机构级别等启动变量（corpRouteTo/finRouteTo 由审批 formData 提供，不在此种）
         buildStartVariables(cmd.getOwnerOrgId(), vars);
         // 前置校验：业绩分配调整仅限 2级/3级机构员工发起。
@@ -1380,40 +1384,113 @@ public class AllocAdjustService {
      * 任一环节缺失即抛 {@link PerfException} fail-fast，避免流程行至该节点无人可批卡死。</p>
      */
     private List<String> resolveOriginalOwnerOrgLeaderEmpIds(List<String> originalOwnerEmpIds) {
-        // 1) 每个原分配人主机构上溯至 2 级机构，LinkedHashSet 去重保序（同分行多人只留一个机构）
-        java.util.LinkedHashSet<String> level2OrgCodes = new java.util.LinkedHashSet<>();
-        for (String empId : originalOwnerEmpIds) {
-            OrgDTO org = orgApi.getUserMainOrg(empId);
-            if (org == null) {
-                throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
-                        "原业绩分配人[" + empId + "]无机构归属，无法确定所属机构负责人");
-            }
-            // 沿 P_ID 上溯；hops 上限防脏数据成环
-            int hops = 0;
-            while (org != null && (org.getOrgLevel() == null || org.getOrgLevel() > ORG_LEADER_ORG_LEVEL)) {
-                if (++hops > 10 || isBlank(org.getParentOrgCode())) {
-                    org = null;
-                    break;
-                }
-                org = orgApi.getOrg(org.getParentOrgCode());
-            }
-            if (org == null || org.getOrgLevel() == null || org.getOrgLevel() != ORG_LEADER_ORG_LEVEL) {
-                throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
-                        "原业绩分配人[" + empId + "]无法定位到2级所属机构，无法确定机构负责人");
-            }
-            level2OrgCodes.add(org.getOrgCode());
+        return resolveOrgLeaderEmpIds(originalOwnerEmpIds, "原业绩分配人", "原业绩所属机构");
+    }
+
+    /**
+     * 解析分配明细中分配对象所属 2 级机构的负责人。
+     *
+     * <p>该结果当前仅用于提交前预检；流程仍按原业绩分配负责人变量路由，避免改变既有流程契约。</p>
+     */
+    private List<String> resolveAllocationTargetOrgLeaderEmpIds(List<String> allocationTargetEmpIds) {
+        return resolveOrgLeaderEmpIds(allocationTargetEmpIds, "分配对象", "分配对象所属机构");
+    }
+
+    /**
+     * 按员工主机构上溯到 2 级机构，按机构去重后检查 BRANCH_HEAD。
+     *
+     * @param empIds      员工工号列表
+     * @param subjectText 错误提示中的员工类别
+     * @param orgText     错误提示中的机构类别
+     * @return 去重后的负责人工号
+     */
+    private List<String> resolveOrgLeaderEmpIds(List<String> empIds, String subjectText, String orgText) {
+        if (empIds == null || empIds.isEmpty()) {
+            return new ArrayList<>();
         }
-        // 2) 各 2 级机构 BRANCH_HEAD 持有者并集（跨分行=多机构负责人会签）
+        // 保留首次出现顺序；同一 2 级机构下多人只检查一次负责人配置。
+        Map<String, OrgDTO> level2Orgs = new LinkedHashMap<>();
+        for (String empId : empIds) {
+            if (isBlank(empId)) {
+                continue;
+            }
+            OrgDTO level2Org = resolveLevel2Org(empId, subjectText);
+            level2Orgs.putIfAbsent(level2Org.getOrgCode(), level2Org);
+        }
+
         java.util.LinkedHashSet<String> leaderEmpIds = new java.util.LinkedHashSet<>();
-        for (String orgCode : level2OrgCodes) {
+        for (Map.Entry<String, OrgDTO> entry : level2Orgs.entrySet()) {
+            String orgCode = entry.getKey();
             List<String> holders = userApi.getEmpIdsByRoleCodeAndOrg(ROLE_CODE_BRANCH_HEAD, orgCode);
             if (holders == null || holders.isEmpty()) {
                 throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
-                        "原业绩所属机构[" + orgCode + "]未配置机构负责人(BRANCH_HEAD)，无法发起审批");
+                        orgText + "[" + resolveOrgDisplayName(entry.getValue())
+                                + "]未配置机构负责人(BRANCH_HEAD)，无法发起审批");
             }
             leaderEmpIds.addAll(holders);
         }
         return new ArrayList<>(leaderEmpIds);
+    }
+
+    /** 按员工主机构沿父机构链定位 2 级机构，并保持错误提示的对象类别。 */
+    private OrgDTO resolveLevel2Org(String empId, String subjectText) {
+        OrgDTO org = orgApi.getUserMainOrg(empId);
+        if (org == null) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    subjectText + "[" + empId + "]无机构归属，无法确定所属机构负责人");
+        }
+
+        // 沿 P_ID 上溯；hops 上限防脏数据成环。
+        int hops = 0;
+        while (org != null
+                && (org.getOrgLevel() == null || org.getOrgLevel() > ORG_LEADER_ORG_LEVEL)) {
+            if (++hops > 10 || isBlank(org.getParentOrgCode())) {
+                org = null;
+                break;
+            }
+            org = orgApi.getOrg(org.getParentOrgCode());
+        }
+        if (org == null || org.getOrgLevel() == null
+                || org.getOrgLevel() != ORG_LEADER_ORG_LEVEL || isBlank(org.getOrgCode())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    subjectText + "[" + empId + "]无法定位到2级所属机构，无法确定机构负责人");
+        }
+        return org;
+    }
+
+    /** 提取分配明细员工工号，去空并保序去重。 */
+    private List<String> extractAllocationTargetEmpIds(List<SubmitAllocAdjustCmd.Item> items) {
+        java.util.LinkedHashSet<String> empIds = new java.util.LinkedHashSet<>();
+        if (items != null) {
+            for (SubmitAllocAdjustCmd.Item item : items) {
+                if (item != null && !isBlank(item.getEmpId())) {
+                    empIds.add(item.getEmpId());
+                }
+            }
+        }
+        return new ArrayList<>(empIds);
+    }
+
+    /**
+     * 负责人提示只展示机构名称；名称缺失时给出明确占位，不回退展示机构号。
+     * 若主机构 DTO 未携带名称，使用 OrgApi 的公开查询接口补全一次。
+     */
+    private String resolveOrgDisplayName(OrgDTO org) {
+        if (org != null && !isBlank(org.getOrgName())) {
+            return org.getOrgName();
+        }
+        if (org != null && !isBlank(org.getOrgCode())) {
+            try {
+                OrgDTO detail = orgApi.getOrg(org.getOrgCode());
+                if (detail != null && !isBlank(detail.getOrgName())) {
+                    return detail.getOrgName();
+                }
+            } catch (Exception e) {
+                log.warn("[AllocAdjustService.resolveOrgDisplayName] 查询机构名称失败 orgCode={}, err={}",
+                        org.getOrgCode(), e.toString());
+            }
+        }
+        return "机构名称未配置";
     }
 
     /**

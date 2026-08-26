@@ -140,6 +140,7 @@ class AllocAdjustServiceTest {
         OrgDTO org = new OrgDTO();
         org.setOrgLevel(2);
         org.setOrgCode("ORG_L2");
+        org.setOrgName("测试二级机构");
         when(orgApi.getOrg(anyString())).thenReturn(org);
         // 原业绩所属机构负责人解析（startApprovalWorkflow 内 fail-fast 前置校验）：
         // 原分配人主机构=2级（就地），该机构 BRANCH_HEAD 持有者非空
@@ -491,6 +492,43 @@ class AllocAdjustServiceTest {
         assertThatThrownBy(() -> service.submit(baseCmd("CORP_LOAN")))
                 .isInstanceOf(PerfException.class)
                 .hasMessageContaining("BRANCH_HEAD");
+
+        verify(applyMapper, never()).insert(any(PerfAllocAdjustApply.class));
+        verify(itemMapper, never()).batchInsert(anyList());
+        verify(workflowApi, never()).startProcess(any(StartProcessCmd.class));
+    }
+
+    @Test
+    @DisplayName("分配对象所属机构未配置 BRANCH_HEAD 时，提示机构名称且不能先写入申请主表/明细")
+    void submit_allocationTargetWithoutBranchHeadRejectedBeforePersistence() {
+        OrgDTO originalOrg = new OrgDTO();
+        originalOrg.setOrgCode("ORIGIN_ORG");
+        originalOrg.setOrgName("原业绩机构");
+        originalOrg.setOrgLevel(2);
+        OrgDTO targetBranch = new OrgDTO();
+        targetBranch.setOrgCode("TARGET_BRANCH");
+        targetBranch.setOrgName("目标分行");
+        targetBranch.setOrgLevel(2);
+        OrgDTO targetSubOrg = new OrgDTO();
+        targetSubOrg.setOrgCode("TARGET_SUB");
+        targetSubOrg.setOrgName("目标支行");
+        targetSubOrg.setOrgLevel(3);
+        targetSubOrg.setParentOrgCode("TARGET_BRANCH");
+
+        when(orgApi.getUserMainOrg("rm_zhang")).thenReturn(originalOrg);
+        when(orgApi.getUserMainOrg("EMP_A")).thenReturn(targetSubOrg);
+        when(orgApi.getUserMainOrg("EMP_B")).thenReturn(targetSubOrg);
+        when(orgApi.getOrg("TARGET_BRANCH")).thenReturn(targetBranch);
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "ORIGIN_ORG"))
+                .thenReturn(List.of("ORIGIN_LEADER"));
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "TARGET_BRANCH"))
+                .thenReturn(Collections.emptyList());
+
+        assertThatThrownBy(() -> service.submit(baseCmd("CORP_LOAN")))
+                .isInstanceOf(PerfException.class)
+                .hasMessageContaining("分配对象")
+                .hasMessageContaining("目标分行")
+                .hasMessageNotContaining("TARGET_BRANCH");
 
         verify(applyMapper, never()).insert(any(PerfAllocAdjustApply.class));
         verify(itemMapper, never()).batchInsert(anyList());

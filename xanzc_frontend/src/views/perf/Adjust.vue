@@ -426,7 +426,7 @@
               <template #default="{row}">{{ row.username || '-' }}{{ row.empChnName ? '（' + row.empChnName + '）' : '' }}</template>
             </el-table-column>
             <el-table-column label="所属机构" min-width="180" show-overflow-tooltip>
-              <template #default="{row}">{{ row.orgName || '-' }}{{ row.orgCode ? '（' + row.orgCode + '）' : '' }}</template>
+              <template #default="{row}">{{ originalOrgDisplay(row) }}</template>
             </el-table-column>
             <el-table-column prop="ratio" label="分配比例" width="100">
               <template #default="{row}">{{ row.ratio != null && row.ratio !== '' ? row.ratio + '%' : '-' }}</template>
@@ -453,7 +453,7 @@
                 <el-autocomplete v-if="!dlg.readOnly" v-model="row.orgLabel" size="small" style="width:100%"
                   value-key="label" :fetch-suggestions="queryOrgSuggest" :trigger-on-focus="false" clearable
                   placeholder="输入机构号/名称搜索" @select="(item) => onOrigOrgSelect(row, item)" @input="(v) => onOrigOrgInput(row, v)" />
-                <span v-else>{{ row.orgName || '-' }}{{ row.orgCode ? '（' + row.orgCode + '）' : '' }}</span>
+                <span v-else>{{ originalOrgDisplay(row) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="分配比例" width="120">
@@ -1433,6 +1433,10 @@ function origRow() {
 }
 function addOriginalRow() { dlg.form.originalItems.push(origRow()); }
 function removeOriginalRow(i) { dlg.form.originalItems.splice(i, 1); }
+// 原业绩分配的所属机构只展示名称；orgCode 仍保留在数据模型中用于提交。
+function originalOrgDisplay(row) {
+  return row?.orgName || '-';
+}
 // 原业绩分配-员工下拉选中（empId 存登录名干净值，username/empChnName 留快照）
 function onOrigEmpSelect(row, item) {
   row.empId = item.username || item.empId || '';
@@ -1445,7 +1449,7 @@ function onOrigEmpSelect(row, item) {
   if (mainOrgCode) row.orgCode = mainOrgCode;
   if (mainOrgName) row.orgName = mainOrgName;
   if (row.orgCode || row.orgName) {
-    row.orgLabel = row.orgName ? `${row.orgCode}（${row.orgName}）` : row.orgCode;
+    row.orgLabel = row.orgName || '';
   }
 }
 function onOrigEmpInput(row, val) {
@@ -1456,24 +1460,21 @@ function onOrigEmpInput(row, val) {
   }
   if (!String(val).includes('（')) { row.empId = String(val).trim(); row.username = String(val).trim(); }
 }
-// 原业绩分配-机构下拉联想（按机构号/部门号/名称模糊匹配，展示 DEPT_NO + 机构名称）
+// 原业绩分配-机构下拉联想（按机构号/部门号/名称模糊匹配，只展示机构名称）
 async function queryOrgSuggest(queryString, cb) {
   const kw = (queryString || '').trim();
   if (!kw) { cb([]); return; }
   try {
     const list = await suggestOrgs(kw);
     const arr = Array.isArray(list) ? list : [];
-    cb(arr.map(o => {
-      const no = o.deptNo || o.orgCode;
-      return { ...o, label: o.orgName ? `${no}（${o.orgName}）` : no };
-    }));
+    cb(arr.map(o => ({ ...o, label: o.orgName || '' })));
   } catch { cb([]); }
 }
 function onOrigOrgSelect(row, item) {
-  // 存部门号(DEPT_NO)作为「所属机构号」，与展示一致
+  // 存部门号(DEPT_NO)作为「所属机构号」用于提交，输入框只展示机构名称。
   row.orgCode = item.deptNo || item.orgCode || '';
   row.orgName = item.orgName || '';
-  row.orgLabel = item.label || row.orgCode;
+  row.orgLabel = row.orgName || '';
 }
 function onOrigOrgInput(row, val) {
   if (!val) { row.orgCode = ''; row.orgName = ''; return; }
@@ -1486,7 +1487,7 @@ function originalItemsFromDetail(d) {
     username: it.username || '', empChnName: it.empChnName || '',
     orgCode: it.orgCode || '', orgName: it.orgName || '',
     empLabel: empLabelOf(it),
-    orgLabel: it.orgCode ? (it.orgName ? `${it.orgCode}（${it.orgName}）` : it.orgCode) : '',
+    orgLabel: it.orgName || '',
     ratio: it.ratio
   }));
 }

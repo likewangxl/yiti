@@ -168,7 +168,30 @@ describe('业绩调整分配维度与原分配关系', () => {
       username: 'E001', empChnName: '张三', mainOrgCode: 'ORG-01', mainOrgName: '南山支行', label: 'E001（张三）'
     });
 
-    expect(row).toMatchObject({ empId: 'E001', orgCode: 'ORG-01', orgName: '南山支行', orgLabel: 'ORG-01（南山支行）' });
+    expect(row).toMatchObject({ empId: 'E001', orgCode: 'ORG-01', orgName: '南山支行', orgLabel: '南山支行' });
+  });
+
+  it('原业绩分配的所属机构只展示机构名称，但仍保留机构号用于提交', async () => {
+    await mountPage();
+    const row = { empId: '', empLabel: '', username: '', empChnName: '', orgCode: '', orgName: '', orgLabel: '' };
+
+    wrapper.vm.onOrigEmpSelect(row, {
+      username: 'E001', empChnName: '张三', mainOrgCode: 'ORG-01', mainOrgName: '南山支行', label: 'E001（张三）'
+    });
+
+    expect(wrapper.vm.originalOrgDisplay(row)).toBe('南山支行');
+    expect(row).toMatchObject({ orgCode: 'ORG-01', orgName: '南山支行', orgLabel: '南山支行' });
+
+    wrapper.vm.onOrigOrgSelect(row, { deptNo: 'ORG-02', orgName: '福田支行', label: 'ORG-02（福田支行）' });
+
+    expect(row).toMatchObject({ orgCode: 'ORG-02', orgName: '福田支行', orgLabel: '福田支行' });
+
+    api.suggestOrgs.mockResolvedValueOnce([{ deptNo: 'ORG-03', orgName: '罗湖支行' }]);
+    const callback = vi.fn();
+    await wrapper.vm.queryOrgSuggest('ORG-03', callback);
+    expect(callback).toHaveBeenCalledWith([
+      expect.objectContaining({ deptNo: 'ORG-03', orgName: '罗湖支行', label: '罗湖支行' })
+    ]);
   });
 
   it('NEW 不展示原分配、不会预览，也不会要求或提交 originalAllocList', async () => {

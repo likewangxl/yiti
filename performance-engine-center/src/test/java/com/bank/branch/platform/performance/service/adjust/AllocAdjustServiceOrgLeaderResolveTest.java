@@ -44,6 +44,12 @@ class AllocAdjustServiceOrgLeaderResolveTest {
         return o;
     }
 
+    private static OrgDTO org(String code, Integer level, String parent, String name) {
+        OrgDTO o = org(code, level, parent);
+        o.setOrgName(name);
+        return o;
+    }
+
     @SuppressWarnings("unchecked")
     private List<String> invokeResolve(AllocAdjustService svc, List<String> empIds) throws Exception {
         Method m = AllocAdjustService.class.getDeclaredMethod("resolveOriginalOwnerOrgLeaderEmpIds", List.class);
@@ -108,14 +114,15 @@ class AllocAdjustServiceOrgLeaderResolveTest {
     void orgWithoutBranchHead_failsFast() {
         OrgApi orgApi = mock(OrgApi.class);
         UserApi userApi = mock(UserApi.class);
-        when(orgApi.getUserMainOrg("E1")).thenReturn(org("330", 3, "128"));
-        when(orgApi.getOrg("128")).thenReturn(org("128", 2, "1"));
+        when(orgApi.getUserMainOrg("E1")).thenReturn(org("330", 3, "128", "金台支行"));
+        when(orgApi.getOrg("128")).thenReturn(org("128", 2, "1", "宝鸡分行"));
         when(userApi.getEmpIdsByRoleCodeAndOrg(anyString(), anyString())).thenReturn(List.of());
 
         AllocAdjustService svc = AllocAdjustService.forOrgLeaderTest(null, null, userApi, orgApi);
         assertThatThrownBy(() -> invokeResolve(svc, List.of("E1")))
                 .isInstanceOf(PerfException.class)
-                .hasMessageContaining("128");
+                .hasMessageContaining("宝鸡分行")
+                .hasMessageNotContaining("128");
     }
 
     @Test
@@ -128,6 +135,29 @@ class AllocAdjustServiceOrgLeaderResolveTest {
         assertThatThrownBy(() -> invokeResolve(svc, List.of("E9")))
                 .isInstanceOf(PerfException.class)
                 .hasMessageContaining("E9");
+    }
+
+    @Test
+    void targetWithoutMainOrg_failsFastWithTargetLabel() throws Exception {
+        OrgApi orgApi = mock(OrgApi.class);
+        UserApi userApi = mock(UserApi.class);
+
+        AllocAdjustService svc = AllocAdjustService.forOrgLeaderTest(null, null, userApi, orgApi);
+        assertThatThrownBy(() -> invokeResolveTarget(svc, List.of("E9")))
+                .isInstanceOf(PerfException.class)
+                .hasMessageContaining("分配对象")
+                .hasMessageContaining("E9");
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> invokeResolveTarget(AllocAdjustService svc, List<String> empIds) throws Exception {
+        Method m = AllocAdjustService.class.getDeclaredMethod("resolveAllocationTargetOrgLeaderEmpIds", List.class);
+        m.setAccessible(true);
+        try {
+            return (List<String>) m.invoke(svc, empIds);
+        } catch (InvocationTargetException e) {
+            throw (Exception) e.getCause();
+        }
     }
 
     @Test
