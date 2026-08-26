@@ -36,18 +36,34 @@ const props = defineProps({
 const emit = defineEmits(['item-click']);
 
 const mode = computed(() => props.propValue?.barMode || 'basic');
-const boundCols = computed(() =>
-  Array.isArray(props.bind?.items) ? props.bind.items.map(item => item?.col) : []);
-const metricItems = computed(() => {
+const requestedCategoryCol = computed(() => String(props.bind?.categoryCol || '').trim());
+const hasExplicitCategoryCol = computed(() => {
+  const columns = Array.isArray(props.columns) ? props.columns : [];
+  return requestedCategoryCol.value !== '' && columns.includes(requestedCategoryCol.value);
+});
+const categoryCol = computed(() => {
+  const columns = Array.isArray(props.columns) ? props.columns : [];
+  return hasExplicitCategoryCol.value ? requestedCategoryCol.value : columns[0];
+});
+const itemCandidates = computed(() => {
   const columns = Array.isArray(props.columns) ? props.columns : [];
   return (Array.isArray(props.bind?.items) ? props.bind.items : [])
     .filter(item => item?.col != null && columns.includes(item.col));
 });
+const hasExplicitItems = computed(() => Array.isArray(props.bind?.items) && props.bind.items.length > 0);
+const boundCols = computed(() => itemCandidates.value
+  .map(item => item.col)
+  .filter(col => col !== categoryCol.value));
+const metricItems = computed(() => hasExplicitCategoryCol.value
+  ? itemCandidates.value.filter(item => item.col !== categoryCol.value)
+  : itemCandidates.value);
 // groupBy=NONE 的聚合结果为单行，首列若本身就是绑定指标，说明响应没有独立维度列。
 const isSingleRowMetricData = computed(() => {
   const columns = Array.isArray(props.columns) ? props.columns : [];
   const rows = Array.isArray(props.rows) ? props.rows : [];
-  return rows.length === 1 && columns.length > 0 && metricItems.value.some(item => item.col === columns[0]);
+  return !hasExplicitCategoryCol.value
+    && rows.length === 1 && columns.length > 0
+    && itemCandidates.value.some(item => item.col === columns[0]);
 });
 
 function chartNumber(value) {
@@ -62,8 +78,16 @@ function metricLabel(item) {
 }
 
 const parsed = computed(() => {
+  // 显式 items 只绑定类目列时，不能把空系列误判成自动模式。
+  if (hasExplicitItems.value && boundCols.value.length === 0) {
+    const columns = Array.isArray(props.columns) ? props.columns : [];
+    const rows = Array.isArray(props.rows) ? props.rows : [];
+    const index = columns.indexOf(categoryCol.value);
+    const categoryIndex = index >= 0 ? index : 0;
+    return { categories: rows.map(row => row?.[categoryIndex]), series: [] };
+  }
   if (!isSingleRowMetricData.value) {
-    return rowsToSeries(props.columns, props.rows, boundCols.value);
+    return rowsToSeries(props.columns, props.rows, boundCols.value, categoryCol.value);
   }
   const row = props.rows[0] || [];
   return {

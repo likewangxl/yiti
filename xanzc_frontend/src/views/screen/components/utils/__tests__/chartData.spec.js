@@ -72,6 +72,26 @@ describe('chartData.rowsToSeries（首列类目，其余数值列为系列）', 
     const r = rowsToSeries(columns, rows, ['贷款', '不存在']);
     expect(r.series.map(s => s.name)).toEqual(['贷款']);
   });
+  it('指定 categoryCol 时按该列取类目，并从自动/显式系列中排除类目列', () => {
+    const r = rowsToSeries(
+      ['org_code', 'org_name', '存款', '贷款'],
+      [['A', '甲', 10, 20], ['B', '乙', 11, 22]],
+      ['org_name', '存款', '贷款'],
+      'org_name'
+    );
+    expect(r.categories).toEqual(['甲', '乙']);
+    expect(r.series.map(s => s.name)).toEqual(['存款', '贷款']);
+    expect(r.series.map(s => s.data)).toEqual([[10, 11], [20, 22]]);
+
+    const automatic = rowsToSeries(
+      ['org_name', '存款', '贷款'],
+      [['甲', 10, 20], ['乙', 11, 22]],
+      null,
+      'org_name'
+    );
+    expect(automatic.categories).toEqual(['甲', '乙']);
+    expect(automatic.series.map(s => s.name)).toEqual(['存款', '贷款']);
+  });
   it('空数据容错', () => {
     const r = rowsToSeries([], []);
     expect(r.categories).toEqual([]);

@@ -88,6 +88,11 @@ async function chooseMetricColumns(wrapper, values) {
   await select.trigger('change');
 }
 
+async function chooseCategoryColumn(wrapper, value) {
+  const select = wrapper.find('[data-testid="chart-category-column"]');
+  await select.setValue(value);
+}
+
 describe('ChartWidget Attr 指标列绑定', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -394,6 +399,94 @@ describe('ChartWidget Attr 指标列绑定', () => {
       { col: 'balance', label: '余额' },
       { col: 'metric_only', label: 'metric_only' }
     ]);
+  });
+
+  it('BAR_COMPARE 类目轴候选合并字段元数据与 metrics，并补充机构主体运行时列', async () => {
+    const element = {
+      innerType: 'BAR_COMPARE',
+      bindJson: JSON.stringify({ dsId: 9010 }),
+      styleJson: '{}', drillJson: '{}', propValue: {}
+    };
+    const wrapper = await mountAttr(element, [datasource(9010, '机构聚合', {
+      table: 'ORG_INDEX_RESULT',
+      aggregation: { groupBy: 'SUBJECT', agg: 'SUM' },
+      fieldMeta: [
+        { col: 'org_code', alias: '机构编码', role: 'DIM' },
+        { col: 'balance', alias: '余额', role: 'METRIC' }
+      ],
+      metrics: [
+        { metricName: 'balance' },
+        { metricName: 'growth' }
+      ]
+    })]);
+
+    const select = wrapper.find('[data-testid="chart-category-column"]');
+    expect(select.exists()).toBe(true);
+    expect(wrapper.vm.categoryColumnOptions).toEqual([
+      { col: 'org_code', label: '机构编码' },
+      { col: 'balance', label: '余额' },
+      { col: 'growth', label: 'growth' },
+      { col: 'org_name', label: 'org_name' }
+    ]);
+
+    await chooseCategoryColumn(wrapper, 'org_name');
+    expect(JSON.parse(element.bindJson).categoryCol).toBe('org_name');
+  });
+
+  it('BAR_COMPARE 类目轴按聚合口径补充列，NONE 不凭空增加维度', async () => {
+    const cases = [
+      {
+        config: { table: 'ORG_INDEX_RESULT', aggregation: { groupBy: 'DATE', agg: 'SUM' } },
+        expected: 'data_date'
+      },
+      { config: { table: 'ORG_INDEX_RESULT' }, expected: 'data_date' },
+      {
+        config: { table: 'ORG_INDEX_RESULT', aggregation: { groupBy: 'NONE', agg: 'SUM' } },
+        expected: null
+      },
+      {
+        config: { table: 'EMP_INDEX_RESULT', aggregation: { groupBy: 'SUBJECT', agg: 'SUM' } },
+        expected: 'emp_id'
+      }
+    ];
+
+    for (const [index, candidate] of cases.entries()) {
+      const element = {
+        innerType: 'BAR_COMPARE',
+        bindJson: JSON.stringify({ dsId: 9200 + index }),
+        styleJson: '{}', drillJson: '{}', propValue: {}
+      };
+      const wrapper = await mountAttr(element, [datasource(
+        9200 + index,
+        `柱状数据源${index}`,
+        candidate.config
+      )]);
+      const columns = wrapper.vm.categoryColumnOptions.map(item => item.col);
+      if (candidate.expected) expect(columns).toContain(candidate.expected);
+      else expect(columns).not.toEqual(expect.arrayContaining(['data_date', 'org_code', 'emp_id', 'org_name']));
+      wrapper.unmount();
+    }
+  });
+
+  it('BAR_COMPARE 保留旧类目列回显，切换数据源时清空 categoryCol 与 items', async () => {
+    const element = {
+      innerType: 'BAR_COMPARE',
+      bindJson: JSON.stringify({
+        dsId: 9300, categoryCol: 'legacy_category', items: [{ col: 'metric_a', label: '旧指标' }], valueCol: 'keep'
+      }),
+      styleJson: '{}', drillJson: '{}', propValue: {}
+    };
+    const wrapper = await mountAttr(element, [
+      datasource(9300, '旧数据源', { metrics: [{ metricName: 'metric_a' }] }),
+      datasource(9301, '新数据源', { metrics: [{ metricName: 'metric_b' }] })
+    ]);
+
+    expect(wrapper.vm.categoryColumnOptions).toContainEqual({ col: 'legacy_category', label: 'legacy_category' });
+    wrapper.vm.bind.dsId = 9301;
+    await flushPromises();
+
+    expect(JSON.parse(element.bindJson)).toMatchObject({ dsId: 9301, valueCol: 'keep', categoryCol: '' });
+    expect(JSON.parse(element.bindJson).items).toEqual([]);
   });
 
   it('仅精确匹配机构主体聚合宽表时增加 org_name，其他配置不增加', async () => {

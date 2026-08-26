@@ -454,4 +454,101 @@ describe('图表视觉预设与 option', () => {
     expect(option.xAxis.data).toEqual(['A', 'B']);
     expect(option.series.map(s => s.data)).toEqual([[10, 20], [2, 4]]);
   });
+
+  it('BarCompare 有效 categoryCol 控制类目轴并排除同列数值系列，点击回传原始列', () => {
+    const wrapper = mount(BarCompare, {
+      props: {
+        columns: ['org_code', 'org_name', 'sales', 'cost'],
+        rows: [['A', '甲', 10, 2], ['B', '乙', 20, 4]],
+        bind: {
+          categoryCol: 'org_name',
+          items: [
+            { col: 'org_name', label: '机构' },
+            { col: 'sales', label: '销售额' },
+            { col: 'cost', label: '成本' }
+          ]
+        },
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    const option = optionOf(wrapper);
+    expect(option.xAxis.data).toEqual(['甲', '乙']);
+    expect(option.series.map(series => series.name)).toEqual(['sales', 'cost']);
+    expect(option.series.map(series => series.data)).toEqual([[10, 20], [2, 4]]);
+
+    triggerChartClick(wrapper, { componentType: 'series', seriesIndex: 0, dataIndex: 1 });
+    expect(wrapper.emitted('item-click')?.[0]?.[0]).toEqual({
+      col: 'sales', label: '乙', row: { org_code: 'B', org_name: '乙', sales: 20, cost: 4 }
+    });
+  });
+
+  it('BarCompare 横向模式将有效 categoryCol 放到 Y 轴，缺失/无效时回退首列', () => {
+    const horizontal = mount(BarCompare, {
+      props: {
+        columns: ['org_code', 'sales'], rows: [['A', 10], ['B', 20]],
+        bind: { categoryCol: 'org_code', items: [{ col: 'org_code' }, { col: 'sales' }] },
+        propValue: { barMode: 'horizontal' }, styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    const horizontalOption = optionOf(horizontal);
+    expect(horizontalOption.xAxis.type).toBe('value');
+    expect(horizontalOption.yAxis.data).toEqual(['A', 'B']);
+    expect(horizontalOption.series.map(series => series.name)).toEqual(['sales']);
+
+    const fallback = mount(BarCompare, {
+      props: {
+        columns: ['month', 'sales'], rows: [['Jan', 10], ['Feb', 20]],
+        bind: { categoryCol: 'missing', items: [{ col: 'month' }, { col: 'sales' }] }, styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    const fallbackOption = optionOf(fallback);
+    expect(fallbackOption.xAxis.data).toEqual(['Jan', 'Feb']);
+    expect(fallbackOption.series.map(series => series.name)).toEqual(['sales']);
+  });
+
+  it('BarCompare 单行数据显式选择有效 categoryCol 后不再转置指标', () => {
+    const wrapper = mount(BarCompare, {
+      props: {
+        columns: ['metric_a', 'metric_b', 'category'],
+        rows: [[10, 20, '总计']],
+        bind: {
+          categoryCol: 'category',
+          items: [{ col: 'metric_a', label: '指标 A' }, { col: 'metric_b', label: '指标 B' }]
+        },
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    const option = optionOf(wrapper);
+    expect(option.xAxis.data).toEqual(['总计']);
+    expect(option.series.map(series => series.name)).toEqual(['metric_a', 'metric_b']);
+    expect(option.series.map(series => series.data)).toEqual([[10], [20]]);
+  });
+
+  it('BarCompare 显式 items 仅含类目列时不自动绘制其他数值列，空 items 仍自动取数值列', () => {
+    const selectedCategory = mount(BarCompare, {
+      props: {
+        columns: ['name', 'sales', 'cost'],
+        rows: [['A', 10, 2], ['B', 20, 4]],
+        bind: { categoryCol: 'name', items: [{ col: 'name' }] },
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    expect(selectedCategory.find('.scr-block-empty').exists()).toBe(true);
+
+    const automatic = mount(BarCompare, {
+      props: {
+        columns: ['name', 'sales', 'cost'],
+        rows: [['A', 10, 2], ['B', 20, 4]],
+        bind: { categoryCol: 'name', items: [] },
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    expect(optionOf(automatic).series.map(series => series.name)).toEqual(['sales', 'cost']);
+  });
 });

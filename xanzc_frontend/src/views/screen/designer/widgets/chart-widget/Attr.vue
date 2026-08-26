@@ -45,6 +45,15 @@
       <div class="attr-hint">可多选指标列；数据项使用接口原始列名，展示名称可按当前组件单独编辑。</div>
     </el-form-item>
 
+    <el-form-item v-if="innerType === 'BAR_COMPARE'" label="类目轴">
+      <el-select v-model="bind.categoryCol" filterable clearable
+                 data-testid="chart-category-column" placeholder="默认使用返回首列" @change="syncBind">
+        <el-option v-for="item in categoryColumnOptions" :key="item.col"
+                   :label="item.label" :value="item.col" />
+      </el-select>
+      <div class="attr-hint">选择类目轴原始列；清空后兼容旧画布，默认使用接口返回首列。</div>
+    </el-form-item>
+
     <!-- 全屏周期过滤器联动豁免(spec §5.3):仅时序数据源会被联动,豁免后维持自身周期 -->
     <el-form-item label="全局周期">
       <el-switch v-model="propValue.ignoreGlobalPeriod" active-text="忽略联动" @change="syncProp" />
@@ -275,6 +284,7 @@ function syncBind() {
   const d = datasources.value.find(x => String(x.id) === String(bind.dsId));
   if (d) bind.dsType = d.dsType;
   else if (datasourcesLoaded.value) delete bind.dsType;
+  if (innerType.value === 'BAR_COMPARE' && bind.categoryCol == null) bind.categoryCol = '';
   props.element.bindJson = JSON.stringify(bind);
   store.pushSnapshotDebounced();
 }
@@ -325,6 +335,48 @@ function uniqueMetricColumns(columns) {
   });
 }
 
+/** 类目轴候选：语义元数据/指标快照优先，再补宽表按聚合口径可推导的维度列。 */
+function datasourceCategoryColumns(datasource) {
+  const config = parseDatasourceConfig(datasource?.configJson);
+  if (!config) return [];
+
+  const fieldMeta = Array.isArray(config.fieldMeta)
+    ? config.fieldMeta
+      .filter(item => ['DIM', 'METRIC'].includes(String(item?.role || '').toUpperCase()))
+      .map(item => ({
+        col: String(item?.col || '').trim(),
+        label: String(item?.alias || item?.col || '').trim()
+      }))
+      .filter(item => item.col)
+    : [];
+  const metrics = Array.isArray(config.metrics) ? config.metrics : [];
+  const metricSnapshot = metrics.map(item => {
+    const col = String(item?.metricName || '').trim();
+    return { col, label: col };
+  }).filter(item => item.col);
+
+  const sourceKind = String(datasource?.sourceKind || config.sourceKind || '').toUpperCase();
+  const derivedColumns = [];
+  if (sourceKind === 'WIDE_TABLE') {
+    const aggregation = config.aggregation && typeof config.aggregation === 'object'
+      && !Array.isArray(config.aggregation) ? config.aggregation : null;
+    const groupBy = String(aggregation?.groupBy || '').toUpperCase();
+    if (!aggregation || groupBy === 'DATE') {
+      derivedColumns.push({ col: 'data_date', label: 'data_date' });
+    } else if (groupBy === 'SUBJECT') {
+      const table = String(config.table || '').trim();
+      const fallbackSubjectCol = table === 'ORG_INDEX_RESULT'
+        ? 'org_code'
+        : table === 'EMP_INDEX_RESULT' ? 'emp_id' : '';
+      const subjectCol = String(config.subjectCol || fallbackSubjectCol).trim();
+      if (subjectCol) derivedColumns.push({ col: subjectCol, label: subjectCol });
+      if (table === 'ORG_INDEX_RESULT') derivedColumns.push({ col: 'org_name', label: 'org_name' });
+    }
+  }
+
+  return uniqueMetricColumns([...fieldMeta, ...metricSnapshot, ...derivedColumns]);
+}
+
 const metricColumnOptions = computed(() => {
   if (!showMetricItems.value) return [];
 
@@ -344,6 +396,17 @@ const metricColumnOptions = computed(() => {
     col: option.col,
     label: option.label || option.col
   }));
+});
+
+const categoryColumnOptions = computed(() => {
+  if (innerType.value !== 'BAR_COMPARE') return [];
+
+  const options = datasourceCategoryColumns(selectedDatasource.value);
+  const current = String(bind.categoryCol || '').trim();
+  if (current && !options.some(option => option.col === current)) {
+    options.push({ col: current, label: current });
+  }
+  return options;
 });
 
 const metricItemEditorRows = computed(() => {
@@ -442,6 +505,7 @@ watch(() => bind.dsId, (next, previous) => {
   probe.testOrgGroupCode = '';
   if (String(next ?? '') !== String(previous ?? '')) {
     bind.items = [];
+    if (innerType.value === 'BAR_COMPARE') bind.categoryCol = '';
     props.element.bindJson = JSON.stringify(bind);
     store.pushSnapshotDebounced();
   }
