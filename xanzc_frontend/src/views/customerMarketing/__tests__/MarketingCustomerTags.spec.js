@@ -20,4 +20,13 @@ describe('营销客户标签页面契约', () => {
     expect(source).toContain('REPLACE');
     expect(source).toContain('createCustomerTagImportBatch');
   });
+
+  it('导入弹窗提供独立的通用模板下载并反馈状态', () => {
+    expect(source).toContain('downloadCustomerTagImportTemplate');
+    expect(source).toContain('下载导入模板');
+    expect(source).toContain('templateDownloading');
+    expect(source).toContain('营销客户标签导入模板.xlsx');
+    expect(source).toContain('模板下载已开始');
+    expect(source).toContain('模板下载失败');
+  });
 });

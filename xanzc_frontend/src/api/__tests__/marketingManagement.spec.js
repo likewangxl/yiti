@@ -9,6 +9,7 @@ import {
   confirmLeadImportBatch,
   createCustomerTagImportBatch,
   createMarketingLead,
+  downloadCustomerTagImportTemplate,
   getLeadImportBatchDetails,
   getMarketingLead,
   listLeadApprovalHistory,
@@ -161,5 +162,13 @@ describe('六页面营销管理 API', () => {
     expect(call).toHaveBeenNthCalledWith(4, 'post', '/marketing/customer-tag-approvals/batch-approve', {
       data: { detailIds: [11, 12], approveTag: true, opinion: '同意' },
     });
+  });
+
+  it('营销客户标签导入模板使用独立批次接口并按 blob 下载', async () => {
+    await downloadCustomerTagImportTemplate();
+
+    expect(call).toHaveBeenCalledWith('get', '/marketing/customer-tag-import-batches/import-template', {
+      responseType: 'blob',
+    }, null);
   });
 });

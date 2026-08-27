@@ -161,6 +161,8 @@ export const createCustomerTagImportBatch = ({ tagId, importMode, file }) => {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 };
+export const downloadCustomerTagImportTemplate = () =>
+  call('get', '/marketing/customer-tag-import-batches/import-template', { responseType: 'blob' }, null);
 export const listCustomerTagImportBatches = (params = {}) =>
   call('get', '/marketing/customer-tag-import-batches', { params }, pageFallback);
 export const getCustomerTagImportBatch = id =>

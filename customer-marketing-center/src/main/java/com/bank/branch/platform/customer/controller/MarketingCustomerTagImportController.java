@@ -116,4 +116,15 @@ public class MarketingCustomerTagImportController {
                 + URLEncoder.encode(batch.getSourceFileName(), StandardCharsets.UTF_8));
         response.getOutputStream().write(bytes);
     }
+
+    /** 下载与当前标签导入解析器一致的通用模板，不绑定具体标签。 */
+    @GetMapping("/import-template")
+    @BizAuth(bizType = BizType.TAG, action = BizAction.IMPORT)
+    @AuditLog(action = "DOWNLOAD_CUSTOMER_TAG_IMPORT_TEMPLATE", resourceType = "TAG")
+    public void importTemplate(HttpServletResponse response) throws IOException {
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''"
+                + URLEncoder.encode("营销客户标签导入模板.xlsx", StandardCharsets.UTF_8));
+        response.getOutputStream().write(importService.importTemplate());
+    }
 }

@@ -24,12 +24,14 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -50,6 +52,9 @@ public class MarketingCustomerTagImportService {
 
     private static final Set<String> MODES = Set.of("APPEND", "REPLACE");
     private static final int MAX_ROWS = 5000;
+    private static final String[] IMPORT_TEMPLATE_HEADERS = {
+            "企业名称", "统一社会信用代码", "联系人", "联系电话", "注册地址", "经营地址"
+    };
 
     private final MarketingCustomerTagImportBatchMapper batchMapper;
     private final MarketingCustomerTagImportDetailMapper detailMapper;
@@ -190,6 +195,51 @@ public class MarketingCustomerTagImportService {
 
     public byte[] sourceFile(Long batchId, String operatorEmpId, boolean allScope) {
         return fileApi.getFileContent(get(batchId, operatorEmpId, allScope).getSourceFileId());
+    }
+
+    /**
+     * 生成营销客户标签导入模板。
+     * <p>
+     * 首个 sheet 只保留解析器需要的表头，填写说明单独放在第二个 sheet，避免说明文字被当作导入数据。
+     * </p>
+     */
+    public byte[] importTemplate() {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            Sheet importSheet = workbook.createSheet("客户标签导入");
+            Row header = importSheet.createRow(0);
+            for (int i = 0; i < IMPORT_TEMPLATE_HEADERS.length; i++) {
+                header.createCell(i).setCellValue(IMPORT_TEMPLATE_HEADERS[i]);
+                importSheet.setColumnWidth(i, 22 * 256);
+            }
+
+            Sheet instructionSheet = workbook.createSheet("填写说明");
+            Row instructionHeader = instructionSheet.createRow(0);
+            instructionHeader.createCell(0).setCellValue("字段");
+            instructionHeader.createCell(1).setCellValue("是否必填");
+            instructionHeader.createCell(2).setCellValue("填写说明");
+            String[][] instructions = {
+                    {"企业名称", "是", "填写企业名称"},
+                    {"统一社会信用代码", "是", "填写18位统一社会信用代码"},
+                    {"联系人", "否", "填写客户联系人"},
+                    {"联系电话", "否", "填写客户联系电话"},
+                    {"注册地址", "否", "填写企业注册地址"},
+                    {"经营地址", "否", "填写企业实际经营地址"}
+            };
+            for (int rowIndex = 0; rowIndex < instructions.length; rowIndex++) {
+                Row row = instructionSheet.createRow(rowIndex + 1);
+                for (int columnIndex = 0; columnIndex < instructions[rowIndex].length; columnIndex++) {
+                    row.createCell(columnIndex).setCellValue(instructions[rowIndex][columnIndex]);
+                }
+            }
+            instructionSheet.setColumnWidth(0, 24 * 256);
+            instructionSheet.setColumnWidth(1, 12 * 256);
+            instructionSheet.setColumnWidth(2, 36 * 256);
+
+            workbook.write(output);
+            return output.toByteArray();
+        } catch (IOException ex) {
+            throw error("CUST-50001", "营销客户标签导入模板生成失败");
+        }
     }
 
     private MarketingCustomerTag resolveTag(TagImportCreateRequest request, String empId, String orgId) {
