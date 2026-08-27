@@ -85,7 +85,7 @@ describe('ChartWidget 设计态数据绑定反馈', () => {
     });
   });
 
-  it('LEGACY_CONTEXT 始终使用运行时协议版本1，不受草稿根版本2影响', () => {
+  it('LEGACY_CONTEXT 携带已校验的草稿根版本2时使用运行时协议版本2', () => {
     store.orgScopeMode = 'LEGACY_CONTEXT';
     store.draftSchemaVersion = 2;
     const block = {
@@ -95,6 +95,24 @@ describe('ChartWidget 设计态数据绑定反馈', () => {
     store.blocks = [block];
     const wrapper = mountChart({
       component: 'ChartWidget', innerType: 'METRIC_CARD', blockId: 79,
+      bindJson: JSON.stringify({ dsId: 9002 }), propValue: {}
+    });
+
+    expect(wrapper.findComponent(BlockContainerStub).props('context')).toMatchObject({
+      screenCode: 'SCR_DRAFT', previewState: 'draft', schemaVersion: 2
+    });
+  });
+
+  it('LEGACY_CONTEXT 携带草稿根版本1时使用运行时协议版本1', () => {
+    store.orgScopeMode = 'LEGACY_CONTEXT';
+    store.draftSchemaVersion = 1;
+    const block = {
+      id: 80, componentType: 'METRIC_CARD',
+      bindJson: JSON.stringify({ dsId: 9002 }), styleJson: '{}', drillJson: '{}'
+    };
+    store.blocks = [block];
+    const wrapper = mountChart({
+      component: 'ChartWidget', innerType: 'METRIC_CARD', blockId: 80,
       bindJson: JSON.stringify({ dsId: 9002 }), propValue: {}
     });
 

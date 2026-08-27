@@ -50,8 +50,13 @@ const block = computed(() => {
 const ctx = computed(() => {
   const base = isRef(previewContext) ? previewContext.value : (previewContext || {});
   if (props.mode !== 'design') return base;
-  // 运行时请求版本由屏机构范围决定，不能复用仅描述画布结构的草稿版本。
-  const schemaVersion = runtimeSchemaVersion({ orgScopeMode: store.orgScopeMode });
+  // 命名组由机构范围固定走 v2；传统屏仅在草稿根版本已校验为数字 2 时沿用 v2，
+  // 避免把字符串或未知画布版本宽松升级成运行时协议版本。
+  const draftSchemaVersion = store.draftSchemaVersion === 2 ? 2 : 1;
+  const schemaVersion = runtimeSchemaVersion({
+    orgScopeMode: store.orgScopeMode,
+    ...(draftSchemaVersion === 2 ? { runtimeSchemaVersion: 2 } : {})
+  });
   return {
     ...base,
     screenCode: String(store.screenCode || ''),
