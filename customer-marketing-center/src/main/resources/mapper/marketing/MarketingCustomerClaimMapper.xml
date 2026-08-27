@@ -108,7 +108,7 @@
 
     <!--
       已认领池从认领关系反查来源线索；不把主办关系或业绩快照当作认领事实。
-      优先读取 MARKETING_TOUCH_TASK；TOUCH_TASK 仅用于承接迁移期手工触达兼容数据。
+      最新触达任务及触达状态统一读取 MARKETING_TOUCH_TASK。
     -->
     <select id="selectClaimedCustomerPage"
             resultType="com.bank.branch.platform.customer.dto.resp.ClaimedCustomerRespDTO">
@@ -148,10 +148,10 @@
                c.credit_amount,
                c.credit_exposure_amount,
                c.customer_desc,
-               COALESCE(CAST(mtt.id AS CHAR), CAST(tt.id AS CHAR)) AS latest_task_id,
-               COALESCE(mtt.task_no, tt.task_no) AS latest_task_no,
-               COALESCE(mtt.task_status, tt.task_status) AS latest_task_status,
-               COALESCE(mtt.sla_status, tt.sla_status) AS latest_sla_status
+               CAST(mtt.id AS CHAR) AS latest_task_id,
+               mtt.task_no AS latest_task_no,
+               mtt.task_status AS latest_task_status,
+               mtt.sla_status AS latest_sla_status
         FROM MARKETING_CUSTOMER_CLAIM cc
         JOIN MARKETING_CUSTOMER_INFO c
           ON c.id = cc.cust_id
@@ -168,15 +168,6 @@
               ORDER BY mtt2.created_time DESC, mtt2.id DESC
               LIMIT 1
           )
-        LEFT JOIN TOUCH_TASK tt
-          ON tt.id = (
-              SELECT tt2.id
-              FROM TOUCH_TASK tt2
-              WHERE tt2.cust_id = CAST(cc.cust_id AS CHAR)
-                AND tt2.assignee_emp_id = cc.maintainer_emp_id
-              ORDER BY tt2.created_time DESC, tt2.id DESC
-              LIMIT 1
-          )
         WHERE (cc.claimed_by = #{empId} OR cc.maintainer_emp_id = #{empId})
           AND cc.claim_status IN ('CLAIMED', 'CANCELLED')
         <if test="tab != null and tab != '' and tab == 'UNTOUCHED'">
@@ -187,12 +178,6 @@
                 AND target_touched_task.source_biz_id = cc.id
                 AND target_touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
           )
-          AND NOT EXISTS (
-              SELECT 1 FROM TOUCH_TASK touched_task
-              WHERE touched_task.cust_id = CAST(cc.cust_id AS CHAR)
-                AND touched_task.assignee_emp_id = cc.maintainer_emp_id
-                AND touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
-          )
         </if>
         <if test="tab != null and tab != '' and tab == 'TOUCHED'">
           AND (c.last_touch_time IS NOT NULL OR EXISTS (
@@ -200,11 +185,6 @@
               WHERE target_touched_task.source_type = 'CLAIM'
                 AND target_touched_task.source_biz_id = cc.id
                 AND target_touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
-          ) OR EXISTS (
-              SELECT 1 FROM TOUCH_TASK touched_task
-              WHERE touched_task.cust_id = CAST(cc.cust_id AS CHAR)
-                AND touched_task.assignee_emp_id = cc.maintainer_emp_id
-                AND touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
           ))
         </if>
         <if test="keyword != null and keyword != ''">
@@ -239,12 +219,6 @@
                 AND target_touched_task.source_biz_id = cc.id
                 AND target_touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
           )
-          AND NOT EXISTS (
-              SELECT 1 FROM TOUCH_TASK touched_task
-              WHERE touched_task.cust_id = CAST(cc.cust_id AS CHAR)
-                AND touched_task.assignee_emp_id = cc.maintainer_emp_id
-                AND touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
-          )
         </if>
         <if test="tab != null and tab != '' and tab == 'TOUCHED'">
           AND (c.last_touch_time IS NOT NULL OR EXISTS (
@@ -252,11 +226,6 @@
               WHERE target_touched_task.source_type = 'CLAIM'
                 AND target_touched_task.source_biz_id = cc.id
                 AND target_touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
-          ) OR EXISTS (
-              SELECT 1 FROM TOUCH_TASK touched_task
-              WHERE touched_task.cust_id = CAST(cc.cust_id AS CHAR)
-                AND touched_task.assignee_emp_id = cc.maintainer_emp_id
-                AND touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
           ))
         </if>
         <if test="keyword != null and keyword != ''">

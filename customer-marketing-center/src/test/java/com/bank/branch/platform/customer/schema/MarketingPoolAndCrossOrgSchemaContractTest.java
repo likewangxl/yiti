@@ -23,6 +23,8 @@ class MarketingPoolAndCrossOrgSchemaContractTest {
         assertThat(pool).contains("MARKETING_LEAD_INFO", "MARKETING_CUSTOMER_INFO",
                 "MARKETING_CUSTOMER_CLAIM", "SOURCE_LEAD_ID", "CLAIM_STATUS = 'CLAIMED'");
         assertThat(pool).doesNotContain("CUSTOMER_MARKET_CUSTOMER", "CUST_CLAIM");
+        assertThat(pool).contains("MARKETING_TOUCH_TASK");
+        assertThat(pool.replace("MARKETING_TOUCH_TASK", "")).doesNotContain("TOUCH_TASK");
         assertThat(cross).contains("MARKETING_CROSS_ORG_APPLY", "MARKETING_CROSS_ORG_RULE",
                 "MARKETING_CUSTOMER_PERFORMANCE_REL_SNAPSHOT", "MARKETING_TOUCH_TASK", "IN_APPROVAL");
         assertThat(cross).doesNotContain("CROSS_ORG_MARKETING_APPLY", "CUST_PERFORMANCE_RELATION_SNAPSHOT",
