@@ -5,6 +5,7 @@ import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadCreateRequest;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadDetailResponse;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadUpdateRequest;
+import com.bank.branch.platform.customer.dto.marketing.lead.MarketingCustomerSnapshot;
 import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTag;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadManagerScope;
@@ -210,6 +211,81 @@ class MarketingLeadEntryServiceTest {
         verify(managerScopeMapper, never()).insert(any(MarketingLeadManagerScope.class));
         verify(leadTagRelMapper, never()).insert(any(MarketingLeadTagRel.class));
         verify(fileApi, never()).bindFile(any(), any(), any(), any());
+    }
+
+    @Test
+    void lookupRequiresCustomerNameOrUnifiedCreditCode() {
+        var exception = assertThrows(com.bank.branch.platform.common.web.exception.BizException.class,
+                () -> service.lookupCustomer("  ", null));
+
+        assertEquals("MARKETING_CUSTOMER_LOOKUP_REQUIRED", exception.getCode());
+        verify(customerMapper, never()).selectActiveMatches(any(), any());
+    }
+
+    @Test
+    void lookupPrioritizesCreditCodeAndEnrichesMainManagerNames() {
+        com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo customer =
+                new com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo();
+        customer.setId(20L);
+        customer.setCustName("信用代码命中企业");
+        customer.setMainManagerId("OWNER_2");
+        customer.setMainOrgId("ORG_2");
+        when(customerMapper.selectActiveMatches("91320100ABC1234567", null))
+                .thenReturn(List.of(customer));
+        UserDTO owner = enabledManager("OWNER_2", "ORG_2");
+        owner.setDisplayName("王经理");
+        owner.setMainOrgName("公司业务部");
+        when(userApi.getUserByEmpId("OWNER_2")).thenReturn(owner);
+
+        MarketingCustomerSnapshot result = service.lookupCustomer(
+                "另一个名称", " 91320100abc1234567 ");
+
+        assertEquals(20L, result.getId());
+        assertEquals("OWNER_2", result.getMainManagerId());
+        assertEquals("王经理", result.getMainManagerName());
+        assertEquals("公司业务部", result.getMainOrgName());
+        verify(customerMapper).selectActiveMatches("91320100ABC1234567", null);
+    }
+
+    @Test
+    void lookupByExactCustomerNameRejectsAmbiguousActiveCustomers() {
+        com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo first =
+                new com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo();
+        com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo second =
+                new com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo();
+        when(customerMapper.selectActiveMatches(null, "重名企业"))
+                .thenReturn(List.of(first, second));
+
+        var exception = assertThrows(com.bank.branch.platform.common.web.exception.BizException.class,
+                () -> service.lookupCustomer(" 重名企业 ", null));
+
+        assertEquals("MARKETING_CUSTOMER_LOOKUP_AMBIGUOUS", exception.getCode());
+    }
+
+    @Test
+    void updateCannotBypassExistingOwnershipByRequestingPublicDistribution() {
+        MarketingLeadInfo draft = new MarketingLeadInfo();
+        draft.setId(10L);
+        draft.setLeadStatus("DRAFT");
+        draft.setEntryEmpId("EMP_1");
+        draft.setUnifiedCreditCode("91320100ABC1234567");
+        draft.setDistributionMode("OWNER");
+        draft.setMainManagerIdSnapshot("OWNER_1");
+        draft.setMainOrgIdSnapshot("ORG_OWNER");
+        when(leadMapper.selectForUpdate(10L)).thenReturn(draft);
+        when(userApi.getUserByEmpId("OWNER_1")).thenReturn(enabledManager("OWNER_1", "ORG_OWNER"));
+        when(userApi.getUserRoleCodes("OWNER_1"))
+                .thenReturn(Set.of(CustomerRoleCode.LEGACY_RELATIONSHIP_MANAGER));
+        LeadUpdateRequest request = new LeadUpdateRequest();
+        request.setDistributionMode("PUBLIC");
+
+        MarketingLeadInfo result = service.updateDraft(10L, request, "EMP_1", "ORG_1");
+
+        assertEquals("OWNER", result.getDistributionMode());
+        var captor = org.mockito.ArgumentCaptor.forClass(MarketingLeadManagerScope.class);
+        verify(managerScopeMapper).insert(captor.capture());
+        assertEquals("OWNER_1", captor.getValue().getManagerEmpId());
+        assertEquals(1, captor.getValue().getIsPrimary());
     }
 
     @Test

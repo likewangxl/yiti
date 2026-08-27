@@ -28,7 +28,9 @@ public class MarketingCustomerSnapshot {
     private BigDecimal creditAmount;
     private BigDecimal creditExposureAmount;
     private String mainManagerId;
+    private String mainManagerName;
     private String mainOrgId;
+    private String mainOrgName;
     private String ownershipStatus;
     private Integer profileVersion;
 }

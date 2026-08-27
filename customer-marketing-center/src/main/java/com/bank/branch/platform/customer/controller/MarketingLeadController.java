@@ -59,10 +59,11 @@ public class MarketingLeadController {
 
     @GetMapping("/lookup")
     @BizAuth(bizType = BizType.LEAD, action = BizAction.READ)
-    @Operation(summary = "按统一社会信用代码反显客户主档")
+    @Operation(summary = "按客户名称或统一社会信用代码反显客户主档")
     public ResponseWrapper<MarketingCustomerSnapshot> lookup(
-            @RequestParam String unifiedCreditCode) {
-        return ResponseWrapper.success(service.lookupCustomer(unifiedCreditCode));
+            @RequestParam(required = false) String customerName,
+            @RequestParam(required = false) String unifiedCreditCode) {
+        return ResponseWrapper.success(service.lookupCustomer(customerName, unifiedCreditCode));
     }
 
     @GetMapping("/{leadId}")

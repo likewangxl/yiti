@@ -26,6 +26,23 @@
         LIMIT 1
     </select>
 
+    <select id="selectActiveMatches"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_INFO
+        WHERE record_status = 'ACTIVE'
+        <choose>
+            <when test="unifiedCreditCode != null and unifiedCreditCode != ''">
+                AND unified_credit_code = #{unifiedCreditCode}
+            </when>
+            <otherwise>
+                AND cust_name = #{customerName}
+            </otherwise>
+        </choose>
+        ORDER BY id ASC
+        LIMIT 2
+    </select>
+
     <sql id="FILTER_CONDITIONS">
         <if test="query != null and query.keyword != null and query.keyword != ''">
             AND (cust_name LIKE CONCAT('%', #{query.keyword}, '%')

@@ -263,9 +263,33 @@ public class MarketingLeadEntryService {
 
     /** 仅按统一社会信用代码查询客户主档，用于新增页面反显。 */
     public MarketingCustomerSnapshot lookupCustomer(String unifiedCreditCode) {
-        String normalized = normalizeCreditCode(unifiedCreditCode);
-        MarketingCustomerInfo customer = findCustomer(normalized);
-        return customer == null ? null : toSnapshot(customer);
+        return lookupCustomer(null, unifiedCreditCode);
+    }
+
+    /**
+     * 按统一社会信用代码或客户名称精确反显客户主档；两者同时存在时信用代码优先。
+     * 客户名称可能存在重名，因此最多读取两条并对歧义显式报错，禁止静默选择第一条。
+     */
+    public MarketingCustomerSnapshot lookupCustomer(String customerName, String unifiedCreditCode) {
+        String normalizedCreditCode = StringUtils.hasText(unifiedCreditCode)
+                ? normalizeCreditCode(unifiedCreditCode) : null;
+        String normalizedCustomerName = StringUtils.hasText(customerName)
+                ? customerName.trim() : null;
+        if (!StringUtils.hasText(normalizedCreditCode) && !StringUtils.hasText(normalizedCustomerName)) {
+            throw error("MARKETING_CUSTOMER_LOOKUP_REQUIRED", "客户名称和统一社会信用代码至少填写一项");
+        }
+        List<MarketingCustomerInfo> matches = customerMapper.selectActiveMatches(
+                normalizedCreditCode, normalizedCreditCode == null ? normalizedCustomerName : null);
+        if (matches == null || matches.isEmpty()) {
+            return null;
+        }
+        if (matches.size() > 1) {
+            String message = normalizedCreditCode == null
+                    ? "客户名称匹配到多条有效客户，请使用统一社会信用代码查询"
+                    : "统一社会信用代码匹配到多条有效客户，请联系管理员处理重复主档";
+            throw error("MARKETING_CUSTOMER_LOOKUP_AMBIGUOUS", message);
+        }
+        return toSnapshot(matches.get(0));
     }
 
     /**
@@ -424,6 +448,13 @@ public class MarketingLeadEntryService {
     private MarketingCustomerSnapshot toSnapshot(MarketingCustomerInfo customer) {
         MarketingCustomerSnapshot snapshot = new MarketingCustomerSnapshot();
         BeanUtils.copyProperties(customer, snapshot);
+        if (StringUtils.hasText(customer.getMainManagerId())) {
+            UserDTO manager = userApi.getUserByEmpId(customer.getMainManagerId());
+            if (manager != null) {
+                snapshot.setMainManagerName(manager.getDisplayName());
+                snapshot.setMainOrgName(manager.getMainOrgName());
+            }
+        }
         return snapshot;
     }
 
