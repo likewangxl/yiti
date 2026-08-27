@@ -29,4 +29,43 @@ describe('营销客户标签页面契约', () => {
     expect(source).toContain('模板下载已开始');
     expect(source).toContain('模板下载失败');
   });
+
+  it('移除标签分类并通过客户标签类型字典统一筛选、录入和反显', () => {
+    expect(source).not.toContain('标签分类');
+    expect(source).not.toContain('tagCategory');
+    expect(source).not.toContain('query.category');
+    expect(source).not.toContain('项目类');
+    expect(source).not.toContain('认定类');
+    expect(source).toContain("useDict('CUSTOMER_TAG_TYPE')");
+    expect(source).toMatch(/reload:\s*reloadTagTypes/);
+    expect(source).toMatch(/v-model="query\.tagType"[\s\S]*tagTypeOptions/);
+    expect(source).toMatch(/v-model="tagForm\.tagType"[\s\S]*tagTypeOptions/);
+    expect(source).toContain('{{ tagTypeLabelOf(row.tagType) }}');
+    expect(source).toMatch(/async function openCreate\(\)[\s\S]*await reloadTagTypes\(\)/);
+    expect(source).toMatch(/function search\(\)[\s\S]*Promise\.all\(\[reloadTagTypes\(\),load\(\)\]\)/);
+    expect(source).toMatch(/function resetFilters\(\)[\s\S]*Promise\.all\(\[reloadTagTypes\(\),refresh\(\)\]\)/);
+  });
+
+  it('状态列按审批优先级组合显示有效、禁用、待审核和已退回', () => {
+    expect(source).toMatch(/label="状态"[\s\S]*tagStatusLabel\(row\)/);
+    expect(source).not.toContain('label="审批状态"');
+    expect(source).not.toContain('label="启用状态"');
+    expect(source).toMatch(/row\.approvalStatus==='PENDING'[\s\S]*row\.approvalStatus==='REJECTED'[\s\S]*row\.status==='ENABLED'/);
+    ['有效', '禁用', '待审核', '已退回'].forEach(label => expect(source).toContain(label));
+  });
+
+  it('四张统计卡互斥设置 viewStatus 并用无筛选的 pageSize=1 请求总数', () => {
+    expect(source).toContain('class="tag-stat-grid"');
+    ['标签总览', '有效标签', '待审核标签', '异常标签'].forEach(label => expect(source).toContain(label));
+    expect(source).toMatch(/function switchViewStatus\(viewStatus\)[\s\S]*query\.viewStatus=viewStatus[\s\S]*query\.pageNo=1[\s\S]*load\(\)/);
+    expect(source).toMatch(/listMarketingCustomerTags\(\{viewStatus,pageNo:1,pageSize:1\}\)/);
+    expect(source).toMatch(/const statViewStatuses=\['','ACTIVE','PENDING','EXCEPTION'\]/);
+  });
+
+  it('筛选支持四种状态和重置，新增成功后同步刷新统计', () => {
+    ['ACTIVE', 'DISABLED', 'PENDING', 'REJECTED'].forEach(value => expect(source).toContain(`value="${value}"`));
+    expect(source).toMatch(/@click="resetFilters"[^>]*>重置</);
+    expect(source).toMatch(/function resetFilters\(\)[\s\S]*query\.keyword=''[\s\S]*query\.tagType=''[\s\S]*query\.viewStatus=''[\s\S]*query\.pageNo=1[\s\S]*refresh\(\)/);
+    expect(source).toMatch(/createMarketingCustomerTag\(tagForm\)[\s\S]*await refresh\(\)/);
+  });
 });

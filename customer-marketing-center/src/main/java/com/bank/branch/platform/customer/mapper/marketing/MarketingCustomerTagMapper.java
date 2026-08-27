@@ -17,14 +17,18 @@ public interface MarketingCustomerTagMapper extends BaseMapper<MarketingCustomer
     /** 分页查询标签及正式有效客户数。 */
     List<MarketingCustomerTag> selectPage(@Param("keyword") String keyword,
                                            @Param("category") String category,
+                                           @Param("tagType") String tagType,
                                            @Param("status") String status,
                                            @Param("approvalStatus") String approvalStatus,
+                                           @Param("viewStatus") String viewStatus,
                                            @Param("offset") int offset,
                                            @Param("limit") int limit);
 
     /** 统计标签分页总数。 */
     long countPage(@Param("keyword") String keyword,
                    @Param("category") String category,
+                   @Param("tagType") String tagType,
                    @Param("status") String status,
-                   @Param("approvalStatus") String approvalStatus);
+                   @Param("approvalStatus") String approvalStatus,
+                   @Param("viewStatus") String viewStatus);
 }

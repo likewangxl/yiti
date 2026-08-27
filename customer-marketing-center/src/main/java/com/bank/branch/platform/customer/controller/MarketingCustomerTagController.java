@@ -38,11 +38,14 @@ public class MarketingCustomerTagController {
     @Operation(summary = "查询营销客户标签")
     public ResponseWrapper<?> list(@RequestParam(required = false) String keyword,
                                    @RequestParam(required = false) String category,
+                                   @RequestParam(required = false) String tagType,
                                    @RequestParam(required = false) String status,
                                    @RequestParam(required = false) String approvalStatus,
+                                   @RequestParam(required = false) String viewStatus,
                                    @RequestParam(defaultValue = "1") int pageNo,
                                    @RequestParam(defaultValue = "20") int pageSize) {
-        return ResponseWrapper.page(tagService.list(keyword, category, status, approvalStatus, pageNo, pageSize));
+        return ResponseWrapper.page(tagService.list(keyword, category, tagType, status,
+                approvalStatus, viewStatus, pageNo, pageSize));
     }
 
     @PostMapping

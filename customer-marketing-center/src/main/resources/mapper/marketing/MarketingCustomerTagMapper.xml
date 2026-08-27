@@ -19,6 +19,47 @@
         LIMIT 1
     </select>
 
+    <sql id="FILTER_CONDITIONS">
+        <if test="keyword != null and keyword != ''">
+            AND t.tag_name LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        <if test="category != null and category != ''">
+            AND t.tag_category = #{category}
+        </if>
+        <if test="tagType != null and tagType != ''">
+            AND t.tag_type = #{tagType}
+        </if>
+        <if test="status != null and status != ''">
+            AND t.status = #{status}
+        </if>
+        <if test="approvalStatus != null and approvalStatus != ''">
+            AND t.approval_status = #{approvalStatus}
+        </if>
+        <if test="viewStatus != null and viewStatus != ''">
+            <choose>
+                <when test="viewStatus == 'ACTIVE'">
+                    AND t.approval_status = 'APPROVED' AND t.status = 'ENABLED'
+                </when>
+                <when test="viewStatus == 'DISABLED'">
+                    AND t.approval_status = 'APPROVED' AND t.status = 'DISABLED'
+                </when>
+                <when test="viewStatus == 'PENDING'">
+                    AND t.approval_status = 'PENDING'
+                </when>
+                <when test="viewStatus == 'REJECTED'">
+                    AND t.approval_status = 'REJECTED'
+                </when>
+                <when test="viewStatus == 'EXCEPTION'">
+                    AND ((t.approval_status = 'APPROVED' AND t.status = 'DISABLED')
+                         OR t.approval_status = 'REJECTED')
+                </when>
+                <otherwise>
+                    AND 1 = 0
+                </otherwise>
+            </choose>
+        </if>
+    </sql>
+
     <select id="selectPage"
             resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTag">
         SELECT <include refid="BASE_COLUMNS"/>,
@@ -28,18 +69,7 @@
         FROM MARKETING_CUSTOMER_TAG t
         <where>
             t.record_status = 'ACTIVE'
-            <if test="keyword != null and keyword != ''">
-                AND t.tag_name LIKE CONCAT('%', #{keyword}, '%')
-            </if>
-            <if test="category != null and category != ''">
-                AND t.tag_category = #{category}
-            </if>
-            <if test="status != null and status != ''">
-                AND t.status = #{status}
-            </if>
-            <if test="approvalStatus != null and approvalStatus != ''">
-                AND t.approval_status = #{approvalStatus}
-            </if>
+            <include refid="FILTER_CONDITIONS"/>
         </where>
         ORDER BY t.tag_priority ASC, t.created_time DESC, t.id DESC
         LIMIT #{offset}, #{limit}
@@ -50,18 +80,7 @@
         FROM MARKETING_CUSTOMER_TAG t
         <where>
             t.record_status = 'ACTIVE'
-            <if test="keyword != null and keyword != ''">
-                AND t.tag_name LIKE CONCAT('%', #{keyword}, '%')
-            </if>
-            <if test="category != null and category != ''">
-                AND t.tag_category = #{category}
-            </if>
-            <if test="status != null and status != ''">
-                AND t.status = #{status}
-            </if>
-            <if test="approvalStatus != null and approvalStatus != ''">
-                AND t.approval_status = #{approvalStatus}
-            </if>
+            <include refid="FILTER_CONDITIONS"/>
         </where>
     </select>
 </mapper>

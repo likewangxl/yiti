@@ -19,6 +19,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * 营销客户标签主数据服务。
@@ -30,6 +31,9 @@ import java.util.Locale;
 @Service
 @RequiredArgsConstructor
 public class MarketingCustomerTagService {
+
+    private static final Set<String> VIEW_STATUSES = Set.of(
+            "ACTIVE", "DISABLED", "PENDING", "REJECTED", "EXCEPTION");
 
     private final MarketingCustomerTagMapper tagMapper;
     private final MarketingCustomerTagRelMapper relationMapper;
@@ -86,14 +90,25 @@ public class MarketingCustomerTagService {
     /** 查询标签分页，客户数量由 Mapper 从正式有效关系中统计。 */
     public PageResult<MarketingCustomerTag> list(String keyword, String category, String status,
                                                   String approvalStatus, int pageNo, int pageSize) {
+        return list(keyword, category, null, status, approvalStatus, null, pageNo, pageSize);
+    }
+
+    /**
+     * 查询标签分页，支持标签类型精确筛选和页面级组合状态筛选；旧状态参数继续按 AND 语义生效。
+     */
+    public PageResult<MarketingCustomerTag> list(String keyword, String category, String tagType,
+                                                  String status, String approvalStatus,
+                                                  String viewStatus, int pageNo, int pageSize) {
         int safePageNo = Math.max(1, pageNo);
         int safePageSize = Math.min(Math.max(1, pageSize), 100);
         int offset = (safePageNo - 1) * safePageSize;
+        String normalizedViewStatus = normalizeViewStatus(viewStatus);
         return PageResult.of(safePageNo, safePageSize,
-                tagMapper.countPage(trimToNull(keyword), trimToNull(category), trimToNull(status),
-                        trimToNull(approvalStatus)),
-                tagMapper.selectPage(trimToNull(keyword), trimToNull(category), trimToNull(status),
-                        trimToNull(approvalStatus), offset, safePageSize));
+                tagMapper.countPage(trimToNull(keyword), trimToNull(category), trimToNull(tagType),
+                        trimToNull(status), trimToNull(approvalStatus), normalizedViewStatus),
+                tagMapper.selectPage(trimToNull(keyword), trimToNull(category), trimToNull(tagType),
+                        trimToNull(status), trimToNull(approvalStatus), normalizedViewStatus,
+                        offset, safePageSize));
     }
 
     /** 兼容常见的 listPage 命名。 */
@@ -257,5 +272,17 @@ public class MarketingCustomerTagService {
         if (value == null) return null;
         String result = value.trim();
         return result.isEmpty() ? null : result;
+    }
+
+    private String normalizeViewStatus(String viewStatus) {
+        String normalized = trimToNull(viewStatus);
+        if (normalized == null) {
+            return null;
+        }
+        normalized = normalized.toUpperCase(Locale.ROOT);
+        if (!VIEW_STATUSES.contains(normalized)) {
+            throw new BizException("CUST-40000", "标签页面状态不合法");
+        }
+        return normalized;
     }
 }
