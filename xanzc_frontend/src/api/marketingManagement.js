@@ -22,8 +22,10 @@ export const listManualLeads = (params = {}) =>
   call('get', '/marketing/leads', { params: { ...params, leadSource: 'MANUAL' } }, null);
 export const getMarketingLead = async id =>
   toMarketingLeadView(await call('get', `/marketing/leads/${idPart(id)}`, {}, null));
-export const lookupMarketingCustomerByCreditCode = async unifiedCreditCode =>
-  toMarketingLeadAmounts(await call('get', '/marketing/leads/lookup', { params: { unifiedCreditCode } }, null));
+export const lookupMarketingCustomer = async (params = {}) =>
+  toMarketingLeadAmounts(await call('get', '/marketing/leads/lookup', { params }, null));
+export const lookupMarketingCustomerByCreditCode = unifiedCreditCode =>
+  lookupMarketingCustomer({ unifiedCreditCode });
 export const createMarketingLead = data =>
   call('post', '/marketing/leads', { data: toMarketingLeadPayload(data) });
 export const updateMarketingLead = (id, data) =>

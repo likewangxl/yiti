@@ -19,6 +19,8 @@ import {
   listMarketingCustomers,
   listMyCustomers,
   listPendingTagCustomerApprovals,
+  lookupMarketingCustomer,
+  lookupMarketingCustomerByCreditCode,
   restoreCustomerOwnershipAuto,
   transferCustomerOwner,
   updateMarketingCustomerProfile,
@@ -64,6 +66,18 @@ describe('六页面营销管理 API', () => {
     expect(call).toHaveBeenNthCalledWith(2, 'post', '/marketing/leads', {
       data: { custName: '示例企业' },
     });
+  });
+
+  it('客户主档可按客户名称或统一社会信用代码精确反查', async () => {
+    await lookupMarketingCustomer({ customerName: '西安示例企业' });
+    await lookupMarketingCustomerByCreditCode('91610131MA7EXAMPLE');
+
+    expect(call).toHaveBeenNthCalledWith(1, 'get', '/marketing/leads/lookup', {
+      params: { customerName: '西安示例企业' },
+    }, null);
+    expect(call).toHaveBeenNthCalledWith(2, 'get', '/marketing/leads/lookup', {
+      params: { unifiedCreditCode: '91610131MA7EXAMPLE' },
+    }, null);
   });
 
   it('线索金额在前端万元和后端元之间换算', async () => {

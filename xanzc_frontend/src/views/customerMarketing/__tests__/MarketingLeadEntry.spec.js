@@ -96,4 +96,59 @@ describe('营销线索录入页面契约', () => {
     expect(source).toMatch(/isAccountOpenedSnapshot:\s*0/);
     expect(source).toMatch(/isKeystone:\s*0/);
   });
+
+  it('客户名称失焦后精确反查，信用代码反查保持兼容', () => {
+    expect(source).toMatch(/v-model="form\.custName"[^>]*@blur="lookupCustomerByName"/);
+    expect(source).toMatch(/v-model="form\.unifiedCreditCode"[^>]*@blur="lookupCustomerByCreditCode"/);
+    expect(source).toMatch(/lookupMarketingCustomer\(\{customerName/);
+    expect(source).toMatch(/lookupMarketingCustomer\(\{unifiedCreditCode/);
+    expect(source).toMatch(/form\.unifiedCreditCode\s*=\s*customer\.unifiedCreditCode/);
+  });
+
+  it('命中主办人后固定 OWNER 并按工号和姓名展示', () => {
+    expect(source).toMatch(/value="PUBLIC"[^>]*:disabled="Boolean\(ownerCandidate\)"/);
+    expect(source).toMatch(/value="SCOPE"[^>]*:disabled="Boolean\(ownerCandidate\)"/);
+    expect(source).toContain('{{ ownerCandidate.id }} · {{ ownerCandidate.name }}');
+    expect(source).toMatch(/if\(customer\.mainManagerId\)[\s\S]*form\.distributionMode='OWNER'/);
+  });
+
+  it('抽屉支持保存草稿和提交审批，送审失败时保留已保存草稿', () => {
+    expect(source).toMatch(/@click="saveLead\(false\)"[^>]*>保存草稿</);
+    expect(source).toMatch(/@click="saveLead\(true\)"[^>]*>提交审批</);
+    expect(source).toMatch(/async function saveLead\(andSubmit=false\)/);
+    expect(source).toMatch(/await persistLeadDraft\([\s\S]*await submitMarketingLead\(savedId\)/);
+    expect(source).toContain('草稿已保存，但提交审批失败');
+  });
+
+  it('四张状态卡使用 pageSize=1 的 total，并与下拉状态互斥同步', () => {
+    expect(source).toContain('class="lead-stat-grid"');
+    ['草稿', '审批中', '已通过', '已退回'].forEach(label => expect(source).toContain(label));
+    expect(source).toMatch(/listManualLeads\(\{status,pageNo:1,pageSize:1\}\)/);
+    expect(source).toMatch(/leadQuery\.status===status\?'':status/);
+    expect(source).toContain('@change="filterByDropdown"');
+    expect(source).not.toContain("REJECTED:'已驳回'");
+  });
+
+  it('已匹配客户改名或名称查询未命中时清理旧主档快照，不影响未匹配时的手工代码', () => {
+    expect(source).toMatch(/function clearPreviousMatchedSnapshot\(preserveCreditCode=false\)\{[\s\S]*if\(!matchedCustomer\.value\)return false/);
+    ['unifiedCreditCode', 'custNo', 'mainManagerId', 'mainOrgId', 'managerEmpIds'].forEach(field => {
+      expect(source).toMatch(new RegExp(`${field}:[^,}]*`));
+    });
+    expect(source).toMatch(/leadType:'NEW_ACCOUNT'/);
+    expect(source).toMatch(/isAccountOpenedSnapshot:0/);
+    expect(source).toMatch(/matchedCustomer\.value\?\.custName!==customerName[\s\S]*clearPreviousMatchedSnapshot\(\)/);
+    expect(source).toMatch(/if\(!customer\)[\s\S]*clearPreviousMatchedSnapshot\(\)/);
+  });
+
+  it('已匹配客户修改信用代码时清理旧快照并保留当前新代码', () => {
+    expect(source).toMatch(/function clearPreviousMatchedSnapshot\(preserveCreditCode=false\)/);
+    expect(source).toMatch(/unifiedCreditCode:preserveCreditCode\?form\.unifiedCreditCode:''/);
+    expect(source).toMatch(/matchedCustomer\.value\?\.unifiedCreditCode!==unifiedCreditCode[\s\S]*clearPreviousMatchedSnapshot\(true\)[\s\S]*unifiedCreditCode\.length!==18/);
+    expect(source).toMatch(/lookupMarketingCustomer\(\{unifiedCreditCode\}\)[\s\S]*if\(!customer\)[\s\S]*clearPreviousMatchedSnapshot\(true\)/);
+  });
+
+  it('抽屉提示客户名称和信用代码都可自动反显', () => {
+    expect(source).toContain('按客户名称或统一社会信用代码自动反显');
+    expect(source).not.toContain('按统一社会信用代码自动反显');
+  });
 });

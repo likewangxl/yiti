@@ -12,9 +12,24 @@
     </header>
     <el-tabs v-model="activeTab" @tab-change="loadActive">
       <el-tab-pane label="线索录入记录" name="manual">
+        <div class="lead-stat-grid" aria-label="线索状态筛选">
+          <button
+            v-for="item in leadStatCards"
+            :key="item.status"
+            type="button"
+            class="lead-stat-card"
+            :class="[`tone-${item.tone}`, { 'is-selected': leadQuery.status === item.status }]"
+            :aria-pressed="leadQuery.status === item.status"
+            @click="toggleStatusCard(item.status)"
+          >
+            <span class="stat-card-top"><span>{{ item.label }}</span><i /></span>
+            <strong>{{ item.value }}</strong>
+            <small>{{ item.hint }}</small>
+          </button>
+        </div>
         <el-card shadow="never" class="filter-card">
           <div class="toolbar">
-            <el-form inline @submit.prevent><el-form-item label="关键词"><el-input v-model="leadQuery.keyword" clearable placeholder="线索编号 / 企业名称 / 统一社会信用代码" /></el-form-item><el-form-item label="状态"><el-select v-model="leadQuery.status" clearable style="width:140px"><el-option v-for="item in leadStatuses" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item><el-button type="primary" @click="searchLeads">查询</el-button></el-form>
+            <el-form inline @submit.prevent><el-form-item label="关键词"><el-input v-model="leadQuery.keyword" clearable placeholder="线索编号 / 企业名称 / 统一社会信用代码" /></el-form-item><el-form-item label="状态"><el-select v-model="leadQuery.status" clearable style="width:140px" @change="filterByDropdown"><el-option v-for="item in leadStatuses" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item><el-button type="primary" @click="searchLeads">查询</el-button></el-form>
           </div>
         </el-card>
         <el-table :data="leads" v-loading="leadLoading" border stripe class="lead-entry-table">
@@ -57,10 +72,10 @@
       destroy-on-close
       class="lead-form-drawer"
     >
-      <el-alert title="带 * 的字段将参与保存校验；存量客户信息会按统一社会信用代码自动反显。" type="info" :closable="false" show-icon />
+      <el-alert title="带 * 的字段将参与保存校验；存量客户信息会按客户名称或统一社会信用代码自动反显。" type="info" :closable="false" show-icon />
       <el-alert
         v-if="matchedCustomer"
-        :title="`已匹配客户主档：${matchedCustomer.custName || ''}，开户状态：${matchedCustomer.isAccountOpened === 1 ? '已开户' : '未开户'}，主办：${matchedCustomer.mainManagerId || '无'}`"
+        :title="`已匹配客户主档：${matchedCustomer.custName || ''}，开户状态：${matchedCustomer.isAccountOpened === 1 ? '已开户' : '未开户'}，主办：${matchedCustomer.mainManagerId ? `${matchedCustomer.mainManagerId} · ${matchedCustomer.mainManagerName || matchedCustomer.mainManagerId}` : '无'}`"
         type="warning"
         :closable="false"
         show-icon
@@ -71,8 +86,8 @@
           <div class="section-heading"><div><span>01</span><h3>基础信息</h3></div><p>用于客户识别和线索幂等校验</p></div>
           <div class="form-grid">
             <el-form-item label="线索类型" prop="leadType"><el-select v-model="form.leadType" style="width:100%"><el-option label="新客户开户线索" value="NEW_ACCOUNT" /><el-option label="存量客户营销线索" value="EXISTING_MARKETING" /></el-select></el-form-item>
-            <el-form-item label="客户名称" prop="custName"><el-input v-model="form.custName" maxlength="200" show-word-limit /></el-form-item>
-            <el-form-item label="统一社会信用代码" prop="unifiedCreditCode"><el-input v-model="form.unifiedCreditCode" maxlength="18" placeholder="18 位数字或大写字母" @input="normalizeCreditCode" @blur="lookupCustomer" /></el-form-item>
+            <el-form-item label="客户名称" prop="custName"><el-input v-model="form.custName" maxlength="200" show-word-limit @blur="lookupCustomerByName" /></el-form-item>
+            <el-form-item label="统一社会信用代码" prop="unifiedCreditCode"><el-input v-model="form.unifiedCreditCode" maxlength="18" placeholder="18 位数字或大写字母" @input="normalizeCreditCode" @blur="lookupCustomerByCreditCode" /></el-form-item>
             <el-form-item label="是否开户" prop="isAccountOpenedSnapshot"><el-radio-group v-model="form.isAccountOpenedSnapshot"><el-radio :value="1">是</el-radio><el-radio :value="0">否</el-radio></el-radio-group></el-form-item>
             <el-form-item label="客户号"><el-input v-model="form.custNo" :disabled="form.isAccountOpenedSnapshot !== 1" maxlength="50" placeholder="已开户客户可填写" /></el-form-item>
             <el-form-item label="所属行业" prop="industry"><el-select v-model="form.industry" filterable clearable style="width:100%" placeholder="请选择"><el-option v-for="item in industryOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
@@ -92,15 +107,15 @@
         </section>
 
         <section class="form-section">
-          <div class="section-heading"><div><span>03</span><h3>分配信息</h3></div><p>存量客户查到主办权后可选择主办专属</p></div>
+          <div class="section-heading"><div><span>03</span><h3>分配信息</h3></div><p>存量客户查到主办权后固定由主办人承接</p></div>
           <div class="ownership-result" :class="{ 'is-success': ownerCandidate }">
-            <div><strong>{{ ownerCandidate ? '已查询到存量客户主办权' : '尚未查询到主办权' }}</strong><span>{{ ownerCandidate ? '可选择主办专属，也可手动切换其他分配方式。' : '请先填写 18 位统一社会信用代码并离开输入框完成查询。' }}</span></div>
-            <div v-if="ownerCandidate" class="owner-identity"><small>主办客户经理</small><strong>{{ ownerCandidate.name }}（{{ ownerCandidate.id }}）</strong><span>{{ ownerCandidate.orgName || '-' }}</span></div>
+            <div><strong>{{ ownerCandidate ? '已查询到存量客户主办权' : '尚未查询到主办权' }}</strong><span>{{ ownerCandidate ? '分配方式已固定为主办专属，不可切换为公开或指定范围。' : '可按客户名称或 18 位统一社会信用代码查询客户主档。' }}</span></div>
+            <div v-if="ownerCandidate" class="owner-identity"><small>主办客户经理</small><strong>{{ ownerCandidate.id }} · {{ ownerCandidate.name }}</strong><span>{{ ownerCandidate.orgName || '-' }}</span></div>
           </div>
           <el-form-item label="分配方式" prop="distributionMode">
             <el-radio-group v-model="form.distributionMode">
-              <el-radio-button value="PUBLIC">全行公开认领</el-radio-button>
-              <el-radio-button value="SCOPE">指定客户经理范围</el-radio-button>
+              <el-radio-button value="PUBLIC" :disabled="Boolean(ownerCandidate)">全行公开认领</el-radio-button>
+              <el-radio-button value="SCOPE" :disabled="Boolean(ownerCandidate)">指定客户经理范围</el-radio-button>
               <el-radio-button v-if="ownerCandidate" value="OWNER">主办专属</el-radio-button>
             </el-radio-group>
           </el-form-item>
@@ -109,7 +124,7 @@
               <el-option v-for="person in managerOptions" :key="person.id" :label="`${person.name || person.id}（${person.id} · ${person.org || person.orgCode || '-'}）`" :value="person.id" />
             </el-select>
           </el-form-item>
-          <div v-if="form.distributionMode === 'OWNER' && ownerCandidate" class="owner-readonly"><span>主办专属客户经理</span><strong>{{ ownerCandidate.name }}（{{ ownerCandidate.id }}）</strong><small>{{ ownerCandidate.orgName || '-' }}（由客户主办权自动带出）</small></div>
+          <div v-if="form.distributionMode === 'OWNER' && ownerCandidate" class="owner-readonly"><span>主办专属客户经理</span><strong>{{ ownerCandidate.id }} · {{ ownerCandidate.name }}</strong><small>{{ ownerCandidate.orgName || '-' }}（由客户主办权自动带出）</small></div>
           <div class="distribution-outcome"><strong>审批后流向</strong><span>{{ distributionHint }}</span></div>
         </section>
 
@@ -128,7 +143,7 @@
           </el-form-item>
         </section>
       </el-form>
-      <template #footer><div class="drawer-footer"><span>{{ form.id ? '正在编辑草稿线索' : '新建线索将保存为草稿' }}</span><div><el-button @click="formVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveLead">保存草稿</el-button></div></div></template>
+      <template #footer><div class="drawer-footer"><span>{{ form.id ? '正在编辑草稿线索' : '新建线索将先保存草稿' }}</span><div><el-button @click="formVisible=false">取消</el-button><el-button :loading="saving" @click="saveLead(false)">保存草稿</el-button><el-button type="primary" :loading="saving" @click="saveLead(true)">提交审批</el-button></div></div></template>
     </el-drawer>
 
     <el-drawer v-model="leadDetailVisible" title="线索详情" size="min(760px, 95vw)"><el-descriptions v-if="leadDetail?.lead" :column="2" border><el-descriptions-item label="线索编号">{{ leadDetail.lead.leadNo }}</el-descriptions-item><el-descriptions-item label="状态">{{ statusLabel(leadDetail.lead.leadStatus) }}</el-descriptions-item><el-descriptions-item label="企业名称">{{ leadDetail.lead.custName }}</el-descriptions-item><el-descriptions-item label="统一社会信用代码">{{ leadDetail.lead.unifiedCreditCode }}</el-descriptions-item><el-descriptions-item label="当前主办">{{ leadDetail.currentCustomer?.mainManagerId || '无' }}</el-descriptions-item><el-descriptions-item label="开户状态">{{ leadDetail.currentCustomer?.isAccountOpened === 1 ? '已开户' : '未开户' }}</el-descriptions-item></el-descriptions></el-drawer>
@@ -147,7 +162,7 @@ import {
   confirmLeadImportBatch, createLeadImportBatch, createMarketingLead,
   downloadLeadImportErrorFile, downloadLeadImportSourceFile, getMarketingLead,
   listLeadImportBatches, listManualLeads, listMarketingCustomerTags,
-  lookupMarketingCustomerByCreditCode, submitMarketingLead, updateMarketingLead,
+  lookupMarketingCustomer, submitMarketingLead, updateMarketingLead,
   uploadMarketingLeadAttachment
 } from '@/api/marketingManagement';
 
@@ -157,13 +172,20 @@ const ABANDON_REIMPORT = 'ABANDON_REIMPORT';
 const leadQuery = reactive({ keyword: '', status: '', leadSource: 'MANUAL', pageNo: 1, pageSize: 20 });
 const batchQuery = reactive({ keyword: '', status: '', pageNo: 1, pageSize: 20 });
 const leads = ref([]); const leadTotal = ref(0); const leadLoading = ref(false);
+const leadStats = reactive({DRAFT:0,IN_APPROVAL:0,APPROVED:0,REJECTED:0});
 const batches = ref([]); const batchTotal = ref(0); const batchLoading = ref(false); const uploading = ref(false);
 const formVisible = ref(false); const saving = ref(false); const formRef = ref(null); const form = reactive(emptyForm()); const matchedCustomer = ref(null);
 const tagOptions = ref([]); const managerOptions = ref([]); const managerLoading = ref(false);
 const fileList = ref([]); const pendingFiles = ref([]);
 const leadDetailVisible = ref(false); const leadDetail = ref(null);
 const batchDrawerVisible = ref(false); const selectedBatch = ref(null);
-const leadStatuses = [{label:'草稿',value:'DRAFT'},{label:'审批中',value:'IN_APPROVAL'},{label:'已通过',value:'APPROVED'},{label:'已驳回',value:'REJECTED'}];
+const leadStatuses = [{label:'草稿',value:'DRAFT'},{label:'审批中',value:'IN_APPROVAL'},{label:'已通过',value:'APPROVED'},{label:'已退回',value:'REJECTED'}];
+const leadStatCards = computed(()=>[
+  {status:'DRAFT',label:'草稿',value:leadStats.DRAFT,hint:'可继续补充',tone:'primary'},
+  {status:'IN_APPROVAL',label:'审批中',value:leadStats.IN_APPROVAL,hint:'提交后待审核',tone:'warning'},
+  {status:'APPROVED',label:'已通过',value:leadStats.APPROVED,hint:'审批已完成',tone:'success'},
+  {status:'REJECTED',label:'已退回',value:leadStats.REJECTED,hint:'可修改后重提',tone:'danger'}
+]);
 const { options:industryOptions } = useDict('INDUSTRY');
 const { options:groupTypeOptions } = useDict('GROUP_TYPE');
 const { options:customerTypeOptions } = useDict('CUSTOMER_TYPE');
@@ -202,15 +224,25 @@ const distributionHint = computed(() => ({
 }[form.distributionMode]));
 const pageRows = result => result?.records || result?.list || [];
 const formatTime = value => value ? String(value).replace('T',' ').slice(0,19) : '-';
-const statusLabel = value => ({DRAFT:'草稿',SUBMITTED:'已提交',IN_APPROVAL:'审批中',APPROVED:'已通过',REJECTED:'已驳回',CANCELLED:'已取消'}[value] || value || '-');
+const statusLabel = value => ({DRAFT:'草稿',SUBMITTED:'已提交',IN_APPROVAL:'审批中',APPROVED:'已通过',REJECTED:'已退回',CANCELLED:'已取消'}[value] || value || '-');
 const batchLabel = value => ({WAITING_CONFIRM:'待确认',COMPLETED:'成功',ALL_FAILED:'失败',ABANDONED:'已放弃',IMPORTING:'处理中'}[value] || value || '-');
 const batchType = value => ({COMPLETED:'success',WAITING_CONFIRM:'warning',ALL_FAILED:'danger',ABANDONED:'info'}[value] || 'info');
 const failureCount = row => Number(row.rejectedCount || 0) + Number(row.errorCount || 0) + Number(row.warningCount || 0);
 
 async function loadLeads(){ leadLoading.value=true; try { const result=await listManualLeads(leadQuery); leads.value=pageRows(result); leadTotal.value=Number(result?.total||0); } catch (error) { ElMessage.error(`线索录入记录加载失败：${error?.message||'请稍后重试'}`); } finally { leadLoading.value=false; } }
+async function loadLeadStats(){
+  try{
+    const statuses=Object.keys(leadStats);
+    const results=await Promise.all(statuses.map(status=>listManualLeads({status,pageNo:1,pageSize:1})));
+    statuses.forEach((status,index)=>{leadStats[status]=Number(results[index]?.total||0);});
+  }catch(error){ElMessage.error(`线索状态统计加载失败：${error?.message||'请稍后重试'}`);}
+}
+async function refreshManualView(){await Promise.all([loadLeads(),loadLeadStats()]);}
 async function loadBatches(){ batchLoading.value=true; try { const result=await listLeadImportBatches(batchQuery); batches.value=pageRows(result); batchTotal.value=Number(result?.total||0); } catch (error) { ElMessage.error(`导入记录加载失败：${error?.message||'请稍后重试'}`); } finally { batchLoading.value=false; } }
-function loadActive(){ activeTab.value==='manual' ? loadLeads() : loadBatches(); }
+function loadActive(){ activeTab.value==='manual' ? refreshManualView() : loadBatches(); }
 function searchLeads(){ leadQuery.pageNo=1; loadLeads(); } function searchBatches(){ batchQuery.pageNo=1; loadBatches(); }
+function toggleStatusCard(status){leadQuery.status=leadQuery.status===status?'':status;leadQuery.pageNo=1;loadLeads();}
+function filterByDropdown(){leadQuery.pageNo=1;loadLeads();}
 function openImport(){ activeTab.value='imports'; loadBatches(); }
 async function ensureTagOptions(){
   if(tagOptions.value.length)return;
@@ -235,33 +267,67 @@ async function editLead(row){
     touchRestricted:lead.touchRestricted??1
   });
   matchedCustomer.value=detail?.currentCustomer||null;
+  if(matchedCustomer.value?.mainManagerId){form.distributionMode='OWNER';form.mainManagerId=matchedCustomer.value.mainManagerId;form.mainOrgId=matchedCustomer.value.mainOrgId||'';form.managerEmpIds=[];}
   managerOptions.value=(lead.managerScopes||[]).map(item=>({id:item.managerEmpId,name:item.managerName,org:item.managerOrgName,orgCode:item.managerOrgId}));
   fileList.value=attachments.map(file=>({name:file.fileName||file.name||file.id,url:`/api/files/${file.id||file.fileId}/download`,status:'success',fileId:file.id||file.fileId}));
   formVisible.value=true;
 }
 function normalizeCreditCode(){ form.unifiedCreditCode=String(form.unifiedCreditCode||'').replace(/\s+/g,'').toUpperCase(); }
-async function lookupCustomer(){
-  normalizeCreditCode(); if(form.unifiedCreditCode.length!==18)return;
+function clearPreviousMatchedSnapshot(preserveCreditCode=false){
+  if(!matchedCustomer.value)return false;
+  matchedCustomer.value=null;
+  Object.assign(form,{unifiedCreditCode:preserveCreditCode?form.unifiedCreditCode:'',custNo:'',mainManagerId:'',mainOrgId:'',managerEmpIds:[],leadType:'NEW_ACCOUNT',isAccountOpenedSnapshot:0});
+  form.distributionMode='PUBLIC';
+  return true;
+}
+function reflectMatchedCustomer(customer){
+  matchedCustomer.value=customer||null;
+  if(!customer){if(form.distributionMode==='OWNER')form.distributionMode='PUBLIC';return;}
+  ['custName','industry','groupType','groupName','customerType','enterpriseType','isKeystone','customerDesc','creditAmount','creditExposureAmount'].forEach(key=>{if(customer[key]!=null)form[key]=customer[key];});
+  form.unifiedCreditCode=customer.unifiedCreditCode||form.unifiedCreditCode;
+  form.leadType='EXISTING_MARKETING';form.custNo=customer.custNo||'';form.isAccountOpenedSnapshot=customer.isAccountOpened??0;
+  if(customer.mainManagerId){form.distributionMode='OWNER';form.mainManagerId=customer.mainManagerId;form.mainOrgId=customer.mainOrgId||'';form.managerEmpIds=[];}
+  else if(form.distributionMode==='OWNER')form.distributionMode='PUBLIC';
+  ElMessage.warning('已反显客户主档，请确认企业详细参数后保存');
+}
+async function lookupCustomerByName(){
+  const customerName=form.custName.trim();if(!customerName)return;
+  if(matchedCustomer.value?.custName!==customerName)clearPreviousMatchedSnapshot();
   try {
-    matchedCustomer.value=await lookupMarketingCustomerByCreditCode(form.unifiedCreditCode);
-    if(!matchedCustomer.value){ if(form.distributionMode==='OWNER')form.distributionMode='PUBLIC'; return; }
-    const customer=matchedCustomer.value;
-    ['custName','industry','groupType','groupName','customerType','enterpriseType','isKeystone','customerDesc','creditAmount','creditExposureAmount'].forEach(key=>{if(customer[key]!=null)form[key]=customer[key];});
-    form.leadType='EXISTING_MARKETING'; form.custNo=customer.custNo||''; form.isAccountOpenedSnapshot=customer.isAccountOpened??0;
-    if(customer.mainManagerId){form.distributionMode='OWNER';form.mainManagerId=customer.mainManagerId;form.mainOrgId=customer.mainOrgId||'';form.managerEmpIds=[];}
-    else if(form.distributionMode==='OWNER')form.distributionMode='PUBLIC';
-    ElMessage.warning('已反显客户主档，请确认企业详细参数后保存');
+    const customer=await lookupMarketingCustomer({customerName});
+    if(!customer){clearPreviousMatchedSnapshot();reflectMatchedCustomer(null);return;}
+    reflectMatchedCustomer(customer);
   } catch (error) { ElMessage.error(`客户主档查询失败：${error?.message||'请稍后重试'}`); }
+}
+async function lookupCustomerByCreditCode(){
+  normalizeCreditCode();const unifiedCreditCode=form.unifiedCreditCode;
+  if(matchedCustomer.value?.unifiedCreditCode!==unifiedCreditCode)clearPreviousMatchedSnapshot(true);
+  if(unifiedCreditCode.length!==18)return;
+  try{
+    const customer=await lookupMarketingCustomer({unifiedCreditCode});
+    if(!customer){clearPreviousMatchedSnapshot(true);reflectMatchedCustomer(null);return;}
+    reflectMatchedCustomer(customer);
+  }
+  catch(error){ElMessage.error(`客户主档查询失败：${error?.message||'请稍后重试'}`);}
 }
 async function searchManagers(keyword){ if(!keyword?.trim()){managerOptions.value=[];return;} managerLoading.value=true; try{managerOptions.value=await searchEmployees(keyword.trim(),30);}finally{managerLoading.value=false;} }
 function syncAttachments(_,files){ fileList.value=files||[]; pendingFiles.value=fileList.value.filter(file=>file.raw).map(file=>file.raw); form.attachmentIds=fileList.value.map(file=>file.fileId).filter(Boolean); }
 async function uploadPendingAttachments(){
-  const attachmentIds=[...form.attachmentIds];
-  for(const file of pendingFiles.value){
-    if(file.size>10*1024*1024)throw new Error(`附件 ${file.name} 超过10MB`);
-    const uploaded=await uploadMarketingLeadAttachment(file); attachmentIds.push(uploaded?.id||uploaded?.fileObjectId);
+  const attachmentIds=[];const persistedFiles=[];
+  for(const uploadFile of fileList.value){
+    let fileId=uploadFile.fileId;
+    if(uploadFile.raw){
+      if(uploadFile.raw.size>10*1024*1024)throw new Error(`附件 ${uploadFile.raw.name} 超过10MB`);
+      const uploaded=await uploadMarketingLeadAttachment(uploadFile.raw);fileId=uploaded?.id||uploaded?.fileObjectId;
+      if(!fileId)throw new Error(`附件 ${uploadFile.raw.name} 上传未返回文件ID`);
+    }
+    if(fileId){
+      attachmentIds.push(fileId);
+      const {raw:_raw,...persisted}=uploadFile;
+      persistedFiles.push({...persisted,fileId,status:'success',url:uploadFile.url||`/api/files/${fileId}/download`});
+    }
   }
-  return [...new Set(attachmentIds.filter(Boolean))];
+  const ids=[...new Set(attachmentIds)];form.attachmentIds=ids;fileList.value=persistedFiles;pendingFiles.value=[];return ids;
 }
 function leadPayload(attachmentIds){ return {
   leadType:form.leadType,custName:form.custName.trim(),unifiedCreditCode:form.unifiedCreditCode.trim(),
@@ -274,25 +340,35 @@ function leadPayload(attachmentIds){ return {
   creditAmount:form.creditAmount??undefined,creditExposureAmount:form.creditExposureAmount??undefined,
   attachmentIds,touchRestricted:form.touchRestricted
 }; }
-async function saveLead(){
+async function persistLeadDraft(){
+  const attachmentIds=await uploadPendingAttachments();const payload=leadPayload(attachmentIds);
+  if(form.id){await updateMarketingLead(form.id,payload);return form.id;}
+  const created=await createMarketingLead(payload);const createdId=typeof created==='object'?created?.id:created;
+  if(!createdId)throw new Error('线索草稿已请求保存，但未返回线索ID');
+  form.id=createdId;return createdId;
+}
+async function saveLead(andSubmit=false){
   try{await formRef.value?.validate();}catch{return;}
   saving.value=true;
   try {
-    const attachmentIds=await uploadPendingAttachments(); const payload=leadPayload(attachmentIds);
-    if(form.id)await updateMarketingLead(form.id,payload);
-    else {const created=await createMarketingLead(payload);const createdId=typeof created==='object'?created?.id:created;if(createdId)form.id=createdId;}
-    ElMessage.success('线索草稿已保存'); formVisible.value=false; await loadLeads();
+    const savedId=await persistLeadDraft();
+    if(andSubmit){
+      try{await submitMarketingLead(savedId);}
+      catch(error){ElMessage.warning(`草稿已保存，但提交审批失败：${error?.message||'请稍后重试'}`);await refreshManualView();return;}
+    }
+    ElMessage.success(andSubmit?'线索已提交审批':'线索草稿已保存');formVisible.value=false;await refreshManualView();
   } catch (error) { ElMessage.error(`线索保存失败：${error?.message||'请稍后重试'}`); }
   finally { saving.value=false; }
 }
 async function showLead(row){ try { leadDetail.value=await getMarketingLead(row.id); leadDetailVisible.value=true; } catch (error) { ElMessage.error(`线索详情加载失败：${error?.message||'请稍后重试'}`); } }
-async function submitLead(row){ try { await ElMessageBox.confirm(`确认提交线索 ${row.leadNo} 审批？`,'提交审批'); await submitMarketingLead(row.id); ElMessage.success('已提交审批'); await loadLeads(); } catch (error) { if(error!=='cancel'&&error!=='close') ElMessage.error(`提交失败：${error?.message||'请稍后重试'}`); } }
+async function submitLead(row){ try { await ElMessageBox.confirm(`确认提交线索 ${row.leadNo} 审批？`,'提交审批'); await submitMarketingLead(row.id); ElMessage.success('已提交审批'); await refreshManualView(); } catch (error) { if(error!=='cancel'&&error!=='close') ElMessage.error(`提交失败：${error?.message||'请稍后重试'}`); } }
 async function importFile(upload){ if(!upload?.raw || uploading.value) return; uploading.value=true; try { await createLeadImportBatch(upload.raw); ElMessage.success('导入文件已处理'); await loadBatches(); } catch (error) { ElMessage.error(`导入失败：${error?.message||'请检查文件'}`); } finally { uploading.value=false; } }
 function openBatch(row){ selectedBatch.value=row; batchDrawerVisible.value=true; }
 async function confirmBatch(action){ const normalizedAction=action===PROCESS_VALID?PROCESS_VALID:ABANDON_REIMPORT; const actionLabel=normalizedAction===PROCESS_VALID?'仅处理正常数据':'放弃并重新导入'; try { const {value}=await ElMessageBox.prompt(`确认${actionLabel}？`,'导入批次确认',{inputPlaceholder:'可填写备注'}); await confirmLeadImportBatch(selectedBatch.value.id,{action:normalizedAction,remark:value}); ElMessage.success('批次已处理'); batchDrawerVisible.value=false; await loadBatches(); } catch (error) { if(error!=='cancel'&&error!=='close') ElMessage.error(`批次确认失败：${error?.message||'请稍后重试'}`); } }
 
 watch(()=>form.groupType,value=>{if(value==='SINGLE')form.groupName='';});
 watch(()=>form.distributionMode,value=>{
+  if(ownerCandidate.value&&value!=='OWNER'){form.distributionMode='OWNER';return;}
   if(value==='PUBLIC'){form.managerEmpIds=[];form.mainManagerId='';form.mainOrgId='';}
   else if(value==='SCOPE'){form.mainManagerId='';form.mainOrgId='';}
   else if(value==='OWNER'&&ownerCandidate.value){form.managerEmpIds=[];form.mainManagerId=ownerCandidate.value.id;form.mainOrgId=matchedCustomer.value?.mainOrgId||'';}
@@ -300,7 +376,7 @@ watch(()=>form.distributionMode,value=>{
 
 // 文件下载由 MarketingLeadImportDetailDrawer 调用，保留显式引用用于页面契约审计。
 void downloadLeadImportSourceFile; void downloadLeadImportErrorFile;
-loadLeads();
+refreshManualView();
 </script>
 
 <style scoped lang="scss">
@@ -308,6 +384,19 @@ loadLeads();
 .page-head h1 { font-size: 18px; margin: 0; }
 .page-head span { color: #909399; display: block; font-size: 12px; margin-top: 4px; }
 .page-actions { display: flex; gap: 8px; }
+.lead-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.lead-stat-card { position: relative; overflow: hidden; display: grid; gap: 8px; min-height: 112px; padding: 16px 18px; border: 1px solid #dcdfe6; border-radius: 6px; background: #fff; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: border-color .2s ease, box-shadow .2s ease; }
+.lead-stat-card::before { position: absolute; top: 0; bottom: 0; left: 0; width: 3px; background: var(--el-color-primary); content: ''; }
+.lead-stat-card:hover { border-color: var(--el-color-primary-light-5); }
+.lead-stat-card:focus-visible { outline: 2px solid var(--el-color-primary-light-3); outline-offset: 2px; }
+.lead-stat-card.is-selected { border-color: var(--el-color-primary); background: var(--el-color-primary-light-9); box-shadow: 0 0 0 1px var(--el-color-primary-light-7) inset; }
+.stat-card-top { display: flex; align-items: center; justify-content: space-between; color: #606266; font-size: 13px; }
+.stat-card-top i { width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-primary); box-shadow: 0 0 0 4px var(--el-color-primary-light-9); }
+.lead-stat-card strong { color: #303133; font-size: 26px; line-height: 1; }
+.lead-stat-card small { color: #909399; font-size: 12px; }
+.lead-stat-card.tone-warning::before, .lead-stat-card.tone-warning .stat-card-top i { background: var(--el-color-warning); }
+.lead-stat-card.tone-success::before, .lead-stat-card.tone-success .stat-card-top i { background: var(--el-color-success); }
+.lead-stat-card.tone-danger::before, .lead-stat-card.tone-danger .stat-card-top i { background: var(--el-color-danger); }
 .filter-card { margin-bottom: 14px; }
 .filter-card :deep(.el-card__body) { padding-bottom: 2px; }
 .toolbar { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; }
@@ -340,6 +429,7 @@ loadLeads();
 @media (max-width: 680px) {
   .toolbar, .page-head, .drawer-footer { align-items: flex-start; flex-direction: column; }
   .page-actions { flex-wrap: wrap; }
+  .lead-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .form-grid, .ownership-result, .owner-readonly { grid-template-columns: 1fr; }
   .form-section { padding: 14px 14px 2px; }
   .section-heading { flex-direction: column; gap: 4px; }
