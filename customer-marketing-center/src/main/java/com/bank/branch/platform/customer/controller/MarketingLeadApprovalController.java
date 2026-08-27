@@ -57,6 +57,17 @@ public class MarketingLeadApprovalController {
                 currentUserApi.getCurrentEmpId()));
     }
 
+    @GetMapping("/overview")
+    @BizAuth(bizType = BizType.LEAD, action = BizAction.LIST)
+    @Operation(summary = "查询线索审批总览")
+    public ResponseWrapper<LeadApprovalTaskResponse> overview(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        return ResponseWrapper.page(service.overview(keyword, pageNo, pageSize,
+                currentUserApi.getCurrentEmpId()));
+    }
+
     @GetMapping("/{leadId}")
     @BizAuth(bizType = BizType.LEAD, action = BizAction.READ)
     @Operation(summary = "查询线索审批详情")

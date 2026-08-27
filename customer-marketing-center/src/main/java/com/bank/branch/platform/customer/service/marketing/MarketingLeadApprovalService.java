@@ -34,6 +34,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -86,6 +87,28 @@ public class MarketingLeadApprovalService {
         List<LeadApprovalTaskResponse> records = scanWorkflowTasks(operatorEmpId, true).stream()
                 .filter(item -> normalizedResult.equals(item.getLeadStatus()))
                 .filter(item -> matchesKeyword(item, keyword))
+                .toList();
+        return paginate(records, pageNo, pageSize);
+    }
+
+    /**
+     * 查询审批总览：合并当前用户待办理任务与本人已办理的通过/退回记录。
+     * 仅保留页面线索来源，按线索去重后以任务最新时间倒序分页，确保卡片切换与总览分页口径一致。
+     */
+    public PageResult<LeadApprovalTaskResponse> overview(String keyword, int pageNo,
+                                                          int pageSize, String operatorEmpId) {
+        Map<Long, LeadApprovalTaskResponse> distinct = new LinkedHashMap<>();
+        scanWorkflowTasks(operatorEmpId, false).stream()
+                .filter(item -> IN_APPROVAL.equals(item.getLeadStatus()))
+                .forEach(item -> mergeOverviewRecord(distinct, item));
+        scanWorkflowTasks(operatorEmpId, true).stream()
+                .filter(item -> REVIEW_RESULTS.contains(item.getLeadStatus()))
+                .forEach(item -> mergeOverviewRecord(distinct, item));
+
+        List<LeadApprovalTaskResponse> records = distinct.values().stream()
+                .filter(item -> matchesKeyword(item, keyword))
+                .sorted(Comparator.comparing(this::overviewTime,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
         return paginate(records, pageNo, pageSize);
     }
@@ -426,6 +449,31 @@ public class MarketingLeadApprovalService {
         MarketingCustomerInfo customer = findCustomer(lead);
         if (customer != null) response.setCurrentCustomer(toSnapshot(customer));
         return response;
+    }
+
+    private void mergeOverviewRecord(Map<Long, LeadApprovalTaskResponse> distinct,
+                                     LeadApprovalTaskResponse candidate) {
+        if (candidate == null || candidate.getLeadId() == null) return;
+        distinct.merge(candidate.getLeadId(), candidate, (existing, newer) ->
+                isAfter(overviewTime(newer), overviewTime(existing)) ? newer : existing);
+    }
+
+    private boolean isAfter(LocalDateTime candidate, LocalDateTime existing) {
+        if (candidate == null) return false;
+        return existing == null || candidate.isAfter(existing);
+    }
+
+    /** 待办取节点到达时间，已办取完成时间，缺失时回退到流程/业务时间。 */
+    private LocalDateTime overviewTime(LeadApprovalTaskResponse item) {
+        if (item == null) return null;
+        TaskRespDTO task = item.getTask();
+        if (task != null) {
+            if (task.getCompleteTime() != null) return task.getCompleteTime();
+            if (task.getTaskCreateTime() != null) return task.getTaskCreateTime();
+            if (task.getStartTime() != null) return task.getStartTime();
+        }
+        if (item.getReviewedTime() != null) return item.getReviewedTime();
+        return item.getSubmittedTime();
     }
 
     private PageResult<LeadApprovalTaskResponse> paginate(List<LeadApprovalTaskResponse> all,

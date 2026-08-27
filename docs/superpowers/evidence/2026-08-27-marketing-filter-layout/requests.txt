@@ -1,0 +1,25 @@
+线索审批关键请求（均为开发态 mock，HTTP 200）：
+
+GET /api/marketing/lead-approvals/pending?pageNo=1&pageSize=1
+GET /api/marketing/lead-approvals/history?result=APPROVED&pageNo=1&pageSize=1
+GET /api/marketing/lead-approvals/history?result=REJECTED&pageNo=1&pageSize=1
+GET /api/marketing/lead-approvals/overview?keyword=&pageNo=1&pageSize=20
+GET /api/marketing/lead-approvals/history?keyword=&pageNo=1&pageSize=20&result=APPROVED
+GET /api/marketing/lead-approvals/history?keyword=&pageNo=1&pageSize=20&result=REJECTED
+GET /api/marketing/lead-approvals/overview?keyword=&pageNo=1&pageSize=20
+
+线索录入关键请求（均为开发态 mock，HTTP 200）：
+
+GET /api/marketing/leads?keyword=&status=&leadSource=MANUAL&pageNo=1&pageSize=20
+GET /api/marketing/leads?status=DRAFT&pageNo=1&pageSize=1&leadSource=MANUAL
+GET /api/marketing/leads?status=IN_APPROVAL&pageNo=1&pageSize=1&leadSource=MANUAL
+GET /api/marketing/leads?status=APPROVED&pageNo=1&pageSize=1&leadSource=MANUAL
+GET /api/marketing/leads?status=REJECTED&pageNo=1&pageSize=1&leadSource=MANUAL
+
+营销客户标签关键请求（均为开发态 mock，HTTP 200）：
+
+GET /api/marketing/customer-tags?keyword=&tagType=&viewStatus=&pageNo=1&pageSize=20
+GET /api/marketing/customer-tags?viewStatus=&pageNo=1&pageSize=1
+GET /api/marketing/customer-tags?viewStatus=ACTIVE&pageNo=1&pageSize=1
+GET /api/marketing/customer-tags?viewStatus=PENDING&pageNo=1&pageSize=1
+GET /api/marketing/customer-tags?viewStatus=EXCEPTION&pageNo=1&pageSize=1

@@ -48,14 +48,28 @@ describe('营销线索审批页面契约', () => {
     expect(source).not.toContain('线索编号');
   });
 
-  it('三张分类卡片互斥筛选，并分别获取精确总数', () => {
+  it('四张分类卡片互斥筛选，并分别获取精确总数', () => {
+    expect(source).toContain('listLeadApprovalOverview');
+    expect(source).toMatch(/activeStatus\.value === ''[\s\S]*listLeadApprovalOverview\(params\)/);
     expect(source).toMatch(/listLeadApprovalPending\(\{ pageNo: 1, pageSize: 1 \}\)/);
     expect(source).toMatch(/listLeadApprovalHistory\(\{ result: 'APPROVED', pageNo: 1, pageSize: 1 \}\)/);
     expect(source).toMatch(/listLeadApprovalHistory\(\{ result: 'REJECTED', pageNo: 1, pageSize: 1 \}\)/);
     expect(source).toContain(':aria-pressed="activeStatus === item.status"');
     expect(source).toMatch(/function switchStatus\(nextStatus\)[\s\S]*activeStatus\.value = nextStatus/);
+    expect(source).toContain("label: '总览'");
     expect(source).toContain("label: '待审批'");
     expect(source).toContain("label: '已通过'");
     expect(source).toContain("label: '已退回'");
+  });
+
+  it('状态筛选栏与卡片同步互斥，重置会恢复全部和总览', () => {
+    expect(source).toContain('v-model="statusFilter"');
+    expect(source).toContain('label="全部"');
+    expect(source).toMatch(/@change="filterByStatus"/);
+    expect(source).toMatch(/function filterByStatus\(nextStatus\)[\s\S]*activeStatus\.value = nextStatus/);
+    expect(source).toMatch(/function switchStatus\(nextStatus\)[\s\S]*statusFilter\.value = nextStatus/);
+    expect(source).toMatch(/function resetFilter\(\)[\s\S]*query\.keyword = ''[\s\S]*statusFilter\.value = ''[\s\S]*activeStatus\.value = ''/);
+    expect(source).toMatch(/\.approval-toolbar[\s\S]*display:\s*flex[\s\S]*flex-wrap:\s*nowrap/);
+    expect(source).toContain('<el-form-item class="approval-filter-actions">');
   });
 });

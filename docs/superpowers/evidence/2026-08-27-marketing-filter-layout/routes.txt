@@ -1,0 +1,18 @@
+以下均为仅开发态 mock，非联调：
+
+**/api/auth/current-user
+**/api/auth/permissions
+**/api/auth/my-menus
+**/api/notifications/unread-count
+**/api/notifications**
+**/api/sys/dicts/**/items
+**/api/marketing/customer-tags**
+**/api/marketing/lead-approvals/overview**
+**/api/marketing/lead-approvals/pending**
+**/api/marketing/lead-approvals/history**
+**/api/marketing/leads**
+
+字典响应：`INDUSTRY` 返回制造业/金融业；其他字典返回项目类/认定类。
+标签响应：根据 `viewStatus` 返回对应审批/启用组合状态。
+线索审批响应：总览返回三种状态；待审批返回 `IN_APPROVAL`；历史按 `result` 返回 `APPROVED` 或 `REJECTED`。
+线索录入响应：根据 `status` 返回对应状态的手工录入线索。

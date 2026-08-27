@@ -24,6 +24,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -101,6 +102,48 @@ class MarketingLeadApprovalServiceTest {
     }
 
     @Test
+    void overviewCombinesTodoAndOwnHistoryExcludesTagImportDeduplicatesAndSortsByLatestTime() {
+        TaskRespDTO pendingTask = task(101L, "TODO-101");
+        pendingTask.setTaskCreateTime(LocalDateTime.of(2026, 8, 27, 10, 0));
+        TaskRespDTO tagImportTask = task(102L, "TODO-102");
+        tagImportTask.setTaskCreateTime(LocalDateTime.of(2026, 8, 27, 12, 0));
+        TaskRespDTO approvedTask = task(201L, "DONE-201-OLD");
+        approvedTask.setCompleteTime(LocalDateTime.of(2026, 8, 27, 9, 0));
+        TaskRespDTO duplicateApprovedTask = task(201L, "DONE-201-NEW");
+        duplicateApprovedTask.setCompleteTime(LocalDateTime.of(2026, 8, 27, 11, 0));
+        TaskRespDTO rejectedTask = task(301L, "DONE-301");
+        rejectedTask.setCompleteTime(LocalDateTime.of(2026, 8, 27, 8, 0));
+        when(workflowQueryApi.queryTodoList("EMP_1", "LEAD", null, 1, 100))
+                .thenReturn(com.bank.branch.platform.common.web.PageResult.of(1, 100, 2,
+                        List.of(pendingTask, tagImportTask)));
+        when(workflowQueryApi.queryDoneList("EMP_1", "LEAD", null, 1, 100))
+                .thenReturn(com.bank.branch.platform.common.web.PageResult.of(1, 100, 3,
+                        List.of(approvedTask, duplicateApprovedTask, rejectedTask)));
+        when(leadMapper.selectActiveById(101L)).thenReturn(lead(101L, "MANUAL"));
+        MarketingLeadInfo tagImport = lead(102L, "TAG_IMPORT");
+        when(leadMapper.selectActiveById(102L)).thenReturn(tagImport);
+        MarketingLeadInfo approved = lead(201L, "LEAD_IMPORT");
+        approved.setLeadStatus("APPROVED");
+        when(leadMapper.selectActiveById(201L)).thenReturn(approved);
+        MarketingLeadInfo rejected = lead(301L, "MANUAL");
+        rejected.setLeadStatus("REJECTED");
+        when(leadMapper.selectActiveById(301L)).thenReturn(rejected);
+
+        var result = service.overview(null, 1, 2, "EMP_1");
+
+        assertEquals(3, result.getTotal());
+        assertEquals(List.of(201L, 101L), result.getRecords().stream()
+                .map(com.bank.branch.platform.customer.dto.marketing.lead.LeadApprovalTaskResponse::getLeadId)
+                .toList());
+        assertEquals("DONE-201-NEW", result.getRecords().get(0).getTask().getTaskId());
+
+        var secondPage = service.overview(null, 2, 2, "EMP_1");
+        assertEquals(List.of(301L), secondPage.getRecords().stream()
+                .map(com.bank.branch.platform.customer.dto.marketing.lead.LeadApprovalTaskResponse::getLeadId)
+                .toList());
+    }
+
+    @Test
     void approveAndRejectUseConditionalStatusTransition() {
         MarketingLeadInfo lead = lead(21L, "MANUAL");
         lead.setLeadStatus("IN_APPROVAL");
@@ -175,7 +218,12 @@ class MarketingLeadApprovalServiceTest {
     }
 
     private TaskRespDTO task(long id) {
+        return task(id, "TASK-" + id);
+    }
+
+    private TaskRespDTO task(long id, String taskId) {
         TaskRespDTO task = new TaskRespDTO();
+        task.setTaskId(taskId);
         task.setBizId(String.valueOf(id));
         task.setBizType("LEAD");
         return task;

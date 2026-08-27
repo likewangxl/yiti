@@ -13,6 +13,7 @@ import {
   getLeadImportBatchDetails,
   getMarketingLead,
   listLeadApprovalHistory,
+  listLeadApprovalOverview,
   listLeadApprovalPending,
   listLeadImportBatches,
   listManualLeads,
@@ -138,6 +139,14 @@ describe('六页面营销管理 API', () => {
     expect(call).toHaveBeenNthCalledWith(3, 'post', '/marketing/lead-approvals/7/approve', {
       data: { opinion: '同意', lockVersion: 1 },
     });
+  });
+
+  it('线索审批总览使用独立概览接口', async () => {
+    await listLeadApprovalOverview({ keyword: '示例', pageNo: 1, pageSize: 1 });
+
+    expect(call).toHaveBeenCalledWith('get', '/marketing/lead-approvals/overview', {
+      params: { keyword: '示例', pageNo: 1, pageSize: 1 },
+    }, null);
   });
 
   it('标签导入只创建审批批次，批量审批可联动通过标签', async () => {

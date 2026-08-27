@@ -62,6 +62,13 @@ describe('营销客户标签页面契约', () => {
     expect(source).toMatch(/const statViewStatuses=\['','ACTIVE','PENDING','EXCEPTION'\]/);
   });
 
+  it('筛选条件、查询和重置固定在同一行，并将按钮放入明确操作项', () => {
+    expect(source).toContain('<el-form inline class="filter-form" @submit.prevent>');
+    expect(source).toContain('<el-form-item class="filter-actions">');
+    expect(source).toMatch(/\.filter-form\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*nowrap/);
+    expect(source).toMatch(/\.filter-actions\s*\{[^}]*flex:\s*0\s+0\s+auto/);
+  });
+
   it('筛选支持四种状态和重置，新增成功后同步刷新统计', () => {
     ['ACTIVE', 'DISABLED', 'PENDING', 'REJECTED'].forEach(value => expect(source).toContain(`value="${value}"`));
     expect(source).toMatch(/@click="resetFilters"[^>]*>重置</);

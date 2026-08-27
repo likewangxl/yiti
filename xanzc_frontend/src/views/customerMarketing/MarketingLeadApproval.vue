@@ -20,11 +20,21 @@
         <strong>{{ activeCard.label }}</strong>
         <span>共 {{ total }} 条</span>
       </div>
-      <div class="approval-toolbar">
-        <el-input v-model="query.keyword" clearable placeholder="客户名称 / 统一社会信用代码 / 提交人" style="width: 420px" @keyup.enter="search" />
-        <el-button type="primary" @click="search">查询</el-button>
-        <el-button @click="resetFilter">重置</el-button>
-      </div>
+      <el-form inline class="approval-toolbar" @submit.prevent>
+        <el-form-item label="关键词"><el-input v-model="query.keyword" clearable placeholder="客户名称 / 统一社会信用代码 / 提交人" style="width: 420px" @keyup.enter="search" /></el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="statusFilter" clearable class="approval-status-select" @change="filterByStatus">
+            <el-option label="全部" value="" />
+            <el-option label="待审批" value="IN_APPROVAL" />
+            <el-option label="已通过" value="APPROVED" />
+            <el-option label="已退回" value="REJECTED" />
+          </el-select>
+        </el-form-item>
+        <el-form-item class="approval-filter-actions">
+          <el-button type="primary" @click="search">查询</el-button>
+          <el-button @click="resetFilter">重置</el-button>
+        </el-form-item>
+      </el-form>
       <el-table :data="rows" v-loading="loading" border stripe class="lead-approval-table">
         <el-table-column prop="custName" label="客户名称" min-width="210" fixed="left" show-overflow-tooltip />
         <el-table-column prop="unifiedCreditCode" label="统一社会信用代码" min-width="185" />
@@ -80,15 +90,17 @@ import { computed, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import MarketingLeadReadonlyDetail from '@/components/MarketingLeadReadonlyDetail.vue';
 import PageTitle from '@/components/PageTitle.vue';
-import { approveLead, getLeadApprovalDetail, listLeadApprovalHistory, listLeadApprovalPending, marketingLeadYuanToWan, rejectLead } from '@/api/marketingManagement';
+import { approveLead, getLeadApprovalDetail, listLeadApprovalHistory, listLeadApprovalOverview, listLeadApprovalPending, marketingLeadYuanToWan, rejectLead } from '@/api/marketingManagement';
 import { useDict } from '@/composables/useDict';
 
-const activeStatus = ref('IN_APPROVAL');
+const activeStatus = ref('');
+const statusFilter = ref('');
 const query = reactive({ keyword: '', pageNo: 1, pageSize: 20 });
 const rows = ref([]); const total = ref(0); const pendingTotal = ref(0); const approvedTotal = ref(0); const rejectedTotal = ref(0); const loading = ref(false);
 const detailVisible = ref(false); const detail = ref(null); const selectedRow = ref(null);
 const { labelOf: industryLabelOf, reload: reloadIndustry } = useDict('INDUSTRY');
 const summaryCards = computed(() => [
+  { status: '', label: '总览', value: pendingTotal.value + approvedTotal.value + rejectedTotal.value, hint: '待审批、已通过和已退回线索', tone: 'primary' },
   { status: 'IN_APPROVAL', label: '待审批', value: pendingTotal.value, hint: '等待当前审批人处理', tone: 'warning' },
   { status: 'APPROVED', label: '已通过', value: approvedTotal.value, hint: '当前登录人已通过的线索', tone: 'success' },
   { status: 'REJECTED', label: '已退回', value: rejectedTotal.value, hint: '当前登录人已退回的线索', tone: 'danger' }
@@ -101,15 +113,14 @@ async function load() {
   try {
     const params = { ...query };
     const [result] = await Promise.all([
-      activeStatus.value === 'IN_APPROVAL'
+      activeStatus.value === ''
+        ? listLeadApprovalOverview(params)
+        : activeStatus.value === 'IN_APPROVAL'
         ? listLeadApprovalPending(params)
         : listLeadApprovalHistory({ ...params, result: activeStatus.value }),
       reloadIndustry()
     ]);
     rows.value = pageRows(result); total.value = pageTotal(result);
-    if (activeStatus.value === 'IN_APPROVAL') pendingTotal.value = total.value;
-    if (activeStatus.value === 'APPROVED') approvedTotal.value = total.value;
-    if (activeStatus.value === 'REJECTED') rejectedTotal.value = total.value;
   } catch (error) {
     rows.value = []; total.value = 0; ElMessage.error(`审批列表加载失败：${error?.message || '请稍后重试'}`);
   } finally { loading.value = false; }
@@ -124,9 +135,10 @@ async function loadSummary() {
   if (approved.status === 'fulfilled') approvedTotal.value = pageTotal(approved.value);
   if (rejected.status === 'fulfilled') rejectedTotal.value = pageTotal(rejected.value);
 }
-function switchStatus(nextStatus) { if (activeStatus.value === nextStatus) return; activeStatus.value = nextStatus; query.pageNo = 1; load(); }
+function switchStatus(nextStatus) { if (activeStatus.value === nextStatus) return; activeStatus.value = nextStatus; statusFilter.value = nextStatus; query.pageNo = 1; load(); }
+function filterByStatus(nextStatus) { activeStatus.value = nextStatus || ''; query.pageNo = 1; load(); }
 function search() { query.pageNo = 1; load(); }
-function resetFilter() { query.keyword = ''; query.pageNo = 1; load(); }
+function resetFilter() { query.keyword = ''; statusFilter.value = ''; activeStatus.value = ''; query.pageNo = 1; load(); }
 async function openDetail(row) {
   try { selectedRow.value = row; detail.value = normalizeApprovalDetail(await getLeadApprovalDetail(row.leadId)); detailVisible.value = true; }
   catch (error) { ElMessage.error(`审批详情加载失败：${error?.message || '请稍后重试'}`); }
@@ -172,7 +184,7 @@ load();
 .page-head { align-items: flex-start; display: flex; justify-content: space-between; margin-bottom: 14px; }
 .page-head h1 { font-size: 18px; margin: 0; }
 .page-head span { color: #909399; display: block; font-size: 12px; margin-top: 4px; }
-.approval-stat-grid { display: grid; grid-template-columns: repeat(3, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.approval-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .approval-stat-card { position: relative; overflow: hidden; display: grid; gap: 8px; min-height: 112px; padding: 16px 18px; border: 1px solid #dcdfe6; border-radius: 6px; background: #fff; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: border-color .2s ease, box-shadow .2s ease; }
 .approval-stat-card::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--el-color-primary); content: ''; }
 .approval-stat-card:hover { border-color: var(--el-color-primary-light-5); }
@@ -182,6 +194,7 @@ load();
 .stat-card-top i { width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-primary); box-shadow: 0 0 0 4px var(--el-color-primary-light-9); }
 .approval-stat-card strong { color: #303133; font-size: 26px; line-height: 1; }
 .approval-stat-card small { color: #909399; font-size: 12px; }
+.approval-stat-card.tone-primary::before, .approval-stat-card.tone-primary .stat-card-top i { background: var(--el-color-primary); }
 .approval-stat-card.tone-warning::before, .approval-stat-card.tone-warning .stat-card-top i { background: var(--el-color-warning); }
 .approval-stat-card.tone-success::before, .approval-stat-card.tone-success .stat-card-top i { background: var(--el-color-success); }
 .approval-stat-card.tone-danger::before, .approval-stat-card.tone-danger .stat-card-top i { background: var(--el-color-danger); }
@@ -189,7 +202,12 @@ load();
 .approval-section-head { display: flex; align-items: center; justify-content: space-between; min-height: 52px; border-bottom: 1px solid #ebeef5; }
 .approval-section-head strong { color: #303133; font-size: 15px; }
 .approval-section-head span { color: #909399; font-size: 12px; }
-.approval-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 4px 0 12px; }
+.approval-toolbar { align-items: center; display: flex; flex-wrap: nowrap; gap: 12px; margin: 4px 0 12px; overflow-x: auto; }
+.approval-toolbar :deep(.el-form-item) { flex: 0 0 auto; margin-bottom: 18px; margin-right: 0; }
+.approval-toolbar :deep(.el-form-item__content) { display: flex; }
+.approval-status-select { width: 140px; }
+.approval-filter-actions { align-items: center; display: flex; flex: 0 0 auto; gap: 8px; }
+.approval-filter-actions :deep(.el-form-item__content) { display: flex; gap: 8px; }
 .pager { display: flex; justify-content: flex-end; margin-top: 14px; }
 .lead-approval-table { width: 100%; }
 .detail-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; padding: 16px; border: 1px solid #dcdfe6; border-left: 3px solid var(--el-color-primary); border-radius: 5px; background: var(--el-color-primary-light-9); }
@@ -203,7 +221,10 @@ load();
 .drawer-footer > div { display: flex; gap: 8px; }
 @media (max-width: 680px) {
   .approval-stat-grid { grid-template-columns: 1fr; }
-  .approval-toolbar, .drawer-footer { align-items: stretch; flex-direction: column; }
+  .approval-toolbar { align-items: stretch; flex-wrap: wrap; }
+  .approval-toolbar :deep(.el-form-item) { width: 100%; }
   .approval-toolbar :deep(.el-input) { width: 100% !important; }
+  .approval-toolbar .approval-filter-actions { width: 100%; }
+  .drawer-footer { align-items: stretch; flex-direction: column; }
 }
 </style>

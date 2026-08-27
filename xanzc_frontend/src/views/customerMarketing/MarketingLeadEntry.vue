@@ -29,7 +29,14 @@
         </div>
         <el-card shadow="never" class="filter-card">
           <div class="toolbar">
-            <el-form inline @submit.prevent><el-form-item label="关键词"><el-input v-model="leadQuery.keyword" clearable placeholder="企业名称 / 统一社会信用代码" /></el-form-item><el-form-item label="状态"><el-select v-model="leadQuery.status" clearable style="width:140px" @change="filterByDropdown"><el-option v-for="item in leadStatuses" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item><el-button type="primary" @click="searchLeads">查询</el-button><el-button @click="resetLeadFilters">重置</el-button></el-form>
+            <el-form inline class="filter-form" @submit.prevent>
+              <el-form-item label="关键词"><el-input v-model="leadQuery.keyword" clearable placeholder="企业名称 / 统一社会信用代码" /></el-form-item>
+              <el-form-item label="状态"><el-select v-model="leadQuery.status" clearable style="width:140px" @change="filterByDropdown"><el-option v-for="item in leadStatuses" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+              <el-form-item class="filter-actions">
+                <el-button type="primary" @click="searchLeads">查询</el-button>
+                <el-button @click="resetLeadFilters">重置</el-button>
+              </el-form-item>
+            </el-form>
           </div>
         </el-card>
         <el-table :data="leads" v-loading="leadLoading" border stripe class="lead-entry-table">
@@ -407,6 +414,10 @@ refreshManualView();
 .filter-card { margin-bottom: 14px; }
 .filter-card :deep(.el-card__body) { padding-bottom: 2px; }
 .toolbar { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; }
+.filter-form { align-items: center; display: flex; flex-wrap: nowrap; gap: 12px; overflow-x: auto; }
+.filter-form :deep(.el-form-item) { flex: 0 0 auto; margin-bottom: 18px; margin-right: 0; }
+.filter-actions { align-items: center; display: flex; flex: 0 0 auto; gap: 8px; }
+.filter-actions :deep(.el-form-item__content) { display: flex; gap: 8px; }
 .pager { display: flex; justify-content: flex-end; margin-top: 14px; }
 .lead-entry-table { width: 100%; }
 .matched-customer-alert { margin-top: 12px; }

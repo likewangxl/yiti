@@ -147,6 +147,13 @@ describe('营销线索录入页面契约', () => {
     expect(source).toMatch(/function resetLeadFilters\(\)\{[\s\S]*leadQuery\.keyword=''[\s\S]*leadQuery\.status=''[\s\S]*leadQuery\.pageNo=1[\s\S]*loadLeads\(\)/);
   });
 
+  it('线索录入筛选条件、查询和重置固定在同一行，并将按钮放入操作项', () => {
+    expect(source).toContain('<el-form inline class="filter-form" @submit.prevent>');
+    expect(source).toContain('<el-form-item class="filter-actions">');
+    expect(source).toMatch(/\.filter-form\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*nowrap/);
+    expect(source).toMatch(/\.filter-actions\s*\{[^}]*flex:\s*0\s+0\s+auto/);
+  });
+
   it('已退回线索可复用编辑抽屉修改并重新提交审批', () => {
     expect(source).toMatch(/v-if="row\.leadStatus === 'REJECTED'"[^>]*@click="editLead\(row\)"[^>]*>重新编辑</);
     expect(source).toMatch(/const editingLeadStatus = ref\(''\)/);

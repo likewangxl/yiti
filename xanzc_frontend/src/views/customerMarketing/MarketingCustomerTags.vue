@@ -23,7 +23,15 @@
       </button>
     </div>
     <el-card shadow="never" class="filter-card">
-      <el-form inline @submit.prevent><el-form-item label="标签名称"><el-input v-model="query.keyword" clearable /></el-form-item><el-form-item label="标签类型"><el-select v-model="query.tagType" clearable style="width:160px"><el-option v-for="item in tagTypeOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item><el-form-item label="状态"><el-select v-model="statusFilter" clearable style="width:140px" @change="filterByStatus"><el-option label="有效" value="ACTIVE"/><el-option label="禁用" value="DISABLED"/><el-option label="待审核" value="PENDING"/><el-option label="已退回" value="REJECTED"/></el-select></el-form-item><el-button type="primary" @click="search">查询</el-button><el-button @click="resetFilters">重置</el-button></el-form>
+      <el-form inline class="filter-form" @submit.prevent>
+        <el-form-item label="标签名称"><el-input v-model="query.keyword" clearable /></el-form-item>
+        <el-form-item label="标签类型"><el-select v-model="query.tagType" clearable style="width:160px"><el-option v-for="item in tagTypeOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item label="状态"><el-select v-model="statusFilter" clearable style="width:140px" @change="filterByStatus"><el-option label="有效" value="ACTIVE"/><el-option label="禁用" value="DISABLED"/><el-option label="待审核" value="PENDING"/><el-option label="已退回" value="REJECTED"/></el-select></el-form-item>
+        <el-form-item class="filter-actions">
+          <el-button type="primary" @click="search">查询</el-button>
+          <el-button @click="resetFilters">重置</el-button>
+        </el-form-item>
+      </el-form>
     </el-card>
     <el-table :data="tags" v-loading="loading" border stripe class="customer-tags-table">
       <el-table-column prop="tagName" label="标签名称" min-width="170" />
@@ -106,6 +114,10 @@ refresh();
 .tag-stat-card.tone-danger::before, .tag-stat-card.tone-danger .stat-card-top i { background: var(--el-color-danger); }
 .filter-card { margin-bottom: 14px; }
 .filter-card :deep(.el-card__body) { padding-bottom: 2px; }
+.filter-form { align-items: center; display: flex; flex-wrap: nowrap; gap: 12px; overflow-x: auto; }
+.filter-form :deep(.el-form-item) { flex: 0 0 auto; margin-bottom: 18px; margin-right: 0; }
+.filter-actions { align-items: center; display: flex; flex: 0 0 auto; gap: 8px; }
+.filter-actions :deep(.el-form-item__content) { display: flex; gap: 8px; }
 .pager { display: flex; justify-content: flex-end; margin-top: 14px; }
 .customer-tags-table { width: 100%; }
 .drawer-table { margin-top: 14px; }

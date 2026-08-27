@@ -119,6 +119,8 @@ export const downloadLeadImportErrorFile = id =>
   call('get', `/marketing/lead-import-batches/${idPart(id)}/error-file`, { responseType: 'blob' }, null);
 
 // 页面四：线索审批
+export const listLeadApprovalOverview = (params = {}) =>
+  call('get', '/marketing/lead-approvals/overview', { params }, null);
 export const listLeadApprovalPending = (params = {}) =>
   call('get', '/marketing/lead-approvals/pending', { params }, null);
 export const listLeadApprovalHistory = (params = {}) =>
