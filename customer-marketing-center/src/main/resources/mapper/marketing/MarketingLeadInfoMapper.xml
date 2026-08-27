@@ -16,11 +16,11 @@
         created_by, created_time, updated_by, updated_time, lock_version
     </sql>
 
-    <select id="selectManualPage" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
+    <select id="selectEntryPage" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
         SELECT <include refid="BASE_COLUMNS"/>
         FROM MARKETING_LEAD_INFO
         WHERE record_status = 'ACTIVE'
-          AND lead_source = 'MANUAL'
+          AND lead_source IN ('MANUAL', 'LEAD_IMPORT')
           AND entry_emp_id = #{entryEmpId}
         <if test="keyword != null and keyword != ''">
             AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
@@ -34,11 +34,11 @@
         LIMIT #{offset}, #{limit}
     </select>
 
-    <select id="countManualPage" resultType="long">
+    <select id="countEntryPage" resultType="long">
         SELECT COUNT(*)
         FROM MARKETING_LEAD_INFO
         WHERE record_status = 'ACTIVE'
-          AND lead_source = 'MANUAL'
+          AND lead_source IN ('MANUAL', 'LEAD_IMPORT')
           AND entry_emp_id = #{entryEmpId}
         <if test="keyword != null and keyword != ''">
             AND (cust_name LIKE CONCAT('%', #{keyword}, '%')

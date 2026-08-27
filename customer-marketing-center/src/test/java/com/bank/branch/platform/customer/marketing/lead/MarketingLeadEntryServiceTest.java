@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadCreateRequest;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadDetailResponse;
+import com.bank.branch.platform.customer.dto.marketing.lead.LeadQuery;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadUpdateRequest;
 import com.bank.branch.platform.customer.dto.marketing.lead.MarketingCustomerSnapshot;
 import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTag;
@@ -26,11 +27,15 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.nio.charset.StandardCharsets;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -62,6 +67,46 @@ class MarketingLeadEntryServiceTest {
 
     @InjectMocks
     private MarketingLeadEntryService service;
+
+    @Test
+    void listUsesEntryRecordQueriesForManualAndImportedLeads() {
+        LeadQuery query = new LeadQuery();
+        query.setKeyword("测试");
+        query.setStatus("IN_APPROVAL");
+
+        MarketingLeadInfo manual = new MarketingLeadInfo();
+        manual.setLeadSource("MANUAL");
+        MarketingLeadInfo imported = new MarketingLeadInfo();
+        imported.setLeadSource("LEAD_IMPORT");
+        when(leadMapper.selectEntryPage("测试", "IN_APPROVAL", "EMP_1", 0, 20))
+                .thenReturn(List.of(manual, imported));
+        when(leadMapper.countEntryPage("测试", "IN_APPROVAL", "EMP_1")).thenReturn(2L);
+
+        var result = service.list(query, "EMP_1");
+
+        assertEquals(2L, result.getTotal());
+        assertEquals(List.of(manual, imported), result.getRecords());
+        verify(leadMapper).selectEntryPage("测试", "IN_APPROVAL", "EMP_1", 0, 20);
+        verify(leadMapper).countEntryPage("测试", "IN_APPROVAL", "EMP_1");
+    }
+
+    @Test
+    void entryRecordSqlKeepsEmployeeIsolationAndOnlyTwoEntrySources() throws IOException {
+        String xml;
+        try (InputStream stream = getClass().getResourceAsStream(
+                "/mapper/marketing/MarketingLeadInfoMapper.xml")) {
+            assertTrue(stream != null);
+            xml = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        int selectStart = xml.indexOf("<select id=\"selectEntryPage\"");
+        int selectEnd = xml.indexOf("</select>", selectStart);
+        assertTrue(selectStart >= 0 && selectEnd > selectStart);
+        String selectSql = xml.substring(selectStart, selectEnd);
+        assertTrue(selectSql.contains("lead_source IN ('MANUAL', 'LEAD_IMPORT')"));
+        assertTrue(selectSql.contains("entry_emp_id = #{entryEmpId}"));
+        assertTrue(selectSql.contains("record_status = 'ACTIVE'"));
+    }
 
     @Test
     void createRejectsAnotherInFlightLeadWithOperatorVisibleConflict() {

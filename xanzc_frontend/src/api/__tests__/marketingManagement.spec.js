@@ -17,7 +17,7 @@ import {
   listLeadApprovalOverview,
   listLeadApprovalPending,
   listLeadImportBatches,
-  listManualLeads,
+  listLeadEntries,
   listMarketingCustomerTags,
   listEditableMarketingCustomerTags,
   listMarketingCustomers,
@@ -61,15 +61,23 @@ describe('六页面营销管理 API', () => {
     });
   });
 
-  it('手工线索逐条查询并固定 MANUAL 来源', async () => {
-    await listManualLeads({ pageNo: 2 });
+  it('线索录入记录逐条查询并由后端合并来源', async () => {
+    await listLeadEntries({ pageNo: 2 });
     await createMarketingLead({ custName: '示例企业' });
     expect(call).toHaveBeenNthCalledWith(1, 'get', '/marketing/leads', {
-      params: { pageNo: 2, leadSource: 'MANUAL' },
+      params: { pageNo: 2 },
     }, null);
     expect(call).toHaveBeenNthCalledWith(2, 'post', '/marketing/leads', {
       data: { custName: '示例企业' },
     });
+  });
+
+  it('线索录入记录查询不再固定单一来源，交由后端返回本人 MANUAL 与 LEAD_IMPORT', async () => {
+    await listLeadEntries({ pageNo: 2, status: 'IN_APPROVAL' });
+
+    expect(call).toHaveBeenCalledWith('get', '/marketing/leads', {
+      params: { pageNo: 2, status: 'IN_APPROVAL' },
+    }, null);
   });
 
   it('客户主档可按客户名称或统一社会信用代码精确反查', async () => {

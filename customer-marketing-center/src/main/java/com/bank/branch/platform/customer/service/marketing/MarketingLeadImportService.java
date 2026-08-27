@@ -58,8 +58,8 @@ import java.util.function.Supplier;
 /**
  * 页面三线索批量导入服务。
  *
- * <p>批次处理和线索审批是两条独立状态机：本服务只负责本地暂存文件、逐行校验、
- * 待确认和生成线索，不会把导入批次误当成一个整批审批单。</p>
+ * <p>批次处理和线索审批是两条独立状态机：本服务负责本地暂存文件、逐行校验、
+ * 待确认、生成线索并逐条发起审批，不会把导入批次误当成一个整批审批单。</p>
  */
 @Slf4j
 @Service
@@ -142,7 +142,7 @@ public class MarketingLeadImportService {
         return prepareBatch(file, operatorEmpId, operatorOrgId);
     }
 
-    /** 创建并处理批次：无 WARNING 的有效行立即生成线索；有 WARNING 则只停在待确认。 */
+    /** 创建并处理批次：无 WARNING 的有效行立即生成线索并逐条提交审批；有 WARNING 则只停在待确认。 */
     @Transactional
     public LeadImportPreviewResponse create(MultipartFile file, String operatorEmpId, String operatorOrgId) {
         LeadImportPreviewResponse response = prepareBatch(file, operatorEmpId, operatorOrgId);
@@ -474,6 +474,9 @@ public class MarketingLeadImportService {
                 }
             }
         }
+        if (generated > 0) {
+            batch.setApprovalSummaryStatus("IN_APPROVAL");
+        }
         batch.setGeneratedLeadCount((batch.getGeneratedLeadCount() == null ? 0 : batch.getGeneratedLeadCount()) + generated);
         batch.setUpdatedBy(operatorEmpId);
         batch.setUpdatedTime(LocalDateTime.now());
@@ -491,6 +494,7 @@ public class MarketingLeadImportService {
             }
             patchImportedLead(lead, batch, detail, operatorEmpId);
             leadMapper.updateById(lead);
+            leadEntryService.submit(lead.getId(), batch.getImportEmpId(), batch.getImportOrgId());
             detailMapper.updateHandlingIf(detail.getId(), "PENDING", "GENERATED", lead.getId());
             return lead;
         });

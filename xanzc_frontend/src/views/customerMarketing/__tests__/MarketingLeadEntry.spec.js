@@ -22,8 +22,8 @@ describe('营销线索录入页面契约', () => {
     expect(source).toContain(':page-sizes="[10, 20, 50, 100]"');
   });
 
-  it('第一 Tab 按每条 MANUAL 线索展示，不聚合且不向用户展示线索编号和版本', () => {
-    expect(source).toContain('listManualLeads');
+  it('第一 Tab 按每条录入线索展示，不聚合且不向用户展示线索编号和版本', () => {
+    expect(source).toContain('listLeadEntries');
     expect(source).toContain('leadSource');
     expect(source).toContain('线索录入记录');
     expect(source).not.toContain('prop="leadNo"');
@@ -31,6 +31,14 @@ describe('营销线索录入页面契约', () => {
     expect(source).not.toContain('线索编号 / 企业名称');
     expect(source).not.toContain('versionNo');
     expect(source).not.toContain('版本');
+  });
+
+  it('第一 Tab 查询 MANUAL 与 LEAD_IMPORT 线索并按返回值展示来源', () => {
+    expect(source).toContain('listLeadEntries');
+    expect(source).not.toContain('listManualLeads');
+    expect(source).toMatch(/leadSourceLabel\(row\.leadSource\)/);
+    expect(source).toContain("MANUAL:'手工录入'");
+    expect(source).toContain("LEAD_IMPORT:'批量导入'");
   });
 
   it('第二 Tab 展示批次、失败优先明细、OBS 下载和待确认动作', () => {
@@ -223,7 +231,7 @@ describe('营销线索录入页面契约', () => {
   it('四张状态卡使用 pageSize=1 的 total，并与下拉状态互斥同步', () => {
     expect(source).toContain('class="lead-stat-grid"');
     ['草稿', '审批中', '已通过', '已退回'].forEach(label => expect(source).toContain(label));
-    expect(source).toMatch(/listManualLeads\(\{status,pageNo:1,pageSize:1\}\)/);
+    expect(source).toMatch(/listLeadEntries\(\{status,pageNo:1,pageSize:1\}\)/);
     expect(source).toMatch(/leadQuery\.status===status\?'':status/);
     expect(source).toContain('@change="filterByDropdown"');
     expect(source).not.toContain("REJECTED:'已驳回'");

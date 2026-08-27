@@ -2,6 +2,7 @@ package com.bank.branch.platform.customer.marketing.lead;
 
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadCreateRequest;
+import com.bank.branch.platform.customer.dto.marketing.lead.LeadSubmitResponse;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadImportBatch;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadImportDetail;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo;
@@ -20,6 +21,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -56,6 +59,10 @@ class MarketingLeadImportServiceTest {
     private MarketingLeadImportLocalStorage localStorage;
     @Mock
     private FileApi fileApi;
+    @Mock
+    private PlatformTransactionManager transactionManager;
+    @Mock
+    private TransactionStatus transactionStatus;
 
     @InjectMocks
     private MarketingLeadImportService service;
@@ -65,6 +72,8 @@ class MarketingLeadImportServiceTest {
         org.mockito.Mockito.lenient().when(localStorage.saveSource(any()))
                 .thenReturn(new MarketingLeadImportLocalStorage.StoredFile(
                         "local:source/20260827/test.csv", "0123456789abcdef0123456789abcdef"));
+        org.mockito.Mockito.lenient().when(transactionManager.getTransaction(any()))
+                .thenReturn(transactionStatus);
     }
 
     @Test
@@ -124,6 +133,8 @@ class MarketingLeadImportServiceTest {
 
         MarketingLeadInfo generatedLead = new MarketingLeadInfo();
         generatedLead.setId(901L);
+        generatedLead.setLeadSource("MANUAL");
+        generatedLead.setLeadStatus("DRAFT");
         when(leadEntryService.createDraft(any(LeadCreateRequest.class), eq("EMP_1"), eq("ORG_1")))
                 .thenAnswer(invocation -> {
                     LeadCreateRequest request = invocation.getArgument(0);
@@ -147,6 +158,14 @@ class MarketingLeadImportServiceTest {
                     assertEquals(new BigDecimal("10000000"), request.getCreditExposureAmount());
                     return generatedLead;
                 });
+        LeadSubmitResponse submitResponse = new LeadSubmitResponse();
+        submitResponse.setLeadId(901L);
+        submitResponse.setLeadStatus("IN_APPROVAL");
+        when(leadEntryService.submit(901L, "EMP_1", "ORG_1")).thenAnswer(invocation -> {
+            assertEquals("LEAD_IMPORT", generatedLead.getLeadSource());
+            assertEquals(9L, generatedLead.getImportBatchId());
+            return submitResponse;
+        });
 
         // 逗号属于 CSV 分隔符，数值千分位通过引号传递。
         String csv = "线索类型,客户名称,统一社会信用代码,是否开户,客户号,所属行业,所属集团类型,所属集团名称,客户类型,是否基石客户,企业类型,客户标签,分配方式,指定客户经理范围,是否触达限制,客户说明,授信金额（万元）,授信敞口金额（万元）\n"
@@ -157,6 +176,7 @@ class MarketingLeadImportServiceTest {
         var response = service.create(file, "EMP_1", "ORG_1");
 
         assertEquals("COMPLETED", response.getBatch().getImportStatus());
+        assertEquals("IN_APPROVAL", response.getBatch().getApprovalSummaryStatus());
         assertEquals("{", insertedDetails.get(0).getRawRowJson().substring(0, 1));
         assertEquals(new BigDecimal("12345600.00"), insertedDetails.get(0).getCreditAmount());
         assertEquals(new BigDecimal("10000000"), insertedDetails.get(0).getCreditExposureAmount());
@@ -164,9 +184,51 @@ class MarketingLeadImportServiceTest {
         assertEquals(9L, generatedLead.getImportBatchId());
         assertEquals(2, generatedLead.getBatchRowNo());
         verify(leadMapper).updateById(generatedLead);
+        verify(leadEntryService).submit(901L, "EMP_1", "ORG_1");
         verify(detailMapper).updateHandlingIf(91L, "PENDING", "GENERATED", 901L);
         verify(localStorage).saveSource(file);
         verifyNoInteractions(fileApi);
+    }
+
+    @Test
+    void importedLeadSubmissionFailureIsRecordedAsRowError() {
+        stubBatchInsert(17L);
+        List<MarketingLeadImportDetail> insertedDetails = new ArrayList<>();
+        doAnswer(invocation -> {
+            MarketingLeadImportDetail detail = invocation.getArgument(0);
+            detail.setId(171L);
+            insertedDetails.add(detail);
+            return 1;
+        }).when(detailMapper).insert(any(MarketingLeadImportDetail.class));
+        when(detailMapper.selectByBatchAndValidationStatus(17L, "VALID"))
+                .thenAnswer(invocation -> insertedDetails.stream()
+                        .filter(detail -> "VALID".equals(detail.getValidationStatus())).toList());
+        when(customerMapper.selectOne(any())).thenReturn(null);
+        when(leadMapper.selectActiveByCreditCode(anyString())).thenReturn(null);
+
+        MarketingLeadInfo generatedLead = new MarketingLeadInfo();
+        generatedLead.setId(1701L);
+        when(leadEntryService.createDraft(any(LeadCreateRequest.class), eq("EMP_1"), eq("ORG_1")))
+                .thenReturn(generatedLead);
+        org.mockito.Mockito.doThrow(new BizException(
+                        "MARKETING_LEAD_WORKFLOW_START_FAILED", "线索审批流程启动失败"))
+                .when(leadEntryService).submit(1701L, "EMP_1", "ORG_1");
+
+        String csv = "客户名称,统一社会信用代码,是否触达限制\n"
+                + "导入失败企业,91320100ABC1234567,否\n";
+
+        var response = service.create(csvFile(csv), "EMP_1", "ORG_1");
+
+        assertEquals("ALL_FAILED", response.getBatch().getImportStatus());
+        assertEquals("NOT_SUBMITTED", response.getBatch().getApprovalSummaryStatus());
+        assertEquals(1, response.getBatch().getErrorCount());
+        assertEquals(0, response.getBatch().getGeneratedLeadCount());
+        assertEquals("ERROR", insertedDetails.get(0).getValidationStatus());
+        assertEquals("MARKETING_LEAD_WORKFLOW_START_FAILED", insertedDetails.get(0).getErrorCode());
+        assertEquals("SKIPPED", insertedDetails.get(0).getHandlingStatus());
+        verify(leadEntryService).submit(1701L, "EMP_1", "ORG_1");
+        verify(transactionManager).rollback(transactionStatus);
+        verify(detailMapper).updateById(insertedDetails.get(0));
     }
 
     @Test

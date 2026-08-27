@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 页面三手工线索记录与草稿接口。 */
+/** 页面三线索录入记录与手工草稿接口。 */
 @RestController
 @RequiredArgsConstructor
 @Validated
@@ -43,7 +43,7 @@ public class MarketingLeadController {
 
     @GetMapping
     @BizAuth(bizType = BizType.LEAD, action = BizAction.LIST)
-    @Operation(summary = "查询本人手工线索记录")
+    @Operation(summary = "查询本人手工录入和批量导入线索记录")
     public ResponseWrapper<MarketingLeadInfo> list(@RequestParam(required = false) String keyword,
                                                    @RequestParam(required = false) String status,
                                                    @RequestParam(defaultValue = "1") int pageNo,
@@ -68,7 +68,7 @@ public class MarketingLeadController {
 
     @GetMapping("/{leadId}")
     @BizAuth(bizType = BizType.LEAD, action = BizAction.READ)
-    @Operation(summary = "查询本人手工线索详情")
+    @Operation(summary = "查询本人线索录入详情")
     public ResponseWrapper<LeadDetailResponse> detail(@PathVariable Long leadId) {
         return ResponseWrapper.success(service.getDetail(leadId, currentUserApi.getCurrentEmpId()));
     }

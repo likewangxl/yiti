@@ -46,10 +46,10 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * 页面三手工线索服务。
+ * 页面三线索录入服务。
  *
- * <p>这里固定使用 MANUAL 来源，并把列表粒度保持为一条线索。所有状态改变都在
- * 本服务重读并加锁后完成，避免依赖前端的状态和客户主档快照。</p>
+ * <p>创建草稿固定使用 MANUAL 来源；列表同时展示 MANUAL 和 LEAD_IMPORT，并把
+ * 粒度保持为一条线索。所有状态改变都在本服务重读并加锁后完成，避免依赖前端的状态和客户主档快照。</p>
  */
 @Slf4j
 @Service
@@ -72,15 +72,15 @@ public class MarketingLeadEntryService {
     private final UserApi userApi;
     private final FileApi fileApi;
 
-    /** 查询登录人自己的手工线索记录，不按客户聚合。 */
+    /** 查询登录人自己的线索录入记录，包含手工录入和批量导入且不按客户聚合。 */
     public PageResult<MarketingLeadInfo> list(LeadQuery query, String operatorEmpId) {
         LeadQuery safeQuery = query == null ? new LeadQuery() : query;
         int pageNo = safePageNo(safeQuery.getPageNo());
         int pageSize = safePageSize(safeQuery.getPageSize());
         int offset = (pageNo - 1) * pageSize;
-        List<MarketingLeadInfo> records = leadMapper.selectManualPage(
+        List<MarketingLeadInfo> records = leadMapper.selectEntryPage(
                 safeQuery.getKeyword(), safeQuery.getStatus(), operatorEmpId, offset, pageSize);
-        long total = leadMapper.countManualPage(
+        long total = leadMapper.countEntryPage(
                 safeQuery.getKeyword(), safeQuery.getStatus(), operatorEmpId);
         return PageResult.of(pageNo, pageSize, total, records == null ? List.of() : records);
     }

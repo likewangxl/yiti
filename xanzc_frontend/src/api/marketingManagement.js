@@ -17,9 +17,9 @@ export const transferCustomerOwner = (id, data) =>
 export const restoreCustomerOwnershipAuto = (id, data) =>
   call('post', `/marketing/customers/${idPart(id)}/ownership/restore-auto`, { data });
 
-// 页面三 Tab一：每条手工线索一行，不聚合
-export const listManualLeads = (params = {}) =>
-  call('get', '/marketing/leads', { params: { ...params, leadSource: 'MANUAL' } }, null);
+// 页面三 Tab一：每条录入线索一行，包含手工录入和批量导入，不聚合
+export const listLeadEntries = (params = {}) =>
+  call('get', '/marketing/leads', { params }, null);
 export const getMarketingLead = async id =>
   toMarketingLeadView(await call('get', `/marketing/leads/${idPart(id)}`, {}, null));
 export const lookupMarketingCustomer = async (params = {}) =>

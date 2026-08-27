@@ -12,15 +12,15 @@ import java.util.List;
 @Mapper
 public interface MarketingLeadInfoMapper extends BaseMapper<MarketingLeadInfo> {
 
-    List<MarketingLeadInfo> selectManualPage(@Param("keyword") String keyword,
-                                             @Param("status") String status,
-                                             @Param("entryEmpId") String entryEmpId,
-                                             @Param("offset") int offset,
-                                             @Param("limit") int limit);
+    List<MarketingLeadInfo> selectEntryPage(@Param("keyword") String keyword,
+                                            @Param("status") String status,
+                                            @Param("entryEmpId") String entryEmpId,
+                                            @Param("offset") int offset,
+                                            @Param("limit") int limit);
 
-    long countManualPage(@Param("keyword") String keyword,
-                         @Param("status") String status,
-                         @Param("entryEmpId") String entryEmpId);
+    long countEntryPage(@Param("keyword") String keyword,
+                        @Param("status") String status,
+                        @Param("entryEmpId") String entryEmpId);
 
     MarketingLeadInfo selectActiveByCreditCode(@Param("creditCode") String creditCode);
 

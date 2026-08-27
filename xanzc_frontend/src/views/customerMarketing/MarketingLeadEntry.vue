@@ -42,7 +42,7 @@
         <el-table :data="leads" v-loading="leadLoading" border stripe class="lead-entry-table">
           <el-table-column prop="custName" label="企业名称" min-width="180" />
           <el-table-column prop="unifiedCreditCode" label="统一社会信用代码" min-width="190" />
-          <el-table-column prop="leadSource" label="线索来源" width="110"><template #default>手工录入</template></el-table-column>
+          <el-table-column prop="leadSource" label="线索来源" width="110"><template #default="{row}">{{ leadSourceLabel(row.leadSource) }}</template></el-table-column>
           <el-table-column prop="entryEmpId" label="录入人" width="110" />
           <el-table-column prop="entryTime" label="录入时间" min-width="165"><template #default="{row}">{{ formatTime(row.entryTime) }}</template></el-table-column>
           <el-table-column prop="leadStatus" label="状态" width="110"><template #default="{row}"><el-tag>{{ statusLabel(row.leadStatus) }}</el-tag></template></el-table-column>
@@ -199,7 +199,7 @@ import { useDict } from '@/composables/useDict';
 import {
   confirmLeadImportBatch, createLeadImportBatch, createMarketingLead,
   downloadLeadImportErrorFile, downloadLeadImportSourceFile, getMarketingLead,
-  listLeadImportBatches, listManualLeads, listMarketingCustomerTags,
+  listLeadEntries, listLeadImportBatches, listMarketingCustomerTags,
   lookupMarketingCustomer, submitMarketingLead, updateMarketingLead,
   uploadMarketingLeadAttachment
 } from '@/api/marketingManagement';
@@ -207,7 +207,7 @@ import {
 const activeTab = ref('manual');
 const PROCESS_VALID = 'PROCESS_VALID';
 const ABANDON_REIMPORT = 'ABANDON_REIMPORT';
-const leadQuery = reactive({ keyword: '', status: '', leadSource: 'MANUAL', pageNo: 1, pageSize: 20 });
+const leadQuery = reactive({ keyword: '', status: '', pageNo: 1, pageSize: 20 });
 const batchQuery = reactive({ keyword: '', status: '', pageNo: 1, pageSize: 20 });
 const leads = ref([]); const leadTotal = ref(0); const leadLoading = ref(false);
 const leadStats = reactive({DRAFT:0,IN_APPROVAL:0,APPROVED:0,REJECTED:0});
@@ -263,15 +263,16 @@ const distributionHint = computed(() => ({
 const pageRows = result => result?.records || result?.list || [];
 const formatTime = value => value ? String(value).replace('T',' ').slice(0,19) : '-';
 const statusLabel = value => ({DRAFT:'草稿',SUBMITTED:'已提交',IN_APPROVAL:'审批中',APPROVED:'已通过',REJECTED:'已退回',CANCELLED:'已取消'}[value] || value || '-');
+const leadSourceLabel = value => ({MANUAL:'手工录入',LEAD_IMPORT:'批量导入'}[value] || value || '-');
 const batchLabel = value => ({WAITING_CONFIRM:'待确认',COMPLETED:'成功',ALL_FAILED:'失败',ABANDONED:'已放弃',IMPORTING:'处理中'}[value] || value || '-');
 const batchType = value => ({COMPLETED:'success',WAITING_CONFIRM:'warning',ALL_FAILED:'danger',ABANDONED:'info'}[value] || 'info');
 const failureCount = row => Number(row.rejectedCount || 0) + Number(row.errorCount || 0) + Number(row.warningCount || 0);
 
-async function loadLeads(){ leadLoading.value=true; try { const result=await listManualLeads(leadQuery); leads.value=pageRows(result); leadTotal.value=Number(result?.total||0); } catch (error) { ElMessage.error(`线索录入记录加载失败：${error?.message||'请稍后重试'}`); } finally { leadLoading.value=false; } }
+async function loadLeads(){ leadLoading.value=true; try { const result=await listLeadEntries(leadQuery); leads.value=pageRows(result); leadTotal.value=Number(result?.total||0); } catch (error) { ElMessage.error(`线索录入记录加载失败：${error?.message||'请稍后重试'}`); } finally { leadLoading.value=false; } }
 async function loadLeadStats(){
   try{
     const statuses=Object.keys(leadStats);
-    const results=await Promise.all(statuses.map(status=>listManualLeads({status,pageNo:1,pageSize:1})));
+    const results=await Promise.all(statuses.map(status=>listLeadEntries({status,pageNo:1,pageSize:1})));
     statuses.forEach((status,index)=>{leadStats[status]=Number(results[index]?.total||0);});
   }catch(error){ElMessage.error(`线索状态统计加载失败：${error?.message||'请稍后重试'}`);}
 }
