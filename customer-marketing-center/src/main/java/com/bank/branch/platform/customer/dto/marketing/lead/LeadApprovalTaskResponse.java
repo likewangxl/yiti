@@ -21,6 +21,9 @@ public class LeadApprovalTaskResponse {
     private String leadStatus;
     private String submittedBy;
     private LocalDateTime submittedTime;
+    private String reviewedBy;
+    private LocalDateTime reviewedTime;
+    private String rejectReason;
     private String importBatchNo;
     private MarketingCustomerSnapshot currentCustomer;
 }

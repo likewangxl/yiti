@@ -22,7 +22,10 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -38,7 +41,9 @@ import java.util.Set;
 public class MarketingLeadApprovalService {
 
     private static final Set<String> PAGE_SOURCES = Set.of("MANUAL", "LEAD_IMPORT");
+    private static final Set<String> REVIEW_RESULTS = Set.of("APPROVED", "REJECTED");
     private static final String IN_APPROVAL = "IN_APPROVAL";
+    private static final int WORKFLOW_SCAN_PAGE_SIZE = 100;
 
     private final WorkflowQueryApi workflowQueryApi;
     private final WorkflowApi workflowApi;
@@ -48,17 +53,22 @@ public class MarketingLeadApprovalService {
     /** 查询当前登录人的待审批线索，过滤标签导入线索。 */
     public PageResult<LeadApprovalTaskResponse> pending(String keyword, int pageNo,
                                                         int pageSize, String operatorEmpId) {
-        PageResult<TaskRespDTO> tasks = workflowQueryApi.queryTodoList(
-                operatorEmpId, "LEAD", keyword, safePageNo(pageNo), safePageSize(pageSize));
-        return toPage(tasks);
+        List<LeadApprovalTaskResponse> records = scanWorkflowTasks(operatorEmpId, false).stream()
+                .filter(item -> IN_APPROVAL.equals(item.getLeadStatus()))
+                .filter(item -> matchesKeyword(item, keyword))
+                .toList();
+        return paginate(records, pageNo, pageSize);
     }
 
-    /** 查询当前登录人实际办理过的审批记录，过滤标签导入线索。 */
-    public PageResult<LeadApprovalTaskResponse> history(String keyword, int pageNo,
+    /** 查询当前登录人实际办理过的审批记录，并按通过/退回结果互斥过滤。 */
+    public PageResult<LeadApprovalTaskResponse> history(String keyword, String result, int pageNo,
                                                         int pageSize, String operatorEmpId) {
-        PageResult<TaskRespDTO> tasks = workflowQueryApi.queryDoneList(
-                operatorEmpId, "LEAD", keyword, safePageNo(pageNo), safePageSize(pageSize));
-        return toPage(tasks);
+        String normalizedResult = normalizeReviewResult(result);
+        List<LeadApprovalTaskResponse> records = scanWorkflowTasks(operatorEmpId, true).stream()
+                .filter(item -> normalizedResult.equals(item.getLeadStatus()))
+                .filter(item -> matchesKeyword(item, keyword))
+                .toList();
+        return paginate(records, pageNo, pageSize);
     }
 
     /** 查询审批详情；同时返回当前客户主档以支持差异视图。 */
@@ -216,12 +226,37 @@ public class MarketingLeadApprovalService {
                 .last("LIMIT 1"));
     }
 
-    private PageResult<LeadApprovalTaskResponse> toPage(PageResult<TaskRespDTO> tasks) {
-        if (tasks == null || tasks.getRecords() == null) {
-            return PageResult.of(1, 20, 0, List.of());
-        }
+    /**
+     * 工作流公开查询先按 Flowable 原始任务分页，再做业务类型过滤。页面还需排除
+     * TAG_IMPORT，因此必须遍历当前审批人的完整任务集合后再进行业务分页，否则卡片
+     * 数量和翻页会受“当前工作流页”影响。
+     */
+    private List<LeadApprovalTaskResponse> scanWorkflowTasks(String operatorEmpId, boolean done) {
+        Map<String, TaskRespDTO> distinctTasks = new LinkedHashMap<>();
+        int workflowPageNo = 1;
+        long workflowTotal;
+        do {
+            PageResult<TaskRespDTO> page = done
+                    ? workflowQueryApi.queryDoneList(operatorEmpId, "LEAD", null,
+                            workflowPageNo, WORKFLOW_SCAN_PAGE_SIZE)
+                    : workflowQueryApi.queryTodoList(operatorEmpId, "LEAD", null,
+                            workflowPageNo, WORKFLOW_SCAN_PAGE_SIZE);
+            if (page == null) break;
+            workflowTotal = page.getTotal();
+            if (page.getRecords() != null) {
+                for (TaskRespDTO task : page.getRecords()) {
+                    if (task == null) continue;
+                    String key = StringUtils.hasText(task.getTaskId())
+                            ? task.getTaskId()
+                            : task.getProcessInstanceId() + ':' + task.getBizId();
+                    distinctTasks.putIfAbsent(key, task);
+                }
+            }
+            workflowPageNo++;
+        } while ((long) (workflowPageNo - 1) * WORKFLOW_SCAN_PAGE_SIZE < workflowTotal);
+
         List<LeadApprovalTaskResponse> records = new ArrayList<>();
-        for (TaskRespDTO task : tasks.getRecords()) {
+        for (TaskRespDTO task : distinctTasks.values()) {
             if (task == null || !"LEAD".equalsIgnoreCase(task.getBizType())
                     || !StringUtils.hasText(task.getBizId())) continue;
             Long leadId;
@@ -232,25 +267,63 @@ public class MarketingLeadApprovalService {
             }
             MarketingLeadInfo lead = leadMapper.selectActiveById(leadId);
             if (lead == null || !PAGE_SOURCES.contains(lead.getLeadSource())) continue;
-            LeadApprovalTaskResponse response = new LeadApprovalTaskResponse();
-            response.setTask(task);
-            response.setLeadId(lead.getId());
-            response.setLeadNo(lead.getLeadNo());
-            response.setCustName(lead.getCustName());
-            response.setUnifiedCreditCode(lead.getUnifiedCreditCode());
-            response.setLeadType(lead.getLeadType());
-            response.setLeadSource(lead.getLeadSource());
-            response.setIndustry(lead.getIndustry());
-            response.setDistributionMode(lead.getDistributionMode());
-            response.setCustomerMatchStatus(lead.getCustomerMatchStatus());
-            response.setLeadStatus(lead.getLeadStatus());
-            response.setSubmittedBy(lead.getSubmittedBy());
-            response.setSubmittedTime(lead.getSubmittedTime());
-            MarketingCustomerInfo customer = findCustomer(lead);
-            if (customer != null) response.setCurrentCustomer(toSnapshot(customer));
-            records.add(response);
+            records.add(toResponse(task, lead));
         }
-        return PageResult.of(tasks.getPageNo(), tasks.getPageSize(), records.size(), records);
+        return records;
+    }
+
+    private LeadApprovalTaskResponse toResponse(TaskRespDTO task, MarketingLeadInfo lead) {
+        LeadApprovalTaskResponse response = new LeadApprovalTaskResponse();
+        response.setTask(task);
+        response.setLeadId(lead.getId());
+        response.setLeadNo(lead.getLeadNo());
+        response.setCustName(lead.getCustName());
+        response.setUnifiedCreditCode(lead.getUnifiedCreditCode());
+        response.setLeadType(lead.getLeadType());
+        response.setLeadSource(lead.getLeadSource());
+        response.setIndustry(lead.getIndustry());
+        response.setDistributionMode(lead.getDistributionMode());
+        response.setCustomerMatchStatus(lead.getCustomerMatchStatus());
+        response.setLeadStatus(lead.getLeadStatus());
+        response.setSubmittedBy(lead.getSubmittedBy());
+        response.setSubmittedTime(lead.getSubmittedTime());
+        response.setReviewedBy(lead.getReviewedBy());
+        response.setReviewedTime(lead.getReviewedTime());
+        response.setRejectReason(lead.getRejectReason());
+        MarketingCustomerInfo customer = findCustomer(lead);
+        if (customer != null) response.setCurrentCustomer(toSnapshot(customer));
+        return response;
+    }
+
+    private PageResult<LeadApprovalTaskResponse> paginate(List<LeadApprovalTaskResponse> all,
+                                                           int pageNo, int pageSize) {
+        int safePageNo = safePageNo(pageNo);
+        int safePageSize = safePageSize(pageSize);
+        long offset = (long) (safePageNo - 1) * safePageSize;
+        int fromIndex = (int) Math.min(offset, all.size());
+        int toIndex = Math.min(fromIndex + safePageSize, all.size());
+        return PageResult.of(safePageNo, safePageSize, all.size(), all.subList(fromIndex, toIndex));
+    }
+
+    private boolean matchesKeyword(LeadApprovalTaskResponse item, String keyword) {
+        if (!StringUtils.hasText(keyword)) return true;
+        String expected = keyword.trim().toLowerCase(Locale.ROOT);
+        return containsIgnoreCase(item.getCustName(), expected)
+                || containsIgnoreCase(item.getUnifiedCreditCode(), expected)
+                || containsIgnoreCase(item.getLeadNo(), expected)
+                || containsIgnoreCase(item.getSubmittedBy(), expected);
+    }
+
+    private boolean containsIgnoreCase(String value, String expectedLowerCase) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(expectedLowerCase);
+    }
+
+    private String normalizeReviewResult(String result) {
+        String normalized = StringUtils.hasText(result) ? result.trim().toUpperCase(Locale.ROOT) : null;
+        if (normalized == null || !REVIEW_RESULTS.contains(normalized)) {
+            throw error("MARKETING_LEAD_APPROVAL_RESULT_INVALID", "审批结果仅支持APPROVED或REJECTED");
+        }
+        return normalized;
     }
 
     private MarketingCustomerSnapshot toSnapshot(MarketingCustomerInfo customer) {

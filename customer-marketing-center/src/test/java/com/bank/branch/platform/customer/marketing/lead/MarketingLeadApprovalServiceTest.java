@@ -39,10 +39,11 @@ class MarketingLeadApprovalServiceTest {
     void pendingFiltersOutTagImportTasks() {
         TaskRespDTO manual = task(11L);
         TaskRespDTO tag = task(12L);
-        when(workflowQueryApi.queryTodoList("EMP_1", "LEAD", "企业", 1, 20))
-                .thenReturn(com.bank.branch.platform.common.web.PageResult.of(1, 20, 2,
+        when(workflowQueryApi.queryTodoList("EMP_1", "LEAD", null, 1, 100))
+                .thenReturn(com.bank.branch.platform.common.web.PageResult.of(1, 100, 2,
                         List.of(manual, tag)));
         MarketingLeadInfo manualLead = lead(11L, "MANUAL");
+        manualLead.setCustName("示例企业");
         MarketingLeadInfo tagLead = lead(12L, "TAG_IMPORT");
         when(leadMapper.selectActiveById(11L)).thenReturn(manualLead);
         when(leadMapper.selectActiveById(12L)).thenReturn(tagLead);
@@ -54,6 +55,27 @@ class MarketingLeadApprovalServiceTest {
         assertEquals("NEW_ACCOUNT", result.getRecords().get(0).getLeadType());
         assertEquals("MANUFACTURING", result.getRecords().get(0).getIndustry());
         assertEquals("PUBLIC", result.getRecords().get(0).getDistributionMode());
+    }
+
+    @Test
+    void historySeparatesApprovedAndRejectedWithExactTotal() {
+        TaskRespDTO approvedTask = task(31L);
+        TaskRespDTO rejectedTask = task(32L);
+        when(workflowQueryApi.queryDoneList("EMP_1", "LEAD", null, 1, 100))
+                .thenReturn(com.bank.branch.platform.common.web.PageResult.of(1, 100, 2,
+                        List.of(approvedTask, rejectedTask)));
+        MarketingLeadInfo approved = lead(31L, "MANUAL");
+        approved.setLeadStatus("APPROVED");
+        MarketingLeadInfo rejected = lead(32L, "LEAD_IMPORT");
+        rejected.setLeadStatus("REJECTED");
+        when(leadMapper.selectActiveById(31L)).thenReturn(approved);
+        when(leadMapper.selectActiveById(32L)).thenReturn(rejected);
+
+        var result = service.history(null, "APPROVED", 1, 1, "EMP_1");
+
+        assertEquals(1, result.getTotal());
+        assertEquals(1, result.getRecords().size());
+        assertEquals(31L, result.getRecords().get(0).getLeadId());
     }
 
     @Test

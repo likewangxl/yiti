@@ -50,9 +50,10 @@ public class MarketingLeadApprovalController {
     @Operation(summary = "查询本人审批记录")
     public ResponseWrapper<LeadApprovalTaskResponse> history(
             @RequestParam(required = false) String keyword,
+            @RequestParam String result,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
-        return ResponseWrapper.page(service.history(keyword, pageNo, pageSize,
+        return ResponseWrapper.page(service.history(keyword, result, pageNo, pageSize,
                 currentUserApi.getCurrentEmpId()));
     }
 

@@ -8,7 +8,7 @@
     </header>
 
     <div class="approval-stat-grid" aria-label="审批工作台分类">
-      <button v-for="item in summaryCards" :key="item.tab" type="button" class="approval-stat-card" :class="[`tone-${item.tone}`, { 'is-selected': tab === item.tab }]" :aria-pressed="tab === item.tab" @click="switchTab(item.tab)">
+      <button v-for="item in summaryCards" :key="item.status" type="button" class="approval-stat-card" :class="[`tone-${item.tone}`, { 'is-selected': activeStatus === item.status }]" :aria-pressed="activeStatus === item.status" @click="switchStatus(item.status)">
         <span class="stat-card-top"><span>{{ item.label }}</span><i /></span>
         <strong>{{ item.value }}</strong>
         <small>{{ item.hint }}</small>
@@ -16,10 +16,10 @@
     </div>
 
     <section class="approval-card-section">
-      <el-tabs v-model="tab" @tab-change="changeTab">
-        <el-tab-pane :label="`待审批（${pendingTotal}）`" name="pending" />
-        <el-tab-pane :label="`审批记录（${historyTotal}）`" name="history" />
-      </el-tabs>
+      <div class="approval-section-head">
+        <strong>{{ activeCard.label }}</strong>
+        <span>共 {{ total }} 条</span>
+      </div>
       <div class="approval-toolbar">
         <el-input v-model="query.keyword" clearable placeholder="客户名称 / 统一社会信用代码 / 线索编号 / 提交人" style="width: 420px" @keyup.enter="search" />
         <el-button type="primary" @click="search">查询</el-button>
@@ -37,8 +37,8 @@
         <el-table-column label="提交时间" min-width="165"><template #default="{row}">{{ formatTime(row.submittedTime || row.task?.startTime) }}</template></el-table-column>
         <el-table-column label="操作" width="210" fixed="right" class-name="operation-cell">
           <template #default="{row}">
-            <el-button v-if="tab === 'pending'" link type="success" @click="decide(row, true)">通过</el-button>
-            <el-button v-if="tab === 'pending'" link type="danger" @click="decide(row, false)">退回</el-button>
+            <el-button v-if="activeStatus === 'IN_APPROVAL'" link type="success" @click="decide(row, true)">通过</el-button>
+            <el-button v-if="activeStatus === 'IN_APPROVAL'" link type="danger" @click="decide(row, false)">退回</el-button>
             <el-button link type="primary" @click="openDetail(row)">查看详情</el-button>
           </template>
         </el-table-column>
@@ -89,14 +89,14 @@
           <el-descriptions-item label="提交人">{{ submitterLabel(selectedRow) }}</el-descriptions-item>
           <el-descriptions-item label="当前节点">{{ selectedRow?.task?.taskName || '-' }}</el-descriptions-item>
           <el-descriptions-item label="提交时间">{{ formatTime(detail.lead.submittedTime || selectedRow?.task?.startTime) }}</el-descriptions-item>
-          <el-descriptions-item label="办理时间">{{ formatTime(selectedRow?.task?.completeTime) }}</el-descriptions-item>
-          <el-descriptions-item label="审批意见" :span="2">{{ selectedRow?.task?.opinion || detail.lead.rejectReason || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="办理时间">{{ formatTime(selectedRow?.reviewedTime || selectedRow?.task?.completeTime) }}</el-descriptions-item>
+          <el-descriptions-item label="审批意见" :span="2">{{ selectedRow?.task?.opinion || selectedRow?.rejectReason || detail.lead.rejectReason || '-' }}</el-descriptions-item>
         </el-descriptions>
       </template>
       <template #footer>
         <div class="drawer-footer">
-          <span>{{ tab === 'pending' ? '请核对客户主档、分配方式及附件后办理' : '该记录已完成审批' }}</span>
-          <div><el-button @click="detailVisible=false">关闭</el-button><el-button v-if="tab === 'pending'" type="danger" plain @click="decide(selectedRow, false)">退回</el-button><el-button v-if="tab === 'pending'" type="success" @click="decide(selectedRow, true)">通过</el-button></div>
+          <span>{{ activeStatus === 'IN_APPROVAL' ? '请核对客户主档、分配方式及附件后办理' : '该记录已完成审批' }}</span>
+          <div><el-button @click="detailVisible=false">关闭</el-button><el-button v-if="activeStatus === 'IN_APPROVAL'" type="danger" plain @click="decide(selectedRow, false)">退回</el-button><el-button v-if="activeStatus === 'IN_APPROVAL'" type="success" @click="decide(selectedRow, true)">通过</el-button></div>
         </div>
       </template>
     </el-drawer>
@@ -109,14 +109,16 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import PageTitle from '@/components/PageTitle.vue';
 import { approveLead, getLeadApprovalDetail, listLeadApprovalHistory, listLeadApprovalPending, rejectLead } from '@/api/marketingManagement';
 
-const tab = ref('pending');
+const activeStatus = ref('IN_APPROVAL');
 const query = reactive({ keyword: '', pageNo: 1, pageSize: 20 });
-const rows = ref([]); const total = ref(0); const pendingTotal = ref(0); const historyTotal = ref(0); const loading = ref(false);
+const rows = ref([]); const total = ref(0); const pendingTotal = ref(0); const approvedTotal = ref(0); const rejectedTotal = ref(0); const loading = ref(false);
 const detailVisible = ref(false); const detail = ref(null); const selectedRow = ref(null);
 const summaryCards = computed(() => [
-  { tab: 'pending', label: '待审批', value: pendingTotal.value, hint: '等待当前审批人处理', tone: 'warning' },
-  { tab: 'history', label: '审批记录', value: historyTotal.value, hint: '当前登录人的办理记录', tone: 'success' }
+  { status: 'IN_APPROVAL', label: '待审批', value: pendingTotal.value, hint: '等待当前审批人处理', tone: 'warning' },
+  { status: 'APPROVED', label: '已通过', value: approvedTotal.value, hint: '当前登录人已通过的线索', tone: 'success' },
+  { status: 'REJECTED', label: '已退回', value: rejectedTotal.value, hint: '当前登录人已退回的线索', tone: 'danger' }
 ]);
+const activeCard = computed(() => summaryCards.value.find(item => item.status === activeStatus.value) || summaryCards.value[0]);
 const managerScopeLabel = computed(() => {
   const lead = detail.value?.lead;
   if (!lead) return '-';
@@ -135,20 +137,29 @@ function pageTotal(result) { return Number(result?.total || 0); }
 async function load() {
   loading.value = true;
   try {
-    const result = await (tab.value === 'pending' ? listLeadApprovalPending(query) : listLeadApprovalHistory(query));
+    const params = { ...query };
+    const result = await (activeStatus.value === 'IN_APPROVAL'
+      ? listLeadApprovalPending(params)
+      : listLeadApprovalHistory({ ...params, result: activeStatus.value }));
     rows.value = pageRows(result); total.value = pageTotal(result);
-    if (tab.value === 'pending') pendingTotal.value = total.value; else historyTotal.value = total.value;
+    if (activeStatus.value === 'IN_APPROVAL') pendingTotal.value = total.value;
+    if (activeStatus.value === 'APPROVED') approvedTotal.value = total.value;
+    if (activeStatus.value === 'REJECTED') rejectedTotal.value = total.value;
   } catch (error) {
     rows.value = []; total.value = 0; ElMessage.error(`审批列表加载失败：${error?.message || '请稍后重试'}`);
   } finally { loading.value = false; }
 }
 async function loadSummary() {
-  const [pending, history] = await Promise.allSettled([listLeadApprovalPending({ pageNo: 1, pageSize: 1 }), listLeadApprovalHistory({ pageNo: 1, pageSize: 1 })]);
+  const [pending, approved, rejected] = await Promise.allSettled([
+    listLeadApprovalPending({ pageNo: 1, pageSize: 1 }),
+    listLeadApprovalHistory({ result: 'APPROVED', pageNo: 1, pageSize: 1 }),
+    listLeadApprovalHistory({ result: 'REJECTED', pageNo: 1, pageSize: 1 })
+  ]);
   if (pending.status === 'fulfilled') pendingTotal.value = pageTotal(pending.value);
-  if (history.status === 'fulfilled') historyTotal.value = pageTotal(history.value);
+  if (approved.status === 'fulfilled') approvedTotal.value = pageTotal(approved.value);
+  if (rejected.status === 'fulfilled') rejectedTotal.value = pageTotal(rejected.value);
 }
-function changeTab() { query.pageNo = 1; load(); }
-function switchTab(nextTab) { if (tab.value === nextTab) return; tab.value = nextTab; changeTab(); }
+function switchStatus(nextStatus) { if (activeStatus.value === nextStatus) return; activeStatus.value = nextStatus; query.pageNo = 1; load(); }
 function search() { query.pageNo = 1; load(); }
 function resetFilter() { query.keyword = ''; query.pageNo = 1; load(); }
 async function openDetail(row) {
@@ -192,7 +203,7 @@ load();
 .page-head { align-items: flex-start; display: flex; justify-content: space-between; margin-bottom: 14px; }
 .page-head h1 { font-size: 18px; margin: 0; }
 .page-head span { color: #909399; display: block; font-size: 12px; margin-top: 4px; }
-.approval-stat-grid { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.approval-stat-grid { display: grid; grid-template-columns: repeat(3, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .approval-stat-card { position: relative; overflow: hidden; display: grid; gap: 8px; min-height: 112px; padding: 16px 18px; border: 1px solid #dcdfe6; border-radius: 6px; background: #fff; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: border-color .2s ease, box-shadow .2s ease; }
 .approval-stat-card::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--el-color-primary); content: ''; }
 .approval-stat-card:hover { border-color: var(--el-color-primary-light-5); }
@@ -204,7 +215,11 @@ load();
 .approval-stat-card small { color: #909399; font-size: 12px; }
 .approval-stat-card.tone-warning::before, .approval-stat-card.tone-warning .stat-card-top i { background: var(--el-color-warning); }
 .approval-stat-card.tone-success::before, .approval-stat-card.tone-success .stat-card-top i { background: var(--el-color-success); }
+.approval-stat-card.tone-danger::before, .approval-stat-card.tone-danger .stat-card-top i { background: var(--el-color-danger); }
 .approval-card-section { padding: 0 18px 18px; border: 1px solid #dcdfe6; border-radius: 6px; background: #fff; }
+.approval-section-head { display: flex; align-items: center; justify-content: space-between; min-height: 52px; border-bottom: 1px solid #ebeef5; }
+.approval-section-head strong { color: #303133; font-size: 15px; }
+.approval-section-head span { color: #909399; font-size: 12px; }
 .approval-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 4px 0 12px; }
 .pager { display: flex; justify-content: flex-end; margin-top: 14px; }
 .lead-approval-table { width: 100%; }

@@ -14,7 +14,7 @@ describe('营销线索审批页面契约', () => {
     expect(source).toContain(':page-sizes="[10, 20, 50, 100]"');
   });
 
-  it('区分待审批和本人审批记录，并逐线索办理', () => {
+  it('区分待审批、已通过和已退回，并逐线索办理', () => {
     expect(source).toContain('listLeadApprovalPending');
     expect(source).toContain('listLeadApprovalHistory');
     expect(source).toContain('approveLead');
@@ -34,10 +34,14 @@ describe('营销线索审批页面契约', () => {
     expect(source).toContain('detail.currentCustomer?.isAccountOpened === 1');
   });
 
-  it('分类卡片与页签同步，并分别获取精确总数', () => {
+  it('三张分类卡片互斥筛选，并分别获取精确总数', () => {
     expect(source).toMatch(/listLeadApprovalPending\(\{ pageNo: 1, pageSize: 1 \}\)/);
-    expect(source).toMatch(/listLeadApprovalHistory\(\{ pageNo: 1, pageSize: 1 \}\)/);
-    expect(source).toContain(':aria-pressed="tab === item.tab"');
-    expect(source).toMatch(/function switchTab\(nextTab\)[\s\S]*tab\.value = nextTab/);
+    expect(source).toMatch(/listLeadApprovalHistory\(\{ result: 'APPROVED', pageNo: 1, pageSize: 1 \}\)/);
+    expect(source).toMatch(/listLeadApprovalHistory\(\{ result: 'REJECTED', pageNo: 1, pageSize: 1 \}\)/);
+    expect(source).toContain(':aria-pressed="activeStatus === item.status"');
+    expect(source).toMatch(/function switchStatus\(nextStatus\)[\s\S]*activeStatus\.value = nextStatus/);
+    expect(source).toContain("label: '待审批'");
+    expect(source).toContain("label: '已通过'");
+    expect(source).toContain("label: '已退回'");
   });
 });
