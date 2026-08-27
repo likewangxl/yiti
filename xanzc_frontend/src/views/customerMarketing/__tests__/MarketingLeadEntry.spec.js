@@ -41,6 +41,15 @@ describe('营销线索录入页面契约', () => {
     expect(source).toContain("LEAD_IMPORT:'批量导入'");
   });
 
+  it('状态列标签与四张状态卡使用相同颜色，并将 IN_APPROVAL 展示为待审批', () => {
+    expect(source).toMatch(/<el-tag\s+:type="statusTagType\(row\.leadStatus\)"[^>]*>\{\{ statusLabel\(row\.leadStatus\) \}\}<\/el-tag>/);
+    expect(source).toContain("DRAFT:'primary'");
+    expect(source).toContain("IN_APPROVAL:'warning'");
+    expect(source).toContain("APPROVED:'success'");
+    expect(source).toContain("REJECTED:'danger'");
+    expect(source).toContain("IN_APPROVAL:'待审批'");
+  });
+
   it('第二 Tab 展示批次、失败优先明细、OBS 下载和待确认动作', () => {
     expect(source).toContain('listLeadImportBatches');
     expect(source).toContain('MarketingLeadImportDetailDrawer');
@@ -82,6 +91,11 @@ describe('营销线索录入页面契约', () => {
     expect(source).toContain('download="lead-import-template.xlsx"');
     expect(source).toMatch(/10\s*\*\s*1024\s*\*\s*1024/);
     expect(source).toMatch(/await createLeadImportBatch\((?:file|pendingImportFile\.value)\)[\s\S]*importDialogVisible\.value\s*=\s*false[\s\S]*activeTab\.value\s*=\s*['"]imports['"][\s\S]*await loadBatches\(\)/);
+  });
+
+  it('批量导入完成并启动审批后明确提示线索已进入待审批', () => {
+    expect(source).toMatch(/batch\.importStatus===['"]COMPLETED['"][\s\S]*batch\.approvalSummaryStatus===['"]IN_APPROVAL['"]/);
+    expect(source).toContain('导入成功，线索已进入待审批状态');
   });
 
   it('选择导入文件时校验扩展名和大小，并分别提示具体原因', () => {
@@ -230,7 +244,7 @@ describe('营销线索录入页面契约', () => {
 
   it('四张状态卡使用 pageSize=1 的 total，并与下拉状态互斥同步', () => {
     expect(source).toContain('class="lead-stat-grid"');
-    ['草稿', '审批中', '已通过', '已退回'].forEach(label => expect(source).toContain(label));
+    ['草稿', '待审批', '已通过', '已退回'].forEach(label => expect(source).toContain(label));
     expect(source).toMatch(/listLeadEntries\(\{status,pageNo:1,pageSize:1\}\)/);
     expect(source).toMatch(/leadQuery\.status===status\?'':status/);
     expect(source).toContain('@change="filterByDropdown"');

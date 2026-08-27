@@ -45,7 +45,7 @@
           <el-table-column prop="leadSource" label="线索来源" width="110"><template #default="{row}">{{ leadSourceLabel(row.leadSource) }}</template></el-table-column>
           <el-table-column prop="entryEmpId" label="录入人" width="110" />
           <el-table-column prop="entryTime" label="录入时间" min-width="165"><template #default="{row}">{{ formatTime(row.entryTime) }}</template></el-table-column>
-          <el-table-column prop="leadStatus" label="状态" width="110"><template #default="{row}"><el-tag>{{ statusLabel(row.leadStatus) }}</el-tag></template></el-table-column>
+          <el-table-column prop="leadStatus" label="状态" width="110"><template #default="{row}"><el-tag :type="statusTagType(row.leadStatus)">{{ statusLabel(row.leadStatus) }}</el-tag></template></el-table-column>
           <el-table-column label="操作" width="230" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button link type="primary" @click="showLead(row)">详情</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="primary" @click="editLead(row)">编辑</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="success" @click="submitLead(row)">提交审批</el-button><el-button v-if="row.leadStatus === 'REJECTED'" link type="danger" @click="editLead(row)">重新编辑</el-button></template></el-table-column>
         </el-table>
         <div class="pager"><el-pagination background layout="total, sizes, prev, pager, next" :total="leadTotal" v-model:current-page="leadQuery.pageNo" v-model:page-size="leadQuery.pageSize" :page-sizes="[10, 20, 50, 100]" @change="loadLeads" /></div>
@@ -221,10 +221,10 @@ const leadDetailVisible = ref(false); const leadDetail = ref(null);
 const batchDrawerVisible = ref(false); const selectedBatch = ref(null);
 const IMPORT_FILE_MAX_SIZE = 10 * 1024 * 1024;
 const IMPORT_FILE_EXTENSIONS = new Set(['xlsx', 'xls', 'csv']);
-const leadStatuses = [{label:'草稿',value:'DRAFT'},{label:'审批中',value:'IN_APPROVAL'},{label:'已通过',value:'APPROVED'},{label:'已退回',value:'REJECTED'}];
+const leadStatuses = [{label:'草稿',value:'DRAFT'},{label:'待审批',value:'IN_APPROVAL'},{label:'已通过',value:'APPROVED'},{label:'已退回',value:'REJECTED'}];
 const leadStatCards = computed(()=>[
   {status:'DRAFT',label:'草稿',value:leadStats.DRAFT,hint:'可继续补充',tone:'primary'},
-  {status:'IN_APPROVAL',label:'审批中',value:leadStats.IN_APPROVAL,hint:'提交后待审核',tone:'warning'},
+  {status:'IN_APPROVAL',label:'待审批',value:leadStats.IN_APPROVAL,hint:'提交后待审核',tone:'warning'},
   {status:'APPROVED',label:'已通过',value:leadStats.APPROVED,hint:'审批已完成',tone:'success'},
   {status:'REJECTED',label:'已退回',value:leadStats.REJECTED,hint:'可修改后重提',tone:'danger'}
 ]);
@@ -262,7 +262,8 @@ const distributionHint = computed(() => ({
 }[form.distributionMode]));
 const pageRows = result => result?.records || result?.list || [];
 const formatTime = value => value ? String(value).replace('T',' ').slice(0,19) : '-';
-const statusLabel = value => ({DRAFT:'草稿',SUBMITTED:'已提交',IN_APPROVAL:'审批中',APPROVED:'已通过',REJECTED:'已退回',CANCELLED:'已取消'}[value] || value || '-');
+const statusLabel = value => ({DRAFT:'草稿',SUBMITTED:'已提交',IN_APPROVAL:'待审批',APPROVED:'已通过',REJECTED:'已退回',CANCELLED:'已取消'}[value] || value || '-');
+const statusTagType = value => ({DRAFT:'primary',SUBMITTED:'warning',IN_APPROVAL:'warning',APPROVED:'success',REJECTED:'danger',CANCELLED:'info'}[value] || 'info');
 const leadSourceLabel = value => ({MANUAL:'手工录入',LEAD_IMPORT:'批量导入'}[value] || value || '-');
 const batchLabel = value => ({WAITING_CONFIRM:'待确认',COMPLETED:'成功',ALL_FAILED:'失败',ABANDONED:'已放弃',IMPORTING:'处理中'}[value] || value || '-');
 const batchType = value => ({COMPLETED:'success',WAITING_CONFIRM:'warning',ALL_FAILED:'danger',ABANDONED:'info'}[value] || 'info');
@@ -442,6 +443,10 @@ const importFailureMessage = result => {
 function importRequestErrorMessage(error){
   return error?.response?.data?.message||error?.response?.data?.msg||error?.message||'导入请求失败，请稍后重试';
 }
+function importSuccessMessage(batch){
+  return batch.importStatus==='COMPLETED'&&batch.approvalSummaryStatus==='IN_APPROVAL'
+    ?'导入成功，线索已进入待审批状态':'导入文件已上传';
+}
 async function submitImport(){
   const file=pendingImportFile.value;
   if(!file){ElMessage.warning('请先选择导入文件');return;}
@@ -456,7 +461,7 @@ async function submitImport(){
       ElMessage.error(importFailureMessage(result));
       return;
     }
-    ElMessage.success('导入文件已上传');
+    ElMessage.success(importSuccessMessage(batch));
     importDialogVisible.value=false;
     resetImport();
     activeTab.value='imports';
