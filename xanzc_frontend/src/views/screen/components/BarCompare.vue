@@ -1,8 +1,10 @@
 <template>
-  <v-chart v-if="series.length" class="bc-chart" :option="option" autoresize @click="onChartClick" />
-  <div v-else class="scr-block-empty">
-    <el-icon class="scr-empty-icon"><DocumentRemove /></el-icon>
-    <span>暂无可绘制的数值列</span>
+  <div ref="chartWrapEl" class="bc-chart-wrap">
+    <v-chart v-if="series.length" class="bc-chart" :option="option" autoresize @click="onChartClick" />
+    <div v-else class="scr-block-empty">
+      <el-icon class="scr-empty-icon"><DocumentRemove /></el-icon>
+      <span>暂无可绘制的数值列</span>
+    </div>
   </div>
 </template>
 
@@ -10,7 +12,7 @@
 // 柱状对比（BAR_COMPARE）：通常首列为类目（或 data_date），其余数值列为系列。
 // groupBy=NONE 的单行多指标响应没有独立类目列，此时按 bind.items 转置为指标类目。
 // propValue.barMode 三形态：basic 基础分组 | stack 堆叠 | horizontal 横向条形。
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { BarChart } from 'echarts/charts';
@@ -22,6 +24,7 @@ import {
   SCR_MORANDI_PALETTE
 } from '@/styles/screenChartTheme';
 import { rowsToSeries, displayName } from './utils/chartData';
+import { resolveBarLayout } from './utils/barLayout';
 
 use([CanvasRenderer, BarChart, GridComponent, TooltipComponent, LegendComponent, MarkPointComponent]);
 
@@ -110,6 +113,34 @@ const showLegend = computed(() => props.styleCfg.showLegend !== false);
 const showLabels = computed(() => props.styleCfg.showLabels === true);
 const showMarks = computed(() => props.styleCfg.showMarks !== false);
 
+// 组件实际尺寸由外层容器观察，避免只依赖 ECharts autoresize 而无法同步柱宽布局。
+const chartWrapEl = ref(null);
+const chartSize = ref({ width: 640, height: 360 });
+let resizeObserver = null;
+
+function updateChartSize(entry) {
+  const rect = entry?.contentRect;
+  const width = Number(rect?.width) || Number(chartWrapEl.value?.clientWidth) || 0;
+  const height = Number(rect?.height) || Number(chartWrapEl.value?.clientHeight) || 0;
+  if (width <= 0 && height <= 0) return;
+  chartSize.value = {
+    width: width > 0 ? width : chartSize.value.width,
+    height: height > 0 ? height : chartSize.value.height
+  };
+}
+
+onMounted(() => {
+  updateChartSize();
+  if (typeof ResizeObserver === 'undefined' || !chartWrapEl.value) return;
+  resizeObserver = new ResizeObserver(entries => updateChartSize(entries?.[0]));
+  resizeObserver.observe(chartWrapEl.value);
+});
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+});
+
 /** 渐变柱体：沿柱体方向由主色渐隐（横向模式渐变轴转 90°），发光描边呼应深色大屏风格 */
 function barItemStyle(color, horizontal) {
   return {
@@ -127,6 +158,19 @@ function barItemStyle(color, horizontal) {
   };
 }
 
+const grid = computed(() => ({ top: 34, right: 16, bottom: 26, left: mode.value === 'horizontal' ? 90 : 56 }));
+const barLayout = computed(() => {
+  const chartGrid = grid.value;
+  return resolveBarLayout({
+    width: Math.max(0, chartSize.value.width - chartGrid.left - chartGrid.right),
+    height: Math.max(0, chartSize.value.height - chartGrid.top - chartGrid.bottom),
+    categoryCount: parsed.value.categories.length,
+    seriesCount: series.value.length,
+    horizontal: mode.value === 'horizontal',
+    stacked: mode.value === 'stack'
+  });
+});
+
 const option = computed(() => {
   const horizontal = mode.value === 'horizontal';
   const catAxis = { type: 'category', data: parsed.value.categories, axisLine: scrAxisLine(theme.value), axisLabel: scrAxisLabel(theme.value) };
@@ -134,7 +178,7 @@ const option = computed(() => {
   return {
     color: palette.value,
     animation: true,
-    grid: { top: 34, right: 16, bottom: 26, left: horizontal ? 90 : 56 },
+    grid: grid.value,
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, ...scrTooltipStyle(theme.value) },
     legend: { show: showLegend.value, top: 4, textStyle: scrAxisLabel(theme.value) },
     xAxis: horizontal ? valAxis : catAxis,
@@ -143,7 +187,9 @@ const option = computed(() => {
       name: seriesLabel(s.name),
       type: 'bar',
       stack: mode.value === 'stack' ? 'total' : undefined,
-      barMaxWidth: 26,
+      barWidth: barLayout.value.barWidth,
+      barGap: barLayout.value.barGap,
+      barCategoryGap: barLayout.value.barCategoryGap,
       // 横向模式逐柱配色；单行多指标转置后也按指标逐柱配色。
       data: horizontal || isSingleRowMetricData.value
         ? s.data.map((value, dataIndex) => ({
@@ -176,5 +222,6 @@ function onChartClick(p) {
 </script>
 
 <style scoped>
+.bc-chart-wrap { width: 100%; height: 100%; min-width: 0; min-height: 0; }
 .bc-chart { width: 100%; height: 100%; }
 </style>

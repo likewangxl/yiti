@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 import { mount } from '@vue/test-utils';
 
 vi.mock('vue-echarts', () => ({
@@ -458,6 +459,57 @@ describe('图表视觉预设与 option', () => {
     expect(option.series.map(series => series.itemStyle.color.colorStops[1].color))
       .toEqual(['#112233', '#445566', '#112233']);
     expect(option.series.map(series => series.data)).toEqual([[10], [20], [30]]);
+  });
+
+  it('BarCompare 根据容器尺寸更新柱宽和间隔，并在卸载时断开 ResizeObserver', async () => {
+    const originalResizeObserver = globalThis.ResizeObserver;
+    let resizeCallback;
+    const observer = { observe: vi.fn(), disconnect: vi.fn() };
+    globalThis.ResizeObserver = class {
+      constructor(callback) {
+        resizeCallback = callback;
+      }
+
+      observe(element) {
+        observer.observe(element);
+      }
+
+      disconnect() {
+        observer.disconnect();
+      }
+    };
+
+    try {
+      const wrapper = mount(BarCompare, {
+        props: {
+          columns: ['month', 'sales', 'cost'],
+          rows: [['Jan', 10, 2], ['Feb', 20, 4], ['Mar', 30, 6], ['Apr', 40, 8]],
+          bind: { items: [{ col: 'sales' }, { col: 'cost' }] },
+          styleCfg: {}
+        },
+        global: { stubs: chartStubs }
+      });
+
+      expect(observer.observe).toHaveBeenCalledWith(wrapper.find('.bc-chart-wrap').element);
+      const initial = optionOf(wrapper);
+      resizeCallback([{ contentRect: { width: 320, height: 240 } }]);
+      await nextTick();
+      const narrow = optionOf(wrapper);
+      resizeCallback([{ contentRect: { width: 960, height: 240 } }]);
+      await nextTick();
+      const wide = optionOf(wrapper);
+
+      expect(narrow.series[0].barWidth).toBeLessThan(wide.series[0].barWidth);
+      expect(narrow.series[0].barGap).toMatch(/%$/);
+      expect(narrow.series[0].barCategoryGap).toMatch(/%$/);
+      expect(initial.series[0].barWidth).toBeGreaterThan(0);
+
+      wrapper.unmount();
+      expect(observer.disconnect).toHaveBeenCalledTimes(1);
+    } finally {
+      if (originalResizeObserver === undefined) delete globalThis.ResizeObserver;
+      else globalThis.ResizeObserver = originalResizeObserver;
+    }
   });
 
   it('BarCompare 常规多系列优先显示 items label，回退元数据别名和字段名，并保留原始点击列', () => {

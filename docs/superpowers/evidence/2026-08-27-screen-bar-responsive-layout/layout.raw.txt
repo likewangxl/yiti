@@ -1,0 +1,21 @@
+页面断言：
+[
+  {
+    "index": 0,
+    "title": "窄组件 · 五项指标",
+    "width": 598,
+    "height": 330,
+    "barWidth": 10,
+    "barGap": "20%",
+    "barCategoryGap": "34%"
+  },
+  {
+    "index": 1,
+    "title": "宽组件 · 五项指标",
+    "width": 1678,
+    "height": 350,
+    "barWidth": 32,
+    "barGap": "20%",
+    "barCategoryGap": "31%"
+  }
+]
