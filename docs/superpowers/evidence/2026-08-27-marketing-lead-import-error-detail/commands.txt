@@ -1,0 +1,22 @@
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 goto 'http://127.0.0.1:8090/#/customers/leads/new'
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 route-list
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 requests --clear
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 click <批量导入>
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 click <选择文件>
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 upload '/home/djdev/lijh/yiti/xanzc_frontend/package.json'
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 snapshot
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 requests --filter='marketing/lead-import-batches'
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 screenshot --filename='../docs/superpowers/evidence/2026-08-27-marketing-lead-import-error-detail/unsupported-format-specific-message.png'
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 route '**/api/marketing/lead-import-batches' --status=200 --content-type='application/json' --body='<ALL_FAILED response>'
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 route-list
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 requests --clear
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 click <选择文件>
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 upload '/home/djdev/lijh/yiti/xanzc_frontend/public/templates/lead-import-template.csv'
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 click <上传>
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 snapshot
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 screenshot --filename='../docs/superpowers/evidence/2026-08-27-marketing-lead-import-error-detail/backend-detail-specific-message-mock.png'
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 requests --filter='marketing/lead-import-batches'
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 response-body 1
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 unroute '**/api/marketing/lead-import-batches'
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 route-list
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 console

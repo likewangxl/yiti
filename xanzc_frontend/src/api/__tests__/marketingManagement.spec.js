@@ -7,6 +7,7 @@ import {
   approveLead,
   approveTagCustomers,
   confirmLeadImportBatch,
+  createLeadImportBatch,
   createCustomerTagImportBatch,
   createMarketingLead,
   downloadCustomerTagImportTemplate,
@@ -125,6 +126,15 @@ describe('六页面营销管理 API', () => {
     expect(call).toHaveBeenNthCalledWith(3, 'post', '/marketing/lead-import-batches/9/confirm', {
       data: { action: 'PROCESS_VALID', remark: '只处理正常数据', lockVersion: 1 },
     });
+  });
+
+  it('线索导入上传请求关闭全局错误提示，由页面展示具体失败原因', async () => {
+    const file = new File(['csv'], '线索.csv', { type: 'text/csv' });
+    await createLeadImportBatch(file);
+
+    const createCall = call.mock.calls[0];
+    expect(createCall.slice(0, 2)).toEqual(['post', '/marketing/lead-import-batches']);
+    expect(createCall[2].silent).toBe(true);
   });
 
   it('线索审批区分本人待办和本人已办', async () => {

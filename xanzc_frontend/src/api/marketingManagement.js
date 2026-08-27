@@ -109,6 +109,7 @@ export const createLeadImportBatch = file => {
   return call('post', '/marketing/lead-import-batches', {
     data,
     headers: { 'Content-Type': 'multipart/form-data' },
+    silent: true,
   });
 };
 export const confirmLeadImportBatch = (id, data) =>

@@ -1,5 +1,6 @@
 package com.bank.branch.platform.customer.marketing.lead;
 
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadCreateRequest;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadImportBatch;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadImportDetail;
@@ -24,11 +25,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /** 页面三批量导入的待确认/明细排序契约。 */
@@ -209,6 +213,98 @@ class MarketingLeadImportServiceTest {
         assertEquals(4, page.getRecords().size());
         assertEquals("REJECTED", page.getRecords().get(0).getValidationStatus());
         assertEquals("VALID", page.getRecords().get(3).getValidationStatus());
+    }
+
+    @Test
+    void preview_headerOnlyCsv_returnsSpecificNoDataReason() {
+        stubBatchInsert(11L);
+        String csv = "客户名称,统一社会信用代码,是否触达限制\n";
+
+        var response = service.preview(csvFile(csv), "EMP_1", "ORG_1");
+
+        assertEquals(1, response.getDetails().size());
+        assertEquals("FILE_NO_DATA", response.getDetails().get(0).getErrorCode());
+        assertEquals("文件没有可导入的数据行，请至少填写1条线索", response.getDetails().get(0).getErrorMessage());
+    }
+
+    @Test
+    void preview_blankHeaderCsv_returnsSpecificMissingHeaderReason() {
+        stubBatchInsert(12L);
+
+        var response = service.preview(csvFile("\n"), "EMP_1", "ORG_1");
+
+        assertEquals(1, response.getDetails().size());
+        assertEquals("FILE_HEADER_MISSING", response.getDetails().get(0).getErrorCode());
+        assertEquals("文件缺少表头，请下载最新线索导入模板", response.getDetails().get(0).getErrorMessage());
+    }
+
+    @Test
+    void preview_missingCriticalHeader_namesTheMissingColumn() {
+        stubBatchInsert(13L);
+        String csv = "客户名称,是否触达限制\n客户甲,否\n";
+
+        var response = service.preview(csvFile(csv), "EMP_1", "ORG_1");
+
+        assertEquals(1, response.getDetails().size());
+        assertEquals("FILE_REQUIRED_HEADER_MISSING", response.getDetails().get(0).getErrorCode());
+        assertTrue(response.getDetails().get(0).getErrorMessage().contains("统一社会信用代码"));
+    }
+
+    @Test
+    void preview_corruptedExcel_returnsSpecificCorruptionReason() {
+        stubBatchInsert(14L);
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "lead-import.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "not-an-excel-workbook".getBytes(StandardCharsets.UTF_8));
+
+        var response = service.preview(file, "EMP_1", "ORG_1");
+
+        assertEquals(1, response.getDetails().size());
+        assertEquals("FILE_EXCEL_CORRUPTED", response.getDetails().get(0).getErrorCode());
+        assertEquals("Excel文件损坏或格式无法读取，请重新保存为.xlsx后重试",
+                response.getDetails().get(0).getErrorMessage());
+    }
+
+    @Test
+    void preview_fileOverTenMb_isRejectedBeforeUploadWithSpecificReason() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "lead-import.csv", "text/csv",
+                new byte[10 * 1024 * 1024 + 1]);
+
+        BizException exception = assertThrows(BizException.class,
+                () -> service.preview(file, "EMP_1", "ORG_1"));
+
+        assertEquals("MARKETING_LEAD_IMPORT_FILE_TOO_LARGE", exception.getCode());
+        assertEquals("导入文件过大：单个文件不能超过10MB", exception.getMessage());
+        verifyNoInteractions(fileApi, batchMapper);
+    }
+
+    @Test
+    void preview_csvErrorAfterBlankLine_keepsThePhysicalRowNumber() {
+        stubBatchInsert(15L);
+        String csv = "客户名称,统一社会信用代码,是否触达限制\n"
+                + "\n"
+                + "客户甲,91320100ABC1234567,maybe\n";
+
+        var response = service.preview(csvFile(csv), "EMP_1", "ORG_1");
+
+        assertEquals(1, response.getDetails().size());
+        assertEquals(3, response.getDetails().get(0).getRowNo());
+        assertEquals("INVALID_TOUCH_RESTRICTED", response.getDetails().get(0).getErrorCode());
+    }
+
+    private void stubBatchInsert(long batchId) {
+        doAnswer(invocation -> {
+            MarketingLeadImportBatch inserted = invocation.getArgument(0);
+            inserted.setId(batchId);
+            return 1;
+        }).when(batchMapper).insert(any(MarketingLeadImportBatch.class));
+    }
+
+    private MockMultipartFile csvFile(String content) {
+        return new MockMultipartFile("file", "lead-import.csv", "text/csv",
+                content.getBytes(StandardCharsets.UTF_8));
     }
 
     private MarketingLeadImportDetail detail(long id, String status) {

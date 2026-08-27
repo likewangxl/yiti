@@ -46,7 +46,7 @@ public class FileService {
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
             "jpg", "jpeg", "png", "gif",
             "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-            "txt", "zip", "rar"
+            "txt", "zip", "rar", "csv"
     );
 
     /** 最大文件大小：50MB */

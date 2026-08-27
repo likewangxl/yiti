@@ -1,0 +1,10 @@
+修改前真实运行日志（2026-08-27 21:26:56）：
+
+```text
+FileService.upload fileName=lead-import-template (1).csv, size=328, uploadedBy=admin, category=LEAD_IMPORT
+AuditLogMapper.insert ... POST ... 500 ... 文件格式不合法
+MarketingLeadImportController.create error=文件格式不合法
+GlobalExceptionHandler 业务异常: code=GOV-42203, message=文件格式不合法
+```
+
+结论：CSV 在共享文件存储白名单阶段被拒，未进入线索模板解析。

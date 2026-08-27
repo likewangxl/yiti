@@ -131,6 +131,21 @@ class FileServiceTest {
     }
 
     @Test
+    void upload_csv_isAcceptedByTheSharedFileWhitelist() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "lead-import.csv", "text/csv", "客户名称,统一社会信用代码\n".getBytes());
+        when(fileObjectMapper.selectByMd5Hash(anyString())).thenReturn(null);
+
+        FileObjectDTO dto = fileService.upload(file, "EMP001", null, null,
+                FileCategory.GENERAL);
+
+        assertThat(dto).isNotNull();
+        ArgumentCaptor<String> keyCap = ArgumentCaptor.forClass(String.class);
+        verify(obsStorageClient).putObject(any(InputStream.class), keyCap.capture());
+        assertThat(keyCap.getValue()).endsWith(".csv");
+    }
+
+    @Test
     void uploadBytes_putsToObsWithCategory() {
         when(fileObjectMapper.selectByMd5Hash(anyString())).thenReturn(null);
 

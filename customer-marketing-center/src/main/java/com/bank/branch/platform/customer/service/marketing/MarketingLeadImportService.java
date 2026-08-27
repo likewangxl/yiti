@@ -76,7 +76,13 @@ public class MarketingLeadImportService {
 
     private static final int MAX_ROWS = 5000;
     private static final int MAX_PAGE_SIZE = 100;
+    private static final long MAX_FILE_SIZE = 10L * 1024 * 1024;
     private static final Set<String> FAILURE_STATUSES = Set.of("REJECTED", "ERROR", "WARNING");
+    private static final List<RequiredHeader> REQUIRED_HEADERS = List.of(
+            new RequiredHeader("客户名称", Set.of("custname", "客户名称", "企业名称")),
+            new RequiredHeader("统一社会信用代码", Set.of("unifiedcreditcode", "统一社会信用代码", "统一信用代码")),
+            new RequiredHeader("是否触达限制", Set.of("touchrestricted", "是否触达限制"))
+    );
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final BigDecimal WAN_TO_YUAN = BigDecimal.TEN.pow(4);
 
@@ -258,8 +264,9 @@ public class MarketingLeadImportService {
         try {
             details = parseAndValidate(file, batch.getId());
         } catch (Exception ex) {
-            log.warn("线索导入文件解析失败: {}", ex.getMessage());
-            details = List.of(errorDetail(batch.getId(), 2, "文件解析失败，请检查模板和文件内容"));
+            String message = parseFailureMessage(file);
+            log.warn("线索导入文件解析失败: {}", message, ex);
+            details = List.of(errorDetail(batch.getId(), 1, parseFailureCode(file), message));
         }
         if (details.size() > MAX_ROWS) {
             throw error("MARKETING_LEAD_IMPORT_ROWS_TOO_MANY", "导入行数不能超过" + MAX_ROWS + "行");
@@ -296,17 +303,34 @@ public class MarketingLeadImportService {
     private List<MarketingLeadImportDetail> parseCsv(InputStream input, Long batchId) throws IOException {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
             String headerLine = reader.readLine();
-            if (headerLine == null) return List.of(errorDetail(batchId, 2, "文件缺少表头"));
+            if (headerLine == null || headerLine.isBlank()) {
+                return List.of(errorDetail(batchId, 1, "FILE_HEADER_MISSING",
+                        "文件缺少表头，请下载最新线索导入模板"));
+            }
             List<String> headers = splitCsv(headerLine);
+            if (headers.stream().noneMatch(StringUtils::hasText)) {
+                return List.of(errorDetail(batchId, 1, "FILE_HEADER_MISSING",
+                        "文件缺少表头，请下载最新线索导入模板"));
+            }
+            List<String> missingHeaders = missingRequiredHeaders(headers);
+            if (!missingHeaders.isEmpty()) {
+                return List.of(errorDetail(batchId, 1, "FILE_REQUIRED_HEADER_MISSING",
+                        "文件缺少关键表头：" + String.join("、", missingHeaders)
+                                + "，请下载最新线索导入模板"));
+            }
             List<MarketingLeadImportDetail> details = new ArrayList<>();
             String line;
             int rowNo = 2;
             while ((line = reader.readLine()) != null) {
                 List<String> values = splitCsv(line);
+                int physicalRowNo = rowNo++;
                 if (values.stream().allMatch(v -> v == null || v.isBlank())) continue;
-                details.add(validateRow(toMap(headers, values), batchId, rowNo++));
+                details.add(validateRow(toMap(headers, values), batchId, physicalRowNo));
             }
-            return details;
+            return details.isEmpty()
+                    ? List.of(errorDetail(batchId, 2, "FILE_NO_DATA",
+                    "文件没有可导入的数据行，请至少填写1条线索"))
+                    : details;
         }
     }
 
@@ -316,9 +340,22 @@ public class MarketingLeadImportService {
             if (sheet == null) return List.of(errorDetail(batchId, 2, "文件缺少工作表"));
             DataFormatter formatter = new DataFormatter();
             Row header = sheet.getRow(sheet.getFirstRowNum());
-            if (header == null) return List.of(errorDetail(batchId, 2, "文件缺少表头"));
+            if (header == null || header.getLastCellNum() <= 0) {
+                return List.of(errorDetail(batchId, 1, "FILE_HEADER_MISSING",
+                        "文件缺少表头，请下载最新线索导入模板"));
+            }
             List<String> headers = new ArrayList<>();
             for (int i = 0; i < header.getLastCellNum(); i++) headers.add(value(header.getCell(i), formatter));
+            if (headers.stream().noneMatch(StringUtils::hasText)) {
+                return List.of(errorDetail(batchId, 1, "FILE_HEADER_MISSING",
+                        "文件缺少表头，请下载最新线索导入模板"));
+            }
+            List<String> missingHeaders = missingRequiredHeaders(headers);
+            if (!missingHeaders.isEmpty()) {
+                return List.of(errorDetail(batchId, 1, "FILE_REQUIRED_HEADER_MISSING",
+                        "文件缺少关键表头：" + String.join("、", missingHeaders)
+                                + "，请下载最新线索导入模板"));
+            }
             List<MarketingLeadImportDetail> details = new ArrayList<>();
             for (int rowIndex = sheet.getFirstRowNum() + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
@@ -332,7 +369,10 @@ public class MarketingLeadImportService {
                 }
                 if (!blank) details.add(validateRow(toMap(headers, values), batchId, rowIndex + 1));
             }
-            return details;
+            return details.isEmpty()
+                    ? List.of(errorDetail(batchId, 2, "FILE_NO_DATA",
+                    "文件没有可导入的数据行，请至少填写1条线索"))
+                    : details;
         } catch (Exception ex) {
             if (ex instanceof IOException io) throw io;
             throw new IOException("Workbook parse failed", ex);
@@ -763,6 +803,9 @@ public class MarketingLeadImportService {
                 || name.toLowerCase(Locale.ROOT).endsWith(".xls"))) {
             throw error("MARKETING_LEAD_IMPORT_FORMAT_INVALID", "仅支持CSV、XLSX或XLS文件");
         }
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw error("MARKETING_LEAD_IMPORT_FILE_TOO_LARGE", "导入文件过大：单个文件不能超过10MB");
+        }
     }
 
     private MarketingLeadImportDetail markError(MarketingLeadImportDetail detail, String code, String message) {
@@ -773,14 +816,49 @@ public class MarketingLeadImportService {
     }
 
     private MarketingLeadImportDetail errorDetail(Long batchId, int rowNo, String message) {
+        return errorDetail(batchId, rowNo, "FILE_PARSE_ERROR", message);
+    }
+
+    private MarketingLeadImportDetail errorDetail(Long batchId, int rowNo, String code, String message) {
         MarketingLeadImportDetail detail = new MarketingLeadImportDetail();
         detail.setBatchId(batchId);
         detail.setRowNo(rowNo);
         detail.setValidationStatus("ERROR");
-        detail.setErrorCode("FILE_PARSE_ERROR");
+        detail.setErrorCode(code);
         detail.setErrorMessage(message);
         detail.setHandlingStatus("PENDING");
         return detail;
+    }
+
+    private List<String> missingRequiredHeaders(List<String> headers) {
+        Set<String> normalizedHeaders = new LinkedHashSet<>();
+        for (String header : headers) {
+            String normalized = normalizeHeader(header);
+            if (StringUtils.hasText(normalized)) normalizedHeaders.add(normalized);
+        }
+        List<String> missing = new ArrayList<>();
+        for (RequiredHeader required : REQUIRED_HEADERS) {
+            if (required.aliases().stream().noneMatch(normalizedHeaders::contains)) {
+                missing.add(required.displayName());
+            }
+        }
+        return missing;
+    }
+
+    private String parseFailureCode(MultipartFile file) {
+        String filename = file == null || file.getOriginalFilename() == null
+                ? "" : file.getOriginalFilename().toLowerCase(Locale.ROOT);
+        return filename.endsWith(".xlsx") || filename.endsWith(".xls")
+                ? "FILE_EXCEL_CORRUPTED" : "FILE_PARSE_ERROR";
+    }
+
+    private String parseFailureMessage(MultipartFile file) {
+        String filename = file == null || file.getOriginalFilename() == null
+                ? "" : file.getOriginalFilename().toLowerCase(Locale.ROOT);
+        if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
+            return "Excel文件损坏或格式无法读取，请重新保存为.xlsx后重试";
+        }
+        return "CSV文件无法读取，请确认文件使用UTF-8编码且内容格式正确";
     }
 
     private String first(Map<String, String> row, String... names) {
@@ -881,5 +959,8 @@ public class MarketingLeadImportService {
             super(message);
             this.code = code;
         }
+    }
+
+    private record RequiredHeader(String displayName, Set<String> aliases) {
     }
 }

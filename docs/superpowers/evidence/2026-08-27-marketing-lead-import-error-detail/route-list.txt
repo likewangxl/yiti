@@ -1,0 +1,18 @@
+验收开始：
+
+```text
+No active routes
+```
+
+具体后端明细展示阶段（仅开发态 mock，非联调）：
+
+```text
+1. **/api/marketing/lead-import-batches (status=200, contentType=application/json)
+```
+
+验收结束，已清理 mock：
+
+```text
+Removed 1 route(s) for pattern: **/api/marketing/lead-import-batches
+No active routes
+```

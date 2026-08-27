@@ -68,6 +68,37 @@ describe('营销线索录入页面契约', () => {
     expect(source).toMatch(/await createLeadImportBatch\((?:file|pendingImportFile\.value)\)[\s\S]*importDialogVisible\.value\s*=\s*false[\s\S]*activeTab\.value\s*=\s*['"]imports['"][\s\S]*await loadBatches\(\)/);
   });
 
+  it('选择导入文件时校验扩展名和大小，并分别提示具体原因', () => {
+    expect(source).toMatch(/function validateImportFile\(file\)/);
+    expect(source).toContain('导入文件格式不支持：仅支持 .xlsx、.xls、.csv 文件');
+    expect(source).toContain('导入文件内容为空，请选择已填写的模板');
+    expect(source).toMatch(/Number\(file\.size\|\|0\)===0/);
+    expect(source).toContain('导入文件过大：单个文件不能超过10MB');
+    expect(source).toMatch(/function importFile\([\s\S]*validateImportFile\(upload\.raw\)[\s\S]*clearImportFile\(\)[\s\S]*ElMessage\.error/);
+  });
+
+  it('批次全部失败或没有有效行时展示明细中的行号和失败原因并保留弹窗', () => {
+    expect(source).toMatch(/const importFailureMessage\s*=\s*result\s*=>/);
+    expect(source).toMatch(/details\.map\(detail[\s\S]*errorMessage[\s\S]*rowNo/);
+    expect(source).toMatch(/batch\.importStatus\s*===\s*['"]ALL_FAILED['"][\s\S]*validCount\s*===\s*0/);
+    const submitBody = source.match(/async function submitImport\([\s\S]*?\n\}/)?.[0] || '';
+    const failureBranch = submitBody.match(/if\s*\(batch\.importStatus\s*===\s*['"]ALL_FAILED['"]\s*\|\|\s*validCount\s*===\s*0\)\s*\{[\s\S]*?return;\s*\}/)?.[0] || '';
+    expect(failureBranch).toContain('ElMessage.error(importFailureMessage(result))');
+    expect(failureBranch).not.toContain('importDialogVisible.value=false');
+  });
+
+  it('批量导入失败原因最多展示前三条，并提示剩余失败原因到导入记录查看', () => {
+    expect(source).toMatch(/const visibleReasons\s*=\s*reasons\.slice\(0,\s*3\)/);
+    expect(source).toContain('另有 ${remainingCount} 条失败原因，请查看导入记录');
+  });
+
+  it('导入请求异常优先显示后端 message，且不再使用文件不合法的笼统兜底', () => {
+    expect(source).toMatch(/function importRequestErrorMessage\(error\)/);
+    expect(source).toMatch(/response\?\.data\?\.message[\s\S]*response\?\.data\?\.msg[\s\S]*error\?\.message/);
+    expect(source).toContain('导入请求失败，请稍后重试');
+    expect(source).not.toContain('请检查文件');
+  });
+
   it('线索导入模板按录入抽屉顺序覆盖 18 个可表格化字段', () => {
     expect(importTemplate.split(/\r?\n/)[0].split(',')).toEqual([
       '线索类型', '客户名称', '统一社会信用代码', '是否开户', '客户号', '所属行业',

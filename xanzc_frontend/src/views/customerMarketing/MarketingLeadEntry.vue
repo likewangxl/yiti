@@ -219,6 +219,8 @@ const fileList = ref([]); const pendingFiles = ref([]);
 const importDialogVisible = ref(false); const importFileList = ref([]); const pendingImportFile = ref(null);
 const leadDetailVisible = ref(false); const leadDetail = ref(null);
 const batchDrawerVisible = ref(false); const selectedBatch = ref(null);
+const IMPORT_FILE_MAX_SIZE = 10 * 1024 * 1024;
+const IMPORT_FILE_EXTENSIONS = new Set(['xlsx', 'xls', 'csv']);
 const leadStatuses = [{label:'草稿',value:'DRAFT'},{label:'审批中',value:'IN_APPROVAL'},{label:'已通过',value:'APPROVED'},{label:'已退回',value:'REJECTED'}];
 const leadStatCards = computed(()=>[
   {status:'DRAFT',label:'草稿',value:leadStats.DRAFT,hint:'可继续补充',tone:'primary'},
@@ -405,26 +407,60 @@ async function saveLead(andSubmit=false){
 }
 async function showLead(row){ try { leadDetail.value=await getMarketingLead(row.id); leadDetailVisible.value=true; } catch (error) { ElMessage.error(`线索详情加载失败：${error?.message||'请稍后重试'}`); } }
 async function submitLead(row){ try { await ElMessageBox.confirm('确认提交该线索审批？','提交审批'); await submitMarketingLead(row.id); ElMessage.success('已提交审批'); await refreshManualView(); } catch (error) { if(error!=='cancel'&&error!=='close') ElMessage.error(`提交失败：${error?.message||'请稍后重试'}`); } }
+function validateImportFile(file){
+  if(!file)return '请选择导入文件';
+  const fileName=String(file.name||'');
+  const extension=fileName.includes('.')?fileName.slice(fileName.lastIndexOf('.')+1).toLowerCase():'';
+  if(!IMPORT_FILE_EXTENSIONS.has(extension))return '导入文件格式不支持：仅支持 .xlsx、.xls、.csv 文件';
+  if(Number(file.size||0)===0)return '导入文件内容为空，请选择已填写的模板';
+  if(Number(file.size||0)>IMPORT_FILE_MAX_SIZE)return '导入文件过大：单个文件不能超过10MB';
+  return '';
+}
 function importFile(upload){
   if(!upload?.raw)return;
+  const validationMessage=validateImportFile(upload.raw);
+  if(validationMessage){clearImportFile();ElMessage.error(validationMessage);return;}
   importFileList.value=[upload];
   pendingImportFile.value=upload.raw;
 }
 function clearImportFile(){ importFileList.value=[]; pendingImportFile.value=null; }
 function resetImport(){ importFileList.value=[]; pendingImportFile.value=null; }
+const importFailureMessage = result => {
+  const details=Array.isArray(result?.details)?result.details:[];
+  const reasons=details.map(detail=>{
+    const reason=detail?.errorMessage||detail?.warningMessage||detail?.reason;
+    if(!reason)return '';
+    const rowNo=detail?.rowNo??detail?.rowNumber;
+    return rowNo===undefined||rowNo===null||rowNo===''?String(reason):`第${rowNo}行：${reason}`;
+  }).filter(Boolean);
+  const visibleReasons=reasons.slice(0,3);
+  const remainingCount=reasons.length-visibleReasons.length;
+  const remainingHint=remainingCount>0?`；另有 ${remainingCount} 条失败原因，请查看导入记录`:'';
+  return reasons.length?`导入失败：${visibleReasons.join('；')}${remainingHint}`:'导入失败：未发现有效数据，请检查模板表头和数据内容';
+};
+function importRequestErrorMessage(error){
+  return error?.response?.data?.message||error?.response?.data?.msg||error?.message||'导入请求失败，请稍后重试';
+}
 async function submitImport(){
   const file=pendingImportFile.value;
   if(!file){ElMessage.warning('请先选择导入文件');return;}
-  if(file.size>10*1024*1024){ElMessage.error('导入文件不能超过10MB');return;}
+  const validationMessage=validateImportFile(file);
+  if(validationMessage){ElMessage.error(validationMessage);return;}
   uploading.value=true;
   try{
-    await createLeadImportBatch(file);
+    const result=await createLeadImportBatch(file);
+    const batch=result?.batch||result||{};
+    const validCount=Number(batch.validCount??result?.validCount);
+    if(batch.importStatus==='ALL_FAILED'||validCount===0){
+      ElMessage.error(importFailureMessage(result));
+      return;
+    }
     ElMessage.success('导入文件已上传');
     importDialogVisible.value=false;
     resetImport();
     activeTab.value='imports';
     await loadBatches();
-  }catch(error){ElMessage.error(`导入失败：${error?.message||'请检查文件'}`);}
+  }catch(error){ElMessage.error(`导入失败：${importRequestErrorMessage(error)}`);}
   finally{uploading.value=false;}
 }
 function openBatch(row){ selectedBatch.value=row; batchDrawerVisible.value=true; }
