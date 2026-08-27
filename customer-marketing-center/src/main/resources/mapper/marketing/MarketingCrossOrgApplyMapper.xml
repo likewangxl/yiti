@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.marketing.MarketingCrossOrgApplyMapper">
+    <sql id="BASE_COLUMNS">
+        id, apply_no, cust_id, applicant_emp_id, applicant_org_id,
+        main_manager_id_snapshot, main_org_id_snapshot, applicant_not_main_check,
+        main_org_different_check, applicant_no_performance_check,
+        applicant_org_no_performance_check, check_snapshot_time, apply_reason,
+        status, generated_touch_task_id, business_key, process_instance_id,
+        reviewed_by, reviewed_time, reject_reason, created_by, created_time,
+        updated_by, updated_time, lock_version
+    </sql>
+
+    <select id="countActiveByCustomerAndApplicant" resultType="long">
+        SELECT COUNT(*)
+        FROM MARKETING_CROSS_ORG_APPLY
+        WHERE cust_id = #{custId}
+          AND applicant_emp_id = #{applicantEmpId}
+          AND status IN ('IN_APPROVAL', 'APPROVED')
+    </select>
+
+    <update id="updateInApprovalToApproved">
+        UPDATE MARKETING_CROSS_ORG_APPLY
+        SET status = 'APPROVED',
+            reviewed_by = #{item.reviewedBy},
+            reviewed_time = #{item.reviewedTime},
+            updated_by = #{item.updatedBy},
+            updated_time = #{item.updatedTime},
+            lock_version = COALESCE(lock_version, 0) + 1
+        WHERE id = #{item.id}
+          AND status = 'IN_APPROVAL'
+    </update>
+
+    <update id="updateInApprovalToRejected">
+        UPDATE MARKETING_CROSS_ORG_APPLY
+        SET status = 'REJECTED',
+            reviewed_by = #{item.reviewedBy},
+            reviewed_time = #{item.reviewedTime},
+            reject_reason = #{item.rejectReason},
+            updated_by = #{item.updatedBy},
+            updated_time = #{item.updatedTime},
+            lock_version = COALESCE(lock_version, 0) + 1
+        WHERE id = #{item.id}
+          AND status = 'IN_APPROVAL'
+    </update>
+
+    <update id="updateGeneratedTouchTask">
+        UPDATE MARKETING_CROSS_ORG_APPLY
+        SET generated_touch_task_id = #{taskId},
+            updated_time = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+          AND status = 'APPROVED'
+          AND generated_touch_task_id IS NULL
+    </update>
+</mapper>

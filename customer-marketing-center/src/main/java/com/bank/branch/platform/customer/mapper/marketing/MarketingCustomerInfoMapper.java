@@ -18,6 +18,9 @@ public interface MarketingCustomerInfoMapper extends BaseMapper<MarketingCustome
     /** 查询有效营销客户；详情和写服务均使用该方法避免读到失效档案。 */
     MarketingCustomerInfo selectActiveById(@Param("id") Long id);
 
+    /** 认领提交前锁定客户主档，避免主办权在校验后发生变化。 */
+    MarketingCustomerInfo selectForUpdate(@Param("id") Long id);
+
     /**
      * 按信用代码或客户名称精确查询有效客户，最多读取两条用于识别名称歧义。
      * 信用代码非空时由 SQL 优先使用信用代码，忽略客户名称。

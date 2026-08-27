@@ -1,0 +1,11 @@
+Observed UI requests (all returned HTTP 200 from browser-session mocks):
+
+- GET /api/customer-pool?sourceType=PUBLIC&pageNo=1&pageSize=20
+- GET /api/lead-approvals/501
+- GET /api/claims/mine/customers?tab=UNTOUCHED&pageNo=1&pageSize=20
+- GET /api/claims/mine/customers?tab=TOUCHED&pageNo=1&pageSize=20
+- GET /api/cross-org-marketing?pageNo=1&pageSize=20
+- GET /api/cross-org-marketing/validate?custNo=KH-20260827-001
+- GET /api/cross-org-marketing/801
+
+The last Playwright `requests` capture reported the three cross-org requests above as 200 OK.

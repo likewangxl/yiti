@@ -3,8 +3,10 @@ import { call } from './http';
 export const listAvailableCustomers = (params = {}) =>
   call('get', '/customer-pool', { params }, null);
 
-export const claimCustomer = custId =>
-  call('post', '/claims', { data: { custId } });
+export const claimCustomer = (custId, sourceLeadId) =>
+  call('post', '/claims', {
+    data: { custId, ...(sourceLeadId ? { sourceLeadId } : {}) },
+  });
 
 export const listClaimedCustomers = (params = {}) =>
   call('get', '/claims/mine/customers', { params }, null);
@@ -108,9 +110,9 @@ export const listTouchLimitRules = (params = {}) =>
 export const updateTouchLimitRule = (tagId, data) =>
   call('put', `/touch-limit-rules/${encodeURIComponent(tagId)}`, { data });
 
-// 跨机构客户营销申请
-export const validateCrossOrgMarketing = custId =>
-  call('get', '/cross-org-marketing/validate', { params: { custId } }, null);
+// 跨机构客户营销申请：检索入口使用客户号，后端校验后再返回内部 custId 供写操作使用。
+export const validateCrossOrgMarketing = custNo =>
+  call('get', '/cross-org-marketing/validate', { params: { custNo } }, null);
 export const createCrossOrgMarketing = data => call('post', '/cross-org-marketing', { data });
 export const listCrossOrgMarketing = (params = {}) => call('get', '/cross-org-marketing', { params }, []);
 export const getCrossOrgMarketing = id => call('get', `/cross-org-marketing/${id}`, {}, null);

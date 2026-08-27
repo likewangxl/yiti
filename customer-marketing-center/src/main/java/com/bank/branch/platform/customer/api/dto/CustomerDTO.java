@@ -36,6 +36,8 @@ public class CustomerDTO {
 
     /** 集团归属 */
     private String groupType;
+    private String groupTypeName;
+    private String groupName;
 
     /** 客户类型 */
     private String customerType;
@@ -43,11 +45,27 @@ public class CustomerDTO {
     /** 客户类型名称 (字典翻译) */
     private String customerTypeName;
 
+    /** 法定代表人及工商经营摘要，供客户池详情复用。 */
+    private String legalRepresentative;
+
+    private BigDecimal registeredCapital;
+
+    private String registeredAddress;
+
+    private String businessAddress;
+
+    private String businessScope;
+
+    private String contactPerson;
+
+    private String contactMobile;
+
     /** 是否重点客户 */
     private Boolean isKeystone;
 
     /** 企业性质 */
     private String enterpriseType;
+    private String enterpriseTypeName;
 
     /** 是否已开户 */
     private Boolean isAccountOpened;
@@ -72,6 +90,19 @@ public class CustomerDTO {
 
     /** 关联来源线索 ID */
     private String leadId;
+    private String leadNo;
+    private String leadType;
+
+    /** 目标营销表中的来源线索 ID；与旧 leadId 同时返回以兼容旧调用方。 */
+    private String sourceLeadId;
+
+    /** 线索分配和池状态，供待认领池展示和后端回显。 */
+    private String distributionMode;
+
+    private String poolStatus;
+    private String claimScope;
+    private Integer claimedCount;
+    private LocalDateTime releasedTime;
 
     /** 当前生效线索版本 */
     private String currentLeadId;
@@ -102,6 +133,7 @@ public class CustomerDTO {
 
     /** 标签 ID 列表 */
     private List<String> tagIds;
+    private List<String> tagNames;
 
     /** 创建时间 */
     private LocalDateTime createdAt;

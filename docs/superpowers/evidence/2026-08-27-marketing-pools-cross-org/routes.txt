@@ -1,0 +1,16 @@
+Playwright session: marketing-pools-cross-org
+Browser: chromium
+Route boundary: **/api/**, only paths beginning with /api/ are fulfilled; /src/api/** continues to Vite.
+
+Mocked API groups:
+- /api/auth/current-user
+- /api/auth/my-menus
+- /api/auth/permissions
+- /api/customer-pool
+- /api/lead-approvals/501
+- /api/claims/mine/customers?tab=UNTOUCHED|TOUCHED
+- /api/cross-org-marketing
+- /api/cross-org-marketing/validate
+- /api/cross-org-marketing/801
+
+All non-matched /api/** reads return an empty success envelope. No external write or database request was issued.

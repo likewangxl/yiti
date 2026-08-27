@@ -1,0 +1,10 @@
+PASS  待认领线索池显示 LEAD-20260827-001、客户名称、统一信用代码、行业、集团、标签、公开认领范围和已认领人数。
+PASS  待认领详情按钮实际请求 /api/lead-approvals/501，证明优先使用 sourceLeadId。
+PASS  已认领未触达页返回上海澄明供应链有限公司，来源显示“公开认领”。
+PASS  点击“已触达”后实际请求 tab=TOUCHED，返回上海云桥科技有限公司，来源显示“指定范围认领”，任务状态显示“已完成”。
+PASS  跨机构列表展示申请编号、客户、申请人/机构、主办人/机构、业绩关系、审批中状态和审核操作。
+PASS  以客户号 KH-20260827-001 执行校验后，四项规则均显示“满足”，业绩规则数据源显示 MARKETING_CUSTOMER_PERFORMANCE_REL_SNAPSHOT。
+PASS  点击“查看详情”后展示“四项冻结快照”、申请原因、审批意见、退回原因和生成触达任务字段。
+PASS  最终 Chromium 控制台 0 errors / 0 warnings。
+
+Boundary: mock page acceptance only; target schema/database integration was not executed.

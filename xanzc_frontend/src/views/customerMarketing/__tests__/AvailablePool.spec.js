@@ -18,11 +18,27 @@ describe('待认领线索池展示契约', () => {
     expect(source).not.toContain('prop="customerType"');
   });
 
-  it('详情按当前线索编号优先、旧线索编号兜底，并复用详情抽屉', () => {
-    expect(source).toContain('row.currentLeadId || row.leadId');
+  it('详情按待认领关系的来源线索优先、旧字段兜底，并复用详情抽屉', () => {
+    expect(source).toContain('row.sourceLeadId || row.leadId || row.currentLeadId');
     expect(source).toContain('getAvailableCustomerLeadDetail');
     expect(source).toContain('<LeadDetailDrawer');
     expect(source).toContain('>详情</el-button>');
     expect(source).toContain('>认领</el-button>');
+  });
+
+  it('只查询后端可见的 PUBLIC 线索并展示完整线索字段', () => {
+    expect(source).toContain("sourceType: sourceType.value || 'PUBLIC'");
+    expect(source).toContain('线索编号');
+    expect(source).toContain('线索类型');
+    expect(source).toContain('所属集团类型');
+    expect(source).toContain('是否基石客户');
+    expect(source).toContain('是否开户');
+    expect(source).toContain('客户标签');
+    expect(source).toContain('授信敞口');
+    expect(source).toContain('可认领范围');
+    expect(source).toContain('已认领人数');
+    expect(source).toContain('下发时间');
+    expect(source).not.toContain('prop="custId"');
+    expect(source).not.toContain('prop="id" label="客户');
   });
 });

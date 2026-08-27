@@ -17,7 +17,14 @@ public class CrossOrgApplyRespDTO {
     private String applicantOrgId;
     private String applicantOrgName;
     private String mainManagerId;
+    private String mainManagerName;
     private String mainOrgId;
+    private String mainOrgName;
+    private Integer applicantNotMainCheck;
+    private Integer mainOrgDifferentCheck;
+    private Integer applicantNoPerformanceCheck;
+    private Integer applicantOrgNoPerformanceCheck;
+    private LocalDateTime checkSnapshotTime;
     private String applyReason;
     private String status;
     private String generatedTouchTaskId;
@@ -25,4 +32,6 @@ public class CrossOrgApplyRespDTO {
     private LocalDateTime reviewedTime;
     private String rejectReason;
     private LocalDateTime createdTime;
+    /** 仅审核角色且申请仍处于 IN_APPROVAL 时为 true。 */
+    private boolean canReview;
 }

@@ -34,6 +34,8 @@ public class CustomerPoolService {
     private final CustClaimMapper claimMapper;
     private final DictApi dictApi;
     private final OrgApi orgApi;
+    /** 目标 MARKETING_* 查询服务；保留旧查询作为脏数据/兼容环境回退。 */
+    private final MarketingCustomerPoolService marketingPoolService;
 
     /**
      * 分页查询当前员工可认领的全行公开客户。
@@ -67,6 +69,9 @@ public class CustomerPoolService {
      */
     public PageResult<CustomerDTO> listPoolAsDTO(String keyword, String empId, int pageNo, int pageSize) {
         log.info("[CustomerPoolService.listPoolAsDTO] keyword={}, pageNo={}, pageSize={}", keyword, pageNo, pageSize);
+        if (marketingPoolService != null) {
+            return marketingPoolService.listAvailable(keyword, empId, pageNo, pageSize);
+        }
         PageResult<CustMaster> raw = listPool(keyword, empId, pageNo, pageSize);
         PageResult<CustomerDTO> out = new PageResult<>();
         out.setPageNo(raw.getPageNo());

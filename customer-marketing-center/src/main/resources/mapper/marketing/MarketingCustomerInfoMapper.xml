@@ -26,6 +26,15 @@
         LIMIT 1
     </select>
 
+    <select id="selectForUpdate"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_INFO
+        WHERE id = #{id}
+          AND record_status = 'ACTIVE'
+        FOR UPDATE
+    </select>
+
     <select id="selectActiveMatches"
             resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo">
         SELECT <include refid="BASE_COLUMNS"/>

@@ -1,12 +1,17 @@
 package com.bank.branch.platform.customer.marketing.lead;
 
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadDetailResponse;
+import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerClaim;
+import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadManagerScope;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadTagRel;
+import com.bank.branch.platform.customer.entity.marketing.MarketingTouchTask;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerClaimMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadInfoMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadManagerScopeMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadTagRelMapper;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingTouchTaskMapper;
 import com.bank.branch.platform.customer.service.marketing.MarketingLeadApprovalService;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
@@ -44,6 +49,10 @@ class MarketingLeadApprovalServiceTest {
     private MarketingLeadTagRelMapper leadTagRelMapper;
     @Mock
     private FileApi fileApi;
+    @Mock
+    private MarketingCustomerClaimMapper marketingClaimMapper;
+    @Mock
+    private MarketingTouchTaskMapper marketingTouchTaskMapper;
 
     @InjectMocks
     private MarketingLeadApprovalService service;
@@ -105,6 +114,43 @@ class MarketingLeadApprovalServiceTest {
                 .thenReturn(1);
         service.reject(21L, "TASK_1", "EMP_1", "资料不完整");
         verify(workflowApi).rejectByEmp("TASK_1", "EMP_1", "资料不完整");
+    }
+
+    @Test
+    void approveScope_shouldProvisionTargetClaimsWithoutEnteringPublicPool() {
+        MarketingLeadInfo lead = lead(51L, "MANUAL");
+        lead.setLeadStatus("IN_APPROVAL");
+        lead.setDistributionMode("SCOPE");
+        when(leadMapper.selectForUpdate(51L)).thenReturn(lead);
+        when(leadMapper.updateStatusIf(51L, "IN_APPROVAL", "APPROVED", "EMP_1", null)).thenReturn(1);
+        when(customerMapper.insert(any(MarketingCustomerInfo.class))).thenAnswer(invocation -> {
+            MarketingCustomerInfo customer = invocation.getArgument(0);
+            customer.setId(501L);
+            return 1;
+        });
+        MarketingLeadManagerScope scope = new MarketingLeadManagerScope();
+        scope.setManagerEmpId("EMP_2");
+        scope.setManagerOrgId("ORG_2");
+        scope.setAssignmentType("SCOPE");
+        when(managerScopeMapper.selectList(any())).thenReturn(List.of(scope));
+        when(marketingClaimMapper.selectActiveBySourceLeadAndClaimedBy(51L, "EMP_2"))
+                .thenReturn(null);
+        when(marketingClaimMapper.insert(any(MarketingCustomerClaim.class))).thenAnswer(invocation -> {
+            MarketingCustomerClaim claim = invocation.getArgument(0);
+            claim.setId(701L);
+            return 1;
+        });
+        when(marketingTouchTaskMapper.insert(any(MarketingTouchTask.class))).thenAnswer(invocation -> {
+            MarketingTouchTask task = invocation.getArgument(0);
+            task.setId(801L);
+            return 1;
+        });
+
+        service.approve(51L, "TASK_51", "EMP_1", "同意");
+
+        assertEquals("CLAIMED", lead.getPoolStatus());
+        verify(marketingClaimMapper).insert(any(MarketingCustomerClaim.class));
+        verify(marketingTouchTaskMapper).insert(any(MarketingTouchTask.class));
     }
 
     @Test
