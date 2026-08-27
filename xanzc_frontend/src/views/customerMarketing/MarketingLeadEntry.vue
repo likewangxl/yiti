@@ -175,6 +175,10 @@
           <el-button>选择文件</el-button>
           <template #tip><div class="el-upload__tip">支持 xlsx、xls、csv，单个文件不超过 10MB。</div></template>
         </el-upload>
+        <div class="import-dialog-help">
+          <p>客户标签填写标签ID，多个用分号分隔；指定客户经理范围填写工号，多个用分号分隔。</p>
+          <p>附件无法随表格导入，需在线索生成后单独补充。</p>
+        </div>
       </div>
       <template #footer>
         <el-button @click="importDialogVisible=false">取消</el-button>
@@ -467,6 +471,8 @@ refreshManualView();
 .import-dialog-content { display: grid; gap: 18px; }
 .import-template-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; color: #606266; font-size: 13px; }
 .import-uploader :deep(.el-upload__tip) { margin-top: 8px; }
+.import-dialog-help { padding: 10px 12px; border-radius: 4px; background: #f5f7fa; color: #606266; font-size: 12px; line-height: 1.7; }
+.import-dialog-help p { margin: 0; }
 .pager { display: flex; justify-content: flex-end; margin-top: 14px; }
 .lead-entry-table { width: 100%; }
 .matched-customer-alert { margin-top: 12px; }

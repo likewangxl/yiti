@@ -1,8 +1,12 @@
 package com.bank.branch.platform.customer.service.marketing;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.customer.dto.marketing.lead.LeadCreateRequest;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadImportDetailResponse;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadImportPreviewResponse;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadImportQuery;
@@ -24,15 +28,16 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.springframework.beans.BeanUtils;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -41,15 +46,15 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * 页面三线索批量导入服务。
@@ -72,11 +77,15 @@ public class MarketingLeadImportService {
     private static final int MAX_ROWS = 5000;
     private static final int MAX_PAGE_SIZE = 100;
     private static final Set<String> FAILURE_STATUSES = Set.of("REJECTED", "ERROR", "WARNING");
+    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final BigDecimal WAN_TO_YUAN = BigDecimal.TEN.pow(4);
 
     private final MarketingLeadImportBatchMapper batchMapper;
     private final MarketingLeadImportDetailMapper detailMapper;
     private final MarketingLeadInfoMapper leadMapper;
     private final MarketingCustomerInfoMapper customerMapper;
+    private final MarketingLeadEntryService leadEntryService;
+    private final PlatformTransactionManager transactionManager;
     private final FileApi fileApi;
 
     /** 查询导入批次；客户经理固定只能查看本人批次，管理员可查看全量。 */
@@ -345,9 +354,6 @@ public class MarketingLeadImportService {
         detail.setBusinessAddress(first(row, "businessAddress", "经营地址"));
         detail.setIndustry(first(row, "industry", "行业"));
         detail.setCustomerType(first(row, "customerType", "客户类型"));
-        detail.setCreditAmount(decimal(first(row, "creditAmount", "授信金额")));
-        detail.setCreditExposureAmount(decimal(first(row, "creditExposureAmount", "授信敞口金额", "敞口金额")));
-        detail.setRequestedManagerId(first(row, "requestedManagerId", "主办客户经理", "客户经理工号", "主办人工号"));
         detail.setRawRowJson(toJson(row));
         detail.setHandlingStatus("PENDING");
 
@@ -357,13 +363,26 @@ public class MarketingLeadImportService {
         if (!StringUtils.hasText(code) || !code.matches("[0-9A-Z]{18}")) {
             return markError(detail, "INVALID_CREDIT_CODE", "统一社会信用代码必须为18位大写字母或数字");
         }
+        LeadCreateRequest request;
+        try {
+            request = toLeadCreateRequest(detail);
+        } catch (ImportValidationException ex) {
+            return markError(detail, ex.code, ex.getMessage());
+        }
+        detail.setCreditAmount(request.getCreditAmount());
+        detail.setCreditExposureAmount(request.getCreditExposureAmount());
+        detail.setRequestedManagerId(request.getManagerEmpIds().isEmpty()
+                ? null : request.getManagerEmpIds().get(0));
+
         MarketingCustomerInfo customer = findCustomer(code);
         if (customer != null) {
             detail.setMatchedCustomerId(customer.getId());
             detail.setCustomerMatchStatus(customer.getIsAccountOpened() != null && customer.getIsAccountOpened() == 1
                     ? "MATCHED_EXISTING_OPENED" : "MATCHED_EXISTING_UNOPENED");
-            if (StringUtils.hasText(detail.getRequestedManagerId())
-                    && !Objects.equals(detail.getRequestedManagerId(), customer.getMainManagerId())) {
+            if ("OWNER".equals(request.getDistributionMode())
+                    && StringUtils.hasText(customer.getMainManagerId())
+                    && !request.getManagerEmpIds().isEmpty()
+                    && !request.getManagerEmpIds().contains(customer.getMainManagerId())) {
                 detail.setValidationStatus("WARNING");
                 detail.setWarningCode("OWNER_CONFLICT");
                 detail.setWarningMessage("文件主办人与客户主档当前主办人不一致，需人工确认");
@@ -399,24 +418,18 @@ public class MarketingLeadImportService {
                 String code = MarketingLeadEntryService.normalizeCreditCode(detail.getUnifiedCreditCode());
                 MarketingLeadInfo pending = leadMapper.selectActiveByCreditCode(code);
                 if (pending != null) {
-                    detail.setValidationStatus("REJECTED");
-                    detail.setErrorCode("PENDING_LEAD_DUPLICATE");
-                    detail.setErrorMessage("二次校验发现在途线索 " + pending.getLeadNo());
-                    detail.setHandlingStatus("SKIPPED");
-                    detailMapper.updateById(detail);
+                    markProcessingRejected(batch, detail, "二次校验发现在途线索 " + pending.getLeadNo());
                     continue;
                 }
-                MarketingLeadInfo lead = toLead(detail, batch, operatorEmpId);
                 try {
-                    leadMapper.insert(lead);
-                    detailMapper.updateHandlingIf(detail.getId(), "PENDING", "GENERATED", lead.getId());
+                    MarketingLeadInfo lead = createImportedLead(batch, detail, operatorEmpId);
                     generated++;
                 } catch (DuplicateKeyException ex) {
-                    detail.setValidationStatus("REJECTED");
-                    detail.setErrorCode("PENDING_LEAD_DUPLICATE");
-                    detail.setErrorMessage("生成线索时检测到统一社会信用代码已有在途线索");
-                    detail.setHandlingStatus("SKIPPED");
-                    detailMapper.updateById(detail);
+                    markProcessingRejected(batch, detail, "生成线索时检测到统一社会信用代码已有在途线索");
+                } catch (ImportValidationException ex) {
+                    markProcessingError(batch, detail, ex.code, ex.getMessage());
+                } catch (BizException ex) {
+                    markProcessingError(batch, detail, ex.getCode(), ex.getMessage());
                 }
             }
         }
@@ -425,45 +438,267 @@ public class MarketingLeadImportService {
         batch.setUpdatedTime(LocalDateTime.now());
     }
 
-    private MarketingLeadInfo toLead(MarketingLeadImportDetail detail, MarketingLeadImportBatch batch,
-                                     String operatorEmpId) {
-        MarketingLeadInfo lead = new MarketingLeadInfo();
-        lead.setLeadNo("MLEAD_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
-                + "_" + UUID.randomUUID().toString().substring(0, 6).toUpperCase(Locale.ROOT));
-        lead.setCustId(detail.getMatchedCustomerId());
-        lead.setLeadType("NEW_CUSTOMER".equals(detail.getCustomerMatchStatus())
-                ? "NEW_ACCOUNT" : "EXISTING_MARKETING");
-        lead.setCustomerMatchStatus(detail.getCustomerMatchStatus());
-        lead.setCustNoSnapshot(detail.getCustNo());
-        lead.setCustName(detail.getCustName());
-        lead.setUnifiedCreditCode(detail.getUnifiedCreditCode());
-        lead.setContactPerson(detail.getContactPerson());
-        lead.setContactMobile(detail.getContactMobile());
-        lead.setRegisteredAddress(detail.getRegisteredAddress());
-        lead.setBusinessAddress(detail.getBusinessAddress());
-        lead.setIndustry(detail.getIndustry());
-        lead.setCustomerType(detail.getCustomerType());
-        lead.setCreditAmount(detail.getCreditAmount());
-        lead.setCreditExposureAmount(detail.getCreditExposureAmount());
-        lead.setMainManagerIdSnapshot(detail.getRequestedManagerId());
-        lead.setMainOrgIdSnapshot(detail.getRequestedManagerOrgId());
+    private MarketingLeadInfo createImportedLead(MarketingLeadImportBatch batch,
+                                                  MarketingLeadImportDetail detail,
+                                                  String operatorEmpId) {
+        return inNewTransaction(() -> {
+            LeadCreateRequest request = toLeadCreateRequest(detail);
+            MarketingLeadInfo lead = leadEntryService.createDraft(
+                    request, batch.getImportEmpId(), batch.getImportOrgId());
+            if (lead == null || lead.getId() == null) {
+                throw error("MARKETING_LEAD_IMPORT_CREATE_FAILED", "线索服务未返回有效线索");
+            }
+            patchImportedLead(lead, batch, detail, operatorEmpId);
+            leadMapper.updateById(lead);
+            detailMapper.updateHandlingIf(detail.getId(), "PENDING", "GENERATED", lead.getId());
+            return lead;
+        });
+    }
+
+    private <T> T inNewTransaction(Supplier<T> operation) {
+        // 明细尚在外层批次事务中，使用保存点隔离行级回滚，避免新连接看不到未提交明细。
+        // Mockito 单测及少量离线装配没有事务管理器时仍直接执行。
+        if (transactionManager == null) return operation.get();
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_NESTED);
+        return template.execute(status -> operation.get());
+    }
+
+    private void patchImportedLead(MarketingLeadInfo lead, MarketingLeadImportBatch batch,
+                                   MarketingLeadImportDetail detail, String operatorEmpId) {
         lead.setLeadSource("LEAD_IMPORT");
-        lead.setDistributionMode(StringUtils.hasText(detail.getRequestedManagerId()) ? "OWNER" : "PUBLIC");
-        lead.setPoolStatus("NOT_READY");
-        lead.setActiveDedupKey(detail.getUnifiedCreditCode());
-        lead.setLeadStatus("DRAFT");
-        lead.setEntryEmpId(batch.getImportEmpId());
-        lead.setEntryOrgId(batch.getImportOrgId());
-        lead.setEntryTime(batch.getImportTime());
         lead.setImportBatchId(batch.getId());
         lead.setBatchRowNo(detail.getRowNo());
-        lead.setRecordStatus("ACTIVE");
-        lead.setCreatedBy(operatorEmpId);
-        lead.setCreatedTime(LocalDateTime.now());
         lead.setUpdatedBy(operatorEmpId);
         lead.setUpdatedTime(LocalDateTime.now());
-        lead.setLockVersion(0);
-        return lead;
+    }
+
+    private void markProcessingRejected(MarketingLeadImportBatch batch,
+                                        MarketingLeadImportDetail detail, String message) {
+        detail.setValidationStatus("REJECTED");
+        detail.setErrorCode("PENDING_LEAD_DUPLICATE");
+        detail.setErrorMessage(message);
+        detail.setHandlingStatus("SKIPPED");
+        moveValidCounter(batch, "REJECTED");
+        detailMapper.updateById(detail);
+    }
+
+    private void markProcessingError(MarketingLeadImportBatch batch,
+                                     MarketingLeadImportDetail detail, String code, String message) {
+        detail.setValidationStatus("ERROR");
+        detail.setErrorCode(StringUtils.hasText(code) ? code : "MARKETING_LEAD_IMPORT_ROW_FAILED");
+        detail.setErrorMessage(StringUtils.hasText(message) ? message : "该行处理失败，请修正后重新导入");
+        detail.setHandlingStatus("SKIPPED");
+        moveValidCounter(batch, "ERROR");
+        detailMapper.updateById(detail);
+    }
+
+    private void moveValidCounter(MarketingLeadImportBatch batch, String targetStatus) {
+        batch.setValidCount(Math.max(0, (batch.getValidCount() == null ? 0 : batch.getValidCount()) - 1));
+        if ("REJECTED".equals(targetStatus)) {
+            batch.setRejectedCount((batch.getRejectedCount() == null ? 0 : batch.getRejectedCount()) + 1);
+        } else {
+            batch.setErrorCount((batch.getErrorCount() == null ? 0 : batch.getErrorCount()) + 1);
+        }
+    }
+
+    /**
+     * 将导入行还原成手工录入使用的同一份请求对象。
+     * 明细表只保留历史兼容字段，新增字段全部从 raw_row_json 读取，避免为模板扩展修改 DDL。
+     */
+    private LeadCreateRequest toLeadCreateRequest(MarketingLeadImportDetail detail) {
+        Map<String, String> row = readRawRow(detail);
+        boolean legacyRow = "true".equalsIgnoreCase(row.get("__legacyrawrow"));
+        LeadCreateRequest request = new LeadCreateRequest();
+        request.setLeadType(normalizeLeadType(first(row, "leadType", "线索类型")));
+        request.setCustName(firstOr(row, detail.getCustName(), "custName", "企业名称", "客户名称"));
+        request.setUnifiedCreditCode(MarketingLeadEntryService.normalizeCreditCode(
+                firstOr(row, detail.getUnifiedCreditCode(), "unifiedCreditCode", "统一社会信用代码", "统一信用代码")));
+        request.setCustNo(firstOr(row, detail.getCustNo(), "custNo", "客户号", "客户编号"));
+        request.setContactPerson(firstOr(row, detail.getContactPerson(), "contactPerson", "联系人"));
+        request.setContactMobile(firstOr(row, detail.getContactMobile(), "contactMobile", "联系电话", "联系人电话"));
+        request.setRegisteredAddress(firstOr(row, detail.getRegisteredAddress(), "registeredAddress", "注册地址"));
+        request.setBusinessAddress(firstOr(row, detail.getBusinessAddress(), "businessAddress", "经营地址"));
+        request.setIndustry(firstOr(row, detail.getIndustry(), "industry", "所属行业", "行业"));
+        request.setGroupType(first(row, "groupType", "所属集团类型", "集团类型"));
+        request.setGroupName(first(row, "groupName", "所属集团名称", "集团名称"));
+        request.setCustomerType(firstOr(row, detail.getCustomerType(), "customerType", "客户类型"));
+        request.setEnterpriseType(first(row, "enterpriseType", "企业类型"));
+        request.setIsKeystone(parseBoolean(first(row, "isKeystone", "是否基石客户"),
+                "isKeystone", null));
+        request.setIsAccountOpenedSnapshot(parseBoolean(
+                first(row, "isAccountOpenedSnapshot", "isAccountOpened", "是否开户"),
+                "isAccountOpenedSnapshot", 0));
+        String touchRestricted = first(row, "touchRestricted", "是否触达限制");
+        if (!StringUtils.hasText(touchRestricted)) {
+            if (legacyRow) {
+                // 历史明细没有该列，沿用手工录入默认的“是”，不阻断历史批次确认。
+                request.setTouchRestricted(1);
+            } else {
+                throw invalid("REQUIRED_TOUCH_RESTRICTED", "是否触达限制不能为空");
+            }
+        } else {
+            request.setTouchRestricted(parseBoolean(touchRestricted, "touchRestricted", null));
+        }
+        request.setCustomerDesc(first(row, "customerDesc", "客户说明"));
+        String creditValue = first(row, "creditAmount", "授信金额（万元）", "授信金额");
+        String exposureValue = first(row, "creditExposureAmount", "授信敞口金额（万元）",
+                "授信敞口金额", "敞口金额");
+        if (legacyRow) {
+            creditValue = firstOr(row, detail.getCreditAmount() == null ? null
+                    : detail.getCreditAmount().toPlainString(), "creditAmount", "授信金额（万元）", "授信金额");
+            exposureValue = firstOr(row, detail.getCreditExposureAmount() == null ? null
+                    : detail.getCreditExposureAmount().toPlainString(), "creditExposureAmount", "授信敞口金额（万元）",
+                    "授信敞口金额", "敞口金额");
+        }
+        request.setCreditAmount(legacyRow ? amountYuan(creditValue, "creditAmount")
+                : amountWan(creditValue, "creditAmount"));
+        request.setCreditExposureAmount(legacyRow ? amountYuan(exposureValue, "creditExposureAmount")
+                : amountWan(exposureValue, "creditExposureAmount"));
+
+        String managerValue = first(row, "managerEmpIds", "指定客户经理范围", "requestedManagerId",
+                "主办客户经理", "客户经理工号", "主办人工号");
+        List<String> managerEmpIds = splitDelimited(managerValue);
+        request.setManagerEmpIds(managerEmpIds);
+        String distributionValue = first(row, "distributionMode", "分配方式");
+        String distributionMode = normalizeDistributionMode(distributionValue);
+        // 旧模板只有“主办客户经理”列，携带该列时保持旧模板的主办分配语义。
+        if (!StringUtils.hasText(distributionValue) && !managerEmpIds.isEmpty()) {
+            distributionMode = "OWNER";
+        }
+        request.setDistributionMode(distributionMode);
+        if ("OWNER".equals(distributionMode) && !managerEmpIds.isEmpty()) {
+            request.setMainManagerId(managerEmpIds.get(0));
+        }
+        request.setTagIds(parseTagIds(first(row, "tagIds", "客户标签")));
+        return request;
+    }
+
+    private Map<String, String> readRawRow(MarketingLeadImportDetail detail) {
+        if (detail != null && StringUtils.hasText(detail.getRawRowJson())) {
+            try {
+                Map<String, String> parsed = JSON.readValue(detail.getRawRowJson(),
+                        new TypeReference<Map<String, String>>() { });
+                if (parsed != null && !parsed.isEmpty()) {
+                    return parsed;
+                }
+            } catch (IOException ex) {
+                // 旧批次曾保存 Map.toString()，下面使用明细列兜底，保证历史批次仍可确认处理。
+                log.debug("旧版线索导入明细 rawRowJson 非 JSON，使用兼容字段: rowNo={}",
+                        detail.getRowNo());
+            }
+        }
+        Map<String, String> fallback = new HashMap<>();
+        if (detail == null) return fallback;
+        fallback.put("__legacyrawrow", "true");
+        fallback.put("custno", detail.getCustNo());
+        fallback.put("custname", detail.getCustName());
+        fallback.put("unifiedcreditcode", detail.getUnifiedCreditCode());
+        fallback.put("contactperson", detail.getContactPerson());
+        fallback.put("contactmobile", detail.getContactMobile());
+        fallback.put("registeredaddress", detail.getRegisteredAddress());
+        fallback.put("businessaddress", detail.getBusinessAddress());
+        fallback.put("industry", detail.getIndustry());
+        fallback.put("customertype", detail.getCustomerType());
+        fallback.put("creditamount", detail.getCreditAmount() == null
+                ? null : detail.getCreditAmount().toPlainString());
+        fallback.put("creditexposureamount", detail.getCreditExposureAmount() == null
+                ? null : detail.getCreditExposureAmount().toPlainString());
+        fallback.put("requestedmanagerid", detail.getRequestedManagerId());
+        return fallback;
+    }
+
+    private String firstOr(Map<String, String> row, String fallback, String... names) {
+        String value = first(row, names);
+        return StringUtils.hasText(value) ? value : fallback;
+    }
+
+    private String normalizeLeadType(String value) {
+        if (!StringUtils.hasText(value)) return "NEW_ACCOUNT";
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "NEW_ACCOUNT", "NEW", "新客户", "新客户开户", "新客户开户线索" -> "NEW_ACCOUNT";
+            case "EXISTING_MARKETING", "EXISTING", "存量客户营销", "存量客户营销线索" -> "EXISTING_MARKETING";
+            default -> throw invalid("INVALID_LEAD_TYPE", "线索类型只能填写新客户开户线索/存量客户营销线索或对应代码");
+        };
+    }
+
+    private String normalizeDistributionMode(String value) {
+        if (!StringUtils.hasText(value)) return "PUBLIC";
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "PUBLIC", "全行公开认领", "全行公开", "公开认领" -> "PUBLIC";
+            case "SCOPE", "指定客户经理范围", "指定范围" -> "SCOPE";
+            case "OWNER", "主办专属", "主办人专属", "主办分配" -> "OWNER";
+            default -> throw invalid("INVALID_DISTRIBUTION_MODE", "分配方式只能填写全行公开认领/指定客户经理范围/主办专属或对应代码");
+        };
+    }
+
+    private Integer parseBoolean(String value, String field, Integer defaultValue) {
+        if (!StringUtils.hasText(value)) return defaultValue;
+        return switch (value.trim().toUpperCase(Locale.ROOT)) {
+            case "是", "YES", "Y", "TRUE", "1" -> 1;
+            case "否", "NO", "N", "FALSE", "0" -> 0;
+            default -> throw invalid("INVALID_" + field.replaceAll("([a-z])([A-Z])", "$1_$2")
+                    .toUpperCase(Locale.ROOT), "字段值只能填写是/否或对应代码：" + value);
+        };
+    }
+
+    private List<Long> parseTagIds(String value) {
+        List<String> tokens = splitDelimited(value);
+        if (tokens.isEmpty()) return List.of();
+        List<Long> ids = new ArrayList<>(tokens.size());
+        for (String token : tokens) {
+            try {
+                ids.add(Long.valueOf(token));
+            } catch (NumberFormatException ex) {
+                throw invalid("INVALID_TAG_IDS", "客户标签必须填写标签ID，当前值：" + token);
+            }
+        }
+        return new ArrayList<>(new LinkedHashSet<>(ids));
+    }
+
+    private List<String> splitDelimited(String value) {
+        if (!StringUtils.hasText(value)) return List.of();
+        List<String> result = new ArrayList<>();
+        for (String token : value.trim().split("[,;；，、|\\s]+")) {
+            if (StringUtils.hasText(token)) result.add(token.trim());
+        }
+        return new ArrayList<>(new LinkedHashSet<>(result));
+    }
+
+    private BigDecimal amountWan(String value, String field) {
+        if (!StringUtils.hasText(value)) return null;
+        try {
+            BigDecimal amount = new BigDecimal(value.replace(",", "").trim());
+            if (amount.signum() < 0) {
+                throw invalid("INVALID_" + field.replaceAll("([a-z])([A-Z])", "$1_$2")
+                        .toUpperCase(Locale.ROOT), "金额不能为负数");
+            }
+            return amount.multiply(WAN_TO_YUAN);
+        } catch (NumberFormatException ex) {
+            throw invalid("INVALID_" + field.replaceAll("([a-z])([A-Z])", "$1_$2")
+                    .toUpperCase(Locale.ROOT), "金额必须为数字：" + value);
+        }
+    }
+
+    private BigDecimal amountYuan(String value, String field) {
+        if (!StringUtils.hasText(value)) return null;
+        try {
+            BigDecimal amount = new BigDecimal(value.replace(",", "").trim());
+            if (amount.signum() < 0) {
+                throw invalid("INVALID_" + field.replaceAll("([a-z])([A-Z])", "$1_$2")
+                        .toUpperCase(Locale.ROOT), "金额不能为负数");
+            }
+            return amount;
+        } catch (NumberFormatException ex) {
+            throw invalid("INVALID_" + field.replaceAll("([a-z])([A-Z])", "$1_$2")
+                    .toUpperCase(Locale.ROOT), "金额必须为数字：" + value);
+        }
+    }
+
+    private ImportValidationException invalid(String code, String message) {
+        return new ImportValidationException(code, message);
     }
 
     private void skipNonValidRows(Long batchId) {
@@ -593,17 +828,12 @@ public class MarketingLeadImportService {
         return cell == null ? "" : formatter.formatCellValue(cell).trim();
     }
 
-    private BigDecimal decimal(String value) {
-        if (!StringUtils.hasText(value)) return null;
-        try {
-            return new BigDecimal(value.replace(",", "").trim());
-        } catch (NumberFormatException ex) {
-            return null;
-        }
-    }
-
     private String toJson(Map<String, String> row) {
-        return row.toString();
+        try {
+            return JSON.writeValueAsString(row);
+        } catch (JsonProcessingException ex) {
+            throw error("MARKETING_LEAD_IMPORT_JSON_FAILED", "导入行快照生成失败");
+        }
     }
 
     private byte[] toErrorCsv(List<MarketingLeadImportDetail> failures) {
@@ -643,4 +873,13 @@ public class MarketingLeadImportService {
     }
 
     private int safePageSize(int pageSize) { return Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE); }
+
+    private static final class ImportValidationException extends IllegalArgumentException {
+        private final String code;
+
+        private ImportValidationException(String code, String message) {
+            super(message);
+            this.code = code;
+        }
+    }
 }

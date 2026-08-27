@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../MarketingLeadEntry.vue', import.meta.url), 'utf8');
+const importTemplate = readFileSync(new URL('../../../../public/templates/lead-import-template.csv', import.meta.url), 'utf8').trim();
 
 describe('营销线索录入页面契约', () => {
   it('沿用我的客户页面的统一页头、说明、筛选卡片和分页视觉契约', () => {
@@ -65,6 +66,23 @@ describe('营销线索录入页面契约', () => {
     expect(source).toMatch(/templates\/lead-import-template\.csv/);
     expect(source).toMatch(/10\s*\*\s*1024\s*\*\s*1024/);
     expect(source).toMatch(/await createLeadImportBatch\((?:file|pendingImportFile\.value)\)[\s\S]*importDialogVisible\.value\s*=\s*false[\s\S]*activeTab\.value\s*=\s*['"]imports['"][\s\S]*await loadBatches\(\)/);
+  });
+
+  it('线索导入模板按录入抽屉顺序覆盖 18 个可表格化字段', () => {
+    expect(importTemplate.split(/\r?\n/)[0].split(',')).toEqual([
+      '线索类型', '客户名称', '统一社会信用代码', '是否开户', '客户号', '所属行业',
+      '所属集团类型', '所属集团名称', '客户类型', '是否基石客户', '企业类型', '客户标签',
+      '分配方式', '指定客户经理范围', '是否触达限制', '客户说明', '授信金额（万元）', '授信敞口金额（万元）'
+    ]);
+    ['联系人', '联系电话', '注册地址', '经营地址', '主办客户经理工号'].forEach(field => {
+      expect(importTemplate).not.toContain(field);
+    });
+  });
+
+  it('批量导入弹窗说明标签、客户经理范围和附件的填写边界', () => {
+    expect(source).toContain('客户标签填写标签ID，多个用分号分隔');
+    expect(source).toContain('指定客户经理范围填写工号，多个用分号分隔');
+    expect(source).toContain('附件无法随表格导入，需在线索生成后单独补充');
   });
 
   it('写操作失败时不显示成功提示', () => {

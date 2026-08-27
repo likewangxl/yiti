@@ -42,7 +42,7 @@
 ```text
 npm test -- --run src/views/customerMarketing/__tests__/MarketingLeadEntry.spec.js
 Test Files  1 passed (1)
-Tests       25 passed (25)
+Tests       27 passed (27)
 
 npm run build
 3089 modules transformed
@@ -51,3 +51,13 @@ built successfully
 git diff --check
 passed
 ```
+
+## 模板字段对齐增量验收
+
+- 模板表头已按“录入线索”抽屉顺序调整为 18 个可表格化字段。
+- 弹窗明确说明：客户标签填写标签 ID、指定客户经理范围填写工号，多个值用分号分隔；附件需在线索生成后单独补充。
+- 浏览器下载的 `lead-import-template.csv` 与前端静态模板逐字节一致，首行共 18 列。
+- 选择本地模板后，`requests --filter='marketing/lead-import-batches'` 无输出，证明未发起导入批次 GET/POST；未点击“上传”。
+- 当前验收会话 `route-list` 为 `No active routes`，未注册 mock；console 为 0 errors、2 条既有 `/bizexec/supports` 路由 warning。
+- 新增截图：`import-dialog-aligned-template.png`、`local-file-selected-aligned-template.png`。
+- 完整模板首行、浏览器命令和原始摘要见 `template-alignment.txt`。
