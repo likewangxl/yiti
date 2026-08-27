@@ -174,7 +174,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
                 .filter(c -> "ChartWidget".equals(c.getComponent()))
                 .collect(Collectors.toList());
         // 先完成 schema/条线/命名组主体校验，再触碰 block 行；错误配置不能留下半更新草稿。
-        String unboundDraftJson = buildDraftJson(comps);
+        String unboundDraftJson = buildDraftJson(s, comps);
         validateCanvasSchema(unboundDraftJson);
         if (screenMapService != null) {
             screenMapService.validateDraftStructure(unboundDraftJson);
@@ -216,7 +216,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
 
         // 3) 序列化组件树(含 resolved blockId)+ 样式;上限校验
         String styleJson = writeJson(req.getCanvasStyle());
-        String draftJson = buildDraftJson(comps);
+        String draftJson = buildDraftJson(s, comps);
         validateCanvasSchema(draftJson);
         if (screenMapService != null) {
             screenMapService.validateDraftStructure(draftJson);
@@ -732,9 +732,9 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         return json == null || json.isBlank() ? "{}" : json;
     }
 
-    private String buildDraftJson(List<CanvasComponentDTO> comps) {
+    private String buildDraftJson(RptScreen screen, List<CanvasComponentDTO> comps) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("schemaVersion", hasV2Map(comps) ? 2 : 1);
+        root.put("schemaVersion", requiresRuntimeSchemaV2(screen, comps) ? 2 : 1);
         ArrayNode arr = root.putArray("components");
         for (CanvasComponentDTO c : comps) {
             arr.add(objectMapper.valueToTree(c));
@@ -758,6 +758,10 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             }
         }
         return false;
+    }
+
+    private boolean requiresRuntimeSchemaV2(RptScreen screen, List<CanvasComponentDTO> components) {
+        return "NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode()) || hasV2Map(components);
     }
 
     private boolean hasV2Map(JsonNode components) {

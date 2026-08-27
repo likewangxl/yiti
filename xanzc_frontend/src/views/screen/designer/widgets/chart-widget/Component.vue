@@ -12,6 +12,7 @@
 import { computed, inject, isRef } from 'vue';
 import BlockContainer from '@/views/screen/components/BlockContainer.vue';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
+import { runtimeSchemaVersion } from '@/utils/screenScope';
 const props = defineProps({ element: { type: Object, required: true }, mode: { type: String, default: 'design' } });
 const store = useScreenDesignerStore();
 const previewContext = inject('previewContext', { orgCode: '', empId: '' });
@@ -49,7 +50,8 @@ const block = computed(() => {
 const ctx = computed(() => {
   const base = isRef(previewContext) ? previewContext.value : (previewContext || {});
   if (props.mode !== 'design') return base;
-  const schemaVersion = [1, 2].includes(store.draftSchemaVersion) ? store.draftSchemaVersion : 1;
+  // 运行时请求版本由屏机构范围决定，不能复用仅描述画布结构的草稿版本。
+  const schemaVersion = runtimeSchemaVersion({ orgScopeMode: store.orgScopeMode });
   return {
     ...base,
     screenCode: String(store.screenCode || ''),
