@@ -37,6 +37,22 @@ public interface MarketingLeadInfoMapper extends BaseMapper<MarketingLeadInfo> {
                        @Param("rejectReason") String rejectReason);
 
     /**
+     * 审批状态 CAS 成功后，使用递增后的版本号原子回写客户主档关联和池状态。
+     *
+     * @param id                  线索ID
+     * @param expectedLockVersion {@link #updateStatusIf} 执行后的版本号
+     * @param custId              装配后的营销客户主档ID
+     * @param poolStatus          PUBLIC 为 AVAILABLE，定向分配为 CLAIMED
+     * @param updatedBy           审批人工号
+     * @return 更新行数，必须为1
+     */
+    int finalizeApproval(@Param("id") Long id,
+                         @Param("expectedLockVersion") int expectedLockVersion,
+                         @Param("custId") Long custId,
+                         @Param("poolStatus") String poolStatus,
+                         @Param("updatedBy") String updatedBy);
+
+    /**
      * 将已退回线索重新保存为草稿时，显式清空上一轮审批元数据。
      *
      * @param id        线索ID

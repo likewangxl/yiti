@@ -13,6 +13,7 @@ import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadManagerSc
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadTagRelMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingTouchTaskMapper;
 import com.bank.branch.platform.customer.service.marketing.MarketingLeadApprovalService;
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
@@ -28,6 +29,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -147,10 +149,18 @@ class MarketingLeadApprovalServiceTest {
     void approveAndRejectUseConditionalStatusTransition() {
         MarketingLeadInfo lead = lead(21L, "MANUAL");
         lead.setLeadStatus("IN_APPROVAL");
+        lead.setLockVersion(9);
         when(leadMapper.selectForUpdate(21L)).thenReturn(lead);
         when(leadMapper.updateStatusIf(21L, "IN_APPROVAL", "APPROVED", "EMP_1", null)).thenReturn(1);
+        when(customerMapper.insert(any(MarketingCustomerInfo.class))).thenAnswer(invocation -> {
+            MarketingCustomerInfo customer = invocation.getArgument(0);
+            customer.setId(201L);
+            return 1;
+        });
+        when(leadMapper.finalizeApproval(21L, 10, 201L, "AVAILABLE", "EMP_1")).thenReturn(1);
         service.approve(21L, "TASK_1", "EMP_1", "同意");
         verify(workflowApi).approveByEmp("TASK_1", "EMP_1", "同意");
+        verify(leadMapper).finalizeApproval(21L, 10, 201L, "AVAILABLE", "EMP_1");
 
         when(leadMapper.selectForUpdate(21L)).thenReturn(lead);
         when(leadMapper.updateStatusIf(21L, "IN_APPROVAL", "REJECTED", "EMP_1", "资料不完整"))
@@ -164,6 +174,7 @@ class MarketingLeadApprovalServiceTest {
         MarketingLeadInfo lead = lead(51L, "MANUAL");
         lead.setLeadStatus("IN_APPROVAL");
         lead.setDistributionMode("SCOPE");
+        lead.setLockVersion(4);
         when(leadMapper.selectForUpdate(51L)).thenReturn(lead);
         when(leadMapper.updateStatusIf(51L, "IN_APPROVAL", "APPROVED", "EMP_1", null)).thenReturn(1);
         when(customerMapper.insert(any(MarketingCustomerInfo.class))).thenAnswer(invocation -> {
@@ -171,6 +182,7 @@ class MarketingLeadApprovalServiceTest {
             customer.setId(501L);
             return 1;
         });
+        when(leadMapper.finalizeApproval(51L, 5, 501L, "CLAIMED", "EMP_1")).thenReturn(1);
         MarketingLeadManagerScope scope = new MarketingLeadManagerScope();
         scope.setManagerEmpId("EMP_2");
         scope.setManagerOrgId("ORG_2");
@@ -194,6 +206,25 @@ class MarketingLeadApprovalServiceTest {
         assertEquals("CLAIMED", lead.getPoolStatus());
         verify(marketingClaimMapper).insert(any(MarketingCustomerClaim.class));
         verify(marketingTouchTaskMapper).insert(any(MarketingTouchTask.class));
+    }
+
+    @Test
+    void approve_shouldFailTransactionWhenCustomerLinkFinalizationLosesOptimisticLock() {
+        MarketingLeadInfo lead = lead(61L, "MANUAL");
+        lead.setLockVersion(7);
+        when(leadMapper.selectForUpdate(61L)).thenReturn(lead);
+        when(leadMapper.updateStatusIf(61L, "IN_APPROVAL", "APPROVED", "EMP_1", null)).thenReturn(1);
+        when(customerMapper.insert(any(MarketingCustomerInfo.class))).thenAnswer(invocation -> {
+            MarketingCustomerInfo customer = invocation.getArgument(0);
+            customer.setId(601L);
+            return 1;
+        });
+        when(leadMapper.finalizeApproval(61L, 8, 601L, "AVAILABLE", "EMP_1")).thenReturn(0);
+
+        BizException error = assertThrows(BizException.class,
+                () -> service.approve(61L, "TASK_61", "EMP_1", "同意"));
+
+        assertEquals("审批结果回写失败，请刷新后重试", error.getMessage());
     }
 
     @Test

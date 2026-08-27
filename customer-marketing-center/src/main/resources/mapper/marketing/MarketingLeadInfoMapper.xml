@@ -108,6 +108,20 @@
           AND record_status = 'ACTIVE'
     </update>
 
+    <!-- 状态 CAS 已将版本号加一；这里只更新审批装配结果，避免 updateById 使用旧版本并覆盖审批字段。 -->
+    <update id="finalizeApproval">
+        UPDATE MARKETING_LEAD_INFO
+        SET cust_id = #{custId},
+            pool_status = #{poolStatus},
+            updated_by = #{updatedBy},
+            updated_time = NOW(),
+            lock_version = lock_version + 1
+        WHERE id = #{id}
+          AND lead_status = 'APPROVED'
+          AND record_status = 'ACTIVE'
+          AND lock_version = #{expectedLockVersion}
+    </update>
+
     <!-- 已退回线索编辑为草稿时，不能依赖 updateById 的 null 更新策略清理审批元数据。 -->
     <update id="clearApprovalMetadataForDraft">
         UPDATE MARKETING_LEAD_INFO

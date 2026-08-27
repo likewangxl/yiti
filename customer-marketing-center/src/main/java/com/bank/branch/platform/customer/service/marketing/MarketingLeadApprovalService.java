@@ -160,11 +160,13 @@ public class MarketingLeadApprovalService {
             return;
         }
         lead.setPoolStatus(poolStatusAfterApproval(lead));
-        lead.setUpdatedBy(operatorEmpId);
-        lead.setUpdatedTime(LocalDateTime.now());
         MarketingCustomerInfo customer = assembleCustomer(lead, operatorEmpId);
-        // 存量客户的 cust_id 未变化时装配不会更新线索，因此这里统一回写审批后的池状态。
-        leadMapper.updateById(lead);
+        int postStatusVersion = (lead.getLockVersion() == null ? 0 : lead.getLockVersion()) + 1;
+        int finalized = leadMapper.finalizeApproval(leadId, postStatusVersion, customer.getId(),
+                lead.getPoolStatus(), operatorEmpId);
+        if (finalized != 1) {
+            throw error("MARKETING_LEAD_STATE_CONFLICT", "审批结果回写失败，请刷新后重试");
+        }
         provisionDirectClaims(lead, customer, operatorEmpId);
     }
 

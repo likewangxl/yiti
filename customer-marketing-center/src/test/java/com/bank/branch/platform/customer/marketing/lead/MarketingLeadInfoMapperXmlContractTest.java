@@ -48,6 +48,21 @@ class MarketingLeadInfoMapperXmlContractTest {
                 .contains("LEAD_STATUS = 'REJECTED'");
     }
 
+    @Test
+    void approvalFinalizationLinksCustomerAndPoolWithPostTransitionVersion() throws IOException {
+        String xml = readXml();
+        String finalizeApproval = updateSection(xml, "finalizeApproval");
+        String normalized = compact(finalizeApproval).toUpperCase(Locale.ROOT);
+
+        assertThat(normalized)
+                .contains("CUST_ID = #{CUSTID}")
+                .contains("POOL_STATUS = #{POOLSTATUS}")
+                .contains("LEAD_STATUS = 'APPROVED'")
+                .contains("LOCK_VERSION = #{EXPECTEDLOCKVERSION}")
+                .contains("LOCK_VERSION = LOCK_VERSION + 1")
+                .contains("RECORD_STATUS = 'ACTIVE'");
+    }
+
     private String readXml() throws IOException {
         try (InputStream input = getClass().getResourceAsStream(
                 "/mapper/marketing/MarketingLeadInfoMapper.xml")) {
