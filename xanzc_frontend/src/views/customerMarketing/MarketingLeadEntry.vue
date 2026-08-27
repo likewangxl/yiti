@@ -95,7 +95,7 @@
         </section>
 
         <section class="form-section">
-          <div class="section-heading"><div><span>02</span><h3>经营属性</h3></div><p>补充客户分层、集团归属和标签</p></div>
+          <div class="section-heading"><div><span>02</span><h3>经营属性</h3></div><p>均为选填，新开户企业可暂不填写</p></div>
           <div class="form-grid">
             <el-form-item label="所属集团类型" prop="groupType"><el-select v-model="form.groupType" clearable style="width:100%" placeholder="请选择"><el-option v-for="item in groupTypeOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
             <el-form-item label="所属集团名称"><el-input v-model="form.groupName" :disabled="form.groupType === 'SINGLE'" maxlength="100" placeholder="非单一客户时填写" /></el-form-item>
@@ -191,7 +191,7 @@ const { options:groupTypeOptions } = useDict('GROUP_TYPE');
 const { options:customerTypeOptions } = useDict('CUSTOMER_TYPE');
 const { options:enterpriseTypeOptions } = useDict('ENTERPRISE_TYPE');
 
-function emptyForm(){ return { id:null, leadType:'NEW_ACCOUNT', custName:'', unifiedCreditCode:'', isAccountOpenedSnapshot:0, custNo:'', industry:'', groupType:'', groupName:'', customerType:'', isKeystone:0, enterpriseType:'', tagIds:[], distributionMode:'PUBLIC', mainManagerId:'', mainOrgId:'', managerEmpIds:[], customerDesc:'', creditAmount:null, creditExposureAmount:null, attachmentIds:[], touchRestricted:1 }; }
+function emptyForm(){ return { id:null, leadType:'NEW_ACCOUNT', custName:'', unifiedCreditCode:'', isAccountOpenedSnapshot:0, custNo:'', industry:'', groupType:'', groupName:'', customerType:'', isKeystone:null, enterpriseType:'', tagIds:[], distributionMode:'PUBLIC', mainManagerId:'', mainOrgId:'', managerEmpIds:[], customerDesc:'', creditAmount:null, creditExposureAmount:null, attachmentIds:[], touchRestricted:1 }; }
 const formRules = {
   leadType: [{ required:true, message:'请选择线索类型', trigger:'change' }],
   custName: [{ required:true, message:'请输入客户名称', trigger:'blur' }],
@@ -200,11 +200,6 @@ const formRules = {
     { pattern:/^[0-9A-Z]{18}$/, message:'统一社会信用代码须为18位大写字母或数字', trigger:'blur' }
   ],
   isAccountOpenedSnapshot: [{ required:true, message:'请选择是否开户', trigger:'change' }],
-  industry: [{ required:true, message:'请选择所属行业', trigger:'change' }],
-  groupType: [{ required:true, message:'请选择所属集团类型', trigger:'change' }],
-  customerType: [{ required:true, message:'请选择客户类型', trigger:'change' }],
-  isKeystone: [{ required:true, message:'请选择是否基石客户', trigger:'change' }],
-  enterpriseType: [{ required:true, message:'请选择企业类型', trigger:'change' }],
   distributionMode: [{ required:true, message:'请选择分配方式', trigger:'change' }],
   managerEmpIds: [{ validator:(_,value,done)=>form.distributionMode==='SCOPE'&&!value?.length?done(new Error('请选择至少一名客户经理')):done(), trigger:'change' }]
 };
@@ -276,7 +271,11 @@ function normalizeCreditCode(){ form.unifiedCreditCode=String(form.unifiedCredit
 function clearPreviousMatchedSnapshot(preserveCreditCode=false){
   if(!matchedCustomer.value)return false;
   matchedCustomer.value=null;
-  Object.assign(form,{unifiedCreditCode:preserveCreditCode?form.unifiedCreditCode:'',custNo:'',mainManagerId:'',mainOrgId:'',managerEmpIds:[],leadType:'NEW_ACCOUNT',isAccountOpenedSnapshot:0});
+  Object.assign(form,{
+    unifiedCreditCode:preserveCreditCode?form.unifiedCreditCode:'',custNo:'',mainManagerId:'',mainOrgId:'',
+    managerEmpIds:[],leadType:'NEW_ACCOUNT',isAccountOpenedSnapshot:0,industry:'',groupType:'',groupName:'',
+    customerType:'',isKeystone:null,enterpriseType:'',customerDesc:'',creditAmount:null,creditExposureAmount:null
+  });
   form.distributionMode='PUBLIC';
   return true;
 }

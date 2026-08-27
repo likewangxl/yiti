@@ -89,12 +89,13 @@ describe('营销线索录入页面契约', () => {
     expect(source).toMatch(/const tagIds\s*=\s*detail\?\.tagIds\s*\|\|\s*lead\.tagIds/);
   });
 
-  it('V2_DEMO 标记的经营字段都参与必填校验，数值 0 作为有效默认值', () => {
-    ['industry', 'groupType', 'customerType', 'isKeystone', 'enterpriseType', 'isAccountOpenedSnapshot'].forEach(field => {
-      expect(source).toMatch(new RegExp(`${field}:\\s*\\[\\{\\s*required:\\s*true`));
+  it('经营属性均为非必填，新开户企业不预设是否基石客户', () => {
+    ['industry', 'groupType', 'customerType', 'isKeystone', 'enterpriseType'].forEach(field => {
+      expect(source).not.toMatch(new RegExp(`${field}:\\s*\\[\\{\\s*required:\\s*true`));
     });
     expect(source).toMatch(/isAccountOpenedSnapshot:\s*0/);
-    expect(source).toMatch(/isKeystone:\s*0/);
+    expect(source).toMatch(/isKeystone:\s*null/);
+    expect(source).toContain('均为选填，新开户企业可暂不填写');
   });
 
   it('客户名称失焦后精确反查，信用代码反查保持兼容', () => {
@@ -136,6 +137,7 @@ describe('营销线索录入页面契约', () => {
     });
     expect(source).toMatch(/leadType:'NEW_ACCOUNT'/);
     expect(source).toMatch(/isAccountOpenedSnapshot:0/);
+    expect(source).toMatch(/isKeystone:null/);
     expect(source).toMatch(/matchedCustomer\.value\?\.custName!==customerName[\s\S]*clearPreviousMatchedSnapshot\(\)/);
     expect(source).toMatch(/if\(!customer\)[\s\S]*clearPreviousMatchedSnapshot\(\)/);
   });

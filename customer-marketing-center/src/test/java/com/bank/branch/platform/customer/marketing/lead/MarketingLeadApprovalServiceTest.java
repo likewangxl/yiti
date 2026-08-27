@@ -51,6 +51,9 @@ class MarketingLeadApprovalServiceTest {
 
         assertEquals(1, result.getRecords().size());
         assertEquals(11L, result.getRecords().get(0).getLeadId());
+        assertEquals("NEW_ACCOUNT", result.getRecords().get(0).getLeadType());
+        assertEquals("MANUFACTURING", result.getRecords().get(0).getIndustry());
+        assertEquals("PUBLIC", result.getRecords().get(0).getDistributionMode());
     }
 
     @Test
@@ -81,6 +84,9 @@ class MarketingLeadApprovalServiceTest {
         lead.setId(id);
         lead.setLeadSource(source);
         lead.setLeadStatus("IN_APPROVAL");
+        lead.setLeadType("NEW_ACCOUNT");
+        lead.setIndustry("MANUFACTURING");
+        lead.setDistributionMode("PUBLIC");
         return lead;
     }
 }

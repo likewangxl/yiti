@@ -238,9 +238,14 @@ public class MarketingLeadApprovalService {
             response.setLeadNo(lead.getLeadNo());
             response.setCustName(lead.getCustName());
             response.setUnifiedCreditCode(lead.getUnifiedCreditCode());
+            response.setLeadType(lead.getLeadType());
             response.setLeadSource(lead.getLeadSource());
+            response.setIndustry(lead.getIndustry());
+            response.setDistributionMode(lead.getDistributionMode());
             response.setCustomerMatchStatus(lead.getCustomerMatchStatus());
             response.setLeadStatus(lead.getLeadStatus());
+            response.setSubmittedBy(lead.getSubmittedBy());
+            response.setSubmittedTime(lead.getSubmittedTime());
             MarketingCustomerInfo customer = findCustomer(lead);
             if (customer != null) response.setCurrentCustomer(toSnapshot(customer));
             records.add(response);
