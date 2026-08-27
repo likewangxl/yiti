@@ -59,8 +59,9 @@ describe('营销线索录入页面契约', () => {
       'form.groupType', 'form.groupName', 'form.customerType', 'form.isKeystone',
       'form.enterpriseType', 'form.tagIds', 'form.distributionMode',
       'form.managerEmpIds', 'form.customerDesc', 'form.creditAmount',
-      'form.creditExposureAmount', 'form.attachmentIds'
+      'form.creditExposureAmount', 'form.touchRestricted', 'form.attachmentIds'
     ].forEach(field => expect(source).toContain(field));
+    expect(source).toMatch(/label="是否触达限制"[^>]*prop="touchRestricted"[\s\S]*v-model="form\.touchRestricted"/);
     expect(source).toMatch(/touchRestricted:\s*1/);
     expect(source).not.toContain('form.contactPerson');
     expect(source).not.toContain('form.registeredAddress');
@@ -106,11 +107,19 @@ describe('营销线索录入页面契约', () => {
     expect(source).toMatch(/form\.unifiedCreditCode\s*=\s*customer\.unifiedCreditCode/);
   });
 
-  it('命中主办人后固定 OWNER 并按工号和姓名展示', () => {
+  it('编辑仅以当前主档主办权决定 OWNER，并按姓名（工号）展示', () => {
     expect(source).toMatch(/value="PUBLIC"[^>]*:disabled="Boolean\(ownerCandidate\)"/);
     expect(source).toMatch(/value="SCOPE"[^>]*:disabled="Boolean\(ownerCandidate\)"/);
-    expect(source).toContain('{{ ownerCandidate.id }} · {{ ownerCandidate.name }}');
+    expect(source).toContain('{{ ownerCandidate.name }}（{{ ownerCandidate.id }}）');
+    expect(source).not.toContain('{{ ownerCandidate.id }} · {{ ownerCandidate.name }}');
     expect(source).toMatch(/if\(customer\.mainManagerId\)[\s\S]*form\.distributionMode='OWNER'/);
+    expect(source).toMatch(/matchedCustomer\.value=detail\?\.currentCustomer\|\|null;[\s\S]*if\(matchedCustomer\.value\?\.mainManagerId\)[\s\S]*form\.distributionMode='OWNER'[\s\S]*else if\(form\.distributionMode==='OWNER'\)[\s\S]*form\.distributionMode='PUBLIC'/);
+  });
+
+  it('查看详情复用与录入表单一致的只读业务字段组件', () => {
+    expect(source).toContain("import MarketingLeadReadonlyDetail from '@/components/MarketingLeadReadonlyDetail.vue'");
+    expect(source).toContain('<MarketingLeadReadonlyDetail :detail="leadDetail" />');
+    expect(source).not.toContain('<el-descriptions v-if="leadDetail?.lead"');
   });
 
   it('抽屉支持保存草稿和提交审批，送审失败时保留已保存草稿', () => {

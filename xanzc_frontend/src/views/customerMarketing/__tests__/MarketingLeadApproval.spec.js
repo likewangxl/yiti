@@ -19,8 +19,7 @@ describe('营销线索审批页面契约', () => {
     expect(source).toContain('listLeadApprovalHistory');
     expect(source).toContain('approveLead');
     expect(source).toContain('rejectLead');
-    expect(source).toContain('是否开户');
-    expect(source).toContain('当前主办');
+    expect(source).toContain('MarketingLeadReadonlyDetail');
     expect(source).toContain('通过线索');
     expect(source).toContain('退回线索');
     expect(source).toContain('退回原因不能为空');
@@ -28,7 +27,9 @@ describe('营销线索审批页面契约', () => {
 
   it('列表与详情按 DEMO 展示类型、经营属性、分配资料和审批信息', () => {
     ['线索类型', '所属行业', '分配方式', '提交人', '状态', '提交时间'].forEach(label => expect(source).toContain(label));
-    ['基础与经营属性', '分配与补充资料', '审批信息', '客户经理范围', '授信敞口金额', '附件'].forEach(label => expect(source).toContain(label));
+    expect(source).toContain("import MarketingLeadReadonlyDetail from '@/components/MarketingLeadReadonlyDetail.vue'");
+    expect(source).toContain('<MarketingLeadReadonlyDetail :detail="detail" />');
+    expect(source).toContain('审批信息');
     expect(source).toContain('detail-banner');
     expect(source).toContain('detail.profileChanged');
     expect(source).toContain('detail.currentCustomer?.isAccountOpened === 1');

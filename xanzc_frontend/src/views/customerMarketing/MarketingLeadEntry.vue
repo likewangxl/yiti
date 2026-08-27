@@ -75,7 +75,7 @@
       <el-alert title="带 * 的字段将参与保存校验；存量客户信息会按客户名称或统一社会信用代码自动反显。" type="info" :closable="false" show-icon />
       <el-alert
         v-if="matchedCustomer"
-        :title="`已匹配客户主档：${matchedCustomer.custName || ''}，开户状态：${matchedCustomer.isAccountOpened === 1 ? '已开户' : '未开户'}，主办：${matchedCustomer.mainManagerId ? `${matchedCustomer.mainManagerId} · ${matchedCustomer.mainManagerName || matchedCustomer.mainManagerId}` : '无'}`"
+        :title="`已匹配客户主档：${matchedCustomer.custName || ''}，开户状态：${matchedCustomer.isAccountOpened === 1 ? '已开户' : '未开户'}，主办：${matchedCustomer.mainManagerId ? `${matchedCustomer.mainManagerName || matchedCustomer.mainManagerId}（${matchedCustomer.mainManagerId}）` : '无'}`"
         type="warning"
         :closable="false"
         show-icon
@@ -110,7 +110,7 @@
           <div class="section-heading"><div><span>03</span><h3>分配信息</h3></div><p>存量客户查到主办权后固定由主办人承接</p></div>
           <div class="ownership-result" :class="{ 'is-success': ownerCandidate }">
             <div><strong>{{ ownerCandidate ? '已查询到存量客户主办权' : '尚未查询到主办权' }}</strong><span>{{ ownerCandidate ? '分配方式已固定为主办专属，不可切换为公开或指定范围。' : '可按客户名称或 18 位统一社会信用代码查询客户主档。' }}</span></div>
-            <div v-if="ownerCandidate" class="owner-identity"><small>主办客户经理</small><strong>{{ ownerCandidate.id }} · {{ ownerCandidate.name }}</strong><span>{{ ownerCandidate.orgName || '-' }}</span></div>
+            <div v-if="ownerCandidate" class="owner-identity"><small>主办客户经理</small><strong>{{ ownerCandidate.name }}（{{ ownerCandidate.id }}）</strong><span>{{ ownerCandidate.orgName || '-' }}</span></div>
           </div>
           <el-form-item label="分配方式" prop="distributionMode">
             <el-radio-group v-model="form.distributionMode">
@@ -124,12 +124,15 @@
               <el-option v-for="person in managerOptions" :key="person.id" :label="`${person.name || person.id}（${person.id} · ${person.org || person.orgCode || '-'}）`" :value="person.id" />
             </el-select>
           </el-form-item>
-          <div v-if="form.distributionMode === 'OWNER' && ownerCandidate" class="owner-readonly"><span>主办专属客户经理</span><strong>{{ ownerCandidate.id }} · {{ ownerCandidate.name }}</strong><small>{{ ownerCandidate.orgName || '-' }}（由客户主办权自动带出）</small></div>
+          <div v-if="form.distributionMode === 'OWNER' && ownerCandidate" class="owner-readonly"><span>主办专属客户经理</span><strong>{{ ownerCandidate.name }}（{{ ownerCandidate.id }}）</strong><small>{{ ownerCandidate.orgName || '-' }}（由客户主办权自动带出）</small></div>
           <div class="distribution-outcome"><strong>审批后流向</strong><span>{{ distributionHint }}</span></div>
         </section>
 
         <section class="form-section">
           <div class="section-heading"><div><span>04</span><h3>补充资料</h3></div><p>金额单位为万元，附件在保存线索前上传</p></div>
+          <el-form-item label="是否触达限制" prop="touchRestricted">
+            <el-radio-group v-model="form.touchRestricted"><el-radio :value="1">是</el-radio><el-radio :value="0">否</el-radio></el-radio-group>
+          </el-form-item>
           <el-form-item label="客户说明"><el-input v-model="form.customerDesc" type="textarea" :rows="3" maxlength="500" show-word-limit /></el-form-item>
           <div class="form-grid">
             <el-form-item label="授信金额（万元）"><el-input-number v-model="form.creditAmount" :min="0" :precision="2" :controls="false" style="width:100%" /></el-form-item>
@@ -146,7 +149,7 @@
       <template #footer><div class="drawer-footer"><span>{{ form.id ? '正在编辑草稿线索' : '新建线索将先保存草稿' }}</span><div><el-button @click="formVisible=false">取消</el-button><el-button :loading="saving" @click="saveLead(false)">保存草稿</el-button><el-button type="primary" :loading="saving" @click="saveLead(true)">提交审批</el-button></div></div></template>
     </el-drawer>
 
-    <el-drawer v-model="leadDetailVisible" title="线索详情" size="min(760px, 95vw)"><el-descriptions v-if="leadDetail?.lead" :column="2" border><el-descriptions-item label="线索编号">{{ leadDetail.lead.leadNo }}</el-descriptions-item><el-descriptions-item label="状态">{{ statusLabel(leadDetail.lead.leadStatus) }}</el-descriptions-item><el-descriptions-item label="企业名称">{{ leadDetail.lead.custName }}</el-descriptions-item><el-descriptions-item label="统一社会信用代码">{{ leadDetail.lead.unifiedCreditCode }}</el-descriptions-item><el-descriptions-item label="当前主办">{{ leadDetail.currentCustomer?.mainManagerId || '无' }}</el-descriptions-item><el-descriptions-item label="开户状态">{{ leadDetail.currentCustomer?.isAccountOpened === 1 ? '已开户' : '未开户' }}</el-descriptions-item></el-descriptions></el-drawer>
+    <el-drawer v-model="leadDetailVisible" title="线索详情" size="min(900px, 95vw)"><MarketingLeadReadonlyDetail :detail="leadDetail" /></el-drawer>
     <MarketingLeadImportDetailDrawer v-model="batchDrawerVisible" :batch="selectedBatch" @confirm-action="confirmBatch" />
   </main>
 </template>
@@ -155,6 +158,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import PageTitle from '@/components/PageTitle.vue';
+import MarketingLeadReadonlyDetail from '@/components/MarketingLeadReadonlyDetail.vue';
 import MarketingLeadImportDetailDrawer from '@/components/MarketingLeadImportDetailDrawer.vue';
 import { searchEmployees } from '@/api/employees';
 import { useDict } from '@/composables/useDict';
@@ -200,6 +204,7 @@ const formRules = {
     { pattern:/^[0-9A-Z]{18}$/, message:'统一社会信用代码须为18位大写字母或数字', trigger:'blur' }
   ],
   isAccountOpenedSnapshot: [{ required:true, message:'请选择是否开户', trigger:'change' }],
+  touchRestricted: [{ required:true, message:'请选择是否触达限制', trigger:'change' }],
   distributionMode: [{ required:true, message:'请选择分配方式', trigger:'change' }],
   managerEmpIds: [{ validator:(_,value,done)=>form.distributionMode==='SCOPE'&&!value?.length?done(new Error('请选择至少一名客户经理')):done(), trigger:'change' }]
 };
@@ -263,6 +268,7 @@ async function editLead(row){
   });
   matchedCustomer.value=detail?.currentCustomer||null;
   if(matchedCustomer.value?.mainManagerId){form.distributionMode='OWNER';form.mainManagerId=matchedCustomer.value.mainManagerId;form.mainOrgId=matchedCustomer.value.mainOrgId||'';form.managerEmpIds=[];}
+  else if(form.distributionMode==='OWNER'){form.distributionMode='PUBLIC';form.mainManagerId='';form.mainOrgId='';}
   managerOptions.value=(lead.managerScopes||[]).map(item=>({id:item.managerEmpId,name:item.managerName,org:item.managerOrgName,orgCode:item.managerOrgId}));
   fileList.value=attachments.map(file=>({name:file.fileName||file.name||file.id,url:`/api/files/${file.id||file.fileId}/download`,status:'success',fileId:file.id||file.fileId}));
   formVisible.value=true;

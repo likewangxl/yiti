@@ -55,34 +55,7 @@
         <el-alert v-if="detail.currentCustomer?.isAccountOpened === 1" title="该客户已开户，请结合当前主办权和存量客户信息判断本次营销线索。" type="warning" :closable="false" show-icon />
         <el-alert v-if="detail.profileChanged" title="线索提交快照与当前客户主档存在差异，请审批前重点核对。" type="warning" :closable="false" show-icon class="detail-alert" />
 
-        <h3>基础与经营属性</h3>
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="客户号">{{ detail.lead.custNoSnapshot || '未开户暂无客户号' }}</el-descriptions-item>
-          <el-descriptions-item label="线索类型">{{ leadTypeLabel(detail.lead.leadType) }}</el-descriptions-item>
-          <el-descriptions-item label="所属行业">{{ detail.lead.industry || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="所属集团类型">{{ detail.lead.groupType || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="所属集团名称">{{ detail.lead.groupName || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="客户类型">{{ detail.lead.customerType || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="是否基石客户">{{ yesNo(detail.lead.isKeystone) }}</el-descriptions-item>
-          <el-descriptions-item label="企业类型">{{ detail.lead.enterpriseType || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="是否开户">{{ yesNo(detail.lead.isAccountOpenedSnapshot) }}</el-descriptions-item>
-          <el-descriptions-item label="主档资料是否变化">{{ detail.profileChanged ? '是' : '否' }}</el-descriptions-item>
-        </el-descriptions>
-
-        <h3>分配与补充资料</h3>
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="分配方式">{{ distributionLabel(detail.lead.distributionMode) }}</el-descriptions-item>
-          <el-descriptions-item label="客户经理范围">{{ managerScopeLabel }}</el-descriptions-item>
-          <el-descriptions-item label="当前主办">{{ currentOwnerLabel }}</el-descriptions-item>
-          <el-descriptions-item label="客户标签">{{ detail.tagIds?.length ? detail.tagIds.join('、') : '-' }}</el-descriptions-item>
-          <el-descriptions-item label="授信金额">{{ money(detail.lead.creditAmount) }}</el-descriptions-item>
-          <el-descriptions-item label="授信敞口金额">{{ money(detail.lead.creditExposureAmount) }}</el-descriptions-item>
-          <el-descriptions-item label="客户说明" :span="2">{{ detail.lead.customerDesc || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="附件" :span="2">
-            <div v-if="detail.attachments?.length" class="attachments"><el-tag v-for="file in detail.attachments" :key="file.id || file.fileId" effect="plain">{{ file.fileName || file.name || file.id || file.fileId }}</el-tag></div>
-            <span v-else>-</span>
-          </el-descriptions-item>
-        </el-descriptions>
+        <MarketingLeadReadonlyDetail :detail="detail" />
 
         <h3>审批信息</h3>
         <el-descriptions :column="2" border>
@@ -106,8 +79,9 @@
 <script setup>
 import { computed, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import MarketingLeadReadonlyDetail from '@/components/MarketingLeadReadonlyDetail.vue';
 import PageTitle from '@/components/PageTitle.vue';
-import { approveLead, getLeadApprovalDetail, listLeadApprovalHistory, listLeadApprovalPending, rejectLead } from '@/api/marketingManagement';
+import { approveLead, getLeadApprovalDetail, listLeadApprovalHistory, listLeadApprovalPending, marketingLeadYuanToWan, rejectLead } from '@/api/marketingManagement';
 
 const activeStatus = ref('IN_APPROVAL');
 const query = reactive({ keyword: '', pageNo: 1, pageSize: 20 });
@@ -119,19 +93,6 @@ const summaryCards = computed(() => [
   { status: 'REJECTED', label: '已退回', value: rejectedTotal.value, hint: '当前登录人已退回的线索', tone: 'danger' }
 ]);
 const activeCard = computed(() => summaryCards.value.find(item => item.status === activeStatus.value) || summaryCards.value[0]);
-const managerScopeLabel = computed(() => {
-  const lead = detail.value?.lead;
-  if (!lead) return '-';
-  if (lead.distributionMode === 'PUBLIC') return '全行客户经理';
-  if (lead.distributionMode === 'OWNER') return lead.mainManagerIdSnapshot || detail.value?.currentCustomer?.mainManagerId || '主办客户经理';
-  return detail.value?.managerEmpIds?.length ? detail.value.managerEmpIds.join('、') : '未指定';
-});
-const currentOwnerLabel = computed(() => {
-  const customer = detail.value?.currentCustomer;
-  if (!customer?.mainManagerId) return '无主办';
-  return `${customer.mainManagerId} · ${customer.mainManagerName || customer.mainManagerId}`;
-});
-
 function pageRows(result) { return result?.records || result?.list || result?.items || []; }
 function pageTotal(result) { return Number(result?.total || 0); }
 async function load() {
@@ -163,7 +124,7 @@ function switchStatus(nextStatus) { if (activeStatus.value === nextStatus) retur
 function search() { query.pageNo = 1; load(); }
 function resetFilter() { query.keyword = ''; query.pageNo = 1; load(); }
 async function openDetail(row) {
-  try { selectedRow.value = row; detail.value = await getLeadApprovalDetail(row.leadId); detailVisible.value = true; }
+  try { selectedRow.value = row; detail.value = normalizeApprovalDetail(await getLeadApprovalDetail(row.leadId)); detailVisible.value = true; }
   catch (error) { ElMessage.error(`审批详情加载失败：${error?.message || '请稍后重试'}`); }
 }
 async function decide(row, approved) {
@@ -191,8 +152,12 @@ function submitterLabel(row) {
   const name = row?.task?.startUserName;
   return id && name ? `${id} · ${name}` : (name || id || '-');
 }
-function yesNo(value) { return value === 1 || value === true ? '是' : value === 0 || value === false ? '否' : '-'; }
-function money(value) { return value == null || value === '' ? '-' : `${Number(value).toLocaleString()} 万元`; }
+function normalizeApprovalDetail(result) {
+  if (!result?.lead) return result;
+  const lead = { ...result.lead };
+  ['creditAmount', 'creditExposureAmount'].forEach(field => { lead[field] = marketingLeadYuanToWan(lead[field]); });
+  return { ...result, lead };
+}
 function formatTime(value) { return value ? String(value).replace('T', ' ') : '-'; }
 
 loadSummary();
@@ -229,7 +194,6 @@ load();
 .detail-banner strong { color: #303133; font-size: 16px; }
 .detail-alert { margin-top: 10px; }
 .approval-detail-drawer h3 { margin: 22px 0 10px; color: #303133; font-size: 14px; }
-.attachments { display: flex; flex-wrap: wrap; gap: 6px; }
 .drawer-footer { display: flex; align-items: center; justify-content: space-between; width: 100%; }
 .drawer-footer > span { color: #909399; font-size: 12px; }
 .drawer-footer > div { display: flex; gap: 8px; }

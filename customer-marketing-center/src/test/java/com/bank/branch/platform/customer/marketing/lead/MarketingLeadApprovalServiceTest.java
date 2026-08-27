@@ -1,8 +1,15 @@
 package com.bank.branch.platform.customer.marketing.lead;
 
+import com.bank.branch.platform.customer.dto.marketing.lead.LeadDetailResponse;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo;
+import com.bank.branch.platform.customer.entity.marketing.MarketingLeadManagerScope;
+import com.bank.branch.platform.customer.entity.marketing.MarketingLeadTagRel;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadInfoMapper;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadManagerScopeMapper;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadTagRelMapper;
 import com.bank.branch.platform.customer.service.marketing.MarketingLeadApprovalService;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
@@ -31,6 +38,12 @@ class MarketingLeadApprovalServiceTest {
     private MarketingLeadInfoMapper leadMapper;
     @Mock
     private com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerInfoMapper customerMapper;
+    @Mock
+    private MarketingLeadManagerScopeMapper managerScopeMapper;
+    @Mock
+    private MarketingLeadTagRelMapper leadTagRelMapper;
+    @Mock
+    private FileApi fileApi;
 
     @InjectMocks
     private MarketingLeadApprovalService service;
@@ -92,6 +105,27 @@ class MarketingLeadApprovalServiceTest {
                 .thenReturn(1);
         service.reject(21L, "TASK_1", "EMP_1", "资料不完整");
         verify(workflowApi).rejectByEmp("TASK_1", "EMP_1", "资料不完整");
+    }
+
+    @Test
+    void detailReturnsSameReceiverTagAndAttachmentCollectionsAsEntryDetail() {
+        MarketingLeadInfo lead = lead(41L, "MANUAL");
+        when(leadMapper.selectActiveById(41L)).thenReturn(lead);
+        MarketingLeadManagerScope scope = new MarketingLeadManagerScope();
+        scope.setManagerEmpId("EMP_2");
+        when(managerScopeMapper.selectList(any())).thenReturn(List.of(scope));
+        MarketingLeadTagRel tag = new MarketingLeadTagRel();
+        tag.setTagId(9L);
+        when(leadTagRelMapper.selectList(any())).thenReturn(List.of(tag));
+        FileObjectDTO attachment = new FileObjectDTO();
+        attachment.setId("FILE-9");
+        when(fileApi.listBizFiles("LEAD", "41")).thenReturn(List.of(attachment));
+
+        LeadDetailResponse detail = service.detail(41L, "APPROVER_1");
+
+        assertEquals(List.of("EMP_2"), detail.getManagerEmpIds());
+        assertEquals(List.of(9L), detail.getTagIds());
+        assertEquals(List.of(attachment), detail.getAttachments());
     }
 
     private TaskRespDTO task(long id) {

@@ -1,6 +1,7 @@
 package com.bank.branch.platform.customer.service.marketing;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadApprovalTaskResponse;
@@ -8,8 +9,14 @@ import com.bank.branch.platform.customer.dto.marketing.lead.LeadDetailResponse;
 import com.bank.branch.platform.customer.dto.marketing.lead.MarketingCustomerSnapshot;
 import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo;
+import com.bank.branch.platform.customer.entity.marketing.MarketingLeadManagerScope;
+import com.bank.branch.platform.customer.entity.marketing.MarketingLeadTagRel;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerInfoMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadInfoMapper;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadManagerScopeMapper;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadTagRelMapper;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
@@ -49,6 +56,9 @@ public class MarketingLeadApprovalService {
     private final WorkflowApi workflowApi;
     private final MarketingLeadInfoMapper leadMapper;
     private final MarketingCustomerInfoMapper customerMapper;
+    private final MarketingLeadManagerScopeMapper managerScopeMapper;
+    private final MarketingLeadTagRelMapper leadTagRelMapper;
+    private final FileApi fileApi;
 
     /** 查询当前登录人的待审批线索，过滤标签导入线索。 */
     public PageResult<LeadApprovalTaskResponse> pending(String keyword, int pageNo,
@@ -84,6 +94,18 @@ public class MarketingLeadApprovalService {
             response.setCurrentCustomer(toSnapshot(customer));
             response.setProfileChanged(profileChanged(lead, customer));
         }
+        response.setManagerEmpIds(managerScopeMapper.selectList(Wrappers
+                        .<MarketingLeadManagerScope>lambdaQuery()
+                        .eq(MarketingLeadManagerScope::getLeadId, leadId)
+                        .orderByAsc(MarketingLeadManagerScope::getId))
+                .stream().map(MarketingLeadManagerScope::getManagerEmpId).toList());
+        response.setTagIds(leadTagRelMapper.selectList(Wrappers
+                        .<MarketingLeadTagRel>lambdaQuery()
+                        .eq(MarketingLeadTagRel::getLeadId, leadId)
+                        .orderByAsc(MarketingLeadTagRel::getId))
+                .stream().map(MarketingLeadTagRel::getTagId).toList());
+        List<FileObjectDTO> attachments = fileApi.listBizFiles("LEAD", String.valueOf(leadId));
+        response.setAttachments(attachments == null ? List.of() : attachments);
         return response;
     }
 
