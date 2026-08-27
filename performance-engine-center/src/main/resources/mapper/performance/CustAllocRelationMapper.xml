@@ -27,20 +27,53 @@
     </sql>
 
     <!--
-        原业绩分配反显：取该客户当前生效分配（is_original='2'）。
-        allocDim=ACCOUNT 只取 ACCOUNT 维度；RULE/空 取 RULE+ACCOUNT 两维（展示顺序 RULE 在前）。
-        姓名/部门直接读快照列 fullname/dept_no/dept_name，不再 UserApi 补全。
+        原业绩分配反显：取该客户当前生效分配（is_original='2'）的最新来源批次全部关系。
+        非空 source_batch_id 的行按批次分组；无批次行按自身 id 独立成批次。
+        批次排序优先 source_process_date，其次 created_time，最后按稳定主键消歧。
+        allocDim=ACCOUNT 只在 ACCOUNT 候选中取最新批次；RULE/空在 RULE+ACCOUNT 候选中取整体最新批次。
+        姓名/部门直接读快照列 fullname/dept_no/dept_name；username 由 Service 批量反查。
     -->
     <select id="selectCurrentOriginalByCust"
             resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
+        WITH candidate_rows AS (
+            SELECT
+                <include refid="BASE_COLUMNS"/>,
+                CASE
+                    WHEN source_batch_id IS NULL OR TRIM(source_batch_id) = ''
+                        THEN CONCAT('ROW:', id)
+                    ELSE CONCAT('BATCH:', source_batch_id)
+                END AS batch_key
+            FROM CUST_ALLOC_RELATION
+            WHERE cust_id = #{custId}
+              AND is_original = '2'
+              <choose>
+                  <when test='allocDim != null and "ACCOUNT".equals(allocDim.toString())'>
+                      AND alloc_dim = 'ACCOUNT'
+                  </when>
+                  <otherwise>
+                      AND alloc_dim IN ('RULE', 'ACCOUNT')
+                  </otherwise>
+              </choose>
+        ),
+        ranked_batches AS (
+            SELECT
+                batch_key,
+                MAX(source_process_date) AS batch_process_date,
+                MAX(created_time) AS batch_created_time,
+                MAX(id) AS stable_id
+            FROM candidate_rows
+            GROUP BY batch_key
+        ),
+        latest_batch AS (
+            SELECT batch_key
+            FROM ranked_batches
+            ORDER BY batch_process_date DESC, batch_created_time DESC, stable_id DESC, batch_key DESC
+            LIMIT 1
+        )
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM CUST_ALLOC_RELATION
-        WHERE cust_id = #{custId}
-          AND is_original = '2'
-          <if test='allocDim != null and "ACCOUNT".equals(allocDim.toString())'>
-              AND alloc_dim = 'ACCOUNT'
-          </if>
+        FROM candidate_rows
+        WHERE batch_key IN (SELECT batch_key FROM latest_batch)
         ORDER BY (alloc_dim = 'ACCOUNT'), emp_id ASC, id ASC
     </select>
 

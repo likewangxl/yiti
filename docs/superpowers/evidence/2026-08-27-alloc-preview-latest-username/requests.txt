@@ -1,0 +1,11 @@
+46. GET /api/auth/current-user -> 200 OK
+58. GET /api/auth/my-menus -> 200 OK
+59. GET /api/notifications/unread-count -> 200 OK
+60. GET /api/sys/dicts/PERF_ALLOC_DIM/items -> 200 OK
+61. GET /api/sys/dicts/PERF_BIZ_KIND/items -> 200 OK
+62. GET /api/auth/permissions -> 200 OK
+63. GET /api/perf/alloc-adjust/my-applies?pageNo=1&pageSize=20 -> 200 OK
+64. GET /api/perf/stat-show/cust-name?custId=CUST-LATEST-01 -> 200 OK
+65. GET /api/perf/metrics/cust-index-values?custId=CUST-LATEST-01&dataDate=2026-08-26&codes=MC_001,MC_002,MC_003,MC_004 -> 200 OK
+66. GET /api/perf/metrics/cust-index-values?custId=CUST-LATEST-01&dataDate=2026-08-26&codes=MC_005,MC_006,MC_007,MC_008 -> 200 OK
+67. GET /api/report/alloc-preview?custType=CORP&custNo=CUST-LATEST-01&allocDim=RULE&statisDt=2026-08-26 -> 200 OK

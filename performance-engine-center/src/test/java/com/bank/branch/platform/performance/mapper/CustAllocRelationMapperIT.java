@@ -10,6 +10,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -50,6 +51,21 @@ class CustAllocRelationMapperIT extends PerformanceMapperTestBase {
                 r.getId(), r.getCustId(), r.getAllocDim(), r.getBizKind(), r.getAccountNo(),
                 r.getEmpId(), r.getRatio(), r.getEffectiveDate(), r.getEndDate(),
                 r.getSourceBatchId(), r.getSourceProcessDate(), r.getCreatedBy()
+        );
+    }
+
+    /** 插入原业绩预览用当前关系，并显式写入来源批次排序字段。 */
+    private void insertOriginalRaw(String id, String custId, String allocDim, String accountNo,
+                                   String empId, String fullname, BigDecimal ratio,
+                                   String sourceBatchId, LocalDate sourceProcessDate,
+                                   LocalDateTime createdTime) {
+        jdbcTemplate.update(
+                "INSERT INTO CUST_ALLOC_RELATION (id, cust_id, alloc_dim, account_no, is_original, "
+                        + "emp_id, fullname, dept_no, dept_name, ratio, effective_date, end_date, "
+                        + "source_batch_id, source_process_date, created_by, created_time) "
+                        + "VALUES (?, ?, ?, ?, '2', ?, ?, 'ORG_TEST', '测试机构', ?, ?, NULL, ?, ?, 'IT', ?)",
+                id, custId, allocDim, accountNo, empId, fullname, ratio,
+                LocalDate.now(), sourceBatchId, sourceProcessDate, createdTime
         );
     }
 
@@ -313,5 +329,82 @@ class CustAllocRelationMapperIT extends PerformanceMapperTestBase {
         assertThat(count).isEqualTo(page.size());
         assertThat(page).extracting(CustAllocRelation::getCustId)
                 .contains("TEST_AR_PAGE_1", "TEST_AR_PAGE_2", "TEST_AR_PAGE_3");
+    }
+
+    @Test
+    @DisplayName("原业绩预览只返回最新来源批次，且保留该批次全部关系行")
+    void selectCurrentOriginalByCust_latestBatch_returnsAllRows() {
+        LocalDate today = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now().withNano(0);
+
+        insertOriginalRaw("ORIG_LATEST_OLD", "TEST_AR_ORIG_LATEST", "RULE", null,
+                "USER_OLD", "旧关系", new BigDecimal("100.00"), "BATCH_OLD",
+                today.minusDays(1), now.minusDays(1));
+        insertOriginalRaw("ORIG_LATEST_A", "TEST_AR_ORIG_LATEST", "RULE", null,
+                "USER_NEW_A", "新关系A", new BigDecimal("60.00"), "BATCH_NEW",
+                today, now);
+        insertOriginalRaw("ORIG_LATEST_B", "TEST_AR_ORIG_LATEST", "RULE", null,
+                "USER_NEW_B", "新关系B", new BigDecimal("40.00"), "BATCH_NEW",
+                today, now);
+
+        List<CustAllocRelation> rows = mapper.selectCurrentOriginalByCust(
+                "TEST_AR_ORIG_LATEST", null);
+
+        assertThat(rows).hasSize(2);
+        assertThat(rows).extracting(CustAllocRelation::getEmpId)
+                .containsExactly("USER_NEW_A", "USER_NEW_B");
+        assertThat(rows).extracting(CustAllocRelation::getSourceBatchId)
+                .containsOnly("BATCH_NEW");
+    }
+
+    @Test
+    @DisplayName("原业绩预览按维度选择批次：ACCOUNT 独立取最新，RULE/null 取两维整体最新")
+    void selectCurrentOriginalByCust_dimensionScope_selectsExpectedLatestBatch() {
+        LocalDate today = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now().withNano(0);
+
+        insertOriginalRaw("ORIG_DIM_ACCOUNT_OLD", "TEST_AR_ORIG_DIM", "ACCOUNT", "ACC_OLD",
+                "USER_ACC_OLD", "账号旧关系", new BigDecimal("100.00"), "BATCH_ACC_OLD",
+                today.minusDays(3), now.minusDays(3));
+        insertOriginalRaw("ORIG_DIM_ACCOUNT_NEW", "TEST_AR_ORIG_DIM", "ACCOUNT", "ACC_NEW",
+                "USER_ACC_NEW", "账号新关系", new BigDecimal("100.00"), "BATCH_ACC_NEW",
+                today.minusDays(2), now.minusDays(2));
+        insertOriginalRaw("ORIG_DIM_RULE_NEW", "TEST_AR_ORIG_DIM", "RULE", null,
+                "USER_RULE_NEW", "规则新关系", new BigDecimal("100.00"), "BATCH_RULE_NEW",
+                today.minusDays(1), now.minusDays(1));
+
+        List<CustAllocRelation> accountRows = mapper.selectCurrentOriginalByCust(
+                "TEST_AR_ORIG_DIM", "ACCOUNT");
+        List<CustAllocRelation> ruleRows = mapper.selectCurrentOriginalByCust(
+                "TEST_AR_ORIG_DIM", "RULE");
+        List<CustAllocRelation> defaultRows = mapper.selectCurrentOriginalByCust(
+                "TEST_AR_ORIG_DIM", null);
+
+        assertThat(accountRows).extracting(CustAllocRelation::getEmpId)
+                .containsExactly("USER_ACC_NEW");
+        assertThat(ruleRows).extracting(CustAllocRelation::getEmpId)
+                .containsExactly("USER_RULE_NEW");
+        assertThat(defaultRows).extracting(CustAllocRelation::getEmpId)
+                .containsExactly("USER_RULE_NEW");
+    }
+
+    @Test
+    @DisplayName("无 source_batch_id 的历史行按自身 id 作为独立批次")
+    void selectCurrentOriginalByCust_blankBatchId_isIndependentBatch() {
+        LocalDate today = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now().withNano(0);
+
+        insertOriginalRaw("ORIG_NOBATCH_OLD", "TEST_AR_ORIG_NOBATCH", "RULE", null,
+                "USER_NOBATCH_OLD", "无批次旧关系", new BigDecimal("100.00"), null,
+                today.minusDays(2), now.minusDays(2));
+        insertOriginalRaw("ORIG_NOBATCH_NEW", "TEST_AR_ORIG_NOBATCH", "RULE", null,
+                "USER_NOBATCH_NEW", "无批次新关系", new BigDecimal("100.00"), "",
+                today.minusDays(1), now.minusDays(1));
+
+        List<CustAllocRelation> rows = mapper.selectCurrentOriginalByCust(
+                "TEST_AR_ORIG_NOBATCH", null);
+
+        assertThat(rows).extracting(CustAllocRelation::getEmpId)
+                .containsExactly("USER_NOBATCH_NEW");
     }
 }

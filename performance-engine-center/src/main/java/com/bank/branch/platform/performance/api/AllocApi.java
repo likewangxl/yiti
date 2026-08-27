@@ -105,16 +105,16 @@ public interface AllocApi {
     /* ==================== 原业绩分配预览（调整申请页面） ==================== */
 
     /**
-     * 查询客户「原业绩分配」预览：分别取「按规则分配(RULE)」与「按账号分配(ACCOUNT)」两个维度下
-     * <b>审批通过(APPROVED)的最后一条</b>分配关系调整申请，关联其调整明细返回。
+     * 查询客户「原业绩分配」预览：从当前生效（{@code is_original='2'}）的客户分配关系中，
+     * 按来源批次取最新一批的全部关系。
      *
-     * <p>数据源为 {@code PERF_ALLOC_ADJUST_APPLY} + {@code PERF_ALLOC_ADJUST_ITEM}（非
-     * {@code cust_alloc_relation}），供审批/新增调整申请页面的「原业绩分配」模块展示。
-     * 每项已按员工工号补全 username / 中文姓名 / 机构号 / 机构名称。
+     * <p>数据源为 {@code CUST_ALLOC_RELATION}；每项的 {@code empId} 是 PT_USER.USER_ID，
+     * {@code username} 经 UserApi 批量映射为 PT_USER.USERNAME，中文姓名和机构字段取关系快照。
      *
-     * <p>维度过滤：{@code allocDim=ACCOUNT} 只取按账号分配的最后一条；{@code RULE} 或 null 取 RULE+ACCOUNT 两者。
+     * <p>维度过滤：{@code allocDim=ACCOUNT} 只在 ACCOUNT 候选中取最新批次；{@code RULE} 或 null
+     * 在 RULE+ACCOUNT 候选中取整体最新批次。
      *
-     * @param custId   客户编号（匹配 apply.cust_id）
+     * @param custId   客户编号（匹配 relation.cust_id）
      * @param allocDim 当前申请的分配维度（RULE / ACCOUNT / null）
      * @return 预览项列表，可能为空列表，不会返回 null
      */

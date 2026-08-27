@@ -1,0 +1,14 @@
+1. http://127.0.0.1:8090/api/**
+   default body: {"code":0,"message":"success","data":[]}
+2. http://127.0.0.1:8090/api/auth/current-user
+   system administrator mock
+3. http://127.0.0.1:8090/api/auth/permissions
+   system administrator permissions mock
+4. http://127.0.0.1:8090/api/perf/alloc-adjust/my-applies*
+   empty page mock
+5. http://127.0.0.1:8090/api/report/cust-master-name*
+   customer name mock; not matched by the current page request path
+6. http://127.0.0.1:8090/api/report/alloc-preview*
+   latest-batch preview mock; full body in alloc-preview-response.json
+
+All routes are development-only mocks and are not integration evidence.

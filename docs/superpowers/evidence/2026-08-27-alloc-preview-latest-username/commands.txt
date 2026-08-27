@@ -1,0 +1,22 @@
+All commands used the project-local CLI from xanzc_frontend and session alloc-preview-latest-username.
+Every command cleared HTTP_PROXY, HTTPS_PROXY and ALL_PROXY, and set NO_PROXY=127.0.0.1,localhost.
+
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username open about:blank --browser firefox
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username resize 1440 900
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username route 'http://127.0.0.1:8090/api/**' --body '{"code":0,"message":"success","data":[]}' --content-type application/json
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username route 'http://127.0.0.1:8090/api/auth/current-user' --body '<system-admin current-user response>' --content-type application/json
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username route 'http://127.0.0.1:8090/api/auth/permissions' --body '<system-admin permissions response>' --content-type application/json
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username route 'http://127.0.0.1:8090/api/perf/alloc-adjust/my-applies*' --body '<empty page response>' --content-type application/json
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username route 'http://127.0.0.1:8090/api/report/cust-master-name*' --body '<customer response>' --content-type application/json
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username route 'http://127.0.0.1:8090/api/report/alloc-preview*' --body '<contents of alloc-preview-response.json>' --content-type application/json
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username goto 'http://127.0.0.1:8090/#/perf/adjust'
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username click e43
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username fill e210 CUST-LATEST-01
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username run-code '<wait 2200 ms and read dialog text>'
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username eval '<latest batch row count and username assertions>' e180
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username screenshot e180 --filename ../docs/superpowers/evidence/2026-08-27-alloc-preview-latest-username/latest-batch-username-display.png
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username console
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username requests
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username route-list
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username request 67
+./node_modules/.bin/playwright-cli -s=alloc-preview-latest-username response-body 67
