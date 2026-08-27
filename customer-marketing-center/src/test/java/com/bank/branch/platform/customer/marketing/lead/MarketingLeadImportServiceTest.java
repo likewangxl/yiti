@@ -10,8 +10,10 @@ import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadImportBat
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadImportDetailMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadInfoMapper;
 import com.bank.branch.platform.customer.service.marketing.MarketingLeadEntryService;
+import com.bank.branch.platform.customer.service.marketing.MarketingLeadImportLocalStorage;
 import com.bank.branch.platform.customer.service.marketing.MarketingLeadImportService;
 import com.bank.branch.platform.governance.api.FileApi;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -24,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,10 +53,19 @@ class MarketingLeadImportServiceTest {
     @Mock
     private MarketingCustomerInfoMapper customerMapper;
     @Mock
+    private MarketingLeadImportLocalStorage localStorage;
+    @Mock
     private FileApi fileApi;
 
     @InjectMocks
     private MarketingLeadImportService service;
+
+    @BeforeEach
+    void configureLocalStorage() {
+        org.mockito.Mockito.lenient().when(localStorage.saveSource(any()))
+                .thenReturn(new MarketingLeadImportLocalStorage.StoredFile(
+                        "local:source/20260827/test.csv", "0123456789abcdef0123456789abcdef"));
+    }
 
     @Test
     void waitingConfirmationProcessesOnlyValidRowsAndSkipsWarningRows() {
@@ -153,6 +165,8 @@ class MarketingLeadImportServiceTest {
         assertEquals(2, generatedLead.getBatchRowNo());
         verify(leadMapper).updateById(generatedLead);
         verify(detailMapper).updateHandlingIf(91L, "PENDING", "GENERATED", 901L);
+        verify(localStorage).saveSource(file);
+        verifyNoInteractions(fileApi);
     }
 
     @Test
@@ -213,6 +227,25 @@ class MarketingLeadImportServiceTest {
         assertEquals(4, page.getRecords().size());
         assertEquals("REJECTED", page.getRecords().get(0).getValidationStatus());
         assertEquals("VALID", page.getRecords().get(3).getValidationStatus());
+    }
+
+    @Test
+    void sourceFile_readsLocalStorageWithoutCallingObsFileApi() {
+        MarketingLeadImportBatch batch = new MarketingLeadImportBatch();
+        batch.setId(16L);
+        batch.setRecordStatus("ACTIVE");
+        batch.setImportEmpId("EMP_1");
+        batch.setSourceFileId("local:source/20260827/source.csv");
+        byte[] expected = "本地导入文件".getBytes(StandardCharsets.UTF_8);
+        when(batchMapper.selectActiveById(16L)).thenReturn(batch);
+        when(localStorage.supports(batch.getSourceFileId())).thenReturn(true);
+        when(localStorage.read(batch.getSourceFileId())).thenReturn(expected);
+
+        byte[] actual = service.sourceFile(16L, "EMP_1", false);
+
+        assertArrayEquals(expected, actual);
+        verify(localStorage).read(batch.getSourceFileId());
+        verifyNoInteractions(fileApi);
     }
 
     @Test
@@ -277,7 +310,7 @@ class MarketingLeadImportServiceTest {
 
         assertEquals("MARKETING_LEAD_IMPORT_FILE_TOO_LARGE", exception.getCode());
         assertEquals("导入文件过大：单个文件不能超过10MB", exception.getMessage());
-        verifyNoInteractions(fileApi, batchMapper);
+        verifyNoInteractions(localStorage, fileApi, batchMapper);
     }
 
     @Test

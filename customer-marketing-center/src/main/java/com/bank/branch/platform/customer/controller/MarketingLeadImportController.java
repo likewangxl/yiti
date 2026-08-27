@@ -31,7 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 
-/** 页面三批量导入记录、明细、确认和 OBS 文件下载接口。 */
+/** 页面三批量导入记录、明细、确认和导入文件下载接口。 */
 @RestController
 @RequiredArgsConstructor
 @Validated

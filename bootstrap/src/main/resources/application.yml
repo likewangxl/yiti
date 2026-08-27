@@ -98,6 +98,11 @@ knife4j:
 platform:
   slow-sql-threshold-ms: 5000
   method-timing-warn-ms: 500
+
+# 线索批量导入文件当前使用应用节点本地暂存，不依赖 OBS。
+marketing:
+  lead-import:
+    local-dir: ${MARKETING_LEAD_IMPORT_LOCAL_DIR:file-storage/marketing-lead-import}
   method-timing-error-ms: 5000
   # SOAP 网关 Netty 服务端口（独立于 server.port，由 SoapNettyServer 绑定）。
   # 注意：此处是唯一生效来源——原 soap-gateway-center/application-soap.yml 不会被 Spring Boot 加载（已删除）。

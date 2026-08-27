@@ -19,7 +19,6 @@ import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadImportBat
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadImportDetailMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadInfoMapper;
 import com.bank.branch.platform.governance.api.FileApi;
-import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -59,7 +58,7 @@ import java.util.function.Supplier;
 /**
  * 页面三线索批量导入服务。
  *
- * <p>批次处理和线索审批是两条独立状态机：本服务只负责 OBS 文件、逐行校验、
+ * <p>批次处理和线索审批是两条独立状态机：本服务只负责本地暂存文件、逐行校验、
  * 待确认和生成线索，不会把导入批次误当成一个整批审批单。</p>
  */
 @Slf4j
@@ -92,6 +91,8 @@ public class MarketingLeadImportService {
     private final MarketingCustomerInfoMapper customerMapper;
     private final MarketingLeadEntryService leadEntryService;
     private final PlatformTransactionManager transactionManager;
+    private final MarketingLeadImportLocalStorage localStorage;
+    /** 仅用于兼容读取切换前已经落库的 OBS 文件 ID，不再用于新导入文件上传。 */
     private final FileApi fileApi;
 
     /** 查询导入批次；客户经理固定只能查看本人批次，管理员可查看全量。 */
@@ -203,15 +204,22 @@ public class MarketingLeadImportService {
         if (!StringUtils.hasText(batch.getSourceFileId())) {
             throw error("MARKETING_LEAD_IMPORT_FILE_NOT_FOUND", "原始导入文件不存在");
         }
-        return fileApi.getFileContent(batch.getSourceFileId());
+        return readStoredFile(batch.getSourceFileId());
     }
 
-    /** 下载失败明细；没有已生成文件时由服务端生成并通过 FileApi 保存到 OBS。 */
+    private byte[] readStoredFile(String storageId) {
+        if (localStorage.supports(storageId)) {
+            return localStorage.read(storageId);
+        }
+        return fileApi.getFileContent(storageId);
+    }
+
+    /** 下载失败明细；没有已生成文件时由服务端生成并保存到本地目录。 */
     @Transactional
     public byte[] errorFile(Long batchId, String operatorEmpId, boolean allScope) {
         MarketingLeadImportBatch batch = getBatch(batchId, operatorEmpId, allScope);
         if (StringUtils.hasText(batch.getErrorFileId())) {
-            return fileApi.getFileContent(batch.getErrorFileId());
+            return readStoredFile(batch.getErrorFileId());
         }
         List<MarketingLeadImportDetail> details = detailMapper.selectByBatchIdOrderByFailure(
                 batchId, 0, Integer.MAX_VALUE);
@@ -221,15 +229,10 @@ public class MarketingLeadImportService {
             throw error("MARKETING_LEAD_IMPORT_NO_ERROR_FILE", "当前批次没有失败明细");
         }
         byte[] bytes = toErrorCsv(failures);
-        FileObjectDTO uploaded = fileApi.upload(bytes,
-                safeFilename(batch.getSourceFileName()) + ".error.csv",
-                "text/csv", operatorEmpId, "LEAD_IMPORT_ERROR");
-        if (uploaded != null && StringUtils.hasText(uploaded.getId())) {
-            batch.setErrorFileId(uploaded.getId());
-            batch.setUpdatedBy(operatorEmpId);
-            batch.setUpdatedTime(LocalDateTime.now());
-            batchMapper.updateById(batch);
-        }
+        batch.setErrorFileId(localStorage.saveErrorCsv(bytes));
+        batch.setUpdatedBy(operatorEmpId);
+        batch.setUpdatedTime(LocalDateTime.now());
+        batchMapper.updateById(batch);
         return bytes;
     }
 
@@ -253,11 +256,9 @@ public class MarketingLeadImportService {
         batch.setApprovalSummaryStatus("NOT_SUBMITTED");
         batch.setLockVersion(0);
 
-        FileObjectDTO source = fileApi.upload(file, operatorEmpId, "LEAD_IMPORT");
-        if (source != null) {
-            batch.setSourceFileId(source.getId());
-            batch.setFileChecksum(source.getMd5Hash());
-        }
+        MarketingLeadImportLocalStorage.StoredFile source = localStorage.saveSource(file);
+        batch.setSourceFileId(source.key());
+        batch.setFileChecksum(source.md5Hash());
         batchMapper.insert(batch);
 
         List<MarketingLeadImportDetail> details;
@@ -931,11 +932,6 @@ public class MarketingLeadImportService {
     private String csvValue(String value) {
         if (value == null) return "";
         return "\"" + value.replace("\"", "\"\"") + "\"";
-    }
-
-    private String safeFilename(String filename) {
-        if (!StringUtils.hasText(filename)) return "lead-import";
-        return filename.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
     private BizException error(String code, String message) {

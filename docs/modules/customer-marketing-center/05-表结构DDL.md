@@ -457,14 +457,14 @@ MARKETING_CUSTOMER_TAG_IMPORT_BATCH（一批次一标签）
 ### 5.12 MARKETING_LEAD_IMPORT_BATCH
 
 所属领域：线索域
-表含义：一次Excel线索导入批次头，记录OBS文件、校验统计、人工确认和各线索审批汇总；批次本身不作为整批审批单。
+表含义：一次Excel线索导入批次头，记录本地暂存文件、校验统计、人工确认和各线索审批汇总；批次本身不作为整批审批单。
 
 | 字段名 | 建议类型 | 必填 | 字段含义 |
 | --- | --- | --- | --- |
 | id | BIGINT UNSIGNED AUTO_INCREMENT | 是 | 主键 |
 | batch_no | VARCHAR(64) | 是 | 导入批次编号，唯一 |
 | source_file_name | VARCHAR(255) | 是 | 原始文件名 |
-| source_file_id | VARCHAR(64) | 否 | 平台文件对象ID |
+| source_file_id | VARCHAR(64) | 否 | 导入文件存储键；当前为 local: 前缀的本地键，兼容历史平台文件对象ID |
 | file_checksum | VARCHAR(128) | 否 | 文件摘要，用于重复文件提示 |
 | total_count | INT | 是 | 总行数 |
 | valid_count | INT | 是 | 校验通过行数 |
@@ -474,7 +474,7 @@ MARKETING_CUSTOMER_TAG_IMPORT_BATCH（一批次一标签）
 | generated_lead_count | INT | 是 | 实际生成正式线索数 |
 | import_status | VARCHAR(30) | 是 | IMPORTING/WAITING_CONFIRM/COMPLETED/ALL_FAILED/ABANDONED；仅表示导入处理结果 |
 | approval_summary_status | VARCHAR(30) | 是 | NOT_SUBMITTED/IN_APPROVAL/PARTIAL_FINISHED/ALL_APPROVED/HAS_REJECTED；由关联线索汇总 |
-| error_file_id | VARCHAR(64) | 否 | 导出错误明细文件ID |
+| error_file_id | VARCHAR(64) | 否 | 错误明细存储键；当前为 local: 前缀的本地键，兼容历史平台文件对象ID |
 | confirm_action | VARCHAR(30) | 否 | WAITING_CONFIRM批次的选择：PROCESS_VALID仅处理正常行、ABANDON_REIMPORT放弃后修改文件重新导入 |
 | confirmed_by | VARCHAR(32) | 否 | 导入确认人；必须是原导入人或受权管理员 |
 | confirmed_time | DATETIME | 否 | 导入确认时间 |
@@ -489,7 +489,7 @@ MARKETING_CUSTOMER_TAG_IMPORT_BATCH（一批次一标签）
 | updated_time | DATETIME | 是 | 最后修改时间 |
 | lock_version | INT | 是 | 导入确认操作的乐观锁版本 |
 
-主要约束与索引：PK(id)；UK(batch_no)；IDX(import_emp_id, import_time)；IDX(import_status, import_time)。原始文件和错误明细通过平台FileApi存取OBS文件，表中只保存文件对象ID；用户放弃并重传时保留原批次为ABANDONED，新文件必须创建新批次。
+主要约束与索引：PK(id)；UK(batch_no)；IDX(import_emp_id, import_time)；IDX(import_status, import_time)。当前原始文件和错误明细保存到应用节点本地目录，表中保存 `local:` 存储键；历史平台文件对象ID仍按FileApi读取。用户放弃并重传时保留原批次为ABANDONED，新文件必须创建新批次。
 
 ### 5.13 MARKETING_LEAD_IMPORT_DETAIL
 
