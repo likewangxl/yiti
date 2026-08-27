@@ -15,3 +15,12 @@
 ### 响应摘要
 - 请求 197：HTTP 200，业务码 `0`，`message=success`，返回 31 列、6 行。
 - 页面渲染：无 `.scr-block-err`；经营机构余额排名显示宝鸡、渭南、咸阳、榆林、咸阳营业部、渭南营业部，共 6 行。
+
+### 真实库修正后复验
+196: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":41,"period":"LATEST","contextParams":{"orgCode":"","empId":""}} => HTTP 200
+197: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":40,"period":"LATEST","contextParams":{"orgCode":"","empId":""}} => HTTP 200
+198: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":39,"period":"LATEST","contextParams":{"orgCode":"","empId":""}} => HTTP 200
+199: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":38,"period":"LATEST","contextParams":{"orgCode":"","empId":""}} => HTTP 200
+200: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":37,"period":"LAST_1M","contextParams":{"orgCode":"","empId":""}} => HTTP 200
+
+页面状态：`errors=[]`，`rankingRows=6`；`route-list` 再次返回 `No active routes`。

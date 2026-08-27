@@ -1,0 +1,46 @@
+执行时间：2026-08-27 10:57:52（Asia/Shanghai）
+目标：yiti.RPT_SCREEN / SCR_CORP_OVERVIEW
+
+用户授权：已取得对 yiti 执行版本修正的二次明确确认。
+
+执行前只读复核：
+- 匹配行数：1
+- org_scope_mode=NAMED_GROUP
+- canvas_version=28
+- publish_status=1
+- draft JSON valid=1，schemaVersion=1
+- published JSON valid=1，schemaVersion=2
+- draft sha256=c8dd7397a4195236e9e83ef3cb9defcd2a5475634e4592a8d806a8db58676cce
+
+受控备份：
+- 文件：/home/djdev/.codex/backups/lf-yiti/RPT_SCREEN_SCR_CORP_OVERVIEW_before_schema_fix_20260827_1055.sql
+- 权限：600
+- 内容：仅 1 行完整列 INSERT，14199 字节
+- sha256=4f7a82bfd2fb6f91008c85ad3abc35116c24f2ce4f690307aecb7c240bd186fe
+
+乐观更新条件：
+- screen_code=SCR_CORP_OVERVIEW
+- deleted=0
+- org_scope_mode=NAMED_GROUP
+- canvas_version=28
+- publish_status=1
+- draft schemaVersion=1
+- published schemaVersion=2
+- draft sha256 与执行前一致
+
+执行结果：
+- affected_rows=1
+- draft schemaVersion=2
+- published schemaVersion=2
+- canvas_version=29
+- draft components=6
+- draft/published JSON valid=1/1
+- updated_by=codex
+- draft sha256=9de765992349405b9296f98d15bd917624e7ea2e33abaab732e08c127ea7657d
+
+写后页面复验：
+- 当前大屏=SCR_CORP_OVERVIEW
+- .scr-block-err=[]
+- 排行榜行数=6
+- 5 个 /api/screen/data 请求均为 schemaVersion=2、HTTP 200
+- 无浏览器拦截路由
