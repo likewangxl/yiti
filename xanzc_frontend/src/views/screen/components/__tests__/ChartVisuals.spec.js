@@ -460,6 +460,36 @@ describe('图表视觉预设与 option', () => {
     expect(option.series.map(series => series.data)).toEqual([[10], [20], [30]]);
   });
 
+  it('BarCompare 常规多系列优先显示 items label，回退元数据别名和字段名，并保留原始点击列', () => {
+    const wrapper = mount(BarCompare, {
+      props: {
+        columns: ['month', 'sales', 'cost', 'profit'],
+        rows: [['Jan', 10, 2, 8], ['Feb', 20, 4, 16]],
+        bind: {
+          items: [
+            { col: 'sales', label: '销售额' },
+            { col: 'cost', label: '' },
+            { col: 'profit', label: '  ' }
+          ]
+        },
+        columnsMeta: [
+          { col: 'sales', alias: '销售额别名' },
+          { col: 'cost', alias: '成本' }
+        ],
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+
+    expect(optionOf(wrapper).series.map(series => series.name))
+      .toEqual(['销售额', '成本', 'profit']);
+
+    triggerChartClick(wrapper, { componentType: 'series', seriesIndex: 1, dataIndex: 1 });
+    expect(wrapper.emitted('item-click')?.[0]?.[0]).toEqual({
+      col: 'cost', label: 'Feb', row: { month: 'Feb', sales: 20, cost: 4, profit: 16 }
+    });
+  });
+
   it('BarCompare 横向单系列逐柱使用十色莫兰迪色并循环第十一柱', () => {
     const columns = ['name', 'value'];
     const rows = Array.from({ length: 11 }, (_, i) => [`类别${i + 1}`, i + 1]);
@@ -576,7 +606,7 @@ describe('图表视觉预设与 option', () => {
     });
     const option = optionOf(wrapper);
     expect(option.xAxis.data).toEqual(['甲', '乙']);
-    expect(option.series.map(series => series.name)).toEqual(['sales', 'cost']);
+    expect(option.series.map(series => series.name)).toEqual(['销售额', '成本']);
     expect(option.series.map(series => series.data)).toEqual([[10, 20], [2, 4]]);
 
     triggerChartClick(wrapper, { componentType: 'series', seriesIndex: 0, dataIndex: 1 });
@@ -626,7 +656,7 @@ describe('图表视觉预设与 option', () => {
     });
     const option = optionOf(wrapper);
     expect(option.xAxis.data).toEqual(['总计']);
-    expect(option.series.map(series => series.name)).toEqual(['metric_a', 'metric_b']);
+    expect(option.series.map(series => series.name)).toEqual(['指标 A', '指标 B']);
     expect(option.series.map(series => series.data)).toEqual([[10], [20]]);
   });
 

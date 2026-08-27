@@ -5,7 +5,7 @@
 
 <script setup>
 // 双轴组合图：首列作为类目，前两个可证明为数值的列分别绘制柱/线。
-// bind.items 可显式限定列；columnsMeta 只负责显示别名，不改变取数列身份。
+// bind.items 可显式限定列并提供展示 label；columnsMeta 只作为别名回退，均不改变取数列身份。
 import { computed } from 'vue';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -50,9 +50,20 @@ const records = computed(() => (Array.isArray(props.rows) ? props.rows : [])
   })
   .filter(Boolean));
 const categories = computed(() => records.value.map(record => record.category));
+function metricLabel(index) {
+  const col = props.columns[index];
+  const item = Array.isArray(props.bind.items)
+    ? props.bind.items.find(candidate => candidate?.col === col)
+    : null;
+  const label = String(item?.label ?? '').trim();
+  if (label) return label;
+  return String(displayName(col, props.columnsMeta) ?? '').trim() || col;
+}
+
 const series = computed(() => valueIndexes.value.map(index => ({
   index,
-  name: props.columns[index],
+  col: props.columns[index],
+  name: metricLabel(index),
   data: records.value.map(record => finiteNumber(record.sourceRow?.[index]))
 })));
 
@@ -69,13 +80,13 @@ const option = computed(() => {
     legend: { show: props.styleCfg.showLegend !== false, top: 4, textStyle: scrAxisLabel(theme.value) },
     xAxis: { type: 'category', data: categories.value, axisLine: scrAxisLine(theme.value), axisLabel: scrAxisLabel(theme.value) },
     yAxis: [
-      { type: 'value', name: series.value[0] ? displayName(series.value[0].name, props.columnsMeta) : '',
+      { type: 'value', name: series.value[0] ? series.value[0].name : '',
         axisLabel: scrAxisLabel(theme.value), splitLine: scrSplitLine(theme.value), nameTextStyle: scrAxisLabel(theme.value) },
-      { type: 'value', name: series.value[1] ? displayName(series.value[1].name, props.columnsMeta) : '',
+      { type: 'value', name: series.value[1] ? series.value[1].name : '',
         axisLabel: scrAxisLabel(theme.value), splitLine: { show: false }, nameTextStyle: scrAxisLabel(theme.value) }
     ],
     series: series.value.map((item, index) => ({
-      name: displayName(item.name, props.columnsMeta),
+      name: item.name,
       type: index === 0 ? 'bar' : 'line',
       yAxisIndex: index === 0 ? 0 : 1,
       data: item.data,
@@ -111,7 +122,7 @@ function onChartClick(point) {
   const sourceRow = records.value[point.dataIndex]?.sourceRow;
   props.columns.forEach((column, index) => { row[column] = sourceRow?.[index]; });
   const picked = series.value[point.seriesIndex];
-  emit('item-click', { col: picked?.name, label: String(categories.value[point.dataIndex] ?? ''), row });
+  emit('item-click', { col: picked?.col, label: String(categories.value[point.dataIndex] ?? ''), row });
 }
 </script>
 

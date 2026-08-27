@@ -77,6 +77,11 @@ function metricLabel(item) {
   return label || displayName(item.col, props.columnsMeta) || item.col;
 }
 
+function seriesLabel(col) {
+  const item = itemCandidates.value.find(candidate => candidate.col === col);
+  return metricLabel(item || { col });
+}
+
 const parsed = computed(() => {
   // 显式 items 只绑定类目列时，不能把空系列误判成自动模式。
   if (hasExplicitItems.value && boundCols.value.length === 0) {
@@ -135,7 +140,7 @@ const option = computed(() => {
     xAxis: horizontal ? valAxis : catAxis,
     yAxis: horizontal ? catAxis : valAxis,
     series: series.value.map((s, i) => ({
-      name: displayName(s.name, props.columnsMeta),
+      name: seriesLabel(s.name),
       type: 'bar',
       stack: mode.value === 'stack' ? 'total' : undefined,
       barMaxWidth: 26,
