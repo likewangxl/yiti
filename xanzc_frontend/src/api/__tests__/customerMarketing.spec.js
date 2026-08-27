@@ -162,8 +162,10 @@ describe('customer marketing APIs', () => {
     }, null);
   });
 
-  it('待认领客户池详情使用审批详情资源并按线索编号查询', async () => {
+  it('待认领客户池详情复用客户池资源并按来源线索查询', async () => {
     await getAvailableCustomerLeadDetail('LEAD-POOL-1');
-    expect(call).toHaveBeenCalledWith('get', '/lead-approvals/LEAD-POOL-1', {}, null);
+    expect(call).toHaveBeenCalledWith('get', '/customer-pool', {
+      params: { leadId: 'LEAD-POOL-1' }
+    }, null);
   });
 });

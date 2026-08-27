@@ -23,6 +23,10 @@ public interface MarketingCustomerClaimMapper extends BaseMapper<MarketingCustom
     long countAvailablePoolPage(@Param("keyword") String keyword,
                                 @Param("empId") String empId);
 
+    /** 按与待认领池列表完全相同的条件校验来源线索是否仍对当前员工可见。 */
+    int countAvailableLead(@Param("leadId") Long leadId,
+                           @Param("empId") String empId);
+
     /** 查询本人已认领客户及来源、取消原因和最新触达任务。 */
     List<ClaimedCustomerRespDTO> selectClaimedCustomerPage(@Param("empId") String empId,
                                                            @Param("tab") String tab,

@@ -72,4 +72,19 @@ describe('营销线索审批页面契约', () => {
     expect(source).toMatch(/\.approval-toolbar[\s\S]*display:\s*flex[\s\S]*flex-wrap:\s*nowrap/);
     expect(source).toContain('<el-form-item class="approval-filter-actions">');
   });
+
+  it('总览中的待审批行按行状态展示通过和退回，并要求存在可办理任务', () => {
+    expect(source).toContain('function isPendingRow(row)');
+    expect(source).toMatch(/function isPendingRow\(row\)[\s\S]*row\?\.leadStatus[\s\S]*row\?\.task\?\.processStatus[\s\S]*taskId/);
+    expect(source).toMatch(/<el-button v-if="isPendingRow\(row\)" link type="success" @click="decide\(row, true\)">通过<\/el-button>/);
+    expect(source).toMatch(/<el-button v-if="isPendingRow\(row\)" link type="danger" @click="decide\(row, false\)">退回<\/el-button>/);
+    expect(source).not.toMatch(/<el-button v-if="activeStatus === 'IN_APPROVAL'" link type="success"/);
+    expect(source).not.toMatch(/<el-button v-if="activeStatus === 'IN_APPROVAL'" link type="danger"/);
+  });
+
+  it('详情抽屉底部办理按钮与当前选中行状态保持一致', () => {
+    expect(source).toContain("<el-button v-if=\"isPendingRow(selectedRow)\" type=\"danger\" plain @click=\"decide(selectedRow, false)\">退回</el-button>");
+    expect(source).toContain("<el-button v-if=\"isPendingRow(selectedRow)\" type=\"success\" @click=\"decide(selectedRow, true)\">通过</el-button>");
+    expect(source).toMatch(/drawer-footer[\s\S]*isPendingRow\(selectedRow\)/);
+  });
 });

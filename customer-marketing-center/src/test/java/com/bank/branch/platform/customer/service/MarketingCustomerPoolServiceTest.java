@@ -4,9 +4,12 @@ import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
+import com.bank.branch.platform.customer.dto.marketing.lead.LeadDetailResponse;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadTagRel;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerClaimMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadTagRelMapper;
+import com.bank.branch.platform.customer.service.marketing.MarketingLeadApprovalService;
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.DictApi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,8 +20,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -34,6 +39,9 @@ class MarketingCustomerPoolServiceTest {
     private OrgApi orgApi;
     @Mock
     private MarketingLeadTagRelMapper leadTagRelMapper;
+
+    @Mock
+    private MarketingLeadApprovalService leadApprovalService;
 
     @InjectMocks
     private MarketingCustomerPoolService service;
@@ -77,5 +85,29 @@ class MarketingCustomerPoolServiceTest {
             assertThat(item.getOwnerOrgName()).isEqualTo("一支行");
         });
         verify(claimMapper).selectAvailablePoolPage("目标", "EMP-1", 20, 20);
+    }
+
+    @Test
+    void getAvailableLeadDetail_shouldCheckPoolVisibilityBeforeAssemblingDetail() {
+        LeadDetailResponse expected = new LeadDetailResponse();
+        when(claimMapper.countAvailableLead(51L, "EMP-1")).thenReturn(1);
+        when(leadApprovalService.detail(51L, "EMP-1")).thenReturn(expected);
+
+        LeadDetailResponse actual = service.getAvailableLeadDetail(51L, "EMP-1");
+
+        assertThat(actual).isSameAs(expected);
+        verify(claimMapper).countAvailableLead(51L, "EMP-1");
+        verify(leadApprovalService).detail(51L, "EMP-1");
+    }
+
+    @Test
+    void getAvailableLeadDetail_shouldRejectInvisibleLeadAndAvoidDetailLookup() {
+        when(claimMapper.countAvailableLead(51L, "EMP-1")).thenReturn(0);
+
+        assertThatThrownBy(() -> service.getAvailableLeadDetail(51L, "EMP-1"))
+                .isInstanceOf(BizException.class)
+                .hasMessage("线索不存在");
+
+        verify(leadApprovalService, never()).detail(any(), any());
     }
 }

@@ -46,8 +46,8 @@
         <el-table-column label="提交时间" min-width="165"><template #default="{row}">{{ formatTime(row.submittedTime || row.task?.startTime) }}</template></el-table-column>
         <el-table-column label="操作" width="210" fixed="right" class-name="operation-cell">
           <template #default="{row}">
-            <el-button v-if="activeStatus === 'IN_APPROVAL'" link type="success" @click="decide(row, true)">通过</el-button>
-            <el-button v-if="activeStatus === 'IN_APPROVAL'" link type="danger" @click="decide(row, false)">退回</el-button>
+            <el-button v-if="isPendingRow(row)" link type="success" @click="decide(row, true)">通过</el-button>
+            <el-button v-if="isPendingRow(row)" link type="danger" @click="decide(row, false)">退回</el-button>
             <el-button link type="primary" @click="openDetail(row)">查看详情</el-button>
           </template>
         </el-table-column>
@@ -77,8 +77,8 @@
       </template>
       <template #footer>
         <div class="drawer-footer">
-          <span>{{ activeStatus === 'IN_APPROVAL' ? '请核对客户主档、分配方式及附件后办理' : '该记录已完成审批' }}</span>
-          <div><el-button @click="detailVisible=false">关闭</el-button><el-button v-if="activeStatus === 'IN_APPROVAL'" type="danger" plain @click="decide(selectedRow, false)">退回</el-button><el-button v-if="activeStatus === 'IN_APPROVAL'" type="success" @click="decide(selectedRow, true)">通过</el-button></div>
+          <span>{{ isPendingRow(selectedRow) ? '请核对客户主档、分配方式及附件后办理' : '该记录已完成审批' }}</span>
+          <div><el-button @click="detailVisible=false">关闭</el-button><el-button v-if="isPendingRow(selectedRow)" type="danger" plain @click="decide(selectedRow, false)">退回</el-button><el-button v-if="isPendingRow(selectedRow)" type="success" @click="decide(selectedRow, true)">通过</el-button></div>
         </div>
       </template>
     </el-drawer>
@@ -161,6 +161,11 @@ function distributionLabel(value) { return ({ PUBLIC: '全行公开认领', SCOP
 function statusLabel(row) {
   const value = row?.leadStatus || row?.task?.processStatus;
   return ({ IN_APPROVAL: '待审批', RUNNING: '待审批', APPROVED: '已通过', COMPLETED: '已通过', REJECTED: '已退回', CANCELLED: '已退回' }[value] || value || '-');
+}
+function isPendingRow(row) {
+  const status = row?.leadStatus || row?.task?.processStatus;
+  const taskId = row?.task?.taskId || row?.task?.id;
+  return ['IN_APPROVAL', 'RUNNING'].includes(status) && Boolean(taskId);
 }
 function statusType(row) { return ({ 待审批: 'warning', 已通过: 'success', 已退回: 'danger' }[statusLabel(row)] || 'info'); }
 function submitterLabel(row) {

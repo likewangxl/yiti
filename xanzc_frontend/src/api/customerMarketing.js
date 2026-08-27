@@ -76,9 +76,9 @@ export const listLeadVersions = id => call('get', `/leads/${id}/versions`, {}, [
 // 客户线索审批
 export const listLeadApprovals = (params = {}) => call('get', '/lead-approvals', { params }, null);
 export const getLeadApproval = leadId => call('get', `/lead-approvals/${leadId}`, {}, null);
-// 客户池详情复用审批详情资源，但使用语义明确的 API 名称，避免页面误用线索录入详情。
+// 客户池详情复用客户池资源，按来源线索标识查询详情，沿用语义明确的 API 名称。
 export const getAvailableCustomerLeadDetail = leadId =>
-  call('get', `/lead-approvals/${leadId}`, {}, null);
+  call('get', '/customer-pool', { params: { leadId } }, null);
 export const exportLeadApprovals = (params = {}) =>
   call('get', '/lead-approvals/export', { params, responseType: 'blob' }, null);
 

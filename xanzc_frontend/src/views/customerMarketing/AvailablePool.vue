@@ -34,9 +34,6 @@
     />
 
     <el-table :data="rows" v-loading="loading" border stripe class="table">
-      <el-table-column label="线索编号" min-width="170" fixed="left" show-overflow-tooltip>
-        <template #default="{ row }">{{ leadNo(row) }}</template>
-      </el-table-column>
       <el-table-column label="线索类型" min-width="145">
         <template #default="{ row }">{{ leadTypeLabel(row.leadType || row.type) }}</template>
       </el-table-column>
@@ -122,15 +119,25 @@
       />
     </div>
 
-    <LeadDetailDrawer v-model="detailVisible" :lead="selected" :loading="detailLoading" />
+    <el-drawer
+      v-model="detailVisible"
+      title="客户线索详情"
+      size="min(900px, 95vw)"
+      destroy-on-close
+    >
+      <el-skeleton v-if="detailLoading" :rows="12" animated />
+      <MarketingLeadReadonlyDetail v-else-if="selected" :detail="selected" />
+      <el-empty v-else description="暂无详情" />
+    </el-drawer>
   </section>
 </template>
 
 <script setup>
 import { ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import LeadDetailDrawer from '@/components/LeadDetailDrawer.vue';
+import MarketingLeadReadonlyDetail from '@/components/MarketingLeadReadonlyDetail.vue';
 import { claimCustomer, getAvailableCustomerLeadDetail, listAvailableCustomers } from '@/api/customerMarketing';
+import { marketingLeadYuanToWan } from '@/api/marketingManagement';
 
 const keyword = ref('');
 const rows = ref([]);
@@ -191,7 +198,13 @@ async function openDetail(row) {
   selected.value = null;
   try {
     const leadId = row.sourceLeadId || row.leadId || row.currentLeadId;
-    selected.value = await getAvailableCustomerLeadDetail(leadId || row.id) || row;
+    if (!leadId && !row?.id) throw new Error('当前线索缺少来源标识，请刷新后重试');
+    const detail = await getAvailableCustomerLeadDetail(leadId || row.id);
+    selected.value = normalizeDetail(detail || row);
+  } catch (error) {
+    detailVisible.value = false;
+    selected.value = null;
+    ElMessage.error(`详情加载失败：${error?.message || '请稍后重试'}`);
   } finally {
     detailLoading.value = false;
   }
@@ -228,12 +241,18 @@ function claimIdOf(row) {
   return row?.custId || row?.customerId || row?.id || '';
 }
 
-function leadNo(row) {
-  return row?.leadNo || row?.leadNumber || '-';
-}
-
 function leadTypeLabel(value) {
   return { NEW_ACCOUNT: '新客户开户线索', EXISTING_MARKETING: '存量客户营销线索' }[value] || value || '-';
+}
+
+function normalizeDetail(value) {
+  if (!value || typeof value !== 'object') return null;
+  const detail = value.lead ? value : { ...value, lead: value };
+  const lead = { ...detail.lead };
+  ['creditAmount', 'creditExposureAmount'].forEach(field => {
+    lead[field] = marketingLeadYuanToWan(lead[field]);
+  });
+  return { ...detail, lead };
 }
 
 function yesNo(value) {

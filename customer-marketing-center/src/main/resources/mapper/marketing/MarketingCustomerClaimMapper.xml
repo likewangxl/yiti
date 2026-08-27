@@ -107,6 +107,32 @@
     </select>
 
     <!--
+      客户池详情必须先复用列表的可见性口径校验来源线索，避免通过任意线索 ID
+      绕过 PUBLIC/AVAILABLE、客户主档状态或当前员工认领状态限制。
+    -->
+    <select id="countAvailableLead" resultType="int">
+        SELECT COUNT(*)
+        FROM MARKETING_LEAD_INFO l
+        JOIN MARKETING_CUSTOMER_INFO c
+          ON c.id = l.cust_id
+         AND c.record_status = 'ACTIVE'
+        WHERE l.id = #{leadId}
+          AND l.record_status = 'ACTIVE'
+          AND l.lead_status = 'APPROVED'
+          AND l.distribution_mode = 'PUBLIC'
+          AND l.pool_status = 'AVAILABLE'
+          AND c.ownership_status = 'UNASSIGNED'
+          AND c.main_manager_id IS NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM MARKETING_CUSTOMER_CLAIM cc
+              WHERE cc.source_lead_id = l.id
+                AND cc.claimed_by = #{empId}
+                AND cc.claim_status = 'CLAIMED'
+          )
+    </select>
+
+    <!--
       已认领池从认领关系反查来源线索；不把主办关系或业绩快照当作认领事实。
       最新触达任务及触达状态统一读取 MARKETING_TOUCH_TASK。
     -->

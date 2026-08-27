@@ -4,10 +4,14 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
+import com.bank.branch.platform.customer.dto.marketing.lead.LeadDetailResponse;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadTagRel;
+import com.bank.branch.platform.customer.enums.CustomerErrorCode;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerClaimMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadTagRelMapper;
+import com.bank.branch.platform.customer.service.marketing.MarketingLeadApprovalService;
 import com.bank.branch.platform.governance.api.DictApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +40,7 @@ public class MarketingCustomerPoolService {
     private final DictApi dictApi;
     private final OrgApi orgApi;
     private final MarketingLeadTagRelMapper leadTagRelMapper;
+    private final MarketingLeadApprovalService leadApprovalService;
 
     /** 查询当前员工的目标待认领池。 */
     public PageResult<CustomerDTO> listAvailable(String keyword, String empId,
@@ -47,6 +52,26 @@ public class MarketingCustomerPoolService {
         fillDisplayNames(records);
         long total = claimMapper.countAvailablePoolPage(keyword, empId);
         return PageResult.of(safePageNo, safePageSize, total, records == null ? List.of() : records);
+    }
+
+    /**
+     * 查询待认领池中的线索详情。
+     *
+     * <p>详情装配复用审批服务，避免录入、审批和池详情的字段口径分叉；在装配前
+     * 先用与池列表完全一致的 SQL 条件做行级可见性校验。</p>
+     *
+     * @param leadId 来源线索 ID
+     * @param empId 当前员工工号
+     * @return 与线索录入/审批一致的完整详情
+     * @throws BizException 线索不存在、已不可认领或已被当前员工认领时抛出
+     */
+    public LeadDetailResponse getAvailableLeadDetail(Long leadId, String empId) {
+        if (leadId == null || !StringUtils.hasText(empId)
+                || claimMapper.countAvailableLead(leadId, empId) != 1) {
+            throw new BizException(CustomerErrorCode.LEAD_NOT_FOUND.getCode(),
+                    CustomerErrorCode.LEAD_NOT_FOUND.getMessage());
+        }
+        return leadApprovalService.detail(leadId, empId);
     }
 
     private void fillDisplayNames(List<CustomerDTO> records) {

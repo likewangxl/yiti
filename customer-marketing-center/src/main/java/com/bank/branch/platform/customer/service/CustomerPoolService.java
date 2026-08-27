@@ -5,6 +5,7 @@ import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.customer.api.converter.CustomerDTOConverter;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
+import com.bank.branch.platform.customer.dto.marketing.lead.LeadDetailResponse;
 import com.bank.branch.platform.customer.entity.CustMaster;
 import com.bank.branch.platform.customer.mapper.CustClaimMapper;
 import com.bank.branch.platform.governance.api.DictApi;
@@ -81,6 +82,11 @@ public class CustomerPoolService {
         fillDisplayNames(records);
         out.setRecords(records);
         return out;
+    }
+
+    /** 查询待认领客户池中某条来源线索的完整详情。 */
+    public LeadDetailResponse getAvailableLeadDetail(Long leadId, String empId) {
+        return marketingPoolService.getAvailableLeadDetail(leadId, empId);
     }
 
     /**
