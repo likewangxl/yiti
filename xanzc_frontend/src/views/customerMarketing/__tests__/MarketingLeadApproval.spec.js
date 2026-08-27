@@ -35,6 +35,19 @@ describe('营销线索审批页面契约', () => {
     expect(source).toContain('detail.currentCustomer?.isAccountOpened === 1');
   });
 
+  it('所属行业通过 INDUSTRY 字典展示中文，并在每次列表查询时刷新字典', () => {
+    expect(source).toContain("import { useDict } from '@/composables/useDict'");
+    expect(source).toContain("useDict('INDUSTRY')");
+    expect(source).toContain('industryLabelOf(row.industry)');
+    expect(source).toMatch(/async function load\(\)[\s\S]*reloadIndustry\(\)/);
+  });
+
+  it('页面不展示对用户无意义的线索编号', () => {
+    expect(source).not.toContain('prop="leadNo"');
+    expect(source).not.toContain('detail.lead.leadNo');
+    expect(source).not.toContain('线索编号');
+  });
+
   it('三张分类卡片互斥筛选，并分别获取精确总数', () => {
     expect(source).toMatch(/listLeadApprovalPending\(\{ pageNo: 1, pageSize: 1 \}\)/);
     expect(source).toMatch(/listLeadApprovalHistory\(\{ result: 'APPROVED', pageNo: 1, pageSize: 1 \}\)/);

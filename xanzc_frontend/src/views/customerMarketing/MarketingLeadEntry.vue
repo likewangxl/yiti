@@ -29,18 +29,17 @@
         </div>
         <el-card shadow="never" class="filter-card">
           <div class="toolbar">
-            <el-form inline @submit.prevent><el-form-item label="关键词"><el-input v-model="leadQuery.keyword" clearable placeholder="线索编号 / 企业名称 / 统一社会信用代码" /></el-form-item><el-form-item label="状态"><el-select v-model="leadQuery.status" clearable style="width:140px" @change="filterByDropdown"><el-option v-for="item in leadStatuses" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item><el-button type="primary" @click="searchLeads">查询</el-button></el-form>
+            <el-form inline @submit.prevent><el-form-item label="关键词"><el-input v-model="leadQuery.keyword" clearable placeholder="企业名称 / 统一社会信用代码" /></el-form-item><el-form-item label="状态"><el-select v-model="leadQuery.status" clearable style="width:140px" @change="filterByDropdown"><el-option v-for="item in leadStatuses" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item><el-button type="primary" @click="searchLeads">查询</el-button><el-button @click="resetLeadFilters">重置</el-button></el-form>
           </div>
         </el-card>
         <el-table :data="leads" v-loading="leadLoading" border stripe class="lead-entry-table">
-          <el-table-column prop="leadNo" label="线索编号" min-width="160" />
           <el-table-column prop="custName" label="企业名称" min-width="180" />
           <el-table-column prop="unifiedCreditCode" label="统一社会信用代码" min-width="190" />
           <el-table-column prop="leadSource" label="线索来源" width="110"><template #default>手工录入</template></el-table-column>
           <el-table-column prop="entryEmpId" label="录入人" width="110" />
           <el-table-column prop="entryTime" label="录入时间" min-width="165"><template #default="{row}">{{ formatTime(row.entryTime) }}</template></el-table-column>
           <el-table-column prop="leadStatus" label="状态" width="110"><template #default="{row}"><el-tag>{{ statusLabel(row.leadStatus) }}</el-tag></template></el-table-column>
-          <el-table-column label="操作" width="210" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button link type="primary" @click="showLead(row)">详情</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="primary" @click="editLead(row)">编辑</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="success" @click="submitLead(row)">提交审批</el-button></template></el-table-column>
+          <el-table-column label="操作" width="230" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button link type="primary" @click="showLead(row)">详情</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="primary" @click="editLead(row)">编辑</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="success" @click="submitLead(row)">提交审批</el-button><el-button v-if="row.leadStatus === 'REJECTED'" link type="danger" @click="editLead(row)">编辑并重新提交</el-button></template></el-table-column>
         </el-table>
         <div class="pager"><el-pagination background layout="total, sizes, prev, pager, next" :total="leadTotal" v-model:current-page="leadQuery.pageNo" v-model:page-size="leadQuery.pageSize" :page-sizes="[10, 20, 50, 100]" @change="loadLeads" /></div>
       </el-tab-pane>
@@ -146,7 +145,7 @@
           </el-form-item>
         </section>
       </el-form>
-      <template #footer><div class="drawer-footer"><span>{{ form.id ? '正在编辑草稿线索' : '新建线索将先保存草稿' }}</span><div><el-button @click="formVisible=false">取消</el-button><el-button :loading="saving" @click="saveLead(false)">保存草稿</el-button><el-button type="primary" :loading="saving" @click="saveLead(true)">提交审批</el-button></div></div></template>
+      <template #footer><div class="drawer-footer"><span>{{ editingLeadStatus === 'REJECTED' ? '已退回线索修改后可重新提交审批' : form.id ? '正在编辑草稿线索' : '新建线索将先保存草稿' }}</span><div><el-button @click="formVisible=false">取消</el-button><el-button :loading="saving" @click="saveLead(false)">保存草稿</el-button><el-button type="primary" :loading="saving" @click="saveLead(true)">{{ editingLeadStatus === 'REJECTED' ? '重新提交审批' : '提交审批' }}</el-button></div></div></template>
     </el-drawer>
 
     <el-drawer v-model="leadDetailVisible" title="线索详情" size="min(900px, 95vw)"><MarketingLeadReadonlyDetail :detail="leadDetail" /></el-drawer>
@@ -179,6 +178,7 @@ const leads = ref([]); const leadTotal = ref(0); const leadLoading = ref(false);
 const leadStats = reactive({DRAFT:0,IN_APPROVAL:0,APPROVED:0,REJECTED:0});
 const batches = ref([]); const batchTotal = ref(0); const batchLoading = ref(false); const uploading = ref(false);
 const formVisible = ref(false); const saving = ref(false); const formRef = ref(null); const form = reactive(emptyForm()); const matchedCustomer = ref(null);
+const editingLeadStatus = ref('');
 const tagOptions = ref([]); const managerOptions = ref([]); const managerLoading = ref(false);
 const fileList = ref([]); const pendingFiles = ref([]);
 const leadDetailVisible = ref(false); const leadDetail = ref(null);
@@ -243,17 +243,19 @@ function loadActive(){ activeTab.value==='manual' ? refreshManualView() : loadBa
 function searchLeads(){ leadQuery.pageNo=1; loadLeads(); } function searchBatches(){ batchQuery.pageNo=1; loadBatches(); }
 function toggleStatusCard(status){leadQuery.status=leadQuery.status===status?'':status;leadQuery.pageNo=1;loadLeads();}
 function filterByDropdown(){leadQuery.pageNo=1;loadLeads();}
+function resetLeadFilters(){leadQuery.keyword='';leadQuery.status='';leadQuery.pageNo=1;loadLeads();}
 function openImport(){ activeTab.value='imports'; loadBatches(); }
 async function ensureTagOptions(){
   if(tagOptions.value.length)return;
   const result=await listMarketingCustomerTags({status:'ENABLED',approvalStatus:'APPROVED',pageNo:1,pageSize:100});
   tagOptions.value=pageRows(result);
 }
-function resetLeadForm(){ Object.assign(form,emptyForm()); matchedCustomer.value=null; managerOptions.value=[]; fileList.value=[]; pendingFiles.value=[]; }
+function resetLeadForm(){ Object.assign(form,emptyForm()); editingLeadStatus.value=''; matchedCustomer.value=null; managerOptions.value=[]; fileList.value=[]; pendingFiles.value=[]; }
 async function openCreate(){ resetLeadForm(); await ensureTagOptions(); formVisible.value=true; }
 async function editLead(row){
   resetLeadForm(); await ensureTagOptions();
   const detail=await getMarketingLead(row.id); const lead=detail?.lead||row;
+  editingLeadStatus.value=lead.leadStatus||row.leadStatus||'';
   const managerEmpIds=detail?.managerEmpIds||lead.managerEmpIds||(lead.managerScopes||[]).map(item=>item.managerEmpId);
   const tagIds=detail?.tagIds||lead.tagIds||(lead.tags||[]).map(tag=>tag.tagId??tag.id);
   const attachments=lead.attachments||detail?.attachments||[];
@@ -366,7 +368,7 @@ async function saveLead(andSubmit=false){
   finally { saving.value=false; }
 }
 async function showLead(row){ try { leadDetail.value=await getMarketingLead(row.id); leadDetailVisible.value=true; } catch (error) { ElMessage.error(`线索详情加载失败：${error?.message||'请稍后重试'}`); } }
-async function submitLead(row){ try { await ElMessageBox.confirm(`确认提交线索 ${row.leadNo} 审批？`,'提交审批'); await submitMarketingLead(row.id); ElMessage.success('已提交审批'); await refreshManualView(); } catch (error) { if(error!=='cancel'&&error!=='close') ElMessage.error(`提交失败：${error?.message||'请稍后重试'}`); } }
+async function submitLead(row){ try { await ElMessageBox.confirm('确认提交该线索审批？','提交审批'); await submitMarketingLead(row.id); ElMessage.success('已提交审批'); await refreshManualView(); } catch (error) { if(error!=='cancel'&&error!=='close') ElMessage.error(`提交失败：${error?.message||'请稍后重试'}`); } }
 async function importFile(upload){ if(!upload?.raw || uploading.value) return; uploading.value=true; try { await createLeadImportBatch(upload.raw); ElMessage.success('导入文件已处理'); await loadBatches(); } catch (error) { ElMessage.error(`导入失败：${error?.message||'请检查文件'}`); } finally { uploading.value=false; } }
 function openBatch(row){ selectedBatch.value=row; batchDrawerVisible.value=true; }
 async function confirmBatch(action){ const normalizedAction=action===PROCESS_VALID?PROCESS_VALID:ABANDON_REIMPORT; const actionLabel=normalizedAction===PROCESS_VALID?'仅处理正常数据':'放弃并重新导入'; try { const {value}=await ElMessageBox.prompt(`确认${actionLabel}？`,'导入批次确认',{inputPlaceholder:'可填写备注'}); await confirmLeadImportBatch(selectedBatch.value.id,{action:normalizedAction,remark:value}); ElMessage.success('批次已处理'); batchDrawerVisible.value=false; await loadBatches(); } catch (error) { if(error!=='cancel'&&error!=='close') ElMessage.error(`批次确认失败：${error?.message||'请稍后重试'}`); } }

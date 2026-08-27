@@ -60,6 +60,7 @@ public class MarketingLeadEntryService {
     static final String DRAFT = "DRAFT";
     static final String SUBMITTED = "SUBMITTED";
     static final String IN_APPROVAL = "IN_APPROVAL";
+    static final String REJECTED = "REJECTED";
     static final String CANCELLED = "CANCELLED";
 
     private final MarketingLeadInfoMapper leadMapper;
@@ -177,14 +178,15 @@ public class MarketingLeadEntryService {
     @Transactional
     public MarketingLeadInfo updateDraft(Long leadId, LeadUpdateRequest request,
                                          String operatorEmpId, String operatorOrgId) {
-        MarketingLeadInfo current = requireOwnedDraft(leadId, operatorEmpId);
+        MarketingLeadInfo current = requireOwnedEditable(leadId, operatorEmpId);
+        boolean reopeningRejected = REJECTED.equals(current.getLeadStatus());
         if (request == null) {
             throw error("MARKETING_LEAD_REQUEST_INVALID", "线索请求不能为空");
         }
         String nextCreditCode = request.getUnifiedCreditCode() == null
                 ? current.getUnifiedCreditCode()
                 : normalizeCreditCode(request.getUnifiedCreditCode());
-        if (!Objects.equals(nextCreditCode, current.getUnifiedCreditCode())) {
+        if (reopeningRejected || !Objects.equals(nextCreditCode, current.getUnifiedCreditCode())) {
             MarketingLeadInfo pending = leadMapper.selectActiveByCreditCode(nextCreditCode);
             if (pending != null && !Objects.equals(pending.getId(), leadId)) {
                 throw duplicatePending(pending);
@@ -218,6 +220,9 @@ public class MarketingLeadEntryService {
         // 主办客户不得在草稿编辑中改成公共范围。
         if (StringUtils.hasText(current.getMainManagerIdSnapshot())) {
             current.setDistributionMode("OWNER");
+        }
+        if (reopeningRejected) {
+            restoreAsDraft(current, nextCreditCode);
         }
         leadMapper.updateById(current);
         LocalDateTime relationTime = LocalDateTime.now();
@@ -297,7 +302,8 @@ public class MarketingLeadEntryService {
      */
     @Transactional
     public LeadSubmitResponse submit(Long leadId, String operatorEmpId, String operatorOrgId) {
-        MarketingLeadInfo lead = requireOwnedDraft(leadId, operatorEmpId);
+        MarketingLeadInfo lead = requireOwnedSubmittable(leadId, operatorEmpId);
+        String expectedStatus = lead.getLeadStatus();
         MarketingLeadInfo duplicate = leadMapper.selectForUpdateByCreditCode(lead.getUnifiedCreditCode());
         if (duplicate != null && !Objects.equals(duplicate.getId(), leadId)) {
             throw duplicatePending(duplicate);
@@ -311,6 +317,10 @@ public class MarketingLeadEntryService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        if (REJECTED.equals(expectedStatus)) {
+            lead.setActiveDedupKey(lead.getUnifiedCreditCode());
+            clearPreviousApproval(lead);
+        }
         lead.setSubmittedBy(operatorEmpId);
         lead.setSubmittedTime(now);
         lead.setBusinessKey("LEAD:" + leadId);
@@ -330,7 +340,7 @@ public class MarketingLeadEntryService {
         if (launch == null || !StringUtils.hasText(launch.getProcessInstanceId())) {
             throw error("MARKETING_LEAD_WORKFLOW_START_FAILED", "线索审批流程启动失败");
         }
-        int changed = leadMapper.updateStatusIf(leadId, DRAFT, IN_APPROVAL, operatorEmpId, null);
+        int changed = leadMapper.updateStatusIf(leadId, expectedStatus, IN_APPROVAL, operatorEmpId, null);
         if (changed != 1) {
             throw error("MARKETING_LEAD_STATE_CONFLICT", "线索状态已发生变化，请刷新后重试");
         }
@@ -365,15 +375,42 @@ public class MarketingLeadEntryService {
         lead.setActiveDedupKey(null);
     }
 
-    private MarketingLeadInfo requireOwnedDraft(Long leadId, String operatorEmpId) {
+    private MarketingLeadInfo requireOwnedEditable(Long leadId, String operatorEmpId) {
         MarketingLeadInfo lead = leadMapper.selectForUpdate(leadId);
         if (lead == null || !Objects.equals(lead.getEntryEmpId(), operatorEmpId)) {
             throw error("MARKETING_LEAD_NOT_FOUND", "线索不存在");
         }
-        if (!DRAFT.equals(lead.getLeadStatus())) {
-            throw error("MARKETING_LEAD_EDIT_FORBIDDEN", "仅草稿状态线索可编辑或提交");
+        if (!DRAFT.equals(lead.getLeadStatus()) && !REJECTED.equals(lead.getLeadStatus())) {
+            throw error("MARKETING_LEAD_EDIT_FORBIDDEN", "仅草稿或已退回线索可编辑");
         }
         return lead;
+    }
+
+    private MarketingLeadInfo requireOwnedSubmittable(Long leadId, String operatorEmpId) {
+        MarketingLeadInfo lead = leadMapper.selectForUpdate(leadId);
+        if (lead == null || !Objects.equals(lead.getEntryEmpId(), operatorEmpId)) {
+            throw error("MARKETING_LEAD_NOT_FOUND", "线索不存在");
+        }
+        if (!DRAFT.equals(lead.getLeadStatus()) && !REJECTED.equals(lead.getLeadStatus())) {
+            throw error("MARKETING_LEAD_EDIT_FORBIDDEN", "仅草稿或已退回线索可提交");
+        }
+        return lead;
+    }
+
+    private void restoreAsDraft(MarketingLeadInfo lead, String activeDedupKey) {
+        lead.setLeadStatus(DRAFT);
+        lead.setActiveDedupKey(activeDedupKey);
+        clearPreviousApproval(lead);
+    }
+
+    private void clearPreviousApproval(MarketingLeadInfo lead) {
+        lead.setSubmittedBy(null);
+        lead.setSubmittedTime(null);
+        lead.setBusinessKey(null);
+        lead.setProcessInstanceId(null);
+        lead.setReviewedBy(null);
+        lead.setReviewedTime(null);
+        lead.setRejectReason(null);
     }
 
     private MarketingCustomerInfo findCustomer(String creditCode) {

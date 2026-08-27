@@ -14,11 +14,13 @@ describe('营销线索录入页面契约', () => {
     expect(source).toContain(':page-sizes="[10, 20, 50, 100]"');
   });
 
-  it('第一 Tab 按每条 MANUAL 线索展示，不聚合且不展示版本字段', () => {
+  it('第一 Tab 按每条 MANUAL 线索展示，不聚合且不向用户展示线索编号和版本', () => {
     expect(source).toContain('listManualLeads');
     expect(source).toContain('leadSource');
     expect(source).toContain('线索录入记录');
-    expect(source).toContain('leadNo');
+    expect(source).not.toContain('prop="leadNo"');
+    expect(source).not.toContain('row.leadNo');
+    expect(source).not.toContain('线索编号 / 企业名称');
     expect(source).not.toContain('versionNo');
     expect(source).not.toContain('版本');
   });
@@ -124,7 +126,8 @@ describe('营销线索录入页面契约', () => {
 
   it('抽屉支持保存草稿和提交审批，送审失败时保留已保存草稿', () => {
     expect(source).toMatch(/@click="saveLead\(false\)"[^>]*>保存草稿</);
-    expect(source).toMatch(/@click="saveLead\(true\)"[^>]*>提交审批</);
+    expect(source).toContain('@click="saveLead(true)"');
+    expect(source).toContain("'提交审批'");
     expect(source).toMatch(/async function saveLead\(andSubmit=false\)/);
     expect(source).toMatch(/await persistLeadDraft\([\s\S]*await submitMarketingLead\(savedId\)/);
     expect(source).toContain('草稿已保存，但提交审批失败');
@@ -137,6 +140,20 @@ describe('营销线索录入页面契约', () => {
     expect(source).toMatch(/leadQuery\.status===status\?'':status/);
     expect(source).toContain('@change="filterByDropdown"');
     expect(source).not.toContain("REJECTED:'已驳回'");
+  });
+
+  it('筛选栏提供重置按钮并清空关键词和唯一状态筛选', () => {
+    expect(source).toMatch(/@click="resetLeadFilters"[^>]*>重置</);
+    expect(source).toMatch(/function resetLeadFilters\(\)\{[\s\S]*leadQuery\.keyword=''[\s\S]*leadQuery\.status=''[\s\S]*leadQuery\.pageNo=1[\s\S]*loadLeads\(\)/);
+  });
+
+  it('已退回线索可复用编辑抽屉修改并重新提交审批', () => {
+    expect(source).toMatch(/v-if="row\.leadStatus === 'REJECTED'"[^>]*@click="editLead\(row\)"[^>]*>编辑并重新提交</);
+    expect(source).toMatch(/const editingLeadStatus = ref\(''\)/);
+    expect(source).toMatch(/editingLeadStatus\.value=lead\.leadStatus\|\|row\.leadStatus\|\|''/);
+    expect(source).toContain("editingLeadStatus === 'REJECTED' ? '重新提交审批' : '提交审批'");
+    expect(source).toContain('已退回线索修改后可重新提交审批');
+    expect(source).toMatch(/await updateMarketingLead\(form\.id,payload\)[\s\S]*await submitMarketingLead\(savedId\)/);
   });
 
   it('已匹配客户改名或名称查询未命中时清理旧主档快照，不影响未匹配时的手工代码', () => {

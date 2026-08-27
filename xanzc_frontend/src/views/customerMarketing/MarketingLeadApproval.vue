@@ -21,16 +21,15 @@
         <span>共 {{ total }} 条</span>
       </div>
       <div class="approval-toolbar">
-        <el-input v-model="query.keyword" clearable placeholder="客户名称 / 统一社会信用代码 / 线索编号 / 提交人" style="width: 420px" @keyup.enter="search" />
+        <el-input v-model="query.keyword" clearable placeholder="客户名称 / 统一社会信用代码 / 提交人" style="width: 420px" @keyup.enter="search" />
         <el-button type="primary" @click="search">查询</el-button>
         <el-button @click="resetFilter">重置</el-button>
       </div>
       <el-table :data="rows" v-loading="loading" border stripe class="lead-approval-table">
-        <el-table-column prop="leadNo" label="线索编号" min-width="155" fixed="left" />
-        <el-table-column prop="custName" label="客户名称" min-width="210" show-overflow-tooltip />
+        <el-table-column prop="custName" label="客户名称" min-width="210" fixed="left" show-overflow-tooltip />
         <el-table-column prop="unifiedCreditCode" label="统一社会信用代码" min-width="185" />
         <el-table-column label="线索类型" width="135"><template #default="{row}">{{ leadTypeLabel(row.leadType) }}</template></el-table-column>
-        <el-table-column prop="industry" label="所属行业" width="120"><template #default="{row}">{{ row.industry || '-' }}</template></el-table-column>
+        <el-table-column prop="industry" label="所属行业" width="120"><template #default="{row}">{{ industryLabelOf(row.industry) }}</template></el-table-column>
         <el-table-column label="分配方式" min-width="145"><template #default="{row}">{{ distributionLabel(row.distributionMode) }}</template></el-table-column>
         <el-table-column label="提交人" min-width="145"><template #default="{row}">{{ submitterLabel(row) }}</template></el-table-column>
         <el-table-column label="状态" width="105"><template #default="{row}"><el-tag :type="statusType(row)" effect="plain">{{ statusLabel(row) }}</el-tag></template></el-table-column>
@@ -46,7 +45,7 @@
       <div class="pager"><el-pagination background layout="total, sizes, prev, pager, next" :total="total" v-model:current-page="query.pageNo" v-model:page-size="query.pageSize" :page-sizes="[10, 20, 50, 100]" @change="load" /></div>
     </section>
 
-    <el-drawer v-model="detailVisible" :title="detail?.lead ? `线索审批详情 · ${detail.lead.leadNo}` : '线索审批详情'" size="min(820px, 96vw)" class="approval-detail-drawer">
+    <el-drawer v-model="detailVisible" title="线索审批详情" size="min(820px, 96vw)" class="approval-detail-drawer">
       <template v-if="detail?.lead">
         <div class="detail-banner">
           <div><span>客户名称</span><strong>{{ detail.lead.custName }}</strong><small>{{ detail.lead.unifiedCreditCode }}</small></div>
@@ -82,11 +81,13 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import MarketingLeadReadonlyDetail from '@/components/MarketingLeadReadonlyDetail.vue';
 import PageTitle from '@/components/PageTitle.vue';
 import { approveLead, getLeadApprovalDetail, listLeadApprovalHistory, listLeadApprovalPending, marketingLeadYuanToWan, rejectLead } from '@/api/marketingManagement';
+import { useDict } from '@/composables/useDict';
 
 const activeStatus = ref('IN_APPROVAL');
 const query = reactive({ keyword: '', pageNo: 1, pageSize: 20 });
 const rows = ref([]); const total = ref(0); const pendingTotal = ref(0); const approvedTotal = ref(0); const rejectedTotal = ref(0); const loading = ref(false);
 const detailVisible = ref(false); const detail = ref(null); const selectedRow = ref(null);
+const { labelOf: industryLabelOf, reload: reloadIndustry } = useDict('INDUSTRY');
 const summaryCards = computed(() => [
   { status: 'IN_APPROVAL', label: '待审批', value: pendingTotal.value, hint: '等待当前审批人处理', tone: 'warning' },
   { status: 'APPROVED', label: '已通过', value: approvedTotal.value, hint: '当前登录人已通过的线索', tone: 'success' },
@@ -99,9 +100,12 @@ async function load() {
   loading.value = true;
   try {
     const params = { ...query };
-    const result = await (activeStatus.value === 'IN_APPROVAL'
-      ? listLeadApprovalPending(params)
-      : listLeadApprovalHistory({ ...params, result: activeStatus.value }));
+    const [result] = await Promise.all([
+      activeStatus.value === 'IN_APPROVAL'
+        ? listLeadApprovalPending(params)
+        : listLeadApprovalHistory({ ...params, result: activeStatus.value }),
+      reloadIndustry()
+    ]);
     rows.value = pageRows(result); total.value = pageTotal(result);
     if (activeStatus.value === 'IN_APPROVAL') pendingTotal.value = total.value;
     if (activeStatus.value === 'APPROVED') approvedTotal.value = total.value;

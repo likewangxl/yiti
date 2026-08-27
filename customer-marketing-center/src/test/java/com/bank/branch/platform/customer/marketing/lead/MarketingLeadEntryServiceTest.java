@@ -19,6 +19,7 @@ import com.bank.branch.platform.customer.service.marketing.MarketingLeadEntrySer
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
+import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -286,6 +287,74 @@ class MarketingLeadEntryServiceTest {
         verify(managerScopeMapper).insert(captor.capture());
         assertEquals("OWNER_1", captor.getValue().getManagerEmpId());
         assertEquals(1, captor.getValue().getIsPrimary());
+    }
+
+    @Test
+    void updateRejectedLeadRestoresDraftAndClearsPreviousReviewMetadata() {
+        MarketingLeadInfo rejected = new MarketingLeadInfo();
+        rejected.setId(12L);
+        rejected.setLeadStatus("REJECTED");
+        rejected.setEntryEmpId("EMP_1");
+        rejected.setUnifiedCreditCode("91320100ABC1234567");
+        rejected.setActiveDedupKey(null);
+        rejected.setSubmittedBy("EMP_1");
+        rejected.setSubmittedTime(java.time.LocalDateTime.now().minusDays(1));
+        rejected.setBusinessKey("LEAD:12");
+        rejected.setProcessInstanceId("PROCESS_OLD");
+        rejected.setReviewedBy("REVIEWER_1");
+        rejected.setReviewedTime(java.time.LocalDateTime.now().minusHours(1));
+        rejected.setRejectReason("资料不完整");
+        rejected.setDistributionMode("PUBLIC");
+        when(leadMapper.selectForUpdate(12L)).thenReturn(rejected);
+        when(leadMapper.selectActiveByCreditCode("91320100ABC1234567")).thenReturn(null);
+        LeadUpdateRequest request = new LeadUpdateRequest();
+        request.setCustName("修改后企业");
+
+        MarketingLeadInfo result = service.updateDraft(12L, request, "EMP_1", "ORG_1");
+
+        assertEquals("DRAFT", result.getLeadStatus());
+        assertEquals("91320100ABC1234567", result.getActiveDedupKey());
+        assertEquals(null, result.getSubmittedBy());
+        assertEquals(null, result.getSubmittedTime());
+        assertEquals(null, result.getBusinessKey());
+        assertEquals(null, result.getProcessInstanceId());
+        assertEquals(null, result.getReviewedBy());
+        assertEquals(null, result.getReviewedTime());
+        assertEquals(null, result.getRejectReason());
+        verify(leadMapper).updateById(rejected);
+    }
+
+    @Test
+    void submitRejectedLeadRestoresDedupAndStartsAnewApprovalProcess() {
+        MarketingLeadInfo rejected = new MarketingLeadInfo();
+        rejected.setId(13L);
+        rejected.setLeadNo("MLEAD_13");
+        rejected.setLeadStatus("REJECTED");
+        rejected.setEntryEmpId("EMP_1");
+        rejected.setUnifiedCreditCode("91320100ABC1234567");
+        rejected.setDistributionMode("PUBLIC");
+        rejected.setReviewedBy("REVIEWER_1");
+        rejected.setRejectReason("退回原因");
+        when(leadMapper.selectForUpdate(13L)).thenReturn(rejected);
+        when(leadMapper.selectForUpdateByCreditCode("91320100ABC1234567")).thenReturn(null);
+        WorkflowLaunchResp launch = new WorkflowLaunchResp();
+        launch.setProcessInstanceId("PROCESS_NEW");
+        when(workflowApi.startProcess(any())).thenReturn(launch);
+        when(leadMapper.updateStatusIf(13L, "REJECTED", "IN_APPROVAL", "EMP_1", null))
+                .thenReturn(1);
+        MarketingLeadInfo inApproval = new MarketingLeadInfo();
+        inApproval.setId(13L);
+        inApproval.setLeadStatus("IN_APPROVAL");
+        when(leadMapper.selectActiveById(13L)).thenReturn(inApproval);
+
+        var result = service.submit(13L, "EMP_1", "ORG_1");
+
+        assertEquals("IN_APPROVAL", result.getLeadStatus());
+        assertEquals("91320100ABC1234567", rejected.getActiveDedupKey());
+        assertEquals(null, rejected.getReviewedBy());
+        assertEquals(null, rejected.getRejectReason());
+        verify(workflowApi).startProcess(any());
+        verify(leadMapper).updateStatusIf(13L, "REJECTED", "IN_APPROVAL", "EMP_1", null);
     }
 
     @Test
