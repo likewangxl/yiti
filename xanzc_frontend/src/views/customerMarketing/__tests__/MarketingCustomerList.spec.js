@@ -24,6 +24,17 @@ describe('营销客户列表页面契约', () => {
     expect(source).not.toContain("@/api/customerMarketing");
   });
 
+  it('所属行业在查询表单、表格和编辑表单中复用 INDUSTRY 字典中文口径', () => {
+    expect(source).toContain("useDict('INDUSTRY')");
+    expect(source).toContain('v-model="query.industry"');
+    expect(source).toContain('v-for="item in industryOptions"');
+    expect(source).toContain('industryLabelOf(row.industry)');
+    expect(source).toContain('v-model="editForm.industry"');
+    expect(source).toContain('reloadIndustry()');
+    expect(source).not.toContain('<el-table-column prop="industry" label="所属行业"');
+    expect(source).not.toContain('<el-input v-model="editForm.industry"');
+  });
+
   it('编辑表单支持有效营销客户标签多选并提供加载和筛选体验', () => {
     expect(source).toContain('listEditableMarketingCustomerTags');
     expect(source).toContain('label="客户标签"');

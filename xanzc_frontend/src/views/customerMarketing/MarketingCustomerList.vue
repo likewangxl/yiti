@@ -13,6 +13,11 @@
         <el-form-item label="关键词"><el-input v-model="query.keyword" clearable placeholder="企业名称 / 客户号 / 统一社会信用代码" @keyup.enter="search" /></el-form-item>
         <el-form-item label="统一社会信用代码"><el-input v-model="query.unifiedCreditCode" clearable /></el-form-item>
         <el-form-item label="客户号"><el-input v-model="query.custNo" clearable /></el-form-item>
+        <el-form-item label="所属行业">
+          <el-select v-model="query.industry" clearable filterable placeholder="全部" :loading="industryLoading" style="width: 150px">
+            <el-option v-for="item in industryOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="主办工号"><el-input v-model="query.mainManagerId" clearable /></el-form-item>
         <el-form-item label="开户状态"><el-select v-model="query.isAccountOpened" clearable placeholder="全部" style="width: 120px"><el-option label="已开户" :value="1" /><el-option label="未开户" :value="0" /></el-select></el-form-item>
         <el-form-item label="主办状态"><el-select v-model="query.ownershipStatus" clearable placeholder="全部" style="width: 130px"><el-option label="有主办" value="ASSIGNED" /><el-option label="无主办" value="UNASSIGNED" /></el-select></el-form-item>
@@ -30,7 +35,7 @@
       <el-table-column prop="unifiedCreditCode" label="统一社会信用代码" min-width="185" show-overflow-tooltip />
       <el-table-column prop="contactPerson" label="企业联系人" min-width="125" />
       <el-table-column prop="contactMobile" label="联系电话" min-width="130" />
-      <el-table-column prop="industry" label="所属行业" min-width="120" />
+      <el-table-column label="所属行业" min-width="120"><template #default="{ row }">{{ industryLabelOf(row.industry) }}</template></el-table-column>
       <el-table-column label="开户状态" width="95"><template #default="{ row }"><el-tag :type="row.isAccountOpened === 1 ? 'success' : 'info'">{{ row.isAccountOpened === 1 ? '已开户' : '未开户' }}</el-tag></template></el-table-column>
       <el-table-column label="主办客户经理" min-width="170"><template #default="{ row }">{{ ownerLabel(row) }}</template></el-table-column>
       <el-table-column label="主办机构" min-width="145"><template #default="{ row }">{{ row.mainOrgName || row.mainOrgId || '-' }}</template></el-table-column>
@@ -60,7 +65,11 @@
           <el-form-item label="联系电话"><el-input v-model="editForm.contactMobile" maxlength="50" /></el-form-item>
           <el-form-item label="注册地址"><el-input v-model="editForm.registeredAddress" maxlength="500" /></el-form-item>
           <el-form-item label="经营地址"><el-input v-model="editForm.businessAddress" maxlength="500" /></el-form-item>
-          <el-form-item label="所属行业"><el-input v-model="editForm.industry" maxlength="50" /></el-form-item>
+          <el-form-item label="所属行业">
+            <el-select v-model="editForm.industry" clearable filterable placeholder="请选择所属行业" :loading="industryLoading" style="width: 100%">
+              <el-option v-for="item in industryOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </el-form-item>
           <el-form-item label="客户类型"><el-input v-model="editForm.customerType" maxlength="50" /></el-form-item>
           <el-form-item label="集团类型"><el-input v-model="editForm.groupType" maxlength="50" /></el-form-item>
           <el-form-item label="集团名称"><el-input v-model="editForm.groupName" maxlength="200" /></el-form-item>
@@ -100,6 +109,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import PageTitle from '@/components/PageTitle.vue';
 import MarketingCustomerDetailDrawer from '@/components/MarketingCustomerDetailDrawer.vue';
 import MarketingCustomerOwnerDialog from '@/components/MarketingCustomerOwnerDialog.vue';
+import { useDict } from '@/composables/useDict';
 import {
   getMarketingCustomer,
   listEditableMarketingCustomerTags,
@@ -125,6 +135,12 @@ const editFormRef = ref(null);
 const editForm = reactive(emptyEditForm());
 const tagOptions = ref([]);
 const tagLoading = ref(false);
+const {
+  options: industryOptions,
+  labelOf: industryLabelOf,
+  loading: industryLoading,
+  reload: reloadIndustry,
+} = useDict('INDUSTRY');
 const PROFILE_EDIT_FIELDS = [
   'custName', 'legalRepresentative', 'contactPerson', 'contactMobile',
   'registeredAddress', 'businessAddress', 'businessScope', 'industry',
@@ -146,7 +162,10 @@ async function load() {
   loading.value = true;
   errorMessage.value = '';
   try {
-    const result = await listMarketingCustomers(params());
+    const [result] = await Promise.all([
+      listMarketingCustomers(params()),
+      reloadIndustry(),
+    ]);
     rows.value = pageOf(result);
     total.value = Number(result?.total || 0);
   } catch (error) {

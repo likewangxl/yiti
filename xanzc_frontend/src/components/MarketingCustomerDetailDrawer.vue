@@ -15,7 +15,7 @@
         <el-descriptions-item label="法定代表人">{{ customer.legalRepresentative || '-' }}</el-descriptions-item>
         <el-descriptions-item label="企业类型">{{ customer.enterpriseType || '-' }}</el-descriptions-item>
         <el-descriptions-item label="注册资本">{{ money(customer.registeredCapital) }}</el-descriptions-item>
-        <el-descriptions-item label="所属行业">{{ customer.industry || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="所属行业">{{ industryLabelOf(customer.industry) }}</el-descriptions-item>
         <el-descriptions-item label="注册地址" :span="2">{{ customer.registeredAddress || '-' }}</el-descriptions-item>
         <el-descriptions-item label="经营地址" :span="2">{{ customer.businessAddress || '-' }}</el-descriptions-item>
         <el-descriptions-item label="经营范围" :span="2">{{ customer.businessScope || '-' }}</el-descriptions-item>
@@ -59,7 +59,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
+import { useDict } from '@/composables/useDict';
 
 const emit = defineEmits(['update:modelValue', 'edit']);
 const props = defineProps({
@@ -70,6 +71,11 @@ const props = defineProps({
 const visible = computed({
   get: () => props.modelValue,
   set: value => emit('update:modelValue', value),
+});
+const { labelOf: industryLabelOf, reload: reloadIndustry } = useDict('INDUSTRY');
+
+watch(() => props.modelValue, value => {
+  if (value) reloadIndustry();
 });
 
 const yesNo = value => value === 1 || value === true ? '是' : value === 0 || value === false ? '否' : '-';

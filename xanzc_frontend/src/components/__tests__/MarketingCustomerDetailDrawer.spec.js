@@ -11,4 +11,10 @@ describe('营销客户详情抽屉契约', () => {
     expect(source).toContain('授信敞口');
     expect(source).toContain('主办客户经理');
   });
+
+  it('所属行业使用 INDUSTRY 字典显示中文', () => {
+    expect(source).toContain("useDict('INDUSTRY')");
+    expect(source).toContain('industryLabelOf(customer.industry)');
+    expect(source).not.toContain("customer.industry || '-'");
+  });
 });
