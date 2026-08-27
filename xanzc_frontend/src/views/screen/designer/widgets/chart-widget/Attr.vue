@@ -47,11 +47,11 @@
 
     <el-form-item v-if="innerType === 'BAR_COMPARE'" label="类目轴">
       <el-select v-model="bind.categoryCol" filterable clearable
-                 data-testid="chart-category-column" placeholder="默认使用返回首列" @change="syncBind">
+                 data-testid="chart-category-column" placeholder="可不选择" @change="syncBind">
         <el-option v-for="item in categoryColumnOptions" :key="item.col"
                    :label="item.label" :value="item.col" />
       </el-select>
-      <div class="attr-hint">选择类目轴原始列；清空后兼容旧画布，默认使用接口返回首列。</div>
+      <div class="attr-hint">选择类目轴原始列；可不选择，未选择时不显示类目信息。</div>
     </el-form-item>
 
     <el-form-item v-if="showRankList" label="类目列">

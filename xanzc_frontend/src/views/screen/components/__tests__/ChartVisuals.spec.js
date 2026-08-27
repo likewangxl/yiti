@@ -461,6 +461,24 @@ describe('图表视觉预设与 option', () => {
     expect(option.series.map(series => series.data)).toEqual([[10], [20], [30]]);
   });
 
+  it('BarCompare 为顶部指标栏预留更高空间且不覆盖绘图区', () => {
+    const wrapper = mount(BarCompare, {
+      props: {
+        columns: ['month', 'sales', 'cost'],
+        rows: [['Jan', 10, 2], ['Feb', 20, 4]],
+        bind: { items: [{ col: 'sales', label: '销售额' }, { col: 'cost', label: '成本' }] },
+        styleCfg: { showLegend: true }
+      },
+      global: { stubs: chartStubs }
+    });
+    const option = optionOf(wrapper);
+
+    expect(option.legend).toMatchObject({ top: 4, height: 34, padding: [6, 8] });
+    expect(option.grid.top).toBeGreaterThanOrEqual(
+      option.legend.top + option.legend.height + 8
+    );
+  });
+
   it('BarCompare 根据容器尺寸更新柱宽和间隔，并在卸载时断开 ResizeObserver', async () => {
     const originalResizeObserver = globalThis.ResizeObserver;
     let resizeCallback;
@@ -667,6 +685,54 @@ describe('图表视觉预设与 option', () => {
     expect(wrapper.emitted('item-click')?.[0]?.[0]).toEqual({
       col: 'sales', label: '乙', row: { org_code: 'B', org_name: '乙', sales: 20, cost: 4 }
     });
+  });
+
+  it.each([undefined, '', '   ', 'missing'])
+    ('BarCompare categoryCol 为 %j 时仍按首列分组但隐藏类目轴信息', (categoryCol) => {
+      const wrapper = mount(BarCompare, {
+        props: {
+          columns: ['org_code', 'sales'], rows: [['A', 10], ['B', 20]],
+          bind: { ...(categoryCol === undefined ? {} : { categoryCol }), items: [{ col: 'org_code' }, { col: 'sales' }] },
+          styleCfg: {}
+        },
+        global: { stubs: chartStubs }
+      });
+      const option = optionOf(wrapper);
+
+      expect(option.xAxis.data).toEqual(['A', 'B']);
+      expect(option.xAxis.axisLabel.show).toBe(false);
+      expect(option.xAxis.axisTick.show).toBe(false);
+      expect(option.yAxis.axisLabel.show).not.toBe(false);
+      expect(option.series.map(series => series.name)).toEqual(['sales']);
+      expect(option.series[0].data).toEqual([10, 20]);
+    });
+
+  it('BarCompare 有效 categoryCol 时类目轴标签和刻度继续显示，横向模式遵守相同规则', () => {
+    const vertical = mount(BarCompare, {
+      props: {
+        columns: ['org_code', 'org_name', 'sales'], rows: [['A', '甲', 10], ['B', '乙', 20]],
+        bind: { categoryCol: 'org_name', items: [{ col: 'org_name' }, { col: 'sales' }] },
+        styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    const verticalOption = optionOf(vertical);
+    expect(verticalOption.xAxis.axisLabel.show).toBe(true);
+    expect(verticalOption.xAxis.axisTick.show).toBe(true);
+
+    const horizontal = mount(BarCompare, {
+      props: {
+        columns: ['org_code', 'sales'], rows: [['A', 10], ['B', 20]],
+        bind: { items: [{ col: 'org_code' }, { col: 'sales' }] },
+        propValue: { barMode: 'horizontal' }, styleCfg: {}
+      },
+      global: { stubs: chartStubs }
+    });
+    const horizontalOption = optionOf(horizontal);
+    expect(horizontalOption.yAxis.data).toEqual(['A', 'B']);
+    expect(horizontalOption.yAxis.axisLabel.show).toBe(false);
+    expect(horizontalOption.yAxis.axisTick.show).toBe(false);
+    expect(horizontalOption.xAxis.axisLabel.show).not.toBe(false);
   });
 
   it('BarCompare 横向模式将有效 categoryCol 放到 Y 轴，缺失/无效时回退首列', () => {

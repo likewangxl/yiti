@@ -503,6 +503,24 @@ describe('ChartWidget Attr 指标列绑定', () => {
     expect(JSON.parse(element.bindJson).categoryCol).toBe('org_name');
   });
 
+  it('BAR_COMPARE 类目轴允许不选择，并明确提示未选择时不显示类目信息', async () => {
+    const element = {
+      innerType: 'BAR_COMPARE',
+      bindJson: JSON.stringify({ dsId: 9010, categoryCol: '' }),
+      styleJson: '{}', drillJson: '{}', propValue: {}
+    };
+    const wrapper = await mountAttr(element, [datasource(9010, '机构聚合', {
+      fieldMeta: [{ col: 'org_name', alias: '机构名称', role: 'DIM' }],
+      metrics: [{ metricName: 'balance' }]
+    })]);
+
+    const select = wrapper.find('[data-testid="chart-category-column"]');
+    expect(select.attributes('placeholder')).toContain('可不选择');
+    expect(wrapper.findAll('.attr-hint').some(hint => hint.text().includes('未选择时不显示类目信息'))).toBe(true);
+    await chooseCategoryColumn(wrapper, '');
+    expect(JSON.parse(element.bindJson).categoryCol).toBe('');
+  });
+
   it('BAR_COMPARE 类目轴按聚合口径补充列，NONE 不凭空增加维度', async () => {
     const cases = [
       {

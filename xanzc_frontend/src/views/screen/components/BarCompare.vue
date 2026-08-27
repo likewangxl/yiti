@@ -112,6 +112,11 @@ const palette = computed(() => props.styleCfg.colors?.length ? props.styleCfg.co
 const showLegend = computed(() => props.styleCfg.showLegend !== false);
 const showLabels = computed(() => props.styleCfg.showLabels === true);
 const showMarks = computed(() => props.styleCfg.showMarks !== false);
+// 未选择或选择了已失效的类目列时，数据仍按首列回退分组，但不向用户展示类目文字。
+const showCategoryAxisInfo = computed(() => hasExplicitCategoryCol.value);
+const LEGEND_TOP = 4;
+const LEGEND_HEIGHT = 34;
+const LEGEND_BOTTOM_GAP = 8;
 
 // 组件实际尺寸由外层容器观察，避免只依赖 ECharts autoresize 而无法同步柱宽布局。
 const chartWrapEl = ref(null);
@@ -158,7 +163,12 @@ function barItemStyle(color, horizontal) {
   };
 }
 
-const grid = computed(() => ({ top: 34, right: 16, bottom: 26, left: mode.value === 'horizontal' ? 90 : 56 }));
+const grid = computed(() => ({
+  top: showLegend.value ? LEGEND_TOP + LEGEND_HEIGHT + LEGEND_BOTTOM_GAP : 16,
+  right: 16,
+  bottom: 26,
+  left: mode.value === 'horizontal' ? 90 : 56
+}));
 const barLayout = computed(() => {
   const chartGrid = grid.value;
   return resolveBarLayout({
@@ -173,14 +183,26 @@ const barLayout = computed(() => {
 
 const option = computed(() => {
   const horizontal = mode.value === 'horizontal';
-  const catAxis = { type: 'category', data: parsed.value.categories, axisLine: scrAxisLine(theme.value), axisLabel: scrAxisLabel(theme.value) };
+  const catAxis = {
+    type: 'category',
+    data: parsed.value.categories,
+    axisLine: scrAxisLine(theme.value),
+    axisLabel: { ...scrAxisLabel(theme.value), show: showCategoryAxisInfo.value },
+    axisTick: { show: showCategoryAxisInfo.value }
+  };
   const valAxis = { type: 'value', axisLabel: scrAxisLabel(theme.value), splitLine: scrSplitLine(theme.value) };
   return {
     color: palette.value,
     animation: true,
     grid: grid.value,
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, ...scrTooltipStyle(theme.value) },
-    legend: { show: showLegend.value, top: 4, textStyle: scrAxisLabel(theme.value) },
+    legend: {
+      show: showLegend.value,
+      top: LEGEND_TOP,
+      height: LEGEND_HEIGHT,
+      padding: [6, 8],
+      textStyle: scrAxisLabel(theme.value)
+    },
     xAxis: horizontal ? valAxis : catAxis,
     yAxis: horizontal ? catAxis : valAxis,
     series: series.value.map((s, i) => ({
