@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import * as XLSX from 'xlsx';
 
 const source = readFileSync(new URL('../MarketingLeadEntry.vue', import.meta.url), 'utf8');
-const importTemplate = readFileSync(new URL('../../../../public/templates/lead-import-template.csv', import.meta.url), 'utf8').trim();
+const importTemplateWorkbook = XLSX.read(
+  readFileSync(new URL('../../../../public/templates/lead-import-template.xlsx', import.meta.url)),
+  { type: 'buffer' }
+);
+const importTemplateSheet = importTemplateWorkbook.Sheets[importTemplateWorkbook.SheetNames[0]];
+const importTemplateRows = XLSX.utils.sheet_to_json(importTemplateSheet, { header: 1, defval: '' });
+const importTemplate = importTemplateRows[0] || [];
 
 describe('营销线索录入页面契约', () => {
   it('沿用我的客户页面的统一页头、说明、筛选卡片和分页视觉契约', () => {
@@ -63,7 +70,8 @@ describe('营销线索录入页面契约', () => {
 
   it('批量导入弹窗提供本地模板下载、大小校验和成功后刷新导入记录', () => {
     expect(source).toContain('下载模板');
-    expect(source).toMatch(/templates\/lead-import-template\.csv/);
+    expect(source).toMatch(/templates\/lead-import-template\.xlsx/);
+    expect(source).toContain('download="lead-import-template.xlsx"');
     expect(source).toMatch(/10\s*\*\s*1024\s*\*\s*1024/);
     expect(source).toMatch(/await createLeadImportBatch\((?:file|pendingImportFile\.value)\)[\s\S]*importDialogVisible\.value\s*=\s*false[\s\S]*activeTab\.value\s*=\s*['"]imports['"][\s\S]*await loadBatches\(\)/);
   });
@@ -100,7 +108,7 @@ describe('营销线索录入页面契约', () => {
   });
 
   it('线索导入模板按录入抽屉顺序覆盖 18 个可表格化字段', () => {
-    expect(importTemplate.split(/\r?\n/)[0].split(',')).toEqual([
+    expect(importTemplate).toEqual([
       '线索类型', '客户名称', '统一社会信用代码', '是否开户', '客户号', '所属行业',
       '所属集团类型', '所属集团名称', '客户类型', '是否基石客户', '企业类型', '客户标签',
       '分配方式', '指定客户经理范围', '是否触达限制', '客户说明', '授信金额（万元）', '授信敞口金额（万元）'

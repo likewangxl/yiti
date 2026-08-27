@@ -1,0 +1,15 @@
+npm test -- --run src/views/customerMarketing/__tests__/MarketingLeadEntry.spec.js
+npm run build
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 goto 'http://127.0.0.1:8090/#/customers/leads/new'
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 snapshot
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 click f3e420
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 snapshot
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 click f3e599
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 route-list
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 requests --filter='lead-import-template.xlsx'
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 console
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 screenshot --filename='../docs/superpowers/evidence/2026-08-27-marketing-lead-import-xlsx-template/import-dialog-xlsx.png'
+cmp --silent public/templates/lead-import-template.xlsx .playwright-cli/lead-import-template.xlsx
+sha256sum public/templates/lead-import-template.xlsx .playwright-cli/lead-import-template.xlsx
+unzip -t xanzc_frontend/public/templates/lead-import-template.xlsx
+jshell --class-path "$YITI_XLSX_CP"

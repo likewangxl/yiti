@@ -1,0 +1,16 @@
+page=http://127.0.0.1:8090/#/customers/leads/new
+dialog=批量导入
+download_url=/templates/lead-import-template.xlsx
+download_filename=lead-import-template.xlsx
+download_event=Downloaded file lead-import-template.xlsx to .playwright-cli/lead-import-template.xlsx
+route_list=No active routes
+request_filter=lead-import-template.xlsx; no API request entries because this is a Vite static-file download
+console_errors=0
+console_warnings=2
+warning_1=Vue Router: No match found for location with path /bizexec/supports
+warning_2=Vue Router: No match found for location with path /bizexec/supports
+downloaded_xlsx_matches_source=yes
+sheet=线索导入模板
+header_columns=18
+touch_restricted_header=是否触达限制
+poi_workbook_factory=success

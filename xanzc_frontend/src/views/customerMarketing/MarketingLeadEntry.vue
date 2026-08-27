@@ -161,7 +161,7 @@
       <div class="import-dialog-content">
         <div class="import-template-row">
           <span>请先下载模板，按模板填写后选择文件上传。</span>
-          <el-button link type="primary" tag="a" href="/templates/lead-import-template.csv" download="lead-import-template.csv">下载模板</el-button>
+          <el-button link type="primary" tag="a" href="/templates/lead-import-template.xlsx" download="lead-import-template.xlsx">下载模板</el-button>
         </div>
         <el-upload
           v-model:file-list="importFileList"
