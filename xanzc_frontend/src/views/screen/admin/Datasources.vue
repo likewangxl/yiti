@@ -89,7 +89,8 @@
     </section>
 
     <!-- 新建/编辑 -->
-    <el-dialog v-model="dlg.show" class="bp-crud-dialog" :title="dlg.editing ? '编辑数据源' : '新建数据源'" width="760px" top="4vh">
+    <el-dialog v-model="dlg.show" class="bp-crud-dialog" :title="dlg.editing ? '编辑数据源' : '新建数据源'"
+               width="760px" top="4vh" :close-on-click-modal="false">
       <el-form label-position="top">
         <el-form-item label="名称" required>
           <el-input v-model="dlg.dsName" maxlength="100" />

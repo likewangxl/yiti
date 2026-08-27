@@ -1,0 +1,12 @@
+仅开发态 mock，非联调。
+
+1. **/api/auth/current-user (status=200, traceId=mock-current)
+2. **/api/auth/my-menus (status=200, traceId=mock-menus)
+3. **/api/auth/permissions (status=200, traceId=mock-permissions)
+4. **/api/screen/admin/datasources (status=200, traceId=mock-datasources)
+5. **/api/perf/metrics* (status=200, traceId=mock-metrics)
+6. **/api/screen/admin/kpi-schemes* (status=200, traceId=mock-schemes)
+7. **/api/admin/org-groups* (status=200, traceId=mock-groups)
+8. **/api/notifications/unread-count (status=200, traceId=mock-unread)
+
+所有 route 只返回页面加载所需的最小只读数据；未注册写接口 route。

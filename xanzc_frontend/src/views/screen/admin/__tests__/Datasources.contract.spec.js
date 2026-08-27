@@ -156,6 +156,13 @@ describe('Datasources.vue 最终契约', () => {
     expect(source).toMatch(/确认删除/);
   });
 
+  it('新建或编辑数据源时点击页面遮罩不关闭表单', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
+    const editorDialog = source.match(/<el-dialog\s+v-model="dlg\.show"[^>]*>/)?.[0] || '';
+
+    expect(editorDialog).toContain(':close-on-click-modal="false"');
+  });
+
   it('Element Plus 单选项使用 value 契约并保持原模型字符串', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
     const radios = [...source.matchAll(/<el-radio(?:-button)?(?=\s|>)[^>]*>/g)].map((match) => match[0]);
