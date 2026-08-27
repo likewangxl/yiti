@@ -502,6 +502,8 @@ describe('图表视觉预设与 option', () => {
       expect(narrow.series[0].barWidth).toBeLessThan(wide.series[0].barWidth);
       expect(narrow.series[0].barGap).toMatch(/%$/);
       expect(narrow.series[0].barCategoryGap).toMatch(/%$/);
+      expect(Number.parseFloat(wide.series[0].barGap))
+        .toBeGreaterThan(Number.parseFloat(narrow.series[0].barGap));
       expect(initial.series[0].barWidth).toBeGreaterThan(0);
 
       wrapper.unmount();

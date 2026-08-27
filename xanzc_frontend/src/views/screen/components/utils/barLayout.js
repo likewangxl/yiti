@@ -5,7 +5,6 @@ export const BAR_LAYOUT_LIMITS = Object.freeze({
   minBarWidth: 3,
   maxBarWidth: 36,
   minGapPx: 1.5,
-  maxGapPx: 8,
   minCategoryGapPct: 4,
   maxCategoryGapPct: 60
 });
@@ -22,6 +21,14 @@ function finiteNumber(value, fallback = 0) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function percentString(value, fallback = 20) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return `${fallback}%`;
+  // 保留两位小数，避免舍入后破坏等间距关系；超大尺寸仍返回有限值。
+  const rounded = number >= 1e12 ? Math.floor(number) : Math.round(number * 100) / 100;
+  return `${rounded}%`;
 }
 
 /**
@@ -49,31 +56,43 @@ export function resolveBarLayout({
   const visualSeriesCount = stacked ? 1 : positiveInteger(seriesCount);
   const categorySlot = axisLength / categories;
 
-  // 每个类目默认只使用约 72% 的槽位，槽位余量作为类目间隔；系列越多，组内间隔略增，避免相邻柱粘连。
-  const gapRatio = clamp(0.16 + Math.min(visualSeriesCount - 1, 8) * 0.01, 0.16, 0.24);
-  const targetGroupWidth = categorySlot * 0.72;
-  const minimumGaps = Math.max(0, visualSeriesCount - 1) * BAR_LAYOUT_LIMITS.minGapPx;
-  const rawBarWidth = categorySlot > 0
-    ? (targetGroupWidth - minimumGaps)
-      / (visualSeriesCount + Math.max(0, visualSeriesCount - 1) * gapRatio)
-    : 0;
-  const barWidth = Math.round(clamp(rawBarWidth, BAR_LAYOUT_LIMITS.minBarWidth, BAR_LAYOUT_LIMITS.maxBarWidth));
-  const gapPx = clamp(barWidth * gapRatio, BAR_LAYOUT_LIMITS.minGapPx, BAR_LAYOUT_LIMITS.maxGapPx);
-  const groupWidth = barWidth * visualSeriesCount + gapPx * Math.max(0, visualSeriesCount - 1);
+  // 让同一类目内的柱间距和相邻类目间距相等：
+  //   step = categorySlot / visualSeriesCount
+  //   gapPx = step - barWidth
+  // 显式 barWidth 时 ECharts 的组内间距为 barWidth * barGap%，因此 barGap
+  // 必须由实际像素间距反算，不能封顶在 100%。
+  const requestedStep = categorySlot > 0 ? categorySlot / visualSeriesCount : 0;
+  // 槽位小于最小柱宽时无法同时满足最小柱宽和正间隔，使用最小可布局步长，
+  // 保证密集数据仍输出正的柱宽、间距和有限百分比。
+  const step = Math.max(requestedStep, BAR_LAYOUT_LIMITS.minBarWidth + BAR_LAYOUT_LIMITS.minGapPx);
+  const rawBarWidth = step * 0.72;
+  // 先限制到 step - minGapPx，再向下取整，避免四舍五入后柱宽挤掉最小间隔。
+  const maxBarWidthForGap = Math.min(
+    BAR_LAYOUT_LIMITS.maxBarWidth,
+    step - BAR_LAYOUT_LIMITS.minGapPx
+  );
+  const roundedBarWidth = Math.round(clamp(
+    rawBarWidth,
+    BAR_LAYOUT_LIMITS.minBarWidth,
+    maxBarWidthForGap
+  ));
+  const barWidth = Math.max(
+    BAR_LAYOUT_LIMITS.minBarWidth,
+    Math.min(roundedBarWidth, Math.floor(maxBarWidthForGap))
+  );
+  const gapPx = step - barWidth;
+  const barGapPct = (gapPx / barWidth) * 100;
 
-  // 极密数据下仍给 ECharts 一个正的类目间隔；正常数据使用剩余槽位作为真实间隔。
-  const categoryGapPx = categorySlot > groupWidth
-    ? categorySlot - groupWidth
-    : Math.max(BAR_LAYOUT_LIMITS.minGapPx, categorySlot * 0.04);
+  // barCategoryGap 在显式 barWidth 下不参与最终类目 offset，但保留与真实类目
+  // 间距一致的值，供 ECharts 和后续主题配置使用。
   const categoryGapPct = categorySlot > 0
-    ? clamp(Math.round((categoryGapPx / categorySlot) * 100), BAR_LAYOUT_LIMITS.minCategoryGapPct,
+    ? clamp(Math.round((gapPx / categorySlot) * 100), BAR_LAYOUT_LIMITS.minCategoryGapPct,
       BAR_LAYOUT_LIMITS.maxCategoryGapPct)
     : 20;
-  const barGapPct = clamp(Math.round((gapPx / barWidth) * 100), 12, 100);
 
   return {
     barWidth,
-    barGap: `${barGapPct}%`,
+    barGap: percentString(barGapPct),
     barCategoryGap: `${categoryGapPct}%`
   };
 }
