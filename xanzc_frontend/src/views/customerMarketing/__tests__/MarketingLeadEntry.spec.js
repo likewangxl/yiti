@@ -37,6 +37,36 @@ describe('营销线索录入页面契约', () => {
     expect(source).toContain('导入时间');
   });
 
+  it('第二 Tab 改为导入记录且不再承载上传控件', () => {
+    expect(source).toMatch(/<el-tab-pane label="导入记录" name="imports">[\s\S]*<el-table/);
+    const importTab = source.match(/<el-tab-pane label="导入记录" name="imports">[\s\S]*?<\/el-tab-pane>/)?.[0] || '';
+    expect(importTab).not.toContain('<el-upload');
+  });
+
+  it('页头批量导入只打开独立弹窗，不切换导入记录 Tab', () => {
+    expect(source).toContain('<el-dialog');
+    expect(source).toMatch(/const importDialogVisible\s*=\s*ref\(false\)/);
+    expect(source).toMatch(/function openImport\(\)\s*\{\s*importDialogVisible\.value\s*=\s*true\s*;?\s*\}/);
+    const openImportBody = source.match(/function openImport\(\)[\s\S]*?\n\}/)?.[0] || '';
+    expect(openImportBody).not.toContain("activeTab.value='imports'");
+  });
+
+  it('批量导入弹窗先保留本地文件，显式上传时才调用批次接口', () => {
+    expect(source).toMatch(/<el-upload[^>]*:auto-upload="false"[^>]*:limit="1"[^>]*accept="\.xlsx,\.xls,\.csv"/);
+    expect(source).toMatch(/:on-change="importFile"/);
+    expect(source).toMatch(/function importFile\([\s\S]*pendingImportFile\.value\s*=\s*upload\.raw/);
+    expect(source).toMatch(/async function submitImport\([\s\S]*createLeadImportBatch\((?:file|pendingImportFile\.value)\)/);
+    const importFileBody = source.match(/function importFile\([\s\S]*?\n\}/)?.[0] || '';
+    expect(importFileBody).not.toContain('createLeadImportBatch');
+  });
+
+  it('批量导入弹窗提供本地模板下载、大小校验和成功后刷新导入记录', () => {
+    expect(source).toContain('下载模板');
+    expect(source).toMatch(/templates\/lead-import-template\.csv/);
+    expect(source).toMatch(/10\s*\*\s*1024\s*\*\s*1024/);
+    expect(source).toMatch(/await createLeadImportBatch\((?:file|pendingImportFile\.value)\)[\s\S]*importDialogVisible\.value\s*=\s*false[\s\S]*activeTab\.value\s*=\s*['"]imports['"][\s\S]*await loadBatches\(\)/);
+  });
+
   it('写操作失败时不显示成功提示', () => {
     expect(source).toContain('catch (error)');
     expect(source).toContain('ElMessage.error');
@@ -44,7 +74,7 @@ describe('营销线索录入页面契约', () => {
 
   it('页头右侧提供批量导入和录入线索入口', () => {
     expect(source).toMatch(/<header class="page-head">[\s\S]*<div class="page-actions">[\s\S]*>批量导入<[\s\S]*>录入线索<[\s\S]*<\/div>[\s\S]*<\/header>/);
-    expect(source).toMatch(/function openImport\(\)[\s\S]*activeTab\.value\s*=\s*'imports'[\s\S]*loadBatches\(\)/);
+    expect(source).toMatch(/function openImport\(\)\s*\{\s*importDialogVisible\.value\s*=\s*true\s*;?\s*\}/);
     expect(source).toMatch(/>录入线索<[\s\S]*@click="openCreate"|@click="openCreate"[\s\S]*>录入线索</);
     expect(source).not.toContain('>新增线索<');
   });

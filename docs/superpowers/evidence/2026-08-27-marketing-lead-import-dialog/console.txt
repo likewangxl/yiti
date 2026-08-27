@@ -1,0 +1,5 @@
+Total messages: 4 (Errors: 1, Warnings: 1)
+Returning 2 messages for level "info"
+
+[ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:8090/api/auth/current-user:0
+[WARNING] [Vue Router warn]: No match found for location with path "/bizexec/supports" @ http://127.0.0.1:8090/node_modules/.vite/deps/vue-router.js?v=7de43bc9:52

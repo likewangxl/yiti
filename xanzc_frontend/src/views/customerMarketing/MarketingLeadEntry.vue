@@ -51,11 +51,10 @@
         <div class="pager"><el-pagination background layout="total, sizes, prev, pager, next" :total="leadTotal" v-model:current-page="leadQuery.pageNo" v-model:page-size="leadQuery.pageSize" :page-sizes="[10, 20, 50, 100]" @change="loadLeads" /></div>
       </el-tab-pane>
 
-      <el-tab-pane label="批量导入" name="imports">
+      <el-tab-pane label="导入记录" name="imports">
         <el-card shadow="never" class="filter-card">
           <div class="toolbar">
             <el-form inline @submit.prevent><el-form-item label="导入文件名"><el-input v-model="batchQuery.keyword" clearable /></el-form-item><el-form-item label="导入状态"><el-select v-model="batchQuery.status" clearable style="width:150px"><el-option label="待确认" value="WAITING_CONFIRM" /><el-option label="成功" value="COMPLETED" /><el-option label="失败" value="ALL_FAILED" /></el-select></el-form-item><el-button type="primary" @click="searchBatches">查询</el-button></el-form>
-            <el-upload :show-file-list="false" :auto-upload="false" accept=".xlsx,.xls,.csv" :on-change="importFile"><el-button type="primary" :loading="uploading">导入</el-button></el-upload>
           </div>
         </el-card>
         <el-table :data="batches" v-loading="batchLoading" border stripe class="lead-entry-table">
@@ -157,6 +156,31 @@
 
     <el-drawer v-model="leadDetailVisible" title="线索详情" size="min(900px, 95vw)"><MarketingLeadReadonlyDetail :detail="leadDetail" /></el-drawer>
     <MarketingLeadImportDetailDrawer v-model="batchDrawerVisible" :batch="selectedBatch" @confirm-action="confirmBatch" />
+
+    <el-dialog v-model="importDialogVisible" title="批量导入" width="520px" :close-on-click-modal="false" @closed="resetImport">
+      <div class="import-dialog-content">
+        <div class="import-template-row">
+          <span>请先下载模板，按模板填写后选择文件上传。</span>
+          <el-button link type="primary" tag="a" href="/templates/lead-import-template.csv" download="lead-import-template.csv">下载模板</el-button>
+        </div>
+        <el-upload
+          v-model:file-list="importFileList"
+          :auto-upload="false"
+          :limit="1"
+          accept=".xlsx,.xls,.csv"
+          :on-change="importFile"
+          :on-remove="clearImportFile"
+          class="import-uploader"
+        >
+          <el-button>选择文件</el-button>
+          <template #tip><div class="el-upload__tip">支持 xlsx、xls、csv，单个文件不超过 10MB。</div></template>
+        </el-upload>
+      </div>
+      <template #footer>
+        <el-button @click="importDialogVisible=false">取消</el-button>
+        <el-button type="primary" :loading="uploading" @click="submitImport">上传</el-button>
+      </template>
+    </el-dialog>
   </main>
 </template>
 
@@ -188,6 +212,7 @@ const formVisible = ref(false); const saving = ref(false); const formRef = ref(n
 const editingLeadStatus = ref('');
 const tagOptions = ref([]); const managerOptions = ref([]); const managerLoading = ref(false);
 const fileList = ref([]); const pendingFiles = ref([]);
+const importDialogVisible = ref(false); const importFileList = ref([]); const pendingImportFile = ref(null);
 const leadDetailVisible = ref(false); const leadDetail = ref(null);
 const batchDrawerVisible = ref(false); const selectedBatch = ref(null);
 const leadStatuses = [{label:'草稿',value:'DRAFT'},{label:'审批中',value:'IN_APPROVAL'},{label:'已通过',value:'APPROVED'},{label:'已退回',value:'REJECTED'}];
@@ -251,7 +276,7 @@ function searchLeads(){ leadQuery.pageNo=1; loadLeads(); } function searchBatche
 function toggleStatusCard(status){leadQuery.status=leadQuery.status===status?'':status;leadQuery.pageNo=1;loadLeads();}
 function filterByDropdown(){leadQuery.pageNo=1;loadLeads();}
 function resetLeadFilters(){leadQuery.keyword='';leadQuery.status='';leadQuery.pageNo=1;loadLeads();}
-function openImport(){ activeTab.value='imports'; loadBatches(); }
+function openImport(){ importDialogVisible.value=true; }
 async function ensureTagOptions(){
   if(tagOptions.value.length)return;
   const result=await listMarketingCustomerTags({status:'ENABLED',approvalStatus:'APPROVED',pageNo:1,pageSize:100});
@@ -376,7 +401,28 @@ async function saveLead(andSubmit=false){
 }
 async function showLead(row){ try { leadDetail.value=await getMarketingLead(row.id); leadDetailVisible.value=true; } catch (error) { ElMessage.error(`线索详情加载失败：${error?.message||'请稍后重试'}`); } }
 async function submitLead(row){ try { await ElMessageBox.confirm('确认提交该线索审批？','提交审批'); await submitMarketingLead(row.id); ElMessage.success('已提交审批'); await refreshManualView(); } catch (error) { if(error!=='cancel'&&error!=='close') ElMessage.error(`提交失败：${error?.message||'请稍后重试'}`); } }
-async function importFile(upload){ if(!upload?.raw || uploading.value) return; uploading.value=true; try { await createLeadImportBatch(upload.raw); ElMessage.success('导入文件已处理'); await loadBatches(); } catch (error) { ElMessage.error(`导入失败：${error?.message||'请检查文件'}`); } finally { uploading.value=false; } }
+function importFile(upload){
+  if(!upload?.raw)return;
+  importFileList.value=[upload];
+  pendingImportFile.value=upload.raw;
+}
+function clearImportFile(){ importFileList.value=[]; pendingImportFile.value=null; }
+function resetImport(){ importFileList.value=[]; pendingImportFile.value=null; }
+async function submitImport(){
+  const file=pendingImportFile.value;
+  if(!file){ElMessage.warning('请先选择导入文件');return;}
+  if(file.size>10*1024*1024){ElMessage.error('导入文件不能超过10MB');return;}
+  uploading.value=true;
+  try{
+    await createLeadImportBatch(file);
+    ElMessage.success('导入文件已上传');
+    importDialogVisible.value=false;
+    resetImport();
+    activeTab.value='imports';
+    await loadBatches();
+  }catch(error){ElMessage.error(`导入失败：${error?.message||'请检查文件'}`);}
+  finally{uploading.value=false;}
+}
 function openBatch(row){ selectedBatch.value=row; batchDrawerVisible.value=true; }
 async function confirmBatch(action){ const normalizedAction=action===PROCESS_VALID?PROCESS_VALID:ABANDON_REIMPORT; const actionLabel=normalizedAction===PROCESS_VALID?'仅处理正常数据':'放弃并重新导入'; try { const {value}=await ElMessageBox.prompt(`确认${actionLabel}？`,'导入批次确认',{inputPlaceholder:'可填写备注'}); await confirmLeadImportBatch(selectedBatch.value.id,{action:normalizedAction,remark:value}); ElMessage.success('批次已处理'); batchDrawerVisible.value=false; await loadBatches(); } catch (error) { if(error!=='cancel'&&error!=='close') ElMessage.error(`批次确认失败：${error?.message||'请稍后重试'}`); } }
 
@@ -418,6 +464,9 @@ refreshManualView();
 .filter-form :deep(.el-form-item) { flex: 0 0 auto; margin-bottom: 18px; margin-right: 0; }
 .filter-actions { align-items: center; display: flex; flex: 0 0 auto; gap: 8px; }
 .filter-actions :deep(.el-form-item__content) { display: flex; gap: 8px; }
+.import-dialog-content { display: grid; gap: 18px; }
+.import-template-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; color: #606266; font-size: 13px; }
+.import-uploader :deep(.el-upload__tip) { margin-top: 8px; }
 .pager { display: flex; justify-content: flex-end; margin-top: 14px; }
 .lead-entry-table { width: 100%; }
 .matched-customer-alert { margin-top: 12px; }
