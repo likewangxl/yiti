@@ -148,7 +148,7 @@ describe('营销线索录入页面契约', () => {
   });
 
   it('已退回线索可复用编辑抽屉修改并重新提交审批', () => {
-    expect(source).toMatch(/v-if="row\.leadStatus === 'REJECTED'"[^>]*@click="editLead\(row\)"[^>]*>编辑并重新提交</);
+    expect(source).toMatch(/v-if="row\.leadStatus === 'REJECTED'"[^>]*@click="editLead\(row\)"[^>]*>重新编辑</);
     expect(source).toMatch(/const editingLeadStatus = ref\(''\)/);
     expect(source).toMatch(/editingLeadStatus\.value=lead\.leadStatus\|\|row\.leadStatus\|\|''/);
     expect(source).toContain("editingLeadStatus === 'REJECTED' ? '重新提交审批' : '提交审批'");

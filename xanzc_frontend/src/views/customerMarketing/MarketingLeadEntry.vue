@@ -39,7 +39,7 @@
           <el-table-column prop="entryEmpId" label="录入人" width="110" />
           <el-table-column prop="entryTime" label="录入时间" min-width="165"><template #default="{row}">{{ formatTime(row.entryTime) }}</template></el-table-column>
           <el-table-column prop="leadStatus" label="状态" width="110"><template #default="{row}"><el-tag>{{ statusLabel(row.leadStatus) }}</el-tag></template></el-table-column>
-          <el-table-column label="操作" width="230" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button link type="primary" @click="showLead(row)">详情</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="primary" @click="editLead(row)">编辑</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="success" @click="submitLead(row)">提交审批</el-button><el-button v-if="row.leadStatus === 'REJECTED'" link type="danger" @click="editLead(row)">编辑并重新提交</el-button></template></el-table-column>
+          <el-table-column label="操作" width="230" fixed="right" class-name="operation-cell"><template #default="{row}"><el-button link type="primary" @click="showLead(row)">详情</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="primary" @click="editLead(row)">编辑</el-button><el-button v-if="row.leadStatus === 'DRAFT'" link type="success" @click="submitLead(row)">提交审批</el-button><el-button v-if="row.leadStatus === 'REJECTED'" link type="danger" @click="editLead(row)">重新编辑</el-button></template></el-table-column>
         </el-table>
         <div class="pager"><el-pagination background layout="total, sizes, prev, pager, next" :total="leadTotal" v-model:current-page="leadQuery.pageNo" v-model:page-size="leadQuery.pageSize" :page-sizes="[10, 20, 50, 100]" @change="loadLeads" /></div>
       </el-tab-pane>
