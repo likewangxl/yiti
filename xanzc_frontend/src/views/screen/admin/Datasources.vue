@@ -279,7 +279,7 @@
               <template #default="{ row }">
                 <el-select v-model="row.col" filterable allow-create default-first-option
                            placeholder="试跑后可下拉选，也可手输" style="width:100%">
-                  <el-option v-for="c in lastTryCols" :key="c" :label="c" :value="c" />
+                  <el-option v-for="c in sortedLastTryCols" :key="c" :label="c" :value="c" />
                 </el-select>
               </template>
             </el-table-column>
@@ -416,6 +416,8 @@ const loading = ref(false);
 const metrics = ref([]);
 const schemes = ref([]);       // KPI 方案下拉（/screen/admin/kpi-schemes）
 const lastTryCols = ref([]);   // 最近一次试跑返回的列名 → fieldMeta 的 col 下拉候选
+const columnNameCollator = new Intl.Collator('zh-CN');
+const sortedLastTryCols = computed(() => [...lastTryCols.value].sort(columnNameCollator.compare));
 const testOrgGroups = ref([]); // NAMED_GROUP 试跑的显式候选，停用/非报表用途组不展示
 const filters = reactive({ bizLine: '' });
 

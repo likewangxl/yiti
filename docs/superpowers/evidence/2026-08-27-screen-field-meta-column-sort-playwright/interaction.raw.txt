@@ -1,0 +1,7 @@
+playwright-cli run-code（试跑后预览表头）
+
+{"title":"试跑预览（前 10 行）","previewHeaders":["余额","存款余额","机构名称","区域"]}
+
+playwright-cli run-code（编辑页字段元数据列名下拉）
+
+{"title":"编辑数据源","options":["存款余额","机构名称","区域","余额"]}

@@ -113,6 +113,22 @@ describe('Datasources.vue 最终契约', () => {
     expect(api.tryRunScreenDatasource).not.toHaveBeenCalled();
   });
 
+  it('字段元数据的列名下拉按中文名排序展示，但不改写探测结果', async () => {
+    const wrapper = await mountPage();
+    const columns = ['余额', '存款余额', '机构名称', '区域'];
+    api.probeScreenDatasourceColumns.mockResolvedValue({ columns, rows: [] });
+    wrapper.vm.openProbeColumns(frozenRow);
+    wrapper.vm.tr.reason = '核对字段顺序';
+    wrapper.vm.tr.testOrgGroupCode = 'G_REPORT';
+
+    await wrapper.vm.runTry();
+
+    expect(wrapper.vm.lastTryCols).toEqual(columns);
+    expect(wrapper.vm.sortedLastTryCols).toEqual(['存款余额', '机构名称', '区域', '余额']);
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
+    expect(source).toContain('v-for="c in sortedLastTryCols"');
+  });
+
   it('所有数据源保存均强制原因，编辑显式保留 ACTIVE/DISABLED 状态而不静默复原', async () => {
     const wrapper = await mountPage();
     const editable = {
