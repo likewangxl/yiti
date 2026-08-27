@@ -6,4 +6,3 @@
 5. **/api/screen/data (HTTP 200 application/json)
 
 以上均为浏览器上下文开发态 mock；非后端联调。
-

@@ -20,4 +20,3 @@ playwright-cli requests --filter '/api/'
 
 页面断言：
 {"url":"http://127.0.0.1:8091/#/screen/SCR_LABEL_QA?preview=draft","comboTitle":["双轴组合 · label 展示","柱状对比 · label 展示"],"comboCharts":1,"barCharts":1,"canvases":2}
-
