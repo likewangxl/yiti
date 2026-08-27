@@ -14,26 +14,31 @@ test("支部审核员合并为支部书记，演示身份中不再保留支部�
   assert.equal(labels.includes("支部审核员"), false);
 });
 
-test("支部书记继承报送员权限并增加支部审核工作台", () => {
+test("支部书记仅保留首页、支部审核工作台和预警池", () => {
   const reporterMenus = getVisibleMenuKeys("reporter");
   const secretaryMenus = getVisibleMenuKeys("branchSecretary");
 
   assert.deepEqual(
     secretaryMenus,
-    [...reporterMenus, "review"],
+    ["home", "review", "warning"],
   );
   assert.equal(getDefaultView("branchSecretary"), "review");
   assert.equal(reporterMenus.includes("review"), false);
+  assert.equal(secretaryMenus.includes("materials"), false);
+  assert.equal(secretaryMenus.includes("records"), false);
+  assert.equal(secretaryMenus.includes("processing"), false);
 });
 
-test("组织审核员继承组织管理员权限并增加工作台", () => {
+test("组织审核员保留组织管理能力并增加工作台，但不展示材料与上报信息", () => {
   const adminMenus = getVisibleMenuKeys("admin");
   const reviewerMenus = getVisibleMenuKeys("orgReviewer");
 
-  assert.deepEqual(
-    reviewerMenus,
-    [...adminMenus, "workbench"],
-  );
+  assert.equal(reviewerMenus.includes("workbench"), true);
+  assert.equal(reviewerMenus.includes("management"), true);
+  assert.equal(reviewerMenus.includes("materials"), false);
+  assert.equal(reviewerMenus.includes("records"), false);
+  assert.equal(reviewerMenus.includes("processing"), false);
+  assert.equal(reviewerMenus.includes("warning"), true);
   assert.equal(getDefaultView("orgReviewer"), "workbench");
   assert.equal(adminMenus.includes("workbench"), false);
 });
@@ -46,4 +51,6 @@ test("原型使用报送员业务角色，首页待办入口与审核工作台�
   assert.equal(getDefaultView("reporter"), "home");
   assert.equal(getVisibleMenuKeys("reporter").includes("home"), true);
   assert.equal(getVisibleMenuKeys("reporter").includes("review"), false);
+  assert.deepEqual(getVisibleMenuKeys("reporter"), ["home", "materials", "records", "warning"]);
+  assert.equal(getVisibleMenuKeys("admin").includes("processing"), false);
 });

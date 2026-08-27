@@ -1,4 +1,4 @@
-const ALL_STANDARD_MENUS = [
+const ADMIN_MENUS = [
   "home",
   "materials",
   "records",
@@ -9,10 +9,21 @@ const ALL_STANDARD_MENUS = [
   "org",
   "mapping",
   "management",
-  "processing",
 ];
 
-const REPORTER_MENUS = ["home", "materials", "records", "processing"];
+const REPORTER_MENUS = ["home", "materials", "records", "warning"];
+const BRANCH_SECRETARY_MENUS = ["home", "review", "warning"];
+const ORG_REVIEWER_MENUS = [
+  "home",
+  "dashboard",
+  "warning",
+  "workbench",
+  "archive",
+  "export",
+  "org",
+  "mapping",
+  "management",
+];
 
 export const ROLE_OPTIONS = [
   { value: "admin", label: "组织管理员" },
@@ -22,10 +33,10 @@ export const ROLE_OPTIONS = [
 ];
 
 const ROLE_MENU_KEYS = {
-  admin: ALL_STANDARD_MENUS,
+  admin: ADMIN_MENUS,
   reporter: REPORTER_MENUS,
-  branchSecretary: [...REPORTER_MENUS, "review"],
-  orgReviewer: [...ALL_STANDARD_MENUS, "workbench"],
+  branchSecretary: BRANCH_SECRETARY_MENUS,
+  orgReviewer: ORG_REVIEWER_MENUS,
 };
 
 const ROLE_DEFAULT_VIEWS = {

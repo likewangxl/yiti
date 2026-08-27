@@ -7,6 +7,24 @@ const CYCLE_META = {
   "quarterly-end": { label: "每季度末", unit: "quarter", anchor: "end" },
 };
 
+export const TASK_STAGES = {
+  REPORTER_PENDING: "reporter-pending",
+  BRANCH_PENDING: "branch-pending",
+  ORG_PENDING: "org-pending",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+};
+
+export const REPORT_TABS = [
+  { value: "pending", label: "待处理" },
+  { value: "review", label: "审核中" },
+  { value: "approved", label: "已通过" },
+  { value: "rejected", label: "已驳回" },
+];
+
+// 明细项来自字典配置，原型先用可调整的常量模拟字典维护结果。
+export const MATERIAL_DETAIL_ITEMS = ["联建规范度", "合作契约化", "业务转换实质", "服务融合度"];
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function localDate(value) {
@@ -208,7 +226,12 @@ export function publishTask(tasks, draft, now = new Date()) {
     publishedAt: draft.publishedAt || formatDate(localDate(now)),
     status: "published",
     route: draft.type === "四大维度材料上报" ? "materials-entry" : "task-detail",
+    stage: TASK_STAGES.REPORTER_PENDING,
     employeeStatus: "pending",
+    branchApproved: false,
+    submission: null,
+    organizationOpinion: "",
+    materialUploads: {},
   };
   return [...tasks, task];
 }
@@ -217,15 +240,198 @@ export function getEmployeeTasks(tasks, asOf = new Date()) {
   const current = localDate(asOf);
   return tasks
     .filter((task) => {
-      if (task.employeeStatus === "completed") return true;
+      if (task.employeeStatus === "completed" || [TASK_STAGES.BRANCH_PENDING, TASK_STAGES.ORG_PENDING, TASK_STAGES.APPROVED, TASK_STAGES.REJECTED].includes(task.stage)) return true;
       if (task.nature === "temporary") return task.startAt && task.endAt && formatDate(current) >= task.startAt && formatDate(current) <= task.endAt;
       return task.window && formatDate(current) >= task.window.start && formatDate(current) <= task.window.end;
     })
-    .map((task) => ({ ...task, status: task.employeeStatus || "pending" }));
+    .map((task) => ({
+      ...task,
+      status: task.employeeStatus === "completed" || task.stage !== TASK_STAGES.REPORTER_PENDING ? "completed" : "pending",
+    }));
 }
 
 export function completeTask(tasks, taskId) {
-  return tasks.map((task) => task.id === taskId ? { ...task, employeeStatus: "completed", status: "completed" } : task);
+  return tasks.map((task) => task.id === taskId ? {
+    ...task,
+    employeeStatus: "completed",
+    status: "completed",
+    stage: TASK_STAGES.APPROVED,
+  } : task);
+}
+
+function cloneTask(task, patch) {
+  return { ...task, ...patch };
+}
+
+function updateTask(tasks, taskId, updater) {
+  return tasks.map((task) => task.id === taskId ? updater(task) : task);
+}
+
+function nowLabel(value = new Date()) {
+  const date = localDate(value);
+  return `${formatDate(date)} 12:00`;
+}
+
+export function getTaskStage(task) {
+  if (task?.stage) return task.stage;
+  return task?.employeeStatus === "completed" ? TASK_STAGES.APPROVED : TASK_STAGES.REPORTER_PENDING;
+}
+
+/** 报送员临时任务提交后进入支部书记待处理，保留填报内容和附件名称供后续审核查看。 */
+export function submitReporterTask(tasks, taskId, payload = {}) {
+  return updateTask(tasks, taskId, (task) => cloneTask(task, {
+    stage: TASK_STAGES.BRANCH_PENDING,
+    employeeStatus: "completed",
+    status: "submitted",
+    branchApproved: false,
+    submission: {
+      content: String(payload.content || "").trim(),
+      fileNames: Array.isArray(payload.fileNames) ? [...payload.fileNames] : [],
+      submitter: payload.submitter || "张伟",
+      branch: payload.branch || "党支部一",
+      submittedAt: payload.submittedAt || nowLabel(),
+    },
+  }));
+}
+
+/** 支部书记先确认通过，状态仍在支部待处理，下一步才能提交组织审核。 */
+export function approveBranchTask(tasks, taskId) {
+  return updateTask(tasks, taskId, (task) => cloneTask(task, { branchApproved: true }));
+}
+
+export function submitBranchTask(tasks, taskId) {
+  const target = tasks.find((task) => task.id === taskId);
+  if (!target || !target.branchApproved) throw new Error("请先通过支部审核，再提交至组织审核");
+  return updateTask(tasks, taskId, (task) => cloneTask(task, {
+    stage: TASK_STAGES.ORG_PENDING,
+    status: "submitted",
+    branchSubmittedAt: nowLabel(),
+  }));
+}
+
+export function approveOrganizationTask(tasks, taskId) {
+  return updateTask(tasks, taskId, (task) => cloneTask(task, {
+    stage: TASK_STAGES.APPROVED,
+    status: "approved",
+    organizationOpinion: "审核通过",
+    organizationReviewedAt: nowLabel(),
+  }));
+}
+
+export function rejectOrganizationTask(tasks, taskId, opinion = "请补充填报内容") {
+  return updateTask(tasks, taskId, (task) => cloneTask(task, {
+    stage: TASK_STAGES.REJECTED,
+    status: "rejected",
+    organizationOpinion: String(opinion || "请补充填报内容").trim(),
+    organizationReviewedAt: nowLabel(),
+  }));
+}
+
+export function getReportTabTasks(tasks, tab) {
+  const groups = {
+    pending: [TASK_STAGES.REPORTER_PENDING],
+    review: [TASK_STAGES.BRANCH_PENDING, TASK_STAGES.ORG_PENDING],
+    approved: [TASK_STAGES.APPROVED],
+    rejected: [TASK_STAGES.REJECTED],
+  };
+  const accepted = groups[tab] || [];
+  return tasks.filter((task) => accepted.includes(getTaskStage(task)));
+}
+
+export function getHistoryTaskGroups(tasks, tab) {
+  const stageByTab = {
+    review: [TASK_STAGES.BRANCH_PENDING, TASK_STAGES.ORG_PENDING],
+    approved: [TASK_STAGES.APPROVED],
+    rejected: [TASK_STAGES.REJECTED],
+  };
+  const scoped = (stageByTab[tab] || []).length
+    ? tasks.filter((task) => stageByTab[tab].includes(getTaskStage(task)))
+    : tasks;
+  return {
+    materials: scoped.filter((task) => task.type === "四大维度材料上报"),
+    temporary: scoped.filter((task) => task.type !== "四大维度材料上报"),
+  };
+}
+
+export function getPublishedTasks(tasks) {
+  const publishedStatuses = ["published", "submitted", "approved", "rejected"];
+  return tasks.filter((task) => Boolean(task?.publishedAt) || publishedStatuses.includes(task?.status));
+}
+
+export function historyStatusLabel(stage) {
+  if (stage === TASK_STAGES.APPROVED) return "已通过";
+  if (stage === TASK_STAGES.REJECTED) return "已驳回";
+  return "审核中";
+}
+
+export function getBranchTabTasks(tasks, tab) {
+  const groups = {
+    pending: [TASK_STAGES.BRANCH_PENDING],
+    review: [TASK_STAGES.ORG_PENDING],
+    approved: [TASK_STAGES.APPROVED],
+    rejected: [TASK_STAGES.REJECTED],
+  };
+  return tasks.filter((task) => (groups[tab] || []).includes(getTaskStage(task)));
+}
+
+export function addMaterialUpload(tasks, taskId, detail, fileName, uploadedAt = nowLabel()) {
+  if (!MATERIAL_DETAIL_ITEMS.includes(detail)) throw new Error("不支持的材料明细项");
+  return updateTask(tasks, taskId, (task) => {
+    const previous = task.materialUploads?.[detail] || { count: 0, files: [] };
+    return cloneTask(task, {
+      materialUploads: {
+        ...(task.materialUploads || {}),
+        [detail]: {
+          count: previous.count + 1,
+          files: [...previous.files, { name: String(fileName || "材料文件"), uploadedAt }],
+        },
+      },
+    });
+  });
+}
+
+export function getMaterialCompletion(task) {
+  const uploads = task?.materialUploads || {};
+  const completed = MATERIAL_DETAIL_ITEMS.filter((detail) => Number(uploads[detail]?.count || 0) >= 1);
+  return { completed, total: MATERIAL_DETAIL_ITEMS.length, complete: completed.length === MATERIAL_DETAIL_ITEMS.length };
+}
+
+export function buildExportPreview(task, selectedDetails = []) {
+  const normalizedDetails = [...new Set(selectedDetails)].filter((detail) => MATERIAL_DETAIL_ITEMS.includes(detail));
+  if (task.type === "四大维度材料上报" && normalizedDetails.length === 0) throw new Error("请先选择明细项");
+  const submissions = Array.isArray(task.branchSubmissions) && task.branchSubmissions.length
+    ? task.branchSubmissions
+    : task.submission ? [task.submission] : [];
+  const entries = [{ path: "任务填报明细.xlsx", type: "excel", columns: ["任务名称", "任务发布时间", "结束时间", "提交人", "提交时间", "填报内容"] }];
+  const excelRows = submissions.map((submission) => ({
+    taskName: task.title,
+    publishedAt: task.publishedAt || "—",
+    endAt: task.nature === "scheduled" ? task.window?.end || "—" : task.endAt || "—",
+    submitter: submission.submitter || "—",
+    submittedAt: submission.submittedAt || "—",
+    content: submission.content || "—",
+    branch: submission.branch || "党支部一",
+  }));
+  if (task.type === "四大维度材料上报") {
+    normalizedDetails.forEach((detail) => {
+      const record = task.materialUploads?.[detail];
+      entries.push({ path: `四维明细/${detail}`, type: "material-detail", detail });
+      (record?.files || []).forEach((file) => entries.push({ path: `四维明细/${detail}/${file.name}`, type: "material", detail }));
+    });
+  } else {
+    submissions.forEach((submission) => {
+      const branch = submission.branch || "党支部一";
+      (Array.isArray(submission.fileNames) ? submission.fileNames : []).forEach((name) => entries.push({ path: `${branch}/${name}`, type: "attachment" }));
+    });
+  }
+  return {
+    archiveName: `${task.title}-填报导出.zip`,
+    selectedDetails: normalizedDetails,
+    excelColumns: ["任务名称", "任务发布时间", "结束时间", "提交人", "提交时间", "填报内容"],
+    excelRows,
+    entries,
+    note: "原型模拟生成结构预览，不生成真实 ZIP 文件",
+  };
 }
 
 export const TASK_TYPES = ["四大维度材料上报", "党建学习", "通知确认", "整改反馈", "其他"];
