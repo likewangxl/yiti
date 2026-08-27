@@ -135,6 +135,8 @@ export const rejectLead = (id, data) =>
 // 页面五：营销客户标签
 export const listMarketingCustomerTags = (params = {}) =>
   call('get', '/marketing/customer-tags', { params }, pageFallback);
+export const listEditableMarketingCustomerTags = () =>
+  listMarketingCustomerTags({ status: 'ENABLED', approvalStatus: 'APPROVED', pageNo: 1, pageSize: 100 });
 export const getMarketingCustomerTag = id =>
   call('get', `/marketing/customer-tags/${idPart(id)}`, {}, null);
 export const createMarketingCustomerTag = data =>

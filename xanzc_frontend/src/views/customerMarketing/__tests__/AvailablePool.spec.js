@@ -27,7 +27,11 @@ describe('待认领线索池展示契约', () => {
   });
 
   it('只查询后端可见的 PUBLIC 线索并展示完整线索字段', () => {
-    expect(source).toContain("sourceType: sourceType.value || 'PUBLIC'");
+    expect(source).toContain("sourceType: 'PUBLIC'");
+    expect(source).not.toContain('const sourceType = ref');
+    expect(source).not.toContain('v-model="sourceType"');
+    expect(source).not.toContain('sourceType.value');
+    expect(source).toContain("row.distributionMode || row.sourceType || 'PUBLIC'");
     expect(source).toContain('线索编号');
     expect(source).toContain('线索类型');
     expect(source).toContain('所属集团类型');

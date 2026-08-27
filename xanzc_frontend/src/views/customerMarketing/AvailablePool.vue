@@ -18,11 +18,6 @@
             @keyup.enter="search"
           />
         </el-form-item>
-        <el-form-item label="下发方式">
-          <el-select v-model="sourceType" style="width: 160px">
-            <el-option label="全行公开认领" value="PUBLIC" />
-          </el-select>
-        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="search">查询</el-button>
           <el-button @click="reset">重置</el-button>
@@ -96,7 +91,7 @@
         <template #default="{ row }">{{ attachmentNames(row) || '-' }}</template>
       </el-table-column>
       <el-table-column label="下发方式" width="135">
-        <template #default="{ row }">{{ distributionLabel(row.distributionMode || row.sourceType || sourceType) }}</template>
+        <template #default="{ row }">{{ distributionLabel(row.distributionMode || row.sourceType || 'PUBLIC') }}</template>
       </el-table-column>
       <el-table-column label="可认领范围" min-width="190" show-overflow-tooltip>
         <template #default="{ row }">{{ claimScope(row) }}</template>
@@ -138,7 +133,6 @@ import LeadDetailDrawer from '@/components/LeadDetailDrawer.vue';
 import { claimCustomer, getAvailableCustomerLeadDetail, listAvailableCustomers } from '@/api/customerMarketing';
 
 const keyword = ref('');
-const sourceType = ref('PUBLIC');
 const rows = ref([]);
 const total = ref(0);
 const loading = ref(false);
@@ -166,7 +160,7 @@ async function load() {
   try {
     const result = await listAvailableCustomers({
       keyword: keyword.value || undefined,
-      sourceType: sourceType.value || 'PUBLIC',
+      sourceType: 'PUBLIC',
       pageNo: pageNo.value,
       pageSize: pageSize.value,
     });
@@ -188,7 +182,6 @@ function search() {
 
 function reset() {
   keyword.value = '';
-  sourceType.value = 'PUBLIC';
   search();
 }
 

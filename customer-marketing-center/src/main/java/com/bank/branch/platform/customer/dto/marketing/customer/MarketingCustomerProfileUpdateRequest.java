@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * 营销客户资料受控修改请求。
@@ -50,6 +51,10 @@ public class MarketingCustomerProfileUpdateRequest {
     private BigDecimal creditExposureAmount;
     private Integer touchRestricted;
 
+    /** 目标标签 ID；null 表示不调整，空列表表示清空全部当前有效标签。 */
+    @Size(max = 100)
+    private List<Long> tagIds;
+
     @NotNull
     private Integer profileVersion;
     @NotNull
@@ -65,6 +70,6 @@ public class MarketingCustomerProfileUpdateRequest {
                 || businessScope != null || industry != null || groupType != null || groupName != null
                 || customerType != null || enterpriseType != null || isKeystone != null
                 || customerDesc != null || registeredCapital != null || creditAmount != null
-                || creditExposureAmount != null || touchRestricted != null;
+                || creditExposureAmount != null || touchRestricted != null || tagIds != null;
     }
 }

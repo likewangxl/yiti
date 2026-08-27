@@ -29,6 +29,12 @@ public interface MarketingCustomerTagRelMapper extends BaseMapper<MarketingCusto
     MarketingCustomerTagRel selectByCustIdAndTagId(@Param("custId") Long custId,
                                                    @Param("tagId") Long tagId);
 
+    /** 查询客户的全部标签关系，包含已失效历史，用于资料编辑时计算增量。 */
+    List<MarketingCustomerTagRel> selectByCustId(@Param("custId") Long custId);
+
+    /** 批量查询多个客户当前有效标签关系，供客户列表和详情批量回显。 */
+    List<MarketingCustomerTagRel> selectActiveByCustIds(@Param("custIds") List<Long> custIds);
+
     /** 将标签当前有效关系批量失效，保留历史事实。 */
     int expireActiveByTagId(@Param("tagId") Long tagId,
                             @Param("operatorEmpId") String operatorEmpId,
@@ -40,8 +46,20 @@ public interface MarketingCustomerTagRelMapper extends BaseMapper<MarketingCusto
                                @Param("operatorEmpId") String operatorEmpId,
                                @Param("expiredTime") LocalDateTime expiredTime);
 
+    /** 编辑客户标签时批量失效本次未保留的关系。 */
+    int expireNotInTagIds(@Param("custId") Long custId,
+                          @Param("tagIds") List<Long> tagIds,
+                          @Param("operatorEmpId") String operatorEmpId,
+                          @Param("expiredTime") LocalDateTime expiredTime);
+
     /** 恢复已有历史关系。 */
     int reactivate(@Param("id") Long id,
                    @Param("operatorEmpId") String operatorEmpId,
                    @Param("effectiveTime") LocalDateTime effectiveTime);
+
+    /** 恢复历史关系并记录本次人工维护来源。 */
+    int reactivateWithSourceType(@Param("id") Long id,
+                                 @Param("sourceType") String sourceType,
+                                 @Param("operatorEmpId") String operatorEmpId,
+                                 @Param("effectiveTime") LocalDateTime effectiveTime);
 }

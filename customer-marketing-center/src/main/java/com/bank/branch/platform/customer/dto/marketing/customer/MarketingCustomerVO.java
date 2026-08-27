@@ -6,6 +6,7 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /** 营销客户页面输出，不直接暴露 MyBatis 实体。 */
 @Data
@@ -33,6 +34,9 @@ public class MarketingCustomerVO {
     private BigDecimal creditAmount;
     private BigDecimal creditExposureAmount;
     private Integer touchRestricted;
+    /** 当前有效营销标签；列表与详情均由 Service 批量回填。 */
+    private List<Long> tagIds;
+    private List<String> tagNames;
     private Long currentLeadId;
     private LocalDateTime lastTouchTime;
     private String mainManagerId;

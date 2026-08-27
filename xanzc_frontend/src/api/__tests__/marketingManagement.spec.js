@@ -18,6 +18,7 @@ import {
   listLeadImportBatches,
   listManualLeads,
   listMarketingCustomerTags,
+  listEditableMarketingCustomerTags,
   listMarketingCustomers,
   listMyCustomers,
   listPendingTagCustomerApprovals,
@@ -171,6 +172,14 @@ describe('六页面营销管理 API', () => {
     expect(call).toHaveBeenNthCalledWith(4, 'post', '/marketing/customer-tag-approvals/batch-approve', {
       data: { detailIds: [11, 12], approveTag: true, opinion: '同意' },
     });
+  });
+
+  it('编辑营销客户标签只加载已启用且已审批的前100条', async () => {
+    await listEditableMarketingCustomerTags();
+
+    expect(call).toHaveBeenCalledWith('get', '/marketing/customer-tags', {
+      params: { status: 'ENABLED', approvalStatus: 'APPROVED', pageNo: 1, pageSize: 100 },
+    }, { records: [], total: 0 });
   });
 
   it('营销客户标签导入模板使用独立批次接口并按 blob 下载', async () => {

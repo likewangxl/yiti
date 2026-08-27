@@ -1,0 +1,12 @@
+1. **/api/auth/current-user
+2. **/api/auth/my-menus
+3. **/api/auth/permissions
+4. **/api/notifications/unread-count
+5. **/api/marketing/customers?*
+6. **/api/marketing/customers/1
+7. **/api/marketing/customer-tags?*
+8. **/api/customer-pool?*
+9. **/api/marketing/customers/1/profile
+10. **/api/sys/dicts/*/items
+
+全部路由为开发态 mock，非真实联调。未注册 catch-all 路由。

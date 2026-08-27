@@ -64,6 +64,21 @@
           <el-form-item label="客户类型"><el-input v-model="editForm.customerType" maxlength="50" /></el-form-item>
           <el-form-item label="集团类型"><el-input v-model="editForm.groupType" maxlength="50" /></el-form-item>
           <el-form-item label="集团名称"><el-input v-model="editForm.groupName" maxlength="200" /></el-form-item>
+          <el-form-item label="客户标签">
+            <el-select
+              v-model="editForm.tagIds"
+              multiple
+              filterable
+              collapse-tags
+              collapse-tags-tooltip
+              clearable
+              :loading="tagLoading"
+              placeholder="请选择客户标签"
+              style="width: 100%"
+            >
+              <el-option v-for="tag in tagOptions" :key="tag.id" :label="tag.tagName || tag.name || tag.id" :value="tag.id" />
+            </el-select>
+          </el-form-item>
           <el-form-item label="注册资本（元）"><el-input-number v-model="editForm.registeredCapital" :min="0" :precision="2" :controls="false" style="width: 100%" /></el-form-item>
           <el-form-item label="授信金额（元）"><el-input-number v-model="editForm.creditAmount" :min="0" :precision="2" :controls="false" style="width: 100%" /></el-form-item>
           <el-form-item label="授信敞口（元）"><el-input-number v-model="editForm.creditExposureAmount" :min="0" :precision="2" :controls="false" style="width: 100%" /></el-form-item>
@@ -87,6 +102,7 @@ import MarketingCustomerDetailDrawer from '@/components/MarketingCustomerDetailD
 import MarketingCustomerOwnerDialog from '@/components/MarketingCustomerOwnerDialog.vue';
 import {
   getMarketingCustomer,
+  listEditableMarketingCustomerTags,
   listMarketingCustomers,
   restoreCustomerOwnershipAuto,
   transferCustomerOwner,
@@ -107,9 +123,18 @@ const editVisible = ref(false);
 const editSubmitting = ref(false);
 const editFormRef = ref(null);
 const editForm = reactive(emptyEditForm());
+const tagOptions = ref([]);
+const tagLoading = ref(false);
+const PROFILE_EDIT_FIELDS = [
+  'custName', 'legalRepresentative', 'contactPerson', 'contactMobile',
+  'registeredAddress', 'businessAddress', 'businessScope', 'industry',
+  'groupType', 'groupName', 'customerType', 'enterpriseType', 'isKeystone',
+  'customerDesc', 'registeredCapital', 'creditAmount', 'creditExposureAmount',
+  'touchRestricted', 'tagIds', 'profileVersion', 'lockVersion', 'reason',
+];
 
 function emptyEditForm() {
-  return { id: null, custName: '', legalRepresentative: '', contactPerson: '', contactMobile: '', registeredAddress: '', businessAddress: '', businessScope: '', industry: '', groupType: '', groupName: '', customerType: '', enterpriseType: '', isKeystone: null, customerDesc: '', registeredCapital: null, creditAmount: null, creditExposureAmount: null, touchRestricted: null, profileVersion: null, lockVersion: null, reason: '' };
+  return { id: null, custName: '', legalRepresentative: '', contactPerson: '', contactMobile: '', registeredAddress: '', businessAddress: '', businessScope: '', industry: '', groupType: '', groupName: '', customerType: '', enterpriseType: '', isKeystone: null, customerDesc: '', registeredCapital: null, creditAmount: null, creditExposureAmount: null, touchRestricted: null, profileVersion: null, lockVersion: null, tagIds: [], reason: '' };
 }
 
 const money = value => value == null || value === '' ? '-' : `¥${Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`;
@@ -152,6 +177,40 @@ async function fetchDetail(row) {
   }
 }
 
+function dateOnly(value) {
+  if (!value) return null;
+  const text = String(value).slice(0, 10);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  const date = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function isEditableTag(tag) {
+  if (!tag || tag.recordStatus !== 'ACTIVE') return false;
+  const expiresAt = dateOnly(tag.expiresAt);
+  if (!expiresAt) return true;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return expiresAt >= today;
+}
+
+async function loadTagOptions() {
+  tagLoading.value = true;
+  try {
+    const result = await listEditableMarketingCustomerTags();
+    tagOptions.value = pageOf(result).filter(isEditableTag);
+  } catch (error) {
+    tagOptions.value = [];
+    ElMessage.error(`客户标签加载失败：${error?.message || '请稍后重试'}`);
+  } finally {
+    tagLoading.value = false;
+  }
+}
+
 async function openDetail(row) {
   selected.value = row;
   detailVisible.value = true;
@@ -159,8 +218,18 @@ async function openDetail(row) {
 }
 
 async function openEdit(row) {
-  const detail = row?.profileVersion != null ? (await fetchDetail(row)) || row : row;
-  Object.assign(editForm, emptyEditForm(), detail, { id: detail.id, reason: '' });
+  const detailPromise = row?.profileVersion != null || !Array.isArray(row?.tagIds)
+    ? fetchDetail(row)
+    : Promise.resolve(row);
+  const [detail] = await Promise.all([detailPromise, loadTagOptions()]);
+  const editSource = detail || row;
+  Object.assign(editForm, emptyEditForm(), editSource, {
+    id: editSource?.id,
+    tagIds: Array.isArray(detail?.tagIds)
+      ? [...detail.tagIds]
+      : Array.isArray(row?.tagIds) ? [...row.tagIds] : [],
+    reason: '',
+  });
   editVisible.value = true;
 }
 
@@ -171,8 +240,10 @@ async function saveProfile() {
   }
   if (editSubmitting.value || !editForm.id) return;
   editSubmitting.value = true;
-  const payload = { ...editForm };
-  delete payload.id;
+  const payload = Object.fromEntries(PROFILE_EDIT_FIELDS.map(key => [
+    key,
+    key === 'tagIds' ? (Array.isArray(editForm.tagIds) ? [...editForm.tagIds] : []) : editForm[key],
+  ]));
   try {
     await updateMarketingCustomerProfile(editForm.id, payload);
     ElMessage.success('客户资料已保存');

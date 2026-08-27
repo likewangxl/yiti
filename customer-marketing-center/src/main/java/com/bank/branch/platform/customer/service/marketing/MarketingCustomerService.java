@@ -13,7 +13,11 @@ import com.bank.branch.platform.customer.dto.marketing.customer.MarketingCustome
 import com.bank.branch.platform.customer.dto.marketing.customer.MarketingCustomerQuery;
 import com.bank.branch.platform.customer.dto.marketing.customer.MarketingCustomerVO;
 import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo;
+import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTag;
+import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTagRel;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerInfoMapper;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerTagMapper;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerTagRelMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,8 +26,12 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -47,6 +55,9 @@ public class MarketingCustomerService {
     private final OrgApi orgApi;
     /** 保留为服务层权限边界依赖；Controller 也会先解析当前用户数据范围。 */
     private final BizScopeApi bizScopeApi;
+    private final MarketingCustomerTagRelMapper relationMapper;
+    private final MarketingCustomerTagMapper tagMapper;
+    private final MarketingCustomerTagService tagService;
 
     /**
      * 分页查询营销客户总列表。
@@ -128,6 +139,10 @@ public class MarketingCustomerService {
         if (!request.hasProfileChanges()) {
             throw new BizException(CUSTOMER_PROFILE_INVALID, "至少修改一项客户资料");
         }
+        List<Long> requestedTagIds = normalizeTagIds(request.getTagIds());
+        if (requestedTagIds != null) {
+            requestedTagIds.forEach(tagService::requireImportable);
+        }
         MarketingCustomerInfo customer = requireActive(id);
         if (!sameVersion(request.getProfileVersion(), customer.getProfileVersion())
                 || !sameVersion(request.getLockVersion(), customer.getLockVersion())) {
@@ -138,6 +153,9 @@ public class MarketingCustomerService {
                 request.getLockVersion(), request, operatorEmpId, now);
         if (affected != 1) {
             throw versionConflict();
+        }
+        if (requestedTagIds != null) {
+            synchronizeTags(id, requestedTagIds, operatorEmpId, now);
         }
         MarketingCustomerInfo latest = requireActive(id);
         return toVO(latest);
@@ -199,16 +217,25 @@ public class MarketingCustomerService {
         }
         Map<String, UserDTO> users = loadUsers(records);
         Map<String, String> orgNames = loadOrgNames(records);
-        return records.stream().map(item -> toVO(item, users, orgNames)).toList();
+        Map<Long, CustomerTags> customerTags = loadTags(records);
+        return records.stream().map(item -> toVO(item, users, orgNames,
+                customerTags.get(item.getId()))).toList();
     }
 
     private MarketingCustomerVO toVO(MarketingCustomerInfo customer) {
-        return toVO(customer, loadUsers(List.of(customer)), loadOrgNames(List.of(customer)));
+        return toVOList(List.of(customer)).get(0);
     }
 
     private MarketingCustomerVO toVO(MarketingCustomerInfo customer, Map<String, UserDTO> users,
-                                     Map<String, String> orgNames) {
+                                     Map<String, String> orgNames, CustomerTags customerTags) {
         MarketingCustomerVO vo = MarketingCustomerVO.fromEntity(customer);
+        if (customerTags == null) {
+            vo.setTagIds(List.of());
+            vo.setTagNames(List.of());
+        } else {
+            vo.setTagIds(customerTags.tagIds());
+            vo.setTagNames(customerTags.tagNames());
+        }
         if (StringUtils.hasText(customer.getMainManagerId())) {
             UserDTO manager = users.get(customer.getMainManagerId());
             if (manager != null) {
@@ -222,6 +249,103 @@ public class MarketingCustomerService {
             vo.setMainOrgName(orgNames.get(customer.getMainOrgId()));
         }
         return vo;
+    }
+
+    private Map<Long, CustomerTags> loadTags(List<MarketingCustomerInfo> records) {
+        List<Long> customerIds = records.stream().map(MarketingCustomerInfo::getId)
+                .filter(Objects::nonNull).distinct().toList();
+        if (customerIds.isEmpty()) {
+            return Map.of();
+        }
+        List<MarketingCustomerTagRel> relations = relationMapper.selectActiveByCustIds(customerIds);
+        if (relations == null || relations.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> tagIds = relations.stream().map(MarketingCustomerTagRel::getTagId)
+                .filter(Objects::nonNull).distinct().toList();
+        if (tagIds.isEmpty()) {
+            return Map.of();
+        }
+        List<MarketingCustomerTag> tags = tagMapper.selectBatchIds(tagIds);
+        if (tags == null || tags.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, MarketingCustomerTag> tagById = new HashMap<>();
+        for (MarketingCustomerTag tag : tags) {
+            if (tag != null && tag.getId() != null
+                    && (tag.getRecordStatus() == null
+                    || "ACTIVE".equalsIgnoreCase(tag.getRecordStatus()))) {
+                tagById.put(tag.getId(), tag);
+            }
+        }
+        Map<Long, CustomerTagsBuilder> builders = new LinkedHashMap<>();
+        Map<Long, Set<Long>> seen = new HashMap<>();
+        for (MarketingCustomerTagRel relation : relations) {
+            if (relation == null || relation.getCustId() == null || relation.getTagId() == null) continue;
+            MarketingCustomerTag tag = tagById.get(relation.getTagId());
+            if (tag == null || !seen.computeIfAbsent(relation.getCustId(), key -> new HashSet<>())
+                    .add(relation.getTagId())) continue;
+            CustomerTagsBuilder builder = builders.computeIfAbsent(relation.getCustId(),
+                    key -> new CustomerTagsBuilder());
+            builder.tagIds.add(relation.getTagId());
+            builder.tagNames.add(tag.getTagName());
+        }
+        Map<Long, CustomerTags> result = new LinkedHashMap<>();
+        builders.forEach((custId, builder) -> result.put(custId,
+                new CustomerTags(List.copyOf(builder.tagIds), List.copyOf(builder.tagNames))));
+        return result;
+    }
+
+    private List<Long> normalizeTagIds(List<Long> tagIds) {
+        if (tagIds == null) return null;
+        if (tagIds.size() > 100) {
+            throw new BizException(CUSTOMER_PROFILE_INVALID, "客户标签最多选择100个");
+        }
+        LinkedHashSet<Long> distinct = new LinkedHashSet<>(tagIds);
+        if (distinct.contains(null)) {
+            throw new BizException(CUSTOMER_PROFILE_INVALID, "客户标签 ID 不能为空");
+        }
+        return new java.util.ArrayList<>(distinct);
+    }
+
+    private void synchronizeTags(Long customerId, List<Long> requestedTagIds,
+                                 String operatorEmpId, LocalDateTime now) {
+        List<MarketingCustomerTagRel> existingRelations = relationMapper.selectByCustId(customerId);
+        Map<Long, MarketingCustomerTagRel> existingByTagId = new HashMap<>();
+        if (existingRelations != null) {
+            for (MarketingCustomerTagRel relation : existingRelations) {
+                if (relation != null && relation.getTagId() != null) {
+                    existingByTagId.putIfAbsent(relation.getTagId(), relation);
+                }
+            }
+        }
+        relationMapper.expireNotInTagIds(customerId, requestedTagIds, operatorEmpId, now);
+        for (Long tagId : requestedTagIds) {
+            MarketingCustomerTagRel relation = existingByTagId.get(tagId);
+            if (relation == null) {
+                MarketingCustomerTagRel created = new MarketingCustomerTagRel();
+                created.setCustId(customerId);
+                created.setTagId(tagId);
+                created.setActive(1);
+                created.setSourceType("MANUAL");
+                created.setEffectiveTime(now);
+                created.setCreatedBy(operatorEmpId);
+                created.setCreatedTime(now);
+                created.setUpdatedBy(operatorEmpId);
+                created.setUpdatedTime(now);
+                relationMapper.insert(created);
+            } else if (!Integer.valueOf(1).equals(relation.getActive())) {
+                relationMapper.reactivateWithSourceType(relation.getId(), "MANUAL", operatorEmpId, now);
+            }
+        }
+    }
+
+    private static final class CustomerTagsBuilder {
+        private final List<Long> tagIds = new java.util.ArrayList<>();
+        private final List<String> tagNames = new java.util.ArrayList<>();
+    }
+
+    private record CustomerTags(List<Long> tagIds, List<String> tagNames) {
     }
 
     private Map<String, UserDTO> loadUsers(List<MarketingCustomerInfo> records) {
