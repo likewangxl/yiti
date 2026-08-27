@@ -233,6 +233,10 @@ public class MarketingLeadEntryService {
         if (request.getTagIds() != null) {
             replaceTagSnapshots(current.getId(), request.getTagIds(), operatorEmpId, relationTime, true);
         }
+        if (reopeningRejected
+                && leadMapper.clearApprovalMetadataForDraft(leadId, operatorEmpId) != 1) {
+            throw error("MARKETING_LEAD_STATE_CONFLICT", "线索状态已发生变化，请刷新后重试");
+        }
         bindAttachments(current.getId(), request.getAttachmentIds());
         return current;
     }
@@ -326,7 +330,16 @@ public class MarketingLeadEntryService {
         lead.setBusinessKey("LEAD:" + leadId);
         lead.setUpdatedBy(operatorEmpId);
         lead.setUpdatedTime(now);
-        leadMapper.updateById(lead);
+        if (REJECTED.equals(expectedStatus)) {
+            int prepared = leadMapper.prepareRejectedResubmission(
+                    leadId, operatorEmpId, now, lead.getBusinessKey(),
+                    lead.getActiveDedupKey(), operatorEmpId);
+            if (prepared != 1) {
+                throw error("MARKETING_LEAD_STATE_CONFLICT", "线索状态已发生变化，请刷新后重试");
+            }
+        } else {
+            leadMapper.updateById(lead);
+        }
 
         StartProcessCmd command = new StartProcessCmd();
         command.setBizType("LEAD");
@@ -339,6 +352,10 @@ public class MarketingLeadEntryService {
         WorkflowLaunchResp launch = workflowApi.startProcess(command);
         if (launch == null || !StringUtils.hasText(launch.getProcessInstanceId())) {
             throw error("MARKETING_LEAD_WORKFLOW_START_FAILED", "线索审批流程启动失败");
+        }
+        if (leadMapper.updateProcessInstanceId(
+                leadId, launch.getProcessInstanceId(), expectedStatus, operatorEmpId) != 1) {
+            throw error("MARKETING_LEAD_STATE_CONFLICT", "线索状态已发生变化，请刷新后重试");
         }
         int changed = leadMapper.updateStatusIf(leadId, expectedStatus, IN_APPROVAL, operatorEmpId, null);
         if (changed != 1) {

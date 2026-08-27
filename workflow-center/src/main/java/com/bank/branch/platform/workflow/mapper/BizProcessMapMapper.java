@@ -33,6 +33,26 @@ public interface BizProcessMapMapper extends BaseMapper<BizProcessMap> {
     BizProcessMap selectByBusinessKey(String businessKey);
 
     /**
+     * 按业务键加行锁查询现有映射。
+     *
+     * <p>流程重新提交时必须在同一事务中锁住唯一业务键对应的历史映射，
+     * 才能在启动新流程后安全复用该行，而不是再次 INSERT。</p>
+     *
+     * @param businessKey 业务键
+     * @return 映射实体，不存在时返回 null
+     */
+    BizProcessMap selectForUpdateByBusinessKey(@Param("businessKey") String businessKey);
+
+    /**
+     * 复用终态映射启动新流程。该 SQL 显式清理上一流程的办理人、候选组和结束时间，
+     * 避免依赖 MyBatis-Plus 对 null 字段的更新策略。
+     *
+     * @param map 已填充新流程信息且保留原 id 的映射实体
+     * @return 更新行数
+     */
+    int updateForRestart(BizProcessMap map);
+
+    /**
      * 根据流程实例ID查询映射记录。
      *
      * @param processInstanceId Flowable流程实例ID

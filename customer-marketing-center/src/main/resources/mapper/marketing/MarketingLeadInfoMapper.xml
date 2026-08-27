@@ -108,6 +108,54 @@
           AND record_status = 'ACTIVE'
     </update>
 
+    <!-- 已退回线索编辑为草稿时，不能依赖 updateById 的 null 更新策略清理审批元数据。 -->
+    <update id="clearApprovalMetadataForDraft">
+        UPDATE MARKETING_LEAD_INFO
+        SET submitted_by = NULL,
+            submitted_time = NULL,
+            business_key = NULL,
+            process_instance_id = NULL,
+            reviewed_by = NULL,
+            reviewed_time = NULL,
+            reject_reason = NULL,
+            updated_by = #{updatedBy},
+            updated_time = NOW()
+        WHERE id = #{id}
+          AND record_status = 'ACTIVE'
+          AND lead_status = 'DRAFT'
+    </update>
+
+    <!-- 直接从 REJECTED 重提：保留本轮 submitted/business_key，清理上一轮流程结果。 -->
+    <update id="prepareRejectedResubmission">
+        UPDATE MARKETING_LEAD_INFO
+        SET active_dedup_key = #{activeDedupKey},
+            submitted_by = #{submittedBy},
+            submitted_time = #{submittedTime},
+            business_key = #{businessKey},
+            process_instance_id = NULL,
+            reviewed_by = NULL,
+            reviewed_time = NULL,
+            reject_reason = NULL,
+            updated_by = #{updatedBy},
+            updated_time = NOW(),
+            lock_version = lock_version + 1
+        WHERE id = #{id}
+          AND record_status = 'ACTIVE'
+          AND lead_status = 'REJECTED'
+    </update>
+
+    <!-- 工作流启动成功后回写新流程实例，要求线索仍处于启动前状态。 -->
+    <update id="updateProcessInstanceId">
+        UPDATE MARKETING_LEAD_INFO
+        SET process_instance_id = #{processInstanceId},
+            updated_by = #{updatedBy},
+            updated_time = NOW(),
+            lock_version = lock_version + 1
+        WHERE id = #{id}
+          AND record_status = 'ACTIVE'
+          AND lead_status = #{expectedStatus}
+    </update>
+
     <select id="selectByImportBatchId" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
         SELECT <include refid="BASE_COLUMNS"/>
         FROM MARKETING_LEAD_INFO

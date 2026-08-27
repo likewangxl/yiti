@@ -33,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -307,6 +308,7 @@ class MarketingLeadEntryServiceTest {
         rejected.setDistributionMode("PUBLIC");
         when(leadMapper.selectForUpdate(12L)).thenReturn(rejected);
         when(leadMapper.selectActiveByCreditCode("91320100ABC1234567")).thenReturn(null);
+        when(leadMapper.clearApprovalMetadataForDraft(12L, "EMP_1")).thenReturn(1);
         LeadUpdateRequest request = new LeadUpdateRequest();
         request.setCustName("修改后企业");
 
@@ -322,6 +324,7 @@ class MarketingLeadEntryServiceTest {
         assertEquals(null, result.getReviewedTime());
         assertEquals(null, result.getRejectReason());
         verify(leadMapper).updateById(rejected);
+        verify(leadMapper).clearApprovalMetadataForDraft(12L, "EMP_1");
     }
 
     @Test
@@ -340,6 +343,11 @@ class MarketingLeadEntryServiceTest {
         WorkflowLaunchResp launch = new WorkflowLaunchResp();
         launch.setProcessInstanceId("PROCESS_NEW");
         when(workflowApi.startProcess(any())).thenReturn(launch);
+        when(leadMapper.prepareRejectedResubmission(
+                eq(13L), eq("EMP_1"), any(), eq("LEAD:13"),
+                eq("91320100ABC1234567"), eq("EMP_1"))).thenReturn(1);
+        when(leadMapper.updateProcessInstanceId(13L, "PROCESS_NEW", "REJECTED", "EMP_1"))
+                .thenReturn(1);
         when(leadMapper.updateStatusIf(13L, "REJECTED", "IN_APPROVAL", "EMP_1", null))
                 .thenReturn(1);
         MarketingLeadInfo inApproval = new MarketingLeadInfo();
@@ -351,10 +359,68 @@ class MarketingLeadEntryServiceTest {
 
         assertEquals("IN_APPROVAL", result.getLeadStatus());
         assertEquals("91320100ABC1234567", rejected.getActiveDedupKey());
+        assertEquals("EMP_1", rejected.getSubmittedBy());
+        assertEquals("LEAD:13", rejected.getBusinessKey());
+        assertEquals(null, rejected.getProcessInstanceId());
         assertEquals(null, rejected.getReviewedBy());
         assertEquals(null, rejected.getRejectReason());
         verify(workflowApi).startProcess(any());
+        verify(leadMapper).prepareRejectedResubmission(
+                eq(13L), eq("EMP_1"), any(), eq("LEAD:13"),
+                eq("91320100ABC1234567"), eq("EMP_1"));
+        verify(leadMapper).updateProcessInstanceId(13L, "PROCESS_NEW", "REJECTED", "EMP_1");
         verify(leadMapper).updateStatusIf(13L, "REJECTED", "IN_APPROVAL", "EMP_1", null);
+    }
+
+    @Test
+    void submitDraftWritesNewProcessInstanceIdBeforeStateTransition() {
+        MarketingLeadInfo draft = new MarketingLeadInfo();
+        draft.setId(14L);
+        draft.setLeadNo("MLEAD_14");
+        draft.setLeadStatus("DRAFT");
+        draft.setEntryEmpId("EMP_1");
+        draft.setUnifiedCreditCode("91320100ABC1234567");
+        draft.setDistributionMode("PUBLIC");
+        when(leadMapper.selectForUpdate(14L)).thenReturn(draft);
+        when(leadMapper.selectForUpdateByCreditCode("91320100ABC1234567")).thenReturn(null);
+        WorkflowLaunchResp launch = new WorkflowLaunchResp();
+        launch.setProcessInstanceId("PROCESS_DRAFT");
+        when(workflowApi.startProcess(any())).thenReturn(launch);
+        when(leadMapper.updateProcessInstanceId(14L, "PROCESS_DRAFT", "DRAFT", "EMP_1"))
+                .thenReturn(1);
+        when(leadMapper.updateStatusIf(14L, "DRAFT", "IN_APPROVAL", "EMP_1", null))
+                .thenReturn(1);
+
+        var result = service.submit(14L, "EMP_1", "ORG_1");
+
+        assertEquals("IN_APPROVAL", result.getLeadStatus());
+        verify(leadMapper).updateById(draft);
+        verify(leadMapper).updateProcessInstanceId(14L, "PROCESS_DRAFT", "DRAFT", "EMP_1");
+        verify(leadMapper).updateStatusIf(14L, "DRAFT", "IN_APPROVAL", "EMP_1", null);
+    }
+
+    @Test
+    void submitDraftDoesNotSwallowProcessInstanceWriteConflict() {
+        MarketingLeadInfo draft = new MarketingLeadInfo();
+        draft.setId(15L);
+        draft.setLeadNo("MLEAD_15");
+        draft.setLeadStatus("DRAFT");
+        draft.setEntryEmpId("EMP_1");
+        draft.setUnifiedCreditCode("91320100ABC1234567");
+        draft.setDistributionMode("PUBLIC");
+        when(leadMapper.selectForUpdate(15L)).thenReturn(draft);
+        when(leadMapper.selectForUpdateByCreditCode("91320100ABC1234567")).thenReturn(null);
+        WorkflowLaunchResp launch = new WorkflowLaunchResp();
+        launch.setProcessInstanceId("PROCESS_NOT_PERSISTED");
+        when(workflowApi.startProcess(any())).thenReturn(launch);
+        when(leadMapper.updateProcessInstanceId(15L, "PROCESS_NOT_PERSISTED", "DRAFT", "EMP_1"))
+                .thenReturn(0);
+
+        var exception = assertThrows(com.bank.branch.platform.common.web.exception.BizException.class,
+                () -> service.submit(15L, "EMP_1", "ORG_1"));
+
+        assertEquals("MARKETING_LEAD_STATE_CONFLICT", exception.getCode());
+        verify(leadMapper, never()).updateStatusIf(15L, "DRAFT", "IN_APPROVAL", "EMP_1", null);
     }
 
     @Test
