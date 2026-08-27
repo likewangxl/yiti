@@ -10,6 +10,7 @@ import {
   createCustomerTagImportBatch,
   createMarketingLead,
   getLeadImportBatchDetails,
+  getMarketingLead,
   listLeadApprovalHistory,
   listLeadApprovalPending,
   listLeadImportBatches,
@@ -21,6 +22,8 @@ import {
   restoreCustomerOwnershipAuto,
   transferCustomerOwner,
   updateMarketingCustomerProfile,
+  updateMarketingLead,
+  uploadMarketingLeadAttachment,
 } from '../marketingManagement';
 
 describe('六页面营销管理 API', () => {
@@ -61,6 +64,35 @@ describe('六页面营销管理 API', () => {
     expect(call).toHaveBeenNthCalledWith(2, 'post', '/marketing/leads', {
       data: { custName: '示例企业' },
     });
+  });
+
+  it('线索金额在前端万元和后端元之间换算', async () => {
+    call
+      .mockResolvedValueOnce({ id: 11, creditAmount: '2500000', creditExposureAmount: 1250000 })
+      .mockResolvedValueOnce({ id: 12 });
+
+    const detail = await getMarketingLead(11);
+    await createMarketingLead({ custName: '示例企业', creditAmount: 250, creditExposureAmount: 125, attachmentIds: ['FILE-1'] });
+    await updateMarketingLead(12, { creditAmount: 300, creditExposureAmount: null });
+
+    expect(detail).toEqual({ id: 11, creditAmount: 250, creditExposureAmount: 125 });
+    expect(call).toHaveBeenNthCalledWith(2, 'post', '/marketing/leads', {
+      data: { custName: '示例企业', creditAmount: 2500000, creditExposureAmount: 1250000, attachmentIds: ['FILE-1'] },
+    });
+    expect(call).toHaveBeenNthCalledWith(3, 'put', '/marketing/leads/12', {
+      data: { creditAmount: 3000000, creditExposureAmount: null },
+    });
+  });
+
+  it('线索附件通过统一文件端点上传', async () => {
+    const file = new File(['pdf'], '准入资料.pdf', { type: 'application/pdf' });
+    await uploadMarketingLeadAttachment(file);
+
+    const uploadCall = call.mock.calls[0];
+    expect(uploadCall.slice(0, 2)).toEqual(['post', '/files/upload']);
+    expect(uploadCall[2].data).toBeInstanceOf(FormData);
+    expect(uploadCall[2].data.get('file')).toBe(file);
+    expect(uploadCall[2].headers).toEqual({ 'Content-Type': 'multipart/form-data' });
   });
 
   it('线索导入批次支持失败优先详情和待确认动作', async () => {

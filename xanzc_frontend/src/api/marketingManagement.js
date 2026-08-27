@@ -20,20 +20,71 @@ export const restoreCustomerOwnershipAuto = (id, data) =>
 // 页面三 Tab一：每条手工线索一行，不聚合
 export const listManualLeads = (params = {}) =>
   call('get', '/marketing/leads', { params: { ...params, leadSource: 'MANUAL' } }, null);
-export const getMarketingLead = id =>
-  call('get', `/marketing/leads/${idPart(id)}`, {}, null);
-export const lookupMarketingCustomerByCreditCode = unifiedCreditCode =>
-  call('get', '/marketing/leads/lookup', { params: { unifiedCreditCode } }, null);
+export const getMarketingLead = async id =>
+  toMarketingLeadView(await call('get', `/marketing/leads/${idPart(id)}`, {}, null));
+export const lookupMarketingCustomerByCreditCode = async unifiedCreditCode =>
+  toMarketingLeadAmounts(await call('get', '/marketing/leads/lookup', { params: { unifiedCreditCode } }, null));
 export const createMarketingLead = data =>
-  call('post', '/marketing/leads', { data });
+  call('post', '/marketing/leads', { data: toMarketingLeadPayload(data) });
 export const updateMarketingLead = (id, data) =>
-  call('put', `/marketing/leads/${idPart(id)}`, { data });
+  call('put', `/marketing/leads/${idPart(id)}`, { data: toMarketingLeadPayload(data) });
 export const submitMarketingLead = id =>
   call('post', `/marketing/leads/${idPart(id)}/submit`, { data: {} });
 export const cancelMarketingLead = (id, data = {}) =>
   call('post', `/marketing/leads/${idPart(id)}/cancel`, { data });
 export const deleteMarketingLeadDraft = id =>
   call('delete', `/marketing/leads/${idPart(id)}`, {});
+
+const MARKETING_LEAD_AMOUNT_FIELDS = ['creditAmount', 'creditExposureAmount'];
+
+/** 页面金额以万元录入，营销线索 REST 契约以元传输。 */
+export function marketingLeadWanToYuan(value) {
+  if (value === null || value === undefined || value === '') return value;
+  const number = Number(value);
+  return Number.isFinite(number) ? Number((number * 10000).toFixed(4)) : value;
+}
+
+export function marketingLeadYuanToWan(value) {
+  if (value === null || value === undefined || value === '') return value;
+  const number = Number(value);
+  return Number.isFinite(number) ? Number((number / 10000).toFixed(4)) : value;
+}
+
+function toMarketingLeadPayload(data = {}) {
+  const payload = { ...data };
+  MARKETING_LEAD_AMOUNT_FIELDS.forEach(field => {
+    if (Object.prototype.hasOwnProperty.call(payload, field)) {
+      payload[field] = marketingLeadWanToYuan(payload[field]);
+    }
+  });
+  return payload;
+}
+
+function toMarketingLeadAmounts(lead) {
+  if (!lead || typeof lead !== 'object') return lead;
+  const view = { ...lead };
+  MARKETING_LEAD_AMOUNT_FIELDS.forEach(field => {
+    if (Object.prototype.hasOwnProperty.call(view, field)) {
+      view[field] = marketingLeadYuanToWan(view[field]);
+    }
+  });
+  return view;
+}
+
+function toMarketingLeadView(result) {
+  if (!result || typeof result !== 'object') return result;
+  if (result.lead) return { ...result, lead: toMarketingLeadAmounts(result.lead) };
+  return toMarketingLeadAmounts(result);
+}
+
+export function uploadMarketingLeadAttachment(file) {
+  const data = new FormData();
+  data.append('file', file);
+  return call('post', '/files/upload', {
+    data,
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+}
 
 // 页面三 Tab二：批量导入批次与明细
 export const listLeadImportBatches = (params = {}) =>

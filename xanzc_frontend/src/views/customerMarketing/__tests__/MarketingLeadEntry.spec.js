@@ -39,4 +39,61 @@ describe('营销线索录入页面契约', () => {
     expect(source).toContain('catch (error)');
     expect(source).toContain('ElMessage.error');
   });
+
+  it('页头右侧提供批量导入和录入线索入口', () => {
+    expect(source).toMatch(/<header class="page-head">[\s\S]*<div class="page-actions">[\s\S]*>批量导入<[\s\S]*>录入线索<[\s\S]*<\/div>[\s\S]*<\/header>/);
+    expect(source).toMatch(/function openImport\(\)[\s\S]*activeTab\.value\s*=\s*'imports'[\s\S]*loadBatches\(\)/);
+    expect(source).toMatch(/>录入线索<[\s\S]*@click="openCreate"|@click="openCreate"[\s\S]*>录入线索</);
+    expect(source).not.toContain('>新增线索<');
+  });
+
+  it('录入抽屉按 V2_DEMO 分为四个信息分节并使用同步字段', () => {
+    expect(source).toContain('<el-drawer');
+    expect(source).toContain('size="min(1080px, 92vw)"');
+    ['01', '基础信息', '02', '经营属性', '03', '分配信息', '04', '补充资料'].forEach(text => {
+      expect(source).toContain(text);
+    });
+    [
+      'form.leadType', 'form.custName', 'form.unifiedCreditCode',
+      'form.isAccountOpenedSnapshot', 'form.custNo', 'form.industry',
+      'form.groupType', 'form.groupName', 'form.customerType', 'form.isKeystone',
+      'form.enterpriseType', 'form.tagIds', 'form.distributionMode',
+      'form.managerEmpIds', 'form.customerDesc', 'form.creditAmount',
+      'form.creditExposureAmount', 'form.attachmentIds'
+    ].forEach(field => expect(source).toContain(field));
+    expect(source).toMatch(/touchRestricted:\s*1/);
+    expect(source).not.toContain('form.contactPerson');
+    expect(source).not.toContain('form.registeredAddress');
+  });
+
+  it('复用字典、审批通过的启用标签和员工远程搜索', () => {
+    ['INDUSTRY', 'GROUP_TYPE', 'CUSTOMER_TYPE', 'ENTERPRISE_TYPE'].forEach(dictType => {
+      expect(source).toContain(`useDict('${dictType}')`);
+    });
+    expect(source).toContain('listMarketingCustomerTags');
+    expect(source).toMatch(/status:\s*'ENABLED'[\s\S]*approvalStatus:\s*'APPROVED'[\s\S]*pageNo:\s*1[\s\S]*pageSize:\s*100/);
+    expect(source).toContain('searchEmployees');
+    expect(source).toContain(':remote-method="searchManagers"');
+    expect(source).toMatch(/v-if="ownerCandidate"[\s\S]*value="OWNER"/);
+  });
+
+  it('金额以万元展示并在保存时传递附件 ID', () => {
+    expect(source).toContain('授信金额（万元）');
+    expect(source).toContain('授信敞口金额（万元）');
+    expect(source).toContain('uploadMarketingLeadAttachment');
+    expect(source).toMatch(/attachmentIds[\s\S]*uploadPendingAttachments/);
+  });
+
+  it('编辑时优先使用详情顶层的人员和标签关系', () => {
+    expect(source).toMatch(/const managerEmpIds\s*=\s*detail\?\.managerEmpIds\s*\|\|\s*lead\.managerEmpIds/);
+    expect(source).toMatch(/const tagIds\s*=\s*detail\?\.tagIds\s*\|\|\s*lead\.tagIds/);
+  });
+
+  it('V2_DEMO 标记的经营字段都参与必填校验，数值 0 作为有效默认值', () => {
+    ['industry', 'groupType', 'customerType', 'isKeystone', 'enterpriseType', 'isAccountOpenedSnapshot'].forEach(field => {
+      expect(source).toMatch(new RegExp(`${field}:\\s*\\[\\{\\s*required:\\s*true`));
+    });
+    expect(source).toMatch(/isAccountOpenedSnapshot:\s*0/);
+    expect(source).toMatch(/isKeystone:\s*0/);
+  });
 });
