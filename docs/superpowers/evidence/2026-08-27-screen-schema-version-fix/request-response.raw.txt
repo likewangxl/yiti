@@ -1,0 +1,17 @@
+### 请求列表
+197. [POST] http://127.0.0.1:8091/api/screen/data => [200] OK
+198. [POST] http://127.0.0.1:8091/api/screen/data => [200] OK
+199. [POST] http://127.0.0.1:8091/api/screen/data => [200] OK
+200. [POST] http://127.0.0.1:8091/api/screen/data => [200] OK
+201. [POST] http://127.0.0.1:8091/api/screen/data => [200] OK
+
+### 原始请求体
+197: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":41,"period":"LATEST","contextParams":{"orgCode":"","empId":""}}
+198: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":40,"period":"LATEST","contextParams":{"orgCode":"","empId":""}}
+199: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":39,"period":"LATEST","contextParams":{"orgCode":"","empId":""}}
+200: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":38,"period":"LATEST","contextParams":{"orgCode":"","empId":""}}
+201: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":37,"period":"LAST_1M","contextParams":{"orgCode":"","empId":""}}
+
+### 响应摘要
+- 请求 197：HTTP 200，业务码 `0`，`message=success`，返回 31 列、6 行。
+- 页面渲染：无 `.scr-block-err`；经营机构余额排名显示宝鸡、渭南、咸阳、榆林、咸阳营业部、渭南营业部，共 6 行。
