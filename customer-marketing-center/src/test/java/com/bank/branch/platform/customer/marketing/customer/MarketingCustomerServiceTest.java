@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -64,6 +65,28 @@ class MarketingCustomerServiceTest {
                 eq(0), eq(20));
         assertThat(captor.getValue().getOwnershipStatus()).isEqualTo("ASSIGNED");
         assertThat(captor.getValue().getRecordStatus()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void listAll_shouldReturnUnassignedCustomerWhenManagerAndOrgAreMissing() {
+        MarketingCustomerInfo customer = customer(5L, null, null);
+        customer.setOwnershipStatus("UNASSIGNED");
+        when(customerMapper.selectPage(any(), eq(DataScopeType.ALL.getCode()), any(), isNull(),
+                eq(0), eq(20))).thenReturn(List.of(customer));
+        when(customerMapper.countPage(any(), eq(DataScopeType.ALL.getCode()), any(), isNull()))
+                .thenReturn(1L);
+
+        PageResult<MarketingCustomerVO> result = service().listAll(new MarketingCustomerQuery(),
+                "ADMIN", "ORG001", DataScopeType.ALL);
+
+        assertThat(result.getTotal()).isEqualTo(1L);
+        assertThat(result.getRecords()).singleElement().satisfies(item -> {
+            assertThat(item.getOwnershipStatus()).isEqualTo("UNASSIGNED");
+            assertThat(item.getMainManagerId()).isNull();
+            assertThat(item.getMainManagerName()).isNull();
+            assertThat(item.getMainOrgId()).isNull();
+            assertThat(item.getMainOrgName()).isNull();
+        });
     }
 
     @Test

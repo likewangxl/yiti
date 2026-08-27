@@ -209,14 +209,16 @@ public class MarketingCustomerService {
     private MarketingCustomerVO toVO(MarketingCustomerInfo customer, Map<String, UserDTO> users,
                                      Map<String, String> orgNames) {
         MarketingCustomerVO vo = MarketingCustomerVO.fromEntity(customer);
-        UserDTO manager = users.get(customer.getMainManagerId());
-        if (manager != null) {
-            vo.setMainManagerName(manager.getDisplayName());
-            if (!StringUtils.hasText(vo.getMainOrgName())) {
-                vo.setMainOrgName(manager.getMainOrgName());
+        if (StringUtils.hasText(customer.getMainManagerId())) {
+            UserDTO manager = users.get(customer.getMainManagerId());
+            if (manager != null) {
+                vo.setMainManagerName(manager.getDisplayName());
+                if (!StringUtils.hasText(vo.getMainOrgName())) {
+                    vo.setMainOrgName(manager.getMainOrgName());
+                }
             }
         }
-        if (!StringUtils.hasText(vo.getMainOrgName())) {
+        if (!StringUtils.hasText(vo.getMainOrgName()) && StringUtils.hasText(customer.getMainOrgId())) {
             vo.setMainOrgName(orgNames.get(customer.getMainOrgId()));
         }
         return vo;
