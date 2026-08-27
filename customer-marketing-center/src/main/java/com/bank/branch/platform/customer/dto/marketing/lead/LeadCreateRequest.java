@@ -45,5 +45,6 @@ public class LeadCreateRequest {
     private String mainOrgId;
     private List<String> managerEmpIds;
     private List<Long> tagIds;
+    private List<String> attachmentIds;
     private String remark;
 }

@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /** 页面三草稿更新请求；未传字段保持原快照。 */
 @Data
@@ -37,5 +38,8 @@ public class LeadUpdateRequest {
     private String distributionMode;
     private String mainManagerId;
     private String mainOrgId;
+    private List<String> managerEmpIds;
+    private List<Long> tagIds;
+    private List<String> attachmentIds;
     private String remark;
 }

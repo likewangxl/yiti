@@ -1,6 +1,9 @@
 package com.bank.branch.platform.customer.service.marketing;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadCreateRequest;
@@ -10,9 +13,18 @@ import com.bank.branch.platform.customer.dto.marketing.lead.LeadSubmitResponse;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadUpdateRequest;
 import com.bank.branch.platform.customer.dto.marketing.lead.MarketingCustomerSnapshot;
 import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo;
+import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTag;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo;
+import com.bank.branch.platform.customer.entity.marketing.MarketingLeadManagerScope;
+import com.bank.branch.platform.customer.entity.marketing.MarketingLeadTagRel;
+import com.bank.branch.platform.customer.enums.CustomerRoleCode;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerInfoMapper;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerTagMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadInfoMapper;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadManagerScopeMapper;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadTagRelMapper;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
@@ -26,8 +38,11 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -50,6 +65,11 @@ public class MarketingLeadEntryService {
     private final MarketingLeadInfoMapper leadMapper;
     private final MarketingCustomerInfoMapper customerMapper;
     private final WorkflowApi workflowApi;
+    private final MarketingLeadManagerScopeMapper managerScopeMapper;
+    private final MarketingLeadTagRelMapper leadTagRelMapper;
+    private final MarketingCustomerTagMapper tagMapper;
+    private final UserApi userApi;
+    private final FileApi fileApi;
 
     /** 查询登录人自己的手工线索记录，不按客户聚合。 */
     public PageResult<MarketingLeadInfo> list(LeadQuery query, String operatorEmpId) {
@@ -122,11 +142,28 @@ public class MarketingLeadEntryService {
             }
         }
 
+        // 物理表字段非空且无默认值，必须由领域服务兜底，不能依赖页面是否传值。
+        if (lead.getIsKeystone() == null) {
+            lead.setIsKeystone(0);
+        }
+        if (lead.getTouchRestricted() == null) {
+            lead.setTouchRestricted(1);
+        }
+
+        // 先完整校验关系数据，避免明知请求无效仍尝试写入主表。
+        List<MarketingLeadManagerScope> managerScopes = buildManagerScopes(
+                lead, request.getManagerEmpIds(), operatorEmpId, now);
+        List<MarketingLeadTagRel> tagSnapshots = buildTagSnapshots(
+                request.getTagIds(), operatorEmpId, now);
+
         try {
             leadMapper.insert(lead);
         } catch (DuplicateKeyException ex) {
             throw duplicatePending(lead);
         }
+        insertManagerScopes(lead.getId(), managerScopes);
+        insertTagSnapshots(lead.getId(), tagSnapshots);
+        bindAttachments(lead.getId(), request.getAttachmentIds());
         return lead;
     }
 
@@ -183,6 +220,15 @@ public class MarketingLeadEntryService {
             current.setDistributionMode("OWNER");
         }
         leadMapper.updateById(current);
+        LocalDateTime relationTime = LocalDateTime.now();
+        if (request.getDistributionMode() != null || request.getManagerEmpIds() != null
+                || request.getMainManagerId() != null || request.getMainOrgId() != null) {
+            replaceManagerScopes(current, request.getManagerEmpIds(), operatorEmpId, relationTime, true);
+        }
+        if (request.getTagIds() != null) {
+            replaceTagSnapshots(current.getId(), request.getTagIds(), operatorEmpId, relationTime, true);
+        }
+        bindAttachments(current.getId(), request.getAttachmentIds());
         return current;
     }
 
@@ -200,6 +246,18 @@ public class MarketingLeadEntryService {
             response.setCurrentCustomer(toSnapshot(customer));
             response.setProfileChanged(profileChanged(lead, customer));
         }
+        response.setManagerEmpIds(managerScopeMapper.selectList(Wrappers
+                        .<MarketingLeadManagerScope>lambdaQuery()
+                        .eq(MarketingLeadManagerScope::getLeadId, leadId)
+                        .orderByAsc(MarketingLeadManagerScope::getId))
+                .stream().map(MarketingLeadManagerScope::getManagerEmpId).toList());
+        response.setTagIds(leadTagRelMapper.selectList(Wrappers
+                        .<MarketingLeadTagRel>lambdaQuery()
+                        .eq(MarketingLeadTagRel::getLeadId, leadId)
+                        .orderByAsc(MarketingLeadTagRel::getId))
+                .stream().map(MarketingLeadTagRel::getTagId).toList());
+        List<FileObjectDTO> attachments = fileApi.listBizFiles("LEAD", String.valueOf(leadId));
+        response.setAttachments(attachments == null ? List.of() : attachments);
         return response;
     }
 
@@ -311,7 +369,7 @@ public class MarketingLeadEntryService {
     private void copyRequest(LeadCreateRequest request, MarketingLeadInfo target) {
         BeanUtils.copyProperties(request, target,
                 "unifiedCreditCode", "leadType", "distributionMode", "mainManagerId", "mainOrgId",
-                "managerEmpIds", "tagIds", "custNo", "isAccountOpenedSnapshot");
+                "managerEmpIds", "tagIds", "attachmentIds", "custNo", "isAccountOpenedSnapshot");
         target.setCustNoSnapshot(request.getCustNo());
         target.setIsAccountOpenedSnapshot(request.getIsAccountOpenedSnapshot());
         target.setMainManagerIdSnapshot(request.getMainManagerId());
@@ -323,7 +381,7 @@ public class MarketingLeadEntryService {
     private void copyNonNull(LeadUpdateRequest request, MarketingLeadInfo target) {
         BeanUtils.copyProperties(request, target,
                 "unifiedCreditCode", "leadType", "distributionMode", "mainManagerId", "mainOrgId",
-                "custNo", "isAccountOpenedSnapshot");
+                "managerEmpIds", "tagIds", "attachmentIds", "custNo", "isAccountOpenedSnapshot");
         if (request.getCustName() != null) target.setCustName(request.getCustName());
         if (request.getCustNo() != null) target.setCustNoSnapshot(request.getCustNo());
         if (request.getLeadType() != null) target.setLeadType(request.getLeadType());
@@ -376,6 +434,143 @@ public class MarketingLeadEntryService {
                 || !Objects.equals(lead.getRegisteredAddress(), customer.getRegisteredAddress())
                 || !Objects.equals(lead.getBusinessAddress(), customer.getBusinessAddress())
                 || !Objects.equals(lead.getCreditExposureAmount(), customer.getCreditExposureAmount());
+    }
+
+    /**
+     * 按最终分配方式生成接收人快照。先完成全部人员校验，再删除旧关系，避免无效请求产生半成品。
+     */
+    private void replaceManagerScopes(MarketingLeadInfo lead, List<String> requestedManagerEmpIds,
+                                      String operatorEmpId, LocalDateTime now, boolean deleteExisting) {
+        List<MarketingLeadManagerScope> scopes = buildManagerScopes(
+                lead, requestedManagerEmpIds, operatorEmpId, now);
+        if (deleteExisting) {
+            managerScopeMapper.delete(Wrappers.<MarketingLeadManagerScope>lambdaQuery()
+                    .eq(MarketingLeadManagerScope::getLeadId, lead.getId()));
+        }
+        insertManagerScopes(lead.getId(), scopes);
+    }
+
+    private List<MarketingLeadManagerScope> buildManagerScopes(
+            MarketingLeadInfo lead, List<String> requestedManagerEmpIds,
+            String operatorEmpId, LocalDateTime now) {
+        String mode = defaultValue(lead.getDistributionMode(), "PUBLIC");
+        if ("PUBLIC".equals(mode)) {
+            return List.of();
+        }
+        if ("OWNER".equals(mode)) {
+            if (!StringUtils.hasText(lead.getMainManagerIdSnapshot())) {
+                throw error("MARKETING_LEAD_OWNER_REQUIRED", "主办分配必须存在客户主办人快照");
+            }
+            UserDTO owner = requireCustomerManager(lead.getMainManagerIdSnapshot());
+            String ownerOrgId = StringUtils.hasText(lead.getMainOrgIdSnapshot())
+                    ? lead.getMainOrgIdSnapshot() : owner.getMainOrgCode();
+            return List.of(toManagerScope(lead.getId(), owner.getEmpId(), ownerOrgId,
+                    "OWNER", true, operatorEmpId, now));
+        }
+        if (!"SCOPE".equals(mode)) {
+            throw error("MARKETING_LEAD_DISTRIBUTION_INVALID", "线索分配方式不合法");
+        }
+        Set<String> managerIds = normalizeManagerIds(requestedManagerEmpIds);
+        if (managerIds.isEmpty()) {
+            throw error("MARKETING_LEAD_DISTRIBUTION_INVALID", "范围分配必须选择至少一名客户经理");
+        }
+        List<MarketingLeadManagerScope> scopes = new ArrayList<>(managerIds.size());
+        for (String managerId : managerIds) {
+            UserDTO manager = requireCustomerManager(managerId);
+            scopes.add(toManagerScope(lead.getId(), managerId, manager.getMainOrgCode(),
+                    "SCOPE", false, operatorEmpId, now));
+        }
+        return scopes;
+    }
+
+    private UserDTO requireCustomerManager(String empId) {
+        UserDTO user = userApi.getUserByEmpId(empId);
+        if (user == null || !Boolean.TRUE.equals(user.getEnabled())
+                || !StringUtils.hasText(user.getMainOrgCode())
+                || !CustomerRoleCode.isCustomerManager(userApi.getUserRoleCodes(empId))) {
+            throw error("MARKETING_LEAD_MANAGER_INVALID", "接收人不存在、已停用、缺少主机构或无客户经理角色：" + empId);
+        }
+        return user;
+    }
+
+    private MarketingLeadManagerScope toManagerScope(
+            Long leadId, String managerEmpId, String managerOrgId, String assignmentType,
+            boolean primary, String operatorEmpId, LocalDateTime now) {
+        MarketingLeadManagerScope scope = new MarketingLeadManagerScope();
+        scope.setLeadId(leadId);
+        scope.setManagerEmpId(managerEmpId);
+        scope.setManagerOrgId(managerOrgId);
+        scope.setAssignmentType(assignmentType);
+        scope.setIsPrimary(primary ? 1 : 0);
+        scope.setCreatedBy(operatorEmpId);
+        scope.setCreatedTime(now);
+        return scope;
+    }
+
+    private Set<String> normalizeManagerIds(List<String> managerEmpIds) {
+        Set<String> result = new LinkedHashSet<>();
+        if (managerEmpIds != null) {
+            managerEmpIds.stream().filter(StringUtils::hasText).map(String::trim).forEach(result::add);
+        }
+        return result;
+    }
+
+    private void insertManagerScopes(Long leadId, List<MarketingLeadManagerScope> scopes) {
+        for (MarketingLeadManagerScope scope : scopes) {
+            scope.setLeadId(leadId);
+            managerScopeMapper.insert(scope);
+        }
+    }
+
+    /** 替换线索标签快照；仅允许有效、已审批且启用的正式标签。 */
+    private void replaceTagSnapshots(Long leadId, List<Long> requestedTagIds,
+                                     String operatorEmpId, LocalDateTime now, boolean deleteExisting) {
+        List<MarketingLeadTagRel> snapshots = buildTagSnapshots(requestedTagIds, operatorEmpId, now);
+        if (deleteExisting) {
+            leadTagRelMapper.delete(Wrappers.<MarketingLeadTagRel>lambdaQuery()
+                    .eq(MarketingLeadTagRel::getLeadId, leadId));
+        }
+        insertTagSnapshots(leadId, snapshots);
+    }
+
+    private List<MarketingLeadTagRel> buildTagSnapshots(List<Long> requestedTagIds,
+                                                         String operatorEmpId, LocalDateTime now) {
+        List<MarketingLeadTagRel> snapshots = new ArrayList<>();
+        Set<Long> tagIds = requestedTagIds == null
+                ? Set.of() : new LinkedHashSet<>(requestedTagIds);
+        for (Long tagId : tagIds) {
+            MarketingCustomerTag tag = tagId == null ? null : tagMapper.selectById(tagId);
+            if (tag == null || !"ACTIVE".equalsIgnoreCase(tag.getRecordStatus())
+                    || !"APPROVED".equalsIgnoreCase(tag.getApprovalStatus())
+                    || !"ENABLED".equalsIgnoreCase(tag.getStatus())) {
+                throw error("MARKETING_LEAD_TAG_INVALID", "标签不存在、未审批通过或已停用：" + tagId);
+            }
+            MarketingLeadTagRel relation = new MarketingLeadTagRel();
+            relation.setTagId(tagId);
+            relation.setTagNameSnapshot(tag.getTagName());
+            relation.setTagSource("MANUAL");
+            relation.setCreatedBy(operatorEmpId);
+            relation.setCreatedTime(now);
+            snapshots.add(relation);
+        }
+        return snapshots;
+    }
+
+    private void insertTagSnapshots(Long leadId, List<MarketingLeadTagRel> snapshots) {
+        for (MarketingLeadTagRel snapshot : snapshots) {
+            snapshot.setLeadId(leadId);
+            leadTagRelMapper.insert(snapshot);
+        }
+    }
+
+    private void bindAttachments(Long leadId, List<String> attachmentIds) {
+        if (leadId == null || attachmentIds == null) {
+            return;
+        }
+        attachmentIds.stream().filter(StringUtils::hasText).map(String::trim)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new))
+                .forEach(fileId -> fileApi.bindFile(
+                        "LEAD", String.valueOf(leadId), fileId, "ATTACHMENT"));
     }
 
     private void requireRequest(LeadCreateRequest request) {
