@@ -13,6 +13,8 @@
 
 修正前兼容性截图见 [designer-corp-overview.png](designer-corp-overview.png)，真实库修正后的复验截图见 [designer-corp-overview-postfix.png](designer-corp-overview-postfix.png)。
 
+后端加载修复构件并重启后的复验截图见 [designer-corp-overview-after-restart.png](designer-corp-overview-after-restart.png)，进程、日志和请求证据见 [backend-restart.raw.txt](backend-restart.raw.txt)。
+
 ## 数据库执行结果
 
 - 仅在 `yiti_test` 中执行事务内修正并立即回滚，验证更新条件、结果和恢复一致性。
