@@ -1,16 +1,33 @@
 package com.bank.branch.platform.report.service.screen;
 
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.report.dto.req.ScreenDataReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDataRespDTO;
+import com.bank.branch.platform.report.entity.RptScreenDatasource;
 import org.junit.jupiter.api.Test;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * ScreenQueryEngine SQL 构造纯逻辑单测（不触库，DataSource 传 null）.
@@ -21,6 +38,7 @@ class ScreenQueryEngineTest {
 
     private final ScreenQueryEngine engine = new ScreenQueryEngine(
             null,
+            mock(OrgApi.class),
             List.of("EMP_INDEX_RESULT", "ORG_INDEX_RESULT", "CUST_INDEX_RESULT", "KPI_RESULT",
                     "SYS_CONTROL", "EXT_ORG_INFO", "ACT_RU_TASK"),
             List.of("DROP", "DELETE", "UPDATE", "INSERT", "TRUNCATE", "ALTER", "CREATE", "GRANT"),
@@ -448,6 +466,7 @@ class ScreenQueryEngineTest {
         assertThat(resp.getColumnsMeta().get(1).getAlias()).isEqualTo("一般性存款");
         assertThat(resp.getColumnsMeta().get(1).getUnit()).isEqualTo("万元");
         assertThat(resp.getColumnsMeta().get(1).getDecimals()).isEqualTo(2);
+        assertThat(resp.getColumnsMeta().get(1).getAmountScale()).isNull();
     }
 
     @Test
@@ -456,5 +475,179 @@ class ScreenQueryEngineTest {
         ScreenDataRespDTO resp = new ScreenDataRespDTO(List.of("cnt"), List.of());
         engine.fillColumnsMeta(resp, "{\"table\":\"EMP_INDEX_RESULT\"}");
         assertThat(resp.getColumnsMeta()).isNull();
+    }
+
+    @Test
+    void fillColumnsMeta_amountScale_derivesUnitAndFixedDecimals_withoutScalingRows() {
+        String cfg = "{\"table\":\"EMP_INDEX_RESULT\",\"fieldMeta\":["
+                + "{\"col\":\"yuan\",\"role\":\"METRIC\",\"amountScale\":\"YUAN\"},"
+                + "{\"col\":\"tenK\",\"role\":\"METRIC\",\"amountScale\":\"TEN_THOUSAND_YUAN\"},"
+                + "{\"col\":\"hundredM\",\"role\":\"METRIC\",\"amountScale\":\"HUNDRED_MILLION_YUAN\"}]}";
+        List<List<Object>> rows = List.of(List.of(10000, 20000, 30000));
+        ScreenDataRespDTO resp = new ScreenDataRespDTO(
+                List.of("yuan", "tenK", "hundredM"), rows);
+
+        engine.fillColumnsMeta(resp, cfg);
+
+        assertThat(resp.getColumnsMeta()).extracting(ScreenDataRespDTO.ColumnMeta::getUnit)
+                .containsExactly("元", "万元", "亿元");
+        assertThat(resp.getColumnsMeta()).extracting(ScreenDataRespDTO.ColumnMeta::getDecimals)
+                .containsExactly(2, 2, 2);
+        assertThat(resp.getColumnsMeta()).extracting(ScreenDataRespDTO.ColumnMeta::getAmountScale)
+                .containsExactly("YUAN", "TEN_THOUSAND_YUAN", "HUNDRED_MILLION_YUAN");
+        assertThat(resp.getRows()).isSameAs(rows);
+        assertThat(resp.getRows()).containsExactly(List.of(10000, 20000, 30000));
+    }
+
+    @Test
+    void query_orgSubjectAggregation_insertsOrgNameAfterOrgCode_andBatchesDistinctCodes() throws Exception {
+        OrgApi orgApi = mock(OrgApi.class);
+        when(orgApi.getOrgsByCodes(List.of("001", "002", "003")))
+                .thenReturn(List.of(org("001", "一支行"), org("002", "二支行")));
+        JdbcFixture jdbc = jdbc(List.of("org_code", "存款余额"), List.of(
+                List.of("001", 100),
+                List.of(" 002 ", 200),
+                List.of("003", 300),
+                List.of("001", 400),
+                List.of("", 500),
+                Arrays.asList(null, 600)));
+        ScreenQueryEngine queryEngine = engine(jdbc.dataSource(), orgApi);
+        RptScreenDatasource datasource = datasource(orgSubjectConfig());
+
+        ScreenDataRespDTO response = queryEngine.query(datasource, req("LATEST", Map.of()));
+
+        assertThat(response.getColumns()).containsExactly("org_code", "org_name", "存款余额");
+        assertThat(response.getRows()).containsExactly(
+                List.of("001", "一支行", 100),
+                List.of(" 002 ", "二支行", 200),
+                Arrays.asList("003", null, 300),
+                List.of("001", "一支行", 400),
+                Arrays.asList("", null, 500),
+                Arrays.asList(null, null, 600));
+        assertThat(response.getColumnsMeta()).extracting(ScreenDataRespDTO.ColumnMeta::getCol)
+                .containsExactly("org_code", "org_name", "存款余额");
+        verify(orgApi).getOrgsByCodes(List.of("001", "002", "003"));
+    }
+
+    @Test
+    void tryRun_orgSubjectAggregation_usesSameOrgNameEnrichmentPath() throws Exception {
+        OrgApi orgApi = mock(OrgApi.class);
+        when(orgApi.getOrgsByCodes(List.of("001"))).thenReturn(List.of(org("001", "一支行")));
+        JdbcFixture jdbc = jdbc(List.of("org_code", "存款余额"), List.of(List.of("001", 100)));
+        ScreenQueryEngine queryEngine = engine(jdbc.dataSource(), orgApi);
+
+        ScreenDataRespDTO response = queryEngine.tryRun("WIDE_TABLE", orgSubjectConfig(), req("LATEST", Map.of()));
+
+        assertThat(response.getColumns()).containsExactly("org_code", "org_name", "存款余额");
+        assertThat(response.getRows()).containsExactly(List.of("001", "一支行", 100));
+        verify(orgApi).getOrgsByCodes(List.of("001"));
+    }
+
+    @Test
+    void query_nonTargetWideConfigurations_doNotCallOrgApi_orChangeRows() throws Exception {
+        assertNoOrgEnrichment(
+                "{\"table\":\"ORG_INDEX_RESULT\",\"metrics\":[{\"metricName\":\"存款余额\",\"slot\":3}],"
+                        + "\"aggregation\":{\"groupBy\":\"NONE\",\"agg\":\"SUM\"}}",
+                List.of("存款余额"), List.of(List.of(100)));
+        assertNoOrgEnrichment(
+                "{\"table\":\"ORG_INDEX_RESULT\",\"metrics\":[{\"metricName\":\"存款余额\",\"slot\":3}],"
+                        + "\"aggregation\":{\"groupBy\":\"DATE\",\"agg\":\"SUM\"}}",
+                List.of("data_date", "存款余额"), List.of(List.of("2026-07-12", 100)));
+        assertNoOrgEnrichment(
+                "{\"table\":\"ORG_INDEX_RESULT\",\"metrics\":[{\"metricName\":\"存款余额\",\"slot\":3}]}",
+                List.of("data_date", "存款余额"), List.of(List.of("2026-07-12", 100)));
+        assertNoOrgEnrichment(
+                "{\"table\":\"EMP_INDEX_RESULT\",\"metrics\":[{\"metricName\":\"存款余额\",\"slot\":3}],"
+                        + "\"aggregation\":{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\"}}",
+                List.of("emp_id", "存款余额"), List.of(List.of("E001", 100)));
+    }
+
+    @Test
+    void query_orgApiFailure_convergesToScreenDataQueryFailed() throws Exception {
+        OrgApi orgApi = mock(OrgApi.class);
+        when(orgApi.getOrgsByCodes(List.of("001"))).thenThrow(new IllegalStateException("upstream unavailable"));
+        JdbcFixture jdbc = jdbc(List.of("org_code", "存款余额"), List.of(List.of("001", 100)));
+        ScreenQueryEngine queryEngine = engine(jdbc.dataSource(), orgApi);
+
+        assertThatThrownBy(() -> queryEngine.tryRun("WIDE_TABLE", orgSubjectConfig(), req("LATEST", Map.of())))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43008");
+    }
+
+    private void assertNoOrgEnrichment(String config, List<String> columns, List<List<Object>> rows)
+            throws Exception {
+        OrgApi orgApi = mock(OrgApi.class);
+        JdbcFixture jdbc = jdbc(columns, rows);
+        ScreenQueryEngine queryEngine = engine(jdbc.dataSource(), orgApi);
+
+        ScreenDataRespDTO response = queryEngine.tryRun("WIDE_TABLE", config,
+                req("LATEST", Map.of("orgCode", "001")));
+
+        assertThat(response.getColumns()).containsExactlyElementsOf(columns);
+        assertThat(response.getRows()).containsExactlyElementsOf(rows);
+        verify(orgApi, never()).getOrgsByCodes(any());
+    }
+
+    private static String orgSubjectConfig() {
+        return "{\"table\":\"ORG_INDEX_RESULT\",\"metrics\":[{\"metricName\":\"存款余额\",\"slot\":3}],"
+                + "\"aggregation\":{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\"},"
+                + "\"fieldMeta\":[{\"col\":\"org_code\",\"role\":\"DIM\"},"
+                + "{\"col\":\"org_name\",\"role\":\"DIM\"},"
+                + "{\"col\":\"存款余额\",\"role\":\"METRIC\",\"unit\":\"元\",\"decimals\":2}]}";
+    }
+
+    private static RptScreenDatasource datasource(String config) {
+        RptScreenDatasource datasource = new RptScreenDatasource();
+        datasource.setSourceKind("WIDE_TABLE");
+        datasource.setConfigJson(config);
+        return datasource;
+    }
+
+    private static OrgDTO org(String code, String name) {
+        OrgDTO dto = new OrgDTO();
+        dto.setOrgCode(code);
+        dto.setOrgName(name);
+        return dto;
+    }
+
+    private static ScreenQueryEngine engine(DataSource dataSource, OrgApi orgApi) {
+        return new ScreenQueryEngine(
+                dataSource,
+                orgApi,
+                List.of("EMP_INDEX_RESULT", "ORG_INDEX_RESULT", "CUST_INDEX_RESULT", "KPI_RESULT",
+                        "SYS_CONTROL", "EXT_ORG_INFO", "ACT_RU_TASK"),
+                List.of("DROP", "DELETE", "UPDATE", "INSERT", "TRUNCATE", "ALTER", "CREATE", "GRANT"),
+                1000);
+    }
+
+    private static JdbcFixture jdbc(List<String> columns, List<List<Object>> values) throws Exception {
+        DataSource dataSource = mock(DataSource.class);
+        Connection connection = mock(Connection.class);
+        PreparedStatement statement = mock(PreparedStatement.class);
+        ResultSet resultSet = mock(ResultSet.class);
+        ResultSetMetaData metadata = mock(ResultSetMetaData.class);
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.prepareStatement(anyString())).thenReturn(statement);
+        when(statement.executeQuery()).thenReturn(resultSet);
+        when(resultSet.getMetaData()).thenReturn(metadata);
+        when(metadata.getColumnCount()).thenReturn(columns.size());
+        for (int i = 0; i < columns.size(); i++) {
+            when(metadata.getColumnLabel(i + 1)).thenReturn(columns.get(i));
+        }
+        Iterator<List<Object>> iterator = values.iterator();
+        List<Object>[] current = new List[]{null};
+        when(resultSet.next()).thenAnswer(invocation -> {
+            if (!iterator.hasNext()) {
+                return false;
+            }
+            current[0] = iterator.next();
+            return true;
+        });
+        when(resultSet.getObject(anyInt())).thenAnswer(invocation ->
+                current[0].get(invocation.getArgument(0, Integer.class) - 1));
+        return new JdbcFixture(dataSource, resultSet);
+    }
+
+    private record JdbcFixture(DataSource dataSource, ResultSet resultSet) {
     }
 }

@@ -1,0 +1,25 @@
+清空页面加载阶段请求后，指标选择与组件切换阶段的官方 CLI `requests --filter '/api/'` 输出：
+
+1. [GET] http://127.0.0.1:8091/api/screen/admin/datasources => [200] OK
+2. [GET] http://127.0.0.1:8091/api/admin/org-groups => [200] OK
+3. [GET] http://127.0.0.1:8091/api/screen/admin/datasources => [200] OK
+4. [GET] http://127.0.0.1:8091/api/admin/org-groups => [200] OK
+5. [GET] http://127.0.0.1:8091/api/screen/admin/datasources => [200] OK
+6. [GET] http://127.0.0.1:8091/api/admin/org-groups => [200] OK
+
+没有 POST、PUT、PATCH、DELETE 请求。
+
+请求 #1 摘要：
+
+    method: GET
+    url: http://127.0.0.1:8091/api/screen/admin/datasources
+    status: 200 OK
+    duration: 4ms
+    type: xhr
+    mimeType: application/json
+
+请求 #1 响应正文：
+
+{"code":"0","message":"success","data":[{"id":9010,"dsName":"全省存款聚合","dsType":"SINGLE","sourceKind":"WIDE_TABLE","bizLine":"COMMON","status":"ACTIVE","configJson":"{\"scopeMode\":\"GLOBAL\",\"table\":\"ORG_INDEX_RESULT\",\"metrics\":[{\"metricName\":\"一般性存款月均余额较上月-机构\"},{\"metricName\":\"一般性存款月均余额-机构\"}],\"fieldMeta\":[{\"col\":\"一般性存款月均余额较上月-机构\",\"alias\":\"全省存款较上月净增\",\"role\":\"METRIC\"},{\"col\":\"一般性存款月均余额-机构\",\"alias\":\"全省存款月均余额\",\"role\":\"METRIC\"}]}"},{"id":9011,"dsName":"全省贷款聚合","dsType":"SINGLE","sourceKind":"WIDE_TABLE","bizLine":"COMMON","status":"ACTIVE","configJson":"{\"scopeMode\":\"GLOBAL\",\"table\":\"ORG_INDEX_RESULT\",\"metrics\":[{\"metricName\":\"贷款余额-机构\"}],\"fieldMeta\":[{\"col\":\"贷款余额-机构\",\"alias\":\"全省贷款余额\",\"role\":\"METRIC\"}]}"}]}
+
+请求 #3 同为数据源 GET，状态 200、duration 4ms，响应正文与请求 #1 一致。

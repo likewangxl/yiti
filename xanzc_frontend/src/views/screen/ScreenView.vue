@@ -3,7 +3,7 @@
     <div class="scr-stage" :style="{ transform: `translate(-50%, -50%) scale(${scale})` }">
       <div class="scr-header">
         <button type="button" class="scr-back" aria-label="返回上一页" @click="goBack">‹ 返回</button>
-        <span class="scr-title">{{ view?.screenName || '经营管理大屏' }}</span>
+        <span v-if="view?.state !== 'draft'" class="scr-title">{{ view?.screenName || '经营管理大屏' }}</span>
         <span class="scr-clock"><span class="scr-live-dot" /> {{ clock }}</span>
       </div>
       <div class="scr-body" v-if="view && view.renderPackage">

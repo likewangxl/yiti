@@ -161,6 +161,33 @@ class ScreenCanvasServiceTest {
                 comp("TextLabel", null, Map.of("top", 10, "left", 10, "width", 100, "height", 40))));
         org.assertj.core.api.Assertions.assertThat(resp.getCanvasVersion()).isEqualTo(4);
         org.assertj.core.api.Assertions.assertThat(resp.getCanvasDraftJson()).contains("TextLabel");
+        assertThat(resp.getCanvasDraftJson()).contains("\"schemaVersion\":1");
+    }
+
+    @Test
+    void save_namedGroupAlwaysWritesDraftSchemaVersion2() {
+        RptScreen namedGroup = screen(7L, 3);
+        namedGroup.setOrgScopeMode("NAMED_GROUP");
+        when(screenMapper.selectById(7L)).thenReturn(namedGroup);
+        when(canvasMapper.bumpVersion(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
+
+        var resp = service.saveCanvas(req(7L, 3,
+                comp("TextLabel", null, Map.of("top", 10, "left", 10, "width", 100, "height", 40))));
+
+        assertThat(resp.getCanvasDraftJson()).contains("\"schemaVersion\":2");
+    }
+
+    @Test
+    void save_legacyScreenWithV2MapKeepsDraftSchemaVersion2() {
+        when(screenMapper.selectById(7L)).thenReturn(screen(7L, 3));
+        when(canvasMapper.bumpVersion(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
+        CanvasComponentDTO map = comp("MapCenter", null,
+                Map.of("top", 96, "left", 640, "width", 640, "height", 880));
+        map.setPropValue(Map.of("schemaVersion", 2, "mode", "XIAN_COMPOSITE"));
+
+        var resp = service.saveCanvas(req(7L, 3, map));
+
+        assertThat(resp.getCanvasDraftJson()).contains("\"schemaVersion\":2");
     }
 
     /** MapCenter(省级屏地图,Task10 渲染层已支持独立渲染分支)必须在组件白名单内可保存,

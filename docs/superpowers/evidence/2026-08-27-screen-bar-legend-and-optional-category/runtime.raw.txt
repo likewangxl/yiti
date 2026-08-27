@@ -1,0 +1,16 @@
+页面断言：
+{
+  "url": "http://127.0.0.1:8091/#/screen/SCR_BAR_LEGEND_QA?preview=draft",
+  "title": "柱状对比 · 顶部指标栏高度",
+  "container": { "width": 698, "height": 410 },
+  "legend": { "show": true, "top": 4, "height": 34, "padding": [6, 8] },
+  "gridTop": 46,
+  "categoryAxis": {
+    "type": "category",
+    "data": ["一月", "二月", "三月", "四月"],
+    "axisLabelShow": false,
+    "axisTickShow": false
+  },
+  "seriesCount": 8,
+  "canvasCount": 1
+}

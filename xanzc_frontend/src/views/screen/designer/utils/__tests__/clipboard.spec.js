@@ -36,6 +36,27 @@ describe('剪贴板纯函数(Ctrl+C/V 与右键复制粘贴同一口径)', () =>
     expect(node.style.left).toBe(5);
   });
 
+  it('粘贴顶层 ChartWidget 时清空旧 blockId，并保留绑定/展示配置', () => {
+    const clip = {
+      id: 'w-chart001', component: 'ChartWidget', innerType: 'RANK_LIST', blockId: 36,
+      style: { top: 10, left: 20, width: 300, height: 180 },
+      bindJson: JSON.stringify({ dsId: 9010, items: [{ col: 'balance' }] }),
+      styleJson: JSON.stringify({ title: '排行榜', refreshSec: 60 }),
+      drillJson: JSON.stringify({ drillEnabled: true }),
+      propValue: { carousel: true }
+    };
+
+    const node = pasteFromClipboard(clip);
+
+    expect(node.id).toMatch(/^w-/);
+    expect(node.id).not.toBe(clip.id);
+    expect(node.blockId).toBeNull();
+    expect(node.bindJson).toBe(clip.bindJson);
+    expect(node.styleJson).toBe(clip.styleJson);
+    expect(node.drillJson).toBe(clip.drillJson);
+    expect(node.propValue).toEqual(clip.propValue);
+  });
+
   it('pasteFromClipboard 两次粘贴生成不同 id(可连续粘贴多份)', () => {
     const clip = { id: 'w-orig03', style: { top: 0, left: 0 } };
     const a = pasteFromClipboard(clip);
@@ -61,5 +82,53 @@ describe('剪贴板纯函数(Ctrl+C/V 与右键复制粘贴同一口径)', () =>
     expect(node.children[0].id).not.toBe(node.children[1].id);
     // children 相对坐标不加偏移(仅顶层 top/left +offset)
     expect(node.children[0].style.top).toBe(0);
+  });
+
+  it('粘贴 Group 时递归重置任意层级 ChartWidget 的 blockId', () => {
+    const clip = {
+      id: 'w-grp-deep', component: 'Group', style: { top: 0, left: 0 },
+      children: [
+        {
+          id: 'w-chart-top', component: 'ChartWidget', innerType: 'LINE_TREND', blockId: 101,
+          style: { top: 0, left: 0 }, bindJson: '{}', styleJson: '{}', drillJson: '{}', propValue: { smooth: true }
+        },
+        {
+          id: 'w-grp-inner', component: 'Group', style: { top: 10, left: 10 }, children: [
+            {
+              id: 'w-chart-deep', component: 'ChartWidget', innerType: 'RANK_LIST', blockId: 102,
+              style: { top: 0, left: 0 }, bindJson: '{"valueCol":"balance"}', styleJson: '{}',
+              drillJson: '{}', propValue: { carousel: false }
+            },
+            { id: 'w-text-deep', component: 'TextLabel', style: { top: 20, left: 0 }, propValue: { text: '保留' } }
+          ]
+        }
+      ]
+    };
+
+    const node = pasteFromClipboard(clip);
+    const topChart = node.children[0];
+    const deepGroup = node.children[1];
+    const deepChart = deepGroup.children[0];
+
+    expect(topChart.id).not.toBe('w-chart-top');
+    expect(topChart.blockId).toBeNull();
+    expect(deepGroup.id).not.toBe('w-grp-inner');
+    expect(deepChart.id).not.toBe('w-chart-deep');
+    expect(deepChart.blockId).toBeNull();
+    expect(deepChart.bindJson).toBe('{"valueCol":"balance"}');
+    expect(deepChart.propValue).toEqual({ carousel: false });
+  });
+
+  it('粘贴普通素材不新增或改写 blockId，原有字段行为保持不变', () => {
+    const clip = {
+      id: 'w-text-material', component: 'TextLabel',
+      style: { top: 5, left: 6 }, propValue: { text: '普通素材' }
+    };
+    const node = pasteFromClipboard(clip);
+
+    expect(node.id).not.toBe(clip.id);
+    expect(node).not.toHaveProperty('blockId');
+    expect(node.propValue).toEqual({ text: '普通素材' });
+    expect(node.style).toMatchObject({ top: 25, left: 26 });
   });
 });

@@ -1,0 +1,38 @@
+仅开发态 mock，非联调。
+
+1. **/api/auth/current-user
+   response: {"code":"0","message":"success","data":{"empId":"E001","displayName":"验收用户","roles":[{"roleCode":"SYS_ADMIN"}]}}
+2. **/api/auth/my-menus
+   response: {"code":"0","message":"success","data":[]}
+3. **/api/auth/permissions
+   response: {"code":"0","message":"success","data":{"resourceUrls":["/api/screen/admin/screens"],"isSystemAdmin":false}}
+4. **/api/screen/admin/screens
+   response: screenId=9105, screenCode=SCR_DS_SWITCH, bizLine=COMMON, orgScopeMode=LEGACY_CONTEXT
+5. **/api/screen/admin/canvas/9105
+   response: 两个同为 ChartWidget/METRIC_CARD 的组件；chart-a.bindJson.dsId=101，chart-b.bindJson.dsId=202；blockId 均为空，不触发取数。
+6. **/api/screen/admin/screens/9105/map-region-metrics
+   response: {"code":"0","message":"success","data":[]}
+7. **/api/screen/admin/datasources*
+   response: dsId=101“全省存款聚合”、dsId=202“全省贷款聚合”，均为 SINGLE/WIDE_TABLE/COMMON/ACTIVE
+8. **/api/admin/org-groups*
+   response: {"code":"0","message":"success","data":[]}
+9. **/api/admin/org-profiles*
+   response: {"code":"0","message":"success","data":[]}
+10. **/api/admin/roles/all*
+    response: {"code":"0","message":"success","data":[]}
+11. **/api/screen/data
+    response: {"code":"0","message":"success","data":{"columns":[],"rows":[]}}
+
+官方 CLI `route-list` 输出：
+
+1. **/api/auth/current-user
+2. **/api/auth/my-menus
+3. **/api/auth/permissions
+4. **/api/screen/admin/screens
+5. **/api/screen/admin/canvas/9105
+6. **/api/screen/admin/screens/9105/map-region-metrics
+7. **/api/screen/admin/datasources*
+8. **/api/admin/org-groups*
+9. **/api/admin/org-profiles*
+10. **/api/admin/roles/all*
+11. **/api/screen/data

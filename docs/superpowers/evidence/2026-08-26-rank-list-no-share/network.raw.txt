@@ -1,0 +1,24 @@
+仅开发态 mock，非联调。
+
+46. `[GET] /api/auth/current-user` -> 200 OK
+47. `[GET] /api/auth/my-menus` -> 200 OK
+49. `[GET] /api/auth/permissions` -> 200 OK
+234. `[GET] /api/screen/admin/screens` -> 200 OK
+235. `[GET] /api/screen/admin/canvas/9910` -> 200 OK
+236. `[GET] /api/screen/admin/screens/9910/map-region-metrics` -> 200 OK
+237. `[POST] /api/screen/data` -> 200 OK，2ms，XHR，`application/json`
+238. `[GET] /api/admin/org-groups` -> 200 OK
+239. `[GET] /api/admin/roles/all?recordStatus=0` -> 200 OK
+240. `[GET] /api/admin/org-profiles` -> 200 OK
+
+`POST /api/screen/data` 请求体：
+
+```json
+{"schemaVersion":1,"previewState":"draft","screenCode":"SCR_RANK_NO_SHARE","blockId":77,"period":"LATEST","contextParams":{"orgCode":"","empId":""}}
+```
+
+响应体：
+
+```json
+{"code":"0","message":"success","traceId":"mock-screen-data","data":{"columns":["org_name","balance","growth"],"rows":[["超长机构名称用于验证第一列加宽展示",150,1.5],["乙机构",90,8.1],["甲机构",120,3.2],["丁机构",60,6.6]],"columnsMeta":[{"col":"org_name","alias":"机构名称","role":"DIM"},{"col":"balance","alias":"存款余额","role":"METRIC","unit":"万元","decimals":0},{"col":"growth","alias":"增幅","role":"METRIC","unit":"%","decimals":1}]}}
+```

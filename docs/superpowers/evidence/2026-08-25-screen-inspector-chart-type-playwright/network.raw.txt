@@ -1,0 +1,14 @@
+After `requests --clear`:
+
+1. GET http://127.0.0.1:8091/api/screen/admin/datasources => 200 OK, 5ms, application/json
+2. GET http://127.0.0.1:8091/api/admin/org-groups => 200 OK, 2ms, application/json
+3. GET http://127.0.0.1:8091/api/screen/admin/datasources => 200 OK, 5ms, application/json
+4. GET http://127.0.0.1:8091/api/admin/org-groups => 200 OK, 2ms, application/json
+
+Datasource response body for requests #1 and #3:
+{"code":"0","message":"success","data":[{"id":9010,"dsName":"检查器验收数据源","dsType":"SINGLE","sourceKind":"WIDE_TABLE","bizLine":"COMMON","status":"ACTIVE","configJson":"{\"scopeMode\":\"GLOBAL\",\"fieldMeta\":[{\"col\":\"m1\",\"alias\":\"指标一\",\"role\":\"METRIC\"}]}"}]}
+
+Org-group response body for requests #2 and #4:
+{"code":"0","message":"success","data":[]}
+
+No POST, PUT, PATCH or DELETE request was issued after the request list was cleared.

@@ -90,4 +90,57 @@ describe('其余大屏组件视觉预设', () => {
     expect(table.find('.tl-wrap').attributes('style')).toContain('--tl-accent');
     expect(table.find('.tl-wrap').attributes('style')).toContain(SCR_CHART_PRESETS.vivid.tokens.text);
   });
+
+  it('TableList 有效 items 按选中顺序显示、使用组件 label，并按列索引投影值', () => {
+    const table = mount(TableList, {
+      props: {
+        columns: ['org_code', 'org_name', 'balance', 'remark'],
+        rows: [
+          ['001', '机构甲', 1234.5, '正常'],
+          ['002', '机构乙', null, '缺失']
+        ],
+        bind: {
+          items: [
+            { col: 'balance', label: '余额' },
+            { col: 'missing', label: '不存在列' },
+            { col: 'org_name', label: '机构' },
+            { col: 'balance', label: '重复余额' }
+          ]
+        },
+        styleCfg: { visualPreset: 'vivid' },
+        propValue: { carousel: false },
+        columnsMeta: [{ col: 'balance', role: 'METRIC', unit: '万元', decimals: 2 }]
+      },
+      global: { stubs: chartStubs }
+    });
+    mounted.push(table);
+
+    expect(table.findAll('thead th').map(th => th.text())).toEqual(['余额(万元)', '机构']);
+    expect(table.findAll('tbody tr')[0].findAll('td').map(td => td.text())).toEqual(['1,234.50', '机构甲']);
+    expect(table.findAll('tbody tr')[1].findAll('td').map(td => td.text())).toEqual(['—', '机构乙']);
+  });
+
+  it('TableList items 缺失、为空或没有有效列时保持全部响应列的旧行为', () => {
+    const cases = [{}, { items: [] }, { items: [{ col: 'missing', label: '不存在列' }] }];
+    for (const bind of cases) {
+      const table = mount(TableList, {
+        props: {
+          columns: ['org_name', 'balance'],
+          rows: [['机构甲', 12.3]],
+          bind,
+          styleCfg: { visualPreset: 'vivid' },
+          propValue: { carousel: false },
+          columnsMeta: [
+            { col: 'org_name', role: 'DIM', alias: '机构名称' },
+            { col: 'balance', role: 'METRIC', alias: '余额', unit: '万元', decimals: 1 }
+          ]
+        },
+        global: { stubs: chartStubs }
+      });
+      mounted.push(table);
+
+      expect(table.findAll('thead th').map(th => th.text())).toEqual(['机构名称', '余额(万元)']);
+      expect(table.findAll('tbody tr')[0].findAll('td').map(td => td.text())).toEqual(['机构甲', '12.3']);
+    }
+  });
 });

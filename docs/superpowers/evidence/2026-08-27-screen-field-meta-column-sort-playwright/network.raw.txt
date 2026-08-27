@@ -1,0 +1,29 @@
+playwright-cli requests --filter '/api/'
+
+46. [GET] http://127.0.0.1:8091/api/auth/current-user => [200] OK
+47. [GET] http://127.0.0.1:8091/api/auth/my-menus => [200] OK
+49. [GET] http://127.0.0.1:8091/api/auth/permissions => [200] OK
+58. [GET] http://127.0.0.1:8091/api/notifications/unread-count => [200] OK
+59. [GET] http://127.0.0.1:8091/api/screen/admin/datasources => [200] OK
+60. [GET] http://127.0.0.1:8091/api/perf/metrics?pageSize=100 => [200] OK
+61. [GET] http://127.0.0.1:8091/api/screen/admin/kpi-schemes => [200] OK
+62. [GET] http://127.0.0.1:8091/api/admin/org-groups => [200] OK
+63. [POST] http://127.0.0.1:8091/api/screen/admin/datasources/try-run => [200] OK
+
+playwright-cli request 63
+
+#63 [POST] http://127.0.0.1:8091/api/screen/admin/datasources/try-run
+status: [200] OK
+duration: 2ms
+type: xhr
+mimeType: application/json
+
+playwright-cli request-body 63
+
+{"sourceKind":"WIDE_TABLE","dsType":"SINGLE","configJson":"{\"schemaVersion\":2,\"table\":\"ORG_INDEX_RESULT\",\"metrics\":[{\"metricCode\":\"M_BALANCE\"}],\"scopeMode\":\"GLOBAL\"}","period":"LATEST","dateFrom":null,"dateTo":null,"contextParams":{"orgCode":null,"empId":null},"reason":"核对字段中文排序"}
+
+playwright-cli response-body 63
+
+{"code":"0","message":"success","traceId":"mock-try-run","data":{"columns":["余额","存款余额","机构名称","区域"],"rows":[[100,200,"机构甲","城区"]]}}
+
+以上试跑 POST 由开发态 route 拦截，未到达后端；未发起保存或其他写请求。

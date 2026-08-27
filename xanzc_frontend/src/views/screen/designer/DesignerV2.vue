@@ -82,7 +82,8 @@
         </header>
         <!-- 右栏三态:多选=多选工具条(对齐/分布/成组);单选=组件属性面板;未选=画布全局设置 -->
         <MultiSelectBar v-if="store.curComponents.length > 1" />
-        <component v-else-if="store.curComponent" :is="attrOf(store.curComponent.component)" :element="store.curComponent" />
+        <component v-else-if="store.curComponent" :key="attrKey(store.curComponent)"
+                   :is="attrOf(store.curComponent.component)" :element="store.curComponent" />
         <CanvasAttr v-else />
       </div>
     </div>
@@ -242,7 +243,7 @@ import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import { fitScale } from '@/views/screen/designer/utils/scale';
 import { cloneComponentForClipboard, pasteFromClipboard } from '@/views/screen/designer/utils/clipboard';
 import { closeWindowOrFallback } from '@/views/screen/designer/utils/closeWindow';
-import { findAttr } from '@/views/screen/designer/widgets';
+import { chartMetas, findAttr } from '@/views/screen/designer/widgets';
 import {
   BIZ_LINES, ORG_SCOPE_MODES, VIEW_LEVELS, normalizeScreenScope,
   validateScreenScope, viewLevelLabel, filterActiveOrgGroups, filterReportScreenOrgGroups, diffCodes
@@ -272,7 +273,12 @@ const returnButton = ref(null);
 const exitCancelButton = ref(null);
 const scalePct = ref(50);
 const clipboard = ref(null); // Ctrl+C/V 本地剪贴板,与 ContextMenu.vue 右键复制粘贴各自独立持有
-provide('previewContext', { orgCode: '', empId: '' }); // 设计态预览上下文(空→43010 引导态)
+// 设计态按草稿绑定 dsId 查询，明确使用历史 v1 协议；screenCode 随当前加载的屏响应式更新。
+const previewContext = reactive({ schemaVersion: 1, screenCode: '', orgCode: '', empId: '' });
+provide('previewContext', previewContext);
+watch(() => store.screenCode, screenCode => {
+  previewContext.screenCode = screenCode || '';
+}, { immediate: true });
 
 const activeScreen = computed(() => screens.value.find(screen => screen.id === curId.value) || null);
 const inspectorMeta = computed(() => {
@@ -280,12 +286,31 @@ const inspectorMeta = computed(() => {
     return { title: '批量编辑', subtitle: `已选 ${store.curComponents.length} 个组件` };
   }
   if (store.curComponent) {
+    if (store.curComponent.component === 'ChartWidget') {
+      const innerType = store.curComponent.innerType || 'UNKNOWN';
+      const chartMeta = chartMetas.find(meta => meta?.innerType === innerType);
+      return { title: '组件属性', subtitle: `${chartMeta?.label || '图表'}（${innerType}）` };
+    }
     return { title: '组件属性', subtitle: store.curComponent.component || '当前选中组件' };
   }
   return { title: '画布设置', subtitle: '配置画布尺寸与主题' };
 });
 
 function attrOf(component) { return findAttr(component); }
+
+// 同类型属性面板需要随选中节点切换重建；无 id 的历史节点用对象身份兜底，避免复用旧面板状态。
+const anonymousAttrKeys = new WeakMap();
+let anonymousAttrKeySeq = 0;
+function attrKey(element) {
+  if (!element || typeof element !== 'object') return 'attr:none';
+  if (element.id !== undefined && element.id !== null && element.id !== '') {
+    return `attr:${element.component || ''}:${element.id}`;
+  }
+  if (!anonymousAttrKeys.has(element)) {
+    anonymousAttrKeys.set(element, `attr:anonymous:${++anonymousAttrKeySeq}`);
+  }
+  return anonymousAttrKeys.get(element);
+}
 function onScale(v) { store.scale = v / 100; }
 function fitWindow() {
   const wrap = document.querySelector('.dsn2-center');
@@ -854,6 +879,11 @@ onBeforeUnmount(() => {
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 .scr-surface-host { @include theme.scr-theme-vars; } // 供画布内复用 .scr-* 视觉变量
+.scr-surface-host :deep(.scr-block-h) {
+  color: var(--scr-text, #f5fbff);
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(0, 229, 255, .35);
+}
 .dsn2-toolbar {
   z-index: 2;
   display: flex;

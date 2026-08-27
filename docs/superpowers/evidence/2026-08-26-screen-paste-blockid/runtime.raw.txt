@@ -1,0 +1,19 @@
+目标 checkout：/home/djdev/lf/yiti
+
+后端：
+
+- Maven PID：1874445
+- Java PID：1874568
+- Java cwd：/home/djdev/lf/yiti/bootstrap
+- HTTP：18082，直连 `/` 返回 200
+- SOAP：30524
+- `/api/auth/current-user` 未登录直连返回预期 401
+
+前端：
+
+- npm PID：1878002
+- Vite PID：1878032
+- Vite cwd：/home/djdev/lf/yiti/xanzc_frontend
+- HTTP：8091
+- `VITE_PROXY_TARGET=http://127.0.0.1:18082`
+- 经 8091 代理访问 `/api/auth/current-user` 返回预期 401

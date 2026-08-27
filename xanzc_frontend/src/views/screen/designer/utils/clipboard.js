@@ -19,10 +19,19 @@ export function cloneComponentForClipboard(node) {
 export function pasteFromClipboard(clip, offset = 20) {
   if (!clip) return null;
   const node = JSON.parse(JSON.stringify(clip));
-  node.id = 'w-' + Math.random().toString(36).slice(2, 8);
+  regeneratePastedNode(node);
   node.style = { ...node.style, top: (node.style.top || 0) + offset, left: (node.style.left || 0) + offset };
-  if (Array.isArray(node.children)) {
-    node.children.forEach(ch => { ch.id = 'w-' + Math.random().toString(36).slice(2, 8); });
-  }
   return node;
+}
+
+/**
+ * 递归重生成粘贴树中的节点身份；ChartWidget 的 blockId 属于原画布区块身份，
+ * 不能随组件复制到草稿，否则保存时会把新节点误认成旧 block 并触发布局非法。
+ * 其他组件只换 id，保持其余配置字段（含 bind/style/drill/propValue）不变。
+ */
+function regeneratePastedNode(node) {
+  if (!node || typeof node !== 'object') return;
+  node.id = 'w-' + Math.random().toString(36).slice(2, 8);
+  if (node.component === 'ChartWidget') node.blockId = null;
+  if (Array.isArray(node.children)) node.children.forEach(regeneratePastedNode);
 }

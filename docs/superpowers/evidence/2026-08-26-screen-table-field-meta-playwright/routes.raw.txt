@@ -1,0 +1,16 @@
+playwright-cli route-list
+
+1. **/api/auth/current-user (200, application/json, mock-current)
+2. **/api/auth/my-menus (200, application/json, mock-menus)
+3. **/api/auth/permissions (200, application/json, mock-permissions)
+4. **/api/screen/admin/screens (200, application/json, mock-screens)
+5. **/api/screen/admin/canvas/9401 (200, application/json, mock-canvas)
+6. **/api/screen/admin/screens/9401/map-region-metrics (200, application/json, mock-map)
+7. **/api/screen/admin/datasources* (200, application/json, mock-datasources)
+8. **/api/admin/org-groups* (200, application/json, mock-groups)
+9. **/api/admin/org-profiles* (200, application/json, mock-profiles)
+10. **/api/admin/roles/all* (200, application/json, mock-roles)
+11. **/api/screen/data (200, application/json, mock-screen-data)
+12. **/api/notifications/unread-count (200, application/json, mock-unread)
+
+全部为开发态 mock route，非后端联调。未注册保存、发布或其他写接口 route；`/api/screen/data` 因当前未保存 block 不会触发。

@@ -67,6 +67,60 @@ describe('ChartWidget 设计态数据绑定反馈', () => {
     });
   });
 
+  it('NAMED_GROUP 即使草稿根版本为1也使用运行时协议版本2', () => {
+    store.orgScopeMode = 'NAMED_GROUP';
+    store.draftSchemaVersion = 1;
+    const block = {
+      id: 78, componentType: 'METRIC_CARD',
+      bindJson: JSON.stringify({ dsId: 9002 }), styleJson: '{}', drillJson: '{}'
+    };
+    store.blocks = [block];
+    const wrapper = mountChart({
+      component: 'ChartWidget', innerType: 'METRIC_CARD', blockId: 78,
+      bindJson: JSON.stringify({ dsId: 9002 }), propValue: {}
+    });
+
+    expect(wrapper.findComponent(BlockContainerStub).props('context')).toMatchObject({
+      screenCode: 'SCR_DRAFT', previewState: 'draft', schemaVersion: 2
+    });
+  });
+
+  it('LEGACY_CONTEXT 携带已校验的草稿根版本2时使用运行时协议版本2', () => {
+    store.orgScopeMode = 'LEGACY_CONTEXT';
+    store.draftSchemaVersion = 2;
+    const block = {
+      id: 79, componentType: 'METRIC_CARD',
+      bindJson: JSON.stringify({ dsId: 9002 }), styleJson: '{}', drillJson: '{}'
+    };
+    store.blocks = [block];
+    const wrapper = mountChart({
+      component: 'ChartWidget', innerType: 'METRIC_CARD', blockId: 79,
+      bindJson: JSON.stringify({ dsId: 9002 }), propValue: {}
+    });
+
+    expect(wrapper.findComponent(BlockContainerStub).props('context')).toMatchObject({
+      screenCode: 'SCR_DRAFT', previewState: 'draft', schemaVersion: 2
+    });
+  });
+
+  it('LEGACY_CONTEXT 携带草稿根版本1时使用运行时协议版本1', () => {
+    store.orgScopeMode = 'LEGACY_CONTEXT';
+    store.draftSchemaVersion = 1;
+    const block = {
+      id: 80, componentType: 'METRIC_CARD',
+      bindJson: JSON.stringify({ dsId: 9002 }), styleJson: '{}', drillJson: '{}'
+    };
+    store.blocks = [block];
+    const wrapper = mountChart({
+      component: 'ChartWidget', innerType: 'METRIC_CARD', blockId: 80,
+      bindJson: JSON.stringify({ dsId: 9002 }), propValue: {}
+    });
+
+    expect(wrapper.findComponent(BlockContainerStub).props('context')).toMatchObject({
+      screenCode: 'SCR_DRAFT', previewState: 'draft', schemaVersion: 1
+    });
+  });
+
   it('现有 block 与组件 bindJson 不一致时按未保存绑定处理，不显示旧数据', () => {
     store.blocks = [{
       id: 77, componentType: 'METRIC_CARD',

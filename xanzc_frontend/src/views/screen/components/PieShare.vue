@@ -21,12 +21,51 @@ const props = defineProps({
 });
 const emit = defineEmits(['item-click']);
 
-const pieData = computed(() => {
-  const ni = props.columns.indexOf(props.bind.nameCol);
-  const vi = props.columns.indexOf(props.bind.valueCol);
-  if (ni < 0 || vi < 0) return [];
-  return props.rows.slice(0, 10).map(r => ({ name: String(r[ni]), value: Number(r[vi]) || 0 }));
+/**
+ * 显式指标绑定用于单行聚合结果：每个 items 项是一个扇区，统一取返回数据的最新一行。
+ * 只有列真实存在时才启用该模式；旧节点或未配置有效 items 时继续按 nameCol/valueCol 逐行绘制。
+ */
+const metricEntries = computed(() => {
+  const columns = Array.isArray(props.columns) ? props.columns : [];
+  const items = Array.isArray(props.bind?.items) ? props.bind.items : [];
+  return items.map(item => {
+    const col = String(item?.col || '').trim();
+    const index = columns.findIndex(column => String(column) === col);
+    if (!col || index < 0) return null;
+    return {
+      col,
+      index,
+      label: String(item?.label || '').trim() || col
+    };
+  }).filter(Boolean).slice(0, 10);
 });
+const useMetricItems = computed(() => metricEntries.value.length > 0);
+const latestRow = computed(() => {
+  const rows = Array.isArray(props.rows) ? props.rows : [];
+  return rows.length ? rows[rows.length - 1] : null;
+});
+const legacyEntries = computed(() => {
+  const columns = Array.isArray(props.columns) ? props.columns : [];
+  const rows = Array.isArray(props.rows) ? props.rows : [];
+  const ni = columns.indexOf(props.bind?.nameCol);
+  const vi = columns.indexOf(props.bind?.valueCol);
+  if (ni < 0 || vi < 0) return [];
+  return rows.slice(0, 10).map(row => ({
+    name: String(row[ni]), value: Number(row[vi]) || 0
+  }));
+});
+const pieEntries = computed(() => {
+  if (useMetricItems.value) {
+    if (!latestRow.value) return [];
+    return metricEntries.value.map(item => ({
+      name: item.label,
+      value: Number(latestRow.value[item.index]) || 0,
+      item
+    }));
+  }
+  return legacyEntries.value;
+});
+const pieData = computed(() => pieEntries.value.map(({ name, value }) => ({ name, value })));
 const theme = computed(() => resolveChartTheme(props.styleCfg));
 const palette = computed(() => props.styleCfg.colors?.length ? props.styleCfg.colors : theme.value.palette);
 const showLegend = computed(() => props.styleCfg.showLegend !== false);
@@ -60,12 +99,32 @@ const option = computed(() => ({
   }]
 }));
 
+function rowMap(sourceRow) {
+  const row = {};
+  const columns = Array.isArray(props.columns) ? props.columns : [];
+  columns.forEach((column, index) => { row[column] = sourceRow?.[index]; });
+  return row;
+}
+
 function onChartClick(p) {
   if (!p || p.componentType !== 'series') return;
-  const src = props.rows[props.rows.findIndex(r => String(r[props.columns.indexOf(props.bind.nameCol)]) === p.name)];
-  const row = {};
-  props.columns.forEach((c, i) => { row[c] = src?.[i]; });
-  emit('item-click', { col: props.bind.valueCol, label: p.name, row });
+  const dataIndex = Number(p.dataIndex);
+  if (!Number.isInteger(dataIndex) || dataIndex < 0) return;
+  const entry = pieEntries.value[dataIndex];
+  if (!entry) return;
+
+  if (useMetricItems.value) {
+    emit('item-click', {
+      col: entry.item.col,
+      label: entry.item.label,
+      row: rowMap(latestRow.value)
+    });
+    return;
+  }
+
+  // 旧 nameCol/valueCol 模式按 dataIndex 映射原始行，避免重复名称时 findIndex 错配。
+  const sourceRow = Array.isArray(props.rows) ? props.rows[dataIndex] : undefined;
+  emit('item-click', { col: props.bind?.valueCol, label: entry.name, row: rowMap(sourceRow) });
 }
 </script>
 

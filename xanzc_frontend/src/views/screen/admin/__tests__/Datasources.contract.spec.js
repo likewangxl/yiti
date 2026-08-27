@@ -64,19 +64,24 @@ async function mountPage() {
 describe('Datasources.vue 最终契约', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('完整发布/归档引用会显示冻结指引，只允许展示字段编辑而不允许删除', async () => {
+  it('完整发布/归档引用允许编辑语义字段并显示影响已发布大屏的风险提示，但仍不允许删除', async () => {
     const wrapper = await mountPage();
     wrapper.vm.openEdit(frozenRow);
     await wrapper.vm.$nextTick();
 
-    expect(wrapper.vm.semanticFrozen).toBe(true);
+    expect(wrapper.vm.publishedReferenced).toBe(true);
     expect(wrapper.vm.referenceState(frozenRow)).toMatchObject({
       draftCodes: ['SCR_DRAFT_A', 'SCR_DRAFT_B'],
-      publishedCodes: ['SCR_LIVE_A', 'SCR_ARCHIVE_B'], deleteBlocked: true
+      publishedCodes: ['SCR_LIVE_A', 'SCR_ARCHIVE_B'], publishedReferenced: true, deleteBlocked: true
     });
     expect(wrapper.find('[data-testid="datasource-freeze-notice"]').text())
-      .toContain('新建副本→改草稿绑定→重新发布');
+      .toContain('直接影响引用该数据源的已发布大屏');
     expect(wrapper.vm.dlg.remark).toBe('原始备注');
+
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
+    expect(source).not.toContain(':disabled="publishedReferenced"');
+    expect(source).not.toContain(':disabled="semanticFrozen"');
+    expect(source).toContain('新建副本');
   });
 
   it('NAMED_GROUP 时 CUSTOM_SQL 在编辑器中不可选，LEGACY_CONTEXT 不受此限制', async () => {
@@ -106,6 +111,22 @@ describe('Datasources.vue 最终契约', () => {
       contextParams: { orgCode: null, empId: null }, testOrgGroupCode: 'G_REPORT', reason: '确认仪表盘列'
     });
     expect(api.tryRunScreenDatasource).not.toHaveBeenCalled();
+  });
+
+  it('字段元数据的列名下拉按中文名排序展示，但不改写探测结果', async () => {
+    const wrapper = await mountPage();
+    const columns = ['余额', '存款余额', '机构名称', '区域'];
+    api.probeScreenDatasourceColumns.mockResolvedValue({ columns, rows: [] });
+    wrapper.vm.openProbeColumns(frozenRow);
+    wrapper.vm.tr.reason = '核对字段顺序';
+    wrapper.vm.tr.testOrgGroupCode = 'G_REPORT';
+
+    await wrapper.vm.runTry();
+
+    expect(wrapper.vm.lastTryCols).toEqual(columns);
+    expect(wrapper.vm.sortedLastTryCols).toEqual(['存款余额', '机构名称', '区域', '余额']);
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
+    expect(source).toContain('v-for="c in sortedLastTryCols"');
   });
 
   it('所有数据源保存均强制原因，编辑显式保留 ACTIVE/DISABLED 状态而不静默复原', async () => {
@@ -151,6 +172,13 @@ describe('Datasources.vue 最终契约', () => {
     expect(source).toMatch(/确认删除/);
   });
 
+  it('新建或编辑数据源时点击页面遮罩不关闭表单', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
+    const editorDialog = source.match(/<el-dialog\s+v-model="dlg\.show"[^>]*>/)?.[0] || '';
+
+    expect(editorDialog).toContain(':close-on-click-modal="false"');
+  });
+
   it('Element Plus 单选项使用 value 契约并保持原模型字符串', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
     const radios = [...source.matchAll(/<el-radio(?:-button)?(?=\s|>)[^>]*>/g)].map((match) => match[0]);
@@ -160,5 +188,58 @@ describe('Datasources.vue 最终契约', () => {
     expect(radios.every((radio) => !/\blabel="/.test(radio))).toBe(true);
     expect(source).toContain('<el-radio value="ACTIVE">启用 ACTIVE</el-radio>');
     expect(source).toContain('<el-radio-button value="WIDE_TABLE">');
+  });
+
+  it('度量字段提供可清空的金额量级预设，并在选中时锁定单位/小数位', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
+
+    expect(source).toContain('金额量级');
+    expect(source).toContain('amountScale');
+    expect(source).toMatch(/v-if="row\.role === 'METRIC'"[\s\S]*?金额量级/);
+    expect(source).toContain('clearable');
+    expect(source).toMatch(/amountScale[\s\S]*?disabled/);
+    expect(source).toContain('AMOUNT_SCALE_OPTIONS');
+    expect(source).toContain('清空');
+  });
+
+  it('金额量级选择只转换组件/预览展示值，不修改接口原始数据', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
+    expect(source).toContain('仅影响组件/试跑预览');
+    expect(source).toContain('不修改接口原始 rows、SQL 或数据库');
+  });
+
+  it('选中金额量级时显示预设并保留自定义值，清空后恢复编辑', async () => {
+    const wrapper = await mountPage();
+    const row = { role: 'METRIC', amountScale: 'TEN_THOUSAND_YUAN', unit: '自定义单位', decimals: '4' };
+
+    expect(wrapper.vm.hasAmountScale(row)).toBe(true);
+    expect(wrapper.vm.fieldMetaUnitDisplay(row)).toBe('万元');
+    expect(wrapper.vm.fieldMetaDecimalsDisplay(row)).toBe('2');
+    wrapper.vm.updateFieldMetaUnit(row, '不应写入');
+    wrapper.vm.updateFieldMetaDecimals(row, '9');
+    expect(row).toMatchObject({ unit: '自定义单位', decimals: '4' });
+
+    row.amountScale = '';
+    expect(wrapper.vm.hasAmountScale(row)).toBe(false);
+    expect(wrapper.vm.fieldMetaUnitDisplay(row)).toBe('自定义单位');
+    expect(wrapper.vm.fieldMetaDecimalsDisplay(row)).toBe('4');
+    wrapper.vm.updateFieldMetaUnit(row, '元/户');
+    wrapper.vm.updateFieldMetaDecimals(row, '1');
+    expect(row).toMatchObject({ unit: '元/户', decimals: '1' });
+  });
+
+  it('金额量级行切换为 DIM 后不再显示预设值，单位和小数位恢复为自定义值并可编辑', async () => {
+    const wrapper = await mountPage();
+    const row = { role: 'METRIC', amountScale: 'TEN_THOUSAND_YUAN', unit: '自定义单位', decimals: '4' };
+
+    expect(wrapper.vm.fieldMetaUnitDisplay(row)).toBe('万元');
+    expect(wrapper.vm.fieldMetaDecimalsDisplay(row)).toBe('2');
+    row.role = 'DIM';
+    expect(wrapper.vm.hasAmountScale(row)).toBe(false);
+    expect(wrapper.vm.fieldMetaUnitDisplay(row)).toBe('自定义单位');
+    expect(wrapper.vm.fieldMetaDecimalsDisplay(row)).toBe('4');
+    wrapper.vm.updateFieldMetaUnit(row, '维度单位');
+    wrapper.vm.updateFieldMetaDecimals(row, '1');
+    expect(row).toMatchObject({ unit: '维度单位', decimals: '1' });
   });
 });

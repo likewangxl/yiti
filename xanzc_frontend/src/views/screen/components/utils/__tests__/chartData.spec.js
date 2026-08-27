@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { displayName, metaOf, fmtNum, clampPct, rowsToSeries, pickValueCol } from '../chartData';
+import {
+  displayName, metaOf, fmtNum, clampPct, rowsToSeries, pickValueCol, convertAmountScaleRows
+} from '../chartData';
 
 // columnsMeta 样例：后端可选扩展字段，组件必须对缺失容错
 const META = [
@@ -19,6 +21,13 @@ describe('chartData.displayName / metaOf（columnsMeta 容错）', () => {
     expect(metaOf('存款余额', META)?.unit).toBe('万元');
     expect(metaOf('不存在', META)).toBeNull();
     expect(metaOf('存款余额', null)).toBeNull();
+  });
+  it('metaOf 为合法金额量级派生展示单位和固定 2 位，不覆盖显式自定义字段', () => {
+    expect(metaOf('金额', [{ col: '金额', role: 'METRIC', amountScale: 'TEN_THOUSAND_YUAN' }]))
+      .toMatchObject({ amountScale: 'TEN_THOUSAND_YUAN', unit: '万元', decimals: 2 });
+    expect(metaOf('自定义', [{
+      col: '自定义', role: 'METRIC', amountScale: 'YUAN', unit: '元/户', decimals: 1
+    }])).toMatchObject({ unit: '元/户', decimals: 1 });
   });
 });
 
@@ -63,10 +72,63 @@ describe('chartData.rowsToSeries（首列类目，其余数值列为系列）', 
     const r = rowsToSeries(columns, rows, ['贷款', '不存在']);
     expect(r.series.map(s => s.name)).toEqual(['贷款']);
   });
+  it('指定 categoryCol 时按该列取类目，并从自动/显式系列中排除类目列', () => {
+    const r = rowsToSeries(
+      ['org_code', 'org_name', '存款', '贷款'],
+      [['A', '甲', 10, 20], ['B', '乙', 11, 22]],
+      ['org_name', '存款', '贷款'],
+      'org_name'
+    );
+    expect(r.categories).toEqual(['甲', '乙']);
+    expect(r.series.map(s => s.name)).toEqual(['存款', '贷款']);
+    expect(r.series.map(s => s.data)).toEqual([[10, 11], [20, 22]]);
+
+    const automatic = rowsToSeries(
+      ['org_name', '存款', '贷款'],
+      [['甲', 10, 20], ['乙', 11, 22]],
+      null,
+      'org_name'
+    );
+    expect(automatic.categories).toEqual(['甲', '乙']);
+    expect(automatic.series.map(s => s.name)).toEqual(['存款', '贷款']);
+  });
   it('空数据容错', () => {
     const r = rowsToSeries([], []);
     expect(r.categories).toEqual([]);
     expect(r.series).toEqual([]);
+  });
+});
+
+describe('chartData.convertAmountScaleRows（金额量级展示转换）', () => {
+  it('按元为原始值转换合法 METRIC 列，空值/非数值/手工单位和 DIM 保持原样且不修改原始 rows', () => {
+    const columns = ['机构', '元', '万元', '亿元', '手工单位', '文本', '空值', '维度脏值'];
+    const rows = [['甲行', 10000, 10000, 100000000, '10000', 'n/a', '', '10000']];
+    const original = structuredClone(rows);
+    const columnsMeta = [
+      { col: '元', role: 'METRIC', amountScale: 'YUAN' },
+      { col: '万元', role: 'METRIC', amountScale: 'TEN_THOUSAND_YUAN' },
+      { col: '亿元', role: 'METRIC', amountScale: 'HUNDRED_MILLION_YUAN' },
+      { col: '手工单位', role: 'METRIC', unit: '万元' },
+      { col: '文本', role: 'METRIC', amountScale: 'TEN_THOUSAND_YUAN' },
+      { col: '空值', role: 'METRIC', amountScale: 'TEN_THOUSAND_YUAN' },
+      { col: '维度脏值', role: 'DIM', amountScale: 'TEN_THOUSAND_YUAN' }
+    ];
+
+    expect(convertAmountScaleRows(columns, rows, columnsMeta)).toEqual([[
+      '甲行', 10000, 1, 1, '10000', 'n/a', '', '10000'
+    ]]);
+    expect(rows).toEqual(original);
+  });
+
+  it('支持数值字符串，非法 amountScale 不转换', () => {
+    expect(convertAmountScaleRows(
+      ['amount', 'bad'],
+      [['100000', '200000']],
+      [
+        { col: 'amount', role: 'METRIC', amountScale: 'TEN_THOUSAND_YUAN' },
+        { col: 'bad', role: 'METRIC', amountScale: 'UNKNOWN' }
+      ]
+    )).toEqual([[10, '200000']]);
   });
 });
 

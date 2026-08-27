@@ -1,0 +1,22 @@
+目标：yiti_test.RPT_SCREEN / SCR_CORP_OVERVIEW
+
+事务前：
+- org_scope_mode=NAMED_GROUP
+- canvas_version=0
+- draft schemaVersion=1
+- canvas_draft_json length=164
+- canvas_draft_json sha256=68df4d7ca7098780d3d9899f33c42924d40e56756ff05ea16bbf4e00fca2a585
+
+事务内：
+- 使用 screen_code、deleted、org_scope_mode、canvas_version、旧 schemaVersion 作为乐观更新条件
+- affected_rows=1
+- canvas_version=1
+- draft schemaVersion=2
+
+ROLLBACK 后：
+- canvas_version=0
+- draft schemaVersion=1
+- canvas_draft_json length=164
+- canvas_draft_json sha256=68df4d7ca7098780d3d9899f33c42924d40e56756ff05ea16bbf4e00fca2a585
+
+结论：回滚后与事务前完全一致，yiti_test 未残留修正数据；yiti 未执行写操作。

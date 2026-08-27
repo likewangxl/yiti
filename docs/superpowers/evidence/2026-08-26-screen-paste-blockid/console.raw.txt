@@ -1,0 +1,9 @@
+Total messages: 14 (Errors: 0, Warnings: 12)
+
+12 条 warning 内容相同：
+
+```text
+ElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+```
+
+说明：这是页面既有 Element Plus 弃用告警，本次复制粘贴流程无 console error。

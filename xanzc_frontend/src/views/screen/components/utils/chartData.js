@@ -1,16 +1,46 @@
 // 大屏图表通用数据变换纯函数（无 Vue 依赖，vitest 直测）。
-// 数据契约：POST /api/screen/data → { columns:[...], rows:[[...]], columnsMeta?:[{col,alias,role,unit,decimals}] }
+// 数据契约：POST /api/screen/data → { columns:[...], rows:[[...]], columnsMeta?:[{col,alias,role,amountScale,unit,decimals}] }
 // columnsMeta 是后端可选扩展，所有函数必须对其缺失容错（缺失时回退原列名/默认格式化）。
+import { AMOUNT_SCALE_OPTIONS, convertAmountScaleValue } from '@/utils/dsConfig';
 
 /** 按列名查 columnsMeta 行；columnsMeta 缺失或未命中返回 null */
 export function metaOf(col, columnsMeta) {
   if (!Array.isArray(columnsMeta)) return null;
-  return columnsMeta.find(m => m && m.col === col) || null;
+  const meta = columnsMeta.find(m => m && m.col === col) || null;
+  if (!meta || meta.role !== 'METRIC') return meta;
+  const preset = AMOUNT_SCALE_OPTIONS.find(option => option.value === meta.amountScale);
+  if (!preset) return meta;
+  // 后端只保存 amountScale；组件运行态派生单位/小数位，显式自定义值优先。
+  return {
+    ...meta,
+    unit: meta.unit || preset.unit,
+    decimals: meta.decimals ?? preset.decimals
+  };
 }
 
 /** 列显示名：columnsMeta.alias 优先，缺失回退原列名 */
 export function displayName(col, columnsMeta) {
   return metaOf(col, columnsMeta)?.alias || col;
+}
+
+/**
+ * 把接口按元返回的 rows 转为组件展示 rows。
+ * 只转换角色为 METRIC 且 amountScale 合法的列；原数组及空值/非数值均保持不变。
+ */
+export function convertAmountScaleRows(columns, rows, columnsMeta) {
+  const cols = Array.isArray(columns) ? columns : [];
+  const data = Array.isArray(rows) ? rows : [];
+  const factors = cols.map(col => {
+    const meta = metaOf(col, columnsMeta);
+    return meta?.role === 'METRIC' && meta.amountScale ? meta.amountScale : null;
+  });
+  return data.map(row => {
+    if (!Array.isArray(row)) return row;
+    return row.map((value, index) => {
+      const amountScale = factors[index];
+      return amountScale ? convertAmountScaleValue(value, amountScale) : value;
+    });
+  });
 }
 
 /**
@@ -41,18 +71,22 @@ function isNumericish(v) {
  * @param {string[]} columns 列名
  * @param {Array[]} rows 行数据
  * @param {string[]|null} seriesCols 指定系列列（bind.items 场景）；空则自动取"其余数值列"
+ * @param {string|null} categoryCol 指定类目列；缺失或不存在时回退首列
  * @returns {{categories: any[], series: {name: string, data: (number|null)[]}[]}}
  */
-export function rowsToSeries(columns, rows, seriesCols = null) {
+export function rowsToSeries(columns, rows, seriesCols = null, categoryCol = null) {
   const cols = Array.isArray(columns) ? columns : [];
   const data = Array.isArray(rows) ? rows : [];
-  const categories = data.map(r => r[0]);
+  const preferredCategoryIndex = categoryCol == null ? -1 : cols.indexOf(categoryCol);
+  const categoryIndex = preferredCategoryIndex >= 0 ? preferredCategoryIndex : 0;
+  const categoryColumn = cols[categoryIndex];
+  const categories = data.map(r => r[categoryIndex]);
   let picked;
   if (Array.isArray(seriesCols) && seriesCols.length) {
-    picked = seriesCols.filter(c => cols.includes(c)); // 忽略响应里不存在的绑定列
+    picked = seriesCols.filter(c => c !== categoryColumn && cols.includes(c)); // 忽略不存在或类目列
   } else {
     // 自动模式：排除存在"非空且非数值"取值的列（如备注文本列），保留含 null 空洞的数值列
-    picked = cols.slice(1).filter(c => {
+    picked = cols.filter((c, index) => index !== categoryIndex).filter(c => {
       const idx = cols.indexOf(c);
       return data.every(r => isNumericish(r[idx]));
     });

@@ -8,13 +8,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
+import { inject, isReactive, nextTick } from 'vue';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const routerReplace = vi.hoisted(() => vi.fn());
+const findAttrMock = vi.hoisted(() => vi.fn());
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ replace: routerReplace })
+}));
+
+vi.mock('@/views/screen/designer/widgets', () => ({
+  findAttr: findAttrMock,
+  chartMetas: [
+    { innerType: 'BAR_COMPARE', label: '柱状对比' },
+    { innerType: 'LINE_TREND', label: '趋势折线' }
+  ]
 }));
 
 vi.mock('@/api/screen', () => ({
@@ -47,6 +57,32 @@ import {
 import { ElMessageBox } from 'element-plus';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import DesignerV2 from '../DesignerV2.vue';
+
+let capturedPreviewContext = null;
+const CanvasCoreContextStub = {
+  name: 'CanvasCoreContextStub',
+  setup() {
+    capturedPreviewContext = inject('previewContext');
+    return {};
+  },
+  template: '<div class="canvas-core-context-stub" />'
+};
+
+// 只在 setup 中读取一次绑定值，模拟真实 ChartWidgetAttr 对旧 props 的初始化行为。
+// 如果同类型动态属性组件被 Vue 复用，这里会继续显示上一个节点的数据源。
+const TestChartAttr = {
+  name: 'TestChartAttr',
+  props: { element: { type: Object, required: true } },
+  setup(props) {
+    const bind = JSON.parse(props.element.bindJson || '{}');
+    return {
+      initialDsId: bind.dsId,
+      initialMetricCols: Array.isArray(bind.items) ? bind.items.map(item => item.col).join(',') : '',
+      initialMetricLabels: Array.isArray(bind.items) ? bind.items.map(item => item.label).join(',') : ''
+    };
+  },
+  template: '<div><div data-testid="test-datasource">{{ initialDsId }}</div><div data-testid="test-metric-columns">{{ initialMetricCols }}</div><div data-testid="test-metric-labels">{{ initialMetricLabels }}</div></div>'
+};
 
 // el-button/el-dialog/el-input 用渲染 slot 的自定义 stub:新建大屏流程测试需要按钮文本可寻、
 // 弹框内容可见、输入框可 setValue;其余 element-plus 组件保持哑 stub(不关心内部渲染)。
@@ -122,6 +158,22 @@ describe('DesignerV2.vue 挂载冒烟测试', () => {
     expect(wrapper.classes()).toContain('scr-surface-host');
   });
 
+  it('加载当前大屏后向画布提供响应式草稿预览上下文', async () => {
+    capturedPreviewContext = null;
+    listScreens.mockResolvedValueOnce([{
+      id: 1, screenCode: 'SCR_PROVINCE', screenName: '省分行经营总览', viewLevel: 'PROVINCE'
+    }]);
+    getScreenCanvas.mockResolvedValueOnce(editorResp(1, 'SCR_PROVINCE'));
+
+    mount(DesignerV2, { global: { stubs: { ...stubs, CanvasCore: CanvasCoreContextStub } } });
+    await flushPromises();
+
+    expect(isReactive(capturedPreviewContext)).toBe(true);
+    expect(capturedPreviewContext).toEqual({
+      schemaVersion: 1, screenCode: 'SCR_PROVINCE', orgCode: '', empId: ''
+    });
+  });
+
   it('右侧属性检查器使用与左栏一致的深色字号和控件主题', () => {
     const wrapper = mount(DesignerV2, { global: { stubs } });
     expect(wrapper.find('.dsn2-right').classes()).toContain('dsn2-inspector');
@@ -183,6 +235,61 @@ describe('DesignerV2.vue 挂载冒烟测试', () => {
     expect(source).toContain(':focus-visible');
     expect(source).toContain('prefers-reduced-motion');
     expect(source).toContain('.dsn2');
+  });
+
+  it('切换同类型图表后属性面板重建并回显当前数据源', async () => {
+    findAttrMock.mockReturnValue(TestChartAttr);
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    const designerStore = useScreenDesignerStore();
+    designerStore.componentData = [
+      {
+        id: 'chart-a', component: 'ChartWidget',
+        bindJson: JSON.stringify({ dsId: 101, items: [{ col: 'metric-a', label: '指标 A' }] })
+      },
+      {
+        id: 'chart-b', component: 'ChartWidget',
+        bindJson: JSON.stringify({ dsId: 202, items: [{ col: 'metric-b', label: '指标 B' }] })
+      }
+    ];
+
+    designerStore.selectComponent('chart-a');
+    await nextTick();
+    expect(wrapper.find('[data-testid="test-datasource"]').text()).toBe('101');
+    expect(wrapper.find('[data-testid="test-metric-columns"]').text()).toBe('metric-a');
+    expect(wrapper.find('[data-testid="test-metric-labels"]').text()).toBe('指标 A');
+
+    designerStore.selectComponent('chart-b');
+    await nextTick();
+    expect(wrapper.find('[data-testid="test-datasource"]').text()).toBe('202');
+    expect(wrapper.find('[data-testid="test-metric-columns"]').text()).toBe('metric-b');
+    expect(wrapper.find('[data-testid="test-metric-labels"]').text()).toBe('指标 B');
+  });
+
+  it('检查器单选图表显示注册表类型并随图表切换更新，未知类型安全兜底', async () => {
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    const designerStore = useScreenDesignerStore();
+    designerStore.componentData = [
+      { id: 'bar-chart', component: 'ChartWidget', innerType: 'BAR_COMPARE' },
+      { id: 'line-chart', component: 'ChartWidget', innerType: 'LINE_TREND' },
+      { id: 'unknown-chart', component: 'ChartWidget', innerType: 'UNREGISTERED_CHART' },
+      { id: 'text-label', component: 'TextLabel' }
+    ];
+
+    designerStore.selectComponent('bar-chart');
+    await nextTick();
+    expect(wrapper.find('[data-testid="dsn2-right-subtitle"]').text()).toBe('柱状对比（BAR_COMPARE）');
+
+    designerStore.selectComponent('line-chart');
+    await nextTick();
+    expect(wrapper.find('[data-testid="dsn2-right-subtitle"]').text()).toBe('趋势折线（LINE_TREND）');
+
+    designerStore.selectComponent('unknown-chart');
+    await nextTick();
+    expect(wrapper.find('[data-testid="dsn2-right-subtitle"]').text()).toBe('图表（UNREGISTERED_CHART）');
+
+    designerStore.selectComponent('text-label');
+    await nextTick();
+    expect(wrapper.find('[data-testid="dsn2-right-subtitle"]').text()).toBe('TextLabel');
   });
 });
 

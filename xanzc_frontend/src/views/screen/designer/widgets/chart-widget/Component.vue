@@ -12,6 +12,7 @@
 import { computed, inject, isRef } from 'vue';
 import BlockContainer from '@/views/screen/components/BlockContainer.vue';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
+import { runtimeSchemaVersion } from '@/utils/screenScope';
 const props = defineProps({ element: { type: Object, required: true }, mode: { type: String, default: 'design' } });
 const store = useScreenDesignerStore();
 const previewContext = inject('previewContext', { orgCode: '', empId: '' });
@@ -49,7 +50,13 @@ const block = computed(() => {
 const ctx = computed(() => {
   const base = isRef(previewContext) ? previewContext.value : (previewContext || {});
   if (props.mode !== 'design') return base;
-  const schemaVersion = [1, 2].includes(store.draftSchemaVersion) ? store.draftSchemaVersion : 1;
+  // 命名组由机构范围固定走 v2；传统屏仅在草稿根版本已校验为数字 2 时沿用 v2，
+  // 避免把字符串或未知画布版本宽松升级成运行时协议版本。
+  const draftSchemaVersion = store.draftSchemaVersion === 2 ? 2 : 1;
+  const schemaVersion = runtimeSchemaVersion({
+    orgScopeMode: store.orgScopeMode,
+    ...(draftSchemaVersion === 2 ? { runtimeSchemaVersion: 2 } : {})
+  });
   return {
     ...base,
     screenCode: String(store.screenCode || ''),

@@ -24,6 +24,45 @@
     </el-form-item>
     <el-form-item label="周期"><el-input v-model="bind.period" placeholder="LATEST / LAST_10D" @input="syncBind" /></el-form-item>
 
+    <el-form-item v-if="showMetricItems" label="指标列">
+      <el-select v-model="metricItemCols" multiple filterable allow-create default-first-option
+                 data-testid="chart-metric-columns" placeholder="请选择指标列">
+        <el-option v-for="item in metricColumnOptions" :key="item.col"
+                   :label="item.label" :value="item.col" />
+      </el-select>
+      <div v-if="metricItemEditorRows.length" class="metric-item-editor" data-testid="chart-metric-item-editor">
+        <div v-for="item in metricItemEditorRows" :key="item.col"
+             class="metric-item-row" data-testid="chart-metric-item-row">
+          <div class="metric-item-col" data-testid="chart-metric-item-col">
+            <span class="metric-item-caption">数据项</span>
+            <span class="metric-item-value">{{ item.col }}</span>
+          </div>
+          <el-input :model-value="item.label" data-testid="chart-metric-item-label"
+                    aria-label="指标展示名称" placeholder="请输入展示名称"
+                    @update:modelValue="value => updateMetricItemLabel(item.col, value)" />
+        </div>
+      </div>
+      <div class="attr-hint">可多选指标列；数据项使用接口原始列名，展示名称可按当前组件单独编辑。</div>
+    </el-form-item>
+
+    <el-form-item v-if="innerType === 'BAR_COMPARE'" label="类目轴">
+      <el-select v-model="bind.categoryCol" filterable clearable
+                 data-testid="chart-category-column" placeholder="可不选择" @change="syncBind">
+        <el-option v-for="item in categoryColumnOptions" :key="item.col"
+                   :label="item.label" :value="item.col" />
+      </el-select>
+      <div class="attr-hint">选择类目轴原始列；可不选择，未选择时不显示类目信息。</div>
+    </el-form-item>
+
+    <el-form-item v-if="showRankList" label="类目列">
+      <el-select v-model="rankCategoryValue" filterable clearable
+                 data-testid="rank-category-column" placeholder="默认使用首个非指标列">
+        <el-option v-for="item in rankCategoryColumnOptions" :key="item.col"
+                   :label="item.label" :value="item.col" />
+      </el-select>
+      <div class="attr-hint">选择每行标题列；历史 nameCol 会自动回显，清空后回退首个非指标响应列。</div>
+    </el-form-item>
+
     <!-- 全屏周期过滤器联动豁免(spec §5.3):仅时序数据源会被联动,豁免后维持自身周期 -->
     <el-form-item label="全局周期">
       <el-switch v-model="propValue.ignoreGlobalPeriod" active-text="忽略联动" @change="syncProp" />
@@ -100,6 +139,12 @@
       <div class="attr-hint">行数超出可视区时自动循环滚动</div>
     </el-form-item>
 
+    <!-- 排行榜自动滚动轮播；旧节点缺省时默认开启。 -->
+    <el-form-item v-if="showRankList" label="自动滚动">
+      <el-switch v-model="propValue.carousel" data-testid="rank-carousel" @change="syncProp" />
+      <div class="attr-hint">数据条数超出可视行数时每 2 秒逐行循环</div>
+    </el-form-item>
+
     <!-- KPI 雷达取值维度 -->
     <el-form-item v-if="innerType === 'KPI_RADAR'" label="取值">
       <el-radio-group v-model="propValue.valueField" @change="syncProp">
@@ -141,7 +186,7 @@ import CommonAttr from '@/views/screen/designer/panels/CommonAttr.vue';
 import { listScreenDatasources, listOrgGroups, probeScreenDatasourceColumns } from '@/api/screen';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import { chartMetas } from '@/views/screen/designer/widgets';
-import { filterDatasourcesByMeta } from './dsFilter';
+import { filterDatasourcesByMeta, parseDatasourceConfig } from './dsFilter';
 import { buildDatasourceProbeRequest, datasourceTryRunScopeMode } from '@/utils/dsConfig';
 import { filterActiveOrgGroups, filterReportScreenOrgGroups } from '@/utils/screenScope';
 const props = defineProps({ element: { type: Object, required: true } });
@@ -161,11 +206,15 @@ const propValue = reactive(props.element.propValue);
 if (props.element.innerType === 'BAR_COMPARE' && propValue.barMode == null) propValue.barMode = 'basic';
 if (props.element.innerType === 'KPI_RADAR' && propValue.valueField == null) propValue.valueField = 'score';
 if (props.element.innerType === 'TABLE_LIST' && propValue.carousel == null) propValue.carousel = false;
+if (props.element.innerType === 'RANK_LIST' && propValue.carousel == null) propValue.carousel = true;
 // 全屏周期过滤器联动豁免开关默认关(=响应联动);旧节点缺失时补 false 保持 el-switch 受控
 if (propValue.ignoreGlobalPeriod == null) propValue.ignoreGlobalPeriod = false;
 
 const innerType = computed(() => props.element.innerType);
 const chartMeta = computed(() => chartMetas.find(c => c.innerType === innerType.value) || null);
+const metricItemTypes = new Set(['METRIC_CARD', 'LINE_TREND', 'AREA_STACK', 'BAR_COMPARE', 'COMBO_CHART', 'PIE_SHARE', 'TABLE_LIST', 'RANK_LIST']);
+const showMetricItems = computed(() => metricItemTypes.has(innerType.value));
+const showRankList = computed(() => innerType.value === 'RANK_LIST');
 const showSeriesVisualControls = computed(() => ['LINE_TREND', 'AREA_STACK', 'BAR_COMPARE', 'COMBO_CHART'].includes(innerType.value));
 const showStandaloneLabelControl = computed(() => ['FUNNEL_CHART', 'SCATTER_BUBBLE', 'HEATMAP_MATRIX', 'SUNBURST_CHART'].includes(innerType.value));
 const showSmoothControl = computed(() => ['LINE_TREND', 'AREA_STACK', 'COMBO_CHART', 'SPARKLINE_CARD'].includes(innerType.value));
@@ -235,7 +284,7 @@ const dsHint = computed(() => {
   return parts.join('，');
 });
 const needValueCol = computed(() => innerType.value === 'GAUGE' || innerType.value === 'LIQUID_PROGRESS');
-const selectedDatasource = computed(() => datasources.value.find(item => item.id === bind.dsId) || null);
+const selectedDatasource = computed(() => datasources.value.find(item => String(item.id) === String(bind.dsId)) || null);
 const probeRequiresNamedGroup = computed(() => {
   try { return datasourceTryRunScopeMode(selectedDatasource.value?.configJson) === 'NAMED_GROUP'; }
   catch { return false; }
@@ -249,12 +298,240 @@ function syncBind() {
   // 落 dsType 快照:运行时 BlockContainer 判定"是否响应全屏周期过滤器联动"依赖它
   // (utils/globalPeriod.isTimeseriesBlock;快照缺失的历史区块按时序专属图表类型兜底)。
   // 幂等刷新:数据源列表未加载时保留旧值,不误清
-  const d = datasources.value.find(x => x.id === bind.dsId);
+  const d = datasources.value.find(x => String(x.id) === String(bind.dsId));
   if (d) bind.dsType = d.dsType;
   else if (datasourcesLoaded.value) delete bind.dsType;
+  if (innerType.value === 'BAR_COMPARE' && bind.categoryCol == null) bind.categoryCol = '';
   props.element.bindJson = JSON.stringify(bind);
   store.pushSnapshotDebounced();
 }
+
+/**
+ * 指标列候选只来自当前已选数据源的语义配置，不调用运行时取数或高危列探测。
+ * fieldMeta 是优先级更高的展示元数据，metrics 快照补充未被元数据覆盖的指标。
+ */
+function datasourceMetricColumns(datasource) {
+  const config = parseDatasourceConfig(datasource?.configJson);
+  if (!config) return [];
+
+  const fieldMeta = Array.isArray(config.fieldMeta)
+    ? config.fieldMeta
+      .filter(item => {
+        const role = String(item?.role || '').toUpperCase();
+        return role === 'METRIC' || (innerType.value === 'TABLE_LIST' && role === 'DIM');
+      })
+      .map(item => ({
+        col: String(item?.col || '').trim(),
+        label: String(item?.alias || item?.col || '').trim()
+      }))
+      .filter(item => item.col)
+    : [];
+
+  const metrics = Array.isArray(config.metrics) ? config.metrics : [];
+  const metricSnapshot = metrics.map(item => {
+    const col = String(item?.metricName || '').trim();
+    return { col, label: col };
+  }).filter(item => item.col);
+
+  const isOrgSubjectAggregate = String(datasource?.sourceKind || config.sourceKind || '').toUpperCase() === 'WIDE_TABLE'
+    && config.table === 'ORG_INDEX_RESULT'
+    && String(config.aggregation?.groupBy || '').toUpperCase() === 'SUBJECT';
+  const derivedColumns = innerType.value === 'TABLE_LIST' && isOrgSubjectAggregate
+    ? [{ col: 'org_name', label: 'org_name' }]
+    : [];
+
+  return uniqueMetricColumns([...fieldMeta, ...metricSnapshot, ...derivedColumns]);
+}
+
+function uniqueMetricColumns(columns) {
+  const seen = new Set();
+  return columns.filter(item => {
+    if (!item.col || seen.has(item.col)) return false;
+    seen.add(item.col);
+    return true;
+  });
+}
+
+/** 类目轴候选：语义元数据/指标快照优先，再补宽表按聚合口径可推导的维度列。 */
+function datasourceCategoryColumns(datasource) {
+  const config = parseDatasourceConfig(datasource?.configJson);
+  if (!config) return [];
+
+  const fieldMeta = Array.isArray(config.fieldMeta)
+    ? config.fieldMeta
+      .filter(item => ['DIM', 'METRIC'].includes(String(item?.role || '').toUpperCase()))
+      .map(item => ({
+        col: String(item?.col || '').trim(),
+        label: String(item?.alias || item?.col || '').trim()
+      }))
+      .filter(item => item.col)
+    : [];
+  const metrics = Array.isArray(config.metrics) ? config.metrics : [];
+  const metricSnapshot = metrics.map(item => {
+    const col = String(item?.metricName || '').trim();
+    return { col, label: col };
+  }).filter(item => item.col);
+
+  const sourceKind = String(datasource?.sourceKind || config.sourceKind || '').toUpperCase();
+  const derivedColumns = [];
+  if (sourceKind === 'WIDE_TABLE') {
+    const aggregation = config.aggregation && typeof config.aggregation === 'object'
+      && !Array.isArray(config.aggregation) ? config.aggregation : null;
+    const groupBy = String(aggregation?.groupBy || '').toUpperCase();
+    if (!aggregation || groupBy === 'DATE') {
+      derivedColumns.push({ col: 'data_date', label: 'data_date' });
+    } else if (groupBy === 'SUBJECT') {
+      const table = String(config.table || '').trim();
+      const fallbackSubjectCol = table === 'ORG_INDEX_RESULT'
+        ? 'org_code'
+        : table === 'EMP_INDEX_RESULT' ? 'emp_id' : '';
+      const subjectCol = String(config.subjectCol || fallbackSubjectCol).trim();
+      if (subjectCol) derivedColumns.push({ col: subjectCol, label: subjectCol });
+      if (table === 'ORG_INDEX_RESULT') derivedColumns.push({ col: 'org_name', label: 'org_name' });
+    }
+  }
+
+  return uniqueMetricColumns([...fieldMeta, ...metricSnapshot, ...derivedColumns]);
+}
+
+const metricColumnOptions = computed(() => {
+  if (!showMetricItems.value) return [];
+
+  const options = datasourceMetricColumns(selectedDatasource.value);
+  const optionByCol = new Map(options.map(item => [item.col, item]));
+  // RANK_LIST 的候选严格来自当前数据源 METRIC；其余图表保留历史 items 的回显兼容。
+  if (!showRankList.value) {
+    const existingItems = Array.isArray(bind.items) ? bind.items : [];
+    for (const item of existingItems) {
+      const col = String(item?.col || '').trim();
+      if (!col || optionByCol.has(col)) continue;
+      const label = String(item?.label || '').trim() || col;
+      options.push({ col, label });
+      optionByCol.set(col, options[options.length - 1]);
+    }
+  } else {
+    const legacyValueCol = String(bind.valueCol || '').trim();
+    // 旧排行榜只有 valueCol；保留该历史指标以便迁移为 items，多指标候选仍只来自 METRIC 配置。
+    if (legacyValueCol && !optionByCol.has(legacyValueCol)) {
+      options.push({ col: legacyValueCol, label: legacyValueCol });
+    }
+  }
+  // 有效数据源候选的 label 是来源名称，不能被画布 item 的自定义 label 覆盖。
+  // 不在当前候选中的历史 item 已在上方补入，其已有 label 仍作为回显兜底。
+  return options.map(option => ({
+    col: option.col,
+    label: option.label || option.col
+  }));
+});
+
+const categoryColumnOptions = computed(() => {
+  if (innerType.value !== 'BAR_COMPARE') return [];
+
+  const options = datasourceCategoryColumns(selectedDatasource.value);
+  const current = String(bind.categoryCol || '').trim();
+  if (current && !options.some(option => option.col === current)) {
+    options.push({ col: current, label: current });
+  }
+  return options;
+});
+
+const rankCategoryColumnOptions = computed(() => {
+  if (!showRankList.value) return [];
+
+  const options = datasourceCategoryColumns(selectedDatasource.value);
+  const current = String(bind.categoryCol || bind.nameCol || '').trim();
+  // 旧画布只有 nameCol 时保留候选，确保属性面板可以回显并显式迁移到 categoryCol。
+  if (current && !options.some(option => option.col === current)) {
+    options.push({ col: current, label: current });
+  }
+  return options;
+});
+
+const rankCategoryValue = computed({
+  get: () => String(bind.categoryCol || bind.nameCol || '').trim(),
+  set(value) {
+    const col = String(value || '').trim();
+    if (col) bind.categoryCol = col;
+    else {
+      delete bind.categoryCol;
+      // 用户明确清空新配置时，同时退出旧 nameCol 兼容回退，恢复运行态自动识别。
+      delete bind.nameCol;
+    }
+    props.element.bindJson = JSON.stringify(bind);
+    store.pushSnapshotDebounced();
+  }
+});
+
+const metricItemsForEditor = computed(() => {
+  const items = Array.isArray(bind.items) ? bind.items : [];
+  if (items.length) return items;
+  if (showRankList.value && bind.valueCol) return [{ col: String(bind.valueCol).trim() }];
+  return [];
+});
+
+const metricItemEditorRows = computed(() => {
+  if (!showMetricItems.value) return [];
+
+  const optionByCol = new Map(metricColumnOptions.value.map(item => [item.col, item]));
+  const seen = new Set();
+  return metricItemsForEditor.value.reduce((rows, item) => {
+    const col = String(item?.col || '').trim();
+    if (!col || seen.has(col)) return rows;
+    seen.add(col);
+    const option = optionByCol.get(col);
+    rows.push({
+      col,
+      // 旧节点可能只有 col；面板仍展示数据源 alias/原列名作为可编辑兜底。
+      label: String(item?.label || '').trim() || option?.label || col
+    });
+    return rows;
+  }, []);
+});
+
+const metricItemCols = computed({
+  get() {
+    const items = metricItemsForEditor.value;
+    if (items.length) {
+      return uniqueMetricColumns(items.map(item => ({ col: String(item?.col || '').trim() })))
+        .map(item => item.col);
+    }
+    // v1 排行榜只有 valueCol；面板以单指标兼容回显，首次编辑后规范化为 items。
+    if (showRankList.value && bind.valueCol) return [String(bind.valueCol).trim()];
+    return [];
+  },
+  set(columns) {
+    const selected = Array.isArray(columns) ? columns : [];
+    const existingItems = Array.isArray(bind.items) ? bind.items : [];
+    const optionByCol = new Map(metricColumnOptions.value.map(item => [item.col, item]));
+    bind.items = uniqueMetricColumns(selected.map(value => {
+      const col = String(value || '').trim();
+      const existing = existingItems.find(item => String(item?.col || '').trim() === col);
+      const option = optionByCol.get(col);
+      return { col, label: String(existing?.label || '').trim() || option?.label || col };
+    }).filter(item => item.col));
+    if (showRankList.value) delete bind.valueCol;
+    props.element.bindJson = JSON.stringify(bind);
+    store.pushSnapshotDebounced();
+  }
+});
+
+function updateMetricItemLabel(col, value) {
+  let item = Array.isArray(bind.items)
+    ? bind.items.find(candidate => String(candidate?.col || '').trim() === col)
+    : null;
+  if (!item && showRankList.value && String(bind.valueCol || '').trim() === col) {
+    bind.items = [{ col, label: col }];
+    delete bind.valueCol;
+    item = bind.items[0];
+  }
+  if (!item) return;
+
+  const option = metricColumnOptions.value.find(candidate => candidate.col === col);
+  item.label = String(value ?? '').trim() || option?.label || col;
+  props.element.bindJson = JSON.stringify(bind);
+  store.pushSnapshotDebounced();
+}
+
 function syncStyle() { props.element.styleJson = JSON.stringify(styleCfg); store.pushSnapshotDebounced(); }
 function syncDrill() { props.element.drillJson = JSON.stringify(drill); store.pushSnapshotDebounced(); }
 // propValue 是节点上的响应式对象,mutate 即生效;仅需标脏 + 记快照
@@ -293,10 +570,21 @@ async function probeColumns() {
     probe.running = false;
   }
 }
-watch(() => bind.dsId, () => {
+watch(() => bind.dsId, (next, previous) => {
   // 切换数据源后既不能复用另一个数据源的列，也不能复用另一个范围模式的测试组。
   colOptions.value = [];
   probe.testOrgGroupCode = '';
+  if (String(next ?? '') !== String(previous ?? '')) {
+    if (showMetricItems.value) bind.items = [];
+    if (showRankList.value) {
+      delete bind.valueCol;
+      delete bind.categoryCol;
+      delete bind.nameCol;
+    }
+    if (innerType.value === 'BAR_COMPARE') bind.categoryCol = '';
+    props.element.bindJson = JSON.stringify(bind);
+    store.pushSnapshotDebounced();
+  }
 });
 
 /** 数据源列表/屏范围变化后，清理已不再属于候选集合的历史绑定。 */
@@ -325,7 +613,8 @@ watch([
 ], reconcileBinding);
 
 onMounted(async () => {
-  const rows = await listScreenDatasources();
+  const result = await listScreenDatasources();
+  const rows = Array.isArray(result) ? result : result?.records;
   datasources.value = Array.isArray(rows) ? rows : [];
   datasourcesLoaded.value = true;
   reconcileBinding();
@@ -338,6 +627,12 @@ onMounted(async () => {
 </script>
 <style scoped>
 .attr-hint { width: 100%; font-size: 12px; color: #7d9bc9; line-height: 1.5; margin-top: 2px; }
+.metric-item-editor { width: 100%; display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
+.metric-item-row { display: flex; flex-direction: column; gap: 4px; padding: 7px 8px;
+  border: 1px solid rgba(125, 155, 201, .24); border-radius: 6px; background: rgba(12, 25, 49, .38); }
+.metric-item-col { display: flex; align-items: baseline; gap: 6px; min-width: 0; color: #c7d5ea; font-size: 12px; line-height: 1.4; }
+.metric-item-caption { color: #7d9bc9; flex: 0 0 auto; }
+.metric-item-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e8f1ff; }
 .probe-box { width: 100%; display: flex; flex-direction: column; gap: 6px; }
 .attr-scope-conflict { display: flex; width: 100%; flex-direction: column; gap: 3px; margin-top: 7px;
   padding: 8px 10px; border: 1px solid rgba(229, 154, 145, .34); border-radius: 7px;

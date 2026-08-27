@@ -1,0 +1,11 @@
+playwright-cli console
+
+Total messages: 3 (Errors: 1, Warnings: 0)
+Returning 1 messages for level "info"
+
+[ERROR] [ECharts] Component graphic is used but not imported.
+import { GraphicComponent } from 'echarts/components';
+echarts.use([GraphicComponent]);
+@ http://127.0.0.1:8091/node_modules/.vite/deps/chunk-FM4EUMLN.js?v=a2f5076f:603
+
+说明：验收前已执行 console --clear 和 requests --clear，再重新加载目标运行页。该错误对应 PieShare.vue 在本次改动前已经存在的 graphic 配置，属于基线问题；截图和 1378 × 670 canvas 检查均证明饼图仍正常渲染。

@@ -48,6 +48,37 @@ describe('新增六种大屏图表组件', () => {
     expect(option.series[0].itemStyle.color.colorStops.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('ComboChart 显式指标优先显示 bind label，并保留原始 col 和行数据用于点击', () => {
+    const wrapper = mountChart(ComboChart, {
+      columns: ['month', 'sales', 'rate'],
+      rows: [['一月', 10, 0.2]],
+      bind: { items: [{ col: 'sales', label: '存款余额' }, { col: 'rate', label: '余额增幅' }] },
+      styleCfg: {},
+      columnsMeta: [{ col: 'sales', alias: '数据源销售额' }, { col: 'rate', alias: '数据源增长率' }]
+    });
+    const option = optionOf(wrapper);
+    expect(option.series.map(series => series.name)).toEqual(['存款余额', '余额增幅']);
+    expect(option.yAxis.map(axis => axis.name)).toEqual(['存款余额', '余额增幅']);
+
+    triggerChartClick(wrapper, { componentType: 'series', seriesIndex: 1, dataIndex: 0 });
+    expect(wrapper.emitted('item-click')?.[0]?.[0]).toEqual({
+      col: 'rate', label: '一月', row: { month: '一月', sales: 10, rate: 0.2 }
+    });
+  });
+
+  it('ComboChart 空指标 label 依次回退 columnsMeta 别名和字段名', () => {
+    const wrapper = mountChart(ComboChart, {
+      columns: ['month', 'sales', 'rate'],
+      rows: [['一月', 10, 0.2]],
+      bind: { items: [{ col: 'sales', label: '  ' }, { col: 'rate', label: '' }] },
+      styleCfg: {},
+      columnsMeta: [{ col: 'sales', alias: '销售额' }, { col: 'rate', alias: '  ' }]
+    });
+    const option = optionOf(wrapper);
+    expect(option.series.map(series => series.name)).toEqual(['销售额', 'rate']);
+    expect(option.yAxis.map(axis => axis.name)).toEqual(['销售额', 'rate']);
+  });
+
   it('ComboChart 过滤空类目时同步过滤 series，并按有效行回传原始 row', () => {
     const wrapper = mountChart(ComboChart, {
       columns: ['month', 'sales', 'rate'],

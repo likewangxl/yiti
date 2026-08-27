@@ -1,0 +1,22 @@
+playwright-cli requests --filter '/api/'
+
+46. [GET] http://127.0.0.1:8091/api/auth/my-menus => [200] OK
+47. [GET] http://127.0.0.1:8091/api/auth/permissions => [200] OK
+213. [GET] http://127.0.0.1:8091/api/screen/view/SCR_LABEL_QA?preview=draft => [200] OK
+214. [POST] http://127.0.0.1:8091/api/screen/data => [200] OK
+215. [POST] http://127.0.0.1:8091/api/screen/data => [200] OK
+
+#213 response body
+{"code":"0","message":"success","traceId":"mock-screen-view","data":{"screenCode":"SCR_LABEL_QA","screenName":"图表指标 label 验收","state":"draft","runtimeSchemaVersion":2,"renderPackageJson":"{\"runtimeSchemaVersion\":2,\"canvasStyle\":{\"adaptor\":\"keepProportion\",\"background\":\"#050e2b\"},\"components\":[{\"id\":\"combo-label\",\"component\":\"ChartWidget\",\"blockId\":101,\"innerType\":\"COMBO_CHART\",\"isShow\":true,\"style\":{\"top\":90,\"left\":120,\"width\":1680,\"height\":430}},{\"id\":\"bar-label\",\"component\":\"ChartWidget\",\"blockId\":102,\"innerType\":\"BAR_COMPARE\",\"isShow\":true,\"style\":{\"top\":570,\"left\":120,\"width\":1680,\"height\":400},\"propValue\":{\"barMode\":\"basic\"}}],\"bindSnapshots\":{\"101\":{\"componentType\":\"COMBO_CHART\",\"bind\":{\"items\":[{\"col\":\"metric_a\",\"label\":\"存款余额\"},{\"col\":\"metric_b\",\"label\":\"余额增幅\"}],\"period\":\"LATEST\"},\"styleCfg\":{\"title\":\"双轴组合 · label 展示\",\"showLegend\":true,\"showLabels\":false,\"showMarks\":false,\"smooth\":true,\"refreshSec\":0},\"drill\":{}},\"102\":{\"componentType\":\"BAR_COMPARE\",\"bind\":{\"items\":[{\"col\":\"metric_a\",\"label\":\"存款余额\"},{\"col\":\"metric_b\",\"label\":\"余额增幅\"}],\"period\":\"LATEST\"},\"styleCfg\":{\"title\":\"柱状对比 · label 展示\",\"showLegend\":true,\"showLabels\":true,\"showMarks\":false,\"refreshSec\":0},\"drill\":{}}}}","mapPoints":[]}}
+
+#214 request body (COMBO_CHART)
+{"schemaVersion":2,"previewState":"draft","screenCode":"SCR_LABEL_QA","blockId":101,"period":"LATEST","contextParams":{"orgCode":"","empId":""}}
+
+#215 request body (BAR_COMPARE)
+{"schemaVersion":2,"previewState":"draft","screenCode":"SCR_LABEL_QA","blockId":102,"period":"LATEST","contextParams":{"orgCode":"","empId":""}}
+
+#214/#215 response body
+{"code":"0","message":"success","traceId":"mock-screen-data","data":{"columns":["month","metric_a","metric_b"],"columnsMeta":[{"col":"month","alias":"月份","role":"DIMENSION"},{"col":"metric_a","alias":"数据字段A","role":"METRIC"},{"col":"metric_b","alias":"数据字段B","role":"METRIC"}],"rows":[["一月",82,12],["二月",96,18],["三月",108,15],["四月",121,24]]}}
+
+页面断言：
+{"url":"http://127.0.0.1:8091/#/screen/SCR_LABEL_QA?preview=draft","comboTitle":["双轴组合 · label 展示","柱状对比 · label 展示"],"comboCharts":1,"barCharts":1,"canvases":2}
