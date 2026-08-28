@@ -16,6 +16,7 @@ import com.bank.branch.platform.customer.service.marketing.MarketingLeadEntrySer
 import com.bank.branch.platform.customer.service.marketing.MarketingLeadImportLocalStorage;
 import com.bank.branch.platform.customer.service.marketing.MarketingLeadImportService;
 import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -72,10 +74,13 @@ class MarketingLeadImportServiceTest {
     private MarketingLeadImportService service;
 
     @BeforeEach
-    void configureLocalStorage() {
-        org.mockito.Mockito.lenient().when(localStorage.saveSource(any()))
-                .thenReturn(new MarketingLeadImportLocalStorage.StoredFile(
-                        "local:source/20260827/test.csv", "0123456789abcdef0123456789abcdef"));
+    void configureFileStorage() {
+        FileObjectDTO source = new FileObjectDTO();
+        source.setId("obs-source-file-id");
+        source.setMd5Hash("0123456789abcdef0123456789abcdef");
+        org.mockito.Mockito.lenient().when(fileApi.upload(
+                        any(MultipartFile.class), anyString(), eq("LEAD_IMPORT")))
+                .thenReturn(source);
         org.mockito.Mockito.lenient().when(transactionManager.getTransaction(any()))
                 .thenReturn(transactionStatus);
     }
@@ -190,8 +195,10 @@ class MarketingLeadImportServiceTest {
         verify(leadMapper).updateById(generatedLead);
         verify(leadEntryService).submit(901L, "EMP_1", "ORG_1");
         verify(detailMapper).updateHandlingIf(91L, "PENDING", "GENERATED", 901L);
-        verify(localStorage).saveSource(file);
-        verifyNoInteractions(fileApi);
+        assertEquals("obs-source-file-id", response.getBatch().getSourceFileId());
+        assertEquals("0123456789abcdef0123456789abcdef", response.getBatch().getFileChecksum());
+        verify(fileApi).upload(file, "EMP_1", "LEAD_IMPORT");
+        verifyNoInteractions(localStorage);
     }
 
     @Test
@@ -387,6 +394,53 @@ class MarketingLeadImportServiceTest {
     }
 
     @Test
+    void sourceFile_readsObsFileObjectForNewBatch() {
+        MarketingLeadImportBatch batch = new MarketingLeadImportBatch();
+        batch.setId(17L);
+        batch.setRecordStatus("ACTIVE");
+        batch.setImportEmpId("EMP_1");
+        batch.setSourceFileId("obs-source-file-id");
+        byte[] expected = "OBS导入文件".getBytes(StandardCharsets.UTF_8);
+        when(batchMapper.selectActiveById(17L)).thenReturn(batch);
+        when(localStorage.supports(batch.getSourceFileId())).thenReturn(false);
+        when(fileApi.getFileContent(batch.getSourceFileId())).thenReturn(expected);
+
+        byte[] actual = service.sourceFile(17L, "EMP_1", false);
+
+        assertArrayEquals(expected, actual);
+        verify(fileApi).getFileContent(batch.getSourceFileId());
+    }
+
+    @Test
+    void errorFile_uploadsGeneratedCsvToObsAndStoresFileObjectId() {
+        MarketingLeadImportBatch batch = new MarketingLeadImportBatch();
+        batch.setId(19L);
+        batch.setRecordStatus("ACTIVE");
+        batch.setImportEmpId("EMP_1");
+        batch.setSourceFileName("lead-import.csv");
+        MarketingLeadImportDetail failure = detail(191L, "ERROR");
+        failure.setBatchId(19L);
+        failure.setCustName("失败企业");
+        failure.setErrorCode("INVALID_CREDIT_CODE");
+        failure.setErrorMessage("统一社会信用代码格式错误");
+        FileObjectDTO uploaded = new FileObjectDTO();
+        uploaded.setId("obs-error-file-id");
+        when(batchMapper.selectActiveById(19L)).thenReturn(batch);
+        when(detailMapper.selectByBatchIdOrderByFailure(19L, 0, Integer.MAX_VALUE))
+                .thenReturn(List.of(failure));
+        when(fileApi.upload(any(byte[].class), eq("lead-import.csv.error.csv"),
+                eq("text/csv"), eq("EMP_1"), eq("LEAD_IMPORT_ERROR"))).thenReturn(uploaded);
+
+        byte[] actual = service.errorFile(19L, "EMP_1", false);
+
+        assertTrue(new String(actual, StandardCharsets.UTF_8).contains("失败企业"));
+        assertEquals("obs-error-file-id", batch.getErrorFileId());
+        verify(fileApi).upload(any(byte[].class), eq("lead-import.csv.error.csv"),
+                eq("text/csv"), eq("EMP_1"), eq("LEAD_IMPORT_ERROR"));
+        verify(batchMapper).updateById(batch);
+    }
+
+    @Test
     void preview_headerOnlyCsv_returnsSpecificNoDataReason() {
         stubBatchInsert(11L);
         String csv = "客户名称,统一社会信用代码,是否触达限制\n";
@@ -449,6 +503,20 @@ class MarketingLeadImportServiceTest {
         assertEquals("MARKETING_LEAD_IMPORT_FILE_TOO_LARGE", exception.getCode());
         assertEquals("导入文件过大：单个文件不能超过10MB", exception.getMessage());
         verifyNoInteractions(localStorage, fileApi, batchMapper);
+    }
+
+    @Test
+    void preview_obsReturnsNoFileObject_rejectsBeforeCreatingBatch() {
+        when(fileApi.upload(any(MultipartFile.class), eq("EMP_1"), eq("LEAD_IMPORT")))
+                .thenReturn(null);
+
+        BizException exception = assertThrows(BizException.class,
+                () -> service.preview(csvFile("客户名称,统一社会信用代码,是否触达限制\n"),
+                        "EMP_1", "ORG_1"));
+
+        assertEquals("MARKETING_LEAD_IMPORT_FILE_UPLOAD_FAILED", exception.getCode());
+        assertEquals("原始导入文件上传OBS失败，请稍后重试", exception.getMessage());
+        verifyNoInteractions(batchMapper);
     }
 
     @Test

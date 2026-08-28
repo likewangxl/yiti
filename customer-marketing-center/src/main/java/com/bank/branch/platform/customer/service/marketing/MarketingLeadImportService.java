@@ -21,6 +21,7 @@ import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadImportBat
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadImportDetailMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadInfoMapper;
 import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -60,7 +61,7 @@ import java.util.function.Supplier;
 /**
  * 页面三线索批量导入服务。
  *
- * <p>批次处理和线索审批是两条独立状态机：本服务负责本地暂存文件、逐行校验、
+ * <p>批次处理和线索审批是两条独立状态机：本服务负责 OBS 文件、逐行校验、
  * 待确认、生成线索并逐条发起审批，不会把导入批次误当成一个整批审批单。</p>
  */
 @Slf4j
@@ -94,8 +95,9 @@ public class MarketingLeadImportService {
     private final MarketingCustomerTagMapper tagMapper;
     private final MarketingLeadEntryService leadEntryService;
     private final PlatformTransactionManager transactionManager;
+    /** 仅兼容读取切换前已经落库的 local: 文件，新导入不再写应用节点本地目录。 */
     private final MarketingLeadImportLocalStorage localStorage;
-    /** 仅用于兼容读取切换前已经落库的 OBS 文件 ID，不再用于新导入文件上传。 */
+    /** 新导入的原文件、失败明细统一通过平台文件服务写入 OBS。 */
     private final FileApi fileApi;
 
     /** 查询当前员工本人导入批次；系统管理员也不扩大导入记录的数据范围。 */
@@ -240,7 +242,7 @@ public class MarketingLeadImportService {
         return fileApi.getFileContent(storageId);
     }
 
-    /** 下载失败明细；没有已生成文件时由服务端生成并保存到本地目录。 */
+    /** 下载失败明细；没有已生成文件时由服务端生成并通过 FileApi 保存到 OBS。 */
     @Transactional
     public byte[] errorFile(Long batchId, String operatorEmpId, boolean allScope) {
         MarketingLeadImportBatch batch = getBatch(batchId, operatorEmpId, allScope);
@@ -255,7 +257,13 @@ public class MarketingLeadImportService {
             throw error("MARKETING_LEAD_IMPORT_NO_ERROR_FILE", "当前批次没有失败明细");
         }
         byte[] bytes = toErrorCsv(failures);
-        batch.setErrorFileId(localStorage.saveErrorCsv(bytes));
+        FileObjectDTO uploaded = fileApi.upload(bytes,
+                safeFilename(batch.getSourceFileName()) + ".error.csv",
+                "text/csv", operatorEmpId, "LEAD_IMPORT_ERROR");
+        if (uploaded == null || !StringUtils.hasText(uploaded.getId())) {
+            throw error("MARKETING_LEAD_IMPORT_FILE_UPLOAD_FAILED", "失败明细上传OBS失败，请稍后重试");
+        }
+        batch.setErrorFileId(uploaded.getId());
         batch.setUpdatedBy(operatorEmpId);
         batch.setUpdatedTime(LocalDateTime.now());
         batchMapper.updateById(batch);
@@ -282,9 +290,12 @@ public class MarketingLeadImportService {
         batch.setApprovalSummaryStatus("NOT_SUBMITTED");
         batch.setLockVersion(0);
 
-        MarketingLeadImportLocalStorage.StoredFile source = localStorage.saveSource(file);
-        batch.setSourceFileId(source.key());
-        batch.setFileChecksum(source.md5Hash());
+        FileObjectDTO source = fileApi.upload(file, operatorEmpId, "LEAD_IMPORT");
+        if (source == null || !StringUtils.hasText(source.getId())) {
+            throw error("MARKETING_LEAD_IMPORT_FILE_UPLOAD_FAILED", "原始导入文件上传OBS失败，请稍后重试");
+        }
+        batch.setSourceFileId(source.getId());
+        batch.setFileChecksum(source.getMd5Hash());
         batchMapper.insert(batch);
 
         List<MarketingLeadImportDetail> details;
@@ -966,6 +977,11 @@ public class MarketingLeadImportService {
     private String csvValue(String value) {
         if (value == null) return "";
         return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
+
+    private String safeFilename(String filename) {
+        if (!StringUtils.hasText(filename)) return "lead-import";
+        return filename.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
     private BizException error(String code, String message) {

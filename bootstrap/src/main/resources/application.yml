@@ -99,7 +99,7 @@ platform:
   slow-sql-threshold-ms: 5000
   method-timing-warn-ms: 500
 
-# 线索批量导入文件当前使用应用节点本地暂存，不依赖 OBS。
+# 仅用于兼容读取切换前已落库的 local: 线索导入文件；新导入统一经 FileApi 写 OBS。
 marketing:
   lead-import:
     local-dir: ${MARKETING_LEAD_IMPORT_LOCAL_DIR:file-storage/marketing-lead-import}

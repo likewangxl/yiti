@@ -24,10 +24,10 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * 线索批量导入文件的本地暂存。
+ * 线索批量导入历史本地文件兼容层。
  *
- * <p>仅用于线索导入原文件和失败明细，不改变公告、附件等通用文件的 OBS 存储策略。
- * 对外存储键以 {@code local:} 开头，便于与历史 {@code FileApi} 文件 ID 区分。</p>
+ * <p>新导入文件已恢复通过 FileApi 写入 OBS。本组件保留旧 {@code local:} 批次的读取能力，
+ * 对外存储键以 {@code local:} 开头，便于与平台文件对象 ID 区分。</p>
  */
 @Slf4j
 @Component
