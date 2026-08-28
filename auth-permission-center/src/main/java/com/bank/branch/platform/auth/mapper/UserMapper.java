@@ -125,6 +125,19 @@ public interface UserMapper extends BaseMapper<PtUser> {
                        @Param("pwd") String bcryptHash,
                        @Param("updateAuthor") String updateAuthor);
 
+    /**
+     * 更新用户本人可维护的联系方式，并复用 PT_USER.UPDATE_TIME 记录变更时间。
+     * <p>调用方必须在 Service 层传入当前登录用户 ID；该 Mapper 不承担会话鉴权。</p>
+     *
+     * @param userId      当前用户 ID
+     * @param mobile      电话号码，可为 null 清空
+     * @param email       邮箱，可为 null 清空
+     * @return 受影响行数
+     */
+    int updateContact(@Param("userId") String userId,
+                      @Param("mobile") String mobile,
+                      @Param("email") String email);
+
     /** 物理批量删除（V1.14 新增） */
     int deleteByUserIds(@Param("userIds") java.util.List<String> userIds);
 
