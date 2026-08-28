@@ -49,22 +49,15 @@ export async function searchEmployees(keyword, limit = 20) {
 }
 
 // ============================================================
-// 通讯录页专用：保留原始 EmployeeDetailDTO（含 mobile/email/responsibleProducts/selfDesc/updatedTime/canEdit）
+// 通讯录页专用：保留原始员工 DTO（含 mobile/email/responsibleProducts/updatedTime）
 // ============================================================
 
-// GET /api/employees —— 原始分页（EmployeeQueryReqDTO: keyword/orgCode/position/status/pageNo/pageSize）
+// GET /api/employees —— 原始分页（EmployeeQueryReqDTO: keyword/orgCode/pageNo/pageSize）
 export function pageEmployees(params = {}) {
   return call('get', '/employees', { params }, { records: [], total: 0 });
 }
 
-// PUT /api/employees/{empId} —— 编辑（EmployeeUpdateReqDTO: mobile/email/position/selfDesc/responsibleProductIds）
-export function updateEmployee(empId, data) {
-  return call('put', `/employees/${empId}`, { data }, { ok: true });
-}
-
-// POST /api/employees/import —— 导入（原子全或无，成功返回导入行数；失败 throw 带行号原因）
-export function importEmployeesFile(file) {
-  const fd = new FormData();
-  fd.append('file', file);
-  return call('post', '/employees/import', { data: fd, headers: { 'Content-Type': 'multipart/form-data' } }, null);
+// PUT /api/employees/me —— 员工本人维护电话、邮箱和负责产品
+export function updateMyEmployee(data) {
+  return call('put', '/employees/me', { data }, { ok: true });
 }

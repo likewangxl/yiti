@@ -7,6 +7,25 @@ export function listProducts(params = {}) {
   return call('get', '/products', { params }, { records: [], total: 0 });
 }
 
+// 通讯录负责产品候选：只读 ACTIVE 产品，并在分页接口上聚合全部结果。
+export async function listActiveProducts({ pageSize = 100 } = {}) {
+  const records = [];
+  let pageNo = 1;
+  while (true) {
+    const result = await listProducts({ status: 'ACTIVE', pageNo, pageSize });
+    if (Array.isArray(result)) {
+      records.push(...result);
+      break;
+    }
+    const pageRecords = Array.isArray(result?.records) ? result.records : [];
+    records.push(...pageRecords);
+    const total = Number(result?.total);
+    if (!pageRecords.length || (Number.isFinite(total) && records.length >= total) || pageRecords.length < pageSize) break;
+    pageNo += 1;
+  }
+  return records;
+}
+
 // GET /api/products/support-available —— 中场支持可用产品 List<ProductSimpleDTO>
 export function supportAvailableProducts() {
   return call('get', '/products/support-available', {}, []);

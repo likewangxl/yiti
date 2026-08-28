@@ -1,22 +1,7 @@
 <template>
 <main v-bp-overflow-tooltip class="bp-crud ab-page" aria-labelledby="address-book-title">
     <header class="page-h">
-      <PageTitle id="address-book-title"><span class="sub">模糊搜索、60 天未更新提醒，负责产品会反向更新产品库</span></PageTitle>
-      <div class="actions action-group" role="group" aria-label="通讯录操作">
-        <el-button @click="downloadTemplate">下载模板</el-button>
-        <el-upload
-          ref="importUploaderRef"
-          :auto-upload="false"
-          :show-file-list="false"
-          :disabled="importing"
-          accept=".xlsx,.xls"
-          :on-change="onImportPick"
-          style="display:inline-block"
-        >
-          <el-button aria-label="导入通讯录文件" :loading="importing" :disabled="importing">导入</el-button>
-        </el-upload>
-        <el-button @click="exportData">导出</el-button>
-      </div>
+      <PageTitle id="address-book-title"><span class="sub">模糊搜索、60 天未更新提醒</span></PageTitle>
     </header>
 
     <section class="card-section filter-bar" aria-label="通讯录筛选">
@@ -47,17 +32,6 @@
             @change="reload"
           />
         </el-form-item>
-        <el-form-item label="岗位">
-          <el-input
-            v-model="filters.position"
-            aria-label="按岗位筛选"
-            placeholder="全部"
-            clearable
-            style="width:150px"
-            @keyup.enter="reload"
-            @clear="reload"
-          />
-        </el-form-item>
         <el-form-item label="负责产品">
           <el-select v-model="filters.productId" aria-label="按负责产品筛选" placeholder="全部" clearable filterable style="width:180px">
             <el-option v-for="p in products" :key="p.id" :value="p.id" :label="p.productName" />
@@ -82,7 +56,7 @@
       <div class="toolbar">
         <div>
           <h2 id="address-book-heading" class="section-title">通讯录列表</h2>
-          <p class="hint">联系方式、自我描述和负责产品可在编辑抽屉中维护。</p>
+          <p class="hint">本人可在编辑抽屉中维护电话、邮箱和负责产品。</p>
         </div>
         <p id="address-book-state" class="table-state" role="status" aria-live="polite">
           {{ loading ? '通讯录列表加载中' : viewRows.length ? `当前页展示 ${viewRows.length} 名员工` : '暂无员工数据' }}
@@ -99,13 +73,12 @@
         <el-table-column label="姓名" width="150">
           <template #default="{row}">
             <span class="avatar" aria-hidden="true">{{ (row.empName || '?').charAt(0) }}</span>
-            <span class="name">{{ row.empName }}</span>
+            <span class="name">{{ row.empName || '-' }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="empId" label="工号" width="100" />
-        <el-table-column prop="orgName" label="组织节点" min-width="160" show-overflow-tooltip />
-        <el-table-column label="岗位" width="120">
-          <template #default="{row}"><el-tag effect="plain">{{ row.positionDesc || row.position || '-' }}</el-tag></template>
+        <el-table-column label="组织节点" min-width="160" show-overflow-tooltip>
+          <template #default="{row}">{{ row.orgName || '-' }}</template>
         </el-table-column>
         <el-table-column label="联系方式" min-width="200" class-name="compact-stack-cell">
           <template #default="{row}">
@@ -127,9 +100,9 @@
             <el-tag v-if="isStale(row.updatedTime)" class="tag-warning" effect="plain" size="small">60天未更新</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" class-name="operation-cell" width="90" fixed="right">
+        <el-table-column label="操作" class-name="operation-cell" width="130" fixed="right">
           <template #default="{row}">
-            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button v-if="canEditRow(row)" link type="primary" size="small" aria-label="维护我的通讯录" @click="openEdit(row)">维护我的信息</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -146,21 +119,20 @@
       </nav>
     </section>
 
-    <el-drawer v-model="drawer" class="bp-crud-dialog" :title="`编辑通讯录 · ${cur?.empName || ''}`" size="840px">
+    <el-drawer v-model="drawer" class="bp-crud-dialog" :title="`维护我的信息 · ${cur?.empName || ''}`" size="840px">
       <div v-if="cur" class="drawer-body">
         <el-alert
           class="drawer-alert"
           type="info"
           :closable="false"
           show-icon
-          title="勾选“负责产品”将自动反向更新产品资料库的“产品负责人”字段。"
+          title="勾选“负责产品”后，产品资料库会展示对应负责人。"
         />
         <h2 class="sec-title">基本信息（只读）</h2>
         <el-descriptions :column="2" border size="small" class="ro-info">
           <el-descriptions-item label="工号">{{ cur.empId }}</el-descriptions-item>
-          <el-descriptions-item label="姓名">{{ cur.empName }}</el-descriptions-item>
-          <el-descriptions-item label="组织节点">{{ cur.orgName }}</el-descriptions-item>
-          <el-descriptions-item label="岗位">{{ cur.positionDesc || cur.position || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="姓名">{{ cur.empName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="组织节点">{{ cur.orgName || '-' }}</el-descriptions-item>
         </el-descriptions>
 
         <h2 class="sec-title">联系方式（可编辑）</h2>
@@ -175,17 +147,6 @@
         <el-checkbox-group v-model="ef.responsibleProductIds" class="prod-checks" aria-label="负责产品">
           <el-checkbox v-for="p in products" :key="p.id" :value="p.id" border>{{ p.productName }}</el-checkbox>
         </el-checkbox-group>
-
-        <h2 class="sec-title">自我描述</h2>
-        <el-input
-          v-model="ef.selfDesc"
-          aria-label="自我描述"
-          type="textarea"
-          :rows="4"
-          maxlength="500"
-          show-word-limit
-          placeholder="个人专长等"
-        />
       </div>
       <template #footer>
         <el-button :disabled="saving" @click="drawer = false">取消</el-button>
@@ -197,23 +158,24 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage } from 'element-plus';
 import { fmtDateTime } from '@/utils/datetime';
-import { pageEmployees, updateEmployee, importEmployeesFile } from '@/api/employees';
-import { supportAvailableProducts } from '@/api/products';
+import { pageEmployees, updateMyEmployee } from '@/api/employees';
+import { listActiveProducts } from '@/api/products';
 import { getOrgTree } from '@/api/orgs';
+import { useUserStore } from '@/stores/user';
 
+const userStore = useUserStore();
 const loading = ref(false);
 const saving = ref(false);
-const importing = ref(false);
-const importUploaderRef = ref(null);
 const rows = ref([]);
 const total = ref(0);
 const pgNo = ref(1);
 const pgSize = ref(20);
 const products = ref([]);
 const orgTree = ref([]);
-const filters = ref({ keyword: '', orgCode: '', position: '', productId: '', stale60: false });
+const filters = ref({ keyword: '', orgCode: '', productId: '', stale60: false });
+const currentUserId = computed(() => userStore.user?.empId ?? userStore.user?.userId ?? userStore.user?.id ?? '');
 
 const fmtDate = (v) => fmtDateTime(v);
 function isStale(v) {
@@ -236,8 +198,16 @@ function rowProducts(row) {
     .filter(Boolean);
 }
 
+// 页面仅显示本人入口；真正的目标用户校验由后端 /employees/me 负责。
+function canEditRow(row) {
+  if (!row || !currentUserId.value) return false;
+  const rowId = row.empId ?? row.userId ?? row.id;
+  if (rowId != null && String(rowId) === String(currentUserId.value)) return true;
+  return Boolean(row.username && userStore.user?.username && row.username === userStore.user.username);
+}
+
 function resetFilters() {
-  filters.value = { keyword: '', orgCode: '', position: '', productId: '', stale60: false };
+  filters.value = { keyword: '', orgCode: '', productId: '', stale60: false };
   pgNo.value = 1;
   reload();
 }
@@ -245,7 +215,10 @@ function resetFilters() {
 const viewRows = computed(() => {
   let list = rows.value;
   if (filters.value.productId) {
-    list = list.filter(row => (row.responsibleProductIds || []).includes(filters.value.productId));
+    list = list.filter(row => {
+      const ids = row.responsibleProductIds || (row.responsibleProducts || []).map(product => product.id);
+      return ids.includes(filters.value.productId);
+    });
   }
   if (filters.value.stale60) {
     list = list.filter(row => isStale(row.updatedTime));
@@ -259,7 +232,6 @@ async function reload() {
     const r = await pageEmployees({
       keyword: filters.value.keyword || undefined,
       orgCode: filters.value.orgCode || undefined,
-      position: filters.value.position || undefined,
       pageNo: pgNo.value,
       pageSize: pgSize.value
     });
@@ -269,7 +241,7 @@ async function reload() {
 }
 
 async function loadRefs() {
-  try { products.value = await supportAvailableProducts() || []; } catch { products.value = []; }
+  try { products.value = await listActiveProducts() || []; } catch { products.value = []; }
   try { orgTree.value = await getOrgTree() || []; } catch { orgTree.value = []; }
 }
 
@@ -279,44 +251,17 @@ function orgFilter(value, data) {
   return (data.name || '').toLowerCase().includes(keyword) || (data.code || '').toLowerCase().includes(keyword);
 }
 
-function downloadTemplate() {
-  window.open('/api/employees/template', '_blank');
-}
-
-function exportData() {
-  const p = new URLSearchParams();
-  if (filters.value.keyword) p.append('keyword', filters.value.keyword);
-  if (filters.value.orgCode) p.append('orgCode', filters.value.orgCode);
-  if (filters.value.position) p.append('position', filters.value.position);
-  window.open('/api/employees/export?' + p.toString(), '_blank');
-}
-
-async function onImportPick(file) {
-  if (importing.value || !file?.raw) return;
-  importing.value = true;
-  try {
-    const count = await importEmployeesFile(file.raw);
-    ElMessage.success(`导入成功 ${count ?? ''} 条`);
-    reload();
-  } catch (e) {
-    ElMessageBox.alert(e?.message || '导入失败', '导入失败', { type: 'error', confirmButtonText: '知道了' });
-  } finally {
-    importing.value = false;
-    importUploaderRef.value?.clearFiles();
-  }
-}
-
 const drawer = ref(false);
 const cur = ref(null);
-const ef = ref({ mobile: '', email: '', selfDesc: '', responsibleProductIds: [] });
+const ef = ref({ mobile: '', email: '', responsibleProductIds: [] });
 
 function openEdit(row) {
+  if (!canEditRow(row)) return;
   cur.value = row;
   ef.value = {
     mobile: row.mobile || '',
     email: row.email || '',
-    selfDesc: row.selfDesc || '',
-    responsibleProductIds: [...(row.responsibleProductIds || [])]
+    responsibleProductIds: [...(row.responsibleProductIds || (row.responsibleProducts || []).map(product => product.id))]
   };
   drawer.value = true;
 }
@@ -325,12 +270,10 @@ async function save() {
   if (saving.value || !cur.value) return;
   saving.value = true;
   try {
-    await updateEmployee(cur.value.empId, {
+    await updateMyEmployee({
       mobile: ef.value.mobile,
       email: ef.value.email,
-      position: cur.value.position,
-      selfDesc: ef.value.selfDesc,
-      responsibleProductIds: ef.value.responsibleProductIds
+      responsibleProductIds: [...(ef.value.responsibleProductIds || [])]
     });
     ElMessage.success('已保存');
     drawer.value = false;
