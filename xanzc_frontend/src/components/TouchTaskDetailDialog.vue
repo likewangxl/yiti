@@ -1,6 +1,7 @@
 <template>
   <el-dialog :model-value="modelValue" width="920px" top="5vh" append-to-body
-             title="触达任务详情" @update:model-value="$emit('update:modelValue', $event)">
+             title="触达任务详情" :close-on-click-modal="false"
+             @update:model-value="$emit('update:modelValue', $event)">
     <div v-loading="loading">
       <el-descriptions :column="3" border size="small">
         <el-descriptions-item label="任务编号">{{ task.taskNo || '-' }}</el-descriptions-item>

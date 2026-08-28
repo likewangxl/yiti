@@ -7,6 +7,20 @@ const AMOUNT_FIELDS = [
   'creditAmount',
   'creditExposureAmount'
 ];
+const SAVE_FIELDS = [
+  'custId',
+  'sourceTouchTaskId',
+  'sourceWorklogId',
+  'projectName',
+  'projectType',
+  'bizType',
+  'guaranteeType',
+  ...AMOUNT_FIELDS,
+  'urgent',
+  'keyProject',
+  'lockVersion',
+  'attachmentIds'
+];
 
 export async function listAssetProjects(params = {}) {
   const page = unwrapPage(await call('get', BASE, { params }));
@@ -37,6 +51,9 @@ export async function listAssetProjectCustomers(params = {}) {
   return Array.isArray(page) ? page : (page?.records || []);
 }
 
+export const getAssetProjectCustomer = id =>
+  call('get', `/marketing/customers/${encodeURIComponent(id)}`);
+
 export async function uploadAssetProjectAttachment(file) {
   const data = new FormData();
   data.append('file', file);
@@ -56,13 +73,14 @@ export function yuanToWan(value) {
 }
 
 function toPayload(source = {}) {
-  const payload = { ...source };
+  const payload = Object.fromEntries(
+    SAVE_FIELDS
+      .filter(field => Object.prototype.hasOwnProperty.call(source, field))
+      .map(field => [field, source[field]])
+  );
   AMOUNT_FIELDS.forEach(field => {
     if (Object.prototype.hasOwnProperty.call(payload, field)) payload[field] = wanToYuan(payload[field]);
   });
-  delete payload.customerName;
-  delete payload.custNo;
-  delete payload.unifiedCreditCode;
   return payload;
 }
 

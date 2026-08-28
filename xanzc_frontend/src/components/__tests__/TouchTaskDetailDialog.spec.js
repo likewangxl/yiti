@@ -38,7 +38,7 @@ const stubs = {
   'el-descriptions-item': passthrough('ElDescriptionsItem'),
   'el-dialog': {
     name: 'ElDialog',
-    props: ['modelValue'],
+    props: ['modelValue', 'closeOnClickModal'],
     template: '<div v-if="modelValue" class="dialog"><slot /></div>',
   },
   'el-empty': passthrough('ElEmpty'),
@@ -107,6 +107,15 @@ beforeEach(() => {
 });
 
 describe('TouchTaskDetailDialog 一任务一工作日志', () => {
+  it('不允许点击遮罩关闭并丢失未保存的办理内容', async () => {
+    api.getTouchTask.mockResolvedValue(task('PENDING'));
+    api.listTouchLogs.mockResolvedValue([]);
+
+    const view = await mountDialog();
+
+    expect(view.getComponent({ name: 'ElDialog' }).props('closeOnClickModal')).toBe(false);
+  });
+
   it('仅待办理且没有工作日志时展示新增表单，并限制触达小结为 200 字', async () => {
     api.getTouchTask.mockResolvedValue(task('PENDING'));
     api.listTouchLogs.mockResolvedValue([]);
