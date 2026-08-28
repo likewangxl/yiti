@@ -25,7 +25,7 @@
 
 ---
 
-## 1. LoanApi（资产投放查询 API）
+## 1. 历史归档：LoanApi / LoanQueryApi（已删除，不可调用）
 
 ### 接口定义
 

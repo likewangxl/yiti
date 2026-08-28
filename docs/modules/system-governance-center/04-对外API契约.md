@@ -6,7 +6,7 @@
 
 > **2026-07-19 回填说明**：本次以 `system-governance-center` 源码（`api/`/`facade/`/`service/`/`enums/`/`storage/`/`config/`）为唯一依据，对 2026-04-03 版做就地订正，主要包括：
 > 1. **JobApi 全量重写**：`startJobRun`/`completeJobRun`/`failJobRun` 三方法已在 V1.6 quartz 整合中删除（写日志改由全局 `JobExecutionLogger` 统一处理），当前接口仅剩 `getJobConf`（只读）+ V1.7 新增的 `registerJob`/`unregisterJob`（声明式注册/注销），本文历史版本描述的三方法已不存在于源码；
-> 2. **FileApi 补齐全部方法**：历史版本只收录 5/11 个方法，现按源码补齐 `upload(file,uploadedBy,category)`、`upload(byte[],filename,contentType,uploadedBy,category)`、`getFileContent`、`getFileName`、`getFileSizes`、`getFileNames`；
+> 2. **FileApi 补齐全部方法**：历史版本只收录部分方法，现按源码补齐上传重载、流式读取、文件元数据批量查询；2026-08-28 新增 `unbindFile`，用于仅解除指定业务关联；
 > 3. **错误码全量核对**：按 `GovErrorCode` 枚举源码逐条核对本文出现的每个错误码，`FileApi.upload()` 相关错误码订正为 `GOV-42203`/`GOV-42204`/`GOV-40005`（原文误写 `GOV-40903`/`GOV-40904`/`GOV-40404`）；
 > 4. **MinIO → 华为云 OBS**：文件存储已切换为 `storage/ObsStorageClient`（`com.obs.services.ObsClient`），配置键 `obs.*`；本文相应措辞已订正（代码 Javadoc 与 `GovErrorCode.MINIO_ERROR` 枚举常量名/文案仍残留 "MinIO" 字样属历史命名，非文档笔误，已在 FileApi 一节注明）；预签名下载 URL 默认有效期订正为 **10 分钟**（`obs.presignExpireSeconds` 默认 600 秒，非原文"1 小时"）；
 > 5. **缓存后端 Redis → 本地内存缓存**：`DictApi`/`ConfigApi`/`CalendarApi` 内部缓存已从 Redis 切换为 `config/MemoryCacheService`（Caffeine 单实例，`maximumSize=10000`，`expireAfterWrite=1小时` 全局固定），本文原描述的"TTL 10 分钟"/"TTL 24 小时"等分级 TTL 已不准确，已订正为统一口径。
@@ -405,7 +405,7 @@ public interface ConfigApi {
 
 ## 7. FileApi -- 文件管理API
 
-> **订正（2026-07-19）**：原文仅收录 5/11 个方法，且错误码与存储后端描述与源码不符，现按 `api/FileApi.java` 源码全量重写。
+> **订正（2026-08-28）**：本文按 `api/FileApi.java` 的 13 个方法维护；本轮新增 `unbindFile`。
 
 ```java
 package com.bank.branch.platform.governance.api;
@@ -503,6 +503,12 @@ public interface FileApi {
     void bindFile(String bizType, String bizId, String fileObjectId, String fileRole);
 
     /**
+     * 解除指定业务对象与文件的关联；不删除 FILE_OBJECT、OBS 对象或该文件的其他业务关联。
+     * 入参为空时抛 IllegalArgumentException；目标关系不存在时按幂等成功处理。
+     */
+    void unbindFile(String bizType, String bizId, String fileObjectId);
+
+    /**
      * 查询业务关联的文件列表
      *
      * @param bizType 业务类型
@@ -554,6 +560,9 @@ public interface FileApi {
 - `writeFileContent()`：直接将 OBS 对象输入流复制到调用方 `OutputStream`，只关闭 OBS 输入流，不关闭调用方输出流，适用于大文件 HTTP 流式下载
 - `getDownloadUrl()` 返回的预签名 URL 默认有效期 10 分钟（`obs.presignExpireSeconds`，可配置），调用方应在 URL 过期前使用
 - `bindFile()` 幂等：相同的 `bizType + bizId + fileObjectId` 不会重复创建关联
+- `unbindFile()` 只按 `bizType + bizId + fileObjectId` 删除 `BIZ_FILE_REL` 中的目标关系；关系不存在时
+  不报错，也不删除 `FILE_OBJECT`、OBS 对象或其他业务对象的关联。它用于附件替换等场景，不能以
+  `deleteFile()` 代替
 - `deleteFile()` 需要注意：**当前实现无引用计数判断**，调用即无条件删除 OBS 物理文件 + `file_object` 记录 + 该文件全部业务关联，如果文件仍被其他业务对象引用会一并失效，调用方需自行确认没有其他引用后再调用（订正：原文描述的"若无其他引用则删除"逻辑当前源码未实现）
 - `getFileSizes()`/`getFileNames()` 内部使用 MyBatis-Plus `BaseMapper.selectBatchIds` 一次查出，避免 N+1
 - `upload()` 的格式白名单与大小上限**当前为 `FileService` 内硬编码常量**（扩展名白名单集合 + `MAX_FILE_SIZE=50MB`），订正：并非原文描述的由 `sys_config_kv`（`file.upload.allowed.types`/`file.upload.max.size.mb`）读取——`sys_config_kv` 中若存在同名配置项，当前代码并未接入读取
@@ -1261,6 +1270,7 @@ public class PersonTagDTO {
 | FileApi.writeFileContent() | 同步流式 | 无 | 中 | OBS 输入流直接写调用方 OutputStream，不聚合完整字节 |
 | FileApi.getDownloadUrl() | 同步 | 无 | 中 | 预签名 URL 默认有效期 10 分钟（`obs.presignExpireSeconds`，可配置） |
 | FileApi.bindFile() | 同步 | 无 | 低 | 幂等操作 |
+| FileApi.unbindFile() | 同步事务 | 无 | 低 | 只解除指定业务关联，不删除文件对象 |
 | FileApi.listBizFiles() | 同步 | 无 | 中 | - |
 | FileApi.deleteFile() | 同步 | 无 | 低 | 订正：当前实现**不做**引用计数检查，无条件删除 |
 | FileApi.getFileName() | 同步 | 无 | 中 | 供 Content-Disposition；本文历史版本未收录 |

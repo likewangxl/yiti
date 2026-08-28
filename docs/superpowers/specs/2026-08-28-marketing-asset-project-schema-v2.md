@@ -119,3 +119,9 @@ DRAFT → IN_APPROVAL → APPROVED / REJECTED / CANCELLED
 2. 先在隔离库建新表和映射数据，做数量、金额、状态、流程、附件和逻辑关联对账；未通过不切换。
 3. 同步调整实体、Mapper/XML、Service、公开 API、页面、测试schema/data、字典、权限、审计和文档；不允许只改 `@TableName`。
 4. 本轮已交付应用接口、页面、测试与候选 SQL；业务 DDL 和权限迁移 SQL 未执行，仍须经 DBA/权限管理员评审后实施。
+5. 可执行权限脚本只允许事务控制、`INSERT`、`UPDATE`。旧资源和旧数据范围采用状态停用，不执行
+   `DELETE`；执行前盘点和执行后验收查询外置在
+   `docs/superpowers/evidence/2026-08-28-asset-project/release-gates.md`。
+6. 当前 Workflow API 是模块化单体内的同步调用，流程启动按默认 `REQUIRED` 传播加入资产立项事务；
+   主流程或加急流程启动后若本地状态回写失败，应整体回滚。生产切换前必须以集成测试故障注入验证
+   Flowable 与业务表确实共享数据源和事务管理器；若未来改为远程调用，则必须另建可审计补偿闭环。

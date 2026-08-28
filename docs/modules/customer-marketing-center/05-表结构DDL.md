@@ -465,7 +465,7 @@ MARKETING_CUSTOMER_INFO
 ### 5.12 MARKETING_LEAD_IMPORT_BATCH
 
 所属领域：线索域
-表含义：一次Excel线索导入批次头，记录本地暂存文件、校验统计、人工确认和各线索审批汇总；批次本身不作为整批审批单。
+表含义：一次Excel线索导入批次头，记录OBS文件对象、校验统计、人工确认和各线索审批汇总；批次本身不作为整批审批单。
 
 | 字段名 | 建议类型 | 必填 | 字段含义 |
 | --- | --- | --- | --- |
@@ -497,7 +497,7 @@ MARKETING_CUSTOMER_INFO
 | updated_time | DATETIME | 是 | 最后修改时间 |
 | lock_version | INT | 是 | 导入确认操作的乐观锁版本 |
 
-主要约束与索引：PK(id)；UK(batch_no)；IDX(import_emp_id, import_time)；IDX(import_status, import_time)。当前原始文件和错误明细保存到应用节点本地目录，表中保存 `local:` 存储键；历史平台文件对象ID仍按FileApi读取。用户放弃并重传时保留原批次为ABANDONED，新文件必须创建新批次。
+主要约束与索引：PK(id)；UK(batch_no)；IDX(import_emp_id, import_time)；IDX(import_status, import_time)。新导入的原始文件和错误明细通过FileApi保存到OBS，表中保存平台文件对象ID；切换前的 `local:` 存储键仍可兼容读取。用户放弃并重传时保留原批次为ABANDONED，新文件必须创建新批次。
 
 ### 5.13 MARKETING_LEAD_IMPORT_DETAIL
 
