@@ -50,11 +50,12 @@ describe('营销线索录入页面契约', () => {
     expect(source).toContain("IN_APPROVAL:'待审批'");
   });
 
-  it('第二 Tab 展示批次、失败优先明细、OBS 下载和待确认动作', () => {
+  it('第二 Tab 展示批次、失败优先明细、原始文件下载和待确认动作', () => {
     expect(source).toContain('listLeadImportBatches');
     expect(source).toContain('MarketingLeadImportDetailDrawer');
     expect(source).toContain('downloadLeadImportSourceFile');
-    expect(source).toContain('downloadLeadImportErrorFile');
+    expect(source).not.toContain('downloadLeadImportErrorFile');
+    expect(source).not.toContain('下载失败明细');
     expect(source).toContain('WAITING_CONFIRM');
     expect(source).toContain('PROCESS_VALID');
     expect(source).toContain('ABANDON_REIMPORT');
@@ -141,7 +142,7 @@ describe('营销线索录入页面契约', () => {
   });
 
   it('批量导入弹窗说明标签、客户经理范围和附件的填写边界', () => {
-    expect(source).toContain('客户标签填写标签ID，多个用分号分隔');
+    expect(source).toContain('客户标签填写标签名称，多个用分号分隔');
     expect(source).toContain('指定客户经理范围填写工号，多个用分号分隔');
     expect(source).toContain('附件无法随表格导入，需在线索生成后单独补充');
   });

@@ -21,7 +21,6 @@
       <div class="detail-toolbar">
         <div class="toolbar-actions">
           <el-button :loading="downloading === 'source'" @click="downloadSource">下载原始文件</el-button>
-          <el-button v-if="failureCount(batch) > 0" :loading="downloading === 'error'" @click="downloadError">下载失败明细</el-button>
         </div>
         <span class="failure-hint">失败、异常、警告明细优先展示</span>
       </div>
@@ -53,7 +52,6 @@
 import { computed, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import {
-  downloadLeadImportErrorFile,
   downloadLeadImportSourceFile,
   getLeadImportBatchDetails,
 } from '@/api/marketingManagement';
@@ -129,18 +127,6 @@ async function downloadSource() {
   }
 }
 
-async function downloadError() {
-  if (!props.batch?.id || downloading.value) return;
-  downloading.value = 'error';
-  try {
-    const blob = await downloadLeadImportErrorFile(props.batch.id);
-    downloadBlob(blob, `${props.batch.sourceFileName || `线索导入_${props.batch.id}`}.error.csv`);
-  } catch (error) {
-    ElMessage.error(`失败明细下载失败：${error?.message || '请稍后重试'}`);
-  } finally {
-    downloading.value = '';
-  }
-}
 </script>
 
 <style scoped lang="scss">

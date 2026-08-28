@@ -55,8 +55,7 @@ public class MarketingLeadImportController {
         query.setStatus(status);
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
-        return ResponseWrapper.page(service.list(query, currentUserApi.getCurrentEmpId(),
-                currentUserApi.isSystemAdmin()));
+        return ResponseWrapper.page(service.list(query, currentUserApi.getCurrentEmpId()));
     }
 
     @PostMapping("/preview")
@@ -82,8 +81,7 @@ public class MarketingLeadImportController {
     @BizAuth(bizType = BizType.LEAD, action = BizAction.READ)
     @Operation(summary = "查询导入批次汇总")
     public ResponseWrapper<MarketingLeadImportBatch> detail(@PathVariable Long batchId) {
-        return ResponseWrapper.success(service.getBatch(batchId, currentUserApi.getCurrentEmpId(),
-                currentUserApi.isSystemAdmin()));
+        return ResponseWrapper.success(service.getBatch(batchId, currentUserApi.getCurrentEmpId()));
     }
 
     @GetMapping("/{batchId}/details")
@@ -94,7 +92,7 @@ public class MarketingLeadImportController {
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         PageResult<MarketingLeadImportDetail> result = service.listDetails(batchId, pageNo, pageSize,
-                currentUserApi.getCurrentEmpId(), currentUserApi.isSystemAdmin());
+                currentUserApi.getCurrentEmpId());
         return ResponseWrapper.page(result);
     }
 
@@ -106,7 +104,7 @@ public class MarketingLeadImportController {
             @PathVariable Long batchId,
             @Valid @RequestBody LeadImportConfirmRequest request) {
         return ResponseWrapper.success(service.confirm(batchId, request.getAction(),
-                currentUserApi.getCurrentEmpId(), request.getRemark(), currentUserApi.isSystemAdmin()));
+                currentUserApi.getCurrentEmpId(), request.getRemark()));
     }
 
     @GetMapping("/{batchId}/source-file")
@@ -114,17 +112,8 @@ public class MarketingLeadImportController {
     @AuditLog(action = "DOWNLOAD_MARKETING_LEAD_IMPORT_SOURCE", resourceType = "LEAD")
     @Operation(summary = "下载导入原文件")
     public void sourceFile(@PathVariable Long batchId, HttpServletResponse response) throws IOException {
-        write(response, service.sourceFile(batchId, currentUserApi.getCurrentEmpId(),
-                currentUserApi.isSystemAdmin()), "application/octet-stream");
-    }
-
-    @GetMapping("/{batchId}/error-file")
-    @BizAuth(bizType = BizType.LEAD, action = BizAction.READ)
-    @AuditLog(action = "DOWNLOAD_MARKETING_LEAD_IMPORT_ERRORS", resourceType = "LEAD")
-    @Operation(summary = "下载导入失败明细")
-    public void errorFile(@PathVariable Long batchId, HttpServletResponse response) throws IOException {
-        write(response, service.errorFile(batchId, currentUserApi.getCurrentEmpId(),
-                currentUserApi.isSystemAdmin()), "text/csv;charset=UTF-8");
+        write(response, service.sourceFile(batchId, currentUserApi.getCurrentEmpId()),
+                "application/octet-stream");
     }
 
     private void write(HttpServletResponse response, byte[] bytes, String contentType) throws IOException {

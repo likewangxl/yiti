@@ -116,8 +116,6 @@ export const confirmLeadImportBatch = (id, data) =>
   call('post', `/marketing/lead-import-batches/${idPart(id)}/confirm`, { data });
 export const downloadLeadImportSourceFile = id =>
   call('get', `/marketing/lead-import-batches/${idPart(id)}/source-file`, { responseType: 'blob' }, null);
-export const downloadLeadImportErrorFile = id =>
-  call('get', `/marketing/lead-import-batches/${idPart(id)}/error-file`, { responseType: 'blob' }, null);
 
 // 页面四：线索审批
 export const listLeadApprovalOverview = (params = {}) =>

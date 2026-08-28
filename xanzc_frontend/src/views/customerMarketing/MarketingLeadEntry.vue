@@ -176,7 +176,7 @@
           <template #tip><div class="el-upload__tip">支持 xlsx、xls、csv，单个文件不超过 10MB。</div></template>
         </el-upload>
         <div class="import-dialog-help">
-          <p>客户标签填写标签ID，多个用分号分隔；指定客户经理范围填写工号，多个用分号分隔。</p>
+          <p>客户标签填写标签名称，多个用分号分隔；指定客户经理范围填写工号，多个用分号分隔。</p>
           <p>附件无法随表格导入，需在线索生成后单独补充。</p>
         </div>
       </div>
@@ -198,7 +198,7 @@ import { searchEmployees } from '@/api/employees';
 import { useDict } from '@/composables/useDict';
 import {
   confirmLeadImportBatch, createLeadImportBatch, createMarketingLead,
-  downloadLeadImportErrorFile, downloadLeadImportSourceFile, getMarketingLead,
+  downloadLeadImportSourceFile, getMarketingLead,
   listLeadEntries, listLeadImportBatches, listMarketingCustomerTags,
   lookupMarketingCustomer, submitMarketingLead, updateMarketingLead,
   uploadMarketingLeadAttachment
@@ -481,7 +481,7 @@ watch(()=>form.distributionMode,value=>{
 });
 
 // 文件下载由 MarketingLeadImportDetailDrawer 调用，保留显式引用用于页面契约审计。
-void downloadLeadImportSourceFile; void downloadLeadImportErrorFile;
+void downloadLeadImportSourceFile;
 refreshManualView();
 </script>
 

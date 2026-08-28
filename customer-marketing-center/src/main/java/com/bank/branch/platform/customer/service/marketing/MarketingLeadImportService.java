@@ -11,10 +11,12 @@ import com.bank.branch.platform.customer.dto.marketing.lead.LeadImportDetailResp
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadImportPreviewResponse;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadImportQuery;
 import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo;
+import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTag;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadImportBatch;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadImportDetail;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerInfoMapper;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerTagMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadImportBatchMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadImportDetailMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadInfoMapper;
@@ -89,13 +91,21 @@ public class MarketingLeadImportService {
     private final MarketingLeadImportDetailMapper detailMapper;
     private final MarketingLeadInfoMapper leadMapper;
     private final MarketingCustomerInfoMapper customerMapper;
+    private final MarketingCustomerTagMapper tagMapper;
     private final MarketingLeadEntryService leadEntryService;
     private final PlatformTransactionManager transactionManager;
     private final MarketingLeadImportLocalStorage localStorage;
     /** 仅用于兼容读取切换前已经落库的 OBS 文件 ID，不再用于新导入文件上传。 */
     private final FileApi fileApi;
 
-    /** 查询导入批次；客户经理固定只能查看本人批次，管理员可查看全量。 */
+    /** 查询当前员工本人导入批次；系统管理员也不扩大导入记录的数据范围。 */
+    public PageResult<MarketingLeadImportBatch> list(LeadImportQuery query, String operatorEmpId) {
+        return list(query, operatorEmpId, false);
+    }
+
+    /**
+     * 兼容旧调用签名；旧的 allScope 参数已失效，始终按导入员工过滤。
+     */
     public PageResult<MarketingLeadImportBatch> list(LeadImportQuery query,
                                                      String operatorEmpId,
                                                      boolean allScope) {
@@ -104,15 +114,20 @@ public class MarketingLeadImportService {
         int pageSize = safePageSize(safe.getPageSize());
         int offset = (pageNo - 1) * pageSize;
         List<MarketingLeadImportBatch> records = batchMapper.selectPage(
-                safe.getKeyword(), safe.getStatus(), operatorEmpId, allScope, offset, pageSize);
-        long total = batchMapper.countPage(safe.getKeyword(), safe.getStatus(), operatorEmpId, allScope);
+                safe.getKeyword(), safe.getStatus(), operatorEmpId, false, offset, pageSize);
+        long total = batchMapper.countPage(safe.getKeyword(), safe.getStatus(), operatorEmpId, false);
         return PageResult.of(pageNo, pageSize, total, records == null ? List.of() : records);
     }
 
     /** 获取批次汇总并校验数据范围。 */
+    public MarketingLeadImportBatch getBatch(Long batchId, String operatorEmpId) {
+        return getBatch(batchId, operatorEmpId, false);
+    }
+
+    /** 兼容旧调用签名；管理员标志不再扩大可见范围。 */
     public MarketingLeadImportBatch getBatch(Long batchId, String operatorEmpId, boolean allScope) {
         MarketingLeadImportBatch batch = batchMapper.selectActiveById(batchId);
-        requireBatchVisible(batch, operatorEmpId, allScope);
+        requireBatchVisible(batch, operatorEmpId);
         return batch;
     }
 
@@ -129,8 +144,14 @@ public class MarketingLeadImportService {
 
     /** 带数据范围检查的明细查询，供 Controller 使用。 */
     public PageResult<MarketingLeadImportDetail> listDetails(Long batchId, int pageNo, int pageSize,
+                                                              String operatorEmpId) {
+        return listDetails(batchId, pageNo, pageSize, operatorEmpId, false);
+    }
+
+    /** 兼容旧调用签名；管理员标志不再扩大可见范围。 */
+    public PageResult<MarketingLeadImportDetail> listDetails(Long batchId, int pageNo, int pageSize,
                                                               String operatorEmpId, boolean allScope) {
-        getBatch(batchId, operatorEmpId, allScope);
+        getBatch(batchId, operatorEmpId, false);
         return listDetails(batchId, pageNo, pageSize);
     }
 
@@ -166,12 +187,12 @@ public class MarketingLeadImportService {
         return confirm(batchId, action, operatorEmpId, remark, false);
     }
 
-    /** 带管理员数据范围标志的待确认操作；非管理员不能确认他人的批次。 */
+    /** 待确认操作固定校验当前员工归属，系统管理员不能确认他人的批次。 */
     @Transactional
     public MarketingLeadImportBatch confirm(Long batchId, String action,
                                             String operatorEmpId, String remark, boolean allScope) {
         MarketingLeadImportBatch batch = batchMapper.selectForUpdate(batchId);
-        requireBatchVisible(batch, operatorEmpId, allScope);
+        requireBatchVisible(batch, operatorEmpId);
         if (!WAITING_CONFIRM.equals(batch.getImportStatus())) {
             throw error("MARKETING_LEAD_IMPORT_STATE_INVALID", "当前批次不处于待确认状态");
         }
@@ -199,8 +220,13 @@ public class MarketingLeadImportService {
     }
 
     /** 下载原始导入文件；调用方已在 service 层校验批次权限。 */
+    public byte[] sourceFile(Long batchId, String operatorEmpId) {
+        return sourceFile(batchId, operatorEmpId, false);
+    }
+
+    /** 兼容旧调用签名；管理员标志不再扩大原始文件可见范围。 */
     public byte[] sourceFile(Long batchId, String operatorEmpId, boolean allScope) {
-        MarketingLeadImportBatch batch = getBatch(batchId, operatorEmpId, allScope);
+        MarketingLeadImportBatch batch = getBatch(batchId, operatorEmpId, false);
         if (!StringUtils.hasText(batch.getSourceFileId())) {
             throw error("MARKETING_LEAD_IMPORT_FILE_NOT_FOUND", "原始导入文件不存在");
         }
@@ -692,15 +718,19 @@ public class MarketingLeadImportService {
     private List<Long> parseTagIds(String value) {
         List<String> tokens = splitDelimited(value);
         if (tokens.isEmpty()) return List.of();
-        List<Long> ids = new ArrayList<>(tokens.size());
+        Set<Long> ids = new LinkedHashSet<>();
         for (String token : tokens) {
             try {
                 ids.add(Long.valueOf(token));
             } catch (NumberFormatException ex) {
-                throw invalid("INVALID_TAG_IDS", "客户标签必须填写标签ID，当前值：" + token);
+                MarketingCustomerTag tag = tagMapper.selectByTagName(token);
+                if (tag == null || tag.getId() == null) {
+                    throw invalid("INVALID_TAG_IDS", "客户标签不存在：" + token);
+                }
+                ids.add(tag.getId());
             }
         }
-        return new ArrayList<>(new LinkedHashSet<>(ids));
+        return new ArrayList<>(ids);
     }
 
     private List<String> splitDelimited(String value) {
@@ -793,9 +823,9 @@ public class MarketingLeadImportService {
                 .last("LIMIT 1"));
     }
 
-    private void requireBatchVisible(MarketingLeadImportBatch batch, String operatorEmpId, boolean allScope) {
+    private void requireBatchVisible(MarketingLeadImportBatch batch, String operatorEmpId) {
         if (batch == null || !"ACTIVE".equals(batch.getRecordStatus())
-                || (!allScope && !Objects.equals(batch.getImportEmpId(), operatorEmpId))) {
+                || !Objects.equals(batch.getImportEmpId(), operatorEmpId)) {
             throw error("MARKETING_LEAD_IMPORT_NOT_FOUND", "导入批次不存在");
         }
     }

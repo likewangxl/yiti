@@ -3,10 +3,12 @@ package com.bank.branch.platform.customer.marketing.lead;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadCreateRequest;
 import com.bank.branch.platform.customer.dto.marketing.lead.LeadSubmitResponse;
+import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTag;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadImportBatch;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadImportDetail;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerInfoMapper;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerTagMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadImportBatchMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadImportDetailMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadInfoMapper;
@@ -55,6 +57,8 @@ class MarketingLeadImportServiceTest {
     private MarketingLeadEntryService leadEntryService;
     @Mock
     private MarketingCustomerInfoMapper customerMapper;
+    @Mock
+    private MarketingCustomerTagMapper tagMapper;
     @Mock
     private MarketingLeadImportLocalStorage localStorage;
     @Mock
@@ -188,6 +192,78 @@ class MarketingLeadImportServiceTest {
         verify(detailMapper).updateHandlingIf(91L, "PENDING", "GENERATED", 901L);
         verify(localStorage).saveSource(file);
         verifyNoInteractions(fileApi);
+    }
+
+    @Test
+    void importedTagNamesResolveToFormalIdsAndDeduplicateWithNumericIds() {
+        stubBatchInsert(18L);
+        List<MarketingLeadImportDetail> insertedDetails = new ArrayList<>();
+        doAnswer(invocation -> {
+            MarketingLeadImportDetail detail = invocation.getArgument(0);
+            detail.setId(181L);
+            insertedDetails.add(detail);
+            return 1;
+        }).when(detailMapper).insert(any(MarketingLeadImportDetail.class));
+        when(detailMapper.selectByBatchAndValidationStatus(18L, "VALID"))
+                .thenAnswer(invocation -> insertedDetails.stream()
+                        .filter(detail -> "VALID".equals(detail.getValidationStatus())).toList());
+        when(customerMapper.selectOne(any())).thenReturn(null);
+        when(leadMapper.selectActiveByCreditCode(anyString())).thenReturn(null);
+
+        MarketingCustomerTag namedTag = new MarketingCustomerTag();
+        namedTag.setId(2026L);
+        namedTag.setTagName("2026重点企业");
+        namedTag.setRecordStatus("ACTIVE");
+        namedTag.setApprovalStatus("APPROVED");
+        namedTag.setStatus("ENABLED");
+        when(tagMapper.selectByTagName("2026重点企业")).thenReturn(namedTag);
+
+        MarketingLeadInfo generatedLead = new MarketingLeadInfo();
+        generatedLead.setId(1801L);
+        when(leadEntryService.createDraft(any(LeadCreateRequest.class), eq("EMP_1"), eq("ORG_1")))
+                .thenAnswer(invocation -> {
+                    LeadCreateRequest request = invocation.getArgument(0);
+                    assertEquals(List.of(2026L, 101L), request.getTagIds());
+                    return generatedLead;
+                });
+
+        String csv = "客户名称,统一社会信用代码,是否触达限制,客户标签\n"
+                + "标签企业,91320100ABC1234567,否, 2026重点企业；101；2026重点企业 \n";
+
+        var response = service.create(csvFile(csv), "EMP_1", "ORG_1");
+
+        assertEquals("COMPLETED", response.getBatch().getImportStatus());
+        verify(tagMapper, org.mockito.Mockito.times(2)).selectByTagName("2026重点企业");
+    }
+
+    @Test
+    void unknownImportedTagIsReportedAsChineseNameErrorInsteadOfIdRequirement() {
+        stubBatchInsert(19L);
+        when(tagMapper.selectByTagName("不存在标签")).thenReturn(null);
+
+        String csv = "客户名称,统一社会信用代码,是否触达限制,客户标签\n"
+                + "标签企业,91320100ABC1234567,否,不存在标签\n";
+
+        var response = service.preview(csvFile(csv), "EMP_1", "ORG_1");
+
+        MarketingLeadImportDetail detail = response.getDetails().get(0);
+        assertEquals("ERROR", detail.getValidationStatus());
+        assertEquals("INVALID_TAG_IDS", detail.getErrorCode());
+        assertEquals("客户标签不存在：不存在标签", detail.getErrorMessage());
+    }
+
+    @Test
+    void systemAdminFlagCannotExpandImportBatchVisibilityToAnotherEmployee() {
+        MarketingLeadImportBatch batch = new MarketingLeadImportBatch();
+        batch.setId(20L);
+        batch.setRecordStatus("ACTIVE");
+        batch.setImportEmpId("EMP_1");
+        when(batchMapper.selectActiveById(20L)).thenReturn(batch);
+
+        BizException exception = assertThrows(BizException.class,
+                () -> service.getBatch(20L, "EMP_2", true));
+
+        assertEquals("MARKETING_LEAD_IMPORT_NOT_FOUND", exception.getCode());
     }
 
     @Test

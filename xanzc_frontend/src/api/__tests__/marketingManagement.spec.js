@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 
 vi.mock('../http', () => ({ call: vi.fn().mockResolvedValue({ records: [], total: 0 }) }));
+
+const source = readFileSync(new URL('../marketingManagement.js', import.meta.url), 'utf8');
 
 import { call } from '../http';
 import {
@@ -143,6 +146,12 @@ describe('六页面营销管理 API', () => {
     const createCall = call.mock.calls[0];
     expect(createCall.slice(0, 2)).toEqual(['post', '/marketing/lead-import-batches']);
     expect(createCall[2].silent).toBe(true);
+  });
+
+  it('线索导入 API 仅暴露原始文件下载，不暴露失败明细下载', () => {
+    expect(source).toContain('downloadLeadImportSourceFile');
+    expect(source).not.toContain('downloadLeadImportErrorFile');
+    expect(source).not.toContain('/error-file');
   });
 
   it('线索审批区分本人待办和本人已办', async () => {
