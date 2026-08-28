@@ -19,7 +19,7 @@ public class SubmitRespDTO {
     /** Flowable 流程实例ID，对应 WorkflowLaunchResp.processInstanceId */
     private String processInstanceId;
 
-    /** 业务键，格式：LOAN:{id} 或 SUPPORT:{id} */
+    /** 业务键，例如 {@code SUPPORT:{id}}。 */
     private String businessKey;
 
     /** 提交后状态，固定值 "IN_APPROVAL" */

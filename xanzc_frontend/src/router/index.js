@@ -90,40 +90,40 @@ const routes = [
       { path: 'announcement/:id', name: 'AnnouncementDetail', component: () => import('@/views/system/AnnouncementDetail.vue'), meta: { title: '公告详情' } },
       { path: 'workspace/notifications', name: 'NotificationList', component: () => import('@/views/workspace/NotificationList.vue'), meta: { title: '通知列表', group: '工作台' } },
 
-      // 业务申请：资产立项主菜单必须与后端实际菜单路径保持一致；新建/详情仅为同菜单下的隐藏入口。
+      // 客户营销：资产立项正式入口。
       {
-        path: 'bizexec/loans',
-        name: 'BusinessApplicationLoans',
-        component: () => import('@/views/businessApplication/Index.vue'),
+        path: 'marketing/asset-projects',
+        name: 'AssetProjects',
+        component: () => import('@/views/customerMarketing/AssetProjects.vue'),
         meta: {
           title: '资产立项',
-          group: '业务申请',
-          requiredMenu: '/bizexec/loans',
-          requiredResource: '/api/loans'
+          group: '客户营销',
+          requiredMenu: '/marketing/asset-projects',
+          requiredResource: '/api/marketing/asset-projects'
         }
       },
       {
-        path: 'bizexec/loans/new',
-        name: 'BusinessApplicationLoanCreate',
-        component: () => import('@/views/businessApplication/Index.vue'),
+        path: 'marketing/asset-projects/new',
+        name: 'AssetProjectCreate',
+        component: () => import('@/views/customerMarketing/AssetProjects.vue'),
         meta: {
           title: '新建资产立项',
-          group: '业务申请',
+          group: '客户营销',
           hideInMenu: true,
-          requiredMenu: '/bizexec/loans',
-          requiredResource: '/api/loans'
+          requiredMenu: '/marketing/asset-projects',
+          requiredResource: '/api/marketing/asset-projects'
         }
       },
       {
-        path: 'bizexec/loans/:id',
-        name: 'BusinessApplicationLoanDetail',
-        component: () => import('@/views/businessApplication/Index.vue'),
+        path: 'marketing/asset-projects/:id',
+        name: 'AssetProjectDetail',
+        component: () => import('@/views/customerMarketing/AssetProjects.vue'),
         meta: {
           title: '资产立项详情',
-          group: '业务申请',
+          group: '客户营销',
           hideInMenu: true,
-          requiredMenu: '/bizexec/loans',
-          requiredResource: '/api/loans'
+          requiredMenu: '/marketing/asset-projects',
+          requiredResource: '/api/marketing/asset-projects'
         }
       },
 

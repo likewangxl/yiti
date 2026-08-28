@@ -147,7 +147,7 @@ public interface CustLeadMapper extends BaseMapper<CustLead> {
      * 仅当记录当前 lead_status 等于 expectedStatus 时才执行更新，返回影响行数。
      * 用于 WorkflowCallbackListener 防止 ProcessCompletedEvent 被重复 publish 时重复
      * 处理（多实例 / 网络抖动 / 重发场景），返回 0 表示已被其他实例处理，跳过事件发布。
-     * 与 {@code business-application-center.LoanApplyMapper.conditionalUpdateStatus} pattern 对齐。
+     * 采用状态与版本号双条件更新，避免并发覆盖。
      * </p>
      *
      * @param id             线索ID

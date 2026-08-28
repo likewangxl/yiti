@@ -159,9 +159,9 @@ class AdminTouchTaskControllerTest extends AbstractControllerIntegrationTest {
 
     private TouchTask buildTask(String id, String custId, String orgId) {
         TouchTask task = new TouchTask();
-        task.setId(id);
+        task.setId(Math.abs((long) id.hashCode()) + 1L);
         task.setTaskNo("TOUCH_" + id);
-        task.setCustId(custId);
+        task.setCustId(Math.abs((long) custId.hashCode()) + 1L);
         task.setOrgId(orgId);
         task.setAssigneeEmpId("E10001");
         task.setTaskType("FIRST_TOUCH");

@@ -14,7 +14,7 @@ import java.util.Set;
  * 封装触达任务 4 个状态 (PENDING/IN_PROGRESS/SUCCESS/CANCELLED) 之间的合法转移规则。
  * 依据《功能规格》§7.3bis 定义：
  * <ul>
- *   <li>PENDING → IN_PROGRESS / SUCCESS / CANCELLED</li>
+ *   <li>PENDING → IN_PROGRESS / CANCELLED</li>
  *   <li>IN_PROGRESS → SUCCESS / CANCELLED</li>
  *   <li>SUCCESS / CANCELLED 为终态，不允许再转移</li>
  * </ul>
@@ -30,7 +30,6 @@ public class TouchTaskStateMachineService {
      */
     private static final Map<TouchTaskStatus, Set<TouchTaskStatus>> ALLOWED = Map.of(
             TouchTaskStatus.PENDING,     Set.of(TouchTaskStatus.IN_PROGRESS,
-                                                TouchTaskStatus.SUCCESS,
                                                 TouchTaskStatus.CANCELLED),
             TouchTaskStatus.IN_PROGRESS, Set.of(TouchTaskStatus.SUCCESS,
                                                 TouchTaskStatus.CANCELLED),

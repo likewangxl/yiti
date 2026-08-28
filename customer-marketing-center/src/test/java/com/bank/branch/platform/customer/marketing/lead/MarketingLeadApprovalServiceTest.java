@@ -6,12 +6,12 @@ import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadManagerScope;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadTagRel;
-import com.bank.branch.platform.customer.entity.marketing.MarketingTouchTask;
+import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerClaimMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadInfoMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadManagerScopeMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadTagRelMapper;
-import com.bank.branch.platform.customer.mapper.marketing.MarketingTouchTaskMapper;
+import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
 import com.bank.branch.platform.customer.service.marketing.MarketingLeadApprovalService;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.FileApi;
@@ -55,7 +55,7 @@ class MarketingLeadApprovalServiceTest {
     @Mock
     private MarketingCustomerClaimMapper marketingClaimMapper;
     @Mock
-    private MarketingTouchTaskMapper marketingTouchTaskMapper;
+    private TouchTaskMapper marketingTouchTaskMapper;
 
     @InjectMocks
     private MarketingLeadApprovalService service;
@@ -195,8 +195,8 @@ class MarketingLeadApprovalServiceTest {
             claim.setId(701L);
             return 1;
         });
-        when(marketingTouchTaskMapper.insert(any(MarketingTouchTask.class))).thenAnswer(invocation -> {
-            MarketingTouchTask task = invocation.getArgument(0);
+        when(marketingTouchTaskMapper.insert(any(TouchTask.class))).thenAnswer(invocation -> {
+            TouchTask task = invocation.getArgument(0);
             task.setId(801L);
             return 1;
         });
@@ -205,7 +205,7 @@ class MarketingLeadApprovalServiceTest {
 
         assertEquals("CLAIMED", lead.getPoolStatus());
         verify(marketingClaimMapper).insert(any(MarketingCustomerClaim.class));
-        verify(marketingTouchTaskMapper).insert(any(MarketingTouchTask.class));
+        verify(marketingTouchTaskMapper).insert(any(TouchTask.class));
     }
 
     @Test

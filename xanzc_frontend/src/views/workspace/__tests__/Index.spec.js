@@ -370,29 +370,29 @@ describe('Workspace Index', () => {
     expect(ui.success).toHaveBeenCalledWith('已拒绝');
   });
 
-  it('LOAN 待办和已办均跳转资产立项页，并透传业务 id 与任务 id', async () => {
+  it('ASSET_PROJECT 待办和已办均跳转正式资产立项页', async () => {
     api.listTodoTasks.mockResolvedValue({
-      records: [{ taskId: 'TASK_LOAN_TODO', bizType: 'LOAN', bizId: 'LOAN-1', businessKey: 'LOAN:LOAN-1' }],
+      records: [{ taskId: 'TASK_AP_TODO', bizType: 'ASSET_PROJECT', bizId: '101', businessKey: 'ASSET_PROJECT:101' }],
       total: 1
     });
     api.listDoneTasks.mockResolvedValue({
-      records: [{ taskId: 'TASK_LOAN_DONE', bizType: 'LOAN', bizId: 'LOAN-2', businessKey: 'LOAN:LOAN-2' }],
+      records: [{ taskId: 'TASK_AP_DONE', bizType: 'ASSET_PROJECT', bizId: '102', businessKey: 'ASSET_PROJECT:102' }],
       total: 1
     });
 
     wrapper = mountPage();
     await settle();
 
-    await wrapper.vm.goHandle({ taskId: 'TASK_LOAN_TODO', bizType: 'LOAN', bizId: 'LOAN-1', businessKey: 'LOAN:LOAN-1' });
+    await wrapper.vm.goHandle({ taskId: 'TASK_AP_TODO', bizType: 'ASSET_PROJECT', bizId: '101', businessKey: 'ASSET_PROJECT:101' });
     expect(routerPush).toHaveBeenLastCalledWith({
-      path: '/bizexec/loans',
-      query: { tab: 'todo', loanId: 'LOAN-1', taskId: 'TASK_LOAN_TODO' }
+      path: '/marketing/asset-projects/101',
+      query: { tab: 'PENDING', taskId: 'TASK_AP_TODO' }
     });
 
-    await wrapper.vm.goDetail({ taskId: 'TASK_LOAN_DONE', bizType: 'LOAN', bizId: 'LOAN-2', businessKey: 'LOAN:LOAN-2' });
+    await wrapper.vm.goDetail({ taskId: 'TASK_AP_DONE', bizType: 'ASSET_PROJECT', bizId: '102', businessKey: 'ASSET_PROJECT:102' });
     expect(routerPush).toHaveBeenLastCalledWith({
-      path: '/bizexec/loans',
-      query: { tab: 'done', loanId: 'LOAN-2', taskId: 'TASK_LOAN_DONE' }
+      path: '/marketing/asset-projects/102',
+      query: { tab: 'PROCESSED', taskId: 'TASK_AP_DONE' }
     });
   });
 });

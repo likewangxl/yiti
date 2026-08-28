@@ -239,6 +239,7 @@ public class ProcessQueryService {
             }
 
             ProcessDiagramNodeDTO node = new ProcessDiagramNodeDTO();
+            node.setTaskId(activity.getTaskId());
             node.setNodeKey(activity.getActivityId());
             node.setNodeName(activity.getActivityName());
             node.setNodeType(activity.getActivityType());

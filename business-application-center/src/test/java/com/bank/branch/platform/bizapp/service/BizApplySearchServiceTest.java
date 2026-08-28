@@ -1,13 +1,14 @@
 package com.bank.branch.platform.bizapp.service;
 
 import com.bank.branch.platform.bizapp.api.dto.BizApplyStatDTO;
-import com.bank.branch.platform.bizapp.mapper.LoanApplyMapper;
 import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
+import com.bank.branch.platform.customer.api.AssetProjectQueryApi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -23,7 +24,10 @@ import static org.mockito.Mockito.when;
 class BizApplySearchServiceTest {
 
     @Mock
-    private LoanApplyMapper loanMapper;
+    private ObjectProvider<AssetProjectQueryApi> assetProjectQueryApiProvider;
+
+    @Mock
+    private AssetProjectQueryApi assetProjectQueryApi;
 
     @Mock
     private SupportRequestMapper supportMapper;
@@ -35,13 +39,11 @@ class BizApplySearchServiceTest {
     void getEmpStatistics_shouldAggregateFromBothDomains() {
         // Arrange
         String empId = "EMP001";
-        // loanMapper.countPage(null, null, null) -> 全量贷款总数
-        when(loanMapper.countPage(isNull(), isNull(), isNull())).thenReturn(20L);
-        // loanMapper.countCompletedByOrg 使用宽泛时间段
-        when(loanMapper.countCompletedByOrg(isNull(), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(assetProjectQueryApiProvider.getIfAvailable()).thenReturn(assetProjectQueryApi);
+        when(assetProjectQueryApi.countByApplicant(empId)).thenReturn(20L);
+        when(assetProjectQueryApi.countCompletedByApplicant(eq(empId), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(15L);
-        // sumCreditAmountByEmp 全量
-        when(loanMapper.sumCreditAmountByEmp(eq(empId), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(assetProjectQueryApi.sumCompletedCreditByApplicant(eq(empId), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(new BigDecimal("1500000.0000"));
         // 支持申请总数
         when(supportMapper.countPageForSupport(isNull(), isNull(), isNull())).thenReturn(10L);
@@ -64,11 +66,12 @@ class BizApplySearchServiceTest {
     void getEmpStatisticsByPeriod_shouldFilterByDateRange() {
         // Arrange
         String empId = "EMP002";
+        when(assetProjectQueryApiProvider.getIfAvailable()).thenReturn(assetProjectQueryApi);
         LocalDateTime start = LocalDateTime.of(2024, 1, 1, 0, 0, 0);
         LocalDateTime end = LocalDateTime.of(2024, 3, 31, 23, 59, 59);
 
-        when(loanMapper.countCompletedByOrg(isNull(), eq(start), eq(end))).thenReturn(5L);
-        when(loanMapper.sumCreditAmountByEmp(eq(empId), eq(start), eq(end)))
+        when(assetProjectQueryApi.countCompletedByApplicant(eq(empId), eq(start), eq(end))).thenReturn(5L);
+        when(assetProjectQueryApi.sumCompletedCreditByApplicant(eq(empId), eq(start), eq(end)))
                 .thenReturn(new BigDecimal("750000.0000"));
         when(supportMapper.countCompletedByCreator(eq(empId), eq(start), eq(end))).thenReturn(3L);
 

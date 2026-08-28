@@ -201,8 +201,8 @@ public class CustomerQueryApiImpl implements CustomerQueryApi {
         return activeTasks.stream().map(t -> {
             RunningFlowDTO dto = new RunningFlowDTO();
             dto.setBizType("TOUCH_TASK");
-            dto.setBizId(t.getId());
-            dto.setBusinessKey(t.getBusinessKey());
+            dto.setBizId(t.getId() == null ? null : String.valueOf(t.getId()));
+            dto.setBusinessKey(t.getId() == null ? null : "TOUCH:" + t.getId());
             dto.setOrgId(t.getOrgId());
             dto.setEmpId(t.getAssigneeEmpId());
             dto.setStatus(t.getTaskStatus());

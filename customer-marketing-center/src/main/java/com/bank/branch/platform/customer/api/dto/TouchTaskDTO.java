@@ -41,6 +41,9 @@ public class TouchTaskDTO {
     /** 工作流业务键 */
     private String businessKey;
 
+    /** 已停用兼容字段；正式模型一任务多日志，调用方应按任务查询日志。 */
+    private String worklogId;
+
     /** SLA 截止时间 */
     private LocalDateTime slaDeadline;
 

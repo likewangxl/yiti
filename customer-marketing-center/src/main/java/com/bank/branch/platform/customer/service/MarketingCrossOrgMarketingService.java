@@ -12,12 +12,12 @@ import com.bank.branch.platform.customer.entity.marketing.MarketingCrossOrgApply
 import com.bank.branch.platform.customer.entity.marketing.MarketingCrossOrgRule;
 import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo;
 import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerPerformanceRelSnapshot;
-import com.bank.branch.platform.customer.entity.marketing.MarketingTouchTask;
+import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCrossOrgApplyMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCrossOrgRuleMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerInfoMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerPerformanceRelSnapshotMapper;
-import com.bank.branch.platform.customer.mapper.marketing.MarketingTouchTaskMapper;
+import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
 import com.bank.branch.platform.customer.enums.CustomerErrorCode;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.governance.api.dto.NotificationCmd;
@@ -61,7 +61,7 @@ public class MarketingCrossOrgMarketingService {
     private final MarketingCrossOrgRuleMapper ruleMapper;
     private final MarketingCustomerInfoMapper customerMapper;
     private final MarketingCustomerPerformanceRelSnapshotMapper performanceMapper;
-    private final MarketingTouchTaskMapper touchTaskMapper;
+    private final TouchTaskMapper touchTaskMapper;
     private final UserApi userApi;
     private final OrgApi orgApi;
     private final NotifyApi notifyApi;
@@ -305,10 +305,10 @@ public class MarketingCrossOrgMarketingService {
      */
     private void ensureGeneratedTouchTask(MarketingCrossOrgApply apply) {
         if (apply.getGeneratedTouchTaskId() != null) return;
-        MarketingTouchTask task = touchTaskMapper.selectBySource("CROSS_ORG", apply.getId());
+        TouchTask task = touchTaskMapper.selectBySource("CROSS_ORG", apply.getId());
         if (task == null) {
             LocalDateTime now = LocalDateTime.now();
-            task = new MarketingTouchTask();
+            task = new TouchTask();
             task.setTaskNo("MKT-CROSS-" + apply.getApplyNo());
             task.setCustId(apply.getCustId());
             task.setSourceType("CROSS_ORG");

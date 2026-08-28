@@ -9,12 +9,12 @@ import com.bank.branch.platform.customer.entity.marketing.MarketingCrossOrgApply
 import com.bank.branch.platform.customer.entity.marketing.MarketingCrossOrgRule;
 import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo;
 import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerPerformanceRelSnapshot;
-import com.bank.branch.platform.customer.entity.marketing.MarketingTouchTask;
+import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCrossOrgApplyMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCrossOrgRuleMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerInfoMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerPerformanceRelSnapshotMapper;
-import com.bank.branch.platform.customer.mapper.marketing.MarketingTouchTaskMapper;
+import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,7 +44,7 @@ class MarketingCrossOrgMarketingServiceTest {
     @Mock
     private MarketingCustomerPerformanceRelSnapshotMapper performanceMapper;
     @Mock
-    private MarketingTouchTaskMapper touchTaskMapper;
+    private TouchTaskMapper touchTaskMapper;
     @Mock
     private UserApi userApi;
     @Mock
@@ -102,22 +102,22 @@ class MarketingCrossOrgMarketingServiceTest {
         pending.setStatus("IN_APPROVAL");
         when(applyMapper.selectById(9L)).thenReturn(pending);
         when(applyMapper.updateInApprovalToApproved(any())).thenReturn(1);
-        when(touchTaskMapper.insert(any(MarketingTouchTask.class))).thenAnswer(invocation -> {
-            MarketingTouchTask task = invocation.getArgument(0);
+        when(touchTaskMapper.insert(any(TouchTask.class))).thenAnswer(invocation -> {
+            TouchTask task = invocation.getArgument(0);
             task.setId(88L);
             return 1;
         });
 
         service.approve(9L, "REVIEWER", true);
 
-        verify(touchTaskMapper).insert(any(MarketingTouchTask.class));
+        verify(touchTaskMapper).insert(any(TouchTask.class));
         verify(applyMapper).updateGeneratedTouchTask(9L, 88L);
 
         pending.setStatus("APPROVED");
         pending.setGeneratedTouchTaskId(88L);
         when(applyMapper.selectById(9L)).thenReturn(pending);
         service.approve(9L, "REVIEWER", true);
-        verify(touchTaskMapper).insert(any(MarketingTouchTask.class));
+        verify(touchTaskMapper).insert(any(TouchTask.class));
     }
 
     @Test

@@ -34,7 +34,7 @@ describe('普通后台路由 CRUD 审计矩阵', () => {
     expect(missingBaseline).toEqual([]);
   });
 
-  it('在标准页面根容器挂载受控溢出提示，覆盖其全部 113 张表', () => {
+  it('在标准页面根容器挂载受控溢出提示，覆盖其全部 119 张表', () => {
     const pagesWithoutTooltip = normalRoutes
       .filter(route => !independentPageNames.has(route.name))
       .flatMap(route => {
@@ -54,7 +54,7 @@ describe('普通后台路由 CRUD 审计矩阵', () => {
       }, 0);
 
     expect(pagesWithoutTooltip).toEqual([]);
-    expect(tableCount).toBe(113);
+    expect(tableCount).toBe(119);
   });
 
   it('append-to-body 对话框也带 bp-crud-dialog 边界，避免提示跨入红色引擎', () => {

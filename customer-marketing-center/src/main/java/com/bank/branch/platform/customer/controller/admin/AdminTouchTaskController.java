@@ -149,7 +149,7 @@ public class AdminTouchTaskController {
             for (TouchTask t : list) {
                 out.println(
                         quote(t.getTaskNo()) + "," +
-                        quote(t.getCustId()) + "," +
+                        quote(t.getCustId() == null ? "" : String.valueOf(t.getCustId())) + "," +
                         quote(t.getOrgId()) + "," +
                         quote(t.getAssigneeEmpId()) + "," +
                         quote(t.getTaskType()) + "," +

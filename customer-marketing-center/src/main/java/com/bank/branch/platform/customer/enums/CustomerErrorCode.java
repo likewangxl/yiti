@@ -19,6 +19,7 @@ public enum CustomerErrorCode {
     TRANSFER_REASON_REQUIRED("CUST-40008", "转交原因不能为空"),
     CANCEL_REASON_REQUIRED("CUST-40009", "取消原因不能为空"),
     TOUCH_TASK_ILLEGAL_TRANSITION("CUST-40010", "触达任务非法状态转移"),
+    ASSET_PROJECT_INVALID("CUST-40014", "资产立项数据校验失败"),
     TAG_REJECT_REASON_REQUIRED("CUST-40011", "标签退回原因不能为空"),
     CROSS_ORG_REASON_REQUIRED("CUST-40012", "跨机构营销申请原因不能为空"),
     TRANSFER_TARGET_REQUIRED("CUST-40013", "至少选择一名接收客户经理"),
@@ -35,6 +36,7 @@ public enum CustomerErrorCode {
     CROSS_ORG_REVIEW_FORBIDDEN("CUST-40309", "无权审核跨机构营销申请"),
     TRANSFER_ACCESS_FORBIDDEN("CUST-40310", "无权转交非本人或非本机构主办的客户"),
     TAG_REVIEW_FORBIDDEN("CUST-40311", "仅创建人本人或公司部审核人员可审核该标签"),
+    ASSET_PROJECT_ACCESS_FORBIDDEN("CUST-40312", "无权操作该资产立项申请"),
 
     // 404 资源不存在
     TAG_NOT_FOUND("CUST-40401", "标签不存在"),
@@ -45,6 +47,8 @@ public enum CustomerErrorCode {
     BATCH_NOT_FOUND("CUST-40406", "导入批次不存在"),
     CROSS_ORG_APPLY_NOT_FOUND("CUST-40407", "跨机构营销申请不存在"),
     TRANSFER_LOG_NOT_FOUND("CUST-40408", "客户转交记录不存在"),
+    TOUCH_WORKLOG_NOT_FOUND("CUST-40409", "触达工作日志不存在"),
+    ASSET_PROJECT_NOT_FOUND("CUST-40410", "资产立项申请不存在"),
 
     // 409 冲突（按编号递增编排；40907/40910/40911 暂留空给批次 B/C 待补 422 系列时占用）
     TAG_NAME_DUPLICATE("CUST-40901", "标签名称已存在"),
@@ -59,6 +63,8 @@ public enum CustomerErrorCode {
     CROSS_ORG_STATUS_CONFLICT("CUST-40915", "仅待审批申请可以办理"),
     CROSS_ORG_ACTIVE_DUPLICATE("CUST-40916", "该客户已有本人待审批或已通过的跨机构营销申请"),
     TRANSFER_TARGET_CURRENT_MANAGER("CUST-40917", "接收客户经理不能包含当前主办客户经理"),
+    ASSET_PROJECT_STATUS_CONFLICT("CUST-40918", "资产立项状态已变化，请刷新后重试"),
+    ASSET_PROJECT_URGENT_DUPLICATE("CUST-40919", "该资产立项已有在途加急申请"),
 
     // 422 业务校验失败（按编号递增编排；CUST-42201 占位待 V1.x 行级校验落地，详见 LeadImportService.preview TODO）
     LEAD_IMPORT_VALIDATION_FAILED("CUST-42201", "线索导入数据校验失败"),
@@ -78,6 +84,8 @@ public enum CustomerErrorCode {
     CROSS_ORG_VALIDATION_FAILED("CUST-42215", "当前客户不满足跨机构营销申请条件"),
     TOUCH_RESTRICTED_ACCOUNT_OPENED("CUST-42216", "该企业经判定已开户，无法再创建工作日志"),
     TOUCH_LIMIT_REACHED("CUST-42217", "客户触达次数已达到标签周期上限"),
+    ASSET_PROJECT_SOURCE_INVALID("CUST-42218", "资产立项的触达来源与客户不匹配"),
+    ASSET_PROJECT_URGENT_NOT_ALLOWED("CUST-42219", "当前审批节点不允许申请加急"),
 
     // 500 内部错误
     INTERNAL_ERROR("CUST-50001", "客户营销服务内部错误"),

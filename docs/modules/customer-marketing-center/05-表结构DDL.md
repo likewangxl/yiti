@@ -87,8 +87,10 @@
 | 23 | 跨机构营销域 | MARKETING_CROSS_ORG_APPLY | 跨机构营销申请、四项校验快照、审批结果及生成触达任务。 |
 | 24 | 客户域 | MARKETING_CUSTOMER_TAG_IMPORT_BATCH | 单个标签的追加或全量替换导入批次，保存OBS文件、统计、审批汇总和生效状态。 |
 | 25 | 客户域 | MARKETING_CUSTOMER_TAG_IMPORT_DETAIL | 标签导入逐客户明细，保存校验、客户审批、线索关联和正式标签关系载入结果。 |
+| 26 | 资产立项域 | MARKETING_ASSET_PROJECT_APPLY | 资产立项主申请与台账，关联营销客户、来源触达任务/日志、项目金额、标签和主流程。 |
+| 27 | 资产立项域 | MARKETING_ASSET_PROJECT_URGENT_APPLY | 审批中的独立加急申请，保存发起节点快照、审批状态和并发幂等键。 |
 
-本设计共包含 25 张营销模块自有表。待认领池和已认领池均为组合查询结果，不单独建设客户池实体表。表清单中的24、25为本次六页面设计新增；为保持已评审编号稳定，未重排原1至23的序号。
+本设计共包含 27 张营销模块自有表。待认领池和已认领池均为组合查询结果，不单独建设客户池实体表。表清单中的24至27为后续评审新增；为保持已评审编号稳定，未重排原1至23的序号。
 
 ## 4. 主要业务关系
 
@@ -118,6 +120,12 @@ MARKETING_CUSTOMER_TAG_IMPORT_BATCH（一批次一标签）
                     ├─新客户或资料变更→ MARKETING_LEAD_INFO
                     ├─审批通过→ MARKETING_CUSTOMER_INFO（新增/受控更新）
                     └─批次满足生效条件→ MARKETING_CUSTOMER_TAG_REL
+
+MARKETING_CUSTOMER_INFO
+    └─资产立项→ MARKETING_ASSET_PROJECT_APPLY
+                    ├─可选来源任务→ MARKETING_TOUCH_TASK
+                    ├─可选来源日志→ MARKETING_TOUCH_WORKLOG
+                    └─中途加急→ MARKETING_ASSET_PROJECT_URGENT_APPLY
 ```
 
 ## 5. 详细数据字典
@@ -855,6 +863,82 @@ MARKETING_CUSTOMER_TAG_IMPORT_BATCH（一批次一标签）
 
 主要约束与索引：PK(id)；UK(batch_id, row_no)；UK(generated_lead_id)，允许多个NULL；IDX(batch_id, approval_status)；IDX(unified_credit_code)。新客户或存量资料变更通过generated_lead_id关联独立线索审批；存量资料无变化时仅审批标签客户关系，不重复更新客户主档。正式关系写source_type=IMPORT、source_ref_id=本表id。
 
+### 5.26 MARKETING_ASSET_PROJECT_APPLY
+
+所属领域：资产立项域
+表含义：资产立项主申请与台账。客户以 `cust_id` 逻辑关联 `MARKETING_CUSTOMER_INFO.id`，不重复保存客户全量字段。
+
+| 字段名 | 建议类型 | 必填 | 字段含义 |
+| --- | --- | --- | --- |
+| id | BIGINT UNSIGNED AUTO_INCREMENT | 是 | 主键 |
+| apply_no | VARCHAR(64) | 是 | 资产立项申请编号，唯一 |
+| legacy_apply_id | VARCHAR(64) | 否 | 迁移前LOAN_APPLY字符串ID，迁移数据唯一；新数据为空 |
+| cust_id | BIGINT UNSIGNED | 是 | 营销客户ID，关联MARKETING_CUSTOMER_INFO.id |
+| source_touch_task_id | BIGINT UNSIGNED | 否 | 发起立项的来源触达任务ID |
+| source_worklog_id | BIGINT UNSIGNED | 否 | 精确来源工作日志ID；必须属于source_touch_task_id和cust_id |
+| project_name | VARCHAR(200) | 提交时 | 项目名称；草稿可空 |
+| project_type | VARCHAR(50) | 提交时 | 项目类型字典值；草稿可空 |
+| biz_type | VARCHAR(50) | 提交时 | 业务类型字典值；草稿可空 |
+| guarantee_type | VARCHAR(50) | 提交时 | 主要担保方式；草稿可空 |
+| project_total_investment | DECIMAL(18,2) | 提交时 | 项目总投资额，单位人民币元；草稿可空 |
+| project_loan_amount | DECIMAL(18,2) | 提交时 | 项目贷款金额，单位人民币元；草稿可空 |
+| credit_amount | DECIMAL(18,2) | 提交时 | 申请授信金额；草稿可空 |
+| credit_exposure_amount | DECIMAL(18,2) | 提交时 | 申请授信敞口金额；草稿可空 |
+| is_urgent | TINYINT | 是 | 0否、1是；中途加急仅审批通过后回写1 |
+| is_key_project | TINYINT | 是 | 是否重点项目：0否、1是 |
+| urgent_source | VARCHAR(20) | 否 | INITIATION启动时、MID_PROCESS中途；未加急时为NULL |
+| applicant_emp_id | VARCHAR(32) | 是 | 发起人工号快照 |
+| applicant_org_id | VARCHAR(50) | 是 | 发起机构快照 |
+| main_manager_id_snapshot | VARCHAR(32) | 否 | 立项时客户主办人快照 |
+| main_org_id_snapshot | VARCHAR(50) | 否 | 立项时客户主办机构快照 |
+| status | VARCHAR(20) | 是 | DRAFT/IN_APPROVAL/COMPLETED/REJECTED/CANCELLED |
+| business_key | VARCHAR(100) | 否 | 主流程业务键，提交后唯一 |
+| process_instance_id | VARCHAR(64) | 否 | 主流程实例ID |
+| submitted_time | DATETIME | 否 | 提交时间 |
+| completed_time | DATETIME | 否 | 最终完成时间 |
+| record_status | VARCHAR(20) | 是 | ACTIVE/DELETED；仅草稿允许逻辑删除 |
+| created_by | VARCHAR(32) | 是 | 创建人工号 |
+| created_time | DATETIME | 是 | 创建时间 |
+| updated_by | VARCHAR(32) | 是 | 最后修改人工号 |
+| updated_time | DATETIME | 是 | 最后修改时间 |
+| lock_version | INT | 是 | 乐观锁版本 |
+
+主要约束与索引：PK(id)；UK(apply_no)；UK(legacy_apply_id)，允许多个NULL；UK(business_key)；UK(process_instance_id)；IDX(cust_id, status, record_status)；IDX(applicant_emp_id, status, created_time)；IDX(applicant_org_id, status, created_time)；IDX(source_touch_task_id)；IDX(source_worklog_id)。数据库不建跨域物理外键，Service必须校验客户、任务、日志的归属关系及当前数据范围。
+
+### 5.27 MARKETING_ASSET_PROJECT_URGENT_APPLY
+
+所属领域：资产立项域
+表含义：主申请已进入审批后的独立中途加急申请。启动时加急直接作为主流程变量，不写本表。
+
+| 字段名 | 建议类型 | 必填 | 字段含义 |
+| --- | --- | --- | --- |
+| id | BIGINT UNSIGNED AUTO_INCREMENT | 是 | 主键 |
+| urgent_apply_no | VARCHAR(64) | 是 | 中途加急申请编号，唯一 |
+| legacy_urgent_apply_id | VARCHAR(64) | 否 | 迁移前LOAN_URGENT_REQUEST字符串ID，迁移数据唯一；新数据为空 |
+| asset_project_apply_id | BIGINT UNSIGNED | 是 | 关联MARKETING_ASSET_PROJECT_APPLY.id |
+| cust_id | BIGINT UNSIGNED | 是 | 客户ID冗余，仅用于数据范围和审计，必须与主申请一致 |
+| requested_at_node_key | VARCHAR(64) | 是 | 发起时主流程节点key快照 |
+| requested_at_task_id | VARCHAR(64) | 是 | 发起时主流程当前任务ID |
+| apply_reason | VARCHAR(1000) | 是 | 加急原因 |
+| status | VARCHAR(20) | 是 | DRAFT/IN_APPROVAL/APPROVED/REJECTED/CANCELLED |
+| active_dedup_key | VARCHAR(80) | 否 | 在途时写ASSET_PROJECT:{主申请ID}，终态置NULL |
+| business_key | VARCHAR(100) | 否 | 独立加急流程业务键 |
+| process_instance_id | VARCHAR(64) | 否 | 独立加急流程实例ID |
+| requested_by | VARCHAR(32) | 是 | 申请人工号 |
+| requested_org_id | VARCHAR(50) | 是 | 申请机构 |
+| requested_time | DATETIME | 是 | 申请时间 |
+| reviewed_by | VARCHAR(32) | 否 | 最终审批人工号 |
+| reviewed_time | DATETIME | 否 | 最终审批时间 |
+| approval_comment | VARCHAR(1000) | 否 | 最终审批意见 |
+| record_status | VARCHAR(20) | 是 | ACTIVE/INACTIVE |
+| created_by | VARCHAR(32) | 是 | 创建人工号 |
+| created_time | DATETIME | 是 | 创建时间 |
+| updated_by | VARCHAR(32) | 是 | 最后修改人工号 |
+| updated_time | DATETIME | 是 | 最后修改时间 |
+| lock_version | INT | 是 | 乐观锁版本 |
+
+主要约束与索引：PK(id)；UK(urgent_apply_no)；UK(legacy_urgent_apply_id)，允许多个NULL；UK(active_dedup_key)；UK(business_key)；UK(process_instance_id)；IDX(asset_project_apply_id, status)；IDX(cust_id, requested_time)。创建前必须锁定主申请并重查真实流程节点；审批通过时在同一本地事务内将主申请更新为 `is_urgent=1, urgent_source=MID_PROCESS`。
+
 ## 6. 关键业务规则
 
 ### 6.1 线索重复录入与导入
@@ -940,6 +1024,15 @@ MARKETING_CUSTOMER_TAG_IMPORT_BATCH（一批次一标签）
 
 - APPEND客户审批通过后可逐条写入或恢复MARKETING_CUSTOMER_TAG_REL。REPLACE必须等待标签已审批且批次全部有效客户通过，再以单个本地事务差异化失效旧关系并激活本批次关系。任一客户被拒绝时整个REPLACE进入REPLACE_BLOCKED，正式关系不变。
 
+### 6.8 资产立项
+
+- 资产立项客户只能来自 `MARKETING_CUSTOMER_INFO` 的有效企业客户；提交时必须重查客户状态、当前主办人/机构和申请人数据范围，页面选中值不能代替服务端校验。
+- `source_touch_task_id` 可空；传入时必须关联同一 `cust_id` 的 `MARKETING_TOUCH_TASK`。`source_worklog_id` 可空；传入时必须同时属于该任务和客户的 `MARKETING_TOUCH_WORKLOG`。
+- 资产立项上的“加急/重点项目”是申请级标签，不写入 `MARKETING_CUSTOMER_TAG` 或 `MARKETING_CUSTOMER_TAG_REL`，避免把项目属性污染成客户长期标签。
+- 启动时加急在主申请上写 `is_urgent=1, urgent_source=INITIATION`，并由主流程进入加急分支；不产生中途加急表记录。
+- 中途加急必须写 `MARKETING_ASSET_PROJECT_URGENT_APPLY`。审批中主申请仍为普通；只有加急审批通过后才回写主表标签。
+- 附件继续使用 `FILE_OBJECT/BIZ_FILE_REL`，流程实例和审批历史继续使用 `BIZ_PROCESS_MAP` 与 Workflow API；不在资产立项域复制平台附件表或 Flowable `ACT_*` 表。
+
 ## 7. 外部及平台共享表
 
 | 表或数据源 | 归属 | 与营销模块关系 |
@@ -950,7 +1043,7 @@ MARKETING_CUSTOMER_TAG_IMPORT_BATCH（一批次一标签）
 | Flowable ACT_RU_* / ACT_HI_* | 平台共享 | 当前待办及完整审批历史；营销模块通过Workflow API访问 |
 | FILE_OBJECT / BIZ_FILE_REL | 平台共享 | 线索导入文件、附件和触达图片文件对象 |
 | AUDIT_LOG | 平台共享 | 管理员修改客户资料、主办权和高风险操作的前后值审计 |
-| LOAN_APPLY | 资产立项域 | 通过cust_id引用营销客户 |
+| LOAN_APPLY / LOAN_URGENT_REQUEST | 迁移前资产立项实现 | 仅作为历史迁移来源；新模型使用MARKETING_ASSET_PROJECT_APPLY/URGENT_APPLY |
 | CUST_MASTER | M98存量域 | 存量/绩效查询用途，不作为营销客户主档 |
 
 ## 8. 明确不建设或已删除的设计
@@ -980,6 +1073,8 @@ MARKETING_CUSTOMER_TAG_IMPORT_BATCH（一批次一标签）
 | xa_touch_name_list_record | MARKETING_TOUCH_CUSTOMER_TAG_SOURCE |
 | TOUCH_TASK | MARKETING_TOUCH_TASK |
 | CUST_TOUCH_LIMIT_RULE | MARKETING_TOUCH_LIMIT_RULE |
+| LOAN_APPLY | MARKETING_ASSET_PROJECT_APPLY |
+| LOAN_URGENT_REQUEST | MARKETING_ASSET_PROJECT_URGENT_APPLY |
 
 ## 10. 实施前评审事项
 
@@ -992,6 +1087,8 @@ MARKETING_CUSTOMER_TAG_IMPORT_BATCH（一批次一标签）
 - 确认外部全量关系快照的刷新完成标志、数据日期、同一客户号唯一主办保证和员工机构解析接口。
 
 - 确认已开户但上游无主办关系时默认禁止公共认领的安全口径。
+
+- 资产立项迁移前必须确认 `LOAN_APPLY` 字符串ID到 `MARKETING_ASSET_PROJECT_APPLY` BIGINT ID的映射表/回填策略，同步修改实体、Mapper、测试数据、跨模块API、工作流businessKey和附件bizId，不能只改表名。
 
 - 确认旧xa_touch_*数据迁移、ID映射、附件文件对象映射和停机/双写切换方案；历史工作日志不强制补造触达任务，task_id可为空。
 

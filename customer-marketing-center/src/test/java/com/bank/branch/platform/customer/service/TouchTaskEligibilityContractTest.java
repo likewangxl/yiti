@@ -4,6 +4,7 @@ import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.enums.TouchTaskType;
 import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
+import com.bank.branch.platform.customer.mapper.TouchWorklogMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
@@ -31,16 +32,17 @@ class TouchTaskEligibilityContractTest {
                 taskMapper,
                 mock(ApplicationEventPublisher.class),
                 new TouchTaskStateMachineService(),
-                touchEligibilityService);
+                touchEligibilityService,
+                mock(TouchWorklogMapper.class));
     }
 
     @Test
     void createFirstTouchTask_shouldValidateEligibilityBeforeInsert() {
         when(taskMapper.insert(any(TouchTask.class))).thenReturn(1);
 
-        touchTaskService.createFirstTouchTask("cust-001", "ORG_SZ_001", "E10001", null);
+        touchTaskService.createFirstTouchTask("1", "ORG_SZ_001", "E10001", null);
 
-        verify(touchEligibilityService).assertEligible("cust-001");
+        verify(touchEligibilityService).assertEligible("1");
         verify(taskMapper).insert(any(TouchTask.class));
     }
 
@@ -49,10 +51,10 @@ class TouchTaskEligibilityContractTest {
         when(taskMapper.insert(any(TouchTask.class))).thenReturn(1);
 
         TouchTask result = touchTaskService.createFollowUpTask(
-                "cust-002", "ORG_SZ_001", "E10001", "再次拜访", null);
+                "2", "ORG_SZ_001", "E10001", "再次拜访", null);
 
         assertThat(result.getTaskType()).isEqualTo(TouchTaskType.FOLLOW_UP.getCode());
-        verify(touchEligibilityService).assertEligible("cust-002");
+        verify(touchEligibilityService).assertEligible("2");
         verify(taskMapper).insert(any(TouchTask.class));
     }
 

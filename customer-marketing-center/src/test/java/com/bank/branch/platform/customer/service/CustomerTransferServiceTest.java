@@ -50,7 +50,7 @@ class CustomerTransferServiceTest {
 
         service.transfer("C001", List.of("NEW1", "NEW2"), "岗位调整", "ADMIN");
 
-        verify(touchTaskMapper).cancelActiveByCust(any(), any());
+        verify(touchTaskMapper).cancelActiveByCust(any(), any(), any(), any());
         verify(transferTargetMapper).insertBatch(any());
         verify(touchTaskService).createFirstTouchTask("C001", "ORG-NEW", "NEW1", null);
         ArgumentCaptor<CustMaster> captor = ArgumentCaptor.forClass(CustMaster.class);

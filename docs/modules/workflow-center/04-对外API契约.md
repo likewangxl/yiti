@@ -469,6 +469,9 @@ public interface TodoQueryApi {
 | `GET` | `/{processInstanceId}/history` | `ResponseWrapper<List<ApprovalLogDTO>>` |
 | `GET` | `/{processInstanceId}/nodes` | `ResponseWrapper<ProcessDiagramDTO>` |
 
+`ProcessDiagramDTO.nodes[].taskId` 为 2026-08-28 补充的只读字段：活动或历史 `userTask` 返回
+Flowable 任务 ID，事件/网关节点为空。调用方可用它将“当前节点”与后续业务申请做一致性绑定。
+
 `ProcessInstanceInfo` 关键字段：
 
 - 流程基本信息：`processInstanceId`、`processDefinitionKey`、`processDefinitionName`、`processDefinitionVersion`

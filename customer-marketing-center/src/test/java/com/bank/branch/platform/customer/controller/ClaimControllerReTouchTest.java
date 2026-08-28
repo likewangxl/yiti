@@ -38,7 +38,7 @@ class ClaimControllerReTouchTest extends AbstractControllerIntegrationTest {
     @WithMockEmpContext(empId = "E10001", orgCode = "ORG_SZ_001")
     void reTouch_success_returns200() throws Exception {
         TouchTask created = new TouchTask();
-        created.setId("touch-new-001");
+        created.setId(1L);
         created.setTaskNo("TOUCH_TEST_0001");
         created.setTaskType(TouchTaskType.FOLLOW_UP.getCode());
         created.setTaskStatus(TouchTaskStatus.PENDING.getCode());
@@ -55,7 +55,7 @@ class ClaimControllerReTouchTest extends AbstractControllerIntegrationTest {
                         .content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
-                .andExpect(jsonPath("$.data.id").value("touch-new-001"))
+                .andExpect(jsonPath("$.data.id").value(1))
                 .andExpect(jsonPath("$.data.taskType").value("FOLLOW_UP"));
     }
 

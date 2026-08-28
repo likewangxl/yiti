@@ -9,6 +9,7 @@ import com.bank.branch.platform.customer.enums.TouchTaskStatus;
 import com.bank.branch.platform.customer.enums.TouchTaskType;
 import com.bank.branch.platform.customer.event.TouchCompletedEvent;
 import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
+import com.bank.branch.platform.customer.mapper.TouchWorklogMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -18,13 +19,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Random;
-import java.util.UUID;
 
 /**
  * 触达任务业务服务。
  * <p>
  * 负责触达任务的创建（由认领事件驱动）、完成、取消、查询及 SLA 状态刷新。
- * 任务生命周期：PENDING → SUCCESS（完成） | CANCELLED（取消）。
+ * 任务生命周期：PENDING → IN_PROGRESS → SUCCESS（完成），
+ * PENDING / IN_PROGRESS → CANCELLED（取消）。
  * SLA 状态由治理中心调度刷新：BLUE → YELLOW（到预警时间）→ RED（超计划完成时间且未完成）。
  * </p>
  */
@@ -37,6 +38,7 @@ public class TouchTaskService {
     private final ApplicationEventPublisher eventPublisher;
     private final TouchTaskStateMachineService stateMachine;
     private final TouchEligibilityService touchEligibilityService;
+    private final TouchWorklogMapper worklogMapper;
 
     /**
      * 从认领事件创建首次触达任务。
@@ -74,30 +76,27 @@ public class TouchTaskService {
         String taskNo = "TOUCH_" + System.currentTimeMillis() + "_"
                 + String.format("%04d", new Random().nextInt(10000));
 
-        // 生成任务 ID（UUID 32 位无连字符）
-        String taskId = UUID.randomUUID().toString().replace("-", "");
-
         TouchTask entity = new TouchTask();
-        entity.setId(taskId);
         entity.setTaskNo(taskNo);
-        entity.setCustId(custId);
+        entity.setCustId(parseId(custId));
+        entity.setSourceType("CLAIM");
         entity.setOrgId(orgId);
         entity.setAssigneeEmpId(assigneeEmpId);
         entity.setTaskType(TouchTaskType.FIRST_TOUCH.getCode());
         entity.setTaskStatus(TouchTaskStatus.PENDING.getCode());
         entity.setSlaStatus(SlaStatus.BLUE.getCode());
-        entity.setSlaWarning(false);
         LocalDateTime planTime = parsePlanFinishTimeOrDefault(planFinishTime, now);
         entity.setPlanFinishTime(planTime);
         entity.setWarningTime(planTime.minusDays(2));
-        // businessKey 格式: TOUCH:{taskId}
-        entity.setBusinessKey("TOUCH:" + taskId);
         entity.setCreatedTime(now);
+        entity.setCreatedBy(assigneeEmpId);
         entity.setUpdatedTime(now);
+        entity.setUpdatedBy(assigneeEmpId);
+        entity.setLockVersion(0);
 
         taskMapper.insert(entity);
 
-        log.info("[TouchTaskService.createFromClaim] task created, taskId={}, taskNo={}", taskId, taskNo);
+        log.info("[TouchTaskService.createFromClaim] task created, taskId={}, taskNo={}", entity.getId(), taskNo);
         return entity;
     }
 
@@ -126,30 +125,29 @@ public class TouchTaskService {
         LocalDateTime now = LocalDateTime.now();
         String taskNo = "TOUCH_" + System.currentTimeMillis() + "_"
                 + String.format("%04d", new Random().nextInt(10000));
-        String taskId = UUID.randomUUID().toString().replace("-", "");
-
         TouchTask entity = new TouchTask();
-        entity.setId(taskId);
         entity.setTaskNo(taskNo);
-        entity.setCustId(custId);
+        entity.setCustId(parseId(custId));
+        entity.setSourceType("MANUAL");
         entity.setOrgId(orgId);
         entity.setAssigneeEmpId(assigneeEmpId);
         entity.setTaskType(TouchTaskType.FOLLOW_UP.getCode());
         entity.setTaskStatus(TouchTaskStatus.PENDING.getCode());
         entity.setSlaStatus(SlaStatus.BLUE.getCode());
-        entity.setSlaWarning(false);
 
         LocalDateTime planTime = parsePlanFinishTimeOrDefault(planFinishTime, now);
         entity.setPlanFinishTime(planTime);
         // 预警时间 = 计划完成前 2 天（与 createFromClaim 的 5d/7d 同 2 天偏移）
         entity.setWarningTime(planTime.minusDays(2));
-        entity.setBusinessKey("TOUCH:" + taskId);
         entity.setCreatedTime(now);
+        entity.setCreatedBy(assigneeEmpId);
         entity.setUpdatedTime(now);
+        entity.setUpdatedBy(assigneeEmpId);
+        entity.setLockVersion(0);
 
         taskMapper.insert(entity);
 
-        log.info("[TouchTaskService.createFollowUpTask] follow-up task created, taskId={}, taskNo={}", taskId, taskNo);
+        log.info("[TouchTaskService.createFollowUpTask] follow-up task created, taskId={}, taskNo={}", entity.getId(), taskNo);
         return entity;
     }
 
@@ -169,13 +167,14 @@ public class TouchTaskService {
     /**
      * 标记触达任务为已完成。
      * <p>
-     * 允许起始状态：PENDING、IN_PROGRESS。
+     * 仅允许至少保存一条有效工作日志的 IN_PROGRESS 任务完成。
      * 状态转换由 {@link TouchTaskStateMachineService} 校验，非法转移抛 CUST-40010。
      * 完成后 successTime=now，并发布 {@link TouchCompletedEvent}。
      * </p>
      *
      * @param taskId 任务ID
      * @throws BizException CUST-40405 任务不存在
+     * @throws BizException CUST-40409 任务未关联工作日志
      * @throws BizException CUST-40010 非法状态转移（SUCCESS/CANCELLED 终态不允许再转移）
      */
     @Transactional
@@ -183,7 +182,8 @@ public class TouchTaskService {
         log.info("[TouchTaskService.markSuccess] taskId={}, operatorEmpId={}, isAdmin={}",
                 taskId, operatorEmpId, operatorIsAdmin);
 
-        TouchTask task = taskMapper.selectById(taskId);
+        // 完成与取消必须在同一行锁上串行化，避免两个并发请求都通过终态校验并重复发布事件。
+        TouchTask task = taskMapper.selectByIdForUpdate(taskId);
         if (task == null) {
             throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode(),
                     CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getMessage());
@@ -192,22 +192,27 @@ public class TouchTaskService {
         // 操作人校验（CUST-40302）：仅任务执行人本人或系统管理员可标成功
         assertAssigneeOrAdmin(task, operatorEmpId, operatorIsAdmin);
 
-        // 通过状态机校验转移合法性：PENDING/IN_PROGRESS → SUCCESS 合法，终态不可转
+        // 通过状态机校验转移合法性：必须先由工作日志驱动到 IN_PROGRESS。
         TouchTaskStatus from = TouchTaskStatus.valueOf(task.getTaskStatus());
         stateMachine.assertTransition(from, TouchTaskStatus.SUCCESS);
+        if (worklogMapper.countValidByTaskId(task.getId()) == 0) {
+            throw new BizException(CustomerErrorCode.TOUCH_WORKLOG_NOT_FOUND.getCode(),
+                    CustomerErrorCode.TOUCH_WORKLOG_NOT_FOUND.getMessage());
+        }
 
         LocalDateTime now = LocalDateTime.now();
         TouchTask updateEntity = new TouchTask();
-        updateEntity.setId(taskId);
+        updateEntity.setId(task.getId());
         updateEntity.setTaskStatus(TouchTaskStatus.SUCCESS.getCode());
         updateEntity.setSuccessTime(now);
         updateEntity.setUpdatedTime(now);
+        updateEntity.setUpdatedBy(operatorEmpId);
 
         taskMapper.updateById(updateEntity);
 
         // 发布触达完成事件，下游可扩展处理逻辑
         eventPublisher.publishEvent(new TouchCompletedEvent(
-                taskId, task.getTaskNo(), task.getCustId(),
+                taskId, task.getTaskNo(), String.valueOf(task.getCustId()),
                 task.getAssigneeEmpId(), task.getTaskType()));
 
         log.info("[TouchTaskService.markSuccess] task marked success, taskId={}", taskId);
@@ -236,7 +241,12 @@ public class TouchTaskService {
         log.info("[TouchTaskService.cancel] taskId={}, reason={}, operatorEmpId={}, isAdmin={}",
                 taskId, reason, operatorEmpId, operatorIsAdmin);
 
-        TouchTask task = getById(taskId);
+        // 与完成操作共用锁定读，保证 SUCCESS/CANCELLED 终态竞争时只有一个请求可以提交。
+        TouchTask task = taskMapper.selectByIdForUpdate(taskId);
+        if (task == null) {
+            throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode(),
+                    CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getMessage());
+        }
 
         // 操作人校验（CUST-40302）：仅任务执行人本人或系统管理员可取消
         assertAssigneeOrAdmin(task, operatorEmpId, operatorIsAdmin);
@@ -247,10 +257,12 @@ public class TouchTaskService {
 
         LocalDateTime now = LocalDateTime.now();
         TouchTask updateEntity = new TouchTask();
-        updateEntity.setId(taskId);
+        updateEntity.setId(task.getId());
         updateEntity.setTaskStatus(TouchTaskStatus.CANCELLED.getCode());
         updateEntity.setCancelTime(now);
+        updateEntity.setCancelReason(reason);
         updateEntity.setUpdatedTime(now);
+        updateEntity.setUpdatedBy(operatorEmpId);
 
         taskMapper.updateById(updateEntity);
 
@@ -283,9 +295,10 @@ public class TouchTaskService {
         stateMachine.assertTransition(from, TouchTaskStatus.IN_PROGRESS);
 
         TouchTask updateEntity = new TouchTask();
-        updateEntity.setId(taskId);
+        updateEntity.setId(task.getId());
         updateEntity.setTaskStatus(TouchTaskStatus.IN_PROGRESS.getCode());
         updateEntity.setUpdatedTime(LocalDateTime.now());
+        updateEntity.setUpdatedBy(task.getAssigneeEmpId());
         taskMapper.updateById(updateEntity);
 
         log.info("[TouchTaskService.markInProgress] task {} transitioned PENDING→IN_PROGRESS", taskId);
@@ -425,6 +438,8 @@ public class TouchTaskService {
                 continue;
             }
             task.setAssigneeEmpId(newAssigneeEmpId);
+            task.setUpdatedBy(newAssigneeEmpId);
+            task.setUpdatedTime(LocalDateTime.now());
             taskMapper.updateById(task);
             updated++;
         }
@@ -454,18 +469,16 @@ public class TouchTaskService {
         for (TouchTask task : pendingTasks) {
             String newSlaStatus = calcNewSlaStatus(task, now);
             if (newSlaStatus != null && !newSlaStatus.equals(task.getSlaStatus())) {
-                // 仅在状态有变化时执行更新；同步维护 slaWarning 契约字段
-                boolean warning = SlaStatus.YELLOW.getCode().equals(newSlaStatus)
-                        || SlaStatus.RED.getCode().equals(newSlaStatus);
+                // 仅在状态有变化时执行更新；SLA 预警由 sla_status 派生，不再冗余落库。
                 TouchTask updateEntity = new TouchTask();
                 updateEntity.setId(task.getId());
                 updateEntity.setSlaStatus(newSlaStatus);
-                updateEntity.setSlaWarning(warning);
+                updateEntity.setUpdatedBy("SYSTEM");
                 updateEntity.setUpdatedTime(now);
                 taskMapper.updateById(updateEntity);
                 updated++;
-                log.debug("[TouchTaskService.refreshSla] task={} SLA {} -> {}, slaWarning={}",
-                        task.getId(), task.getSlaStatus(), newSlaStatus, warning);
+                log.debug("[TouchTaskService.refreshSla] task={} SLA {} -> {}",
+                        task.getId(), task.getSlaStatus(), newSlaStatus);
             }
         }
 
@@ -512,6 +525,15 @@ public class TouchTaskService {
                     task.getId(), task.getAssigneeEmpId(), operatorEmpId);
             throw new BizException(CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getCode(),
                     CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getMessage());
+        }
+    }
+
+    private Long parseId(String id) {
+        try {
+            return Long.valueOf(id);
+        } catch (Exception e) {
+            throw new BizException(CustomerErrorCode.CUSTOMER_NOT_FOUND.getCode(),
+                    CustomerErrorCode.CUSTOMER_NOT_FOUND.getMessage());
         }
     }
 }

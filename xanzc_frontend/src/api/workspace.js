@@ -20,7 +20,7 @@ function fmtTime(t) {
 const BIZ_TYPE_LABEL = {
   ALLOC_ADJUST: '业绩调整',
   TARGET_ADJUST: '目标修正',
-  LOAN: '贷款业务',
+  ASSET_PROJECT: '资产立项',
   LEAD: '线索管理',
   SUPPORT: '支撑业务',
 };

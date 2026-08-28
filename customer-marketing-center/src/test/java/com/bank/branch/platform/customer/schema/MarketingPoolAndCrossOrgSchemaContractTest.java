@@ -18,7 +18,7 @@ class MarketingPoolAndCrossOrgSchemaContractTest {
         String cross = read("src/main/resources/mapper/marketing/MarketingCrossOrgApplyMapper.xml")
                 + read("src/main/resources/mapper/marketing/MarketingCrossOrgRuleMapper.xml")
                 + read("src/main/resources/mapper/marketing/MarketingCustomerPerformanceRelSnapshotMapper.xml")
-                + read("src/main/resources/mapper/marketing/MarketingTouchTaskMapper.xml");
+                + read("src/main/resources/mapper/customer/TouchTaskMapper.xml");
 
         assertThat(pool).contains("MARKETING_LEAD_INFO", "MARKETING_CUSTOMER_INFO",
                 "MARKETING_CUSTOMER_CLAIM", "SOURCE_LEAD_ID", "CLAIM_STATUS = 'CLAIMED'");
@@ -28,7 +28,7 @@ class MarketingPoolAndCrossOrgSchemaContractTest {
         assertThat(cross).contains("MARKETING_CROSS_ORG_APPLY", "MARKETING_CROSS_ORG_RULE",
                 "MARKETING_CUSTOMER_PERFORMANCE_REL_SNAPSHOT", "MARKETING_TOUCH_TASK", "IN_APPROVAL");
         assertThat(cross).doesNotContain("CROSS_ORG_MARKETING_APPLY", "CUST_PERFORMANCE_RELATION_SNAPSHOT",
-                "UPDATE TOUCH_TASK", "INSERT INTO TOUCH_TASK");
+                "UPDATE MARKETING_TOUCH_TASK", "INSERT INTO MARKETING_TOUCH_TASK");
     }
 
     private String read(String relative) throws IOException {

@@ -12,13 +12,13 @@ import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerClaim
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadManagerScope;
 import com.bank.branch.platform.customer.entity.marketing.MarketingLeadTagRel;
-import com.bank.branch.platform.customer.entity.marketing.MarketingTouchTask;
+import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerClaimMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerInfoMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadInfoMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadManagerScopeMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingLeadTagRelMapper;
-import com.bank.branch.platform.customer.mapper.marketing.MarketingTouchTaskMapper;
+import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
@@ -68,7 +68,7 @@ public class MarketingLeadApprovalService {
     /** 目标认领关系；为空时仅兼容旧测试/未启用目标表的运行环境。 */
     private final MarketingCustomerClaimMapper marketingClaimMapper;
     /** SCOPE/OWNER 每条接收关系各自生成目标营销触达任务。 */
-    private final MarketingTouchTaskMapper marketingTouchTaskMapper;
+    private final TouchTaskMapper marketingTouchTaskMapper;
 
     /** 查询当前登录人的待审批线索，过滤标签导入线索。 */
     public PageResult<LeadApprovalTaskResponse> pending(String keyword, int pageNo,
@@ -323,7 +323,7 @@ public class MarketingLeadApprovalService {
         if (marketingTouchTaskMapper == null || claim.getId() == null) return;
         if (marketingTouchTaskMapper.selectBySource("CLAIM", claim.getId()) != null) return;
         LocalDateTime now = LocalDateTime.now();
-        MarketingTouchTask task = new MarketingTouchTask();
+        TouchTask task = new TouchTask();
         task.setTaskNo("MKT-CLAIM-" + claim.getId());
         task.setCustId(claim.getCustId());
         task.setSourceType("CLAIM");

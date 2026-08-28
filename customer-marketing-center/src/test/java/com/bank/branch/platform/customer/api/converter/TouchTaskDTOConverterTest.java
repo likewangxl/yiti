@@ -23,15 +23,14 @@ class TouchTaskDTOConverterTest {
     void toDTO_mapsAllScalarFields() {
         // given
         TouchTask entity = new TouchTask();
-        entity.setId("task-001");
+        entity.setId(1L);
         entity.setTaskNo("T20240001");
-        entity.setCustId("cust-001");
+        entity.setCustId(101L);
         entity.setOrgId("ORG_001");
         entity.setAssigneeEmpId("EMP_001");
         entity.setTaskType("FIRST_TOUCH");
         entity.setTaskStatus("PENDING");
         entity.setSlaStatus("GREEN");
-        entity.setBusinessKey("TOUCH:task-001");
         LocalDateTime now = LocalDateTime.of(2024, 4, 1, 8, 0, 0);
         entity.setPlanFinishTime(now.plusDays(7));
         entity.setWarningTime(now.plusDays(5));
@@ -45,13 +44,14 @@ class TouchTaskDTOConverterTest {
 
         // then
         assertThat(dto).isNotNull();
-        assertThat(dto.getId()).isEqualTo("task-001");
-        assertThat(dto.getCustId()).isEqualTo("cust-001");
+        assertThat(dto.getId()).isEqualTo("1");
+        assertThat(dto.getCustId()).isEqualTo("101");
         assertThat(dto.getOrgId()).isEqualTo("ORG_001");
         assertThat(dto.getAssigneeEmpId()).isEqualTo("EMP_001");
         assertThat(dto.getTaskType()).isEqualTo("FIRST_TOUCH");
         assertThat(dto.getTaskStatus()).isEqualTo("PENDING");
-        assertThat(dto.getBusinessKey()).isEqualTo("TOUCH:task-001");
+        assertThat(dto.getBusinessKey()).isEqualTo("TOUCH:1");
+        assertThat(dto.getWorklogId()).isNull();
         assertThat(dto.getExpectedFinishAt()).isEqualTo(now.plusDays(7));
         assertThat(dto.getCreatedAt()).isEqualTo(now);
         // 暂置 null 字段
@@ -66,8 +66,8 @@ class TouchTaskDTOConverterTest {
     void toDTO_finishResultIsSuccessWhenTaskStatusSuccess() {
         // given
         TouchTask entity = new TouchTask();
-        entity.setId("task-002");
-        entity.setCustId("cust-002");
+        entity.setId(2L);
+        entity.setCustId(102L);
         entity.setTaskStatus("SUCCESS");
         entity.setSuccessTime(LocalDateTime.of(2024, 4, 8, 16, 0, 0));
 
@@ -83,8 +83,8 @@ class TouchTaskDTOConverterTest {
     void toDTO_finishResultIsCancelledWhenTaskStatusCancelled() {
         // given
         TouchTask entity = new TouchTask();
-        entity.setId("task-003");
-        entity.setCustId("cust-003");
+        entity.setId(3L);
+        entity.setCustId(103L);
         entity.setTaskStatus("CANCELLED");
         entity.setCancelTime(LocalDateTime.of(2024, 4, 5, 12, 0, 0));
 
@@ -99,8 +99,8 @@ class TouchTaskDTOConverterTest {
     void toDTO_finishResultIsNullWhenTaskStatusPending() {
         // given: PENDING 状态不设 finishResult
         TouchTask entity = new TouchTask();
-        entity.setId("task-004");
-        entity.setCustId("cust-004");
+        entity.setId(4L);
+        entity.setCustId(104L);
         entity.setTaskStatus("PENDING");
 
         // when
@@ -114,8 +114,8 @@ class TouchTaskDTOConverterTest {
     void toDTO_finishResultIsNullWhenTaskStatusIsNull() {
         // given
         TouchTask entity = new TouchTask();
-        entity.setId("task-005");
-        entity.setCustId("cust-005");
+        entity.setId(5L);
+        entity.setCustId(105L);
         entity.setTaskStatus(null);
 
         // when
@@ -129,17 +129,17 @@ class TouchTaskDTOConverterTest {
     void toDTO_slaWarningMappedFromSlaStatus() {
         // given: YELLOW 表示触发预警
         TouchTask yellowEntity = new TouchTask();
-        yellowEntity.setId("task-006");
+        yellowEntity.setId(6L);
         yellowEntity.setSlaStatus("YELLOW");
 
         // given: RED 也表示触发预警（更严重）
         TouchTask redEntity = new TouchTask();
-        redEntity.setId("task-007");
+        redEntity.setId(7L);
         redEntity.setSlaStatus("RED");
 
         // given: GREEN 不触发预警
         TouchTask greenEntity = new TouchTask();
-        greenEntity.setId("task-008");
+        greenEntity.setId(8L);
         greenEntity.setSlaStatus("GREEN");
 
         // when + then
@@ -152,7 +152,7 @@ class TouchTaskDTOConverterTest {
     void toDTO_slaDeadlineMappedFromPlanFinishTime() {
         // given
         TouchTask entity = new TouchTask();
-        entity.setId("task-009");
+        entity.setId(9L);
         LocalDateTime deadline = LocalDateTime.of(2024, 5, 1, 23, 59, 59);
         entity.setPlanFinishTime(deadline);
 
@@ -172,12 +172,12 @@ class TouchTaskDTOConverterTest {
     void toDTOList_mapsEachAndFiltersNulls() {
         // given
         TouchTask e1 = new TouchTask();
-        e1.setId("task-001");
+        e1.setId(1L);
         e1.setTaskStatus("SUCCESS");
         e1.setSuccessTime(LocalDateTime.now());
 
         TouchTask e2 = new TouchTask();
-        e2.setId("task-002");
+        e2.setId(2L);
         e2.setTaskStatus("PENDING");
 
         List<TouchTask> list = Arrays.asList(e1, null, e2);
@@ -187,9 +187,9 @@ class TouchTaskDTOConverterTest {
 
         // then
         assertThat(dtos).hasSize(2);
-        assertThat(dtos.get(0).getId()).isEqualTo("task-001");
+        assertThat(dtos.get(0).getId()).isEqualTo("1");
         assertThat(dtos.get(0).getFinishResult()).isEqualTo("SUCCESS");
-        assertThat(dtos.get(1).getId()).isEqualTo("task-002");
+        assertThat(dtos.get(1).getId()).isEqualTo("2");
         assertThat(dtos.get(1).getFinishResult()).isNull();
     }
 

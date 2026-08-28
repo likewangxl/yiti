@@ -209,7 +209,7 @@ public class CrossOrgMarketingService {
         }
         TouchTask task = touchTaskService.createFirstTouchTask(existing.getCustId(), existing.getApplicantOrgId(),
                 existing.getApplicantEmpId(), null);
-        applyMapper.updateGeneratedTask(id, task.getId());
+        applyMapper.updateGeneratedTask(id, String.valueOf(task.getId()));
         notifyApplicant(existing, "跨机构营销申请已通过", "审批通过，系统已生成触达任务。", reviewerEmpId);
     }
 

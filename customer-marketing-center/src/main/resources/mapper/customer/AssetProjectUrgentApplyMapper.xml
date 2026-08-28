@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.AssetProjectUrgentApplyMapper">
+    <select id="selectByAssetProjectId" resultType="com.bank.branch.platform.customer.entity.AssetProjectUrgentApply">
+        SELECT * FROM MARKETING_ASSET_PROJECT_URGENT_APPLY
+        WHERE asset_project_apply_id=#{assetProjectId} AND record_status IN ('ACTIVE','INACTIVE')
+        ORDER BY requested_time DESC,id DESC
+    </select>
+    <select id="selectActiveByAssetProjectId" resultType="com.bank.branch.platform.customer.entity.AssetProjectUrgentApply">
+        SELECT * FROM MARKETING_ASSET_PROJECT_URGENT_APPLY
+        WHERE asset_project_apply_id=#{assetProjectId} AND active_dedup_key IS NOT NULL
+          AND status IN ('DRAFT','IN_APPROVAL') LIMIT 1
+    </select>
+    <update id="complete">
+        UPDATE MARKETING_ASSET_PROJECT_URGENT_APPLY SET status=#{targetStatus},active_dedup_key=NULL,
+          reviewed_by=#{reviewedBy},reviewed_time=#{updatedTime},approval_comment=#{approvalComment},
+          record_status='INACTIVE',updated_by=#{reviewedBy},updated_time=#{updatedTime},lock_version=lock_version+1
+        WHERE id=#{id} AND status=#{expectedStatus} AND record_status='ACTIVE'
+    </update>
+</mapper>

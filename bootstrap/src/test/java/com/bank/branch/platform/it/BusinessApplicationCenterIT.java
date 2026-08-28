@@ -1,11 +1,8 @@
 package com.bank.branch.platform.it;
 
 import com.bank.branch.platform.bizapp.api.BizApplyQueryApi;
-import com.bank.branch.platform.bizapp.api.LoanApi;
 import com.bank.branch.platform.bizapp.api.SupportApi;
-import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
-import com.bank.branch.platform.bizapp.service.LoanService;
 import com.bank.branch.platform.bizapp.service.SupportService;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
@@ -25,7 +22,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -49,13 +45,7 @@ class BusinessApplicationCenterIT {
     private static final String CUSTOMER_ID = "CUST_BIZ_IT_001";
 
     @Autowired
-    private LoanService loanService;
-
-    @Autowired
     private SupportService supportService;
-
-    @Autowired
-    private LoanApi loanApi;
 
     @Autowired
     private SupportApi supportApi;
@@ -76,8 +66,8 @@ class BusinessApplicationCenterIT {
     private ProductApi productApi;
 
     @Test
-    @DisplayName("bizapp 集成 - 贷款与中场支持流程链路按既定流程定义发起")
-    void loanAndSupportWorkflowChains_useExpectedProcessDefinitionKeys() {
+    @DisplayName("bizapp 集成 - 中场支持流程链路按既定流程定义发起")
+    void supportWorkflowChains_useExpectedProcessDefinitionKeys() {
         when(customerQueryApi.isValidCustomer(CUSTOMER_ID)).thenReturn(true);
         when(customerQueryApi.isClaimedByOrg(CUSTOMER_ID, OPERATOR_ORG_ID)).thenReturn(true);
 
@@ -95,23 +85,9 @@ class BusinessApplicationCenterIT {
         when(productApi.getProductResponsibleEmpIds("PROD_BIZ_IT_001")).thenReturn(List.of("user002"));
 
         when(workflowApi.startProcess(any())).thenReturn(
-                new WorkflowLaunchResp("PI_LOAN_IT_001", "LOAN:loan-it", null),
                 new WorkflowLaunchResp("PI_SUPPORT_SIMPLE_IT_001", "SUPPORT:support-simple-it", null),
                 new WorkflowLaunchResp("PI_SUPPORT_COMPLEX_IT_001", "SUPPORT:support-complex-it", null)
         );
-
-        LoanApply loanApply = loanService.createDraft(
-                CUSTOMER_ID,
-                null,
-                "WORKING_CAPITAL",
-                "LOAN",
-                "CREDIT",
-                new BigDecimal("1000000.00"),
-                new BigDecimal("800000.00"),
-                OPERATOR_EMP_ID,
-                OPERATOR_ORG_ID
-        );
-        loanService.submitForApproval(loanApply.getId(), OPERATOR_EMP_ID, OPERATOR_ORG_ID);
 
         SupportRequestCreateRespDTO.CreatedItem supportSimple = supportService.create(
                 List.of("PROD_BIZ_IT_001"),
@@ -136,17 +112,16 @@ class BusinessApplicationCenterIT {
         supportService.submit(supportComplex.getId(), OPERATOR_EMP_ID, OPERATOR_ORG_ID);
 
         ArgumentCaptor<StartProcessCmd> processCaptor = ArgumentCaptor.forClass(StartProcessCmd.class);
-        verify(workflowApi, times(3)).startProcess(processCaptor.capture());
+        verify(workflowApi, times(2)).startProcess(processCaptor.capture());
         assertThat(processCaptor.getAllValues())
                 .extracting(StartProcessCmd::getProcessDefinitionKey)
-                .containsExactly("loan_approve_v1", "support_simple_v1", "support_complex_v1");
+                .containsExactly("support_simple_v1", "support_complex_v1");
 
-        assertThat(loanApi.getLoanApply(loanApply.getId())).isPresent();
         assertThat(supportApi.getSupportRequest(supportSimple.getId())).isPresent();
         assertThat(supportApi.getSupportRequest(supportComplex.getId())).isPresent();
         assertThat(bizApplyQueryApi.countRunningApplications(CUSTOMER_ID))
                 .satisfies(dto -> {
-                    assertThat(dto.getRunningLoanCount()).isEqualTo(1L);
+                    assertThat(dto.getRunningLoanCount()).isZero();
                     assertThat(dto.getRunningSupportCount()).isEqualTo(2L);
                 });
     }

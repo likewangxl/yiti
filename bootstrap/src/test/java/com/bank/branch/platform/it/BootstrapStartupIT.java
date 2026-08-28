@@ -93,15 +93,14 @@ class BootstrapStartupIT {
                 com.bank.branch.platform.portal.api.DocumentApi.class,
                 com.bank.branch.platform.portal.api.NavApi.class,
                 com.bank.branch.platform.portal.api.AddressBookApi.class,
-                // customer-marketing-center（5 个）
+                // customer-marketing-center（6 个）
                 com.bank.branch.platform.customer.api.CustomerQueryApi.class,
                 com.bank.branch.platform.customer.api.TouchTaskQueryApi.class,
                 com.bank.branch.platform.customer.api.TagApi.class,
                 com.bank.branch.platform.customer.api.LeadApi.class,
                 com.bank.branch.platform.customer.api.ClaimApi.class,
-                // business-application-center（5 个）
-                com.bank.branch.platform.bizapp.api.LoanApi.class,
-                com.bank.branch.platform.bizapp.api.LoanQueryApi.class,
+                com.bank.branch.platform.customer.api.AssetProjectQueryApi.class,
+                // business-application-center（3 个）
                 com.bank.branch.platform.bizapp.api.SupportApi.class,
                 com.bank.branch.platform.bizapp.api.SupportQueryApi.class,
                 com.bank.branch.platform.bizapp.api.BizApplyQueryApi.class,

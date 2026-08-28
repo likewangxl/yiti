@@ -198,7 +198,7 @@ public class SupportService {
                 ? SupportScenario.A.getProcessDefinitionKey()
                 : SupportScenario.B.getProcessDefinitionKey();
 
-        // businessKey 统一定义一次，后续 cmd 和 SubmitRespDTO 共用（与 LoanService 保持一致）
+        // businessKey 统一定义一次，后续 cmd 和 SubmitRespDTO 共用。
         String businessKey = "SUPPORT:" + id;
 
         // 启动工作流

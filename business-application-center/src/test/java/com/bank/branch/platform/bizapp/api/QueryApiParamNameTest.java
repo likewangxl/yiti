@@ -39,28 +39,6 @@ class QueryApiParamNameTest {
     }
 
     @Test
-    @DisplayName("LoanQueryApi.countCompletedByOrg 参数名必须为 orgId/startTime/endTime")
-    void countCompletedByOrg_paramNames_matchesDoc() throws Exception {
-        Method m = LoanQueryApi.class.getMethod("countCompletedByOrg",
-                String.class, LocalDateTime.class, LocalDateTime.class);
-        assertParametersPresent(m);
-        assertThat(m.getParameters())
-                .extracting(Parameter::getName)
-                .containsExactly("orgId", "startTime", "endTime");
-    }
-
-    @Test
-    @DisplayName("LoanQueryApi.sumCreditAmountByEmp 参数名必须为 empId/startTime/endTime")
-    void sumCreditAmountByEmp_paramNames_matchesDoc() throws Exception {
-        Method m = LoanQueryApi.class.getMethod("sumCreditAmountByEmp",
-                String.class, LocalDateTime.class, LocalDateTime.class);
-        assertParametersPresent(m);
-        assertThat(m.getParameters())
-                .extracting(Parameter::getName)
-                .containsExactly("empId", "startTime", "endTime");
-    }
-
-    @Test
     @DisplayName("SupportQueryApi.countCompletedByCreator/Assignee 参数名必须为 empId/startTime/endTime")
     void supportQueryApi_paramNames_matchesDoc() throws Exception {
         for (String method : new String[]{"countCompletedByCreator", "countCompletedByAssignee"}) {

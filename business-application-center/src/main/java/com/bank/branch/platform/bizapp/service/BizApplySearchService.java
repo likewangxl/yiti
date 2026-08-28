@@ -1,11 +1,12 @@
 package com.bank.branch.platform.bizapp.service;
 
 import com.bank.branch.platform.bizapp.api.dto.BizApplyStatDTO;
-import com.bank.branch.platform.bizapp.mapper.LoanApplyMapper;
 import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
+import com.bank.branch.platform.customer.api.AssetProjectQueryApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -23,7 +24,7 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class BizApplySearchService {
 
-    private final LoanApplyMapper loanMapper;
+    private final ObjectProvider<AssetProjectQueryApi> assetProjectQueryApiProvider;
     private final SupportRequestMapper supportMapper;
 
     /**
@@ -40,14 +41,17 @@ public class BizApplySearchService {
         log.debug("[BizApplySearchService.getEmpStatistics] empId={}", empId);
 
         // 贷款申请：分别统计总数和已完成数
-        long totalLoans = loanMapper.countPage(null, null, null);
+        AssetProjectQueryApi assetProjectQueryApi = assetProjectQueryApiProvider.getIfAvailable();
+        long totalLoans = assetProjectQueryApi == null ? 0L : assetProjectQueryApi.countByApplicant(empId);
         // 需要按 created_by 过滤——借助全时段时间范围 (极早至极晚) 使用 sumCreditAmount 统计逻辑
         // 注意：mapper 只有按创建人+时段的汇总方法，使用 [MIN, MAX] 时间段获取全量
         LocalDateTime minTime = LocalDateTime.of(1970, 1, 1, 0, 0, 0);
         LocalDateTime maxTime = LocalDateTime.of(9999, 12, 31, 23, 59, 59);
 
-        long completedLoans = loanMapper.countCompletedByOrg(null, minTime, maxTime);
-        BigDecimal totalCreditAmount = loanMapper.sumCreditAmountByEmp(empId, minTime, maxTime);
+        long completedLoans = assetProjectQueryApi == null ? 0L
+                : assetProjectQueryApi.countCompletedByApplicant(empId, minTime, maxTime);
+        BigDecimal totalCreditAmount = assetProjectQueryApi == null ? BigDecimal.ZERO
+                : assetProjectQueryApi.sumCompletedCreditByApplicant(empId, minTime, maxTime);
 
         // 支持申请：统计创建人和承接人两个维度的已完成数
         long totalSupports = supportMapper.countPageForSupport(null, null, null);
@@ -82,8 +86,11 @@ public class BizApplySearchService {
         log.debug("[BizApplySearchService.getEmpStatisticsByPeriod] empId={}, startTime={}, endTime={}",
                 empId, startTime, endTime);
 
-        long completedLoans = loanMapper.countCompletedByOrg(null, startTime, endTime);
-        BigDecimal totalCreditAmount = loanMapper.sumCreditAmountByEmp(empId, startTime, endTime);
+        AssetProjectQueryApi assetProjectQueryApi = assetProjectQueryApiProvider.getIfAvailable();
+        long completedLoans = assetProjectQueryApi == null ? 0L
+                : assetProjectQueryApi.countCompletedByApplicant(empId, startTime, endTime);
+        BigDecimal totalCreditAmount = assetProjectQueryApi == null ? BigDecimal.ZERO
+                : assetProjectQueryApi.sumCompletedCreditByApplicant(empId, startTime, endTime);
         long completedSupports = supportMapper.countCompletedByCreator(empId, startTime, endTime);
 
         BizApplyStatDTO stat = new BizApplyStatDTO();

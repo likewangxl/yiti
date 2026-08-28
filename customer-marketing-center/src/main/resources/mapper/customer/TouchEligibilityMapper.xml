@@ -4,13 +4,11 @@
 
     <select id="countValidWorklogs" resultType="long">
         SELECT COUNT(*)
-        FROM xa_touch_custom_worklogs w
-        INNER JOIN TOUCH_TASK t ON t.worklog_id = w.workLogId
-        WHERE t.cust_id = #{custId}
-          AND w.createTime &gt;= #{startTime}
-          AND w.createTime &lt; #{endTime}
-          AND (w.isDestroy IS NULL
-               OR (w.isDestroy &lt;&gt; '1' AND w.isDestroy &lt;&gt; 'Y' AND w.isDestroy &lt;&gt; 'TRUE'))
+        FROM MARKETING_TOUCH_WORKLOG w
+        WHERE w.cust_id = #{custId}
+          AND w.touch_time &gt;= #{startTime}
+          AND w.touch_time &lt; #{endTime}
+          AND w.record_status = 'VALID'
     </select>
 
 </mapper>

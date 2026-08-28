@@ -466,7 +466,7 @@ public interface TouchTaskQueryApi {
     /**
      * 按业务键查询触达任务
      *
-     * @param businessKey 业务键，格式 TOUCH:{taskId}
+     * @param businessKey 对外兼容业务键，格式 TOUCH:{taskId}；由任务 ID 派生，不读取物理 business_key 列
      * @return 任务 DTO
      */
     Optional<TouchTaskDTO> getTouchTaskByBusinessKey(String businessKey);
@@ -658,25 +658,27 @@ public class TouchTaskDTO {
     private String assigneeEmpName;           // 指派人姓名
     private String taskType;                  // FIRST_TOUCH/FOLLOW_UP
     private String taskStatus;                // PENDING/IN_PROGRESS/SUCCESS/CANCELLED
-    private String businessKey;               // 业务键
-    private LocalDateTime slaDeadline;        // SLA 截止时间
-    private Boolean slaWarning;               // 是否触发预警
-    private LocalDateTime expectedFinishAt;   // 期望完成时间
-    private LocalDateTime actualFinishAt;     // 实际完成时间
-    private String finishResult;              // SUCCESS/CANCELLED
-    private String cancelReason;              // 取消原因
-    private Integer logCount;                 // 日志数量
-    private LocalDateTime createdAt;          // 创建时间
+    private LocalDateTime planFinishTime;     // 计划完成时间
+    private LocalDateTime warningTime;        // SLA 预警时间
+    private String slaStatus;                 // SLA 状态
+    private String worklogId;                 // 唯一关联工作日志编号
+    private String businessKey;               // 兼容字段：由 id 派生为 TOUCH:{id}
+    private Boolean slaWarning;               // 兼容字段：由 slaStatus 派生，非物理列
+    private LocalDateTime successTime;        // 成功完成时间
+    private LocalDateTime cancelTime;         // 取消时间
+    private Integer logCount;                 // 工作日志数量，仅 0 或 1，由 worklogId 派生
+    private LocalDateTime createdTime;        // 创建时间
+    private LocalDateTime updatedTime;        // 最后更新时间
 }
 ```
 
-### 6.6 TouchLogDTO
+### 6.6 TouchLogDTO（工作日志兼容 DTO）
 ```java
 @Data
 public class TouchLogDTO {
-    private String id;                        // 日志 ID
-    private String touchTaskId;               // 任务 ID
-    private String clientUuid;                // 幂等键
+    private String id;                        // 兼容响应 ID
+    private String workLogId;                 // 兼容字段，来源 MARKETING_TOUCH_WORKLOG.worklog_no
+    private String touchTaskId;               // 任务 ID（由查询上下文补充）
     private String logContent;                // 日志内容
     private List<String> photoUrls;           // 照片 URL 列表
     private String operatorEmpId;             // 操作人
@@ -685,6 +687,10 @@ public class TouchLogDTO {
     private LocalDateTime createdAt;          // 创建时间
 }
 ```
+
+`TouchLogDTO` 仅保留为跨模块/旧客户端兼容名称，不对应物理 `TOUCH_LOG` 表；其数据来自
+`MARKETING_TOUCH_WORKLOG`，图片来自 `MARKETING_TOUCH_WORKLOG_PICTURE`。新提交必须保留
+`clientUuid`，并以 `(task_id, client_uuid)` 作为任务内幂等键。
 
 ### 6.7 RunningFlowDTO
 ```java
@@ -947,6 +953,7 @@ public class CustomerDeletedEvent {
 | `TagApi.*` | STABLE | |
 | `ClaimApi.*` | STABLE | |
 | `TouchTaskQueryApi.*` | STABLE | |
+| `AssetProjectQueryApi.*` | STABLE | 资产立项跨模块只读统计，不允许调用方直连业务表 |
 | `CustomerQueryApi.searchCustomers` | EXPERIMENTAL | 搜索算法可能变化 |
 | `CustomerQueryApi.listRunningProcesses` | EXPERIMENTAL | 可能拆分为多方法 |
 
@@ -1007,3 +1014,21 @@ public class CustomerQueryApiMockConfig {
 | docs/common-dev-guide.md | 通用开发规范 |
 | auth-permission-center/04-对外API契约.md | 认证授权 API 契约 |
 | workflow-center/04-对外API契约.md | 工作流 API 契约 |
+
+---
+
+## 12. AssetProjectQueryApi（资产立项只读统计）
+
+```java
+public interface AssetProjectQueryApi {
+    long countRunningByCustomer(Long custId);
+    long countByApplicant(String empId);
+    long countCompletedByApplicant(String empId, LocalDateTime startTime, LocalDateTime endTime);
+    BigDecimal sumCompletedCreditByApplicant(String empId, LocalDateTime startTime, LocalDateTime endTime);
+}
+```
+
+- 权威来源：`MARKETING_ASSET_PROJECT_APPLY`。
+- “运行中”限定 `status=IN_APPROVAL` 且 `record_status=ACTIVE`。
+- “已完成”限定 `status=COMPLETED`，时段按 `completed_time` 闭区间统计。
+- 调用方只消费聚合结果，不得依赖资产立项 Entity、Mapper 或表结构。

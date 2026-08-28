@@ -15,7 +15,7 @@ import java.util.List;
  * <p>
  * 提供触达报告的分页查询和状态统计功能。
  * 本服务通过 {@link TouchReportMapper} 执行聚合 JOIN 查询，
- * 汇聚 TOUCH_TASK 与 CUSTOMER_MARKET_CUSTOMER 的数据，无需触碰任何写操作。
+ * 汇聚 MARKETING_TOUCH_TASK 与 MARKETING_CUSTOMER_INFO 的数据，无需触碰任何写操作。
  * </p>
  */
 @Slf4j

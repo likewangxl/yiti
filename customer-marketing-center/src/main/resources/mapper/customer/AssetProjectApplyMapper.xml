@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.AssetProjectApplyMapper">
+    <sql id="BASE_COLUMNS">
+        a.id, a.apply_no, a.legacy_apply_id, a.cust_id, a.source_touch_task_id,
+        a.source_worklog_id, a.project_name, a.project_type, a.biz_type, a.guarantee_type,
+        a.project_total_investment, a.project_loan_amount, a.credit_amount,
+        a.credit_exposure_amount, a.is_urgent, a.is_key_project, a.urgent_source,
+        a.applicant_emp_id, a.applicant_org_id, a.main_manager_id_snapshot,
+        a.main_org_id_snapshot, a.status, a.business_key, a.process_instance_id,
+        a.submitted_time, a.completed_time, a.record_status, a.created_by, a.created_time,
+        a.updated_by, a.updated_time, a.lock_version
+    </sql>
+    <select id="selectActiveById" resultType="com.bank.branch.platform.customer.entity.AssetProjectApply">
+        SELECT <include refid="BASE_COLUMNS"/> FROM MARKETING_ASSET_PROJECT_APPLY a
+        WHERE a.id=#{id} AND a.record_status='ACTIVE'
+    </select>
+    <select id="selectForUpdate" resultType="com.bank.branch.platform.customer.entity.AssetProjectApply">
+        SELECT <include refid="BASE_COLUMNS"/> FROM MARKETING_ASSET_PROJECT_APPLY a
+        WHERE a.id=#{id} AND a.record_status='ACTIVE' FOR UPDATE
+    </select>
+    <select id="selectByBusinessKey" resultType="com.bank.branch.platform.customer.entity.AssetProjectApply">
+        SELECT <include refid="BASE_COLUMNS"/> FROM MARKETING_ASSET_PROJECT_APPLY a
+        WHERE a.business_key=#{businessKey} AND a.record_status='ACTIVE' LIMIT 1
+    </select>
+    <sql id="FILTERS">
+        <choose>
+            <when test="query.tab == 'MY'">AND a.applicant_emp_id=#{empId}</when>
+            <otherwise>
+                <choose>
+                    <when test="bizIds != null and !bizIds.isEmpty()">
+                        AND a.id IN <foreach collection="bizIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+                    </when>
+                    <otherwise>AND 1=0</otherwise>
+                </choose>
+            </otherwise>
+        </choose>
+        <if test="query.keyword != null and query.keyword != ''">
+            AND (a.apply_no LIKE CONCAT('%',#{query.keyword},'%')
+                 OR a.project_name LIKE CONCAT('%',#{query.keyword},'%')
+                 OR c.cust_name LIKE CONCAT('%',#{query.keyword},'%'))
+        </if>
+        <if test="query.customerName != null and query.customerName != ''">AND c.cust_name LIKE CONCAT('%',#{query.customerName},'%')</if>
+        <if test="query.projectName != null and query.projectName != ''">AND a.project_name LIKE CONCAT('%',#{query.projectName},'%')</if>
+        <if test="query.status != null and query.status != ''">AND a.status=#{query.status}</if>
+        <if test="query.urgent != null">AND a.is_urgent=#{query.urgent}</if>
+        <if test="query.keyProject != null">AND a.is_key_project=#{query.keyProject}</if>
+        <if test="query.startDate != null">AND a.created_time &gt;= #{query.startDate}</if>
+        <if test="query.endDate != null">AND a.created_time &lt; DATE_ADD(#{query.endDate}, INTERVAL 1 DAY)</if>
+    </sql>
+    <select id="selectPage" resultType="com.bank.branch.platform.customer.entity.AssetProjectApply">
+        SELECT <include refid="BASE_COLUMNS"/> FROM MARKETING_ASSET_PROJECT_APPLY a
+        JOIN MARKETING_CUSTOMER_INFO c ON c.id=a.cust_id AND c.record_status='ACTIVE'
+        WHERE a.record_status='ACTIVE' <include refid="FILTERS"/>
+        ORDER BY a.updated_time DESC,a.id DESC LIMIT #{offset},#{limit}
+    </select>
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*) FROM MARKETING_ASSET_PROJECT_APPLY a
+        JOIN MARKETING_CUSTOMER_INFO c ON c.id=a.cust_id AND c.record_status='ACTIVE'
+        WHERE a.record_status='ACTIVE' <include refid="FILTERS"/>
+    </select>
+    <update id="updateDraftCas">
+        UPDATE MARKETING_ASSET_PROJECT_APPLY SET
+          cust_id=#{entity.custId}, source_touch_task_id=#{entity.sourceTouchTaskId}, source_worklog_id=#{entity.sourceWorklogId},
+          project_name=#{entity.projectName}, project_type=#{entity.projectType}, biz_type=#{entity.bizType}, guarantee_type=#{entity.guaranteeType},
+          project_total_investment=#{entity.projectTotalInvestment}, project_loan_amount=#{entity.projectLoanAmount},
+          credit_amount=#{entity.creditAmount}, credit_exposure_amount=#{entity.creditExposureAmount},
+          is_urgent=#{entity.isUrgent}, is_key_project=#{entity.isKeyProject}, urgent_source=#{entity.urgentSource},
+          main_manager_id_snapshot=#{entity.mainManagerIdSnapshot}, main_org_id_snapshot=#{entity.mainOrgIdSnapshot},
+          updated_by=#{entity.updatedBy}, updated_time=#{entity.updatedTime}, lock_version=lock_version+1
+        WHERE id=#{entity.id} AND status='DRAFT' AND record_status='ACTIVE' AND lock_version=#{expectedVersion}
+    </update>
+    <update id="markDeleted">
+        UPDATE MARKETING_ASSET_PROJECT_APPLY SET record_status='DELETED',updated_by=#{updatedBy},updated_time=#{updatedTime},lock_version=lock_version+1
+        WHERE id=#{id} AND status='DRAFT' AND record_status='ACTIVE' AND lock_version=#{expectedVersion}
+    </update>
+    <update id="markSubmitted">
+        UPDATE MARKETING_ASSET_PROJECT_APPLY SET status='IN_APPROVAL',business_key=#{businessKey},process_instance_id=#{processInstanceId},
+          submitted_time=#{updatedTime},updated_by=#{updatedBy},updated_time=#{updatedTime},lock_version=lock_version+1
+        WHERE id=#{id} AND status='DRAFT' AND record_status='ACTIVE' AND lock_version=#{expectedVersion}
+    </update>
+    <update id="conditionalUpdateStatus">
+        UPDATE MARKETING_ASSET_PROJECT_APPLY SET status=#{targetStatus},
+          completed_time=CASE WHEN #{targetStatus} IN ('COMPLETED','REJECTED','CANCELLED') THEN #{updatedTime} ELSE completed_time END,
+          updated_by=#{updatedBy},updated_time=#{updatedTime},lock_version=lock_version+1
+        WHERE id=#{id} AND status=#{expectedStatus} AND record_status='ACTIVE'
+    </update>
+    <update id="markUrgentApproved">
+        UPDATE MARKETING_ASSET_PROJECT_APPLY SET is_urgent=1,urgent_source='MID_PROCESS',updated_by=#{updatedBy},updated_time=#{updatedTime},lock_version=lock_version+1
+        WHERE id=#{id} AND status='IN_APPROVAL' AND record_status='ACTIVE' AND is_urgent=0
+    </update>
+    <select id="countRunningByCustomer" resultType="long">
+        SELECT COUNT(*) FROM MARKETING_ASSET_PROJECT_APPLY
+        WHERE cust_id=#{custId} AND status='IN_APPROVAL' AND record_status='ACTIVE'
+    </select>
+    <select id="countByApplicant" resultType="long">
+        SELECT COUNT(*) FROM MARKETING_ASSET_PROJECT_APPLY
+        WHERE applicant_emp_id=#{empId} AND record_status='ACTIVE'
+    </select>
+    <select id="countCompletedByApplicant" resultType="long">
+        SELECT COUNT(*) FROM MARKETING_ASSET_PROJECT_APPLY
+        WHERE applicant_emp_id=#{empId} AND status='COMPLETED' AND record_status='ACTIVE'
+          AND completed_time BETWEEN #{startTime} AND #{endTime}
+    </select>
+    <select id="sumCompletedCreditByApplicant" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(credit_amount),0) FROM MARKETING_ASSET_PROJECT_APPLY
+        WHERE applicant_emp_id=#{empId} AND status='COMPLETED' AND record_status='ACTIVE'
+          AND completed_time BETWEEN #{startTime} AND #{endTime}
+    </select>
+</mapper>

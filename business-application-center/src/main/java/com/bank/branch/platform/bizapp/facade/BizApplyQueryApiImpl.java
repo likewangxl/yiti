@@ -3,25 +3,25 @@ package com.bank.branch.platform.bizapp.facade;
 import com.bank.branch.platform.bizapp.api.BizApplyQueryApi;
 import com.bank.branch.platform.bizapp.api.dto.BizApplyStatDTO;
 import com.bank.branch.platform.bizapp.api.dto.RunningAppCountDTO;
-import com.bank.branch.platform.bizapp.mapper.LoanApplyMapper;
 import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
 import com.bank.branch.platform.bizapp.service.BizApplySearchService;
+import com.bank.branch.platform.customer.api.AssetProjectQueryApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * 业务申请综合查询接口实现。
  * <p>
- * 实现 {@link BizApplyQueryApi} 接口，聚合贷款申请和中场支持申请两个域的查询。
+ * 实现 {@link BizApplyQueryApi} 接口，聚合资产立项和中场支持申请两个域的查询。
  * 简单计数查询直接委托 Mapper；复杂聚合统计委托 {@link BizApplySearchService}。
  * </p>
  * <p>
  * 注：本 Facade 仅返回计数 / 统计类 DTO（RunningAppCountDTO / BizApplyStatDTO），
- * 不返回 LoanApplyDTO / SupportRequestDTO，因此不依赖 Converter 层（Task 1.2）。
+ * 只返回跨模块聚合结果，不暴露业务模块内部 DTO。
  * </p>
  */
 @Slf4j
@@ -29,7 +29,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class BizApplyQueryApiImpl implements BizApplyQueryApi {
 
-    private final LoanApplyMapper loanApplyMapper;
+    private final ObjectProvider<AssetProjectQueryApi> assetProjectQueryApiProvider;
     private final SupportRequestMapper supportRequestMapper;
     private final BizApplySearchService bizApplySearchService;
 
@@ -115,23 +115,18 @@ public class BizApplyQueryApiImpl implements BizApplyQueryApi {
     /**
      * 统计客户正在运行的贷款申请数量（IN_APPROVAL 状态）。
      * <p>
-     * LoanApplyMapper 无专用的按客户ID统计运行中数量方法，
-     * 通过 selectByCustId 获取全量后在内存中按状态过滤计数，
-     * 业务上单个客户的贷款申请列表量有限，此方式可接受。
+     * 资产立项已迁移至客户营销模块，通过跨模块查询接口统计运行中申请数。
      * </p>
      *
      * @param custId 客户ID
      * @return 运行中贷款申请数
      */
     private long countRunningLoansByCustId(String custId) {
-        List<com.bank.branch.platform.bizapp.entity.LoanApply> loans =
-                loanApplyMapper.selectByCustId(custId);
-        if (loans == null || loans.isEmpty()) {
+        try {
+            AssetProjectQueryApi api = assetProjectQueryApiProvider.getIfAvailable();
+            return api == null ? 0L : api.countRunningByCustomer(Long.valueOf(custId));
+        } catch (NumberFormatException ignored) {
             return 0L;
         }
-        // IN_APPROVAL 表示贷款申请正在审批流程中，是唯一的"运行中"状态
-        return loans.stream()
-                .filter(l -> "IN_APPROVAL".equals(l.getStatus()))
-                .count();
     }
 }
