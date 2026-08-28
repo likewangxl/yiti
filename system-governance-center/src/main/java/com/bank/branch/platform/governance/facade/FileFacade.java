@@ -81,6 +81,11 @@ public class FileFacade implements FileApi {
         fileService.bindFile(bizType, bizId, fileObjectId, fileRole);
     }
 
+    @Override
+    public void unbindFile(String bizType, String bizId, String fileObjectId) {
+        fileService.unbindFile(bizType, bizId, fileObjectId);
+    }
+
     /**
      * 查询业务关联的文件列表
      *

@@ -1,5 +1,7 @@
 package com.bank.branch.platform.customer.service;
 
+import com.bank.branch.platform.auth.api.BizScopeApi;
+import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.dto.asset.AssetProjectQuery;
@@ -17,8 +19,10 @@ import com.bank.branch.platform.customer.mapper.AssetProjectApplyMapper;
 import com.bank.branch.platform.customer.mapper.AssetProjectUrgentApplyMapper;
 import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
 import com.bank.branch.platform.customer.mapper.TouchWorklogMapper;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerClaimMapper;
 import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerInfoMapper;
 import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
@@ -40,6 +44,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.LinkedHashSet;
 import java.util.stream.Stream;
 
 /** 资产立项完整业务服务；运行时仅操作 MARKETING_ASSET_PROJECT_*。 */
@@ -55,11 +60,13 @@ public class AssetProjectService {
     private final AssetProjectApplyMapper applyMapper;
     private final AssetProjectUrgentApplyMapper urgentMapper;
     private final MarketingCustomerInfoMapper customerMapper;
+    private final MarketingCustomerClaimMapper customerClaimMapper;
     private final TouchTaskMapper touchTaskMapper;
     private final TouchWorklogMapper worklogMapper;
     private final WorkflowApi workflowApi;
     private final WorkflowQueryApi workflowQueryApi;
     private final FileApi fileApi;
+    private final BizScopeApi bizScopeApi;
 
     public PageResult<AssetProjectVO> page(AssetProjectQuery query, String empId, boolean admin) {
         normalizeQuery(query);
@@ -81,8 +88,8 @@ public class AssetProjectService {
     }
 
     @Transactional
-    public AssetProjectVO create(AssetProjectSaveRequest request, String empId, String orgId) {
-        MarketingCustomerInfo customer = validateCustomerAndSource(request, empId);
+    public AssetProjectVO create(AssetProjectSaveRequest request, String empId, String orgId, boolean admin) {
+        MarketingCustomerInfo customer = validateCustomerAndSource(request, empId, empId, admin);
         validateAmounts(request);
         LocalDateTime now = LocalDateTime.now();
         AssetProjectApply entity = new AssetProjectApply();
@@ -103,13 +110,14 @@ public class AssetProjectService {
     }
 
     @Transactional
-    public AssetProjectVO update(Long id, AssetProjectSaveRequest request, String empId, boolean admin) {
+    public AssetProjectVO update(Long id, AssetProjectSaveRequest request, String empId, String orgId, boolean admin) {
         AssetProjectApply current = requireActive(id);
         requireDraftOwner(current, empId, admin);
         if (request.getLockVersion() == null || !request.getLockVersion().equals(current.getLockVersion())) {
             throw error(CustomerErrorCode.ASSET_PROJECT_STATUS_CONFLICT);
         }
-        MarketingCustomerInfo customer = validateCustomerAndSource(request, current.getApplicantEmpId());
+        MarketingCustomerInfo customer = validateCustomerAndSource(
+                request, current.getApplicantEmpId(), empId, admin);
         validateAmounts(request);
         copyDraftFields(current, request, customer);
         current.setUpdatedBy(empId);
@@ -118,7 +126,7 @@ public class AssetProjectService {
             throw error(CustomerErrorCode.ASSET_PROJECT_STATUS_CONFLICT);
         }
         current.setLockVersion(current.getLockVersion() + 1);
-        bindAttachments(id, request.getAttachmentIds());
+        synchronizeAttachments(id, request.getAttachmentIds());
         return toVO(current, empId, admin, true, null);
     }
 
@@ -129,7 +137,7 @@ public class AssetProjectService {
         requireDraftOwner(current, empId, admin);
         validateRequiredForSubmit(current);
         AssetProjectSaveRequest validation = toSaveRequest(current);
-        validateCustomerAndSource(validation, current.getApplicantEmpId());
+        validateCustomerAndSource(validation, current.getApplicantEmpId(), empId, admin);
         validateAmounts(validation);
         String businessKey = "ASSET_PROJECT:" + id;
         StartProcessCmd cmd = startCmd(MAIN_BIZ_TYPE, String.valueOf(id), businessKey,
@@ -241,7 +249,9 @@ public class AssetProjectService {
         urgent.setBusinessKey(businessKey);
         urgent.setProcessInstanceId(workflow.getProcessInstanceId());
         urgent.setUpdatedTime(LocalDateTime.now());
-        urgentMapper.updateById(urgent);
+        if (urgentMapper.updateById(urgent) != 1) {
+            throw error(CustomerErrorCode.ASSET_PROJECT_STATUS_CONFLICT);
+        }
         return new AssetProjectSubmitResponse(workflow.getProcessInstanceId(), businessKey, "IN_APPROVAL");
     }
 
@@ -320,15 +330,20 @@ public class AssetProjectService {
         entity.setMainManagerIdSnapshot(customer.getMainManagerId()); entity.setMainOrgIdSnapshot(customer.getMainOrgId());
     }
 
-    private MarketingCustomerInfo validateCustomerAndSource(AssetProjectSaveRequest request, String empId) {
+    private MarketingCustomerInfo validateCustomerAndSource(AssetProjectSaveRequest request,
+                                                              String sourceOwnerEmpId,
+                                                              String operatorEmpId,
+                                                              boolean operatorAdmin) {
         MarketingCustomerInfo customer = customerMapper.selectActiveById(request.getCustId());
         if (customer == null) throw error(CustomerErrorCode.CUSTOMER_NOT_FOUND);
+        ensureCustomerWritable(customer, operatorEmpId, operatorAdmin);
         if (request.getSourceTouchTaskId() == null && request.getSourceWorklogId() != null) {
             throw error(CustomerErrorCode.ASSET_PROJECT_SOURCE_INVALID);
         }
         if (request.getSourceTouchTaskId() != null) {
             TouchTask task = touchTaskMapper.selectById(String.valueOf(request.getSourceTouchTaskId()));
-            if (task == null || !request.getCustId().equals(task.getCustId()) || !empId.equals(task.getAssigneeEmpId())) {
+            if (task == null || !request.getCustId().equals(task.getCustId())
+                    || !sourceOwnerEmpId.equals(task.getAssigneeEmpId())) {
                 throw error(CustomerErrorCode.ASSET_PROJECT_SOURCE_INVALID);
             }
             if (request.getSourceWorklogId() != null) {
@@ -346,12 +361,10 @@ public class AssetProjectService {
         List<BigDecimal> nonNegative = Stream.of(request.getProjectTotalInvestment(), request.getProjectLoanAmount(),
                 request.getCreditAmount(), request.getCreditExposureAmount()).filter(Objects::nonNull).toList();
         if (nonNegative.stream().anyMatch(value -> value.signum() < 0)
-                || request.getProjectTotalInvestment() != null && request.getProjectLoanAmount() != null
-                && request.getProjectLoanAmount().compareTo(request.getProjectTotalInvestment()) > 0
                 || request.getCreditAmount() != null && request.getCreditExposureAmount() != null
                 && request.getCreditExposureAmount().compareTo(request.getCreditAmount()) > 0) {
             throw new BizException(CustomerErrorCode.ASSET_PROJECT_INVALID.getCode(),
-                    "金额必须非负，项目贷款金额不能超过项目总投资，授信敞口不能超过授信金额");
+                    "金额必须非负，授信敞口不能超过授信金额");
         }
     }
 
@@ -379,6 +392,32 @@ public class AssetProjectService {
         if (attachmentIds == null) return;
         attachmentIds.stream().filter(StringUtils::hasText).distinct()
                 .forEach(fileId -> fileApi.bindFile(MAIN_BIZ_TYPE, String.valueOf(id), fileId, "ATTACHMENT"));
+    }
+
+    private void synchronizeAttachments(Long id, List<String> attachmentIds) {
+        if (attachmentIds == null) return;
+        Set<String> requested = attachmentIds.stream().filter(StringUtils::hasText)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        List<FileObjectDTO> currentFiles = fileApi.listBizFiles(MAIN_BIZ_TYPE, String.valueOf(id));
+        Set<String> current = currentFiles == null ? Set.of() : currentFiles.stream()
+                .filter(Objects::nonNull)
+                .filter(file -> "ATTACHMENT".equals(file.getFileRole()))
+                .map(FileObjectDTO::getId)
+                .filter(StringUtils::hasText)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        current.stream().filter(fileId -> !requested.contains(fileId))
+                .forEach(fileId -> fileApi.unbindFile(MAIN_BIZ_TYPE, String.valueOf(id), fileId));
+        requested.stream().filter(fileId -> !current.contains(fileId))
+                .forEach(fileId -> fileApi.bindFile(MAIN_BIZ_TYPE, String.valueOf(id), fileId, "ATTACHMENT"));
+    }
+
+    private void ensureCustomerWritable(MarketingCustomerInfo customer, String operatorEmpId,
+                                        boolean operatorAdmin) {
+        if (operatorAdmin || operatorEmpId.equals(customer.getMainManagerId())) return;
+        if (customerClaimMapper.countActiveByCustomerAndEmp(customer.getId(), operatorEmpId) > 0) return;
+        boolean writable = bizScopeApi.checkWritePermission(operatorEmpId, BizType.CUSTOMER,
+                customer.getMainOrgId(), customer.getMainManagerId());
+        if (!writable) throw error(CustomerErrorCode.ASSET_PROJECT_ACCESS_FORBIDDEN);
     }
 
     private AssetProjectApply requireActive(Long id) {

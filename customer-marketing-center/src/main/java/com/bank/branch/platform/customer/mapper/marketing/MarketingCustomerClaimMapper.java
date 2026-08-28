@@ -46,6 +46,10 @@ public interface MarketingCustomerClaimMapper extends BaseMapper<MarketingCustom
             @Param("sourceLeadId") Long sourceLeadId,
             @Param("claimedBy") String claimedBy);
 
+    /** 校验员工是否通过有效认领或维护关系拥有指定客户。 */
+    int countActiveByCustomerAndEmp(@Param("custId") Long custId,
+                                    @Param("empId") String empId);
+
     /** 取消/触达前锁定目标认领行。 */
     MarketingCustomerClaim selectForUpdate(@Param("id") Long id);
 }

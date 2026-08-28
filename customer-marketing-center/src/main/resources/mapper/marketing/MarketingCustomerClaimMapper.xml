@@ -278,6 +278,14 @@
         LIMIT 1
     </select>
 
+    <select id="countActiveByCustomerAndEmp" resultType="int">
+        SELECT COUNT(*)
+        FROM MARKETING_CUSTOMER_CLAIM
+        WHERE cust_id = #{custId}
+          AND (claimed_by = #{empId} OR maintainer_emp_id = #{empId})
+          AND claim_status = 'CLAIMED'
+    </select>
+
     <select id="selectForUpdate"
             resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerClaim">
         SELECT id, cust_id, source_lead_id, org_id, claimed_by, maintainer_emp_id,

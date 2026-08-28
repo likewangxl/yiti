@@ -10,6 +10,7 @@ import com.bank.branch.platform.governance.mapper.BizFileRelMapper;
 import com.bank.branch.platform.governance.mapper.FileObjectMapper;
 import com.bank.branch.platform.governance.storage.FileCategory;
 import com.bank.branch.platform.governance.storage.ObsStorageClient;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -339,6 +340,20 @@ public class FileService {
         bizFileRelMapper.insert(rel);
 
         log.info("[FileService.bindFile] 关联创建成功 id={}", id);
+    }
+
+    /** 仅解除指定业务关联，文件对象及其余业务关联保持不变。 */
+    @Transactional
+    public void unbindFile(String bizType, String bizId, String fileObjectId) {
+        if (bizType == null || bizType.isBlank() || bizId == null || bizId.isBlank()
+                || fileObjectId == null || fileObjectId.isBlank()) {
+            throw new IllegalArgumentException("bizType、bizId、fileObjectId 不能为空");
+        }
+        QueryWrapper<BizFileRel> query = new QueryWrapper<BizFileRel>()
+                .eq("biz_type", bizType)
+                .eq("biz_id", bizId)
+                .eq("file_object_id", fileObjectId);
+        bizFileRelMapper.delete(query);
     }
 
     /**

@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.validation.annotation.Validated;
 
 import java.util.List;
 
@@ -60,7 +61,7 @@ public class AssetProjectController {
     @AuditLog(action = "CREATE_ASSET_PROJECT", resourceType = "ASSET_PROJECT")
     @Operation(summary = "创建资产立项草稿")
     public ResponseWrapper<AssetProjectVO> create(@Valid @RequestBody AssetProjectSaveRequest request) {
-        return ResponseWrapper.success(service.create(request, empId(), orgId()));
+        return ResponseWrapper.success(service.create(request, empId(), orgId(), admin()));
     }
 
     @PutMapping("/{id}")
@@ -68,8 +69,9 @@ public class AssetProjectController {
     @AuditLog(action = "UPDATE_ASSET_PROJECT", resourceType = "ASSET_PROJECT")
     @Operation(summary = "修改资产立项草稿")
     public ResponseWrapper<AssetProjectVO> update(@PathVariable Long id,
-                                                  @Valid @RequestBody AssetProjectSaveRequest request) {
-        return ResponseWrapper.success(service.update(id, request, empId(), admin()));
+                                                  @Validated(AssetProjectSaveRequest.Update.class)
+                                                  @RequestBody AssetProjectSaveRequest request) {
+        return ResponseWrapper.success(service.update(id, request, empId(), orgId(), admin()));
     }
 
     @PostMapping("/{id}/submit")

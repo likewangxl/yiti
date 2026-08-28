@@ -378,7 +378,7 @@ class CustomerQueryApiImplTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getBizType()).isEqualTo("TOUCH_TASK");
         assertThat(result.get(0).getBizId()).isEqualTo("1");
-        assertThat(result.get(0).getBusinessKey()).isEqualTo("TOUCH:T1");
+        assertThat(result.get(0).getBusinessKey()).isEqualTo("TOUCH:1");
         assertThat(result.get(0).getStatus()).isEqualTo("PENDING");
     }
 

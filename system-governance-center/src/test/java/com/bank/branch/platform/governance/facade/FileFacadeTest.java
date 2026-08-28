@@ -20,4 +20,14 @@ class FileFacadeTest {
 
         verify(fileService).writeFileContent("F_001", output);
     }
+
+    @Test
+    void unbindFile_delegatesToFileService() {
+        FileService fileService = mock(FileService.class);
+        FileFacade facade = new FileFacade(fileService);
+
+        facade.unbindFile("ASSET_PROJECT", "9001", "F_001");
+
+        verify(fileService).unbindFile("ASSET_PROJECT", "9001", "F_001");
+    }
 }

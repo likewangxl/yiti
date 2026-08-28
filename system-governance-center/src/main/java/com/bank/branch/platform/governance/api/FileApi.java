@@ -90,6 +90,11 @@ public interface FileApi {
     void bindFile(String bizType, String bizId, String fileObjectId, String fileRole);
 
     /**
+     * 解除指定业务对象与文件的关联，不删除文件对象或其他业务关联。
+     */
+    void unbindFile(String bizType, String bizId, String fileObjectId);
+
+    /**
      * 查询业务关联的文件列表
      *
      * @param bizType 业务类型

@@ -26,6 +26,11 @@ public class AssetProjectWorkflowListener {
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void onProcessCompleted(ProcessCompletedEvent event) {
         if (event.businessKey() == null) return;
+        if (!"APPROVED".equals(event.outcome()) && !"REJECTED".equals(event.outcome())) {
+            log.warn("忽略未知资产立项流程结果: businessKey={}, outcome={}",
+                    event.businessKey(), event.outcome());
+            return;
+        }
         if (event.businessKey().startsWith("ASSET_PROJECT_URGENT:")) {
             completeUrgent(event);
         } else if (event.businessKey().startsWith("ASSET_PROJECT:")) {
