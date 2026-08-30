@@ -43,10 +43,14 @@ class FlowVariableCatalogTest {
     void approverVariables_allocAdjust_hasOriginalOwner() {
         // VAR 审批人可选的「名单类流程变量」：原业绩所属人 originalOwnerEmpIds
         assertThat(c.approverVariables("ALLOC_ADJUST")).extracting(FlowVariableDTO::getField)
-                .contains("originalOwnerEmpIds");
+                .contains("originalOwnerEmpIds", "originalOwnerOrgLeaderEmpIds", "originalOwnerOrgApprovalGroups");
         FlowVariableDTO v = c.approverVariables("ALLOC_ADJUST").stream()
                 .filter(x -> "originalOwnerEmpIds".equals(x.getField())).findFirst().orElseThrow();
         assertThat(v.getLabel()).isEqualTo("原业绩所属人");
+        FlowVariableDTO groupVar = c.approverVariables("ALLOC_ADJUST").stream()
+                .filter(x -> "originalOwnerOrgApprovalGroups".equals(x.getField())).findFirst().orElseThrow();
+        assertThat(groupVar.getLabel()).isEqualTo("原业绩所属机构负责人分组");
+        assertThat(groupVar.getType()).isEqualTo("group-list");
     }
 
     @Test

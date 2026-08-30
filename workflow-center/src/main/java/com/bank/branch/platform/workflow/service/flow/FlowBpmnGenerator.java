@@ -36,6 +36,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   <li>每个审批 UserTask 挂 TaskListener(event=create, ${taskAssignmentListener})；</li>
  *   <li>会签（ALL）审批节点设多实例 MI（集合变量 approverEmpIds），
  *       并挂 ExecutionListener(event=start, ${multiInstanceApproverResolver}) 运行时解析集合；</li>
+ *   <li>按机构会签（GROUP_ALL）审批节点设顺序多实例 MI（集合变量 approverGroups），
+ *       每个元素为一个机构审批组，组内候选人由任务监听器实现或签；</li>
  *   <li>每个审批节点后插入审批结果排他网关，统一引出 approved==false 的驳回路径
  *       到单例 rejectedEnd；</li>
  *   <li>网关出边按原图边的条件渲染（{@link FlowConditionExpressionBuilder}）。</li>
@@ -60,6 +62,12 @@ public class FlowBpmnGenerator {
 
     /** 会签多实例元素变量名（单个审批人 empId） */
     private static final String MI_ELEMENT_VAR = "approver";
+
+    /** 按机构会签的集合变量名（由分组解析监听器注入机构审批组快照） */
+    private static final String MI_GROUP_COLLECTION = "approverGroups";
+
+    /** 按机构会签的多实例元素变量名（当前机构审批组） */
+    private static final String MI_GROUP_ELEMENT_VAR = "approverGroup";
 
     private final FlowConditionExpressionBuilder conditionBuilder;
 
@@ -213,6 +221,19 @@ public class FlowBpmnGenerator {
             // 进入节点时由解析器把审批人集合写入 approverEmpIds（Task 7 提供实现）
             ut.getExecutionListeners().add(
                     delegateListener("start", "${multiInstanceApproverResolver}"));
+        } else if ("GROUP_ALL".equalsIgnoreCase(n.getApproveMode())) {
+            // 机构间全部审批、机构内任一负责人审批：顺序多实例每次只创建一个机构任务。
+            // 当前组不设 assignee，由 TaskAssignmentListener 写入本组候选用户，任一人完成即可。
+            MultiInstanceLoopCharacteristics mi = new MultiInstanceLoopCharacteristics();
+            mi.setSequential(true);
+            mi.setInputDataItem(MI_GROUP_COLLECTION);
+            mi.setCollectionString(MI_GROUP_COLLECTION);
+            mi.setElementVariable(MI_GROUP_ELEMENT_VAR);
+            mi.setCompletionCondition(
+                    "${rejected == true || nrOfCompletedInstances >= nrOfInstances}");
+            ut.setLoopCharacteristics(mi);
+            ut.getExecutionListeners().add(
+                    delegateListener("start", "${multiInstanceApproverGroupResolver}"));
         }
         return ut;
     }

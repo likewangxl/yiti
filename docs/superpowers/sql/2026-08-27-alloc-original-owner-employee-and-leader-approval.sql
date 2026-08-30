@@ -4,10 +4,11 @@
 -- 目标流程：FDEF_ALLOC_CORP / FDEF_ALLOC_RETAIL
 --   公司部/零售部经办人选择 OWNER 后：
 --     gw1_route → original_owner_employee_approve（员工会签，ALL）
---                    → original_owner_approve（机构负责人或签，ANY）
+--                    → original_owner_approve（按机构顺序会签，GROUP_ALL；机构内或签）
 --                    → biz_dept_leader_approve
 --
--- original_owner_approve 的审批人变量保持为 originalOwnerOrgLeaderEmpIds。
+-- original_owner_approve 的审批人变量切换为 originalOwnerOrgApprovalGroups；旧的
+-- originalOwnerOrgLeaderEmpIds 仍由业务启动变量保留，用于兼容历史流程/审计读取。
 -- 虚拟员工的默认同意行为由现有运行时监听器负责，本脚本只维护设计器源模型。
 --
 -- 幂等约束：新节点不存在时才平移 sort_no；节点、审批人和连线均使用
@@ -125,11 +126,11 @@ SELECT 'AR_ORIG_OWNER_EMP', n.id, 'VAR', 'originalOwnerEmpIds', 1
           AND a.approver_value = 'originalOwnerEmpIds'
    );
 
--- 原业绩所属机构负责人改为或签；其候选变量保持为机构负责人变量。
+-- 原业绩所属机构负责人改为按机构顺序会签、组内或签；候选变量切换为机构分组变量。
 UPDATE WF_FLOW_NODE n
 JOIN WF_FLOW_DEF d
   ON d.id = n.flow_def_id
-SET n.approve_mode = 'ANY'
+SET n.approve_mode = 'GROUP_ALL'
 WHERE d.id IN ('FDEF_ALLOC_CORP', 'FDEF_ALLOC_RETAIL')
   AND n.node_key = 'original_owner_approve';
 
@@ -138,7 +139,7 @@ JOIN WF_FLOW_NODE n
   ON n.id = a.node_id
 JOIN WF_FLOW_DEF d
   ON d.id = n.flow_def_id
-SET a.approver_value = 'originalOwnerOrgLeaderEmpIds'
+SET a.approver_value = 'originalOwnerOrgApprovalGroups'
 WHERE d.id IN ('FDEF_ALLOC_CORP', 'FDEF_ALLOC_RETAIL')
   AND n.node_key = 'original_owner_approve'
   AND a.approver_type = 'VAR';

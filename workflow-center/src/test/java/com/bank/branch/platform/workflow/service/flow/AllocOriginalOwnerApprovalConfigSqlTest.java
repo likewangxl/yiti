@@ -79,12 +79,13 @@ class AllocOriginalOwnerApprovalConfigSqlTest {
     }
 
     @Test
-    void script_keeps_leader_variable_and_changes_leader_node_to_any() {
+    void script_switches_leader_node_to_group_all_and_group_variable() {
         String executable = stripComments(readSql());
 
         assertThat(executable)
-                .containsPattern("(?is)UPDATE\\s+WF_FLOW_NODE[\\s\\S]*?approve_mode\\s*=\\s*'ANY'[\\s\\S]*?original_owner_approve")
-                .containsPattern("(?is)UPDATE\\s+WF_FLOW_NODE_APPROVER[\\s\\S]*?approver_value\\s*=\\s*'originalOwnerOrgLeaderEmpIds'[\\s\\S]*?original_owner_approve");
+                .containsPattern("(?is)UPDATE\\s+WF_FLOW_NODE[\\s\\S]*?approve_mode\\s*=\\s*'GROUP_ALL'[\\s\\S]*?original_owner_approve")
+                .containsPattern("(?is)UPDATE\\s+WF_FLOW_NODE_APPROVER[\\s\\S]*?approver_value\\s*=\\s*'originalOwnerOrgApprovalGroups'[\\s\\S]*?original_owner_approve");
+        assertThat(readSql()).contains("originalOwnerOrgLeaderEmpIds");
     }
 
     @Test

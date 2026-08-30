@@ -2,6 +2,7 @@ package com.bank.branch.platform.workflow.listener;
 
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.governance.api.NotifyApi;
+import com.bank.branch.platform.workflow.api.dto.ApproverGroupDTO;
 import com.bank.branch.platform.workflow.service.CandidateResolverService;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.repository.ProcessDefinition;
@@ -606,6 +607,47 @@ class TaskAssignmentListenerTest {
         verify(delegateTask).addCandidateUser("E1");
         verify(delegateTask).addCandidateUser("E2");
         verify(delegateTask, never()).addCandidateGroup(anyString());
+    }
+
+    /**
+     * GROUP_ALL 多实例当前实例只绑定一个机构组：组内任一负责人可办理，任务名称和机构快照保留组上下文。
+     */
+    @Test
+    void notify_groupInstance_addsGroupUsers_namesTaskAndRecordsOrgSnapshot() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:8");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("original_owner_approve");
+        when(delegateTask.getId()).thenReturn("TASK_GROUP_A");
+        when(delegateTask.getProcessInstanceId()).thenReturn("PROC_GROUP");
+        when(delegateTask.getName()).thenReturn("原业绩所属机构负责人审批");
+        stubProcDefKey("DSN_alloc:1:8", "DSN_alloc");
+        when(delegateTask.hasVariable(MultiInstanceApproverGroupResolver.VAR_APPROVER_GROUP)).thenReturn(true);
+        when(delegateTask.getVariable(MultiInstanceApproverGroupResolver.VAR_APPROVER_GROUP))
+                .thenReturn(new ApproverGroupDTO("ORG_A", "机构A", List.of("A1", "A2", "A1")));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        verify(delegateTask).addCandidateUser("A1");
+        verify(delegateTask).addCandidateUser("A2");
+        verify(delegateTask).setName("原业绩所属机构负责人审批（机构A）");
+        verify(wfProcessOrgService).recordOrg("PROC_GROUP", "ORG_A", "CANDIDATE");
+        verify(candidateResolverService, never()).resolveCandidates(anyString(), anyString());
+        verify(delegateTask, never()).addCandidateGroup(anyString());
+    }
+
+    @Test
+    void notify_groupInstance_withInvalidGroup_failsClosed() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:9");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("original_owner_approve");
+        when(delegateTask.getId()).thenReturn("TASK_GROUP_INVALID");
+        when(delegateTask.hasVariable(MultiInstanceApproverGroupResolver.VAR_APPROVER_GROUP)).thenReturn(true);
+        when(delegateTask.getVariable(MultiInstanceApproverGroupResolver.VAR_APPROVER_GROUP))
+                .thenReturn(new ApproverGroupDTO("", "机构A", List.of("A1")));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> taskAssignmentListener.notify(delegateTask))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("机构审批分组");
     }
 
     /**

@@ -21,6 +21,7 @@ import com.bank.branch.platform.performance.service.adjust.cmd.SubmitAllocAdjust
 import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
+import com.bank.branch.platform.workflow.api.dto.ApproverGroupDTO;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.TaskCandidateUserDTO;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
@@ -36,6 +37,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -519,11 +521,13 @@ public class AllocAdjustService {
         // 原业绩分配会签名单（corp_v1 并行多实例 collection）；NEW 为空列表。
         vars.put("originalOwnerEmpIds", originalOwnerEmpIds == null
                 ? java.util.Collections.emptyList() : originalOwnerEmpIds);
-        // 原业绩所属机构负责人会签名单：original_owner_approve 节点候选已切换为该变量
-        // （每个原分配人主机构上溯至 2 级机构后取 BRANCH_HEAD 持有者并集，缺失则 fail-fast 阻断发起）
-        vars.put("originalOwnerOrgLeaderEmpIds", originalOwnerEmpIds == null || originalOwnerEmpIds.isEmpty()
+        // 原业绩所属机构负责人审批：保留旧扁平名单变量兼容既有流程，同时写入按机构分组的
+        // 审批人快照。GROUP_ALL 节点按组顺序执行，组内负责人使用或签语义。
+        List<ApproverGroupDTO> ownerApprovalGroups = originalOwnerEmpIds == null || originalOwnerEmpIds.isEmpty()
                 ? java.util.Collections.emptyList()
-                : resolveOriginalOwnerOrgLeaderEmpIds(originalOwnerEmpIds));
+                : resolveOriginalOwnerOrgApprovalGroups(originalOwnerEmpIds);
+        vars.put("originalOwnerOrgApprovalGroups", ownerApprovalGroups);
+        vars.put("originalOwnerOrgLeaderEmpIds", flattenApproverGroups(ownerApprovalGroups));
         // 分配明细中的每个分配对象也必须有可审批的 2 级机构负责人；只做提交前预检，
         // 不改变现有流程变量，避免申请写入后才发现审批节点无人可批。
         resolveAllocationTargetOrgLeaderEmpIds(extractAllocationTargetEmpIds(cmd.getItems()));
@@ -1317,8 +1321,8 @@ public class AllocAdjustService {
      * {@code flowable:assignee="${ownerEmpId}"}——单人指派给<b>原业绩所属人本人</b>
      * （{@link #resolveOriginalOwnerEmpId}），节点名 "原业绩所属人审批" 与之相符；
      * 而设计器流程自 2026-07-16 起已切换为<b>原业绩所属 2 级机构负责人（BRANCH_HEAD）会签</b>
-     * （候选变量 {@code originalOwnerOrgLeaderEmpIds}，节点名 "原业绩所属机构负责人审批"，
-     * 见 {@code docs/superpowers/sql/2026-07-16-alloc-original-owner-org-leader-switch.sql}）。
+     * （候选变量 {@code originalOwnerOrgApprovalGroups}，节点名 "原业绩所属机构负责人审批"；
+     * 旧变量 {@code originalOwnerOrgLeaderEmpIds} 仍作为扁平兼容快照保留，见当前配置脚本）。
      * 故静态 BPMN 的旧节点名<b>不是待修的漏网之鱼，而是与其自身行为相符</b>，不要"顺手改成"新名，
      * 否则标签会与实际审批人不符。真要回退，须同时确认业务上接受审批人退回原业绩所属人本人。</p>
      *
@@ -1384,7 +1388,16 @@ public class AllocAdjustService {
      * 任一环节缺失即抛 {@link PerfException} fail-fast，避免流程行至该节点无人可批卡死。</p>
      */
     private List<String> resolveOriginalOwnerOrgLeaderEmpIds(List<String> originalOwnerEmpIds) {
-        return resolveOrgLeaderEmpIds(originalOwnerEmpIds, "原业绩分配人", "原业绩所属机构");
+        return flattenApproverGroups(resolveOriginalOwnerOrgApprovalGroups(originalOwnerEmpIds));
+    }
+
+    /**
+     * 解析「原业绩所属机构负责人」的机构分组审批快照。
+     * <p>每个二级机构对应一个顺序多实例任务；机构内负责人列表仅用于候选人或签，
+     * 不再把不同机构的负责人合并成一个扁平 ANY 节点。</p>
+     */
+    private List<ApproverGroupDTO> resolveOriginalOwnerOrgApprovalGroups(List<String> originalOwnerEmpIds) {
+        return resolveOrgLeaderGroups(originalOwnerEmpIds, "原业绩分配人", "原业绩所属机构");
     }
 
     /**
@@ -1405,6 +1418,12 @@ public class AllocAdjustService {
      * @return 去重后的负责人工号
      */
     private List<String> resolveOrgLeaderEmpIds(List<String> empIds, String subjectText, String orgText) {
+        return flattenApproverGroups(resolveOrgLeaderGroups(empIds, subjectText, orgText));
+    }
+
+    /** 按员工所属二级机构解析负责人分组，保留机构边界和负责人快照。 */
+    private List<ApproverGroupDTO> resolveOrgLeaderGroups(List<String> empIds,
+                                                            String subjectText, String orgText) {
         if (empIds == null || empIds.isEmpty()) {
             return new ArrayList<>();
         }
@@ -1418,7 +1437,7 @@ public class AllocAdjustService {
             level2Orgs.putIfAbsent(level2Org.getOrgCode(), level2Org);
         }
 
-        java.util.LinkedHashSet<String> leaderEmpIds = new java.util.LinkedHashSet<>();
+        List<ApproverGroupDTO> groups = new ArrayList<>();
         for (Map.Entry<String, OrgDTO> entry : level2Orgs.entrySet()) {
             String orgCode = entry.getKey();
             List<String> holders = userApi.getEmpIdsByRoleCodeAndOrg(ROLE_CODE_BRANCH_HEAD, orgCode);
@@ -1427,9 +1446,34 @@ public class AllocAdjustService {
                         orgText + "[" + resolveOrgDisplayName(entry.getValue())
                                 + "]未配置机构负责人(BRANCH_HEAD)，无法发起审批");
             }
-            leaderEmpIds.addAll(holders);
+            LinkedHashSet<String> uniqueHolders = new LinkedHashSet<>();
+            for (String holder : holders) {
+                if (!isBlank(holder)) {
+                    uniqueHolders.add(holder);
+                }
+            }
+            if (uniqueHolders.isEmpty()) {
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                        orgText + "[" + resolveOrgDisplayName(entry.getValue())
+                                + "]未配置机构负责人(BRANCH_HEAD)，无法发起审批");
+            }
+            groups.add(new ApproverGroupDTO(orgCode, resolveOrgDisplayName(entry.getValue()),
+                    new ArrayList<>(uniqueHolders)));
         }
-        return new ArrayList<>(leaderEmpIds);
+        return groups;
+    }
+
+    /** 保持旧流程变量的扁平名单兼容，同时按出现顺序去重。 */
+    private List<String> flattenApproverGroups(List<ApproverGroupDTO> groups) {
+        LinkedHashSet<String> result = new LinkedHashSet<>();
+        if (groups != null) {
+            for (ApproverGroupDTO group : groups) {
+                if (group != null && group.getApproverEmpIds() != null) {
+                    result.addAll(group.getApproverEmpIds());
+                }
+            }
+        }
+        return new ArrayList<>(result);
     }
 
     /** 按员工主机构沿父机构链定位 2 级机构，并保持错误提示的对象类别。 */

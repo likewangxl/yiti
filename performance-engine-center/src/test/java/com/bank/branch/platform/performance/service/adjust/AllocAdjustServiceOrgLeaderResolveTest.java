@@ -7,6 +7,7 @@ import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.CustAllocRelationMapper;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitAllocAdjustCmd;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
+import com.bank.branch.platform.workflow.api.dto.ApproverGroupDTO;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 import org.junit.jupiter.api.Test;
@@ -30,9 +31,9 @@ import static org.mockito.Mockito.when;
  *
  * <p>需求：original_owner_approve 节点审批人由「原业绩分配人本人」改为「原业绩所属
  * 2 级机构的机构负责人(BRANCH_HEAD)」——每个原分配人主机构沿 P_ID 上溯至 2 级机构
- * （与公司部/零售部同级；主机构本身 2 级则就地），机构去重后取各机构 BRANCH_HEAD
- * 持有者并集（跨分行=多机构负责人会签）；任一环节缺失在发起时 fail-fast，
- * 避免流程行至该节点无人可批卡死。</p>
+ * （与公司部/零售部同级；主机构本身 2 级则就地），机构去重后形成独立审批组；组间按顺序
+ * 全部完成、组内负责人任一人完成即可。任一环节缺失在发起时 fail-fast，避免流程行至该节点
+ * 无人可批卡死。</p>
  */
 class AllocAdjustServiceOrgLeaderResolveTest {
 
@@ -56,6 +57,17 @@ class AllocAdjustServiceOrgLeaderResolveTest {
         m.setAccessible(true);
         try {
             return (List<String>) m.invoke(svc, empIds);
+        } catch (InvocationTargetException e) {
+            throw (Exception) e.getCause();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<ApproverGroupDTO> invokeResolveGroups(AllocAdjustService svc, List<String> empIds) throws Exception {
+        Method m = AllocAdjustService.class.getDeclaredMethod("resolveOriginalOwnerOrgApprovalGroups", List.class);
+        m.setAccessible(true);
+        try {
+            return (List<ApproverGroupDTO>) m.invoke(svc, empIds);
         } catch (InvocationTargetException e) {
             throw (Exception) e.getCause();
         }
@@ -106,6 +118,28 @@ class AllocAdjustServiceOrgLeaderResolveTest {
                 .containsExactly("LDR_BJ", "LDR_X", "LDR_200");
         // 同一 2 级机构（128）只按机构查一次负责人
         verify(userApi, times(1)).getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "128");
+    }
+
+    @Test
+    void multiOwnersAcrossBranches_preserveIndependentApprovalGroups() throws Exception {
+        OrgApi orgApi = mock(OrgApi.class);
+        UserApi userApi = mock(UserApi.class);
+        when(orgApi.getUserMainOrg("E1")).thenReturn(org("330", 3, "128"));
+        when(orgApi.getUserMainOrg("E3")).thenReturn(org("200", 2, "1"));
+        when(orgApi.getOrg("128")).thenReturn(org("128", 2, "1", "宝鸡分行"));
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "128")).thenReturn(List.of("LDR_BJ", "LDR_X"));
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "200")).thenReturn(List.of("LDR_200"));
+
+        AllocAdjustService svc = AllocAdjustService.forOrgLeaderTest(null, null, userApi, orgApi);
+
+        List<ApproverGroupDTO> groups = invokeResolveGroups(svc, List.of("E1", "E3"));
+
+        assertThat(groups).hasSize(2);
+        assertThat(groups.get(0).getGroupKey()).isEqualTo("128");
+        assertThat(groups.get(0).getGroupName()).isEqualTo("宝鸡分行");
+        assertThat(groups.get(0).getApproverEmpIds()).containsExactly("LDR_BJ", "LDR_X");
+        assertThat(groups.get(1).getGroupKey()).isEqualTo("200");
+        assertThat(groups.get(1).getApproverEmpIds()).containsExactly("LDR_200");
     }
 
     // ---------- fail-fast ----------
@@ -212,6 +246,12 @@ class AllocAdjustServiceOrgLeaderResolveTest {
         // 新变量：original_owner_approve 节点候选（DB conf 切换到该变量后生效）
         assertThat(captor.getValue().getVariables().get("originalOwnerOrgLeaderEmpIds"))
                 .isEqualTo(List.of("LDR_BJ"));
+        @SuppressWarnings("unchecked")
+        List<ApproverGroupDTO> groups = (List<ApproverGroupDTO>) captor.getValue().getVariables()
+                .get("originalOwnerOrgApprovalGroups");
+        assertThat(groups).hasSize(1);
+        assertThat(groups.get(0).getGroupKey()).isEqualTo("128");
+        assertThat(groups.get(0).getApproverEmpIds()).containsExactly("LDR_BJ");
         // 旧变量保留（进度展示/审计仍在读）
         assertThat(captor.getValue().getVariables().get("originalOwnerEmpIds")).isEqualTo(List.of("E1"));
     }

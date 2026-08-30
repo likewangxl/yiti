@@ -10,7 +10,7 @@ import java.util.List;
  * nodeKey：节点唯一标识（图内唯一，作为边引用 fromNodeKey/toNodeKey 的锚点）<br>
  * nodeType：节点类型，取值 START / END / APPROVAL / GATEWAY<br>
  * name：节点中文名称<br>
- * approveMode：审批模式，APPROVAL 节点有效，取值 ALL（会签）/ ANY（或签）<br>
+ * approveMode：审批模式，APPROVAL 节点有效，取值 ALL（会签）/ ANY（或签）/ GROUP_ALL（按机构会签）<br>
  * sortNo：节点排列序号，供前端渲染参考<br>
  * approvers：APPROVAL 节点的审批人列表，非 APPROVAL 节点可为空
  * </p>
@@ -27,7 +27,7 @@ public class FlowNodeDTO {
     /** 节点中文名称 */
     private String name;
 
-    /** 审批模式（仅 APPROVAL 节点有效）：ALL（会签）/ ANY（或签） */
+    /** 审批模式（仅 APPROVAL 节点有效）：ALL（会签）/ ANY（或签）/ GROUP_ALL（机构间顺序会签、组内或签） */
     private String approveMode;
 
     /**

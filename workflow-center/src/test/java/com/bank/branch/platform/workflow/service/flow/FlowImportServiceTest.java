@@ -10,6 +10,9 @@ import com.bank.branch.platform.workflow.mapper.WfFlowDefMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.EndEvent;
+import org.flowable.bpmn.model.FlowableListener;
+import org.flowable.bpmn.model.ImplementationType;
+import org.flowable.bpmn.model.MultiInstanceLoopCharacteristics;
 import org.flowable.bpmn.model.Process;
 import org.flowable.bpmn.model.SequenceFlow;
 import org.flowable.bpmn.model.StartEvent;
@@ -175,6 +178,41 @@ class FlowImportServiceTest {
         assertThat(result).isEqualTo("EXIST-ID");
         verify(flowDefService, never())
                 .createImported(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("importFromDeployed：顺序机构组多实例反向识别为 GROUP_ALL")
+    void importFromDeployed_preservesGroupAllMode() {
+        when(flowDefMapper.selectByFlowKey("imported_" + PROC_KEY)).thenReturn(null);
+        BpmnModel model = simpleModel();
+        UserTask task = (UserTask) model.getMainProcess().getFlowElement("a1");
+        MultiInstanceLoopCharacteristics mi = new MultiInstanceLoopCharacteristics();
+        mi.setSequential(true);
+        mi.setCollectionString("approverGroups");
+        mi.setElementVariable("approverGroup");
+        task.setLoopCharacteristics(mi);
+        FlowableListener listener = new FlowableListener();
+        listener.setEvent("start");
+        listener.setImplementationType(ImplementationType.IMPLEMENTATION_TYPE_DELEGATEEXPRESSION);
+        listener.setImplementation("${multiInstanceApproverGroupResolver}");
+        task.getExecutionListeners().add(listener);
+        mockRepository(model);
+
+        WfNodeCandidateConf conf = new WfNodeCandidateConf();
+        conf.setProcessDefinitionKey(PROC_KEY);
+        conf.setNodeKey("a1");
+        conf.setCandidateType("VAR");
+        conf.setCandidateValue("[\"originalOwnerOrgApprovalGroups\"]");
+        when(nodeCandidateConfMapper.selectByProcessDefKeyAndNodeKey(PROC_KEY, "a1"))
+                .thenReturn(List.of(conf));
+        when(flowDefService.createImported(org.mockito.ArgumentMatchers.any(), eq(PROC_KEY)))
+                .thenReturn("GROUP-DEF-ID");
+
+        service.importFromDeployed(PROC_KEY);
+
+        ArgumentCaptor<FlowGraphDTO> captor = ArgumentCaptor.forClass(FlowGraphDTO.class);
+        verify(flowDefService).createImported(captor.capture(), eq(PROC_KEY));
+        assertThat(nodeByKey(captor.getValue(), "a1").getApproveMode()).isEqualTo("GROUP_ALL");
     }
 
     private FlowNodeDTO nodeByKey(FlowGraphDTO graph, String key) {

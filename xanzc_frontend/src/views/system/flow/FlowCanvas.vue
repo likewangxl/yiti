@@ -93,8 +93,8 @@
       <div class="node-inner">
         <span class="node-name">{{ node.name || nodeTypeLabel(node.nodeType) || node.nodeKey }}</span>
         <span v-if="node.nodeType === 'APPROVAL'" class="node-meta">
-          <span class="mode-tag">{{ node.approveMode === 'ALL' ? '会签' : '或签' }}</span>
-          <span class="apv-cnt">审批人 {{ (node.approvers || []).length }}</span>
+          <span class="mode-tag">{{ node.approveMode === 'GROUP_ALL' ? '按机构会签' : (node.approveMode === 'ALL' ? '会签' : '或签') }}</span>
+          <span class="apv-cnt">{{ node.approveMode === 'GROUP_ALL' ? '审批机构组' : '审批人' }} {{ (node.approvers || []).length }}</span>
         </span>
       </div>
 
@@ -207,7 +207,11 @@ function isEdgeSelected(idx) { return props.selection?.type === 'edge' && props.
 
 function nodeAriaLabel(node) {
   const parts = [`${nodeTypeLabel(node.nodeType)}节点`, node.name || node.nodeKey || '未命名'];
-  if (node.nodeType === 'APPROVAL') parts.push(node.approveMode === 'ALL' ? '会签' : '或签', `审批人 ${(node.approvers || []).length} 名`);
+  if (node.nodeType === 'APPROVAL') {
+    const grouped = node.approveMode === 'GROUP_ALL';
+    parts.push(grouped ? '按机构会签' : (node.approveMode === 'ALL' ? '会签' : '或签'),
+      `${grouped ? '审批机构组' : '审批人'} ${(node.approvers || []).length} 名`);
+  }
   return parts.join('，');
 }
 function edgeAriaLabel(idx) {
