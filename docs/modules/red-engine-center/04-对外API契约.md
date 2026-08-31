@@ -1,9 +1,9 @@
 # 红色引擎（党建管理）— 对外 API 契约
 
-> 版本：v1.0
-> 最后更新：2026-08-20
+> 版本：v1.1
+> 最后更新：2026-08-31
 > 模块编码：red-engine-center
-> 本文以代码为准核实：本模块**是否**对外暴露 `*Api`/`*QueryApi`、本模块消费上游哪些 `*Api`、字典/事件约定
+> 本文以代码为准核实：本模块**是否**对外暴露 `*Api`/`*QueryApi`、本模块消费上游哪些 `*Api`、字典/事件约定；任务域 REST/RBAC 对照见 `03-接口设计与报文.md` 第 12 节
 > 结论已 grep `red-engine-center/src/main/java` 全量核实，无凭空补写
 
 ---
@@ -60,6 +60,9 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 - `ReSubmitController`（`private final CurrentUserApi currentUserApi;`）——`createSubmit`/`getMySubmits` 取 `currentUserApi.getCurrentEmpId()` 作为提交人/查询过滤主体
 - `ReReviewController`（同上）——`approve`/`reject` 取当前登录审核人工号；`ReReviewService`
   除回填 `RE_SUBMIT.reviewerId` 外，还会与持久化 `submitterId` 比较并以 `RE-40008` 拒绝本人自审
+- 任务管理、任务处理、附件、异步导出和首页服务——取当前操作人、角色编码和系统管理员标识，
+  再由红色引擎 Service 依据任务/分配/组织实体执行二次数据范围校验；首页逾期扣分的
+  `SYS_ADMIN` 专属守卫不依赖前端菜单隐藏
 
 **用到的方法**：仅 `getCurrentEmpId()`（`CurrentUserApi` 接口另有 `getCurrentUserContext`/`getCurrentOrgCode`/`getCurrentRoleIds`/`getCurrentRoleCodes`/`getCurrentCandidateGroupKeys`/`isSystemAdmin`，本模块均未调用）。
 
@@ -98,22 +101,53 @@ import com.bank.branch.platform.auth.api.UserApi;
 `ReUserPartyMapDTO.username`/`displayName` 响应字段展示；前端 auth 用户下拉同时展示工号与姓名，
 仅提交 `USER_ID`。
 
+任务域还使用 `UserApi.getEmpIdsByRoleCode` 解析报送员和组织审核员候选，使用
+`getUserByEmpId`/`getUserByEmpIds` 回填任务分配中的提交人信息；这些调用只返回 auth 公开 DTO，
+不直接读取 `PT_USER`。
+
 ### 2.3 `FileApi`（`system-governance-center`）
 
 ```java
 import com.bank.branch.platform.governance.api.FileApi;
 ```
 
-**使用位置**：`ReSubmitService`（`private final FileApi fileApi;`）
+**使用位置**：`ReSubmitService`、`ReTaskFileServiceImpl`、`ReTaskExportServiceImpl`。
 
-**用到的方法**：`bindFile(String bizType, String bizId, String fileObjectId, String fileRole)`——`createSubmit` 内对 `req.getFileObjectIds()` 逐个调用，把材料上报的附件（前端已通过 governance `POST /api/files/upload` 直传拿到 `fileObjectId`）与业务对象（上报记录）建立关联登记，同时写本模块自有的 `RE_SUBMIT_FILE` 表落业务侧元数据。**未调用** `FileApi.upload`/`getFileContent`/`getDownloadUrl`/`listBizFiles`/`deleteFile`/`getFileName(s)`/`getFileSizes` 等其余方法——上传动作完全由前端直连 governance 端点完成，本模块服务端只做"绑定登记"这一步。该直连上传端点对应共享资源 `G_FILE_UPLOAD`，只显式授予 `R_RE_REPORT`/`R_RE_SECR`。
+**用到的方法**：
+- `ReSubmitService` 在材料上报创建时调用 `getFileName` 与 `bindFile`，并把业务侧文件元数据写入
+  `RE_SUBMIT_FILE`；前端先经治理中心上传端点取得 `fileObjectId`。
+- `ReTaskFileServiceImpl` 在红色引擎完成 assignment/提交版本/文件归属校验后调用
+  `getFileContent` 与 `getFileName`；无归属时不触发治理文件读取。
+- `ReTaskExportServiceImpl` 使用字节上传、`getFileContent` 读取导出 ZIP 和任务附件；最终产物
+  仍是治理中心文件对象，不将对象 ID作为前端下载口令。
 
-### 2.3 未消费的其他上游 `*Api`
+任务附件下载、导出范围和治理文件访问必须在红色引擎实体授权之后执行。不得依赖前端隐藏、直接
+查询治理中心表或直连 OBS。当前治理实现的对象存储以 `ObsStorageClient`/OBS 为准，接口历史注释
+中出现的 MinIO 名称不改变跨模块契约。
+
+### 2.4 `JobApi`（`system-governance-center`）
+
+```java
+import com.bank.branch.platform.governance.api.JobApi;
+import com.bank.branch.platform.governance.api.dto.RegisterJobCmd;
+```
+
+**使用位置**：`ReTaskScheduler`。
+
+任务窗口补偿使用固定白名单键 `RED_ENGINE_TASK_WINDOW` 注册/注销治理中心 Quartz Job，周期表达式
+与 Job 类名由红色引擎服务端固定，不接受请求参数透传。红色引擎不创建自己的 Scheduler，不直写
+`SYS_JOB_CONF` 或 `QRTZ_*`。隔离联调 profile 关闭调度时，不能据此证明生产 Quartz 已接通。
+
+### 2.5 未消费的其他上游 `*Api`
 
 以下平台常见 `*Api` **未被本模块 import/使用**（grep 确认为空）：
-- `DictApi`（`system-governance-center`）——本模块字典（`RE_ORG_TYPE`/`RE_DIMENSION`/`RE_SUBMIT_STATUS`/`RE_ITEM_CODE`）走的是种子 SQL 直接落 `SYS_DICT` 表，前端读取走通用字典查询端点，**Java 代码层面本模块无需也未调用 `DictApi`**（见 §3）
+- `DictApi`（`system-governance-center`）——当前 Java 代码未调用；`RE_ITEM_CODE` 的红色引擎只读投影
+  映射到治理 `SYS_DICT` 的既有分组，字典内容不在本次 RBAC DML 中新增。该映射不应扩展为跨模块
+  表写入；若按平台依赖红线收口，后续应改为治理 `DictApi` 查询并保留本次文档的字典快照边界（见
+  `09-依赖契约摘要.md`），本阶段不引入新的红色引擎对外 `*Api`。
 - `BizScopeApi`（`auth-permission-center`）——见 2.1 说明
 - `WorkflowApi`/`WorkflowQueryApi`（`workflow-center`）——本模块**不接 Flowable**，审核流是自管两级状态机（`RE_SUBMIT.status` 字段流转），不依赖 `workflow-center` 模块（模块根 AGENTS.md 已明确该边界）
+- `NotifyApi`（`system-governance-center`）——当前代码未发送逾期通知；通知渠道、收件人和幂等键仍待业务确认
 
 ---
 
@@ -149,8 +183,8 @@ import com.bank.branch.platform.governance.api.FileApi;
 | 契约方向 | 结论 |
 |---|---|
 | 本模块对外暴露的 `*Api`/`*QueryApi` | 无（`api/` 包下只有 `dto/`） |
-| 本模块消费的上游 `*Api` | `auth-permission-center.CurrentUserApi`（仅 `getCurrentEmpId()`）、`auth-permission-center.UserApi`（`getUserByEmpId`、`findUsersByUsernameAndDisplayName`、`getUserByEmpIds`，及内部兼容辅助方法的 `mapEmpIdsToUsername`）、`system-governance-center.FileApi`（仅 `bindFile(...)`） |
-| 字典读取方式 | `SYS_DICT`（`RE_` 前缀命名空间，4 类 18 项），Java 代码不调用 `DictApi`，前端走通用字典查询端点 |
+| 本模块消费的上游 `*Api` | `auth-permission-center.CurrentUserApi`、`auth-permission-center.UserApi`、`system-governance-center.FileApi`、`system-governance-center.JobApi`；本阶段无新增红色引擎对外 `*Api` |
+| 字典读取方式 | `SYS_DICT` 中 `RE_` 前缀命名空间；当前 `RE_ITEM_CODE` 为红色引擎只读投影，Java 代码未调用 `DictApi`，前端可走治理通用字典查询端点；跨模块表投影收口为后续契约项 |
 | Spring 领域事件 | 无发布 |
 | 被本模块依赖但未使用的常见上游 API | `BizScopeApi`、`DictApi`、`WorkflowApi`/`WorkflowQueryApi`（均未 import） |
 
@@ -162,6 +196,10 @@ import com.bank.branch.platform.governance.api.FileApi;
 |---|---|
 | `red-engine-center/AGENTS.md` | 模块权威上下文：依赖关系、状态机、安全约束与已知限制 |
 | `03-接口设计与报文.md` | REST 接口全量端点契约 |
+| `07-审计要求.md` | 任务发布、审核、导出和逾期扣分的审计动作 |
+| `08-初始化数据清单.md` | 角色、菜单、API 资源及历史关系处理清单（不替代 DBA 执行审批） |
+| `09-依赖契约摘要.md` | 任务域与 auth/governance 的依赖边界及未决项 |
 | `AGENTS.md` | 本目录文档维护规则 |
 | `auth-permission-center/04-对外API契约.md` | `CurrentUserApi`、`UserApi` 完整接口定义 |
 | `system-governance-center/04-对外API契约.md` | `FileApi` 完整接口定义 |
+| `docs/superpowers/sql/2026-08-31-redengine-task-rbac-align.sql` | 仅供获授权 `yit_test` 的 RBAC/角色合并 DML |
