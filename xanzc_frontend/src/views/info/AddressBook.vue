@@ -175,7 +175,7 @@ const pgSize = ref(20);
 const products = ref([]);
 const orgTree = ref([]);
 const filters = ref({ keyword: '', orgCode: '', productId: '', stale60: false });
-const currentUserId = computed(() => userStore.user?.empId ?? userStore.user?.userId ?? userStore.user?.id ?? '');
+const currentUserId = computed(() => userStore.user?.empId ?? '');
 
 const fmtDate = (v) => fmtDateTime(v);
 function isStale(v) {
@@ -201,9 +201,7 @@ function rowProducts(row) {
 // 页面仅显示本人入口；真正的目标用户校验由后端 /employees/me 负责。
 function canEditRow(row) {
   if (!row || !currentUserId.value) return false;
-  const rowId = row.empId ?? row.userId ?? row.id;
-  if (rowId != null && String(rowId) === String(currentUserId.value)) return true;
-  return Boolean(row.username && userStore.user?.username && row.username === userStore.user.username);
+  return row.empId != null && String(row.empId) === String(currentUserId.value);
 }
 
 function resetFilters() {

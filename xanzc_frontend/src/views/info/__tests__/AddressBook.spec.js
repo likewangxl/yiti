@@ -132,6 +132,15 @@ describe('AddressBook.vue 通讯录', () => {
     expect(wrapper.vm.ef).toMatchObject({ mobile: self.mobile, email: self.email, responsibleProductIds: ['P1'] });
   });
 
+  it('本人判定只使用 PT_USER.USER_ID，不使用可能重复的 username 回退', async () => {
+    const sameUsernameOtherUser = { empId: 'E002', username: 'zhangsan', empName: '同名账号' };
+    pageEmployees.mockResolvedValueOnce({ records: [sameUsernameOtherUser], total: 1 });
+    wrapper = mountPage();
+    await settle();
+
+    expect(wrapper.vm.canEditRow(sameUsernameOtherUser)).toBe(false);
+  });
+
   it('自助保存只提交电话、邮箱和负责产品，不提交员工主数据字段', async () => {
     const self = { empId: 'E001', empName: '张三', position: '岗位', selfDesc: '旧描述', mobile: '13800000000', email: 'old@example.com', responsibleProductIds: ['P1'] };
     pageEmployees.mockResolvedValue({ records: [self], total: 1 });
