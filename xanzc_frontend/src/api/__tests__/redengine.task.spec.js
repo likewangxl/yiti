@@ -16,8 +16,6 @@ import {
   listMyTaskAssignments,
   listMaterialDetailItems,
   listTaskAssignments,
-  listTaskFileTypes,
-  listTaskTypes,
   listTasks,
   submitTask
 } from '@/api/redengine';
@@ -101,14 +99,10 @@ describe('红色引擎任务 API', () => {
     expect(call).toHaveBeenNthCalledWith(2, 'post', '/re/tasks/submissions', { data: payload });
   });
 
-  it('任务字典覆盖任务类型、文件类型和四维明细项', async () => {
-    await listTaskTypes();
-    await listTaskFileTypes();
+  it('四维明细通过治理中心 RE_ITEM_CODE 字典读取', async () => {
     await listMaterialDetailItems();
 
-    expect(call).toHaveBeenNthCalledWith(1, 'get', '/re/tasks/types', {});
-    expect(call).toHaveBeenNthCalledWith(2, 'get', '/re/tasks/file-types', {});
-    expect(call).toHaveBeenNthCalledWith(3, 'get', '/re/tasks/material-details', {});
+    expect(call).toHaveBeenCalledWith('get', '/sys/dicts/RE_ITEM_CODE/items');
   });
 
   it('导出使用单任务异步作业，附件和 ZIP 均按二进制读取', async () => {

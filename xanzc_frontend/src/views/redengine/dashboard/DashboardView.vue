@@ -174,7 +174,9 @@ function hasRole(...codes) {
   return typeof userStore.hasRoleCode === 'function' && userStore.hasRoleCode(...codes)
 }
 
-const isOrganizationRole = computed(() => hasRole('SYS_ADMIN', 'R_RE_ORGADM', 'R_RE_ORGREV'))
+// 组织首页模式只接受后端实际角色：系统管理员或组织审核员。
+// R_RE_ORGADM 不是当前角色常量，不能让历史别名改变页面数据分支。
+const isOrganizationRole = computed(() => hasRole('SYS_ADMIN', 'R_RE_ORGREV'))
 const isOrganizationView = computed(() => {
   const mode = String(summary.value.mode || '').toUpperCase()
   if (mode === 'ORGANIZATION') return true

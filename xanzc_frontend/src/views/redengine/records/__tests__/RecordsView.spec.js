@@ -108,7 +108,7 @@ describe('报送员上报信息', () => {
     expect(listMyTaskAssignments).toHaveBeenCalledWith({
       pageNo: 1,
       pageSize: 10,
-      status: 'UNREPORTED'
+      assignmentStatus: 'UNREPORTED'
     });
     expect(wrapper.vm.records[0]).toMatchObject({
       assignmentId: 1001,
@@ -127,7 +127,7 @@ describe('报送员上报信息', () => {
     expect(listMyTaskAssignments).toHaveBeenLastCalledWith({
       pageNo: 1,
       pageSize: 10,
-      status: 'UNREPORTED',
+      assignmentStatus: 'UNREPORTED',
       title: '整改',
       taskNature: 'TEMPORARY',
       cycleType: 'MONTH_END'

@@ -14,10 +14,7 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/api/redengine', () => ({
   createTask: vi.fn(),
-  getOrgTree: vi.fn(),
-  listMaterialDetailItems: vi.fn(),
-  listTaskFileTypes: vi.fn(),
-  listTaskTypes: vi.fn()
+  getOrgTree: vi.fn()
 }));
 
 vi.mock('@/api/users', () => ({
@@ -26,10 +23,7 @@ vi.mock('@/api/users', () => ({
 
 import {
   createTask,
-  getOrgTree,
-  listMaterialDetailItems,
-  listTaskFileTypes,
-  listTaskTypes
+  getOrgTree
 } from '@/api/redengine';
 import { listUsers } from '@/api/users';
 import NewTaskView from '../NewTaskView.vue';
@@ -86,28 +80,37 @@ describe('新增任务', () => {
     createTask.mockResolvedValue({ taskId: 100 });
     getOrgTree.mockResolvedValue([{ id: 11, orgName: '第一党支部', children: [] }]);
     listUsers.mockResolvedValue({ records: [{ userId: 'U1', displayName: '张伟', partyOrgId: 11 }] });
-    listTaskTypes.mockResolvedValue([
-      { value: 'NOTICE', label: '通知确认' },
-      { value: 'FOUR_DIMENSION', label: '四大维度材料上报' }
-    ]);
-    listTaskFileTypes.mockResolvedValue([
-      { value: 'PDF', label: 'PDF' },
-      { value: 'DOCX', label: 'Word' }
-    ]);
-    listMaterialDetailItems.mockResolvedValue([{ value: 'JC_STANDARD', label: '联建规范度' }]);
   });
 
-  it('加载任务类型、文件类型和目标范围数据', async () => {
+  it('加载后端组织和员工范围，并使用任务域固定枚举与文件编码选项', async () => {
     const wrapper = mount(NewTaskView, {
       global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
     });
     await settle();
 
-    expect(listTaskTypes).toHaveBeenCalledTimes(1);
-    expect(listTaskFileTypes).toHaveBeenCalledTimes(1);
     expect(getOrgTree).toHaveBeenCalledTimes(1);
     expect(listUsers).toHaveBeenCalledTimes(1);
+    expect(wrapper.vm.taskTypeOptions.map((item) => item.value)).toEqual(['FOUR_DIMENSION', 'GENERAL']);
+    expect(wrapper.vm.fileTypeOptions.map((item) => item.value)).toContain('PDF');
     expect(wrapper.find('.page-title').text()).toBe('新增任务');
+    wrapper.unmount();
+  });
+
+  it('员工范围超过单页上限时继续读取后续分页', async () => {
+    listUsers
+      .mockResolvedValueOnce({ records: [{ userId: 'U1', displayName: '张伟', partyOrgId: 11 }], total: 101 })
+      .mockResolvedValueOnce({ records: [{ userId: 'U2', displayName: '李娜', partyOrgId: 11 }], total: 101 })
+      .mockResolvedValueOnce({ records: [], total: 101 });
+
+    const wrapper = mount(NewTaskView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    expect(listUsers).toHaveBeenNthCalledWith(1, { pageNo: 1, pageSize: 100 });
+    expect(listUsers).toHaveBeenNthCalledWith(2, { pageNo: 2, pageSize: 100 });
+    expect(listUsers).toHaveBeenNthCalledWith(3, { pageNo: 3, pageSize: 100 });
+    expect(wrapper.vm.employeeOptions.map((item) => item.value)).toEqual(['U1', 'U2']);
     wrapper.unmount();
   });
 

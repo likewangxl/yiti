@@ -28,7 +28,14 @@
           </el-select>
         </el-form-item>
         <el-form-item label="任务类型">
-          <el-input v-model="query.typeCode" clearable placeholder="请输入任务类型" />
+          <el-select v-model="query.typeCode" clearable placeholder="请选择" style="width: 168px">
+            <el-option
+              v-for="option in taskTypeOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="周期">
           <el-select v-model="query.cycle" clearable placeholder="请选择" style="width: 132px">
@@ -126,6 +133,7 @@ import { ElMessage } from 'element-plus';
 import { Plus, Refresh, Search } from '@element-plus/icons-vue';
 import { listTasks } from '@/api/redengine';
 import {
+  BUSINESS_TYPES,
   CYCLE_OPTIONS,
   audienceLabel,
   buildTaskQuery,
@@ -136,6 +144,7 @@ import {
 
 const router = useRouter();
 const cycleOptions = CYCLE_OPTIONS;
+const taskTypeOptions = BUSINESS_TYPES;
 const query = reactive({ title: '', nature: '', typeCode: '', cycle: '', status: 'PUBLISHED' });
 const appliedQuery = ref({ status: 'PUBLISHED' });
 const pageNo = ref(1);
@@ -217,7 +226,8 @@ defineExpose({
   handleReset,
   handlePageChange,
   handleSizeChange,
-  openDetail
+  openDetail,
+  taskTypeOptions
 });
 </script>
 

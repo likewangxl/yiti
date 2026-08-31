@@ -22,7 +22,13 @@
 
         <el-form-item label="任务类型" prop="businessType">
           <el-select v-model="formData.businessType" clearable filterable placeholder="请选择任务类型" style="width: 360px">
-            <el-option v-for="option in taskTypeOptions" :key="option.value" :label="option.label" :value="option.value" />
+            <el-option
+              v-for="option in taskTypeOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+              :disabled="formData.nature === 'TEMPORARY' && option.value === 'FOUR_DIMENSION'"
+            />
           </el-select>
           <div v-if="validationErrors.businessType" class="field-error">{{ validationErrors.businessType }}</div>
         </el-form-item>
@@ -162,16 +168,14 @@ import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import {
   createTask,
-  getOrgTree,
-  listMaterialDetailItems,
-  listTaskFileTypes,
-  listTaskTypes
+  getOrgTree
 } from '@/api/redengine';
 import { listUsers } from '@/api/users';
 import {
   AUDIENCE_TYPES,
   BUSINESS_TYPES,
   CYCLE_OPTIONS,
+  FILE_TYPE_OPTIONS,
   TASK_NATURES,
   calculateTaskWindow,
   buildTaskCreatePayload,
@@ -184,8 +188,7 @@ const formRef = ref(null);
 const submitting = ref(false);
 const loadingOptions = ref(false);
 const taskTypeOptions = ref([...BUSINESS_TYPES]);
-const fileTypeOptions = ref([]);
-const materialDetailOptions = ref([]);
+const fileTypeOptions = ref([...FILE_TYPE_OPTIONS]);
 const branchOptions = ref([]);
 const employeeOptions = ref([]);
 const validationErrors = reactive({});
@@ -209,26 +212,15 @@ const formData = reactive({
   itemCodes: []
 });
 
-function toOption(value) {
-  if (typeof value === 'string' || typeof value === 'number') return { value, label: String(value) };
-  return {
-    value: value?.value ?? value?.code ?? value?.id,
-    label: value?.label ?? value?.name ?? value?.typeName ?? value?.orgName ?? value?.displayName ?? String(value?.value ?? '')
-  };
-}
-
-function toOptions(value) {
-  if (Array.isArray(value)) return value.map(toOption).filter((item) => item.value !== undefined && item.value !== null);
-  if (Array.isArray(value?.records)) return value.records.map(toOption).filter((item) => item.value !== undefined && item.value !== null);
-  if (Array.isArray(value?.items)) return value.items.map(toOption).filter((item) => item.value !== undefined && item.value !== null);
-  return [];
-}
-
 function flattenOrganizations(nodes, parentLabel = '') {
   const result = [];
   (nodes || []).forEach((node) => {
     const currentLabel = parentLabel ? `${parentLabel} / ${node.orgName}` : node.orgName;
-    if (node.id !== undefined && node.id !== null) result.push({ value: node.id, label: currentLabel });
+    // 后端任务分配只接受 orgLevel=2 的党支部，组织树中的上级党委不能作为目标。
+    if (node.id !== undefined && node.id !== null
+      && (Number(node.orgLevel) === 2 || (node.orgLevel == null && !node.children?.length))) {
+      result.push({ value: node.id, label: currentLabel });
+    }
     result.push(...flattenOrganizations(node.children, currentLabel));
   });
   return result;
@@ -244,19 +236,33 @@ function mapUsers(value) {
     .filter((item) => item.value !== undefined && item.value !== null);
 }
 
+function pageRecords(value) {
+  return Array.isArray(value) ? value : value?.records || value?.list || [];
+}
+
+async function loadAllUsers() {
+  const users = [];
+  const pageSize = 100;
+  let pageNo = 1;
+  let total = Infinity;
+
+  while (users.length < total) {
+    const result = await listUsers({ pageNo, pageSize });
+    const records = pageRecords(result);
+    users.push(...records);
+    total = Number(result?.total ?? result?.totalCount ?? users.length);
+    if (!records.length || users.length >= total) break;
+    pageNo += 1;
+  }
+  return users;
+}
+
 async function loadOptions() {
   loadingOptions.value = true;
-  const [types, fileTypes, details, organizations, users] = await Promise.allSettled([
-    listTaskTypes(),
-    listTaskFileTypes(),
-    listMaterialDetailItems(),
+  const [organizations, users] = await Promise.allSettled([
     getOrgTree(),
-    listUsers({ pageNo: 1, pageSize: 1000 })
+    loadAllUsers()
   ]);
-  const loadedTypes = types.status === 'fulfilled' ? toOptions(types.value) : [];
-  taskTypeOptions.value = loadedTypes.length ? loadedTypes : [...BUSINESS_TYPES];
-  fileTypeOptions.value = fileTypes.status === 'fulfilled' ? toOptions(fileTypes.value) : [];
-  materialDetailOptions.value = details.status === 'fulfilled' ? toOptions(details.value) : [];
   branchOptions.value = organizations.status === 'fulfilled' ? flattenOrganizations(organizations.value) : [];
   employeeOptions.value = users.status === 'fulfilled' ? mapUsers(users.value) : [];
   loadingOptions.value = false;
@@ -265,7 +271,8 @@ async function loadOptions() {
 const windowPreview = computed(() => {
   if (!isPeriodicNature(formData.nature) || !formData.cycle || !formData.durationDays) return null;
   try {
-    return calculateTaskWindow(formData.cycle, Number(formData.durationDays), new Date());
+    // 周期窗口由任务域按北京时间自然日计算，视图不使用浏览器本地日历。
+    return calculateTaskWindow(formData.cycle, Number(formData.durationDays));
   } catch {
     return null;
   }
@@ -323,7 +330,6 @@ defineExpose({
   fileTypeOptions,
   branchOptions,
   employeeOptions,
-  materialDetailOptions,
   loadingOptions,
   handleSubmit,
   handleBack,

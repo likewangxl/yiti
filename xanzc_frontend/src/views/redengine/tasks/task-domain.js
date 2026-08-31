@@ -17,6 +17,17 @@ export const BUSINESS_TYPES = Object.freeze([
   { value: 'GENERAL', label: '普通任务' }
 ]);
 
+// 任务文件类型由 RE_TASK_FILE_TYPE 以编码快照保存。当前后端没有提供任务文件类型
+// 元数据查询端点，因此新增任务使用与文件服务契约兼容的常用扩展名编码；提交时仍由
+// 后端按任务配置再次校验，填报页的大小/MIME 限制以 assignment 详情为准。
+export const FILE_TYPE_OPTIONS = Object.freeze([
+  { value: 'PDF', label: 'PDF' },
+  { value: 'DOCX', label: 'Word（DOCX）' },
+  { value: 'XLSX', label: 'Excel（XLSX）' },
+  { value: 'PNG', label: '图片（PNG）' },
+  { value: 'ZIP', label: '压缩包（ZIP）' }
+]);
+
 export const AUDIENCE_TYPES = Object.freeze([
   { value: 'ALL_BRANCH', label: '全部党支部' },
   { value: 'SPECIFIED_BRANCH', label: '指定党支部' },
@@ -63,31 +74,49 @@ const AUDIENCE_ALIASES = Object.freeze({
 });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const BEIJING_TIME_ZONE = 'Asia/Shanghai';
+const DATE_PART_PATTERN = /^(\d{4})-(\d{2})-(\d{2})/;
+const EXPLICIT_TIME_ZONE_PATTERN = /(?:Z|[+-]\d{2}:?\d{2})$/i;
 
-function asLocalDate(value) {
-  if (value instanceof Date) {
-    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
-  }
+function calendarDate(year, monthIndex, day) {
+  // 用 UTC 保存“日历日期”，避免浏览器所在时区或夏令时影响自然日加减。
+  return new Date(Date.UTC(year, monthIndex, day));
+}
+
+function asBeijingDate(value) {
   if (typeof value === 'string') {
-    const datePart = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (datePart) {
-      return new Date(Number(datePart[1]), Number(datePart[2]) - 1, Number(datePart[3]));
+    const trimmed = value.trim();
+    const datePart = trimmed.match(DATE_PART_PATTERN);
+    // LocalDate/LocalDateTime 没有时区，按业务输入的北京时间日期处理；
+    // 带 Z 或偏移量的 ISO 时刻则按真实时刻换算到北京时间。
+    if (datePart && !EXPLICIT_TIME_ZONE_PATTERN.test(trimmed)) {
+      return calendarDate(Number(datePart[1]), Number(datePart[2]) - 1, Number(datePart[3]));
     }
   }
-  const parsed = new Date(value || Date.now());
+
+  const parsed = value instanceof Date ? value : new Date(value || Date.now());
   if (Number.isNaN(parsed.getTime())) throw new Error('日期格式不正确');
-  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BEIJING_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(parsed);
+  const values = Object.fromEntries(parts
+    .filter((part) => ['year', 'month', 'day'].includes(part.type))
+    .map((part) => [part.type, Number(part.value)]));
+  return calendarDate(values.year, values.month - 1, values.day);
 }
 
 function addDays(date, days) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+  return calendarDate(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days);
 }
 
 function formatDate(date) {
   return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0')
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, '0'),
+    String(date.getUTCDate()).padStart(2, '0')
   ].join('-');
 }
 
@@ -96,31 +125,25 @@ function quarterStartMonth(monthIndex) {
 }
 
 function getPeriodBounds(unit, referenceDate) {
-  const date = asLocalDate(referenceDate);
+  const date = asBeijingDate(referenceDate);
   if (unit === 'week') {
-    const daysFromMonday = (date.getDay() + 6) % 7;
+    const daysFromMonday = (date.getUTCDay() + 6) % 7;
     const start = addDays(date, -daysFromMonday);
     return { start, end: addDays(start, 6) };
   }
   if (unit === 'month') {
-    const start = new Date(date.getFullYear(), date.getMonth(), 1);
-    return { start, end: new Date(date.getFullYear(), date.getMonth() + 1, 0) };
+    const start = calendarDate(date.getUTCFullYear(), date.getUTCMonth(), 1);
+    return {
+      start,
+      end: calendarDate(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)
+    };
   }
-  const month = quarterStartMonth(date.getMonth());
-  const start = new Date(date.getFullYear(), month, 1);
-  return { start, end: new Date(date.getFullYear(), month + 3, 0) };
-}
-
-function shiftPeriod(bounds, unit, amount) {
-  if (unit === 'week') {
-    return { start: addDays(bounds.start, amount * 7), end: addDays(bounds.end, amount * 7) };
-  }
-  if (unit === 'month') {
-    const start = new Date(bounds.start.getFullYear(), bounds.start.getMonth() + amount, 1);
-    return { start, end: new Date(start.getFullYear(), start.getMonth() + 1, 0) };
-  }
-  const start = new Date(bounds.start.getFullYear(), bounds.start.getMonth() + amount * 3, 1);
-  return { start, end: new Date(start.getFullYear(), start.getMonth() + 3, 0) };
+  const month = quarterStartMonth(date.getUTCMonth());
+  const start = calendarDate(date.getUTCFullYear(), month, 1);
+  return {
+    start,
+    end: calendarDate(date.getUTCFullYear(), month + 3, 0)
+  };
 }
 
 function periodDays(bounds) {
@@ -155,8 +178,8 @@ export function isFourDimensionTask(task = {}) {
 }
 
 /**
- * 计算下一次自然周期窗口。开始锚点从周期初向后顺延，结束锚点从周期末向前倒推，
- * 持续天数包含首尾且不能超过周、月或季度的自然天数。
+ * 计算北京时间下定位日期所在的自然周期窗口。开始锚点从周期初向后顺延，
+ * 结束锚点从周期末向前倒推；持续天数包含首尾且不能超过周、月或季度的自然天数。
  */
 export function calculateTaskWindow(cycle, duration, referenceDate = new Date()) {
   const meta = CYCLE_MAP[cycle];
@@ -166,21 +189,7 @@ export function calculateTaskWindow(cycle, duration, referenceDate = new Date())
     throw new Error('持续天数必须为正整数');
   }
 
-  const reference = asLocalDate(referenceDate);
-  let bounds = getPeriodBounds(meta.unit, reference);
-  if (meta.anchor === 'start') {
-    // 配置任务从当前周期之后的周期初开始，避免发布后覆盖已经开始的窗口。
-    bounds = shiftPeriod(bounds, meta.unit, 1);
-  } else {
-    // 结束锚点默认使用当前周期末；如果当前日期已进入倒推窗口，则取下一周期末。
-    let candidate = windowForAnchor(meta, bounds, numberOfDays);
-    if (reference.getTime() >= candidate.start.getTime()) {
-      bounds = shiftPeriod(bounds, meta.unit, 1);
-    }
-  }
-
-  // 先确定发布后实际采用的完整周期，再校验窗口长度。跨月/跨季度时，
-  // 目标周期的自然天数可能比当前参考周期更短，不能只校验参考日所在周期。
+  const bounds = getPeriodBounds(meta.unit, referenceDate);
   if (numberOfDays > periodDays(bounds)) {
     throw new Error(meta.unit === 'week'
       ? '持续天数不能超过周周期'
@@ -213,10 +222,16 @@ export function businessTypeLabel(businessType) {
 
 export function formatTaskWindow(task = {}) {
   if (isPeriodicNature(task.nature ?? task.taskNature)) {
-    const start = task.windowStart || task.startAt || task.window?.start || task.window?.startDate
-      || task.windowStartDate || task.scheduleWindow?.startDate || '—';
-    const end = task.windowEnd || task.endAt || task.window?.end || task.window?.endDate
-      || task.windowEndDate || task.scheduleWindow?.endDate || '—';
+    const rawStart = task.windowStart || task.startAt || task.window?.start || task.window?.startDate
+      || task.windowStartDate || task.scheduleWindow?.startDate;
+    const rawEnd = task.windowEnd || task.endAt || task.window?.end || task.window?.endDate
+      || task.windowEndDate || task.scheduleWindow?.endDate;
+    const durationDays = Number(task.durationDays);
+    if (!rawStart && !rawEnd && Number.isInteger(durationDays) && durationDays > 0) {
+      return `${cycleLabel(task.cycle ?? task.cycleType)} · 持续 ${durationDays} 天`;
+    }
+    const start = rawStart || '—';
+    const end = rawEnd || '—';
     return `${cycleLabel(task.cycle ?? task.cycleType)} · ${start} 至 ${end}`;
   }
   return `${task.startAt || task.temporaryStartTime || task.windowStart || '—'} 至 ${task.endAt || task.temporaryEndTime || task.windowEnd || '—'}`;
@@ -237,6 +252,9 @@ export function validateTaskDraft(draft = {}) {
   const endAt = draft.endAt ?? draft.temporaryEndTime;
 
   if (!businessType) errors.businessType = '请选择任务类型';
+  if (nature === TASK_NATURES.TEMPORARY && businessType === 'FOUR_DIMENSION') {
+    errors.businessType = '四大维度材料上报必须选择定时任务';
+  }
   if (![TASK_NATURES.PERIODIC, TASK_NATURES.TEMPORARY].includes(nature)) {
     errors.nature = '请选择任务性质';
   }

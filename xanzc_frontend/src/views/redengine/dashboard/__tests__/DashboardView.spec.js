@@ -122,4 +122,14 @@ describe('红色引擎首页工作台', () => {
     expect(wrapper.find('.todo-empty').exists()).toBe(true);
     wrapper.unmount();
   });
+
+  it('组织首页判断只认后端实际的 SYS_ADMIN 和 R_RE_ORGREV', async () => {
+    session.roleCodes = ['R_RE_ORGADM'];
+    api.getHomeSummary.mockResolvedValue({ mode: '', organizationTasks: [] });
+    const wrapper = mount(DashboardView, { global: { stubs, directives: { loading: {} } } });
+    await settle();
+
+    expect(wrapper.find('.organization-task-section').exists()).toBe(false);
+    wrapper.unmount();
+  });
 });

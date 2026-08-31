@@ -4,12 +4,14 @@ import {
   AUDIENCE_TYPES,
   BUSINESS_TYPES,
   EXPORT_MAX_ROWS_PER_SHEET,
+  FILE_TYPE_OPTIONS,
   TASK_NATURES,
   buildTaskCreatePayload,
   calculateTaskWindow,
   buildExportRequest,
   buildTaskQuery,
   businessTypeLabel,
+  formatTaskWindow,
   getExportSheetCount,
   getTaskRoute,
   linkifyDescription,
@@ -34,8 +36,8 @@ describe('红色引擎任务域模型', () => {
       end: '2026-08-31'
     });
     expect(calculateTaskWindow('QUARTER_START', 5, '2026-08-15')).toEqual({
-      start: '2026-10-01',
-      end: '2026-10-05'
+      start: '2026-07-01',
+      end: '2026-07-05'
     });
     expect(() => calculateTaskWindow('WEEK_START', 8, '2026-08-15')).toThrow(/不能超过/);
   });
@@ -96,6 +98,26 @@ describe('红色引擎任务域模型', () => {
     expect(businessTypeLabel('GENERAL')).toBe('普通任务');
   });
 
+  it('文件类型选项锁定为任务服务可保存的编码快照', () => {
+    expect(FILE_TYPE_OPTIONS.map((item) => item.value)).toEqual([
+      'PDF',
+      'DOCX',
+      'XLSX',
+      'PNG',
+      'ZIP'
+    ]);
+  });
+
+  it('周期任务缺少实例窗口时仍展示后端返回的持续时间', () => {
+    expect(formatTaskWindow({
+      taskNature: 'SCHEDULED',
+      cycleType: 'MONTH_END',
+      durationDays: 5,
+      startAt: null,
+      endAt: null
+    })).toBe('每月末 · 持续 5 天');
+  });
+
   it('临时任务导出不需要明细项，四维任务导出必须选择明细项', () => {
     expect(buildExportRequest({ isFourDimension: false }, [])).toEqual({ itemCodes: [] });
     expect(() => buildExportRequest({ isFourDimension: true }, [])).toThrow(/明细/);
@@ -104,8 +126,19 @@ describe('红色引擎任务域模型', () => {
     });
   });
 
-  it('周期初任务按发布后的目标周期校验自然天数', () => {
-    expect(() => calculateTaskWindow('MONTH_START', 31, '2026-08-15')).toThrow(/当月自然天数/);
+  it('周期窗口按后端定位日期所在周期校验自然天数', () => {
+    expect(calculateTaskWindow('MONTH_START', 31, '2026-08-15')).toEqual({
+      start: '2026-08-01',
+      end: '2026-08-31'
+    });
+    expect(() => calculateTaskWindow('MONTH_START', 29, '2026-02-15')).toThrow(/当月自然天数/);
+  });
+
+  it('周期预览按北京时间自然日解析带时区的参考时刻', () => {
+    expect(calculateTaskWindow('MONTH_END', 1, '2026-08-31T16:30:00.000Z')).toEqual({
+      start: '2026-09-30',
+      end: '2026-09-30'
+    });
   });
 
   it('创建任务请求映射为后端 DTO，三种对象各生成明确 target', () => {

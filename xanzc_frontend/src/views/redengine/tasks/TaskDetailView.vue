@@ -115,7 +115,7 @@
           <span class="card-header-title">导出状态</span>
           <span class="export-state-label">{{ exportStatusLabel }}</span>
           <span v-if="exportState.sheetCount" class="muted-text">
-            {{ exportState.totalRows }} 行，{{ exportState.sheetCount }} 个 Sheet（单 Sheet ≤ 5000 行）
+            {{ exportState.totalRows }} 行，{{ exportState.sheetCount }} 个 Sheet（单 Sheet ≤ {{ exportState.sheetRowLimit || 5000 }} 行）
           </span>
         </div>
         <div class="export-state-actions">
@@ -188,6 +188,7 @@ const exportState = reactive({
   status: 'IDLE',
   totalRows: 0,
   sheetCount: 0,
+  sheetRowLimit: 5000,
   errorMessage: ''
 });
 let exportTimer = null;
@@ -200,8 +201,9 @@ function routeTaskId() {
 function optionFromValue(value) {
   if (typeof value === 'string' || typeof value === 'number') return { value, label: String(value) };
   return {
-    value: value?.value ?? value?.code ?? value?.id,
-    label: value?.label ?? value?.name ?? value?.itemName ?? String(value?.value ?? '')
+    value: value?.value ?? value?.code ?? value?.dictCode ?? value?.dictValue ?? value?.id,
+    label: value?.label ?? value?.name ?? value?.dictLabel ?? value?.itemName
+      ?? String(value?.value ?? value?.dictCode ?? '')
   };
 }
 
@@ -325,6 +327,7 @@ async function pollExportStatus(exportId) {
     }[rawStatus] || rawStatus;
     exportState.totalRows = Number(status?.totalRows ?? 0);
     exportState.sheetCount = Number(status?.sheetCount ?? 0);
+    exportState.sheetRowLimit = Number(status?.sheetRowLimit ?? 5000);
     exportState.errorMessage = status?.errorMessage || '';
     if (exportState.status === 'QUEUED' || exportState.status === 'RUNNING') {
       exportTimer = setTimeout(() => pollExportStatus(exportId), 1000);

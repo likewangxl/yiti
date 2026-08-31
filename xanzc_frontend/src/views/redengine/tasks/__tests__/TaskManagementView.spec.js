@@ -91,6 +91,19 @@ describe('任务管理列表', () => {
     wrapper.unmount();
   });
 
+  it('任务类型查询使用后端业务类型枚举，而不是自由文本', async () => {
+    const wrapper = mount(TaskManagementView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    const typeSelect = wrapper.findAll('select')
+      .find((select) => select.text().includes('四大维度材料上报'));
+    expect(typeSelect).toBeDefined();
+    expect(typeSelect.text()).toContain('普通任务');
+    wrapper.unmount();
+  });
+
   it('点击查询重置到第一页并携带任务标题和性质', async () => {
     const wrapper = mount(TaskManagementView, {
       global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }

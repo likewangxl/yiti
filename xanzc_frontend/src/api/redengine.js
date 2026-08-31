@@ -82,10 +82,9 @@ export const getMyTaskAssignment = (assignmentId) =>
 export const submitTask = (data) =>
   call('post', '/re/tasks/submissions', { data });
 
-// 任务类型、允许上传文件类型和四维明细项由后端字典维护，前端不复制生产字典值。
-export const listTaskTypes = () => call('get', '/re/tasks/types', {});
-export const listTaskFileTypes = () => call('get', '/re/tasks/file-types', {});
-export const listMaterialDetailItems = () => call('get', '/re/tasks/material-details', {});
+// 四维明细项由治理中心 RE_ITEM_CODE 字典维护；任务类型是 red-engine DTO 固定枚举，
+// 文件类型由任务配置写入 RE_TASK_FILE_TYPE，当前没有独立的任务元数据 REST 端点。
+export const listMaterialDetailItems = () => call('get', '/sys/dicts/RE_ITEM_CODE/items');
 
 // 任务导出始终是一个异步 ZIP 作业；ZIP 内包含一个多 Sheet Excel，附件目录由服务端生成。
 export const createTaskExport = (taskId, data = {}) =>

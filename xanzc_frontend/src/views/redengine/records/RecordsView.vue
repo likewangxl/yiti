@@ -235,9 +235,10 @@ function normalizeTaskRow(row = {}) {
 }
 
 function taskQuery() {
+  const assignmentStatus = TASK_STATUS_QUERY[activeTab.value]
   return buildTaskQuery({
     ...appliedQuery.value,
-    status: TASK_STATUS_QUERY[activeTab.value]
+    assignmentStatus
   }, pageNo.value, pageSize.value)
 }
 
