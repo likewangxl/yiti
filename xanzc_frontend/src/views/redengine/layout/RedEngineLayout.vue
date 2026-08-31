@@ -74,19 +74,19 @@ import {
   DataAnalysis,
   WarningFilled,
   Checked,
-  Trophy,
-  Download,
+  List,
   Setting,
   Connection
 } from '@element-plus/icons-vue';
 import { logout } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
 import { usePermissionStore } from '@/stores/permission';
-import { menuItems, canSee as canSeeImpl } from './canSee';
+import { menuItems, canSee as canSeeImpl, normalizeRoleCodes } from './canSee';
 
 const route = useRoute();
 const userStore = useUserStore();
 const permissionStore = usePermissionStore();
+const effectiveRoleCodes = computed(() => normalizeRoleCodes(userStore.roles, userStore.isSystemAdmin));
 
 // 平台未做图标全局注册（main.js 只 app.use(ElementPlus)，未 app.component 逐个注册图标），
 // 故按平台既有用法（如 views/report/Dynamic.vue）本地 import 后建 name → 组件映射，供 <component :is> 用
@@ -98,8 +98,7 @@ const iconMap = {
   DataAnalysis,
   WarningFilled,
   Checked,
-  Trophy,
-  Download,
+  List,
   Setting,
   Connection
 };
@@ -108,10 +107,14 @@ const iconMap = {
  * 判断某菜单项/子视图内某资源对当前用户是否可见；绑定共享权限 store，供模板与 provide 复用。
  */
 function canSee(item) {
-  if (!item?.res) return true;
-  if (!permissionStore.loaded) return false;
-  if (permissionStore.isSystemAdmin) return true;
-  return canSeeImpl(item, permissionStore.resourceUrls);
+  // 敏感菜单在权限快照完成前保持隐藏；角色白名单和资源权限均满足才显示。
+  if (item?.res && !permissionStore.loaded) return false;
+  return canSeeImpl(
+    item,
+    permissionStore.resourceUrls,
+    effectiveRoleCodes.value,
+    permissionStore.isSystemAdmin
+  );
 }
 
 // 供 Task 14 子视图通过 inject('canSee') 复用同一份鉴权判断

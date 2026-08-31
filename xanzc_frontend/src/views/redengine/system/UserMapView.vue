@@ -134,12 +134,9 @@
 //
 // 党内角色下拉取值来源：种子 SQL(docs/superpowers/sql/2026-07-18-redengine-seed.sql) 的
 // SYS_DICT 未登记 partyRole 相关字典（RE_ 前缀字典只有 RE_ORG_TYPE/RE_DIMENSION/
-// RE_SUBMIT_STATUS/RE_ITEM_CODE 四类，无角色字典），故改核实后端权威口径：
-// entity/ReUserPartyMap.java、api/dto/ReUserPartyMapDTO.java 的字段注释与 Schema 描述明文列出
-// ORG_REVIEWER/BRANCH_REVIEWER/SECRETARY/REPORTER 四个字符串字面量（无更严格的后端枚举校验，
-// 仅 @NotBlank）；ReUserPartyMapServiceTest.java 测试夹具实际只覆盖了 SECRETARY/REPORTER 两值
-// （ORG_REVIEWER/BRANCH_REVIEWER 未见于任何测试断言，如实记录不夸大覆盖范围），故本页 4 项取值以
-// entity/DTO 注释为准，硬编码这 4 项 + 中文标签，不虚构字典来源。
+// RE_SUBMIT_STATUS/RE_ITEM_CODE 四类，无角色字典），故按红色引擎当前角色模型提供
+// ORG_REVIEWER/SECRETARY/REPORTER 三项。支部书记已承接原支部审核职责，前端不再提供
+// BRANCH_REVIEWER 选项；partyRole 仍只是映射描述字段，实际接口授权以平台角色为准。
 import { ref, onMounted, computed } from 'vue';
 import { ElMessage } from 'element-plus';
 import { listUserMaps, bindUserMap, getOrgTree } from '@/api/redengine';
@@ -160,7 +157,6 @@ const formRef = ref(null);
 
 const partyRoleOptions = [
   { value: 'ORG_REVIEWER', label: '组织审核员' },
-  { value: 'BRANCH_REVIEWER', label: '支部审核员' },
   { value: 'SECRETARY', label: '支部书记' },
   { value: 'REPORTER', label: '报送员' }
 ];

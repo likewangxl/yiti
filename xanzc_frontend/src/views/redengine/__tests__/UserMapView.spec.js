@@ -177,6 +177,15 @@ describe('UserMapView 用户来源与展示契约', () => {
     expect(userSelector.find('option').attributes('value')).toBe('PT_USER_ID_1001');
     expect(userSelector.find('option').text()).toBe('EMP001 · 测试用户');
 
+    const roleSelectors = wrapper.findAll('.form-item-stub[data-label="党内角色"] .select-stub');
+    expect(roleSelectors).toHaveLength(2);
+    expect(roleSelectors[1].findAll('option').map((option) => option.text())).toEqual([
+      '组织审核员',
+      '支部书记',
+      '报送员'
+    ]);
+    expect(wrapper.text()).not.toContain('支部审核员');
+
     wrapper.unmount();
   });
 
