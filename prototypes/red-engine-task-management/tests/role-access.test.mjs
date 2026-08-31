@@ -38,9 +38,14 @@ test("组织审核员保留组织管理能力并增加工作台，但不展示�
   assert.equal(reviewerMenus.includes("materials"), false);
   assert.equal(reviewerMenus.includes("records"), false);
   assert.equal(reviewerMenus.includes("processing"), false);
+  assert.equal(reviewerMenus.includes("archive"), false);
+  assert.equal(reviewerMenus.includes("export"), false);
   assert.equal(reviewerMenus.includes("warning"), true);
   assert.equal(getDefaultView("orgReviewer"), "workbench");
   assert.equal(adminMenus.includes("workbench"), false);
+  assert.equal(adminMenus.includes("archive"), false);
+  assert.equal(adminMenus.includes("export"), false);
+  assert.equal(adminMenus.includes("management"), true);
 });
 
 test("原型使用报送员业务角色，首页待办入口与审核工作台分离", () => {

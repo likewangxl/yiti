@@ -1,0 +1,9 @@
+Command: playwright-cli -s=redengine-home-ranking-20260831-v2 console warning
+
+Total messages: 3 (Errors: 0, Warnings: 0)
+Returning 0 messages for level "warning"
+
+Command: playwright-cli -s=redengine-home-ranking-20260831-v2 console error
+
+Total messages: 3 (Errors: 0, Warnings: 0)
+Returning 0 messages for level "error"
