@@ -1,31 +1,26 @@
 package com.bank.branch.platform.redengine.controller;
 
 import com.bank.branch.platform.common.web.GlobalExceptionHandler;
-import com.bank.branch.platform.redengine.api.dto.ReAnnualGenerateReqDTO;
 import com.bank.branch.platform.redengine.service.ReCockpitService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * ReCockpitController 单元测试（standaloneSetup 惯例同 {@code ReOrgControllerTest}）。
- * <p>仅覆盖本次修复目标端点 {@code POST /api/re/cockpit/archive/generate/{year}}：
- * 高危操作补齐 {@code @AuditLog(reasonRequired = true)} + {@link ReAnnualGenerateReqDTO#reason}
- * {@code @NotBlank}，其余 7 个只读/执行端点行为未变更，不在本文件重复覆盖。</p>
+ * ReCockpitController 单元测试。
+ * <p>归档接口已由任务管理替代，测试确保历史 archive 路径不再注册；驾驶舱其余端点由既有兼容测试覆盖。</p>
  */
 @ExtendWith(MockitoExtension.class)
 class ReCockpitControllerTest {
@@ -34,48 +29,39 @@ class ReCockpitControllerTest {
     private ReCockpitService reCockpitService;
 
     private MockMvc mockMvc;
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(new ReCockpitController(reCockpitService))
                 .setControllerAdvice(new GlobalExceptionHandler())
+                .addDispatcherServletCustomizer(dispatcherServlet ->
+                        dispatcherServlet.setThrowExceptionIfNoHandlerFound(false))
                 .build();
     }
 
     @Test
-    void generateAnnualResult_withReason_shouldReturn200AndDelegateToService() throws Exception {
-        ReAnnualGenerateReqDTO req = new ReAnnualGenerateReqDTO();
-        req.setReason("年度考核期结束，按计划生成归档结果");
-        doNothing().when(reCockpitService).generateAnnualResult(anyInt());
+    void archiveSettlement_endpointRemoved_returns404() throws Exception {
+        mockMvc.perform(get("/api/re/cockpit/archive/settlement"))
+                .andExpect(status().isNotFound());
 
-        mockMvc.perform(post("/api/re/cockpit/archive/generate/2026")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(req)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("0"));
-
-        verify(reCockpitService).generateAnnualResult(2026);
+        verify(reCockpitService, never()).archiveSettlement(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
-    void generateAnnualResult_blankReason_shouldReturn400AndNotCallService() throws Exception {
-        ReAnnualGenerateReqDTO req = new ReAnnualGenerateReqDTO();
-        req.setReason("");
-
-        mockMvc.perform(post("/api/re/cockpit/archive/generate/2026")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(req)))
-                .andExpect(status().isBadRequest());
-
-        verify(reCockpitService, never()).generateAnnualResult(anyInt());
-    }
-
-    @Test
-    void generateAnnualResult_missingBody_shouldReturn400AndNotCallService() throws Exception {
+    void annualArchiveEndpointRemoved_returns404() throws Exception {
         mockMvc.perform(post("/api/re/cockpit/archive/generate/2026"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isNotFound());
 
         verify(reCockpitService, never()).generateAnnualResult(anyInt());
+    }
+
+    @Test
+    void exportControllerRemoved_directExportPathReturns404AndClassIsAbsent() throws Exception {
+        mockMvc.perform(get("/api/re/export/submit"))
+                .andExpect(status().isNotFound());
+
+        assertThatThrownBy(() -> Class.forName(
+                "com.bank.branch.platform.redengine.controller.ReExportController"))
+                .isInstanceOf(ClassNotFoundException.class);
     }
 }
