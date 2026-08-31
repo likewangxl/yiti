@@ -1842,10 +1842,15 @@ async function onSaveDraft() {
 async function onWithdraw(row) {
   let reason;
   try {
-    const r = await ElMessageBox.prompt('请填写撤回原因', '撤回申请', {
-      type: 'warning', inputPattern: /\S+/, inputErrorMessage: '撤回原因必填'
+    const r = await ElMessageBox.prompt(`确认撤回申请 ${row.applyNo || row.id}？\n请填写撤回原因`, '撤回申请', {
+      type: 'warning', inputPattern: /\S+/, inputErrorMessage: '撤回原因必填',
+      confirmButtonText: '确认撤回', cancelButtonText: '取消'
     });
-    reason = r.value;
+    reason = String(r?.value || '').trim();
+    if (!reason) {
+      ElMessage.warning('撤回原因必填');
+      return;
+    }
   } catch { return; }
   try {
     await withdrawAdjust(row.id || row.applyNo, reason);
@@ -1857,13 +1862,6 @@ async function onWithdraw(row) {
 }
 
 async function confirmWithdraw(row) {
-  try {
-    await ElMessageBox.confirm(`确认撤回申请 ${row.applyNo || row.id}？`, '确认撤回', {
-      type: 'warning', confirmButtonText: '确认撤回', cancelButtonText: '取消'
-    });
-  } catch {
-    return;
-  }
   await onWithdraw(row);
 }
 

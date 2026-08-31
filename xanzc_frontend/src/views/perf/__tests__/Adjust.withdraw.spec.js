@@ -85,9 +85,8 @@ afterEach(() => {
   api.withdrawAdjust.mockResolvedValue({ ok: true });
 });
 
-describe('Adjust 撤回二阶段确认', () => {
-  it('更多菜单使用元素节点承载撤回，确认后才进入原因输入和写请求', async () => {
-    ui.confirm.mockResolvedValue('confirm');
+describe('Adjust 撤回单 prompt 确认', () => {
+  it('更多菜单使用单个 prompt 同时确认撤回并填写原因，确认后只发一次写请求', async () => {
     ui.prompt.mockResolvedValue({ value: '提交信息有误' });
     wrapper = mount(Adjust, { global: { stubs, directives: { loading: {}, 'bp-overflow-tooltip': {} } } });
     await flushPromises();
@@ -101,26 +100,19 @@ describe('Adjust 撤回二阶段确认', () => {
     await withdraw.trigger('click');
     await flushPromises();
 
-    expect(ui.confirm).toHaveBeenCalledWith('确认撤回申请 ADJ-1？', '确认撤回', expect.objectContaining({ type: 'warning' }));
-    expect(ui.prompt).toHaveBeenCalledWith('请填写撤回原因', '撤回申请', expect.objectContaining({ type: 'warning' }));
+    expect(ui.confirm).not.toHaveBeenCalled();
+    expect(ui.prompt).toHaveBeenCalledTimes(1);
+    expect(ui.prompt.mock.calls[0][0]).toEqual(expect.stringContaining('确认撤回申请 ADJ-1？'));
+    expect(ui.prompt.mock.calls[0][0]).toEqual(expect.stringContaining('撤回原因'));
+    expect(ui.prompt.mock.calls[0][1]).toBe('撤回申请');
+    expect(ui.prompt.mock.calls[0][2]).toEqual(expect.objectContaining({
+      type: 'warning', inputPattern: /\S+/, inputErrorMessage: '撤回原因必填'
+    }));
+    expect(api.withdrawAdjust).toHaveBeenCalledTimes(1);
     expect(api.withdrawAdjust).toHaveBeenCalledWith('ADJ-1', '提交信息有误');
   });
 
-  it('取消第一阶段确认时不打开原因输入也不发写请求', async () => {
-    ui.confirm.mockRejectedValue('cancel');
-    wrapper = mount(Adjust, { global: { stubs, directives: { loading: {}, 'bp-overflow-tooltip': {} } } });
-    await flushPromises();
-
-    const withdraw = wrapper.findAll('.dropdown-item').find((item) => item.text() === '撤回');
-    await withdraw.trigger('click');
-    await flushPromises();
-
-    expect(ui.prompt).not.toHaveBeenCalled();
-    expect(api.withdrawAdjust).not.toHaveBeenCalled();
-  });
-
-  it('第一阶段确认后取消填写撤回原因时不发写请求', async () => {
-    ui.confirm.mockResolvedValue('confirm');
+  it('取消单个撤回 prompt 时不发写请求', async () => {
     ui.prompt.mockRejectedValue('cancel');
     wrapper = mount(Adjust, { global: { stubs, directives: { loading: {}, 'bp-overflow-tooltip': {} } } });
     await flushPromises();
@@ -129,8 +121,22 @@ describe('Adjust 撤回二阶段确认', () => {
     await withdraw.trigger('click');
     await flushPromises();
 
-    expect(ui.confirm).toHaveBeenCalledTimes(1);
+    expect(ui.confirm).not.toHaveBeenCalled();
     expect(ui.prompt).toHaveBeenCalledTimes(1);
+    expect(api.withdrawAdjust).not.toHaveBeenCalled();
+  });
+
+  it('撤回原因仅空白时不发写请求', async () => {
+    ui.prompt.mockResolvedValue({ value: '   ' });
+    wrapper = mount(Adjust, { global: { stubs, directives: { loading: {}, 'bp-overflow-tooltip': {} } } });
+    await flushPromises();
+
+    const withdraw = wrapper.findAll('.dropdown-item').find((item) => item.text() === '撤回');
+    await withdraw.trigger('click');
+    await flushPromises();
+
+    expect(ui.prompt).toHaveBeenCalledTimes(1);
+    expect(ui.warning).toHaveBeenCalledWith('撤回原因必填');
     expect(api.withdrawAdjust).not.toHaveBeenCalled();
   });
 });
