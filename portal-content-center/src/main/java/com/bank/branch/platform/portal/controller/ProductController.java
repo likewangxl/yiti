@@ -21,6 +21,7 @@ import com.bank.branch.platform.portal.entity.ProductInfo;
 import com.bank.branch.platform.portal.service.AddrbookQueryService;
 import com.bank.branch.platform.portal.service.ProductExportService;
 import com.bank.branch.platform.portal.service.ProductService;
+import com.bank.branch.platform.portal.service.UserProductRelationService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,8 +37,10 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -52,6 +55,7 @@ public class ProductController {
     private final ProductService productService;
     private final ProductExportService productExportService;
     private final AddrbookQueryService addrbookQueryService;
+    private final UserProductRelationService userProductRelationService;
     private final BizScopeApi bizScopeApi;
     private final CurrentUserApi currentUserApi;
     private final OrgApi orgApi;
@@ -62,9 +66,11 @@ public class ProductController {
     @BizAuth(bizType = BizType.PRODUCT, action = BizAction.LIST)
     public ResponseWrapper<ProductDTO> listProducts(@Valid ProductQueryReqDTO req) {
         PageResult<ProductInfo> entityPage = productService.listProducts(req);
-        List<ProductDTO> base = entityPage.getRecords().stream()
-                .map(ProductConverter::toDTO)
-                .map(this::withResponsibleEmpNames)
+        List<ProductInfo> entities = entityPage.getRecords();
+        Map<String, List<String>> responsibleMap = resolveResponsibleEmpIds(entities);
+        Map<String, String> responsibleNameMap = resolveResponsibleEmpNames(responsibleMap);
+        List<ProductDTO> base = entities.stream()
+                .map(entity -> toProductDTO(entity, responsibleMap, responsibleNameMap))
                 .collect(Collectors.toList());
         // 批量解析产品部门机构名称 + 附件文件名（各单次取数，避免逐行 N+1），回填供列表展示
         Map<String, String> orgNameMap = resolveProductDeptOrgNames(base);
@@ -116,21 +122,47 @@ public class ProductController {
         return orgs.stream().collect(Collectors.toMap(OrgDTO::getOrgCode, OrgDTO::getOrgName, (a, b) -> a));
     }
 
-    /**
-     * 按 responsibleEmpIds 批量解析负责人姓名，填充 responsibleEmpNames（顿号分隔）。
-     * 姓名缺失（如离职/未维护）时回退展示工号，避免空白。
-     */
-    private ProductDTO withResponsibleEmpNames(ProductDTO dto) {
-        List<String> empIds = dto.getResponsibleEmpIds();
-        if (empIds == null || empIds.isEmpty()) {
-            return dto.toBuilder().responsibleEmpNames("").build();
+    /** 批量读取当前页所有产品的负责人关系，避免逐产品查询。 */
+    private Map<String, List<String>> resolveResponsibleEmpIds(List<ProductInfo> entities) {
+        List<String> productIds = entities.stream()
+                .map(ProductInfo::getId)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toList());
+        Map<String, List<String>> result = userProductRelationService.mapUserIdsByProductIds(productIds);
+        return result != null ? result : Collections.emptyMap();
+    }
+
+    /** 批量解析负责人姓名，姓名缺失时由调用方回退显示工号。 */
+    private Map<String, String> resolveResponsibleEmpNames(Map<String, List<String>> responsibleMap) {
+        if (responsibleMap == null || responsibleMap.isEmpty()) {
+            return Collections.emptyMap();
         }
-        Map<String, String> nameMap = addrbookQueryService.listResponsibleEmps(empIds).stream()
-                .collect(Collectors.toMap(ResponsibleEmpDTO::getEmpId, ResponsibleEmpDTO::getEmpName, (a, b) -> a));
+        Set<String> empIds = responsibleMap.values().stream()
+                .flatMap(List::stream)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toSet());
+        if (empIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<ResponsibleEmpDTO> emps = addrbookQueryService.listResponsibleEmps(List.copyOf(empIds));
+        if (emps == null || emps.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return emps.stream().collect(Collectors.toMap(
+                ResponsibleEmpDTO::getEmpId, ResponsibleEmpDTO::getEmpName, (a, b) -> a));
+    }
+
+    /** 将关系表负责人和批量姓名映射回单个产品 DTO。 */
+    private ProductDTO toProductDTO(ProductInfo entity,
+                                    Map<String, List<String>> responsibleMap,
+                                    Map<String, String> responsibleNameMap) {
+        List<String> empIds = responsibleMap.getOrDefault(entity.getId(), Collections.emptyList());
         String names = empIds.stream()
-                .map(id -> nameMap.getOrDefault(id, id))
+                .map(id -> responsibleNameMap.getOrDefault(id, id))
                 .collect(Collectors.joining("、"));
-        return dto.toBuilder().responsibleEmpNames(names).build();
+        return ProductConverter.toDTO(entity, empIds).toBuilder()
+                .responsibleEmpNames(names)
+                .build();
     }
 
     /** D.3 查询支持中场支持的产品 */
@@ -162,7 +194,11 @@ public class ProductController {
     @GetMapping("/{id:[A-Za-z0-9_-]{1,64}}")
     @BizAuth(bizType = BizType.PRODUCT, action = BizAction.READ)
     public ResponseWrapper<ProductDTO> getProduct(@PathVariable String id) {
-        return ResponseWrapper.success(ProductConverter.toDTO(productService.getProduct(id)));
+        ProductInfo entity = productService.getProduct(id);
+        Map<String, List<String>> responsibleMap = userProductRelationService
+                .mapUserIdsByProductIds(Collections.singletonList(entity.getId()));
+        Map<String, String> responsibleNameMap = resolveResponsibleEmpNames(responsibleMap);
+        return ResponseWrapper.success(toProductDTO(entity, responsibleMap, responsibleNameMap));
     }
 
     /** D.4 新增产品 */

@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.portal.mapper.UserProductRelationMapper">
+
+    <resultMap id="UserProductRelationMap"
+               type="com.bank.branch.platform.portal.entity.UserProductRelation">
+        <id column="USER_ID" property="userId"/>
+        <result column="PRODUCT_ID" property="productId"/>
+        <result column="ASSIGNED_TIME" property="assignedTime"/>
+        <result column="UPDATED_TIME" property="updatedTime"/>
+        <result column="UPDATED_BY" property="updatedBy"/>
+    </resultMap>
+
+    <sql id="BASE_COLUMNS">
+        USER_ID, PRODUCT_ID, ASSIGNED_TIME, UPDATED_TIME, UPDATED_BY
+    </sql>
+
+    <select id="listByUserId" resultMap="UserProductRelationMap">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM PORTAL_USER_PRODUCT_REL
+        WHERE USER_ID = #{userId}
+        ORDER BY PRODUCT_ID
+    </select>
+
+    <select id="listByUserIds" resultMap="UserProductRelationMap">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM PORTAL_USER_PRODUCT_REL
+        WHERE USER_ID IN
+        <foreach collection="userIds" item="userId" open="(" separator="," close=")">
+            #{userId}
+        </foreach>
+        ORDER BY USER_ID, PRODUCT_ID
+    </select>
+
+    <select id="listByProductId" resultMap="UserProductRelationMap">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM PORTAL_USER_PRODUCT_REL
+        WHERE PRODUCT_ID = #{productId}
+        ORDER BY USER_ID
+    </select>
+
+    <select id="listByProductIds" resultMap="UserProductRelationMap">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM PORTAL_USER_PRODUCT_REL
+        WHERE PRODUCT_ID IN
+        <foreach collection="productIds" item="productId" open="(" separator="," close=")">
+            #{productId}
+        </foreach>
+        ORDER BY PRODUCT_ID, USER_ID
+    </select>
+
+    <delete id="deleteByUserId">
+        DELETE FROM PORTAL_USER_PRODUCT_REL
+        WHERE USER_ID = #{userId}
+    </delete>
+
+    <delete id="deleteByUserAndProduct">
+        DELETE FROM PORTAL_USER_PRODUCT_REL
+        WHERE USER_ID = #{userId}
+          AND PRODUCT_ID = #{productId}
+    </delete>
+
+    <delete id="deleteByProductAndUserIds">
+        DELETE FROM PORTAL_USER_PRODUCT_REL
+        WHERE PRODUCT_ID = #{productId}
+          AND USER_ID IN
+        <foreach collection="userIds" item="userId" open="(" separator="," close=")">
+            #{userId}
+        </foreach>
+    </delete>
+
+    <insert id="insertBatch">
+        INSERT INTO PORTAL_USER_PRODUCT_REL
+            (USER_ID, PRODUCT_ID, ASSIGNED_TIME, UPDATED_TIME, UPDATED_BY)
+        VALUES
+        <foreach collection="relations" item="relation" separator=",">
+            (#{relation.userId}, #{relation.productId},
+             #{relation.assignedTime}, #{relation.updatedTime}, #{relation.updatedBy})
+        </foreach>
+    </insert>
+
+    <select id="countByProductId" resultType="int">
+        SELECT COUNT(*)
+        FROM PORTAL_USER_PRODUCT_REL
+        WHERE PRODUCT_ID = #{productId}
+    </select>
+
+</mapper>

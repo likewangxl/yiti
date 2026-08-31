@@ -83,9 +83,10 @@ class ProductControllerTest extends AbstractControllerIntegrationTest {
         entity.setId("P001"); entity.setProductCode("DEPOSIT_001"); entity.setProductName("活期存款");
         entity.setProductCategory("CAT_DEPOSIT"); entity.setProductDeptOrgCode("ORG_SZ_001");
         entity.setStatus("ACTIVE");
-        entity.setResponsibleEmpIds(List.of("E001", "E002"));
         when(productService.listProducts(any(ProductQueryReqDTO.class)))
                 .thenReturn(PageResult.of(1, 20, 1L, List.of(entity)));
+        when(userProductRelationService.mapUserIdsByProductIds(any()))
+                .thenReturn(java.util.Map.of("P001", List.of("E001", "E002")));
         ResponsibleEmpDTO e1 = new ResponsibleEmpDTO(); e1.setEmpId("E001"); e1.setEmpName("张三");
         ResponsibleEmpDTO e2 = new ResponsibleEmpDTO(); e2.setEmpId("E002"); e2.setEmpName("李四");
         when(addrbookQueryService.listResponsibleEmps(List.of("E001", "E002")))

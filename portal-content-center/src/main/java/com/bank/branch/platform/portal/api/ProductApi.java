@@ -55,7 +55,7 @@ public interface ProductApi {
 
     /**
      * 查询产品负责人工号列表。
-     * 从通讯录反向关联，返回 responsible_emp_ids 字段。
+     * 从 PORTAL_USER_PRODUCT_REL 关系表查询负责人 ID。
      *
      * @param productId 产品ID
      * @return 负责人工号列表（可能为空）

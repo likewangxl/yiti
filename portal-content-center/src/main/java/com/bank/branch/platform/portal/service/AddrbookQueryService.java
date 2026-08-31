@@ -1,75 +1,67 @@
 package com.bank.branch.platform.portal.service;
 
-import com.bank.branch.platform.portal.api.dto.ResponsibleEmpDTO;
-import com.bank.branch.platform.portal.entity.AddrbookEmployee;
-import com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper;
+import com.bank.branch.platform.auth.api.UserDirectoryApi;
+import com.bank.branch.platform.auth.api.dto.UserDirectoryDTO;
 import com.bank.branch.platform.common.security.masker.SensitiveDataMasker;
+import com.bank.branch.platform.portal.api.dto.ResponsibleEmpDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 通讯录内部查询服务（不开 REST，仅供 portal 模块内部 D.2/D.4/D.5/D.6 使用）
+ * 通讯录内部查询服务（不开 REST）。
+ *
+ * <p>产品负责人查询统一走 auth 的 UserDirectoryApi，不再直接依赖
+ * ADDRBOOK_EMPLOYEE 的实体或 Mapper。跨模块/导出使用的手机号在这里统一脱敏。</p>
  */
 @Service
 @RequiredArgsConstructor
 public class AddrbookQueryService {
 
-    private final AddrbookEmployeeMapper addrbookMapper;
+    private final UserDirectoryApi userDirectoryApi;
 
-    /**
-     * 批量按 empId 查询并转换为 ResponsibleEmpDTO（含手机号脱敏）
-     *
-     * @param empIds 员工工号列表
-     * @return 负责人 DTO 列表，手机号已脱敏
-     */
+    /** 批量按 USER_ID 查询负责人，手机号脱敏。 */
     public List<ResponsibleEmpDTO> listResponsibleEmps(List<String> empIds) {
         if (empIds == null || empIds.isEmpty()) {
             return Collections.emptyList();
         }
-        return addrbookMapper.listByEmpIds(empIds).stream()
-                .map(this::toResponsibleEmpDTO)
-                .collect(Collectors.toList());
+        List<UserDirectoryDTO> employees = userDirectoryApi.getEmployeesByIds(empIds);
+        if (employees == null || employees.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return employees.stream().map(this::toResponsibleEmpDTO).collect(Collectors.toList());
     }
 
     /**
-     * 校验 empIds 全部存在且 ACTIVE，返回不存在或非 ACTIVE 的 empId 集合
-     *
-     * @param empIds 员工工号列表
-     * @return 不存在或非 ACTIVE 的 empId 集合，全部合法时返回空列表
+     * 校验 empIds 是否全部为 auth 目录中的在职用户。
+     * UserDirectoryApi 只返回在职用户，因此未命中集合和返回之外的 ID 均视为非法。
      */
     public List<String> findInvalidEmpIds(List<String> empIds) {
         if (empIds == null || empIds.isEmpty()) {
             return Collections.emptyList();
         }
-        int activeCount = addrbookMapper.countActiveByEmpIds(empIds);
-        if (activeCount == empIds.size()) {
-            return Collections.emptyList();
-        }
-        List<String> foundActive = addrbookMapper.listByEmpIds(empIds).stream()
-                .filter(e -> "ACTIVE".equals(e.getStatus()))
-                .map(AddrbookEmployee::getEmpId)
-                .collect(Collectors.toList());
+        List<UserDirectoryDTO> employees = userDirectoryApi.getEmployeesByIds(empIds);
+        Set<String> activeIds = employees == null ? Collections.emptySet() : employees.stream()
+                .map(UserDirectoryDTO::getEmpId)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toCollection(HashSet::new));
         return empIds.stream()
-                .filter(id -> !foundActive.contains(id))
+                .filter(id -> id == null || !activeIds.contains(id.trim()))
+                .distinct()
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 将 AddrbookEmployee 实体转换为 ResponsibleEmpDTO（含手机号脱敏）
-     *
-     * @param e 通讯录员工实体
-     * @return 负责人 DTO
-     */
-    private ResponsibleEmpDTO toResponsibleEmpDTO(AddrbookEmployee e) {
+    private ResponsibleEmpDTO toResponsibleEmpDTO(UserDirectoryDTO employee) {
         ResponsibleEmpDTO dto = new ResponsibleEmpDTO();
-        dto.setEmpId(e.getEmpId());
-        dto.setEmpName(e.getEmpName());
-        dto.setMobile(SensitiveDataMasker.maskPhone(e.getMobile()));
-        dto.setPosition(e.getPosition());
+        dto.setEmpId(employee.getEmpId());
+        dto.setEmpName(employee.getEmpName());
+        dto.setMobile(employee.getMobile() == null ? null : SensitiveDataMasker.maskPhone(employee.getMobile()));
+        dto.setPosition(employee.getPosition());
         return dto;
     }
 }

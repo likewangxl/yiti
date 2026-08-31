@@ -7,7 +7,6 @@ import com.bank.branch.platform.bizapp.event.SupportDispatchedEvent;
 import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
-import com.bank.branch.platform.portal.api.AddressBookApi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -40,9 +39,6 @@ class SupportDeptServiceTest {
 
     @Mock
     private BizStateMachine bizStateMachine;
-
-    @Mock
-    private AddressBookApi addressBookApi;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;

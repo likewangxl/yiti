@@ -4,7 +4,9 @@
 > 所有 Api 接口在模块化单体中为本地方法调用（Spring Bean 注入），无 RPC 开销。
 > 所有 Api 方法都是同步强依赖（S）。
 
-> **2026-07-19 回填说明**：2026-04-14 版遗漏 `RoleApi`（1 个方法）与 `UserApi`（全部 14 个方法）两个已在源码 `api/` 目录落地的接口，均按源码 Javadoc 逐字核实补齐为「6. RoleApi」「7. UserApi」，原「6. DTO 定义」「7. 调用约束」「8. 领域事件」相应顺延为「8」「9」「10」；同时补齐 `UserApi` 引用的 `UserDTO`（新增 8.7）。顺带在「9.2 缓存策略」加注：该表所述 Redis TTL/Key 为历史设计，项目已于 2026-05-20 去 Redis 改直查库，详情见 `auth-permission-center/AGENTS.md`（表内容本身未删改，仅作提醒，全面重写留待后续专项更新）。
+> **2026-08-31 通讯录收口说明**：新增 `UserDirectoryApi` 契约，人员只读口径统一为
+> `PT_USER + EXT_USER_ORG + EXT_ORG_INFO`，当前用户联系方式写入仅允许更新
+> `PT_USER.MOBILE/EMAIL`。portal 不得直接依赖 auth 的 entity、Mapper 或 Service。
 
 ---
 
@@ -591,6 +593,42 @@ public interface UserApi {
   直接返回空列表且不访问数据库。返回 DTO 只装配 `empId`/`username`/`displayName`，不装配机构和角色。
 - `getRolesByUserIds()`：批量查询避免逐用户 N+1；入参为空返回空 Map，无角色的 userId 不在返回 Map 中（而非补 null）
 - `UserDTO` 字段结构见本文档「8. DTO 定义」补充；`RoleSimpleDTO` 字段结构见 `03-接口设计与报文.md` A.1
+
+---
+
+### 7.1 UserDirectoryApi -- 用户通讯录 API（2026-08-31）
+
+```java
+public interface UserDirectoryApi {
+    PageResult<UserDirectoryDTO> pageActiveUsers(
+            String keyword, String orgCode, int pageNo, int pageSize);
+    UserDirectoryDTO getEmployee(String userId);
+    List<UserDirectoryDTO> getEmployeesByIds(List<String> userIds);
+    List<UserDirectoryDTO> searchEmployees(String keyword, int limit);
+    UserDirectoryDTO updateCurrentUserContact(String mobile, String email);
+}
+```
+
+**调用约束：**
+
+- `empId/userId` 固定表示 `PT_USER.USER_ID`；在职用户为 `ISENABLED=0`。
+- 分页最大 100 条；批量查询按入参顺序返回，未命中用户不补占位值。
+- `updateCurrentUserContact` 不接收目标用户 ID，必须从当前认证上下文取得用户；
+  只更新 `PT_USER.MOBILE/EMAIL`，不更改姓名、机构和状态。
+- `getById/getByIds/search` 是语义别名，分别委托给上述单查、批量和搜索方法。
+- 数据库 IO 在 auth 模块内完成；消费模块不得跨模块联表或直调 Mapper。
+
+### 7.2 UserDirectoryDTO
+
+| 字段 | 类型 | 口径 |
+|---|---|---|
+| empId | String | `PT_USER.USER_ID` |
+| empName | String | `PT_USER.USERCHNNAME` |
+| mobile / email | String | `PT_USER.MOBILE/EMAIL` |
+| orgCode / orgName | String | 用户主机构 |
+| position | String | 三表无权威来源，返回 `null` |
+| status | String | 在职用户返回 `ACTIVE` |
+| updatedTime | LocalDateTime | `PT_USER.UPDATE_TIME` |
 
 ---
 

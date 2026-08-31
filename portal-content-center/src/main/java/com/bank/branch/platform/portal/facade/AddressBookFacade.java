@@ -1,11 +1,11 @@
 package com.bank.branch.platform.portal.facade;
 
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDirectoryDTO;
+import com.bank.branch.platform.common.security.masker.SensitiveDataMasker;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.portal.api.AddressBookApi;
 import com.bank.branch.platform.portal.api.dto.EmployeeDTO;
-import com.bank.branch.platform.portal.convert.EmployeeConverter;
-import com.bank.branch.platform.portal.entity.AddrbookEmployee;
-import com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper;
 import com.bank.branch.platform.portal.service.AddressBookService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,21 +13,16 @@ import org.springframework.stereotype.Service;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 通讯录 Facade 实现
+ * 通讯录跨模块 Facade。
  *
- * <p>实现 {@link AddressBookApi} 接口，负责将 AddressBookService / AddrbookEmployeeMapper
- * 返回的实体转换为跨模块 DTO。所有方法均为只读查询，不提供写操作。</p>
- *
- * <p>异常处理约定：
- * <ul>
- *   <li>单条查询不存在时返回 {@code Optional.empty()}，不抛异常</li>
- *   <li>批量查询不存在的项不包含在返回列表中，不报错</li>
- *   <li>系统异常直接抛出 RuntimeException，由调用方降级</li>
- * </ul></p>
+ * <p>兼容原 {@link AddressBookApi} 契约，但数据统一来自 auth 的 UserDirectoryApi；
+ * 手机号仅在跨模块 DTO 这里脱敏，REST Controller 仍返回本人编辑所需的原始值。</p>
  */
 @Slf4j
 @Service
@@ -35,91 +30,85 @@ import java.util.stream.Collectors;
 public class AddressBookFacade implements AddressBookApi {
 
     private final AddressBookService addressBookService;
-    private final AddrbookEmployeeMapper addrbookEmployeeMapper;
+    private final UserApi userApi;
 
-    /**
-     * 获取员工通讯录信息。
-     * 捕获 BizException（员工不存在）返回 Optional.empty()，符合 API 契约。
-     *
-     * @param empId 员工工号
-     * @return 员工详情 DTO，不存在时返回 Optional.empty()
-     */
+    /** 获取单个员工，不存在时返回 Optional.empty。 */
     @Override
     public Optional<EmployeeDTO> getEmployee(String empId) {
         try {
-            AddrbookEmployee entity = addressBookService.getEmployee(empId);
-            return Optional.ofNullable(EmployeeConverter.toDTO(entity));
+            UserDirectoryDTO employee = addressBookService.getEmployee(empId);
+            List<String> productIds = addressBookService.listProductIdsByUserId(employee.getEmpId());
+            return Optional.of(toDTO(employee, productIds));
         } catch (BizException e) {
             log.debug("[AddressBookFacade.getEmployee] 员工不存在, empId={}", empId);
             return Optional.empty();
         }
     }
 
-    /**
-     * 批量获取员工信息。
-     * 使用 Mapper 直接批量查询，避免 N+1。
-     *
-     * @param empIds 员工工号列表
-     * @return 员工DTO列表（不存在的员工不返回）
-     */
+    /** 批量获取员工，并一次性回填负责产品关系。 */
     @Override
     public List<EmployeeDTO> getEmployees(List<String> empIds) {
         if (empIds == null || empIds.isEmpty()) {
             return Collections.emptyList();
         }
-        List<AddrbookEmployee> entities = addrbookEmployeeMapper.listByEmpIds(empIds);
-        return entities.stream()
-                .map(EmployeeConverter::toDTO)
-                .collect(Collectors.toList());
+        List<UserDirectoryDTO> employees = addressBookService.getEmployees(empIds);
+        return toDTOs(employees);
     }
 
-    /**
-     * 模糊搜索员工。
-     * 委托 AddressBookService 进行搜索。
-     *
-     * @param keyword 关键词（工号/姓名）
-     * @param limit   返回数量上限
-     * @return 员工DTO列表
-     */
+    /** 模糊搜索员工，并一次性回填负责产品关系。 */
     @Override
     public List<EmployeeDTO> searchEmployees(String keyword, int limit) {
-        List<AddrbookEmployee> entities = addressBookService.searchEmployees(keyword, limit);
-        return entities.stream()
-                .map(EmployeeConverter::toDTO)
-                .collect(Collectors.toList());
+        return toDTOs(addressBookService.searchEmployees(keyword, limit));
     }
 
-    /**
-     * 按机构查询员工列表。
-     * 委托 AddressBookService 按机构代码查询。
-     *
-     * @param orgCode 机构编码
-     * @return 该机构下的全部员工DTO列表
-     */
+    /** 按机构查询在职员工，并一次性回填负责产品关系。 */
     @Override
     public List<EmployeeDTO> listEmployeesByOrg(String orgCode) {
-        List<AddrbookEmployee> entities = addressBookService.listByOrg(orgCode);
-        return entities.stream()
-                .map(EmployeeConverter::toDTO)
-                .collect(Collectors.toList());
+        return toDTOs(addressBookService.listByOrg(orgCode));
     }
 
     /**
-     * 校验员工是否为客户经理角色。
-     * V1 简化实现：检查 position 字段是否为客户经理相关值。
+     * 通过 auth 角色编码兼容客户经理校验。
      *
-     * @param empId 员工工号
-     * @return true 表示是客户经理
+     * <p>新通讯录三表联查没有岗位字段，不能再通过 position 文本猜测角色；角色由
+     * UserApi 的公开角色查询契约提供。</p>
      */
     @Override
     public boolean isCustomerManager(String empId) {
-        try {
-            AddrbookEmployee entity = addressBookService.getEmployee(empId);
-            // V1 简化：position 包含"客户经理"即认为是客户经理
-            return entity.getPosition() != null && entity.getPosition().contains("客户经理");
-        } catch (BizException e) {
-            log.debug("[AddressBookFacade.isCustomerManager] 员工不存在, empId={}", empId);
+        if (empId == null || empId.isBlank()) {
             return false;
         }
+        Set<String> roles = userApi.getUserRoleCodes(empId.trim());
+        return roles != null && (roles.contains("CUST_MARKETING_MANAGER") || roles.contains("R_RM"));
+    }
+
+    private List<EmployeeDTO> toDTOs(List<UserDirectoryDTO> employees) {
+        if (employees == null || employees.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> ids = employees.stream().map(UserDirectoryDTO::getEmpId)
+                .filter(id -> id != null && !id.isBlank()).collect(Collectors.toList());
+        Map<String, List<String>> productIdsByUser = addressBookService.mapProductIdsByUserIds(ids);
+        return employees.stream()
+                .map(employee -> toDTO(employee, productIdsByUser.get(employee.getEmpId())))
+                .collect(Collectors.toList());
+    }
+
+    private EmployeeDTO toDTO(UserDirectoryDTO employee, List<String> productIds) {
+        String mobile = employee.getMobile() == null ? null : SensitiveDataMasker.maskPhone(employee.getMobile());
+        return EmployeeDTO.builder()
+                .empId(employee.getEmpId())
+                .empName(employee.getEmpName())
+                .mobile(mobile)
+                .email(employee.getEmail())
+                .orgCode(employee.getOrgCode())
+                .orgName(employee.getOrgName())
+                .position(employee.getPosition())
+                .positionDesc(null)
+                .selfDesc(null)
+                .responsibleProductIds(productIds == null ? Collections.emptyList() : productIds)
+                .status(employee.getStatus())
+                .updatedTime(employee.getUpdatedTime())
+                .build();
     }
 }

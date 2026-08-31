@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * ProductInfoMapper 集成测试。
  * <p>
  * 直连本地 MySQL 实例，每个测试方法执行前清理 TEST_/AVAIL_ 前缀的测试数据。
- * 重点验证 responsible_emp_ids 的 JSON 序列化/反序列化（TypeHandler 集成）。
+ * 重点验证 PRODUCT_INFO 自身字段、逻辑删除、分页及 DATA_SCOPE 查询。
  * </p>
  */
 @Sql(scripts = "/sql/clean-product-info.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
@@ -31,35 +31,6 @@ class ProductInfoMapperIntegrationTest extends AbstractMapperIntegrationTest {
 
     @Autowired
     ProductInfoMapper mapper;
-
-    /**
-     * 验证插入和按 ID 查询的完整往返，重点验证 JSON 字段 responsibleEmpIds 的序列化/反序列化。
-     */
-    @Test
-    void insertAndSelectByIdShouldRoundTripJsonField() {
-        // Arrange
-        ProductInfo product = newProduct("TEST_JSON_RT");
-        product.setResponsibleEmpIds(Arrays.asList("E10001", "E10002"));
-        product.setDescription("JSON 往返测试产品");
-
-        // Act
-        int rows = mapper.insert(product);
-        ProductInfo found = mapper.selectById(product.getId());
-
-        // Assert
-        assertThat(rows).isEqualTo(1);
-        assertThat(found).isNotNull();
-        assertThat(found.getId()).isEqualTo(product.getId());
-        assertThat(found.getProductCode()).isEqualTo("TEST_JSON_RT");
-        assertThat(found.getProductName()).isEqualTo("产品 TEST_JSON_RT");
-        assertThat(found.getProductCategory()).isEqualTo("CAT_DEPOSIT");
-        assertThat(found.getDescription()).isEqualTo("JSON 往返测试产品");
-        assertThat(found.getSupportForSupportRequest()).isFalse();
-        assertThat(found.getStatus()).isEqualTo("ACTIVE");
-        assertThat(found.getDeleted()).isEqualTo(0);
-        assertThat(found.getResponsibleEmpIds())
-                .containsExactly("E10001", "E10002");
-    }
 
     /**
      * 验证逻辑删除后 selectById 返回 null。
@@ -215,24 +186,6 @@ class ProductInfoMapperIntegrationTest extends AbstractMapperIntegrationTest {
 
         // Assert
         assertThat(rows).isEqualTo(0);
-    }
-
-    /**
-     * 验证 responsibleEmpIds 为 null 时的序列化/反序列化。
-     */
-    @Test
-    void insertWithNullResponsibleEmpIdsShouldReturnEmptyList() {
-        // Arrange
-        ProductInfo product = newProduct("TEST_NULL_JSON");
-        product.setResponsibleEmpIds(null);
-        mapper.insert(product);
-
-        // Act
-        ProductInfo found = mapper.selectById(product.getId());
-
-        // Assert
-        assertThat(found).isNotNull();
-        assertThat(found.getResponsibleEmpIds()).isEmpty();
     }
 
     /**

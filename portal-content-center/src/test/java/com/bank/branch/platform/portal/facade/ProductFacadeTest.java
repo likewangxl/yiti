@@ -6,6 +6,8 @@ import com.bank.branch.platform.portal.api.dto.ProductDTO;
 import com.bank.branch.platform.portal.entity.ProductInfo;
 import com.bank.branch.platform.portal.mapper.ProductInfoMapper;
 import com.bank.branch.platform.portal.service.ProductService;
+import com.bank.branch.platform.portal.service.UserProductRelationService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +23,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.ArgumentMatchers.any;
 
 /**
  * ProductFacade 单元测试
@@ -37,8 +41,17 @@ class ProductFacadeTest {
     @Mock
     private ProductInfoMapper productInfoMapper;
 
+    @Mock
+    private UserProductRelationService userProductRelationService;
+
     @InjectMocks
     private ProductFacade productFacade;
+
+    @BeforeEach
+    void defaultRelationQueriesToEmpty() {
+        lenient().when(userProductRelationService.mapUserIdsByProductIds(any()))
+                .thenReturn(Collections.emptyMap());
+    }
 
     // ===== getProduct =====
 
@@ -175,8 +188,9 @@ class ProductFacadeTest {
     void getProductResponsibleEmpIds() {
         // given
         ProductInfo entity = buildEntity("P001", "DEPOSIT_001", "活期存款");
-        entity.setResponsibleEmpIds(Arrays.asList("E001", "E002"));
         when(productService.getProduct("P001")).thenReturn(entity);
+        when(userProductRelationService.listUserIdsByProductId("P001"))
+                .thenReturn(Arrays.asList("E001", "E002"));
 
         // when
         List<String> result = productFacade.getProductResponsibleEmpIds("P001");
@@ -204,8 +218,9 @@ class ProductFacadeTest {
     void getProductResponsibleEmpIds_nullList() {
         // given
         ProductInfo entity = buildEntity("P001", "DEPOSIT_001", "活期存款");
-        entity.setResponsibleEmpIds(null);
         when(productService.getProduct("P001")).thenReturn(entity);
+        when(userProductRelationService.listUserIdsByProductId("P001"))
+                .thenReturn(Collections.emptyList());
 
         // when
         List<String> result = productFacade.getProductResponsibleEmpIds("P001");

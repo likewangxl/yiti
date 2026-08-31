@@ -10,7 +10,6 @@ import com.bank.branch.platform.bizapp.event.SupportDispatchedEvent;
 import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
-import com.bank.branch.platform.portal.api.AddressBookApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -34,7 +33,6 @@ public class SupportDeptService {
 
     private final SupportRequestMapper supportMapper;
     private final BizStateMachine bizStateMachine;
-    private final AddressBookApi addressBookApi;
     private final ApplicationEventPublisher eventPublisher;
     private final SupportRequestDTOConverter supportRequestDTOConverter;
 

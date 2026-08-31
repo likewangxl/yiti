@@ -1,330 +1,248 @@
 package com.bank.branch.platform.portal.service;
 
-import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
-import com.bank.branch.platform.common.security.enums.BizType;
-import com.bank.branch.platform.common.security.enums.DataScopeType;
+import com.bank.branch.platform.auth.api.UserDirectoryApi;
+import com.bank.branch.platform.auth.api.dto.UserDirectoryDTO;
 import com.bank.branch.platform.common.trace.MdcUtils;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
 import com.bank.branch.platform.portal.controller.dto.addrbook.EmployeeQueryReqDTO;
-import com.bank.branch.platform.portal.controller.dto.addrbook.EmployeeUpdateReqDTO;
-import com.bank.branch.platform.portal.entity.AddrbookEmployee;
+import com.bank.branch.platform.portal.controller.dto.addrbook.EmployeeSelfUpdateReqDTO;
 import com.bank.branch.platform.portal.entity.ProductInfo;
 import com.bank.branch.platform.portal.enums.PortalErrorCode;
-import com.bank.branch.platform.portal.event.AddrbookUpdatedEvent;
-import com.bank.branch.platform.portal.event.ProductResponsibleUpdatedEvent;
-import com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper;
 import com.bank.branch.platform.portal.mapper.ProductInfoMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Objects;
+import java.util.Map;
 import java.util.Set;
 
 /**
- * 通讯录域核心 Service
+ * 通讯录域核心服务。
  *
- * <p>提供通讯录员工的分页列表、详情查询、编辑、模糊搜索、按机构查询等能力。
- * 编辑操作包含权限校验、产品数量限制、双向同步产品负责人、领域事件发布。</p>
+ * <p>员工主数据统一由 auth 的 {@link UserDirectoryApi} 提供，负责产品关系由
+ * {@link UserProductRelationService} 提供。portal 不再读取或写入 ADDRBOOK_EMPLOYEE，
+ * 也不再维护产品负责人 JSON 反向字段。</p>
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AddressBookService {
 
-    private final AddrbookEmployeeMapper addrbookEmployeeMapper;
-    private final ProductInfoMapper productInfoMapper;
-    private final CurrentUserApi currentUserApi;
-    private final BizScopeApi bizScopeApi;
-    private final AuditApi auditApi;
-    private final ApplicationEventPublisher eventPublisher;
-
-    /** 单员工负责产品数量上限 */
+    private static final int DEFAULT_PAGE_NO = 1;
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_PAGE_SIZE = 100;
     private static final int MAX_RESPONSIBLE_PRODUCTS = 20;
 
+    private final UserDirectoryApi userDirectoryApi;
+    private final UserProductRelationService userProductRelationService;
+    private final ProductInfoMapper productInfoMapper;
+    private final CurrentUserApi currentUserApi;
+    private final AuditApi auditApi;
+
     /**
-     * C.1 分页查询通讯录员工列表
+     * 分页查询在职通讯录。
      *
-     * @param req 查询请求（含关键词、机构、状态、分页参数）
-     * @return 分页结果
+     * <p>status、position 在新主数据模型中没有对应的 portal 私有来源；查询统一使用
+     * UserDirectoryApi 的在职口径，保留请求字段只是为了兼容现有前端报文。</p>
      */
-    public PageResult<AddrbookEmployee> listEmployees(EmployeeQueryReqDTO req) {
-        int pageNo = req.getPageNo() != null ? req.getPageNo() : 1;
-        int pageSize = req.getPageSize() != null ? req.getPageSize() : 20;
-        int offset = (pageNo - 1) * pageSize;
+    public PageResult<UserDirectoryDTO> listEmployees(EmployeeQueryReqDTO req) {
+        EmployeeQueryReqDTO query = req == null ? new EmployeeQueryReqDTO() : req;
+        int pageNo = positiveOrDefault(query.getPageNo(), DEFAULT_PAGE_NO);
+        int pageSize = positiveOrDefault(query.getPageSize(), DEFAULT_PAGE_SIZE);
+        pageSize = Math.min(pageSize, MAX_PAGE_SIZE);
+        return userDirectoryApi.pageActiveUsers(query.getKeyword(), query.getOrgCode(), pageNo, pageSize);
+    }
 
-        long total = addrbookEmployeeMapper.countPage(req.getKeyword(), req.getOrgCode(), req.getPosition(), req.getStatus());
-        if (total == 0) {
-            return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
+    /** 按 USER_ID 查询通讯录详情；不存在时沿用 portal 的业务错误码。 */
+    public UserDirectoryDTO getEmployee(String empId) {
+        UserDirectoryDTO employee = userDirectoryApi.getEmployee(empId);
+        if (employee == null) {
+            throw employeeNotFound();
         }
+        return employee;
+    }
 
-        List<AddrbookEmployee> records = addrbookEmployeeMapper.selectPage(
-                req.getKeyword(), req.getOrgCode(), req.getPosition(), req.getStatus(), offset, pageSize);
-        return PageResult.of(pageNo, pageSize, total, records);
+    /** 批量按 USER_ID 查询通讯录，顺序由 UserDirectoryApi 保证。 */
+    public List<UserDirectoryDTO> getEmployees(List<String> empIds) {
+        if (empIds == null || empIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<UserDirectoryDTO> employees = userDirectoryApi.getEmployeesByIds(empIds);
+        return employees == null ? Collections.emptyList() : employees;
+    }
+
+    /** 搜索在职通讯录员工。 */
+    public List<UserDirectoryDTO> searchEmployees(String keyword, int limit) {
+        List<UserDirectoryDTO> employees = userDirectoryApi.searchEmployees(keyword, Math.min(Math.max(limit, 1), 50));
+        return employees == null ? Collections.emptyList() : employees;
     }
 
     /**
-     * C.2 查询员工详情
+     * 按机构查询在职员工。
      *
-     * @param empId 员工工号
-     * @return 员工实体
-     * @throws BizException EMPLOYEE_NOT_FOUND 员工不存在
+     * <p>UserDirectoryApi 以分页形式提供查询，这里按总数继续翻页，避免为兼容旧的
+     * AddressBookApi 而退回 portal 私表。</p>
      */
-    public AddrbookEmployee getEmployee(String empId) {
-        AddrbookEmployee entity = addrbookEmployeeMapper.selectByEmpId(empId);
-        if (entity == null) {
-            throw new BizException(
-                    PortalErrorCode.EMPLOYEE_NOT_FOUND.getCode(),
-                    PortalErrorCode.EMPLOYEE_NOT_FOUND.getMessage());
+    public List<UserDirectoryDTO> listByOrg(String orgCode) {
+        if (orgCode == null || orgCode.isBlank()) {
+            return Collections.emptyList();
         }
-        return entity;
-    }
-
-    /**
-     * C.3 编辑员工通讯录信息
-     *
-     * <p>业务规则：
-     * <ul>
-     *   <li>目标员工必须存在且 ACTIVE</li>
-     *   <li>仅本人或同机构负责人可编辑（V1 简化：同机构即可）</li>
-     *   <li>负责产品数量不超过 20</li>
-     *   <li>负责产品必须 ACTIVE 且 support_for_support_request=true</li>
-     *   <li>产品变更时双向同步 product_info.responsible_emp_ids</li>
-     *   <li>发布 AddrbookUpdatedEvent + ProductResponsibleUpdatedEvent</li>
-     * </ul></p>
-     *
-     * @param targetEmpId 目标员工工号
-     * @param req         更新请求
-     * @throws BizException EMPLOYEE_NOT_FOUND / EMPLOYEE_RESIGNED / NO_RIGHT_TO_EDIT_OTHER / PRODUCT_RESPONSIBLE_LIMIT
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public void updateEmployee(String targetEmpId, EmployeeUpdateReqDTO req) {
-        String operatorEmpId = currentUserApi.getCurrentEmpId();
-
-        // 1. 查询目标员工
-        AddrbookEmployee target = addrbookEmployeeMapper.selectByEmpId(targetEmpId);
-        if (target == null) {
-            throw new BizException(
-                    PortalErrorCode.EMPLOYEE_NOT_FOUND.getCode(),
-                    PortalErrorCode.EMPLOYEE_NOT_FOUND.getMessage());
-        }
-
-        // 2. 检查员工状态
-        if (!"ACTIVE".equals(target.getStatus())) {
-            throw new BizException(
-                    PortalErrorCode.EMPLOYEE_RESIGNED.getCode(),
-                    PortalErrorCode.EMPLOYEE_RESIGNED.getMessage());
-        }
-
-        // 3. 权限校验（数据范围）：本人可编辑；非本人仅 ADDRBOOK 数据范围=ALL（管理员）可编辑，其余拒绝。
-        if (!operatorEmpId.equals(targetEmpId)) {
-            DataScopeType scope = bizScopeApi.resolveScope(operatorEmpId, BizType.ADDRBOOK);
-            if (scope != DataScopeType.ALL) {
-                throw new BizException(
-                        PortalErrorCode.NO_RIGHT_TO_EDIT_OTHER.getCode(),
-                        PortalErrorCode.NO_RIGHT_TO_EDIT_OTHER.getMessage());
+        List<UserDirectoryDTO> result = new ArrayList<>();
+        int pageNo = 1;
+        long total = Long.MAX_VALUE;
+        while (result.size() < total) {
+            PageResult<UserDirectoryDTO> page = userDirectoryApi.pageActiveUsers(null, orgCode.trim(), pageNo, MAX_PAGE_SIZE);
+            if (page == null || page.getRecords() == null || page.getRecords().isEmpty()) {
+                break;
             }
-        }
-
-        // 4. 负责产品校验
-        List<String> newProductIds = req.getResponsibleProductIds();
-        boolean productChanged = false;
-        List<String> oldProductIds = target.getResponsibleProductIds() != null
-                ? target.getResponsibleProductIds() : Collections.emptyList();
-
-        if (newProductIds != null) {
-            // 4a. 数量上限
-            if (newProductIds.size() > MAX_RESPONSIBLE_PRODUCTS) {
-                throw new BizException(
-                        PortalErrorCode.PRODUCT_RESPONSIBLE_LIMIT.getCode(),
-                        PortalErrorCode.PRODUCT_RESPONSIBLE_LIMIT.getMessage());
+            result.addAll(page.getRecords());
+            total = page.getTotal();
+            if (result.size() >= total || page.getRecords().size() < MAX_PAGE_SIZE) {
+                break;
             }
-            // 4b. 产品有效性
-            if (!newProductIds.isEmpty()) {
-                List<ProductInfo> products = productInfoMapper.listByIds(newProductIds);
-                if (products.size() != newProductIds.size()) {
-                    throw new BizException(
-                            PortalErrorCode.PRODUCT_RESPONSIBLE_LIMIT.getCode(),
-                            "部分产品不存在");
-                }
-                for (ProductInfo p : products) {
-                    if (!"ACTIVE".equals(p.getStatus()) || !Boolean.TRUE.equals(p.getSupportForSupportRequest())) {
-                        throw new BizException(
-                                PortalErrorCode.PRODUCT_RESPONSIBLE_LIMIT.getCode(),
-                                "产品 " + p.getProductCode() + " 不可选（非 ACTIVE 或不支持中场支持）");
-                    }
-                }
-            }
-            // 4c. 检查是否真正变更
-            productChanged = !new HashSet<>(oldProductIds).equals(new HashSet<>(newProductIds));
+            pageNo++;
         }
-
-        // 5. 构建更新实体
-        AddrbookEmployee patch = new AddrbookEmployee();
-        patch.setEmpId(targetEmpId);
-        List<String> changedFields = new ArrayList<>();
-
-        if (req.getMobile() != null) {
-            patch.setMobile(req.getMobile());
-            changedFields.add("mobile");
-        }
-        if (req.getEmail() != null) {
-            patch.setEmail(req.getEmail());
-            changedFields.add("email");
-        }
-        if (req.getPosition() != null) {
-            patch.setPosition(req.getPosition());
-            changedFields.add("position");
-        }
-        if (req.getSelfDesc() != null) {
-            patch.setSelfDesc(req.getSelfDesc());
-            changedFields.add("selfDesc");
-        }
-        if (newProductIds != null) {
-            patch.setResponsibleProductIds(newProductIds);
-            changedFields.add("responsibleProductIds");
-        }
-        patch.setMaintainerEmpId(operatorEmpId);
-
-        // 6. 执行更新
-        addrbookEmployeeMapper.updateFields(patch);
-
-        // 7. 双向同步产品负责人
-        if (productChanged) {
-            syncProductResponsible(targetEmpId, oldProductIds, newProductIds, operatorEmpId);
-        }
-
-        // 8. 发布通讯录更新事件
-        eventPublisher.publishEvent(new AddrbookUpdatedEvent(
-                targetEmpId, changedFields, operatorEmpId, LocalDateTime.now()));
-
-        if (!operatorEmpId.equals(targetEmpId)) {
-            auditEditOther(targetEmpId, changedFields, operatorEmpId);
-        }
-
-        log.info("[AddressBookService.updateEmployee] empId={}, changedFields={}, operator={}",
-                targetEmpId, changedFields, operatorEmpId);
+        return result;
     }
 
-    /**
-     * C.4 模糊搜索员工（员工选择器）
-     *
-     * @param keyword 搜索关键词
-     * @param limit   最大返回数量
-     * @return 匹配的员工列表
-     */
-    public List<AddrbookEmployee> searchEmployees(String keyword, int limit) {
-        return addrbookEmployeeMapper.searchByKeyword(keyword, limit);
+    /** 按用户查询负责产品 ID；用于 REST 详情和列表回填。 */
+    public List<String> listProductIdsByUserId(String userId) {
+        List<String> productIds = userProductRelationService.listProductIdsByUserId(userId);
+        return productIds == null ? Collections.emptyList() : productIds;
     }
 
-    /**
-     * 按机构查询员工列表
-     *
-     * @param orgCode 机构代码
-     * @return 该机构下的员工列表
-     */
-    public List<AddrbookEmployee> listByOrg(String orgCode) {
-        return addrbookEmployeeMapper.selectByOrgCode(orgCode);
+    /** 批量查询用户负责产品 ID，供列表一次性回填，避免逐用户 N+1。 */
+    public Map<String, List<String>> mapProductIdsByUserIds(Collection<String> userIds) {
+        Map<String, List<String>> productIds = userProductRelationService.mapProductIdsByUserIds(userIds);
+        return productIds == null ? Collections.emptyMap() : productIds;
     }
 
-    /**
-     * 按 ID 列表查询产品信息（供 Controller 聚合详情使用）
-     *
-     * <p>遵循 Controller→Service→Mapper 分层规则，Controller 不直接注入 Mapper。</p>
-     *
-     * @param productIds 产品ID列表
-     * @return 匹配的产品列表
-     */
+    /** 按产品 ID 批量查询产品简要信息。 */
     public List<ProductInfo> listProductsByIds(List<String> productIds) {
         if (productIds == null || productIds.isEmpty()) {
             return Collections.emptyList();
         }
-        return productInfoMapper.listByIds(productIds);
+        List<ProductInfo> products = productInfoMapper.listByIds(productIds);
+        return products == null ? Collections.emptyList() : products;
     }
 
     /**
-     * 双向同步产品负责人：将员工从旧产品中移除、加入新产品
+     * 当前用户自助维护电话、邮箱和负责产品。
      *
-     * @param empId         员工工号
-     * @param oldProductIds 旧负责产品列表
-     * @param newProductIds 新负责产品列表
-     * @param operatorEmpId 操作人工号
+     * <p>不接收目标用户 ID，用户身份由 UserDirectoryApi 的认证上下文确定。产品关系
+     * 变更前校验产品存在、启用且支持中场支持，随后使用关系服务整组替换。</p>
      */
-    private void syncProductResponsible(String empId, List<String> oldProductIds,
-                                        List<String> newProductIds, String operatorEmpId) {
-        Set<String> oldSet = new HashSet<>(oldProductIds);
-        Set<String> newSet = new HashSet<>(newProductIds);
+    @Transactional(rollbackFor = Exception.class)
+    public UserDirectoryDTO updateCurrentUser(EmployeeSelfUpdateReqDTO req) {
+        if (req == null) {
+            throw new IllegalArgumentException("通讯录更新请求不能为空");
+        }
+        String operator = currentUserApi.getCurrentEmpId();
+        requireCurrentUser(operator);
+        UserDirectoryDTO current = userDirectoryApi.getEmployee(operator);
+        if (current == null) {
+            throw employeeNotFound();
+        }
+        List<String> productIds = req.getResponsibleProductIds() == null
+                ? null : normalizeIds(req.getResponsibleProductIds());
+        if (productIds != null) {
+            validateResponsibleProducts(productIds);
+        }
 
-        // 需要移除 empId 的产品（旧有但新没有）
-        Set<String> removed = new HashSet<>(oldSet);
-        removed.removeAll(newSet);
+        // DTO 为部分更新语义：省略联系方式时保留现值，空字符串才表示清空。
+        String mobile = req.getMobile() == null ? current.getMobile() : req.getMobile();
+        String email = req.getEmail() == null ? current.getEmail() : req.getEmail();
+        UserDirectoryDTO updated = userDirectoryApi.updateCurrentUserContact(mobile, email);
+        if (productIds != null) {
+            userProductRelationService.replaceProductsForUser(operator, productIds, operator);
+        }
 
-        // 需要新增 empId 的产品（新有但旧没有）
-        Set<String> added = new HashSet<>(newSet);
-        added.removeAll(oldSet);
+        safeAuditLog(AuditLogCmd.builder()
+                .traceId(MdcUtils.getTraceId())
+                .empId(operator)
+                .bizType("EMPLOYEE")
+                .bizAction("EDIT_SELF")
+                .resourceUrl("/api/employees/me")
+                .requestMethod("PUT")
+                .requestParams("changedFields=[mobile,email,responsibleProductIds]")
+                .responseStatus(200)
+                .build());
+        log.info("[AddressBookService.updateCurrentUser] operator={}, productCount={}",
+                operator, productIds == null ? "unchanged" : productIds.size());
+        return updated;
+    }
 
-        // 对所有变更的产品进行同步
-        Set<String> allChanged = new HashSet<>();
-        allChanged.addAll(removed);
-        allChanged.addAll(added);
+    /** 兼容 service 层旧命名，仍然只能更新当前登录用户。 */
+    public UserDirectoryDTO updateMyself(EmployeeSelfUpdateReqDTO req) {
+        return updateCurrentUser(req);
+    }
 
-        for (String productId : allChanged) {
-            ProductInfo product = productInfoMapper.selectById(productId);
-            if (product == null) {
-                log.warn("[syncProductResponsible] skip missing productId={}", productId);
+    private void validateResponsibleProducts(List<String> productIds) {
+        if (productIds.size() > MAX_RESPONSIBLE_PRODUCTS) {
+            throw new BizException(PortalErrorCode.PRODUCT_RESPONSIBLE_LIMIT.getCode(),
+                    PortalErrorCode.PRODUCT_RESPONSIBLE_LIMIT.getMessage());
+        }
+        if (productIds.isEmpty()) {
+            return;
+        }
+        List<ProductInfo> products = productInfoMapper.listByIds(productIds);
+        if (products == null || products.size() != productIds.size()) {
+            throw new BizException(PortalErrorCode.PRODUCT_RESPONSIBLE_LIMIT.getCode(), "部分产品不存在");
+        }
+        Set<String> requested = new LinkedHashSet<>(productIds);
+        Set<String> found = new LinkedHashSet<>();
+        for (ProductInfo product : products) {
+            if (product == null || product.getId() == null) {
                 continue;
             }
-            List<String> empIds = product.getResponsibleEmpIds() != null
-                    ? new ArrayList<>(product.getResponsibleEmpIds()) : new ArrayList<>();
-            List<String> beforeEmpIds = new ArrayList<>(empIds);
-
-            if (added.contains(productId)) {
-                // 新增 empId 到产品
-                if (!empIds.contains(empId)) {
-                    empIds.add(empId);
-                }
-            } else {
-                // 从产品移除 empId
-                empIds.remove(empId);
+            found.add(product.getId());
+            if (!"ACTIVE".equals(product.getStatus())
+                    || !Boolean.TRUE.equals(product.getSupportForSupportRequest())) {
+                throw new BizException(PortalErrorCode.PRODUCT_RESPONSIBLE_LIMIT.getCode(),
+                        "产品 " + product.getProductCode() + " 不可选（非 ACTIVE 或不支持中场支持）");
             }
-
-            // 更新产品
-            ProductInfo patch = new ProductInfo();
-            patch.setId(productId);
-            patch.setResponsibleEmpIds(empIds);
-            patch.setUpdatedBy(operatorEmpId);
-            productInfoMapper.updateById(patch);
-
-            // 发布产品负责人变更事件
-            eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(
-                    productId, product.getProductCode(),
-                    beforeEmpIds, empIds,
-                    "ADDRBOOK_SIDE", operatorEmpId, LocalDateTime.now()));
+        }
+        if (!found.equals(requested)) {
+            throw new BizException(PortalErrorCode.PRODUCT_RESPONSIBLE_LIMIT.getCode(), "部分产品不存在");
         }
     }
 
-    private void auditEditOther(String targetEmpId, List<String> changedFields, String operatorEmpId) {
-        safeAuditLog(AuditLogCmd.builder()
-                .traceId(MdcUtils.getTraceId())
-                .empId(operatorEmpId)
-                .bizType("EMPLOYEE")
-                .bizAction("EDIT_OTHER")
-                .resourceUrl("/api/employees/" + targetEmpId)
-                .requestMethod("PUT")
-                .requestParams("targetEmpId=" + targetEmpId + "&changedFields=" + changedFields)
-                .responseStatus(200)
-                .build());
+    private static List<String> normalizeIds(Collection<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Set<String> normalized = new LinkedHashSet<>();
+        for (String id : ids) {
+            if (id != null && !id.isBlank()) {
+                normalized.add(id.trim());
+            }
+        }
+        return new ArrayList<>(normalized);
+    }
+
+    private void requireCurrentUser(String operator) {
+        if (operator == null || operator.isBlank()) {
+            throw employeeNotFound();
+        }
+    }
+
+    private static BizException employeeNotFound() {
+        return new BizException(PortalErrorCode.EMPLOYEE_NOT_FOUND.getCode(),
+                PortalErrorCode.EMPLOYEE_NOT_FOUND.getMessage());
+    }
+
+    private static int positiveOrDefault(Integer value, int fallback) {
+        return value == null || value < 1 ? fallback : value;
     }
 
     private void safeAuditLog(AuditLogCmd cmd) {

@@ -8,6 +8,7 @@ import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
+import com.bank.branch.platform.governance.api.dto.DictItemDTO;
 import com.bank.branch.platform.portal.api.dto.ResponsibleEmpDTO;
 import com.bank.branch.platform.portal.entity.ProductInfo;
 import com.bank.branch.platform.portal.enums.PortalErrorCode;
@@ -19,7 +20,10 @@ import org.springframework.stereotype.Service;
 
 import java.io.OutputStream;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -35,6 +39,7 @@ public class ProductExportService {
     private final DictApi dictApi;
     private final OrgApi orgApi;
     private final AddrbookQueryService addrbookQueryService;
+    private final UserProductRelationService userProductRelationService;
     private final AuditApi auditApi;
 
     private static final long SYNC_EXPORT_THRESHOLD = 5000L;
@@ -63,18 +68,25 @@ public class ProductExportService {
         // 2. 查询全量数据（导出不分页）
         List<ProductInfo> entities = productInfoMapper.selectPage(keyword, category, effectiveStatus, 0, (int) count);
 
-        // 3. 转换为导出行
+        // 3. 统一批量回填导出所需的跨表信息，避免按产品逐行查询关系、人员和机构。
+        Map<String, List<String>> responsibleMap = userProductRelationService.mapUserIdsByProductIds(
+                entities.stream().map(ProductInfo::getId).collect(Collectors.toList()));
+        Map<String, ResponsibleEmpDTO> employeeMap = resolveResponsibleEmps(responsibleMap);
+        Map<String, String> orgNameMap = resolveOrgNames(entities);
+        Map<String, String> categoryLabelMap = resolveCategoryLabels();
+
+        // 4. 转换为导出行
         List<ProductExportRow> rows = entities.stream()
-                .map(this::toExportRow)
+                .map(entity -> toExportRow(entity, responsibleMap, employeeMap, orgNameMap, categoryLabelMap))
                 .collect(Collectors.toList());
 
-        // 4. 写入 Excel（autoCloseStream=false 避免关闭外部 OutputStream）
+        // 5. 写入 Excel（autoCloseStream=false 避免关闭外部 OutputStream）
         EasyExcel.write(output, ProductExportRow.class)
                 .autoCloseStream(false)
                 .sheet("产品资料")
                 .doWrite(rows);
 
-        // 5. 审计日志（导出为高危操作）
+        // 6. 审计日志（导出为高危操作）
         safeAuditLog(AuditLogCmd.builder()
                 .traceId(MdcUtils.getTraceId())
                 .empId(operatorEmpId)
@@ -92,13 +104,17 @@ public class ProductExportService {
     /**
      * 将实体转为导出行（含字典翻译、机构名、负责人脱敏手机）
      */
-    private ProductExportRow toExportRow(ProductInfo entity) {
+    private ProductExportRow toExportRow(ProductInfo entity,
+                                         Map<String, List<String>> responsibleMap,
+                                         Map<String, ResponsibleEmpDTO> employeeMap,
+                                         Map<String, String> orgNameMap,
+                                         Map<String, String> categoryLabelMap) {
         ProductExportRow row = new ProductExportRow();
         row.setProductCode(entity.getProductCode());
         row.setProductName(entity.getProductName());
 
         // 字典翻译
-        row.setProductCategoryDesc(dictApi.getDictLabel("PRODUCT_CATEGORY", entity.getProductCategory()));
+        row.setProductCategoryDesc(categoryLabelMap.getOrDefault(entity.getProductCategory(), entity.getProductCategory()));
 
         // 产品说明（去换行符）
         row.setDescription(entity.getDescription() != null
@@ -108,21 +124,16 @@ public class ProductExportService {
         row.setSupportForSupportRequest(Boolean.TRUE.equals(entity.getSupportForSupportRequest()) ? "是" : "否");
 
         // 机构名
-        try {
-            OrgDTO org = orgApi.getOrg(entity.getProductDeptOrgCode());
-            row.setProductDeptOrgName(org != null ? org.getOrgName() : "");
-        } catch (Exception e) {
-            row.setProductDeptOrgName("");
-        }
+        row.setProductDeptOrgName(orgNameMap.getOrDefault(entity.getProductDeptOrgCode(), ""));
 
         // 负责人（含脱敏手机）
-        if (entity.getResponsibleEmpIds() != null && !entity.getResponsibleEmpIds().isEmpty()) {
-            List<ResponsibleEmpDTO> emps = addrbookQueryService.listResponsibleEmps(entity.getResponsibleEmpIds());
-            row.setResponsibleEmpNames(emps.stream()
-                    .map(ResponsibleEmpDTO::getEmpName)
+        List<String> empIds = responsibleMap.getOrDefault(entity.getId(), Collections.emptyList());
+        if (!empIds.isEmpty()) {
+            row.setResponsibleEmpNames(empIds.stream()
+                    .map(id -> employeeMap.containsKey(id) ? employeeMap.get(id).getEmpName() : id)
                     .collect(Collectors.joining("、")));
-            row.setResponsibleEmpMobiles(emps.stream()
-                    .map(ResponsibleEmpDTO::getMobile)
+            row.setResponsibleEmpMobiles(empIds.stream()
+                    .map(id -> employeeMap.containsKey(id) ? employeeMap.get(id).getMobile() : "")
                     .collect(Collectors.joining("、")));
         } else {
             row.setResponsibleEmpNames("");
@@ -136,6 +147,56 @@ public class ProductExportService {
         row.setUpdatedTime(entity.getUpdatedTime() != null ? entity.getUpdatedTime().format(DT_FMT) : "");
 
         return row;
+    }
+
+    private Map<String, ResponsibleEmpDTO> resolveResponsibleEmps(Map<String, List<String>> responsibleMap) {
+        Set<String> empIds = responsibleMap.values().stream()
+                .flatMap(List::stream)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toSet());
+        if (empIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<ResponsibleEmpDTO> employees = addrbookQueryService.listResponsibleEmps(List.copyOf(empIds));
+        if (employees == null || employees.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return employees.stream().collect(Collectors.toMap(
+                ResponsibleEmpDTO::getEmpId, employee -> employee, (a, b) -> a));
+    }
+
+    private Map<String, String> resolveOrgNames(List<ProductInfo> entities) {
+        Set<String> orgCodes = entities.stream()
+                .map(ProductInfo::getProductDeptOrgCode)
+                .filter(code -> code != null && !code.isBlank())
+                .collect(Collectors.toSet());
+        if (orgCodes.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        try {
+            List<OrgDTO> orgs = orgApi.getOrgsByCodes(orgCodes);
+            if (orgs == null) {
+                return Collections.emptyMap();
+            }
+            return orgs.stream().collect(Collectors.toMap(
+                    OrgDTO::getOrgCode, OrgDTO::getOrgName, (a, b) -> a));
+        } catch (Exception e) {
+            log.warn("[ProductExport] batch organization lookup failed", e);
+            return Collections.emptyMap();
+        }
+    }
+
+    private Map<String, String> resolveCategoryLabels() {
+        try {
+            Map<String, List<DictItemDTO>> dicts = dictApi.batchGetDictItems(Collections.singleton("PRODUCT_CATEGORY"));
+            List<DictItemDTO> items = dicts == null ? Collections.emptyList()
+                    : dicts.getOrDefault("PRODUCT_CATEGORY", Collections.emptyList());
+            return items.stream().collect(Collectors.toMap(
+                    DictItemDTO::getDictCode, DictItemDTO::getDictLabel, (a, b) -> a));
+        } catch (Exception e) {
+            log.warn("[ProductExport] batch category lookup failed", e);
+            return Collections.emptyMap();
+        }
     }
 
     private void safeAuditLog(AuditLogCmd cmd) {

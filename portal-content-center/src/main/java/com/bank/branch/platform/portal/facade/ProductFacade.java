@@ -7,12 +7,14 @@ import com.bank.branch.platform.portal.convert.ProductConverter;
 import com.bank.branch.platform.portal.entity.ProductInfo;
 import com.bank.branch.platform.portal.mapper.ProductInfoMapper;
 import com.bank.branch.platform.portal.service.ProductService;
+import com.bank.branch.platform.portal.service.UserProductRelationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -36,6 +38,7 @@ public class ProductFacade implements ProductApi {
 
     private final ProductService productService;
     private final ProductInfoMapper productInfoMapper;
+    private final UserProductRelationService userProductRelationService;
 
     /**
      * 获取产品详情。
@@ -48,7 +51,10 @@ public class ProductFacade implements ProductApi {
     public Optional<ProductDTO> getProduct(String productId) {
         try {
             ProductInfo entity = productService.getProduct(productId);
-            return Optional.ofNullable(ProductConverter.toDTO(entity));
+            Map<String, List<String>> responsibleMap = userProductRelationService
+                    .mapUserIdsByProductIds(Collections.singletonList(entity.getId()));
+            return Optional.ofNullable(ProductConverter.toDTO(entity,
+                    responsibleMap.getOrDefault(entity.getId(), Collections.emptyList())));
         } catch (BizException e) {
             log.debug("[ProductFacade.getProduct] 产品不存在, productId={}", productId);
             return Optional.empty();
@@ -68,8 +74,10 @@ public class ProductFacade implements ProductApi {
             return Collections.emptyList();
         }
         List<ProductInfo> entities = productInfoMapper.listByIds(productIds);
+        Map<String, List<String>> responsibleMap = userProductRelationService.mapUserIdsByProductIds(productIds);
         return entities.stream()
-                .map(ProductConverter::toDTO)
+                .map(entity -> ProductConverter.toDTO(entity,
+                        responsibleMap.getOrDefault(entity.getId(), Collections.emptyList())))
                 .collect(Collectors.toList());
     }
 
@@ -82,8 +90,11 @@ public class ProductFacade implements ProductApi {
     @Override
     public List<ProductDTO> listSupportAvailableProducts() {
         List<ProductInfo> entities = productService.listSupportAvailable();
+        Map<String, List<String>> responsibleMap = userProductRelationService.mapUserIdsByProductIds(
+                entities.stream().map(ProductInfo::getId).collect(Collectors.toList()));
         return entities.stream()
-                .map(ProductConverter::toDTO)
+                .map(entity -> ProductConverter.toDTO(entity,
+                        responsibleMap.getOrDefault(entity.getId(), Collections.emptyList())))
                 .collect(Collectors.toList());
     }
 
@@ -97,8 +108,11 @@ public class ProductFacade implements ProductApi {
     @Override
     public List<ProductDTO> listProductsByDept(String productDeptOrgCode) {
         List<ProductInfo> entities = productInfoMapper.listByProductDeptOrgCode(productDeptOrgCode);
+        Map<String, List<String>> responsibleMap = userProductRelationService.mapUserIdsByProductIds(
+                entities.stream().map(ProductInfo::getId).collect(Collectors.toList()));
         return entities.stream()
-                .map(ProductConverter::toDTO)
+                .map(entity -> ProductConverter.toDTO(entity,
+                        responsibleMap.getOrDefault(entity.getId(), Collections.emptyList())))
                 .collect(Collectors.toList());
     }
 
@@ -112,9 +126,8 @@ public class ProductFacade implements ProductApi {
     @Override
     public List<String> getProductResponsibleEmpIds(String productId) {
         try {
-            ProductInfo entity = productService.getProduct(productId);
-            List<String> empIds = entity.getResponsibleEmpIds();
-            return empIds != null ? empIds : Collections.emptyList();
+            productService.getProduct(productId);
+            return userProductRelationService.listUserIdsByProductId(productId);
         } catch (BizException e) {
             log.debug("[ProductFacade.getProductResponsibleEmpIds] 产品不存在, productId={}", productId);
             return Collections.emptyList();
