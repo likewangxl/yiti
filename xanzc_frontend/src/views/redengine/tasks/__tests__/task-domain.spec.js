@@ -73,6 +73,18 @@ describe('红色引擎任务域模型', () => {
     });
   });
 
+  it('审核工作台查询保留后端状态字段，不把响应 status 当作查询条件', () => {
+    expect(buildTaskQuery({
+      assignmentStatus: 'BRANCH_PENDING',
+      submissionStatus: 'BRANCH_APPROVED'
+    }, 1, 20)).toEqual({
+      pageNo: 1,
+      pageSize: 20,
+      assignmentStatus: 'BRANCH_PENDING',
+      submissionStatus: 'BRANCH_APPROVED'
+    });
+  });
+
   it('四维任务走原材料入口，其他任务走临时任务填报入口', () => {
     expect(getTaskRoute({ isFourDimension: true })).toBe('materials');
     expect(getTaskRoute({ typeCode: 'FOUR_DIMENSION' })).toBe('materials');
@@ -146,6 +158,22 @@ describe('红色引擎任务域模型', () => {
       assignmentId: 9,
       submitterName: '--',
       submittedAt: '--'
+    });
+  });
+
+  it('工作台响应区分 assignment status 与当前 submission status', () => {
+    expect(normalizeAssignment({
+      assignmentId: 10,
+      status: 'BRANCH_PENDING',
+      submissionStatus: 'BRANCH_APPROVED',
+      branchName: '第一党支部',
+      submitterName: '张伟',
+      submittedAt: '2026-08-31 10:00:00'
+    })).toMatchObject({
+      assignmentId: 10,
+      status: 'BRANCH_APPROVED',
+      assignmentStatus: 'BRANCH_PENDING',
+      submissionStatus: 'BRANCH_APPROVED'
     });
   });
 

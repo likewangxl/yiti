@@ -1,19 +1,39 @@
 <template>
   <div class="review-container">
-    <h2 class="page-title">沉浸式审核工作台</h2>
+    <div class="page-heading">
+      <div>
+        <h2 class="page-title">工作台</h2>
+        <p class="page-desc">组织审核员处理四大维度材料和临时任务</p>
+      </div>
+    </div>
 
     <div class="review-layout">
       <!-- 左侧：审核队列 -->
       <div class="queue-panel" v-loading="loading">
+        <div class="queue-filter">
+          <el-radio-group v-model="activeTab" size="small" @change="handleTabChange">
+            <el-radio-button v-for="tab in tabs" :key="tab.value" :label="tab.value">{{ tab.label }}</el-radio-button>
+          </el-radio-group>
+          <el-input v-model="query.title" size="small" clearable placeholder="任务标题" @keyup.enter="handleSearch" />
+          <el-select v-model="query.nature" size="small" clearable placeholder="任务类型">
+            <el-option label="四大维度材料上报" value="FOUR_DIMENSION" />
+            <el-option label="临时任务" value="TEMPORARY" />
+          </el-select>
+          <el-select v-model="query.cycle" size="small" clearable placeholder="周期">
+            <el-option v-for="option in cycleOptions" :key="option.value" :label="option.label" :value="option.value" />
+          </el-select>
+          <el-button size="small" type="primary" @click="handleSearch">查询</el-button>
+        </div>
         <div class="queue-header">
-          <span class="badge pending-badge">待审 {{ pendingItems.length }}</span>
-          <span class="badge pass-badge">通过 {{ passedItems.length }}</span>
-          <span class="badge reject-badge">驳回 {{ rejectedItems.length }}</span>
+          <span class="badge pending-badge">待处理 {{ pendingItems.length }}</span>
+          <span class="badge reviewing-badge">审核中 {{ reviewingItems.length }}</span>
+          <span class="badge pass-badge">已通过 {{ passedItems.length }}</span>
+          <span class="badge reject-badge">已驳回 {{ rejectedItems.length }}</span>
         </div>
         <div class="queue-list">
           <div
-            v-for="item in reviewItems"
-            :key="item.id"
+            v-for="item in filteredItems"
+            :key="itemKey(item)"
             :class="['queue-item', { active: selectedItem?.id === item.id }]"
             @click="selectItem(item)"
           >
@@ -21,9 +41,10 @@
             <div class="item-name">{{ item.item }}</div>
             <div class="item-meta">{{ item.submitter }} · {{ item.date }}</div>
             <span :class="['status-tag', item.status]">
-              {{ item.status === 'pending' ? '待审' : item.status === 'passed' ? '已通过' : '已驳回' }}
+              {{ statusLabel(item.status) }}
             </span>
           </div>
+          <div v-if="filteredItems.length === 0" class="queue-empty">暂无{{ activeTabLabel }}任务</div>
         </div>
       </div>
 
@@ -34,6 +55,22 @@
           <div class="preview-sub">{{ selectedItem.branch }} · {{ selectedItem.submitter }}</div>
         </div>
         <div class="preview-body">
+          <div v-if="selectedItem.isTemporary" class="task-content-block">
+            <div class="block-title">📋 任务填报内容</div>
+            <div v-if="selectedItem.description" class="task-description">
+              <template v-for="(part, index) in descriptionParts(selectedItem.description)" :key="`description-${index}`">
+                <a
+                  v-if="part.type === 'link'"
+                  :href="part.href"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >{{ part.value }}</a>
+                <span v-else>{{ part.value }}</span>
+              </template>
+            </div>
+            <div class="task-content">{{ selectedItem.content }}</div>
+          </div>
+
           <!-- 结构化数据 -->
           <div v-if="selectedItem.formData" class="form-data-block">
             <div class="block-title">📋 结构化填报数据（核验区）</div>
@@ -47,10 +84,21 @@
           <div class="files-block">
             <div class="block-title">📄 附件清单</div>
             <div v-if="selectedItem.files.length === 0" class="file-item file-empty">暂无可查询附件</div>
-            <div v-for="(file, idx) in selectedItem.files" :key="idx" class="file-item">
-              <span class="file-icon">{{ getFileIcon(file) }}</span>
-              <span>{{ file }}</span>
-            </div>
+            <template v-for="(file, idx) in selectedItem.files" :key="idx">
+              <el-button
+                v-if="selectedItem.source === 'task'"
+                link
+                class="file-item"
+                @click="downloadAttachment(selectedItem, file)"
+              >
+                <span class="file-icon">{{ getFileIcon(file) }}</span>
+                <span>{{ fileName(file) }}</span>
+              </el-button>
+              <div v-else class="file-item">
+                <span class="file-icon">{{ getFileIcon(file) }}</span>
+                <span>{{ fileName(file) }}</span>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -59,7 +107,7 @@
       </div>
 
       <!-- 右侧：评分与裁决 -->
-      <div v-if="selectedItem" class="scoring-panel">
+      <div v-if="selectedItem && !selectedItem.isTemporary" class="scoring-panel">
         <h3 class="scoring-title">评分与裁决</h3>
 
         <div class="info-block">
@@ -100,16 +148,34 @@
         <!-- 操作按钮 -->
         <div v-if="selectedItem.status === 'pending'" class="action-buttons">
           <el-button type="success" class="action-btn" :loading="acting" @click="handleApprove">
-            ✅ 通过并计 {{ finalScore ?? 0 }} 分
+            {{ selectedItem.isTemporary ? '✅ 通过' : `✅ 通过并计 ${finalScore ?? 0} 分` }}
           </el-button>
           <el-button class="action-btn reject-btn" :loading="acting" @click="handleRejectClick">
-            ❌ 驳回重交
+            ❌ 驳回
           </el-button>
         </div>
 
         <div v-if="selectedItem.status === 'passed'" class="result-block passed">
-          ✅ 已通过，计 {{ selectedItem.finalScore }} 分
+          ✅ 已通过<span v-if="!selectedItem.isTemporary">，计 {{ selectedItem.finalScore }} 分</span>
         </div>
+        <div v-if="selectedItem.status === 'rejected'" class="result-block rejected">
+          <div>❌ 已驳回</div>
+          <div class="reject-reason">{{ selectedItem.rejectReason }}</div>
+        </div>
+      </div>
+
+      <div v-if="selectedItem && selectedItem.isTemporary" class="task-action-panel">
+        <h3 class="scoring-title">任务处理</h3>
+        <div class="task-action-summary">
+          <div>任务性质：临时任务</div>
+          <div>提交时间：{{ selectedItem.date }}</div>
+        </div>
+        <div v-if="selectedItem.status === 'pending'" class="action-buttons">
+          <el-button type="success" class="action-btn" :loading="acting" @click="handleApprove">✅ 通过</el-button>
+          <el-button class="action-btn reject-btn" :loading="acting" @click="handleRejectClick">❌ 驳回</el-button>
+        </div>
+        <div v-if="selectedItem.status === 'reviewing'" class="result-block reviewing">审核中</div>
+        <div v-if="selectedItem.status === 'passed'" class="result-block passed">✅ 已通过</div>
         <div v-if="selectedItem.status === 'rejected'" class="result-block rejected">
           <div>❌ 已驳回</div>
           <div class="reject-reason">{{ selectedItem.rejectReason }}</div>
@@ -138,26 +204,30 @@
 </template>
 
 <script setup>
-// 沉浸式审核工作台。
-// F1：script 内 API 全部改走 @/api/redengine。与 branch-review/BranchReviewView.vue 共用同一条
-// 后端审核队列（GET /re/reviews/queue + POST approve/reject——red-engine-center 只有一套"两级审核"
-// 收敛后的 status=1 队列，无独立的组织级队列，见该视图脚本注释），本页额外用
-// GET /re/reviews/{id}/preview 在选中队列项时拉取详情供中间预览栏渲染。
-// 字段/能力缺口说明（先读 red-engine-center DTO/entity 确认，非凭空猜测）：
-//   - "系统建议分值"（源系统 selectedItem.suggest）：源系统本身是硬编码演示值，非真实算法输出，
-//     后端也没有对应的评分建议接口，本次移植去掉该栏，改为展示 maxScore（满分上限），
-//     避免向审核人展示一个"看似算法给出、实为编造"的建议分值。
-//   - "预览区"（源系统 selectedItem.previewContent 原始文本卡片）：同样是源系统纯装饰性 mock 文本，
-//     无对应后端字段，本次移植去掉，保留结构化 formData 卡片与附件清单即可覆盖审核所需信息。
-//   - 附件清单：ReSubmit.fileUrls 是源系统遗留字段，新提交走 fileObjectIds + governance
-//     BizFileRel 关联登记，但当前 6 个 Controller 未提供"按 submitId 查关联文件"的只读端点，
-//     故大多数新数据此处为空，属已知能力缺口，非渲染 Bug。
-//   - 评分规则文案（rule）/满分（maxScore）：优先取队列返回的 ReSubmit.maxScore；规则说明文字
-//     后端未提供文案字段，沿用与 report/JointView.vue 一致的静态评分标准文案（按 itemCode 映射），
-//     不是编造数据，是产品既定评分标准的前端静态展示。
-import { ref, computed, watch, onMounted } from 'vue'
+// 组织审核工作台：左侧保留生产环境的沉浸式队列，增加任务页签和任务类型筛选。
+// 四大维度材料沿用原评分与审核 API；临时任务使用 assignment 审核 API，并在预览区展示
+// 填报正文和附件。任务审核 API 的资源路径需与 red-engine-center 后端同步发布。
+import { ref, computed, reactive, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getReviewQueue, getReviewPreview, approveSubmit, rejectSubmit } from '@/api/redengine'
+import {
+  approveOrgTask,
+  approveSubmit,
+  downloadTaskAttachment,
+  getOrgTaskReview,
+  getReviewQueue,
+  getReviewPreview,
+  listOrgTaskReviews,
+  rejectOrgTask,
+  rejectSubmit
+} from '@/api/redengine'
+import {
+  CYCLE_OPTIONS,
+  buildTaskQuery,
+  isFourDimensionTask,
+  isPeriodicNature,
+  linkifyDescription,
+  normalizeAssignmentPage
+} from '../tasks/task-domain'
 
 // 评分标准文案：与 report/JointView.vue 的 rule-box 文案保持一致（产品既定标准，非编造数据）
 const RULE_TEXT = {
@@ -171,11 +241,34 @@ const RULE_TEXT = {
   sup: '按时提交节点跟踪表、典型案例、工作总结。逾期1天扣1分，逾期3天不得分。满分5分。',
 }
 const DIM_LABEL = { dim1: '外联共建', dim2: '业务提升', dim3: '头雁先锋', dim4: '督导响应' }
+const tabs = [
+  { value: 'pending', label: '待处理' },
+  { value: 'reviewing', label: '审核中' },
+  { value: 'passed', label: '已通过' },
+  { value: 'rejected', label: '已驳回' }
+]
+const cycleOptions = CYCLE_OPTIONS
+const TASK_STATUS_MAP = {
+  UNREPORTED: 'reviewing',
+  TODO: 'reviewing',
+  BRANCH_PENDING: 'reviewing',
+  BRANCH_APPROVED: 'reviewing',
+  ORG_PENDING: 'pending',
+  APPROVED: 'passed',
+  COMPLETED: 'passed',
+  REJECTED: 'rejected',
+  REJECTED_BY_BRANCH: 'rejected',
+  REJECTED_BY_ORG: 'rejected'
+}
 
 const loading = ref(false)
 const previewLoading = ref(false)
 const acting = ref(false)
 const reviewItems = ref([])
+
+const activeTab = ref('pending')
+const query = reactive({ title: '', nature: '', cycle: '' })
+const appliedQuery = ref({})
 
 const selectedItem = ref(null)
 const finalScore = ref(0)
@@ -184,11 +277,15 @@ const showRejectModal = ref(false)
 const rejectReason = ref('')
 
 const pendingItems = computed(() => reviewItems.value.filter((i) => i.status === 'pending'))
+const reviewingItems = computed(() => reviewItems.value.filter((i) => i.status === 'reviewing'))
 const passedItems = computed(() => reviewItems.value.filter((i) => i.status === 'passed'))
 const rejectedItems = computed(() => reviewItems.value.filter((i) => i.status === 'rejected'))
+const filteredItems = computed(() => reviewItems.value.filter((i) => i.status === activeTab.value))
+const activeTabLabel = computed(() => tabs.find((tab) => tab.value === activeTab.value)?.label || '')
 
 function parseFormData(raw) {
   if (!raw) return null
+  if (typeof raw === 'object') return raw
   try {
     return JSON.parse(raw)
   } catch {
@@ -198,6 +295,7 @@ function parseFormData(raw) {
 
 function parseFiles(raw) {
   if (!raw) return []
+  if (Array.isArray(raw)) return raw
   try {
     const arr = JSON.parse(raw)
     return Array.isArray(arr) ? arr : []
@@ -208,36 +306,171 @@ function parseFiles(raw) {
 
 function toQueueItem(row) {
   return {
+    ...row,
     id: row.id,
-    branch: row.orgId != null ? `组织#${row.orgId}` : '-',
+    source: 'material',
+    taskId: row.taskId,
+    assignmentId: row.assignmentId,
+    branch: row.orgName || (row.orgId != null ? `组织#${row.orgId}` : '—'),
     dim: DIM_LABEL[row.dimension] || row.dimension || '-',
     item: row.itemName ? `${row.itemCode ? row.itemCode + ' ' : ''}${row.itemName}` : (row.itemCode || '-'),
     itemCode: row.itemCode,
-    submitter: row.submitterId || '-',
-    date: row.submitDate,
+    submitter: row.submitterId || '—',
+    date: row.submitDate || '—',
+    description: '',
+    content: '',
+    nature: 'PERIODIC',
+    cycle: row.cycleType || row.cycle || '',
+    isPeriodic: true,
+    isTemporary: false,
+    isFourDimension: true,
     maxScore: row.maxScore ?? 100,
     rule: RULE_TEXT[row.itemCode] || '（暂无对应静态评分标准文案）',
     formData: parseFormData(row.formData),
     files: parseFiles(row.fileUrls),
-    status: 'pending',
-    finalScore: null,
-    rejectReason: '',
+    status: legacyStatus(row.status),
+    finalScore: row.score ?? row.finalScore ?? null,
+    rejectReason: row.reviewFeedback || row.feedback || '',
+    reviewNote: row.reviewFeedback || row.feedback || ''
   }
 }
 
-// 工作台一次性拉一页（size=50）承接原型"整屏滚动队列"的交互，不做二次翻页 UI——
-// 符合 common-dev-guide 分页上限（max 100）约束，见 task-14-report.md 说明
+function mapTaskStatus(status) {
+  return TASK_STATUS_MAP[String(status || '').toUpperCase()] || 'reviewing'
+}
+
+function normalizeTaskRow(row = {}) {
+  const task = row.task || row.taskDefinition || {}
+  const assignment = { ...task, ...row }
+  const normalized = normalizeAssignmentPage([assignment]).records[0] || {}
+  const taskNature = assignment.taskNature || assignment.nature || task.taskNature || task.nature || ''
+  const fourDimension = isFourDimensionTask({ ...task, ...assignment })
+  const rawStatus = assignment.submission?.status
+    || assignment.currentSubmission?.status
+    || assignment.submissionStatus
+    || assignment.status
+    || assignment.stage
+  return {
+    ...assignment,
+    ...normalized,
+    id: assignment.assignmentId || assignment.id,
+    source: 'task',
+    taskId: assignment.taskId || task.taskId || task.id,
+    assignmentId: assignment.assignmentId || assignment.id,
+    branch: normalized.branchName || assignment.branchName || '—',
+    dim: fourDimension ? (DIM_LABEL[assignment.dimension] || assignment.dimension || '四大维度材料上报') : '临时任务',
+    item: assignment.taskTitle || assignment.title || task.title || '—',
+    itemCode: assignment.itemCode,
+    submitter: normalized.submitterName || assignment.submitterName || '—',
+    date: normalized.submittedAt || assignment.submittedAt || '—',
+    description: assignment.taskDescription || assignment.description || task.description || '',
+    content: normalized.content || assignment.content || assignment.formData || '—',
+    nature: taskNature,
+    cycle: assignment.cycleType || assignment.cycle || task.cycleType || task.cycle || '',
+    isPeriodic: isPeriodicNature(taskNature),
+    isTemporary: !fourDimension,
+    isFourDimension: fourDimension,
+    formData: parseFormData(assignment.formData),
+    files: normalized.files || [],
+    status: normalized.isUnreported ? 'reviewing' : mapTaskStatus(rawStatus),
+    finalScore: assignment.score ?? assignment.finalScore ?? null,
+    rejectReason: assignment.reviewFeedback || assignment.feedback || assignment.reviewOpinion || '',
+    reviewNote: assignment.reviewFeedback || assignment.feedback || assignment.reviewOpinion || ''
+  }
+}
+
+function statusLabel(status) {
+  return { pending: '待处理', reviewing: '审核中', passed: '已通过', rejected: '已驳回' }[status] || '—'
+}
+
+function legacyReviewId(item) {
+  return item?.reviewId ?? item?.submitId ?? item?.id
+}
+
+function legacyStatus(value) {
+  const normalized = String(value ?? '').toUpperCase()
+  if (value === 2 || normalized === 'APPROVED') return 'passed'
+  if (value === 3 || normalized === 'REJECTED' || normalized === 'REJECTED_BY_ORG') return 'rejected'
+  return 'pending'
+}
+
+function taskQuery() {
+  // `status` is the response DTO's assignment status.  Query binding uses the
+  // explicit assignmentStatus field, so tabs must never send an unknown
+  // `status` parameter to ReTaskWorkflowPageQueryDTO.
+  const assignmentStatus = activeTab.value === 'pending' ? 'ORG_PENDING'
+    : activeTab.value === 'passed' ? 'APPROVED' : undefined
+  const filters = { ...appliedQuery.value, assignmentStatus }
+  if (filters.nature === 'FOUR_DIMENSION') {
+    filters.businessType = 'FOUR_DIMENSION'
+    delete filters.nature
+  }
+  return buildTaskQuery(filters, 1, 50)
+}
+
+async function loadTaskRows() {
+  if (typeof listOrgTaskReviews !== 'function') return { rows: [], total: 0 }
+  try {
+    const result = await listOrgTaskReviews(taskQuery())
+    const page = normalizeAssignmentPage(result)
+    const rows = page.records.map(normalizeTaskRow).filter((item) => {
+      if (item.status !== activeTab.value) return false
+      if (appliedQuery.value.nature === 'FOUR_DIMENSION' && !item.isFourDimension) return false
+      if (appliedQuery.value.nature === 'TEMPORARY' && !item.isTemporary) return false
+      if (appliedQuery.value.title && !`${item.item} ${item.branch}`.includes(appliedQuery.value.title)) return false
+      if (appliedQuery.value.cycle && item.cycle !== appliedQuery.value.cycle) return false
+      return true
+    })
+    return { rows, total: Number(result?.total ?? rows.length) }
+  } catch {
+    return { rows: [], total: 0 }
+  }
+}
+
+async function loadMaterialRows() {
+  if (typeof getReviewQueue !== 'function') return { rows: [], total: 0 }
+  try {
+    const result = await getReviewQueue(1, 50)
+    const rawRows = result?.records || (Array.isArray(result) ? result : [])
+    const rows = rawRows.map(toQueueItem).filter((item) => {
+      if (item.status !== activeTab.value) return false
+      if (appliedQuery.value.title && !`${item.item} ${item.branch}`.includes(appliedQuery.value.title)) return false
+      if (appliedQuery.value.nature === 'TEMPORARY') return false
+      if (appliedQuery.value.cycle && item.cycle !== appliedQuery.value.cycle) return false
+      return true
+    })
+    return { rows, total: Number(result?.total ?? rows.length) }
+  } catch {
+    return { rows: [], total: 0 }
+  }
+}
+
 async function reload() {
   loading.value = true
   try {
-    const r = await getReviewQueue(1, 50)
-    const arr = r?.records || (Array.isArray(r) ? r : [])
-    reviewItems.value = arr.map(toQueueItem)
-  } catch {
-    reviewItems.value = []
+    const [taskResult, materialResult] = await Promise.all([loadTaskRows(), loadMaterialRows()])
+    reviewItems.value = [...taskResult.rows, ...materialResult.rows]
+    if (selectedItem.value) {
+      selectedItem.value = reviewItems.value.find((item) => item.id === selectedItem.value.id) || null
+    }
   } finally {
     loading.value = false
   }
+}
+
+async function handleSearch() {
+  appliedQuery.value = { ...query }
+  await reload()
+}
+
+async function handleReset() {
+  Object.assign(query, { title: '', nature: '', cycle: '' })
+  appliedQuery.value = {}
+  await reload()
+}
+
+async function handleTabChange() {
+  await reload()
 }
 
 // 只在"切换到不同条目"时把评分清零；同一条目的重赋值（handleApprove/handleConfirmReject
@@ -247,51 +480,96 @@ async function reload() {
 // （Playwright 联调 Task 17d 截图复现），且若用户在预览异步加载期间已手填分数，预览返回时
 // 也会静默清零用户刚输入的值。
 watch(selectedItem, (val, oldVal) => {
-  if (val && (!oldVal || val.id !== oldVal.id)) finalScore.value = 0
+  if (val && (!oldVal || val.id !== oldVal.id) && !val.isTemporary) finalScore.value = 0
 })
 
 const selectItem = async (item) => {
+  if (!item) return
   selectedItem.value = item
-  reviewComment.value = ''
+  reviewComment.value = item.reviewNote || ''
   previewLoading.value = true
   try {
-    const detail = await getReviewPreview(item.id)
-    if (detail) {
-      const merged = { ...item, formData: parseFormData(detail.formData), files: parseFiles(detail.fileUrls) }
-      selectedItem.value = merged
-      const idx = reviewItems.value.findIndex((i) => i.id === item.id)
-      if (idx >= 0) reviewItems.value[idx] = { ...reviewItems.value[idx], ...merged }
+    if (item.source === 'task' && item.isFourDimension && typeof getReviewPreview === 'function') {
+      const detail = await getReviewPreview(legacyReviewId(item))
+      if (detail) {
+        Object.assign(item, {
+          formData: parseFormData(detail.formData),
+          files: parseFiles(detail.fileUrls),
+          content: detail.content || item.content
+        })
+      }
+    } else if (item.source === 'task' && typeof getOrgTaskReview === 'function') {
+      const detail = await getOrgTaskReview(item.assignmentId)
+      if (detail) Object.assign(item, normalizeTaskRow({ ...item, ...detail }))
+    } else if (item.source === 'material' && typeof getReviewPreview === 'function') {
+      const detail = await getReviewPreview(item.id)
+      if (detail) {
+        Object.assign(item, {
+          formData: parseFormData(detail.formData),
+          files: parseFiles(detail.fileUrls),
+          content: detail.content || item.content
+        })
+      }
     }
-  } catch (e) {
-    ElMessage.error(e?.message || '加载详情失败')
+  } catch (error) {
+    ElMessage.error(error?.message || '加载详情失败')
   } finally {
     previewLoading.value = false
   }
 }
 
 const getFileIcon = (file) => {
-  if (file.endsWith('.pdf')) return '📕'
-  if (file.endsWith('.xlsx') || file.endsWith('.xls')) return '📗'
-  if (file.endsWith('.zip')) return '📦'
-  if (file.endsWith('.png') || file.endsWith('.jpg')) return '🖼️'
-  if (file.endsWith('.docx') || file.endsWith('.doc')) return '📄'
+  const name = fileName(file).toLowerCase()
+  if (name.endsWith('.pdf')) return '📕'
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) return '📗'
+  if (name.endsWith('.zip')) return '📦'
+  if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg')) return '🖼️'
+  if (name.endsWith('.docx') || name.endsWith('.doc')) return '📄'
   return '📄'
+}
+
+const fileName = (file) => typeof file === 'string' ? file : file?.fileName || file?.name || '未命名附件'
+
+async function downloadAttachment(item, file) {
+  if (item?.source !== 'task' || typeof downloadTaskAttachment !== 'function') return
+  const fileId = file?.fileId || file?.id || file?.fileObjectId
+  if (!fileId) return
+  try {
+    const blob = await downloadTaskAttachment(item.taskId, item.assignmentId, fileId)
+    if (blob instanceof Blob && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = fileName(file)
+      anchor.click()
+      URL.revokeObjectURL(url)
+    }
+  } catch (error) {
+    ElMessage.error(error?.message || '附件下载失败')
+  }
 }
 
 const handleApprove = async () => {
   if (!selectedItem.value) return
   acting.value = true
   try {
-    await approveSubmit(selectedItem.value.id, { score: finalScore.value, feedback: reviewComment.value || undefined })
-    const item = reviewItems.value.find((i) => i.id === selectedItem.value.id)
-    if (item) {
+    const item = reviewItems.value.find((row) => row.id === selectedItem.value.id) || selectedItem.value
+    if (item.source === 'task' && !item.isFourDimension) {
+      if (typeof approveOrgTask !== 'function') return
+      await approveOrgTask(item.assignmentId, { feedback: reviewComment.value || undefined })
+      item.status = 'passed'
+      item.reviewNote = reviewComment.value
+      selectedItem.value = { ...item }
+      ElMessage.success(`✅ 已通过${item.isTemporary ? '临时任务' : '任务'}`)
+    } else {
+      await approveSubmit(legacyReviewId(item), { score: finalScore.value, feedback: reviewComment.value || undefined })
       item.status = 'passed'
       item.finalScore = finalScore.value
       selectedItem.value = { ...item }
+      ElMessage.success(`✅ 通过并计 ${finalScore.value} 分`)
     }
-    ElMessage.success(`✅ 通过并计 ${finalScore.value} 分`)
-  } catch (e) {
-    ElMessage.error(e?.message || '操作失败')
+  } catch (error) {
+    ElMessage.error(error?.message || '操作失败')
   } finally {
     acting.value = false
   }
@@ -303,29 +581,68 @@ const handleRejectClick = () => {
 }
 
 const handleConfirmReject = async () => {
+  if (!selectedItem.value) return
   if (!rejectReason.value.trim()) {
-    ElMessage.warning('请填写驳回原因')
+    ElMessage.warning('请填写驳回意见')
     return
   }
   acting.value = true
   try {
-    await rejectSubmit(selectedItem.value.id, { feedback: rejectReason.value })
-    const item = reviewItems.value.find((i) => i.id === selectedItem.value.id)
-    if (item) {
-      item.status = 'rejected'
-      item.rejectReason = rejectReason.value
-      selectedItem.value = { ...item }
+    const item = reviewItems.value.find((row) => row.id === selectedItem.value.id) || selectedItem.value
+    if (item.source === 'task' && !item.isFourDimension) {
+      if (typeof rejectOrgTask !== 'function') return
+      await rejectOrgTask(item.assignmentId, { feedback: rejectReason.value.trim() })
+    } else {
+      await rejectSubmit(legacyReviewId(item), { feedback: rejectReason.value.trim() })
     }
+    item.status = 'rejected'
+    item.rejectReason = rejectReason.value.trim()
+    item.reviewNote = rejectReason.value.trim()
+    selectedItem.value = { ...item }
     showRejectModal.value = false
     ElMessage.success('✅ 已驳回')
-  } catch (e) {
-    ElMessage.error(e?.message || '操作失败')
+  } catch (error) {
+    ElMessage.error(error?.message || '操作失败')
   } finally {
     acting.value = false
   }
 }
 
+const itemKey = (item) => `${item.source || 'legacy'}-${item.id}`
+const descriptionParts = (description) => linkifyDescription(description)
+
 onMounted(reload)
+
+defineExpose({
+  activeTab,
+  activeTabLabel,
+  appliedQuery,
+  descriptionParts,
+  downloadAttachment,
+  filteredItems,
+  finalScore,
+  getFileIcon,
+  handleApprove,
+  handleConfirmReject,
+  handleRejectClick,
+  handleReset,
+  handleSearch,
+  handleTabChange,
+  loadTaskRows,
+  normalizeTaskRow,
+  pendingItems,
+  query,
+  rejectedItems,
+  rejectReason,
+  reload,
+  reviewingItems,
+  reviewItems,
+  selectItem,
+  selectedItem,
+  showRejectModal,
+  statusLabel,
+  passedItems
+})
 </script>
 
 <style scoped lang="scss">
@@ -340,6 +657,19 @@ onMounted(reload)
   }
 }
 
+.page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.page-desc {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
 .review-layout {
   display: grid;
   grid-template-columns: 240px 330px 1fr;
@@ -350,6 +680,7 @@ onMounted(reload)
 .queue-panel   { grid-column: 1; }
 .scoring-panel { grid-column: 2; }
 .preview-panel { grid-column: 3; }
+.task-action-panel { grid-column: 2; }
 
 /* Queue Panel */
 .queue-panel {
@@ -359,6 +690,29 @@ onMounted(reload)
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.queue-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.queue-filter :deep(.el-radio-group) {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.queue-filter :deep(.el-radio-button__inner) {
+  padding: 7px 8px;
+  font-size: 11px;
+}
+
+.queue-filter :deep(.el-input),
+.queue-filter :deep(.el-select) {
+  width: 100%;
 }
 
 .queue-header {
@@ -380,11 +734,19 @@ onMounted(reload)
 .pending-badge { background: #fef9c3; color: #92400e; }
 .pass-badge { background: #dcfce7; color: #166534; }
 .reject-badge { background: #fee2e2; color: #b91c1c; }
+.reviewing-badge { background: #dbeafe; color: #1d4ed8; }
 
 .queue-list {
   flex: 1;
   overflow-y: auto;
   padding: 8px;
+}
+
+.queue-empty {
+  padding: 40px 12px;
+  color: #94a3b8;
+  font-size: 12px;
+  text-align: center;
 }
 
 .queue-item {
@@ -435,6 +797,7 @@ onMounted(reload)
     font-weight: 600;
 
     &.pending { background: #fef9c3; color: #92400e; }
+    &.reviewing { background: #dbeafe; color: #1d4ed8; }
     &.passed { background: #dcfce7; color: #166534; }
     &.rejected { background: #fee2e2; color: #b91c1c; }
   }
@@ -514,6 +877,32 @@ onMounted(reload)
   }
 }
 
+.task-content-block {
+  padding: 14px;
+  margin-bottom: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+
+  .block-title {
+    margin-bottom: 8px;
+    color: #1e293b;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .task-description,
+  .task-content {
+    color: #334155;
+    font-size: 13px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .task-description { margin-bottom: 8px; }
+}
+
 .files-block {
   margin-bottom: 16px;
 
@@ -556,6 +945,23 @@ onMounted(reload)
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+}
+
+.task-action-panel {
+  grid-column: 2;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.task-action-summary {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.8;
 }
 
 .scoring-title {

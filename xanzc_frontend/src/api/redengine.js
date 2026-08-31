@@ -88,3 +88,27 @@ export const downloadTaskAttachment = (taskId, assignmentId, fileId) =>
   call('get', `/re/tasks/${taskId}/assignments/${assignmentId}/attachments/${fileId}/download`, {
     responseType: 'blob'
   });
+
+// 任务审核工作台：支部审核与组织审核使用独立的 assignment 资源。
+// 列表参数严格对应 ReTaskWorkflowPageQueryDTO：查询状态使用
+// assignmentStatus/submissionStatus；响应中的 status 是 assignment 状态，
+// submissionStatus 是当前提交版本状态，不能把响应字段 status 当作查询参数发送。
+export const listBranchTaskReviews = (params = {}) =>
+  call('get', '/re/reviews/tasks/branch/queue', { params });
+export const getBranchTaskReview = (assignmentId) =>
+  call('get', `/re/reviews/tasks/branch/${assignmentId}`);
+export const approveBranchTask = (assignmentId, data = {}) =>
+  call('post', `/re/reviews/tasks/branch/${assignmentId}/approve`, { data });
+export const submitBranchTaskToOrg = (assignmentId, data = {}) =>
+  call('post', `/re/reviews/tasks/branch/${assignmentId}/submit-to-org`, { data });
+export const rejectBranchTask = (assignmentId, data) =>
+  call('post', `/re/reviews/tasks/branch/${assignmentId}/reject`, { data });
+
+export const listOrgTaskReviews = (params = {}) =>
+  call('get', '/re/reviews/tasks/org/queue', { params });
+export const getOrgTaskReview = (assignmentId) =>
+  call('get', `/re/reviews/tasks/org/${assignmentId}`);
+export const approveOrgTask = (assignmentId, data = {}) =>
+  call('post', `/re/reviews/tasks/org/${assignmentId}/approve`, { data });
+export const rejectOrgTask = (assignmentId, data) =>
+  call('post', `/re/reviews/tasks/org/${assignmentId}/reject`, { data });
