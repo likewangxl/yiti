@@ -251,6 +251,10 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; flex: 0
 
 .metric-card strong { display: block; margin-top: 5px; color: #31445b; font-size: 23px; line-height: 1; }
 
+.home-lower-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+
+.home-lower-grid.has-ranking { grid-template-columns: minmax(0, 1.22fr) minmax(360px, .78fr); }
+
 .todo-card { overflow: hidden; }
 
 .todo-list { padding: 0 20px; }
@@ -277,6 +281,26 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; flex: 0
 .todo-meta > span:last-child { color: #98a3b1; font-size: 11px; }
 
 .todo-arrow { color: #a9b2bd; }
+
+.ranking-card { overflow: hidden; }
+
+.ranking-table { padding: 0 20px; }
+
+.ranking-table table { min-width: 0; table-layout: fixed; }
+
+.ranking-table th, .ranking-table td { height: 45px; }
+
+.ranking-table th:first-child, .ranking-table td:first-child { width: 48%; }
+
+.ranking-table td { color: #526175; }
+
+.ranking-table td:first-child { color: #405269; font-weight: 600; }
+
+.ranking-score { color: #465c75; font-size: 13px; font-weight: 600; }
+
+.ranking-number { min-width: 22px; height: 22px; padding: 0 5px; border-radius: 3px; color: #64748a; background: #f1f4f7; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+
+.ranking-number.top { color: #a36c18; background: #fff1d6; }
 
 .workbench-note { margin-top: 15px; padding: 11px 14px; border: 1px solid #e9e0cf; border-radius: 3px; color: #987a43; background: #fffaf0; display: flex; align-items: center; gap: 8px; font-size: 12px; }
 
@@ -518,6 +542,7 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; flex: 0
 
 @media (max-width: 1260px) {
   .workbench-split { grid-template-columns: 170px 280px minmax(0, 1fr); }
+  .home-lower-grid.has-ranking { grid-template-columns: minmax(0, 1fr) minmax(320px, .8fr); }
   .warning-branch-row { grid-template-columns: 50px 110px 1fr; }
   .warning-branch-row small { display: none; }
 }
