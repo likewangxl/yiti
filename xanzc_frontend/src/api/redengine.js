@@ -53,3 +53,28 @@ export const exportData = (type) => call('get', `/re/export/${type}`, { response
 // ── 文件上传（复用平台 governance 端点，非红色引擎自建）──
 export const uploadFile = (formData) =>
   call('post', '/files/upload', { data: formData, headers: { 'Content-Type': 'multipart/form-data' } });
+
+// ── 任务协同 ──
+// 任务模块以任务主表、党支部任务实例和填报记录分层返回；页面只通过这些 wrapper
+// 访问 /api/re，避免在视图内拼接 URL 或另建 axios 实例。
+export const listTasks = (params = {}) => call('get', '/re/tasks', { params });
+export const createTask = (data) => call('post', '/re/tasks', { data });
+export const getTaskDetail = (taskId) => call('get', `/re/tasks/${taskId}`);
+export const listTaskAssignments = (taskId, params = {}) =>
+  call('get', `/re/tasks/${taskId}/assignments`, { params });
+
+// 任务类型、允许上传文件类型和四维明细项由后端字典维护，前端不复制生产字典值。
+export const listTaskTypes = () => call('get', '/re/tasks/types', {});
+export const listTaskFileTypes = () => call('get', '/re/tasks/file-types', {});
+export const listMaterialDetailItems = () => call('get', '/re/tasks/material-details', {});
+
+// 任务导出始终是一个异步 ZIP 作业；ZIP 内包含一个多 Sheet Excel，附件目录由服务端生成。
+export const createTaskExport = (taskId, data = {}) =>
+  call('post', `/re/tasks/${taskId}/exports`, { data });
+export const getTaskExportStatus = (exportId) => call('get', `/re/task-exports/${exportId}`);
+export const downloadTaskExport = (exportId) =>
+  call('get', `/re/task-exports/${exportId}/download`, { responseType: 'blob' });
+export const downloadTaskAttachment = (taskId, assignmentId, fileId) =>
+  call('get', `/re/tasks/${taskId}/assignments/${assignmentId}/attachments/${fileId}/download`, {
+    responseType: 'blob'
+  });
