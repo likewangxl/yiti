@@ -38,6 +38,7 @@ public class ReSubmitService {
     private final ReSubmitFileMapper reSubmitFileMapper;
     private final ReUserPartyMapService reUserPartyMapService;
     private final FileApi fileApi;
+    private final ReTaskFourDimensionAdapter fourDimensionAdapter;
 
     /**
      * 创建材料上报（含附件绑定）。
@@ -81,6 +82,13 @@ public class ReSubmitService {
                 // 登记"文件-业务对象"关联，bizId 按 FileApi 契约传字符串化的 submitId
                 fileApi.bindFile("RE_SUBMIT", String.valueOf(submit.getId()), fileObjectId, "ATTACHMENT");
             }
+        }
+
+        // 只有带任务关联字段的四维请求才进入新任务关系域；旧客户端不带字段时保持原行为。
+        if (fourDimensionAdapter != null && req.getTaskId() != null
+                && req.getTaskInstanceId() != null && req.getTaskAssignmentId() != null) {
+            fourDimensionAdapter.linkFromLegacyRequest(submit, submit.getId(), req.getTaskId(),
+                    req.getTaskInstanceId(), req.getTaskAssignmentId(), userId);
         }
 
         log.info("[ReSubmitService.createSubmit] id={}, orgId={}, submitterId={}, fileCount={}",

@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 /** 报送员提交或重新提交任务填报内容的请求 DTO。 */
@@ -29,4 +31,28 @@ public class ReTaskSubmissionReqDTO {
     @NotBlank(message = "请求幂等号不能为空")
     @Schema(description = "请求幂等号", requiredMode = Schema.RequiredMode.REQUIRED)
     private String clientRequestId;
+
+    /** 四维任务关联既有 RE_SUBMIT 时使用的维度编码。 */
+    private String dimensionCode;
+
+    /** 四维任务关联既有 RE_SUBMIT 时使用的明细项编码。 */
+    private String itemCode;
+
+    /** 四维任务详情展示名称；普通任务无需填写。 */
+    private String itemName;
+
+    /** 四维任务兼容旧材料上报的上限分值。 */
+    private BigDecimal maxScore;
+
+    /** 四维任务兼容旧材料上报的项目名称。 */
+    private String projectName;
+
+    /** 四维任务兼容旧材料上报的上报类型。 */
+    private Integer submitType;
+
+    /** 四维任务兼容旧材料上报的上报日期。 */
+    private LocalDate submitDate;
+
+    /** 四维任务结构化材料数据。 */
+    private String formData;
 }

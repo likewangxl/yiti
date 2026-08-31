@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -55,6 +56,9 @@ class ReSubmitServiceTest {
 
     @Mock
     private FileApi fileApi;
+
+    @Mock
+    private ReTaskFourDimensionAdapter fourDimensionAdapter;
 
     @InjectMocks
     private ReSubmitService reSubmitService;
@@ -129,6 +133,27 @@ class ReSubmitServiceTest {
         verify(reSubmitFileMapper, never()).insert(any(ReSubmitFile.class));
         verify(fileApi, never()).bindFile(anyString(), anyString(), anyString(), anyString());
         verify(fileApi, never()).getFileName(anyString());
+    }
+
+    @Test
+    void createSubmit_withTaskContext_linksLegacySubmissionToTaskDomain() {
+        when(reUserPartyMapService.getRequiredPartyOrgId("E001")).thenReturn(100L);
+        when(reSubmitMapper.insert(ArgumentMatchers.any(ReSubmit.class))).thenAnswer(invocation -> {
+            ReSubmit arg = invocation.getArgument(0);
+            arg.setId(502L);
+            return 1;
+        });
+
+        ReSubmitCreateReqDTO request = req(null);
+        request.setTaskId(10L);
+        request.setTaskInstanceId(20L);
+        request.setTaskAssignmentId(30L);
+
+        Long id = reSubmitService.createSubmit(request, "E001");
+
+        assertThat(id).isEqualTo(502L);
+        verify(fourDimensionAdapter).linkFromLegacyRequest(
+                ArgumentMatchers.any(ReSubmit.class), eq(502L), eq(10L), eq(20L), eq(30L), eq("E001"));
     }
 
     @Test
