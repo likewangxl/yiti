@@ -45,7 +45,9 @@ public class FlowVariableCatalog {
                     new FlowVariableDTO("allocDim", "分配维度",  "string"),
                     START_ORG_LEVEL,
                     new FlowVariableDTO("corpRouteTo", "部门审批走向", "string"),
-                    new FlowVariableDTO("finRouteTo",  "资财部审批走向", "string")),
+                    new FlowVariableDTO("finRouteTo",  "资财部审批走向", "string"),
+                    new FlowVariableDTO("originalOwnerLevel3ApprovalRequired",
+                            "原业绩是否需3级机构负责人审批", "string")),
             // TARGET_ADJUST：TargetAdjustService 实际写入 subjectType / subjectId / cycleKey + 系统注入 startOrgLevel
             "TARGET_ADJUST", List.of(
                     new FlowVariableDTO("subjectType", "主体类型", "string"),
@@ -63,11 +65,14 @@ public class FlowVariableCatalog {
     private static final Map<String, List<FlowVariableDTO>> APPROVER_VAR_CATALOG = Map.of(
             // ALLOC_ADJUST：AllocAdjustService.submit 写入 originalOwnerEmpIds（原业绩分配名单）
             // 与 originalOwnerOrgLeaderEmpIds（原业绩所属 2 级机构 BRANCH_HEAD 负责人名单）
-            // 以及 originalOwnerOrgApprovalGroups（按机构分组的负责人快照）
+            // originalOwnerOrgApprovalGroups（按2级机构分组的负责人快照）
+            // 以及 originalOwnerLevel3OrgApprovalGroups（仅原业绩人为3级机构员工时生成）
             "ALLOC_ADJUST", List.of(
                     new FlowVariableDTO("originalOwnerEmpIds", "原业绩所属人", "list"),
                     new FlowVariableDTO("originalOwnerOrgLeaderEmpIds", "原业绩所属机构负责人", "list"),
-                    new FlowVariableDTO("originalOwnerOrgApprovalGroups", "原业绩所属机构负责人分组", GROUP_LIST))
+                    new FlowVariableDTO("originalOwnerOrgApprovalGroups", "原业绩所属机构负责人分组", GROUP_LIST),
+                    new FlowVariableDTO("originalOwnerLevel3OrgApprovalGroups",
+                            "原业绩所属3级机构负责人分组", GROUP_LIST))
             // TARGET_ADJUST 无 VAR 审批人变量
     );
 

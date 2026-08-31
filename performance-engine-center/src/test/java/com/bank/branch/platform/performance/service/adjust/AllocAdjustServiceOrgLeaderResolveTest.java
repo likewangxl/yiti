@@ -73,6 +73,19 @@ class AllocAdjustServiceOrgLeaderResolveTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    private List<ApproverGroupDTO> invokeResolveLevel3Groups(AllocAdjustService svc,
+                                                               List<String> empIds) throws Exception {
+        Method m = AllocAdjustService.class.getDeclaredMethod(
+                "resolveOriginalOwnerOrgLevel3ApprovalGroups", List.class);
+        m.setAccessible(true);
+        try {
+            return (List<ApproverGroupDTO>) m.invoke(svc, empIds);
+        } catch (InvocationTargetException e) {
+            throw (Exception) e.getCause();
+        }
+    }
+
     // ---------- 上溯定位 2 级机构 ----------
 
     @Test
@@ -142,6 +155,53 @@ class AllocAdjustServiceOrgLeaderResolveTest {
         assertThat(groups.get(1).getApproverEmpIds()).containsExactly("LDR_200");
     }
 
+    @Test
+    void level3Owners_resolveLevel3GroupsSeparatelyFromExistingLevel2Groups() throws Exception {
+        OrgApi orgApi = mock(OrgApi.class);
+        UserApi userApi = mock(UserApi.class);
+        when(orgApi.getUserMainOrg("E1")).thenReturn(org("330", 3, "128", "金台支行"));
+        when(orgApi.getUserMainOrg("E2")).thenReturn(org("331", 3, "128", "渭滨支行"));
+        when(orgApi.getUserMainOrg("E3")).thenReturn(org("200", 2, "1", "宝鸡分行"));
+        when(orgApi.getOrg("128")).thenReturn(org("128", 2, "1", "宝鸡分行"));
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "330"))
+                .thenReturn(List.of("LDR_330"));
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "331"))
+                .thenReturn(List.of("LDR_331"));
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "128"))
+                .thenReturn(List.of("LDR_128"));
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "200"))
+                .thenReturn(List.of("LDR_200"));
+
+        AllocAdjustService svc = AllocAdjustService.forOrgLeaderTest(null, null, userApi, orgApi);
+
+        List<ApproverGroupDTO> level3Groups = invokeResolveLevel3Groups(svc, List.of("E1", "E2", "E3"));
+        assertThat(level3Groups).hasSize(2);
+        assertThat(level3Groups.get(0).getGroupKey()).isEqualTo("330");
+        assertThat(level3Groups.get(0).getGroupName()).isEqualTo("金台支行");
+        assertThat(level3Groups.get(0).getApproverEmpIds()).containsExactly("LDR_330");
+        assertThat(level3Groups.get(1).getGroupKey()).isEqualTo("331");
+        assertThat(level3Groups.get(1).getApproverEmpIds()).containsExactly("LDR_331");
+
+        List<ApproverGroupDTO> level2Groups = invokeResolveGroups(svc, List.of("E1", "E2", "E3"));
+        assertThat(level2Groups).hasSize(2);
+        assertThat(level2Groups.get(0).getGroupKey()).isEqualTo("128");
+        assertThat(level2Groups.get(1).getGroupKey()).isEqualTo("200");
+    }
+
+    @Test
+    void level2Owner_doesNotCreateLevel3ApprovalGroup() throws Exception {
+        OrgApi orgApi = mock(OrgApi.class);
+        UserApi userApi = mock(UserApi.class);
+        when(orgApi.getUserMainOrg("E2")).thenReturn(org("98", 2, "1", "总行公司客户一部"));
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "98"))
+                .thenReturn(List.of("LDR_98"));
+
+        AllocAdjustService svc = AllocAdjustService.forOrgLeaderTest(null, null, userApi, orgApi);
+
+        assertThat(invokeResolveLevel3Groups(svc, List.of("E2"))).isEmpty();
+        verify(userApi, times(0)).getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "98");
+    }
+
     // ---------- fail-fast ----------
 
     @Test
@@ -157,6 +217,21 @@ class AllocAdjustServiceOrgLeaderResolveTest {
                 .isInstanceOf(PerfException.class)
                 .hasMessageContaining("宝鸡分行")
                 .hasMessageNotContaining("128");
+    }
+
+    @Test
+    void level3OrgWithoutBranchHead_failsFastWithOrgName() {
+        OrgApi orgApi = mock(OrgApi.class);
+        UserApi userApi = mock(UserApi.class);
+        when(orgApi.getUserMainOrg("E1")).thenReturn(org("330", 3, "128", "金台支行"));
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "330"))
+                .thenReturn(List.of());
+
+        AllocAdjustService svc = AllocAdjustService.forOrgLeaderTest(null, null, userApi, orgApi);
+        assertThatThrownBy(() -> invokeResolveLevel3Groups(svc, List.of("E1")))
+                .isInstanceOf(PerfException.class)
+                .hasMessageContaining("金台支行")
+                .hasMessageNotContaining("330");
     }
 
     @Test
@@ -227,6 +302,7 @@ class AllocAdjustServiceOrgLeaderResolveTest {
         when(orgApi.getOrg("98")).thenReturn(org("98", 2, "1"));
         when(orgApi.getUserMainOrg("E1")).thenReturn(org("330", 3, "128"));
         when(orgApi.getOrg("128")).thenReturn(org("128", 2, "1"));
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "330")).thenReturn(List.of("LDR_JT"));
         when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "128")).thenReturn(List.of("LDR_BJ"));
 
         SubmitAllocAdjustCmd cmd = new SubmitAllocAdjustCmd();
@@ -252,6 +328,14 @@ class AllocAdjustServiceOrgLeaderResolveTest {
         assertThat(groups).hasSize(1);
         assertThat(groups.get(0).getGroupKey()).isEqualTo("128");
         assertThat(groups.get(0).getApproverEmpIds()).containsExactly("LDR_BJ");
+        @SuppressWarnings("unchecked")
+        List<ApproverGroupDTO> level3Groups = (List<ApproverGroupDTO>) captor.getValue().getVariables()
+                .get("originalOwnerLevel3OrgApprovalGroups");
+        assertThat(level3Groups).hasSize(1);
+        assertThat(level3Groups.get(0).getGroupKey()).isEqualTo("330");
+        assertThat(level3Groups.get(0).getApproverEmpIds()).containsExactly("LDR_JT");
+        assertThat(captor.getValue().getVariables().get("originalOwnerLevel3ApprovalRequired"))
+                .isEqualTo("YES");
         // 旧变量保留（进度展示/审计仍在读）
         assertThat(captor.getValue().getVariables().get("originalOwnerEmpIds")).isEqualTo(List.of("E1"));
     }

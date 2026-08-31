@@ -79,6 +79,14 @@ public class AllocAdjustService {
     private static final String ROLE_CODE_BRANCH_HEAD = "BRANCH_HEAD";
     /** 「所属机构」的行政级别：2 级（分行/总行部门，与公司部/零售部同级） */
     private static final int ORG_LEADER_ORG_LEVEL = 2;
+    /** 三级机构负责人审批的行政级别。 */
+    private static final int ORG_LEVEL3 = 3;
+    /** 设计器用于判断是否需要原业绩三级机构负责人审批的启动变量。 */
+    private static final String VAR_ORIGINAL_OWNER_LEVEL3_APPROVAL_REQUIRED =
+            "originalOwnerLevel3ApprovalRequired";
+    /** 原业绩三级机构负责人审批的 GROUP_ALL 分组变量。 */
+    private static final String VAR_ORIGINAL_OWNER_LEVEL3_ORG_APPROVAL_GROUPS =
+            "originalOwnerLevel3OrgApprovalGroups";
 
     /** 【已停用·保留回退】零售静态 BPMN 流程定义 key. */
     public static final String PROCESS_KEY_RETAIL = "perf_alloc_adjust_retail_v1";
@@ -521,8 +529,21 @@ public class AllocAdjustService {
         // 原业绩分配会签名单（corp_v1 并行多实例 collection）；NEW 为空列表。
         vars.put("originalOwnerEmpIds", originalOwnerEmpIds == null
                 ? java.util.Collections.emptyList() : originalOwnerEmpIds);
-        // 原业绩所属机构负责人审批：保留旧扁平名单变量兼容既有流程，同时写入按机构分组的
-        // 审批人快照。GROUP_ALL 节点按组顺序执行，组内负责人使用或签语义。
+        // 原业绩员工本人审批完成后，三级机构负责人先按三级机构分组审批；随后再进入既有的
+        // 二级机构负责人分组审批。两个变量分别供两个 GROUP_ALL 节点使用，不能合并，否则
+        // 无法保证三级机构与所属二级机构之间的审批顺序。
+        List<ApproverGroupDTO> ownerLevel3ApprovalGroups = originalOwnerEmpIds == null
+                || originalOwnerEmpIds.isEmpty()
+                ? java.util.Collections.emptyList()
+                : resolveOriginalOwnerOrgLevel3ApprovalGroups(originalOwnerEmpIds);
+        vars.put(VAR_ORIGINAL_OWNER_LEVEL3_ORG_APPROVAL_GROUPS, ownerLevel3ApprovalGroups);
+        // 流程条件生成器按字符串比较，使用 YES/NO 而非 Boolean，避免设计器 SQL 条件被序列化为
+        // 不可匹配的 true/false 或类型不一致的值。
+        vars.put(VAR_ORIGINAL_OWNER_LEVEL3_APPROVAL_REQUIRED,
+                ownerLevel3ApprovalGroups.isEmpty() ? "NO" : "YES");
+
+        // 保留旧扁平名单变量兼容既有流程，同时写入按二级机构分组的审批人快照。
+        // GROUP_ALL 节点按组顺序执行，组内负责人使用或签语义。
         List<ApproverGroupDTO> ownerApprovalGroups = originalOwnerEmpIds == null || originalOwnerEmpIds.isEmpty()
                 ? java.util.Collections.emptyList()
                 : resolveOriginalOwnerOrgApprovalGroups(originalOwnerEmpIds);
@@ -1320,8 +1341,9 @@ public class AllocAdjustService {
      * 静态 BPMN（{@code perf_alloc_adjust_{corp,retail}_v1.bpmn20.xml}）该节点是
      * {@code flowable:assignee="${ownerEmpId}"}——单人指派给<b>原业绩所属人本人</b>
      * （{@link #resolveOriginalOwnerEmpId}），节点名 "原业绩所属人审批" 与之相符；
-     * 而设计器流程自 2026-07-16 起已切换为<b>原业绩所属 2 级机构负责人（BRANCH_HEAD）会签</b>
-     * （候选变量 {@code originalOwnerOrgApprovalGroups}，节点名 "原业绩所属机构负责人审批"；
+     * 而设计器流程已切换为<b>原业绩所属机构负责人逐级会签</b>：有3级原业绩人时，
+     * 先用 {@code originalOwnerLevel3OrgApprovalGroups} 完成3级机构审批，再用
+     * {@code originalOwnerOrgApprovalGroups} 完成2级机构审批（均取 BRANCH_HEAD）；
      * 旧变量 {@code originalOwnerOrgLeaderEmpIds} 仍作为扁平兼容快照保留，见当前配置脚本）。
      * 故静态 BPMN 的旧节点名<b>不是待修的漏网之鱼，而是与其自身行为相符</b>，不要"顺手改成"新名，
      * 否则标签会与实际审批人不符。真要回退，须同时确认业务上接受审批人退回原业绩所属人本人。</p>
@@ -1382,7 +1404,7 @@ public class AllocAdjustService {
     }
 
     /**
-     * 解析「原业绩所属机构负责人」会签名单（original_owner_approve 节点候选）。
+     * 解析「原业绩所属2级机构负责人」兼容名单（original_owner_approve 节点候选）。
      * <p>每个原业绩分配人主机构沿 P_ID 上溯至 2 级机构（与公司部/零售部同级；主机构本身
      * 2 级则就地），机构去重后取各机构 BRANCH_HEAD（机构负责人）角色持有者并集。
      * 任一环节缺失即抛 {@link PerfException} fail-fast，避免流程行至该节点无人可批卡死。</p>
@@ -1392,12 +1414,47 @@ public class AllocAdjustService {
     }
 
     /**
-     * 解析「原业绩所属机构负责人」的机构分组审批快照。
+     * 解析「原业绩所属2级机构负责人」的机构分组审批快照。
      * <p>每个二级机构对应一个顺序多实例任务；机构内负责人列表仅用于候选人或签，
      * 不再把不同机构的负责人合并成一个扁平 ANY 节点。</p>
      */
     private List<ApproverGroupDTO> resolveOriginalOwnerOrgApprovalGroups(List<String> originalOwnerEmpIds) {
         return resolveOrgLeaderGroups(originalOwnerEmpIds, "原业绩分配人", "原业绩所属机构");
+    }
+
+    /**
+     * 解析原业绩分配人主机构为三级机构的负责人审批分组。
+     *
+     * <p>仅三级主机构进入该变量；二级主机构不会生成三级组。每个三级机构只生成一个组，
+     * 组间由流程的 GROUP_ALL 节点保证全部完成，组内负责人由监听器执行任一人审批即可。
+     * 三级机构负责人缺失时在提交前直接失败，避免流程进入无人可批的节点。</p>
+     */
+    private List<ApproverGroupDTO> resolveOriginalOwnerOrgLevel3ApprovalGroups(
+            List<String> originalOwnerEmpIds) {
+        if (originalOwnerEmpIds == null || originalOwnerEmpIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // 保留原业绩员工首次出现的机构顺序；同一三级机构下多人只生成一组。
+        Map<String, OrgDTO> level3Orgs = new LinkedHashMap<>();
+        for (String empId : originalOwnerEmpIds) {
+            if (isBlank(empId)) {
+                continue;
+            }
+            OrgDTO mainOrg = orgApi.getUserMainOrg(empId);
+            if (mainOrg == null) {
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                        "原业绩分配人[" + empId + "]无机构归属，无法确定所属机构负责人");
+            }
+            if (mainOrg.getOrgLevel() != null && mainOrg.getOrgLevel() == ORG_LEVEL3) {
+                if (isBlank(mainOrg.getOrgCode())) {
+                    throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                            "原业绩分配人[" + empId + "]的三级机构缺少机构编码，无法确定机构负责人");
+                }
+                level3Orgs.putIfAbsent(mainOrg.getOrgCode(), mainOrg);
+            }
+        }
+        return resolveOrgLeaderGroups(level3Orgs, "原业绩所属3级机构");
     }
 
     /**
@@ -1437,8 +1494,14 @@ public class AllocAdjustService {
             level2Orgs.putIfAbsent(level2Org.getOrgCode(), level2Org);
         }
 
+        return resolveOrgLeaderGroups(level2Orgs, orgText);
+    }
+
+    /** 按已经解析出的机构快照读取 BRANCH_HEAD 并生成机构审批分组。 */
+    private List<ApproverGroupDTO> resolveOrgLeaderGroups(Map<String, OrgDTO> orgs,
+                                                            String orgText) {
         List<ApproverGroupDTO> groups = new ArrayList<>();
-        for (Map.Entry<String, OrgDTO> entry : level2Orgs.entrySet()) {
+        for (Map.Entry<String, OrgDTO> entry : orgs.entrySet()) {
             String orgCode = entry.getKey();
             List<String> holders = userApi.getEmpIdsByRoleCodeAndOrg(ROLE_CODE_BRANCH_HEAD, orgCode);
             if (holders == null || holders.isEmpty()) {
