@@ -6,9 +6,12 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.redengine.api.dto.ReTaskApproveReqDTO;
+import com.bank.branch.platform.redengine.api.dto.ReTaskAssignmentStatus;
 import com.bank.branch.platform.redengine.api.dto.ReTaskRejectReqDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionReqDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionStatus;
+import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowAssignmentDTO;
+import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowPageQueryDTO;
 import com.bank.branch.platform.redengine.entity.RePartyOrg;
 import com.bank.branch.platform.redengine.entity.ReTask;
 import com.bank.branch.platform.redengine.entity.ReTaskBranchAssignment;
@@ -41,6 +44,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -260,6 +264,161 @@ class ReTaskWorkflowServiceTest {
                 .isInstanceOf(com.bank.branch.platform.common.web.exception.BizException.class)
                 .hasMessage("禁止审核本人提交的记录");
         verify(submissionMapper, never()).update(any(), any());
+    }
+
+    @Test
+    void branchQueue_includesPendingAndAllHistoricalStatuses() {
+        String operatorId = "SECRETARY-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        RePartyOrg branch = branch(40L, operatorId);
+        List<ReTaskBranchAssignment> assignments = List.of(
+                assignment(301L, 20L, 40L, "BRANCH_PENDING", 1),
+                assignment(302L, 20L, 40L, "BRANCH_PENDING", 1),
+                assignment(303L, 20L, 40L, "ORG_PENDING", 1),
+                assignment(304L, 20L, 40L, "APPROVED", 1),
+                assignment(305L, 20L, 40L, "REJECTED_BY_BRANCH", 1),
+                assignment(306L, 20L, 40L, "REJECTED_BY_ORG", 1));
+        List<ReTaskSubmission> submissions = List.of(
+                submission(401L, 10L, 20L, 301L, 1, ReTaskSubmissionStatus.BRANCH_PENDING, "REPORTER-1"),
+                submission(402L, 10L, 20L, 302L, 1, ReTaskSubmissionStatus.BRANCH_APPROVED, "REPORTER-1"),
+                submission(403L, 10L, 20L, 303L, 1, ReTaskSubmissionStatus.ORG_PENDING, "REPORTER-1"),
+                submission(404L, 10L, 20L, 304L, 1, ReTaskSubmissionStatus.APPROVED, "REPORTER-1"),
+                submission(405L, 10L, 20L, 305L, 1, ReTaskSubmissionStatus.REJECTED_BY_BRANCH, "REPORTER-1"),
+                submission(406L, 10L, 20L, 306L, 1, ReTaskSubmissionStatus.REJECTED_BY_ORG, "REPORTER-1"));
+        stubWorkflowListing(operatorId, Set.of("R_RE_SECR"), branch, task, instance,
+                assignments, submissions);
+
+        var result = service.listBranchReviews(new ReTaskWorkflowPageQueryDTO(), operatorId);
+
+        assertThat(result.getRecords()).extracting(ReTaskWorkflowAssignmentDTO::getSubmissionStatus)
+                .containsExactly(ReTaskSubmissionStatus.BRANCH_PENDING,
+                        ReTaskSubmissionStatus.BRANCH_APPROVED,
+                        ReTaskSubmissionStatus.ORG_PENDING,
+                        ReTaskSubmissionStatus.APPROVED,
+                        ReTaskSubmissionStatus.REJECTED_BY_BRANCH,
+                        ReTaskSubmissionStatus.REJECTED_BY_ORG);
+        assertThat(result.getRecords()).extracting(ReTaskWorkflowAssignmentDTO::getStatus)
+                .containsExactly(ReTaskAssignmentStatus.BRANCH_PENDING,
+                        ReTaskAssignmentStatus.BRANCH_PENDING,
+                        ReTaskAssignmentStatus.ORG_PENDING,
+                        ReTaskAssignmentStatus.APPROVED,
+                        ReTaskAssignmentStatus.REJECTED_BY_BRANCH,
+                        ReTaskAssignmentStatus.REJECTED_BY_ORG);
+    }
+
+    @Test
+    void orgQueue_includesPendingAndHistoricalApprovedOrRejectedStatuses() {
+        String operatorId = "ORG-REVIEWER-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        RePartyOrg branch = branch(40L, "SECRETARY-1");
+        List<ReTaskBranchAssignment> assignments = List.of(
+                assignment(311L, 20L, 40L, "ORG_PENDING", 1),
+                assignment(312L, 20L, 40L, "APPROVED", 1),
+                assignment(313L, 20L, 40L, "REJECTED_BY_BRANCH", 1),
+                assignment(314L, 20L, 40L, "REJECTED_BY_ORG", 1));
+        List<ReTaskSubmission> submissions = List.of(
+                submission(411L, 10L, 20L, 311L, 1, ReTaskSubmissionStatus.ORG_PENDING, "REPORTER-1"),
+                submission(412L, 10L, 20L, 312L, 1, ReTaskSubmissionStatus.APPROVED, "REPORTER-1"),
+                submission(413L, 10L, 20L, 313L, 1, ReTaskSubmissionStatus.REJECTED_BY_BRANCH, "REPORTER-1"),
+                submission(414L, 10L, 20L, 314L, 1, ReTaskSubmissionStatus.REJECTED_BY_ORG, "REPORTER-1"));
+        stubWorkflowListing(operatorId, Set.of("R_RE_ORGREV"), branch, task, instance,
+                assignments, submissions);
+
+        var result = service.listOrgReviews(new ReTaskWorkflowPageQueryDTO(), operatorId);
+
+        assertThat(result.getRecords()).extracting(ReTaskWorkflowAssignmentDTO::getSubmissionStatus)
+                .containsExactly(ReTaskSubmissionStatus.ORG_PENDING,
+                        ReTaskSubmissionStatus.APPROVED,
+                        ReTaskSubmissionStatus.REJECTED_BY_BRANCH,
+                        ReTaskSubmissionStatus.REJECTED_BY_ORG);
+    }
+
+    @Test
+    void branchQueue_explicitOrgPendingStatus_isNotDroppedByBranchDefaultFilter() {
+        String operatorId = "SECRETARY-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        RePartyOrg branch = branch(40L, operatorId);
+        ReTaskBranchAssignment assignment = assignment(321L, 20L, 40L, "ORG_PENDING", 1);
+        ReTaskSubmission submission = submission(421L, 10L, 20L, 321L, 1,
+                ReTaskSubmissionStatus.ORG_PENDING, "REPORTER-1");
+        stubWorkflowListing(operatorId, Set.of("R_RE_SECR"), branch, task, instance,
+                List.of(assignment), List.of(submission));
+        ReTaskWorkflowPageQueryDTO query = new ReTaskWorkflowPageQueryDTO();
+        query.setAssignmentStatus(ReTaskAssignmentStatus.ORG_PENDING);
+
+        var result = service.listBranchReviews(query, operatorId);
+
+        assertThat(result.getRecords()).singleElement()
+                .extracting(ReTaskWorkflowAssignmentDTO::getStatus)
+                .isEqualTo(ReTaskAssignmentStatus.ORG_PENDING);
+    }
+
+    @Test
+    void orgQueue_explicitApprovedStatus_isNotDroppedByOrgDefaultFilter() {
+        String operatorId = "ORG-REVIEWER-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        RePartyOrg branch = branch(40L, "SECRETARY-1");
+        ReTaskBranchAssignment assignment = assignment(322L, 20L, 40L, "APPROVED", 1);
+        ReTaskSubmission submission = submission(422L, 10L, 20L, 322L, 1,
+                ReTaskSubmissionStatus.APPROVED, "REPORTER-1");
+        stubWorkflowListing(operatorId, Set.of("R_RE_ORGREV"), branch, task, instance,
+                List.of(assignment), List.of(submission));
+        ReTaskWorkflowPageQueryDTO query = new ReTaskWorkflowPageQueryDTO();
+        query.setAssignmentStatus(ReTaskAssignmentStatus.APPROVED);
+
+        var result = service.listOrgReviews(query, operatorId);
+
+        assertThat(result.getRecords()).singleElement()
+                .extracting(ReTaskWorkflowAssignmentDTO::getStatus)
+                .isEqualTo(ReTaskAssignmentStatus.APPROVED);
+    }
+
+    @Test
+    void orgQueue_explicitBranchPendingStatus_doesNotExpandOrganizationScope() {
+        String operatorId = "ORG-REVIEWER-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        RePartyOrg branch = branch(40L, "SECRETARY-1");
+        ReTaskBranchAssignment assignment = assignment(323L, 20L, 40L, "BRANCH_PENDING", 1);
+        ReTaskSubmission submission = submission(423L, 10L, 20L, 323L, 1,
+                ReTaskSubmissionStatus.BRANCH_PENDING, "REPORTER-1");
+        stubWorkflowListing(operatorId, Set.of("R_RE_ORGREV"), branch, task, instance,
+                List.of(assignment), List.of(submission));
+        ReTaskWorkflowPageQueryDTO query = new ReTaskWorkflowPageQueryDTO();
+        query.setAssignmentStatus(ReTaskAssignmentStatus.BRANCH_PENDING);
+
+        var result = service.listOrgReviews(query, operatorId);
+
+        assertThat(result.getRecords()).isEmpty();
+    }
+
+    /** 为列表契约测试准备同一任务下的多个 assignment 和当前版本。 */
+    private void stubWorkflowListing(String operatorId, Set<String> roles, RePartyOrg branch,
+                                     ReTask task, ReTaskInstance instance,
+                                     List<ReTaskBranchAssignment> assignments,
+                                     List<ReTaskSubmission> submissions) {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(operatorId);
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(roles);
+        when(currentUserApi.isSystemAdmin()).thenReturn(false);
+        when(assignmentMapper.selectList(any())).thenReturn(assignments);
+        when(instanceMapper.selectById(instance.getId())).thenReturn(instance);
+        when(taskMapper.selectById(task.getId())).thenReturn(task);
+        when(partyOrgMapper.selectById(anyLong())).thenReturn(branch);
+        when(submissionFileMapper.selectList(any())).thenReturn(List.of());
+        when(fileTypeMapper.selectList(any())).thenReturn(List.of());
+        AtomicInteger submissionIndex = new AtomicInteger();
+        when(submissionMapper.selectList(any())).thenAnswer(invocation -> {
+            int index = submissionIndex.getAndIncrement();
+            return index < submissions.size() ? List.of(submissions.get(index)) : List.of();
+        });
+        if (roles.contains("R_RE_SECR")) {
+            when(partyOrgMapper.selectList(org.mockito.ArgumentMatchers.isNull()))
+                    .thenReturn(List.of(branch));
+        }
     }
 
     private static ReTask task(Long id, String typeCode) {

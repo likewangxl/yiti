@@ -1058,14 +1058,22 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         return type == parseBusinessType(task.getTypeCode());
     }
 
+    /** 支部工作台可查当前提交及后续审核历史；无提交版本的未上报 assignment 不进入工作台。 */
     private boolean branchQueueStatus(ReTaskSubmissionStatus status) {
         return status == ReTaskSubmissionStatus.BRANCH_PENDING
                 || status == ReTaskSubmissionStatus.BRANCH_APPROVED
-                || status == ReTaskSubmissionStatus.REJECTED_BY_BRANCH;
+                || status == ReTaskSubmissionStatus.ORG_PENDING
+                || status == ReTaskSubmissionStatus.APPROVED
+                || status == ReTaskSubmissionStatus.REJECTED_BY_BRANCH
+                || status == ReTaskSubmissionStatus.REJECTED_BY_ORG;
     }
 
+    /** 组织工作台只接收已进入组织链路或已形成终态的提交版本。 */
     private boolean orgQueueStatus(ReTaskSubmissionStatus status) {
-        return status == ReTaskSubmissionStatus.ORG_PENDING;
+        return status == ReTaskSubmissionStatus.ORG_PENDING
+                || status == ReTaskSubmissionStatus.APPROVED
+                || status == ReTaskSubmissionStatus.REJECTED_BY_BRANCH
+                || status == ReTaskSubmissionStatus.REJECTED_BY_ORG;
     }
 
     private boolean isBranchQueue(String operatorId, Set<Long> branchIds) {
