@@ -63,6 +63,16 @@ export const getTaskDetail = (taskId) => call('get', `/re/tasks/${taskId}`);
 export const listTaskAssignments = (taskId, params = {}) =>
   call('get', `/re/tasks/${taskId}/assignments`, { params });
 
+// 报送员任务处理：列表按当前用户可见的党支部 assignment 查询，详情与提交使用同一 assignment。
+// 查询字段由 ReTaskAssignmentPageQueryDTO/任务列表契约共同承载；提交请求使用
+// ReTaskSubmissionReqDTO 的 assignmentId、content、fileObjectIds、clientRequestId。
+export const listMyTaskAssignments = (params = {}) =>
+  call('get', '/re/tasks/my-assignments', { params });
+export const getMyTaskAssignment = (assignmentId) =>
+  call('get', `/re/tasks/assignments/${assignmentId}`);
+export const submitTask = (data) =>
+  call('post', '/re/tasks/submissions', { data });
+
 // 任务类型、允许上传文件类型和四维明细项由后端字典维护，前端不复制生产字典值。
 export const listTaskTypes = () => call('get', '/re/tasks/types', {});
 export const listTaskFileTypes = () => call('get', '/re/tasks/file-types', {});

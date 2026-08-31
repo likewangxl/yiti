@@ -12,11 +12,14 @@ import {
   downloadTaskExport,
   getTaskDetail,
   getTaskExportStatus,
+  getMyTaskAssignment,
+  listMyTaskAssignments,
   listMaterialDetailItems,
   listTaskAssignments,
   listTaskFileTypes,
   listTaskTypes,
-  listTasks
+  listTasks,
+  submitTask
 } from '@/api/redengine';
 
 describe('红色引擎任务 API', () => {
@@ -67,6 +70,35 @@ describe('红色引擎任务 API', () => {
     expect(call).toHaveBeenNthCalledWith(2, 'get', '/re/tasks/42/assignments', {
       params: { pageNo: 1, pageSize: 10, branchId: 11 }
     });
+  });
+
+  it('报送员任务列表支持分页、页签和任务筛选条件', async () => {
+    const params = {
+      pageNo: 2,
+      pageSize: 10,
+      status: 'UNREPORTED',
+      title: '整改',
+      taskNature: 'TEMPORARY',
+      cycleType: 'MONTH_END'
+    };
+
+    await listMyTaskAssignments(params);
+
+    expect(call).toHaveBeenCalledWith('get', '/re/tasks/my-assignments', { params });
+  });
+
+  it('报送员任务详情和提交使用独立资源，并保留幂等号和附件对象 ID', async () => {
+    await getMyTaskAssignment(1001);
+    const payload = {
+      assignmentId: 1001,
+      content: '已完成整改，详见附件',
+      fileObjectIds: ['file-1'],
+      clientRequestId: 'client-1'
+    };
+    await submitTask(payload);
+
+    expect(call).toHaveBeenNthCalledWith(1, 'get', '/re/tasks/assignments/1001');
+    expect(call).toHaveBeenNthCalledWith(2, 'post', '/re/tasks/submissions', { data: payload });
   });
 
   it('任务字典覆盖任务类型、文件类型和四维明细项', async () => {
