@@ -202,7 +202,7 @@ SET name = '原业绩所属2级机构负责人审批'
 WHERE flow_def_id IN ('FDEF_ALLOC_CORP', 'FDEF_ALLOC_RETAIL')
   AND node_key = 'original_owner_approve';
 
--- 原业绩员工会签 -> 2级机构原边：仅3级审批不需要时命中。
+-- 原业绩员工会签 -> 2级机构原边：系统自动路由，不作为人工选项；仅3级审批不需要时命中。
 UPDATE WF_FLOW_EDGE e
 JOIN WF_FLOW_NODE employee_node
   ON employee_node.id = e.from_node_id
@@ -210,18 +210,18 @@ JOIN WF_FLOW_NODE employee_node
 JOIN WF_FLOW_NODE level2_owner_node
   ON level2_owner_node.id = e.to_node_id
  AND level2_owner_node.flow_def_id = e.flow_def_id
-SET e.name = '直接进入2级机构负责人审批',
+SET e.name = NULL,
     e.is_default = 0,
     e.condition_json = '{"logic":"AND","conditions":[{"field":"originalOwnerLevel3ApprovalRequired","op":"EQ","value":"NO"}]}'
 WHERE e.flow_def_id IN ('FDEF_ALLOC_CORP', 'FDEF_ALLOC_RETAIL')
   AND employee_node.node_key = 'original_owner_employee_approve'
   AND level2_owner_node.node_key = 'original_owner_approve';
 
--- 对公：原业绩员工会签 -> 3级机构负责人（YES）。
+-- 对公：原业绩员工会签 -> 3级机构负责人（YES），系统自动路由，不作为人工选项。
 INSERT INTO WF_FLOW_EDGE
     (id, flow_def_id, from_node_id, to_node_id, name, is_default, condition_json, sort_no)
 SELECT 'EC_OWNER_EMP_L3', d.id, employee_node.id, level3_owner_node.id,
-       '进入3级机构负责人审批', 0,
+       NULL, 0,
        '{"logic":"AND","conditions":[{"field":"originalOwnerLevel3ApprovalRequired","op":"EQ","value":"YES"}]}',
        employee_to_level2.sort_no + 1
   FROM WF_FLOW_DEF d
@@ -246,11 +246,11 @@ SELECT 'EC_OWNER_EMP_L3', d.id, employee_node.id, level3_owner_node.id,
           AND existing.to_node_id = level3_owner_node.id
    );
 
--- 零售：原业绩员工会签 -> 3级机构负责人（YES）。
+-- 零售：原业绩员工会签 -> 3级机构负责人（YES），系统自动路由，不作为人工选项。
 INSERT INTO WF_FLOW_EDGE
     (id, flow_def_id, from_node_id, to_node_id, name, is_default, condition_json, sort_no)
 SELECT 'ER_OWNER_EMP_L3', d.id, employee_node.id, level3_owner_node.id,
-       '进入3级机构负责人审批', 0,
+       NULL, 0,
        '{"logic":"AND","conditions":[{"field":"originalOwnerLevel3ApprovalRequired","op":"EQ","value":"YES"}]}',
        employee_to_level2.sort_no + 1
   FROM WF_FLOW_DEF d
@@ -274,6 +274,20 @@ SELECT 'ER_OWNER_EMP_L3', d.id, employee_node.id, level3_owner_node.id,
           AND existing.from_node_id = employee_node.id
           AND existing.to_node_id = level3_owner_node.id
    );
+
+-- 兼容旧脚本已执行的库：3级自动路由边不作为人工选项，统一修复名称和 YES 条件。
+UPDATE WF_FLOW_EDGE e
+JOIN WF_FLOW_NODE employee_node
+  ON employee_node.id = e.from_node_id
+ AND employee_node.flow_def_id = e.flow_def_id
+JOIN WF_FLOW_NODE level3_owner_node
+  ON level3_owner_node.id = e.to_node_id
+ AND level3_owner_node.flow_def_id = e.flow_def_id
+SET e.name = NULL,
+    e.condition_json = '{"logic":"AND","conditions":[{"field":"originalOwnerLevel3ApprovalRequired","op":"EQ","value":"YES"}]}'
+WHERE e.flow_def_id IN ('FDEF_ALLOC_CORP', 'FDEF_ALLOC_RETAIL')
+  AND employee_node.node_key = 'original_owner_employee_approve'
+  AND level3_owner_node.node_key = 'original_owner_level3_approve';
 
 -- 3级机构负责人分组全部完成后，无条件进入2级机构负责人分组。
 INSERT INTO WF_FLOW_EDGE

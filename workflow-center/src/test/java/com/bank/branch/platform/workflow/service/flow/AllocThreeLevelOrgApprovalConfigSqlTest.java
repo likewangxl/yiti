@@ -61,6 +61,42 @@ class AllocThreeLevelOrgApprovalConfigSqlTest {
         assertThat(readSql()).contains("原业绩所属3级机构负责人审批", "原业绩所属2级机构负责人审批");
     }
 
+    @Test
+    void original_owner_condition_edges_are_unnamed_and_route_by_start_variable() {
+        String executable = stripComments(readSql());
+        List<String> statements = statements(executable);
+
+        String level2Edge = statements.stream()
+                .filter(statement -> statement.contains("\"value\":\"NO\""))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("缺少原业绩员工到2级机构的 NO 条件边"));
+        assertThat(level2Edge)
+                .containsPattern("(?is)SET\\s+e\\.name\\s*=\\s*NULL")
+                .contains("original_owner_employee_approve", "original_owner_approve")
+                .contains("\"field\":\"originalOwnerLevel3ApprovalRequired\"", "\"value\":\"NO\"");
+
+        List<String> level3Edges = statements.stream()
+                .filter(statement -> statement.contains("EC_OWNER_EMP_L3") || statement.contains("ER_OWNER_EMP_L3"))
+                .toList();
+        assertThat(level3Edges).hasSize(2).allSatisfy(statement -> assertThat(statement)
+                .containsPattern("(?is)SELECT\\s+'(?:EC|ER)_OWNER_EMP_L3'[\\s\\S]*?level3_owner_node\\.id\\s*,\\s*NULL\\s*,\\s*0")
+                .contains("original_owner_employee_approve", "original_owner_level3_approve",
+                        "\"field\":\"originalOwnerLevel3ApprovalRequired\"", "\"value\":\"YES\"", "NOT EXISTS"));
+
+        String level3Repair = statements.stream()
+                .filter(statement -> statement.matches("(?is)^UPDATE\\s+WF_FLOW_EDGE\\b[\\s\\S]*"))
+                .filter(statement -> statement.contains("e.name"))
+                .filter(statement -> statement.contains("original_owner_employee_approve")
+                        && statement.contains("original_owner_level3_approve"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("缺少兼容旧脚本的原业绩员工到3级机构负责人边修复 UPDATE"));
+        assertThat(level3Repair)
+                .containsPattern("(?is)SET\\s+e\\.name\\s*=\\s*NULL")
+                .contains("FDEF_ALLOC_CORP", "FDEF_ALLOC_RETAIL",
+                        "original_owner_employee_approve", "original_owner_level3_approve",
+                        "\"field\":\"originalOwnerLevel3ApprovalRequired\"", "\"value\":\"YES\"");
+    }
+
     private String readSql() {
         Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath();
         for (int i = 0; i < 8 && current != null; i++) {
