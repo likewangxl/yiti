@@ -87,7 +87,7 @@
           <el-form-item label="联系电话"><el-input v-model="form.contactMobile" maxlength="20" /></el-form-item>
         </div>
 
-        <div class="ownership-row">
+        <div v-if="CCRM_OWNERSHIP_QUERY_ENABLED" class="ownership-row">
           <div><strong>存量客户与主办权查询</strong><span>{{ ownershipText }}</span></div>
           <el-button :loading="ownershipLoading" @click="lookupOwnership">查询主办权</el-button>
         </div>
@@ -113,16 +113,16 @@
           <el-radio-group v-model="form.distributionMode">
             <el-radio-button value="PUBLIC">全行公开认领</el-radio-button>
             <el-radio-button value="SCOPE">指定客户经理范围</el-radio-button>
-            <el-radio-button value="OWNER" :disabled="!ownership?.hasMainOwnership">主办专属</el-radio-button>
+            <el-radio-button v-if="CCRM_OWNERSHIP_QUERY_ENABLED" value="OWNER" :disabled="!ownership?.hasMainOwnership">主办专属</el-radio-button>
           </el-radio-group>
         </el-form-item>
-        <el-alert :title="distributionHelp" type="info" :closable="false" class="distribution-help" />
+        <el-alert v-if="distributionHelp" :title="distributionHelp" type="info" :closable="false" class="distribution-help" />
         <el-form-item v-if="form.distributionMode === 'SCOPE'" label="指定客户经理" prop="managerScopeIds">
           <el-select v-model="form.managerScopeIds" multiple filterable remote :remote-method="searchManagers" :loading="managerLoading" placeholder="按工号或姓名搜索" style="width:100%">
             <el-option v-for="manager in managerOptions" :key="manager.id" :value="manager.id" :label="`${manager.name || manager.id}（${manager.id}） · ${manager.org || manager.orgCode || '-'}`" />
           </el-select>
         </el-form-item>
-        <el-descriptions v-if="form.distributionMode === 'OWNER' && ownership?.hasMainOwnership" :column="2" border class="owner-card">
+        <el-descriptions v-if="CCRM_OWNERSHIP_QUERY_ENABLED && form.distributionMode === 'OWNER' && ownership?.hasMainOwnership" :column="2" border class="owner-card">
           <el-descriptions-item label="主办客户经理">{{ ownership.mainManagerName || ownership.mainManagerId }}（{{ ownership.mainManagerId }}）</el-descriptions-item>
           <el-descriptions-item label="主办机构">{{ ownership.mainOrgName || ownership.mainOrgId || '-' }}</el-descriptions-item>
         </el-descriptions>
@@ -153,6 +153,8 @@ import {
   executeLeadImport, previewLeadImport, submitLead, updateLead, uploadLeadAttachment
 } from '@/api/customerMarketing';
 
+// CCRM 暂不可用，暂时关闭存量客户与主办权查询；保留字段、API 和 OWNER 映射便于恢复。
+const CCRM_OWNERSHIP_QUERY_ENABLED = false;
 const statusOptions = [{label:'草稿',value:'DRAFT'},{label:'已提交',value:'SUBMITTED'},{label:'审批中',value:'IN_APPROVAL'},{label:'已通过',value:'APPROVED'},{label:'已驳回',value:'REJECTED'}];
 const query = reactive({ keyword:'', status:'', ownerOrgId:'', pageNo:1, pageSize:20 });
 const rows=ref([]), total=ref(0), loading=ref(false), saving=ref(false);
@@ -175,7 +177,7 @@ const leadTypeLabel=value=>({NEW_ACCOUNT:'新客户开户',EXISTING_MARKETING:'�
 const distributionLabel=value=>({PUBLIC:'全行公开认领',SCOPE:'指定客户经理范围',OWNER:'主办专属'}[value]||value||'-');
 const formatTime=value=>value?String(value).replace('T',' ').slice(0,19):'-';
 const ownershipText=computed(()=>!ownership.value?'请按统一社会信用代码或客户名称查询':ownership.value.existingCustomer?(ownership.value.hasMainOwnership?`已匹配存量客户，主办：${ownership.value.mainManagerName||ownership.value.mainManagerId}`:'已匹配存量客户，但未维护主办客户经理'):'未匹配到存量客户');
-const distributionHelp=computed(()=>getDistributionHelp(form.distributionMode));
+const distributionHelp=computed(()=>!CCRM_OWNERSHIP_QUERY_ENABLED&&form.distributionMode==='OWNER'?'':getDistributionHelp(form.distributionMode));
 const canExecuteImport=computed(()=>Boolean(importPreview.value?.batchId)
   && Number(importPreview.value?.errorRows ?? importPreview.value?.failCount ?? 0) === 0);
 
@@ -212,7 +214,7 @@ async function executeImport(){
   catch(error){importError.value=error?.message||'导入执行失败';ElMessage.error(importError.value);return false;}
   finally{importLoading.value=false;}
 }
-async function lookupOwnership(){if(!form.unifiedCreditCode&&!form.custName)return ElMessage.warning('请先填写客户名称或统一社会信用代码');ownershipLoading.value=true;try{ownership.value=await lookupLeadMainManager({unifiedCreditCode:form.unifiedCreditCode||undefined,custName:form.custName||undefined});if(ownership.value?.hasMainOwnership){form.distributionMode='OWNER';form.mainManagerId=ownership.value.mainManagerId;}else if(form.distributionMode==='OWNER'){form.distributionMode='PUBLIC';form.mainManagerId='';}}finally{ownershipLoading.value=false;}}
+async function lookupOwnership(){if(!CCRM_OWNERSHIP_QUERY_ENABLED)return;if(!form.unifiedCreditCode&&!form.custName)return ElMessage.warning('请先填写客户名称或统一社会信用代码');ownershipLoading.value=true;try{ownership.value=await lookupLeadMainManager({unifiedCreditCode:form.unifiedCreditCode||undefined,custName:form.custName||undefined});if(ownership.value?.hasMainOwnership){form.distributionMode='OWNER';form.mainManagerId=ownership.value.mainManagerId;}else if(form.distributionMode==='OWNER'){form.distributionMode='PUBLIC';form.mainManagerId='';}}finally{ownershipLoading.value=false;}}
 async function searchManagers(keyword){if(!keyword?.trim()){managerOptions.value=[];return;}managerLoading.value=true;try{managerOptions.value=await searchEmployees(keyword.trim(),30);}finally{managerLoading.value=false;}}
 function syncFiles(_,files){fileList.value=files;pendingFiles.value=files.filter(file=>file.raw).map(file=>file.raw);form.attachmentIds=files.filter(file=>file.fileId).map(file=>file.fileId);}
 async function uploadPending(){const ids=[...form.attachmentIds];for(const file of pendingFiles.value){if(file.size>10*1024*1024)throw new Error(`附件 ${file.name} 超过10MB`);const uploaded=await uploadLeadAttachment(file);ids.push(uploaded?.id||uploaded?.fileObjectId);}return ids.filter(Boolean);}

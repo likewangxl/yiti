@@ -11,6 +11,16 @@ describe('客户营销路由', () => {
     expect(routes.find(route => route.name === 'LeadApproval')?.path).toBe('/customers/leads/approval');
   });
 
+  it('注册标签客户名单管理页面并声明资源权限', async () => {
+    const { default: router } = await import('@/router');
+    const route = router.getRoutes().find(item => item.name === 'NameListManagement');
+
+    expect(route?.path).toBe('/customers/name-list');
+    expect(route?.meta?.title).toBe('标签客户名单');
+    expect(route?.meta?.group).toBe('客户营销');
+    expect(route?.meta?.requiredResource).toBe('/api/name-list');
+  });
+
   it('触达管理只保留触达任务一览入口', async () => {
     const { default: router } = await import('@/router');
     const routes = router.getRoutes();
