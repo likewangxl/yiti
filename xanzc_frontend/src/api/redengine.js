@@ -32,9 +32,18 @@ export const approveSubmit = (id, data) => call('post', `/re/reviews/${id}/appro
 export const rejectSubmit = (id, data) => call('post', `/re/reviews/${id}/reject`, { data });
 
 // ── 驾驶舱 ──
+// 红色引擎首页聚合：仅返回后端真实数据，页面不以本地静态值冒充生产结果。
+export const getHomeSummary = () => call('get', '/re/home/summary');
+export const getHomeRanking = () => call('get', '/re/home/ranking');
+// 新版预警池按季度一次返回红黄牌；逾期任务使用 assignment 维度分页和扣分。
+export const getWarningPool = () => call('get', '/re/home/warning-pool');
+export const getTaskOverdueList = (params = {}) => call('get', '/re/home/overdue', { params });
+export const executeTaskOverdue = (data) => call('post', '/re/home/overdue/execute', { data });
 export const getCockpitOverview = () => call('get', '/re/cockpit/overview');
 export const getRanking = () => call('get', '/re/cockpit/ranking');
-export const getOverdueList = () => call('get', '/re/cockpit/overdue');
+export const getOverdueList = (params) => params === undefined
+  ? call('get', '/re/cockpit/overdue')
+  : call('get', '/re/cockpit/overdue', { params });
 // 纠偏（后端实际签名 ReCockpitController.executeOverdue 是
 // @PostMapping("/overdue/execute") @Valid @RequestBody ReOverdueExecuteReqDTO，
 // 字段 submitId/deductionPoints/reason，reason 为 @NotBlank 必填，非简报原先的 query params）

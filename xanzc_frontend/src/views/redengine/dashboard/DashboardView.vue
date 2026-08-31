@@ -1,110 +1,214 @@
 <template>
-  <div class="dashboard-container">
+  <div class="dashboard-container" v-loading="loading">
     <h1 class="page-title">工作台</h1>
 
-    <!-- Stat Cards -->
+    <div v-if="loadError" class="load-error" role="alert">{{ loadError }}</div>
+
     <div class="stat-grid">
-      <div class="stat-card" style="background: #fee2e2; border-top: 3px solid #dc2626;">
-        <div class="stat-label">总得分</div>
-        <div class="stat-value" style="color: #dc2626;">{{ stats.totalScore }}</div>
-        <div class="stat-sub">满分100</div>
+      <div class="stat-card task-stat" data-metric="task-overview">
+        <div class="stat-label">任务概览</div>
+        <div class="stat-value">{{ taskOverviewCount }}</div>
+        <div class="stat-sub">已发布任务</div>
       </div>
-      <div class="stat-card" style="background: #fef9c3; border-top: 3px solid #ca8a04;">
-        <div class="stat-label">排名</div>
-        <div class="stat-value" style="color: #ca8a04;">{{ stats.rank }}</div>
-        <div class="stat-sub">共9个支部</div>
+
+      <div v-if="showOrgMetrics" class="stat-card org-score-stat" data-metric="org-score">
+        <div class="stat-label">所在机构得分</div>
+        <div class="stat-value">{{ displayValue(summary.organizationScore) }}</div>
+        <div class="stat-sub">{{ summary.organizationName }}</div>
       </div>
-      <div class="stat-card" style="background: #fee2e2; border-top: 3px solid #dc2626;">
-        <div class="stat-label">待办事项</div>
-        <div class="stat-value" style="color: #dc2626;">{{ stats.todoCount }}</div>
-        <div class="stat-sub">需尽快处理</div>
-      </div>
-      <div class="stat-card" style="background: #fef9c3; border-top: 3px solid #ca8a04;">
-        <div class="stat-label">全员达标率</div>
-        <div class="stat-value" style="color: #ca8a04;">{{ stats.passRate }}%</div>
-        <div class="stat-sub">目标100%</div>
+      <div v-if="showOrgMetrics" class="stat-card org-rank-stat" data-metric="org-rank">
+        <div class="stat-label">所在机构排名</div>
+        <div class="stat-value">{{ displayValue(summary.organizationRank) }}</div>
+        <div class="stat-sub">当前考核周期</div>
       </div>
     </div>
 
-    <!-- Two Column: 待办事项 + 已办追踪 -->
-    <div class="two-col-grid">
-      <div class="section-card">
-        <div class="section-title" style="border-left: 3px solid #dc2626; color: #dc2626;">待办事项</div>
-        <ul class="todo-list">
-          <li v-for="item in todoItems" :key="item.id" class="todo-item">
-            <span class="todo-dot" :style="{ background: item.color }"></span>
-            <span class="todo-text">{{ item.text }}</span>
-            <span class="todo-time">{{ item.time }}</span>
-          </li>
-        </ul>
-      </div>
-      <div class="section-card">
-        <div class="section-title" style="border-left: 3px solid #16a34a; color: #16a34a;">已办追踪</div>
-        <ul class="todo-list">
-          <li v-for="item in doneItems" :key="item.id" class="todo-item">
-            <span class="done-icon">✅</span>
-            <span class="todo-text">{{ item.text }}</span>
-            <span class="todo-time">{{ item.time }}</span>
-          </li>
-        </ul>
-      </div>
+    <div v-if="isOrganizationView" class="section-card organization-task-section">
+      <div class="section-title">任务概览</div>
+      <div v-if="summary.organizationTasks.length === 0" class="todo-empty">暂无已发布任务</div>
+      <ul v-else class="todo-list">
+        <li v-for="item in summary.organizationTasks" :key="item.id" class="todo-item">
+          <span class="todo-dot"></span>
+          <span class="todo-text">{{ item.title }}</span>
+          <span class="todo-branch">{{ item.taskNatureLabel }}</span>
+          <span class="todo-time">{{ item.endTime }}</span>
+        </li>
+      </ul>
     </div>
 
-    <!-- 全员营销积分 -->
-    <div class="section-card" style="margin-top: 20px;">
-      <div class="section-title" style="border-left: 3px solid #dc2626; color: #dc2626;">全员营销积分</div>
-      <div class="member-scores">
-        <div v-for="member in memberScores" :key="member.name" class="member-row">
-          <span class="member-name">{{ member.name }}</span>
-          <div class="member-bar-wrap">
-            <div
-              class="member-bar"
-              :style="{ width: (member.score / 20 * 100) + '%', background: member.score >= 15 ? '#16a34a' : member.score >= 10 ? '#ca8a04' : '#dc2626' }"
-            ></div>
-          </div>
-          <span class="member-score">{{ member.score }}/20</span>
-        </div>
-      </div>
+    <div class="section-card todo-section">
+      <div class="section-title">待办事项</div>
+      <div v-if="todoDisplayItems.length === 0" class="todo-empty">暂无待办事项</div>
+      <ul v-else class="todo-list">
+        <li v-for="item in todoDisplayItems" :key="item.id" class="todo-item">
+          <span class="todo-dot"></span>
+          <span class="todo-text">{{ item.title }}</span>
+          <span v-if="isOrganizationView" class="todo-branch">{{ item.branchName }}</span>
+          <span v-if="isOrganizationView" class="todo-score">得分 {{ displayValue(item.score) }}</span>
+          <span v-if="isOrganizationView" class="todo-rank">排名 {{ displayValue(item.rank) }}</span>
+          <span v-else class="todo-status">{{ item.statusLabel }}</span>
+          <span class="todo-time">{{ item.time }}</span>
+        </li>
+      </ul>
     </div>
   </div>
 </template>
 
 <script setup>
-// 工作台：源系统本就是纯静态演示数据（无任何 API 调用），本次迁移原样保真移植，
-// 仅做 F3 路由/F1 目录位置调整，不新增数据接入（YAGNI——后端目前也没有对应的
-// "个人待办/已办追踪/全员营销积分"读接口）。
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { getHomeSummary } from '@/api/redengine'
+import { useUserStore } from '@/stores/user'
 
-const stats = ref({
-  totalScore: 78.5,
-  rank: 3,
-  todoCount: 5,
-  passRate: 72,
+const userStore = useUserStore()
+const loading = ref(false)
+const loadError = ref('')
+
+const emptySummary = () => ({
+  mode: '',
+  todoCount: 0,
+  todoItems: [],
+  todoDisplayItems: [],
+  organizationTasks: [],
+  taskOverviewCount: 0,
+  organizationName: '--',
+  organizationScore: null,
+  organizationRank: null
 })
 
-const todoItems = ref([
-  { id: 1, text: '党建联建维度材料上报（截止3月31日）', time: '剩余7天', color: '#dc2626' },
-  { id: 2, text: '业务提升维度季度总结待提交', time: '剩余12天', color: '#dc2626' },
-  { id: 3, text: '全员营销积分录入（张伟、李娜未达标）', time: '剩余5天', color: '#ca8a04' },
-  { id: 4, text: '头雁工程活动照片补充上传', time: '剩余15天', color: '#ca8a04' },
-  { id: 5, text: '督导检查整改报告', time: '已逾期', color: '#6b7280' },
-])
+const summary = ref(emptySummary())
 
-const doneItems = ref([
-  { id: 1, text: '2月份党建联建材料已审核通过', time: '03-15' },
-  { id: 2, text: '业务提升2月数据已确认', time: '03-12' },
-  { id: 3, text: '全员营销1月积分已公示', time: '03-10' },
-  { id: 4, text: '头雁工程Q1活动方案已批复', time: '03-08' },
-])
+function firstDefined(...values) {
+  return values.find((value) => value !== null && value !== undefined && value !== '') ?? null
+}
 
-const memberScores = ref([
-  { name: '王建国', score: 18 },
-  { name: '李明华', score: 16 },
-  { name: '张丽萍', score: 14 },
-  { name: '陈志强', score: 12 },
-  { name: '刘晓燕', score: 8 },
-  { name: '赵德柱', score: 6 },
-])
+function listValue(value) {
+  return Array.isArray(value) ? value : []
+}
+
+function normalizeSummary(payload) {
+  const source = payload && typeof payload === 'object' ? payload : {}
+  const taskOverview = source.taskOverview || source.tasks || {}
+  const rows = listValue(firstDefined(
+    taskOverview.todoItems,
+    taskOverview.todos,
+    taskOverview.pendingTasks,
+    source.todoItems,
+    source.todos,
+    source.pendingTasks,
+    []
+  ))
+  const organizationTasks = listValue(firstDefined(source.organizationTasks, taskOverview.organizationTasks, []))
+    .map((row, index) => ({
+      id: firstDefined(row.taskId, row.id, `task-${index}`),
+      title: firstDefined(row.title, row.taskTitle, row.name, '--'),
+      taskNatureLabel: firstDefined(row.taskNatureLabel, row.taskNature, '--'),
+      endTime: firstDefined(row.currentWindowEndAt, row.endTime, row.taskEndTime, '--')
+    }))
+  const branchRankings = listValue(firstDefined(source.branchRankings, source.rankings, []))
+    .map((row, index) => ({
+      id: firstDefined(row.branchId, row.id, `branch-${index}`),
+      title: firstDefined(row.title, row.branchName, '--'),
+      branchName: firstDefined(row.branchName, row.branch, row.orgName, '--'),
+      score: firstDefined(row.score, row.finalScore),
+      rank: firstDefined(row.rank, row.ranking),
+      time: firstDefined(row.quarter, '--')
+    }))
+  const organization = source.organization || source.org || {}
+
+  return {
+    mode: firstDefined(source.mode, ''),
+    todoCount: Number(firstDefined(
+      taskOverview.todoCount,
+      taskOverview.pendingCount,
+      source.todoCount,
+      source.pendingCount,
+      rows.length
+    ) ?? 0),
+    todoItems: rows.map((row, index) => ({
+      id: firstDefined(row.id, row.taskId, row.assignmentId, `todo-${index}`),
+      title: firstDefined(row.taskTitle, row.title, row.taskName, row.name, '--'),
+      branchName: firstDefined(row.branchName, row.branch, row.partyOrgName, row.organizationName, '--'),
+      score: firstDefined(row.score, row.finalScore, row.organizationScore),
+      rank: firstDefined(row.rank, row.ranking, row.organizationRank),
+      statusLabel: firstDefined(row.statusLabel, row.status, '--'),
+      time: firstDefined(row.windowEndAt, row.dueTime, row.deadline, row.time, row.remainingTime, '--')
+    })),
+    todoDisplayItems: branchRankings,
+    organizationTasks,
+    taskOverviewCount: Number(firstDefined(
+      source.organizationTaskCount,
+      taskOverview.organizationTaskCount,
+      organizationTasks.length,
+      source.todoCount,
+      rows.length
+    ) ?? 0),
+    organizationName: firstDefined(
+      source.branchName,
+      source.organizationName,
+      source.orgName,
+      organization.name,
+      organization.orgName,
+      organization.branchName,
+      '--'
+    ),
+    organizationScore: firstDefined(
+      source.branchScore,
+      source.institutionScore,
+      source.organizationScore,
+      source.orgScore,
+      organization.score,
+      organization.finalScore
+    ),
+    organizationRank: firstDefined(
+      source.branchRank,
+      source.institutionRank,
+      source.organizationRank,
+      source.orgRank,
+      organization.rank,
+      organization.ranking
+    )
+  }
+}
+
+function hasRole(...codes) {
+  return typeof userStore.hasRoleCode === 'function' && userStore.hasRoleCode(...codes)
+}
+
+const isOrganizationRole = computed(() => hasRole('SYS_ADMIN', 'R_RE_ORGADM', 'R_RE_ORGREV'))
+const isOrganizationView = computed(() => {
+  const mode = String(summary.value.mode || '').toUpperCase()
+  if (mode === 'ORGANIZATION') return true
+  if (mode === 'INSTITUTION') return false
+  return isOrganizationRole.value
+})
+const showOrgMetrics = computed(() => !isOrganizationView.value && hasRole('R_RE_SECR', 'R_RE_REPORT', 'R_RE_BRREV'))
+
+const taskOverviewCount = computed(() => isOrganizationView.value
+  ? summary.value.taskOverviewCount
+  : summary.value.todoCount)
+const todoDisplayItems = computed(() => {
+  return isOrganizationView.value ? summary.value.todoDisplayItems : summary.value.todoItems
+})
+
+function displayValue(value) {
+  return value === null || value === undefined || value === '' ? '--' : value
+}
+
+async function loadSummary() {
+  loading.value = true
+  loadError.value = ''
+  try {
+    const response = await getHomeSummary()
+    summary.value = normalizeSummary(response)
+  } catch {
+    summary.value = emptySummary()
+    loadError.value = '工作台数据加载失败，请稍后重试'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadSummary)
 </script>
 
 <style scoped lang="scss">
@@ -118,45 +222,66 @@ const memberScores = ref([
     color: #1e293b;
   }
 
+  .load-error {
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    color: #991b1b;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+
   .stat-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 16px;
     margin-bottom: 24px;
+  }
 
-    .stat-card {
-      border-radius: 8px;
-      padding: 20px;
-      transition: box-shadow 0.2s;
+  .stat-card {
+    border-radius: 8px;
+    padding: 20px;
+    transition: box-shadow 0.2s;
+    background: #fff;
+    border-top: 3px solid #dc2626;
 
-      &:hover {
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-      }
+    &:hover {
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    }
 
-      .stat-label {
-        font-size: 12px;
-        color: #64748b;
-        margin-bottom: 8px;
-      }
+    .stat-label {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
 
-      .stat-value {
-        font-size: 32px;
-        font-weight: 700;
-        line-height: 1.2;
-        margin-bottom: 4px;
-      }
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 4px;
+      color: #dc2626;
+    }
 
-      .stat-sub {
-        font-size: 12px;
-        color: #94a3b8;
-      }
+    .stat-sub {
+      font-size: 12px;
+      color: #94a3b8;
     }
   }
 
-  .two-col-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
+  .org-score-stat {
+    background: #fee2e2;
+    border-top-color: #dc2626;
+  }
+
+  .org-rank-stat {
+    background: #fef9c3;
+    border-top-color: #ca8a04;
+
+    .stat-value {
+      color: #ca8a04;
+    }
   }
 
   .section-card {
@@ -164,91 +289,82 @@ const memberScores = ref([
     border-radius: 8px;
     padding: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
 
-    .section-title {
-      font-size: 16px;
-      font-weight: 600;
-      padding-left: 12px;
-      margin-bottom: 16px;
-    }
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    padding-left: 12px;
+    margin-bottom: 16px;
+    border-left: 3px solid #dc2626;
+    color: #dc2626;
+  }
+
+  .todo-empty {
+    color: #94a3b8;
+    font-size: 13px;
+    padding: 12px 0;
   }
 
   .todo-list {
     list-style: none;
     padding: 0;
     margin: 0;
+  }
 
-    .todo-item {
-      display: flex;
-      align-items: center;
-      padding: 10px 0;
-      border-bottom: 1px solid #f1f5f9;
-      gap: 10px;
+  .todo-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #f1f5f9;
+    gap: 12px;
 
-      &:last-child {
-        border-bottom: none;
-      }
-
-      .todo-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        flex-shrink: 0;
-      }
-
-      .done-icon {
-        font-size: 16px;
-        flex-shrink: 0;
-      }
-
-      .todo-text {
-        flex: 1;
-        font-size: 14px;
-        color: #334155;
-      }
-
-      .todo-time {
-        font-size: 12px;
-        color: #94a3b8;
-        flex-shrink: 0;
-      }
+    &:last-child {
+      border-bottom: none;
     }
   }
 
-  .member-scores {
-    .member-row {
-      display: flex;
-      align-items: center;
-      padding: 8px 0;
-      gap: 12px;
+  .todo-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #dc2626;
+    flex-shrink: 0;
+  }
 
-      .member-name {
-        width: 70px;
-        font-size: 14px;
-        color: #334155;
-        flex-shrink: 0;
-      }
+  .todo-text {
+    flex: 1;
+    font-size: 14px;
+    color: #334155;
+  }
 
-      .member-bar-wrap {
-        flex: 1;
-        height: 16px;
-        background: #f1f5f9;
-        border-radius: 8px;
-        overflow: hidden;
+  .todo-branch,
+  .todo-score,
+  .todo-rank,
+  .todo-time {
+    font-size: 12px;
+    color: #64748b;
+    flex-shrink: 0;
+  }
 
-        .member-bar {
-          height: 100%;
-          border-radius: 8px;
-          transition: width 0.6s ease;
-        }
-      }
+  .todo-score,
+  .todo-rank {
+    color: #991b1b;
+  }
+}
 
-      .member-score {
-        width: 50px;
-        font-size: 13px;
-        color: #64748b;
-        text-align: right;
-        flex-shrink: 0;
+@media (max-width: 1000px) {
+  .dashboard-container {
+    .stat-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .todo-item {
+      align-items: flex-start;
+      flex-wrap: wrap;
+
+      .todo-text {
+        min-width: calc(100% - 24px);
       }
     }
   }
@@ -257,10 +373,6 @@ const memberScores = ref([
 @media (max-width: 768px) {
   .dashboard-container {
     .stat-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-
-    .two-col-grid {
       grid-template-columns: 1fr;
     }
   }
