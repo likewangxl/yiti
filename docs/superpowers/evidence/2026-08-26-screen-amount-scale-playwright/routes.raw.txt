@@ -1,0 +1,12 @@
+1. **/api/auth/current-user (200, mock-current)
+2. **/api/auth/my-menus (200, mock-menus)
+3. **/api/auth/permissions (200, mock-permissions)
+4. **/api/screen/admin/datasources (200, mock-datasources)
+5. **/api/perf/metrics* (200, mock-metrics)
+6. **/api/screen/admin/kpi-schemes* (200, mock-schemes)
+7. **/api/admin/org-groups* (200, mock-groups)
+8. **/api/notifications/unread-count (200, mock-unread)
+9. **/api/screen/view/SCR_AMOUNT (200, mock-screen-view)
+10. **/api/screen/data (200, mock-screen-data)
+
+全部路由的 content-type 均为 application/json。验收期间未注册上述清单之外的业务 mock route，未请求真实后端业务数据。

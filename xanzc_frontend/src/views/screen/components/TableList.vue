@@ -1,15 +1,15 @@
 <template>
-  <div ref="wrapEl" class="tl-wrap" :class="{ 'tl-static': !carouselOn }">
+  <div ref="wrapEl" class="tl-wrap" :class="{ 'tl-static': !carouselOn }" :style="themeVars">
     <table v-if="rows.length" class="tl-table">
       <thead>
         <tr>
-          <th v-for="c in columns" :key="c">{{ headerOf(c) }}</th>
+          <th v-for="column in visibleColumns" :key="column.col">{{ headerOf(column.col, column.label) }}</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="ri in shownIndices" :key="ri">
-          <td v-for="(c, ci) in columns" :key="c" :class="{ num: isNum(rows[ri][ci]) }">
-            {{ cellText(c, rows[ri][ci]) }}
+          <td v-for="column in visibleColumns" :key="column.col" :class="{ num: isNum(rows[ri][column.index]) }">
+            {{ cellText(column.col, rows[ri][column.index]) }}
           </td>
         </tr>
       </tbody>
@@ -26,6 +26,7 @@
 // propValue.carousel 开关 = 自动滚动轮播——行数超出可视区时按环形窗口逐行推进（纯自研，零新增依赖）。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { DocumentRemove } from '@element-plus/icons-vue';
+import { resolveChartTheme } from '@/styles/screenChartTheme';
 import { displayName, metaOf, fmtNum } from './utils/chartData';
 import { visibleCount, shouldCarousel, nextStart, windowIndices } from './utils/carousel';
 
@@ -53,10 +54,48 @@ const shownIndices = computed(() =>
   carouselOn.value
     ? windowIndices(start.value, visible.value, props.rows.length)
     : props.rows.map((_, i) => i));
+const theme = computed(() => resolveChartTheme(props.styleCfg));
+const themeVars = computed(() => ({
+  '--tl-accent': theme.value.tokens.accent,
+  '--tl-accent-strong': theme.value.tokens.accentStrong,
+  '--tl-text': theme.value.tokens.text,
+  '--tl-number': theme.value.tokens.number,
+  '--tl-muted': theme.value.tokens.textDim,
+  '--tl-border': theme.value.tokens.border,
+  '--tl-up': theme.value.tokens.up,
+  '--tl-down': theme.value.tokens.down,
+  '--tl-bg': theme.value.tokens.bgDeep
+}));
+
+/**
+ * 绑定 items 只影响当前表格的展示列；历史配置没有有效绑定时回退全部响应列。
+ * 通过响应列下标读取值，避免按选中顺序调整表头后错位取值。
+ */
+const visibleColumns = computed(() => {
+  const responseColumns = Array.isArray(props.columns) ? props.columns : [];
+  const indexByColumn = new Map(responseColumns.map((col, index) => [col, index]));
+  const items = Array.isArray(props.bind?.items) ? props.bind.items : [];
+  const selected = [];
+  const seen = new Set();
+
+  for (const item of items) {
+    const col = String(item?.col || '').trim();
+    if (!col || seen.has(col) || !indexByColumn.has(col)) continue;
+    seen.add(col);
+    selected.push({
+      col,
+      index: indexByColumn.get(col),
+      label: String(item?.label || '').trim()
+    });
+  }
+
+  if (selected.length) return selected;
+  return responseColumns.map((col, index) => ({ col, index, label: '' }));
+});
 
 /** 表头：别名替换 + 单位并入（如 "一般性存款(万元)"） */
-function headerOf(col) {
-  const name = displayName(col, props.columnsMeta);
+function headerOf(col, itemLabel = '') {
+  const name = itemLabel || displayName(col, props.columnsMeta);
   const unit = metaOf(col, props.columnsMeta)?.unit;
   return unit ? `${name}(${unit})` : name;
 }
@@ -97,7 +136,7 @@ watch(() => props.rows, () => { start.value = 0; });
   overflow: hidden;
   &.tl-static { overflow-y: auto; }
   &::-webkit-scrollbar { width: 4px; }
-  &::-webkit-scrollbar-thumb { background: rgba(0, 229, 255, .3); border-radius: 2px; }
+  &::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--tl-accent, var(--scr-cyan)) 30%, transparent); border-radius: 2px; }
 }
 .tl-table {
   width: 100%;
@@ -110,25 +149,25 @@ watch(() => props.rows, () => { start.value = 0; });
     padding: 0 8px;
     font-weight: 600;
     text-align: left;
-    color: var(--scr-cyan);
+    color: var(--tl-accent, var(--scr-cyan));
     letter-spacing: 1px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    background: linear-gradient(180deg, rgba(0, 229, 255, .14), rgba(0, 229, 255, .04));
-    border-bottom: 1px solid var(--scr-border);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--tl-accent, var(--scr-cyan)) 14%, transparent), color-mix(in srgb, var(--tl-accent, var(--scr-cyan)) 4%, transparent));
+    border-bottom: 1px solid var(--tl-border, var(--scr-border));
   }
   td {
     height: 30px; // = ROW_H
     padding: 0 8px;
-    color: var(--scr-text);
+    color: var(--tl-text, var(--tl-muted, var(--scr-text)));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    border-bottom: 1px solid rgba(125, 155, 201, .12);
-    &.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--scr-num); }
+    border-bottom: 1px solid color-mix(in srgb, var(--tl-border, var(--scr-border)) 45%, transparent);
+    &.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--tl-number, var(--scr-num)); }
   }
   tbody tr:nth-child(even) { background: rgba(10, 32, 74, .35); }
-  tbody tr:hover { background: rgba(0, 229, 255, .08); }
+  tbody tr:hover { background: color-mix(in srgb, var(--tl-accent, var(--scr-cyan)) 8%, transparent); }
 }
 </style>

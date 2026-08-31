@@ -161,6 +161,33 @@ class ScreenCanvasServiceTest {
                 comp("TextLabel", null, Map.of("top", 10, "left", 10, "width", 100, "height", 40))));
         org.assertj.core.api.Assertions.assertThat(resp.getCanvasVersion()).isEqualTo(4);
         org.assertj.core.api.Assertions.assertThat(resp.getCanvasDraftJson()).contains("TextLabel");
+        assertThat(resp.getCanvasDraftJson()).contains("\"schemaVersion\":1");
+    }
+
+    @Test
+    void save_namedGroupAlwaysWritesDraftSchemaVersion2() {
+        RptScreen namedGroup = screen(7L, 3);
+        namedGroup.setOrgScopeMode("NAMED_GROUP");
+        when(screenMapper.selectById(7L)).thenReturn(namedGroup);
+        when(canvasMapper.bumpVersion(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
+
+        var resp = service.saveCanvas(req(7L, 3,
+                comp("TextLabel", null, Map.of("top", 10, "left", 10, "width", 100, "height", 40))));
+
+        assertThat(resp.getCanvasDraftJson()).contains("\"schemaVersion\":2");
+    }
+
+    @Test
+    void save_legacyScreenWithV2MapKeepsDraftSchemaVersion2() {
+        when(screenMapper.selectById(7L)).thenReturn(screen(7L, 3));
+        when(canvasMapper.bumpVersion(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
+        CanvasComponentDTO map = comp("MapCenter", null,
+                Map.of("top", 96, "left", 640, "width", 640, "height", 880));
+        map.setPropValue(Map.of("schemaVersion", 2, "mode", "XIAN_COMPOSITE"));
+
+        var resp = service.saveCanvas(req(7L, 3, map));
+
+        assertThat(resp.getCanvasDraftJson()).contains("\"schemaVersion\":2");
     }
 
     /** MapCenter(省级屏地图,Task10 渲染层已支持独立渲染分支)必须在组件白名单内可保存,
@@ -412,9 +439,9 @@ class ScreenCanvasServiceTest {
                 .hasFieldOrPropertyWithValue("code", "RPT-43006");
     }
 
-    // ===== 图表 innerType 白名单扩充（spec 2026-07-17 §5.1，8 种新图表）=====
+    // ===== 图表 innerType 白名单扩充（六种常用图表）=====
 
-    /** 8 种新图表 innerType 必须全部进入画布保存白名单（占位启用 4 种 + KPI 专属 4 种）. */
+    /** 新增六种图表 innerType 必须全部进入画布保存白名单. */
     @Test
     void save_newChartInnerTypes_allAccepted() {
         when(screenMapper.selectById(7L)).thenReturn(screen(7L, 0));
@@ -427,7 +454,9 @@ class ScreenCanvasServiceTest {
         }).when(blockMapper).insert(any(RptScreenBlock.class));
 
         for (String innerType : List.of("BAR_COMPARE", "AREA_STACK", "GAUGE", "TABLE_LIST",
-                "KPI_DETAIL_TABLE", "KPI_RADAR", "LIQUID_PROGRESS", "PROGRESS_LIST")) {
+                "KPI_DETAIL_TABLE", "KPI_RADAR", "LIQUID_PROGRESS", "PROGRESS_LIST",
+                "COMBO_CHART", "FUNNEL_CHART", "SCATTER_BUBBLE", "HEATMAP_MATRIX",
+                "SUNBURST_CHART", "SPARKLINE_CARD")) {
             CanvasComponentDTO c = comp("ChartWidget", innerType,
                     Map.of("top", 10, "left", 10, "width", 100, "height", 40));
             var resp = service.saveCanvas(req(7L, 0, c));
@@ -463,6 +492,16 @@ class ScreenCanvasServiceTest {
         when(dsMapper.selectById(1L)).thenReturn(datasource(1L, "SINGLE", "WIDE_TABLE"));
 
         assertThatThrownBy(() -> service.saveCanvas(req(7L, 0, boundChart("LINE_TREND", 1L))))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43005");
+    }
+
+    @Test
+    void save_sparklineCardOnSingleDatasource_throws43005() {
+        when(screenMapper.selectById(7L)).thenReturn(screen(7L, 0));
+        when(dsMapper.selectById(1L)).thenReturn(datasource(1L, "SINGLE", "WIDE_TABLE"));
+
+        assertThatThrownBy(() -> service.saveCanvas(req(7L, 0, boundChart("SPARKLINE_CARD", 1L))))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43005");
     }

@@ -41,6 +41,43 @@ describe('ScreenView.vue', () => {
     expect(getScreenViewMock).toHaveBeenCalledWith('SCR_TEST', 'draft');
   });
 
+  it('只有后端确认 state=draft 时才向区块传草稿取数身份', async () => {
+    routeState.query = { preview: 'draft' };
+    getScreenViewMock.mockResolvedValue({
+      screenName: 'X', state: 'draft', runtimeSchemaVersion: 1,
+      renderPackageJson: '{"components":[]}', mapPoints: []
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(JSON.parse(wrapper.find('.stub-renderer').attributes('data-context')).previewState).toBe('draft');
+  });
+
+  it('后端确认 state=draft 时隐藏顶部标题，但保留返回按钮和时钟', async () => {
+    routeState.query = { preview: 'draft' };
+    getScreenViewMock.mockResolvedValue({
+      screenName: '草稿大屏', state: 'draft',
+      renderPackageJson: '{"components":[]}', mapPoints: []
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(wrapper.find('.scr-title').exists()).toBe(false);
+    expect(wrapper.find('button.scr-back').exists()).toBe(true);
+    expect(wrapper.find('.scr-clock').exists()).toBe(true);
+  });
+
+  it('后端返回正式态时即使 URL 带 preview=draft 也继续显示标题', async () => {
+    routeState.query = { preview: 'draft' };
+    getScreenViewMock.mockResolvedValue({
+      screenName: '正式大屏', state: 'published',
+      renderPackageJson: '{"components":[]}', mapPoints: []
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(wrapper.find('.scr-title').text()).toBe('正式大屏');
+    expect(wrapper.find('button.scr-back').exists()).toBe(true);
+    expect(wrapper.find('.scr-clock').exists()).toBe(true);
+  });
+
   it('返回入口是真实 button，具备键盘原生语义而不是可点击 span', async () => {
     getScreenViewMock.mockResolvedValue({ screenName: 'X', renderPackageJson: null, mapPoints: [] });
     wrapper = mount(ScreenView, { global: { stubs } });

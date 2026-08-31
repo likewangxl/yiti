@@ -1,0 +1,14 @@
+playwright-cli requests --filter '/api/'
+
+1. [PUT] http://127.0.0.1:8091/api/screen/admin/datasources/9012 => [200] OK
+2. [GET] http://127.0.0.1:8091/api/screen/admin/datasources => [200] OK
+
+playwright-cli request-body 1
+
+{"dsName":"日均存款详图","remark":"发布引用编辑验收","sourceKind":"WIDE_TABLE","bizLine":"COMMON","dsType":"TIMESERIES","configJson":"{\"schemaVersion\":2,\"table\":\"ORG_INDEX_RESULT\",\"metrics\":[{\"metricCode\":\"M_0269\"}],\"scopeMode\":\"GLOBAL\"}","timeParamJson":"[\"LATEST\",\"LAST_10D\"]","status":"DISABLED","reason":"验证发布引用下允许停用并保留审计"}
+
+playwright-cli response-body 1
+
+{"code":"0","message":"success","data":null}
+
+以上 PUT/GET 均由开发态 route 拦截，未修改真实数据源或数据库。

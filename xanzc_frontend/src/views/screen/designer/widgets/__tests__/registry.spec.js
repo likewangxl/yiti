@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { findWidget, findAttr, newComponentFromMeta, materialMetas, chartMetas } from '../index';
 
 describe('widgets 注册表', () => {
-  it('素材元数据 9 个(5 既有 + 标题条/装饰线/跑马灯 + 周期过滤器) + 图表元数据 13 个（4 占位启用 + 4 个 KPI 专属新增）', () => {
+  it('素材元数据 9 个(5 既有 + 标题条/装饰线/跑马灯 + 周期过滤器) + 图表元数据 19 个', () => {
     expect(materialMetas.length).toBe(9);
     // 2026-07-17 素材装饰扩充:新素材注册进拖拽面板(与后端 COMPONENT_TYPES 白名单同步)
     for (const c of ['TitleBar', 'DecorLine', 'Marquee', 'PeriodFilter']) {
@@ -10,7 +10,7 @@ describe('widgets 注册表', () => {
       expect(findWidget(c)).toBeTruthy();
       expect(findAttr(c)).toBeTruthy();
     }
-    expect(chartMetas.length).toBe(13);
+    expect(chartMetas.length).toBe(19);
     // 本期起全部图表均已启用，不再有 enabled:false 占位
     expect(chartMetas.every(c => c.enabled !== false)).toBe(true);
     // KPI 专属图表声明 needKinds（属性面板数据源过滤 + 后端校验双侧联动）
@@ -19,6 +19,12 @@ describe('widgets 注册表', () => {
     }
     // LIQUID_PROGRESS 不限 source_kind
     expect(chartMetas.find(c => c.innerType === 'LIQUID_PROGRESS')?.needKinds).toBeUndefined();
+    for (const type of ['COMBO_CHART', 'FUNNEL_CHART', 'SCATTER_BUBBLE', 'HEATMAP_MATRIX', 'SUNBURST_CHART', 'SPARKLINE_CARD']) {
+      const meta = chartMetas.find(c => c.innerType === type);
+      expect(meta).toBeTruthy();
+      expect(meta.icon).toBeTruthy();
+    }
+    expect(chartMetas.find(c => c.innerType === 'SPARKLINE_CARD')?.needTimeseries).toBe(true);
   });
   it('findWidget 能取到素材/图表渲染组件', () => {
     expect(findWidget('TextLabel')).toBeTruthy();
@@ -52,13 +58,16 @@ describe('widgets 注册表', () => {
     // 已启用类型正常创建
     expect(newComponentFromMeta('ChartWidget', 'GAUGE').innerType).toBe('GAUGE');
   });
-  it('MapCenter(省级屏地图,复用运行时 MapCenter.vue)已登记 findWidget/findAttr,但不进入可拖拽素材面板', () => {
-    // materialMetas 驱动 ComponentPanel 的拖拽入口;MapCenter 的 props 契约是 mapPoints 数组,
-    // 与素材类 element/propValue 完全不同,一期不开放拖拽创建,故意不并入 materialMetas(素材扩充后为 8 个)。
+  it('MapCenter 已登记并可创建，元数据由组件面板的独立地图分组消费', () => {
+    // MapCenter 的运行时 props 契约与普通素材不同，因此不并入 materialMetas，
+    // 但 ComponentPanel 会单独展示 mapCenterMeta，并通过 newComponentFromMeta 创建地图节点。
     expect(findWidget('MapCenter')).toBeTruthy();
     expect(findAttr('MapCenter')).toBeTruthy();
     expect(materialMetas.length).toBe(9);
     expect(materialMetas.some(m => m.component === 'MapCenter')).toBe(false);
+    const map = newComponentFromMeta('MapCenter');
+    expect(map.component).toBe('MapCenter');
+    expect(map.propValue).toMatchObject({ schemaVersion: 1, mode: 'SHAANXI_LEGACY' });
   });
   it('新素材 newComponentFromMeta 生成节点携带默认 propValue(标题条预设/跑马灯速度方向)', () => {
     const t = newComponentFromMeta('TitleBar');

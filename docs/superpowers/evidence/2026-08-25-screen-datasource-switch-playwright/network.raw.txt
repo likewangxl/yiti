@@ -1,0 +1,34 @@
+官方 CLI `requests --filter '/api/'`（进入页面后清空，再执行图表 A → 图表 B 切换）：
+
+1. [GET] http://127.0.0.1:8091/api/screen/admin/datasources => [200] OK
+2. [GET] http://127.0.0.1:8091/api/admin/org-groups => [200] OK
+3. [GET] http://127.0.0.1:8091/api/screen/admin/datasources => [200] OK
+4. [GET] http://127.0.0.1:8091/api/admin/org-groups => [200] OK
+
+请求 #1：
+
+- method: GET
+- status: 200 OK
+- duration: 4ms
+- type: xhr
+- mimeType: application/json
+- response content-type: application/json
+- response content-length: 321
+
+请求 #3：
+
+- method: GET
+- status: 200 OK
+- duration: 3ms
+- type: xhr
+- mimeType: application/json
+- response content-type: application/json
+- response content-length: 321
+
+请求 #1/#3 原始响应正文相同：
+
+```json
+{"code":"0","message":"success","data":[{"id":101,"dsName":"全省存款聚合","dsType":"SINGLE","sourceKind":"WIDE_TABLE","bizLine":"COMMON","status":"ACTIVE","configJson":"{}"},{"id":202,"dsName":"全省贷款聚合","dsType":"SINGLE","sourceKind":"WIDE_TABLE","bizLine":"COMMON","status":"ACTIVE","configJson":"{}"}]}
+```
+
+切换阶段没有 POST、PUT、PATCH、DELETE 请求。

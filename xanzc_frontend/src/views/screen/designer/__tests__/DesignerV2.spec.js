@@ -8,11 +8,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
+import { inject, isReactive, nextTick } from 'vue';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const routerReplace = vi.hoisted(() => vi.fn());
+const findAttrMock = vi.hoisted(() => vi.fn());
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ replace: routerReplace })
+}));
+
+vi.mock('@/views/screen/designer/widgets', () => ({
+  findAttr: findAttrMock,
+  chartMetas: [
+    { innerType: 'BAR_COMPARE', label: '柱状对比' },
+    { innerType: 'LINE_TREND', label: '趋势折线' }
+  ]
 }));
 
 vi.mock('@/api/screen', () => ({
@@ -24,6 +36,7 @@ vi.mock('@/api/screen', () => ({
   listScreenRoles: vi.fn().mockResolvedValue([]),
   listOrgGroups: vi.fn().mockResolvedValue([]),
   listOrgProfiles: vi.fn().mockResolvedValue([]),
+  listScreenMapRegionMetrics: vi.fn().mockResolvedValue([]),
   saveScreenCanvas: vi.fn(),
   publishScreenCanvas: vi.fn(),
   rollbackScreenCanvas: vi.fn(),
@@ -44,6 +57,32 @@ import {
 import { ElMessageBox } from 'element-plus';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import DesignerV2 from '../DesignerV2.vue';
+
+let capturedPreviewContext = null;
+const CanvasCoreContextStub = {
+  name: 'CanvasCoreContextStub',
+  setup() {
+    capturedPreviewContext = inject('previewContext');
+    return {};
+  },
+  template: '<div class="canvas-core-context-stub" />'
+};
+
+// 只在 setup 中读取一次绑定值，模拟真实 ChartWidgetAttr 对旧 props 的初始化行为。
+// 如果同类型动态属性组件被 Vue 复用，这里会继续显示上一个节点的数据源。
+const TestChartAttr = {
+  name: 'TestChartAttr',
+  props: { element: { type: Object, required: true } },
+  setup(props) {
+    const bind = JSON.parse(props.element.bindJson || '{}');
+    return {
+      initialDsId: bind.dsId,
+      initialMetricCols: Array.isArray(bind.items) ? bind.items.map(item => item.col).join(',') : '',
+      initialMetricLabels: Array.isArray(bind.items) ? bind.items.map(item => item.label).join(',') : ''
+    };
+  },
+  template: '<div><div data-testid="test-datasource">{{ initialDsId }}</div><div data-testid="test-metric-columns">{{ initialMetricCols }}</div><div data-testid="test-metric-labels">{{ initialMetricLabels }}</div></div>'
+};
 
 // el-button/el-dialog/el-input 用渲染 slot 的自定义 stub:新建大屏流程测试需要按钮文本可寻、
 // 弹框内容可见、输入框可 setValue;其余 element-plus 组件保持哑 stub(不关心内部渲染)。
@@ -119,6 +158,33 @@ describe('DesignerV2.vue 挂载冒烟测试', () => {
     expect(wrapper.classes()).toContain('scr-surface-host');
   });
 
+  it('加载当前大屏后向画布提供响应式草稿预览上下文', async () => {
+    capturedPreviewContext = null;
+    listScreens.mockResolvedValueOnce([{
+      id: 1, screenCode: 'SCR_PROVINCE', screenName: '省分行经营总览', viewLevel: 'PROVINCE'
+    }]);
+    getScreenCanvas.mockResolvedValueOnce(editorResp(1, 'SCR_PROVINCE'));
+
+    mount(DesignerV2, { global: { stubs: { ...stubs, CanvasCore: CanvasCoreContextStub } } });
+    await flushPromises();
+
+    expect(isReactive(capturedPreviewContext)).toBe(true);
+    expect(capturedPreviewContext).toEqual({
+      schemaVersion: 1, screenCode: 'SCR_PROVINCE', orgCode: '', empId: ''
+    });
+  });
+
+  it('右侧属性检查器使用与左栏一致的深色字号和控件主题', () => {
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    expect(wrapper.find('.dsn2-right').classes()).toContain('dsn2-inspector');
+
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/designer/DesignerV2.vue'), 'utf8');
+    expect(source).toContain('--dsn-inspector-font-size: 12px');
+    expect(source).toContain(':deep(.el-collapse-item__header)');
+    expect(source).toContain(':deep(.el-form-item__label)');
+    expect(source).toContain(':deep(.el-input__wrapper)');
+  });
+
   it('卸载不抛错(keydown 监听器能正常移除)', () => {
     const wrapper = mount(DesignerV2, { global: { stubs } });
     expect(() => wrapper.unmount()).not.toThrow();
@@ -132,6 +198,98 @@ describe('DesignerV2.vue 挂载冒烟测试', () => {
       expect(findButton(wrapper, label), label).toBeTruthy();
     }
     expect(findButton(wrapper, '返回').attributes('aria-label')).toBe('返回工作区');
+  });
+
+  it('现代工作台壳层提供产品标识、当前大屏上下文和分组后的操作区', async () => {
+    listScreens.mockResolvedValueOnce([{ id: 9, screenName: '省分行经营总览', viewLevel: 'PROVINCE' }]);
+    getScreenCanvas.mockResolvedValueOnce(editorResp(9, 'SCR_PROVINCE'));
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="dsn2-product"]').text()).toContain('大屏设计器');
+    expect(wrapper.find('[data-testid="dsn2-screen-context"]').text()).toContain('省分行经营总览');
+    expect(wrapper.find('[data-testid="dsn2-screen-actions"]').text()).toContain('编辑范围');
+    expect(wrapper.find('[data-testid="dsn2-history-actions"]').text()).toContain('撤销');
+    expect(wrapper.find('[data-testid="dsn2-draft-actions"]').text()).toContain('预览草稿');
+    expect(wrapper.find('[data-testid="dsn2-publish-actions"]').text()).toContain('发布');
+  });
+
+  it('三栏工作区有语义标题、保存状态 badge 和右栏三态说明', async () => {
+    listScreens.mockResolvedValueOnce([{ id: 9, screenName: '省分行经营总览', viewLevel: 'PROVINCE' }]);
+    getScreenCanvas.mockResolvedValueOnce(editorResp(9, 'SCR_PROVINCE'));
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="dsn2-left-heading"]').text()).toContain('组件与图层');
+    expect(wrapper.find('[data-testid="dsn2-left-subtitle"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="dsn2-right-heading"]').text()).toContain('画布设置');
+    expect(wrapper.find('[data-testid="dsn2-right-subtitle"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="dsn2-save-state"]').attributes('role')).toBe('status');
+    expect(wrapper.find('[data-testid="dsn2-save-state"]').classes()).toContain('is-saved');
+  });
+
+  it('现代视觉令牌和键盘/动效降级约束仅作用于 dsn2 域', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/designer/DesignerV2.vue'), 'utf8');
+    expect(source).toContain('--dsn2-bg');
+    expect(source).toContain('--dsn2-accent');
+    expect(source).toContain(':focus-visible');
+    expect(source).toContain('prefers-reduced-motion');
+    expect(source).toContain('.dsn2');
+  });
+
+  it('切换同类型图表后属性面板重建并回显当前数据源', async () => {
+    findAttrMock.mockReturnValue(TestChartAttr);
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    const designerStore = useScreenDesignerStore();
+    designerStore.componentData = [
+      {
+        id: 'chart-a', component: 'ChartWidget',
+        bindJson: JSON.stringify({ dsId: 101, items: [{ col: 'metric-a', label: '指标 A' }] })
+      },
+      {
+        id: 'chart-b', component: 'ChartWidget',
+        bindJson: JSON.stringify({ dsId: 202, items: [{ col: 'metric-b', label: '指标 B' }] })
+      }
+    ];
+
+    designerStore.selectComponent('chart-a');
+    await nextTick();
+    expect(wrapper.find('[data-testid="test-datasource"]').text()).toBe('101');
+    expect(wrapper.find('[data-testid="test-metric-columns"]').text()).toBe('metric-a');
+    expect(wrapper.find('[data-testid="test-metric-labels"]').text()).toBe('指标 A');
+
+    designerStore.selectComponent('chart-b');
+    await nextTick();
+    expect(wrapper.find('[data-testid="test-datasource"]').text()).toBe('202');
+    expect(wrapper.find('[data-testid="test-metric-columns"]').text()).toBe('metric-b');
+    expect(wrapper.find('[data-testid="test-metric-labels"]').text()).toBe('指标 B');
+  });
+
+  it('检查器单选图表显示注册表类型并随图表切换更新，未知类型安全兜底', async () => {
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    const designerStore = useScreenDesignerStore();
+    designerStore.componentData = [
+      { id: 'bar-chart', component: 'ChartWidget', innerType: 'BAR_COMPARE' },
+      { id: 'line-chart', component: 'ChartWidget', innerType: 'LINE_TREND' },
+      { id: 'unknown-chart', component: 'ChartWidget', innerType: 'UNREGISTERED_CHART' },
+      { id: 'text-label', component: 'TextLabel' }
+    ];
+
+    designerStore.selectComponent('bar-chart');
+    await nextTick();
+    expect(wrapper.find('[data-testid="dsn2-right-subtitle"]').text()).toBe('柱状对比（BAR_COMPARE）');
+
+    designerStore.selectComponent('line-chart');
+    await nextTick();
+    expect(wrapper.find('[data-testid="dsn2-right-subtitle"]').text()).toBe('趋势折线（LINE_TREND）');
+
+    designerStore.selectComponent('unknown-chart');
+    await nextTick();
+    expect(wrapper.find('[data-testid="dsn2-right-subtitle"]').text()).toBe('图表（UNREGISTERED_CHART）');
+
+    designerStore.selectComponent('text-label');
+    await nextTick();
+    expect(wrapper.find('[data-testid="dsn2-right-subtitle"]').text()).toBe('TextLabel');
   });
 });
 
@@ -495,13 +653,20 @@ describe('DesignerV2.vue 新建大屏', () => {
     getScreenCanvas
       .mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 4 })
       .mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 5 });
-    listScreenPublishLogs.mockResolvedValueOnce([{ id: 99, publishedAt: '2026-08-12 09:00:00' }]);
+    listScreenPublishLogs.mockResolvedValueOnce([
+      { id: 99, publishedAt: '2026-08-12 09:00:00', publishedBy: 'alice' },
+      { id: 98, publishedAt: '2026-08-11 09:00:00', publishedBy: 'bob' }
+    ]);
     rollbackScreenCanvas.mockRejectedValueOnce({ code: 'RPT-43012' });
     const wrapper = mount(DesignerV2, { global: { stubs } });
     await flushPromises();
 
     await wrapper.vm.onRollback();
-    expect(wrapper.vm.rollbackDialog).toMatchObject({ show: true, publishLogId: 99, expectedVersion: 4, reason: '' });
+    expect(wrapper.vm.rollbackDialog).toMatchObject({ show: true, publishLogId: null, expectedVersion: 4, reason: '' });
+    expect(wrapper.vm.rollbackDialog.archives).toHaveLength(2);
+    expect(wrapper.text()).toContain('2026-08-12 09:00:00');
+    expect(wrapper.text()).toContain('2026-08-11 09:00:00');
+    wrapper.vm.rollbackDialog.publishLogId = 99;
     expect(rollbackScreenCanvas).not.toHaveBeenCalled();
 
     wrapper.vm.rollbackDialog.reason = '回退异常发布';
@@ -509,6 +674,37 @@ describe('DesignerV2.vue 新建大屏', () => {
     expect(rollbackScreenCanvas).toHaveBeenCalledWith({ screenId: 7, publishLogId: 99, expectedVersion: 4, reason: '回退异常发布' });
     expect(getScreenCanvas).toHaveBeenCalledTimes(2);
     expect(useScreenDesignerStore().canvasVersion).toBe(5);
+  });
+
+  it('没有显式选择归档时不能提交回滚', async () => {
+    const existing = { id: 7, screenCode: 'SCR_EXISTING', screenName: '现有屏', viewLevel: 'BRANCH' };
+    listScreens.mockResolvedValueOnce([existing]);
+    getScreenCanvas.mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 4 });
+    listScreenPublishLogs.mockResolvedValueOnce([{ id: 99, publishedAt: '2026-08-12 09:00:00' }]);
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+
+    await wrapper.vm.onRollback();
+    wrapper.vm.rollbackDialog.reason = '误操作回退';
+    await wrapper.vm.confirmRollback();
+    expect(rollbackScreenCanvas).not.toHaveBeenCalled();
+    expect(wrapper.vm.rollbackDialog.show).toBe(true);
+  });
+
+  it('归档候选最多展示最近十条且保留后端顺序', async () => {
+    const existing = { id: 7, screenCode: 'SCR_EXISTING', screenName: '现有屏', viewLevel: 'BRANCH' };
+    listScreens.mockResolvedValueOnce([existing]);
+    getScreenCanvas.mockResolvedValueOnce({ ...editorResp(7, 'SCR_EXISTING'), canvasVersion: 4 });
+    listScreenPublishLogs.mockResolvedValueOnce(Array.from({ length: 12 }, (_, index) => ({
+      id: 120 - index, publishedAt: `2026-08-${String(12 - index).padStart(2, '0')} 09:00:00`
+    })));
+    const wrapper = mount(DesignerV2, { global: { stubs } });
+    await flushPromises();
+    await wrapper.vm.onRollback();
+    expect(wrapper.vm.rollbackDialog.archives).toHaveLength(10);
+    expect(wrapper.vm.rollbackDialog.archives.map(item => item.id)).toEqual(
+      Array.from({ length: 10 }, (_, index) => 120 - index)
+    );
   });
 });
 

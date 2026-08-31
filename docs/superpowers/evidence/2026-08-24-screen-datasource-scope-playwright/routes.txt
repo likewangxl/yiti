@@ -1,0 +1,20 @@
+仅开发态 mock，非联调。
+
+1. **/api/auth/current-user
+2. **/api/auth/my-menus
+3. **/api/auth/permissions
+4. **/api/screen/admin/screens/9105/map-region-metrics
+   response: {"code":"RPT-43017","message":"无权访问该大屏","data":null}
+5. **/api/admin/org-groups*
+6. **/api/admin/org-profiles*
+7. **/api/admin/roles/all*
+8. **/api/screen/admin/screens/9105/access-roles
+9. **/api/screen/data
+10. **/api/screen/admin/screens
+    scope: RETAIL / NAMED_GROUP / ORG_GRP_PRIMARY_OPERATING_UNITS
+11. **/api/screen/admin/datasources*
+    candidates: 9009 KPI_DETAIL/EMP (invalid), 9002 WIDE_TABLE/ORG_INDEX_RESULT/org_code (valid)
+12. **/api/screen/admin/canvas/9105
+    historical binding: dsId=9009, dsType=TIMESERIES
+13. **/api/screen/admin/canvas/save
+    response: canvasVersion=2, dsId=9002

@@ -92,6 +92,22 @@ class ScreenDataHttpContractTest {
         assertThat(request.getContextParams()).isEqualTo(Map.of("orgCode", "ORG001", "empId", "E001"));
     }
 
+    @Test
+    void data_acceptsExplicitDraftPreviewState() throws Exception {
+        when(datasourceService.queryData(any(ScreenDataReqDTO.class)))
+                .thenReturn(new ScreenDataRespDTO(List.of("metric"), List.of(List.<Object>of(1))));
+
+        mockMvc.perform(post("/api/screen/data")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"previewState\":\"draft\",\"schemaVersion\":2,"
+                                + "\"screenCode\":\"SCR\",\"blockId\":11}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<ScreenDataReqDTO> captor = ArgumentCaptor.forClass(ScreenDataReqDTO.class);
+        verify(datasourceService).queryData(captor.capture());
+        assertThat(captor.getValue().getPreviewState()).isEqualTo("draft");
+    }
+
     private void assertDuplicateIdentityFieldRejected(String body) throws Exception {
         mockMvc.perform(post("/api/screen/data")
                         .contentType(MediaType.APPLICATION_JSON)

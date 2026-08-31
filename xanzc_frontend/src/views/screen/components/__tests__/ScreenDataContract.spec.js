@@ -9,6 +9,7 @@ vi.mock('vue-echarts', () => ({ default: { name: 'VChart', props: ['option'], te
 
 import BlockContainer from '../BlockContainer.vue';
 import DrillTrend from '../DrillTrend.vue';
+import MetricCard from '../MetricCard.vue';
 
 const componentGlobals = { stubs: { 'el-icon': true, InfoFilled: true }, directives: { loading: {} } };
 
@@ -65,6 +66,25 @@ describe('大屏区块取数请求契约', () => {
     expect(body.dsId).toBeUndefined();
     expect(body.orgGroupCode).toBeUndefined();
     expect(body.orgCodes).toBeUndefined();
+  });
+
+  it('草稿预览统一提交 previewState=draft + blockId，不把草稿 dsId 当作客户端可信身份', async () => {
+    mount(BlockContainer, {
+      props: {
+        block: { id: 77, componentType: 'METRIC_CARD', bindJson: JSON.stringify({ dsId: 9002, period: 'LATEST' }), styleJson: '{}', drillJson: '{}' },
+        context: { screenCode: 'SCR_DRAFT', schemaVersion: 1, previewState: 'draft', orgCode: '128' }
+      },
+      global: componentGlobals
+    });
+    await vi.waitFor(() => expect(queryMock).toHaveBeenCalledTimes(1));
+    expect(queryMock.mock.calls[0][0]).toEqual({
+      schemaVersion: 1,
+      previewState: 'draft',
+      screenCode: 'SCR_DRAFT',
+      blockId: 77,
+      period: 'LATEST',
+      contextParams: { orgCode: '128' }
+    });
   });
 
   it.each([
@@ -170,5 +190,104 @@ describe('大屏区块取数请求契约', () => {
     await vi.waitFor(() => expect(wrapper.text()).toContain('需受控迁移或重新发布'));
     expect(queryMock).toHaveBeenCalledTimes(1);
     expect(queryMock.mock.calls[0][0]).toMatchObject({ schemaVersion: 2, blockId: 12 });
+  });
+
+  it('BlockContainer 注册并下发六种新增图表，propValue/columnsMeta 只对扩展类型透传', async () => {
+    for (const componentType of [
+      'COMBO_CHART', 'FUNNEL_CHART', 'SCATTER_BUBBLE',
+      'HEATMAP_MATRIX', 'SUNBURST_CHART', 'SPARKLINE_CARD'
+    ]) {
+      const payload = componentType === 'SCATTER_BUBBLE'
+        ? { columns: ['name', 'x', 'y'], rows: [['A', 1, 2], ['B', 3, 4]], columnsMeta: [] }
+        : componentType === 'HEATMAP_MATRIX'
+          ? { columns: ['region', 'month', 'value'], rows: [['甲', '一月', 10], ['乙', '一月', 12]], columnsMeta: [] }
+          : componentType === 'SUNBURST_CHART'
+            ? { columns: ['region', 'branch', 'value'], rows: [['甲', 'A', 10], ['乙', 'B', 12]], columnsMeta: [] }
+            : componentType === 'FUNNEL_CHART'
+              ? { columns: ['stage', 'value'], rows: [['浏览', 10], ['成交', 2]], columnsMeta: [] }
+              : { columns: ['data_date', 'value'], rows: [['2026-08-01', 10], ['2026-08-02', 12]], columnsMeta: [] };
+      queryMock.mockResolvedValue(payload);
+      const wrapper = mount(BlockContainer, {
+        props: {
+          block: { id: 31, componentType, bindJson: JSON.stringify({ dsId: 9002 }),
+            styleJson: JSON.stringify({ refreshSec: 0 }), drillJson: '{}' },
+          propValue: { showLabels: true }, context: { schemaVersion: 1, screenCode: 'SCR_NEW' }
+        },
+        global: componentGlobals
+      });
+      await vi.waitFor(() => expect(queryMock).toHaveBeenCalled());
+      await vi.waitFor(() => expect(wrapper.find('.v-chart-stub').exists() || wrapper.find('[data-testid="sparkline-value"]').exists(), componentType)
+        .toBe(true));
+      expect(wrapper.find('.scr-block-empty').exists()).toBe(false);
+      wrapper.unmount();
+    }
+  });
+
+  it('BlockContainer 统一转换金额量级后再下发旧图表，保留接口原始 rows 不变', async () => {
+    const payload = {
+      columns: ['机构', '存款余额'],
+      rows: [['甲行', 100000000]],
+      columnsMeta: [{ col: '存款余额', role: 'METRIC', amountScale: 'HUNDRED_MILLION_YUAN' }]
+    };
+    queryMock.mockResolvedValueOnce(payload);
+    const wrapper = mount(BlockContainer, {
+      props: {
+        block: { id: 91, componentType: 'METRIC_CARD', bindJson: JSON.stringify({ dsId: 9002 }), styleJson: '{}', drillJson: '{}' },
+        context: { schemaVersion: 1, screenCode: 'SCR_AMOUNT' }
+      },
+      global: componentGlobals
+    });
+
+    await vi.waitFor(() => expect(wrapper.findComponent(MetricCard).props('rows')).toEqual([['甲行', 1]]));
+    expect(payload.rows).toEqual([['甲行', 100000000]]);
+    wrapper.unmount();
+  });
+
+  it('数值卡按指标元数据展示金额量级后的数值和单位', async () => {
+    const payload = {
+      columns: ['存款余额'],
+      rows: [[100000000]],
+      columnsMeta: [{ col: '存款余额', role: 'METRIC', amountScale: 'HUNDRED_MILLION_YUAN', unit: '亿元', decimals: 2 }]
+    };
+    queryMock.mockResolvedValueOnce(payload);
+    const wrapper = mount(BlockContainer, {
+      props: {
+        block: {
+          id: 93,
+          componentType: 'METRIC_CARD',
+          bindJson: JSON.stringify({ dsId: 9002, items: [{ col: '存款余额', label: '存款余额' }] }),
+          styleJson: JSON.stringify({ refreshSec: 0 }),
+          drillJson: '{}'
+        },
+        context: { schemaVersion: 1, screenCode: 'SCR_AMOUNT_CARD' }
+      },
+      global: componentGlobals
+    });
+
+    await vi.waitFor(() => expect(wrapper.find('.mc-value').exists()).toBe(true));
+    const valueText = wrapper.find('.mc-value').text();
+    expect(valueText).toContain('1.00');
+    expect(valueText).not.toContain('100,000,000.00');
+    expect(wrapper.find('.mc-unit').text()).toBe('亿元');
+    wrapper.unmount();
+  });
+
+  it('DrillTrend 统一转换钻取指标的金额量级后生成趋势序列', async () => {
+    queryMock.mockResolvedValueOnce({
+      columns: ['data_date', '存款余额'],
+      rows: [['2026-08-01', 10000], ['2026-08-02', 20000]],
+      columnsMeta: [{ col: '存款余额', role: 'METRIC', amountScale: 'TEN_THOUSAND_YUAN' }]
+    });
+    const wrapper = mount(DrillTrend, {
+      props: {
+        bind: { dsId: 9002 }, context: { schemaVersion: 1, screenCode: 'SCR_AMOUNT', blockId: 92 },
+        item: { col: '存款余额', label: '存款余额' }, periods: ['LAST_10D']
+      },
+      global: componentGlobals
+    });
+
+    await vi.waitFor(() => expect(wrapper.findComponent({ name: 'VChart' }).props('option').series[0].data)
+      .toEqual([1, 2]));
+    wrapper.unmount();
   });
 });

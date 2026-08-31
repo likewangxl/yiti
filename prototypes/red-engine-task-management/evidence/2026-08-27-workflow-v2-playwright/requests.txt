@@ -1,0 +1,13 @@
+Official Playwright CLI session: redengine-workflow-v2-20260827
+Command: xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-workflow-v2-20260827 requests --static
+
+35 requests were observed during the full session. All returned HTTP 200 and all targeted http://127.0.0.1:4176.
+Request groups:
+- document: / (including the temporary-task popup query URL)
+- Vite runtime: /@vite/client, /@react-refresh
+- app modules: /src/main.jsx, /src/App.jsx, /src/styles.css, /src/task-domain.js, /src/role-access.js
+- dependencies: React, React DOM, Tabler Icons and Vite dependency chunks
+- asset: /favicon.svg
+- hot-update reloads: /src/App.jsx?t=..., /src/task-domain.js?t=...
+
+No /api request was made. This is an in-memory prototype and not a backend integration test.

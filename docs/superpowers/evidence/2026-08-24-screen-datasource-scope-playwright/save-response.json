@@ -1,0 +1,8 @@
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "canvasVersion": 2,
+    "canvasDraftJson": "{\"components\":[{\"bindJson\":\"{\\\"dsId\\\":9002,\\\"dsType\\\":\\\"TIMESERIES\\\"}\",\"innerType\":\"BAR_COMPARE\",\"blockId\":29,\"component\":\"ChartWidget\"}],\"schemaVersion\":2}"
+  }
+}

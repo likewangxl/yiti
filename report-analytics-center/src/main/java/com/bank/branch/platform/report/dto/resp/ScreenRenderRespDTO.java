@@ -29,6 +29,9 @@ public class ScreenRenderRespDTO {
     /** PROVINCE 屏地图点位(非 PROVINCE 屏为空列表) */
     private List<MapPointDTO> mapPoints;
 
+    /** 地图机构真实经营指标；缺少数据时为空列表，前端不得生成模拟值。 */
+    private List<MapRegionMetricDTO> mapRegionMetrics;
+
     /** schemaVersion=2 复合地图服务端渲染包；schemaVersion=1 时为空。 */
     private ScreenMapRenderPackageDTO mapPackage;
 }

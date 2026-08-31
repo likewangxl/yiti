@@ -1,0 +1,11 @@
+[screen-morandi-bar]
+### Result
+Total messages: 2 (Errors: 0, Warnings: 0)
+Returning 0 messages for level "info"
+
+[screen-morandi-line]
+### Result
+Total messages: 2 (Errors: 0, Warnings: 0)
+Returning 0 messages for level "info"
+
+Both consoles were cleared after initial navigation and before the verified page reload.

@@ -8,7 +8,8 @@ import { describe, it, expect } from 'vitest';
 import {
   defaultDsModel, deriveDsType, buildConfigJson, buildTimeParamJson,
   parseConfigJson, validateDsModel, buildPreviewColumns, formatPreviewCell,
-  datasourceTryRunScopeMode, buildDatasourceTryRunRequest, buildDatasourceProbeRequest
+  datasourceTryRunScopeMode, buildDatasourceTryRunRequest, buildDatasourceProbeRequest,
+  AMOUNT_SCALE_OPTIONS
 } from '../dsConfig';
 
 /** 快速构造一个在 defaultDsModel 基础上打补丁的模型 */
@@ -50,6 +51,31 @@ describe('deriveDsType —— ds_type 随配置联动（与后端强制规则一
 });
 
 describe('buildConfigJson —— 表单模型 → config_json 对象', () => {
+  it('金额量级预设：METRIC 只落 amountScale，不携带自定义单位和小数位；未选预设时保留自定义值', () => {
+    expect(AMOUNT_SCALE_OPTIONS).toEqual([
+      { value: 'YUAN', label: '元', unit: '元', decimals: 2 },
+      { value: 'TEN_THOUSAND_YUAN', label: '万元', unit: '万元', decimals: 2 },
+      { value: 'HUNDRED_MILLION_YUAN', label: '亿元', unit: '亿元', decimals: 2 }
+    ]);
+
+    const m = model({ sourceKind: 'CUSTOM_SQL', dsType: 'SINGLE' });
+    m.sql = { text: 'SELECT amount FROM RPT_X', dateCol: '' };
+    m.fieldMeta = [
+      {
+        col: 'amount', alias: '存款余额', role: 'METRIC', amountScale: 'TEN_THOUSAND_YUAN',
+        unit: '自定义单位', decimals: '4'
+      },
+      { col: 'ratio', role: 'METRIC', amountScale: '', unit: '%', decimals: '1' },
+      { col: 'org_name', role: 'DIM', amountScale: 'YUAN', unit: '', decimals: null }
+    ];
+
+    expect(buildConfigJson(m).fieldMeta).toEqual([
+      { col: 'amount', alias: '存款余额', role: 'METRIC', amountScale: 'TEN_THOUSAND_YUAN' },
+      { col: 'ratio', role: 'METRIC', unit: '%', decimals: 1 },
+      { col: 'org_name', role: 'DIM' }
+    ]);
+  });
+
   it('WIDE_TABLE 基础形态：table + metrics(仅 code) + schemaVersion:2 + scopeMode，未开聚合/无 fieldMeta 时不落对应键', () => {
     const m = model({ sourceKind: 'WIDE_TABLE' });
     m.wide.table = 'EMP_INDEX_RESULT';
@@ -185,6 +211,23 @@ describe('buildTimeParamJson —— 预设周期落 time_param_json', () => {
 });
 
 describe('parseConfigJson —— config_json → 表单模型补丁（读时兼容 v1 旧数据）', () => {
+  it('金额量级预设回填；旧 fieldMeta 无 amountScale 时继续回填 unit/decimals', () => {
+    const patch = parseConfigJson('CUSTOM_SQL', {
+      sql: 'SELECT amount, ratio FROM RPT_X',
+      fieldMeta: [
+        { col: 'amount', role: 'METRIC', amountScale: 'HUNDRED_MILLION_YUAN' },
+        { col: 'ratio', role: 'METRIC', unit: '%', decimals: 1 }
+      ]
+    });
+
+    expect(patch.fieldMeta).toEqual([
+      {
+        col: 'amount', alias: '', role: 'METRIC', amountScale: 'HUNDRED_MILLION_YUAN', unit: '', decimals: null
+      },
+      { col: 'ratio', alias: '', role: 'METRIC', unit: '%', decimals: 1 }
+    ]);
+  });
+
   it('WIDE_TABLE v1 旧数据：无 fieldMeta/aggregation/scopeMode → 补默认（关聚合/空元数据/SUBJECT）', () => {
     const patch = parseConfigJson('WIDE_TABLE', {
       table: 'EMP_INDEX_RESULT',
@@ -245,6 +288,13 @@ describe('parseConfigJson —— config_json → 表单模型补丁（读时兼�
 });
 
 describe('validateDsModel —— 与后端 43009 校验规则对齐的前置校验', () => {
+  it('金额量级只允许 METRIC 使用；DIM 行携带 amountScale 时保存不得落盘', () => {
+    const m = model({ sourceKind: 'KPI_RESULT' });
+    m.fieldMeta = [{ col: 'org_name', role: 'DIM', amountScale: 'YUAN', unit: '', decimals: null }];
+    expect(validateDsModel(m)).toEqual([]);
+    expect(buildConfigJson(m).fieldMeta).toEqual([{ col: 'org_name', role: 'DIM' }]);
+  });
+
   it('新建模型不为 bizLine 静默补值；NAMED_GROUP 仅在 ORG_INDEX_RESULT + org_code 宽表下合法', () => {
     const fresh = defaultDsModel();
     expect(fresh.bizLine).toBe('');
@@ -336,6 +386,16 @@ describe('试跑预览增强 —— columnsMeta 列头与单元格格式化', ()
       { col: 'a', label: 'a', meta: null },
       { col: 'b', label: 'b', meta: null }
     ]);
+  });
+
+  it('试跑预览：amountScale 预设按元转换到目标单位并固定 2 位', () => {
+    const columns = buildPreviewColumns(
+      ['存款余额'],
+      [{ col: '存款余额', alias: '一般性存款', role: 'METRIC', amountScale: 'HUNDRED_MILLION_YUAN' }]
+    );
+    expect(columns[0]).toMatchObject({ col: '存款余额', label: '一般性存款（亿元）' });
+    expect(formatPreviewCell(123456789, columns[0].meta)).toBe('1.23');
+    expect(formatPreviewCell(100000000, columns[0].meta)).toBe('1.00');
   });
 
   it('formatPreviewCell：null/undefined → "—"（完成率 target=0 场景）；decimals 生效；非数值原样', () => {

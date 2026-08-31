@@ -86,7 +86,7 @@ const conditionalMatrix = [
   ['views/perf/Adjust.vue', 0, ["row.status === 'DRAFT'", 'canWithdraw(row.status)']],
   ['views/eval/Tasks.vue', 0, ["row.status === 2", "row.sourceType === 'AUTO' && row.status === 0", 'isDeadlinePassed(row)']],
   ['views/report/FreeReport.vue', 0, ['isOperator', "row.status === 'DISABLED'"]],
-  ['views/screen/admin/Datasources.vue', 0, ['referenceState(row).semanticFrozen']],
+  ['views/screen/admin/Datasources.vue', 0, ['referenceState(row).publishedReferenced']],
   ['views/system/Jobs.vue', 0, ["row.status === 'ACTIVE'", 'row.allowManualTrigger']],
   ['views/system/Notifications.vue', 0, ['!row.isRead', 'row.linkUrl || row.bizId']],
   ['views/system/FlowList.vue', 0, ["row.status === 'DRAFT' && row.isReadonlyImport != 1"]],

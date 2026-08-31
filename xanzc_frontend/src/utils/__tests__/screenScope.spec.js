@@ -7,6 +7,7 @@ import {
   FIXED_SATELLITE_ORG_CODES,
   XIAN_SECONDARY_BRANCHES,
   XIAN_SECONDARY_BRANCH_DISCLAIMER,
+  SHAANXI_MAP_REGIONS,
   normalizeScreenScope,
   validateScreenScope,
   isDatasourceCompatible,
@@ -58,6 +59,17 @@ describe('screenScope 业务条线、机构范围与地图配置契约', () => {
       schemaVersion: 2, mode: 'XIAN_COMPOSITE', baseRegion: 'XIAN_OUTLINE',
       disclaimer: '组织分布示意，非地理比例'
     });
+  });
+
+  it('陕西地图地域下拉固定包含全省和十个地市，市级选择落为可持久化 v1 配置', () => {
+    expect(SHAANXI_MAP_REGIONS.map(item => item.code)).toEqual([
+      '610000', '610100', '610200', '610300', '610400', '610500',
+      '610600', '610700', '610800', '610900', '611000'
+    ]);
+    expect(normalizeMapConfig({ schemaVersion: 1, mode: 'SHAANXI_LEGACY', regionCode: '610300' }))
+      .toMatchObject({ schemaVersion: 1, mode: 'SHAANXI_LEGACY', regionCode: '610300', baseRegion: 'CITY_DISTRICT' });
+    expect(normalizeMapConfig({ schemaVersion: 1, mode: 'SHAANXI_LEGACY', regionCode: '999999' }))
+      .toMatchObject({ regionCode: '610000', baseRegion: 'SHAANXI' });
   });
 
   it('地图 schema 与 mode 必须同时精确声明，缺失、冲突或宽松字符串一律拒绝', () => {
@@ -200,7 +212,7 @@ describe('screenScope 业务条线、机构范围与地图配置契约', () => {
     expect(datasourceReferenceLabel({})).toBe('未引用');
   });
 
-  it('数据源完整草稿/发布引用决定冻结与删除提示：发布引用冻结语义字段，任一引用禁止删除', () => {
+  it('数据源完整草稿/发布引用决定风险提示与删除保护：发布引用可编辑，任一引用禁止删除', () => {
     const state = datasourceReferenceState({
       draftReferenceScreenCodes: ['SCR_DRAFT_A', 'SCR_DRAFT_B'],
       publishedReferenceScreenCodes: ['SCR_LIVE_A', 'SCR_ARCHIVE_B']
@@ -208,10 +220,11 @@ describe('screenScope 业务条线、机构范围与地图配置契约', () => {
     expect(state).toMatchObject({
       draftCodes: ['SCR_DRAFT_A', 'SCR_DRAFT_B'],
       publishedCodes: ['SCR_LIVE_A', 'SCR_ARCHIVE_B'],
-      semanticFrozen: true,
+      publishedReferenced: true,
       deleteBlocked: true
     });
-    expect(state.guidance).toContain('新建副本→改草稿绑定→重新发布');
+    expect(state).not.toHaveProperty('semanticFrozen');
+    expect(state.guidance).toContain('直接影响引用该数据源的已发布大屏');
     expect(datasourceReferenceLabel({
       draftReferenceScreenCodes: state.draftCodes,
       publishedReferenceScreenCodes: state.publishedCodes

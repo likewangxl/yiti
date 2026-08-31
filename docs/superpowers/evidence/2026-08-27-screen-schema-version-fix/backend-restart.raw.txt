@@ -1,0 +1,55 @@
+执行时间：2026-08-27 11:01-11:06（Asia/Shanghai）
+
+### 构件与原实例
+- 原父进程：1874445
+- 原 Java 进程：1874568
+- 原监听端口：18082
+- 父进程 cwd：/home/djdev/lf/yiti
+- 子进程 cwd：/home/djdev/lf/yiti/bootstrap
+- 独立 Maven 仓库：/home/djdev/.m2-lf-yiti/repository
+- 原日志：/home/djdev/lf/yiti/logs/bootstrap-2026-08-26.log
+
+安装命令：
+mvn -Dmaven.repo.local=/home/djdev/.m2-lf-yiti/repository -pl report-analytics-center -am install -DskipTests
+
+结果：14 个 Reactor 工程全部 SUCCESS，修复后的 report-analytics-center JAR 已安装到独立仓库。
+
+JAR 方法签名核对：
+private java.lang.String buildDraftJson(com.bank.branch.platform.report.entity.RptScreen, java.util.List<com.bank.branch.platform.report.dto.req.CanvasComponentDTO>);
+
+### 停止与启动
+- 向原父进程发送 TERM 后优雅退出，18082 确认释放。
+- 第一次拉起未继承原有效端口覆盖，应用回退到默认 18080；该端口由其他 checkout 占用，启动失败并正常关闭。未停止、复用或修改其他 checkout 进程。
+- 使用 SERVER_PORT=18082 按原 dev profile 重新启动成功。
+- 新 Maven 父进程：2952303
+- 新 Java 进程：2952375
+- 父进程 cwd：/home/djdev/lf/yiti
+- 子进程 cwd：/home/djdev/lf/yiti/bootstrap
+- 新日志：/home/djdev/lf/yiti/logs/bootstrap-2026-08-27.log
+
+关键启动日志：
+- Tomcat started on port 18082
+- Started BranchPlatformApplication in 6.144 seconds
+- Scheduler BranchPlatformScheduler started
+
+独立告警：Sidecar http://127.0.0.1:8089/isready 持续超时；不影响本次大屏接口和页面验收。
+
+### 官方 playwright-cli 写后复验
+route-list：No active routes
+
+页面状态：
+{"screen":"当前大屏\n对公经营总览（全辖）\nSCR_CORP_OVERVIEW","errors":[],"rankingRows":6}
+
+目标请求：
+196: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":41,"period":"LATEST","contextParams":{"orgCode":"","empId":""}} => HTTP 200
+197: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":40,"period":"LATEST","contextParams":{"orgCode":"","empId":""}} => HTTP 200
+198: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":39,"period":"LATEST","contextParams":{"orgCode":"","empId":""}} => HTTP 200
+199: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":38,"period":"LATEST","contextParams":{"orgCode":"","empId":""}} => HTTP 200
+200: {"schemaVersion":2,"previewState":"draft","screenCode":"SCR_CORP_OVERVIEW","blockId":37,"period":"LAST_1M","contextParams":{"orgCode":"","empId":""}} => HTTP 200
+
+控制台原始摘要：
+- Vue Router 两条既有未匹配路由警告。
+- 9105、9104 的 map-region-metrics 因资源未登记返回 403，触发既有地图 mock fallback。
+- 目标 /api/screen/data 请求未使用 fallback，均为真实 HTTP 200。
+
+截图：designer-corp-overview-after-restart.png

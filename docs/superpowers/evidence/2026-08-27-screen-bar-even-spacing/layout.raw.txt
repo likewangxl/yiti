@@ -1,0 +1,27 @@
+页面断言：
+[
+  {
+    "index": 0,
+    "title": "窄组件 · 动态均匀间隔",
+    "containerWidth": 598,
+    "axisLength": 526,
+    "categoryCount": 6,
+    "seriesCount": 5,
+    "barWidth": 13,
+    "barGap": "34.87%",
+    "innerGapPx": 4.53,
+    "crossCategoryGapPx": 4.53
+  },
+  {
+    "index": 1,
+    "title": "宽组件 · 动态均匀间隔",
+    "containerWidth": 1678,
+    "axisLength": 1606,
+    "categoryCount": 6,
+    "seriesCount": 5,
+    "barWidth": 36,
+    "barGap": "48.7%",
+    "innerGapPx": 17.53,
+    "crossCategoryGapPx": 17.54
+  }
+]

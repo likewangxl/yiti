@@ -1,0 +1,6 @@
+playwright-cli console debug
+
+Total messages: 2 (Errors: 0, Warnings: 0)
+
+[DEBUG] [vite] connecting... @ http://127.0.0.1:8091/@vite/client:228
+[DEBUG] [vite] connected. @ http://127.0.0.1:8091/@vite/client:324

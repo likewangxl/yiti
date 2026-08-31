@@ -12,6 +12,8 @@ import com.bank.branch.platform.report.dto.req.ScreenMetadataUpdateReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenSaveReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDetailRespDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenViewRespDTO;
+import com.bank.branch.platform.report.dto.resp.MapRegionMetricDTO;
+import com.bank.branch.platform.performance.api.MetricApi;
 import com.bank.branch.platform.report.entity.RptScreen;
 import com.bank.branch.platform.report.entity.RptScreenAccessRole;
 import com.bank.branch.platform.report.entity.RptScreenBlock;
@@ -43,6 +45,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -59,14 +63,21 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     /** 运行时查询以 ACTIVE 精确过滤，持久化状态必须先在写入边界规范为该枚举。 */
     private static final Set<String> SCREEN_STATUSES = Set.of("ACTIVE", "DISABLED");
     private static final Set<String> REGIONS = Set.of("LEFT", "MAIN", "RIGHT");
-    /** 区块 component_type 白名单（基础 5 + spec 2026-07-17 §5.1 扩充 8；画布 innerType 白名单
-     * 见 ScreenCanvasServiceImpl 同步扩充） */
+    /** 地图首屏只查询领导驾驶舱需要的结果、驱动和趋势指标。 */
+    private static final List<String> MAP_METRIC_CODES = List.of(
+            "KPI_ACHIEVE_RATE_ORG", "DEP_ACHIEVE_RATE_ORG", "LOAN_ACHIEVE_RATE_ORG",
+            "NEW_CUST_ACHIEVE_ORG", "M_0265", "M_0348", "NEW_VALID_CUST_ORG_MONTH",
+            "DEP_BAL_YOY_RATE", "LOAN_BAL_YOY_RATE", "DEP_BAL_MOM_RATE", "LOAN_BAL_MOM_RATE");
+    /** 区块 component_type 白名单；必须与 ScreenCanvasServiceImpl 的画布 innerType 白名单同步。 */
     private static final Set<String> COMPONENT_TYPES = Set.of(
             "METRIC_CARD", "LINE_TREND", "PIE_SHARE", "RANK_LIST", "FLOW_STATUS",
             "BAR_COMPARE", "AREA_STACK", "GAUGE", "TABLE_LIST",
-            "KPI_DETAIL_TABLE", "KPI_RADAR", "LIQUID_PROGRESS", "PROGRESS_LIST");
+            "KPI_DETAIL_TABLE", "KPI_RADAR", "LIQUID_PROGRESS", "PROGRESS_LIST",
+            "COMBO_CHART", "FUNNEL_CHART", "SCATTER_BUBBLE", "HEATMAP_MATRIX",
+            "SUNBURST_CHART", "SPARKLINE_CARD");
     /** 需要时序型数据源的组件（needTimeseries 联动，违规 43005） */
-    private static final Set<String> TIMESERIES_ONLY_COMPONENTS = Set.of("LINE_TREND", "AREA_STACK");
+    private static final Set<String> TIMESERIES_ONLY_COMPONENTS =
+            Set.of("LINE_TREND", "AREA_STACK", "SPARKLINE_CARD");
     /** 仅可绑 source_kind=KPI_DETAIL 数据源的 KPI 专属组件（needKinds 联动，spec §5.1，违规 43005） */
     private static final Set<String> KPI_DETAIL_ONLY_COMPONENTS =
             Set.of("KPI_DETAIL_TABLE", "KPI_RADAR", "PROGRESS_LIST");
@@ -98,6 +109,10 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     /** 高危角色白名单与画布共用 canvas_version 的 CAS mapper。 */
     @Autowired(required = false)
     private RptScreenCanvasMapper canvasMapper;
+
+    /** 指标查询只经 performance 的跨模块 API；缺少适配器时返回空指标，不生成兜底值。 */
+    @Autowired(required = false)
+    private MetricApi metricApi;
 
     public ScreenConfigServiceImpl(RptScreenMapper screenMapper,
                                    RptScreenBlockMapper blockMapper,
@@ -259,6 +274,19 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     }
 
     @Override
+    public List<MapRegionMetricDTO> listMapRegionMetrics(Long screenId) {
+        RptScreen screen = requireScreen(screenId);
+        authorizeRuntime(screen);
+        if (!"PROVINCE".equals(screen.getViewLevel()) || hasV2Map(screen)) {
+            return List.of();
+        }
+        List<MapPointDTO> points = pointMapper.selectList(new LambdaQueryWrapper<RptScreenMapPoint>()
+                        .eq(RptScreenMapPoint::getStatus, "ACTIVE"))
+                .stream().map(this::toPointDto).toList();
+        return buildMapRegionMetrics(points);
+    }
+
+    @Override
     public ScreenViewRespDTO getViewByCode(String screenCode) {
         List<RptScreen> hits = screenMapper.selectList(new LambdaQueryWrapper<RptScreen>()
                 .eq(RptScreen::getScreenCode, screenCode)
@@ -326,6 +354,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         } else {
             d.setMapPoints(List.of());
         }
+        d.setMapRegionMetrics(buildMapRegionMetrics(d.getMapPoints()));
         boolean draft = "draft".equalsIgnoreCase(state);
         if (draft) {
             if (resourceApi == null
@@ -335,8 +364,8 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                 persistRuntimeDeniedAudit(s, "/api/screen/view/" + screenCode, denied);
                 throw denied;
             }
-            // 草稿态:临时合成一个只含 components 的渲染包(bindSnapshots 由前端设计器内已持有 block,
-            // 或运行时按 blockId 走 /api/screen/data 实时取数);此处直投 draft 组件树 + style。
+            // 草稿态只在上面的画布管理读取权限通过后合成；绑定快照来自当前屏的 block 行，
+            // 不能借用发布包或其它屏的可变行，避免预览成为跨屏/越权取数旁路。
             d.setRenderPackageJson(composeDraftPreview(s));
             d.setState("draft");
         } else {
@@ -353,6 +382,46 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         return d;
     }
 
+    /**
+     * 从真实机构指标宽表构建地图指标包。单机构失败仅留下空 metricValues，既不阻断整屏，
+     * 也不能用其它机构或 mock 值替代；前端据此明确显示“--”。
+     */
+    private List<MapRegionMetricDTO> buildMapRegionMetrics(List<MapPointDTO> points) {
+        if (metricApi == null || points == null || points.isEmpty()) {
+            return List.of();
+        }
+        LocalDate dataDate;
+        try {
+            dataDate = metricApi.getLatestDataDate("ORG");
+        } catch (RuntimeException e) {
+            log.warn("[ScreenMapMetric] 读取最新机构数据日期失败 cause={}", e.getMessage());
+            dataDate = null;
+        }
+        List<MapRegionMetricDTO> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (MapPointDTO point : points) {
+            String orgCode = point == null ? null : point.getOrgCode();
+            if (orgCode == null || orgCode.isBlank() || !seen.add(orgCode)) {
+                continue;
+            }
+            Map<String, BigDecimal> values;
+            try {
+                Map<String, BigDecimal> queried = metricApi.getOrgMetricValues(orgCode, dataDate, MAP_METRIC_CODES);
+                values = queried == null ? Map.of() : queried;
+            } catch (RuntimeException e) {
+                log.warn("[ScreenMapMetric] 机构指标读取失败 orgCode={} cause={}", orgCode, e.getMessage());
+                values = Map.of();
+            }
+            result.add(MapRegionMetricDTO.builder()
+                    .orgCode(orgCode)
+                    .orgName(point.getOrgName())
+                    .dataDate(dataDate)
+                    .metricValues(values)
+                    .build());
+        }
+        return result;
+    }
+
     private String composeDraftPreview(RptScreen s) {
         try {
             com.fasterxml.jackson.databind.node.ObjectNode pkg = objectMapper.createObjectNode();
@@ -360,13 +429,50 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                     s.getCanvasStyleJson() == null ? "{}" : s.getCanvasStyleJson()));
             com.fasterxml.jackson.databind.JsonNode draft = objectMapper.readTree(
                     s.getCanvasDraftJson() == null ? "{}" : s.getCanvasDraftJson());
-            pkg.set("components", draft.path("components").isMissingNode()
-                    ? objectMapper.createArrayNode() : draft.path("components"));
-            pkg.putObject("bindSnapshots"); // 草稿预览留空,ChartWidget 走实时取数
+            JsonNode components = draft.path("components").isMissingNode()
+                    ? objectMapper.createArrayNode() : draft.path("components");
+            pkg.set("components", components);
+            Set<Long> chartBlockIds = new HashSet<>();
+            collectDraftChartBlockIds(components, chartBlockIds);
+            Map<Long, RptScreenBlock> blocksById = blockMapper.selectList(
+                            new LambdaQueryWrapper<RptScreenBlock>().eq(RptScreenBlock::getScreenId, s.getId()))
+                    .stream()
+                    // 防御不可信 mapper/旁路实现返回其它屏行，预览身份必须绑定当前 screenId。
+                    .filter(block -> s.getId().equals(block.getScreenId()))
+                    .collect(Collectors.toMap(RptScreenBlock::getId, Function.identity(), (left, right) -> left));
+            if (!blocksById.keySet().containsAll(chartBlockIds)) {
+                throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+            }
+            com.fasterxml.jackson.databind.node.ObjectNode snapshots = pkg.putObject("bindSnapshots");
+            for (Long blockId : chartBlockIds) {
+                RptScreenBlock block = blocksById.get(blockId);
+                com.fasterxml.jackson.databind.node.ObjectNode snapshot = snapshots.putObject(String.valueOf(blockId));
+                snapshot.set("bind", objectMapper.readTree(block.getBindJson() == null ? "{}" : block.getBindJson()));
+                snapshot.put("componentType", block.getComponentType());
+                snapshot.set("styleCfg", objectMapper.readTree(block.getStyleJson() == null ? "{}" : block.getStyleJson()));
+                snapshot.set("drill", objectMapper.readTree(block.getDrillJson() == null ? "{}" : block.getDrillJson()));
+            }
             pkg.put("schemaVersion", hasV2MapInComponents(pkg.path("components")) ? 2 : 1);
             return pkg.toString();
         } catch (Exception e) {
             throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, e);
+        }
+    }
+
+    /** 草稿预览递归收集 ChartWidget 身份；Group.children 不能漏收，否则预览会出现假空图表。 */
+    private void collectDraftChartBlockIds(JsonNode components, Set<Long> out) {
+        if (components == null || !components.isArray()) {
+            return;
+        }
+        for (JsonNode component : components) {
+            if ("ChartWidget".equals(component.path("component").asText())) {
+                JsonNode blockId = component.path("blockId");
+                if (!blockId.isIntegralNumber() || !blockId.canConvertToLong()
+                        || blockId.longValue() <= 0 || !out.add(blockId.longValue())) {
+                    throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+                }
+            }
+            collectDraftChartBlockIds(component.path("children"), out);
         }
     }
 

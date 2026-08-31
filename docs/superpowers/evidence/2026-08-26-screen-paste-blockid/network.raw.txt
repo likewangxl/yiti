@@ -1,0 +1,13 @@
+仅开发态 mock，非联调。
+
+关键请求：
+
+```text
+247. [POST] http://127.0.0.1:8091/api/screen/admin/canvas/save => [200] OK
+```
+
+保存请求体：
+
+```json
+{"screenId":9912,"expectedVersion":7,"canvasStyle":{"schemaVersion":1,"designWidth":1920,"designHeight":1080,"background":"#050e2b","adaptor":"keepProportion","backgroundType":"solid","bgGradient":{"from":"#050e2b","to":"#0a1f4e","angle":135},"bgImage":""},"components":[{"id":"w-chart-original","component":"ChartWidget","name":"待复制指标卡","innerType":"METRIC_CARD","blockId":88,"style":{"top":120,"left":120,"width":520,"height":260},"propValue":{"ignoreGlobalPeriod":false},"bindJson":"{\"dsId\":9913,\"dsType\":\"SINGLE\",\"period\":\"LATEST\",\"items\":[{\"col\":\"balance\",\"label\":\"存款余额\"}]}","styleJson":"{\"title\":\"待复制指标卡\",\"decimals\":0,\"refreshSec\":60}","drillJson":"{}","isLock":false,"isShow":true},{"id":"w-b13zd1","component":"ChartWidget","name":"待复制指标卡","innerType":"METRIC_CARD","blockId":null,"style":{"top":140,"left":140,"width":520,"height":260},"propValue":{"ignoreGlobalPeriod":false},"bindJson":"{\"dsId\":9913,\"dsType\":\"SINGLE\",\"period\":\"LATEST\",\"items\":[{\"col\":\"balance\",\"label\":\"存款余额\"}]}","styleJson":"{\"title\":\"待复制指标卡\",\"decimals\":0,\"refreshSec\":60}","drillJson":"{}","isLock":false,"isShow":true}]}
+```

@@ -73,15 +73,17 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
 
     /** 全屏周期过滤器组件名(每屏最多 1 个的保存/发布双侧校验共用) */
     private static final String PERIOD_FILTER = "PeriodFilter";
-    /** ChartWidget 的 innerType 白名单(基础 5 图表 + spec 2026-07-17 §5.1 扩充 8 种:
-     * 占位启用 BAR_COMPARE/AREA_STACK/GAUGE/TABLE_LIST + KPI 专属 KPI_DETAIL_TABLE/KPI_RADAR/
-     * LIQUID_PROGRESS/PROGRESS_LIST;区块保存侧 component_type 白名单见 ScreenConfigServiceImpl 同步扩充) */
+    /** ChartWidget 的 innerType 白名单（基础图表、KPI 图表与常用扩展图表；
+     * 区块保存侧 component_type 白名单见 ScreenConfigServiceImpl 同步扩充）。 */
     private static final Set<String> INNER_TYPES = Set.of(
             "METRIC_CARD", "LINE_TREND", "PIE_SHARE", "RANK_LIST", "FLOW_STATUS",
             "BAR_COMPARE", "AREA_STACK", "GAUGE", "TABLE_LIST",
-            "KPI_DETAIL_TABLE", "KPI_RADAR", "LIQUID_PROGRESS", "PROGRESS_LIST");
+            "KPI_DETAIL_TABLE", "KPI_RADAR", "LIQUID_PROGRESS", "PROGRESS_LIST",
+            "COMBO_CHART", "FUNNEL_CHART", "SCATTER_BUBBLE", "HEATMAP_MATRIX",
+            "SUNBURST_CHART", "SPARKLINE_CARD");
     /** 时序图和启用钻取的图表只能绑定时序数据源。 */
-    private static final Set<String> TIMESERIES_ONLY_INNER_TYPES = Set.of("LINE_TREND", "AREA_STACK");
+    private static final Set<String> TIMESERIES_ONLY_INNER_TYPES =
+            Set.of("LINE_TREND", "AREA_STACK", "SPARKLINE_CARD");
     /** KPI 专属图表只能绑定 KPI_DETAIL 数据源。 */
     private static final Set<String> KPI_DETAIL_ONLY_INNER_TYPES =
             Set.of("KPI_DETAIL_TABLE", "KPI_RADAR", "PROGRESS_LIST");
@@ -172,7 +174,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
                 .filter(c -> "ChartWidget".equals(c.getComponent()))
                 .collect(Collectors.toList());
         // 先完成 schema/条线/命名组主体校验，再触碰 block 行；错误配置不能留下半更新草稿。
-        String unboundDraftJson = buildDraftJson(comps);
+        String unboundDraftJson = buildDraftJson(s, comps);
         validateCanvasSchema(unboundDraftJson);
         if (screenMapService != null) {
             screenMapService.validateDraftStructure(unboundDraftJson);
@@ -214,7 +216,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
 
         // 3) 序列化组件树(含 resolved blockId)+ 样式;上限校验
         String styleJson = writeJson(req.getCanvasStyle());
-        String draftJson = buildDraftJson(comps);
+        String draftJson = buildDraftJson(s, comps);
         validateCanvasSchema(draftJson);
         if (screenMapService != null) {
             screenMapService.validateDraftStructure(draftJson);
@@ -730,9 +732,9 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         return json == null || json.isBlank() ? "{}" : json;
     }
 
-    private String buildDraftJson(List<CanvasComponentDTO> comps) {
+    private String buildDraftJson(RptScreen screen, List<CanvasComponentDTO> comps) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("schemaVersion", hasV2Map(comps) ? 2 : 1);
+        root.put("schemaVersion", requiresRuntimeSchemaV2(screen, comps) ? 2 : 1);
         ArrayNode arr = root.putArray("components");
         for (CanvasComponentDTO c : comps) {
             arr.add(objectMapper.valueToTree(c));
@@ -756,6 +758,10 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             }
         }
         return false;
+    }
+
+    private boolean requiresRuntimeSchemaV2(RptScreen screen, List<CanvasComponentDTO> components) {
+        return "NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode()) || hasV2Map(components);
     }
 
     private boolean hasV2Map(JsonNode components) {

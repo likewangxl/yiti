@@ -1,0 +1,24 @@
+Playwright CLI 请求摘要
+=======================
+
+认证与设计器：
+- GET /api/auth/permissions => 200
+- GET /api/screen/admin/screens => 200
+- GET /api/screen/admin/canvas/9105 => 200
+- GET /api/screen/admin/canvas/9101 => 200
+- GET /api/screen/admin/datasources => 200
+- GET /api/admin/org-groups => 200
+- GET /api/admin/roles/all?recordStatus=0 => 200
+- GET /api/admin/org-profiles => 200
+
+图表数据：
+- POST /api/screen/data（请求 174-178、181-187）=> 全部 200
+- 流程状态响应包含：["在途任务", 48]
+- 折线响应包含 17 个日期点；第一项指标均为空，第二项指标均为 1,150,000。
+- 指标卡响应包含 1,150,000 和空值。
+
+已知独立问题：
+- GET /api/screen/admin/screens/9105/map-region-metrics => 403
+- GET /api/screen/admin/screens/9101/map-region-metrics => 403
+
+Playwright CLI `route-list` 返回 `No active routes`，因此上述真实接口请求没有被浏览器路由拦截或替换。

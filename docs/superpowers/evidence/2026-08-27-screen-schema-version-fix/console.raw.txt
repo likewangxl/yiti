@@ -1,0 +1,13 @@
+### Result
+Total messages: 9 (Errors: 3, Warnings: 4)
+Returning 7 messages for level "info"
+
+[ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:8091/api/auth/login:0
+[WARNING] [Vue Router warn]: No match found for location with path "/customers/manage"
+[WARNING] [Vue Router warn]: No match found for location with path "/bizexec/supports"
+[ERROR] Failed to load resource: the server responded with a status of 403 (Forbidden) @ http://127.0.0.1:8091/api/screen/admin/screens/9105/map-region-metrics:0
+[WARNING] [api fallback] GET /screen/admin/screens/9105/map-region-metrics 失败，使用 mock 兜底 资源未登记
+[ERROR] Failed to load resource: the server responded with a status of 403 (Forbidden) @ http://127.0.0.1:8091/api/screen/admin/screens/9104/map-region-metrics:0
+[WARNING] [api fallback] GET /screen/admin/screens/9104/map-region-metrics 失败，使用 mock 兜底 资源未登记
+
+说明：401 来自首次使用失效本地默认密码；两个 403/fallback 属于经营地图资源，与本次 `/api/screen/data` 图表请求无关。

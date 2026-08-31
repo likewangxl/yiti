@@ -1,0 +1,21 @@
+playwright-cli route-list（CLI 注册表）
+
+1. **/api/auth/current-user
+2. **/api/auth/my-menus
+3. **/api/screen/admin/screens
+4. **/api/screen/admin/canvas/9201
+5. **/api/screen/admin/screens/9201/map-region-metrics
+6. **/api/screen/admin/datasources*
+7. **/api/admin/org-groups*
+8. **/api/admin/org-profiles*
+9. **/api/admin/roles/all*
+10. **/api/screen/data
+11. **/api/auth/permissions
+
+浏览器上下文额外注册（run-code）
+
+12. **/api/screen/view/SCR_PIE_METRICS*
+
+说明：第 12 条由 page.context().route 直接注册，不进入 playwright-cli 的 route-list 注册表；network.raw.txt 中请求 213 的 200 响应与完整草稿包响应体证明该 route 已命中。
+
+所有 12 条均为开发态 mock route，仅用于本次浏览器验收，非联调。

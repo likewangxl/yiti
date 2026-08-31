@@ -35,6 +35,9 @@ public class ScreenDataReqDTO {
     @JsonDeserialize(using = StrictJsonLongDeserializer.class)
     private Long blockId;
 
+    /** 管理端草稿预览取数标记；仅允许显式 draft，发布态请求不得借此改变身份语义。 */
+    private String previewState;
+
     /** 预设周期：LATEST/LAST_10D/LAST_1M/LAST_6M_EOM/RANGE（空=LATEST） */
     private String period;
 

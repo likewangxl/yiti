@@ -1,0 +1,13 @@
+仅开发态 mock，非联调。
+
+1. **/api/auth/current-user
+2. **/api/auth/my-menus
+3. **/api/auth/permissions
+4. **/api/screen/admin/datasources
+5. **/api/perf/metrics*
+6. **/api/screen/admin/kpi-schemes*
+7. **/api/admin/org-groups*
+8. **/api/screen/admin/datasources/9012
+9. **/api/notifications/unread-count
+
+第 4 条返回数据源 9012，并人为设置 publishedReferenceScreenCodes=["SCR_PROVINCE"]；第 8 条拦截 PUT 更新并返回成功。所有接口均未到达真实后端。

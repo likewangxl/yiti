@@ -1,0 +1,11 @@
+GET http://127.0.0.1:8091/api/screen/admin/datasources => 200
+GET http://127.0.0.1:8091/api/admin/org-groups => 200
+GET http://127.0.0.1:8091/api/screen/admin/datasources => 200
+GET http://127.0.0.1:8091/api/admin/org-groups => 200
+GET http://127.0.0.1:8091/api/screen/admin/datasources => 200
+GET http://127.0.0.1:8091/api/admin/org-groups => 200
+
+Datasource response used by the interaction:
+{"code":"0","message":"success","data":[{"id":9010,"dsName":"全省存款聚合","dsType":"SINGLE","sourceKind":"WIDE_TABLE","bizLine":"COMMON","status":"ACTIVE","configJson":"{\"scopeMode\":\"GLOBAL\",\"table\":\"ORG_INDEX_RESULT\",\"metrics\":[{\"metricName\":\"一般性存款月均余额较上月-机构\"},{\"metricName\":\"一般性存款月均余额-机构\"}],\"fieldMeta\":[{\"col\":\"一般性存款月均余额较上月-机构\",\"alias\":\"全省存款较上月净增\",\"role\":\"METRIC\"},{\"col\":\"一般性存款月均余额-机构\",\"alias\":\"全省存款月均余额\",\"role\":\"METRIC\"}]}"},{"id":9011,"dsName":"全省贷款聚合","dsType":"SINGLE","sourceKind":"WIDE_TABLE","bizLine":"COMMON","status":"ACTIVE","configJson":"{\"scopeMode\":\"GLOBAL\",\"table\":\"ORG_INDEX_RESULT\",\"metrics\":[{\"metricName\":\"贷款余额-机构\"}],\"fieldMeta\":[{\"col\":\"贷款余额-机构\",\"alias\":\"全省贷款余额\",\"role\":\"METRIC\"}]}"}]}
+
+No POST, PUT, PATCH or DELETE request was issued after the request list was cleared.

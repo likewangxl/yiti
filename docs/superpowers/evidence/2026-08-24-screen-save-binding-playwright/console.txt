@@ -1,0 +1,6 @@
+加载设计器（map-region-metrics 返回 RPT-43017）：
+Total messages: 3 (Errors: 0, Warnings: 1)
+[WARNING] [api fallback] GET /screen/admin/screens/9105/map-region-metrics 失败，使用 mock 兜底 无权访问该大屏 @ http://127.0.0.1:8092/src/api/http.js:127
+
+保存后（已在点击保存前执行 console --clear）：
+Total messages: 0 (Errors: 0, Warnings: 0)

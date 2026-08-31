@@ -22,6 +22,7 @@ import VChart from 'vue-echarts';
 import { queryScreenData } from '@/api/screen';
 import { buildScreenDataRequest } from '@/utils/screenScope';
 import { SCR_COLOR, scrAxisLabel, scrAxisLine, scrSplitLine, scrTooltipStyle } from '@/styles/screenChartTheme';
+import { convertAmountScaleRows } from './utils/chartData';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent]);
 
@@ -64,7 +65,7 @@ onMounted(load);
 
 const option = computed(() => {
   const cols = data.value?.columns || [];
-  const rows = data.value?.rows || [];
+  const rows = convertAmountScaleRows(cols, data.value?.rows, data.value?.columnsMeta);
   const idx = cols.indexOf(props.item.col);
   return {
     grid: { top: 20, right: 16, bottom: 26, left: 56 },

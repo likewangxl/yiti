@@ -1,0 +1,27 @@
+仅开发态 mock，非联调。
+
+验收页面 API 请求均返回 200：
+
+- GET /api/auth/current-user
+- GET /api/auth/my-menus
+- GET /api/auth/permissions
+- GET /api/screen/admin/screens
+- GET /api/screen/admin/canvas/9910
+- GET /api/screen/admin/screens/9910/map-region-metrics
+- POST /api/screen/data
+- GET /api/admin/org-groups
+- GET /api/admin/roles/all?recordStatus=0
+- GET /api/admin/org-profiles
+- GET /api/screen/admin/datasources
+
+`POST /api/screen/data` 请求体：
+
+```json
+{"schemaVersion":1,"previewState":"draft","screenCode":"SCR_RANK_E2E","blockId":77,"period":"LATEST","contextParams":{"orgCode":"","empId":""}}
+```
+
+响应体：
+
+```json
+{"code":"0","message":"success","data":{"columns":["org_name","balance","growth"],"rows":[["甲机构",120,3.2],["乙机构",90,8.1],["丙机构",150,1.5],["丁机构",60,6.6],["戊机构",130,2.8],["己机构",75,9.2],["庚机构",110,4.4],["辛机构",45,7.3],["壬机构",105,5.1],["癸机构",82,6],["子机构",98,3.8],["丑机构",68,8.7]],"columnsMeta":[{"col":"org_name","alias":"机构名称","role":"DIM"},{"col":"balance","alias":"存款余额","role":"METRIC","unit":"万元","decimals":0},{"col":"growth","alias":"增幅","role":"METRIC","unit":"%","decimals":1}]}}
+```

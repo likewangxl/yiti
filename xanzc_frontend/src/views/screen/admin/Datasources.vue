@@ -68,7 +68,7 @@
               <template #expanded>
                 <el-button link @click="openTryRun(row)">试跑</el-button>
                 <el-button link @click="openProbeColumns(row)">探测列</el-button>
-                <el-button v-if="referenceState(row).semanticFrozen" link @click="openCopy(row)">新建副本</el-button>
+                <el-button v-if="referenceState(row).publishedReferenced" link @click="openCopy(row)">新建副本</el-button>
                 <el-button link type="danger" :disabled="referenceState(row).deleteBlocked" :title="referenceState(row).guidance || undefined" @click="onDelete(row)">删除</el-button>
               </template>
               <template #compact>
@@ -77,7 +77,7 @@
                   <template #dropdown><el-dropdown-menu>
                     <el-dropdown-item command="try">试跑</el-dropdown-item>
                     <el-dropdown-item command="probe">探测列</el-dropdown-item>
-                    <el-dropdown-item v-if="referenceState(row).semanticFrozen" command="copy">新建副本</el-dropdown-item>
+                    <el-dropdown-item v-if="referenceState(row).publishedReferenced" command="copy">新建副本</el-dropdown-item>
                     <el-dropdown-item command="delete" divided class="danger-item" :disabled="referenceState(row).deleteBlocked" :title="referenceState(row).guidance || undefined">删除</el-dropdown-item>
                   </el-dropdown-menu></template>
                 </el-dropdown>
@@ -89,7 +89,8 @@
     </section>
 
     <!-- 新建/编辑 -->
-    <el-dialog v-model="dlg.show" class="bp-crud-dialog" :title="dlg.editing ? '编辑数据源' : '新建数据源'" width="760px" top="4vh">
+    <el-dialog v-model="dlg.show" class="bp-crud-dialog" :title="dlg.editing ? '编辑数据源' : '新建数据源'"
+               width="760px" top="4vh" :close-on-click-modal="false">
       <el-form label-position="top">
         <el-form-item label="名称" required>
           <el-input v-model="dlg.dsName" maxlength="100" />
@@ -108,17 +109,17 @@
           <el-input v-model="dlg.reason" maxlength="500" data-testid="datasource-save-reason"
                     placeholder="新增、修改、停用数据源均须填写原因" />
         </el-form-item>
-        <el-alert v-if="semanticFrozen" type="warning" :closable="false" show-icon
-                  title="发布/归档引用已冻结查询语义"
-                  :description="frozenGuidance" data-testid="datasource-freeze-notice" />
+        <el-alert v-if="publishedReferenced" type="warning" :closable="false" show-icon
+                  title="发布/归档引用数据源，编辑会影响已发布大屏"
+                  :description="publishedReferenceGuidance" data-testid="datasource-freeze-notice" />
         <el-form-item label="业务条线" required>
-          <el-select v-model="dlg.m.bizLine" :disabled="semanticFrozen" style="width:100%" placeholder="请选择数据归属">
+          <el-select v-model="dlg.m.bizLine" style="width:100%" placeholder="请选择数据归属">
             <el-option v-for="line in BIZ_LINES" :key="line.value" :label="line.label" :value="line.value" />
           </el-select>
           <span class="hint">由数据源显式声明，不能根据名称或指标中文名推断；共用请明确选择“共用”。</span>
         </el-form-item>
         <el-form-item label="来源类型" required>
-          <el-radio-group v-model="dlg.m.sourceKind" :disabled="semanticFrozen || !!dlg.editing">
+          <el-radio-group v-model="dlg.m.sourceKind" :disabled="!!dlg.editing">
             <el-radio-button value="WIDE_TABLE">指标宽表(引导式)</el-radio-button>
             <el-radio-button value="KPI_RESULT" :disabled="namedGroupMode">KPI结果(引导式)</el-radio-button>
             <el-radio-button value="KPI_DETAIL" :disabled="namedGroupMode">KPI细项(引导式)</el-radio-button>
@@ -129,19 +130,19 @@
         <!-- 宽表引导式 -->
         <template v-if="dlg.m.sourceKind === 'WIDE_TABLE'">
           <el-form-item label="宽表" required>
-            <el-select v-model="dlg.m.wide.table" :disabled="semanticFrozen" style="width:100%" @change="onWideTableChange">
+            <el-select v-model="dlg.m.wide.table" style="width:100%" @change="onWideTableChange">
               <el-option label="员工指标宽表 (EMP_INDEX_RESULT)" value="EMP_INDEX_RESULT" :disabled="namedGroupMode" />
               <el-option label="机构指标宽表 (ORG_INDEX_RESULT)" value="ORG_INDEX_RESULT" />
             </el-select>
           </el-form-item>
           <el-form-item label="指标（多选，保存时自动绑定宽表字段槽位）" required>
-            <el-select v-model="dlg.m.wide.metricCodes" :disabled="semanticFrozen" multiple filterable style="width:100%">
+            <el-select v-model="dlg.m.wide.metricCodes" multiple filterable style="width:100%">
               <el-option v-for="m in wideMetricOptions" :key="m.metricCode"
                          :label="`${m.metricName} (${m.metricCode})`" :value="m.metricCode" />
             </el-select>
           </el-form-item>
           <el-form-item label="允许的预设周期（存 timeParamJson，供设计器周期下拉参考）">
-            <el-select v-model="dlg.m.wide.timeParams" :disabled="semanticFrozen" multiple style="width:100%">
+            <el-select v-model="dlg.m.wide.timeParams" multiple style="width:100%">
               <el-option v-for="p in TIME_PARAM_PRESETS" :key="p" :label="p" :value="p" />
             </el-select>
           </el-form-item>
@@ -150,35 +151,35 @@
           <el-form-item>
             <template #label>
               聚合配置（可选）
-              <el-switch v-model="dlg.m.aggEnabled" :disabled="semanticFrozen" size="small" style="margin-left:8px" />
+              <el-switch v-model="dlg.m.aggEnabled" size="small" style="margin-left:8px" />
             </template>
             <div v-if="dlg.m.aggEnabled" class="agg-box">
               <div class="agg-row">
                 <span class="agg-label">分组维度</span>
-                <el-select v-model="dlg.m.aggregation.groupBy" :disabled="semanticFrozen" style="width:180px">
+                <el-select v-model="dlg.m.aggregation.groupBy" style="width:180px">
                   <el-option label="不分组（全量聚合为一行）" value="NONE" />
                   <el-option label="按主体（emp/org）" value="SUBJECT" />
                   <el-option label="按日期（时序）" value="DATE" />
                 </el-select>
                 <span class="agg-label">聚合函数</span>
-                <el-select v-model="dlg.m.aggregation.agg" :disabled="semanticFrozen" style="width:120px">
+                <el-select v-model="dlg.m.aggregation.agg" style="width:120px">
                   <el-option v-for="f in AGG_FUNCS" :key="f" :label="f" :value="f" />
                 </el-select>
               </div>
               <div v-for="(f, i) in dlg.m.aggregation.filters" :key="i" class="agg-row">
-                <el-select v-model="f.col" :disabled="semanticFrozen" filterable allow-create default-first-option
+                <el-select v-model="f.col" filterable allow-create default-first-option
                            placeholder="过滤列" style="width:180px">
                   <el-option v-for="c in filterColOptions" :key="c" :label="c" :value="c" />
                 </el-select>
-                <el-select v-model="f.op" :disabled="semanticFrozen" style="width:90px">
+                <el-select v-model="f.op" style="width:90px">
                   <el-option v-for="op in FILTER_OPS" :key="op" :label="op" :value="op" />
                 </el-select>
-                <el-input v-model="f.value" :disabled="semanticFrozen" style="width:220px"
+                <el-input v-model="f.value" style="width:220px"
                           :placeholder="f.op === 'IN' ? '多值用英文逗号分隔，如 A,B,C' : '值'" />
-                <el-button link type="danger" :disabled="semanticFrozen" @click="dlg.m.aggregation.filters.splice(i, 1)">删除</el-button>
+                <el-button link type="danger" @click="dlg.m.aggregation.filters.splice(i, 1)">删除</el-button>
               </div>
               <div class="agg-row">
-                <el-button size="small" :disabled="semanticFrozen" @click="dlg.m.aggregation.filters.push({ col: '', op: 'EQ', value: '' })">
+                <el-button size="small" @click="dlg.m.aggregation.filters.push({ col: '', op: 'EQ', value: '' })">
                   + 添加过滤条件
                 </el-button>
                 <span class="hint">过滤列仅允许主体列/data_date/已绑定槽位列（val_N，保存后编辑可下拉选）</span>
@@ -191,7 +192,7 @@
         <!-- KPI 结果引导式 -->
         <template v-else-if="dlg.m.sourceKind === 'KPI_RESULT'">
           <el-form-item label="周期类型" required>
-            <el-radio-group v-model="dlg.m.kpi.cycleType" :disabled="semanticFrozen">
+            <el-radio-group v-model="dlg.m.kpi.cycleType">
               <el-radio value="MONTHLY">月度</el-radio>
               <el-radio value="QUARTERLY">季度</el-radio>
             </el-radio-group>
@@ -201,39 +202,39 @@
         <!-- KPI 细项引导式（spec 2026-07-17 §3.1） -->
         <template v-else-if="dlg.m.sourceKind === 'KPI_DETAIL'">
           <el-form-item label="KPI 方案" required>
-            <el-select v-model="dlg.m.kpiDetail.schemeCode" :disabled="semanticFrozen" filterable style="width:100%"
+            <el-select v-model="dlg.m.kpiDetail.schemeCode" filterable style="width:100%"
                        placeholder="选择 ACTIVE 状态的 KPI 方案">
               <el-option v-for="s in schemes" :key="s.schemeCode"
                          :label="`${s.schemeName} (${s.schemeCode})`" :value="s.schemeCode" />
             </el-select>
           </el-form-item>
           <el-form-item label="主体类型" required>
-            <el-radio-group v-model="dlg.m.kpiDetail.subjectType" :disabled="semanticFrozen" @change="dlg.m.kpiDetail.metrics = []">
+            <el-radio-group v-model="dlg.m.kpiDetail.subjectType" @change="dlg.m.kpiDetail.metrics = []">
               <el-radio value="EMP">员工（个人屏 empId）</el-radio>
               <el-radio value="ORG">机构（支行屏 orgCode）</el-radio>
             </el-radio-group>
           </el-form-item>
           <el-form-item label="模式" required>
-            <el-radio-group v-model="dlg.m.kpiDetail.mode" :disabled="semanticFrozen">
+            <el-radio-group v-model="dlg.m.kpiDetail.mode">
               <el-radio value="SNAPSHOT">细项快照（最新一日全部细项：目标/实际/完成率/缺口/得分）</el-radio>
               <el-radio value="TREND">细项趋势（按日期返回所选细项的得分或完成率）</el-radio>
             </el-radio-group>
           </el-form-item>
           <template v-if="dlg.m.kpiDetail.mode === 'TREND'">
             <el-form-item label="指标（细项，多选；保存时携带名称快照）" required>
-              <el-select v-model="kpiMetricCodes" :disabled="semanticFrozen" multiple filterable style="width:100%">
+              <el-select v-model="kpiMetricCodes" multiple filterable style="width:100%">
                 <el-option v-for="m in kpiMetricOptions" :key="m.metricCode"
                            :label="`${m.metricName} (${m.metricCode})`" :value="m.metricCode" />
               </el-select>
             </el-form-item>
             <el-form-item label="取值列" required>
-              <el-radio-group v-model="dlg.m.kpiDetail.valueCol" :disabled="semanticFrozen">
+              <el-radio-group v-model="dlg.m.kpiDetail.valueCol">
                 <el-radio value="score">得分（score）</el-radio>
                 <el-radio value="completeRate">完成率（completeRate）</el-radio>
               </el-radio-group>
             </el-form-item>
             <el-form-item label="允许的预设周期（存 timeParamJson，供设计器周期下拉参考）">
-              <el-select v-model="dlg.m.kpiDetail.timeParams" :disabled="semanticFrozen" multiple style="width:100%">
+              <el-select v-model="dlg.m.kpiDetail.timeParams" multiple style="width:100%">
                 <el-option v-for="p in TIME_PARAM_PRESETS" :key="p" :label="p" :value="p" />
               </el-select>
             </el-form-item>
@@ -243,17 +244,17 @@
         <!-- 自定义 SQL -->
         <template v-else>
           <el-form-item label="SELECT 语句（占位参数：#{orgCode} #{empId} #{dateFrom} #{dateTo}；仅白名单表）" required>
-            <el-input v-model="dlg.m.sql.text" :disabled="semanticFrozen" type="textarea" :rows="6"
+            <el-input v-model="dlg.m.sql.text" type="textarea" :rows="6"
                       placeholder="SELECT org_name, cnt FROM ... WHERE org_code = #{orgCode}" />
           </el-form-item>
           <el-form-item label="能力标签" required>
-            <el-radio-group v-model="dlg.m.dsType" :disabled="semanticFrozen">
+            <el-radio-group v-model="dlg.m.dsType">
               <el-radio value="SINGLE">单值型（仅最新统计结果）</el-radio>
               <el-radio value="TIMESERIES">时序型（须声明日期列）</el-radio>
             </el-radio-group>
           </el-form-item>
           <el-form-item v-if="dlg.m.dsType === 'TIMESERIES'" label="日期列名" required>
-            <el-input v-model="dlg.m.sql.dateCol" :disabled="semanticFrozen" placeholder="如 stat_date" />
+            <el-input v-model="dlg.m.sql.dateCol" placeholder="如 stat_date" />
           </el-form-item>
         </template>
 
@@ -267,50 +268,67 @@
         <!-- 字段元数据（全类型通用可选段，spec §3.2） -->
         <el-form-item>
           <template #label>
-            字段元数据（可选：别名/角色/单位/小数位，组件展示时套用）
+            字段元数据（可选：别名/角色/金额量级/单位/小数位，组件展示时套用）
             <el-button size="small" style="margin-left:8px"
-                       :disabled="semanticFrozen" @click="dlg.m.fieldMeta.push({ col: '', alias: '', role: 'METRIC', unit: '', decimals: null })">
+                       @click="addFieldMetaRow">
               + 加一行
             </el-button>
           </template>
           <el-table v-if="dlg.m.fieldMeta.length" :data="dlg.m.fieldMeta" size="small" border>
             <el-table-column label="列名(col)" min-width="150">
               <template #default="{ row }">
-                <el-select v-model="row.col" :disabled="semanticFrozen" filterable allow-create default-first-option
+                <el-select v-model="row.col" filterable allow-create default-first-option
                            placeholder="试跑后可下拉选，也可手输" style="width:100%">
-                  <el-option v-for="c in lastTryCols" :key="c" :label="c" :value="c" />
+                  <el-option v-for="c in sortedLastTryCols" :key="c" :label="c" :value="c" />
                 </el-select>
               </template>
             </el-table-column>
             <el-table-column label="别名(alias)" min-width="120">
-              <template #default="{ row }"><el-input v-model="row.alias" :disabled="semanticFrozen" /></template>
+              <template #default="{ row }"><el-input v-model="row.alias" /></template>
             </el-table-column>
             <el-table-column label="角色" width="110">
               <template #default="{ row }">
-                <el-select v-model="row.role" :disabled="semanticFrozen">
+                <el-select v-model="row.role">
                   <el-option label="维度 DIM" value="DIM" />
                   <el-option label="度量 METRIC" value="METRIC" />
                 </el-select>
               </template>
             </el-table-column>
+            <el-table-column label="金额量级" width="130">
+              <template #default="{ row }">
+                <el-select v-if="row.role === 'METRIC'" v-model="row.amountScale" clearable
+                           placeholder="自定义" style="width:100%">
+                  <el-option v-for="option in AMOUNT_SCALE_OPTIONS" :key="option.value"
+                             :label="option.label" :value="option.value" />
+                </el-select>
+                <span v-else class="hint">—</span>
+              </template>
+            </el-table-column>
             <el-table-column label="单位" width="90">
-              <template #default="{ row }"><el-input v-model="row.unit" :disabled="semanticFrozen" /></template>
+              <template #default="{ row }">
+                <el-input :model-value="fieldMetaUnitDisplay(row)" :disabled="hasAmountScale(row)"
+                          @update:model-value="value => updateFieldMetaUnit(row, value)" />
+              </template>
             </el-table-column>
             <el-table-column label="小数位" width="80">
-              <template #default="{ row }"><el-input v-model="row.decimals" :disabled="semanticFrozen" placeholder="如 2" /></template>
+              <template #default="{ row }">
+                <el-input :model-value="fieldMetaDecimalsDisplay(row)" :disabled="hasAmountScale(row)"
+                          placeholder="如 2" @update:model-value="value => updateFieldMetaDecimals(row, value)" />
+              </template>
             </el-table-column>
             <el-table-column label="" width="60">
               <template #default="{ $index }">
-                <el-button link type="danger" :disabled="semanticFrozen" @click="dlg.m.fieldMeta.splice($index, 1)">删</el-button>
+                <el-button link type="danger" @click="dlg.m.fieldMeta.splice($index, 1)">删</el-button>
               </template>
             </el-table-column>
           </el-table>
           <span v-else class="hint">未配置时组件按原始列名展示；先在列表页「试跑」一次可让列名支持下拉选择</span>
+          <span class="hint">选择金额量级会将按元返回的原始数值转换为对应单位并按 2 位小数展示，仅影响组件/试跑预览，不修改接口原始 rows、SQL 或数据库；清空后恢复自定义单位/小数位。</span>
         </el-form-item>
 
         <!-- 数据范围模式（spec §4） -->
         <el-form-item label="数据范围模式">
-          <el-radio-group v-model="dlg.m.scopeMode" :disabled="semanticFrozen" @change="onScopeModeChange">
+          <el-radio-group v-model="dlg.m.scopeMode" @change="onScopeModeChange">
             <el-radio value="SUBJECT">主体范围（按 empId/orgCode 校验查看者数据范围，默认）</el-radio>
             <el-radio value="GLOBAL">全省聚合（无主体参数的全省类数据；查看需 ALL/省级数据范围权限）</el-radio>
             <el-radio value="NAMED_GROUP">命名机构组（仅机构宽表；服务端按已授权组成员取数）</el-radio>
@@ -382,7 +400,7 @@ import { listMetrics } from '@/api/metrics';
 import {
   defaultDsModel, deriveDsType, buildConfigJson, buildTimeParamJson,
   parseConfigJson, validateDsModel, buildPreviewColumns, formatPreviewCell,
-  AGG_FUNCS, FILTER_OPS, TIME_PARAM_PRESETS, datasourceTryRunScopeMode,
+  AGG_FUNCS, FILTER_OPS, TIME_PARAM_PRESETS, AMOUNT_SCALE_OPTIONS, datasourceTryRunScopeMode,
   buildDatasourceTryRunRequest, buildDatasourceProbeRequest
 } from '@/utils/dsConfig';
 import {
@@ -398,6 +416,8 @@ const loading = ref(false);
 const metrics = ref([]);
 const schemes = ref([]);       // KPI 方案下拉（/screen/admin/kpi-schemes）
 const lastTryCols = ref([]);   // 最近一次试跑返回的列名 → fieldMeta 的 col 下拉候选
+const columnNameCollator = new Intl.Collator('zh-CN');
+const sortedLastTryCols = computed(() => [...lastTryCols.value].sort(columnNameCollator.compare));
 const testOrgGroups = ref([]); // NAMED_GROUP 试跑的显式候选，停用/非报表用途组不展示
 const filters = reactive({ bizLine: '' });
 
@@ -411,8 +431,8 @@ const deleteDialog = reactive({ show: false, saving: false, row: null, reason: '
 // 能力标签联动展示：宽表随聚合 groupBy、KPI 细项随模式（与后端保存强制规则一致）
 const derivedDsType = computed(() => deriveDsType(dlg.m));
 const editingReferenceState = computed(() => datasourceReferenceState(dlg.editingRow || {}));
-const semanticFrozen = computed(() => editingReferenceState.value.semanticFrozen);
-const frozenGuidance = computed(() => editingReferenceState.value.guidance);
+const publishedReferenced = computed(() => editingReferenceState.value.publishedReferenced);
+const publishedReferenceGuidance = computed(() => editingReferenceState.value.guidance);
 const namedGroupMode = computed(() => dlg.m.scopeMode === 'NAMED_GROUP');
 
 // 宽表指标下拉：按所选宽表的维度过滤（EMP 表→EMP 指标）
@@ -443,6 +463,37 @@ const filterColOptions = computed(() => {
   const subject = dlg.m.wide.table === 'ORG_INDEX_RESULT' ? 'org_code' : 'emp_id';
   return [subject, 'data_date', ...dlg.m.wide.slotCols];
 });
+
+function amountScaleOption(row) {
+  return AMOUNT_SCALE_OPTIONS.find(option => option.value === row?.amountScale) || null;
+}
+
+/** 已选择金额量级时仅锁定展示字段；row.unit/decimals 仍保留，清空预设即可恢复。 */
+function hasAmountScale(row) {
+  return row?.role === 'METRIC' && Boolean(amountScaleOption(row));
+}
+
+function fieldMetaUnitDisplay(row) {
+  const preset = hasAmountScale(row) ? amountScaleOption(row) : null;
+  return preset?.unit || row?.unit || '';
+}
+
+function fieldMetaDecimalsDisplay(row) {
+  const preset = hasAmountScale(row) ? amountScaleOption(row) : null;
+  return preset ? String(preset.decimals) : (row?.decimals ?? '');
+}
+
+function updateFieldMetaUnit(row, value) {
+  if (!hasAmountScale(row)) row.unit = value;
+}
+
+function updateFieldMetaDecimals(row, value) {
+  if (!hasAmountScale(row)) row.decimals = value;
+}
+
+function addFieldMetaRow() {
+  dlg.m.fieldMeta.push({ col: '', alias: '', role: 'METRIC', amountScale: '', unit: '', decimals: null });
+}
 
 function onWideTableChange() {
   // 换表后指标维度变化，清空已选指标与槽位缓存

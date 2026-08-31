@@ -14,7 +14,7 @@
                   :context="{ ...context, blockId: block.id ?? block.blockId }"
                   :item="drillItem" :periods="drill.drillPeriods || ['LAST_10D']" />
       <component v-else-if="data" :is="componentMap[block.componentType]"
-                 :columns="data.columns" :rows="data.rows"
+                 :columns="data.columns" :rows="displayRows"
                  :bind="bind" :style-cfg="styleCfg" v-bind="extraProps" @item-click="onItemClick" />
     </div>
   </div>
@@ -27,6 +27,7 @@ import { InfoFilled } from '@element-plus/icons-vue';
 import { queryScreenData } from '@/api/screen';
 import { buildScreenDataRequest } from '@/utils/screenScope';
 import { GLOBAL_PERIOD_INJECT_KEY, resolveBlockPeriod, shouldApplyGlobalPeriod } from '@/utils/globalPeriod';
+import { convertAmountScaleRows } from './utils/chartData';
 import MetricCard from './MetricCard.vue';
 import LineTrend from './LineTrend.vue';
 import PieShare from './PieShare.vue';
@@ -41,6 +42,12 @@ import KpiDetailTable from './KpiDetailTable.vue';
 import KpiRadar from './KpiRadar.vue';
 import LiquidProgress from './LiquidProgress.vue';
 import ProgressList from './ProgressList.vue';
+import ComboChart from './ComboChart.vue';
+import FunnelChart from './FunnelChart.vue';
+import ScatterBubble from './ScatterBubble.vue';
+import HeatmapMatrix from './HeatmapMatrix.vue';
+import SunburstChart from './SunburstChart.vue';
+import SparklineCard from './SparklineCard.vue';
 
 const props = defineProps({
   block: { type: Object, required: true },
@@ -64,13 +71,21 @@ const componentMap = {
   KPI_DETAIL_TABLE: KpiDetailTable,
   KPI_RADAR: KpiRadar,
   LIQUID_PROGRESS: LiquidProgress,
-  PROGRESS_LIST: ProgressList
+  PROGRESS_LIST: ProgressList,
+  COMBO_CHART: ComboChart,
+  FUNNEL_CHART: FunnelChart,
+  SCATTER_BUBBLE: ScatterBubble,
+  HEATMAP_MATRIX: HeatmapMatrix,
+  SUNBURST_CHART: SunburstChart,
+  SPARKLINE_CARD: SparklineCard
 };
 // 新一代图表额外消费 propValue + columnsMeta（/api/screen/data 可选扩展字段，缺失容错）；
-// 旧 5 类图表不声明这两个 props，避免对象透传落成 DOM attribute，按类型白名单条件绑定
+// 数值卡只声明 columnsMeta；其余旧图表不声明元数据，避免对象透传落成 DOM attribute。
 const EXTENDED_TYPES = new Set([
   'BAR_COMPARE', 'AREA_STACK', 'GAUGE', 'TABLE_LIST',
-  'KPI_DETAIL_TABLE', 'KPI_RADAR', 'LIQUID_PROGRESS', 'PROGRESS_LIST'
+  'KPI_DETAIL_TABLE', 'KPI_RADAR', 'LIQUID_PROGRESS', 'PROGRESS_LIST',
+  'COMBO_CHART', 'FUNNEL_CHART', 'SCATTER_BUBBLE', 'HEATMAP_MATRIX',
+  'SUNBURST_CHART', 'SPARKLINE_CARD', 'RANK_LIST'
 ]);
 
 function parse(json, fallback = {}) {
@@ -81,11 +96,17 @@ const styleCfg = computed(() => parse(props.block.styleJson));
 const drill = computed(() => parse(props.block.drillJson));
 
 const data = ref(null);
+// 接口 data 保留原始 rows；仅把按元计价的度量列转换为组件展示值，统一覆盖 19 类图表。
+const displayRows = computed(() => convertAmountScaleRows(
+  data.value?.columns, data.value?.rows, data.value?.columnsMeta
+));
 // 扩展 props 仅对新一代图表下发（columnsMeta 来自 /api/screen/data 响应可选字段，后端未上线时为 null）
 const extraProps = computed(() =>
-  EXTENDED_TYPES.has(props.block.componentType)
-    ? { propValue: props.propValue || {}, columnsMeta: data.value?.columnsMeta || null }
-    : {});
+  props.block.componentType === 'METRIC_CARD'
+    ? { columnsMeta: data.value?.columnsMeta || null }
+    : EXTENDED_TYPES.has(props.block.componentType)
+      ? { propValue: props.propValue || {}, columnsMeta: data.value?.columnsMeta || null }
+      : {});
 const loading = ref(false);
 const error = ref('');    // 真错误（红字）：周期非法 43011 / 执行失败 43008 / 其他
 const guide = ref('');    // 引导态（非报错）：缺必填上下文参数 43010，提示补 orgCode/empId
@@ -139,6 +160,7 @@ async function load() {
   try {
     data.value = await queryScreenData(buildScreenDataRequest({
       schemaVersion,
+      previewState: props.context?.previewState === 'draft' ? 'draft' : undefined,
       screenCode: props.context.screenCode,
       blockId,
       dsId: bind.value.dsId,
@@ -209,6 +231,26 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer); });
 </script>
 
 <style scoped>
+/*
+ * 结构兜底：运行态由 screen shell 提供这些约束，设计器通过 ChartWidget 复用本组件时
+ * 不一定经过同一层 shell；只声明尺寸/溢出，不复制 screen 主题视觉。
+ */
+.scr-block {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.scr-block-h { flex: none; }
+.scr-block-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
 /* 引导占位态（缺必填上下文参数）——柔和青灰、非红字，与 .scr-block-err 错误态视觉区分；
    scoped 随组件 chunk 生效，设计器预览与全屏大屏两个入口均可读，不依赖 screen.scss 是否被引入 */
 .scr-block-guide {

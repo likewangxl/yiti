@@ -1,0 +1,42 @@
+页面加载后的业务请求：
+
+46. [GET] /api/auth/current-user => [200] OK
+47. [GET] /api/auth/my-menus => [200] OK
+49. [GET] /api/auth/permissions => [200] OK
+234. [GET] /api/screen/admin/screens => [200] OK
+235. [GET] /api/screen/admin/canvas/9301 => [200] OK
+236. [GET] /api/screen/admin/screens/9301/map-region-metrics => [200] OK
+237. [POST] /api/screen/data => [200] OK（只读取数，非写操作）
+238. [GET] /api/admin/org-groups => [200] OK
+239. [GET] /api/admin/roles/all?recordStatus=0 => [200] OK
+240. [GET] /api/admin/org-profiles => [200] OK
+241. [GET] /api/screen/admin/datasources => [200] OK
+242. [GET] /api/admin/org-groups => [200] OK
+
+#237 [POST] /api/screen/data
+
+status: [200] OK
+duration: 2ms
+type: xhr
+mimeType: application/json
+
+请求正文：
+
+{"schemaVersion":1,"previewState":"draft","screenCode":"SCR_ORG_NAME_COLUMN","blockId":131,"period":"LATEST","contextParams":{"orgCode":"","empId":""}}
+
+响应正文：
+
+{"code":"0","message":"success","traceId":"mock-screen-data","data":{"columns":["org_code","org_name","存款余额"],"rows":[["001","机构甲",1234.5],["002","机构乙",6789]],"columnsMeta":[{"col":"org_name","alias":"机构名称","role":"DIM"},{"col":"存款余额","role":"METRIC","unit":"万元","decimals":2}]}}
+
+#241 [GET] /api/screen/admin/datasources
+
+status: [200] OK
+duration: 4ms
+type: xhr
+mimeType: application/json
+
+响应正文：
+
+{"code":"0","message":"success","traceId":"mock-datasources","data":[{"id":9302,"dsCode":"DS_ORG_SUBJECT","dsName":"机构指标主体聚合","dsType":"SINGLE","sourceKind":"WIDE_TABLE","bizLine":"COMMON","status":"ACTIVE","configJson":"{\"scopeMode\":\"GLOBAL\",\"table\":\"ORG_INDEX_RESULT\",\"aggregation\":{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\"},\"metrics\":[{\"metricName\":\"存款余额\"}]}"}]}
+
+选列交互只修改浏览器本地草稿，没有保存请求；全程没有 PUT、PATCH、DELETE 或发布请求。

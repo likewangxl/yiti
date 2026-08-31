@@ -12,6 +12,10 @@ const scss = readFileSync(
   resolve(dirname(fileURLToPath(import.meta.url)), '../../../styles/_screen-theme.scss'),
   'utf8'
 );
+const blockContainerSfc = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), '../components/BlockContainer.vue'),
+  'utf8'
+);
 
 describe('.scr-block 高度契约', () => {
   it('.scr-block 规则块内必须声明 height: 100%（宿主恒为定高盒子，缺失则 echarts 图表 0 高度空白）', () => {
@@ -20,5 +24,23 @@ describe('.scr-block 高度契约', () => {
     const m = scss.match(/\.scr-block\s*\{([^{]*)/);
     expect(m, '_screen-theme.scss 中应存在 .scr-block 规则块').toBeTruthy();
     expect(m[1]).toMatch(/height:\s*100%/);
+  });
+
+  it('BlockContainer 自带结构高度兜底，设计器脱离 screen shell 时仍保持区块可伸展', () => {
+    const scopedStyle = blockContainerSfc.match(/<style\s+scoped[^>]*>([\s\S]*?)<\/style>/)?.[1] || '';
+    const blockRule = scopedStyle.match(/\.scr-block\s*\{([^}]*)\}/)?.[1] || '';
+    const bodyRule = scopedStyle.match(/\.scr-block-body\s*\{([^}]*)\}/)?.[1] || '';
+    const headerRule = scopedStyle.match(/\.scr-block-h\s*\{([^}]*)\}/)?.[1] || '';
+    expect(blockRule).toMatch(/height:\s*100%/);
+    expect(blockRule).toMatch(/display:\s*flex/);
+    expect(blockRule).toMatch(/flex-direction:\s*column/);
+    expect(blockRule).toMatch(/min-width:\s*0/);
+    expect(blockRule).toMatch(/min-height:\s*0/);
+    expect(blockRule).toMatch(/overflow:\s*hidden/);
+    expect(headerRule).toMatch(/flex:\s*none/);
+    expect(bodyRule).toMatch(/flex:\s*1/);
+    expect(bodyRule).toMatch(/min-height:\s*0/);
+    expect(bodyRule).toMatch(/position:\s*relative/);
+    expect(bodyRule).toMatch(/overflow:\s*hidden/);
   });
 });

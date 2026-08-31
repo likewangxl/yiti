@@ -1,0 +1,30 @@
+{
+  "screenId": 9105,
+  "expectedVersion": 7,
+  "canvasStyle": {
+    "schemaVersion": 1,
+    "designWidth": 1920,
+    "designHeight": 1080,
+    "background": "#050e2b",
+    "backgroundType": "gradient",
+    "bgGradient": { "from": "#050e2b", "to": "#092b54", "angle": 135 },
+    "bgImage": "",
+    "adaptor": "keepProportion",
+    "themeOverride": {}
+  },
+  "components": [
+    {
+      "id": "chart-new",
+      "component": "ChartWidget",
+      "innerType": "METRIC_CARD",
+      "name": "新建指标卡",
+      "blockId": null,
+      "bindJson": "{\"dsId\":9009,\"period\":\"LATEST\"}",
+      "styleJson": "{\"title\":\"绑定验证\",\"refreshSec\":0}",
+      "drillJson": "{}",
+      "style": { "top": 120, "left": 260, "width": 420, "height": 220 },
+      "isLock": false,
+      "isShow": true
+    }
+  ]
+}

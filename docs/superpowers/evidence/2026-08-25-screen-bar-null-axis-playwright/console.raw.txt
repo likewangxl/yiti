@@ -1,0 +1,5 @@
+### Result
+Total messages: 2 (Errors: 0, Warnings: 0)
+Returning 0 messages for level "info"
+
+The console was cleared after initial navigation and before the verified page reload.

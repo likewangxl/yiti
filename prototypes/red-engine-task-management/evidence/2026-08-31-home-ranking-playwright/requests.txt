@@ -1,0 +1,21 @@
+Command: playwright-cli -s=redengine-home-ranking-20260831-v2 requests --static
+
+1. [GET] http://127.0.0.1:4179/ => [200] OK
+2. [GET] http://127.0.0.1:4179/@vite/client => [200] OK
+3. [GET] http://127.0.0.1:4179/src/main.jsx => [200] OK
+4. [GET] http://127.0.0.1:4179/@react-refresh => [200] OK
+5. [GET] http://127.0.0.1:4179/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=755efd35 => [200] OK
+6. [GET] http://127.0.0.1:4179/node_modules/.vite/deps/react.js?v=755efd35 => [200] OK
+7. [GET] http://127.0.0.1:4179/node_modules/.vite/deps/react-dom_client.js?v=755efd35 => [200] OK
+8. [GET] http://127.0.0.1:4179/src/App.jsx => [200] OK
+9. [GET] http://127.0.0.1:4179/src/styles.css => [200] OK
+10. [GET] http://127.0.0.1:4179/node_modules/.vite/deps/chunk-WGQ442SR.js?v=755efd35 => [200] OK
+11. [GET] http://127.0.0.1:4179/node_modules/vite/dist/client/env.mjs => [200] OK
+12. [GET] http://127.0.0.1:4179/node_modules/.vite/deps/chunk-5OEL3WWE.js?v=755efd35 => [200] OK
+13. [GET] http://127.0.0.1:4179/node_modules/.vite/deps/@tabler_icons-react.js?v=755efd35 => [200] OK
+14. [GET] http://127.0.0.1:4179/src/task-domain.js => [200] OK
+15. [GET] http://127.0.0.1:4179/src/role-access.js => [200] OK
+16. [GET] http://127.0.0.1:4179/src/home-domain.js => [200] OK
+17. [GET] http://127.0.0.1:4179/favicon.svg => [200] OK
+
+All 17 requests were static and returned 200. No `/api` request was made.

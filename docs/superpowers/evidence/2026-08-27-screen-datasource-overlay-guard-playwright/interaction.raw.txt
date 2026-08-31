@@ -1,0 +1,7 @@
+playwright-cli run-code（打开并修改表单）
+
+{"dialogVisible":1,"title":"编辑数据源","name":"日均存款详图-未保存","overlayCount":1}
+
+playwright-cli run-code（鼠标点击遮罩坐标 200,500 后）
+
+{"dialogVisibleAfterBackdropClick":1,"title":"编辑数据源","nameAfterBackdropClick":"日均存款详图-未保存","overlayCount":1}

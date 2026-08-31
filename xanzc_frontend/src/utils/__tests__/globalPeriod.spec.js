@@ -44,9 +44,10 @@ describe('isTimeseriesBlock 时序区块判定', () => {
     expect(isTimeseriesBlock({ dsType: 'SINGLE' }, 'LINE_TREND')).toBe(false);
   });
   it('dsType 缺失时按时序专属图表类型兜底（后端 RPT-43005 保证其只能绑 TIMESERIES）', () => {
-    expect(TIMESERIES_ONLY_COMPONENT_TYPES).toEqual(['LINE_TREND', 'AREA_STACK']);
+    expect(TIMESERIES_ONLY_COMPONENT_TYPES).toEqual(['LINE_TREND', 'AREA_STACK', 'SPARKLINE_CARD']);
     expect(isTimeseriesBlock({}, 'LINE_TREND')).toBe(true);
     expect(isTimeseriesBlock(null, 'AREA_STACK')).toBe(true);
+    expect(isTimeseriesBlock({}, 'SPARKLINE_CARD')).toBe(true);
     expect(isTimeseriesBlock({}, 'METRIC_CARD')).toBe(false);
     expect(isTimeseriesBlock(undefined, undefined)).toBe(false);
   });

@@ -1,6 +1,7 @@
 package com.bank.branch.platform.report.service.screen;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.ResourceApi;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.report.dto.req.ScreenDataReqDTO;
@@ -10,6 +11,7 @@ import com.bank.branch.platform.report.dto.req.ScreenTryRunReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDataRespDTO;
 import com.bank.branch.platform.report.entity.PerfKpiScheme;
 import com.bank.branch.platform.report.entity.RptScreen;
+import com.bank.branch.platform.report.entity.RptScreenBlock;
 import com.bank.branch.platform.report.entity.RptScreenDatasource;
 import com.bank.branch.platform.report.entity.RptScreenPublishLog;
 import com.bank.branch.platform.report.enums.RptErrorCode;
@@ -42,6 +44,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -60,6 +63,8 @@ class ScreenDatasourceServiceTest {
     @Mock private CurrentUserApi currentUserApi;
     @Mock private AuditApi auditApi;
     @Mock private ScreenDataScopeGuard scopeGuard;
+    @Mock private ResourceApi resourceApi;
+    @Mock private ScreenScopeAuthorizationService scopeAuthorizationService;
 
     private ScreenDatasourceServiceImpl service;
 
@@ -69,6 +74,8 @@ class ScreenDatasourceServiceTest {
                 currentUserApi, auditApi, scopeGuard);
         ReflectionTestUtils.setField(service, "screenMapper", screenMapper);
         ReflectionTestUtils.setField(service, "publishLogMapper", publishLogMapper);
+        ReflectionTestUtils.setField(service, "resourceApi", resourceApi);
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
         lenient().when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
     }
 
@@ -477,6 +484,123 @@ class ScreenDatasourceServiceTest {
         order.verify(engine).query(any(), any());
     }
 
+    @Test
+    void queryData_draftResolvesDatasourceFromCurrentDraftBlockAndRequiresCanvasPermission() {
+        RptScreen screen = legacyRuntimeScreen(999L);
+        screen.setCanvasDraftJson("{\"components\":[{\"component\":\"Group\",\"children\":["
+                + "{\"component\":\"ChartWidget\",\"blockId\":21}]}]}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(resourceApi.hasResourcePermission("E001", "R_RPT_SCR_CV_GET")).thenReturn(true);
+        RptScreenBlock block = new RptScreenBlock();
+        block.setId(21L); block.setScreenId(17L); block.setBindJson("{\"dsId\":3}");
+        when(blockMapper.selectList(any())).thenReturn(List.of(block));
+        RptScreenDatasource ds = new RptScreenDatasource();
+        ds.setId(3L); ds.setStatus("ACTIVE"); ds.setBizLine("COMMON"); ds.setSourceKind("WIDE_TABLE");
+        when(dsMapper.selectById(3L)).thenReturn(ds);
+        when(engine.query(any(), any())).thenReturn(new ScreenDataRespDTO(List.of("c"), List.of()));
+
+        ScreenDataReqDTO req = new ScreenDataReqDTO();
+        req.setPreviewState("draft"); req.setSchemaVersion(1); req.setScreenCode("SCR_LEGACY");
+        req.setBlockId(21L); req.setDsId(999L);
+        service.queryData(req);
+
+        verify(dsMapper).selectById(3L);
+        verify(dsMapper, never()).selectById(999L);
+        verify(resourceApi).hasResourcePermission("E001", "R_RPT_SCR_CV_GET");
+        verify(engine).query(ds, req);
+    }
+
+    @Test
+    void queryData_draftRejectsBlockNotInCurrentDraftBeforeDatasourceLookup() {
+        RptScreen screen = legacyRuntimeScreen(3L);
+        screen.setCanvasDraftJson("{\"components\":[{\"component\":\"ChartWidget\",\"blockId\":21}]}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(resourceApi.hasResourcePermission("E001", "R_RPT_SCR_CV_GET")).thenReturn(true);
+
+        ScreenDataReqDTO req = new ScreenDataReqDTO();
+        req.setPreviewState("draft"); req.setScreenCode("SCR_LEGACY"); req.setBlockId(22L);
+        assertThatThrownBy(() -> service.queryData(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_BLOCK_NOT_PUBLISHED.getCode());
+        verify(dsMapper, never()).selectById(any());
+    }
+
+    @Test
+    void queryData_rejectsNonCanonicalPreviewStateInsteadOfFallingBackToPublished() {
+        ScreenDataReqDTO req = new ScreenDataReqDTO();
+        req.setPreviewState("DRAFT");
+        assertThatThrownBy(() -> service.queryData(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_BLOCK_NOT_PUBLISHED.getCode());
+        verifyNoInteractions(screenMapper, dsMapper, engine);
+    }
+
+    @Test
+    void queryData_draftRequiresSchemaVersionMatchingLegacyScreen() {
+        RptScreen screen = legacyRuntimeScreen(3L);
+        screen.setCanvasDraftJson("{\"components\":[{\"component\":\"ChartWidget\",\"blockId\":21}]}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(resourceApi.hasResourcePermission("E001", "R_RPT_SCR_CV_GET")).thenReturn(true);
+
+        ScreenDataReqDTO req = new ScreenDataReqDTO();
+        req.setPreviewState("draft"); req.setSchemaVersion(2);
+        req.setScreenCode("SCR_LEGACY"); req.setBlockId(21L);
+
+        assertThatThrownBy(() -> service.queryData(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_BLOCK_NOT_PUBLISHED.getCode());
+        verify(dsMapper, never()).selectById(any());
+        verify(blockMapper, never()).selectList(any());
+    }
+
+    /** 草稿态即使是旧 LEGACY_CONTEXT 屏，也必须先经过屏级角色白名单门禁。 */
+    @Test
+    void queryData_legacyDraftRequiresScreenRoleAuthorizationBeforeBlockLookup() {
+        RptScreen screen = legacyRuntimeScreen(3L);
+        screen.setCanvasDraftJson("{\"components\":[{\"component\":\"ChartWidget\",\"blockId\":21}]}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(resourceApi.hasResourcePermission("E001", "R_RPT_SCR_CV_GET")).thenReturn(true);
+        doThrow(new RptException(RptErrorCode.SCREEN_ACCESS_DENIED))
+                .when(scopeAuthorizationService).authorize(screen);
+
+        ScreenDataReqDTO req = new ScreenDataReqDTO();
+        req.setPreviewState("draft"); req.setSchemaVersion(1);
+        req.setScreenCode("SCR_LEGACY"); req.setBlockId(21L);
+
+        assertThatThrownBy(() -> service.queryData(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_ACCESS_DENIED.getCode());
+        verify(blockMapper, never()).selectList(any());
+        verify(dsMapper, never()).selectById(any());
+    }
+
+    /** 已发布 v1 的旧屏在当前草稿加入 V2 地图后，草稿取数应接受 schemaVersion=2。 */
+    @Test
+    void queryData_legacyPublishedV1DraftWithV2MapRequiresDraftSchemaVersion2() {
+        RptScreen screen = legacyRuntimeScreen(999L);
+        screen.setCanvasDraftJson("{\"schemaVersion\":2,\"components\":["
+                + "{\"component\":\"MapCenter\",\"propValue\":{\"schemaVersion\":2}},"
+                + "{\"component\":\"ChartWidget\",\"blockId\":21}]}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(resourceApi.hasResourcePermission("E001", "R_RPT_SCR_CV_GET")).thenReturn(true);
+        RptScreenBlock block = new RptScreenBlock();
+        block.setId(21L); block.setScreenId(17L); block.setBindJson("{\"dsId\":3}");
+        when(blockMapper.selectList(any())).thenReturn(List.of(block));
+        RptScreenDatasource ds = new RptScreenDatasource();
+        ds.setId(3L); ds.setStatus("ACTIVE"); ds.setBizLine("COMMON"); ds.setSourceKind("WIDE_TABLE");
+        when(dsMapper.selectById(3L)).thenReturn(ds);
+        when(engine.query(any(), any())).thenReturn(new ScreenDataRespDTO(List.of("c"), List.of()));
+
+        ScreenDataReqDTO req = new ScreenDataReqDTO();
+        req.setPreviewState("draft"); req.setSchemaVersion(2);
+        req.setScreenCode("SCR_LEGACY"); req.setBlockId(21L);
+
+        service.queryData(req);
+
+        verify(scopeAuthorizationService).authorize(screen);
+        verify(engine).query(ds, req);
+    }
+
     // ===== scopeMode（spec 2026-07-17 §4，config_json 可选 SUBJECT|GLOBAL）=====
 
     @Test
@@ -617,9 +741,9 @@ class ScreenDatasourceServiceTest {
         assertThat(cap.getValue().getDsName()).isEqualTo("更新后的名称");
     }
 
-    /** 已发布屏快照引用的数据源不得原地改变查询语义，错误必须带完整屏编码。 */
+    /** 已发布屏快照引用的数据源允许原地改变查询语义，但必须经过引用屏安全矩阵并完整审计。 */
     @Test
-    void update_publishedReferencesRejectSemanticChangeAndReturnAllScreenCodes() {
+    void update_publishedReferencesAllowsSemanticChangeAndAuditsAllScreenCodes() {
         RptScreenDatasource existing = new RptScreenDatasource();
         existing.setId(6L);
         existing.setDsCode("SCRDS_LOCKED");
@@ -648,15 +772,56 @@ class ScreenDatasourceServiceTest {
         req.setConfigJson("{\"cycleType\":\"QUARTERLY\"}");
         req.setReason("尝试改变查询周期");
 
-        assertThatThrownBy(() -> service.update(6L, req))
-                .isInstanceOf(BizException.class)
-                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_DS_IN_USE.getCode())
-                .hasMessageContaining("SCR_ALPHA")
-                .hasMessageContaining("SCR_BETA");
-        verify(dsMapper, never()).updateById(any(RptScreenDatasource.class));
+        service.update(6L, req);
+
+        ArgumentCaptor<RptScreenDatasource> updated = ArgumentCaptor.forClass(RptScreenDatasource.class);
+        verify(dsMapper).updateById(updated.capture());
+        assertThat(updated.getValue().getConfigJson()).contains("QUARTERLY");
+        ArgumentCaptor<com.bank.branch.platform.governance.api.dto.AuditLogCmd> audit =
+                ArgumentCaptor.forClass(com.bank.branch.platform.governance.api.dto.AuditLogCmd.class);
+        verify(auditApi).log(audit.capture());
+        assertThat(audit.getValue().getRequestParams())
+                .contains("publishedReferences")
+                .contains("SCR_ALPHA")
+                .contains("SCR_BETA");
     }
 
-    /** 已发布引用仅允许改名称/备注等非查询语义元数据。 */
+    /** 放开语义编辑不放松已发布引用屏的业务条线安全矩阵。 */
+    @Test
+    void update_publishedReferencesStillRejectsIncompatibleBizLine() {
+        RptScreenDatasource existing = new RptScreenDatasource();
+        existing.setId(6L);
+        existing.setDsCode("SCRDS_LOCKED");
+        existing.setDsName("零售指标");
+        existing.setDsType("TIMESERIES");
+        existing.setSourceKind("KPI_RESULT");
+        existing.setBizLine("COMMON");
+        existing.setStatus("ACTIVE");
+        existing.setConfigJson("{\"cycleType\":\"MONTHLY\"}");
+        when(dsMapper.selectById(6L)).thenReturn(existing);
+        RptScreen screen = new RptScreen();
+        screen.setId(71L);
+        screen.setScreenCode("SCR_RETAIL");
+        screen.setBizLine("RETAIL");
+        screen.setCanvasPublishedJson("{\"bindSnapshots\":{\"11\":{\"bind\":{\"dsId\":6}}}}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+
+        ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
+        req.setDsName("零售指标");
+        req.setSourceKind("KPI_RESULT");
+        req.setBizLine("CORP");
+        req.setStatus("ACTIVE");
+        req.setConfigJson("{\"cycleType\":\"QUARTERLY\"}");
+        req.setReason("验证条线安全矩阵");
+
+        assertThatThrownBy(() -> service.update(6L, req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_BIZ_LINE_MISMATCH.getCode());
+        verify(dsMapper, never()).updateById(any(RptScreenDatasource.class));
+        verify(auditApi, never()).log(any());
+    }
+
+    /** 已发布引用修改名称/备注等非查询语义元数据同样保留兼容。 */
     @Test
     void update_publishedReferencesAllowsCosmeticMetadataOnlyChange() {
         RptScreenDatasource existing = new RptScreenDatasource();
@@ -712,7 +877,7 @@ class ScreenDatasourceServiceTest {
         verify(dsMapper, never()).deleteById(6L);
     }
 
-    /** 无快照归档无法证明“不引用”任一数据源，因此冻结扫描必须保守拒绝删除并返回该屏编码。 */
+    /** 无快照归档无法证明“不引用”任一数据源，因此删除保护扫描必须保守拒绝并返回该屏编码。 */
     @Test
     void delete_untrustedArchivedPackageFailsClosedForUnknownReference() {
         RptScreenDatasource existing = new RptScreenDatasource();
@@ -735,7 +900,7 @@ class ScreenDatasourceServiceTest {
         verify(dsMapper, never()).deleteById(6L);
     }
 
-    /** 草稿也引用时不能先返回泛化错误而吞掉已发布引用屏；发布冻结优先级更高。 */
+    /** 草稿也引用时不能先返回泛化错误而吞掉已发布引用屏；发布删除保护优先级更高。 */
     @Test
     void delete_draftAndPublishedReferencesReturnsAllPublishedScreenCodes() {
         RptScreenDatasource existing = new RptScreenDatasource();
@@ -815,6 +980,19 @@ class ScreenDatasourceServiceTest {
     }
 
     @Test
+    void save_fieldMeta_amountScale_valid_preservedThroughWideTableRewrite() {
+        mockSlotEmp();
+        service.save(wideReqWith("{\"table\":\"EMP_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\"}],"
+                + "\"fieldMeta\":[{\"col\":\"存款余额\",\"role\":\"METRIC\","
+                + "\"amountScale\":\"TEN_THOUSAND_YUAN\"}]}"));
+
+        ArgumentCaptor<RptScreenDatasource> cap = ArgumentCaptor.forClass(RptScreenDatasource.class);
+        verify(dsMapper).insert(cap.capture());
+        assertThat(cap.getValue().getConfigJson()).contains("\"amountScale\":\"TEN_THOUSAND_YUAN\"");
+    }
+
+    @Test
     void save_fieldMeta_illegalRole_throws43009() {
         assertThatThrownBy(() -> service.save(wideReqWith("{\"table\":\"EMP_INDEX_RESULT\","
                 + "\"metrics\":[{\"metricCode\":\"M_0001\"}],"
@@ -854,6 +1032,50 @@ class ScreenDatasourceServiceTest {
         assertThatThrownBy(() -> service.save(req))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43009");
+    }
+
+    @Test
+    void save_fieldMeta_amountScale_illegalEnum_throws43009() {
+        assertThatThrownBy(() -> service.save(wideReqWith("{\"table\":\"EMP_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\"}],"
+                + "\"fieldMeta\":[{\"col\":\"存款余额\",\"role\":\"METRIC\","
+                + "\"amountScale\":\"THOUSAND_YUAN\"}]}")))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+        verify(dsMapper, never()).insert(any(RptScreenDatasource.class));
+    }
+
+    @Test
+    void save_fieldMeta_amountScale_onDim_throws43009() {
+        assertThatThrownBy(() -> service.save(wideReqWith("{\"table\":\"EMP_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\"}],"
+                + "\"fieldMeta\":[{\"col\":\"data_date\",\"role\":\"DIM\","
+                + "\"amountScale\":\"YUAN\"}]}")))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+        verify(dsMapper, never()).insert(any(RptScreenDatasource.class));
+    }
+
+    @Test
+    void save_fieldMeta_amountScale_withUnit_throws43009() {
+        assertThatThrownBy(() -> service.save(wideReqWith("{\"table\":\"EMP_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\"}],"
+                + "\"fieldMeta\":[{\"col\":\"存款余额\",\"role\":\"METRIC\","
+                + "\"amountScale\":\"YUAN\",\"unit\":\"元\"}]}")))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+        verify(dsMapper, never()).insert(any(RptScreenDatasource.class));
+    }
+
+    @Test
+    void save_fieldMeta_amountScale_withDecimals_throws43009() {
+        assertThatThrownBy(() -> service.save(wideReqWith("{\"table\":\"EMP_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\"}],"
+                + "\"fieldMeta\":[{\"col\":\"存款余额\",\"role\":\"METRIC\","
+                + "\"amountScale\":\"YUAN\",\"decimals\":2}]}")))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+        verify(dsMapper, never()).insert(any(RptScreenDatasource.class));
     }
 
     // ===== WIDE_TABLE aggregation（spec 2026-07-17 §3.3）=====

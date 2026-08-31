@@ -1,0 +1,18 @@
+playwright-cli console error
+
+Total messages: 8 (Errors: 0, Warnings: 6)
+Returning 0 messages for level "error"
+
+playwright-cli console
+
+Total messages: 8 (Errors: 0, Warnings: 6)
+Returning 6 messages for level "info"
+
+[WARNING] ElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+[WARNING] ElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+[WARNING] ElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+[WARNING] ElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+[WARNING] ElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+[WARNING] ElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+
+六条 warning 的调用栈均定位到开发态 `element-plus.js` 的 `useDeprecated`；本次无新增 Console error。

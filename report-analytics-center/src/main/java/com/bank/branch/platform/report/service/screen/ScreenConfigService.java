@@ -6,6 +6,7 @@ import com.bank.branch.platform.report.dto.req.ScreenMetadataUpdateReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenSaveReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDetailRespDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenViewRespDTO;
+import com.bank.branch.platform.report.dto.resp.MapRegionMetricDTO;
 
 import java.util.List;
 
@@ -40,6 +41,9 @@ public interface ScreenConfigService {
 
     /** 点位整表覆盖保存 */
     void saveMapPoints(List<MapPointDTO> points);
+
+    /** 查询指定屏可见地图机构的真实经营指标。 */
+    List<MapRegionMetricDTO> listMapRegionMetrics(Long screenId);
 
     /** 运行时读取整屏配置（ACTIVE；PROVINCE 附 ACTIVE 点位） */
     ScreenViewRespDTO getViewByCode(String screenCode);

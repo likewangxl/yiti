@@ -82,6 +82,72 @@ describe('screenDesigner store', () => {
     expect(payload).not.toHaveProperty('orgScopeMode');
     expect(payload).not.toHaveProperty('allowedRoleCodes');
   });
+
+  it('adoptSaveResult 采纳服务端 resolved draft 后保持选中引用并补齐新 ChartWidget block', () => {
+    const store = useScreenDesignerStore();
+    store.loadFromEditor({
+      screenId: 11, screenCode: 'SCR_DRAFT', canvasVersion: 2, publishStatus: 0,
+      canvasStyleJson: JSON.stringify({ schemaVersion: 1 }),
+      canvasDraftJson: JSON.stringify({ schemaVersion: 1, components: [
+        {
+          id: 'chart-new', component: 'ChartWidget', innerType: 'METRIC_CARD', blockId: null,
+          bindJson: JSON.stringify({ dsId: 9002, period: 'LATEST' }),
+          styleJson: JSON.stringify({ title: '经营总览', refreshSec: 0 }), drillJson: '{}',
+          style: { top: 10, left: 20, width: 300, height: 180 }
+        }
+      ] }),
+      blocks: []
+    });
+    store.selectComponent('chart-new');
+
+    store.adoptSaveResult({
+      canvasVersion: 3,
+      canvasDraftJson: JSON.stringify({ schemaVersion: 1, components: [
+        {
+          id: 'chart-new', component: 'ChartWidget', innerType: 'METRIC_CARD', blockId: 77,
+          bindJson: JSON.stringify({ dsId: 9002, period: 'LATEST' }),
+          styleJson: JSON.stringify({ title: '经营总览', refreshSec: 0 }), drillJson: '{}',
+          style: { top: 10, left: 20, width: 300, height: 180 }
+        }
+      ] })
+    });
+
+    expect(store.canvasVersion).toBe(3);
+    expect(store.curComponent).toBe(store.componentData[0]);
+    expect(store.curComponent.id).toBe('chart-new');
+    expect(store.curComponent.blockId).toBe(77);
+    expect(store.blocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 77, componentType: 'METRIC_CARD',
+        bindJson: JSON.stringify({ dsId: 9002, period: 'LATEST' })
+      })
+    ]));
+  });
+
+  it('adoptSaveResult 保持多选语义并以新组件对象重定向每个选中引用', () => {
+    const store = useScreenDesignerStore();
+    store.loadFromEditor({
+      screenId: 12, screenCode: 'SCR_MULTI', canvasVersion: 1, publishStatus: 0,
+      canvasStyleJson: '{}',
+      canvasDraftJson: JSON.stringify({ schemaVersion: 1, components: [
+        { id: 'a', component: 'RectShape', style: {} },
+        { id: 'b', component: 'TextLabel', style: {} }
+      ] }), blocks: []
+    });
+    store.setCurComponents(['a', 'b']);
+
+    store.adoptSaveResult({
+      canvasVersion: 2,
+      canvasDraftJson: JSON.stringify({ schemaVersion: 1, components: [
+        { id: 'a', component: 'RectShape', style: { left: 1 } },
+        { id: 'b', component: 'TextLabel', style: { left: 2 } }
+      ] })
+    });
+
+    expect(store.curComponent).toBeNull();
+    expect(store.curComponents).toEqual([store.componentData[0], store.componentData[1]]);
+    expect(store.curComponents.map(c => c.id)).toEqual(['a', 'b']);
+  });
 });
 
 // ===== 画布交互增强:多选/成组/对齐分布/排序/改名(TDD Red 先行) =====

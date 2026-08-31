@@ -1,0 +1,17 @@
+[screen-morandi-bar]
+46. [GET] http://127.0.0.1:8091/api/auth/my-menus => [200] OK
+47. [GET] http://127.0.0.1:8091/api/auth/permissions => [200] OK
+213. [GET] http://127.0.0.1:8091/api/screen/view/SCR_PROVINCE?preview=draft => [200] OK
+214. [POST] http://127.0.0.1:8091/api/screen/data => [200] OK
+
+screen/data response summary: columns=m01..m11; rows=[[10,20,30,40,50,60,70,80,90,100,110]].
+
+[screen-morandi-line]
+46. [GET] http://127.0.0.1:8091/api/auth/my-menus => [200] OK
+47. [GET] http://127.0.0.1:8091/api/auth/permissions => [200] OK
+213. [GET] http://127.0.0.1:8091/api/screen/view/SCR_PROVINCE?preview=draft => [200] OK
+214. [POST] http://127.0.0.1:8091/api/screen/data => [200] OK
+
+screen/data response summary: columns=月份,m01..m11; four rows for 一月..四月, with 11 numeric indicator values per row.
+
+No save, publish, PUT, PATCH or DELETE request was issued in either session.

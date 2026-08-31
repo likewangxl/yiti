@@ -13,13 +13,17 @@ import { computed } from 'vue';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { LineChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
+import {
+  GridComponent, TooltipComponent, LegendComponent, AxisPointerComponent,
+  MarkPointComponent, MarkLineComponent
+} from 'echarts/components';
 import VChart from 'vue-echarts';
 import { DocumentRemove } from '@element-plus/icons-vue';
-import { SCR_PALETTE, scrAxisLabel, scrAxisLine, scrSplitLine, scrTooltipStyle, scrWithAlpha } from '@/styles/screenChartTheme';
+import { resolveChartTheme, scrAxisLabel, scrAxisLine, scrSplitLine, scrTooltipStyle, scrWithAlpha } from '@/styles/screenChartTheme';
 import { rowsToSeries, displayName } from './utils/chartData';
 
-use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent]);
+use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent, AxisPointerComponent,
+  MarkPointComponent, MarkLineComponent]);
 
 const props = defineProps({
   columns: { type: Array, default: () => [] },
@@ -34,27 +38,43 @@ const emit = defineEmits(['item-click']);
 const parsed = computed(() =>
   rowsToSeries(props.columns, props.rows, (props.bind.items || []).map(i => i.col)));
 const series = computed(() => parsed.value.series);
+const theme = computed(() => resolveChartTheme(props.styleCfg));
+const palette = computed(() => props.styleCfg.colors?.length ? props.styleCfg.colors : theme.value.palette);
+const showLegend = computed(() => props.styleCfg.showLegend !== false);
+const showLabels = computed(() => props.styleCfg.showLabels === true);
+const showMarks = computed(() => props.styleCfg.showMarks !== false);
+const smooth = computed(() => props.styleCfg.smooth !== false);
 
 const option = computed(() => {
-  const palette = props.styleCfg.colors?.length ? props.styleCfg.colors : SCR_PALETTE;
   return {
-    color: palette,
+    color: palette.value,
+    animation: true,
     grid: { top: 34, right: 16, bottom: 26, left: 56 },
-    tooltip: { trigger: 'axis', ...scrTooltipStyle() },
-    legend: { top: 4, textStyle: scrAxisLabel() },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, ...scrTooltipStyle(theme.value) },
+    legend: { show: showLegend.value, top: 4, textStyle: scrAxisLabel(theme.value) },
     xAxis: { type: 'category', boundaryGap: false, data: parsed.value.categories,
-             axisLine: scrAxisLine(), axisLabel: scrAxisLabel() },
-    yAxis: { type: 'value', axisLabel: scrAxisLabel(), splitLine: scrSplitLine() },
+             axisLine: scrAxisLine(theme.value), axisLabel: scrAxisLabel(theme.value) },
+    yAxis: { type: 'value', axisLabel: scrAxisLabel(theme.value), splitLine: scrSplitLine(theme.value) },
     series: series.value.map((s, i) => {
-      const c = palette[i % palette.length];
+      const c = palette.value[i % palette.value.length];
       return {
         name: displayName(s.name, props.columnsMeta),
         type: 'line',
         stack: 'total',
-        smooth: true,
-        showSymbol: false,
-        emphasis: { focus: 'series' },
+        smooth: smooth.value,
+        showSymbol: showLabels.value,
+        label: { show: showLabels.value, color: theme.value.tokens.text },
+        emphasis: { focus: 'series', lineStyle: { width: 2.5 } },
         lineStyle: { width: 1.5, shadowBlur: 6, shadowColor: scrWithAlpha(c, 0.4) },
+        ...(showMarks.value ? {
+          markPoint: { data: [{ type: 'max', name: '最大' }], label: { color: theme.value.tokens.text } },
+          markLine: {
+            silent: true,
+            lineStyle: { type: 'dashed', color: theme.value.tokens.textDim },
+            label: { color: theme.value.tokens.textDim, formatter: '均值' },
+            data: [{ type: 'average', name: '均值' }]
+          }
+        } : {}),
         areaStyle: {
           color: {
             type: 'linear', x: 0, y: 0, x2: 0, y2: 1,

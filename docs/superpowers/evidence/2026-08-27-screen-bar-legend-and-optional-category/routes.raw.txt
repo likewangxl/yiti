@@ -1,0 +1,8 @@
+[screen-bar-legend-20260827]
+1. **/api/auth/current-user (HTTP 200 application/json)
+2. **/api/auth/my-menus (HTTP 200 application/json)
+3. **/api/auth/permissions (HTTP 200 application/json)
+4. **/api/screen/view/SCR_BAR_LEGEND_QA* (HTTP 200 application/json)
+5. **/api/screen/data (HTTP 200 application/json)
+
+以上均为浏览器上下文开发态 mock；非后端联调。

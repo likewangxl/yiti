@@ -9,6 +9,7 @@ import com.bank.branch.platform.report.dto.req.ScreenCreateReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenMetadataUpdateReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenAccessRoleSaveReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDetailRespDTO;
+import com.bank.branch.platform.report.dto.resp.MapRegionMetricDTO;
 import com.bank.branch.platform.report.service.screen.ScreenConfigService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -90,6 +91,13 @@ public class ScreenConfigAdminController {
     public ResponseWrapper<Void> saveMapPoints(@Valid @RequestBody List<MapPointDTO> points) {
         configService.saveMapPoints(points);
         return ResponseWrapper.success();
+    }
+
+    @GetMapping("/screens/{id}/map-region-metrics")
+    @BizAuth(bizType = BizType.REPORT, action = BizAction.READ)
+    @Operation(summary = "查询地图经营指标（无数据不兜底）")
+    public ResponseWrapper<List<MapRegionMetricDTO>> listMapRegionMetrics(@PathVariable Long id) {
+        return ResponseWrapper.success(configService.listMapRegionMetrics(id));
     }
 
     @GetMapping("/screens/{id}/access-roles")

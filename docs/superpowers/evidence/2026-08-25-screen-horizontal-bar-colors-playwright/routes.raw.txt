@@ -1,0 +1,6 @@
+5 routes registered in browser context:
+**/api/auth/current-user
+**/api/auth/my-menus
+**/api/auth/permissions
+**/api/screen/view/SCR_HORIZONTAL*
+**/api/screen/data

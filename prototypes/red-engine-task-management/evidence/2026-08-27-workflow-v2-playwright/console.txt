@@ -1,0 +1,10 @@
+Official Playwright CLI session: redengine-workflow-v2-20260827
+Command: xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-workflow-v2-20260827 console warning
+
+Total messages: 3 (Errors: 0, Warnings: 0)
+Returning 0 messages for level "warning"
+
+Command: xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-workflow-v2-20260827 console error
+
+Total messages: 3 (Errors: 0, Warnings: 0)
+Returning 0 messages for level "error"

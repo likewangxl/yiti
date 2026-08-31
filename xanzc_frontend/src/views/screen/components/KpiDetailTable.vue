@@ -1,5 +1,5 @@
 <template>
-  <div class="kdt-wrap">
+  <div class="kdt-wrap" :style="themeVars">
     <table v-if="items.length" class="kdt-table">
       <thead>
         <tr>
@@ -41,6 +41,7 @@
 // 细项名称/目标值/实际值/完成率(内嵌进度条)/缺口(负=绿"已超额"、正=红"还差 X")/得分。
 import { computed } from 'vue';
 import { DocumentRemove } from '@element-plus/icons-vue';
+import { resolveChartTheme } from '@/styles/screenChartTheme';
 import { fmtNum, clampPct, metaOf } from './utils/chartData';
 import { parseKpiRows, gapText } from './utils/kpiDetail';
 
@@ -57,6 +58,17 @@ const items = computed(() => parseKpiRows(props.columns, props.rows));
 // 目标/实际列小数位：columnsMeta.decimals 可用则用，否则默认 2
 const numDecimals = computed(() => metaOf('目标值', props.columnsMeta)?.decimals ?? 2);
 const gapDecimals = computed(() => metaOf('缺口', props.columnsMeta)?.decimals ?? 2);
+const theme = computed(() => resolveChartTheme(props.styleCfg));
+const themeVars = computed(() => ({
+  '--kdt-accent': theme.value.tokens.accent,
+  '--kdt-accent-strong': theme.value.tokens.accentStrong,
+  '--kdt-number': theme.value.tokens.number,
+  '--kdt-muted': theme.value.tokens.textDim,
+  '--kdt-border': theme.value.tokens.border,
+  '--kdt-up': theme.value.tokens.up,
+  '--kdt-down': theme.value.tokens.down,
+  '--kdt-bg': theme.value.tokens.bgDeep
+}));
 
 function gapOf(it) { return gapText(it.gap, gapDecimals.value); }
 /** 完成率分档配色：≥100 达标绿 / ≥60 主题蓝青 / <60 预警橙红 */
@@ -72,7 +84,7 @@ function bandOf(rate) {
   height: 100%;
   overflow-y: auto;
   &::-webkit-scrollbar { width: 4px; }
-  &::-webkit-scrollbar-thumb { background: rgba(0, 229, 255, .3); border-radius: 2px; }
+  &::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--kdt-accent, var(--scr-cyan)) 30%, transparent); border-radius: 2px; }
 }
 .kdt-table {
   width: 100%;
@@ -85,27 +97,27 @@ function bandOf(rate) {
     padding: 0 6px;
     font-weight: 600;
     text-align: left;
-    color: var(--scr-cyan);
+    color: var(--kdt-accent, var(--scr-cyan));
     letter-spacing: 1px;
-    background: linear-gradient(180deg, rgba(0, 229, 255, .14), rgba(0, 229, 255, .04));
-    border-bottom: 1px solid var(--scr-border);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--kdt-accent, var(--scr-cyan)) 14%, transparent), color-mix(in srgb, var(--kdt-accent, var(--scr-cyan)) 4%, transparent));
+    border-bottom: 1px solid var(--kdt-border, var(--scr-border));
   }
   td {
     height: 34px;
     padding: 0 6px;
-    color: var(--scr-text);
+    color: var(--kdt-muted, var(--scr-text));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     border-bottom: 1px solid rgba(125, 155, 201, .12);
   }
-  tbody tr:hover { background: rgba(0, 229, 255, .07); }
+  tbody tr:hover { background: color-mix(in srgb, var(--kdt-accent, var(--scr-cyan)) 7%, transparent); }
 
   .c-name { width: 22%; }
   .c-num { width: 13%; text-align: right; font-variant-numeric: tabular-nums; }
   .c-rate { width: 22%; }
   .c-gap { width: 17%; text-align: right; font-variant-numeric: tabular-nums; }
-  .c-score { width: 13%; text-align: right; color: var(--scr-num); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .c-score { width: 13%; text-align: right; color: var(--kdt-number, var(--scr-num)); font-weight: 700; font-variant-numeric: tabular-nums; }
   th.c-num, th.c-gap, th.c-score { text-align: right; }
 }
 .kdt-bar {
@@ -119,9 +131,9 @@ function bandOf(rate) {
   height: 100%;
   border-radius: 7px;
   transition: width .6s ease;
-  &.ok { background: linear-gradient(90deg, rgba(0, 230, 118, .5), var(--scr-up)); box-shadow: 0 0 8px rgba(0, 230, 118, .5); }
-  &.mid { background: linear-gradient(90deg, var(--scr-blue), var(--scr-cyan)); box-shadow: 0 0 8px rgba(0, 229, 255, .4); }
-  &.low { background: linear-gradient(90deg, #ff8a65, var(--scr-down)); box-shadow: 0 0 8px rgba(255, 82, 82, .4); }
+  &.ok { background: linear-gradient(90deg, color-mix(in srgb, var(--kdt-up, var(--scr-up)) 50%, transparent), var(--kdt-up, var(--scr-up))); box-shadow: 0 0 8px color-mix(in srgb, var(--kdt-up, var(--scr-up)) 50%, transparent); }
+  &.mid { background: linear-gradient(90deg, var(--kdt-accent, var(--scr-blue)), var(--kdt-accent-strong, var(--scr-cyan))); box-shadow: 0 0 8px color-mix(in srgb, var(--kdt-accent, var(--scr-cyan)) 40%, transparent); }
+  &.low { background: linear-gradient(90deg, color-mix(in srgb, var(--kdt-down, var(--scr-down)) 55%, transparent), var(--kdt-down, var(--scr-down))); box-shadow: 0 0 8px color-mix(in srgb, var(--kdt-down, var(--scr-down)) 50%, transparent); }
 }
 .kdt-rate-txt {
   position: absolute;
@@ -133,8 +145,11 @@ function bandOf(rate) {
   text-shadow: 0 0 3px rgba(0, 0, 0, .8);
   font-variant-numeric: tabular-nums;
 }
-.kdt-none { color: var(--scr-text-dim); }
-.gap-lack { color: var(--scr-down); }
-.gap-over { color: var(--scr-up); }
-.gap-none { color: var(--scr-text-dim); }
+.kdt-none { color: var(--kdt-muted, var(--scr-text-dim)); }
+.gap-lack { color: var(--kdt-down, var(--scr-down)); }
+.gap-over { color: var(--kdt-up, var(--scr-up)); }
+.gap-none { color: var(--kdt-muted, var(--scr-text-dim)); }
+@media (prefers-reduced-motion: reduce) {
+  .kdt-fill { transition: none; }
+}
 </style>

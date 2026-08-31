@@ -16,7 +16,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { GaugeChart } from 'echarts/charts';
 import VChart from 'vue-echarts';
 import { Warning } from '@element-plus/icons-vue';
-import { SCR_COLOR, scrWithAlpha } from '@/styles/screenChartTheme';
+import { resolveChartTheme, scrWithAlpha } from '@/styles/screenChartTheme';
 import { pickValueCol, displayName, metaOf, fmtNum, clampPct } from './utils/chartData';
 
 use([CanvasRenderer, GaugeChart]);
@@ -42,8 +42,11 @@ const rawValue = computed(() => {
 const dialValue = computed(() => clampPct(rawValue.value)); // 表盘封顶 0-100
 const unit = computed(() => meta.value?.unit || '%');
 const decimals = computed(() => meta.value?.decimals ?? props.styleCfg.decimals ?? 1);
+const theme = computed(() => resolveChartTheme(props.styleCfg));
+const palette = computed(() => props.styleCfg.colors?.length ? props.styleCfg.colors : theme.value.palette);
 
 const option = computed(() => ({
+  color: palette.value,
   series: [
     // 底层：暗色刻度环 + 发光进度弧
     {
@@ -53,31 +56,31 @@ const option = computed(() => ({
       progress: {
         show: true, roundCap: true, width: 12,
         itemStyle: {
-          shadowBlur: 12, shadowColor: scrWithAlpha(SCR_COLOR.cyan, 0.6),
+          shadowBlur: 12, shadowColor: scrWithAlpha(palette.value[0], 0.6),
           color: {
             type: 'linear', x: 0, y: 1, x2: 1, y2: 0,
             colorStops: [
-              { offset: 0, color: SCR_COLOR.blue },
-              { offset: 1, color: SCR_COLOR.cyan }
+              { offset: 0, color: palette.value[1] },
+              { offset: 1, color: palette.value[0] }
             ]
           }
         }
       },
-      axisLine: { roundCap: true, lineStyle: { width: 12, color: [[1, 'rgba(125,155,201,.15)']] } },
-      axisTick: { distance: -22, length: 4, lineStyle: { color: 'rgba(125,155,201,.5)', width: 1 } },
-      splitLine: { distance: -26, length: 8, lineStyle: { color: 'rgba(125,155,201,.7)', width: 2 } },
-      axisLabel: { distance: -14, color: SCR_COLOR.textDim, fontSize: 10 },
+      axisLine: { roundCap: true, lineStyle: { width: 12, color: [[1, theme.value.tokens.border]] } },
+      axisTick: { distance: -22, length: 4, lineStyle: { color: theme.value.tokens.border, width: 1 } },
+      splitLine: { distance: -26, length: 8, lineStyle: { color: theme.value.tokens.textDim, width: 2 } },
+      axisLabel: { distance: -14, color: theme.value.tokens.textDim, fontSize: 10 },
       pointer: { show: true, length: '58%', width: 4, offsetCenter: [0, 0],
-                 itemStyle: { color: SCR_COLOR.cyan, shadowBlur: 8, shadowColor: scrWithAlpha(SCR_COLOR.cyan, 0.8) } },
+                 itemStyle: { color: palette.value[0], shadowBlur: 8, shadowColor: scrWithAlpha(palette.value[0], 0.8) } },
       anchor: { show: true, size: 8, showAbove: true,
-                itemStyle: { color: SCR_COLOR.bgDeep, borderColor: SCR_COLOR.cyan, borderWidth: 2 } },
+                itemStyle: { color: theme.value.tokens.bgDeep, borderColor: palette.value[0], borderWidth: 2 } },
       // 中央数字显示真实值（可超 100），单位来自 columnsMeta.unit（缺省 %）
       detail: {
         valueAnimation: true, offsetCenter: [0, '38%'],
         formatter: () => `${fmtNum(rawValue.value, decimals.value)}${unit.value}`,
-        color: SCR_COLOR.gold, fontSize: 26, fontWeight: 700, fontFamily: 'inherit'
+        color: theme.value.tokens.number, fontSize: 26, fontWeight: 700, fontFamily: 'inherit'
       },
-      title: { offsetCenter: [0, '68%'], color: SCR_COLOR.textDim, fontSize: 13 },
+      title: { offsetCenter: [0, '68%'], color: theme.value.tokens.textDim, fontSize: 13 },
       data: [{ value: dialValue.value, name: displayName(colName.value, props.columnsMeta) }]
     }
   ]
