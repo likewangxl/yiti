@@ -66,11 +66,10 @@ rpt:
 
 flowable:
   # 红色引擎自管状态机，不使用 Flowable；保留组合根兼容装配但禁止 schema/部署/异步调度。
-  database-schema-update: false
-  check-process-definitions: false
-  async-executor-activate: false
-  async-history-executor-activate: false
+  # Flowable 7 的 ProcessEngineAutoConfiguration 由 flowable.process.enabled 控制，
+  # 缺省值为 true；必须显式关闭，不能只依赖 database-schema-update=false。
   process:
+    enabled: false
     async:
       executor:
         async-job-acquisition-enabled: false
@@ -79,6 +78,10 @@ flowable:
       executor:
         async-job-acquisition-enabled: false
         timer-job-acquisition-enabled: false
+  database-schema-update: false
+  check-process-definitions: false
+  async-executor-activate: false
+  async-history-executor-activate: false
   idm:
     enabled: false
   app:
