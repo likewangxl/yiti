@@ -150,6 +150,8 @@ async function handleLogout() {
 .re-layout {
   height: 100vh;
   width: 100%;
+  min-width: 0;
+  min-height: 0;
   display: flex !important;
   flex-direction: row !important;
 
@@ -267,8 +269,11 @@ async function handleLogout() {
 
 .re-main-content {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .re-header-container {
@@ -308,6 +313,8 @@ async function handleLogout() {
 
 .re-main-area {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow-y: auto;
   background-color: #f5f7fa;
   padding: 20px;
