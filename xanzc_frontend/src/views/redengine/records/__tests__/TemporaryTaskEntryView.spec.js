@@ -69,6 +69,50 @@ describe('临时任务填报', () => {
     wrapper.unmount();
   });
 
+  it('兼容任务分配接口返回的 windowStartAt/windowEndAt 时间窗', async () => {
+    getMyTaskAssignment.mockResolvedValueOnce({
+      assignmentId: 1001,
+      taskId: 42,
+      taskTitle: '窗口字段任务',
+      taskDescription: '请按时间窗填报',
+      taskNature: 'TEMPORARY',
+      windowStartAt: '2026-09-01T09:00:00',
+      windowEndAt: '2026-09-03T18:00:00',
+      requiresFile: false,
+      content: '',
+      files: []
+    });
+
+    const wrapper = mount(TemporaryTaskEntryView, { global: { stubs } });
+    await settle();
+
+    expect(wrapper.text()).toContain('2026-09-01T09:00:00');
+    expect(wrapper.text()).toContain('2026-09-03T18:00:00');
+    wrapper.unmount();
+  });
+
+  it('不要求上传文件时不展示文件输入和附件行', async () => {
+    getMyTaskAssignment.mockResolvedValueOnce({
+      assignmentId: 1001,
+      taskId: 42,
+      taskTitle: '无需附件任务',
+      taskDescription: '请直接填报文本',
+      taskNature: 'TEMPORARY',
+      windowStartAt: '2026-09-01T09:00:00',
+      windowEndAt: '2026-09-03T18:00:00',
+      requiresFile: false,
+      content: '',
+      files: []
+    });
+
+    const wrapper = mount(TemporaryTaskEntryView, { global: { stubs } });
+    await settle();
+
+    expect(wrapper.find('input[type="file"]').exists()).toBe(false);
+    expect(wrapper.find('.file-row').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it('提交文本和附件时先上传文件，再以 assignmentId 和幂等号提交并进入审核中', async () => {
     const wrapper = mount(TemporaryTaskEntryView, { global: { stubs } });
     await settle();

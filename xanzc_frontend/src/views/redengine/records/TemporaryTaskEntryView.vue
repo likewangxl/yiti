@@ -50,7 +50,7 @@
           />
         </div>
 
-        <div class="form-row file-row">
+        <div v-if="task.requiresFile" class="form-row file-row">
           <span class="form-label" :class="{ required: task.requiresFile }">附件</span>
           <div class="file-control">
             <input ref="fileInput" type="file" multiple :accept="fileAccept" @change="handleFileChange" />
@@ -124,8 +124,8 @@ function asTaskModel(value = {}) {
     taskId: merged.taskId || taskValue.taskId || taskValue.id,
     title: merged.taskTitle || merged.title || taskValue.title || '临时任务',
     description: merged.taskDescription || merged.description || taskValue.description || '',
-    startAt: merged.temporaryStartTime || merged.startAt || merged.windowStart || '—',
-    endAt: merged.temporaryEndTime || merged.endAt || merged.windowEnd || '—',
+    startAt: merged.windowStartAt || merged.temporaryStartTime || merged.startAt || merged.windowStart || '—',
+    endAt: merged.windowEndAt || merged.temporaryEndTime || merged.endAt || merged.windowEnd || '—',
     requiresFile: Boolean(merged.requiresFile),
     fileTypeCodes: Array.isArray(merged.fileTypeCodes)
       ? merged.fileTypeCodes
