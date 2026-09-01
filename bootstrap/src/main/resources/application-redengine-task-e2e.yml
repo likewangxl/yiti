@@ -65,11 +65,11 @@ rpt:
       password: ${REDENGINE_TASK_DB_PASSWORD}
 
 flowable:
-  # 红色引擎自管状态机，不使用 Flowable；保留组合根兼容装配但禁止 schema/部署/异步调度。
-  # Flowable 7 的 ProcessEngineAutoConfiguration 由 flowable.process.enabled 控制，
-  # 缺省值为 true；必须显式关闭，不能只依赖 database-schema-update=false。
+  # 组合根仍装配既有业务模块，它们通过 workflow-center 公共 API 依赖 ProcessEngine。
+  # 任务域自身不调用 Flowable；仅保留引擎基础 Bean 以满足组合装配，不启动任何异步执行器。
+  # Flowable 7 的 ProcessEngineAutoConfiguration 由 flowable.process.enabled 控制。
   process:
-    enabled: false
+    enabled: true
     async:
       executor:
         async-job-acquisition-enabled: false

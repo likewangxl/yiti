@@ -9,10 +9,8 @@ import com.bank.branch.platform.governance.storage.ObsStorageClient;
 import com.bank.branch.platform.redengine.service.ReTaskScheduler;
 import com.bank.branch.platform.soap.config.SidecarRegistrationChecker;
 import com.bank.branch.platform.soap.config.SoapNettyServer;
-import org.flowable.spring.boot.ProcessEngineAutoConfiguration;
 import org.flowable.spring.boot.condition.ConditionalOnProcessEngine;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
@@ -38,7 +36,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 红色引擎任务域隔离 profile 的运行时契约。
  *
  * <p>除检查 YAML 展开值外，本测试还把实际项目组件放进内存 ApplicationContext，验证
- * Flowable、Quartz、边车、SOAP 和锁清理的条件装配确实被关闭；不会启动完整应用、连接数据库或发起网络请求。</p>
+ * Flowable 基础引擎按组合根兼容要求启用，但异步执行、Quartz、边车、SOAP 和锁清理均关闭；
+ * 不会启动完整应用、连接数据库或发起网络请求。</p>
  */
 class RedEngineTaskE2eProfileTest {
 
@@ -72,7 +71,7 @@ class RedEngineTaskE2eProfileTest {
                 "org.springframework.boot.autoconfigure.quartz.QuartzAutoConfiguration",
                 "org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfiguration");
 
-        assertThat(properties.getProperty("flowable.process.enabled")).isEqualTo(false);
+        assertThat(properties.getProperty("flowable.process.enabled")).isEqualTo(true);
         assertThat(properties.getProperty("flowable.database-schema-update")).isEqualTo(false);
         assertThat(properties.getProperty("flowable.check-process-definitions")).isEqualTo(false);
         assertThat(properties.getProperty("flowable.async-executor-activate")).isEqualTo(false);
@@ -94,15 +93,21 @@ class RedEngineTaskE2eProfileTest {
     }
 
     @Test
-    void processEngine_conditionUsesActualFlowablePropertyAndIsDisabled() {
+    void processEngine_conditionUsesActualFlowablePropertyAndIsEnabled() {
         taskProfile()
-                .withConfiguration(AutoConfigurations.of(ProcessEngineAutoConfiguration.class))
                 .withUserConfiguration(ProcessEngineProbeConfiguration.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean(org.flowable.engine.ProcessEngine.class);
-                    assertThat(context).doesNotHaveBean("processEngineProbe");
+                    assertThat(context).hasBean("processEngineProbe");
                 });
+    }
+
+    @Test
+    void profile_doesNotExcludeFlowableProcessAutoConfiguration() throws IOException {
+        PropertySource<?> properties = loadProfile();
+
+        assertThat(propertyValues(properties))
+                .noneMatch(value -> value.contains("ProcessEngineAutoConfiguration"));
     }
 
     @Test
