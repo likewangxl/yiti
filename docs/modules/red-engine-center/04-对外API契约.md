@@ -89,7 +89,9 @@ import com.bank.branch.platform.auth.api.UserApi;
 
 任务域还使用 `UserApi.getEmpIdsByRoleCode` 解析报送员和组织审核员候选，使用
 `getUserByEmpId`/`getUserByEmpIds` 回填任务分配中的提交人信息；这些调用只返回 auth 公开 DTO，
-不直接读取 `PT_USER`。
+不直接读取 `PT_USER`。任务管理端支部填报分页的提交人姓名关键字也通过
+`findUsersByUsernameAndDisplayName` 先形成 `USER_ID` 候选，再与支部名称、提交人 ID、填报内容一起
+交给红色引擎 Mapper 在数据库分页前筛选，避免把全量 assignment 拉入内存。
 
 ### 2.3 `DictApi`（`system-governance-center`）
 

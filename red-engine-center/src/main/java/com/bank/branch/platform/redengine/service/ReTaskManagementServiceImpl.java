@@ -424,6 +424,7 @@ public class ReTaskManagementServiceImpl implements ReTaskManagementService {
                     && request.getCycleType() == ReTaskCycleType.NONE) {
                 throw new BizException("RE-40021", "四大维度任务必须为定时任务");
             }
+            validateScheduledDuration(request);
         } else {
             if (request.getTemporaryStartTime() == null || request.getTemporaryEndTime() == null
                     || request.getTemporaryEndTime().isBefore(request.getTemporaryStartTime())
@@ -431,6 +432,22 @@ public class ReTaskManagementServiceImpl implements ReTaskManagementService {
                     || request.getBusinessType() == ReTaskBusinessType.FOUR_DIMENSION) {
                 throw new BizException("RE-40021", "临时任务时间参数无效");
             }
+        }
+    }
+
+    /**
+     * 在发布前验证周期窗口长度；生效日期未到时也必须校验，不能依赖首个实例生成路径。
+     *
+     * <p>以任务生效日作为周期定位日，未配置生效日时使用北京时间当天。实际周期长度由
+     * {@link ReTaskScheduleService} 统一计算，因而月末/月初和季度边界遵循同一套自然日口径。</p>
+     */
+    private void validateScheduledDuration(ReTaskCreateReqDTO request) {
+        LocalDate periodDate = request.getEffectiveFrom() == null
+                ? LocalDate.now(BEIJING_ZONE) : request.getEffectiveFrom();
+        try {
+            scheduleService.calculateWindow(request.getCycleType(), periodDate, request.getDurationDays());
+        } catch (IllegalArgumentException ex) {
+            throw new BizException("RE-40021", ex.getMessage());
         }
     }
 

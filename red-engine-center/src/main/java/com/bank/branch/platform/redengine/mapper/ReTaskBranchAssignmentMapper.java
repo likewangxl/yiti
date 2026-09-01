@@ -31,4 +31,30 @@ public interface ReTaskBranchAssignmentMapper extends BaseMapper<ReTaskBranchAss
             @Param("submitterIds") Collection<String> submitterIds,
             @Param("submittedStartAt") LocalDateTime submittedStartAt,
             @Param("submittedEndAt") LocalDateTime submittedEndAt);
+
+    /**
+     * 在任务详情场景按任务维度完成支部 assignment 的数据库筛选与分页。
+     *
+     * <p>与工作台查询分开保留参数契约，避免管理端为了得到任务实例 ID 而先加载全部实例；
+     * 任务、实例、最新提交及关键字条件均在分页前由 SQL 执行。</p>
+     *
+     * @param page 分页对象
+     * @param taskId 任务定义 ID
+     * @param branchId 可选支部 ID
+     * @param status 可选 assignment 状态
+     * @param keyword 可选支部/提交信息关键字
+     * @param submitterIds 关键字命中的提交人 ID 候选
+     * @param submittedStartAt 填报时间起点
+     * @param submittedEndAt 填报时间终点
+     * @return 数据库分页结果
+     */
+    IPage<ReTaskBranchAssignment> selectTaskAssignmentPage(
+            IPage<?> page,
+            @Param("taskId") Long taskId,
+            @Param("branchId") Long branchId,
+            @Param("status") String status,
+            @Param("keyword") String keyword,
+            @Param("submitterIds") Collection<String> submitterIds,
+            @Param("submittedStartAt") LocalDateTime submittedStartAt,
+            @Param("submittedEndAt") LocalDateTime submittedEndAt);
 }

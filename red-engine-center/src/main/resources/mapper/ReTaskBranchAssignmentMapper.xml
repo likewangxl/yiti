@@ -89,4 +89,54 @@
         </if>
         ORDER BY a.LAST_SUBMITTED_AT DESC, a.ID DESC
     </select>
+
+    <!-- 管理端任务详情：任务、实例、最新提交和筛选条件均在分页前执行。 -->
+    <select id="selectTaskAssignmentPage"
+            resultType="com.bank.branch.platform.redengine.entity.ReTaskBranchAssignment">
+        SELECT a.*
+        FROM RE_TASK_BRANCH_ASSIGNMENT a
+        INNER JOIN RE_TASK_INSTANCE i ON i.ID = a.TASK_INSTANCE_ID
+        INNER JOIN RE_TASK t ON t.ID = i.TASK_ID
+        LEFT JOIN RE_PARTY_ORG p ON p.ID = a.BRANCH_ID
+        LEFT JOIN RE_TASK_SUBMISSION s
+          ON s.ASSIGNMENT_ID = a.ID
+         AND s.DELETED = 0
+         AND NOT EXISTS (
+             SELECT 1
+             FROM RE_TASK_SUBMISSION newer
+             WHERE newer.ASSIGNMENT_ID = s.ASSIGNMENT_ID
+               AND newer.DELETED = 0
+               AND (newer.VERSION_NO &gt; s.VERSION_NO
+                    OR (newer.VERSION_NO = s.VERSION_NO AND newer.ID &gt; s.ID))
+         )
+        WHERE i.TASK_ID = #{taskId}
+          AND t.STATUS = 'PUBLISHED'
+          AND t.DELETED = 0
+        <if test="branchId != null">
+          AND a.BRANCH_ID = #{branchId}
+        </if>
+        <if test="status != null and status != ''">
+          AND a.STATUS = #{status}
+        </if>
+        <if test="submittedStartAt != null">
+          AND a.LAST_SUBMITTED_AT &gt;= #{submittedStartAt}
+        </if>
+        <if test="submittedEndAt != null">
+          AND a.LAST_SUBMITTED_AT &lt;= #{submittedEndAt}
+        </if>
+        <if test="keyword != null and keyword != ''">
+          AND (
+              LOWER(COALESCE(p.ORG_NAME, '')) LIKE CONCAT('%', LOWER(#{keyword}), '%')
+              OR LOWER(COALESCE(s.SUBMITTER_ID, '')) LIKE CONCAT('%', LOWER(#{keyword}), '%')
+              OR LOWER(COALESCE(s.CONTENT_TEXT, '')) LIKE CONCAT('%', LOWER(#{keyword}), '%')
+              <if test="submitterIds != null and submitterIds.size() &gt; 0">
+                OR s.SUBMITTER_ID IN
+                <foreach collection="submitterIds" item="submitterId" open="(" separator="," close=")">
+                  #{submitterId}
+                </foreach>
+              </if>
+          )
+        </if>
+        ORDER BY a.LAST_SUBMITTED_AT DESC, a.ID DESC
+    </select>
 </mapper>

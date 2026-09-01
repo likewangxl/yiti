@@ -1,7 +1,12 @@
 package com.bank.branch.platform.redengine.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.redengine.api.dto.ReTaskAssignmentDTO;
+import com.bank.branch.platform.redengine.api.dto.ReTaskAssignmentPageQueryDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskAssignmentStatus;
 import com.bank.branch.platform.redengine.api.dto.ReTaskStatus;
 import com.bank.branch.platform.redengine.entity.RePartyOrg;
@@ -14,6 +19,8 @@ import com.bank.branch.platform.redengine.entity.ReUserPartyMap;
 import com.bank.branch.platform.redengine.mapper.RePartyOrgMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskBranchAssignmentMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskInstanceMapper;
+import com.bank.branch.platform.redengine.mapper.ReTaskSubmissionFileMapper;
+import com.bank.branch.platform.redengine.mapper.ReTaskSubmissionMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskTargetMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskTodoMapper;
 import com.bank.branch.platform.redengine.mapper.ReUserPartyMapMapper;
@@ -29,6 +36,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -52,6 +60,10 @@ class ReTaskAssignmentServiceTest {
     private ReTaskTodoMapper todoMapper;
     @Mock
     private ReTaskInstanceMapper instanceMapper;
+    @Mock
+    private ReTaskSubmissionMapper submissionMapper;
+    @Mock
+    private ReTaskSubmissionFileMapper submissionFileMapper;
     @Mock
     private UserApi userApi;
 
@@ -148,6 +160,51 @@ class ReTaskAssignmentServiceTest {
         assertThat(assignments).containsExactly(existing);
         verify(assignmentMapper, never()).insert(any(ReTaskBranchAssignment.class));
         verify(todoMapper, never()).insert(any(ReTaskTodo.class));
+    }
+
+    @Test
+    void pageAssignmentsUsesDatabasePageAndKeepsDatabaseTotal() {
+        ReTaskBranchAssignment assignment = new ReTaskBranchAssignment();
+        assignment.setId(301L);
+        assignment.setTaskInstanceId(302L);
+        assignment.setBranchId(2L);
+        assignment.setStatus(ReTaskAssignmentStatus.ORG_PENDING.name());
+        Page<ReTaskBranchAssignment> databasePage = new Page<>(2, 1);
+        databasePage.setTotal(3L);
+        databasePage.setRecords(List.of(assignment));
+
+        ReTaskAssignmentPageQueryDTO query = new ReTaskAssignmentPageQueryDTO();
+        query.setPageNo(2);
+        query.setPageSize(1);
+        query.setKeyword("第一支部");
+        query.setBranchId(2L);
+        query.setStatus(ReTaskAssignmentStatus.ORG_PENDING);
+        query.setSubmittedStartAt(LocalDateTime.of(2026, 8, 1, 0, 0));
+        query.setSubmittedEndAt(LocalDateTime.of(2026, 8, 31, 23, 59, 59));
+
+        ReTaskInstance instance = instance(302L);
+        when(assignmentMapper.selectTaskAssignmentPage(any(), eq(1L), eq(2L),
+                eq(ReTaskAssignmentStatus.ORG_PENDING.name()), eq("第一支部"), any(),
+                eq(query.getSubmittedStartAt()), eq(query.getSubmittedEndAt())))
+                .thenReturn(databasePage);
+        when(instanceMapper.selectList(any())).thenReturn(List.of(instance));
+        when(submissionMapper.selectList(any())).thenReturn(List.of());
+        when(partyOrgMapper.selectById(2L)).thenReturn(org(2L, 1L, 2, "第一支部"));
+
+        PageResult<ReTaskAssignmentDTO> result = service.pageAssignments(1L, query);
+
+        assertThat(result.getPageNo()).isEqualTo(2);
+        assertThat(result.getPageSize()).isEqualTo(1);
+        assertThat(result.getTotal()).isEqualTo(3L);
+        assertThat(result.getRecords()).extracting(ReTaskAssignmentDTO::getAssignmentId)
+                .containsExactly(301L);
+        ArgumentCaptor<IPage> pageCaptor = ArgumentCaptor.forClass(IPage.class);
+        verify(assignmentMapper).selectTaskAssignmentPage(pageCaptor.capture(), eq(1L), eq(2L),
+                eq(ReTaskAssignmentStatus.ORG_PENDING.name()), eq("第一支部"), any(),
+                eq(query.getSubmittedStartAt()), eq(query.getSubmittedEndAt()));
+        assertThat(pageCaptor.getValue().getCurrent()).isEqualTo(2L);
+        assertThat(pageCaptor.getValue().getSize()).isEqualTo(1L);
+        verify(assignmentMapper, never()).selectList(any());
     }
 
     private static ReTask task(String audienceType) {

@@ -223,6 +223,42 @@ class ReTaskManagementServiceTest {
         verify(historyMapper).insert(any(ReTaskStatusHistory.class));
     }
 
+    @Test
+    void scheduledTaskDurationCannotExceedCycleLength_evenWhenEffectiveFromIsInFuture() {
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RE_ORGREV"));
+        when(currentUserApi.getCurrentEmpId()).thenReturn("ORG-001");
+        when(currentUserApi.isSystemAdmin()).thenReturn(false);
+
+        List<Object[]> cases = List.of(
+                new Object[]{ReTaskCycleType.WEEK_START, LocalDate.of(2026, 10, 5), 7},
+                new Object[]{ReTaskCycleType.WEEK_END, LocalDate.of(2026, 10, 5), 7},
+                new Object[]{ReTaskCycleType.MONTH_START, LocalDate.of(2027, 2, 1), 28},
+                new Object[]{ReTaskCycleType.MONTH_END, LocalDate.of(2027, 2, 1), 28},
+                new Object[]{ReTaskCycleType.QUARTER_START, LocalDate.of(2027, 1, 1), 90},
+                new Object[]{ReTaskCycleType.QUARTER_END, LocalDate.of(2027, 1, 1), 90}
+        );
+
+        for (Object[] item : cases) {
+            ReTaskCycleType cycleType = (ReTaskCycleType) item[0];
+            LocalDate effectiveFrom = (LocalDate) item[1];
+            int cycleLength = (Integer) item[2];
+            int invalidDuration = cycleLength + 1;
+            when(scheduleService.calculateWindow(eq(cycleType), eq(effectiveFrom), eq(invalidDuration)))
+                    .thenThrow(new IllegalArgumentException("任务持续时间不能超过周期长度"));
+
+            ReTaskCreateReqDTO request = scheduledRequest();
+            request.setCycleType(cycleType);
+            request.setDurationDays(invalidDuration);
+            request.setEffectiveFrom(effectiveFrom);
+
+            assertThatThrownBy(() -> service.createAndPublish(request, "ORG-001"))
+                    .isInstanceOf(com.bank.branch.platform.common.web.exception.BizException.class)
+                    .hasMessageContaining("任务持续时间不能超过周期长度");
+        }
+
+        verify(taskMapper, never()).insert(any(ReTask.class));
+    }
+
     private ReTaskCreateReqDTO temporaryRequest() {
         ReTaskCreateReqDTO request = new ReTaskCreateReqDTO();
         request.setTitle("临时任务");

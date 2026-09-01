@@ -1,6 +1,8 @@
 package com.bank.branch.platform.redengine.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
@@ -36,7 +38,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -108,8 +109,8 @@ public class ReTaskAssignmentServiceImpl implements ReTaskAssignmentService {
 
     /**
      * 分页查询任务详情中的支部填报汇总，并批量装配支部、提交人及附件快照。
-     * <p>该实现只查询本任务实例下的 assignment，过滤条件先作用于本域数据后再分页；
-     * 展示姓名由 UserApi 批量补齐，不直接跨模块访问 PT_USER。</p>
+     * <p>该实现由本域 Mapper 在数据库内完成任务、状态、关键字和时间条件筛选及分页，
+     * 只对当前页装配实例、提交、支部和附件；展示姓名由 UserApi 批量补齐，不直接跨模块访问 PT_USER。</p>
      *
      * @param taskId 任务定义 ID
      * @param query  分页和筛选条件
@@ -125,40 +126,29 @@ public class ReTaskAssignmentServiceImpl implements ReTaskAssignmentService {
         int pageNo = normalizePageNo(normalized.getPageNo());
         int pageSize = normalizePageSize(normalized.getPageSize());
 
-        List<ReTaskInstance> instances = instanceMapper.selectList(
-                new LambdaQueryWrapper<ReTaskInstance>()
-                        .eq(ReTaskInstance::getTaskId, taskId)
-                        .orderByDesc(ReTaskInstance::getWindowStartAt)
-                        .orderByDesc(ReTaskInstance::getId));
-        if (instances == null || instances.isEmpty()) {
-            return PageResult.of(pageNo, pageSize, 0L, List.of());
+        String keyword = normalizeText(normalized.getKeyword());
+        IPage<ReTaskBranchAssignment> assignmentPage = assignmentMapper.selectTaskAssignmentPage(
+                new Page<>(pageNo, pageSize), taskId, normalized.getBranchId(),
+                normalized.getStatus() == null ? null : normalized.getStatus().name(), keyword,
+                findSubmitterIds(keyword), normalized.getSubmittedStartAt(), normalized.getSubmittedEndAt());
+        List<ReTaskBranchAssignment> assignments = assignmentPage == null
+                || assignmentPage.getRecords() == null ? List.of() : assignmentPage.getRecords();
+        long total = assignmentPage == null ? 0L : assignmentPage.getTotal();
+        if (assignments.isEmpty()) {
+            return PageResult.of(pageNo, pageSize, total, List.of());
         }
 
-        List<Long> instanceIds = instances.stream()
-                .map(ReTaskInstance::getId)
+        List<Long> instanceIds = assignments.stream()
+                .map(ReTaskBranchAssignment::getTaskInstanceId)
                 .filter(Objects::nonNull)
+                .distinct()
                 .toList();
         if (instanceIds.isEmpty()) {
-            return PageResult.of(pageNo, pageSize, 0L, List.of());
+            throw new BizException("RE-40011", "任务实例不存在");
         }
-        List<ReTaskBranchAssignment> assignments = assignmentMapper.selectList(
-                new LambdaQueryWrapper<ReTaskBranchAssignment>()
-                        .in(ReTaskBranchAssignment::getTaskInstanceId, instanceIds)
-                        .eq(normalized.getBranchId() != null,
-                                ReTaskBranchAssignment::getBranchId, normalized.getBranchId())
-                        .eq(normalized.getStatus() != null,
-                                ReTaskBranchAssignment::getStatus, normalized.getStatus().name())
-                        .ge(normalized.getSubmittedStartAt() != null,
-                                ReTaskBranchAssignment::getLastSubmittedAt, normalized.getSubmittedStartAt())
-                        .le(normalized.getSubmittedEndAt() != null,
-                                ReTaskBranchAssignment::getLastSubmittedAt, normalized.getSubmittedEndAt())
-                        .orderByDesc(ReTaskBranchAssignment::getLastSubmittedAt)
-                        .orderByDesc(ReTaskBranchAssignment::getId));
-        if (assignments == null || assignments.isEmpty()) {
-            return PageResult.of(pageNo, pageSize, 0L, List.of());
-        }
-
-        Map<Long, ReTaskInstance> instanceById = instances.stream()
+        List<ReTaskInstance> instances = instanceMapper.selectList(
+                new LambdaQueryWrapper<ReTaskInstance>().in(ReTaskInstance::getId, instanceIds));
+        Map<Long, ReTaskInstance> instanceById = (instances == null ? List.<ReTaskInstance>of() : instances).stream()
                 .filter(item -> item.getId() != null)
                 .collect(Collectors.toMap(ReTaskInstance::getId, Function.identity(), (first, ignored) -> first));
         List<Long> assignmentIds = assignments.stream()
@@ -170,17 +160,11 @@ public class ReTaskAssignmentServiceImpl implements ReTaskAssignmentService {
         Map<Long, String> branchNameById = branchNames(assignments);
         Map<String, String> userNameById = userNames(submissionByAssignment.values());
 
-        String keyword = normalizeText(normalized.getKeyword());
         List<ReTaskAssignmentDTO> rows = assignments.stream()
                 .map(assignment -> toAssignmentDTO(taskId, assignment, instanceById,
                         submissionByAssignment, filesBySubmission, branchNameById, userNameById))
-                .filter(row -> matchesKeyword(row, keyword))
                 .toList();
-
-        long total = rows.size();
-        int from = Math.min((pageNo - 1) * pageSize, rows.size());
-        int to = Math.min(from + pageSize, rows.size());
-        return PageResult.of(pageNo, pageSize, total, rows.subList(from, to));
+        return PageResult.of(pageNo, pageSize, total, rows);
     }
 
     /** 校验任务实例主键，避免在异常数据下生成无法关联的孤儿记录。 */
@@ -516,19 +500,22 @@ public class ReTaskAssignmentServiceImpl implements ReTaskAssignmentService {
         return dto;
     }
 
-    private boolean matchesKeyword(ReTaskAssignmentDTO row, String keyword) {
+    /** 将提交人姓名命中的平台用户 ID 交给本域 SQL，保持关键字筛选和数据库分页一致。 */
+    private List<String> findSubmitterIds(String keyword) {
         if (!hasText(keyword)) {
-            return true;
+            return List.of();
         }
-        String value = keyword.toLowerCase();
-        return contains(row.getBranchName(), value)
-                || contains(row.getSubmitterName(), value)
-                || contains(row.getSubmitterId(), value)
-                || contains(row.getContent(), value);
+        Set<String> result = new LinkedHashSet<>();
+        addSubmitterIds(result, userApi.findUsersByUsernameAndDisplayName(keyword, null));
+        addSubmitterIds(result, userApi.findUsersByUsernameAndDisplayName(null, keyword));
+        return List.copyOf(result);
     }
 
-    private boolean contains(String source, String keyword) {
-        return source != null && source.toLowerCase().contains(keyword);
+    private void addSubmitterIds(Set<String> target, List<UserDTO> users) {
+        if (users == null) {
+            return;
+        }
+        users.stream().map(UserDTO::getEmpId).filter(this::hasText).map(String::trim).forEach(target::add);
     }
 
     private ReTaskAssignmentStatus parseAssignmentStatus(String status) {

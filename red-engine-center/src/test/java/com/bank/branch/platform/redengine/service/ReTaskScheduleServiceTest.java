@@ -5,8 +5,10 @@ import com.bank.branch.platform.redengine.api.dto.ReTaskScheduleWindowDTO;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -88,6 +90,28 @@ class ReTaskScheduleServiceTest {
                 ReTaskCycleType.QUARTER_END,
                 LocalDate.of(2024, 5, 20),
                 0));
+    }
+
+    @Test
+    void eachCycleAcceptsItsBoundaryLengthAndRejectsOneMoreDay() {
+        List<Object[]> cases = List.of(
+                new Object[]{ReTaskCycleType.WEEK_START, LocalDate.of(2027, 1, 4), 7},
+                new Object[]{ReTaskCycleType.WEEK_END, LocalDate.of(2027, 1, 4), 7},
+                new Object[]{ReTaskCycleType.MONTH_START, LocalDate.of(2027, 2, 1), 28},
+                new Object[]{ReTaskCycleType.MONTH_END, LocalDate.of(2027, 2, 1), 28},
+                new Object[]{ReTaskCycleType.QUARTER_START, LocalDate.of(2027, 1, 1), 90},
+                new Object[]{ReTaskCycleType.QUARTER_END, LocalDate.of(2027, 1, 1), 90}
+        );
+
+        for (Object[] item : cases) {
+            ReTaskCycleType cycleType = (ReTaskCycleType) item[0];
+            LocalDate periodDate = (LocalDate) item[1];
+            int cycleLength = (Integer) item[2];
+
+            assertDoesNotThrow(() -> service.calculateWindow(cycleType, periodDate, cycleLength));
+            assertThrows(IllegalArgumentException.class,
+                    () -> service.calculateWindow(cycleType, periodDate, cycleLength + 1));
+        }
     }
 
     @Test
