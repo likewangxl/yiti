@@ -1,12 +1,13 @@
 package com.bank.branch.platform.redengine.service;
 
 import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.DictApi;
+import com.bank.branch.platform.governance.api.dto.DictItemDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskBusinessType;
 import com.bank.branch.platform.redengine.api.dto.ReTaskDetailDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskExportReqDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskExportRespDTO;
 import com.bank.branch.platform.redengine.entity.RePartyOrg;
-import com.bank.branch.platform.redengine.entity.ReItemCode;
 import com.bank.branch.platform.redengine.entity.ReTask;
 import com.bank.branch.platform.redengine.entity.ReTaskBranchAssignment;
 import com.bank.branch.platform.redengine.entity.ReTaskExportTask;
@@ -14,7 +15,6 @@ import com.bank.branch.platform.redengine.entity.ReTaskInstance;
 import com.bank.branch.platform.redengine.entity.ReTaskSubmission;
 import com.bank.branch.platform.redengine.entity.ReTaskSubmissionFile;
 import com.bank.branch.platform.redengine.mapper.RePartyOrgMapper;
-import com.bank.branch.platform.redengine.mapper.ReItemCodeMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskBranchAssignmentMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskExportTaskMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskInstanceMapper;
@@ -26,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.util.Set;
@@ -62,7 +63,7 @@ class ReTaskExportServiceTest {
     @Mock
     private ReTaskSubmissionFileMapper submissionFileMapper;
     @Mock
-    private ReItemCodeMapper itemCodeMapper;
+    private DictApi dictApi;
     @Mock
     private RePartyOrgMapper partyOrgMapper;
     @Mock
@@ -71,6 +72,8 @@ class ReTaskExportServiceTest {
     private FileApi fileApi;
     @Mock
     private ReTaskExportAsyncExecutor asyncExecutor;
+    @Mock
+    private ReTaskExportWorker exportWorker;
 
     @InjectMocks
     private ReTaskExportServiceImpl service;
@@ -148,7 +151,7 @@ class ReTaskExportServiceTest {
         task.setId(7L);
         task.setTypeCode(ReTaskBusinessType.FOUR_DIMENSION.name());
         when(taskMapper.selectById(7L)).thenReturn(task);
-        when(itemCodeMapper.selectList(any())).thenReturn(List.of());
+        when(dictApi.getDictItems("RE_ITEM_CODE")).thenReturn(List.of());
 
         ReTaskExportReqDTO request = new ReTaskExportReqDTO();
         request.setItemCodes(List.of("not-active"));
@@ -157,6 +160,55 @@ class ReTaskExportServiceTest {
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("不存在或已停用");
         verify(exportTaskMapper, never()).insert(any(ReTaskExportTask.class));
+    }
+
+    @Test
+    void fourDimensionItemValidationUsesGovernanceDictionaryApi() {
+        ReTaskDetailDTO detail = new ReTaskDetailDTO();
+        detail.setBusinessType(ReTaskBusinessType.FOUR_DIMENSION);
+        when(taskManagementService.getDetail(7L, "E001")).thenReturn(detail);
+        ReTask task = new ReTask();
+        task.setId(7L);
+        task.setTypeCode(ReTaskBusinessType.FOUR_DIMENSION.name());
+        when(taskMapper.selectById(7L)).thenReturn(task);
+        DictItemDTO item = new DictItemDTO();
+        item.setDictType("RE_ITEM_CODE");
+        item.setDictCode("ITEM_1");
+        when(dictApi.getDictItems("RE_ITEM_CODE")).thenReturn(List.of(item));
+
+        ReTaskExportReqDTO request = new ReTaskExportReqDTO();
+        request.setItemCodes(List.of("ITEM_1"));
+
+        ReTaskExportRespDTO response = service.createExport(7L, request, "E001");
+
+        assertThat(response.getExportId()).startsWith("RTE_");
+        verify(dictApi).getDictItems("RE_ITEM_CODE");
+        verify(exportTaskMapper).insert(any(ReTaskExportTask.class));
+    }
+
+    @Test
+    void fourDimensionSelectionMayUseSubsetOfEnabledDictionaryItems() {
+        ReTaskDetailDTO detail = new ReTaskDetailDTO();
+        detail.setBusinessType(ReTaskBusinessType.FOUR_DIMENSION);
+        when(taskManagementService.getDetail(7L, "E001")).thenReturn(detail);
+        ReTask task = new ReTask();
+        task.setId(7L);
+        task.setTypeCode(ReTaskBusinessType.FOUR_DIMENSION.name());
+        when(taskMapper.selectById(7L)).thenReturn(task);
+
+        DictItemDTO first = new DictItemDTO();
+        first.setDictCode("ITEM_1");
+        DictItemDTO second = new DictItemDTO();
+        second.setDictCode("ITEM_2");
+        when(dictApi.getDictItems("RE_ITEM_CODE")).thenReturn(List.of(first, second));
+
+        ReTaskExportReqDTO request = new ReTaskExportReqDTO();
+        request.setItemCodes(List.of("ITEM_1"));
+
+        ReTaskExportRespDTO response = service.createExport(7L, request, "E001");
+
+        assertThat(response.getExportId()).startsWith("RTE_");
+        verify(exportTaskMapper).insert(any(ReTaskExportTask.class));
     }
 
     @Test
@@ -233,5 +285,65 @@ class ReTaskExportServiceTest {
                 .anyMatch(name -> name.startsWith("branch-2-第一党支部/"))
                 .hasSize(3);
         assertThat(entries).noneMatch(name -> name.contains(".."));
+    }
+
+    @Test
+    void workerDeletesUploadedArchiveWhenSuccessStateUpdateLosesRace() {
+        ReTaskExportTask queued = new ReTaskExportTask();
+        queued.setId("RTE_cleanup");
+        queued.setTaskId(7L);
+        queued.setOperatorId("E001");
+        queued.setStatus(com.bank.branch.platform.redengine.api.dto.ReTaskExportStatus.PENDING);
+        queued.setDetailItemCodesJson("[]");
+        when(exportTaskMapper.selectById("RTE_cleanup")).thenReturn(queued);
+        // claim succeeds, the conditional SUCCESS update loses the race, then FAILED is recorded.
+        when(exportTaskMapper.update(any(ReTaskExportTask.class), any())).thenReturn(1, 0, 1);
+
+        ReTask task = new ReTask();
+        task.setId(7L);
+        task.setTypeCode(ReTaskBusinessType.GENERAL.name());
+        task.setTitle("临时任务");
+        when(taskMapper.selectById(7L)).thenReturn(task);
+        when(instanceMapper.selectList(any())).thenReturn(List.of());
+
+        com.bank.branch.platform.governance.api.dto.FileObjectDTO artifact =
+                new com.bank.branch.platform.governance.api.dto.FileObjectDTO();
+        artifact.setId("F-ZIP-RACE");
+        when(fileApi.upload(any(byte[].class), any(String.class), any(String.class), any(String.class), any(String.class)))
+                .thenReturn(artifact);
+
+        service.executeExport("RTE_cleanup");
+
+        verify(fileApi).deleteFile("F-ZIP-RACE");
+    }
+
+    @Test
+    void asyncWorkerIsSpringManagedAndTransactional() throws Exception {
+        Class<?> workerClass = Class.forName(
+                "com.bank.branch.platform.redengine.service.ReTaskExportWorker");
+        assertThat(workerClass.getAnnotation(org.springframework.stereotype.Component.class)).isNotNull();
+        java.lang.reflect.Method execute = workerClass.getDeclaredMethod("execute", String.class);
+        assertThat(execute.getAnnotation(org.springframework.transaction.annotation.Transactional.class))
+                .isNotNull();
+    }
+
+    @Test
+    void createExport_submitsSpringManagedWorkerEntryPoint() {
+        ReTaskDetailDTO detail = new ReTaskDetailDTO();
+        detail.setBusinessType(ReTaskBusinessType.GENERAL);
+        when(taskManagementService.getDetail(7L, "E001")).thenReturn(detail);
+        ReTask task = new ReTask();
+        task.setId(7L);
+        task.setTypeCode(ReTaskBusinessType.GENERAL.name());
+        when(taskMapper.selectById(7L)).thenReturn(task);
+
+        ReTaskExportReqDTO request = new ReTaskExportReqDTO();
+        request.setItemCodes(List.of());
+        ReTaskExportRespDTO response = service.createExport(7L, request, "E001");
+
+        ArgumentCaptor<Runnable> workerCaptor = ArgumentCaptor.forClass(Runnable.class);
+        verify(asyncExecutor).submit(workerCaptor.capture());
+        workerCaptor.getValue().run();
+        verify(exportWorker).execute(response.getExportId());
     }
 }

@@ -368,6 +368,9 @@ public class ReHomeServiceImpl implements ReHomeService {
         if (instance == null || task == null || !isBranch(branch)) {
             throw new BizException("RE-40034", "任务分配数据不完整");
         }
+        if (task.getStatus() != ReTaskStatus.PUBLISHED) {
+            throw new BizException("RE-40303", "任务未发布，不能执行逾期扣分");
+        }
         if (instance.getWindowEndAt() == null || !instance.getWindowEndAt().isBefore(now())) {
             throw new BizException("RE-40035", "任务尚未超过截止时间");
         }
@@ -379,6 +382,15 @@ public class ReHomeServiceImpl implements ReHomeService {
         }
         if (existing != null && existing.getStatus() == ReTaskDeductionStatus.CANCELLED) {
             throw new BizException("RE-40903", "该任务分配的扣分已取消，不能重复执行");
+        }
+        // 执行接口不能只依赖列表查询：直接构造请求时仍需确认当前版本没有在截止前完成上报。
+        // 已由扫描器建立的 PENDING 记录必须保留，后续补报不能绕过既定扣分决定。
+        if (existing == null) {
+            ReTaskSubmission submission = latestSubmissions(List.of(assignmentId)).get(assignmentId);
+            if (submission != null && submission.getSubmittedAt() != null
+                    && !submission.getSubmittedAt().isAfter(instance.getWindowEndAt())) {
+                throw new BizException("RE-40036", "任务已在截止时间前上报，不能执行逾期扣分");
+            }
         }
 
         LocalDateTime now = now();
@@ -587,12 +599,16 @@ public class ReHomeServiceImpl implements ReHomeService {
 
     /** 读取指定员工的待办/已办，并批量从本域任务表补齐展示字段。 */
     private List<ReHomeTodoItemDTO> loadTodoItems(String operatorId, String roleCode, String status) {
+        LocalDateTime now = now();
         List<ReTaskTodo> todos = nullToEmpty(todoMapper.selectList(new LambdaQueryWrapper<ReTaskTodo>()
                 .eq(ReTaskTodo::getEmployeeId, operatorId)
                 .eq(ReTaskTodo::getRoleCode, roleCode)
                 .eq(ReTaskTodo::getStatus, status)
+                .le(ReTaskTodo::getAvailableAt, now)
                 .orderByAsc(ReTaskTodo::getAvailableAt).orderByAsc(ReTaskTodo::getId)));
-        return toTodoItems(todos);
+        return toTodoItems(todos.stream()
+                .filter(todo -> isTodoAvailable(todo, now))
+                .toList());
     }
 
     /** 支部书记的待处理任务由支部 assignment 状态派生，不依赖未生成的秘书待办行。 */
@@ -629,6 +645,9 @@ public class ReHomeServiceImpl implements ReHomeService {
         }
         ReTaskInstance instance = instanceMapper.selectById(assignment.getTaskInstanceId());
         if (instance == null || instance.getTaskId() == null) {
+            return null;
+        }
+        if (instance.getWindowStartAt() != null && now().isBefore(instance.getWindowStartAt())) {
             return null;
         }
         ReTask task = taskMapper.selectById(instance.getTaskId());
@@ -899,6 +918,11 @@ public class ReHomeServiceImpl implements ReHomeService {
 
     private static boolean contains(String value, String keyword) {
         return value != null && value.toLowerCase(Locale.ROOT).contains(keyword.toLowerCase(Locale.ROOT));
+    }
+
+    /** 待办必须拥有明确的可用时间，并且只能在北京时区的开始时刻后展示。 */
+    private static boolean isTodoAvailable(ReTaskTodo todo, LocalDateTime now) {
+        return todo != null && todo.getAvailableAt() != null && !todo.getAvailableAt().isAfter(now);
     }
 
     private static String normalizeText(String value) {

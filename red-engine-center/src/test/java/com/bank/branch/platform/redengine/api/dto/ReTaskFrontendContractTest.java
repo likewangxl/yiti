@@ -36,6 +36,15 @@ class ReTaskFrontendContractTest {
     }
 
     @Test
+    void workflowPayloadExposesTabAndLegacyFourDimensionIds() throws Exception {
+        assertNotNull(ReTaskWorkflowPageQueryDTO.class.getDeclaredField("tab"));
+        assertNotNull(ReTaskWorkflowAssignmentDTO.class.getDeclaredField("legacyReviewId"));
+        assertNotNull(ReTaskWorkflowAssignmentDTO.class.getDeclaredField("submitId"));
+        assertNotNull(ReTaskWorkflowActionRespDTO.class.getDeclaredField("legacyReviewId"));
+        assertNotNull(ReTaskWorkflowActionRespDTO.class.getDeclaredField("submitId"));
+    }
+
+    @Test
     void frontendAliasesNormalizeToImplementedDatabaseValues() {
         assertEquals(ReTaskNature.SCHEDULED, ReTaskNature.fromValue("PERIODIC"));
         assertEquals("SCHEDULED", ReTaskNature.SCHEDULED.getValue());

@@ -20,7 +20,7 @@ public class ReTaskCreateRespDTO {
     @Schema(description = "任务状态")
     private ReTaskStatus status;
 
-    /** 首个任务实例主键；定时任务为当前/下一有效窗口实例。 */
+    /** 首个任务实例主键；临时任务立即生成，定时任务仅在当前有效窗口生成，未来窗口为 null。 */
     @Schema(description = "任务实例 ID")
     private Long instanceId;
 

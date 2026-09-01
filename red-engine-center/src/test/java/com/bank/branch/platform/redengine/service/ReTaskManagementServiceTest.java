@@ -25,6 +25,7 @@ import com.bank.branch.platform.redengine.mapper.ReTaskStatusHistoryMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskSubmissionFileMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskSubmissionMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskTargetMapper;
+import com.bank.branch.platform.redengine.mapper.ReTaskTodoMapper;
 import com.bank.branch.platform.redengine.mapper.ReUserPartyMapMapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -79,6 +81,8 @@ class ReTaskManagementServiceTest {
     private ReTaskScheduleService scheduleService;
     @Mock
     private ReTaskAssignmentService assignmentService;
+    @Mock
+    private ReTaskTodoMapper todoMapper;
 
     @InjectMocks
     private ReTaskManagementServiceImpl service;
@@ -140,6 +144,7 @@ class ReTaskManagementServiceTest {
         when(currentUserApi.getCurrentEmpId()).thenReturn("admin");
         when(scheduleService.calculateWindow(eq(ReTaskCycleType.MONTH_END), any(), eq(3)))
                 .thenReturn(window(ReTaskCycleType.MONTH_END, "2026-08", 2026, 8, 29, 2026, 8, 31));
+        when(scheduleService.isCurrentWindow(any(), any())).thenReturn(true);
         when(taskMapper.insert(any(ReTask.class))).thenAnswer(invocation -> {
             ReTask task = invocation.getArgument(0);
             task.setId(199L);
@@ -160,6 +165,62 @@ class ReTaskManagementServiceTest {
         assertThat(instanceCaptor.getValue().getPeriodKey()).isEqualTo("2026-08");
         assertThat(instanceCaptor.getValue().getWindowStartAt()).isEqualTo(LocalDateTime.of(2026, 8, 29, 0, 0));
         assertThat(instanceCaptor.getValue().getWindowEndAt()).isEqualTo(LocalDateTime.of(2026, 8, 31, 23, 59, 59));
+    }
+
+    @Test
+    void temporaryPublish_returnsReporterTodoCountForCreatedAssignments() {
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RE_ORGREV"));
+        when(currentUserApi.getCurrentEmpId()).thenReturn("ORG-001");
+        when(currentUserApi.isSystemAdmin()).thenReturn(false);
+        when(partyOrgMapper.selectById(20L)).thenReturn(branch(20L));
+        when(userApi.getUserByEmpId("E001")).thenReturn(user("E001"));
+        when(userPartyMapMapper.selectOne(any())).thenReturn(mapping("E001", 20L));
+        when(taskMapper.insert(any(ReTask.class))).thenAnswer(invocation -> {
+            ReTask task = invocation.getArgument(0);
+            task.setId(199L);
+            return 1;
+        });
+        when(instanceMapper.insert(any(ReTaskInstance.class))).thenAnswer(invocation -> {
+            ReTaskInstance instance = invocation.getArgument(0);
+            instance.setId(299L);
+            return 1;
+        });
+        ReTaskBranchAssignment assignment = new ReTaskBranchAssignment();
+        assignment.setId(399L);
+        assignment.setTaskInstanceId(299L);
+        when(assignmentService.ensureAssignments(any(ReTask.class), any(ReTaskInstance.class)))
+                .thenReturn(List.of(assignment));
+        when(todoMapper.selectCount(any())).thenReturn(1L);
+
+        var result = service.createAndPublish(temporaryRequest(), "ORG-001");
+
+        assertThat(result.getAssignmentCount()).isEqualTo(1);
+        assertThat(result.getTodoCount()).isEqualTo(1);
+        verify(todoMapper).selectCount(any());
+    }
+
+    @Test
+    void scheduledTaskBeforeEffectiveDate_publishesWithoutPrematureInstanceOrTodo() {
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RE_ORGREV"));
+        when(currentUserApi.getCurrentEmpId()).thenReturn("ORG-001");
+        when(currentUserApi.isSystemAdmin()).thenReturn(false);
+        when(taskMapper.insert(any(ReTask.class))).thenAnswer(invocation -> {
+            ReTask task = invocation.getArgument(0);
+            task.setId(499L);
+            return 1;
+        });
+        ReTaskCreateReqDTO request = scheduledRequest();
+        request.setEffectiveFrom(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).plusDays(1));
+
+        var result = service.createAndPublish(request, "ORG-001");
+
+        assertThat(result.getInstanceId()).isNull();
+        assertThat(result.getAssignmentCount()).isZero();
+        assertThat(result.getTodoCount()).isZero();
+        verify(instanceMapper, never()).insert(any(ReTaskInstance.class));
+        verify(assignmentService, never()).ensureAssignments(any(ReTask.class), any(ReTaskInstance.class));
+        verify(todoMapper, never()).selectCount(any());
+        verify(historyMapper).insert(any(ReTaskStatusHistory.class));
     }
 
     private ReTaskCreateReqDTO temporaryRequest() {

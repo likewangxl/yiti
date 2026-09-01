@@ -31,6 +31,7 @@ import com.bank.branch.platform.redengine.entity.ReTaskFileType;
 import com.bank.branch.platform.redengine.entity.ReTaskInstance;
 import com.bank.branch.platform.redengine.entity.ReTaskStatusHistory;
 import com.bank.branch.platform.redengine.entity.ReTaskTarget;
+import com.bank.branch.platform.redengine.entity.ReTaskTodo;
 import com.bank.branch.platform.redengine.entity.ReUserPartyMap;
 import com.bank.branch.platform.redengine.mapper.RePartyOrgMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskBranchAssignmentMapper;
@@ -40,6 +41,7 @@ import com.bank.branch.platform.redengine.mapper.ReTaskMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskStatusHistoryMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskSubmissionMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskTargetMapper;
+import com.bank.branch.platform.redengine.mapper.ReTaskTodoMapper;
 import com.bank.branch.platform.redengine.mapper.ReUserPartyMapMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -95,6 +97,7 @@ public class ReTaskManagementServiceImpl implements ReTaskManagementService {
     private final UserApi userApi;
     private final ReTaskScheduleService scheduleService;
     private final ReTaskAssignmentService assignmentService;
+    private final ReTaskTodoMapper todoMapper;
 
     /**
      * 分页查询任务定义及支部分配进度。
@@ -231,21 +234,25 @@ public class ReTaskManagementServiceImpl implements ReTaskManagementService {
         saveFileTypes(task, request, operatorId, now);
         saveTargets(task, request, operatorId, now);
         ReTaskInstance instance = createInstance(task, request, now);
-        instanceMapper.insert(instance);
-        if (instance.getId() == null) {
-            throw new BizException("RE-50011", "任务实例保存失败");
+        List<ReTaskBranchAssignment> assignments = List.of();
+        int todoCount = 0;
+        if (instance != null) {
+            instanceMapper.insert(instance);
+            if (instance.getId() == null) {
+                throw new BizException("RE-50011", "任务实例保存失败");
+            }
+            assignments = assignmentService.ensureAssignments(task, instance);
+            todoCount = countReporterTodos(assignments);
         }
-
-        List<ReTaskBranchAssignment> assignments = assignmentService.ensureAssignments(task, instance);
         saveStatusHistory(task, instance, operatorId, now);
 
         ReTaskCreateRespDTO response = new ReTaskCreateRespDTO();
         response.setTaskId(task.getId());
         response.setTaskNo(task.getTaskNo());
         response.setStatus(task.getStatus());
-        response.setInstanceId(instance.getId());
+        response.setInstanceId(instance == null ? null : instance.getId());
         response.setAssignmentCount(assignments == null ? 0 : assignments.size());
-        response.setTodoCount(0);
+        response.setTodoCount(todoCount);
         return response;
     }
 
@@ -503,8 +510,17 @@ public class ReTaskManagementServiceImpl implements ReTaskManagementService {
             instance.setUpdateTime(now);
             return instance;
         }
+        LocalDate today = LocalDate.now(BEIJING_ZONE);
+        if (!isWithinEffectiveRange(task, today)) {
+            return null;
+        }
         ReTaskScheduleWindowDTO window = scheduleService.calculateWindow(
-                request.getCycleType(), LocalDate.now(BEIJING_ZONE), request.getDurationDays());
+                request.getCycleType(), today, request.getDurationDays());
+        // 发布时只创建当前有效窗口；尚未进入窗口的定时任务由调度补偿首次生成，
+        // 避免给员工提前展示未来 assignment/todo。
+        if (!scheduleService.isCurrentWindow(window, today)) {
+            return null;
+        }
         return newInstance(task, window, now);
     }
 
@@ -534,7 +550,7 @@ public class ReTaskManagementServiceImpl implements ReTaskManagementService {
     private void saveStatusHistory(ReTask task, ReTaskInstance instance, String operatorId, LocalDateTime now) {
         ReTaskStatusHistory history = new ReTaskStatusHistory();
         history.setTaskId(task.getId());
-        history.setTaskInstanceId(instance.getId());
+        history.setTaskInstanceId(instance == null ? null : instance.getId());
         history.setActionCode("PUBLISH");
         history.setFromStatus(ReTaskStatus.DRAFT.name());
         history.setToStatus(ReTaskStatus.PUBLISHED.name());
@@ -542,6 +558,22 @@ public class ReTaskManagementServiceImpl implements ReTaskManagementService {
         history.setOccurredAt(now);
         history.setCreateTime(now);
         historyMapper.insert(history);
+    }
+
+    /** 统计本次发布实际创建的报送员待办，避免把组织审核员待办混入返回值。 */
+    private int countReporterTodos(List<ReTaskBranchAssignment> assignments) {
+        if (assignments == null || assignments.isEmpty()) {
+            return 0;
+        }
+        List<Long> assignmentIds = assignments.stream().map(ReTaskBranchAssignment::getId)
+                .filter(Objects::nonNull).toList();
+        if (assignmentIds.isEmpty()) {
+            return 0;
+        }
+        Long count = todoMapper.selectCount(new LambdaQueryWrapper<ReTaskTodo>()
+                .in(ReTaskTodo::getAssignmentId, assignmentIds)
+                .eq(ReTaskTodo::getRoleCode, "REPORTER"));
+        return count == null ? 0 : Math.toIntExact(count);
     }
 
     private Map<Long, List<ReTaskBranchAssignment>> assignmentsByTask(Collection<ReTask> tasks) {

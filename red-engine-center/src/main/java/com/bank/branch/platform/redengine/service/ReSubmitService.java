@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 红色引擎-材料上报服务。
@@ -118,12 +119,26 @@ public class ReSubmitService {
     }
 
     /**
-     * 查询上报详情。
+     * 查询上报详情，并按当前用户映射的党组织执行实体级数据范围校验。
+     *
+     * <p>详情接口不能只依赖前端菜单或列表过滤；即使调用者拿到了其他党组织的 ID，
+     * 也必须在服务层拒绝。党组织映射缺失继续由 {@link ReUserPartyMapService} 以
+     * RE-40001 fail-close。</p>
      *
      * @param id 上报ID
-     * @return 上报实体；不存在时返回 null（与源系统一致，交由调用方决定是否视为异常）
+     * @param userId 当前登录人平台用户ID
+     * @return 当前党组织内的上报实体；不存在时返回 null
      */
-    public ReSubmit getDetail(Long id) {
-        return reSubmitMapper.selectById(id);
+    public ReSubmit getDetail(Long id, String userId) {
+        ReSubmit submit = reSubmitMapper.selectById(id);
+        if (submit == null) {
+            return null;
+        }
+        Long currentOrgId = reUserPartyMapService.getRequiredPartyOrgId(userId);
+        if (!Objects.equals(currentOrgId, submit.getOrgId())) {
+            throw new com.bank.branch.platform.common.web.exception.BizException(
+                    "RE-40304", "无权查看该上报记录");
+        }
+        return submit;
     }
 }

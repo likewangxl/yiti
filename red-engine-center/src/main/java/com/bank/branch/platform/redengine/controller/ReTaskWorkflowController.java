@@ -14,6 +14,7 @@ import com.bank.branch.platform.redengine.api.dto.ReTaskNature;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowActionRespDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowAssignmentDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowPageQueryDTO;
+import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowTab;
 import com.bank.branch.platform.redengine.service.ReTaskWorkflowService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -55,6 +56,13 @@ public class ReTaskWorkflowController {
                     @Override
                     public void setAsText(String text) {
                         setValue(ReTaskNature.fromValue(text));
+                    }
+                });
+        binder.registerCustomEditor(ReTaskWorkflowTab.class,
+                new java.beans.PropertyEditorSupport() {
+                    @Override
+                    public void setAsText(String text) {
+                        setValue(ReTaskWorkflowTab.fromValue(text));
                     }
                 });
     }

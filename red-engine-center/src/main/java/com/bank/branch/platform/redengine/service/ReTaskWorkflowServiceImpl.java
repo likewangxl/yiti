@@ -2,8 +2,11 @@ package com.bank.branch.platform.redengine.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.FileApi;
@@ -19,6 +22,7 @@ import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionStatus;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowActionRespDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowAssignmentDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowPageQueryDTO;
+import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowTab;
 import com.bank.branch.platform.redengine.entity.RePartyOrg;
 import com.bank.branch.platform.redengine.entity.ReTask;
 import com.bank.branch.platform.redengine.entity.ReTaskBranchAssignment;
@@ -28,6 +32,7 @@ import com.bank.branch.platform.redengine.entity.ReTaskStatusHistory;
 import com.bank.branch.platform.redengine.entity.ReTaskSubmission;
 import com.bank.branch.platform.redengine.entity.ReTaskSubmissionFile;
 import com.bank.branch.platform.redengine.entity.ReTaskTodo;
+import com.bank.branch.platform.redengine.entity.ReTaskReSubmitRel;
 import com.bank.branch.platform.redengine.mapper.RePartyOrgMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskBranchAssignmentMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskFileTypeMapper;
@@ -38,6 +43,7 @@ import com.bank.branch.platform.redengine.mapper.ReTaskSubmissionFileMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskSubmissionMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskTargetMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskTodoMapper;
+import com.bank.branch.platform.redengine.mapper.ReTaskReSubmitRelMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -48,8 +54,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -58,7 +64,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -78,6 +83,7 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
     static final String ORG_REVIEWER_ROLE = "R_RE_ORGREV";
     static final String ORG_TODO_ROLE = "ORG_REVIEWER";
     static final String SYSTEM_ADMIN_ROLE = "SYS_ADMIN";
+    private static final ZoneId BEIJING_ZONE = ZoneId.of("Asia/Shanghai");
 
     private final ReTaskMapper taskMapper;
     private final ReTaskInstanceMapper instanceMapper;
@@ -88,6 +94,7 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
     private final ReTaskStatusHistoryMapper historyMapper;
     private final ReTaskTargetMapper targetMapper;
     private final ReTaskFileTypeMapper fileTypeMapper;
+    private final ReTaskReSubmitRelMapper relMapper;
     private final RePartyOrgMapper partyOrgMapper;
     private final com.bank.branch.platform.redengine.mapper.ReUserPartyMapMapper userPartyMapMapper;
     private final CurrentUserApi currentUserApi;
@@ -101,16 +108,32 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
     public PageResult<ReTaskWorkflowAssignmentDTO> listMyAssignments(ReTaskWorkflowPageQueryDTO query,
                                                                       String operatorId) {
         requireCurrentUser(operatorId);
+        LocalDateTime now = now();
         List<ReTaskTodo> todos = todoMapper.selectList(new LambdaQueryWrapper<ReTaskTodo>()
                 .eq(ReTaskTodo::getEmployeeId, operatorId)
                 .eq(ReTaskTodo::getRoleCode, REPORTER_TODO_ROLE)
                 .ne(ReTaskTodo::getStatus, "CANCELLED")
+                .le(ReTaskTodo::getAvailableAt, now)
                 .orderByAsc(ReTaskTodo::getAvailableAt)
                 .orderByAsc(ReTaskTodo::getId));
-        Set<Long> assignmentIds = todos == null ? Set.of() : todos.stream()
-                .map(ReTaskTodo::getAssignmentId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<Long> assignmentIds = new LinkedHashSet<>();
+        if (todos != null) {
+            todos.stream().filter(todo -> isTodoAvailable(todo, now))
+                    .map(ReTaskTodo::getAssignmentId).filter(Objects::nonNull)
+                    .forEach(assignmentIds::add);
+        }
+        // 报送员提交后待办会被置为 COMPLETED；工作台历史页签不能只依赖首页待办，
+        // 因此把当前用户提交过的 assignment 一并纳入授权集合，最终状态/分页仍由任务域 SQL 统一筛选。
+        List<ReTaskSubmission> ownSubmissions = submissionMapper.selectList(
+                new LambdaQueryWrapper<ReTaskSubmission>()
+                        .eq(ReTaskSubmission::getSubmitterId, operatorId)
+                        .orderByDesc(ReTaskSubmission::getVersionNo)
+                        .orderByDesc(ReTaskSubmission::getId));
+        if (ownSubmissions != null) {
+            ownSubmissions.stream().filter(Objects::nonNull)
+                    .map(ReTaskSubmission::getAssignmentId).filter(Objects::nonNull)
+                    .forEach(assignmentIds::add);
+        }
         if (assignmentIds.isEmpty()) {
             return emptyPage(query);
         }
@@ -150,6 +173,10 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         if (reporterTodo == null || "CANCELLED".equalsIgnoreCase(reporterTodo.getStatus())) {
             throw new BizException("RE-40304", "当前用户不是该任务的处理人");
         }
+        LocalDateTime now = now();
+        if (instance.getWindowStartAt() != null && now.isBefore(instance.getWindowStartAt())) {
+            throw new BizException("RE-40905", "任务尚未开始");
+        }
 
         String actionCode = idempotencyActionCode(clientRequestId);
         ReTaskStatusHistory idempotency = historyMapper.selectOne(
@@ -177,7 +204,6 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         validateSubmissionContent(task, request);
         List<ReTaskFileSnapshot> files = validateFiles(task, request.getFileObjectIds());
 
-        LocalDateTime now = LocalDateTime.now();
         int assignmentUpdated = assignmentMapper.update(null, new LambdaUpdateWrapper<ReTaskBranchAssignment>()
                 .eq(ReTaskBranchAssignment::getId, assignment.getId())
                 .eq(ReTaskBranchAssignment::getCurrentVersion, oldVersion)
@@ -250,13 +276,13 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         return action(submission, assignment, false);
     }
 
-    /** 查询支部书记工作台；支部范围由当前实体书记关系和 R_RE_SECR 双重确定。 */
+    /** 查询支部书记工作台；普通书记按实体关系取数，SYS_ADMIN 可查看全部二级党支部。 */
     @Override
     @Transactional(readOnly = true)
     public PageResult<ReTaskWorkflowAssignmentDTO> listBranchReviews(ReTaskWorkflowPageQueryDTO query,
                                                                       String operatorId) {
         requireCurrentUser(operatorId);
-        requireRole(BRANCH_SECRETARY_ROLE);
+        requireBranchReviewer();
         Set<Long> branchIds = secretaryBranchIds(operatorId);
         if (branchIds.isEmpty()) {
             return emptyPage(query);
@@ -269,7 +295,7 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
     @Transactional(readOnly = true)
     public ReTaskWorkflowAssignmentDTO getBranchReview(Long assignmentId, String operatorId) {
         requireCurrentUser(operatorId);
-        requireRole(BRANCH_SECRETARY_ROLE);
+        requireBranchReviewer();
         ReTaskBranchAssignment assignment = requireAssignment(assignmentId);
         requireSecretaryForBranch(assignment.getBranchId(), operatorId);
         ReTask task = requireTaskForAssignment(assignment);
@@ -283,12 +309,12 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
     public ReTaskWorkflowActionRespDTO approveBranch(Long assignmentId, ReTaskApproveReqDTO request,
                                                       String operatorId) {
         requireCurrentUser(operatorId);
-        requireRole(BRANCH_SECRETARY_ROLE);
+        requireBranchReviewer();
         ReTaskContext context = requireReviewContext(assignmentId, operatorId, true);
         ReTaskSubmission submission = requireCurrentSubmission(context.assignment().getId(),
                 ReTaskSubmissionStatus.BRANCH_PENDING);
         rejectSelfReview(submission, operatorId);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = now();
         transitionSubmission(context, submission, ReTaskSubmissionStatus.BRANCH_APPROVED,
                 operatorId, normalizeOpinion(request == null ? null : request.getFeedback()), now,
                 true, false, true);
@@ -302,15 +328,15 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
     public ReTaskWorkflowActionRespDTO rejectBranch(Long assignmentId, ReTaskRejectReqDTO request,
                                                      String operatorId) {
         requireCurrentUser(operatorId);
-        requireRole(BRANCH_SECRETARY_ROLE);
+        requireBranchReviewer();
         String opinion = requiredOpinion(request == null ? null : request.getFeedback());
         ReTaskContext context = requireReviewContext(assignmentId, operatorId, true);
         ReTaskSubmission submission = requireCurrentSubmission(context.assignment().getId(),
                 ReTaskSubmissionStatus.BRANCH_PENDING);
         rejectSelfReview(submission, operatorId);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = now();
         transitionSubmission(context, submission, ReTaskSubmissionStatus.REJECTED_BY_BRANCH,
-                operatorId, opinion, now, true, false, true);
+                operatorId, opinion, now, true, true, true);
         reopenReporterTodos(context.assignment().getId(), now);
         return action(submission, context.assignment(), false, ReTaskSubmissionStatus.REJECTED_BY_BRANCH,
                 ReTaskAssignmentStatus.REJECTED_BY_BRANCH);
@@ -322,12 +348,12 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
     public ReTaskWorkflowActionRespDTO submitToOrg(Long assignmentId, ReTaskApproveReqDTO request,
                                                     String operatorId) {
         requireCurrentUser(operatorId);
-        requireRole(BRANCH_SECRETARY_ROLE);
+        requireBranchReviewer();
         ReTaskContext context = requireReviewContext(assignmentId, operatorId, true);
         ReTaskSubmission submission = requireCurrentSubmission(context.assignment().getId(),
                 ReTaskSubmissionStatus.BRANCH_APPROVED);
         rejectSelfReview(submission, operatorId);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = now();
         transitionSubmission(context, submission, ReTaskSubmissionStatus.ORG_PENDING,
                 operatorId, normalizeOpinion(request == null ? null : request.getFeedback()), now,
                 true, true, false);
@@ -369,7 +395,7 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         ReTaskSubmission submission = requireCurrentSubmission(context.assignment().getId(),
                 ReTaskSubmissionStatus.ORG_PENDING);
         rejectSelfReview(submission, operatorId);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = now();
         transitionSubmission(context, submission, ReTaskSubmissionStatus.APPROVED,
                 operatorId, normalizeOpinion(request == null ? null : request.getFeedback()), now,
                 false, true, true);
@@ -390,7 +416,7 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         ReTaskSubmission submission = requireCurrentSubmission(context.assignment().getId(),
                 ReTaskSubmissionStatus.ORG_PENDING);
         rejectSelfReview(submission, operatorId);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = now();
         transitionSubmission(context, submission, ReTaskSubmissionStatus.REJECTED_BY_ORG,
                 operatorId, opinion, now, false, true, true);
         completeOrgReviewerTodos(context.assignment().getId(), now);
@@ -407,82 +433,230 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         ReTaskWorkflowPageQueryDTO normalized = query == null ? new ReTaskWorkflowPageQueryDTO() : query;
         int pageNo = normalizePageNo(normalized.getPageNo());
         int pageSize = normalizePageSize(normalized.getPageSize());
-        LambdaQueryWrapper<ReTaskBranchAssignment> wrapper = new LambdaQueryWrapper<ReTaskBranchAssignment>()
-                .in(authorizedAssignmentIds != null && !authorizedAssignmentIds.isEmpty(),
-                        ReTaskBranchAssignment::getId, authorizedAssignmentIds == null ? List.of() : authorizedAssignmentIds)
-                .in(branchIds != null && !branchIds.isEmpty(), ReTaskBranchAssignment::getBranchId,
-                        branchIds == null ? List.of() : branchIds)
-                .ge(normalized.getSubmittedStartAt() != null,
-                        ReTaskBranchAssignment::getLastSubmittedAt, normalized.getSubmittedStartAt())
-                .le(normalized.getSubmittedEndAt() != null,
-                        ReTaskBranchAssignment::getLastSubmittedAt, normalized.getSubmittedEndAt())
-                .orderByDesc(ReTaskBranchAssignment::getLastSubmittedAt)
-                .orderByDesc(ReTaskBranchAssignment::getId);
-        List<ReTaskBranchAssignment> assignments = assignmentMapper.selectList(wrapper);
-        if (assignments == null || assignments.isEmpty()) {
+        Set<Long> effectiveBranchIds = branchIds == null ? null : new LinkedHashSet<>(branchIds);
+        if (normalized.getBranchId() != null) {
+            if (effectiveBranchIds != null && !effectiveBranchIds.contains(normalized.getBranchId())) {
+                return PageResult.of(pageNo, pageSize, 0L, List.of());
+            }
+            effectiveBranchIds = Set.of(normalized.getBranchId());
+        }
+
+        WorkflowStatusFilter statusFilter = resolveStatusFilter(normalized, branchIds, operatorId);
+        if (statusFilter.empty()) {
             return PageResult.of(pageNo, pageSize, 0L, List.of());
         }
 
         String keyword = trimToNull(normalized.resolvedKeyword());
+        Set<String> submitterIds = resolveSubmitterIds(keyword);
         ReTaskNature nature = normalized.resolvedTaskNature();
         ReTaskCycleType cycle = normalized.resolvedCycleType();
+        Set<Long> effectiveAssignmentIds = authorizedAssignmentIds == null
+                ? null : new LinkedHashSet<>(authorizedAssignmentIds);
+        if (effectiveAssignmentIds != null && effectiveAssignmentIds.isEmpty()) {
+            return PageResult.of(pageNo, pageSize, 0L, List.of());
+        }
+
+        IPage<ReTaskBranchAssignment> assignmentPage = assignmentMapper.selectWorkflowPage(
+                new Page<>(pageNo, pageSize), effectiveAssignmentIds, null, effectiveBranchIds,
+                statusFilter.assignmentStatuses(), statusFilter.submissionStatuses(),
+                nature == null ? null : nature.getValue(),
+                normalized.getBusinessType() == null ? null : normalized.getBusinessType().name(),
+                cycle == null || cycle == ReTaskCycleType.NONE ? null : cycle.name(),
+                keyword, submitterIds, normalized.getSubmittedStartAt(), normalized.getSubmittedEndAt());
+        if (assignmentPage == null || assignmentPage.getRecords() == null
+                || assignmentPage.getRecords().isEmpty()) {
+            return PageResult.of(pageNo, pageSize,
+                    assignmentPage == null ? 0L : assignmentPage.getTotal(), List.of());
+        }
+
         List<ReTaskWorkflowAssignmentDTO> rows = new ArrayList<>();
-        for (ReTaskBranchAssignment assignment : assignments) {
+        for (ReTaskBranchAssignment assignment : assignmentPage.getRecords()) {
             if (assignment == null || assignment.getId() == null) {
                 continue;
             }
-            ReTask task = taskMapper.selectById(taskIdForAssignment(assignment));
-            if (task == null || task.getStatus() != ReTaskStatus.PUBLISHED) {
+            // SQL 已负责状态、关键字和分页；这里仅做不可绕过的实体关系复核，避免
+            // 非标准 Mapper 实现或异常数据把错误任务映射进工作台。
+            if (effectiveBranchIds != null && !effectiveBranchIds.isEmpty()
+                    && !effectiveBranchIds.contains(assignment.getBranchId())) {
                 continue;
             }
             ReTaskInstance instance = instanceMapper.selectById(assignment.getTaskInstanceId());
-            if (instance == null || !Objects.equals(instance.getTaskId(), task.getId())) {
+            if (instance == null || instance.getTaskId() == null) {
                 continue;
             }
-            if (nature != null && !natureMatches(task, nature)) {
-                continue;
-            }
-            if (cycle != null && cycle != ReTaskCycleType.NONE
-                    && !cycleMatches(task, cycle)) {
-                continue;
-            }
-            if (normalized.getBusinessType() != null
-                    && !businessTypeMatches(task, normalized.getBusinessType())) {
+            ReTask task = taskMapper.selectById(instance.getTaskId());
+            if (task == null || task.getStatus() != ReTaskStatus.PUBLISHED) {
                 continue;
             }
             ReTaskWorkflowAssignmentDTO dto = toAssignment(task, instance, assignment);
-            if (normalized.getAssignmentStatus() != null
-                    && dto.getStatus() != normalized.getAssignmentStatus()) {
-                continue;
-            }
-            if (normalized.getSubmissionStatus() != null
-                    && dto.getSubmissionStatus() != normalized.getSubmissionStatus()) {
-                continue;
-            }
-            if (!matchesKeyword(dto, keyword)) {
-                continue;
-            }
-            if (isBranchQueue(operatorId, branchIds) && !branchQueueStatus(dto.getSubmissionStatus())) {
-                continue;
-            }
-            if (isOrgQueue(operatorId, branchIds) && !orgQueueStatus(dto.getSubmissionStatus())) {
-                continue;
-            }
             rows.add(dto);
         }
-        long total = rows.size();
-        int from = Math.min((pageNo - 1) * pageSize, rows.size());
-        int to = Math.min(from + pageSize, rows.size());
-        return PageResult.of(pageNo, pageSize, total, rows.subList(from, to));
+        return PageResult.of(pageNo, pageSize, assignmentPage.getTotal(), rows);
     }
 
-    /** 将 assignment 的实例反查任务；不信任请求路径或前端传入的任务 ID。 */
-    private Long taskIdForAssignment(ReTaskBranchAssignment assignment) {
-        if (assignment.getTaskInstanceId() == null) {
-            return null;
+    /**
+     * 将工作台页签和显式状态条件转换为数据库筛选集合。
+     * <p>组织/支部默认队列的状态集合也在这里下推，避免先读全量 assignment 再在内存合并页签。</p>
+     */
+    private WorkflowStatusFilter resolveStatusFilter(ReTaskWorkflowPageQueryDTO query,
+                                                       Set<Long> branchIds,
+                                                       String operatorId) {
+        boolean branchQueue = isBranchQueue(operatorId, branchIds);
+        boolean orgQueue = isOrgQueue(operatorId, branchIds);
+        Set<String> allowedAssignments = null;
+        Set<String> allowedSubmissions = null;
+        if (branchQueue) {
+            allowedAssignments = Set.of(
+                    ReTaskAssignmentStatus.BRANCH_PENDING.name(),
+                    ReTaskAssignmentStatus.ORG_PENDING.name(),
+                    ReTaskAssignmentStatus.APPROVED.name(),
+                    ReTaskAssignmentStatus.REJECTED_BY_BRANCH.name(),
+                    ReTaskAssignmentStatus.REJECTED_BY_ORG.name());
+            allowedSubmissions = Set.of(
+                    ReTaskSubmissionStatus.BRANCH_PENDING.name(),
+                    ReTaskSubmissionStatus.BRANCH_APPROVED.name(),
+                    ReTaskSubmissionStatus.ORG_PENDING.name(),
+                    ReTaskSubmissionStatus.APPROVED.name(),
+                    ReTaskSubmissionStatus.REJECTED_BY_BRANCH.name(),
+                    ReTaskSubmissionStatus.REJECTED_BY_ORG.name());
+        } else if (orgQueue) {
+            allowedAssignments = Set.of(
+                    ReTaskAssignmentStatus.ORG_PENDING.name(),
+                    ReTaskAssignmentStatus.APPROVED.name(),
+                    ReTaskAssignmentStatus.REJECTED_BY_BRANCH.name(),
+                    ReTaskAssignmentStatus.REJECTED_BY_ORG.name());
+            allowedSubmissions = Set.of(
+                    ReTaskSubmissionStatus.ORG_PENDING.name(),
+                    ReTaskSubmissionStatus.APPROVED.name(),
+                    ReTaskSubmissionStatus.REJECTED_BY_BRANCH.name(),
+                    ReTaskSubmissionStatus.REJECTED_BY_ORG.name());
         }
-        ReTaskInstance instance = instanceMapper.selectById(assignment.getTaskInstanceId());
-        return instance == null ? null : instance.getTaskId();
+
+        Set<String> assignments = null;
+        Set<String> submissions = null;
+        ReTaskWorkflowTab tab = query.getTab();
+        if (tab != null) {
+            if (branchQueue) {
+                switch (tab) {
+                    case PENDING -> {
+                        assignments = Set.of(ReTaskAssignmentStatus.BRANCH_PENDING.name());
+                        submissions = Set.of(ReTaskSubmissionStatus.BRANCH_PENDING.name(),
+                                ReTaskSubmissionStatus.BRANCH_APPROVED.name());
+                    }
+                    case REVIEWING -> {
+                        assignments = Set.of(ReTaskAssignmentStatus.ORG_PENDING.name());
+                        submissions = Set.of(ReTaskSubmissionStatus.ORG_PENDING.name());
+                    }
+                    case PASSED -> {
+                        assignments = Set.of(ReTaskAssignmentStatus.APPROVED.name());
+                        submissions = Set.of(ReTaskSubmissionStatus.APPROVED.name());
+                    }
+                    case REJECTED -> {
+                        assignments = Set.of(ReTaskAssignmentStatus.REJECTED_BY_BRANCH.name(),
+                                ReTaskAssignmentStatus.REJECTED_BY_ORG.name());
+                        submissions = Set.of(ReTaskSubmissionStatus.REJECTED_BY_BRANCH.name(),
+                                ReTaskSubmissionStatus.REJECTED_BY_ORG.name());
+                    }
+                }
+            } else if (orgQueue) {
+                switch (tab) {
+                    case PENDING, REVIEWING -> {
+                        assignments = Set.of(ReTaskAssignmentStatus.ORG_PENDING.name());
+                        submissions = Set.of(ReTaskSubmissionStatus.ORG_PENDING.name());
+                    }
+                    case PASSED -> {
+                        assignments = Set.of(ReTaskAssignmentStatus.APPROVED.name());
+                        submissions = Set.of(ReTaskSubmissionStatus.APPROVED.name());
+                    }
+                    case REJECTED -> {
+                        assignments = Set.of(ReTaskAssignmentStatus.REJECTED_BY_BRANCH.name(),
+                                ReTaskAssignmentStatus.REJECTED_BY_ORG.name());
+                        submissions = Set.of(ReTaskSubmissionStatus.REJECTED_BY_BRANCH.name(),
+                                ReTaskSubmissionStatus.REJECTED_BY_ORG.name());
+                    }
+                }
+            } else {
+                switch (tab) {
+                    case PENDING -> assignments = Set.of(ReTaskAssignmentStatus.UNREPORTED.name(),
+                            ReTaskAssignmentStatus.REJECTED_BY_BRANCH.name(),
+                            ReTaskAssignmentStatus.REJECTED_BY_ORG.name());
+                    case REVIEWING -> {
+                        assignments = Set.of(ReTaskAssignmentStatus.BRANCH_PENDING.name(),
+                                ReTaskAssignmentStatus.ORG_PENDING.name());
+                        submissions = Set.of(ReTaskSubmissionStatus.BRANCH_PENDING.name(),
+                                ReTaskSubmissionStatus.BRANCH_APPROVED.name(),
+                                ReTaskSubmissionStatus.ORG_PENDING.name());
+                    }
+                    case PASSED -> {
+                        assignments = Set.of(ReTaskAssignmentStatus.APPROVED.name());
+                        submissions = Set.of(ReTaskSubmissionStatus.APPROVED.name());
+                    }
+                    case REJECTED -> {
+                        assignments = Set.of(ReTaskAssignmentStatus.REJECTED_BY_BRANCH.name(),
+                                ReTaskAssignmentStatus.REJECTED_BY_ORG.name());
+                        submissions = Set.of(ReTaskSubmissionStatus.REJECTED_BY_BRANCH.name(),
+                                ReTaskSubmissionStatus.REJECTED_BY_ORG.name());
+                    }
+                }
+            }
+        }
+
+        if (query.getAssignmentStatus() != null) {
+            String status = query.getAssignmentStatus().name();
+            if (allowedAssignments != null && !allowedAssignments.contains(status)) {
+                return WorkflowStatusFilter.emptyFilter();
+            }
+            if (assignments != null && !assignments.contains(status)) {
+                return WorkflowStatusFilter.emptyFilter();
+            }
+            assignments = Set.of(status);
+        }
+        if (query.getSubmissionStatus() != null) {
+            String status = query.getSubmissionStatus().name();
+            if (allowedSubmissions != null && !allowedSubmissions.contains(status)) {
+                return WorkflowStatusFilter.emptyFilter();
+            }
+            if (submissions != null && !submissions.contains(status)) {
+                return WorkflowStatusFilter.emptyFilter();
+            }
+            submissions = Set.of(status);
+        }
+        if (assignments == null) {
+            assignments = allowedAssignments;
+        }
+        if (submissions == null) {
+            submissions = allowedSubmissions;
+        }
+        return new WorkflowStatusFilter(assignments, submissions, false);
+    }
+
+    /** 关键字命中用户工号或姓名时，把候选员工 ID 下推到任务域 SQL。 */
+    private Set<String> resolveSubmitterIds(String keyword) {
+        if (!hasText(keyword) || userApi == null) {
+            return Set.of();
+        }
+        Set<String> ids = new LinkedHashSet<>();
+        List<UserDTO> usernameMatches = userApi.findUsersByUsernameAndDisplayName(keyword, null);
+        List<UserDTO> displayNameMatches = userApi.findUsersByUsernameAndDisplayName(null, keyword);
+        addUserIds(ids, usernameMatches);
+        addUserIds(ids, displayNameMatches);
+        return ids;
+    }
+
+    private void addUserIds(Set<String> ids, List<UserDTO> users) {
+        if (users == null) {
+            return;
+        }
+        users.stream().filter(Objects::nonNull).map(UserDTO::getEmpId)
+                .filter(this::hasText).map(String::trim).forEach(ids::add);
+    }
+
+    private record WorkflowStatusFilter(Set<String> assignmentStatuses,
+                                        Set<String> submissionStatuses,
+                                        boolean empty) {
+        private static WorkflowStatusFilter emptyFilter() {
+            return new WorkflowStatusFilter(Set.of(), Set.of(), true);
+        }
     }
 
     private ReTaskWorkflowAssignmentDTO toAssignment(ReTask task, ReTaskInstance instance,
@@ -518,6 +692,9 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         } else {
             dto.setFiles(List.of());
         }
+        Long legacyReviewId = findLegacyReviewId(assignment.getId());
+        dto.setLegacyReviewId(legacyReviewId);
+        dto.setSubmitId(legacyReviewId);
         dto.setWindowStartAt(instance.getWindowStartAt());
         dto.setWindowEndAt(instance.getWindowEndAt());
         dto.setRequiresFile(Integer.valueOf(1).equals(task.getRequiresFile()));
@@ -623,10 +800,25 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
             requireSecretaryForBranch(assignment.getBranchId(), operatorId);
             return;
         }
-        if (findReporterTodo(assignment.getId(), operatorId) != null) {
+        if (findReporterTodo(assignment.getId(), operatorId) != null
+                || hasReporterSubmission(assignment.getId(), operatorId)) {
             return;
         }
         throw new BizException("RE-40304", "无权查看该任务");
+    }
+
+    /** 已完成/被清理的待办仍应允许原报送员查看自己提交过的任务历史。 */
+    private boolean hasReporterSubmission(Long assignmentId, String operatorId) {
+        if (assignmentId == null || !hasText(operatorId)) {
+            return false;
+        }
+        List<ReTaskSubmission> submissions = submissionMapper.selectList(
+                new LambdaQueryWrapper<ReTaskSubmission>()
+                        .eq(ReTaskSubmission::getAssignmentId, assignmentId)
+                        .eq(ReTaskSubmission::getSubmitterId, operatorId)
+                        .orderByDesc(ReTaskSubmission::getVersionNo)
+                        .orderByDesc(ReTaskSubmission::getId));
+        return submissions != null && submissions.stream().anyMatch(Objects::nonNull);
     }
 
     private Set<Long> secretaryBranchIds(String operatorId) {
@@ -634,21 +826,27 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         if (orgs == null) {
             return Set.of();
         }
-        return orgs.stream().filter(org -> org != null && Integer.valueOf(2).equals(org.getOrgLevel())
-                        && operatorId.equals(org.getSecretaryId()))
+        return orgs.stream().filter(this::isBranch)
+                .filter(org -> isSystemAdmin() || operatorId.equals(org.getSecretaryId()))
                 .map(RePartyOrg::getId).filter(Objects::nonNull)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private void requireSecretaryForBranch(Long branchId, String operatorId) {
-        if (branchId == null || !hasRole(BRANCH_SECRETARY_ROLE)) {
+        if (branchId == null || !isBranchReviewer()) {
             throw new BizException("RE-40302", "无支部审核权限");
         }
         RePartyOrg branch = partyOrgMapper.selectById(branchId);
-        if (branch == null || !Integer.valueOf(2).equals(branch.getOrgLevel())
-                || !operatorId.equals(branch.getSecretaryId())) {
+        if (!isBranch(branch)) {
             throw new BizException("RE-40302", "无权审核该党支部任务");
         }
+        if (!isSystemAdmin() && !operatorId.equals(branch.getSecretaryId())) {
+            throw new BizException("RE-40302", "无权审核该党支部任务");
+        }
+    }
+
+    private boolean isBranch(RePartyOrg org) {
+        return org != null && org.getId() != null && Integer.valueOf(2).equals(org.getOrgLevel());
     }
 
     private void requireOrgReviewer() {
@@ -660,6 +858,21 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
     private boolean isOrgReviewer() {
         return currentUserApi.isSystemAdmin() || hasRole(ORG_REVIEWER_ROLE)
                 || hasRole(SYSTEM_ADMIN_ROLE);
+    }
+
+    /** 支部工作台允许支部书记按实体归属访问，系统管理员拥有全量支部排障权限。 */
+    private void requireBranchReviewer() {
+        if (!isBranchReviewer()) {
+            throw new BizException("RE-40302", "无权执行该任务操作");
+        }
+    }
+
+    private boolean isBranchReviewer() {
+        return isSystemAdmin() || hasRole(BRANCH_SECRETARY_ROLE);
+    }
+
+    private boolean isSystemAdmin() {
+        return currentUserApi.isSystemAdmin() || hasRole(SYSTEM_ADMIN_ROLE);
     }
 
     private void requireRole(String roleCode) {
@@ -959,8 +1172,24 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         response.setSubmissionId(submission.getId());
         response.setSubmissionStatus(submissionStatus);
         response.setAssignmentStatus(assignmentStatus);
+        Long legacyReviewId = findLegacyReviewId(assignment.getId());
+        response.setLegacyReviewId(legacyReviewId);
+        response.setSubmitId(legacyReviewId);
         response.setIdempotent(idempotent);
         return response;
+    }
+
+    /** 查询四维旧记录关联 ID，供原评分页继续打开对应 RE_SUBMIT。 */
+    private Long findLegacyReviewId(Long assignmentId) {
+        if (assignmentId == null || relMapper == null) {
+            return null;
+        }
+        ReTaskReSubmitRel relation = relMapper.selectOne(new LambdaQueryWrapper<ReTaskReSubmitRel>()
+                .eq(ReTaskReSubmitRel::getAssignmentId, assignmentId)
+                .isNotNull(ReTaskReSubmitRel::getReSubmitId)
+                .orderByDesc(ReTaskReSubmitRel::getId)
+                .last("LIMIT 1"));
+        return relation == null ? null : relation.getReSubmitId();
     }
 
     private ReTaskAssignmentStatus resolveAssignmentStatus(ReTaskBranchAssignment assignment,
@@ -1031,59 +1260,21 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         }
     }
 
-    private boolean matchesKeyword(ReTaskWorkflowAssignmentDTO dto, String keyword) {
-        if (!hasText(keyword)) {
-            return true;
-        }
-        String normalized = keyword.toLowerCase(Locale.ROOT);
-        return contains(dto.getTaskTitle(), normalized)
-                || contains(dto.getTaskDescription(), normalized)
-                || contains(dto.getBranchName(), normalized)
-                || contains(dto.getSubmitterName(), normalized);
+    /** 待办仅在明确的北京时区可用时间到达后才可见。 */
+    private boolean isTodoAvailable(ReTaskTodo todo, LocalDateTime now) {
+        return todo != null && todo.getAvailableAt() != null && !todo.getAvailableAt().isAfter(now);
     }
 
-    private boolean contains(String value, String keyword) {
-        return value != null && value.toLowerCase(Locale.ROOT).contains(keyword);
-    }
-
-    private boolean natureMatches(ReTask task, ReTaskNature nature) {
-        return nature == parseNature(task.getNature());
-    }
-
-    private boolean cycleMatches(ReTask task, ReTaskCycleType cycle) {
-        return cycle == parseCycle(task.getCycle());
-    }
-
-    private boolean businessTypeMatches(ReTask task, ReTaskBusinessType type) {
-        return type == parseBusinessType(task.getTypeCode());
-    }
-
-    /** 支部工作台可查当前提交及后续审核历史；无提交版本的未上报 assignment 不进入工作台。 */
-    private boolean branchQueueStatus(ReTaskSubmissionStatus status) {
-        return status == ReTaskSubmissionStatus.BRANCH_PENDING
-                || status == ReTaskSubmissionStatus.BRANCH_APPROVED
-                || status == ReTaskSubmissionStatus.ORG_PENDING
-                || status == ReTaskSubmissionStatus.APPROVED
-                || status == ReTaskSubmissionStatus.REJECTED_BY_BRANCH
-                || status == ReTaskSubmissionStatus.REJECTED_BY_ORG;
-    }
-
-    /** 组织工作台只接收已进入组织链路或已形成终态的提交版本。 */
-    private boolean orgQueueStatus(ReTaskSubmissionStatus status) {
-        return status == ReTaskSubmissionStatus.ORG_PENDING
-                || status == ReTaskSubmissionStatus.APPROVED
-                || status == ReTaskSubmissionStatus.REJECTED_BY_BRANCH
-                || status == ReTaskSubmissionStatus.REJECTED_BY_ORG;
+    private LocalDateTime now() {
+        return LocalDateTime.now(BEIJING_ZONE);
     }
 
     private boolean isBranchQueue(String operatorId, Set<Long> branchIds) {
-        return branchIds != null && !branchIds.isEmpty() && hasRole(BRANCH_SECRETARY_ROLE)
-                && !isOrgReviewer();
+        return branchIds != null && !branchIds.isEmpty() && isBranchReviewer();
     }
 
     private boolean isOrgQueue(String operatorId, Set<Long> branchIds) {
-        return (branchIds == null || branchIds.isEmpty()) && isOrgReviewer()
-                && !hasRole(BRANCH_SECRETARY_ROLE);
+        return (branchIds == null || branchIds.isEmpty()) && isOrgReviewer();
     }
 
     private PageResult<ReTaskWorkflowAssignmentDTO> emptyPage(ReTaskWorkflowPageQueryDTO query) {

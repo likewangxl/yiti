@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Objects;
 
 /**
@@ -36,6 +37,8 @@ import java.util.Objects;
 @Service
 @RequiredArgsConstructor
 public class ReTaskFourDimensionAdapter {
+
+    private static final ZoneId BEIJING_ZONE = ZoneId.of("Asia/Shanghai");
 
     private final ReTaskReSubmitRelMapper relMapper;
     private final ReTaskDimensionProgressMapper progressMapper;
@@ -62,7 +65,7 @@ public class ReTaskFourDimensionAdapter {
         if (!hasText(dimensionCode)) {
             return;
         }
-        upsertProgress(task, instance, assignment, dimensionCode, taskSubmission, LocalDateTime.now());
+        upsertProgress(task, instance, assignment, dimensionCode, taskSubmission, now());
     }
 
     /**
@@ -115,14 +118,14 @@ public class ReTaskFourDimensionAdapter {
             relation.setDimensionCode(resolvedDimension);
             relation.setItemCode(resolvedItem);
             relation.setCreatedBy(operatorId);
-            relation.setCreateTime(LocalDateTime.now());
+            relation.setCreateTime(now());
             try {
                 relMapper.insert(relation);
             } catch (DuplicateKeyException duplicate) {
                 // 关系表唯一键承担并发幂等；另一节点已创建时当前操作无需重复写入。
             }
         }
-        upsertProgress(task, instance, assignment, resolvedDimension, null, LocalDateTime.now());
+        upsertProgress(task, instance, assignment, resolvedDimension, null, now());
     }
 
     /**
@@ -185,11 +188,11 @@ public class ReTaskFourDimensionAdapter {
 
     private void incrementProgress(ReTaskDimensionProgress existing, ReTaskSubmission submission,
                                    LocalDateTime now) {
-        int count = existing.getUploadCount() == null ? 0 : existing.getUploadCount();
         LambdaUpdateWrapper<ReTaskDimensionProgress> update = new LambdaUpdateWrapper<ReTaskDimensionProgress>()
                 .eq(ReTaskDimensionProgress::getId, existing.getId())
                 .set(ReTaskDimensionProgress::getStatus, ReTaskDimensionProgressStatus.COMPLETED)
-                .set(ReTaskDimensionProgress::getUploadCount, count + 1)
+                // 不能先读 count 再回写：并发上传时两个请求可能都把同一个值加一。
+                .setSql("upload_count = COALESCE(upload_count, 0) + 1")
                 .set(ReTaskDimensionProgress::getLastSubmissionId,
                         submission == null ? null : submission.getId())
                 .set(ReTaskDimensionProgress::getUpdateTime, now);
@@ -216,5 +219,9 @@ public class ReTaskFourDimensionAdapter {
 
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private LocalDateTime now() {
+        return LocalDateTime.now(BEIJING_ZONE);
     }
 }

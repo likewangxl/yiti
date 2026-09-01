@@ -7,8 +7,10 @@ import com.alibaba.excel.write.metadata.WriteSheet;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.api.dto.DictItemDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskBusinessType;
 import com.bank.branch.platform.redengine.api.dto.ReTaskDetailDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskExportReqDTO;
@@ -16,7 +18,6 @@ import com.bank.branch.platform.redengine.api.dto.ReTaskExportRespDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskExportRowDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskExportStatus;
 import com.bank.branch.platform.redengine.entity.RePartyOrg;
-import com.bank.branch.platform.redengine.entity.ReItemCode;
 import com.bank.branch.platform.redengine.entity.ReSubmit;
 import com.bank.branch.platform.redengine.entity.ReSubmitFile;
 import com.bank.branch.platform.redengine.entity.ReTask;
@@ -27,7 +28,6 @@ import com.bank.branch.platform.redengine.entity.ReTaskReSubmitRel;
 import com.bank.branch.platform.redengine.entity.ReTaskSubmission;
 import com.bank.branch.platform.redengine.entity.ReTaskSubmissionFile;
 import com.bank.branch.platform.redengine.mapper.RePartyOrgMapper;
-import com.bank.branch.platform.redengine.mapper.ReItemCodeMapper;
 import com.bank.branch.platform.redengine.mapper.ReSubmitFileMapper;
 import com.bank.branch.platform.redengine.mapper.ReSubmitMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskBranchAssignmentMapper;
@@ -91,7 +91,6 @@ public class ReTaskExportServiceImpl implements ReTaskExportService {
     private static final ZoneId BEIJING_ZONE = ZoneId.of("Asia/Shanghai");
     private static final String FOUR_DIMENSION = ReTaskBusinessType.FOUR_DIMENSION.name();
     private static final String ITEM_CODE_DICT_TYPE = "RE_ITEM_CODE";
-    private static final String ACTIVE_DICT_STATUS = "ACTIVE";
     private static final String FILE_CATEGORY = "re_task_export";
     private static final String ZIP_CONTENT_TYPE = "application/zip";
     private static final String GENERIC_FAILURE = "导出失败，请稍后重试";
@@ -106,11 +105,12 @@ public class ReTaskExportServiceImpl implements ReTaskExportService {
     private final ReTaskReSubmitRelMapper taskReSubmitRelMapper;
     private final ReSubmitMapper reSubmitMapper;
     private final ReSubmitFileMapper reSubmitFileMapper;
-    private final ReItemCodeMapper itemCodeMapper;
     private final RePartyOrgMapper partyOrgMapper;
     private final ReTaskManagementService taskManagementService;
+    private final DictApi dictApi;
     private final FileApi fileApi;
     private final ReTaskExportAsyncExecutor asyncExecutor;
+    private final ReTaskExportWorker exportWorker;
 
     /**
      * 创建异步导出作业。
@@ -228,6 +228,13 @@ public class ReTaskExportServiceImpl implements ReTaskExportService {
      * 异步 worker 入口，包可见便于定向单元测试；状态条件更新保证多节点只有一个执行者。
      */
     void executeExport(String exportId) {
+        executeExportNow(exportId);
+    }
+
+    /**
+     * 在 {@link ReTaskExportWorker} 已开启的事务中执行导出；不作为异步提交入口使用。
+     */
+    void executeExportNow(String exportId) {
         ReTaskExportTask queued = exportTaskMapper.selectById(exportId);
         if (queued == null || queued.getStatus() != ReTaskExportStatus.PENDING) {
             return;
@@ -246,6 +253,7 @@ public class ReTaskExportServiceImpl implements ReTaskExportService {
             return;
         }
 
+        FileObjectDTO uploadedArtifact = null;
         try {
             ReTask task = taskMapper.selectById(queued.getTaskId());
             if (task == null) {
@@ -253,12 +261,12 @@ public class ReTaskExportServiceImpl implements ReTaskExportService {
             }
             ExportPayload payload = loadPayload(task, queued);
             byte[] archive = buildArchive(payload.rows(), payload.attachments());
-            FileObjectDTO file = fileApi.upload(archive,
+            uploadedArtifact = fileApi.upload(archive,
                     "red-engine-task-export-" + exportId + ".zip",
                     ZIP_CONTENT_TYPE,
                     queued.getOperatorId(),
                     FILE_CATEGORY);
-            if (file == null || !hasText(file.getId())) {
+            if (uploadedArtifact == null || !hasText(uploadedArtifact.getId())) {
                 throw new IllegalStateException("file object unavailable");
             }
 
@@ -269,7 +277,7 @@ public class ReTaskExportServiceImpl implements ReTaskExportService {
             succeeded.setRowCount(payload.rows().size());
             succeeded.setSheetCount(sheetCount(payload.rows().size()));
             succeeded.setSheetRowLimit(SHEET_ROW_LIMIT);
-            succeeded.setFileObjectId(file.getId());
+            succeeded.setFileObjectId(uploadedArtifact.getId());
             succeeded.setFileSize((long) archive.length);
             succeeded.setFinishedAt(finishedAt);
             succeeded.setUpdatedTime(finishedAt);
@@ -278,15 +286,33 @@ public class ReTaskExportServiceImpl implements ReTaskExportService {
                     .eq(ReTaskExportTask::getStatus, ReTaskExportStatus.RUNNING));
             if (updated != 1) {
                 log.warn("任务导出完成状态未写入 exportId={}", exportId);
+                // 条件更新失败意味着当前节点没有取得产物所有权；删除已上传对象，避免
+                // 状态仍为 RUNNING/被其他节点接管时留下不可达 ZIP。
+                deleteUploadedArtifact(uploadedArtifact, exportId);
+                uploadedArtifact = null;
+                markFailed(exportId);
             }
         } catch (Exception failure) {
             log.error("任务异步导出失败 exportId={}", exportId, failure);
+            deleteUploadedArtifact(uploadedArtifact, exportId);
             markFailed(exportId);
         }
     }
 
+    /** 上传成功但后续状态落库失败时回收对象；清理失败不能掩盖原始导出失败。 */
+    private void deleteUploadedArtifact(FileObjectDTO artifact, String exportId) {
+        if (artifact == null || !hasText(artifact.getId())) {
+            return;
+        }
+        try {
+            fileApi.deleteFile(artifact.getId());
+        } catch (RuntimeException cleanupFailure) {
+            log.warn("任务导出产物清理失败 exportId={}", exportId, cleanupFailure);
+        }
+    }
+
     private void submitAfterCommit(String exportId) {
-        Runnable worker = () -> executeExport(exportId);
+        Runnable worker = () -> exportWorker.execute(exportId);
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             asyncExecutor.submit(worker);
             return;
@@ -705,22 +731,20 @@ public class ReTaskExportServiceImpl implements ReTaskExportService {
     }
 
     private void validateActiveItemCodes(List<String> itemCodes) {
-        if (itemCodeMapper == null) {
-            // 生产上下文必须注册本域只读字典投影；缺失时 fail-close，不能放行前端自带编码。
+        if (dictApi == null) {
+            // 治理中心字典 API 缺失时 fail-close，不能放行前端自带编码。
             throw new BizException("RE-50013", "四维明细项字典不可用");
         }
-        List<ReItemCode> activeItems = itemCodeMapper.selectList(
-                new LambdaQueryWrapper<ReItemCode>()
-                        .eq(ReItemCode::getDictType, ITEM_CODE_DICT_TYPE)
-                        .eq(ReItemCode::getStatus, ACTIVE_DICT_STATUS)
-                        .in(ReItemCode::getDictCode, itemCodes));
+        // DictApi 只返回启用字典项；红色引擎不直接投影治理中心 SYS_DICT，避免跨模块
+        // 依赖私有表结构，也使明细项配置可以由字典维护后立即生效。
+        List<DictItemDTO> activeItems = dictApi.getDictItems(ITEM_CODE_DICT_TYPE);
         Set<String> activeCodes = activeItems == null ? Set.of() : activeItems.stream()
                 .filter(Objects::nonNull)
-                .map(ReItemCode::getDictCode)
+                .map(DictItemDTO::getDictCode)
                 .filter(this::hasText)
                 .map(String::trim)
                 .collect(Collectors.toSet());
-        if (activeCodes.size() != itemCodes.size() || !activeCodes.containsAll(itemCodes)) {
+        if (!activeCodes.containsAll(itemCodes)) {
             throw new BizException("RE-40031", "明细项不存在或已停用");
         }
     }

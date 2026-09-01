@@ -1,5 +1,6 @@
 package com.bank.branch.platform.redengine.service;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Component;
@@ -18,6 +19,7 @@ public class ReTaskExportAsyncExecutor {
 
     private final Executor delegate;
 
+    @Autowired
     public ReTaskExportAsyncExecutor(ObjectProvider<TaskExecutor> taskExecutors) {
         this.delegate = taskExecutors.orderedStream()
                 .map(taskExecutor -> (Executor) taskExecutor)

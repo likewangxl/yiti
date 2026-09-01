@@ -1,6 +1,7 @@
 package com.bank.branch.platform.redengine.service;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.bank.branch.platform.redengine.api.dto.ReTaskDimensionProgressStatus;
 import com.bank.branch.platform.redengine.entity.ReSubmit;
@@ -115,6 +116,26 @@ class ReTaskFourDimensionAdapterTest {
         adapter.recordTaskUpload(task, instance, assignment, submission, "DIM_1", "ITEM_1", "REPORTER-1");
 
         verify(progressMapper).update(isNull(), any());
+    }
+
+    @Test
+    void recordTaskUpload_repeatedUploadUsesAtomicCounterIncrement() {
+        ReTask task = task(10L);
+        ReTaskInstance instance = instance(20L, 10L);
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L);
+        ReTaskDimensionProgress existing = new ReTaskDimensionProgress();
+        existing.setId(101L);
+        existing.setUploadCount(7);
+        existing.setDimensionCode("DIM_1");
+        existing.setStatus(ReTaskDimensionProgressStatus.COMPLETED);
+        when(progressMapper.selectOne(any())).thenReturn(existing);
+        when(progressMapper.update(any(), any())).thenReturn(1);
+
+        adapter.recordTaskUpload(task, instance, assignment, null,
+                "DIM_1", "ITEM_1", "REPORTER-1");
+
+        verify(progressMapper).update(isNull(), org.mockito.ArgumentMatchers.<LambdaUpdateWrapper<ReTaskDimensionProgress>>argThat(
+                wrapper -> wrapper.getSqlSet().contains("upload_count = COALESCE(upload_count, 0) + 1")));
     }
 
     private static ReTask task(Long id) {

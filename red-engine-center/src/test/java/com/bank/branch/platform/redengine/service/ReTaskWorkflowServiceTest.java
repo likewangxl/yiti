@@ -1,7 +1,10 @@
 package com.bank.branch.platform.redengine.service;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.governance.api.FileApi;
@@ -12,6 +15,7 @@ import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionReqDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionStatus;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowAssignmentDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowPageQueryDTO;
+import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowTab;
 import com.bank.branch.platform.redengine.entity.RePartyOrg;
 import com.bank.branch.platform.redengine.entity.ReTask;
 import com.bank.branch.platform.redengine.entity.ReTaskBranchAssignment;
@@ -39,6 +43,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
@@ -138,6 +143,208 @@ class ReTaskWorkflowServiceTest {
     }
 
     @Test
+    void submit_beforeTaskWindowStart_isRejectedWithoutChangingAssignment() {
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        LocalDateTime start = LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai")).plusDays(1);
+        instance.setWindowStartAt(start);
+        instance.setWindowEndAt(start.plusDays(2));
+        ReTaskBranchAssignment assignment = assignment(30L, instance.getId(), 40L, "UNREPORTED", 0);
+        when(assignmentMapper.selectById(30L)).thenReturn(assignment);
+        when(instanceMapper.selectById(20L)).thenReturn(instance);
+        when(taskMapper.selectById(10L)).thenReturn(task);
+        when(todoMapper.selectOne(any())).thenReturn(todo(50L, 30L, "REPORTER-1", "REPORTER", "PENDING"));
+
+        assertThatThrownBy(() -> service.submit(request(30L, "client-before-start"), "REPORTER-1"))
+                .isInstanceOf(com.bank.branch.platform.common.web.exception.BizException.class)
+                .hasMessageContaining("尚未开始");
+        verify(assignmentMapper, never()).update(any(), any());
+        verify(submissionMapper, never()).insert(any(ReTaskSubmission.class));
+    }
+
+    @Test
+    void listMyAssignments_doesNotExposeTodoBeforeAvailableAt() {
+        String operatorId = "REPORTER-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        LocalDateTime start = LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai")).plusDays(1);
+        instance.setWindowStartAt(start);
+        instance.setWindowEndAt(start.plusDays(2));
+        ReTaskBranchAssignment assignment = assignment(30L, instance.getId(), 40L, "UNREPORTED", 0);
+        ReTaskTodo futureTodo = todo(50L, 30L, operatorId, "REPORTER", "PENDING");
+        futureTodo.setAvailableAt(start);
+        when(todoMapper.selectList(any())).thenReturn(List.of(futureTodo));
+
+        var result = service.listMyAssignments(new ReTaskWorkflowPageQueryDTO(), operatorId);
+
+        assertThat(result.getRecords()).isEmpty();
+    }
+
+    @Test
+    void listMyAssignments_includesSubmittedAssignmentWhenReporterTodoWasCompleted() {
+        String operatorId = "REPORTER-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L, "BRANCH_PENDING", 1);
+        ReTaskSubmission submitted = submission(60L, 10L, 20L, 30L, 1,
+                ReTaskSubmissionStatus.BRANCH_PENDING, operatorId);
+        when(todoMapper.selectList(any())).thenReturn(List.of());
+        when(submissionMapper.selectList(any())).thenReturn(List.of(submitted));
+        when(assignmentMapper.selectWorkflowPage(any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            IPage<ReTaskBranchAssignment> page = (IPage<ReTaskBranchAssignment>) invocation.getArgument(0);
+            page.setRecords(List.of(assignment));
+            page.setTotal(1L);
+            return page;
+        });
+        when(taskMapper.selectById(task.getId())).thenReturn(task);
+        when(instanceMapper.selectById(instance.getId())).thenReturn(instance);
+        when(partyOrgMapper.selectById(assignment.getBranchId())).thenReturn(branch(40L, "SECRETARY-1"));
+        when(submissionFileMapper.selectList(any())).thenReturn(List.of());
+        when(fileTypeMapper.selectList(any())).thenReturn(List.of());
+
+        var result = service.listMyAssignments(new ReTaskWorkflowPageQueryDTO(), operatorId);
+
+        assertThat(result.getTotal()).isEqualTo(1L);
+        assertThat(result.getRecords()).singleElement()
+                .extracting(ReTaskWorkflowAssignmentDTO::getAssignmentId)
+                .isEqualTo(30L);
+        verify(assignmentMapper).selectWorkflowPage(any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void getAssignment_allowsReporterToOpenOwnSubmissionWithoutActiveTodo() {
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L, "BRANCH_PENDING", 1);
+        ReTaskSubmission submitted = submission(60L, 10L, 20L, 30L, 1,
+                ReTaskSubmissionStatus.BRANCH_PENDING, "REPORTER-1");
+        when(assignmentMapper.selectById(30L)).thenReturn(assignment);
+        when(instanceMapper.selectById(20L)).thenReturn(instance);
+        when(taskMapper.selectById(10L)).thenReturn(task);
+        when(todoMapper.selectOne(any())).thenReturn(null);
+        when(submissionMapper.selectList(any())).thenReturn(List.of(submitted));
+        when(partyOrgMapper.selectById(40L)).thenReturn(branch(40L, "SECRETARY-1"));
+        when(submissionFileMapper.selectList(any())).thenReturn(List.of());
+        when(fileTypeMapper.selectList(any())).thenReturn(List.of());
+
+        var result = service.getAssignment(30L, "REPORTER-1");
+
+        assertThat(result.getAssignmentId()).isEqualTo(30L);
+        assertThat(result.getSubmitterId()).isEqualTo("REPORTER-1");
+        assertThat(result.getSubmissionStatus()).isEqualTo(ReTaskSubmissionStatus.BRANCH_PENDING);
+    }
+
+    @Test
+    void workflowPage_filtersBeforePaginationAndPreservesDatabaseTotal() {
+        String operatorId = "SECRETARY-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        RePartyOrg branch = branch(40L, operatorId);
+        when(currentUserApi.getCurrentEmpId()).thenReturn(operatorId);
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L, "APPROVED", 1);
+        ReTaskSubmission submitted = submission(60L, 10L, 20L, 30L, 1,
+                ReTaskSubmissionStatus.APPROVED, "REPORTER-1");
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RE_ORGREV"));
+        when(currentUserApi.isSystemAdmin()).thenReturn(false);
+        when(assignmentMapper.selectWorkflowPage(any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            IPage<ReTaskBranchAssignment> page = (IPage<ReTaskBranchAssignment>) invocation.getArgument(0);
+            page.setRecords(List.of(assignment));
+            page.setTotal(9L);
+            return page;
+        });
+        when(taskMapper.selectById(task.getId())).thenReturn(task);
+        when(instanceMapper.selectById(instance.getId())).thenReturn(instance);
+        when(partyOrgMapper.selectById(assignment.getBranchId())).thenReturn(branch);
+        when(submissionMapper.selectList(any())).thenReturn(List.of(submitted));
+        when(submissionFileMapper.selectList(any())).thenReturn(List.of());
+        when(fileTypeMapper.selectList(any())).thenReturn(List.of());
+        ReTaskWorkflowPageQueryDTO query = new ReTaskWorkflowPageQueryDTO();
+        query.setPageNo(2);
+        query.setPageSize(1);
+        query.setTab(ReTaskWorkflowTab.PASSED);
+
+        var result = service.listOrgReviews(query, operatorId);
+
+        assertThat(result.getPageNo()).isEqualTo(2);
+        assertThat(result.getPageSize()).isEqualTo(1);
+        assertThat(result.getTotal()).isEqualTo(9L);
+        assertThat(result.getRecords()).hasSize(1);
+    }
+
+    @Test
+    void branchQueue_branchFilterFurtherNarrowsAuthorizedAssignments() {
+        String operatorId = "SECRETARY-1";
+        RePartyOrg branch = branch(40L, operatorId);
+        ReTaskBranchAssignment first = assignment(331L, 20L, 40L, "BRANCH_PENDING", 1);
+        ReTaskBranchAssignment second = assignment(332L, 20L, 41L, "BRANCH_PENDING", 1);
+        when(currentUserApi.getCurrentEmpId()).thenReturn(operatorId);
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RE_SECR"));
+        when(partyOrgMapper.selectList(org.mockito.ArgumentMatchers.isNull())).thenReturn(List.of(branch));
+        ReTaskWorkflowPageQueryDTO query = new ReTaskWorkflowPageQueryDTO();
+        query.setBranchId(41L);
+
+        var result = service.listBranchReviews(query, operatorId);
+
+        assertThat(result.getRecords()).isEmpty();
+        verify(taskMapper, never()).selectById(anyLong());
+    }
+
+    @Test
+    void systemAdminCanUseBranchReviewQueueAcrossAllBranches() {
+        String operatorId = "ADMIN-1";
+        when(currentUserApi.getCurrentEmpId()).thenReturn(operatorId);
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("SYS_ADMIN"));
+        when(currentUserApi.isSystemAdmin()).thenReturn(false);
+        when(partyOrgMapper.selectList(org.mockito.ArgumentMatchers.isNull()))
+                .thenReturn(List.of(branch(40L, "SECRETARY-1"), branch(41L, "SECRETARY-2")));
+        when(assignmentMapper.selectWorkflowPage(any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.listBranchReviews(new ReTaskWorkflowPageQueryDTO(), operatorId);
+
+        assertThat(result.getRecords()).isEmpty();
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Set<Long>> branchIds = ArgumentCaptor.forClass(Set.class);
+        verify(assignmentMapper).selectWorkflowPage(any(), any(), any(), branchIds.capture(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any());
+        assertThat(branchIds.getValue()).containsExactlyInAnyOrder(40L, 41L);
+    }
+
+    @Test
+    void systemAdminCanRejectSubmissionFromAnyBranch() {
+        String operatorId = "ADMIN-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L, "BRANCH_PENDING", 1);
+        ReTaskSubmission submission = submission(60L, 10L, 20L, 30L, 1,
+                ReTaskSubmissionStatus.BRANCH_PENDING, "REPORTER-1");
+        when(currentUserApi.getCurrentEmpId()).thenReturn(operatorId);
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("SYS_ADMIN"));
+        when(currentUserApi.isSystemAdmin()).thenReturn(false);
+        when(assignmentMapper.selectById(30L)).thenReturn(assignment);
+        when(instanceMapper.selectById(20L)).thenReturn(instance);
+        when(taskMapper.selectById(10L)).thenReturn(task);
+        when(partyOrgMapper.selectById(40L)).thenReturn(branch(40L, "SECRETARY-1"));
+        when(submissionMapper.selectOne(any())).thenReturn(submission);
+        when(submissionMapper.update(any(), any())).thenReturn(1);
+        when(assignmentMapper.update(any(), any())).thenReturn(1);
+        when(historyMapper.insert(any(ReTaskStatusHistory.class))).thenReturn(1);
+        when(todoMapper.update(any(), any())).thenReturn(1);
+
+        ReTaskRejectReqDTO reject = new ReTaskRejectReqDTO();
+        reject.setFeedback("请补充材料");
+        var result = service.rejectBranch(30L, reject, operatorId);
+
+        assertThat(result.getSubmissionStatus()).isEqualTo(ReTaskSubmissionStatus.REJECTED_BY_BRANCH);
+        verify(submissionMapper).update(any(), any());
+    }
+
+    @Test
     void submit_sameClientRequestId_returnsExistingSubmissionWithoutSecondWrite() {
         ReTask task = task(10L, "GENERAL");
         ReTaskInstance instance = instance(20L, task.getId());
@@ -183,6 +390,11 @@ class ReTaskWorkflowServiceTest {
         var result = service.rejectBranch(30L, reject, "SECRETARY-1");
 
         assertThat(result.getAssignmentStatus().name()).isEqualTo("REJECTED_BY_BRANCH");
+        ArgumentCaptor<LambdaUpdateWrapper<ReTaskBranchAssignment>> assignmentUpdate =
+                ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
+        verify(assignmentMapper).update(any(), assignmentUpdate.capture());
+        assertThat(assignmentUpdate.getValue().getParamNameValuePairs().values())
+                .contains(ReTaskAssignmentStatus.REJECTED_BY_BRANCH.name());
         verify(todoMapper).update(any(), any());
         verify(historyMapper).insert(org.mockito.ArgumentMatchers.<ReTaskStatusHistory>argThat(value ->
                 "REJECT_BRANCH".equals(value.getActionCode())
@@ -401,22 +613,54 @@ class ReTaskWorkflowServiceTest {
                                      ReTask task, ReTaskInstance instance,
                                      List<ReTaskBranchAssignment> assignments,
                                      List<ReTaskSubmission> submissions) {
-        when(currentUserApi.getCurrentEmpId()).thenReturn(operatorId);
-        when(currentUserApi.getCurrentRoleCodes()).thenReturn(roles);
-        when(currentUserApi.isSystemAdmin()).thenReturn(false);
-        when(assignmentMapper.selectList(any())).thenReturn(assignments);
-        when(instanceMapper.selectById(instance.getId())).thenReturn(instance);
-        when(taskMapper.selectById(task.getId())).thenReturn(task);
-        when(partyOrgMapper.selectById(anyLong())).thenReturn(branch);
-        when(submissionFileMapper.selectList(any())).thenReturn(List.of());
-        when(fileTypeMapper.selectList(any())).thenReturn(List.of());
+        org.mockito.Mockito.lenient().when(currentUserApi.getCurrentEmpId()).thenReturn(operatorId);
+        org.mockito.Mockito.lenient().when(currentUserApi.getCurrentRoleCodes()).thenReturn(roles);
+        org.mockito.Mockito.lenient().when(currentUserApi.isSystemAdmin()).thenReturn(false);
+        org.mockito.Mockito.lenient().when(assignmentMapper.selectWorkflowPage(any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            IPage<ReTaskBranchAssignment> page = (IPage<ReTaskBranchAssignment>) invocation.getArgument(0);
+            @SuppressWarnings("unchecked")
+            Set<Long> requestedAssignmentIds = (Set<Long>) invocation.getArgument(1);
+            @SuppressWarnings("unchecked")
+            Set<Long> requestedBranchIds = (Set<Long>) invocation.getArgument(3);
+            @SuppressWarnings("unchecked")
+            Set<String> requestedStatuses = (Set<String>) invocation.getArgument(4);
+            @SuppressWarnings("unchecked")
+            Set<String> requestedSubmissionStatuses = (Set<String>) invocation.getArgument(5);
+            List<ReTaskBranchAssignment> filtered = assignments.stream()
+                    .filter(item -> requestedAssignmentIds == null || requestedAssignmentIds.isEmpty()
+                            || requestedAssignmentIds.contains(item.getId()))
+                    .filter(item -> requestedBranchIds == null || requestedBranchIds.isEmpty()
+                            || requestedBranchIds.contains(item.getBranchId()))
+                    .filter(item -> requestedStatuses == null || requestedStatuses.isEmpty()
+                            || requestedStatuses.contains(item.getStatus()))
+                    .filter(item -> {
+                        if (requestedSubmissionStatuses == null || requestedSubmissionStatuses.isEmpty()) {
+                            return true;
+                        }
+                        return submissions.stream()
+                                .filter(submission -> item.getId().equals(submission.getAssignmentId()))
+                                .anyMatch(submission -> requestedSubmissionStatuses.contains(
+                                        submission.getStatus().name()));
+                    })
+                    .toList();
+            page.setRecords(filtered);
+            page.setTotal(filtered.size());
+            return page;
+        });
+        org.mockito.Mockito.lenient().when(instanceMapper.selectById(instance.getId())).thenReturn(instance);
+        org.mockito.Mockito.lenient().when(taskMapper.selectById(task.getId())).thenReturn(task);
+        org.mockito.Mockito.lenient().when(partyOrgMapper.selectById(anyLong())).thenReturn(branch);
+        org.mockito.Mockito.lenient().when(submissionFileMapper.selectList(any())).thenReturn(List.of());
+        org.mockito.Mockito.lenient().when(fileTypeMapper.selectList(any())).thenReturn(List.of());
         AtomicInteger submissionIndex = new AtomicInteger();
-        when(submissionMapper.selectList(any())).thenAnswer(invocation -> {
+        org.mockito.Mockito.lenient().when(submissionMapper.selectList(any())).thenAnswer(invocation -> {
             int index = submissionIndex.getAndIncrement();
             return index < submissions.size() ? List.of(submissions.get(index)) : List.of();
         });
         if (roles.contains("R_RE_SECR")) {
-            when(partyOrgMapper.selectList(org.mockito.ArgumentMatchers.isNull()))
+            org.mockito.Mockito.lenient().when(partyOrgMapper.selectList(org.mockito.ArgumentMatchers.isNull()))
                     .thenReturn(List.of(branch));
         }
     }

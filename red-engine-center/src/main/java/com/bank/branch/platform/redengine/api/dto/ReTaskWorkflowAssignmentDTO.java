@@ -41,6 +41,11 @@ public class ReTaskWorkflowAssignmentDTO {
     private String formData;
     private List<ReTaskAttachmentDTO> files;
 
+    /** 四维旧材料审核记录 ID，供原评分入口继续使用。 */
+    private Long legacyReviewId;
+    /** 四维旧材料上报 ID 的兼容别名。 */
+    private Long submitId;
+
     private LocalDateTime windowStartAt;
     private LocalDateTime windowEndAt;
     private Boolean requiresFile;

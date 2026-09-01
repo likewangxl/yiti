@@ -51,6 +51,9 @@ public class ReTaskWorkflowPageQueryDTO {
     /** 当前提交状态。 */
     private ReTaskSubmissionStatus submissionStatus;
 
+    /** 工作台页签；服务端据此生成状态集合并在 SQL 分页前过滤。 */
+    private ReTaskWorkflowTab tab;
+
     private Long branchId;
     private LocalDateTime submittedStartAt;
     private LocalDateTime submittedEndAt;

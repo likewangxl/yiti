@@ -70,7 +70,8 @@ public class ReSubmitController {
     @GetMapping("/{id}")
     @BizAuth(bizType = BizType.RED_ENGINE, action = BizAction.READ)
     public ResponseWrapper<ReSubmit> getSubmit(@PathVariable Long id) {
-        ReSubmit submit = reSubmitService.getDetail(id);
+        String userId = currentUserApi.getCurrentEmpId();
+        ReSubmit submit = reSubmitService.getDetail(id, userId);
         log.info("[ReSubmitController.getSubmit] id={}, found={}", id, submit != null);
         return ResponseWrapper.success(submit);
     }

@@ -324,6 +324,57 @@ class ReHomeServiceTest {
     }
 
     @Test
+    void executeOverdue_rejectsAssignmentThatWasSubmittedBeforeDeadline() {
+        mockAdmin("admin-1");
+        ReTask task = task(10L, "季度走访", "任务内容");
+        LocalDateTime deadline = LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai")).minusDays(1);
+        ReTaskInstance instance = instance(20L, 10L, deadline);
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 8L, "APPROVED");
+        ReTaskSubmission submission = new ReTaskSubmission();
+        submission.setId(40L);
+        submission.setAssignmentId(30L);
+        submission.setVersionNo(1);
+        submission.setSubmittedAt(deadline.minusMinutes(1));
+        when(assignmentMapper.selectById(30L)).thenReturn(assignment);
+        when(instanceMapper.selectById(20L)).thenReturn(instance);
+        when(taskMapper.selectById(10L)).thenReturn(task);
+        when(partyOrgMapper.selectById(8L)).thenReturn(branch(8L, "八支部"));
+        when(submissionMapper.selectList(any())).thenReturn(List.of(submission));
+
+        ReTaskDeductionExecuteReqDTO request = new ReTaskDeductionExecuteReqDTO();
+        request.setAssignmentId(30L);
+        request.setReason("逾期扣分");
+
+        assertThatThrownBy(() -> service.executeOverdue(request, "admin-1"))
+                .isInstanceOf(com.bank.branch.platform.common.web.exception.BizException.class)
+                .hasMessageContaining("截止时间前");
+        verify(deductionMapper, never()).insert(any(ReTaskDeduction.class));
+    }
+
+    @Test
+    void executeOverdue_rejectsAssignmentForUnpublishedTask() {
+        mockAdmin("admin-1");
+        ReTask task = task(10L, "季度走访", "任务内容");
+        task.setStatus(ReTaskStatus.DRAFT);
+        ReTaskInstance instance = instance(20L, 10L,
+                LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai")).minusDays(1));
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 8L, "UNREPORTED");
+        when(assignmentMapper.selectById(30L)).thenReturn(assignment);
+        when(instanceMapper.selectById(20L)).thenReturn(instance);
+        when(taskMapper.selectById(10L)).thenReturn(task);
+        when(partyOrgMapper.selectById(8L)).thenReturn(branch(8L, "八支部"));
+
+        ReTaskDeductionExecuteReqDTO request = new ReTaskDeductionExecuteReqDTO();
+        request.setAssignmentId(30L);
+        request.setReason("逾期扣分");
+
+        assertThatThrownBy(() -> service.executeOverdue(request, "admin-1"))
+                .isInstanceOf(com.bank.branch.platform.common.web.exception.BizException.class)
+                .hasMessageContaining("未发布");
+        verify(deductionMapper, never()).insert(any(ReTaskDeduction.class));
+    }
+
+    @Test
     void executeOverdue_whenAlreadyExecuted_isIdempotent_andDoesNotInsertAgain() {
         mockAdmin("admin-1");
         ReTask task = task(10L, "季度走访", "任务内容");

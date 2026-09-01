@@ -206,13 +206,44 @@ class ReSubmitServiceTest {
     }
 
     @Test
-    void getDetail_delegatesToMapperSelectById() {
+    void getDetail_returnsSubmissionWithinCurrentPartyOrg() throws Exception {
         ReSubmit submit = new ReSubmit();
         submit.setId(9L);
+        submit.setOrgId(100L);
         when(reSubmitMapper.selectById(9L)).thenReturn(submit);
+        when(reUserPartyMapService.getRequiredPartyOrgId("E001")).thenReturn(100L);
 
-        ReSubmit result = reSubmitService.getDetail(9L);
+        ReSubmit result = invokeScopedDetail(9L, "E001");
 
         assertThat(result).isSameAs(submit);
+    }
+
+    @Test
+    void getDetail_rejectsSubmissionOutsideCurrentPartyOrg() {
+        ReSubmit submit = new ReSubmit();
+        submit.setId(9L);
+        submit.setOrgId(999L);
+        when(reSubmitMapper.selectById(9L)).thenReturn(submit);
+        when(reUserPartyMapService.getRequiredPartyOrgId("E001")).thenReturn(100L);
+
+        assertThatThrownBy(() -> invokeScopedDetail(9L, "E001"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("无权查看");
+    }
+
+    private ReSubmit invokeScopedDetail(Long id, String userId) {
+        try {
+            java.lang.reflect.Method method = ReSubmitService.class
+                    .getMethod("getDetail", Long.class, String.class);
+            return (ReSubmit) method.invoke(reSubmitService, id, userId);
+        } catch (java.lang.reflect.InvocationTargetException ex) {
+            Throwable cause = ex.getCause();
+            if (cause instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            throw new IllegalStateException(cause);
+        } catch (ReflectiveOperationException ex) {
+            throw new AssertionError("ReSubmitService 必须提供带当前用户的数据范围详情接口", ex);
+        }
     }
 }
