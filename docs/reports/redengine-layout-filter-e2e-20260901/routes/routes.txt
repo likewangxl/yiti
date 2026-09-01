@@ -1,0 +1,6 @@
+# 官方 playwright-cli route-list 原始摘要
+
+会话 redengine-layout-filter-network-20260901：No active routes
+会话 redengine-layout-filter-1440-20260901：No active routes
+
+结论：未注册 mock/fallback route，请求直接到达本次隔离 Vite 代理和 18082 后端。

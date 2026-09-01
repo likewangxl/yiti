@@ -1,0 +1,43 @@
+# 红色引擎侧栏与任务管理筛选区官方 playwright-cli 验收命令
+# 所有密码均在归档中脱敏为 <redacted>；未保存 cookie、session 或响应正文。
+
+# 1. 只读进程/端口归属检查（8091/18081 未停止）
+ss -ltnp | rg ':(8091|18081)\\b'
+ps -eo pid,ppid,lstart,args | rg '([j]ava|[n]ode|[v]ite|[s]pring-boot)' | rg '(8091|18081|bootstrap|vite|yiti|redengine)'
+readlink -f /proc/833639/cwd
+tr '\\0' ' ' < /proc/833639/cmdline
+readlink -f /proc/518043/cwd
+tr '\\0' ' ' < /proc/518043/cmdline
+
+# 2. 本次隔离服务启动（实际命令中的数据库密码未归档）
+REDENGINE_TASK_SERVER_PORT=18082 REDENGINE_TASK_DB_USERNAME=root REDENGINE_TASK_DB_PASSWORD=<redacted> mvn -pl bootstrap spring-boot:run -Dspring-boot.run.profiles=redengine-task-e2e
+VITE_DEV_PORT=8092 VITE_PROXY_TARGET=http://127.0.0.1:18082 VITE_DEV_STRICT_PORT=true VITE_USE_MOCK=false npm run dev
+
+# 3. 官方 CLI 浏览器会话（项目内 CLI，Chromium）
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-1440-20260901 open http://127.0.0.1:8092/#/login?normal
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-1440-20260901 fill <username-ref> yangdb1
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-1440-20260901 fill <password-ref> <redacted>
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-1440-20260901 click <login-ref>
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-1440-20260901 goto http://127.0.0.1:8092/#/workspace
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-1440-20260901 goto http://127.0.0.1:8092/#/redengine/task-management
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-1440-20260901 resize 1440 900
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-1440-20260901 screenshot --filename=docs/reports/redengine-layout-filter-e2e-20260901/screenshots/task-management-1440x900.png
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-1440-20260901 resize 1024 768
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-1440-20260901 screenshot --filename=docs/reports/redengine-layout-filter-e2e-20260901/screenshots/task-management-1024x768.png
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-1440-20260901 click <query-ref>
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-1440-20260901 route-list
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-1440-20260901 requests
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-1440-20260901 console
+
+# 4. 独立网络会话捕获登录/权限/任务请求
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-network-20260901 open http://127.0.0.1:8092/#/login?normal
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-network-20260901 fill <username-ref> yangdb1
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-network-20260901 fill <password-ref> <redacted>
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-network-20260901 click <login-ref>
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-network-20260901 goto http://127.0.0.1:8092/#/redengine/task-management
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-network-20260901 requests
+PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright PLAYWRIGHT_MCP_BROWSER=chromium xanzc_frontend/node_modules/.bin/playwright-cli -s=redengine-layout-filter-network-20260901 route-list
+
+# 5. 服务停止（仅停止本次启动的会话；未停止 8091/18081）
+# 通过 exec 会话向 Maven/前端会话发送 Ctrl-C：backend session=81757，frontend session=92414。
+# 停止后只读复核：8092/18082 已释放；既有 8091/18081 仍在监听。

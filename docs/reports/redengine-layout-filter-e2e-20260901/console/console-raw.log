@@ -1,0 +1,41 @@
+# 官方 playwright-cli console 原始输出摘要；错误数为 0。
+# 会话 redengine-layout-filter-network-20260901（Total messages: 4; Errors: 0; Warnings: 2）
+[   19327ms] [WARNING] [Vue Router warn]: No match found for location with path "/marketing/asset-projects" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[      46ms] [WARNING] [Vue Router warn]: <router-view> can no longer be used directly inside <transition> or <keep-alive>.
+Use slot props instead:
+
+<router-view v-slot="{ Component }">
+  <transition>
+    <component :is="Component" />
+  </transition>
+</router-view> @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+
+# 会话 redengine-layout-filter-1440-20260901（Total messages: 8; Errors: 0; Warnings: 6）
+# 以下为该会话各次导航产生的原始 warning 行，重复 warning 未展开。
+[   17427ms] [WARNING] [Vue Router warn]: No match found for location with path "/marketing/asset-projects" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[      98ms] [WARNING] [Vue Router warn]: <router-view> can no longer be used directly inside <transition> or <keep-alive>.
+Use slot props instead:
+
+<router-view v-slot="{ Component }">
+  <transition>
+    <component :is="Component" />
+  </transition>
+</router-view> @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[       7ms] [WARNING] [Vue Router warn]: No match found for location with path "/marketing/asset-projects" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[       6ms] [WARNING] [Vue Router warn]: <router-view> can no longer be used directly inside <transition> or <keep-alive>.
+Use slot props instead:
+
+<router-view v-slot="{ Component }">
+  <transition>
+    <component :is="Component" />
+  </transition>
+</router-view> @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[       5ms] [WARNING] [Vue Router warn]: No match found for location with path "/marketing/asset-projects" @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52
+[       5ms] [WARNING] [Vue Router warn]: <router-view> can no longer be used directly inside <transition> or <keep-alive>.
+Use slot props instead:
+
+<router-view v-slot="{ Component }">
+  <transition>
+    <component :is="Component" />
+  </transition>
+</router-view> @ http://127.0.0.1:8092/node_modules/.vite/deps/vue-router.js?v=41ded0b2:52

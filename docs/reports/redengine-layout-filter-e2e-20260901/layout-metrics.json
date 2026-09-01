@@ -1,0 +1,44 @@
+{
+  "viewport_1440x900": {
+    "sidebar": {"x": 0, "width": 220, "height": 900},
+    "main_system_sidebar": {"selector": "aside.side", "x": 0, "width": 220, "height": 900},
+    "red_sidebar": {"selector": ".re-sidebar", "x": 0, "width": 220, "height": 900},
+    "filter_card": {"x": 240, "y": 154.5, "width": 1180, "height": 98, "clientWidth": 1178, "scrollWidth": 1178, "clientHeight": 96, "scrollHeight": 96},
+    "filter_form": {"x": 257, "y": 171.5, "width": 1146, "height": 80, "clientWidth": 1146, "scrollWidth": 1146, "clientHeight": 80, "scrollHeight": 80},
+    "body": {"clientWidth": 1440, "scrollWidth": 1440},
+    "html": {"clientWidth": 1440, "scrollWidth": 1440},
+    "fields": ["任务标题", "任务性质", "任务类型", "周期", "状态"],
+    "buttons": [
+      {"text": "查询", "x": 547.5, "y": 219.5, "width": 74, "height": 32, "right": 621.5, "bottom": 251.5, "withinCard": true, "centerHit": true},
+      {"text": "重置", "x": 641.5, "y": 219.5, "width": 74, "height": 32, "right": 715.5, "bottom": 251.5, "withinCard": true, "centerHit": true}
+    ],
+    "requiredVisible": true
+  },
+  "viewport_1024x768": {
+    "sidebar": {"x": 0, "width": 220, "height": 768},
+    "red_sidebar": {"selector": ".re-sidebar", "x": 0, "width": 220, "height": 768},
+    "filter_card": {"x": 240, "y": 154.5, "width": 764, "height": 98, "clientWidth": 762, "scrollWidth": 762, "clientHeight": 96, "scrollHeight": 96},
+    "filter_form": {"x": 257, "y": 171.5, "width": 730, "height": 80, "clientWidth": 730, "scrollWidth": 730, "clientHeight": 80, "scrollHeight": 80},
+    "body": {"clientWidth": 1024, "scrollWidth": 1024},
+    "html": {"clientWidth": 1024, "scrollWidth": 1024},
+    "fields": ["任务标题", "任务性质", "任务类型", "周期", "状态"],
+    "buttons": [
+      {"text": "查询", "x": 754.33, "y": 219.5, "width": 74, "height": 32, "right": 828.33, "bottom": 251.5, "withinCard": true, "centerHit": true},
+      {"text": "重置", "x": 848.33, "y": 219.5, "width": 74, "height": 32, "right": 922.33, "bottom": 251.5, "withinCard": true, "centerHit": true}
+    ],
+    "requiredVisible": true
+  },
+  "alignment": {
+    "main_system_aside_x": 0,
+    "main_system_aside_width": 220,
+    "red_engine_sidebar_x": 0,
+    "red_engine_sidebar_width": 220,
+    "main_system_item_outer_x": 0,
+    "red_engine_item_outer_x": 0,
+    "main_system_item_outer_width": 219,
+    "red_engine_item_outer_width": 220,
+    "red_engine_logo_outer_x": 0,
+    "red_engine_logo_icon_x": 16,
+    "red_engine_visible_menu_icon_x": [16, 16, 16, 16, 18, 16, 16]
+  }
+}
