@@ -69,7 +69,8 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.UserApi;
 ```
 
-**使用位置**：`ReUserPartyMapService`（`private final UserApi userApi;`）。
+**使用位置**：`ReUserPartyMapService`、`ReTaskEligibleUserServiceImpl`（均通过
+`private final UserApi userApi` 注入公开契约）。
 
 **用到的方法**：
 - `getUserByEmpId(userId)`：绑定前确认请求中的值是真实 `PT_USER.USER_ID`；不存在时抛
@@ -92,6 +93,12 @@ import com.bank.branch.platform.auth.api.UserApi;
 不直接读取 `PT_USER`。任务管理端支部填报分页的提交人姓名关键字也通过
 `findUsersByUsernameAndDisplayName` 先形成 `USER_ID` 候选，再与支部名称、提交人 ID、填报内容一起
 交给红色引擎 Mapper 在数据库分页前筛选，避免把全量 assignment 拉入内存。
+
+任务新增的“指定员工”对象选择使用红色引擎自身的
+`GET /api/re/tasks/eligible-users`，服务端先以 `RE_USER_PARTY_MAP`/`RE_PARTY_ORG` 形成可落到
+党支部的候选员工 ID，再批量调用 `UserApi.getUserByEmpIds` 补齐并过滤 `enabled=true`。该端点
+仅授予 `R_RE_ORGREV` 和 `SYS_ADMIN`，不复用也不放宽 auth 的 `/api/admin/users` 全局用户管理
+资源；auth 公开契约调用失败时红色引擎以 `RE-50014` fail-close。
 
 ### 2.3 `DictApi`（`system-governance-center`）
 
