@@ -83,6 +83,8 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
     static final String ORG_REVIEWER_ROLE = "R_RE_ORGREV";
     static final String ORG_TODO_ROLE = "ORG_REVIEWER";
     static final String SYSTEM_ADMIN_ROLE = "SYS_ADMIN";
+    private static final String SUBMIT_ACTION_CODE_PREFIX = "SUBMIT:";
+    private static final int STATUS_HISTORY_ACTION_CODE_MAX_LENGTH = 40;
     private static final ZoneId BEIJING_ZONE = ZoneId.of("Asia/Shanghai");
 
     private final ReTaskMapper taskMapper;
@@ -1240,10 +1242,14 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
 
     private String idempotencyActionCode(String clientRequestId) {
         String id = clientRequestId.trim();
-        if (id.length() <= 40) {
-            return "SUBMIT:" + id;
+        // ACTION_CODE 在数据库中只有 40 个字符；保留能完整放入前缀的短 ID，
+        // 较长 ID 使用固定长度的 128 位摘要，避免简单截断造成幂等键碰撞。
+        int readableIdMaxLength = STATUS_HISTORY_ACTION_CODE_MAX_LENGTH
+                - SUBMIT_ACTION_CODE_PREFIX.length();
+        if (id.length() <= readableIdMaxLength) {
+            return SUBMIT_ACTION_CODE_PREFIX + id;
         }
-        return "SUBMIT:" + shortHash(id);
+        return SUBMIT_ACTION_CODE_PREFIX + shortHash(id);
     }
 
     private String shortHash(String value) {

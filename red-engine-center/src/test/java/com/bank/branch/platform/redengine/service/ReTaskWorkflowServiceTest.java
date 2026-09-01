@@ -367,6 +367,74 @@ class ReTaskWorkflowServiceTest {
     }
 
     @Test
+    void submit_uuidClientRequestId_persistsBoundedNonTruncatedActionCode() {
+        String clientRequestId = "123e4567-e89b-12d3-a456-426614174000";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        ReTaskBranchAssignment assignment = assignment(30L, instance.getId(), 40L, "UNREPORTED", 0);
+        when(assignmentMapper.selectById(30L)).thenReturn(assignment);
+        when(instanceMapper.selectById(20L)).thenReturn(instance);
+        when(taskMapper.selectById(10L)).thenReturn(task);
+        when(todoMapper.selectOne(any())).thenReturn(todo(50L, 30L, "REPORTER-1", "REPORTER", "PENDING"));
+        when(submissionMapper.selectOne(any())).thenReturn(null);
+        when(historyMapper.selectOne(any())).thenReturn(null);
+        when(assignmentMapper.update(any(), any())).thenReturn(1);
+        when(submissionMapper.insert(any(ReTaskSubmission.class))).thenAnswer(invocation -> {
+            ReTaskSubmission submission = invocation.getArgument(0);
+            submission.setId(60L);
+            return 1;
+        });
+        when(historyMapper.insert(any(ReTaskStatusHistory.class))).thenReturn(1);
+        when(todoMapper.update(any(), any())).thenReturn(1);
+
+        service.submit(request(30L, clientRequestId), "REPORTER-1");
+
+        ArgumentCaptor<ReTaskStatusHistory> historyCaptor = ArgumentCaptor.forClass(ReTaskStatusHistory.class);
+        verify(historyMapper).insert(historyCaptor.capture());
+        assertThat(historyCaptor.getValue().getActionCode())
+                .isEqualTo("SUBMIT:986c0dc956dc822b5d8f698661b9eb1e")
+                .hasSizeLessThanOrEqualTo(40);
+    }
+
+    @Test
+    void submit_uuidClientRequestId_matchesPersistedHistoryWithoutSecondWrite() {
+        String clientRequestId = "123e4567-e89b-12d3-a456-426614174000";
+        String actionCode = "SUBMIT:986c0dc956dc822b5d8f698661b9eb1e";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        ReTaskBranchAssignment assignment = assignment(30L, instance.getId(), 40L, "BRANCH_PENDING", 1);
+        ReTaskSubmission existing = submission(60L, 10L, 20L, 30L, 1,
+                ReTaskSubmissionStatus.BRANCH_PENDING, "REPORTER-1");
+        when(assignmentMapper.selectById(30L)).thenReturn(assignment);
+        when(instanceMapper.selectById(20L)).thenReturn(instance);
+        when(taskMapper.selectById(10L)).thenReturn(task);
+        when(todoMapper.selectOne(any())).thenReturn(todo(50L, 30L, "REPORTER-1", "REPORTER", "COMPLETED"));
+        when(historyMapper.selectOne(any())).thenReturn(history(70L, 30L, 60L, actionCode));
+        when(submissionMapper.selectById(60L)).thenReturn(existing);
+
+        var result = service.submit(request(30L, clientRequestId), "REPORTER-1");
+
+        assertThat(result.getSubmissionId()).isEqualTo(60L);
+        assertThat(result.isIdempotent()).isTrue();
+        assertThat(invokeIdempotencyActionCode(clientRequestId)).isEqualTo(actionCode);
+        verify(submissionMapper, never()).insert(any(ReTaskSubmission.class));
+        verify(assignmentMapper, never()).update(any(), any());
+    }
+
+    @Test
+    void idempotencyActionCode_differentLongIdsWithSamePrefixDoNotCollide() {
+        String commonPrefix = "123456789012345678901234567890123";
+        assertThat(currentUserApi.getCurrentEmpId()).isEqualTo("REPORTER-1");
+
+        String firstActionCode = invokeIdempotencyActionCode(commonPrefix + "A");
+        String secondActionCode = invokeIdempotencyActionCode(commonPrefix + "B");
+
+        assertThat(firstActionCode).hasSizeLessThanOrEqualTo(40);
+        assertThat(secondActionCode).hasSizeLessThanOrEqualTo(40);
+        assertThat(firstActionCode).isNotEqualTo(secondActionCode);
+    }
+
+    @Test
     void branchReject_requiresOpinionAndReturnsAssignmentToReporter() {
         ReTask task = task(10L, "GENERAL");
         ReTaskInstance instance = instance(20L, task.getId());
@@ -748,5 +816,16 @@ class ReTaskWorkflowServiceTest {
         history.setSubmissionId(submissionId);
         history.setActionCode(actionCode);
         return history;
+    }
+
+    private String invokeIdempotencyActionCode(String clientRequestId) {
+        try {
+            var method = ReTaskWorkflowServiceImpl.class
+                    .getDeclaredMethod("idempotencyActionCode", String.class);
+            method.setAccessible(true);
+            return (String) method.invoke(service, clientRequestId);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("无法调用幂等编码生成器", exception);
+        }
     }
 }
