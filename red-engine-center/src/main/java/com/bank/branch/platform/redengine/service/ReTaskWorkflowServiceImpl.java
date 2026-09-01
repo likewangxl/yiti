@@ -33,6 +33,7 @@ import com.bank.branch.platform.redengine.entity.ReTaskSubmission;
 import com.bank.branch.platform.redengine.entity.ReTaskSubmissionFile;
 import com.bank.branch.platform.redengine.entity.ReTaskTodo;
 import com.bank.branch.platform.redengine.entity.ReTaskReSubmitRel;
+import com.bank.branch.platform.redengine.entity.ReUserPartyMap;
 import com.bank.branch.platform.redengine.mapper.RePartyOrgMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskBranchAssignmentMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskFileTypeMapper;
@@ -828,8 +829,11 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         if (orgs == null) {
             return Set.of();
         }
+        Set<Long> mappedBranchIds = mappedPartyOrgIds(operatorId);
         return orgs.stream().filter(this::isBranch)
-                .filter(org -> isSystemAdmin() || operatorId.equals(org.getSecretaryId()))
+                .filter(org -> isSystemAdmin()
+                        || operatorId.equals(org.getSecretaryId())
+                        || mappedBranchIds.contains(org.getId()))
                 .map(RePartyOrg::getId).filter(Objects::nonNull)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
@@ -842,9 +846,32 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         if (!isBranch(branch)) {
             throw new BizException("RE-40302", "无权审核该党支部任务");
         }
-        if (!isSystemAdmin() && !operatorId.equals(branch.getSecretaryId())) {
+        if (!isSystemAdmin() && !operatorId.equals(branch.getSecretaryId())
+                && !mappedPartyOrgIds(operatorId).contains(branchId)) {
             throw new BizException("RE-40302", "无权审核该党支部任务");
         }
+    }
+
+    /**
+     * 返回当前平台用户映射到的党组织范围。
+     *
+     * <p>RE_USER_PARTY_MAP.partyRole 只是历史兼容描述，不能替代平台角色或参与支部数据范围判定；
+     * 因此这里只按 userId 和 partyOrgId 取映射。</p>
+     */
+    private Set<Long> mappedPartyOrgIds(String operatorId) {
+        if (!hasText(operatorId)) {
+            return Set.of();
+        }
+        List<ReUserPartyMap> mappings = userPartyMapMapper.selectList(
+                new LambdaQueryWrapper<ReUserPartyMap>()
+                        .eq(ReUserPartyMap::getUserId, operatorId.trim()));
+        if (mappings == null) {
+            return Set.of();
+        }
+        return mappings.stream().filter(Objects::nonNull)
+                .map(ReUserPartyMap::getPartyOrgId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private boolean isBranch(RePartyOrg org) {

@@ -23,6 +23,7 @@ import com.bank.branch.platform.redengine.entity.ReTaskInstance;
 import com.bank.branch.platform.redengine.entity.ReTaskSubmission;
 import com.bank.branch.platform.redengine.entity.ReTaskStatusHistory;
 import com.bank.branch.platform.redengine.entity.ReTaskTodo;
+import com.bank.branch.platform.redengine.entity.ReUserPartyMap;
 import com.bank.branch.platform.redengine.mapper.RePartyOrgMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskBranchAssignmentMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskDimensionProgressMapper;
@@ -292,6 +293,95 @@ class ReTaskWorkflowServiceTest {
 
         assertThat(result.getRecords()).isEmpty();
         verify(taskMapper, never()).selectById(anyLong());
+    }
+
+    @Test
+    void branchQueue_usesUserPartyMappingWhenLegacySecretaryIdIsNull() {
+        String operatorId = "SECRETARY-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        RePartyOrg branch = branch(40L, null);
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L, "BRANCH_PENDING", 1);
+        ReTaskSubmission submitted = submission(60L, 10L, 20L, 30L, 1,
+                ReTaskSubmissionStatus.BRANCH_PENDING, "REPORTER-1");
+        stubWorkflowListing(operatorId, Set.of("R_RE_SECR"), branch, task, instance,
+                List.of(assignment), List.of(submitted));
+        // partyRole is only a compatibility description; the platform role above grants the action.
+        when(userPartyMapMapper.selectList(any())).thenReturn(
+                List.of(userPartyMap(operatorId, 40L, "REPORTER")));
+
+        var result = service.listBranchReviews(new ReTaskWorkflowPageQueryDTO(), operatorId);
+
+        assertThat(result.getRecords()).singleElement()
+                .extracting(ReTaskWorkflowAssignmentDTO::getAssignmentId)
+                .isEqualTo(30L);
+    }
+
+    @Test
+    void branchReviewActions_acceptMappedBranchWithoutLegacySecretaryId() {
+        String operatorId = "SECRETARY-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        RePartyOrg branch = branch(40L, null);
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L, "BRANCH_PENDING", 1);
+        ReTaskSubmission submission = submission(60L, 10L, 20L, 30L, 1,
+                ReTaskSubmissionStatus.BRANCH_PENDING, "REPORTER-1");
+        stubBranchAction(operatorId, branch, task, instance, assignment, submission);
+
+        ReTaskApproveReqDTO approve = new ReTaskApproveReqDTO();
+        approve.setFeedback("材料完整");
+        var approved = service.approveBranch(30L, approve, operatorId);
+
+        assertThat(approved.getSubmissionStatus()).isEqualTo(ReTaskSubmissionStatus.BRANCH_APPROVED);
+
+        submission.setStatus(ReTaskSubmissionStatus.BRANCH_APPROVED);
+        assignment.setStatus("BRANCH_PENDING");
+        var toOrg = service.submitToOrg(30L, approve, operatorId);
+
+        assertThat(toOrg.getSubmissionStatus()).isEqualTo(ReTaskSubmissionStatus.ORG_PENDING);
+    }
+
+    @Test
+    void branchReject_acceptsMappedBranchWithoutLegacySecretaryId() {
+        String operatorId = "SECRETARY-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        RePartyOrg branch = branch(40L, null);
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L, "BRANCH_PENDING", 1);
+        ReTaskSubmission submission = submission(60L, 10L, 20L, 30L, 1,
+                ReTaskSubmissionStatus.BRANCH_PENDING, "REPORTER-1");
+        stubBranchAction(operatorId, branch, task, instance, assignment, submission);
+
+        ReTaskRejectReqDTO reject = new ReTaskRejectReqDTO();
+        reject.setFeedback("请补充说明");
+        var rejected = service.rejectBranch(30L, reject, operatorId);
+
+        assertThat(rejected.getSubmissionStatus()).isEqualTo(ReTaskSubmissionStatus.REJECTED_BY_BRANCH);
+    }
+
+    @Test
+    void branchReviewer_mappingToDifferentBranchIsRejected() {
+        String operatorId = "SECRETARY-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        RePartyOrg branch = branch(40L, null);
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L, "BRANCH_PENDING", 1);
+        ReTaskSubmission submission = submission(60L, 10L, 20L, 30L, 1,
+                ReTaskSubmissionStatus.BRANCH_PENDING, "REPORTER-1");
+        when(currentUserApi.getCurrentEmpId()).thenReturn(operatorId);
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RE_SECR"));
+        when(currentUserApi.isSystemAdmin()).thenReturn(false);
+        when(assignmentMapper.selectById(assignment.getId())).thenReturn(assignment);
+        when(instanceMapper.selectById(instance.getId())).thenReturn(instance);
+        when(taskMapper.selectById(task.getId())).thenReturn(task);
+        when(partyOrgMapper.selectById(branch.getId())).thenReturn(branch);
+        when(userPartyMapMapper.selectList(any())).thenReturn(
+                List.of(userPartyMap(operatorId, 41L, "SECRETARY")));
+
+        assertThatThrownBy(() -> service.approveBranch(30L, new ReTaskApproveReqDTO(), operatorId))
+                .isInstanceOf(com.bank.branch.platform.common.web.exception.BizException.class)
+                .hasMessage("无权审核该党支部任务");
+        verify(submissionMapper, never()).update(any(), any());
     }
 
     @Test
@@ -733,6 +823,24 @@ class ReTaskWorkflowServiceTest {
         }
     }
 
+    private void stubBranchAction(String operatorId, RePartyOrg branch, ReTask task,
+                                  ReTaskInstance instance, ReTaskBranchAssignment assignment,
+                                  ReTaskSubmission submission) {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(operatorId);
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RE_SECR"));
+        when(currentUserApi.isSystemAdmin()).thenReturn(false);
+        when(assignmentMapper.selectById(assignment.getId())).thenReturn(assignment);
+        when(instanceMapper.selectById(instance.getId())).thenReturn(instance);
+        when(taskMapper.selectById(task.getId())).thenReturn(task);
+        when(submissionMapper.selectOne(any())).thenReturn(submission);
+        when(partyOrgMapper.selectById(branch.getId())).thenReturn(branch);
+        when(userPartyMapMapper.selectList(any())).thenReturn(
+                List.of(userPartyMap(operatorId, branch.getId(), "REPORTER")));
+        when(assignmentMapper.update(any(), any())).thenReturn(1);
+        when(submissionMapper.update(any(), any())).thenReturn(1);
+        when(historyMapper.insert(any(ReTaskStatusHistory.class))).thenReturn(1);
+    }
+
     private static ReTask task(Long id, String typeCode) {
         ReTask task = new ReTask();
         task.setId(id);
@@ -798,6 +906,15 @@ class ReTaskWorkflowServiceTest {
         branch.setSecretaryId(secretaryId);
         branch.setOrgName("第一党支部");
         return branch;
+    }
+
+    private static ReUserPartyMap userPartyMap(String userId, Long partyOrgId, String partyRole) {
+        ReUserPartyMap mapping = new ReUserPartyMap();
+        mapping.setUserId(userId);
+        mapping.setPartyOrgId(partyOrgId);
+        mapping.setPartyRole(partyRole);
+        mapping.setDeleted(0);
+        return mapping;
     }
 
     private static ReTaskSubmissionReqDTO request(Long assignmentId, String clientRequestId) {
