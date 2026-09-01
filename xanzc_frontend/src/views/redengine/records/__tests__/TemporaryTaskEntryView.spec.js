@@ -66,6 +66,32 @@ describe('临时任务填报', () => {
     expect(wrapper.text()).toContain('PDF、DOCX');
     expect(wrapper.text()).toContain('5 MB');
     expect(wrapper.find('[data-test="description-link"]').attributes('href')).toBe('https://example.com/guide');
+    expect(wrapper.find('.entry-kicker').text()).toBe('临时任务填报');
+    expect(wrapper.text()).toContain('任务性质：临时任务');
+    wrapper.unmount();
+  });
+
+  it('普通定时任务详情按 taskNature 展示定时任务填报和性质', async () => {
+    getMyTaskAssignment.mockResolvedValueOnce({
+      assignmentId: 1005,
+      taskId: 5,
+      taskTitle: '每月初经营分析填报',
+      taskDescription: '请按每月初要求填报经营分析',
+      taskNature: 'RECURRING',
+      businessType: 'GENERAL',
+      cycleType: 'MONTH_START',
+      windowStartAt: '2026-09-01T00:00:00',
+      windowEndAt: '2026-09-05T23:59:59',
+      requiresFile: false,
+      content: '',
+      files: []
+    });
+
+    const wrapper = mount(TemporaryTaskEntryView, { global: { stubs } });
+    await settle();
+
+    expect(wrapper.find('.entry-kicker').text()).toBe('定时任务填报');
+    expect(wrapper.text()).toContain('任务性质：定时任务');
     wrapper.unmount();
   });
 

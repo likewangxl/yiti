@@ -5,7 +5,7 @@
     <template v-else-if="task">
       <div class="entry-header">
         <div>
-          <div class="entry-kicker">临时任务填报</div>
+          <div class="entry-kicker">{{ taskEntryTitle(task.nature) }}</div>
           <h2 class="page-title">{{ task.title }}</h2>
         </div>
         <span class="status-badge">待提交</span>
@@ -15,7 +15,7 @@
 
       <div class="task-card">
         <div class="task-meta">
-          <span>任务性质：临时任务</span>
+          <span>任务性质：{{ taskNatureLabel(task.nature) }}</span>
           <span>开始时间：{{ task.startAt || '—' }}</span>
           <span>截止时间：{{ task.endAt || '—' }}</span>
         </div>
@@ -88,6 +88,7 @@ import { ElMessage } from 'element-plus'
 import { getMyTaskAssignment, submitTask, uploadFile } from '@/api/redengine'
 import { linkifyDescription } from '../tasks/task-domain'
 import FileIntegrationNotice from '../components/FileIntegrationNotice.vue'
+import { taskEntryTitle, taskNatureLabel } from './task-display'
 
 const route = useRoute()
 const router = useRouter()
@@ -110,6 +111,7 @@ function asTaskModel(value = {}) {
   const taskValue = value.task || value.taskDefinition || {}
   const assignment = value.assignment || value
   const merged = { ...taskValue, ...assignment }
+  const taskNature = merged.taskNature || merged.nature || ''
   const rawFiles = merged.files || merged.attachments || merged.submission?.files || []
   const files = Array.isArray(rawFiles)
     ? rawFiles.map((file) => ({
@@ -122,6 +124,8 @@ function asTaskModel(value = {}) {
     ...merged,
     assignmentId: merged.assignmentId || value.assignmentId || assignmentId.value,
     taskId: merged.taskId || taskValue.taskId || taskValue.id,
+    taskNature,
+    nature: taskNature,
     title: merged.taskTitle || merged.title || taskValue.title || '临时任务',
     description: merged.taskDescription || merged.description || taskValue.description || '',
     startAt: merged.windowStartAt || merged.temporaryStartTime || merged.startAt || merged.windowStart || '—',

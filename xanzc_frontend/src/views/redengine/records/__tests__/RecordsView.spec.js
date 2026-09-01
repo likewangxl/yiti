@@ -71,6 +71,19 @@ function temporaryAssignment(overrides = {}) {
   };
 }
 
+function recurringGeneralAssignment(overrides = {}) {
+  return temporaryAssignment({
+    assignmentId: 1005,
+    taskId: 5,
+    taskTitle: '每月初经营分析填报',
+    taskDescription: '请按每月初要求填报经营分析',
+    taskNature: 'RECURRING',
+    businessType: 'GENERAL',
+    cycleType: 'MONTH_START',
+    ...overrides
+  });
+}
+
 describe('报送员上报信息', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -132,6 +145,30 @@ describe('报送员上报信息', () => {
       taskNature: 'TEMPORARY',
       cycleType: 'MONTH_END'
     });
+    wrapper.unmount();
+  });
+
+  it('普通定时任务的维度显示普通任务，性质和周期仍按定时任务展示', async () => {
+    listMyTaskAssignments.mockResolvedValueOnce({
+      records: [recurringGeneralAssignment()],
+      total: 1
+    });
+    const wrapper = mount(RecordsView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    const row = wrapper.vm.records[0];
+    expect(row).toMatchObject({
+      nature: 'RECURRING',
+      cycle: 'MONTH_START',
+      isPeriodic: true,
+      isTemporary: false,
+      isTask: true
+    });
+    expect(wrapper.vm.taskNatureLabel(row.nature)).toBe('定时任务');
+    expect(wrapper.vm.dimensionLabel(row)).toBe('普通任务');
+    expect(wrapper.vm.cycleLabel(row.cycle)).toBe('每月初');
     wrapper.unmount();
   });
 

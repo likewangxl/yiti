@@ -43,8 +43,8 @@
       <el-table :data="filteredRecords" stripe style="width: 100%" :row-class-name="tableRowClass">
         <el-table-column label="维度" width="120">
           <template #default="{ row }">
-            <span v-if="row.isTemporary" class="dim-tag temporary-tag">临时任务</span>
-            <span v-else class="dim-tag" :style="{ background: getDimColor(row.dimension) }">{{ getDimLabel(row.dimension) }}</span>
+            <span v-if="row.isFourDimension" class="dim-tag" :style="{ background: getDimColor(row.dimension) }">{{ getDimLabel(row.dimension) }}</span>
+            <span v-else :class="['dim-tag', isPeriodicTaskNature(row.nature) ? 'general-tag' : 'temporary-tag']">{{ dimensionLabel(row) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="任务标题 / 考核项" min-width="190" show-overflow-tooltip>
@@ -69,7 +69,7 @@
           </template>
         </el-table-column>
         <el-table-column label="任务性质" width="100">
-          <template #default="{ row }">{{ natureLabel(row.nature) }}</template>
+          <template #default="{ row }">{{ taskNatureLabel(row.nature) }}</template>
         </el-table-column>
         <el-table-column label="定期周期" width="110">
           <template #default="{ row }">{{ row.isPeriodic ? cycleLabel(row.cycle) : '—' }}</template>
@@ -126,11 +126,14 @@ import {
   buildWorkflowQuery,
   cycleLabel,
   isFourDimensionTask,
-  isPeriodicNature,
   linkifyDescription,
-  natureLabel,
   normalizeAssignmentPage
 } from '../tasks/task-domain'
+import {
+  isPeriodicTaskNature,
+  taskDimensionLabel,
+  taskNatureLabel
+} from './task-display'
 
 const router = useRouter()
 const cycleOptions = CYCLE_OPTIONS
@@ -209,6 +212,7 @@ function normalizeTaskRow(row = {}) {
   const normalized = normalizeAssignmentPage([assignment]).records[0]
   const taskNature = assignment.taskNature || assignment.nature
   const fourDimension = isFourDimensionTask(assignment)
+  const isTask = !fourDimension
   const rawStatus = assignment.submission?.status
     || assignment.currentSubmission?.status
     || assignment.submissionStatus
@@ -226,8 +230,9 @@ function normalizeTaskRow(row = {}) {
     description: assignment.taskDescription || assignment.description || task.description || '',
     nature: taskNature || '',
     cycle: assignment.cycleType || assignment.cycle || task.cycleType || task.cycle || '',
-    isPeriodic: isPeriodicNature(taskNature),
-    isTemporary: !fourDimension,
+    isPeriodic: isPeriodicTaskNature(taskNature),
+    isTemporary: !isPeriodicTaskNature(taskNature),
+    isTask,
     isFourDimension: fourDimension,
     submitter: normalized.submitterName || assignment.submitterName || '—',
     date: normalized.submittedAt || assignment.submittedAt || '—',
@@ -331,11 +336,12 @@ function countByStatus(status) {
 }
 
 const filteredRecords = computed(() => records.value)
-const showMaterialColumns = computed(() => activeTab.value !== 'pending' && records.value.some((row) => !row.isTemporary))
-const showTemporaryFeedback = computed(() => activeTab.value === 'rejected' && records.value.some((row) => row.isTemporary))
+const showMaterialColumns = computed(() => activeTab.value !== 'pending' && records.value.some((row) => row.isFourDimension))
+const showTemporaryFeedback = computed(() => activeTab.value === 'rejected' && records.value.some((row) => row.isTask))
 const descriptionParts = (description) => linkifyDescription(description)
 const getDimLabel = (dim) => DIM_LABEL[dim] || dim || '—'
 const getDimColor = (dim) => DIM_COLOR[dim] || '#64748b'
+const dimensionLabel = (row) => row?.isFourDimension ? getDimLabel(row.dimension) : taskDimensionLabel(row?.nature)
 const tableRowClass = ({ row }) => (row.status === 'rejected' ? 'row-rejected' : '')
 
 onMounted(reload)
@@ -344,7 +350,9 @@ defineExpose({
   activeTab,
   appliedQuery,
   countByStatus,
+  cycleLabel,
   descriptionParts,
+  dimensionLabel,
   filteredRecords,
   handlePageChange,
   handleReset,
@@ -363,6 +371,7 @@ defineExpose({
   showMaterialColumns,
   showTemporaryFeedback,
   statusLabel,
+  taskNatureLabel,
   total
 })
 </script>
@@ -429,6 +438,7 @@ defineExpose({
   font-size: 11px;
   font-weight: 600;
 }
+.general-tag { background: #0f766e; }
 .temporary-tag { background: #7c3aed; }
 .status-badge {
   display: inline-block;
