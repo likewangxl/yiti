@@ -27,10 +27,6 @@ public class ReTaskExportAsyncExecutor {
                 .orElse(ForkJoinPool.commonPool());
     }
 
-    ReTaskExportAsyncExecutor(Executor delegate) {
-        this.delegate = delegate;
-    }
-
     /** 提交一个不阻塞 HTTP 请求的导出任务。 */
     public void submit(Runnable task) {
         if (task == null) {
