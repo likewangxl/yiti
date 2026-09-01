@@ -5,6 +5,7 @@ vi.mock('@/api/http', () => ({
 }));
 
 import { call } from '@/api/http';
+import * as redengineApi from '@/api/redengine';
 import {
   createTask,
   createTaskExport,
@@ -39,7 +40,17 @@ describe('红色引擎任务 API', () => {
 
     await listTasks(params);
 
-    expect(call).toHaveBeenCalledWith('get', '/re/tasks', { params });
+    expect(call).toHaveBeenCalledWith('get', '/re/tasks', {
+      params: { ...params, taskNature: 'SCHEDULED' }
+    });
+  });
+
+  it('任务管理列表将前端周期别名转换为 GET DTO 的 SCHEDULED 枚举', async () => {
+    await listTasks({ taskNature: 'PERIODIC' });
+
+    expect(call).toHaveBeenCalledWith('get', '/re/tasks', {
+      params: { taskNature: 'SCHEDULED' }
+    });
   });
 
   it('新增任务使用 POST 并原样传递任务对象和目标范围', async () => {
@@ -74,7 +85,7 @@ describe('红色引擎任务 API', () => {
     const params = {
       pageNo: 2,
       pageSize: 10,
-      status: 'UNREPORTED',
+      tab: 'PENDING',
       title: '整改',
       taskNature: 'TEMPORARY',
       cycleType: 'MONTH_END'
@@ -83,6 +94,12 @@ describe('红色引擎任务 API', () => {
     await listMyTaskAssignments(params);
 
     expect(call).toHaveBeenCalledWith('get', '/re/tasks/my-assignments', { params });
+  });
+
+  it('不再暴露已经下线的归档与旧导出接口', () => {
+    expect(redengineApi.archiveSettlement).toBeUndefined();
+    expect(redengineApi.generateAnnual).toBeUndefined();
+    expect(redengineApi.exportData).toBeUndefined();
   });
 
   it('报送员任务详情和提交使用独立资源，并保留幂等号和附件对象 ID', async () => {

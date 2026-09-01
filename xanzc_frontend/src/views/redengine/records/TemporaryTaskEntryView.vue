@@ -1,6 +1,7 @@
 <template>
   <div class="temporary-task-entry">
     <div v-if="loading" class="entry-loading">正在加载任务…</div>
+    <div v-else-if="loadError" class="load-error" role="alert">{{ loadError }}</div>
     <template v-else-if="task">
       <div class="entry-header">
         <div>
@@ -9,6 +10,8 @@
         </div>
         <span class="status-badge">待提交</span>
       </div>
+
+      <FileIntegrationNotice />
 
       <div class="task-card">
         <div class="task-meta">
@@ -84,6 +87,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getMyTaskAssignment, submitTask, uploadFile } from '@/api/redengine'
 import { linkifyDescription } from '../tasks/task-domain'
+import FileIntegrationNotice from '../components/FileIntegrationNotice.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -95,6 +99,7 @@ const assignmentId = computed(() => {
 })
 const task = ref(null)
 const loading = ref(false)
+const loadError = ref('')
 const submitting = ref(false)
 const form = reactive({ content: '' })
 const selectedFiles = ref([])
@@ -269,7 +274,11 @@ function goBack() {
 }
 
 async function load() {
-  if (!assignmentId.value) return
+  loadError.value = ''
+  if (!assignmentId.value) {
+    loadError.value = '任务编号缺失，无法加载任务'
+    return
+  }
   loading.value = true
   try {
     const result = await getMyTaskAssignment(assignmentId.value)
@@ -278,6 +287,7 @@ async function load() {
     existingFiles.value = task.value.files
   } catch {
     task.value = null
+    loadError.value = '任务加载失败，请稍后重试'
   } finally {
     loading.value = false
   }
@@ -296,6 +306,7 @@ defineExpose({
   handleFileChange,
   handleSubmit,
   load,
+  loadError,
   removeFile,
   selectedFiles,
   task,
@@ -331,4 +342,13 @@ defineExpose({
 .remove-file { border: 0; background: transparent; color: #dc2626; cursor: pointer; font-size: 12px; }
 .entry-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 6px; border-top: 1px solid #f1f5f9; }
 .entry-loading { padding: 60px 20px; color: #94a3b8; text-align: center; }
+.load-error {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #991b1b;
+  background: #fef2f2;
+  font-size: 13px;
+}
 </style>

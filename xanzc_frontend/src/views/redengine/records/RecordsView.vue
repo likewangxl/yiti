@@ -2,6 +2,10 @@
   <div class="records-container">
     <h2 class="page-title">上报信息</h2>
 
+    <FileIntegrationNotice />
+
+    <div v-if="loadError" class="load-error" role="alert">{{ loadError }}</div>
+
     <div class="stat-bar">
       <div class="stat-chip pending-chip">待处理 <strong>{{ countByStatus('pending') }}</strong></div>
       <div class="stat-chip reviewing-chip">审核中 <strong>{{ countByStatus('reviewing') }}</strong></div>
@@ -93,7 +97,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="!filteredRecords.length && !loading" description="暂无上报信息" />
+      <el-empty v-if="!filteredRecords.length && !loading && !loadError" description="暂无上报信息" />
       <div class="pager">
         <el-pagination
           v-model:current-page="pageNo"
@@ -110,14 +114,16 @@
 </template>
 
 <script setup>
-// 报送员上报信息：四维材料继续复用原 /re/submits/my 数据，任务协同记录来自 assignment。
-// 页面只负责组合两类记录；审核状态、权限和 assignment 重提语义由后端状态机负责。
+// 报送员上报信息：四维材料与临时任务统一从 assignment 工作台分页读取。
+// 旧材料行只作为服务端统一响应中的兼容形态归一化，不再额外请求 /re/submits/my。
+// 审核状态、权限和 assignment 重提语义由后端状态机负责。
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getMySubmits, listMyTaskAssignments } from '@/api/redengine'
+import { listMyTaskAssignments } from '@/api/redengine'
+import FileIntegrationNotice from '../components/FileIntegrationNotice.vue'
 import {
   CYCLE_OPTIONS,
-  buildTaskQuery,
+  buildWorkflowQuery,
   cycleLabel,
   isFourDimensionTask,
   isPeriodicNature,
@@ -137,6 +143,7 @@ const pageNo = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 const records = ref([])
+const loadError = ref('')
 
 const STATUS_MAP = { 0: 'reviewing', 1: 'reviewing', 2: 'passed', 3: 'rejected' }
 const DIM_LABEL = { dim1: '外联共建', dim2: '业务提升', dim3: '头雁先锋', dim4: '督导响应' }
@@ -154,16 +161,6 @@ const TASK_STATUS_MAP = {
   REJECTED_BY_BRANCH: 'rejected',
   REJECTED_BY_ORG: 'rejected'
 }
-const TASK_STATUS_QUERY = {
-  pending: 'UNREPORTED',
-  // 审核中同时包含支部审核和组织审核两个状态，不能压成一个不存在的枚举值；
-  // 省略服务端状态过滤后在页面按状态机结果收敛，避免漏掉 BRANCH_PENDING。
-  reviewing: undefined,
-  passed: 'APPROVED',
-  // 驳回包含 REJECTED_BY_BRANCH、REJECTED_BY_ORG 两种后端状态，页面统一映射为已驳回。
-  rejected: undefined
-}
-
 function statusLabel(status) {
   return { pending: '待处理', reviewing: '审核中', passed: '已通过', rejected: '已驳回' }[status] || '—'
 }
@@ -180,6 +177,9 @@ function normalizeMaterialRow(row = {}) {
     source: 'material',
     taskId: row.taskId,
     assignmentId: row.assignmentId,
+    legacyReviewId: row.legacyReviewId ?? row.submitId ?? row.reviewId,
+    periodKey: row.periodKey,
+    detailItemCode: row.detailItemCode ?? row.itemCode,
     title: row.taskTitle || row.title || '',
     dimension: row.dimension,
     item: row.itemName ? `${row.itemCode ? `${row.itemCode} ` : ''}${row.itemName}` : (row.itemCode || '—'),
@@ -196,7 +196,14 @@ function normalizeMaterialRow(row = {}) {
   }
 }
 
+function isLegacyMaterialRow(row = {}) {
+  return row.source === 'material'
+    || (!row.taskId && !row.taskTitle && !row.businessType && !row.taskNature && !row.nature
+      && (row.dimension || row.itemCode))
+}
+
 function normalizeTaskRow(row = {}) {
+  if (isLegacyMaterialRow(row)) return normalizeMaterialRow(row)
   const task = row.task || row.taskDefinition || {}
   const assignment = { ...task, ...row }
   const normalized = normalizeAssignmentPage([assignment]).records[0]
@@ -235,51 +242,33 @@ function normalizeTaskRow(row = {}) {
 }
 
 function taskQuery() {
-  const assignmentStatus = TASK_STATUS_QUERY[activeTab.value]
-  return buildTaskQuery({
-    ...appliedQuery.value,
-    assignmentStatus
-  }, pageNo.value, pageSize.value)
-}
-
-function matchesTab(row) {
-  return row.status === activeTab.value
+  return buildWorkflowQuery(
+    appliedQuery.value,
+    activeTab.value,
+    pageNo.value,
+    pageSize.value
+  )
 }
 
 async function loadTaskRows() {
   try {
     const result = await listMyTaskAssignments(taskQuery())
-    const rows = normalizeAssignmentPage(result).records.map(normalizeTaskRow).filter(matchesTab)
-    return { rows, total: Number(result?.total ?? rows.length) }
+    const page = normalizeAssignmentPage(result)
+    const rows = page.records.map(normalizeTaskRow)
+    return { rows, total: page.total, error: '' }
   } catch {
-    return { rows: [], total: 0 }
-  }
-}
-
-async function loadMaterialRows() {
-  if (activeTab.value === 'pending') return { rows: [], total: 0 }
-  try {
-    const result = await getMySubmits(pageNo.value, pageSize.value)
-    const rawRows = result?.records || (Array.isArray(result) ? result : [])
-    const rows = rawRows.map(normalizeMaterialRow).filter((row) => {
-      if (!matchesTab(row)) return false
-      if (appliedQuery.value.title && !`${row.title} ${row.item}`.includes(appliedQuery.value.title)) return false
-      if (appliedQuery.value.nature && appliedQuery.value.nature !== 'PERIODIC') return false
-      if (appliedQuery.value.cycle && row.cycle !== appliedQuery.value.cycle) return false
-      return true
-    })
-    return { rows, total: Number(result?.total ?? rows.length) }
-  } catch {
-    return { rows: [], total: 0 }
+    return { rows: [], total: 0, error: '任务数据加载失败' }
   }
 }
 
 async function reload() {
   loading.value = true
+  loadError.value = ''
   try {
-    const [taskResult, materialResult] = await Promise.all([loadTaskRows(), loadMaterialRows()])
-    records.value = [...materialResult.rows, ...taskResult.rows]
-    total.value = materialResult.total + taskResult.total
+    const result = await loadTaskRows()
+    records.value = result.rows
+    total.value = result.total
+    if (result.error) loadError.value = result.error
   } finally {
     loading.value = false
   }
@@ -321,10 +310,19 @@ function openRow(row) {
   if (row.source === 'material' || row.isFourDimension || isFourDimensionTask(row)) {
     const query = { taskId }
     if (assignmentId !== undefined && assignmentId !== null) query.assignmentId = assignmentId
+    for (const key of ['taskInstanceId', 'periodKey', 'detailItemCode']) {
+      const value = row[key] ?? (key === 'detailItemCode' ? row.itemCode : undefined)
+      if (value !== undefined && value !== null && value !== '') query[key] = value
+    }
     router.push({ path: '/redengine/report', query })
     return
   }
-  const location = router.resolve({ path: '/redengine/task-entry', query: { taskId, assignmentId } })
+  const query = { taskId, assignmentId }
+  for (const key of ['taskInstanceId', 'periodKey', 'detailItemCode']) {
+    const value = row[key] ?? (key === 'detailItemCode' ? row.itemCode : undefined)
+    if (value !== undefined && value !== null && value !== '') query[key] = value
+  }
+  const location = router.resolve({ path: '/redengine/task-entry', query })
   window.open(location.href, '_blank', 'noopener,noreferrer')
 }
 
@@ -354,6 +352,7 @@ defineExpose({
   handleSizeChange,
   handleTabChange,
   loadTaskRows,
+  loadError,
   normalizeTaskRow,
   openRow,
   pageNo,
@@ -371,6 +370,16 @@ defineExpose({
 <style scoped lang="scss">
 .records-container { padding: 0; }
 .page-title { margin: 0 0 16px; color: #1e293b; font-size: 22px; font-weight: 700; }
+
+.load-error {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #991b1b;
+  background: #fef2f2;
+  font-size: 13px;
+}
 
 .stat-bar { display: flex; gap: 12px; margin-bottom: 16px; }
 .stat-chip {

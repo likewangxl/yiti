@@ -13,7 +13,6 @@ vi.mock('@/api/redengine', () => ({
   downloadTaskAttachment: vi.fn(),
   getOrgTaskReview: vi.fn(),
   getReviewPreview: vi.fn(),
-  getReviewQueue: vi.fn(),
   listOrgTaskReviews: vi.fn(),
   rejectOrgTask: vi.fn(),
   rejectSubmit: vi.fn()
@@ -26,7 +25,6 @@ import {
   downloadTaskAttachment,
   getOrgTaskReview,
   getReviewPreview,
-  getReviewQueue,
   listOrgTaskReviews,
   rejectOrgTask
 } from '@/api/redengine';
@@ -84,7 +82,6 @@ function taskRow(overrides = {}) {
 describe('组织审核工作台', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getReviewQueue.mockResolvedValue({ records: [], total: 0 });
     getReviewPreview.mockResolvedValue(null);
     listOrgTaskReviews.mockResolvedValue({ records: [taskRow()], total: 1 });
     getOrgTaskReview.mockResolvedValue(taskRow());
@@ -105,6 +102,7 @@ describe('组织审核工作台', () => {
     expect(wrapper.text()).toContain('已驳回');
     expect(wrapper.text()).toContain('四大维度材料上报');
     expect(wrapper.text()).toContain('临时任务');
+    expect(wrapper.find('.queue-item').attributes()).toMatchObject({ role: 'button', tabindex: '0' });
     wrapper.unmount();
   });
 
@@ -122,7 +120,7 @@ describe('组织审核工作台', () => {
       pageSize: 50,
       title: '整改',
       taskNature: 'TEMPORARY',
-      assignmentStatus: 'ORG_PENDING'
+      tab: 'PENDING'
     });
     wrapper.unmount();
   });
@@ -180,7 +178,7 @@ describe('组织审核工作台', () => {
       formData: null,
       fileUrls: null
     };
-    getReviewQueue.mockResolvedValue({ records: [material], total: 1 });
+    listOrgTaskReviews.mockResolvedValue({ records: [material], total: 1 });
     getReviewPreview.mockResolvedValue(material);
 
     const wrapper = mount(ReviewView, { global: { stubs } });
@@ -217,6 +215,46 @@ describe('组织审核工作台', () => {
     wrapper.vm.finalScore = 4;
     await wrapper.vm.handleApprove();
     expect(approveSubmit).toHaveBeenCalledWith(17, { score: 4, feedback: undefined });
+    wrapper.unmount();
+  });
+
+  it('审核队列请求失败时展示错误态而不是误报暂无任务', async () => {
+    listOrgTaskReviews.mockRejectedValueOnce(new Error('服务不可用'));
+    const wrapper = mount(ReviewView, { global: { stubs } });
+    await settle();
+
+    expect(wrapper.vm.loadError).toContain('审核队列加载失败');
+    expect(wrapper.find('[role="alert"]').text()).toContain('审核队列加载失败');
+    expect(wrapper.find('.queue-empty').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('组织审核队列由服务端页签和状态分页，不再合并旧材料队列', async () => {
+    listOrgTaskReviews.mockResolvedValue({ records: [taskRow()], total: 6 });
+    const wrapper = mount(ReviewView, { global: { stubs } });
+    await settle();
+
+    expect(listOrgTaskReviews).toHaveBeenCalledWith({
+      pageNo: 1,
+      pageSize: 50,
+      tab: 'PENDING'
+    });
+    wrapper.unmount();
+  });
+
+  it('四维任务缺少后端 legacyReviewId 时不回退 assignment id 调旧评分接口', async () => {
+    listOrgTaskReviews.mockResolvedValue({
+      records: [taskRow({ businessType: 'FOUR_DIMENSION', taskNature: 'SCHEDULED' })],
+      total: 1
+    });
+    const wrapper = mount(ReviewView, { global: { stubs } });
+    await settle();
+    const item = wrapper.vm.reviewItems.find((row) => row.source === 'task');
+
+    await wrapper.vm.selectItem(item);
+    await settle();
+
+    expect(getReviewPreview).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });

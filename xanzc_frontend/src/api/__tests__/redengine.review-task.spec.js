@@ -28,7 +28,7 @@ describe('红色引擎任务审核 API', () => {
     const params = {
       pageNo: 1,
       pageSize: 20,
-      assignmentStatus: 'BRANCH_PENDING',
+      tab: 'PENDING',
       taskNature: 'TEMPORARY',
       businessType: 'GENERAL',
       title: '整改'
@@ -61,7 +61,7 @@ describe('红色引擎任务审核 API', () => {
     const params = {
       pageNo: 1,
       pageSize: 20,
-      submissionStatus: 'ORG_PENDING',
+      tab: 'PENDING',
       taskNature: 'TEMPORARY'
     };
 

@@ -17,13 +17,17 @@ vi.mock('element-plus', () => ({
 }));
 
 vi.mock('@/api/redengine', () => ({
-  getReviewQueue: vi.fn(),
+  approveOrgTask: vi.fn(),
   getReviewPreview: vi.fn(),
   approveSubmit: vi.fn(),
-  rejectSubmit: vi.fn()
+  rejectSubmit: vi.fn(),
+  listOrgTaskReviews: vi.fn().mockResolvedValue({ records: [], total: 0 }),
+  getOrgTaskReview: vi.fn(),
+  rejectOrgTask: vi.fn(),
+  downloadTaskAttachment: vi.fn()
 }));
 
-import { getReviewQueue, getReviewPreview, approveSubmit } from '@/api/redengine';
+import { getReviewPreview, approveSubmit, listOrgTaskReviews } from '@/api/redengine';
 import ReviewView from '../review/ReviewView.vue';
 
 // 桩使用手写可交互的 el-input-number/el-input，避免依赖 Element Plus 全量挂载
@@ -76,7 +80,7 @@ describe('沉浸式审核工作台(ReviewView) - 审核通过后评分展示', (
       formData: null,
       fileUrls: null
     };
-    getReviewQueue.mockResolvedValue({ records: [queueRow], total: 1 });
+    listOrgTaskReviews.mockResolvedValue({ records: [queueRow], total: 1 });
     getReviewPreview.mockResolvedValue(queueRow);
     approveSubmit.mockResolvedValue({});
 

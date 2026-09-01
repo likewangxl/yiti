@@ -108,7 +108,7 @@ describe('报送员上报信息', () => {
     expect(listMyTaskAssignments).toHaveBeenCalledWith({
       pageNo: 1,
       pageSize: 10,
-      assignmentStatus: 'UNREPORTED'
+      tab: 'PENDING'
     });
     expect(wrapper.vm.records[0]).toMatchObject({
       assignmentId: 1001,
@@ -127,7 +127,7 @@ describe('报送员上报信息', () => {
     expect(listMyTaskAssignments).toHaveBeenLastCalledWith({
       pageNo: 1,
       pageSize: 10,
-      assignmentStatus: 'UNREPORTED',
+      tab: 'PENDING',
       title: '整改',
       taskNature: 'TEMPORARY',
       cycleType: 'MONTH_END'
@@ -195,8 +195,20 @@ describe('报送员上报信息', () => {
 
   it('审核中页同时保留原四维上报记录和临时任务记录', async () => {
     listMyTaskAssignments.mockResolvedValue({
-      records: [temporaryAssignment({ status: 'ORG_PENDING' })],
-      total: 1
+      records: [
+        temporaryAssignment({ status: 'ORG_PENDING' }),
+        {
+          source: 'material',
+          id: 11,
+          dimension: 'dim1',
+          itemCode: '1.1',
+          itemName: '联建规范度',
+          submitterId: 'U1',
+          submitDate: '2026-08-21',
+          status: 1
+        }
+      ],
+      total: 2
     });
     const wrapper = mount(RecordsView, {
       global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
@@ -206,13 +218,47 @@ describe('报送员上报信息', () => {
     await wrapper.vm.reload();
     await settle();
 
-    expect(getMySubmits).toHaveBeenCalledWith(1, 10);
+    expect(getMySubmits).not.toHaveBeenCalled();
     expect(wrapper.vm.records.map((item) => item.source)).toEqual(expect.arrayContaining(['material', 'task']));
     expect(wrapper.vm.records.find((item) => item.source === 'material')).toMatchObject({
       dimension: 'dim1',
       status: 'reviewing',
       isTemporary: false
     });
+    wrapper.unmount();
+  });
+
+  it('任务或材料列表请求失败时展示错误态而不是误报暂无上报信息', async () => {
+    listMyTaskAssignments.mockRejectedValueOnce(new Error('服务不可用'));
+    const wrapper = mount(RecordsView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    expect(wrapper.vm.loadError).toContain('任务数据加载失败');
+    expect(wrapper.find('[role="alert"]').text()).toContain('任务数据加载失败');
+    expect(wrapper.find('.empty-stub').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('按服务端页签和状态分页，不再另查旧材料列表后在前端合并总数', async () => {
+    listMyTaskAssignments.mockResolvedValue({
+      records: [temporaryAssignment({ status: 'ORG_PENDING' })],
+      total: 9
+    });
+    getMySubmits.mockResolvedValue({ records: [{ id: 99 }], total: 99 });
+    const wrapper = mount(RecordsView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    expect(listMyTaskAssignments).toHaveBeenCalledWith({
+      pageNo: 1,
+      pageSize: 10,
+      tab: 'PENDING'
+    });
+    expect(getMySubmits).not.toHaveBeenCalled();
+    expect(wrapper.vm.total).toBe(9);
     wrapper.unmount();
   });
 });

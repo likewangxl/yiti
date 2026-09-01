@@ -108,6 +108,7 @@ describe('支部审核工作台', () => {
     expect(wrapper.text()).toContain('已驳回');
     expect(wrapper.text()).not.toContain('待审核');
     expect(wrapper.vm.items[0]).toMatchObject({ assignmentId: 1001, nature: 'TEMPORARY', status: 'pending' });
+    expect(wrapper.find('.review-card').attributes()).toMatchObject({ role: 'button', tabindex: '0' });
     wrapper.unmount();
   });
 
@@ -127,7 +128,7 @@ describe('支部审核工作台', () => {
       title: '整改',
       taskNature: 'TEMPORARY',
       cycleType: 'MONTH_END',
-      assignmentStatus: 'BRANCH_PENDING'
+      tab: 'PENDING'
     });
     expect(wrapper.text()).toContain('整改已完成');
     expect(wrapper.text()).toContain('整改说明.pdf');
@@ -183,6 +184,34 @@ describe('支部审核工作台', () => {
     await wrapper.vm.handleConfirmReject();
     expect(rejectBranchTask).toHaveBeenCalledWith(1001, { feedback: '请补充附件' });
     expect(item.status).toBe('rejected');
+    wrapper.unmount();
+  });
+
+  it('队列请求失败时展示错误态而不是误报暂无记录', async () => {
+    listBranchTaskReviews.mockRejectedValueOnce(new Error('服务不可用'));
+    getReviewQueue.mockRejectedValueOnce(new Error('服务不可用'));
+    const wrapper = mount(BranchReviewView, { global: { stubs } });
+    await settle();
+
+    expect(wrapper.vm.loadError).toContain('任务审核队列加载失败');
+    expect(wrapper.find('[role="alert"]').text()).toContain('任务审核队列加载失败');
+    expect(wrapper.find('.empty-state').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('审核队列由服务端页签和状态分页，不再合并旧材料队列', async () => {
+    getReviewQueue.mockResolvedValue({ records: [{ id: 17 }], total: 99 });
+    listBranchTaskReviews.mockResolvedValue({ records: [taskRow()], total: 7 });
+    const wrapper = mount(BranchReviewView, { global: { stubs } });
+    await settle();
+
+    expect(listBranchTaskReviews).toHaveBeenCalledWith({
+      pageNo: 1,
+      pageSize: 20,
+      tab: 'PENDING'
+    });
+    expect(getReviewQueue).not.toHaveBeenCalled();
+    expect(wrapper.vm.total).toBe(7);
     wrapper.unmount();
   });
 });

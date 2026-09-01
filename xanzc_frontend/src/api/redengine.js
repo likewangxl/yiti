@@ -50,14 +50,6 @@ export const getOverdueList = (params) => params === undefined
 export const executeOverdue = (data) => call('post', '/re/cockpit/overdue/execute', { data });
 export const getRedWarning = () => call('get', '/re/cockpit/warning/red');
 export const getYellowWarning = () => call('get', '/re/cockpit/warning/yellow');
-export const archiveSettlement = (period) =>
-  call('get', '/re/cockpit/archive/settlement', { params: { period } });
-// 纠偏（2026-07-19 修复审计缺口）：后端 generateAnnualResult 现为
-// @Valid @RequestBody ReAnnualGenerateReqDTO（reason 为 @NotBlank，@AuditLog 补齐 reasonRequired=true）
-export const generateAnnual = (year, reason) => call('post', `/re/cockpit/archive/generate/${year}`, { data: { reason } });
-
-// ── 导出（二进制直下）──
-export const exportData = (type) => call('get', `/re/export/${type}`, { responseType: 'blob' });
 
 // ── 文件上传（复用平台 governance 端点，非红色引擎自建）──
 export const uploadFile = (formData) =>
@@ -66,7 +58,20 @@ export const uploadFile = (formData) =>
 // ── 任务协同 ──
 // 任务模块以任务主表、党支部任务实例和填报记录分层返回；页面只通过这些 wrapper
 // 访问 /api/re，避免在视图内拼接 URL 或另建 axios 实例。
-export const listTasks = (params = {}) => call('get', '/re/tasks', { params });
+// 任务管理的查询 DTO 使用 ReTaskNature.SCHEDULED；页面/旧原型沿用 PERIODIC
+// 作为“定时任务”别名。只在任务管理资源边界做转换，避免把工作流查询中
+// 已由后端 @InitBinder 支持的 PERIODIC 值误改掉。
+function normalizeTaskManagementQuery(params = {}) {
+  const taskNature = typeof params.taskNature === 'string'
+    ? params.taskNature.trim().toUpperCase()
+    : params.taskNature;
+  if (taskNature !== 'PERIODIC') return params;
+  return { ...params, taskNature: 'SCHEDULED' };
+}
+
+export const listTasks = (params = {}) => call('get', '/re/tasks', {
+  params: normalizeTaskManagementQuery(params)
+});
 export const createTask = (data) => call('post', '/re/tasks', { data });
 export const getTaskDetail = (taskId) => call('get', `/re/tasks/${taskId}`);
 export const listTaskAssignments = (taskId, params = {}) =>
@@ -98,9 +103,8 @@ export const downloadTaskAttachment = (taskId, assignmentId, fileId) =>
   });
 
 // 任务审核工作台：支部审核与组织审核使用独立的 assignment 资源。
-// 列表参数严格对应 ReTaskWorkflowPageQueryDTO：查询状态使用
-// assignmentStatus/submissionStatus；响应中的 status 是 assignment 状态，
-// submissionStatus 是当前提交版本状态，不能把响应字段 status 当作查询参数发送。
+// 列表参数按 ReTaskWorkflowPageQueryDTO 的 tab 工作台契约传递；服务端负责把
+// 页签转换为状态集合并在分页前过滤，响应中的 status/submissionStatus 仍只用于展示。
 export const listBranchTaskReviews = (params = {}) =>
   call('get', '/re/reviews/tasks/branch/queue', { params });
 export const getBranchTaskReview = (assignmentId) =>

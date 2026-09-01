@@ -175,4 +175,17 @@ describe('新增任务', () => {
     expect(wrapper.find('[data-test="window-preview"]').exists()).toBe(true);
     wrapper.unmount();
   });
+
+  it('组织或员工选项加载失败时展示错误态', async () => {
+    getOrgTree.mockRejectedValueOnce(new Error('服务不可用'));
+    listUsers.mockRejectedValueOnce(new Error('服务不可用'));
+    const wrapper = mount(NewTaskView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    expect(wrapper.vm.optionsError).toBe('任务对象选项加载失败，请稍后重试');
+    expect(wrapper.find('[role="alert"]').text()).toContain('任务对象选项加载失败');
+    wrapper.unmount();
+  });
 });

@@ -3,6 +3,17 @@
     <h2 class="page-title">四大维度材料上报</h2>
     <p class="page-desc">按考核维度上传材料，系统自动关联评分标准。每个考核项可提交多条记录。</p>
 
+    <FileIntegrationNotice />
+
+    <div v-if="hasTaskContext" class="task-context-banner" data-test="task-context">
+      <span>任务期间：{{ taskContext.periodKey || '—' }}</span>
+      <span>明细项：{{ taskContext.detailItemCode || activeSub || '—' }}</span>
+      <span>已上传 {{ progress.uploadCount }} 次</span>
+      <span>{{ progress.completed ? '本季度已完成' : '当前周期待完成' }}</span>
+      <span v-if="progress.lastUploadedAt">最近上传：{{ progress.lastUploadedAt }}</span>
+    </div>
+    <div v-if="contextError" class="task-context-error" role="alert">{{ contextError }}</div>
+
     <!-- 维度Tab -->
     <div class="dim-tabs">
       <div
@@ -370,9 +381,11 @@
 // itemName/maxScore/projectName/submitType/submitDate/formData/fileObjectIds；orgId/submitterId
 // 不由前端传（服务端按当前登录人解析 party org，防止越权指定他人组织）。
 // YAGNI：源系统与本次移植均不做草稿态（submitType 固定按"月度=1"上报，源页面本身也无期间选择控件）。
-import { ref, reactive } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { createSubmit, uploadFile } from '@/api/redengine'
+import { createSubmit, getMyTaskAssignment, uploadFile } from '@/api/redengine'
+import FileIntegrationNotice from '../components/FileIntegrationNotice.vue'
 
 const dimTabs = [
   { id: 'dim1', label: '一、外联共建（35分）', color: '#dc2626' },
@@ -397,6 +410,114 @@ const dim3Subs = [
 
 const activeDim = ref('dim1')
 const activeSub = ref('1.1')
+
+const route = useRoute()
+const routeValue = (key) => {
+  const value = route?.query?.[key]
+  return Array.isArray(value) ? value[0] || '' : value || ''
+}
+const taskContext = reactive({
+  taskId: routeValue('taskId'),
+  assignmentId: routeValue('assignmentId'),
+  taskInstanceId: routeValue('taskInstanceId'),
+  periodKey: routeValue('periodKey'),
+  detailItemCode: routeValue('detailItemCode')
+})
+const contextDetail = ref(null)
+const contextError = ref('')
+const contextLoading = ref(false)
+const progress = reactive({ uploadCount: 0, completed: false, lastUploadedAt: '' })
+const hasTaskContext = computed(() => Boolean(taskContext.taskId || taskContext.assignmentId))
+
+function toNumberIfNumeric(value) {
+  if (value === undefined || value === null || value === '') return value
+  const number = Number(value)
+  return Number.isNaN(number) ? value : number
+}
+
+function progressSource(detail = {}) {
+  const code = taskContext.detailItemCode || activeSub.value
+  const dimension = itemMeta[code]?.dimension
+  const candidates = detail.dimensionProgresses
+    || detail.progresses
+    || detail.progressList
+    || detail.dimensionProgress
+    || []
+  if (Array.isArray(candidates)) {
+    const selected = candidates.find((entry) => entry?.detailItemCode === code
+      || entry?.itemCode === code
+      || entry?.dimensionCode === code
+      || entry?.dimensionCode === dimension)
+    if (selected) return selected
+  } else if (candidates && typeof candidates === 'object') {
+    const selected = candidates[code] || candidates[dimension]
+    if (selected && typeof selected === 'object') return selected
+  }
+  return detail.progress || detail
+}
+
+function asBoolean(value) {
+  if (typeof value === 'string') return value.trim().toLowerCase() === 'true'
+  return Boolean(value)
+}
+
+function syncProgress(detail = contextDetail.value || {}) {
+  const source = progressSource(detail)
+  const rawCount = source.uploadCount ?? source.uploads ?? source.uploadTotal
+  if (rawCount !== undefined && rawCount !== null && rawCount !== '') {
+    progress.uploadCount = Math.max(0, Number(rawCount) || 0)
+  }
+  if (source.completed !== undefined && source.completed !== null) {
+    progress.completed = asBoolean(source.completed)
+  } else if (source.isCompleted !== undefined && source.isCompleted !== null) {
+    progress.completed = asBoolean(source.isCompleted)
+  } else if (source.status !== undefined) {
+    progress.completed = String(source.status).toUpperCase() === 'COMPLETED'
+  } else if (rawCount !== undefined) {
+    progress.completed = Number(rawCount) > 0
+  }
+  progress.lastUploadedAt = source.lastUploadedAt
+    ?? source.lastUploadedTime
+    ?? source.completedAt
+    ?? progress.lastUploadedAt
+    ?? ''
+}
+
+function mergeTaskContext(detail = {}) {
+  const values = {
+    taskId: detail.taskId,
+    assignmentId: detail.assignmentId,
+    taskInstanceId: detail.taskInstanceId,
+    periodKey: detail.periodKey,
+    detailItemCode: detail.detailItemCode ?? detail.itemCode
+  }
+  Object.entries(values).forEach(([key, value]) => {
+    if ((taskContext[key] === undefined || taskContext[key] === '') && value !== undefined && value !== null) {
+      taskContext[key] = value
+    }
+  })
+  const itemCode = taskContext.detailItemCode
+  if (itemCode && itemMeta[itemCode]) {
+    activeDim.value = itemMeta[itemCode].dimension
+    activeSub.value = itemCode
+  }
+}
+
+async function loadTaskContext() {
+  if (!taskContext.assignmentId || typeof getMyTaskAssignment !== 'function') return
+  contextLoading.value = true
+  contextError.value = ''
+  try {
+    const detail = await getMyTaskAssignment(toNumberIfNumeric(taskContext.assignmentId))
+    contextDetail.value = detail || {}
+    mergeTaskContext(contextDetail.value)
+    syncProgress(contextDetail.value)
+  } catch (error) {
+    contextError.value = error?.message || '任务上下文加载失败'
+  } finally {
+    contextLoading.value = false
+  }
+}
 
 const switchDim = (id) => {
   activeDim.value = id
@@ -536,7 +657,21 @@ const submitRecord = async (subId) => {
     }
 
     // 2) 创建即提交
-    await createSubmit({
+    const taskPayload = {}
+    if (hasTaskContext.value) {
+      const contextValues = {
+        taskId: toNumberIfNumeric(taskContext.taskId),
+        taskInstanceId: toNumberIfNumeric(taskContext.taskInstanceId),
+        taskAssignmentId: toNumberIfNumeric(taskContext.assignmentId),
+        periodKey: taskContext.periodKey || undefined,
+        detailItemCode: taskContext.detailItemCode || subId
+      }
+      Object.entries(contextValues).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') taskPayload[key] = value
+      })
+    }
+
+    const response = await createSubmit({
       dimension: meta.dimension,
       itemCode: subId,
       itemName: meta.itemName,
@@ -546,7 +681,21 @@ const submitRecord = async (subId) => {
       submitDate: today,
       formData: JSON.stringify(f),
       fileObjectIds,
+      ...taskPayload,
     })
+
+    if (hasTaskContext.value) {
+      const responseProgress = response?.progress || response
+      const hasServerCount = responseProgress && typeof responseProgress === 'object'
+        && (responseProgress.uploadCount !== undefined || responseProgress.lastUploadedAt !== undefined)
+      if (hasServerCount) {
+        syncProgress(responseProgress)
+      } else {
+        progress.uploadCount += 1
+        progress.completed = true
+        progress.lastUploadedAt = response?.lastUploadedAt || new Date().toISOString()
+      }
+    }
 
     records[subId].push({
       id: nextId++,
@@ -577,6 +726,23 @@ const removeRecord = (subId, id) => {
     ElMessage.success('已删除')
   }
 }
+
+onMounted(loadTaskContext)
+
+defineExpose({
+  activeDim,
+  activeSub,
+  contextDetail,
+  contextError,
+  contextLoading,
+  forms,
+  hasTaskContext,
+  loadTaskContext,
+  progress,
+  records,
+  submitRecord,
+  taskContext
+})
 </script>
 
 <style scoped lang="scss">
@@ -584,6 +750,30 @@ const removeRecord = (subId, id) => {
 
 .page-title { font-size: 20px; font-weight: 700; color: #1e293b; margin: 0 0 4px 0; }
 .page-desc { font-size: 12px; color: #64748b; margin: 0 0 16px 0; }
+
+.task-context-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: center;
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #7f1d1d;
+  background: #fef2f2;
+  font-size: 12px;
+}
+
+.task-context-error {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #991b1b;
+  background: #fef2f2;
+  font-size: 13px;
+}
 
 /* Dimension Tabs */
 .dim-tabs {

@@ -10,6 +10,7 @@ import {
   calculateTaskWindow,
   buildExportRequest,
   buildTaskQuery,
+  buildWorkflowQuery,
   businessTypeLabel,
   formatTaskWindow,
   getExportSheetCount,
@@ -84,6 +85,16 @@ describe('红色引擎任务域模型', () => {
       pageSize: 20,
       assignmentStatus: 'BRANCH_PENDING',
       submissionStatus: 'BRANCH_APPROVED'
+    });
+  });
+
+  it('工作台查询只提交页签，由服务端按页签展开状态集合分页', () => {
+    expect(buildWorkflowQuery({ title: '整改', nature: 'TEMPORARY' }, 'pending', 2, 20)).toEqual({
+      pageNo: 2,
+      pageSize: 20,
+      title: '整改',
+      taskNature: 'TEMPORARY',
+      tab: 'PENDING'
     });
   });
 

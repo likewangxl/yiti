@@ -11,6 +11,8 @@
       </el-button>
     </div>
 
+    <div v-if="loadError" class="load-error" role="alert">{{ loadError }}</div>
+
     <el-card class="filter-card" shadow="never">
       <el-form :inline="true" class="filter-form" @submit.prevent>
         <el-form-item label="任务标题">
@@ -109,7 +111,7 @@
         </el-table-column>
       </el-table>
 
-      <el-empty v-else description="暂无已发布任务" />
+      <el-empty v-else-if="!loadError" description="暂无已发布任务" />
 
       <div class="pager">
         <el-pagination
@@ -152,6 +154,7 @@ const pageSize = ref(10);
 const total = ref(0);
 const rows = ref([]);
 const loading = ref(false);
+const loadError = ref('');
 
 const STATUS_LABELS = {
   DRAFT: '草稿',
@@ -169,6 +172,7 @@ function statusClass(status) {
 
 async function load() {
   loading.value = true;
+  loadError.value = '';
   try {
     const result = await listTasks(buildTaskQuery(appliedQuery.value, pageNo.value, pageSize.value));
     const page = normalizeTaskList(result);
@@ -177,6 +181,7 @@ async function load() {
   } catch {
     rows.value = [];
     total.value = 0;
+    loadError.value = '任务列表加载失败，请稍后重试';
   } finally {
     loading.value = false;
   }
@@ -227,7 +232,8 @@ defineExpose({
   handlePageChange,
   handleSizeChange,
   openDetail,
-  taskTypeOptions
+  taskTypeOptions,
+  loadError
 });
 </script>
 
@@ -254,6 +260,16 @@ defineExpose({
 .page-desc {
   margin: 0;
   color: #64748b;
+  font-size: 13px;
+}
+
+.load-error {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #991b1b;
+  background: #fef2f2;
   font-size: 13px;
 }
 

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 
@@ -26,6 +26,7 @@ vi.mock('@/api/redengine', () => ({
 import {
   createTaskExport,
   downloadTaskAttachment,
+  downloadTaskExport,
   getTaskDetail,
   getTaskExportStatus,
   listMaterialDetailItems,
@@ -95,6 +96,10 @@ describe('任务详情', () => {
     getTaskExportStatus.mockResolvedValue({ exportId: 'export-1', status: 'SUCCESS', totalRows: 1, sheetCount: 1 });
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('加载任务配置和支部实例，未上报字段展示 --', async () => {
     const wrapper = mount(TaskDetailView, {
       global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
@@ -122,6 +127,66 @@ describe('任务详情', () => {
     expect(createTaskExport).toHaveBeenCalledWith(42, { itemCodes: [] });
     expect(getTaskExportStatus).toHaveBeenCalledWith('export-1');
     expect(wrapper.vm.exportState.status).toBe('SUCCEEDED');
+    wrapper.unmount();
+  });
+
+  it('组件卸载后不重新启动导出状态轮询', async () => {
+    vi.useFakeTimers();
+    let resolveStatus;
+    getTaskExportStatus.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveStatus = resolve;
+    }));
+    const wrapper = mount(TaskDetailView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    const exportPromise = wrapper.vm.handleExport();
+    await flushPromises();
+    expect(getTaskExportStatus).toHaveBeenCalledTimes(1);
+
+    wrapper.unmount();
+    resolveStatus({ exportId: 'export-1', status: 'RUNNING' });
+    await exportPromise;
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(1100);
+
+    expect(getTaskExportStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('导出已完成但不可下载时不展示或触发下载', async () => {
+    getTaskExportStatus.mockResolvedValueOnce({
+      exportId: 'export-1',
+      status: 'SUCCEEDED',
+      downloadable: false,
+      totalRows: 1,
+      sheetCount: 1
+    });
+    const wrapper = mount(TaskDetailView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    await wrapper.vm.handleExport();
+    await settle();
+    await wrapper.vm.downloadExport();
+
+    expect(wrapper.vm.exportState.downloadable).toBe(false);
+    expect(downloadTaskExport).not.toHaveBeenCalled();
+    expect(wrapper.findAll('button').some((button) => button.text().includes('下载 ZIP'))).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('任务详情请求失败时展示错误态而不是误报暂无支部填报数据', async () => {
+    getTaskDetail.mockRejectedValueOnce(new Error('服务不可用'));
+    const wrapper = mount(TaskDetailView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    expect(wrapper.vm.loadError).toBe('任务详情加载失败，请稍后重试');
+    expect(wrapper.find('[role="alert"]').text()).toContain('任务详情加载失败');
+    expect(wrapper.find('.empty-stub').exists()).toBe(false);
     wrapper.unmount();
   });
 

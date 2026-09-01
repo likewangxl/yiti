@@ -147,4 +147,17 @@ describe('任务管理列表', () => {
     });
     wrapper.unmount();
   });
+
+  it('列表请求失败时展示错误态而不是误报暂无任务', async () => {
+    listTasks.mockRejectedValueOnce(new Error('服务不可用'));
+    const wrapper = mount(TaskManagementView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    expect(wrapper.vm.loadError).toBe('任务列表加载失败，请稍后重试');
+    expect(wrapper.find('[role="alert"]').text()).toContain('任务列表加载失败');
+    expect(wrapper.find('.empty-stub').exists()).toBe(false);
+    wrapper.unmount();
+  });
 });

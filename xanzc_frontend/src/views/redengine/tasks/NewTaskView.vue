@@ -8,6 +8,8 @@
       <el-button @click="handleBack">返回任务管理</el-button>
     </div>
 
+    <div v-if="optionsError" class="load-error" role="alert">{{ optionsError }}</div>
+
     <el-card class="form-card" shadow="never">
       <el-form ref="formRef" :model="formData" label-width="116px" class="task-form" @submit.prevent>
         <div class="form-section-title">基本信息</div>
@@ -187,6 +189,7 @@ const router = useRouter();
 const formRef = ref(null);
 const submitting = ref(false);
 const loadingOptions = ref(false);
+const optionsError = ref('');
 const taskTypeOptions = ref([...BUSINESS_TYPES]);
 const fileTypeOptions = ref([...FILE_TYPE_OPTIONS]);
 const branchOptions = ref([]);
@@ -259,12 +262,16 @@ async function loadAllUsers() {
 
 async function loadOptions() {
   loadingOptions.value = true;
+  optionsError.value = '';
   const [organizations, users] = await Promise.allSettled([
     getOrgTree(),
     loadAllUsers()
   ]);
   branchOptions.value = organizations.status === 'fulfilled' ? flattenOrganizations(organizations.value) : [];
   employeeOptions.value = users.status === 'fulfilled' ? mapUsers(users.value) : [];
+  if (organizations.status !== 'fulfilled' || users.status !== 'fulfilled') {
+    optionsError.value = '任务对象选项加载失败，请稍后重试';
+  }
   loadingOptions.value = false;
 }
 
@@ -331,6 +338,7 @@ defineExpose({
   branchOptions,
   employeeOptions,
   loadingOptions,
+  optionsError,
   handleSubmit,
   handleBack,
   buildPayload
@@ -356,6 +364,16 @@ defineExpose({
 }
 
 .page-desc { margin: 0; color: #64748b; font-size: 13px; }
+
+.load-error {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #991b1b;
+  background: #fef2f2;
+  font-size: 13px;
+}
 
 .form-card {
   border: 1px solid #e2e8f0;

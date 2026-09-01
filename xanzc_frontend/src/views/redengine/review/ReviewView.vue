@@ -7,6 +7,10 @@
       </div>
     </div>
 
+    <div v-if="loadError" class="load-error" role="alert">{{ loadError }}</div>
+
+    <FileIntegrationNotice />
+
     <div class="review-layout">
       <!-- 左侧：审核队列 -->
       <div class="queue-panel" v-loading="loading">
@@ -35,7 +39,12 @@
             v-for="item in filteredItems"
             :key="itemKey(item)"
             :class="['queue-item', { active: selectedItem?.id === item.id }]"
+            role="button"
+            tabindex="0"
+            :aria-pressed="selectedItem?.id === item.id"
             @click="selectItem(item)"
+            @keydown.enter.prevent.self="selectItem(item)"
+            @keydown.space.prevent.self="selectItem(item)"
           >
             <div class="item-branch">{{ item.branch }}</div>
             <div class="item-name">{{ item.item }}</div>
@@ -44,7 +53,18 @@
               {{ statusLabel(item.status) }}
             </span>
           </div>
-          <div v-if="filteredItems.length === 0" class="queue-empty">暂无{{ activeTabLabel }}任务</div>
+          <div v-if="filteredItems.length === 0 && !loadError" class="queue-empty">暂无{{ activeTabLabel }}任务</div>
+        </div>
+        <div class="queue-pager">
+          <el-pagination
+            v-model:current-page="pageNo"
+            v-model:page-size="pageSize"
+            :total="total"
+            :page-sizes="[20, 50, 100]"
+            layout="total, sizes, prev, pager, next"
+            @current-change="handlePageChange"
+            @size-change="handleSizeChange"
+          />
         </div>
       </div>
 
@@ -214,7 +234,6 @@ import {
   approveSubmit,
   downloadTaskAttachment,
   getOrgTaskReview,
-  getReviewQueue,
   getReviewPreview,
   listOrgTaskReviews,
   rejectOrgTask,
@@ -222,12 +241,13 @@ import {
 } from '@/api/redengine'
 import {
   CYCLE_OPTIONS,
-  buildTaskQuery,
+  buildWorkflowQuery,
   isFourDimensionTask,
   isPeriodicNature,
   linkifyDescription,
   normalizeAssignmentPage
 } from '../tasks/task-domain'
+import FileIntegrationNotice from '../components/FileIntegrationNotice.vue'
 
 // 评分标准文案：与 report/JointView.vue 的 rule-box 文案保持一致（产品既定标准，非编造数据）
 const RULE_TEXT = {
@@ -262,9 +282,13 @@ const TASK_STATUS_MAP = {
 }
 
 const loading = ref(false)
+const loadError = ref('')
 const previewLoading = ref(false)
 const acting = ref(false)
 const reviewItems = ref([])
+const pageNo = ref(1)
+const pageSize = ref(50)
+const total = ref(0)
 
 const activeTab = ref('pending')
 const query = reactive({ title: '', nature: '', cycle: '' })
@@ -280,7 +304,8 @@ const pendingItems = computed(() => reviewItems.value.filter((i) => i.status ===
 const reviewingItems = computed(() => reviewItems.value.filter((i) => i.status === 'reviewing'))
 const passedItems = computed(() => reviewItems.value.filter((i) => i.status === 'passed'))
 const rejectedItems = computed(() => reviewItems.value.filter((i) => i.status === 'rejected'))
-const filteredItems = computed(() => reviewItems.value.filter((i) => i.status === activeTab.value))
+// 组织队列已经由服务端按页签和状态分页；不在客户端再次过滤，避免丢行或污染 total。
+const filteredItems = computed(() => reviewItems.value)
 const activeTabLabel = computed(() => tabs.find((tab) => tab.value === activeTab.value)?.label || '')
 
 function parseFormData(raw) {
@@ -309,8 +334,11 @@ function toQueueItem(row) {
     ...row,
     id: row.id,
     source: 'material',
+    legacyReviewId: row.legacyReviewId ?? row.submitId ?? row.reviewId,
     taskId: row.taskId,
     assignmentId: row.assignmentId,
+    periodKey: row.periodKey,
+    detailItemCode: row.detailItemCode ?? row.itemCode,
     branch: row.orgName || (row.orgId != null ? `组织#${row.orgId}` : '—'),
     dim: DIM_LABEL[row.dimension] || row.dimension || '-',
     item: row.itemName ? `${row.itemCode ? row.itemCode + ' ' : ''}${row.itemName}` : (row.itemCode || '-'),
@@ -335,11 +363,18 @@ function toQueueItem(row) {
   }
 }
 
+function isLegacyMaterialRow(row = {}) {
+  return row.source === 'material'
+    || (!row.taskId && !row.taskTitle && !row.businessType && !row.taskNature && !row.nature
+      && (row.dimension || row.itemCode))
+}
+
 function mapTaskStatus(status) {
   return TASK_STATUS_MAP[String(status || '').toUpperCase()] || 'reviewing'
 }
 
 function normalizeTaskRow(row = {}) {
+  if (isLegacyMaterialRow(row)) return toQueueItem(row)
   const task = row.task || row.taskDefinition || {}
   const assignment = { ...task, ...row }
   const normalized = normalizeAssignmentPage([assignment]).records[0] || {}
@@ -384,7 +419,9 @@ function statusLabel(status) {
 }
 
 function legacyReviewId(item) {
-  return item?.reviewId ?? item?.submitId ?? item?.id
+  if (!item) return null
+  return item.legacyReviewId ?? item.submitId ?? item.reviewId
+    ?? (item.source === 'material' ? item.id : null)
 }
 
 function legacyStatus(value) {
@@ -395,61 +432,34 @@ function legacyStatus(value) {
 }
 
 function taskQuery() {
-  // `status` is the response DTO's assignment status.  Query binding uses the
-  // explicit assignmentStatus field, so tabs must never send an unknown
-  // `status` parameter to ReTaskWorkflowPageQueryDTO.
-  const assignmentStatus = activeTab.value === 'pending' ? 'ORG_PENDING'
-    : activeTab.value === 'passed' ? 'APPROVED' : undefined
-  const filters = { ...appliedQuery.value, assignmentStatus }
+  const filters = { ...appliedQuery.value }
   if (filters.nature === 'FOUR_DIMENSION') {
     filters.businessType = 'FOUR_DIMENSION'
     delete filters.nature
   }
-  return buildTaskQuery(filters, 1, 50)
+  return buildWorkflowQuery(filters, activeTab.value, pageNo.value, pageSize.value)
 }
 
 async function loadTaskRows() {
-  if (typeof listOrgTaskReviews !== 'function') return { rows: [], total: 0 }
+  if (typeof listOrgTaskReviews !== 'function') return { rows: [], total: 0, error: '任务审核队列不可用' }
   try {
     const result = await listOrgTaskReviews(taskQuery())
     const page = normalizeAssignmentPage(result)
-    const rows = page.records.map(normalizeTaskRow).filter((item) => {
-      if (item.status !== activeTab.value) return false
-      if (appliedQuery.value.nature === 'FOUR_DIMENSION' && !item.isFourDimension) return false
-      if (appliedQuery.value.nature === 'TEMPORARY' && !item.isTemporary) return false
-      if (appliedQuery.value.title && !`${item.item} ${item.branch}`.includes(appliedQuery.value.title)) return false
-      if (appliedQuery.value.cycle && item.cycle !== appliedQuery.value.cycle) return false
-      return true
-    })
-    return { rows, total: Number(result?.total ?? rows.length) }
+    const rows = page.records.map(normalizeTaskRow)
+    return { rows, total: page.total, error: '' }
   } catch {
-    return { rows: [], total: 0 }
-  }
-}
-
-async function loadMaterialRows() {
-  if (typeof getReviewQueue !== 'function') return { rows: [], total: 0 }
-  try {
-    const result = await getReviewQueue(1, 50)
-    const rawRows = result?.records || (Array.isArray(result) ? result : [])
-    const rows = rawRows.map(toQueueItem).filter((item) => {
-      if (item.status !== activeTab.value) return false
-      if (appliedQuery.value.title && !`${item.item} ${item.branch}`.includes(appliedQuery.value.title)) return false
-      if (appliedQuery.value.nature === 'TEMPORARY') return false
-      if (appliedQuery.value.cycle && item.cycle !== appliedQuery.value.cycle) return false
-      return true
-    })
-    return { rows, total: Number(result?.total ?? rows.length) }
-  } catch {
-    return { rows: [], total: 0 }
+    return { rows: [], total: 0, error: '任务审核队列加载失败' }
   }
 }
 
 async function reload() {
   loading.value = true
+  loadError.value = ''
   try {
-    const [taskResult, materialResult] = await Promise.all([loadTaskRows(), loadMaterialRows()])
-    reviewItems.value = [...taskResult.rows, ...materialResult.rows]
+    const result = await loadTaskRows()
+    reviewItems.value = result.rows
+    total.value = result.total
+    if (result.error) loadError.value = result.error
     if (selectedItem.value) {
       selectedItem.value = reviewItems.value.find((item) => item.id === selectedItem.value.id) || null
     }
@@ -460,16 +470,30 @@ async function reload() {
 
 async function handleSearch() {
   appliedQuery.value = { ...query }
+  pageNo.value = 1
   await reload()
 }
 
 async function handleReset() {
   Object.assign(query, { title: '', nature: '', cycle: '' })
   appliedQuery.value = {}
+  pageNo.value = 1
   await reload()
 }
 
 async function handleTabChange() {
+  pageNo.value = 1
+  await reload()
+}
+
+async function handlePageChange(nextPage) {
+  pageNo.value = nextPage
+  await reload()
+}
+
+async function handleSizeChange(nextSize) {
+  pageSize.value = nextSize
+  pageNo.value = 1
   await reload()
 }
 
@@ -489,8 +513,9 @@ const selectItem = async (item) => {
   reviewComment.value = item.reviewNote || ''
   previewLoading.value = true
   try {
-    if (item.source === 'task' && item.isFourDimension && typeof getReviewPreview === 'function') {
-      const detail = await getReviewPreview(legacyReviewId(item))
+    const reviewId = legacyReviewId(item)
+    if (item.source === 'task' && item.isFourDimension && reviewId && typeof getReviewPreview === 'function') {
+      const detail = await getReviewPreview(reviewId)
       if (detail) {
         Object.assign(item, {
           formData: parseFormData(detail.formData),
@@ -562,7 +587,9 @@ const handleApprove = async () => {
       selectedItem.value = { ...item }
       ElMessage.success(`✅ 已通过${item.isTemporary ? '临时任务' : '任务'}`)
     } else {
-      await approveSubmit(legacyReviewId(item), { score: finalScore.value, feedback: reviewComment.value || undefined })
+      const reviewId = legacyReviewId(item)
+      if (!reviewId) throw new Error('缺少旧材料审核标识，无法审核')
+      await approveSubmit(reviewId, { score: finalScore.value, feedback: reviewComment.value || undefined })
       item.status = 'passed'
       item.finalScore = finalScore.value
       selectedItem.value = { ...item }
@@ -593,7 +620,9 @@ const handleConfirmReject = async () => {
       if (typeof rejectOrgTask !== 'function') return
       await rejectOrgTask(item.assignmentId, { feedback: rejectReason.value.trim() })
     } else {
-      await rejectSubmit(legacyReviewId(item), { feedback: rejectReason.value.trim() })
+      const reviewId = legacyReviewId(item)
+      if (!reviewId) throw new Error('缺少旧材料审核标识，无法驳回')
+      await rejectSubmit(reviewId, { feedback: rejectReason.value.trim() })
     }
     item.status = 'rejected'
     item.rejectReason = rejectReason.value.trim()
@@ -620,13 +649,16 @@ defineExpose({
   descriptionParts,
   downloadAttachment,
   filteredItems,
+  loadError,
   finalScore,
   getFileIcon,
   handleApprove,
   handleConfirmReject,
+  handlePageChange,
   handleRejectClick,
   handleReset,
   handleSearch,
+  handleSizeChange,
   handleTabChange,
   loadTaskRows,
   normalizeTaskRow,
@@ -641,7 +673,10 @@ defineExpose({
   selectedItem,
   showRejectModal,
   statusLabel,
-  passedItems
+  passedItems,
+  pageNo,
+  pageSize,
+  total
 })
 </script>
 
@@ -667,6 +702,16 @@ defineExpose({
 .page-desc {
   margin: 0;
   color: #64748b;
+  font-size: 13px;
+}
+
+.load-error {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #991b1b;
+  background: #fef2f2;
   font-size: 13px;
 }
 
@@ -742,6 +787,14 @@ defineExpose({
   padding: 8px;
 }
 
+.queue-pager {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 10px;
+  border-top: 1px solid #e2e8f0;
+  overflow-x: auto;
+}
+
 .queue-empty {
   padding: 40px 12px;
   color: #94a3b8;
@@ -757,6 +810,8 @@ defineExpose({
   cursor: pointer;
   background: #f8fafc;
   transition: all 0.2s;
+
+  &:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
 
   &:hover { background: #f1f5f9; }
 

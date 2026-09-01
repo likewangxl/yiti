@@ -14,6 +14,10 @@
       </div>
     </div>
 
+    <div v-if="loadError" class="load-error" role="alert">{{ loadError }}</div>
+
+    <FileIntegrationNotice />
+
     <el-card v-if="task" class="config-card" shadow="never">
       <template #header>
         <div class="card-header-title">任务配置</div>
@@ -94,7 +98,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-else description="暂无支部填报数据" />
+      <el-empty v-else-if="!loadError" description="暂无支部填报数据" />
 
       <div class="pager">
         <el-pagination
@@ -119,7 +123,11 @@
           </span>
         </div>
         <div class="export-state-actions">
-          <el-button v-if="exportState.status === 'SUCCEEDED'" type="primary" @click="downloadExport">
+          <el-button
+            v-if="exportState.status === 'SUCCEEDED' && exportState.downloadable"
+            type="primary"
+            @click="downloadExport"
+          >
             下载 ZIP
           </el-button>
           <el-button v-if="exportState.status === 'FAILED'" type="primary" plain @click="handleExport">
@@ -169,6 +177,7 @@ import {
   normalizeAssignmentPage,
   normalizeTask
 } from './task-domain';
+import FileIntegrationNotice from '../components/FileIntegrationNotice.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -176,6 +185,7 @@ const task = ref(null);
 const assignments = ref([]);
 const materialDetailOptions = ref([]);
 const loading = ref(false);
+const loadError = ref('');
 const pageNo = ref(1);
 const pageSize = ref(10);
 const total = ref(0);
@@ -186,12 +196,14 @@ const selectedDetailCodes = ref([]);
 const exportState = reactive({
   exportId: '',
   status: 'IDLE',
+  downloadable: false,
   totalRows: 0,
   sheetCount: 0,
   sheetRowLimit: 5000,
   errorMessage: ''
 });
 let exportTimer = null;
+let exportUnmounted = false;
 
 function routeTaskId() {
   const value = route.params.taskId;
@@ -227,6 +239,7 @@ const exportStatusLabel = computed(() => ({
 
 async function loadTask() {
   loading.value = true;
+  loadError.value = '';
   const taskId = routeTaskId();
   try {
     const [detailResult, assignmentResult, detailItemsResult] = await Promise.allSettled([
@@ -237,6 +250,10 @@ async function loadTask() {
     if (detailResult.status !== 'fulfilled') throw detailResult.reason;
     const detail = detailResult.value?.task || detailResult.value;
     task.value = normalizeTask(detail || {});
+    const loadErrors = [];
+    if (assignmentResult.status !== 'fulfilled') loadErrors.push('支部填报数据加载失败');
+    if (detailItemsResult.status !== 'fulfilled') loadErrors.push('导出明细项加载失败');
+    if (loadErrors.length) loadError.value = `${loadErrors.join('；')}，请稍后重试`;
     const assignmentPage = assignmentResult.status === 'fulfilled'
       ? normalizeAssignmentPage(assignmentResult.value)
       : { records: [], total: 0 };
@@ -252,6 +269,7 @@ async function loadTask() {
     task.value = null;
     assignments.value = [];
     total.value = 0;
+    loadError.value = '任务详情加载失败，请稍后重试';
   } finally {
     loading.value = false;
   }
@@ -318,8 +336,10 @@ function clearExportTimer() {
 
 async function pollExportStatus(exportId) {
   clearExportTimer();
+  if (exportUnmounted) return;
   try {
     const status = await getTaskExportStatus(exportId);
+    if (exportUnmounted) return;
     const rawStatus = status?.status || 'RUNNING';
     exportState.status = {
       PENDING: 'QUEUED',
@@ -328,11 +348,19 @@ async function pollExportStatus(exportId) {
     exportState.totalRows = Number(status?.totalRows ?? 0);
     exportState.sheetCount = Number(status?.sheetCount ?? 0);
     exportState.sheetRowLimit = Number(status?.sheetRowLimit ?? 5000);
+    // 旧后端响应没有 downloadable 字段时，以已完成状态兼容；新契约明确返回
+    // false（例如文件已过期）时禁止展示/触发下载，避免页面误报成功。
+    exportState.downloadable = status?.downloadable === undefined
+      ? exportState.status === 'SUCCEEDED'
+      : status.downloadable === true;
     exportState.errorMessage = status?.errorMessage || '';
     if (exportState.status === 'QUEUED' || exportState.status === 'RUNNING') {
-      exportTimer = setTimeout(() => pollExportStatus(exportId), 1000);
+      if (!exportUnmounted) {
+        exportTimer = setTimeout(() => pollExportStatus(exportId), 1000);
+      }
     }
   } catch (error) {
+    if (exportUnmounted) return;
     exportState.status = 'FAILED';
     exportState.errorMessage = error?.message || '导出状态查询失败';
   }
@@ -349,6 +377,7 @@ async function handleExport() {
   exportDialogVisible.value = false;
   clearExportTimer();
   exportState.status = 'SUBMITTING';
+  exportState.downloadable = false;
   exportState.errorMessage = '';
   exportState.totalRows = 0;
   exportState.sheetCount = 0;
@@ -376,7 +405,7 @@ function saveBlob(blob, filename) {
 }
 
 async function downloadExport() {
-  if (!exportState.exportId) return;
+  if (!exportState.exportId || !exportState.downloadable) return;
   try {
     const blob = await fetchTaskExport(exportState.exportId);
     saveBlob(blob, `${task.value?.title || '任务导出'}.zip`);
@@ -395,13 +424,20 @@ async function downloadAttachment(row, file) {
   }
 }
 
-onMounted(loadTask);
-onBeforeUnmount(clearExportTimer);
+onMounted(() => {
+  exportUnmounted = false;
+  loadTask();
+});
+onBeforeUnmount(() => {
+  exportUnmounted = true;
+  clearExportTimer();
+});
 
 defineExpose({
   task,
   assignments,
   assignmentQuery,
+  loadError,
   exportState,
   selectedDetailCodes,
   materialDetailOptions,
@@ -434,6 +470,16 @@ defineExpose({
 }
 
 .page-desc { margin: 0; color: #64748b; font-size: 13px; }
+
+.load-error {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #991b1b;
+  background: #fef2f2;
+  font-size: 13px;
+}
 
 .header-actions { display: flex; gap: 10px; }
 

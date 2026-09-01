@@ -313,6 +313,22 @@ export function buildTaskQuery(query = {}, pageNo = 1, pageSize = 10) {
   return params;
 }
 
+// 工作台列表由服务端按页签和状态分页返回。页面只能传递当前页签的查询上下文，
+// 不能先把多个状态请求合并后再在浏览器过滤，否则分页总数和跨页结果都会失真。
+export const WORKFLOW_TABS = Object.freeze({
+  pending: 'PENDING',
+  reviewing: 'REVIEWING',
+  passed: 'PASSED',
+  rejected: 'REJECTED'
+});
+
+export function buildWorkflowQuery(query = {}, tab = 'pending', pageNo = 1, pageSize = 10) {
+  const tabValue = WORKFLOW_TABS[tab] || String(tab || '').trim().toUpperCase();
+  // ReTaskWorkflowPageQueryDTO 没有单值 status 字段；后端根据 tab 在分页前
+  // 展开 assignment/submission 状态集合。不要把响应 DTO 的 status 反向拼进查询参数。
+  return buildTaskQuery({ ...query, tab: tabValue }, pageNo, pageSize);
+}
+
 function buildTaskTargets(draft = {}) {
   const audienceType = canonicalAudience(draft.audienceType ?? draft.targetType);
   if (audienceType === 'ALL_BRANCH') return [{ targetType: 'ALL_BRANCH' }];

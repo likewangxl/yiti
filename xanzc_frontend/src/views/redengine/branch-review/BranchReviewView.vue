@@ -3,12 +3,21 @@
     <h2 class="page-title">支部审核工作台</h2>
     <p class="page-desc">处理支部报送员提交的任务；审核通过后可单独提交至组织审核</p>
 
+    <FileIntegrationNotice />
+
+    <div v-if="loadError" class="load-error" role="alert">{{ loadError }}</div>
+
     <div class="stat-bar">
       <div
         v-for="tab in tabs"
         :key="tab.value"
         :class="['stat-item', `${tab.value}-stat`, { 'is-active': activeTab === tab.value }]"
+        role="button"
+        tabindex="0"
+        :aria-pressed="activeTab === tab.value"
         @click="changeTab(tab.value)"
+        @keydown.enter.prevent.self="changeTab(tab.value)"
+        @keydown.space.prevent.self="changeTab(tab.value)"
       >
         <span class="stat-num">{{ countByStatus(tab.value) }}</span>
         <span class="stat-label">{{ tab.label }}</span>
@@ -39,13 +48,18 @@
     </div>
 
     <div class="review-list" v-loading="loading">
-      <div v-if="filteredItems.length === 0" class="empty-state">暂无{{ activeTabLabel }}记录</div>
+      <div v-if="filteredItems.length === 0 && !loadError" class="empty-state">暂无{{ activeTabLabel }}记录</div>
 
       <div
         v-for="item in filteredItems"
         :key="itemKey(item)"
         :class="['review-card', { selected: selectedItem?.id === item.id }]"
+        role="button"
+        tabindex="0"
+        :aria-pressed="selectedItem?.id === item.id"
         @click="selectItem(item)"
+        @keydown.enter.prevent.self="selectItem(item)"
+        @keydown.space.prevent.self="selectItem(item)"
       >
         <div class="card-header">
           <div class="card-left">
@@ -181,7 +195,6 @@ import {
   approveSubmit,
   downloadTaskAttachment,
   getBranchTaskReview,
-  getReviewQueue,
   getReviewPreview,
   listBranchTaskReviews,
   rejectBranchTask,
@@ -190,12 +203,13 @@ import {
 } from '@/api/redengine'
 import {
   CYCLE_OPTIONS,
-  buildTaskQuery,
+  buildWorkflowQuery,
   isFourDimensionTask,
   isPeriodicNature,
   linkifyDescription,
   normalizeAssignmentPage
 } from '../tasks/task-domain'
+import FileIntegrationNotice from '../components/FileIntegrationNotice.vue'
 
 const tabs = [
   { value: 'pending', label: '待处理' },
@@ -213,6 +227,7 @@ const pageNo = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 const items = ref([])
+const loadError = ref('')
 const selectedItem = ref(null)
 const showRejectModal = ref(false)
 const rejectReason = ref('')
@@ -234,7 +249,9 @@ const pendingItems = computed(() => items.value.filter((item) => item.status ===
 const reviewingItems = computed(() => items.value.filter((item) => item.status === 'reviewing'))
 const passedItems = computed(() => items.value.filter((item) => item.status === 'passed'))
 const rejectedItems = computed(() => items.value.filter((item) => item.status === 'rejected'))
-const filteredItems = computed(() => items.value.filter((item) => item.status === activeTab.value))
+// 队列接口已按页签在服务端完成过滤；这里不能再次按状态过滤，否则后端返回的 total
+// 与页面展示行会失配，尤其是审核中包含多个工作流阶段时。
+const filteredItems = computed(() => items.value)
 const activeTabLabel = computed(() => tabs.find((tab) => tab.value === activeTab.value)?.label || '')
 
 function parseFormData(raw) {
@@ -263,7 +280,9 @@ function statusLabel(status) {
 }
 
 function legacyReviewId(item) {
-  return item?.reviewId ?? item?.submitId ?? item?.id
+  if (!item) return null
+  return item.legacyReviewId ?? item.submitId ?? item.reviewId
+    ?? (item.source === 'material' ? item.id : null)
 }
 
 function mapTaskStatus(status) {
@@ -278,8 +297,11 @@ function normalizeMaterialRow(row = {}) {
     ...row,
     id: row.id,
     source: 'material',
+    legacyReviewId: row.legacyReviewId ?? row.submitId ?? row.reviewId,
     assignmentId: row.assignmentId,
     taskId: row.taskId,
+    periodKey: row.periodKey,
+    detailItemCode: row.detailItemCode ?? row.itemCode,
     branch: row.orgName || (row.orgId != null ? `组织#${row.orgId}` : '—'),
     dim: DIM_LABEL[row.dimension] || row.dimension || '—',
     itemName: row.itemName ? `${row.itemCode ? `${row.itemCode} ` : ''}${row.itemName}` : (row.itemCode || '—'),
@@ -301,7 +323,14 @@ function normalizeMaterialRow(row = {}) {
   }
 }
 
+function isLegacyMaterialRow(row = {}) {
+  return row.source === 'material'
+    || (!row.taskId && !row.taskTitle && !row.businessType && !row.taskNature && !row.nature
+      && (row.dimension || row.itemCode))
+}
+
 function normalizeTaskRow(row = {}) {
+  if (isLegacyMaterialRow(row)) return normalizeMaterialRow(row)
   const task = row.task || row.taskDefinition || {}
   const assignment = { ...task, ...row }
   const normalized = normalizeAssignmentPage([assignment]).records[0] || {}
@@ -342,46 +371,29 @@ function normalizeTaskRow(row = {}) {
 }
 
 function taskQuery() {
-  // ReTaskWorkflowPageQueryDTO exposes assignmentStatus/submissionStatus; `status`
-  // is only the response field and must not be sent as a query parameter.  The
-  // assignment status keeps BRANCH_PENDING and BRANCH_APPROVED together, which
-  // is what the branch secretary's 待处理 tab needs after clicking 通过.
-  const assignmentStatus = activeTab.value === 'pending' ? 'BRANCH_PENDING'
-    : activeTab.value === 'reviewing' ? 'ORG_PENDING'
-      : activeTab.value === 'passed' ? 'APPROVED' : undefined
-  return buildTaskQuery({ ...appliedQuery.value, assignmentStatus }, pageNo.value, pageSize.value)
+  return buildWorkflowQuery(appliedQuery.value, activeTab.value, pageNo.value, pageSize.value)
 }
 
 async function loadTaskRows() {
-  if (typeof listBranchTaskReviews !== 'function') return { rows: [], total: 0 }
+  if (typeof listBranchTaskReviews !== 'function') return { rows: [], total: 0, error: '任务审核队列不可用' }
   try {
     const result = await listBranchTaskReviews(taskQuery())
     const page = normalizeAssignmentPage(result)
-    const rows = page.records.map(normalizeTaskRow).filter((row) => row.status === activeTab.value)
-    return { rows, total: Number(result?.total ?? rows.length) }
+    const rows = page.records.map(normalizeTaskRow)
+    return { rows, total: page.total, error: '' }
   } catch {
-    return { rows: [], total: 0 }
-  }
-}
-
-async function loadMaterialRows() {
-  if (typeof getReviewQueue !== 'function') return { rows: [], total: 0 }
-  try {
-    const result = await getReviewQueue(pageNo.value, pageSize.value)
-    const rawRows = result?.records || (Array.isArray(result) ? result : [])
-    const rows = rawRows.map(normalizeMaterialRow).filter((row) => row.status === activeTab.value)
-    return { rows, total: Number(result?.total ?? rows.length) }
-  } catch {
-    return { rows: [], total: 0 }
+    return { rows: [], total: 0, error: '任务审核队列加载失败' }
   }
 }
 
 async function reload() {
   loading.value = true
+  loadError.value = ''
   try {
-    const [taskResult, materialResult] = await Promise.all([loadTaskRows(), loadMaterialRows()])
-    items.value = [...taskResult.rows, ...materialResult.rows]
-    total.value = taskResult.total + materialResult.total
+    const result = await loadTaskRows()
+    items.value = result.rows
+    total.value = result.total
+    if (result.error) loadError.value = result.error
     if (selectedItem.value) {
       selectedItem.value = items.value.find((item) => item.id === selectedItem.value.id) || null
     }
@@ -430,9 +442,10 @@ function itemKey(item) {
 
 async function selectItem(item) {
   selectedItem.value = item
-  if (item.source === 'task' && item.isFourDimension && typeof getReviewPreview === 'function') {
+  const reviewId = legacyReviewId(item)
+  if (item.source === 'task' && item.isFourDimension && reviewId && typeof getReviewPreview === 'function') {
     try {
-      const detail = await getReviewPreview(legacyReviewId(item))
+      const detail = await getReviewPreview(reviewId)
       if (detail) Object.assign(item, {
         formData: parseFormData(detail.formData),
         files: parseFiles(detail.fileUrls),
@@ -466,7 +479,9 @@ async function handleApprove(item = selectedItem.value) {
       item.branchApproved = true
       ElMessage.success(`✅ 已通过「${item.itemName}」，请提交至组织审核`)
     } else {
-      await approveSubmit(legacyReviewId(item), { feedback: item.reviewNote || undefined })
+      const reviewId = legacyReviewId(item)
+      if (!reviewId) throw new Error('缺少旧材料审核标识，无法审核')
+      await approveSubmit(reviewId, { feedback: item.reviewNote || undefined })
       item.status = 'passed'
       ElMessage.success(`✅ 已通过「${item.itemName}」`)
     }
@@ -512,7 +527,9 @@ async function handleConfirmReject() {
       if (typeof rejectBranchTask !== 'function') return
       await rejectBranchTask(item.assignmentId, { feedback: rejectReason.value.trim() })
     } else {
-      await rejectSubmit(legacyReviewId(item), { feedback: rejectReason.value.trim() })
+      const reviewId = legacyReviewId(item)
+      if (!reviewId) throw new Error('缺少旧材料审核标识，无法驳回')
+      await rejectSubmit(reviewId, { feedback: rejectReason.value.trim() })
     }
     item.status = 'rejected'
     item.branchApproved = false
@@ -585,6 +602,7 @@ defineExpose({
   handleSubmitToOrg,
   handleTabChange,
   items,
+  loadError,
   loadTaskRows,
   normalizeTaskRow,
   openReject,
@@ -606,6 +624,15 @@ defineExpose({
 
 .page-title { font-size: 22px; font-weight: 700; color: #1e293b; margin: 0 0 4px 0; }
 .page-desc { font-size: 13px; color: #64748b; margin: 0 0 20px 0; }
+.load-error {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #991b1b;
+  background: #fef2f2;
+  font-size: 13px;
+}
 
 /* Stats bar */
 .stat-bar {
@@ -638,6 +665,8 @@ defineExpose({
 .reviewing-stat { background: #dbeafe; .stat-num { color: #2563eb; } }
 .stat-item { cursor: pointer; }
 .stat-item.is-active { box-shadow: inset 0 0 0 1px currentColor; }
+.stat-item:focus-visible,
+.review-card:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
 
 /* Filter */
 .filter-bar {

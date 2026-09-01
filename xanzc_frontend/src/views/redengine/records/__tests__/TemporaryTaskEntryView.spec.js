@@ -101,4 +101,15 @@ describe('临时任务填报', () => {
     expect(ElMessage.warning).toHaveBeenCalledWith('请填写填报内容');
     wrapper.unmount();
   });
+
+  it('任务详情请求失败时展示错误态而不是误报任务不存在', async () => {
+    getMyTaskAssignment.mockRejectedValueOnce(new Error('服务不可用'));
+    const wrapper = mount(TemporaryTaskEntryView, { global: { stubs } });
+    await settle();
+
+    expect(wrapper.vm.loadError).toBe('任务加载失败，请稍后重试');
+    expect(wrapper.find('[role="alert"]').text()).toContain('任务加载失败');
+    expect(wrapper.find('.empty-stub').exists()).toBe(false);
+    wrapper.unmount();
+  });
 });
