@@ -170,9 +170,9 @@ import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import {
   createTask,
-  getOrgTree
+  getOrgTree,
+  listEligibleUsers
 } from '@/api/redengine';
-import { listUsers } from '@/api/users';
 import {
   AUDIENCE_TYPES,
   BUSINESS_TYPES,
@@ -230,12 +230,14 @@ function flattenOrganizations(nodes, parentLabel = '') {
   return result;
 }
 
-function mapUsers(value) {
+function mapEligibleUsers(value) {
   const records = Array.isArray(value) ? value : value?.records || value?.list || [];
   return records
     .map((user) => ({
-      value: user.userId ?? user.id,
-      label: `${user.username || user.userCode || user.userId || ''}${user.displayName || user.userchnname ? ` · ${user.displayName || user.userchnname}` : ''}`.trim()
+      value: user.employeeId,
+      label: [user.username || user.employeeId, user.displayName, user.branchName]
+        .filter((item) => item !== undefined && item !== null && String(item).trim())
+        .join(' · ')
     }))
     .filter((item) => item.value !== undefined && item.value !== null);
 }
@@ -251,7 +253,7 @@ async function loadAllUsers() {
   let total = Infinity;
 
   while (users.length < total) {
-    const result = await listUsers({ pageNo, pageSize });
+    const result = await listEligibleUsers({ pageNo, pageSize });
     const records = pageRecords(result);
     users.push(...records);
     total = Number(result?.total ?? result?.totalCount ?? users.length);
@@ -274,7 +276,7 @@ async function loadOrganizations() {
 async function loadEmployees() {
   if (employeeOptionsLoaded.value) return true;
   try {
-    employeeOptions.value = mapUsers(await loadAllUsers());
+    employeeOptions.value = mapEligibleUsers(await loadAllUsers());
     employeeOptionsLoaded.value = true;
     return true;
   } catch {

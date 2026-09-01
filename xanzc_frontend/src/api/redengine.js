@@ -76,6 +76,9 @@ export const createTask = (data) => call('post', '/re/tasks', { data });
 export const getTaskDetail = (taskId) => call('get', `/re/tasks/${taskId}`);
 export const listTaskAssignments = (taskId, params = {}) =>
   call('get', `/re/tasks/${taskId}/assignments`, { params });
+// 组织审核员新增任务时使用红色引擎受控员工候选接口，避免跨越全局用户管理资源的数据范围。
+export const listEligibleUsers = (params = {}) =>
+  call('get', '/re/tasks/eligible-users', { params });
 
 // 报送员任务处理：列表按当前用户可见的党支部 assignment 查询，详情与提交使用同一 assignment。
 // 查询字段由 ReTaskAssignmentPageQueryDTO/任务列表契约共同承载；提交请求使用

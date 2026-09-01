@@ -14,18 +14,15 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/api/redengine', () => ({
   createTask: vi.fn(),
-  getOrgTree: vi.fn()
-}));
-
-vi.mock('@/api/users', () => ({
-  listUsers: vi.fn()
+  getOrgTree: vi.fn(),
+  listEligibleUsers: vi.fn()
 }));
 
 import {
   createTask,
-  getOrgTree
+  getOrgTree,
+  listEligibleUsers
 } from '@/api/redengine';
-import { listUsers } from '@/api/users';
 import NewTaskView from '../NewTaskView.vue';
 
 const stubs = {
@@ -79,7 +76,7 @@ describe('新增任务', () => {
     vi.clearAllMocks();
     createTask.mockResolvedValue({ taskId: 100 });
     getOrgTree.mockResolvedValue([{ id: 11, orgName: '第一党支部', children: [] }]);
-    listUsers.mockResolvedValue({ records: [{ userId: 'U1', displayName: '张伟', partyOrgId: 11 }] });
+    listEligibleUsers.mockResolvedValue({ records: [{ employeeId: 'U1', username: 'zhangw', displayName: '张伟', branchId: 11, branchName: '第一党支部' }] });
   });
 
   it('加载后端组织和员工范围，并使用任务域固定枚举与文件编码选项', async () => {
@@ -89,7 +86,7 @@ describe('新增任务', () => {
     await settle();
 
     expect(getOrgTree).toHaveBeenCalledTimes(1);
-    expect(listUsers).not.toHaveBeenCalled();
+    expect(listEligibleUsers).not.toHaveBeenCalled();
     expect(wrapper.vm.taskTypeOptions.map((item) => item.value)).toEqual(['FOUR_DIMENSION', 'GENERAL']);
     expect(wrapper.vm.fileTypeOptions.map((item) => item.value)).toContain('PDF');
     expect(wrapper.find('.page-title').text()).toBe('新增任务');
@@ -97,9 +94,9 @@ describe('新增任务', () => {
   });
 
   it('员工范围超过单页上限时继续读取后续分页', async () => {
-    listUsers
-      .mockResolvedValueOnce({ records: [{ userId: 'U1', displayName: '张伟', partyOrgId: 11 }], total: 101 })
-      .mockResolvedValueOnce({ records: [{ userId: 'U2', displayName: '李娜', partyOrgId: 11 }], total: 101 })
+    listEligibleUsers
+      .mockResolvedValueOnce({ records: [{ employeeId: 'U1', username: 'zhangw', displayName: '张伟', branchId: 11, branchName: '第一党支部' }], total: 101 })
+      .mockResolvedValueOnce({ records: [{ employeeId: 'U2', username: 'lin', displayName: '李娜', branchId: 11, branchName: '第一党支部' }], total: 101 })
       .mockResolvedValueOnce({ records: [], total: 101 });
 
     const wrapper = mount(NewTaskView, {
@@ -110,10 +107,14 @@ describe('新增任务', () => {
     wrapper.vm.formData.audienceType = 'SPECIFIED_EMPLOYEE';
     await settle();
 
-    expect(listUsers).toHaveBeenNthCalledWith(1, { pageNo: 1, pageSize: 100 });
-    expect(listUsers).toHaveBeenNthCalledWith(2, { pageNo: 2, pageSize: 100 });
-    expect(listUsers).toHaveBeenNthCalledWith(3, { pageNo: 3, pageSize: 100 });
+    expect(listEligibleUsers).toHaveBeenNthCalledWith(1, { pageNo: 1, pageSize: 100 });
+    expect(listEligibleUsers).toHaveBeenNthCalledWith(2, { pageNo: 2, pageSize: 100 });
+    expect(listEligibleUsers).toHaveBeenNthCalledWith(3, { pageNo: 3, pageSize: 100 });
     expect(wrapper.vm.employeeOptions.map((item) => item.value)).toEqual(['U1', 'U2']);
+    expect(wrapper.vm.employeeOptions.map((item) => item.label)).toEqual([
+      'zhangw · 张伟 · 第一党支部',
+      'lin · 李娜 · 第一党支部'
+    ]);
     wrapper.unmount();
   });
 
@@ -208,7 +209,7 @@ describe('新增任务', () => {
 
   it('组织或员工选项加载失败时展示错误态', async () => {
     getOrgTree.mockRejectedValueOnce(new Error('服务不可用'));
-    listUsers.mockRejectedValueOnce(new Error('服务不可用'));
+    listEligibleUsers.mockRejectedValueOnce(new Error('服务不可用'));
     const wrapper = mount(NewTaskView, {
       global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
     });

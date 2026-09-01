@@ -14,6 +14,7 @@ import {
   getTaskDetail,
   getTaskExportStatus,
   getMyTaskAssignment,
+  listEligibleUsers,
   listMyTaskAssignments,
   listMaterialDetailItems,
   listTaskAssignments,
@@ -94,6 +95,19 @@ describe('红色引擎任务 API', () => {
     await listMyTaskAssignments(params);
 
     expect(call).toHaveBeenCalledWith('get', '/re/tasks/my-assignments', { params });
+  });
+
+  it('指定员工候选使用红色引擎受控分页接口', async () => {
+    const params = {
+      pageNo: 1,
+      pageSize: 100,
+      keyword: '张',
+      branchId: 11
+    };
+
+    await listEligibleUsers(params);
+
+    expect(call).toHaveBeenCalledWith('get', '/re/tasks/eligible-users', { params });
   });
 
   it('不再暴露已经下线的归档与旧导出接口', () => {
