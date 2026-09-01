@@ -77,6 +77,31 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const BEIJING_TIME_ZONE = 'Asia/Shanghai';
 const DATE_PART_PATTERN = /^(\d{4})-(\d{2})-(\d{2})/;
 const EXPLICIT_TIME_ZONE_PATTERN = /(?:Z|[+-]\d{2}:?\d{2})$/i;
+const LOCAL_DATE_TIME_PATTERN = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2})(?::(\d{2}))?(?::(\d{2}))?(?:\.\d+)?)?$/;
+
+/**
+ * 将页面日期控件的本地日期时间转换为后端 LocalDateTime 可解析的 ISO 形式。
+ *
+ * 页面为了便于用户阅读继续展示空格分隔的 `YYYY-MM-DD HH:mm:ss`，但 Java
+ * LocalDateTime 的默认 Jackson 反序列化要求 `T` 分隔。这里刻意不输出时区、
+ * 毫秒或浏览器时区换算，保证用户选择的北京时间日历值原样提交。
+ */
+export function normalizeLocalDateTime(value) {
+  if (value === undefined || value === null || String(value).trim() === '') return null;
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) throw new Error('日期时间格式不正确');
+    const pad = (part) => String(part).padStart(2, '0');
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+      + `T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
+  }
+
+  const raw = String(value).trim();
+  const match = raw.match(LOCAL_DATE_TIME_PATTERN);
+  if (!match) throw new Error('日期时间格式不正确');
+  const [, date, hour = '00', minute = '00', second = '00'] = match;
+  return `${date}T${hour}:${minute}:${second}`;
+}
 
 function calendarDate(year, monthIndex, day) {
   // 用 UTC 保存“日历日期”，避免浏览器所在时区或夏令时影响自然日加减。
@@ -362,8 +387,8 @@ export function buildTaskCreatePayload(draft = {}) {
     durationDays: periodic && draft.durationDays !== undefined && draft.durationDays !== null
       ? Number(draft.durationDays)
       : null,
-    temporaryStartTime: periodic ? null : (draft.startAt ?? draft.temporaryStartTime ?? null),
-    temporaryEndTime: periodic ? null : (draft.endAt ?? draft.temporaryEndTime ?? null),
+    temporaryStartTime: periodic ? null : normalizeLocalDateTime(draft.startAt ?? draft.temporaryStartTime),
+    temporaryEndTime: periodic ? null : normalizeLocalDateTime(draft.endAt ?? draft.temporaryEndTime),
     requiresFile: Boolean(draft.requiresFile),
     fileTypeCodes: draft.requiresFile ? [...fileTypes] : [],
     targets: buildTaskTargets(draft),

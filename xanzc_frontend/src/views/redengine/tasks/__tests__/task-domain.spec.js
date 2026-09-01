@@ -16,6 +16,7 @@ import {
   getExportSheetCount,
   getTaskRoute,
   linkifyDescription,
+  normalizeLocalDateTime,
   normalizeAssignment,
   normalizePageResult,
   validateTaskDraft
@@ -171,8 +172,8 @@ describe('红色引擎任务域模型', () => {
       businessType: 'GENERAL',
       cycleType: null,
       durationDays: null,
-      temporaryStartTime: '2026-08-20 09:00:00',
-      temporaryEndTime: '2026-08-31 18:00:00',
+      temporaryStartTime: '2026-08-20T09:00:00',
+      temporaryEndTime: '2026-08-31T18:00:00',
       requiresFile: true,
       fileTypeCodes: ['PDF'],
       targets: [
@@ -181,6 +182,13 @@ describe('红色引擎任务域模型', () => {
       ],
       itemCodes: []
     });
+  });
+
+  it('将页面本地日期时间格式化为后端要求的无时区 ISO 秒精度', () => {
+    expect(normalizeLocalDateTime('2026-09-01 12:00:00')).toBe('2026-09-01T12:00:00');
+    expect(normalizeLocalDateTime('2026-09-01T12:00')).toBe('2026-09-01T12:00:00');
+    expect(normalizeLocalDateTime('2026-09-01T12:00:00.123')).toBe('2026-09-01T12:00:00');
+    expect(normalizeLocalDateTime('')).toBeNull();
   });
 
   it('导出单 Excel 按 5000 行拆分 Sheet，不拆成多个下载包', () => {

@@ -165,7 +165,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import {
@@ -194,6 +194,7 @@ const taskTypeOptions = ref([...BUSINESS_TYPES]);
 const fileTypeOptions = ref([...FILE_TYPE_OPTIONS]);
 const branchOptions = ref([]);
 const employeeOptions = ref([]);
+const employeeOptionsLoaded = ref(false);
 const validationErrors = reactive({});
 const audienceOptions = AUDIENCE_TYPES;
 const cycleOptions = CYCLE_OPTIONS;
@@ -260,20 +261,45 @@ async function loadAllUsers() {
   return users;
 }
 
+async function loadOrganizations() {
+  try {
+    branchOptions.value = flattenOrganizations(await getOrgTree());
+    return true;
+  } catch {
+    branchOptions.value = [];
+    return false;
+  }
+}
+
+async function loadEmployees() {
+  if (employeeOptionsLoaded.value) return true;
+  try {
+    employeeOptions.value = mapUsers(await loadAllUsers());
+    employeeOptionsLoaded.value = true;
+    return true;
+  } catch {
+    employeeOptions.value = [];
+    return false;
+  }
+}
+
 async function loadOptions() {
   loadingOptions.value = true;
   optionsError.value = '';
-  const [organizations, users] = await Promise.allSettled([
-    getOrgTree(),
-    loadAllUsers()
-  ]);
-  branchOptions.value = organizations.status === 'fulfilled' ? flattenOrganizations(organizations.value) : [];
-  employeeOptions.value = users.status === 'fulfilled' ? mapUsers(users.value) : [];
-  if (organizations.status !== 'fulfilled' || users.status !== 'fulfilled') {
+  const organizationLoaded = await loadOrganizations();
+  if (!organizationLoaded) {
     optionsError.value = '任务对象选项加载失败，请稍后重试';
   }
   loadingOptions.value = false;
 }
+
+watch(() => formData.audienceType, async (audienceType) => {
+  if (audienceType !== 'SPECIFIED_EMPLOYEE' || employeeOptionsLoaded.value) return;
+  loadingOptions.value = true;
+  const employeeLoaded = await loadEmployees();
+  if (!employeeLoaded) optionsError.value = '任务对象选项加载失败，请稍后重试';
+  loadingOptions.value = false;
+});
 
 const windowPreview = computed(() => {
   if (!isPeriodicNature(formData.nature) || !formData.cycle || !formData.durationDays) return null;

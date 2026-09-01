@@ -89,7 +89,7 @@ describe('新增任务', () => {
     await settle();
 
     expect(getOrgTree).toHaveBeenCalledTimes(1);
-    expect(listUsers).toHaveBeenCalledTimes(1);
+    expect(listUsers).not.toHaveBeenCalled();
     expect(wrapper.vm.taskTypeOptions.map((item) => item.value)).toEqual(['FOUR_DIMENSION', 'GENERAL']);
     expect(wrapper.vm.fileTypeOptions.map((item) => item.value)).toContain('PDF');
     expect(wrapper.find('.page-title').text()).toBe('新增任务');
@@ -105,6 +105,9 @@ describe('新增任务', () => {
     const wrapper = mount(NewTaskView, {
       global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
     });
+    await settle();
+
+    wrapper.vm.formData.audienceType = 'SPECIFIED_EMPLOYEE';
     await settle();
 
     expect(listUsers).toHaveBeenNthCalledWith(1, { pageNo: 1, pageSize: 100 });
@@ -142,13 +145,40 @@ describe('新增任务', () => {
       businessType: 'GENERAL',
       cycleType: null,
       durationDays: null,
-      temporaryStartTime: '2026-08-20 09:00:00',
-      temporaryEndTime: '2026-08-31 18:00:00',
+      temporaryStartTime: '2026-08-20T09:00:00',
+      temporaryEndTime: '2026-08-31T18:00:00',
       targets: [{ targetType: 'SPECIFIED_BRANCH', partyOrgId: 11 }],
       requiresFile: true,
       fileTypeCodes: ['PDF']
     }));
     expect(routerPush).toHaveBeenCalledWith('/redengine/task-management');
+    wrapper.unmount();
+  });
+
+  it('日期控件继续显示空格分隔格式，但提交 payload 使用无时区 ISO 秒精度', async () => {
+    const wrapper = mount(NewTaskView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    Object.assign(wrapper.vm.formData, {
+      nature: 'TEMPORARY',
+      businessType: 'GENERAL',
+      title: '临时任务',
+      description: '任务说明',
+      audienceType: 'ALL_BRANCH',
+      startAt: '2026-09-01 12:00:00',
+      endAt: '2026-09-02 18:30:00'
+    });
+    await nextTick();
+
+    const datePickers = wrapper.findAll('.date-picker-stub');
+    expect(datePickers[0].element.value).toBe('2026-09-01 12:00:00');
+    expect(datePickers[1].element.value).toBe('2026-09-02 18:30:00');
+    expect(wrapper.vm.buildPayload()).toMatchObject({
+      temporaryStartTime: '2026-09-01T12:00:00',
+      temporaryEndTime: '2026-09-02T18:30:00'
+    });
     wrapper.unmount();
   });
 
@@ -182,6 +212,9 @@ describe('新增任务', () => {
     const wrapper = mount(NewTaskView, {
       global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
     });
+    await settle();
+
+    wrapper.vm.formData.audienceType = 'SPECIFIED_EMPLOYEE';
     await settle();
 
     expect(wrapper.vm.optionsError).toBe('任务对象选项加载失败，请稍后重试');
