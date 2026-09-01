@@ -56,6 +56,21 @@ function ruleBody(selector) {
 }
 
 describe('红色引擎布局横向溢出契约', () => {
+  it('侧栏宽度和左对齐基线复用主系统布局 token', () => {
+    expect(source).toMatch(/<el-aside[^>]*width="var\(--layout-sidebar-width\)"/);
+    expect(source).not.toMatch(/275px/);
+
+    const logoRule = ruleBody('.re-sidebar-logo');
+    expect(logoRule).toMatch(/justify-content:\s*flex-start/);
+    expect(logoRule).toMatch(/padding:\s*0 var\(--space-2\) 0 var\(--space-4\)/);
+    expect(logoRule).toMatch(/height:\s*var\(--layout-header-height\)/);
+
+    const menuItemRule = ruleBody('.el-menu-item');
+    expect(menuItemRule).toMatch(/justify-content:\s*flex-start/);
+    expect(menuItemRule).toMatch(/text-align:\s*left/);
+    expect(menuItemRule).toMatch(/padding:\s*var\(--space-2\) var\(--space-4\) !important/);
+  });
+
   it.each([
     ['1440px 桌面视口', 1440],
     ['窄视口', 640]

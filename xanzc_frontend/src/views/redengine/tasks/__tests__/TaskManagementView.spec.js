@@ -2,6 +2,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), warning: vi.fn(), error: vi.fn() }
@@ -17,6 +19,8 @@ vi.mock('@/api/redengine', () => ({
 
 import { listTasks } from '@/api/redengine';
 import TaskManagementView from '../TaskManagementView.vue';
+
+const source = readFileSync(resolve(process.cwd(), 'src/views/redengine/tasks/TaskManagementView.vue'), 'utf8');
 
 const stubs = {
   'el-icon': { template: '<span><slot /></span>' },
@@ -71,6 +75,17 @@ describe('任务管理列表', () => {
       }],
       total: 21
     });
+  });
+
+  it('查询条件采用响应式网格并让查询操作始终完整可见', () => {
+    expect(source).toMatch(/class="filter-form"/);
+    expect(source).toMatch(/class="filter-control"/);
+    expect(source).toMatch(/class="filter-actions"/);
+    expect(source).toMatch(/\.filter-form\s*\{[^}]*display:\s*grid/);
+    expect(source).toMatch(/grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(/);
+    expect(source).toMatch(/\.filter-control\s*\{[^}]*width:\s*100%\s*!important/);
+    expect(source).toMatch(/\.filter-actions\s*\{[^}]*display:\s*flex/);
+    expect(source).not.toMatch(/min-width:\s*(?:\d{4,}|\d{3,}px)/);
   });
 
   it('首次加载分页列表并展示任务管理标题、任务摘要字段', async () => {

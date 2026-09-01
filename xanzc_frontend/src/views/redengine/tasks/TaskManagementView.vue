@@ -14,9 +14,10 @@
     <div v-if="loadError" class="load-error" role="alert">{{ loadError }}</div>
 
     <el-card class="filter-card" shadow="never">
-      <el-form :inline="true" class="filter-form" @submit.prevent>
+      <el-form class="filter-form" @submit.prevent>
         <el-form-item label="任务标题">
           <el-input
+            class="filter-control"
             v-model="query.title"
             clearable
             placeholder="请输入任务标题"
@@ -24,13 +25,13 @@
           />
         </el-form-item>
         <el-form-item label="任务性质">
-          <el-select v-model="query.nature" clearable placeholder="请选择" style="width: 132px">
+          <el-select class="filter-control" v-model="query.nature" clearable placeholder="请选择" style="width: 132px">
             <el-option label="定时任务" value="PERIODIC" />
             <el-option label="临时任务" value="TEMPORARY" />
           </el-select>
         </el-form-item>
         <el-form-item label="任务类型">
-          <el-select v-model="query.typeCode" clearable placeholder="请选择" style="width: 168px">
+          <el-select class="filter-control" v-model="query.typeCode" clearable placeholder="请选择" style="width: 168px">
             <el-option
               v-for="option in taskTypeOptions"
               :key="option.value"
@@ -40,12 +41,12 @@
           </el-select>
         </el-form-item>
         <el-form-item label="周期">
-          <el-select v-model="query.cycle" clearable placeholder="请选择" style="width: 132px">
+          <el-select class="filter-control" v-model="query.cycle" clearable placeholder="请选择" style="width: 132px">
             <el-option v-for="option in cycleOptions" :key="option.value" :label="option.label" :value="option.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="query.status" clearable placeholder="请选择" style="width: 132px">
+          <el-select class="filter-control" v-model="query.status" clearable placeholder="请选择" style="width: 132px">
             <el-option label="草稿" value="DRAFT" />
             <el-option label="已发布" value="PUBLISHED" />
             <el-option label="已取消" value="CANCELLED" />
@@ -285,7 +286,13 @@ defineExpose({
 }
 
 .filter-form {
-  margin-bottom: -18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  align-items: end;
+  column-gap: var(--space-4);
+  row-gap: var(--space-4);
+  min-width: 0;
+  margin: 0;
 }
 
 :deep(.el-card__body) {
@@ -294,20 +301,46 @@ defineExpose({
 
 :deep(.filter-card .el-card__body) {
   padding-bottom: 0;
+  min-width: 0;
 }
 
-:deep(.el-form-item) {
-  margin-right: 16px;
-  margin-bottom: 16px;
+:deep(.filter-form .el-form-item) {
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
 }
 
-:deep(.el-form-item__label) {
+:deep(.filter-form .el-form-item__label) {
+  flex: 0 0 auto;
+  padding-right: var(--space-2);
   color: #475569;
   font-size: 13px;
+  white-space: nowrap;
+}
+
+:deep(.filter-form .el-form-item__content) {
+  min-width: 0;
+  flex: 1;
+}
+
+.filter-control {
+  width: 100% !important;
+  min-width: 0;
 }
 
 .filter-actions {
+  display: flex;
+  align-items: center;
   margin-right: 0 !important;
+  white-space: nowrap;
+}
+
+:deep(.filter-actions .el-form-item__content) {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .table-header {

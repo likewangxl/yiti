@@ -1,6 +1,6 @@
 <template>
   <el-container class="re-layout">
-    <el-aside width="275px" class="re-aside">
+    <el-aside width="var(--layout-sidebar-width)" class="re-aside">
       <div class="re-sidebar">
         <div class="re-sidebar-logo">
           <component :is="Star" class="re-logo-icon" />
@@ -61,7 +61,7 @@
 //   扁平的 10 项（无 children），故本次移植未保留递归子菜单渲染；如 Task 14/15 需要二级菜单再补 SidebarItem 递归。
 // - 源工程 MainLayout 的侧栏折叠开关（Sidebar @toggle-collapse / TopNav @toggle-sidebar）在源码里两端均未真正
 //   emit 事件（Sidebar.vue 只是 defineExpose 了一个方法，从未被调用），是无效代码；本次移植未保留这段死代码，
-//   侧栏宽度固定为 275px（对齐源 MainLayout.vue 展开态默认值 sidebarWidth=ref('275px')，审查返工按建议对齐）。
+//   侧栏宽度复用主系统 --layout-sidebar-width，避免红色引擎与主系统出现不同的左侧基线。
 // - menuItems 数据源 + canSee() 判断逻辑位于同目录 canSee.js，供布局、子视图和 Vitest 复用。
 import { computed, provide, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
@@ -182,6 +182,7 @@ async function handleLogout() {
 }
 
 .re-aside {
+  width: var(--layout-sidebar-width) !important;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -195,14 +196,14 @@ async function handleLogout() {
   .re-sidebar-logo {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 10px;
-    height: 60px;
-    padding: 0 20px;
+    justify-content: flex-start;
+    gap: var(--space-2);
+    height: var(--layout-header-height);
+    padding: 0 var(--space-2) 0 var(--space-4);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     color: #fecaca;
     font-weight: bold;
-    font-size: 16px;
+    font-size: 14px;
     flex-shrink: 0;
 
     .re-logo-icon {
@@ -233,13 +234,15 @@ async function handleLogout() {
 
     .el-menu-item {
       color: rgba(255, 255, 255, 0.7);
-      height: 46px;
-      line-height: 46px;
+      min-height: 40px;
+      height: auto;
+      line-height: normal;
       font-size: 14px;
       transition: all 0.3s;
-      justify-content: center;
-      text-align: center;
-      padding: 0 16px !important;
+      justify-content: flex-start;
+      text-align: left;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-4) !important;
 
       &:hover {
         background-color: rgba(255, 255, 255, 0.08) !important;
@@ -249,12 +252,12 @@ async function handleLogout() {
       &.is-active {
         background-color: rgba(248, 113, 113, 0.15) !important;
         color: #f87171;
-        border-left: 3px solid #f87171;
+        border-left: 2px solid #f87171;
       }
     }
 
     .re-menu-icon {
-      margin-right: 8px;
+      margin-right: 0;
       width: 16px;
       height: 16px;
       font-size: 16px;
