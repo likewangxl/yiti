@@ -84,6 +84,22 @@ function recurringGeneralAssignment(overrides = {}) {
   });
 }
 
+const historyTabCases = [
+  { tab: 'reviewing', status: 'ORG_PENDING', label: '审核中' },
+  { tab: 'passed', status: 'APPROVED', label: '已通过' },
+  { tab: 'rejected', status: 'REJECTED_BY_ORG', label: '已驳回' }
+];
+const taskHistoryColumns = ['审核状态', '得分', '审核意见', '驳回意见'];
+
+function renderedColumnLabels(wrapper) {
+  return wrapper.findAll('.column-stub').map((column) => column.attributes('data-label'));
+}
+
+function expectTaskHistoryColumnsHidden(wrapper) {
+  const labels = renderedColumnLabels(wrapper);
+  for (const label of taskHistoryColumns) expect(labels).not.toContain(label);
+}
+
 describe('报送员上报信息', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -128,7 +144,7 @@ describe('报送员上报信息', () => {
       title: '专项整改任务',
       nature: 'TEMPORARY',
       status: 'pending',
-      isTemporary: true
+      isFourDimension: false
     });
 
     wrapper.vm.query.title = '整改';
@@ -163,8 +179,7 @@ describe('报送员上报信息', () => {
       nature: 'RECURRING',
       cycle: 'MONTH_START',
       isPeriodic: true,
-      isTemporary: false,
-      isTask: true
+      isFourDimension: false
     });
     expect(wrapper.vm.taskNatureLabel(row.nature)).toBe('定时任务');
     expect(wrapper.vm.dimensionLabel(row)).toBe('普通任务');
@@ -210,23 +225,41 @@ describe('报送员上报信息', () => {
     wrapper.unmount();
   });
 
-  it('临时任务历史隐藏审核状态、审核意见和得分，但驳回意见仍可读', async () => {
+  it.each(historyTabCases)('$label页签不渲染临时任务的审核和评分列', async ({ tab, status }) => {
     getMySubmits.mockResolvedValue({ records: [], total: 0 });
     listMyTaskAssignments.mockResolvedValue({
-      records: [temporaryAssignment({ status: 'REJECTED_BY_ORG', reviewFeedback: '请重新补充附件' })],
+      records: [temporaryAssignment({ status, reviewFeedback: '请重新补充附件' })],
       total: 1
     });
     const wrapper = mount(RecordsView, {
       global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
     });
     await settle();
-    wrapper.vm.activeTab = 'rejected';
+    wrapper.vm.activeTab = tab;
     await wrapper.vm.reload();
     await settle();
 
-    expect(wrapper.vm.records[0]).toMatchObject({ status: 'rejected', feedback: '请重新补充附件', isTemporary: true });
-    expect(wrapper.vm.showMaterialColumns).toBe(false);
-    expect(wrapper.vm.showTemporaryFeedback).toBe(true);
+    expect(wrapper.vm.records[0]).toMatchObject({ status: tab, nature: 'TEMPORARY', isFourDimension: false });
+    expectTaskHistoryColumnsHidden(wrapper);
+    wrapper.unmount();
+  });
+
+  it.each(historyTabCases)('$label页签不渲染定时普通任务的审核和评分列', async ({ tab, status }) => {
+    getMySubmits.mockResolvedValue({ records: [], total: 0 });
+    listMyTaskAssignments.mockResolvedValue({
+      records: [recurringGeneralAssignment({ status })],
+      total: 1
+    });
+    const wrapper = mount(RecordsView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+    wrapper.vm.activeTab = tab;
+    await wrapper.vm.reload();
+    await settle();
+
+    expect(wrapper.vm.records[0]).toMatchObject({ status: tab, nature: 'RECURRING', isPeriodic: true, isFourDimension: false });
+    expectTaskHistoryColumnsHidden(wrapper);
     wrapper.unmount();
   });
 
@@ -260,8 +293,11 @@ describe('报送员上报信息', () => {
     expect(wrapper.vm.records.find((item) => item.source === 'material')).toMatchObject({
       dimension: 'dim1',
       status: 'reviewing',
-      isTemporary: false
+      isFourDimension: true
     });
+    expect(wrapper.vm.showMaterialColumns).toBe(true);
+    expect(renderedColumnLabels(wrapper)).toEqual(expect.arrayContaining(['审核状态', '得分', '审核意见']));
+    expect(renderedColumnLabels(wrapper)).not.toContain('驳回意见');
     wrapper.unmount();
   });
 

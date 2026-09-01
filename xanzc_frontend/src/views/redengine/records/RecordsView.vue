@@ -78,22 +78,17 @@
         <el-table-column v-if="activeTab !== 'pending'" prop="date" label="提交日期" width="150" />
         <el-table-column v-if="showMaterialColumns" label="审核状态" width="100" align="center">
           <template #default="{ row }">
-            <span v-if="!row.isTemporary" :class="['status-badge', row.status]">{{ statusLabel(row.status) }}</span>
+            <span v-if="row.isFourDimension" :class="['status-badge', row.status]">{{ statusLabel(row.status) }}</span>
           </template>
         </el-table-column>
         <el-table-column v-if="showMaterialColumns" label="得分" width="80" align="center">
           <template #default="{ row }">
-            <span v-if="!row.isTemporary" class="score-placeholder">—</span>
+            <span v-if="row.isFourDimension" class="score-placeholder">—</span>
           </template>
         </el-table-column>
         <el-table-column v-if="showMaterialColumns" label="审核意见" min-width="150">
           <template #default="{ row }">
-            <span v-if="!row.isTemporary" class="feedback-text">{{ row.feedback || '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column v-if="showTemporaryFeedback" label="驳回意见" min-width="160">
-          <template #default="{ row }">
-            <span v-if="row.isTemporary" class="feedback-text temporary-feedback" data-test="temporary-feedback">{{ row.feedback || '—' }}</span>
+            <span v-if="row.isFourDimension" class="feedback-text">{{ row.feedback || '—' }}</span>
           </template>
         </el-table-column>
       </el-table>
@@ -190,7 +185,6 @@ function normalizeMaterialRow(row = {}) {
     nature: 'PERIODIC',
     cycle: row.cycleType || row.cycle || '',
     isPeriodic: true,
-    isTemporary: false,
     isFourDimension: true,
     submitter: row.submitterId || '—',
     date: row.submitDate || '—',
@@ -212,7 +206,6 @@ function normalizeTaskRow(row = {}) {
   const normalized = normalizeAssignmentPage([assignment]).records[0]
   const taskNature = assignment.taskNature || assignment.nature
   const fourDimension = isFourDimensionTask(assignment)
-  const isTask = !fourDimension
   const rawStatus = assignment.submission?.status
     || assignment.currentSubmission?.status
     || assignment.submissionStatus
@@ -231,8 +224,6 @@ function normalizeTaskRow(row = {}) {
     nature: taskNature || '',
     cycle: assignment.cycleType || assignment.cycle || task.cycleType || task.cycle || '',
     isPeriodic: isPeriodicTaskNature(taskNature),
-    isTemporary: !isPeriodicTaskNature(taskNature),
-    isTask,
     isFourDimension: fourDimension,
     submitter: normalized.submitterName || assignment.submitterName || '—',
     date: normalized.submittedAt || assignment.submittedAt || '—',
@@ -337,7 +328,6 @@ function countByStatus(status) {
 
 const filteredRecords = computed(() => records.value)
 const showMaterialColumns = computed(() => activeTab.value !== 'pending' && records.value.some((row) => row.isFourDimension))
-const showTemporaryFeedback = computed(() => activeTab.value === 'rejected' && records.value.some((row) => row.isTask))
 const descriptionParts = (description) => linkifyDescription(description)
 const getDimLabel = (dim) => DIM_LABEL[dim] || dim || '—'
 const getDimColor = (dim) => DIM_COLOR[dim] || '#64748b'
@@ -369,7 +359,6 @@ defineExpose({
   records,
   reload,
   showMaterialColumns,
-  showTemporaryFeedback,
   statusLabel,
   taskNatureLabel,
   total
