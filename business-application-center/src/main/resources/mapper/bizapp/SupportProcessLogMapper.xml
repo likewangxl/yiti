@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.bizapp.mapper.SupportProcessLogMapper">
+    <sql id="BASE_COLUMNS">
+        id, support_request_id, client_uuid, log_type, content, checkin_time,
+        longitude, latitude, location_address, created_by, created_time, deleted
+    </sql>
+
+    <select id="selectByRequestAndClientUuid" resultType="com.bank.branch.platform.bizapp.entity.SupportProcessLog">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM SUPPORT_PROCESS_LOG
+        WHERE support_request_id = #{supportRequestId}
+          AND client_uuid = #{clientUuid}
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
+    <select id="selectByRequestId" resultType="com.bank.branch.platform.bizapp.entity.SupportProcessLog">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM SUPPORT_PROCESS_LOG
+        WHERE support_request_id = #{supportRequestId}
+          AND deleted = 0
+        ORDER BY created_time ASC, id ASC
+    </select>
+
+    <select id="countByRequestId" resultType="long">
+        SELECT COUNT(*)
+        FROM SUPPORT_PROCESS_LOG
+        WHERE support_request_id = #{supportRequestId}
+          AND deleted = 0
+    </select>
+
+    <select id="countByRequestIdAndLogType" resultType="long">
+        SELECT COUNT(*)
+        FROM SUPPORT_PROCESS_LOG
+        WHERE support_request_id = #{supportRequestId}
+          AND log_type = #{logType}
+          AND deleted = 0
+    </select>
+</mapper>

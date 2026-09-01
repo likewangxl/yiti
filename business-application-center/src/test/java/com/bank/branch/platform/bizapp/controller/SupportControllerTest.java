@@ -140,7 +140,8 @@ class SupportControllerTest extends AbstractControllerIntegrationTest {
                 .build();
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
-        when(supportService.create(any(), anyString(), any(), any(), any(), anyString(), anyString()))
+        when(supportService.create(any(), anyString(), any(), any(), any(), anyString(), anyString(),
+                any(), any(), any()))
                 .thenReturn(resp);
 
         String body = "{\"custId\":\"CUST001\"}";
@@ -166,7 +167,8 @@ class SupportControllerTest extends AbstractControllerIntegrationTest {
                 .build();
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
-        when(supportService.create(any(), anyString(), any(), any(), any(), anyString(), anyString()))
+        when(supportService.create(any(), anyString(), any(), any(), any(), anyString(), anyString(),
+                any(), any(), any()))
                 .thenReturn(resp);
 
         String body = "{\"custId\":\"CUST001\"}";
@@ -265,4 +267,3 @@ class SupportControllerTest extends AbstractControllerIntegrationTest {
     }
 
 }
-

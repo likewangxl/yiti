@@ -3,7 +3,7 @@ package com.bank.branch.platform.bizapp.api.dto;
 import lombok.Data;
 
 /**
- * 中场支持申请分页查询条件 DTO。
+ * 中台支持申请分页查询条件 DTO。
  * <p>
  * 用于跨模块调用 {@code SupportQueryApi.pageQuery()} 时传递查询参数。
  * </p>

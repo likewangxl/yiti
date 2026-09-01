@@ -5,7 +5,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 中场支持申请列表条目展示 DTO（轻量）。
+ * 中台支持申请列表条目展示 DTO（轻量）。
  * <p>
  * 用于 REST 层 listPage 接口返回，字段是 {@link SupportRequestDTO} 的严格子集：
  * <ul>

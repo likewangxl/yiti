@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * 中场支持申请状态枚举。
+ * 中台支持申请状态枚举。
  * 对应 support_request.status 字段值。
  */
 @Getter

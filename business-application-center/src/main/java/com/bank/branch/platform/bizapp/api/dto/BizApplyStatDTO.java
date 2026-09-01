@@ -9,7 +9,7 @@ import java.math.BigDecimal;
  * <p>
  * 用于 {@code BizApplyQueryApi.getEmpStatistics()} 和
  * {@code BizApplyQueryApi.getEmpStatisticsByPeriod()} 的返回结果。
- * 聚合贷款申请和中场支持申请两个域的数量与金额。
+ * 聚合贷款申请和中台支持申请两个域的数量与金额。
  * </p>
  */
 @Data

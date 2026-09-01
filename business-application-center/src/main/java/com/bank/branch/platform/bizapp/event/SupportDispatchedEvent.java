@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 中场支持申请派单事件。
+ * 中台支持申请派单事件。
  * 在承接部门秘书完成派单（IN_APPROVAL -> IN_PROGRESS）时发布。
  */
 @Data

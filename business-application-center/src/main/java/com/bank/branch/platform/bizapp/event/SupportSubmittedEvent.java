@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 中场支持申请提交事件。
+ * 中台支持申请提交事件。
  * 在申请从 DRAFT -> IN_APPROVAL 时发布。
  */
 @Data

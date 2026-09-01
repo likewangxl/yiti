@@ -12,7 +12,7 @@
 
     <artifactId>business-application-center</artifactId>
     <name>Business Application Center</name>
-    <description>业务申请中心：资产投放申请 + 中场支持申请</description>
+    <description>业务申请中心：资产投放申请 + 中台支持申请</description>
 
     <dependencies>
         <!-- Lombok -->

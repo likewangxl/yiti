@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 创建中场支持申请响应 DTO。
+ * 创建中台支持申请响应 DTO。
  * <p>
  * 返回同批拆单的所有申请记录及共享的 submitGroupId，
  * 消费方可通过 submitGroupId 做同批追溯查询。

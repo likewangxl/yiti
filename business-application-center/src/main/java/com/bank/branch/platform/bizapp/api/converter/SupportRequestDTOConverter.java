@@ -24,7 +24,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 中场支持申请 DTO 转换器。
+ * 中台支持申请 DTO 转换器。
  * <p>
  * 职责：将 {@code SupportRequest} 实体转换为对外 API 的 {@code SupportRequestDTO}，
  * 并分别通过以下 API 补充消费方所需的冗余展示字段：
@@ -218,6 +218,7 @@ public class SupportRequestDTOConverter {
         dto.setRequestNo(entity.getRequestNo());
         dto.setSubmitGroupId(entity.getSubmitGroupId());
         dto.setCustId(entity.getCustId());
+        dto.setSourceType(resolveSourceType(entity));
         dto.setSourceTouchTaskId(entity.getSourceTouchTaskId());
         dto.setProductId(entity.getProductId());
         dto.setSupportDeptId(entity.getSupportDeptId());
@@ -235,6 +236,13 @@ public class SupportRequestDTOConverter {
         dto.setUpdatedTime(entity.getUpdatedTime());
         // 注意：不复制 deleted 字段，API 层不暴露内部软删标记
         return dto;
+    }
+
+    private String resolveSourceType(SupportRequest entity) {
+        if (StringUtils.hasText(entity.getSourceType())) {
+            return entity.getSourceType();
+        }
+        return StringUtils.hasText(entity.getSourceTouchTaskId()) ? "TOUCH_TASK" : "EXISTING_CUSTOMER";
     }
 
     /**

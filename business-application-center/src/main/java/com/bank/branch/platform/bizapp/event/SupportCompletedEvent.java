@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 中场支持申请完成事件。
+ * 中台支持申请完成事件。
  * 在申请状态变为 COMPLETED 或 REJECTED 时发布。
  */
 @Data

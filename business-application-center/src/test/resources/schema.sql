@@ -22,3 +22,21 @@ CREATE TABLE IF NOT EXISTS SUPPORT_REQUEST (
   deleted                INT            NOT NULL DEFAULT 0,
   PRIMARY KEY (id)
 );
+
+-- 中台支持过程记录（测试库；生产 DDL 由 DBA 按部署脚本执行）
+CREATE TABLE IF NOT EXISTS SUPPORT_PROCESS_LOG (
+  id                   VARCHAR(32)  NOT NULL,
+  support_request_id   VARCHAR(32)  NOT NULL,
+  client_uuid          VARCHAR(128) NOT NULL,
+  log_type             VARCHAR(32)  NOT NULL DEFAULT 'PROCESS',
+  content              CLOB         DEFAULT NULL,
+  checkin_time         TIMESTAMP    DEFAULT NULL,
+  longitude            DECIMAL(10,7) DEFAULT NULL,
+  latitude             DECIMAL(10,7) DEFAULT NULL,
+  location_address     VARCHAR(500) DEFAULT NULL,
+  created_by           VARCHAR(32)  NOT NULL,
+  created_time         TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  deleted              INT          NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  CONSTRAINT UK_SUPPORT_PROCESS_LOG_CLIENT UNIQUE (support_request_id, client_uuid)
+);

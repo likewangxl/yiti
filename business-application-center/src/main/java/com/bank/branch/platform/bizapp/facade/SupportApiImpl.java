@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 中场支持申请对外查询接口实现。
+ * 中台支持申请对外查询接口实现。
  * <p>
  * 实现 {@link SupportApi} 接口，直接委托 {@link SupportRequestMapper} 完成只读查询。
  * 所有查询结果通过 {@link SupportRequestDTOConverter} 转换为跨模块传输对象，

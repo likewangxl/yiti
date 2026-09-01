@@ -73,6 +73,72 @@
         </if>
     </select>
 
+    <select id="selectPageForSupportByCreator" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM SUPPORT_REQUEST
+        WHERE deleted = 0
+          AND created_by = #{createdBy}
+        <if test="keyword != null and keyword != ''">
+            AND request_no LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="ownerOrgId != null and ownerOrgId != ''">
+            AND owner_org_id = #{ownerOrgId}
+        </if>
+        ORDER BY created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countPageForSupportByCreator" resultType="long">
+        SELECT COUNT(*) FROM SUPPORT_REQUEST
+        WHERE deleted = 0
+          AND created_by = #{createdBy}
+        <if test="keyword != null and keyword != ''">
+            AND request_no LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="ownerOrgId != null and ownerOrgId != ''">
+            AND owner_org_id = #{ownerOrgId}
+        </if>
+    </select>
+
+    <select id="selectPageForSupportByOrgCodes" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM SUPPORT_REQUEST
+        WHERE deleted = 0
+          AND owner_org_id IN
+        <foreach collection="orgCodes" item="orgCode" open="(" separator="," close=")">
+            #{orgCode}
+        </foreach>
+        <if test="keyword != null and keyword != ''">
+            AND request_no LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        ORDER BY created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countPageForSupportByOrgCodes" resultType="long">
+        SELECT COUNT(*) FROM SUPPORT_REQUEST
+        WHERE deleted = 0
+          AND owner_org_id IN
+        <foreach collection="orgCodes" item="orgCode" open="(" separator="," close=")">
+            #{orgCode}
+        </foreach>
+        <if test="keyword != null and keyword != ''">
+            AND request_no LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+    </select>
+
     <!-- 承接侧分页查询（SUPPORT_DEPT 视图，按 support_dept_id 过滤） -->
     <select id="selectPageForDept" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
         SELECT
@@ -99,6 +165,39 @@
         <if test="supportDeptId != null and supportDeptId != ''">
             AND support_dept_id = #{supportDeptId}
         </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="assignedEmpId != null and assignedEmpId != ''">
+            AND assigned_emp_id = #{assignedEmpId}
+        </if>
+    </select>
+
+    <select id="selectPageForDeptByOrgCodes" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM SUPPORT_REQUEST
+        WHERE deleted = 0
+          AND support_dept_id IN
+        <foreach collection="supportDeptIds" item="deptId" open="(" separator="," close=")">
+            #{deptId}
+        </foreach>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="assignedEmpId != null and assignedEmpId != ''">
+            AND assigned_emp_id = #{assignedEmpId}
+        </if>
+        ORDER BY created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countPageForDeptByOrgCodes" resultType="long">
+        SELECT COUNT(*) FROM SUPPORT_REQUEST
+        WHERE deleted = 0
+          AND support_dept_id IN
+        <foreach collection="supportDeptIds" item="deptId" open="(" separator="," close=")">
+            #{deptId}
+        </foreach>
         <if test="status != null and status != ''">
             AND status = #{status}
         </if>

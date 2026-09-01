@@ -12,10 +12,12 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
+import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -34,6 +36,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -72,8 +75,17 @@ class SupportServiceTest {
     @Mock
     private SupportRequestDTOConverter supportRequestDTOConverter;
 
+    @Mock
+    private FileApi fileApi;
+
     @InjectMocks
     private SupportService supportService;
+
+    @BeforeEach
+    void allowLegacyExistingCustomerFixtures() {
+        // 旧 7 参数入口现同样执行机构认领校验；既有单测夹具默认视为已认领。
+        lenient().when(customerQueryApi.isClaimedByOrg(anyString(), anyString())).thenReturn(true);
+    }
 
     // ==================== SupportSourceType 枚举契约 ====================
 
@@ -189,6 +201,46 @@ class SupportServiceTest {
                 List.of("P001"), "CUST999", null, null, null, "E10001", "ORG001"))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "BIZ-40301");
+    }
+
+    @Test
+    void create_withRunningSupportAndNoConfirmation_shouldThrowBIZ40907WithCount() {
+        when(customerQueryApi.isValidCustomer("CUST001")).thenReturn(true);
+        when(supportMapper.countRunningByCustomer("CUST001")).thenReturn(2L);
+
+        assertThatThrownBy(() -> supportService.create(
+                List.of("P001"), "CUST001", null, null, null, "E10001", "ORG001",
+                SupportSourceType.EXISTING_CUSTOMER.getCode(), false, List.of()))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "BIZ-40907")
+                .hasMessageContaining("2");
+        verify(scenarioRouter, never()).route(any(), any(), any());
+    }
+
+    @Test
+    void create_withRunningSupportAndConfirmation_shouldCreateAndBindEachSplitAttachment() {
+        when(customerQueryApi.isValidCustomer("CUST001")).thenReturn(true);
+        when(supportMapper.countRunningByCustomer("CUST001")).thenReturn(1L);
+        when(scenarioRouter.route(any(), any(), any())).thenReturn(SupportScenario.A);
+
+        SupportRequest sr1 = buildRequest("SR001", SupportStatus.DRAFT);
+        sr1.setSubmitGroupId("grp-confirmed");
+        sr1.setProductId("P001");
+        SupportRequest sr2 = buildRequest("SR002", SupportStatus.DRAFT);
+        sr2.setSubmitGroupId("grp-confirmed");
+        sr2.setProductId("P002");
+        when(splitService.splitByProducts(any(), eq("CUST001"), any(), eq("E10001"), eq("ORG001")))
+                .thenReturn(List.of(sr1, sr2));
+
+        SupportRequestCreateRespDTO result = supportService.create(
+                List.of("P001", "P002"), "CUST001", null, null, null, "E10001", "ORG001",
+                SupportSourceType.EXISTING_CUSTOMER.getCode(), true, List.of("FILE-1", "FILE-2"));
+
+        assertThat(result.getProductCount()).isEqualTo(2);
+        verify(fileApi).bindFile("SUPPORT_REQUEST", "SR001", "FILE-1", "ATTACHMENT");
+        verify(fileApi).bindFile("SUPPORT_REQUEST", "SR001", "FILE-2", "ATTACHMENT");
+        verify(fileApi).bindFile("SUPPORT_REQUEST", "SR002", "FILE-1", "ATTACHMENT");
+        verify(fileApi).bindFile("SUPPORT_REQUEST", "SR002", "FILE-2", "ATTACHMENT");
     }
 
     // ==================== submit ====================

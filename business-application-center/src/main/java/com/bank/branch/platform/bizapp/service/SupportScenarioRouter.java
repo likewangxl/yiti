@@ -10,7 +10,7 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 
 /**
- * 中场支持申请场景路由器（无状态）。
+ * 中台支持申请场景路由器（无状态）。
  * <p>
  * 根据输入参数决定走场景A（产品直达）还是场景B（部门承接）。
  * 场景A：productIds 非空 且 otherDemand 为空。

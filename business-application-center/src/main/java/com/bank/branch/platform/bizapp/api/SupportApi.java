@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 中场支持申请对外查询接口。
+ * 中台支持申请对外查询接口。
  * <p>
  * 供其他模块查询支持申请数据。
  * 实现类位于 {@code facade/SupportApiImpl}。

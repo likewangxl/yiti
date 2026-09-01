@@ -137,7 +137,7 @@ public interface LoanQueryApi {
 
 ---
 
-## 3. SupportApi（中场支持查询 API）
+## 3. SupportApi（中台支持查询 API）
 
 ```java
 package com.bank.branch.platform.bizapp.api;
@@ -147,26 +147,26 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 中场支持申请对外 API
+ * 中台支持申请对外 API
  *
- * 提供中场支持申请的基础查询能力。
+ * 提供中台支持申请的基础查询能力。
  */
 public interface SupportApi {
 
     /**
-     * 按申请 ID 查询中场支持申请。
+     * 按申请 ID 查询中台支持申请。
      */
     Optional<SupportRequestDTO> getSupportRequest(String requestId);
 
     /**
-     * 按业务键查询中场支持申请。
+     * 按业务键查询中台支持申请。
      *
      * 业务键格式：{@code SUPPORT:{requestId}}
      */
     Optional<SupportRequestDTO> getSupportRequestByBusinessKey(String businessKey);
 
     /**
-     * 查询指定客户的中场支持申请历史。
+     * 查询指定客户的中台支持申请历史。
      *
      * @param custId 客户 ID
      * @return 历史申请列表，不含审批日志
@@ -194,7 +194,7 @@ public interface SupportApi {
 }
 ```
 
-### 4. SupportQueryApi（中场支持聚合查询 API）
+### 4. SupportQueryApi（中台支持聚合查询 API）
 
 ```java
 package com.bank.branch.platform.bizapp.api;
@@ -206,17 +206,17 @@ import com.bank.branch.platform.common.web.PageResult;
 public interface SupportQueryApi {
 
     /**
-     * 分页查询中场支持申请（不含权限过滤）。
+     * 分页查询中台支持申请（不含权限过滤）。
      */
     PageResult<SupportRequestDTO> pageQuery(SupportQueryConditionDTO condition);
 
     /**
-     * 统计员工作为发起人的已完成中场支持数量。
+     * 统计员工作为发起人的已完成中台支持数量。
      */
     long countCompletedByCreator(String empId, java.time.LocalDateTime startTime, java.time.LocalDateTime endTime);
 
     /**
-     * 统计员工作为承接人的已完成中场支持数量。
+     * 统计员工作为承接人的已完成中台支持数量。
      */
     long countCompletedByAssignee(String empId, java.time.LocalDateTime startTime, java.time.LocalDateTime endTime);
 }
@@ -255,7 +255,7 @@ public interface BizApplyQueryApi {
     boolean hasRunningLoan(String custId);
 
     /**
-     * 查询客户是否存在进行中的中场支持申请。
+     * 查询客户是否存在进行中的中台支持申请。
      */
     boolean hasRunningSupport(String custId);
 
@@ -455,13 +455,13 @@ public class BizApplyStatDTO {
     private long loanRunning;
     /** 资产投放总授信金额（已完成部分） */
     private BigDecimal loanCompletedAmount;
-    /** 发起的中场支持总数 */
+    /** 发起的中台支持总数 */
     private long supportTotal;
-    /** 已完成的中场支持数 */
+    /** 已完成的中台支持数 */
     private long supportCompleted;
-    /** 在途的中场支持数 */
+    /** 在途的中台支持数 */
     private long supportRunning;
-    /** 作为承接人已完成的中场支持数 */
+    /** 作为承接人已完成的中台支持数 */
     private long supportAssignedCompleted;
 }
 ```
@@ -479,7 +479,7 @@ public class RunningAppCountDTO {
     private String custId;
     /** 在途资产投放数 */
     private int loanRunningCount;
-    /** 在途中场支持数 */
+    /** 在途中台支持数 */
     private int supportRunningCount;
     /** 在途申请总数 */
     public int getTotal() {
@@ -821,7 +821,7 @@ public record ParsedBusinessKey(String bizType, String bizId) {
 
 ### 8.4 `bizapp.support.submitted.v1`
 
-**发布时机**：中场支持申请提交成功（每条拆单后的记录独立发一条事件）
+**发布时机**：中台支持申请提交成功（每条拆单后的记录独立发一条事件）
 
 **典型消费方**：`portal-content-center`
 
@@ -870,7 +870,7 @@ public record ParsedBusinessKey(String bizType, String bizId) {
 
 ### 8.6 `bizapp.support.completed.v1`
 
-**发布时机**：中场支持流程完成（结果 = SUCCESS/FAILED/CANCELLED）
+**发布时机**：中台支持流程完成（结果 = SUCCESS/FAILED/CANCELLED）
 
 **典型消费方**：`portal-content-center`（通知发起人）、`performance-engine-center`（弱依赖）
 

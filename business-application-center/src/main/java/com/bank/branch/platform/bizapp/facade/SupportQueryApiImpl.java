@@ -16,7 +16,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 中场支持申请对外分页/统计查询接口实现。
+ * 中台支持申请对外分页/统计查询接口实现。
  * <p>
  * 实现 {@link SupportQueryApi} 接口，委托 {@link SupportRequestMapper} 执行分页与聚合查询。
  * 所有查询结果通过 {@link SupportRequestDTOConverter} 转换，确保不暴露 deleted 字段且补充冗余展示字段。

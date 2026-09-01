@@ -7,9 +7,10 @@ import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 /**
- * 中场支持申请 Mapper 接口，操作 support_request 表。
+ * 中台支持申请 Mapper 接口，操作 support_request 表。
  * 所有查询默认过滤逻辑删除记录（deleted = 0）。
  * <p>
  * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
@@ -42,6 +43,30 @@ public interface SupportRequestMapper extends BaseMapper<SupportRequest> {
                              @Param("status") String status,
                              @Param("ownerOrgId") String ownerOrgId);
 
+    /** 发起侧 SELF_CREATED/SELF 查询，显式按创建人过滤。 */
+    List<SupportRequest> selectPageForSupportByCreator(@Param("keyword") String keyword,
+                                                       @Param("status") String status,
+                                                       @Param("ownerOrgId") String ownerOrgId,
+                                                       @Param("createdBy") String createdBy,
+                                                       @Param("offset") int offset,
+                                                       @Param("limit") int limit);
+
+    long countPageForSupportByCreator(@Param("keyword") String keyword,
+                                      @Param("status") String status,
+                                      @Param("ownerOrgId") String ownerOrgId,
+                                      @Param("createdBy") String createdBy);
+
+    /** 发起侧 ORG_SUBTREE 查询，机构集合由数据域解析器提供。 */
+    List<SupportRequest> selectPageForSupportByOrgCodes(@Param("keyword") String keyword,
+                                                        @Param("status") String status,
+                                                        @Param("orgCodes") Set<String> orgCodes,
+                                                        @Param("offset") int offset,
+                                                        @Param("limit") int limit);
+
+    long countPageForSupportByOrgCodes(@Param("keyword") String keyword,
+                                       @Param("status") String status,
+                                       @Param("orgCodes") Set<String> orgCodes);
+
     /** 承接侧分页查询（SUPPORT_DEPT 视图） */
     List<SupportRequest> selectPageForDept(@Param("supportDeptId") String supportDeptId,
                                            @Param("status") String status,
@@ -53,6 +78,17 @@ public interface SupportRequestMapper extends BaseMapper<SupportRequest> {
     long countPageForDept(@Param("supportDeptId") String supportDeptId,
                           @Param("status") String status,
                           @Param("assignedEmpId") String assignedEmpId);
+
+    /** 承接侧 ORG_SUBTREE 查询。 */
+    List<SupportRequest> selectPageForDeptByOrgCodes(@Param("supportDeptIds") Set<String> supportDeptIds,
+                                                     @Param("status") String status,
+                                                     @Param("assignedEmpId") String assignedEmpId,
+                                                     @Param("offset") int offset,
+                                                     @Param("limit") int limit);
+
+    long countPageForDeptByOrgCodes(@Param("supportDeptIds") Set<String> supportDeptIds,
+                                    @Param("status") String status,
+                                    @Param("assignedEmpId") String assignedEmpId);
 
     // insert(T) 由 BaseMapper 提供
 

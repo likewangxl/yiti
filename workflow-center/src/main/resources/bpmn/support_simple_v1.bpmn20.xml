@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    中台支持场景 A：明确产品直达产品负责人。
+    驳回由 workflow-center 任务服务强制终止流程，不在该固定 V1 图中增加条件网关。
+    product_owner_handle 的候选人由 WF_NODE_CANDIDATE_CONF 的 VAR:assignedEmpId 解析。
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://www.bank.com/branch/platform/workflow">
+
+    <process id="support_simple_v1" name="中台支持（产品直达）" isExecutable="true">
+        <extensionElements>
+            <flowable:executionListener event="end" delegateExpression="${processCompletedListener}"/>
+        </extensionElements>
+
+        <startEvent id="start" name="开始"/>
+
+        <userTask id="product_owner_handle" name="产品负责人办理">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <endEvent id="end" name="结束"/>
+
+        <sequenceFlow id="flow_start_product_owner" sourceRef="start" targetRef="product_owner_handle"/>
+        <sequenceFlow id="flow_product_owner_end" sourceRef="product_owner_handle" targetRef="end"/>
+    </process>
+</definitions>

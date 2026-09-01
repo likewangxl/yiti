@@ -2,10 +2,14 @@ package com.bank.branch.platform.bizapp.controller;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
+import com.bank.branch.platform.bizapp.api.dto.SupportProcessLogDTO;
 import com.bank.branch.platform.bizapp.dto.req.CompleteReq;
+import com.bank.branch.platform.bizapp.dto.req.CreateSupportProcessLogReq;
 import com.bank.branch.platform.bizapp.dto.req.DispatchReq;
 import com.bank.branch.platform.bizapp.dto.req.TransferReq;
 import com.bank.branch.platform.bizapp.service.SupportDeptService;
+import com.bank.branch.platform.bizapp.service.SupportProcessLogService;
 import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
@@ -26,8 +30,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
- * 中场支持申请 REST 控制器（承接侧视图）。
+ * 中台支持申请 REST 控制器（承接侧视图）。
  * <p>
  * 提供承接部门的 4 个端点：列表、派单、转交、办理完成。
  * </p>
@@ -37,11 +43,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/api/support-dept/requests")
 @Validated
-@Tag(name = "中场支持承接侧管理")
+@Tag(name = "中台支持承接侧管理")
 public class SupportDeptController {
 
     private final SupportDeptService supportDeptService;
     private final CurrentUserApi currentUserApi;
+    private final SupportProcessLogService supportProcessLogService;
 
     /**
      * 分页查询支持申请列表（承接侧）。
@@ -49,7 +56,7 @@ public class SupportDeptController {
      */
     @GetMapping
     @BizAuth(bizType = BizType.SUPPORT_DEPT, action = BizAction.LIST)
-    @Operation(summary = "承接侧查询中场支持申请列表")
+    @Operation(summary = "承接侧查询中台支持申请列表")
     public ResponseWrapper<SupportRequestListItemDTO> listPageForDept(
             @RequestParam(required = false) String supportDeptId,
             @RequestParam(required = false) String status,
@@ -61,6 +68,15 @@ public class SupportDeptController {
         PageResult<SupportRequestListItemDTO> result = supportDeptService.listPageForDeptAsDTO(
                 supportDeptId, status, assignedEmpId, pageNo, pageSize);
         return ResponseWrapper.page(result);
+    }
+
+    /** 承接侧详情；服务层按 SUPPORT_DEPT 数据域校验。 */
+    @GetMapping("/{id}")
+    @BizAuth(bizType = BizType.SUPPORT_DEPT, action = BizAction.READ)
+    @Operation(summary = "承接侧查询中台支持详情")
+    public ResponseWrapper<SupportRequestDTO> getById(@PathVariable String id) {
+        return ResponseWrapper.success(supportDeptService.getByIdAsDTO(
+                id, currentUserApi.getCurrentEmpId()));
     }
 
     /**
@@ -104,7 +120,33 @@ public class SupportDeptController {
                                           @RequestBody CompleteReq req) {
         log.info("[SupportDeptController.complete] id={}, success={}", id, req.isSuccess());
         String empId = currentUserApi.getCurrentEmpId();
-        supportDeptService.complete(id, req.isSuccess(), empId);
+        if (req.getHandleResult() == null && req.getSummary() == null
+                && req.getResult() == null && req.getOutputAttachmentIds() == null
+                && req.getFileIds() == null) {
+            supportDeptService.complete(id, req.isSuccess(), empId);
+        } else {
+            supportDeptService.complete(id, req, empId);
+        }
         return ResponseWrapper.success();
+    }
+
+    /** 承接侧只读过程记录。 */
+    @GetMapping("/{id}/logs")
+    @BizAuth(bizType = BizType.SUPPORT_DEPT, action = BizAction.READ)
+    @Operation(summary = "承接侧查询中台支持过程记录")
+    public ResponseWrapper<List<SupportProcessLogDTO>> logs(@PathVariable String id) {
+        return ResponseWrapper.success(supportProcessLogService.listForDept(
+                id, currentUserApi.getCurrentEmpId()));
+    }
+
+    /** 当前承接人新增过程记录（含定位和照片关联）。 */
+    @PostMapping("/{id}/logs")
+    @BizAuth(bizType = BizType.SUPPORT_DEPT, action = BizAction.WRITE)
+    @AuditLog(action = "CREATE_SUPPORT_PROCESS_LOG", resourceType = "SUPPORT_LOG")
+    @Operation(summary = "新增中台支持过程记录")
+    public ResponseWrapper<SupportProcessLogDTO> addLog(@PathVariable String id,
+                                                        @Valid @RequestBody CreateSupportProcessLogReq req) {
+        return ResponseWrapper.success(supportProcessLogService.addLog(
+                id, req, currentUserApi.getCurrentEmpId()));
     }
 }

@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 /**
  * 业务申请综合查询接口实现。
  * <p>
- * 实现 {@link BizApplyQueryApi} 接口，聚合资产立项和中场支持申请两个域的查询。
+ * 实现 {@link BizApplyQueryApi} 接口，聚合资产立项和中台支持申请两个域的查询。
  * 简单计数查询直接委托 Mapper；复杂聚合统计委托 {@link BizApplySearchService}。
  * </p>
  * <p>

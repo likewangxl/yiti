@@ -5,7 +5,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 中场支持申请对外传输对象。
+ * 中台支持申请对外传输对象。
  * <p>
  * 跨模块 API 契约：不携带 deleted 等内部运维字段；
  * 额外补充消费方所需的冗余展示字段（custName/productName/supportDeptName）。
@@ -13,6 +13,9 @@ import java.time.LocalDateTime;
  */
 @Data
 public class SupportRequestDTO {
+
+    /** 来源类型：TOUCH_TASK / EXISTING_CUSTOMER。 */
+    private String sourceType;
 
     /** 申请ID（UUID，32位去连字符） */
     private String id;

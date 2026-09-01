@@ -2,6 +2,7 @@ package com.bank.branch.platform.bizapp.support;
 
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
@@ -12,6 +13,7 @@ import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.portal.api.AddressBookApi;
 import com.bank.branch.platform.portal.api.ProductApi;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
+import com.bank.branch.platform.workflow.api.TodoQueryApi;
 import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import org.junit.jupiter.api.Tag;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -64,6 +66,7 @@ public abstract class AbstractControllerIntegrationTest {
 
     // auth-permission-center
     @MockBean protected CurrentUserApi currentUserApi;
+    @MockBean protected UserApi userApi;
     @MockBean protected BizScopeApi bizScopeApi;
     @MockBean protected OrgApi orgApi;
 
@@ -75,6 +78,7 @@ public abstract class AbstractControllerIntegrationTest {
 
     // workflow-center
     @MockBean protected WorkflowApi workflowApi;
+    @MockBean protected TodoQueryApi todoQueryApi;
     @MockBean protected WorkflowQueryApi workflowQueryApi;
 
     // customer-marketing-center

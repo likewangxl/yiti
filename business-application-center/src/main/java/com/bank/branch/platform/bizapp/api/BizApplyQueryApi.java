@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 /**
  * 业务申请综合查询接口。
  * <p>
- * 跨贷款申请和中场支持申请两个域进行聚合查询，
+ * 跨贷款申请和中台支持申请两个域进行聚合查询，
  * 供绩效计算中心、报表分析中心等外部模块使用。
  * 实现类位于 {@code facade/BizApplyQueryApiImpl}。
  * </p>

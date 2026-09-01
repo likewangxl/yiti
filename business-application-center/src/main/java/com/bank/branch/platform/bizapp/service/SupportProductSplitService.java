@@ -18,7 +18,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * 中场支持申请多产品拆单服务（场景A专用）。
+ * 中台支持申请多产品拆单服务（场景A专用）。
  * <p>
  * 对每个 productId 独立创建一条 DRAFT 状态的 SupportRequest。
  * 同批次的记录共享 submitGroupId，方便后续批量操作。
@@ -57,7 +57,7 @@ public class SupportProductSplitService {
         List<SupportRequest> results = new ArrayList<>();
 
         for (String productId : productIds) {
-            // 1. 校验产品存在且支持中场支持
+            // 1. 校验产品存在且支持中台支持
             Optional<ProductDTO> productOpt = productApi.getProduct(productId);
             if (productOpt.isEmpty() || !Boolean.TRUE.equals(productOpt.get().getSupportForSupportRequest())) {
                 throw new BizException(
@@ -77,8 +77,14 @@ public class SupportProductSplitService {
 
             // 3. 查询产品负责人，取第一个
             List<String> responsibleEmpIds = productApi.getProductResponsibleEmpIds(productId);
-            String assignedEmpId = (responsibleEmpIds != null && !responsibleEmpIds.isEmpty())
-                    ? responsibleEmpIds.get(0) : null;
+            String assignedEmpId = responsibleEmpIds == null ? null : responsibleEmpIds.stream()
+                    .filter(org.springframework.util.StringUtils::hasText)
+                    .findFirst().orElse(null);
+            if (!org.springframework.util.StringUtils.hasText(assignedEmpId)) {
+                // 场景A 没有产品负责人时无法形成可办理流程，禁止创建孤儿草稿。
+                throw new BizException(BizAppErrorCode.NOT_SUPPORT_DEPT_MEMBER.getCode(),
+                        "产品负责人不能为空");
+            }
 
             // 4. 构建实体
             SupportRequest entity = new SupportRequest();

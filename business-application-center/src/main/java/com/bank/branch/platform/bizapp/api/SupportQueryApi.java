@@ -7,7 +7,7 @@ import com.bank.branch.platform.common.web.PageResult;
 import java.time.LocalDateTime;
 
 /**
- * 中场支持申请对外分页/统计查询接口。
+ * 中台支持申请对外分页/统计查询接口。
  * <p>
  * 供报表分析中心、绩效计算中心等模块使用。
  * 实现类位于 {@code facade/SupportQueryApiImpl}。

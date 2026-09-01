@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * 中场支持场景枚举。
+ * 中台支持场景枚举。
  * A=产品直达（有明确产品，无其他需求），B=部门承接（含模糊需求）。
  */
 @Getter

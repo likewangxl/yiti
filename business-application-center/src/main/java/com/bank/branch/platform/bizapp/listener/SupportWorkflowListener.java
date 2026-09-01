@@ -5,6 +5,11 @@ import com.bank.branch.platform.bizapp.enums.SupportStatus;
 import com.bank.branch.platform.bizapp.event.SupportCompletedEvent;
 import com.bank.branch.platform.bizapp.event.SupportRejectedEvent;
 import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.portal.api.ProductApi;
+import com.bank.branch.platform.portal.api.dto.ProductDTO;
+import com.bank.branch.platform.governance.api.NotifyApi;
+import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,8 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.util.List;
+import java.util.Optional;
+
 /**
- * 中场支持申请工作流回调监听器。
+ * 中台支持申请工作流回调监听器。
  * <p>
  * 监听工作流中心发布的 {@link ProcessCompletedEvent} 事件，
  * 根据 businessKey 前缀（SUPPORT:）识别支持申请相关流程，按 outcome 分派审批结果：
@@ -53,10 +61,12 @@ public class SupportWorkflowListener {
 
     private final SupportRequestMapper supportMapper;
     private final ApplicationEventPublisher eventPublisher;
-    private final com.bank.branch.platform.governance.api.NotifyApi notifyApi;
+    private final NotifyApi notifyApi;
+    private final ProductApi productApi;
+    private final UserApi userApi;
 
     /**
-     * 监听工作流流程完成事件，处理中场支持申请状态流转（AFTER_COMMIT 阶段触发）。
+     * 监听工作流流程完成事件，处理中台支持申请状态流转（AFTER_COMMIT 阶段触发）。
      * <p>
      * businessKey 格式为 {@code SUPPORT:{requestId}}，非支持申请相关流程直接忽略。<br>
      * 1. 过滤非 SUPPORT: 前缀的业务键，直接返回。<br>
@@ -88,9 +98,14 @@ public class SupportWorkflowListener {
                     ? SupportStatus.REJECTED.getCode()
                     : SupportStatus.COMPLETED.getCode();
 
-            // 3. 条件更新（幂等）：仅当状态为 IN_APPROVAL 时才更新，避免多实例重复处理
+            // 3. 条件更新（幂等）：场景A在 IN_APPROVAL 完成，场景B派单后已处于
+            // IN_PROGRESS；先尝试 A，再尝试 B。两次均为 CAS，重复回调不会二次发布事件。
             int rowsAffected = supportMapper.conditionalUpdateStatus(
                     requestId, SupportStatus.IN_APPROVAL.getCode(), targetStatus, "SYSTEM");
+            if (rowsAffected == 0) {
+                rowsAffected = supportMapper.conditionalUpdateStatus(
+                        requestId, SupportStatus.IN_PROGRESS.getCode(), targetStatus, "SYSTEM");
+            }
             if (rowsAffected == 0) {
                 log.warn("[SupportWorkflowListener] 状态已被其他实例处理，跳过 id={}, processInstanceId={}",
                         requestId, event.processInstanceId());
@@ -118,7 +133,7 @@ public class SupportWorkflowListener {
                         event.reason()
                 ));
                 notifyApplicant(request, "驳回",
-                        "您的中场支持申请已被驳回" + (event.reason() != null ? "：" + event.reason() : "") + "。");
+                        "您的中台支持申请已被驳回" + (event.reason() != null ? "：" + event.reason() : "") + "。");
             } else {
                 // 审批通过：发布 SupportCompletedEvent
                 eventPublisher.publishEvent(new SupportCompletedEvent(
@@ -129,8 +144,12 @@ public class SupportWorkflowListener {
                         request.getAssignedEmpId(),
                         true
                 ));
-                notifyApplicant(request, "通过", "您的中场支持申请已审批通过。");
+                notifyApplicant(request, "通过", "您的中台支持申请已审批通过。");
             }
+
+            // ZT-04：支持结束后将结果提交所在部门/顾问负责人知悉。该通知为旁路通知，
+            // 单个收件人或候选人查询失败不得影响已完成的业务状态和工作流事务。
+            notifySupportDepartment(request, targetStatus);
 
         } catch (Exception e) {
             // 必须捕获所有异常，防止异常传播到 Flowable 引擎影响流程状态
@@ -147,9 +166,9 @@ public class SupportWorkflowListener {
             return;
         }
         try {
-            notifyApi.sendNotification(com.bank.branch.platform.governance.api.dto.NotificationCmd.builder()
+            notifyApi.sendNotification(NotificationCmd.builder()
                     .targetEmpId(request.getCreatedBy())
-                    .title("中场支持审批" + result)
+                    .title("中台支持审批" + result)
                     .content(content + "（申请编号：" + request.getRequestNo() + "）")
                     .notifyType("WORKFLOW")
                     .bizType("SUPPORT")
@@ -159,5 +178,80 @@ public class SupportWorkflowListener {
             log.warn("[SupportWorkflowListener] 发送通知失败 requestId={}, err={}",
                     request.getId(), e.getMessage());
         }
+    }
+
+    /**
+     * ZT-04：流程完成后通知承接部门秘书/负责人知悉。
+     *
+     * <p>场景 B 的承接部门直接取申请上的 supportDeptId；场景 A 没有承接部门，
+     * 通过产品资料的 productDeptOrgCode 解析产品维护部门。收件人统一使用实际
+     * 角色码 SUPPORT_SE（部门秘书/负责人代理）。通知失败只记告警，不回滚流程完成。</p>
+     */
+    private void notifySupportDepartment(SupportRequest request, String targetStatus) {
+        if (request == null || notifyApi == null || userApi == null) {
+            return;
+        }
+
+        try {
+            String departmentOrgCode = trimToNull(request.getSupportDeptId());
+            if (departmentOrgCode == null) {
+                departmentOrgCode = resolveProductDepartment(request.getProductId());
+            }
+            if (departmentOrgCode == null) {
+                log.warn("[SupportWorkflowListener] 无法解析 ZT-04 知悉部门，requestId={}", request.getId());
+                return;
+            }
+
+            List<String> recipients = userApi.getEmpIdsByRoleCodeAndOrg("SUPPORT_SE", departmentOrgCode);
+            if (recipients == null || recipients.isEmpty()) {
+                log.warn("[SupportWorkflowListener] ZT-04 未找到部门秘书/负责人，requestId={}, orgCode={}",
+                        request.getId(), departmentOrgCode);
+                return;
+            }
+
+            String resultText = SupportStatus.REJECTED.getCode().equals(targetStatus) ? "已驳回" : "已完成";
+            for (String recipient : recipients) {
+                String targetEmpId = trimToNull(recipient);
+                if (targetEmpId == null) {
+                    continue;
+                }
+                try {
+                    notifyApi.sendNotification(NotificationCmd.builder()
+                            .targetEmpId(targetEmpId)
+                            .title("中台支持结束知悉")
+                            .content("中台支持申请" + resultText + "，请知悉（申请编号："
+                                    + request.getRequestNo() + "）")
+                            .notifyType("WORKFLOW")
+                            .bizType("SUPPORT")
+                            .bizId(request.getId())
+                            .build());
+                } catch (Exception e) {
+                    log.warn("[SupportWorkflowListener] ZT-04 发送部门知悉通知失败，requestId={}, targetEmpId={}, err={}",
+                            request.getId(), targetEmpId, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[SupportWorkflowListener] ZT-04 查询部门知悉人失败，requestId={}, err={}",
+                    request.getId(), e.getMessage());
+        }
+    }
+
+    private String resolveProductDepartment(String productId) {
+        String id = trimToNull(productId);
+        if (id == null || productApi == null) {
+            return null;
+        }
+        Optional<ProductDTO> product = productApi.getProduct(id);
+        return product == null ? null : product.map(ProductDTO::getProductDeptOrgCode)
+                .map(this::trimToNull)
+                .orElse(null);
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

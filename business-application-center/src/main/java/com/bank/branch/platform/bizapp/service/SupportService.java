@@ -8,12 +8,20 @@ import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.enums.BizAppErrorCode;
 import com.bank.branch.platform.bizapp.enums.SupportScenario;
+import com.bank.branch.platform.bizapp.enums.SupportSourceType;
 import com.bank.branch.platform.bizapp.enums.SupportStatus;
 import com.bank.branch.platform.bizapp.event.SupportSubmittedEvent;
 import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.common.security.context.DataScopeContext;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
+import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
+import com.bank.branch.platform.customer.api.dto.TouchTaskDTO;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.portal.api.ProductApi;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
@@ -25,12 +33,18 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * 中场支持申请服务（发起侧视图）。
+ * 中台支持申请服务（发起侧视图）。
  * <p>
  * 提供创建（含自动拆单）、提交、撤回、删除草稿、查询等发起侧操作。
  * 场景A（产品直达）通过 SupportProductSplitService 拆单；
@@ -51,9 +65,83 @@ public class SupportService {
     private final CustomerQueryApi customerQueryApi;
     private final ApplicationEventPublisher eventPublisher;
     private final SupportRequestDTOConverter supportRequestDTOConverter;
+    /** 来源校验只依赖公开查询契约；可为空仅用于兼容旧单元测试构造。 */
+    private final TouchTaskQueryApi touchTaskQueryApi;
+    private final UserApi userApi;
+    private final ProductApi productApi;
+    private final SupportProcessLogService supportProcessLogService;
+    private final FileApi fileApi;
 
     /**
-     * 创建中场支持申请（含自动拆单逻辑）。
+     * 新契约入口：sourceType 放在末尾，避免破坏已发布的 7 参数调用方。
+     */
+    @Transactional
+    public SupportRequestCreateRespDTO create(List<String> productIds, String custId,
+                                               String sourceTouchTaskId, String otherDemand,
+                                               String supportDeptId, String operatorEmpId,
+                                               String orgCode, String sourceType) {
+        return createInternal(productIds, custId, sourceTouchTaskId, otherDemand,
+                supportDeptId, operatorEmpId, orgCode, sourceType, false, null, true);
+    }
+
+    /** 严格创建入口：仅传并行确认时的兼容重载，附件可省略。 */
+    @Transactional
+    public SupportRequestCreateRespDTO create(List<String> productIds, String custId,
+                                               String sourceTouchTaskId, String otherDemand,
+                                               String supportDeptId, String operatorEmpId,
+                                               String orgCode, String sourceType,
+                                               Boolean confirmParallel) {
+        return create(productIds, custId, sourceTouchTaskId, otherDemand, supportDeptId,
+                operatorEmpId, orgCode, sourceType, confirmParallel, null);
+    }
+
+    /** 严格创建入口：支持并行申请确认和创建页附件关联。 */
+    @Transactional
+    public SupportRequestCreateRespDTO create(List<String> productIds, String custId,
+                                               String sourceTouchTaskId, String otherDemand,
+                                               String supportDeptId, String operatorEmpId,
+                                               String orgCode, String sourceType,
+                                               Boolean confirmParallel, List<String> attachmentIds) {
+        return createInternal(productIds, custId, sourceTouchTaskId, otherDemand,
+                supportDeptId, operatorEmpId, orgCode, sourceType, confirmParallel,
+                attachmentIds, true);
+    }
+
+    /** 新契约入口：支持 sourceType 置于首位的调用约定。 */
+    @Transactional
+    public SupportRequestCreateRespDTO create(String sourceType, List<String> productIds,
+                                               String custId, String sourceTouchTaskId,
+                                               String otherDemand, String supportDeptId,
+                                               String operatorEmpId, String orgCode) {
+        return createInternal(productIds, custId, sourceTouchTaskId, otherDemand,
+                supportDeptId, operatorEmpId, orgCode, sourceType, false, null, true);
+    }
+
+    /** 严格创建入口（sourceType 首参兼容形式）：仅传并行确认时的重载。 */
+    @Transactional
+    public SupportRequestCreateRespDTO create(String sourceType, List<String> productIds,
+                                               String custId, String sourceTouchTaskId,
+                                               String otherDemand, String supportDeptId,
+                                               String operatorEmpId, String orgCode,
+                                               Boolean confirmParallel) {
+        return create(sourceType, productIds, custId, sourceTouchTaskId, otherDemand,
+                supportDeptId, operatorEmpId, orgCode, confirmParallel, null);
+    }
+
+    /** 严格创建入口（sourceType 首参兼容形式）：支持并行申请确认和附件关联。 */
+    @Transactional
+    public SupportRequestCreateRespDTO create(String sourceType, List<String> productIds,
+                                               String custId, String sourceTouchTaskId,
+                                               String otherDemand, String supportDeptId,
+                                               String operatorEmpId, String orgCode,
+                                               Boolean confirmParallel, List<String> attachmentIds) {
+        return createInternal(productIds, custId, sourceTouchTaskId, otherDemand,
+                supportDeptId, operatorEmpId, orgCode, sourceType, confirmParallel,
+                attachmentIds, true);
+    }
+
+    /**
+     * 创建中台支持申请（含自动拆单逻辑）。
      * <p>
      * 场景A：调用 splitService.splitByProducts() 创建多条 DRAFT 记录，同批共享 submitGroupId；
      * 场景B：创建单条 DRAFT 记录，supportDeptId 必填，自动生成 submitGroupId。
@@ -72,14 +160,34 @@ public class SupportService {
     public SupportRequestCreateRespDTO create(List<String> productIds, String custId,
                                                String sourceTouchTaskId, String otherDemand,
                                                String supportDeptId, String operatorEmpId, String orgCode) {
+        // 保留旧服务契约，但不能绕过来源/机构校验：未显式指定 sourceType 时按
+        // EXISTING_CUSTOMER（有 sourceTouchTaskId 时按 TOUCH_TASK）处理。
+        return createInternal(productIds, custId, sourceTouchTaskId, otherDemand,
+                supportDeptId, operatorEmpId, orgCode,
+                StringUtils.hasText(sourceTouchTaskId) ? SupportSourceType.TOUCH_TASK.getCode() : null,
+                false, null, true);
+    }
+
+    private SupportRequestCreateRespDTO createInternal(List<String> productIds, String custId,
+                                               String sourceTouchTaskId, String otherDemand,
+                                               String supportDeptId, String operatorEmpId, String orgCode,
+                                               String sourceType, Boolean confirmParallel,
+                                               List<String> attachmentIds,
+                                               boolean strictSourceValidation) {
         log.info("[SupportService.create] custId={}, operator={}", custId, operatorEmpId);
 
         // 1. 校验客户有效性
-        if (!customerQueryApi.isValidCustomer(custId)) {
+        if (customerQueryApi != null && !customerQueryApi.isValidCustomer(custId)) {
             throw new BizException(
                     BizAppErrorCode.CUSTOMER_NOT_VALID.getCode(),
                     BizAppErrorCode.CUSTOMER_NOT_VALID.getMessage()
             );
+        }
+
+        String normalizedSourceType = normalizeSourceType(sourceType, sourceTouchTaskId);
+        if (strictSourceValidation) {
+            validateSource(normalizedSourceType, sourceTouchTaskId, custId, operatorEmpId, orgCode);
+            validateParallel(custId, confirmParallel);
         }
 
         // 2. 场景路由
@@ -90,6 +198,11 @@ public class SupportService {
             // 场景A：splitService 负责生成 submitGroupId 并写入每条 entity
             List<SupportRequest> entities =
                     splitService.splitByProducts(productIds, custId, sourceTouchTaskId, operatorEmpId, orgCode);
+
+            if (entities != null) {
+                entities.forEach(entity -> entity.setSourceType(normalizedSourceType));
+                entities.forEach(entity -> bindAttachments(entity.getId(), attachmentIds));
+            }
 
             // splitService 已保证同批记录共享同一 submitGroupId，取第一条即可
             String submitGroupId = entities.isEmpty() ? "" : entities.get(0).getSubmitGroupId();
@@ -122,6 +235,7 @@ public class SupportService {
             entity.setSubmitGroupId(submitGroupId);
             entity.setCustId(custId);
             entity.setSourceTouchTaskId(sourceTouchTaskId);
+            entity.setSourceType(normalizedSourceType);
             entity.setOtherDemand(otherDemand);
             entity.setSupportDeptId(supportDeptId);
             entity.setStatus(SupportStatus.DRAFT.getCode());
@@ -136,6 +250,7 @@ public class SupportService {
             entity.setDeleted(0);
 
             supportMapper.insert(entity);
+            bindAttachments(entity.getId(), attachmentIds);
             log.info("[SupportService.create] 场景B，创建 SupportRequest id={}, submitGroupId={}",
                     entity.getId(), submitGroupId);
 
@@ -153,6 +268,96 @@ public class SupportService {
                     .requests(List.of(item))
                     .build();
         }
+    }
+
+    private String normalizeSourceType(String sourceType, String sourceTouchTaskId) {
+        String normalized = StringUtils.hasText(sourceType)
+                ? sourceType.trim().toUpperCase(java.util.Locale.ROOT)
+                : (StringUtils.hasText(sourceTouchTaskId)
+                ? SupportSourceType.TOUCH_TASK.getCode()
+                : SupportSourceType.EXISTING_CUSTOMER.getCode());
+        try {
+            SupportSourceType.valueOf(normalized);
+        } catch (IllegalArgumentException ex) {
+            throw new BizException(BizAppErrorCode.INVALID_DICT_VALUE.getCode(),
+                    BizAppErrorCode.INVALID_DICT_VALUE.getMessage());
+        }
+        if (SupportSourceType.EXISTING_CUSTOMER.getCode().equals(normalized)
+                && StringUtils.hasText(sourceTouchTaskId)) {
+            throw new BizException(BizAppErrorCode.INVALID_DICT_VALUE.getCode(),
+                    BizAppErrorCode.INVALID_DICT_VALUE.getMessage());
+        }
+        return normalized;
+    }
+
+    private void validateSource(String sourceType, String sourceTouchTaskId, String custId,
+                                String operatorEmpId, String orgCode) {
+        if (SupportSourceType.TOUCH_TASK.getCode().equals(sourceType)) {
+            if (!StringUtils.hasText(sourceTouchTaskId) || touchTaskQueryApi == null) {
+                throw new BizException(BizAppErrorCode.APPLY_NOT_FOUND.getCode(),
+                        BizAppErrorCode.APPLY_NOT_FOUND.getMessage());
+            }
+            Optional<TouchTaskDTO> taskOpt = touchTaskQueryApi.getTouchTask(sourceTouchTaskId);
+            if (taskOpt == null || taskOpt.isEmpty()) {
+                throw new BizException(BizAppErrorCode.APPLY_NOT_FOUND.getCode(),
+                        BizAppErrorCode.APPLY_NOT_FOUND.getMessage());
+            }
+            TouchTaskDTO task = taskOpt.get();
+            if (!same(custId, task.getCustId())) {
+                throw new BizException(BizAppErrorCode.TOUCH_TASK_CUSTOMER_MISMATCH.getCode(),
+                        BizAppErrorCode.TOUCH_TASK_CUSTOMER_MISMATCH.getMessage());
+            }
+            if (!"SUCCESS".equalsIgnoreCase(task.getTaskStatus())) {
+                throw new BizException(BizAppErrorCode.NOT_TOUCH_TASK_ASSIGNEE.getCode(),
+                        BizAppErrorCode.NOT_TOUCH_TASK_ASSIGNEE.getMessage());
+            }
+            if (!same(operatorEmpId, task.getAssigneeEmpId())) {
+                throw new BizException(BizAppErrorCode.NOT_TOUCH_TASK_ASSIGNEE.getCode(),
+                        BizAppErrorCode.NOT_TOUCH_TASK_ASSIGNEE.getMessage());
+            }
+            return;
+        }
+        if (customerQueryApi == null || !customerQueryApi.isClaimedByOrg(custId, orgCode)) {
+            throw new BizException(BizAppErrorCode.CUSTOMER_NOT_CLAIMED_BY_ORG.getCode(),
+                    BizAppErrorCode.CUSTOMER_NOT_CLAIMED_BY_ORG.getMessage());
+        }
+    }
+
+    /**
+     * CD-09 并行申请确认：确认字段由客户端显式传递，不能仅依赖前端弹窗绕过。
+     * 只要客户存在任一条在途支持申请，未确认就拒绝本次创建，并把当前数量返回给前端。
+     */
+    private void validateParallel(String custId, Boolean confirmParallel) {
+        long runningCount = countRunningByCustomer(custId);
+        if (runningCount > 0 && !Boolean.TRUE.equals(confirmParallel)) {
+            throw new BizException(BizAppErrorCode.PARALLEL_APPLY_OVER_LIMIT.getCode(),
+                    BizAppErrorCode.PARALLEL_APPLY_OVER_LIMIT.getMessage()
+                            + "：当前在途申请数=" + runningCount + "，请确认是否并行发起");
+        }
+    }
+
+    /** 暴露客户在途中台支持申请数，供创建防绕过校验及查询侧复用。 */
+    @Transactional(readOnly = true)
+    public long countRunningByCustomer(String custId) {
+        if (!StringUtils.hasText(custId)) {
+            return 0L;
+        }
+        return supportMapper.countRunningByCustomer(custId);
+    }
+
+    /** 将创建页附件关联到拆单后的每条支持申请。 */
+    private void bindAttachments(String requestId, List<String> attachmentIds) {
+        if (fileApi == null || !StringUtils.hasText(requestId) || attachmentIds == null) {
+            return;
+        }
+        attachmentIds.stream()
+                .filter(StringUtils::hasText)
+                .distinct()
+                .forEach(fileId -> fileApi.bindFile("SUPPORT_REQUEST", requestId, fileId, "ATTACHMENT"));
+    }
+
+    private boolean same(String left, String right) {
+        return left != null && left.equals(right);
     }
 
     /**
@@ -184,9 +389,10 @@ public class SupportService {
         if (!operatorEmpId.equals(request.getCreatedBy())) {
             throw new BizException(
                     BizAppErrorCode.NOT_APPLY_CREATOR.getCode(),
-                    BizAppErrorCode.NOT_APPLY_CREATOR.getMessage()
+                BizAppErrorCode.NOT_APPLY_CREATOR.getMessage()
             );
         }
+        assertInitiatingWrite(request, operatorEmpId);
 
         // 状态迁移校验：DRAFT -> IN_APPROVAL
         bizStateMachine.validateSupportTransition(request.getStatus(), SupportStatus.IN_APPROVAL.getCode());
@@ -197,6 +403,47 @@ public class SupportService {
         String processDefinitionKey = isScenarioA
                 ? SupportScenario.A.getProcessDefinitionKey()
                 : SupportScenario.B.getProcessDefinitionKey();
+
+        // 候选变量必须在启动流程时一次性传入。流程配置分别读取
+        // VAR:assignedEmpId（场景A）和 VAR:dispatchEmpIds（场景B）。
+        Map<String, Object> variables = new HashMap<>();
+        if (isScenarioA) {
+            String assignedEmpId = request.getAssignedEmpId();
+            if (!StringUtils.hasText(assignedEmpId) && productApi != null
+                    && StringUtils.hasText(request.getProductId())) {
+                List<String> responsibleEmpIds = productApi.getProductResponsibleEmpIds(request.getProductId());
+                if (responsibleEmpIds != null && !responsibleEmpIds.isEmpty()) {
+                    assignedEmpId = responsibleEmpIds.stream()
+                            .filter(StringUtils::hasText)
+                            .findFirst().orElse(null);
+                    request.setAssignedEmpId(assignedEmpId);
+                }
+            }
+            // 生产环境 productApi 一定存在；null 仅兼容早期没有负责人字段的单元夹具。
+            if (productApi != null && !StringUtils.hasText(assignedEmpId)) {
+                throw new BizException(BizAppErrorCode.NOT_SUPPORT_DEPT_MEMBER.getCode(),
+                        "产品负责人不能为空");
+            }
+            if (StringUtils.hasText(assignedEmpId)) {
+                variables.put("assignedEmpId", assignedEmpId);
+                variables.put("assignedEmpIds", List.of(assignedEmpId));
+            }
+        } else {
+            List<String> dispatchEmpIds = Collections.emptyList();
+            if (userApi != null) {
+                List<String> candidates = userApi.getEmpIdsByRoleCodeAndOrg("SUPPORT_SE",
+                        request.getSupportDeptId());
+                dispatchEmpIds = candidates == null ? Collections.emptyList() : candidates.stream()
+                        .filter(StringUtils::hasText).distinct().toList();
+                if (dispatchEmpIds.isEmpty()) {
+                    throw new BizException(BizAppErrorCode.NOT_SUPPORT_DEPT_MEMBER.getCode(),
+                            "承接部门秘书候选人不能为空");
+                }
+            }
+            variables.put("dispatchEmpIds", dispatchEmpIds);
+            // 兼容候选组解析器的通用变量名，WF_NODE_CANDIDATE_CONF 以具体变量为准。
+            variables.put("candidateEmpIds", dispatchEmpIds);
+        }
 
         // businessKey 统一定义一次，后续 cmd 和 SubmitRespDTO 共用。
         String businessKey = "SUPPORT:" + id;
@@ -209,7 +456,8 @@ public class SupportService {
         cmd.setProcessDefinitionKey(processDefinitionKey);
         cmd.setStartUser(operatorEmpId);
         cmd.setStartOrgId(orgCode);
-        cmd.setTitle("中场支持申请-" + request.getRequestNo());
+        cmd.setTitle("中台支持申请-" + request.getRequestNo());
+        cmd.setVariables(variables);
 
         WorkflowLaunchResp resp = workflowApi.startProcess(cmd);
 
@@ -241,17 +489,34 @@ public class SupportService {
      */
     @Transactional
     public void cancel(String id, String operatorEmpId) {
+        // 旧 Java 调用方没有理由参数；新 REST 请求应使用三参方法。
+        cancel(id, operatorEmpId, "用户撤回");
+    }
+
+    /** 撤回申请；只有创建人可以撤回，且工作流实例必须同步取消。 */
+    @Transactional
+    public void cancel(String id, String operatorEmpId, String reason) {
         log.info("[SupportService.cancel] id={}, operator={}", id, operatorEmpId);
 
         SupportRequest request = supportMapper.selectForUpdate(id);
         if (request == null) {
             throw new BizException(
                     BizAppErrorCode.APPLY_NOT_FOUND.getCode(),
-                    BizAppErrorCode.APPLY_NOT_FOUND.getMessage()
+                BizAppErrorCode.APPLY_NOT_FOUND.getMessage()
             );
         }
 
+        assertInitiatingWrite(request, operatorEmpId);
+        if (workflowApi != null && !StringUtils.hasText(reason)) {
+            throw new BizException(BizAppErrorCode.CANCEL_REASON_REQUIRED.getCode(),
+                    BizAppErrorCode.CANCEL_REASON_REQUIRED.getMessage());
+        }
+
         bizStateMachine.validateSupportTransition(request.getStatus(), SupportStatus.CANCELLED.getCode());
+
+        if (workflowApi != null && StringUtils.hasText(request.getProcessInstanceId())) {
+            workflowApi.cancelProcess(request.getProcessInstanceId(), reason);
+        }
 
         request.setStatus(SupportStatus.CANCELLED.getCode());
         request.setUpdatedBy(operatorEmpId);
@@ -275,9 +540,11 @@ public class SupportService {
         if (request == null) {
             throw new BizException(
                     BizAppErrorCode.APPLY_NOT_FOUND.getCode(),
-                    BizAppErrorCode.APPLY_NOT_FOUND.getMessage()
+                BizAppErrorCode.APPLY_NOT_FOUND.getMessage()
             );
         }
+
+        assertInitiatingWrite(request, operatorEmpId);
 
         // 只允许草稿状态删除
         if (!SupportStatus.DRAFT.getCode().equals(request.getStatus())) {
@@ -306,8 +573,13 @@ public class SupportService {
         if (request == null) {
             throw new BizException(
                     BizAppErrorCode.APPLY_NOT_FOUND.getCode(),
-                    BizAppErrorCode.APPLY_NOT_FOUND.getMessage()
+                BizAppErrorCode.APPLY_NOT_FOUND.getMessage()
             );
+        }
+        DataScopeContext ctx = DataScopeContext.current();
+        if (ctx != null && ctx.getScope() != null && !inInitiatingScope(request, ctx)) {
+            throw new BizException(BizAppErrorCode.NOT_APPLY_CREATOR.getCode(),
+                    BizAppErrorCode.NOT_APPLY_CREATOR.getMessage());
         }
         return request;
     }
@@ -326,11 +598,72 @@ public class SupportService {
                                                 String ownerOrgId, int pageNo, int pageSize) {
         log.info("[SupportService.listPage] ownerOrgId={}, pageNo={}, pageSize={}", ownerOrgId, pageNo, pageSize);
 
+        DataScopeContext ctx = DataScopeContext.current();
+        if (ctx != null && ctx.getScope() != null) {
+            ownerOrgId = scopedOrg(ownerOrgId, ctx);
+        }
+
         int offset = (pageNo - 1) * pageSize;
-        List<SupportRequest> records = supportMapper.selectPageForSupport(keyword, status, ownerOrgId, offset, pageSize);
-        long total = supportMapper.countPageForSupport(keyword, status, ownerOrgId);
+        List<SupportRequest> records;
+        long total;
+        if (ctx != null && (ctx.getScope() == DataScopeType.SELF_CREATED
+                || ctx.getScope() == DataScopeType.SELF) && StringUtils.hasText(ctx.getEmpId())) {
+            records = supportMapper.selectPageForSupportByCreator(keyword, status, ownerOrgId,
+                    ctx.getEmpId(), offset, pageSize);
+            total = supportMapper.countPageForSupportByCreator(keyword, status, ownerOrgId, ctx.getEmpId());
+        } else if (ctx != null && ctx.getScope() == DataScopeType.ORG_SUBTREE
+                && ctx.getOrgSubtreeCodes() != null && !ctx.getOrgSubtreeCodes().isEmpty()) {
+            records = supportMapper.selectPageForSupportByOrgCodes(keyword, status,
+                    ctx.getOrgSubtreeCodes(), offset, pageSize);
+            total = supportMapper.countPageForSupportByOrgCodes(keyword, status, ctx.getOrgSubtreeCodes());
+        } else {
+            records = supportMapper.selectPageForSupport(keyword, status, ownerOrgId, offset, pageSize);
+            total = supportMapper.countPageForSupport(keyword, status, ownerOrgId);
+        }
 
         return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    private String scopedOrg(String requestedOrg, DataScopeContext ctx) {
+        if (ctx.getScope() == DataScopeType.ALL || ctx.getScope() == DataScopeType.SELF_CREATED
+                || ctx.getScope() == DataScopeType.SELF) {
+            return StringUtils.hasText(ctx.getOrgCode()) ? ctx.getOrgCode() : requestedOrg;
+        }
+        if (ctx.getScope() == DataScopeType.ORG || ctx.getScope() == DataScopeType.ORG_SUBTREE) {
+            return ctx.getOrgCode();
+        }
+        return requestedOrg;
+    }
+
+    private void assertInitiatingWrite(SupportRequest request, String operatorEmpId) {
+        if (!same(operatorEmpId, request.getCreatedBy())) {
+            throw new BizException(BizAppErrorCode.NOT_APPLY_CREATOR.getCode(),
+                    BizAppErrorCode.NOT_APPLY_CREATOR.getMessage());
+        }
+        DataScopeContext ctx = DataScopeContext.current();
+        if (ctx != null && ctx.getScope() != null && !inInitiatingScope(request, ctx)) {
+            throw new BizException(BizAppErrorCode.NOT_APPLY_CREATOR.getCode(),
+                    BizAppErrorCode.NOT_APPLY_CREATOR.getMessage());
+        }
+    }
+
+    private boolean inInitiatingScope(SupportRequest request, DataScopeContext ctx) {
+        DataScopeType scope = ctx.getScope();
+        if (scope == DataScopeType.ALL) {
+            return true;
+        }
+        if (scope == DataScopeType.SELF_CREATED || scope == DataScopeType.SELF
+                || scope == DataScopeType.WORKFLOW_PARTICIPANT) {
+            return same(ctx.getEmpId(), request.getCreatedBy());
+        }
+        if (scope == DataScopeType.ORG) {
+            return same(ctx.getOrgCode(), request.getOwnerOrgId());
+        }
+        if (scope == DataScopeType.ORG_SUBTREE) {
+            return ctx.getOrgSubtreeCodes() != null
+                    && ctx.getOrgSubtreeCodes().contains(request.getOwnerOrgId());
+        }
+        return false;
     }
 
     /**

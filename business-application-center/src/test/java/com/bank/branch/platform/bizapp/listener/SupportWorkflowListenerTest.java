@@ -5,6 +5,11 @@ import com.bank.branch.platform.bizapp.enums.SupportStatus;
 import com.bank.branch.platform.bizapp.event.SupportCompletedEvent;
 import com.bank.branch.platform.bizapp.event.SupportRejectedEvent;
 import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.governance.api.NotifyApi;
+import com.bank.branch.platform.governance.api.dto.NotificationCmd;
+import com.bank.branch.platform.portal.api.ProductApi;
+import com.bank.branch.platform.portal.api.dto.ProductDTO;
 import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.lang.reflect.Method;
+import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -40,6 +47,15 @@ class SupportWorkflowListenerTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private NotifyApi notifyApi;
+
+    @Mock
+    private ProductApi productApi;
+
+    @Mock
+    private UserApi userApi;
 
     @InjectMocks
     private SupportWorkflowListener listener;
@@ -191,6 +207,52 @@ class SupportWorkflowListenerTest {
         assertThatCode(() -> listener.onProcessCompleted(
                 new ProcessCompletedEvent("PID001", "SUPPORT:SR001", "APPROVED", null)))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("ZT-04 场景B：流程结束后通知承接部门 SUPPORT_SE，通知失败不影响主流程")
+    void onProcessCompleted_sceneB_notifiesSupportDepartmentSecretary() {
+        SupportRequest sr = buildRequest("SR004", SupportStatus.IN_PROGRESS);
+        sr.setSupportDeptId("SUPPORT-DEPT");
+        when(supportMapper.conditionalUpdateStatus("SR004", SupportStatus.IN_APPROVAL.getCode(),
+                SupportStatus.COMPLETED.getCode(), "SYSTEM")).thenReturn(0);
+        when(supportMapper.conditionalUpdateStatus("SR004", SupportStatus.IN_PROGRESS.getCode(),
+                SupportStatus.COMPLETED.getCode(), "SYSTEM")).thenReturn(1);
+        when(supportMapper.selectById("SR004")).thenReturn(sr);
+        when(userApi.getEmpIdsByRoleCodeAndOrg("SUPPORT_SE", "SUPPORT-DEPT"))
+                .thenReturn(List.of("E501", "E502"));
+
+        listener.onProcessCompleted(new ProcessCompletedEvent("PID004", "SUPPORT:SR004", "APPROVED", null));
+
+        ArgumentCaptor<NotificationCmd> captor = ArgumentCaptor.forClass(NotificationCmd.class);
+        verify(notifyApi, org.mockito.Mockito.times(3)).sendNotification(captor.capture());
+        assertThat(captor.getAllValues().stream()
+                .filter(cmd -> "中台支持结束知悉".equals(cmd.getTitle()))
+                .map(NotificationCmd::getTargetEmpId))
+                .containsExactlyInAnyOrder("E501", "E502");
+    }
+
+    @Test
+    @DisplayName("ZT-04 场景A：从产品维护部门解析 SUPPORT_SE 知悉人")
+    void onProcessCompleted_sceneA_resolvesProductDepartmentForSecretary() {
+        SupportRequest sr = buildRequest("SR005", SupportStatus.IN_APPROVAL);
+        sr.setProductId("P001");
+        when(supportMapper.conditionalUpdateStatus("SR005", SupportStatus.IN_APPROVAL.getCode(),
+                SupportStatus.COMPLETED.getCode(), "SYSTEM")).thenReturn(1);
+        when(supportMapper.selectById("SR005")).thenReturn(sr);
+        when(productApi.getProduct("P001")).thenReturn(Optional.of(ProductDTO.builder()
+                .id("P001").productDeptOrgCode("PRODUCT-DEPT").build()));
+        when(userApi.getEmpIdsByRoleCodeAndOrg("SUPPORT_SE", "PRODUCT-DEPT"))
+                .thenReturn(List.of("E601"));
+
+        listener.onProcessCompleted(new ProcessCompletedEvent("PID005", "SUPPORT:SR005", "APPROVED", null));
+
+        ArgumentCaptor<NotificationCmd> captor = ArgumentCaptor.forClass(NotificationCmd.class);
+        verify(notifyApi, org.mockito.Mockito.times(2)).sendNotification(captor.capture());
+        assertThat(captor.getAllValues().stream()
+                .filter(cmd -> "中台支持结束知悉".equals(cmd.getTitle()))
+                .map(NotificationCmd::getTargetEmpId))
+                .containsExactly("E601");
     }
 
     // ==================== 辅助方法 ====================

@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 /**
  * 业务申请跨域聚合查询服务。
  * <p>
- * 汇总贷款申请（loan_apply）和中场支持申请（support_request）两个域的统计数据，
+ * 汇总贷款申请（loan_apply）和中台支持申请（support_request）两个域的统计数据，
  * 供 {@code BizApplyQueryApiImpl} 对外提供员工绩效统计能力。
  * 本服务只做只读聚合，不发起任何写操作。
  * </p>

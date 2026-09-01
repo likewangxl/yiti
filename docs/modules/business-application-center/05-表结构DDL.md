@@ -16,16 +16,17 @@
 
 | 序号 | 表名 | 说明 | 主键策略 | 预估数据量 | 写入频度 | 读取频度 |
 |----|-----|-----|--------|----------|--------|--------|
-| 1 | `LOAN_APPLY` | 资产投放申请表 | UUID(32) | 5万/年 | 中 | 高 |
-| 2 | `SUPPORT_REQUEST` | 中场支持申请表 | UUID(32) | 20万/年 | 中 | 高 |
+| 1 | `SUPPORT_REQUEST` | 中台支持申请表 | UUID(32) | 20万/年 | 中 | 高 |
+| 2 | `SUPPORT_PROCESS_LOG` | 中台支持办理过程记录（本次新增，待 DBA 实施） | UUID(32) | 100万/年 | 高 | 高 |
+| — | `LOAN_APPLY` | 资产投放申请表（历史归档） | UUID(32) | — | — | — |
 
 **重要说明：**
 
-1. V1 版本 DDL 中**未单独定义** `loan_apply_attachment` 和 `support_dispatch_log` 表：
+1. V1 版本中**未单独定义** `loan_apply_attachment` 和 `support_dispatch_log` 表：
    - **附件关联**：统一通过 `system-governance-center` 模块的 `BIZ_FILE_REL` 表进行关联，通过 `biz_type='LOAN'/'SUPPORT'` + `biz_id` 匹配；
    - **派单历史**：通过 `SUPPORT_REQUEST` 表的 `dispatch_emp_id`、`dispatch_time`、`assigned_emp_id` 字段记录当前态，历史态通过 `AUDIT_LOG`（governance 模块）保留；
    - **审批历史**：通过 Flowable 内置的 `ACT_HI_TASKINST` / `ACT_HI_VARINST` / `ACT_HI_ACTINST` 表记录，由 `workflow-center` 提供查询 API。
-2. 本模块作为业务申请的**门户层**，物理表只承载"申请主表"核心字段，流程态由 `workflow-center` 管理，附件态由 `system-governance-center` 管理。
+2. `SUPPORT_PROCESS_LOG` 是本次中台支持办理过程记录的新增业务表，由外层 [中台支持_数据库变更.sql](/home/djdev/jxe/中台支持_数据库变更.sql) 交 DBA 评审实施；当前代理未执行该脚本。申请主表的流程态仍由 `workflow-center` 管理，照片/附件对象仍由 `system-governance-center` 管理。
 3. 所有表统一遵守 `docs/common-dev-guide.md` 的通用字段规范：`created_by`、`created_time`、`updated_by`、`updated_time`、`deleted`。
 
 ---
@@ -72,12 +73,12 @@ CREATE TABLE `LOAN_APPLY` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='资产投放申请表';
 ```
 
-### 2.2 support_request — 中场支持申请表
+### 2.2 support_request — 中台支持申请表
 
 ```sql
 -- ==========================================================================
 -- 表名: support_request
--- 说明: 中场支持申请表,承载客户经理向中后台部门发起的支持需求
+-- 说明: 中台支持申请表,承载客户经理向中台部门发起的支持需求
 --      支持多产品拆单(同一提交批次按产品拆为多条记录,共享submit_group_id)
 --      支持双视图: SUPPORT(发起侧)与SUPPORT_DEPT(承接侧)
 -- 创建: 2026-04-10
@@ -94,7 +95,7 @@ CREATE TABLE `SUPPORT_REQUEST` (
   `other_demand`              TEXT           DEFAULT NULL COMMENT '其他需求/补充说明',
   `dispatch_emp_id`           VARCHAR(32)    DEFAULT NULL COMMENT '派单人工号(部门秘书,仅场景B)',
   `dispatch_time`             DATETIME       DEFAULT NULL COMMENT '派单时间',
-  `assigned_emp_id`           VARCHAR(32)    DEFAULT NULL COMMENT '承接办理人工号(场景A=产品负责人,场景B=秘书派单)',
+  `assigned_emp_id`           VARCHAR(32)    DEFAULT NULL COMMENT '承接办理人工号(场景A=产品负责人变量,场景B=秘书派单)',
   `status`                    VARCHAR(20)    NOT NULL DEFAULT 'DRAFT' COMMENT '状态:DRAFT/IN_APPROVAL/IN_PROGRESS/COMPLETED/REJECTED/CANCELLED',
   `business_key`              VARCHAR(100)   DEFAULT NULL COMMENT '流程业务键,固定格式SUPPORT:{id}',
   `process_instance_id`       VARCHAR(64)    DEFAULT NULL COMMENT '流程实例ID',
@@ -116,8 +117,28 @@ CREATE TABLE `SUPPORT_REQUEST` (
   KEY `idx_owner_org` (`owner_org_id`),
   KEY `idx_created_time` (`created_time`),
   KEY `idx_product` (`product_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='中场支持申请表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='中台支持申请表';
 ```
+
+### 2.3 support_process_log — 中台支持办理过程记录（新增目标结构）
+
+该表按申请追加办理过程/结果记录，服务端通过 `client_uuid` 吸收移动端网络重试；照片和附件只在 `BIZ_FILE_REL` 绑定，不在本表复制 URL。下列字段与当前 `SupportProcessLog` 实体一致，最终结构由外层数据库变更脚本实施后再以目标库为准。
+
+| 字段 | 类型 | 必填/默认 | 说明 |
+|---|---|---|---|
+| `id` | `VARCHAR(32)` | 必填，主键 | 记录 ID |
+| `support_request_id` | `VARCHAR(32)` | 必填 | 逻辑关联 `SUPPORT_REQUEST.id` |
+| `client_uuid` | `VARCHAR(64)` | 必填 | 同一申请内的客户端幂等键 |
+| `log_type` | `VARCHAR(20)` | 必填，`PROCESS` | `PROCESS` 过程记录或 `RESULT` 结果记录 |
+| `content` | `TEXT` | 必填 | 办理内容/结果说明 |
+| `checkin_time` | `DATETIME` | 可空 | 现场打卡时间 |
+| `longitude` / `latitude` | `DECIMAL(12,8)` | 可空 | 定位经纬度 |
+| `location_address` | `VARCHAR(255)` | 可空 | 定位地址快照 |
+| `created_by` | `VARCHAR(32)` | 必填 | 记录人工号 |
+| `created_time` | `DATETIME` | `CURRENT_TIMESTAMP` | 记录时间 |
+| `deleted` | `TINYINT(1)` | `0` | 逻辑删除标记；过程记录接口只读未删除记录 |
+
+唯一约束 `uk_request_client(support_request_id, client_uuid)`；列表按 `idx_spl_request_time(support_request_id, created_time)` 倒序查询，审计/运营按 `idx_spl_creator_time(created_by, created_time)` 查询。该表不设置跨模块物理外键。
 
 ---
 
@@ -193,7 +214,16 @@ SELECT id, product_id, status FROM support_request
  WHERE submit_group_id = ? AND deleted = 0;
 ```
 
-### 3.3 索引设计原则
+### 3.3 support_process_log
+
+| 索引名 | 字段 | 类型 | 用途 | 命中场景 |
+|---|---|---|---|---|
+| PRIMARY | `id` | 主键 | 记录检索 | 过程记录详情 |
+| `uk_request_client` | `support_request_id, client_uuid` | 唯一 | 客户端重试幂等 | 新增过程记录前查重 |
+| `idx_spl_request_time` | `support_request_id, created_time` | 复合普通 | 申请过程时间线 | 详情页日志列表 |
+| `idx_spl_creator_time` | `created_by, created_time` | 复合普通 | 操作人留痕查询 | 审计/运营追溯 |
+
+### 3.4 索引设计原则
 
 1. **避免过多索引**：每多一个索引，写入成本增加 ~5%，本表核心读多写少，索引数量可控；
 2. **复合索引优先**：后续优化可按 `(owner_org_id, status, created_time)` 建复合索引提升列表性能；
@@ -216,12 +246,14 @@ SELECT id, product_id, status FROM support_request
 | loan_apply | guarantee_type | DICT_ITEM | item_value(dict_type=GUARANTEE_TYPE) | 担保方式字典 | 同上 |
 | support_request | cust_id | cust_master | id | 申请客户 | 同 loan_apply |
 | support_request | product_id | product_info (portal-content) | id | 申请产品 | 调用 `ProductApi.getProduct()` 校验可用性 |
-| support_request | support_dept_id | EXT_ORG_INFO | org_code | 承接部门 | 由产品配置或用户选择 |
+| support_request | support_dept_id | EXT_ORG_INFO | org_code | 承接部门 | 场景 B 用户选择；场景 A 通过产品资料解析知悉部门，不强写此列 |
 | support_request | dispatch_emp_id | PT_USER | emp_id | 派单人(秘书) | 场景B派单时记录 |
-| support_request | assigned_emp_id | PT_USER | emp_id | 承接办理人 | 场景A=产品负责人自动,场景B=秘书派单 |
+| support_request | assigned_emp_id | PT_USER | emp_id | 承接办理人 | 场景A写入流程变量 `assignedEmpId`,场景B由秘书派单 |
 | support_request | source_touch_task_id | touch_task | id | 来源触达任务 | 同 loan_apply |
 | support_request | owner_org_id | EXT_ORG_INFO | org_code | 发起机构 | 继承发起人 |
 | support_request | created_by | PT_USER | emp_id | 发起人 | CurrentUserApi |
+| support_process_log | support_request_id | SUPPORT_REQUEST | id | 过程记录所属申请 | 新增日志时锁定申请并校验可写状态 |
+| support_process_log | created_by | PT_USER | emp_id | 记录人 | CurrentUserApi |
 
 **逻辑外键的执行规则：**
 
@@ -229,6 +261,7 @@ SELECT id, product_id, status FROM support_request
 2. **Service 层强制校验**：所有逻辑外键在 Service 层通过对应 `QueryApi` 校验，校验失败抛 `BizException`；
 3. **允许历史悬挂**：如员工离职后 `assigned_emp_id` 可能指向已停用账号，允许查询返回但不允许新建绑定；
 4. **级联删除**：业务表均为逻辑删除 (`deleted=1`)，不涉及物理级联。
+5. **过程记录幂等**：`support_process_log` 以 `(support_request_id, client_uuid)` 唯一约束防止移动端重试重复写入；照片文件 ID 通过 `FileApi.bindFile("SUPPORT_LOG", logId, fileId, ...)` 关联。
 
 ---
 
@@ -267,19 +300,20 @@ SELECT id, product_id, status FROM support_request
 
 | 字段 | 来源 | 赋值时机 | 可变性 | 是否可为空 | 赋值方 |
 |---|---|---|---|---|---|
+| `sourceType` | 前端入口 | 创建请求解析 | 不落库，仅应用层字段 | 可空（由 `sourceTouchTaskId` 推断时可省略） | `CreateSupportReq`；旧 `SUPPORT_REQUEST` 无此列 |
 | `id` | 应用层生成（UUID） | 创建草稿 | 不可变 | 不可空 | `SupportService.createDraft` |
-| `request_no` | 应用层生成（`SR+yyyyMMdd+6位序号`） | 提交审批时 | 不可变 | 草稿可空 | `SupportService.submit` |
-| `submit_group_id` | 应用层生成（UUID） | 多产品拆单提交时，同批所有记录共享 | 不可变 | 单产品为 null | `SupportProductSplitService.splitAndSave` |
+| `request_no` | 应用层生成（`SR+yyyyMMdd+6位序号`） | 创建草稿时 | 不可变 | 不可空 | `SupportService.create` / `SupportProductSplitService` |
+| `submit_group_id` | 应用层生成（UUID） | 创建草稿时；多产品同批共享 | 不可变 | 当前单条场景 B 也生成 | `SupportService.create` / `SupportProductSplitService` |
 | `cust_id` | 前端选择器 | 创建草稿 | 草稿期可改，提交后不可变 | 不可空 | 前端传参 |
 | `source_touch_task_id` | 前端从"触达完成弹窗"带入 | 创建草稿 | 不可变 | 可空 | 前端传参 |
 | `product_id` | 前端产品选择器（来自 `ProductApi.listSupportAvailable`） | **创建草稿时确定**（因拆单后不可变更） | 不可变（拆单后） | 可空（场景 B 无具体产品时） | `SupportService.createDraft` / `splitAndSave` |
-| `support_dept_id` | 根据 `product_id` 自动推导，或用户选择 | 创建草稿 | 草稿期可改，提交后不可变 | 场景 A 自动设置，场景 B 必填 | `SupportScenarioRouter.resolveDept` |
+| `support_dept_id` | 场景 B 用户选择的承接部门；场景 A 的产品所属部门仅用于完成后的知悉人解析 | 创建草稿 | 草稿期可改，提交后不可变 | 场景 A 可空，场景 B 必填 | `SupportService.create` / `SupportWorkflowListener` |
 | `other_demand` | 用户输入 | 创建草稿 / 更新草稿 | 草稿期可改，提交后不可变 | 场景 B 必填（若 product_id 为空） | 前端传参 |
 | `dispatch_emp_id` | `CurrentUserApi`（派单人） | **派单时**（POST /api/support-dept/requests/{id}/dispatch） | 仅派单时赋值，不可再改 | 场景 A 永远为空 | `SupportDeptService.dispatch` |
 | `dispatch_time` | `System.now()` | 派单时 | 同上 | 同上 | 同上 |
-| `assigned_emp_id` | 场景 A：从 `ProductApi.getProduct().getResponsibleEmpIds()` 取第一个；场景 B：秘书派单时选择 | 场景 A：提交审批时自动赋值；场景 B：派单时赋值 | 仅初次赋值时可改（通过 TRANSFER 接口） | 不可空 | `SupportService.submit` / `SupportDeptService.dispatch` / `SupportDeptService.transfer` |
+| `assigned_emp_id` | 场景 A：产品负责人；场景 B：秘书选择 | 场景 A：创建/提交时作为 `assignedEmpId` 流程变量；场景 B：派单时赋值 | 场景 B 仅通过受限 TRANSFER 接口可变 | 场景 A 提交后、场景 B 派单后必填 | `SupportProductSplitService` / `SupportService.submit` / `SupportDeptService.dispatch` / `SupportDeptService.transfer` |
 | `status` | Service 状态机 | 状态转移时 | 按状态机规则可变 | 不可空，默认 `DRAFT` | `SupportService.*` / `SupportDeptService.*` / `WorkflowCompletedListener` |
-| `business_key` | 应用层 `SUPPORT:{id}` | 提交审批时 | 不可变 | 草稿可空 | `SupportService.submit` |
+| `business_key` | 应用层 `SUPPORT:{id}` | 创建草稿时 | 不可变 | 草稿即存在 | `SupportService.create` / `SupportProductSplitService` |
 | `process_instance_id` | `WorkflowApi.startProcess` 返回 | 提交审批的同一事务 | 不可变 | 草稿可空 | 同上 |
 | `owner_org_id` | `CurrentUserApi.getOrgCode()` | 创建草稿 | 不可变 | 不可空 | `SupportService.createDraft` |
 | `created_by` | `CurrentUserApi.getEmpId()` | 创建草稿 | 不可变 | 不可空 | 同上 |
@@ -288,12 +322,30 @@ SELECT id, product_id, status FROM support_request
 | `updated_time` | 数据库 | 每次 UPDATE | 可变 | 不可空 | 数据库 |
 | `deleted` | 应用层 | 删除草稿时 | `0 → 1` | 不可空，默认 0 | `SupportService.deleteDraft` |
 
+### 4a.2a support_process_log 字段溯源
+
+| 字段 | 来源 | 赋值时机 | 可变性 | 是否可为空 | 赋值方 |
+|---|---|---|---|---|---|
+| `id` | 应用层 UUID | 新增过程记录 | 不可变 | 不可空 | `SupportProcessLogService` |
+| `support_request_id` | URL 路径申请 ID | 新增过程记录 | 不可变 | 不可空 | 服务端校验 `SUPPORT_REQUEST` |
+| `client_uuid` | 移动端本次提交 | 新增过程记录 | 不可变 | 不可空 | 请求体；同申请唯一 |
+| `log_type` | 请求体 | 新增过程记录 | 不可变 | 不可空，默认 `PROCESS` | 服务端白名单校验 `PROCESS/RESULT` |
+| `content` | 请求体 | 新增过程记录 | 不可变 | 不可空 | 承接人员 |
+| `checkin_time` | 请求体现场打卡 | 新增过程记录 | 不可变 | 可空 | 承接人员 |
+| `longitude` / `latitude` | 请求体定位 | 新增过程记录 | 不可变 | 可空 | 承接人员 |
+| `location_address` | 请求体定位地址 | 新增过程记录 | 不可变 | 可空 | 承接人员 |
+| `created_by` | `CurrentUserApi.getCurrentEmpId()` | 新增过程记录 | 不可变 | 不可空 | 服务端上下文，不信任客户端 |
+| `created_time` | 数据库默认值 | INSERT | 不可变 | 不可空 | 数据库 |
+| `deleted` | 应用层 | 预留逻辑删除 | `0 → 1` | 不可空，默认 0 | 服务端 |
+
+`fileIds`/`photoFileIds` 不写入 `SUPPORT_PROCESS_LOG`，由服务端校验后通过 `FileApi` 绑定 `biz_type=SUPPORT_LOG`、`biz_id=log.id`。
+
 **关键提示**：
 - `product_id` 一旦拆单保存就**不可再改**（即使是草稿状态也不能改）。如需改，必须**删除整组草稿重建**
 - `support_dept_id` 的推导逻辑：
-  - 场景 A（`product_id != null`）：`support_dept_id = ProductApi.getProduct(product_id).getProductDeptOrgCode()`
-  - 场景 B（`product_id == null`）：用户前端选择承接部门
-- `assigned_emp_id` 的 TRANSFER 是**受限变更**：只有 `SUPPORT_DEPT` 秘书可在 `IN_PROGRESS` 状态下转交给本部门其他人员
+  - 场景 A（`product_id != null`）：产品部门由 `ProductApi.getProduct(product_id).getProductDeptOrgCode()` 解析，供 ZT-04 知悉通知使用，不强写 `support_dept_id`
+  - 场景 B（`product_id == null`）：用户前端选择承接部门并写入 `support_dept_id`
+- `assigned_emp_id` 的 TRANSFER 是**受限变更**：只有当前承接人可在 `IN_PROGRESS` 状态下转交给本部门其他人员
 
 ### 4a.3 赋值时机 vs 状态对照表
 
@@ -301,11 +353,11 @@ SELECT id, product_id, status FROM support_request
 |---|---|---|---|
 | 创建草稿（LOAN） | POST /api/loans | id/cust_id/project_type/biz_type/guarantee_type/credit_amount/credit_exposure_amount/owner_org_id/created_by/created_time/status=DRAFT | `DRAFT` |
 | 创建草稿（SUPPORT） | POST /api/support-requests | id/cust_id/product_id 或 other_demand/support_dept_id/owner_org_id/created_by/created_time/status=DRAFT/submit_group_id | `DRAFT` |
-| 更新草稿 | PUT /api/loans/{id} 或 /api/support-requests/{id} | 业务字段 + updated_by/updated_time | `DRAFT` |
+| 更新草稿 | 当前中台支持 REST 未提供 PUT 更新入口；需删除草稿后重建 | — | `DRAFT` |
 | 提交审批 | POST /api/loans/{id}/submit 或 /api/support-requests/{id}/submit | apply_no/request_no + business_key + process_instance_id + status=IN_APPROVAL | `IN_APPROVAL` |
 | 秘书派单（仅场景 B） | POST /api/support-dept/requests/{id}/dispatch | dispatch_emp_id + dispatch_time + assigned_emp_id + status=IN_PROGRESS | `IN_PROGRESS` |
-| 秘书转交 | POST /api/support-dept/requests/{id}/transfer | assigned_emp_id（更新为新人） + updated_by/updated_time | `IN_PROGRESS`（不变） |
-| 支持人员完成 | POST /api/support-dept/requests/{id}/complete | status=COMPLETED + updated_by/updated_time | `COMPLETED` |
+| 当前承接人转交 | POST /api/support-dept/requests/{id}/transfer | assigned_emp_id（更新为新人） + updated_by/updated_time | `IN_PROGRESS`（不变） |
+| 支持人员完成 | POST /api/support-dept/requests/{id}/complete | 通过 workflow 任务办理，结束监听器回写 status；失败由强制终止回写 `REJECTED` | `COMPLETED` / `REJECTED` |
 | 流程通过回写（LOAN） | `WorkflowCompletedListener`（异步） | status=COMPLETED + updated_by=SYSTEM + updated_time | `COMPLETED` |
 | 流程驳回回写 | 同上 | status=REJECTED + updated_by=SYSTEM + updated_time | `REJECTED` |
 | 撤回 | POST /api/loans/{id}/cancel 或 /api/support-requests/{id}/cancel | status=CANCELLED + updated_by/updated_time | `CANCELLED` |
@@ -338,22 +390,24 @@ SELECT id, product_id, status FROM support_request
 | 取值 | 含义 | 进入条件 | 可达状态 |
 |------|------|--------|---------|
 | DRAFT | 草稿 | 创建/保存草稿 | IN_APPROVAL / CANCELLED |
-| IN_APPROVAL | 审批中(含派单环节) | 提交后启动流程 | IN_PROGRESS / REJECTED |
-| IN_PROGRESS | 处理中 | 秘书派单后(场景B)或产品负责人接单后(场景A) | COMPLETED / REJECTED |
-| COMPLETED | 已完成 | 承接人完成办理 | (终态) |
-| REJECTED | 已驳回 | 流程被驳回 | (终态) |
+| IN_APPROVAL | 工作流处理中（含派单环节） | 提交后启动流程 | IN_PROGRESS / COMPLETED / REJECTED |
+| IN_PROGRESS | 处理中 | 秘书派单后(场景B) | COMPLETED / REJECTED |
+| COMPLETED | 已完成 | 正常路径到达流程结束节点，由 `processCompletedListener` 回写 | (终态) |
+| REJECTED | 已驳回 | workflow service 强制终止流程后回写 | (终态) |
 | CANCELLED | 已取消 | 用户撤销草稿 | (终态) |
 
 状态机图：
 ```
-  DRAFT ──submit──▶ IN_APPROVAL ──dispatch/claim──▶ IN_PROGRESS ──complete──▶ COMPLETED
-    │                   │                               │
-    │                   └──reject──▶ REJECTED           └──reject──▶ REJECTED
+  DRAFT ──submit──▶ IN_APPROVAL ──dispatch──▶ IN_PROGRESS ──approve──▶ COMPLETED
+    │                   │                         │
+    │                   ├──approve(场景A)──▶ COMPLETED
+    │                   └──reject(强制终止)──▶ REJECTED
+    │                                             └──reject──▶ REJECTED
     └──cancel──▶ CANCELLED
 ```
 
 **场景A与场景B的状态差异：**
-- **场景A (`support_simple_v1`)**：提交后直接由产品负责人处理，`IN_APPROVAL` 停留时间短，很快进入 `IN_PROGRESS`；
+- **场景A (`support_simple_v1`)**：提交后由 `assignedEmpId` 对应的产品负责人办理，正常完成由流程结束监听器从 `IN_APPROVAL` 回写 `COMPLETED`，不要求经过 `IN_PROGRESS`；
 - **场景B (`support_complex_v1`)**：提交后等待秘书派单，`IN_APPROVAL` 期间 `assigned_emp_id` 为 NULL，派单后变更为 `IN_PROGRESS`。
 
 ### 5.3 字典引用
@@ -373,7 +427,7 @@ SELECT id, product_id, status FROM support_request
 | 业务 | 格式 | 示例 | 长度 |
 |------|------|------|-----|
 | 资产投放申请 | `LOAN:{id}` | `LOAN:LA202604100001abcdef...` | ≤ 100 |
-| 中场支持申请 | `SUPPORT:{id}` | `SUPPORT:SR202604100001abcdef...` | ≤ 100 |
+| 中台支持申请 | `SUPPORT:{id}` | `SUPPORT:SR202604100001abcdef...` | ≤ 100 |
 
 **格式设计原则：**
 1. **前缀分类**：便于在 Flowable 中直接按前缀检索不同类型的流程；

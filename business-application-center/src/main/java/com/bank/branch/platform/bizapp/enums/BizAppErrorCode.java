@@ -26,7 +26,7 @@ public enum BizAppErrorCode {
     APPLY_NOT_FOUND("BIZ-40401", "申请不存在"),
 
     // 409 冲突/业务规则
-    PRODUCT_NOT_SUPPORT_AVAILABLE("BIZ-40901", "产品不支持中场支持"),
+    PRODUCT_NOT_SUPPORT_AVAILABLE("BIZ-40901", "产品不支持中台支持"),
     SCENARIO_B_MISSING_DEPT("BIZ-40902", "场景B缺少supportDeptId"),
     EMPTY_PRODUCT_AND_DEMAND("BIZ-40903", "productIds和otherDemand都为空"),
     INVALID_DICT_VALUE("BIZ-40904", "字典值不合法"),

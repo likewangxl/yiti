@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 中场支持申请审批驳回事件。
+ * 中台支持申请审批驳回事件。
  * 在工作流完成且结果为驳回（outcome=REJECTED）时发布。
  */
 @Data

@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * 中场支持来源类型枚举。
+ * 中台支持来源类型枚举。
  */
 @Getter
 @AllArgsConstructor

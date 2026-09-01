@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    中台支持场景 B：模糊需求由部门秘书派单后交具体支持人员办理。
+    驳回由 workflow-center 任务服务强制终止流程，不在该固定 V1 图中增加条件网关。
+    两个用户任务的候选人均由 WF_NODE_CANDIDATE_CONF 的 VAR 配置解析：
+      - dept_secretary_dispatch → dispatchEmpIds
+      - support_staff_handle    → assignedEmpId
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://www.bank.com/branch/platform/workflow">
+
+    <process id="support_complex_v1" name="中台支持（部门承接）" isExecutable="true">
+        <extensionElements>
+            <flowable:executionListener event="end" delegateExpression="${processCompletedListener}"/>
+        </extensionElements>
+
+        <startEvent id="start" name="开始"/>
+
+        <userTask id="dept_secretary_dispatch" name="部门秘书派单">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <userTask id="support_staff_handle" name="支持人员办理">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <endEvent id="end" name="结束"/>
+
+        <sequenceFlow id="flow_start_secretary" sourceRef="start" targetRef="dept_secretary_dispatch"/>
+        <sequenceFlow id="flow_secretary_staff" sourceRef="dept_secretary_dispatch" targetRef="support_staff_handle"/>
+        <sequenceFlow id="flow_staff_end" sourceRef="support_staff_handle" targetRef="end"/>
+    </process>
+</definitions>

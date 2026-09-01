@@ -6,7 +6,7 @@ import lombok.Data;
  * 客户正在运行的业务申请数量汇总 DTO。
  * <p>
  * 用于 {@code BizApplyQueryApi.countRunningApplications()} 的返回结果。
- * 聚合贷款申请和中场支持申请两个域的运行中数量。
+ * 聚合贷款申请和中台支持申请两个域的运行中数量。
  * </p>
  */
 @Data
