@@ -127,6 +127,42 @@ const routes = [
         }
       },
 
+      // 中台支持：正式菜单资源来自 /bizexec/supports；创建/详情页隐藏于同一菜单下。
+      {
+        path: 'bizexec/supports',
+        name: 'SupportRequests',
+        component: () => import('@/views/businessApplication/SupportRequests.vue'),
+        meta: {
+          title: '中台支持',
+          group: '客户营销',
+          requiredMenu: '/bizexec/supports',
+          requiredResource: '/api/support-requests'
+        }
+      },
+      {
+        path: 'bizexec/supports/new',
+        name: 'SupportRequestCreate',
+        component: () => import('@/views/businessApplication/SupportRequests.vue'),
+        meta: {
+          title: '新建中台支持',
+          group: '客户营销',
+          hideInMenu: true,
+          requiredMenu: '/bizexec/supports',
+          requiredResource: '/api/support-requests'
+        }
+      },
+      {
+        path: 'bizexec/supports/:id',
+        name: 'SupportRequestDetail',
+        component: () => import('@/views/businessApplication/SupportRequests.vue'),
+        meta: {
+          title: '中台支持详情',
+          group: '客户营销',
+          hideInMenu: true,
+          requiredMenu: '/bizexec/supports',
+          requiredResource: '/api/support-requests'
+        }
+      },
       // 信息聚合
       { path: 'info/nav',          name: 'InfoNav',        component: () => import('@/views/info/NavHub.vue'),      meta: { title: '网址导航',     group: '信息聚合' } },
       { path: 'info/address-book', name: 'InfoAddressBook', component: () => import('@/views/info/AddressBook.vue'), meta: { title: '通讯录',       group: '信息聚合' } },

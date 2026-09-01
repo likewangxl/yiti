@@ -237,7 +237,7 @@ const MODULE_RULES = [
   { prefix: '/api/touch-reports', name: '触达任务' },
   { prefix: '/api/loan', name: '业务执行' },
   { prefix: '/api/business-application', name: '业务执行' },
-  { prefix: '/api/support', name: '中场支持' },
+  { prefix: '/api/support', name: '中台支持' },
   { prefix: '/api/workflow', name: '工作流' },
   { prefix: '/api/perf', name: '绩效与考核' },
   { prefix: '/api/admin/perf', name: '绩效与考核' },
@@ -310,7 +310,7 @@ const groupedRes = computed(() => {
     group.allItems.push(resource);
     group[rwSide(resource)].items.push(resource);
   }
-  const order = ['工作台', '客户营销', '触达任务', '业务执行', '中场支持', '工作流', '绩效与考核', '报表分析', '组织架构', '产品资料库', '文档下载', '文件管理', '数据探查', '权限管理', '认证', '系统治理', '管理后台', '其它'];
+  const order = ['工作台', '客户营销', '触达任务', '业务执行', '中台支持', '工作流', '绩效与考核', '报表分析', '组织架构', '产品资料库', '文档下载', '文件管理', '数据探查', '权限管理', '认证', '系统治理', '管理后台', '其它'];
   return [...groups.values()].map(group => {
     group.allItems.sort((a, b) => String(a.resourceUrl || '').localeCompare(String(b.resourceUrl || '')));
     for (const side of ['r', 'w']) {

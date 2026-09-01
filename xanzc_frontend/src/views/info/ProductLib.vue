@@ -33,8 +33,8 @@
             @change="reload"
           />
         </el-form-item>
-        <el-form-item label="中场支持">
-          <el-select v-model="filters.supportForSupportRequest" aria-label="按中场支持筛选" placeholder="全部" clearable style="width:120px" @change="reload">
+        <el-form-item label="中台支持">
+          <el-select v-model="filters.supportForSupportRequest" aria-label="按中台支持筛选" placeholder="全部" clearable style="width:120px" @change="reload">
             <el-option :value="true" label="是" />
             <el-option :value="false" label="否" />
           </el-select>
@@ -79,7 +79,7 @@
         <el-table-column prop="productDeptOrgName" label="产品部门" width="190" class-name="compact-clamp-cell" />
         <el-table-column prop="productName" label="产品名称" width="200" class-name="compact-clamp-cell" />
         <el-table-column prop="description" label="产品说明" min-width="270" class-name="compact-clamp-cell" />
-        <el-table-column label="中场支持" width="100" align="center">
+        <el-table-column label="中台支持" width="100" align="center">
           <template #default="{row}">
             <el-tag :class="row.supportForSupportRequest ? 'tag-success' : 'tag-info'" effect="plain">
               {{ row.supportForSupportRequest ? '是' : '否' }}
@@ -158,9 +158,9 @@
         <el-form-item label="产品说明">
           <el-input v-model="form.description" aria-label="产品说明" type="textarea" :rows="3" maxlength="1000" show-word-limit />
         </el-form-item>
-        <el-form-item label="中场支持">
+        <el-form-item label="中台支持">
           <el-switch v-model="form.supportForSupportRequest" aria-label="是否支持中场请求" />
-          <span class="hint support-hint">勾选后该产品在“发起中场支持”页可见</span>
+          <span class="hint support-hint">勾选后该产品在“发起中台支持”页可见</span>
         </el-form-item>
         <el-form-item v-if="editing" label="状态">
           <el-select v-model="form.status" aria-label="产品状态" style="width:140px">

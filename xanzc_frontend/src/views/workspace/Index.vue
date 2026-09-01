@@ -464,6 +464,16 @@ function resolveTaskRoute(row, mode) {
       ? { path: '/perf/adjust', query: { tab: 'done', taskId: id, action: 'view', bizKey: row.businessKey } }
       : { path: '/perf/adjust', query: { tab: 'todo', taskId: id, action: 'open' } };
   }
+  if (row.bizType === 'SUPPORT' || row.bizType === 'SUPPORT_DEPT') {
+    const supportId = row.bizId || (String(row.businessKey || '').startsWith('SUPPORT:')
+      ? String(row.businessKey).slice('SUPPORT:'.length)
+      : '');
+    if (!supportId) return null;
+    return {
+      path: `/bizexec/supports/${supportId}`,
+      query: { tab: isDetail ? 'DEPT_DONE' : 'DEPT_TODO', taskId: id }
+    };
+  }
   return null;
 }
 

@@ -17,9 +17,11 @@ const message = vi.hoisted(() => ({
   warning: vi.fn(),
 }));
 const messageBox = vi.hoisted(() => ({ confirm: vi.fn(), prompt: vi.fn() }));
+const routerPush = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/customerMarketing', () => api);
 vi.mock('element-plus', () => ({ ElMessage: message, ElMessageBox: messageBox }));
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: routerPush }) }));
 
 import TouchTaskDetailDialog from '../TouchTaskDetailDialog.vue';
 
@@ -104,6 +106,7 @@ beforeEach(() => {
   api.cancelTouchTask.mockResolvedValue({});
   messageBox.confirm.mockResolvedValue(true);
   messageBox.prompt.mockResolvedValue({ value: '客户暂不配合' });
+  routerPush.mockReset();
 });
 
 describe('TouchTaskDetailDialog 一任务一工作日志', () => {
@@ -207,5 +210,37 @@ describe('TouchTaskDetailDialog 一任务一工作日志', () => {
     expect(api.cancelTouchTask).toHaveBeenCalledTimes(1);
     expect(api.cancelTouchTask).toHaveBeenCalledWith('TASK-1', '客户暂不配合');
     expect(view.vm.task.taskStatus).toBe('CANCELLED');
+  });
+
+  it('触达成功后询问是否需要中台支持，选择是带出客户和来源任务', async () => {
+    api.getTouchTask.mockResolvedValue(task('IN_PROGRESS'));
+    api.listTouchLogs.mockResolvedValue([log()]);
+    api.completeTouchTask.mockResolvedValue({});
+    messageBox.confirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+
+    const view = await mountDialog();
+    await view.get('.complete-task-button').trigger('click');
+    await flushPromises();
+
+    expect(messageBox.confirm).toHaveBeenCalledTimes(2);
+    expect(routerPush).toHaveBeenCalledWith({
+      path: '/bizexec/supports/new',
+      query: { custId: 'CUST-1', sourceTouchTaskId: 'TASK-1' }
+    });
+  });
+
+  it('中台支持后续选择取消或跳转失败不影响触达完成', async () => {
+    api.getTouchTask.mockResolvedValue(task('IN_PROGRESS'));
+    api.listTouchLogs.mockResolvedValue([log()]);
+    api.completeTouchTask.mockResolvedValue({});
+    messageBox.confirm.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('cancel'));
+
+    const view = await mountDialog();
+    await view.get('.complete-task-button').trigger('click');
+    await flushPromises();
+
+    expect(api.completeTouchTask).toHaveBeenCalledWith('TASK-1');
+    expect(view.vm.task.taskStatus).toBe('IN_PROGRESS');
+    expect(routerPush).not.toHaveBeenCalled();
   });
 });

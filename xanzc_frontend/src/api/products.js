@@ -26,7 +26,7 @@ export async function listActiveProducts({ pageSize = 100 } = {}) {
   return records;
 }
 
-// GET /api/products/support-available —— 中场支持可用产品 List<ProductSimpleDTO>
+// GET /api/products/support-available —— 中台支持可用产品 List<ProductSimpleDTO>
 export function supportAvailableProducts() {
   return call('get', '/products/support-available', {}, []);
 }

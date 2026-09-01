@@ -99,6 +99,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { useRouter } from 'vue-router';
 import {
   addTouchLog, cancelTouchTask, completeTouchTask, getMarketingCustomer, getTouchTask,
   listTouchLogs, uploadTouchPhoto
@@ -111,6 +112,7 @@ const props = defineProps({
   allowWrite: { type: Boolean, default: false }
 });
 const emit = defineEmits(['update:modelValue', 'changed']);
+const router = useRouter();
 const task = ref({});
 const customer = ref({});
 const logs = ref([]);
@@ -202,7 +204,32 @@ async function complete() {
     ElMessage.success('任务已完成');
     await load();
     emit('changed');
+    await offerSupportRequest();
   } finally { completing.value = false; }
+}
+
+/**
+ * 触达完成后的中台支持入口是独立的后续选择。
+ * 这里吞掉用户取消和导航异常，确保触达成功状态不会因后续入口失败而回滚或被误报。
+ */
+async function offerSupportRequest() {
+  try {
+    await ElMessageBox.confirm('触达已完成，是否需要发起中台支持？', '中台支持', {
+      type: 'info', confirmButtonText: '需要', cancelButtonText: '暂不需要'
+    });
+  } catch (_) {
+    return;
+  }
+  const custId = task.value?.custId;
+  if (!custId) return;
+  try {
+    await router?.push({
+      path: '/bizexec/supports/new',
+      query: { custId: String(custId), sourceTouchTaskId: String(props.taskId) }
+    });
+  } catch (_) {
+    // 触达已完成；中台支持只是可选后续入口，路由失败不影响已完成结果。
+  }
 }
 
 async function cancel() {
