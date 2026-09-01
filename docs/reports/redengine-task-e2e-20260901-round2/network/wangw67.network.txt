@@ -1,0 +1,20 @@
+# wangw67 独立会话 network（官方 playwright-cli，已脱敏）
+# 会话：redengine-wang-round2
+# 说明：未保存登录请求体/任何会话凭据；以下仅保存请求方法、URL、状态和非敏感响应摘要。
+
+## 真实 API 请求
+
+- POST /api/auth/login -> 200 OK（登录成功；响应体未归档，因含会话凭据）
+- GET /api/auth/my-menus -> 200 OK
+- GET /api/auth/current-user -> 200 OK；empId=wangw67，username=wangw67，roles=R_RM、R_RE_SECR，mainOrg=96/科技发展部
+- GET /api/re/home/summary -> 200 OK；quarter=2026-Q3，mode=INSTITUTION，organization=曲江支行党支部，score=0，rank=1，todoCount=0
+- GET /api/re/reviews/tasks/branch/queue?pageNo=1&pageSize=20&tab=PENDING -> 200 OK
+- GET /api/re/home/warning-pool -> 200 OK；redBranches=[]，yellowBranches=[]
+
+## mock 路由
+
+`route-list` 原文见 `../routes/wangw67.route-list.txt`：`No active routes`。
+
+## 直接路由门禁补充
+
+直接访问 `/redengine/report`、`/redengine/records`、`/redengine/task-entry?assignmentId=1`、`/redengine/task-management` 均落到 `#/no-access`，未进入对应页面。

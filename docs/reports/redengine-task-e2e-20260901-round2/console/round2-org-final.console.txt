@@ -1,0 +1,7 @@
+# round2-org-final 最终 console 摘要（官方 playwright-cli）
+# 命令：PWTEST_DAEMON_SESSION_DIR=/tmp/redengine-playwright-daemon-root PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright ./node_modules/.bin/playwright-cli -s=round2-org-final console
+
+最终 CLI 结果计数：Total messages: 7（Errors: 0，Warnings: 5）。
+结论：最终会话 console error 为 0。
+已观察到的 warning 为既有 Vue Router 路由/transition/keep-alive 警告和 Element Plus radio `label` 弃用提示；未发现任务创建、组织通过、空意见校验或组织驳回流程产生的 console error。
+未归档任何密码、Cookie、token、Authorization 或登录响应体。
