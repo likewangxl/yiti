@@ -60,6 +60,7 @@ import java.util.stream.Collectors;
 public class TodoQueryService {
 
     private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {};
+    private static final String DISABLED_HISTORICAL_EDGE_NAME = "历史直达边已停用";
 
     private final TaskService taskService;
     private final HistoryService historyService;
@@ -369,20 +370,30 @@ public class TodoQueryService {
             if (!nodeKey.equals(e.getFromNodeKey())) {
                 continue;
             }
-            if (e.getOutputName() != null) {
+            if (isVisibleBranchEdge(e)) {
                 result.add(toBranchOption(e)); // 命名边直接作为分支
             } else if (e.getCondition() == null
                     && "GATEWAY".equals(typeByKey.get(e.getToNodeKey()))) {
                 // 仅无条件结构边穿透网关；带条件的无名边本身就是路由，不展示网关后的选项
                 String gwKey = e.getToNodeKey();
                 for (com.bank.branch.platform.workflow.api.dto.flow.FlowEdgeDTO ge : graph.getEdges()) {
-                    if (gwKey.equals(ge.getFromNodeKey()) && ge.getOutputName() != null) {
+                    if (gwKey.equals(ge.getFromNodeKey()) && isVisibleBranchEdge(ge)) {
                         result.add(toBranchOption(ge));
                     }
                 }
             }
         }
         return result;
+    }
+
+    /**
+     * 判断命名边是否应作为任务办理按钮展示。
+     * 历史直达边为保留数据而未物理删除，但已由永不命中的条件停用，不能再暴露为可选分支。
+     */
+    private static boolean isVisibleBranchEdge(
+            com.bank.branch.platform.workflow.api.dto.flow.FlowEdgeDTO edge) {
+        return edge.getOutputName() != null
+                && !DISABLED_HISTORICAL_EDGE_NAME.equals(edge.getOutputName());
     }
 
     /**

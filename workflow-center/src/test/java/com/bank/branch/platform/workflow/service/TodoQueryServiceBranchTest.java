@@ -59,6 +59,20 @@ class TodoQueryServiceBranchTest {
     }
 
     @Test
+    void computeOutgoingBranches_disabledHistoricalEdge_doesNotExposeButton() {
+        FlowGraphDTO g = new FlowGraphDTO();
+        g.setEdges(List.of(
+                edge("branch_approve_l3", "branch_approve_l2", "2级机构负责人审批", null, null),
+                edge("branch_approve_l3", "finance_review", "历史直达边已停用", "startOrgLevel", "0")
+        ));
+
+        List<BranchOptionDTO> branches = TodoQueryService.computeOutgoingBranches(g, "branch_approve_l3");
+
+        assertEquals(1, branches.size());
+        assertEquals("2级机构负责人审批", branches.get(0).getOutputName());
+    }
+
+    @Test
     void computeOutgoingBranches_nullGraph_returnsEmpty() {
         assertTrue(TodoQueryService.computeOutgoingBranches(null, "biz_dept_review").isEmpty());
     }
