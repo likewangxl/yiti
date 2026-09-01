@@ -79,6 +79,19 @@ function taskRow(overrides = {}) {
   };
 }
 
+function recurringGeneralTaskRow(overrides = {}) {
+  return taskRow({
+    taskId: 5,
+    assignmentId: 5,
+    taskTitle: '每月初经营分析填报',
+    taskDescription: '请按每月初要求填报经营分析',
+    taskNature: 'RECURRING',
+    businessType: 'GENERAL',
+    cycleType: 'MONTH_START',
+    ...overrides
+  });
+}
+
 describe('组织审核工作台', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -138,6 +151,32 @@ describe('组织审核工作台', () => {
     expect(wrapper.find('.scoring-panel').exists()).toBe(false);
     await wrapper.vm.downloadAttachment(item, item.files[0]);
     expect(downloadTaskAttachment).toHaveBeenCalledWith(42, 1001, 'file-1');
+    wrapper.unmount();
+  });
+
+  it('普通定时任务展示定时任务和每月初，仍使用任务处理区而非评分区', async () => {
+    const recurringTask = recurringGeneralTaskRow();
+    listOrgTaskReviews.mockResolvedValueOnce({ records: [recurringTask], total: 1 });
+    getOrgTaskReview.mockResolvedValueOnce(recurringTask);
+
+    const wrapper = mount(ReviewView, { global: { stubs } });
+    await settle();
+    const item = wrapper.vm.reviewItems.find((row) => row.source === 'task');
+
+    await wrapper.vm.selectItem(item);
+    await settle();
+
+    expect(item).toMatchObject({
+      nature: 'RECURRING',
+      cycle: 'MONTH_START',
+      isPeriodic: true,
+      isTemporary: false,
+      isTask: true
+    });
+    expect(wrapper.text()).toContain('任务性质：定时任务');
+    expect(wrapper.text()).toContain('周期：每月初');
+    expect(wrapper.find('.scoring-panel').exists()).toBe(false);
+    expect(wrapper.find('.task-action-panel').exists()).toBe(true);
     wrapper.unmount();
   });
 

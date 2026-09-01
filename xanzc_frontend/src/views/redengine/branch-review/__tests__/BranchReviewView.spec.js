@@ -71,6 +71,19 @@ function taskRow(overrides = {}) {
   };
 }
 
+function recurringGeneralTaskRow(overrides = {}) {
+  return taskRow({
+    taskId: 5,
+    assignmentId: 5,
+    taskTitle: '每月初经营分析填报',
+    taskDescription: '请按每月初要求填报经营分析',
+    taskNature: 'RECURRING',
+    businessType: 'GENERAL',
+    cycleType: 'MONTH_START',
+    ...overrides
+  });
+}
+
 describe('支部审核工作台', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -134,6 +147,27 @@ describe('支部审核工作台', () => {
     expect(wrapper.text()).toContain('整改说明.pdf');
     await wrapper.vm.downloadAttachment(wrapper.vm.items.find((item) => item.source === 'task'), taskRow().files[0]);
     expect(downloadTaskAttachment).toHaveBeenCalledWith(42, 1001, 'file-1');
+    wrapper.unmount();
+  });
+
+  it('普通定时任务卡片显示定时任务和每月初，不把 GENERAL 当成临时任务', async () => {
+    const recurringTask = recurringGeneralTaskRow();
+    listBranchTaskReviews.mockResolvedValueOnce({ records: [recurringTask], total: 1 });
+
+    const wrapper = mount(BranchReviewView, { global: { stubs } });
+    await settle();
+
+    const item = wrapper.vm.items[0];
+    expect(item).toMatchObject({
+      nature: 'RECURRING',
+      cycle: 'MONTH_START',
+      isPeriodic: true,
+      isTemporary: false,
+      isTask: true,
+      dim: '定时任务'
+    });
+    expect(wrapper.find('.dim-badge').text()).toBe('定时任务');
+    expect(wrapper.text()).toContain('每月初');
     wrapper.unmount();
   });
 

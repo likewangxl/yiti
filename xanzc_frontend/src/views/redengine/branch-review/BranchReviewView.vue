@@ -79,6 +79,8 @@
             <span class="meta-item" v-if="item.branch">党支部：{{ item.branch }}</span>
             <span class="meta-item">📋 提交人：{{ item.submitter }}</span>
             <span class="meta-item">📅 {{ item.submitDate }}</span>
+            <span v-if="item.source === 'task'" class="meta-item">任务性质：{{ taskNatureLabel(item.nature) }}</span>
+            <span v-if="item.source === 'task' && item.isPeriodic && item.cycle" class="meta-item">周期：{{ cycleLabel(item.cycle) }}</span>
           </div>
           <div v-if="item.description" class="description">
             <template v-for="(part, index) in descriptionParts(item.description)" :key="`${itemKey(item)}-description-${index}`">
@@ -204,12 +206,13 @@ import {
 import {
   CYCLE_OPTIONS,
   buildWorkflowQuery,
+  cycleLabel,
   isFourDimensionTask,
-  isPeriodicNature,
   linkifyDescription,
   normalizeAssignmentPage
 } from '../tasks/task-domain'
 import FileIntegrationNotice from '../components/FileIntegrationNotice.vue'
+import { isPeriodicTaskNature, taskNatureLabel } from '../records/task-display'
 
 const tabs = [
   { value: 'pending', label: '待处理' },
@@ -315,6 +318,7 @@ function normalizeMaterialRow(row = {}) {
     cycle: row.cycleType || row.cycle || '',
     isPeriodic: true,
     isTemporary: false,
+    isTask: false,
     isFourDimension: true,
     status,
     reviewNote: row.reviewFeedback || row.feedback || '',
@@ -336,6 +340,8 @@ function normalizeTaskRow(row = {}) {
   const normalized = normalizeAssignmentPage([assignment]).records[0] || {}
   const taskNature = assignment.taskNature || assignment.nature || task.taskNature || task.nature || ''
   const fourDimension = isFourDimensionTask({ ...task, ...assignment })
+  const isTask = !fourDimension
+  const isPeriodic = isPeriodicTaskNature(taskNature)
   const rawStatus = assignment.submission?.status
     || assignment.currentSubmission?.status
     || assignment.submissionStatus
@@ -350,14 +356,15 @@ function normalizeTaskRow(row = {}) {
     taskId: assignment.taskId || task.taskId || task.id,
     assignmentId: assignment.assignmentId || assignment.id,
     branch: normalized.branchName || assignment.branchName || '—',
-    dim: fourDimension ? (DIM_LABEL[assignment.dimension] || assignment.dimension || '四大维度材料上报') : '临时任务',
+    dim: fourDimension ? (DIM_LABEL[assignment.dimension] || assignment.dimension || '四大维度材料上报') : taskNatureLabel(taskNature),
     itemName: assignment.taskTitle || assignment.title || task.title || '—',
     description: assignment.taskDescription || assignment.description || task.description || '',
     summary: normalized.content || assignment.content || assignment.formData || '',
     nature: taskNature,
     cycle: assignment.cycleType || assignment.cycle || task.cycleType || task.cycle || '',
-    isPeriodic: isPeriodicNature(taskNature),
-    isTemporary: !fourDimension,
+    isPeriodic,
+    isTemporary: !isPeriodic,
+    isTask,
     isFourDimension: fourDimension,
     submitter: normalized.submitterName || assignment.submitterName || '—',
     submitDate: normalized.submittedAt || assignment.submittedAt || '—',

@@ -49,6 +49,9 @@
             <div class="item-branch">{{ item.branch }}</div>
             <div class="item-name">{{ item.item }}</div>
             <div class="item-meta">{{ item.submitter }} · {{ item.date }}</div>
+            <div v-if="item.source === 'task'" class="item-kind">
+              {{ taskNatureLabel(item.nature) }}<span v-if="item.isPeriodic && item.cycle"> · {{ cycleLabel(item.cycle) }}</span>
+            </div>
             <span :class="['status-tag', item.status]">
               {{ statusLabel(item.status) }}
             </span>
@@ -75,7 +78,7 @@
           <div class="preview-sub">{{ selectedItem.branch }} · {{ selectedItem.submitter }}</div>
         </div>
         <div class="preview-body">
-          <div v-if="selectedItem.isTemporary" class="task-content-block">
+          <div v-if="selectedItem.isTask" class="task-content-block">
             <div class="block-title">📋 任务填报内容</div>
             <div v-if="selectedItem.description" class="task-description">
               <template v-for="(part, index) in descriptionParts(selectedItem.description)" :key="`description-${index}`">
@@ -127,7 +130,7 @@
       </div>
 
       <!-- 右侧：评分与裁决 -->
-      <div v-if="selectedItem && !selectedItem.isTemporary" class="scoring-panel">
+      <div v-if="selectedItem && selectedItem.isFourDimension" class="scoring-panel">
         <h3 class="scoring-title">评分与裁决</h3>
 
         <div class="info-block">
@@ -168,7 +171,7 @@
         <!-- 操作按钮 -->
         <div v-if="selectedItem.status === 'pending'" class="action-buttons">
           <el-button type="success" class="action-btn" :loading="acting" @click="handleApprove">
-            {{ selectedItem.isTemporary ? '✅ 通过' : `✅ 通过并计 ${finalScore ?? 0} 分` }}
+            {{ selectedItem.isTask ? '✅ 通过' : `✅ 通过并计 ${finalScore ?? 0} 分` }}
           </el-button>
           <el-button class="action-btn reject-btn" :loading="acting" @click="handleRejectClick">
             ❌ 驳回
@@ -176,7 +179,7 @@
         </div>
 
         <div v-if="selectedItem.status === 'passed'" class="result-block passed">
-          ✅ 已通过<span v-if="!selectedItem.isTemporary">，计 {{ selectedItem.finalScore }} 分</span>
+          ✅ 已通过<span v-if="selectedItem.isFourDimension">，计 {{ selectedItem.finalScore }} 分</span>
         </div>
         <div v-if="selectedItem.status === 'rejected'" class="result-block rejected">
           <div>❌ 已驳回</div>
@@ -184,10 +187,11 @@
         </div>
       </div>
 
-      <div v-if="selectedItem && selectedItem.isTemporary" class="task-action-panel">
+      <div v-if="selectedItem && selectedItem.isTask" class="task-action-panel">
         <h3 class="scoring-title">任务处理</h3>
         <div class="task-action-summary">
-          <div>任务性质：临时任务</div>
+          <div>任务性质：{{ taskNatureLabel(selectedItem.nature) }}</div>
+          <div v-if="selectedItem.isPeriodic && selectedItem.cycle">周期：{{ cycleLabel(selectedItem.cycle) }}</div>
           <div>提交时间：{{ selectedItem.date }}</div>
         </div>
         <div v-if="selectedItem.status === 'pending'" class="action-buttons">
@@ -242,12 +246,13 @@ import {
 import {
   CYCLE_OPTIONS,
   buildWorkflowQuery,
+  cycleLabel,
   isFourDimensionTask,
-  isPeriodicNature,
   linkifyDescription,
   normalizeAssignmentPage
 } from '../tasks/task-domain'
 import FileIntegrationNotice from '../components/FileIntegrationNotice.vue'
+import { isPeriodicTaskNature, taskNatureLabel } from '../records/task-display'
 
 // 评分标准文案：与 report/JointView.vue 的 rule-box 文案保持一致（产品既定标准，非编造数据）
 const RULE_TEXT = {
@@ -351,6 +356,7 @@ function toQueueItem(row) {
     cycle: row.cycleType || row.cycle || '',
     isPeriodic: true,
     isTemporary: false,
+    isTask: false,
     isFourDimension: true,
     maxScore: row.maxScore ?? 100,
     rule: RULE_TEXT[row.itemCode] || '（暂无对应静态评分标准文案）',
@@ -380,6 +386,8 @@ function normalizeTaskRow(row = {}) {
   const normalized = normalizeAssignmentPage([assignment]).records[0] || {}
   const taskNature = assignment.taskNature || assignment.nature || task.taskNature || task.nature || ''
   const fourDimension = isFourDimensionTask({ ...task, ...assignment })
+  const isTask = !fourDimension
+  const isPeriodic = isPeriodicTaskNature(taskNature)
   const rawStatus = assignment.submission?.status
     || assignment.currentSubmission?.status
     || assignment.submissionStatus
@@ -393,7 +401,7 @@ function normalizeTaskRow(row = {}) {
     taskId: assignment.taskId || task.taskId || task.id,
     assignmentId: assignment.assignmentId || assignment.id,
     branch: normalized.branchName || assignment.branchName || '—',
-    dim: fourDimension ? (DIM_LABEL[assignment.dimension] || assignment.dimension || '四大维度材料上报') : '临时任务',
+    dim: fourDimension ? (DIM_LABEL[assignment.dimension] || assignment.dimension || '四大维度材料上报') : taskNatureLabel(taskNature),
     item: assignment.taskTitle || assignment.title || task.title || '—',
     itemCode: assignment.itemCode,
     submitter: normalized.submitterName || assignment.submitterName || '—',
@@ -402,8 +410,9 @@ function normalizeTaskRow(row = {}) {
     content: normalized.content || assignment.content || assignment.formData || '—',
     nature: taskNature,
     cycle: assignment.cycleType || assignment.cycle || task.cycleType || task.cycle || '',
-    isPeriodic: isPeriodicNature(taskNature),
-    isTemporary: !fourDimension,
+    isPeriodic,
+    isTemporary: !isPeriodic,
+    isTask,
     isFourDimension: fourDimension,
     formData: parseFormData(assignment.formData),
     files: normalized.files || [],
@@ -504,7 +513,7 @@ async function handleSizeChange(nextSize) {
 // （Playwright 联调 Task 17d 截图复现），且若用户在预览异步加载期间已手填分数，预览返回时
 // 也会静默清零用户刚输入的值。
 watch(selectedItem, (val, oldVal) => {
-  if (val && (!oldVal || val.id !== oldVal.id) && !val.isTemporary) finalScore.value = 0
+  if (val && (!oldVal || val.id !== oldVal.id) && val.isFourDimension) finalScore.value = 0
 })
 
 const selectItem = async (item) => {
@@ -585,7 +594,7 @@ const handleApprove = async () => {
       item.status = 'passed'
       item.reviewNote = reviewComment.value
       selectedItem.value = { ...item }
-      ElMessage.success(`✅ 已通过${item.isTemporary ? '临时任务' : '任务'}`)
+      ElMessage.success(`✅ 已通过${item.isTask ? taskNatureLabel(item.nature) : '任务'}`)
     } else {
       const reviewId = legacyReviewId(item)
       if (!reviewId) throw new Error('缺少旧材料审核标识，无法审核')
@@ -842,6 +851,12 @@ defineExpose({
   .item-meta {
     font-size: 10px;
     color: #94a3b8;
+    margin-bottom: 4px;
+  }
+
+  .item-kind {
+    font-size: 10px;
+    color: #64748b;
     margin-bottom: 4px;
   }
 
