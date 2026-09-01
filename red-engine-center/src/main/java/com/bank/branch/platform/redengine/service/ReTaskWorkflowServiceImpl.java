@@ -194,7 +194,7 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
             return action(existing, assignment, true);
         }
 
-        ReTaskSubmission current = latestSubmission(assignment.getId());
+        ReTaskSubmission current = currentSubmission(assignment);
         ReTaskSubmissionStatus currentStatus = current == null ? null : current.getStatus();
         if (current != null && currentStatus != ReTaskSubmissionStatus.REJECTED_BY_BRANCH
                 && currentStatus != ReTaskSubmissionStatus.REJECTED_BY_ORG) {
@@ -678,7 +678,7 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         dto.setBranchId(assignment.getBranchId());
         RePartyOrg branch = assignment.getBranchId() == null ? null : partyOrgMapper.selectById(assignment.getBranchId());
         dto.setBranchName(branch == null ? null : branch.getOrgName());
-        ReTaskSubmission submission = latestSubmission(assignment.getId());
+        ReTaskSubmission submission = currentSubmission(assignment);
         ReTaskSubmissionStatus submissionStatus = submission == null ? null : submission.getStatus();
         dto.setSubmissionStatus(submissionStatus);
         dto.setStatus(resolveAssignmentStatus(assignment, submissionStatus));
@@ -924,7 +924,8 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
     }
 
     private ReTaskSubmission requireCurrentSubmission(Long assignmentId, ReTaskSubmissionStatus expected) {
-        ReTaskSubmission submission = latestSubmission(assignmentId);
+        ReTaskBranchAssignment assignment = requireAssignment(assignmentId);
+        ReTaskSubmission submission = currentSubmission(assignment);
         if (submission == null || submission.getStatus() != expected) {
             throw new BizException("RE-40904", "当前任务状态不允许执行该操作");
         }
@@ -1066,6 +1067,31 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
                 .eq(ReTaskTodo::getRoleCode, REPORTER_TODO_ROLE));
     }
 
+    /**
+     * 读取 assignment 当前提交版本。
+     *
+     * <p>重提复用 assignment 主键，但历史提交仍保留在 RE_TASK_SUBMISSION。队列的当前行必须
+     * 以 assignment.CURRENT_VERSION 为准，不能仅依赖“按 assignment 排序后取第一条”的结果，
+     * 否则旧版本可能在分页查询或缓存返回时覆盖刚刚重提的版本。</p>
+     */
+    private ReTaskSubmission currentSubmission(ReTaskBranchAssignment assignment) {
+        if (assignment == null || assignment.getId() == null) {
+            return null;
+        }
+        Integer currentVersion = assignment.getCurrentVersion();
+        if (currentVersion != null && currentVersion > 0) {
+            ReTaskSubmission current = submissionMapper.selectOne(
+                    new LambdaQueryWrapper<ReTaskSubmission>()
+                            .eq(ReTaskSubmission::getAssignmentId, assignment.getId())
+                            .eq(ReTaskSubmission::getVersionNo, currentVersion));
+            if (current != null) {
+                return current;
+            }
+        }
+        return latestSubmission(assignment.getId());
+    }
+
+    /** 在当前版本缺失时按版本号读取最新历史提交，兼容旧数据和纯 Mockito 单测。 */
     private ReTaskSubmission latestSubmission(Long assignmentId) {
         if (assignmentId == null) {
             return null;

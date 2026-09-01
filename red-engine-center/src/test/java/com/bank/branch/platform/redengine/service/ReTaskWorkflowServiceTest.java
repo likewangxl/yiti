@@ -678,6 +678,53 @@ class ReTaskWorkflowServiceTest {
     }
 
     @Test
+    void branchQueue_usesAssignmentCurrentVersionInsteadOfOlderSubmission() {
+        String operatorId = "SECRETARY-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        RePartyOrg branch = branch(40L, operatorId);
+        ReTaskBranchAssignment assignment = assignment(30L, instance.getId(), branch.getId(),
+                "BRANCH_PENDING", 2);
+        ReTaskSubmission olderSubmission = submission(60L, task.getId(), instance.getId(),
+                assignment.getId(), 1, ReTaskSubmissionStatus.REJECTED_BY_BRANCH, "REPORTER-1");
+        olderSubmission.setContentText("旧版本内容");
+        ReTaskSubmission currentSubmission = submission(61L, task.getId(), instance.getId(),
+                assignment.getId(), 2, ReTaskSubmissionStatus.BRANCH_PENDING, "REPORTER-1");
+        currentSubmission.setContentText("重提版本内容");
+
+        when(currentUserApi.getCurrentEmpId()).thenReturn(operatorId);
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RE_SECR"));
+        when(currentUserApi.isSystemAdmin()).thenReturn(false);
+        when(partyOrgMapper.selectList(org.mockito.ArgumentMatchers.isNull())).thenReturn(List.of(branch));
+        when(assignmentMapper.selectWorkflowPage(any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            IPage<ReTaskBranchAssignment> page = (IPage<ReTaskBranchAssignment>) invocation.getArgument(0);
+            page.setRecords(List.of(assignment));
+            page.setTotal(1L);
+            return page;
+        });
+        when(instanceMapper.selectById(instance.getId())).thenReturn(instance);
+        when(taskMapper.selectById(task.getId())).thenReturn(task);
+        when(partyOrgMapper.selectById(branch.getId())).thenReturn(branch);
+        // 模拟旧实现拿到旧列表的场景；当前版本查询必须命中 version 2。
+        org.mockito.Mockito.lenient().when(submissionMapper.selectList(any()))
+                .thenReturn(List.of(olderSubmission));
+        when(submissionMapper.selectOne(any())).thenReturn(currentSubmission);
+        when(submissionFileMapper.selectList(any())).thenReturn(List.of());
+        when(fileTypeMapper.selectList(any())).thenReturn(List.of());
+
+        var result = service.listBranchReviews(new ReTaskWorkflowPageQueryDTO(), operatorId);
+
+        assertThat(result.getRecords()).singleElement()
+                .satisfies(row -> {
+                    assertThat(row.getSubmissionStatus()).isEqualTo(ReTaskSubmissionStatus.BRANCH_PENDING);
+                    assertThat(row.getContent()).isEqualTo("重提版本内容");
+                });
+        verify(submissionMapper).selectOne(any());
+    }
+
+    @Test
     void orgQueue_includesPendingAndHistoricalApprovedOrRejectedStatuses() {
         String operatorId = "ORG-REVIEWER-1";
         ReTask task = task(10L, "GENERAL");
