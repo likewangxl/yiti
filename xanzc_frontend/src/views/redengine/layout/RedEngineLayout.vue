@@ -55,7 +55,7 @@
 // 变换要点（见 Task 13 简报 F1-F6）：
 // - F1: 平台侧 API 调用一律走统一 API 层；权限由 permission store 严格加载，业务 API 见 @/api/redengine.js
 // - F2: 源工程的 JWT/localStorage token 逻辑全部不移植，登录态完全靠 yiti session cookie（http.js withCredentials:true）
-// - F3: 路由路径统一加 /redengine 前缀，登出后整页跳转 /#/redengine/login
+// - F3: 路由路径统一加 /redengine 前缀，登出后整页跳转平台统一登录页 /#/login
 // - F5: 源工程的 v-permission 指令替换为本组件维护的 canSee()，经 provide/inject 供 Task 14 子视图使用
 // - 源工程 Sidebar/SidebarItem 支持多级子菜单（el-sub-menu 递归），但 Task 13 简报给定的菜单数据源是
 //   扁平的 10 项（无 children），故本次移植未保留递归子菜单渲染；如 Task 14/15 需要二级菜单再补 SidebarItem 递归。
@@ -133,7 +133,7 @@ onMounted(async () => {
   }
 });
 
-// 登出：清 yiti session（后端）+ 本地用户态，整页回到红色引擎登录页。
+// 登出：清 yiti session（后端）+ 本地用户态，整页回到平台统一登录页。
 // 使用整页导航确保菜单等 Pinia 内存状态不会残留给下一位用户。
 async function handleLogout() {
   try {
@@ -142,7 +142,7 @@ async function handleLogout() {
     // 登出接口异常也继续清本地态、跳登录页，避免用户卡在原页面
   }
   userStore.clear();
-  window.location.replace('/#/redengine/login');
+  window.location.replace('/#/login');
 }
 </script>
 
