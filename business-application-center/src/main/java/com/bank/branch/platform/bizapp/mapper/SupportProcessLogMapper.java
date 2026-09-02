@@ -7,7 +7,7 @@ import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
-/** SUPPORT_PROCESS_LOG Mapper。 */
+/** MARKETING_SUPPORT_PROCESS_LOG Mapper。 */
 @Mapper
 public interface SupportProcessLogMapper extends BaseMapper<SupportProcessLog> {
     SupportProcessLog selectByRequestAndClientUuid(@Param("supportRequestId") String supportRequestId,

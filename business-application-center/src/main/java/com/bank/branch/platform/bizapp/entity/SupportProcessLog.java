@@ -8,9 +8,9 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/** 中台支持办理过程记录，对应 SUPPORT_PROCESS_LOG。 */
+/** 中台支持办理过程记录，对应 MARKETING_SUPPORT_PROCESS_LOG。 */
 @Data
-@TableName("SUPPORT_PROCESS_LOG")
+@TableName("MARKETING_SUPPORT_PROCESS_LOG")
 public class SupportProcessLog {
 
     @TableId(value = "id", type = IdType.INPUT)

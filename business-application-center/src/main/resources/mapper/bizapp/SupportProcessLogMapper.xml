@@ -8,7 +8,7 @@
 
     <select id="selectByRequestAndClientUuid" resultType="com.bank.branch.platform.bizapp.entity.SupportProcessLog">
         SELECT <include refid="BASE_COLUMNS"/>
-        FROM SUPPORT_PROCESS_LOG
+        FROM MARKETING_SUPPORT_PROCESS_LOG
         WHERE support_request_id = #{supportRequestId}
           AND client_uuid = #{clientUuid}
           AND deleted = 0
@@ -17,7 +17,7 @@
 
     <select id="selectByRequestId" resultType="com.bank.branch.platform.bizapp.entity.SupportProcessLog">
         SELECT <include refid="BASE_COLUMNS"/>
-        FROM SUPPORT_PROCESS_LOG
+        FROM MARKETING_SUPPORT_PROCESS_LOG
         WHERE support_request_id = #{supportRequestId}
           AND deleted = 0
         ORDER BY created_time ASC, id ASC
@@ -25,14 +25,14 @@
 
     <select id="countByRequestId" resultType="long">
         SELECT COUNT(*)
-        FROM SUPPORT_PROCESS_LOG
+        FROM MARKETING_SUPPORT_PROCESS_LOG
         WHERE support_request_id = #{supportRequestId}
           AND deleted = 0
     </select>
 
     <select id="countByRequestIdAndLogType" resultType="long">
         SELECT COUNT(*)
-        FROM SUPPORT_PROCESS_LOG
+        FROM MARKETING_SUPPORT_PROCESS_LOG
         WHERE support_request_id = #{supportRequestId}
           AND log_type = #{logType}
           AND deleted = 0
