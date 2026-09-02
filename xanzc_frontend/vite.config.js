@@ -4,9 +4,9 @@ import { fileURLToPath, URL } from 'node:url';
 
 const DEFAULT_DEV_SERVER_OPTIONS = Object.freeze({
   host: '0.0.0.0',
-  port: 8091,
-  strictPort: false,
-  proxyTarget: 'http://localhost:18081'
+  port: 8092,
+  strictPort: true,
+  proxyTarget: 'http://localhost:18089'
 });
 
 function hasEnvironmentVariable(environment, name) {
@@ -95,7 +95,7 @@ const createViteConfig = (devServerOptions) => ({
     port: devServerOptions.port,
     // 允许通过花生壳/内网穿透域名访问（否则 Vite 校验 Host 头会返回 "Blocked request. This host is not allowed."）
     allowedHosts: ['1916dn17xs12.vicp.fun'],
-    // 默认保留原有的自动选端口行为；隔离联调通过 VITE_DEV_STRICT_PORT=true 显式 fail-fast。
+    // 默认固定 8092；端口冲突时直接失败，避免误连其他 checkout。
     strictPort: devServerOptions.strictPort,
     open: false,
     proxy: {

@@ -5,9 +5,9 @@ describe('Vite 开发服务器隔离配置', () => {
   it('未设置覆盖变量时保持现有默认值', () => {
     expect(resolveDevServerOptions({})).toEqual({
       host: '0.0.0.0',
-      port: 8091,
-      strictPort: false,
-      proxyTarget: 'http://localhost:18081'
+      port: 8092,
+      strictPort: true,
+      proxyTarget: 'http://localhost:18089'
     });
   });
 

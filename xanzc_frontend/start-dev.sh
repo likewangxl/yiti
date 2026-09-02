@@ -10,7 +10,7 @@
 #
 # 日志：logs/dev-YYYYMMDD-HHMMSS.log（每次启动一个新文件）
 # PID：logs/vite.pid
-# 端口：8090（vite.config.js 配置；冲突时此脚本会报错退出）
+# 端口：8092（vite.config.js 配置；冲突时此脚本会报错退出）
 # ----------------------------------------------------------------
 set -euo pipefail
 
@@ -20,8 +20,8 @@ cd "$SCRIPT_DIR"
 
 LOG_DIR="$SCRIPT_DIR/logs"
 PID_FILE="$LOG_DIR/vite.pid"
-PORT_FILE="$LOG_DIR/vite.port"   # 实际监听端口（与 vite.config.js 一致，固定 8090）
-DEFAULT_PORT=8090                # 与 vite.config.js 一致；strictPort=true，被占用直接报错不漂移
+PORT_FILE="$LOG_DIR/vite.port"   # 实际监听端口（与 vite.config.js 一致，固定 8092）
+DEFAULT_PORT=8092                # 与 vite.config.js 一致；strictPort=true，被占用直接报错不漂移
 mkdir -p "$LOG_DIR"
 
 # ---------- 内部工具 ----------
@@ -51,8 +51,8 @@ cmd_start() {
   HOLDER=$(port_holder "$DEFAULT_PORT")
   if [ -n "${HOLDER:-}" ]; then
     HOLDER_CMD=$(tr '\0' ' ' < /proc/$HOLDER/cmdline 2>/dev/null | head -c 80)
-    echo "[start-dev] 提示：默认端口 $DEFAULT_PORT 被 PID=$HOLDER 占用（${HOLDER_CMD}…）"
-    echo "[start-dev]       vite 会自动滚动到下一个空闲端口，启动后看 ready 行确认实际端口"
+    echo "[start-dev] 错误：固定端口 $DEFAULT_PORT 被 PID=$HOLDER 占用（${HOLDER_CMD}…）" >&2
+    exit 1
   fi
 
   if [ ! -d "node_modules" ]; then
@@ -76,9 +76,6 @@ cmd_start() {
       LOCAL_URL=$(grep -oE "http://localhost:[0-9]+/?" "$LOG_FILE" | head -1)
       ACTUAL=$(echo "$LOCAL_URL" | grep -oE '[0-9]+' | tail -1)
       echo "${ACTUAL:-$DEFAULT_PORT}" > "$PORT_FILE"
-      if [ "${ACTUAL:-}" != "$DEFAULT_PORT" ]; then
-        echo "[start-dev] ⚠️ 实际端口 $ACTUAL（$DEFAULT_PORT 被占用，vite 自动让路）"
-      fi
       echo "[start-dev] ready in ${i}s — $LOCAL_URL  (PID=$PID)"
       exit 0
     fi

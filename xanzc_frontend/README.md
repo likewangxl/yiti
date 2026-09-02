@@ -45,23 +45,23 @@ src/
 # 1. 安装依赖（Node 16；vite 4 必须）
 npm install --legacy-peer-deps --no-fund --no-audit
 
-# 2. 启动 dev 服务器（端口 8090）
+# 2. 启动 dev 服务器（固定端口 8092，代理后端 18089）
 npm run dev
 # or 显式：
-NO_PROXY=localhost,127.0.0.1 ./node_modules/.bin/vite --port 8090 --host 0.0.0.0
+NO_PROXY=localhost,127.0.0.1 ./node_modules/.bin/vite --port 8092 --host 0.0.0.0 --strictPort
 ```
 
 > Linux/sandbox 环境下若有全局 http_proxy，需带 `NO_PROXY=localhost,127.0.0.1` 否则
-> `curl http://localhost:8090/` 会被代理拦截误报 502。
+> `curl http://localhost:8092/` 会被代理拦截误报 502。
 
-打开 `http://localhost:8090/`：
+打开 `http://localhost:8092/`：
 
 - 未登录时跳到 `#/login?redirect=<原路径>`；登录后按“已授权 redirect → 工作台 → 首个授权菜单 → no-access”选择落点。红色专属登录在无 redirect 时优先红色工作台
 - 默认账号 `admin / 123456`（由 yiti `PT_USER` 表 seed）
 
 ## 后端联调
 
-- yiti 后端默认 8080；vite proxy 配置 `/api` → `http://localhost:8080`
+- 本 checkout 后端端口为 18089；vite proxy 配置 `/api` → `http://localhost:18089`
 - mock 模式：`.env.development` 设 `VITE_USE_MOCK=true`，所有 api 直接返 mock 数据
 - 真实模式：`VITE_USE_MOCK=false` + yiti 启动后自动走真接口
 - 失败兜底：普通 GET 查询失败时 `call()` 可使用 mock 兜底；认证用户、菜单、权限三个安全关键 GET 严格抛错
