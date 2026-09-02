@@ -36,6 +36,7 @@
         <span>{{ loading ? '加载中…' : `共 ${total} 条` }}</span>
       </div>
       <el-alert v-if="listError" :title="listError" type="error" :closable="false" show-icon class="inline-error" />
+      <el-alert v-if="actionError" :title="actionError" type="error" :closable="false" show-icon class="inline-error" />
       <el-table :data="rows" stripe border row-key="id" empty-text="暂无资产立项记录">
         <el-table-column label="申请编号" min-width="180"><template #default="{ row }"><el-button link type="primary" @click="openDetail(row.id)">{{ row.applyNo }}</el-button></template></el-table-column>
         <el-table-column prop="customerName" label="客户名称" min-width="190" show-overflow-tooltip />
@@ -53,6 +54,8 @@
               <template #expanded>
                 <el-button v-if="row.canEdit" link type="primary" @click="openEdit(row)">编辑</el-button>
                 <el-button v-if="row.canSubmit" link type="success" @click="submitRow(row)">提交</el-button>
+                <el-button v-if="canDecide(row)" link type="success" @click="approveRow(row)">通过</el-button>
+                <el-button v-if="canDecide(row)" link type="danger" @click="rejectRow(row)">驳回</el-button>
                 <el-button v-if="row.canDelete" link type="danger" @click="deleteRow(row)">删除</el-button>
                 <el-button v-if="row.canCancel" link type="danger" @click="cancelRow(row)">撤回</el-button>
                 <el-button v-if="row.canApplyUrgent" link type="warning" @click="openUrgent(row)">申请加急</el-button>
@@ -60,6 +63,8 @@
               <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link>更多</el-button><template #dropdown><el-dropdown-menu>
                 <el-dropdown-item v-if="row.canEdit" @click="openEdit(row)">编辑</el-dropdown-item>
                 <el-dropdown-item v-if="row.canSubmit" @click="submitRow(row)">提交</el-dropdown-item>
+                <el-dropdown-item v-if="canDecide(row)" @click="approveRow(row)">通过</el-dropdown-item>
+                <el-dropdown-item v-if="canDecide(row)" @click="rejectRow(row)">驳回</el-dropdown-item>
                 <el-dropdown-item v-if="row.canDelete" class="danger-item" @click="deleteRow(row)">删除</el-dropdown-item>
                 <el-dropdown-item v-if="row.canCancel" class="danger-item" @click="cancelRow(row)">撤回</el-dropdown-item>
                 <el-dropdown-item v-if="row.canApplyUrgent" @click="openUrgent(row)">申请加急</el-dropdown-item>
@@ -141,11 +146,13 @@ import {
   getAssetProjectCustomer, getAssetProjectUrgentContext, listAssetProjectCustomers, listAssetProjects,
   requestAssetProjectUrgent, submitAssetProject, updateAssetProject, uploadAssetProjectAttachment
 } from '@/api/assetProjects';
+import { approveTask, rejectTask } from '@/api/workflow';
 
 const route = useRoute();
 const query = reactive({ tab: 'MY', keyword: '', status: '', tag: '', dateRange: [], pageNo: 1, pageSize: 20 });
 const rows = ref([]); const total = ref(0); const loading = ref(false);
 const listError = ref('');
+const actionError = ref('');
 const formVisible = ref(false); const formRef = ref(); const saving = ref(false); const sourceLocked = ref(false);
 const customers = ref([]); const customerLoading = ref(false); const fileList = ref([]);
 const formError = ref('');
@@ -169,6 +176,7 @@ const statusLabel = value => statusMap[value] || value || '-';
 const statusType = value => ({DRAFT:'info',IN_APPROVAL:'warning',COMPLETED:'success',REJECTED:'danger',CANCELLED:'info'}[value] || 'info');
 const time = value => value ? String(value).replace('T',' ').slice(0,19) : '-';
 const money = value => value == null ? '-' : `${Number(value).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})} 万元`;
+const canDecide = row => query.tab === 'PENDING' && Boolean(row?.workflowTaskId);
 
 async function load(){ loading.value=true; listError.value=''; try { const params={ tab:query.tab,keyword:query.keyword||undefined,status:query.status||undefined,urgent:query.tag==='URGENT'?true:undefined,keyProject:query.tag==='KEY'?true:undefined,startDate:query.dateRange?.[0],endDate:query.dateRange?.[1],pageNo:query.pageNo,pageSize:query.pageSize }; const page=await listAssetProjects(params); rows.value=page.records||[]; total.value=page.total||0; } catch(error) { listError.value=error?.message||'资产立项列表加载失败'; } finally { loading.value=false; } }
 function search(){ query.pageNo=1; load(); }
@@ -244,6 +252,36 @@ async function save(andSubmit){
     await load();
   }catch(error){formError.value=error?.message||(andSubmit?'资产立项提交失败':'草稿保存失败');}
   finally{saving.value=false;}
+}
+async function approveRow(row){
+  if(!canDecide(row))return;
+  actionError.value='';
+  try{
+    const {value}=await ElMessageBox.prompt('可填写审批意见','通过资产立项',{inputValue:'同意',confirmButtonText:'确认通过',cancelButtonText:'取消'});
+    await approveTask(row.workflowTaskId,String(value??'').trim()||'同意');
+    ElMessage.success('资产立项审批已通过');
+    await load();
+  }catch(error){
+    if(error==='cancel'||error==='close')return;
+    actionError.value=error?.message||'资产立项审批通过失败';
+    ElMessage.error(actionError.value);
+  }
+}
+async function rejectRow(row){
+  if(!canDecide(row))return;
+  actionError.value='';
+  try{
+    const {value}=await ElMessageBox.prompt('请输入驳回原因','驳回资产立项',{inputValidator:value=>Boolean(value?.trim())||'驳回原因不能为空',confirmButtonText:'确认驳回',cancelButtonText:'取消'});
+    const reason=String(value??'').trim();
+    if(!reason){ElMessage.warning('驳回原因不能为空');return;}
+    await rejectTask(row.workflowTaskId,reason);
+    ElMessage.success('资产立项审批已驳回');
+    await load();
+  }catch(error){
+    if(error==='cancel'||error==='close')return;
+    actionError.value=error?.message||'资产立项审批驳回失败';
+    ElMessage.error(actionError.value);
+  }
 }
 async function submitRow(row){ await ElMessageBox.confirm(`确认提交 ${row.applyNo}？`,'提交确认'); await submitAssetProject(row.id); ElMessage.success('已提交审批'); load(); }
 async function deleteRow(row){ const {value}=await ElMessageBox.prompt(`请输入删除草稿 ${row.applyNo} 的原因`,'删除确认',{type:'warning',inputValidator:value=>Boolean(value?.trim())||'删除原因不能为空'}); await deleteAssetProject(row.id,row.lockVersion,value); ElMessage.success('草稿已删除'); load(); }

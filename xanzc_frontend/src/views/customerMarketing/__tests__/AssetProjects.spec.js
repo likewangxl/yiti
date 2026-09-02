@@ -18,15 +18,19 @@ const api = vi.hoisted(() => ({
   uploadAssetProjectAttachment: vi.fn()
 }));
 const message = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }));
+const messageBox = vi.hoisted(() => ({ confirm: vi.fn(), prompt: vi.fn() }));
+const workflow = vi.hoisted(() => ({ approveTask: vi.fn(), rejectTask: vi.fn() }));
 
 vi.mock('vue-router', () => ({ useRoute: () => route }));
 vi.mock('@/api/assetProjects', () => api);
+vi.mock('@/api/workflow', () => workflow);
 vi.mock('element-plus', () => ({
   ElMessage: message,
-  ElMessageBox: { confirm: vi.fn(), prompt: vi.fn() }
+  ElMessageBox: messageBox
 }));
 
 import AssetProjects from '../AssetProjects.vue';
+import { approveTask, rejectTask } from '@/api/workflow';
 
 const passthrough = (name, template = '<div><slot /><slot name="footer" /></div>') => ({
   name,
@@ -79,6 +83,9 @@ beforeEach(() => {
   Object.assign(route, { name: 'AssetProjects', query: {}, params: {} });
   api.listAssetProjects.mockResolvedValue({ records: [], total: 0 });
   api.listAssetProjectCustomers.mockResolvedValue([]);
+  messageBox.prompt.mockResolvedValue({ value: '同意' });
+  approveTask.mockResolvedValue({ ok: true });
+  rejectTask.mockResolvedValue({ ok: true });
 });
 
 afterEach(() => wrapper?.unmount());
@@ -188,5 +195,59 @@ describe('资产立项页面', () => {
     ];
     expect(overlays).toHaveLength(3);
     expect(overlays.every(item => item.props('closeOnClickModal') === false)).toBe(true);
+  });
+
+  it('仅 PENDING 且存在 workflowTaskId 的行显示直接审批入口', async () => {
+    const view = await mountPage();
+
+    expect(view.vm.canDecide({ workflowTaskId: 'TASK-1' })).toBe(false);
+    view.vm.query.tab = 'PENDING';
+    expect(view.vm.canDecide({ workflowTaskId: 'TASK-1' })).toBe(true);
+    expect(view.vm.canDecide({ workflowTaskId: '' })).toBe(false);
+  });
+
+  it('待办行通过默认使用同意并等待列表刷新', async () => {
+    const view = await mountPage();
+    view.vm.query.tab = 'PENDING';
+    messageBox.prompt.mockResolvedValueOnce({ value: '' });
+
+    await view.vm.approveRow({ id: 11, applyNo: 'AP-11', workflowTaskId: 'TASK-11' });
+
+    expect(approveTask).toHaveBeenCalledWith('TASK-11', '同意');
+    expect(message.success).toHaveBeenCalledWith('资产立项审批已通过');
+    expect(api.listAssetProjects).toHaveBeenCalledTimes(2);
+  });
+
+  it('待办行驳回必须填写原因并等待列表刷新', async () => {
+    const view = await mountPage();
+    view.vm.query.tab = 'PENDING';
+    messageBox.prompt.mockResolvedValueOnce({ value: '  材料不完整  ' });
+
+    await view.vm.rejectRow({ id: 12, applyNo: 'AP-12', workflowTaskId: 'TASK-12' });
+
+    const [, , options] = messageBox.prompt.mock.calls[0];
+    expect(options.inputValidator('')).toBe('驳回原因不能为空');
+    expect(rejectTask).toHaveBeenCalledWith('TASK-12', '材料不完整');
+    expect(message.success).toHaveBeenCalledWith('资产立项审批已驳回');
+    expect(api.listAssetProjects).toHaveBeenCalledTimes(2);
+  });
+
+  it('取消审批不报错且真实失败显示可见错误', async () => {
+    const view = await mountPage();
+    view.vm.query.tab = 'PENDING';
+    messageBox.prompt.mockRejectedValueOnce('cancel');
+
+    await expect(view.vm.approveRow({ workflowTaskId: 'TASK-CANCEL' })).resolves.toBeUndefined();
+    expect(approveTask).not.toHaveBeenCalled();
+    expect(message.error).not.toHaveBeenCalled();
+
+    const failure = new Error('审批服务暂不可用');
+    messageBox.prompt.mockResolvedValueOnce({ value: '同意' });
+    approveTask.mockRejectedValueOnce(failure);
+    await view.vm.approveRow({ workflowTaskId: 'TASK-FAIL' });
+
+    expect(message.error).toHaveBeenCalledWith('审批服务暂不可用');
+    expect(view.vm.actionError).toBe('审批服务暂不可用');
+    expect(view.text()).toContain('审批服务暂不可用');
   });
 });

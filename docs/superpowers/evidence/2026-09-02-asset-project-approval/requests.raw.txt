@@ -1,0 +1,11 @@
+GET  http://127.0.0.1:8092/api/auth/current-user => 200 OK
+GET  http://127.0.0.1:8092/api/auth/my-menus => 200 OK
+GET  http://127.0.0.1:8092/api/auth/permissions => 200 OK
+GET  http://127.0.0.1:8092/api/notifications/unread-count => 200 OK
+GET  http://127.0.0.1:8092/api/marketing/asset-projects?tab=PENDING&pageNo=1&pageSize=20 => 200 OK
+POST http://127.0.0.1:8092/api/workflow/tasks/TASK-9001/approve => 200 OK
+body: {"opinion":"同意"}
+GET  http://127.0.0.1:8092/api/marketing/asset-projects?tab=PENDING&pageNo=1&pageSize=20 => 200 OK
+POST http://127.0.0.1:8092/api/workflow/tasks/TASK-9001/reject => 200 OK
+body: {"opinion":"材料不完整，请补充尽调附件"}
+GET  http://127.0.0.1:8092/api/marketing/asset-projects?tab=PENDING&pageNo=1&pageSize=20 => 200 OK

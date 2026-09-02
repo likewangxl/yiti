@@ -1,0 +1,7 @@
+**/api/auth/current-user
+**/api/auth/my-menus
+**/api/auth/permissions
+**/api/notifications/unread-count
+**/api/marketing/asset-projects?*
+**/api/workflow/tasks/TASK-9001/approve
+**/api/workflow/tasks/TASK-9001/reject
