@@ -3,13 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 
 const api = vi.hoisted(() => ({
-    addTouchLog: vi.fn(),
+  addTouchLog: vi.fn(),
   cancelTouchTask: vi.fn(),
   completeTouchTask: vi.fn(),
   getMarketingCustomer: vi.fn(),
   getTouchTask: vi.fn(),
   listTouchLogs: vi.fn(),
   uploadTouchPhoto: vi.fn(),
+}));
+const marketingApi = vi.hoisted(() => ({
+  getMarketingCustomer: vi.fn(),
 }));
 const message = vi.hoisted(() => ({
   error: vi.fn(),
@@ -20,6 +23,7 @@ const messageBox = vi.hoisted(() => ({ confirm: vi.fn(), prompt: vi.fn() }));
 const routerPush = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/customerMarketing', () => api);
+vi.mock('@/api/marketingManagement', () => marketingApi);
 vi.mock('element-plus', () => ({ ElMessage: message, ElMessageBox: messageBox }));
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: routerPush }) }));
 
@@ -108,7 +112,8 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  api.getMarketingCustomer.mockResolvedValue({ custName: '测试客户' });
+  api.getMarketingCustomer.mockResolvedValue({ custName: '旧客户接口不应调用' });
+  marketingApi.getMarketingCustomer.mockResolvedValue({ custName: '测试客户' });
   api.completeTouchTask.mockResolvedValue({});
   api.cancelTouchTask.mockResolvedValue({});
   messageBox.confirm.mockResolvedValue(true);
@@ -117,6 +122,16 @@ beforeEach(() => {
 });
 
 describe('TouchTaskDetailDialog 一任务一工作日志', () => {
+  it('根据触达任务客户ID读取正式营销客户详情，不再调用旧客户接口', async () => {
+    api.getTouchTask.mockResolvedValue(task('PENDING'));
+    api.listTouchLogs.mockResolvedValue([]);
+
+    await mountDialog();
+
+    expect(marketingApi.getMarketingCustomer).toHaveBeenCalledWith('CUST-1');
+    expect(api.getMarketingCustomer).not.toHaveBeenCalled();
+  });
+
   it('不允许点击遮罩关闭并丢失未保存的办理内容', async () => {
     api.getTouchTask.mockResolvedValue(task('PENDING'));
     api.listTouchLogs.mockResolvedValue([]);
@@ -236,7 +251,7 @@ describe('TouchTaskDetailDialog 一任务一工作日志', () => {
   it('触达成功后询问是否需要中台支持，选择是带出客户和来源任务', async () => {
     api.getTouchTask.mockResolvedValue(task('IN_PROGRESS'));
     api.listTouchLogs.mockResolvedValue([log()]);
-    api.getMarketingCustomer.mockResolvedValue({ custName: '测试客户', custNo: 'KH-001' });
+    marketingApi.getMarketingCustomer.mockResolvedValue({ custName: '测试客户', custNo: 'KH-001' });
     api.completeTouchTask.mockResolvedValue({});
     messageBox.confirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
 
@@ -257,7 +272,7 @@ describe('TouchTaskDetailDialog 一任务一工作日志', () => {
 
   it('客户名称和客户号都缺失时完成确认仍保持自然文案', async () => {
     api.getTouchTask.mockResolvedValue({ ...task('IN_PROGRESS'), custName: undefined, custNo: undefined });
-    api.getMarketingCustomer.mockResolvedValue({});
+    marketingApi.getMarketingCustomer.mockResolvedValue({});
     api.listTouchLogs.mockResolvedValue([log()]);
     api.completeTouchTask.mockResolvedValue({});
     messageBox.confirm.mockResolvedValueOnce(true).mockRejectedValueOnce('close');

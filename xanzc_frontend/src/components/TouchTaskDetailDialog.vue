@@ -133,14 +133,15 @@ import { computed, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useRouter } from 'vue-router';
 import {
-  addTouchLog, cancelTouchTask, completeTouchTask, getMarketingCustomer, getTouchTask,
+  addTouchLog, cancelTouchTask, completeTouchTask, getTouchTask,
   listTouchLogs, uploadTouchPhoto
 } from '@/api/customerMarketing';
+import { getMarketingCustomer } from '@/api/marketingManagement';
 import { normalizePhotoGroups, slaLabel, slaTagType, taskStatusLabel, taskTagType } from '@/utils/touchViewModel';
 
 const props = defineProps({
   modelValue: Boolean,
-  taskId: { type: String, default: '' },
+  taskId: { type: [String, Number], default: '' },
   allowWrite: { type: Boolean, default: false }
 });
 const emit = defineEmits(['update:modelValue', 'changed']);
