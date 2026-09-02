@@ -33,6 +33,23 @@ class MarketingCustomerClaimMapperXmlContractTest {
                 .doesNotContain("CUST_LEAD");
     }
 
+    @Test
+    void claimedCustomerQueriesUseExactClaimSourceAndSafeLegacyFallback() throws IOException {
+        String xml = readXml();
+        assertClaimTaskAssociation(selectSection(xml, "selectClaimedCustomerPage"));
+        assertClaimTaskAssociation(selectSection(xml, "countClaimedCustomerPage"));
+    }
+
+    private void assertClaimTaskAssociation(String section) {
+        String normalized = compact(section).toUpperCase(Locale.ROOT);
+        assertThat(normalized)
+                .contains("SOURCE_BIZ_ID = CC.ID")
+                .contains("SOURCE_BIZ_ID IS NULL")
+                .contains("CUST_ID = CC.CUST_ID")
+                .contains("ASSIGNEE_EMP_ID = CC.CLAIMED_BY")
+                .contains("ASSIGNEE_EMP_ID = CC.MAINTAINER_EMP_ID");
+    }
+
     private String readXml() throws IOException {
         try (InputStream input = getClass().getResourceAsStream(
                 "/mapper/marketing/MarketingCustomerClaimMapper.xml")) {

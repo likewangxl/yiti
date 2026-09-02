@@ -190,8 +190,17 @@
               SELECT mtt2.id
               FROM MARKETING_TOUCH_TASK mtt2
               WHERE mtt2.source_type = 'CLAIM'
-                AND mtt2.source_biz_id = cc.id
-              ORDER BY mtt2.created_time DESC, mtt2.id DESC
+                AND (
+                    mtt2.source_biz_id = cc.id
+                    OR (
+                        mtt2.source_biz_id IS NULL
+                        AND mtt2.cust_id = cc.cust_id
+                        AND (mtt2.assignee_emp_id = cc.claimed_by
+                             OR mtt2.assignee_emp_id = cc.maintainer_emp_id)
+                    )
+                )
+              ORDER BY CASE WHEN mtt2.source_biz_id = cc.id THEN 0 ELSE 1 END,
+                       mtt2.created_time DESC, mtt2.id DESC
               LIMIT 1
           )
         WHERE (cc.claimed_by = #{empId} OR cc.maintainer_emp_id = #{empId})
@@ -201,7 +210,15 @@
           AND NOT EXISTS (
               SELECT 1 FROM MARKETING_TOUCH_TASK target_touched_task
               WHERE target_touched_task.source_type = 'CLAIM'
-                AND target_touched_task.source_biz_id = cc.id
+                AND (
+                    target_touched_task.source_biz_id = cc.id
+                    OR (
+                        target_touched_task.source_biz_id IS NULL
+                        AND target_touched_task.cust_id = cc.cust_id
+                        AND (target_touched_task.assignee_emp_id = cc.claimed_by
+                             OR target_touched_task.assignee_emp_id = cc.maintainer_emp_id)
+                    )
+                )
                 AND target_touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
           )
         </if>
@@ -209,7 +226,15 @@
           AND (c.last_touch_time IS NOT NULL OR EXISTS (
               SELECT 1 FROM MARKETING_TOUCH_TASK target_touched_task
               WHERE target_touched_task.source_type = 'CLAIM'
-                AND target_touched_task.source_biz_id = cc.id
+                AND (
+                    target_touched_task.source_biz_id = cc.id
+                    OR (
+                        target_touched_task.source_biz_id IS NULL
+                        AND target_touched_task.cust_id = cc.cust_id
+                        AND (target_touched_task.assignee_emp_id = cc.claimed_by
+                             OR target_touched_task.assignee_emp_id = cc.maintainer_emp_id)
+                    )
+                )
                 AND target_touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
           ))
         </if>
@@ -242,7 +267,15 @@
           AND NOT EXISTS (
               SELECT 1 FROM MARKETING_TOUCH_TASK target_touched_task
               WHERE target_touched_task.source_type = 'CLAIM'
-                AND target_touched_task.source_biz_id = cc.id
+                AND (
+                    target_touched_task.source_biz_id = cc.id
+                    OR (
+                        target_touched_task.source_biz_id IS NULL
+                        AND target_touched_task.cust_id = cc.cust_id
+                        AND (target_touched_task.assignee_emp_id = cc.claimed_by
+                             OR target_touched_task.assignee_emp_id = cc.maintainer_emp_id)
+                    )
+                )
                 AND target_touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
           )
         </if>
@@ -250,7 +283,15 @@
           AND (c.last_touch_time IS NOT NULL OR EXISTS (
               SELECT 1 FROM MARKETING_TOUCH_TASK target_touched_task
               WHERE target_touched_task.source_type = 'CLAIM'
-                AND target_touched_task.source_biz_id = cc.id
+                AND (
+                    target_touched_task.source_biz_id = cc.id
+                    OR (
+                        target_touched_task.source_biz_id IS NULL
+                        AND target_touched_task.cust_id = cc.cust_id
+                        AND (target_touched_task.assignee_emp_id = cc.claimed_by
+                             OR target_touched_task.assignee_emp_id = cc.maintainer_emp_id)
+                    )
+                )
                 AND target_touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
           ))
         </if>

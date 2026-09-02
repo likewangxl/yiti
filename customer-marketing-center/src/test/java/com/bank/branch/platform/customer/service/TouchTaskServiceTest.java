@@ -129,6 +129,35 @@ class TouchTaskServiceTest {
         verify(configApi).getConfigValue("CUSTOMER_TOUCH_TASK_SLA_DAYS", "7");
     }
 
+    @Test
+    void createFirstTouchTask_withClaimSource_shouldPersistClaimSource() {
+        when(taskMapper.insert(any(TouchTask.class))).thenAnswer(invocation -> {
+            TouchTask inserted = invocation.getArgument(0);
+            inserted.setId(3L);
+            return 1;
+        });
+
+        touchTaskService.createFirstTouchTask("1", "ORG_SZ_001", "E10001", null, 91L);
+
+        ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
+        verify(taskMapper).insert(captor.capture());
+        assertThat(captor.getValue().getSourceType()).isEqualTo("CLAIM");
+        assertThat(captor.getValue().getSourceBizId()).isEqualTo(91L);
+    }
+
+    @Test
+    void createFollowUpTask_withClaimSource_shouldPersistClaimSource() {
+        when(taskMapper.insert(any(TouchTask.class))).thenReturn(1);
+
+        touchTaskService.createFollowUpTask("1", "ORG_SZ_001", "E10001",
+                "客户需要补充材料后再次沟通", null, 92L);
+
+        ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
+        verify(taskMapper).insert(captor.capture());
+        assertThat(captor.getValue().getSourceType()).isEqualTo("CLAIM");
+        assertThat(captor.getValue().getSourceBizId()).isEqualTo(92L);
+    }
+
     // ==================== markSuccess ====================
 
     @Test

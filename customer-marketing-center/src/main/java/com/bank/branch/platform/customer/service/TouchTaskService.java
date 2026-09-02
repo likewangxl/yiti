@@ -79,6 +79,21 @@ public class TouchTaskService {
     @Transactional
     public TouchTask createFirstTouchTask(String custId, String orgId, String assigneeEmpId,
                                            String planFinishTime) {
+        return createFirstTouchTask(custId, orgId, assigneeEmpId, planFinishTime, null);
+    }
+
+    /**
+     * 从正式认领关系创建首次触达任务，并保存认领关系来源。
+     *
+     * <p>旧调用方没有认领关系 ID 时继续使用四参数重载；正式认领入口传入
+     * {@code sourceBizId} 后，已认领池可以优先按认领关系精确回查任务。</p>
+     *
+     * @param planFinishTime 兼容旧客户端的字段；服务端忽略，统一按后台 SLA 配置计算
+     * @param sourceBizId    正式认领关系 ID，可为空以兼容历史调用方
+     */
+    @Transactional
+    public TouchTask createFirstTouchTask(String custId, String orgId, String assigneeEmpId,
+                                           String planFinishTime, Long sourceBizId) {
         log.info("[TouchTaskService.createFromClaim] custId={}, orgId={}, assigneeEmpId={}",
                 custId, orgId, assigneeEmpId);
 
@@ -93,6 +108,7 @@ public class TouchTaskService {
         entity.setTaskNo(taskNo);
         entity.setCustId(parseId(custId));
         entity.setSourceType("CLAIM");
+        entity.setSourceBizId(sourceBizId);
         entity.setOrgId(orgId);
         entity.setAssigneeEmpId(assigneeEmpId);
         entity.setTaskType(TouchTaskType.FIRST_TOUCH.getCode());
@@ -131,6 +147,22 @@ public class TouchTaskService {
     @Transactional
     public TouchTask createFollowUpTask(String custId, String orgId, String assigneeEmpId,
                                          String reason, String planFinishTime) {
+        return createFollowUpTask(custId, orgId, assigneeEmpId, reason, planFinishTime, null);
+    }
+
+    /**
+     * 从正式认领关系创建后续触达任务，并保存认领关系来源。
+     *
+     * <p>无来源 ID 的旧调用仍保留 {@code MANUAL} 来源；正式认领入口传入来源 ID
+     * 后统一使用 {@code CLAIM}，确保首次和再次触达在已认领池使用同一关联口径。</p>
+     *
+     * @param reason         重新触达原因（仅记日志）
+     * @param planFinishTime 兼容旧客户端的字段；服务端忽略，统一按后台 SLA 配置计算
+     * @param sourceBizId    正式认领关系 ID，可为空以兼容历史调用方
+     */
+    @Transactional
+    public TouchTask createFollowUpTask(String custId, String orgId, String assigneeEmpId,
+                                         String reason, String planFinishTime, Long sourceBizId) {
         log.info("[TouchTaskService.createFollowUpTask] custId={}, orgId={}, assigneeEmpId={}, reason={}",
                 custId, orgId, assigneeEmpId, reason);
 
@@ -141,7 +173,8 @@ public class TouchTaskService {
         TouchTask entity = new TouchTask();
         entity.setTaskNo(taskNo);
         entity.setCustId(parseId(custId));
-        entity.setSourceType("MANUAL");
+        entity.setSourceType(sourceBizId == null ? "MANUAL" : "CLAIM");
+        entity.setSourceBizId(sourceBizId);
         entity.setOrgId(orgId);
         entity.setAssigneeEmpId(assigneeEmpId);
         entity.setTaskType(TouchTaskType.FOLLOW_UP.getCode());

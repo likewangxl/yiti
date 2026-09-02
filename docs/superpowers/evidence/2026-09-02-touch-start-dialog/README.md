@@ -22,6 +22,14 @@
 - 最终请求链路中任务详情、日志和正式营销客户详情均返回 200；浏览器控制台无业务错误。
 - `real-confirm-success.png`：真实任务创建后，从“我的触达任务”打开办理详情的截图。
 
+## 进行中任务重复发起修复复验
+
+- 2026-09-02 18:06 使用官方 `playwright-cli` 会话 `touch-running-fix` 复验，未注册任何 mock route。
+- 已认领池返回原任务 ID `1`、状态 `PENDING`；页面显示“待触达”“触达任务进行中”和“办理触达”，不再显示“发起触达”。
+- 点击“办理触达”直接打开原任务详情和补录入口；请求只有任务、日志和正式营销客户详情 GET，没有再次调用 `POST /api/claims/1/touch`。
+- 相关真实请求均为 200，复验阶段浏览器控制台无错误、无警告。
+- 复验前后客户 ID `1` 的任务总数均为 1，未创建重复任务，也未修改历史任务数据。
+
 ## 关键命令
 
 ```bash
@@ -32,6 +40,11 @@ npx --yes @playwright/cli -s=touch-start-jxe route-list
 npx --yes @playwright/cli -s=touch-start-jxe requests
 npx --yes @playwright/cli -s=touch-start-jxe console
 npx --yes @playwright/cli -s=touch-start-jxe screenshot e623 --filename=/home/djdev/jxe/yiti/docs/superpowers/evidence/2026-09-02-touch-start-dialog/start-dialog.png
+./node_modules/.bin/playwright-cli -s=touch-running-fix route-list
+./node_modules/.bin/playwright-cli -s=touch-running-fix click f6e401
+./node_modules/.bin/playwright-cli -s=touch-running-fix requests
+./node_modules/.bin/playwright-cli -s=touch-running-fix console warning
+./node_modules/.bin/playwright-cli -s=touch-running-fix screenshot --filename=/home/djdev/jxe/yiti/docs/superpowers/evidence/2026-09-02-touch-start-dialog/running-task-detail.png --full-page
 ```
 
 ## 文件
@@ -42,3 +55,6 @@ npx --yes @playwright/cli -s=touch-start-jxe screenshot e623 --filename=/home/dj
 - `requests.txt`：真实业务请求摘要。
 - `console.txt`：浏览器控制台原始摘要及说明。
 - `real-confirm-success.png`：真实确认发起成功后的任务详情。
+- `running-task-claimed-pool.png`：进行中任务在已认领池显示“办理触达”的截图。
+- `running-task-detail.png`：点击“办理触达”后打开原任务办理详情的截图。
+- `routes-running-task.txt`、`requests-running-task.txt`、`console-running-task.txt`：无 mock、真实请求和控制台复验证据。

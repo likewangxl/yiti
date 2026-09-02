@@ -57,4 +57,11 @@ describe('已认领客户池标签展示契约', () => {
     expect(source).toContain('await startFollowUpTouch(claimId, { reason: startDlg.reason.trim() })');
     expect(source).not.toContain('const data = { planFinishTime');
   });
+
+  it('已有进行中任务时进入办理页，不再展示重复发起入口', () => {
+    expect(source).toContain('v-if="hasRunningTask(row)"');
+    expect(source).toContain('@click="viewTask(row)"');
+    expect(source).toContain('>办理触达</el-button>');
+    expect(source).toContain("['PENDING', 'IN_PROGRESS', 'PROCESSING', 'RUNNING'].includes(taskStatus(row))");
+  });
 });

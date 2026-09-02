@@ -79,7 +79,7 @@
               link
               type="primary"
               @click="viewTask(row)"
-            >任务详情</el-button>
+            >办理触达</el-button>
             <el-button
               v-else-if="isTerminalTask(row)"
               link

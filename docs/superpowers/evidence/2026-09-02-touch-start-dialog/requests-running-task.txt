@@ -1,0 +1,7 @@
+9. [GET] http://localhost:8092/api/claims/mine/customers?tab=UNTOUCHED&pageNo=1&pageSize=20 => [200] OK
+10. [GET] http://localhost:8092/api/touch-tasks/1 => [200] OK
+11. [GET] http://localhost:8092/api/touch-tasks/1/logs => [200] OK
+12. [GET] http://localhost:8092/api/marketing/customers/1 => [200] OK
+
+Note: 8 static requests not shown by playwright-cli.
+There is no POST /api/claims/1/touch after clicking "办理触达".

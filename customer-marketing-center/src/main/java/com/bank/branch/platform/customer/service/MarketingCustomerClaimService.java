@@ -185,7 +185,7 @@ public class MarketingCustomerClaimService {
                     CustomerErrorCode.RE_TOUCH_HAS_RUNNING.getMessage());
         }
         return touchTaskService.createFirstTouchTask(custId, claim.getOrgId(),
-                claim.getMaintainerEmpId(), planFinishTime);
+                claim.getMaintainerEmpId(), planFinishTime, claim.getId());
     }
 
     /** 从目标认领关系再次发起后续触达，仍兼容当前 TouchTaskService。 */
@@ -201,7 +201,7 @@ public class MarketingCustomerClaimService {
                     CustomerErrorCode.RE_TOUCH_HAS_RUNNING.getMessage());
         }
         return touchTaskService.createFollowUpTask(custId, claim.getOrgId(), claim.getMaintainerEmpId(),
-                req == null ? null : req.getReason(), req == null ? null : req.getPlanFinishTime());
+                req == null ? null : req.getReason(), req == null ? null : req.getPlanFinishTime(), claim.getId());
     }
 
     private MarketingCustomerClaim requireOwnedActive(String claimId, String empId, String orgId) {
