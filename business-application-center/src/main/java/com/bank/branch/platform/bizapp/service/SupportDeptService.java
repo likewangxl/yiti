@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 中台支持申请服务（承接侧视图）。
@@ -473,6 +474,35 @@ public class SupportDeptService {
                                                                       String assignedEmpId, int pageNo, int pageSize) {
         PageResult<SupportRequest> page = listPageForDept(supportDeptId, status, assignedEmpId, pageNo, pageSize);
         List<SupportRequestListItemDTO> items = supportRequestDTOConverter.toListItems(page.getRecords());
+        enrichActiveTaskMetadata(page.getRecords(), items);
         return PageResult.of(pageNo, pageSize, page.getTotal(), items);
+    }
+
+    private void enrichActiveTaskMetadata(List<SupportRequest> records,
+                                          List<SupportRequestListItemDTO> items) {
+        if (todoQueryApi == null || records == null || items == null || records.isEmpty()) {
+            return;
+        }
+        List<String> processInstanceIds = records.stream()
+                .map(SupportRequest::getProcessInstanceId)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .collect(Collectors.toList());
+        if (processInstanceIds.isEmpty()) {
+            return;
+        }
+        Map<String, TaskRespDTO> tasks = todoQueryApi
+                .findActiveTaskRespByProcessInstanceIds(processInstanceIds);
+        if (tasks == null || tasks.isEmpty()) {
+            return;
+        }
+        for (int i = 0; i < Math.min(records.size(), items.size()); i++) {
+            TaskRespDTO task = tasks.get(records.get(i).getProcessInstanceId());
+            if (task != null) {
+                items.get(i).setCurrentNodeName(task.getTaskName());
+                items.get(i).setCurrentNodeKey(task.getNodeKey());
+                items.get(i).setSlaStatus(task.getSlaStatus());
+            }
+        }
     }
 }

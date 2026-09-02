@@ -793,4 +793,30 @@ class TodoQueryServiceTest {
         verify(userApi).getCandidateGroupKeys("E10001");
         verify(currentUserApi, never()).getCurrentCandidateGroupKeys();
     }
+
+    @Test
+    void findActiveTaskRespByProcessInstanceIds_batchesFlowableQueryAndBuildsTaskMetadata() {
+        Task task = buildMockTask("TASK_092", "产品经理办理", "PID_092",
+                "E10002", "product_owner_task", "support_simple_v1:1:1");
+        TaskQuery query = mock(TaskQuery.class);
+        when(taskService.createTaskQuery()).thenReturn(query);
+        when(query.processInstanceIdIn(List.of("PID_092", "PID_093"))).thenReturn(query);
+        when(query.active()).thenReturn(query);
+        when(query.list()).thenReturn(List.of(task));
+        BizProcessMap map = buildBizProcessMap("PID_092", "SUPPORT", "SUP092");
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_092")).thenReturn(map);
+        when(slaCalculationService.calculateSlaStatus(
+                eq("support_simple_v1"), eq("product_owner_task"), any(LocalDateTime.class)))
+                .thenReturn(SlaStatus.YELLOW);
+
+        List<TaskRespDTO> result = todoQueryService.findActiveTaskRespByProcessInstanceIds(
+                List.of("PID_092", "PID_093", "PID_092"));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getProcessInstanceId()).isEqualTo("PID_092");
+        assertThat(result.get(0).getNodeKey()).isEqualTo("product_owner_task");
+        assertThat(result.get(0).getAssignee()).isEqualTo("E10002");
+        assertThat(result.get(0).getSlaStatus()).isEqualTo("YELLOW");
+        verify(query).processInstanceIdIn(List.of("PID_092", "PID_093"));
+    }
 }

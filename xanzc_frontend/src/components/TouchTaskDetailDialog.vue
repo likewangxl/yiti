@@ -196,8 +196,23 @@ async function submitLog() {
   } finally { saving.value = false; }
 }
 
+function customerConfirmText() {
+  const name = customer.value?.custName || customer.value?.customerName
+    || task.value?.custName || task.value?.customerName;
+  const custNo = customer.value?.custNo || customer.value?.customerNo
+    || task.value?.custNo || task.value?.customerNo;
+  if (name && custNo) return `客户“${name}”（客户号：${custNo}）`;
+  if (name) return `客户“${name}”`;
+  if (custNo) return `客户号“${custNo}”`;
+  return '';
+}
+
 async function complete() {
-  await ElMessageBox.confirm('确认完成该触达任务？完成后不可继续补录。', '完成任务', { type: 'warning' });
+  const customerText = customerConfirmText();
+  const prompt = customerText
+    ? `确认完成${customerText}的触达任务？完成后不可继续补录。`
+    : '确认完成该触达任务？完成后不可继续补录。';
+  await ElMessageBox.confirm(prompt, '完成任务', { type: 'warning' });
   completing.value = true;
   try {
     await completeTouchTask(props.taskId);
@@ -213,14 +228,18 @@ async function complete() {
  * 这里吞掉用户取消和导航异常，确保触达成功状态不会因后续入口失败而回滚或被误报。
  */
 async function offerSupportRequest() {
+  const customerText = customerConfirmText();
+  const prompt = customerText
+    ? `触达已完成，当前${customerText}，是否需要发起中台支持？`
+    : '触达已完成，是否需要发起中台支持？';
   try {
-    await ElMessageBox.confirm('触达已完成，是否需要发起中台支持？', '中台支持', {
+    await ElMessageBox.confirm(prompt, '中台支持', {
       type: 'info', confirmButtonText: '需要', cancelButtonText: '暂不需要'
     });
   } catch (_) {
     return;
   }
-  const custId = task.value?.custId;
+  const custId = task.value?.custId || customer.value?.custId || customer.value?.id;
   if (!custId) return;
   try {
     await router?.push({

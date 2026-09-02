@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS SUPPORT_REQUEST (
 CREATE TABLE IF NOT EXISTS SUPPORT_PROCESS_LOG (
   id                   VARCHAR(32)  NOT NULL,
   support_request_id   VARCHAR(32)  NOT NULL,
-  client_uuid          VARCHAR(128) NOT NULL,
+  client_uuid          VARCHAR(64) NOT NULL,
   log_type             VARCHAR(32)  NOT NULL DEFAULT 'PROCESS',
   content              CLOB         DEFAULT NULL,
   checkin_time         TIMESTAMP    DEFAULT NULL,

@@ -215,6 +215,7 @@ describe('TouchTaskDetailDialog 一任务一工作日志', () => {
   it('触达成功后询问是否需要中台支持，选择是带出客户和来源任务', async () => {
     api.getTouchTask.mockResolvedValue(task('IN_PROGRESS'));
     api.listTouchLogs.mockResolvedValue([log()]);
+    api.getMarketingCustomer.mockResolvedValue({ custName: '测试客户', custNo: 'KH-001' });
     api.completeTouchTask.mockResolvedValue({});
     messageBox.confirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
 
@@ -222,11 +223,30 @@ describe('TouchTaskDetailDialog 一任务一工作日志', () => {
     await view.get('.complete-task-button').trigger('click');
     await flushPromises();
 
+    expect(messageBox.confirm.mock.calls[0][0]).toContain('测试客户');
+    expect(messageBox.confirm.mock.calls[0][0]).toContain('KH-001');
+    expect(messageBox.confirm.mock.calls[1][0]).toContain('测试客户');
+    expect(messageBox.confirm.mock.calls[1][0]).toContain('KH-001');
     expect(messageBox.confirm).toHaveBeenCalledTimes(2);
     expect(routerPush).toHaveBeenCalledWith({
       path: '/bizexec/supports/new',
       query: { custId: 'CUST-1', sourceTouchTaskId: 'TASK-1' }
     });
+  });
+
+  it('客户名称和客户号都缺失时完成确认仍保持自然文案', async () => {
+    api.getTouchTask.mockResolvedValue({ ...task('IN_PROGRESS'), custName: undefined, custNo: undefined });
+    api.getMarketingCustomer.mockResolvedValue({});
+    api.listTouchLogs.mockResolvedValue([log()]);
+    api.completeTouchTask.mockResolvedValue({});
+    messageBox.confirm.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('cancel'));
+
+    const view = await mountDialog();
+    await view.get('.complete-task-button').trigger('click');
+    await flushPromises();
+
+    expect(messageBox.confirm.mock.calls[0][0]).toBe('确认完成该触达任务？完成后不可继续补录。');
+    expect(messageBox.confirm.mock.calls[0][0]).not.toMatch(/undefined|null|客户号：\s*（/);
   });
 
   it('中台支持后续选择取消或跳转失败不影响触达完成', async () => {

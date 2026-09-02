@@ -309,4 +309,26 @@ describe('SupportRequests 中台支持工作台', () => {
       Object.defineProperty(navigator, 'geolocation', { configurable: true, value: previousGeolocation });
     }
   });
+
+  it('过程时间线按后端 logType 展示过程记录和办理结果', async () => {
+    wrapper = mountPage();
+    await settle();
+    wrapper.vm.detail = { id: 'SR-LOG' };
+    wrapper.vm.logs = [
+      { id: 'LOG-P', logType: 'PROCESS', content: '现场沟通', createdBy: 'E-1' },
+      { id: 'LOG-R', logType: 'RESULT', content: '已完成办理', createdBy: 'E-1' }
+    ];
+    await nextTick();
+
+    expect(wrapper.text()).toContain('过程记录');
+    expect(wrapper.text()).toContain('办理结果');
+  });
+
+  it('真实承接字段优先于旧兼容字段', async () => {
+    wrapper = mountPage();
+    await settle();
+
+    expect(wrapper.vm.assignedName({ assignedName: '旧字段', assignedEmpId: 'E-9' })).toBe('E-9');
+    expect(wrapper.vm.assignedName({ assignedName: '旧字段', assignedEmpId: 'E-9', assignedEmpName: '承接人' })).toBe('承接人');
+  });
 });

@@ -17,7 +17,7 @@ import java.util.List;
 public class CreateSupportProcessLogReq {
     /** 移动端幂等键。 */
     @NotBlank(message = "clientUuid不能为空")
-    @Size(max = 128, message = "clientUuid长度不能超过128")
+    @Size(max = 64, message = "clientUuid长度不能超过64")
     private String clientUuid;
     /** PROCESS / RESULT。未传时按 PROCESS 处理。 */
     @Pattern(regexp = "(?i)(PROCESS|RESULT)", message = "logType仅支持PROCESS或RESULT")

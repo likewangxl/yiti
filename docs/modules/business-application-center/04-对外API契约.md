@@ -435,6 +435,38 @@ public class SupportRequestDTO {
 | status | String | 状态 |
 | businessKey | String | 业务键 |
 
+### 6.2.1 SupportRequestListItemDTO（REST 列表轻量 DTO）
+
+`GET /api/support-requests` 和 `GET /api/support-dept/requests` 的列表条目使用
+`SupportRequestListItemDTO`，只保留列表所需字段。六个业务字段直接映射自
+`SUPPORT_REQUEST` 实体；三个名称字段由转换器通过对应公开查询 API 补充。
+
+| 字段 | 类型 | 来源/说明 |
+|---|---|---|
+| id | String | 申请 ID |
+| requestNo | String | 申请编号 |
+| submitGroupId | String | 同批拆单分组 ID |
+| custId | String | 直接来自实体的客户 ID |
+| custName | String | 客户名称，`CustomerQueryApi` 补充 |
+| productId | String | 直接来自实体的产品 ID |
+| productName | String | 产品名称，`ProductApi` 补充 |
+| supportDeptId | String | 直接来自实体的承接部门 ID |
+| supportDeptName | String | 承接部门名称，`OrgApi` 补充 |
+| otherDemand | String | 直接来自实体的其他需求/补充说明 |
+| scenario | String | `A` 产品直达 / `B` 部门承接 |
+| assignedEmpId | String | 直接来自实体的承接办理人员工号 |
+| createdBy | String | 直接来自实体的发起人员工号 |
+| status | String | 业务状态 |
+| currentNodeName | String | 当前活动流程节点名称；草稿或流程结束时为空 |
+| currentNodeKey | String | 当前活动流程节点 KEY；草稿或流程结束时为空 |
+| slaStatus | String | 当前节点 SLA：`GREEN` / `YELLOW` / `RED`；无活动节点时为空 |
+| createdTime | LocalDateTime | 创建时间 |
+
+列表 DTO 不暴露 `deleted`、`businessKey`、`processInstanceId`、`updatedBy`、
+`updatedTime`、`ownerOrgId` 等软删除、流程和内部审计字段；详情 DTO
+`SupportRequestDTO` 的字段范围与列表 DTO 独立维护。
+三个当前流程字段由服务在业务数据范围过滤后通过 `TodoQueryApi` 批量补充，不参与数据范围判断。
+
 ### 6.3 BizApplyStatDTO
 
 ```java

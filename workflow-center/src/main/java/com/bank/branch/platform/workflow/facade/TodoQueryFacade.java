@@ -41,6 +41,18 @@ public class TodoQueryFacade implements TodoQueryApi {
     }
 
     @Override
+    public Map<String, TaskRespDTO> findActiveTaskRespByProcessInstanceIds(List<String> processInstanceIds) {
+        log.debug("[TodoQueryFacade.findActiveTaskRespByProcessInstanceIds] instances={}",
+                processInstanceIds == null ? 0 : processInstanceIds.size());
+        if (processInstanceIds == null || processInstanceIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return todoQueryService.findActiveTaskRespByProcessInstanceIds(processInstanceIds).stream()
+                .filter(d -> d.getProcessInstanceId() != null)
+                .collect(Collectors.toMap(TaskRespDTO::getProcessInstanceId, d -> d, (a, b) -> a));
+    }
+
+    @Override
     public List<String> listMyDoneBusinessKeys(String empId, String bizType) {
         log.debug("[TodoQueryFacade.listMyDoneBusinessKeys] empId={}, bizType={}", empId, bizType);
         return todoQueryService.listMyDoneBusinessKeys(empId, bizType);

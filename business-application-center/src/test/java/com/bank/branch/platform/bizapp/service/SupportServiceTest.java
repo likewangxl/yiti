@@ -1,6 +1,7 @@
 package com.bank.branch.platform.bizapp.service;
 
 import com.bank.branch.platform.bizapp.api.converter.SupportRequestDTOConverter;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
 import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
 import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
@@ -14,7 +15,9 @@ import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
+import com.bank.branch.platform.workflow.api.TodoQueryApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
+import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +31,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -65,6 +69,9 @@ class SupportServiceTest {
 
     @Mock
     private WorkflowApi workflowApi;
+
+    @Mock
+    private TodoQueryApi todoQueryApi;
 
     @Mock
     private CustomerQueryApi customerQueryApi;
@@ -456,6 +463,31 @@ class SupportServiceTest {
         // then
         assertThat(result.getTotal()).isEqualTo(1L);
         assertThat(result.getRecords()).hasSize(1);
+    }
+
+    @Test
+    void listPageAsDTO_shouldEnrichCurrentNodeAndSlaAfterScopedQuery() {
+        SupportRequest sr = buildRequest("SR001", SupportStatus.IN_APPROVAL);
+        sr.setProcessInstanceId("PID001");
+        SupportRequestListItemDTO item = new SupportRequestListItemDTO();
+        item.setId("SR001");
+        when(supportMapper.selectPageForSupport(any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(List.of(sr));
+        when(supportMapper.countPageForSupport(any(), any(), any())).thenReturn(1L);
+        when(supportRequestDTOConverter.toListItems(List.of(sr))).thenReturn(List.of(item));
+        TaskRespDTO task = new TaskRespDTO();
+        task.setTaskName("产品经理办理");
+        task.setNodeKey("product_owner_task");
+        task.setSlaStatus("YELLOW");
+        when(todoQueryApi.findActiveTaskRespByProcessInstanceIds(List.of("PID001")))
+                .thenReturn(Map.of("PID001", task));
+
+        PageResult<SupportRequestListItemDTO> result = supportService.listPageAsDTO(
+                null, null, "ORG001", 1, 20);
+
+        assertThat(result.getRecords().get(0).getCurrentNodeName()).isEqualTo("产品经理办理");
+        assertThat(result.getRecords().get(0).getCurrentNodeKey()).isEqualTo("product_owner_task");
+        assertThat(result.getRecords().get(0).getSlaStatus()).isEqualTo("YELLOW");
     }
 
     // ==================== 辅助方法 ====================

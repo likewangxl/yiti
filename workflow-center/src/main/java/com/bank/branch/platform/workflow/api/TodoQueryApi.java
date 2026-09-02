@@ -33,6 +33,16 @@ public interface TodoQueryApi {
     Map<String, TaskRespDTO> findTaskRespByBusinessKeys(String empId, List<String> businessKeys);
 
     /**
+     * 按流程实例 ID 批量查询当前活动任务。
+     * <p>本方法不做员工候选人鉴权，仅供业务模块在完成自身数据范围过滤后补充
+     * 当前节点、办理人和 SLA 信息；调用方不得用它扩大可见数据范围。</p>
+     *
+     * @param processInstanceIds 已通过业务数据权限校验的流程实例 ID
+     * @return 以流程实例 ID 为 key 的活动任务 Map（不命中的 key 在 Map 中缺失）
+     */
+    Map<String, TaskRespDTO> findActiveTaskRespByProcessInstanceIds(List<String> processInstanceIds);
+
+    /**
      * 已办：查询某员工某 bizType 下所有历史已办 task 的 processInstanceBusinessKey（去重）。
      *
      * @param empId   员工 ID

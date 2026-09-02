@@ -200,7 +200,7 @@
           <el-timeline v-else>
             <el-timeline-item v-for="log in logs" :key="log.id || log.logId || log.createdTime" :timestamp="formatTime(log.createdTime || log.logTime || log.checkInTime || log.checkinTime)" placement="top">
               <el-card shadow="never">
-                <div class="log-head">{{ log.operatorName || log.createdByName || log.createdBy || '-' }} <span v-if="log.result">· {{ resultLabel(log.result) }}</span></div>
+                <div class="log-head">{{ log.operatorName || log.createdByName || log.createdBy || '-' }} <span v-if="logTypeLabel(log.logType)">· {{ logTypeLabel(log.logType) }}</span></div>
                 <div class="pre-wrap">{{ log.content || log.summary || log.logContent || '-' }}</div>
                 <div v-if="log.operatorLocation || log.locationAddress || log.location" class="muted">定位：{{ log.operatorLocation || log.locationAddress || log.location }}</div>
                 <div v-if="log.checkInTime || log.checkinTime" class="muted">打卡：{{ formatTime(log.checkInTime || log.checkinTime) }}</div>
@@ -395,12 +395,14 @@ function productName(row) {
   return row.product?.name || row.product?.productName || '';
 }
 function employeeLabel(item) { return [item.name || item.empName, item.id || item.empId].filter(Boolean).join(' · '); }
-function assignedName(row) { return row?.assignedEmpName || row?.assignedName || row?.assignedEmpId || '-'; }
+function assignedName(row) { return row?.assignedEmpName || row?.assignedEmpId || row?.assignedName || '-'; }
 function formatTime(value) { return value ? String(value).replace('T', ' ').slice(0, 19) : '-'; }
 function statusLabel(value) { return statusMap[value] || value || '-'; }
 function statusType(value) { return ({ DRAFT: 'info', IN_APPROVAL: 'warning', IN_PROGRESS: 'warning', COMPLETED: 'success', REJECTED: 'danger', CANCELLED: 'info' }[value] || 'info'); }
 function processStatusLabel(value) { return ({ COMPLETED: '已完成', ACTIVE: '处理中', PENDING: '待处理', REJECTED: '已驳回' }[value] || value || '-'); }
-function resultLabel(value) { return ({ SUCCESS: '办理成功', FAILED: '驳回', CANCELLED: '已取消' }[value] || value || '-'); }
+function logTypeLabel(value) {
+  return ({ PROCESS: '过程记录', RESULT: '办理结果' }[String(value || '').trim().toUpperCase()] || '');
+}
 function slaValue(row) { return String(row?.slaStatus || row?.sla?.status || row?.slaColor || '').toUpperCase(); }
 function slaClass(row) { return ({ GREEN: 'normal', YELLOW: 'warn', RED: 'overdue' }[slaValue(row)] || 'unknown'); }
 function slaLabel(row) { return ({ GREEN: '正常', YELLOW: '预警', RED: '超时' }[slaValue(row)] || row?.slaStatus || '-'); }

@@ -719,6 +719,31 @@ public class TodoQueryService {
     }
 
     /**
+     * 按已完成业务数据权限过滤的流程实例 ID 批量查询活动任务。
+     * 调用方负责数据范围校验，本方法只负责 Flowable 任务和 SLA 元信息装配。
+     */
+    public List<TaskRespDTO> findActiveTaskRespByProcessInstanceIds(List<String> processInstanceIds) {
+        if (processInstanceIds == null || processInstanceIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<String> instanceIds = processInstanceIds.stream()
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+        if (instanceIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return taskService.createTaskQuery()
+                .processInstanceIdIn(instanceIds)
+                .active()
+                .list()
+                .stream()
+                .map(this::convertTaskToDTO)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * 同 {@link #findMyTaskRespByBusinessKeys}，但候选组按传入 empId 查库实时解析（<b>不读登录态</b>）。
      * 供 SOAP 网关 / callpu 等无会话上下文链路调用，避免 AUTH-40105；PC 管理端请继续用
      * {@link #findMyTaskRespByBusinessKeys}（保持会话登录语义）。

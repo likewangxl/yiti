@@ -165,6 +165,8 @@ public class SupportRequestDTOConverter {
      * 纯字段复制到列表条目 DTO，不含冗余展示字段和敏感/内部字段。
      * <p>
      * ownerOrgId 为内部字段，不暴露到 API 列表层。
+     * custId、productId、supportDeptId、otherDemand、assignedEmpId、createdBy
+     * 直接来自实体，供前端列表展示和操作判断。
      * scenario 由 productId/supportDeptId 组合推断后填入。
      * </p>
      *
@@ -176,6 +178,12 @@ public class SupportRequestDTOConverter {
         dto.setId(entity.getId());
         dto.setRequestNo(entity.getRequestNo());
         dto.setSubmitGroupId(entity.getSubmitGroupId());
+        dto.setCustId(entity.getCustId());
+        dto.setProductId(entity.getProductId());
+        dto.setSupportDeptId(entity.getSupportDeptId());
+        dto.setOtherDemand(entity.getOtherDemand());
+        dto.setAssignedEmpId(entity.getAssignedEmpId());
+        dto.setCreatedBy(entity.getCreatedBy());
         dto.setStatus(entity.getStatus());
         dto.setScenario(inferScenario(entity.getProductId(), entity.getSupportDeptId()));
         dto.setCreatedTime(entity.getCreatedTime());

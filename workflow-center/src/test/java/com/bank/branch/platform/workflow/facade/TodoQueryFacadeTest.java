@@ -91,4 +91,30 @@ class TodoQueryFacadeTest {
         assertThat(map.get("ALLOC_ADJUST:A1").getTaskId()).isEqualTo("T1");
         assertThat(map).doesNotContainKey("ALLOC_ADJUST:A2");
     }
+
+    @Test
+    void w6_findActiveTaskRespByProcessInstanceIds_buildsMapAndIgnoresMissingInstances() {
+        TaskRespDTO dto1 = new TaskRespDTO();
+        dto1.setTaskId("T1");
+        dto1.setProcessInstanceId("PI1");
+        TaskRespDTO dto2 = new TaskRespDTO();
+        dto2.setTaskId("T2");
+        dto2.setProcessInstanceId("PI2");
+        when(todoQueryService.findActiveTaskRespByProcessInstanceIds(
+                Arrays.asList("PI1", "PI2", "PI3")))
+                .thenReturn(Arrays.asList(dto1, dto2));
+
+        Map<String, TaskRespDTO> map = facade.findActiveTaskRespByProcessInstanceIds(
+                Arrays.asList("PI1", "PI2", "PI3"));
+
+        assertThat(map).containsOnlyKeys("PI1", "PI2");
+        assertThat(map.get("PI1").getTaskId()).isEqualTo("T1");
+        assertThat(map).doesNotContainKey("PI3");
+    }
+
+    @Test
+    void w7_findActiveTaskRespByProcessInstanceIds_emptyInputReturnsEmptyMap() {
+        assertThat(facade.findActiveTaskRespByProcessInstanceIds(null)).isEmpty();
+        assertThat(facade.findActiveTaskRespByProcessInstanceIds(Collections.emptyList())).isEmpty();
+    }
 }

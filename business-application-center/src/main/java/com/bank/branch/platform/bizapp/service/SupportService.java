@@ -23,7 +23,9 @@ import com.bank.branch.platform.customer.api.dto.TouchTaskDTO;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.portal.api.ProductApi;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
+import com.bank.branch.platform.workflow.api.TodoQueryApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
+import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -62,6 +64,7 @@ public class SupportService {
     private final BizStateMachine bizStateMachine;
     private final BizNoGenerator bizNoGenerator;
     private final WorkflowApi workflowApi;
+    private final TodoQueryApi todoQueryApi;
     private final CustomerQueryApi customerQueryApi;
     private final ApplicationEventPublisher eventPublisher;
     private final SupportRequestDTOConverter supportRequestDTOConverter;
@@ -684,7 +687,36 @@ public class SupportService {
                                                                String ownerOrgId, int pageNo, int pageSize) {
         PageResult<SupportRequest> page = listPage(keyword, status, ownerOrgId, pageNo, pageSize);
         List<SupportRequestListItemDTO> items = supportRequestDTOConverter.toListItems(page.getRecords());
+        enrichActiveTaskMetadata(page.getRecords(), items);
         return PageResult.of(pageNo, pageSize, page.getTotal(), items);
+    }
+
+    private void enrichActiveTaskMetadata(List<SupportRequest> records,
+                                          List<SupportRequestListItemDTO> items) {
+        if (todoQueryApi == null || records == null || items == null || records.isEmpty()) {
+            return;
+        }
+        List<String> processInstanceIds = records.stream()
+                .map(SupportRequest::getProcessInstanceId)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .collect(Collectors.toList());
+        if (processInstanceIds.isEmpty()) {
+            return;
+        }
+        Map<String, TaskRespDTO> tasks = todoQueryApi
+                .findActiveTaskRespByProcessInstanceIds(processInstanceIds);
+        if (tasks == null || tasks.isEmpty()) {
+            return;
+        }
+        for (int i = 0; i < Math.min(records.size(), items.size()); i++) {
+            TaskRespDTO task = tasks.get(records.get(i).getProcessInstanceId());
+            if (task != null) {
+                items.get(i).setCurrentNodeName(task.getTaskName());
+                items.get(i).setCurrentNodeKey(task.getNodeKey());
+                items.get(i).setSlaStatus(task.getSlaStatus());
+            }
+        }
     }
 
     /**

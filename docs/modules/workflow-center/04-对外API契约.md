@@ -322,6 +322,8 @@ public interface TodoQueryApi {
 
     Map<String, TaskRespDTO> findTaskRespByBusinessKeys(String empId, List<String> businessKeys);
 
+    Map<String, TaskRespDTO> findActiveTaskRespByProcessInstanceIds(List<String> processInstanceIds);
+
     List<String> listMyDoneBusinessKeys(String empId, String bizType);
 
     Map<String, TaskRespDTO> findDoneTaskRespByBusinessKeys(String empId, List<String> businessKeys);
@@ -342,6 +344,7 @@ public interface TodoQueryApi {
 |---|---|---|
 | `listMyTodoBusinessKeys(empId, bizType)` | 查询某员工某 bizType 的所有待办 task 的 businessKey（去重） | 会话版：按登录态候选组解析 |
 | `findTaskRespByBusinessKeys(empId, businessKeys)` | 按 businessKey 批量反查 `TaskRespDTO`；`empId` 用于鉴权，只返该员工候选或受理的 task | 会话版 |
+| `findActiveTaskRespByProcessInstanceIds(processInstanceIds)` | 对已通过业务数据范围过滤的流程实例，批量补充当前节点、办理人与 SLA；本方法不做员工候选人鉴权，调用方不得据此扩大可见范围 | 业务范围内批量查询 |
 | `listMyDoneBusinessKeys(empId, bizType)` | 已办：查询某员工某 bizType 下所有历史已办 task 的 businessKey（去重） | 会话版 |
 | `findDoneTaskRespByBusinessKeys(empId, businessKeys)` | 已办：按 businessKey 反查 `TaskRespDTO`（走 `HistoryService`，仅返该员工 assignee 的） | 会话版 |
 | `listTodoBusinessKeysByEmp(empId, bizType)` | 同 `listMyTodoBusinessKeys`，但候选组按传入 `empId` 查库实时解析 | **无会话**，供 SOAP 网关/callpu 使用（会话版在无会话线程调用会抛 `AUTH-40105`） |

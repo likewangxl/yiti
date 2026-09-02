@@ -16,6 +16,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.BeanWrapperImpl;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -246,5 +247,29 @@ class SupportRequestDTOConverterTest {
 
         SupportRequestListItemDTO dto = converter.toListItem(entity);
         assertThat(dto.getScenario()).isEqualTo("B");
+    }
+
+    @Test
+    @DisplayName("toListItem 映射前端列表所需实体字段且不暴露内部字段")
+    void toListItem_mapsRequiredEntityFields_withoutInternalFields() {
+        SupportRequest entity = buildEntity("sr-required-fields", "cust001", "prod001", "DEPT001");
+
+        SupportRequestListItemDTO dto = converter.toListItem(entity);
+
+        assertThat(propertyValue(dto, "custId")).isEqualTo(entity.getCustId());
+        assertThat(propertyValue(dto, "productId")).isEqualTo(entity.getProductId());
+        assertThat(propertyValue(dto, "supportDeptId")).isEqualTo(entity.getSupportDeptId());
+        assertThat(propertyValue(dto, "otherDemand")).isEqualTo(entity.getOtherDemand());
+        assertThat(propertyValue(dto, "assignedEmpId")).isEqualTo(entity.getAssignedEmpId());
+        assertThat(propertyValue(dto, "createdBy")).isEqualTo(entity.getCreatedBy());
+
+        assertThat(BeanUtils.getPropertyDescriptors(SupportRequestListItemDTO.class))
+                .extracting(descriptor -> descriptor.getName())
+                .doesNotContain("deleted", "businessKey", "processInstanceId", "updatedBy",
+                        "updatedTime", "ownerOrgId");
+    }
+
+    private Object propertyValue(SupportRequestListItemDTO dto, String propertyName) {
+        return new BeanWrapperImpl(dto).getPropertyValue(propertyName);
     }
 }
