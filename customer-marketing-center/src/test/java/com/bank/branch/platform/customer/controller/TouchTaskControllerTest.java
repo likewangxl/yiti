@@ -2,7 +2,7 @@ package com.bank.branch.platform.customer.controller;
 
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
-import com.bank.branch.platform.customer.entity.TouchLog;
+import com.bank.branch.platform.customer.dto.resp.TouchWorklogVO;
 import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.enums.CustomerErrorCode;
 import com.bank.branch.platform.customer.enums.SlaStatus;
@@ -58,8 +58,8 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
     @WithMockEmpContext(empId = "E10001", orgCode = "ORG_SZ_001")
     void listTasks_shouldReturn200() throws Exception {
         // given
-        TouchTask t1 = buildPendingTask("task-001");
-        TouchTask t2 = buildPendingTask("task-002");
+        TouchTask t1 = buildPendingTask("1");
+        TouchTask t2 = buildPendingTask("2");
         PageResult<TouchTask> page = PageResult.of(1, 20, 2L, Arrays.asList(t1, t2));
 
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
@@ -72,7 +72,7 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.page.total").value(2))
-                .andExpect(jsonPath("$.page.records[0].id").value("task-001"));
+                .andExpect(jsonPath("$.page.records[0].id").value(1));
     }
 
     // ==================== GET /api/touch-tasks/{id} 详情 ====================
@@ -81,16 +81,16 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
     @WithMockEmpContext(empId = "E10001")
     void getTask_shouldReturn200() throws Exception {
         // given
-        TouchTask task = buildPendingTask("task-001");
+        TouchTask task = buildPendingTask("1");
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG_SZ_001");
-        when(touchTaskService.getVisibleById("task-001", "E10001", "ORG_SZ_001", false)).thenReturn(task);
+        when(touchTaskService.getVisibleById("1", "E10001", "ORG_SZ_001", false)).thenReturn(task);
 
         // when/then
-        mockMvc.perform(get("/api/touch-tasks/task-001"))
+        mockMvc.perform(get("/api/touch-tasks/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
-                .andExpect(jsonPath("$.data.id").value("task-001"))
+                .andExpect(jsonPath("$.data.id").value(1))
                 .andExpect(jsonPath("$.data.taskStatus").value(TouchTaskStatus.PENDING.getCode()));
     }
 
@@ -99,13 +99,13 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
     void getTask_shouldReturn404WhenNotFound() throws Exception {
         // given: 任务不存在
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
-        when(touchTaskService.getVisibleById(eq("not-exist"), eq("E10001"), any(), eq(false)))
+        when(touchTaskService.getVisibleById(eq("999"), eq("E10001"), any(), eq(false)))
                 .thenThrow(new BizException(
                         CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode(),
                         CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getMessage()));
 
         // when/then
-        mockMvc.perform(get("/api/touch-tasks/not-exist"))
+        mockMvc.perform(get("/api/touch-tasks/999"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode()));
     }
@@ -116,10 +116,10 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
     @WithMockEmpContext(empId = "E10001")
     void markSuccessTask_shouldReturn200() throws Exception {
         // given
-        doNothing().when(touchTaskService).markSuccess(eq("task-001"), eq("E10001"), eq(false));
+        doNothing().when(touchTaskService).markSuccess(eq("1"), eq("E10001"), eq(false));
 
         // when/then
-        mockMvc.perform(post("/api/touch-tasks/task-001/success"))
+        mockMvc.perform(post("/api/touch-tasks/1/success"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
     }
@@ -131,10 +131,10 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
         doThrow(new BizException(
                 CustomerErrorCode.TOUCH_TASK_ILLEGAL_TRANSITION.getCode(),
                 CustomerErrorCode.TOUCH_TASK_ILLEGAL_TRANSITION.getMessage()))
-                .when(touchTaskService).markSuccess(eq("task-done"), eq("E10001"), eq(false));
+                .when(touchTaskService).markSuccess(eq("3"), eq("E10001"), eq(false));
 
         // when/then
-        mockMvc.perform(post("/api/touch-tasks/task-done/success"))
+        mockMvc.perform(post("/api/touch-tasks/3/success"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(CustomerErrorCode.TOUCH_TASK_ILLEGAL_TRANSITION.getCode()));
     }
@@ -145,12 +145,12 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
     @WithMockEmpContext(empId = "E10001")
     void cancelTask_shouldReturn200() throws Exception {
         // given
-        doNothing().when(touchTaskService).cancel(eq("task-001"), anyString(), eq("E10001"), eq(false));
+        doNothing().when(touchTaskService).cancel(eq("1"), anyString(), eq("E10001"), eq(false));
 
         String body = "{\"reason\":\"客户拒绝拜访\"}";
 
         // when/then
-        mockMvc.perform(post("/api/touch-tasks/task-001/cancel")
+        mockMvc.perform(post("/api/touch-tasks/1/cancel")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
@@ -164,7 +164,7 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
         String body = "{\"reason\":\"\"}";
 
         // when/then
-        mockMvc.perform(post("/api/touch-tasks/task-001/cancel")
+        mockMvc.perform(post("/api/touch-tasks/1/cancel")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isBadRequest());
@@ -176,16 +176,16 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
     @WithMockEmpContext(empId = "E10001", orgCode = "ORG_SZ_001")
     void addLog_shouldReturn200() throws Exception {
         // given
-        TouchLog log = new TouchLog();
-        log.setId("log-001");
-        log.setTouchTaskId("task-001");
+        TouchWorklogVO log = new TouchWorklogVO();
+        log.setId("11");
+        log.setTouchTaskId("1");
         log.setClientUuid("uuid-abc");
         log.setLogContent("今日拜访客户");
 
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG_SZ_001");
         when(touchLogService.addLog(
-                eq("task-001"), eq("uuid-abc"), eq("今日拜访客户"),
+                eq("1"), eq("uuid-abc"), eq("今日拜访客户"),
                 any(), any(), eq("VISIT"), any(), any(), any(),
                 eq("E10001"), eq("ORG_SZ_001"), eq(false)))
                 .thenReturn(log);
@@ -195,12 +195,12 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
                 "\"photoGroups\":{\"keyPerson\":[\"http://minio/a.jpg\"],\"doorplate\":[],\"workplace\":[]}}";
 
         // when/then
-        mockMvc.perform(post("/api/touch-tasks/task-001/logs")
+        mockMvc.perform(post("/api/touch-tasks/1/logs")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
-                .andExpect(jsonPath("$.data.id").value("log-001"));
+                .andExpect(jsonPath("$.data.id").value("11"));
     }
 
     @Test
@@ -210,7 +210,7 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
         String body = "{\"clientUuid\":\"\",\"logContent\":\"今日拜访客户\"}";
 
         // when/then
-        mockMvc.perform(post("/api/touch-tasks/task-001/logs")
+        mockMvc.perform(post("/api/touch-tasks/1/logs")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isBadRequest());
@@ -222,26 +222,21 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
     @WithMockEmpContext(empId = "E10001")
     void listLogs_shouldReturn200() throws Exception {
         // given
-        TouchLog log1 = new TouchLog();
-        log1.setId("log-001");
-        log1.setTouchTaskId("task-001");
+        TouchWorklogVO log1 = new TouchWorklogVO();
+        log1.setId("11");
+        log1.setTouchTaskId("1");
         log1.setLogContent("第一次拜访");
-        TouchLog log2 = new TouchLog();
-        log2.setId("log-002");
-        log2.setTouchTaskId("task-001");
-        log2.setLogContent("第二次拜访");
 
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG_SZ_001");
-        when(touchLogService.listVisibleByTaskId("task-001", "ORG_SZ_001", false))
-                .thenReturn(Arrays.asList(log1, log2));
+        when(touchLogService.listVisibleByTaskId("1", "ORG_SZ_001", false))
+                .thenReturn(List.of(log1));
 
         // when/then
-        mockMvc.perform(get("/api/touch-tasks/task-001/logs"))
+        mockMvc.perform(get("/api/touch-tasks/1/logs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data").isArray())
-                .andExpect(jsonPath("$.data[0].id").value("log-001"))
-                .andExpect(jsonPath("$.data[1].id").value("log-002"));
+                .andExpect(jsonPath("$.data[0].id").value("11"));
     }
 
     // ==================== 测试辅助方法 ====================
@@ -251,9 +246,9 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
      */
     private TouchTask buildPendingTask(String id) {
         TouchTask task = new TouchTask();
-        task.setId(id);
+        task.setId(Long.valueOf(id));
         task.setTaskNo("TOUCH_" + id);
-        task.setCustId("cust-001");
+        task.setCustId(101L);
         task.setOrgId("ORG_SZ_001");
         task.setAssigneeEmpId("E10001");
         task.setTaskType(TouchTaskType.FIRST_TOUCH.getCode());
@@ -261,7 +256,6 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
         task.setSlaStatus(SlaStatus.GREEN.getCode());
         task.setPlanFinishTime(LocalDateTime.now().plusDays(7));
         task.setWarningTime(LocalDateTime.now().plusDays(5));
-        task.setBusinessKey("TOUCH:" + id);
         task.setCreatedTime(LocalDateTime.now());
         task.setUpdatedTime(LocalDateTime.now());
         return task;

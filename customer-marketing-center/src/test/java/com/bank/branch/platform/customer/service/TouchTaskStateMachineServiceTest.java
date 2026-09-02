@@ -24,7 +24,7 @@ class TouchTaskStateMachineServiceTest {
         service = new TouchTaskStateMachineService();
     }
 
-    // === 合法转移（5 条）===
+    // === 合法转移（4 条）===
 
     @Test
     void pendingCanTransitionToInProgress() {
@@ -33,9 +33,10 @@ class TouchTaskStateMachineServiceTest {
     }
 
     @Test
-    void pendingCanTransitionToSuccess() {
-        assertThatCode(() -> service.assertTransition(TouchTaskStatus.PENDING, TouchTaskStatus.SUCCESS))
-                .doesNotThrowAnyException();
+    void pendingToSuccess_illegal() {
+        assertThatThrownBy(() -> service.assertTransition(TouchTaskStatus.PENDING, TouchTaskStatus.SUCCESS))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "CUST-40010");
     }
 
     @Test

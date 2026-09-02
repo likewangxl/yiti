@@ -8,6 +8,7 @@ import com.bank.branch.platform.governance.mapper.BizFileRelMapper;
 import com.bank.branch.platform.governance.mapper.FileObjectMapper;
 import com.bank.branch.platform.governance.storage.FileCategory;
 import com.bank.branch.platform.governance.storage.ObsStorageClient;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -128,6 +129,21 @@ class FileServiceTest {
         assertThat(foCap.getValue().getBucketName()).isEqualTo("obs");
         assertThat(dto.getFileName()).isEqualTo("r.xlsx");
         assertThat(dto.getNewlyCreated()).isTrue();
+    }
+
+    @Test
+    void upload_csv_isAcceptedByTheSharedFileWhitelist() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "lead-import.csv", "text/csv", "客户名称,统一社会信用代码\n".getBytes());
+        when(fileObjectMapper.selectByMd5Hash(anyString())).thenReturn(null);
+
+        FileObjectDTO dto = fileService.upload(file, "EMP001", null, null,
+                FileCategory.GENERAL);
+
+        assertThat(dto).isNotNull();
+        ArgumentCaptor<String> keyCap = ArgumentCaptor.forClass(String.class);
+        verify(obsStorageClient).putObject(any(InputStream.class), keyCap.capture());
+        assertThat(keyCap.getValue()).endsWith(".csv");
     }
 
     @Test
@@ -327,6 +343,22 @@ class FileServiceTest {
                         && "F_001".equals(rel.getFileObjectId())
                         && "ATTACHMENT".equals(rel.getFileRole())
         ));
+    }
+
+    @Test
+    void unbindFile_shouldDeleteOnlyTheRequestedBusinessRelation() {
+        when(bizFileRelMapper.delete(any())).thenReturn(1);
+
+        fileService.unbindFile("ASSET_PROJECT", "9001", "F_001");
+
+        ArgumentCaptor<QueryWrapper<BizFileRel>> queryCaptor =
+                ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(bizFileRelMapper).delete(queryCaptor.capture());
+        assertThat(queryCaptor.getValue().getSqlSegment())
+                .contains("biz_type", "biz_id", "file_object_id");
+        assertThat(queryCaptor.getValue().getParamNameValuePairs().values())
+                .contains("ASSET_PROJECT", "9001", "F_001");
+        verifyNoInteractions(fileObjectMapper, obsStorageClient);
     }
 
     @Test

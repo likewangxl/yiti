@@ -9,6 +9,7 @@ import com.bank.branch.platform.portal.api.dto.ResponsibleEmpDTO;
 import com.bank.branch.platform.portal.entity.ProductInfo;
 import com.bank.branch.platform.portal.mapper.ProductInfoMapper;
 import com.bank.branch.platform.portal.service.dto.ProductExportRow;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -19,6 +20,7 @@ import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -26,6 +28,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,9 +43,16 @@ class ProductExportServiceTest {
     @Mock DictApi dictApi;
     @Mock OrgApi orgApi;
     @Mock AddrbookQueryService addrbookQueryService;
+    @Mock UserProductRelationService userProductRelationService;
     @Mock AuditApi auditApi;
 
     @InjectMocks ProductExportService productExportService;
+
+    @BeforeEach
+    void defaultRelationQueriesToEmpty() {
+        lenient().when(userProductRelationService.mapUserIdsByProductIds(any()))
+                .thenReturn(Collections.emptyMap());
+    }
 
     /**
      * 超过 5000 行应抛出 PORTAL-42207
@@ -68,10 +78,10 @@ class ProductExportServiceTest {
         ProductInfo entity = buildEntity("P001");
         when(productInfoMapper.selectPage(eq(null), eq(null), eq("ACTIVE"), eq(0), eq(5000)))
                 .thenReturn(List.of(entity));
-        when(dictApi.getDictLabel("PRODUCT_CATEGORY", "CAT_DEPOSIT")).thenReturn("存款类");
         OrgDTO org = new OrgDTO();
+        org.setOrgCode("ORG_SZ_001");
         org.setOrgName("深圳分行");
-        when(orgApi.getOrg("ORG_SZ_001")).thenReturn(org);
+        when(orgApi.getOrgsByCodes(Collections.singleton("ORG_SZ_001"))).thenReturn(List.of(org));
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         productExportService.exportToStream(null, null, null, baos, "E10001");
@@ -87,14 +97,13 @@ class ProductExportServiceTest {
     void exportShouldIncludeResponsibleEmpsWithMaskedMobile() {
         when(productInfoMapper.countPage(null, null, "ACTIVE")).thenReturn(1L);
         ProductInfo entity = buildEntity("P001");
-        entity.setResponsibleEmpIds(List.of("E001"));
         when(productInfoMapper.selectPage(any(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(List.of(entity));
-        when(dictApi.getDictLabel(any(), any())).thenReturn("存款类");
-        OrgDTO org = new OrgDTO();
-        org.setOrgName("深圳分行");
-        when(orgApi.getOrg(any())).thenReturn(org);
+        when(userProductRelationService.mapUserIdsByProductIds(any()))
+                .thenReturn(Map.of("P001", List.of("E001")));
+        when(orgApi.getOrgsByCodes(any())).thenReturn(Collections.emptyList());
         ResponsibleEmpDTO emp = new ResponsibleEmpDTO();
+        emp.setEmpId("E001");
         emp.setEmpName("张三");
         emp.setMobile("138****5678");
         when(addrbookQueryService.listResponsibleEmps(List.of("E001"))).thenReturn(List.of(emp));

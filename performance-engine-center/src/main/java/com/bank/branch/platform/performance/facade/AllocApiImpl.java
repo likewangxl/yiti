@@ -166,7 +166,7 @@ public class AllocApiImpl implements AllocApi {
     // ==================== 原业绩分配预览（调整申请页面） ====================
 
     /**
-     * 查询客户「原业绩分配」预览（RULE + ACCOUNT 各取审批通过的最后一条申请明细）.
+     * 查询客户「原业绩分配」预览（取当前原分配关系最新来源批次的全部明细）.
      */
     @Override
     public List<com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custId, String allocDim) {

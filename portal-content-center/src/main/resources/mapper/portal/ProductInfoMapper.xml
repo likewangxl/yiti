@@ -4,7 +4,7 @@
 
     <!-- insert/selectById/updateById 均含 TypeHandler 或业务逻辑（deleted=0 过滤），保留 XML 实现覆盖 BaseMapper 默认行为 -->
 
-    <!-- product_info 结果映射（responsible_emp_ids 需要 TypeHandler） -->
+    <!-- product_info 结果映射；负责人由 PORTAL_USER_PRODUCT_REL 派生。 -->
     <resultMap id="ProductInfoMap" type="com.bank.branch.platform.portal.entity.ProductInfo">
         <id column="id" property="id"/>
         <result column="product_code" property="productCode"/>
@@ -15,8 +15,6 @@
         <result column="owner_org_id" property="ownerOrgId"/>
         <result column="product_dept_org_code" property="productDeptOrgCode"/>
         <result column="file_object_id" property="fileObjectId"/>
-        <result column="responsible_emp_ids" property="responsibleEmpIds"
-                typeHandler="com.bank.branch.platform.portal.typehandler.JsonStringListTypeHandler"/>
         <result column="status" property="status"/>
         <result column="created_by" property="createdBy"/>
         <result column="updated_by" property="updatedBy"/>
@@ -29,7 +27,7 @@
     <sql id="BASE_COLUMNS">
         id, product_code, product_name, product_category, description,
         support_for_support_request, owner_org_id, product_dept_org_code,
-        file_object_id, responsible_emp_ids, status,
+        file_object_id, status,
         created_by, updated_by, created_time, updated_time, deleted
     </sql>
 
@@ -38,14 +36,12 @@
         INSERT INTO PRODUCT_INFO (
             id, product_code, product_name, product_category, description,
             support_for_support_request, owner_org_id, product_dept_org_code,
-            file_object_id, responsible_emp_ids, status,
+            file_object_id, status,
             created_by, updated_by, created_time, updated_time, deleted
         ) VALUES (
             #{id}, #{productCode}, #{productName}, #{productCategory}, #{description},
             #{supportForSupportRequest}, #{ownerOrgId}, #{productDeptOrgCode},
-            #{fileObjectId},
-            #{responsibleEmpIds, typeHandler=com.bank.branch.platform.portal.typehandler.JsonStringListTypeHandler},
-            #{status},
+            #{fileObjectId}, #{status},
             #{createdBy}, #{updatedBy}, #{createdTime}, #{updatedTime}, #{deleted}
         )
     </insert>
@@ -91,7 +87,6 @@
             <if test="ownerOrgId != null">owner_org_id = #{ownerOrgId},</if>
             <if test="productDeptOrgCode != null">product_dept_org_code = #{productDeptOrgCode},</if>
             <if test="fileObjectId != null">file_object_id = #{fileObjectId},</if>
-            <if test="responsibleEmpIds != null">responsible_emp_ids = #{responsibleEmpIds, typeHandler=com.bank.branch.platform.portal.typehandler.JsonStringListTypeHandler},</if>
             <if test="status != null">status = #{status},</if>
             <if test="updatedBy != null">updated_by = #{updatedBy},</if>
             updated_time = NOW(),

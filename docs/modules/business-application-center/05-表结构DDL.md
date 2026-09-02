@@ -1,5 +1,9 @@
 # 业务申请中心 — 表结构 DDL
 
+> **当前运行边界（2026-08-28）**：本模块当前只持有 `SUPPORT_REQUEST`。本文 `LOAN_APPLY` 相关结构
+> 仅为历史归档，不是当前数据模型，也不是可执行 DDL。资产立项现行模型见
+> `docs/modules/customer-marketing-center/05-表结构DDL.md`。
+
 > 模块: business-application-center
 > 版本: V1.0
 > 更新日期: 2026-04-10

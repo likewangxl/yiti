@@ -359,14 +359,14 @@ class CustomerServiceTest {
         when(claimMapper.selectByCustId(custId)).thenReturn(List.of(activeClaim, cancelledClaim));
 
         TouchTask task1 = new TouchTask();
-        task1.setId("task-001");
-        task1.setCustId(custId);
+        task1.setId(1L);
+        task1.setCustId(101L);
         TouchTask task2 = new TouchTask();
-        task2.setId("task-002");
-        task2.setCustId(custId);
+        task2.setId(2L);
+        task2.setCustId(101L);
         TouchTask task3 = new TouchTask();
-        task3.setId("task-003");
-        task3.setCustId(custId);
+        task3.setId(3L);
+        task3.setCustId(101L);
 
         when(touchTaskMapper.selectByCustOrderByCreatedDesc(custId)).thenReturn(List.of(task1, task2, task3));
 

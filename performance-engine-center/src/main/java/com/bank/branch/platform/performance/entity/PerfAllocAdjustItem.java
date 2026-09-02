@@ -37,6 +37,9 @@ public class PerfAllocAdjustItem {
     /** 父申请 ID（关联 PERF_ALLOC_ADJUST_APPLY.id）. */
     private String applyId;
 
+    /** 明细类型：NEW=新分配 / ORIGIN=原业绩分配快照。 */
+    private String itemKind;
+
     /** 账号（仅原业绩分配选填）. */
     private String acctNo;
 

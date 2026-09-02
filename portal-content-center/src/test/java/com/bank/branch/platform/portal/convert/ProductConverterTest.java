@@ -66,13 +66,12 @@ class ProductConverterTest {
         entity.setSupportForSupportRequest(true);
         entity.setProductDeptOrgCode("ORG-DEPT-001");
         entity.setFileObjectId("file-001");
-        entity.setResponsibleEmpIds(List.of("emp-001", "emp-002"));
         entity.setStatus("ACTIVE");
         entity.setCreatedTime(now);
         entity.setUpdatedTime(now);
 
         // when
-        ProductDTO dto = ProductConverter.toDTO(entity);
+        ProductDTO dto = ProductConverter.toDTO(entity, List.of("emp-001", "emp-002"));
 
         // then
         assertNotNull(dto);

@@ -1,6 +1,9 @@
 package com.bank.branch.platform.customer.dto.req;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
@@ -54,6 +57,12 @@ public class LeadCreateReqDTO {
 
     /** 是否已开户：0-否/1-是 */
     private Integer isAccountOpened;
+
+    /** 是否限制触达：0-否/1-是，默认按受限处理 */
+    @NotNull(message = "是否触达限制不能为空")
+    @Min(value = 0, message = "是否触达限制只能为0或1")
+    @Max(value = 1, message = "是否触达限制只能为0或1")
+    private Integer touchRestricted = 1;
 
     /** 客户描述 */
     private String customerDesc;

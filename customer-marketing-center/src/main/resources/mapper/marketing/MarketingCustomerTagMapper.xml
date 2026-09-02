@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerTagMapper">
+
+    <sql id="BASE_COLUMNS">
+        t.id, t.tag_name, t.tag_category, t.tag_type, t.tag_priority,
+        t.description, t.status, t.approval_status, t.expires_at, t.owner_org_id,
+        t.reviewed_by, t.reviewed_time, t.reject_reason, t.record_status,
+        t.created_by, t.created_time, t.updated_by, t.updated_time, t.lock_version
+    </sql>
+
+    <select id="selectByTagName"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTag">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_TAG t
+        WHERE t.record_status = 'ACTIVE'
+          AND LOWER(TRIM(t.tag_name)) = LOWER(TRIM(#{tagName}))
+        ORDER BY t.id
+        LIMIT 1
+    </select>
+
+    <sql id="FILTER_CONDITIONS">
+        <if test="keyword != null and keyword != ''">
+            AND t.tag_name LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        <if test="category != null and category != ''">
+            AND t.tag_category = #{category}
+        </if>
+        <if test="tagType != null and tagType != ''">
+            AND t.tag_type = #{tagType}
+        </if>
+        <if test="status != null and status != ''">
+            AND t.status = #{status}
+        </if>
+        <if test="approvalStatus != null and approvalStatus != ''">
+            AND t.approval_status = #{approvalStatus}
+        </if>
+        <if test="viewStatus != null and viewStatus != ''">
+            <choose>
+                <when test="viewStatus == 'ACTIVE'">
+                    AND t.approval_status = 'APPROVED' AND t.status = 'ENABLED'
+                </when>
+                <when test="viewStatus == 'DISABLED'">
+                    AND t.approval_status = 'APPROVED' AND t.status = 'DISABLED'
+                </when>
+                <when test="viewStatus == 'PENDING'">
+                    AND t.approval_status = 'PENDING'
+                </when>
+                <when test="viewStatus == 'REJECTED'">
+                    AND t.approval_status = 'REJECTED'
+                </when>
+                <when test="viewStatus == 'EXCEPTION'">
+                    AND ((t.approval_status = 'APPROVED' AND t.status = 'DISABLED')
+                         OR t.approval_status = 'REJECTED')
+                </when>
+                <otherwise>
+                    AND 1 = 0
+                </otherwise>
+            </choose>
+        </if>
+    </sql>
+
+    <select id="selectPage"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTag">
+        SELECT <include refid="BASE_COLUMNS"/>,
+               (SELECT COUNT(1)
+                  FROM MARKETING_CUSTOMER_TAG_REL r
+                 WHERE r.tag_id = t.id AND r.active = 1) AS customer_count
+        FROM MARKETING_CUSTOMER_TAG t
+        <where>
+            t.record_status = 'ACTIVE'
+            <include refid="FILTER_CONDITIONS"/>
+        </where>
+        ORDER BY t.tag_priority ASC, t.created_time DESC, t.id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(1)
+        FROM MARKETING_CUSTOMER_TAG t
+        <where>
+            t.record_status = 'ACTIVE'
+            <include refid="FILTER_CONDITIONS"/>
+        </where>
+    </select>
+</mapper>

@@ -1,0 +1,8 @@
+Official playwright-cli console capture after the final clean Chromium reload:
+
+Total messages: 2 (Errors: 0, Warnings: 0)
+
+- [DEBUG] [vite] connecting...
+- [DEBUG] [vite] connected.
+
+An earlier discarded Firefox run hit a development-server module transport error. The recorded Chromium evidence was reloaded with corrected route scoping and had zero errors/warnings.

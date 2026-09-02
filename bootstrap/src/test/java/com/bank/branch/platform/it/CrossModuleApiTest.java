@@ -55,10 +55,7 @@ class CrossModuleApiTest {
     private com.bank.branch.platform.workflow.api.WorkflowApi workflowApi;
 
     @Autowired(required = false)
-    private com.bank.branch.platform.bizapp.api.LoanApi loanApi;
-
-    @Autowired(required = false)
-    private com.bank.branch.platform.bizapp.api.LoanQueryApi loanQueryApi;
+    private com.bank.branch.platform.customer.api.AssetProjectQueryApi assetProjectQueryApi;
 
     @Autowired(required = false)
     private com.bank.branch.platform.bizapp.api.SupportApi supportApi;
@@ -97,8 +94,7 @@ class CrossModuleApiTest {
     @Test
     @DisplayName("跨模块 API - BizApp 模块 API 可被注入")
     void bizAppApis_allInjectable() {
-        assertThat(loanApi).as("LoanApi should be injectable").isNotNull();
-        assertThat(loanQueryApi).as("LoanQueryApi should be injectable").isNotNull();
+        assertThat(assetProjectQueryApi).as("AssetProjectQueryApi should be injectable").isNotNull();
         assertThat(supportApi).as("SupportApi should be injectable").isNotNull();
         assertThat(supportQueryApi).as("SupportQueryApi should be injectable").isNotNull();
         assertThat(bizApplyQueryApi).as("BizApplyQueryApi should be injectable").isNotNull();
@@ -111,15 +107,12 @@ class CrossModuleApiTest {
             "/business-application-data.sql"
     })
     void bizAppApis_basicQueryWorks() {
-        assertThat(loanApi.getLoanApply("loan-seed-001"))
-                .as("LoanApi should return seeded loan apply")
-                .isPresent();
         assertThat(supportApi.getSupportRequest("support-seed-001"))
                 .as("SupportApi should return seeded support request")
                 .isPresent();
         assertThat(bizApplyQueryApi.countRunningApplications("CUST_BIZ_SEED"))
                 .satisfies(dto -> {
-                    assertThat(dto.getRunningLoanCount()).isEqualTo(1L);
+                    assertThat(dto.getRunningLoanCount()).isZero();
                     assertThat(dto.getRunningSupportCount()).isEqualTo(1L);
                 });
     }

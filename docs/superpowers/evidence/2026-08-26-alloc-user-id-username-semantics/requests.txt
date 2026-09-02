@@ -1,0 +1,15 @@
+46. [GET] http://127.0.0.1:8090/api/auth/current-user => [200] OK
+58. [GET] http://127.0.0.1:8090/api/auth/my-menus => [200] OK
+59. [GET] http://127.0.0.1:8090/api/notifications/unread-count => [200] OK
+60. [GET] http://127.0.0.1:8090/api/sys/dicts/PERF_ALLOC_DIM/items => [200] OK
+61. [GET] http://127.0.0.1:8090/api/sys/dicts/PERF_BIZ_KIND/items => [200] OK
+62. [GET] http://127.0.0.1:8090/api/auth/permissions => [200] OK
+63. [GET] http://127.0.0.1:8090/api/perf/alloc-adjust/my-applies?pageNo=1&pageSize=20 => [200] OK
+64. [GET] http://127.0.0.1:8090/api/perf/stat-show/cust-name?custId=CUST-PW-USER-ID => [200] OK
+65. [GET] http://127.0.0.1:8090/api/perf/metrics/cust-index-values?custId=CUST-PW-USER-ID&dataDate=2026-08-25&codes=MC_001,MC_002,MC_003,MC_004 => [200] OK
+66. [GET] http://127.0.0.1:8090/api/perf/metrics/cust-index-values?custId=CUST-PW-USER-ID&dataDate=2026-08-25&codes=MC_005,MC_006,MC_007,MC_008 => [200] OK
+67. [GET] http://127.0.0.1:8090/api/perf/alloc-adjust/emp-suggest?keyword=12038011&limit=20 => [200] OK
+68. [POST] http://127.0.0.1:8090/api/perf/alloc-adjust/create => [200] OK
+69. [GET] http://127.0.0.1:8090/api/perf/alloc-adjust/my-applies?pageNo=1&pageSize=20 => [200] OK
+
+Static requests are omitted by the CLI default request summary.

@@ -1,0 +1,14 @@
+cd /home/djdev/lijh/yiti/xanzc_frontend
+npx playwright-cli -s=lead-import-ui-clean-20260828 open about:blank --browser chromium
+npx playwright-cli -s=lead-import-ui-clean-20260828 run-code '<register the development-only routes listed in routes.txt>'
+npx playwright-cli -s=lead-import-ui-clean-20260828 goto http://127.0.0.1:8090/#/customers/leads/new
+npx playwright-cli -s=lead-import-ui-clean-20260828 click '<batch import button>'
+npx playwright-cli -s=lead-import-ui-clean-20260828 find '客户标签填写标签名称'
+npx playwright-cli -s=lead-import-ui-clean-20260828 screenshot
+npx playwright-cli -s=lead-import-ui-clean-20260828 click '<cancel import dialog>'
+npx playwright-cli -s=lead-import-ui-clean-20260828 click '<import records tab>'
+npx playwright-cli -s=lead-import-ui-clean-20260828 click '<batch detail button>'
+npx playwright-cli -s=lead-import-ui-clean-20260828 snapshot
+npx playwright-cli -s=lead-import-ui-clean-20260828 screenshot
+npx playwright-cli -s=lead-import-ui-clean-20260828 console
+npx playwright-cli -s=lead-import-ui-clean-20260828 requests

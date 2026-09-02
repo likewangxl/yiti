@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerPerformanceRelSnapshotMapper">
+    <select id="selectActiveByCustId"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerPerformanceRelSnapshot">
+        SELECT id, cust_id, subject_type, subject_id, related_emp_id, related_org_id,
+               relation_type, ratio, effective_date, expiry_date, source_system,
+               source_batch_id, refreshed_at, refresh_status, created_time
+        FROM MARKETING_CUSTOMER_PERFORMANCE_REL_SNAPSHOT
+        WHERE cust_id = #{custId}
+          AND refresh_status = 'SUCCESS'
+          AND (effective_date IS NULL OR effective_date &lt;= CURRENT_DATE)
+          AND (expiry_date IS NULL OR expiry_date &gt;= CURRENT_DATE)
+    </select>
+</mapper>

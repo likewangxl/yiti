@@ -1,0 +1,375 @@
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { flushPromises, mount } from '@vue/test-utils';
+
+const api = vi.hoisted(() => ({
+  submitAdjust: vi.fn().mockResolvedValue({ id: 'ADJ-1' }),
+  saveDraftAdjust: vi.fn().mockResolvedValue({ id: 'DRAFT-1', status: 'DRAFT' }),
+  submitDraftAdjust: vi.fn().mockResolvedValue({ id: 'DRAFT-1', status: 'IN_APPROVAL' }),
+  withdrawAdjust: vi.fn().mockResolvedValue({ ok: true }),
+  getAdjustDetail: vi.fn().mockResolvedValue({}),
+  getAdjustApprovalHistory: vi.fn().mockResolvedValue([]),
+  listMyAdjustTodos: vi.fn().mockResolvedValue({ records: [], total: 0 }),
+  listMyAdjustApplies: vi.fn().mockResolvedValue({ records: [], total: 0 }),
+  listMyAdjustDones: vi.fn().mockResolvedValue({ records: [], total: 0 }),
+  getAllocPreview: vi.fn().mockResolvedValue({ allocList: [] }),
+  getCustMasterName: vi.fn().mockResolvedValue({ found: false }),
+  getCustIndexValues: vi.fn().mockResolvedValue({}),
+  suggestEmployees: vi.fn().mockResolvedValue([]),
+  suggestOrgs: vi.fn().mockResolvedValue([])
+}));
+const dict = vi.hoisted(() => ({
+  listDictItems: vi.fn((type) => Promise.resolve(type === 'PERF_ALLOC_DIM'
+    ? [
+        { dictCode: 'RULE', dictLabel: '按规则分配' },
+        { dictCode: 'ACCOUNT', dictLabel: '按台账分配' },
+        { dictCode: 'NEW', dictLabel: '新客户' }
+      ]
+    : [
+        { dictCode: 'CORP_DEPOSIT', dictLabel: '对公存款' },
+        { dictCode: 'CORP_LOAN', dictLabel: '对公贷款' }
+      ]))
+}));
+const ui = vi.hoisted(() => ({ success: vi.fn(), warning: vi.fn(), error: vi.fn() }));
+
+vi.mock('element-plus', () => ({
+  ElMessage: { success: ui.success, warning: ui.warning, error: ui.error },
+  ElMessageBox: { prompt: vi.fn(), confirm: vi.fn() }
+}));
+vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }) }));
+vi.mock('@/components/AllocAdjustViewDialog.vue', () => ({ default: { template: '<div />' } }));
+vi.mock('@/api/perf', () => api);
+vi.mock('@/api/workflow', () => ({
+  approveTask: vi.fn(), rejectTask: vi.fn(), claimTask: vi.fn(), getTaskDetail: vi.fn().mockResolvedValue({})
+}));
+vi.mock('@/api/auth', () => ({ getMyPermissions: vi.fn().mockResolvedValue({ resourceUrls: [] }) }));
+vi.mock('@/stores/user', () => ({ useUserStore: () => ({ user: {} }) }));
+vi.mock('@/api/system', () => dict);
+vi.mock('@/utils/datetime', () => ({ fmtDateTime: (value) => String(value || '-') }));
+
+import Adjust from '../Adjust.vue';
+
+const passthrough = (name) => ({ name, template: '<div><slot /><slot name="footer" /></div>' });
+const empty = (name) => ({ name, template: '<div />' });
+const stubs = {
+  PageTitle: passthrough('PageTitle'),
+  'el-button': { name: 'ElButton', emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' },
+  'el-tabs': passthrough('ElTabs'),
+  'el-tab-pane': passthrough('ElTabPane'),
+  'el-form': passthrough('ElForm'),
+  'el-form-item': passthrough('ElFormItem'),
+  'el-input': empty('ElInput'),
+  'el-select': passthrough('ElSelect'),
+  'el-option': empty('ElOption'),
+  'el-date-picker': empty('ElDatePicker'),
+  'el-input-number': empty('ElInputNumber'),
+  'el-autocomplete': empty('ElAutocomplete'),
+  'el-empty': empty('ElEmpty'),
+  'el-radio-group': passthrough('ElRadioGroup'),
+  'el-radio': passthrough('ElRadio'),
+  'el-col': passthrough('ElCol'),
+  'el-row': passthrough('ElRow'),
+  'el-descriptions': passthrough('ElDescriptions'),
+  'el-descriptions-item': passthrough('ElDescriptionsItem'),
+  'el-timeline': passthrough('ElTimeline'),
+  'el-timeline-item': passthrough('ElTimelineItem'),
+  'el-alert': empty('ElAlert'),
+  'el-tag': passthrough('ElTag'),
+  'el-pagination': empty('ElPagination'),
+  'el-dialog': { name: 'ElDialog', props: ['modelValue'], template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>' },
+  'el-table': passthrough('ElTable'),
+  'el-table-column': { name: 'ElTableColumn', template: '<div><slot :row="{ id: \'ADJ-1\', applyNo: \'ADJ-1\', status: \'DRAFT\' }" :$index="0" /></div>' },
+  'el-dropdown': { name: 'ElDropdown', template: '<div><slot /><slot name="dropdown" /></div>' },
+  'el-dropdown-menu': passthrough('ElDropdownMenu'),
+  'el-dropdown-item': { name: 'ElDropdownItem', template: '<button class="dropdown-item"><slot /></button>' },
+  BpAdaptiveRowActions: passthrough('BpAdaptiveRowActions')
+};
+
+let wrapper;
+afterEach(() => {
+  wrapper?.unmount();
+  wrapper = undefined;
+  vi.clearAllMocks();
+  api.getAdjustDetail.mockResolvedValue({});
+  api.getAllocPreview.mockResolvedValue({ allocList: [] });
+  api.saveDraftAdjust.mockResolvedValue({ id: 'DRAFT-1', status: 'DRAFT' });
+  dict.listDictItems.mockImplementation((type) => Promise.resolve(type === 'PERF_ALLOC_DIM'
+    ? [
+        { dictCode: 'RULE', dictLabel: '按规则分配' },
+        { dictCode: 'ACCOUNT', dictLabel: '按台账分配' },
+        { dictCode: 'NEW', dictLabel: '新客户' }
+      ]
+    : [
+        { dictCode: 'CORP_DEPOSIT', dictLabel: '对公存款' },
+        { dictCode: 'CORP_LOAN', dictLabel: '对公贷款' }
+      ]));
+});
+
+async function mountPage() {
+  wrapper = mount(Adjust, { global: { stubs, directives: { loading: {}, 'bp-overflow-tooltip': {} } } });
+  await flushPromises();
+  return wrapper;
+}
+
+describe('业绩调整分配维度与原分配关系', () => {
+  it('从 PERF_ALLOC_DIM 加载 NEW，并使用同一映射生成标签；接口失败保留三项兜底', async () => {
+    await mountPage();
+
+    expect(dict.listDictItems).toHaveBeenCalledWith('PERF_ALLOC_DIM');
+    expect(wrapper.vm.allocDimOptions).toEqual([
+      { value: 'RULE', label: '按规则分配' },
+      { value: 'ACCOUNT', label: '按账号分配' },
+      { value: 'NEW', label: '新开户' }
+    ]);
+    expect(wrapper.vm.allocDimLabel('NEW')).toBe('新开户');
+
+    dict.listDictItems.mockRejectedValueOnce(new Error('dictionary unavailable'));
+    await wrapper.vm.loadAllocDimDict();
+    expect(wrapper.vm.allocDimOptions).toEqual([
+      { value: 'RULE', label: '按规则分配' },
+      { value: 'ACCOUNT', label: '按账号分配' },
+      { value: 'NEW', label: '新开户' }
+    ]);
+  });
+
+  it('客户类型切换为零售时联动 ACCOUNT，但维度选项仍保留 RULE/ACCOUNT/NEW', async () => {
+    await mountPage();
+    wrapper.vm.openCreate();
+    wrapper.vm.dlg.form.allocDim = 'RULE';
+    wrapper.vm.dlg.form.bizKind = ['CORP_LOAN'];
+
+    wrapper.vm.onCustTypeChange('RETAIL');
+
+    expect(wrapper.vm.dlg.form.allocDim).toBe('ACCOUNT');
+    expect(wrapper.vm.dlg.form.bizKind).toEqual(['CORP_DEPOSIT']);
+    expect(wrapper.vm.allocDimOptions.map((item) => item.value)).toEqual(['RULE', 'ACCOUNT', 'NEW']);
+  });
+
+  it('加载已有零售草稿时保留详情中的分配维度，不触发零售默认联动覆盖', async () => {
+    api.getAdjustDetail.mockResolvedValueOnce({
+      id: 'DRAFT-RETAIL', status: 'DRAFT', custType: 'RETAIL', custId: 'R-001',
+      custName: '零售客户', allocDim: 'NEW', bizKind: 'CORP_DEPOSIT', items: []
+    });
+
+    await mountPage();
+    await wrapper.vm.openEdit({ id: 'DRAFT-RETAIL', status: 'DRAFT', custType: 'RETAIL', allocDim: 'NEW' });
+    await flushPromises();
+
+    expect(wrapper.vm.dlg.form.custType).toBe('RETAIL');
+    expect(wrapper.vm.dlg.form.allocDim).toBe('NEW');
+    expect(api.getAllocPreview).not.toHaveBeenCalled();
+  });
+
+  it('原分配员工选择后自动带出 mainOrgCode/mainOrgName，机构仍可继续手工选择', async () => {
+    await mountPage();
+    const row = { empId: '', empLabel: '', username: '', empChnName: '', orgCode: '', orgName: '', orgLabel: '' };
+
+    wrapper.vm.onOrigEmpSelect(row, {
+      empId: 'E-001', username: 'E001', empChnName: '张三', mainOrgCode: 'ORG-01', mainOrgName: '南山支行', label: 'E001（张三）'
+    });
+
+    expect(row).toMatchObject({ empId: 'E-001', orgCode: 'ORG-01', orgName: '南山支行', orgLabel: '南山支行' });
+  });
+
+  it('员工反查同时返回 empId/username 时，分配明细和原业绩分配提交 empId，展示 username', async () => {
+    await mountPage();
+    const employee = {
+      empId: '2347', username: '12038011', empChnName: '张三', label: '12038011（张三）'
+    };
+    api.suggestEmployees.mockResolvedValueOnce([employee]);
+    const suggestionCallback = vi.fn();
+    await wrapper.vm.queryEmpSuggest('12038011', suggestionCallback);
+    expect(suggestionCallback).toHaveBeenCalledWith([
+      expect.objectContaining({ empId: '2347', username: '12038011', label: '12038011（张三）' })
+    ]);
+    const selectedEmployee = suggestionCallback.mock.calls[0][0][0];
+    const itemRow = { empId: '', empLabel: '', pct: 100, remark: '' };
+    const originalRow = {
+      acctNo: '', empId: '', empLabel: '', username: '', empChnName: '',
+      orgCode: 'ORG-01', orgName: '南山支行', orgLabel: '南山支行', ratio: 100
+    };
+
+    wrapper.vm.onEmpSelect(itemRow, selectedEmployee);
+    wrapper.vm.onOrigEmpSelect(originalRow, selectedEmployee);
+    Object.assign(wrapper.vm.dlg.form, {
+      custType: 'CORP', custId: 'C-001', custName: '客户一', allocDim: 'RULE',
+      bizKind: ['CORP_DEPOSIT'], ownerOrgId: 'ORG-01', reason: '调整',
+      items: [itemRow], originalItems: [originalRow]
+    });
+
+    expect(itemRow).toMatchObject({ empId: '2347', empLabel: '12038011（张三）' });
+    expect(originalRow).toMatchObject({ empId: '2347', username: '12038011', empLabel: '12038011（张三）' });
+    expect(wrapper.vm.buildAdjustPayload()).toMatchObject({
+      items: [expect.objectContaining({ empId: '2347', ratio: 100 })],
+      originalAllocList: [expect.objectContaining({ empId: '2347', username: '12038011' })]
+    });
+  });
+
+  it('自由输入员工工号不会伪装成主键，只有重新选择反查项才写入 payload.empId', async () => {
+    await mountPage();
+    const employee = {
+      empId: '2347', username: '12038011', empChnName: '张三', label: '12038011（张三）'
+    };
+    const itemRow = {
+      empId: '2347', username: '12038011', empChnName: '张三', empLabel: '12038011（张三）', pct: 100, remark: ''
+    };
+    const originalRow = {
+      acctNo: '', empId: '2347', username: '12038011', empChnName: '张三', empLabel: '12038011（张三）',
+      orgCode: 'ORG-01', orgName: '南山支行', orgLabel: '南山支行', ratio: 100
+    };
+
+    wrapper.vm.onEmpInput(itemRow, '12038011');
+    wrapper.vm.onOrigEmpInput(originalRow, '12038011');
+    Object.assign(wrapper.vm.dlg.form, {
+      custType: 'CORP', custId: 'C-001', allocDim: 'RULE', bizKind: ['CORP_DEPOSIT'],
+      ownerOrgId: 'ORG-01', items: [itemRow], originalItems: [originalRow]
+    });
+
+    expect(itemRow.empId).toBe('');
+    expect(originalRow.empId).toBe('');
+    expect(wrapper.vm.buildAdjustPayload().items).toEqual([]);
+    expect(wrapper.vm.buildAdjustPayload().originalAllocList).toEqual([]);
+
+    wrapper.vm.onEmpSelect(itemRow, employee);
+    wrapper.vm.onOrigEmpSelect(originalRow, employee);
+    const payload = wrapper.vm.buildAdjustPayload();
+    expect(payload.items).toEqual([expect.objectContaining({ empId: '2347' })]);
+    expect(payload.originalAllocList).toEqual([expect.objectContaining({ empId: '2347', username: '12038011' })]);
+  });
+
+  it('员工输入事件先更新 v-model 后，编辑已选工号会清空主键，选中项回填不会误清', async () => {
+    await mountPage();
+    const employee = {
+      empId: '2347', username: '12038011', empChnName: '张三', label: '12038011（张三）'
+    };
+    const itemRow = {
+      empId: '2347', username: '12038011', empChnName: '张三', empLabel: '12038011（张三）', pct: 100
+    };
+    const originalRow = {
+      acctNo: '', empId: '2347', username: '12038011', empChnName: '张三', empLabel: '12038011（张三）',
+      orgCode: 'ORG-01', orgName: '南山支行', orgLabel: '南山支行', ratio: 100
+    };
+
+    // el-autocomplete 的 v-model 先变更，事件处理器拿到的 row.empLabel 已是新输入值。
+    itemRow.empLabel = '12038012';
+    originalRow.empLabel = '12038012';
+    wrapper.vm.onEmpInput(itemRow, '12038012');
+    wrapper.vm.onOrigEmpInput(originalRow, '12038012');
+
+    expect(itemRow.empId).toBe('');
+    expect(originalRow.empId).toBe('');
+
+    // 选择反查项后，组件可能再次触发 input/change；原样回填不应清掉刚写入的真实主键。
+    wrapper.vm.onEmpSelect(itemRow, employee);
+    wrapper.vm.onOrigEmpSelect(originalRow, employee);
+    wrapper.vm.onEmpInput(itemRow, itemRow.empLabel);
+    wrapper.vm.onOrigEmpInput(originalRow, originalRow.empLabel);
+
+    expect(itemRow.empId).toBe('2347');
+    expect(originalRow.empId).toBe('2347');
+  });
+
+  it('草稿详情回显保留真实 empId，员工号展示使用 username', async () => {
+    api.getAdjustDetail.mockResolvedValueOnce({
+      id: 'DRAFT-EMP', status: 'DRAFT', custType: 'CORP', custId: 'C-001', custName: '客户一',
+      allocDim: 'RULE', bizKind: 'CORP_DEPOSIT', ownerOrgId: 'ORG-01', reason: '调整',
+      items: [
+        { itemKind: 'NEW', empId: '2347', username: '12038011', empChnName: '张三', ratio: 100 },
+        { itemKind: 'ORIGIN', empId: '2347', username: '12038011', empChnName: '张三',
+          orgCode: 'ORG-01', orgName: '南山支行', ratio: 100 }
+      ]
+    });
+
+    await mountPage();
+    await wrapper.vm.openEdit({ id: 'DRAFT-EMP', status: 'DRAFT', custId: 'C-001', allocDim: 'RULE' });
+    await flushPromises();
+
+    expect(wrapper.vm.dlg.form.items[0]).toMatchObject({
+      empId: '2347', empLabel: '12038011（张三）', _selectedEmpLabel: '12038011（张三）'
+    });
+    expect(wrapper.vm.dlg.form.originalItems[0]).toMatchObject({
+      empId: '2347', username: '12038011', empLabel: '12038011（张三）', _selectedEmpLabel: '12038011（张三）'
+    });
+    expect(wrapper.vm.buildAdjustPayload()).toMatchObject({
+      items: [expect.objectContaining({ empId: '2347' })],
+      originalAllocList: [expect.objectContaining({ empId: '2347', username: '12038011' })]
+    });
+  });
+
+  it('原业绩分配的所属机构只展示机构名称，但仍保留机构号用于提交', async () => {
+    await mountPage();
+    const row = { empId: '', empLabel: '', username: '', empChnName: '', orgCode: '', orgName: '', orgLabel: '' };
+
+    wrapper.vm.onOrigEmpSelect(row, {
+      empId: 'E-001', username: 'E001', empChnName: '张三', mainOrgCode: 'ORG-01', mainOrgName: '南山支行', label: 'E001（张三）'
+    });
+
+    expect(wrapper.vm.originalOrgDisplay(row)).toBe('南山支行');
+    expect(row).toMatchObject({ empId: 'E-001', orgCode: 'ORG-01', orgName: '南山支行', orgLabel: '南山支行' });
+
+    wrapper.vm.onOrigOrgSelect(row, { deptNo: 'ORG-02', orgName: '福田支行', label: 'ORG-02（福田支行）' });
+
+    expect(row).toMatchObject({ orgCode: 'ORG-02', orgName: '福田支行', orgLabel: '福田支行' });
+
+    api.suggestOrgs.mockResolvedValueOnce([{ deptNo: 'ORG-03', orgName: '罗湖支行' }]);
+    const callback = vi.fn();
+    await wrapper.vm.queryOrgSuggest('ORG-03', callback);
+    expect(callback).toHaveBeenCalledWith([
+      expect.objectContaining({ deptNo: 'ORG-03', orgName: '罗湖支行', label: '罗湖支行' })
+    ]);
+  });
+
+  it('NEW 不展示原分配、不会预览，也不会要求或提交 originalAllocList', async () => {
+    await mountPage();
+    wrapper.vm.openCreate();
+    Object.assign(wrapper.vm.dlg.form, {
+      custType: 'CORP', custId: 'C-NEW', custName: '新客户', allocDim: 'NEW',
+      bizKind: ['CORP_DEPOSIT'], reason: '新开户调整',
+      items: [{ empId: 'E001', pct: 100, remark: '', empLabel: 'E001' }],
+      originalItems: [{ empId: 'OLD', orgCode: 'ORG-OLD', ratio: 100 }]
+    });
+
+    await wrapper.vm.loadPreview();
+    expect(api.getAllocPreview).not.toHaveBeenCalled();
+    expect(wrapper.vm.showOriginalAllocation).toBe(false);
+    expect(wrapper.vm.buildAdjustPayload().originalAllocList).toEqual([]);
+
+    wrapper.vm.dlgFormRef = { validate: vi.fn().mockResolvedValue(true) };
+    api.submitAdjust.mockClear();
+    await wrapper.vm.onSubmit();
+    expect(api.submitAdjust).toHaveBeenCalledWith(expect.objectContaining({
+      allocDim: 'NEW', originalAllocList: []
+    }));
+  });
+
+  it('编辑草稿时保留详情 ORIGIN 行为可编辑 originalItems，修改后草稿 payload 持久化', async () => {
+    api.getAdjustDetail.mockResolvedValueOnce({
+      id: 'DRAFT-1', status: 'DRAFT', custType: 'CORP', custId: 'C-001', custName: '客户一',
+      allocDim: 'RULE', bizKind: 'CORP_DEPOSIT', reason: '调整', createdTime: '2026-08-24T10:00:00',
+      items: [
+        { itemKind: 'ORIGIN', acctNo: 'A-1', empId: 'E-OLD', username: 'E-OLD', empChnName: '旧员工', orgCode: 'ORG-OLD', orgName: '旧机构', ratio: 40 },
+        { itemKind: 'NEW', empId: 'E-NEW', pct: 100, remark: '' }
+      ]
+    });
+    api.getAllocPreview.mockResolvedValueOnce({
+      allocList: [{ acctNo: 'A-PREVIEW', username: 'E-PREVIEW', orgCode: 'ORG-PREVIEW', ratio: 100 }]
+    });
+
+    await mountPage();
+    await wrapper.vm.openEdit({ id: 'DRAFT-1', status: 'DRAFT', custId: 'C-001', allocDim: 'RULE' });
+    await flushPromises();
+
+    expect(wrapper.vm.dlg.form.originalItems).toHaveLength(1);
+    expect(wrapper.vm.dlg.form.originalItems[0]).toMatchObject({ empId: 'E-OLD', orgCode: 'ORG-OLD', ratio: 40 });
+    expect(wrapper.vm.showOriginalAllocation).toBe(true);
+    expect(wrapper.vm.hasOriginalOwners).toBe(false);
+
+    Object.assign(wrapper.vm.dlg.form.originalItems[0], { orgCode: 'ORG-NEW', orgName: '新机构', ratio: 60 });
+    await wrapper.vm.onSaveDraft();
+
+    expect(api.saveDraftAdjust).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'DRAFT-1',
+      originalAllocList: [expect.objectContaining({ empId: 'E-OLD', orgCode: 'ORG-NEW', orgName: '新机构', ratio: 60 })]
+    }));
+  });
+});

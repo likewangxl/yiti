@@ -439,6 +439,7 @@ public class LeadEntryService {
         lead.setEnterpriseType(req.getEnterpriseType());
         lead.setGroupName(req.getGroupName());
         lead.setIsAccountOpened(req.getIsAccountOpened());
+        lead.setTouchRestricted(req.getTouchRestricted() == null ? 1 : req.getTouchRestricted());
         lead.setCustomerDesc(req.getCustomerDesc());
         lead.setCreditAmount(req.getCreditAmount());
         lead.setCreditExposureAmount(req.getCreditExposureAmount());
@@ -460,6 +461,7 @@ public class LeadEntryService {
         if (req.getEnterpriseType() != null) lead.setEnterpriseType(req.getEnterpriseType());
         if (req.getGroupName() != null) lead.setGroupName(req.getGroupName());
         if (req.getIsAccountOpened() != null) lead.setIsAccountOpened(req.getIsAccountOpened());
+        if (req.getTouchRestricted() != null) lead.setTouchRestricted(req.getTouchRestricted());
         if (req.getCustomerDesc() != null) lead.setCustomerDesc(req.getCustomerDesc());
         if (req.getCreditAmount() != null) lead.setCreditAmount(req.getCreditAmount());
         if (req.getCreditExposureAmount() != null) lead.setCreditExposureAmount(req.getCreditExposureAmount());

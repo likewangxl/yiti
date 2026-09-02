@@ -1,0 +1,18 @@
+选择本地文件后，导入批次请求过滤结果：
+
+26. [GET] http://127.0.0.1:8090/api/marketing/lead-import-batches?keyword=&status=&pageNo=1&pageSize=20 => [200] OK
+
+未出现 POST /api/marketing/lead-import-batches。
+
+页面主查询：
+
+15. [GET] http://127.0.0.1:8090/api/marketing/leads?keyword=&status=&leadSource=MANUAL&pageNo=1&pageSize=20 => [200] OK
+16. [GET] http://127.0.0.1:8090/api/marketing/leads?status=DRAFT&pageNo=1&pageSize=1&leadSource=MANUAL => [200] OK
+17. [GET] http://127.0.0.1:8090/api/marketing/leads?status=IN_APPROVAL&pageNo=1&pageSize=1&leadSource=MANUAL => [200] OK
+18. [GET] http://127.0.0.1:8090/api/marketing/leads?status=APPROVED&pageNo=1&pageSize=1&leadSource=MANUAL => [200] OK
+19. [GET] http://127.0.0.1:8090/api/marketing/leads?status=REJECTED&pageNo=1&pageSize=1&leadSource=MANUAL => [200] OK
+
+模板下载事件：
+
+Downloading file lead-import-template.csv ...
+Downloaded file lead-import-template.csv to ".playwright-cli/lead-import-template.csv"

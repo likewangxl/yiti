@@ -53,6 +53,8 @@ public class ClaimService {
     private final ApplicationEventPublisher eventPublisher;
     private final DictApi dictApi;
     private final OrgApi orgApi;
+    /** 目标 MARKETING_* 认领服务；旧实体路径仅作为兼容回退。 */
+    private final MarketingCustomerClaimService marketingClaimService;
 
     /**
      * 认领客户（争抢式）。
@@ -106,11 +108,27 @@ public class ClaimService {
     }
 
     /**
+     * 按目标营销线索认领。线索 ID 是唯一业务维度，避免把客户主档 ID 当成防重键。
+     *
+     * @return 目标认领记录 ID 的字符串形式，兼容现有 REST 响应契约
+     */
+    @Transactional
+    public String claimMarketingLead(Long sourceLeadId, String orgId, String empId) {
+        if (marketingClaimService == null) {
+            throw new BizException(CustomerErrorCode.INTERNAL_ERROR.getCode(), "目标营销认领服务未配置");
+        }
+        return String.valueOf(marketingClaimService.claim(sourceLeadId, orgId, empId).getId());
+    }
+
+    /**
      * 对本人有效认领关系手动发起首次触达。
      */
     @Transactional
     public TouchTask startTouch(String claimId, String planFinishTime,
                                 String operatorEmpId, String operatorOrgCode) {
+        if (marketingClaimService != null && isNumericId(claimId)) {
+            return marketingClaimService.startTouch(claimId, planFinishTime, operatorEmpId, operatorOrgCode);
+        }
         CustClaim claim = requireOwnedActiveClaim(claimId, operatorEmpId, operatorOrgCode);
         List<TouchTask> active = touchTaskMapper.selectActiveByCustAndAssignee(
                 claim.getCustId(), claim.getMaintainerEmpId());
@@ -144,6 +162,11 @@ public class ClaimService {
         if (!StringUtils.hasText(reason)) {
             throw new BizException(CustomerErrorCode.CANCEL_REASON_REQUIRED.getCode(),
                     CustomerErrorCode.CANCEL_REASON_REQUIRED.getMessage());
+        }
+
+        if (marketingClaimService != null && isNumericId(claimId)) {
+            marketingClaimService.cancel(claimId, reason, operatorEmpId, operatorOrgCode);
+            return;
         }
 
         // 查询认领记录，不存在则抛 CLAIM_NOT_FOUND
@@ -204,6 +227,16 @@ public class ClaimService {
 
     /** 查询本人已认领客户，附带最近触达任务，供页面直接展示。 */
     public PageResult<ClaimedCustomerRespDTO> listMyClaimedCustomers(String empId, int pageNo, int pageSize) {
+        return listMyClaimedCustomers(empId, null, null, null, pageNo, pageSize);
+    }
+
+    /** 查询目标已认领池；无目标服务时回退到旧兼容查询。 */
+    public PageResult<ClaimedCustomerRespDTO> listMyClaimedCustomers(String empId, String tab,
+                                                                       String keyword, String sourceType,
+                                                                       int pageNo, int pageSize) {
+        if (marketingClaimService != null) {
+            return marketingClaimService.listClaimed(empId, tab, keyword, sourceType, pageNo, pageSize);
+        }
         int offset = (pageNo - 1) * pageSize;
         List<ClaimedCustomerRespDTO> records = claimMapper.selectMyClaimedCustomerPage(empId, offset, pageSize);
         fillDisplayNames(records);
@@ -277,6 +310,10 @@ public class ClaimService {
     public TouchTask reTouch(String claimId, ReTouchReqDTO req, String operatorEmpId, String operatorOrgCode) {
         log.info("[ClaimService.reTouch] claimId={}, operator={}, orgCode={}", claimId, operatorEmpId, operatorOrgCode);
 
+        if (marketingClaimService != null && isNumericId(claimId)) {
+            return marketingClaimService.reTouch(claimId, req, operatorEmpId, operatorOrgCode);
+        }
+
         CustClaim claim = requireOwnedActiveClaim(claimId, operatorEmpId, operatorOrgCode);
 
         // 当前客户不允许有任何在途触达（PENDING/IN_PROGRESS），由 mapper 自身查询条件保证
@@ -313,5 +350,15 @@ public class ClaimService {
                     CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getMessage());
         }
         return claim;
+    }
+
+    private boolean isNumericId(String claimId) {
+        if (!StringUtils.hasText(claimId)) return false;
+        try {
+            Long.parseLong(claimId);
+            return true;
+        } catch (NumberFormatException ex) {
+            return false;
+        }
     }
 }

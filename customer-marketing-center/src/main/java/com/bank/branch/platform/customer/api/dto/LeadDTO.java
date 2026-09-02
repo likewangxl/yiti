@@ -42,6 +42,9 @@ public class LeadDTO {
     /** 是否已开户 */
     private Boolean isAccountOpened;
 
+    /** 是否限制触达；1/true 为受限 */
+    private Boolean touchRestricted;
+
     /** 客户描述 */
     private String customerDesc;
 

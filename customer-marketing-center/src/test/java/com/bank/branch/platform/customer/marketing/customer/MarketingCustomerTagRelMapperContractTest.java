@@ -1,0 +1,22 @@
+package com.bank.branch.platform.customer.marketing.customer;
+
+import org.junit.jupiter.api.Test;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/** 客户手工维护标签的关系 SQL 契约。 */
+class MarketingCustomerTagRelMapperContractTest {
+
+    @Test
+    void manualReactivationClearsPreviousImportReference() throws Exception {
+        String xml = Files.readString(Path.of(
+                "src/main/resources/mapper/marketing/MarketingCustomerTagRelMapper.xml"));
+        String normalized = xml.replaceAll("\\s+", " ");
+
+        assertTrue(normalized.contains("<update id=\"reactivateWithSourceType\">"));
+        assertTrue(normalized.contains("source_type = #{sourceType}, source_ref_id = NULL"));
+    }
+}

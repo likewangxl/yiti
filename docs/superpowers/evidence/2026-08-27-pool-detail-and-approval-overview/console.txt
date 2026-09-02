@@ -1,0 +1,6 @@
+Available pool after reload and detail open:
+Total messages: 2 (Errors: 0, Warnings: 0)
+Returning 0 messages for level "info"
+
+Approval overview:
+Total messages: 0 (Errors: 0, Warnings: 0)

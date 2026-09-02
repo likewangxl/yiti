@@ -43,13 +43,16 @@ public final class TouchTaskDTOConverter {
             return null;
         }
         TouchTaskDTO dto = new TouchTaskDTO();
-        dto.setId(entity.getId());
-        dto.setCustId(entity.getCustId());
+        dto.setId(entity.getId() == null ? null : String.valueOf(entity.getId()));
+        dto.setCustId(entity.getCustId() == null ? null : String.valueOf(entity.getCustId()));
         dto.setOrgId(entity.getOrgId());
         dto.setAssigneeEmpId(entity.getAssigneeEmpId());
         dto.setTaskType(entity.getTaskType());
         dto.setTaskStatus(entity.getTaskStatus());
-        dto.setBusinessKey(entity.getBusinessKey());
+        // 正式触达任务表不再保存 business_key，跨模块契约仍按任务 ID 派生稳定业务键。
+        dto.setBusinessKey(entity.getId() == null ? null : "TOUCH:" + entity.getId());
+        dto.setWorklogId(null);
+        dto.setCancelReason(entity.getCancelReason());
         // 时间字段重命名映射
         dto.setExpectedFinishAt(entity.getPlanFinishTime());
         dto.setSlaDeadline(entity.getPlanFinishTime());
@@ -62,7 +65,7 @@ public final class TouchTaskDTOConverter {
         // 以下字段需上层 Service 查询后补充，转换器层暂置 null
         dto.setCustName(null);              // 需查 CustMaster
         dto.setAssigneeEmpName(null);       // 需查 EmpApi
-        dto.setLogCount(null);              // 需查 touch_log 计数
+        dto.setLogCount(null);              // 需由 worklog_id 判断，转换器不访问数据库
         return dto;
     }
 

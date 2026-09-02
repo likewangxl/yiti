@@ -7,6 +7,7 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
+import com.bank.branch.platform.customer.dto.marketing.lead.LeadDetailResponse;
 import com.bank.branch.platform.customer.service.CustomerPoolService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -44,7 +45,7 @@ public class CustomerPoolController {
      * @param pageSize 每页大小，默认 20
      * @return 分页的全行公开待认领客户列表
      */
-    @GetMapping
+    @GetMapping(params = "!leadId")
     @BizAuth(bizType = BizType.CUSTOMER_POOL, action = BizAction.LIST)
     @Operation(summary = "分页查询客户池")
     public ResponseWrapper<CustomerDTO> listPool(
@@ -55,5 +56,15 @@ public class CustomerPoolController {
         PageResult<CustomerDTO> result = customerPoolService.listPoolAsDTO(
                 keyword, currentUserApi.getCurrentEmpId(), pageNo, pageSize);
         return ResponseWrapper.page(result);
+    }
+
+    /** 查询当前员工仍可认领的公开线索完整详情。 */
+    @GetMapping(params = "leadId")
+    @BizAuth(bizType = BizType.CUSTOMER_POOL, action = BizAction.LIST)
+    @Operation(summary = "查询待认领线索详情")
+    public ResponseWrapper<LeadDetailResponse> detail(@RequestParam Long leadId) {
+        log.info("[CustomerPoolController.detail] leadId={}", leadId);
+        return ResponseWrapper.success(customerPoolService.getAvailableLeadDetail(
+                leadId, currentUserApi.getCurrentEmpId()));
     }
 }

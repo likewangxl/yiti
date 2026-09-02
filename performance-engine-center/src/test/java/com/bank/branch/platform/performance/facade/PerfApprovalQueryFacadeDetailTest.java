@@ -25,6 +25,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -64,15 +65,12 @@ class PerfApprovalQueryFacadeDetailTest {
         return apply;
     }
 
-    /**
-     * PERF_ALLOC_ADJUST_ITEM 明细 = 「调整后分配」(isOriginal=2)：李四/30%。
-     * item_kind 废弃后，「原业绩分配」(isOriginal=1) 不再存于 item 表，改由
-     * {@code getOriginalAllocPreview}（cust_alloc_relation 当前生效分配）提供，见 setUp。
-     */
+    /** PERF_ALLOC_ADJUST_ITEM 的 NEW 明细 = 「调整后分配」(isOriginal=2)：李四/30%。 */
     private List<PerfAllocAdjustItem> buildItems() {
         PerfAllocAdjustItem newItem = new PerfAllocAdjustItem();
         newItem.setId("ITEM_2");
         newItem.setApplyId("PA_1");
+        newItem.setItemKind("NEW");
         newItem.setEmpId("E2");
         newItem.setUsername("lisi");
         newItem.setEmpChnName("李四");
@@ -87,8 +85,7 @@ class PerfApprovalQueryFacadeDetailTest {
         AllocAdjustService.ApplyWithItems bundle =
                 new AllocAdjustService.ApplyWithItems(buildApply(), buildItems());
         when(allocAdjustService.getById("PA_1")).thenReturn(bundle);
-        // 原业绩分配（isOriginal=1）改从 cust_alloc_relation 当前生效分配取（item_kind 废弃后）：
-        // 张三/70% 作为「原业绩分配」，与 apply 明细「调整后分配」李四/30%（isOriginal=2）合计两条。
+        // 兼容没有 ORIGIN 快照的旧申请：从 cust_alloc_relation 当前生效分配回退。
         com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO origin =
                 new com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO();
         origin.setEmpId("E1");
@@ -169,5 +166,52 @@ class PerfApprovalQueryFacadeDetailTest {
         assertThat(d.getAllocaters())
                 .extracting("ratio")
                 .containsExactlyInAnyOrder("70.00", "30.00");
+    }
+
+    @Test
+    void getAllocAdjustDetail_prefersPersistedOriginSnapshot_andDoesNotTreatItAsNew() {
+        PerfAllocAdjustApply apply = buildApply();
+        apply.setId("PA_ORIGIN");
+        apply.setStatus("APPROVED");
+
+        PerfAllocAdjustItem newer = new PerfAllocAdjustItem();
+        newer.setItemKind("NEW");
+        newer.setEmpId("E_NEW");
+        newer.setUsername("newer");
+        newer.setRatio(new BigDecimal("60.00"));
+        PerfAllocAdjustItem origin = new PerfAllocAdjustItem();
+        origin.setItemKind("ORIGIN");
+        origin.setEmpId("E_SAVED_ORIGIN");
+        origin.setUsername("saved_origin");
+        origin.setRatio(new BigDecimal("40.00"));
+        when(allocAdjustService.getById("PA_ORIGIN"))
+                .thenReturn(new AllocAdjustService.ApplyWithItems(apply, List.of(newer, origin)));
+
+        com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO current =
+                new com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO();
+        current.setEmpId("E_CURRENT");
+        current.setRatio(new BigDecimal("100.00"));
+        when(allocAdjustService.getOriginalAllocPreview("C001", "ACCOUNT"))
+                .thenReturn(List.of(current));
+
+        AllocAdjustDetailDTO d = facade.getAllocAdjustDetail("PA_ORIGIN", "U999");
+
+        assertThat(d.getAllocaters()).extracting("empId", "isOriginal")
+                .containsExactly(tuple("E_NEW", 2), tuple("E_SAVED_ORIGIN", 1));
+    }
+
+    @Test
+    void getAllocAdjustDetail_newDimension_doesNotFallbackCurrentOriginal() {
+        PerfAllocAdjustApply apply = buildApply();
+        apply.setId("PA_NEW_DIM");
+        apply.setAllocDim("NEW");
+        PerfAllocAdjustItem item = buildItems().get(0);
+        when(allocAdjustService.getById("PA_NEW_DIM"))
+                .thenReturn(new AllocAdjustService.ApplyWithItems(apply, List.of(item)));
+
+        AllocAdjustDetailDTO d = facade.getAllocAdjustDetail("PA_NEW_DIM", "U001");
+
+        assertThat(d.getAllocaters()).extracting("empId", "isOriginal")
+                .containsExactly(tuple("E2", 2));
     }
 }

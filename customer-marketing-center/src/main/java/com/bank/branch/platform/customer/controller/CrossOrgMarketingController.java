@@ -6,6 +6,7 @@ import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.dto.req.CrossOrgApplyCreateReqDTO;
 import com.bank.branch.platform.customer.dto.req.CrossOrgReviewReqDTO;
 import com.bank.branch.platform.customer.dto.resp.CrossOrgApplyRespDTO;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Set;
@@ -41,8 +43,14 @@ public class CrossOrgMarketingController {
     @GetMapping("/validate")
     @BizAuth(bizType = BizType.CROSS_ORG_MARKETING, action = BizAction.READ)
     @Operation(summary = "校验跨机构营销申请条件")
-    public ResponseWrapper<CrossOrgValidationRespDTO> validate(@RequestParam String custId) {
-        return ResponseWrapper.success(service.validate(custId, currentUserApi.getCurrentEmpId(),
+    public ResponseWrapper<CrossOrgValidationRespDTO> validate(
+            @RequestParam(required = false) String custId,
+            @RequestParam(required = false) String custNo) {
+        String customerKey = StringUtils.hasText(custId) ? custId : custNo;
+        if (!StringUtils.hasText(customerKey)) {
+            throw new BizException("CUST-40001", "客户ID或客户号不能为空");
+        }
+        return ResponseWrapper.success(service.validate(customerKey, currentUserApi.getCurrentEmpId(),
                 currentUserApi.getCurrentOrgCode()));
     }
 

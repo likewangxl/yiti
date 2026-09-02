@@ -65,6 +65,7 @@ class AuthMapperIntTest {
         PtUser user = userMapper.selectByUserId("admin");
         assertThat(user).isNotNull();
         assertThat(user.getUsername()).isEqualTo("admin");
+        assertThat(user.getMobile()).isEqualTo("13800000000");
     }
 
     @Test
@@ -220,6 +221,9 @@ class AuthMapperIntTest {
         assertThat(d.getOrgName()).isEqualTo("北京分行朝阳支行"); // 来自 EXT_ORG_INFO
         assertThat(d.getStatus()).isEqualTo("ACTIVE");          // ISENABLED=0 → ACTIVE
         assertThat(d.getPosition()).isNull();                   // 三表无来源
+        assertThat(d.getMobile()).isEqualTo("13800000001");
+        assertThat(d.getEmail()).isEqualTo("zhangsan@test.com");
+        assertThat(d.getUpdatedTime()).isNotNull();
     }
 
     @Test
@@ -251,6 +255,38 @@ class AuthMapperIntTest {
     @DisplayName("通讯录: empId 不存在返回 null")
     void directory_selectByEmpId_notFound() {
         assertThat(userDirectoryMapper.selectByEmpId("nonexistent")).isNull();
+    }
+
+    @Test
+    @DisplayName("通讯录: 分页查询在职用户支持关键词与机构过滤")
+    void directory_pageActiveUsers() {
+        List<UserDirectoryDTO> rows = userDirectoryMapper.selectActiveUsersByPage("张", "BJ_CY", 0, 20);
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).getEmpId()).isEqualTo("user001");
+        assertThat(userDirectoryMapper.countActiveUsers("张", "BJ_CY")).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("通讯录: 按ID批量查询返回联系方式")
+    void directory_selectByEmpIds() {
+        List<UserDirectoryDTO> rows = userDirectoryMapper.selectByEmpIds(List.of("user002", "user001"));
+        assertThat(rows).extracting(UserDirectoryDTO::getEmpId)
+                .containsExactlyInAnyOrder("user001", "user002");
+        assertThat(rows).allSatisfy(row -> assertThat(row.getMobile()).isNotBlank());
+    }
+
+    @Test
+    @DisplayName("用户: 更新联系方式同时刷新 PT_USER.UPDATE_TIME")
+    void updateContact_updatesMobileEmailAndUpdateTime() {
+        PtUser before = userMapper.selectByUserId("user001");
+        int affected = userMapper.updateContact("user001", "13900000001", "updated@example.com");
+        PtUser after = userMapper.selectByUserId("user001");
+
+        assertThat(affected).isEqualTo(1);
+        assertThat(after.getMobile()).isEqualTo("13900000001");
+        assertThat(after.getEmail()).isEqualTo("updated@example.com");
+        assertThat(after.getUpdateTime()).isNotNull();
+        assertThat(after.getUpdateTime()).isAfterOrEqualTo(before.getUpdateTime());
     }
 }
 

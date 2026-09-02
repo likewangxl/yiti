@@ -88,6 +88,9 @@ public class CustLead {
     /** 是否已开户：0-否/1-是，对应 is_account_opened */
     private Integer isAccountOpened;
 
+    /** 是否限制触达：0-否/1-是，对应 touch_restricted */
+    private Integer touchRestricted;
+
     /** 客户描述，对应 customer_desc */
     private String customerDesc;
 

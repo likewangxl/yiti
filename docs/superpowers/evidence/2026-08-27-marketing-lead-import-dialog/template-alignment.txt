@@ -1,0 +1,29 @@
+页面：http://127.0.0.1:8090/#/customers/leads/new
+浏览器：官方 playwright-cli，真实 Chromium，会话 marketing-filter-final-20260827
+
+弹窗可见内容：
+- 下载模板
+- 选择文件
+- 上传
+- 客户标签填写标签ID，多个用分号分隔；指定客户经理范围填写工号，多个用分号分隔。
+- 附件无法随表格导入，需在线索生成后单独补充。
+
+模板下载事件：
+Downloading file lead-import-template.csv ...
+Downloaded file lead-import-template.csv to ".playwright-cli/lead-import-template.csv"
+
+下载文件校验：
+downloaded template matches source
+downloaded template columns=18
+线索类型,客户名称,统一社会信用代码,是否开户,客户号,所属行业,所属集团类型,所属集团名称,客户类型,是否基石客户,企业类型,客户标签,分配方式,指定客户经理范围,是否触达限制,客户说明,授信金额（万元）,授信敞口金额（万元）
+
+选择本地模板后的导入批次请求过滤结果：
+No matching requests. 未出现 POST /api/marketing/lead-import-batches。
+
+活动路由：
+No active routes
+
+控制台：
+Total messages: 4 (Errors: 0, Warnings: 2)
+[WARNING] [Vue Router warn]: No match found for location with path "/bizexec/supports"
+[WARNING] [Vue Router warn]: No match found for location with path "/bizexec/supports"

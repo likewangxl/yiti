@@ -25,9 +25,9 @@ class MapperContainerSmokeTest extends AbstractMapperIntegrationTest {
             try (ResultSet rs = stmt.executeQuery("SHOW TABLES LIKE 'portal_shortcut'")) {
                 assertThat(rs.next()).as("portal_shortcut table should exist").isTrue();
             }
-            // Verify addrbook_employee table exists
-            try (ResultSet rs = stmt.executeQuery("SHOW TABLES LIKE 'addrbook_employee'")) {
-                assertThat(rs.next()).as("addrbook_employee table should exist").isTrue();
+            // Verify the normalized user-product relation table exists
+            try (ResultSet rs = stmt.executeQuery("SHOW TABLES LIKE 'PORTAL_USER_PRODUCT_REL'")) {
+                assertThat(rs.next()).as("PORTAL_USER_PRODUCT_REL table should exist").isTrue();
             }
             // Verify PT_USER table exists (from ddl-auth.sql)
             try (ResultSet rs = stmt.executeQuery("SHOW TABLES LIKE 'PT_USER'")) {

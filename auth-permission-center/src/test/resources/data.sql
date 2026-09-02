@@ -3,10 +3,10 @@
 -- ============================================================
 
 -- 用户表（密码是 BCrypt 加密后的 "password"）
-INSERT INTO PT_USER (USER_ID, USERNAME, USERCHNNAME, PWD, EMAIL, ISENABLED, ISEXPIRED, ISLOCKED, PASS_WRONG_COUNT) VALUES
-    ('admin', 'admin', '系统管理员', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin@test.com', 0, 0, 0, 0),
-    ('user001', 'user001', '张三', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'zhangsan@test.com', 0, 0, 0, 0),
-    ('user002', 'user002', '李四', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'lisi@test.com', 0, 0, 0, 0);
+INSERT INTO PT_USER (USER_ID, USERNAME, USERCHNNAME, PWD, EMAIL, MOBILE, ISENABLED, ISEXPIRED, ISLOCKED, PASS_WRONG_COUNT) VALUES
+    ('admin', 'admin', '系统管理员', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin@test.com', '13800000000', 0, 0, 0, 0),
+    ('user001', 'user001', '张三', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'zhangsan@test.com', '13800000001', 0, 0, 0, 0),
+    ('user002', 'user002', '李四', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'lisi@test.com', '13800000002', 0, 0, 0, 0);
 
 -- 角色表
 INSERT INTO PT_ROLE (ROLE_ID, ROLE_CODE, ROLE_CHNAME, RECORD_STATUS, SYS_CODE) VALUES

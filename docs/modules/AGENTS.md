@@ -10,7 +10,7 @@
 - `workflow-center/`：平台唯一的 Flowable 集成边界。
 - `portal-content-center/`：工作台聚合及门户内容。
 - `customer-marketing-center/`：线索、客户、认领和触达。
-- `business-application-center/`：资产投放和中场支持申请。
+- `business-application-center/`：中场支持申请；旧 Loan/资产投放内容仅作迁移历史，不是当前契约。
 - `performance-engine-center/`：指标、KPI、目标、分配与 eval/REWARD。
 - `report-analytics-center/`：只读聚合、报表、自有查询/导出任务和大屏配置。
 - `red-engine-center/`：党建材料、审核、驾驶舱和归档。

@@ -2,10 +2,10 @@
 -- MySQL 不支持独立的 CREATE UNIQUE INDEX IF NOT EXISTS，改成内联 UNIQUE KEY 子句
 --
 -- ⚠️ V1.12 # 5 注（2026-05-01）：CREATE TABLE IF NOT EXISTS 不更新现有表列。
--- 当本文件后续加新列时（如 V1.6 加 TOUCH_TASK.sla_warning），已存在的旧表（V1.6 之前
+-- 当本文件后续加新列时，已存在的旧表可能缺少新增列；
 -- 创建的实例如 onepl_test_bootstrap）会缺这些列。修复办法：
 -- 1. 在 docs/superpowers/sql/ 新建日期前缀脚本含 ALTER TABLE ADD COLUMN（INFORMATION_SCHEMA 兜底）
--- 2. 现役脚本：docs/superpowers/sql/2026-05-01-v1.12-schema-column-drift-fix.sql（修 sla_warning）
+-- 2. 现役脚本按审批结果补齐目标库结构
 -- 3. 测试库实例手工跑该脚本对齐
 
 CREATE TABLE IF NOT EXISTS CUST_TAG (
@@ -156,6 +156,7 @@ CREATE TABLE IF NOT EXISTS CUST_LEAD (
     group_type VARCHAR(50),
     customer_type VARCHAR(50),
     is_keystone TINYINT,
+    touch_restricted TINYINT NOT NULL DEFAULT 0,
     enterprise_type VARCHAR(50),
     group_name VARCHAR(200),
     is_account_opened TINYINT,
@@ -277,6 +278,54 @@ CREATE TABLE IF NOT EXISTS CUSTOMER_MARKET_CUSTOMER (
     UNIQUE KEY uk_customer_market_credit_code (unified_credit_code)
 );
 
+CREATE TABLE IF NOT EXISTS MARKETING_CUSTOMER_INFO (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    cust_no VARCHAR(64),
+    cust_name VARCHAR(200) NOT NULL,
+    unified_credit_code VARCHAR(18) NOT NULL,
+    legal_representative VARCHAR(100),
+    registered_capital DECIMAL(18, 2),
+    registered_address VARCHAR(500),
+    business_address VARCHAR(500),
+    business_scope VARCHAR(2000),
+    contact_person VARCHAR(100),
+    contact_mobile VARCHAR(50),
+    industry VARCHAR(50),
+    group_type VARCHAR(50),
+    group_name VARCHAR(200),
+    customer_type VARCHAR(50),
+    enterprise_type VARCHAR(50),
+    is_keystone TINYINT NOT NULL DEFAULT 0,
+    customer_desc VARCHAR(2000),
+    is_account_opened TINYINT,
+    credit_amount DECIMAL(18, 2),
+    credit_exposure_amount DECIMAL(18, 2),
+    touch_restricted TINYINT NOT NULL DEFAULT 0,
+    current_lead_id BIGINT,
+    last_touch_time DATETIME,
+    main_manager_id VARCHAR(32),
+    main_org_id VARCHAR(50),
+    ownership_status VARCHAR(20) NOT NULL,
+    ownership_source VARCHAR(20) NOT NULL,
+    ownership_maintain_mode VARCHAR(10) NOT NULL,
+    ownership_data_date DATE,
+    ownership_updated_by VARCHAR(32),
+    ownership_updated_time DATETIME,
+    ownership_manual_reason VARCHAR(500),
+    profile_version INT NOT NULL DEFAULT 0,
+    account_opened_by_emp_id VARCHAR(32),
+    account_opened_time DATETIME,
+    opening_touch_task_id BIGINT,
+    record_status VARCHAR(20) NOT NULL,
+    created_by VARCHAR(32) NOT NULL,
+    created_time DATETIME NOT NULL,
+    updated_by VARCHAR(32) NOT NULL,
+    updated_time DATETIME NOT NULL,
+    lock_version INT NOT NULL DEFAULT 0,
+    UNIQUE KEY uk_marketing_customer_no (cust_no),
+    UNIQUE KEY uk_marketing_customer_credit_code (unified_credit_code)
+);
+
 CREATE TABLE IF NOT EXISTS CUST_CLAIM (
     id VARCHAR(32) PRIMARY KEY,
     cust_id VARCHAR(32) NOT NULL,
@@ -292,39 +341,154 @@ CREATE TABLE IF NOT EXISTS CUST_CLAIM (
     UNIQUE KEY uk_cust_claim_emp (cust_id, claimed_by)
 );
 
-CREATE TABLE IF NOT EXISTS TOUCH_TASK (
-    id VARCHAR(32) PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS MARKETING_TOUCH_TASK (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     task_no VARCHAR(64) NOT NULL,
-    cust_id VARCHAR(32) NOT NULL,
-    org_id VARCHAR(32),
-    assignee_emp_id VARCHAR(32),
+    cust_id BIGINT NOT NULL,
+    source_type VARCHAR(30) NOT NULL,
+    source_biz_id BIGINT,
+    org_id VARCHAR(50) NOT NULL,
+    assignee_emp_id VARCHAR(32) NOT NULL,
     task_type VARCHAR(20) NOT NULL,
     task_status VARCHAR(20) NOT NULL,
     plan_finish_time DATETIME,
     warning_time DATETIME,
-    sla_status VARCHAR(20),
-    sla_warning TINYINT DEFAULT 0,
-    business_key VARCHAR(100),
+    sla_status VARCHAR(20) NOT NULL,
     success_time DATETIME,
     cancel_time DATETIME,
-    created_time DATETIME,
-    updated_time DATETIME,
-    UNIQUE KEY uk_touch_task_no (task_no)
+    cancel_reason VARCHAR(500),
+    created_by VARCHAR(32) NOT NULL,
+    created_time DATETIME NOT NULL,
+    updated_by VARCHAR(32) NOT NULL,
+    updated_time DATETIME NOT NULL,
+    lock_version INT NOT NULL DEFAULT 0,
+    UNIQUE KEY uk_marketing_touch_task_no (task_no)
 );
 
-CREATE TABLE IF NOT EXISTS TOUCH_LOG (
-    id VARCHAR(32) PRIMARY KEY,
-    touch_task_id VARCHAR(32) NOT NULL,
-    log_time DATETIME,
-    client_uuid VARCHAR(64) NOT NULL,
-    log_content VARCHAR(2000),
-    touch_method VARCHAR(30),
-    participant_emp_ids VARCHAR(2000),
-    photo_urls VARCHAR(2000),
-    photo_groups VARCHAR(4000),
-    operator_location VARCHAR(1000),
-    owner_org_id VARCHAR(32),
-    created_by VARCHAR(32),
-    created_time DATETIME,
-    UNIQUE KEY uk_touch_log_client (touch_task_id, client_uuid)
+CREATE TABLE IF NOT EXISTS MARKETING_TOUCH_WORKLOG (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    worklog_no VARCHAR(64) NOT NULL,
+    legacy_worklog_id VARCHAR(150),
+    task_id BIGINT,
+    cust_id BIGINT NOT NULL,
+    customer_name_snapshot VARCHAR(200) NOT NULL,
+    unified_credit_code_snapshot VARCHAR(18) NOT NULL,
+    customer_tag_snapshot VARCHAR(1000),
+    operator_emp_id VARCHAR(32) NOT NULL,
+    operator_org_id VARCHAR(50) NOT NULL,
+    touch_time DATETIME NOT NULL,
+    touch_method VARCHAR(20) NOT NULL,
+    touch_points VARCHAR(1000),
+    touch_result VARCHAR(1000),
+    is_first_touch TINYINT NOT NULL,
+    account_open_progress VARCHAR(20),
+    location_status VARCHAR(20),
+    location_time DATETIME,
+    location_address VARCHAR(500),
+    location_city_area VARCHAR(100),
+    location_remark VARCHAR(500),
+    client_uuid VARCHAR(64),
+    record_status VARCHAR(20) NOT NULL,
+    void_by VARCHAR(32),
+    void_time DATETIME,
+    void_reason VARCHAR(500),
+    created_time DATETIME NOT NULL,
+    updated_time DATETIME NOT NULL,
+    UNIQUE KEY uk_marketing_worklog_no (worklog_no),
+    UNIQUE KEY uk_marketing_worklog_legacy (legacy_worklog_id),
+    UNIQUE KEY uk_marketing_worklog_client (task_id, client_uuid)
+);
+
+CREATE TABLE IF NOT EXISTS MARKETING_TOUCH_WORKLOG_PICTURE (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    worklog_id BIGINT NOT NULL,
+    picture_type VARCHAR(30) NOT NULL,
+    file_object_id VARCHAR(64) NOT NULL,
+    sort_no TINYINT NOT NULL,
+    created_by VARCHAR(32) NOT NULL,
+    created_time DATETIME NOT NULL,
+    record_status VARCHAR(20) NOT NULL,
+    UNIQUE KEY uk_marketing_worklog_picture (worklog_id, picture_type, sort_no)
+);
+
+CREATE TABLE IF NOT EXISTS MARKETING_TOUCH_WORKLOG_PARTICIPANT (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    worklog_id BIGINT NOT NULL,
+    participant_emp_id VARCHAR(32) NOT NULL,
+    participant_org_id VARCHAR(50) NOT NULL,
+    participant_role VARCHAR(20) NOT NULL,
+    created_by VARCHAR(32) NOT NULL,
+    created_time DATETIME NOT NULL,
+    UNIQUE KEY uk_marketing_worklog_participant (worklog_id, participant_emp_id)
+);
+
+CREATE TABLE IF NOT EXISTS MARKETING_ASSET_PROJECT_APPLY (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    apply_no VARCHAR(64) NOT NULL,
+    legacy_apply_id VARCHAR(64),
+    cust_id BIGINT NOT NULL,
+    source_touch_task_id BIGINT,
+    source_worklog_id BIGINT,
+    project_name VARCHAR(200),
+    project_type VARCHAR(50),
+    biz_type VARCHAR(50),
+    guarantee_type VARCHAR(50),
+    project_total_investment DECIMAL(18, 2),
+    project_loan_amount DECIMAL(18, 2),
+    credit_amount DECIMAL(18, 2),
+    credit_exposure_amount DECIMAL(18, 2),
+    is_urgent TINYINT NOT NULL DEFAULT 0,
+    is_key_project TINYINT NOT NULL DEFAULT 0,
+    urgent_source VARCHAR(20),
+    applicant_emp_id VARCHAR(32) NOT NULL,
+    applicant_org_id VARCHAR(50) NOT NULL,
+    main_manager_id_snapshot VARCHAR(32),
+    main_org_id_snapshot VARCHAR(50),
+    status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+    business_key VARCHAR(100),
+    process_instance_id VARCHAR(64),
+    submitted_time DATETIME,
+    completed_time DATETIME,
+    record_status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_by VARCHAR(32) NOT NULL,
+    created_time DATETIME NOT NULL,
+    updated_by VARCHAR(32) NOT NULL,
+    updated_time DATETIME NOT NULL,
+    lock_version INT NOT NULL DEFAULT 0,
+    UNIQUE KEY uk_asset_project_apply_no (apply_no),
+    UNIQUE KEY uk_asset_project_legacy_id (legacy_apply_id),
+    UNIQUE KEY uk_asset_project_business_key (business_key),
+    UNIQUE KEY uk_asset_project_process (process_instance_id)
+);
+
+CREATE TABLE IF NOT EXISTS MARKETING_ASSET_PROJECT_URGENT_APPLY (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    urgent_apply_no VARCHAR(64) NOT NULL,
+    legacy_urgent_apply_id VARCHAR(64),
+    asset_project_apply_id BIGINT NOT NULL,
+    cust_id BIGINT NOT NULL,
+    requested_at_node_key VARCHAR(64) NOT NULL,
+    requested_at_task_id VARCHAR(64) NOT NULL,
+    apply_reason VARCHAR(1000) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+    active_dedup_key VARCHAR(80),
+    business_key VARCHAR(100),
+    process_instance_id VARCHAR(64),
+    requested_by VARCHAR(32) NOT NULL,
+    requested_org_id VARCHAR(50) NOT NULL,
+    requested_time DATETIME NOT NULL,
+    reviewed_by VARCHAR(32),
+    reviewed_time DATETIME,
+    approval_comment VARCHAR(1000),
+    record_status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_by VARCHAR(32) NOT NULL,
+    created_time DATETIME NOT NULL,
+    updated_by VARCHAR(32) NOT NULL,
+    updated_time DATETIME NOT NULL,
+    lock_version INT NOT NULL DEFAULT 0,
+    UNIQUE KEY uk_asset_urgent_apply_no (urgent_apply_no),
+    UNIQUE KEY uk_asset_urgent_legacy_id (legacy_urgent_apply_id),
+    UNIQUE KEY uk_asset_urgent_dedup (active_dedup_key),
+    UNIQUE KEY uk_asset_urgent_business_key (business_key),
+    UNIQUE KEY uk_asset_urgent_process (process_instance_id)
 );

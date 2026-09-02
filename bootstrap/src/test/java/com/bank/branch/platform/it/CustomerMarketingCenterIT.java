@@ -8,10 +8,10 @@ import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustClaimDTO;
 import com.bank.branch.platform.customer.api.dto.LeadDTO;
 import com.bank.branch.platform.customer.api.dto.TouchTaskDTO;
+import com.bank.branch.platform.customer.dto.resp.TouchWorklogVO;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.entity.CustLead;
 import com.bank.branch.platform.customer.entity.CustTag;
-import com.bank.branch.platform.customer.entity.TouchLog;
 import com.bank.branch.platform.customer.service.ClaimService;
 import com.bank.branch.platform.customer.service.LeadService;
 import com.bank.branch.platform.customer.service.TagCustomerService;
@@ -56,7 +56,7 @@ class CustomerMarketingCenterIT {
 
     private static final String OPERATOR_EMP_ID = "user001";
     private static final String OPERATOR_ORG_ID = "BJ_CY";
-    private static final String CUSTOMER_ID = "cust-seed-001";
+    private static final String CUSTOMER_ID = "1001";
 
     @Autowired
     private TagService tagService;
@@ -135,18 +135,24 @@ class CustomerMarketingCenterIT {
         claimService.startTouch(claim.getId(), null, OPERATOR_EMP_ID, OPERATOR_ORG_ID);
 
         String touchTaskId = jdbcTemplate.queryForObject(
-                "SELECT id FROM TOUCH_TASK WHERE cust_id = ? ORDER BY created_time DESC LIMIT 1",
+                "SELECT id FROM MARKETING_TOUCH_TASK WHERE cust_id = ? ORDER BY created_time DESC LIMIT 1",
                 String.class,
                 CUSTOMER_ID
         );
 
-        TouchLog log = touchLogService.addLog(
+        TouchWorklogVO log = touchLogService.addLog(
                 touchTaskId,
                 "client-phase1-001",
                 "首次触达已完成，客户愿意继续沟通",
-                "[\"https://example.com/photo-1.png\"]",
+                "[\"photo-1.png\"]",
+                null,
+                "ONSITE",
+                "[]",
+                null,
+                "{\"address\":\"客户经营场所\"}",
                 OPERATOR_EMP_ID,
-                OPERATOR_ORG_ID
+                OPERATOR_ORG_ID,
+                false
         );
 
         touchTaskService.markSuccess(touchTaskId, OPERATOR_EMP_ID, false);
@@ -169,14 +175,16 @@ class CustomerMarketingCenterIT {
         assertThat(customerQueryApi.isClaimedByOrg(CUSTOMER_ID, OPERATOR_ORG_ID)).isTrue();
 
         assertThat(log.getTouchTaskId()).isEqualTo(touchTaskId);
+        assertThat(log.getWorkLogId()).isNotBlank();
         TouchTaskDTO taskDto = touchTaskQueryApi.getTouchTask(touchTaskId).orElseThrow();
         assertThat(taskDto.getTaskStatus()).isEqualTo("SUCCESS");
+        assertThat(taskDto.getWorklogId()).isEqualTo(log.getWorkLogId());
         // getSlaStatus 已从契约删除；slaWarning=false 表示 SLA 正常（GREEN）
         assertThat(taskDto.getSlaWarning()).isFalse();
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM TOUCH_LOG WHERE touch_task_id = ?",
+                "SELECT COUNT(*) FROM MARKETING_TOUCH_WORKLOG WHERE id = ?",
                 Long.class,
-                touchTaskId
+                log.getWorkLogId()
         )).isEqualTo(1L);
     }
 }

@@ -230,4 +230,96 @@ class FlowValidatorTest {
         assertThat(result.isOk()).isTrue();
         assertThat(result.getErrors()).isEmpty();
     }
+
+    @Test
+    void approval_mode_must_be_supported_value() {
+        FlowGraphDTO g = linearGraph();
+        g.getNodes().stream().filter(n -> "a1".equals(n.getNodeKey())).findFirst().orElseThrow()
+                .setApproveMode("SEQUENTIAL");
+
+        FlowValidator.ValidationResult result = validator.validate(g, "ALLOC_ADJUST");
+
+        assertThat(result.isOk()).isFalse();
+        assertThat(result.getErrors()).anyMatch(e -> e.contains("ANY") && e.contains("ALL")
+                && e.contains("GROUP_ALL"));
+    }
+
+    @Test
+    void group_all_requires_exactly_one_var_approver() {
+        FlowGraphDTO g = linearGraph();
+        FlowNodeDTO approval = g.getNodes().stream()
+                .filter(n -> "a1".equals(n.getNodeKey())).findFirst().orElseThrow();
+        approval.setApproveMode("GROUP_ALL");
+        approval.setApprovers(List.of(
+                approver("VAR", "originalOwnerOrgApprovalGroups"),
+                approver("VAR", "originalOwnerOrgApprovalGroups")));
+
+        FlowValidator.ValidationResult result = validator.validate(g, "ALLOC_ADJUST");
+
+        assertThat(result.isOk()).isFalse();
+        assertThat(result.getErrors()).anyMatch(e -> e.contains("GROUP_ALL") && e.contains("一个 VAR"));
+    }
+
+    @Test
+    void group_all_requires_current_biz_group_list_var() {
+        FlowGraphDTO g = linearGraph();
+        FlowNodeDTO approval = g.getNodes().stream()
+                .filter(n -> "a1".equals(n.getNodeKey())).findFirst().orElseThrow();
+        approval.setApproveMode("GROUP_ALL");
+        approval.setApprovers(List.of(approver("VAR", "originalOwnerEmpIds")));
+
+        FlowValidator.ValidationResult result = validator.validate(g, "ALLOC_ADJUST");
+
+        assertThat(result.isOk()).isFalse();
+        assertThat(result.getErrors()).anyMatch(e -> e.contains("group-list"));
+    }
+
+    @Test
+    void group_all_requires_var_to_be_in_current_biz_catalog() {
+        FlowGraphDTO g = linearGraph();
+        FlowNodeDTO approval = g.getNodes().stream()
+                .filter(n -> "a1".equals(n.getNodeKey())).findFirst().orElseThrow();
+        approval.setApproveMode("GROUP_ALL");
+        approval.setApprovers(List.of(approver("VAR", "groupsFromAnotherBiz")));
+
+        FlowValidator.ValidationResult result = validator.validate(g, "ALLOC_ADJUST");
+
+        assertThat(result.isOk()).isFalse();
+        assertThat(result.getErrors()).anyMatch(e -> e.contains("approverVariables")
+                && e.contains("groupsFromAnotherBiz"));
+    }
+
+    @Test
+    void group_all_with_group_list_var_passes() {
+        FlowGraphDTO g = linearGraph();
+        FlowNodeDTO approval = g.getNodes().stream()
+                .filter(n -> "a1".equals(n.getNodeKey())).findFirst().orElseThrow();
+        approval.setApproveMode("GROUP_ALL");
+        approval.setApprovers(List.of(approver("VAR", "originalOwnerOrgApprovalGroups")));
+
+        FlowValidator.ValidationResult result = validator.validate(g, "ALLOC_ADJUST");
+
+        assertThat(result.isOk()).isTrue();
+    }
+
+    @Test
+    void non_group_all_cannot_reference_group_list_var() {
+        FlowGraphDTO g = linearGraph();
+        FlowNodeDTO approval = g.getNodes().stream()
+                .filter(n -> "a1".equals(n.getNodeKey())).findFirst().orElseThrow();
+        approval.setApproveMode("ALL");
+        approval.setApprovers(List.of(approver("VAR", "originalOwnerOrgApprovalGroups")));
+
+        FlowValidator.ValidationResult result = validator.validate(g, "ALLOC_ADJUST");
+
+        assertThat(result.isOk()).isFalse();
+        assertThat(result.getErrors()).anyMatch(e -> e.contains("group-list") && e.contains("GROUP_ALL"));
+    }
+
+    private FlowApproverDTO approver(String type, String value) {
+        FlowApproverDTO approver = new FlowApproverDTO();
+        approver.setApproverType(type);
+        approver.setApproverValue(value);
+        return approver;
+    }
 }

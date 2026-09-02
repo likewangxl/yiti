@@ -110,13 +110,13 @@ class ClaimServiceTest {
         when(claimMapper.selectById("claim-001")).thenReturn(claim);
         when(touchTaskMapper.selectActiveByCustAndAssignee("cust-001", "E10001")).thenReturn(List.of());
         TouchTask created = new TouchTask();
-        created.setId("task-001");
+        created.setId(1L);
         when(touchTaskService.createFirstTouchTask("cust-001", "ORG_SZ_001", "E10001", null))
                 .thenReturn(created);
 
         TouchTask result = claimService.startTouch("claim-001", null, "E10001", "ORG_SZ_001");
 
-        assertThat(result.getId()).isEqualTo("task-001");
+        assertThat(result.getId()).isEqualTo(1L);
         verify(touchTaskService).createFirstTouchTask("cust-001", "ORG_SZ_001", "E10001", null);
     }
 

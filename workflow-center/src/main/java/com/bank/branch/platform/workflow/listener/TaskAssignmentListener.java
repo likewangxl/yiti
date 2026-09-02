@@ -6,6 +6,7 @@ import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.governance.api.dto.NotificationCmd;
+import com.bank.branch.platform.workflow.api.dto.ApproverGroupDTO;
 import com.bank.branch.platform.workflow.service.CandidateResolverService;
 import com.bank.branch.platform.workflow.service.WfProcessOrgService;
 import lombok.RequiredArgsConstructor;
@@ -82,6 +83,18 @@ public class TaskAssignmentListener implements TaskListener {
         String nodeKey = delegateTask.getTaskDefinitionKey();
         String taskId = delegateTask.getId();
 
+        // GROUP_ALL 顺序多实例的当前元素是一个机构审批组。组内负责人共享同一个 Flowable
+        // userTask，任一候选人完成即结束本组；不要再按设计器候选配置做扁平化解析，避免
+        // 把不同机构合并成一个 ANY 节点。
+        if (delegateTask.hasVariable(MultiInstanceApproverGroupResolver.VAR_APPROVER_GROUP)) {
+            Object groupValue = delegateTask.getVariable(MultiInstanceApproverGroupResolver.VAR_APPROVER_GROUP);
+            if (groupValue == null) {
+                throw new IllegalStateException("机构审批分组配置无效: 当前任务缺少机构审批分组元素");
+            }
+            assignApproverGroup(delegateTask, groupValue, taskId, nodeKey);
+            return;
+        }
+
         // 虚拟员工默认通过（泛化）：任意审批任务的受理人若为「虚拟员工」(字典 USER_TYPE=2)，
         // 无需人工审批，自动默认审批通过，审批意见记「默认同意」，流程继续到后续节点。
         // （原仅限 original_owner_approve 节点，现去掉 nodeKey 限制，对设计器重建的任意流程一致生效。）
@@ -136,6 +149,30 @@ public class TaskAssignmentListener implements TaskListener {
 
         // 待审批任务统一只进「待办」、不发通知（isNotifySuppressed 恒为 true），复用 notifyCandidates 收口
         notifyCandidates(delegateTask, candidates);
+    }
+
+    /**
+     * 为当前机构审批组设置候选人、任务展示名称和参与机构快照。
+     *
+     * @param delegateTask 当前机构组任务
+     * @param groupValue Flowable 多实例元素变量（DTO 或可转换的 Map）
+     * @param taskId 任务 ID
+     * @param nodeKey 节点 KEY
+     */
+    private void assignApproverGroup(DelegateTask delegateTask, Object groupValue,
+                                     String taskId, String nodeKey) {
+        ApproverGroupDTO group = MultiInstanceApproverGroupResolver.readGroup(groupValue);
+        for (String empId : group.getApproverEmpIds()) {
+            delegateTask.addCandidateUser(empId);
+        }
+        String baseName = delegateTask.getName();
+        String taskName = (baseName == null || baseName.isBlank())
+                ? group.getGroupName()
+                : baseName + "（" + group.getGroupName() + "）";
+        delegateTask.setName(taskName);
+        wfProcessOrgService.recordOrg(delegateTask.getProcessInstanceId(), group.getGroupKey(), "CANDIDATE");
+        log.info("[TaskAssignmentListener] 任务 {} 节点 {} 按机构组 {} 分派候选人 {}，任务名={}",
+                taskId, nodeKey, group.getGroupKey(), group.getApproverEmpIds(), taskName);
     }
 
     /**

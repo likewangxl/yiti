@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.auth.api.dto.UserRoleItemDTO;
+import com.bank.branch.platform.auth.entity.ExtOrgInfo;
+import com.bank.branch.platform.auth.entity.ExtUserOrg;
 import com.bank.branch.platform.auth.entity.PtUser;
 import com.bank.branch.platform.auth.mapper.OrgMapper;
 import com.bank.branch.platform.auth.mapper.UserMapper;
@@ -28,6 +30,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,21 +51,48 @@ class UserFacadePageRolesTest {
     @InjectMocks private UserFacade userFacade;
 
     @Test
-    @DisplayName("pageUsers 返回分页用户，empId/username/displayName 装配正确")
+    @DisplayName("pageUsers 返回分页用户并批量装配主机构信息")
     void pageUsers_returnsMappedDtos() {
-        PtUser u = new PtUser();
-        u.setUserId("1001");
-        u.setUsername("zhangsan");
-        u.setUserchnname("张三");
-        when(userMapper.selectByKeywordPaged("张", 0, 20)).thenReturn(List.of(u));
-        when(userMapper.countByKeyword("张")).thenReturn(1L);
+        PtUser zhangSan = new PtUser();
+        zhangSan.setUserId("1001");
+        zhangSan.setUsername("zhangsan");
+        zhangSan.setUserchnname("张三");
+        PtUser liSi = new PtUser();
+        liSi.setUserId("1002");
+        liSi.setUsername("lisi");
+        liSi.setUserchnname("李四");
+        when(userMapper.selectByKeywordPaged("张", 0, 20)).thenReturn(List.of(zhangSan, liSi));
+        when(userMapper.countByKeyword("张")).thenReturn(2L);
+
+        ExtUserOrg zhangSanOrg = new ExtUserOrg();
+        zhangSanOrg.setUserId("1001");
+        zhangSanOrg.setOrgCode("ORG001");
+        ExtUserOrg liSiOrg = new ExtUserOrg();
+        liSiOrg.setUserId("1002");
+        liSiOrg.setOrgCode("ORG002");
+        when(userOrgMapper.selectByUserIds(List.of("1001", "1002")))
+                .thenReturn(List.of(zhangSanOrg, liSiOrg));
+
+        ExtOrgInfo branch = new ExtOrgInfo();
+        branch.setOrgCode("ORG001");
+        branch.setOrgName("一机构");
+        ExtOrgInfo subBranch = new ExtOrgInfo();
+        subBranch.setOrgCode("ORG002");
+        subBranch.setOrgName("二机构");
+        when(orgMapper.selectByOrgCodes(any())).thenReturn(List.of(branch, subBranch));
 
         PageResult<UserDTO> r = userFacade.pageUsers("张", 1, 20);
 
-        assertThat(r.getTotal()).isEqualTo(1L);
-        assertThat(r.getRecords()).hasSize(1);
+        assertThat(r.getTotal()).isEqualTo(2L);
+        assertThat(r.getRecords()).hasSize(2);
         assertThat(r.getRecords().get(0).getEmpId()).isEqualTo("1001");
         assertThat(r.getRecords().get(0).getDisplayName()).isEqualTo("张三");
+        assertThat(r.getRecords().get(0).getMainOrgCode()).isEqualTo("ORG001");
+        assertThat(r.getRecords().get(0).getMainOrgName()).isEqualTo("一机构");
+        assertThat(r.getRecords().get(1).getMainOrgCode()).isEqualTo("ORG002");
+        assertThat(r.getRecords().get(1).getMainOrgName()).isEqualTo("二机构");
+        verify(userOrgMapper, times(1)).selectByUserIds(List.of("1001", "1002"));
+        verify(orgMapper, times(1)).selectByOrgCodes(any());
     }
 
     @Test

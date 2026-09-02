@@ -1,278 +1,295 @@
 package com.bank.branch.platform.customer.service;
 
 import com.bank.branch.platform.common.web.exception.BizException;
-import com.bank.branch.platform.customer.entity.TouchLog;
+import com.bank.branch.platform.customer.dto.resp.TouchWorklogVO;
 import com.bank.branch.platform.customer.entity.TouchTask;
+import com.bank.branch.platform.customer.entity.TouchWorklog;
+import com.bank.branch.platform.customer.entity.TouchWorklogParticipant;
+import com.bank.branch.platform.customer.entity.TouchWorklogPictureRecord;
+import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo;
 import com.bank.branch.platform.customer.enums.CustomerErrorCode;
-import com.bank.branch.platform.customer.enums.TouchTaskStatus;
-import com.bank.branch.platform.customer.mapper.TouchLogMapper;
 import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
+import com.bank.branch.platform.customer.mapper.TouchWorklogMapper;
+import com.bank.branch.platform.customer.mapper.TouchWorklogParticipantMapper;
+import com.bank.branch.platform.customer.mapper.TouchWorklogPictureRecordMapper;
+import com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerInfoMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.Map;
 
-/**
- * 触达日志业务服务。
- * <p>
- * 负责触达日志的新增和查询。
- * 利用唯一索引 uk(touch_task_id, client_uuid) 保证移动端重试的幂等性：
- * 先查后插，若已存在直接返回；若并发下 INSERT 触发唯一键冲突，则捕获转为业务异常。
- * </p>
- */
-@Slf4j
+/** MARKETING_TOUCH_WORKLOG 工作日志服务。 */
 @Service
 @RequiredArgsConstructor
 public class TouchLogService {
+    private static final TypeReference<Map<String, List<String>>> PHOTO_GROUP_TYPE = new TypeReference<>() { };
 
-    private final TouchLogMapper logMapper;
     private final TouchTaskMapper taskMapper;
-    private final TouchTaskService touchTaskService;
+    private final TouchWorklogMapper worklogMapper;
+    private final TouchWorklogPictureRecordMapper pictureMapper;
+    private final TouchWorklogParticipantMapper participantMapper;
+    private final MarketingCustomerInfoMapper customerMapper;
+    private final ObjectMapper objectMapper;
 
-    /** 允许提交触达日志的任务状态集合（PENDING 为首次日志，IN_PROGRESS 为后续日志）。 */
-    private static final Set<String> LOGGABLE_STATUSES = Set.of(
-            TouchTaskStatus.PENDING.getCode(),
-            TouchTaskStatus.IN_PROGRESS.getCode()
-    );
-
-    /** 触达照片单次上传上限（CUST-42207）。 */
-    private static final int MAX_PHOTO_COUNT = 9;
-
-    /** 触达照片允许的扩展名（CUST-42208，小写匹配）。 */
-    private static final Set<String> ALLOWED_PHOTO_EXTENSIONS = Set.of("jpg", "jpeg", "png", "heic");
-
-    /**
-     * 新增触达日志（幂等接口）。
-     * <p>
-     * 幂等策略：先按 (touchTaskId, clientUuid) 查询，若已存在则直接返回已有记录；
-     * 若不存在则插入新记录；若并发导致 INSERT 触发 DuplicateKeyException，转为 TOUCH_LOG_DUPLICATE 异常。
-     * 前置检查：任务必须存在且处于 PENDING 状态。
-     * </p>
-     *
-     * @param touchTaskId    触达任务ID
-     * @param clientUuid     客户端幂等键（由移动端生成）
-     * @param logContent     触达内容描述
-     * @param photoUrls      照片 URL 列表（JSON 数组字符串，最多 9 张），可为 null
-     * @param operatorEmpId  操作人员工工号
-     * @param orgId          归属机构代码
-     * @return 触达日志实体（新建或已存在的）
-     */
+    /** 创建工作日志；相同 taskId/clientUuid 返回原记录。 */
     @Transactional
-    public TouchLog addLog(String touchTaskId, String clientUuid, String logContent,
-                           String photoUrls, String operatorEmpId, String orgId) {
-        return addLog(touchTaskId, clientUuid, logContent, photoUrls,
-                LocalDateTime.now(), "OTHER", null, null, null,
-                operatorEmpId, orgId, false, false);
-    }
-
-    /**
-     * 新版触达日志入口，补齐触达时间、方式、协同人员、分类照片与定位。
-     */
-    @Transactional
-    public TouchLog addLog(String touchTaskId, String clientUuid, String logContent,
-                           String photoUrls, LocalDateTime touchTime, String touchMethod,
-                           String participantEmpIds, String photoGroups, String operatorLocation,
-                           String operatorEmpId, String orgId, boolean operatorIsAdmin) {
-        return addLog(touchTaskId, clientUuid, logContent, photoUrls, touchTime, touchMethod,
-                participantEmpIds, photoGroups, operatorLocation,
-                operatorEmpId, orgId, operatorIsAdmin, true);
-    }
-
-    private TouchLog addLog(String touchTaskId, String clientUuid, String logContent,
-                            String photoUrls, LocalDateTime touchTime, String touchMethod,
-                            String participantEmpIds, String photoGroups, String operatorLocation,
-                            String operatorEmpId, String orgId, boolean operatorIsAdmin,
-                            boolean photoRequired) {
-        log.info("[TouchLogService.addLog] touchTaskId={}, clientUuid={}, operatorEmpId={}",
-                touchTaskId, clientUuid, operatorEmpId);
-
-        // 必填校验（CUST-42206）：logContent 与 photoUrls 至少一个非空
-        assertContentOrPhotoPresent(logContent, photoUrls);
-
-        // 照片数量与格式校验（CUST-42207 / CUST-42208）：photoUrls 非空时解析 JSON 数组
-        List<String> photos = parsePhotoUrls(photoUrls);
-        if (photoRequired && photos.isEmpty()) {
-            throw new BizException(CustomerErrorCode.TOUCH_LOG_PHOTO_REQUIRED.getCode(),
-                    CustomerErrorCode.TOUCH_LOG_PHOTO_REQUIRED.getMessage());
-        }
-        assertPhotoCountWithinLimit(photos);
-        assertPhotoFormatsAllowed(photos);
-
-        // 检查触达任务存在且处于可提交日志的状态（PENDING 或 IN_PROGRESS）
-        TouchTask task = taskMapper.selectById(touchTaskId);
+    public TouchWorklogVO addLog(String touchTaskId, String clientUuid, String logContent,
+                                 String photoUrlsJson, LocalDateTime touchTime, String touchMethod,
+                                 String participantEmpIdsJson, String photoGroupsJson, String operatorLocation,
+                                 String operatorEmpId, String operatorOrgId, boolean operatorIsAdmin) {
+        Long taskId = parseId(touchTaskId);
+        TouchTask task = taskMapper.selectByIdForUpdate(touchTaskId);
         if (task == null) {
-            throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode(),
-                    CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getMessage());
+            throw error(CustomerErrorCode.TOUCH_TASK_NOT_FOUND);
         }
-        if (!LOGGABLE_STATUSES.contains(task.getTaskStatus())) {
-            // 终态任务（SUCCESS/CANCELLED）不允许再提交日志
-            throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getCode(),
-                    CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getMessage());
+        if (!operatorEmpId.equals(task.getAssigneeEmpId())) {
+            throw error(CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN);
         }
-        // 会议纪要明确：日志只能由任务执行人本人填写，系统管理员也只能查看、不能代录。
-        if (!java.util.Objects.equals(task.getAssigneeEmpId(), operatorEmpId)) {
-            throw new BizException(CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getCode(),
-                    CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getMessage());
-        }
-        if (!operatorIsAdmin && !java.util.Objects.equals(task.getOrgId(), orgId)) {
-            throw new BizException(CustomerErrorCode.CLAIM_ORG_FORBIDDEN.getCode(),
-                    CustomerErrorCode.CLAIM_ORG_FORBIDDEN.getMessage());
+        if (!List.of("PENDING", "IN_PROGRESS").contains(task.getTaskStatus())) {
+            throw error(CustomerErrorCode.TOUCH_TASK_NOT_PENDING);
         }
 
-        // 幂等检查：先查是否已存在相同 (touchTaskId, clientUuid) 的日志
-        TouchLog existing = logMapper.selectByTaskIdAndClientUuid(touchTaskId, clientUuid);
+        TouchWorklog existing = worklogMapper.selectByTaskAndClientUuid(taskId, clientUuid);
         if (existing != null) {
-            // 幂等返回：移动端重试场景，直接返回已有记录
-            log.info("[TouchLogService.addLog] idempotent hit, logId={}", existing.getId());
-            return existing;
+            return toVO(existing);
         }
 
-        // 构建新日志记录
+        MarketingCustomerInfo customer = customerMapper.selectActiveById(task.getCustId());
+        if (customer == null) {
+            throw error(CustomerErrorCode.CUSTOMER_NOT_FOUND);
+        }
+
+        Map<String, List<String>> photoGroups = parsePhotoGroups(photoGroupsJson, photoUrlsJson);
+        validatePhotos(photoGroups);
+        List<String> participants = parseStringList(participantEmpIdsJson);
         LocalDateTime now = LocalDateTime.now();
-        TouchLog entity = new TouchLog();
-        entity.setId(UUID.randomUUID().toString().replace("-", ""));
-        entity.setTouchTaskId(touchTaskId);
-        entity.setClientUuid(clientUuid);
-        entity.setLogContent(logContent);
-        entity.setTouchMethod(touchMethod);
-        entity.setParticipantEmpIds(participantEmpIds);
-        entity.setPhotoUrls(photoUrls);
-        entity.setPhotoGroups(photoGroups);
-        entity.setOperatorLocation(operatorLocation);
-        entity.setLogTime(touchTime == null ? now : touchTime);
-        entity.setOwnerOrgId(task.getOrgId());
-        entity.setCreatedBy(operatorEmpId);
-        entity.setCreatedTime(now);
+
+        TouchWorklog worklog = new TouchWorklog();
+        worklog.setWorklogNo("MWL" + now.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS")));
+        worklog.setTaskId(taskId);
+        worklog.setCustId(task.getCustId());
+        worklog.setCustomerNameSnapshot(customer.getCustName());
+        worklog.setUnifiedCreditCodeSnapshot(customer.getUnifiedCreditCode());
+        worklog.setOperatorEmpId(operatorEmpId);
+        worklog.setOperatorOrgId(operatorOrgId);
+        worklog.setTouchTime(touchTime == null ? now : touchTime);
+        worklog.setTouchMethod(normalizeTouchMethod(touchMethod));
+        worklog.setTouchPoints(logContent);
+        worklog.setIsFirstTouch("FIRST_TOUCH".equals(task.getTaskType())
+                && worklogMapper.countValidByTaskId(taskId) == 0 ? 1 : 0);
+        applyLocation(worklog, operatorLocation);
+        worklog.setClientUuid(clientUuid);
+        worklog.setRecordStatus("VALID");
+        worklog.setCreatedTime(now);
+        worklog.setUpdatedTime(now);
 
         try {
-            logMapper.insert(entity);
-        } catch (DuplicateKeyException e) {
-            // 并发场景：两个请求同时通过幂等检查，其中一个会触发唯一键冲突
-            log.warn("[TouchLogService.addLog] concurrent duplicate, touchTaskId={}, clientUuid={}",
-                    touchTaskId, clientUuid);
-            throw new BizException(CustomerErrorCode.TOUCH_LOG_DUPLICATE.getCode(),
-                    CustomerErrorCode.TOUCH_LOG_DUPLICATE.getMessage());
+            worklogMapper.insert(worklog);
+            insertPictures(worklog.getId(), photoGroups, operatorEmpId, now);
+            insertParticipants(worklog.getId(), participants, operatorEmpId, operatorOrgId, now);
+            taskMapper.markInProgressIfPending(taskId, operatorEmpId, now);
+            return toVO(worklog);
+        } catch (DuplicateKeyException duplicate) {
+            TouchWorklog duplicated = worklogMapper.selectByTaskAndClientUuid(taskId, clientUuid);
+            if (duplicated != null) {
+                return toVO(duplicated);
+            }
+            throw duplicate;
         }
-
-        log.info("[TouchLogService.addLog] log created, logId={}", entity.getId());
-
-        // 首次日志触发 PENDING → IN_PROGRESS 状态迁移（依据《功能规格》§7.3bis）
-        // 统计插入后的日志总数：count=1 说明本次是首条日志，驱动状态转移
-        long logCount = logMapper.countByTaskId(touchTaskId);
-        if (logCount == 1L && TouchTaskStatus.PENDING.getCode().equals(task.getTaskStatus())) {
-            touchTaskService.markInProgress(touchTaskId);
-        }
-
-        return entity;
     }
 
-    /**
-     * 按触达任务 ID 查询该任务的所有日志（按 log_time 降序）。
-     *
-     * @param touchTaskId 触达任务ID
-     * @return 该任务的触达日志列表，按 log_time 降序
-     */
-    public List<TouchLog> listByTaskId(String touchTaskId) {
-        log.info("[TouchLogService.listByTaskId] touchTaskId={}", touchTaskId);
-        return logMapper.selectByTaskId(touchTaskId);
+    /** 查询任务全部有效工作日志。 */
+    public List<TouchWorklogVO> listByTaskId(String touchTaskId) {
+        Long taskId = parseId(touchTaskId);
+        return worklogMapper.selectValidByTaskId(taskId).stream().map(this::toVO).toList();
     }
 
-    /** 同机构可查看历史，跨机构隔离；系统管理员可查看。 */
-    public List<TouchLog> listVisibleByTaskId(String touchTaskId, String operatorOrgCode,
-                                              boolean operatorIsAdmin) {
+    /** 同机构或管理员可查看任务日志。 */
+    public List<TouchWorklogVO> listVisibleByTaskId(String touchTaskId, String operatorOrgCode,
+                                                    boolean operatorIsAdmin) {
         TouchTask task = taskMapper.selectById(touchTaskId);
         if (task == null) {
-            throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode(),
-                    CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getMessage());
+            throw error(CustomerErrorCode.TOUCH_TASK_NOT_FOUND);
         }
-        if (!operatorIsAdmin && !java.util.Objects.equals(task.getOrgId(), operatorOrgCode)) {
-            throw new BizException(CustomerErrorCode.HISTORY_ACCESS_FORBIDDEN.getCode(),
-                    CustomerErrorCode.HISTORY_ACCESS_FORBIDDEN.getMessage());
+        if (!operatorIsAdmin && !task.getOrgId().equals(operatorOrgCode)) {
+            throw error(CustomerErrorCode.HISTORY_ACCESS_FORBIDDEN);
         }
-        return logMapper.selectByTaskId(touchTaskId);
+        return listByTaskId(touchTaskId);
     }
 
-    // ============================= 私有校验方法 =============================
+    private void insertPictures(Long worklogId, Map<String, List<String>> groups,
+                                String operator, LocalDateTime now) {
+        Map<String, String> types = Map.of(
+                "keyPerson", "KEY_PERSON", "doorplate", "COMPANY_SIGN", "workplace", "BUSINESS_SITE");
+        groups.forEach((group, files) -> {
+            String type = types.get(group);
+            if (type == null || files == null) return;
+            for (int i = 0; i < files.size(); i++) {
+                TouchWorklogPictureRecord row = new TouchWorklogPictureRecord();
+                row.setWorklogId(worklogId);
+                row.setPictureType(type);
+                row.setFileObjectId(files.get(i));
+                row.setSortNo(i + 1);
+                row.setCreatedBy(operator);
+                row.setCreatedTime(now);
+                row.setRecordStatus("ACTIVE");
+                pictureMapper.insert(row);
+            }
+        });
+    }
 
-    /**
-     * 校验 logContent 与 photoUrls 至少一个非空（CUST-42206）。
-     */
-    private void assertContentOrPhotoPresent(String logContent, String photoUrls) {
-        boolean contentBlank = logContent == null || logContent.isBlank();
-        boolean photosBlank = photoUrls == null || photoUrls.isBlank() || "[]".equals(photoUrls.trim());
-        if (contentBlank && photosBlank) {
-            throw new BizException(CustomerErrorCode.TOUCH_LOG_CONTENT_REQUIRED.getCode(),
-                    CustomerErrorCode.TOUCH_LOG_CONTENT_REQUIRED.getMessage());
+    private void insertParticipants(Long worklogId, List<String> participants, String operator,
+                                    String orgId, LocalDateTime now) {
+        LinkedHashSet<String> employees = new LinkedHashSet<>();
+        employees.add(operator);
+        if (participants != null) employees.addAll(participants);
+        for (String empId : employees) {
+            if (!StringUtils.hasText(empId)) continue;
+            TouchWorklogParticipant row = new TouchWorklogParticipant();
+            row.setWorklogId(worklogId);
+            row.setParticipantEmpId(empId);
+            row.setParticipantOrgId(orgId);
+            row.setParticipantRole(operator.equals(empId) ? "OPERATOR" : "COLLABORATOR");
+            row.setCreatedBy(operator);
+            row.setCreatedTime(now);
+            participantMapper.insert(row);
         }
     }
 
-    /**
-     * 解析 photoUrls JSON 数组字符串为 URL 列表。
-     * 仅支持 JSON 数组形态（["url1","url2"]），其它形态视作单一 URL；空/null 返回空列表。
-     */
-    private List<String> parsePhotoUrls(String photoUrls) {
-        if (photoUrls == null || photoUrls.isBlank() || "[]".equals(photoUrls.trim())) {
+    private TouchWorklogVO toVO(TouchWorklog row) {
+        TouchWorklogVO vo = new TouchWorklogVO();
+        String id = row.getId() == null ? null : String.valueOf(row.getId());
+        vo.setId(id);
+        vo.setWorkLogId(id);
+        vo.setWorklogNo(row.getWorklogNo());
+        vo.setTouchTaskId(row.getTaskId() == null ? null : String.valueOf(row.getTaskId()));
+        vo.setClientUuid(row.getClientUuid());
+        vo.setLogTime(row.getTouchTime());
+        vo.setLogContent(row.getTouchPoints());
+        vo.setTouchMethod(row.getTouchMethod());
+        vo.setOwnerOrgId(row.getOperatorOrgId());
+        vo.setCreatedBy(row.getOperatorEmpId());
+        vo.setCreatedTime(row.getCreatedTime());
+        vo.setCompanyName(row.getCustomerNameSnapshot());
+        vo.setCompanyUSCI(row.getUnifiedCreditCodeSnapshot());
+        vo.setAccountOpenProgress(row.getAccountOpenProgress());
+        vo.setRecordStatus(row.getRecordStatus());
+
+        List<TouchWorklogParticipant> participantRows = participantMapper.selectByWorklogId(row.getId());
+        vo.setParticipantEmpIds(participantRows.stream()
+                .filter(item -> !"OPERATOR".equals(item.getParticipantRole()))
+                .map(TouchWorklogParticipant::getParticipantEmpId).toList());
+        Map<String, List<String>> groups = emptyGroups();
+        for (TouchWorklogPictureRecord picture : pictureMapper.selectActiveByWorklogId(row.getId())) {
+            String group = switch (picture.getPictureType()) {
+                case "KEY_PERSON" -> "keyPerson";
+                case "COMPANY_SIGN" -> "doorplate";
+                case "BUSINESS_SITE" -> "workplace";
+                default -> null;
+            };
+            if (group != null) groups.get(group).add(picture.getFileObjectId());
+        }
+        vo.setPhotoGroups(groups);
+        vo.setPhotoUrls(groups.values().stream().flatMap(List::stream).toList());
+        if (StringUtils.hasText(row.getLocationAddress())) {
+            vo.setOperatorLocation(toJson(Map.of("address", row.getLocationAddress())));
+        }
+        return vo;
+    }
+
+    private Map<String, List<String>> parsePhotoGroups(String groupsJson, String urlsJson) {
+        try {
+            if (StringUtils.hasText(groupsJson)) {
+                Map<String, List<String>> parsed = objectMapper.readValue(groupsJson, PHOTO_GROUP_TYPE);
+                Map<String, List<String>> result = emptyGroups();
+                result.keySet().forEach(key -> result.put(key,
+                        parsed.get(key) == null ? new ArrayList<>() : new ArrayList<>(parsed.get(key))));
+                return result;
+            }
+        } catch (Exception ignored) {
+            // 统一由 validatePhotos 转为业务错误。
+        }
+        Map<String, List<String>> result = emptyGroups();
+        result.get("workplace").addAll(parseStringList(urlsJson));
+        return result;
+    }
+
+    private List<String> parseStringList(String json) {
+        if (!StringUtils.hasText(json)) return List.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() { });
+        } catch (Exception ignored) {
             return List.of();
         }
-        String trimmed = photoUrls.trim();
-        // 只接受 JSON 数组形式，否则视为格式错误（防御性 — 调用方约定 JSON 数组）
-        if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
-            throw new BizException(CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID.getCode(),
-                    CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID.getMessage());
-        }
-        // 简化解析：去掉首尾 [ ] 后按逗号分割，剥离引号与空格。
-        // 不引入 Jackson 依赖（addLog 高频调用，避免 ObjectMapper 开销 + 反射风险）。
-        String inner = trimmed.substring(1, trimmed.length() - 1).trim();
-        if (inner.isEmpty()) {
-            return List.of();
-        }
-        String[] parts = inner.split(",");
-        List<String> urls = new java.util.ArrayList<>(parts.length);
-        for (String p : parts) {
-            String s = p.trim();
-            if (s.startsWith("\"") && s.endsWith("\"") && s.length() >= 2) {
-                s = s.substring(1, s.length() - 1);
-            }
-            if (!s.isEmpty()) {
-                urls.add(s);
-            }
-        }
-        return urls;
     }
 
-    /**
-     * 校验照片数量不超过 9 张（CUST-42207）。
-     */
-    private void assertPhotoCountWithinLimit(List<String> photos) {
-        if (photos.size() > MAX_PHOTO_COUNT) {
-            throw new BizException(CustomerErrorCode.TOUCH_LOG_PHOTO_LIMIT_EXCEEDED.getCode(),
-                    CustomerErrorCode.TOUCH_LOG_PHOTO_LIMIT_EXCEEDED.getMessage());
+    private void validatePhotos(Map<String, List<String>> groups) {
+        int total = groups.values().stream().mapToInt(List::size).sum();
+        if (total == 0) throw error(CustomerErrorCode.TOUCH_LOG_PHOTO_REQUIRED);
+        if (total > 9 || groups.values().stream().anyMatch(files -> files.size() > 3)) {
+            throw error(CustomerErrorCode.TOUCH_LOG_PHOTO_LIMIT_EXCEEDED);
+        }
+        boolean invalid = groups.values().stream().flatMap(List::stream)
+                .anyMatch(file -> !file.toLowerCase().matches(".*\\.(jpg|jpeg|png|heic)(\\?.*)?$"));
+        if (invalid) throw error(CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID);
+    }
+
+    private void applyLocation(TouchWorklog worklog, String locationJson) {
+        if (!StringUtils.hasText(locationJson)) {
+            worklog.setLocationStatus("NOT_PROVIDED");
+            return;
+        }
+        worklog.setLocationStatus("CHECKED");
+        worklog.setLocationTime(LocalDateTime.now());
+        try {
+            JsonNode node = objectMapper.readTree(locationJson);
+            worklog.setLocationAddress(text(node, "address", locationJson));
+            worklog.setLocationCityArea(text(node, "cityArea", null));
+            worklog.setLocationRemark(text(node, "remark", null));
+        } catch (Exception ignored) {
+            worklog.setLocationAddress(locationJson);
         }
     }
 
-    /**
-     * 校验每个照片 URL 后缀属于允许格式 jpg/jpeg/png/heic（CUST-42208）。
-     */
-    private void assertPhotoFormatsAllowed(List<String> photos) {
-        for (String url : photos) {
-            int dot = url.lastIndexOf('.');
-            int qm = url.indexOf('?');
-            int end = qm > 0 ? qm : url.length();
-            if (dot < 0 || dot >= end - 1) {
-                throw new BizException(CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID.getCode(),
-                        CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID.getMessage());
-            }
-            String ext = url.substring(dot + 1, end).toLowerCase();
-            if (!ALLOWED_PHOTO_EXTENSIONS.contains(ext)) {
-                throw new BizException(CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID.getCode(),
-                        CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID.getMessage());
-            }
-        }
+    private String text(JsonNode node, String field, String fallback) {
+        JsonNode value = node.get(field);
+        return value == null || value.isNull() ? fallback : value.asText();
+    }
+
+    private String normalizeTouchMethod(String method) {
+        return "VISIT".equalsIgnoreCase(method) ? "ONSITE" : method.toUpperCase();
+    }
+
+    private Map<String, List<String>> emptyGroups() {
+        Map<String, List<String>> groups = new LinkedHashMap<>();
+        groups.put("keyPerson", new ArrayList<>());
+        groups.put("doorplate", new ArrayList<>());
+        groups.put("workplace", new ArrayList<>());
+        return groups;
+    }
+
+    private String toJson(Object value) {
+        try { return objectMapper.writeValueAsString(value); }
+        catch (Exception e) { return null; }
+    }
+
+    private Long parseId(String id) {
+        try { return Long.valueOf(id); }
+        catch (Exception e) { throw error(CustomerErrorCode.TOUCH_TASK_NOT_FOUND); }
+    }
+
+    private BizException error(CustomerErrorCode code) {
+        return new BizException(code.getCode(), code.getMessage());
     }
 }

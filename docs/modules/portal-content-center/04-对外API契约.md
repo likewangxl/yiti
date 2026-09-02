@@ -1,5 +1,11 @@
 # 门户与内容中心 — 对外 API 契约
 
+> 通讯录契约收口（2026-08-31）：`AddressBookApi` 的方法签名保持兼容，但实现改由
+> auth `UserDirectoryApi` 提供人员目录；`ProductApi` 的负责人字段从
+> `PORTAL_USER_PRODUCT_REL` 派生。`empId` 固定为 `PT_USER.USER_ID`，
+> `position`/`selfDesc` 无权威来源时返回 `null`。portal 不再通过旧员工表、负责人 JSON
+> 或事件监听同步数据。
+
 > 文档版本: v1.0
 > 对应模块: `portal-content-center`
 > 目标读者: 依赖本模块的其他模块开发者
@@ -133,10 +139,10 @@ public interface ProductApi {
 
     /**
      * 查询产品负责人工号列表。
-     * 从通讯录反向关联，返回 responsible_emp_ids 字段。
+     * 按 PORTAL_USER_PRODUCT_REL 反查负责人，返回用户 ID 列表。
      *
      * @param productId 产品ID
-     * @return 负责人工号列表（可能为空）
+     * @return 负责人用户 ID 列表（可能为空；ID = PT_USER.USER_ID）
      */
     List<String> getProductResponsibleEmpIds(String productId);
 }
@@ -250,6 +256,17 @@ public interface AddressBookApi {
     boolean isCustomerManager(String empId);
 }
 ```
+
+### 3.1.1 兼容口径
+
+上述 `AddressBookApi` 方法签名保持不变，调用方无需改名或切换接口。实现层必须将
+`getEmployee`、`getEmployees`、`searchEmployees` 和 `listEmployeesByOrg` 委托给 auth 的
+`UserDirectoryApi`，再按 `PORTAL_USER_PRODUCT_REL` 装配 `responsibleProductIds`。
+`isCustomerManager` 继续按原签名提供校验，但不得通过旧通讯录表判断。所有返回对象中：
+
+- `empId` 是 `PT_USER.USER_ID`，不是登录名或旧表工号副本；
+- `position`、`positionDesc`、`selfDesc` 因无权威来源固定为 `null`；
+- `mobile` 按调用方权限脱敏，机构字段来自 `EXT_USER_ORG + EXT_ORG_INFO`。
 
 ### 3.2 调用示例
 ```java
@@ -410,7 +427,7 @@ public class ProductDTO {
     /** 附件对象ID */
     String fileObjectId;
 
-    /** 产品负责人工号列表 */
+    /** 产品负责人用户 ID 列表，按 PORTAL_USER_PRODUCT_REL 派生 */
     List<String> responsibleEmpIds;
 
     /** 状态 ACTIVE/DISABLED */
@@ -457,7 +474,7 @@ import java.util.List;
 @Value
 @Builder
 public class EmployeeDTO {
-    /** 员工工号 */
+    /** 员工用户 ID（= PT_USER.USER_ID） */
     String empId;
 
     /** 员工姓名 */
@@ -475,16 +492,16 @@ public class EmployeeDTO {
     /** 机构名称 */
     String orgName;
 
-    /** 岗位代码 */
+    /** 岗位代码；当前无权威来源，固定为 null */
     String position;
 
-    /** 岗位显示名 */
+    /** 岗位显示名；当前无权威来源，固定为 null */
     String positionDesc;
 
-    /** 自我描述 */
+    /** 自我描述；当前无权威来源，固定为 null */
     String selfDesc;
 
-    /** 负责产品ID列表 */
+    /** 负责产品 ID 列表，按 PORTAL_USER_PRODUCT_REL 派生 */
     List<String> responsibleProductIds;
 
     /** 状态 ACTIVE/RESIGNED */
@@ -497,16 +514,16 @@ public class EmployeeDTO {
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| empId | String | 工号 |
+| empId | String | 用户 ID，固定等于 `PT_USER.USER_ID` |
 | empName | String | 姓名 |
 | mobile | String | 手机号（已脱敏） |
 | email | String | 邮箱 |
 | orgCode | String | 机构编码 |
 | orgName | String | 机构名称 |
-| position | String | 岗位代码 |
-| positionDesc | String | 岗位显示名 |
-| selfDesc | String | 自我描述 |
-| responsibleProductIds | List&lt;String&gt; | 负责产品 ID 列表 |
+| position | String | 无权威来源，固定为 `null` |
+| positionDesc | String | 无权威来源，固定为 `null` |
+| selfDesc | String | 无权威来源，固定为 `null` |
+| responsibleProductIds | List&lt;String&gt; | 从 `PORTAL_USER_PRODUCT_REL` 按 `USER_ID` 派生 |
 | status | String | 状态 |
 | updatedTime | LocalDateTime | 更新时间 |
 
@@ -741,119 +758,15 @@ public class DocumentDTO {
 ### 7.3 调用方自缓存建议
 - 高频查询（如产品详情、员工详情）建议调用方使用本地 Guava Cache 或 Caffeine 缓存
 - 缓存 TTL 建议 1-5 分钟，避免数据滞后
-- 对于配置类数据（产品列表、员工列表），缓存失效可以靠事件驱动（订阅本模块发布的事件）
+- 对于配置类数据（产品列表、员工列表），调用方按 TTL 或显式刷新策略处理缓存；本模块不发布旧通讯录/负责人同步事件
 
 ---
 
-## 8. 领域事件
+## 8. 事件边界
 
-### 8.1 portal.product.responsible-updated.v1
-
-#### 8.1.1 事件定义
-```java
-package com.bank.branch.platform.portal.event;
-
-import lombok.Value;
-
-import java.time.LocalDateTime;
-import java.util.List;
-
-/**
- * 产品负责人变更事件。
- * 发布时机：
- * 1. 通讯录员工修改"负责产品"字段后
- * 2. 员工离职被清理负责产品时
- * 3. 产品被逻辑删除时
- */
-@Value
-public class ProductResponsibleUpdatedEvent {
-    /** 产品ID */
-    String productId;
-
-    /** 产品代码 */
-    String productCode;
-
-    /** 变更前负责人列表 */
-    List<String> beforeEmpIds;
-
-    /** 变更后负责人列表 */
-    List<String> afterEmpIds;
-
-    /** 变更人工号 */
-    String operatorEmpId;
-
-    /** 变更时间 */
-    LocalDateTime occurredAt;
-}
-```
-
-#### 8.1.2 事件字段
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| productId | String | 产品 ID |
-| productCode | String | 产品代码 |
-| beforeEmpIds | List&lt;String&gt; | 变更前负责人工号列表 |
-| afterEmpIds | List&lt;String&gt; | 变更后负责人工号列表 |
-| operatorEmpId | String | 操作人工号 |
-| occurredAt | LocalDateTime | 事件发生时间 |
-
-#### 8.1.3 发布时机
-1. **通讯录员工修改"负责产品"字段后**：事件由 `AddressBookService.updateEmployee()` 在事务提交前发布
-2. **员工离职事件触发的清理**：`UserResignedEventListener` 清理关联负责产品时发布
-3. **产品逻辑删除时**：`ProductService.deleteProduct()` 清理所有员工对该产品的引用后发布
-
-#### 8.1.4 消费方
-- **product_info 表自身**：触发缓存失效 `portal:product:support-available:*`
-- **后续扩展**：`customer-marketing-center` 可订阅该事件以刷新其本地产品缓存
-
----
-
-### 8.2 portal.addrbook.updated.v1
-
-#### 8.2.1 事件定义
-```java
-package com.bank.branch.platform.portal.event;
-
-import lombok.Value;
-
-import java.time.LocalDateTime;
-import java.util.List;
-
-/**
- * 员工通讯录更新事件。
- * 发布时机：员工信息更新后
- */
-@Value
-public class AddrbookUpdatedEvent {
-    /** 员工工号 */
-    String empId;
-
-    /** 变更字段列表 */
-    List<String> changedFields;
-
-    /** 操作人工号 */
-    String operatorEmpId;
-
-    /** 变更时间 */
-    LocalDateTime occurredAt;
-}
-```
-
-#### 8.2.2 事件字段
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| empId | String | 员工工号 |
-| changedFields | List&lt;String&gt; | 变更字段名列表（例如 ["mobile", "position"]） |
-| operatorEmpId | String | 操作人工号 |
-| occurredAt | LocalDateTime | 事件发生时间 |
-
-#### 8.2.3 发布时机
-员工通讯录信息更新后，由 `AddressBookService.updateEmployee()` 在事务提交后发布。
-
-#### 8.2.4 消费方
-- 本模块内部的审计日志服务（记录详细变更）
-- 本模块内部的缓存失效处理
-- 后续扩展可供其他模块订阅
+通讯录和产品负责人关系不发布旧的人员更新/负责人同步事件，也不订阅 auth 用户镜像
+事件。auth 目录 API 是人员查询和联系方式写入边界，`PORTAL_USER_PRODUCT_REL` 是负责人
+关系的唯一写模型；审计和缓存失效在本地事务提交后按模块策略处理。
 
 ---
 
@@ -862,7 +775,7 @@ public class AddrbookUpdatedEvent {
 ### 9.1 向后兼容原则
 - **DTO 只能新增字段**，不能删除或修改已有字段类型
 - **接口方法只能新增**，不能删除或修改已有方法签名
-- 若必须引入破坏性变更，通过新增方法或事件版本号实现（例如 `portal.product.responsible-updated.v2`）
+- 若必须引入破坏性变更，通过新增方法或明确版本化的 API 实现；不得重新引入已删除的通讯录镜像或负责人同步事件
 
 ### 9.2 废弃标记
 - 计划废弃的方法先标记 `@Deprecated` 并注释替代方法

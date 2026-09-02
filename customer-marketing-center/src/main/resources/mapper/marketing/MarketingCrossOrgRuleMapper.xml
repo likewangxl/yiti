@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.marketing.MarketingCrossOrgRuleMapper">
+    <select id="selectEnabledRules"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCrossOrgRule">
+        SELECT id, rule_code, rule_name, enabled, data_source, failure_message,
+               extension_params, sort_no, created_by, created_time, updated_by,
+               updated_time, lock_version
+        FROM MARKETING_CROSS_ORG_RULE
+        WHERE enabled = 1
+        ORDER BY sort_no ASC, rule_code ASC
+    </select>
+</mapper>

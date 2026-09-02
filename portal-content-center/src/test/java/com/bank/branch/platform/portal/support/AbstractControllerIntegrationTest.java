@@ -8,9 +8,8 @@ import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.NotifyApi;
-import com.bank.branch.platform.portal.service.AddrbookQueryService;
 import com.bank.branch.platform.portal.service.AddressBookService;
-import com.bank.branch.platform.portal.service.AddrbookImportService;
+import com.bank.branch.platform.portal.service.AddrbookQueryService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.bank.branch.platform.portal.service.AnnouncementService;
 import com.bank.branch.platform.portal.service.DocService;
@@ -19,10 +18,9 @@ import com.bank.branch.platform.portal.service.GuaranteeService;
 import com.bank.branch.platform.portal.service.NavService;
 import com.bank.branch.platform.portal.service.ProductExportService;
 import com.bank.branch.platform.portal.service.ProductService;
+import com.bank.branch.platform.portal.service.UserProductRelationService;
 import com.bank.branch.platform.portal.service.ShortcutService;
 import com.bank.branch.platform.portal.service.WorkspaceService;
-import com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper;
-import com.bank.branch.platform.portal.mapper.ProductInfoMapper;
 import org.junit.jupiter.api.Tag;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -92,7 +90,6 @@ public abstract class AbstractControllerIntegrationTest {
     @MockBean protected NotifyApi notifyApi;
     @MockBean protected AuditApi auditApi;
     @MockBean protected AddressBookService addressBookService;
-    @MockBean protected AddrbookImportService addrbookImportService;
     // common-web 的 LockAutoConfig.lockManager 需要 JdbcTemplate；切片上下文无 DataSource，故 mock
     @MockBean protected JdbcTemplate jdbcTemplate;
     @MockBean protected AnnouncementService announcementService;
@@ -101,6 +98,7 @@ public abstract class AbstractControllerIntegrationTest {
     @MockBean protected ProductService productService;
     @MockBean protected ProductExportService productExportService;
     @MockBean protected AddrbookQueryService addrbookQueryService;
+    @MockBean protected UserProductRelationService userProductRelationService;
     @MockBean protected ShortcutService shortcutService;
     @MockBean protected WorkspaceService workspaceService;
     @MockBean protected GuaranteeService guaranteeService;

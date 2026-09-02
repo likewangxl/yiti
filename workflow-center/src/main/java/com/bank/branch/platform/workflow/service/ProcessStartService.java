@@ -19,7 +19,9 @@ import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -61,6 +63,7 @@ public class ProcessStartService {
      * @param cmd 流程启动命令
      * @return 流程启动响应
      */
+    @Transactional
     public WorkflowLaunchResp startProcess(StartProcessCmd cmd) {
         // 1. 校验流程定义是否存在
         ProcessDefinition processDef = repositoryService.createProcessDefinitionQuery()
@@ -74,12 +77,20 @@ public class ProcessStartService {
                     WfErrorCode.PROCESS_DEF_NOT_FOUND.getMessage());
         }
 
-        // 2. 校验业务键是否已有运行中的流程
-        if (bizProcessMapMapper.existsRunningByBusinessKey(cmd.getBusinessKey())) {
+        // 2. 锁住业务键已有的映射。终态映射要复用，不能再次 INSERT 触发唯一键冲突。
+        BizProcessMap existingMap = bizProcessMapMapper.selectForUpdateByBusinessKey(cmd.getBusinessKey());
+        if (existingMap != null && ProcessStatus.RUNNING.getCode().equals(existingMap.getProcessStatus())) {
             log.warn("业务键已有运行中流程: businessKey={}", cmd.getBusinessKey());
             throw new BizException(
                     WfErrorCode.BUSINESS_KEY_ALREADY_RUNNING.getCode(),
                     WfErrorCode.BUSINESS_KEY_ALREADY_RUNNING.getMessage());
+        }
+        if (existingMap != null && !isTerminal(existingMap.getProcessStatus())) {
+            log.warn("业务键映射状态不允许重新启动: businessKey={}, processStatus={}",
+                    cmd.getBusinessKey(), existingMap.getProcessStatus());
+            throw new BizException(
+                    WfErrorCode.ENGINE_ERROR.getCode(),
+                    "业务键已有不可复用的流程映射");
         }
 
         // 3. 启动流程实例（注入 startOrgId 到流程变量，供候选人机构过滤）
@@ -102,9 +113,11 @@ public class ProcessStartService {
                 vars);
         log.info("流程启动成功: processInstanceId={}, businessKey={}", pi.getId(), cmd.getBusinessKey());
 
-        // 4. 写入 biz_process_map 映射记录
-        BizProcessMap map = new BizProcessMap();
-        map.setId(UUID.randomUUID().toString().replace("-", ""));
+        // 4. 写入或复用 biz_process_map 映射记录。
+        LocalDateTime startedAt = LocalDateTime.now();
+        BizProcessMap map = existingMap == null ? new BizProcessMap() : existingMap;
+        map.setId(existingMap == null
+                ? UUID.randomUUID().toString().replace("-", "") : existingMap.getId());
         map.setBizType(cmd.getBizType());
         map.setBizId(cmd.getBizId());
         map.setBusinessKey(cmd.getBusinessKey());
@@ -112,9 +125,27 @@ public class ProcessStartService {
         map.setProcessInstanceId(pi.getId());
         map.setProcessStatus(ProcessStatus.RUNNING.getCode());
         map.setStartUser(cmd.getStartUser());
+        map.setCurrentAssignee(null);
+        map.setCandidateGroups(null);
         map.setTitle(cmd.getTitle());
-        map.setStartTime(LocalDateTime.now());
-        bizProcessMapMapper.insert(map);
+        map.setStartTime(startedAt);
+        map.setEndTime(null);
+        map.setUpdatedTime(startedAt);
+        if (existingMap == null) {
+            try {
+                bizProcessMapMapper.insert(map);
+            } catch (DuplicateKeyException e) {
+                // 没有历史行时 SELECT ... FOR UPDATE 无法锁住间隙，唯一索引负责兜底并发插入。
+                log.warn("业务键并发创建冲突: businessKey={}", cmd.getBusinessKey());
+                throw new BizException(
+                        WfErrorCode.BUSINESS_KEY_ALREADY_RUNNING.getCode(),
+                        WfErrorCode.BUSINESS_KEY_ALREADY_RUNNING.getMessage());
+            }
+        } else if (bizProcessMapMapper.updateForRestart(map) != 1) {
+            throw new BizException(
+                    WfErrorCode.ENGINE_ERROR.getCode(),
+                    "业务流程映射已发生变化，请刷新后重试");
+        }
 
         // 4.1 记录参与机构快照（D5：流程发起时记发起人机构，source=START）
         wfProcessOrgService.record(pi.getId(), cmd.getStartUser(), "START");
@@ -129,6 +160,11 @@ public class ProcessStartService {
         eventPublisher.publishEvent(new ProcessStartedEvent(pi.getId(), cmd.getBusinessKey(), cmd.getBizType()));
 
         return new WorkflowLaunchResp(pi.getId(), cmd.getBusinessKey(), firstTaskId);
+    }
+
+    private boolean isTerminal(String processStatus) {
+        return ProcessStatus.COMPLETED.getCode().equals(processStatus)
+                || ProcessStatus.CANCELLED.getCode().equals(processStatus);
     }
 
     /**

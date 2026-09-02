@@ -5,6 +5,7 @@ import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.customer.api.converter.CustomerDTOConverter;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
+import com.bank.branch.platform.customer.dto.marketing.lead.LeadDetailResponse;
 import com.bank.branch.platform.customer.entity.CustMaster;
 import com.bank.branch.platform.customer.mapper.CustClaimMapper;
 import com.bank.branch.platform.governance.api.DictApi;
@@ -34,6 +35,8 @@ public class CustomerPoolService {
     private final CustClaimMapper claimMapper;
     private final DictApi dictApi;
     private final OrgApi orgApi;
+    /** 目标 MARKETING_* 查询服务；保留旧查询作为脏数据/兼容环境回退。 */
+    private final MarketingCustomerPoolService marketingPoolService;
 
     /**
      * 分页查询当前员工可认领的全行公开客户。
@@ -67,6 +70,9 @@ public class CustomerPoolService {
      */
     public PageResult<CustomerDTO> listPoolAsDTO(String keyword, String empId, int pageNo, int pageSize) {
         log.info("[CustomerPoolService.listPoolAsDTO] keyword={}, pageNo={}, pageSize={}", keyword, pageNo, pageSize);
+        if (marketingPoolService != null) {
+            return marketingPoolService.listAvailable(keyword, empId, pageNo, pageSize);
+        }
         PageResult<CustMaster> raw = listPool(keyword, empId, pageNo, pageSize);
         PageResult<CustomerDTO> out = new PageResult<>();
         out.setPageNo(raw.getPageNo());
@@ -76,6 +82,11 @@ public class CustomerPoolService {
         fillDisplayNames(records);
         out.setRecords(records);
         return out;
+    }
+
+    /** 查询待认领客户池中某条来源线索的完整详情。 */
+    public LeadDetailResponse getAvailableLeadDetail(Long leadId, String empId) {
+        return marketingPoolService.getAvailableLeadDetail(leadId, empId);
     }
 
     /**

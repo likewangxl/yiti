@@ -47,10 +47,18 @@ describe('行级更多菜单可见性与原始交互门禁', () => {
     expect(workspace).toMatch(/<el-dropdown\s+v-if="row\.status === 'PENDING_ACCEPT'"[^>]*>[\s\S]*?aria-label="更多转出记录操作"/);
   });
 
-  it('撤回仍是确认后再收集原因的两阶段链路，确认前不直连 onWithdraw', () => {
+  it('撤回使用单个 prompt 同时确认并收集原因，菜单事件仍经 confirmWithdraw', () => {
     const source = sourceOf('perf/Adjust.vue');
     expect(source).toMatch(/<el-dropdown-item\b(?=[^>]*class="danger-item")(?=[^>]*@click="confirmWithdraw\(row\)")[^>]*>撤回<\/el-dropdown-item>/);
-    expect(source).toMatch(/async function confirmWithdraw\(row\)[\s\S]*?ElMessageBox\.confirm\(`确认撤回申请 \$\{row\.applyNo \|\| row\.id\}？`[\s\S]*?await onWithdraw\(row\);/);
+    const confirmBlock = source.match(/async function confirmWithdraw\(row\)\s*\{[\s\S]*?\n\}/)?.[0] || '';
+    expect(confirmBlock).not.toContain('ElMessageBox.confirm');
+    expect(confirmBlock).toContain('await onWithdraw(row);');
+    const withdrawBlock = source.match(/async function onWithdraw\(row\)[\s\S]*?\n\}\n\nasync function confirmWithdraw/)?.[0] || '';
+    expect(withdrawBlock).toContain('ElMessageBox.prompt');
+    expect(withdrawBlock).toContain('确认撤回申请 ${row.applyNo || row.id}？\\n请填写撤回原因');
+    expect(withdrawBlock).toMatch(/inputPattern:\s*\/\\S\+\//);
+    expect(withdrawBlock).toContain("inputErrorMessage: '撤回原因必填'");
+    expect(withdrawBlock).toMatch(/await withdrawAdjust\(row\.id \|\| row\.applyNo, reason\)/);
     expect(source).not.toMatch(/<el-dropdown-item\b[^>]*@click="onWithdraw\(row\)"/);
   });
 

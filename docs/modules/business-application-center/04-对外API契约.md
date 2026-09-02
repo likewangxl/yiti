@@ -4,6 +4,10 @@
 > Api 子模块名称：`business-application-center-api`
 > 基础包：`com.bank.branch.platform.bizapp.api`
 > 文档版本：V1.0
+>
+> **2026-08-28 运行切换**：`LoanApi`、`LoanQueryApi` 及其实现已从本模块删除。资产立项跨模块只读能力
+> 由 `customer-marketing-center` 的 `AssetProjectQueryApi` 提供。本文 Loan 章节仅保留为迁移前历史记录，
+> 不得继续作为编译或调用依据；本模块对外仅保留 Support 与综合统计契约。
 
 ---
 
@@ -21,7 +25,7 @@
 
 ---
 
-## 1. LoanApi（资产投放查询 API）
+## 1. 历史归档：LoanApi / LoanQueryApi（已删除，不可调用）
 
 ### 接口定义
 

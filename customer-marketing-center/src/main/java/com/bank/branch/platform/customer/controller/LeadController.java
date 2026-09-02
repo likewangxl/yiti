@@ -200,7 +200,7 @@ public class LeadController {
                 req.getContactPerson(), req.getContactMobile(),
                 req.getIndustry(), req.getGroupType(), req.getCustomerType(),
                 req.getIsKeystone(), req.getEnterpriseType(), req.getGroupName(),
-                req.getIsAccountOpened(), req.getCustomerDesc(),
+                req.getIsAccountOpened(), req.getTouchRestricted(), req.getCustomerDesc(),
                 req.getCreditAmount(), req.getCreditExposureAmount(),
                 req.getLeadSource(), req.getTagIds(), null, req.getRemark(),
                 empId, orgCode

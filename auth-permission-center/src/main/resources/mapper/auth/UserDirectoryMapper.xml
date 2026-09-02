@@ -17,10 +17,13 @@
     <sql id="DIRECTORY_COLUMNS">
         u.USER_ID      AS empId,
         u.USERCHNNAME  AS empName,
+        u.MOBILE       AS mobile,
+        u.EMAIL        AS email,
         o.ORG_CODE     AS orgCode,
         o.ORG_NAME     AS orgName,
         NULL           AS position,
-        'ACTIVE'       AS status
+        CASE WHEN u.ISENABLED = 0 THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
+        u.UPDATE_TIME  AS updatedTime
     </sql>
 
     <!-- 主机构关联：每个用户只取一条机构，保证结果 1 用户 1 行 -->
@@ -44,11 +47,73 @@
         <include refid="MAIN_ORG_JOIN"/>
         WHERE u.ISENABLED = 0
         <if test="keyword != null and keyword != ''">
-            AND (u.USERCHNNAME LIKE CONCAT('%', #{keyword}, '%')
-                 OR u.USERNAME LIKE CONCAT('%', #{keyword}, '%'))
+            AND (u.USER_ID LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERNAME LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERCHNNAME LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.MOBILE LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.EMAIL LIKE CONCAT('%', #{keyword}, '%'))
         </if>
         ORDER BY u.USERCHNNAME ASC
         LIMIT #{limit}
+    </select>
+
+    <!-- 分页查询在职用户，可按关键字和机构过滤 -->
+    <select id="selectActiveUsersByPage" resultType="com.bank.branch.platform.auth.api.dto.UserDirectoryDTO">
+        SELECT
+        <include refid="DIRECTORY_COLUMNS"/>
+        FROM PT_USER u
+        <include refid="MAIN_ORG_JOIN"/>
+        WHERE u.ISENABLED = 0
+        <if test="keyword != null and keyword != ''">
+            AND (u.USER_ID LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERNAME LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERCHNNAME LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.MOBILE LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.EMAIL LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="orgCode != null and orgCode != ''">
+            AND EXISTS (
+                SELECT 1 FROM EXT_USER_ORG filter_uo
+                WHERE filter_uo.USER_ID = u.USER_ID
+                  AND filter_uo.ORG_CODE = #{orgCode}
+            )
+        </if>
+        ORDER BY u.USERCHNNAME ASC, u.USER_ID ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 分页总数；EXISTS 避免一人多机构时重复计数 -->
+    <select id="countActiveUsers" resultType="long">
+        SELECT COUNT(*)
+        FROM PT_USER u
+        WHERE u.ISENABLED = 0
+        <if test="keyword != null and keyword != ''">
+            AND (u.USER_ID LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERNAME LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERCHNNAME LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.MOBILE LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.EMAIL LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="orgCode != null and orgCode != ''">
+            AND EXISTS (
+                SELECT 1 FROM EXT_USER_ORG filter_uo
+                WHERE filter_uo.USER_ID = u.USER_ID
+                  AND filter_uo.ORG_CODE = #{orgCode}
+            )
+        </if>
+    </select>
+
+    <!-- 按 USER_ID 批量查询；调用方在 Service 层按入参顺序重排 -->
+    <select id="selectByEmpIds" resultType="com.bank.branch.platform.auth.api.dto.UserDirectoryDTO">
+        SELECT
+        <include refid="DIRECTORY_COLUMNS"/>
+        FROM PT_USER u
+        <include refid="MAIN_ORG_JOIN"/>
+        WHERE u.USER_ID IN
+        <foreach item="empId" collection="empIds" open="(" separator="," close=")">
+            #{empId}
+        </foreach>
+        ORDER BY u.USER_ID ASC
     </select>
 
     <!-- 按 empId(=USER_ID) 查单个员工详情（对应原 /api/employees/{empId}，不做在职过滤） -->

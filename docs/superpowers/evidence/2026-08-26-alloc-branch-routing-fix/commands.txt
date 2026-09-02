@@ -1,0 +1,22 @@
+NO_PROXY=127.0.0.1,localhost HTTPS_PROXY= HTTP_PROXY= ALL_PROXY= \
+  ./node_modules/.bin/playwright-cli -s=alloc-branch-routing-fix open \
+  http://127.0.0.1:8090/#/login --browser firefox
+
+# 使用宝鸡分行负责人的既有有效 SESSION；Cookie 值因安全原因未归档。
+./node_modules/.bin/playwright-cli -s=alloc-branch-routing-fix cookie-set \
+  SESSION '<redacted>' --domain 127.0.0.1 --path / --httpOnly --sameSite Lax
+
+./node_modules/.bin/playwright-cli -s=alloc-branch-routing-fix goto \
+  http://127.0.0.1:8090/#/perf/adjust
+./node_modules/.bin/playwright-cli -s=alloc-branch-routing-fix resize 1440 900
+./node_modules/.bin/playwright-cli -s=alloc-branch-routing-fix click e175
+./node_modules/.bin/playwright-cli -s=alloc-branch-routing-fix click e443
+./node_modules/.bin/playwright-cli -s=alloc-branch-routing-fix find '下一步走向'
+./node_modules/.bin/playwright-cli -s=alloc-branch-routing-fix screenshot \
+  --filename ../docs/superpowers/evidence/2026-08-26-alloc-branch-routing-fix/branch-approval-without-wrong-routing.png \
+  --full-page
+./node_modules/.bin/playwright-cli -s=alloc-branch-routing-fix console
+./node_modules/.bin/playwright-cli -s=alloc-branch-routing-fix route-list
+./node_modules/.bin/playwright-cli -s=alloc-branch-routing-fix requests
+./node_modules/.bin/playwright-cli -s=alloc-branch-routing-fix response-body 21
+./node_modules/.bin/playwright-cli -s=alloc-branch-routing-fix close

@@ -67,9 +67,11 @@ public interface CustAllocRelationMapper extends BaseMapper<CustAllocRelation> {
                                 @Param("endDate") java.time.LocalDate endDate);
 
     /**
-     * 原业绩分配反显：取该客户当前生效分配（{@code is_original='2'}）。
+     * 原业绩分配反显：取该客户当前生效分配（{@code is_original='2'}）的最新来源批次全部关系。
      *
-     * <p>{@code allocDim='ACCOUNT'} 只取 ACCOUNT 维度；RULE/空 取 RULE+ACCOUNT 两维（RULE 在前）。
+     * <p>来源批次按非空 {@code source_batch_id} 分组；无批次历史行按自身 {@code id} 独立成批次。
+     * 批次排序优先 {@code source_process_date}、其次 {@code created_time}，最后以稳定主键消歧。
+     * {@code allocDim='ACCOUNT'} 只在 ACCOUNT 候选中取最新批次；RULE/空在 RULE+ACCOUNT 候选中取整体最新批次。
      * 姓名/部门直接读快照列 fullname/dept_no/dept_name。
      *
      * @param custId   客户编号

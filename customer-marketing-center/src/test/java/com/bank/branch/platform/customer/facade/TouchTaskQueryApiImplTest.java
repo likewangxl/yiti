@@ -44,7 +44,7 @@ class TouchTaskQueryApiImplTest {
 
         // then
         assertThat(result).isPresent();
-        assertThat(result.get().getId()).isEqualTo("task-001");
+        assertThat(result.get().getId()).isEqualTo(String.valueOf(task.getId()));
         assertThat(result.get().getTaskStatus()).isEqualTo(TouchTaskStatus.PENDING.getCode());
         verify(touchTaskMapper).selectById("task-001");
     }
@@ -68,28 +68,35 @@ class TouchTaskQueryApiImplTest {
     void getTouchTaskByBusinessKey_returnsOptional() {
         // given
         TouchTask task = buildTask("task-001", "cust-001", TouchTaskStatus.PENDING.getCode());
-        task.setBusinessKey("TOUCH:task-001");
-        when(touchTaskMapper.selectByBusinessKey("TOUCH:task-001")).thenReturn(task);
+        when(touchTaskMapper.selectById("task-001")).thenReturn(task);
 
         // when
         Optional<TouchTaskDTO> result = touchTaskQueryApiImpl.getTouchTaskByBusinessKey("TOUCH:task-001");
 
         // then
         assertThat(result).isPresent();
-        assertThat(result.get().getBusinessKey()).isEqualTo("TOUCH:task-001");
-        verify(touchTaskMapper).selectByBusinessKey("TOUCH:task-001");
+        assertThat(result.get().getBusinessKey()).isEqualTo("TOUCH:" + task.getId());
+        verify(touchTaskMapper).selectById("task-001");
     }
 
     @Test
     void getTouchTaskByBusinessKey_emptyForNull() {
         // given
-        when(touchTaskMapper.selectByBusinessKey("TOUCH:not-exist")).thenReturn(null);
+        when(touchTaskMapper.selectById("not-exist")).thenReturn(null);
 
         // when
         Optional<TouchTaskDTO> result = touchTaskQueryApiImpl.getTouchTaskByBusinessKey("TOUCH:not-exist");
 
         // then
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getTouchTaskByBusinessKey_rejectsWrongPrefixWithoutQuery() {
+        Optional<TouchTaskDTO> result = touchTaskQueryApiImpl.getTouchTaskByBusinessKey("LEAD:task-001");
+
+        assertThat(result).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(touchTaskMapper);
     }
 
     // ===================== getEmpTouchTasks =====================
@@ -254,9 +261,9 @@ class TouchTaskQueryApiImplTest {
 
     private TouchTask buildTask(String id, String custId, String status) {
         TouchTask task = new TouchTask();
-        task.setId(id);
+        task.setId(Math.abs((long) id.hashCode()) + 1L);
         task.setTaskNo("TOUCH_" + id);
-        task.setCustId(custId);
+        task.setCustId(Math.abs((long) custId.hashCode()) + 1L);
         task.setTaskStatus(status);
         task.setSlaStatus("GREEN");
         return task;

@@ -22,6 +22,7 @@ public enum BizType {
     TOUCH_TASK("TOUCH_TASK", "触达任务"),
     TOUCH_REPORT("TOUCH_REPORT", "触达报告"),
     CROSS_ORG_MARKETING("CROSS_ORG_MARKETING", "跨机构客户营销"),
+    ASSET_PROJECT("ASSET_PROJECT", "资产立项"),
     LOAN("LOAN", "贷款业务"),
     SUPPORT("SUPPORT", "支撑类业务"),
     SUPPORT_DEPT("SUPPORT_DEPT", "支撑部门管理"),

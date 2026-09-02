@@ -10,17 +10,27 @@ import com.bank.branch.platform.customer.mapper.CustLeadMapper;
 import com.bank.branch.platform.customer.mapper.LeadImportBatchMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -78,26 +88,46 @@ public class LeadImportService {
                     CustomerErrorCode.IMPORT_FILE_TOO_LARGE.getMessage());
         }
 
-        // 解析文件行数（简化：按换行符计算，减去表头行）
-        int totalRows = 0;
-        int errorRows = 0;
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            boolean firstLine = true;
-            while ((line = reader.readLine()) != null) {
-                if (firstLine) {
-                    // 跳过表头
-                    firstLine = false;
-                    continue;
+        // 解析表头和数据行；CSV/XLS/XLSX 均要求 touchRestricted 列。
+        ParsedImport parsed = new ParsedImport(Collections.emptyList(), -1, null);
+        try {
+            if (isCsv(file.getOriginalFilename())) {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+                    parsed = parseCsv(reader);
                 }
-                if (!line.trim().isEmpty()) {
-                    totalRows++;
-                }
+            } else {
+                parsed = parseWorkbook(file.getInputStream());
             }
         } catch (Exception e) {
             log.warn("[LeadImportService.preview] 文件解析异常: {}", e.getMessage());
-            // 解析失败时设置行数为 0，交由前端决策
+            parsed = new ParsedImport(Collections.emptyList(), -1, "文件解析失败，请检查文件内容");
+        }
+
+        int totalRows = parsed.rows().size();
+        int errorRows = 0;
+        String errorSummary = parsed.errorSummary();
+        List<LeadImportPreviewResp.LeadImportErrorVO> errorSamples = new ArrayList<>();
+        if (parsed.touchRestrictedColumnIndex() < 0) {
+            if (errorSummary == null) {
+                errorSummary = "是否触达限制列缺失";
+            }
+            for (int i = 0; i < totalRows; i++) {
+                errorRows++;
+                addErrorSample(errorSamples, i + 1, "是否触达限制", "是否触达限制列不能为空");
+            }
+        } else {
+            for (int i = 0; i < totalRows; i++) {
+                List<String> row = parsed.rows().get(i);
+                String value = parsed.touchRestrictedColumnIndex() < row.size()
+                        ? row.get(parsed.touchRestrictedColumnIndex()) : "";
+                String normalized = value == null ? "" : value.trim();
+                if (!"是".equals(normalized) && !"否".equals(normalized)) {
+                    errorRows++;
+                    errorSummary = "是否触达限制列存在非法值";
+                    addErrorSample(errorSamples, i + 1, "是否触达限制", "是否触达限制只能填写是或否");
+                }
+            }
         }
 
         // 行数超限校验（CUST-42205）
@@ -115,9 +145,11 @@ public class LeadImportService {
         batch.setId(batchId);
         batch.setBatchNo(batchNo);
         batch.setSourceFileName(file.getOriginalFilename());
-        batch.setStatus(BatchStatus.CREATED.getCode());
+        batch.setStatus(errorRows > 0 || errorSummary != null
+                ? BatchStatus.VALIDATION_FAILED.getCode() : BatchStatus.CREATED.getCode());
         batch.setTotalRowCount(totalRows);
         batch.setErrorRowCount(errorRows);
+        batch.setErrorSummary(errorSummary);
         batch.setOwnerOrgId(orgCode);
         batch.setCreatedBy(operatorEmpId);
         batch.setCreatedTime(now);
@@ -131,10 +163,10 @@ public class LeadImportService {
         resp.setBatchNo(batchNo);
         resp.setTotalRows(totalRows);
         resp.setErrorRows(errorRows);
-        // TODO: 行级校验逻辑将在后续补齐；当前简化实现下默认全部成功，无错误样本
-        resp.setSuccessCount(totalRows);
-        resp.setFailCount(0);
-        resp.setErrorSamples(Collections.emptyList());
+        resp.setErrorSummary(errorSummary);
+        resp.setSuccessCount(totalRows - errorRows);
+        resp.setFailCount(errorRows);
+        resp.setErrorSamples(errorSamples);
 
         log.info("[LeadImportService.preview] batchId={}, totalRows={}, successCount={}, failCount={}",
                 batchId, totalRows, resp.getSuccessCount(), resp.getFailCount());
@@ -159,6 +191,12 @@ public class LeadImportService {
         if (batch == null) {
             throw new BizException(CustomerErrorCode.BATCH_NOT_FOUND.getCode(),
                     CustomerErrorCode.BATCH_NOT_FOUND.getMessage());
+        }
+
+        if (BatchStatus.VALIDATION_FAILED.getCode().equals(batch.getStatus())
+                || (batch.getErrorRowCount() != null && batch.getErrorRowCount() > 0)) {
+            throw new BizException(CustomerErrorCode.LEAD_IMPORT_VALIDATION_FAILED.getCode(),
+                    CustomerErrorCode.LEAD_IMPORT_VALIDATION_FAILED.getMessage());
         }
 
         // 更新批次状态为待审批
@@ -212,6 +250,129 @@ public class LeadImportService {
     }
 
     // ============================= 私有辅助方法 =============================
+
+    private boolean isCsv(String filename) {
+        return filename != null && filename.toLowerCase(Locale.ROOT).endsWith(".csv");
+    }
+
+    private ParsedImport parseCsv(BufferedReader reader) throws Exception {
+        String headerLine = reader.readLine();
+        if (headerLine == null) {
+            return new ParsedImport(Collections.emptyList(), -1, "是否触达限制列缺失");
+        }
+        List<String> headers = parseCsvLine(headerLine);
+        int touchRestrictedColumnIndex = findTouchRestrictedColumn(headers);
+        List<List<String>> rows = new ArrayList<>();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            List<String> row = parseCsvLine(line);
+            if (!isBlankRow(row)) {
+                rows.add(row);
+            }
+        }
+        return new ParsedImport(rows, touchRestrictedColumnIndex, null);
+    }
+
+    private ParsedImport parseWorkbook(InputStream inputStream) throws Exception {
+        try (Workbook workbook = WorkbookFactory.create(inputStream)) {
+            Sheet sheet = workbook.getNumberOfSheets() == 0 ? null : workbook.getSheetAt(0);
+            if (sheet == null || sheet.getPhysicalNumberOfRows() == 0) {
+                return new ParsedImport(Collections.emptyList(), -1, "是否触达限制列缺失");
+            }
+            DataFormatter formatter = new DataFormatter();
+            Row headerRow = sheet.getRow(sheet.getFirstRowNum());
+            int lastCell = headerRow == null ? 0 : Math.max(headerRow.getLastCellNum(), 0);
+            List<String> headers = new ArrayList<>();
+            for (int i = 0; i < lastCell; i++) {
+                headers.add(cellValue(headerRow.getCell(i), formatter));
+            }
+            int touchRestrictedColumnIndex = findTouchRestrictedColumn(headers);
+            List<List<String>> rows = new ArrayList<>();
+            for (int rowIndex = sheet.getFirstRowNum() + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null || isBlankRow(row, lastCell, formatter)) {
+                    continue;
+                }
+                List<String> values = new ArrayList<>();
+                for (int i = 0; i < lastCell; i++) {
+                    values.add(cellValue(row.getCell(i), formatter));
+                }
+                rows.add(values);
+            }
+            return new ParsedImport(rows, touchRestrictedColumnIndex, null);
+        }
+    }
+
+    private String cellValue(Cell cell, DataFormatter formatter) {
+        return cell == null ? "" : formatter.formatCellValue(cell).trim();
+    }
+
+    private boolean isBlankRow(Row row, int lastCell, DataFormatter formatter) {
+        for (int i = 0; i < lastCell; i++) {
+            if (!cellValue(row.getCell(i), formatter).isBlank()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private int findTouchRestrictedColumn(List<String> headers) {
+        for (int i = 0; i < headers.size(); i++) {
+            String header = headers.get(i);
+            if ("是否触达限制".equals(header == null ? null : header.replace("\uFEFF", "").trim())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private boolean isBlankRow(List<String> row) {
+        return row == null || row.stream().filter(Objects::nonNull)
+                .noneMatch(value -> !value.trim().isEmpty());
+    }
+
+    private List<String> parseCsvLine(String line) {
+        if (line == null || line.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> values = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean quoted = false;
+        for (int i = 0; i < line.length(); i++) {
+            char ch = line.charAt(i);
+            if (ch == '"') {
+                if (quoted && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                    current.append('"');
+                    i++;
+                } else {
+                    quoted = !quoted;
+                }
+            } else if (ch == ',' && !quoted) {
+                values.add(current.toString().trim());
+                current.setLength(0);
+            } else {
+                current.append(ch);
+            }
+        }
+        values.add(current.toString().trim());
+        return values;
+    }
+
+    private void addErrorSample(List<LeadImportPreviewResp.LeadImportErrorVO> samples,
+                                int rowIndex, String field, String message) {
+        if (samples.size() >= 10) {
+            return;
+        }
+        LeadImportPreviewResp.LeadImportErrorVO sample = new LeadImportPreviewResp.LeadImportErrorVO();
+        sample.setRowIndex(rowIndex);
+        sample.setField(field);
+        sample.setMessage(message);
+        samples.add(sample);
+    }
+
+    private record ParsedImport(List<List<String>> rows, int touchRestrictedColumnIndex,
+                                String errorSummary) {
+    }
 
     /**
      * 校验上传文件扩展名是否在允许列表内（仅 csv/xlsx/xls）。

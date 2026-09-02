@@ -1,0 +1,19 @@
+Marketing customer save:
+1. [PUT] http://127.0.0.1:8090/api/marketing/customers/1/profile => [200] OK
+2. [GET] http://127.0.0.1:8090/api/marketing/customers?pageNo=1&pageSize=20 => [200] OK
+
+Final PUT request body:
+{"custName":"星河科技有限公司","legalRepresentative":"李法人","contactPerson":"张经理","contactMobile":"13800000000","registeredAddress":"","businessAddress":"","businessScope":"","industry":"I01","groupType":"","groupName":"","customerType":"","enterpriseType":"","isKeystone":null,"customerDesc":"","registeredCapital":null,"creditAmount":null,"creditExposureAmount":500000,"touchRestricted":null,"tagIds":[11,12],"profileVersion":2,"lockVersion":3,"reason":"验收白名单提交"}
+
+Available pool final requests:
+1. [GET] http://127.0.0.1:8090/api/customer-pool?sourceType=PUBLIC&pageNo=1&pageSize=20 => [200] OK
+2. [GET] http://127.0.0.1:8090/api/auth/my-menus => [200] OK
+3. [GET] http://127.0.0.1:8090/api/notifications/unread-count => [200] OK
+4. [GET] http://127.0.0.1:8090/api/sys/dicts/INDUSTRY/items => [200] OK
+5. [GET] http://127.0.0.1:8090/api/sys/dicts/GROUP_TYPE/items => [200] OK
+6. [GET] http://127.0.0.1:8090/api/sys/dicts/CUSTOMER_TYPE/items => [200] OK
+7. [GET] http://127.0.0.1:8090/api/sys/dicts/ENTERPRISE_TYPE/items => [200] OK
+8. [GET] http://127.0.0.1:8090/api/sys/dicts/LEAD_SOURCE/items => [200] OK
+
+Accessibility counts:
+{"distributionFilters":0,"keywordInputs":1,"queryButtons":1,"resetButtons":1}

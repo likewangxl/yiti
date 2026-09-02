@@ -8,15 +8,20 @@ import com.bank.branch.platform.customer.enums.BatchStatus;
 import com.bank.branch.platform.customer.enums.CustomerErrorCode;
 import com.bank.branch.platform.customer.mapper.CustLeadMapper;
 import com.bank.branch.platform.customer.mapper.LeadImportBatchMapper;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Collections;
+import java.io.ByteArrayOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -226,12 +231,12 @@ class LeadImportServiceTest {
      * Task 8.2 TDD: 当前实现无行级校验，preview 应默认 successCount=totalCount, failCount=0, errorSamples 空列表。
      */
     @Test
-    void preview_defaultsAllSuccessWhenNoValidation() {
+    void preview_validTouchRestrictionValuesAreSuccessful() {
         // given: 一个包含 CSV 头行 + 3 条数据行的文件
-        String csvContent = "客户名称,统一社会信用代码,联系人,手机号\n" +
-                "企业A,91110000123456789A,张三,13800000001\n" +
-                "企业B,91110000123456789B,李四,13900000002\n" +
-                "企业C,91110000123456789C,王五,13700000003\n";
+        String csvContent = "客户名称,统一社会信用代码,联系人,手机号,是否触达限制\n" +
+                "企业A,91110000123456789A,张三,13800000001,是\n" +
+                "企业B,91110000123456789B,李四,13900000002,否\n" +
+                "企业C,91110000123456789C,王五,13700000003,是\n";
         MultipartFile file = new MockMultipartFile(
                 "file", "leads.csv", "text/csv", csvContent.getBytes()
         );
@@ -241,16 +246,130 @@ class LeadImportServiceTest {
         // when
         LeadImportPreviewResp resp = leadImportService.preview(file, "E1", "ORG1");
 
-        // then: 无校验时默认全部成功
+        // then: 触达限制列通过校验时全部成功
         assertThat(resp.getSuccessCount())
-                .as("无行级校验时 successCount 应等于 totalRows")
+                .as("合法触达限制值 successCount 应等于 totalRows")
                 .isEqualTo(resp.getTotalRows());
         assertThat(resp.getFailCount())
-                .as("无行级校验时 failCount 应为 0")
+                .as("合法触达限制值 failCount 应为 0")
                 .isEqualTo(0);
         assertThat(resp.getErrorSamples())
-                .as("无行级校验时 errorSamples 应为空列表")
+                .as("合法触达限制值 errorSamples 应为空列表")
                 .isEmpty();
+    }
+
+    @Test
+    void preview_shouldRejectMissingTouchRestrictionColumnAsRowErrors() {
+        String csvContent = "客户名称,统一社会信用代码,联系人,手机号\n" +
+                "企业A,91110000123456789A,张三,13800000001\n";
+        MultipartFile file = new MockMultipartFile(
+                "file", "leads.csv", "text/csv", csvContent.getBytes()
+        );
+        when(batchMapper.insert(any(LeadImportBatch.class))).thenReturn(1);
+
+        LeadImportPreviewResp resp = leadImportService.preview(file, "E1", "ORG1");
+
+        assertThat(resp.getTotalRows()).isEqualTo(1);
+        assertThat(resp.getErrorRows()).isEqualTo(1);
+        assertThat(resp.getSuccessCount()).isZero();
+        assertThat(resp.getFailCount()).isEqualTo(1);
+        assertThat(resp.getErrorSamples()).singleElement()
+                .extracting("field", "message")
+                .containsExactly("是否触达限制", "是否触达限制列不能为空");
+        ArgumentCaptor<LeadImportBatch> batchCaptor = ArgumentCaptor.forClass(LeadImportBatch.class);
+        verify(batchMapper).insert(batchCaptor.capture());
+        assertThat(batchCaptor.getValue().getStatus()).isEqualTo(BatchStatus.VALIDATION_FAILED.getCode());
+    }
+
+    @Test
+    void preview_shouldRejectInvalidTouchRestrictionValues() {
+        String csvContent = "客户名称,统一社会信用代码,是否触达限制\n" +
+                "企业A,91110000123456789A,是\n" +
+                "企业B,91110000123456789B,maybe\n";
+        MultipartFile file = new MockMultipartFile(
+                "file", "leads.csv", "text/csv", csvContent.getBytes()
+        );
+        when(batchMapper.insert(any(LeadImportBatch.class))).thenReturn(1);
+
+        LeadImportPreviewResp resp = leadImportService.preview(file, "E1", "ORG1");
+
+        assertThat(resp.getTotalRows()).isEqualTo(2);
+        assertThat(resp.getErrorRows()).isEqualTo(1);
+        assertThat(resp.getSuccessCount()).isEqualTo(1);
+        assertThat(resp.getFailCount()).isEqualTo(1);
+        assertThat(resp.getErrorSamples()).singleElement()
+                .extracting("rowIndex", "field")
+                .containsExactly(2, "是否触达限制");
+    }
+
+    @Test
+    void preview_xlsx_shouldValidateTouchRestrictionColumn() throws Exception {
+        when(batchMapper.insert(any(LeadImportBatch.class))).thenReturn(1);
+        MultipartFile file = new MockMultipartFile(
+                "file", "leads.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                workbookBytes(new XSSFWorkbook(), "是"));
+
+        LeadImportPreviewResp resp = leadImportService.preview(file, "E1", "ORG1");
+
+        assertThat(resp.getTotalRows()).isEqualTo(1);
+        assertThat(resp.getSuccessCount()).isEqualTo(1);
+        assertThat(resp.getFailCount()).isZero();
+    }
+
+    @Test
+    void preview_xls_shouldValidateTouchRestrictionColumn() throws Exception {
+        when(batchMapper.insert(any(LeadImportBatch.class))).thenReturn(1);
+        MultipartFile file = new MockMultipartFile(
+                "file", "leads.xls", "application/vnd.ms-excel", workbookBytes(new HSSFWorkbook(), "否"));
+
+        LeadImportPreviewResp resp = leadImportService.preview(file, "E1", "ORG1");
+
+        assertThat(resp.getTotalRows()).isEqualTo(1);
+        assertThat(resp.getSuccessCount()).isEqualTo(1);
+        assertThat(resp.getFailCount()).isZero();
+    }
+
+    @Test
+    void execute_shouldRejectBatchWithValidationErrors() {
+        LeadImportBatch batch = buildBatch("batch-invalid", BatchStatus.VALIDATION_FAILED.getCode());
+        batch.setErrorRowCount(1);
+        when(batchMapper.selectById("batch-invalid")).thenReturn(batch);
+
+        assertThatThrownBy(() -> leadImportService.execute("batch-invalid", "E001", "ORG001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.LEAD_IMPORT_VALIDATION_FAILED.getCode());
+        verify(batchMapper, never()).updateById(any(LeadImportBatch.class));
+    }
+
+    @Test
+    void preview_shouldMarkParseFailureAsValidationFailed() {
+        MultipartFile file = new MockMultipartFile(
+                "file", "leads.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "not-an-excel-file".getBytes()
+        );
+        when(batchMapper.insert(any(LeadImportBatch.class))).thenReturn(1);
+
+        LeadImportPreviewResp resp = leadImportService.preview(file, "E1", "ORG1");
+
+        assertThat(resp.getTotalRows()).isZero();
+        assertThat(resp.getErrorSummary()).isEqualTo("文件解析失败，请检查文件内容");
+        ArgumentCaptor<LeadImportBatch> batchCaptor = ArgumentCaptor.forClass(LeadImportBatch.class);
+        verify(batchMapper).insert(batchCaptor.capture());
+        assertThat(batchCaptor.getValue().getStatus()).isEqualTo(BatchStatus.VALIDATION_FAILED.getCode());
+    }
+
+    private byte[] workbookBytes(Workbook workbook, String touchRestricted) throws Exception {
+        try (Workbook toWrite = workbook; ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            var sheet = toWrite.createSheet();
+            var header = sheet.createRow(0);
+            header.createCell(0).setCellValue("客户名称");
+            header.createCell(1).setCellValue("是否触达限制");
+            var row = sheet.createRow(1);
+            row.createCell(0).setCellValue("企业A");
+            row.createCell(1).setCellValue(touchRestricted);
+            toWrite.write(output);
+            return output.toByteArray();
+        }
     }
 
     // ============================= 辅助方法 =============================

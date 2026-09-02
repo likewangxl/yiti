@@ -1,6 +1,6 @@
 -- ============================================
 -- 模块：门户内容中心 (portal-content-center)
--- 描述：网址导航、工作台快捷入口、通讯录、产品信息、文档信息
+-- 描述：网址导航、工作台快捷入口、产品信息、用户产品关系、文档信息
 -- 版本：V1
 -- 创建日期：2026-03-25
 -- ============================================
@@ -48,31 +48,7 @@ CREATE TABLE IF NOT EXISTS `portal_shortcut` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='工作台快捷入口表';
 
 -- -------------------------------------------
--- 3. 通讯录员工表
--- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `addrbook_employee` (
-  `emp_id` varchar(32) NOT NULL COMMENT '员工工号',
-  `emp_name` varchar(100) NOT NULL COMMENT '员工姓名',
-  `mobile` varchar(20) DEFAULT NULL COMMENT '手机号',
-  `email` varchar(100) DEFAULT NULL COMMENT '邮箱',
-  `org_code` varchar(50) DEFAULT NULL COMMENT '所属机构代码',
-  `org_name` varchar(200) DEFAULT NULL COMMENT '所属机构名称',
-  `position` varchar(100) DEFAULT NULL COMMENT '岗位',
-  `self_desc` text COMMENT '自我描述',
-  `responsible_product_ids` text COMMENT '负责产品ID列表(JSON数组)',
-  `status` varchar(20) DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE-在职, RESIGNED-离职',
-  `maintainer_emp_id` varchar(32) DEFAULT NULL COMMENT '维护人工号',
-  `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` int(11) DEFAULT '0' COMMENT '删除标记：0-未删除, 1-已删除',
-  PRIMARY KEY (`emp_id`),
-  KEY `idx_org_code` (`org_code`),
-  KEY `idx_maintainer` (`maintainer_emp_id`),
-  KEY `idx_deleted` (`deleted`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='通讯录员工表';
-
--- -------------------------------------------
--- 4. 产品信息表
+-- 3. 产品信息表
 -- -------------------------------------------
 CREATE TABLE IF NOT EXISTS `product_info` (
   `id` varchar(64) NOT NULL COMMENT '产品ID',
@@ -84,7 +60,6 @@ CREATE TABLE IF NOT EXISTS `product_info` (
   `owner_org_id` varchar(50) DEFAULT NULL COMMENT '归属组织(维护组织)',
   `product_dept_org_code` varchar(50) DEFAULT NULL COMMENT '产品部门ORG_CODE',
   `file_object_id` varchar(32) DEFAULT NULL COMMENT '主附件文件ID',
-  `responsible_emp_ids` text COMMENT '负责人列表(JSON数组,反向关联通讯录)',
   `status` varchar(32) NOT NULL COMMENT '产品状态',
   `created_by` varchar(32) DEFAULT NULL COMMENT '创建人',
   `updated_by` varchar(32) DEFAULT NULL COMMENT '更新人',
@@ -97,6 +72,19 @@ CREATE TABLE IF NOT EXISTS `product_info` (
   KEY `idx_status` (`status`),
   KEY `idx_deleted` (`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='产品信息表';
+
+-- -------------------------------------------
+-- 4. 用户产品负责关系表
+-- -------------------------------------------
+CREATE TABLE IF NOT EXISTS `PORTAL_USER_PRODUCT_REL` (
+  `user_id` varchar(50) NOT NULL COMMENT 'PT_USER.USER_ID',
+  `product_id` varchar(64) NOT NULL COMMENT 'PRODUCT_INFO.ID',
+  `assigned_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '关系建立时间',
+  `updated_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
+  `updated_by` varchar(50) DEFAULT NULL COMMENT '最后修改人',
+  PRIMARY KEY (`user_id`, `product_id`),
+  KEY `idx_portal_user_product_rel_product` (`product_id`, `user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户产品负责关系';
 
 -- -------------------------------------------
 -- 5. 文档信息表

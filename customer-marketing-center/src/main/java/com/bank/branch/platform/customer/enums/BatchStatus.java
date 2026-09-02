@@ -11,6 +11,7 @@ import lombok.Getter;
 public enum BatchStatus {
 
     CREATED("CREATED", "已创建"),
+    VALIDATION_FAILED("VALIDATION_FAILED", "校验失败"),
     PENDING_APPROVAL("PENDING_APPROVAL", "待审批"),
     APPROVED("APPROVED", "已通过"),
     REJECTED("REJECTED", "已拒绝");

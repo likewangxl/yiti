@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerTagRelMapper">
+
+    <sql id="BASE_COLUMNS">
+        r.id, r.cust_id, r.tag_id, r.active, r.source_type, r.source_ref_id,
+        r.effective_time, r.expired_time, r.created_by, r.created_time,
+        r.updated_by, r.updated_time
+    </sql>
+
+    <select id="selectActivePage"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTagRel">
+        SELECT <include refid="BASE_COLUMNS"/>,
+               c.cust_no, c.cust_name, c.unified_credit_code,
+               c.main_manager_id, c.main_org_id,
+               CASE WHEN c.is_account_opened = 1 THEN 'OPENED'
+                    WHEN c.is_account_opened = 0 THEN 'NOT_OPENED'
+                    ELSE 'UNKNOWN' END AS account_opened
+        FROM MARKETING_CUSTOMER_TAG_REL r
+        JOIN MARKETING_CUSTOMER_INFO c ON c.id = r.cust_id
+        WHERE r.tag_id = #{tagId}
+          AND r.active = 1
+          AND c.record_status = 'ACTIVE'
+        <if test="keyword != null and keyword != ''">
+          AND (c.cust_name LIKE CONCAT('%', #{keyword}, '%')
+               OR c.unified_credit_code = #{keyword}
+               OR c.cust_no = #{keyword})
+        </if>
+        ORDER BY r.effective_time DESC, r.id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countActiveByTagId" resultType="long">
+        SELECT COUNT(1)
+        FROM MARKETING_CUSTOMER_TAG_REL r
+        JOIN MARKETING_CUSTOMER_INFO c ON c.id = r.cust_id
+        WHERE r.tag_id = #{tagId}
+          AND r.active = 1
+          AND c.record_status = 'ACTIVE'
+        <if test="keyword != null and keyword != ''">
+          AND (c.cust_name LIKE CONCAT('%', #{keyword}, '%')
+               OR c.unified_credit_code = #{keyword}
+               OR c.cust_no = #{keyword})
+        </if>
+    </select>
+
+    <select id="selectActiveByTagId"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTagRel">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_TAG_REL r
+        WHERE r.tag_id = #{tagId} AND r.active = 1
+        ORDER BY r.id
+    </select>
+
+    <select id="selectByCustIdAndTagId"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTagRel">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_TAG_REL r
+        WHERE r.cust_id = #{custId} AND r.tag_id = #{tagId}
+        ORDER BY r.active DESC, r.id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectByCustId"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTagRel">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_TAG_REL r
+        WHERE r.cust_id = #{custId}
+        ORDER BY r.tag_id ASC, r.active DESC, r.id DESC
+    </select>
+
+    <select id="selectActiveByCustIds"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTagRel">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_TAG_REL r
+        <where>
+            r.active = 1
+            <choose>
+                <when test="custIds != null and custIds.size() &gt; 0">
+                    AND r.cust_id IN
+                    <foreach collection="custIds" item="custId" open="(" separator="," close=")">
+                        #{custId}
+                    </foreach>
+                </when>
+                <otherwise>AND 1 = 0</otherwise>
+            </choose>
+        </where>
+        ORDER BY r.cust_id ASC, r.tag_id ASC, r.id ASC
+    </select>
+
+    <update id="expireActiveByTagId">
+        UPDATE MARKETING_CUSTOMER_TAG_REL
+           SET active = 0,
+               expired_time = #{expiredTime},
+               updated_by = #{operatorEmpId},
+               updated_time = #{expiredTime}
+         WHERE tag_id = #{tagId} AND active = 1
+    </update>
+
+    <update id="expireNotInCustomerIds">
+        UPDATE MARKETING_CUSTOMER_TAG_REL
+           SET active = 0,
+               expired_time = #{expiredTime},
+               updated_by = #{operatorEmpId},
+               updated_time = #{expiredTime}
+         WHERE tag_id = #{tagId} AND active = 1
+        <choose>
+            <when test="custIds != null and custIds.size() &gt; 0">
+                AND cust_id NOT IN
+                <foreach collection="custIds" item="custId" open="(" separator="," close=")">
+                    #{custId}
+                </foreach>
+            </when>
+            <otherwise>
+                <!-- 空集合代表本次替换没有有效客户，全部旧关系都应失效。 -->
+            </otherwise>
+        </choose>
+    </update>
+
+    <update id="expireNotInTagIds">
+        UPDATE MARKETING_CUSTOMER_TAG_REL
+           SET active = 0,
+               expired_time = #{expiredTime},
+               updated_by = #{operatorEmpId},
+               updated_time = #{expiredTime}
+         WHERE cust_id = #{custId} AND active = 1
+        <choose>
+            <when test="tagIds != null and tagIds.size() &gt; 0">
+                AND tag_id NOT IN
+                <foreach collection="tagIds" item="tagId" open="(" separator="," close=")">
+                    #{tagId}
+                </foreach>
+            </when>
+            <otherwise>
+                <!-- 空列表表示清空客户当前全部有效标签。 -->
+            </otherwise>
+        </choose>
+    </update>
+
+    <update id="reactivate">
+        UPDATE MARKETING_CUSTOMER_TAG_REL
+           SET active = 1,
+               effective_time = COALESCE(effective_time, #{effectiveTime}),
+               expired_time = NULL,
+               updated_by = #{operatorEmpId},
+               updated_time = #{effectiveTime}
+         WHERE id = #{id}
+    </update>
+
+    <update id="reactivateWithSourceType">
+        UPDATE MARKETING_CUSTOMER_TAG_REL
+           SET active = 1,
+               source_type = #{sourceType},
+               source_ref_id = NULL,
+               effective_time = COALESCE(effective_time, #{effectiveTime}),
+               expired_time = NULL,
+               updated_by = #{operatorEmpId},
+               updated_time = #{effectiveTime}
+         WHERE id = #{id}
+    </update>
+</mapper>

@@ -9,6 +9,7 @@ import com.bank.branch.platform.customer.enums.TouchTaskStatus;
 import com.bank.branch.platform.customer.enums.TouchTaskType;
 import com.bank.branch.platform.customer.event.TouchCompletedEvent;
 import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
+import com.bank.branch.platform.customer.mapper.TouchWorklogMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -46,6 +47,12 @@ class TouchTaskServiceTest {
     @Spy
     private TouchTaskStateMachineService stateMachine = new TouchTaskStateMachineService();
 
+    @Mock
+    private TouchEligibilityService touchEligibilityService;
+
+    @Mock
+    private TouchWorklogMapper worklogMapper;
+
     @InjectMocks
     private TouchTaskService touchTaskService;
 
@@ -54,16 +61,20 @@ class TouchTaskServiceTest {
     @Test
     void createFromClaim_shouldInsertPendingTask() {
         // given: 认领后创建首次触达任务
-        when(taskMapper.insert(any(TouchTask.class))).thenReturn(1);
+        when(taskMapper.insert(any(TouchTask.class))).thenAnswer(invocation -> {
+            TouchTask inserted = invocation.getArgument(0);
+            inserted.setId(1L);
+            return 1;
+        });
 
         // when
-        TouchTask result = touchTaskService.createFromClaim("cust-001", "ORG_SZ_001", "E10001");
+        TouchTask result = touchTaskService.createFromClaim("1", "ORG_SZ_001", "E10001");
 
         // then
         assertThat(result).isNotNull();
         assertThat(result.getId()).isNotNull();
         assertThat(result.getTaskNo()).startsWith("TOUCH_");
-        assertThat(result.getCustId()).isEqualTo("cust-001");
+        assertThat(result.getCustId()).isEqualTo(1L);
         assertThat(result.getOrgId()).isEqualTo("ORG_SZ_001");
         assertThat(result.getAssigneeEmpId()).isEqualTo("E10001");
         assertThat(result.getTaskType()).isEqualTo(TouchTaskType.FIRST_TOUCH.getCode());
@@ -73,8 +84,6 @@ class TouchTaskServiceTest {
         assertThat(result.getWarningTime()).isNotNull();
         // 计划完成时间应在预警时间之后
         assertThat(result.getPlanFinishTime()).isAfter(result.getWarningTime());
-        // businessKey 格式: TOUCH:{taskId}
-        assertThat(result.getBusinessKey()).isEqualTo("TOUCH:" + result.getId());
 
         verify(taskMapper).insert(any(TouchTask.class));
     }
@@ -82,29 +91,28 @@ class TouchTaskServiceTest {
     // ==================== markSuccess ====================
 
     @Test
-    void markSuccess_fromPending_shouldUpdateStatusToSuccess() {
-        // given: PENDING 状态任务
-        TouchTask task = buildPendingTask("task-001");
-        when(taskMapper.selectById("task-001")).thenReturn(task);
+    void markSuccess_shouldReloadTaskWithLockBeforeTransition() {
+        TouchTask task = buildPendingTask("task-lock-success");
+        task.setTaskStatus(TouchTaskStatus.IN_PROGRESS.getCode());
+        when(taskMapper.selectByIdForUpdate("task-lock-success")).thenReturn(task);
+        when(worklogMapper.countValidByTaskId(task.getId())).thenReturn(1L);
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
-        // when
-        touchTaskService.markSuccess("task-001", "E10001", false);
+        touchTaskService.markSuccess("task-lock-success", "E10001", false);
 
-        // then: 验证 updateById 中的任务状态更新为 SUCCESS
-        ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
-        verify(taskMapper).updateById(captor.capture());
-        TouchTask updated = captor.getValue();
-        assertThat(updated.getId()).isEqualTo("task-001");
-        assertThat(updated.getTaskStatus()).isEqualTo(TouchTaskStatus.SUCCESS.getCode());
-        assertThat(updated.getSuccessTime()).isNotNull();
+        verify(taskMapper).selectByIdForUpdate("task-lock-success");
+        verify(taskMapper).updateById(any(TouchTask.class));
+    }
 
-        // 验证发布了 TouchCompletedEvent
-        ArgumentCaptor<TouchCompletedEvent> eventCaptor = ArgumentCaptor.forClass(TouchCompletedEvent.class);
-        verify(eventPublisher).publishEvent(eventCaptor.capture());
-        TouchCompletedEvent event = eventCaptor.getValue();
-        assertThat(event.getTaskId()).isEqualTo("task-001");
-        assertThat(event.getCustId()).isEqualTo("cust-001");
+    @Test
+    void markSuccess_fromPending_shouldRejectDirectCompletion() {
+        // given: PENDING 任务尚未保存工作日志
+        TouchTask task = buildPendingTask("task-001");
+        when(taskMapper.selectByIdForUpdate("task-001")).thenReturn(task);
+
+        assertThatThrownBy(() -> touchTaskService.markSuccess("task-001", "E10001", false))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_TASK_ILLEGAL_TRANSITION.getCode());
     }
 
     @Test
@@ -112,7 +120,8 @@ class TouchTaskServiceTest {
         // given: IN_PROGRESS 状态任务也允许完成
         TouchTask task = buildPendingTask("task-002");
         task.setTaskStatus(TouchTaskStatus.IN_PROGRESS.getCode());
-        when(taskMapper.selectById("task-002")).thenReturn(task);
+        when(taskMapper.selectByIdForUpdate("task-002")).thenReturn(task);
+        when(worklogMapper.countValidByTaskId(task.getId())).thenReturn(1L);
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
         // when
@@ -129,11 +138,22 @@ class TouchTaskServiceTest {
     }
 
     @Test
+    void markSuccess_fromInProgressWithoutWorklog_shouldRejectCompletion() {
+        TouchTask task = buildPendingTask("task-no-worklog");
+        task.setTaskStatus(TouchTaskStatus.IN_PROGRESS.getCode());
+        when(taskMapper.selectByIdForUpdate("task-no-worklog")).thenReturn(task);
+
+        assertThatThrownBy(() -> touchTaskService.markSuccess("task-no-worklog", "E10001", false))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_WORKLOG_NOT_FOUND.getCode());
+    }
+
+    @Test
     void markSuccess_shouldThrowWhenAlreadySuccess() {
         // given: 任务已完成（终态），不允许再次完成
         TouchTask task = buildPendingTask("task-003");
         task.setTaskStatus(TouchTaskStatus.SUCCESS.getCode());
-        when(taskMapper.selectById("task-003")).thenReturn(task);
+        when(taskMapper.selectByIdForUpdate("task-003")).thenReturn(task);
 
         // when/then: 状态机校验失败，抛 CUST-40010
         assertThatThrownBy(() -> touchTaskService.markSuccess("task-003", "E10001", false))
@@ -146,7 +166,7 @@ class TouchTaskServiceTest {
         // given: 任务已取消（终态），不允许完成
         TouchTask task = buildPendingTask("task-004");
         task.setTaskStatus(TouchTaskStatus.CANCELLED.getCode());
-        when(taskMapper.selectById("task-004")).thenReturn(task);
+        when(taskMapper.selectByIdForUpdate("task-004")).thenReturn(task);
 
         // when/then: 状态机校验失败，抛 CUST-40010
         assertThatThrownBy(() -> touchTaskService.markSuccess("task-004", "E10001", false))
@@ -157,7 +177,7 @@ class TouchTaskServiceTest {
     @Test
     void markSuccess_shouldThrowWhenTaskNotFound() {
         // given: 任务不存在
-        when(taskMapper.selectById("not-exist")).thenReturn(null);
+        when(taskMapper.selectByIdForUpdate("not-exist")).thenReturn(null);
 
         // when/then: 抛 CUST-40405
         assertThatThrownBy(() -> touchTaskService.markSuccess("not-exist", "E10001", false))
@@ -168,10 +188,22 @@ class TouchTaskServiceTest {
     // ==================== cancel ====================
 
     @Test
+    void cancel_shouldReloadTaskWithLockBeforeTransition() {
+        TouchTask task = buildPendingTask("task-lock-cancel");
+        when(taskMapper.selectByIdForUpdate("task-lock-cancel")).thenReturn(task);
+        when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
+
+        touchTaskService.cancel("task-lock-cancel", "并发取消", "E10001", false);
+
+        verify(taskMapper).selectByIdForUpdate("task-lock-cancel");
+        verify(taskMapper).updateById(any(TouchTask.class));
+    }
+
+    @Test
     void cancel_shouldUpdateStatusToCancelled() {
         // given: PENDING 状态任务
         TouchTask task = buildPendingTask("task-003");
-        when(taskMapper.selectById("task-003")).thenReturn(task);
+        when(taskMapper.selectByIdForUpdate("task-003")).thenReturn(task);
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
         // when: reason 仅记日志，TouchTask 表无 cancelReason 字段
@@ -181,7 +213,7 @@ class TouchTaskServiceTest {
         ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
         verify(taskMapper).updateById(captor.capture());
         TouchTask updated = captor.getValue();
-        assertThat(updated.getId()).isEqualTo("task-003");
+        assertThat(updated.getId()).isEqualTo(task.getId());
         assertThat(updated.getTaskStatus()).isEqualTo(TouchTaskStatus.CANCELLED.getCode());
         assertThat(updated.getCancelTime()).isNotNull();
     }
@@ -199,7 +231,7 @@ class TouchTaskServiceTest {
 
         // then
         assertThat(result).isNotNull();
-        assertThat(result.getId()).isEqualTo("task-004");
+        assertThat(result.getId()).isEqualTo(task.getId());
     }
 
     @Test
@@ -290,7 +322,7 @@ class TouchTaskServiceTest {
     void cancel_allowsPending() {
         // given: PENDING 状态 → CANCELLED 合法
         TouchTask task = buildPendingTask("T-P");
-        when(taskMapper.selectById("T-P")).thenReturn(task);
+        when(taskMapper.selectByIdForUpdate("T-P")).thenReturn(task);
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
         // when: 应当正常完成，不抛异常
@@ -308,7 +340,7 @@ class TouchTaskServiceTest {
         // given: IN_PROGRESS 状态 → CANCELLED 也合法（状态机化后新增支持）
         TouchTask task = buildPendingTask("T-IP");
         task.setTaskStatus(TouchTaskStatus.IN_PROGRESS.getCode());
-        when(taskMapper.selectById("T-IP")).thenReturn(task);
+        when(taskMapper.selectByIdForUpdate("T-IP")).thenReturn(task);
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
         // when: 应当正常完成，不抛异常
@@ -325,7 +357,7 @@ class TouchTaskServiceTest {
         // P1C：操作人非任务执行人且非 admin → CUST-40302
         TouchTask task = buildPendingTask("task-other");
         task.setAssigneeEmpId("E_OTHER");
-        when(taskMapper.selectById("task-other")).thenReturn(task);
+        when(taskMapper.selectByIdForUpdate("task-other")).thenReturn(task);
 
         assertThatThrownBy(() -> touchTaskService.markSuccess("task-other", "E10001", false))
                 .isInstanceOf(BizException.class)
@@ -337,7 +369,9 @@ class TouchTaskServiceTest {
         // P1C：admin 可绕过 assignee 校验
         TouchTask task = buildPendingTask("task-admin");
         task.setAssigneeEmpId("E_OTHER");
-        when(taskMapper.selectById("task-admin")).thenReturn(task);
+        task.setTaskStatus(TouchTaskStatus.IN_PROGRESS.getCode());
+        when(taskMapper.selectByIdForUpdate("task-admin")).thenReturn(task);
+        when(worklogMapper.countValidByTaskId(task.getId())).thenReturn(1L);
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
         touchTaskService.markSuccess("task-admin", "ADMIN001", true);
@@ -350,7 +384,7 @@ class TouchTaskServiceTest {
         // P1C：操作人非任务执行人且非 admin → CUST-40302
         TouchTask task = buildPendingTask("T-perm");
         task.setAssigneeEmpId("E_OTHER");
-        when(taskMapper.selectById("T-perm")).thenReturn(task);
+        when(taskMapper.selectByIdForUpdate("T-perm")).thenReturn(task);
 
         assertThatThrownBy(() -> touchTaskService.cancel("T-perm", "原因", "E10001", false))
                 .isInstanceOf(BizException.class)
@@ -361,10 +395,10 @@ class TouchTaskServiceTest {
     void cancel_rejectsAlreadySuccess() {
         // given: SUCCESS 终态不允许取消
         TouchTask t = new TouchTask();
-        t.setId("T-S");
+        t.setId(101L);
         t.setTaskStatus("SUCCESS");
         t.setAssigneeEmpId("E10001");  // P1C 40302 校验需要 assignee 匹配 operator
-        when(taskMapper.selectById("T-S")).thenReturn(t);
+        when(taskMapper.selectByIdForUpdate("T-S")).thenReturn(t);
 
         // when/then: 状态机校验失败，抛 CUST-40010
         assertThatThrownBy(() -> touchTaskService.cancel("T-S", "reason", "E10001", false))
@@ -376,10 +410,10 @@ class TouchTaskServiceTest {
     void cancel_rejectsAlreadyCancelled() {
         // given: CANCELLED 终态不允许再次取消
         TouchTask t = new TouchTask();
-        t.setId("T-C");
+        t.setId(102L);
         t.setTaskStatus("CANCELLED");
         t.setAssigneeEmpId("E10001");  // P1C 40302 校验需要 assignee 匹配 operator
-        when(taskMapper.selectById("T-C")).thenReturn(t);
+        when(taskMapper.selectByIdForUpdate("T-C")).thenReturn(t);
 
         // when/then: 状态机校验失败，抛 CUST-40010
         assertThatThrownBy(() -> touchTaskService.cancel("T-C", "reason", "E10001", false))
@@ -403,11 +437,10 @@ class TouchTaskServiceTest {
         // when
         touchTaskService.refreshSla();
 
-        // then: slaStatus=YELLOW 且 slaWarning=true
+        // then: slaStatus=YELLOW 即表示已预警，实体不再保存冗余 slaWarning
         ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
         verify(taskMapper).updateById(captor.capture());
         assertThat(captor.getValue().getSlaStatus()).isEqualTo(SlaStatus.YELLOW.getCode());
-        assertThat(captor.getValue().getSlaWarning()).isTrue();
     }
 
     @Test
@@ -424,11 +457,10 @@ class TouchTaskServiceTest {
         // when
         touchTaskService.refreshSla();
 
-        // then: slaStatus=RED 且 slaWarning=true
+        // then: slaStatus=RED 即表示已预警，实体不再保存冗余 slaWarning
         ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
         verify(taskMapper).updateById(captor.capture());
         assertThat(captor.getValue().getSlaStatus()).isEqualTo(SlaStatus.RED.getCode());
-        assertThat(captor.getValue().getSlaWarning()).isTrue();
     }
 
     @Test
@@ -443,7 +475,6 @@ class TouchTaskServiceTest {
         //   用一个没有状态变化的场景（calcNewSlaStatus=null）来确认 updateById 不被调用
         TouchTask task = buildPendingTask("T-G");
         task.setSlaStatus(SlaStatus.GREEN.getCode());
-        task.setSlaWarning(false);
         // 预警时间未到（GREEN）
         task.setWarningTime(LocalDateTime.now().plusDays(3));
         task.setPlanFinishTime(LocalDateTime.now().plusDays(7));
@@ -463,7 +494,7 @@ class TouchTaskServiceTest {
     void markInProgress_setsStatusFromPendingToInProgress() {
         // given
         TouchTask existing = new TouchTask();
-        existing.setId("T001");
+        existing.setId(103L);
         existing.setTaskStatus("PENDING");
         when(taskMapper.selectById("T001")).thenReturn(existing);
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
@@ -481,7 +512,7 @@ class TouchTaskServiceTest {
     void markInProgress_throwsWhenCurrentStatusIsNotPending() {
         // given: 非 PENDING 状态（SUCCESS）不允许转移到 IN_PROGRESS
         TouchTask existing = new TouchTask();
-        existing.setId("T001");
+        existing.setId(103L);
         existing.setTaskStatus("SUCCESS");
         when(taskMapper.selectById("T001")).thenReturn(existing);
 
@@ -590,9 +621,9 @@ class TouchTaskServiceTest {
      */
     private TouchTask buildPendingTask(String id) {
         TouchTask task = new TouchTask();
-        task.setId(id);
+        task.setId(Math.abs((long) id.hashCode()) + 1L);
         task.setTaskNo("TOUCH_" + id);
-        task.setCustId("cust-001");
+        task.setCustId(1L);
         task.setOrgId("ORG_SZ_001");
         task.setAssigneeEmpId("E10001");
         task.setTaskType(TouchTaskType.FIRST_TOUCH.getCode());
@@ -600,7 +631,6 @@ class TouchTaskServiceTest {
         task.setSlaStatus(SlaStatus.GREEN.getCode());
         task.setPlanFinishTime(LocalDateTime.now().plusDays(7));
         task.setWarningTime(LocalDateTime.now().plusDays(5));
-        task.setBusinessKey("TOUCH:" + id);
         task.setCreatedTime(LocalDateTime.now());
         task.setUpdatedTime(LocalDateTime.now());
         return task;

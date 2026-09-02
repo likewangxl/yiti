@@ -16,23 +16,18 @@ import com.bank.branch.platform.portal.config.PortalCacheConfig;
 import com.bank.branch.platform.portal.controller.dto.product.ProductQueryReqDTO;
 import com.bank.branch.platform.portal.controller.dto.product.ProductUpdateReqDTO;
 import com.bank.branch.platform.portal.service.dto.ProductListQuery;
-import com.bank.branch.platform.portal.entity.AddrbookEmployee;
 import com.bank.branch.platform.portal.entity.ProductInfo;
 import com.bank.branch.platform.portal.enums.PortalErrorCode;
-import com.bank.branch.platform.portal.event.ProductResponsibleUpdatedEvent;
-import com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper;
 import com.bank.branch.platform.portal.mapper.ProductInfoMapper;
 import com.bank.branch.platform.governance.config.MemoryCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -43,12 +38,12 @@ import java.util.UUID;
 public class ProductService {
 
     private final ProductInfoMapper productInfoMapper;
-    private final AddrbookEmployeeMapper addrbookEmployeeMapper;
+    private final AddrbookQueryService addrbookQueryService;
+    private final UserProductRelationService userProductRelationService;
     private final CurrentUserApi currentUserApi;
     private final BizScopeApi bizScopeApi;
     private final AuditApi auditApi;
     private final MemoryCacheService memoryCacheService;
-    private final ApplicationEventPublisher eventPublisher;
 
     /** D.1 分页查询产品列表（含 DATA_SCOPE 数据权限过滤） */
     public PageResult<ProductInfo> listProducts(ProductQueryReqDTO req) {
@@ -115,13 +110,8 @@ public class ProductService {
         if (productInfoMapper.selectByProductCode(req.getProductCode()) != null) {
             throw new BizException(PortalErrorCode.PRODUCT_CODE_DUPLICATE.getCode(), PortalErrorCode.PRODUCT_CODE_DUPLICATE.getMessage());
         }
-        List<String> empIds = req.getResponsibleEmpIds();
-        if (empIds != null && !empIds.isEmpty()) {
-            int activeCount = addrbookEmployeeMapper.countActiveByEmpIds(empIds);
-            if (activeCount != empIds.size()) {
-                throw new BizException(PortalErrorCode.EMPLOYEE_RESIGNED.getCode(), PortalErrorCode.EMPLOYEE_RESIGNED.getMessage());
-            }
-        }
+        List<String> empIds = normalizeIds(req.getResponsibleEmpIds());
+        validateResponsibleEmpIds(empIds);
         String productId = UUID.randomUUID().toString().replace("-", "");
         ProductInfo entity = new ProductInfo();
         entity.setId(productId);
@@ -133,18 +123,13 @@ public class ProductService {
         entity.setProductDeptOrgCode(req.getProductDeptOrgCode());
         entity.setOwnerOrgId(req.getProductDeptOrgCode());
         entity.setFileObjectId(req.getFileObjectId());
-        entity.setResponsibleEmpIds(empIds);
         entity.setStatus("ACTIVE");
         entity.setCreatedBy(currentEmpId);
         entity.setUpdatedBy(currentEmpId);
         entity.setDeleted(0);
         productInfoMapper.insert(entity);
-        List<String> newEmpIds = empIds != null ? empIds : Collections.emptyList();
-        if (!newEmpIds.isEmpty()) { syncResponsibleToAddrbook(productId, Collections.emptyList(), newEmpIds, currentEmpId); }
+        userProductRelationService.replaceUsersForProduct(productId, empIds, currentEmpId);
         clearSupportCache();
-        if (!newEmpIds.isEmpty()) {
-            eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(productId, req.getProductCode(), Collections.emptyList(), newEmpIds, "PRODUCT_SIDE", currentEmpId, LocalDateTime.now()));
-        }
         auditCreate(entity, currentEmpId);
         return entity;
     }
@@ -157,14 +142,10 @@ public class ProductService {
         if (existing == null) {
             throw new BizException(PortalErrorCode.PRODUCT_NOT_FOUND.getCode(), PortalErrorCode.PRODUCT_NOT_FOUND.getMessage());
         }
-        List<String> oldEmpIds = existing.getResponsibleEmpIds() != null ? existing.getResponsibleEmpIds() : Collections.emptyList();
-        List<String> newEmpIds = req.getResponsibleEmpIds();
-        boolean empIdsChanged = newEmpIds != null && !new HashSet<>(oldEmpIds).equals(new HashSet<>(newEmpIds));
-        if (empIdsChanged && !newEmpIds.isEmpty()) {
-            int activeCount = addrbookEmployeeMapper.countActiveByEmpIds(newEmpIds);
-            if (activeCount != newEmpIds.size()) {
-                throw new BizException(PortalErrorCode.EMPLOYEE_RESIGNED.getCode(), PortalErrorCode.EMPLOYEE_RESIGNED.getMessage());
-            }
+        List<String> newEmpIds = req.getResponsibleEmpIds() == null
+                ? null : normalizeIds(req.getResponsibleEmpIds());
+        if (newEmpIds != null) {
+            validateResponsibleEmpIds(newEmpIds);
         }
         ProductInfo patch = new ProductInfo();
         patch.setId(id);
@@ -178,15 +159,13 @@ public class ProductService {
         if (req.getDescription() != null) { patch.setDescription(req.getDescription()); existing.setDescription(req.getDescription()); }
         if (req.getSupportForSupportRequest() != null) { patch.setSupportForSupportRequest(req.getSupportForSupportRequest()); existing.setSupportForSupportRequest(req.getSupportForSupportRequest()); }
         if (req.getFileObjectId() != null) { patch.setFileObjectId(req.getFileObjectId()); existing.setFileObjectId(req.getFileObjectId()); }
-        if (empIdsChanged) { patch.setResponsibleEmpIds(newEmpIds); existing.setResponsibleEmpIds(newEmpIds); }
         if (req.getStatus() != null) { patch.setStatus(req.getStatus()); existing.setStatus(req.getStatus()); }
         patch.setUpdatedBy(currentEmpId);
         productInfoMapper.updateById(patch);
-        if (empIdsChanged) { syncResponsibleToAddrbook(id, oldEmpIds, newEmpIds != null ? newEmpIds : Collections.emptyList(), currentEmpId); }
-        clearSupportCache();
-        if (empIdsChanged) {
-            eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(id, existing.getProductCode(), oldEmpIds, newEmpIds != null ? newEmpIds : Collections.emptyList(), "PRODUCT_SIDE", currentEmpId, LocalDateTime.now()));
+        if (newEmpIds != null) {
+            userProductRelationService.replaceUsersForProduct(id, newEmpIds, currentEmpId);
         }
+        clearSupportCache();
         auditUpdate(existing, req, currentEmpId);
         return existing;
     }
@@ -209,34 +188,41 @@ public class ProductService {
                         PortalErrorCode.NO_RIGHT_TO_PRODUCT_DEPT.getMessage());
             }
         }
-        // 前置引用检查：仍有员工引用该产品时，不可删除
-        int refCount = addrbookEmployeeMapper.countEmployeesReferringProduct(id);
+        // 前置引用检查：关系表仍有负责人引用时，不可删除
+        int refCount = userProductRelationService.countUsersByProductId(id);
         if (refCount > 0) {
             throw new BizException(PortalErrorCode.PRODUCT_STILL_REFERRED.getCode(),
                     "仍有 " + refCount + " 名员工引用该产品，不可删除");
         }
         productInfoMapper.softDeleteById(id, currentEmpId);
-        List<String> oldEmpIds = existing.getResponsibleEmpIds() != null ? existing.getResponsibleEmpIds() : Collections.emptyList();
-        if (!oldEmpIds.isEmpty()) { syncResponsibleToAddrbook(id, oldEmpIds, Collections.emptyList(), currentEmpId); }
         clearSupportCache();
-        eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(id, existing.getProductCode(), oldEmpIds, Collections.emptyList(), "PRODUCT_SIDE", currentEmpId, LocalDateTime.now()));
         auditDelete(existing, currentEmpId);
     }
 
-    private void syncResponsibleToAddrbook(String productId, List<String> oldEmpIds, List<String> newEmpIds, String operatorEmpId) {
-        Set<String> oldSet = new HashSet<>(oldEmpIds);
-        Set<String> newSet = new HashSet<>(newEmpIds);
-        Set<String> added = new HashSet<>(newSet); added.removeAll(oldSet);
-        Set<String> removed = new HashSet<>(oldSet); removed.removeAll(newSet);
-        List<String> allEmpIds = new ArrayList<>(); allEmpIds.addAll(added); allEmpIds.addAll(removed); Collections.sort(allEmpIds);
-        for (String empId : allEmpIds) {
-            AddrbookEmployee emp = addrbookEmployeeMapper.selectByEmpId(empId);
-            if (emp == null) { log.warn("[syncResponsibleToAddrbook] skip missing empId={}", empId); continue; }
-            List<String> productIds = emp.getResponsibleProductIds() != null ? new ArrayList<>(emp.getResponsibleProductIds()) : new ArrayList<>();
-            if (added.contains(empId)) { if (!productIds.contains(productId)) { productIds.add(productId); } }
-            else { productIds.remove(productId); }
-            addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(empId, productIds, emp.getUpdatedTime(), operatorEmpId);
+    /** 校验负责人均为通讯录中的在职用户。 */
+    private void validateResponsibleEmpIds(List<String> empIds) {
+        if (empIds.isEmpty()) {
+            return;
         }
+        List<String> invalidEmpIds = addrbookQueryService.findInvalidEmpIds(empIds);
+        if (invalidEmpIds != null && !invalidEmpIds.isEmpty()) {
+            throw new BizException(PortalErrorCode.EMPLOYEE_RESIGNED.getCode(),
+                    PortalErrorCode.EMPLOYEE_RESIGNED.getMessage());
+        }
+    }
+
+    /** 统一规范化负责人 ID，保证关系表复合键不会因空白或重复值冲突。 */
+    private static List<String> normalizeIds(List<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Set<String> normalized = new LinkedHashSet<>();
+        for (String id : ids) {
+            if (id != null && !id.isBlank()) {
+                normalized.add(id.trim());
+            }
+        }
+        return new ArrayList<>(normalized);
     }
 
     /** 清除产品支持缓存（吞没异常，缓存删除失败不影响主流程） */
@@ -280,8 +266,7 @@ public class ProductService {
                 .resourceUrl("/api/products/" + existing.getId())
                 .requestMethod("DELETE")
                 .requestParams("id=" + existing.getId() + "&productCode=" + existing.getProductCode()
-                        + "&fileObjectId=" + existing.getFileObjectId()
-                        + "&responsibleEmpIds=" + existing.getResponsibleEmpIds())
+                        + "&fileObjectId=" + existing.getFileObjectId())
                 .responseStatus(200)
                 .build());
     }

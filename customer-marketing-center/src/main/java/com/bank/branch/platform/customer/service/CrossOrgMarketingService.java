@@ -20,6 +20,8 @@ import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -50,13 +52,22 @@ public class CrossOrgMarketingService {
     private final UserApi userApi;
     private final NotifyApi notifyApi;
 
+    /**
+     * 新 MARKETING_* 表服务。保留旧构造器和旧实体作为兼容入口，Spring 运行时优先
+     * 将数字 ID 的请求路由到目标服务，避免继续向旧跨机构表写入新业务数据。
+     */
+    @Autowired(required = false)
+    private MarketingCrossOrgMarketingService marketingService;
+
     /** 返回内置的四条冻结规则；数据库无配置时作为安全默认值。 */
     public static List<CrossOrgMarketingRule> defaultRules() {
         return List.of(
-                rule(APPLICANT_NOT_MAIN, "申请人不是客户主办", "CCRM", "申请人是当前主办客户经理", 10),
-                rule(MAIN_ORG_DIFFERENT, "申请机构与主办机构不同", "CCRM", "申请机构与主办机构相同", 20),
-                rule(APPLICANT_NO_PERFORMANCE, "申请人无业绩归属", "M98_SNAPSHOT", "申请人已有业绩归属", 30),
-                rule(APPLICANT_ORG_NO_PERFORMANCE, "申请机构无业绩归属", "M98_SNAPSHOT", "申请机构已有业绩归属", 40));
+                rule(APPLICANT_NOT_MAIN, "申请人不是客户主办", "MARKETING_CUSTOMER_INFO", "申请人是当前主办客户经理", 10),
+                rule(MAIN_ORG_DIFFERENT, "申请机构与主办机构不同", "MARKETING_CUSTOMER_INFO", "申请机构与主办机构相同", 20),
+                rule(APPLICANT_NO_PERFORMANCE, "申请人无业绩归属",
+                        "MARKETING_CUSTOMER_PERFORMANCE_REL_SNAPSHOT", "申请人已有业绩归属", 30),
+                rule(APPLICANT_ORG_NO_PERFORMANCE, "申请机构无业绩归属",
+                        "MARKETING_CUSTOMER_PERFORMANCE_REL_SNAPSHOT", "申请机构已有业绩归属", 40));
     }
 
     private static CrossOrgMarketingRule rule(String code, String name, String source, String message, int sort) {
@@ -73,6 +84,10 @@ public class CrossOrgMarketingService {
 
     /** 按数据库启用规则逐条执行并返回前端展示结果。 */
     public CrossOrgValidationRespDTO validate(String custId, String applicantEmpId, String applicantOrgId) {
+        Long marketingCustId = parseLong(custId);
+        if (marketingService != null && marketingCustId != null) {
+            return marketingService.validate(marketingCustId, applicantEmpId, applicantOrgId);
+        }
         CustMaster customer = requireCustomer(custId);
         List<CustPerformanceRelationSnapshot> relations = performanceMapper.selectActiveByCustId(customer.getId());
         if (relations == null) {
@@ -120,6 +135,10 @@ public class CrossOrgMarketingService {
     /** 新建申请并通知原主办及原主办机构。 */
     @Transactional
     public CrossOrgMarketingApply create(String custId, String reason, String applicantEmpId, String applicantOrgId) {
+        Long marketingCustId = parseLong(custId);
+        if (marketingService != null && marketingCustId != null) {
+            return toLegacyApply(marketingService.create(marketingCustId, reason, applicantEmpId, applicantOrgId));
+        }
         if (!StringUtils.hasText(reason)) {
             throw new BizException(CustomerErrorCode.CROSS_ORG_REASON_REQUIRED.getCode(),
                     CustomerErrorCode.CROSS_ORG_REASON_REQUIRED.getMessage());
@@ -175,6 +194,11 @@ public class CrossOrgMarketingService {
     /** 审核通过申请；CAS 成功后只创建一次申请人触达任务。 */
     @Transactional
     public void approve(String id, String reviewerEmpId) {
+        Long marketingApplyId = parseLong(id);
+        if (marketingService != null && marketingApplyId != null) {
+            marketingService.approve(marketingApplyId, reviewerEmpId, true);
+            return;
+        }
         CrossOrgMarketingApply existing = requireApply(id);
         if (!"PENDING".equals(existing.getStatus())) {
             throw statusConflict();
@@ -185,13 +209,18 @@ public class CrossOrgMarketingService {
         }
         TouchTask task = touchTaskService.createFirstTouchTask(existing.getCustId(), existing.getApplicantOrgId(),
                 existing.getApplicantEmpId(), null);
-        applyMapper.updateGeneratedTask(id, task.getId());
+        applyMapper.updateGeneratedTask(id, String.valueOf(task.getId()));
         notifyApplicant(existing, "跨机构营销申请已通过", "审批通过，系统已生成触达任务。", reviewerEmpId);
     }
 
     /** 审核退回申请并记录原因。 */
     @Transactional
     public void reject(String id, String reason, String reviewerEmpId) {
+        Long marketingApplyId = parseLong(id);
+        if (marketingService != null && marketingApplyId != null) {
+            marketingService.reject(marketingApplyId, reason, reviewerEmpId, true);
+            return;
+        }
         CrossOrgMarketingApply existing = requireApply(id);
         if (!"PENDING".equals(existing.getStatus())) {
             throw statusConflict();
@@ -219,24 +248,35 @@ public class CrossOrgMarketingService {
 
     /** 查询申请；审核角色可见全量，普通员工只见本人。 */
     public List<CrossOrgApplyRespDTO> list(String status, String currentEmpId, boolean reviewer) {
+        if (marketingService != null) {
+            return marketingService.list(status, currentEmpId, reviewer);
+        }
         LambdaQueryWrapper<CrossOrgMarketingApply> query = new LambdaQueryWrapper<CrossOrgMarketingApply>()
                 .eq(StringUtils.hasText(status), CrossOrgMarketingApply::getStatus, status)
                 .eq(!reviewer, CrossOrgMarketingApply::getApplicantEmpId, currentEmpId)
                 .orderByDesc(CrossOrgMarketingApply::getCreatedTime);
-        return applyMapper.selectList(query).stream().map(this::toResp).toList();
+        return applyMapper.selectList(query).stream().map(item -> toResp(item, reviewer)).toList();
     }
 
     /** 按权限查询申请详情。 */
     public CrossOrgApplyRespDTO get(String id, String currentEmpId, boolean reviewer) {
+        Long marketingApplyId = parseLong(id);
+        if (marketingService != null && marketingApplyId != null) {
+            return marketingService.get(marketingApplyId, currentEmpId, reviewer);
+        }
         CrossOrgMarketingApply entity = requireApply(id);
         if (!reviewer && !java.util.Objects.equals(currentEmpId, entity.getApplicantEmpId())) {
             throw new BizException(CustomerErrorCode.CROSS_ORG_REVIEW_FORBIDDEN.getCode(),
                     CustomerErrorCode.CROSS_ORG_REVIEW_FORBIDDEN.getMessage());
         }
-        return toResp(entity);
+        return toResp(entity, reviewer);
     }
 
     private CrossOrgApplyRespDTO toResp(CrossOrgMarketingApply entity) {
+        return toResp(entity, false);
+    }
+
+    private CrossOrgApplyRespDTO toResp(CrossOrgMarketingApply entity, boolean reviewer) {
         CrossOrgApplyRespDTO dto = new CrossOrgApplyRespDTO();
         org.springframework.beans.BeanUtils.copyProperties(entity, dto);
         CustMaster customer = masterMapper.selectById(entity.getCustId());
@@ -248,7 +288,20 @@ public class CrossOrgMarketingService {
             dto.setApplicantName(applicant.getDisplayName());
             dto.setApplicantOrgName(applicant.getMainOrgName());
         }
+        dto.setCanReview(reviewer && "IN_APPROVAL".equals(entity.getStatus()));
         return dto;
+    }
+
+    private CrossOrgMarketingApply toLegacyApply(
+            com.bank.branch.platform.customer.entity.marketing.MarketingCrossOrgApply source) {
+        CrossOrgMarketingApply target = new CrossOrgMarketingApply();
+        if (source == null) return target;
+        BeanUtils.copyProperties(source, target);
+        target.setId(source.getId() == null ? null : String.valueOf(source.getId()));
+        target.setCustId(source.getCustId() == null ? null : String.valueOf(source.getCustId()));
+        target.setGeneratedTouchTaskId(source.getGeneratedTouchTaskId() == null
+                ? null : String.valueOf(source.getGeneratedTouchTaskId()));
+        return target;
     }
 
     private void notifyOriginalOwners(CrossOrgMarketingApply entity, String custName) {
@@ -307,5 +360,14 @@ public class CrossOrgMarketingService {
     private BizException statusConflict() {
         return new BizException(CustomerErrorCode.CROSS_ORG_STATUS_CONFLICT.getCode(),
                 CustomerErrorCode.CROSS_ORG_STATUS_CONFLICT.getMessage());
+    }
+
+    private Long parseLong(String value) {
+        if (!StringUtils.hasText(value)) return null;
+        try {
+            return Long.valueOf(value.trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 }

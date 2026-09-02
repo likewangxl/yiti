@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 /**
  * 触达报告视图对象（聚合查询结果）。
  * <p>
- * 由 TouchReportMapper 通过 TOUCH_TASK LEFT JOIN CUSTOMER_MARKET_CUSTOMER 聚合而来，
+ * 由 TouchReportMapper 通过 MARKETING_TOUCH_TASK LEFT JOIN MARKETING_CUSTOMER_INFO 聚合而来，
  * 包含任务基本信息、客户名称以及该任务关联的日志条数。
  * </p>
  */

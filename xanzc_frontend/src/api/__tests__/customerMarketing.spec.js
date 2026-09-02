@@ -17,7 +17,9 @@ import {
   listCustomerTransfers, transferCustomer,
   listMarketingCustomers, getMarketingCustomer, exportMarketingCustomers,
   listLeads, getLead, createLead, updateLead, deleteLead, submitLead,
-  lookupLeadMainManager, listLeadApprovals, getLeadApproval, getAvailableCustomerLeadDetail, exportLeadApprovals
+  lookupLeadMainManager, listLeadApprovals, getLeadApproval, getAvailableCustomerLeadDetail, exportLeadApprovals,
+  previewLeadImport, executeLeadImport
+  ,listNameList, importNameList, downloadNameListTemplate, exportNameList
 } from '../customerMarketing';
 
 describe('customer marketing APIs', () => {
@@ -86,7 +88,7 @@ describe('customer marketing APIs', () => {
     await validateCrossOrgMarketing('C1');
     await createCrossOrgMarketing({ custId: 'C1', reason: '联合营销' });
     await approveCrossOrgMarketing('A1', '审批通过');
-    expect(call).toHaveBeenNthCalledWith(1, 'get', '/cross-org-marketing/validate', { params: { custId: 'C1' } }, null);
+    expect(call).toHaveBeenNthCalledWith(1, 'get', '/cross-org-marketing/validate', { params: { custNo: 'C1' } }, null);
     expect(call).toHaveBeenNthCalledWith(2, 'post', '/cross-org-marketing', { data: { custId: 'C1', reason: '联合营销' } });
     expect(call).toHaveBeenNthCalledWith(3, 'post', '/cross-org-marketing/A1/approve', {
       data: { reason: '审批通过' }
@@ -133,6 +135,23 @@ describe('customer marketing APIs', () => {
     expect(call).toHaveBeenNthCalledWith(7, 'delete', '/leads/L1', {});
   });
 
+  it('线索批量导入使用预览 FormData 和批次执行接口', async () => {
+    const file = new File(['客户名称,是否触达限制\n华夏科技,是'], '线索导入.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+
+    await previewLeadImport(file);
+    await executeLeadImport('BATCH-1');
+
+    const previewConfig = call.mock.calls[0][2];
+    expect(call.mock.calls[0].slice(0, 2)).toEqual(['post', '/leads/import/preview']);
+    expect(previewConfig.data).toBeInstanceOf(FormData);
+    expect(previewConfig.data.get('file')).toBe(file);
+    expect(call).toHaveBeenNthCalledWith(2, 'post', '/leads/import/execute', {
+      data: { batchId: 'BATCH-1' }
+    });
+  });
+
   it('线索审批页使用独立待办已办、详情和导出接口', async () => {
     await listLeadApprovals({ tab: 'PENDING' });
     await getLeadApproval('L1');
@@ -144,8 +163,46 @@ describe('customer marketing APIs', () => {
     }, null);
   });
 
-  it('待认领客户池详情使用审批详情资源并按线索编号查询', async () => {
+  it('待认领客户池详情复用客户池资源并按来源线索查询', async () => {
     await getAvailableCustomerLeadDetail('LEAD-POOL-1');
-    expect(call).toHaveBeenCalledWith('get', '/lead-approvals/LEAD-POOL-1', {}, null);
+    expect(call).toHaveBeenCalledWith('get', '/customer-pool', {
+      params: { leadId: 'LEAD-POOL-1' }
+    }, null);
+  });
+
+  it('标签客户名单查询、模板下载和按筛选条件导出使用独立资源', async () => {
+    const params = {
+      companyName: '华夏科技',
+      companyUsci: '91310000123456789A',
+      nameType: '重点客户',
+      startDate: '2026-08-01',
+      endDate: '2026-08-25',
+      pageNo: 2,
+      pageSize: 20
+    };
+    await listNameList(params);
+    await downloadNameListTemplate();
+    await exportNameList(params);
+
+    expect(call).toHaveBeenNthCalledWith(1, 'get', '/name-list', { params }, null);
+    expect(call).toHaveBeenNthCalledWith(2, 'get', '/name-list/template', { responseType: 'blob' }, null);
+    expect(call).toHaveBeenNthCalledWith(3, 'get', '/name-list/export', { params, responseType: 'blob' }, null);
+  });
+
+  it('标签客户名单导入使用 multipart FormData 并保留后端汇总结果', async () => {
+    const file = new File(['companyName,companyUsci\n华夏科技,91310000123456789A'], '名单.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+    const result = { totalRows: 1, importedCount: 1, skippedCount: 0, errors: [] };
+    call.mockResolvedValueOnce(result);
+
+    const actual = await importNameList(file);
+
+    const config = call.mock.calls[0][2];
+    expect(call.mock.calls[0].slice(0, 2)).toEqual(['post', '/name-list/import']);
+    expect(config.data).toBeInstanceOf(FormData);
+    expect(config.data.get('file')).toBe(file);
+    expect(config.headers).toEqual({ 'Content-Type': 'multipart/form-data' });
+    expect(actual).toEqual(result);
   });
 });

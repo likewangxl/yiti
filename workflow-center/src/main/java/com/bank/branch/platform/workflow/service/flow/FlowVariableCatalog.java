@@ -26,6 +26,9 @@ import java.util.stream.Collectors;
 @Component
 public class FlowVariableCatalog {
 
+    /** 机构审批分组列表：元素为 ApproverGroupDTO，不能当作普通员工工号列表使用。 */
+    public static final String GROUP_LIST = "group-list";
+
     /**
      * 发起人机构级别变量：由 {@code ProcessStartService} 启动流程时统一注入
      * （1=总部 / 2=分行 / 3=支行）。供网关按 2级/3级机构走不同审批路径，
@@ -42,7 +45,9 @@ public class FlowVariableCatalog {
                     new FlowVariableDTO("allocDim", "分配维度",  "string"),
                     START_ORG_LEVEL,
                     new FlowVariableDTO("corpRouteTo", "部门审批走向", "string"),
-                    new FlowVariableDTO("finRouteTo",  "资财部审批走向", "string")),
+                    new FlowVariableDTO("finRouteTo",  "资财部审批走向", "string"),
+                    new FlowVariableDTO("originalOwnerLevel3ApprovalRequired",
+                            "原业绩是否需3级机构负责人审批", "string")),
             // TARGET_ADJUST：TargetAdjustService 实际写入 subjectType / subjectId / cycleKey + 系统注入 startOrgLevel
             "TARGET_ADJUST", List.of(
                     new FlowVariableDTO("subjectType", "主体类型", "string"),
@@ -53,15 +58,21 @@ public class FlowVariableCatalog {
 
     /**
      * VAR 审批人可选的「名单类流程变量」目录（按 bizType）。
-     * <p>这些变量由提交方启动流程时写入，值为审批人工号（单值或列表），供审批节点
-     * 选「流程变量」类型审批人时下拉选择，避免手输变量名出错。</p>
+     * <p>这些变量由提交方启动流程时写入，值为审批人工号（单值或列表），或机构审批分组
+     * 列表（{@link #GROUP_LIST}），供审批节点选「流程变量」类型审批人时下拉选择，避免
+     * 手输变量名出错。</p>
      */
     private static final Map<String, List<FlowVariableDTO>> APPROVER_VAR_CATALOG = Map.of(
             // ALLOC_ADJUST：AllocAdjustService.submit 写入 originalOwnerEmpIds（原业绩分配名单）
             // 与 originalOwnerOrgLeaderEmpIds（原业绩所属 2 级机构 BRANCH_HEAD 负责人名单）
+            // originalOwnerOrgApprovalGroups（按2级机构分组的负责人快照）
+            // 以及 originalOwnerLevel3OrgApprovalGroups（仅原业绩人为3级机构员工时生成）
             "ALLOC_ADJUST", List.of(
                     new FlowVariableDTO("originalOwnerEmpIds", "原业绩所属人", "list"),
-                    new FlowVariableDTO("originalOwnerOrgLeaderEmpIds", "原业绩所属机构负责人", "list"))
+                    new FlowVariableDTO("originalOwnerOrgLeaderEmpIds", "原业绩所属机构负责人", "list"),
+                    new FlowVariableDTO("originalOwnerOrgApprovalGroups", "原业绩所属机构负责人分组", GROUP_LIST),
+                    new FlowVariableDTO("originalOwnerLevel3OrgApprovalGroups",
+                            "原业绩所属3级机构负责人分组", GROUP_LIST))
             // TARGET_ADJUST 无 VAR 审批人变量
     );
 

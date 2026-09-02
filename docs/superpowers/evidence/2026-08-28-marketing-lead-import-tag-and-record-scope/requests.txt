@@ -1,0 +1,8 @@
+GET /api/auth/current-user -> 200 (development-only mock)
+GET /api/auth/my-menus -> 200 (development-only mock)
+GET /api/auth/permissions -> 200 (development-only mock)
+GET /api/marketing/leads?keyword=&status=&pageNo=1&pageSize=20 -> 200 (development-only mock)
+GET /api/marketing/lead-import-batches?keyword=&status=&pageNo=1&pageSize=20 -> 200 (development-only mock)
+GET /api/marketing/lead-import-batches/28/details?pageNo=1&pageSize=100 -> 200 (development-only mock)
+
+No request to /api/marketing/lead-import-batches/28/error-file was issued or exposed by the page.

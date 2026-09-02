@@ -59,6 +59,20 @@ class TodoQueryServiceBranchTest {
     }
 
     @Test
+    void computeOutgoingBranches_disabledHistoricalEdge_doesNotExposeButton() {
+        FlowGraphDTO g = new FlowGraphDTO();
+        g.setEdges(List.of(
+                edge("branch_approve_l3", "branch_approve_l2", "2级机构负责人审批", null, null),
+                edge("branch_approve_l3", "finance_review", "历史直达边已停用", "startOrgLevel", "0")
+        ));
+
+        List<BranchOptionDTO> branches = TodoQueryService.computeOutgoingBranches(g, "branch_approve_l3");
+
+        assertEquals(1, branches.size());
+        assertEquals("2级机构负责人审批", branches.get(0).getOutputName());
+    }
+
+    @Test
     void computeOutgoingBranches_nullGraph_returnsEmpty() {
         assertTrue(TodoQueryService.computeOutgoingBranches(null, "biz_dept_review").isEmpty());
     }
@@ -93,5 +107,28 @@ class TodoQueryServiceBranchTest {
         assertEquals("LEADER", branches.get(0).getRouteVariables().get("corpRouteTo"));
         assertEquals("原业绩所属人会签", branches.get(1).getOutputName());
         assertEquals("OWNER", branches.get(1).getRouteVariables().get("corpRouteTo"));
+    }
+
+    @Test
+    void computeOutgoingBranches_conditionalUnnamedGatewayEdge_doesNotPassThrough() {
+        // v8 图结构：branch_approve_l2 的条件边分别指向业务审批节点和路由网关，均不是结构边。
+        FlowGraphDTO g = new FlowGraphDTO();
+        g.setNodes(List.of(
+                node("branch_approve_l2", "APPROVAL"),
+                node("biz_dept_review", "APPROVAL"),
+                node("gw2_route", "GATEWAY"),
+                node("finance_leader_approve", "APPROVAL"),
+                node("end", "END")
+        ));
+        g.setEdges(List.of(
+                edge("branch_approve_l2", "biz_dept_review", null, "allocDim", "RULE"),
+                edge("branch_approve_l2", "gw2_route", null, "allocDim", "新开户"),
+                edge("gw2_route", "finance_leader_approve", "资财部负责人审批", "finRouteTo", "LEADER"),
+                edge("gw2_route", "end", "审批结束", null, null)
+        ));
+
+        List<BranchOptionDTO> branches = TodoQueryService.computeOutgoingBranches(g, "branch_approve_l2");
+
+        assertTrue(branches.isEmpty());
     }
 }

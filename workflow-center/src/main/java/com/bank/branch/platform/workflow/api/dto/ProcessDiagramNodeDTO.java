@@ -10,6 +10,9 @@ import java.time.LocalDateTime;
 @Data
 public class ProcessDiagramNodeDTO {
 
+    /** Flowable 任务ID；仅 userTask 节点有值。 */
+    private String taskId;
+
     /** BPMN 节点ID */
     private String nodeKey;
 

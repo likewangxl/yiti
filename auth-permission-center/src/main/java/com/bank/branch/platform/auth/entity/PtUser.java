@@ -37,6 +37,10 @@ public class PtUser {
     /** 邮箱，对应 EMAIL */
     private String email;
 
+    /** 电话号码，对应 MOBILE；由用户本人通过通讯录自助维护 */
+    @TableField("MOBILE")
+    private String mobile;
+
     /** 用户类型（字典 USER_TYPE：1-员工 / 2-虚拟员工），对应 USER_TYPE */
     @TableField("USER_TYPE")
     private String userType;

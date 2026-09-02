@@ -79,7 +79,7 @@ public class WorkflowCallbackListener {
      *       reconcile 早返回（log.warn 但不抛异常），<strong>不</strong>发布下游事件，
      *       保证幂等（重复事件 / 补偿与 listener 主路径并发触发场景下不会双写 cust_master）；</li>
      *   <li><strong>非 LEAD 前缀 businessKey</strong>：本 listener 仅处理 {@code LEAD:*} 前缀的流程，
-     *       其他模块（如 LOAN/SUPPORT）由各自 listener 监听同一 {@code ProcessCompletedEvent} 处理。</li>
+     *       其他业务（如资产立项、诉求支持）由各自 listener 监听同一 {@code ProcessCompletedEvent} 处理。</li>
      * </ul>
      * </p>
      *

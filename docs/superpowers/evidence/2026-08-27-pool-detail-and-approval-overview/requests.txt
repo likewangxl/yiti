@@ -1,0 +1,18 @@
+GET http://127.0.0.1:8090/api/customer-pool?sourceType=PUBLIC&pageNo=1&pageSize=20
+status: 200 OK
+response summary: code=0, total=1, custName=测试客户1, sourceLeadId=1, industryName=金融业
+
+GET http://127.0.0.1:8090/api/customer-pool?leadId=1
+status: 200 OK
+duration: 28ms
+traceId: pc-1787824971085-751010
+response summary: code=0, custName=测试客户1, leadStatus=APPROVED, distributionMode=PUBLIC, poolStatus=AVAILABLE, ownershipStatus=UNASSIGNED, creditAmount=50000000.00, creditExposureAmount=59990000.00
+
+GET http://127.0.0.1:8090/api/marketing/lead-approvals/pending?pageNo=1&pageSize=1 => 200 OK
+GET http://127.0.0.1:8090/api/marketing/lead-approvals/history?result=APPROVED&pageNo=1&pageSize=1 => 200 OK
+GET http://127.0.0.1:8090/api/marketing/lead-approvals/history?result=REJECTED&pageNo=1&pageSize=1 => 200 OK
+GET http://127.0.0.1:8090/api/marketing/lead-approvals/overview?keyword=&pageNo=1&pageSize=20
+status: 200 OK
+duration: 46ms
+traceId: pc-1787824946739-938593
+response summary: code=0, total=1, leadId=2, custName=测试客户2, leadStatus=IN_APPROVAL, taskId=ef12e75e-a1fc-11f1-ba3f-96ad2b0efe06

@@ -31,6 +31,7 @@ public class TouchLogReqDTO {
      * 触达内容描述，必填
      */
     @NotBlank(message = "触达内容不能为空")
+    @Size(max = 200, message = "触达内容不能超过200个字符")
     @Schema(description = "触达内容文字描述", required = true)
     private String logContent;
 

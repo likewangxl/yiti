@@ -32,6 +32,38 @@ public interface UserDirectoryMapper extends BaseMapper<PtUser> {
                                            @Param("limit") int limit);
 
     /**
+     * 分页查询在职用户，可按关键字和机构编码过滤。
+     *
+     * @param keyword 关键字（用户 ID、登录名、中文姓名、电话或邮箱），可为空
+     * @param orgCode 机构编码，可为空
+     * @param offset  分页偏移量
+     * @param limit   每页条数
+     * @return 通讯录视图列表
+     */
+    List<UserDirectoryDTO> selectActiveUsersByPage(@Param("keyword") String keyword,
+                                                    @Param("orgCode") String orgCode,
+                                                    @Param("offset") int offset,
+                                                    @Param("limit") int limit);
+
+    /**
+     * 统计满足关键字和机构条件的在职用户数。
+     *
+     * @param keyword 关键字，可为空
+     * @param orgCode 机构编码，可为空
+     * @return 用户数
+     */
+    long countActiveUsers(@Param("keyword") String keyword,
+                          @Param("orgCode") String orgCode);
+
+    /**
+     * 按 USER_ID 批量查询用户通讯录视图。
+     *
+     * @param empIds USER_ID 列表（调用方保证非空）
+     * @return 命中的用户列表
+     */
+    List<UserDirectoryDTO> selectByEmpIds(@Param("empIds") List<String> empIds);
+
+    /**
      * 按 empId（= USER_ID 代理键）查询单个员工详情（对应原 /api/employees/{empId}）。
      *
      * <p>与 addrbook selectByEmpId 口径一致：不做在职过滤，按主键直查。</p>

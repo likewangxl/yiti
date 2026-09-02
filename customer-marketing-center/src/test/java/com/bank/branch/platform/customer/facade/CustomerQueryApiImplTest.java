@@ -365,8 +365,7 @@ class CustomerQueryApiImplTest {
     void listRunningProcesses_returnsTouchTaskFlows() {
         // given
         TouchTask t = new TouchTask();
-        t.setId("T1");
-        t.setBusinessKey("TOUCH:T1");
+        t.setId(1L);
         t.setOrgId("ORG001");
         t.setAssigneeEmpId("E001");
         t.setTaskStatus("PENDING");
@@ -378,8 +377,8 @@ class CustomerQueryApiImplTest {
         // then
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getBizType()).isEqualTo("TOUCH_TASK");
-        assertThat(result.get(0).getBizId()).isEqualTo("T1");
-        assertThat(result.get(0).getBusinessKey()).isEqualTo("TOUCH:T1");
+        assertThat(result.get(0).getBizId()).isEqualTo("1");
+        assertThat(result.get(0).getBusinessKey()).isEqualTo("TOUCH:1");
         assertThat(result.get(0).getStatus()).isEqualTo("PENDING");
     }
 

@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerInfoMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, cust_no, cust_name, unified_credit_code, legal_representative,
+        registered_capital, registered_address, business_address, business_scope,
+        contact_person, contact_mobile, industry, group_type, group_name,
+        customer_type, enterprise_type, is_keystone, customer_desc, is_account_opened,
+        credit_amount, credit_exposure_amount, touch_restricted, current_lead_id,
+        last_touch_time, main_manager_id, main_org_id, ownership_status,
+        ownership_source, ownership_maintain_mode, ownership_data_date,
+        ownership_updated_by, ownership_updated_time, ownership_manual_reason,
+        profile_version, account_opened_by_emp_id, account_opened_time,
+        opening_touch_task_id, record_status, created_by, created_time, updated_by,
+        updated_time, lock_version
+    </sql>
+
+    <select id="selectActiveById"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_INFO
+        WHERE id = #{id}
+          AND record_status = 'ACTIVE'
+        LIMIT 1
+    </select>
+
+    <select id="selectForUpdate"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_INFO
+        WHERE id = #{id}
+          AND record_status = 'ACTIVE'
+        FOR UPDATE
+    </select>
+
+    <select id="selectActiveMatches"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_INFO
+        WHERE record_status = 'ACTIVE'
+        <choose>
+            <when test="unifiedCreditCode != null and unifiedCreditCode != ''">
+                AND unified_credit_code = #{unifiedCreditCode}
+            </when>
+            <otherwise>
+                AND cust_name = #{customerName}
+            </otherwise>
+        </choose>
+        ORDER BY id ASC
+        LIMIT 2
+    </select>
+
+    <sql id="FILTER_CONDITIONS">
+        <if test="query != null and query.keyword != null and query.keyword != ''">
+            AND (cust_name LIKE CONCAT('%', #{query.keyword}, '%')
+                 OR cust_no LIKE CONCAT('%', #{query.keyword}, '%')
+                 OR unified_credit_code LIKE CONCAT('%', #{query.keyword}, '%'))
+        </if>
+        <if test="query != null and query.unifiedCreditCode != null and query.unifiedCreditCode != ''">
+            AND unified_credit_code = #{query.unifiedCreditCode}
+        </if>
+        <if test="query != null and query.custNo != null and query.custNo != ''">
+            AND cust_no = #{query.custNo}
+        </if>
+        <if test="query != null and query.mainManagerId != null and query.mainManagerId != ''">
+            AND main_manager_id = #{query.mainManagerId}
+        </if>
+        <if test="query != null and query.ownershipStatus != null and query.ownershipStatus != ''">
+            AND ownership_status = #{query.ownershipStatus}
+        </if>
+        <if test="query != null and query.isAccountOpened != null">
+            AND is_account_opened = #{query.isAccountOpened}
+        </if>
+        <if test="query != null and query.industry != null and query.industry != ''">
+            AND industry = #{query.industry}
+        </if>
+        <if test="query != null and query.customerType != null and query.customerType != ''">
+            AND customer_type = #{query.customerType}
+        </if>
+        <if test="query != null and query.isKeystone != null">
+            AND is_keystone = #{query.isKeystone}
+        </if>
+        <if test="query != null and query.ownershipMaintainMode != null and query.ownershipMaintainMode != ''">
+            AND ownership_maintain_mode = #{query.ownershipMaintainMode}
+        </if>
+        <if test="query != null and query.recordStatus != null and query.recordStatus != ''">
+            AND record_status = #{query.recordStatus}
+        </if>
+        <if test="query != null and query.updatedFrom != null">
+            AND updated_time &gt;= #{query.updatedFrom}
+        </if>
+        <if test="query != null and query.updatedTo != null">
+            AND updated_time &lt;= #{query.updatedTo}
+        </if>
+    </sql>
+
+    <sql id="SCOPE_CONDITIONS">
+        <if test="mineEmpId != null and mineEmpId != ''">
+            AND main_manager_id = #{mineEmpId}
+            AND ownership_status = 'ASSIGNED'
+        </if>
+        <if test="mineEmpId == null or mineEmpId == ''">
+            <choose>
+                <when test="scopeType == 'ALL' or scopeType == null or scopeType == ''">
+                    <!-- 管理员/ALL 不追加机构边界。 -->
+                </when>
+                <when test="scopeType == 'ORG' or scopeType == 'ORG_SUBTREE'">
+                    <choose>
+                        <when test="orgCodes != null and !orgCodes.isEmpty()">
+                            AND main_org_id IN
+                            <foreach collection="orgCodes" item="org" open="(" close=")" separator=",">
+                                #{org}
+                            </foreach>
+                        </when>
+                        <otherwise>AND 1 = 0</otherwise>
+                    </choose>
+                </when>
+                <when test="scopeType == 'SELF' or scopeType == 'SELF_ASSIGNED' or scopeType == 'SELF_CREATED'">
+                    <!-- 无操作人时按无数据处理，避免误放大范围。 -->
+                    AND 1 = 0
+                </when>
+                <otherwise>AND 1 = 0</otherwise>
+            </choose>
+        </if>
+    </sql>
+
+    <select id="selectPage"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_CUSTOMER_INFO
+        <where>
+            1 = 1
+            <include refid="FILTER_CONDITIONS"/>
+            <include refid="SCOPE_CONDITIONS"/>
+        </where>
+        ORDER BY updated_time DESC, id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*)
+        FROM MARKETING_CUSTOMER_INFO
+        <where>
+            1 = 1
+            <include refid="FILTER_CONDITIONS"/>
+            <include refid="SCOPE_CONDITIONS"/>
+        </where>
+    </select>
+
+    <update id="updateProfileByVersions">
+        UPDATE MARKETING_CUSTOMER_INFO
+        <set>
+            <if test="profile.custName != null">cust_name = #{profile.custName},</if>
+            <if test="profile.legalRepresentative != null">legal_representative = #{profile.legalRepresentative},</if>
+            <if test="profile.contactPerson != null">contact_person = #{profile.contactPerson},</if>
+            <if test="profile.contactMobile != null">contact_mobile = #{profile.contactMobile},</if>
+            <if test="profile.registeredAddress != null">registered_address = #{profile.registeredAddress},</if>
+            <if test="profile.businessAddress != null">business_address = #{profile.businessAddress},</if>
+            <if test="profile.businessScope != null">business_scope = #{profile.businessScope},</if>
+            <if test="profile.industry != null">industry = #{profile.industry},</if>
+            <if test="profile.groupType != null">group_type = #{profile.groupType},</if>
+            <if test="profile.groupName != null">group_name = #{profile.groupName},</if>
+            <if test="profile.customerType != null">customer_type = #{profile.customerType},</if>
+            <if test="profile.enterpriseType != null">enterprise_type = #{profile.enterpriseType},</if>
+            <if test="profile.isKeystone != null">is_keystone = #{profile.isKeystone},</if>
+            <if test="profile.customerDesc != null">customer_desc = #{profile.customerDesc},</if>
+            <if test="profile.registeredCapital != null">registered_capital = #{profile.registeredCapital},</if>
+            <if test="profile.creditAmount != null">credit_amount = #{profile.creditAmount},</if>
+            <if test="profile.creditExposureAmount != null">credit_exposure_amount = #{profile.creditExposureAmount},</if>
+            <if test="profile.touchRestricted != null">touch_restricted = #{profile.touchRestricted},</if>
+            profile_version = COALESCE(profile_version, 0) + 1,
+            lock_version = COALESCE(lock_version, 0) + 1,
+            updated_by = #{updatedBy},
+            updated_time = #{updatedTime}
+        </set>
+        WHERE id = #{id}
+          AND record_status = 'ACTIVE'
+          AND profile_version = #{profileVersion}
+          AND lock_version = #{lockVersion}
+    </update>
+
+    <update id="updateOwnershipByLockVersion">
+        UPDATE MARKETING_CUSTOMER_INFO
+        SET main_manager_id = #{managerId},
+            main_org_id = #{orgId},
+            ownership_status = #{ownershipStatus},
+            ownership_source = 'MANUAL',
+            ownership_maintain_mode = #{ownershipMaintainMode},
+            ownership_updated_by = #{updatedBy},
+            ownership_updated_time = #{updatedTime},
+            ownership_manual_reason = #{manualReason},
+            updated_by = #{updatedBy},
+            updated_time = #{updatedTime},
+            lock_version = COALESCE(lock_version, 0) + 1
+        WHERE id = #{id}
+          AND record_status = 'ACTIVE'
+          AND lock_version = #{lockVersion}
+    </update>
+</mapper>

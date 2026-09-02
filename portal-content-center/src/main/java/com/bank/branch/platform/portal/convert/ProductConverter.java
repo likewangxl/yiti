@@ -44,6 +44,17 @@ public final class ProductConverter {
      * @return ProductDTO，entity 为 null 时返回 null
      */
     public static ProductDTO toDTO(ProductInfo entity) {
+        return toDTO(entity, null);
+    }
+
+    /**
+     * 将产品实体和关系表派生的负责人列表转换为跨模块 DTO。
+     *
+     * @param entity 产品实体
+     * @param responsibleEmpIds {@code PORTAL_USER_PRODUCT_REL} 派生的负责人 ID
+     * @return 产品 DTO
+     */
+    public static ProductDTO toDTO(ProductInfo entity, List<String> responsibleEmpIds) {
         if (entity == null) return null;
         return ProductDTO.builder()
                 .id(entity.getId())
@@ -56,7 +67,7 @@ public final class ProductConverter {
                 .productDeptOrgCode(entity.getProductDeptOrgCode())
                 .productDeptOrgName(null) // 需要 OrgApi 翻译，Service 层填充
                 .fileObjectId(entity.getFileObjectId())
-                .responsibleEmpIds(entity.getResponsibleEmpIds())
+                .responsibleEmpIds(responsibleEmpIds)
                 .status(entity.getStatus())
                 .createdTime(entity.getCreatedTime())
                 .updatedTime(entity.getUpdatedTime())

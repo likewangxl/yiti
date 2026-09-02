@@ -4,7 +4,14 @@
 > 关联文档: `01-功能规格.md` / `02-后端架构.md` / `03-接口设计与报文.md`
 > 契约层: 所有跨模块调用必须通过本文件定义的 `*Api` 接口, 禁止直接访问本模块的 mapper/entity/serviceImpl
 > 契约位置: `com.bank.branch.platform.performance.api.*`
-> 最后更新: **2026-08-11**（此前一次实质更新 2026-07-19）
+> 最后更新: **2026-08-27**（原业绩分配预览查询口径同步；此前一次实质更新 2026-07-19）
+
+> **2026-08-27 口径同步**：`AllocApi.getLastApprovedAllocPreview` 现从
+> `CUST_ALLOC_RELATION` 的 `is_original='2'` 候选中，按 `source_batch_id`（空/NULL 按自身
+> `id` 独立批次）选整体最新一批并返回该批全部关系行；`ACCOUNT` 只在 ACCOUNT 候选中选，
+> `RULE/null` 在 RULE+ACCOUNT 候选中选。关系的 `empId` 是 PT_USER.USER_ID，`username` 经
+> `UserApi.mapEmpIdsToUsername` 批量映射为 PT_USER.USERNAME，未解析时回退 USER_ID；
+> 中文姓名与机构继续读取关系快照。REST 路径、参数和权限不变。
 
 > **2026-08-11 增量说明**：`PerfApprovalQueryApi.getAllocAdjustDetail` 的 `AllocAdjustDetailDTO` 新增 `currentNodeApprovers[]`，返回当前未审核活动节点可审批员工的姓名和工号；节点已审核或流程终态时为空列表。该字段的节点级解释按串行单活动审批节点假设；现有并行/多实例审批返回值不携带任务/节点分组。
 
@@ -724,21 +731,22 @@ public interface AllocApi {
     /* ==================== 原业绩分配预览（调整申请页面，2026-07-19 补充） ==================== */
 
     /**
-     * 查询客户「原业绩分配」预览：分别取「按规则分配(RULE)」与「按账号分配(ACCOUNT)」两个维度下
-     * 审批通过(APPROVED)的最后一条分配关系调整申请，关联其调整明细返回.
+     * 查询客户「原业绩分配」预览：从当前原分配关系（{@code CUST_ALLOC_RELATION.is_original='2'}）
+     * 的维度候选中按来源批次选最新一批，并返回该批次全部关系行。
      *
-     * <p>数据源为 {@code PERF_ALLOC_ADJUST_APPLY} + {@code PERF_ALLOC_ADJUST_ITEM}（非
-     * {@code cust_alloc_relation}），供审批/新增调整申请页面的「原业绩分配」模块展示。
+     * <p>{@code source_batch_id} 非空时按批次分组；空/NULL 历史行按自身 {@code id} 独立成批次。
+     * 批次排序优先 {@code source_process_date}，其次 {@code created_time}，再以稳定字段消歧。
+     * {@code ACCOUNT} 只在 ACCOUNT 候选中选最新批次；{@code RULE} 或 null 在 RULE+ACCOUNT 候选中选整体最新批次。
      *
-     * @param custId   客户编号（匹配 apply.cust_id）
-     * @param allocDim 当前申请的分配维度（RULE / ACCOUNT / null，null 或 RULE 取 RULE+ACCOUNT 两者）
+     * @param custId   客户编号（匹配 relation.cust_id）
+     * @param allocDim 当前申请的分配维度（RULE / ACCOUNT / null）
      * @return 预览项列表，可能为空列表，不会返回 null
      */
     List<AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custId, String allocDim);
 }
 ```
 
-> **2026-07-19 代码核实**：源码 `AllocApi` 实际比本节原文档多 1 个方法 `getLastApprovedAllocPreview`（上方已补入代码块），供审批/新增调整申请页面展示"原业绩分配"预览，与 `cust_alloc_relation`（生产分配关系）不同，反映的是"最近一次审批通过的调整申请"快照。对应 DTO `AllocAdjustPreviewItemDTO` 见 §7.4。
+> **2026-07-19 代码核实**：源码 `AllocApi` 实际比本节原文档多 1 个方法 `getLastApprovedAllocPreview`（上方已补入代码块），供审批/新增调整申请页面展示"原业绩分配"预览。2026-08-27 已将其数据口径同步为当前 `CUST_ALLOC_RELATION` 最新来源批次；对应 DTO `AllocAdjustPreviewItemDTO` 见 §7.4。
 
 ### 7.1 AllocApi 补充 DTO
 
@@ -832,24 +840,26 @@ public class LoanSubmitService {
 - 监听 `performance.allocation-adjustment.approved.v1` 事件 → 失效相关 `alloc:*` 缓存
 - 监听 `performance.sys-control.updated.v1` 事件 → 失效 `alloc:latestver:*` 缓存
 
-### 7.4 AllocApi 原业绩分配预览方法与 DTO（2026-07-19 补充，代码核实）
+### 7.4 AllocApi 原业绩分配预览方法与 DTO（2026-07-19 补充，2026-08-27 口径同步）
 
 **方法：** `List<AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custId, String allocDim)`
 
-**调用方：** `performance-engine-center` 内部（`AllocAdjustController`/`TargetAdjustController` 等新建调整申请页面），当前未见其他模块消费，暂列为模块内可复用能力
+**调用方：** `performance-engine-center` 内部调整申请页面，以及 `report-analytics-center` 的 `/api/report/alloc-preview` 透传服务
+
+**查询口径：** 仅从 `CUST_ALLOC_RELATION` 中筛 `is_original='2'` 的候选关系。非空 `source_batch_id` 的行按批次分组，空/NULL 批次号的历史行按自身 `id` 独立成批次；按 `source_process_date`、`created_time`、稳定字段选整体最新一批，并返回该批全部关系行。`ACCOUNT` 只在 ACCOUNT 候选中选最新批次；`RULE/null` 在 RULE+ACCOUNT 候选中选整体最新批次。
 
 **`AllocAdjustPreviewItemDTO` 字段：**
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `allocDim` | String | 分配维度：RULE（按规则分配）/ ACCOUNT（按账号分配） |
-| `accountNo` | String | 账号（ACCOUNT 维度取 apply.account_no；RULE 维度为空） |
-| `empId` | String | 员工工号（item.emp_id） |
-| `username` | String | 员工登录名（PT_USER.USERNAME；解析不到时回退为工号） |
-| `empChnName` | String | 员工中文姓名（PT_USER.USERCHNNAME） |
-| `orgCode` | String | 所属机构号（员工主机构 ORG_CODE） |
-| `orgName` | String | 所属机构名称（员工主机构 ORG_NAME） |
-| `ratio` | BigDecimal | 分配比例（0-100） |
+| `accountNo` | String | 账号（relation.account_no；RULE 维度为空） |
+| `empId` | String | 员工 USER_ID（relation.emp_id；对应 PT_USER.USER_ID） |
+| `username` | String | 员工登录名（批量由 UserApi 映射 PT_USER.USERNAME；缺失时回退 empId） |
+| `empChnName` | String | 员工中文姓名（relation.fullname 快照，对应 PT_USER.USERCHNNAME） |
+| `orgCode` | String | 所属机构号（relation.dept_no 快照） |
+| `orgName` | String | 所属机构名称（relation.dept_name 快照） |
+| `ratio` | BigDecimal | 分配比例（relation.ratio，0-100） |
 
 ---
 

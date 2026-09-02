@@ -1,0 +1,15 @@
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 open http://127.0.0.1:8090 --browser=chromium
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 cookie-set SESSION '<redacted>' --domain 127.0.0.1 --path / --httpOnly --sameSite Lax
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 resize 1440 900
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 goto 'http://127.0.0.1:8090/#/customers/pool/available'
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 route-list
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 console --clear
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 requests --clear
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 reload
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 run-code '<click detail and assert labels/customer/amount>'
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 screenshot --filename ../docs/superpowers/evidence/2026-08-27-pool-detail-and-approval-overview/available-pool-detail.png --full-page
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 goto 'http://127.0.0.1:8090/#/customers/leads/approval'
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 run-code '<assert overview pending row approve/reject buttons>'
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 screenshot --filename ../docs/superpowers/evidence/2026-08-27-pool-detail-and-approval-overview/approval-overview.png --full-page
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 requests --filter '/api/marketing/lead-approvals'
+npx --no-install playwright-cli -s=pool-detail-actions-20260827 console

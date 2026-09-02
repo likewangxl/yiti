@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.marketing.MarketingCustomerClaimMapper">
+
+    <!--
+      客户池是组合查询结果，不建设独立池表。线索和客户必须同时有效，
+      只有 APPROVED + PUBLIC + AVAILABLE 的线索才允许进入待认领池。
+    -->
+    <select id="selectAvailablePoolPage"
+            resultType="com.bank.branch.platform.customer.api.dto.CustomerDTO">
+        SELECT CAST(c.id AS CHAR) AS id,
+               c.cust_no,
+               c.cust_name,
+               c.unified_credit_code,
+               c.legal_representative,
+               c.registered_capital,
+               c.registered_address,
+               c.business_address,
+               c.business_scope,
+               c.contact_person,
+               c.contact_mobile,
+               c.industry,
+               c.group_type,
+               c.group_name,
+               c.customer_type,
+               c.enterprise_type,
+               c.is_keystone,
+               c.is_account_opened,
+               c.touch_restricted,
+               c.customer_desc,
+               c.credit_amount,
+               c.credit_exposure_amount,
+               l.entry_org_id AS owner_org_id,
+               l.lead_no,
+               l.lead_type,
+               CAST(l.id AS CHAR) AS lead_id,
+               CAST(l.id AS CHAR) AS source_lead_id,
+               CAST(c.current_lead_id AS CHAR) AS current_lead_id,
+               c.main_manager_id,
+               c.main_org_id,
+               c.ownership_status,
+               c.last_touch_time,
+               l.distribution_mode,
+               l.pool_status,
+               '全行客户经理' AS claim_scope,
+               (SELECT COUNT(*)
+                  FROM MARKETING_CUSTOMER_CLAIM claim_count
+                 WHERE claim_count.source_lead_id = l.id
+                   AND claim_count.claim_status = 'CLAIMED') AS claimed_count,
+               l.entry_time AS released_time,
+               c.record_status AS status,
+               c.created_time,
+               c.updated_time
+        FROM MARKETING_LEAD_INFO l
+        JOIN MARKETING_CUSTOMER_INFO c
+          ON c.id = l.cust_id
+         AND c.record_status = 'ACTIVE'
+        WHERE l.record_status = 'ACTIVE'
+          AND l.lead_status = 'APPROVED'
+          AND l.distribution_mode = 'PUBLIC'
+          AND l.pool_status = 'AVAILABLE'
+          AND c.ownership_status = 'UNASSIGNED'
+          AND c.main_manager_id IS NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM MARKETING_CUSTOMER_CLAIM cc
+              WHERE cc.source_lead_id = l.id
+                AND cc.claimed_by = #{empId}
+                AND cc.claim_status = 'CLAIMED'
+          )
+        <if test="keyword != null and keyword != ''">
+          AND (c.cust_name LIKE CONCAT('%', #{keyword}, '%')
+               OR c.cust_no LIKE CONCAT('%', #{keyword}, '%')
+               OR c.unified_credit_code LIKE CONCAT('%', #{keyword}, '%')
+               OR l.lead_no LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY l.updated_time DESC, l.id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countAvailablePoolPage" resultType="long">
+        SELECT COUNT(*)
+        FROM MARKETING_LEAD_INFO l
+        JOIN MARKETING_CUSTOMER_INFO c
+          ON c.id = l.cust_id
+         AND c.record_status = 'ACTIVE'
+        WHERE l.record_status = 'ACTIVE'
+          AND l.lead_status = 'APPROVED'
+          AND l.distribution_mode = 'PUBLIC'
+          AND l.pool_status = 'AVAILABLE'
+          AND c.ownership_status = 'UNASSIGNED'
+          AND c.main_manager_id IS NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM MARKETING_CUSTOMER_CLAIM cc
+              WHERE cc.source_lead_id = l.id
+                AND cc.claimed_by = #{empId}
+                AND cc.claim_status = 'CLAIMED'
+          )
+        <if test="keyword != null and keyword != ''">
+          AND (c.cust_name LIKE CONCAT('%', #{keyword}, '%')
+               OR c.cust_no LIKE CONCAT('%', #{keyword}, '%')
+               OR c.unified_credit_code LIKE CONCAT('%', #{keyword}, '%')
+               OR l.lead_no LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+    <!--
+      客户池详情必须先复用列表的可见性口径校验来源线索，避免通过任意线索 ID
+      绕过 PUBLIC/AVAILABLE、客户主档状态或当前员工认领状态限制。
+    -->
+    <select id="countAvailableLead" resultType="int">
+        SELECT COUNT(*)
+        FROM MARKETING_LEAD_INFO l
+        JOIN MARKETING_CUSTOMER_INFO c
+          ON c.id = l.cust_id
+         AND c.record_status = 'ACTIVE'
+        WHERE l.id = #{leadId}
+          AND l.record_status = 'ACTIVE'
+          AND l.lead_status = 'APPROVED'
+          AND l.distribution_mode = 'PUBLIC'
+          AND l.pool_status = 'AVAILABLE'
+          AND c.ownership_status = 'UNASSIGNED'
+          AND c.main_manager_id IS NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM MARKETING_CUSTOMER_CLAIM cc
+              WHERE cc.source_lead_id = l.id
+                AND cc.claimed_by = #{empId}
+                AND cc.claim_status = 'CLAIMED'
+          )
+    </select>
+
+    <!--
+      已认领池从认领关系反查来源线索；不把主办关系或业绩快照当作认领事实。
+      最新触达任务及触达状态统一读取 MARKETING_TOUCH_TASK。
+    -->
+    <select id="selectClaimedCustomerPage"
+            resultType="com.bank.branch.platform.customer.dto.resp.ClaimedCustomerRespDTO">
+        SELECT CAST(cc.id AS CHAR) AS claim_id,
+               CAST(cc.cust_id AS CHAR) AS cust_id,
+               CAST(cc.source_lead_id AS CHAR) AS source_lead_id,
+               l.lead_no,
+               c.cust_no,
+               c.cust_name,
+               c.unified_credit_code,
+               c.contact_person,
+               c.contact_mobile,
+               c.industry,
+               c.customer_type,
+               l.entry_org_id AS owner_org_id,
+               cc.org_id,
+               cc.maintainer_emp_id,
+               cc.claim_time,
+               cc.claim_status,
+               cc.cancel_reason,
+               c.last_touch_time,
+               l.lead_status,
+               l.distribution_mode,
+               'CLAIM' AS source_type,
+               l.distribution_mode AS allocation_source,
+               c.legal_representative,
+               c.registered_capital,
+               c.registered_address,
+               c.business_address,
+               c.business_scope,
+               c.group_type,
+               c.group_name,
+               c.enterprise_type,
+               c.is_keystone,
+               c.is_account_opened,
+               c.touch_restricted,
+               c.credit_amount,
+               c.credit_exposure_amount,
+               c.customer_desc,
+               CAST(mtt.id AS CHAR) AS latest_task_id,
+               mtt.task_no AS latest_task_no,
+               mtt.task_status AS latest_task_status,
+               mtt.sla_status AS latest_sla_status
+        FROM MARKETING_CUSTOMER_CLAIM cc
+        JOIN MARKETING_CUSTOMER_INFO c
+          ON c.id = cc.cust_id
+         AND c.record_status = 'ACTIVE'
+        JOIN MARKETING_LEAD_INFO l
+          ON l.id = cc.source_lead_id
+         AND l.record_status = 'ACTIVE'
+        LEFT JOIN MARKETING_TOUCH_TASK mtt
+          ON mtt.id = (
+              SELECT mtt2.id
+              FROM MARKETING_TOUCH_TASK mtt2
+              WHERE mtt2.source_type = 'CLAIM'
+                AND mtt2.source_biz_id = cc.id
+              ORDER BY mtt2.created_time DESC, mtt2.id DESC
+              LIMIT 1
+          )
+        WHERE (cc.claimed_by = #{empId} OR cc.maintainer_emp_id = #{empId})
+          AND cc.claim_status IN ('CLAIMED', 'CANCELLED')
+        <if test="tab != null and tab != '' and tab == 'UNTOUCHED'">
+          AND c.last_touch_time IS NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM MARKETING_TOUCH_TASK target_touched_task
+              WHERE target_touched_task.source_type = 'CLAIM'
+                AND target_touched_task.source_biz_id = cc.id
+                AND target_touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
+          )
+        </if>
+        <if test="tab != null and tab != '' and tab == 'TOUCHED'">
+          AND (c.last_touch_time IS NOT NULL OR EXISTS (
+              SELECT 1 FROM MARKETING_TOUCH_TASK target_touched_task
+              WHERE target_touched_task.source_type = 'CLAIM'
+                AND target_touched_task.source_biz_id = cc.id
+                AND target_touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
+          ))
+        </if>
+        <if test="keyword != null and keyword != ''">
+          AND (c.cust_name LIKE CONCAT('%', #{keyword}, '%')
+               OR c.cust_no LIKE CONCAT('%', #{keyword}, '%')
+               OR c.unified_credit_code LIKE CONCAT('%', #{keyword}, '%')
+               OR l.lead_no LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="sourceType != null and sourceType != ''">
+          AND (l.distribution_mode = #{sourceType} OR #{sourceType} = 'CLAIM')
+        </if>
+        ORDER BY cc.claim_time DESC, cc.id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countClaimedCustomerPage" resultType="long">
+        SELECT COUNT(*)
+        FROM MARKETING_CUSTOMER_CLAIM cc
+        JOIN MARKETING_CUSTOMER_INFO c
+          ON c.id = cc.cust_id
+         AND c.record_status = 'ACTIVE'
+        JOIN MARKETING_LEAD_INFO l
+          ON l.id = cc.source_lead_id
+         AND l.record_status = 'ACTIVE'
+        WHERE (cc.claimed_by = #{empId} OR cc.maintainer_emp_id = #{empId})
+          AND cc.claim_status IN ('CLAIMED', 'CANCELLED')
+        <if test="tab != null and tab != '' and tab == 'UNTOUCHED'">
+          AND c.last_touch_time IS NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM MARKETING_TOUCH_TASK target_touched_task
+              WHERE target_touched_task.source_type = 'CLAIM'
+                AND target_touched_task.source_biz_id = cc.id
+                AND target_touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
+          )
+        </if>
+        <if test="tab != null and tab != '' and tab == 'TOUCHED'">
+          AND (c.last_touch_time IS NOT NULL OR EXISTS (
+              SELECT 1 FROM MARKETING_TOUCH_TASK target_touched_task
+              WHERE target_touched_task.source_type = 'CLAIM'
+                AND target_touched_task.source_biz_id = cc.id
+                AND target_touched_task.task_status IN ('IN_PROGRESS', 'SUCCESS')
+          ))
+        </if>
+        <if test="keyword != null and keyword != ''">
+          AND (c.cust_name LIKE CONCAT('%', #{keyword}, '%')
+               OR c.cust_no LIKE CONCAT('%', #{keyword}, '%')
+               OR c.unified_credit_code LIKE CONCAT('%', #{keyword}, '%')
+               OR l.lead_no LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="sourceType != null and sourceType != ''">
+          AND (l.distribution_mode = #{sourceType} OR #{sourceType} = 'CLAIM')
+        </if>
+    </select>
+
+    <select id="selectActiveBySourceLeadAndClaimedBy"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerClaim">
+        SELECT id, cust_id, source_lead_id, org_id, claimed_by, maintainer_emp_id,
+               claim_status, claim_time, cancel_time, cancel_reason, created_by,
+               created_time, updated_by, updated_time, lock_version
+        FROM MARKETING_CUSTOMER_CLAIM
+        WHERE source_lead_id = #{sourceLeadId}
+          AND claimed_by = #{claimedBy}
+          AND claim_status = 'CLAIMED'
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="countActiveByCustomerAndEmp" resultType="int">
+        SELECT COUNT(*)
+        FROM MARKETING_CUSTOMER_CLAIM
+        WHERE cust_id = #{custId}
+          AND (claimed_by = #{empId} OR maintainer_emp_id = #{empId})
+          AND claim_status = 'CLAIMED'
+    </select>
+
+    <select id="selectForUpdate"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingCustomerClaim">
+        SELECT id, cust_id, source_lead_id, org_id, claimed_by, maintainer_emp_id,
+               claim_status, claim_time, cancel_time, cancel_reason, created_by,
+               created_time, updated_by, updated_time, lock_version
+        FROM MARKETING_CUSTOMER_CLAIM
+        WHERE id = #{id}
+        FOR UPDATE
+    </select>
+</mapper>

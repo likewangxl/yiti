@@ -1,9 +1,11 @@
 package com.bank.branch.platform.workflow.service.flow;
 
+import com.bank.branch.platform.workflow.api.dto.flow.FlowApproverDTO;
 import com.bank.branch.platform.workflow.api.dto.flow.FlowConditionDTO;
 import com.bank.branch.platform.workflow.api.dto.flow.FlowEdgeDTO;
 import com.bank.branch.platform.workflow.api.dto.flow.FlowGraphDTO;
 import com.bank.branch.platform.workflow.api.dto.flow.FlowNodeDTO;
+import com.bank.branch.platform.workflow.api.dto.flow.FlowVariableDTO;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -24,7 +26,8 @@ import java.util.stream.Collectors;
  *   <li>START 节点恰好 1 个（0 个或多个均报错）</li>
  *   <li>至少 1 个 END 节点</li>
  *   <li>无孤立节点：除 START 外每个节点须有入边；除 END 外每个节点须有出边</li>
- *   <li>APPROVAL 节点 approvers 列表必须非空</li>
+ *   <li>APPROVAL 节点 approvers 列表必须非空，审批模式只能为 ANY / ALL / GROUP_ALL</li>
+ *   <li>GROUP_ALL 仅允许一个 group-list 类型的 VAR 审批人；普通模式不得引用 group-list</li>
  *   <li>边条件字段须在 FlowVariableCatalog 白名单内，op 须为合法运算符</li>
  *   <li>边引用的 fromNodeKey / toNodeKey 须在 nodes 中存在</li>
  * </ol>
@@ -35,6 +38,9 @@ public class FlowValidator {
     /** 合法运算符集合 */
     private static final Set<String> VALID_OPS = Set.of(
             "EQ", "NE", "GT", "GE", "LT", "LE", "IN", "NOT_IN", "CONTAINS");
+
+    /** 审批节点允许的审批模式。 */
+    private static final Set<String> VALID_APPROVE_MODES = Set.of("ANY", "ALL", "GROUP_ALL");
 
     private final FlowVariableCatalog catalog;
 
@@ -111,6 +117,7 @@ public class FlowValidator {
                 if (node.getApprovers() == null || node.getApprovers().isEmpty()) {
                     errors.add("APPROVAL 节点 [" + node.getNodeKey() + "] 的审批人列表为空，至少需要 1 个审批人");
                 }
+                validateApprovalSemantics(node, bizType, errors);
             }
         }
 
@@ -149,6 +156,67 @@ public class FlowValidator {
         }
 
         return new ValidationResult(errors);
+    }
+
+    /** 校验审批模式及机构分组 VAR 的类型/绑定关系。 */
+    private void validateApprovalSemantics(FlowNodeDTO node, String bizType, List<String> errors) {
+        String nodeKey = node.getNodeKey();
+        String approveMode = node.getApproveMode();
+        if (approveMode == null || !VALID_APPROVE_MODES.contains(approveMode)) {
+            errors.add("APPROVAL 节点 [" + nodeKey + "] 的审批模式非法：" + approveMode
+                    + "，合法值：ANY / ALL / GROUP_ALL");
+            return;
+        }
+
+        List<FlowApproverDTO> approvers = node.getApprovers();
+        if ("GROUP_ALL".equals(approveMode)) {
+            if (approvers == null || approvers.size() != 1) {
+                errors.add("GROUP_ALL 节点 [" + nodeKey + "] 必须且只能配置一个 VAR 审批人，当前配置 "
+                        + (approvers == null ? 0 : approvers.size()) + " 个");
+                return;
+            }
+            FlowApproverDTO approver = approvers.get(0);
+            if (approver == null || !"VAR".equals(approver.getApproverType())
+                    || approver.getApproverValue() == null || approver.getApproverValue().isBlank()) {
+                errors.add("GROUP_ALL 节点 [" + nodeKey + "] 必须且只能配置一个 VAR 审批人");
+                return;
+            }
+            FlowVariableDTO variable = findApproverVariable(bizType, approver.getApproverValue());
+            if (variable == null) {
+                errors.add("GROUP_ALL 节点 [" + nodeKey + "] 的 VAR 变量 ["
+                        + approver.getApproverValue() + "] 不在当前业务类型 " + bizType
+                        + " 的 approverVariables 中");
+            } else if (!FlowVariableCatalog.GROUP_LIST.equals(variable.getType())) {
+                errors.add("GROUP_ALL 节点 [" + nodeKey + "] 的 VAR 变量 ["
+                        + approver.getApproverValue() + "] 类型必须为 group-list，实际为 "
+                        + variable.getType());
+            }
+            return;
+        }
+
+        if (approvers == null) {
+            return;
+        }
+        for (FlowApproverDTO approver : approvers) {
+            if (approver == null || !"VAR".equals(approver.getApproverType())) {
+                continue;
+            }
+            FlowVariableDTO variable = findApproverVariable(bizType, approver.getApproverValue());
+            if (variable != null && FlowVariableCatalog.GROUP_LIST.equals(variable.getType())) {
+                errors.add("非 GROUP_ALL 节点 [" + nodeKey + "] 不得引用 group-list 变量 ["
+                        + approver.getApproverValue() + "]");
+            }
+        }
+    }
+
+    private FlowVariableDTO findApproverVariable(String bizType, String field) {
+        if (field == null || field.isBlank()) {
+            return null;
+        }
+        return catalog.approverVariables(bizType).stream()
+                .filter(variable -> field.equals(variable.getField()))
+                .findFirst()
+                .orElse(null);
     }
 
     // ---------------------------------------------------------------

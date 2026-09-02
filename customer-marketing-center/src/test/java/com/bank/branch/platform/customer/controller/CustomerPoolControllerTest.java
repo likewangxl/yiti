@@ -2,6 +2,7 @@ package com.bank.branch.platform.customer.controller;
 
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
+import com.bank.branch.platform.customer.dto.marketing.lead.LeadDetailResponse;
 import com.bank.branch.platform.customer.service.CustomerPoolService;
 import com.bank.branch.platform.customer.support.AbstractControllerIntegrationTest;
 import com.bank.branch.platform.customer.support.WithMockEmpContext;
@@ -18,6 +19,8 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -81,5 +84,25 @@ class CustomerPoolControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.page.total").value(0));
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
+    void detail_shouldRouteLeadIdToAvailablePoolDetailService() throws Exception {
+        LeadDetailResponse detail = new LeadDetailResponse();
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(customerPoolService.getAvailableLeadDetail(51L, "E10001")).thenReturn(detail);
+
+        mockMvc.perform(get("/api/customer-pool")
+                        .param("leadId", "51"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
+
+        verify(customerPoolService).getAvailableLeadDetail(51L, "E10001");
+        verify(customerPoolService, never()).listPoolAsDTO(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt());
     }
 }

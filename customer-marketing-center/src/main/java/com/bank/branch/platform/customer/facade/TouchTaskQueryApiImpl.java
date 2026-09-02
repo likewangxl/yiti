@@ -47,7 +47,14 @@ public class TouchTaskQueryApiImpl implements TouchTaskQueryApi {
     @Override
     public Optional<TouchTaskDTO> getTouchTaskByBusinessKey(String businessKey) {
         log.debug("[TouchTaskQueryApiImpl.getTouchTaskByBusinessKey] businessKey={}", businessKey);
-        return Optional.ofNullable(TouchTaskDTOConverter.toDTO(touchTaskMapper.selectByBusinessKey(businessKey)));
+        if (businessKey == null || !businessKey.startsWith("TOUCH:")) {
+            return Optional.empty();
+        }
+        String taskId = businessKey.substring("TOUCH:".length());
+        if (taskId.isBlank() || taskId.contains(":")) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(TouchTaskDTOConverter.toDTO(touchTaskMapper.selectById(taskId)));
     }
 
     /**

@@ -34,7 +34,7 @@ public class WfFlowNode {
     /** 节点显示名称，对应 name */
     private String name;
 
-    /** 审批模式：ANY/ALL，对应 approve_mode */
+    /** 审批模式：ANY/ALL/GROUP_ALL，对应 approve_mode */
     private String approveMode;
 
     /** 审批机构归属：SELF=本机构/PARENT=上级机构/NULL=不判断，对应 approve_org_scope */

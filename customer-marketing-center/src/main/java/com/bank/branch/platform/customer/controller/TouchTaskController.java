@@ -9,8 +9,8 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.customer.dto.req.TouchCancelReqDTO;
 import com.bank.branch.platform.customer.dto.req.TouchLogReqDTO;
-import com.bank.branch.platform.customer.entity.TouchLog;
 import com.bank.branch.platform.customer.entity.TouchTask;
+import com.bank.branch.platform.customer.dto.resp.TouchWorklogVO;
 import com.bank.branch.platform.customer.service.TouchLogService;
 import com.bank.branch.platform.customer.service.TouchTaskService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -154,8 +154,8 @@ public class TouchTaskController {
     @BizAuth(bizType = BizType.TOUCH_TASK, action = BizAction.WRITE)
     @AuditLog(action = "ADD_TOUCH_LOG", resourceType = "TOUCH_TASK")
     @Operation(summary = "新增触达日志")
-    public ResponseWrapper<TouchLog> addLog(@PathVariable String id,
-                                            @Valid @RequestBody TouchLogReqDTO req) {
+    public ResponseWrapper<TouchWorklogVO> addLog(@PathVariable String id,
+                                                  @Valid @RequestBody TouchLogReqDTO req) {
         log.info("[TouchTaskController.addLog] taskId={}, clientUuid={}", id, req.getClientUuid());
         String empId = currentUserApi.getCurrentEmpId();
         String orgId = currentUserApi.getCurrentOrgCode();
@@ -175,7 +175,7 @@ public class TouchTaskController {
         String participantEmpIdsJson = writeJson(req.getParticipantEmpIds());
         String photoGroupsJson = writeJson(req.getPhotoGroups());
 
-        TouchLog result = touchLogService.addLog(
+        TouchWorklogVO result = touchLogService.addLog(
                 id, req.getClientUuid(), req.getLogContent(),
                 photoUrlsJson, req.getTouchTime(), req.getTouchMethod(),
                 participantEmpIdsJson, photoGroupsJson, req.getOperatorLocation(),
@@ -192,9 +192,9 @@ public class TouchTaskController {
     @GetMapping("/{id}/logs")
     @BizAuth(bizType = BizType.TOUCH_TASK, action = BizAction.READ)
     @Operation(summary = "查询触达日志列表")
-    public ResponseWrapper<List<TouchLog>> listLogs(@PathVariable String id) {
+    public ResponseWrapper<List<TouchWorklogVO>> listLogs(@PathVariable String id) {
         log.info("[TouchTaskController.listLogs] taskId={}", id);
-        List<TouchLog> logs = touchLogService.listVisibleByTaskId(
+        List<TouchWorklogVO> logs = touchLogService.listVisibleByTaskId(
                 id, currentUserApi.getCurrentOrgCode(), currentUserApi.isSystemAdmin());
         return ResponseWrapper.success(logs);
     }

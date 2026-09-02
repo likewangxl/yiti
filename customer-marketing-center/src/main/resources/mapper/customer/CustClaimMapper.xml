@@ -110,8 +110,8 @@
                tt.task_status AS latest_task_status, tt.sla_status AS latest_sla_status
         FROM CUST_CLAIM cc
         JOIN CUSTOMER_MARKET_CUSTOMER cm ON cm.id = cc.cust_id AND cm.deleted = 0
-        LEFT JOIN TOUCH_TASK tt ON tt.id = (
-            SELECT tt2.id FROM TOUCH_TASK tt2
+        LEFT JOIN MARKETING_TOUCH_TASK tt ON tt.id = (
+            SELECT tt2.id FROM MARKETING_TOUCH_TASK tt2
             WHERE tt2.cust_id = cc.cust_id
               AND tt2.assignee_emp_id = cc.maintainer_emp_id
             ORDER BY tt2.created_time DESC

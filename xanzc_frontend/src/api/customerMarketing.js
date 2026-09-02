@@ -3,8 +3,10 @@ import { call } from './http';
 export const listAvailableCustomers = (params = {}) =>
   call('get', '/customer-pool', { params }, null);
 
-export const claimCustomer = custId =>
-  call('post', '/claims', { data: { custId } });
+export const claimCustomer = (custId, sourceLeadId) =>
+  call('post', '/claims', {
+    data: { custId, ...(sourceLeadId ? { sourceLeadId } : {}) },
+  });
 
 export const listClaimedCustomers = (params = {}) =>
   call('get', '/claims/mine/customers', { params }, null);
@@ -57,6 +59,16 @@ export const createLead = data => call('post', '/leads', { data });
 export const updateLead = (id, data) => call('put', `/leads/${id}`, { data });
 export const deleteLead = id => call('delete', `/leads/${id}`, {});
 export const submitLead = id => call('post', `/leads/${id}/submit`, { data: {} });
+export const previewLeadImport = file => {
+  const data = new FormData();
+  data.append('file', file);
+  return call('post', '/leads/import/preview', {
+    data,
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+export const executeLeadImport = batchId =>
+  call('post', '/leads/import/execute', { data: { batchId } });
 export const createLeadEditVersion = data => call('post', '/leads/edit-version', { data });
 export const createLeadDeleteVersion = data => call('post', '/leads/delete-version', { data });
 export const listLeadVersions = id => call('get', `/leads/${id}/versions`, {}, []);
@@ -64,9 +76,9 @@ export const listLeadVersions = id => call('get', `/leads/${id}/versions`, {}, [
 // 客户线索审批
 export const listLeadApprovals = (params = {}) => call('get', '/lead-approvals', { params }, null);
 export const getLeadApproval = leadId => call('get', `/lead-approvals/${leadId}`, {}, null);
-// 客户池详情复用审批详情资源，但使用语义明确的 API 名称，避免页面误用线索录入详情。
+// 客户池详情复用客户池资源，按来源线索标识查询详情，沿用语义明确的 API 名称。
 export const getAvailableCustomerLeadDetail = leadId =>
-  call('get', `/lead-approvals/${leadId}`, {}, null);
+  call('get', '/customer-pool', { params: { leadId } }, null);
 export const exportLeadApprovals = (params = {}) =>
   call('get', '/lead-approvals/export', { params, responseType: 'blob' }, null);
 
@@ -92,9 +104,15 @@ export const importTagCustomersFile = (id, file, mode) => {
   return call('post', `/tags/${id}/customers/import-file`, { data }, null);
 };
 
-// 跨机构客户营销申请
-export const validateCrossOrgMarketing = custId =>
-  call('get', '/cross-org-marketing/validate', { params: { custId } }, null);
+// 客户触达周期限制
+export const listTouchLimitRules = (params = {}) =>
+  call('get', '/touch-limit-rules', { params }, { records: [], total: 0 });
+export const updateTouchLimitRule = (tagId, data) =>
+  call('put', `/touch-limit-rules/${encodeURIComponent(tagId)}`, { data });
+
+// 跨机构客户营销申请：检索入口使用客户号，后端校验后再返回内部 custId 供写操作使用。
+export const validateCrossOrgMarketing = custNo =>
+  call('get', '/cross-org-marketing/validate', { params: { custNo } }, null);
 export const createCrossOrgMarketing = data => call('post', '/cross-org-marketing', { data });
 export const listCrossOrgMarketing = (params = {}) => call('get', '/cross-org-marketing', { params }, []);
 export const getCrossOrgMarketing = id => call('get', `/cross-org-marketing/${id}`, {}, null);

@@ -127,6 +127,24 @@ class FlowBpmnGeneratorTest {
     }
 
     @Test
+    void group_all_node_generates_sequential_group_multiInstance_without_assignee() {
+        BpmnModel model = generator.generate(linearGraph("GROUP_ALL"), SHADOW_KEY);
+        Process process = model.getProcessById(SHADOW_KEY);
+
+        UserTask ut = (UserTask) process.getFlowElement("a1");
+        MultiInstanceLoopCharacteristics mi = ut.getLoopCharacteristics();
+        assertNotNull(mi, "GROUP_ALL 模式应有多实例特性");
+        assertTrue(mi.isSequential(), "GROUP_ALL 应按机构组顺序执行");
+        assertEquals("approverGroups", mi.getCollectionString());
+        assertEquals("approverGroup", mi.getElementVariable());
+        assertNull(ut.getAssignee(), "GROUP_ALL 任务不应把机构组 DTO 当作 assignee");
+        assertTrue(ut.getExecutionListeners().stream()
+                .anyMatch(l -> "${multiInstanceApproverGroupResolver}".equals(l.getImplementation())
+                        && "start".equals(l.getEvent())),
+                "GROUP_ALL 应挂分组解析监听器");
+    }
+
+    @Test
     void approval_node_has_reject_path() {
         BpmnModel model = generator.generate(linearGraph("ANY"), SHADOW_KEY);
         Process process = model.getProcessById(SHADOW_KEY);

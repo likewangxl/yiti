@@ -12,7 +12,8 @@ class FlowVariableCatalogTest {
     void allocAdjust_hasExpectedVars() {
         // ALLOC_ADJUST：bizKind / allocDim + 系统注入 startOrgLevel + 经办产出路由变量 corpRouteTo / finRouteTo
         assertThat(c.variables("ALLOC_ADJUST")).extracting(FlowVariableDTO::getField)
-                .containsExactlyInAnyOrder("bizKind", "allocDim", "startOrgLevel", "corpRouteTo", "finRouteTo");
+                .containsExactlyInAnyOrder("bizKind", "allocDim", "startOrgLevel", "corpRouteTo", "finRouteTo",
+                        "originalOwnerLevel3ApprovalRequired");
     }
 
     @Test
@@ -43,10 +44,20 @@ class FlowVariableCatalogTest {
     void approverVariables_allocAdjust_hasOriginalOwner() {
         // VAR 审批人可选的「名单类流程变量」：原业绩所属人 originalOwnerEmpIds
         assertThat(c.approverVariables("ALLOC_ADJUST")).extracting(FlowVariableDTO::getField)
-                .contains("originalOwnerEmpIds");
+                .contains("originalOwnerEmpIds", "originalOwnerOrgLeaderEmpIds", "originalOwnerOrgApprovalGroups",
+                        "originalOwnerLevel3OrgApprovalGroups");
         FlowVariableDTO v = c.approverVariables("ALLOC_ADJUST").stream()
                 .filter(x -> "originalOwnerEmpIds".equals(x.getField())).findFirst().orElseThrow();
         assertThat(v.getLabel()).isEqualTo("原业绩所属人");
+        FlowVariableDTO groupVar = c.approverVariables("ALLOC_ADJUST").stream()
+                .filter(x -> "originalOwnerOrgApprovalGroups".equals(x.getField())).findFirst().orElseThrow();
+        assertThat(groupVar.getLabel()).isEqualTo("原业绩所属机构负责人分组");
+        assertThat(groupVar.getType()).isEqualTo("group-list");
+        FlowVariableDTO level3GroupVar = c.approverVariables("ALLOC_ADJUST").stream()
+                .filter(x -> "originalOwnerLevel3OrgApprovalGroups".equals(x.getField()))
+                .findFirst().orElseThrow();
+        assertThat(level3GroupVar.getLabel()).isEqualTo("原业绩所属3级机构负责人分组");
+        assertThat(level3GroupVar.getType()).isEqualTo("group-list");
     }
 
     @Test

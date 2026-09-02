@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
  * <p>转换规则：
  * <ul>
  *   <li>标量字段直接映射，时间字段 createdTime/updatedTime → createdAt/updatedAt</li>
- *   <li>Integer isKeystone/isAccountOpened → Boolean（1=true, 0=false, null=null）</li>
+ *   <li>Integer isKeystone/isAccountOpened/touchRestricted → Boolean（1=true, 0=false, null=null）</li>
  *   <li>ownerOrgName、industryName、tagIds 需二次查询，转换器层暂置 null，由上层 Service 补充</li>
  * </ul>
  */
@@ -46,6 +46,7 @@ public final class CustomerDTOConverter {
         dto.setIsKeystone(intToBoolean(entity.getIsKeystone()));
         dto.setEnterpriseType(entity.getEnterpriseType());
         dto.setIsAccountOpened(intToBoolean(entity.getIsAccountOpened()));
+        dto.setTouchRestricted(intToBoolean(entity.getTouchRestricted()));
         dto.setCustomerDesc(entity.getCustomerDesc());
         dto.setCreditAmount(entity.getCreditAmount());
         dto.setCreditExposureAmount(entity.getCreditExposureAmount());

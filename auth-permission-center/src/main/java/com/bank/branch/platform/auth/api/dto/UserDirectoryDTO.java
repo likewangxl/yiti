@@ -2,6 +2,8 @@ package com.bank.branch.platform.auth.api.dto;
 
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 /**
  * 用户通讯录视图 DTO（PT_USER + EXT_USER_ORG + EXT_ORG_INFO 三表联查结果）
  *
@@ -27,6 +29,12 @@ public class UserDirectoryDTO {
     /** 员工姓名（中文姓名 USERCHNNAME） */
     private String empName;
 
+    /** 电话号码（PT_USER.MOBILE） */
+    private String mobile;
+
+    /** 邮箱（PT_USER.EMAIL） */
+    private String email;
+
     /** 主机构编码 */
     private String orgCode;
 
@@ -38,4 +46,7 @@ public class UserDirectoryDTO {
 
     /** 在职状态（在职恒为 ACTIVE，对齐原通讯录口径） */
     private String status;
+
+    /** 用户记录更新时间（PT_USER.UPDATE_TIME） */
+    private LocalDateTime updatedTime;
 }

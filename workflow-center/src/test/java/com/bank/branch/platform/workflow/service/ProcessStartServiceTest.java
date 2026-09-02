@@ -24,6 +24,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -137,13 +138,83 @@ class ProcessStartServiceTest {
         StartProcessCmd cmd = buildCmd();
         ProcessDefinition pd = mock(ProcessDefinition.class);
         mockProcessDefinitionQuery(pd);
-        when(bizProcessMapMapper.existsRunningByBusinessKey(cmd.getBusinessKey())).thenReturn(true);
+        BizProcessMap running = new BizProcessMap();
+        running.setBusinessKey(cmd.getBusinessKey());
+        running.setProcessStatus(ProcessStatus.RUNNING.getCode());
+        when(bizProcessMapMapper.selectForUpdateByBusinessKey(cmd.getBusinessKey())).thenReturn(running);
 
         // when & then
         assertThatThrownBy(() -> processStartService.startProcess(cmd))
                 .isInstanceOf(BizException.class)
                 .extracting("code")
                 .isEqualTo("WF-40901");
+    }
+
+    /**
+     * 终态业务键重新发起时复用原映射行，避免违反 business_key 唯一约束。
+     */
+    @Test
+    void startProcess_terminalBusinessKey_reusesMapAndDoesNotInsert() {
+        StartProcessCmd cmd = buildCmd();
+        ProcessDefinition pd = mock(ProcessDefinition.class);
+        mockProcessDefinitionQuery(pd);
+
+        BizProcessMap existing = new BizProcessMap();
+        existing.setId("MAP_OLD");
+        existing.setBusinessKey(cmd.getBusinessKey());
+        existing.setBizType(cmd.getBizType());
+        existing.setBizId(cmd.getBizId());
+        existing.setProcessStatus(ProcessStatus.CANCELLED.getCode());
+        existing.setProcessInstanceId("PID_OLD");
+        existing.setCurrentAssignee("OLD_ASSIGNEE");
+        existing.setCandidateGroups("[\"OLD_GROUP\"]");
+        existing.setEndTime(java.time.LocalDateTime.now().minusMinutes(1));
+        when(bizProcessMapMapper.selectForUpdateByBusinessKey(cmd.getBusinessKey())).thenReturn(existing);
+        when(bizProcessMapMapper.updateForRestart(existing)).thenReturn(1);
+
+        ProcessInstance pi = mock(ProcessInstance.class);
+        when(pi.getId()).thenReturn("PID_NEW");
+        when(runtimeService.startProcessInstanceByKey(
+                eq(cmd.getProcessDefinitionKey()), eq(cmd.getBusinessKey()), anyMap()))
+                .thenReturn(pi);
+        mockTaskQuery(null);
+
+        WorkflowLaunchResp response = processStartService.startProcess(cmd);
+
+        assertThat(response.getProcessInstanceId()).isEqualTo("PID_NEW");
+        verify(bizProcessMapMapper).updateForRestart(existing);
+        verify(bizProcessMapMapper, never()).insert(any(BizProcessMap.class));
+        assertThat(existing.getId()).isEqualTo("MAP_OLD");
+        assertThat(existing.getProcessInstanceId()).isEqualTo("PID_NEW");
+        assertThat(existing.getProcessStatus()).isEqualTo(ProcessStatus.RUNNING.getCode());
+        assertThat(existing.getCurrentAssignee()).isNull();
+        assertThat(existing.getCandidateGroups()).isNull();
+        assertThat(existing.getEndTime()).isNull();
+    }
+
+    /**
+     * 无历史映射时无法锁住不存在的行，唯一索引仍需兜住并发插入并返回业务冲突。
+     */
+    @Test
+    void startProcess_concurrentNewBusinessKeyDuplicate_isBusinessConflict() {
+        StartProcessCmd cmd = buildCmd();
+        ProcessDefinition pd = mock(ProcessDefinition.class);
+        mockProcessDefinitionQuery(pd);
+        when(bizProcessMapMapper.selectForUpdateByBusinessKey(cmd.getBusinessKey())).thenReturn(null);
+
+        ProcessInstance pi = mock(ProcessInstance.class);
+        when(pi.getId()).thenReturn("PID_RACE");
+        when(runtimeService.startProcessInstanceByKey(
+                eq(cmd.getProcessDefinitionKey()), eq(cmd.getBusinessKey()), anyMap()))
+                .thenReturn(pi);
+        doThrow(new DuplicateKeyException("uk_business_key"))
+                .when(bizProcessMapMapper).insert(any(BizProcessMap.class));
+
+        assertThatThrownBy(() -> processStartService.startProcess(cmd))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40901");
+        verify(wfProcessOrgService, never()).record(anyString(), anyString(), anyString());
     }
 
     /**
@@ -155,7 +226,7 @@ class ProcessStartServiceTest {
         StartProcessCmd cmd = buildCmd();
         ProcessDefinition pd = mock(ProcessDefinition.class);
         mockProcessDefinitionQuery(pd);
-        when(bizProcessMapMapper.existsRunningByBusinessKey(cmd.getBusinessKey())).thenReturn(false);
+        when(bizProcessMapMapper.selectForUpdateByBusinessKey(cmd.getBusinessKey())).thenReturn(null);
 
         ProcessInstance pi = mock(ProcessInstance.class);
         when(pi.getId()).thenReturn("PID_001");
@@ -198,7 +269,7 @@ class ProcessStartServiceTest {
         StartProcessCmd cmd = buildCmd();
         ProcessDefinition pd = mock(ProcessDefinition.class);
         mockProcessDefinitionQuery(pd);
-        when(bizProcessMapMapper.existsRunningByBusinessKey(cmd.getBusinessKey())).thenReturn(false);
+        when(bizProcessMapMapper.selectForUpdateByBusinessKey(cmd.getBusinessKey())).thenReturn(null);
 
         ProcessInstance pi = mock(ProcessInstance.class);
         when(pi.getId()).thenReturn("PID_001");
@@ -311,7 +382,7 @@ class ProcessStartServiceTest {
         StartProcessCmd cmd = buildCmd();
         ProcessDefinition pd = mock(ProcessDefinition.class);
         mockProcessDefinitionQuery(pd);
-        when(bizProcessMapMapper.existsRunningByBusinessKey(cmd.getBusinessKey())).thenReturn(false);
+        when(bizProcessMapMapper.selectForUpdateByBusinessKey(cmd.getBusinessKey())).thenReturn(null);
 
         ProcessInstance pi = mock(ProcessInstance.class);
         when(pi.getId()).thenReturn("PID_AUTO");
@@ -339,7 +410,7 @@ class ProcessStartServiceTest {
 
         ProcessDefinition pd = mock(ProcessDefinition.class);
         mockProcessDefinitionQuery(pd);
-        when(bizProcessMapMapper.existsRunningByBusinessKey(cmd.getBusinessKey())).thenReturn(false);
+        when(bizProcessMapMapper.selectForUpdateByBusinessKey(cmd.getBusinessKey())).thenReturn(null);
 
         ProcessInstance pi = mock(ProcessInstance.class);
         when(pi.getId()).thenReturn("PID_NOVAR");
@@ -364,7 +435,7 @@ class ProcessStartServiceTest {
         StartProcessCmd cmd = buildCmd();              // startOrgId=ORG001
         ProcessDefinition pd = mock(ProcessDefinition.class);
         mockProcessDefinitionQuery(pd);
-        when(bizProcessMapMapper.existsRunningByBusinessKey(cmd.getBusinessKey())).thenReturn(false);
+        when(bizProcessMapMapper.selectForUpdateByBusinessKey(cmd.getBusinessKey())).thenReturn(null);
 
         OrgDTO org = new OrgDTO();
         org.setOrgCode("ORG001");
@@ -397,7 +468,7 @@ class ProcessStartServiceTest {
         cmd.setStartOrgId(null);                        // 无机构编码 → 走发起人主机构
         ProcessDefinition pd = mock(ProcessDefinition.class);
         mockProcessDefinitionQuery(pd);
-        when(bizProcessMapMapper.existsRunningByBusinessKey(cmd.getBusinessKey())).thenReturn(false);
+        when(bizProcessMapMapper.selectForUpdateByBusinessKey(cmd.getBusinessKey())).thenReturn(null);
 
         OrgDTO org = new OrgDTO();
         org.setOrgLevel(2);                            // 2级分行

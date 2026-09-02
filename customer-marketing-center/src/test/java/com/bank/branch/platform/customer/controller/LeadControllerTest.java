@@ -174,7 +174,7 @@ class LeadControllerTest extends AbstractControllerIntegrationTest {
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
         when(leadVersionService.createEditVersion(
                 anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), anyString(), anyString()
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyString(), anyString()
         )).thenReturn(lead);
 
         String body = "{\"sourceCustId\":\"cust-001\",\"custName\":\"更新企业名\"}";

@@ -60,9 +60,12 @@ public class ClaimController {
     @BizAuth(bizType = BizType.CLAIM, action = BizAction.WRITE)
     @Operation(summary = "认领客户")
     public ResponseWrapper<String> claim(@Valid @RequestBody ClaimReqDTO req) {
-        log.info("[ClaimController.claim] custId={}", req.getCustId());
+        log.info("[ClaimController.claim] custId={}, sourceLeadId={}", req.getCustId(), req.getSourceLeadId());
         String empId = currentUserApi.getCurrentEmpId();
         String orgId = currentUserApi.getCurrentOrgCode();
+        if (req.getSourceLeadId() != null) {
+            return ResponseWrapper.success(claimService.claimMarketingLead(req.getSourceLeadId(), orgId, empId));
+        }
         CustClaim result = claimService.claim(req.getCustId(), orgId, empId);
         return ResponseWrapper.success(result.getId());
     }
@@ -153,10 +156,13 @@ public class ClaimController {
     @BizAuth(bizType = BizType.CLAIM, action = BizAction.LIST)
     @Operation(summary = "查询我的已认领客户")
     public ResponseWrapper<ClaimedCustomerRespDTO> listMyClaimedCustomers(
+            @RequestParam(required = false) String tab,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String sourceType,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         PageResult<ClaimedCustomerRespDTO> result = claimService.listMyClaimedCustomers(
-                currentUserApi.getCurrentEmpId(), pageNo, pageSize);
+                currentUserApi.getCurrentEmpId(), tab, keyword, sourceType, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 }

@@ -1,0 +1,235 @@
+<template>
+  <main v-bp-overflow-tooltip class="page bp-crud marketing-lead-approval" aria-labelledby="marketing-lead-approval-title">
+    <header class="page-head">
+      <div>
+        <PageTitle id="marketing-lead-approval-title" />
+        <span>集中处理待审批线索，查看完整业务字段、分配范围、附件和当前客户主档。</span>
+      </div>
+    </header>
+
+    <div class="approval-stat-grid" aria-label="审批工作台分类">
+      <button v-for="item in summaryCards" :key="item.status" type="button" class="approval-stat-card" :class="[`tone-${item.tone}`, { 'is-selected': activeStatus === item.status }]" :aria-pressed="activeStatus === item.status" @click="switchStatus(item.status)">
+        <span class="stat-card-top"><span>{{ item.label }}</span><i /></span>
+        <strong>{{ item.value }}</strong>
+        <small>{{ item.hint }}</small>
+      </button>
+    </div>
+
+    <section class="approval-card-section">
+      <div class="approval-section-head">
+        <strong>{{ activeCard.label }}</strong>
+        <span>共 {{ total }} 条</span>
+      </div>
+      <el-form inline class="approval-toolbar" @submit.prevent>
+        <el-form-item label="关键词"><el-input v-model="query.keyword" clearable placeholder="客户名称 / 统一社会信用代码 / 提交人" style="width: 420px" @keyup.enter="search" /></el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="statusFilter" clearable class="approval-status-select" @change="filterByStatus">
+            <el-option label="全部" value="" />
+            <el-option label="待审批" value="IN_APPROVAL" />
+            <el-option label="已通过" value="APPROVED" />
+            <el-option label="已退回" value="REJECTED" />
+          </el-select>
+        </el-form-item>
+        <el-form-item class="approval-filter-actions">
+          <el-button type="primary" @click="search">查询</el-button>
+          <el-button @click="resetFilter">重置</el-button>
+        </el-form-item>
+      </el-form>
+      <el-table :data="rows" v-loading="loading" border stripe class="lead-approval-table">
+        <el-table-column prop="custName" label="客户名称" min-width="210" fixed="left" show-overflow-tooltip />
+        <el-table-column prop="unifiedCreditCode" label="统一社会信用代码" min-width="185" />
+        <el-table-column label="线索类型" width="135"><template #default="{row}">{{ leadTypeLabel(row.leadType) }}</template></el-table-column>
+        <el-table-column prop="industry" label="所属行业" width="120"><template #default="{row}">{{ industryLabelOf(row.industry) }}</template></el-table-column>
+        <el-table-column label="分配方式" min-width="145"><template #default="{row}">{{ distributionLabel(row.distributionMode) }}</template></el-table-column>
+        <el-table-column label="提交人" min-width="145"><template #default="{row}">{{ submitterLabel(row) }}</template></el-table-column>
+        <el-table-column label="状态" width="105"><template #default="{row}"><el-tag :type="statusType(row)" effect="plain">{{ statusLabel(row) }}</el-tag></template></el-table-column>
+        <el-table-column label="提交时间" min-width="165"><template #default="{row}">{{ formatTime(row.submittedTime || row.task?.startTime) }}</template></el-table-column>
+        <el-table-column label="操作" width="210" fixed="right" class-name="operation-cell">
+          <template #default="{row}">
+            <el-button v-if="isPendingRow(row)" link type="success" @click="decide(row, true)">通过</el-button>
+            <el-button v-if="isPendingRow(row)" link type="danger" @click="decide(row, false)">退回</el-button>
+            <el-button link type="primary" @click="openDetail(row)">查看详情</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="pager"><el-pagination background layout="total, sizes, prev, pager, next" :total="total" v-model:current-page="query.pageNo" v-model:page-size="query.pageSize" :page-sizes="[10, 20, 50, 100]" @change="load" /></div>
+    </section>
+
+    <el-drawer v-model="detailVisible" title="线索审批详情" size="min(820px, 96vw)" class="approval-detail-drawer">
+      <template v-if="detail?.lead">
+        <div class="detail-banner">
+          <div><span>客户名称</span><strong>{{ detail.lead.custName }}</strong><small>{{ detail.lead.unifiedCreditCode }}</small></div>
+          <el-tag :type="statusType(selectedRow)" effect="plain">{{ statusLabel(selectedRow) }}</el-tag>
+        </div>
+        <el-alert v-if="detail.currentCustomer?.isAccountOpened === 1" title="该客户已开户，请结合当前主办权和存量客户信息判断本次营销线索。" type="warning" :closable="false" show-icon />
+        <el-alert v-if="detail.profileChanged" title="线索提交快照与当前客户主档存在差异，请审批前重点核对。" type="warning" :closable="false" show-icon class="detail-alert" />
+
+        <MarketingLeadReadonlyDetail :detail="detail" />
+
+        <h3>审批信息</h3>
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="提交人">{{ submitterLabel(selectedRow) }}</el-descriptions-item>
+          <el-descriptions-item label="当前节点">{{ selectedRow?.task?.taskName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="提交时间">{{ formatTime(detail.lead.submittedTime || selectedRow?.task?.startTime) }}</el-descriptions-item>
+          <el-descriptions-item label="办理时间">{{ formatTime(selectedRow?.reviewedTime || selectedRow?.task?.completeTime) }}</el-descriptions-item>
+          <el-descriptions-item label="审批意见" :span="2">{{ selectedRow?.task?.opinion || selectedRow?.rejectReason || detail.lead.rejectReason || '-' }}</el-descriptions-item>
+        </el-descriptions>
+      </template>
+      <template #footer>
+        <div class="drawer-footer">
+          <span>{{ isPendingRow(selectedRow) ? '请核对客户主档、分配方式及附件后办理' : '该记录已完成审批' }}</span>
+          <div><el-button @click="detailVisible=false">关闭</el-button><el-button v-if="isPendingRow(selectedRow)" type="danger" plain @click="decide(selectedRow, false)">退回</el-button><el-button v-if="isPendingRow(selectedRow)" type="success" @click="decide(selectedRow, true)">通过</el-button></div>
+        </div>
+      </template>
+    </el-drawer>
+  </main>
+</template>
+
+<script setup>
+import { computed, reactive, ref } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import MarketingLeadReadonlyDetail from '@/components/MarketingLeadReadonlyDetail.vue';
+import PageTitle from '@/components/PageTitle.vue';
+import { approveLead, getLeadApprovalDetail, listLeadApprovalHistory, listLeadApprovalOverview, listLeadApprovalPending, marketingLeadYuanToWan, rejectLead } from '@/api/marketingManagement';
+import { useDict } from '@/composables/useDict';
+
+const activeStatus = ref('');
+const statusFilter = ref('');
+const query = reactive({ keyword: '', pageNo: 1, pageSize: 20 });
+const rows = ref([]); const total = ref(0); const pendingTotal = ref(0); const approvedTotal = ref(0); const rejectedTotal = ref(0); const loading = ref(false);
+const detailVisible = ref(false); const detail = ref(null); const selectedRow = ref(null);
+const { labelOf: industryLabelOf, reload: reloadIndustry } = useDict('INDUSTRY');
+const summaryCards = computed(() => [
+  { status: '', label: '总览', value: pendingTotal.value + approvedTotal.value + rejectedTotal.value, hint: '待审批、已通过和已退回线索', tone: 'primary' },
+  { status: 'IN_APPROVAL', label: '待审批', value: pendingTotal.value, hint: '等待当前审批人处理', tone: 'warning' },
+  { status: 'APPROVED', label: '已通过', value: approvedTotal.value, hint: '当前登录人已通过的线索', tone: 'success' },
+  { status: 'REJECTED', label: '已退回', value: rejectedTotal.value, hint: '当前登录人已退回的线索', tone: 'danger' }
+]);
+const activeCard = computed(() => summaryCards.value.find(item => item.status === activeStatus.value) || summaryCards.value[0]);
+function pageRows(result) { return result?.records || result?.list || result?.items || []; }
+function pageTotal(result) { return Number(result?.total || 0); }
+async function load() {
+  loading.value = true;
+  try {
+    const params = { ...query };
+    const [result] = await Promise.all([
+      activeStatus.value === ''
+        ? listLeadApprovalOverview(params)
+        : activeStatus.value === 'IN_APPROVAL'
+        ? listLeadApprovalPending(params)
+        : listLeadApprovalHistory({ ...params, result: activeStatus.value }),
+      reloadIndustry()
+    ]);
+    rows.value = pageRows(result); total.value = pageTotal(result);
+  } catch (error) {
+    rows.value = []; total.value = 0; ElMessage.error(`审批列表加载失败：${error?.message || '请稍后重试'}`);
+  } finally { loading.value = false; }
+}
+async function loadSummary() {
+  const [pending, approved, rejected] = await Promise.allSettled([
+    listLeadApprovalPending({ pageNo: 1, pageSize: 1 }),
+    listLeadApprovalHistory({ result: 'APPROVED', pageNo: 1, pageSize: 1 }),
+    listLeadApprovalHistory({ result: 'REJECTED', pageNo: 1, pageSize: 1 })
+  ]);
+  if (pending.status === 'fulfilled') pendingTotal.value = pageTotal(pending.value);
+  if (approved.status === 'fulfilled') approvedTotal.value = pageTotal(approved.value);
+  if (rejected.status === 'fulfilled') rejectedTotal.value = pageTotal(rejected.value);
+}
+function switchStatus(nextStatus) { if (activeStatus.value === nextStatus) return; activeStatus.value = nextStatus; statusFilter.value = nextStatus; query.pageNo = 1; load(); }
+function filterByStatus(nextStatus) { activeStatus.value = nextStatus || ''; query.pageNo = 1; load(); }
+function search() { query.pageNo = 1; load(); }
+function resetFilter() { query.keyword = ''; statusFilter.value = ''; activeStatus.value = ''; query.pageNo = 1; load(); }
+async function openDetail(row) {
+  try { selectedRow.value = row; detail.value = normalizeApprovalDetail(await getLeadApprovalDetail(row.leadId)); detailVisible.value = true; }
+  catch (error) { ElMessage.error(`审批详情加载失败：${error?.message || '请稍后重试'}`); }
+}
+async function decide(row, approved) {
+  if (!row?.leadId) return;
+  try {
+    const { value } = await ElMessageBox.prompt(approved ? '请输入审批意见（可选）' : '请输入明确的退回原因', approved ? '通过线索' : '退回线索', { inputPlaceholder: approved ? '可不填写' : '请说明需要补充或修正的内容', inputValidator: value => approved || Boolean(value?.trim()) || '退回原因不能为空' });
+    const payload = { taskId: row.task?.taskId || row.task?.id, opinion: value?.trim() || '' };
+    if (approved) await approveLead(row.leadId, payload); else await rejectLead(row.leadId, payload);
+    ElMessage.success(approved ? '审批通过，线索已按分配方式进入对应客户池' : '线索已退回录入人');
+    detailVisible.value = false; detail.value = null; selectedRow.value = null;
+    await Promise.all([load(), loadSummary()]);
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(`审批失败：${error?.message || '请刷新后重试'}`);
+  }
+}
+function leadTypeLabel(value) { return ({ NEW_ACCOUNT: '新客户开户线索', EXISTING_MARKETING: '存量客户营销线索' }[value] || value || '-'); }
+function distributionLabel(value) { return ({ PUBLIC: '全行公开认领', SCOPE: '指定客户经理范围', OWNER: '主办专属' }[value] || value || '-'); }
+function statusLabel(row) {
+  const value = row?.leadStatus || row?.task?.processStatus;
+  return ({ IN_APPROVAL: '待审批', RUNNING: '待审批', APPROVED: '已通过', COMPLETED: '已通过', REJECTED: '已退回', CANCELLED: '已退回' }[value] || value || '-');
+}
+function isPendingRow(row) {
+  const status = row?.leadStatus || row?.task?.processStatus;
+  const taskId = row?.task?.taskId || row?.task?.id;
+  return ['IN_APPROVAL', 'RUNNING'].includes(status) && Boolean(taskId);
+}
+function statusType(row) { return ({ 待审批: 'warning', 已通过: 'success', 已退回: 'danger' }[statusLabel(row)] || 'info'); }
+function submitterLabel(row) {
+  const id = row?.task?.startUserEmpNo || row?.submittedBy || row?.task?.startUser;
+  const name = row?.task?.startUserName;
+  return id && name ? `${id} · ${name}` : (name || id || '-');
+}
+function normalizeApprovalDetail(result) {
+  if (!result?.lead) return result;
+  const lead = { ...result.lead };
+  ['creditAmount', 'creditExposureAmount'].forEach(field => { lead[field] = marketingLeadYuanToWan(lead[field]); });
+  return { ...result, lead };
+}
+function formatTime(value) { return value ? String(value).replace('T', ' ') : '-'; }
+
+loadSummary();
+load();
+</script>
+
+<style scoped lang="scss">
+.page-head { align-items: flex-start; display: flex; justify-content: space-between; margin-bottom: 14px; }
+.page-head h1 { font-size: 18px; margin: 0; }
+.page-head span { color: #909399; display: block; font-size: 12px; margin-top: 4px; }
+.approval-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.approval-stat-card { position: relative; overflow: hidden; display: grid; gap: 8px; min-height: 112px; padding: 16px 18px; border: 1px solid #dcdfe6; border-radius: 6px; background: #fff; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: border-color .2s ease, box-shadow .2s ease; }
+.approval-stat-card::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--el-color-primary); content: ''; }
+.approval-stat-card:hover { border-color: var(--el-color-primary-light-5); }
+.approval-stat-card:focus-visible { outline: 2px solid var(--el-color-primary-light-3); outline-offset: 2px; }
+.approval-stat-card.is-selected { border-color: var(--el-color-primary); background: var(--el-color-primary-light-9); box-shadow: 0 0 0 1px var(--el-color-primary-light-7) inset; }
+.stat-card-top { display: flex; align-items: center; justify-content: space-between; color: #606266; font-size: 13px; }
+.stat-card-top i { width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-primary); box-shadow: 0 0 0 4px var(--el-color-primary-light-9); }
+.approval-stat-card strong { color: #303133; font-size: 26px; line-height: 1; }
+.approval-stat-card small { color: #909399; font-size: 12px; }
+.approval-stat-card.tone-primary::before, .approval-stat-card.tone-primary .stat-card-top i { background: var(--el-color-primary); }
+.approval-stat-card.tone-warning::before, .approval-stat-card.tone-warning .stat-card-top i { background: var(--el-color-warning); }
+.approval-stat-card.tone-success::before, .approval-stat-card.tone-success .stat-card-top i { background: var(--el-color-success); }
+.approval-stat-card.tone-danger::before, .approval-stat-card.tone-danger .stat-card-top i { background: var(--el-color-danger); }
+.approval-card-section { padding: 0 18px 18px; border: 1px solid #dcdfe6; border-radius: 6px; background: #fff; }
+.approval-section-head { display: flex; align-items: center; justify-content: space-between; min-height: 52px; border-bottom: 1px solid #ebeef5; }
+.approval-section-head strong { color: #303133; font-size: 15px; }
+.approval-section-head span { color: #909399; font-size: 12px; }
+.approval-toolbar { align-items: center; display: flex; flex-wrap: nowrap; gap: 12px; margin: 4px 0 12px; overflow-x: auto; }
+.approval-toolbar :deep(.el-form-item) { flex: 0 0 auto; margin-bottom: 18px; margin-right: 0; }
+.approval-toolbar :deep(.el-form-item__content) { display: flex; }
+.approval-status-select { width: 140px; }
+.approval-filter-actions { align-items: center; display: flex; flex: 0 0 auto; gap: 8px; }
+.approval-filter-actions :deep(.el-form-item__content) { display: flex; gap: 8px; }
+.pager { display: flex; justify-content: flex-end; margin-top: 14px; }
+.lead-approval-table { width: 100%; }
+.detail-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; padding: 16px; border: 1px solid #dcdfe6; border-left: 3px solid var(--el-color-primary); border-radius: 5px; background: var(--el-color-primary-light-9); }
+.detail-banner > div { display: grid; gap: 4px; }
+.detail-banner span, .detail-banner small { color: #909399; font-size: 11px; }
+.detail-banner strong { color: #303133; font-size: 16px; }
+.detail-alert { margin-top: 10px; }
+.approval-detail-drawer h3 { margin: 22px 0 10px; color: #303133; font-size: 14px; }
+.drawer-footer { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.drawer-footer > span { color: #909399; font-size: 12px; }
+.drawer-footer > div { display: flex; gap: 8px; }
+@media (max-width: 680px) {
+  .approval-stat-grid { grid-template-columns: 1fr; }
+  .approval-toolbar { align-items: stretch; flex-wrap: wrap; }
+  .approval-toolbar :deep(.el-form-item) { width: 100%; }
+  .approval-toolbar :deep(.el-input) { width: 100% !important; }
+  .approval-toolbar .approval-filter-actions { width: 100%; }
+  .drawer-footer { align-items: stretch; flex-direction: column; }
+}
+</style>

@@ -1,0 +1,28 @@
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 goto 'http://127.0.0.1:8090/#/customers/leads/new'
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 snapshot
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 click <批量导入>
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 screenshot --filename='../docs/superpowers/evidence/2026-08-27-marketing-lead-import-dialog/import-dialog.png'
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 click <下载模板>
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 click <选择文件>
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 upload '/home/djdev/lijh/yiti/xanzc_frontend/public/templates/lead-import-template.csv'
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 screenshot --filename='../docs/superpowers/evidence/2026-08-27-marketing-lead-import-dialog/local-file-selected.png'
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 requests --filter='marketing/lead-import-batches'
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 click <取消>
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 click <导入记录>
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 screenshot --filename='../docs/superpowers/evidence/2026-08-27-marketing-lead-import-dialog/import-records-tab.png'
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 route-list
+npx --no-install playwright-cli -s=marketing-filter-final-20260827 console
+
+# 2026-08-27 模板字段对齐增量验收
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 click <批量导入>
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 snapshot
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 screenshot --filename='../docs/superpowers/evidence/2026-08-27-marketing-lead-import-dialog/import-dialog-aligned-template.png'
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 click <下载模板>
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 click <选择文件>
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 upload '/home/djdev/lijh/yiti/xanzc_frontend/public/templates/lead-import-template.csv'
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 requests --filter='marketing/lead-import-batches'
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 route-list
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 console
+npx --yes @playwright/cli@latest -s=marketing-filter-final-20260827 screenshot --filename='../docs/superpowers/evidence/2026-08-27-marketing-lead-import-dialog/local-file-selected-aligned-template.png'
+cmp --silent public/templates/lead-import-template.csv .playwright-cli/lead-import-template.csv
+awk -F',' 'NR==1 { print "downloaded template columns=" NF; print $0 }' .playwright-cli/lead-import-template.csv

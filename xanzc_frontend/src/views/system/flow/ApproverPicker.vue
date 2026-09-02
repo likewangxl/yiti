@@ -152,6 +152,10 @@ const props = defineProps({
 });
 const emit = defineEmits(['update:modelValue']);
 
+const userSearchOptions = ref([]);
+const userSearchLoading = ref(false);
+let userSearchVersion = 0;
+
 const localList = ref([]);
 watch(
   () => props.modelValue,
@@ -189,9 +193,6 @@ function flattenOrgTree(nodes, result = []) {
   return result;
 }
 
-const userSearchOptions = ref([]);
-const userSearchLoading = ref(false);
-let userSearchVersion = 0;
 async function onUserSearch(keyword) {
   const version = ++userSearchVersion;
   if (!keyword?.trim()) { userSearchOptions.value = []; userSearchLoading.value = false; return; }

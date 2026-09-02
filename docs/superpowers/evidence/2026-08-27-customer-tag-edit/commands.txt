@@ -1,0 +1,23 @@
+./node_modules/.bin/playwright-cli --version
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 open about:blank --browser=chromium
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 resize 1440 900
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 route '**/api/auth/current-user' '<mock system admin>'
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 route '**/api/auth/my-menus' '<mock customer marketing menus>'
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 route '**/api/auth/permissions' '<mock customer resources>'
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 route '**/api/notifications/unread-count' '<mock zero>'
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 route '**/api/marketing/customers?*' '<mock one customer page>'
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 route '**/api/marketing/customers/1' '<mock customer detail with tagIds>'
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 route '**/api/marketing/customer-tags?*' '<mock usable, expired and inactive tags>'
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 route '**/api/marketing/customers/1/profile' '<mock update success>'
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 route '**/api/customer-pool?*' '<mock empty PUBLIC pool>'
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 route '**/api/sys/dicts/*/items' '<mock empty dictionary items>'
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 goto 'http://127.0.0.1:8090/#/customers/manage'
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 run-code '<open edit, choose tag, fill reason>'
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 request-body 1
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 goto 'http://127.0.0.1:8090/#/customers/pool/available'
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 run-code '<count distribution filter and real filter controls>'
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 console
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 requests
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 route-list
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 screenshot --filename /home/djdev/lijh/yiti/docs/superpowers/evidence/2026-08-27-customer-tag-edit/marketing-customer-tag-edit.png --full-page
+./node_modules/.bin/playwright-cli -s=customer-tag-edit-20260827 screenshot --filename /home/djdev/lijh/yiti/docs/superpowers/evidence/2026-08-27-customer-tag-edit/available-pool-filter.png --full-page

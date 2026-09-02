@@ -71,7 +71,7 @@ class ClaimServiceReTouchTest {
         when(touchTaskMapper.selectActiveByCustAndAssignee("cust-001", "E10001"))
                 .thenReturn(Collections.emptyList());
         TouchTask created = new TouchTask();
-        created.setId("touch-new-001");
+        created.setId(1L);
         when(touchTaskService.createFollowUpTask(eq("cust-001"), eq("ORG_SZ_001"),
                 eq("E10001"), eq("客户提出新需求需要重新触达"), any()))
                 .thenReturn(created);
@@ -79,7 +79,7 @@ class ClaimServiceReTouchTest {
         TouchTask result = claimService.reTouch("claim-001", buildReq(), "E10001", "ORG_SZ_001");
 
         assertThat(result).isNotNull();
-        assertThat(result.getId()).isEqualTo("touch-new-001");
+        assertThat(result.getId()).isEqualTo(1L);
         verify(touchTaskService).createFollowUpTask(eq("cust-001"), eq("ORG_SZ_001"),
                 eq("E10001"), eq("客户提出新需求需要重新触达"), any());
     }

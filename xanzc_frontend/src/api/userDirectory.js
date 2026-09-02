@@ -1,8 +1,8 @@
 // 用户通讯录 API —— 对接 auth `/api/users/directory`
 // （UserDirectoryController：PT_USER + EXT_USER_ORG + EXT_ORG_INFO 三表联查）
 //
-// 替代原 `@/api/employees`（portal AddressBookController / ADDRBOOK_EMPLOYEE）作为
-// 员工选择器/审批人选择的数据源。原 employees.js 保持不动。
+// 作为员工选择器/审批人选择的直接数据源；通讯录页则继续
+// 通过 portal `/api/employees` 取数，两者的人员口径都是 PT_USER。
 //
 // 后端 ResponseWrapper，DTO 字段：empId / empName / orgCode / orgName / position / status
 //   - empId = PT_USER.USER_ID（代理键，全系统 empId 规范取值，与会签 assignee 一致），非工号

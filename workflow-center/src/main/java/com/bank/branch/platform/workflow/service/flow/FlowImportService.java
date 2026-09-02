@@ -17,6 +17,7 @@ import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.EndEvent;
 import org.flowable.bpmn.model.ExclusiveGateway;
 import org.flowable.bpmn.model.FlowElement;
+import org.flowable.bpmn.model.FlowableListener;
 import org.flowable.bpmn.model.Process;
 import org.flowable.bpmn.model.SequenceFlow;
 import org.flowable.bpmn.model.StartEvent;
@@ -44,7 +45,8 @@ import java.util.Set;
  * <ul>
  *   <li>StartEvent→START、EndEvent→END、ExclusiveGateway→GATEWAY、UserTask→APPROVAL；
  *       其它 BPMN 元素（含 SequenceFlow，单独收集）忽略。</li>
- *   <li>UserTask 含多实例特性（getLoopCharacteristics()!=null）→ 会签 ALL，否则 ANY。</li>
+ *   <li>UserTask 含多实例特性（getLoopCharacteristics()!=null）→ 会签 ALL；
+ *       使用 approverGroups 集合及分组解析监听器时识别为 GROUP_ALL，否则 ANY。</li>
  *   <li>审批人来自 {@link WfNodeCandidateConf}（按 procKey + nodeKey 查），
  *       candidateValue 为 JSON 数组，逐值展开为 {@link FlowApproverDTO}。</li>
  *   <li>SequenceFlow 转 edge；网关 defaultFlow 的那条边 isDefault=true；
@@ -133,7 +135,7 @@ public class FlowImportService {
                     nodes.add(node(el.getId(), displayName(el), "GATEWAY", null));
                 } else if (el instanceof UserTask) {
                     UserTask ut = (UserTask) el;
-                    String approveMode = ut.getLoopCharacteristics() != null ? "ALL" : "ANY";
+                    String approveMode = resolveApproveMode(ut);
                     FlowNodeDTO node = node(el.getId(), displayName(el), "APPROVAL", approveMode);
                     node.setApprovers(resolveApprovers(procKey, el.getId()));
                     nodes.add(node);
@@ -210,6 +212,19 @@ public class FlowImportService {
             }
         }
         return approvers;
+    }
+
+    /** 从已部署 UserTask 的多实例集合和入口监听器恢复设计器审批模式。 */
+    private String resolveApproveMode(UserTask userTask) {
+        if (userTask.getLoopCharacteristics() == null) {
+            return "ANY";
+        }
+        String collection = userTask.getLoopCharacteristics().getCollectionString();
+        boolean grouped = "approverGroups".equals(collection)
+                && userTask.getExecutionListeners().stream()
+                .map(FlowableListener::getImplementation)
+                .anyMatch("${multiInstanceApproverGroupResolver}"::equals);
+        return grouped ? "GROUP_ALL" : "ALL";
     }
 
     /**

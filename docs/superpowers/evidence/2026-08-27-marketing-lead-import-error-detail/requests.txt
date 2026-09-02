@@ -1,0 +1,22 @@
+# 无 mock 的本地扩展名校验
+
+选择 `package.json` 后：
+
+```text
+requests --filter='marketing/lead-import-batches'
+Result: no matching requests
+```
+
+# 仅开发态 mock 的后端明细展示
+
+```text
+1. [POST] http://127.0.0.1:8090/api/marketing/lead-import-batches => [200] OK
+type: xhr
+mimeType: application/json
+```
+
+响应体：
+
+```json
+{"code":"0","message":"success","data":{"batch":{"importStatus":"ALL_FAILED","validCount":0},"details":[{"rowNo":1,"errorMessage":"文件缺少关键表头：客户名称、统一社会信用代码，请下载最新线索导入模板"}]}}
+```

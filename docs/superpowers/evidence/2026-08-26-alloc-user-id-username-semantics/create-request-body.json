@@ -1,0 +1,25 @@
+{
+  "custType": "CORP",
+  "custId": "CUST-PW-USER-ID",
+  "custName": "字段语义验收客户",
+  "currBal": null,
+  "mAvgBal": null,
+  "qAvgBal": null,
+  "yAvgBal": null,
+  "loanCurrBal": null,
+  "loanMAvgBal": null,
+  "loanQAvgBal": null,
+  "loanYAvgBal": null,
+  "allocDim": "NEW",
+  "bizKind": "CORP_DEPOSIT,CORP_LOAN",
+  "ownerOrgId": "1",
+  "reason": "验证工号展示与用户主键提交",
+  "items": [
+    {
+      "empId": "2347",
+      "ratio": 100,
+      "remark": ""
+    }
+  ],
+  "originalAllocList": []
+}

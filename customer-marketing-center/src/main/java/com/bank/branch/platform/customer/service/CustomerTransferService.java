@@ -129,7 +129,7 @@ public class CustomerTransferService {
         transferTargetMapper.insertBatch(targetEntities);
 
         // 先关闭旧机构任务，再把客户主办快照切到新机构，保证日志权限按任务原机构保留。
-        touchTaskMapper.cancelActiveByCust(custId, now);
+        touchTaskMapper.cancelActiveByCust(custId, now, "客户转交", operatorEmpId);
         CustMaster update = new CustMaster();
         update.setId(custId);
         update.setMainManagerId(primary.getEmpId());

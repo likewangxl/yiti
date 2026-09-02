@@ -1,0 +1,10 @@
+# 以下均为开发态 mock，非后端联调。
+GET **/api/auth/current-user -> E_UI_1 验收用户
+GET **/api/auth/my-menus -> []
+GET **/api/auth/permissions -> /api/marketing/leads, /api/marketing/lead-import-batches/**
+GET **/api/notifications/unread-count -> 0
+GET **/api/sys/dicts/*/items -> []
+GET **/api/marketing/leads?* -> 空列表
+GET **/api/marketing/customer-tags?* -> 2026重点企业
+GET **/api/marketing/lead-import-batches?* -> E_UI_1 本人批次一条
+GET **/api/marketing/lead-import-batches/28/details?* -> 失败明细一条

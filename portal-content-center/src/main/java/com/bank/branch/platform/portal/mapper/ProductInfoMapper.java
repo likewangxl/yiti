@@ -12,12 +12,11 @@ import java.util.List;
  * 产品信息 Mapper 接口，操作 product_info 表。
  * <p>
  * 所有查询默认过滤逻辑删除记录（deleted = 0）。
- * responsible_emp_ids 字段通过 JsonStringListTypeHandler 自动转换 List&lt;String&gt; ↔ JSON 字符串。
  * </p>
  * <p>
  * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
  * {@code selectById(Serializable)} / {@code updateById(T)} 由 BaseMapper 提供。
- * 自定义 SQL（含逻辑删除过滤、TypeHandler、DATA_SCOPE 过滤）继续保留在本接口和 XML。
+ * 自定义 SQL（含逻辑删除过滤、DATA_SCOPE 过滤）继续保留在本接口和 XML。
  * </p>
  */
 @Mapper

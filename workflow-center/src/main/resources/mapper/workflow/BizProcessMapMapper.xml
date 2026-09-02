@@ -25,6 +25,16 @@
         LIMIT 1
     </select>
 
+    <!-- 按业务键加行锁查询，供终态流程重提时复用唯一映射行 -->
+    <select id="selectForUpdateByBusinessKey"
+            resultType="com.bank.branch.platform.workflow.entity.BizProcessMap">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM BIZ_PROCESS_MAP
+        WHERE business_key = #{businessKey}
+        FOR UPDATE
+    </select>
+
     <!-- 根据流程实例ID查询 -->
     <select id="selectByProcessInstanceId" parameterType="string"
             resultType="com.bank.branch.platform.workflow.entity.BizProcessMap">
@@ -45,6 +55,28 @@
         ORDER BY created_time DESC
         LIMIT 1
     </select>
+
+    <!-- 终态流程重新启动时复用原行，并显式清理上一流程的运行态字段。 -->
+    <update id="updateForRestart"
+            parameterType="com.bank.branch.platform.workflow.entity.BizProcessMap">
+        UPDATE BIZ_PROCESS_MAP
+        SET business_key = #{businessKey},
+            biz_type = #{bizType},
+            biz_id = #{bizId},
+            process_definition_key = #{processDefinitionKey},
+            process_instance_id = #{processInstanceId},
+            start_user = #{startUser},
+            current_assignee = NULL,
+            candidate_groups = NULL,
+            process_status = #{processStatus},
+            title = #{title},
+            start_time = #{startTime},
+            end_time = NULL,
+            updated_time = #{updatedTime}
+        WHERE id = #{id}
+          AND business_key = #{businessKey}
+          AND process_status IN ('COMPLETED', 'CANCELLED')
+    </update>
 
     <!-- insert / updateById 由 MyBatis-Plus BaseMapper 提供 -->
 

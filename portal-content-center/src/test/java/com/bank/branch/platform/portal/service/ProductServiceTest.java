@@ -6,12 +6,10 @@ import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.config.MemoryCacheService;
 import com.bank.branch.platform.portal.api.dto.ProductCreateReqDTO;
+import com.bank.branch.platform.portal.controller.dto.product.ProductQueryReqDTO;
 import com.bank.branch.platform.portal.controller.dto.product.ProductUpdateReqDTO;
-import com.bank.branch.platform.portal.entity.AddrbookEmployee;
 import com.bank.branch.platform.portal.entity.ProductInfo;
 import com.bank.branch.platform.portal.enums.PortalErrorCode;
-import com.bank.branch.platform.portal.event.ProductResponsibleUpdatedEvent;
-import com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper;
 import com.bank.branch.platform.portal.mapper.ProductInfoMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,10 +17,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -32,483 +28,174 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-/**
- * ProductService 单元测试 -- 纯 JUnit 5 + Mockito，无需 Spring 上下文
- */
+/** ProductService 产品 CRUD 与负责人关系编排测试。 */
 @ExtendWith(MockitoExtension.class)
 class ProductServiceTest {
 
     @Mock ProductInfoMapper productInfoMapper;
-    @Mock AddrbookEmployeeMapper addrbookEmployeeMapper;
+    @Mock AddrbookQueryService addrbookQueryService;
+    @Mock UserProductRelationService userProductRelationService;
     @Mock CurrentUserApi currentUserApi;
     @Mock BizScopeApi bizScopeApi;
     @Mock AuditApi auditApi;
     @Mock MemoryCacheService memoryCacheService;
-    @Mock ApplicationEventPublisher eventPublisher;
+
     @InjectMocks ProductService productService;
 
     @Test
-    void createProduct_success() {
+    void createProduct_persistsProductAndReplacesRelationSet() {
         ProductCreateReqDTO req = new ProductCreateReqDTO();
-        req.setProductCode("PRD001"); req.setProductName("测试产品"); req.setProductCategory("LOAN");
-        req.setDescription("测试描述"); req.setSupportForSupportRequest(true);
-        req.setProductDeptOrgCode("ORG001"); req.setFileObjectId("file-001");
-        req.setResponsibleEmpIds(Arrays.asList("E001", "E002"));
+        req.setProductCode("PRD001");
+        req.setProductName("测试产品");
+        req.setProductCategory("LOAN");
+        req.setDescription("测试描述");
+        req.setSupportForSupportRequest(true);
+        req.setProductDeptOrgCode("ORG001");
+        req.setFileObjectId("file-001");
+        req.setResponsibleEmpIds(Arrays.asList(" E001 ", "E002", "E001", " "));
         when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
         when(currentUserApi.isSystemAdmin()).thenReturn(true);
         when(productInfoMapper.selectByProductCode("PRD001")).thenReturn(null);
-        when(addrbookEmployeeMapper.countActiveByEmpIds(Arrays.asList("E001", "E002"))).thenReturn(2);
-        when(addrbookEmployeeMapper.selectByEmpId("E001")).thenReturn(buildEmployee("E001", new ArrayList<>()));
-        when(addrbookEmployeeMapper.selectByEmpId("E002")).thenReturn(buildEmployee("E002", new ArrayList<>()));
-        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString())).thenReturn(1);
+        when(addrbookQueryService.findInvalidEmpIds(List.of("E001", "E002"))).thenReturn(Collections.emptyList());
+
         ProductInfo result = productService.createProduct(req);
-        assertThat(result).isNotNull();
+
         assertThat(result.getProductCode()).isEqualTo("PRD001");
         assertThat(result.getCreatedBy()).isEqualTo("OPERATOR01");
         assertThat(result.getId()).isNotBlank();
         assertThat(result.getStatus()).isEqualTo("ACTIVE");
         verify(productInfoMapper).insert(any(ProductInfo.class));
-        verify(eventPublisher).publishEvent(any(ProductResponsibleUpdatedEvent.class));
+        verify(userProductRelationService).replaceUsersForProduct(
+                eq(result.getId()), eq(List.of("E001", "E002")), eq("OPERATOR01"));
+        verify(addrbookQueryService).findInvalidEmpIds(List.of("E001", "E002"));
         verify(auditApi).log(any());
     }
 
     @Test
-    void createProduct_duplicateCode() {
-        ProductCreateReqDTO req = new ProductCreateReqDTO();
-        req.setProductCode("EXISTING_CODE"); req.setProductName("重复产品"); req.setProductCategory("LOAN");
-        req.setSupportForSupportRequest(false); req.setProductDeptOrgCode("ORG001");
+    void createProduct_duplicateCode_doesNotWrite() {
+        ProductCreateReqDTO req = createRequest("EXISTING_CODE");
         when(currentUserApi.isSystemAdmin()).thenReturn(true);
         when(productInfoMapper.selectByProductCode("EXISTING_CODE")).thenReturn(new ProductInfo());
-        assertThatThrownBy(() -> productService.createProduct(req)).isInstanceOf(BizException.class)
-                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(PortalErrorCode.PRODUCT_CODE_DUPLICATE.getCode()));
+
+        assertThatThrownBy(() -> productService.createProduct(req))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode())
+                        .isEqualTo(PortalErrorCode.PRODUCT_CODE_DUPLICATE.getCode()));
         verify(productInfoMapper, never()).insert(any(ProductInfo.class));
+        verify(userProductRelationService, never()).replaceUsersForProduct(anyString(), any(), anyString());
     }
 
     @Test
-    void createProduct_resignedEmployee() {
-        ProductCreateReqDTO req = new ProductCreateReqDTO();
-        req.setProductCode("PRD002"); req.setProductName("产品2"); req.setProductCategory("DEPOSIT");
-        req.setSupportForSupportRequest(true); req.setProductDeptOrgCode("ORG002");
-        req.setResponsibleEmpIds(Arrays.asList("E001", "E002", "E003"));
+    void createProduct_invalidEmployee_doesNotWrite() {
+        ProductCreateReqDTO req = createRequest("PRD002");
+        req.setResponsibleEmpIds(List.of("E001", "E002"));
         when(currentUserApi.isSystemAdmin()).thenReturn(true);
         when(productInfoMapper.selectByProductCode("PRD002")).thenReturn(null);
-        when(addrbookEmployeeMapper.countActiveByEmpIds(Arrays.asList("E001", "E002", "E003"))).thenReturn(2);
-        assertThatThrownBy(() -> productService.createProduct(req)).isInstanceOf(BizException.class)
-                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(PortalErrorCode.EMPLOYEE_RESIGNED.getCode()));
+        when(addrbookQueryService.findInvalidEmpIds(List.of("E001", "E002"))).thenReturn(List.of("E002"));
+
+        assertThatThrownBy(() -> productService.createProduct(req))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode())
+                        .isEqualTo(PortalErrorCode.EMPLOYEE_RESIGNED.getCode()));
         verify(productInfoMapper, never()).insert(any(ProductInfo.class));
     }
 
     @Test
-    void updateProduct_success() {
-        String productId = "prod-001";
-        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
-        req.setProductName("更新后名称"); req.setDescription("更新后描述");
-        when(productInfoMapper.selectByIdForUpdate(productId)).thenReturn(buildProduct(productId, "PRD001", Arrays.asList("E001")));
+    void updateProduct_withoutResponsibleField_keepsRelationSet() {
+        ProductInfo existing = buildProduct("P001", "PRD001");
+        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
         when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-        ProductInfo result = productService.updateProduct(productId, req);
-        assertThat(result).isNotNull();
+        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
+        req.setProductName("新名称");
+
+        ProductInfo result = productService.updateProduct("P001", req);
+
+        assertThat(result.getProductName()).isEqualTo("新名称");
         verify(productInfoMapper).updateById(any(ProductInfo.class));
+        verify(userProductRelationService, never()).replaceUsersForProduct(anyString(), any(), anyString());
         verify(auditApi).log(any());
     }
 
     @Test
-    void updateProduct_notFound() {
-        when(productInfoMapper.selectByIdForUpdate("nonexistent")).thenReturn(null);
-        ProductUpdateReqDTO req = new ProductUpdateReqDTO(); req.setProductName("x");
-        assertThatThrownBy(() -> productService.updateProduct("nonexistent", req)).isInstanceOf(BizException.class)
-                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(PortalErrorCode.PRODUCT_NOT_FOUND.getCode()));
+    void updateProduct_withResponsibleField_validatesAndReplacesRelations() {
+        ProductInfo existing = buildProduct("P001", "PRD001");
+        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        when(addrbookQueryService.findInvalidEmpIds(List.of("E002", "E003"))).thenReturn(Collections.emptyList());
+        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
+        req.setResponsibleEmpIds(Arrays.asList(" E002 ", "E003", "E002"));
+
+        productService.updateProduct("P001", req);
+
+        verify(addrbookQueryService).findInvalidEmpIds(List.of("E002", "E003"));
+        verify(userProductRelationService).replaceUsersForProduct("P001", List.of("E002", "E003"), "OPERATOR01");
+    }
+
+    @Test
+    void updateProduct_emptyResponsibleField_clearsRelations() {
+        ProductInfo existing = buildProduct("P001", "PRD001");
+        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
+        req.setResponsibleEmpIds(Collections.emptyList());
+
+        productService.updateProduct("P001", req);
+
+        verify(userProductRelationService).replaceUsersForProduct("P001", Collections.emptyList(), "OPERATOR01");
+        verify(addrbookQueryService, never()).findInvalidEmpIds(any());
+    }
+
+    @Test
+    void updateProduct_notFound_doesNotWrite() {
+        when(productInfoMapper.selectByIdForUpdate("P999")).thenReturn(null);
+        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
+        req.setProductName("x");
+
+        assertThatThrownBy(() -> productService.updateProduct("P999", req))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode())
+                        .isEqualTo(PortalErrorCode.PRODUCT_NOT_FOUND.getCode()));
         verify(productInfoMapper, never()).updateById(any(ProductInfo.class));
     }
 
     @Test
-    void updateProduct_responsibleSync() {
-        String productId = "prod-002";
-        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
-        req.setResponsibleEmpIds(Arrays.asList("E002", "E003"));
-        when(productInfoMapper.selectByIdForUpdate(productId)).thenReturn(buildProduct(productId, "PRD002", Arrays.asList("E001", "E002")));
-        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-        when(addrbookEmployeeMapper.countActiveByEmpIds(Arrays.asList("E002", "E003"))).thenReturn(2);
-        when(addrbookEmployeeMapper.selectByEmpId("E001")).thenReturn(buildEmployee("E001", new ArrayList<>(Collections.singletonList(productId))));
-        when(addrbookEmployeeMapper.selectByEmpId("E003")).thenReturn(buildEmployee("E003", new ArrayList<>()));
-        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString())).thenReturn(1);
-        productService.updateProduct(productId, req);
-        verify(addrbookEmployeeMapper).selectByEmpId("E001");
-        verify(addrbookEmployeeMapper).selectByEmpId("E003");
-        verify(addrbookEmployeeMapper, times(2)).updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString());
-        verify(eventPublisher).publishEvent(any(ProductResponsibleUpdatedEvent.class));
-    }
-
-    @Test
-    void deleteProduct_success_cleansReferences() {
-        String productId = "prod-003";
-        when(productInfoMapper.selectByIdForUpdate(productId)).thenReturn(buildProduct(productId, "PRD003", Arrays.asList("E001", "E002")));
+    void deleteProduct_withoutRelations_softDeletes() {
+        ProductInfo existing = buildProduct("P001", "PRD001");
+        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
         when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
         when(currentUserApi.isSystemAdmin()).thenReturn(true);
-        when(addrbookEmployeeMapper.selectByEmpId("E001")).thenReturn(buildEmployee("E001", new ArrayList<>(Collections.singletonList(productId))));
-        when(addrbookEmployeeMapper.selectByEmpId("E002")).thenReturn(buildEmployee("E002", new ArrayList<>(Collections.singletonList(productId))));
-        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString())).thenReturn(1);
-        productService.deleteProduct(productId);
-        verify(productInfoMapper).softDeleteById(productId, "OPERATOR01");
-        verify(addrbookEmployeeMapper, times(2)).updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString());
-        ArgumentCaptor<ProductResponsibleUpdatedEvent> cap = ArgumentCaptor.forClass(ProductResponsibleUpdatedEvent.class);
-        verify(eventPublisher).publishEvent(cap.capture());
-        assertThat(cap.getValue().getAfterEmpIds()).isEmpty();
-        assertThat(cap.getValue().getBeforeEmpIds()).containsExactlyInAnyOrder("E001", "E002");
+        when(userProductRelationService.countUsersByProductId("P001")).thenReturn(0);
+
+        productService.deleteProduct("P001");
+
+        verify(userProductRelationService).countUsersByProductId("P001");
+        verify(productInfoMapper).softDeleteById("P001", "OPERATOR01");
         verify(auditApi).log(any());
     }
 
     @Test
-    void deleteProduct_notFound() {
-        when(productInfoMapper.selectByIdForUpdate("nonexistent")).thenReturn(null);
-        assertThatThrownBy(() -> productService.deleteProduct("nonexistent")).isInstanceOf(BizException.class)
-                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(PortalErrorCode.PRODUCT_NOT_FOUND.getCode()));
-        verify(productInfoMapper, never()).softDeleteById(anyString(), anyString());
-    }
-
-    @Test
-    void listSupportAvailable_cacheMiss_queriesDbAndCaches() {
-        when(memoryCacheService.get("portal:product:support-available")).thenReturn(null);
-        List<ProductInfo> dbResult = Arrays.asList(
-                buildProduct("p1", "PRD001", Collections.emptyList()),
-                buildProduct("p2", "PRD002", Collections.emptyList()));
-        when(productInfoMapper.listSupportAvailable()).thenReturn(dbResult);
-
-        List<ProductInfo> r1 = productService.listSupportAvailable();
-        assertThat(r1).hasSize(2);
-        verify(productInfoMapper, times(1)).listSupportAvailable();
-        verify(memoryCacheService).put(eq("portal:product:support-available"), eq(dbResult), any());
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    void listSupportAvailable_cacheHit_skipsDb() {
-        List<ProductInfo> cachedResult = Collections.singletonList(
-                buildProduct("p1", "PRD001", Collections.emptyList()));
-        when(memoryCacheService.get("portal:product:support-available")).thenReturn(cachedResult);
-
-        List<ProductInfo> result = productService.listSupportAvailable();
-
-        assertThat(result).hasSize(1);
-        verify(productInfoMapper, never()).listSupportAvailable();
-    }
-
-    @Test
-    void getProduct_notFound() {
-        when(productInfoMapper.selectById("nonexistent")).thenReturn(null);
-        assertThatThrownBy(() -> productService.getProduct("nonexistent")).isInstanceOf(BizException.class)
-                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(PortalErrorCode.PRODUCT_NOT_FOUND.getCode()));
-    }
-
-    @Test
-    void listProductsShouldPassSupportAndDeptFilters() {
-        com.bank.branch.platform.portal.controller.dto.product.ProductQueryReqDTO req =
-                new com.bank.branch.platform.portal.controller.dto.product.ProductQueryReqDTO();
-        req.setSupportForSupportRequest(true);
-        req.setProductDeptOrgCode("ORG_SZ_001");
-        req.setPageNo(1); req.setPageSize(20);
-        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-        when(productInfoMapper.countProducts(any(com.bank.branch.platform.portal.service.dto.ProductListQuery.class))).thenReturn(1L);
-        when(productInfoMapper.listProducts(any(com.bank.branch.platform.portal.service.dto.ProductListQuery.class)))
-                .thenReturn(List.of(buildProduct("P001", "DEPOSIT_001", List.of())));
-
-        productService.listProducts(req);
-
-        // 组装的查询对象必须携带中场支持 / 产品部门筛选，否则 Mapper 的 <if> 不命中 → 返回全部
-        ArgumentCaptor<com.bank.branch.platform.portal.service.dto.ProductListQuery> captor =
-                ArgumentCaptor.forClass(com.bank.branch.platform.portal.service.dto.ProductListQuery.class);
-        verify(productInfoMapper).listProducts(captor.capture());
-        assertThat(captor.getValue().getSupportForSupportRequest()).isTrue();
-        assertThat(captor.getValue().getProductDeptOrgCode()).isEqualTo("ORG_SZ_001");
-    }
-
-    // ========== D.4 createProduct 补充测试 ==========
-
-    @Test
-    void createProductShouldInsertAndPublishEvent() {
-        ProductCreateReqDTO req = new ProductCreateReqDTO();
-        req.setProductCode("DEPOSIT_001");
-        req.setProductName("活期存款");
-        req.setProductCategory("CAT_DEPOSIT");
-        req.setSupportForSupportRequest(true);
-        req.setProductDeptOrgCode("ORG_SZ_001");
-        req.setResponsibleEmpIds(List.of("E10001", "E10002"));
-        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
-        when(currentUserApi.isSystemAdmin()).thenReturn(true);
-        when(productInfoMapper.selectByProductCode("DEPOSIT_001")).thenReturn(null);
-        when(addrbookEmployeeMapper.countActiveByEmpIds(List.of("E10001", "E10002"))).thenReturn(2);
-        when(addrbookEmployeeMapper.selectByEmpId("E10001")).thenReturn(buildEmployee("E10001", new ArrayList<>()));
-        when(addrbookEmployeeMapper.selectByEmpId("E10002")).thenReturn(buildEmployee("E10002", new ArrayList<>()));
-        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString())).thenReturn(1);
-
-        ProductInfo result = productService.createProduct(req);
-        assertThat(result).isNotNull();
-        assertThat(result.getId()).isNotBlank();
-        verify(productInfoMapper).insert(any(ProductInfo.class));
-        ArgumentCaptor<ProductResponsibleUpdatedEvent> captor = ArgumentCaptor.forClass(ProductResponsibleUpdatedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        assertThat(captor.getValue().getAfterEmpIds()).containsExactly("E10001", "E10002");
-        assertThat(captor.getValue().getBeforeEmpIds()).isEmpty();
-    }
-
-    @Test
-    void createProductShouldThrowWhenDuplicateCodePreCheck() {
-        ProductCreateReqDTO req = new ProductCreateReqDTO();
-        req.setProductCode("EXISTING_CODE");
-        req.setProductName("活期存款");
-        req.setProductCategory("CAT_DEPOSIT");
-        req.setSupportForSupportRequest(true);
-        req.setProductDeptOrgCode("ORG_SZ_001");
-        when(currentUserApi.isSystemAdmin()).thenReturn(true);
-        when(productInfoMapper.selectByProductCode("EXISTING_CODE")).thenReturn(new ProductInfo());
-
-        assertThatThrownBy(() -> productService.createProduct(req))
-                .isInstanceOf(BizException.class)
-                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo("PORTAL-40901"));
-    }
-
-    @Test
-    void createProductShouldNotPublishEventWhenNoResponsibleEmpIds() {
-        ProductCreateReqDTO req = new ProductCreateReqDTO();
-        req.setProductCode("DEPOSIT_003");
-        req.setProductName("定期存款");
-        req.setProductCategory("CAT_DEPOSIT");
-        req.setSupportForSupportRequest(false);
-        req.setProductDeptOrgCode("ORG_SZ_001");
-        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
-        when(currentUserApi.isSystemAdmin()).thenReturn(true);
-        when(productInfoMapper.selectByProductCode("DEPOSIT_003")).thenReturn(null);
-
-        ProductInfo result = productService.createProduct(req);
-        assertThat(result).isNotNull();
-        verify(productInfoMapper).insert(any(ProductInfo.class));
-        verify(eventPublisher, never()).publishEvent(any(ProductResponsibleUpdatedEvent.class));
-    }
-
-    @Test
-    void createProductShouldThrowWhenEmployeeResigned() {
-        ProductCreateReqDTO req = new ProductCreateReqDTO();
-        req.setProductCode("DEPOSIT_004");
-        req.setProductName("基金产品");
-        req.setProductCategory("CAT_FUND");
-        req.setSupportForSupportRequest(true);
-        req.setProductDeptOrgCode("ORG_SZ_001");
-        req.setResponsibleEmpIds(List.of("E001", "E002", "E003"));
-        when(currentUserApi.isSystemAdmin()).thenReturn(true);
-        when(productInfoMapper.selectByProductCode("DEPOSIT_004")).thenReturn(null);
-        when(addrbookEmployeeMapper.countActiveByEmpIds(List.of("E001", "E002", "E003"))).thenReturn(2);
-
-        assertThatThrownBy(() -> productService.createProduct(req))
-                .isInstanceOf(BizException.class)
-                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo("PORTAL-40902"));
-        verify(productInfoMapper, never()).insert(any(ProductInfo.class));
-    }
-
-    @Test
-    void createProductShouldSetStatusActiveByDefault() {
-        ProductCreateReqDTO req = new ProductCreateReqDTO();
-        req.setProductCode("DEPOSIT_005");
-        req.setProductName("理财产品");
-        req.setProductCategory("CAT_WEALTH");
-        req.setSupportForSupportRequest(false);
-        req.setProductDeptOrgCode("ORG_BJ_001");
-        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
-        when(currentUserApi.isSystemAdmin()).thenReturn(true);
-        when(productInfoMapper.selectByProductCode("DEPOSIT_005")).thenReturn(null);
-
-        ProductInfo result = productService.createProduct(req);
-        assertThat(result.getStatus()).isEqualTo("ACTIVE");
-        assertThat(result.getDeleted()).isEqualTo(0);
-        assertThat(result.getCreatedBy()).isEqualTo("E10001");
-    }
-
-    @Test
-    void createProductShouldThrowWhenOrgCodeMismatch() {
-        ProductCreateReqDTO req = new ProductCreateReqDTO();
-        req.setProductCode("PRD_ORG_TEST");
-        req.setProductName("权限测试产品");
-        req.setProductCategory("LOAN");
-        req.setSupportForSupportRequest(false);
-        req.setProductDeptOrgCode("ORG_OTHER");
-        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-        when(currentUserApi.isSystemAdmin()).thenReturn(false);
-        when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
-
-        assertThatThrownBy(() -> productService.createProduct(req))
-                .isInstanceOf(BizException.class)
-                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo("PORTAL-40302"));
-        verify(productInfoMapper, never()).insert(any(ProductInfo.class));
-    }
-
-    // ========== D.5 updateProduct 补充测试 ==========
-
-    @Test
-    void updateProductShouldThrowWhenNotFound() {
-        when(productInfoMapper.selectByIdForUpdate("P999")).thenReturn(null);
-        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
-        req.setProductName("新名称");
-        assertThatThrownBy(() -> productService.updateProduct("P999", req))
-                .isInstanceOf(BizException.class)
-                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo("PORTAL-40003"));
-    }
-
-    @Test
-    void updateProductShouldUseForUpdateLock() {
-        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", List.of());
-        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
-        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
-        req.setProductName("新名称");
-
-        productService.updateProduct("P001", req);
-        verify(productInfoMapper).selectByIdForUpdate("P001");
-        verify(productInfoMapper).updateById(any(ProductInfo.class));
-    }
-
-    @Test
-    void updateProductShouldComputeDiffAndPublishEvent() {
-        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", Arrays.asList("E001", "E002"));
-        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
-        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-        when(addrbookEmployeeMapper.countActiveByEmpIds(Arrays.asList("E002", "E003"))).thenReturn(2);
-        when(addrbookEmployeeMapper.selectByEmpId("E001")).thenReturn(buildEmployee("E001", new ArrayList<>(Collections.singletonList("P001"))));
-        when(addrbookEmployeeMapper.selectByEmpId("E003")).thenReturn(buildEmployee("E003", new ArrayList<>()));
-        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString())).thenReturn(1);
-        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
-        req.setResponsibleEmpIds(Arrays.asList("E002", "E003"));
-
-        productService.updateProduct("P001", req);
-
-        ArgumentCaptor<ProductResponsibleUpdatedEvent> captor = ArgumentCaptor.forClass(ProductResponsibleUpdatedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        ProductResponsibleUpdatedEvent event = captor.getValue();
-        assertThat(event.getBeforeEmpIds()).containsExactlyInAnyOrder("E001", "E002");
-        assertThat(event.getAfterEmpIds()).containsExactlyInAnyOrder("E002", "E003");
-    }
-
-    @Test
-    void updateProductShouldNotPublishEventWhenEmpIdsUnchanged() {
-        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", Arrays.asList("E001"));
-        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
-        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
-        req.setProductName("新名称");
-
-        productService.updateProduct("P001", req);
-        verify(eventPublisher, never()).publishEvent(any(ProductResponsibleUpdatedEvent.class));
-    }
-
-    @Test
-    void updateProductShouldPersistProductDeptOrgCode() {
-        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", List.of());
-        existing.setProductDeptOrgCode("ORG_OLD");
-        existing.setOwnerOrgId("ORG_OLD");
-        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
-        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
-        req.setProductDeptOrgCode("ORG_NEW");
-
-        ProductInfo result = productService.updateProduct("P001", req);
-
-        // patch 必须把新部门写入 updateById，且 owner_org_id 与产品部门保持一致（与 createProduct 语义对齐）
-        ArgumentCaptor<ProductInfo> captor = ArgumentCaptor.forClass(ProductInfo.class);
-        verify(productInfoMapper).updateById(captor.capture());
-        assertThat(captor.getValue().getProductDeptOrgCode()).isEqualTo("ORG_NEW");
-        assertThat(captor.getValue().getOwnerOrgId()).isEqualTo("ORG_NEW");
-        assertThat(result.getProductDeptOrgCode()).isEqualTo("ORG_NEW");
-    }
-
-    @Test
-    void updateProductShouldPersistStatus() {
-        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", List.of());
-        existing.setStatus("ACTIVE");
-        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
-        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
-        req.setStatus("DISABLED");
-
-        ProductInfo result = productService.updateProduct("P001", req);
-
-        ArgumentCaptor<ProductInfo> captor = ArgumentCaptor.forClass(ProductInfo.class);
-        verify(productInfoMapper).updateById(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo("DISABLED");
-        assertThat(result.getStatus()).isEqualTo("DISABLED");
-    }
-
-    @Test
-    void updateProductShouldOnlyUpdateNonNullFields() {
-        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", List.of());
-        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
-        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
-        req.setProductName("更新名称");
-
-        ProductInfo result = productService.updateProduct("P001", req);
-        assertThat(result.getProductName()).isEqualTo("更新名称");
-        verify(productInfoMapper).updateById(any(ProductInfo.class));
-    }
-
-    // ========== D.6 deleteProduct 补充测试 ==========
-
-    @Test
-    void deleteProductShouldThrowWhenNotFound() {
-        when(productInfoMapper.selectByIdForUpdate("P999")).thenReturn(null);
-        assertThatThrownBy(() -> productService.deleteProduct("P999"))
-                .isInstanceOf(BizException.class)
-                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo("PORTAL-40003"));
-    }
-
-    @Test
-    void deleteProductShouldThrow40905WhenStillReferenced() {
-        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", List.of("E001"));
+    void deleteProduct_withRelations_isRejectedBeforeSoftDelete() {
+        ProductInfo existing = buildProduct("P001", "PRD001");
         when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
         when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
         when(currentUserApi.isSystemAdmin()).thenReturn(true);
-        when(addrbookEmployeeMapper.countEmployeesReferringProduct("P001")).thenReturn(2);
+        when(userProductRelationService.countUsersByProductId("P001")).thenReturn(2);
 
         assertThatThrownBy(() -> productService.deleteProduct("P001"))
                 .isInstanceOf(BizException.class)
-                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo("PORTAL-40905"));
+                .satisfies(ex -> assertThat(((BizException) ex).getCode())
+                        .isEqualTo(PortalErrorCode.PRODUCT_STILL_REFERRED.getCode()));
         verify(productInfoMapper, never()).softDeleteById(anyString(), anyString());
     }
 
     @Test
-    void deleteProductShouldSoftDeleteAndPublishEvent() {
-        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", Arrays.asList("E001"));
-        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
-        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-        when(currentUserApi.isSystemAdmin()).thenReturn(true);
-        when(addrbookEmployeeMapper.countEmployeesReferringProduct("P001")).thenReturn(0);
-        when(addrbookEmployeeMapper.selectByEmpId("E001")).thenReturn(buildEmployee("E001", new ArrayList<>(Collections.singletonList("P001"))));
-        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString())).thenReturn(1);
-
-        productService.deleteProduct("P001");
-
-        verify(productInfoMapper).softDeleteById("P001", "OPERATOR01");
-        ArgumentCaptor<ProductResponsibleUpdatedEvent> captor = ArgumentCaptor.forClass(ProductResponsibleUpdatedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        assertThat(captor.getValue().getAfterEmpIds()).isEmpty();
-        assertThat(captor.getValue().getBeforeEmpIds()).containsExactly("E001");
-    }
-
-    @Test
-    void deleteProductShouldSucceedWhenNoResponsibleEmps() {
-        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", Collections.emptyList());
-        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
-        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-        when(currentUserApi.isSystemAdmin()).thenReturn(true);
-        when(addrbookEmployeeMapper.countEmployeesReferringProduct("P001")).thenReturn(0);
-
-        productService.deleteProduct("P001");
-
-        verify(productInfoMapper).softDeleteById("P001", "OPERATOR01");
-        verify(eventPublisher).publishEvent(any(ProductResponsibleUpdatedEvent.class));
-    }
-
-    @Test
-    void deleteProductShouldThrowWhenOrgCodeMismatch() {
-        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", Collections.emptyList());
+    void deleteProduct_orgMismatch_isRejected() {
+        ProductInfo existing = buildProduct("P001", "PRD001");
+        existing.setProductDeptOrgCode("ORG_OWNER");
         when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
         when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
         when(currentUserApi.isSystemAdmin()).thenReturn(false);
@@ -516,41 +203,75 @@ class ProductServiceTest {
 
         assertThatThrownBy(() -> productService.deleteProduct("P001"))
                 .isInstanceOf(BizException.class)
-                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo("PORTAL-40302"));
-        verify(productInfoMapper, never()).softDeleteById(anyString(), anyString());
+                .satisfies(ex -> assertThat(((BizException) ex).getCode())
+                        .isEqualTo(PortalErrorCode.NO_RIGHT_TO_PRODUCT_DEPT.getCode()));
+        verify(userProductRelationService, never()).countUsersByProductId(anyString());
     }
 
-    // ========== Cache-Aside 补充测试 ==========
+    @Test
+    void listSupportAvailable_cacheMiss_queriesAndCaches() {
+        when(memoryCacheService.get("portal:product:support-available")).thenReturn(null);
+        List<ProductInfo> dbResult = List.of(buildProduct("P001", "PRD001"), buildProduct("P002", "PRD002"));
+        when(productInfoMapper.listSupportAvailable()).thenReturn(dbResult);
+
+        assertThat(productService.listSupportAvailable()).containsExactlyElementsOf(dbResult);
+
+        verify(productInfoMapper).listSupportAvailable();
+        verify(memoryCacheService).put(eq("portal:product:support-available"), eq(dbResult), any());
+    }
 
     @Test
-    void createProduct_clearsCache() {
+    void listSupportAvailable_cacheHit_skipsDb() {
+        List<ProductInfo> cached = List.of(buildProduct("P001", "PRD001"));
+        when(memoryCacheService.get("portal:product:support-available")).thenReturn(cached);
+
+        assertThat(productService.listSupportAvailable()).containsExactlyElementsOf(cached);
+
+        verify(productInfoMapper, never()).listSupportAvailable();
+    }
+
+    @Test
+    void listProducts_passesSupportAndDepartmentFilters() {
+        ProductQueryReqDTO req = new ProductQueryReqDTO();
+        req.setSupportForSupportRequest(true);
+        req.setProductDeptOrgCode("ORG001");
+        req.setPageNo(1);
+        req.setPageSize(20);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        when(productInfoMapper.countProducts(any())).thenReturn(1L);
+        when(productInfoMapper.listProducts(any())).thenReturn(List.of(buildProduct("P001", "PRD001")));
+
+        productService.listProducts(req);
+
+        ArgumentCaptor<com.bank.branch.platform.portal.service.dto.ProductListQuery> captor =
+                ArgumentCaptor.forClass(com.bank.branch.platform.portal.service.dto.ProductListQuery.class);
+        verify(productInfoMapper).listProducts(captor.capture());
+        assertThat(captor.getValue().getSupportForSupportRequest()).isTrue();
+        assertThat(captor.getValue().getProductDeptOrgCode()).isEqualTo("ORG001");
+    }
+
+    private ProductCreateReqDTO createRequest(String productCode) {
         ProductCreateReqDTO req = new ProductCreateReqDTO();
-        req.setProductCode("PRD_CACHE_TEST");
-        req.setProductName("缓存测试产品");
+        req.setProductCode(productCode);
+        req.setProductName("测试产品");
         req.setProductCategory("LOAN");
         req.setSupportForSupportRequest(false);
         req.setProductDeptOrgCode("ORG001");
-        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-        when(currentUserApi.isSystemAdmin()).thenReturn(true);
-        when(productInfoMapper.selectByProductCode("PRD_CACHE_TEST")).thenReturn(null);
-
-        productService.createProduct(req);
-
-        verify(memoryCacheService).evict("portal:product:support-available");
+        return req;
     }
 
-    private ProductInfo buildProduct(String id, String productCode, List<String> responsibleEmpIds) {
-        ProductInfo p = new ProductInfo(); p.setId(id); p.setProductCode(productCode); p.setProductName("产品-" + productCode);
-        p.setProductCategory("LOAN"); p.setStatus("ACTIVE"); p.setResponsibleEmpIds(responsibleEmpIds);
-        p.setProductDeptOrgCode("ORG001"); p.setCreatedBy("CREATOR01");
-        p.setCreatedTime(LocalDateTime.of(2026, 4, 1, 10, 0)); p.setUpdatedTime(LocalDateTime.of(2026, 4, 1, 10, 0)); p.setDeleted(0);
-        return p;
-    }
-
-    private AddrbookEmployee buildEmployee(String empId, List<String> responsibleProductIds) {
-        AddrbookEmployee e = new AddrbookEmployee(); e.setEmpId(empId); e.setEmpName("员工-" + empId);
-        e.setStatus("ACTIVE"); e.setResponsibleProductIds(responsibleProductIds != null ? responsibleProductIds : new ArrayList<>());
-        e.setUpdatedTime(LocalDateTime.of(2026, 4, 1, 10, 0)); e.setDeleted(0);
-        return e;
+    private ProductInfo buildProduct(String id, String code) {
+        ProductInfo product = new ProductInfo();
+        product.setId(id);
+        product.setProductCode(code);
+        product.setProductName("产品-" + code);
+        product.setProductCategory("LOAN");
+        product.setProductDeptOrgCode("ORG001");
+        product.setStatus("ACTIVE");
+        product.setCreatedBy("CREATOR01");
+        product.setCreatedTime(LocalDateTime.of(2026, 4, 1, 10, 0));
+        product.setUpdatedTime(LocalDateTime.of(2026, 4, 1, 10, 0));
+        product.setDeleted(0);
+        return product;
     }
 }

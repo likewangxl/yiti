@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.marketing.MarketingLeadInfoMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, lead_no, cust_id, lead_type, customer_match_status,
+        base_customer_profile_version, cust_no_snapshot, cust_name, unified_credit_code,
+        legal_representative, registered_capital, registered_address, business_address,
+        business_scope, contact_person, contact_mobile, industry, group_type, group_name,
+        customer_type, enterprise_type, is_keystone, is_account_opened_snapshot,
+        touch_restricted, customer_desc, credit_amount, credit_exposure_amount, lead_source,
+        distribution_mode, pool_status, main_manager_id_snapshot, main_org_id_snapshot,
+        entry_emp_id, entry_org_id, entry_time, lead_status, active_dedup_key, submitted_by,
+        submitted_time, business_key, process_instance_id, import_batch_id, batch_row_no,
+        tag_import_detail_id, reviewed_by, reviewed_time, reject_reason, remark, record_status,
+        created_by, created_time, updated_by, updated_time, lock_version
+    </sql>
+
+    <select id="selectEntryPage" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_LEAD_INFO
+        WHERE record_status = 'ACTIVE'
+          AND lead_source IN ('MANUAL', 'LEAD_IMPORT')
+          AND entry_emp_id = #{entryEmpId}
+        <if test="keyword != null and keyword != ''">
+            AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR unified_credit_code LIKE CONCAT('%', #{keyword}, '%')
+                 OR lead_no LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != null and status != ''">
+            AND lead_status = #{status}
+        </if>
+        ORDER BY entry_time DESC, id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countEntryPage" resultType="long">
+        SELECT COUNT(*)
+        FROM MARKETING_LEAD_INFO
+        WHERE record_status = 'ACTIVE'
+          AND lead_source IN ('MANUAL', 'LEAD_IMPORT')
+          AND entry_emp_id = #{entryEmpId}
+        <if test="keyword != null and keyword != ''">
+            AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR unified_credit_code LIKE CONCAT('%', #{keyword}, '%')
+                 OR lead_no LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != null and status != ''">
+            AND lead_status = #{status}
+        </if>
+    </select>
+
+    <select id="selectActiveByCreditCode" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_LEAD_INFO
+        WHERE record_status = 'ACTIVE'
+          AND active_dedup_key = #{creditCode}
+          AND lead_status IN ('DRAFT', 'SUBMITTED', 'IN_APPROVAL')
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectActiveById" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_LEAD_INFO
+        WHERE id = #{id} AND record_status = 'ACTIVE'
+        LIMIT 1
+    </select>
+
+    <select id="selectForUpdate" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_LEAD_INFO
+        WHERE id = #{id} AND record_status = 'ACTIVE'
+        FOR UPDATE
+    </select>
+
+    <select id="selectForUpdateByCreditCode" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_LEAD_INFO
+        WHERE record_status = 'ACTIVE'
+          AND active_dedup_key = #{creditCode}
+          AND lead_status IN ('DRAFT', 'SUBMITTED', 'IN_APPROVAL')
+        ORDER BY id DESC
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <update id="updateStatusIf">
+        UPDATE MARKETING_LEAD_INFO
+        SET lead_status = #{targetStatus},
+            active_dedup_key = CASE
+                WHEN #{targetStatus} IN ('APPROVED', 'REJECTED', 'CANCELLED') THEN NULL
+                ELSE active_dedup_key END,
+            reviewed_by = CASE
+                WHEN #{targetStatus} IN ('APPROVED', 'REJECTED') THEN #{updatedBy}
+                ELSE reviewed_by END,
+            reviewed_time = CASE
+                WHEN #{targetStatus} IN ('APPROVED', 'REJECTED') THEN NOW()
+                ELSE reviewed_time END,
+            reject_reason = CASE
+                WHEN #{targetStatus} = 'REJECTED' THEN #{rejectReason}
+                WHEN #{targetStatus} = 'APPROVED' THEN NULL
+                ELSE reject_reason END,
+            updated_by = #{updatedBy}, updated_time = NOW(),
+            lock_version = lock_version + 1
+        WHERE id = #{id}
+          AND lead_status = #{expectedStatus}
+          AND record_status = 'ACTIVE'
+    </update>
+
+    <!-- 状态 CAS 已将版本号加一；这里只更新审批装配结果，避免 updateById 使用旧版本并覆盖审批字段。 -->
+    <update id="finalizeApproval">
+        UPDATE MARKETING_LEAD_INFO
+        SET cust_id = #{custId},
+            pool_status = #{poolStatus},
+            updated_by = #{updatedBy},
+            updated_time = NOW(),
+            lock_version = lock_version + 1
+        WHERE id = #{id}
+          AND lead_status = 'APPROVED'
+          AND record_status = 'ACTIVE'
+          AND lock_version = #{expectedLockVersion}
+    </update>
+
+    <!-- 已退回线索编辑为草稿时，不能依赖 updateById 的 null 更新策略清理审批元数据。 -->
+    <update id="clearApprovalMetadataForDraft">
+        UPDATE MARKETING_LEAD_INFO
+        SET submitted_by = NULL,
+            submitted_time = NULL,
+            business_key = NULL,
+            process_instance_id = NULL,
+            reviewed_by = NULL,
+            reviewed_time = NULL,
+            reject_reason = NULL,
+            updated_by = #{updatedBy},
+            updated_time = NOW()
+        WHERE id = #{id}
+          AND record_status = 'ACTIVE'
+          AND lead_status = 'DRAFT'
+    </update>
+
+    <!-- 直接从 REJECTED 重提：保留本轮 submitted/business_key，清理上一轮流程结果。 -->
+    <update id="prepareRejectedResubmission">
+        UPDATE MARKETING_LEAD_INFO
+        SET active_dedup_key = #{activeDedupKey},
+            submitted_by = #{submittedBy},
+            submitted_time = #{submittedTime},
+            business_key = #{businessKey},
+            process_instance_id = NULL,
+            reviewed_by = NULL,
+            reviewed_time = NULL,
+            reject_reason = NULL,
+            updated_by = #{updatedBy},
+            updated_time = NOW(),
+            lock_version = lock_version + 1
+        WHERE id = #{id}
+          AND record_status = 'ACTIVE'
+          AND lead_status = 'REJECTED'
+    </update>
+
+    <!-- 工作流启动成功后回写新流程实例，要求线索仍处于启动前状态。 -->
+    <update id="updateProcessInstanceId">
+        UPDATE MARKETING_LEAD_INFO
+        SET process_instance_id = #{processInstanceId},
+            updated_by = #{updatedBy},
+            updated_time = NOW(),
+            lock_version = lock_version + 1
+        WHERE id = #{id}
+          AND record_status = 'ACTIVE'
+          AND lead_status = #{expectedStatus}
+    </update>
+
+    <select id="selectByImportBatchId" resultType="com.bank.branch.platform.customer.entity.marketing.MarketingLeadInfo">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM MARKETING_LEAD_INFO
+        WHERE import_batch_id = #{batchId} AND record_status = 'ACTIVE'
+        ORDER BY id ASC
+    </select>
+</mapper>

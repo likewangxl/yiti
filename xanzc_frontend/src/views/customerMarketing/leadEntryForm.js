@@ -13,6 +13,7 @@ export function createLeadEntryInitialState() {
     enterpriseType: '',
     groupName: '',
     isAccountOpened: null,
+    touchRestricted: 1,
     customerDesc: '',
     creditAmount: undefined,
     creditExposureAmount: undefined,
@@ -34,6 +35,7 @@ export function createLeadEntryRules(form) {
       { pattern: /^[0-9A-Z]{18}$/, message: '统一社会信用代码须为18位大写字母或数字', trigger: 'blur' }
     ],
     distributionMode: [{ required: true, message: '请选择分配方式', trigger: 'change' }],
+    touchRestricted: [{ required: true, message: '请选择是否触达限制', trigger: 'change' }],
     managerScopeIds: [{
       validator: (_, value, done) => form.distributionMode === 'SCOPE' && (!value || !value.length)
         ? done(new Error('请选择至少一名客户经理'))

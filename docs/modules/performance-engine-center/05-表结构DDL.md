@@ -518,7 +518,7 @@ CREATE TABLE `PERF_ALLOC_ADJUST_APPLY` (
   `apply_no` varchar(64) NOT NULL COMMENT '申请单号, 格式: ALLOC-yyyyMMdd-xxxx',
   `cust_id` varchar(64) NOT NULL COMMENT '客户 ID',
   `cust_name` varchar(100) DEFAULT NULL COMMENT '客户名 (冗余)',
-  `alloc_dim` varchar(20) NOT NULL COMMENT '分配维度: RULE/ACCOUNT/RATIO',
+  `alloc_dim` varchar(20) NOT NULL COMMENT '分配维度: RULE/ACCOUNT/NEW',
   `biz_kind` varchar(32) DEFAULT NULL COMMENT '业务类型',
   `account_no` varchar(64) DEFAULT NULL COMMENT '账户号',
   `effective_date` date NOT NULL COMMENT '申请的生效日期',
@@ -551,19 +551,25 @@ CREATE TABLE `PERF_ALLOC_ADJUST_APPLY` (
 
 ```sql
 CREATE TABLE `PERF_ALLOC_ADJUST_ITEM` (
-  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键',
   `apply_id` varchar(32) NOT NULL COMMENT '关联 perf_alloc_adjust_apply.id',
+  `item_kind` varchar(20) NOT NULL DEFAULT 'NEW' COMMENT '明细类型：NEW=新分配，ORIGIN=原业绩分配快照',
+  `acct_no` varchar(64) DEFAULT NULL COMMENT '账号',
   `emp_id` varchar(32) NOT NULL COMMENT '分配到的员工 ID',
-  `emp_name` varchar(100) DEFAULT NULL COMMENT '员工姓名 (冗余)',
+  `username` varchar(64) DEFAULT NULL COMMENT '员工登录名快照',
+  `emp_chn_name` varchar(64) DEFAULT NULL COMMENT '员工中文名快照',
+  `org_code` varchar(32) DEFAULT NULL COMMENT '机构编码快照',
+  `org_name` varchar(128) DEFAULT NULL COMMENT '机构名称快照',
   `ratio` decimal(5,2) NOT NULL COMMENT '分配比例 0-100',
-  `operation` varchar(20) NOT NULL DEFAULT 'UPDATE' COMMENT '操作类型: ADD/UPDATE/DELETE',
-  `old_ratio` decimal(5,2) DEFAULT NULL COMMENT '原比例 (UPDATE/DELETE 时有值)',
+  `remark` varchar(200) DEFAULT NULL COMMENT '说明',
   `created_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_apply_emp` (`apply_id`, `emp_id`),
-  KEY `idx_emp_id` (`emp_id`)
+  UNIQUE KEY `uk_apply_emp_kind` (`apply_id`, `emp_id`, `item_kind`),
+  KEY `idx_apply_id` (`apply_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分配关系调整明细表';
 ```
+
+> **2026-08-25 需求变更：item_kind 字段为最终结构前置。** 业绩调整应用模型与 MyBatis 映射按 `item_kind` 区分 `NEW`（新分配）和 `ORIGIN`（原业绩分配快照），草稿编辑通过明细全量重建保存 ORIGIN 修改，审批通过只落 NEW。当前物理 `yiti` 库的 `PERF_ALLOC_ADJUST_ITEM` 尚未提供 `item_kind`，需 DBA 先在目标库按审批结果补齐字段及 `(apply_id, emp_id, item_kind)` 唯一性约束后才能启用本实现；本次不执行数据库写入、不提交可执行 DDL，以上仅为设计/实施前置说明。
 
 ---
 
@@ -644,7 +650,7 @@ CREATE TABLE `PERF_TARGET_ADJUST_APPLY` (
 | `PERF_ALLOC_ADJUST_APPLY` | `uk_apply_no(apply_no, deleted)` | UK | 申请号唯一 |
 | `PERF_ALLOC_ADJUST_APPLY` | `idx_owner_org_status(owner_org_id, status)` | KEY | 机构维度权限过滤 |
 | `PERF_ALLOC_ADJUST_APPLY` | `idx_business_key` | KEY | 按 business_key 查询 (工作流回调用) |
-| `PERF_ALLOC_ADJUST_ITEM` | `uk_apply_emp(apply_id, emp_id)` | UK | 同一申请内员工唯一 |
+| `PERF_ALLOC_ADJUST_ITEM` | `uk_apply_emp_kind(apply_id, emp_id, item_kind)` | UK | 同一申请、同类明细内员工唯一；允许同一员工同时存在 NEW 与 ORIGIN |
 | `PERF_TARGET_ADJUST_APPLY` | `uk_apply_no(apply_no, deleted)` | UK | 申请号唯一 |
 | `PERF_TARGET_ADJUST_APPLY` | `idx_plan_subject(plan_id, subject_type, subject_id)` | KEY | 按计划+对象查询 |
 
@@ -864,7 +870,7 @@ ORDER BY update_time DESC LIMIT 1;
 | | `ALLOC_RELATION` | 分配关系导入 |
 | `import_batch.status` | `PENDING` / `PARSING` / `PREVIEW` / `IMPORTING` / `SUCCESS` / `FAILED` / `PARTIAL` | 导入状态 |
 | `alloc_dim` | `RULE` | 按规则分配 |
-| | `ACCOUNT` | 按账户分配 |
+| | `ACCOUNT` | 按账号分配 |
 | | `RATIO` | 按比例分配 |
 
 ---

@@ -41,8 +41,9 @@
         <el-radio-group v-model="node.approveMode" :disabled="readonly">
           <el-radio-button value="ANY">或签</el-radio-button>
           <el-radio-button value="ALL">会签</el-radio-button>
+          <el-radio-button value="GROUP_ALL">按机构会签</el-radio-button>
         </el-radio-group>
-        <div class="field-hint">或签：任一审批人通过即可；会签：所有审批人均需通过</div>
+        <div class="field-hint">或签：任一审批人通过即可；会签：所有审批人均需通过；按机构会签：机构间按顺序会签；同一机构内任一负责人审批即可</div>
       </el-form-item>
 
       <!-- 审批人（仅 APPROVAL）。机构归属已下放到「层级角色」审批人，节点不再单独配置 -->
