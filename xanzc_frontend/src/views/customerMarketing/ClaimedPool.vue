@@ -144,6 +144,7 @@
       v-model="detail.show"
       :task-id="detail.taskId"
       :allow-write="detail.allowWrite"
+      :mode="detail.mode"
       @changed="load"
     />
   </section>
@@ -163,7 +164,7 @@ const total = ref(0);
 const loading = ref(false);
 const pageNo = ref(1);
 const pageSize = ref(20);
-const detail = reactive({ show: false, taskId: '', allowWrite: true });
+const detail = reactive({ show: false, taskId: '', allowWrite: true, mode: 'view' });
 const startDlg = reactive({ show: false, row: null, followUp: false, reason: '', saving: false });
 
 function pageOf(result) {
@@ -244,6 +245,7 @@ async function submitStart() {
     if (taskId) {
       detail.taskId = taskId;
       detail.allowWrite = true;
+      detail.mode = 'handle';
       detail.show = true;
     }
   } catch (error) {
@@ -258,6 +260,7 @@ function viewTask(row) {
   if (!taskId) return;
   detail.taskId = taskId;
   detail.allowWrite = isRelationOperable(row);
+  detail.mode = 'handle';
   detail.show = true;
 }
 

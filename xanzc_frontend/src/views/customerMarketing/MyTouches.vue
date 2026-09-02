@@ -66,7 +66,7 @@
         </el-table-column>
         <el-table-column label="计划完成" width="170"><template #default="{row}">{{ fmt(row.planFinishTime) }}</template></el-table-column>
         <el-table-column label="操作" width="100" fixed="right" class-name="operation-cell">
-          <template #default="{row}"><el-button link type="primary" @click="open(row)">{{ inFlight(row) ? '办理' : '详情' }}</el-button></template>
+          <template #default="{row}"><el-button link type="primary" @click="open(row)">{{ actionLabel(row) }}</el-button></template>
         </el-table-column>
       </el-table>
     </section>
@@ -74,7 +74,7 @@
     <div class="pager" aria-label="我的触达任务分页">
       <el-pagination background layout="total, sizes, prev, pager, next" :total="total" v-model:current-page="pageNo" v-model:page-size="pageSize" :page-sizes="[10,20,50]" @change="load" />
     </div>
-    <TouchTaskDetailDialog v-model="detail.show" :task-id="detail.taskId" :allow-write="true" @changed="load" />
+    <TouchTaskDetailDialog v-model="detail.show" :task-id="detail.taskId" :allow-write="true" :mode="detail.mode" @changed="load" />
   </main>
 </template>
 
@@ -97,7 +97,7 @@ const loading = ref(false);
 const loadError = ref('');
 const pageNo = ref(1);
 const pageSize = ref(20);
-const detail = reactive({ show: false, taskId: '' });
+const detail = reactive({ show: false, taskId: '', mode: 'view' });
 const fmt = value => value ? String(value).replace('T', ' ').slice(0, 19) : '-';
 
 const summaryCards = computed(() => [
@@ -151,6 +151,17 @@ function inFlight(row) {
   return ['PENDING', 'IN_PROGRESS'].includes(String(row?.taskStatus || '').toUpperCase());
 }
 
+function actionMode(row) {
+  const status = String(row?.taskStatus || '').toUpperCase();
+  if (inFlight(row)) return 'handle';
+  if (status === 'SUCCESS') return 'supplement';
+  return 'view';
+}
+
+function actionLabel(row) {
+  return { handle: '办理', supplement: '补录日志', view: '详情' }[actionMode(row)];
+}
+
 async function load() {
   loading.value = true;
   loadError.value = '';
@@ -174,7 +185,11 @@ async function load() {
 
 function search() { pageNo.value = 1; void load(); }
 function reset() { q.keyword = ''; q.status = ''; search(); }
-function open(row) { detail.taskId = row.id; detail.show = true; }
+function open(row) {
+  detail.taskId = row.id;
+  detail.mode = actionMode(row);
+  detail.show = true;
+}
 
 void load();
 </script>

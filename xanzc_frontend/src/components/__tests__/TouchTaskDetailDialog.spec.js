@@ -44,7 +44,7 @@ const stubs = {
   'el-descriptions-item': passthrough('ElDescriptionsItem'),
   'el-dialog': {
     name: 'ElDialog',
-    props: ['modelValue', 'closeOnClickModal'],
+    props: ['modelValue', 'closeOnClickModal', 'title'],
     template: '<div v-if="modelValue" class="dialog"><slot /></div>',
   },
   'el-empty': passthrough('ElEmpty'),
@@ -90,9 +90,9 @@ function log(overrides = {}) {
   };
 }
 
-async function mountDialog() {
+async function mountDialog(overrides = {}) {
   wrapper = mount(TouchTaskDetailDialog, {
-    props: { modelValue: false, taskId: 'TASK-1', allowWrite: true },
+    props: { modelValue: false, taskId: 'TASK-1', allowWrite: true, mode: 'handle', ...overrides },
     global: { stubs, directives: { loading: () => {} } },
   });
   await wrapper.setProps({ modelValue: true });
@@ -122,6 +122,73 @@ beforeEach(() => {
 });
 
 describe('TouchTaskDetailDialog 一任务一工作日志', () => {
+  it('默认 view 模式只读，即使入口保留写权限也不展示办理表单和任务操作', async () => {
+    api.getTouchTask.mockResolvedValue(task('PENDING'));
+    api.listTouchLogs.mockResolvedValue([]);
+
+    const view = await mountDialog({ mode: undefined });
+
+    expect(view.getComponent({ name: 'ElDialog' }).props('title')).toBe('触达任务详情');
+    expect(view.find('.log-form').exists()).toBe(false);
+    expect(view.find('.task-actions').exists()).toBe(false);
+  });
+
+  it('办理模式的待办理任务使用首次登记语义，并说明保存首条日志后进入办理中', async () => {
+    api.getTouchTask.mockResolvedValue(task('PENDING'));
+    api.listTouchLogs.mockResolvedValue([]);
+
+    const view = await mountDialog({ mode: 'handle' });
+
+    expect(view.getComponent({ name: 'ElDialog' }).props('title')).toBe('办理触达任务');
+    expect(view.find('.log-form h3').text()).toBe('登记本次触达');
+    expect(view.find('.log-form').text()).toContain('保存首条日志后任务进入办理中');
+  });
+
+  it('办理模式的办理中任务使用补录语义，并保留完成任务操作', async () => {
+    api.getTouchTask.mockResolvedValue(task('IN_PROGRESS'));
+    api.listTouchLogs.mockResolvedValue([log()]);
+
+    const view = await mountDialog({ mode: 'handle' });
+
+    expect(view.getComponent({ name: 'ElDialog' }).props('title')).toBe('办理触达任务');
+    expect(view.find('.log-form h3').text()).toBe('补录触达日志');
+    expect(view.find('.complete-task-button').exists()).toBe(true);
+  });
+
+  it('补录模式允许成功任务追加日志，但不展示完成或取消任务操作', async () => {
+    api.getTouchTask.mockResolvedValue(task('SUCCESS'));
+    api.listTouchLogs.mockResolvedValue([log()]);
+
+    const view = await mountDialog({ mode: 'supplement' });
+
+    expect(view.getComponent({ name: 'ElDialog' }).props('title')).toBe('补录触达日志');
+    expect(view.find('.log-form h3').text()).toBe('补录触达日志');
+    expect(view.find('.save-log-button').exists()).toBe(true);
+    expect(view.find('.task-actions').exists()).toBe(false);
+  });
+
+  it('办理模式刷新后若任务已完成则自然切换为补录语义', async () => {
+    api.getTouchTask.mockResolvedValue(task('SUCCESS'));
+    api.listTouchLogs.mockResolvedValue([log()]);
+
+    const view = await mountDialog({ mode: 'handle' });
+
+    expect(view.getComponent({ name: 'ElDialog' }).props('title')).toBe('补录触达日志');
+    expect(view.find('.log-form h3').text()).toBe('补录触达日志');
+    expect(view.find('.task-actions').exists()).toBe(false);
+  });
+
+  it('办理模式刷新后若任务已取消则自然切换为只读详情', async () => {
+    api.getTouchTask.mockResolvedValue(task('CANCELLED'));
+    api.listTouchLogs.mockResolvedValue([log()]);
+
+    const view = await mountDialog({ mode: 'handle' });
+
+    expect(view.getComponent({ name: 'ElDialog' }).props('title')).toBe('触达任务详情');
+    expect(view.find('.log-form').exists()).toBe(false);
+    expect(view.find('.task-actions').exists()).toBe(false);
+  });
+
   it('根据触达任务客户ID读取正式营销客户详情，不再调用旧客户接口', async () => {
     api.getTouchTask.mockResolvedValue(task('PENDING'));
     api.listTouchLogs.mockResolvedValue([]);

@@ -1,6 +1,6 @@
 <template>
   <el-dialog :model-value="modelValue" width="920px" top="5vh" append-to-body
-             title="触达任务详情" :close-on-click-modal="false" class="touch-detail-dialog"
+             :title="dialogTitle" :close-on-click-modal="false" class="touch-detail-dialog"
              @update:model-value="$emit('update:modelValue', $event)">
     <div v-loading="loading">
       <section class="task-overview" aria-label="触达任务概览">
@@ -31,11 +31,11 @@
         </el-descriptions>
       </section>
 
-      <section v-if="showLogForm" class="log-form" aria-label="补录触达日志">
+      <section v-if="showLogForm" class="log-form" :aria-label="logFormTitle">
         <div class="section-heading">
           <div>
-            <h3>补录触达日志</h3>
-            <p>每次保存都会追加一条独立日志，已有历史记录不会被覆盖。</p>
+            <h3>{{ logFormTitle }}</h3>
+            <p>{{ logFormDescription }}</p>
           </div>
           <el-tag type="warning" effect="plain">可继续补录</el-tag>
         </div>
@@ -142,7 +142,12 @@ import { normalizePhotoGroups, slaLabel, slaTagType, taskStatusLabel, taskTagTyp
 const props = defineProps({
   modelValue: Boolean,
   taskId: { type: [String, Number], default: '' },
-  allowWrite: { type: Boolean, default: false }
+  allowWrite: { type: Boolean, default: false },
+  mode: {
+    type: String,
+    default: 'view',
+    validator: value => ['handle', 'supplement', 'view'].includes(value)
+  }
 });
 const emit = defineEmits(['update:modelValue', 'changed']);
 const router = useRouter();
@@ -171,13 +176,37 @@ function initialForm() {
 }
 const form = reactive(initialForm());
 const supplementableStatuses = ['PENDING', 'IN_PROGRESS', 'SUCCESS'];
-const inFlight = computed(() => ['PENDING', 'IN_PROGRESS'].includes(String(task.value.taskStatus || '').toUpperCase()));
-const cancelled = computed(() => String(task.value.taskStatus || '').toUpperCase() === 'CANCELLED');
+const normalizedTaskStatus = computed(() => String(task.value?.taskStatus || '').toUpperCase());
+const requestedMode = computed(() => ['handle', 'supplement', 'view'].includes(props.mode) ? props.mode : 'view');
+/**
+ * 入口意图由 mode 表达，服务端刷新后的终态优先保证操作语义安全：
+ * 办理中的任务完成后只能补录，取消或其他终止状态只能查看。
+ */
+const effectiveMode = computed(() => {
+  if (['CANCELLED', 'CANCELED', 'FAILED', 'REJECTED'].includes(normalizedTaskStatus.value)) return 'view';
+  if (requestedMode.value === 'handle' && normalizedTaskStatus.value === 'SUCCESS') return 'supplement';
+  return requestedMode.value;
+});
+const dialogTitle = computed(() => ({
+  handle: '办理触达任务',
+  supplement: '补录触达日志',
+  view: '触达任务详情'
+}[effectiveMode.value]));
+const inFlight = computed(() => ['PENDING', 'IN_PROGRESS'].includes(normalizedTaskStatus.value));
+const cancelled = computed(() => ['CANCELLED', 'CANCELED'].includes(normalizedTaskStatus.value));
+const firstTouchRegistration = computed(() => effectiveMode.value === 'handle'
+  && normalizedTaskStatus.value === 'PENDING' && logs.value.length === 0);
+const logFormTitle = computed(() => firstTouchRegistration.value ? '登记本次触达' : '补录触达日志');
+const logFormDescription = computed(() => firstTouchRegistration.value
+  ? '保存首条日志后任务进入办理中；每次保存都会追加一条独立日志，已有历史记录不会被覆盖。'
+  : '每次保存都会追加一条独立日志，已有历史记录不会被覆盖。');
 const showLogForm = computed(() => props.allowWrite
   && task.value?.canWriteLog !== false
-  && supplementableStatuses.includes(String(task.value.taskStatus || '').toUpperCase()));
+  && effectiveMode.value !== 'view'
+  && supplementableStatuses.includes(normalizedTaskStatus.value));
 const showTaskActions = computed(() => props.allowWrite
   && task.value?.canOperateTask !== false
+  && effectiveMode.value === 'handle'
   && inFlight.value);
 const canComplete = computed(() => showTaskActions.value && logs.value.length > 0);
 const customerName = computed(() => customer.value?.custName || customer.value?.customerName

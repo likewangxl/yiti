@@ -15,6 +15,12 @@ import MyTouches from '../MyTouches.vue';
 import TouchOverview from '../TouchOverview.vue';
 
 const passthrough = (name, template = '<div><slot /></div>') => ({ name, inheritAttrs: false, template });
+const TouchTaskDetailDialogStub = {
+  name: 'TouchTaskDetailDialog',
+  inheritAttrs: false,
+  props: ['modelValue', 'taskId', 'allowWrite', 'mode'],
+  template: '<div class="touch-task-detail-dialog-stub" />'
+};
 const TableStub = {
   name: 'ElTable',
   inheritAttrs: false,
@@ -27,11 +33,11 @@ const TableColumnStub = {
   inheritAttrs: false,
   inject: ['tableRows'],
   props: ['prop', 'label'],
-  template: '<div class="table-column"><span class="column-label">{{ label }}</span><div v-for="row in tableRows" :key="row.id"><slot :row="row"><span>{{ prop ? row[prop] : "" }}</span></slot></div></div>'
+  template: '<div class="table-column" v-bind="$attrs"><span class="column-label">{{ label }}</span><div v-for="row in tableRows" :key="row.id"><slot :row="row"><span>{{ prop ? row[prop] : "" }}</span></slot></div></div>'
 };
 const stubs = {
   PageTitle: { name: 'PageTitle', template: '<h1>触达任务管理</h1>' },
-  TouchTaskDetailDialog: passthrough('TouchTaskDetailDialog'),
+  TouchTaskDetailDialog: TouchTaskDetailDialogStub,
   'el-button': { name: 'ElButton', inheritAttrs: false, template: '<button v-bind="$attrs"><slot /></button>' },
   'el-card': passthrough('ElCard'),
   'el-form': passthrough('ElForm', '<form><slot /></form>'),
@@ -83,6 +89,34 @@ describe('我的触达任务列表', () => {
     expect(view.find('.task-table').attributes('aria-label')).toBe('我的触达任务列表');
     expect(view.find('[aria-label="任务状态：办理中"]').exists()).toBe(true);
     expect(view.find('[aria-label="历史日志数量：2"]').exists()).toBe(true);
+  });
+
+  it('按任务状态把我的触达任务分别进入办理、补录或只读详情模式', async () => {
+    api.listMyTouchTasks.mockResolvedValue({
+      records: [
+        { id: 'TASK-PENDING', taskStatus: 'PENDING' },
+        { id: 'TASK-SUCCESS', taskStatus: 'SUCCESS' },
+        { id: 'TASK-CANCELLED', taskStatus: 'CANCELLED' }
+      ],
+      total: 3
+    });
+
+    const view = await mountPage(MyTouches);
+    const buttons = view.findAll('button').filter(button => ['办理', '补录日志', '详情'].includes(button.text()));
+    expect(buttons.map(button => button.text())).toEqual(['办理', '补录日志', '详情']);
+
+    await buttons[0].trigger('click');
+    await nextTick();
+    const dialog = view.getComponent({ name: 'TouchTaskDetailDialog' });
+    expect(dialog.props()).toMatchObject({ taskId: 'TASK-PENDING', allowWrite: true, mode: 'handle' });
+
+    await buttons[1].trigger('click');
+    await nextTick();
+    expect(dialog.props()).toMatchObject({ taskId: 'TASK-SUCCESS', allowWrite: true, mode: 'supplement' });
+
+    await buttons[2].trigger('click');
+    await nextTick();
+    expect(dialog.props()).toMatchObject({ taskId: 'TASK-CANCELLED', allowWrite: true, mode: 'view' });
   });
 });
 

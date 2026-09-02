@@ -63,5 +63,12 @@ describe('已认领客户池标签展示契约', () => {
     expect(source).toContain('@click="viewTask(row)"');
     expect(source).toContain('>办理触达</el-button>');
     expect(source).toContain("['PENDING', 'IN_PROGRESS', 'PROCESSING', 'RUNNING'].includes(taskStatus(row))");
+    expect(source).toContain(':mode="detail.mode"');
+    expect(source).toContain("detail.mode = 'handle'");
+  });
+
+  it('发起成功后直接进入办理模式，而非触达详情模式', () => {
+    expect(source).toContain("detail.mode = 'handle'");
+    expect(source).toContain('触达任务已发起');
   });
 });
