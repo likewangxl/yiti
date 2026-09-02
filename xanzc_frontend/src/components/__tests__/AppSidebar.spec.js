@@ -120,6 +120,35 @@ describe('AppSidebar 主导航', () => {
     expect(sidebar.find('[data-menu-group="M_CUSTOMER"]').attributes('aria-expanded')).toBe('false');
   });
 
+  it('红色引擎即使带有子菜单也只展示直达入口，不修改原始授权树', async () => {
+    menuTree.value = [
+      ...buildTree(),
+      {
+        resourceId: 'M_RE_ENGINE',
+        resourceUrl: '/redengine/dashboard',
+        menuName: '红色引擎',
+        children: [
+          { resourceId: 'P_RE_ORG', resourceUrl: '/redengine/system/org', menuName: '组织管理', children: [] },
+          { resourceId: 'P_RE_TASK', resourceUrl: '/redengine/task', menuName: '任务管理', children: [] }
+        ]
+      }
+    ];
+    const sidebar = mountSidebar();
+    await nextTick();
+
+    const redEngineEntries = sidebar.findAll('[aria-label="红色引擎"]');
+    expect(redEngineEntries).toHaveLength(1);
+    expect(redEngineEntries[0].element.tagName).toBe('A');
+    expect(redEngineEntries[0].attributes('href')).toBe('/redengine/dashboard');
+    expect(sidebar.find('[data-menu-group="M_RE_ENGINE"]').exists()).toBe(false);
+    expect(sidebar.find('[aria-label="组织管理"]').exists()).toBe(false);
+    expect(sidebar.find('[aria-label="任务管理"]').exists()).toBe(false);
+    expect(menuTree.value.find((menu) => menu.resourceId === 'M_RE_ENGINE').children).toHaveLength(2);
+
+    await redEngineEntries[0].trigger('click');
+    expect(routerLinkNavigate).toHaveBeenCalledWith('/redengine/dashboard');
+  });
+
   it('折叠状态将打开的二级菜单渲染到侧栏滚动容器之外，保留可访问入口', async () => {
     const sidebar = mountSidebar({ collapsed: true });
 

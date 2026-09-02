@@ -22,9 +22,9 @@
     <nav class="side-nav" aria-label="主导航" :aria-busy="loading ? 'true' : undefined">
       <div v-loading="loading" class="side-nav__content">
         <template v-for="m in menus" :key="m.resourceId">
-          <!-- 顶层叶子菜单（无子节点）—— 直接单项 -->
+          <!-- 顶层直接入口（无子节点或红色引擎系统入口） -->
           <router-link
-            v-if="!m.children || !m.children.length"
+            v-if="isDirectEntry(m)"
             :to="m.resourceUrl"
             class="item root-item"
             :class="{ active: isCurrentMenu(m) }"
@@ -134,6 +134,12 @@ const collapsedFlyoutElement = ref(null);
 const collapsedFlyoutStyle = ref({});
 const collapsedTriggerElement = ref(null);
 const FLYOUT_VIEWPORT_GUTTER = 8;
+const RED_ENGINE_MENU_ID = 'M_RE_ENGINE';
+
+// 红色引擎是系统入口；即使授权树包含业务子节点，主平台也只展示这一层入口。
+function isDirectEntry(menu) {
+  return menu?.resourceId === RED_ENGINE_MENU_ID || !menu?.children?.length;
+}
 
 function findCurrentResourceId(nodes) {
   for (const node of nodes || []) {
