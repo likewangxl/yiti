@@ -84,6 +84,13 @@
 
     <template v-else>
       <section class="card-section workbench" aria-label="中台支持工作台">
+        <div class="workbench-head">
+          <div>
+            <h2>工作台</h2>
+            <p>按申请侧与承接侧切换；先看本页摘要，再用条件筛选或进入详情办理。</p>
+          </div>
+          <span class="scope-note">统计口径：当前查询结果本页</span>
+        </div>
         <nav class="support-tabs" aria-label="中台支持视图">
           <button v-for="tab in tabs" :key="tab.value" type="button" class="support-tab"
                   :aria-current="activeTab === tab.value ? 'page' : undefined"
@@ -91,6 +98,17 @@
             {{ tab.label }}
           </button>
         </nav>
+        <div class="summary-grid" aria-label="中台支持本页概览">
+          <button v-for="card in summaryCards" :key="card.key" type="button" class="summary-card"
+                  :class="{ active: summaryActive(card) }" data-testid="support-summary-card"
+                  :aria-pressed="summaryActive(card)"
+                  :aria-label="`中台支持${card.label}，${card.value}条，点击${card.filterText}`"
+                  @click="applySummaryFilter(card)">
+            <span class="summary-label">{{ card.label }}</span>
+            <strong class="summary-value">{{ card.value }}</strong>
+            <span class="summary-action">点击筛选</span>
+          </button>
+        </div>
         <el-form inline class="filter-form" @submit.prevent>
           <el-form-item label="综合查询">
             <el-input v-model="query.keyword" clearable placeholder="申请编号、客户或需求" @keyup.enter="search" />
@@ -112,17 +130,20 @@
         </el-form>
       </section>
 
-      <section class="card-section" :aria-label="currentTabLabel + '列表'" :aria-busy="loading">
+      <section class="card-section" :aria-label="currentTabLabel + '列表'" aria-labelledby="support-request-list-title"
+               aria-describedby="support-request-list-state" :aria-busy="loading ? 'true' : 'false'">
         <div class="section-head">
           <div>
-            <h2>{{ currentTabLabel }}</h2>
+            <h2 id="support-request-list-title">{{ currentTabLabel }}</h2>
             <p v-if="activeTab === 'MINE'">展示本人发起的中台支持申请及其流程状态。</p>
-            <p v-else>承接侧待办和已办分别按支持部门、承接人数据范围展示。</p>
+            <p v-else>承接侧待办和已办按支持部门、承接人数据范围展示，可在详情中派单、留痕并办理。</p>
           </div>
-          <span class="result-count">{{ loading ? '加载中…' : `共 ${total} 条` }}</span>
+          <p id="support-request-list-state" class="table-state" role="status" aria-live="polite">
+            {{ loading ? '中台支持列表加载中' : rows.length ? `当前页展示 ${rows.length} 条，共 ${total} 条` : '当前查询暂无中台支持记录' }}
+          </p>
         </div>
         <el-alert v-if="listError" :title="listError" type="error" :closable="false" show-icon class="inline-error" />
-        <el-table :data="rows" stripe border row-key="id" empty-text="暂无中台支持记录">
+        <el-table v-loading="loading" :data="rows" stripe border row-key="id" empty-text="当前查询暂无中台支持记录" aria-labelledby="support-request-list-title" aria-describedby="support-request-list-state">
           <el-table-column label="申请编号" min-width="180">
             <template #default="{ row }"><el-button link type="primary" @click="openDetail(row.id)">{{ row.requestNo || row.id || '-' }}</el-button></template>
           </el-table-column>
@@ -312,6 +333,16 @@ let listGeneration = 0;
 
 const isCreateRoute = computed(() => route.name === 'SupportRequestCreate' || /\/new$/.test(route.path || ''));
 const currentTabLabel = computed(() => tabs.find(item => item.value === activeTab.value)?.label || '我的申请');
+const summaryCards = computed(() => {
+  const records = Array.isArray(rows.value) ? rows.value : [];
+  const countStatus = status => records.filter(row => row?.status === status).length;
+  return [
+    { key: 'all', label: '本页总数', value: records.length, filterText: '显示全部本页记录' },
+    { key: 'approval', label: '本页审批中', value: countStatus('IN_APPROVAL'), status: 'IN_APPROVAL', filterText: '筛选审批中记录' },
+    { key: 'progress', label: '本页办理中', value: countStatus('IN_PROGRESS'), status: 'IN_PROGRESS', filterText: '筛选办理中记录' },
+    { key: 'overdue', label: '本页超时', value: records.filter(row => slaValue(row) === 'RED').length, slaStatus: 'RED', filterText: '筛选超时记录' }
+  ];
+});
 
 const emptyForm = () => ({
   sourceType: 'EXISTING_CUSTOMER', sourceTouchTaskId: '', custId: '', productIds: [],
@@ -406,6 +437,15 @@ function logTypeLabel(value) {
 function slaValue(row) { return String(row?.slaStatus || row?.sla?.status || row?.slaColor || '').toUpperCase(); }
 function slaClass(row) { return ({ GREEN: 'normal', YELLOW: 'warn', RED: 'overdue' }[slaValue(row)] || 'unknown'); }
 function slaLabel(row) { return ({ GREEN: '正常', YELLOW: '预警', RED: '超时' }[slaValue(row)] || row?.slaStatus || '-'); }
+function summaryActive(card) {
+  if (card.slaStatus) return query.slaStatus === card.slaStatus && !query.status;
+  if (card.status) return query.status === card.status && !query.slaStatus;
+  return !query.status && !query.slaStatus;
+}
+function applySummaryFilter(card) {
+  Object.assign(query, { status: card.status || '', slaStatus: card.slaStatus || '', pageNo: 1 });
+  search();
+}
 function processNodes(item) { return item?.processNodes || item?.processMap?.nodes || item?.nodes || []; }
 function photoUrls(log) {
   const value = log?.photoUrls || log?.photos || log?.attachments || log?.files || [];
@@ -872,15 +912,24 @@ onMounted(async () => {
 <style scoped lang="scss">
 .support-requests { display: flex; flex-direction: column; gap: 16px; }
 .page-h, .section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.section-head h2, .detail-section h3 { margin: 0; font-size: 16px; color: var(--color-text-strong); }
-.section-head p { margin: 4px 0 0; color: var(--color-text-muted); font-size: 12px; line-height: 18px; }
+.section-head h2, .detail-section h3, .workbench-head h2 { margin: 0; font-size: 16px; color: var(--color-text-strong); }
+.section-head p, .workbench-head p { margin: 4px 0 0; color: var(--color-text-muted); font-size: 12px; line-height: 18px; }
 .result-count { flex: 0 0 auto; color: var(--color-text-muted); font-size: 12px; }
 .card-section { overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-surface); box-shadow: var(--shadow-surface); }
 .workbench { padding: 0 16px 12px; }
+.workbench-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 16px 0 12px; }
+.scope-note { flex: 0 0 auto; color: var(--color-text-muted); font-size: 12px; line-height: 18px; }
 .support-tabs { display: flex; align-items: center; gap: 24px; min-height: 52px; border-bottom: 1px solid var(--color-border); }
 .support-tab { position: relative; min-height: 52px; padding: 0 2px; border: 0; background: transparent; color: var(--color-text-muted); font: inherit; cursor: pointer; }
 .support-tab.active { color: var(--color-brand-700); font-weight: 600; }
 .support-tab.active::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--color-brand-700); content: ''; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 0 0 14px; }
+.summary-card { display: flex; min-width: 0; min-height: 76px; flex-direction: column; align-items: flex-start; justify-content: center; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-surface-soft); color: var(--color-text-strong); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--motion-fast), background-color var(--motion-fast), box-shadow var(--motion-fast); }
+.summary-card:hover { border-color: var(--color-brand-500); background: var(--color-brand-100); }
+.summary-card.active { border-color: var(--color-brand-500); background: var(--color-brand-100); box-shadow: inset 3px 0 0 var(--color-brand-700); }
+.summary-label { color: var(--color-text-muted); font-size: 12px; line-height: 18px; }
+.summary-value { font-size: 24px; line-height: 28px; font-variant-numeric: tabular-nums; }
+.summary-action { color: var(--color-brand-700); font-size: 11px; line-height: 16px; }
 .filter-form { display: flex; flex-wrap: wrap; padding-top: 14px; }
 .filter-form :deep(.el-form-item) { margin-bottom: 8px; }
 .inline-error { margin: 12px 0; }
@@ -920,10 +969,14 @@ onMounted(async () => {
 .sla-badge.warn { color: var(--color-warning-fg); }.sla-badge.warn i { background: var(--color-warning-fg); }
 .sla-badge.overdue { color: var(--color-danger-fg); font-weight: 600; }.sla-badge.overdue i { background: var(--color-danger-fg); }
 @media (max-width: 760px) {
-  .page-h, .section-head { flex-direction: column; align-items: stretch; }
+  .page-h, .section-head, .workbench-head { flex-direction: column; align-items: stretch; }
+  .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .form-grid, .product-grid { grid-template-columns: 1fr; }
   .support-tabs { gap: 14px; overflow-x: auto; }
   .support-tab { flex: 0 0 auto; }
   .form-footer { flex-wrap: wrap; }
+}
+@media (max-width: 480px) {
+  .summary-grid { grid-template-columns: 1fr; }
 }
 </style>

@@ -91,6 +91,35 @@ beforeEach(() => {
 afterEach(() => wrapper?.unmount());
 
 describe('资产立项页面', () => {
+  it('工作台展示带本页口径的四项摘要卡，并可点击卡片筛选列表', async () => {
+    api.listAssetProjects.mockResolvedValue({
+      records: [
+        { id: 1, status: 'DRAFT' },
+        { id: 2, status: 'IN_APPROVAL' },
+        { id: 3, status: 'COMPLETED', urgent: true }
+      ],
+      total: 99
+    });
+
+    const view = await mountPage();
+    const cards = view.findAll('[data-testid="asset-summary-card"]');
+
+    expect(cards).toHaveLength(4);
+    expect(cards[0].attributes('aria-label')).toContain('资产立项本页');
+    expect(cards[0].text()).toContain('本页');
+    expect(cards[0].text()).toContain('3');
+    const listPanel = view.find('section.card-section[aria-label="资产立项列表"]');
+    expect(listPanel.attributes('aria-describedby')).toBe('asset-project-list-state');
+    expect(view.find('#asset-project-list-state').attributes('aria-live')).toBe('polite');
+
+    const approvalCard = cards.find(card => card.text().includes('审批中'));
+    await approvalCard.trigger('click');
+
+    expect(view.vm.query.status).toBe('IN_APPROVAL');
+    expect(view.vm.query.tag).toBe('');
+    expect(api.listAssetProjects).toHaveBeenCalledTimes(2);
+  });
+
   it('从客户或触达入口新建时按 custId 精确反显客户并锁定来源', async () => {
     Object.assign(route, {
       name: 'AssetProjectCreate',

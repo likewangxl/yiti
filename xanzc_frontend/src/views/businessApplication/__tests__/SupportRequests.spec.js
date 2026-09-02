@@ -111,6 +111,35 @@ beforeEach(resetMocks);
 afterEach(() => wrapper?.unmount());
 
 describe('SupportRequests 中台支持工作台', () => {
+  it('工作台展示带本页口径的四项摘要卡，并可点击卡片筛选列表', async () => {
+    api.listSupportRequests.mockResolvedValue({
+      records: [
+        { id: 'SR-1', status: 'DRAFT' },
+        { id: 'SR-2', status: 'IN_PROGRESS' },
+        { id: 'SR-3', status: 'COMPLETED', slaStatus: 'RED' }
+      ],
+      total: 99
+    });
+
+    wrapper = mountPage();
+    await settle();
+    const cards = wrapper.findAll('[data-testid="support-summary-card"]');
+
+    expect(cards).toHaveLength(4);
+    expect(cards[0].attributes('aria-label')).toContain('中台支持本页');
+    expect(cards[0].text()).toContain('本页');
+    expect(cards[0].text()).toContain('3');
+    const listPanel = wrapper.find('section.card-section[aria-label="我的申请列表"]');
+    expect(listPanel.attributes('aria-describedby')).toBe('support-request-list-state');
+    expect(wrapper.find('#support-request-list-state').attributes('aria-live')).toBe('polite');
+
+    await cards[2].trigger('click');
+
+    expect(wrapper.vm.query.status).toBe('IN_PROGRESS');
+    expect(wrapper.vm.query.slaStatus).toBe('');
+    expect(api.listSupportRequests).toHaveBeenCalledTimes(2);
+  });
+
   it('SLA 缺失时显示未知，不把未返回的状态伪装为正常', async () => {
     wrapper = mountPage();
     await settle();

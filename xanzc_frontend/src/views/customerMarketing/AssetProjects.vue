@@ -6,11 +6,29 @@
     </div>
 
     <section class="card-section workbench" aria-label="资产立项工作台">
+      <div class="workbench-head">
+        <div>
+          <h2>工作台</h2>
+          <p>按“我的申请、待办、已办”切换工作流视图；摘要仅统计当前查询结果本页，点击卡片可快速筛选。</p>
+        </div>
+        <span class="scope-note">统计口径：当前查询结果本页</span>
+      </div>
       <el-tabs v-model="query.tab" @tab-change="search">
         <el-tab-pane label="我的申请" name="MY" />
         <el-tab-pane label="待办" name="PENDING" />
         <el-tab-pane label="已办" name="PROCESSED" />
       </el-tabs>
+      <div class="summary-grid" aria-label="资产立项本页概览">
+        <button v-for="card in summaryCards" :key="card.key" type="button" class="summary-card"
+                :class="{ active: summaryActive(card) }" data-testid="asset-summary-card"
+                :aria-pressed="summaryActive(card)"
+                :aria-label="`资产立项${card.label}，${card.value}条，点击${card.filterText}`"
+                @click="applySummaryFilter(card)">
+          <span class="summary-label">{{ card.label }}</span>
+          <strong class="summary-value">{{ card.value }}</strong>
+          <span class="summary-action">点击筛选</span>
+        </button>
+      </div>
       <el-form inline class="filter-form" @submit.prevent>
         <el-form-item label="综合查询"><el-input v-model="query.keyword" clearable placeholder="申请编号、客户或项目" @keyup.enter="search" /></el-form-item>
         <el-form-item label="状态">
@@ -30,14 +48,17 @@
       </el-form>
     </section>
 
-    <section class="card-section" :aria-busy="loading">
+    <section class="card-section" aria-label="资产立项列表" aria-labelledby="asset-project-list-title"
+             aria-describedby="asset-project-list-state" :aria-busy="loading ? 'true' : 'false'">
       <div class="section-head">
-        <div><h2>资产立项列表</h2><p>金额单位：万元；待办和已办由工作流参与记录实时过滤。</p></div>
-        <span>{{ loading ? '加载中…' : `共 ${total} 条` }}</span>
+        <div><h2 id="asset-project-list-title">资产立项列表</h2><p>金额单位：万元；待办和已办按工作流参与记录实时过滤。</p></div>
+        <p id="asset-project-list-state" class="table-state" role="status" aria-live="polite">
+          {{ loading ? '资产立项列表加载中' : rows.length ? `当前页展示 ${rows.length} 条，共 ${total} 条` : '当前查询暂无资产立项记录' }}
+        </p>
       </div>
       <el-alert v-if="listError" :title="listError" type="error" :closable="false" show-icon class="inline-error" />
       <el-alert v-if="actionError" :title="actionError" type="error" :closable="false" show-icon class="inline-error" />
-      <el-table :data="rows" stripe border row-key="id" empty-text="暂无资产立项记录">
+      <el-table v-loading="loading" :data="rows" stripe border row-key="id" empty-text="当前查询暂无资产立项记录" aria-labelledby="asset-project-list-title" aria-describedby="asset-project-list-state">
         <el-table-column label="申请编号" min-width="180"><template #default="{ row }"><el-button link type="primary" @click="openDetail(row.id)">{{ row.applyNo }}</el-button></template></el-table-column>
         <el-table-column prop="customerName" label="客户名称" min-width="190" show-overflow-tooltip />
         <el-table-column prop="projectName" label="项目名称" min-width="180" show-overflow-tooltip />
@@ -169,6 +190,16 @@ const projectTypes = [{label:'固定资产项目',value:'FIXED_ASSET'},{label:'�
 const bizTypes = [{label:'项目贷款',value:'PROJECT_LOAN'},{label:'流动资金贷款',value:'WORKING_CAPITAL_LOAN'},{label:'综合授信',value:'COMPREHENSIVE_CREDIT'}];
 const guaranteeTypes = [{label:'信用',value:'CREDIT'},{label:'保证',value:'GUARANTEE'},{label:'抵押',value:'MORTGAGE'},{label:'质押',value:'PLEDGE'}];
 const statusMap = Object.fromEntries(statusOptions.map(item => [item.value,item.label]));
+const summaryCards = computed(() => {
+  const records = Array.isArray(rows.value) ? rows.value : [];
+  const countStatus = status => records.filter(row => row?.status === status).length;
+  return [
+    { key: 'all', label: '本页总数', value: records.length, filterText: '显示全部本页记录' },
+    { key: 'draft', label: '本页草稿', value: countStatus('DRAFT'), status: 'DRAFT', filterText: '筛选草稿' },
+    { key: 'approval', label: '本页审批中', value: countStatus('IN_APPROVAL'), status: 'IN_APPROVAL', filterText: '筛选审批中记录' },
+    { key: 'urgent', label: '本页加急', value: records.filter(row => row?.urgent).length, tag: 'URGENT', filterText: '筛选加急项目' }
+  ];
+});
 const amountWarning = computed(() => form.projectLoanAmount!=null&&form.projectTotalInvestment!=null&&Number(form.projectLoanAmount)>Number(form.projectTotalInvestment)
   ? '项目贷款金额高于项目总投资，请核对业务口径（当前仅提示，不阻断保存或提交）'
   : '');
@@ -177,6 +208,15 @@ const statusType = value => ({DRAFT:'info',IN_APPROVAL:'warning',COMPLETED:'succ
 const time = value => value ? String(value).replace('T',' ').slice(0,19) : '-';
 const money = value => value == null ? '-' : `${Number(value).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})} 万元`;
 const canDecide = row => query.tab === 'PENDING' && Boolean(row?.workflowTaskId);
+const summaryActive = card => card.status
+  ? query.status === card.status && !query.tag
+  : card.tag
+    ? query.tag === card.tag && !query.status
+    : !query.status && !query.tag;
+function applySummaryFilter(card) {
+  Object.assign(query, { status: card.status || '', tag: card.tag || '', pageNo: 1 });
+  search();
+}
 
 async function load(){ loading.value=true; listError.value=''; try { const params={ tab:query.tab,keyword:query.keyword||undefined,status:query.status||undefined,urgent:query.tag==='URGENT'?true:undefined,keyProject:query.tag==='KEY'?true:undefined,startDate:query.dateRange?.[0],endDate:query.dateRange?.[1],pageNo:query.pageNo,pageSize:query.pageSize }; const page=await listAssetProjects(params); rows.value=page.records||[]; total.value=page.total||0; } catch(error) { listError.value=error?.message||'资产立项列表加载失败'; } finally { loading.value=false; } }
 function search(){ query.pageNo=1; load(); }
@@ -294,5 +334,5 @@ onMounted(async()=>{ if(['MY','PENDING','PROCESSED'].includes(String(route.query
 </script>
 
 <style scoped lang="scss">
-.asset-projects{display:flex;flex-direction:column;gap:16px}.page-h,.section-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.section-head h2{margin:0;font-size:16px}.section-head p{margin:4px 0;color:var(--color-text-muted);font-size:12px}.filter-form{display:flex;flex-wrap:wrap}.inline-error{margin:12px 0}.pager{display:flex;justify-content:flex-end;margin-top:16px}.form-section,.detail-body section{margin-bottom:16px;padding:14px 16px;border:1px solid var(--color-border);border-radius:var(--radius-control)}.form-section h3,.detail-body h3{margin:0 0 12px;font-size:15px}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}.checks{display:flex;gap:24px;margin-bottom:12px}.el-input-number{width:100%}small{color:var(--color-text-muted)}@media(max-width:760px){.form-grid{grid-template-columns:1fr}.page-h,.section-head{align-items:stretch;flex-direction:column}}
+.asset-projects{display:flex;flex-direction:column;gap:16px}.page-h,.section-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.section-head h2,.workbench-head h2{margin:0;font-size:16px}.section-head p,.workbench-head p{margin:4px 0;color:var(--color-text-muted);font-size:12px;line-height:18px}.workbench-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:16px 0 12px}.scope-note{flex:0 0 auto;color:var(--color-text-muted);font-size:12px;line-height:18px}.summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:0 0 14px}.summary-card{display:flex;min-width:0;min-height:76px;flex-direction:column;align-items:flex-start;justify-content:center;padding:10px 14px;border:1px solid var(--color-border);border-radius:var(--radius-control);background:var(--color-surface-soft);color:var(--color-text-strong);font:inherit;text-align:left;cursor:pointer;transition:border-color var(--motion-fast),background-color var(--motion-fast),box-shadow var(--motion-fast)}.summary-card:hover{border-color:var(--color-brand-500);background:var(--color-brand-100)}.summary-card.active{border-color:var(--color-brand-500);background:var(--color-brand-100);box-shadow:inset 3px 0 0 var(--color-brand-700)}.summary-label{color:var(--color-text-muted);font-size:12px;line-height:18px}.summary-value{font-size:24px;line-height:28px;font-variant-numeric:tabular-nums}.summary-action{color:var(--color-brand-700);font-size:11px;line-height:16px}.filter-form{display:flex;flex-wrap:wrap}.inline-error{margin:12px 0}.pager{display:flex;justify-content:flex-end;margin-top:16px}.form-section,.detail-body section{margin-bottom:16px;padding:14px 16px;border:1px solid var(--color-border);border-radius:var(--radius-control)}.form-section h3,.detail-body h3{margin:0 0 12px;font-size:15px}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}.checks{display:flex;gap:24px;margin-bottom:12px}.el-input-number{width:100%}small{color:var(--color-text-muted)}@media(max-width:960px){.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.form-grid{grid-template-columns:1fr}.page-h,.section-head,.workbench-head{align-items:stretch;flex-direction:column}.summary-grid{grid-template-columns:1fr}}
 </style>
