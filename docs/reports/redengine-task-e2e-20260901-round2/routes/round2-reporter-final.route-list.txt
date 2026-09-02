@@ -1,0 +1,4 @@
+# round2-reporter 最终 route-list（官方 playwright-cli）
+# 命令：PWTEST_DAEMON_SESSION_DIR=/tmp/redengine-playwright-daemon-root PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright ./node_modules/.bin/playwright-cli -s=round2-reporter route-list
+# 退出状态：0
+No active routes

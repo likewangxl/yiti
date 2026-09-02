@@ -63,4 +63,13 @@ public class ReSubmitCreateReqDTO {
     /** 附件文件对象ID列表（governance FileApi 上传后返回的 fileObjectId，可为空表示无附件） */
     @Schema(description = "附件文件对象ID列表")
     private List<String> fileObjectIds;
+
+    /** 可选任务 assignment；为空时保持原有材料上报行为。 */
+    private Long taskAssignmentId;
+
+    /** 可选任务定义 ID，供兼容客户端回传；服务端仍以 assignment 关联为准。 */
+    private Long taskId;
+
+    /** 可选任务实例 ID，供兼容客户端回传；服务端仍以 assignment 关联为准。 */
+    private Long taskInstanceId;
 }

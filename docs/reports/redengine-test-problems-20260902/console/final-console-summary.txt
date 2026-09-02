@@ -1,0 +1,13 @@
+round2-reporter
+Total messages: 3 (Errors: 0, Warnings: 1)
+Warning: Vue Router 既有 router-view/transition/keep-alive 用法告警。
+
+round2-secretary
+Total messages: 7 (Errors: 0, Warnings: 5)
+Warnings: Vue Router 既有告警 1 条；Element Plus el-radio label-as-value 弃用告警 4 条。
+
+round2-org-final
+Total messages: 7 (Errors: 0, Warnings: 5)
+Warnings: Vue Router 既有告警 1 条；Element Plus el-radio label-as-value 弃用告警 4 条。
+
+最终 console 均在 clear 后对正确目标页 reload 再读取；不包含登录阶段或错误路由探查产生的历史消息。

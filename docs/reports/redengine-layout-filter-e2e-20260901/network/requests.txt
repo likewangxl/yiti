@@ -1,0 +1,21 @@
+# 官方 playwright-cli requests 摘要（仅状态码，未归档响应正文、cookie 或 session）
+# 会话：redengine-layout-filter-network-20260901
+GET  http://127.0.0.1:8092/                                      200
+POST http://127.0.0.1:8092/api/auth/login                      200
+GET  http://127.0.0.1:8092/api/auth/my-menus                   200
+GET  http://127.0.0.1:8092/api/auth/permissions                200
+GET  http://127.0.0.1:8092/api/re/tasks?pageNo=1&pageSize=10&status=PUBLISHED  200
+
+# 同一网络会话中的工作台只读请求
+GET  http://127.0.0.1:8092/api/notifications/unread-count      200
+GET  http://127.0.0.1:8092/api/workflow/tasks?pageSize=20      200
+GET  http://127.0.0.1:8092/api/portal/announcements/recent?limit=3  200
+GET  http://127.0.0.1:8092/api/notifications?pageNo=1&pageSize=3  200
+GET  http://127.0.0.1:8092/api/workflow/transfers/inbox         200
+GET  http://127.0.0.1:8092/api/workflow/transfers/outbox        200
+
+# 会话：redengine-layout-filter-1440-20260901；初次进入和点击“查询”各一次
+GET  http://127.0.0.1:8092/api/re/tasks?pageNo=1&pageSize=10&status=PUBLISHED  200
+GET  http://127.0.0.1:8092/api/re/tasks?pageNo=1&pageSize=10&status=PUBLISHED  200
+
+# 静态资源请求省略；原始 CLI 请求清单未通过 mock route 改写。

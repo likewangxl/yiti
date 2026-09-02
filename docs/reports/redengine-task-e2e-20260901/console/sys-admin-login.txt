@@ -1,0 +1,8 @@
+Session: redengine-admin-e2e
+CLI: @playwright/cli 0.1.18
+
+原始 console（登录失败后）：
+[ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:8093/api/auth/login:0
+[ERROR] Login error: AxiosError: 用户名或密码错误 @ http://127.0.0.1:8093/src/views/redengine/login/LoginView.vue:89
+
+说明：console 中无凭据；本文件未保存请求体。

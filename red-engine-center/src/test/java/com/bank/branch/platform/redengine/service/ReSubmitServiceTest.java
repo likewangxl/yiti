@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -55,6 +56,9 @@ class ReSubmitServiceTest {
 
     @Mock
     private FileApi fileApi;
+
+    @Mock
+    private ReTaskFourDimensionAdapter fourDimensionAdapter;
 
     @InjectMocks
     private ReSubmitService reSubmitService;
@@ -132,6 +136,27 @@ class ReSubmitServiceTest {
     }
 
     @Test
+    void createSubmit_withTaskContext_linksLegacySubmissionToTaskDomain() {
+        when(reUserPartyMapService.getRequiredPartyOrgId("E001")).thenReturn(100L);
+        when(reSubmitMapper.insert(ArgumentMatchers.any(ReSubmit.class))).thenAnswer(invocation -> {
+            ReSubmit arg = invocation.getArgument(0);
+            arg.setId(502L);
+            return 1;
+        });
+
+        ReSubmitCreateReqDTO request = req(null);
+        request.setTaskId(10L);
+        request.setTaskInstanceId(20L);
+        request.setTaskAssignmentId(30L);
+
+        Long id = reSubmitService.createSubmit(request, "E001");
+
+        assertThat(id).isEqualTo(502L);
+        verify(fourDimensionAdapter).linkFromLegacyRequest(
+                ArgumentMatchers.any(ReSubmit.class), eq(502L), eq(10L), eq(20L), eq(30L), eq("E001"));
+    }
+
+    @Test
     void createSubmit_unboundOrg_throwsRe40001_andDoesNotInsert() {
         when(reUserPartyMapService.getRequiredPartyOrgId("E404"))
                 .thenThrow(new BizException("RE-40001", "当前用户未绑定党组织，请联系管理员"));
@@ -181,13 +206,44 @@ class ReSubmitServiceTest {
     }
 
     @Test
-    void getDetail_delegatesToMapperSelectById() {
+    void getDetail_returnsSubmissionWithinCurrentPartyOrg() throws Exception {
         ReSubmit submit = new ReSubmit();
         submit.setId(9L);
+        submit.setOrgId(100L);
         when(reSubmitMapper.selectById(9L)).thenReturn(submit);
+        when(reUserPartyMapService.getRequiredPartyOrgId("E001")).thenReturn(100L);
 
-        ReSubmit result = reSubmitService.getDetail(9L);
+        ReSubmit result = invokeScopedDetail(9L, "E001");
 
         assertThat(result).isSameAs(submit);
+    }
+
+    @Test
+    void getDetail_rejectsSubmissionOutsideCurrentPartyOrg() {
+        ReSubmit submit = new ReSubmit();
+        submit.setId(9L);
+        submit.setOrgId(999L);
+        when(reSubmitMapper.selectById(9L)).thenReturn(submit);
+        when(reUserPartyMapService.getRequiredPartyOrgId("E001")).thenReturn(100L);
+
+        assertThatThrownBy(() -> invokeScopedDetail(9L, "E001"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("无权查看");
+    }
+
+    private ReSubmit invokeScopedDetail(Long id, String userId) {
+        try {
+            java.lang.reflect.Method method = ReSubmitService.class
+                    .getMethod("getDetail", Long.class, String.class);
+            return (ReSubmit) method.invoke(reSubmitService, id, userId);
+        } catch (java.lang.reflect.InvocationTargetException ex) {
+            Throwable cause = ex.getCause();
+            if (cause instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            throw new IllegalStateException(cause);
+        } catch (ReflectiveOperationException ex) {
+            throw new AssertionError("ReSubmitService 必须提供带当前用户的数据范围详情接口", ex);
+        }
     }
 }

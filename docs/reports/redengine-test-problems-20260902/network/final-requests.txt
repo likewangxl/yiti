@@ -1,0 +1,23 @@
+round2-reporter
+GET /api/re/tasks/my-assignments?pageNo=1&pageSize=10&tab=PENDING -> 200
+GET /api/re/tasks/my-assignments?pageNo=1&pageSize=1&tab=REVIEWING -> 200
+GET /api/re/tasks/my-assignments?pageNo=1&pageSize=1&tab=PASSED -> 200
+GET /api/re/tasks/my-assignments?pageNo=1&pageSize=1&tab=REJECTED -> 200
+GET /api/re/tasks/my-assignments?pageNo=1&pageSize=10&tab=PASSED -> 200
+GET /api/re/tasks/assignments/3 -> 200
+
+round2-secretary
+GET /api/re/reviews/tasks/branch/queue?pageNo=1&pageSize=20&tab=PENDING -> 200
+GET /api/re/reviews/tasks/branch/queue?pageNo=1&pageSize=1&tab=REVIEWING -> 200
+GET /api/re/reviews/tasks/branch/queue?pageNo=1&pageSize=1&tab=PASSED -> 200
+GET /api/re/reviews/tasks/branch/queue?pageNo=1&pageSize=1&tab=REJECTED -> 200
+GET /api/re/reviews/tasks/branch/queue?pageNo=1&pageSize=20&tab=PASSED -> 200
+
+round2-org-final
+GET /api/re/reviews/tasks/org/queue?pageNo=1&pageSize=50&tab=PENDING -> 200
+GET /api/re/reviews/tasks/org/queue?pageNo=1&pageSize=1&tab=REVIEWING -> 200
+GET /api/re/reviews/tasks/org/queue?pageNo=1&pageSize=1&tab=PASSED -> 200
+GET /api/re/reviews/tasks/org/queue?pageNo=1&pageSize=1&tab=REJECTED -> 200
+GET /api/re/orgs/tree -> 200
+
+以上为官方 CLI `requests --filter '/api/re/'` 的脱敏摘要。没有 POST/PUT/PATCH/DELETE 请求。

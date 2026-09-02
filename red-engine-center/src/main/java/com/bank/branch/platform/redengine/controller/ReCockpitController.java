@@ -5,7 +5,6 @@ import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
-import com.bank.branch.platform.redengine.api.dto.ReAnnualGenerateReqDTO;
 import com.bank.branch.platform.redengine.api.dto.ReCockpitOverviewDTO;
 import com.bank.branch.platform.redengine.api.dto.ReOverdueExecuteReqDTO;
 import com.bank.branch.platform.redengine.api.dto.ReOverdueItemDTO;
@@ -18,26 +17,18 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
 /**
- * 红色引擎-驾驶舱/预警/年度归档端点。
+ * 红色引擎-驾驶舱/预警端点。
  * <p>移植自 redengine {@code CockpitController}（{@code business.controller}）。
- * URL 与 Task 4 权限种子对照表严格一致：6 个只读 GET 端点（overview/ranking/overdue/
- * warning/red/warning/yellow/archive/settlement）统一由资源 {@code P_RE_CKPT_VIEW}
- * （{@code /api/re/cockpit/**}，GET）一条覆盖，Controller 侧无需逐一登记；POST
- * {@code /overdue/execute} 对应高危资源 {@code P_RE_CKPT_EXEC}；POST
- * {@code /archive/generate/{year}} 对应高危资源 {@code P_RE_CKPT_ANNUAL}。</p>
- * <p>源系统另有 POST {@code /archive/generate}（无 year 路径参数的 {@code generateReport}，
- * 权限 {@code business:cockpit:report}）——Task 10 简报端点契约未列该端点，本次移植不落地
- * （YAGNI，且该端点未登记在 Task 4 权限种子中）。</p>
+ * 旧年度归档入口已由任务管理替代，archive 路径不再由本 Controller 注册；历史归档服务和数据
+ * 仍保留用于兼容读取与后续迁移。</p>
  */
 @Slf4j
 @Tag(name = "红色引擎-驾驶舱")
@@ -104,23 +95,4 @@ public class ReCockpitController {
         return ResponseWrapper.success(yellowWarning);
     }
 
-    @Operation(summary = "期间结算归档查询")
-    @GetMapping("/archive/settlement")
-    @BizAuth(bizType = BizType.RED_ENGINE, action = BizAction.READ)
-    public ResponseWrapper<Boolean> archiveSettlement(@RequestParam(required = false) String period) {
-        boolean result = reCockpitService.archiveSettlement(period);
-        log.info("[ReCockpitController.archiveSettlement] period={}, result={}", period, result);
-        return ResponseWrapper.success(result);
-    }
-
-    @Operation(summary = "生成年度考核归档结果(高危)")
-    @PostMapping("/archive/generate/{year}")
-    @BizAuth(bizType = BizType.RED_ENGINE, action = BizAction.EXECUTE)
-    @AuditLog(action = "RE_ANNUAL_GENERATE", resourceType = "RE_ANNUAL_RESULT", reasonRequired = true)
-    public ResponseWrapper<Void> generateAnnualResult(@PathVariable Integer year,
-                                                       @Valid @RequestBody ReAnnualGenerateReqDTO req) {
-        reCockpitService.generateAnnualResult(year);
-        log.info("[ReCockpitController.generateAnnualResult] year={}, reason={}", year, req.getReason());
-        return ResponseWrapper.success();
-    }
 }

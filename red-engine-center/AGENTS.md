@@ -8,11 +8,17 @@
 
 本模块是独立核心业务域，审核状态机由自身维护，**不接入 Flowable**，不写 `business_key` 或 `BIZ_PROCESS_MAP`。当前没有对外 `*Api`/`*QueryApi`；其他模块未来需要党建数据时，必须新增明确的查询接口，禁止直接依赖本模块 service、mapper 或 entity。
 
-允许的跨模块依赖只有平台基础模块，以及：
+跨模块依赖可按业务需要引用其他模块 `api/` 包公开的 `*Api`、`*QueryApi` 及其 DTO；仍须遵守
+根 `AGENTS.md` 的模块边界，不得引用对方内部 `service`、`mapper`、`entity` 或直接访问私有表。
+当前已使用的公开契约包括：
 
 - `auth-permission-center` 的 `CurrentUserApi`，用于取得当前登录人 `PT_USER.USER_ID`；
 - `auth-permission-center` 的 `UserApi`，用于校验用户映射中的 `USER_ID` 并批量补充展示用 `USERNAME`；
+- `system-governance-center` 的 `DictApi`，用于读取启用的 `RE_ITEM_CODE` 明细字典项；
+- `system-governance-center` 的 `JobApi`，用于通过平台统一调度点注册固定任务窗口；
 - `system-governance-center` 的 `FileApi`，用于附件绑定。
+
+上述列表是当前使用示例而非跨模块 API 名称白名单；新增依赖仍须同步接口契约、资源与测试。
 
 ## 代码与持久化
 

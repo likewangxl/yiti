@@ -1,0 +1,142 @@
+# 红色引擎任务域隔离联调 profile。
+#
+# 仅用于连接已经隔离的 yit_test。默认只监听本机随机端口，数据库账号和密码必须
+# 通过环境变量传入；不会覆盖 application.yml/application-dev.yml 的既有配置。
+#
+# 示例：
+#   REDENGINE_TASK_DB_USERNAME=... REDENGINE_TASK_DB_PASSWORD=... \
+#   mvn -pl bootstrap spring-boot:run -Dspring-boot.run.profiles=redengine-task-e2e
+#
+# 任务域正式实现沿用红色引擎现有后台组件和视觉规范；此 profile 不引入原型技术栈。
+
+server:
+  address: 127.0.0.1
+  port: ${REDENGINE_TASK_SERVER_PORT:0}
+  servlet:
+    session:
+      cookie:
+        name: ${REDENGINE_TASK_SESSION_COOKIE:REDENGINE_TASK_E2E_SESSION}
+        http-only: true
+        secure: false
+        same-site: lax
+        path: /
+
+spring:
+  application:
+    name: ${REDENGINE_TASK_APP_NAME:redengine-task-e2e}
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${REDENGINE_TASK_DB_URL:jdbc:mysql://127.0.0.1:3306/yit_test?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&sessionVariables=time_zone%3D%27%2B08%3A00%27}
+    username: ${REDENGINE_TASK_DB_USERNAME}
+    password: ${REDENGINE_TASK_DB_PASSWORD}
+  sql:
+    init:
+      mode: never
+  session:
+    store-type: jdbc
+    jdbc:
+      initialize-schema: never
+      table-name: SPRING_SESSION
+      cleanup-cron: '-'
+  quartz:
+    enabled: false
+    auto-startup: false
+    job-store-type: memory
+    jdbc:
+      initialize-schema: never
+  task:
+    scheduling:
+      enabled: false
+  autoconfigure:
+    exclude:
+      # QuartzAutoConfiguration 不读取 spring.quartz.enabled；显式排除避免创建 Scheduler。
+      - org.springframework.boot.autoconfigure.quartz.QuartzAutoConfiguration
+      # 任务域隔离联调不启动任何 @Scheduled 调度线程。
+      - org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfiguration
+
+# 报表模块若被组合根装配，显式回退到同一隔离库，不允许隐式读取其他 schema。
+rpt:
+  datasource:
+    read-only:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: ${REDENGINE_TASK_DB_URL:jdbc:mysql://127.0.0.1:3306/yit_test?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&sessionVariables=time_zone%3D%27%2B08%3A00%27}
+      username: ${REDENGINE_TASK_DB_USERNAME}
+      password: ${REDENGINE_TASK_DB_PASSWORD}
+
+flowable:
+  # 组合根仍装配既有业务模块，它们通过 workflow-center 公共 API 依赖 ProcessEngine。
+  # 任务域自身不调用 Flowable；仅保留引擎基础 Bean 以满足组合装配，不启动任何异步执行器。
+  # Flowable 7 的 ProcessEngineAutoConfiguration 由 flowable.process.enabled 控制。
+  process:
+    enabled: true
+    async:
+      executor:
+        async-job-acquisition-enabled: false
+        timer-job-acquisition-enabled: false
+    async-history:
+      executor:
+        async-job-acquisition-enabled: false
+        timer-job-acquisition-enabled: false
+  database-schema-update: false
+  check-process-definitions: false
+  async-executor-activate: false
+  async-history-executor-activate: false
+  idm:
+    enabled: false
+  app:
+    enabled: false
+  eventregistry:
+    enabled: false
+  dmn:
+    enabled: false
+  cmmn:
+    enabled: false
+  form:
+    enabled: false
+
+obs:
+  # 禁止访问克隆数据中可能仍指向生产对象存储的 FILE_OBJECT；字段只保留安全占位值。
+  enabled: false
+  endPoint: ${REDENGINE_TASK_OBS_ENDPOINT:http://127.0.0.1:9}
+  accessKey: ${REDENGINE_TASK_OBS_ACCESS_KEY:disabled}
+  secretKey: ${REDENGINE_TASK_OBS_SECRET_KEY:disabled}
+  bucketName: ${REDENGINE_TASK_OBS_BUCKET:redengine-task-e2e-disabled}
+
+platform:
+  instance-id: ${REDENGINE_TASK_INSTANCE_ID:redengine-task-e2e-${HOSTNAME:local}}
+  sidecar:
+    # 注册和直接认证调用均默认落到本机保留端口，避免误连外部边车/ESB。
+    base-url: ${REDENGINE_TASK_SIDECAR_BASE_URL:http://127.0.0.1:9}
+    health-base-url: ${REDENGINE_TASK_SIDECAR_HEALTH_URL:http://127.0.0.1:9}
+    connect-timeout-ms: 200
+    read-timeout-ms: 500
+    log-request: false
+    registration:
+      enabled: false
+    uniauth:
+      redirect-url: ${REDENGINE_TASK_UNIAUTH_REDIRECT_URL:http://127.0.0.1:9/disabled}
+      callback-url: ${REDENGINE_TASK_UNIAUTH_CALLBACK_URL:http://127.0.0.1:9/disabled}
+      service-adr: ${REDENGINE_TASK_UNIAUTH_SERVICE_URL:http://127.0.0.1:9/disabled}
+  soap:
+    netty:
+      enabled: false
+      port: ${REDENGINE_TASK_SOAP_PORT:0}
+      log-request: false
+  lock:
+    cleanup:
+      enabled: false
+  notification:
+    outbound:
+      enabled: false
+
+perf:
+  scheduler:
+    health-check:
+      enabled: false
+    startup-sync:
+      enabled: false
+  eval:
+    import:
+      compensation:
+        enabled: false

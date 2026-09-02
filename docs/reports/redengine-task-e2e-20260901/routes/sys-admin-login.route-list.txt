@@ -1,0 +1,5 @@
+Session: redengine-admin-e2e
+CLI: @playwright/cli 0.1.18
+Result: No active routes
+
+说明：该会话未注册任何 mock route；登录请求真实经过前端代理到本 checkout 后端。

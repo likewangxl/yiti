@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// 红色引擎退出时必须回到独立的红色登录页，并使用整页导航清空前端内存态。
+// 红色引擎退出时必须回到平台统一登录页，并使用整页导航清空前端内存态。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
@@ -66,7 +66,7 @@ async function settle() {
 }
 
 describe('红色引擎退出入口', () => {
-  it('退出后清理用户态并整页跳转红色引擎登录页', async () => {
+  it('退出后清理用户态并整页跳转平台统一登录页', async () => {
     const userStore = useUserStore();
     userStore.setUser({ empId: 'E001', displayName: '党建用户', roles: [] });
     wrapper = mount(RedEngineLayout, { global: { plugins: [pinia], stubs } });
@@ -76,8 +76,8 @@ describe('红色引擎退出入口', () => {
 
     expect(logout).toHaveBeenCalled();
     expect(userStore.user).toBeNull();
-    expect(locationReplace).toHaveBeenCalledWith('/#/redengine/login');
-    expect(locationReplace).not.toHaveBeenCalledWith('/login');
+    expect(locationReplace).toHaveBeenCalledWith('/#/login');
+    expect(locationReplace).not.toHaveBeenCalledWith('/#/redengine/login');
     expect(routerPush).not.toHaveBeenCalled();
   });
 });

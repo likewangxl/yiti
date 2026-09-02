@@ -33,6 +33,7 @@ public class ReUserPartyMapService {
 
     private final ReUserPartyMapMapper reUserPartyMapMapper;
     private final UserApi userApi;
+    private final ReTaskAssignmentService taskAssignmentService;
 
     /**
      * 查询指定员工必须绑定的党组织ID。
@@ -81,7 +82,9 @@ public class ReUserPartyMapService {
         ReUserPartyMap existing = selectByUserId(userId);
         if (existing != null) {
             // 已存在映射：按主键更新，不重新 insert，避免触发 uk_user 唯一键冲突
+            Long previousPartyOrgId = existing.getPartyOrgId();
             updateMapping(existing, partyOrgId, partyRole);
+            taskAssignmentService.synchronizeReporterAssignments(userId, previousPartyOrgId, partyOrgId);
             log.info("[ReUserPartyMapService.bind] update userId={}, partyOrgId={}, partyRole={}", userId, partyOrgId, partyRole);
             return;
         }
@@ -92,6 +95,7 @@ public class ReUserPartyMapService {
         entity.setPartyRole(partyRole);
         try {
             reUserPartyMapMapper.insert(entity);
+            taskAssignmentService.synchronizeReporterAssignments(userId, null, partyOrgId);
             log.info("[ReUserPartyMapService.bind] insert userId={}, partyOrgId={}, partyRole={}", userId, partyOrgId, partyRole);
         } catch (DuplicateKeyException e) {
             // 并发窗口命中：insert 撞 uk_user 唯一键，说明另一个并发请求已抢先落库。
@@ -103,7 +107,9 @@ public class ReUserPartyMapService {
                 // 数据异常（例如冲突记录被并发删除），此时不静默吞掉，原样抛出保留现场供排查。
                 throw e;
             }
+            Long previousPartyOrgId = winner.getPartyOrgId();
             updateMapping(winner, partyOrgId, partyRole);
+            taskAssignmentService.synchronizeReporterAssignments(userId, previousPartyOrgId, partyOrgId);
             log.info("[ReUserPartyMapService.bind] concurrent-conflict converge to update userId={}, partyOrgId={}, partyRole={}",
                     userId, partyOrgId, partyRole);
         }

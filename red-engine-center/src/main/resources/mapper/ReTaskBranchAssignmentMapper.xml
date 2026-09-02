@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.redengine.mapper.ReTaskBranchAssignmentMapper">
+
+    <!--
+        工作台筛选必须在数据库分页前完成。最新提交通过 NOT EXISTS 选出同一
+        assignment 的最高版本；左连接保留完全未上报 assignment，只有服务端页签
+        状态集合需要提交状态时才会把它排除。
+    -->
+    <select id="selectWorkflowPage"
+            resultType="com.bank.branch.platform.redengine.entity.ReTaskBranchAssignment">
+        SELECT a.*
+        FROM RE_TASK_BRANCH_ASSIGNMENT a
+        INNER JOIN RE_TASK_INSTANCE i ON i.ID = a.TASK_INSTANCE_ID
+        INNER JOIN RE_TASK t ON t.ID = i.TASK_ID
+        LEFT JOIN RE_PARTY_ORG p ON p.ID = a.BRANCH_ID
+        LEFT JOIN RE_TASK_SUBMISSION s
+          ON s.ASSIGNMENT_ID = a.ID
+         AND s.DELETED = 0
+         AND NOT EXISTS (
+             SELECT 1
+             FROM RE_TASK_SUBMISSION newer
+             WHERE newer.ASSIGNMENT_ID = s.ASSIGNMENT_ID
+               AND newer.DELETED = 0
+               AND (newer.VERSION_NO &gt; s.VERSION_NO
+                    OR (newer.VERSION_NO = s.VERSION_NO AND newer.ID &gt; s.ID))
+         )
+        WHERE t.STATUS = 'PUBLISHED'
+          AND t.DELETED = 0
+        <if test="assignmentIds != null and assignmentIds.size() &gt; 0">
+          AND a.ID IN
+          <foreach collection="assignmentIds" item="id" open="(" separator="," close=")">
+            #{id}
+          </foreach>
+        </if>
+        <if test="instanceIds != null and instanceIds.size() &gt; 0">
+          AND a.TASK_INSTANCE_ID IN
+          <foreach collection="instanceIds" item="id" open="(" separator="," close=")">
+            #{id}
+          </foreach>
+        </if>
+        <if test="branchIds != null and branchIds.size() &gt; 0">
+          AND a.BRANCH_ID IN
+          <foreach collection="branchIds" item="id" open="(" separator="," close=")">
+            #{id}
+          </foreach>
+        </if>
+        <if test="assignmentStatuses != null and assignmentStatuses.size() &gt; 0">
+          AND a.STATUS IN
+          <foreach collection="assignmentStatuses" item="status" open="(" separator="," close=")">
+            #{status}
+          </foreach>
+        </if>
+        <if test="submissionStatuses != null and submissionStatuses.size() &gt; 0">
+          AND s.STATUS IN
+          <foreach collection="submissionStatuses" item="status" open="(" separator="," close=")">
+            #{status}
+          </foreach>
+        </if>
+        <if test="taskNature != null and taskNature != ''">
+          AND t.NATURE = #{taskNature}
+        </if>
+        <if test="businessType != null and businessType != ''">
+          AND t.TYPE_CODE = #{businessType}
+        </if>
+        <if test="cycle != null and cycle != ''">
+          AND t.CYCLE = #{cycle}
+        </if>
+        <if test="submittedStartAt != null">
+          AND a.LAST_SUBMITTED_AT &gt;= #{submittedStartAt}
+        </if>
+        <if test="submittedEndAt != null">
+          AND a.LAST_SUBMITTED_AT &lt;= #{submittedEndAt}
+        </if>
+        <if test="keyword != null and keyword != ''">
+          AND (
+              t.TITLE LIKE CONCAT('%', #{keyword}, '%')
+              OR t.DESCRIPTION LIKE CONCAT('%', #{keyword}, '%')
+              OR p.ORG_NAME LIKE CONCAT('%', #{keyword}, '%')
+              <if test="submitterIds != null and submitterIds.size() &gt; 0">
+                OR s.SUBMITTER_ID IN
+                <foreach collection="submitterIds" item="submitterId" open="(" separator="," close=")">
+                  #{submitterId}
+                </foreach>
+              </if>
+          )
+        </if>
+        ORDER BY a.LAST_SUBMITTED_AT DESC, a.ID DESC
+    </select>
+
+    <!-- 管理端任务详情：任务、实例、最新提交和筛选条件均在分页前执行。 -->
+    <select id="selectTaskAssignmentPage"
+            resultType="com.bank.branch.platform.redengine.entity.ReTaskBranchAssignment">
+        SELECT a.*
+        FROM RE_TASK_BRANCH_ASSIGNMENT a
+        INNER JOIN RE_TASK_INSTANCE i ON i.ID = a.TASK_INSTANCE_ID
+        INNER JOIN RE_TASK t ON t.ID = i.TASK_ID
+        LEFT JOIN RE_PARTY_ORG p ON p.ID = a.BRANCH_ID
+        LEFT JOIN RE_TASK_SUBMISSION s
+          ON s.ASSIGNMENT_ID = a.ID
+         AND s.DELETED = 0
+         AND NOT EXISTS (
+             SELECT 1
+             FROM RE_TASK_SUBMISSION newer
+             WHERE newer.ASSIGNMENT_ID = s.ASSIGNMENT_ID
+               AND newer.DELETED = 0
+               AND (newer.VERSION_NO &gt; s.VERSION_NO
+                    OR (newer.VERSION_NO = s.VERSION_NO AND newer.ID &gt; s.ID))
+         )
+        WHERE i.TASK_ID = #{taskId}
+          AND t.STATUS = 'PUBLISHED'
+          AND t.DELETED = 0
+        <if test="branchId != null">
+          AND a.BRANCH_ID = #{branchId}
+        </if>
+        <if test="status != null and status != ''">
+          AND a.STATUS = #{status}
+        </if>
+        <if test="submittedStartAt != null">
+          AND a.LAST_SUBMITTED_AT &gt;= #{submittedStartAt}
+        </if>
+        <if test="submittedEndAt != null">
+          AND a.LAST_SUBMITTED_AT &lt;= #{submittedEndAt}
+        </if>
+        <if test="keyword != null and keyword != ''">
+          AND (
+              LOWER(COALESCE(p.ORG_NAME, '')) LIKE CONCAT('%', LOWER(#{keyword}), '%')
+              OR LOWER(COALESCE(s.SUBMITTER_ID, '')) LIKE CONCAT('%', LOWER(#{keyword}), '%')
+              OR LOWER(COALESCE(s.CONTENT_TEXT, '')) LIKE CONCAT('%', LOWER(#{keyword}), '%')
+              <if test="submitterIds != null and submitterIds.size() &gt; 0">
+                OR s.SUBMITTER_ID IN
+                <foreach collection="submitterIds" item="submitterId" open="(" separator="," close=")">
+                  #{submitterId}
+                </foreach>
+              </if>
+          )
+        </if>
+        ORDER BY a.LAST_SUBMITTED_AT DESC, a.ID DESC
+    </select>
+</mapper>

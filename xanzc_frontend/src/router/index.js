@@ -7,6 +7,10 @@ import http from '@/api/http';
 import { ElMessage } from 'element-plus';
 import { createRouteProgress } from './routeProgress';
 import { hasRouteAccessRequirements, resolveRouteAccess } from './access';
+import {
+  normalizeRoleCodes,
+  RED_ENGINE_RESOURCE_URLS
+} from '@/views/redengine/layout/canSee';
 
 const routes = [
   // 登录页：顶层路由，不进 DefaultLayout（无 sidebar / header）
@@ -55,18 +59,139 @@ const routes = [
     redirect: '/redengine/dashboard',
     meta: { requiredMenu: '/redengine/dashboard' },
     children: [
-      { path: 'dashboard', name: 'RedEngineDashboard', component: () => import('@/views/redengine/dashboard/DashboardView.vue'), meta: { title: '工作台' } },
-      { path: 'report', name: 'RedEngineReport', component: () => import('@/views/redengine/report/JointView.vue'), meta: { title: '四大维度材料上报', requiredResource: '/api/re/submits' } },
-      { path: 'records', name: 'RedEngineRecords', component: () => import('@/views/redengine/records/RecordsView.vue'), meta: { title: '上报记录', requiredResource: '/api/re/submits/my' } },
-      { path: 'branch-review', name: 'RedEngineBranchReview', component: () => import('@/views/redengine/branch-review/BranchReviewView.vue'), meta: { title: '支部审核工作台', requiredResource: '/api/re/reviews/**' } },
-      { path: 'cockpit', name: 'RedEngineCockpit', component: () => import('@/views/redengine/cockpit/CockpitView.vue'), meta: { title: '全局数据驾驶舱', requiredResource: '/api/re/cockpit/**' } },
-      { path: 'warning', name: 'RedEngineWarning', component: () => import('@/views/redengine/warning/WarningView.vue'), meta: { title: '红黄牌预警池', requiredResource: '/api/re/cockpit/**' } },
-      { path: 'review', name: 'RedEngineReview', component: () => import('@/views/redengine/review/ReviewView.vue'), meta: { title: '沉浸式审核工作台', requiredResource: '/api/re/reviews/**' } },
-      { path: 'archive', name: 'RedEngineArchive', component: () => import('@/views/redengine/archive/ArchiveView.vue'), meta: { title: '年度考核归档', requiredResource: '/api/re/cockpit/**' } },
-      { path: 'export', name: 'RedEngineExport', component: () => import('@/views/redengine/export/ExportView.vue'), meta: { title: '数据导出', requiredResource: '/api/re/export/*' } },
-      // Task 15 新增：党组织管理（org-manage，Task 13 起菜单数组已声明该项但路由此前未接）+ 用户党组织映射（user-map，新建）
-      { path: 'org-manage', name: 'RedEngineOrgManage', component: () => import('@/views/redengine/system/OrgManageView.vue'), meta: { title: '党组织管理', requiredResource: '/api/re/orgs' } },
-      { path: 'user-map', name: 'RedEngineUserMap', component: () => import('@/views/redengine/system/UserMapView.vue'), meta: { title: '用户党组织映射', requiredResource: '/api/re/user-party-maps' } }
+      {
+        path: 'dashboard',
+        name: 'RedEngineDashboard',
+        component: () => import('@/views/redengine/dashboard/DashboardView.vue'),
+        meta: {
+          title: '工作台',
+          requiredRoleCodes: ['R_RE_REPORT', 'R_RE_SECR', 'R_RE_ORGREV', 'SYS_ADMIN']
+        }
+      },
+      {
+        path: 'report',
+        name: 'RedEngineReport',
+        component: () => import('@/views/redengine/report/JointView.vue'),
+        meta: {
+          title: '四大维度材料上报',
+          requiredResource: RED_ENGINE_RESOURCE_URLS.REPORT,
+          requiredRoleCodes: ['R_RE_REPORT', 'SYS_ADMIN']
+        }
+      },
+      {
+        path: 'records',
+        name: 'RedEngineRecords',
+        component: () => import('@/views/redengine/records/RecordsView.vue'),
+        meta: {
+          title: '上报信息',
+          requiredResource: RED_ENGINE_RESOURCE_URLS.RECORDS,
+          requiredRoleCodes: ['R_RE_REPORT', 'SYS_ADMIN']
+        }
+      },
+      {
+        path: 'branch-review',
+        name: 'RedEngineBranchReview',
+        component: () => import('@/views/redengine/branch-review/BranchReviewView.vue'),
+        meta: {
+          title: '支部审核工作台',
+          requiredResource: RED_ENGINE_RESOURCE_URLS.REVIEW,
+          requiredRoleCodes: ['R_RE_SECR']
+        }
+      },
+      {
+        path: 'cockpit',
+        name: 'RedEngineCockpit',
+        component: () => import('@/views/redengine/cockpit/CockpitView.vue'),
+        meta: {
+          title: '全局数据驾驶舱',
+          requiredResource: RED_ENGINE_RESOURCE_URLS.COCKPIT,
+          requiredRoleCodes: ['R_RE_ORGREV', 'SYS_ADMIN']
+        }
+      },
+      {
+        path: 'warning',
+        name: 'RedEngineWarning',
+        component: () => import('@/views/redengine/warning/WarningView.vue'),
+        meta: {
+          title: '红黄牌预警池',
+          requiredResource: RED_ENGINE_RESOURCE_URLS.HOME,
+          requiredRoleCodes: ['R_RE_REPORT', 'R_RE_SECR', 'R_RE_ORGREV', 'SYS_ADMIN']
+        }
+      },
+      {
+        path: 'review',
+        name: 'RedEngineReview',
+        component: () => import('@/views/redengine/review/ReviewView.vue'),
+        meta: {
+          title: '工作台',
+          requiredResource: RED_ENGINE_RESOURCE_URLS.REVIEW,
+          requiredRoleCodes: ['R_RE_ORGREV']
+        }
+      },
+      {
+        path: 'task-management',
+        name: 'RedEngineTaskManagement',
+        component: () => import('@/views/redengine/tasks/TaskManagementView.vue'),
+        meta: {
+          title: '任务管理',
+          requiredResource: RED_ENGINE_RESOURCE_URLS.TASK_COLLECTION,
+          requiredRoleCodes: ['R_RE_ORGREV', 'SYS_ADMIN']
+        }
+      },
+      {
+        path: 'task-management/new',
+        name: 'RedEngineTaskNew',
+        component: () => import('@/views/redengine/tasks/NewTaskView.vue'),
+        meta: {
+          title: '新增任务',
+          hideInMenu: true,
+          requiredResource: RED_ENGINE_RESOURCE_URLS.TASK_COLLECTION,
+          requiredRoleCodes: ['R_RE_ORGREV', 'SYS_ADMIN']
+        }
+      },
+      {
+        path: 'task-management/:taskId',
+        name: 'RedEngineTaskDetail',
+        component: () => import('@/views/redengine/tasks/TaskDetailView.vue'),
+        meta: {
+          title: '任务详情',
+          hideInMenu: true,
+          requiredResource: RED_ENGINE_RESOURCE_URLS.TASK_DETAIL,
+          requiredRoleCodes: ['R_RE_ORGREV', 'SYS_ADMIN']
+        }
+      },
+      {
+        path: 'task-entry',
+        name: 'RedEngineTaskEntry',
+        component: () => import('@/views/redengine/records/TemporaryTaskEntryView.vue'),
+        meta: {
+          title: '临时任务填报',
+          hideInMenu: true,
+          requiredResource: RED_ENGINE_RESOURCE_URLS.TASK_ASSIGNMENT,
+          requiredRoleCodes: ['R_RE_REPORT']
+        }
+      },
+      // 党组织管理、用户党组织映射只对组织审核员和系统管理员开放。
+      {
+        path: 'org-manage',
+        name: 'RedEngineOrgManage',
+        component: () => import('@/views/redengine/system/OrgManageView.vue'),
+        meta: {
+          title: '党组织管理',
+          requiredResource: RED_ENGINE_RESOURCE_URLS.ORG_TREE,
+          requiredRoleCodes: ['R_RE_ORGREV', 'SYS_ADMIN']
+        }
+      },
+      {
+        path: 'user-map',
+        name: 'RedEngineUserMap',
+        component: () => import('@/views/redengine/system/UserMapView.vue'),
+        meta: {
+          title: '用户党组织映射',
+          requiredResource: RED_ENGINE_RESOURCE_URLS.USER_MAP,
+          requiredRoleCodes: ['R_RE_ORGREV', 'SYS_ADMIN']
+        }
+      }
     ]
   },
   {
@@ -258,7 +383,30 @@ const progress = createRouteProgress({
   }
 });
 
+/**
+ * 红色引擎页面除平台资源外再按角色做一层路由门禁，避免仅隐藏菜单而允许直接输入 URL。
+ * SYS_ADMIN 仅按各路由显式白名单生效，不能借系统管理员身份访问组织审核员专属工作台。
+ */
+export function checkRouteRoleAccess(to, userStore = useUserStore()) {
+  const metas = to?.matched?.length
+    ? to.matched.map((record) => record.meta || {})
+    : [to?.meta || {}];
+  const requiredRoleCodes = [...new Set(
+    metas.flatMap((meta) => {
+      const declared = meta.requiredRoleCodes;
+      return Array.isArray(declared) ? declared : declared ? [declared] : [];
+    })
+  )];
+  if (!requiredRoleCodes.length) return true;
+  const roleCodes = normalizeRoleCodes(userStore.roles, userStore.isSystemAdmin);
+  return requiredRoleCodes.some((roleCode) => roleCodes.has(roleCode))
+    ? true
+    : { path: '/no-access' };
+}
+
 function checkDeclaredRouteAccess(to) {
+  const roleAccess = checkRouteRoleAccess(to);
+  if (roleAccess !== true) return roleAccess;
   if (!hasRouteAccessRequirements(to)) return true;
   return resolveRouteAccess(to, useMenuStore(), usePermissionStore());
 }

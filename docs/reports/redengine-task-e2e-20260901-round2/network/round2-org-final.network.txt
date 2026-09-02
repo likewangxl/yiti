@@ -1,0 +1,40 @@
+# round2-org-final 最终 network 摘要（官方 playwright-cli，已脱敏）
+# 账号：yangdb1；未保存登录请求体、响应体、Cookie、token 或 Authorization。
+
+## 角色、首页、工作台与任务管理
+
+- POST `/api/auth/login` -> `200 OK`（响应体未归档）
+- GET `/api/auth/my-menus` -> `200 OK`
+- GET `/api/auth/current-user` -> `200 OK`（组织审核员角色；仅归档非凭据身份摘要）
+- GET `/api/re/home/summary` -> `200 OK`
+- GET `/api/re/reviews/tasks/org/queue?pageNo=1&pageSize=20&tab=PENDING` -> `200 OK`
+- GET `/api/re/home/warning-pool` -> `200 OK`（当前 redBranches/yellowBranches 均为空）
+- GET `/api/re/orgs/tree` -> `200 OK`（新增任务的目标党支部选择）
+- GET `/api/re/tasks?...` -> `200 OK`（任务管理分页查询）
+- POST `/api/re/tasks` -> `200 OK`（临时任务 A/B/C/D 创建并发布）
+- 输入定时普通任务持续 32 天点击发布时，页面提示“持续天数不能超过当月自然天数”；该次交互仅产生组织树 `GET`，未发送 `POST /api/re/tasks`。
+- POST `/api/re/tasks` -> `200 OK`（定时普通任务 `E2E-RECURRING-GENERAL-20260901`，5 天）
+- 该任务列表显示“定时任务、普通任务、每月初·持续5天、0/1”；数据库事实为 `NATURE=SCHEDULED`、`TYPE_CODE=GENERAL`、`CYCLE=MONTH_START`、`DURATION_DAYS=5`，窗口 `2026-09-01 00:00:00` 至 `2026-09-05 23:59:59`。
+
+## 组织审核流转
+
+- POST `/api/re/reviews/tasks/org/3/approve` -> `200 OK`（最终通过）
+- 任务 4 组织驳回意见为空时，页面校验阻止请求，未发送 `/api/re/reviews/tasks/org/4/reject` POST
+- POST `/api/re/reviews/tasks/org/4/reject` -> `200 OK`（填写必填驳回意见后）
+- GET `/api/re/reviews/tasks/org/3` -> `200 OK`（终审详情读取）
+- GET `/api/re/reviews/tasks/org/queue?pageNo=1&pageSize=20&tab=APPROVED` -> `200 OK`
+- GET `/api/re/reviews/tasks/org/queue?pageNo=1&pageSize=20&tab=REJECTED` -> `200 OK`
+- POST `/api/re/reviews/tasks/org/5/approve` -> `200 OK`（定时普通任务最终通过）
+- 组织工作台列表及任务处理区显示“定时任务·每月初”，无评分区。
+
+## 任务详情、支部填报详情与导出
+
+- GET `/api/re/tasks/3` -> `200 OK`
+- GET `/api/re/tasks/3/assignments?pageNo=1&pageSize=10` -> `200 OK`
+- GET `/api/sys/dicts/RE_ITEM_CODE/items` -> `200 OK`
+- POST `/api/re/tasks/3/exports` -> `200 OK`（返回 `QUEUED`）
+- GET `/api/re/task-exports/{exportId}` -> `200 OK`（轮询仍为排队状态）
+
+本轮未做附件下载或最终 ZIP 文件联调：当前无 OBS，且隔离测试配置关闭异步 worker。未把 `QUEUED` 记为导出完成。
+
+未注册 mock 路由的最终核验见 `../routes/round2-org-final.route-list.txt`。

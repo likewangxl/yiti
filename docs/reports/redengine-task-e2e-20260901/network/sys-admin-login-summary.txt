@@ -1,0 +1,7 @@
+Session: redengine-admin-e2e
+CLI: @playwright/cli 0.1.18
+
+请求摘要（不含请求体、Cookie、Authorization 或密码）：
+- POST http://127.0.0.1:8093/api/auth/login -> 401 Unauthorized
+
+未执行业务 API；未创建任务、未提交任务、未执行导出或附件请求。

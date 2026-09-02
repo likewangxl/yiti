@@ -1,6 +1,6 @@
 <template>
   <el-container class="re-layout">
-    <el-aside width="275px" class="re-aside">
+    <el-aside width="var(--layout-sidebar-width)" class="re-aside">
       <div class="re-sidebar">
         <div class="re-sidebar-logo">
           <component :is="Star" class="re-logo-icon" />
@@ -55,13 +55,13 @@
 // 变换要点（见 Task 13 简报 F1-F6）：
 // - F1: 平台侧 API 调用一律走统一 API 层；权限由 permission store 严格加载，业务 API 见 @/api/redengine.js
 // - F2: 源工程的 JWT/localStorage token 逻辑全部不移植，登录态完全靠 yiti session cookie（http.js withCredentials:true）
-// - F3: 路由路径统一加 /redengine 前缀，登出后整页跳转 /#/redengine/login
+// - F3: 路由路径统一加 /redengine 前缀，登出后整页跳转平台统一登录页 /#/login
 // - F5: 源工程的 v-permission 指令替换为本组件维护的 canSee()，经 provide/inject 供 Task 14 子视图使用
 // - 源工程 Sidebar/SidebarItem 支持多级子菜单（el-sub-menu 递归），但 Task 13 简报给定的菜单数据源是
 //   扁平的 10 项（无 children），故本次移植未保留递归子菜单渲染；如 Task 14/15 需要二级菜单再补 SidebarItem 递归。
 // - 源工程 MainLayout 的侧栏折叠开关（Sidebar @toggle-collapse / TopNav @toggle-sidebar）在源码里两端均未真正
 //   emit 事件（Sidebar.vue 只是 defineExpose 了一个方法，从未被调用），是无效代码；本次移植未保留这段死代码，
-//   侧栏宽度固定为 275px（对齐源 MainLayout.vue 展开态默认值 sidebarWidth=ref('275px')，审查返工按建议对齐）。
+//   侧栏宽度复用主系统 --layout-sidebar-width，避免红色引擎与主系统出现不同的左侧基线。
 // - menuItems 数据源 + canSee() 判断逻辑位于同目录 canSee.js，供布局、子视图和 Vitest 复用。
 import { computed, provide, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
@@ -74,19 +74,19 @@ import {
   DataAnalysis,
   WarningFilled,
   Checked,
-  Trophy,
-  Download,
+  List,
   Setting,
   Connection
 } from '@element-plus/icons-vue';
 import { logout } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
 import { usePermissionStore } from '@/stores/permission';
-import { menuItems, canSee as canSeeImpl } from './canSee';
+import { menuItems, canSee as canSeeImpl, normalizeRoleCodes } from './canSee';
 
 const route = useRoute();
 const userStore = useUserStore();
 const permissionStore = usePermissionStore();
+const effectiveRoleCodes = computed(() => normalizeRoleCodes(userStore.roles, userStore.isSystemAdmin));
 
 // 平台未做图标全局注册（main.js 只 app.use(ElementPlus)，未 app.component 逐个注册图标），
 // 故按平台既有用法（如 views/report/Dynamic.vue）本地 import 后建 name → 组件映射，供 <component :is> 用
@@ -98,8 +98,7 @@ const iconMap = {
   DataAnalysis,
   WarningFilled,
   Checked,
-  Trophy,
-  Download,
+  List,
   Setting,
   Connection
 };
@@ -108,10 +107,14 @@ const iconMap = {
  * 判断某菜单项/子视图内某资源对当前用户是否可见；绑定共享权限 store，供模板与 provide 复用。
  */
 function canSee(item) {
-  if (!item?.res) return true;
-  if (!permissionStore.loaded) return false;
-  if (permissionStore.isSystemAdmin) return true;
-  return canSeeImpl(item, permissionStore.resourceUrls);
+  // 敏感菜单在权限快照完成前保持隐藏；角色白名单和资源权限均满足才显示。
+  if (item?.res && !permissionStore.loaded) return false;
+  return canSeeImpl(
+    item,
+    permissionStore.resourceUrls,
+    effectiveRoleCodes.value,
+    permissionStore.isSystemAdmin
+  );
 }
 
 // 供 Task 14 子视图通过 inject('canSee') 复用同一份鉴权判断
@@ -130,7 +133,7 @@ onMounted(async () => {
   }
 });
 
-// 登出：清 yiti session（后端）+ 本地用户态，整页回到红色引擎登录页。
+// 登出：清 yiti session（后端）+ 本地用户态，整页回到平台统一登录页。
 // 使用整页导航确保菜单等 Pinia 内存状态不会残留给下一位用户。
 async function handleLogout() {
   try {
@@ -139,7 +142,7 @@ async function handleLogout() {
     // 登出接口异常也继续清本地态、跳登录页，避免用户卡在原页面
   }
   userStore.clear();
-  window.location.replace('/#/redengine/login');
+  window.location.replace('/#/login');
 }
 </script>
 
@@ -147,6 +150,8 @@ async function handleLogout() {
 .re-layout {
   height: 100vh;
   width: 100%;
+  min-width: 0;
+  min-height: 0;
   display: flex !important;
   flex-direction: row !important;
 
@@ -177,6 +182,7 @@ async function handleLogout() {
 }
 
 .re-aside {
+  width: var(--layout-sidebar-width) !important;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -190,14 +196,14 @@ async function handleLogout() {
   .re-sidebar-logo {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 10px;
-    height: 60px;
-    padding: 0 20px;
+    justify-content: flex-start;
+    gap: var(--space-2);
+    height: var(--layout-header-height);
+    padding: 0 var(--space-2) 0 var(--space-4);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     color: #fecaca;
     font-weight: bold;
-    font-size: 16px;
+    font-size: 14px;
     flex-shrink: 0;
 
     .re-logo-icon {
@@ -228,13 +234,15 @@ async function handleLogout() {
 
     .el-menu-item {
       color: rgba(255, 255, 255, 0.7);
-      height: 46px;
-      line-height: 46px;
+      min-height: 40px;
+      height: auto;
+      line-height: normal;
       font-size: 14px;
       transition: all 0.3s;
-      justify-content: center;
-      text-align: center;
-      padding: 0 16px !important;
+      justify-content: flex-start;
+      text-align: left;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-4) !important;
 
       &:hover {
         background-color: rgba(255, 255, 255, 0.08) !important;
@@ -244,12 +252,12 @@ async function handleLogout() {
       &.is-active {
         background-color: rgba(248, 113, 113, 0.15) !important;
         color: #f87171;
-        border-left: 3px solid #f87171;
+        border-left: 2px solid #f87171;
       }
     }
 
     .re-menu-icon {
-      margin-right: 8px;
+      margin-right: 0;
       width: 16px;
       height: 16px;
       font-size: 16px;
@@ -264,8 +272,11 @@ async function handleLogout() {
 
 .re-main-content {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .re-header-container {
@@ -305,6 +316,8 @@ async function handleLogout() {
 
 .re-main-area {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow-y: auto;
   background-color: #f5f7fa;
   padding: 20px;

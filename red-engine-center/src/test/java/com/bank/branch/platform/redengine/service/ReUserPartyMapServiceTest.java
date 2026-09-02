@@ -52,6 +52,9 @@ class ReUserPartyMapServiceTest {
     @Mock
     private UserApi userApi;
 
+    @Mock
+    private ReTaskAssignmentService taskAssignmentService;
+
     @InjectMocks
     private ReUserPartyMapService reUserPartyMapService;
 
@@ -98,6 +101,7 @@ class ReUserPartyMapServiceTest {
         verify(reUserPartyMapMapper, never()).insert(ArgumentMatchers.any(ReUserPartyMap.class));
         verify(reUserPartyMapMapper).updateById(ArgumentMatchers.<ReUserPartyMap>argThat(e ->
                 e.getId().equals(5L) && e.getPartyOrgId().equals(2L) && "SECRETARY".equals(e.getPartyRole())));
+        verify(taskAssignmentService).synchronizeReporterAssignments("E001", 1L, 2L);
     }
 
     @Test
@@ -111,6 +115,7 @@ class ReUserPartyMapServiceTest {
         verify(reUserPartyMapMapper).insert(ArgumentMatchers.<ReUserPartyMap>argThat(e ->
                 "E002".equals(e.getUserId()) && e.getPartyOrgId().equals(3L) && "REPORTER".equals(e.getPartyRole())));
         verify(reUserPartyMapMapper, never()).updateById(ArgumentMatchers.any(ReUserPartyMap.class));
+        verify(taskAssignmentService).synchronizeReporterAssignments("E002", null, 3L);
     }
 
     @Test
@@ -133,6 +138,7 @@ class ReUserPartyMapServiceTest {
         // 收敛为幂等 update：以重查命中的赢家记录 id 为准，写入本次请求期望的 partyOrgId/partyRole
         verify(reUserPartyMapMapper).updateById(ArgumentMatchers.<ReUserPartyMap>argThat(e ->
                 e.getId().equals(9L) && e.getPartyOrgId().equals(5L) && "SECRETARY".equals(e.getPartyRole())));
+        verify(taskAssignmentService).synchronizeReporterAssignments("E003", 1L, 5L);
     }
 
     @Test

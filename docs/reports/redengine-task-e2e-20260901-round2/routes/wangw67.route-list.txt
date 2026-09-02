@@ -1,0 +1,4 @@
+# wangw67 独立会话 route-list（官方 playwright-cli）
+# 命令：PWTEST_DAEMON_SESSION_DIR=/tmp/redengine-playwright-daemon-round2-wang PLAYWRIGHT_BROWSERS_PATH=/home/djdev/.cache/ms-playwright ./node_modules/.bin/playwright-cli -s=redengine-wang-round2 route-list
+# 退出状态：0
+No active routes

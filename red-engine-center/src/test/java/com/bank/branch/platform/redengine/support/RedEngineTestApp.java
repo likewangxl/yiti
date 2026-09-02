@@ -2,6 +2,7 @@ package com.bank.branch.platform.redengine.support;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Import;
 
 /**
  * 测试专用 Spring Boot 启动类。
@@ -12,6 +13,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * （如 PasswordEncoder、MyBatis-Plus 拦截器）不受 scanBasePackages 限制，仍会正常加载。
  */
 @SpringBootApplication(scanBasePackages = "com.bank.branch.platform.redengine")
+@Import(RedEngineTestConfig.class)
 public class RedEngineTestApp {
 
     public static void main(String[] args) {
