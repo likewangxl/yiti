@@ -115,19 +115,21 @@
     <el-dialog
       v-model="startDlg.show"
       :title="startDlg.followUp ? '再次发起触达' : '发起首次触达'"
-      width="480px"
+      width="560px"
       :close-on-click-modal="false"
     >
-      <el-form label-width="100px">
+      <el-alert
+        title="提交后，系统将按发起时间 + 后台触达时限配置自动计算计划完成时间"
+        type="info"
+        :closable="false"
+        show-icon
+        class="start-sla-hint"
+      />
+      <el-form label-width="160px" class="start-customer-info">
         <el-form-item label="客户名称">{{ startDlg.row?.custName || startDlg.row?.customerName || '-' }}</el-form-item>
-        <el-form-item label="计划完成时间">
-          <el-date-picker
-            v-model="startDlg.planFinishTime"
-            type="datetime"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            style="width: 100%"
-          />
-        </el-form-item>
+        <el-form-item label="客户统一社会信用代码">{{ startDlg.row?.unifiedCreditCode || '-' }}</el-form-item>
+        <el-form-item label="客户联系人">{{ startDlg.row?.contactPerson || '-' }}</el-form-item>
+        <el-form-item label="联系方式">{{ startDlg.row?.contactMobile || '-' }}</el-form-item>
         <el-form-item v-if="startDlg.followUp" label="再次触达原因" required>
           <el-input v-model="startDlg.reason" type="textarea" :rows="3" maxlength="500" show-word-limit />
         </el-form-item>
@@ -162,7 +164,7 @@ const loading = ref(false);
 const pageNo = ref(1);
 const pageSize = ref(20);
 const detail = reactive({ show: false, taskId: '', allowWrite: true });
-const startDlg = reactive({ show: false, row: null, followUp: false, planFinishTime: '', reason: '', saving: false });
+const startDlg = reactive({ show: false, row: null, followUp: false, reason: '', saving: false });
 
 function pageOf(result) {
   if (Array.isArray(result)) return { records: result, total: result.length };
@@ -218,7 +220,6 @@ function openStart(row, followUp) {
     show: true,
     row,
     followUp,
-    planFinishTime: '',
     reason: '',
     saving: false,
   });
@@ -232,11 +233,10 @@ async function submitStart() {
   }
   startDlg.saving = true;
   try {
-    const data = { planFinishTime: startDlg.planFinishTime || undefined };
     const claimId = startDlg.row.claimId || startDlg.row.id;
     const task = startDlg.followUp
-      ? await startFollowUpTouch(claimId, { ...data, reason: startDlg.reason.trim() })
-      : await startFirstTouch(claimId, data);
+      ? await startFollowUpTouch(claimId, { reason: startDlg.reason.trim() })
+      : await startFirstTouch(claimId);
     ElMessage.success('触达任务已发起');
     startDlg.show = false;
     await load();
@@ -364,6 +364,9 @@ load();
 .filter-card { margin-bottom: 12px; }
 .table { margin-top: 12px; }
 .pager { display: flex; justify-content: flex-end; margin-top: 14px; }
+.start-sla-hint { margin-bottom: 16px; }
+.start-customer-info :deep(.el-form-item) { margin-bottom: 10px; }
+.start-customer-info :deep(.el-form-item__content) { color: #303133; font-weight: 500; }
 .customer-summary { display: grid; gap: 3px; line-height: 1.35; }
 .disabled-reason { display: grid; gap: 2px; line-height: 1.35; }
 .disabled-reason strong { color: #f56c6c; font-size: 12px; }

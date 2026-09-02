@@ -1,0 +1,6 @@
+1. [GET] http://localhost:8092/api/auth/current-user => [200] OK
+9. [GET] http://localhost:8092/api/claims/mine/customers?tab=UNTOUCHED&pageNo=1&pageSize=20 => [200] OK
+10. [GET] http://localhost:8092/api/auth/my-menus => [200] OK
+11. [GET] http://localhost:8092/api/notifications/unread-count => [200] OK
+
+7 static requests omitted by playwright-cli.

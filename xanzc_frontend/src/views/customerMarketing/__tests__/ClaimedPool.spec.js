@@ -39,4 +39,22 @@ describe('已认领客户池标签展示契约', () => {
     expect(source).toContain('row.allocationSource || row.sourceType');
     expect(source).not.toContain('value="CROSS_ORG_MARKETING"');
   });
+
+  it('发起触达弹窗只读展示客户识别与联系信息，不允许手工填写计划完成时间', () => {
+    expect(source).toContain('客户统一社会信用代码');
+    expect(source).toContain('客户联系人');
+    expect(source).toContain('联系方式');
+    expect(source).toContain('startDlg.row?.unifiedCreditCode');
+    expect(source).toContain('startDlg.row?.contactPerson');
+    expect(source).toContain('startDlg.row?.contactMobile');
+    expect(source).toContain('发起时间 + 后台触达时限配置');
+    expect(source).not.toContain('<el-date-picker');
+    expect(source).not.toContain('planFinishTime');
+  });
+
+  it('发起触达不向后端提交计划完成时间，由服务端按 SLA 配置计算', () => {
+    expect(source).toContain('await startFirstTouch(claimId)');
+    expect(source).toContain('await startFollowUpTouch(claimId, { reason: startDlg.reason.trim() })');
+    expect(source).not.toContain('const data = { planFinishTime');
+  });
 });
