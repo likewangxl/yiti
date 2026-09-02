@@ -29,6 +29,7 @@ Profile 以资源目录中的实际文件为准，新增或删除时同步更新
 - `dev`：默认本地开发配置。
 - `remerge`：红色引擎合并开发/验收配置，数据源指向测试库；不得据此推断已获准写正式库。
 - `screen-scope-e2e`：大屏范围真实联调的隔离配置；凭据和端口从环境变量传入，并关闭调度、外发和无关后台任务。
+- `redengine-task-e2e`：红色引擎任务域隔离联调配置；数据源从环境变量指向 `yit_test`，并关闭调度、外联、对象存储和通知外发。
 - `test`：默认集成测试 Profile，使用测试数据源并关闭不需要的后台组件。
 - `flowable-e2e`：真实 Flowable 端到端测试。
 - `flowable-real-env`：遗留的真实 Redis + Flowable 测试环境；它不代表生产重新使用 Redis。运行前检查 SOAP Netty 开关和端口隔离。

@@ -13,6 +13,7 @@
 - 官方 `@playwright/cli` 版本为 0.1.18，Chromium 使用本机已有 1237 缓存；CLI 会话使用 `PWTEST_DAEMON_SESSION_DIR` 可写临时目录。
 - 已打开真实红色引擎登录页并验证无 mock route。页面演示账号 `admin/admin123` 通过真实后端返回 401，业务页面验收因此暂停；不得在未获授权时枚举其他密码。失败证据见 `routes/sys-admin-login.route-list.txt`、`network/sys-admin-login-summary.txt`、`console/sys-admin-login.txt` 和 `screenshots/sys-admin-login-401.png`。
 - 业务验收（任务创建/状态流转/导出/附件）尚未执行，因此没有任务 DML，也未注册文件开发态 mock。
+- 四个目标角色及 `yit_test` 账号/党组织映射的只读盘点见 `commands/09-roles-pre-credential.md`。临时口令准备尚未执行：安全审查阻止读取/备份原始 `PT_USER.PWD`，待取得直接凭据操作授权或改用已有测试认证方案。
 
 ## 证据约束
 
