@@ -1,6 +1,7 @@
 package com.bank.branch.platform.customer.mapper.marketing;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.bank.branch.platform.customer.entity.marketing.MarketingTouchEligibilityRule;
 import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerTagRel;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -34,6 +35,14 @@ public interface MarketingCustomerTagRelMapper extends BaseMapper<MarketingCusto
 
     /** 批量查询多个客户当前有效标签关系，供客户列表和详情批量回显。 */
     List<MarketingCustomerTagRel> selectActiveByCustIds(@Param("custIds") List<Long> custIds);
+
+    /**
+     * 查询客户当前有效的正式标签及其触达周期规则。
+     * 未配置或当前未生效的规则由触达资格服务按兼容默认值处理。
+     */
+    List<MarketingTouchEligibilityRule> selectEffectiveTouchRules(
+            @Param("custId") Long custId,
+            @Param("asOf") LocalDateTime asOf);
 
     /** 将标签当前有效关系批量失效，保留历史事实。 */
     int expireActiveByTagId(@Param("tagId") Long tagId,

@@ -88,6 +88,35 @@
         ORDER BY r.cust_id ASC, r.tag_id ASC, r.id ASC
     </select>
 
+    <!--
+        触达资格只读取正式营销域表。规则使用 LEFT JOIN：没有配置或规则尚未生效时，
+        服务层按 MONTH/5 的兼容默认值处理；不会回退到旧 CUST_* 表。
+    -->
+    <select id="selectEffectiveTouchRules"
+            resultType="com.bank.branch.platform.customer.entity.marketing.MarketingTouchEligibilityRule">
+        SELECT r.tag_id,
+               t.tag_name,
+               COALESCE(lr.cycle_type, 'MONTH') AS cycle_type,
+               COALESCE(lr.max_touch_count, 5) AS max_touch_count
+          FROM MARKETING_CUSTOMER_TAG_REL r
+          JOIN MARKETING_CUSTOMER_TAG t
+            ON t.id = r.tag_id
+           AND t.record_status = 'ACTIVE'
+           AND t.status = 'ENABLED'
+           AND t.approval_status = 'APPROVED'
+           AND (t.expires_at IS NULL OR t.expires_at &gt;= DATE(#{asOf}))
+          LEFT JOIN MARKETING_TOUCH_LIMIT_RULE lr
+            ON lr.tag_id = r.tag_id
+           AND lr.enabled = 1
+           AND lr.effective_date &lt;= DATE(#{asOf})
+           AND (lr.expiry_date IS NULL OR lr.expiry_date &gt;= DATE(#{asOf}))
+         WHERE r.cust_id = #{custId}
+           AND r.active = 1
+           AND r.effective_time &lt;= #{asOf}
+           AND (r.expired_time IS NULL OR r.expired_time &gt; #{asOf})
+         ORDER BY r.tag_id
+    </select>
+
     <update id="expireActiveByTagId">
         UPDATE MARKETING_CUSTOMER_TAG_REL
            SET active = 0,

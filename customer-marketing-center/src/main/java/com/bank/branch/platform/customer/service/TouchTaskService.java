@@ -10,6 +10,7 @@ import com.bank.branch.platform.customer.enums.TouchTaskType;
 import com.bank.branch.platform.customer.event.TouchCompletedEvent;
 import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
 import com.bank.branch.platform.customer.mapper.TouchWorklogMapper;
+import com.bank.branch.platform.governance.api.ConfigApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -35,18 +36,29 @@ import java.util.Random;
 @RequiredArgsConstructor
 public class TouchTaskService {
 
+    /** 系统治理中心中的触达 SLA 配置键；缺少配置时按默认值处理。 */
+    static final String SLA_DAYS_CONFIG_KEY = "CUSTOMER_TOUCH_TASK_SLA_DAYS";
+    static final int DEFAULT_SLA_DAYS = 7;
+    private static final int MAX_SLA_DAYS = 365;
+
     private final TouchTaskMapper taskMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final TouchTaskStateMachineService stateMachine;
     private final TouchEligibilityService touchEligibilityService;
     private final TouchWorklogMapper worklogMapper;
+    /** 正式 MARKETING_* 客户链路的资格校验，旧服务仅保留兼容旧 ID 的入口。 */
+    private final MarketingTouchEligibilityService marketingTouchEligibilityService;
+
+    /** 系统配置读取由治理中心提供；缺少键或异常值时由服务层回退默认值。 */
+    private final ConfigApi configApi;
 
     /**
      * 从认领事件创建首次触达任务。
      * <p>
      * 由 {@code ClaimCreatedListener} 在认领成功事务提交后调用。
      * 任务类型为 FIRST_TOUCH，初始状态 PENDING，SLA 状态 BLUE。
-     * 计划完成时间 = now + 7 天，预警时间 = now + 5 天。
+     * 计划完成时间 = 发起时间 + {@value #SLA_DAYS_CONFIG_KEY} 配置天数（默认 7 天），
+     * 预警时间为计划完成前 2 天。
      * </p>
      *
      * @param custId         客户ID
@@ -62,7 +74,7 @@ public class TouchTaskService {
     /**
      * 手动发起首次触达任务。认领本身不再自动建任务。
      *
-     * @param planFinishTime 可选计划完成时间，格式 yyyy-MM-dd HH:mm:ss
+     * @param planFinishTime 兼容旧客户端的字段；服务端忽略，统一按后台 SLA 配置计算
      */
     @Transactional
     public TouchTask createFirstTouchTask(String custId, String orgId, String assigneeEmpId,
@@ -70,7 +82,7 @@ public class TouchTaskService {
         log.info("[TouchTaskService.createFromClaim] custId={}, orgId={}, assigneeEmpId={}",
                 custId, orgId, assigneeEmpId);
 
-        touchEligibilityService.assertEligible(custId);
+        assertTouchEligible(custId);
         LocalDateTime now = LocalDateTime.now();
 
         // 生成 taskNo: TOUCH_{timestamp}_{random4}
@@ -86,7 +98,7 @@ public class TouchTaskService {
         entity.setTaskType(TouchTaskType.FIRST_TOUCH.getCode());
         entity.setTaskStatus(TouchTaskStatus.PENDING.getCode());
         entity.setSlaStatus(SlaStatus.BLUE.getCode());
-        LocalDateTime planTime = parsePlanFinishTimeOrDefault(planFinishTime, now);
+        LocalDateTime planTime = calculatePlanFinishTime(now);
         entity.setPlanFinishTime(planTime);
         entity.setWarningTime(planTime.minusDays(2));
         entity.setCreatedTime(now);
@@ -105,24 +117,24 @@ public class TouchTaskService {
      * 由 ClaimService.reTouch 调用，对已认领客户创建一个 FOLLOW_UP（非首次）触达任务。
      * <p>
      * 与 {@link #createFromClaim(String, String, String)} 的差异：task_type=FOLLOW_UP；
-     * reason 仅记录到日志（touch_task 表无 reason 列）；planFinishTime 为可选字符串，
-     * 缺省/解析失败时回退到默认 7 天。
+     * reason 仅记录到日志（touch_task 表无 reason 列）；planFinishTime 仅为旧客户端兼容字段，
+     * 服务端忽略该值并按后台 SLA 配置计算。
      * </p>
      *
      * @param custId         客户ID
      * @param orgId          所属机构代码
      * @param assigneeEmpId  执行人（维护人）员工工号
      * @param reason         重新触达原因（仅记日志）
-     * @param planFinishTime 计划完成时间字符串（可选；格式 yyyy-MM-dd HH:mm:ss）
+     * @param planFinishTime 兼容旧客户端的字段；服务端忽略，统一按后台 SLA 配置计算
      * @return 创建成功的触达任务实体
      */
     @Transactional
     public TouchTask createFollowUpTask(String custId, String orgId, String assigneeEmpId,
                                          String reason, String planFinishTime) {
-        log.info("[TouchTaskService.createFollowUpTask] custId={}, orgId={}, assigneeEmpId={}, reason={}, planFinishTime={}",
-                custId, orgId, assigneeEmpId, reason, planFinishTime);
+        log.info("[TouchTaskService.createFollowUpTask] custId={}, orgId={}, assigneeEmpId={}, reason={}",
+                custId, orgId, assigneeEmpId, reason);
 
-        touchEligibilityService.assertEligible(custId);
+        assertTouchEligible(custId);
         LocalDateTime now = LocalDateTime.now();
         String taskNo = "TOUCH_" + System.currentTimeMillis() + "_"
                 + String.format("%04d", new Random().nextInt(10000));
@@ -136,7 +148,7 @@ public class TouchTaskService {
         entity.setTaskStatus(TouchTaskStatus.PENDING.getCode());
         entity.setSlaStatus(SlaStatus.BLUE.getCode());
 
-        LocalDateTime planTime = parsePlanFinishTimeOrDefault(planFinishTime, now);
+        LocalDateTime planTime = calculatePlanFinishTime(now);
         entity.setPlanFinishTime(planTime);
         // 预警时间 = 计划完成前 2 天（与 createFromClaim 的 5d/7d 同 2 天偏移）
         entity.setWarningTime(planTime.minusDays(2));
@@ -152,16 +164,49 @@ public class TouchTaskService {
         return entity;
     }
 
-    private LocalDateTime parsePlanFinishTimeOrDefault(String planFinishTime, LocalDateTime base) {
-        if (planFinishTime == null || planFinishTime.isBlank()) {
-            return base.plusDays(7);
+    /**
+     * 计算服务端计划完成时间。客户端字段不参与计算，配置异常或暂时不可用时安全回退七天。
+     */
+    private LocalDateTime calculatePlanFinishTime(LocalDateTime base) {
+        int slaDays = DEFAULT_SLA_DAYS;
+        if (configApi != null) {
+            try {
+                String configured = configApi.getConfigValue(SLA_DAYS_CONFIG_KEY,
+                        String.valueOf(DEFAULT_SLA_DAYS));
+                if (configured != null && !configured.isBlank()) {
+                    int parsed = Integer.parseInt(configured.trim());
+                    if (parsed >= 1 && parsed <= MAX_SLA_DAYS) {
+                        slaDays = parsed;
+                    } else {
+                        log.warn("[TouchTaskService] invalid {}={}, fallback to {} days",
+                                SLA_DAYS_CONFIG_KEY, configured, DEFAULT_SLA_DAYS);
+                    }
+                }
+            } catch (RuntimeException ex) {
+                log.warn("[TouchTaskService] failed to read {}, fallback to {} days",
+                        SLA_DAYS_CONFIG_KEY, DEFAULT_SLA_DAYS, ex);
+            }
+        }
+        return base.plusDays(slaDays);
+    }
+
+    /** 正式数字客户 ID 走 MARKETING_* 表资格校验，兼容旧 UUID 客户仍走旧入口。 */
+    private void assertTouchEligible(String custId) {
+        if (isNumericCustomerId(custId)) {
+            marketingTouchEligibilityService.assertEligible(custId);
+            return;
+        }
+        touchEligibilityService.assertEligible(custId);
+    }
+
+    private boolean isNumericCustomerId(String custId) {
+        if (custId == null || custId.isBlank()) {
+            return false;
         }
         try {
-            return LocalDateTime.parse(planFinishTime,
-                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-        } catch (Exception e) {
-            log.warn("[TouchTaskService.createFollowUpTask] invalid planFinishTime={}, fallback to default 7d", planFinishTime);
-            return base.plusDays(7);
+            return Long.parseLong(custId) > 0;
+        } catch (NumberFormatException ex) {
+            return false;
         }
     }
 

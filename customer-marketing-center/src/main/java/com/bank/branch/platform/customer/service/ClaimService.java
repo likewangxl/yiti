@@ -301,7 +301,7 @@ public class ClaimService {
      * </p>
      *
      * @param claimId          认领关系 ID
-     * @param req              请求 DTO（包含 reason 必填，planFinishTime 可选）
+     * @param req              请求 DTO（包含 reason 必填；planFinishTime 仅兼容旧客户端且服务端忽略）
      * @param operatorEmpId    操作人员工工号（仅记录到日志）
      * @param operatorOrgCode  操作人所在机构代码（用于校验跨机构）
      * @return 新创建的 FOLLOW_UP 触达任务实体

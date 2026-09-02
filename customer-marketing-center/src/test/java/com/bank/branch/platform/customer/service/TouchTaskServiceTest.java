@@ -10,6 +10,7 @@ import com.bank.branch.platform.customer.enums.TouchTaskType;
 import com.bank.branch.platform.customer.event.TouchCompletedEvent;
 import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
 import com.bank.branch.platform.customer.mapper.TouchWorklogMapper;
+import com.bank.branch.platform.governance.api.ConfigApi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -32,7 +33,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * TouchTaskService 单元测试（TDD RED 阶段）
+ * TouchTaskService 单元测试。
  * 使用 MockitoExtension，不需要 Spring 上下文。
  */
 @ExtendWith(MockitoExtension.class)
@@ -52,6 +53,12 @@ class TouchTaskServiceTest {
 
     @Mock
     private TouchWorklogMapper worklogMapper;
+
+    @Mock
+    private MarketingTouchEligibilityService marketingTouchEligibilityService;
+
+    @Mock
+    private ConfigApi configApi;
 
     @InjectMocks
     private TouchTaskService touchTaskService;
@@ -86,6 +93,40 @@ class TouchTaskServiceTest {
         assertThat(result.getPlanFinishTime()).isAfter(result.getWarningTime());
 
         verify(taskMapper).insert(any(TouchTask.class));
+    }
+
+    @Test
+    void createFirstTouchTask_shouldIgnoreClientPlanAndUseConfiguredSlaDays() {
+        // 前端传入的计划完成时间只保留兼容性，截止时间必须由服务端配置计算。
+        when(configApi.getConfigValue("CUSTOMER_TOUCH_TASK_SLA_DAYS", "7")).thenReturn("3");
+        when(taskMapper.insert(any(TouchTask.class))).thenAnswer(invocation -> {
+            TouchTask inserted = invocation.getArgument(0);
+            inserted.setId(2L);
+            return 1;
+        });
+
+        TouchTask result = touchTaskService.createFirstTouchTask(
+                "1", "ORG_SZ_001", "E10001", "2099-12-31 23:59:59");
+
+        assertThat(result.getPlanFinishTime())
+                .isAfter(LocalDateTime.now().plusDays(2))
+                .isBefore(LocalDateTime.now().plusDays(4));
+        verify(configApi).getConfigValue("CUSTOMER_TOUCH_TASK_SLA_DAYS", "7");
+    }
+
+    @Test
+    void createFirstTouchTask_shouldFallbackWhenSlaConfigIsOutOfRange() {
+        when(configApi.getConfigValue("CUSTOMER_TOUCH_TASK_SLA_DAYS", "7")).thenReturn("0");
+        when(taskMapper.insert(any(TouchTask.class))).thenReturn(1);
+
+        LocalDateTime before = LocalDateTime.now();
+        TouchTask result = touchTaskService.createFirstTouchTask(
+                "1", "ORG_SZ_001", "E10001", "2000-01-01 00:00:00");
+
+        assertThat(result.getPlanFinishTime())
+                .isAfter(before.plusDays(6))
+                .isBefore(LocalDateTime.now().plusDays(8));
+        verify(configApi).getConfigValue("CUSTOMER_TOUCH_TASK_SLA_DAYS", "7");
     }
 
     // ==================== markSuccess ====================

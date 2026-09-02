@@ -5,6 +5,7 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.governance.api.AuditApi;
+import com.bank.branch.platform.governance.api.ConfigApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.NotifyApi;
@@ -66,6 +67,7 @@ public abstract class AbstractControllerIntegrationTest {
     @MockBean protected FileApi fileApi;
     @MockBean protected NotifyApi notifyApi;
     @MockBean protected AuditApi auditApi;
+    @MockBean protected ConfigApi configApi;
     @MockBean protected WorkflowApi workflowApi;
     @MockBean protected WorkflowQueryApi workflowQueryApi;
 }

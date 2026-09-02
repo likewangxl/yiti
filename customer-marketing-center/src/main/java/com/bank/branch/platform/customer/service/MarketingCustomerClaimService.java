@@ -172,7 +172,7 @@ public class MarketingCustomerClaimService {
         claimMapper.updateById(update);
     }
 
-    /** 从目标认领关系手动发起首次触达，仍兼容当前 TouchTaskService。 */
+    /** 从目标认领关系手动发起首次触达；截止时间由 TouchTaskService 按后台 SLA 配置生成。 */
     @Transactional
     public TouchTask startTouch(String claimId, String planFinishTime,
                                 String operatorEmpId, String operatorOrgId) {
