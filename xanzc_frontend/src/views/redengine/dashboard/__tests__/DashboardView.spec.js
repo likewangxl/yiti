@@ -5,8 +5,12 @@ import { nextTick } from 'vue';
 
 const api = vi.hoisted(() => ({ getHomeSummary: vi.fn() }));
 const session = vi.hoisted(() => ({ roleCodes: [] }));
+const routerPush = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/redengine', () => ({ getHomeSummary: api.getHomeSummary }));
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: routerPush })
+}));
 vi.mock('@/stores/user', () => ({
   useUserStore: () => ({
     hasRoleCode: (...codes) => codes.some((code) => session.roleCodes.includes(code)),
@@ -130,6 +134,70 @@ describe('红色引擎首页工作台', () => {
     await settle();
 
     expect(wrapper.find('.organization-task-section').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it.each([
+    ['R_RE_REPORT', '/redengine/records'],
+    ['R_RE_SECR', '/redengine/branch-review'],
+    ['R_RE_ORGREV', '/redengine/review']
+  ])('角色 %s 点击首页待办按角色跳转并保留待处理 assignment 上下文', async (roleCode, path) => {
+    session.roleCodes = [roleCode];
+    api.getHomeSummary.mockResolvedValue({
+      mode: 'INSTITUTION',
+      todoItems: [{
+        assignmentId: 1001,
+        taskId: 42,
+        taskTitle: '专项整改任务',
+        status: 'UNREPORTED',
+        dueTime: '2026-09-30'
+      }]
+    });
+    const wrapper = mount(DashboardView, { global: { stubs, directives: { loading: {} } } });
+    await settle();
+
+    const item = wrapper.find('.todo-section .todo-item');
+    expect(item.attributes('role')).toBe('button');
+    await item.trigger('click');
+    expect(routerPush).toHaveBeenCalledWith({
+      path,
+      query: {
+        tab: 'pending',
+        taskId: 42,
+        assignmentId: 1001,
+        status: 'UNREPORTED'
+      }
+    });
+    wrapper.unmount();
+  });
+
+  it('无红色引擎业务角色时首页待办不可点击，不把支部书记导向报送员页面', async () => {
+    session.roleCodes = ['R_RE_ORGADM'];
+    api.getHomeSummary.mockResolvedValue({
+      mode: 'INSTITUTION',
+      todoItems: [{ assignmentId: 1001, taskId: 42, taskTitle: '专项整改任务' }]
+    });
+    const wrapper = mount(DashboardView, { global: { stubs, directives: { loading: {} } } });
+    await settle();
+
+    const item = wrapper.find('.todo-section .todo-item');
+    expect(item.attributes('role')).toBeUndefined();
+    await item.trigger('click');
+    expect(routerPush).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('组织审核角色与报送角色并存时优先进入组织审核工作台', async () => {
+    session.roleCodes = ['SYS_ADMIN', 'R_RE_REPORT'];
+    api.getHomeSummary.mockResolvedValue({
+      mode: 'ORGANIZATION',
+      todoItems: [{ assignmentId: 1001, taskId: 42, taskTitle: '待审核任务', status: 'ORG_PENDING' }]
+    });
+    const wrapper = mount(DashboardView, { global: { stubs, directives: { loading: {} } } });
+    await settle();
+
+    await wrapper.find('.todo-section .todo-item').trigger('keydown', { key: 'Enter' });
+    expect(routerPush).toHaveBeenCalledWith(expect.objectContaining({ path: '/redengine/review' }));
     wrapper.unmount();
   });
 });

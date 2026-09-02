@@ -153,7 +153,7 @@ describe('报送员上报信息', () => {
     await wrapper.vm.handleSearch();
     await settle();
 
-    expect(listMyTaskAssignments).toHaveBeenLastCalledWith({
+    expect(listMyTaskAssignments).toHaveBeenCalledWith({
       pageNo: 1,
       pageSize: 10,
       tab: 'PENDING',
@@ -187,26 +187,39 @@ describe('报送员上报信息', () => {
     wrapper.unmount();
   });
 
-  it('临时任务标题在新窗口打开填报入口，四维任务保留材料上报跳转意图', async () => {
-    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+  it('临时任务标题在同一 SPA 页签打开填报入口，四维任务保留材料上报跳转意图', async () => {
     const wrapper = mount(RecordsView, {
       global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
     });
     await settle();
 
     wrapper.vm.openRow(temporaryAssignment());
-    expect(routerResolve).toHaveBeenCalledWith({
+    expect(routerPush).toHaveBeenCalledWith({
       path: '/redengine/task-entry',
-      query: { taskId: 42, assignmentId: 1001 }
+      query: { taskId: 42, assignmentId: 1001, tab: 'pending', status: 'UNREPORTED' }
     });
-    expect(openSpy).toHaveBeenCalledWith('#/redengine/task-entry?assignmentId=1001', '_blank', 'noopener,noreferrer');
+    expect(routerResolve).not.toHaveBeenCalled();
 
     wrapper.vm.openRow({ taskId: 99, assignmentId: 1002, businessType: 'FOUR_DIMENSION', isFourDimension: true });
     expect(routerPush).toHaveBeenCalledWith({
       path: '/redengine/report',
       query: { taskId: 99, assignmentId: 1002 }
     });
-    openSpy.mockRestore();
+    wrapper.unmount();
+  });
+
+  it('审核中普通任务点击仍在同一 SPA 页签打开并带上当前状态上下文', async () => {
+    const wrapper = mount(RecordsView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    wrapper.vm.activeTab = 'reviewing';
+    wrapper.vm.openRow(temporaryAssignment({ status: 'ORG_PENDING' }));
+    expect(routerPush).toHaveBeenCalledWith({
+      path: '/redengine/task-entry',
+      query: { taskId: 42, assignmentId: 1001, tab: 'reviewing', status: 'ORG_PENDING' }
+    });
     wrapper.unmount();
   });
 
@@ -332,6 +345,26 @@ describe('报送员上报信息', () => {
     });
     expect(getMySubmits).not.toHaveBeenCalled();
     expect(wrapper.vm.total).toBe(9);
+    wrapper.unmount();
+  });
+
+  it('四个状态数量使用各页签分页 total，而不是当前页 records 长度', async () => {
+    const totals = { PENDING: 7, REVIEWING: 5, PASSED: 3, REJECTED: 2 };
+    listMyTaskAssignments.mockImplementation(async (params) => ({
+      records: params.tab === 'PENDING' ? [temporaryAssignment()] : [],
+      total: totals[params.tab]
+    }));
+    const wrapper = mount(RecordsView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    expect(wrapper.vm.statusTotals).toEqual({ pending: 7, reviewing: 5, passed: 3, rejected: 2 });
+    expect(wrapper.find('.pending-chip strong').text()).toBe('7');
+    expect(wrapper.find('.reviewing-chip strong').text()).toBe('5');
+    expect(wrapper.find('.passed-chip strong').text()).toBe('3');
+    expect(wrapper.find('.rejected-chip strong').text()).toBe('2');
+    expect(listMyTaskAssignments).toHaveBeenCalledWith({ pageNo: 1, pageSize: 1, tab: 'REVIEWING' });
     wrapper.unmount();
   });
 });

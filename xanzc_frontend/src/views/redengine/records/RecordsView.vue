@@ -142,6 +142,9 @@ const pageSize = ref(10)
 const total = ref(0)
 const records = ref([])
 const loadError = ref('')
+const statusTotals = ref({ pending: 0, reviewing: 0, passed: 0, rejected: 0 })
+const reloadVersion = ref(0)
+const TAB_VALUES = ['pending', 'reviewing', 'passed', 'rejected']
 
 const STATUS_MAP = { 0: 'reviewing', 1: 'reviewing', 2: 'passed', 3: 'rejected' }
 const DIM_LABEL = { dim1: '外联共建', dim2: '业务提升', dim3: '头雁先锋', dim4: '督导响应' }
@@ -228,6 +231,7 @@ function normalizeTaskRow(row = {}) {
     submitter: normalized.submitterName || assignment.submitterName || '—',
     date: normalized.submittedAt || assignment.submittedAt || '—',
     status: normalized.isUnreported ? 'pending' : mapTaskStatus(rawStatus),
+    workflowStatus: String(rawStatus || (normalized.isUnreported ? 'UNREPORTED' : '')).toUpperCase(),
     feedback: assignment.reviewFeedback
       || assignment.feedback
       || assignment.reviewOpinion
@@ -257,16 +261,45 @@ async function loadTaskRows() {
   }
 }
 
+async function loadOtherStatusTotals(filters, currentTab) {
+  const tabs = TAB_VALUES.filter((tab) => tab !== currentTab)
+  const entries = await Promise.all(tabs.map(async (tab) => {
+    try {
+      const result = await listMyTaskAssignments(buildWorkflowQuery(filters, tab, 1, 1))
+      return [tab, normalizeAssignmentPage(result).total]
+    } catch {
+      return [tab, null]
+    }
+  }))
+  return entries.reduce((totals, [tab, value]) => {
+    if (value !== null && Number.isFinite(Number(value))) totals[tab] = Number(value)
+    return totals
+  }, {})
+}
+
 async function reload() {
+  const requestId = ++reloadVersion.value
+  const requestedTab = activeTab.value
+  const filters = { ...appliedQuery.value }
   loading.value = true
   loadError.value = ''
   try {
-    const result = await loadTaskRows()
+    // 当前页先读取，保证“一次请求”的 mock/真实响应对应当前列表；其余页签只取
+    // pageSize=1 的 total。所有请求带同一份筛选快照，旧请求返回时由版本号丢弃。
+    const rowsPromise = loadTaskRows()
+    const totalsPromise = loadOtherStatusTotals(filters, requestedTab)
+    const [result, otherTotals] = await Promise.all([rowsPromise, totalsPromise])
+    if (requestId !== reloadVersion.value) return
     records.value = result.rows
     total.value = result.total
+    statusTotals.value = {
+      ...statusTotals.value,
+      [requestedTab]: result.total,
+      ...otherTotals
+    }
     if (result.error) loadError.value = result.error
   } finally {
-    loading.value = false
+    if (requestId === reloadVersion.value) loading.value = false
   }
 }
 
@@ -313,17 +346,19 @@ function openRow(row) {
     router.push({ path: '/redengine/report', query })
     return
   }
-  const query = { taskId, assignmentId }
+  const query = { taskId, tab: activeTab.value }
+  if (assignmentId !== undefined && assignmentId !== null && assignmentId !== '') query.assignmentId = assignmentId
+  const workflowStatus = row.workflowStatus || row.submissionStatus || row.status
+  if (workflowStatus) query.status = String(workflowStatus).toUpperCase()
   for (const key of ['taskInstanceId', 'periodKey', 'detailItemCode']) {
     const value = row[key] ?? (key === 'detailItemCode' ? row.itemCode : undefined)
     if (value !== undefined && value !== null && value !== '') query[key] = value
   }
-  const location = router.resolve({ path: '/redengine/task-entry', query })
-  window.open(location.href, '_blank', 'noopener,noreferrer')
+  router.push({ path: '/redengine/task-entry', query })
 }
 
 function countByStatus(status) {
-  return records.value.filter((row) => row.status === status).length
+  return Number(statusTotals.value[status] ?? 0)
 }
 
 const filteredRecords = computed(() => records.value)
@@ -359,6 +394,7 @@ defineExpose({
   records,
   reload,
   showMaterialColumns,
+  statusTotals,
   statusLabel,
   taskNatureLabel,
   total

@@ -8,7 +8,7 @@
           <div class="entry-kicker">{{ taskEntryTitle(task.nature) }}</div>
           <h2 class="page-title">{{ task.title }}</h2>
         </div>
-        <span class="status-badge">待提交</span>
+        <span :class="['status-badge', `status-${String(task.status || '').toLowerCase()}`]">{{ statusLabel(task.status) }}</span>
       </div>
 
       <FileIntegrationNotice />
@@ -38,22 +38,23 @@
         </div>
       </div>
 
-      <div class="entry-card">
+      <div :class="['entry-card', { 'is-readonly': !canEdit }]">
         <div class="form-row">
           <label for="temporary-task-content" class="form-label required">填报内容</label>
           <textarea
             id="temporary-task-content"
             v-model="form.content"
             class="content-input"
+            :disabled="!canEdit"
             rows="8"
             placeholder="请输入本次任务填报内容"
           />
         </div>
 
-        <div v-if="task.requiresFile" class="form-row file-row">
+        <div v-if="task.requiresFile || existingFiles.length" class="form-row file-row">
           <span class="form-label" :class="{ required: task.requiresFile }">附件</span>
           <div class="file-control">
-            <input ref="fileInput" type="file" multiple :accept="fileAccept" @change="handleFileChange" />
+            <input ref="fileInput" type="file" multiple :accept="fileAccept" :disabled="!canEdit" @change="handleFileChange" />
             <div class="file-policy">{{ filePolicyText }}</div>
             <div v-if="existingFiles.length" class="file-list">
               <div v-for="file in existingFiles" :key="file.fileId" class="file-item existing-file">
@@ -63,7 +64,7 @@
             <div v-if="selectedFiles.length" class="file-list">
               <div v-for="(file, index) in selectedFiles" :key="`${file.name}-${index}`" class="file-item">
                 <span>{{ file.name }}</span>
-                <button type="button" class="remove-file" @click="removeFile(index)">移除</button>
+                <button v-if="canEdit" type="button" class="remove-file" @click="removeFile(index)">移除</button>
               </div>
             </div>
           </div>
@@ -71,7 +72,7 @@
 
         <div class="entry-actions">
           <el-button :disabled="submitting" @click="goBack">返回</el-button>
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">提交填报</el-button>
+          <el-button v-if="canEdit" type="primary" :loading="submitting" @click="handleSubmit">提交填报</el-button>
         </div>
       </div>
     </template>
@@ -107,12 +108,27 @@ const selectedFiles = ref([])
 const existingFiles = ref([])
 const fileInput = ref(null)
 
+const EDITABLE_STATUSES = Object.freeze(['UNREPORTED', 'REJECTED_BY_BRANCH', 'REJECTED_BY_ORG'])
+const STATUS_LABELS = Object.freeze({
+  UNREPORTED: '待提交',
+  TODO: '待提交',
+  OVERDUE_UNREPORTED: '待提交',
+  REJECTED_BY_BRANCH: '支部驳回',
+  REJECTED_BY_ORG: '组织驳回',
+  BRANCH_PENDING: '支部审核中',
+  BRANCH_APPROVED: '支部已审核',
+  ORG_PENDING: '组织审核中',
+  APPROVED: '已通过',
+  COMPLETED: '已通过'
+})
+
 function asTaskModel(value = {}) {
   const taskValue = value.task || value.taskDefinition || {}
   const assignment = value.assignment || value
   const merged = { ...taskValue, ...assignment }
+  const submission = merged.submission || merged.currentSubmission || {}
   const taskNature = merged.taskNature || merged.nature || ''
-  const rawFiles = merged.files || merged.attachments || merged.submission?.files || []
+  const rawFiles = merged.files || merged.attachments || submission.files || submission.attachments || []
   const files = Array.isArray(rawFiles)
     ? rawFiles.map((file) => ({
       ...file,
@@ -142,14 +158,30 @@ function asTaskModel(value = {}) {
       ?? (Array.isArray(merged.fileTypes)
         ? merged.fileTypes.find((item) => item?.maxSizeBytes)?.maxSizeBytes
         : undefined),
-    content: merged.content || merged.submission?.content || '',
+    content: merged.content ?? submission.content ?? submission.contentText ?? '',
     feedback: merged.reviewFeedback
       || merged.feedback
       || merged.reviewOpinion
-      || merged.submission?.reviewFeedback
-      || merged.currentSubmission?.reviewFeedback
+      || submission.reviewFeedback
+      || submission.reviewOpinion
       || '',
-    files
+    files,
+    status: String(
+      submission.status
+      || merged.submissionStatus
+      || merged.status
+      || merged.stage
+      || merged.assignmentStatus
+      || 'UNREPORTED'
+    ).trim().toUpperCase(),
+    canEdit: EDITABLE_STATUSES.includes(String(
+      submission.status
+      || merged.submissionStatus
+      || merged.status
+      || merged.stage
+      || merged.assignmentStatus
+      || 'UNREPORTED'
+    ).trim().toUpperCase())
   }
 }
 
@@ -187,6 +219,7 @@ function formatBytes(bytes) {
 }
 
 const descriptionParts = computed(() => linkifyDescription(task.value?.description || ''))
+const canEdit = computed(() => Boolean(task.value?.canEdit))
 const filePolicyText = computed(() => {
   if (!task.value) return ''
   const types = task.value.fileTypeCodes.map(fileTypeLabel).filter(Boolean)
@@ -219,12 +252,14 @@ function validateFile(file) {
 }
 
 function handleFileChange(event) {
+  if (!canEdit.value) return
   const files = Array.from(event.target?.files || []).filter(validateFile)
   selectedFiles.value = [...selectedFiles.value, ...files]
   if (fileInput.value) fileInput.value.value = ''
 }
 
 function removeFile(index) {
+  if (!canEdit.value) return
   selectedFiles.value.splice(index, 1)
 }
 
@@ -235,6 +270,7 @@ function clientRequestId() {
 
 async function uploadSelectedFiles() {
   const ids = existingFiles.value.map((file) => file.fileId).filter(Boolean)
+  if (!canEdit.value) return [...new Set(ids)]
   for (const file of selectedFiles.value) {
     const data = new FormData()
     data.append('file', file)
@@ -247,6 +283,10 @@ async function uploadSelectedFiles() {
 }
 
 async function handleSubmit() {
+  if (!canEdit.value) {
+    ElMessage.warning('当前任务状态不可编辑或重复提交')
+    return
+  }
   if (!String(form.content || '').trim()) {
     ElMessage.warning('请填写填报内容')
     return
@@ -275,6 +315,11 @@ async function handleSubmit() {
 
 function goBack() {
   router.push('/redengine/records')
+}
+
+function statusLabel(status) {
+  const normalized = String(status || '').trim().toUpperCase()
+  return STATUS_LABELS[normalized] || '状态未知'
 }
 
 async function load() {
@@ -313,6 +358,8 @@ defineExpose({
   loadError,
   removeFile,
   selectedFiles,
+  statusLabel,
+  canEdit,
   task,
   uploadSelectedFiles
 })
@@ -324,6 +371,13 @@ defineExpose({
 .entry-kicker { margin-bottom: 5px; color: #64748b; font-size: 13px; }
 .page-title { margin: 0; color: #1e293b; font-size: 22px; font-weight: 700; }
 .status-badge { padding: 4px 10px; border-radius: 4px; color: #92400e; background: #fef9c3; font-size: 12px; font-weight: 600; }
+.status-badge.status-branch_pending,
+.status-badge.status-branch_approved,
+.status-badge.status-org_pending { color: #1d4ed8; background: #dbeafe; }
+.status-badge.status-approved,
+.status-badge.status-completed { color: #166534; background: #dcfce7; }
+.status-badge.status-rejected_by_branch,
+.status-badge.status-rejected_by_org { color: #b91c1c; background: #fee2e2; }
 .task-card, .entry-card { border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .04); }
 .task-card { margin-bottom: 16px; padding: 16px 20px; }
 .task-meta { display: flex; flex-wrap: wrap; gap: 24px; margin-bottom: 14px; color: #64748b; font-size: 12px; }
@@ -332,6 +386,7 @@ defineExpose({
 .meta-label { flex: 0 0 70px; color: #64748b; font-weight: 600; }
 .task-description a { color: #2563eb; }
 .entry-card { padding: 20px; }
+.entry-card.is-readonly { background: #f8fafc; }
 .form-row { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
 .form-label { flex: 0 0 80px; padding-top: 8px; color: #475569; font-size: 13px; font-weight: 600; }
 .form-label.required::before { margin-right: 4px; color: #dc2626; content: '*'; }

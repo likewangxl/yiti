@@ -172,6 +172,59 @@ describe('临时任务填报', () => {
     wrapper.unmount();
   });
 
+  it.each([
+    ['BRANCH_PENDING', '支部审核中'],
+    ['BRANCH_APPROVED', '支部已审核'],
+    ['ORG_PENDING', '组织审核中'],
+    ['APPROVED', '已通过']
+  ])('%s 状态只读，隐藏提交按钮且暴露方法也不能提交', async (status, label) => {
+    getMyTaskAssignment.mockResolvedValueOnce({
+      assignmentId: 1001,
+      taskId: 42,
+      taskTitle: '专项整改任务',
+      taskDescription: '请填报整改情况',
+      taskNature: 'TEMPORARY',
+      status,
+      content: '已填报内容',
+      requiresFile: true,
+      files: [{ fileId: 'file-1', fileName: '整改说明.pdf' }]
+    });
+    const wrapper = mount(TemporaryTaskEntryView, { global: { stubs } });
+    await settle();
+
+    expect(wrapper.find('.status-badge').text()).toBe(label);
+    expect(wrapper.find('.content-input').element.disabled).toBe(true);
+    expect(wrapper.find('input[type="file"]').element.disabled).toBe(true);
+    expect(wrapper.find('.entry-actions button').text()).not.toContain('提交填报');
+    await wrapper.vm.handleSubmit();
+    expect(submitTask).not.toHaveBeenCalled();
+    expect(uploadFile).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('被驳回任务展示后端 reviewFeedback，并允许同一 assignment 重新提交', async () => {
+    getMyTaskAssignment.mockResolvedValueOnce({
+      assignmentId: 1001,
+      taskId: 42,
+      taskTitle: '专项整改任务',
+      taskDescription: '请填报整改情况',
+      taskNature: 'TEMPORARY',
+      status: 'REJECTED_BY_BRANCH',
+      reviewFeedback: '请补充整改佐证',
+      content: '第一次填报',
+      requiresFile: false,
+      files: []
+    });
+    const wrapper = mount(TemporaryTaskEntryView, { global: { stubs } });
+    await settle();
+
+    expect(wrapper.find('.rejection-note').text()).toContain('请补充整改佐证');
+    wrapper.vm.form.content = '第二次填报';
+    await wrapper.vm.handleSubmit();
+    expect(submitTask).toHaveBeenCalledWith(expect.objectContaining({ assignmentId: 1001, content: '第二次填报' }));
+    wrapper.unmount();
+  });
+
   it('任务详情请求失败时展示错误态而不是误报任务不存在', async () => {
     getMyTaskAssignment.mockRejectedValueOnce(new Error('服务不可用'));
     const wrapper = mount(TemporaryTaskEntryView, { global: { stubs } });

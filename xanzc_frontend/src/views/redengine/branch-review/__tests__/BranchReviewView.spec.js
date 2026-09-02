@@ -135,7 +135,7 @@ describe('支部审核工作台', () => {
     await wrapper.vm.handleSearch();
     await settle();
 
-    expect(listBranchTaskReviews).toHaveBeenLastCalledWith({
+    expect(listBranchTaskReviews).toHaveBeenCalledWith({
       pageNo: 1,
       pageSize: 20,
       title: '整改',
@@ -188,6 +188,7 @@ describe('支部审核工作台', () => {
     expect(submitBranchTaskToOrg).toHaveBeenCalledWith(1001, { feedback: undefined });
     expect(item.status).toBe('reviewing');
     expect(item.branchApproved).toBe(false);
+    expect(wrapper.vm.statusTotals).toMatchObject({ pending: 0, reviewing: 2 });
     wrapper.unmount();
   });
 
@@ -246,6 +247,32 @@ describe('支部审核工作台', () => {
     });
     expect(getReviewQueue).not.toHaveBeenCalled();
     expect(wrapper.vm.total).toBe(7);
+    wrapper.unmount();
+  });
+
+  it('四个状态数量使用各页签分页 total，切页不会把其他计数归零', async () => {
+    const totals = { PENDING: 7, REVIEWING: 5, PASSED: 3, REJECTED: 2 };
+    listBranchTaskReviews.mockImplementation(async (params) => ({
+      records: params.tab === 'PENDING' ? [taskRow()] : [],
+      total: totals[params.tab]
+    }));
+    const wrapper = mount(BranchReviewView, { global: { stubs } });
+    await settle();
+
+    expect(wrapper.vm.statusTotals).toEqual({ pending: 7, reviewing: 5, passed: 3, rejected: 2 });
+    expect(wrapper.find('.pending-stat .stat-num').text()).toBe('7');
+    expect(wrapper.find('.reviewing-stat .stat-num').text()).toBe('5');
+    expect(listBranchTaskReviews).toHaveBeenCalledWith({ pageNo: 1, pageSize: 1, tab: 'REVIEWING' });
+    wrapper.unmount();
+  });
+
+  it('支部审核卡片明确区分任务说明与本次填报内容', async () => {
+    const wrapper = mount(BranchReviewView, { global: { stubs } });
+    await settle();
+
+    const card = wrapper.find('.review-card');
+    expect(card.find('.description .field-label').text()).toContain('任务说明');
+    expect(card.find('.summary .field-label').text()).toContain('本次填报内容');
     wrapper.unmount();
   });
 });

@@ -40,12 +40,22 @@
       <div class="section-title">待办事项</div>
       <div v-if="todoDisplayItems.length === 0" class="todo-empty">暂无待办事项</div>
       <ul v-else class="todo-list">
-        <li v-for="item in todoDisplayItems" :key="item.id" class="todo-item">
+        <li
+          v-for="item in todoDisplayItems"
+          :key="item.id"
+          :class="['todo-item', { 'is-actionable': todoRoute(item) }]"
+          :role="todoRoute(item) ? 'button' : undefined"
+          :tabindex="todoRoute(item) ? 0 : undefined"
+          @click="openTodo(item)"
+          @keydown.enter.prevent.self="openTodo(item)"
+          @keydown.space.prevent.self="openTodo(item)"
+        >
           <span class="todo-dot"></span>
           <span class="todo-text">{{ item.title }}</span>
           <span v-if="isOrganizationView" class="todo-branch">{{ item.branchName }}</span>
-          <span v-if="isOrganizationView" class="todo-score">得分 {{ displayValue(item.score) }}</span>
-          <span v-if="isOrganizationView" class="todo-rank">排名 {{ displayValue(item.rank) }}</span>
+          <span v-if="isOrganizationView && !item.assignmentId" class="todo-score">得分 {{ displayValue(item.score) }}</span>
+          <span v-if="isOrganizationView && !item.assignmentId" class="todo-rank">排名 {{ displayValue(item.rank) }}</span>
+          <span v-else-if="isOrganizationView" class="todo-status">{{ item.statusLabel }}</span>
           <span v-else class="todo-status">{{ item.statusLabel }}</span>
           <span class="todo-time">{{ item.time }}</span>
         </li>
@@ -56,10 +66,12 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { getHomeSummary } from '@/api/redengine'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
+const router = useRouter()
 const loading = ref(false)
 const loadError = ref('')
 
@@ -126,11 +138,21 @@ function normalizeSummary(payload) {
     ) ?? 0),
     todoItems: rows.map((row, index) => ({
       id: firstDefined(row.id, row.taskId, row.assignmentId, `todo-${index}`),
+      taskId: firstDefined(row.taskId),
+      taskInstanceId: firstDefined(row.taskInstanceId),
+      assignmentId: firstDefined(row.assignmentId),
       title: firstDefined(row.taskTitle, row.title, row.taskName, row.name, '--'),
       branchName: firstDefined(row.branchName, row.branch, row.partyOrgName, row.organizationName, '--'),
       score: firstDefined(row.score, row.finalScore, row.organizationScore),
       rank: firstDefined(row.rank, row.ranking, row.organizationRank),
       statusLabel: firstDefined(row.statusLabel, row.status, '--'),
+      workflowStatus: firstDefined(
+        row.submission?.status,
+        row.currentSubmission?.status,
+        row.submissionStatus,
+        row.status,
+        row.assignmentStatus
+      ),
       time: firstDefined(row.windowEndAt, row.dueTime, row.deadline, row.time, row.remainingTime, '--')
     })),
     todoDisplayItems: branchRankings,
@@ -189,11 +211,33 @@ const taskOverviewCount = computed(() => isOrganizationView.value
   ? summary.value.taskOverviewCount
   : summary.value.todoCount)
 const todoDisplayItems = computed(() => {
-  return isOrganizationView.value ? summary.value.todoDisplayItems : summary.value.todoItems
+  if (!isOrganizationView.value) return summary.value.todoItems
+  // 组织审核员的真实待办来自后端 todoItems；旧接口未返回待办时才保留排名展示兼容。
+  return summary.value.todoItems.length ? summary.value.todoItems : summary.value.todoDisplayItems
 })
 
 function displayValue(value) {
   return value === null || value === undefined || value === '' ? '--' : value
+}
+
+function todoRoute(item) {
+  if (!item || isOrganizationView.value && !item.assignmentId) return null
+  const query = { tab: 'pending' }
+  for (const key of ['taskId', 'taskInstanceId', 'assignmentId']) {
+    const value = item[key]
+    if (value !== undefined && value !== null && value !== '') query[key] = value
+  }
+  if (item.workflowStatus) query.status = item.workflowStatus
+
+  if (hasRole('R_RE_ORGREV', 'SYS_ADMIN')) return { path: '/redengine/review', query }
+  if (hasRole('R_RE_SECR')) return { path: '/redengine/branch-review', query }
+  if (hasRole('R_RE_REPORT')) return { path: '/redengine/records', query }
+  return null
+}
+
+function openTodo(item) {
+  const target = todoRoute(item)
+  if (target) router?.push(target)
 }
 
 async function loadSummary() {
@@ -320,6 +364,15 @@ onMounted(loadSummary)
     padding: 10px 0;
     border-bottom: 1px solid #f1f5f9;
     gap: 12px;
+
+    &.is-actionable {
+      cursor: pointer;
+    }
+
+    &.is-actionable:focus-visible {
+      outline: 2px solid #2563eb;
+      outline-offset: 2px;
+    }
 
     &:last-child {
       border-bottom: none;

@@ -128,7 +128,7 @@ describe('组织审核工作台', () => {
     await wrapper.vm.handleSearch();
     await settle();
 
-    expect(listOrgTaskReviews).toHaveBeenLastCalledWith({
+    expect(listOrgTaskReviews).toHaveBeenCalledWith({
       pageNo: 1,
       pageSize: 50,
       title: '整改',
@@ -190,6 +190,7 @@ describe('组织审核工作台', () => {
     await wrapper.vm.handleApprove();
     expect(approveOrgTask).toHaveBeenCalledWith(1001, { feedback: undefined });
     expect(item.status).toBe('passed');
+    expect(wrapper.vm.statusTotals).toMatchObject({ pending: 0, passed: 2 });
 
     item.status = 'pending';
     await wrapper.vm.handleRejectClick();
@@ -201,6 +202,7 @@ describe('组织审核工作台', () => {
     await wrapper.vm.handleConfirmReject();
     expect(rejectOrgTask).toHaveBeenCalledWith(1001, { feedback: '请补充附件' });
     expect(item.status).toBe('rejected');
+    expect(wrapper.vm.statusTotals).toMatchObject({ pending: 0, rejected: 2 });
     wrapper.unmount();
   });
 
@@ -278,6 +280,34 @@ describe('组织审核工作台', () => {
       pageSize: 50,
       tab: 'PENDING'
     });
+    wrapper.unmount();
+  });
+
+  it('四个状态数量使用各页签分页 total，切页不会把其他计数归零', async () => {
+    const totals = { PENDING: 7, REVIEWING: 5, PASSED: 3, REJECTED: 2 };
+    listOrgTaskReviews.mockImplementation(async (params) => ({
+      records: params.tab === 'PENDING' ? [taskRow()] : [],
+      total: totals[params.tab]
+    }));
+    const wrapper = mount(ReviewView, { global: { stubs } });
+    await settle();
+
+    expect(wrapper.vm.statusTotals).toEqual({ pending: 7, reviewing: 5, passed: 3, rejected: 2 });
+    expect(wrapper.find('.pending-badge').text()).toContain('7');
+    expect(wrapper.find('.reviewing-badge').text()).toContain('5');
+    expect(listOrgTaskReviews).toHaveBeenCalledWith({ pageNo: 1, pageSize: 1, tab: 'REVIEWING' });
+    wrapper.unmount();
+  });
+
+  it('组织审核预览明确区分任务说明和本次填报内容', async () => {
+    const wrapper = mount(ReviewView, { global: { stubs } });
+    await settle();
+    const item = wrapper.vm.reviewItems.find((row) => row.source === 'task');
+    await wrapper.vm.selectItem(item);
+    await settle();
+
+    expect(wrapper.find('.task-description-block .block-title').text()).toContain('任务说明');
+    expect(wrapper.find('.task-submission-block .block-title').text()).toContain('本次填报内容');
     wrapper.unmount();
   });
 

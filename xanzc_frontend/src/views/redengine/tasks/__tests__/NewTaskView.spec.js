@@ -34,7 +34,7 @@ const stubs = {
       return {};
     }
   },
-  'el-form-item': { props: ['label'], template: '<label><span>{{ label }}</span><slot /></label>' },
+  'el-form-item': { props: ['label', 'required'], template: '<label :data-required="required"><span>{{ label }}</span><slot /></label>' },
   'el-input': {
     props: ['modelValue', 'placeholder', 'type'],
     emits: ['update:modelValue'],
@@ -220,6 +220,28 @@ describe('新增任务', () => {
 
     expect(wrapper.vm.optionsError).toBe('任务对象选项加载失败，请稍后重试');
     expect(wrapper.find('[role="alert"]').text()).toContain('任务对象选项加载失败');
+    wrapper.unmount();
+  });
+
+  it('所有当前适用的业务必填项显示 required 标识，条件字段随适用条件切换', async () => {
+    const wrapper = mount(NewTaskView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    const requiredLabels = () => wrapper.findAll('label[data-required]').map((node) => node.attributes('prop'));
+    expect(requiredLabels()).toEqual(expect.arrayContaining(['nature', 'businessType', 'title', 'description', 'audienceType', 'startAt', 'endAt']));
+    expect(requiredLabels()).not.toContain('cycle');
+    expect(requiredLabels()).not.toContain('durationDays');
+    expect(requiredLabels()).not.toContain('allowedFileTypes');
+
+    wrapper.vm.formData.nature = 'PERIODIC';
+    wrapper.vm.formData.audienceType = 'SPECIFIED_BRANCH';
+    wrapper.vm.formData.requiresFile = true;
+    await nextTick();
+    expect(requiredLabels()).toEqual(expect.arrayContaining(['cycle', 'durationDays', 'targetBranchIds', 'allowedFileTypes']));
+    expect(requiredLabels()).not.toContain('startAt');
+    expect(requiredLabels()).not.toContain('endAt');
     wrapper.unmount();
   });
 });

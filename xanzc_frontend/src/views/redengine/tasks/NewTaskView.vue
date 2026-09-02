@@ -14,7 +14,7 @@
       <el-form ref="formRef" :model="formData" label-width="116px" class="task-form" @submit.prevent>
         <div class="form-section-title">基本信息</div>
 
-        <el-form-item label="任务性质" prop="nature">
+        <el-form-item label="任务性质" prop="nature" required>
           <el-radio-group v-model="formData.nature">
             <el-radio-button label="PERIODIC">定时任务</el-radio-button>
             <el-radio-button label="TEMPORARY">临时任务</el-radio-button>
@@ -22,7 +22,7 @@
           <div v-if="validationErrors.nature" class="field-error">{{ validationErrors.nature }}</div>
         </el-form-item>
 
-        <el-form-item label="任务类型" prop="businessType">
+        <el-form-item label="任务类型" prop="businessType" required>
           <el-select v-model="formData.businessType" clearable filterable placeholder="请选择任务类型" style="width: 360px">
             <el-option
               v-for="option in taskTypeOptions"
@@ -35,12 +35,12 @@
           <div v-if="validationErrors.businessType" class="field-error">{{ validationErrors.businessType }}</div>
         </el-form-item>
 
-        <el-form-item label="任务标题" prop="title">
+        <el-form-item label="任务标题" prop="title" required>
           <el-input v-model="formData.title" maxlength="100" show-word-limit placeholder="请输入任务标题" style="width: 560px" />
           <div v-if="validationErrors.title" class="field-error">{{ validationErrors.title }}</div>
         </el-form-item>
 
-        <el-form-item label="任务说明" prop="description">
+        <el-form-item label="任务说明" prop="description" required>
           <el-input
             v-model="formData.description"
             type="textarea"
@@ -55,7 +55,7 @@
 
         <div class="form-section-title">任务对象</div>
 
-        <el-form-item label="任务对象" prop="audienceType">
+        <el-form-item label="任务对象" prop="audienceType" required>
           <el-radio-group v-model="formData.audienceType">
             <el-radio-button v-for="item in audienceOptions" :key="item.value" :label="item.value">
               {{ item.label }}
@@ -64,7 +64,7 @@
           <div v-if="validationErrors.audienceType" class="field-error">{{ validationErrors.audienceType }}</div>
         </el-form-item>
 
-        <el-form-item v-if="formData.audienceType === 'SPECIFIED_BRANCH'" label="选择党支部" prop="targetBranchIds">
+        <el-form-item v-if="formData.audienceType === 'SPECIFIED_BRANCH'" label="选择党支部" prop="targetBranchIds" required>
           <el-select
             v-model="formData.targetBranchIds"
             multiple
@@ -80,7 +80,7 @@
           <div v-if="validationErrors.targetBranchIds" class="field-error">{{ validationErrors.targetBranchIds }}</div>
         </el-form-item>
 
-        <el-form-item v-if="formData.audienceType === 'SPECIFIED_EMPLOYEE'" label="选择员工" prop="targetEmployeeIds">
+        <el-form-item v-if="formData.audienceType === 'SPECIFIED_EMPLOYEE'" label="选择员工" prop="targetEmployeeIds" required>
           <el-select
             v-model="formData.targetEmployeeIds"
             multiple
@@ -99,13 +99,13 @@
         <div class="form-section-title">时间设置</div>
 
         <template v-if="formData.nature === 'PERIODIC'">
-          <el-form-item label="任务周期" prop="cycle">
+          <el-form-item label="任务周期" prop="cycle" required>
             <el-select v-model="formData.cycle" clearable placeholder="请选择周期" style="width: 220px">
               <el-option v-for="option in cycleOptions" :key="option.value" :label="option.label" :value="option.value" />
             </el-select>
             <div v-if="validationErrors.cycle" class="field-error">{{ validationErrors.cycle }}</div>
           </el-form-item>
-          <el-form-item label="持续天数" prop="durationDays">
+          <el-form-item label="持续天数" prop="durationDays" required>
             <el-input-number v-model="formData.durationDays" :min="1" :max="366" controls-position="right" />
             <span class="field-suffix">天</span>
             <div v-if="validationErrors.durationDays" class="field-error">{{ validationErrors.durationDays }}</div>
@@ -119,7 +119,7 @@
         </template>
 
         <template v-else>
-          <el-form-item label="开始时间" prop="startAt">
+          <el-form-item label="开始时间" prop="startAt" required>
             <el-date-picker
               v-model="formData.startAt"
               type="datetime"
@@ -129,7 +129,7 @@
             />
             <div v-if="validationErrors.startAt" class="field-error">{{ validationErrors.startAt }}</div>
           </el-form-item>
-          <el-form-item label="截止时间" prop="endAt">
+          <el-form-item label="截止时间" prop="endAt" required>
             <el-date-picker
               v-model="formData.endAt"
               type="datetime"
@@ -146,7 +146,7 @@
         <el-form-item label="是否上传文件" prop="requiresFile">
           <el-switch v-model="formData.requiresFile" active-text="是" inactive-text="否" />
         </el-form-item>
-        <el-form-item v-if="formData.requiresFile" label="允许文件类型" prop="allowedFileTypes">
+        <el-form-item v-if="formData.requiresFile" label="允许文件类型" prop="allowedFileTypes" required>
           <el-checkbox-group v-model="formData.allowedFileTypes">
             <el-checkbox v-for="option in fileTypeOptions" :key="option.value" :label="option.value">
               {{ option.label }}

@@ -83,6 +83,7 @@
             <span v-if="item.source === 'task' && item.isPeriodic && item.cycle" class="meta-item">周期：{{ cycleLabel(item.cycle) }}</span>
           </div>
           <div v-if="item.description" class="description">
+            <span class="field-label">任务说明：</span>
             <template v-for="(part, index) in descriptionParts(item.description)" :key="`${itemKey(item)}-description-${index}`">
               <a
                 v-if="part.type === 'link'"
@@ -95,6 +96,7 @@
             </template>
           </div>
           <div v-if="item.summary" class="summary">
+            <span class="field-label">本次填报内容：</span>
             <template v-for="(part, index) in descriptionParts(item.summary)" :key="`${itemKey(item)}-summary-${index}`">
               <a
                 v-if="part.type === 'link'"
@@ -231,6 +233,9 @@ const pageSize = ref(20)
 const total = ref(0)
 const items = ref([])
 const loadError = ref('')
+const statusTotals = ref({ pending: 0, reviewing: 0, passed: 0, rejected: 0 })
+const reloadVersion = ref(0)
+const TAB_VALUES = ['pending', 'reviewing', 'passed', 'rejected']
 const selectedItem = ref(null)
 const showRejectModal = ref(false)
 const rejectReason = ref('')
@@ -393,19 +398,46 @@ async function loadTaskRows() {
   }
 }
 
+async function loadOtherStatusTotals(filters, currentTab) {
+  const tabsToLoad = TAB_VALUES.filter((tab) => tab !== currentTab)
+  const entries = await Promise.all(tabsToLoad.map(async (tab) => {
+    try {
+      const result = await listBranchTaskReviews(buildWorkflowQuery(filters, tab, 1, 1))
+      return [tab, normalizeAssignmentPage(result).total]
+    } catch {
+      return [tab, null]
+    }
+  }))
+  return entries.reduce((totals, [tab, value]) => {
+    if (value !== null && Number.isFinite(Number(value))) totals[tab] = Number(value)
+    return totals
+  }, {})
+}
+
 async function reload() {
+  const requestId = ++reloadVersion.value
+  const requestedTab = activeTab.value
+  const filters = { ...appliedQuery.value }
   loading.value = true
   loadError.value = ''
   try {
-    const result = await loadTaskRows()
+    const rowsPromise = loadTaskRows()
+    const totalsPromise = loadOtherStatusTotals(filters, requestedTab)
+    const [result, otherTotals] = await Promise.all([rowsPromise, totalsPromise])
+    if (requestId !== reloadVersion.value) return
     items.value = result.rows
     total.value = result.total
+    statusTotals.value = {
+      ...statusTotals.value,
+      [requestedTab]: result.total,
+      ...otherTotals
+    }
     if (result.error) loadError.value = result.error
     if (selectedItem.value) {
       selectedItem.value = items.value.find((item) => item.id === selectedItem.value.id) || null
     }
   } finally {
-    loading.value = false
+    if (requestId === reloadVersion.value) loading.value = false
   }
 }
 
@@ -488,8 +520,10 @@ async function handleApprove(item = selectedItem.value) {
     } else {
       const reviewId = legacyReviewId(item)
       if (!reviewId) throw new Error('缺少旧材料审核标识，无法审核')
+      const previousStatus = item.status
       await approveSubmit(reviewId, { feedback: item.reviewNote || undefined })
       item.status = 'passed'
+      moveStatusTotal(previousStatus, item.status)
       ElMessage.success(`✅ 已通过「${item.itemName}」`)
     }
   } catch (error) {
@@ -503,9 +537,11 @@ async function handleSubmitToOrg(item = selectedItem.value) {
   if (!item || !showSubmitToOrg(item) || typeof submitBranchTaskToOrg !== 'function') return
   item.acting = true
   try {
+    const previousStatus = item.status
     await submitBranchTaskToOrg(item.assignmentId, { feedback: item.reviewNote || undefined })
     item.status = 'reviewing'
     item.branchApproved = false
+    moveStatusTotal(previousStatus, item.status)
     ElMessage.success('✅ 已提交至组织审核')
   } catch (error) {
     ElMessage.error(error?.message || '操作失败')
@@ -527,6 +563,7 @@ async function handleConfirmReject() {
     return
   }
   const item = selectedItem.value
+  const previousStatus = item.status
   acting.value = true
   item.acting = true
   try {
@@ -541,6 +578,7 @@ async function handleConfirmReject() {
     item.status = 'rejected'
     item.branchApproved = false
     item.reviewNote = rejectReason.value.trim()
+    moveStatusTotal(previousStatus, item.status)
     showRejectModal.value = false
     ElMessage.success('✅ 已驳回并退回报送员')
   } catch (error) {
@@ -586,7 +624,15 @@ async function downloadAttachment(item, file) {
 
 const descriptionParts = (description) => linkifyDescription(description)
 const getDimColor = (dim) => DIM_COLOR[dim] || '#64748b'
-const countByStatus = (status) => items.value.filter((item) => item.status === status).length
+const countByStatus = (status) => Number(statusTotals.value[status] ?? 0)
+function moveStatusTotal(previousStatus, nextStatus) {
+  if (!TAB_VALUES.includes(previousStatus) || !TAB_VALUES.includes(nextStatus) || previousStatus === nextStatus) return
+  statusTotals.value = {
+    ...statusTotals.value,
+    [previousStatus]: Math.max(0, Number(statusTotals.value[previousStatus] ?? 0) - 1),
+    [nextStatus]: Number(statusTotals.value[nextStatus] ?? 0) + 1
+  }
+}
 
 onMounted(reload)
 
@@ -621,6 +667,7 @@ defineExpose({
   selectedItem,
   showRejectModal,
   showSubmitToOrg,
+  statusTotals,
   statusLabel,
   total
 })

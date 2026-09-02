@@ -29,10 +29,10 @@
           <el-button size="small" type="primary" @click="handleSearch">查询</el-button>
         </div>
         <div class="queue-header">
-          <span class="badge pending-badge">待处理 {{ pendingItems.length }}</span>
-          <span class="badge reviewing-badge">审核中 {{ reviewingItems.length }}</span>
-          <span class="badge pass-badge">已通过 {{ passedItems.length }}</span>
-          <span class="badge reject-badge">已驳回 {{ rejectedItems.length }}</span>
+          <span class="badge pending-badge">待处理 {{ countByStatus('pending') }}</span>
+          <span class="badge reviewing-badge">审核中 {{ countByStatus('reviewing') }}</span>
+          <span class="badge pass-badge">已通过 {{ countByStatus('passed') }}</span>
+          <span class="badge reject-badge">已驳回 {{ countByStatus('rejected') }}</span>
         </div>
         <div class="queue-list">
           <div
@@ -79,19 +79,24 @@
         </div>
         <div class="preview-body">
           <div v-if="selectedItem.isTask" class="task-content-block">
-            <div class="block-title">📋 任务填报内容</div>
-            <div v-if="selectedItem.description" class="task-description">
-              <template v-for="(part, index) in descriptionParts(selectedItem.description)" :key="`description-${index}`">
-                <a
-                  v-if="part.type === 'link'"
-                  :href="part.href"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >{{ part.value }}</a>
-                <span v-else>{{ part.value }}</span>
-              </template>
+            <div class="task-description-block">
+              <div class="block-title">📋 任务说明</div>
+              <div v-if="selectedItem.description" class="task-description">
+                <template v-for="(part, index) in descriptionParts(selectedItem.description)" :key="`description-${index}`">
+                  <a
+                    v-if="part.type === 'link'"
+                    :href="part.href"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  >{{ part.value }}</a>
+                  <span v-else>{{ part.value }}</span>
+                </template>
+              </div>
             </div>
-            <div class="task-content">{{ selectedItem.content }}</div>
+            <div class="task-submission-block">
+              <div class="block-title">📝 本次填报内容</div>
+              <div class="task-content">{{ selectedItem.content }}</div>
+            </div>
           </div>
 
           <!-- 结构化数据 -->
@@ -294,6 +299,9 @@ const reviewItems = ref([])
 const pageNo = ref(1)
 const pageSize = ref(50)
 const total = ref(0)
+const statusTotals = ref({ pending: 0, reviewing: 0, passed: 0, rejected: 0 })
+const reloadVersion = ref(0)
+const TAB_VALUES = ['pending', 'reviewing', 'passed', 'rejected']
 
 const activeTab = ref('pending')
 const query = reactive({ title: '', nature: '', cycle: '' })
@@ -441,12 +449,20 @@ function legacyStatus(value) {
 }
 
 function taskQuery() {
-  const filters = { ...appliedQuery.value }
+  return workflowQuery(appliedQuery.value, activeTab.value, pageNo.value, pageSize.value)
+}
+
+function workflowFilters(source = {}) {
+  const filters = { ...source }
   if (filters.nature === 'FOUR_DIMENSION') {
     filters.businessType = 'FOUR_DIMENSION'
     delete filters.nature
   }
-  return buildWorkflowQuery(filters, activeTab.value, pageNo.value, pageSize.value)
+  return filters
+}
+
+function workflowQuery(filters, tab, currentPage, currentSize) {
+  return buildWorkflowQuery(workflowFilters(filters), tab, currentPage, currentSize)
 }
 
 async function loadTaskRows() {
@@ -461,19 +477,46 @@ async function loadTaskRows() {
   }
 }
 
+async function loadOtherStatusTotals(filters, currentTab) {
+  const tabsToLoad = TAB_VALUES.filter((tab) => tab !== currentTab)
+  const entries = await Promise.all(tabsToLoad.map(async (tab) => {
+    try {
+      const result = await listOrgTaskReviews(workflowQuery(filters, tab, 1, 1))
+      return [tab, normalizeAssignmentPage(result).total]
+    } catch {
+      return [tab, null]
+    }
+  }))
+  return entries.reduce((totals, [tab, value]) => {
+    if (value !== null && Number.isFinite(Number(value))) totals[tab] = Number(value)
+    return totals
+  }, {})
+}
+
 async function reload() {
+  const requestId = ++reloadVersion.value
+  const requestedTab = activeTab.value
+  const filters = { ...appliedQuery.value }
   loading.value = true
   loadError.value = ''
   try {
-    const result = await loadTaskRows()
+    const rowsPromise = loadTaskRows()
+    const totalsPromise = loadOtherStatusTotals(filters, requestedTab)
+    const [result, otherTotals] = await Promise.all([rowsPromise, totalsPromise])
+    if (requestId !== reloadVersion.value) return
     reviewItems.value = result.rows
     total.value = result.total
+    statusTotals.value = {
+      ...statusTotals.value,
+      [requestedTab]: result.total,
+      ...otherTotals
+    }
     if (result.error) loadError.value = result.error
     if (selectedItem.value) {
       selectedItem.value = reviewItems.value.find((item) => item.id === selectedItem.value.id) || null
     }
   } finally {
-    loading.value = false
+    if (requestId === reloadVersion.value) loading.value = false
   }
 }
 
@@ -588,10 +631,12 @@ const handleApprove = async () => {
   acting.value = true
   try {
     const item = reviewItems.value.find((row) => row.id === selectedItem.value.id) || selectedItem.value
+    const previousStatus = item.status
     if (item.source === 'task' && !item.isFourDimension) {
       if (typeof approveOrgTask !== 'function') return
       await approveOrgTask(item.assignmentId, { feedback: reviewComment.value || undefined })
       item.status = 'passed'
+      moveStatusTotal(previousStatus, item.status)
       item.reviewNote = reviewComment.value
       selectedItem.value = { ...item }
       ElMessage.success(`✅ 已通过${item.isTask ? taskNatureLabel(item.nature) : '任务'}`)
@@ -625,6 +670,7 @@ const handleConfirmReject = async () => {
   acting.value = true
   try {
     const item = reviewItems.value.find((row) => row.id === selectedItem.value.id) || selectedItem.value
+    const previousStatus = item.status
     if (item.source === 'task' && !item.isFourDimension) {
       if (typeof rejectOrgTask !== 'function') return
       await rejectOrgTask(item.assignmentId, { feedback: rejectReason.value.trim() })
@@ -636,6 +682,7 @@ const handleConfirmReject = async () => {
     item.status = 'rejected'
     item.rejectReason = rejectReason.value.trim()
     item.reviewNote = rejectReason.value.trim()
+    moveStatusTotal(previousStatus, item.status)
     selectedItem.value = { ...item }
     showRejectModal.value = false
     ElMessage.success('✅ 已驳回')
@@ -648,6 +695,15 @@ const handleConfirmReject = async () => {
 
 const itemKey = (item) => `${item.source || 'legacy'}-${item.id}`
 const descriptionParts = (description) => linkifyDescription(description)
+const countByStatus = (status) => Number(statusTotals.value[status] ?? 0)
+function moveStatusTotal(previousStatus, nextStatus) {
+  if (!TAB_VALUES.includes(previousStatus) || !TAB_VALUES.includes(nextStatus) || previousStatus === nextStatus) return
+  statusTotals.value = {
+    ...statusTotals.value,
+    [previousStatus]: Math.max(0, Number(statusTotals.value[previousStatus] ?? 0) - 1),
+    [nextStatus]: Number(statusTotals.value[nextStatus] ?? 0) + 1
+  }
+}
 
 onMounted(reload)
 
@@ -682,10 +738,12 @@ defineExpose({
   selectedItem,
   showRejectModal,
   statusLabel,
+  countByStatus,
   passedItems,
   pageNo,
   pageSize,
-  total
+  total,
+  statusTotals
 })
 </script>
 
