@@ -1,6 +1,7 @@
 package com.bank.branch.platform.redengine.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.bank.branch.platform.auth.api.UserApi;
@@ -10,6 +11,7 @@ import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.redengine.api.dto.ReTaskAssignmentDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskAssignmentPageQueryDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskAssignmentStatus;
+import com.bank.branch.platform.redengine.api.dto.ReTaskInstanceStatus;
 import com.bank.branch.platform.redengine.api.dto.ReTaskStatus;
 import com.bank.branch.platform.redengine.entity.RePartyOrg;
 import com.bank.branch.platform.redengine.entity.ReTask;
@@ -23,6 +25,7 @@ import com.bank.branch.platform.redengine.entity.ReUserPartyMap;
 import com.bank.branch.platform.redengine.mapper.RePartyOrgMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskBranchAssignmentMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskInstanceMapper;
+import com.bank.branch.platform.redengine.mapper.ReTaskMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskSubmissionFileMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskSubmissionMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskTargetMapper;
@@ -69,6 +72,7 @@ public class ReTaskAssignmentServiceImpl implements ReTaskAssignmentService {
     private final ReTaskTargetMapper targetMapper;
     private final RePartyOrgMapper partyOrgMapper;
     private final ReUserPartyMapMapper userPartyMapMapper;
+    private final ReTaskMapper taskMapper;
     private final ReTaskBranchAssignmentMapper assignmentMapper;
     private final ReTaskTodoMapper todoMapper;
     private final ReTaskInstanceMapper instanceMapper;
@@ -105,6 +109,89 @@ public class ReTaskAssignmentServiceImpl implements ReTaskAssignmentService {
             }
         }
         return result;
+    }
+
+    /**
+     * 在用户党组织映射变更后，收敛当前有效任务的报送员分配和待办。
+     *
+     * <p>任务发布时已经生成的 assignment 会被复用；只有当前窗口仍开放、任务仍发布且
+     * assignment 处于可填报状态时才补齐待办。旧支部只取消尚未处理的 REPORTER 待办，
+     * 不删除提交版本或已完成待办，保证历史仍可追溯。该方法与映射 bind 在同一事务中执行。</p>
+     *
+     * @param employeeId         平台用户 ID
+     * @param previousPartyOrgId 变更前党组织 ID，可为空
+     * @param currentPartyOrgId  变更后党组织 ID，可为空
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void synchronizeReporterAssignments(String employeeId, Long previousPartyOrgId,
+                                                Long currentPartyOrgId) {
+        String normalizedEmployeeId = normalizeText(employeeId);
+        if (!hasText(normalizedEmployeeId)) {
+            return;
+        }
+
+        Map<Long, RePartyOrg> orgCache = new HashMap<>();
+        Long previousBranchId = resolveBranchId(previousPartyOrgId, orgCache);
+        Long currentBranchId = resolveBranchId(currentPartyOrgId, orgCache);
+        boolean reporter = isReporter(normalizedEmployeeId);
+        LocalDateTime now = now();
+
+        List<ReTask> publishedTasks = taskMapper.selectList(new LambdaQueryWrapper<ReTask>()
+                .eq(ReTask::getStatus, ReTaskStatus.PUBLISHED)
+                .eq(ReTask::getDeleted, 0));
+        if (publishedTasks == null || publishedTasks.isEmpty()) {
+            return;
+        }
+        Map<Long, ReTask> taskById = publishedTasks.stream()
+                .filter(task -> task != null && task.getId() != null)
+                .collect(Collectors.toMap(ReTask::getId, Function.identity(), (first, ignored) -> first));
+        if (taskById.isEmpty()) {
+            return;
+        }
+
+        List<ReTaskInstance> instances = instanceMapper.selectList(new LambdaQueryWrapper<ReTaskInstance>()
+                .in(ReTaskInstance::getTaskId, taskById.keySet())
+                .eq(ReTaskInstance::getStatus, ReTaskInstanceStatus.OPEN));
+        if (instances == null || instances.isEmpty()) {
+            return;
+        }
+
+        for (ReTaskInstance instance : instances) {
+            if (!isAssignableOpenWindow(instance, now)) {
+                continue;
+            }
+            ReTask task = taskById.get(instance.getTaskId());
+            if (task == null) {
+                continue;
+            }
+            List<ReTaskTarget> targets = targetMapper.selectList(
+                    new LambdaQueryWrapper<ReTaskTarget>().eq(ReTaskTarget::getTaskId, task.getId()));
+            boolean shouldReceive = reporter && currentBranchId != null
+                    && isEmployeeTargeted(task, targets, normalizedEmployeeId, currentBranchId);
+
+            List<ReTaskBranchAssignment> assignments = assignmentMapper.selectList(
+                    new LambdaQueryWrapper<ReTaskBranchAssignment>()
+                            .eq(ReTaskBranchAssignment::getTaskInstanceId, instance.getId()));
+            for (ReTaskBranchAssignment assignment : nullToEmpty(assignments)) {
+                if (assignment == null || assignment.getId() == null) {
+                    continue;
+                }
+                // 映射改变后，只有旧支部的待处理待办需要撤销；完成状态保留为历史快照。
+                if (previousBranchId != null && previousBranchId.equals(assignment.getBranchId())
+                        && (!shouldReceive || !previousBranchId.equals(currentBranchId))) {
+                    cancelPendingReporterTodo(assignment.getId(), normalizedEmployeeId, now);
+                }
+            }
+
+            if (!shouldReceive) {
+                continue;
+            }
+            ReTaskBranchAssignment assignment = findOrCreateAssignment(instance, currentBranchId);
+            if (isReporterProcessable(assignment)) {
+                ensureReporterTodo(assignment, normalizedEmployeeId, instance);
+            }
+        }
     }
 
     /**
@@ -245,14 +332,22 @@ public class ReTaskAssignmentServiceImpl implements ReTaskAssignmentService {
         }
 
         if ("SPECIFIED_EMPLOYEES".equals(audience) || "SPECIFIED_EMPLOYEE".equals(audience)) {
+            Set<String> reporterIds = normalizedReporterIds(userApi.getEmpIdsByRoleCode(REPORTER_PLATFORM_ROLE));
+            if (reporterIds.isEmpty()) {
+                return result;
+            }
             for (ReTaskTarget target : nullToEmpty(targets)) {
                 if (target.getEmployeeId() == null || target.getEmployeeId().isBlank()) {
+                    continue;
+                }
+                String employeeId = target.getEmployeeId().trim();
+                if (!reporterIds.contains(employeeId)) {
                     continue;
                 }
                 ReUserPartyMap mapping = findUserMapping(target.getEmployeeId());
                 Long branchId = resolveBranchId(mapping == null ? null : mapping.getPartyOrgId(), orgCache);
                 if (branchId != null && result.containsKey(branchId)) {
-                    result.get(branchId).add(target.getEmployeeId().trim());
+                    result.get(branchId).add(employeeId);
                 }
             }
             return result;
@@ -321,6 +416,16 @@ public class ReTaskAssignmentServiceImpl implements ReTaskAssignmentService {
                         .eq(ReTaskTodo::getEmployeeId, employeeId)
                         .eq(ReTaskTodo::getRoleCode, REPORTER_TODO_ROLE));
         if (existing != null) {
+            if ("CANCELLED".equalsIgnoreCase(existing.getStatus())) {
+                LocalDateTime now = now();
+                todoMapper.update(null, new LambdaUpdateWrapper<ReTaskTodo>()
+                        .eq(ReTaskTodo::getId, existing.getId())
+                        .eq(ReTaskTodo::getStatus, "CANCELLED")
+                        .set(ReTaskTodo::getStatus, "PENDING")
+                        .set(ReTaskTodo::getAvailableAt, instance.getWindowStartAt())
+                        .set(ReTaskTodo::getCompletedAt, null)
+                        .set(ReTaskTodo::getUpdateTime, now));
+            }
             return;
         }
         LocalDateTime now = now();
@@ -339,6 +444,82 @@ public class ReTaskAssignmentServiceImpl implements ReTaskAssignmentService {
             log.debug("任务待办已由并发节点创建 assignmentId={} employeeId={}",
                     assignment.getId(), employeeId);
         }
+    }
+
+    /** 只有平台 R_RE_REPORT 角色才有资格生成 REPORTER 待办。 */
+    private boolean isReporter(String employeeId) {
+        return normalizedReporterIds(userApi.getEmpIdsByRoleCode(REPORTER_PLATFORM_ROLE)).contains(employeeId);
+    }
+
+    /** 将角色 API 返回的用户 ID 规范化，避免空白快照影响角色校验。 */
+    private Set<String> normalizedReporterIds(List<String> reporterIds) {
+        if (reporterIds == null) {
+            return Set.of();
+        }
+        return reporterIds.stream().filter(this::hasText).map(String::trim)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /**
+     * 判断任务实例是否仍需同步分配。
+     *
+     * <p>开始时间可以晚于当前时间：待办会以 windowStartAt 作为 availableAt，查询侧在到点前不会展示。
+     * 若这里跳过未来窗口，用户在任务开始前调整党组织映射后将永久保留旧支部待办。</p>
+     */
+    private boolean isAssignableOpenWindow(ReTaskInstance instance, LocalDateTime now) {
+        return instance != null && instance.getId() != null
+                && instance.getStatus() == ReTaskInstanceStatus.OPEN
+                && instance.getWindowStartAt() != null
+                && instance.getWindowEndAt() != null
+                && !now.isAfter(instance.getWindowEndAt());
+    }
+
+    /** 解析全部/指定支部及指定员工任务对当前用户的收件资格。 */
+    private boolean isEmployeeTargeted(ReTask task, List<ReTaskTarget> targets,
+                                       String employeeId, Long currentBranchId) {
+        String audience = normalizeAudience(task.getAudienceType());
+        if ("ALL_BRANCHES".equals(audience) || "ALL_BRANCH".equals(audience)) {
+            return true;
+        }
+        if ("SPECIFIED_BRANCHES".equals(audience) || "SPECIFIED_BRANCH".equals(audience)) {
+            return nullToEmpty(targets).stream()
+                    .filter(Objects::nonNull)
+                    .filter(target -> "BRANCH".equalsIgnoreCase(target.getTargetType())
+                            || "SPECIFIED_BRANCH".equalsIgnoreCase(target.getTargetType()))
+                    .anyMatch(target -> Objects.equals(target.getBranchId(), currentBranchId));
+        }
+        if ("SPECIFIED_EMPLOYEES".equals(audience) || "SPECIFIED_EMPLOYEE".equals(audience)) {
+            return nullToEmpty(targets).stream()
+                    .filter(Objects::nonNull)
+                    .filter(target -> "EMPLOYEE".equalsIgnoreCase(target.getTargetType())
+                            || "SPECIFIED_EMPLOYEE".equalsIgnoreCase(target.getTargetType()))
+                    .map(ReTaskTarget::getEmployeeId)
+                    .filter(this::hasText)
+                    .map(String::trim)
+                    .anyMatch(employeeId::equals);
+        }
+        return false;
+    }
+
+    /** 只有未上报或被驳回的 assignment 仍可创建/恢复报送员待办。 */
+    private boolean isReporterProcessable(ReTaskBranchAssignment assignment) {
+        if (assignment == null || !hasText(assignment.getStatus())) {
+            return false;
+        }
+        return ReTaskAssignmentStatus.UNREPORTED.name().equalsIgnoreCase(assignment.getStatus())
+                || ReTaskAssignmentStatus.REJECTED_BY_BRANCH.name().equalsIgnoreCase(assignment.getStatus())
+                || ReTaskAssignmentStatus.REJECTED_BY_ORG.name().equalsIgnoreCase(assignment.getStatus());
+    }
+
+    /** 取消指定旧支部 assignment 上该用户尚未处理的 REPORTER 待办，不改历史提交。 */
+    private void cancelPendingReporterTodo(Long assignmentId, String employeeId, LocalDateTime now) {
+        todoMapper.update(null, new LambdaUpdateWrapper<ReTaskTodo>()
+                .eq(ReTaskTodo::getAssignmentId, assignmentId)
+                .eq(ReTaskTodo::getEmployeeId, employeeId)
+                .eq(ReTaskTodo::getRoleCode, REPORTER_TODO_ROLE)
+                .eq(ReTaskTodo::getStatus, "PENDING")
+                .set(ReTaskTodo::getStatus, "CANCELLED")
+                .set(ReTaskTodo::getUpdateTime, now));
     }
 
     /** 查找员工的党组织绑定；映射缺失交由调用方按目标类型 fail-close。 */

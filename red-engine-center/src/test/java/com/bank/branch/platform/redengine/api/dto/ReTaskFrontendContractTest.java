@@ -40,6 +40,7 @@ class ReTaskFrontendContractTest {
         assertNotNull(ReTaskWorkflowPageQueryDTO.class.getDeclaredField("tab"));
         assertNotNull(ReTaskWorkflowAssignmentDTO.class.getDeclaredField("legacyReviewId"));
         assertNotNull(ReTaskWorkflowAssignmentDTO.class.getDeclaredField("submitId"));
+        assertNotNull(ReTaskWorkflowAssignmentDTO.class.getDeclaredField("reviewFeedback"));
         assertNotNull(ReTaskWorkflowActionRespDTO.class.getDeclaredField("legacyReviewId"));
         assertNotNull(ReTaskWorkflowActionRespDTO.class.getDeclaredField("submitId"));
     }

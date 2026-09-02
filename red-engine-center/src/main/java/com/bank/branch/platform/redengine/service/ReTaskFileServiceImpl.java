@@ -20,6 +20,8 @@ import com.bank.branch.platform.redengine.mapper.ReTaskMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskSubmissionFileMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskSubmissionMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskTodoMapper;
+import com.bank.branch.platform.redengine.mapper.ReUserPartyMapMapper;
+import com.bank.branch.platform.redengine.entity.ReUserPartyMap;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +54,7 @@ public class ReTaskFileServiceImpl implements ReTaskFileService {
     private final ReTaskSubmissionFileMapper submissionFileMapper;
     private final ReTaskTodoMapper todoMapper;
     private final RePartyOrgMapper partyOrgMapper;
+    private final ReUserPartyMapMapper userPartyMapMapper;
     private final CurrentUserApi currentUserApi;
     private final FileApi fileApi;
 
@@ -129,7 +132,8 @@ public class ReTaskFileServiceImpl implements ReTaskFileService {
             RePartyOrg branch = assignment.getBranchId() == null ? null
                     : partyOrgMapper.selectById(assignment.getBranchId());
             if (branch != null && Integer.valueOf(2).equals(branch.getOrgLevel())
-                    && operatorId.equals(branch.getSecretaryId())) {
+                    && (operatorId.equals(branch.getSecretaryId())
+                    || mappedToBranch(operatorId, branch.getId()))) {
                 return new ReTaskContext(task, instance, assignment);
             }
         }
@@ -142,6 +146,18 @@ public class ReTaskFileServiceImpl implements ReTaskFileService {
             throw new BizException("RE-40305", "无权访问该任务附件");
         }
         return new ReTaskContext(task, instance, assignment);
+    }
+
+    /** 具有支部书记平台角色且通过当前映射归属该支部时，允许访问支部附件。 */
+    private boolean mappedToBranch(String operatorId, Long branchId) {
+        if (!hasText(operatorId) || branchId == null) {
+            return false;
+        }
+        List<ReUserPartyMap> mappings = userPartyMapMapper.selectList(
+                new LambdaQueryWrapper<ReUserPartyMap>()
+                        .eq(ReUserPartyMap::getUserId, operatorId.trim()));
+        return mappings != null && mappings.stream().filter(Objects::nonNull)
+                .anyMatch(mapping -> branchId.equals(mapping.getPartyOrgId()));
     }
 
     private List<ReTaskAttachmentDTO> loadFiles(Long submissionId) {

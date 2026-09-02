@@ -22,6 +22,20 @@ public interface ReTaskAssignmentService {
     List<ReTaskBranchAssignment> ensureAssignments(ReTask task, ReTaskInstance instance);
 
     /**
+     * 同步用户映射变更对当前有效任务的报送员分配。
+     *
+     * <p>仅具备平台 {@code R_RE_REPORT} 角色的用户可获得 REPORTER 待办；全部/指定支部
+     * 按新映射所在支部重建或补齐，指定员工任务只匹配显式员工目标。旧支部尚未处理的
+     * 待办会取消，但已完成待办和提交版本不删除，以保留历史查看能力。</p>
+     *
+     * @param employeeId         平台用户 ID
+     * @param previousPartyOrgId 变更前党组织 ID，可为空
+     * @param currentPartyOrgId  变更后党组织 ID，可为空
+     */
+    void synchronizeReporterAssignments(String employeeId, Long previousPartyOrgId,
+                                        Long currentPartyOrgId);
+
+    /**
      * 分页查询任务实例的支部填报汇总。
      *
      * @param taskId 任务定义 ID

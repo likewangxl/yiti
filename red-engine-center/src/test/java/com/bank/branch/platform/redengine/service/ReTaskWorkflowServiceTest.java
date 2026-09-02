@@ -222,6 +222,7 @@ class ReTaskWorkflowServiceTest {
         ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L, "BRANCH_PENDING", 1);
         ReTaskSubmission submitted = submission(60L, 10L, 20L, 30L, 1,
                 ReTaskSubmissionStatus.BRANCH_PENDING, "REPORTER-1");
+        submitted.setReviewOpinion("请补充支部说明");
         when(assignmentMapper.selectById(30L)).thenReturn(assignment);
         when(instanceMapper.selectById(20L)).thenReturn(instance);
         when(taskMapper.selectById(10L)).thenReturn(task);
@@ -236,6 +237,26 @@ class ReTaskWorkflowServiceTest {
         assertThat(result.getAssignmentId()).isEqualTo(30L);
         assertThat(result.getSubmitterId()).isEqualTo("REPORTER-1");
         assertThat(result.getSubmissionStatus()).isEqualTo(ReTaskSubmissionStatus.BRANCH_PENDING);
+        assertThat(result.getReviewFeedback()).isEqualTo("请补充支部说明");
+    }
+
+    @Test
+    void getAssignment_rejectsReporterWhoseOldBranchTodoWasCancelled() {
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L, "UNREPORTED", 0);
+        when(assignmentMapper.selectById(30L)).thenReturn(assignment);
+        when(instanceMapper.selectById(20L)).thenReturn(instance);
+        when(taskMapper.selectById(10L)).thenReturn(task);
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RE_REPORT"));
+        // 取消状态由 findReporterTodo 的 status <> CANCELLED 条件在数据库侧过滤，
+        // 因此 Mockito 应模拟真实 Mapper 语义：查询不到可处理的报送员待办。
+        when(todoMapper.selectOne(any())).thenReturn(null);
+        when(submissionMapper.selectList(any())).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.getAssignment(30L, "REPORTER-1"))
+                .isInstanceOf(com.bank.branch.platform.common.web.exception.BizException.class)
+                .hasMessage("无权查看该任务");
     }
 
     @Test

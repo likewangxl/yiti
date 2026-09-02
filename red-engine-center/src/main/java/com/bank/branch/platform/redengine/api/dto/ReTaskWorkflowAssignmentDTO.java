@@ -39,6 +39,8 @@ public class ReTaskWorkflowAssignmentDTO {
     private LocalDateTime submittedAt;
     private String content;
     private String formData;
+    /** 当前提交版本最近一次审核/驳回意见，稳定契约字段名为 reviewFeedback。 */
+    private String reviewFeedback;
     private List<ReTaskAttachmentDTO> files;
 
     /** 四维旧材料审核记录 ID，供原评分入口继续使用。 */

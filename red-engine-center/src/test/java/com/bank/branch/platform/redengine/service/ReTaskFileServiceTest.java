@@ -9,6 +9,8 @@ import com.bank.branch.platform.redengine.entity.ReTaskBranchAssignment;
 import com.bank.branch.platform.redengine.entity.ReTaskInstance;
 import com.bank.branch.platform.redengine.entity.ReTaskSubmission;
 import com.bank.branch.platform.redengine.entity.ReTaskSubmissionFile;
+import com.bank.branch.platform.redengine.entity.ReUserPartyMap;
+import com.bank.branch.platform.redengine.entity.RePartyOrg;
 import com.bank.branch.platform.redengine.mapper.RePartyOrgMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskBranchAssignmentMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskInstanceMapper;
@@ -16,6 +18,7 @@ import com.bank.branch.platform.redengine.mapper.ReTaskMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskSubmissionFileMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskSubmissionMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskTodoMapper;
+import com.bank.branch.platform.redengine.mapper.ReUserPartyMapMapper;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -45,6 +48,7 @@ class ReTaskFileServiceTest {
     @Mock private ReTaskSubmissionFileMapper submissionFileMapper;
     @Mock private ReTaskTodoMapper todoMapper;
     @Mock private RePartyOrgMapper partyOrgMapper;
+    @Mock private ReUserPartyMapMapper userPartyMapMapper;
     @Mock private CurrentUserApi currentUserApi;
     @Mock private FileApi fileApi;
 
@@ -58,6 +62,7 @@ class ReTaskFileServiceTest {
         TableInfoHelper.initTableInfo(assistant, ReTaskBranchAssignment.class);
         TableInfoHelper.initTableInfo(assistant, ReTaskSubmission.class);
         TableInfoHelper.initTableInfo(assistant, ReTaskSubmissionFile.class);
+        TableInfoHelper.initTableInfo(assistant, ReUserPartyMap.class);
     }
 
     @Test
@@ -99,6 +104,49 @@ class ReTaskFileServiceTest {
         verify(fileApi).getFileContent("FILE-1");
     }
 
+    @Test
+    void mappedBranchSecretary_canDownloadWhenLegacySecretaryIdIsEmpty() {
+        String operatorId = "SECRETARY-1";
+        when(currentUserApi.getCurrentEmpId()).thenReturn(operatorId);
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RE_SECR"));
+        when(assignmentMapper.selectById(30L)).thenReturn(assignment(30L, 20L, 40L));
+        when(instanceMapper.selectById(20L)).thenReturn(instance(20L, 10L));
+        when(taskMapper.selectById(10L)).thenReturn(task(10L));
+        when(partyOrgMapper.selectById(40L)).thenReturn(branch(40L, null));
+        when(userPartyMapMapper.selectList(any())).thenReturn(List.of(mapping(operatorId, 40L)));
+        ReTaskSubmission submission = submission(60L, 30L);
+        when(submissionMapper.selectList(any())).thenReturn(List.of(submission));
+        ReTaskSubmissionFile file = new ReTaskSubmissionFile();
+        file.setId(70L);
+        file.setSubmissionId(60L);
+        file.setFileObjectId("FILE-1");
+        file.setFileName("evidence.pdf");
+        when(submissionFileMapper.selectOne(any())).thenReturn(file);
+        when(fileApi.getFileContent("FILE-1")).thenReturn(new byte[]{1, 2, 3});
+
+        var result = service.download(10L, 30L, "FILE-1", operatorId);
+
+        assertThat(result.getContent()).containsExactly(1, 2, 3);
+        verify(fileApi).getFileContent("FILE-1");
+    }
+
+    @Test
+    void mappedBranchSecretary_cannotDownloadAnotherBranchAttachment() {
+        String operatorId = "SECRETARY-1";
+        when(currentUserApi.getCurrentEmpId()).thenReturn(operatorId);
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RE_SECR"));
+        when(assignmentMapper.selectById(30L)).thenReturn(assignment(30L, 20L, 40L));
+        when(instanceMapper.selectById(20L)).thenReturn(instance(20L, 10L));
+        when(taskMapper.selectById(10L)).thenReturn(task(10L));
+        when(partyOrgMapper.selectById(40L)).thenReturn(branch(40L, null));
+        when(userPartyMapMapper.selectList(any())).thenReturn(List.of(mapping(operatorId, 41L)));
+
+        assertThatThrownBy(() -> service.download(10L, 30L, "FILE-1", operatorId))
+                .isInstanceOf(com.bank.branch.platform.common.web.exception.BizException.class)
+                .hasMessage("无权访问该任务附件");
+        verify(fileApi, never()).getFileContent(any());
+    }
+
     private static ReTask task(Long id) {
         ReTask task = new ReTask();
         task.setId(id);
@@ -126,5 +174,20 @@ class ReTaskFileServiceTest {
         submission.setAssignmentId(assignmentId);
         submission.setVersionNo(1);
         return submission;
+    }
+
+    private static ReUserPartyMap mapping(String userId, Long partyOrgId) {
+        ReUserPartyMap mapping = new ReUserPartyMap();
+        mapping.setUserId(userId);
+        mapping.setPartyOrgId(partyOrgId);
+        return mapping;
+    }
+
+    private static RePartyOrg branch(Long id, String secretaryId) {
+        RePartyOrg branch = new RePartyOrg();
+        branch.setId(id);
+        branch.setOrgLevel(2);
+        branch.setSecretaryId(secretaryId);
+        return branch;
     }
 }

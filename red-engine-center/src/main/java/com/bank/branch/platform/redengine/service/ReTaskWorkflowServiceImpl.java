@@ -691,6 +691,7 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
             dto.setSubmittedAt(submission.getSubmittedAt());
             dto.setContent(submission.getContentText());
             dto.setFormData(submission.getFormData());
+            dto.setReviewFeedback(submission.getReviewOpinion());
             dto.setFiles(loadAttachments(submission.getId()));
         } else {
             dto.setFiles(List.of());
@@ -1064,7 +1065,8 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         return todoMapper.selectOne(new LambdaQueryWrapper<ReTaskTodo>()
                 .eq(ReTaskTodo::getAssignmentId, assignmentId)
                 .eq(ReTaskTodo::getEmployeeId, operatorId)
-                .eq(ReTaskTodo::getRoleCode, REPORTER_TODO_ROLE));
+                .eq(ReTaskTodo::getRoleCode, REPORTER_TODO_ROLE)
+                .ne(ReTaskTodo::getStatus, "CANCELLED"));
     }
 
     /**
