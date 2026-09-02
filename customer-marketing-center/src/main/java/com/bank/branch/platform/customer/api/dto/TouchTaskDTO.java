@@ -3,6 +3,7 @@ package com.bank.branch.platform.customer.api.dto;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 触达任务对外 DTO
@@ -64,6 +65,9 @@ public class TouchTaskDTO {
 
     /** 触达日志数量 */
     private Integer logCount;
+
+    /** 任务下所有有效日志登记的参与人工号 */
+    private List<String> participantEmpIds;
 
     /** 创建时间 */
     private LocalDateTime createdAt;

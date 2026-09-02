@@ -63,7 +63,8 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
         PageResult<TouchTask> page = PageResult.of(1, 20, 2L, Arrays.asList(t1, t2));
 
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
-        when(touchTaskService.listPage(isNull(), isNull(), eq("E10001"), eq(1), eq(20))).thenReturn(page);
+        when(touchTaskService.listPage(isNull(), isNull(), eq("E10001"), eq("ORG_SZ_001"), eq(1), eq(20)))
+                .thenReturn(page);
 
         // when/then
         mockMvc.perform(get("/api/touch-tasks")
@@ -82,6 +83,9 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
     void getTask_shouldReturn200() throws Exception {
         // given
         TouchTask task = buildPendingTask("1");
+        task.setEligibleCollaboratorEmpIdsText("E20002");
+        task.setCanWriteLog(true);
+        task.setCanOperateTask(true);
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG_SZ_001");
         when(touchTaskService.getVisibleById("1", "E10001", "ORG_SZ_001", false)).thenReturn(task);
@@ -91,7 +95,10 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.id").value(1))
-                .andExpect(jsonPath("$.data.taskStatus").value(TouchTaskStatus.PENDING.getCode()));
+                .andExpect(jsonPath("$.data.taskStatus").value(TouchTaskStatus.PENDING.getCode()))
+                .andExpect(jsonPath("$.data.canWriteLog").value(true))
+                .andExpect(jsonPath("$.data.canOperateTask").value(true))
+                .andExpect(jsonPath("$.data.eligibleCollaboratorEmpIdsText").doesNotExist());
     }
 
     @Test

@@ -8,6 +8,54 @@
         updated_by, updated_time, lock_version
     </sql>
 
+    <!--
+        页面查询专用列。客户名称、有效日志数和参与人一次聚合返回，避免列表服务按任务
+        逐条访问工作日志/参与人表。participant_emp_ids_text 由服务层拆分为数组。
+    -->
+    <sql id="VIEW_BASE_COLUMNS">
+        t.id, t.task_no, t.cust_id, t.source_type, t.source_biz_id, t.org_id, t.assignee_emp_id,
+        t.task_type, t.task_status, t.plan_finish_time, t.warning_time, t.sla_status,
+        t.success_time, t.cancel_time, t.cancel_reason, t.created_by, t.created_time,
+        t.updated_by, t.updated_time, t.lock_version
+    </sql>
+    <sql id="VIEW_COLUMNS">
+        <include refid="VIEW_BASE_COLUMNS"/>,
+        c.cust_name AS cust_name,
+        c.cust_name AS customer_name,
+        (SELECT COUNT(*)
+           FROM MARKETING_TOUCH_WORKLOG w
+          WHERE w.task_id = t.id
+            AND w.record_status = 'VALID') AS log_count,
+        (SELECT GROUP_CONCAT(DISTINCT p.participant_emp_id ORDER BY p.participant_emp_id SEPARATOR ',')
+           FROM MARKETING_TOUCH_WORKLOG w
+           JOIN MARKETING_TOUCH_WORKLOG_PARTICIPANT p ON p.worklog_id = w.id
+          WHERE w.task_id = t.id
+            AND w.record_status = 'VALID') AS participant_emp_ids_text,
+        (SELECT GROUP_CONCAT(DISTINCT p.participant_emp_id ORDER BY p.participant_emp_id SEPARATOR ',')
+           FROM MARKETING_TOUCH_WORKLOG w
+           JOIN MARKETING_TOUCH_WORKLOG_PARTICIPANT p ON p.worklog_id = w.id
+          WHERE w.task_id = t.id
+            AND w.record_status = 'VALID'
+            AND w.operator_emp_id = t.assignee_emp_id
+            AND p.participant_role = 'COLLABORATOR'
+            AND p.participant_org_id = t.org_id) AS eligible_collaborator_emp_ids_text
+    </sql>
+    <sql id="VIEW_JOIN">
+        LEFT JOIN MARKETING_CUSTOMER_INFO c
+          ON c.id = t.cust_id AND c.record_status = 'ACTIVE'
+    </sql>
+
+    <!-- 显式声明页面扩展字段；其余任务字段由 autoMapping 按驼峰规则映射。 -->
+    <resultMap id="TOUCH_TASK_VIEW_RESULT"
+               type="com.bank.branch.platform.customer.entity.TouchTask"
+               autoMapping="true">
+        <result property="custName" column="cust_name"/>
+        <result property="customerName" column="customer_name"/>
+        <result property="logCount" column="log_count" javaType="java.lang.Long"/>
+        <result property="participantEmpIdsText" column="participant_emp_ids_text"/>
+        <result property="eligibleCollaboratorEmpIdsText" column="eligible_collaborator_emp_ids_text"/>
+    </resultMap>
+
     <select id="selectByIdForUpdate" resultType="com.bank.branch.platform.customer.entity.TouchTask">
         SELECT <include refid="BASE_COLUMNS"/> FROM MARKETING_TOUCH_TASK WHERE id=#{id} FOR UPDATE
     </select>
@@ -23,16 +71,78 @@
     </select>
 
     <sql id="FILTERS">
-        <if test="keyword != null and keyword != ''">AND task_no LIKE CONCAT('%',#{keyword},'%')</if>
-        <if test="status != null and status != ''">AND task_status=#{status}</if>
-        <if test="assigneeEmpId != null and assigneeEmpId != ''">AND assignee_emp_id=#{assigneeEmpId}</if>
+        <if test="keyword != null and keyword != ''">
+            AND (t.task_no LIKE CONCAT('%',#{keyword},'%')
+                 OR EXISTS (SELECT 1 FROM MARKETING_CUSTOMER_INFO ck
+                             WHERE ck.id = t.cust_id
+                               AND ck.record_status = 'ACTIVE'
+                               AND ck.cust_name LIKE CONCAT('%',#{keyword},'%')))
+        </if>
+        <if test="status != null and status != ''">AND t.task_status=#{status}</if>
+        <if test="assigneeEmpId != null and assigneeEmpId != ''">AND t.assignee_emp_id=#{assigneeEmpId}</if>
     </sql>
-    <select id="selectPage" resultType="com.bank.branch.platform.customer.entity.TouchTask">
-        SELECT <include refid="BASE_COLUMNS"/> FROM MARKETING_TOUCH_TASK WHERE 1=1
-        <include refid="FILTERS"/> ORDER BY created_time DESC LIMIT #{offset},#{limit}
+    <sql id="VIEWER_FILTERS">
+        <if test="keyword != null and keyword != ''">
+            AND (t.task_no LIKE CONCAT('%',#{keyword},'%')
+                 OR EXISTS (SELECT 1 FROM MARKETING_CUSTOMER_INFO ck
+                             WHERE ck.id = t.cust_id
+                               AND ck.record_status = 'ACTIVE'
+                               AND ck.cust_name LIKE CONCAT('%',#{keyword},'%')))
+        </if>
+        <if test="status != null and status != ''">AND t.task_status=#{status}</if>
+    </sql>
+    <select id="selectPage" resultMap="TOUCH_TASK_VIEW_RESULT">
+        SELECT <include refid="VIEW_COLUMNS"/> FROM MARKETING_TOUCH_TASK t
+        <include refid="VIEW_JOIN"/> WHERE 1=1
+        <include refid="FILTERS"/> ORDER BY t.created_time DESC LIMIT #{offset},#{limit}
     </select>
     <select id="countPage" resultType="long">
-        SELECT COUNT(*) FROM MARKETING_TOUCH_TASK WHERE 1=1 <include refid="FILTERS"/>
+        SELECT COUNT(*) FROM MARKETING_TOUCH_TASK t WHERE 1=1 <include refid="FILTERS"/>
+    </select>
+    <select id="selectPageForViewer" resultMap="TOUCH_TASK_VIEW_RESULT">
+        SELECT <include refid="VIEW_COLUMNS"/> FROM MARKETING_TOUCH_TASK t
+        <include refid="VIEW_JOIN"/> WHERE 1=1
+        <include refid="VIEWER_FILTERS"/>
+          AND t.org_id = #{viewerOrgId}
+          AND (
+              t.assignee_emp_id = #{viewerEmpId}
+              OR EXISTS (
+                  SELECT 1
+                    FROM MARKETING_TOUCH_WORKLOG wv
+                    JOIN MARKETING_TOUCH_WORKLOG_PARTICIPANT pv ON pv.worklog_id = wv.id
+                   WHERE wv.task_id = t.id
+                     AND wv.record_status = 'VALID'
+                     AND wv.operator_emp_id = t.assignee_emp_id
+                     AND pv.participant_emp_id = #{viewerEmpId}
+                     AND pv.participant_role = 'COLLABORATOR'
+                     AND pv.participant_org_id = t.org_id
+              )
+          )
+        ORDER BY t.created_time DESC LIMIT #{offset},#{limit}
+    </select>
+    <select id="countPageForViewer" resultType="long">
+        SELECT COUNT(*) FROM MARKETING_TOUCH_TASK t WHERE 1=1
+        <include refid="VIEWER_FILTERS"/>
+          AND t.org_id = #{viewerOrgId}
+          AND (
+              t.assignee_emp_id = #{viewerEmpId}
+              OR EXISTS (
+                  SELECT 1
+                    FROM MARKETING_TOUCH_WORKLOG wv
+                    JOIN MARKETING_TOUCH_WORKLOG_PARTICIPANT pv ON pv.worklog_id = wv.id
+                   WHERE wv.task_id = t.id
+                     AND wv.record_status = 'VALID'
+                     AND wv.operator_emp_id = t.assignee_emp_id
+                     AND pv.participant_emp_id = #{viewerEmpId}
+                     AND pv.participant_role = 'COLLABORATOR'
+                     AND pv.participant_org_id = t.org_id
+              )
+          )
+    </select>
+    <select id="selectViewById" resultMap="TOUCH_TASK_VIEW_RESULT">
+        SELECT <include refid="VIEW_COLUMNS"/> FROM MARKETING_TOUCH_TASK t
+        <include refid="VIEW_JOIN"/>
+        WHERE t.id = #{id}
     </select>
     <select id="selectPendingForSlaRefresh" resultType="com.bank.branch.platform.customer.entity.TouchTask">
         SELECT <include refid="BASE_COLUMNS"/> FROM MARKETING_TOUCH_TASK
@@ -90,14 +200,15 @@
           AND created_time &gt;= CONCAT(#{startDate},' 00:00:00')
           AND created_time &lt; DATE_ADD(#{endDate}, INTERVAL 1 DAY)
     </select>
-    <select id="selectAdminPage" resultType="com.bank.branch.platform.customer.entity.TouchTask">
-        SELECT <include refid="BASE_COLUMNS"/> FROM MARKETING_TOUCH_TASK WHERE 1=1
+    <select id="selectAdminPage" resultMap="TOUCH_TASK_VIEW_RESULT">
+        SELECT <include refid="VIEW_COLUMNS"/> FROM MARKETING_TOUCH_TASK t
+        <include refid="VIEW_JOIN"/> WHERE 1=1
         <include refid="FILTERS"/>
-        <if test="orgId != null and orgId != ''">AND org_id=#{orgId}</if>
-        ORDER BY created_time DESC LIMIT #{offset},#{limit}
+        <if test="orgId != null and orgId != ''">AND t.org_id=#{orgId}</if>
+        ORDER BY t.created_time DESC LIMIT #{offset},#{limit}
     </select>
     <select id="countAdminPage" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM MARKETING_TOUCH_TASK WHERE 1=1 <include refid="FILTERS"/>
-        <if test="orgId != null and orgId != ''">AND org_id=#{orgId}</if>
+        SELECT COUNT(*) FROM MARKETING_TOUCH_TASK t WHERE 1=1 <include refid="FILTERS"/>
+        <if test="orgId != null and orgId != ''">AND t.org_id=#{orgId}</if>
     </select>
 </mapper>

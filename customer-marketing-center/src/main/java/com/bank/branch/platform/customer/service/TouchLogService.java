@@ -22,12 +22,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 
 /** MARKETING_TOUCH_WORKLOG 工作日志服务。 */
 @Service
@@ -42,7 +47,13 @@ public class TouchLogService {
     private final MarketingCustomerInfoMapper customerMapper;
     private final ObjectMapper objectMapper;
 
-    /** 创建工作日志；相同 taskId/clientUuid 返回原记录。 */
+    /**
+     * 创建工作日志；相同 taskId/clientUuid 返回原记录。
+     *
+     * <p>任务完成后仍允许任务执行人或由主执行人在既有日志中登记的协同参与人补录，
+     * 但取消任务永远不可写。任务行锁确保状态判断、幂等查询和日志插入处于同一串行化
+     * 边界；补录 SUCCESS 日志不会再触发状态迁移。</p>
+     */
     @Transactional
     public TouchWorklogVO addLog(String touchTaskId, String clientUuid, String logContent,
                                  String photoUrlsJson, LocalDateTime touchTime, String touchMethod,
@@ -53,10 +64,15 @@ public class TouchLogService {
         if (task == null) {
             throw error(CustomerErrorCode.TOUCH_TASK_NOT_FOUND);
         }
-        if (!operatorEmpId.equals(task.getAssigneeEmpId())) {
+        // 取消任务是不可写终态，即使调用者是管理员也不能代录或补录。
+        if ("CANCELLED".equals(task.getTaskStatus())) {
+            throw error(CustomerErrorCode.TOUCH_TASK_NOT_PENDING);
+        }
+        // 管理员身份不扩大日志写入边界：仍须是执行人或已登记协同参与人。
+        if (!canWriteLog(task, operatorEmpId, operatorOrgId)) {
             throw error(CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN);
         }
-        if (!List.of("PENDING", "IN_PROGRESS").contains(task.getTaskStatus())) {
+        if (!List.of("PENDING", "IN_PROGRESS", "SUCCESS").contains(task.getTaskStatus())) {
             throw error(CustomerErrorCode.TOUCH_TASK_NOT_PENDING);
         }
 
@@ -76,7 +92,8 @@ public class TouchLogService {
         LocalDateTime now = LocalDateTime.now();
 
         TouchWorklog worklog = new TouchWorklog();
-        worklog.setWorklogNo("MWL" + now.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS")));
+        worklog.setWorklogNo("MWL" + now.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS"))
+                + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
         worklog.setTaskId(taskId);
         worklog.setCustId(task.getCustId());
         worklog.setCustomerNameSnapshot(customer.getCustName());
@@ -98,7 +115,10 @@ public class TouchLogService {
             worklogMapper.insert(worklog);
             insertPictures(worklog.getId(), photoGroups, operatorEmpId, now);
             insertParticipants(worklog.getId(), participants, operatorEmpId, operatorOrgId, now);
-            taskMapper.markInProgressIfPending(taskId, operatorEmpId, now);
+            // 只有首条日志驱动 PENDING → IN_PROGRESS；SUCCESS 补录不能改变终态。
+            if ("PENDING".equals(task.getTaskStatus())) {
+                taskMapper.markInProgressIfPending(taskId, operatorEmpId, now);
+            }
             return toVO(worklog);
         } catch (DuplicateKeyException duplicate) {
             TouchWorklog duplicated = worklogMapper.selectByTaskAndClientUuid(taskId, clientUuid);
@@ -139,7 +159,9 @@ public class TouchLogService {
                 TouchWorklogPictureRecord row = new TouchWorklogPictureRecord();
                 row.setWorklogId(worklogId);
                 row.setPictureType(type);
-                row.setFileObjectId(files.get(i));
+                // 前端使用平台下载地址展示照片，但数据库只保存真实文件对象 ID，避免把
+                // 文件名 fragment 或下载路径挤进 VARCHAR(64) 并导致后续下载失效。
+                row.setFileObjectId(toStoredFileObjectId(files.get(i)));
                 row.setSortNo(i + 1);
                 row.setCreatedBy(operator);
                 row.setCreatedTime(now);
@@ -198,7 +220,7 @@ public class TouchLogService {
                 case "BUSINESS_SITE" -> "workplace";
                 default -> null;
             };
-            if (group != null) groups.get(group).add(picture.getFileObjectId());
+            if (group != null) groups.get(group).add(toPhotoUrl(picture.getFileObjectId()));
         }
         vo.setPhotoGroups(groups);
         vo.setPhotoUrls(groups.values().stream().flatMap(List::stream).toList());
@@ -241,8 +263,104 @@ public class TouchLogService {
             throw error(CustomerErrorCode.TOUCH_LOG_PHOTO_LIMIT_EXCEEDED);
         }
         boolean invalid = groups.values().stream().flatMap(List::stream)
-                .anyMatch(file -> !file.toLowerCase().matches(".*\\.(jpg|jpeg|png|heic)(\\?.*)?$"));
+                .anyMatch(file -> !isImageReference(file));
         if (invalid) throw error(CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID);
+    }
+
+    /**
+     * 判断照片引用的扩展名。平台下载地址的文件名通常位于 URL fragment（#xxx.jpg），
+     * 同时兼容旧客户端把扩展名放在路径或查询串中的形式；非图片扩展名仍然拒绝。
+     */
+    private boolean isImageReference(String reference) {
+        if (!StringUtils.hasText(reference)) return false;
+        String value = reference.toLowerCase();
+        int hash = value.indexOf('#');
+        String fragment = hash >= 0 ? value.substring(hash + 1) : "";
+        String beforeFragment = hash >= 0 ? value.substring(0, hash) : value;
+        String candidate = stripQuery(fragment);
+        if (candidate == null || candidate.isBlank()) candidate = stripQuery(beforeFragment);
+        return hasImageSuffix(candidate);
+    }
+
+    private boolean hasImageSuffix(String value) {
+        return value != null && value.matches(".*\\.(jpg|jpeg|png|heic)$");
+    }
+
+    private String stripQuery(String value) {
+        if (value == null) return null;
+        int query = value.indexOf('?');
+        return query >= 0 ? value.substring(0, query) : value;
+    }
+
+    /**
+     * 将平台下载地址还原为数据库中的文件对象 ID；非平台 URL 维持兼容原值。
+     */
+    private String toStoredFileObjectId(String reference) {
+        if (!StringUtils.hasText(reference)) return reference;
+        String marker = "/api/files/";
+        int markerIndex = reference.indexOf(marker);
+        if (markerIndex < 0) return reference;
+        int idStart = markerIndex + marker.length();
+        int downloadIndex = reference.indexOf("/download", idStart);
+        if (downloadIndex <= idStart) return reference;
+        String suffix = reference.substring(downloadIndex + "/download".length());
+        if (!suffix.isEmpty() && suffix.charAt(0) != '?' && suffix.charAt(0) != '#') return reference;
+        return decodePathSegment(reference.substring(idStart, downloadIndex));
+    }
+
+    /**
+     * 将数据库中的文件对象 ID转换成前端可直接展示的下载地址；已有完整 URL 保持不变。
+     */
+    private String toPhotoUrl(String fileObjectId) {
+        if (!StringUtils.hasText(fileObjectId)) return fileObjectId;
+        if (fileObjectId.startsWith("/api/files/")
+                || fileObjectId.matches("(?i)^[a-z][a-z0-9+.-]*://.*")) {
+            return fileObjectId;
+        }
+        return "/api/files/" + encodePathSegment(fileObjectId) + "/download";
+    }
+
+    private String decodePathSegment(String value) {
+        try {
+            return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException ex) {
+            return value;
+        }
+    }
+
+    private String encodePathSegment(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+
+    /**
+     * 日志写入者只能是任务执行人，或由任务执行人在有效历史日志中登记的协同参与人。
+     * 管理员参数故意不参与判断，防止管理查看权限意外变成代录权限。
+     */
+    private boolean canWriteLog(TouchTask task, String operatorEmpId, String operatorOrgId) {
+        if (!StringUtils.hasText(operatorEmpId) || !StringUtils.hasText(operatorOrgId)
+                || !Objects.equals(task.getOrgId(), operatorOrgId)) return false;
+        if (Objects.equals(operatorEmpId, task.getAssigneeEmpId())) return true;
+        if (task.getId() == null) return false;
+
+        List<TouchWorklog> assigneeLogs = worklogMapper.selectValidByTaskId(task.getId());
+        if (assigneeLogs == null) return false;
+        for (TouchWorklog log : assigneeLogs) {
+            // 只认可主执行人登记的协同人，避免协同人员通过后续日志自助扩大写入范围。
+            if (log == null || !Objects.equals(task.getAssigneeEmpId(), log.getOperatorEmpId())
+                    || log.getId() == null) {
+                continue;
+            }
+            List<TouchWorklogParticipant> participants = participantMapper.selectByWorklogId(log.getId());
+            if (participants == null) continue;
+            boolean registered = participants.stream().anyMatch(participant ->
+                    participant != null
+                            && Objects.equals(operatorEmpId, participant.getParticipantEmpId())
+                            && "COLLABORATOR".equals(participant.getParticipantRole())
+                            && (participant.getParticipantOrgId() == null
+                            || Objects.equals(task.getOrgId(), participant.getParticipantOrgId())));
+            if (registered) return true;
+        }
+        return false;
     }
 
     private void applyLocation(TouchWorklog worklog, String locationJson) {

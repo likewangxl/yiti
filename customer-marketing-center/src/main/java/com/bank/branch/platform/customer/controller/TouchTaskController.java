@@ -55,7 +55,7 @@ public class TouchTaskController {
     /**
      * 分页查询触达任务列表。
      *
-     * @param keyword       关键词（模糊匹配 task_no），可为空
+     * @param keyword       关键词（模糊匹配任务编号或客户名称），可为空
      * @param status        任务状态过滤（PENDING/SUCCESS/CANCELLED），可为空
      * @param assigneeEmpId 执行人工号过滤，可为空
      * @param pageNo        页码，默认 1
@@ -71,9 +71,11 @@ public class TouchTaskController {
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         String assigneeEmpId = currentUserApi.getCurrentEmpId();
+        String operatorOrgCode = currentUserApi.getCurrentOrgCode();
         log.info("[TouchTaskController.listPage] keyword={}, status={}, currentAssignee={}, pageNo={}, pageSize={}",
                 keyword, status, assigneeEmpId, pageNo, pageSize);
-        PageResult<TouchTask> result = touchTaskService.listPage(keyword, status, assigneeEmpId, pageNo, pageSize);
+        PageResult<TouchTask> result = touchTaskService.listPage(
+                keyword, status, assigneeEmpId, operatorOrgCode, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 

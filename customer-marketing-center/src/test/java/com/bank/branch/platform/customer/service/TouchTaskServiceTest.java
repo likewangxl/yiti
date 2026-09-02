@@ -245,6 +245,21 @@ class TouchTaskServiceTest {
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode());
     }
 
+    @Test
+    void getVisibleById_shouldExposeCollaboratorWriteWithoutTaskOperationPermission() {
+        TouchTask task = buildPendingTask("task-visible");
+        TouchTask view = buildPendingTask("task-visible");
+        view.setEligibleCollaboratorEmpIdsText("E20002");
+        when(taskMapper.selectById("task-visible")).thenReturn(task);
+        when(taskMapper.selectViewById("task-visible")).thenReturn(view);
+
+        TouchTask result = touchTaskService.getVisibleById(
+                "task-visible", "E20002", "ORG_SZ_001", false);
+
+        assertThat(result.getCanWriteLog()).isTrue();
+        assertThat(result.getCanOperateTask()).isFalse();
+    }
+
     // ==================== listPage ====================
 
     @Test
@@ -270,6 +285,33 @@ class TouchTaskServiceTest {
         // 验证 offset 计算正确：(3-1)*10=20
         verify(taskMapper).selectPage(null, null, null, 20, 10);
         verify(taskMapper).countPage(null, null, null);
+    }
+
+    @Test
+    void listPageForViewer_shouldUseSameOrgAndCollaboratorScopeAndNormalizeViewFields() {
+        TouchTask task = buildPendingTask("task-viewer-001");
+        task.setCustName("测试客户");
+        task.setParticipantEmpIdsText("E10001,E20002,E10001");
+        task.setEligibleCollaboratorEmpIdsText("E20002");
+        task.setLogCount(2L);
+        when(taskMapper.selectPageForViewer("客户", "IN_PROGRESS", "E20002", "ORG_SZ_001", 0, 20))
+                .thenReturn(List.of(task));
+        when(taskMapper.countPageForViewer("客户", "IN_PROGRESS", "E20002", "ORG_SZ_001"))
+                .thenReturn(1L);
+
+        PageResult<TouchTask> result = touchTaskService.listPage(
+                "客户", "IN_PROGRESS", "E20002", "ORG_SZ_001", 1, 20);
+
+        assertThat(result.getTotal()).isEqualTo(1L);
+        assertThat(result.getRecords()).hasSize(1);
+        TouchTask view = result.getRecords().get(0);
+        assertThat(view.getCustomerName()).isEqualTo("测试客户");
+        assertThat(view.getParticipantEmpIds()).containsExactly("E10001", "E20002");
+        assertThat(view.getLogCount()).isEqualTo(2L);
+        assertThat(view.getCanWriteLog()).isTrue();
+        assertThat(view.getCanOperateTask()).isFalse();
+        verify(taskMapper).selectPageForViewer("客户", "IN_PROGRESS", "E20002", "ORG_SZ_001", 0, 20);
+        verify(taskMapper).countPageForViewer("客户", "IN_PROGRESS", "E20002", "ORG_SZ_001");
     }
 
     // ==================== refreshSla ====================

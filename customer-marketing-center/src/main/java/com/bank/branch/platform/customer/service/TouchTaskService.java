@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 
 /**
@@ -44,7 +45,7 @@ public class TouchTaskService {
      * 从认领事件创建首次触达任务。
      * <p>
      * 由 {@code ClaimCreatedListener} 在认领成功事务提交后调用。
-     * 任务类型为 FIRST_TOUCH，初始状态 PENDING，SLA 状态 GREEN。
+     * 任务类型为 FIRST_TOUCH，初始状态 PENDING，SLA 状态 BLUE。
      * 计划完成时间 = now + 7 天，预警时间 = now + 5 天。
      * </p>
      *
@@ -330,17 +331,22 @@ public class TouchTaskService {
             throw new BizException(CustomerErrorCode.HISTORY_ACCESS_FORBIDDEN.getCode(),
                     CustomerErrorCode.HISTORY_ACCESS_FORBIDDEN.getMessage());
         }
-        return task;
+        // 读取展示字段使用一次聚合查询；先用原任务做机构校验，避免跨机构响应任何详情数据。
+        TouchTask view = taskMapper.selectViewById(id);
+        TouchTask result = view == null ? task : view;
+        normalizeViewFields(result);
+        applyViewerCapabilities(result, operatorEmpId, operatorOrgCode, operatorIsAdmin);
+        return result;
     }
 
     /**
      * 分页查询触达任务列表。
      * <p>
-     * keyword 模糊搜索 task_no，status 和 assigneeEmpId 精确匹配。
+     * keyword 模糊搜索任务编号或客户名称，status 和 assigneeEmpId 精确匹配。
      * offset = (pageNo - 1) * pageSize
      * </p>
      *
-     * @param keyword       关键词（搜索 task_no），可为 null
+     * @param keyword       关键词（搜索任务编号或客户名称），可为 null
      * @param status        任务状态过滤，可为 null
      * @param assigneeEmpId 执行人工号过滤，可为 null
      * @param pageNo        页码（从 1 开始）
@@ -356,6 +362,33 @@ public class TouchTaskService {
         List<TouchTask> records = taskMapper.selectPage(keyword, status, assigneeEmpId, offset, pageSize);
         long total = taskMapper.countPage(keyword, status, assigneeEmpId);
 
+        normalizeViewFields(records);
+        log.info("[TouchTaskService.listPage] total={}", total);
+        return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * 按当前用户可见范围分页查询触达任务。
+     * <p>
+     * 服务端把机构边界和协同参与关系下推到同一条 SQL：仅返回同机构的任务，且当前员工
+     * 必须是主执行人，或已由主执行人在有效日志中登记为 COLLABORATOR。列表展示字段由
+     * SQL 聚合一次返回，不按任务逐条查询日志，避免 N+1。
+     * </p>
+     */
+    public PageResult<TouchTask> listPage(String keyword, String status, String viewerEmpId,
+                                          String viewerOrgId, int pageNo, int pageSize) {
+        log.info("[TouchTaskService.listPage] keyword={}, status={}, viewerEmpId={}, viewerOrgId={}, pageNo={}, pageSize={}",
+                keyword, status, viewerEmpId, viewerOrgId, pageNo, pageSize);
+
+        int offset = (pageNo - 1) * pageSize;
+        List<TouchTask> records = taskMapper.selectPageForViewer(
+                keyword, status, viewerEmpId, viewerOrgId, offset, pageSize);
+        long total = taskMapper.countPageForViewer(keyword, status, viewerEmpId, viewerOrgId);
+
+        normalizeViewFields(records);
+        if (records != null) {
+            records.forEach(task -> applyViewerCapabilities(task, viewerEmpId, viewerOrgId, false));
+        }
         log.info("[TouchTaskService.listPage] total={}", total);
         return PageResult.of(pageNo, pageSize, total, records);
     }
@@ -363,11 +396,11 @@ public class TouchTaskService {
     /**
      * 管理后台全局分页查询触达任务（不按机构过滤，需 ADMIN 权限）。
      * <p>
-     * keyword 模糊搜索 task_no，status、assigneeEmpId、orgId 精确匹配，均可为 null 表示不过滤。
+     * keyword 模糊搜索任务编号或客户名称，status、assigneeEmpId、orgId 精确匹配，均可为 null 表示不过滤。
      * offset = (pageNo - 1) * pageSize
      * </p>
      *
-     * @param keyword       关键词（搜索 task_no），可为 null
+     * @param keyword       关键词（搜索任务编号或客户名称），可为 null
      * @param status        任务状态过滤，可为 null
      * @param assigneeEmpId 执行人工号过滤，可为 null
      * @param orgId         机构 ID 过滤，可为 null
@@ -384,6 +417,7 @@ public class TouchTaskService {
         List<TouchTask> records = taskMapper.selectAdminPage(keyword, status, assigneeEmpId, orgId, offset, pageSize);
         Long total = taskMapper.countAdminPage(keyword, status, assigneeEmpId, orgId);
 
+        normalizeViewFields(records);
         log.info("[TouchTaskService.listPageAdmin] total={}", total);
         return PageResult.of(pageNo, pageSize, total == null ? 0L : total, records);
     }
@@ -404,7 +438,61 @@ public class TouchTaskService {
     public List<TouchTask> listAllForAdminExport(String keyword, String status, String orgId, int maxRows) {
         log.info("[TouchTaskService.listAllForAdminExport] keyword={}, status={}, orgId={}, maxRows={}",
                 keyword, status, orgId, maxRows);
-        return taskMapper.selectAdminPage(keyword, status, null, orgId, 0, maxRows);
+        List<TouchTask> records = taskMapper.selectAdminPage(keyword, status, null, orgId, 0, maxRows);
+        normalizeViewFields(records);
+        return records;
+    }
+
+    /** 将 SQL 聚合的页面字段转换成前端稳定的 JSON 类型。 */
+    private void normalizeViewFields(List<TouchTask> records) {
+        if (records == null) {
+            return;
+        }
+        records.forEach(this::normalizeViewFields);
+    }
+
+    private void normalizeViewFields(TouchTask task) {
+        if (task == null) {
+            return;
+        }
+        if (task.getCustomerName() == null) {
+            task.setCustomerName(task.getCustName());
+        }
+        if (task.getCustName() == null) {
+            task.setCustName(task.getCustomerName());
+        }
+        String participants = task.getParticipantEmpIdsText();
+        if (participants != null && !participants.isBlank()) {
+            task.setParticipantEmpIds(java.util.Arrays.stream(participants.split(","))
+                    .map(String::trim)
+                    .filter(value -> !value.isEmpty())
+                    .distinct()
+                    .toList());
+        } else if (task.getParticipantEmpIds() == null) {
+            task.setParticipantEmpIds(List.of());
+        }
+        if (task.getLogCount() == null) {
+            task.setLogCount(0L);
+        }
+    }
+
+    /** 页面能力与服务端写权限保持一致，避免协同人员看到完成/取消入口。 */
+    private void applyViewerCapabilities(TouchTask task, String viewerEmpId, String viewerOrgId,
+                                         boolean viewerIsAdmin) {
+        boolean assignee = Objects.equals(viewerEmpId, task.getAssigneeEmpId());
+        boolean sameOrg = Objects.equals(viewerOrgId, task.getOrgId());
+        boolean collaborator = sameOrg && csvContains(task.getEligibleCollaboratorEmpIdsText(), viewerEmpId);
+        task.setCanWriteLog(assignee || collaborator);
+        task.setCanOperateTask(viewerIsAdmin || assignee);
+    }
+
+    private boolean csvContains(String csv, String value) {
+        if (csv == null || csv.isBlank() || value == null || value.isBlank()) {
+            return false;
+        }
+        return java.util.Arrays.stream(csv.split(","))
+                .map(String::trim)
+                .anyMatch(value::equals);
     }
 
     /**

@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
  *   <li>finishResult：仅在 taskStatus 为 SUCCESS 或 CANCELLED 时填入 taskStatus 值，否则为 null</li>
  *   <li>slaWarning：slaStatus 为 YELLOW 或 RED 时为 true，其余为 false，null 时为 false</li>
  *   <li>slaDeadline：来自 planFinishTime</li>
- *   <li>custName、assigneeEmpName、logCount 需二次查询，转换器层暂置 null，由上层 Service 补充</li>
+ *   <li>custName、logCount、participantEmpIds 从实体的页面展示字段透传；assigneeEmpName 仍由上层解析</li>
  * </ul>
  */
 public final class TouchTaskDTOConverter {
@@ -62,10 +62,11 @@ public final class TouchTaskDTOConverter {
         dto.setFinishResult(resolveFinishResult(entity.getTaskStatus()));
         // slaWarning：YELLOW/RED 表示已预警
         dto.setSlaWarning(resolveSlaWarning(entity.getSlaStatus()));
-        // 以下字段需上层 Service 查询后补充，转换器层暂置 null
-        dto.setCustName(null);              // 需查 CustMaster
+        // 页面查询服务会在返回实体前填充这些非持久化展示字段；未填充时保持 null。
+        dto.setCustName(entity.getCustName());
         dto.setAssigneeEmpName(null);       // 需查 EmpApi
-        dto.setLogCount(null);              // 需由 worklog_id 判断，转换器不访问数据库
+        dto.setLogCount(entity.getLogCount() == null ? null : entity.getLogCount().intValue());
+        dto.setParticipantEmpIds(entity.getParticipantEmpIds());
         return dto;
     }
 

@@ -29,6 +29,19 @@ public interface TouchTaskMapper extends BaseMapper<TouchTask> {
                                @Param("offset") int offset, @Param("limit") int limit);
     long countPage(@Param("keyword") String keyword, @Param("status") String status,
                    @Param("assigneeEmpId") String assigneeEmpId);
+    /**
+     * 查询当前员工可见的触达任务：主执行人，或同机构且已在有效日志中登记的协同参与人。
+     * 列表展示字段在 SQL 中一次聚合，避免服务层按任务逐条查询日志和参与人。
+     */
+    List<TouchTask> selectPageForViewer(@Param("keyword") String keyword, @Param("status") String status,
+                                        @Param("viewerEmpId") String viewerEmpId,
+                                        @Param("viewerOrgId") String viewerOrgId,
+                                        @Param("offset") int offset, @Param("limit") int limit);
+    long countPageForViewer(@Param("keyword") String keyword, @Param("status") String status,
+                            @Param("viewerEmpId") String viewerEmpId,
+                            @Param("viewerOrgId") String viewerOrgId);
+    /** 查询带页面展示聚合字段的任务详情，不用于写入锁定。 */
+    TouchTask selectViewById(@Param("id") String id);
     List<TouchTask> selectPendingForSlaRefresh();
     Long countActiveByCust(@Param("custId") String custId);
     List<TouchTask> selectActiveByCust(@Param("custId") String custId);

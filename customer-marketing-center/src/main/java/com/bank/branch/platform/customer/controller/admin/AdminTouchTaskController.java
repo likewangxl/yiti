@@ -52,11 +52,11 @@ public class AdminTouchTaskController {
     /**
      * 管理后台全局触达任务列表（不按机构过滤）。
      * <p>
-     * 支持关键词（模糊搜索 task_no）、状态、执行人工号、机构 ID 过滤，
+     * 支持关键词（模糊搜索任务编号或客户名称）、状态、执行人工号、机构 ID 过滤，
      * 分页返回结果，默认 pageSize=20，最大 100。
      * </p>
      *
-     * @param keyword       关键词（搜索 task_no），可为 null
+     * @param keyword       关键词（搜索任务编号或客户名称），可为 null
      * @param status        任务状态过滤，可为 null
      * @param assigneeEmpId 执行人工号过滤，可为 null
      * @param orgId         机构 ID 过滤，可为 null

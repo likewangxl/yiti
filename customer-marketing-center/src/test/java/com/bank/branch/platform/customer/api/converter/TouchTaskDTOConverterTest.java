@@ -38,6 +38,9 @@ class TouchTaskDTOConverterTest {
         entity.setCancelTime(null);
         entity.setCreatedTime(now);
         entity.setUpdatedTime(now.plusHours(1));
+        entity.setCustName("测试客户");
+        entity.setLogCount(2L);
+        entity.setParticipantEmpIds(List.of("EMP_001", "EMP_002"));
 
         // when
         TouchTaskDTO dto = TouchTaskDTOConverter.toDTO(entity);
@@ -54,10 +57,10 @@ class TouchTaskDTOConverterTest {
         assertThat(dto.getWorklogId()).isNull();
         assertThat(dto.getExpectedFinishAt()).isEqualTo(now.plusDays(7));
         assertThat(dto.getCreatedAt()).isEqualTo(now);
-        // 暂置 null 字段
-        assertThat(dto.getCustName()).isNull();
+        assertThat(dto.getCustName()).isEqualTo("测试客户");
         assertThat(dto.getAssigneeEmpName()).isNull();
-        assertThat(dto.getLogCount()).isNull();
+        assertThat(dto.getLogCount()).isEqualTo(2);
+        assertThat(dto.getParticipantEmpIds()).containsExactly("EMP_001", "EMP_002");
         // PENDING 状态 finishResult 为 null
         assertThat(dto.getFinishResult()).isNull();
     }
