@@ -3,7 +3,7 @@
 ## 核对范围
 
 - V2_DEMO 需求：`/home/djdev/lijh/V2_DEMO/公司部演示源码/03_功能需求与业务设计.md`
-- yiti 功能设计：`docs/modules/customer-marketing-center/10-营销客户管理前后端功能设计.md`
+- yiti 功能与接口设计：`docs/modules/customer-marketing-center/01-功能规格.md`、`docs/modules/customer-marketing-center/03-接口设计与报文.md`
 - yiti 表设计：`docs/modules/customer-marketing-center/05-表结构DDL.md`
 - 当前运行库：`yiti`，仅通过 `information_schema` 做只读结构核对
 
