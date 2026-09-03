@@ -41,10 +41,24 @@
           <h2 class="section-title">触达任务明细</h2>
           <p class="hint">状态标签同时提供文字说明；参与人、日志数量与客户信息不依赖颜色或隐藏字段。</p>
         </div>
-        <span class="result-count">共 {{ total }} 条</span>
+        <div class="toolbar-actions">
+          <el-button type="primary" :disabled="selectedRows.length === 0" @click="openBatchAssign">批量改派</el-button>
+          <span class="result-count">共 {{ total }} 条</span>
+        </div>
       </div>
       <p v-if="loadError" class="table-state error-state" role="alert">{{ loadError }}</p>
-      <el-table v-else class="task-table" :data="rows" v-loading="loading" border stripe aria-label="触达任务一览列表">
+      <el-table
+        v-else
+        ref="taskTable"
+        class="task-table"
+        :data="rows"
+        v-loading="loading"
+        border
+        stripe
+        aria-label="触达任务一览列表"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="48" fixed="left" :selectable="isSelectable" />
         <el-table-column label="任务编号 / 类型" min-width="190" class-name="compact-stack-cell">
           <template #default="{row}">
             <div class="stack"><strong>{{ row.taskNo || row.id || '-' }}</strong><small>{{ taskTypeLabel(row.taskType) }}</small></div>
@@ -73,6 +87,28 @@
     <div class="pager" aria-label="触达任务一览分页">
       <el-pagination background layout="total, sizes, prev, pager, next" :total="total" v-model:current-page="pageNo" v-model:page-size="pageSize" :page-sizes="[10,20,50,100]" @change="load" />
     </div>
+    <el-dialog v-model="batchAssignDlg.show" title="批量改派触达任务" width="560px" :close-on-click-modal="false">
+      <el-alert
+        title="仅允许改派待办理或办理中的任务，已完成和已取消任务不会被更新。"
+        type="info"
+        :closable="false"
+        show-icon
+        class="batch-assign-hint"
+      />
+      <el-form label-width="160px" class="batch-assign-form">
+        <el-form-item label="已选任务数">{{ selectedRows.length }}</el-form-item>
+        <el-form-item label="新办理人员工号" required>
+          <el-input v-model="batchAssignDlg.newAssigneeEmpId" clearable maxlength="64" show-word-limit placeholder="请输入员工工号" />
+        </el-form-item>
+        <el-form-item label="改派原因" required>
+          <el-input v-model="batchAssignDlg.reason" type="textarea" :rows="4" maxlength="500" show-word-limit placeholder="请填写改派原因" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="batchAssignDlg.saving" @click="batchAssignDlg.show = false">取消</el-button>
+        <el-button type="primary" :loading="batchAssignDlg.saving" @click="submitBatchAssign">确认改派</el-button>
+      </template>
+    </el-dialog>
     <TouchTaskDetailDialog v-model="detail.show" :task-id="detail.taskId" :allow-write="false" />
   </main>
 </template>
@@ -81,7 +117,7 @@
 import { computed, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import TouchTaskDetailDialog from '@/components/TouchTaskDetailDialog.vue';
-import { exportTouchOverview, listTouchOverview } from '@/api/customerMarketing';
+import { batchAssignTouchTasks, exportTouchOverview, listTouchOverview } from '@/api/customerMarketing';
 import { slaLabel, slaTagType, taskStatusLabel, taskTagType } from '@/utils/touchViewModel';
 
 const statuses = [
@@ -98,6 +134,9 @@ const loadError = ref('');
 const pageNo = ref(1);
 const pageSize = ref(20);
 const detail = reactive({ show: false, taskId: '' });
+const taskTable = ref(null);
+const selectedRows = ref([]);
+const batchAssignDlg = reactive({ show: false, newAssigneeEmpId: '', reason: '', saving: false });
 const fmt = value => value ? String(value).replace('T', ' ').slice(0, 19) : '-';
 
 const cards = computed(() => [
@@ -151,6 +190,19 @@ function inFlight(row) {
   return ['PENDING', 'IN_PROGRESS'].includes(String(row?.taskStatus || '').toUpperCase());
 }
 
+function isSelectable(row) {
+  return inFlight(row);
+}
+
+function handleSelectionChange(selection) {
+  selectedRows.value = selection.filter(row => isSelectable(row));
+}
+
+function clearSelection() {
+  selectedRows.value = [];
+  taskTable.value?.clearSelection?.();
+}
+
 function params() {
   return {
     keyword: q.keyword || undefined,
@@ -163,6 +215,7 @@ function params() {
 }
 
 async function load() {
+  clearSelection();
   loading.value = true;
   loadError.value = '';
   try {
@@ -181,6 +234,45 @@ async function load() {
 function search() { pageNo.value = 1; void load(); }
 function reset() { Object.assign(q, { keyword: '', assigneeEmpId: '', orgId: '', status: '' }); search(); }
 function open(row) { detail.taskId = row.id; detail.show = true; }
+
+function openBatchAssign() {
+  if (!selectedRows.value.length) {
+    ElMessage.warning('请先选择待办理或办理中的触达任务');
+    return;
+  }
+  Object.assign(batchAssignDlg, { show: true, newAssigneeEmpId: '', reason: '', saving: false });
+}
+
+async function submitBatchAssign() {
+  const taskIds = selectedRows.value.map(row => row.id).filter(Boolean);
+  const newAssigneeEmpId = batchAssignDlg.newAssigneeEmpId.trim();
+  const reason = batchAssignDlg.reason.trim();
+  if (!taskIds.length) {
+    ElMessage.warning('请先选择待办理或办理中的触达任务');
+    return;
+  }
+  if (!newAssigneeEmpId) {
+    ElMessage.warning('请输入新办理人员工号');
+    return;
+  }
+  if (!reason) {
+    ElMessage.warning('请填写改派原因');
+    return;
+  }
+  batchAssignDlg.saving = true;
+  try {
+    const result = await batchAssignTouchTasks(taskIds, newAssigneeEmpId, reason);
+    const updated = Number(result?.data ?? result);
+    ElMessage.success(Number.isFinite(updated) ? `已成功改派 ${updated} 条触达任务` : '触达任务改派成功');
+    batchAssignDlg.show = false;
+    clearSelection();
+    await load();
+  } catch (error) {
+    ElMessage.error(`触达任务改派失败：${error?.message || '请稍后重试'}`);
+  } finally {
+    batchAssignDlg.saving = false;
+  }
+}
 
 async function download() {
   try {
@@ -217,6 +309,7 @@ void load();
 .filter-bar { padding: var(--space-3, 12px) var(--space-4, 16px); }
 .data-panel { padding: var(--space-4, 16px); }
 .toolbar { align-items: flex-end; }
+.toolbar-actions { display: flex; align-items: center; gap: var(--space-3, 12px); }
 .section-title { margin: 0 0 3px; }
 .hint, .result-count { color: var(--color-text-muted, #909399); font-size: 12px; }
 .result-count { white-space: nowrap; }
@@ -227,6 +320,8 @@ void load();
 .log-count { font-variant-numeric: tabular-nums; }
 .table-state { padding: 20px; border: 1px solid var(--color-border, #ebeef5); background: var(--touch-soft); text-align: center; }
 .error-state { color: var(--color-danger-fg, #b42318); background: var(--color-danger-bg, #fff1f2); }
+.batch-assign-hint { margin-bottom: 16px; }
+.batch-assign-form :deep(.el-form-item) { margin-bottom: 14px; }
 .pager { display: flex; justify-content: flex-end; }
 @media (max-width: 1000px) { .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 650px) { .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .toolbar { align-items: flex-start; flex-direction: column; } }

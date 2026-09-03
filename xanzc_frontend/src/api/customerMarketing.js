@@ -44,6 +44,11 @@ export const getTouchSummary = (params = {}) =>
 export const exportTouchOverview = (params = {}) =>
   call('get', '/admin/touch-tasks/export', { params, responseType: 'blob' }, null);
 
+export const batchAssignTouchTasks = (taskIds, newAssigneeEmpId, reason) =>
+  call('post', '/admin/touch-tasks/batch-assign', {
+    data: { taskIds, newAssigneeEmpId, reason }
+  });
+
 export const getMarketingCustomer = id =>
   call('get', `/customers/${id}`, {}, null);
 export const listMarketingCustomers = (params = {}) => call('get', '/customers', { params }, null);

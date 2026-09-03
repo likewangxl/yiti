@@ -35,7 +35,8 @@
       </el-form>
     </el-card>
 
-    <el-table :data="rows" v-loading="loading" border stripe class="table">
+    <p v-if="loadError" class="table-state error-state" role="alert">{{ loadError }}</p>
+    <el-table v-else :data="rows" v-loading="loading" border stripe class="table">
       <el-table-column label="客户名称" min-width="190" show-overflow-tooltip>
         <template #default="{ row }">{{ row.custName || row.customerName || '-' }}</template>
       </el-table-column>
@@ -71,7 +72,7 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="235" fixed="right" class-name="operation-cell">
+      <el-table-column label="操作" width="265" fixed="right" class-name="operation-cell">
         <template #default="{ row }">
           <template v-if="isRelationOperable(row)">
             <el-button
@@ -80,6 +81,19 @@
               type="primary"
               @click="viewTask(row)"
             >办理触达</el-button>
+            <template v-else-if="canSupplementTask(row)">
+              <el-button
+                link
+                type="primary"
+                @click="viewTask(row, 'supplement')"
+              >补录日志</el-button>
+              <el-button
+                link
+                type="warning"
+                :disabled="row.canReTouch === false"
+                @click="openStart(row, true)"
+              >再次触达</el-button>
+            </template>
             <el-button
               v-else-if="isTerminalTask(row)"
               link
@@ -162,6 +176,7 @@ const sourceType = ref('');
 const rows = ref([]);
 const total = ref(0);
 const loading = ref(false);
+const loadError = ref('');
 const pageNo = ref(1);
 const pageSize = ref(20);
 const detail = reactive({ show: false, taskId: '', allowWrite: true, mode: 'view' });
@@ -181,6 +196,7 @@ function pageOf(result) {
 
 async function load() {
   loading.value = true;
+  loadError.value = '';
   try {
     const r = await listClaimedCustomers({ tab: tab.value,
       keyword: keyword.value || undefined,
@@ -192,9 +208,10 @@ async function load() {
     rows.value = page.records;
     total.value = Number(r?.total || 0);
     if (!total.value) total.value = page.total;
-  } catch {
+  } catch (error) {
     rows.value = [];
     total.value = 0;
+    loadError.value = error?.message || '已认领客户池加载失败，请稍后重试';
   } finally {
     loading.value = false;
   }
@@ -255,12 +272,12 @@ async function submitStart() {
   }
 }
 
-function viewTask(row) {
+function viewTask(row, mode = 'handle') {
   const taskId = row.latestTaskId || row.taskId;
   if (!taskId) return;
   detail.taskId = taskId;
   detail.allowWrite = isRelationOperable(row);
-  detail.mode = 'handle';
+  detail.mode = mode;
   detail.show = true;
 }
 
@@ -287,6 +304,10 @@ function taskStatus(row) {
 
 function hasRunningTask(row) {
   return Boolean(row?.latestTaskId || row?.taskId) && ['PENDING', 'IN_PROGRESS', 'PROCESSING', 'RUNNING'].includes(taskStatus(row));
+}
+
+function canSupplementTask(row) {
+  return ['SUCCESS', 'COMPLETED'].includes(taskStatus(row));
 }
 
 function isTerminalTask(row) {
@@ -366,6 +387,8 @@ load();
 .page-head span { font-size: 12px; color: #909399; }
 .filter-card { margin-bottom: 12px; }
 .table { margin-top: 12px; }
+.table-state { margin-top: 12px; padding: 20px; border: 1px solid #ebeef5; text-align: center; }
+.error-state { color: #b42318; background: #fff1f2; }
 .pager { display: flex; justify-content: flex-end; margin-top: 14px; }
 .start-sla-hint { margin-bottom: 16px; }
 .start-customer-info :deep(.el-form-item) { margin-bottom: 10px; }
