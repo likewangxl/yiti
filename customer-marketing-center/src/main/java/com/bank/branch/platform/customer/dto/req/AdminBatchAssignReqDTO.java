@@ -29,4 +29,10 @@ public class AdminBatchAssignReqDTO {
      */
     @NotBlank(message = "新执行人工号不能为空")
     private String newAssigneeEmpId;
+
+    /**
+     * 批量改派原因，用于高危操作审计，不能为空或空白。
+     */
+    @NotBlank(message = "批量分配原因不能为空")
+    private String reason;
 }

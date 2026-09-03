@@ -170,7 +170,7 @@ public class AdminTouchTaskController {
      * 返回实际更新的任务数量。
      * </p>
      *
-     * @param req 批量分配请求 DTO（taskIds + newAssigneeEmpId）
+     * @param req 批量分配请求 DTO（taskIds + newAssigneeEmpId + reason）
      * @return 实际更新的任务数量
      */
     @PostMapping("/batch-assign")
@@ -180,7 +180,8 @@ public class AdminTouchTaskController {
     public ResponseWrapper<Integer> batchAssign(@Valid @RequestBody AdminBatchAssignReqDTO req) {
         log.info("[AdminTouchTaskController.batchAssign] taskCount={}, newAssigneeEmpId={}",
                 req.getTaskIds().size(), req.getNewAssigneeEmpId());
-        int updated = touchTaskService.batchAssign(req.getTaskIds(), req.getNewAssigneeEmpId());
+        int updated = touchTaskService.batchAssign(
+                req.getTaskIds(), req.getNewAssigneeEmpId(), currentUserApi.getCurrentEmpId());
         log.info("[AdminTouchTaskController.batchAssign] updated={}", updated);
         return ResponseWrapper.success(updated);
     }

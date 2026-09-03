@@ -30,6 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 /**
@@ -679,15 +680,24 @@ class TouchTaskServiceTest {
         TouchTask t2 = buildPendingTask("task-BA-2");
         t2.setTaskStatus("IN_PROGRESS");
 
-        when(taskMapper.selectById("task-BA-1")).thenReturn(t1);
-        when(taskMapper.selectById("task-BA-2")).thenReturn(t2);
+        when(taskMapper.selectByIdForUpdate("task-BA-1")).thenReturn(t1);
+        when(taskMapper.selectByIdForUpdate("task-BA-2")).thenReturn(t2);
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
         // when
-        int updated = touchTaskService.batchAssign(List.of("task-BA-1", "task-BA-2"), "E99999");
+        int updated = touchTaskService.batchAssign(List.of("task-BA-1", "task-BA-2"), "E99999", "E10001");
 
         // then: 两条均成功更新
         assertThat(updated).isEqualTo(2);
+        verify(taskMapper).selectByIdForUpdate("task-BA-1");
+        verify(taskMapper).selectByIdForUpdate("task-BA-2");
+        ArgumentCaptor<TouchTask> updates = ArgumentCaptor.forClass(TouchTask.class);
+        verify(taskMapper, times(2)).updateById(updates.capture());
+        assertThat(updates.getAllValues())
+                .allSatisfy(task -> {
+                    assertThat(task.getAssigneeEmpId()).isEqualTo("E99999");
+                    assertThat(task.getUpdatedBy()).isEqualTo("E10001");
+                });
     }
 
     @Test
@@ -698,12 +708,12 @@ class TouchTaskServiceTest {
         TouchTask success = buildPendingTask("task-BA-S");
         success.setTaskStatus("SUCCESS");
 
-        when(taskMapper.selectById("task-BA-P")).thenReturn(pending);
-        when(taskMapper.selectById("task-BA-S")).thenReturn(success);
+        when(taskMapper.selectByIdForUpdate("task-BA-P")).thenReturn(pending);
+        when(taskMapper.selectByIdForUpdate("task-BA-S")).thenReturn(success);
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
         // when
-        int updated = touchTaskService.batchAssign(List.of("task-BA-P", "task-BA-S"), "E99999");
+        int updated = touchTaskService.batchAssign(List.of("task-BA-P", "task-BA-S"), "E99999", "E10001");
 
         // then: 只有 PENDING 的任务被更新，SUCCESS 跳过
         assertThat(updated).isEqualTo(1);
@@ -715,12 +725,12 @@ class TouchTaskServiceTest {
         TouchTask existing = buildPendingTask("task-BA-E");
         existing.setTaskStatus("PENDING");
 
-        when(taskMapper.selectById("task-BA-E")).thenReturn(existing);
-        when(taskMapper.selectById("task-BA-NA")).thenReturn(null);
+        when(taskMapper.selectByIdForUpdate("task-BA-E")).thenReturn(existing);
+        when(taskMapper.selectByIdForUpdate("task-BA-NA")).thenReturn(null);
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
         // when
-        int updated = touchTaskService.batchAssign(List.of("task-BA-E", "task-BA-NA"), "E99999");
+        int updated = touchTaskService.batchAssign(List.of("task-BA-E", "task-BA-NA"), "E99999", "E10001");
 
         // then: 只有存在的任务被更新，不存在的跳过
         assertThat(updated).isEqualTo(1);

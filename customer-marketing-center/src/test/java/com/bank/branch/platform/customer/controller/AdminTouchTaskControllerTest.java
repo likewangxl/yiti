@@ -20,6 +20,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -119,9 +120,9 @@ class AdminTouchTaskControllerTest extends AbstractControllerIntegrationTest {
     @WithMockEmpContext(empId = "E10001")
     void batchAssign_shouldReturn200WithUpdatedCount() throws Exception {
         // given: 批量分配成功，更新了 2 条记录
-        when(touchTaskService.batchAssign(any(), eq("E99999"))).thenReturn(2);
+        when(touchTaskService.batchAssign(any(), eq("E99999"), eq("E10001"))).thenReturn(2);
 
-        String body = "{\"taskIds\":[\"task-001\",\"task-002\"],\"newAssigneeEmpId\":\"E99999\"}";
+        String body = "{\"taskIds\":[\"task-001\",\"task-002\"],\"newAssigneeEmpId\":\"E99999\",\"reason\":\"原执行人休假，由新执行人接管在途任务\"}";
 
         mockMvc.perform(post("/api/admin/touch-tasks/batch-assign")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -129,6 +130,19 @@ class AdminTouchTaskControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data").value(2));
+
+        verify(touchTaskService).batchAssign(any(), eq("E99999"), eq("E10001"));
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
+    void batchAssign_missingReason_shouldReturn400() throws Exception {
+        String body = "{\"taskIds\":[\"task-001\"],\"newAssigneeEmpId\":\"E99999\"}";
+
+        mockMvc.perform(post("/api/admin/touch-tasks/batch-assign")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

@@ -584,15 +584,18 @@ public class TouchTaskService {
      *
      * @param taskIds       待分配的任务 ID 列表
      * @param newAssigneeEmpId 新执行人员工工号
+     * @param operatorEmpId    当前操作人员工工号，用于更新审计字段
      * @return 实际更新的任务数量
      */
     @Transactional
-    public int batchAssign(List<String> taskIds, String newAssigneeEmpId) {
-        log.info("[TouchTaskService.batchAssign] taskCount={}, newAssigneeEmpId={}", taskIds.size(), newAssigneeEmpId);
+    public int batchAssign(List<String> taskIds, String newAssigneeEmpId, String operatorEmpId) {
+        log.info("[TouchTaskService.batchAssign] taskCount={}, newAssigneeEmpId={}, operatorEmpId={}",
+                taskIds.size(), newAssigneeEmpId, operatorEmpId);
 
         int updated = 0;
         for (String id : taskIds) {
-            TouchTask task = taskMapper.selectById(id);
+            // 锁定在途任务，串行化与完成/取消等状态变更，避免并发改派覆盖最新状态。
+            TouchTask task = taskMapper.selectByIdForUpdate(id);
             if (task == null) {
                 // 不存在的任务静默跳过，防止单个错误终止整批操作
                 log.warn("[TouchTaskService.batchAssign] task not found, skip: {}", id);
@@ -604,7 +607,7 @@ public class TouchTaskService {
                 continue;
             }
             task.setAssigneeEmpId(newAssigneeEmpId);
-            task.setUpdatedBy(newAssigneeEmpId);
+            task.setUpdatedBy(operatorEmpId);
             task.setUpdatedTime(LocalDateTime.now());
             taskMapper.updateById(task);
             updated++;
