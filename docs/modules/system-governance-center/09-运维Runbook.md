@@ -1,626 +1,205 @@
-# 09 — sys_job_conf / Quartz 集群调度运维 Runbook
+# 系统治理中心运维 Runbook
 
-**版本**: V1.9（整合 V1.6→V1.8 调度知识，2026-05-01）｜**归属模块**: system-governance-center
-**权威源**: 本文件是 sys_job_conf / Quartz 集群调度运维的**唯一入口**；模块级 `AGENTS.md`
-只保留稳定边界，具体运维步骤集中在本页。
+> 本文面向当前部署的日常核对、健康检查、任务暂停/恢复、故障定位和安全恢复。
+> 配置以活动 profile 与 `bootstrap/src/main/resources/application*.yml` 为准，
+> 行为以当前源码和 [03-接口设计与报文.md](03-接口设计与报文.md) 为准。
+> 命令中的地址、数据库名和凭据均使用现场受控变量，不在文档中固化。
 
-> ⚠️ **Flyway 已彻底废弃**（详见根 [AGENTS.md](../../../AGENTS.md) "Flyway 禁令"红线）。
-> 本文件下方 § 2 历史"启用前置检查"段中提到的 `mvn flyway:migrate` / `flyway_schema_history` /
-> `V1_7_0FlywayIT` 等内容仅作**历史档案**保留，对应迁移脚本与 IT 测试基类已从源码中删除。
-> 当前 schema 变更只能由 DBA 按审批结果在目标库直接实施，不生成或提交 DDL `.sql`
-> 文件，也不使用任何“按版本号自动 migrate”框架。
+## 1. 操作边界
 
----
+- system-governance-center 负责字典、配置、工作日历、通知、文件、审计和 Quartz
+  任务配置/执行日志；Quartz 使用 JDBC JobStore 和 `QRTZ_` 表。
+- 应用不自动创建或修改业务 schema。结构和权限由 DBA/权限管理员按审批执行，本
+  Runbook 不提供交付 DDL/DML，也不通过数据库直接暂停、恢复或触发任务。
+- 任何写操作先取得工单/变更审批，确认目标实例、目标 `jobId`/资源和回退负责人；
+  只读检查可以先行。
+- 不在排障中复制口令、OBS 密钥、Cookie、完整个人信息、完整 SQL 结果或未脱敏日志；
+  证据使用 Trace、时间窗口和脱敏摘要关联。
 
-## § 1. 表结构概览
+## 2. 启动前核对（只读）
 
-### 1.1 三类表的关系
+### 2.1 配置和进程归属
 
-平台调度体系由三层表组成：
+1. 确认待启动的 checkout、活动 profile 和配置文件来源；重点核对
+   `spring.quartz.enabled`、`job-store-type=jdbc`、`jdbc.initialize-schema=never`、
+   `obs.enabled`、multipart 限制和 Session JDBC 配置。
+2. 若实例已运行，只读取进程命令行、工作目录和监听关系，确认它属于目标 checkout；
+   不因端口冲突停止或复用其他实例。
+3. 读取应用日志中的配置加载、数据源连接、Quartz 初始化和 OBS 初始化结果。凭据值只
+   看是否已注入，不输出具体值。
 
+可使用现场变量执行只读检查（变量由运维工具或受控终端提供）：
+
+```bash
+ps -ef | rg '[b]ootstrap|[s]pring'
+readlink -f /proc/<PID>/cwd
+tr '\0' ' ' < /proc/<PID>/cmdline
+ss -ltnp
 ```
-业务配置层                  运行日志层           Quartz 持久层
-────────────               ────────────         ─────────────────────
-SYS_JOB_CONF               SYS_JOB_RUN_LOG      QRTZ_JOB_DETAILS
-  job_key (唯一)              job_id → SYS_JOB_CONF   QRTZ_TRIGGERS
-  cron_expr                   status               QRTZ_CRON_TRIGGERS
-  quartz_job_class            trigger_type         QRTZ_FIRED_TRIGGERS
-  status                      start/end_time       QRTZ_LOCKS
-  misfire_policy              error_msg            QRTZ_SCHEDULER_STATE
-```
 
-- **SYS_JOB_CONF**：业务语义层，持有 job_key / cron_expr / quartz_job_class / status。
-  JobService.syncJobsOnStartup 以此为权威源同步到 QRTZ_* 表。
-- **SYS_JOB_RUN_LOG**：执行记录层，由 JobExecutionLogger（全局 Quartz JobListener）
-  在每次调度开始/结束时自动写入，业务模块无需调用任何写日志 API。
-- **QRTZ_\* 表**（11 张）：Quartz JDBC JobStore 持久层，由 ddl-quartz.sql 手动初始化，
-  spring.quartz.jdbc.initialize-schema=never。
+以上命令只用于确认进程归属和监听关系；`<PID>`、端口和路径必须替换为现场核对结果，
+不能写入工单模板作为固定值。
 
-### 1.2 SYS_JOB_CONF 主键与关键字段语义
+### 2.2 数据库和调度状态
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `id` | varchar(32) | 主键，业务生成 |
-| `job_key` | varchar(100) | 唯一业务标识，如 `LEAD_CALLBACK_COMPENSATE`；UNIQUE KEY `uk_job_key` |
-| `job_name` | varchar(200) | 显示名称 |
-| `cron_expr` | varchar(100) | Quartz cron 表达式，6 段（含秒） |
-| `quartz_job_class` | varchar(255) | Quartz 包装 Job 类全限定名（V1.6 新增）；反射加载失败会在 syncJobsOnStartup 中 catch + log.error 跳过 |
-| `misfire_policy` | varchar(32) | 默认 `FIRE_ONCE_NOW`；LEAD_CALLBACK_COMPENSATE 使用 `DO_NOTHING` |
-| `status` | varchar(20) | `ACTIVE`（启用）/ `PAUSED`（暂停）/ 逻辑删除时行可直接 DELETE（V1_7_1 删 DAILY_KPI_CALC） |
-| `allow_manual_trigger` | tinyint(1) | 是否允许通过 JobController REST 端点手动触发，默认 1 |
-| `last_run_time` | datetime | 上次执行时间（由生产代码写入；V1.7 观察项 #1：perf_metric_def.last_run_time 尚未写入） |
-
-### 1.3 SYS_JOB_RUN_LOG status 字段语义
-
-| 值 | 含义 |
-|---|---|
-| `RUNNING` | JobExecutionLogger.jobToBeExecuted 写入；执行中 |
-| `SUCCESS` | jobWasExecuted 无异常时更新 |
-| `FAILED` | jobWasExecuted 捕获 JobExecutionException 时更新，error_msg 记录异常栈 |
-
-trigger_type 取值：`SCHEDULED`（cron 触发）/ `MANUAL`（JobController 手动触发）。
-
-### 1.4 关键 QRTZ_* 表用途
-
-| 表 | 用途 |
-|---|---|
-| `QRTZ_JOB_DETAILS` | 存储 JobDetail 元信息，JOB_NAME 对应 sys_job_conf.job_key |
-| `QRTZ_TRIGGERS` / `QRTZ_CRON_TRIGGERS` | Trigger 主表 + cron 扩展，TRIGGER_STATE 可查执行状态 |
-| `QRTZ_FIRED_TRIGGERS` | 正在执行的 Trigger 记录，INSTANCE_NAME 可确认执行节点 |
-| `QRTZ_LOCKS` | 集群行锁防重，含 `TRIGGER_ACCESS` / `STATE_ACCESS` 两把锁 |
-| `QRTZ_SCHEDULER_STATE` | 各节点心跳，LAST_CHECKIN_TIME 可判断节点存活 |
-
-本节字段与状态语义以 `SysJobConf`、`JobExecutionLogger` 的当前实现及
-`docs/schema/ddl-governance.sql`、`docs/schema/ddl-quartz.sql` 历史基线交叉核对。
-
----
-
-## § 2. 启用前置检查
-
-以下按**时间倒序**列出各版本 DDL 迁移的预检步骤（最新版本在前）。
-
-### 2.1 V1.8（2026-05-01）— customer 模块 LeadCallback 注册
-
-**迁移脚本**：`customer-marketing-center/src/main/resources/sql/V1_8_0__register_lead_callback_compensate_job.sql`
-
-**迁移目的**：将 customer 模块 LeadCallbackCompensation @Scheduled 迁移到 Quartz，在 sys_job_conf
-注册 LEAD_CALLBACK_COMPENSATE 行。
-
-**预检 SQL**（确认行尚未存在，防止重复插入报 UK 冲突）：
+仅使用具有最小权限的只读账号，在目标 profile 指向的数据库执行以下核对。SQL 只用于
+现场诊断，不保存为交付脚本：
 
 ```sql
--- 预检：sys_job_conf 是否已含 LEAD_CALLBACK_COMPENSATE 行
-SELECT job_key, status, cron_expr
-FROM SYS_JOB_CONF
-WHERE job_key = 'LEAD_CALLBACK_COMPENSATE';
--- 无结果 → 安全执行 V1_8_0 脚本
--- 有结果 → 脚本有 INSERT IGNORE 或 ON DUPLICATE KEY 逻辑，直接跑也可；但需确认 cron_expr 正确
+SELECT job_key, status, cron_expr, quartz_job_class, allow_manual_trigger, last_run_time
+  FROM SYS_JOB_CONF
+ ORDER BY job_key;
+
+SELECT job_id, trigger_type, status, start_time, end_time, error_msg
+  FROM SYS_JOB_RUN_LOG
+ ORDER BY start_time DESC;
+
+SELECT SCHED_NAME, INSTANCE_NAME, LAST_CHECKIN_TIME
+  FROM QRTZ_SCHEDULER_STATE;
+
+SELECT SCHED_NAME, TRIGGER_NAME, TRIGGER_GROUP, TRIGGER_STATE, NEXT_FIRE_TIME,
+       PREV_FIRE_TIME
+  FROM QRTZ_TRIGGERS;
 ```
 
-**期望结果**：无结果（首次）或 cron_expr = `0 */5 * * * ?`（每 5 分钟扫描一次未回调线索）。
+核对结果至少包括：业务任务配置是否存在、状态与 Cron 是否可解释、最近执行是否有
+异常、Quartz 节点心跳是否更新、触发器状态是否与业务配置一致。不要以固定任务数或
+固定节点数判断健康。
 
-**失败处理**：若存在行但 cron_expr 不正确，手工 UPDATE 后重跑。
+### 2.3 权限和外部依赖
 
----
+- 管理端 URL、HTTP 方法、`BizType`/`BizAction` 和 `PT_RESOURCE` 绑定一致；
+  管理操作由授权账号执行，不能以未标注 `@BizAuth` 推断公开。
+- 用户/机构解析通过 auth-permission-center 的公开 API；OBS 端点、桶和凭据来自受控
+  注入；Spring Session JDBC、Quartz 表和治理表均应已由责任方准备。
+- 启动前不执行初始化 SQL、不复制生产数据、不修改代理/端口/数据源或外联凭据。
 
-### 2.2 V1.7（2026-04-30）— perf 模块指标级调度
+## 3. 健康检查
 
-**迁移脚本**：
-- `V1_7_0__perf_metric_def_schedule_cols.sql`：perf_metric_def 加 cron_expr / subject_sql / last_run_time + idx_metric_def_schedulable 索引
-- `V1_7_1__remove_daily_kpi_calc_job.sql`：删除 sys_job_conf 中 DAILY_KPI_CALC 行（KPI 改为事件驱动）
+按实际网关和认证方式访问，不在命令中记录 Cookie 或 Token：
 
-**迁移目的**：支持每条 ACTIVE+AUTO 指标 1:1 注册一个 Quartz Job，并废除旧的每日 KPI 批量计算定时任务。
+1. 访问应用基础健康端点或首页，确认 HTTP 响应、Trace 和应用日志时间一致。
+2. 通过授权管理端读取 `GET /api/admin/sys/jobs`，再按需读取
+   `GET /api/admin/sys/jobs/{jobId}/logs`；确认配置列表能读、分页参数生效、日志
+   状态可追踪。
+3. 读取 `GET /api/sys/dicts`、`GET /api/sys/calendar`，确认公共读取链路；
+   通过授权端读取审计列表，确认数据范围和响应包装正确。
+4. 按审批范围验证文件对象开关和通知自服务；`obs.enabled=false` 时文件操作应明确
+   返回治理错误，不得把数据库元数据当成对象读取成功。
+5. 对配置、字典和年度日历执行一次读后写缓存失效核对（只在有审批的变更窗口进行）；
+   运行实例内 Caffeine 缓存，不把另一实例的读取作为生效证明。
 
-**预检 SQL**：
+健康检查应记录：实例标识、活动 profile、检查时间、Trace、接口状态、最近 Job 状态、
+Quartz 心跳和 OBS/Session 结果。日志和截图脱敏后归档。
 
-```sql
--- 预检 1：EXPR/GROOVY 类型指标 subject_sql 是否填齐
--- 缺失则 syncJobsOnStartup 会跳过该指标的 registerJob，指标不会被调度
-SELECT COUNT(*) AS missing_subject_sql
-FROM perf_metric_def
-WHERE status = 'ACTIVE'
-  AND calc_mode = 'AUTO'
-  AND calc_logic_type IN ('EXPR', 'GROOVY')
-  AND (subject_sql IS NULL OR subject_sql = '');
--- 期望: 0；非 0 则补填 subject_sql 后再迁移
+## 4. 任务暂停、恢复和人工触发
 
--- 预检 2：sys_job_conf 中 DAILY_KPI_CALC 行是否存在（V1_7_1 会删除它）
-SELECT job_key, status, cron_expr
-FROM SYS_JOB_CONF
-WHERE job_key = 'DAILY_KPI_CALC';
--- 期望: 1 行；若已不存在说明 V1_7_1 已执行过，可跳过
+### 4.1 暂停
+
+1. 记录工单、原因、目标 `jobId`、当前配置状态、是否正在运行以及最近失败信息。
+2. 用授权账号调用当前接口：
+
+   `PUT /api/admin/sys/jobs/{jobId}/pause`
+
+3. 再读任务配置和运行日志，确认状态与 Quartz Trigger 均已进入预期暂停状态。暂停只
+   影响后续调度，不强行终止已经运行的 Job；运行中的 Job 由其自身完成或按独立的应急
+   审批处理。
+
+### 4.2 恢复
+
+1. 确认故障原因已处理、依赖可用、Cron 和 Job 类仍正确，且没有未完成的并发运行。
+2. 用原工单授权账号调用：
+
+   `PUT /api/admin/sys/jobs/{jobId}/resume`
+
+3. 重新读取配置、Quartz Trigger 和执行日志，确认下一次触发时间和状态；记录恢复时间、
+   操作人、Trace 和验证结果。当前恢复接口没有理由请求体，理由必须留在受控工单/审计
+   记录中，不得自行扩展请求格式。
+
+### 4.3 人工触发
+
+人工触发是高风险动作，需 `SYS_CONFIG/JOB_TRIGGER` 授权和理由：
+
+```text
+POST /api/admin/sys/jobs/{jobId}/trigger
+{
+  "reason": "审批单中的最小必要说明",
+  "dataDate": "按任务契约提供或省略",
+  "allocDate": "按任务契约提供或省略"
+}
 ```
 
-**启动后验证**：
-
-```sql
--- 启动后确认 PERF_METRIC_* 系列 Job 已注册
-SELECT job_key, cron_expr, status
-FROM SYS_JOB_CONF
-WHERE job_key LIKE 'PERF_METRIC_%';
--- 应有 N 条，N = ACTIVE+AUTO 且 subject_sql 已填的指标数
-```
-
-**失败处理**：若 V1.7 schema 变更 SQL 执行失败，按 MySQL 报错定位后修复（如冲突列、索引、数据），
-再 source 一次。严禁跳过当前版本直接执行后续 SQL，否则 schema 状态不一致。
-
----
-
-### 2.3 V1.4（2026-04-24）— perf Target 字段扩展
-
-**迁移脚本**：`V1_4_0__perf_target_owner_cols.sql`：perf_target_plan / perf_target_value 各加
-`owner_emp_id` / `owner_org_code` 字段 + 索引，历史数据以 `owner_emp_id = created_by` 兜底回填。
-
-**迁移目的**：修复 Target 数据范围注入降级到 created_by 的问题，引入标准 owner 字段模型。
-
-**预检 SQL**：
-
-```sql
--- 预检 1：确认两表字段尚未存在（幂等兜底）
-SELECT TABLE_NAME, COLUMN_NAME
-FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_SCHEMA = DATABASE()
-  AND TABLE_NAME IN ('perf_target_plan', 'perf_target_value')
-  AND COLUMN_NAME IN ('owner_emp_id', 'owner_org_code');
--- 无结果 → 安全执行
--- 有结果 → 脚本本身是 ADD COLUMN IF NOT EXISTS，直接跑也可
-
--- 预检 2：历史行 created_by 分布（估计 owner_emp_id 回填后的准确率）
-SELECT COUNT(*), COUNT(DISTINCT created_by)
-FROM perf_target_plan
-WHERE created_by IS NOT NULL;
-
-SELECT COUNT(*), COUNT(DISTINCT created_by)
-FROM perf_target_value
-WHERE created_by IS NOT NULL;
-```
-
-**期望结果**：预检 1 无结果为佳；预检 2 仅供评估，无阻断条件。
-
-**失败处理**：undo 脚本 `U1_4_0__perf_target_owner_cols.sql` 可 DROP 两列；
-undo 前确认 Service 已退回到 V1.3 的 created_by 配置，否则查询会报"未知列"。
-
----
-
-### 2.4 V1.3（2026-04-24）— perf 基础债务清偿 DDL
-
-**迁移脚本**：
-- `V1_2_5__perf_cleanup_null_deleted.sql`：清理 perf_metric_def 历史 NULL deleted 行
-- `V1_3_0__perf_run_task_uk.sql`：为 perf_run_task 补加 uk_task_key 唯一键
-
-**迁移目的**：补偿 V1.0 MetricDefService.create 漏填 deleted 字段的历史 bug；补齐
-uk_task_key 唯一约束作为 Redis SETNX 幂等的 DB 兜底。
-
-**预检 SQL**：
-
-```sql
--- 预检 1（V1_2_5）：perf_metric_def 有多少历史行 deleted 为 NULL
--- 注意：仅处理 perf_metric_def 一张表（perf_target_plan/value 无 deleted 字段）
-SELECT COUNT(*) AS null_deleted_rows
-FROM perf_metric_def
-WHERE deleted IS NULL;
--- V1_2_5 将这些 NULL 置为 0，等价于"兜底"而非"误删"
-
--- 预检 2（V1_3_0）：是否有重复 task_key 导致 ALTER 失败
-SELECT task_key, COUNT(*) AS cnt
-FROM perf_run_task
-WHERE task_key IS NOT NULL
-GROUP BY task_key
-HAVING COUNT(*) > 1;
--- 有结果 → 手工清理重复行后再 source ALTER 脚本
--- 无结果 → 直接 source ALTER 脚本
-```
-
-**期望结果**：预检 2 无结果，可直接执行；预检 1 行数多少均安全。
-
-**失败处理**：若 V1.3 ALTER 因存量重复失败：
-1. 按业务规则手工清理重复行
-2. 重新 source 当期 ALTER 脚本
-3. **严禁**直接跳到下个版本的 SQL，否则 schema 状态不一致
-
----
-
-### 2.5 V1.6（2026-04-25）— Quartz 基础设施初始化
-
-**迁移脚本**：`docs/schema/ddl-quartz.sql`（手动执行）
-
-**迁移目的**：初始化 11 张 QRTZ_* 表，为 Quartz JDBC JobStore 集群模式提供持久层。
-
-**预检 SQL**（确认 QRTZ_* 表尚未存在）：
-
-```sql
--- 预检：11 张 QRTZ_* 表是否已存在
-SELECT TABLE_NAME
-FROM INFORMATION_SCHEMA.TABLES
-WHERE TABLE_SCHEMA = DATABASE()
-  AND TABLE_NAME LIKE 'QRTZ_%';
--- 无结果 → 执行 ddl-quartz.sql
--- 有结果 → 已初始化，跳过（或检查表结构是否完整）
-```
-
-**期望结果**：11 张表全部存在，或全部不存在（初次部署）。
-
-**配置验证**：确认 application.yml 或 bootstrap.yml 含：
-```yaml
-spring:
-  quartz:
-    jdbc:
-      initialize-schema: never   # 必须为 never，DDL 手动初始化
-    properties:
-      org.quartz.jobStore.isClustered: true
-```
-
-当前运行边界参见 `system-governance-center/AGENTS.md`“Quartz 动态调度”小节；
-QRTZ 表的历史基线见 `docs/schema/ddl-quartz.sql`。
-
----
-
-## § 3. 紧急停止
-
-紧急停止分三个层级，影响范围由小到大：
-
-### 3.1 业务级停止（推荐：停单个 Job，无需重启）
-
-修改 sys_job_conf.status = 'PAUSED'，再通过 JobController 触发重新同步（或重启应用）：
-
-```sql
--- 停止单个 Job（以 LEAD_CALLBACK_COMPENSATE 为例）
-UPDATE SYS_JOB_CONF
-SET status = 'PAUSED', updated_time = NOW()
-WHERE job_key = 'LEAD_CALLBACK_COMPENSATE';
-```
-
-然后调用 REST 端点（`@BizAuth(SYS_CONFIG)` 鉴权）触发同步：
-```
-POST /api/admin/sys/jobs/{jobId}/pause
-```
-
-或重启应用，syncJobsOnStartup 会读取 PAUSED 状态并 pause Quartz Trigger。
-
-**影响范围**：仅停止指定 Job 的 cron 调度，其他 Job 不受影响。
-**是否需要重启**：不需要（通过 REST 端点同步）或需要（直接 SQL 改后等下次启动）。
-**回滚成本**：低——改回 ACTIVE 后同步即可恢复。
-
----
-
-### 3.2 Quartz 级停止（停 Trigger，绕过业务配置层）
-
-直接操作 QRTZ_TRIGGERS 表或通过 JobController REST 端点：
-
-```sql
--- 查看当前 Trigger 状态
-SELECT TRIGGER_NAME, TRIGGER_GROUP, TRIGGER_STATE, NEXT_FIRE_TIME
-FROM QRTZ_TRIGGERS
-WHERE JOB_NAME = 'LEAD_CALLBACK_COMPENSATE';
-
--- 直接暂停 Trigger（TRIGGER_STATE = 'PAUSED'）
--- 注意：此操作绕过 sys_job_conf，重启后 syncJobsOnStartup 会按 sys_job_conf 状态重置
--- 生产建议优先走 § 3.1 业务级停止，保持两层一致
-UPDATE QRTZ_TRIGGERS
-SET TRIGGER_STATE = 'PAUSED'
-WHERE TRIGGER_NAME = 'LEAD_CALLBACK_COMPENSATE'
-  AND SCHED_NAME = 'BranchPlatformScheduler';
-```
-
-也可调用 JobController REST 端点（推荐，有鉴权和审计）：
-```
-POST /api/admin/sys/jobs/{jobId}/pause
-```
-
-**影响范围**：仅停止指定 Job 的 Quartz Trigger，sys_job_conf 状态不变（两层可能短暂不一致）。
-**是否需要重启**：不需要。
-**回滚成本**：中——需手动或通过 REST 端点恢复，且重启后 syncJobsOnStartup 会以 sys_job_conf 为准覆盖。
-
----
-
-### 3.3 配置级停止（停整个 Quartz 子系统或 HealthCheck）
-
-**停整个 Quartz 子系统**（影响所有调度 Job）：
-
-在 application.yml 中设置：
-```yaml
-spring:
-  quartz:
-    enabled: false
-```
-
-需要重启应用才能生效。**影响范围**：所有 Quartz 调度任务全部停止，包括
-SYSCONTROL_CLEANUP / PERF_RUN_TASK_CLEANUP / LEAD_CALLBACK_COMPENSATE /
-所有 PERF_METRIC_* 指标调度。**回滚成本**：高——需改配置文件 + 重启。
-
-**仅停 MetricSchedulerHealthCheck**（保留 Quartz，仅停止指标补偿 @Scheduled）：
-
-```yaml
-perf:
-  scheduler:
-    health-check:
-      enabled: false
-```
-
-需要重启。**影响范围**：仅停止每 10 分钟扫描的指标调度补偿检查，不影响 Quartz 正式调度。
-**回滚成本**：中——改配置 + 重启。
-
-当前调度边界参见 `performance-engine-center/AGENTS.md`“调度、评价与文件规则”和
-`system-governance-center/AGENTS.md`“Quartz 动态调度”小节。
-
----
-
-## § 4. 业务 Job 清单
-
-以下为系统当前所有 ACTIVE Job（V1.8 交付后）：
-
-| jobKey | group | cron | cron 说明 | misfire 策略 | quartz_job_class | 业务用途 |
-|---|---|---|---|---|---|---|
-| `SYSCONTROL_CLEANUP` | DEFAULT | `0 0 3 ? * SUN` | 每周日凌晨 3 点 | FIRE_ONCE_NOW | SysControlCleanupQuartzJob | 清理过期 sys_control 历史版本 |
-| `PERF_RUN_TASK_CLEANUP` | DEFAULT | `0 0 4 * * ?` | 每日凌晨 4 点 | FIRE_ONCE_NOW | PerfRunTaskCleanupQuartzJob | 清理 perf_run_task 90 天前数据 |
-| `LEAD_CALLBACK_COMPENSATE` | DEFAULT | `0 */5 * * * ?` | 每 5 分钟执行一次 | DO_NOTHING | LeadCallbackCompensateQuartzJob | 扫描 customer 模块未回调线索并补偿 |
-| `PERF_METRIC_${metricCode}` | PERF_METRIC | 按各指标 cron_expr | 随指标配置 | 随指标 misfire 配置 | MetricExecuteQuartzJob | V1.7 指标级调度；每个 ACTIVE+AUTO 指标自动注册一个 Job |
-
-**已删除 Job**（历史归档）：
-
-| jobKey | 删除版本 | 原因 |
-|---|---|---|
-| `DAILY_KPI_CALC` | V1.7（2026-04-30，V1_7_1 脚本删除） | KPI 计算改为事件驱动（MetricCalcCompletedEvent → KpiCascadeListener） |
-
-**残留 Spring @Scheduled**（非 Quartz，设计意图保留）：
-
-| 类 | 调度 | 说明 |
-|---|---|---|
-| `MetricSchedulerHealthCheck` | 每 10 分钟 | V1.7 spec § 7 明确论证：补偿器不依赖 Quartz，故意不 Quartz 化（V1.9 永久关闭该迁移计划） |
-
-本清单以本页 § 4 表格中列出的当前 Job 类与实际 `sys_job_conf` 只读盘点结果为准。
-
----
-
-## § 5. 故障排查
-
-### 5.1 cron 误植
-
-**现象**：Job 触发时间不符预期（过频 / 不触发）。
-
-**排查**：
-
-```sql
--- 查看当前配置
-SELECT job_key, cron_expr, status, last_run_time
-FROM SYS_JOB_CONF
-WHERE job_key = 'LEAD_CALLBACK_COMPENSATE';
-
--- 确认 Quartz 侧 Trigger 的 cron 是否已同步
-SELECT ct.CRON_EXPRESSION, t.NEXT_FIRE_TIME, t.TRIGGER_STATE
-FROM QRTZ_CRON_TRIGGERS ct
-JOIN QRTZ_TRIGGERS t ON t.TRIGGER_NAME = ct.TRIGGER_NAME
-  AND t.TRIGGER_GROUP = ct.TRIGGER_GROUP
-  AND t.SCHED_NAME = ct.SCHED_NAME
-WHERE ct.TRIGGER_NAME = 'LEAD_CALLBACK_COMPENSATE';
-```
-
-**修复步骤**：
-1. UPDATE SYS_JOB_CONF SET cron_expr = '修正后表达式' WHERE job_key = '...'
-2. 调用 `POST /api/admin/sys/jobs/{jobId}/reschedule` 或重启，syncJobsOnStartup 会覆盖 QRTZ_CRON_TRIGGERS
-3. 验证 QRTZ_TRIGGERS.NEXT_FIRE_TIME 已更新
-
-**下次 reload 时机**：应用启动（syncJobsOnStartup）或通过 JobController REST 端点触发，
-不会自动定时重读 sys_job_conf（需显式触发或重启）。
-
----
-
-### 5.2 多节点行为确认
-
-**集群模式**：`isClustered=true`，QRTZ_LOCKS 行锁（`TRIGGER_ACCESS` / `STATE_ACCESS`）
-保证同一 Trigger 在多节点环境下只有一个节点执行。
-
-**确认哪个节点在跑**：
-
-```sql
--- 查看当前正在执行的 Trigger 及其所在节点
-SELECT TRIGGER_NAME, TRIGGER_GROUP, INSTANCE_NAME, FIRED_TIME, STATE
-FROM QRTZ_FIRED_TRIGGERS
-WHERE JOB_NAME = 'LEAD_CALLBACK_COMPENSATE'
-  AND SCHED_NAME = 'BranchPlatformScheduler'
-ORDER BY FIRED_TIME DESC
-LIMIT 10;
-
--- 查看各节点心跳（判断节点存活）
-SELECT INSTANCE_NAME, LAST_CHECKIN_TIME, CHECKIN_INTERVAL
-FROM QRTZ_SCHEDULER_STATE
-WHERE SCHED_NAME = 'BranchPlatformScheduler'
-ORDER BY LAST_CHECKIN_TIME DESC;
-```
-
----
-
-### 5.3 反射加载失败（类不存在）
-
-**现象**：syncJobsOnStartup 启动时跳过某个 Job，sys_job_conf 有配置但 Quartz 侧无对应
-JobDetail；sys_job_run_log 可能出现 status=FAILED 且 error_msg 含 ClassNotFoundException。
-
-**原因**：sys_job_conf.quartz_job_class 指向的类不存在（如 V1.6→V1.7 迁移删除了
-DailyKpiCalcQuartzJob，但 sys_job_conf 旧行未删除）。
-
-**排查**：
-
-```sql
--- 查看失败日志
-SELECT job_id, status, error_msg, created_time
-FROM SYS_JOB_RUN_LOG
-WHERE status = 'FAILED'
-ORDER BY created_time DESC
-LIMIT 20;
-
--- 对照 sys_job_conf 确认 quartz_job_class 是否仍存在
-SELECT job_key, quartz_job_class, status
-FROM SYS_JOB_CONF
-WHERE status = 'ACTIVE';
-```
-
-**修复**：若类已删除（如 DailyKpiCalcQuartzJob），手工 DELETE 对应 sys_job_conf 行；
-或更新 quartz_job_class 为新类名。
-
----
-
-### 5.4 Quartz 锁竞争（QRTZ_LOCKS 死锁）
-
-**现象**：多节点下 Job 触发延迟，MySQL slow query log 出现 QRTZ_LOCKS 相关长时间等待。
-
-**排查**：
-
-```sql
--- 查看 InnoDB 当前锁与死锁信息
-SHOW ENGINE INNODB STATUS;
--- 在输出中搜索 QRTZ_LOCKS 相关的 TRANSACTION 段
-
--- 查看当前持锁线程
-SELECT * FROM INFORMATION_SCHEMA.INNODB_TRX
-WHERE trx_tables_locked > 0;
-```
-
-**处理**：通常由 Quartz 内部自动超时释放；若持续死锁，按 MySQL 标准流程 KILL 问题线程，
-Quartz 节点会在下一个 checkin 周期重新竞争锁。
-
----
-
-### 5.5 sys_job_conf 与 Quartz 不一致（孤儿 Job）
-
-**背景**：V1.9 评估认为此情况实际产生频率 < 1 次/年（V1.9 spec § 1.1 # 3 永久关闭
-自动反向清理实现）。Quartz 侧孤儿 Job 对运行无害（不会触发，不会写日志），
-运维侧可手工排查。
-
-**孤儿 Job 排查**（Quartz 有但 sys_job_conf 无记录）：
-
-```sql
--- 查找 Quartz 中有但 sys_job_conf 中无对应行的 Job（孤儿）
-SELECT j.JOB_NAME, j.JOB_GROUP, j.JOB_CLASS_NAME
-FROM QRTZ_JOB_DETAILS j
-LEFT JOIN SYS_JOB_CONF s ON s.job_key = j.JOB_NAME
-WHERE s.job_key IS NULL
-  AND j.SCHED_NAME = 'BranchPlatformScheduler';
-```
-
-**清理方式**（手工）：若确认为孤儿 Job，调用 JobController 的 unregisterJob 端点，
-或直接通过 Quartz API 删除 JobDetail + Trigger（级联删除）。
-
-本故障场景的运行态边界以本页 § 1.1 和 § 5.5 为准；历史决策见
-`docs/superpowers/specs/2026-05-01-v1.9-runbook-and-case-consistency-design.md`。
-
----
-
-## § 6. 升级路径（V1.0 → V1.6 → V1.7 → V1.8 调度演进史）
-
-### 6.1 V1.0–V1.5：Spring @Scheduled + ShedLock + Redis 防重
-
-**时间范围**：2026-04-15（V1.0）→ 2026-04-24（V1.5）
-
-**调度方式**：各业务模块（performance-engine-center）独立使用 Spring `@Scheduled` 注解 +
-`@SchedulerLock`（ShedLock）在 Redis 层面防止多实例重复执行。
-
-**JobApi 当时形态**（4 个方法）：`getJobConf` / `startJobRun` / `completeJobRun` / `failJobRun`，
-业务模块须在 Job 执行前后显式调用写日志方法，耦合性高。
-
-**缺陷**：ShedLock 依赖 Redis 单点可用性；Redis 宕机窗口内无防重保障。
-
----
-
-### 6.2 V1.6（2026-04-25）：Quartz 集成，ShedLock 全部废弃
-
-**交付内容**：
-- governance 新增 Quartz 基础设施：`QuartzConfig`（注册 JobExecutionLogger 为全局 JobListener） +
-  `JobExecutionLogger`（统一写 sys_job_run_log）+ `JobService.syncJobsOnStartup`（启动同步）
-- ddl-quartz.sql 手动初始化 11 张 QRTZ_* 表
-- performance 模块 3 个 `@Scheduled` 任务迁移为 Quartz（删除 `@SchedulerLock` 注解）：
-  - DailyKpiCalcJob → DailyKpiCalcQuartzJob（每日凌晨 2 点，`0 0 2 * * ?`）
-  - SysControlCleanupJob → SysControlCleanupQuartzJob（每周日凌晨 3 点，`0 0 3 ? * SUN`）
-  - PerfRunTaskCleanupJob → PerfRunTaskCleanupQuartzJob（每日凌晨 4 点，`0 0 4 * * ?`）
-- 删除 ShedLock 全部痕迹（pom.xml + ShedLockConfig + 相关测试）
-- **JobApi 精简到 1 方法**：仅保留 `getJobConf`；`startJobRun/completeJobRun/failJobRun`
-  由 JobExecutionLogger 统一接管，业务模块无需调用
-
-**防重机制切换**：ShedLock + Redis → Quartz QRTZ_LOCKS 行锁（InnoDB 事务保证，不依赖 Redis）
-
----
-
-### 6.3 V1.7（2026-04-30）：指标级 Quartz 调度，JobApi 扩展
-
-**交付内容**：
-- perf_metric_def 新增 `cron_expr` / `subject_sql` / `last_run_time` 字段（V1_7_0 DDL）
-- **JobApi 扩展为 3 方法**：新增 `registerJob(RegisterJobCmd)` + `unregisterJob(jobKey)`，
-  支持业务模块声明式动态注册/注销 Quartz Job
-- 指标 CRUD afterCommit Hook 自动调用 `registerJob` / `unregisterJob`
-- MetricSchedulerService.syncSchedulableMetrics 启动时批量同步所有 ACTIVE+AUTO 指标
-- 通用 MetricExecuteQuartzJob（按 JobDataMap.metricCode 派发，不再需要每指标一个 Job 类）
-- MetricSchedulerHealthCheck：每 10 分钟补偿扫描（Spring @Scheduled，`@ConditionalOnProperty` 启停）
-- **DailyKpiCalcJob 删除**：KPI 计算改为事件驱动——
-  MetricCalcCompletedEvent → KpiCascadeListener（@TransactionalEventListener AFTER_COMMIT + @Async +
-  Redis SETNX 30s 防重）
-- V1_7_1 DDL 脚本删除 sys_job_conf 中 DAILY_KPI_CALC 行
-
-**错误码扩展**：
-- GOV-50010 (JOB_CRON_INVALID)
-- GOV-50011 (JOB_CLASS_NOT_FOUND)
-- GOV-50012 (JOB_REGISTER_FAILED)
-
----
-
-### 6.4 V1.8（2026-05-01）：customer LeadCallback @Scheduled → Quartz 迁移
-
-**交付内容**：
-- LeadCallbackCompensationService.scheduledScan() + @Scheduled 入口删除
-- 新增 `LeadCallbackCompensateQuartzJob`（实现 `org.quartz.Job`）
-- V1_8_0 DDL：sys_job_conf 插入 LEAD_CALLBACK_COMPENSATE 行
-  - cron = `0 */5 * * * ?`（每 5 分钟扫描一次）
-  - misfire = DO_NOTHING（补偿任务跳过错过的执行，不追偿）
-- customer 模块 `CustomerSchedulingConfig`（@EnableScheduling）删除，
-  @EnableScheduling 职责归还 performance 模块的 `PerformanceSchedulingConfig`
-- ArchUnit `NoCustomerScheduledArchTest` 守护 customer 模块零 @Scheduled
-- 多实例防重：依旧由 QRTZ_LOCKS 行锁保证（与其他 Quartz Job 一致）
-
-**V1.9 候选评估结果**（2026-05-01 二次收敛）：
-
-| 候选事项 | 处置 |
-|---|---|
-| HealthCheck 也 Quartz 化 | 永久关闭：V1.7 spec § 7 论证"补偿器不依赖 Quartz"是设计意图 |
-| sys_job_conf 运维 Runbook（本文档） | 已交付（V1.9） |
-| Quartz JobStore 反向清理 | 永久关闭：实际产生 < 1 次/年，孤儿对运行无害，成本/收益失衡 |
-| 大小写一致性治理 | 已交付（V1.9 bootstrap test data SQL 30 处） |
-| 测试库环境完整治理 | 延期 V1.10 |
-
----
-
-### 6.5 当前调度格局总结
-
-| 维度 | 当前状态 |
-|---|---|
-| 调度引擎 | Quartz 2.3.x，JDBC JobStore，isClustered=true |
-| 防重机制 | QRTZ_LOCKS InnoDB 行锁（已替代 ShedLock + Redis） |
-| 日志写入 | JobExecutionLogger 全局统一（业务模块零感知） |
-| JobApi 方法数 | 3（getJobConf + registerJob + unregisterJob） |
-| @Scheduled 残留 | 仅 MetricSchedulerHealthCheck（设计意图保留） |
-| ACTIVE Quartz Job 数 | 3 固定（SYSCONTROL_CLEANUP / PERF_RUN_TASK_CLEANUP / LEAD_CALLBACK_COMPENSATE）+ N 指标级动态 Job |
-
-本总结由本页 § 4 业务 Job 清单、§ 6.2–§ 6.4 调度演进史与当前实现交叉核对；
-历史决策见 `docs/superpowers/specs/2026-05-01-v1.9-runbook-and-case-consistency-design.md`。
-
----
-
-## § 7. 测试库合一（V1.10 / 2026-05-01）
-
-### 唯一测试库
-
-V1.10 合一后平台测试 mysql 库**唯一为 `onepl_test_bootstrap`**：
-- bootstrap @SpringBootTest 业务 IT 用
-- perf 模块 IT 用
-- report 模块 IT 用
-
-> Flyway 已彻底废弃（详见根 AGENTS.md "Flyway 禁令"红线），原 perf/report 的 `*FlywayTestBase` /
-> `*FlywayIT` 测试基类已从源码中删除。
-
-### v103 库废弃
-
-`onepl_test_v103` 库已废弃。V1.10 P5 阶段**不**物理 DROP（保留为 V1.10 回滚 fallback 1-2 周）。V1.10 稳定 1-2 周后由运维手工执行：
-```sql
-DROP DATABASE onepl_test_v103;
-```
-
-### 来源
-
-详细决策溯源 + 路径 Y 设计：`docs/superpowers/specs/2026-05-01-v1.10-test-db-unification-design.md`
+触发后不要仅凭 HTTP 成功判断 Job 已完成。读取返回的触发信息、`SYS_JOB_RUN_LOG` 和
+应用日志；`runLogId` 可能在响应时尚未生成。重复触发前先确认 `isJobRunning` 结果、
+幂等语义和业务负责人批准。
+
+## 5. 常见故障定位
+
+### 5.1 应用启动但任务没有调度
+
+- 先核对活动 profile 中 Quartz 是否启用、JobStore 是否为 JDBC、自动启动策略和表前缀；
+  再查启动日志是否完成 Scheduler 初始化。
+- 对照 `SYS_JOB_CONF` 检查任务状态、Cron、`quartz_job_class` 和
+  `allow_manual_trigger`；类加载或 Cron 校验失败时按日志定位，不手工写 Quartz 表。
+- 查看 `QRTZ_SCHEDULER_STATE` 心跳和 `QRTZ_TRIGGERS` 状态，区分单实例未启动、
+  集群未登记和业务任务自身暂停。
+
+### 5.2 触发接口失败或没有执行记录
+
+- 先确认资源授权、目标 `jobId` 存在、任务未禁止人工触发，理由已提供。
+- 读取应用错误码和 Trace，再查询任务配置、Quartz Trigger、`QRTZ_FIRED_TRIGGERS`
+  和运行日志；不要绕过 API 直接触发。
+- Scheduler 不可用时，按错误边界处理并联系部署负责人；不要把“配置已保存”当作“已
+  调度成功”。
+
+### 5.3 任务持续 RUNNING、失败或重复执行
+
+- 以 `SYS_JOB_RUN_LOG`、Quartz fired trigger、节点心跳和应用日志交叉核对，确认是否仍
+  有真实执行节点；`isJobRunning` 是只读判断，不提供通用互斥锁。
+- 先暂停后续调度并通知任务负责人，保留异常摘要和业务影响；不直接杀进程、不删除运行
+ 记录、不修改状态字段。
+- 集群重复现象优先核对 JDBC JobStore、`QRTZ_LOCKS`、节点时钟和实例标识，涉及数据
+  修复时转 DBA 审批。
+
+### 5.4 暂停/恢复状态不一致
+
+- 记录接口响应和 Trace，重新读取业务配置、Trigger 状态、Scheduler 日志。
+- 若 Quartz 操作失败而业务配置已改变，保持暂停或停止继续触发，提交运维/DBA 复核；
+  不在数据库中手工补写状态。
+- 恢复前重新验证 Job 类、Cron、依赖服务和未完成运行，避免在原因未消除时重复放量。
+
+### 5.5 审计、通知或文件异常
+
+- 审计缺失：按 Trace 查 `GovAuditLogHandler`、`AuditLogService` 和事务日志；区分
+  普通切面失败隔离与 Service-managed 审计随业务事务回滚，不补造成功记录。
+- 通知部分失败：按单条结果和服务端日志核对，批量接口不是整体回滚；重试前确认接收人
+  和幂等策略。
+- 文件失败：确认 `obs.enabled`、端点/桶注入和对象访问结果；新对象元数据落库失败时
+  检查服务的补偿日志，避免重复上传或误删已有 MD5 对象。
+- 字典、配置或日历读到旧值：确认写事务已提交、受影响缓存是否清除，并在同一实例重新
+  读取；不能通过修改缓存表或重启其他实例代替核对。
+
+## 6. 安全恢复与审批边界
+
+以下动作必须由对应责任人审批并留痕：修改配置或资源授权、重启实例、暂停/恢复/人工
+触发任务、OBS 对象处理、审计数据导出、任何数据库结构或业务数据变更。执行前后都要
+保存脱敏的配置摘要、日志、接口响应、Trace 和状态核对结果。
+
+- 数据库结构、权限和数据修复只由 DBA/权限管理员按审批流程实施；本 Runbook 的只读
+  查询不得改写成执行脚本。
+- 不执行 `UPDATE`、`DELETE`、`INSERT`、DDL、存储过程或自动结构升级；不清空、
+  覆盖、克隆数据库，不把测试环境结论直接用于目标环境。
+- 不使用未经核实的 PID、端口、checkout、代理、账号或凭据；不停止其他实例，不以
+  强制杀进程替代任务暂停。
+- 外部对象存储、通知发送和人工触发可能产生不可逆业务副作用；先确认范围、幂等策略、
+  回退方案和业务窗口。
+- 恢复完成的判据是：接口权限正确、目标配置与 Quartz 状态一致、最近执行结果可追踪、
+  审计/日志证据齐全，且责任人确认业务影响已关闭。
+
+## 7. 交接清单
+
+- [ ] 目标实例、活动 profile、数据源和外部依赖已核实。
+- [ ] `SYS_JOB_CONF`、运行日志、Quartz 心跳/Trigger 与接口返回已交叉核对。
+- [ ] 所有暂停、恢复、触发和重启均有审批、理由、操作人、时间和 Trace。
+- [ ] 未执行越过 SQL 门禁的变更；未触碰其他实例或无关模块。
+- [ ] 日志、请求、截图和数据库结果均已脱敏并按工单归档。

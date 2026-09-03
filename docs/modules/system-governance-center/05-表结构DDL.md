@@ -1,709 +1,190 @@
-# 系统治理中心 -- 表结构 DDL
-
-> 版本：V1 | 最后更新：2026-04-02
-> DDL 源文件：`docs/schema/ddl-governance.sql`
-
----
-
-## 1. 表清单
-
-| 序号 | 表名 | 说明 | 主键策略 | 所属 |
-|:---:|:---|:---|:---|:---|
-| 1 | sys_dict | 字典表 | UUID(id) varchar(32) | 自有 |
-| 2 | sys_dict_item | 字典项表（V1备用） | UUID(id) varchar(32) | 自有 |
-| 3 | sys_calendar_day | 工作日历（按天） | 自然主键(day) DATE | 自有 |
-| 4 | sys_job_conf | 任务调度配置 | UUID(id) varchar(32) | 自有 |
-| 5 | sys_job_run_log | 任务执行日志 | UUID(id) varchar(32) | 自有 |
-| 6 | sys_config_kv | 系统配置KV | UUID(id) varchar(32) | 自有 |
-| 7 | user_notification | 用户通知 | UUID(id) varchar(32) | 自有 |
-| 8 | file_object | 文件对象 | UUID(id) varchar(32) | 自有 |
-| 9 | biz_file_rel | 业务附件关联 | UUID(id) varchar(32) | 自有 |
-| 10 | audit_log | 审计日志 | UUID(id) varchar(32) | 自有 |
-| 11 | PERSON_TAG | 人员标签（全平台通用） | 自增(TAG_ID) bigint | 自有 |
-| 12 | PERSON_TAG_REL | 人员标签-人员关联 | 自增(ID) bigint | 自有 |
-
----
-
-## 2. 完整 DDL
-
-### 2.1 sys_dict -- 字典表
-
-| 字段名 | 类型 | NULL | 默认值 | 注释 |
-|:---|:---|:---:|:---|:---|
-| id | varchar(32) | NOT NULL | - | 字典ID（UUID主键） |
-| dict_type | varchar(100) | NOT NULL | - | 字典类型 |
-| dict_code | varchar(100) | NOT NULL | - | 字典编码 |
-| dict_label | varchar(200) | NOT NULL | - | 字典标签（显示名称） |
-| dict_value | varchar(500) | NOT NULL | - | 字典值（实际存储值） |
-| sort_order | int(11) | NULL | 0 | 排序号 |
-| status | varchar(20) | NULL | 'ACTIVE' | 状态：ACTIVE-启用, DISABLED-禁用 |
-| remark | varchar(500) | NULL | NULL | 备注 |
-| created_by | varchar(32) | NULL | NULL | 创建人 |
-| created_time | datetime | NULL | CURRENT_TIMESTAMP | 创建时间 |
-| updated_by | varchar(32) | NULL | NULL | 更新人 |
-| updated_time | datetime | NULL | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
-
-```sql
-CREATE TABLE IF NOT EXISTS `SYS_DICT` (
-  `id` varchar(32) NOT NULL COMMENT '字典ID',
-  `dict_type` varchar(100) NOT NULL COMMENT '字典类型',
-  `dict_code` varchar(100) NOT NULL COMMENT '字典编码',
-  `dict_label` varchar(200) NOT NULL COMMENT '字典标签',
-  `dict_value` varchar(500) NOT NULL COMMENT '字典值',
-  `sort_order` int(11) DEFAULT '0' COMMENT '排序号',
-  `status` varchar(20) DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE-启用, DISABLED-禁用',
-  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-  `created_by` varchar(32) DEFAULT NULL COMMENT '创建人',
-  `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_by` varchar(32) DEFAULT NULL COMMENT '更新人',
-  `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_dict_type_code` (`dict_type`,`dict_code`),
-  KEY `idx_dict_type` (`dict_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='字典表';
-```
-
-### 2.2 sys_dict_item -- 字典项表（V1备用）
-
-| 字段名 | 类型 | NULL | 默认值 | 注释 |
-|:---|:---|:---:|:---|:---|
-| id | varchar(32) | NOT NULL | - | 字典项ID（UUID主键） |
-| dict_type | varchar(100) | NOT NULL | - | 字典类型（关联 sys_dict.dict_type） |
-| item_code | varchar(100) | NOT NULL | - | 字典项编码 |
-| item_label | varchar(200) | NOT NULL | - | 字典项标签 |
-| item_value | varchar(500) | NOT NULL | - | 字典项值 |
-| sort_order | int(11) | NULL | 0 | 排序号 |
-| status | varchar(20) | NULL | 'ACTIVE' | 状态：ACTIVE-启用, DISABLED-禁用 |
-| remark | varchar(500) | NULL | NULL | 备注 |
-| created_by | varchar(32) | NULL | NULL | 创建人 |
-| created_time | datetime | NULL | CURRENT_TIMESTAMP | 创建时间 |
-| updated_by | varchar(32) | NULL | NULL | 更新人 |
-| updated_time | datetime | NULL | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
-
-```sql
-CREATE TABLE IF NOT EXISTS `SYS_DICT_ITEM` (
-  `id` varchar(32) NOT NULL COMMENT '字典项ID',
-  `dict_type` varchar(100) NOT NULL COMMENT '字典类型（关联 sys_dict.dict_type）',
-  `item_code` varchar(100) NOT NULL COMMENT '字典项编码',
-  `item_label` varchar(200) NOT NULL COMMENT '字典项标签',
-  `item_value` varchar(500) NOT NULL COMMENT '字典项值',
-  `sort_order` int(11) DEFAULT '0' COMMENT '排序号',
-  `status` varchar(20) DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE-启用, DISABLED-禁用',
-  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-  `created_by` varchar(32) DEFAULT NULL COMMENT '创建人',
-  `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_by` varchar(32) DEFAULT NULL COMMENT '更新人',
-  `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_dict_type_item_code` (`dict_type`,`item_code`),
-  KEY `idx_dict_type` (`dict_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='字典项表';
-```
-
-> **说明**：V1 版本字典类型与字典项统一存储在 `SYS_DICT` 中。`SYS_DICT_ITEM` 保留 DDL 备用，供未来拆分字典类型和字典项时使用。
-
-### 2.3 sys_calendar_day -- 工作日历（按天）
-
-| 字段名 | 类型 | NULL | 默认值 | 注释 |
-|:---|:---|:---:|:---|:---|
-| day | date | NOT NULL | - | 日期（自然主键） |
-| is_workday | tinyint(1) | NOT NULL | 1 | 是否工作日：1-工作日, 0-休息日 |
-| remark | varchar(500) | NULL | NULL | 备注（如"国庆节"、"调休"等） |
-| created_by | varchar(32) | NULL | NULL | 创建人 |
-| created_time | datetime | NULL | CURRENT_TIMESTAMP | 创建时间 |
-| updated_by | varchar(32) | NULL | NULL | 更新人 |
-| updated_time | datetime | NULL | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
-
-```sql
-CREATE TABLE IF NOT EXISTS `SYS_CALENDAR_DAY` (
-  `day` date NOT NULL COMMENT '日期',
-  `is_workday` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否工作日：1-工作日,0-休息日',
-  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-  `created_by` varchar(32) DEFAULT NULL COMMENT '创建人',
-  `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_by` varchar(32) DEFAULT NULL COMMENT '更新人',
-  `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`day`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='工作日历(按天)';
-```
-
-### 2.4 sys_job_conf -- 任务调度配置
-
-| 字段名 | 类型 | NULL | 默认值 | 注释 |
-|:---|:---|:---:|:---|:---|
-| id | varchar(32) | NOT NULL | - | 任务ID（UUID主键） |
-| job_key | varchar(100) | NOT NULL | - | 任务KEY（唯一标识） |
-| job_name | varchar(200) | NOT NULL | - | 任务名称 |
-| cron_expr | varchar(100) | NOT NULL | - | Cron表达式 |
-| status | varchar(20) | NOT NULL | 'ACTIVE' | 状态：ACTIVE/PAUSED |
-| allow_manual_trigger | tinyint(1) | NOT NULL | 1 | 是否允许手动触发 |
-| last_run_time | datetime | NULL | NULL | 上次执行时间 |
-| next_run_time | datetime | NULL | NULL | 下次执行时间（可选） |
-| remark | varchar(500) | NULL | NULL | 备注 |
-| created_by | varchar(32) | NULL | NULL | 创建人 |
-| created_time | datetime | NULL | CURRENT_TIMESTAMP | 创建时间 |
-| updated_by | varchar(32) | NULL | NULL | 更新人 |
-| updated_time | datetime | NULL | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
-
-```sql
-CREATE TABLE IF NOT EXISTS `SYS_JOB_CONF` (
-  `id` varchar(32) NOT NULL COMMENT '任务ID',
-  `job_key` varchar(100) NOT NULL COMMENT '任务KEY(唯一)',
-  `job_name` varchar(200) NOT NULL COMMENT '任务名称',
-  `cron_expr` varchar(100) NOT NULL COMMENT 'Cron表达式',
-  `status` varchar(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE/PAUSED',
-  `allow_manual_trigger` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否允许手动触发',
-  `last_run_time` datetime DEFAULT NULL COMMENT '上次执行时间',
-  `next_run_time` datetime DEFAULT NULL COMMENT '下次执行时间(可选)',
-  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-  `created_by` varchar(32) DEFAULT NULL COMMENT '创建人',
-  `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_by` varchar(32) DEFAULT NULL COMMENT '更新人',
-  `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_job_key` (`job_key`),
-  KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='任务调度配置';
-```
-
-### 2.5 sys_job_run_log -- 任务执行日志
-
-| 字段名 | 类型 | NULL | 默认值 | 注释 |
-|:---|:---|:---:|:---|:---|
-| id | varchar(32) | NOT NULL | - | 执行日志ID（UUID主键） |
-| job_id | varchar(32) | NOT NULL | - | 任务ID（关联 sys_job_conf.id） |
-| trigger_type | varchar(20) | NOT NULL | - | 触发类型：SCHEDULED/MANUAL |
-| reason | varchar(500) | NULL | NULL | 原因（手动触发必填） |
-| start_time | datetime | NULL | CURRENT_TIMESTAMP | 开始时间 |
-| end_time | datetime | NULL | NULL | 结束时间 |
-| status | varchar(20) | NOT NULL | 'RUNNING' | 状态：RUNNING/SUCCESS/FAILED |
-| error_msg | longtext | NULL | NULL | 错误信息 |
-| created_by | varchar(32) | NULL | NULL | 触发人 |
-| created_time | datetime | NULL | CURRENT_TIMESTAMP | 创建时间 |
-
-```sql
-CREATE TABLE IF NOT EXISTS `SYS_JOB_RUN_LOG` (
-  `id` varchar(32) NOT NULL COMMENT '执行日志ID',
-  `job_id` varchar(32) NOT NULL COMMENT '任务ID',
-  `trigger_type` varchar(20) NOT NULL COMMENT '触发类型：SCHEDULED/MANUAL',
-  `reason` varchar(500) DEFAULT NULL COMMENT '原因(手动触发必填)',
-  `start_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '开始时间',
-  `end_time` datetime DEFAULT NULL COMMENT '结束时间',
-  `status` varchar(20) NOT NULL DEFAULT 'RUNNING' COMMENT '状态：RUNNING/SUCCESS/FAILED',
-  `error_msg` longtext COMMENT '错误信息',
-  `created_by` varchar(32) DEFAULT NULL COMMENT '触发人',
-  `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_job_id` (`job_id`),
-  KEY `idx_created_time` (`created_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='任务执行日志';
-```
-
-### 2.6 sys_config_kv -- 系统配置KV
-
-| 字段名 | 类型 | NULL | 默认值 | 注释 |
-|:---|:---|:---:|:---|:---|
-| id | varchar(32) | NOT NULL | - | 配置ID（UUID主键） |
-| config_key | varchar(200) | NOT NULL | - | 配置键（唯一） |
-| config_value | longtext | NULL | NULL | 配置值 |
-| value_type | varchar(20) | NOT NULL | 'STRING' | 值类型：STRING/JSON/NUMBER/BOOL |
-| status | varchar(20) | NOT NULL | 'ACTIVE' | 状态：ACTIVE/DISABLED |
-| remark | varchar(500) | NULL | NULL | 备注 |
-| created_by | varchar(32) | NULL | NULL | 创建人 |
-| created_time | datetime | NULL | CURRENT_TIMESTAMP | 创建时间 |
-| updated_by | varchar(32) | NULL | NULL | 更新人 |
-| updated_time | datetime | NULL | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
-
-```sql
-CREATE TABLE IF NOT EXISTS `SYS_CONFIG_KV` (
-  `id` varchar(32) NOT NULL COMMENT '配置ID',
-  `config_key` varchar(200) NOT NULL COMMENT '配置键(唯一)',
-  `config_value` longtext COMMENT '配置值',
-  `value_type` varchar(20) NOT NULL DEFAULT 'STRING' COMMENT '值类型：STRING/JSON/NUMBER/BOOL',
-  `status` varchar(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE/DISABLED',
-  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-  `created_by` varchar(32) DEFAULT NULL COMMENT '创建人',
-  `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_by` varchar(32) DEFAULT NULL COMMENT '更新人',
-  `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_config_key` (`config_key`),
-  KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='系统配置KV';
-```
-
-### 2.7 user_notification -- 用户通知表
-
-| 字段名 | 类型 | NULL | 默认值 | 注释 |
-|:---|:---|:---:|:---|:---|
-| id | varchar(32) | NOT NULL | - | 通知ID（UUID主键） |
-| emp_id | varchar(32) | NOT NULL | - | 接收人工号 |
-| title | varchar(200) | NOT NULL | - | 通知标题 |
-| content | text | NULL | NULL | 通知内容 |
-| notify_type | varchar(50) | NULL | NULL | 通知类型：SYSTEM-系统, WORKFLOW-流程, BUSINESS-业务 |
-| biz_type | varchar(50) | NULL | NULL | 业务类型（如 LEAD/LOAN 等） |
-| biz_id | varchar(100) | NULL | NULL | 业务ID |
-| link_url | varchar(500) | NULL | NULL | 跳转链接 |
-| is_read | tinyint(1) | NULL | 0 | 是否已读：1-已读, 0-未读 |
-| read_time | datetime | NULL | NULL | 阅读时间 |
-| created_time | datetime | NULL | CURRENT_TIMESTAMP | 创建时间 |
-
-```sql
-CREATE TABLE IF NOT EXISTS `USER_NOTIFICATION` (
-  `id` varchar(32) NOT NULL COMMENT '通知ID',
-  `emp_id` varchar(32) NOT NULL COMMENT '接收人工号',
-  `title` varchar(200) NOT NULL COMMENT '通知标题',
-  `content` text COMMENT '通知内容',
-  `notify_type` varchar(50) DEFAULT NULL COMMENT '通知类型：SYSTEM-系统, WORKFLOW-流程, BUSINESS-业务',
-  `biz_type` varchar(50) DEFAULT NULL COMMENT '业务类型',
-  `biz_id` varchar(100) DEFAULT NULL COMMENT '业务ID',
-  `link_url` varchar(500) DEFAULT NULL COMMENT '跳转链接',
-  `is_read` tinyint(1) DEFAULT '0' COMMENT '是否已读：1-已读, 0-未读',
-  `read_time` datetime DEFAULT NULL COMMENT '阅读时间',
-  `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_emp_id_read` (`emp_id`,`is_read`),
-  KEY `idx_created_time` (`created_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户通知表';
-```
-
-### 2.8 file_object -- 文件对象表
-
-| 字段名 | 类型 | NULL | 默认值 | 注释 |
-|:---|:---|:---:|:---|:---|
-| id | varchar(32) | NOT NULL | - | 文件对象ID（UUID主键） |
-| file_name | varchar(255) | NOT NULL | - | 文件名 |
-| file_size | bigint(20) | NULL | NULL | 文件大小（字节） |
-| file_type | varchar(100) | NULL | NULL | 文件类型（MIME类型或扩展名） |
-| storage_path | varchar(500) | NOT NULL | - | 存储路径（MinIO对象存储） |
-| bucket_name | varchar(100) | NULL | NULL | 存储桶名称 |
-| md5_hash | varchar(64) | NULL | NULL | MD5哈希值（用于去重校验） |
-| uploaded_by | varchar(32) | NULL | NULL | 上传人 |
-| uploaded_time | datetime | NULL | CURRENT_TIMESTAMP | 上传时间 |
-
-```sql
-CREATE TABLE IF NOT EXISTS `FILE_OBJECT` (
-  `id` varchar(32) NOT NULL COMMENT '文件对象ID',
-  `file_name` varchar(255) NOT NULL COMMENT '文件名',
-  `file_size` bigint(20) DEFAULT NULL COMMENT '文件大小（字节）',
-  `file_type` varchar(100) DEFAULT NULL COMMENT '文件类型',
-  `storage_path` varchar(500) NOT NULL COMMENT '存储路径（对象存储）',
-  `bucket_name` varchar(100) DEFAULT NULL COMMENT '存储桶名称',
-  `md5_hash` varchar(64) DEFAULT NULL COMMENT 'MD5哈希值',
-  `uploaded_by` varchar(32) DEFAULT NULL COMMENT '上传人',
-  `uploaded_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '上传时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_uploaded_by` (`uploaded_by`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='文件对象表';
-```
-
-### 2.9 biz_file_rel -- 业务-附件关联表
-
-| 字段名 | 类型 | NULL | 默认值 | 注释 |
-|:---|:---|:---:|:---|:---|
-| id | varchar(32) | NOT NULL | - | 关联ID（UUID主键） |
-| biz_type | varchar(32) | NOT NULL | - | 业务类型（BizType或业务域标识） |
-| biz_id | varchar(100) | NOT NULL | - | 业务ID（字符串） |
-| file_object_id | varchar(32) | NOT NULL | - | 文件对象ID（关联 file_object.id） |
-| file_role | varchar(32) | NULL | NULL | 用途：ATTACHMENT/PHOTO/... |
-| created_by | varchar(32) | NULL | NULL | 创建人 |
-| created_time | datetime | NULL | CURRENT_TIMESTAMP | 创建时间 |
-
-```sql
-CREATE TABLE IF NOT EXISTS `BIZ_FILE_REL` (
-  `id` varchar(32) NOT NULL COMMENT '关联ID',
-  `biz_type` varchar(32) NOT NULL COMMENT '业务类型(BizType或业务域)',
-  `biz_id` varchar(100) NOT NULL COMMENT '业务ID(字符串)',
-  `file_object_id` varchar(32) NOT NULL COMMENT '文件对象ID',
-  `file_role` varchar(32) DEFAULT NULL COMMENT '用途：ATTACHMENT/PHOTO/...',
-  `created_by` varchar(32) DEFAULT NULL COMMENT '创建人',
-  `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_biz_file` (`biz_type`, `biz_id`, `file_object_id`),
-  KEY `idx_biz` (`biz_type`, `biz_id`),
-  KEY `idx_file` (`file_object_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='业务-附件关联表';
-```
-
-### 2.10 audit_log -- 审计日志表
-
-| 字段名 | 类型 | NULL | 默认值 | 注释 |
-|:---|:---|:---:|:---|:---|
-| id | varchar(32) | NOT NULL | - | 日志ID（UUID主键） |
-| trace_id | varchar(64) | NULL | NULL | 链路追踪ID |
-| emp_id | varchar(32) | NOT NULL | - | 操作人工号 |
-| emp_name | varchar(100) | NULL | NULL | 操作人姓名 |
-| biz_type | varchar(50) | NULL | NULL | 业务类型 |
-| biz_action | varchar(50) | NULL | NULL | 业务动作 |
-| resource_url | varchar(500) | NULL | NULL | 资源URL |
-| request_method | varchar(20) | NULL | NULL | 请求方法（GET/POST/PUT/DELETE） |
-| request_params | text | NULL | NULL | 请求参数（脱敏后） |
-| response_status | int(11) | NULL | NULL | 响应状态码 |
-| error_msg | text | NULL | NULL | 错误信息 |
-| ip_address | varchar(50) | NULL | NULL | IP地址 |
-| user_agent | varchar(500) | NULL | NULL | 用户代理 |
-| execution_time | int(11) | NULL | NULL | 执行耗时（毫秒） |
-| reason | varchar(500) | NULL | NULL | 操作原因（高危动作必填） |
-| created_time | datetime | NULL | CURRENT_TIMESTAMP | 创建时间 |
-
-```sql
-CREATE TABLE IF NOT EXISTS `AUDIT_LOG` (
-  `id` varchar(32) NOT NULL COMMENT '日志ID',
-  `trace_id` varchar(64) DEFAULT NULL COMMENT '链路追踪ID',
-  `emp_id` varchar(32) NOT NULL COMMENT '操作人工号',
-  `emp_name` varchar(100) DEFAULT NULL COMMENT '操作人姓名',
-  `biz_type` varchar(50) DEFAULT NULL COMMENT '业务类型',
-  `biz_action` varchar(50) DEFAULT NULL COMMENT '业务动作',
-  `resource_url` varchar(500) DEFAULT NULL COMMENT '资源URL',
-  `request_method` varchar(20) DEFAULT NULL COMMENT '请求方法',
-  `request_params` text COMMENT '请求参数（脱敏）',
-  `response_status` int(11) DEFAULT NULL COMMENT '响应状态码',
-  `error_msg` text COMMENT '错误信息',
-  `ip_address` varchar(50) DEFAULT NULL COMMENT 'IP地址',
-  `user_agent` varchar(500) DEFAULT NULL COMMENT '用户代理',
-  `execution_time` int(11) DEFAULT NULL COMMENT '执行耗时（毫秒）',
-  `reason` varchar(500) DEFAULT NULL COMMENT '操作原因（高危动作必填）',
-  `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_emp_id` (`emp_id`),
-  KEY `idx_biz_type` (`biz_type`),
-  KEY `idx_created_time` (`created_time`),
-  KEY `idx_trace_id` (`trace_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='审计日志表';
-```
-
-### 2.11 PERSON_TAG -- 人员标签（2026-07-20 新增，全平台通用）
-
-```sql
-CREATE TABLE IF NOT EXISTS `PERSON_TAG` (
-  `TAG_ID`      bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `TAG_NAME`    varchar(100) NOT NULL COMMENT '标签名称',
-  `REMARK`      varchar(500) DEFAULT NULL COMMENT '备注',
-  `CREATE_BY`   varchar(50)  DEFAULT NULL COMMENT '创建人工号',
-  `CREATE_TIME` datetime     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `UPDATE_BY`   varchar(50)  DEFAULT NULL COMMENT '更新人工号',
-  `UPDATE_TIME` datetime     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`TAG_ID`),
-  UNIQUE KEY `UK_PERSON_TAG_NAME` (`TAG_NAME`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='人员标签（全平台通用）';
-```
-
-### 2.12 PERSON_TAG_REL -- 人员标签-人员关联（2026-07-20 新增）
-
-```sql
-CREATE TABLE IF NOT EXISTS `PERSON_TAG_REL` (
-  `ID`          bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `TAG_ID`      bigint       NOT NULL COMMENT '标签ID（PERSON_TAG.TAG_ID）',
-  `USERNAME`    varchar(200) NOT NULL COMMENT '员工工号（PT_USER.USERNAME，注意不是 USER_ID 代理键）',
-  `CREATE_BY`   varchar(50)  DEFAULT NULL COMMENT '创建人工号',
-  `CREATE_TIME` datetime     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  PRIMARY KEY (`ID`),
-  UNIQUE KEY `UK_PTR_TAG_USER` (`TAG_ID`, `USERNAME`),
-  KEY `IDX_PTR_USERNAME` (`USERNAME`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='人员标签-人员关联（一人可多标签）';
-```
-
-> 一人可挂多个标签（唯一键是 (TAG_ID, USERNAME) 而非 USERNAME）；成员姓名/机构不冗余存储，
-> 展示时按工号实时解析。部署脚本：`docs/superpowers/sql/2026-07-20-person-tag-tables-and-menu.sql`
-> （含 PT_RESOURCE 菜单/12 个 API 资源/角色绑定种子，幂等）。
-
----
-
-## 3. 索引说明
-
-### 3.1 sys_dict
-
-| 索引名 | 字段 | 类型 | 用途 |
-|:---|:---|:---|:---|
-| PRIMARY | id | 主键 | 唯一标识 |
-| uk_dict_type_code | dict_type, dict_code | 唯一索引 | 同一字典类型下编码唯一，防止重复录入 |
-| idx_dict_type | dict_type | 普通索引 | 按字典类型查询字典项列表（高频查询） |
-
-### 3.2 sys_dict_item
-
-| 索引名 | 字段 | 类型 | 用途 |
-|:---|:---|:---|:---|
-| PRIMARY | id | 主键 | 唯一标识 |
-| uk_dict_type_item_code | dict_type, item_code | 唯一索引 | 同一字典类型下字典项编码唯一 |
-| idx_dict_type | dict_type | 普通索引 | 按字典类型查询字典项列表 |
-
-### 3.3 sys_calendar_day
-
-| 索引名 | 字段 | 类型 | 用途 |
-|:---|:---|:---|:---|
-| PRIMARY | day | 主键 | 日期天然唯一，直接作为主键 |
-
-### 3.4 sys_job_conf
-
-| 索引名 | 字段 | 类型 | 用途 |
-|:---|:---|:---|:---|
-| PRIMARY | id | 主键 | 唯一标识 |
-| uk_job_key | job_key | 唯一索引 | 任务KEY全局唯一，用于代码中按KEY查找任务 |
-| idx_status | status | 普通索引 | 按状态过滤活跃/暂停任务 |
-
-### 3.5 sys_job_run_log
-
-| 索引名 | 字段 | 类型 | 用途 |
-|:---|:---|:---|:---|
-| PRIMARY | id | 主键 | 唯一标识 |
-| idx_job_id | job_id | 普通索引 | 按任务ID查询执行记录 |
-| idx_created_time | created_time | 普通索引 | 按时间范围查询执行日志，支持归档清理 |
-
-### 3.6 sys_config_kv
-
-| 索引名 | 字段 | 类型 | 用途 |
-|:---|:---|:---|:---|
-| PRIMARY | id | 主键 | 唯一标识 |
-| uk_config_key | config_key | 唯一索引 | 配置键全局唯一，防止重复配置 |
-| idx_status | status | 普通索引 | 按状态过滤有效/禁用配置 |
-
-### 3.7 user_notification
-
-| 索引名 | 字段 | 类型 | 用途 |
-|:---|:---|:---|:---|
-| PRIMARY | id | 主键 | 唯一标识 |
-| idx_emp_id_read | emp_id, is_read | 普通联合索引 | 查询某用户的未读/已读通知（核心高频查询） |
-| idx_created_time | created_time | 普通索引 | 按时间排序、按时间范围过滤，支持归档清理 |
-
-### 3.8 file_object
-
-| 索引名 | 字段 | 类型 | 用途 |
-|:---|:---|:---|:---|
-| PRIMARY | id | 主键 | 唯一标识 |
-| idx_uploaded_by | uploaded_by | 普通索引 | 按上传人查询文件列表 |
-
-### 3.9 biz_file_rel
-
-| 索引名 | 字段 | 类型 | 用途 |
-|:---|:---|:---|:---|
-| PRIMARY | id | 主键 | 唯一标识 |
-| uk_biz_file | biz_type, biz_id, file_object_id | 唯一索引 | 同一业务对象不能重复关联同一文件 |
-| idx_biz | biz_type, biz_id | 普通联合索引 | 按业务类型和业务ID查询关联文件列表 |
-| idx_file | file_object_id | 普通索引 | 按文件ID反查关联的业务记录 |
-
-### 3.10 audit_log
-
-| 索引名 | 字段 | 类型 | 用途 |
-|:---|:---|:---|:---|
-| PRIMARY | id | 主键 | 唯一标识 |
-| idx_emp_id | emp_id | 普通索引 | 按操作人工号查询审计记录 |
-| idx_biz_type | biz_type | 普通索引 | 按业务类型过滤审计记录 |
-| idx_created_time | created_time | 普通索引 | 按时间范围查询审计日志，支持月度分区和归档 |
-| idx_trace_id | trace_id | 普通索引 | 按链路追踪ID查询同一请求的审计记录 |
-
----
-
-## 4. 逻辑外键
-
-> 本系统不使用物理外键约束，全部通过应用层保证引用完整性。
-
-| 表 | 字段 | 关联表 | 关联字段 | 说明 |
-|:---|:---|:---|:---|:---|
-| user_notification | emp_id | PT_USER | USER_ID | 通知接收人，来自 auth-permission-center 管理的用户表 |
-| audit_log | emp_id | PT_USER | USER_ID | 审计日志操作人 |
-| sys_job_run_log | job_id | sys_job_conf | id | 执行日志关联的任务配置 |
-| sys_job_run_log | created_by | PT_USER | USER_ID | 手动触发的触发人 |
-| biz_file_rel | file_object_id | file_object | id | 文件关联，删除文件前需检查关联 |
-| file_object | uploaded_by | PT_USER | USER_ID | 文件上传人 |
-| sys_dict | created_by | PT_USER | USER_ID | 字典创建人 |
-| sys_dict | updated_by | PT_USER | USER_ID | 字典更新人 |
-| sys_config_kv | created_by | PT_USER | USER_ID | 配置创建人 |
-| sys_config_kv | updated_by | PT_USER | USER_ID | 配置更新人 |
-| sys_calendar_day | created_by | PT_USER | USER_ID | 日历创建人 |
-| sys_calendar_day | updated_by | PT_USER | USER_ID | 日历更新人 |
-
----
-
-## 5. 审计字段规范
-
-本模块各表的审计字段设计遵循以下规范：
-
-### 5.1 标准审计字段（4字段）
-
-适用于普通管理类表，包含完整的创建和更新追踪：
-
-| 字段 | 类型 | 说明 |
-|:---|:---|:---|
-| created_by | varchar(32) | 创建人工号 |
-| created_time | datetime DEFAULT CURRENT_TIMESTAMP | 创建时间，数据库自动填充 |
-| updated_by | varchar(32) | 最后更新人工号 |
-| updated_time | datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 最后更新时间，数据库自动维护 |
-
-**适用表**：sys_dict, sys_dict_item, sys_calendar_day, sys_job_conf, sys_config_kv
-
-### 5.2 仅创建时间
-
-通知为系统生成，不需要更新人和更新时间：
-
-| 字段 | 类型 | 说明 |
-|:---|:---|:---|
-| created_time | datetime DEFAULT CURRENT_TIMESTAMP | 通知创建时间 |
-
-**适用表**：user_notification
-
-> 说明：user_notification 的 `is_read` 和 `read_time` 虽然会更新，但不属于审计字段范畴，不需要记录"谁标记已读"（通知接收人本人操作）。
-
-### 5.3 仅创建时间（append-only）
-
-审计日志和执行日志为不可修改的追加记录：
-
-| 字段 | 类型 | 说明 |
-|:---|:---|:---|
-| created_by | varchar(32) | 触发人/操作人（sys_job_run_log 使用） |
-| created_time | datetime DEFAULT CURRENT_TIMESTAMP | 创建时间 |
-
-**适用表**：audit_log, sys_job_run_log
-
-> 说明：audit_log 表不设 updated 字段，因为审计记录不可修改、不可删除。sys_job_run_log 的 `end_time` 和 `status` 会在任务执行完成时更新，但不需要记录"谁更新"（系统自动更新）。
-
-### 5.4 上传审计
-
-文件表使用专用的上传审计字段：
-
-| 字段 | 类型 | 说明 |
-|:---|:---|:---|
-| uploaded_by | varchar(32) | 上传人工号 |
-| uploaded_time | datetime DEFAULT CURRENT_TIMESTAMP | 上传时间 |
-
-**适用表**：file_object
-
-### 5.5 仅创建审计
-
-业务附件关联表只记录创建信息：
-
-| 字段 | 类型 | 说明 |
-|:---|:---|:---|
-| created_by | varchar(32) | 创建人工号 |
-| created_time | datetime DEFAULT CURRENT_TIMESTAMP | 创建时间 |
-
-**适用表**：biz_file_rel
-
----
-
-## 6. 关键字段取值枚举
-
-### 6.1 通用状态
-
-| 字段位置 | 枚举值 | 说明 |
-|:---|:---|:---|
-| sys_dict.status | `ACTIVE` | 启用 |
-| sys_dict.status | `DISABLED` | 禁用 |
-| sys_dict_item.status | `ACTIVE` | 启用 |
-| sys_dict_item.status | `DISABLED` | 禁用 |
-| sys_config_kv.status | `ACTIVE` | 启用 |
-| sys_config_kv.status | `DISABLED` | 禁用 |
-
-### 6.2 工作日历
-
-| 字段 | 枚举值 | 说明 |
-|:---|:---|:---|
-| sys_calendar_day.is_workday | `1` | 工作日 |
-| sys_calendar_day.is_workday | `0` | 休息日 |
-
-### 6.3 任务调度
-
-| 字段 | 枚举值 | 说明 |
-|:---|:---|:---|
-| sys_job_conf.status | `ACTIVE` | 活跃（定时执行中） |
-| sys_job_conf.status | `PAUSED` | 暂停 |
-| sys_job_conf.allow_manual_trigger | `1` | 允许手动触发 |
-| sys_job_conf.allow_manual_trigger | `0` | 不允许手动触发 |
-| sys_job_run_log.trigger_type | `SCHEDULED` | 定时触发 |
-| sys_job_run_log.trigger_type | `MANUAL` | 手动触发 |
-| sys_job_run_log.status | `RUNNING` | 运行中 |
-| sys_job_run_log.status | `SUCCESS` | 成功 |
-| sys_job_run_log.status | `FAILED` | 失败 |
-
-### 6.4 系统配置
-
-| 字段 | 枚举值 | 说明 |
-|:---|:---|:---|
-| sys_config_kv.value_type | `STRING` | 字符串类型 |
-| sys_config_kv.value_type | `JSON` | JSON类型 |
-| sys_config_kv.value_type | `NUMBER` | 数值类型 |
-| sys_config_kv.value_type | `BOOL` | 布尔类型 |
-
-### 6.5 用户通知
-
-| 字段 | 枚举值 | 说明 |
-|:---|:---|:---|
-| user_notification.notify_type | `SYSTEM` | 系统通知 |
-| user_notification.notify_type | `WORKFLOW` | 流程通知 |
-| user_notification.notify_type | `BUSINESS` | 业务通知 |
-| user_notification.is_read | `0` | 未读 |
-| user_notification.is_read | `1` | 已读 |
-
-### 6.6 文件管理
-
-| 字段 | 枚举值 | 说明 |
-|:---|:---|:---|
-| biz_file_rel.file_role | `ATTACHMENT` | 附件 |
-| biz_file_rel.file_role | `PHOTO` | 图片 |
-| biz_file_rel.biz_type | 由调用方决定 | 如 LEAD / LOAN / SUPPORT / PRODUCT / DOC 等 |
-
-### 6.7 审计日志
-
-| 字段 | 枚举值 | 说明 |
-|:---|:---|:---|
-| audit_log.biz_type | `SYS_CONFIG` | 系统配置管理 |
-| audit_log.biz_type | `SYS_JOB` | 任务调度管理 |
-| audit_log.biz_type | `SQL_PROBE` | SQL探查 |
-| audit_log.biz_type | `LEAD` | 线索管理 |
-| audit_log.biz_type | `CUSTOMER` | 客户管理 |
-| audit_log.biz_type | `LOAN` | 资产投放 |
-| audit_log.biz_type | `SUPPORT` | 中场支持 |
-| audit_log.biz_type | `WORKFLOW` | 工作流 |
-| audit_log.biz_type | `AUTH` | 认证授权 |
-| audit_log.biz_action | `READ` | 读取/查询 |
-| audit_log.biz_action | `CONFIG` | 配置变更（增/改/删） |
-| audit_log.biz_action | `JOB_TRIGGER` | 手动触发任务 |
-| audit_log.biz_action | `EXECUTE_SQL` | 执行SQL探查 |
-| audit_log.biz_action | `EXPORT` | 数据导出 |
-| audit_log.biz_action | `IMPORT` | 数据导入 |
-| audit_log.request_method | `GET` | GET 请求 |
-| audit_log.request_method | `POST` | POST 请求 |
-| audit_log.request_method | `PUT` | PUT 请求 |
-| audit_log.request_method | `DELETE` | DELETE 请求 |
-
----
-
-## 7. 分区/归档策略
-
-### 7.1 audit_log -- 审计日志
-
-- **分区方式**：建议按 `created_time` 月度 RANGE 分区
-- **在线保留**：至少 12 个月
-- **归档策略**：超期数据导出至冷存储（如 OSS/NAS），然后 DROP 对应分区
-- **分区 DDL 示例**：
-
-```sql
-ALTER TABLE audit_log PARTITION BY RANGE (TO_DAYS(created_time)) (
-  PARTITION p202601 VALUES LESS THAN (TO_DAYS('2026-02-01')),
-  PARTITION p202602 VALUES LESS THAN (TO_DAYS('2026-03-01')),
-  PARTITION p202603 VALUES LESS THAN (TO_DAYS('2026-04-01')),
-  -- 按月追加分区...
-  PARTITION p_future VALUES LESS THAN MAXVALUE
-);
-```
-
-> **注意**：需提前创建未来月份的分区，建议通过定时任务在每月月末自动创建下月分区。
-
-### 7.2 sys_job_run_log -- 任务执行日志
-
-- **在线保留**：3 个月
-- **归档策略**：按 `created_time` 定期清理超期数据
-- **清理方式**：通过定时任务执行 DELETE 或 PARTITION DROP
-- **建议**：可通过 sys_job_conf 配置一个 `JOB_LOG_CLEANUP` 定时任务自动清理
-
-### 7.3 user_notification -- 用户通知
-
-- **在线保留**：6 个月
-- **归档策略**：按 `created_time` 定期清理超期数据
-- **清理方式**：已读超过 6 个月的通知可安全删除
-- **建议**：通过定时任务定期清理已读的历史通知
-
-### 7.4 file_object / biz_file_rel -- 文件相关
-
-- **归档策略**：不主动清理
-- **孤立文件清理**：可定期检查 `FILE_OBJECT` 中无 `BIZ_FILE_REL` 关联且上传超过 30 天的文件，标记为待清理
-- **MinIO 同步**：删除数据库记录时需同步删除 MinIO 中的对象
+# 系统治理中心数据模型说明
+
+> 本文件描述当前实现使用的数据模型，不是可执行结构脚本。目标库实际 schema 和已批准的 DBA 记录是结构权威；任何结构调整都必须走独立审批和实施流程。
+
+## 1. 归属与公共约定
+
+治理中心维护下表业务数据及 Quartz 持久化表；`PT_USER`、`EXT_USER_ORG`、`EXT_ORG_INFO` 和指标计算任务表由其他模块维护，治理只通过公开 API 或只读关联查询使用。
+
+治理表的审计字段按实体实际定义使用：有 `created_by/created_time` 的记录在创建时填充；支持更新的表另有 `updated_by/updated_time`。日志、通知和任务运行记录没有通用更新字段时，按其专属状态更新语义处理。
+
+## 2. 字典与日历
+
+### 2.1 `SYS_DICT`
+
+| 字段 | 语义 |
+| --- | --- |
+| `id` | 字典项主键 |
+| `dict_type` | 字典类型编码 |
+| `dict_code` | 类型内编码 |
+| `dict_label` | 展示标签 |
+| `dict_value` | 存储/传输值 |
+| `sort_order` | 展示顺序 |
+| `status` | `ACTIVE`/`DISABLED` |
+| `remark` | 备注 |
+| `created_by/created_time` | 创建审计 |
+| `updated_by/updated_time` | 更新审计 |
+
+约束：`(dict_type, dict_code)` 唯一；按 `dict_type` 查询启用项。禁用是逻辑状态，不删除字典项记录。
+
+### 2.2 `SYS_CALENDAR_DAY`
+
+| 字段 | 语义 |
+| --- | --- |
+| `day` | 日期自然主键 |
+| `is_workday` | `1` 工作日，`0` 休息日 |
+| `remark` | 节假日/调休备注 |
+| `created_by/created_time` | 创建审计 |
+| `updated_by/updated_time` | 更新审计 |
+
+缺失日期由服务按周规则判断；管理端写入会创建或更新记录。日历表按日期范围查询，不额外拆分类型表。
+
+## 3. 调度与配置
+
+### 3.1 `SYS_JOB_CONF`
+
+| 字段 | 语义 |
+| --- | --- |
+| `id` | 任务配置主键 |
+| `job_key` | 全局唯一任务标识 |
+| `job_name` | 展示名称 |
+| `cron_expr` | Quartz Cron 表达式 |
+| `quartz_job_class` | Job 实现类全限定名 |
+| `misfire_policy` | `FIRE_ONCE_NOW`/`DO_NOTHING`/`IGNORE_MISFIRE_POLICY` |
+| `status` | `ACTIVE`/`PAUSED` |
+| `allow_manual_trigger` | `1` 允许，`0` 禁止 |
+| `last_run_time/next_run_time` | 最近/计划执行时间 |
+| `remark` | 备注 |
+| `created_by/created_time`、`updated_by/updated_time` | 审计字段 |
+
+`job_key` 唯一。Quartz JobDetail、CronTrigger 与该表的配置由 `JobService` 同步；表中不存在固定 Job 数量的约束。
+
+### 3.2 `SYS_JOB_RUN_LOG`
+
+| 字段 | 语义 |
+| --- | --- |
+| `id` | 执行日志主键 |
+| `job_id` | 对应 `SYS_JOB_CONF.id` |
+| `trigger_type` | `SCHEDULED`/`MANUAL`（协调调用可传 `AUTO`，监听器负责记录实际触发类型） |
+| `reason` | 触发原因 |
+| `start_time/end_time` | 执行起止时间 |
+| `status` | `RUNNING`/`SUCCESS`/`FAILED` |
+| `error_msg` | 失败信息 |
+| `created_by/created_time` | 触发人和创建时间 |
+| `scheduled_fire_time` | Quartz 计划触发时间 |
+
+`processStatus` 是查询 DTO 的非本表字段，可由指标计算任务关联得到；不得作为本表列写入。
+
+### 3.3 `SYS_CONFIG_KV`
+
+| 字段 | 语义 |
+| --- | --- |
+| `id` | 配置主键 |
+| `config_key` | 全局唯一配置键 |
+| `config_value` | 配置原文（长文本） |
+| `value_type` | `STRING`/`JSON`/`NUMBER`/`BOOL` |
+| `status` | `ACTIVE`/`DISABLED` |
+| `remark` | 备注 |
+| `created_by/created_time`、`updated_by/updated_time` | 审计字段 |
+
+配置值的类型转换由 `ConfigService` 负责；凭据类配置的可见性和日志脱敏由权限与安全规范约束。
+
+## 4. 通知、文件与关联
+
+### 4.1 `USER_NOTIFICATION`
+
+| 字段 | 语义 |
+| --- | --- |
+| `id` | 通知主键 |
+| `emp_id` | 接收人工号 |
+| `title`、`content` | 标题和内容 |
+| `notify_type` | `SYSTEM`/`WORKFLOW`/`BUSINESS` |
+| `biz_type`、`biz_id`、`link_url` | 可选业务关联和跳转 |
+| `is_read`、`read_time` | `0/1` 已读状态和时间 |
+| `created_time` | 创建时间 |
+
+查询索引应覆盖接收人工号及已读条件；已读状态通过 Service 的用户范围校验后更新。
+
+### 4.2 `FILE_OBJECT`
+
+| 字段 | 语义 |
+| --- | --- |
+| `id` | 文件对象主键 |
+| `file_name` | 原始文件名 |
+| `file_size` | 字节数 |
+| `file_type` | MIME 类型或扩展信息 |
+| `storage_path` | OBS 对象 key |
+| `bucket_name` | OBS 桶标识 |
+| `md5_hash` | 内容摘要，用于去重 |
+| `uploaded_by`、`uploaded_time` | 上传人和时间 |
+
+内容不存数据库，数据库仅保存元数据；对象生命周期由 `FileService` 与 `ObsStorageClient` 协同处理。
+
+### 4.3 `BIZ_FILE_REL`
+
+| 字段 | 语义 |
+| --- | --- |
+| `id` | 关联主键 |
+| `biz_type`、`biz_id` | 业务对象标识 |
+| `file_object_id` | 对应 `FILE_OBJECT.id` |
+| `file_role` | 附件用途，可为空 |
+| `created_by`、`created_time` | 关联审计 |
+
+约束：`(biz_type, biz_id, file_object_id)` 唯一，保证绑定幂等。解绑只删除关联，删除文件对象时才清理其全部关联。
+
+## 5. 审计与标签
+
+### 5.1 `AUDIT_LOG`
+
+| 字段 | 语义 |
+| --- | --- |
+| `id` | 日志主键 |
+| `trace_id`、`emp_id`、`emp_name` | 链路和操作人 |
+| `biz_type`、`biz_action` | 业务类型和动作 |
+| `resource_url`、`request_method` | 请求资源 |
+| `request_params` | 脱敏请求参数 |
+| `response_status`、`error_msg`、`execution_time` | 结果、错误和耗时 |
+| `ip_address`、`user_agent` | 请求环境 |
+| `reason` | 操作原因 |
+| `target_type`、`target_id` | 结构化目标 |
+| `before_snapshot`、`after_snapshot` | 前后状态快照 |
+| `added_items`、`removed_items` | 变更集合 |
+| `created_time` | 写入时间 |
+
+审计记录为追加型数据；只有 `created_time`，不提供治理接口修改/删除。结构化字段和自由文本都必须做脱敏、长度控制。
+
+### 5.2 `PERSON_TAG`
+
+| 字段 | 语义 |
+| --- | --- |
+| `TAG_ID` | 自增标签主键 |
+| `TAG_NAME` | 全局唯一标签名称 |
+| `REMARK` | 备注 |
+| `CREATE_BY`、`CREATE_TIME` | 创建审计 |
+| `UPDATE_BY`、`UPDATE_TIME` | 更新审计 |
+
+### 5.3 `PERSON_TAG_REL`
+
+| 字段 | 语义 |
+| --- | --- |
+| `ID` | 自增关联主键 |
+| `TAG_ID` | 对应 `PERSON_TAG.TAG_ID` |
+| `DIM_TYPE` | `EMP` 或 `ORG` |
+| `USERNAME` | EMP 维度的 `PT_USER.USERNAME` |
+| `ORG_DEPT_NO` | ORG 维度的 `EXT_ORG_INFO.DEPT_NO` |
+| `CREATE_BY`、`CREATE_TIME` | 创建审计 |
+
+EMP 行只填 `USERNAME`，ORG 行只填 `ORG_DEPT_NO`；两列均不存展示名称。标签+员工、标签+机构业务编号分别具备唯一约束，删除标签级联清理关联。
+
+## 6. 外部持有表与 Quartz 表
+
+- `PT_USER`、`EXT_USER_ORG`、`EXT_ORG_INFO` 是 auth/组织域的外部数据源；治理只保存标签关联所需的工号/机构业务编号，并通过公开 API 校验和解析名称。
+- 指标任务状态等 `processStatus` 来源于性能域查询，不改变治理运行日志模型。
+- `QRTZ_*` 是 Quartz JDBC JobStore 的持久化表，由 Quartz 官方 schema 管理；治理代码不得把它们当作业务表直接改写。
+- Spring Session 表由 Session 基础设施管理；治理仅在清理任务中按配置引用，不负责初始化或重建。
+
+## 7. 数据完整性要求
+
+1. 自有表的唯一约束、自然主键和外键语义以目标库实际结构为准，Service 仍必须做存在性和范围校验。
+2. 写入前后的审计字段、状态值和关联维度必须符合 API 契约；未知状态拒绝写入。
+3. 结构实施、数据修复和权限资源调整不在本文件或模块交付物中附带 SQL；执行前后分别按 DBA 审批和只读验收流程留证。
