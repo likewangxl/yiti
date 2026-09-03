@@ -26,9 +26,11 @@ import {
   approveSubmit,
   downloadTaskAttachment,
   getBranchTaskReview,
+  getReviewPreview,
   getReviewQueue,
   listBranchTaskReviews,
   rejectBranchTask,
+  rejectSubmit,
   submitBranchTaskToOrg
 } from '@/api/redengine';
 import BranchReviewView from '../BranchReviewView.vue';
@@ -84,7 +86,7 @@ function recurringGeneralTaskRow(overrides = {}) {
   });
 }
 
-describe('支部审核工作台', () => {
+describe('支部任务处理', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getReviewQueue.mockResolvedValue({
@@ -103,6 +105,7 @@ describe('支部审核工作台', () => {
     });
     listBranchTaskReviews.mockResolvedValue({ records: [taskRow()], total: 1 });
     getBranchTaskReview.mockResolvedValue(taskRow());
+    getReviewPreview.mockResolvedValue({});
     approveSubmit.mockResolvedValue({});
     approveBranchTask.mockResolvedValue({ status: 'BRANCH_APPROVED' });
     submitBranchTaskToOrg.mockResolvedValue({ status: 'ORG_PENDING' });
@@ -110,11 +113,12 @@ describe('支部审核工作台', () => {
     downloadTaskAttachment.mockResolvedValue(new Blob(['file']));
   });
 
-  it('标题改为支部审核工作台并提供四个页签，旧待审核文案消失', async () => {
+  it('标题改为任务处理并提供四个页签，旧支部审核工作台文案消失', async () => {
     const wrapper = mount(BranchReviewView, { global: { stubs } });
     await settle();
 
-    expect(wrapper.find('.page-title').text()).toBe('支部审核工作台');
+    expect(wrapper.find('.page-title').text()).toBe('任务处理');
+    expect(wrapper.text()).not.toContain('支部审核工作台');
     expect(wrapper.text()).toContain('待处理');
     expect(wrapper.text()).toContain('审核中');
     expect(wrapper.text()).toContain('已通过');
@@ -122,6 +126,9 @@ describe('支部审核工作台', () => {
     expect(wrapper.text()).not.toContain('待审核');
     expect(wrapper.vm.items[0]).toMatchObject({ assignmentId: 1001, nature: 'TEMPORARY', status: 'pending' });
     expect(wrapper.find('.review-card').attributes()).toMatchObject({ role: 'button', tabindex: '0' });
+    expect(wrapper.find('.review-card .description').exists()).toBe(false);
+    expect(wrapper.find('.review-card .summary').exists()).toBe(false);
+    expect(wrapper.find('.review-card .card-actions').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -143,10 +150,30 @@ describe('支部审核工作台', () => {
       cycleType: 'MONTH_END',
       tab: 'PENDING'
     });
-    expect(wrapper.text()).toContain('整改已完成');
-    expect(wrapper.text()).toContain('整改说明.pdf');
-    await wrapper.vm.downloadAttachment(wrapper.vm.items.find((item) => item.source === 'task'), taskRow().files[0]);
+    const item = wrapper.vm.items.find((row) => row.source === 'task');
+    await wrapper.vm.selectItem(item);
+    await settle();
+    expect(wrapper.vm.showDetailDialog).toBe(true);
+    expect(wrapper.find('.task-detail-dialog').text()).toContain('整改已完成');
+    expect(wrapper.find('.task-detail-dialog').text()).toContain('整改说明.pdf');
+    await wrapper.vm.downloadAttachment(item, taskRow().files[0]);
     expect(downloadTaskAttachment).toHaveBeenCalledWith(42, 1001, 'file-1');
+    wrapper.unmount();
+  });
+
+  it('列表支持回车打开当前页详情弹窗，关闭后不保留弹窗', async () => {
+    const wrapper = mount(BranchReviewView, { global: { stubs } });
+    await settle();
+    const card = wrapper.find('.review-card');
+
+    await card.trigger('keydown.enter');
+    await settle();
+
+    expect(wrapper.vm.showDetailDialog).toBe(true);
+    expect(wrapper.find('.detail-dialog').exists()).toBe(true);
+    wrapper.vm.showDetailDialog = false;
+    await nextTick();
+    expect(wrapper.find('.detail-dialog').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -189,6 +216,55 @@ describe('支部审核工作台', () => {
     expect(item.status).toBe('reviewing');
     expect(item.branchApproved).toBe(false);
     expect(wrapper.vm.statusTotals).toMatchObject({ pending: 0, reviewing: 2 });
+    wrapper.unmount();
+  });
+
+  it('四大维度 task 通过和提交均走任务工作流接口，不能调用旧材料审核接口', async () => {
+    const fourDimensionTask = taskRow({
+      taskTitle: '四维材料任务',
+      itemName: '联建规范度',
+      dimension: 'dim1',
+      businessType: 'FOUR_DIMENSION',
+      isFourDimension: true,
+      legacyReviewId: 17
+    });
+    listBranchTaskReviews.mockResolvedValueOnce({ records: [fourDimensionTask], total: 1 });
+    const wrapper = mount(BranchReviewView, { global: { stubs } });
+    await settle();
+    const item = wrapper.vm.items[0];
+
+    await wrapper.vm.handleApprove(item);
+    expect(approveBranchTask).toHaveBeenCalledWith(1001, { feedback: undefined });
+    expect(approveSubmit).not.toHaveBeenCalled();
+    expect(item).toMatchObject({ status: 'pending', branchApproved: true });
+    expect(wrapper.vm.showSubmitToOrg(item)).toBe(true);
+
+    await wrapper.vm.handleSubmitToOrg(item);
+    expect(submitBranchTaskToOrg).toHaveBeenCalledWith(1001, { feedback: undefined });
+    expect(item).toMatchObject({ status: 'reviewing', branchApproved: false });
+    wrapper.unmount();
+  });
+
+  it('四大维度 task 驳回走任务工作流接口，不能调用旧材料驳回接口', async () => {
+    const fourDimensionTask = taskRow({
+      taskTitle: '四维材料任务',
+      itemName: '联建规范度',
+      dimension: 'dim1',
+      businessType: 'FOUR_DIMENSION',
+      isFourDimension: true,
+      legacyReviewId: 17
+    });
+    listBranchTaskReviews.mockResolvedValueOnce({ records: [fourDimensionTask], total: 1 });
+    const wrapper = mount(BranchReviewView, { global: { stubs } });
+    await settle();
+    const item = wrapper.vm.items[0];
+    wrapper.vm.openReject(item);
+    wrapper.vm.rejectReason = '请补充佐证材料';
+
+    await wrapper.vm.handleConfirmReject();
+    expect(rejectBranchTask).toHaveBeenCalledWith(1001, { feedback: '请补充佐证材料' });
+    expect(rejectSubmit).not.toHaveBeenCalled();
+    expect(item.status).toBe('rejected');
     wrapper.unmount();
   });
 
@@ -270,9 +346,58 @@ describe('支部审核工作台', () => {
     const wrapper = mount(BranchReviewView, { global: { stubs } });
     await settle();
 
-    const card = wrapper.find('.review-card');
-    expect(card.find('.description .field-label').text()).toContain('任务说明');
-    expect(card.find('.summary .field-label').text()).toContain('本次填报内容');
+    const item = wrapper.vm.items.find((row) => row.source === 'task');
+    await wrapper.vm.selectItem(item);
+    await settle();
+
+    const dialog = wrapper.find('.task-detail-dialog');
+    expect(dialog.find('.description .field-label').text()).toContain('任务说明');
+    expect(dialog.find('.summary .field-label').text()).toContain('本次填报内容');
+    expect(wrapper.find('.review-card .description').exists()).toBe(false);
+    expect(wrapper.find('.review-card .summary').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('四大维度详情明确显示维度、任务名称、材料明细编码和结构化材料，并保留任务附件', async () => {
+    const fourDimensionRow = taskRow({
+      taskTitle: '四大维度材料任务',
+      businessType: 'FOUR_DIMENSION',
+      isFourDimension: true,
+      legacyReviewId: 17,
+      formData: { 初始材料: '已归档' },
+      files: [{ fileId: 'task-file-1', fileName: '上报附件.pdf' }]
+    });
+    listBranchTaskReviews.mockResolvedValueOnce({ records: [fourDimensionRow], total: 1 });
+    getBranchTaskReview.mockResolvedValueOnce({
+      ...fourDimensionRow,
+      dimensionCode: 'dim2',
+      itemCode: '2.1',
+      formData: JSON.stringify({ 本次上报: '完成联建' }),
+      content: '材料预览内容',
+      files: []
+    });
+
+    const wrapper = mount(BranchReviewView, { global: { stubs } });
+    await settle();
+    const item = wrapper.vm.items[0];
+    await wrapper.vm.selectItem(item);
+    await settle();
+
+    expect(getBranchTaskReview).toHaveBeenCalledWith(1001);
+    expect(getReviewPreview).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-test="four-dimension-detail"]').exists()).toBe(true);
+    const dialogText = wrapper.find('.detail-dialog').text();
+    expect(dialogText).toContain('业务提升');
+    expect(dialogText).toContain('2.1');
+    expect(dialogText).toContain('四大维度材料任务');
+    expect(dialogText).toContain('结构化材料');
+    expect(dialogText).toContain('本次上报');
+    expect(dialogText).toContain('材料预览内容');
+    expect(dialogText).toContain('上报附件.pdf');
+    expect(item.files).toEqual([{ fileId: 'task-file-1', fileName: '上报附件.pdf' }]);
+
+    await wrapper.vm.downloadAttachment(item, item.files[0]);
+    expect(downloadTaskAttachment).toHaveBeenCalledWith(42, 1001, 'task-file-1');
     wrapper.unmount();
   });
 });

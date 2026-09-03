@@ -43,6 +43,8 @@ describe('红色引擎路由入口', () => {
       expect(route?.meta.requiredResource, name).toBe(requiredResource);
       expect(route?.meta.requiredRoleCodes, name).toEqual(requiredRoleCodes);
     }
+    expect(router.getRoutes().find((item) => item.name === 'RedEngineRecords')?.meta.title).toBe('任务处理');
+    expect(router.getRoutes().find((item) => item.name === 'RedEngineBranchReview')?.meta.title).toBe('任务处理');
 
     const dashboard = router.getRoutes().find((item) => item.name === 'RedEngineDashboard');
     expect(dashboard?.meta.requiredRoleCodes).toEqual([

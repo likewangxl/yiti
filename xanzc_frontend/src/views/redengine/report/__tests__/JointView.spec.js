@@ -83,7 +83,7 @@ describe('四大维度任务上下文', () => {
     wrapper.unmount();
   });
 
-  it('任务上下文提交旧材料时传回 taskId、assignment、期间和明细编码，并保留重复上传', async () => {
+  it('任务上下文提交旧材料时传回任务关联字段和 itemCode，不发送不受支持的 detailItemCode', async () => {
     const wrapper = mount(JointView, { global: { stubs } });
     await settle();
     wrapper.vm.forms['1.1'].unit = '测试单位';
@@ -95,9 +95,9 @@ describe('四大维度任务上下文', () => {
       taskInstanceId: 2001,
       taskAssignmentId: 1001,
       periodKey: '2026-Q3',
-      detailItemCode: '1.1',
       itemCode: '1.1'
     }));
+    expect(createSubmit.mock.calls[0][0]).not.toHaveProperty('detailItemCode');
     expect(wrapper.vm.progress.uploadCount).toBe(3);
     expect(wrapper.vm.progress.completed).toBe(true);
     wrapper.unmount();

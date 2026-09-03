@@ -663,8 +663,7 @@ const submitRecord = async (subId) => {
         taskId: toNumberIfNumeric(taskContext.taskId),
         taskInstanceId: toNumberIfNumeric(taskContext.taskInstanceId),
         taskAssignmentId: toNumberIfNumeric(taskContext.assignmentId),
-        periodKey: taskContext.periodKey || undefined,
-        detailItemCode: taskContext.detailItemCode || subId
+        periodKey: taskContext.periodKey || undefined
       }
       Object.entries(contextValues).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') taskPayload[key] = value

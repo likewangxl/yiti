@@ -45,7 +45,7 @@ const stubs = {
     emits: ['current-change', 'size-change'],
     template: '<div class="pagination-stub" :data-total="total" />'
   },
-  'el-empty': { template: '<div class="empty-stub"><slot /></div>' }
+  'el-empty': { props: ['description'], template: '<div class="empty-stub">{{ description }}<slot /></div>' }
 };
 
 async function settle() {
@@ -100,7 +100,7 @@ function expectTaskHistoryColumnsHidden(wrapper) {
   for (const label of taskHistoryColumns) expect(labels).not.toContain(label);
 }
 
-describe('报送员上报信息', () => {
+describe('报送员任务处理', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getMySubmits.mockResolvedValue({
@@ -113,18 +113,30 @@ describe('报送员上报信息', () => {
     listMyTaskAssignments.mockResolvedValue({ records: [temporaryAssignment()], total: 1 });
   });
 
-  it('改名为上报信息并提供待处理、审核中、已通过、已驳回四个页签', async () => {
+  it('改名为任务处理并提供待处理、审核中、已通过、已驳回四个页签', async () => {
     const wrapper = mount(RecordsView, {
       global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
     });
     await settle();
 
-    expect(wrapper.find('.page-title').text()).toBe('上报信息');
+    expect(wrapper.find('.page-title').text()).toBe('任务处理');
+    expect(wrapper.text()).not.toContain('上报信息');
     expect(wrapper.text()).toContain('待处理');
     expect(wrapper.text()).toContain('审核中');
     expect(wrapper.text()).toContain('已通过');
     expect(wrapper.text()).toContain('已驳回');
     expect(wrapper.text()).not.toContain('待审核');
+    wrapper.unmount();
+  });
+
+  it('空态文案同步为暂无任务处理记录', async () => {
+    listMyTaskAssignments.mockResolvedValue({ records: [], total: 0 });
+    const wrapper = mount(RecordsView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    expect(wrapper.find('.empty-stub').text()).toBe('暂无任务处理记录');
     wrapper.unmount();
   });
 
@@ -314,7 +326,7 @@ describe('报送员上报信息', () => {
     wrapper.unmount();
   });
 
-  it('任务或材料列表请求失败时展示错误态而不是误报暂无上报信息', async () => {
+  it('任务或材料列表请求失败时展示错误态而不是误报暂无任务处理记录', async () => {
     listMyTaskAssignments.mockRejectedValueOnce(new Error('服务不可用'));
     const wrapper = mount(RecordsView, {
       global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }

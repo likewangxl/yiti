@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // Task 15 TDD Step 1（RED）：红色引擎侧边栏菜单过滤(canSee)回归测试。
 // 契约断言：resourceUrls 只含 '/api/re/submits/my' 时，canSee 只放行"工作台"(res=null 恒可见)
-// 与"上报信息"(res 精确匹配 '/api/re/submits/my')；角色矩阵再决定各角色的菜单集合。
+// 与"任务处理"(res 精确匹配 '/api/re/submits/my')；角色矩阵再决定各角色的菜单集合。
 //
 // canSee/menuItems 从 RedEngineLayout.vue 抽成 ../layout/canSee.js 纯函数模块（Task 15 重构，
 // 非行为变更，Layout 改为 import 该模块），使菜单过滤逻辑可脱离组件挂载做纯函数单测；
@@ -10,10 +10,10 @@ import { describe, it, expect } from 'vitest';
 import { menuItems, canSee, RED_ENGINE_RESOURCE_URLS } from '../layout/canSee.js';
 
 describe('红色引擎侧边栏菜单过滤(canSee)', () => {
-  it('resourceUrls 只含 /api/re/submits/my 时，只放行 工作台 + 上报信息', () => {
+  it('resourceUrls 只含 /api/re/submits/my 时，只放行 工作台 + 任务处理', () => {
     const resourceUrls = new Set(['/api/re/submits/my']);
     const visibleTitles = menuItems.filter((item) => canSee(item, resourceUrls)).map((item) => item.title);
-    expect(visibleTitles).toEqual(['工作台', '上报信息']);
+    expect(visibleTitles).toEqual(['工作台', '任务处理']);
   });
 
   it('resourceUrls 为 null（拉取中/失败）时仅放行无需鉴权的工作台', () => {

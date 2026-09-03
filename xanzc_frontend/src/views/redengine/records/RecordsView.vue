@@ -1,6 +1,6 @@
 <template>
   <div class="records-container">
-    <h2 class="page-title">上报信息</h2>
+    <h2 class="page-title">任务处理</h2>
 
     <FileIntegrationNotice />
 
@@ -92,7 +92,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="!filteredRecords.length && !loading && !loadError" description="暂无上报信息" />
+      <el-empty v-if="!filteredRecords.length && !loading && !loadError" description="暂无任务处理记录" />
       <div class="pager">
         <el-pagination
           v-model:current-page="pageNo"
@@ -109,7 +109,7 @@
 </template>
 
 <script setup>
-// 报送员上报信息：四维材料与临时任务统一从 assignment 工作台分页读取。
+// 报送员任务处理：四维材料与临时任务统一从 assignment 工作台分页读取。
 // 旧材料行只作为服务端统一响应中的兼容形态归一化，不再额外请求 /re/submits/my。
 // 审核状态、权限和 assignment 重提语义由后端状态机负责。
 import { computed, onMounted, reactive, ref } from 'vue'

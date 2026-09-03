@@ -58,14 +58,14 @@ export const menuItems = [
   },
   {
     path: '/redengine/records',
-    title: '上报信息',
+    title: '任务处理',
     icon: 'Document',
     res: RED_ENGINE_RESOURCE_URLS.RECORDS,
     allowedRoles: REPORTER_ROLES
   },
   {
     path: '/redengine/branch-review',
-    title: '支部审核工作台',
+    title: '任务处理',
     icon: 'Stamp',
     res: RED_ENGINE_RESOURCE_URLS.REVIEW,
     allowedRoles: SECRETARY_ROLES

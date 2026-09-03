@@ -1,6 +1,6 @@
 <template>
   <div class="branch-review-container">
-    <h2 class="page-title">支部审核工作台</h2>
+    <h2 class="page-title">任务处理</h2>
     <p class="page-desc">处理支部报送员提交的任务；审核通过后可单独提交至组织审核</p>
 
     <FileIntegrationNotice />
@@ -74,7 +74,7 @@
           </div>
         </div>
 
-        <div class="card-body">
+        <div class="card-body card-summary">
           <div class="meta-row">
             <span class="meta-item" v-if="item.branch">党支部：{{ item.branch }}</span>
             <span class="meta-item">📋 提交人：{{ item.submitter }}</span>
@@ -82,85 +82,7 @@
             <span v-if="item.source === 'task'" class="meta-item">任务性质：{{ taskNatureLabel(item.nature) }}</span>
             <span v-if="item.source === 'task' && item.isPeriodic && item.cycle" class="meta-item">周期：{{ cycleLabel(item.cycle) }}</span>
           </div>
-          <div v-if="item.description" class="description">
-            <span class="field-label">任务说明：</span>
-            <template v-for="(part, index) in descriptionParts(item.description)" :key="`${itemKey(item)}-description-${index}`">
-              <a
-                v-if="part.type === 'link'"
-                :href="part.href"
-                target="_blank"
-                rel="noreferrer noopener"
-                @click.stop
-              >{{ part.value }}</a>
-              <span v-else>{{ part.value }}</span>
-            </template>
-          </div>
-          <div v-if="item.summary" class="summary">
-            <span class="field-label">本次填报内容：</span>
-            <template v-for="(part, index) in descriptionParts(item.summary)" :key="`${itemKey(item)}-summary-${index}`">
-              <a
-                v-if="part.type === 'link'"
-                :href="part.href"
-                target="_blank"
-                rel="noreferrer noopener"
-                @click.stop
-              >{{ part.value }}</a>
-              <span v-else>{{ part.value }}</span>
-            </template>
-          </div>
-
-          <div v-if="item.files && item.files.length > 0" class="files-row">
-            <template v-for="(file, idx) in item.files" :key="`${itemKey(item)}-file-${idx}`">
-              <el-button
-                v-if="item.source === 'task'"
-                link
-                size="small"
-                class="file-tag"
-                @click.stop="downloadAttachment(item, file)"
-              >{{ getFileIcon(file) }} {{ fileName(file) }}</el-button>
-              <span v-else class="file-tag">{{ getFileIcon(file) }} {{ fileName(file) }}</span>
-            </template>
-          </div>
-
-          <div v-if="item.formData" class="form-data">
-            <div v-for="(val, key) in item.formData" :key="key" class="data-row">
-              <span class="data-key">{{ key }}：</span>
-              <span class="data-val">{{ val }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="item.status === 'pending'" class="card-actions" @click.stop>
-          <div class="action-note">
-            <el-input v-model="item.reviewNote" size="small" placeholder="审核意见（选填）" style="width: 300px;" />
-          </div>
-          <div class="action-btns">
-            <el-button
-              v-if="!showSubmitToOrg(item)"
-              type="success"
-              size="small"
-              :loading="item.acting"
-              @click="handleApprove(item)"
-            >✅ 审核通过</el-button>
-            <el-button
-              v-else
-              type="primary"
-              size="small"
-              :loading="item.acting"
-              @click="handleSubmitToOrg(item)"
-            >提交至组织审核</el-button>
-            <el-button type="danger" size="small" plain :loading="item.acting" @click="openReject(item)">↩ 驳回</el-button>
-          </div>
-        </div>
-
-        <div v-if="item.status === 'reviewing'" class="result-bar reviewing-bar">已提交至组织审核，等待组织审核员处理</div>
-        <div v-if="item.status === 'passed'" class="result-bar approved-bar">
-          ✅ 已通过
-          <span v-if="item.reviewNote" class="result-note">备注：{{ item.reviewNote }}</span>
-        </div>
-        <div v-if="item.status === 'rejected'" class="result-bar rejected-bar">
-          ↩ 已驳回，已退回报送员
-          <span v-if="item.reviewNote" class="result-note">原因：{{ item.reviewNote }}</span>
+          <div class="card-hint">点击查看详情并处理</div>
         </div>
       </div>
     </div>
@@ -176,6 +98,150 @@
         @size-change="handleSizeChange"
       />
     </div>
+
+    <el-dialog
+      v-model="showDetailDialog"
+      :title="detailDialogTitle"
+      width="760px"
+      :close-on-click-modal="false"
+      destroy-on-close
+      @closed="handleDetailClosed"
+    >
+      <div v-if="selectedItem" class="detail-dialog task-detail-dialog">
+        <div class="detail-meta">
+          <span v-if="selectedItem.branch">党支部：{{ selectedItem.branch }}</span>
+          <span>提交人：{{ selectedItem.submitter }}</span>
+          <span>提交时间：{{ selectedItem.submitDate }}</span>
+          <span>状态：{{ statusLabel(selectedItem.status) }}</span>
+        </div>
+
+        <section v-if="selectedItem.isFourDimension" class="detail-section four-dimension-detail" data-test="four-dimension-detail">
+          <h3>四大维度材料</h3>
+          <div class="detail-grid">
+            <div><span class="field-label">维度：</span>{{ getDimLabel(selectedItem.dimensionCode || selectedItem.dimension || selectedItem.dim) }}</div>
+            <div><span class="field-label">任务名称：</span>{{ selectedItem.itemName || selectedItem.taskTitle || '—' }}</div>
+            <div><span class="field-label">材料明细编码：</span>{{ selectedItem.itemCode || '—' }}</div>
+          </div>
+          <div class="detail-subsection">
+            <h4>结构化材料</h4>
+            <div v-if="selectedItem.formData" class="form-data">
+              <div v-for="(val, key) in selectedItem.formData" :key="key" class="data-row">
+                <span class="data-key">{{ key }}：</span>
+                <span class="data-val">{{ val }}</span>
+              </div>
+            </div>
+            <div v-else class="detail-empty">暂无结构化材料</div>
+          </div>
+          <div class="detail-subsection">
+            <h4>材料摘要</h4>
+            <div class="material-preview">{{ selectedItem.legacyPreview || selectedItem.summary || '暂无材料摘要' }}</div>
+          </div>
+          <div class="detail-subsection">
+            <h4>附件</h4>
+            <div v-if="selectedItem.files?.length" class="files-row">
+              <template v-for="(file, idx) in selectedItem.files" :key="`${itemKey(selectedItem)}-file-${idx}`">
+                <el-button
+                  v-if="selectedItem.source === 'task'"
+                  link
+                  size="small"
+                  class="file-tag"
+                  @click.stop="downloadAttachment(selectedItem, file)"
+                >{{ getFileIcon(file) }} {{ fileName(file) }}</el-button>
+                <span v-else class="file-tag">{{ getFileIcon(file) }} {{ fileName(file) }}</span>
+              </template>
+            </div>
+            <div v-else class="detail-empty">暂无附件</div>
+          </div>
+        </section>
+
+        <section v-else class="detail-section task-detail" data-test="task-detail">
+          <h3>任务内容</h3>
+          <div class="detail-grid">
+            <div><span class="field-label">任务性质：</span>{{ taskNatureLabel(selectedItem.nature) }}</div>
+            <div v-if="selectedItem.isPeriodic && selectedItem.cycle"><span class="field-label">周期：</span>{{ cycleLabel(selectedItem.cycle) }}</div>
+          </div>
+          <div v-if="selectedItem.description" class="description">
+            <span class="field-label">任务说明：</span>
+            <template v-for="(part, index) in descriptionParts(selectedItem.description)" :key="`${itemKey(selectedItem)}-description-${index}`">
+              <a
+                v-if="part.type === 'link'"
+                :href="part.href"
+                target="_blank"
+                rel="noreferrer noopener"
+              >{{ part.value }}</a>
+              <span v-else>{{ part.value }}</span>
+            </template>
+          </div>
+          <div class="summary">
+            <span class="field-label">本次填报内容：</span>
+            <template v-if="selectedItem.summary">
+              <template v-for="(part, index) in descriptionParts(selectedItem.summary)" :key="`${itemKey(selectedItem)}-summary-${index}`">
+                <a
+                  v-if="part.type === 'link'"
+                  :href="part.href"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >{{ part.value }}</a>
+                <span v-else>{{ part.value }}</span>
+              </template>
+            </template>
+            <span v-else class="detail-empty">暂无填报内容</span>
+          </div>
+          <div class="detail-subsection">
+            <h4>任务附件</h4>
+            <div v-if="selectedItem.files?.length" class="files-row">
+              <template v-for="(file, idx) in selectedItem.files" :key="`${itemKey(selectedItem)}-file-${idx}`">
+                <el-button
+                  v-if="selectedItem.source === 'task'"
+                  link
+                  size="small"
+                  class="file-tag"
+                  @click.stop="downloadAttachment(selectedItem, file)"
+                >{{ getFileIcon(file) }} {{ fileName(file) }}</el-button>
+                <span v-else class="file-tag">{{ getFileIcon(file) }} {{ fileName(file) }}</span>
+              </template>
+            </div>
+            <div v-else class="detail-empty">暂无任务附件</div>
+          </div>
+        </section>
+
+        <div v-if="selectedItem.status === 'pending'" class="dialog-actions" @click.stop>
+          <div class="action-note">
+            <el-input v-model="selectedItem.reviewNote" size="small" placeholder="审核意见（选填）" style="width: 300px;" />
+          </div>
+          <div class="action-btns">
+            <el-button
+              v-if="!showSubmitToOrg(selectedItem)"
+              type="success"
+              size="small"
+              :loading="selectedItem.acting"
+              @click="handleApprove(selectedItem)"
+            >✅ 审核通过</el-button>
+            <el-button
+              v-else
+              type="primary"
+              size="small"
+              :loading="selectedItem.acting"
+              @click="handleSubmitToOrg(selectedItem)"
+            >提交至组织审核</el-button>
+            <el-button type="danger" size="small" plain :loading="selectedItem.acting" @click="openReject(selectedItem)">↩ 驳回</el-button>
+          </div>
+        </div>
+
+        <div v-if="selectedItem.status === 'reviewing'" class="result-bar reviewing-bar">已提交至组织审核，等待组织审核员处理</div>
+        <div v-if="selectedItem.status === 'passed'" class="result-bar approved-bar">
+          ✅ 已通过
+          <span v-if="selectedItem.reviewNote" class="result-note">备注：{{ selectedItem.reviewNote }}</span>
+        </div>
+        <div v-if="selectedItem.status === 'rejected'" class="result-bar rejected-bar">
+          ↩ 已驳回，已退回报送员
+          <span v-if="selectedItem.reviewNote" class="result-note">原因：{{ selectedItem.reviewNote }}</span>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="showDetailDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="showRejectModal" title="填写驳回意见" width="500px">
       <div class="reject-info">
@@ -237,6 +303,7 @@ const statusTotals = ref({ pending: 0, reviewing: 0, passed: 0, rejected: 0 })
 const reloadVersion = ref(0)
 const TAB_VALUES = ['pending', 'reviewing', 'passed', 'rejected']
 const selectedItem = ref(null)
+const showDetailDialog = ref(false)
 const showRejectModal = ref(false)
 const rejectReason = ref('')
 
@@ -261,6 +328,7 @@ const rejectedItems = computed(() => items.value.filter((item) => item.status ==
 // 与页面展示行会失配，尤其是审核中包含多个工作流阶段时。
 const filteredItems = computed(() => items.value)
 const activeTabLabel = computed(() => tabs.find((tab) => tab.value === activeTab.value)?.label || '')
+const detailDialogTitle = computed(() => selectedItem.value?.isFourDimension ? '四大维度材料详情' : '任务详情')
 
 function parseFormData(raw) {
   if (!raw) return null
@@ -310,6 +378,7 @@ function normalizeMaterialRow(row = {}) {
     taskId: row.taskId,
     periodKey: row.periodKey,
     detailItemCode: row.detailItemCode ?? row.itemCode,
+    itemCode: row.itemCode ?? row.detailItemCode,
     branch: row.orgName || (row.orgId != null ? `组织#${row.orgId}` : '—'),
     dim: DIM_LABEL[row.dimension] || row.dimension || '—',
     itemName: row.itemName ? `${row.itemCode ? `${row.itemCode} ` : ''}${row.itemName}` : (row.itemCode || '—'),
@@ -317,6 +386,7 @@ function normalizeMaterialRow(row = {}) {
     submitDate: row.submitDate || '—',
     description: '',
     summary: row.projectName || row.itemName || '—',
+    legacyPreview: row.legacyPreview || row.materialPreview || row.projectName || row.content || '',
     files: parseFiles(row.fileUrls),
     formData: parseFormData(row.formData),
     nature: 'PERIODIC',
@@ -353,6 +423,10 @@ function normalizeTaskRow(row = {}) {
     || assignment.status
     || assignment.stage
   const status = normalized.isUnreported ? 'pending' : mapTaskStatus(rawStatus)
+  const dimensionCode = assignment.dimensionCode || assignment.dimension || assignment.dim || ''
+  const itemName = fourDimension
+    ? (assignment.itemName || assignment.item || assignment.taskTitle || assignment.title || task.title || '—')
+    : (assignment.taskTitle || assignment.title || task.title || '—')
   return {
     ...assignment,
     ...normalized,
@@ -361,10 +435,14 @@ function normalizeTaskRow(row = {}) {
     taskId: assignment.taskId || task.taskId || task.id,
     assignmentId: assignment.assignmentId || assignment.id,
     branch: normalized.branchName || assignment.branchName || '—',
-    dim: fourDimension ? (DIM_LABEL[assignment.dimension] || assignment.dimension || '四大维度材料上报') : taskNatureLabel(taskNature),
-    itemName: assignment.taskTitle || assignment.title || task.title || '—',
+    dim: fourDimension ? (DIM_LABEL[dimensionCode] || dimensionCode || '四大维度材料上报') : taskNatureLabel(taskNature),
+    itemCode: assignment.itemCode || assignment.detailItemCode || '',
+    dimension: dimensionCode,
+    dimensionCode,
+    itemName,
     description: assignment.taskDescription || assignment.description || task.description || '',
     summary: normalized.content || assignment.content || assignment.formData || '',
+    legacyPreview: assignment.legacyPreview || assignment.materialPreview || assignment.projectName || '',
     nature: taskNature,
     cycle: assignment.cycleType || assignment.cycle || task.cycleType || task.cycle || '',
     isPeriodic,
@@ -480,38 +558,61 @@ function itemKey(item) {
 }
 
 async function selectItem(item) {
+  if (!item) return
   selectedItem.value = item
+  showDetailDialog.value = true
   const reviewId = legacyReviewId(item)
-  if (item.source === 'task' && item.isFourDimension && reviewId && typeof getReviewPreview === 'function') {
+  if (item.source === 'material' && reviewId && typeof getReviewPreview === 'function') {
     try {
       const detail = await getReviewPreview(reviewId)
-      if (detail) Object.assign(item, {
-        formData: parseFormData(detail.formData),
-        files: parseFiles(detail.fileUrls),
-        summary: detail.content || item.summary
-      })
+      if (detail) {
+        const detailFormData = parseFormData(detail.formData)
+        const detailFiles = parseFiles(detail.fileUrls)
+        const fallbackFiles = parseFiles(detail.files)
+        Object.assign(item, {
+          ...(detailFormData ? { formData: detailFormData } : {}),
+          ...(detailFiles.length ? { files: detailFiles } : (fallbackFiles.length ? { files: fallbackFiles } : {})),
+          summary: detail.content || item.summary,
+          legacyPreview: detail.legacyPreview || detail.materialPreview || detail.content || detail.projectName || item.legacyPreview
+        })
+      }
     } catch (error) {
       ElMessage.error(error?.message || '加载详情失败')
     }
   } else if (item.source === 'task' && typeof getBranchTaskReview === 'function') {
     try {
       const detail = await getBranchTaskReview(item.assignmentId)
-      if (detail) Object.assign(item, normalizeTaskRow({ ...item, ...detail }))
+      if (detail) {
+        const detailRow = {
+          ...item,
+          ...detail,
+          // 任务详情接口是当前页唯一的任务数据来源；在部分旧服务响应中缺少可选字段时，
+          // 保留列表 DTO 已带的材料，避免打开弹窗后附件/结构化填报被空值覆盖。
+          files: Array.isArray(detail.files) && detail.files.length ? detail.files : item.files,
+          formData: detail.formData ?? item.formData,
+          content: detail.content ?? item.content
+        }
+        Object.assign(item, normalizeTaskRow(detailRow))
+      }
     } catch (error) {
       ElMessage.error(error?.message || '加载任务详情失败')
     }
   }
 }
 
+function handleDetailClosed() {
+  if (!showRejectModal.value) selectedItem.value = null
+}
+
 function showSubmitToOrg(item) {
-  return item?.source === 'task' && !item.isFourDimension && item.status === 'pending' && item.branchApproved === true
+  return item?.source === 'task' && item.status === 'pending' && item.branchApproved === true
 }
 
 async function handleApprove(item = selectedItem.value) {
   if (!item) return
   item.acting = true
   try {
-    if (item.source === 'task' && !item.isFourDimension) {
+    if (item.source === 'task') {
       if (typeof approveBranchTask !== 'function') return
       await approveBranchTask(item.assignmentId, { feedback: item.reviewNote || undefined })
       item.status = 'pending'
@@ -520,10 +621,10 @@ async function handleApprove(item = selectedItem.value) {
     } else {
       const reviewId = legacyReviewId(item)
       if (!reviewId) throw new Error('缺少旧材料审核标识，无法审核')
-      const previousStatus = item.status
+      const previousItemStatus = item.status
       await approveSubmit(reviewId, { feedback: item.reviewNote || undefined })
       item.status = 'passed'
-      moveStatusTotal(previousStatus, item.status)
+      moveStatusTotal(previousItemStatus, item.status)
       ElMessage.success(`✅ 已通过「${item.itemName}」`)
     }
   } catch (error) {
@@ -537,11 +638,11 @@ async function handleSubmitToOrg(item = selectedItem.value) {
   if (!item || !showSubmitToOrg(item) || typeof submitBranchTaskToOrg !== 'function') return
   item.acting = true
   try {
-    const previousStatus = item.status
+    const previousItemStatus = item.status
     await submitBranchTaskToOrg(item.assignmentId, { feedback: item.reviewNote || undefined })
     item.status = 'reviewing'
     item.branchApproved = false
-    moveStatusTotal(previousStatus, item.status)
+    moveStatusTotal(previousItemStatus, item.status)
     ElMessage.success('✅ 已提交至组织审核')
   } catch (error) {
     ElMessage.error(error?.message || '操作失败')
@@ -563,11 +664,11 @@ async function handleConfirmReject() {
     return
   }
   const item = selectedItem.value
-  const previousStatus = item.status
+  const previousItemStatus = item.status
   acting.value = true
   item.acting = true
   try {
-    if (item.source === 'task' && !item.isFourDimension) {
+    if (item.source === 'task') {
       if (typeof rejectBranchTask !== 'function') return
       await rejectBranchTask(item.assignmentId, { feedback: rejectReason.value.trim() })
     } else {
@@ -578,7 +679,7 @@ async function handleConfirmReject() {
     item.status = 'rejected'
     item.branchApproved = false
     item.reviewNote = rejectReason.value.trim()
-    moveStatusTotal(previousStatus, item.status)
+    moveStatusTotal(previousItemStatus, item.status)
     showRejectModal.value = false
     ElMessage.success('✅ 已驳回并退回报送员')
   } catch (error) {
@@ -623,6 +724,7 @@ async function downloadAttachment(item, file) {
 }
 
 const descriptionParts = (description) => linkifyDescription(description)
+const getDimLabel = (dim) => DIM_LABEL[dim] || dim || '—'
 const getDimColor = (dim) => DIM_COLOR[dim] || '#64748b'
 const countByStatus = (status) => Number(statusTotals.value[status] ?? 0)
 function moveStatusTotal(previousStatus, nextStatus) {
@@ -665,6 +767,8 @@ defineExpose({
   reload,
   rejectReason,
   selectedItem,
+  showDetailDialog,
+  showDetailModal: showDetailDialog,
   showRejectModal,
   showSubmitToOrg,
   statusTotals,
@@ -852,8 +956,69 @@ defineExpose({
   }
 }
 
+.card-summary {
+  .meta-row { margin-bottom: 0; flex-wrap: wrap; }
+  .card-hint {
+    margin-top: 12px;
+    color: #2563eb;
+    font-size: 12px;
+  }
+}
+
+.detail-dialog {
+  color: #334155;
+  font-size: 13px;
+
+  .detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #e2e8f0;
+    color: #64748b;
+  }
+
+  .detail-section {
+    padding-top: 16px;
+
+    h3, h4 { margin: 0 0 10px; color: #1e293b; }
+    h3 { font-size: 16px; }
+    h4 { font-size: 13px; }
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 20px;
+    margin-bottom: 14px;
+  }
+
+  .detail-subsection {
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  .description, .summary, .material-preview {
+    margin-bottom: 14px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .files-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .detail-empty { color: #94a3b8; }
+}
+
 /* Actions */
-.card-actions {
+.card-actions, .dialog-actions {
   padding: 12px 20px;
   border-top: 1px solid #f1f5f9;
   background: #fafbfc;

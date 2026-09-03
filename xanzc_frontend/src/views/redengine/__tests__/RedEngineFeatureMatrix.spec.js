@@ -110,7 +110,7 @@ describe('红色引擎跨页面契约矩阵', () => {
     expect(result.errors.businessType).toMatch(/定时任务/)
   })
 
-  it('报送员上报信息查询使用服务端页签和状态分页', async () => {
+  it('报送员任务处理查询使用服务端页签和状态分页', async () => {
     const wrapper = mount(RecordsView, {
       global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
     })

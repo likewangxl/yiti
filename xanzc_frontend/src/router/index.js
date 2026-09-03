@@ -83,7 +83,7 @@ const routes = [
         name: 'RedEngineRecords',
         component: () => import('@/views/redengine/records/RecordsView.vue'),
         meta: {
-          title: '上报信息',
+          title: '任务处理',
           requiredResource: RED_ENGINE_RESOURCE_URLS.RECORDS,
           requiredRoleCodes: ['R_RE_REPORT', 'SYS_ADMIN']
         }
@@ -93,7 +93,7 @@ const routes = [
         name: 'RedEngineBranchReview',
         component: () => import('@/views/redengine/branch-review/BranchReviewView.vue'),
         meta: {
-          title: '支部审核工作台',
+          title: '任务处理',
           requiredResource: RED_ENGINE_RESOURCE_URLS.REVIEW,
           requiredRoleCodes: ['R_RE_SECR']
         }
