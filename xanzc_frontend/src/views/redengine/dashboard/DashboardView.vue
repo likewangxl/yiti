@@ -141,6 +141,11 @@ function normalizeSummary(payload) {
       taskId: firstDefined(row.taskId),
       taskInstanceId: firstDefined(row.taskInstanceId),
       assignmentId: firstDefined(row.assignmentId),
+      submitId: firstDefined(row.submitId, row.legacyReviewId, row.reviewId),
+      source: firstDefined(
+        row.source,
+        row.submitId != null || row.legacyReviewId != null || row.reviewId != null ? 'material' : null
+      ),
       title: firstDefined(row.taskTitle, row.title, row.taskName, row.name, '--'),
       branchName: firstDefined(row.branchName, row.branch, row.partyOrgName, row.organizationName, '--'),
       score: firstDefined(row.score, row.finalScore, row.organizationScore),
@@ -226,6 +231,10 @@ function todoRoute(item) {
   for (const key of ['taskId', 'taskInstanceId', 'assignmentId']) {
     const value = item[key]
     if (value !== undefined && value !== null && value !== '') query[key] = value
+  }
+  if (item.source) query.source = item.source
+  if (item.submitId !== undefined && item.submitId !== null && item.submitId !== '') {
+    query.submitId = item.submitId
   }
   if (item.workflowStatus) query.status = item.workflowStatus
 

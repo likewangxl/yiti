@@ -47,56 +47,127 @@
       <el-button size="small" @click="handleReset">重置</el-button>
     </div>
 
-    <div class="review-list" v-loading="loading">
-      <div v-if="filteredItems.length === 0 && !loadError" class="empty-state">暂无{{ activeTabLabel }}记录</div>
-
-      <div
-        v-for="item in filteredItems"
-        :key="itemKey(item)"
-        :class="['review-card', { selected: selectedItem?.id === item.id }]"
-        role="button"
-        tabindex="0"
-        :aria-pressed="selectedItem?.id === item.id"
-        @click="selectItem(item)"
-        @keydown.enter.prevent.self="selectItem(item)"
-        @keydown.space.prevent.self="selectItem(item)"
-      >
-        <div class="card-header">
-          <div class="card-left">
-            <span class="dim-badge" :style="{ background: getDimColor(item.dim) }">{{ item.dim }}</span>
-            <span class="item-name">{{ item.itemName }}</span>
+    <div class="review-sources" v-loading="loading">
+      <section class="review-source-section" data-source="task">
+        <div class="source-heading">
+          <div>
+            <h3>任务填报</h3>
+            <p>临时任务和普通任务：查看任务说明、本次填报内容及任务附件</p>
           </div>
-          <div class="card-right">
-            <el-tag
-              :type="item.status === 'passed' ? 'success' : item.status === 'rejected' ? 'danger' : item.status === 'reviewing' ? 'info' : 'warning'"
-              size="small"
-            >{{ statusLabel(item.status) }}</el-tag>
+          <span class="source-total">共 {{ total }} 条</span>
+        </div>
+        <div class="review-list">
+          <div v-if="items.length === 0 && !loadError" class="empty-state">暂无{{ activeTabLabel }}任务</div>
+
+          <div
+            v-for="item in items"
+            :key="itemKey(item)"
+            :class="['review-card', { selected: selectedItem && itemKey(selectedItem) === itemKey(item) }]"
+            role="button"
+            tabindex="0"
+            :aria-pressed="selectedItem && itemKey(selectedItem) === itemKey(item)"
+            @click="selectItem(item)"
+            @keydown.enter.prevent.self="selectItem(item)"
+            @keydown.space.prevent.self="selectItem(item)"
+          >
+            <div class="card-header">
+              <div class="card-left">
+                <span class="dim-badge" :style="{ background: getDimColor(item.dim) }">{{ item.dim }}</span>
+                <span class="item-name">{{ item.itemName }}</span>
+              </div>
+              <div class="card-right">
+                <el-tag
+                  :type="item.status === 'passed' ? 'success' : item.status === 'rejected' ? 'danger' : item.status === 'reviewing' ? 'info' : 'warning'"
+                  size="small"
+                >{{ statusLabel(item.status) }}</el-tag>
+              </div>
+            </div>
+
+            <div class="card-body card-summary">
+              <div class="meta-row">
+                <span class="meta-item" v-if="item.branch">党支部：{{ item.branch }}</span>
+                <span class="meta-item">📋 提交人：{{ item.submitter }}</span>
+                <span class="meta-item">📅 {{ item.submitDate }}</span>
+                <span class="meta-item">任务性质：{{ taskNatureLabel(item.nature) }}</span>
+                <span v-if="item.isPeriodic && item.cycle" class="meta-item">周期：{{ cycleLabel(item.cycle) }}</span>
+              </div>
+              <div class="card-hint">点击查看详情并处理</div>
+            </div>
           </div>
         </div>
 
-        <div class="card-body card-summary">
-          <div class="meta-row">
-            <span class="meta-item" v-if="item.branch">党支部：{{ item.branch }}</span>
-            <span class="meta-item">📋 提交人：{{ item.submitter }}</span>
-            <span class="meta-item">📅 {{ item.submitDate }}</span>
-            <span v-if="item.source === 'task'" class="meta-item">任务性质：{{ taskNatureLabel(item.nature) }}</span>
-            <span v-if="item.source === 'task' && item.isPeriodic && item.cycle" class="meta-item">周期：{{ cycleLabel(item.cycle) }}</span>
-          </div>
-          <div class="card-hint">点击查看详情并处理</div>
+        <div class="pager task-pager">
+          <el-pagination
+            v-model:current-page="pageNo"
+            v-model:page-size="pageSize"
+            :total="total"
+            :page-sizes="[10, 20, 50]"
+            layout="total, sizes, prev, pager, next"
+            @current-change="handlePageChange"
+            @size-change="handleSizeChange"
+          />
         </div>
-      </div>
-    </div>
+      </section>
 
-    <div class="pager">
-      <el-pagination
-        v-model:current-page="pageNo"
-        v-model:page-size="pageSize"
-        :total="total"
-        :page-sizes="[10, 20, 50]"
-        layout="total, sizes, prev, pager, next"
-        @current-change="handlePageChange"
-        @size-change="handleSizeChange"
-      />
+      <section class="review-source-section" data-source="material">
+        <div class="source-heading">
+          <div>
+            <h3>四大维度材料上报</h3>
+            <p>兼容直接上报的旧材料记录：查看维度、材料明细、结构化材料及附件</p>
+          </div>
+          <span class="source-total">共 {{ legacyTotal }} 条</span>
+        </div>
+        <div class="review-list">
+          <div v-if="legacyItems.length === 0 && !loadError" class="empty-state">暂无{{ activeTabLabel }}四大维度材料</div>
+
+          <div
+            v-for="item in legacyItems"
+            :key="itemKey(item)"
+            :class="['review-card', { selected: selectedItem && itemKey(selectedItem) === itemKey(item) }]"
+            role="button"
+            tabindex="0"
+            :aria-pressed="selectedItem && itemKey(selectedItem) === itemKey(item)"
+            @click="selectItem(item)"
+            @keydown.enter.prevent.self="selectItem(item)"
+            @keydown.space.prevent.self="selectItem(item)"
+          >
+            <div class="card-header">
+              <div class="card-left">
+                <span class="dim-badge" :style="{ background: getDimColor(item.dim) }">{{ item.dim }}</span>
+                <span class="item-name">{{ item.itemName }}</span>
+              </div>
+              <div class="card-right">
+                <el-tag
+                  :type="item.status === 'passed' ? 'success' : item.status === 'rejected' ? 'danger' : item.status === 'reviewing' ? 'info' : 'warning'"
+                  size="small"
+                >{{ statusLabel(item.status) }}</el-tag>
+              </div>
+            </div>
+
+            <div class="card-body card-summary">
+              <div class="meta-row">
+                <span class="meta-item" v-if="item.branch">党支部：{{ item.branch }}</span>
+                <span class="meta-item">📋 提交人：{{ item.submitter }}</span>
+                <span class="meta-item">📅 {{ item.submitDate }}</span>
+                <span class="meta-item">材料来源：直接上报</span>
+              </div>
+              <div class="card-hint">点击查看详情并处理</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pager material-pager">
+          <el-pagination
+            v-model:current-page="legacyPageNo"
+            v-model:page-size="legacyPageSize"
+            :total="legacyTotal"
+            :page-sizes="[10, 20, 50]"
+            layout="total, sizes, prev, pager, next"
+            @current-change="handleLegacyPageChange"
+            @size-change="handleLegacySizeChange"
+          />
+        </div>
+      </section>
     </div>
 
     <el-dialog
@@ -259,12 +330,14 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   approveBranchTask,
   approveSubmit,
   downloadTaskAttachment,
   getBranchTaskReview,
+  getReviewQueue,
   getReviewPreview,
   listBranchTaskReviews,
   rejectBranchTask,
@@ -277,6 +350,7 @@ import {
   cycleLabel,
   isFourDimensionTask,
   linkifyDescription,
+  normalizePageResult,
   normalizeAssignmentPage
 } from '../tasks/task-domain'
 import FileIntegrationNotice from '../components/FileIntegrationNotice.vue'
@@ -289,6 +363,8 @@ const tabs = [
   { value: 'rejected', label: '已驳回' }
 ]
 const cycleOptions = CYCLE_OPTIONS
+const TAB_VALUES = ['pending', 'reviewing', 'passed', 'rejected']
+const route = useRoute()
 const activeTab = ref('pending')
 const query = reactive({ title: '', nature: '', cycle: '' })
 const appliedQuery = ref({})
@@ -298,14 +374,18 @@ const pageNo = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 const items = ref([])
+const legacyPageNo = ref(1)
+const legacyPageSize = ref(20)
+const legacyTotal = ref(0)
+const legacyItems = ref([])
 const loadError = ref('')
 const statusTotals = ref({ pending: 0, reviewing: 0, passed: 0, rejected: 0 })
 const reloadVersion = ref(0)
-const TAB_VALUES = ['pending', 'reviewing', 'passed', 'rejected']
 const selectedItem = ref(null)
 const showDetailDialog = ref(false)
 const showRejectModal = ref(false)
 const rejectReason = ref('')
+const autoOpenedSubmitId = ref('')
 
 const DIM_LABEL = { dim1: '外联共建', dim2: '业务提升', dim3: '头雁先锋', dim4: '督导响应' }
 const DIM_COLOR = { dim1: '#dc2626', dim2: '#2563eb', dim3: '#ca8a04', dim4: '#16a34a' }
@@ -366,14 +446,15 @@ function mapTaskStatus(status) {
 }
 
 function normalizeMaterialRow(row = {}) {
-  const numericStatus = row.status
-  const status = numericStatus === 2 || numericStatus === 'APPROVED' ? 'passed'
-    : numericStatus === 3 || numericStatus === 'REJECTED' ? 'rejected' : 'pending'
+  const normalizedStatus = String(row.status ?? row.submitStatus ?? '').trim().toUpperCase()
+  const status = ['2', 'PASSED', 'APPROVED', 'COMPLETED'].includes(normalizedStatus) ? 'passed'
+    : ['3', 'REJECTED'].includes(normalizedStatus) ? 'rejected'
+      : ['REVIEWING', 'ORG_PENDING'].includes(normalizedStatus) ? 'reviewing' : 'pending'
   return {
     ...row,
-    id: row.id,
+    id: row.id ?? row.submitId ?? row.legacyReviewId ?? row.reviewId,
     source: 'material',
-    legacyReviewId: row.legacyReviewId ?? row.submitId ?? row.reviewId,
+    legacyReviewId: row.legacyReviewId ?? row.submitId ?? row.reviewId ?? row.id,
     assignmentId: row.assignmentId,
     taskId: row.taskId,
     periodKey: row.periodKey,
@@ -387,7 +468,7 @@ function normalizeMaterialRow(row = {}) {
     description: '',
     summary: row.projectName || row.itemName || '—',
     legacyPreview: row.legacyPreview || row.materialPreview || row.projectName || row.content || '',
-    files: parseFiles(row.fileUrls),
+    files: parseFiles(row.fileUrls).length ? parseFiles(row.fileUrls) : parseFiles(row.files),
     formData: parseFormData(row.formData),
     nature: 'PERIODIC',
     cycle: row.cycleType || row.cycle || '',
@@ -399,6 +480,14 @@ function normalizeMaterialRow(row = {}) {
     reviewNote: row.reviewFeedback || row.feedback || '',
     branchApproved: false,
     acting: false
+  }
+}
+
+function normalizeLegacyPage(result) {
+  const page = normalizePageResult(result)
+  return {
+    ...page,
+    records: page.records.map(normalizeMaterialRow)
   }
 }
 
@@ -464,6 +553,14 @@ function taskQuery() {
   return buildWorkflowQuery(appliedQuery.value, activeTab.value, pageNo.value, pageSize.value)
 }
 
+function legacyQuery(tab = activeTab.value, nextPage = legacyPageNo.value, nextSize = legacyPageSize.value) {
+  return {
+    pageNo: nextPage,
+    pageSize: nextSize,
+    tab: String(tab).toUpperCase()
+  }
+}
+
 async function loadTaskRows() {
   if (typeof listBranchTaskReviews !== 'function') return { rows: [], total: 0, error: '任务审核队列不可用' }
   try {
@@ -476,15 +573,40 @@ async function loadTaskRows() {
   }
 }
 
+async function loadLegacyRows() {
+  if (typeof getReviewQueue !== 'function') return { rows: [], total: 0, error: '旧材料审核队列不可用' }
+  try {
+    const result = await getReviewQueue(legacyQuery())
+    const page = normalizeLegacyPage(result)
+    return { rows: page.records, total: page.total, error: '' }
+  } catch {
+    return { rows: [], total: 0, error: '旧材料审核队列加载失败' }
+  }
+}
+
 async function loadOtherStatusTotals(filters, currentTab) {
   const tabsToLoad = TAB_VALUES.filter((tab) => tab !== currentTab)
   const entries = await Promise.all(tabsToLoad.map(async (tab) => {
-    try {
-      const result = await listBranchTaskReviews(buildWorkflowQuery(filters, tab, 1, 1))
-      return [tab, normalizeAssignmentPage(result).total]
-    } catch {
-      return [tab, null]
-    }
+    const [taskTotal, legacyTotalForTab] = await Promise.all([
+      (async () => {
+        try {
+          const result = await listBranchTaskReviews(buildWorkflowQuery(filters, tab, 1, 1))
+          return normalizeAssignmentPage(result).total
+        } catch {
+          return null
+        }
+      })(),
+      (async () => {
+        try {
+          const result = await getReviewQueue(legacyQuery(tab, 1, 1))
+          return normalizeLegacyPage(result).total
+        } catch {
+          return null
+        }
+      })()
+    ])
+    if (taskTotal === null && legacyTotalForTab === null) return [tab, null]
+    return [tab, Number(taskTotal || 0) + Number(legacyTotalForTab || 0)]
   }))
   return entries.reduce((totals, [tab, value]) => {
     if (value !== null && Number.isFinite(Number(value))) totals[tab] = Number(value)
@@ -500,20 +622,27 @@ async function reload() {
   loadError.value = ''
   try {
     const rowsPromise = loadTaskRows()
+    const legacyRowsPromise = loadLegacyRows()
     const totalsPromise = loadOtherStatusTotals(filters, requestedTab)
-    const [result, otherTotals] = await Promise.all([rowsPromise, totalsPromise])
+    const [result, legacyResult, otherTotals] = await Promise.all([rowsPromise, legacyRowsPromise, totalsPromise])
     if (requestId !== reloadVersion.value) return
     items.value = result.rows
     total.value = result.total
+    legacyItems.value = legacyResult.rows
+    legacyTotal.value = legacyResult.total
     statusTotals.value = {
       ...statusTotals.value,
-      [requestedTab]: result.total,
+      [requestedTab]: result.total + legacyResult.total,
       ...otherTotals
     }
-    if (result.error) loadError.value = result.error
+    const errors = [result.error, legacyResult.error].filter(Boolean)
+    if (errors.length) loadError.value = errors.join('；')
     if (selectedItem.value) {
-      selectedItem.value = items.value.find((item) => item.id === selectedItem.value.id) || null
+      const selectedKey = itemKey(selectedItem.value)
+      selectedItem.value = [...items.value, ...legacyItems.value]
+        .find((item) => itemKey(item) === selectedKey) || null
     }
+    await openRouteLegacyDetail()
   } finally {
     if (requestId === reloadVersion.value) loading.value = false
   }
@@ -522,6 +651,7 @@ async function reload() {
 async function handleSearch() {
   appliedQuery.value = { ...query }
   pageNo.value = 1
+  legacyPageNo.value = 1
   await reload()
 }
 
@@ -529,11 +659,13 @@ async function handleReset() {
   Object.assign(query, { title: '', nature: '', cycle: '' })
   appliedQuery.value = {}
   pageNo.value = 1
+  legacyPageNo.value = 1
   await reload()
 }
 
 async function handleTabChange() {
   pageNo.value = 1
+  legacyPageNo.value = 1
   await reload()
 }
 
@@ -553,18 +685,72 @@ async function handleSizeChange(nextSize) {
   await reload()
 }
 
+async function handleLegacyPageChange(nextPage) {
+  legacyPageNo.value = nextPage
+  await reload()
+}
+
+async function handleLegacySizeChange(nextSize) {
+  legacyPageSize.value = nextSize
+  legacyPageNo.value = 1
+  await reload()
+}
+
 function itemKey(item) {
   return `${item.source || 'legacy'}-${item.id}`
 }
 
-async function selectItem(item) {
+function removeLegacyItem(item) {
+  const key = itemKey(item)
+  const isSelected = selectedItem.value && itemKey(selectedItem.value) === key
+  const hadItem = legacyItems.value.some((row) => itemKey(row) === key)
+  if (hadItem) legacyItems.value = legacyItems.value.filter((row) => itemKey(row) !== key)
+  if (!hadItem && !isSelected) return
+  legacyTotal.value = Math.max(0, Number(legacyTotal.value || 0) - 1)
+  if (isSelected) {
+    showDetailDialog.value = false
+    showRejectModal.value = false
+    selectedItem.value = null
+  }
+}
+
+function routeQueryValue(key) {
+  const value = route?.query?.[key]
+  return Array.isArray(value) ? value[0] : value
+}
+
+async function openRouteLegacyDetail() {
+  const submitId = routeQueryValue('submitId')
+  const source = String(routeQueryValue('source') || '').toLowerCase()
+  if (!submitId || (source && source !== 'material') || autoOpenedSubmitId.value === String(submitId)) return
+  const target = legacyItems.value.find((item) => String(legacyReviewId(item)) === String(submitId))
+  if (target) {
+    autoOpenedSubmitId.value = String(submitId)
+    await selectItem(target)
+    return
+  }
+  // 首页待办只携带 submitId，目标可能因服务端分页不在首屏；用详情接口按后端数据范围
+  // 直接校验并打开，不把跨页记录伪造塞进当前分页列表。
+  if (typeof getReviewPreview !== 'function') return
+  try {
+    const detail = await getReviewPreview(submitId)
+    if (!detail || typeof detail !== 'object') return
+    const fallback = normalizeMaterialRow({ ...detail, id: submitId, submitId })
+    autoOpenedSubmitId.value = String(submitId)
+    await selectItem(fallback, detail)
+  } catch (error) {
+    ElMessage.error(error?.message || '加载详情失败')
+  }
+}
+
+async function selectItem(item, detailOverride = null) {
   if (!item) return
   selectedItem.value = item
   showDetailDialog.value = true
   const reviewId = legacyReviewId(item)
   if (item.source === 'material' && reviewId && typeof getReviewPreview === 'function') {
     try {
-      const detail = await getReviewPreview(reviewId)
+      const detail = detailOverride !== null ? detailOverride : await getReviewPreview(reviewId)
       if (detail) {
         const detailFormData = parseFormData(detail.formData)
         const detailFiles = parseFiles(detail.fileUrls)
@@ -625,6 +811,7 @@ async function handleApprove(item = selectedItem.value) {
       await approveSubmit(reviewId, { feedback: item.reviewNote || undefined })
       item.status = 'passed'
       moveStatusTotal(previousItemStatus, item.status)
+      removeLegacyItem(item)
       ElMessage.success(`✅ 已通过「${item.itemName}」`)
     }
   } catch (error) {
@@ -680,6 +867,7 @@ async function handleConfirmReject() {
     item.branchApproved = false
     item.reviewNote = rejectReason.value.trim()
     moveStatusTotal(previousItemStatus, item.status)
+    if (item.source === 'material') removeLegacyItem(item)
     showRejectModal.value = false
     ElMessage.success('✅ 已驳回并退回报送员')
   } catch (error) {
@@ -736,7 +924,11 @@ function moveStatusTotal(previousStatus, nextStatus) {
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  const tab = String(routeQueryValue('tab') || '').toLowerCase()
+  if (TAB_VALUES.includes(tab)) activeTab.value = tab
+  reload()
+})
 
 defineExpose({
   activeTab,
@@ -749,6 +941,8 @@ defineExpose({
   filteredItems,
   handleApprove,
   handleConfirmReject,
+  handleLegacyPageChange,
+  handleLegacySizeChange,
   handlePageChange,
   handleReject: openReject,
   handleReset,
@@ -757,7 +951,12 @@ defineExpose({
   handleSubmitToOrg,
   handleTabChange,
   items,
+  legacyItems,
+  legacyPageNo,
+  legacyPageSize,
+  legacyTotal,
   loadError,
+  loadLegacyRows,
   loadTaskRows,
   normalizeTaskRow,
   openReject,
@@ -838,6 +1037,45 @@ defineExpose({
 .query-select { width: 132px; }
 
 /* Review list */
+.review-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.review-source-section {
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.source-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+
+  h3 {
+    margin: 0 0 4px;
+    color: #1e293b;
+    font-size: 16px;
+  }
+
+  p {
+    margin: 0;
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  .source-total {
+    flex: none;
+    color: #475569;
+    font-size: 12px;
+  }
+}
+
 .review-list {
   display: flex;
   flex-direction: column;

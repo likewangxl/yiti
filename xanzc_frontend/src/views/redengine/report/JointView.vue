@@ -707,7 +707,7 @@ const submitRecord = async (subId) => {
     Object.keys(f).forEach((k) => { f[k] = typeof f[k] === 'string' ? '' : null })
     rawFiles[subId] = []
     showForm[subId] = false
-    ElMessage.success('✅ 上报成功，待审核')
+    ElMessage.success('✅ 上报成功，已进入支部任务处理，待审核')
   } catch (e) {
     ElMessage.error(e?.message || '上报失败')
   } finally {

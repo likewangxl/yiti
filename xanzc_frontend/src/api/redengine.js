@@ -25,8 +25,18 @@ export const getMySubmits = (pageNo = 1, pageSize = 10) =>
 export const getSubmit = (id) => call('get', `/re/submits/${id}`);
 
 // ── 审核 ──
-export const getReviewQueue = (pageNo = 1, pageSize = 10) =>
-  call('get', '/re/reviews/queue', { params: { pageNo, pageSize } });
+// 旧材料审核队列现在也按工作台页签分页；保留历史的两个位置参数调用，避免旧页面升级时
+// 丢失分页语义。新页面使用 params 对象并显式传递 tab。
+export const getReviewQueue = (paramsOrPageNo = 1, pageSize = 10, tab) => {
+  const params = paramsOrPageNo && typeof paramsOrPageNo === 'object'
+    ? { ...paramsOrPageNo }
+    : {
+        pageNo: paramsOrPageNo,
+        pageSize,
+        ...(tab ? { tab } : {})
+      };
+  return call('get', '/re/reviews/queue', { params });
+};
 export const getReviewPreview = (id) => call('get', `/re/reviews/${id}/preview`);
 export const approveSubmit = (id, data) => call('post', `/re/reviews/${id}/approve`, { data });
 export const rejectSubmit = (id, data) => call('post', `/re/reviews/${id}/reject`, { data });

@@ -26,6 +26,7 @@ vi.mock('@/api/redengine', () => ({
 }));
 
 import { createSubmit, getMyTaskAssignment, uploadFile } from '@/api/redengine';
+import { ElMessage } from 'element-plus';
 import JointView from '../JointView.vue';
 
 const stubs = {
@@ -101,5 +102,36 @@ describe('四大维度任务上下文', () => {
     expect(wrapper.vm.progress.uploadCount).toBe(3);
     expect(wrapper.vm.progress.completed).toBe(true);
     wrapper.unmount();
+  });
+
+  it('没有任务上下文时保留旧四维材料提交契约，不伪造任务关联字段', async () => {
+    const previousQuery = routeState.query;
+    routeState.query = {};
+    let wrapper;
+    try {
+      wrapper = mount(JointView, { global: { stubs } });
+      await settle();
+      expect(wrapper.vm.hasTaskContext).toBe(false);
+      expect(getMyTaskAssignment).not.toHaveBeenCalled();
+
+      wrapper.vm.forms['1.1'].unit = '测试单位';
+      wrapper.vm.forms['1.1'].conclusion = '兼容旧材料上报';
+      await wrapper.vm.submitRecord('1.1');
+
+      const payload = createSubmit.mock.calls[0][0];
+      expect(payload).toMatchObject({
+        dimension: 'dim1',
+        itemCode: '1.1',
+        itemName: '联建规范度'
+      });
+      expect(payload).not.toHaveProperty('taskId');
+      expect(payload).not.toHaveProperty('taskInstanceId');
+      expect(payload).not.toHaveProperty('taskAssignmentId');
+      expect(payload).not.toHaveProperty('detailItemCode');
+      expect(ElMessage.success).toHaveBeenCalledWith(expect.stringContaining('支部任务处理'));
+    } finally {
+      wrapper?.unmount();
+      routeState.query = previousQuery;
+    }
   });
 });

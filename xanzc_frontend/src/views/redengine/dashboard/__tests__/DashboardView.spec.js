@@ -171,6 +171,34 @@ describe('红色引擎首页工作台', () => {
     wrapper.unmount();
   });
 
+  it('首页旧四维材料待办透传 source 和 submitId，进入支部任务处理', async () => {
+    session.roleCodes = ['R_RE_SECR'];
+    api.getHomeSummary.mockResolvedValue({
+      mode: 'INSTITUTION',
+      todoItems: [{
+        submitId: 17,
+        source: 'material',
+        title: '四大维度材料上报',
+        status: 'PENDING',
+        dueTime: '2026-09-03'
+      }]
+    });
+    const wrapper = mount(DashboardView, { global: { stubs, directives: { loading: {} } } });
+    await settle();
+
+    await wrapper.find('.todo-section .todo-item').trigger('click');
+    expect(routerPush).toHaveBeenCalledWith({
+      path: '/redengine/branch-review',
+      query: {
+        tab: 'pending',
+        source: 'material',
+        submitId: 17,
+        status: 'PENDING'
+      }
+    });
+    wrapper.unmount();
+  });
+
   it('无红色引擎业务角色时首页待办不可点击，不把支部书记导向报送员页面', async () => {
     session.roleCodes = ['R_RE_ORGADM'];
     api.getHomeSummary.mockResolvedValue({

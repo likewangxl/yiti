@@ -7,6 +7,11 @@ vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), warning: vi.fn(), error: vi.fn() }
 }));
 
+const branchRouteState = vi.hoisted(() => ({ query: {} }));
+vi.mock('vue-router', () => ({
+  useRoute: () => branchRouteState
+}));
+
 vi.mock('@/api/redengine', () => ({
   approveBranchTask: vi.fn(),
   approveSubmit: vi.fn(),
@@ -73,6 +78,21 @@ function taskRow(overrides = {}) {
   };
 }
 
+function materialRow(overrides = {}) {
+  return {
+    id: 17,
+    dimension: 'dim1',
+    itemCode: '1.1',
+    itemName: '联建规范度',
+    submitterId: 'U1',
+    submitDate: '2026-08-30',
+    maxScore: 6,
+    formData: JSON.stringify({ 本次上报: '已完成' }),
+    fileUrls: JSON.stringify([{ fileObjectId: 'legacy-file-1', fileName: '四维材料.pdf' }]),
+    ...overrides
+  };
+}
+
 function recurringGeneralTaskRow(overrides = {}) {
   return taskRow({
     taskId: 5,
@@ -89,18 +109,9 @@ function recurringGeneralTaskRow(overrides = {}) {
 describe('支部任务处理', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    branchRouteState.query = {};
     getReviewQueue.mockResolvedValue({
-      records: [{
-        id: 17,
-        dimension: 'dim1',
-        itemCode: '1.1',
-        itemName: '联建规范度',
-        submitterId: 'U1',
-        submitDate: '2026-08-30',
-        maxScore: 6,
-        formData: null,
-        fileUrls: null
-      }],
+      records: [materialRow({ formData: null, fileUrls: null })],
       total: 1
     });
     listBranchTaskReviews.mockResolvedValue({ records: [taskRow()], total: 1 });
@@ -110,6 +121,7 @@ describe('支部任务处理', () => {
     approveBranchTask.mockResolvedValue({ status: 'BRANCH_APPROVED' });
     submitBranchTaskToOrg.mockResolvedValue({ status: 'ORG_PENDING' });
     rejectBranchTask.mockResolvedValue({ status: 'REJECTED_BY_BRANCH' });
+    rejectSubmit.mockResolvedValue({});
     downloadTaskAttachment.mockResolvedValue(new Blob(['file']));
   });
 
@@ -215,7 +227,7 @@ describe('支部任务处理', () => {
     expect(submitBranchTaskToOrg).toHaveBeenCalledWith(1001, { feedback: undefined });
     expect(item.status).toBe('reviewing');
     expect(item.branchApproved).toBe(false);
-    expect(wrapper.vm.statusTotals).toMatchObject({ pending: 0, reviewing: 2 });
+    expect(wrapper.vm.statusTotals).toMatchObject({ pending: 1, reviewing: 3 });
     wrapper.unmount();
   });
 
@@ -310,8 +322,11 @@ describe('支部任务处理', () => {
     wrapper.unmount();
   });
 
-  it('审核队列由服务端页签和状态分页，不再合并旧材料队列', async () => {
-    getReviewQueue.mockResolvedValue({ records: [{ id: 17 }], total: 99 });
+  it('同页分别展示任务和旧四维材料，各自保留服务端分页且计数相加', async () => {
+    getReviewQueue.mockImplementation(async (params) => ({
+      records: params.tab === 'PENDING' ? [materialRow()] : [],
+      total: params.tab === 'PENDING' ? 3 : 0
+    }));
     listBranchTaskReviews.mockResolvedValue({ records: [taskRow()], total: 7 });
     const wrapper = mount(BranchReviewView, { global: { stubs } });
     await settle();
@@ -321,24 +336,107 @@ describe('支部任务处理', () => {
       pageSize: 20,
       tab: 'PENDING'
     });
-    expect(getReviewQueue).not.toHaveBeenCalled();
+    expect(getReviewQueue).toHaveBeenCalledWith({ pageNo: 1, pageSize: 20, tab: 'PENDING' });
     expect(wrapper.vm.total).toBe(7);
+    expect(wrapper.vm.legacyTotal).toBe(3);
+    expect(wrapper.vm.statusTotals.pending).toBe(10);
+    expect(wrapper.find('[data-source="task"] .review-card').exists()).toBe(true);
+    expect(wrapper.find('[data-source="material"] .review-card').exists()).toBe(true);
+    expect(wrapper.find('[data-source="task"] .pagination-stub').attributes('data-total')).toBe('7');
+    expect(wrapper.find('[data-source="material"] .pagination-stub').attributes('data-total')).toBe('3');
+
+    await wrapper.find('[data-source="material"] .review-card').trigger('click');
+    await settle();
+    expect(getReviewPreview).toHaveBeenCalledWith(17);
+    expect(wrapper.find('[data-test="four-dimension-detail"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('首页 submitId 路由进入任务处理后自动打开对应旧四维材料详情', async () => {
+    branchRouteState.query = { tab: 'pending', source: 'material', submitId: '17' };
+    const wrapper = mount(BranchReviewView, { global: { stubs } });
+    await settle();
+
+    expect(wrapper.vm.showDetailDialog).toBe(true);
+    expect(wrapper.vm.selectedItem).toMatchObject({ source: 'material', legacyReviewId: 17 });
+    expect(getReviewPreview).toHaveBeenCalledWith(17);
+    expect(wrapper.find('[data-test="four-dimension-detail"]').exists()).toBe(true);
+    wrapper.unmount();
+    branchRouteState.query = {};
+  });
+
+  it('首页 submitId 不在旧材料当前页时仍直接加载详情并打开弹窗', async () => {
+    branchRouteState.query = { tab: 'pending', source: 'material', submitId: '17' };
+    getReviewQueue.mockResolvedValue({ records: [], total: 99 });
+    getReviewPreview.mockResolvedValue(materialRow({ id: 17, submitId: 17, content: '跨页材料详情' }));
+    const wrapper = mount(BranchReviewView, { global: { stubs } });
+    await settle();
+
+    expect(wrapper.vm.showDetailDialog).toBe(true);
+    expect(wrapper.vm.selectedItem).toMatchObject({ source: 'material', legacyReviewId: '17' });
+    expect(wrapper.find('[data-test="four-dimension-detail"]').text()).toContain('跨页材料详情');
+    expect(getReviewPreview).toHaveBeenCalledWith('17');
+    await wrapper.vm.handleApprove(wrapper.vm.selectedItem);
+    expect(approveSubmit).toHaveBeenCalledWith('17', { feedback: undefined });
+    expect(wrapper.vm.legacyTotal).toBe(98);
+    expect(wrapper.vm.showDetailDialog).toBe(false);
+    wrapper.unmount();
+    branchRouteState.query = {};
+  });
+
+  it('旧四维材料通过后从待处理当前页移除并同步分页总数', async () => {
+    const wrapper = mount(BranchReviewView, { global: { stubs } });
+    await settle();
+    const item = wrapper.vm.legacyItems[0];
+    await wrapper.vm.selectItem(item);
+    await settle();
+
+    await wrapper.vm.handleApprove(item);
+    expect(approveSubmit).toHaveBeenCalledWith(17, { feedback: undefined });
+    expect(item.status).toBe('passed');
+    expect(wrapper.vm.legacyItems).toHaveLength(0);
+    expect(wrapper.vm.legacyTotal).toBe(0);
+    expect(wrapper.vm.showDetailDialog).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('旧四维材料驳回后从待处理当前页移除并同步分页总数', async () => {
+    const wrapper = mount(BranchReviewView, { global: { stubs } });
+    await settle();
+    const item = wrapper.vm.legacyItems[0];
+    await wrapper.vm.selectItem(item);
+    await settle();
+
+    wrapper.vm.openReject(item);
+    wrapper.vm.rejectReason = '请补充佐证材料';
+    await wrapper.vm.handleConfirmReject();
+    expect(rejectSubmit).toHaveBeenCalledWith(17, { feedback: '请补充佐证材料' });
+    expect(item.status).toBe('rejected');
+    expect(wrapper.vm.legacyItems).toHaveLength(0);
+    expect(wrapper.vm.legacyTotal).toBe(0);
+    expect(wrapper.vm.showDetailDialog).toBe(false);
     wrapper.unmount();
   });
 
   it('四个状态数量使用各页签分页 total，切页不会把其他计数归零', async () => {
     const totals = { PENDING: 7, REVIEWING: 5, PASSED: 3, REJECTED: 2 };
+    const legacyTotals = { PENDING: 11, REVIEWING: 0, PASSED: 13, REJECTED: 17 };
     listBranchTaskReviews.mockImplementation(async (params) => ({
       records: params.tab === 'PENDING' ? [taskRow()] : [],
       total: totals[params.tab]
     }));
+    getReviewQueue.mockImplementation(async (params) => ({
+      records: [],
+      total: legacyTotals[params.tab]
+    }));
     const wrapper = mount(BranchReviewView, { global: { stubs } });
     await settle();
 
-    expect(wrapper.vm.statusTotals).toEqual({ pending: 7, reviewing: 5, passed: 3, rejected: 2 });
-    expect(wrapper.find('.pending-stat .stat-num').text()).toBe('7');
+    expect(wrapper.vm.statusTotals).toEqual({ pending: 18, reviewing: 5, passed: 16, rejected: 19 });
+    expect(wrapper.find('.pending-stat .stat-num').text()).toBe('18');
     expect(wrapper.find('.reviewing-stat .stat-num').text()).toBe('5');
     expect(listBranchTaskReviews).toHaveBeenCalledWith({ pageNo: 1, pageSize: 1, tab: 'REVIEWING' });
+    expect(getReviewQueue).toHaveBeenCalledWith({ pageNo: 1, pageSize: 1, tab: 'REVIEWING' });
     wrapper.unmount();
   });
 

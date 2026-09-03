@@ -11,6 +11,7 @@ import {
   downloadTaskAttachment,
   getBranchTaskReview,
   getOrgTaskReview,
+  getReviewQueue,
   listBranchTaskReviews,
   listOrgTaskReviews,
   rejectBranchTask,
@@ -22,6 +23,22 @@ describe('红色引擎任务审核 API', () => {
   beforeEach(() => {
     call.mockReset();
     call.mockResolvedValue({});
+  });
+
+  it('旧材料审核队列接受 params 对象并传递 tab', async () => {
+    const params = { pageNo: 2, pageSize: 20, tab: 'PENDING' };
+
+    await getReviewQueue(params);
+
+    expect(call).toHaveBeenCalledWith('get', '/re/reviews/queue', { params });
+  });
+
+  it('旧材料审核队列兼容历史 pageNo/pageSize 调用方式', async () => {
+    await getReviewQueue(3, 15, 'PASSED');
+
+    expect(call).toHaveBeenCalledWith('get', '/re/reviews/queue', {
+      params: { pageNo: 3, pageSize: 15, tab: 'PASSED' }
+    });
   });
 
   it('支部审核队列保留页签和任务筛选条件', async () => {
