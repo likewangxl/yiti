@@ -34,5 +34,6 @@ public class AdminBatchAssignReqDTO {
      * 批量改派原因，用于高危操作审计，不能为空或空白。
      */
     @NotBlank(message = "批量分配原因不能为空")
+    @Size(max = 500, message = "批量分配原因不能超过 500 个字符")
     private String reason;
 }

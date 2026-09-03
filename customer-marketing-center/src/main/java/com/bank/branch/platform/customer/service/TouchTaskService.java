@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Random;
@@ -579,6 +580,7 @@ public class TouchTaskService {
      * 仅允许对 PENDING 或 IN_PROGRESS 状态的任务进行重分配，
      * 终态（SUCCESS/CANCELLED）任务自动跳过（不报错），
      * 不存在的任务 ID 也自动跳过。
+     * 输入中的重复 ID 只处理一次，并按稳定顺序获取行锁，避免并发批次反序锁定。
      * 返回实际成功更新的任务数量。
      * </p>
      *
@@ -593,7 +595,11 @@ public class TouchTaskService {
                 taskIds.size(), newAssigneeEmpId, operatorEmpId);
 
         int updated = 0;
-        for (String id : taskIds) {
+        List<String> orderedTaskIds = taskIds.stream()
+                .distinct()
+                .sorted(Comparator.nullsFirst(Comparator.naturalOrder()))
+                .toList();
+        for (String id : orderedTaskIds) {
             // 锁定在途任务，串行化与完成/取消等状态变更，避免并发改派覆盖最新状态。
             TouchTask task = taskMapper.selectByIdForUpdate(id);
             if (task == null) {

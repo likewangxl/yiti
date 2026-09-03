@@ -147,6 +147,18 @@ class AdminTouchTaskControllerTest extends AbstractControllerIntegrationTest {
 
     @Test
     @WithMockEmpContext(empId = "E10001")
+    void batchAssign_reasonExceeds500Characters_shouldReturn400() throws Exception {
+        String body = "{\"taskIds\":[\"task-001\"],\"newAssigneeEmpId\":\"E99999\",\"reason\":\""
+                + "a".repeat(501) + "\"}";
+
+        mockMvc.perform(post("/api/admin/touch-tasks/batch-assign")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
     void batchAssign_emptyTaskIds_shouldReturn400() throws Exception {
         // given: taskIds 为空，校验失败
         String body = "{\"taskIds\":[],\"newAssigneeEmpId\":\"E99999\"}";

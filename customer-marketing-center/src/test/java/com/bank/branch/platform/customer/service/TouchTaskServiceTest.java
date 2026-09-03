@@ -14,6 +14,7 @@ import com.bank.branch.platform.governance.api.ConfigApi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -29,9 +30,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 /**
  * TouchTaskService 单元测试。
@@ -734,6 +736,30 @@ class TouchTaskServiceTest {
 
         // then: 只有存在的任务被更新，不存在的跳过
         assertThat(updated).isEqualTo(1);
+    }
+
+    @Test
+    void batchAssign_shouldDeduplicateIdsAndLockInStableOrder() {
+        // given: 调用方顺序不稳定且包含重复 ID，服务应按稳定顺序只处理一次
+        TouchTask first = buildPendingTask("task-BA-1");
+        first.setTaskStatus("PENDING");
+        TouchTask second = buildPendingTask("task-BA-2");
+        second.setTaskStatus("IN_PROGRESS");
+
+        when(taskMapper.selectByIdForUpdate("task-BA-1")).thenReturn(first);
+        when(taskMapper.selectByIdForUpdate("task-BA-2")).thenReturn(second);
+        when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
+
+        // when: 反序输入并重复 task-BA-2
+        int updated = touchTaskService.batchAssign(
+                List.of("task-BA-2", "task-BA-1", "task-BA-2"), "E99999", "E10001");
+
+        // then: 每个任务只更新一次，并按 ID 升序获取行锁
+        assertThat(updated).isEqualTo(2);
+        InOrder order = inOrder(taskMapper);
+        order.verify(taskMapper).selectByIdForUpdate("task-BA-1");
+        order.verify(taskMapper).selectByIdForUpdate("task-BA-2");
+        verify(taskMapper, times(2)).updateById(any(TouchTask.class));
     }
 
     // ==================== 测试辅助方法 ====================
