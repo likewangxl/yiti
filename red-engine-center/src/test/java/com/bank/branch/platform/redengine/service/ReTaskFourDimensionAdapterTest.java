@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.bank.branch.platform.redengine.api.dto.ReTaskDimensionProgressStatus;
+import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionStatus;
 import com.bank.branch.platform.redengine.entity.ReSubmit;
 import com.bank.branch.platform.redengine.entity.ReTask;
 import com.bank.branch.platform.redengine.entity.ReTaskBranchAssignment;
@@ -32,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,6 +59,7 @@ class ReTaskFourDimensionAdapterTest {
         TableInfoHelper.initTableInfo(assistant, ReTaskBranchAssignment.class);
         TableInfoHelper.initTableInfo(assistant, ReTaskReSubmitRel.class);
         TableInfoHelper.initTableInfo(assistant, ReTaskDimensionProgress.class);
+        TableInfoHelper.initTableInfo(assistant, ReTaskSubmission.class);
         TableInfoHelper.initTableInfo(assistant, ReSubmit.class);
     }
 
@@ -138,6 +141,103 @@ class ReTaskFourDimensionAdapterTest {
                 wrapper -> wrapper.getSqlSet().contains("upload_count = COALESCE(upload_count, 0) + 1")));
     }
 
+    @Test
+    void linkFromLegacyRequest_withWorkflowVersionOnlyCreatesBridgeWithoutProgressIncrement() {
+        ReTask task = task(10L);
+        ReTaskInstance instance = instance(20L, 10L);
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L);
+        ReSubmit old = new ReSubmit();
+        old.setId(99L);
+        old.setOrgId(40L);
+        old.setDimension("DIM_1");
+        old.setItemCode("ITEM_1");
+        ReTaskSubmission taskSubmission = new ReTaskSubmission();
+        taskSubmission.setId(700L);
+        taskSubmission.setTaskId(10L);
+        taskSubmission.setTaskInstanceId(20L);
+        taskSubmission.setAssignmentId(30L);
+        when(taskSubmissionMapper.selectById(700L)).thenReturn(taskSubmission);
+        when(taskMapper.selectById(10L)).thenReturn(task);
+        when(instanceMapper.selectById(20L)).thenReturn(instance);
+        when(assignmentMapper.selectById(30L)).thenReturn(assignment);
+        when(reSubmitMapper.selectById(99L)).thenReturn(old);
+        when(relMapper.selectOne(any())).thenReturn(null);
+        when(relMapper.insert(any(ReTaskReSubmitRel.class))).thenAnswer(invocation -> {
+            ReTaskReSubmitRel relation = invocation.getArgument(0);
+            relation.setId(100L);
+            return 1;
+        });
+
+        adapter.linkFromLegacyRequest(old, 99L, 10L, 20L, 30L, 700L, "REPORTER-1");
+
+        verify(relMapper).insert(org.mockito.ArgumentMatchers.<ReTaskReSubmitRel>argThat(relation ->
+                Long.valueOf(700L).equals(relation.getTaskSubmissionId())
+                        && Long.valueOf(99L).equals(relation.getReSubmitId())
+                        && "DIM_1".equals(relation.getDimensionCode())
+                        && "ITEM_1".equals(relation.getItemCode())));
+        verify(progressMapper, never()).selectOne(any());
+        verify(progressMapper, never()).insert(any(ReTaskDimensionProgress.class));
+        verify(progressMapper, never()).update(any(), any());
+    }
+
+    @Test
+    void linkExistingSubmissionToVersion_incrementsDimensionProgressOnceAndReferencesVersion() {
+        ReTask task = task(10L);
+        ReTaskInstance instance = instance(20L, 10L);
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L);
+        ReSubmit old = new ReSubmit();
+        old.setId(99L);
+        old.setOrgId(40L);
+        old.setDimension("DIM_1");
+        old.setItemCode("ITEM_1");
+        ReTaskSubmission taskSubmission = taskSubmission(700L, 10L, 20L, 30L);
+        when(taskSubmissionMapper.selectById(700L)).thenReturn(taskSubmission);
+        when(taskMapper.selectById(10L)).thenReturn(task);
+        when(instanceMapper.selectById(20L)).thenReturn(instance);
+        when(assignmentMapper.selectById(30L)).thenReturn(assignment);
+        when(reSubmitMapper.selectById(99L)).thenReturn(old);
+        when(relMapper.selectOne(any())).thenReturn(null);
+        when(relMapper.insert(any(ReTaskReSubmitRel.class))).thenAnswer(invocation -> {
+            ReTaskReSubmitRel relation = invocation.getArgument(0);
+            relation.setId(100L);
+            return 1;
+        });
+        when(progressMapper.selectOne(any())).thenReturn(null);
+        when(progressMapper.insert(any(ReTaskDimensionProgress.class))).thenReturn(1);
+
+        adapter.linkExistingSubmissionToVersion(old, 99L, 10L, 20L, 30L,
+                700L, "DIM_1", "ITEM_1", "REPORTER-1");
+
+        verify(relMapper).insert(org.mockito.ArgumentMatchers.<ReTaskReSubmitRel>argThat(relation ->
+                Long.valueOf(700L).equals(relation.getTaskSubmissionId())));
+        verify(progressMapper).insert(org.mockito.ArgumentMatchers.<ReTaskDimensionProgress>argThat(progress ->
+                Integer.valueOf(1).equals(progress.getUploadCount())
+                        && Long.valueOf(700L).equals(progress.getCompletedSubmissionId())
+                        && Long.valueOf(700L).equals(progress.getLastSubmissionId())));
+    }
+
+    @Test
+    void findCurrentSubmission_returnsCurrentAssignmentVersion() {
+        ReTask task = task(10L);
+        ReTaskInstance instance = instance(20L, 10L);
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L);
+        assignment.setCurrentVersion(2);
+        ReTaskSubmission current = new ReTaskSubmission();
+        current.setId(700L);
+        current.setAssignmentId(30L);
+        current.setVersionNo(2);
+        current.setStatus(ReTaskSubmissionStatus.BRANCH_PENDING);
+        when(taskMapper.selectById(10L)).thenReturn(task);
+        when(instanceMapper.selectById(20L)).thenReturn(instance);
+        when(assignmentMapper.selectById(30L)).thenReturn(assignment);
+        when(taskSubmissionMapper.selectOne(any())).thenReturn(current);
+
+        ReTaskSubmission result = adapter.findCurrentSubmission(10L, 20L, 30L);
+
+        assertThat(result).isSameAs(current);
+        verify(taskSubmissionMapper).selectOne(any());
+    }
+
     private static ReTask task(Long id) {
         ReTask task = new ReTask();
         task.setId(id);
@@ -158,5 +258,16 @@ class ReTaskFourDimensionAdapterTest {
         assignment.setTaskInstanceId(instanceId);
         assignment.setBranchId(branchId);
         return assignment;
+    }
+
+    private static ReTaskSubmission taskSubmission(Long id, Long taskId, Long instanceId,
+                                                   Long assignmentId) {
+        ReTaskSubmission submission = new ReTaskSubmission();
+        submission.setId(id);
+        submission.setTaskId(taskId);
+        submission.setTaskInstanceId(instanceId);
+        submission.setAssignmentId(assignmentId);
+        submission.setStatus(ReTaskSubmissionStatus.BRANCH_PENDING);
+        return submission;
     }
 }

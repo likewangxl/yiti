@@ -9,8 +9,12 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.redengine.api.dto.ReSubmitCreateReqDTO;
+import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionReqDTO;
+import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionStatus;
+import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowActionRespDTO;
 import com.bank.branch.platform.redengine.entity.ReSubmit;
 import com.bank.branch.platform.redengine.entity.ReSubmitFile;
+import com.bank.branch.platform.redengine.entity.ReTaskSubmission;
 import com.bank.branch.platform.redengine.mapper.ReSubmitFileMapper;
 import com.bank.branch.platform.redengine.mapper.ReSubmitMapper;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
@@ -59,6 +63,9 @@ class ReSubmitServiceTest {
 
     @Mock
     private ReTaskFourDimensionAdapter fourDimensionAdapter;
+
+    @Mock
+    private ReTaskWorkflowService taskWorkflowService;
 
     @InjectMocks
     private ReSubmitService reSubmitService;
@@ -148,12 +155,78 @@ class ReSubmitServiceTest {
         request.setTaskId(10L);
         request.setTaskInstanceId(20L);
         request.setTaskAssignmentId(30L);
+        ReTaskWorkflowActionRespDTO workflowResult = new ReTaskWorkflowActionRespDTO();
+        workflowResult.setSubmissionId(700L);
+        when(fourDimensionAdapter.findCurrentSubmission(10L, 20L, 30L)).thenReturn(null);
+        when(taskWorkflowService.submit(any(ReTaskSubmissionReqDTO.class), eq("E001")))
+                .thenReturn(workflowResult);
 
         Long id = reSubmitService.createSubmit(request, "E001");
 
         assertThat(id).isEqualTo(502L);
+        verify(taskWorkflowService).getAssignment(30L, "E001");
         verify(fourDimensionAdapter).linkFromLegacyRequest(
-                ArgumentMatchers.any(ReSubmit.class), eq(502L), eq(10L), eq(20L), eq(30L), eq("E001"));
+                ArgumentMatchers.any(ReSubmit.class), eq(502L), eq(10L), eq(20L), eq(30L),
+                eq(700L), eq("E001"));
+    }
+
+    @Test
+    void createSubmit_withTaskContext_submitsTaskWorkflowBeforeLegacyBridge() {
+        when(reUserPartyMapService.getRequiredPartyOrgId("E001")).thenReturn(100L);
+        when(reSubmitMapper.insert(ArgumentMatchers.any(ReSubmit.class))).thenAnswer(invocation -> {
+            ReSubmit arg = invocation.getArgument(0);
+            arg.setId(503L);
+            return 1;
+        });
+        ReTaskWorkflowActionRespDTO workflowResult = new ReTaskWorkflowActionRespDTO();
+        workflowResult.setSubmissionId(700L);
+        when(taskWorkflowService.submit(ArgumentMatchers.any(ReTaskSubmissionReqDTO.class), eq("E001")))
+                .thenReturn(workflowResult);
+
+        ReSubmitCreateReqDTO request = req(null);
+        request.setTaskId(10L);
+        request.setTaskInstanceId(20L);
+        request.setTaskAssignmentId(30L);
+        when(fourDimensionAdapter.findCurrentSubmission(10L, 20L, 30L)).thenReturn(null);
+
+        reSubmitService.createSubmit(request, "E001");
+
+        verify(taskWorkflowService).getAssignment(30L, "E001");
+        verify(taskWorkflowService).submit(ArgumentMatchers.<ReTaskSubmissionReqDTO>argThat(taskRequest ->
+                Long.valueOf(30L).equals(taskRequest.getAssignmentId())
+                        && "dim1".equals(taskRequest.getDimensionCode())
+                        && "1.1".equals(taskRequest.getItemCode())
+                        && "{\"a\":1}".equals(taskRequest.getFormData())), eq("E001"));
+    }
+
+    @Test
+    void createSubmit_withExistingBranchPendingVersion_reusesVersionAndDoesNotResubmitWorkflow() {
+        when(reUserPartyMapService.getRequiredPartyOrgId("E001")).thenReturn(100L);
+        when(reSubmitMapper.insert(ArgumentMatchers.any(ReSubmit.class))).thenAnswer(invocation -> {
+            ReSubmit arg = invocation.getArgument(0);
+            arg.setId(504L);
+            return 1;
+        });
+        ReTaskSubmission current = new ReTaskSubmission();
+        current.setId(701L);
+        current.setStatus(ReTaskSubmissionStatus.BRANCH_PENDING);
+        when(fourDimensionAdapter.findCurrentSubmission(10L, 20L, 30L)).thenReturn(current);
+
+        ReSubmitCreateReqDTO request = req(null);
+        request.setTaskId(10L);
+        request.setTaskInstanceId(20L);
+        request.setTaskAssignmentId(30L);
+
+        Long id = reSubmitService.createSubmit(request, "E001");
+
+        assertThat(id).isEqualTo(504L);
+        verify(taskWorkflowService).getAssignment(30L, "E001");
+        verify(taskWorkflowService, never()).submit(any(ReTaskSubmissionReqDTO.class), eq("E001"));
+        verify(fourDimensionAdapter).linkExistingSubmissionToVersion(
+                ArgumentMatchers.any(ReSubmit.class), eq(504L), eq(10L), eq(20L), eq(30L),
+                eq(701L), eq("dim1"), eq("1.1"), eq("E001"));
+        verify(fourDimensionAdapter, never()).linkFromLegacyRequest(
+                any(ReSubmit.class), eq(504L), eq(10L), eq(20L), eq(30L), eq(701L), eq("E001"));
     }
 
     @Test

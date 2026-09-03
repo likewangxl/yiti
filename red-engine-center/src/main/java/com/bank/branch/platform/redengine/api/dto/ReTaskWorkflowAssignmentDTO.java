@@ -39,6 +39,10 @@ public class ReTaskWorkflowAssignmentDTO {
     private LocalDateTime submittedAt;
     private String content;
     private String formData;
+    /** 当前任务提交版本对应的四维材料维度编码。 */
+    private String dimensionCode;
+    /** 当前任务提交版本对应的四维材料明细项编码。 */
+    private String itemCode;
     /** 当前提交版本最近一次审核/驳回意见，稳定契约字段名为 reviewFeedback。 */
     private String reviewFeedback;
     private List<ReTaskAttachmentDTO> files;

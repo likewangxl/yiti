@@ -6,8 +6,12 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.redengine.api.dto.ReSubmitCreateReqDTO;
+import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionReqDTO;
+import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionStatus;
+import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowActionRespDTO;
 import com.bank.branch.platform.redengine.entity.ReSubmit;
 import com.bank.branch.platform.redengine.entity.ReSubmitFile;
+import com.bank.branch.platform.redengine.entity.ReTaskSubmission;
 import com.bank.branch.platform.redengine.mapper.ReSubmitFileMapper;
 import com.bank.branch.platform.redengine.mapper.ReSubmitMapper;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +44,7 @@ public class ReSubmitService {
     private final ReUserPartyMapService reUserPartyMapService;
     private final FileApi fileApi;
     private final ReTaskFourDimensionAdapter fourDimensionAdapter;
+    private final ReTaskWorkflowService taskWorkflowService;
 
     /**
      * 创建材料上报（含附件绑定）。
@@ -85,16 +90,78 @@ public class ReSubmitService {
             }
         }
 
-        // 只有带任务关联字段的四维请求才进入新任务关系域；旧客户端不带字段时保持原行为。
-        if (fourDimensionAdapter != null && req.getTaskId() != null
-                && req.getTaskInstanceId() != null && req.getTaskAssignmentId() != null) {
-            fourDimensionAdapter.linkFromLegacyRequest(submit, submit.getId(), req.getTaskId(),
-                    req.getTaskInstanceId(), req.getTaskAssignmentId(), userId);
+        // 只有带完整任务上下文的四维请求才进入任务工作流；旧客户端不带字段时保持原行为。
+        if (req.getTaskId() != null && req.getTaskInstanceId() != null
+                && req.getTaskAssignmentId() != null) {
+            submitInTaskWorkflow(req, submit, userId);
         }
 
         log.info("[ReSubmitService.createSubmit] id={}, orgId={}, submitterId={}, fileCount={}",
                 submit.getId(), orgId, userId, fileObjectIds == null ? 0 : fileObjectIds.size());
         return submit.getId();
+    }
+
+    /**
+     * 将四维旧材料上报接入任务域。
+     *
+     * <p>同一任务窗口允许连续上报多个维度/材料。首个材料或驳回后的首次重提创建新的任务提交
+     * 版本；当前版本仍处于支部待审时，只复用该版本并追加桥接关系，避免每个材料都触发一次状态
+     * 流转。方法由外层 {@code createSubmit} 事务调用，旧记录、任务版本、桥接和进度因此原子提交。</p>
+     */
+    private void submitInTaskWorkflow(ReSubmitCreateReqDTO request, ReSubmit legacySubmission,
+                                      String operatorId) {
+        if (fourDimensionAdapter == null || taskWorkflowService == null) {
+            throw new com.bank.branch.platform.common.web.exception.BizException(
+                    "RE-50011", "四维任务服务未就绪");
+        }
+
+        // 复用当前 BRANCH_PENDING 版本时也必须经过任务域实体级访问校验，不能只依赖
+        // assignment/task 三个客户端字段；首次提交同样由 workflow 服务检查当前处理人。
+        taskWorkflowService.getAssignment(request.getTaskAssignmentId(), operatorId);
+        ReTaskSubmission current = fourDimensionAdapter.findCurrentSubmission(
+                request.getTaskId(), request.getTaskInstanceId(), request.getTaskAssignmentId());
+        if (current != null && current.getStatus() == ReTaskSubmissionStatus.BRANCH_PENDING) {
+            fourDimensionAdapter.linkExistingSubmissionToVersion(
+                    legacySubmission, legacySubmission.getId(), request.getTaskId(),
+                    request.getTaskInstanceId(), request.getTaskAssignmentId(), current.getId(),
+                    request.getDimension(), request.getItemCode(), operatorId);
+            return;
+        }
+
+        ReTaskWorkflowActionRespDTO workflowResult = taskWorkflowService.submit(
+                toTaskSubmissionRequest(request, legacySubmission.getId()), operatorId);
+        if (workflowResult == null || workflowResult.getSubmissionId() == null) {
+            throw new com.bank.branch.platform.common.web.exception.BizException(
+                    "RE-50012", "任务提交保存失败");
+        }
+        if (workflowResult.getAssignmentId() != null
+                && !Objects.equals(workflowResult.getAssignmentId(), request.getTaskAssignmentId())) {
+            throw new com.bank.branch.platform.common.web.exception.BizException(
+                    "RE-40906", "任务提交分配与材料上报不匹配");
+        }
+        // workflow.submit 已调用一次 recordTaskUpload；此处只建桥，不能再次推进四维进度。
+        fourDimensionAdapter.linkFromLegacyRequest(legacySubmission, legacySubmission.getId(),
+                request.getTaskId(), request.getTaskInstanceId(), request.getTaskAssignmentId(),
+                workflowResult.getSubmissionId(), operatorId);
+    }
+
+    /** 把旧材料字段转换为任务提交请求；任务域以 assignment 关联反查任务和实例。 */
+    private ReTaskSubmissionReqDTO toTaskSubmissionRequest(ReSubmitCreateReqDTO request,
+                                                            Long legacySubmissionId) {
+        ReTaskSubmissionReqDTO taskRequest = new ReTaskSubmissionReqDTO();
+        taskRequest.setAssignmentId(request.getTaskAssignmentId());
+        taskRequest.setContent(null);
+        taskRequest.setFormData(request.getFormData());
+        taskRequest.setFileObjectIds(request.getFileObjectIds());
+        taskRequest.setClientRequestId("RE_SUBMIT:" + legacySubmissionId);
+        taskRequest.setDimensionCode(request.getDimension());
+        taskRequest.setItemCode(request.getItemCode());
+        taskRequest.setItemName(request.getItemName());
+        taskRequest.setMaxScore(request.getMaxScore());
+        taskRequest.setProjectName(request.getProjectName());
+        taskRequest.setSubmitType(request.getSubmitType());
+        taskRequest.setSubmitDate(request.getSubmitDate());
+        return taskRequest;
     }
 
     /**

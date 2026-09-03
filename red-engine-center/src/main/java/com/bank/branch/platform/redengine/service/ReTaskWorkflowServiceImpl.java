@@ -691,6 +691,8 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
             dto.setSubmittedAt(submission.getSubmittedAt());
             dto.setContent(submission.getContentText());
             dto.setFormData(submission.getFormData());
+            dto.setDimensionCode(submission.getDimensionCode());
+            dto.setItemCode(submission.getItemCode());
             dto.setReviewFeedback(submission.getReviewOpinion());
             dto.setFiles(loadAttachments(submission.getId()));
         } else {

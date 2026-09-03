@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.redengine.api.dto.ReTaskDimensionProgressStatus;
-import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionReqDTO;
 import com.bank.branch.platform.redengine.entity.ReSubmit;
 import com.bank.branch.platform.redengine.entity.ReTask;
 import com.bank.branch.platform.redengine.entity.ReTaskBranchAssignment;
@@ -26,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -69,6 +70,26 @@ public class ReTaskFourDimensionAdapter {
     }
 
     /**
+     * 查询任务 assignment 当前提交版本。
+     *
+     * <p>材料上报允许在同一支部任务窗口内连续提交多个维度；调用方据此决定是复用当前
+     * {@code BRANCH_PENDING} 版本，还是发起一次新的 workflow submit。这里同时复核任务、实例
+     * 和 assignment 关系，避免客户端只凭三个 ID 把材料挂到其他任务。</p>
+     */
+    @Transactional(readOnly = true)
+    public ReTaskSubmission findCurrentSubmission(Long taskId, Long taskInstanceId, Long assignmentId) {
+        if (taskId == null || taskInstanceId == null || assignmentId == null) {
+            throw new BizException("RE-40031", "四维任务关联参数不完整");
+        }
+        ReTask task = taskMapper.selectById(taskId);
+        ReTaskInstance instance = instanceMapper.selectById(taskInstanceId);
+        ReTaskBranchAssignment assignment = assignmentMapper.selectById(assignmentId);
+        requireContext(task, instance, assignment);
+        requireFourDimensionTask(task);
+        return currentSubmission(assignment);
+    }
+
+    /**
      * 将旧材料上报记录关联到当前任务 assignment，并推进该维度进度。
      *
      * @param taskId 任务定义 ID
@@ -83,6 +104,41 @@ public class ReTaskFourDimensionAdapter {
     public void linkExistingSubmission(Long taskId, Long taskInstanceId, Long assignmentId,
                                        Long reSubmitId, String dimensionCode,
                                        String itemCode, String operatorId) {
+        linkExistingSubmissionInternal(taskId, taskInstanceId, assignmentId, reSubmitId, null,
+                dimensionCode, itemCode, operatorId, true);
+    }
+
+    /**
+     * 将旧材料关联到指定任务提交版本并累计一次进度。
+     *
+     * <p>用于当前版本仍为 {@code BRANCH_PENDING} 的后续材料上报。任务提交版本已经存在，
+     * 因此不再调用 workflow submit，但本次新材料仍应为对应维度累计一次有效上传。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void linkExistingSubmissionToVersion(ReSubmit request, Long reSubmitId,
+                                                 Long taskId, Long taskInstanceId,
+                                                 Long assignmentId, Long taskSubmissionId,
+                                                 String dimensionCode, String itemCode,
+                                                 String operatorId) {
+        if (taskSubmissionId == null) {
+            throw new BizException("RE-40036", "任务提交版本不能为空");
+        }
+        linkExistingSubmissionInternal(taskId, taskInstanceId, assignmentId, reSubmitId,
+                taskSubmissionId,
+                hasText(dimensionCode) ? dimensionCode : request == null ? null : request.getDimension(),
+                hasText(itemCode) ? itemCode : request == null ? null : request.getItemCode(),
+                operatorId, true);
+    }
+
+    /**
+     * 执行旧材料与任务版本的关系写入。
+     *
+     * @param recordProgress 是否由本次桥接负责推进四维进度；workflow 首次提交后再次建桥时必须为 false
+     */
+    private void linkExistingSubmissionInternal(Long taskId, Long taskInstanceId, Long assignmentId,
+                                                 Long reSubmitId, Long taskSubmissionId,
+                                                 String dimensionCode, String itemCode,
+                                                 String operatorId, boolean recordProgress) {
         if (taskId == null || taskInstanceId == null || assignmentId == null || reSubmitId == null) {
             throw new BizException("RE-40031", "四维任务关联参数不完整");
         }
@@ -98,6 +154,8 @@ public class ReTaskFourDimensionAdapter {
         if (!Objects.equals(oldSubmission.getOrgId(), assignment.getBranchId())) {
             throw new BizException("RE-40306", "材料上报不属于该党支部任务");
         }
+        ReTaskSubmission taskSubmission = requireTaskSubmissionContext(
+                taskSubmissionId, taskId, taskInstanceId, assignmentId);
 
         String resolvedDimension = hasText(dimensionCode) ? dimensionCode.trim() : oldSubmission.getDimension();
         String resolvedItem = hasText(itemCode) ? itemCode.trim() : oldSubmission.getItemCode();
@@ -109,23 +167,38 @@ public class ReTaskFourDimensionAdapter {
                 .eq(ReTaskReSubmitRel::getTaskInstanceId, taskInstanceId)
                 .eq(ReTaskReSubmitRel::getAssignmentId, assignmentId)
                 .eq(ReTaskReSubmitRel::getReSubmitId, reSubmitId));
+        boolean relationCreated = false;
         if (existing == null) {
             ReTaskReSubmitRel relation = new ReTaskReSubmitRel();
             relation.setTaskId(taskId);
             relation.setTaskInstanceId(taskInstanceId);
             relation.setAssignmentId(assignmentId);
             relation.setReSubmitId(reSubmitId);
+            relation.setTaskSubmissionId(taskSubmissionId);
             relation.setDimensionCode(resolvedDimension);
             relation.setItemCode(resolvedItem);
             relation.setCreatedBy(operatorId);
             relation.setCreateTime(now());
             try {
                 relMapper.insert(relation);
+                relationCreated = true;
             } catch (DuplicateKeyException duplicate) {
-                // 关系表唯一键承担并发幂等；另一节点已创建时当前操作无需重复写入。
+                // 关系表唯一键承担并发幂等；另一节点已创建时当前操作无需重复推进进度。
             }
         }
-        upsertProgress(task, instance, assignment, resolvedDimension, null, now());
+        if (existing != null && taskSubmissionId != null
+                && !Objects.equals(existing.getTaskSubmissionId(), taskSubmissionId)) {
+            if (existing.getTaskSubmissionId() != null) {
+                throw new BizException("RE-40906", "材料已关联其他任务提交版本");
+            }
+            existing.setTaskSubmissionId(taskSubmissionId);
+            if (relMapper.updateById(existing) != 1) {
+                throw new BizException("RE-40901", "材料关联已被其他用户更新");
+            }
+        }
+        if (recordProgress && relationCreated) {
+            upsertProgress(task, instance, assignment, resolvedDimension, taskSubmission, now());
+        }
     }
 
     /**
@@ -140,9 +213,76 @@ public class ReTaskFourDimensionAdapter {
         if (taskId == null || taskInstanceId == null || assignmentId == null) {
             return;
         }
-        linkExistingSubmission(taskId, taskInstanceId, assignmentId, reSubmitId,
+        linkExistingSubmissionInternal(taskId, taskInstanceId, assignmentId, reSubmitId, null,
                 request == null ? null : request.getDimension(),
-                request == null ? null : request.getItemCode(), operatorId);
+                request == null ? null : request.getItemCode(), operatorId, true);
+    }
+
+    /**
+     * 将 workflow 已创建的任务提交版本与旧材料建桥。
+     *
+     * <p>workflow {@code submit} 已经调用过一次 {@link #recordTaskUpload}；此入口只写关系，
+     * 明确禁止再次推进四维进度，避免同一份材料被记为两次上传。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void linkFromLegacyRequest(ReSubmit request, Long reSubmitId, Long taskId,
+                                      Long taskInstanceId, Long assignmentId,
+                                      Long taskSubmissionId, String operatorId) {
+        if (taskId == null || taskInstanceId == null || assignmentId == null) {
+            return;
+        }
+        if (taskSubmissionId == null) {
+            throw new BizException("RE-40036", "任务提交版本不能为空");
+        }
+        linkExistingSubmissionInternal(taskId, taskInstanceId, assignmentId, reSubmitId,
+                taskSubmissionId,
+                request == null ? null : request.getDimension(),
+                request == null ? null : request.getItemCode(), operatorId, false);
+    }
+
+    /** 读取 assignment 当前版本，兼容旧数据中 CURRENT_VERSION 缺失的情况。 */
+    private ReTaskSubmission currentSubmission(ReTaskBranchAssignment assignment) {
+        if (assignment == null || assignment.getId() == null) {
+            return null;
+        }
+        Integer currentVersion = assignment.getCurrentVersion();
+        if (currentVersion != null && currentVersion > 0) {
+            ReTaskSubmission current = taskSubmissionMapper.selectOne(
+                    new LambdaQueryWrapper<ReTaskSubmission>()
+                            .eq(ReTaskSubmission::getAssignmentId, assignment.getId())
+                            .eq(ReTaskSubmission::getVersionNo, currentVersion));
+            if (current != null) {
+                return current;
+            }
+        }
+        List<ReTaskSubmission> submissions = taskSubmissionMapper.selectList(
+                new LambdaQueryWrapper<ReTaskSubmission>()
+                        .eq(ReTaskSubmission::getAssignmentId, assignment.getId())
+                        .orderByDesc(ReTaskSubmission::getVersionNo)
+                        .orderByDesc(ReTaskSubmission::getId));
+        if (submissions != null && !submissions.isEmpty()) {
+            return submissions.stream().filter(Objects::nonNull).max(Comparator
+                    .comparing(ReTaskSubmission::getVersionNo, Comparator.nullsFirst(Integer::compareTo))
+                    .thenComparing(ReTaskSubmission::getId, Comparator.nullsFirst(Long::compareTo))).orElse(null);
+        }
+        return taskSubmissionMapper.selectOne(new LambdaQueryWrapper<ReTaskSubmission>()
+                .eq(ReTaskSubmission::getAssignmentId, assignment.getId())
+                .orderByDesc(ReTaskSubmission::getVersionNo)
+                .orderByDesc(ReTaskSubmission::getId));
+    }
+
+    private ReTaskSubmission requireTaskSubmissionContext(Long taskSubmissionId, Long taskId,
+                                                          Long taskInstanceId, Long assignmentId) {
+        if (taskSubmissionId == null) {
+            return null;
+        }
+        ReTaskSubmission submission = taskSubmissionMapper.selectById(taskSubmissionId);
+        if (submission == null || !Objects.equals(submission.getTaskId(), taskId)
+                || !Objects.equals(submission.getTaskInstanceId(), taskInstanceId)
+                || !Objects.equals(submission.getAssignmentId(), assignmentId)) {
+            throw new BizException("RE-40036", "任务提交版本与任务关联关系不一致");
+        }
+        return submission;
     }
 
     /** 以 assignment+维度唯一键更新上传次数，首次上传即完成，重复上传只增加次数。 */

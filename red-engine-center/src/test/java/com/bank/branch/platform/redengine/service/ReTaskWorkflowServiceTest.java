@@ -260,6 +260,38 @@ class ReTaskWorkflowServiceTest {
     }
 
     @Test
+    void getBranchReview_populatesFourDimensionFieldsFromCurrentTaskSubmission() {
+        String operatorId = "SECRETARY-1";
+        ReTask task = task(10L, "FOUR_DIMENSION");
+        ReTaskInstance instance = instance(20L, task.getId());
+        RePartyOrg branch = branch(40L, operatorId);
+        ReTaskBranchAssignment assignment = assignment(30L, instance.getId(), branch.getId(),
+                "BRANCH_PENDING", 1);
+        ReTaskSubmission current = submission(60L, task.getId(), instance.getId(), assignment.getId(), 1,
+                ReTaskSubmissionStatus.BRANCH_PENDING, "REPORTER-1");
+        current.setDimensionCode("DIM_2");
+        current.setItemCode("2.3");
+        current.setFormData("{\"evidence\":true}");
+
+        when(currentUserApi.getCurrentEmpId()).thenReturn(operatorId);
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RE_SECR"));
+        when(assignmentMapper.selectById(assignment.getId())).thenReturn(assignment);
+        when(instanceMapper.selectById(instance.getId())).thenReturn(instance);
+        when(taskMapper.selectById(task.getId())).thenReturn(task);
+        when(partyOrgMapper.selectById(branch.getId())).thenReturn(branch);
+        when(submissionMapper.selectOne(any())).thenReturn(current);
+        when(submissionFileMapper.selectList(any())).thenReturn(List.of());
+        when(fileTypeMapper.selectList(any())).thenReturn(List.of());
+        when(relMapper.selectOne(any())).thenReturn(null);
+
+        ReTaskWorkflowAssignmentDTO result = service.getBranchReview(assignment.getId(), operatorId);
+
+        assertThat(result.getDimensionCode()).isEqualTo("DIM_2");
+        assertThat(result.getItemCode()).isEqualTo("2.3");
+        assertThat(result.getFormData()).isEqualTo("{\"evidence\":true}");
+    }
+
+    @Test
     void workflowPage_filtersBeforePaginationAndPreservesDatabaseTotal() {
         String operatorId = "SECRETARY-1";
         ReTask task = task(10L, "GENERAL");
