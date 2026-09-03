@@ -1,0 +1,11 @@
+### Result
+Total messages: 7 (Errors: 0, Warnings: 5)
+
+[WARNING] [Vue Router warn]: <router-view> can no longer be used directly inside <transition> or <keep-alive>.
+[WARNING] ElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+[WARNING] ElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+[WARNING] ElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+[WARNING] ElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+
+采集地址：http://127.0.0.1:8093/#/redengine/records
+采集会话：task-processing-reporter-20260903

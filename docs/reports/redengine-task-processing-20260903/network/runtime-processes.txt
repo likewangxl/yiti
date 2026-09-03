@@ -1,0 +1,11 @@
+8093 LISTEN: node pid=53917
+  command: node /home/djdev/leid/yiti/xanzc_frontend/node_modules/.bin/vite
+  PWD=/home/djdev/leid/yiti/xanzc_frontend
+  VITE_DEV_PORT=8093
+  VITE_PROXY_TARGET=http://127.0.0.1:18091
+  VITE_USE_MOCK=false
+
+18091 LISTEN: java pid=3752592
+  command: java -Xms256m -Xmx768m -jar /home/djdev/leid/yiti/bootstrap/target/bootstrap-1.0.0-SNAPSHOT.jar
+
+备注：主机还存在其他 checkout 和同 checkout 的其他 Vite 进程，本次浏览器验收全部固定访问 127.0.0.1:8093；未使用这些其他实例。

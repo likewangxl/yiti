@@ -1,0 +1,13 @@
+隔离库：yit_test
+采集方式：MySQL 只读 SELECT
+
+assignment	8	BRANCH_PENDING	1	6	4	E10001
+submission	6	1	BRANCH_PENDING	dim2	2.1	E10001	{"desc":"E2E四维可见性验证材料-20260903-1323"}
+relation	3	6	dim2	2.1
+submit	3	dim2	2.1	1	E10001	{"desc":"E2E四维可见性验证材料-20260903-1323"}
+
+字段说明：
+- assignment：ID、状态、当前版本、任务实例、支部、最近提交人。
+- submission：ID、版本、状态、维度、明细项、提交人、结构化表单。
+- relation：旧材料 ID、任务提交 ID、维度、明细项。
+- submit：旧材料 ID、维度、明细项、状态、提交人、结构化表单。

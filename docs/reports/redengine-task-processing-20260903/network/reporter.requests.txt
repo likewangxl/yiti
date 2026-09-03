@@ -1,0 +1,11 @@
+10. [GET] http://127.0.0.1:8093/api/re/tasks/assignments/8 => [200] OK
+11. [POST] http://127.0.0.1:8093/api/re/submits => [200] OK
+
+提交后进入任务处理列表：
+6. [GET] http://127.0.0.1:8093/api/re/tasks/my-assignments?pageNo=1&pageSize=10&tab=PENDING => [200] OK
+7. [GET] http://127.0.0.1:8093/api/re/tasks/my-assignments?pageNo=1&pageSize=1&tab=REVIEWING => [200] OK
+8. [GET] http://127.0.0.1:8093/api/re/tasks/my-assignments?pageNo=1&pageSize=1&tab=PASSED => [200] OK
+9. [GET] http://127.0.0.1:8093/api/re/tasks/my-assignments?pageNo=1&pageSize=1&tab=REJECTED => [200] OK
+
+会话：task-processing-reporter-20260903
+过滤器：/api/re/
