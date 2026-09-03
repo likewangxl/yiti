@@ -50,10 +50,12 @@ public class ReReviewController {
     @BizAuth(bizType = BizType.RED_ENGINE, action = BizAction.LIST)
     public ResponseWrapper<PageResult<ReSubmit>> getReviewQueue(
             @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
-            @RequestParam(value = "pageSize", defaultValue = "10") int pageSize) {
-        PageResult<ReSubmit> result = reReviewService.getReviewQueue(pageNo, pageSize);
-        log.info("[ReReviewController.getReviewQueue] pageNo={}, pageSize={}, total={}",
-                pageNo, pageSize, result.getTotal());
+            @RequestParam(value = "pageSize", defaultValue = "10") int pageSize,
+            @RequestParam(value = "tab", defaultValue = "PENDING") String tab) {
+        String operatorId = currentUserApi.getCurrentEmpId();
+        PageResult<ReSubmit> result = reReviewService.getReviewQueue(pageNo, pageSize, tab, operatorId);
+        log.info("[ReReviewController.getReviewQueue] pageNo={}, pageSize={}, tab={}, operatorId={}, total={}",
+                pageNo, pageSize, tab, operatorId, result.getTotal());
         return ResponseWrapper.success(result);
     }
 

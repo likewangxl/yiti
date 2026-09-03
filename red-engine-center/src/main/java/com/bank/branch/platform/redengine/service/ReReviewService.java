@@ -3,12 +3,17 @@ package com.bank.branch.platform.redengine.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.redengine.entity.RePartyOrg;
 import com.bank.branch.platform.redengine.entity.ReScore;
 import com.bank.branch.platform.redengine.entity.ReSubmit;
+import com.bank.branch.platform.redengine.entity.ReUserPartyMap;
+import com.bank.branch.platform.redengine.mapper.RePartyOrgMapper;
 import com.bank.branch.platform.redengine.mapper.ReScoreMapper;
 import com.bank.branch.platform.redengine.mapper.ReSubmitMapper;
+import com.bank.branch.platform.redengine.mapper.ReUserPartyMapMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,8 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 红色引擎-两级审核服务。
@@ -46,8 +54,16 @@ public class ReReviewService {
 
     private static final String SELF_REVIEW_ERROR_MESSAGE = "禁止审核本人提交的记录";
 
+    private static final String BRANCH_SECRETARY_ROLE = "R_RE_SECR";
+    private static final String SYSTEM_ADMIN_ROLE = "SYS_ADMIN";
+    private static final String DEFAULT_REVIEW_TAB = "PENDING";
+    private static final String REVIEWING_TAB = "REVIEWING";
+
     private final ReSubmitMapper reSubmitMapper;
     private final ReScoreMapper reScoreMapper;
+    private final RePartyOrgMapper partyOrgMapper;
+    private final ReUserPartyMapMapper userPartyMapMapper;
+    private final CurrentUserApi currentUserApi;
 
     /**
      * 查询审核待审队列。
@@ -60,11 +76,44 @@ public class ReReviewService {
      * @return 分页结果
      */
     public PageResult<ReSubmit> getReviewQueue(int pageNo, int pageSize) {
+        return getReviewQueue(pageNo, pageSize, DEFAULT_REVIEW_TAB, currentUserApi.getCurrentEmpId());
+    }
+
+    /**
+     * 查询当前支部书记可见的旧材料审核队列。
+     *
+     * <p>旧 {@code RE_SUBMIT} 记录没有任务 assignment，因此不能沿用任务工作台的查询；这里按
+     * 当前支部书记可审核的支部集合限制 {@code orgId}，并在 Service 层再次校验，避免仅凭前端页签
+     * 或 URL 泄露其他支部材料。REVIEWING 是任务工作台兼容页签，旧材料没有该状态，固定返回空页。</p>
+     *
+     * @param pageNo     页码（从1开始）
+     * @param pageSize   每页大小
+     * @param tab        PENDING/PASSED/REJECTED；空值默认为 PENDING，REVIEWING 返回空页
+     * @param operatorId 当前登录支部书记平台用户 ID
+     * @return 当前用户支部范围内的旧材料分页
+     */
+    public PageResult<ReSubmit> getReviewQueue(int pageNo, int pageSize, String tab, String operatorId) {
+        requireCurrentUser(operatorId);
+        requireBranchReviewer();
+        Set<Long> branchIds = secretaryBranchIds(operatorId);
+        String normalizedTab = normalizeReviewTab(tab);
+        if (REVIEWING_TAB.equals(normalizedTab) || branchIds.isEmpty()) {
+            return PageResult.of(pageNo, pageSize, 0L, List.of());
+        }
+
+        int status = statusForTab(normalizedTab);
         LambdaQueryWrapper<ReSubmit> wrapper = new LambdaQueryWrapper<ReSubmit>()
-                .eq(ReSubmit::getStatus, 1)
+                .eq(ReSubmit::getStatus, status)
+                .in(ReSubmit::getOrgId, branchIds)
                 .orderByAsc(ReSubmit::getSubmitDate);
         IPage<ReSubmit> page = reSubmitMapper.selectPage(new Page<>(pageNo, pageSize), wrapper);
-        return PageResult.of(pageNo, pageSize, page.getTotal(), page.getRecords());
+        List<ReSubmit> records = page == null || page.getRecords() == null
+                ? List.of()
+                : page.getRecords().stream()
+                .filter(Objects::nonNull)
+                .filter(item -> branchIds.contains(item.getOrgId()))
+                .toList();
+        return PageResult.of(pageNo, pageSize, page == null ? 0L : page.getTotal(), records);
     }
 
     /**
@@ -77,7 +126,18 @@ public class ReReviewService {
      * @return 上报实体
      */
     public ReSubmit getPreview(Long id) {
-        return reSubmitMapper.selectById(id);
+        return getPreview(id, currentUserApi.getCurrentEmpId());
+    }
+
+    /** 查询旧材料详情，并按当前支部书记的实际支部范围执行实体级校验。 */
+    public ReSubmit getPreview(Long id, String operatorId) {
+        requireCurrentUser(operatorId);
+        requireBranchReviewer();
+        ReSubmit existing = reSubmitMapper.selectById(id);
+        if (existing != null) {
+            requireSecretaryForBranch(existing.getOrgId(), operatorId);
+        }
+        return existing;
     }
 
     /**
@@ -102,10 +162,13 @@ public class ReReviewService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void approve(Long submitId, BigDecimal score, String feedback, String empId) {
+        requireCurrentUser(empId);
+        requireBranchReviewer();
         ReSubmit existing = reSubmitMapper.selectById(submitId);
         if (existing == null) {
             throw new BizException("RE-40003", "提交记录不存在");
         }
+        requireSecretaryForBranch(existing.getOrgId(), empId);
         rejectSelfReview(existing, empId);
 
         if (score != null && score.compareTo(BigDecimal.ZERO) > 0) {
@@ -180,7 +243,12 @@ public class ReReviewService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void reject(Long submitId, String feedback, String empId) {
+        requireCurrentUser(empId);
+        requireBranchReviewer();
         ReSubmit existing = reSubmitMapper.selectById(submitId);
+        if (existing != null) {
+            requireSecretaryForBranch(existing.getOrgId(), empId);
+        }
         rejectSelfReview(existing, empId);
 
         ReSubmit update = new ReSubmit();
@@ -202,5 +270,112 @@ public class ReReviewService {
         if (existing != null && Objects.equals(existing.getSubmitterId(), empId)) {
             throw new BizException(SELF_REVIEW_ERROR_CODE, SELF_REVIEW_ERROR_MESSAGE);
         }
+    }
+
+    /** 将旧审核页签归一化；未知值 fail-close，避免把未知状态误当作待审。 */
+    private String normalizeReviewTab(String tab) {
+        if (tab == null || tab.isBlank()) {
+            return DEFAULT_REVIEW_TAB;
+        }
+        String normalized = tab.trim().toUpperCase(java.util.Locale.ROOT);
+        if (DEFAULT_REVIEW_TAB.equals(normalized) || "PASSED".equals(normalized)
+                || "REJECTED".equals(normalized) || REVIEWING_TAB.equals(normalized)) {
+            return normalized;
+        }
+        throw new BizException("RE-40020", "审核页签不支持");
+    }
+
+    private int statusForTab(String tab) {
+        return switch (tab) {
+            case DEFAULT_REVIEW_TAB -> 1;
+            case "PASSED" -> 2;
+            case "REJECTED" -> 3;
+            default -> throw new BizException("RE-40020", "审核页签不支持");
+        };
+    }
+
+    /** 与任务审核服务保持一致：书记按 secretaryId 或用户党组织映射获得实际支部范围。 */
+    private Set<Long> secretaryBranchIds(String operatorId) {
+        List<RePartyOrg> orgs = partyOrgMapper.selectList(null);
+        if (orgs == null) {
+            return Set.of();
+        }
+        Set<Long> mappedBranchIds = mappedPartyOrgIds(operatorId);
+        return orgs.stream()
+                .filter(this::isBranch)
+                .filter(org -> isSystemAdmin()
+                        || Objects.equals(normalize(operatorId), normalize(org.getSecretaryId()))
+                        || mappedBranchIds.contains(org.getId()))
+                .map(RePartyOrg::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /** 校验旧材料目标组织是当前书记可审核的支部。 */
+    private void requireSecretaryForBranch(Long branchId, String operatorId) {
+        if (branchId == null || !isBranchReviewer()) {
+            throw new BizException("RE-40302", "无支部审核权限");
+        }
+        RePartyOrg branch = partyOrgMapper.selectById(branchId);
+        if (!isBranch(branch)) {
+            throw new BizException("RE-40302", "无权审核该党支部材料");
+        }
+        if (!isSystemAdmin()
+                && !Objects.equals(normalize(operatorId), normalize(branch.getSecretaryId()))
+                && !mappedPartyOrgIds(operatorId).contains(branchId)) {
+            throw new BizException("RE-40302", "无权审核该党支部材料");
+        }
+    }
+
+    private Set<Long> mappedPartyOrgIds(String operatorId) {
+        if (operatorId == null || operatorId.isBlank()) {
+            return Set.of();
+        }
+        List<ReUserPartyMap> mappings = userPartyMapMapper.selectList(
+                new LambdaQueryWrapper<ReUserPartyMap>().eq(ReUserPartyMap::getUserId, operatorId.trim()));
+        if (mappings == null) {
+            return Set.of();
+        }
+        return mappings.stream()
+                .filter(Objects::nonNull)
+                .map(ReUserPartyMap::getPartyOrgId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private void requireBranchReviewer() {
+        if (!isSystemAdmin() && !hasRole(BRANCH_SECRETARY_ROLE)) {
+            throw new BizException("RE-40302", "无权执行该审核操作");
+        }
+    }
+
+    private boolean isBranchReviewer() {
+        return isSystemAdmin() || hasRole(BRANCH_SECRETARY_ROLE);
+    }
+
+    private boolean isSystemAdmin() {
+        return currentUserApi.isSystemAdmin() || hasRole(SYSTEM_ADMIN_ROLE);
+    }
+
+    private boolean hasRole(String roleCode) {
+        Set<String> roles = currentUserApi.getCurrentRoleCodes();
+        return roles != null && roles.stream().filter(Objects::nonNull)
+                .map(String::trim).anyMatch(roleCode::equalsIgnoreCase);
+    }
+
+    private void requireCurrentUser(String operatorId) {
+        String current = currentUserApi.getCurrentEmpId();
+        if (operatorId == null || operatorId.isBlank() || current == null || current.isBlank()
+                || !operatorId.trim().equals(current.trim())) {
+            throw new BizException("RE-40301", "当前用户与操作人不匹配");
+        }
+    }
+
+    private boolean isBranch(RePartyOrg org) {
+        return org != null && org.getId() != null && Integer.valueOf(2).equals(org.getOrgLevel());
+    }
+
+    private String normalize(String value) {
+        return value == null ? null : value.trim();
     }
 }

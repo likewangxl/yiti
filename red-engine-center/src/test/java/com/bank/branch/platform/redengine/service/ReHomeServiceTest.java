@@ -6,6 +6,7 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.redengine.api.dto.ReHomeBranchRankingDTO;
 import com.bank.branch.platform.redengine.api.dto.ReHomeSummaryDTO;
+import com.bank.branch.platform.redengine.api.dto.ReHomeTodoItemDTO;
 import com.bank.branch.platform.redengine.api.dto.ReOverduePageQueryDTO;
 import com.bank.branch.platform.redengine.api.dto.ReQuarterWarningDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskDeductionActionRespDTO;
@@ -22,9 +23,11 @@ import com.bank.branch.platform.redengine.entity.ReTaskDeduction;
 import com.bank.branch.platform.redengine.entity.ReTaskInstance;
 import com.bank.branch.platform.redengine.entity.ReTaskSubmission;
 import com.bank.branch.platform.redengine.entity.ReTaskTodo;
+import com.bank.branch.platform.redengine.entity.ReSubmit;
 import com.bank.branch.platform.redengine.entity.ReUserPartyMap;
 import com.bank.branch.platform.redengine.mapper.RePartyOrgMapper;
 import com.bank.branch.platform.redengine.mapper.ReScoreMapper;
+import com.bank.branch.platform.redengine.mapper.ReSubmitMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskBranchAssignmentMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskDeductionMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskInstanceMapper;
@@ -68,6 +71,8 @@ class ReHomeServiceTest {
     private RePartyOrgMapper partyOrgMapper;
     @Mock
     private ReScoreMapper scoreMapper;
+    @Mock
+    private ReSubmitMapper reSubmitMapper;
     @Mock
     private ReTaskDeductionMapper deductionMapper;
     @Mock
@@ -443,6 +448,40 @@ class ReHomeServiceTest {
     }
 
     @Test
+    void summary_forSecretaryIncludesOnlyCurrentBranchLegacyPendingAlongsideTaskTodos() {
+        String operatorId = "SECRETARY-1";
+        when(currentUserApi.getCurrentEmpId()).thenReturn(operatorId);
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RE_SECR"));
+        when(currentUserApi.isSystemAdmin()).thenReturn(false);
+
+        ReUserPartyMap mapping = new ReUserPartyMap();
+        mapping.setUserId(operatorId);
+        mapping.setPartyOrgId(7L);
+        RePartyOrg ownBranch = branch(7L, "七支部");
+        when(userPartyMapMapper.selectOne(any())).thenReturn(mapping);
+        when(partyOrgMapper.selectById(7L)).thenReturn(ownBranch);
+        when(partyOrgMapper.selectList(any())).thenReturn(List.of(ownBranch));
+        when(scoreMapper.selectList(any())).thenReturn(List.of());
+        when(deductionMapper.selectList(any())).thenReturn(List.of());
+        ReTask task = task(10L, "任务待办", "任务说明");
+        ReTaskInstance instance = instance(20L, 10L, LocalDateTime.now().minusDays(1));
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 7L, "BRANCH_PENDING");
+        when(assignmentMapper.selectList(any())).thenReturn(List.of(assignment));
+        when(instanceMapper.selectById(20L)).thenReturn(instance);
+        when(taskMapper.selectById(10L)).thenReturn(task);
+
+        ReSubmit own = legacySubmit(4L, 7L, 1);
+        ReSubmit other = legacySubmit(5L, 8L, 1);
+        when(reSubmitMapper.selectList(any())).thenReturn(List.of(own, other));
+
+        ReHomeSummaryDTO summary = service.getSummary(operatorId);
+
+        assertThat(summary.getTodoItems()).extracting(ReHomeTodoItemDTO::getSource)
+                .containsExactly("task", "material");
+        assertThat(summary.getTodoItems().get(1).getSubmitId()).isEqualTo(4L);
+    }
+
+    @Test
     void summary_unknownRole_failsClosed() {
         when(currentUserApi.getCurrentEmpId()).thenReturn("user-1");
         when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("UNKNOWN"));
@@ -513,5 +552,15 @@ class ReHomeServiceTest {
         assignment.setStatus(status);
         assignment.setCurrentVersion(0);
         return assignment;
+    }
+
+    private static ReSubmit legacySubmit(Long id, Long orgId, Integer status) {
+        ReSubmit submit = new ReSubmit();
+        submit.setId(id);
+        submit.setOrgId(orgId);
+        submit.setStatus(status);
+        submit.setItemName("四维材料");
+        submit.setProjectName("党建项目");
+        return submit;
     }
 }

@@ -22,6 +22,7 @@ import com.bank.branch.platform.redengine.api.dto.ReTaskTodoStatus;
 import com.bank.branch.platform.redengine.api.dto.ReWarningPoolDTO;
 import com.bank.branch.platform.redengine.entity.RePartyOrg;
 import com.bank.branch.platform.redengine.entity.ReScore;
+import com.bank.branch.platform.redengine.entity.ReSubmit;
 import com.bank.branch.platform.redengine.entity.ReTask;
 import com.bank.branch.platform.redengine.entity.ReTaskBranchAssignment;
 import com.bank.branch.platform.redengine.entity.ReTaskDeduction;
@@ -32,6 +33,7 @@ import com.bank.branch.platform.redengine.entity.ReTaskTodo;
 import com.bank.branch.platform.redengine.entity.ReUserPartyMap;
 import com.bank.branch.platform.redengine.mapper.RePartyOrgMapper;
 import com.bank.branch.platform.redengine.mapper.ReScoreMapper;
+import com.bank.branch.platform.redengine.mapper.ReSubmitMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskBranchAssignmentMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskDeductionMapper;
 import com.bank.branch.platform.redengine.mapper.ReTaskInstanceMapper;
@@ -94,6 +96,7 @@ public class ReHomeServiceImpl implements ReHomeService {
     private final UserApi userApi;
     private final RePartyOrgMapper partyOrgMapper;
     private final ReScoreMapper scoreMapper;
+    private final ReSubmitMapper reSubmitMapper;
     private final ReTaskDeductionMapper deductionMapper;
     private final ReTaskMapper taskMapper;
     private final ReTaskInstanceMapper instanceMapper;
@@ -611,7 +614,7 @@ public class ReHomeServiceImpl implements ReHomeService {
                 .toList());
     }
 
-    /** 支部书记的待处理任务由支部 assignment 状态派生，不依赖未生成的秘书待办行。 */
+    /** 支部书记的待处理任务由 assignment 与旧材料上报共同组成。 */
     private List<ReHomeTodoItemDTO> loadSecretaryTodoItems(Long branchId) {
         List<ReTaskBranchAssignment> assignments = nullToEmpty(assignmentMapper.selectList(
                 new LambdaQueryWrapper<ReTaskBranchAssignment>()
@@ -619,7 +622,44 @@ public class ReHomeServiceImpl implements ReHomeService {
                         .eq(ReTaskBranchAssignment::getStatus, ReTaskAssignmentStatus.BRANCH_PENDING.name())
                         .orderByAsc(ReTaskBranchAssignment::getLastSubmittedAt)
                         .orderByAsc(ReTaskBranchAssignment::getId)));
-        return assignments.stream().map(this::toTodoItem).filter(Objects::nonNull).toList();
+        List<ReHomeTodoItemDTO> result = assignments.stream()
+                .map(this::toTodoItem)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(ArrayList::new));
+        result.addAll(loadLegacySecretaryTodoItems(branchId));
+        return result;
+    }
+
+    /** 查询当前支部尚未处理的旧材料上报，显式重复组织过滤以保持 fail-close。 */
+    private List<ReHomeTodoItemDTO> loadLegacySecretaryTodoItems(Long branchId) {
+        if (branchId == null) {
+            return List.of();
+        }
+        List<ReSubmit> submits = nullToEmpty(reSubmitMapper.selectList(
+                new LambdaQueryWrapper<ReSubmit>()
+                        .eq(ReSubmit::getOrgId, branchId)
+                        .eq(ReSubmit::getStatus, 1)
+                        .orderByAsc(ReSubmit::getSubmitDate)
+                        .orderByAsc(ReSubmit::getId)));
+        return submits.stream()
+                .filter(Objects::nonNull)
+                .filter(submit -> Objects.equals(submit.getOrgId(), branchId)
+                        && Integer.valueOf(1).equals(submit.getStatus()))
+                .map(this::toLegacyTodoItem)
+                .toList();
+    }
+
+    /** 将旧 RE_SUBMIT 转成首页待办强类型条目，前端可凭 source=material/submitId 定位详情。 */
+    private ReHomeTodoItemDTO toLegacyTodoItem(ReSubmit submit) {
+        ReHomeTodoItemDTO dto = new ReHomeTodoItemDTO();
+        dto.setSource("material");
+        dto.setSubmitId(submit.getId());
+        dto.setTitle(firstText(submit.getItemName(), submit.getProjectName(), "材料上报"));
+        dto.setDescription(submit.getProjectName());
+        dto.setTaskType("FOUR_DIMENSION");
+        dto.setTaskNature("FOUR_DIMENSION");
+        dto.setStatus(ReTaskTodoStatus.PENDING.name());
+        return dto;
     }
 
     private List<ReHomeTodoItemDTO> toTodoItems(List<ReTaskTodo> todos) {
@@ -655,6 +695,7 @@ public class ReHomeServiceImpl implements ReHomeService {
             return null;
         }
         ReHomeTodoItemDTO dto = new ReHomeTodoItemDTO();
+        dto.setSource("task");
         dto.setTaskId(task.getId());
         dto.setTaskInstanceId(instance.getId());
         dto.setAssignmentId(assignment.getId());
@@ -927,6 +968,16 @@ public class ReHomeServiceImpl implements ReHomeService {
 
     private static String normalizeText(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static String firstText(String... values) {
+        for (String value : values) {
+            String normalized = normalizeText(value);
+            if (normalized != null) {
+                return normalized;
+            }
+        }
+        return null;
     }
 
     private static boolean hasText(String value) {

@@ -10,6 +10,10 @@ import java.time.LocalDateTime;
 @Schema(description = "红色引擎首页任务条目")
 public class ReHomeTodoItemDTO {
 
+    /** 任务条目来源：task 为任务工作流，material 为旧 RE_SUBMIT 四维材料上报。 */
+    private String source;
+    /** 旧材料上报 ID；任务工作流条目为空。 */
+    private Long submitId;
     private Long taskId;
     private Long taskInstanceId;
     private Long assignmentId;
