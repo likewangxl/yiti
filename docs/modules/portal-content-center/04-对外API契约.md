@@ -1,814 +1,122 @@
 # 门户与内容中心 — 对外 API 契约
 
-> 通讯录契约收口（2026-08-31）：`AddressBookApi` 的方法签名保持兼容，但实现改由
-> auth `UserDirectoryApi` 提供人员目录；`ProductApi` 的负责人字段从
-> `PORTAL_USER_PRODUCT_REL` 派生。`empId` 固定为 `PT_USER.USER_ID`，
-> `position`/`selfDesc` 无权威来源时返回 `null`。portal 不再通过旧员工表、负责人 JSON
-> 或事件监听同步数据。
+## 1. 契约范围
 
-> 文档版本: v1.0
-> 对应模块: `portal-content-center`
-> 目标读者: 依赖本模块的其他模块开发者
+本文只记录 `portal-content-center/src/main/java/.../portal/api/` 中当前存在、供其他模块注入调用的公开接口。调用方只能依赖这些接口及 `api/dto`，不能引用 portal 的 Mapper、Entity、Controller DTO 或内部 Service；接口实现和 DTO 字段以源码为最终依据。
 
-## 概述
+当前公开契约包括 `PortalApi`、`ProductApi`、`AddressBookApi`、`DocumentApi` 和 `NavApi`。所有方法均为只读查询，门户写操作仍走门户 REST；工作台的 workflow/metric 适配器是 portal 内部边界，不作为调用方 API。
 
-本文档定义 `portal-content-center` 向其他模块提供的跨模块调用接口。所有接口定义在 `com.bank.branch.platform.portal.api` 包下，其他模块通过 Maven 依赖 `portal-content-center-api` 来调用。
+## 2. `PortalApi`
 
-### 依赖方清单
-| 模块 | 调用的接口 | 主要场景 |
-|---|---|---|
-| customer-marketing-center | ProductApi, AddressBookApi | 线索/触达任务关联产品查询、员工选择 |
-| business-application-center | ProductApi | 中场支持申请的产品选择 |
-
-### 调用规则
-1. **只能调用 `api` 包下的接口**：禁止直接依赖本模块的 `mapper`、`entity`、`service` 实现类
-2. **所有接口都是只读的**：本模块对外提供的接口均为查询类，不提供写操作（写操作由本模块内部的 Controller 处理）
-3. **所有 DTO 都是不可变的**：跨模块传输对象只包含 getter，没有 setter，避免被调用方修改
-4. **返回 Optional 或 List**：单条查询返回 `Optional<T>`，多条查询返回 `List<T>`，避免 null 判断
-
----
-
-## 1. PortalApi — 门户聚合接口
-
-### 1.1 接口定义
 ```java
-package com.bank.branch.platform.portal.api;
-
-import com.bank.branch.platform.portal.api.dto.WorkspaceDTO;
-
-/**
- * 门户聚合对外接口。
- * 提供工作台数据聚合能力。
- *
- * @author portal-content-center
- * @since V1.0
- */
-public interface PortalApi {
-
-    /**
-     * 工作台数据聚合。
-     * 一次调用返回工作台需要的全部数据（待办/通知/指标/快捷入口）。
-     *
-     * @param empId 员工工号
-     * @return 工作台数据传输对象
-     */
-    WorkspaceDTO getWorkspace(String empId);
-
-    /**
-     * 获取用户待办数量。
-     * 被其他模块调用，用于显示角标计数。
-     *
-     * @param empId 员工工号
-     * @return 待办总数
-     */
-    int getTodoCount(String empId);
-
-    /**
-     * 获取用户未读通知数量。
-     * 被其他模块调用，用于显示角标计数。
-     *
-     * @param empId 员工工号
-     * @return 未读通知数量
-     */
-    int getUnreadNotificationCount(String empId);
-}
+WorkspaceDTO getWorkspace(String empId);
+int getTodoCount(String empId);
+int getUnreadNotificationCount(String empId);
 ```
 
-### 1.2 调用说明
-- 被调用方：工作台页面、移动端首页、SDK 客户端
-- 调用频率：中频（每次用户打开工作台页面）
-- 降级策略：`getWorkspace()` 内部对各子调用 try-catch，部分失败不影响整体返回
+`getTodoCount` 和 `getUnreadNotificationCount` 分别读取 workflow 待办和治理通知，异常/上游缺失按工作台降级语义返回 `0`。`getWorkspace` 返回工作台聚合 DTO；当前 Facade 内部按认证上下文取得当前用户，`empId` 必须与有效请求上下文一致，不能借此查询任意用户。
 
----
+`WorkspaceDTO` 当前字段：
 
-## 2. ProductApi — 产品资料对外接口（高频调用）
+| 字段 | 类型 | 语义 |
+| --- | --- | --- |
+| `todoCount` | `int` | 待办数量 |
+| `unreadNotificationCount` | `int` | 未读通知数量 |
+| `recentTodos` | `List<TodoItemDTO>` | 最近待办 |
+| `recentNotifications` | `List<NotificationItemDTO>` | 最近通知 |
+| `metricCards` | `List<PortalMetricCard>` | 指标卡片，缺失时空列表 |
+| `shortcuts` | `List<ShortcutDTO>` | 系统/个人快捷入口 |
+| `aggregateErrors` | `Map<String,String>` | 聚合分支错误摘要 |
 
-### 2.1 接口定义
+`TodoItemDTO` 字段为 `taskId`、`processInstanceId`、`processName`、`taskTitle`、`initiatorName`、`initiatedTime`、`lightStatus`、`overdueInfo`、`bizDetailUrl`；`NotificationItemDTO` 字段为 `notificationId`、`title`、`summary`、`sentTime`、`readStatus`、`bizType`、`bizId`、`bizDetailUrl`；`PortalMetricCard` 字段为 `metricCode`、`metricName`、`currentValue`、`targetValue`、`completionRate`、`trend`、`unit`。这些集合不承诺固定条数。
+
+## 3. `ProductApi`
+
 ```java
-package com.bank.branch.platform.portal.api;
-
-import com.bank.branch.platform.portal.api.dto.ProductDTO;
-
-import java.util.List;
-import java.util.Optional;
-
-/**
- * 产品资料对外接口。
- * 被 customer-marketing-center 和 business-application-center 依赖。
- *
- * @author portal-content-center
- * @since V1.0
- */
-public interface ProductApi {
-
-    /**
-     * 获取产品详情。
-     * 用于线索、触达任务、业务申请等关联产品展示。
-     *
-     * @param productId 产品ID
-     * @return 产品详情，不存在时返回 Optional.empty()
-     */
-    Optional<ProductDTO> getProduct(String productId);
-
-    /**
-     * 批量获取产品信息。
-     * 用于列表页展示多个产品的简要信息，避免 N+1 查询。
-     *
-     * @param productIds 产品ID列表
-     * @return 产品DTO列表（顺序不保证与入参一致，不存在的产品不返回）
-     */
-    List<ProductDTO> getProducts(List<String> productIds);
-
-    /**
-     * 查询支持中场支持的产品列表。
-     * 供 business-application-center 的"中场支持申请"页面调用。
-     * 本方法高频调用，建议缓存 TTL 5 分钟。
-     *
-     * @return 所有 status=ACTIVE 且 support_for_support_request=true 的产品列表
-     */
-    List<ProductDTO> listSupportAvailableProducts();
-
-    /**
-     * 按部门查询产品。
-     * 用于显示某机构维护的全部产品。
-     *
-     * @param productDeptOrgCode 产品部门机构编码
-     * @return 该部门维护的全部产品列表（不含已删除）
-     */
-    List<ProductDTO> listProductsByDept(String productDeptOrgCode);
-
-    /**
-     * 查询产品负责人工号列表。
-     * 按 PORTAL_USER_PRODUCT_REL 反查负责人，返回用户 ID 列表。
-     *
-     * @param productId 产品ID
-     * @return 负责人用户 ID 列表（可能为空；ID = PT_USER.USER_ID）
-     */
-    List<String> getProductResponsibleEmpIds(String productId);
-}
+Optional<ProductDTO> getProduct(String productId);
+List<ProductDTO> getProducts(List<String> productIds);
+List<ProductDTO> listSupportAvailableProducts();
+List<ProductDTO> listProductsByDept(String productDeptOrgCode);
+List<String> getProductResponsibleEmpIds(String productId);
 ```
 
-### 2.2 调用示例
+语义：
+
+- `getProduct` 查询不到（包括门户逻辑删除记录）返回 `Optional.empty()`；
+- `getProducts` 入参为空或未命中返回空列表，不保证与入参顺序一致；
+- `listSupportAvailableProducts` 只返回 `ACTIVE`、支持中场支持且未逻辑删除的产品；
+- `listProductsByDept` 按维护机构查询未逻辑删除产品，当前不额外承诺只返回 `ACTIVE`；
+- `getProductResponsibleEmpIds` 查询不到产品或无关系时返回空列表。
+
+`ProductDTO` 当前字段：
+
+| 字段 | 类型 | 语义 |
+| --- | --- | --- |
+| `id` | `String` | 产品 ID |
+| `productCode` | `String` | 产品代码 |
+| `productName` | `String` | 名称 |
+| `productCategory` | `String` | 类别代码 |
+| `productCategoryDesc` | `String` | 类别显示名，基础 Facade 可为空 |
+| `description` | `String` | 产品说明 |
+| `supportForSupportRequest` | `Boolean` | 是否支持中场支持 |
+| `productDeptOrgCode` | `String` | 维护机构编码 |
+| `productDeptOrgName` | `String` | 维护机构名称，基础 Facade 可为空 |
+| `fileObjectId` | `String` | 治理文件对象 ID |
+| `fileName` | `String` | 文件名，基础 Facade 可为空 |
+| `responsibleEmpIds` | `List<String>` | 负责人 ID |
+| `responsibleEmpNames` | `String` | 展示用负责人姓名，基础 Facade 可为空 |
+| `status` | `String` | `ACTIVE`/`DISABLED` |
+| `createdTime` | `LocalDateTime` | 创建时间 |
+| `updatedTime` | `LocalDateTime` | 更新时间 |
+
+产品 ID 是应用生成的字符串，不是 `Long`。负责人关系来自门户关系表；调用方不得假定产品 DTO 中含有可写的负责人对象或完整组织信息。
+
+## 4. `AddressBookApi`
+
 ```java
-// 在 customer-marketing-center 中调用
-@Service
-public class ClueServiceImpl {
-
-    @Resource
-    private ProductApi productApi;
-
-    public ClueDetailDTO getClueDetail(Long clueId) {
-        Clue clue = clueMapper.selectById(clueId);
-        ClueDetailDTO dto = new ClueDetailDTO();
-        // ... 其他字段赋值
-
-        // 查询关联产品
-        if (clue.getProductId() != null) {
-            Optional<ProductDTO> productOpt = productApi.getProduct(clue.getProductId());
-            productOpt.ifPresent(dto::setProduct);
-        }
-        return dto;
-    }
-}
-
-// 在 business-application-center 中调用
-@Service
-public class SupportRequestServiceImpl {
-
-    @Resource
-    private ProductApi productApi;
-
-    public List<ProductDTO> getAvailableProducts() {
-        return productApi.listSupportAvailableProducts();
-    }
-}
+Optional<EmployeeDTO> getEmployee(String empId);
+List<EmployeeDTO> getEmployees(List<String> empIds);
+List<EmployeeDTO> searchEmployees(String keyword, int limit);
+List<EmployeeDTO> listEmployeesByOrg(String orgCode);
+boolean isCustomerManager(String empId);
 ```
 
-### 2.3 性能约束
-- `listSupportAvailableProducts()`：本方法高频调用，本模块内部已缓存 5 分钟
-- `getProducts()`：建议调用方一次性批量传入，避免循环调用
-- 单次 `getProducts()` 入参产品 ID 数量上限 200
+员工标识是 auth `PT_USER.USER_ID` 的规范字符串；用户、主机构和联系方式通过 auth 公开目录能力取得，负责人产品 ID 由门户关系查询补充。空入参/未命中按 `Optional.empty()` 或空列表处理，查询异常由调用方按业务需要降级。
 
----
+`EmployeeDTO` 字段为 `empId`、`empName`、`mobile`、`email`、`orgCode`、`orgName`、`position`、`positionDesc`、`selfDesc`、`responsibleProductIds`、`status`、`updatedTime`。跨模块 `mobile` 已脱敏；当前 auth 三表不能提供岗位说明和自我描述，`positionDesc`/`selfDesc` 可为 `null`。`status` 以 auth 在职目录口径返回，不能自行解释为旧通讯录表状态。
 
-## 3. AddressBookApi — 通讯录对外接口
+`isCustomerManager` 通过 auth `UserApi.getUserRoleCodes` 检查角色编码（当前认可客户营销经理/客户经理角色编码）；它不是对岗位文本的猜测，也不是权限授予接口。
 
-### 3.1 接口定义
+## 5. `DocumentApi`
+
 ```java
-package com.bank.branch.platform.portal.api;
-
-import com.bank.branch.platform.portal.api.dto.EmployeeDTO;
-
-import java.util.List;
-import java.util.Optional;
-
-/**
- * 通讯录对外接口。
- * 被 customer-marketing-center 等业务模块依赖。
- *
- * @author portal-content-center
- * @since V1.0
- */
-public interface AddressBookApi {
-
-    /**
-     * 获取员工通讯录信息。
-     *
-     * @param empId 员工工号
-     * @return 员工详情，不存在时返回 Optional.empty()
-     */
-    Optional<EmployeeDTO> getEmployee(String empId);
-
-    /**
-     * 批量获取员工信息。
-     * 用于列表展示，避免 N+1 查询。
-     *
-     * @param empIds 员工工号列表
-     * @return 员工DTO列表
-     */
-    List<EmployeeDTO> getEmployees(List<String> empIds);
-
-    /**
-     * 模糊搜索员工。
-     * 用于前端员工选择器（如转派、指派、@提及等）。
-     *
-     * @param keyword 关键词（工号/姓名）
-     * @param limit 返回数量上限（最大 50）
-     * @return 员工列表
-     */
-    List<EmployeeDTO> searchEmployees(String keyword, int limit);
-
-    /**
-     * 按机构查询员工列表。
-     *
-     * @param orgCode 机构编码
-     * @return 该机构下的全部员工列表（仅 status=ACTIVE）
-     */
-    List<EmployeeDTO> listEmployeesByOrg(String orgCode);
-
-    /**
-     * 校验员工是否为客户经理角色。
-     * 用于线索转派校验、触达任务分配校验等。
-     *
-     * @param empId 员工工号
-     * @return true 表示是客户经理
-     */
-    boolean isCustomerManager(String empId);
-}
+Optional<DocumentDTO> getDocument(String docId);
+List<DocumentDTO> listDocumentsByCategory(String category);
 ```
 
-### 3.1.1 兼容口径
+`listDocumentsByCategory` 只查询 `ACTIVE` 文档；`getDocument` 当前 Facade 按 ID 直接查询 Mapper，返回不存在时为空，调用方不能假定该方法自动排除 `DISABLED`。下载 URL 不属于本 Java API，REST 下载经治理 `FileApi` 完成。
 
-上述 `AddressBookApi` 方法签名保持不变，调用方无需改名或切换接口。实现层必须将
-`getEmployee`、`getEmployees`、`searchEmployees` 和 `listEmployeesByOrg` 委托给 auth 的
-`UserDirectoryApi`，再按 `PORTAL_USER_PRODUCT_REL` 装配 `responsibleProductIds`。
-`isCustomerManager` 继续按原签名提供校验，但不得通过旧通讯录表判断。所有返回对象中：
+`DocumentDTO` 字段为 `id`、`docTitle`、`docCategory`、`docCategoryDesc`、`fileObjectId`、`fileName`、`status`、`fileSize`、`updatedBy`、`updatedTime`。分类显示名、文件名和大小是否装配取决于调用路径；基础 `DocumentFacade` 只保证实体可映射字段。
 
-- `empId` 是 `PT_USER.USER_ID`，不是登录名或旧表工号副本；
-- `position`、`positionDesc`、`selfDesc` 因无权威来源固定为 `null`；
-- `mobile` 按调用方权限脱敏，机构字段来自 `EXT_USER_ORG + EXT_ORG_INFO`。
+## 6. `NavApi`
 
-### 3.2 调用示例
 ```java
-// 在 customer-marketing-center 中的转派校验场景
-@Service
-public class ClueTransferServiceImpl {
-
-    @Resource
-    private AddressBookApi addressBookApi;
-
-    public void transferClue(Long clueId, String targetEmpId) {
-        // 校验目标员工存在
-        Optional<EmployeeDTO> targetEmpOpt = addressBookApi.getEmployee(targetEmpId);
-        if (targetEmpOpt.isEmpty()) {
-            throw new BizException(MarketingErrorCode.EMPLOYEE_NOT_FOUND);
-        }
-
-        // 校验目标员工是客户经理
-        if (!addressBookApi.isCustomerManager(targetEmpId)) {
-            throw new BizException(MarketingErrorCode.TARGET_NOT_CUSTOMER_MANAGER);
-        }
-
-        // 执行转派
-        // ...
-    }
-}
+List<NavDTO> listActiveNavs();
+List<NavDTO> listActiveNavsByCategory(String category);
 ```
 
-### 3.3 性能约束
-- `searchEmployees()`：`limit` 参数最大 50
-- `getEmployees()`：入参 `empIds` 数量上限 200
-- 所有接口返回脱敏后的手机号
+两者只返回 `ACTIVE` 导航并按排序号升序；空分类或无命中返回空列表。`NavDTO` 字段为字符串 `id`、`navName`、`navUrl`、`navIcon`、`navCategory`、`Integer sortOrder` 和 `status`。
 
----
+## 7. 调用和降级规则
 
-## 4. DocumentApi — 文档对外接口
+- 门户 Facade 不返回可写 Entity；调用方不得修改 DTO 后期待回写门户。
+- 单条资源缺失采用 `Optional.empty()`（或计数接口的 `0`），集合缺失采用空列表；不要用 `null` 表示“关系未知”。
+- 上游 API Bean 缺失或适配器捕获异常时，工作台待办/指标/通知按各自的空值契约降级；产品、通讯录、文档和导航 Facade 的系统异常通常向调用方抛出，由调用方决定页面或流程降级。
+- 数据范围由门户/上游服务各自按公开契约执行；调用方不得直接 JOIN portal 或 auth 私有表补查询。
+- 文件对象仅能经治理 `FileApi` 使用，DTO 中的 `fileObjectId` 不能被当成本地路径或 OBS 客户端凭据。
 
-### 4.1 接口定义
-```java
-package com.bank.branch.platform.portal.api;
+## 8. 依赖方向与演进
 
-import com.bank.branch.platform.portal.api.dto.DocumentDTO;
+当前主要消费者是 business-application-center（产品及通讯录）和 performance-engine-center（通讯录员工校验）；实际引用以消费者源码和 POM 为准。portal 不反向依赖这些消费者。
 
-import java.util.List;
-import java.util.Optional;
-
-/**
- * 文档对外接口。
- *
- * @author portal-content-center
- * @since V1.0
- */
-public interface DocumentApi {
-
-    /**
-     * 获取文档详情。
-     *
-     * @param docId 文档 ID
-     * @return 文档详情，不存在时返回 Optional.empty()
-     */
-    Optional<DocumentDTO> getDocument(String docId);
-
-    /**
-     * 按分类查询文档列表。
-     *
-     * @param category 文档分类
-     * @return 该分类下的全部文档列表（仅 status=ACTIVE）
-     */
-    List<DocumentDTO> listDocumentsByCategory(String category);
-}
-```
-
----
-
-## 5. NavApi — 导航对外接口
-
-### 5.1 接口定义
-```java
-package com.bank.branch.platform.portal.api;
-
-import com.bank.branch.platform.portal.api.dto.NavDTO;
-
-import java.util.List;
-
-/**
- * 网址导航对外接口。
- * 供工作台聚合等场景调用。
- *
- * @author portal-content-center
- * @since V1.0
- */
-public interface NavApi {
-
-    /**
-     * 获取所有启用的导航列表。
-     *
-     * @return 所有 status=ACTIVE 的导航列表
-     */
-    List<NavDTO> listActiveNavs();
-
-    /**
-     * 按分类查询启用的导航列表。
-     *
-     * @param category 导航分类
-     * @return 该分类下的启用导航列表
-     */
-    List<NavDTO> listActiveNavsByCategory(String category);
-}
-```
-
----
-
-## 6. DTO 定义
-
-### 6.1 ProductDTO
-```java
-package com.bank.branch.platform.portal.api.dto;
-
-import lombok.Builder;
-import lombok.Value;
-
-import java.time.LocalDateTime;
-import java.util.List;
-
-/**
- * 产品信息传输对象（不可变）。
- */
-@Value
-@Builder
-public class ProductDTO {
-    /** 产品ID */
-    String id;
-
-    /** 产品代码 */
-    String productCode;
-
-    /** 产品名称 */
-    String productName;
-
-    /** 产品类别代码 */
-    String productCategory;
-
-    /** 产品类别显示名 */
-    String productCategoryDesc;
-
-    /** 产品描述 */
-    String description;
-
-    /** 是否支持中场支持 */
-    Boolean supportForSupportRequest;
-
-    /** 产品部门机构编码（维护组织） */
-    String productDeptOrgCode;
-
-    /** 产品部门机构名称 */
-    String productDeptOrgName;
-
-    /** 附件对象ID */
-    String fileObjectId;
-
-    /** 产品负责人用户 ID 列表，按 PORTAL_USER_PRODUCT_REL 派生 */
-    List<String> responsibleEmpIds;
-
-    /** 状态 ACTIVE/DISABLED */
-    String status;
-
-    /** 创建时间 */
-    LocalDateTime createdTime;
-
-    /** 最后更新时间 */
-    LocalDateTime updatedTime;
-}
-```
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| id | String | 产品 ID |
-| productCode | String | 产品代码 |
-| productName | String | 产品名称 |
-| productCategory | String | 产品类别代码 |
-| productCategoryDesc | String | 产品类别显示名 |
-| description | String | 产品描述 |
-| supportForSupportRequest | Boolean | 是否支持中场支持 |
-| productDeptOrgCode | String | 维护部门机构编码 |
-| productDeptOrgName | String | 维护部门机构名称 |
-| fileObjectId | String | 附件对象 ID |
-| responsibleEmpIds | List&lt;String&gt; | 负责人工号列表 |
-| status | String | 状态 |
-| createdTime | LocalDateTime | 创建时间 |
-| updatedTime | LocalDateTime | 更新时间 |
-
-### 6.2 EmployeeDTO
-```java
-package com.bank.branch.platform.portal.api.dto;
-
-import lombok.Builder;
-import lombok.Value;
-
-import java.time.LocalDateTime;
-import java.util.List;
-
-/**
- * 员工通讯录信息传输对象（不可变）。
- */
-@Value
-@Builder
-public class EmployeeDTO {
-    /** 员工用户 ID（= PT_USER.USER_ID） */
-    String empId;
-
-    /** 员工姓名 */
-    String empName;
-
-    /** 手机号（脱敏后） */
-    String mobile;
-
-    /** 邮箱 */
-    String email;
-
-    /** 机构编码 */
-    String orgCode;
-
-    /** 机构名称 */
-    String orgName;
-
-    /** 岗位代码；当前无权威来源，固定为 null */
-    String position;
-
-    /** 岗位显示名；当前无权威来源，固定为 null */
-    String positionDesc;
-
-    /** 自我描述；当前无权威来源，固定为 null */
-    String selfDesc;
-
-    /** 负责产品 ID 列表，按 PORTAL_USER_PRODUCT_REL 派生 */
-    List<String> responsibleProductIds;
-
-    /** 状态 ACTIVE/RESIGNED */
-    String status;
-
-    /** 最后更新时间 */
-    LocalDateTime updatedTime;
-}
-```
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| empId | String | 用户 ID，固定等于 `PT_USER.USER_ID` |
-| empName | String | 姓名 |
-| mobile | String | 手机号（已脱敏） |
-| email | String | 邮箱 |
-| orgCode | String | 机构编码 |
-| orgName | String | 机构名称 |
-| position | String | 无权威来源，固定为 `null` |
-| positionDesc | String | 无权威来源，固定为 `null` |
-| selfDesc | String | 无权威来源，固定为 `null` |
-| responsibleProductIds | List&lt;String&gt; | 从 `PORTAL_USER_PRODUCT_REL` 按 `USER_ID` 派生 |
-| status | String | 状态 |
-| updatedTime | LocalDateTime | 更新时间 |
-
-### 6.3 WorkspaceDTO
-```java
-@Value
-@Builder
-public class WorkspaceDTO {
-    /** 待办总数 */
-    int todoCount;
-
-    /** 未读通知数量 */
-    int unreadNotificationCount;
-
-    /** 最近待办列表 */
-    List<TodoItemDTO> recentTodos;
-
-    /** 最近通知列表 */
-    List<NotificationItemDTO> recentNotifications;
-
-    /** 指标卡片 */
-    List<MetricCardDTO> metricCards;
-
-    /** 新增流程快捷入口 */
-    List<ShortcutDTO> shortcuts;
-
-    /** 聚合子调用错误信息 */
-    Map<String, String> aggregateErrors;
-}
-```
-
-### 6.4 TodoItemDTO
-```java
-@Value
-@Builder
-public class TodoItemDTO {
-    /** 任务ID */
-    String taskId;
-
-    /** 流程实例ID */
-    String processInstanceId;
-
-    /** 流程名称 */
-    String processName;
-
-    /** 任务标题 */
-    String taskTitle;
-
-    /** 发起人姓名 */
-    String initiatorName;
-
-    /** 发起时间 */
-    LocalDateTime initiatedTime;
-
-    /** 红绿灯状态 GREEN/YELLOW/RED */
-    String lightStatus;
-
-    /** 超时信息 */
-    String overdueInfo;
-
-    /** 业务详情页URL */
-    String bizDetailUrl;
-}
-```
-
-### 6.5 NotificationItemDTO
-```java
-@Value
-@Builder
-public class NotificationItemDTO {
-    /** 通知ID */
-    String notificationId;
-
-    /** 标题 */
-    String title;
-
-    /** 摘要 */
-    String summary;
-
-    /** 发送时间 */
-    LocalDateTime sentTime;
-
-    /** 读状态 READ/UNREAD */
-    String readStatus;
-
-    /** 关联业务类型 */
-    String bizType;
-
-    /** 关联业务ID */
-    String bizId;
-
-    /** 业务详情页URL */
-    String bizDetailUrl;
-}
-```
-
-### 6.6 MetricCardDTO
-```java
-@Value
-@Builder
-public class MetricCardDTO {
-    /** 指标代码 */
-    String metricCode;
-
-    /** 指标名称 */
-    String metricName;
-
-    /** 当前值 */
-    String currentValue;
-
-    /** 目标值 */
-    String targetValue;
-
-    /** 完成率（0-1） */
-    BigDecimal completionRate;
-
-    /** 趋势 UP/DOWN/FLAT */
-    String trend;
-
-    /** 单位 */
-    String unit;
-}
-```
-
-### 6.7 ShortcutDTO
-```java
-@Value
-@Builder
-public class ShortcutDTO {
-    /** ID */
-    Long id;
-
-    /** 名称 */
-    String shortcutName;
-
-    /** 跳转URL */
-    String shortcutUrl;
-
-    /** 图标 */
-    String shortcutIcon;
-
-    /** 类型 SYSTEM/CUSTOM */
-    String shortcutType;
-
-    /** 跳转类型 INTERNAL/EXTERNAL */
-    String targetType;
-
-    /** 排序号 */
-    Integer sortOrder;
-}
-```
-
-### 6.8 NavDTO
-```java
-@Value
-@Builder
-public class NavDTO {
-    /** 导航ID */
-    Long id;
-
-    /** 名称 */
-    String navName;
-
-    /** URL */
-    String navUrl;
-
-    /** 图标 */
-    String navIcon;
-
-    /** 分类 */
-    String navCategory;
-
-    /** 排序号 */
-    Integer sortOrder;
-
-    /** 状态 */
-    String status;
-}
-```
-
-### 6.9 DocumentDTO
-```java
-@Value
-@Builder
-public class DocumentDTO {
-    /** 文档ID */
-    String id;
-
-    /** 文档标题 */
-    String docTitle;
-
-    /** 分类代码 */
-    String docCategory;
-
-    /** 分类显示名 */
-    String docCategoryDesc;
-
-    /** 文件对象ID */
-    String fileObjectId;
-
-    /** 文件名 */
-    String fileName;
-
-    /** 状态 */
-    String status;
-
-    /** 更新时间 */
-    LocalDateTime updatedTime;
-}
-```
-
----
-
-## 7. 调用约束与限流
-
-### 7.1 调用频率约束
-| 接口 | 预期频率 | 缓存策略 |
-|---|---|---|
-| `ProductApi.listSupportAvailableProducts()` | 高频 | 模块内缓存 5 分钟 |
-| `ProductApi.getProduct(id)` | 中频 | 调用方自行缓存 |
-| `ProductApi.getProducts(ids)` | 中频 | 调用方自行缓存 |
-| `AddressBookApi.searchEmployees(kw, limit)` | 中频 | `limit` 最大 50 |
-| `AddressBookApi.getEmployee(id)` | 高频 | 调用方自行缓存 |
-| `AddressBookApi.getEmployees(ids)` | 中频 | 一次最多 200 个 |
-| `PortalApi.getTodoCount()` | 高频 | 内部缓存 1 分钟 |
-| `PortalApi.getUnreadNotificationCount()` | 高频 | 内部缓存 1 分钟 |
-
-### 7.2 调用超时约定
-- 所有跨模块接口调用默认超时 500ms
-- 超时后调用方需要有降级逻辑（例如返回空列表或使用旧数据）
-
-### 7.3 调用方自缓存建议
-- 高频查询（如产品详情、员工详情）建议调用方使用本地 Guava Cache 或 Caffeine 缓存
-- 缓存 TTL 建议 1-5 分钟，避免数据滞后
-- 对于配置类数据（产品列表、员工列表），调用方按 TTL 或显式刷新策略处理缓存；本模块不发布旧通讯录/负责人同步事件
-
----
-
-## 8. 事件边界
-
-通讯录和产品负责人关系不发布旧的人员更新/负责人同步事件，也不订阅 auth 用户镜像
-事件。auth 目录 API 是人员查询和联系方式写入边界，`PORTAL_USER_PRODUCT_REL` 是负责人
-关系的唯一写模型；审计和缓存失效在本地事务提交后按模块策略处理。
-
----
-
-## 9. 版本演进约定
-
-### 9.1 向后兼容原则
-- **DTO 只能新增字段**，不能删除或修改已有字段类型
-- **接口方法只能新增**，不能删除或修改已有方法签名
-- 若必须引入破坏性变更，通过新增方法或明确版本化的 API 实现；不得重新引入已删除的通讯录镜像或负责人同步事件
-
-### 9.2 废弃标记
-- 计划废弃的方法先标记 `@Deprecated` 并注释替代方法
-- 至少保留 2 个版本后才可以真正删除
-
-### 9.3 调用方对接流程
-1. 依赖方在 `pom.xml` 中添加 `portal-content-center-api`
-2. 依赖方通过 `@Resource` 注入所需的 `Api` 接口
-3. 依赖方的集成测试必须包含对 `Api` 调用的用例
-4. 依赖方发布前需要回归本模块的变更日志
-
----
-
-## 10. 错误处理约定
-
-### 10.1 异常传递
-- 跨模块调用不抛出业务异常（`BizException`），而是通过返回值表达结果
-- 单条查询不存在时返回 `Optional.empty()`，而非抛异常
-- 批量查询不存在的项不包含在返回列表中，不报错
-
-### 10.2 系统异常
-- 系统异常（如数据库连接失败）直接抛出 `RuntimeException`
-- 调用方必须在关键调用点使用 `try-catch` 并降级
-
-### 10.3 调用方降级示例
-```java
-// 推荐的降级调用模式
-public ProductDTO getProductSafely(String productId) {
-    try {
-        return productApi.getProduct(productId).orElse(null);
-    } catch (Exception e) {
-        log.warn("调用 productApi.getProduct 失败, productId={}, 降级返回 null", productId, e);
-        return null;
-    }
-}
-```
+新增字段应保持旧调用方可反序列化，改变字段语义或 ID 类型必须同步所有消费者和测试；删除/重命名方法前先完成消费者迁移。本文不维护版本流水、调用次数、限流数字或未实现接口。
