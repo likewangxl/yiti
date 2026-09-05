@@ -21,6 +21,7 @@ import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionReqDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionStatus;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowActionRespDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowAssignmentDTO;
+import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowHistoryDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowPageQueryDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowTab;
 import com.bank.branch.platform.redengine.entity.RePartyOrg;
@@ -87,6 +88,9 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
     private static final String SUBMIT_ACTION_CODE_PREFIX = "SUBMIT:";
     private static final int STATUS_HISTORY_ACTION_CODE_MAX_LENGTH = 40;
     private static final ZoneId BEIJING_ZONE = ZoneId.of("Asia/Shanghai");
+    /** 对外展示的审核动作；报送员 SUBMIT:* 历史仅用于幂等，不属于审核处理记录。 */
+    private static final Set<String> REVIEW_HISTORY_ACTION_CODES = Set.of(
+            "APPROVE_BRANCH", "REJECT_BRANCH", "APPROVE_ORG", "REJECT_ORG", "SUBMIT_TO_ORG");
 
     private final ReTaskMapper taskMapper;
     private final ReTaskInstanceMapper instanceMapper;
@@ -152,7 +156,7 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         ReTask task = requireTaskForAssignment(assignment);
         ReTaskInstance instance = requireInstance(task, assignment);
         requireViewAccess(assignment, operatorId);
-        return toAssignment(task, instance, assignment);
+        return toAssignment(task, instance, assignment, true);
     }
 
     /** 报送员提交新版本；驳回后的 assignment 继续使用同一主键。 */
@@ -303,7 +307,7 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         requireSecretaryForBranch(assignment.getBranchId(), operatorId);
         ReTask task = requireTaskForAssignment(assignment);
         ReTaskInstance instance = requireInstance(task, assignment);
-        return toAssignment(task, instance, assignment);
+        return toAssignment(task, instance, assignment, true);
     }
 
     /** 支部书记通过当前版本；通过动作不直接进入组织审核。 */
@@ -384,7 +388,7 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         ReTaskBranchAssignment assignment = requireAssignment(assignmentId);
         ReTask task = requireTaskForAssignment(assignment);
         ReTaskInstance instance = requireInstance(task, assignment);
-        return toAssignment(task, instance, assignment);
+        return toAssignment(task, instance, assignment, true);
     }
 
     /** 组织审核通过当前版本并关闭组织审核待办。 */
@@ -491,7 +495,8 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
             if (task == null || task.getStatus() != ReTaskStatus.PUBLISHED) {
                 continue;
             }
-            ReTaskWorkflowAssignmentDTO dto = toAssignment(task, instance, assignment);
+            // 列表只返回稳定的空历史集合；详情再一次性读取审核轨迹，避免逐行 history/user 查询。
+            ReTaskWorkflowAssignmentDTO dto = toAssignment(task, instance, assignment, false);
             rows.add(dto);
         }
         return PageResult.of(pageNo, pageSize, assignmentPage.getTotal(), rows);
@@ -663,7 +668,8 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
     }
 
     private ReTaskWorkflowAssignmentDTO toAssignment(ReTask task, ReTaskInstance instance,
-                                                     ReTaskBranchAssignment assignment) {
+                                                     ReTaskBranchAssignment assignment,
+                                                     boolean includeReviewHistory) {
         ReTaskWorkflowAssignmentDTO dto = new ReTaskWorkflowAssignmentDTO();
         dto.setTaskId(task.getId());
         dto.setTaskNo(task.getTaskNo());
@@ -698,6 +704,8 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         } else {
             dto.setFiles(List.of());
         }
+        dto.setReviewHistory(includeReviewHistory
+                ? loadReviewHistory(assignment.getId()) : List.of());
         Long legacyReviewId = findLegacyReviewId(assignment.getId());
         dto.setLegacyReviewId(legacyReviewId);
         dto.setSubmitId(legacyReviewId);
@@ -706,6 +714,94 @@ public class ReTaskWorkflowServiceImpl implements ReTaskWorkflowService {
         dto.setRequiresFile(Integer.valueOf(1).equals(task.getRequiresFile()));
         dto.setAllowedFileTypes(loadAllowedFileTypes(task.getId()));
         return dto;
+    }
+
+    /**
+     * 查询 assignment 的审核处理轨迹。
+     *
+     * <p>RE_TASK_STATUS_HISTORY 同时保存报送员提交的幂等记录和审核状态转换；
+     * 这里只允许真实审核动作，避免把报送员“提交”展示成审批。历史在详情场景一次查询，
+     * 再按发生时间和主键排序，保证数据库未提供同一时间顺序时页面仍稳定。</p>
+     */
+    private List<ReTaskWorkflowHistoryDTO> loadReviewHistory(Long assignmentId) {
+        if (assignmentId == null || historyMapper == null) {
+            return List.of();
+        }
+        List<ReTaskStatusHistory> histories = historyMapper.selectList(
+                new LambdaQueryWrapper<ReTaskStatusHistory>()
+                        .eq(ReTaskStatusHistory::getAssignmentId, assignmentId)
+                        .in(ReTaskStatusHistory::getActionCode, REVIEW_HISTORY_ACTION_CODES)
+                        .orderByAsc(ReTaskStatusHistory::getOccurredAt)
+                        .orderByAsc(ReTaskStatusHistory::getId));
+        if (histories == null || histories.isEmpty()) {
+            return List.of();
+        }
+        List<ReTaskStatusHistory> ordered = histories.stream()
+                .filter(Objects::nonNull)
+                .filter(history -> REVIEW_HISTORY_ACTION_CODES.contains(history.getActionCode()))
+                .sorted(Comparator
+                        .comparing(ReTaskStatusHistory::getOccurredAt,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(ReTaskStatusHistory::getId,
+                                Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+        if (ordered.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> operatorIds = ordered.stream()
+                .map(ReTaskStatusHistory::getOperatorId)
+                .filter(this::hasText)
+                .map(String::trim)
+                .distinct()
+                .toList();
+        Map<String, String> operatorNames = new LinkedHashMap<>();
+        if (!operatorIds.isEmpty() && userApi != null) {
+            List<UserDTO> users = userApi.getUserByEmpIds(operatorIds);
+            if (users != null) {
+                users.stream().filter(Objects::nonNull).forEach(user -> {
+                    if (hasText(user.getEmpId())) {
+                        operatorNames.put(user.getEmpId().trim(), user.getDisplayName());
+                    }
+                });
+            }
+        }
+        Map<String, String> names = operatorNames;
+        return ordered.stream().map(history -> {
+            ReTaskWorkflowHistoryDTO dto = new ReTaskWorkflowHistoryDTO();
+            dto.setId(history.getId());
+            dto.setSubmissionId(history.getSubmissionId());
+            dto.setActionCode(history.getActionCode());
+            dto.setActionLabel(reviewActionLabel(history.getActionCode()));
+            dto.setStageLabel(reviewStageLabel(history.getActionCode()));
+            dto.setFromStatus(history.getFromStatus());
+            dto.setToStatus(history.getToStatus());
+            dto.setOpinion(history.getOpinion());
+            dto.setOperatorId(history.getOperatorId());
+            dto.setOperatorName(hasText(history.getOperatorId())
+                    ? names.get(history.getOperatorId().trim()) : null);
+            dto.setOccurredAt(history.getOccurredAt());
+            return dto;
+        }).toList();
+    }
+
+    private String reviewActionLabel(String actionCode) {
+        return switch (actionCode) {
+            case "APPROVE_BRANCH" -> "支部通过";
+            case "REJECT_BRANCH" -> "支部驳回";
+            case "SUBMIT_TO_ORG" -> "提交组织审核";
+            case "APPROVE_ORG" -> "组织通过";
+            case "REJECT_ORG" -> "组织驳回";
+            default -> null;
+        };
+    }
+
+    private String reviewStageLabel(String actionCode) {
+        return switch (actionCode) {
+            case "APPROVE_BRANCH", "REJECT_BRANCH" -> "支部审核";
+            case "SUBMIT_TO_ORG", "APPROVE_ORG", "REJECT_ORG" -> "组织审核";
+            default -> null;
+        };
     }
 
     private List<com.bank.branch.platform.redengine.api.dto.ReTaskAttachmentDTO> loadAttachments(Long submissionId) {

@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.redengine.api.dto.ReTaskApproveReqDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskAssignmentStatus;
@@ -14,6 +15,7 @@ import com.bank.branch.platform.redengine.api.dto.ReTaskRejectReqDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionReqDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskSubmissionStatus;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowAssignmentDTO;
+import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowHistoryDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowPageQueryDTO;
 import com.bank.branch.platform.redengine.api.dto.ReTaskWorkflowTab;
 import com.bank.branch.platform.redengine.entity.RePartyOrg;
@@ -238,6 +240,94 @@ class ReTaskWorkflowServiceTest {
         assertThat(result.getSubmitterId()).isEqualTo("REPORTER-1");
         assertThat(result.getSubmissionStatus()).isEqualTo(ReTaskSubmissionStatus.BRANCH_PENDING);
         assertThat(result.getReviewFeedback()).isEqualTo("请补充支部说明");
+    }
+
+    @Test
+    void getAssignment_returnsOnlyReviewHistoryWithLabelsNamesAndStableOrder() {
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L, "REJECTED_BY_ORG", 2);
+        ReTaskSubmission submitted = submission(61L, 10L, 20L, 30L, 2,
+                ReTaskSubmissionStatus.REJECTED_BY_ORG, "REPORTER-1");
+        LocalDateTime first = LocalDateTime.of(2026, 8, 20, 9, 0);
+        LocalDateTime second = LocalDateTime.of(2026, 8, 20, 10, 0);
+        ReTaskStatusHistory branchApprove = history(12L, 30L, 60L, "APPROVE_BRANCH");
+        branchApprove.setFromStatus("BRANCH_PENDING");
+        branchApprove.setToStatus("BRANCH_APPROVED");
+        branchApprove.setOpinion("支部材料完整");
+        branchApprove.setOperatorId("SECRETARY-1");
+        branchApprove.setOccurredAt(first);
+        ReTaskStatusHistory reporterSubmit = history(11L, 30L, 60L, "SUBMIT:client-1");
+        reporterSubmit.setOperatorId("REPORTER-1");
+        reporterSubmit.setOccurredAt(LocalDateTime.of(2026, 8, 20, 8, 0));
+        ReTaskStatusHistory submitToOrg = history(13L, 30L, 60L, "SUBMIT_TO_ORG");
+        submitToOrg.setFromStatus("BRANCH_APPROVED");
+        submitToOrg.setToStatus("ORG_PENDING");
+        submitToOrg.setOpinion("提交组织审核");
+        submitToOrg.setOperatorId("SECRETARY-1");
+        submitToOrg.setOccurredAt(second);
+        ReTaskStatusHistory orgReject = history(14L, 30L, 61L, "REJECT_ORG");
+        orgReject.setFromStatus("ORG_PENDING");
+        orgReject.setToStatus("REJECTED_BY_ORG");
+        orgReject.setOpinion("请补充组织材料");
+        orgReject.setOperatorId("ORG-REVIEWER-1");
+        orgReject.setOccurredAt(second);
+
+        when(assignmentMapper.selectById(30L)).thenReturn(assignment);
+        when(instanceMapper.selectById(20L)).thenReturn(instance);
+        when(taskMapper.selectById(10L)).thenReturn(task);
+        when(todoMapper.selectOne(any())).thenReturn(null);
+        when(submissionMapper.selectList(any())).thenReturn(List.of(submitted));
+        when(partyOrgMapper.selectById(40L)).thenReturn(branch(40L, "SECRETARY-1"));
+        when(submissionFileMapper.selectList(any())).thenReturn(List.of());
+        when(fileTypeMapper.selectList(any())).thenReturn(List.of());
+        when(historyMapper.selectList(any())).thenReturn(
+                List.of(orgReject, reporterSubmit, submitToOrg, branchApprove));
+        UserDTO secretary = new UserDTO();
+        secretary.setEmpId("SECRETARY-1");
+        secretary.setDisplayName("支部书记");
+        UserDTO orgReviewer = new UserDTO();
+        orgReviewer.setEmpId("ORG-REVIEWER-1");
+        orgReviewer.setDisplayName("组织审核员");
+        when(userApi.getUserByEmpIds(any())).thenReturn(List.of(secretary, orgReviewer));
+        when(userApi.getUserName("REPORTER-1")).thenReturn("报送员");
+
+        ReTaskWorkflowAssignmentDTO result = service.getAssignment(30L, "REPORTER-1");
+
+        assertThat(result.getReviewHistory()).extracting(ReTaskWorkflowHistoryDTO::getActionCode)
+                .containsExactly("APPROVE_BRANCH", "SUBMIT_TO_ORG", "REJECT_ORG");
+        assertThat(result.getReviewHistory()).extracting(ReTaskWorkflowHistoryDTO::getId)
+                .containsExactly(12L, 13L, 14L);
+        assertThat(result.getReviewHistory().get(0).getActionLabel()).isEqualTo("支部通过");
+        assertThat(result.getReviewHistory().get(0).getStageLabel()).isEqualTo("支部审核");
+        assertThat(result.getReviewHistory().get(0).getOperatorName()).isEqualTo("支部书记");
+        assertThat(result.getReviewHistory().get(1).getActionLabel()).isEqualTo("提交组织审核");
+        assertThat(result.getReviewHistory().get(1).getStageLabel()).isEqualTo("组织审核");
+        assertThat(result.getReviewHistory().get(2).getOpinion()).isEqualTo("请补充组织材料");
+        assertThat(result.getReviewHistory().get(2).getFromStatus()).isEqualTo("ORG_PENDING");
+        assertThat(result.getReviewHistory().get(2).getToStatus()).isEqualTo("REJECTED_BY_ORG");
+        verify(historyMapper).selectList(any());
+        verify(userApi).getUserByEmpIds(any());
+    }
+
+    @Test
+    void workflowList_doesNotLoadReviewHistoryPerAssignment() {
+        String operatorId = "SECRETARY-1";
+        ReTask task = task(10L, "GENERAL");
+        ReTaskInstance instance = instance(20L, task.getId());
+        RePartyOrg branch = branch(40L, operatorId);
+        ReTaskBranchAssignment assignment = assignment(30L, 20L, 40L, "BRANCH_PENDING", 1);
+        ReTaskSubmission submitted = submission(60L, 10L, 20L, 30L, 1,
+                ReTaskSubmissionStatus.BRANCH_PENDING, "REPORTER-1");
+        stubWorkflowListing(operatorId, Set.of("R_RE_SECR"), branch, task, instance,
+                List.of(assignment), List.of(submitted));
+
+        var result = service.listBranchReviews(new ReTaskWorkflowPageQueryDTO(), operatorId);
+
+        assertThat(result.getRecords()).singleElement()
+                .extracting(ReTaskWorkflowAssignmentDTO::getReviewHistory)
+                .isEqualTo(List.of());
+        verify(historyMapper, never()).selectList(any());
     }
 
     @Test

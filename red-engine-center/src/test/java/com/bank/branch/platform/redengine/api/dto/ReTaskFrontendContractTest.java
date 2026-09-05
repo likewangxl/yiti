@@ -41,8 +41,22 @@ class ReTaskFrontendContractTest {
         assertNotNull(ReTaskWorkflowAssignmentDTO.class.getDeclaredField("legacyReviewId"));
         assertNotNull(ReTaskWorkflowAssignmentDTO.class.getDeclaredField("submitId"));
         assertNotNull(ReTaskWorkflowAssignmentDTO.class.getDeclaredField("reviewFeedback"));
+        assertNotNull(ReTaskWorkflowAssignmentDTO.class.getDeclaredField("reviewHistory"));
         assertNotNull(ReTaskWorkflowActionRespDTO.class.getDeclaredField("legacyReviewId"));
         assertNotNull(ReTaskWorkflowActionRespDTO.class.getDeclaredField("submitId"));
+    }
+
+    @Test
+    void reviewHistoryExposesAuditLabelsAndOperatorIdentity() throws Exception {
+        assertNotNull(ReTaskWorkflowHistoryDTO.class.getDeclaredField("actionCode"));
+        assertNotNull(ReTaskWorkflowHistoryDTO.class.getDeclaredField("actionLabel"));
+        assertNotNull(ReTaskWorkflowHistoryDTO.class.getDeclaredField("stageLabel"));
+        assertNotNull(ReTaskWorkflowHistoryDTO.class.getDeclaredField("operatorId"));
+        assertNotNull(ReTaskWorkflowHistoryDTO.class.getDeclaredField("operatorName"));
+        assertNotNull(ReTaskWorkflowHistoryDTO.class.getDeclaredField("occurredAt"));
+        assertNotNull(ReTaskWorkflowHistoryDTO.class.getDeclaredField("opinion"));
+        assertNotNull(ReTaskWorkflowHistoryDTO.class.getDeclaredField("fromStatus"));
+        assertNotNull(ReTaskWorkflowHistoryDTO.class.getDeclaredField("toStatus"));
     }
 
     @Test

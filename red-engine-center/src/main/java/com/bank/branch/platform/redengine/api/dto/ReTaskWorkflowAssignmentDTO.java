@@ -45,6 +45,11 @@ public class ReTaskWorkflowAssignmentDTO {
     private String itemCode;
     /** 当前提交版本最近一次审核/驳回意见，稳定契约字段名为 reviewFeedback。 */
     private String reviewFeedback;
+    /**
+     * 当前 assignment 的审核处理历史。详情接口返回按发生时间升序排列的审核动作；
+     * 分页列表为避免逐行加载历史，返回空集合。
+     */
+    private List<ReTaskWorkflowHistoryDTO> reviewHistory;
     private List<ReTaskAttachmentDTO> files;
 
     /** 四维旧材料审核记录 ID，供原评分入口继续使用。 */
