@@ -7,10 +7,20 @@
     <div v-if="loadError" class="load-error" role="alert">{{ loadError }}</div>
 
     <div class="stat-bar">
-      <div class="stat-chip pending-chip">待处理 <strong>{{ countByStatus('pending') }}</strong></div>
-      <div class="stat-chip reviewing-chip">审核中 <strong>{{ countByStatus('reviewing') }}</strong></div>
-      <div class="stat-chip passed-chip">已通过 <strong>{{ countByStatus('passed') }}</strong></div>
-      <div class="stat-chip rejected-chip">已驳回 <strong>{{ countByStatus('rejected') }}</strong></div>
+      <div
+        v-for="tab in tabs"
+        :key="tab.value"
+        :class="['stat-item', 'stat-chip', `${tab.value}-stat`, `${tab.value}-chip`, { 'is-active': activeTab === tab.value }]"
+        role="button"
+        tabindex="0"
+        :aria-pressed="activeTab === tab.value"
+        @click="changeTab(tab.value)"
+        @keydown.enter.prevent.self="changeTab(tab.value)"
+        @keydown.space.prevent.self="changeTab(tab.value)"
+      >
+        <span class="stat-num"><strong>{{ countByStatus(tab.value) }}</strong></span>
+        <span class="stat-label">{{ tab.label }}</span>
+      </div>
     </div>
 
     <div class="filter-row">
@@ -134,6 +144,12 @@ const router = useRouter()
 const cycleOptions = CYCLE_OPTIONS
 
 const activeTab = ref('pending')
+const tabs = [
+  { value: 'pending', label: '待处理' },
+  { value: 'reviewing', label: '审核中' },
+  { value: 'passed', label: '已通过' },
+  { value: 'rejected', label: '已驳回' }
+]
 const query = reactive({ title: '', nature: '', cycle: '' })
 const appliedQuery = ref({})
 const loading = ref(false)
@@ -321,6 +337,12 @@ async function handleTabChange() {
   await reload()
 }
 
+async function changeTab(tab) {
+  if (!TAB_VALUES.includes(tab)) return
+  activeTab.value = tab
+  await handleTabChange()
+}
+
 async function handlePageChange(nextPage) {
   pageNo.value = nextPage
   await reload()
@@ -374,6 +396,7 @@ onMounted(reload)
 defineExpose({
   activeTab,
   appliedQuery,
+  changeTab,
   countByStatus,
   cycleLabel,
   descriptionParts,
@@ -415,19 +438,37 @@ defineExpose({
   font-size: 13px;
 }
 
-.stat-bar { display: flex; gap: 12px; margin-bottom: 16px; }
-.stat-chip {
-  padding: 6px 14px;
-  border-radius: 20px;
+.stat-bar { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 8px;
   color: #475569;
   font-size: 13px;
+  cursor: pointer;
+  user-select: none;
 
-  strong { margin-left: 4px; color: #1e293b; }
+  .stat-num {
+    color: #1e293b;
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .stat-label { line-height: 1.2; }
+
+  strong { font-weight: inherit; }
 }
-.pending-chip { background: #fef9c3; strong { color: #92400e; } }
-.reviewing-chip { background: #dbeafe; strong { color: #1d4ed8; } }
-.passed-chip { background: #dcfce7; strong { color: #166534; } }
-.rejected-chip { background: #fee2e2; strong { color: #b91c1c; } }
+.stat-chip {
+  border-radius: 8px;
+}
+.pending-stat, .pending-chip { background: #fef9c3; .stat-num { color: #ca8a04; } }
+.reviewing-stat, .reviewing-chip { background: #dbeafe; .stat-num { color: #2563eb; } }
+.passed-stat, .passed-chip { background: #dcfce7; .stat-num { color: #16a34a; } }
+.rejected-stat, .rejected-chip { background: #fee2e2; .stat-num { color: #dc2626; } }
+.stat-item.is-active { box-shadow: inset 0 0 0 1px currentColor; }
+.stat-item:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
 
 .filter-row {
   display: flex;

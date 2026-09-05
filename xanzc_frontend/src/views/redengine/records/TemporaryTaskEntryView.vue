@@ -70,6 +70,29 @@
           </div>
         </div>
 
+        <section class="review-history" data-test="review-history" aria-labelledby="review-history-title">
+          <h3 id="review-history-title" class="review-history-title">审核处理记录</h3>
+          <ol v-if="task.reviewHistory.length" class="review-history-list">
+            <li
+              v-for="(entry, index) in task.reviewHistory"
+              :key="`${entry.occurredAt || 'history'}-${entry.actionCode || index}-${index}`"
+              class="review-history-item"
+              data-test="review-history-item"
+            >
+              <div class="review-history-main">
+                <span class="review-history-field"><span class="history-label">处理人：</span>{{ reviewOperator(entry) }}</span>
+                <span class="review-history-field"><span class="history-label">时间：</span>{{ entry.occurredAt || '—' }}</span>
+                <span class="review-history-field"><span class="history-label">阶段/动作：</span>{{ reviewHistoryAction(entry) }}</span>
+              </div>
+              <div v-if="reviewHistoryTransition(entry)" class="review-history-transition">
+                {{ reviewHistoryTransition(entry) }}
+              </div>
+              <div class="review-history-opinion"><span class="history-label">意见：</span>{{ entry.opinion || '—' }}</div>
+            </li>
+          </ol>
+          <div v-else class="review-history-empty" data-test="review-history-empty">暂无审核处理记录</div>
+        </section>
+
         <div class="entry-actions">
           <el-button :disabled="submitting" @click="goBack">返回</el-button>
           <el-button v-if="canEdit" type="primary" :loading="submitting" @click="handleSubmit">提交填报</el-button>
@@ -128,6 +151,7 @@ function asTaskModel(value = {}) {
   const merged = { ...taskValue, ...assignment }
   const submission = merged.submission || merged.currentSubmission || {}
   const taskNature = merged.taskNature || merged.nature || ''
+  const rawReviewHistory = merged.reviewHistory ?? submission.reviewHistory
   const rawFiles = merged.files || merged.attachments || submission.files || submission.attachments || []
   const files = Array.isArray(rawFiles)
     ? rawFiles.map((file) => ({
@@ -165,6 +189,9 @@ function asTaskModel(value = {}) {
       || submission.reviewFeedback
       || submission.reviewOpinion
       || '',
+    reviewHistory: Array.isArray(rawReviewHistory)
+      ? rawReviewHistory.filter((entry) => entry && typeof entry === 'object')
+      : [],
     files,
     status: String(
       submission.status
@@ -322,6 +349,28 @@ function statusLabel(status) {
   return STATUS_LABELS[normalized] || '状态未知'
 }
 
+function reviewOperator(entry = {}) {
+  const name = String(entry.operatorName || '').trim()
+  const id = String(entry.operatorId || '').trim()
+  if (name && id) return `${name}（${id}）`
+  return name || id || '—'
+}
+
+function reviewHistoryAction(entry = {}) {
+  return entry.actionLabel
+    || entry.actionCode
+    || statusLabel(entry.toStatus)
+    || statusLabel(entry.fromStatus)
+    || '—'
+}
+
+function reviewHistoryTransition(entry = {}) {
+  const from = entry.fromStatus ? statusLabel(entry.fromStatus) : ''
+  const to = entry.toStatus ? statusLabel(entry.toStatus) : ''
+  if (!from && !to) return ''
+  return `状态：${from || '—'} → ${to || '—'}`
+}
+
 async function load() {
   loadError.value = ''
   if (!assignmentId.value) {
@@ -357,6 +406,9 @@ defineExpose({
   load,
   loadError,
   removeFile,
+  reviewHistoryAction,
+  reviewHistoryTransition,
+  reviewOperator,
   selectedFiles,
   statusLabel,
   canEdit,
@@ -399,6 +451,48 @@ defineExpose({
 .file-item { display: flex; justify-content: space-between; max-width: 520px; padding: 7px 10px; border-radius: 4px; background: #f8fafc; color: #475569; font-size: 12px; }
 .existing-file small { color: #94a3b8; }
 .remove-file { border: 0; background: transparent; color: #dc2626; cursor: pointer; font-size: 12px; }
+.review-history {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid #f1f5f9;
+}
+.review-history-title { margin: 0 0 14px; color: #334155; font-size: 15px; font-weight: 700; }
+.review-history-list { margin: 0; padding: 0 0 0 22px; list-style: none; }
+.review-history-item {
+  position: relative;
+  padding: 0 0 18px 18px;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.review-history-item:not(:last-child)::before {
+  position: absolute;
+  top: 8px;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: #cbd5e1;
+  content: '';
+}
+.review-history-item::after {
+  position: absolute;
+  top: 6px;
+  left: -4px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #2563eb;
+  box-shadow: 0 0 0 1px #93c5fd;
+  content: '';
+}
+.review-history-main { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.review-history-field, .review-history-transition, .review-history-opinion { min-width: 0; }
+.review-history-transition { margin-top: 2px; color: #64748b; font-size: 12px; }
+.review-history-opinion { margin-top: 3px; color: #334155; white-space: pre-wrap; }
+.history-label { color: #64748b; font-weight: 600; }
+.review-history-empty { padding: 14px 16px; border-radius: 6px; color: #94a3b8; background: #f8fafc; font-size: 13px; text-align: center; }
 .entry-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 6px; border-top: 1px solid #f1f5f9; }
 .entry-loading { padding: 60px 20px; color: #94a3b8; text-align: center; }
 .load-error {
@@ -409,5 +503,12 @@ defineExpose({
   color: #991b1b;
   background: #fef2f2;
   font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .review-history-list { padding-left: 14px; }
+  .review-history-item { padding-left: 14px; }
+  .review-history-main { display: block; }
+  .review-history-field { display: block; }
 }
 </style>

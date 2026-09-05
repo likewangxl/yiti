@@ -47,56 +47,110 @@
       <el-button size="small" @click="handleReset">重置</el-button>
     </div>
 
+    <div class="source-tabs" role="tablist" aria-label="任务来源">
+      <button
+        v-for="source in sourceTabs"
+        :id="`branch-review-source-tab-${source.value}`"
+        :key="source.value"
+        type="button"
+        :class="['source-tab', { 'is-active': activeSource === source.value }]"
+        role="tab"
+        :aria-selected="activeSource === source.value"
+        :tabindex="activeSource === source.value ? 0 : -1"
+        aria-controls="branch-review-source-panel"
+        :data-source-tab="source.value"
+        @click="changeSource(source.value)"
+        @keydown="handleSourceKeydown($event, source.value)"
+      >{{ source.label }}</button>
+    </div>
+
     <div class="review-sources" v-loading="loading">
-      <section class="review-source-section" data-source="task">
-        <div class="source-heading">
+      <section
+        id="branch-review-source-panel"
+        class="review-source-section"
+        :data-source="activeSource"
+        role="tabpanel"
+        tabindex="0"
+        :aria-labelledby="`branch-review-source-tab-${activeSource}`"
+      >
+        <div class="source-heading review-source-heading">
           <div>
-            <h3>任务填报</h3>
-            <p>临时任务和普通任务：查看任务说明、本次填报内容及任务附件</p>
+            <h3>{{ activeSourceMeta.title }}</h3>
+            <p>{{ activeSourceMeta.description }}</p>
           </div>
-          <span class="source-total">共 {{ total }} 条</span>
+          <span class="source-total">共 {{ activeSourceTotal }} 条</span>
         </div>
         <div class="review-list">
-          <div v-if="items.length === 0 && !loadError" class="empty-state">暂无{{ activeTabLabel }}任务</div>
+          <template v-if="activeSource === 'task'">
+            <div v-if="items.length === 0 && !loadError" class="empty-state">暂无{{ activeTabLabel }}任务</div>
 
-          <div
-            v-for="item in items"
-            :key="itemKey(item)"
-            :class="['review-card', { selected: selectedItem && itemKey(selectedItem) === itemKey(item) }]"
-            role="button"
-            tabindex="0"
-            :aria-pressed="selectedItem && itemKey(selectedItem) === itemKey(item)"
-            @click="selectItem(item)"
-            @keydown.enter.prevent.self="selectItem(item)"
-            @keydown.space.prevent.self="selectItem(item)"
-          >
-            <div class="card-header">
-              <div class="card-left">
-                <span class="dim-badge" :style="{ background: getDimColor(item.dim) }">{{ item.dim }}</span>
-                <span class="item-name">{{ item.itemName }}</span>
-              </div>
-              <div class="card-right">
-                <el-tag
-                  :type="item.status === 'passed' ? 'success' : item.status === 'rejected' ? 'danger' : item.status === 'reviewing' ? 'info' : 'warning'"
-                  size="small"
-                >{{ statusLabel(item.status) }}</el-tag>
+            <div
+              v-for="item in items"
+              :key="itemKey(item)"
+              :class="['review-card', { selected: selectedItem && itemKey(selectedItem) === itemKey(item) }]"
+              role="button"
+              tabindex="0"
+              :aria-pressed="selectedItem && itemKey(selectedItem) === itemKey(item)"
+              @click="selectItem(item)"
+              @keydown.enter.prevent.self="selectItem(item)"
+              @keydown.space.prevent.self="selectItem(item)"
+            >
+              <div class="card-body card-summary">
+                <div class="card-summary-row is-responsive">
+                  <span class="dim-badge" :style="{ background: getDimColor(item.dim) }">{{ item.dim }}</span>
+                  <span class="item-name">任务名称：{{ item.itemName }}</span>
+                  <span class="meta-item summary-description">任务说明：{{ item.description || '—' }}</span>
+                  <span class="meta-item" v-if="item.branch">党支部：{{ item.branch }}</span>
+                  <span class="meta-item">📋 提交人：{{ item.submitter }}</span>
+                  <span class="meta-item">📅 提交时间：{{ item.submitDate }}</span>
+                  <span class="meta-item">任务性质：{{ taskNatureLabel(item.nature) }}</span>
+                  <span v-if="item.isPeriodic && item.cycle" class="meta-item">周期：{{ cycleLabel(item.cycle) }}</span>
+                  <el-tag
+                    class="summary-status"
+                    :type="item.status === 'passed' ? 'success' : item.status === 'rejected' ? 'danger' : item.status === 'reviewing' ? 'info' : 'warning'"
+                    size="small"
+                  >{{ statusLabel(item.status) }}</el-tag>
+                </div>
+                <div class="card-hint">点击查看详情并处理</div>
               </div>
             </div>
+          </template>
 
-            <div class="card-body card-summary">
-              <div class="meta-row">
-                <span class="meta-item" v-if="item.branch">党支部：{{ item.branch }}</span>
-                <span class="meta-item">📋 提交人：{{ item.submitter }}</span>
-                <span class="meta-item">📅 {{ item.submitDate }}</span>
-                <span class="meta-item">任务性质：{{ taskNatureLabel(item.nature) }}</span>
-                <span v-if="item.isPeriodic && item.cycle" class="meta-item">周期：{{ cycleLabel(item.cycle) }}</span>
+          <template v-else>
+            <div v-if="legacyItems.length === 0 && !loadError" class="empty-state">暂无{{ activeTabLabel }}四大维度材料</div>
+
+            <div
+              v-for="item in legacyItems"
+              :key="itemKey(item)"
+              :class="['review-card', { selected: selectedItem && itemKey(selectedItem) === itemKey(item) }]"
+              role="button"
+              tabindex="0"
+              :aria-pressed="selectedItem && itemKey(selectedItem) === itemKey(item)"
+              @click="selectItem(item)"
+              @keydown.enter.prevent.self="selectItem(item)"
+              @keydown.space.prevent.self="selectItem(item)"
+            >
+              <div class="card-body card-summary">
+                <div class="card-summary-row is-responsive">
+                  <span class="dim-badge" :style="{ background: getDimColor(item.dim) }">{{ item.dim }}</span>
+                  <span class="item-name">任务名称：{{ item.itemName }}</span>
+                  <span class="meta-item" v-if="item.branch">党支部：{{ item.branch }}</span>
+                  <span class="meta-item">📋 提交人：{{ item.submitter }}</span>
+                  <span class="meta-item">📅 提交时间：{{ item.submitDate }}</span>
+                  <span class="meta-item">材料来源：直接上报</span>
+                  <el-tag
+                    class="summary-status"
+                    :type="item.status === 'passed' ? 'success' : item.status === 'rejected' ? 'danger' : item.status === 'reviewing' ? 'info' : 'warning'"
+                    size="small"
+                  >{{ statusLabel(item.status) }}</el-tag>
+                </div>
+                <div class="card-hint">点击查看详情并处理</div>
               </div>
-              <div class="card-hint">点击查看详情并处理</div>
             </div>
-          </div>
+          </template>
         </div>
 
-        <div class="pager task-pager">
+        <div v-if="activeSource === 'task'" class="pager task-pager">
           <el-pagination
             v-model:current-page="pageNo"
             v-model:page-size="pageSize"
@@ -107,56 +161,7 @@
             @size-change="handleSizeChange"
           />
         </div>
-      </section>
-
-      <section class="review-source-section" data-source="material">
-        <div class="source-heading">
-          <div>
-            <h3>四大维度材料上报</h3>
-            <p>兼容直接上报的旧材料记录：查看维度、材料明细、结构化材料及附件</p>
-          </div>
-          <span class="source-total">共 {{ legacyTotal }} 条</span>
-        </div>
-        <div class="review-list">
-          <div v-if="legacyItems.length === 0 && !loadError" class="empty-state">暂无{{ activeTabLabel }}四大维度材料</div>
-
-          <div
-            v-for="item in legacyItems"
-            :key="itemKey(item)"
-            :class="['review-card', { selected: selectedItem && itemKey(selectedItem) === itemKey(item) }]"
-            role="button"
-            tabindex="0"
-            :aria-pressed="selectedItem && itemKey(selectedItem) === itemKey(item)"
-            @click="selectItem(item)"
-            @keydown.enter.prevent.self="selectItem(item)"
-            @keydown.space.prevent.self="selectItem(item)"
-          >
-            <div class="card-header">
-              <div class="card-left">
-                <span class="dim-badge" :style="{ background: getDimColor(item.dim) }">{{ item.dim }}</span>
-                <span class="item-name">{{ item.itemName }}</span>
-              </div>
-              <div class="card-right">
-                <el-tag
-                  :type="item.status === 'passed' ? 'success' : item.status === 'rejected' ? 'danger' : item.status === 'reviewing' ? 'info' : 'warning'"
-                  size="small"
-                >{{ statusLabel(item.status) }}</el-tag>
-              </div>
-            </div>
-
-            <div class="card-body card-summary">
-              <div class="meta-row">
-                <span class="meta-item" v-if="item.branch">党支部：{{ item.branch }}</span>
-                <span class="meta-item">📋 提交人：{{ item.submitter }}</span>
-                <span class="meta-item">📅 {{ item.submitDate }}</span>
-                <span class="meta-item">材料来源：直接上报</span>
-              </div>
-              <div class="card-hint">点击查看详情并处理</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="pager material-pager">
+        <div v-else class="pager material-pager">
           <el-pagination
             v-model:current-page="legacyPageNo"
             v-model:page-size="legacyPageSize"
@@ -329,7 +334,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -362,10 +367,16 @@ const tabs = [
   { value: 'passed', label: '已通过' },
   { value: 'rejected', label: '已驳回' }
 ]
+const sourceTabs = [
+  { value: 'task', label: '任务填报' },
+  { value: 'material', label: '四大维度材料上报' }
+]
 const cycleOptions = CYCLE_OPTIONS
 const TAB_VALUES = ['pending', 'reviewing', 'passed', 'rejected']
+const SOURCE_VALUES = ['task', 'material']
 const route = useRoute()
 const activeTab = ref('pending')
+const activeSource = ref('task')
 const query = reactive({ title: '', nature: '', cycle: '' })
 const appliedQuery = ref({})
 const loading = ref(false)
@@ -408,6 +419,16 @@ const rejectedItems = computed(() => items.value.filter((item) => item.status ==
 // 与页面展示行会失配，尤其是审核中包含多个工作流阶段时。
 const filteredItems = computed(() => items.value)
 const activeTabLabel = computed(() => tabs.find((tab) => tab.value === activeTab.value)?.label || '')
+const activeSourceMeta = computed(() => activeSource.value === 'material'
+  ? {
+      title: '四大维度材料上报',
+      description: '兼容直接上报的旧材料记录：查看维度、材料明细、结构化材料及附件'
+    }
+  : {
+      title: '任务填报',
+      description: '临时任务和普通任务：查看任务说明、本次填报内容及任务附件'
+    })
+const activeSourceTotal = computed(() => activeSource.value === 'material' ? legacyTotal.value : total.value)
 const detailDialogTitle = computed(() => selectedItem.value?.isFourDimension ? '四大维度材料详情' : '任务详情')
 
 function parseFormData(raw) {
@@ -674,6 +695,33 @@ function changeTab(tab) {
   handleTabChange()
 }
 
+function changeSource(source) {
+  if (SOURCE_VALUES.includes(source)) activeSource.value = source
+}
+
+function handleSourceKeydown(event, source) {
+  const currentIndex = SOURCE_VALUES.indexOf(source)
+  if (currentIndex < 0) return
+
+  let nextIndex
+  if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+    nextIndex = (currentIndex + 1) % SOURCE_VALUES.length
+  } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+    nextIndex = (currentIndex - 1 + SOURCE_VALUES.length) % SOURCE_VALUES.length
+  } else if (event.key === 'Home') {
+    nextIndex = 0
+  } else if (event.key === 'End') {
+    nextIndex = SOURCE_VALUES.length - 1
+  } else {
+    return
+  }
+
+  event.preventDefault()
+  const nextSource = SOURCE_VALUES[nextIndex]
+  activeSource.value = nextSource
+  nextTick(() => document.getElementById(`branch-review-source-tab-${nextSource}`)?.focus())
+}
+
 async function handlePageChange(nextPage) {
   pageNo.value = nextPage
   await reload()
@@ -723,6 +771,7 @@ async function openRouteLegacyDetail() {
   const submitId = routeQueryValue('submitId')
   const source = String(routeQueryValue('source') || '').toLowerCase()
   if (!submitId || (source && source !== 'material') || autoOpenedSubmitId.value === String(submitId)) return
+  if (!source) activeSource.value = 'material'
   const target = legacyItems.value.find((item) => String(legacyReviewId(item)) === String(submitId))
   if (target) {
     autoOpenedSubmitId.value = String(submitId)
@@ -927,14 +976,21 @@ function moveStatusTotal(previousStatus, nextStatus) {
 onMounted(() => {
   const tab = String(routeQueryValue('tab') || '').toLowerCase()
   if (TAB_VALUES.includes(tab)) activeTab.value = tab
+  const source = String(routeQueryValue('source') || '').toLowerCase()
+  if (SOURCE_VALUES.includes(source)) activeSource.value = source
   reload()
 })
 
 defineExpose({
   activeTab,
   activeTabLabel,
+  activeSource,
+  activeSourceMeta,
+  activeSourceTotal,
   appliedQuery,
   changeTab,
+  changeSource,
+  handleSourceKeydown,
   countByStatus,
   descriptionParts,
   downloadAttachment,
@@ -1036,14 +1092,48 @@ defineExpose({
 .query-title { width: 190px; }
 .query-select { width: 132px; }
 
+/* Source tabs */
+.source-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #dbe3ec;
+}
+
+.source-tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  padding: 9px 14px;
+  color: #475569;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s;
+
+  &:hover { color: #1d4ed8; background: #eff6ff; }
+  &:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+}
+
+.source-tab.is-active {
+  color: #1d4ed8;
+  border-bottom-color: #2563eb;
+  background: #eff6ff;
+  font-weight: 600;
+}
+
 /* Review list */
 .review-sources {
   display: flex;
   flex-direction: column;
-  gap: 22px;
 }
 
 .review-source-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   padding: 16px;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
@@ -1195,7 +1285,30 @@ defineExpose({
 }
 
 .card-summary {
-  .meta-row { margin-bottom: 0; flex-wrap: wrap; }
+  .card-summary-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    min-width: 0;
+    gap: 8px 16px;
+  }
+
+  .card-summary-row .dim-badge,
+  .card-summary-row .item-name,
+  .card-summary-row .meta-item,
+  .card-summary-row .summary-status {
+    flex: 0 1 auto;
+  }
+
+  .card-summary-row .summary-description {
+    min-width: 0;
+    flex: 1 1 260px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  .card-summary-row .summary-status { flex: 0 0 auto; }
+
   .card-hint {
     margin-top: 12px;
     color: #2563eb;

@@ -322,7 +322,7 @@ describe('支部任务处理', () => {
     wrapper.unmount();
   });
 
-  it('同页分别展示任务和旧四维材料，各自保留服务端分页且计数相加', async () => {
+  it('来源页签共用同一内容区，各自保留服务端分页 total 且计数相加', async () => {
     getReviewQueue.mockImplementation(async (params) => ({
       records: params.tab === 'PENDING' ? [materialRow()] : [],
       total: params.tab === 'PENDING' ? 3 : 0
@@ -340,15 +340,78 @@ describe('支部任务处理', () => {
     expect(wrapper.vm.total).toBe(7);
     expect(wrapper.vm.legacyTotal).toBe(3);
     expect(wrapper.vm.statusTotals.pending).toBe(10);
+    expect(wrapper.vm.activeSource).toBe('task');
+    expect(wrapper.findAll('.review-source-section')).toHaveLength(1);
     expect(wrapper.find('[data-source="task"] .review-card').exists()).toBe(true);
-    expect(wrapper.find('[data-source="material"] .review-card').exists()).toBe(true);
     expect(wrapper.find('[data-source="task"] .pagination-stub').attributes('data-total')).toBe('7');
+    expect(wrapper.find('[data-source-tab="task"]').attributes()).toMatchObject({
+      role: 'tab',
+      'aria-selected': 'true',
+      'aria-controls': 'branch-review-source-panel'
+    });
+    expect(wrapper.find('[data-source-tab="material"]').attributes()).toMatchObject({
+      role: 'tab',
+      'aria-selected': 'false',
+      'aria-controls': 'branch-review-source-panel'
+    });
+
+    await wrapper.find('[data-source-tab="material"]').trigger('click');
+    await nextTick();
+    expect(wrapper.vm.activeSource).toBe('material');
+    expect(wrapper.findAll('.review-source-section')).toHaveLength(1);
+    expect(wrapper.find('[data-source="task"]').exists()).toBe(false);
+    expect(wrapper.find('[data-source="material"] .review-card').exists()).toBe(true);
     expect(wrapper.find('[data-source="material"] .pagination-stub').attributes('data-total')).toBe('3');
+    expect(wrapper.find('[data-source="material"] .review-source-heading').exists()).toBe(true);
+    expect(wrapper.find('#branch-review-source-panel').attributes()).toMatchObject({
+      role: 'tabpanel',
+      'aria-labelledby': 'branch-review-source-tab-material'
+    });
 
     await wrapper.find('[data-source="material"] .review-card').trigger('click');
     await settle();
     expect(getReviewPreview).toHaveBeenCalledWith(17);
     expect(wrapper.find('[data-test="four-dimension-detail"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('来源页签使用单一 Tab 焦点，并支持左右方向键切换', async () => {
+    const wrapper = mount(BranchReviewView, { attachTo: document.body, global: { stubs } });
+    await settle();
+
+    const taskTab = wrapper.find('[data-source-tab="task"]');
+    expect(taskTab.attributes('tabindex')).toBe('0');
+    expect(wrapper.find('[data-source-tab="material"]').attributes('tabindex')).toBe('-1');
+
+    taskTab.element.focus();
+    await taskTab.trigger('keydown', { key: 'ArrowRight' });
+    await nextTick();
+    const materialTab = wrapper.find('[data-source-tab="material"]');
+    expect(wrapper.vm.activeSource).toBe('material');
+    expect(materialTab.attributes('tabindex')).toBe('0');
+    expect(document.activeElement).toBe(materialTab.element);
+
+    await materialTab.trigger('keydown', { key: 'ArrowLeft' });
+    await nextTick();
+    expect(wrapper.vm.activeSource).toBe('task');
+    expect(document.activeElement).toBe(taskTab.element);
+    wrapper.unmount();
+  });
+
+  it('卡片摘要将维度、任务名、任务说明和审核元信息置于可响应式换行的同一行', async () => {
+    const wrapper = mount(BranchReviewView, { global: { stubs } });
+    await settle();
+
+    const summaryRow = wrapper.find('[data-source="task"] .card-summary-row');
+    expect(summaryRow.exists()).toBe(true);
+    expect(summaryRow.text()).toContain('临时任务');
+    expect(summaryRow.text()).toContain('专项整改任务');
+    expect(summaryRow.text()).toContain('任务说明：请提交整改情况');
+    expect(summaryRow.text()).toContain('党支部：第一党支部');
+    expect(summaryRow.text()).toContain('提交人：张伟');
+    expect(summaryRow.text()).toContain('2026-08-31 10:00:00');
+    expect(summaryRow.text()).toContain('任务性质：临时任务');
+    expect(summaryRow.classes()).toContain('is-responsive');
     wrapper.unmount();
   });
 

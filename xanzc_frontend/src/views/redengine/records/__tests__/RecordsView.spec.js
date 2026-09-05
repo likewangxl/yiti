@@ -22,6 +22,7 @@ vi.mock('@/api/redengine', () => ({
 
 import { getMySubmits, listMyTaskAssignments } from '@/api/redengine';
 import RecordsView from '../RecordsView.vue';
+import recordsViewSource from '../RecordsView.vue?raw';
 
 const stubs = {
   'el-radio-group': { props: ['modelValue'], emits: ['update:modelValue'], template: '<div><slot /></div>' },
@@ -377,6 +378,45 @@ describe('报送员任务处理', () => {
     expect(wrapper.find('.passed-chip strong').text()).toBe('3');
     expect(wrapper.find('.rejected-chip strong').text()).toBe('2');
     expect(listMyTaskAssignments).toHaveBeenCalledWith({ pageNo: 1, pageSize: 1, tab: 'REVIEWING' });
+    wrapper.unmount();
+  });
+
+  it('四个状态统计块与支部书记页保持同样尺寸和交互，可用点击 Enter Space 触发对应页签查询', async () => {
+    const totals = { PENDING: 7, REVIEWING: 5, PASSED: 3, REJECTED: 2 };
+    listMyTaskAssignments.mockImplementation(async (params) => ({
+      records: params.tab === 'PENDING' ? [temporaryAssignment()] : [],
+      total: totals[params.tab]
+    }));
+    const wrapper = mount(RecordsView, {
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } } }
+    });
+    await settle();
+
+    const stats = wrapper.findAll('.stat-item');
+    expect(stats).toHaveLength(4);
+    expect(stats.map((item) => item.text())).toEqual(['7待处理', '5审核中', '3已通过', '2已驳回']);
+    expect(stats[0].attributes('role')).toBe('button');
+    expect(stats[0].attributes('tabindex')).toBe('0');
+    expect(stats[0].attributes('aria-pressed')).toBe('true');
+    expect(stats[0].classes()).toContain('is-active');
+    expect(recordsViewSource).toMatch(/\.stat-num\s*\{[^}]*font-size:\s*24px;/s);
+
+    await stats[1].trigger('click');
+    await settle();
+    expect(wrapper.vm.activeTab).toBe('reviewing');
+    expect(wrapper.find('.reviewing-stat').classes()).toContain('is-active');
+    expect(wrapper.find('.reviewing-stat').attributes('aria-pressed')).toBe('true');
+    expect(listMyTaskAssignments).toHaveBeenCalledWith({ pageNo: 1, pageSize: 10, tab: 'REVIEWING' });
+
+    await stats[2].trigger('keydown', { key: 'Enter' });
+    await settle();
+    expect(wrapper.vm.activeTab).toBe('passed');
+    expect(listMyTaskAssignments).toHaveBeenCalledWith({ pageNo: 1, pageSize: 10, tab: 'PASSED' });
+
+    await stats[3].trigger('keydown', { key: ' ' });
+    await settle();
+    expect(wrapper.vm.activeTab).toBe('rejected');
+    expect(listMyTaskAssignments).toHaveBeenCalledWith({ pageNo: 1, pageSize: 10, tab: 'REJECTED' });
     wrapper.unmount();
   });
 });

@@ -225,6 +225,89 @@ describe('临时任务填报', () => {
     wrapper.unmount();
   });
 
+  it.each([
+    ['ORG_PENDING', '审核中'],
+    ['REJECTED_BY_BRANCH', '已驳回'],
+    ['APPROVED', '已通过']
+  ])('%s 状态展示后端 reviewHistory 的全部审核处理记录', async (status) => {
+    const reviewHistory = [
+      {
+        actionCode: 'BRANCH_REJECT',
+        actionLabel: '支部驳回',
+        operatorId: 'U-BRANCH',
+        operatorName: '张三',
+        occurredAt: '2026-08-25 10:00:00',
+        opinion: '第一次请补充佐证',
+        fromStatus: 'BRANCH_PENDING',
+        toStatus: 'REJECTED_BY_BRANCH'
+      },
+      {
+        actionCode: 'ORG_REJECT',
+        actionLabel: '组织驳回',
+        operatorId: 'U-ORG',
+        operatorName: '',
+        occurredAt: '2026-08-26 11:30:00',
+        opinion: '第二次请补充说明',
+        fromStatus: 'ORG_PENDING',
+        toStatus: 'REJECTED_BY_ORG'
+      }
+    ];
+    getMyTaskAssignment.mockResolvedValueOnce({
+      assignmentId: 1001,
+      taskId: 42,
+      taskTitle: '专项整改任务',
+      taskDescription: '请填报整改情况',
+      taskNature: 'TEMPORARY',
+      status,
+      reviewFeedback: '最新反馈不得伪造成多条历史',
+      reviewHistory,
+      content: '第一次填报',
+      requiresFile: false,
+      files: []
+    });
+    const wrapper = mount(TemporaryTaskEntryView, { global: { stubs } });
+    await settle();
+
+    const history = wrapper.find('[data-test="review-history"]');
+    expect(history.exists()).toBe(true);
+    expect(history.find('[data-test="review-history-empty"]').exists()).toBe(false);
+    const entries = history.findAll('[data-test="review-history-item"]');
+    expect(entries).toHaveLength(2);
+    expect(entries[0].text()).toContain('张三（U-BRANCH）');
+    expect(entries[0].text()).toContain('2026-08-25 10:00:00');
+    expect(entries[0].text()).toContain('支部驳回');
+    expect(entries[0].text()).toContain('第一次请补充佐证');
+    expect(entries[1].text()).toContain('U-ORG');
+    expect(entries[1].text()).toContain('组织驳回');
+    expect(entries[1].text()).toContain('第二次请补充说明');
+    expect(wrapper.vm.task.reviewHistory).toEqual(reviewHistory);
+    expect(entries.map((entry) => entry.text()).join('\n')).not.toContain('最新反馈不得伪造成多条历史');
+    wrapper.unmount();
+  });
+
+  it('没有 reviewHistory 时展示明确空态，不使用最新 reviewFeedback 伪造历史', async () => {
+    getMyTaskAssignment.mockResolvedValueOnce({
+      assignmentId: 1001,
+      taskId: 42,
+      taskTitle: '无历史任务',
+      taskDescription: '请直接填报',
+      taskNature: 'TEMPORARY',
+      status: 'REJECTED_BY_BRANCH',
+      reviewFeedback: '仅当前摘要意见',
+      reviewHistory: [],
+      content: '第一次填报',
+      requiresFile: false,
+      files: []
+    });
+    const wrapper = mount(TemporaryTaskEntryView, { global: { stubs } });
+    await settle();
+
+    expect(wrapper.find('[data-test="review-history-empty"]').text()).toContain('暂无审核处理记录');
+    expect(wrapper.findAll('[data-test="review-history-item"]')).toHaveLength(0);
+    expect(wrapper.find('[data-test="review-history"]').text()).not.toContain('仅当前摘要意见');
+    wrapper.unmount();
+  });
+
   it('任务详情请求失败时展示错误态而不是误报任务不存在', async () => {
     getMyTaskAssignment.mockRejectedValueOnce(new Error('服务不可用'));
     const wrapper = mount(TemporaryTaskEntryView, { global: { stubs } });
