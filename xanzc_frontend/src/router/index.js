@@ -20,6 +20,13 @@ const routes = [
     component: () => import('@/views/login/Index.vue'),
     meta: { title: '登录', public: true }
   },
+  // 本地视觉验收入口：只在 Vite 开发环境编译进路由，生产包没有该入口。
+  ...(import.meta.env.DEV ? [{
+    path: '/screen-preview',
+    name: 'ScreenPreview',
+    component: () => import('@/views/screen/panorama/PanoramaPreview.vue'),
+    meta: { title: '本地演示预览', public: true, hideInMenu: true }
+  }] : []),
   // 经营大屏：顶层全屏路由（不进 DefaultLayout，无 sidebar/header；仍走登录守卫）
   {
     path: '/screen/:screenCode',
@@ -27,16 +34,17 @@ const routes = [
     component: () => import('@/views/screen/ScreenView.vue'),
     meta: { title: '经营大屏', requiredResource: '/api/screen/view/*' }
   },
-  // 大屏设计器：同运行态一样是顶层独立路由，不渲染主平台 sidebar/header/工作区页签。
+  // 大屏管理：历史 designer 路径继续兼容，但入口改为绑定/发布管理页，不再暴露为菜单。
   // 保留原路径和权限资源，刷新、直达和会话恢复仍经全局守卫 Fail Close。
   {
     path: '/screen-admin/designer',
     name: 'ScreenAdminDesigner',
-    component: () => import('@/views/screen/designer/DesignerV2.vue'),
+    component: () => import('@/views/screen/panorama/PanoramaBindings.vue'),
     meta: {
-      title: '大屏设计器',
+      title: '大屏管理',
       group: '报表分析',
       fullBleed: true,
+      hideInMenu: true,
       requiredResource: '/api/screen/admin/screens'
     }
   },

@@ -1,5 +1,16 @@
 <template>
-  <div class="screen-root">
+  <!-- 代码化全景拥有自己的根和视觉域，不进入旧 1920×1080 舞台。 -->
+  <div v-if="isPanoramaPresentation" class="screen-panorama-root">
+    <PanoramaRuntime :view="view" :context="context" />
+  </div>
+
+  <div v-else-if="unsupportedPresentation" class="screen-presentation-unsupported" role="alert">
+    <h1>当前大屏展示模板暂不支持</h1>
+    <p>已收到 presentation：{{ presentationLabel }}，请联系管理员切换到受支持的模板。</p>
+    <button type="button" @click="goBack">返回上一页</button>
+  </div>
+
+  <div v-else class="screen-root">
     <div class="scr-stage" :style="{ transform: `translate(-50%, -50%) scale(${scale})` }">
       <div class="scr-header">
         <button type="button" class="scr-back" aria-label="返回上一页" @click="goBack">‹ 返回</button>
@@ -30,6 +41,7 @@ import { stageStyle } from '@/views/screen/designer/utils/scale';
 import { GLOBAL_PERIOD_INJECT_KEY } from '@/utils/globalPeriod';
 import { runtimeSchemaVersion } from '@/utils/screenScope';
 import ScreenRenderer from './components/ScreenRenderer.vue';
+import PanoramaRuntime from './panorama/PanoramaRuntime.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -44,6 +56,7 @@ const view = ref(null);
 const loadError = ref('');
 const scale = ref(1);
 const clock = ref('');
+let loadGeneration = 0;
 
 // 路由参数即取数上下文：同一份屏配置服务所有支行/员工
 const context = computed(() => ({
@@ -56,13 +69,30 @@ const context = computed(() => ({
   previewState: view.value?.state === 'draft' ? 'draft' : undefined
 }));
 
+const presentation = computed(() => view.value?.renderPackage?.canvasStyle?.presentation);
+const hasPresentation = computed(() => Object.prototype.hasOwnProperty.call(
+  view.value?.renderPackage?.canvasStyle || {}, 'presentation'
+) && presentation.value !== null && presentation.value !== undefined);
+const isPanoramaPresentation = computed(() => presentation.value?.type === 'CODE'
+  && presentation.value?.template === 'branch-overview-v1');
+const unsupportedPresentation = computed(() => Boolean(
+  view.value?.renderPackage && hasPresentation.value && !isPanoramaPresentation.value
+));
+const presentationLabel = computed(() => {
+  const type = presentation.value?.type || 'unknown';
+  const template = presentation.value?.template || 'unknown-template';
+  return `${type}/${template}`;
+});
+
 async function load() {
+  const generation = ++loadGeneration;
   loadError.value = '';
   view.value = null;
   // 换屏(跳屏钻取/路由参数变化)重置为默认不干预,避免上一屏 PeriodFilter 的选中周期串到新屏
   globalPeriod.value = null;
   try {
     const resp = await getScreenView(route.params.screenCode, route.query.preview);
+    if (generation !== loadGeneration) return;
     if (resp.renderPackageJson) {
       try {
         resp.renderPackage = JSON.parse(resp.renderPackageJson);
@@ -73,9 +103,11 @@ async function load() {
       // 屏从未发布——renderPackage 留 null，交给模板判空渲染「该大屏尚未发布」引导态
       resp.renderPackage = null;
     }
+    if (generation !== loadGeneration) return;
     view.value = resp;
     fit(); // 缩放策略随渲染包 canvasStyle.adaptor 变化，拿到 view 后需重新计算(mounted 时早于本函数，先按缺省策略占位)
   } catch (e) {
+    if (generation !== loadGeneration) return;
     loadError.value = e?.message || '未知错误';
   }
 }
@@ -110,6 +142,7 @@ onMounted(() => {
   load();
 });
 onBeforeUnmount(() => {
+  loadGeneration += 1;
   window.removeEventListener('resize', fit);
   clearInterval(clockTimer);
 });
@@ -117,6 +150,42 @@ onBeforeUnmount(() => {
 
 <style lang="scss">
 @use '@/styles/screen.scss';
+
+// 代码化全景不使用旧 screen.scss 的 .screen-root/.scr-stage 规则。
+.screen-panorama-root {
+  min-height: 100vh;
+  width: 100%;
+}
+
+.screen-presentation-unsupported {
+  min-height: 100vh;
+  box-sizing: border-box;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  padding: 32px;
+  color: #eaf2ff;
+  background: #07102c;
+}
+
+.screen-presentation-unsupported h1,
+.screen-presentation-unsupported p {
+  margin: 0;
+}
+
+.screen-presentation-unsupported p {
+  color: #9eb5dc;
+}
+
+.screen-presentation-unsupported button {
+  width: fit-content;
+  border: 1px solid rgba(119, 178, 255, .45);
+  border-radius: 4px;
+  padding: 7px 12px;
+  color: #dbebff;
+  background: rgba(19, 45, 91, .75);
+  cursor: pointer;
+}
 
 // 「该大屏尚未发布」引导态——中性弱化文案，与 .scr-block-err 的报错红区分语义
 .scr-guide-empty {

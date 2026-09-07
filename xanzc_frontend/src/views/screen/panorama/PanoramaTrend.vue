@@ -1,0 +1,156 @@
+<template>
+  <section class="panorama-trend" :class="{ 'is-compact': compact }" :aria-label="title">
+    <div class="panorama-panel-heading">
+      <h2>{{ title }}</h2>
+      <span v-if="dataDate" class="panorama-panel-date">{{ dataDate }}</span>
+    </div>
+    <v-chart
+      v-if="hasChart"
+      class="panorama-trend-chart"
+      :option="option"
+      autoresize
+      aria-label="经营指标趋势图"
+    />
+    <div v-else class="panorama-empty" data-testid="trend-empty">暂无趋势数据</div>
+  </section>
+</template>
+
+<script setup>
+import { computed } from 'vue';
+import { use } from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
+import { LineChart } from 'echarts/charts';
+import {
+  AxisPointerComponent,
+  GridComponent,
+  LegendComponent,
+  TooltipComponent
+} from 'echarts/components';
+import VChart from 'vue-echarts';
+
+use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent, AxisPointerComponent]);
+
+const props = defineProps({
+  trend: { type: Array, default: () => [] },
+  rows: { type: Array, default: null },
+  title: { type: String, default: '主要指标趋势' },
+  dataDate: { type: String, default: '' },
+  compact: { type: Boolean, default: false },
+  series: {
+    type: Array,
+    default: () => [
+      { key: 'deposit', label: '存款余额', color: '#42e8ef' },
+      { key: 'loan', label: '贷款余额', color: '#a77bff' }
+    ]
+  }
+});
+
+const sourceRows = computed(() => (Array.isArray(props.rows) ? props.rows : props.trend));
+const normalizedSeries = computed(() => (Array.isArray(props.series) ? props.series : [])
+  .map((item, index) => ({
+    key: String(item?.key || '').trim(),
+    label: String(item?.label || item?.key || '').trim(),
+    color: item?.color || (index ? '#a77bff' : '#42e8ef')
+  }))
+  .filter(item => item.key));
+
+const labels = computed(() => sourceRows.value.map(row => String(row?.date ?? row?.label ?? '')));
+
+function finiteValue(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function formatPointValue(value) {
+  const number = finiteValue(Array.isArray(value) ? value[value.length - 1] : value);
+  return number === null ? '' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(number);
+}
+
+const optionSeries = computed(() => normalizedSeries.value.map(item => {
+  const pointCount = sourceRows.value.length;
+  return {
+    name: item.label,
+    type: 'line',
+    smooth: true,
+    connectNulls: false,
+    showSymbol: true,
+    symbol: 'circle',
+    symbolSize: 5,
+    label: {
+      show: true,
+      position: 'top',
+      color: item.color,
+      fontSize: 10,
+      formatter: params => {
+        // Keep the chart readable while retaining the reference's visible endpoints.
+        const showLabel = pointCount <= 4 || params.dataIndex === 0 || params.dataIndex === pointCount - 1;
+        return showLabel ? formatPointValue(params.value) : '';
+      }
+    },
+    lineStyle: { color: item.color, width: 2, shadowBlur: 8, shadowColor: item.color },
+    itemStyle: { color: item.color },
+    areaStyle: {
+      color: {
+        type: 'linear',
+        x: 0,
+        y: 0,
+        x2: 0,
+        y2: 1,
+        colorStops: [
+          { offset: 0, color: `${item.color}55` },
+          { offset: 1, color: `${item.color}00` }
+        ]
+      }
+    },
+    data: sourceRows.value.map(row => finiteValue(row?.[item.key]))
+  };
+}));
+
+const hasChart = computed(() => labels.value.some(Boolean)
+  && optionSeries.value.some(item => item.data.some(value => value !== null)));
+
+const option = computed(() => ({
+  animation: true,
+  color: normalizedSeries.value.map(item => item.color),
+  grid: { top: 34, right: 30, bottom: 26, left: 48, containLabel: true },
+  tooltip: {
+    trigger: 'axis',
+    axisPointer: { type: 'line' },
+    backgroundColor: 'rgba(7, 18, 53, .96)',
+    borderColor: 'rgba(117, 158, 255, .38)',
+    textStyle: { color: '#e8efff', fontSize: 12 }
+  },
+  legend: {
+    show: normalizedSeries.value.length > 1,
+    top: 4,
+    left: 2,
+    itemWidth: 18,
+    itemHeight: 3,
+    textStyle: { color: '#9fb2da', fontSize: 11 }
+  },
+  xAxis: {
+    type: 'category',
+    boundaryGap: false,
+    data: labels.value,
+    axisLine: { lineStyle: { color: 'rgba(130, 165, 235, .24)' } },
+    axisTick: { show: false },
+    axisLabel: { color: '#8ea5d2', fontSize: 10 }
+  },
+  yAxis: {
+    type: 'value',
+    splitNumber: 3,
+    axisLine: { show: false },
+    axisTick: { show: false },
+    axisLabel: { color: '#8ea5d2', fontSize: 10 },
+    splitLine: { lineStyle: { color: 'rgba(104, 143, 217, .12)' } }
+  },
+  series: optionSeries.value
+}));
+</script>
+
+<style scoped>
+.panorama-trend { display: flex; min-height: 0; flex-direction: column; }
+.panorama-trend-chart { width: 100%; height: auto; min-height: 170px; flex: 1 1 auto; }
+.panorama-trend.is-compact .panorama-trend-chart { min-height: 0; }
+</style>

@@ -15,7 +15,8 @@ export function listScreenDatasources(params = {}) {
   const query = {};
   if (params.dsType) query.dsType = params.dsType;
   if (params.keyword) query.keyword = params.keyword;
-  return call('get', '/screen/admin/datasources', { params: query }, []);
+  // 数据源目录是绑定配置的权限/事实来源，读取失败不能伪装成空库。
+  return call('get', '/screen/admin/datasources', { params: query });
 }
 
 const SCREEN_DATASOURCE_STATUSES = new Set(['ACTIVE', 'DISABLED']);
@@ -74,7 +75,8 @@ export function listKpiSchemes() {
 
 // ===== 大屏布局管理 =====
 export function listScreens() {
-  return call('get', '/screen/admin/screens', {}, []);
+  // 屏目录读取失败不能被误判为“没有屏”，否则管理页可能进入错误的新建态。
+  return call('get', '/screen/admin/screens', {});
 }
 export function getScreen(id) {
   return call('get', `/screen/admin/screens/${id}`, {}, null);
@@ -151,7 +153,8 @@ export function listScreenMapRegionMetrics(screenId) {
 
 // 屏级查看角色白名单：与 auth 机构组角色绑定分别校验，不能在前端拼接权限。
 export function listScreenAccessRoles(screenId) {
-  return call('get', `/screen/admin/screens/${screenId}/access-roles`, {}, []);
+  // 权限白名单读取必须 fail-close；空数组会被误解为“确实没有白名单”，进而允许覆盖式清空。
+  return call('get', `/screen/admin/screens/${screenId}/access-roles`, {});
 }
 export function saveScreenAccessRoles(screenId, data) {
   const expectedVersion = data?.expectedVersion;
@@ -168,7 +171,8 @@ export function saveScreenAccessRoles(screenId, data) {
 
 // 屏级角色候选列表沿用 auth 角色目录；列表只用于配置体验，后端保存时重新校验。
 export function listScreenRoles(params = {}) {
-  return call('get', '/admin/roles/all', { params }, []);
+  // 角色候选目录读取失败时必须阻止角色编辑，不能以空候选继续保存。
+  return call('get', '/admin/roles/all', { params });
 }
 
 // ===== 机构画像与命名机构组（auth-permission-center 管理端契约） =====
@@ -184,7 +188,8 @@ export function updateOrgProfile(orgCode, data) {
 }
 export function listOrgGroups(params = {}) {
   // auth 控制器无查询参数，状态/用途筛选由管理端页面按 DTO 做本地过滤。
-  return call('get', '/admin/org-groups', { params: {} }, []);
+  // 机构组是命名范围的权限边界，读取失败不可降级为空列表。
+  return call('get', '/admin/org-groups', { params: {} });
 }
 export function createOrgGroup(data) {
   return call('post', '/admin/org-groups', { data });
@@ -314,5 +319,6 @@ export function discardScreenCanvas(screenId, data = {}) {
   return call('post', '/screen/admin/canvas/discard', { data: { screenId: id, expectedVersion, reason } });
 }
 export function listScreenPublishLogs(id) {
-  return call('get', `/screen/admin/canvas/${id}/publish-logs`, {}, []);
+  // 发布归档读取失败必须显式暴露，避免回滚页把未知状态显示成“无归档”。
+  return call('get', `/screen/admin/canvas/${id}/publish-logs`, {});
 }

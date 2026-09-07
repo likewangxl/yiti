@@ -5,8 +5,9 @@
 // 吞掉这个引导态语义，属真实 bug，已修复，见 impl-t10 报告）。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
+import { nextTick, reactive } from 'vue';
 
-const routeState = { params: { screenCode: 'SCR_TEST' }, query: {} };
+const routeState = reactive({ params: { screenCode: 'SCR_TEST' }, query: {} });
 vi.mock('vue-router', () => ({
   useRoute: () => routeState,
   useRouter: () => ({ back: vi.fn(), push: vi.fn() })
@@ -18,10 +19,16 @@ vi.mock('@/api/screen', () => ({ getScreenView: (...args) => getScreenViewMock(.
 import ScreenView from '../ScreenView.vue';
 
 const stubs = {
-    ScreenRenderer: {
+  ScreenRenderer: {
     template: '<div class="stub-renderer" :data-pkg="JSON.stringify(renderPackage)" '
       + ':data-points="JSON.stringify(mapPoints)" :data-context="JSON.stringify(context)" />',
     props: ['renderPackage', 'mapPoints', 'context']
+  },
+  PanoramaRuntime: {
+    name: 'PanoramaRuntime',
+    template: '<div class="stub-panorama-runtime" :data-screen="view?.screenName" '
+      + ':data-context="JSON.stringify(context)" />',
+    props: ['view', 'context']
   }
 };
 
@@ -29,6 +36,7 @@ let wrapper;
 describe('ScreenView.vue', () => {
   beforeEach(() => {
     getScreenViewMock.mockReset();
+    routeState.params.screenCode = 'SCR_TEST';
     routeState.query = {};
   });
   afterEach(() => { wrapper?.unmount(); });
@@ -106,6 +114,78 @@ describe('ScreenView.vue', () => {
     await flushPromises();
     expect(wrapper.find('.stub-renderer').exists()).toBe(false);
     expect(wrapper.text()).toContain('该大屏尚未发布');
+  });
+
+  it('CODE branch-overview-v1 脱离旧舞台并只渲染 PanoramaRuntime，透传 view/context', async () => {
+    getScreenViewMock.mockResolvedValue({
+      screenName: '代码化分行总览',
+      orgScopeMode: 'NAMED_GROUP',
+      renderPackageJson: JSON.stringify({
+        canvasStyle: { presentation: { type: 'CODE', template: 'branch-overview-v1' } },
+        components: [{ id: 'legacy-must-not-render' }]
+      }),
+      mapPoints: [{ orgCode: 'O1' }]
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(wrapper.find('.stub-panorama-runtime').exists()).toBe(true);
+    expect(wrapper.find('.stub-renderer').exists()).toBe(false);
+    expect(wrapper.find('.scr-stage').exists()).toBe(false);
+    expect(wrapper.find('.stub-panorama-runtime').attributes('data-screen')).toBe('代码化分行总览');
+    expect(JSON.parse(wrapper.find('.stub-panorama-runtime').attributes('data-context'))).toMatchObject({
+      screenCode: 'SCR_TEST', schemaVersion: 2
+    });
+  });
+
+  it('presentation=null 兼容旧画布，继续走旧 ScreenRenderer', async () => {
+    getScreenViewMock.mockResolvedValue({
+      screenName: '旧画布兼容屏',
+      renderPackageJson: JSON.stringify({ canvasStyle: { presentation: null }, components: [] })
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(wrapper.find('.stub-renderer').exists()).toBe(true);
+    expect(wrapper.find('.scr-stage').exists()).toBe(true);
+    expect(wrapper.find('.stub-panorama-runtime').exists()).toBe(false);
+    expect(wrapper.find('.screen-presentation-unsupported').exists()).toBe(false);
+  });
+
+  it('未知 presentation 明确报不支持，不能静默回退旧 ScreenRenderer', async () => {
+    getScreenViewMock.mockResolvedValue({
+      screenName: '未知模板屏',
+      renderPackageJson: JSON.stringify({
+        canvasStyle: { presentation: { type: 'CODE', template: 'future-template-v9' } },
+        components: [{ id: 'legacy-must-not-render' }]
+      })
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(wrapper.find('.stub-panorama-runtime').exists()).toBe(false);
+    expect(wrapper.find('.stub-renderer').exists()).toBe(false);
+    expect(wrapper.text()).toContain('暂不支持');
+    expect(wrapper.text()).toContain('future-template-v9');
+  });
+
+  it('路由切换后旧请求迟到不能覆盖新屏响应', async () => {
+    let resolveFirst;
+    let resolveSecond;
+    getScreenViewMock
+      .mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve; }))
+      .mockImplementationOnce(() => new Promise(resolve => { resolveSecond = resolve; }));
+    wrapper = mount(ScreenView, { global: { stubs } });
+    expect(getScreenViewMock).toHaveBeenCalledWith('SCR_TEST', undefined);
+
+    routeState.params.screenCode = 'SCR_NEXT';
+    await nextTick();
+    expect(getScreenViewMock).toHaveBeenCalledWith('SCR_NEXT', undefined);
+
+    resolveSecond({ screenName: '新屏', renderPackageJson: '{"components":[]}' });
+    await flushPromises();
+    expect(wrapper.find('.scr-title').text()).toBe('新屏');
+
+    resolveFirst({ screenName: '旧屏', renderPackageJson: '{"components":[]}' });
+    await flushPromises();
+    expect(wrapper.find('.scr-title').text()).toBe('新屏');
   });
 
   it('无地图的 NAMED_GROUP 屏仍向区块传 schemaVersion=2', async () => {

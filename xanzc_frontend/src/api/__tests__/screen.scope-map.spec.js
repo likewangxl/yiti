@@ -7,6 +7,7 @@ import {
   listOrgProfiles,
   updateOrgProfile,
   listOrgGroups,
+  listScreens,
   listScreenDatasources,
   listScreenMapRegionMetrics,
   createOrgGroup,
@@ -19,6 +20,8 @@ import {
   saveScreenMetadata,
   queryScreenData,
   discardScreenCanvas,
+  listScreenRoles,
+  listScreenPublishLogs,
   probeScreenDatasourceColumns,
   saveScreenDatasource,
   updateScreenDatasource,
@@ -37,14 +40,14 @@ describe('大屏范围与机构配置 API', () => {
     await updateOrgProfile('X1', { operatingLevel: 'PRIMARY' });
     expect(call).toHaveBeenCalledWith('put', '/admin/org-profiles/X1', { data: { operatingLevel: 'PRIMARY' } });
     await listOrgGroups({ status: 'ACTIVE' });
-    expect(call).toHaveBeenCalledWith('get', '/admin/org-groups', { params: {} }, []);
+    expect(call).toHaveBeenCalledWith('get', '/admin/org-groups', { params: {} });
   });
 
   it('数据源列表只向后端发送其声明的 dsType/keyword，业务条线由前端按 DTO 过滤', async () => {
     await listScreenDatasources({ bizLine: 'CORP', dsType: 'SINGLE', keyword: '存款' });
     expect(call).toHaveBeenCalledWith('get', '/screen/admin/datasources', {
       params: { dsType: 'SINGLE', keyword: '存款' }
-    }, []);
+    });
   });
 
   it('通用屏保存不静默补业务字段，也绝不夹带角色白名单', async () => {
@@ -154,7 +157,7 @@ describe('大屏范围与机构配置 API', () => {
   it('屏级角色白名单 API 与严格 schema2 区块请求契约隔离', async () => {
     await listScreenAccessRoles(12);
     await saveScreenAccessRoles(12, { roleCodes: ['R1'], reason: '配置', expectedVersion: 7 });
-    expect(call).toHaveBeenCalledWith('get', '/screen/admin/screens/12/access-roles', {}, []);
+    expect(call).toHaveBeenCalledWith('get', '/screen/admin/screens/12/access-roles', {});
     expect(call).toHaveBeenCalledWith('put', '/screen/admin/screens/12/access-roles', {
       data: { roleCodes: ['R1'], reason: '配置', expectedVersion: 7 }
     });
@@ -162,6 +165,27 @@ describe('大屏范围与机构配置 API', () => {
     expect(call).toHaveBeenLastCalledWith('post', '/screen/data', {
       data: { screenCode: 'SCR_RETAIL', blockId: 9, period: 'LATEST', schemaVersion: 2 }, silent: true
     }, null);
+  });
+
+  it('权限配置目录和发布归档读取不提供空数组降级，底层错误原样向上传递', async () => {
+    await listScreenRoles({ enabled: true });
+    expect(call).toHaveBeenCalledWith('get', '/admin/roles/all', { params: { enabled: true } });
+    await listScreenPublishLogs(12);
+    expect(call).toHaveBeenCalledWith('get', '/screen/admin/canvas/12/publish-logs', {});
+
+    const forbidden = Object.assign(new Error('forbidden'), { response: { status: 403 } });
+    call.mockRejectedValueOnce(forbidden);
+    await expect(listScreenAccessRoles(12)).rejects.toBe(forbidden);
+    call.mockRejectedValueOnce(forbidden);
+    await expect(listScreenRoles()).rejects.toBe(forbidden);
+    call.mockRejectedValueOnce(forbidden);
+    await expect(listOrgGroups()).rejects.toBe(forbidden);
+    call.mockRejectedValueOnce(forbidden);
+    await expect(listScreenPublishLogs(12)).rejects.toBe(forbidden);
+    call.mockRejectedValueOnce(forbidden);
+    await expect(listScreens()).rejects.toBe(forbidden);
+    call.mockRejectedValueOnce(forbidden);
+    await expect(listScreenDatasources()).rejects.toBe(forbidden);
   });
 
   it('设计器地图指标为可选请求且静默处理屏级无权限，不改变后端 fail-close', async () => {
