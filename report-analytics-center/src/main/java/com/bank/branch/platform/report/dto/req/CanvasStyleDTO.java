@@ -1,5 +1,6 @@
 package com.bank.branch.platform.report.dto.req;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 import java.util.Map;
 
@@ -20,4 +21,9 @@ public class CanvasStyleDTO {
     /** 适配策略:keep/keepProportion/widthFirst/heightFirst */
     private String adaptor = "keepProportion";
     private Map<String, Object> themeOverride;
+    /**
+     * 可选的代码化大屏声明。缺省表示历史坐标画布，必须继续按旧契约兼容。
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private CodeScreenPresentationDTO presentation;
 }

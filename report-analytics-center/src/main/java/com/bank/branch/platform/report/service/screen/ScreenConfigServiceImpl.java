@@ -2,6 +2,7 @@ package com.bank.branch.platform.report.service.screen;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.ResourceApi;
+import com.bank.branch.platform.auth.api.dto.OrgProfileDTO;
 import com.bank.branch.platform.common.trace.MdcUtils;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
@@ -13,6 +14,7 @@ import com.bank.branch.platform.report.dto.req.ScreenSaveReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDetailRespDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenViewRespDTO;
 import com.bank.branch.platform.report.dto.resp.MapRegionMetricDTO;
+import com.bank.branch.platform.report.dto.resp.PanoramaInstitutionDTO;
 import com.bank.branch.platform.performance.api.MetricApi;
 import com.bank.branch.platform.report.entity.RptScreen;
 import com.bank.branch.platform.report.entity.RptScreenAccessRole;
@@ -345,16 +347,6 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         d.setScreenName(s.getScreenName());
         d.setViewLevel(s.getViewLevel());
         d.setOrgScopeMode(normalizeScopeMode(s.getOrgScopeMode()));
-        // mapPoints 沿用旧 getViewByCode 的实时查询语义:仅 PROVINCE 屏现查现填,不烘焙进渲染包,
-        // published/draft 两态一致(点位数据独立于画布双态)。
-        if ("PROVINCE".equals(s.getViewLevel()) && !hasV2Map(s)) {
-            d.setMapPoints(pointMapper.selectList(new LambdaQueryWrapper<RptScreenMapPoint>()
-                            .eq(RptScreenMapPoint::getStatus, "ACTIVE"))
-                    .stream().map(this::toPointDto).collect(Collectors.toList()));
-        } else {
-            d.setMapPoints(List.of());
-        }
-        d.setMapRegionMetrics(buildMapRegionMetrics(d.getMapPoints()));
         boolean draft = "draft".equalsIgnoreCase(state);
         if (draft) {
             if (resourceApi == null
@@ -372,14 +364,171 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             d.setRenderPackageJson(s.getCanvasPublishedJson());
             d.setState("published");
         }
+        boolean codePresentation = validateRenderPackage(s, d.getRenderPackageJson());
+        // CODE 画布的组件身份来自 bindSnapshots，不使用旧坐标点位及其逐机构指标 N+1 路径。
+        // 历史画布继续保留原有 PROVINCE 实时点位语义。
+        if (!codePresentation && "PROVINCE".equals(s.getViewLevel()) && !hasV2Map(s)) {
+            d.setMapPoints(pointMapper.selectList(new LambdaQueryWrapper<RptScreenMapPoint>()
+                            .eq(RptScreenMapPoint::getStatus, "ACTIVE"))
+                    .stream().map(this::toPointDto).collect(Collectors.toList()));
+            d.setMapRegionMetrics(buildMapRegionMetrics(d.getMapPoints()));
+        } else {
+            d.setMapPoints(List.of());
+            d.setMapRegionMetrics(List.of());
+        }
+        if (codePresentation && "NAMED_GROUP".equals(normalizeScopeMode(s.getOrgScopeMode()))) {
+            d.setPanoramaInstitutions(buildPanoramaInstitutions(s, authorizedOrgCodes));
+        } else {
+            d.setPanoramaInstitutions(List.of());
+        }
         d.setRuntimeSchemaVersion(runtimeSchemaVersion(s, d.getRenderPackageJson()));
-        if (screenMapService != null && screenMapService.hasV2Map(d.getRenderPackageJson())
+        if (!codePresentation && screenMapService != null && screenMapService.hasV2Map(d.getRenderPackageJson())
                 && scopeAuthorizationService != null) {
             var profiles = scopeAuthorizationService.activeProfiles(s, authorizedOrgCodes);
             d.setMapPackage(screenMapService.render(
                     screenMapService.findV2MapConfig(d.getRenderPackageJson()), authorizedOrgCodes, profiles));
         }
         return d;
+    }
+
+    /**
+     * CODE 包在运行时再次按不可变快照校验；旧包保持历史解析路径。
+     */
+    private boolean validateRenderPackage(RptScreen screen, String packageJson) {
+        try {
+            JsonNode root = objectMapper.readTree(packageJson == null || packageJson.isBlank()
+                    ? "{}" : packageJson);
+            boolean code = CodeScreenPresentationValidator.isCodePresentation(root.path("canvasStyle"));
+            if (code) {
+                // CODE runtime must pass the existing immutable identity validator as well as
+                // the slot/units validator. The latter alone would allow a snapshot map whose
+                // keys do not match ChartWidget blockIds.
+                JsonNode strictRoot;
+                try {
+                    strictRoot = PublishedScreenPackageValidator.read(packageJson);
+                    PublishedScreenPackageValidator.requireTrustedBindings(strictRoot);
+                } catch (Exception ex) {
+                    throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
+                }
+                CodeScreenPresentationValidator.validatePublishedPackage(strictRoot);
+                validateCodeDatasourceBindings(screen, strictRoot);
+            }
+            return code;
+        } catch (RptException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, e);
+        }
+    }
+
+    /** CODE 运行/草稿预览按发布包快照的真实 dsId 校验字段存在性和 DIM/METRIC 角色。 */
+    private void validateCodeDatasourceBindings(RptScreen screen, JsonNode root) {
+        JsonNode components = root.path("components");
+        JsonNode snapshots = root.path("bindSnapshots");
+        if (!components.isArray() || !snapshots.isObject()) {
+            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED);
+        }
+        for (JsonNode component : components) {
+            if (!"ChartWidget".equals(component.path("component").asText())) {
+                throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED);
+            }
+            JsonNode blockId = component.path("blockId");
+            String bindingKey = component.path("propValue").path("bindingKey").asText();
+            JsonNode snapshot = snapshots.path(blockId.asText());
+            JsonNode bind = snapshot.path("bind");
+            if (!bind.isObject() || !bind.path("dsId").isIntegralNumber()) {
+                throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED);
+            }
+            RptScreenDatasource datasource = dsMapper.selectById(bind.path("dsId").longValue());
+            if (datasource == null) {
+                throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
+            }
+            try {
+                CodeScreenPresentationValidator.validateBindAgainstDatasource(bind, bindingKey, datasource);
+                if ("NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())
+                        && ("branches".equals(bindingKey) || "citySummary".equals(bindingKey))) {
+                    try {
+                        // The immutable package must satisfy the same server-side identity rule as
+                        // save/publish/metadata transitions. A stale package must never reach the
+                        // frontend with an org_name pretending to be an orgCode.
+                        validateCodeNamedGroupBinding(bindingKey, bind.toString(), datasource);
+                    } catch (RptException ex) {
+                        if (RptErrorCode.SCREEN_DS_CONFIG_INVALID.getCode().equals(ex.getCode())) {
+                            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
+                        }
+                        throw ex;
+                    }
+                }
+            } catch (RptException ex) {
+                if (RptErrorCode.SCREEN_LAYOUT_INVALID.getCode().equals(ex.getCode())) {
+                    throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
+                }
+                throw ex;
+            }
+        }
+    }
+
+    /**
+     * 将当前授权机构集合投影为前端目录。遍历只使用 authorizeRuntime 返回的 code，
+     * activeProfiles 的额外键不会进入响应；授权 code 缺画像或画像非 ACTIVE 时 fail-close。
+     */
+    private List<PanoramaInstitutionDTO> buildPanoramaInstitutions(RptScreen screen,
+                                                                     Set<String> authorizedOrgCodes) {
+        if (scopeAuthorizationService == null || authorizedOrgCodes == null
+                || authorizedOrgCodes.isEmpty()) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        Map<String, OrgProfileDTO> profiles = scopeAuthorizationService.activeProfiles(
+                screen, authorizedOrgCodes);
+        if (profiles == null) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        List<PanoramaInstitutionDTO> result = new ArrayList<>();
+        for (String authorizedCode : authorizedOrgCodes) {
+            if (authorizedCode == null || authorizedCode.isBlank()) {
+                throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+            }
+            OrgProfileDTO profile = profiles.get(authorizedCode);
+            if (profile == null || !"ACTIVE".equalsIgnoreCase(profile.getStatus())
+                    || profile.getOrgCode() == null
+                    || !authorizedCode.equals(profile.getOrgCode().trim())) {
+                throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+            }
+            if ("DEPARTMENT".equalsIgnoreCase(profile.getOrgNature())) {
+                continue;
+            }
+            PanoramaInstitutionDTO dto = new PanoramaInstitutionDTO();
+            dto.setOrgCode(authorizedCode);
+            dto.setOrgName(profile.getOrgName());
+            dto.setCityCode(profile.getCityCode());
+            dto.setCityName(profile.getCityName());
+            dto.setOwnerOperatingOrgCode(profile.getOwnerOperatingOrgCode());
+            dto.setOperatingLevel(profile.getOperatingLevel());
+            dto.setOrgNature(profile.getOrgNature());
+            dto.setCoordSys(profile.getCoordSys());
+            boolean demo = profile.getRemark() != null
+                    && profile.getRemark().contains("SCREEN_MAP_DEMO");
+            boolean located = !demo && validPanoramaCoordinate(profile);
+            dto.setLocated(located);
+            if (!located) {
+                dto.setLng(null);
+                dto.setLat(null);
+            } else {
+                dto.setLng(profile.getLng());
+                dto.setLat(profile.getLat());
+            }
+            result.add(dto);
+        }
+        return result;
+    }
+
+    private boolean validPanoramaCoordinate(OrgProfileDTO profile) {
+        return profile.getLng() != null && profile.getLat() != null
+                && profile.getLng().compareTo(BigDecimal.valueOf(-180)) >= 0
+                && profile.getLng().compareTo(BigDecimal.valueOf(180)) <= 0
+                && profile.getLat().compareTo(BigDecimal.valueOf(-90)) >= 0
+                && profile.getLat().compareTo(BigDecimal.valueOf(90)) <= 0
+                && "GCJ02".equalsIgnoreCase(profile.getCoordSys());
     }
 
     /**
@@ -453,7 +602,11 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                 snapshot.set("drill", objectMapper.readTree(block.getDrillJson() == null ? "{}" : block.getDrillJson()));
             }
             pkg.put("schemaVersion", hasV2MapInComponents(pkg.path("components")) ? 2 : 1);
-            return pkg.toString();
+            String packageJson = pkg.toString();
+            validateRenderPackage(s, packageJson);
+            return packageJson;
+        } catch (RptException e) {
+            throw e;
         } catch (Exception e) {
             throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, e);
         }
@@ -513,7 +666,8 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
      */
     private void validateExistingBlockBindings(RptScreen screen) {
         List<BlockBinding> bindings = new ArrayList<>();
-        for (ScreenBlockDTO block : listBlocks(screen.getId())) {
+        List<ScreenBlockDTO> draftBlocks = listBlocks(screen.getId());
+        for (ScreenBlockDTO block : draftBlocks) {
             Long datasourceId = readDsId(block.getBindJson());
             if (datasourceId == null) {
                 throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
@@ -549,6 +703,127 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                     && !"KPI_DETAIL".equals(datasource.getSourceKind())) {
                 throw new RptException(RptErrorCode.SCREEN_BLOCK_BIND_MISMATCH);
             }
+        }
+
+        // A legacy screen can already contain a CODE canvas. When its scope changes to
+        // NAMED_GROUP, componentType alone is insufficient: the branches slot must still be
+        // backed by the server-side SUBJECT/org_code binding contract. Parse both mutable draft
+        // components and immutable published components before the metadata CAS, so a scope
+        // change cannot create a path that save/publish would have rejected.
+        if ("NAMED_GROUP".equals(normalizeScopeMode(screen.getOrgScopeMode()))
+                && CodeScreenPresentationValidator.isCodePresentation(screen.getCanvasStyleJson())) {
+            validateCodeNamedGroupMetadataBindings(screen, draftBlocks, datasourceById);
+        }
+    }
+
+    private void validateCodeNamedGroupMetadataBindings(RptScreen screen,
+                                                        List<ScreenBlockDTO> draftBlocks,
+                                                        Map<Long, RptScreenDatasource> datasourceById) {
+        Map<Long, ScreenBlockDTO> blocksById = draftBlocks.stream()
+                .filter(block -> block.getId() != null)
+                .collect(Collectors.toMap(ScreenBlockDTO::getId, Function.identity(), (left, right) -> left));
+        Map<Long, String> draftBindingKeys = new HashMap<>();
+        collectCodeBindingKeys(readJsonNode(screen.getCanvasDraftJson()).path("components"), draftBindingKeys);
+        for (Map.Entry<Long, String> entry : draftBindingKeys.entrySet()) {
+            if (!"branches".equals(entry.getValue()) && !"citySummary".equals(entry.getValue())) {
+                continue;
+            }
+            ScreenBlockDTO block = blocksById.get(entry.getKey());
+            if (block == null) {
+                throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+            }
+            Long dsId = readDsId(block.getBindJson());
+            RptScreenDatasource datasource = datasourceById.get(dsId);
+            if (datasource == null) {
+                throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
+            }
+            validateCodeNamedGroupBinding(entry.getValue(), block.getBindJson(), datasource);
+        }
+
+        if (screen.getCanvasPublishedJson() == null || screen.getCanvasPublishedJson().isBlank()) {
+            return;
+        }
+        try {
+            JsonNode published = PublishedScreenPackageValidator.read(screen.getCanvasPublishedJson());
+            Map<Long, JsonNode> snapshots = PublishedScreenPackageValidator.requireTrustedBindings(published);
+            Map<Long, String> publishedBindingKeys = new HashMap<>();
+            collectCodeBindingKeys(published.path("components"), publishedBindingKeys);
+            for (Map.Entry<Long, String> entry : publishedBindingKeys.entrySet()) {
+                if (!"branches".equals(entry.getValue()) && !"citySummary".equals(entry.getValue())) {
+                    continue;
+                }
+                JsonNode snapshot = snapshots.get(entry.getKey());
+                if (snapshot == null || !snapshot.path("bind").isObject()) {
+                    throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED);
+                }
+                Long dsId = readDsId(snapshot.path("bind").toString());
+                RptScreenDatasource datasource = datasourceById.get(dsId);
+                if (datasource == null) {
+                    throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
+                }
+                validateCodeNamedGroupBinding(entry.getValue(), snapshot.path("bind").toString(), datasource);
+            }
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
+        }
+    }
+
+    private void collectCodeBindingKeys(JsonNode components, Map<Long, String> keysByBlockId) {
+        if (components == null || components.isMissingNode() || components.isNull()) {
+            return;
+        }
+        if (!components.isArray()) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+        }
+        for (JsonNode component : components) {
+            if ("ChartWidget".equals(component.path("component").asText())) {
+                JsonNode blockId = component.path("blockId");
+                if (!blockId.isIntegralNumber() || !blockId.canConvertToLong() || blockId.longValue() <= 0) {
+                    throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+                }
+                String bindingKey = component.path("propValue").path("bindingKey").asText();
+                if (!bindingKey.isBlank() && keysByBlockId.putIfAbsent(blockId.longValue(), bindingKey) != null) {
+                    throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+                }
+            }
+            collectCodeBindingKeys(component.path("children"), keysByBlockId);
+        }
+    }
+
+    private JsonNode readJsonNode(String json) {
+        try {
+            return objectMapper.readTree(json == null || json.isBlank() ? "{}" : json);
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, ex);
+        }
+    }
+
+    private void validateCodeNamedGroupBinding(String bindingKey, String bindJson,
+                                               RptScreenDatasource datasource) {
+        if (!"branches".equals(bindingKey) && !"citySummary".equals(bindingKey)) {
+            return;
+        }
+        try {
+            JsonNode config = objectMapper.readTree(datasource.getConfigJson() == null
+                    ? "{}" : datasource.getConfigJson());
+            JsonNode bind = objectMapper.readTree(bindJson == null ? "{}" : bindJson);
+            boolean namedSubject = "WIDE_TABLE".equals(datasource.getSourceKind())
+                    && "ORG_INDEX_RESULT".equals(config.path("table").asText())
+                    && "org_code".equals(config.path("subjectCol").asText())
+                    && config.path("aggregation").isObject()
+                    && "SUBJECT".equals(config.path("aggregation").path("groupBy").asText());
+            boolean requiresNamedSubject = "branches".equals(bindingKey)
+                    || ("citySummary".equals(bindingKey) && bind.path("fields").has("orgCode"));
+            if (requiresNamedSubject && (!namedSubject
+                    || !"org_code".equals(bind.path("fields").path("orgCode").asText()))) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID, ex);
         }
     }
 
@@ -670,6 +945,8 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         candidate.setThemeJson(source.getThemeJson());
         candidate.setStatus(source.getStatus());
         // 仅供更新前的发布快照矩阵复核使用；updateMetadataCas XML 未引用该字段，绝不写回数据库。
+        candidate.setCanvasStyleJson(source.getCanvasStyleJson());
+        candidate.setCanvasDraftJson(source.getCanvasDraftJson());
         candidate.setCanvasPublishedJson(source.getCanvasPublishedJson());
         return candidate;
     }

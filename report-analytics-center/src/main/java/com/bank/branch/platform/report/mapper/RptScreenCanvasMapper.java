@@ -30,6 +30,8 @@ public interface RptScreenCanvasMapper extends BaseMapper<RptScreen> {
     int applyPublishedCas(@Param("id") Long id,
                           @Param("expected") int expectedVersion,
                           @Param("publishedJson") String publishedJson,
+                          @Param("styleJson") String styleJson,
+                          @Param("draftJson") String draftJson,
                           @Param("publishStatus") int publishStatus,
                           @Param("empId") String empId);
 
@@ -54,6 +56,7 @@ public interface RptScreenCanvasMapper extends BaseMapper<RptScreen> {
      */
     int discardDraftCas(@Param("id") Long id,
                         @Param("expected") int expectedVersion,
+                        @Param("styleJson") String styleJson,
                         @Param("draftJson") String draftJson,
                         @Param("empId") String empId);
 }

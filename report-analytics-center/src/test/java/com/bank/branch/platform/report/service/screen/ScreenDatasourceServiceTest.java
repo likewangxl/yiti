@@ -33,6 +33,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.bank.branch.platform.report.dto.resp.ScreenDatasourceRespDTO;
 
@@ -482,6 +483,72 @@ class ScreenDatasourceServiceTest {
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(scopeGuard, engine);
         order.verify(scopeGuard).check(any(), any());
         order.verify(engine).query(any(), any());
+    }
+
+    @Test
+    void queryData_namedGroupValidOrgCodeNarrowsServerScopeToSingleton() {
+        RptScreen screen = namedGroupRuntimeScreen();
+        RptScreenDatasource ds = namedGroupDatasource();
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(dsMapper.selectById(3L)).thenReturn(ds);
+        when(scopeAuthorizationService.authorize(screen)).thenReturn(Set.of("ORG_1", "ORG_2"));
+        when(engine.query(any(), any())).thenReturn(new ScreenDataRespDTO(List.of("c"), List.of()));
+
+        ScreenDataReqDTO req = namedGroupRequest();
+        req.setContextParams(Map.of("orgCode", "ORG_2"));
+
+        service.queryData(req);
+
+        assertThat(req.getServerOrgCodes()).containsExactly("ORG_2");
+        verify(engine).query(ds, req);
+    }
+
+    @Test
+    void queryData_namedGroupWithoutOrgCodeKeepsAllAuthorizedMembers() {
+        RptScreen screen = namedGroupRuntimeScreen();
+        RptScreenDatasource ds = namedGroupDatasource();
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(dsMapper.selectById(3L)).thenReturn(ds);
+        when(scopeAuthorizationService.authorize(screen)).thenReturn(Set.of("ORG_1", "ORG_2"));
+        when(engine.query(any(), any())).thenReturn(new ScreenDataRespDTO(List.of("c"), List.of()));
+
+        ScreenDataReqDTO req = namedGroupRequest();
+        req.setContextParams(Map.of("orgCodes", "ORG_FORGED"));
+
+        service.queryData(req);
+
+        assertThat(req.getServerOrgCodes()).containsExactlyInAnyOrder("ORG_1", "ORG_2");
+        verify(engine).query(ds, req);
+    }
+
+    @Test
+    void queryData_namedGroupForeignOrgCodeIsDeniedBeforeEngine() {
+        RptScreen screen = namedGroupRuntimeScreen();
+        RptScreenDatasource ds = namedGroupDatasource();
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(dsMapper.selectById(3L)).thenReturn(ds);
+        when(scopeAuthorizationService.authorize(screen)).thenReturn(Set.of("ORG_1", "ORG_2"));
+
+        ScreenDataReqDTO req = namedGroupRequest();
+        req.setContextParams(Map.of("orgCode", "ORG_999"));
+
+        assertThatThrownBy(() -> service.queryData(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_ACCESS_DENIED.getCode());
+        verify(engine, never()).query(any(), any());
+    }
+
+    @Test
+    void queryData_namedGroupEmptyAuthorizedSetIsDenied() {
+        RptScreen screen = namedGroupRuntimeScreen();
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(dsMapper.selectById(3L)).thenReturn(namedGroupDatasource());
+        when(scopeAuthorizationService.authorize(screen)).thenReturn(Set.of());
+
+        assertThatThrownBy(() -> service.queryData(namedGroupRequest()))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_ACCESS_DENIED.getCode());
+        verify(engine, never()).query(any(), any());
     }
 
     @Test
@@ -964,6 +1031,38 @@ class ScreenDatasourceServiceTest {
         return req;
     }
 
+    private RptScreen namedGroupRuntimeScreen() {
+        RptScreen screen = new RptScreen();
+        screen.setId(18L);
+        screen.setScreenCode("SCR_NAMED");
+        screen.setStatus("ACTIVE");
+        screen.setBizLine("COMMON");
+        screen.setOrgScopeMode("NAMED_GROUP");
+        screen.setPublishStatus(1);
+        screen.setCanvasPublishedJson("{\"schemaVersion\":2,\"components\":[{\"component\":\"ChartWidget\",\"blockId\":31}],"
+                + "\"bindSnapshots\":{\"31\":{\"bind\":{\"dsId\":3}}}}");
+        return screen;
+    }
+
+    private RptScreenDatasource namedGroupDatasource() {
+        RptScreenDatasource ds = new RptScreenDatasource();
+        ds.setId(3L);
+        ds.setStatus("ACTIVE");
+        ds.setBizLine("COMMON");
+        ds.setSourceKind("WIDE_TABLE");
+        ds.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","
+                + "\"aggregation\":{\"groupBy\":\"SUBJECT\"}}");
+        return ds;
+    }
+
+    private ScreenDataReqDTO namedGroupRequest() {
+        ScreenDataReqDTO req = new ScreenDataReqDTO();
+        req.setSchemaVersion(2);
+        req.setScreenCode("SCR_NAMED");
+        req.setBlockId(31L);
+        return req;
+    }
+
     @Test
     void save_fieldMeta_valid_preservedThroughWideTableRewrite() {
         mockSlotEmp();
@@ -1155,6 +1254,36 @@ class ScreenDatasourceServiceTest {
                         + "\"filters\":[{\"col\":\"emp_id\",\"op\":\"LIKE\",\"value\":\"E%\"}]}"))))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43009");
+    }
+
+    @Test
+    void list_readsReferenceTablesOnceForAllDatasources() {
+        RptScreenDatasource first = new RptScreenDatasource();
+        first.setId(7L);
+        RptScreenDatasource second = new RptScreenDatasource();
+        second.setId(8L);
+        RptScreen screen = new RptScreen();
+        screen.setId(90L);
+        screen.setScreenCode("SCREEN_A");
+        // 未知发布包应保守引用每个数据源，不能用加速列表丢失删除保护提示。
+        screen.setCanvasPublishedJson("{}");
+        RptScreenBlock block = new RptScreenBlock();
+        block.setScreenId(90L);
+        block.setBindJson("{\"dsId\":7}");
+        when(dsMapper.selectList(any())).thenReturn(List.of(first, second));
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(blockMapper.selectList(any())).thenReturn(List.of(block));
+        lenient().when(publishLogMapper.selectList(any())).thenReturn(List.of());
+
+        List<ScreenDatasourceRespDTO> result = service.list(null, null);
+
+        assertThat(result.get(0).getDraftReferenceScreenCodes()).containsExactly("SCREEN_A");
+        assertThat(result.get(1).getDraftReferenceScreenCodes()).isEmpty();
+        assertThat(result).allSatisfy(row ->
+                assertThat(row.getPublishedReferenceScreenCodes()).containsExactly("SCREEN_A"));
+        verify(screenMapper).selectList(any());
+        verify(blockMapper).selectList(any());
+        verify(publishLogMapper).selectList(any());
     }
 
     @Test

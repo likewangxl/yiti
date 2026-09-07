@@ -103,6 +103,7 @@ class ScreenSecurityRegressionTest {
         when(queryEngine.query(any(), any())).thenReturn(expected);
 
         ScreenDataReqDTO req = runtimeRequest(11L);
+        req.setContextParams(Map.of()); // 本例验证发布身份；不请求越权支行。
 
         assertThat(datasourceService.queryData(req)).isSameAs(expected);
         verifyNoInteractions(blockMapper);
@@ -117,7 +118,9 @@ class ScreenSecurityRegressionTest {
         when(dsMapper.selectById(12L)).thenReturn(datasource);
         when(queryEngine.query(any(), any())).thenReturn(new ScreenDataRespDTO(List.of(), List.of()));
 
-        datasourceService.queryData(runtimeRequest(11L));
+        ScreenDataReqDTO req = runtimeRequest(11L);
+        req.setContextParams(Map.of()); // 草稿归属与已发布身份隔离，与支行选择正交。
+        datasourceService.queryData(req);
 
         verify(queryEngine).query(any(), any());
         verify(blockMapper, never()).selectById(11L);

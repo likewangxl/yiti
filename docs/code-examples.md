@@ -6,6 +6,8 @@
 
 ## 后端
 
+- 代码化大屏模板声明与机构地图边界：`report-analytics-center/src/main/java/com/bank/branch/platform/report/service/screen/CodeScreenPresentationValidator.java`；前端槽位/单位适配：`xanzc_frontend/src/views/screen/panorama/bindings.js`、`dataAdapter.js`。约束与使用步骤见 `docs/modules/report-analytics-center/11-代码化经营大屏.md`。
+
 ### 文件上传 + 对象存储（华为云 OBS）
 | 关注点 | 位置 | 说明 |
 |---|---|---|

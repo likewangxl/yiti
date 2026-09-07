@@ -2,6 +2,7 @@ package com.bank.branch.platform.report.service.screen;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.ResourceApi;
+import com.bank.branch.platform.auth.api.dto.OrgProfileDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.performance.api.MetricApi;
@@ -34,11 +35,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.util.Set;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -109,6 +113,44 @@ class ScreenConfigServiceTest {
         screen.setCanvasDraftJson("{\"schemaVersion\":1,\"components\":[]}");
         screen.setCanvasPublishedJson("{\"schemaVersion\":1,\"components\":[],\"bindSnapshots\":{}}");
         return screen;
+    }
+
+    private RptScreen legacyCodeScreen(long id) {
+        RptScreen screen = configuredScreen(id);
+        screen.setOrgGroupCode("GROUP_1");
+        screen.setCanvasStyleJson("{\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"branch-overview-v1\"}}");
+        String component = "{\"component\":\"ChartWidget\",\"blockId\":31,"
+                + "\"propValue\":{\"bindingKey\":\"branches\"}}";
+        screen.setCanvasDraftJson("{\"schemaVersion\":1,\"components\":[" + component + "]}");
+        screen.setCanvasPublishedJson("{\"schemaVersion\":1,\"canvasStyle\":"
+                + screen.getCanvasStyleJson() + ",\"components\":[" + component + "],"
+                + "\"bindSnapshots\":{\"31\":{\"componentType\":\"CODE\","
+                + "\"bind\":{\"dsId\":3,\"fields\":{\"orgCode\":\"org_code\"}},"
+                + "\"styleCfg\":{},\"drill\":{}}}}");
+        return screen;
+    }
+
+    private RptScreenBlock codeBranchBlock() {
+        RptScreenBlock block = new RptScreenBlock();
+        block.setId(31L);
+        block.setScreenId(7L);
+        block.setComponentType("CODE");
+        block.setBindJson("{\"dsId\":3,\"fields\":{\"orgCode\":\"org_code\"}}");
+        block.setDrillJson("{}");
+        return block;
+    }
+
+    private RptScreenDatasource namedGroupBranchDatasource(String groupBy) {
+        RptScreenDatasource datasource = new RptScreenDatasource();
+        datasource.setId(3L);
+        datasource.setBizLine("COMMON");
+        datasource.setDsType("SINGLE");
+        datasource.setSourceKind("WIDE_TABLE");
+        datasource.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\","
+                + "\"subjectCol\":\"org_code\",\"aggregation\":{\"groupBy\":\""
+                + groupBy + "\"}}");
+        return datasource;
     }
 
     @Test
@@ -352,6 +394,96 @@ class ScreenConfigServiceTest {
                 org.mockito.ArgumentMatchers.anyString());
     }
 
+    /** LEGACY -> NAMED_GROUP 不能只看 CODE block 的 componentType；branches 必须维持
+     * ORG_INDEX_RESULT + SUBJECT + fields.orgCode=org_code 的收口条件。 */
+    @Test
+    void updateMetadata_rejectsCodeBranchesDatasourceWithUnscopedAggregation() {
+        RptScreen existing = legacyCodeScreen(7L);
+        ScreenMetadataUpdateReqDTO req = metadataReq();
+        req.setOrgScopeMode("NAMED_GROUP");
+        when(screenMapper.selectById(7L)).thenReturn(existing);
+        when(blockMapper.selectList(any(Wrapper.class))).thenReturn(List.of(codeBranchBlock()));
+        when(accessRoleMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
+        when(dsMapper.selectBatchIds(any())).thenReturn(List.of(namedGroupBranchDatasource("NONE")));
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        doNothing().when(scopeAuthorizationService).validateForSave(any(RptScreen.class), any(), anyBoolean());
+
+        assertThatThrownBy(() -> service.updateScreenMetadata(7L, req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_DS_CONFIG_INVALID.getCode());
+        verify(canvasMapper, never()).updateMetadataCas(any(RptScreen.class), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void updateMetadata_allowsCodeBranchesDatasourceWhenScopedAggregationIsPreserved() {
+        RptScreen existing = legacyCodeScreen(7L);
+        ScreenMetadataUpdateReqDTO req = metadataReq();
+        req.setOrgScopeMode("NAMED_GROUP");
+        when(screenMapper.selectById(7L)).thenReturn(existing);
+        when(blockMapper.selectList(any(Wrapper.class))).thenReturn(List.of(codeBranchBlock()));
+        when(accessRoleMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
+        when(dsMapper.selectBatchIds(any())).thenReturn(List.of(namedGroupBranchDatasource("SUBJECT")));
+        when(canvasMapper.updateMetadataCas(any(RptScreen.class), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyString())).thenReturn(1);
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        doNothing().when(scopeAuthorizationService).validateForSave(any(RptScreen.class), any(), anyBoolean());
+
+        assertThat(service.updateScreenMetadata(7L, req)).isEqualTo(7L);
+        verify(canvasMapper).updateMetadataCas(any(RptScreen.class), org.mockito.ArgumentMatchers.eq(4),
+                org.mockito.ArgumentMatchers.eq("E001"));
+    }
+
+    @Test
+    void updateMetadata_rejectsCodeCitySummaryOrgNameIdentity() {
+        RptScreen existing = legacyCodeScreen(7L);
+        existing.setCanvasDraftJson(existing.getCanvasDraftJson().replace("\"branches\"", "\"citySummary\""));
+        existing.setCanvasPublishedJson(existing.getCanvasPublishedJson()
+                .replace("\"branches\"", "\"citySummary\"")
+                .replace("org_code", "org_name"));
+        RptScreenBlock block = codeBranchBlock();
+        block.setBindJson("{\"dsId\":3,\"fields\":{\"orgCode\":\"org_name\",\"deposit\":\"balance\"},"
+                + "\"units\":{\"deposit\":\"YUAN\"}}");
+        ScreenMetadataUpdateReqDTO req = metadataReq();
+        req.setOrgScopeMode("NAMED_GROUP");
+        when(screenMapper.selectById(7L)).thenReturn(existing);
+        when(blockMapper.selectList(any(Wrapper.class))).thenReturn(List.of(block));
+        when(accessRoleMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
+        when(dsMapper.selectBatchIds(any())).thenReturn(List.of(namedGroupBranchDatasource("SUBJECT")));
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        doNothing().when(scopeAuthorizationService).validateForSave(any(RptScreen.class), any(), anyBoolean());
+
+        assertThatThrownBy(() -> service.updateScreenMetadata(7L, req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_DS_CONFIG_INVALID.getCode());
+        verify(canvasMapper, never()).updateMetadataCas(any(RptScreen.class), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void updateMetadata_allowsCodeCitySummaryCityCodeOnlyWithoutOrgSubjectConstraint() {
+        RptScreen existing = legacyCodeScreen(7L);
+        existing.setCanvasDraftJson(existing.getCanvasDraftJson().replace("\"branches\"", "\"citySummary\""));
+        existing.setCanvasPublishedJson(existing.getCanvasPublishedJson()
+                .replace("\"branches\"", "\"citySummary\"")
+                .replace("\"orgCode\":\"org_code\"", "\"cityCode\":\"city_code\""));
+        RptScreenBlock block = codeBranchBlock();
+        block.setBindJson("{\"dsId\":3,\"fields\":{\"cityCode\":\"city_code\",\"deposit\":\"balance\"},"
+                + "\"units\":{\"deposit\":\"YUAN\"}}");
+        ScreenMetadataUpdateReqDTO req = metadataReq();
+        req.setOrgScopeMode("NAMED_GROUP");
+        when(screenMapper.selectById(7L)).thenReturn(existing);
+        when(blockMapper.selectList(any(Wrapper.class))).thenReturn(List.of(block));
+        when(accessRoleMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
+        when(dsMapper.selectBatchIds(any())).thenReturn(List.of(namedGroupBranchDatasource("SUBJECT")));
+        when(canvasMapper.updateMetadataCas(any(RptScreen.class), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyString())).thenReturn(1);
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        doNothing().when(scopeAuthorizationService).validateForSave(any(RptScreen.class), any(), anyBoolean());
+
+        assertThat(service.updateScreenMetadata(7L, req)).isEqualTo(7L);
+    }
+
     /** 高危元数据审计写入失败时必须抛错，使同一事务内的 CAS 回滚。 */
     @Test
     void updateMetadata_auditFailureFailsClosed() {
@@ -502,6 +634,69 @@ class ScreenConfigServiceTest {
         assertThat(render.getRuntimeSchemaVersion()).isEqualTo(2);
     }
 
+    @Test
+    void getRenderByCode_codeNamedGroupProjectsAuthorizedProfilesOnly() {
+        RptScreen screen = codeNamedRuntimeScreen();
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
+        when(dsMapper.selectById(12L)).thenReturn(codeRuntimeDatasource());
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        when(scopeAuthorizationService.authorize(screen))
+                .thenReturn(new java.util.LinkedHashSet<>(List.of("ORG_1", "DEPT_1", "DEMO_1", "UNKNOWN_COORD")));
+        when(scopeAuthorizationService.activeProfiles(any(RptScreen.class), any(Set.class)))
+                .thenReturn(Map.of(
+                        "ORG_1", profile("ORG_1", "ACTIVE", "BRANCH", "GCJ02", new BigDecimal("108.90"), new BigDecimal("34.20"), null),
+                        "DEPT_1", profile("DEPT_1", "ACTIVE", "DEPARTMENT", "GCJ02", new BigDecimal("108.91"), new BigDecimal("34.21"), null),
+                        "DEMO_1", profile("DEMO_1", "ACTIVE", "BRANCH", "GCJ02", new BigDecimal("108.92"), new BigDecimal("34.22"), "SCREEN_MAP_DEMO"),
+                        "UNKNOWN_COORD", profile("UNKNOWN_COORD", "ACTIVE", "BRANCH", "WGS84", new BigDecimal("108.93"), new BigDecimal("34.23"), null),
+                        "EXTRA", profile("EXTRA", "ACTIVE", "BRANCH", "GCJ02", new BigDecimal("108.94"), new BigDecimal("34.24"), null)));
+
+        ScreenRenderRespDTO render = service.getRenderByCode(screen.getScreenCode(), "published");
+
+        assertThat(render.getPanoramaInstitutions()).extracting("orgCode")
+                .containsExactly("ORG_1", "DEMO_1", "UNKNOWN_COORD");
+        assertThat(render.getPanoramaInstitutions().get(0).isLocated()).isTrue();
+        assertThat(render.getPanoramaInstitutions().get(1).getLng()).isNull();
+        assertThat(render.getPanoramaInstitutions().get(1).getLat()).isNull();
+        assertThat(render.getPanoramaInstitutions().get(1).isLocated()).isFalse();
+        assertThat(render.getPanoramaInstitutions().get(2).getLng()).isNull();
+        assertThat(render.getPanoramaInstitutions().get(2).isLocated()).isFalse();
+        assertThat(render.getMapPoints()).isEmpty();
+        assertThat(render.getMapRegionMetrics()).isEmpty();
+        verify(pointMapper, never()).selectList(any(Wrapper.class));
+        verify(metricApi, never()).getLatestDataDate(any());
+    }
+
+    @Test
+    void getRenderByCode_codeNamedGroupMissingOrInactiveProfileFailsScopeClosed() {
+        RptScreen screen = codeNamedRuntimeScreen();
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
+        when(dsMapper.selectById(12L)).thenReturn(codeRuntimeDatasource());
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        when(scopeAuthorizationService.authorize(screen)).thenReturn(Set.of("ORG_1", "ORG_2"));
+        OrgProfileDTO inactive = profile("ORG_1", "DISABLED", "BRANCH", "GCJ02",
+                new BigDecimal("108.90"), new BigDecimal("34.20"), null);
+        when(scopeAuthorizationService.activeProfiles(any(RptScreen.class), any(Set.class)))
+                .thenReturn(Map.of("ORG_1", inactive));
+
+        assertThatThrownBy(() -> service.getRenderByCode(screen.getScreenCode(), "published"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_SCOPE_INVALID.getCode());
+    }
+
+    @Test
+    void getRenderByCode_codeNamedGroupCitySummaryOrgNameIdentityFailsClosed() {
+        RptScreen screen = codeNamedRuntimeScreen();
+        screen.setCanvasPublishedJson(codeCitySummaryOrgNamePackage());
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
+        when(dsMapper.selectById(12L)).thenReturn(codeRuntimeSubjectDatasource());
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        when(scopeAuthorizationService.authorize(screen)).thenReturn(Set.of("ORG_1"));
+
+        assertThatThrownBy(() -> service.getRenderByCode(screen.getScreenCode(), "published"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED.getCode());
+    }
+
     /** SYS_ADMIN 不能绕过草稿管理资源；拒绝事件必须携带实际 GET URL 与屏目标。 */
     @Test
     void getRenderByCode_draftSystemAdminStillRequiresCanvasReadResourceAndAuditsDenial() {
@@ -557,6 +752,73 @@ class ScreenConfigServiceTest {
         assertThat(pkg.path("bindSnapshots").path("102").path("componentType").asText())
                 .isEqualTo("BAR_COMPARE");
         assertThat(pkg.path("bindSnapshots").has("999")).isFalse();
+    }
+
+    private RptScreen codeNamedRuntimeScreen() {
+        RptScreen screen = new RptScreen();
+        screen.setId(19L);
+        screen.setScreenCode("SCR_CODE_NAMED");
+        screen.setScreenName("代码化支行总览");
+        screen.setViewLevel("BRANCH");
+        screen.setBizLine("COMMON");
+        screen.setOrgScopeMode("NAMED_GROUP");
+        screen.setOrgGroupCode("GROUP_1");
+        screen.setStatus("ACTIVE");
+        screen.setPublishStatus(1);
+        screen.setCanvasPublishedJson(codePackage());
+        return screen;
+    }
+
+    private String codePackage() {
+        return "{\"schemaVersion\":2,\"canvasStyle\":{\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"}},"
+                + "\"components\":[{\"component\":\"ChartWidget\",\"id\":\"w-deposit\",\"blockId\":1,"
+                + "\"propValue\":{\"bindingKey\":\"deposit\"},"
+                + "\"bindJson\":\"{\\\"dsId\\\":12,\\\"period\\\":\\\"LATEST\\\",\\\"fields\\\":{\\\"value\\\":\\\"balance\\\"},\\\"units\\\":{\\\"value\\\":\\\"YUAN\\\"}}\"}],"
+                + "\"bindSnapshots\":{\"1\":{\"bind\":{\"dsId\":12,\"period\":\"LATEST\",\"fields\":{\"value\":\"balance\"},\"units\":{\"value\":\"YUAN\"}}}}}";
+    }
+
+    private String codeCitySummaryOrgNamePackage() {
+        return "{\"schemaVersion\":2,\"canvasStyle\":{\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"}},"
+                + "\"components\":[{\"component\":\"ChartWidget\",\"id\":\"w-city\",\"blockId\":1,"
+                + "\"propValue\":{\"bindingKey\":\"citySummary\"},"
+                + "\"bindJson\":\"{\\\"dsId\\\":12,\\\"period\\\":\\\"LATEST\\\",\\\"fields\\\":{\\\"orgCode\\\":\\\"org_name\\\",\\\"deposit\\\":\\\"balance\\\"},\\\"units\\\":{\\\"deposit\\\":\\\"YUAN\\\"}}\"}],"
+                + "\"bindSnapshots\":{\"1\":{\"bind\":{\"dsId\":12,\"period\":\"LATEST\",\"fields\":{\"orgCode\":\"org_name\",\"deposit\":\"balance\"},\"units\":{\"deposit\":\"YUAN\"}}}}}";
+    }
+
+    private RptScreenDatasource codeRuntimeDatasource() {
+        RptScreenDatasource datasource = new RptScreenDatasource();
+        datasource.setId(12L);
+        datasource.setSourceKind("WIDE_TABLE");
+        datasource.setBizLine("COMMON");
+        datasource.setStatus("ACTIVE");
+        datasource.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","
+                + "\"metrics\":[{\"metricCode\":\"M1\",\"metricName\":\"balance\",\"slot\":1}]}");
+        return datasource;
+    }
+
+    private RptScreenDatasource codeRuntimeSubjectDatasource() {
+        RptScreenDatasource datasource = codeRuntimeDatasource();
+        datasource.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","
+                + "\"aggregation\":{\"groupBy\":\"SUBJECT\"},"
+                + "\"metrics\":[{\"metricCode\":\"M1\",\"metricName\":\"balance\",\"slot\":1}]}");
+        return datasource;
+    }
+
+    private OrgProfileDTO profile(String code, String status, String nature, String coordSys,
+                                  BigDecimal lng, BigDecimal lat, String remark) {
+        OrgProfileDTO profile = new OrgProfileDTO();
+        profile.setOrgCode(code);
+        profile.setOrgName(code + "机构");
+        profile.setOrgNature(nature);
+        profile.setOperatingLevel("PRIMARY");
+        profile.setCityCode("610100");
+        profile.setCityName("西安");
+        profile.setStatus(status);
+        profile.setCoordSys(coordSys);
+        profile.setLng(lng);
+        profile.setLat(lat);
+        profile.setRemark(remark);
+        return profile;
     }
 
     @Test

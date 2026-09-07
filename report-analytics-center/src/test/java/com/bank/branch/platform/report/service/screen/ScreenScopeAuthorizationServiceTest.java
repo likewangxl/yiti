@@ -5,6 +5,7 @@ import com.bank.branch.platform.auth.api.OrgGroupApi;
 import com.bank.branch.platform.auth.api.dto.OrgGroupDTO;
 import com.bank.branch.platform.auth.api.dto.OrgGroupRoleCheckDTO;
 import com.bank.branch.platform.auth.api.dto.OrgGroupScopeDTO;
+import com.bank.branch.platform.auth.api.dto.OrgProfileDTO;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.report.entity.RptScreen;
 import com.bank.branch.platform.report.entity.RptScreenAccessRole;
@@ -24,6 +25,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -180,5 +182,64 @@ class ScreenScopeAuthorizationServiceTest {
 
         assertThatThrownBy(() -> service.validateForSave(screen(), Set.of("R_NOT_FOUND"), false))
                 .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_ACCESS_ROLE_REQUIRED.getCode());
+    }
+
+    private void publishDefaults() {
+        groupDefaults();
+        RptScreenAccessRole role = new RptScreenAccessRole();
+        role.setRoleCode("R_SCREEN_CORP_VIEWER");
+        role.setStatus("ACTIVE");
+        when(roleMapper.selectList(any(Wrapper.class))).thenReturn(List.of(role));
+        OrgGroupRoleCheckDTO valid = new OrgGroupRoleCheckDTO();
+        valid.setSatisfiable(true);
+        valid.setValidRoleCodes(Set.of("R_SCREEN_CORP_VIEWER"));
+        when(orgGroupApi.checkRoleBindings(any(), anyCollection())).thenReturn(valid);
+    }
+
+    private OrgProfileDTO profile(String code, String status) {
+        OrgProfileDTO profile = new OrgProfileDTO();
+        profile.setOrgCode(code);
+        profile.setStatus(status);
+        return profile;
+    }
+
+    @Test
+    void validatePublishRoles_missingConfiguredMemberProfileFailsClosed() {
+        publishDefaults();
+        when(orgGroupApi.getActiveProfiles(anyCollection()))
+                .thenReturn(Map.of("D1", profile("D1", "ACTIVE")));
+
+        assertThatThrownBy(() -> service.validatePublishRoles(screen()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_SCOPE_INVALID.getCode());
+    }
+
+    @Test
+    void validatePublishRoles_inactiveConfiguredMemberProfileFailsClosed() {
+        publishDefaults();
+        when(orgGroupApi.getActiveProfiles(anyCollection())).thenReturn(Map.of(
+                "D1", profile("D1", "ACTIVE"),
+                "D2", profile("D2", "DISABLED")));
+
+        assertThatThrownBy(() -> service.validatePublishRoles(screen()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_SCOPE_INVALID.getCode());
+    }
+
+    @Test
+    void validatePublishRoles_mismatchedConfiguredMemberProfileFailsClosed() {
+        publishDefaults();
+        when(orgGroupApi.getActiveProfiles(anyCollection())).thenReturn(Map.of(
+                "D1", profile("D1", "ACTIVE"),
+                "D2", profile("OTHER", "ACTIVE")));
+
+        assertThatThrownBy(() -> service.validatePublishRoles(screen()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_SCOPE_INVALID.getCode());
+    }
+
+    @Test
+    void activeProfiles_nullResponseFailsClosed() {
+        when(orgGroupApi.getActiveProfiles(anyCollection())).thenReturn(null);
+
+        assertThatThrownBy(() -> service.activeProfiles(screen(), Set.of("D1")))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_SCOPE_INVALID.getCode());
     }
 }

@@ -168,9 +168,27 @@ public class ScreenScopeAuthorizationService {
         Set<String> roles = allowedRoleCodes(screen.getId());
         validateForSave(screen, roles, true);
         GroupSnapshot group = requireGroup(screen.getOrgGroupCode());
-        Map<String, OrgProfileDTO> profiles = orgGroupApi.getActiveProfiles(group.memberCodes());
+        Map<String, OrgProfileDTO> profiles;
+        try {
+            profiles = orgGroupApi.getActiveProfiles(group.memberCodes());
+        } catch (RptException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID, e);
+        }
         if (profiles == null) {
             throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        // Publishing is a promise that every configured member can be represented at runtime.
+        // Extra response keys are ignored, but a missing/inactive/mismatched configured member
+        // must fail closed instead of making the screen publish successfully and fail on read.
+        for (String memberCode : group.memberCodes()) {
+            OrgProfileDTO profile = profiles.get(memberCode);
+            if (profile == null || !ACTIVE.equalsIgnoreCase(profile.getStatus())
+                    || profile.getOrgCode() == null
+                    || !memberCode.equals(profile.getOrgCode().trim())) {
+                throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+            }
         }
     }
 
@@ -181,9 +199,15 @@ public class ScreenScopeAuthorizationService {
         }
         try {
             Map<String, OrgProfileDTO> profiles = orgGroupApi.getActiveProfiles(memberCodes);
-            return profiles == null ? Map.of() : profiles;
+            if (profiles == null) {
+                throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+            }
+            return profiles;
         } catch (RuntimeException e) {
             log.warn("[ScreenScopeAuthorization] 读取机构画像失败，fail-close cause={}", e.getMessage());
+            if (e instanceof RptException rptException) {
+                throw rptException;
+            }
             throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID, e);
         }
     }

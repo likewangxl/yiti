@@ -36,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -147,6 +148,8 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
     public ScreenCanvasSaveRespDTO saveCanvas(ScreenCanvasSaveReqDTO req) {
         RptScreen s = requireScreen(req.getScreenId());
         List<CanvasComponentDTO> comps = req.getComponents() == null ? List.of() : req.getComponents();
+        String styleJson = writeJson(req.getCanvasStyle());
+        boolean codePresentation = CodeScreenPresentationValidator.isCodePresentation(styleJson);
 
         // 1) 结构化校验:组件类型白名单 + innerType + 坐标/尺寸范围。
         //    Group 节点的 children 一并摊平校验(children 为相对组左上角坐标,恒落在
@@ -157,10 +160,14 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
                 throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
             }
             if ("ChartWidget".equals(c.getComponent())
+                    && !codePresentation
                     && (c.getInnerType() == null || !INNER_TYPES.contains(c.getInnerType()))) {
                 throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
             }
-            validateStyle(c.getStyle());
+            // CODE 组件由 bindingKey 驱动，不消费坐标布局；历史画布继续要求完整坐标范围。
+            if (!codePresentation) {
+                validateStyle(c.getStyle());
+            }
         }
         // 全屏周期过滤器每屏最多 1 个(spec 2026-07-17 §5.3):多个过滤器会互相覆盖 screen 级
         // globalPeriod,联动语义不可仲裁 → 按布局非法拒绝(计数用摊平列表,防 Group 嵌套绕过)
@@ -176,10 +183,11 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         // 先完成 schema/条线/命名组主体校验，再触碰 block 行；错误配置不能留下半更新草稿。
         String unboundDraftJson = buildDraftJson(s, comps);
         validateCanvasSchema(unboundDraftJson);
+        CodeScreenPresentationValidator.validateDraft(styleJson, unboundDraftJson);
         if (screenMapService != null) {
             screenMapService.validateDraftStructure(unboundDraftJson);
         }
-        validateDraftDatasourceLines(s, chartNodes);
+        validateDraftDatasourceLines(s, chartNodes, codePresentation);
 
         List<RptScreenBlock> existingBlocksToUpdate = new ArrayList<>();
         for (CanvasComponentDTO c : chartNodes) {
@@ -189,7 +197,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
                 if (existing == null || !existing.getScreenId().equals(s.getId())) {
                     throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
                 }
-                existing.setComponentType(c.getInnerType());
+                existing.setComponentType(componentTypeFor(c, codePresentation));
                 existing.setBindJson(nullToEmptyObj(c.getBindJson()));
                 existing.setStyleJson(c.getStyleJson());
                 existing.setDrillJson(c.getDrillJson());
@@ -205,7 +213,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
                 e.setColNo(1);
                 e.setWidthPct(100);
                 e.setHeightPct(100);
-                e.setComponentType(c.getInnerType());
+                e.setComponentType(componentTypeFor(c, codePresentation));
                 e.setBindJson(nullToEmptyObj(c.getBindJson()));
                 e.setStyleJson(c.getStyleJson());
                 e.setDrillJson(c.getDrillJson());
@@ -215,7 +223,6 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         }
 
         // 3) 序列化组件树(含 resolved blockId)+ 样式;上限校验
-        String styleJson = writeJson(req.getCanvasStyle());
         String draftJson = buildDraftJson(s, comps);
         validateCanvasSchema(draftJson);
         if (screenMapService != null) {
@@ -304,7 +311,9 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
         }
         // 发布必须重做屏/数据源业务条线矩阵校验，不能只依赖保存时的草稿检查。
-        validatePublishedDatasourceLines(s, rows, draftBlockIds);
+        CodeScreenPresentationValidator.validateDraft(s.getCanvasStyleJson(),
+                s.getCanvasDraftJson(), rows);
+        validatePublishedDatasourceLines(s, rows, draftBlockIds, draft.path("components"));
         // 3) 合成渲染包 = canvasStyle + components + bindSnapshots(从 block 行快照)
         ObjectNode pkg = objectMapper.createObjectNode();
         pkg.put("schemaVersion", requiresRuntimeSchemaV2(s, draft.path("components")) ? 2 : 1);
@@ -337,8 +346,10 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         validatePublishedSnapshot(s, publishedJson);
         requireAuditReason(req.getReason());
         CanvasBlockDiff publishDiff = canvasBlockDiff(s.getCanvasPublishedJson(), publishedJson);
-        int rowsUpd = canvasMapper.applyPublishedCas(s.getId(), req.getExpectedVersion(), publishedJson, 1,
-                currentUserApi.getCurrentEmpId());
+        int rowsUpd = canvasMapper.applyPublishedCas(s.getId(), req.getExpectedVersion(), publishedJson,
+                s.getCanvasStyleJson() == null ? "{}" : s.getCanvasStyleJson(),
+                s.getCanvasDraftJson() == null ? "{}" : s.getCanvasDraftJson(),
+                1, currentUserApi.getCurrentEmpId());
         if (rowsUpd == 0) {
             throw new RptException(RptErrorCode.SCREEN_CANVAS_CONFLICT);
         }
@@ -372,11 +383,37 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         validatePublishedSnapshot(s, logEntry.getSnapshotJson());
         requireAuditReason(req.getReason());
         CanvasBlockDiff rollbackDiff = canvasBlockDiff(s.getCanvasPublishedJson(), logEntry.getSnapshotJson());
-        int rows = canvasMapper.applyPublishedCas(s.getId(), req.getExpectedVersion(), logEntry.getSnapshotJson(), 1,
-                currentUserApi.getCurrentEmpId());
+        String rollbackStyleJson;
+        String rollbackDraftJson;
+        List<PublishedBlockSnapshot> rollbackBlocks;
+        try {
+            JsonNode rollbackPackage = objectMapper.readTree(logEntry.getSnapshotJson());
+            rollbackStyleJson = rollbackPackage.path("canvasStyle").isObject()
+                    ? rollbackPackage.path("canvasStyle").toString()
+                    : (s.getCanvasStyleJson() == null ? "{}" : s.getCanvasStyleJson());
+            ObjectNode rollbackDraft = objectMapper.createObjectNode();
+            rollbackDraft.put("schemaVersion", rollbackPackage.path("schemaVersion").asInt(1));
+            rollbackDraft.set("components", rollbackPackage.path("components").isMissingNode()
+                    ? objectMapper.createArrayNode() : rollbackPackage.path("components"));
+            rollbackDraftJson = rollbackDraft.toString();
+            // rollback must restore the immutable block identities captured by this archive. The
+            // current draft rows may have been deleted or rebound after the archive was created.
+            rollbackBlocks = publishedBlocks(rollbackPackage);
+        } catch (Exception e) {
+            if (e instanceof RptException rptException) {
+                throw rptException;
+            }
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, e);
+        }
+        int rows = canvasMapper.applyPublishedCas(s.getId(), req.getExpectedVersion(), logEntry.getSnapshotJson(),
+                rollbackStyleJson, rollbackDraftJson, 1, currentUserApi.getCurrentEmpId());
         if (rows == 0) {
             throw new RptException(RptErrorCode.SCREEN_CANVAS_CONFLICT);
         }
+        // Keep CAS and block restoration in this transaction. If an insert/update/delete fails,
+        // Spring rolls back the published/style/draft CAS together with the block mutations.
+        restorePublishedBlocks(s.getId(), rollbackBlocks);
+        removeNonPublishedBlocks(s.getId(), rollbackBlocks);
         persistCanvasAudit("SCREEN_ROLLBACK", s, "/api/screen/admin/canvas/rollback", "POST",
                 s.getCanvasPublishedJson(), logEntry.getSnapshotJson(), rollbackDiff.added(), rollbackDiff.removed(),
                 req.getExpectedVersion(), req.getReason());
@@ -395,9 +432,13 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         validatePublishedSnapshot(s, s.getCanvasPublishedJson());
         JsonNode published;
         String draftJson;
+        String publishedStyleJson;
         List<PublishedBlockSnapshot> publishedBlocks;
         try {
             published = objectMapper.readTree(s.getCanvasPublishedJson());
+            publishedStyleJson = published.path("canvasStyle").isObject()
+                    ? published.path("canvasStyle").toString()
+                    : (s.getCanvasStyleJson() == null ? "{}" : s.getCanvasStyleJson());
             ObjectNode d = objectMapper.createObjectNode();
             d.put("schemaVersion", hasV2Map(published.path("components")) ? 2 : 1);
             d.set("components", published.path("components").isMissingNode()
@@ -410,23 +451,14 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, e);
         }
         // CAS 必须先成功，后续 block 恢复才会发生；冲突路径不触碰 block，事务失败也会回滚 CAS。
-        if (canvasMapper.discardDraftCas(s.getId(), req.getExpectedVersion(), draftJson,
+        if (canvasMapper.discardDraftCas(s.getId(), req.getExpectedVersion(), publishedStyleJson, draftJson,
                 currentUserApi.getCurrentEmpId()) == 0) {
             throw new RptException(RptErrorCode.SCREEN_CANVAS_CONFLICT);
         }
         restorePublishedBlocks(s.getId(), publishedBlocks);
         // 发布组件树是 discard 后草稿 block 的唯一真相。恢复后再删除新增/孤儿行，避免已删除
         // 的草稿图表在下一次编辑时借残留 block 重新出现；零 ChartWidget 时 retained 为空，会清空本屏行。
-        Set<Long> retainedBlockIds = publishedBlocks.stream().map(PublishedBlockSnapshot::blockId)
-                .collect(Collectors.toSet());
-        Set<Long> orphanBlockIds = blockMapper.selectList(new LambdaQueryWrapper<RptScreenBlock>()
-                        .eq(RptScreenBlock::getScreenId, s.getId()))
-                .stream().filter(block -> s.getId().equals(block.getScreenId()))
-                .map(RptScreenBlock::getId).filter(blockId -> !retainedBlockIds.contains(blockId))
-                .collect(Collectors.toSet());
-        if (!orphanBlockIds.isEmpty()) {
-            blockMapper.deleteByScreenIdAndIds(s.getId(), orphanBlockIds);
-        }
+        removeNonPublishedBlocks(s.getId(), publishedBlocks);
         CanvasBlockDiff discardDiff = canvasBlockDiff(s.getCanvasDraftJson(), draftJson);
         persistCanvasAudit("SCREEN_DISCARD_DRAFT", s, "/api/screen/admin/canvas/discard", "POST",
                 s.getCanvasDraftJson(), draftJson, discardDiff.added(), discardDiff.removed(),
@@ -502,6 +534,20 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
                 applySnapshot(block, snapshot);
                 blockMapper.updateById(block);
             }
+        }
+    }
+
+    /** Remove draft-only rows after a published snapshot has become the editable truth. */
+    private void removeNonPublishedBlocks(Long screenId, List<PublishedBlockSnapshot> snapshots) {
+        Set<Long> retainedBlockIds = snapshots.stream().map(PublishedBlockSnapshot::blockId)
+                .collect(Collectors.toSet());
+        Set<Long> orphanBlockIds = blockMapper.selectList(new LambdaQueryWrapper<RptScreenBlock>()
+                        .eq(RptScreenBlock::getScreenId, screenId))
+                .stream().filter(block -> screenId.equals(block.getScreenId()))
+                .map(RptScreenBlock::getId).filter(blockId -> !retainedBlockIds.contains(blockId))
+                .collect(Collectors.toSet());
+        if (!orphanBlockIds.isEmpty()) {
+            blockMapper.deleteByScreenIdAndIds(screenId, orphanBlockIds);
         }
     }
 
@@ -790,11 +836,15 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
 
     private void validatePublishedDatasourceLines(RptScreen screen,
                                                   List<RptScreenBlock> rows,
-                                                  Set<Long> draftBlockIds) {
+                                                  Set<Long> draftBlockIds,
+                                                  JsonNode draftComponents) {
         // 未声明条线的历史屏按旧契约兼容；新屏保存后会有显式值，命名组屏无论如何都必须校验。
         boolean explicitLine = screen.getBizLine() != null && !screen.getBizLine().isBlank();
         boolean namedGroup = "NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode());
-        if (!explicitLine && !namedGroup) {
+        boolean codePresentation = CodeScreenPresentationValidator.isCodePresentation(screen.getCanvasStyleJson());
+        // CODE 的 datasource schema 是新绑定契约，即使挂在未声明条线的历史 screen 上也必须
+        // 在 publish 侧从当前 datasource 重新证明；旧坐标 canvas 才保留无条线兼容路径。
+        if (!explicitLine && !namedGroup && !codePresentation) {
             return;
         }
         String screenLine = normalizeBizLine(screen.getBizLine());
@@ -814,12 +864,66 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             if (namedGroup && !isNamedGroupSafeDatasource(dataSource)) {
                 throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
             }
+            if (codePresentation) {
+                String bindingKey = codeBindingKey(draftComponents, block.getId());
+                validateCodeDatasourceBinding(bindingKey, block.getBindJson(), dataSource);
+                if (namedGroup) {
+                    validateCodeNamedGroupBinding(bindingKey, block.getBindJson(), dataSource);
+                }
+            }
             validateComponentDatasourceCompatibility(block.getComponentType(), block.getDrillJson(), dataSource);
         }
     }
 
+    private void validateCodeNamedGroupBinding(String bindingKey, String bindJson,
+                                               com.bank.branch.platform.report.entity.RptScreenDatasource datasource) {
+        if (!"branches".equals(bindingKey) && !"citySummary".equals(bindingKey)) {
+            return;
+        }
+        try {
+            JsonNode cfg = objectMapper.readTree(datasource.getConfigJson() == null ? "{}" : datasource.getConfigJson());
+            JsonNode bind = objectMapper.readTree(bindJson == null ? "{}" : bindJson);
+            boolean orgIdentity = "org_code".equals(bind.path("fields").path("orgCode").asText());
+            boolean namedSubject = "WIDE_TABLE".equals(datasource.getSourceKind())
+                    && "ORG_INDEX_RESULT".equals(cfg.path("table").asText())
+                    && "org_code".equals(cfg.path("subjectCol").asText())
+                    && cfg.path("aggregation").isObject()
+                    && "SUBJECT".equals(cfg.path("aggregation").path("groupBy").asText());
+            // branches always carries the institution identity. citySummary may use cityCode
+            // alone, but whenever it uses orgCode that identity must be the engine's SUBJECT
+            // column; org_name is a display dimension and cannot scope a city aggregate.
+            boolean requiresNamedSubject = "branches".equals(bindingKey)
+                    || ("citySummary".equals(bindingKey) && bind.path("fields").has("orgCode"));
+            if (requiresNamedSubject && (!namedSubject || !orgIdentity)) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID, ex);
+        }
+    }
+
+    private String codeBindingKey(JsonNode components, Long blockId) {
+        if (components == null || !components.isArray()) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+        }
+        for (JsonNode component : components) {
+            if (component.path("blockId").isIntegralNumber()
+                    && blockId.equals(component.path("blockId").longValue())) {
+                String key = component.path("propValue").path("bindingKey").asText();
+                if (key.isBlank()) {
+                    throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+                }
+                return key;
+            }
+        }
+        throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+    }
+
     /** 保存画布也必须执行同一条线矩阵与命名组主体校验，不能等到发布才发现错误。 */
-    private void validateDraftDatasourceLines(RptScreen screen, List<CanvasComponentDTO> chartNodes) {
+    private void validateDraftDatasourceLines(RptScreen screen, List<CanvasComponentDTO> chartNodes,
+                                              boolean codePresentation) {
         String screenLine = normalizeBizLine(screen.getBizLine());
         boolean namedGroup = "NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode());
         for (CanvasComponentDTO chart : chartNodes) {
@@ -838,8 +942,77 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             if (namedGroup && !isNamedGroupSafeDatasource(datasource)) {
                 throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
             }
+            if (codePresentation) {
+                String bindingKey = chartBindingKey(chart);
+                validateCodeDatasourceBinding(bindingKey, chart.getBindJson(), datasource);
+            }
+            if (codePresentation && namedGroup) {
+                validateCodeNamedGroupBinding(chart, datasource);
+            }
             validateComponentDatasourceCompatibility(chart.getInnerType(), chart.getDrillJson(), datasource);
         }
+    }
+
+    /** CODE 命名机构组的支行趋势只能使用服务端可收口的主体聚合绑定。 */
+    private void validateCodeNamedGroupBinding(CanvasComponentDTO chart,
+                                               com.bank.branch.platform.report.entity.RptScreenDatasource datasource) {
+        String bindingKey = chart.getPropValue() == null ? null
+                : String.valueOf(chart.getPropValue().get("bindingKey"));
+        if (!"branches".equals(bindingKey) && !"citySummary".equals(bindingKey)) {
+            return;
+        }
+        try {
+            JsonNode cfg = objectMapper.readTree(datasource.getConfigJson() == null ? "{}" : datasource.getConfigJson());
+            JsonNode bind = objectMapper.readTree(chart.getBindJson() == null ? "{}" : chart.getBindJson());
+            JsonNode aggregation = cfg.path("aggregation");
+            JsonNode fields = bind.path("fields");
+            boolean namedSubject = "WIDE_TABLE".equals(datasource.getSourceKind())
+                    && "ORG_INDEX_RESULT".equals(cfg.path("table").asText())
+                    && "org_code".equals(cfg.path("subjectCol").asText())
+                    && aggregation.isObject()
+                    && "SUBJECT".equals(aggregation.path("groupBy").asText());
+            boolean requiresNamedSubject = "branches".equals(bindingKey)
+                    || ("citySummary".equals(bindingKey) && fields.has("orgCode"));
+            if (!fields.isObject()
+                    || (requiresNamedSubject && (!namedSubject
+                    || !"org_code".equals(fields.path("orgCode").asText())))) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID, ex);
+        }
+    }
+
+    private String chartBindingKey(CanvasComponentDTO chart) {
+        if (chart == null || chart.getPropValue() == null) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+        }
+        Object value = chart.getPropValue().get("bindingKey");
+        if (!(value instanceof String key) || key.isBlank()) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+        }
+        return key;
+    }
+
+    private void validateCodeDatasourceBinding(String bindingKey, String bindJson,
+                                               com.bank.branch.platform.report.entity.RptScreenDatasource datasource) {
+        try {
+            JsonNode bind = objectMapper.readTree(bindJson == null ? "{}" : bindJson);
+            CodeScreenPresentationValidator.validateBindAgainstDatasource(bind, bindingKey, datasource);
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, ex);
+        }
+    }
+
+    private String componentTypeFor(CanvasComponentDTO component, boolean codePresentation) {
+        if (codePresentation && (component.getInnerType() == null || component.getInnerType().isBlank())) {
+            return "CODE";
+        }
+        return component.getInnerType();
     }
 
     /**
@@ -878,6 +1051,17 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
         }
         validateCanvasSchema(root);
+        try {
+            CodeScreenPresentationValidator.validatePublishedPackage(root);
+        } catch (RptException ex) {
+            if (RptErrorCode.SCREEN_LAYOUT_INVALID.getCode().equals(ex.getCode())) {
+                throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
+            }
+            throw ex;
+        }
+        if (CodeScreenPresentationValidator.isCodePresentation(root.path("canvasStyle"))) {
+            validateCodePublishedDatasourceBindings(root, trustedBindings);
+        }
         if (scopeAuthorizationService != null) {
             scopeAuthorizationService.validatePublishRoles(screen);
         } else if ("NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())) {
@@ -913,6 +1097,70 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             if (namedGroup && !isNamedGroupSafeDatasource(datasource)) {
                 throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
             }
+        }
+        if (namedGroup && CodeScreenPresentationValidator.isCodePresentation(root.path("canvasStyle"))) {
+            validateCodePublishedNamedGroupBindings(screen, root);
+        }
+    }
+
+    /** CODE 发布包恢复/运行前按快照中的真实 dsId 校验每个字段映射。 */
+    private void validateCodePublishedDatasourceBindings(JsonNode root,
+                                                         Map<Long, JsonNode> trustedBindings) {
+        JsonNode components = root.path("components");
+        if (components == null || !components.isArray()) {
+            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED);
+        }
+        for (JsonNode component : components) {
+            if (!"ChartWidget".equals(component.path("component").asText())) {
+                throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED);
+            }
+            JsonNode blockId = component.path("blockId");
+            String bindingKey = component.path("propValue").path("bindingKey").asText();
+            JsonNode snapshot = trustedBindings.get(blockId.longValue());
+            if (snapshot == null) {
+                throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED);
+            }
+            JsonNode bind = snapshot.path("bind");
+            if (!bind.isObject() || !bind.path("dsId").isIntegralNumber()) {
+                throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED);
+            }
+            var datasource = dsMapper.selectById(bind.path("dsId").longValue());
+            if (datasource == null) {
+                throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
+            }
+            validateCodeDatasourceBinding(bindingKey, bind.toString(), datasource);
+        }
+    }
+
+    /** 回滚/发布快照再次确认 branches 绑定没有失去命名机构组的服务端主体约束。 */
+    private void validateCodePublishedNamedGroupBindings(RptScreen screen, JsonNode root) {
+        JsonNode components = root.path("components");
+        JsonNode snapshots = root.path("bindSnapshots");
+        if (!components.isArray() || !snapshots.isObject()) {
+            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED);
+        }
+        Iterator<JsonNode> componentIterator = components.elements();
+        while (componentIterator.hasNext()) {
+            JsonNode component = componentIterator.next();
+            if (!"ChartWidget".equals(component.path("component").asText())) {
+                continue;
+            }
+            String bindingKey = component.path("propValue").path("bindingKey").asText();
+            if (!"branches".equals(bindingKey) && !"citySummary".equals(bindingKey)) {
+                continue;
+            }
+            long blockId = component.path("blockId").longValue();
+            JsonNode snapshot = snapshots.path(String.valueOf(blockId));
+            Long dsId = snapshot.path("bind").path("dsId").isIntegralNumber()
+                    ? snapshot.path("bind").path("dsId").longValue() : null;
+            if (dsId == null) {
+                throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED);
+            }
+            var datasource = dsMapper.selectById(dsId);
+            if (datasource == null) {
+                throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
+            }
+            validateCodeNamedGroupBinding(bindingKey, snapshot.path("bind").toString(), datasource);
         }
     }
 

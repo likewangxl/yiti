@@ -143,7 +143,27 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
             qw.like(RptScreenDatasource::getDsName, keyword);
         }
         qw.orderByDesc(RptScreenDatasource::getId);
-        return dsMapper.selectList(qw).stream().map(this::toDto).collect(Collectors.toList());
+        List<RptScreenDatasource> datasources = dsMapper.selectList(qw);
+        if (datasources == null || datasources.isEmpty()) {
+            return List.of();
+        }
+        // 远程数据库下不能逐数据源重读相同屏、区块和归档；请求级快照保留保守引用语义。
+        List<RptScreen> screens = screenMapper == null ? List.of()
+                : screenMapper.selectList(new LambdaQueryWrapper<>());
+        List<RptScreenBlock> blocks = blockMapper.selectList(new LambdaQueryWrapper<>());
+        List<RptScreenPublishLog> archives = List.of();
+        boolean archiveReadFailed = false;
+        if (publishLogMapper != null) {
+            try {
+                archives = publishLogMapper.selectList(new LambdaQueryWrapper<>());
+            } catch (RuntimeException ex) {
+                archiveReadFailed = true;
+                log.warn("[ScreenDatasource] 列表归档读取失败，采用保守引用提示", ex);
+            }
+        }
+        ScreenDatasourceReferenceIndex.Snapshot references = ScreenDatasourceReferenceIndex.build(
+                screens, blocks, archives, archiveReadFailed);
+        return datasources.stream().map(e -> toDto(e, references)).collect(Collectors.toList());
     }
 
     @Override
@@ -354,11 +374,21 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
                 }
                 ensureNamedGroupDatasourceSafe(ds);
                 // 命名机构组权限在屏级同角色门禁中已完成；将服务端机构集合注入引擎，
-                // 不再信任客户端 orgCode/orgCodes 及旧 DATA_SCOPE 主体参数。
+                // 不再信任客户端 orgCodes 及旧 DATA_SCOPE 主体参数；单个 orgCode 只允许
+                // 在已授权集合内做收窄，不能借此扩大范围。
                 req.setNamedGroup(true);
-                req.setServerOrgCodes(new java.util.ArrayList<>(scopeAuthorizationService.authorize(screen)));
-                if (req.getServerOrgCodes().isEmpty()) {
+                Set<String> authorizedOrgCodes = scopeAuthorizationService.authorize(screen);
+                if (authorizedOrgCodes == null || authorizedOrgCodes.isEmpty()) {
                     throw new RptException(RptErrorCode.SCREEN_ACCESS_DENIED);
+                }
+                String requestedOrgCode = requestedOrgCode(req);
+                if (requestedOrgCode != null) {
+                    if (!authorizedOrgCodes.contains(requestedOrgCode)) {
+                        throw new RptException(RptErrorCode.SCREEN_ACCESS_DENIED);
+                    }
+                    req.setServerOrgCodes(List.of(requestedOrgCode));
+                } else {
+                    req.setServerOrgCodes(new java.util.ArrayList<>(authorizedOrgCodes));
                 }
             } else {
                 if (!isBizLineCompatible(screen.getBizLine(), ds.getBizLine())) {
@@ -372,6 +402,14 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
             persistRuntimeDenied(req, ex);
             throw ex;
         }
+    }
+
+    private String requestedOrgCode(ScreenDataReqDTO req) {
+        if (req == null || req.getContextParams() == null) {
+            return null;
+        }
+        String orgCode = req.getContextParams().get("orgCode");
+        return orgCode == null || orgCode.isBlank() ? null : orgCode.trim();
     }
 
     // ===== 内部 =====
@@ -620,7 +658,7 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         return "DATE".equals(groupBy) ? "TIMESERIES" : "SINGLE";
     }
 
-    private ScreenDatasourceRespDTO toDto(RptScreenDatasource e) {
+    private ScreenDatasourceRespDTO toDto(RptScreenDatasource e, ScreenDatasourceReferenceIndex.Snapshot references) {
         ScreenDatasourceRespDTO d = new ScreenDatasourceRespDTO();
         d.setId(e.getId());
         d.setDsCode(e.getDsCode());
@@ -633,8 +671,8 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         d.setStatus(e.getStatus());
         d.setRemark(e.getRemark());
         d.setCreatedTime(e.getCreatedTime());
-        d.setDraftReferenceScreenCodes(referencedScreenCodes(e.getId(), false));
-        d.setPublishedReferenceScreenCodes(referencedScreenCodes(e.getId(), true));
+        d.setDraftReferenceScreenCodes(references.draftCodes(e.getId()));
+        d.setPublishedReferenceScreenCodes(references.publishedCodes(e.getId()));
         return d;
     }
 

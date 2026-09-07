@@ -385,7 +385,7 @@ class ScreenDatasourceRuntimeContractTest {
         req.setScreenCode("SCR_RETAIL");
         req.setBlockId(11L);
         req.setDsId(999L);
-        req.setContextParams(java.util.Map.of("orgCode", "FORGED_ORG", "orgGroupCode", "FORGED_GROUP"));
+        req.setContextParams(java.util.Map.of("orgCode", "ORG_1", "orgGroupCode", "FORGED_GROUP"));
 
         service.queryData(req);
 

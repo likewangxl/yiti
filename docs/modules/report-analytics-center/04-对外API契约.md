@@ -1,5 +1,7 @@
 # 报表分析中心 — 对外 API 契约
 
+> 代码化经营大屏补充：继续只通过现有 screen REST 服务前端，不新增跨模块 Java API，也不改既有 `PT_RESOURCE` 的路径/授权。`CanvasStyleDTO.presentation`、运行响应 `panoramaInstitutions` 及 NAMED_GROUP 单机构收窄语义见 [03 接口设计](03-接口设计与报文.md#代码化经营大屏契约)。机构画像通过 auth 的 `OrgGroupApi.getActiveProfiles` 与已授权成员集合求交，不能改用管理端接口或跨模块私表查询。机构组直接成员才是授权集合，经营上下级关系不会自动授权子树。
+
 > **模块**: report-analytics-center
 > **版本**: V1.0
 > **最后更新**: 2026-07-19（回填 screen/自由报表/AMAS 审批查询/DataScope picker 等子域 REST 范围 + 订正跨模块 `*Api` 消费清单，详见文末《2026-07-19 回填说明》；本次回填不改变 §1"V1 不暴露 Api"的结论）

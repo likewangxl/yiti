@@ -34,4 +34,7 @@ public class ScreenRenderRespDTO {
 
     /** schemaVersion=2 复合地图服务端渲染包；schemaVersion=1 时为空。 */
     private ScreenMapRenderPackageDTO mapPackage;
+
+    /** CODE 全景屏的已授权机构目录；旧坐标画布保持空列表。 */
+    private List<PanoramaInstitutionDTO> panoramaInstitutions;
 }

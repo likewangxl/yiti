@@ -1,0 +1,22 @@
+package com.bank.branch.platform.report.dto.resp;
+
+import lombok.Data;
+
+import java.math.BigDecimal;
+
+/** CODE 全景屏运行时机构目录的最小字段集合。 */
+@Data
+public class PanoramaInstitutionDTO {
+
+    private String orgCode;
+    private String orgName;
+    private String cityCode;
+    private String cityName;
+    private String ownerOperatingOrgCode;
+    private String operatingLevel;
+    private String orgNature;
+    private BigDecimal lng;
+    private BigDecimal lat;
+    private String coordSys;
+    private boolean located;
+}

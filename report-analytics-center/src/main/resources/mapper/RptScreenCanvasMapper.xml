@@ -19,6 +19,8 @@
     <update id="applyPublishedCas">
         UPDATE RPT_SCREEN
         SET canvas_published_json = #{publishedJson},
+            canvas_style_json     = #{styleJson},
+            canvas_draft_json     = #{draftJson},
             publish_status        = #{publishStatus},
             canvas_version        = canvas_version + 1,
             published_at          = NOW(),
@@ -58,7 +60,8 @@
     <!-- 放弃草稿仅覆盖编辑态组件树和状态机；发布渲染包保持不可变。 -->
     <update id="discardDraftCas">
         UPDATE RPT_SCREEN
-        SET canvas_draft_json = #{draftJson},
+        SET canvas_style_json = #{styleJson},
+            canvas_draft_json = #{draftJson},
             publish_status    = 1,
             canvas_version    = canvas_version + 1,
             updated_by        = #{empId},

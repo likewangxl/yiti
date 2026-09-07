@@ -115,6 +115,13 @@ class ScreenCanvasServiceTest {
         return datasource;
     }
 
+    private RptScreenDatasource codeDatasource(long id) {
+        RptScreenDatasource datasource = datasource(id, "SINGLE", "WIDE_TABLE");
+        datasource.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","
+                + "\"metrics\":[{\"metricCode\":\"M1\",\"metricName\":\"balance\",\"slot\":1}]}");
+        return datasource;
+    }
+
     @Test
     void save_unknownScreen_throws43004() {
         when(screenMapper.selectById(7L)).thenReturn(null);
@@ -402,7 +409,7 @@ class ScreenCanvasServiceTest {
         b.setComponentType("METRIC_CARD");
         b.setBindJson("{\"dsId\":9001,\"period\":\"LATEST\"}");
         when(blockMapper.selectList(any())).thenReturn(List.of(b));
-        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString())).thenReturn(1);
+        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString())).thenReturn(1);
         when(publishLogMapper.selectList(any())).thenReturn(List.of());
 
         var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
@@ -413,7 +420,8 @@ class ScreenCanvasServiceTest {
 
         ArgumentCaptor<String> pkgCaptor = ArgumentCaptor.forClass(String.class);
         verify(canvasMapper).applyPublishedCas(
-                org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.eq(5), pkgCaptor.capture(), anyInt(), anyString());
+                org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.eq(5), pkgCaptor.capture(),
+                anyString(), anyString(), anyInt(), anyString());
         assertThat(pkgCaptor.getValue())
                 .contains("\"component\":\"Group\"")
                 .contains("\"bindSnapshots\":{\"1001\":{")
@@ -622,7 +630,7 @@ class ScreenCanvasServiceTest {
         assertThatThrownBy(() -> service.publishCanvas(req))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43006");
-        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString());
+        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString());
     }
 
     @org.junit.jupiter.api.Test
@@ -662,7 +670,7 @@ class ScreenCanvasServiceTest {
         assertThatThrownBy(() -> service.publishCanvas(req))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43006");
-        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString());
+        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString());
     }
 
     /** 发布包身份字段必须是原生整数：浮点 blockId/dsId 不能被 asLong 静默截断。 */
@@ -685,7 +693,7 @@ class ScreenCanvasServiceTest {
         assertThatThrownBy(() -> service.rollbackCanvas(req))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED.getCode());
-        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString());
+        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString());
     }
 
     @org.junit.jupiter.api.Test
@@ -703,7 +711,7 @@ class ScreenCanvasServiceTest {
         b.setComponentType("METRIC_CARD");
         b.setBindJson("{\"dsId\":9001,\"period\":\"LATEST\"}");
         when(blockMapper.selectList(any())).thenReturn(java.util.List.of(b));
-        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString())).thenReturn(1);
+        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString())).thenReturn(1);
         // 归档滚动:selectList 查历史条数(返回空即无需裁剪)
         when(publishLogMapper.selectList(any())).thenReturn(java.util.List.of());
 
@@ -717,7 +725,7 @@ class ScreenCanvasServiceTest {
                 org.mockito.ArgumentMatchers.eq(7L),
                 org.mockito.ArgumentMatchers.eq(5),
                 org.mockito.ArgumentMatchers.contains("bindSnapshots"),
-                anyInt(), anyString());
+                anyString(), anyString(), anyInt(), anyString());
         org.mockito.Mockito.verify(publishLogMapper).insert(
                 any(com.bank.branch.platform.report.entity.RptScreenPublishLog.class));
         // 高危发布操作必须留痕:审计恰好写入 1 次(rev-t3 补测)
@@ -740,7 +748,7 @@ class ScreenCanvasServiceTest {
         assertThatThrownBy(() -> service.publishCanvas(req))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43022");
-        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString());
+        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString());
     }
 
     /** 发布审计记录真实包间 block 差异，而不是整个草稿集合或内部事件名。 */
@@ -758,7 +766,7 @@ class ScreenCanvasServiceTest {
         block.setBindJson("{\"dsId\":9002}");
         when(screenMapper.selectById(7L)).thenReturn(s);
         when(blockMapper.selectList(any())).thenReturn(List.of(block));
-        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString())).thenReturn(1);
+        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString())).thenReturn(1);
         when(publishLogMapper.selectList(any())).thenReturn(List.of());
 
         var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
@@ -789,7 +797,7 @@ class ScreenCanvasServiceTest {
         logEntry.setSnapshotJson(trustedPublishedPackage(1002L, 9002L));
         when(screenMapper.selectById(7L)).thenReturn(s);
         when(publishLogMapper.selectById(200L)).thenReturn(logEntry);
-        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString())).thenReturn(1);
+        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString())).thenReturn(1);
 
         var missing = new com.bank.branch.platform.report.dto.req.ScreenCanvasRollbackReqDTO();
         missing.setScreenId(7L);
@@ -798,7 +806,7 @@ class ScreenCanvasServiceTest {
         assertThatThrownBy(() -> service.rollbackCanvas(missing))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43022");
-        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString());
+        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString());
 
         var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasRollbackReqDTO();
         req.setScreenId(7L);
@@ -850,7 +858,7 @@ class ScreenCanvasServiceTest {
         assertThatThrownBy(() -> service.publishCanvas(req))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43014");
-        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString());
+        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString());
     }
 
     /** MapCenter 节点(省级屏地图)不是 ChartWidget、无 blockId,发布时的 blockId 一致性校验只遍历
@@ -873,7 +881,7 @@ class ScreenCanvasServiceTest {
         b.setComponentType("METRIC_CARD");
         b.setBindJson("{\"dsId\":9001,\"period\":\"LATEST\"}");
         when(blockMapper.selectList(any())).thenReturn(java.util.List.of(b));
-        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString())).thenReturn(1);
+        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString())).thenReturn(1);
         when(publishLogMapper.selectList(any())).thenReturn(java.util.List.of());
 
         var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
@@ -886,7 +894,8 @@ class ScreenCanvasServiceTest {
 
         ArgumentCaptor<String> pkgCaptor = ArgumentCaptor.forClass(String.class);
         org.mockito.Mockito.verify(canvasMapper).applyPublishedCas(
-                org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.eq(5), pkgCaptor.capture(), anyInt(), anyString());
+                org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.eq(5), pkgCaptor.capture(),
+                anyString(), anyString(), anyInt(), anyString());
         assertThat(pkgCaptor.getValue())
                 .contains("\"component\":\"MapCenter\"")     // 节点原样保留进发布包 components
                 .contains("\"bindSnapshots\":{\"1001\":{")    // 仅 ChartWidget 的 blockId=1001 有快照且非空
@@ -909,7 +918,7 @@ class ScreenCanvasServiceTest {
         assertThatThrownBy(() -> service.publishCanvas(req))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43015");
-        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString());
+        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString());
     }
 
     /** 归档滚动:超过 PUBLISH_LOG_KEEP(10)份时,只删最旧的那些(id 最小),不动最近 10 份(rev-t3 补测). */
@@ -928,7 +937,7 @@ class ScreenCanvasServiceTest {
         b.setComponentType("METRIC_CARD");
         b.setBindJson("{\"dsId\":9001,\"period\":\"LATEST\"}");
         when(blockMapper.selectList(any())).thenReturn(java.util.List.of(b));
-        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString())).thenReturn(1);
+        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString())).thenReturn(1);
 
         // 归档滚动:mock 12 条既有归档,按 id 倒序构造(对齐实现 orderByDesc(id) 的真实查询排序:新→旧)
         java.util.List<com.bank.branch.platform.report.entity.RptScreenPublishLog> archives =
@@ -964,11 +973,11 @@ class ScreenCanvasServiceTest {
                 + "\"components\":[{\"id\":\"w-9\",\"component\":\"TextLabel\","
                 + "\"style\":{\"top\":0,\"left\":0,\"width\":10,\"height\":10}}],\"bindSnapshots\":{}}");
         when(screenMapper.selectById(7L)).thenReturn(s);
-        when(canvasMapper.discardDraftCas(anyLong(), anyInt(), anyString(), anyString())).thenReturn(1);
+        when(canvasMapper.discardDraftCas(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
         service.discardDraft(discardReq(7L, 5));
         // 放弃后 draft 组件树来自 published.components
         ArgumentCaptor<String> draft = ArgumentCaptor.forClass(String.class);
-        verify(canvasMapper).discardDraftCas(eq(7L), eq(5), draft.capture(), eq("E001"));
+        verify(canvasMapper).discardDraftCas(eq(7L), eq(5), anyString(), draft.capture(), eq("E001"));
         assertThat(draft.getValue()).contains("w-9");
         verify(screenMapper, never()).updateById(any(RptScreen.class));
     }
@@ -985,7 +994,7 @@ class ScreenCanvasServiceTest {
                 + "\"bindSnapshots\":{\"1001\":{\"componentType\":\"METRIC_CARD\","
                 + "\"bind\":{\"dsId\":12},\"styleCfg\":{\"color\":\"blue\"},\"drill\":{}}}}");
         when(screenMapper.selectById(7L)).thenReturn(s);
-        when(canvasMapper.discardDraftCas(anyLong(), anyInt(), anyString(), anyString())).thenReturn(1);
+        when(canvasMapper.discardDraftCas(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
         when(blockMapper.selectList(any())).thenReturn(List.of());
         when(dsMapper.selectById(12L)).thenReturn(datasource(12L, "SINGLE", "WIDE_TABLE"));
 
@@ -1013,7 +1022,7 @@ class ScreenCanvasServiceTest {
         orphan.setId(1002L);
         orphan.setScreenId(7L);
         when(screenMapper.selectById(7L)).thenReturn(s);
-        when(canvasMapper.discardDraftCas(anyLong(), anyInt(), anyString(), anyString())).thenReturn(1);
+        when(canvasMapper.discardDraftCas(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
         when(blockMapper.selectList(any())).thenReturn(List.of(published, orphan));
         when(dsMapper.selectById(12L)).thenReturn(datasource(12L, "SINGLE", "WIDE_TABLE"));
 
@@ -1028,7 +1037,7 @@ class ScreenCanvasServiceTest {
         RptScreen s = screen(7L, 5);
         s.setCanvasPublishedJson("{\"schemaVersion\":1,\"components\":[],\"bindSnapshots\":{}}");
         when(screenMapper.selectById(7L)).thenReturn(s);
-        when(canvasMapper.discardDraftCas(anyLong(), anyInt(), anyString(), anyString())).thenReturn(0);
+        when(canvasMapper.discardDraftCas(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(0);
 
         assertThatThrownBy(() -> service.discardDraft(discardReq(7L, 5)))
                 .isInstanceOf(BizException.class)
@@ -1044,7 +1053,7 @@ class ScreenCanvasServiceTest {
         RptScreen s = screen(7L, 5);
         s.setCanvasPublishedJson("{\"schemaVersion\":1,\"components\":[],\"bindSnapshots\":{}}");
         when(screenMapper.selectById(7L)).thenReturn(s);
-        when(canvasMapper.discardDraftCas(anyLong(), anyInt(), anyString(), anyString())).thenReturn(1);
+        when(canvasMapper.discardDraftCas(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
         doThrow(new IllegalStateException("audit down")).when(auditApi).log(any());
 
         assertThatThrownBy(() -> service.discardDraft(discardReq(7L, 5)))
@@ -1063,7 +1072,7 @@ class ScreenCanvasServiceTest {
         logEntry.setScreenId(7L);
         logEntry.setSnapshotJson("{\"schemaVersion\":1,\"components\":[],\"bindSnapshots\":{}}");
         when(publishLogMapper.selectById(200L)).thenReturn(logEntry);
-        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString())).thenReturn(1);
+        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString())).thenReturn(1);
 
         var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasRollbackReqDTO();
         req.setScreenId(7L);
@@ -1076,9 +1085,106 @@ class ScreenCanvasServiceTest {
                 org.mockito.ArgumentMatchers.eq(7L),
                 org.mockito.ArgumentMatchers.eq(5),
                 org.mockito.ArgumentMatchers.eq(logEntry.getSnapshotJson()),
-                org.mockito.ArgumentMatchers.eq(1), anyString());
+                anyString(), anyString(), org.mockito.ArgumentMatchers.eq(1), anyString());
         // 高危回滚操作必须留痕:审计恰好写入 1 次(rev-t3 补测)
         org.mockito.Mockito.verify(auditApi, org.mockito.Mockito.times(1)).log(any());
+    }
+
+    /** 回滚必须把归档 bindSnapshots 同步恢复为可编辑 block：缺失行插回、改绑行覆盖，
+     * 当前归档之外的草稿孤儿行清掉；否则回滚后的 draft 会引用不存在或错误数据源的 block。 */
+    @org.junit.jupiter.api.Test
+    void rollback_restoresArchivedBlocksAndRemovesCurrentOrphans() {
+        RptScreen s = screen(7L, 5);
+        s.setCanvasPublishedJson("{\"schemaVersion\":1,\"components\":[],\"bindSnapshots\":{}}");
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        com.bank.branch.platform.report.entity.RptScreenPublishLog logEntry =
+                new com.bank.branch.platform.report.entity.RptScreenPublishLog();
+        logEntry.setId(200L);
+        logEntry.setScreenId(7L);
+        logEntry.setSnapshotJson("{\"schemaVersion\":1,\"components\":["
+                + "{\"component\":\"ChartWidget\",\"blockId\":1001},"
+                + "{\"component\":\"ChartWidget\",\"blockId\":1002}],"
+                + "\"bindSnapshots\":{"
+                + "\"1001\":{\"componentType\":\"METRIC_CARD\",\"bind\":{\"dsId\":12},"
+                + "\"styleCfg\":{\"color\":\"green\"},\"drill\":{}},"
+                + "\"1002\":{\"componentType\":\"LINE_TREND\",\"bind\":{\"dsId\":13},"
+                + "\"styleCfg\":{},\"drill\":{}}}}");
+        when(publishLogMapper.selectById(200L)).thenReturn(logEntry);
+
+        RptScreenBlock rebound = new RptScreenBlock();
+        rebound.setId(1001L);
+        rebound.setScreenId(7L);
+        rebound.setComponentType("METRIC_CARD");
+        rebound.setBindJson("{\"dsId\":99}");
+        RptScreenBlock orphan = new RptScreenBlock();
+        orphan.setId(1003L);
+        orphan.setScreenId(7L);
+        orphan.setComponentType("METRIC_CARD");
+        orphan.setBindJson("{\"dsId\":98}");
+        when(blockMapper.selectList(any())).thenReturn(List.of(rebound, orphan));
+        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString()))
+                .thenReturn(1);
+
+        var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasRollbackReqDTO();
+        req.setScreenId(7L);
+        req.setPublishLogId(200L);
+        req.setExpectedVersion(5);
+        req.setReason("回滚并恢复绑定");
+        service.rollbackCanvas(req);
+
+        ArgumentCaptor<RptScreenBlock> inserted = ArgumentCaptor.forClass(RptScreenBlock.class);
+        verify(blockMapper).insert(inserted.capture());
+        assertThat(inserted.getValue().getId()).isEqualTo(1002L);
+        assertThat(inserted.getValue().getBindJson()).isEqualTo("{\"dsId\":13}");
+
+        ArgumentCaptor<RptScreenBlock> updated = ArgumentCaptor.forClass(RptScreenBlock.class);
+        verify(blockMapper).updateById(updated.capture());
+        assertThat(updated.getValue().getId()).isEqualTo(1001L);
+        assertThat(updated.getValue().getBindJson()).isEqualTo("{\"dsId\":12}");
+        assertThat(updated.getValue().getStyleJson()).isEqualTo("{\"color\":\"green\"}");
+        verify(blockMapper).deleteByScreenIdAndIds(7L, Set.of(1003L));
+    }
+
+    /** 回滚归档的 CODE presentation 时，style 与 draft 必须和 published package 一起恢复，
+     * 否则画布会出现“发布包是 CODE、编辑态仍是旧布局”的双态漂移。 */
+    @org.junit.jupiter.api.Test
+    void rollback_codeArchiveRestoresPresentationStyleAndDraft() {
+        RptScreen s = screen(7L, 5);
+        s.setCanvasStyleJson("{\"schemaVersion\":1}");
+        s.setCanvasDraftJson("{\"schemaVersion\":1,\"components\":[]}");
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        com.bank.branch.platform.report.entity.RptScreenPublishLog logEntry =
+                new com.bank.branch.platform.report.entity.RptScreenPublishLog();
+        logEntry.setId(201L);
+        logEntry.setScreenId(7L);
+        String codeStyle = "{\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"branch-overview-v1\"}}";
+        String bind = "{\"dsId\":12,\"period\":\"LATEST\","
+                + "\"fields\":{\"value\":\"balance\"},\"units\":{\"value\":\"YUAN\"}}";
+        logEntry.setSnapshotJson("{\"schemaVersion\":1,\"canvasStyle\":" + codeStyle
+                + ",\"components\":[{\"component\":\"ChartWidget\",\"id\":\"w-code\","
+                + "\"blockId\":1201,\"propValue\":{\"bindingKey\":\"deposit\"},"
+                + "\"bindJson\":" + new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(bind)
+                + "}],\"bindSnapshots\":{\"1201\":{\"componentType\":\"CODE\","
+                + "\"bind\":" + bind + ",\"styleCfg\":{},\"drill\":{}}}}");
+        when(publishLogMapper.selectById(201L)).thenReturn(logEntry);
+        when(blockMapper.selectList(any())).thenReturn(List.of());
+        when(dsMapper.selectById(12L)).thenReturn(codeDatasource(12L));
+        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString()))
+                .thenReturn(1);
+
+        var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasRollbackReqDTO();
+        req.setScreenId(7L);
+        req.setPublishLogId(201L);
+        req.setExpectedVersion(5);
+        req.setReason("回滚代码化画布");
+        service.rollbackCanvas(req);
+
+        verify(canvasMapper).applyPublishedCas(
+                eq(7L), eq(5), eq(logEntry.getSnapshotJson()),
+                org.mockito.ArgumentMatchers.contains("\"presentation\""),
+                org.mockito.ArgumentMatchers.contains("\"bindingKey\":\"deposit\""),
+                eq(1), anyString());
     }
 
     /** 旧归档缺少 immutable bindSnapshots 时不可直接回滚，不能由当前 block 行补证。 */
@@ -1100,7 +1206,7 @@ class ScreenCanvasServiceTest {
         assertThatThrownBy(() -> service.rollbackCanvas(req))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED.getCode());
-        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyInt(), anyString());
+        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString());
     }
 
     /** 归档条目所属屏与请求屏不一致(跨屏越权回滚)→ 拒绝. */
