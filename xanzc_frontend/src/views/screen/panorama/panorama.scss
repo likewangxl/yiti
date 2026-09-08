@@ -295,7 +295,7 @@
 .city-leadership-card strong.is-muted { color: var(--panorama-text-dim); }
 .city-leadership-card small { grid-column: 1 / -1; overflow: hidden; margin-top: 3px; color: #718fc2; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 
-.city-workspace { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(380px, 1fr); grid-template-rows: minmax(240px, .8fr) minmax(300px, 1fr); gap: 12px; height: calc(94vh - 325px); min-height: 540px; margin: 0 22px 12px; }
+.city-workspace { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(380px, 1fr); grid-template-rows: 350px 430px; gap: 12px; height: auto; min-height: 780px; margin: 0 22px 12px; }
 .city-map-panel { grid-column: 1; grid-row: 1 / span 2; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .city-map-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 53px; padding-right: 13px; }
 .city-map-toolbar .panorama-panel-heading { flex: 1; border-bottom: 0; }
@@ -314,7 +314,7 @@
 .city-map-legend i.is-ring { border: 2px solid var(--panorama-cyan); background: transparent; }
 .city-coordinate-note { padding: 8px 14px 12px; color: var(--panorama-text-dim); font-size: 11px; text-align: right; }
 .city-coordinate-note span { margin: 0 8px; color: rgba(121, 161, 248, .34); }
-.city-list-panel { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.city-list-panel { min-height: 350px; display: flex; flex-direction: column; overflow: hidden; }
 .city-list-panel .panorama-panel-heading h2 small { color: var(--panorama-text-dim); font-size: 11px; font-weight: 400; }
 .city-sort-button { padding: 5px 8px; border: 1px solid rgba(121, 161, 248, .23); border-radius: 4px; font-size: 11px; }
 .city-sort-button:hover,
@@ -344,14 +344,14 @@
 .city-pagination button:not(:disabled):hover,
 .city-pagination button:not(:disabled):focus-visible { border-color: var(--panorama-border-strong); color: var(--panorama-cyan); outline: none; }
 .city-pagination button:disabled { cursor: not-allowed; opacity: .4; }
-.city-detail-panel { grid-column: 2; grid-row: 2; min-height: 0; margin: 0; display: flex; flex-direction: column; overflow: hidden; }
+.city-detail-panel { grid-column: 2; grid-row: 2; min-height: 430px; margin: 0; display: flex; flex-direction: column; overflow: hidden; }
 .city-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 15px; border-bottom: 1px solid rgba(121, 161, 248, .15); }
 .city-detail-heading span { color: var(--panorama-text-dim); font-size: 10px; }
 .city-detail-heading h2 { margin: 4px 0 0; font-size: 19px; }
 .city-detail-heading button { padding: 6px 9px; border: 1px solid rgba(121, 161, 248, .25); border-radius: 4px; font-size: 11px; }
 .city-detail-heading button:hover,
 .city-detail-heading button:focus-visible { border-color: var(--panorama-border-strong); color: var(--panorama-cyan); outline: none; }
-.city-detail-body { display: grid; flex: 1; min-height: 0; overflow: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(80px, 1fr) auto; gap: 7px; padding: 8px 12px 9px; }
+.city-detail-body { display: grid; flex: 1; min-height: 0; overflow: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(200px, 1fr) auto; gap: 7px; padding: 8px 12px 9px; }
 .city-detail-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .city-detail-metrics > div { padding: 6px; border: 1px solid rgba(121, 161, 248, .15); border-radius: 4px; }
 .city-detail-metrics span { display: block; color: var(--panorama-text-dim); font-size: 10px; }
@@ -360,26 +360,28 @@
 .city-detail-observation > div { min-width: 0; padding: 6px 8px; border-left: 2px solid rgba(77, 232, 239, .35); background: rgba(11, 37, 85, .35); }
 .city-detail-observation span { display: block; color: var(--panorama-text-dim); font-size: 9px; }
 .city-detail-observation strong { display: block; overflow: hidden; margin-top: 3px; color: #eaf2ff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.city-detail-trend { display: flex; min-height: 80px; flex-direction: column; overflow: hidden; }
-.city-detail-panel .city-detail-trend { min-height: 80px; }
-.city-detail-panel .city-detail-trend .panorama-trend-chart { min-height: 65px; height: auto; flex: 1 1 auto; }
+.city-detail-trend { display: flex; min-height: 200px; flex-direction: column; overflow: hidden; }
+.city-detail-panel .city-detail-trend { min-height: 200px; }
+.city-detail-panel .city-detail-trend .panorama-trend-chart { min-height: 140px; height: auto; flex: 1 1 auto; }
 .city-detail-attention { margin: 0; padding: 0; list-style: none; }
 .city-detail-attention li { display: flex; align-items: center; gap: 7px; min-height: 30px; border-bottom: 1px solid rgba(121, 161, 248, .13); color: #d5e1fb; font-size: 11px; }
 .city-detail-attention li > span { width: 17px; height: 17px; display: grid; place-items: center; border-radius: 50%; color: #291e03; background: var(--panorama-amber); font-weight: 700; }
 .city-detail-attention strong { margin-left: auto; color: var(--panorama-amber); }
 
 @media (min-width: 761px) and (max-width: 1500px) {
-  .city-workspace { grid-template-rows: minmax(240px, .8fr) minmax(300px, 1fr); }
+  .city-workspace { grid-template-rows: 350px 430px; min-height: 780px; }
   .city-list-panel { overflow-y: auto; }
+  .city-list-panel { min-height: 350px; }
+  .city-detail-panel { min-height: 430px; }
   .city-detail-heading { padding: 8px 10px; }
-  .city-detail-body { grid-template-rows: auto auto minmax(80px, 1fr) auto; gap: 6px; padding: 6px 10px 7px; }
+  .city-detail-body { grid-template-rows: auto auto minmax(200px, 1fr) auto; gap: 6px; padding: 6px 10px 7px; }
   .city-detail-metrics { gap: 5px; }
   .city-detail-metrics > div { padding: 4px; }
   .city-detail-metrics strong { margin-top: 3px; font-size: 15px; }
   .city-detail-observation { gap: 5px; }
   .city-detail-observation > div { padding: 4px 5px; }
-  .city-detail-panel .city-detail-trend { min-height: 80px; }
-  .city-detail-panel .city-detail-trend .panorama-trend-chart { min-height: 65px; }
+  .city-detail-panel .city-detail-trend { min-height: 200px; }
+  .city-detail-panel .city-detail-trend .panorama-trend-chart { min-height: 140px; }
 }
 
 @media (max-width: 1300px) {
