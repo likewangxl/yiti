@@ -87,13 +87,17 @@
           </div>
 
           <label class="panorama-bindings__field-label" for="panorama-datasource">数据源</label>
-          <select id="panorama-datasource" data-testid="slot-datasource" v-model="selectedDatasourceId" @change="onDatasourceChange">
-            <option value="">请选择当前屏可用数据源</option>
-            <option v-for="source in availableDatasources" :key="source.id" :value="String(source.id)" :disabled="source.__compositionColumnsUnsupported">
-              {{ source.dsName || source.ds_name || source.dsCode || `数据源 #${source.id}` }}{{ source.__compositionColumnsUnsupported ? '（当前双列模式不支持）' : '' }}
-            </option>
-          </select>
-          <p v-if="!availableDatasources.length" class="panorama-bindings__hint">当前屏范围没有可用的数据源。</p>
+          <PanoramaDatasourcePicker
+            id="panorama-datasource"
+            data-testid="slot-datasource"
+            :sources="availableDatasources"
+            v-model="selectedDatasourceId"
+            @change="onDatasourceChange"
+          />
+          <p data-testid="datasource-option-count" class="panorama-bindings__hint">当前屏可选数据源：{{ selectableDatasourceCount }} 个</p>
+          <p v-if="!selectableDatasourceCount" class="panorama-bindings__hint">当前屏范围没有可用的数据源。</p>
+          <p v-if="!selectedDatasource" data-testid="datasource-required-hint" class="panorama-bindings__hint">请先选择数据源，再配置字段和单位。</p>
+          <p v-else-if="selectedFieldSpecs.length && !hasApplicableFieldOptions" data-testid="datasource-fields-unavailable-hint" class="panorama-bindings__hint">已选择数据源，但没有适用字段候选，请核对字段角色或元数据。</p>
 
           <div class="panorama-bindings__fields">
             <div v-for="fieldSpec in selectedFieldSpecs" :key="fieldSpec.semantic" class="panorama-bindings__field-row">
@@ -102,6 +106,7 @@
               </label>
               <select :id="`panorama-field-${fieldSpec.semantic}`"
                       :data-testid="`field-option-${selectedSlot}-${fieldSpec.semantic}`"
+                      :disabled="!selectedDatasource"
                       :value="selectedBinding.fields[fieldSpec.semantic] || ''"
                       @change="setField(fieldSpec.semantic, $event.target.value)">
                 <option value="">未绑定</option>
@@ -111,6 +116,7 @@
               </select>
               <select v-if="fieldSpec.kind !== 'dimension' && fieldSpec.unitKinds?.length"
                       :data-testid="`unit-${selectedSlot}-${fieldSpec.semantic}`"
+                      :disabled="!selectedDatasource"
                       :value="unitFor(fieldSpec.semantic)"
                       @change="setUnit(fieldSpec.semantic, $event.target.value)">
                 <option value="">未知单位</option>
@@ -184,6 +190,7 @@ import {
 import { RETAIL_SLOT_ORDER, RETAIL_BINDING_SLOTS } from './retailBindings';
 import PanoramaSettings from './PanoramaSettings.vue';
 import PanoramaIntegrationReadiness from './PanoramaIntegrationReadiness.vue';
+import PanoramaDatasourcePicker from './PanoramaDatasourcePicker.vue';
 
 const props = defineProps({ screenId: { type: [Number, String], default: '' } });
 const emit = defineEmits(['saved', 'published', 'discarded', 'preview', 'error']);
@@ -264,6 +271,18 @@ function fieldOptionsForBinding(slot, semantic, dsId) {
 function fieldOptionsFor(semantic) {
   return fieldOptionsForBinding(selectedSlot.value, semantic, selectedBinding.value.dsId);
 }
+const hasApplicableFieldOptions = computed(() => {
+  if (!selectedDatasource.value) return false;
+  const requiredSemantics = new Set([
+    ...(selectedSpec.value?.required || []),
+    ...(selectedSpec.value?.oneOfRequired || []),
+    ...(selectedSpec.value?.atLeastOneOf || [])
+  ]);
+  const candidates = requiredSemantics.size
+    ? selectedFieldSpecs.value.filter(fieldSpec => requiredSemantics.has(fieldSpec.semantic))
+    : selectedFieldSpecs.value;
+  return candidates.some(fieldSpec => fieldOptionsFor(fieldSpec.semantic).length > 0);
+});
 const canvasVersion = computed(() => canvas.value?.canvasVersion ?? null);
 
 const isCodePresentation = computed(() => canvasStyle.value?.presentation?.type === 'CODE'
@@ -301,6 +320,8 @@ const availableDatasources = computed(() => filterDatasourcesByMeta(
   }
   return list;
 }, []));
+const selectableDatasourceCount = computed(() => availableDatasources.value
+  .filter(source => !source.__compositionColumnsUnsupported && !source.disabled).length);
 
 function emptyBinding(slot = '') {
   return {
@@ -468,7 +489,9 @@ function setCompositionMode(value) {
   conflict.value = '';
 }
 
-function onDatasourceChange() {
+function onDatasourceChange(value) {
+  const nextId = value && typeof value === 'object' ? value.target?.value : value;
+  if (nextId !== undefined) selectedDatasourceId.value = nextId;
   // 切换数据源后只保留新数据源仍声明的列；失效单位也必须删除，
   // 否则服务端会拒绝“单位指向未绑定字段”的 bindJson。
   const binding = selectedBinding.value;

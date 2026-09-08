@@ -34,6 +34,32 @@ const { dashboardStub } = vi.hoisted(() => ({
 }));
 vi.mock('../PanoramaDashboard.vue', () => ({ default: dashboardStub }));
 
+const { datasourcePickerStub } = vi.hoisted(() => ({
+  datasourcePickerStub: {
+    name: 'PanoramaDatasourcePicker',
+    inheritAttrs: false,
+    props: ['sources', 'modelValue', 'disabled', 'placeholder'],
+    emits: ['update:modelValue', 'change'],
+    methods: {
+      sourceLabel(source = {}) {
+        const label = source.dsName || source.ds_name || source.dsCode || `数据源 #${source.id}`;
+        return source.__compositionColumnsUnsupported ? `${label}（当前双列模式不支持）` : label;
+      },
+      select(event) {
+        const value = event.target.value;
+        this.$emit('update:modelValue', value);
+        this.$emit('change', value);
+      }
+    },
+    template: '<select v-bind="$attrs" :value="modelValue" :disabled="disabled" @change="select">'
+      + '<option value="">{{ placeholder }}</option>'
+      + '<option v-for="source in sources" :key="source.id" :value="String(source.id)" :disabled="source.__compositionColumnsUnsupported">'
+      + '{{ sourceLabel(source) }}</option>'
+      + '</select>'
+  }
+}));
+vi.mock('../PanoramaDatasourcePicker.vue', () => ({ default: datasourcePickerStub }));
+
 import PanoramaBindings from '../PanoramaBindings.vue';
 import PanoramaRuntime from '../PanoramaRuntime.vue';
 
@@ -189,6 +215,60 @@ describe('PanoramaBindings', () => {
     expect(wrapper.find('[data-testid="field-option-trend-date"] option[value="data_date"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="field-option-trend-deposit"] option[value="data_date"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="try-run"]').exists()).toBe(false);
+  });
+
+  it('未选数据源时字段和单位禁用，picker change 传入新 ID 后恢复配置', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({ ...canvas, canvasDraftJson: JSON.stringify({ components: [] }) });
+    api.listScreenDatasources.mockResolvedValue([datasource]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+
+    await vi.waitFor(() => expect(api.listScreenDatasources).toHaveBeenCalled());
+    expect(wrapper.find('[data-testid="datasource-option-count"]').text()).toContain('当前屏可选数据源：1 个');
+    expect(wrapper.find('[data-testid="datasource-required-hint"]').text()).toContain('请先选择数据源');
+    expect(wrapper.find('[data-testid="field-option-deposit-value"]').element.disabled).toBe(true);
+    expect(wrapper.find('[data-testid="unit-deposit-value"]').element.disabled).toBe(true);
+
+    wrapper.findComponent(datasourcePickerStub).vm.$emit('change', '77');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[data-testid="field-option-deposit-value"]').element.disabled).toBe(false);
+    expect(wrapper.find('[data-testid="unit-deposit-value"]').element.disabled).toBe(false);
+    expect(wrapper.find('[data-testid="datasource-required-hint"]').exists()).toBe(false);
+  });
+
+  it('已选择数据源但没有适用字段时明确提示，不猜测字段', async () => {
+    const noMetricDatasource = {
+      ...datasource,
+      id: 82,
+      dsName: '只有机构维度',
+      configJson: JSON.stringify({ fieldMeta: [{ col: 'org_code', alias: '机构号', role: 'DIM' }] })
+    };
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({ ...canvas, canvasDraftJson: JSON.stringify({ components: [] }) });
+    api.listScreenDatasources.mockResolvedValue([noMetricDatasource]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+
+    await vi.waitFor(() => expect(api.listScreenDatasources).toHaveBeenCalled());
+    await wrapper.find('[data-testid="slot-datasource"]').setValue('82');
+    expect(wrapper.find('[data-testid="datasource-fields-unavailable-hint"]').text()).toContain('没有适用字段候选');
+    expect(wrapper.find('[data-testid="field-option-deposit-value"] option[value="org_code"]').exists()).toBe(false);
+  });
+
+  it('columns 模式的可选数据源计数排除保留的禁用旧来源', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({
+      ...canvas,
+      canvasStyleJson: JSON.stringify({ presentation: { type: 'CODE', template: 'branch-overview-v1' } }),
+      canvasDraftJson: JSON.stringify({ components: [] })
+    });
+    api.listScreenDatasources.mockResolvedValue([compositionUnsupportedDatasource, compositionColumnsDatasource]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+
+    await vi.waitFor(() => expect(api.listScreenDatasources).toHaveBeenCalled());
+    await wrapper.find('[data-testid="slot-composition"]').trigger('click');
+    await wrapper.find('[data-testid="composition-mode"]').setValue('columns');
+    expect(wrapper.find('[data-testid="datasource-option-count"]').text()).toContain('当前屏可选数据源：1 个');
+    expect(wrapper.find('[data-testid="slot-datasource"] option[value="78"]').exists()).toBe(false);
   });
 
   it('NAMED_GROUP 城市汇总的机构号只显示内置 org_code，不把 org_name 当身份候选', async () => {
