@@ -53,6 +53,51 @@ describe('defaultBindings', () => {
     expect(result.binding.fields.value).not.toBe('M_0265');
   });
 
+  it('按槽位粒度拒绝未声明聚合的一般宽表，避免把原始多行来源当作单值', () => {
+    const rawWide = source(9002, {
+      table: 'ORG_INDEX_RESULT',
+      subjectCol: 'org_code',
+      metrics: [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }]
+    });
+    const result = resolveDefaultBinding({
+      slot: 'depositAverage', template: 'branch-overview-v1', screenScope, datasources: [rawWide]
+    });
+    expect(result.status).toBe('missing');
+    expect(result.gap).toContain('NONE');
+  });
+
+  it('趋势只接受 DATE 粒度，机构展示只接受 SUBJECT 粒度', () => {
+    const trendSource = orgWideSource(9012, [
+      { metricCode: 'M_TREND', metricName: '存款趋势', semantic: 'deposit', unit: 'HUNDRED_MILLION' }
+    ], undefined);
+    const branchSource = source(9002, {
+      table: 'ORG_INDEX_RESULT',
+      metrics: [{ metricCode: 'M_BRANCH', metricName: '存款', semantic: 'deposit', unit: 'HUNDRED_MILLION' }]
+    });
+    const trend = resolveDefaultBinding({ slot: 'trend', template: 'branch-overview-v1', screenScope, datasources: [trendSource] });
+    const branches = resolveDefaultBinding({ slot: 'branches', template: 'branch-overview-v1', screenScope, datasources: [branchSource] });
+    expect(trend.status).toBe('missing');
+    expect(trend.gap).toContain('DATE');
+    expect(branches.status).toBe('missing');
+    expect(branches.gap).toContain('SUBJECT');
+  });
+
+  it('非宽表来源没有明确结果结构时不因 dsType 或名称自动当作单值', () => {
+    const custom = source(9017, {
+      semantic: 'depositAverage',
+      fields: [{ col: 'average', semantic: 'depositAverage', role: 'METRIC', unit: 'HUNDRED_MILLION' }]
+    }, { sourceKind: 'CUSTOM_SQL' });
+    const shaped = source(9018, {
+      resultShape: 'SINGLE',
+      fields: [{ col: 'average', semantic: 'depositAverage', role: 'METRIC', unit: 'HUNDRED_MILLION' }]
+    }, { sourceKind: 'CUSTOM_SQL' });
+    const missing = resolveDefaultBinding({ slot: 'depositAverage', template: 'branch-overview-v1', screenScope, datasources: [custom] });
+    const applied = resolveDefaultBinding({ slot: 'depositAverage', template: 'branch-overview-v1', screenScope, datasources: [shaped] });
+    expect(missing.status).toBe('missing');
+    expect(missing.gap).toContain('单值');
+    expect(applied.status).toBe('applied');
+  });
+
   it('同一语义存在多个可用来源时保留缺口，不按数组首项猜测', () => {
     const result = resolveDefaultBinding({
       slot: 'depositAverage',
@@ -60,7 +105,9 @@ describe('defaultBindings', () => {
       screenScope,
       datasources: [
         orgWideSource(9014, [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }]),
-        orgWideSource(9015, [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }], { groupBy: 'SUBJECT', agg: 'SUM' })
+        orgWideSource(9015, [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }], {
+          groupBy: 'NONE', agg: 'SUM', filters: [{ col: 'org_code', op: 'IN', value: 'A,B' }]
+        })
       ]
     });
 
@@ -155,7 +202,7 @@ describe('defaultBindings', () => {
         orgWideSource(1, [{ metricCode: 'RETAIL_AUM', metricName: 'aum', semantic: 'aum', unit: 'HUNDRED_MILLION' }]),
         source(2, {
           table: 'ORG_INDEX_RESULT', subjectCol: 'org_code', scopeMode: 'NAMED_GROUP',
-          aggregation: { groupBy: 'SUBJECT', agg: 'SUM' },
+          aggregation: { groupBy: 'NONE', agg: 'SUM' },
           metrics: [{ metricCode: 'RETAIL_AUM', metricName: 'aum', semantic: 'aum', unit: 'HUNDRED_MILLION' }]
         }, { bizLine: 'RETAIL' })
       ]
@@ -170,6 +217,7 @@ describe('defaultBindings', () => {
       slot: 'depositAverage', template: 'branch-overview-v1', screenScope,
       datasources: [source(1, {
         table: 'OTHER_TABLE',
+        aggregation: { groupBy: 'NONE', agg: 'SUM' },
         metrics: [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', semantic: 'depositAverage' }]
       })]
     });

@@ -37,6 +37,12 @@ const AMOUNT_FIELD_NAMES = new Set([
   'value', 'deposit', 'depositIncrease', 'depositAverage', 'loan', 'revenue',
   'rate', 'corporate', 'retail', 'actual', 'target', 'aum', 'increase', 'nplRate'
 ]);
+const SINGLE_VALUE_SLOTS = new Set([
+  'deposit', 'depositIncrease', 'depositAverage', 'loan', 'customers', 'revenue', 'rate',
+  'retailAum', 'retailDeposit', 'retailDepositAverage', 'retailRevenue', 'retailValueCustomers',
+  'retailLoan', 'retailNplRate'
+]);
+const TIME_SERIES_SLOTS = new Set(['trend', 'retailTrend', 'branchTrend']);
 
 // 这是用户已确认的现有机构指标宽表原始口径，只适用于 ORG_INDEX_RESULT。
 // 旧数据源 fieldMeta 中的“万元”是展示遗留值，不能覆盖这里的受控口径。
@@ -367,6 +373,18 @@ function sourceScopeMode(source) {
   return upper(datasourceConfig(source)?.scopeMode || 'SUBJECT');
 }
 
+function explicitSourceShape(source) {
+  const config = datasourceConfig(source);
+  const schema = object(config.schema || config.outputSchema || config.resultSchema);
+  return upper(config.resultShape || config.outputShape || config.rowShape || config.cardinality
+    || schema.shape || schema.resultShape || schema.cardinality);
+}
+
+function hasExplicitOrgContext(source) {
+  const config = datasourceConfig(source);
+  return Boolean(text(config.subjectCol || config.subjectParam || config.orgCode || config.org_code));
+}
+
 function sourceStructureIssue(source, screen, slot, mode) {
   const config = datasourceConfig(source);
   const sourceKind = upper(source?.sourceKind || source?.source_kind || config.sourceKind);
@@ -375,12 +393,34 @@ function sourceStructureIssue(source, screen, slot, mode) {
   const scopeMode = sourceScopeMode(source);
   const named = upper(screen.orgScopeMode) === 'NAMED_GROUP';
 
+  if (sourceKind === 'WIDE_TABLE' && SINGLE_VALUE_SLOTS.has(slot) && groupBy !== 'NONE') {
+    return '单值展示需要 WIDE_TABLE 明确按 NONE 聚合为一行';
+  }
+  if (sourceKind === 'WIDE_TABLE' && TIME_SERIES_SLOTS.has(slot)) {
+    if (slot === 'branchTrend' && !groupBy && hasExplicitOrgContext(source)) {
+      // 支行趋势允许服务端由明确 orgCode 收窄未聚合宽表；不能靠屏名或来源名推断。
+    } else if (groupBy !== 'DATE') {
+      return '趋势展示需要 WIDE_TABLE 明确按 DATE 聚合';
+    }
+  }
+  if (sourceKind === 'WIDE_TABLE' && ['branches', 'ranking', 'retailRanking'].includes(slot) && groupBy !== 'SUBJECT') {
+    return '机构展示需要 WIDE_TABLE 明确按 SUBJECT 聚合';
+  }
+  if (sourceKind !== 'WIDE_TABLE' && SINGLE_VALUE_SLOTS.has(slot) && explicitSourceShape(source) !== 'SINGLE') {
+    return '非宽表来源缺少已确认的单值结果结构';
+  }
+  if (sourceKind !== 'WIDE_TABLE' && TIME_SERIES_SLOTS.has(slot) && explicitSourceShape(source) !== 'TIMESERIES') {
+    return '非宽表来源缺少已确认的时序结果结构';
+  }
+
   if (named) {
     if (sourceKind !== 'WIDE_TABLE' || table !== 'ORG_INDEX_RESULT' || text(config.subjectCol) !== 'org_code') {
       return '当前机构范围只允许带 org_code 的机构指标宽表';
     }
     if (scopeMode === 'GLOBAL') return '当前机构范围不能使用全局汇总来源';
-    if (groupBy && groupBy !== 'SUBJECT') return '当前机构范围需要按机构汇总的来源';
+    if (groupBy && groupBy !== 'SUBJECT' && !(SINGLE_VALUE_SLOTS.has(slot) && groupBy === 'NONE')) {
+      return '当前机构范围需要按机构汇总的来源';
+    }
     if (slot === 'composition' && mode === 'columns') return '双列构成需要一行来源，命名机构组按机构多行来源粒度不符';
   }
   if (slot === 'composition' && mode === 'columns') {
