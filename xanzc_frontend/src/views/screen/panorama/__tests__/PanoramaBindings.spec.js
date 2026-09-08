@@ -100,7 +100,11 @@ const autoDatasource = {
   configJson: JSON.stringify({
     table: 'ORG_INDEX_RESULT', scopeMode: 'GLOBAL', aggregation: { groupBy: 'NONE', agg: 'SUM' },
     fieldMeta: [{ col: 'manual_deposit', role: 'METRIC' }],
-    metrics: [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }]
+    metrics: [
+      { metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 },
+      { metricCode: 'M_0277', metricName: '对公一般性存款余额-机构', slot: 18 },
+      { metricCode: 'M_0309', metricName: '零售一般性存款余额-机构', slot: 30 }
+    ]
   })
 };
 
@@ -292,6 +296,8 @@ describe('PanoramaBindings', () => {
 
     await wrapper.find('[data-testid="binding-auto-empty"]').trigger('click');
     expect(wrapper.vm.collectValidBindings().bindings.deposit.fields.value).toBe('manual_deposit');
+    await wrapper.find('[data-testid="slot-composition"]').trigger('click');
+    expect(wrapper.find('[data-testid="composition-mode"]').element.value).toBe('columns');
     await wrapper.find('[data-testid="slot-depositAverage"]').trigger('click');
     await wrapper.find('[data-testid="slot-datasource"]').setValue('84');
     expect(wrapper.find('[data-testid="field-option-depositAverage-value"]').element.value).toBe('一般性存款月均余额-机构');

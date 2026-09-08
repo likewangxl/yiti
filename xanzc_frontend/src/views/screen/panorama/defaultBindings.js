@@ -43,6 +43,10 @@ const SINGLE_VALUE_SLOTS = new Set([
   'retailLoan', 'retailNplRate'
 ]);
 const TIME_SERIES_SLOTS = new Set(['trend', 'retailTrend', 'branchTrend']);
+const DIMENSION_SEMANTICS = new Set([
+  'date', 'dataDate', 'orgCode', 'orgName', 'cityCode', 'cityName', 'ownerOperatingOrgCode',
+  'parentOrgCode', 'lng', 'lat', 'coordSys', 'located', 'name', 'label', 'owner', 'deadline'
+]);
 
 // 这是用户已确认的现有机构指标宽表原始口径，只适用于 ORG_INDEX_RESULT。
 // 旧数据源 fieldMeta 中的“万元”是展示遗留值，不能覆盖这里的受控口径。
@@ -805,7 +809,9 @@ export function summarizeBinding(label, binding, datasources = []) {
   const source = datasources.find(item => String(item.id) === String(binding.dsId));
   const sourceLabel = source?.dsName || source?.ds_name || `数据来源 #${binding.dsId}`;
   const pairs = Object.entries(binding.fields || {}).map(([semantic, column]) =>
-    `${column}${binding.units?.[semantic] ? `（${unitLabel(binding.units[semantic])}）` : '（单位待确认）'}`
+    DIMENSION_SEMANTICS.has(semantic)
+      ? String(column)
+      : `${column}${binding.units?.[semantic] ? `（${unitLabel(binding.units[semantic])}）` : '（单位待确认）'}`
   );
   return `${label}：${sourceLabel} → ${pairs.join('、') || '字段待配置'}`;
 }

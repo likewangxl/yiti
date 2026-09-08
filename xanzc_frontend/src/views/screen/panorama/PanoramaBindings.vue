@@ -468,6 +468,10 @@ function applyDefaultsToEmpty() {
   });
   for (const slot of result.applied) {
     writeBinding(slot, result.bindings[slot]);
+    if (slot === 'composition' && !manualSlots.has(slot)
+        && result.bindings[slot]?.fields?.corporate && result.bindings[slot]?.fields?.retail) {
+      compositionMode.value = 'columns';
+    }
     autoReviewSlots.add(slot);
   }
   for (const slot of result.preserved) autoReviewSlots.delete(slot);
@@ -628,6 +632,11 @@ function selectSlot(slot) {
   if (!Object.prototype.hasOwnProperty.call(BINDING_SLOTS, slot)) return;
   selectedSlot.value = slot;
   if (!bindingState[slot]) bindingState[slot] = emptyBinding(slot);
+  if (slot === 'composition' && !manualSlots.has(slot)) {
+    const fields = bindingState[slot]?.fields || {};
+    if (fields.corporate && fields.retail) compositionMode.value = 'columns';
+    else if (fields.name || fields.value) compositionMode.value = 'rows';
+  }
   applyDefaultToSlot(slot);
 }
 

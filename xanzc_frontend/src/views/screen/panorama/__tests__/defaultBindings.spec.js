@@ -266,5 +266,10 @@ describe('defaultBindings', () => {
       fields: { value: '一般性存款月均余额-机构' },
       units: { value: 'HUNDRED_MILLION' }
     }, [{ id: 9014, dsName: '机构指标汇总' }])).toContain('机构指标汇总 → 一般性存款月均余额-机构（亿元）');
+    expect(summarizeBinding('支行机构', {
+      dsId: 9015,
+      fields: { orgCode: 'org_code' },
+      units: {}
+    }, [{ id: 9015, dsName: '机构指标按机构统计' }])).not.toContain('单位待确认');
   });
 });
