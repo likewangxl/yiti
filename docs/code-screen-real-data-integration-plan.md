@@ -69,7 +69,7 @@
 
 以上为配置候选，不是已经执行并核对数值的正式绑定。宽表指标定义、fieldMeta 的显示单位与真实 rows 单位还须交叉核对；不能因列别名带“亿元”就将原始数值认定为亿元。
 
-**需要开发的契约缺口**：当前 `ScreenDatasourceServiceImpl.validateNamedGroupDatasource` 将 NAMED_GROUP 数据源限定为 `ORG_INDEX_RESULT` 宽表。现有查询输出并不直接提供事项分类、业务构成的 `name/value`、每城市唯一行等模型；因此 `attention`、`composition`、`citySummary` 不能靠简单字段选择全部接通。须先设计受控查询或受限结果转换能力，继承同一授权范围和发布身份，并补齐保存、发布、运行及回滚校验；不能以改成 GLOBAL 或放开任意 SQL 绕过。14 槽已有字段契约只证明能声明绑定，不代表 14 槽已具备可用真实来源。
+**需要开发的契约缺口**：当前 `ScreenDatasourceServiceImpl.ensureNamedGroupDatasourceSafe` 将 NAMED_GROUP 数据源限定为 `ORG_INDEX_RESULT` 宽表。现有查询输出并不直接提供事项分类、业务构成的 `name/value`、每城市唯一行等模型；因此 `attention`、`composition`、`citySummary` 不能靠简单字段选择全部接通。须先设计受控查询或受限结果转换能力，继承同一授权范围和发布身份，并补齐保存、发布、运行及回滚校验；不能以改成 GLOBAL 或放开任意 SQL 绕过。14 槽已有字段契约只证明能声明绑定，不代表 14 槽已具备可用真实来源。
 
 ### 范围与日期
 
