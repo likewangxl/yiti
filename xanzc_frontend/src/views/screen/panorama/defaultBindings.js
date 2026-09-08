@@ -406,6 +406,9 @@ function sourceStructureIssue(source, screen, slot, mode) {
   if (sourceKind === 'WIDE_TABLE' && ['branches', 'ranking', 'retailRanking'].includes(slot) && groupBy !== 'SUBJECT') {
     return '机构展示需要 WIDE_TABLE 明确按 SUBJECT 聚合';
   }
+  if (['branches', 'ranking', 'retailRanking'].includes(slot) && scopeMode === 'GLOBAL') {
+    return '机构展示不能使用全局汇总来源';
+  }
   if (sourceKind !== 'WIDE_TABLE' && SINGLE_VALUE_SLOTS.has(slot) && explicitSourceShape(source) !== 'SINGLE') {
     return '非宽表来源缺少已确认的单值结果结构';
   }
