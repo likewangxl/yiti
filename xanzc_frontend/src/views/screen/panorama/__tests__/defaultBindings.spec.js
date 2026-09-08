@@ -82,6 +82,17 @@ describe('defaultBindings', () => {
     expect(branches.gap).toContain('SUBJECT');
   });
 
+  it('机构展示在有固定内置机构名称时同时绑定机构号和机构名称', () => {
+    const result = resolveDefaultBinding({
+      slot: 'branches', template: 'branch-overview-v1', screenScope,
+      datasources: [orgWideSource(9015, [
+        { metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }
+      ], { groupBy: 'SUBJECT', agg: 'SUM' }, {}, { scopeMode: 'SUBJECT' })]
+    });
+    expect(result.status).toBe('applied');
+    expect(result.binding.fields).toEqual({ orgCode: 'org_code', orgName: 'org_name' });
+  });
+
   it('非宽表来源没有明确结果结构时不因 dsType 或名称自动当作单值', () => {
     const custom = source(9017, {
       semantic: 'depositAverage',
