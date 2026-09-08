@@ -60,6 +60,29 @@
       </article>
     </section>
 
+    <section class="retail-insight-strip" data-testid="retail-leadership-insights" aria-label="经营观察">
+      <div class="retail-insight-item">
+        <span>负增机构</span>
+        <strong>{{ growthCountLabel }}</strong>
+        <small>{{ growthSampleLabel }}</small>
+      </div>
+      <div class="retail-insight-item">
+        <span>已达标目标</span>
+        <strong>{{ insightCount(leadershipInsights.achievedTargetCount) }}</strong>
+        <small>有效目标 {{ insightCount(leadershipInsights.validTargetCount) }} 项</small>
+      </div>
+      <div class="retail-insight-item">
+        <span>缺指标</span>
+        <strong>{{ insightCount(leadershipInsights.missingMetricCount) }}</strong>
+        <small>排名矩阵空值单元</small>
+      </div>
+      <div class="retail-insight-item retail-insight-item--wide">
+        <span>目标有效数 / 缺口</span>
+        <strong>{{ targetValidityLabel }}</strong>
+        <small>{{ targetGapLabel }}</small>
+      </div>
+    </section>
+
     <section class="retail-main-grid">
       <div class="retail-column retail-column--left">
         <article class="retail-panel retail-savings-panel">
@@ -95,18 +118,38 @@
               <span class="retail-kicker">客户结构</span>
               <h2>客户分层与资产</h2>
             </div>
-            <span>万户 / 亿元</span>
+            <span>万户 / 亿元 · 万元/户</span>
           </header>
-          <p class="retail-panel__note">分层口径以业务定义为准</p>
-          <div v-if="safeModel.segments.length" class="retail-segment-list">
-            <div v-for="(segment, index) in safeModel.segments" :key="`${segment.name || 'segment'}-${index}`" class="retail-segment-row" data-testid="retail-segment-row">
+          <p class="retail-panel__note retail-segment-scope-note" data-testid="retail-segment-scope-note" title="客户占比与资产占比仅使用客户数和AUM均已提供且非负的同一分层分母">
+            分层内占比 · {{ segmentCoverageLabel }}，非全客群（分层口径以业务定义为准）
+          </p>
+          <div v-if="segmentComparisons.length" class="retail-segment-list">
+            <div class="retail-segment-compare-head" aria-hidden="true">
+              <span>客户占比 / 资产占比</span>
+              <span>客户数</span>
+              <span>AUM</span>
+              <span>户均AUM</span>
+            </div>
+            <div v-for="(segment, index) in segmentComparisons" :key="`${segment.name || 'segment'}-${index}`" class="retail-segment-row" data-testid="retail-segment-row">
               <div class="retail-segment-row__identity">
                 <i :style="{ backgroundColor: segmentColor(index) }"></i>
                 <span>{{ segment.name || '—' }}</span>
               </div>
-              <div class="retail-segment-row__bar" aria-hidden="true"><i :style="{ width: `${segmentBarWidth(segment.aum)}%`, backgroundColor: segmentColor(index) }"></i></div>
+              <div class="retail-segment-row__comparison" aria-label="客户占比与资产占比">
+                <span class="retail-share retail-share--customers">
+                  <em>客</em>
+                  <i aria-hidden="true"><b :style="{ width: `${shareWidth(segment.customerShare)}%` }"></b></i>
+                  <strong>{{ formatPercent(segment.customerShare) }}</strong>
+                </span>
+                <span class="retail-share retail-share--aum">
+                  <em>资</em>
+                  <i aria-hidden="true"><b :style="{ width: `${shareWidth(segment.aumShare)}%` }"></b></i>
+                  <strong>{{ formatPercent(segment.aumShare) }}</strong>
+                </span>
+              </div>
               <strong>{{ formatMetric(segment.customers) }}</strong>
               <small>{{ formatMetric(segment.aum) }}</small>
+              <em class="retail-segment-row__average">{{ formatMetric(segment.averageAum) }}</em>
             </div>
           </div>
           <div v-else class="retail-empty">暂无客户分层数据</div>
@@ -189,6 +232,15 @@
             </div>
             <span class="retail-ranking-unit" data-testid="retail-ranking-unit">单位：{{ rankingMetricInfo.unit }}</span>
           </div>
+          <div v-if="filteredRankings.length" class="retail-ranking-matrix-head" data-testid="retail-ranking-matrix-head" aria-hidden="true">
+            <span aria-hidden="true"></span>
+            <span>机构</span>
+            <span>当前排序值<small>{{ rankingMetricInfo.label }} · {{ rankingMetricInfo.unit }}</small></span>
+            <span>AUM<small>亿元</small></span>
+            <span>净增<small>亿元</small></span>
+            <span>完成率<small>%</small></span>
+            <span>不良率<small>%</small></span>
+          </div>
           <ol v-if="filteredRankings.length" class="retail-ranking-list">
             <li
               v-for="(item, index) in filteredRankings"
@@ -201,13 +253,16 @@
               @keydown.enter="openInstitution(item)"
               @keydown.space.prevent="openInstitution(item)"
             >
-              <span class="retail-ranking-row__number">{{ index + 1 }}</span>
+              <span class="retail-ranking-row__number">{{ rankingRank(item, index) ?? '—' }}</span>
               <span class="retail-ranking-row__name">{{ item.name || item.orgName || '—' }}</span>
-              <span class="retail-ranking-row__bar" aria-hidden="true"><i :class="{ 'is-negative': rankingValue(item) < 0 }" :style="{ width: `${rankingBarWidth(item)}%` }"></i></span>
-              <strong>{{ formatMetric(rankingValue(item)) }}</strong>
-              <small v-if="hasValue(item.nplRate)" class="retail-ranking-row__npl">不良 {{ formatMetric(item.nplRate) }}%</small>
+              <strong class="retail-ranking-row__sort-value">{{ formatMetric(rankingValue(item)) }}</strong>
+              <span class="retail-ranking-row__metric" data-testid="retail-ranking-matrix">{{ formatMetric(item.aum) }}</span>
+              <span class="retail-ranking-row__metric">{{ formatMetric(item.increase) }}</span>
+              <span class="retail-ranking-row__metric">{{ formatMetric(item.rate) }}</span>
+              <span class="retail-ranking-row__metric">{{ formatMetric(item.nplRate) }}</span>
             </li>
           </ol>
+          <p v-if="filteredRankings.length" class="retail-ranking-matrix-note">四项指标同屏展示；颜色仅作视觉区分，不代表风险阈值。</p>
           <div v-else class="retail-empty">暂无机构排名绑定</div>
           <p class="retail-ranking-hint">点击机构查看资产、净增和风险指标</p>
         </article>
@@ -303,6 +358,18 @@
               </div>
               <p v-else>暂无本机构排名数据</p>
             </section>
+            <section class="retail-directory-detail__rank" data-testid="retail-directory-ranking-context" aria-label="同口径机构排名">
+              <h4>同口径机构排名</h4>
+              <div>
+                <span>当前口径</span>
+                <strong>{{ rankingMetricInfo.label }}</strong>
+              </div>
+              <div>
+                <span>排名</span>
+                <strong>{{ selectedInstitutionRankLabel }}</strong>
+                <small>可比样本 {{ comparableSampleLabel }} 家</small>
+              </div>
+            </section>
           </aside>
           <aside v-else class="retail-directory-detail retail-directory-detail--empty">
             <span class="retail-kicker">本机构身份</span>
@@ -322,6 +389,10 @@ import {
 import PanoramaMap from './PanoramaMap.vue';
 import RetailTrend from './RetailTrend.vue';
 import { provinceGeo } from './geography.js';
+import {
+  buildRetailLeadershipInsights,
+  buildSegmentComparisons
+} from './retailLeadershipInsights.js';
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -407,6 +478,19 @@ const today = computed(() => {
   return `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
 });
 const rankingMetricInfo = computed(() => rankingMetricOptions.find(item => item.key === rankingMetric.value) || rankingMetricOptions[0]);
+const segmentComparisons = computed(() => buildSegmentComparisons(safeModel.value.segments));
+const segmentCoverageLabel = computed(() => `${segmentComparisons.value.length}组有效`);
+const leadershipInsights = computed(() => buildRetailLeadershipInsights(safeModel.value));
+const growthCountLabel = computed(() => leadershipInsights.value.growthComparableCount > 0
+  ? String(leadershipInsights.value.negativeGrowthCount)
+  : '—');
+const growthSampleLabel = computed(() => `可判断 ${leadershipInsights.value.growthComparableCount}/${leadershipInsights.value.growthSampleCount} 家`);
+const targetValidityLabel = computed(() => leadershipInsights.value.targetCount > 0
+  ? `${leadershipInsights.value.validTargetCount}/${leadershipInsights.value.targetCount}`
+  : '—');
+const targetGapLabel = computed(() => leadershipInsights.value.targetCount > 0
+  ? `有缺口 ${insightCount(leadershipInsights.value.targetGapCount)} 项 · 金额按指标分列`
+  : '未绑定目标');
 const filteredRankings = computed(() => {
   const source = safeModel.value.rankings.filter(row => !selectedCityCode.value || String(row?.cityCode || '') === selectedCityCode.value);
   return [...source].sort((left, right) => {
@@ -432,6 +516,19 @@ const selectedInstitutionRanking = computed(() => {
   if (!code) return null;
   return safeModel.value.rankings.find(item => String(item?.orgCode || '') === code) || null;
 });
+const comparableRankings = computed(() => filteredRankings.value.filter(item => rankingValue(item) !== null));
+const comparableSampleLabel = computed(() => String(comparableRankings.value.length));
+const selectedInstitutionRank = computed(() => {
+  const code = String(selectedInstitution.value?.orgCode || '');
+  if (!code) return null;
+  const selected = comparableRankings.value.find(item => String(item?.orgCode || '') === code);
+  if (!selected) return null;
+  return rankingRank(selected, 0);
+});
+const selectedInstitutionRankLabel = computed(() => {
+  const rank = selectedInstitutionRank.value;
+  return rank === null ? '—' : `${rank}/${comparableSampleLabel.value}`;
+});
 const institutionCountLabel = computed(() => {
   const total = safeModel.value.institutions.length;
   const located = safeModel.value.institutions.filter(item => item?.located).length;
@@ -441,8 +538,14 @@ const segmentMaxAum = computed(() => Math.max(0, ...safeModel.value.segments.map
 
 function finiteValue(value) {
   if (value === null || value === undefined || value === '') return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
+  if (typeof value === 'boolean' || typeof value === 'object') return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  try {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  } catch {
+    return null;
+  }
 }
 
 function hasValue(value) {
@@ -504,6 +607,16 @@ function segmentBarWidth(value) {
   return Math.max(0, Math.min(100, number / segmentMaxAum.value * 100));
 }
 
+function shareWidth(value) {
+  const number = finiteValue(value);
+  return number === null ? 0 : Math.max(0, Math.min(100, number));
+}
+
+function insightCount(value) {
+  const number = finiteValue(value);
+  return number === null ? '—' : String(number);
+}
+
 function rankingValue(item) {
   return finiteValue(item?.[rankingMetric.value]);
 }
@@ -512,6 +625,16 @@ function rankingBarWidth(item) {
   const value = rankingValue(item);
   if (value === null || rankingMax.value <= 0) return 0;
   return Math.min(100, Math.abs(value) / rankingMax.value * 100);
+}
+
+function rankingRank(item) {
+  const value = rankingValue(item);
+  if (value === null) return null;
+  const betterCount = comparableRankings.value.filter(row => {
+    const rowValue = rankingValue(row);
+    return rankingOrder.value === 'leading' ? rowValue > value : rowValue < value;
+  }).length;
+  return betterCount + 1;
 }
 
 function hasValidTarget(target) {
