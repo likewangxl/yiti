@@ -108,4 +108,70 @@ describe('PanoramaDataVerification', () => {
     expect(wrapper.find('[data-testid="panorama-verification-table"]').exists()).toBe(false);
     expect(service.invalidate).toHaveBeenCalled();
   });
+
+  it('绑定展示使用中文字段和单位，身份维度不显示单位未配或内部单位编码', async () => {
+    const service = {
+      verify: vi.fn().mockResolvedValue({
+        overallStatus: 'HAS_GAPS', overallStatusLabel: '存在数据或结构缺口',
+        disclaimer: '取数结构核验不证明指标业务口径和单位正确',
+        results: [
+          {
+            slot: 'branches', label: '支行机构',
+            binding: {
+              datasourceName: '机构宽表',
+              fields: { orgCode: 'org_code', orgName: 'org_name' },
+              units: {}
+            },
+            rowCount: 114, coverage: { label: '0/0', available: 0, total: 0, missing: [], authorizedOnly: true },
+            status: 'VERIFIED_WITH_WARNINGS', statusLabel: '结构通过，存在缺口', issues: []
+          },
+          {
+            slot: 'deposit', label: '存款余额',
+            binding: {
+              datasourceName: '机构宽表', fields: { value: 'amount' }, units: { value: 'HUNDRED_MILLION' }
+            },
+            rowCount: 1, coverage: { label: '返回 1 行' }, status: 'STRUCTURE_VERIFIED', statusLabel: '结构通过', issues: []
+          }
+        ]
+      })
+    };
+    const wrapper = mount(PanoramaDataVerification, {
+      props: { screen: { id: 7 }, canvas: { canvasVersion: 3 }, slotOrder: ['branches', 'deposit'], service }
+    });
+    await wrapper.get('[data-testid="verify-saved-draft-data"]').trigger('click');
+    await flushPromises();
+    const table = wrapper.get('[data-testid="panorama-verification-table"]').text();
+    expect(table).toContain('机构号=org_code');
+    expect(table).toContain('机构名称=org_name');
+    expect(table).not.toContain('orgCode=');
+    expect(table).not.toContain('单位未配');
+    expect(table).toContain('数值单位：亿元');
+    expect(table).not.toContain('value:HUNDRED_MILLION');
+  });
+
+  it('授权目录为空时不把 0/0 展示成覆盖正确，明确返回行数和覆盖不可核验', async () => {
+    const service = {
+      verify: vi.fn().mockResolvedValue({
+        overallStatus: 'HAS_GAPS', overallStatusLabel: '存在数据或结构缺口',
+        disclaimer: '取数结构核验不证明指标业务口径和单位正确',
+        results: [{
+          slot: 'branches', label: '支行机构',
+          binding: { datasourceName: '机构宽表', fields: { orgCode: 'org_code' }, units: {} },
+          rowCount: 114,
+          coverage: { label: '0/0', available: 0, total: 0, missing: [], authorizedOnly: true },
+          status: 'VERIFIED_WITH_WARNINGS', statusLabel: '结构通过，存在缺口', issues: []
+        }]
+      })
+    };
+    const wrapper = mount(PanoramaDataVerification, {
+      props: { screen: { id: 7 }, canvas: { canvasVersion: 3 }, slotOrder: ['branches'], service }
+    });
+    await wrapper.get('[data-testid="verify-saved-draft-data"]').trigger('click');
+    await flushPromises();
+    const table = wrapper.get('[data-testid="panorama-verification-table"]').text();
+    expect(table).toContain('授权目录未提供');
+    expect(table).toContain('已返回 114 家机构');
+    expect(table).toContain('覆盖无法核验');
+    expect(table).not.toContain('0/0');
+  });
 });

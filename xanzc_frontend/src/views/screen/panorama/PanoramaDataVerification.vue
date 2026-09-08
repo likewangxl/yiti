@@ -201,6 +201,11 @@ function rowCountLabel(row) {
 
 function coverageLabel(row) {
   const coverage = row.coverage || {};
+  if (coverage.authorizedOnly && Number(coverage.total) === 0) {
+    const returned = row.rowCount === null || row.rowCount === undefined
+      ? '' : `，已返回 ${row.rowCount} 家机构`;
+    return `授权目录未提供${returned}，覆盖无法核验`;
+  }
   if (coverage.label) {
     if (Array.isArray(coverage.missing) && coverage.missing.length) {
       return `${coverage.label}，缺失 ${coverage.missing.join('、')}`;
@@ -210,13 +215,39 @@ function coverageLabel(row) {
   return row.rowCount === null || row.rowCount === undefined ? '未核验' : `返回 ${row.rowCount} 行`;
 }
 
+const UNIT_LABELS = Object.freeze({
+  YUAN: '元',
+  TEN_THOUSAND: '万元',
+  HUNDRED_MILLION: '亿元',
+  COUNT: '个',
+  TEN_THOUSAND_COUNT: '万户',
+  PERCENT: '%',
+  RATIO: '%'
+});
+
+function bindingFieldSpec(row, semantic) {
+  return BINDING_SLOTS[row.slot]?.fields?.find(field => field.semantic === semantic) || null;
+}
+
+function bindingFieldLabel(row, semantic) {
+  return bindingFieldSpec(row, semantic)?.label || semantic;
+}
+
 function formatBinding(row) {
   const binding = row.binding;
   if (!binding) return '未配置';
   const source = binding.datasourceName || (binding.datasourceId ? `数据源 ${binding.datasourceId}` : '数据源未明');
-  const fields = Object.entries(binding.fields || {}).map(([semantic, column]) => `${semantic}=${column}`).join('，');
-  const units = Object.entries(binding.units || {}).map(([semantic, unit]) => `${semantic}:${unit}`).join('，');
-  return [source, fields || '字段未配', units || '单位未配'].filter(Boolean).join(' · ');
+  const fieldEntries = Object.entries(binding.fields || {});
+  const fields = fieldEntries
+    .map(([semantic, column]) => `${bindingFieldLabel(row, semantic)}=${column}`)
+    .join('，');
+  const metricFields = fieldEntries.filter(([semantic]) => bindingFieldSpec(row, semantic)?.kind === 'metric');
+  const units = metricFields.map(([semantic]) => {
+    const unit = binding.units?.[semantic];
+    const label = bindingFieldLabel(row, semantic);
+    return unit && UNIT_LABELS[unit] ? `${label}单位：${UNIT_LABELS[unit]}` : `${label}单位未配`;
+  }).join('，');
+  return [source, fields || '字段未配', units].filter(Boolean).join(' · ');
 }
 
 function statusClass(status) {
