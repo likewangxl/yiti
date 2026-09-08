@@ -1,4 +1,4 @@
-import { BINDING_SLOTS, UNIT_VALUES, normalizeBinding } from './bindings';
+import { BINDING_SLOTS, UNIT_VALUES, getCompositionMode, normalizeBinding } from './bindings';
 
 const DISPLAY_UNIT_LABELS = Object.freeze({
   HUNDRED_MILLION: '亿元',
@@ -13,6 +13,8 @@ const DISPLAY_UNIT_LABELS = Object.freeze({
 const AMOUNT_SCALES_PROVING_YUAN = new Set([
   'YUAN', 'TEN_THOUSAND_YUAN', 'HUNDRED_MILLION_YUAN'
 ]);
+const COMPOSITION_AMOUNT_UNITS = new Set(['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION']);
+const COMPOSITION_RATIO_UNITS = new Set(['PERCENT', 'RATIO']);
 
 const SLOT_ORDER = Object.keys(BINDING_SLOTS);
 
@@ -84,8 +86,9 @@ function parseTableResponse(response, slot, issues) {
     issue(issues, slot, 'INVALID_COLUMNS', '数据响应存在空列名');
     return null;
   }
+  const sourceRows = table.rows;
   const rows = [];
-  for (const rawRow of table.rows) {
+  for (const rawRow of sourceRows) {
     if (!Array.isArray(rawRow)) {
       issue(issues, slot, 'INVALID_ROWS', '数据响应 rows 必须是二维数组');
       continue;
@@ -94,7 +97,15 @@ function parseTableResponse(response, slot, issues) {
     columns.forEach((column, index) => { row[column] = rawRow[index] === undefined ? null : rawRow[index]; });
     rows.push(row);
   }
-  return { ...table, columns, rows, columnsMeta: Array.isArray(table.columnsMeta) ? table.columnsMeta : [] };
+  return {
+    ...table,
+    columns,
+    rows,
+    // Keep the source row count so an invalid row cannot be silently dropped
+    // and make a multi-row composition look like a valid single-row result.
+    rawRowCount: sourceRows.length,
+    columnsMeta: Array.isArray(table.columnsMeta) ? table.columnsMeta : []
+  };
 }
 
 function columnMeta(table, column) {
@@ -103,8 +114,9 @@ function columnMeta(table, column) {
 }
 
 /**
- * columnsMeta.amountScale 是展示预设，ScreenQueryEngine 返回的 rows 仍然按元提供。
- * 因此它只能证明金额原值单位为 YUAN，不能把 HUNDRED_MILLION_YUAN 当作输入亿元再次换算。
+ * columnsMeta.amountScale 是历史展示预设；只有没有显式 units 时，兼容性回退才把
+ * *_YUAN 标记解释为原始元值。显式 units 始终优先，因此 ORG_INDEX_RESULT 若声明
+ * HUNDRED_MILLION 就按亿元原值读取，不会再次缩放。
  */
 function resolveInputUnit(binding, semantic, meta) {
   const explicit = binding?.units?.[semantic];
@@ -128,9 +140,10 @@ function metricKind(slot, semantic, unit = null) {
   if (semantic === 'customers' || (slot === 'customers' && semantic === 'value') || semantic === 'count') return 'count';
   if (semantic === 'rate' || semantic === 'change'
       || (slot === 'rate' && semantic === 'value')) return 'ratio';
-  // 构成值允许按比例绑定；只有单位明确为百分数/比例时才走比例换算，
-  // 这样同一个 semantic=value 仍可安全表示金额构成。
-  if (slot === 'composition' && semantic === 'value' && (unit === 'PERCENT' || unit === 'RATIO')) return 'ratio';
+  // 构成指标允许按比例绑定；只有单位明确为百分数/比例时才走比例换算，
+  // 这样旧的 semantic=value 以及双列指标都可安全表示金额或比例构成。
+  if (slot === 'composition' && ['value', 'corporate', 'retail'].includes(semantic)
+      && (unit === 'PERCENT' || unit === 'RATIO')) return 'ratio';
   // Ranking and amount KPI value fields are always amounts; only composition
   // value can opt into a ratio unit.
   return 'amount';
@@ -270,16 +283,149 @@ function adaptTrend(slot, table, binding, model, issues) {
   }
 }
 
+function compositionUnitKind(unit) {
+  if (COMPOSITION_AMOUNT_UNITS.has(unit)) return 'amount';
+  if (COMPOSITION_RATIO_UNITS.has(unit)) return 'ratio';
+  return null;
+}
+
+function compositionFieldSelected(binding, semantic) {
+  const value = binding?.fields?.[semantic];
+  return value !== undefined && value !== null && String(value).trim() !== '';
+}
+
+function compositionBindingState(binding, table, issues, slot) {
+  const fields = binding?.fields && isObject(binding.fields) ? binding.fields : {};
+  const units = binding?.units && isObject(binding.units) ? binding.units : {};
+  const allowedFields = new Set(['name', 'value', 'corporate', 'retail']);
+  let valid = true;
+  for (const semantic of Object.keys(fields)) {
+    if (!allowedFields.has(semantic)) {
+      issue(issues, slot, 'UNSUPPORTED_FIELD', `字段不受支持: ${semantic}`, semantic);
+      valid = false;
+    }
+  }
+
+  const mode = getCompositionMode(binding);
+  const hasRowsField = compositionFieldSelected(binding, 'name') || compositionFieldSelected(binding, 'value');
+  const requiredFields = mode === 'columns' ? ['corporate', 'retail'] : ['name', 'value'];
+  if (mode === 'columns' && hasRowsField) {
+    issue(issues, slot, 'INVALID_BINDING_MODE', '构成字段模式不能混用');
+    valid = false;
+  }
+  for (const semantic of requiredFields) {
+    if (!compositionFieldSelected(binding, semantic)) {
+      issue(issues, slot, 'MISSING_FIELD', `缺少字段映射: ${semantic}`, semantic);
+      valid = false;
+    }
+  }
+
+  for (const [semantic, unit] of Object.entries(units)) {
+    if (!compositionFieldSelected(binding, semantic)) {
+      issue(issues, slot, 'UNIT_UNBOUND_FIELD', `单位未绑定字段: ${semantic}`, semantic);
+      valid = false;
+    } else if (mode === 'columns' && !UNIT_VALUES.includes(unit)) {
+      // Columns are the new atomic shape and cannot reach conversion with an
+      // unproven unit. Legacy rows intentionally defer unit interpretation to
+      // readMetric so their historical null/issue behavior remains intact.
+      issue(issues, slot, 'INVALID_UNIT', `单位无效: ${semantic}`, semantic);
+      valid = false;
+    }
+  }
+
+  // Legacy rows keep readMetric's historical missing/invalid-unit and null
+  // behavior. The new columns shape requires both units before conversion.
+  const metricFields = mode === 'columns' ? ['corporate', 'retail'] : [];
+  const metricKinds = [];
+  for (const semantic of metricFields) {
+    const unit = units[semantic];
+    const kind = compositionUnitKind(unit);
+    if (!kind) {
+      issue(issues, slot, 'UNKNOWN_UNIT', `字段 ${semantic} 缺少可证明单位`, semantic);
+      valid = false;
+    } else {
+      metricKinds.push(kind);
+    }
+  }
+  if (mode === 'columns' && metricKinds.length === 2 && metricKinds[0] !== metricKinds[1]) {
+    issue(issues, slot, 'MIXED_UNIT_KIND', '构成单位类型必须一致');
+    valid = false;
+  }
+
+  // When the query includes metadata, a declared role is evidence that the
+  // selected output column has the expected semantic role. Missing metadata is
+  // left to the server-side datasource validator, while a contradictory role
+  // must fail closed at runtime as well.
+  const roleFields = mode === 'columns'
+    ? [['corporate', 'METRIC'], ['retail', 'METRIC']]
+    : [];
+  for (const [semantic, expectedRole] of roleFields) {
+    const column = fields[semantic];
+    const meta = columnMeta(table, column);
+    if (!meta || meta.role === undefined || meta.role === null || meta.role === '') continue;
+    if (String(meta.role).toUpperCase() !== expectedRole) {
+      issue(issues, slot, 'ROLE_MISMATCH', `字段 ${semantic} 输出角色不匹配`, semantic);
+      valid = false;
+    }
+  }
+
+  return { mode, valid };
+}
+
+function compositionMetric(row, binding, semantic, table, slot, issues) {
+  const column = binding?.fields?.[semantic];
+  const raw = row[column];
+  if (numeric(raw) === null) {
+    issue(issues, slot, 'INVALID_NUMBER', `字段 ${semantic} 不是数值`, semantic);
+    return null;
+  }
+  return readMetric(row, binding, semantic, table, slot, issues, true);
+}
+
 function adaptComposition(table, binding, model, issues, slot = 'composition') {
-  if (!table?.rows?.length) {
-    issue(issues, slot, 'NO_ROWS', '数据响应没有构成行');
+  const state = compositionBindingState(binding, table, issues, slot);
+  const sourceRowCount = Number.isInteger(table?.rawRowCount) ? table.rawRowCount : table?.rows?.length;
+  if (state.mode === 'columns' && (sourceRowCount !== 1 || table?.rows?.length !== 1)) {
+    issue(issues, slot, 'INVALID_ROW_COUNT', '业务构成数据必须恰好一行');
     return;
   }
-  for (const row of table.rows) {
-    const name = readDimension(row, binding, 'name', table, slot, issues, true);
-    const value = readMetric(row, binding, 'value', table, slot, issues, true);
-    model.composition.push({ name: name ?? null, value: value.value, unit: value.unit });
+  if (!state.valid) return;
+
+  if (state.mode === 'rows') {
+    // Preserve the legacy rows contract: an empty result is still reported as
+    // NO_ROWS, while any number of valid rows remains a valid classification.
+    if (!table?.rows?.length) {
+      issue(issues, slot, 'NO_ROWS', '数据响应没有构成行');
+      return;
+    }
+    for (const row of table.rows) {
+      const name = readDimension(row, binding, 'name', table, slot, issues, true);
+      const value = readMetric(row, binding, 'value', table, slot, issues, true);
+      model.composition.push({ name: name ?? null, value: value.value, unit: value.unit });
+    }
+    return;
   }
+
+  const requiredSemantics = ['corporate', 'retail'];
+  const row = table.rows[0];
+  for (const semantic of requiredSemantics) {
+    const column = binding.fields?.[semantic];
+    if (!Object.prototype.hasOwnProperty.call(row, column)) {
+      issue(issues, slot, 'MISSING_COLUMN', `响应缺少列: ${column}`, semantic);
+      return;
+    }
+  }
+
+  const corporate = compositionMetric(row, binding, 'corporate', table, slot, issues);
+  const retail = compositionMetric(row, binding, 'retail', table, slot, issues);
+  if (!corporate || !retail || corporate.value === null || retail.value === null
+      || issues.some(item => item.slot === slot
+        && ['INVALID_NUMBER', 'UNKNOWN_UNIT', 'UNIT_MISMATCH', 'ROLE_MISMATCH'].includes(item.code))) return;
+  const unit = corporate.unit || retail.unit;
+  model.composition.push(
+    { name: '对公业务', value: corporate.value, unit },
+    { name: '零售业务', value: retail.value, unit }
+  );
 }
 
 function adaptRanking(table, binding, model, issues) {
@@ -318,7 +464,7 @@ function adaptAttention(table, binding, model, issues) {
 
 const INSTITUTION_FIELDS = Object.freeze([
   'orgCode', 'orgName', 'cityCode', 'cityName', 'ownerOperatingOrgCode', 'parentOrgCode', 'operatingLevel',
-  'orgNature', 'lng', 'lat', 'coordSys', 'located'
+  'orgNature', 'lng', 'lat', 'coordSys', 'located', 'locationSource'
 ]);
 
 function normalizeInstitution(raw = {}) {
@@ -332,7 +478,7 @@ function normalizeInstitution(raw = {}) {
       orgName: 'org_name', cityCode: 'city_code', cityName: 'city_name',
       ownerOperatingOrgCode: 'owner_operating_org_code',
       parentOrgCode: 'parent_org_code', operatingLevel: 'operating_level',
-      orgNature: 'org_nature', coordSys: 'coord_sys'
+      orgNature: 'org_nature', coordSys: 'coord_sys', locationSource: 'location_source'
     }[fieldName]);
     if (value !== undefined && value !== null) out[fieldName] = value;
   }
@@ -342,6 +488,8 @@ function normalizeInstitution(raw = {}) {
   out.lat = lat;
   out.coordSys = asText(out.coordSys);
   out.located = Boolean(out.located) && Number.isFinite(lng) && Number.isFinite(lat);
+  const source = asText(out.locationSource).trim();
+  out.locationSource = out.located && source ? source : null;
   out.metrics = emptyMetrics();
   out.trend = [];
   out.attention = [];

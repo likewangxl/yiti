@@ -13,6 +13,14 @@ vi.mock('../PanoramaMap.vue', () => ({
 vi.mock('vue-echarts', () => ({
   default: { props: { option: { type: Object, default: () => ({}) } }, template: '<div data-testid="chart-option" :data-option="JSON.stringify(option)" />' }
 }));
+vi.mock('../PanoramaInstitutionDirectory.vue', () => ({
+  default: {
+    name: 'PanoramaInstitutionDirectory',
+    props: ['model'],
+    emits: ['close', 'branch-select'],
+    template: '<div data-testid="institution-directory-stub"><button type="button" data-action="directory-close" @click="$emit(\'close\')">关闭目录</button><button type="button" data-action="directory-select" @click="$emit(\'branch-select\', \'ORG-2\')">选择机构</button></div>'
+  }
+}));
 
 import PanoramaDashboard from '../PanoramaDashboard.vue';
 
@@ -130,6 +138,16 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(wrapper.emitted('refresh')).toHaveLength(1);
     expect(wrapper.emitted('back')).toHaveLength(1);
     expect(wrapper.emitted('configure')).toHaveLength(1);
+  });
+
+  it('机构目录入口只把 model.institutions 交给独立面板，并转发机构选择', async () => {
+    const wrapper = mountDashboard();
+    await wrapper.get('[data-action="open-institution-directory"]').trigger('click');
+    expect(wrapper.find('[data-testid="institution-directory-stub"]').exists()).toBe(true);
+    await wrapper.get('[data-action="directory-select"]').trigger('click');
+    expect(wrapper.emitted('branch-select')).toContainEqual(['ORG-2']);
+    await wrapper.get('[data-action="directory-close"]').trigger('click');
+    expect(wrapper.find('[data-testid="institution-directory-stub"]').exists()).toBe(false);
   });
 
   it('省级地图选择行政区后打开市级 modal，市汇总不存在时显示未绑定而不累加下级机构', async () => {

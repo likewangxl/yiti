@@ -481,3 +481,7 @@ public class SysControlUpdatedListener {
 | customer-marketing-center | `CustomerQueryApi` / `TouchTaskQueryApi` | — |
 
 单向依赖原则（report 只调用其他模块、不被调用）与 Code Review 硬规则（§4.4）不受本次订正影响，依然成立。
+
+代码模板业务构成可采用固定 `corporate/retail` 单行两列映射，沿用既有 screen REST、范围及发布身份，不新增跨模块 API；字段形状、数据源限制和单位约束见 03。
+
+机构目录继续消费 auth 的 `OrgGroupApi` 与 `OrgProfileDTO`。新增 `locationSource` 仅表示已核定坐标的来源；report 将它随合法坐标投影到授权目录，不读取 auth 私有位置表，也不向运行时传递详细地址和审计字段。未定位机构保留在目录中，坐标及来源为空。

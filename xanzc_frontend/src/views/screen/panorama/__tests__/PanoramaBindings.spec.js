@@ -9,7 +9,9 @@ const api = vi.hoisted(() => ({
   saveScreenCanvas: vi.fn(),
   publishScreenCanvas: vi.fn(),
   discardScreenCanvas: vi.fn(),
-  queryScreenData: vi.fn()
+  queryScreenData: vi.fn(),
+  listOrgProfiles: vi.fn(),
+  listOrgGroups: vi.fn()
 }));
 vi.mock('@/api/screen', () => api);
 
@@ -45,12 +47,35 @@ const canvas = {
 };
 const datasource = { id: 77, dsName: '存款', dsType: 'SINGLE', sourceKind: 'WIDE_TABLE', bizLine: 'COMMON', status: 'ACTIVE',
   configJson: JSON.stringify({ fieldMeta: [{ col: 'deposit_raw', alias: '存款原值', role: 'METRIC', amountScale: 'HUNDRED_MILLION_YUAN' }] }) };
+const compositionColumnsDatasource = {
+  id: 79, dsName: '构成宽表', dsType: 'SINGLE', sourceKind: 'WIDE_TABLE', bizLine: 'COMMON', status: 'ACTIVE',
+  configJson: JSON.stringify({
+    table: 'ORG_INDEX_RESULT',
+    fieldMeta: [
+      { col: 'name_raw', alias: '构成名称', role: 'DIM' },
+      { col: 'value_raw', alias: '构成值', role: 'METRIC' },
+      { col: 'corporate_raw', alias: '对公', role: 'METRIC' },
+      { col: 'retail_raw', alias: '零售', role: 'METRIC' }
+    ]
+  })
+};
+const compositionUnsupportedDatasource = {
+  id: 78, dsName: '自定义构成查询', dsType: 'SINGLE', sourceKind: 'CUSTOM_SQL', bizLine: 'COMMON', status: 'ACTIVE',
+  configJson: JSON.stringify({
+    fieldMeta: [
+      { col: 'corporate_raw', alias: '对公', role: 'METRIC' },
+      { col: 'retail_raw', alias: '零售', role: 'METRIC' }
+    ]
+  })
+};
 
 describe('PanoramaBindings', () => {
   beforeEach(() => {
     router.push.mockReset();
     router.back.mockReset();
     api.queryScreenData.mockReset();
+    api.listOrgProfiles.mockReset();
+    api.listOrgGroups.mockReset();
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -64,6 +89,20 @@ describe('PanoramaBindings', () => {
     expect(wrapper.find('[data-testid="legacy-conversion-warning"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="conversion-confirm"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="try-run"]').exists()).toBe(false);
+  });
+
+  it('加载当前屏后显示 14 槽静态接入检查，未点击前不读取机构管理目录', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({ ...canvas, canvasDraftJson: JSON.stringify({ components: [] }) });
+    api.listScreenDatasources.mockResolvedValue([datasource]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="integration-readiness"]').exists()).toBe(true));
+    expect(wrapper.findAll('[data-testid^="readiness-slot-"]')).toHaveLength(14);
+    expect(wrapper.text()).toContain('静态预检');
+    expect(wrapper.text()).toContain('未发布任何版本');
+    expect(api.listOrgProfiles).not.toHaveBeenCalled();
+    expect(api.listOrgGroups).not.toHaveBeenCalled();
   });
 
   it('屏选择器切换到 B 时传递选中的 ID，并加载 B 画布', async () => {
@@ -135,6 +174,78 @@ describe('PanoramaBindings', () => {
     await wrapper.find('[data-testid="slot-datasource"]').setValue('77');
     expect(wrapper.find('[data-testid="field-option-citySummary-orgCode"] option[value="org_code"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="field-option-citySummary-orgCode"] option[value="org_name"]').exists()).toBe(false);
+  });
+
+  it('业务构成按 rows/columns 切换互斥字段，columns 只展示双列来源并保留数据源与周期', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({
+      ...canvas,
+      canvasStyleJson: JSON.stringify({ presentation: { type: 'CODE', template: 'branch-overview-v1' } }),
+      canvasDraftJson: JSON.stringify({ components: [] })
+    });
+    api.listScreenDatasources.mockResolvedValue([compositionUnsupportedDatasource, compositionColumnsDatasource]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+
+    await vi.waitFor(() => expect(api.listScreenDatasources).toHaveBeenCalled());
+    await wrapper.find('[data-testid="slot-composition"]').trigger('click');
+    expect(wrapper.find('[data-testid="composition-mode"]').element.value).toBe('rows');
+    expect(wrapper.find('.panorama-bindings__editor-head').text()).toContain('名称/构成值均需绑定');
+    expect(wrapper.find('[data-testid="field-option-composition-name"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="field-option-composition-value"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="field-option-composition-corporate"]').exists()).toBe(false);
+
+    await wrapper.find('[data-testid="slot-datasource"]').setValue('79');
+    await wrapper.find('[data-testid="binding-period"]').setValue('LAST_1M');
+    await wrapper.find('[data-testid="field-option-composition-name"]').setValue('name_raw');
+    await wrapper.find('[data-testid="field-option-composition-value"]').setValue('value_raw');
+    await wrapper.find('[data-testid="unit-composition-value"]').setValue('YUAN');
+    await wrapper.find('[data-testid="composition-mode"]').setValue('columns');
+
+    expect(wrapper.find('[data-testid="composition-mode"]').element.value).toBe('columns');
+    expect(wrapper.find('[data-testid="field-option-composition-name"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="field-option-composition-value"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="field-option-composition-corporate"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="field-option-composition-retail"]').exists()).toBe(true);
+    expect(wrapper.find('.panorama-bindings__editor-head').text()).toContain('对公金额/零售金额均需绑定');
+    expect(wrapper.find('[data-testid="slot-datasource"]').element.value).toBe('79');
+    expect(wrapper.find('[data-testid="binding-period"]').element.value).toBe('LAST_1M');
+    expect(wrapper.find('[data-testid="slot-datasource"] option[value="78"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="composition-mode-hint"]').text()).toContain('恰好一行');
+    expect(wrapper.find('[data-testid="composition-mode-hint"]').text()).toContain('对公/零售');
+
+    await wrapper.find('[data-testid="field-option-composition-corporate"]').setValue('corporate_raw');
+    await wrapper.find('[data-testid="field-option-composition-retail"]').setValue('retail_raw');
+    await wrapper.find('[data-testid="unit-composition-corporate"]').setValue('YUAN');
+    await wrapper.find('[data-testid="unit-composition-retail"]').setValue('YUAN');
+    await wrapper.find('[data-testid="composition-mode"]').setValue('rows');
+    expect(wrapper.find('[data-testid="composition-mode"]').element.value).toBe('rows');
+    expect(wrapper.find('[data-testid="slot-datasource"]').element.value).toBe('79');
+    expect(wrapper.find('[data-testid="binding-period"]').element.value).toBe('LAST_1M');
+    expect(wrapper.find('[data-testid="field-option-composition-name"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="field-option-composition-corporate"]').exists()).toBe(false);
+  });
+
+  it('既有 columns 绑定若来源不满足后端固定宽表约束，保存前报告硬错误', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({
+      ...canvas,
+      canvasStyleJson: JSON.stringify({ presentation: { type: 'CODE', template: 'branch-overview-v1' } }),
+      canvasDraftJson: JSON.stringify({ components: [{
+        id: 'composition', component: 'ChartWidget', blockId: 41, innerType: 'PIE_SHARE',
+        propValue: { bindingKey: 'composition' },
+        bindJson: JSON.stringify({
+          dsId: 78, period: 'LATEST', fields: { corporate: 'corporate_raw', retail: 'retail_raw' },
+          units: { corporate: 'YUAN', retail: 'YUAN' }
+        })
+      }] })
+    });
+    api.listScreenDatasources.mockResolvedValue([compositionUnsupportedDatasource]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+
+    await vi.waitFor(() => expect(api.listScreenDatasources).toHaveBeenCalled());
+    await wrapper.find('[data-testid="binding-save"]').trigger('click');
+    expect(wrapper.find('.panorama-bindings__error').text()).toContain('仅允许 WIDE_TABLE 且表为 ORG_INDEX_RESULT');
+    expect(api.saveScreenCanvas).not.toHaveBeenCalled();
   });
 
   it('保存代码草稿固定 presentation 和组件样式，发布必须填写 reason；冲突保留编辑态', async () => {

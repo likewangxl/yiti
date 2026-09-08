@@ -41,6 +41,24 @@ const field = (semantic, label, options = {}) => Object.freeze({
 const amountUnits = Object.freeze(['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION']);
 const countUnits = Object.freeze(['COUNT', 'TEN_THOUSAND_COUNT']);
 const ratioUnits = Object.freeze(['PERCENT', 'RATIO']);
+const compositionValueUnits = Object.freeze(amountUnits.concat(ratioUnits));
+
+const compositionRowFields = Object.freeze([
+  field('name', '构成名称', { required: true, kind: 'dimension' }),
+  field('value', '构成值', { required: true, unitKinds: compositionValueUnits })
+]);
+
+const compositionColumnFields = Object.freeze([
+  field('corporate', '对公业务', { required: true, unitKinds: compositionValueUnits }),
+  field('retail', '零售业务', { required: true, unitKinds: compositionValueUnits })
+]);
+
+/** 业务构成绑定的两种固定形状；管理页按模式消费，不允许自由扩展字段。 */
+export const COMPOSITION_MODES = Object.freeze(['rows', 'columns']);
+const COMPOSITION_FIELD_SPECS = Object.freeze({
+  rows: compositionRowFields,
+  columns: compositionColumnFields
+});
 
 const singleMetric = (label, kind = 'amount') => Object.freeze({
   label,
@@ -85,11 +103,11 @@ export const BINDING_SLOTS = Object.freeze({
   composition: Object.freeze({
     label: '业务构成',
     innerType: 'PIE_SHARE',
-    required: ['name', 'value'],
-    fields: Object.freeze([
-      field('name', '构成名称', { required: true, kind: 'dimension' }),
-      field('value', '构成值', { required: true, unitKinds: amountUnits.concat(ratioUnits) })
-    ])
+    // required/fields are mode-neutral metadata. validateBinding applies the
+    // exact rows or columns shape after getCompositionMode resolves it.
+    required: [],
+    fields: Object.freeze([...compositionRowFields, ...compositionColumnFields]),
+    modes: COMPOSITION_MODES
   }),
   ranking: Object.freeze({
     label: '机构排名',
@@ -188,6 +206,27 @@ export function isBindingSlot(slot) {
   return Object.prototype.hasOwnProperty.call(BINDING_SLOTS, String(slot || ''));
 }
 
+function hasSelectedField(fields, semantic) {
+  const value = fields?.[semantic];
+  return value !== undefined && value !== null && String(value).trim() !== '';
+}
+
+/**
+ * 根据已选择字段识别业务构成形状。
+ * corporate/retail 任一存在即进入双列模式；没有列模式字段时保持旧行模式。
+ */
+export function getCompositionMode(binding = {}) {
+  const source = parseJson(binding, {});
+  const fields = source?.fields && typeof source.fields === 'object' && !Array.isArray(source.fields)
+    ? source.fields : {};
+  return hasSelectedField(fields, 'corporate') || hasSelectedField(fields, 'retail') ? 'columns' : 'rows';
+}
+
+/** 管理页按当前模式取得固定字段定义，未知模式安全回到旧行模式。 */
+export function getCompositionFieldSpecs(mode = 'rows') {
+  return COMPOSITION_FIELD_SPECS[mode] || COMPOSITION_FIELD_SPECS.rows;
+}
+
 /** 只取运行时需要的绑定字段，避免把旧 block 的 display 配置带进代码绑定。 */
 export function normalizeBinding(raw = {}, slot = raw?.slot) {
   const source = parseJson(raw, {});
@@ -225,8 +264,20 @@ export function validateBinding(slot, raw = {}) {
   for (const semantic of Object.keys(raw.fields || {})) {
     if (!allowedFields.has(semantic)) issues.push(`字段不受支持: ${semantic}`);
   }
-  for (const semantic of spec.required || []) {
-    if (!binding.fields?.[semantic]) issues.push(`缺少字段: ${semantic}`);
+  if (slot === 'composition') {
+    const mode = getCompositionMode(binding);
+    const hasRowField = hasSelectedField(binding.fields, 'name') || hasSelectedField(binding.fields, 'value');
+    if (mode === 'columns' && hasRowField) {
+      issues.push('构成字段模式不能混用');
+    }
+    const requiredFields = mode === 'columns' ? ['corporate', 'retail'] : ['name', 'value'];
+    for (const semantic of requiredFields) {
+      if (!hasSelectedField(binding.fields, semantic)) issues.push(`缺少字段: ${semantic}`);
+    }
+  } else {
+    for (const semantic of spec.required || []) {
+      if (!binding.fields?.[semantic]) issues.push(`缺少字段: ${semantic}`);
+    }
   }
   const atLeastOneOf = spec.atLeastOneOf || [];
   if (atLeastOneOf.length && !atLeastOneOf.some(semantic => binding.fields?.[semantic])) {
@@ -253,6 +304,15 @@ export function validateBinding(slot, raw = {}) {
     const fieldSpec = (spec.fields || []).find(item => item.semantic === semantic);
     if (UNIT_VALUES.includes(unit) && fieldSpec?.unitKinds?.length && !fieldSpec.unitKinds.includes(unit)) {
       issues.push(`单位不适用: ${semantic}`);
+    }
+  }
+  if (slot === 'composition' && getCompositionMode(binding) === 'columns'
+      && hasSelectedField(binding.fields, 'corporate') && hasSelectedField(binding.fields, 'retail')) {
+    const unitKind = unit => amountUnits.includes(unit) ? 'amount' : ratioUnits.includes(unit) ? 'ratio' : null;
+    const corporateKind = unitKind(binding.units?.corporate);
+    const retailKind = unitKind(binding.units?.retail);
+    if (corporateKind && retailKind && corporateKind !== retailKind) {
+      issues.push('构成单位类型必须一致');
     }
   }
   return issues;

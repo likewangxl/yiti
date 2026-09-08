@@ -183,7 +183,9 @@ public final class CodeScreenPresentationValidator {
             }
             present.add(entry.getKey());
         }
-        if (!present.containsAll(REQUIRED_FIELDS.get(bindingKey))) {
+        if ("composition".equals(bindingKey)) {
+            validateCompositionShape(present);
+        } else if (!present.containsAll(REQUIRED_FIELDS.get(bindingKey))) {
             throw invalid();
         }
         if ("trend".equals(bindingKey)
@@ -215,6 +217,9 @@ public final class CodeScreenPresentationValidator {
                 throw invalid();
             }
         }
+        if ("composition".equals(bindingKey)) {
+            validateCompositionUnitKinds(present, units);
+        }
         // A numeric semantic with a declared unit kind cannot be published without its unit:
         // the runtime would otherwise have to guess the scale and render UNKNOWN_UNIT/null.
         for (String semantic : present) {
@@ -242,6 +247,14 @@ public final class CodeScreenPresentationValidator {
         if (datasource == null || datasource.getId() == null
                 || !isPositiveIntegral(bind.path("dsId"))
                 || bind.path("dsId").longValue() != datasource.getId()) {
+            throw invalid();
+        }
+        // The new fixed two-column conversion is intentionally scoped to the
+        // institution wide table. Legacy row bindings retain their existing
+        // datasource support; this branch must not turn CUSTOM_SQL or another
+        // source kind into a new composition execution path.
+        if ("composition".equals(bindingKey) && isCompositionColumns(bind)
+                && !isInstitutionWideTable(datasource)) {
             throw invalid();
         }
         Map<String, String> outputRoles = outputRoles(datasource);
@@ -363,6 +376,65 @@ public final class CodeScreenPresentationValidator {
         return node.asText();
     }
 
+    /** 业务构成只能是旧的 name/value 行形状或固定的 corporate/retail 双列形状。 */
+    private static void validateCompositionShape(Set<String> present) {
+        boolean hasRowField = present.contains("name") || present.contains("value");
+        boolean hasColumnField = present.contains("corporate") || present.contains("retail");
+        if (hasRowField && hasColumnField) {
+            throw invalid();
+        }
+        if (hasRowField && !present.containsAll(Set.of("name", "value"))) {
+            throw invalid();
+        }
+        if (hasColumnField && !present.containsAll(Set.of("corporate", "retail"))) {
+            throw invalid();
+        }
+        if (!hasRowField && !hasColumnField) {
+            throw invalid();
+        }
+    }
+
+    /** 双列两个指标必须使用同一类单位：金额或比例。 */
+    private static void validateCompositionUnitKinds(Set<String> present, JsonNode units) {
+        if (!present.contains("corporate") || !present.contains("retail")) {
+            return;
+        }
+        String corporate = units.path("corporate").asText(null);
+        String retail = units.path("retail").asText(null);
+        String corporateKind = compositionUnitKind(corporate);
+        String retailKind = compositionUnitKind(retail);
+        if (corporateKind == null || retailKind == null || !corporateKind.equals(retailKind)) {
+            throw invalid();
+        }
+    }
+
+    private static String compositionUnitKind(String unit) {
+        if (unit == null) {
+            return null;
+        }
+        if (Set.of("YUAN", "TEN_THOUSAND", "HUNDRED_MILLION").contains(unit)) {
+            return "amount";
+        }
+        if (Set.of("PERCENT", "RATIO").contains(unit)) {
+            return "ratio";
+        }
+        return null;
+    }
+
+    private static boolean isCompositionColumns(JsonNode bind) {
+        JsonNode fields = bind == null ? null : bind.path("fields");
+        return fields != null && fields.isObject()
+                && (fields.has("corporate") || fields.has("retail"));
+    }
+
+    private static boolean isInstitutionWideTable(RptScreenDatasource datasource) {
+        if (!"WIDE_TABLE".equalsIgnoreCase(datasource.getSourceKind())) {
+            return false;
+        }
+        JsonNode config = readConfigForSchema(datasource.getConfigJson());
+        return "ORG_INDEX_RESULT".equalsIgnoreCase(config.path("table").asText());
+    }
+
     private static long parsePositiveLong(String key) {
         if (key == null || key.isBlank() || !key.chars().allMatch(Character::isDigit)) {
             throw untrusted();
@@ -401,7 +473,7 @@ public final class CodeScreenPresentationValidator {
         result.put("rate", Set.of("value", "change", "date"));
         result.put("trend", Set.of("date", "deposit", "loan", "depositIncrease", "customers", "rate"));
         result.put("branchTrend", Set.of("date", "deposit", "loan", "customers", "rate"));
-        result.put("composition", Set.of("name", "value"));
+        result.put("composition", Set.of("name", "value", "corporate", "retail"));
         result.put("ranking", Set.of("orgCode", "name", "value", "increase", "average", "change"));
         result.put("attention", Set.of("label", "count"));
         result.put("branches", Set.of("orgCode", "orgName", "cityCode", "cityName", "ownerOperatingOrgCode",
@@ -611,9 +683,11 @@ public final class CodeScreenPresentationValidator {
                 case "rate" -> ratio;
                 default -> Set.of();
             };
-            case "composition" -> "value".equals(field)
-                    ? Set.of("YUAN", "TEN_THOUSAND", "HUNDRED_MILLION", "PERCENT", "RATIO")
-                    : Set.of();
+            case "composition" -> switch (field) {
+                case "value", "corporate", "retail" ->
+                        Set.of("YUAN", "TEN_THOUSAND", "HUNDRED_MILLION", "PERCENT", "RATIO");
+                default -> Set.of();
+            };
             case "ranking" -> switch (field) {
                 case "value", "increase", "average" -> amount;
                 case "change" -> ratio;

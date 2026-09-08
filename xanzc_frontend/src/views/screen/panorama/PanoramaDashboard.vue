@@ -145,7 +145,16 @@
               <span class="panorama-section-kicker">机构视图</span>
               <h2>全辖机构分布</h2>
             </div>
-            <span>{{ institutionCountLabel }}</span>
+            <div class="panorama-map-heading-actions">
+              <span>{{ institutionCountLabel }}</span>
+              <button
+                type="button"
+                class="panorama-directory-button"
+                data-action="open-institution-directory"
+                aria-label="打开机构目录"
+                @click="directoryOpen = true"
+              >机构目录</button>
+            </div>
           </div>
           <div class="panorama-panel-subheading">
             <span class="panorama-scope-chip">{{ scopeLabel }}</span>
@@ -288,6 +297,13 @@
         @branch-select="selectInstitution"
       />
     </div>
+
+    <PanoramaInstitutionDirectory
+      v-if="directoryOpen"
+      :model="safeModel"
+      @close="directoryOpen = false"
+      @branch-select="selectInstitution"
+    />
   </main>
 </template>
 
@@ -303,6 +319,7 @@ import {
 } from '@element-plus/icons-vue';
 import PanoramaMap from './PanoramaMap.vue';
 import CityPanorama from './CityPanorama.vue';
+import PanoramaInstitutionDirectory from './PanoramaInstitutionDirectory.vue';
 import PanoramaTrend from './PanoramaTrend.vue';
 import { provinceGeo } from './geography.js';
 import {
@@ -332,6 +349,7 @@ const cityOpen = ref(false);
 const selectedRegion = ref(null);
 const selectedRegionCode = ref('');
 const selectedOrgCode = ref('');
+const directoryOpen = ref(false);
 const cityInitialOrgCode = ref('');
 const focusBeforeCity = ref(null);
 const overflowBeforeCity = ref('');
@@ -585,3 +603,11 @@ onBeforeUnmount(() => {
 </script>
 
 <style src="./panorama.scss" lang="scss"></style>
+
+<style scoped>
+.panorama-map-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.panorama-map-heading-actions > span { color: var(--panorama-text-dim); font-size: 11px; white-space: nowrap; }
+.panorama-directory-button { padding: 5px 8px; border: 1px solid rgba(121, 161, 248, .3); border-radius: 5px; color: #bcd5ff; background: rgba(55, 112, 206, .22); font: inherit; font-size: 11px; cursor: pointer; }
+.panorama-directory-button:hover,
+.panorama-directory-button:focus-visible { border-color: var(--panorama-border-strong); color: var(--panorama-cyan); outline: none; }
+</style>

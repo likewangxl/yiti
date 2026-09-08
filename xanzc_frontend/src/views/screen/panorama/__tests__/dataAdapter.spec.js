@@ -40,6 +40,20 @@ describe('panorama data adapter', () => {
     expect(model.kpis[0]).toMatchObject({ value: 1, unit: '亿元' });
   });
 
+  it('显式 HUNDRED_MILLION 单位优先于 columnsMeta amountScale，不重复换算亿元原值', () => {
+    const model = adaptPanoramaResults({
+      loan: {
+        binding: binding('loan', { value: 'loan_amount' }, { value: 'HUNDRED_MILLION' }),
+        response: {
+          columns: ['loan_amount'], rows: [[12]],
+          columnsMeta: [{ col: 'loan_amount', role: 'METRIC', amountScale: 'YUAN' }]
+        }
+      }
+    });
+    expect(model.kpis[0]).toMatchObject({ key: 'loan', value: 12, unit: '亿元' });
+    expect(model.issues).toEqual([]);
+  });
+
   it('未知单位保留 null 并记录 slot issue，不按名称猜测', () => {
     const model = adaptPanoramaResults({
       deposit: {
@@ -206,6 +220,30 @@ describe('panorama data adapter', () => {
     expect(directoryOnly.institutions[0].metrics.deposit).toBeNull();
   });
 
+  it('机构目录保留 camel/snake locationSource，未定位机构强制清空来源，未知来源可透传', () => {
+    const model = adaptPanoramaResults({
+      branches: {
+        binding: binding('branches', { orgCode: 'org_code', deposit: 'deposit' }, { deposit: 'YUAN' }),
+        response: {
+          columns: ['org_code', 'deposit'],
+          rows: [['A', 100000000], ['B', 200000000], ['C', 300000000]]
+        }
+      }
+    }, {
+      view: {
+        orgScopeMode: 'NAMED_GROUP',
+        panoramaInstitutions: [
+          { orgCode: 'A', lng: 108.90, lat: 34.20, located: true, locationSource: 'MANUAL' },
+          { org_code: 'B', longitude: 108.91, latitude: 34.21, located: false, location_source: 'PROFILE' },
+          { orgCode: 'C', lng: 108.92, lat: 34.22, located: true, location_source: 'NEEDS_REVIEW' }
+        ]
+      }
+    });
+
+    expect(model.institutions.map(item => item.locationSource))
+      .toEqual(['MANUAL', null, 'NEEDS_REVIEW']);
+  });
+
   it('空响应不是 mock，适配器清空模型并暴露明确问题', () => {
     const model = adaptPanoramaResults({
       deposit: { binding: binding('deposit', { value: 'amount' }, { value: 'YUAN' }), response: null }
@@ -252,6 +290,149 @@ describe('panorama data adapter', () => {
     expect(model.citySummaries['610100']).toBeUndefined();
     expect(model.issues).toEqual(expect.arrayContaining([
       expect.objectContaining({ slot: 'citySummary', code: 'DUPLICATE_CITY' })
+    ]));
+  });
+
+  it('composition 旧行模式保留明确名称和值的数值换算', () => {
+    const model = adaptPanoramaResults({
+      composition: {
+        binding: binding('composition', { name: 'kind', value: 'amount' }, { value: 'TEN_THOUSAND' }),
+        response: { columns: ['kind', 'amount'], rows: [['存款', 123456]] }
+      }
+    });
+    expect(model.composition).toEqual([{ name: '存款', value: 12.3456, unit: '亿元' }]);
+    expect(model.issues).toEqual([]);
+  });
+
+  it('composition 旧行模式保留多行分类，不把第二行当作重复列拒绝', () => {
+    const model = adaptPanoramaResults({
+      composition: {
+        binding: binding('composition', { name: 'kind', value: 'amount' }, { value: 'YUAN' }),
+        response: { columns: ['kind', 'amount'], rows: [['对公', 100000000], ['零售', 200000000]] }
+      }
+    });
+    expect(model.composition).toEqual([
+      { name: '对公', value: 1, unit: '亿元' },
+      { name: '零售', value: 2, unit: '亿元' }
+    ]);
+    expect(model.issues).toEqual([]);
+  });
+
+  it('composition 旧行模式保留历史空值与单位不匹配结果形状', () => {
+    const emptyValue = adaptPanoramaResults({
+      composition: {
+        binding: binding('composition', { name: 'kind', value: 'amount' }, { value: 'YUAN' }),
+        response: { columns: ['kind', 'amount'], rows: [['空值', null]] }
+      }
+    });
+    expect(emptyValue.composition).toEqual([{ name: '空值', value: null, unit: '亿元' }]);
+    expect(emptyValue.issues).toEqual([]);
+
+    const mismatchedUnit = adaptPanoramaResults({
+      composition: {
+        binding: binding('composition', { name: 'kind', value: 'amount' }, { value: 'COUNT' }),
+        response: { columns: ['kind', 'amount'], rows: [['错误单位', 1]] }
+      }
+    });
+    expect(mismatchedUnit.composition).toEqual([{ name: '错误单位', value: null, unit: null }]);
+    expect(mismatchedUnit.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'composition', code: 'UNIT_MISMATCH', field: 'value' })
+    ]));
+  });
+
+  it('composition 双列金额允许元/万元混用并统一为亿元，保留零值', () => {
+    const model = adaptPanoramaResults({
+      composition: {
+        binding: binding('composition', { corporate: 'corp', retail: 'retail' }, {
+          corporate: 'YUAN', retail: 'TEN_THOUSAND'
+        }),
+        response: { columns: ['corp', 'retail'], rows: [[0, 50000]] }
+      }
+    });
+    expect(model.composition).toEqual([
+      { name: '对公业务', value: 0, unit: '亿元' },
+      { name: '零售业务', value: 5, unit: '亿元' }
+    ]);
+    expect(model.issues).toEqual([]);
+  });
+
+  it('composition 双列比例允许 PERCENT/RATIO 混用并统一为百分数', () => {
+    const model = adaptPanoramaResults({
+      composition: {
+        binding: binding('composition', { corporate: 'corp', retail: 'retail' }, {
+          corporate: 'PERCENT', retail: 'RATIO'
+        }),
+        response: { columns: ['corp', 'retail'], rows: [[0, 0.25]] }
+      }
+    });
+    expect(model.composition).toEqual([
+      { name: '对公业务', value: 0, unit: '%' },
+      { name: '零售业务', value: 25, unit: '%' }
+    ]);
+    expect(model.issues).toEqual([]);
+  });
+
+  it('composition 对空行、重复行、缺列和非数值原子拒绝且不取首行/求和/填零', () => {
+    const cases = [
+      { response: { columns: ['corp', 'retail'], rows: [] }, code: 'INVALID_ROW_COUNT' },
+      { response: { columns: ['corp', 'retail'], rows: [[1, 2], [3, 4]] }, code: 'INVALID_ROW_COUNT' },
+      { response: { columns: ['corp'], rows: [[1]] }, code: 'MISSING_COLUMN' },
+      { response: { columns: ['corp', 'retail'], rows: [['oops', 2]] }, code: 'INVALID_NUMBER' }
+    ];
+    for (const item of cases) {
+      const model = adaptPanoramaResults({
+        composition: {
+          binding: binding('composition', { corporate: 'corp', retail: 'retail' }, {
+            corporate: 'YUAN', retail: 'YUAN'
+          }),
+          response: item.response
+        }
+      });
+      expect(model.composition).toEqual([]);
+      expect(model.issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ slot: 'composition', code: item.code })
+      ]));
+    }
+  });
+
+  it('composition 拒绝混合模式、混类单位和单位指向未绑定字段', () => {
+    const mixedMode = adaptPanoramaResults({
+      composition: {
+        binding: binding('composition', {
+          name: 'kind', value: 'amount', corporate: 'corp', retail: 'retail'
+        }, { value: 'YUAN', corporate: 'YUAN', retail: 'YUAN' }),
+        response: { columns: ['kind', 'amount', 'corp', 'retail'], rows: [['旧', 1, 2, 3]] }
+      }
+    });
+    expect(mixedMode.composition).toEqual([]);
+    expect(mixedMode.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'composition', code: 'INVALID_BINDING_MODE' })
+    ]));
+
+    const mixedUnits = adaptPanoramaResults({
+      composition: {
+        binding: binding('composition', { corporate: 'corp', retail: 'retail' }, {
+          corporate: 'PERCENT', retail: 'YUAN'
+        }),
+        response: { columns: ['corp', 'retail'], rows: [[50, 100000000]] }
+      }
+    });
+    expect(mixedUnits.composition).toEqual([]);
+    expect(mixedUnits.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'composition', code: 'MIXED_UNIT_KIND' })
+    ]));
+
+    const unboundUnit = adaptPanoramaResults({
+      composition: {
+        binding: binding('composition', { corporate: 'corp', retail: 'retail' }, {
+          corporate: 'YUAN', retail: 'YUAN', value: 'YUAN'
+        }),
+        response: { columns: ['corp', 'retail'], rows: [[1, 2]] }
+      }
+    });
+    expect(unboundUnit.composition).toEqual([]);
+    expect(unboundUnit.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'composition', code: 'UNIT_UNBOUND_FIELD' })
     ]));
   });
 });

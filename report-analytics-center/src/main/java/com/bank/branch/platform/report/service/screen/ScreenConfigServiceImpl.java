@@ -507,19 +507,31 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             dto.setOrgNature(profile.getOrgNature());
             dto.setCoordSys(profile.getCoordSys());
             boolean demo = profile.getRemark() != null
-                    && profile.getRemark().contains("SCREEN_MAP_DEMO");
-            boolean located = !demo && validPanoramaCoordinate(profile);
+                    && profile.getRemark().toUpperCase(Locale.ROOT).contains("SCREEN_MAP_DEMO");
+            boolean located = validPanoramaCoordinate(profile)
+                    && (!demo || trustedRuntimeLocationSource(profile.getLocationSource()));
             dto.setLocated(located);
             if (!located) {
                 dto.setLng(null);
                 dto.setLat(null);
+                dto.setLocationSource(null);
             } else {
                 dto.setLng(profile.getLng());
                 dto.setLat(profile.getLat());
+                dto.setLocationSource(profile.getLocationSource());
             }
             result.add(dto);
         }
         return result;
+    }
+
+    /** 已认证的位置台账来源可以覆盖旧 demo 标记；画像来源或未知来源仍保持 fail-close。 */
+    private boolean trustedRuntimeLocationSource(String source) {
+        if (source == null) {
+            return false;
+        }
+        return "MANUAL".equalsIgnoreCase(source.trim())
+                || "GEOCODE_VERIFIED".equalsIgnoreCase(source.trim());
     }
 
     private boolean validPanoramaCoordinate(OrgProfileDTO profile) {

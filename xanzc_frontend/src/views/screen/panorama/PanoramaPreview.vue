@@ -1,7 +1,8 @@
 <template>
   <main class="screen-preview" aria-label="经营全景本地演示" style="--panorama-viewport-offset: 78px">
     <div class="screen-preview__source screen-preview__source--top" data-testid="preview-source-top">
-      本地演示 · 非业务数据
+      <span>本地演示 · 非业务数据</span>
+      <button type="button" data-action="configure-real-data" @click="goToDesigner">配置真实数据</button>
     </div>
 
     <PanoramaDashboard
@@ -44,6 +45,11 @@ function goBack() {
   // 工作区仍由全局路由守卫决定是否需要登录，演示页不自行探测会话或请求后端。
   router.push('/workspace');
 }
+
+function goToDesigner() {
+  // 真实数据配置仍由现有路由守卫鉴权；预览页不自动取数或改变演示模型。
+  router.push('/screen-admin/designer');
+}
 </script>
 
 <style scoped>
@@ -64,10 +70,31 @@ function goBack() {
 }
 
 .screen-preview__source--top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   padding: 8px 20px;
-  text-align: center;
   background: rgba(246, 184, 73, .12);
   border-bottom: 1px solid rgba(246, 184, 73, .35);
+}
+
+.screen-preview__source--top button {
+  padding: 4px 9px;
+  border: 1px solid rgba(246, 184, 73, .62);
+  border-radius: 5px;
+  color: #ffe4a8;
+  background: rgba(87, 52, 4, .28);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.screen-preview__source--top button:hover,
+.screen-preview__source--top button:focus-visible {
+  border-color: #ffe4a8;
+  color: #fff6dc;
+  outline: none;
 }
 
 .screen-preview :deep(.panorama-dashboard) {

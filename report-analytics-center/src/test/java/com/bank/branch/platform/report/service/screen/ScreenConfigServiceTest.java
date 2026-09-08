@@ -667,6 +667,61 @@ class ScreenConfigServiceTest {
     }
 
     @Test
+    void getRenderByCode_codeNamedGroupProjectsLocationSourceOnlyForLocatedProfiles() {
+        RptScreen screen = codeNamedRuntimeScreen();
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
+        when(dsMapper.selectById(12L)).thenReturn(codeRuntimeDatasource());
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        when(scopeAuthorizationService.authorize(screen))
+                .thenReturn(new java.util.LinkedHashSet<>(List.of(
+                        "PROFILE_1", "MANUAL_1", "GEOCODE_1", "UNKNOWN_1", "DEMO_1",
+                        "DEMO_PROFILE_1", "INVALID_1")));
+
+        OrgProfileDTO profile = profile("PROFILE_1", "ACTIVE", "BRANCH", "GCJ02",
+                new BigDecimal("108.90"), new BigDecimal("34.20"), null);
+        profile.setLocationSource("PROFILE");
+        OrgProfileDTO manual = profile("MANUAL_1", "ACTIVE", "BRANCH", "GCJ02",
+                new BigDecimal("108.91"), new BigDecimal("34.21"), null);
+        manual.setLocationSource("MANUAL");
+        OrgProfileDTO geocode = profile("GEOCODE_1", "ACTIVE", "BRANCH", "GCJ02",
+                new BigDecimal("108.92"), new BigDecimal("34.22"), null);
+        geocode.setLocationSource("GEOCODE_VERIFIED");
+        OrgProfileDTO unknown = profile("UNKNOWN_1", "ACTIVE", "BRANCH", "GCJ02",
+                new BigDecimal("108.93"), new BigDecimal("34.23"), null);
+        unknown.setLocationSource("NEEDS_REVIEW");
+        OrgProfileDTO demo = profile("DEMO_1", "ACTIVE", "BRANCH", "GCJ02",
+                new BigDecimal("108.94"), new BigDecimal("34.24"), "SCREEN_MAP_DEMO");
+        demo.setLocationSource("MANUAL");
+        OrgProfileDTO demoProfile = profile("DEMO_PROFILE_1", "ACTIVE", "BRANCH", "GCJ02",
+                new BigDecimal("108.945"), new BigDecimal("34.245"), "SCREEN_MAP_DEMO");
+        demoProfile.setLocationSource("PROFILE");
+        OrgProfileDTO invalid = profile("INVALID_1", "ACTIVE", "BRANCH", "WGS84",
+                new BigDecimal("108.95"), new BigDecimal("34.25"), null);
+        invalid.setLocationSource("PROFILE");
+        when(scopeAuthorizationService.activeProfiles(any(RptScreen.class), any(Set.class)))
+                .thenReturn(Map.of(
+                        "PROFILE_1", profile,
+                        "MANUAL_1", manual,
+                        "GEOCODE_1", geocode,
+                        "UNKNOWN_1", unknown,
+                        "DEMO_1", demo,
+                        "DEMO_PROFILE_1", demoProfile,
+                        "INVALID_1", invalid));
+
+        ScreenRenderRespDTO render = service.getRenderByCode(screen.getScreenCode(), "published");
+
+        assertThat(render.getPanoramaInstitutions()).extracting("orgCode")
+                .containsExactly("PROFILE_1", "MANUAL_1", "GEOCODE_1", "UNKNOWN_1", "DEMO_1",
+                        "DEMO_PROFILE_1", "INVALID_1");
+        assertThat(render.getPanoramaInstitutions()).extracting("locationSource")
+                .containsExactly("PROFILE", "MANUAL", "GEOCODE_VERIFIED", "NEEDS_REVIEW", "MANUAL", null, null);
+        assertThat(render.getPanoramaInstitutions().get(4).isLocated()).isTrue();
+        assertThat(render.getPanoramaInstitutions().get(4).getLng()).isEqualByComparingTo("108.94");
+        assertThat(render.getPanoramaInstitutions().get(5).isLocated()).isFalse();
+        assertThat(render.getPanoramaInstitutions().get(5).getLng()).isNull();
+    }
+
+    @Test
     void getRenderByCode_codeNamedGroupMissingOrInactiveProfileFailsScopeClosed() {
         RptScreen screen = codeNamedRuntimeScreen();
         when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));

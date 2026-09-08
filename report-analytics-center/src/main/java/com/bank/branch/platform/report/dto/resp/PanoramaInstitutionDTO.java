@@ -19,4 +19,6 @@ public class PanoramaInstitutionDTO {
     private BigDecimal lat;
     private String coordSys;
     private boolean located;
+    /** 位置来源；只有 located=true 时才向运行时目录暴露。 */
+    private String locationSource;
 }

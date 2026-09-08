@@ -55,4 +55,11 @@ describe('PanoramaPreview 本地演示入口', () => {
     await wrapper.get('[data-action="dashboard-back"]').trigger('click');
     expect(push).toHaveBeenCalledWith('/workspace');
   });
+
+  it('演示标识旁提供配置真实数据入口，点击后交给现有路由守卫', async () => {
+    const wrapper = mount(PanoramaPreview);
+    expect(wrapper.get('[data-action="configure-real-data"]').text()).toContain('配置真实数据');
+    await wrapper.get('[data-action="configure-real-data"]').trigger('click');
+    expect(push).toHaveBeenCalledWith('/screen-admin/designer');
+  });
 });

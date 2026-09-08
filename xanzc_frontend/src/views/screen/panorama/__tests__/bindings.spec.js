@@ -5,6 +5,8 @@ import {
   buildCodeComponents,
   buildBinding,
   getDatasourceFieldOptions,
+  getCompositionFieldSpecs,
+  getCompositionMode,
   normalizeBinding,
   PERIOD_VALUES,
   validateBinding
@@ -141,5 +143,56 @@ describe('panorama bindings contract', () => {
       fields: { orgCode: 'org', name: 'name', value: 'deposit', increase: 'increase' },
       units: { value: 'YUAN', increase: 'PERCENT' }
     })).toContain('单位不适用: increase');
+  });
+
+  it('公开业务构成两种互斥绑定模式及管理页字段 helper', () => {
+    expect(getCompositionMode({ fields: {} })).toBe('rows');
+    expect(getCompositionMode({ fields: { name: '业务类型', value: '余额' } })).toBe('rows');
+    expect(getCompositionMode({ fields: { corporate: '对公', retail: '零售' } })).toBe('columns');
+    expect(getCompositionMode({ fields: { corporate: '对公' } })).toBe('columns');
+    expect(getCompositionFieldSpecs('rows').map(item => item.semantic)).toEqual(['name', 'value']);
+    expect(getCompositionFieldSpecs('columns').map(item => item.semantic)).toEqual(['corporate', 'retail']);
+    expect(getCompositionFieldSpecs('columns')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ semantic: 'corporate', kind: 'metric', unitKinds: ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION', 'PERCENT', 'RATIO'] }),
+      expect.objectContaining({ semantic: 'retail', kind: 'metric', unitKinds: ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION', 'PERCENT', 'RATIO'] })
+    ]));
+  });
+
+  it('composition 绑定接受旧行模式和双列模式但拒绝混合/混类单位', () => {
+    expect(validateBinding('composition', {
+      dsId: 2, fields: { name: '业务类型', value: '余额' }, units: { value: 'YUAN' }
+    })).toEqual([]);
+    expect(validateBinding('composition', {
+      dsId: 2, fields: { corporate: '对公余额', retail: '零售余额' },
+      units: { corporate: 'TEN_THOUSAND', retail: 'YUAN' }
+    })).toEqual([]);
+    expect(validateBinding('composition', {
+      dsId: 2, fields: { corporate: '对公余额', retail: '零售余额' },
+      units: { corporate: 'PERCENT', retail: 'RATIO' }
+    })).toEqual([]);
+    expect(validateBinding('composition', {
+      dsId: 2, fields: { name: '业务类型', value: '余额', corporate: '对公余额', retail: '零售余额' },
+      units: { value: 'YUAN', corporate: 'YUAN', retail: 'YUAN' }
+    })).toContain('构成字段模式不能混用');
+    expect(validateBinding('composition', {
+      dsId: 2, fields: { corporate: '对公余额', retail: '零售余额' },
+      units: { corporate: 'PERCENT', retail: 'YUAN' }
+    })).toContain('构成单位类型必须一致');
+    expect(validateBinding('composition', {
+      dsId: 2, fields: { corporate: '对公余额' }, units: { corporate: 'YUAN' }
+    })).toContain('缺少字段: retail');
+    expect(validateBinding('composition', {
+      dsId: 2, fields: { corporate: '对公余额', retail: '零售余额' },
+      units: { corporate: 'YUAN', retail: 'YUAN', value: 'YUAN' }
+    })).toContain('单位未绑定字段: value');
+  });
+
+  it('composition 双列字段和单位随组件快照往返保留', () => {
+    const binding = buildBinding(7,
+      { corporate: '对公余额', retail: '零售余额' },
+      { corporate: 'TEN_THOUSAND', retail: 'YUAN' });
+    const components = buildCodeComponents({ composition: binding });
+    expect(JSON.parse(components[0].bindJson)).toEqual(binding);
+    expect(normalizeBinding(JSON.parse(components[0].bindJson), 'composition')).toEqual(binding);
   });
 });

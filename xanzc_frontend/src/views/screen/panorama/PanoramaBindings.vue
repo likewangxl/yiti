@@ -60,23 +60,38 @@
           <header class="panorama-bindings__editor-head">
             <div>
               <h2>{{ selectedSpec.label }}</h2>
-              <p v-if="selectedSpec.oneOfRequired?.length">{{ selectedSpec.oneOfRequired.join('、') }}至少选择一个；{{ selectedSpec.atLeastOneOf?.length ? `${selectedSpec.atLeastOneOf.join('、')}至少选择一个` : '' }}</p>
+              <p v-if="selectedSlot === 'composition'">{{ compositionMode === 'columns' ? '对公金额/零售金额均需绑定' : '名称/构成值均需绑定' }}</p>
+              <p v-else-if="selectedSpec.oneOfRequired?.length">{{ selectedSpec.oneOfRequired.join('、') }}至少选择一个；{{ selectedSpec.atLeastOneOf?.length ? `${selectedSpec.atLeastOneOf.join('、')}至少选择一个` : '' }}</p>
               <p v-else>{{ selectedSpec.required?.join('、') || '无必填字段' }}为必填</p>
             </div>
             <span v-if="selectedBinding?.dsId" class="panorama-bindings__bound">已选择数据源</span>
           </header>
 
+          <div v-if="selectedSlot === 'composition'" class="panorama-bindings__composition-mode">
+            <label class="panorama-bindings__field-label" for="panorama-composition-mode">构成模式</label>
+            <select id="panorama-composition-mode" data-testid="composition-mode"
+                    :value="compositionMode" @change="setCompositionMode($event.target.value)">
+              <option value="rows">行模式（名称 + 构成值）</option>
+              <option value="columns">双列模式（对公 + 零售）</option>
+            </select>
+            <p data-testid="composition-mode-hint" class="panorama-bindings__hint">
+              {{ compositionMode === 'columns'
+                ? '双列模式要求数据源返回恰好一行，固定对公/零售标签；不会按名称自动绑定。'
+                : '行模式允许多行，每行必须包含构成名称和构成值。' }}
+            </p>
+          </div>
+
           <label class="panorama-bindings__field-label" for="panorama-datasource">数据源</label>
           <select id="panorama-datasource" data-testid="slot-datasource" v-model="selectedDatasourceId" @change="onDatasourceChange">
             <option value="">请选择当前屏可用数据源</option>
-            <option v-for="source in availableDatasources" :key="source.id" :value="String(source.id)">
-              {{ source.dsName || source.ds_name || source.dsCode || `数据源 #${source.id}` }}
+            <option v-for="source in availableDatasources" :key="source.id" :value="String(source.id)" :disabled="source.__compositionColumnsUnsupported">
+              {{ source.dsName || source.ds_name || source.dsCode || `数据源 #${source.id}` }}{{ source.__compositionColumnsUnsupported ? '（当前双列模式不支持）' : '' }}
             </option>
           </select>
           <p v-if="!availableDatasources.length" class="panorama-bindings__hint">当前屏范围没有可用的数据源。</p>
 
           <div class="panorama-bindings__fields">
-            <div v-for="fieldSpec in selectedSpec.fields" :key="fieldSpec.semantic" class="panorama-bindings__field-row">
+            <div v-for="fieldSpec in selectedFieldSpecs" :key="fieldSpec.semantic" class="panorama-bindings__field-row">
               <label :for="`panorama-field-${fieldSpec.semantic}`">
                 {{ fieldSpec.label }}<em v-if="fieldSpec.required">必填</em>
               </label>
@@ -111,6 +126,15 @@
       </main>
     </div>
 
+    <PanoramaIntegrationReadiness
+      v-if="screenReady"
+      :screens="screens"
+      :screen="activeScreen"
+      :canvas="canvas"
+      :datasources="datasources"
+      :binding-state="bindingState"
+    />
+
     <footer class="panorama-bindings__footer">
       <label for="panorama-publish-reason">发布原因</label>
       <input id="panorama-publish-reason" data-testid="publish-reason" v-model="publishReason" maxlength="500" placeholder="发布时必填" />
@@ -139,18 +163,20 @@ import {
   publishScreenCanvas,
   saveScreenCanvas
 } from '@/api/screen';
-import { filterDatasourcesByMeta } from '../designer/widgets/chart-widget/dsFilter';
+import { filterDatasourcesByMeta, parseDatasourceConfig } from '../designer/widgets/chart-widget/dsFilter';
 import {
   BINDING_SLOTS,
   PERIOD_LABELS,
   PERIOD_VALUES,
   SLOT_ORDER,
   buildCodeComponents,
+  getCompositionMode,
   getDatasourceFieldOptions,
   normalizeBinding,
   validateBinding
 } from './bindings';
 import PanoramaSettings from './PanoramaSettings.vue';
+import PanoramaIntegrationReadiness from './PanoramaIntegrationReadiness.vue';
 
 const props = defineProps({ screenId: { type: [Number, String], default: '' } });
 const emit = defineEmits(['saved', 'published', 'discarded', 'preview', 'error']);
@@ -177,6 +203,7 @@ const conversionAccepted = ref(false);
 const screenReady = ref(false);
 const settingsVisible = ref(false);
 const settingsTarget = ref(null);
+const compositionMode = ref('rows');
 let loadGeneration = 0;
 let disposed = false;
 let settingsRefreshGeneration = 0;
@@ -187,6 +214,12 @@ const selectedSpec = computed(() => BINDING_SLOTS[selectedSlot.value] || null);
 const selectedBinding = computed(() => {
   if (!bindingState[selectedSlot.value]) bindingState[selectedSlot.value] = emptyBinding(selectedSlot.value);
   return bindingState[selectedSlot.value];
+});
+const selectedFieldSpecs = computed(() => {
+  if (!selectedSpec.value) return [];
+  if (selectedSlot.value !== 'composition') return selectedSpec.value.fields || [];
+  const semantics = compositionMode.value === 'columns' ? ['corporate', 'retail'] : ['name', 'value'];
+  return (selectedSpec.value.fields || []).filter(fieldSpec => semantics.includes(fieldSpec.semantic));
 });
 const selectedDatasource = computed(() => datasources.value.find(item => String(item.id) === String(selectedBinding.value.dsId)) || null);
 const selectedDatasourceId = computed({
@@ -231,12 +264,28 @@ const screenScope = computed(() => ({
   orgScopeMode: activeScreen.value?.orgScopeMode || activeScreen.value?.org_scope_mode || 'LEGACY_CONTEXT'
 }));
 
+function isCompositionColumnsDatasource(source = {}) {
+  const config = parseDatasourceConfig(source.configJson);
+  const sourceKind = String(source.sourceKind || source.source_kind || '').trim().toUpperCase();
+  return sourceKind === 'WIDE_TABLE' && config?.table === 'ORG_INDEX_RESULT';
+}
+
 /** 既有 helper 负责 bizLine + NAMED_GROUP 收窄；本页再做 ACTIVE 状态过滤。 */
 const availableDatasources = computed(() => filterDatasourcesByMeta(
   datasources.value.filter(source => source?.status === 'ACTIVE' || source?.status === 1 || source?.status === '1' || source?.status === true),
   null,
   screenScope.value
-));
+).reduce((list, source) => {
+  if (selectedSlot.value !== 'composition' || compositionMode.value !== 'columns') return list.concat(source);
+  if (isCompositionColumnsDatasource(source)) return list.concat(source);
+  // Keep an already persisted incompatible source visible and marked so the
+  // user can see the existing binding and replace it; no new invalid source
+  // enters the selectable list.
+  if (String(source.id) === String(selectedBinding.value?.dsId)) {
+    return list.concat({ ...source, __compositionColumnsUnsupported: true });
+  }
+  return list;
+}, []));
 
 function emptyBinding(slot = '') {
   return {
@@ -271,6 +320,7 @@ function clearCanvasState() {
   for (const key of Object.keys(bindingState)) delete bindingState[key];
   selectedSlot.value = SLOT_ORDER[0];
   bindingState[selectedSlot.value] = emptyBinding(selectedSlot.value);
+  compositionMode.value = 'rows';
   conversionAccepted.value = false;
   screenReady.value = false;
 }
@@ -285,6 +335,7 @@ function resetBindings(components) {
   const first = SLOT_ORDER.find(slot => bindingState[slot]) || SLOT_ORDER[0];
   selectedSlot.value = first;
   if (!bindingState[first]) bindingState[first] = emptyBinding(first);
+  compositionMode.value = getCompositionMode(bindingState.composition || {});
 }
 
 async function loadScreens() {
@@ -388,6 +439,19 @@ function selectSlot(slot) {
   if (!bindingState[slot]) bindingState[slot] = emptyBinding(slot);
 }
 
+function setCompositionMode(value) {
+  if (selectedSlot.value !== 'composition') return;
+  const nextMode = value === 'columns' ? 'columns' : 'rows';
+  const binding = selectedBinding.value;
+  const obsolete = nextMode === 'columns' ? ['name', 'value'] : ['corporate', 'retail'];
+  for (const semantic of obsolete) {
+    delete binding.fields[semantic];
+    delete binding.units[semantic];
+  }
+  compositionMode.value = nextMode;
+  conflict.value = '';
+}
+
 function onDatasourceChange() {
   // 切换数据源后只保留新数据源仍声明的列；失效单位也必须删除，
   // 否则服务端会拒绝“单位指向未绑定字段”的 bindJson。
@@ -456,7 +520,23 @@ function collectValidBindings() {
   for (const slot of SLOT_ORDER) {
     const candidate = bindingState[slot];
     if (!candidate || !candidate.dsId) continue;
-    const slotProblems = validateBinding(slot, candidate);
+    const mode = slot === 'composition'
+      ? (compositionMode.value === 'columns' || getCompositionMode(candidate) === 'columns' ? 'columns' : 'rows')
+      : null;
+    let slotProblems = validateBinding(slot, candidate);
+    if (slot === 'composition' && mode === 'columns') {
+      // The shared validator derives columns mode from its two semantic
+      // fields. When the user has just selected columns and has not filled a
+      // field yet, replace the legacy row errors with mode-specific guidance.
+      slotProblems = slotProblems.filter(message => !/^缺少字段: (name|value)$/.test(message));
+      for (const semantic of ['corporate', 'retail']) {
+        if (!candidate.fields?.[semantic]) slotProblems.push(`缺少字段: ${semantic}`);
+      }
+      const source = datasources.value.find(item => String(item.id) === String(candidate.dsId));
+      if (!isCompositionColumnsDatasource(source)) {
+        problems.push(`${BINDING_SLOTS[slot].label}：columns 模式仅允许 WIDE_TABLE 且表为 ORG_INDEX_RESULT`);
+      }
+    }
     if (slotProblems.length) problems.push(...slotProblems.map(message => `${BINDING_SLOTS[slot].label}：${message}`));
     let fieldProblemCount = 0;
     for (const [semantic, column] of Object.entries(candidate.fields || {})) {
@@ -465,7 +545,11 @@ function collectValidBindings() {
         fieldProblemCount += 1;
       }
     }
-    if (!slotProblems.length && fieldProblemCount === 0) next[slot] = normalizeBinding(candidate, slot);
+    if (!slotProblems.length && fieldProblemCount === 0
+        && !(slot === 'composition' && mode === 'columns'
+          && !isCompositionColumnsDatasource(datasources.value.find(item => String(item.id) === String(candidate.dsId))))) {
+      next[slot] = normalizeBinding(candidate, slot);
+    }
   }
   return { bindings: next, problems };
 }

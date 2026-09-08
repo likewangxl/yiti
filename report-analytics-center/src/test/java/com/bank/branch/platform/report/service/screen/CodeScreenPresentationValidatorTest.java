@@ -46,6 +46,25 @@ class CodeScreenPresentationValidatorTest {
         return datasource;
     }
 
+    private RptScreenDatasource compositionDatasource() {
+        RptScreenDatasource datasource = orgSubjectDatasource();
+        datasource.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","
+                + "\"metrics\":[{\"metricCode\":\"CORP\",\"metricName\":\"对公余额\",\"slot\":1},"
+                + "{\"metricCode\":\"RETAIL\",\"metricName\":\"零售余额\",\"slot\":2}],"
+                + "\"aggregation\":{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\"}}");
+        return datasource;
+    }
+
+    private RptScreenDatasource customSqlCompositionDatasource() {
+        RptScreenDatasource datasource = new RptScreenDatasource();
+        datasource.setId(12L);
+        datasource.setSourceKind("CUSTOM_SQL");
+        datasource.setConfigJson("{\"fieldMeta\":["
+                + "{\"col\":\"corporate\",\"role\":\"METRIC\"},"
+                + "{\"col\":\"retail\",\"role\":\"METRIC\"}]}");
+        return datasource;
+    }
+
     @Test
     void acceptsBranchOverviewWithRequiredDepositBinding() {
         org.assertj.core.api.Assertions.assertThat(CodeScreenPresentationValidator.isCodePresentation(style)).isTrue();
@@ -160,6 +179,80 @@ class CodeScreenPresentationValidatorTest {
                 + "\"average\":\"HUNDRED_MILLION\"}}";
         CodeScreenPresentationValidator.validateDraft(style,
                 draft("ChartWidget", "w-ranking", "ranking", ranking));
+    }
+
+    @Test
+    void compositionAcceptsLegacyRowsAndWideTableColumns() throws Exception {
+        String rows = validBind("{\"name\":\"org_name\",\"value\":\"对公余额\"}",
+                "{\"value\":\"YUAN\"}");
+        CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-composition-rows", "composition", rows));
+
+        String columns = validBind("{\"corporate\":\"对公余额\",\"retail\":\"零售余额\"}",
+                "{\"corporate\":\"TEN_THOUSAND\",\"retail\":\"YUAN\"}");
+        CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-composition-columns", "composition", columns));
+        CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(columns), "composition", compositionDatasource());
+    }
+
+    @Test
+    void compositionRejectsMixedShapeIncompleteUnitsAndMixedUnitKinds() {
+        String mixedShape = validBind(
+                "{\"name\":\"org_name\",\"value\":\"对公余额\",\"corporate\":\"对公余额\",\"retail\":\"零售余额\"}",
+                "{\"value\":\"YUAN\",\"corporate\":\"YUAN\",\"retail\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-composition-mixed", "composition", mixedShape), List.of()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String missingRetail = validBind("{\"corporate\":\"对公余额\"}",
+                "{\"corporate\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-composition-missing", "composition", missingRetail), List.of()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String mixedKinds = validBind("{\"corporate\":\"对公余额\",\"retail\":\"零售余额\"}",
+                "{\"corporate\":\"PERCENT\",\"retail\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-composition-kinds", "composition", mixedKinds), List.of()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String unboundUnit = validBind("{\"corporate\":\"对公余额\",\"retail\":\"零售余额\"}",
+                "{\"corporate\":\"YUAN\",\"retail\":\"YUAN\",\"value\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-composition-unit", "composition", unboundUnit), List.of()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String missingUnits = validBind("{\"corporate\":\"对公余额\",\"retail\":\"零售余额\"}", "{}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-composition-missing-units", "composition", missingUnits), List.of()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
+    void compositionRequiresMetricOutputColumnsAndPublishedSnapshotRoundTrip() throws Exception {
+        RptScreenDatasource datasource = compositionDatasource();
+        String dimensionAsMetric = validBind("{\"corporate\":\"org_name\",\"retail\":\"零售余额\"}",
+                "{\"corporate\":\"YUAN\",\"retail\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(dimensionAsMetric), "composition", datasource))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String customSqlColumns = validBind("{\"corporate\":\"corporate\",\"retail\":\"retail\"}",
+                "{\"corporate\":\"YUAN\",\"retail\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(customSqlColumns), "composition", customSqlCompositionDatasource()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String columns = validBind("{\"corporate\":\"对公余额\",\"retail\":\"零售余额\"}",
+                "{\"corporate\":\"PERCENT\",\"retail\":\"RATIO\"}");
+        String component = "{\"component\":\"ChartWidget\",\"id\":\"w-composition-published\","
+                + "\"blockId\":12,\"propValue\":{\"bindingKey\":\"composition\"},\"bindJson\":"
+                + MAPPER.valueToTree(columns) + "}";
+        String published = "{\"canvasStyle\":{\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"}},"
+                + "\"components\":[" + component + "],\"bindSnapshots\":{\"12\":{\"bind\":"
+                + MAPPER.readTree(columns) + "}}}";
+        CodeScreenPresentationValidator.validatePublishedPackage(published);
     }
 
     @Test
