@@ -64,6 +64,20 @@
       </article>
     </section>
 
+    <section class="panorama-diagnostics-strip" data-testid="leadership-diagnostics" aria-label="经营诊断">
+      <article
+        v-for="card in diagnosticCards"
+        :key="card.key"
+        class="panorama-diagnostic-card"
+        :data-diagnostic="card.key"
+      >
+        <span class="panorama-diagnostic-label">{{ card.label }}</span>
+        <strong :class="diagnosticValueClass(card)">{{ diagnosticValueText(card) }}</strong>
+        <span v-if="card.unit" class="panorama-diagnostic-unit">{{ card.unit }}</span>
+        <small>{{ card.note }}</small>
+      </article>
+    </section>
+
     <section class="panorama-workspace">
       <div class="panorama-column panorama-left-column">
         <article class="panorama-panel panorama-deposit-panel">
@@ -84,7 +98,7 @@
               <span class="panorama-deposit-card-label">{{ item.label }}</span>
               <strong :class="{ 'is-muted': !hasMetric(item.value) }">{{ formatMetric(item.value) }}</strong>
               <span v-if="item.unit" class="panorama-deposit-card-unit">{{ item.unit }}</span>
-              <small v-if="!hasMetric(item.value)" class="panorama-unbound-label">未绑定</small>
+              <small v-if="!hasMetric(item.value)" class="panorama-unbound-label">暂无有效数据<span class="panorama-visually-hidden">未绑定</span></small>
               <small v-else class="panorama-deposit-card-note">{{ item.note }}</small>
             </article>
           </div>
@@ -103,13 +117,13 @@
             <span>{{ compositionHeadingMeta }}</span>
           </div>
           <div v-if="compositionItems.length" class="panorama-composition-layout">
-            <v-chart class="panorama-composition-chart" :option="compositionOption" autoresize aria-label="业务结构占比图" />
+            <v-chart class="panorama-composition-chart" :option="compositionOption" autoresize aria-label="业务结构矩形份额图" />
             <div class="panorama-composition-list">
               <div v-for="(item, index) in compositionItems" :key="item.name || index" class="panorama-composition-row">
                 <span class="panorama-composition-mark" :style="{ backgroundColor: compositionColor(index) }" />
                 <div class="panorama-composition-copy">
                   <span class="panorama-composition-name">{{ item.name || '—' }}</span>
-                  <span class="panorama-composition-bar"><i :style="{ width: `${compositionPercent(item.value)}%`, backgroundColor: compositionColor(index) }"></i></span>
+                  <span class="panorama-composition-share">{{ compositionShareText(item.value) }}</span>
                 </div>
                 <strong>{{ formatMetric(item.value) }}</strong>
                 <small>{{ item.unit || '' }}</small>
@@ -185,90 +199,68 @@
       </div>
 
       <div class="panorama-column panorama-right-column">
-        <article class="panorama-panel panorama-ranking-panel">
-          <div class="panorama-panel-heading">
+        <article class="panorama-panel panorama-leadership-panel">
+          <div class="panorama-panel-heading panorama-leadership-heading">
             <div>
-              <span class="panorama-section-kicker">机构梯队</span>
-              <h2>机构{{ rankingMetricInfo.label }}排名</h2>
+              <span class="panorama-section-kicker">行领导经营视图</span>
+              <h2>机构经营诊断与矩阵</h2>
             </div>
-            <span>TOP {{ Math.min(10, topRankings.length) }}</span>
+            <span>共 {{ leadershipMatrixRows.length }} 家</span>
           </div>
-          <div class="panorama-panel-toolbar">
-            <div class="panorama-segmented" role="group" aria-label="排名指标">
-              <button
-                v-for="metric in rankingMetricOptions"
-                :key="metric.key"
-                type="button"
-                :data-ranking-mode="metric.key"
-                :class="{ active: rankingMetric === metric.key }"
-                @click="rankingMetric = metric.key"
-              >{{ metric.label.replace('存款', '') }}</button>
+          <article class="panorama-panel panorama-target-panel">
+            <div v-if="targetProgressActual !== null" class="panorama-target-summary">
+              <span class="panorama-target-summary-label">目标完成</span>
+              <div class="panorama-target-ring" data-testid="target-progress-ring" :style="{ '--target-progress': `${targetProgressVisual}%` }">
+                <strong data-testid="target-progress-value">{{ formatMetric(targetProgressActual) }}<small>%</small></strong>
+              </div>
+              <span class="panorama-target-gap">目标差 {{ formatSignedMetric(targetProgressActual - 100) }} 百分点</span>
+              <span class="panorama-target-period">{{ targetPeriodLabel }}</span>
             </div>
-            <span class="panorama-unit-note">单位：{{ rankingMetricInfo.unit }}</span>
-          </div>
-          <ol v-if="topRankings.length" class="panorama-ranking-list">
-            <li
-              v-for="(item, index) in topRankings"
-              :key="item.orgCode || index"
-              :data-testid="'ranking-row'"
-              :data-org-code="item.orgCode || ''"
-              tabindex="0"
-              @click="selectRanking(item)"
-              @keydown.enter="selectRanking(item)"
-            >
-              <span class="panorama-rank-number">{{ index + 1 }}</span>
-              <span class="panorama-rank-name">{{ item.name || item.orgName || '—' }}</span>
-              <span class="panorama-rank-bar"><i :class="{ 'is-negative': rankingDisplayValue(item) < 0 }" :style="rankingBarStyle(item)"></i></span>
-              <strong>{{ formatMetric(rankingDisplayValue(item)) }}</strong>
-              <span v-if="rankingMetric === 'deposit' && formatChange(item.change) !== null" class="panorama-ranking-change" :class="changeClass(item.change)" title="余额较上期变化">{{ item.change >= 0 ? '↑' : '↓' }}{{ Math.abs(Number(item.change)).toFixed(1) }}%</span>
-            </li>
-          </ol>
-          <div v-else class="panorama-empty">暂无机构排名绑定</div>
-        </article>
-
-        <article class="panorama-panel panorama-target-panel">
-          <div class="panorama-panel-heading">
-            <div>
-              <span class="panorama-section-kicker">目标追踪</span>
-              <h2>目标完成进度</h2>
+            <div v-else class="panorama-unbound" data-testid="target-unbound">{{ targetKpi ? '目标完成率暂无有效数据' : '目标完成率未绑定' }}<span v-if="targetKpi" class="panorama-visually-hidden">未绑定</span></div>
+          </article>
+          <article class="panorama-panel panorama-ranking-panel panorama-ranking-detail-panel">
+            <div class="panorama-panel-heading">
+              <div><span class="panorama-section-kicker">机构经营矩阵</span><h2>全辖机构对比</h2></div>
+              <span>TOP {{ Math.min(10, topRankings.length) }} / 共 {{ leadershipMatrixRows.length }} 家</span>
             </div>
-            <span>{{ targetPeriodLabel }}</span>
-          </div>
-          <div v-if="targetProgressActual !== null" class="panorama-target-content">
-            <div class="panorama-target-ring" data-testid="target-progress-ring" :style="{ '--target-progress': `${targetProgressVisual}%` }">
-              <strong data-testid="target-progress-value">{{ formatMetric(targetProgressActual) }}<small>%</small></strong>
+            <div class="panorama-panel-toolbar">
+              <div class="panorama-segmented" role="group" aria-label="排名指标">
+                <button
+                  v-for="metric in rankingMetricOptions"
+                  :key="metric.key"
+                  type="button"
+                  :data-ranking-mode="metric.key"
+                  :class="{ active: rankingMetric === metric.key }"
+                  @click="rankingMetric = metric.key"
+                >{{ metric.label.replace('存款', '') }}</button>
+              </div>
+              <span class="panorama-unit-note">单位：{{ rankingMetricInfo.unit }}</span>
             </div>
-            <div class="panorama-target-meta">
-              <span>完成情况</span>
-              <small>{{ targetProgressActual > 100 ? '超额完成' : '目标进度' }}</small>
+            <div class="panorama-matrix-legend" aria-label="机构矩阵规则">
+              <span><i class="is-up" />达标</span><span><i class="is-warning" />未达标</span><span><i class="is-muted" />未知</span>
+              <small>目标差 = 存款余额 − 金额目标</small>
             </div>
-            <div class="panorama-target-track" aria-hidden="true"><i :style="{ width: `${targetProgressVisual}%` }"></i></div>
-          </div>
-          <div v-else class="panorama-unbound" data-testid="target-unbound">目标完成率未绑定</div>
-        </article>
-
-        <article class="panorama-panel panorama-ranking-detail-panel">
-          <div class="panorama-panel-heading">
-            <div>
-              <span class="panorama-section-kicker">数据明细</span>
-              <h2>排名明细</h2>
-            </div>
-            <span>共 {{ safeModel.rankings.length }} 家</span>
-          </div>
-          <div class="panorama-detail-table-wrap">
+            <div class="panorama-detail-table-wrap">
             <table class="panorama-detail-table">
-              <caption class="panorama-visually-hidden">机构排名明细，净增和月均余额单位：亿元</caption>
-              <thead><tr><th scope="col">机构</th><th scope="col">净增<br>亿元</th><th scope="col">月均余额<br>亿元</th></tr></thead>
+              <caption class="panorama-visually-hidden">机构经营矩阵，金额目标差、完成率和趋势均按已有绑定展示</caption>
+              <thead><tr><th scope="col">机构</th><th scope="col">经营目标 / {{ rankingMetricInfo.label }}</th><th scope="col">余额 / 趋势</th></tr></thead>
               <tbody>
-                <tr v-for="(item, index) in rankingDetailRows" :key="item.orgCode || index" :data-testid="`ranking-detail-${item.orgCode || index}`">
-                  <td :title="item.name || item.orgName || '—'">{{ item.name || item.orgName || '—' }}</td>
-                  <td>{{ formatMetric(item.increase) }}</td>
-                  <td>{{ formatMetric(item.average) }}</td>
+                <tr v-for="(item, index) in leadershipMatrixRows" :key="item.orgCode || index" :data-testid="rankingRowTestId(item)" :data-org-code="item.orgCode || ''" tabindex="0" @click="selectRanking(item)" @keydown.enter="selectRanking(item)">
+                  <td :title="item.name || item.orgName || '—'"><span class="panorama-matrix-rank">{{ rankingPosition(item) || '—' }}</span>{{ item.name || item.orgName || '—' }}</td>
+                  <td>
+                    <span :class="statusClass(item.status)">{{ statusLabel(item.status) }} {{ formatPercent(item.rate) }}</span>
+                    <small>目标差 {{ formatSignedMetric(item.targetGap) }} · {{ formatMetric(rankingDisplayValue(item)) }}</small>
+                  </td>
+                  <td>
+                    <strong>{{ formatMetric(item.deposit) }}</strong>
+                    <small :class="trendClass(item.trendState)">{{ item.trendState || '—' }}<template v-if="item.trend?.change !== null"> · {{ formatSignedMetric(item.trend.change) }}</template></small>
+                  </td>
                 </tr>
               </tbody>
             </table>
-            <div v-if="!rankingDetailRows.length" class="panorama-empty">暂无排名明细绑定</div>
-          </div>
+            <div v-if="!leadershipMatrixRows.length" class="panorama-empty">暂无机构经营矩阵绑定</div>
+            </div>
+          </article>
         </article>
       </div>
     </section>
@@ -311,8 +303,8 @@
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
-import { PieChart } from 'echarts/charts';
-import { LegendComponent, TooltipComponent } from 'echarts/components';
+import { TreemapChart } from 'echarts/charts';
+import { TooltipComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 import {
   Aim, Coin, Close, OfficeBuilding, Refresh, Setting, TrendCharts, UserFilled
@@ -332,8 +324,13 @@ import {
   sortRankingRows,
   topRankingRows
 } from './panoramaViewModel.js';
+import {
+  buildProvinceInsights,
+  coverageLabel,
+  statusLabel
+} from './leadershipInsights.js';
 
-use([CanvasRenderer, PieChart, TooltipComponent, LegendComponent]);
+use([CanvasRenderer, TreemapChart, TooltipComponent]);
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -405,6 +402,47 @@ const compositionHeadingMeta = computed(() => {
   if (units.length === 1) return units[0];
   return '指标口径';
 });
+const compositionShareAvailable = computed(() => {
+  const units = [...new Set(compositionItems.value.map(item => String(item?.unit || '').trim()).filter(Boolean))];
+  const values = compositionItems.value.map(item => finiteValue(item.value));
+  return units.length <= 1 && values.length > 0 && values.every(value => value !== null && value >= 0) && values.reduce((sum, value) => sum + value, 0) > 0;
+});
+const compositionChartData = computed(() => {
+  if (!compositionShareAvailable.value) return [];
+  return compositionItems.value
+    .map((item, index) => ({
+      name: item.name || `业务${index + 1}`,
+      value: finiteValue(item.value),
+      unit: item.unit || compositionHeadingMeta.value,
+      itemStyle: { color: compositionColor(index) }
+    }))
+    .filter(item => item.value !== null && item.value > 0);
+});
+const compositionOption = computed(() => ({
+  animation: true,
+  tooltip: {
+    trigger: 'item',
+    formatter: params => `${params.name}<br/>${formatMetric(params.value)} ${params.data?.unit || ''} · ${compositionShareText(params.value)}`
+  },
+  series: [{
+    type: 'treemap',
+    roam: false,
+    nodeClick: false,
+    breadcrumb: { show: false },
+    visibleMin: 0,
+    squareRatio: 1.15,
+    label: {
+      show: true,
+      color: '#eff7ff',
+      fontSize: 11,
+      lineHeight: 16,
+      formatter: params => `${params.name}\n${formatMetric(params.value)} ${params.data?.unit || ''}\n${compositionShareText(params.value)}`
+    },
+    upperLabel: { show: false },
+    itemStyle: { borderColor: '#07183e', borderWidth: 2, gapWidth: 2 },
+    data: compositionChartData.value
+  }]
+}));
 const institutionCountLabel = computed(() => {
   const located = safeModel.value.institutions.filter(item => item?.located && item?.lng != null && item?.lat != null).length;
   const total = safeModel.value.institutions.length;
@@ -431,25 +469,66 @@ const rankingMax = computed(() => {
   const values = topRankings.value.map(item => Math.abs(rankingValue(item, rankingMetric.value) ?? 0));
   return Math.max(0, ...values);
 });
-const compositionChartData = computed(() => compositionItems.value
-  .map((item, index) => ({ name: item.name || `业务${index + 1}`, value: finiteValue(item.value), itemStyle: { color: compositionColor(index) } }))
-  .filter(item => item.value !== null));
-const compositionOption = computed(() => ({
-  animation: true,
-  tooltip: { trigger: 'item', formatter: '{b}: {c}' },
-  legend: { show: false },
-  series: [{
-    type: 'pie',
-    radius: ['47%', '74%'],
-    center: ['50%', '50%'],
-    label: { show: false },
-    labelLine: { show: false },
-    itemStyle: { borderColor: '#07183e', borderWidth: 2 },
-    data: compositionChartData.value
-  }]
-}));
+const leadershipInsights = computed(() => buildProvinceInsights(safeModel.value));
+const diagnosticCards = computed(() => {
+  const diagnostics = leadershipInsights.value.diagnostics;
+  const coverage = leadershipInsights.value.coverage;
+  return [
+    {
+      key: 'depositIncrease',
+      label: '存款净增',
+      value: diagnostics.depositIncrease,
+      unit: '亿元',
+      note: '省级已绑定口径'
+    },
+    {
+      key: 'targetGapPoints',
+      label: '目标差百分点',
+      value: diagnostics.targetGapPoints,
+      unit: '百分点',
+      note: '完成率 − 100'
+    },
+    {
+      key: 'decliningCount',
+      label: '下降机构数',
+      value: diagnostics.decliningCount,
+      unit: '家',
+      note: `可判断 ${coverageLabel(leadershipInsights.value.decliningCoverage)} · 趋势/净增`
+    },
+    {
+      key: 'coverage',
+      label: '可比指标覆盖',
+      value: coverageLabel(coverage.rate),
+      unit: '完成率',
+      note: `存款 ${coverageLabel(coverage.deposit)} · 完成率 ${coverageLabel(coverage.rate)}`
+    }
+  ];
+});
+const leadershipMatrixRows = computed(() => {
+  const rowsByCode = new Map(leadershipInsights.value.rows.map(item => [String(item.orgCode), item]));
+  const sourceRows = rankingDetailRows.value.length ? rankingDetailRows.value : leadershipInsights.value.rows;
+  return sourceRows.map((item, index) => {
+    const insight = rowsByCode.get(String(item?.orgCode || '')) || {};
+    return {
+      ...item,
+      ...insight,
+      orgCode: item?.orgCode || insight.orgCode || `row-${index}`,
+      name: item?.name || item?.orgName || insight.name || '—',
+      deposit: insight.deposit ?? rankingValue(item, 'deposit'),
+      increase: insight.increase ?? finiteValue(item?.increase),
+      average: finiteValue(item?.average),
+      targetGap: insight.targetGap ?? null,
+      trend: insight.trend || { state: '无趋势数据', change: null },
+      trendState: insight.trendState || '无趋势数据',
+      status: insight.status || 'unknown',
+      rate: insight.rate ?? null
+    };
+  });
+});
 
 function finiteValue(value) {
+  if (typeof value === 'boolean' || (typeof value !== 'number' && typeof value !== 'string')) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
   return finiteMetric(value);
 }
 
@@ -473,6 +552,38 @@ function formatMetric(value) {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, minimumFractionDigits: Number.isInteger(number) ? 0 : 2 }).format(number);
 }
 
+function formatPercent(value) {
+  const number = finiteValue(value);
+  return number === null ? '—' : `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 1, minimumFractionDigits: 1 }).format(number)}%`;
+}
+
+function formatSignedMetric(value) {
+  const number = finiteValue(value);
+  if (number === null) return '—';
+  const prefix = number > 0 ? '+' : '';
+  return `${prefix}${formatMetric(number)}`;
+}
+
+function diagnosticValueText(card) {
+  if (card.key === 'coverage') return card.value || '—';
+  return card.value === null || card.value === undefined ? '—' : formatSignedMetric(card.value);
+}
+
+function diagnosticValueClass(card) {
+  if (card.key === 'coverage') return '';
+  const value = finiteValue(card.value);
+  if (value === null) return 'is-muted';
+  return value < 0 ? 'is-down' : 'is-up';
+}
+
+function statusClass(status) {
+  return ({ achieved: 'is-up', below: 'is-warning', unknown: 'is-muted' })[status] || 'is-muted';
+}
+
+function trendClass(state) {
+  return state === '连续下降' || state === '最新回落' ? 'is-down' : state === '最新回升' ? 'is-up' : 'is-muted';
+}
+
 function formatChange(value) {
   const number = finiteValue(value);
   return number === null ? null : number;
@@ -493,15 +604,39 @@ function compositionColor(index) {
 }
 
 function compositionPercent(value) {
+  if (!compositionShareAvailable.value) return null;
   const values = compositionItems.value.map(item => finiteValue(item.value)).filter(item => item !== null);
   const total = values.reduce((sum, item) => sum + item, 0);
   const number = finiteValue(value);
   if (total <= 0 || number === null) return 0;
-  return Math.max(0, Math.min(100, (number / total) * 100));
+  return Number(Math.max(0, Math.min(100, (number / total) * 100)).toFixed(1));
+}
+
+function compositionShareText(value) {
+  const percent = compositionPercent(value);
+  return percent === null ? '占比 —（单位或数值不可比）' : `占比 ${percent}%`;
 }
 
 function rankingDisplayValue(item) {
   return rankingValue(item, rankingMetric.value);
+}
+
+function rankingPosition(item) {
+  const index = topRankings.value.findIndex(entry => String(entry?.orgCode || '') === String(item?.orgCode || ''));
+  if (index === -1) return null;
+  const currentValue = rankingValue(item, rankingMetric.value);
+  if (currentValue === null) return null;
+  let rank = 1;
+  for (let cursor = 1; cursor <= index; cursor += 1) {
+    const previousValue = rankingValue(topRankings.value[cursor], rankingMetric.value);
+    if (previousValue !== currentValue) rank = cursor + 1;
+  }
+  return rank;
+}
+
+function rankingRowTestId(item) {
+  const position = rankingPosition(item);
+  return position ? 'ranking-row' : `ranking-detail-${item?.orgCode || 'row'}`;
 }
 
 function rankingBarStyle(item) {

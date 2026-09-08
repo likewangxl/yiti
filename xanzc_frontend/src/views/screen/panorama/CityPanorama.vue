@@ -23,6 +23,29 @@
       </article>
     </section>
     <div v-if="summaryUnbound" class="city-summary-unbound" data-testid="city-summary-unbound">市级汇总未绑定，无法据下级机构加总</div>
+    <section class="city-leadership-strip" data-testid="city-leadership-diagnostics" aria-label="市级经营诊断">
+      <article class="city-leadership-card">
+        <span>达标 / 未达标 / 未知</span>
+        <strong>{{ cityCountText('achieved') }} / {{ cityCountText('below') }} / {{ cityCountText('unknown') }}</strong>
+        <small>完成率样本 {{ coverageLabel(cityInsights.coverage.rate) }}</small>
+      </article>
+      <article class="city-leadership-card">
+        <span>目标差百分点</span>
+        <strong :class="signedClass(cityInsights.diagnostics.targetGapPoints)">{{ signedMetricText(cityInsights.diagnostics.targetGapPoints) }}</strong>
+        <small>市级汇总直接绑定 · 不平均下级完成率</small>
+      </article>
+      <article class="city-leadership-card">
+        <span>下降支行数</span>
+        <strong :class="{ 'is-muted': cityInsights.diagnostics.decliningCount === null }">{{ cityInsights.diagnostics.decliningCount === null ? '—' : cityInsights.diagnostics.decliningCount }}</strong>
+        <small>可判断 {{ coverageLabel(cityInsights.decliningCoverage) }} · 趋势/净增</small>
+      </article>
+      <article class="city-leadership-card city-observation-card">
+        <span>同城展示观察</span>
+        <strong>{{ selectedBranchInsight?.rank ? `${selectedBranchInsight.rank} / ${selectedBranchInsight.total}` : '—' }}</strong>
+        <small v-if="selectedBranchInsight && selectedBranchInsight.medianDifference !== null">展示机构位次 · 存款中位余额差 {{ signedMetricText(selectedBranchInsight.medianDifference) }} 亿元</small>
+        <small v-else>展示机构位次 — · 需要可比余额</small>
+      </article>
+    </section>
     <span class="panorama-visually-hidden" data-testid="selected-org-code">{{ selectedOrgCode }}</span>
 
     <section class="city-workspace">
@@ -51,13 +74,16 @@
       </article>
 
       <article class="panorama-panel city-list-panel">
-        <div class="panorama-panel-heading"><h2>支行列表 <small>{{ filteredInstitutions.length }} 家</small></h2><button type="button" data-testid="deposit-sort" class="city-sort-button" @click="toggleSort">按存款余额 {{ sortDescending ? '↓' : '↑' }}</button></div>
+        <div class="panorama-panel-heading"><h2>支行多指标对比 <small>{{ filteredInstitutions.length }} 家</small></h2><button type="button" data-testid="deposit-sort" class="city-sort-button" @click="toggleSort">按存款余额 {{ sortDescending ? '↓' : '↑' }}</button></div>
         <div class="city-search-wrap"><label for="city-branch-search">搜索支行名称</label><input id="city-branch-search" data-testid="branch-search" v-model="search" type="search" placeholder="搜索支行名称" /></div>
+        <div class="city-branch-columns" aria-hidden="true"><span>#</span><span>支行</span><span>存款</span><span>贷款</span><span>客户</span><span>完成率</span></div>
         <div v-if="pagedInstitutions.length" class="city-branch-list">
           <button v-for="(branch, index) in pagedInstitutions" :key="branch.orgCode" type="button" class="city-branch-row" data-testid="branch-row" :class="{ selected: selectedOrgCode === branch.orgCode }" @click="selectBranch(branch.orgCode)">
             <span class="city-branch-rank">{{ (page - 1) * pageSize + index + 1 }}</span>
             <span class="city-branch-name">{{ branch.orgName || branch.orgCode || '—' }}</span>
             <strong>{{ formatMetric(branch.metrics?.deposit) }}</strong>
+            <span class="city-branch-loan">{{ formatMetric(branch.metrics?.loan) }}</span>
+            <span class="city-branch-customers">{{ formatMetric(branch.metrics?.customers) }}</span>
             <span :class="rateClass(branch.metrics?.rate)">{{ formatPercent(branch.metrics?.rate) }}</span>
           </button>
         </div>
@@ -78,6 +104,13 @@
             <div><span>贷款余额（亿元）</span><strong>{{ formatMetric(selectedBranch.metrics?.loan) }}</strong></div>
             <div><span>客户总量（万户）</span><strong>{{ formatMetric(selectedBranch.metrics?.customers) }}</strong></div>
             <div><span>目标完成率</span><strong>{{ formatPercent(selectedBranch.metrics?.rate) }}</strong></div>
+            <div><span>实际目标差（亿元）</span><strong :class="signedClass(selectedBranchInsight?.targetGap)">{{ signedMetricText(selectedBranchInsight?.targetGap) }}</strong></div>
+          </div>
+          <div class="city-detail-observation" data-testid="branch-observation">
+            <div><span>同城展示机构位次</span><strong>{{ selectedBranchInsight?.rank ? `${selectedBranchInsight.rank} / ${selectedBranchInsight.total}` : '—' }}</strong></div>
+            <div><span>中位余额差（亿元）</span><strong :class="signedClass(selectedBranchInsight?.medianDifference)">{{ signedMetricText(selectedBranchInsight?.medianDifference) }}</strong></div>
+            <div><span>趋势首末变化</span><strong :class="signedClass(selectedBranchInsight?.trend?.change)">{{ signedMetricText(selectedBranchInsight?.trend?.change) }}</strong></div>
+            <div><span>趋势状态</span><strong :class="trendClass(selectedBranchInsight?.trendState)">{{ selectedBranchInsight?.trendState || '—' }}</strong></div>
           </div>
           <PanoramaTrend :trend="selectedBranch.trend" :title="`${selectedBranch.orgName || selectedBranch.orgCode}经营趋势`" compact data-testid="branch-detail-trend" class="city-detail-trend" />
           <ul v-if="selectedBranch.attention?.length" class="city-detail-attention">
@@ -95,6 +128,10 @@ import { Back, Close, FullScreen, Location, Refresh } from '@element-plus/icons-
 import PanoramaMap from './PanoramaMap.vue';
 import PanoramaTrend from './PanoramaTrend.vue';
 import { cityGeoByCode } from './geography.js';
+import {
+  buildCityInsights,
+  coverageLabel
+} from './leadershipInsights.js';
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -160,9 +197,17 @@ const pagedInstitutions = computed(() => filteredInstitutions.value.slice((page.
 // 地图跟随当前搜索与经营关注筛选展示全部匹配机构，分页只限制右侧列表。
 const mapInstitutions = computed(() => filteredInstitutions.value);
 const selectedBranch = computed(() => cityInstitutions.value.find(item => item.orgCode === selectedOrgCode.value) || null);
+const cityInsights = computed(() => buildCityInsights({
+  cityCode: props.cityCode,
+  citySummary: citySummary.value,
+  institutions: safeModel.value.institutions
+}));
+const selectedBranchInsight = computed(() => cityInsights.value.selected(selectedOrgCode.value));
 
 function finiteValue(value) {
   if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'boolean' || (typeof value !== 'number' && typeof value !== 'string')) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
@@ -174,6 +219,23 @@ function formatMetric(value) {
 function formatPercent(value) {
   const number = finiteValue(value);
   return number === null ? '—' : `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 1, minimumFractionDigits: 1 }).format(number)}%`;
+}
+function signedMetricText(value) {
+  const number = finiteValue(value);
+  if (number === null) return '—';
+  const prefix = number > 0 ? '+' : '';
+  return `${prefix}${formatMetric(number)}`;
+}
+function signedClass(value) {
+  const number = finiteValue(value);
+  if (number === null) return 'is-muted';
+  return number < 0 ? 'is-down' : 'is-up';
+}
+function trendClass(state) {
+  return state === '连续下降' || state === '最新回落' ? 'is-down' : state === '最新回升' ? 'is-up' : 'is-muted';
+}
+function cityCountText(key) {
+  return cityInsights.value.sampleSize ? cityInsights.value.statusCounts[key] : '—';
 }
 function formatChange(value) {
   return finiteValue(value);
