@@ -485,3 +485,7 @@ public class SysControlUpdatedListener {
 代码模板业务构成可采用固定 `corporate/retail` 单行两列映射，沿用既有 screen REST、范围及发布身份，不新增跨模块 API；字段形状、数据源限制和单位约束见 03。
 
 机构目录继续消费 auth 的 `OrgGroupApi` 与 `OrgProfileDTO`。新增 `locationSource` 仅表示已核定坐标的来源；report 将它随合法坐标投影到授权目录，不读取 auth 私有位置表，也不向运行时传递详细地址和审计字段。未定位机构保留在目录中，坐标及来源为空。
+
+## 零售经营模板
+
+`retail-overview-v1` 复用既有 screen REST 与 auth 公开机构画像接口；不新增跨模块 Java API，不修改 PT_RESOURCE。模板绑定、原始单位与机构目录边界详见 [零售经营总览契约](../../retail-screen-design-and-acceptance.md#零售绑定契约)。启用前须部署兼容校验器，并经原大屏保存/发布流程配置 RETAIL 来源。

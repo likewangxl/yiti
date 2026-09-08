@@ -28,13 +28,19 @@ public final class CodeScreenPresentationValidator {
 
     public static final String CODE_TYPE = "CODE";
     public static final String BRANCH_OVERVIEW_TEMPLATE = "branch-overview-v1";
+    public static final String RETAIL_OVERVIEW_TEMPLATE = "retail-overview-v1";
 
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
-    private static final Set<String> SLOTS = Set.of(
+    private static final Set<String> BRANCH_SLOTS = Set.of(
             "deposit", "loan", "customers", "revenue", "rate", "trend", "composition",
             "ranking", "attention", "branches", "branchTrend", "citySummary",
             "depositIncrease", "depositAverage");
+    private static final Set<String> RETAIL_SLOTS = Set.of(
+            "retailAum", "retailDeposit", "retailDepositAverage", "retailRevenue", "retailLoan",
+            "retailValueCustomers", "retailNplRate", "retailTrend", "retailSegments", "retailRanking",
+            "retailAttention", "retailTargets", "branches");
+    private static final Set<String> SLOTS = union(BRANCH_SLOTS, RETAIL_SLOTS);
     private static final Set<String> UNITS = Set.of(
             "YUAN", "TEN_THOUSAND", "HUNDRED_MILLION", "COUNT", "TEN_THOUSAND_COUNT",
             "PERCENT", "RATIO");
@@ -54,22 +60,28 @@ public final class CodeScreenPresentationValidator {
 
     /** 判断样式节点是否声明 CODE；调用方已完成 JSON 解析时使用。 */
     public static boolean isCodePresentation(JsonNode canvasStyle) {
+        return presentationTemplate(canvasStyle) != null;
+    }
+
+    /** 返回 CODE 画布模板；历史样式无 presentation 时返回 null，未知声明按非法配置拒绝。 */
+    public static String presentationTemplate(JsonNode canvasStyle) {
         JsonNode presentation = canvasStyle == null ? null : canvasStyle.path("presentation");
         if (presentation == null || presentation.isMissingNode() || presentation.isNull()) {
-            return false;
+            return null;
         }
         validatePresentation(presentation);
-        return true;
+        return presentation.path("template").asText();
     }
 
     /** 保存阶段校验样式与草稿组件形状；不要求新 ChartWidget 已经获得 blockId。 */
     public static void validateDraft(String canvasStyleJson, String draftJson) {
         JsonNode style = readObject(canvasStyleJson, RptErrorCode.SCREEN_LAYOUT_INVALID);
-        if (!isCodePresentation(style)) {
+        String template = presentationTemplate(style);
+        if (template == null) {
             return;
         }
         JsonNode draft = readObject(draftJson, RptErrorCode.SCREEN_LAYOUT_INVALID);
-        validateComponents(draft.path("components"), false, Set.of());
+        validateComponents(draft.path("components"), false, Set.of(), template);
     }
 
     /**
@@ -79,7 +91,8 @@ public final class CodeScreenPresentationValidator {
     public static void validateDraft(String canvasStyleJson, String draftJson,
                                      Collection<RptScreenBlock> rows) {
         JsonNode style = readObject(canvasStyleJson, RptErrorCode.SCREEN_LAYOUT_INVALID);
-        if (!isCodePresentation(style)) {
+        String template = presentationTemplate(style);
+        if (template == null) {
             return;
         }
         JsonNode draft = readObject(draftJson, RptErrorCode.SCREEN_LAYOUT_INVALID);
@@ -92,13 +105,13 @@ public final class CodeScreenPresentationValidator {
                 }
             }
         }
-        Set<Long> blockIds = validateComponents(draft.path("components"), true, byId.keySet());
+        Set<Long> blockIds = validateComponents(draft.path("components"), true, byId.keySet(), template);
         for (Long blockId : blockIds) {
             RptScreenBlock row = byId.get(blockId);
             if (row == null) {
                 throw invalid();
             }
-            validateBindJson(row.getBindJson(), bindingKeyFor(draft.path("components"), blockId));
+            validateBindJson(row.getBindJson(), bindingKeyFor(draft.path("components"), blockId), template);
         }
     }
 
@@ -114,11 +127,12 @@ public final class CodeScreenPresentationValidator {
             throw untrusted();
         }
         JsonNode style = root.path("canvasStyle");
-        if (!isCodePresentation(style)) {
+        String template = presentationTemplate(style);
+        if (template == null) {
             return;
         }
         JsonNode components = root.path("components");
-        Set<Long> blockIds = validateComponents(components, true, Set.of());
+        Set<Long> blockIds = validateComponents(components, true, Set.of(), template);
         JsonNode snapshots = root.path("bindSnapshots");
         if (!snapshots.isObject()) {
             throw untrusted();
@@ -137,7 +151,7 @@ public final class CodeScreenPresentationValidator {
             }
             JsonNode bind = snapshot.path("bind");
             String bindingKey = bindingKeyFor(components, blockId);
-            validateBind(bind, bindingKey);
+            validateBind(bind, bindingKey, template);
         }
         if (!snapshotIds.equals(blockIds)) {
             throw untrusted();
@@ -153,7 +167,13 @@ public final class CodeScreenPresentationValidator {
      * 校验一个已解析绑定；用于 publish 从 RPT_SCREEN_BLOCK 读取的真实 bindJson。
      */
     public static void validateBind(JsonNode bind, String bindingKey) {
-        if (!SLOTS.contains(bindingKey)) {
+        validateBind(bind, bindingKey, templateForBindingKey(bindingKey));
+    }
+
+    /** 按指定 CODE 模板校验绑定，防止 branch/retail 槽位互相混用。 */
+    public static void validateBind(JsonNode bind, String bindingKey, String template) {
+        Set<String> templateSlots = slotsForTemplate(template);
+        if (!templateSlots.contains(bindingKey)) {
             throw invalid();
         }
         if (bind == null || !bind.isObject() || !isPositiveIntegral(bind.path("dsId"))) {
@@ -172,7 +192,8 @@ public final class CodeScreenPresentationValidator {
         if (!fields.isObject() || !units.isObject()) {
             throw invalid();
         }
-        Set<String> allowed = FIELD_KEYS.get(bindingKey);
+        Set<String> allowed = fieldKeys(template, bindingKey);
+        Set<String> required = requiredFields(template, bindingKey);
         Set<String> present = new HashSet<>();
         Iterator<Map.Entry<String, JsonNode>> fieldEntries = fields.fields();
         while (fieldEntries.hasNext()) {
@@ -185,12 +206,16 @@ public final class CodeScreenPresentationValidator {
         }
         if ("composition".equals(bindingKey)) {
             validateCompositionShape(present);
-        } else if (!present.containsAll(REQUIRED_FIELDS.get(bindingKey))) {
+        } else if (!present.containsAll(required)) {
             throw invalid();
         }
         if ("trend".equals(bindingKey)
                 && !present.contains("deposit") && !present.contains("loan")
                 && !present.contains("depositIncrease")) {
+            throw invalid();
+        }
+        if ("retailTrend".equals(bindingKey)
+                && !present.contains("aum") && !present.contains("deposit")) {
             throw invalid();
         }
         if ("branchTrend".equals(bindingKey)
@@ -243,7 +268,14 @@ public final class CodeScreenPresentationValidator {
      */
     public static void validateBindAgainstDatasource(JsonNode bind, String bindingKey,
                                                       RptScreenDatasource datasource) {
-        validateBind(bind, bindingKey);
+        validateBindAgainstDatasource(bind, bindingKey, datasource, templateForBindingKey(bindingKey));
+    }
+
+    /** 按指定 CODE 模板校验绑定字段与数据源输出 schema 一致。 */
+    public static void validateBindAgainstDatasource(JsonNode bind, String bindingKey,
+                                                      RptScreenDatasource datasource,
+                                                      String template) {
+        validateBind(bind, bindingKey, template);
         if (datasource == null || datasource.getId() == null
                 || !isPositiveIntegral(bind.path("dsId"))
                 || bind.path("dsId").longValue() != datasource.getId()) {
@@ -272,12 +304,18 @@ public final class CodeScreenPresentationValidator {
                 throw invalid();
             }
         }
+        if ("retailRanking".equals(bindingKey) && isOrgSubjectAggregation(datasource)
+                && !"org_code".equals(fields.path("orgCode").asText())) {
+            // NAMED_GROUP runtime uses the engine's subject aggregate. org_name is only a
+            // display dimension and cannot be accepted as the catalog identity.
+            throw invalid();
+        }
     }
 
-    private static void validateBindJson(String bindJson, String bindingKey) {
+    private static void validateBindJson(String bindJson, String bindingKey, String template) {
         JsonNode bind = readObject(bindJson, RptErrorCode.SCREEN_LAYOUT_INVALID);
         try {
-            validateBind(bind, bindingKey);
+            validateBind(bind, bindingKey, template);
         } catch (RptException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -286,7 +324,7 @@ public final class CodeScreenPresentationValidator {
     }
 
     private static Set<Long> validateComponents(JsonNode components, boolean requireBlockId,
-                                                Collection<Long> knownBlockIds) {
+                                                Collection<Long> knownBlockIds, String template) {
         if (components == null || !components.isArray() || components.isEmpty()) {
             throw invalid();
         }
@@ -311,7 +349,7 @@ public final class CodeScreenPresentationValidator {
                 throw invalid();
             }
             String bindingKey = textRequired(propValue.path("bindingKey"));
-            if (!SLOTS.contains(bindingKey) || !bindingKeys.add(bindingKey)) {
+            if (!slotsForTemplate(template).contains(bindingKey) || !bindingKeys.add(bindingKey)) {
                 throw invalid();
             }
             JsonNode blockId = component.path("blockId");
@@ -332,7 +370,7 @@ public final class CodeScreenPresentationValidator {
             if (!bindJson.isTextual()) {
                 throw invalid();
             }
-            validateBindJson(bindJson.asText(), bindingKey);
+            validateBindJson(bindJson.asText(), bindingKey, template);
         }
         return blockIds;
     }
@@ -352,9 +390,30 @@ public final class CodeScreenPresentationValidator {
     private static void validatePresentation(JsonNode presentation) {
         if (presentation == null || !presentation.isObject()
                 || !CODE_TYPE.equals(presentation.path("type").asText())
-                || !BRANCH_OVERVIEW_TEMPLATE.equals(presentation.path("template").asText())) {
+                || (!BRANCH_OVERVIEW_TEMPLATE.equals(presentation.path("template").asText())
+                && !RETAIL_OVERVIEW_TEMPLATE.equals(presentation.path("template").asText()))) {
             throw invalid();
         }
+    }
+
+    private static Set<String> slotsForTemplate(String template) {
+        if (BRANCH_OVERVIEW_TEMPLATE.equals(template)) {
+            return BRANCH_SLOTS;
+        }
+        if (RETAIL_OVERVIEW_TEMPLATE.equals(template)) {
+            return RETAIL_SLOTS;
+        }
+        throw invalid();
+    }
+
+    private static String templateForBindingKey(String bindingKey) {
+        if (BRANCH_SLOTS.contains(bindingKey)) {
+            return BRANCH_OVERVIEW_TEMPLATE;
+        }
+        if (RETAIL_SLOTS.contains(bindingKey)) {
+            return RETAIL_OVERVIEW_TEMPLATE;
+        }
+        throw invalid();
     }
 
     private static JsonNode readObject(String json, RptErrorCode code) {
@@ -435,6 +494,23 @@ public final class CodeScreenPresentationValidator {
         return "ORG_INDEX_RESULT".equalsIgnoreCase(config.path("table").asText());
     }
 
+    private static boolean isOrgSubjectAggregation(RptScreenDatasource datasource) {
+        if (datasource == null || !"WIDE_TABLE".equalsIgnoreCase(datasource.getSourceKind())) {
+            return false;
+        }
+        JsonNode config = readConfigForSchema(datasource.getConfigJson());
+        return "ORG_INDEX_RESULT".equals(config.path("table").asText())
+                && "org_code".equals(config.path("subjectCol").asText())
+                && config.path("aggregation").isObject()
+                && "SUBJECT".equals(config.path("aggregation").path("groupBy").asText());
+    }
+
+    private static Set<String> union(Set<String> first, Set<String> second) {
+        Set<String> result = new LinkedHashSet<>(first);
+        result.addAll(second);
+        return Set.copyOf(result);
+    }
+
     private static long parsePositiveLong(String key) {
         if (key == null || key.isBlank() || !key.chars().allMatch(Character::isDigit)) {
             throw untrusted();
@@ -480,6 +556,19 @@ public final class CodeScreenPresentationValidator {
                 "parentOrgCode",
                 "lng", "lat", "coordSys", "located", "deposit", "loan", "customers", "target", "rate"));
         result.put("citySummary", Set.of("cityCode", "orgCode", "cityName", "deposit", "loan", "customers", "revenue", "rate"));
+        result.put("retailAum", Set.of("value", "change", "date"));
+        result.put("retailDeposit", Set.of("value", "change", "date"));
+        result.put("retailDepositAverage", Set.of("value", "change", "date"));
+        result.put("retailRevenue", Set.of("value", "change", "date"));
+        result.put("retailLoan", Set.of("value", "change", "date"));
+        result.put("retailValueCustomers", Set.of("value", "change", "date"));
+        result.put("retailNplRate", Set.of("value", "change", "date"));
+        result.put("retailTrend", Set.of("date", "aum", "deposit", "depositAverage", "revenue",
+                "loan", "valueCustomers", "nplRate"));
+        result.put("retailSegments", Set.of("name", "customers", "aum"));
+        result.put("retailRanking", Set.of("orgCode", "name", "aum", "increase", "rate", "nplRate"));
+        result.put("retailAttention", Set.of("label", "count", "owner", "deadline"));
+        result.put("retailTargets", Set.of("name", "actual", "target"));
         return Map.copyOf(result);
     }
 
@@ -501,7 +590,37 @@ public final class CodeScreenPresentationValidator {
         // cityCode is preferred, but an ORG_INDEX_RESULT SUBJECT binding may provide the
         // authorized orgCode and let the runtime resolve city identity from profiles.
         result.put("citySummary", Set.of());
+        result.put("retailAum", Set.of("value"));
+        result.put("retailDeposit", Set.of("value"));
+        result.put("retailDepositAverage", Set.of("value"));
+        result.put("retailRevenue", Set.of("value"));
+        result.put("retailLoan", Set.of("value"));
+        result.put("retailValueCustomers", Set.of("value"));
+        result.put("retailNplRate", Set.of("value"));
+        result.put("retailTrend", Set.of("date"));
+        result.put("retailSegments", Set.of("name", "customers", "aum"));
+        result.put("retailRanking", Set.of("orgCode", "name", "aum"));
+        result.put("retailAttention", Set.of("label", "count"));
+        result.put("retailTargets", Set.of("name", "actual", "target"));
         return Map.copyOf(result);
+    }
+
+    private static Set<String> fieldKeys(String template, String bindingKey) {
+        slotsForTemplate(template);
+        Set<String> fields = FIELD_KEYS.get(bindingKey);
+        if (fields == null) {
+            throw invalid();
+        }
+        return fields;
+    }
+
+    private static Set<String> requiredFields(String template, String bindingKey) {
+        slotsForTemplate(template);
+        Set<String> fields = REQUIRED_FIELDS.get(bindingKey);
+        if (fields == null) {
+            throw invalid();
+        }
+        return fields;
     }
 
     /**
@@ -704,6 +823,41 @@ public final class CodeScreenPresentationValidator {
                 case "deposit", "loan", "revenue" -> amount;
                 case "customers" -> count;
                 case "rate" -> ratio;
+                default -> Set.of();
+            };
+            case "retailAum", "retailDeposit", "retailDepositAverage", "retailRevenue", "retailLoan" -> switch (field) {
+                case "value" -> amount;
+                case "change" -> ratio;
+                default -> Set.of();
+            };
+            case "retailValueCustomers" -> switch (field) {
+                case "value" -> count;
+                case "change" -> ratio;
+                default -> Set.of();
+            };
+            case "retailNplRate" -> switch (field) {
+                case "value", "change" -> ratio;
+                default -> Set.of();
+            };
+            case "retailTrend" -> switch (field) {
+                case "aum", "deposit", "depositAverage", "revenue", "loan" -> amount;
+                case "valueCustomers" -> count;
+                case "nplRate" -> ratio;
+                default -> Set.of();
+            };
+            case "retailSegments" -> switch (field) {
+                case "customers" -> count;
+                case "aum" -> amount;
+                default -> Set.of();
+            };
+            case "retailRanking" -> switch (field) {
+                case "aum", "increase" -> amount;
+                case "rate", "nplRate" -> ratio;
+                default -> Set.of();
+            };
+            case "retailAttention" -> "count".equals(field) ? Set.of("COUNT") : Set.of();
+            case "retailTargets" -> switch (field) {
+                case "actual", "target" -> amount;
                 default -> Set.of();
             };
             default -> Set.of();

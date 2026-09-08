@@ -364,6 +364,9 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
             if (ds == null || !"ACTIVE".equals(normalizedDatasourceStatus(ds.getStatus()))) {
                 throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
             }
+            String runtimeTemplate = runtimeCodeTemplate(screen, req);
+            validateRetailTemplateScreenLine(screen, runtimeTemplate);
+            validateRetailTemplateDatasourceLine(runtimeTemplate, ds);
             if ("NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())) {
                 if (scopeAuthorizationService == null) {
                     // 命名组运行时没有 auth 适配器时必须拒绝，不能退回旧 DATA_SCOPE 全局口径。
@@ -1060,6 +1063,65 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         };
     }
 
+    /** RETAIL CODE 模板只能挂在 RETAIL 屏上；历史坐标画布不触发该专属约束。 */
+    private void validateRetailTemplateScreenLine(RptScreen screen) {
+        validateRetailTemplateScreenLine(screen, codeTemplate(screen));
+    }
+
+    private void validateRetailTemplateScreenLine(RptScreen screen, String template) {
+        if (CodeScreenPresentationValidator.RETAIL_OVERVIEW_TEMPLATE.equals(template)
+                && !"RETAIL".equals(normalizeBizLine(screen.getBizLine()))) {
+            throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
+        }
+    }
+
+    /** 已被 RETAIL CODE 屏引用的数据源必须保持 RETAIL，COMMON 全行源不能伪装零售口径。 */
+    private void validateRetailTemplateDatasourceLine(RptScreen screen, RptScreenDatasource datasource) {
+        validateRetailTemplateDatasourceLine(codeTemplate(screen), datasource);
+    }
+
+    private void validateRetailTemplateDatasourceLine(String template, RptScreenDatasource datasource) {
+        if (CodeScreenPresentationValidator.RETAIL_OVERVIEW_TEMPLATE.equals(template)
+                && (datasource == null || !"RETAIL".equals(normalizeBizLine(datasource.getBizLine())))) {
+            throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
+        }
+    }
+
+    /** 正式取数只认当前不可变发布包模板；草稿预览才读取当前可变画布样式。 */
+    private String runtimeCodeTemplate(RptScreen screen, ScreenDataReqDTO req) {
+        if (req != null && "draft".equals(req.getPreviewState())) {
+            return codeTemplate(screen);
+        }
+        return publishedCodeTemplate(screen);
+    }
+
+    private String publishedCodeTemplate(RptScreen screen) {
+        return publishedCodeTemplate(screen == null ? null : screen.getCanvasPublishedJson());
+    }
+
+    private String publishedCodeTemplate(String publishedJson) {
+        try {
+            JsonNode root = PublishedScreenPackageValidator.read(publishedJson);
+            return CodeScreenPresentationValidator.presentationTemplate(root.path("canvasStyle"));
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
+        }
+    }
+
+    private String codeTemplate(RptScreen screen) {
+        try {
+            JsonNode style = objectMapper.readTree(screen == null || screen.getCanvasStyleJson() == null
+                    || screen.getCanvasStyleJson().isBlank() ? "{}" : screen.getCanvasStyleJson());
+            return CodeScreenPresentationValidator.presentationTemplate(style);
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, ex);
+        }
+    }
+
     private void validateReferencedScreenLines(Long dsId, RptScreenDatasource candidate) {
         if (screenMapper == null || blockMapper == null) {
             return;
@@ -1078,9 +1140,70 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
             if (!isBizLineCompatible(screen.getBizLine(), candidate.getBizLine())) {
                 throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
             }
+            if (referencedByDraft) {
+                String draftTemplate = codeTemplate(screen);
+                validateRetailTemplateScreenLine(screen, draftTemplate);
+                validateRetailTemplateDatasourceLine(draftTemplate, candidate);
+            }
+            if (referencedByPublished) {
+                for (String publishedTemplate : publishedCodeTemplates(screen, dsId)) {
+                    validateRetailTemplateScreenLine(screen, publishedTemplate);
+                    validateRetailTemplateDatasourceLine(publishedTemplate, candidate);
+                }
+            }
             if ("NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())) {
                 ensureNamedGroupDatasourceSafe(candidate);
             }
+        }
+    }
+
+    /** 当前发布包与所有归档包都属于引用编辑的安全边界，不能只看可变 canvasStyleJson。 */
+    private Set<String> publishedCodeTemplates(RptScreen screen, Long dsId) {
+        Set<String> templates = new LinkedHashSet<>();
+        String current = publishedCodeTemplateForDatasource(
+                screen == null ? null : screen.getCanvasPublishedJson(), dsId);
+        if (current != null) {
+            templates.add(current);
+        }
+        if (publishLogMapper == null || screen == null || screen.getId() == null) {
+            return templates;
+        }
+        try {
+            List<RptScreenPublishLog> archives = publishLogMapper.selectList(
+                    new LambdaQueryWrapper<RptScreenPublishLog>()
+                            .eq(RptScreenPublishLog::getScreenId, screen.getId()));
+            if (archives != null) {
+                for (RptScreenPublishLog archive : archives) {
+                    String template = publishedCodeTemplateForDatasource(archive.getSnapshotJson(), dsId);
+                    if (template != null) {
+                        templates.add(template);
+                    }
+                }
+            }
+            return templates;
+        } catch (RuntimeException ex) {
+            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
+        }
+    }
+
+    private String publishedCodeTemplateForDatasource(String publishedJson, Long dsId) {
+        try {
+            JsonNode root = PublishedScreenPackageValidator.read(publishedJson);
+            String template = CodeScreenPresentationValidator.presentationTemplate(root.path("canvasStyle"));
+            // Legacy coordinate packages have no CODE declaration and keep the existing
+            // conservative reference matrix; they cannot contribute a retail template rule.
+            if (template == null) {
+                return null;
+            }
+            Map<Long, JsonNode> snapshots = PublishedScreenPackageValidator.requireTrustedBindings(root);
+            boolean referencesDatasource = snapshots.values().stream()
+                    .map(snapshot -> snapshot.path("bind").path("dsId"))
+                    .anyMatch(value -> value.isIntegralNumber() && dsId != null && dsId.equals(value.longValue()));
+            return referencesDatasource ? template : null;
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
         }
     }
 

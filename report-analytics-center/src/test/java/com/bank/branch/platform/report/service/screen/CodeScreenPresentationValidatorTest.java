@@ -17,6 +17,7 @@ class CodeScreenPresentationValidatorTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final String style = "{\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"}}";
+    private final String retailStyle = "{\"presentation\":{\"type\":\"CODE\",\"template\":\"retail-overview-v1\"}}";
 
     private String draft(String component, String id, String bindingKey, String bindJson) {
         return "{\"components\":[{\"component\":\"" + component + "\",\"id\":\""
@@ -65,12 +66,114 @@ class CodeScreenPresentationValidatorTest {
         return datasource;
     }
 
+    private RptScreenDatasource retailRankingDatasource() {
+        RptScreenDatasource datasource = new RptScreenDatasource();
+        datasource.setId(12L);
+        datasource.setBizLine("RETAIL");
+        datasource.setSourceKind("WIDE_TABLE");
+        datasource.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","
+                + "\"aggregation\":{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\"},"
+                + "\"metrics\":[{\"metricCode\":\"AUM\",\"metricName\":\"aum\",\"slot\":1},"
+                + "{\"metricCode\":\"INC\",\"metricName\":\"increase\",\"slot\":2},"
+                + "{\"metricCode\":\"RATE\",\"metricName\":\"rate\",\"slot\":3},"
+                + "{\"metricCode\":\"NPL\",\"metricName\":\"nplRate\",\"slot\":4}]}" );
+        return datasource;
+    }
+
     @Test
     void acceptsBranchOverviewWithRequiredDepositBinding() {
         org.assertj.core.api.Assertions.assertThat(CodeScreenPresentationValidator.isCodePresentation(style)).isTrue();
         String bind = validBind("{\"value\":\"存款余额\"}", "{\"value\":\"HUNDRED_MILLION\"}");
         CodeScreenPresentationValidator.validateDraft(style,
                 draft("ChartWidget", "w-deposit", "deposit", bind), List.of(block(bind)));
+    }
+
+    @Test
+    void acceptsRetailOverviewWithRetailSlotsAndSharedBranches() throws Exception {
+        org.assertj.core.api.Assertions.assertThat(CodeScreenPresentationValidator.isCodePresentation(retailStyle)).isTrue();
+
+        String aum = validBind("{\"value\":\"零售AUM\",\"change\":\"AUM增幅\",\"date\":\"日期\"}",
+                "{\"value\":\"YUAN\",\"change\":\"PERCENT\"}");
+        String trend = "{\"dsId\":12,\"period\":\"LAST_6M_EOM\","
+                + "\"fields\":{\"date\":\"日期\",\"aum\":\"零售AUM\",\"deposit\":\"零售存款\"},"
+                + "\"units\":{\"aum\":\"TEN_THOUSAND\",\"deposit\":\"YUAN\"}}";
+        String segments = validBind("{\"name\":\"客群\",\"customers\":\"客户数\",\"aum\":\"AUM\"}",
+                "{\"customers\":\"COUNT\",\"aum\":\"HUNDRED_MILLION\"}");
+        String ranking = validBind("{\"orgCode\":\"org_code\",\"name\":\"org_name\",\"aum\":\"aum\","
+                        + "\"increase\":\"increase\",\"rate\":\"rate\",\"nplRate\":\"nplRate\"}",
+                "{\"aum\":\"YUAN\",\"increase\":\"TEN_THOUSAND\",\"rate\":\"RATIO\",\"nplRate\":\"PERCENT\"}");
+        String branches = validBind("{\"orgCode\":\"org_code\",\"deposit\":\"零售存款\"}",
+                "{\"deposit\":\"YUAN\"}");
+
+        CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-aum", "retailAum", aum));
+        CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-trend", "retailTrend", trend));
+        CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-segments", "retailSegments", segments));
+        CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-ranking", "retailRanking", ranking));
+        CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-branches", "branches", branches));
+        CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(ranking), "retailRanking", retailRankingDatasource());
+    }
+
+    @Test
+    void branchAndRetailTemplatesCannotMixTheirSlotSets() {
+        String branchBind = validBind("{\"value\":\"余额\"}", "{\"value\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-branch-slot", "deposit", branchBind)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String retailBind = validBind("{\"value\":\"零售AUM\"}", "{\"value\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-retail-slot", "retailAum", retailBind)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
+    void retailSlotsEnforceRequiredShapeAndSemanticUnits() {
+        String customers = validBind("{\"value\":\"高价值客户\"}", "{\"value\":\"TEN_THOUSAND_COUNT\"}");
+        CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-customers", "retailValueCustomers", customers));
+
+        String npl = validBind("{\"value\":\"不良率\",\"change\":\"变化\",\"date\":\"日期\"}",
+                "{\"value\":\"RATIO\",\"change\":\"PERCENT\"}");
+        CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-npl", "retailNplRate", npl));
+
+        String trendWithoutRequiredMetric = validBind("{\"date\":\"日期\",\"revenue\":\"收入\"}",
+                "{\"revenue\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-trend-invalid", "retailTrend", trendWithoutRequiredMetric)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String incompleteSegments = validBind("{\"name\":\"客群\",\"customers\":\"客户数\"}",
+                "{\"customers\":\"COUNT\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-segments-invalid", "retailSegments", incompleteSegments)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String attentionWithTenThousandCount = validBind("{\"label\":\"事项\",\"count\":\"数量\"}",
+                "{\"count\":\"TEN_THOUSAND_COUNT\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-attention-invalid", "retailAttention", attentionWithTenThousandCount)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
+    void retailRankingNamedGroupMustUseOrgSubjectIdentity() throws Exception {
+        String valid = validBind("{\"orgCode\":\"org_code\",\"name\":\"org_name\",\"aum\":\"aum\"}",
+                "{\"aum\":\"YUAN\"}");
+        CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(valid), "retailRanking", retailRankingDatasource());
+
+        String forged = validBind("{\"orgCode\":\"org_name\",\"name\":\"org_name\",\"aum\":\"aum\"}",
+                "{\"aum\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(forged), "retailRanking", retailRankingDatasource()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
     }
 
     @Test

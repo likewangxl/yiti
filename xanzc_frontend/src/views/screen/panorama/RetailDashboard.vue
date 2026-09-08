@@ -152,7 +152,7 @@
             <span class="retail-map-legend"><i class="is-cyan"></i>行政区</span>
             <span class="retail-map-legend"><i class="is-violet"></i>城市选择</span>
             <button v-if="selectedCityCode" type="button" class="retail-clear-city" data-action="clear-city" @click="clearCity">显示全部机构</button>
-            <span v-else class="retail-map-hint">点击城市筛选机构排名与目录</span>
+            <span v-else class="retail-map-hint">点击城市筛选机构排名</span>
           </div>
           <PanoramaMap
             class="retail-map"

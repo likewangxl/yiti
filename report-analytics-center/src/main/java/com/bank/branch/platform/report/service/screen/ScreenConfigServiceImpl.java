@@ -398,8 +398,10 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         try {
             JsonNode root = objectMapper.readTree(packageJson == null || packageJson.isBlank()
                     ? "{}" : packageJson);
-            boolean code = CodeScreenPresentationValidator.isCodePresentation(root.path("canvasStyle"));
+            String template = CodeScreenPresentationValidator.presentationTemplate(root.path("canvasStyle"));
+            boolean code = template != null;
             if (code) {
+                validateRetailTemplateScreenLine(screen, template);
                 // CODE runtime must pass the existing immutable identity validator as well as
                 // the slot/units validator. The latter alone would allow a snapshot map whose
                 // keys do not match ChartWidget blockIds.
@@ -411,7 +413,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                     throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
                 }
                 CodeScreenPresentationValidator.validatePublishedPackage(strictRoot);
-                validateCodeDatasourceBindings(screen, strictRoot);
+                validateCodeDatasourceBindings(screen, strictRoot, template);
             }
             return code;
         } catch (RptException e) {
@@ -422,7 +424,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     }
 
     /** CODE 运行/草稿预览按发布包快照的真实 dsId 校验字段存在性和 DIM/METRIC 角色。 */
-    private void validateCodeDatasourceBindings(RptScreen screen, JsonNode root) {
+    private void validateCodeDatasourceBindings(RptScreen screen, JsonNode root, String template) {
         JsonNode components = root.path("components");
         JsonNode snapshots = root.path("bindSnapshots");
         if (!components.isArray() || !snapshots.isObject()) {
@@ -444,9 +446,11 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                 throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
             }
             try {
-                CodeScreenPresentationValidator.validateBindAgainstDatasource(bind, bindingKey, datasource);
+                CodeScreenPresentationValidator.validateBindAgainstDatasource(bind, bindingKey, datasource, template);
+                validateRetailTemplateDatasourceLine(template, datasource);
                 if ("NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())
-                        && ("branches".equals(bindingKey) || "citySummary".equals(bindingKey))) {
+                        && ("branches".equals(bindingKey) || "citySummary".equals(bindingKey)
+                        || "retailRanking".equals(bindingKey))) {
                     try {
                         // The immutable package must satisfy the same server-side identity rule as
                         // save/publish/metadata transitions. A stale package must never reach the
@@ -677,6 +681,10 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
      * 此入口绝不重建、更新或删除 block。
      */
     private void validateExistingBlockBindings(RptScreen screen) {
+        String draftTemplate = codeTemplate(screen.getCanvasStyleJson());
+        String publishedTemplate = publishedCodeTemplate(screen.getCanvasPublishedJson());
+        validateRetailTemplateScreenLine(screen, draftTemplate);
+        validateRetailTemplateScreenLine(screen, publishedTemplate);
         List<BlockBinding> bindings = new ArrayList<>();
         List<ScreenBlockDTO> draftBlocks = listBlocks(screen.getId());
         for (ScreenBlockDTO block : draftBlocks) {
@@ -684,7 +692,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             if (datasourceId == null) {
                 throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
             }
-            bindings.add(new BlockBinding(datasourceId, block.getComponentType(), block.getDrillJson()));
+            bindings.add(new BlockBinding(datasourceId, block.getComponentType(), block.getDrillJson(), draftTemplate));
         }
         bindings.addAll(readPublishedBindings(screen, screen.getCanvasPublishedJson()));
         if (bindings.isEmpty()) {
@@ -702,6 +710,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                     normalizeBizLine(datasource.getBizLine()))) {
                 throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
             }
+            validateRetailTemplateDatasourceLine(binding.template(), datasource);
             if ("NAMED_GROUP".equals(normalizeScopeMode(screen.getOrgScopeMode()))
                     && !isNamedGroupSafeDatasource(datasource)) {
                 throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
@@ -723,36 +732,42 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         // components and immutable published components before the metadata CAS, so a scope
         // change cannot create a path that save/publish would have rejected.
         if ("NAMED_GROUP".equals(normalizeScopeMode(screen.getOrgScopeMode()))
-                && CodeScreenPresentationValidator.isCodePresentation(screen.getCanvasStyleJson())) {
-            validateCodeNamedGroupMetadataBindings(screen, draftBlocks, datasourceById);
+                && (draftTemplate != null || publishedTemplate != null)) {
+            validateCodeNamedGroupMetadataBindings(screen, draftBlocks, datasourceById,
+                    draftTemplate, publishedTemplate);
         }
     }
 
     private void validateCodeNamedGroupMetadataBindings(RptScreen screen,
                                                         List<ScreenBlockDTO> draftBlocks,
-                                                        Map<Long, RptScreenDatasource> datasourceById) {
+                                                        Map<Long, RptScreenDatasource> datasourceById,
+                                                        String draftTemplate,
+                                                        String publishedTemplate) {
         Map<Long, ScreenBlockDTO> blocksById = draftBlocks.stream()
                 .filter(block -> block.getId() != null)
                 .collect(Collectors.toMap(ScreenBlockDTO::getId, Function.identity(), (left, right) -> left));
-        Map<Long, String> draftBindingKeys = new HashMap<>();
-        collectCodeBindingKeys(readJsonNode(screen.getCanvasDraftJson()).path("components"), draftBindingKeys);
-        for (Map.Entry<Long, String> entry : draftBindingKeys.entrySet()) {
-            if (!"branches".equals(entry.getValue()) && !"citySummary".equals(entry.getValue())) {
-                continue;
+        if (draftTemplate != null) {
+            Map<Long, String> draftBindingKeys = new HashMap<>();
+            collectCodeBindingKeys(readJsonNode(screen.getCanvasDraftJson()).path("components"), draftBindingKeys);
+            for (Map.Entry<Long, String> entry : draftBindingKeys.entrySet()) {
+                if (!isNamedGroupCodeBinding(entry.getValue())) {
+                    continue;
+                }
+                ScreenBlockDTO block = blocksById.get(entry.getKey());
+                if (block == null) {
+                    throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+                }
+                Long dsId = readDsId(block.getBindJson());
+                RptScreenDatasource datasource = datasourceById.get(dsId);
+                if (datasource == null) {
+                    throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
+                }
+                validateCodeNamedGroupBinding(entry.getValue(), block.getBindJson(), datasource);
             }
-            ScreenBlockDTO block = blocksById.get(entry.getKey());
-            if (block == null) {
-                throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
-            }
-            Long dsId = readDsId(block.getBindJson());
-            RptScreenDatasource datasource = datasourceById.get(dsId);
-            if (datasource == null) {
-                throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
-            }
-            validateCodeNamedGroupBinding(entry.getValue(), block.getBindJson(), datasource);
         }
 
-        if (screen.getCanvasPublishedJson() == null || screen.getCanvasPublishedJson().isBlank()) {
+        if (publishedTemplate == null || screen.getCanvasPublishedJson() == null
+                || screen.getCanvasPublishedJson().isBlank()) {
             return;
         }
         try {
@@ -761,7 +776,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             Map<Long, String> publishedBindingKeys = new HashMap<>();
             collectCodeBindingKeys(published.path("components"), publishedBindingKeys);
             for (Map.Entry<Long, String> entry : publishedBindingKeys.entrySet()) {
-                if (!"branches".equals(entry.getValue()) && !"citySummary".equals(entry.getValue())) {
+                if (!isNamedGroupCodeBinding(entry.getValue())) {
                     continue;
                 }
                 JsonNode snapshot = snapshots.get(entry.getKey());
@@ -814,7 +829,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
 
     private void validateCodeNamedGroupBinding(String bindingKey, String bindJson,
                                                RptScreenDatasource datasource) {
-        if (!"branches".equals(bindingKey) && !"citySummary".equals(bindingKey)) {
+        if (!isNamedGroupCodeBinding(bindingKey)) {
             return;
         }
         try {
@@ -827,6 +842,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                     && config.path("aggregation").isObject()
                     && "SUBJECT".equals(config.path("aggregation").path("groupBy").asText());
             boolean requiresNamedSubject = "branches".equals(bindingKey)
+                    || "retailRanking".equals(bindingKey)
                     || ("citySummary".equals(bindingKey) && bind.path("fields").has("orgCode"));
             if (requiresNamedSubject && (!namedSubject
                     || !"org_code".equals(bind.path("fields").path("orgCode").asText()))) {
@@ -839,6 +855,11 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         }
     }
 
+    private boolean isNamedGroupCodeBinding(String bindingKey) {
+        return "branches".equals(bindingKey) || "citySummary".equals(bindingKey)
+                || "retailRanking".equals(bindingKey);
+    }
+
     /**
      * 元数据 CAS 只核当前发布包的不可变绑定。缺少/损坏 bindSnapshots 的旧包必须先经受控
      * 迁移或业务核对后重新发布，绝不从当前可变 RPT_SCREEN_BLOCK 回填历史身份。
@@ -849,6 +870,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         }
         try {
             JsonNode root = PublishedScreenPackageValidator.read(publishedJson);
+            String template = CodeScreenPresentationValidator.presentationTemplate(root.path("canvasStyle"));
             Map<Long, JsonNode> snapshots = PublishedScreenPackageValidator.requireTrustedBindings(root);
             List<BlockBinding> bindings = new ArrayList<>();
             for (JsonNode snapshot : snapshots.values()) {
@@ -859,7 +881,8 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                 }
                 JsonNode drill = snapshot.path("drill");
                 bindings.add(new BlockBinding(dsId.asLong(), componentType,
-                        drill.isMissingNode() || drill.isNull() ? "{}" : objectMapper.writeValueAsString(drill)));
+                        drill.isMissingNode() || drill.isNull() ? "{}" : objectMapper.writeValueAsString(drill),
+                        template));
             }
             return bindings;
         } catch (RptException e) {
@@ -999,7 +1022,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                                   String orgScopeMode, String orgGroupCode, String themeJson, String status) {
     }
 
-    private record BlockBinding(Long datasourceId, String componentType, String drillJson) {
+    private record BlockBinding(Long datasourceId, String componentType, String drillJson, String template) {
     }
 
     private List<ScreenBlockDTO> listBlocks(Long screenId) {
@@ -1152,6 +1175,47 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
 
     private String normalizeScopeMode(String value) {
         return value == null || value.isBlank() ? "LEGACY_CONTEXT" : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    /** 从屏样式读取 CODE 模板；历史坐标画布没有 presentation，返回 null。 */
+    private String codeTemplate(String canvasStyleJson) {
+        try {
+            JsonNode style = objectMapper.readTree(canvasStyleJson == null || canvasStyleJson.isBlank()
+                    ? "{}" : canvasStyleJson);
+            return CodeScreenPresentationValidator.presentationTemplate(style);
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, ex);
+        }
+    }
+
+    /** 发布/归档引用必须使用不可变包内的模板，不能以当前可变 canvasStyle 代替。 */
+    private String publishedCodeTemplate(String publishedJson) {
+        try {
+            JsonNode root = PublishedScreenPackageValidator.read(publishedJson);
+            return CodeScreenPresentationValidator.presentationTemplate(root.path("canvasStyle"));
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
+        }
+    }
+
+    /** RETAIL CODE 模板必须挂在 RETAIL 屏上，不能以 COMMON 屏伪装零售经营口径。 */
+    private void validateRetailTemplateScreenLine(RptScreen screen, String template) {
+        if (CodeScreenPresentationValidator.RETAIL_OVERVIEW_TEMPLATE.equals(template)
+                && !"RETAIL".equals(normalizeBizLine(screen.getBizLine()))) {
+            throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
+        }
+    }
+
+    /** RETAIL CODE 模板的每个绑定都必须来自 RETAIL 数据源，COMMON 全行源不能贴零售标签。 */
+    private void validateRetailTemplateDatasourceLine(String template, RptScreenDatasource datasource) {
+        if (CodeScreenPresentationValidator.RETAIL_OVERVIEW_TEMPLATE.equals(template)
+                && (datasource == null || !"RETAIL".equals(normalizeBizLine(datasource.getBizLine())))) {
+            throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
+        }
     }
 
     /**
