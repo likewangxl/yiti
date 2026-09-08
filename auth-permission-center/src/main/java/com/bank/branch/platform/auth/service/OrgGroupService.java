@@ -11,6 +11,8 @@ import com.bank.branch.platform.auth.api.dto.OrgGroupScopeDTO;
 import com.bank.branch.platform.auth.api.dto.OrgGroupUpdateReqDTO;
 import com.bank.branch.platform.auth.api.dto.OrgProfileDTO;
 import com.bank.branch.platform.auth.api.dto.OrgProfileUpdateReqDTO;
+import com.bank.branch.platform.auth.location.persistence.PtOrgLocation;
+import com.bank.branch.platform.auth.location.service.OrgLocationService;
 import com.bank.branch.platform.auth.entity.ExtOrgInfo;
 import com.bank.branch.platform.auth.entity.PtOrgGroup;
 import com.bank.branch.platform.auth.entity.PtOrgGroupMember;
@@ -74,6 +76,8 @@ public class OrgGroupService {
     private final RoleMapper roleMapper;
     private final UserRoleMapper userRoleMapper;
     private final OrgGroupAuditService orgGroupAuditService;
+    /** 可选的位置台账补充；位置能力关闭时服务返回空集且旧画像链路保持可用。 */
+    private final OrgLocationService orgLocationService;
 
     /**
      * 查询全部机构并附带本地画像。外部机构名称/状态来自 EXT_ORG_INFO，画像字段来自本地表。
@@ -102,6 +106,7 @@ public class OrgGroupService {
             String normalizedKeyword = keyword == null ? null : keyword.trim().toLowerCase(Locale.ROOT);
             String normalizedCity = city == null ? null : city.trim().toLowerCase(Locale.ROOT);
             List<OrgProfileDTO> result = new ArrayList<>();
+            Map<String, OrgProfileDTO> activeProfiles = new LinkedHashMap<>();
             for (ExtOrgInfo org : orgs) {
                 if (normalizedKeyword != null && !normalizedKeyword.isEmpty()
                         && !containsIgnoreCase(org.getOrgCode(), normalizedKeyword)
@@ -114,12 +119,19 @@ public class OrgGroupService {
                         && !containsIgnoreCase(profile == null ? null : profile.getCityName(), normalizedCity)) {
                     continue;
                 }
-                result.add(toProfileDto(profile, org));
+                OrgProfileDTO dto = toProfileDto(profile, org);
+                result.add(dto);
+                if (Integer.valueOf(0).equals(org.getOrganState())
+                        && ACTIVE.equalsIgnoreCase(dto.getStatus())) {
+                    activeProfiles.put(dto.getOrgCode(), dto);
+                }
             }
+            supplementRuntimeLocations(activeProfiles);
             return result;
         } catch (RuntimeException ex) {
             log.warn("[OrgGroupService.listProfiles] fail close keyword={}, city={}", keyword, city, ex);
-            return List.of();
+            throw new BizException(AuthErrorCode.AUTH_SERVICE_UNAVAILABLE.getCode(),
+                    AuthErrorCode.AUTH_SERVICE_UNAVAILABLE.getMessage(), ex);
         }
     }
 
@@ -584,17 +596,81 @@ public class OrgGroupService {
             if (external.isEmpty()) {
                 return Map.of();
             }
-            return safeList(orgProfileMapper.selectList(new LambdaQueryWrapper<PtOrgProfile>()
+            Map<String, OrgProfileDTO> result = safeList(orgProfileMapper.selectList(new LambdaQueryWrapper<PtOrgProfile>()
                             .in(PtOrgProfile::getOrgCode, external.keySet())
                             .eq(PtOrgProfile::getStatus, ACTIVE)))
                     .stream()
                     .collect(Collectors.toMap(PtOrgProfile::getOrgCode,
                             profile -> toProfileDto(profile, external.get(profile.getOrgCode())),
                             (left, right) -> left, LinkedHashMap::new));
+            supplementRuntimeLocations(result);
+            return result;
         } catch (RuntimeException ex) {
             log.warn("[OrgGroupService.getActiveProfiles] fail close orgCodes={}", orgCodes, ex);
             return Map.of();
         }
+    }
+
+    /**
+     * 仅为当前调用方已经筛出的有效画像补充位置台账坐标；详细地址永不进入跨模块画像 DTO。
+     * 画像自身存在合法 GCJ02 坐标时保持其优先级，位置表只作为 fallback。
+     */
+    private void supplementRuntimeLocations(Map<String, OrgProfileDTO> profiles) {
+        if (orgLocationService == null || profiles == null || profiles.isEmpty()) {
+            return;
+        }
+        Map<String, PtOrgLocation> locations = Map.of();
+        try {
+            Map<String, PtOrgLocation> loaded = orgLocationService.findRuntimeLocations(
+                    profiles.keySet(), profiles);
+            if (loaded != null) {
+                locations = loaded;
+            }
+        } catch (RuntimeException ex) {
+            // 位置补充是可选增强，失败不能吞掉原本已经取得的合法画像。
+            log.warn("[OrgGroupService] runtime location supplement skipped size={}", profiles.size(), ex);
+        }
+        for (Map.Entry<String, OrgProfileDTO> entry : profiles.entrySet()) {
+            OrgProfileDTO profile = entry.getValue();
+            if (profile == null) {
+                continue;
+            }
+            boolean demoCoordinates = isScreenMapDemo(profile);
+            if (demoCoordinates) {
+                // 演示脚本中的坐标不是生产位置；只有已确认位置台账可以覆盖它。
+                profile.setLng(null);
+                profile.setLat(null);
+                profile.setCoordSys(null);
+                profile.setLocationSource(null);
+            } else if (validGcj02Coordinate(profile.getLng(), profile.getLat(), profile.getCoordSys())) {
+                if (profile.getLocationSource() == null) {
+                    profile.setLocationSource(OrgLocationService.SOURCE_PROFILE);
+                }
+                continue;
+            }
+            PtOrgLocation location = locations.get(entry.getKey());
+            if (location != null && validGcj02Coordinate(location.getLng(), location.getLat(),
+                    location.getCoordSys())) {
+                profile.setLng(location.getLng());
+                profile.setLat(location.getLat());
+                profile.setCoordSys(OrgLocationService.COORD_SYS_GCJ02);
+                profile.setLocationSource(location.getLocationSource());
+            }
+        }
+    }
+
+    private static boolean isScreenMapDemo(OrgProfileDTO profile) {
+        return profile.getRemark() != null
+                && profile.getRemark().toUpperCase(Locale.ROOT).contains("SCREEN_MAP_DEMO");
+    }
+
+    private static boolean validGcj02Coordinate(BigDecimal lng, BigDecimal lat, String coordSys) {
+        return lng != null && lat != null
+                && lng.compareTo(BigDecimal.valueOf(-180)) >= 0
+                && lng.compareTo(BigDecimal.valueOf(180)) <= 0
+                && lat.compareTo(BigDecimal.valueOf(-90)) >= 0
+                && lat.compareTo(BigDecimal.valueOf(90)) <= 0
+                && OrgLocationService.COORD_SYS_GCJ02.equalsIgnoreCase(coordSys);
     }
 
     // ----------------------- 校验与转换 -----------------------

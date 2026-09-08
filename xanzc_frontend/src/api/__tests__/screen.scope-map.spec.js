@@ -36,7 +36,7 @@ describe('大屏范围与机构配置 API', () => {
 
   it('机构画像和机构组使用规格约定的独立管理端点，城市不混入 keyword', async () => {
     await listOrgProfiles({ city: '610100' });
-    expect(call).toHaveBeenCalledWith('get', '/admin/org-profiles', { params: { city: '610100' } }, []);
+    expect(call).toHaveBeenCalledWith('get', '/admin/org-profiles', { params: { city: '610100' } });
     await updateOrgProfile('X1', { operatingLevel: 'PRIMARY' });
     expect(call).toHaveBeenCalledWith('put', '/admin/org-profiles/X1', { data: { operatingLevel: 'PRIMARY' } });
     await listOrgGroups({ status: 'ACTIVE' });

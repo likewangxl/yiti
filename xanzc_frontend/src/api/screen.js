@@ -181,7 +181,8 @@ export function listOrgProfiles(params = {}) {
   const query = {};
   if (params.keyword) query.keyword = params.keyword;
   if (params.city) query.city = params.city;
-  return call('get', '/admin/org-profiles', { params: query }, []);
+  // 机构目录是画像、地图与命名机构组的事实来源；读取失败必须交由页面显示错误态。
+  return call('get', '/admin/org-profiles', { params: query });
 }
 export function updateOrgProfile(orgCode, data) {
   return call('put', `/admin/org-profiles/${encodeURIComponent(orgCode)}`, { data });

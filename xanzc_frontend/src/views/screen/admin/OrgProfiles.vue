@@ -23,6 +23,11 @@
         <el-form-item label="城市">
           <el-input v-model="filters.city" clearable placeholder="城市编码或名称" @keyup.enter="reload" />
         </el-form-item>
+        <el-form-item label="缺口筛选">
+          <el-select v-model="filters.gap" clearable placeholder="全部缺口">
+            <el-option v-for="item in GAP_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="reload">查询</el-button>
           <el-button @click="resetFilters">重置</el-button>
@@ -37,10 +42,22 @@
           <p class="hint">外部同步字段保持只读；本地画像仅服务经营范围、地图和命名机构组配置。</p>
         </div>
         <p id="org-profile-table-state" class="table-state" role="status" aria-live="polite">
-          {{ loading ? '机构经营画像列表加载中' : (rows.length ? `共 ${rows.length} 个机构` : '暂无机构画像') }}
+          {{ loadError || (loading ? '机构经营画像列表加载中' : `共 ${readiness.total} 个机构`) }}
         </p>
       </div>
-      <el-table :data="rows" size="default" stripe border empty-text="暂无机构画像" aria-labelledby="org-profile-table-heading" aria-describedby="org-profile-table-state">
+      <div class="readiness-summary" aria-label="当前查询结果的机构画像缺口统计">
+        <div class="readiness-item" data-testid="org-profile-total"><span>查询总数</span><strong>{{ readiness.total }}</strong></div>
+        <div class="readiness-item" data-testid="org-profile-configured"><span>已配置画像</span><strong>{{ readiness.profileConfigured }}</strong></div>
+        <div class="readiness-item" data-testid="org-profile-missing"><span>未配置画像</span><strong>{{ readiness.missingProfile }}</strong></div>
+        <div class="readiness-item" data-testid="org-profile-missing-city"><span>城市缺失</span><strong>{{ readiness.missingCity }}</strong></div>
+        <div class="readiness-item" data-testid="org-profile-located"><span>有效坐标</span><strong>{{ readiness.located }}</strong></div>
+        <div class="readiness-item" data-testid="org-profile-missing-coordinates"><span>待定位</span><strong>{{ readiness.missingCoordinates }}</strong></div>
+      </div>
+      <div v-if="loadError" class="error-state" role="alert">
+        <span>{{ loadError }}</span>
+        <el-button link type="primary" @click="reload">重试</el-button>
+      </div>
+      <el-table :data="rows" size="default" stripe border :empty-text="loadError ? '机构画像读取失败，请点击重试' : '暂无机构画像'" aria-labelledby="org-profile-table-heading" aria-describedby="org-profile-table-state">
         <el-table-column prop="orgCode" label="机构编码" width="120" show-overflow-tooltip />
         <el-table-column prop="orgName" label="机构名称" min-width="150" show-overflow-tooltip />
         <el-table-column label="机构性质" width="120">
@@ -59,13 +76,22 @@
           <template #default="{ row }">{{ row.lng ?? '-' }}, {{ row.lat ?? '-' }}</template>
         </el-table-column>
         <el-table-column label="画像状态" width="96">
-          <template #default="{ row }"><el-tag size="small" effect="plain" :class="active(row) ? 'tag-success' : 'tag-info'">{{ active(row) ? '启用' : '停用' }}</el-tag></template>
+          <template #default="{ row }"><el-tag size="small" effect="plain" :class="statusClass(row)">{{ profileStatusLabel(row) }}</el-tag></template>
         </el-table-column>
-        <el-table-column label="操作" class-name="operation-cell" width="96" fixed="right">
-          <template #default="{ row }"><el-button link type="primary" @click="openEdit(row)">编辑画像</el-button></template>
+        <el-table-column label="操作" class-name="operation-cell" width="180" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openEdit(row)">编辑画像</el-button>
+            <el-button link type="primary" @click="openLocation(row)">地址与定位</el-button>
+          </template>
         </el-table-column>
       </el-table>
     </section>
+
+    <OrgLocationDialog
+      v-model="locationDialog.show"
+      :org="locationDialog.org"
+      @saved="onLocationSaved"
+    />
 
     <el-dialog v-model="dialog.show" class="bp-crud-dialog" title="编辑机构本地画像" width="620px">
       <div class="readonly-tip">外部机构名称、层级和状态只读；本地经营属性仅服务大屏机构组与地图。</div>
@@ -97,10 +123,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { listOrgProfiles, updateOrgProfile } from '@/api/screen';
 import { filterOrgProfiles } from '@/utils/screenScope';
+import { analyzeOrgProfiles, profileStatusOf } from '@/utils/orgProfileReadiness';
+import OrgLocationDialog from './OrgLocationDialog.vue';
 
 const NATURES = [
   { value: 'DEPARTMENT', label: '部门' },
@@ -114,13 +142,51 @@ const LEVELS = [
   { value: 'SUBORDINATE', label: '下属机构' },
   { value: 'NONE', label: '非经营机构' }
 ];
-const rows = ref([]);
+const GAP_OPTIONS = [
+  { value: 'MISSING_PROFILE', label: '未配置画像' },
+  { value: 'UNKNOWN_STATUS', label: '状态未知' },
+  { value: 'MISSING_CITY', label: '城市缺失' },
+  { value: 'MISSING_COORDINATES', label: '待定位' },
+  { value: 'LOCATED', label: '已定位' }
+];
+const queryRows = ref([]);
 const loading = ref(false);
-const filters = reactive({ keyword: '', orgNature: '', operatingLevel: '', city: '' });
+const loadError = ref('');
+const filters = reactive({ keyword: '', orgNature: '', operatingLevel: '', city: '', gap: '' });
 const dialog = reactive({ show: false, saving: false, form: {} });
+const locationDialog = reactive({ show: false, org: null });
+let requestSequence = 0;
+let mounted = false;
 
-const primaryOptions = computed(() => rows.value.filter(row => row.operatingLevel === 'PRIMARY' && active(row)));
-function active(row) { return row.status === undefined || row.status === null || row.status === 'ACTIVE' || row.status === 0 || row.status === '0'; }
+function gapMatches(entry, gap) {
+  if (!gap) return true;
+  if (gap === 'MISSING_PROFILE') return entry.profileStatus === 'UNCONFIGURED';
+  if (gap === 'UNKNOWN_STATUS') return entry.profileStatus === 'UNKNOWN';
+  if (gap === 'MISSING_CITY') return !entry.hasCity;
+  if (gap === 'MISSING_COORDINATES') return !entry.located;
+  if (gap === 'LOCATED') return entry.located;
+  return true;
+}
+
+const rows = computed(() => {
+  const filtered = filterOrgProfiles(queryRows.value, filters);
+  if (!filters.gap) return filtered;
+  const entries = analyzeOrgProfiles(filtered).entries;
+  return filtered.filter((row, index) => gapMatches(entries[index], filters.gap));
+});
+const readiness = computed(() => analyzeOrgProfiles(rows.value));
+
+// 一级候选来自当前查询结果，不随 gap 视图筛选消失，保证编辑下属机构时仍可选择有效归属。
+const primaryOptions = computed(() => filterOrgProfiles(queryRows.value, filters)
+  .filter(row => row.operatingLevel === 'PRIMARY' && active(row)));
+function profileStatus(row) { return profileStatusOf(row); }
+function active(row) { return profileStatus(row) === 'ACTIVE'; }
+function profileStatusLabel(row) {
+  return { ACTIVE: '启用', DISABLED: '停用', UNCONFIGURED: '未配置', UNKNOWN: '状态未知' }[profileStatus(row)] || '状态未知';
+}
+function statusClass(row) {
+  return { ACTIVE: 'tag-success', DISABLED: 'tag-info', UNCONFIGURED: 'tag-warning', UNKNOWN: 'tag-warning' }[profileStatus(row)] || 'tag-warning';
+}
 function natureLabel(v) { return NATURES.find(x => x.value === v)?.label || v || '-'; }
 function levelLabel(v) { return LEVELS.find(x => x.value === v)?.label || v || '-'; }
 function optionalQueryText(value) {
@@ -134,11 +200,14 @@ function resetFilters() {
   filters.orgNature = '';
   filters.operatingLevel = '';
   filters.city = '';
+  filters.gap = '';
   reload();
 }
 
 async function reload() {
+  const currentRequest = ++requestSequence;
   loading.value = true;
+  loadError.value = '';
   try {
     const result = await listOrgProfiles({
       // keyword 只表达机构编码/名称；城市必须独立落在 city 参数，避免改变后端筛选口径。
@@ -147,20 +216,38 @@ async function reload() {
       operatingLevel: filters.operatingLevel || undefined,
       city: optionalQueryText(filters.city)
     });
-    const returned = Array.isArray(result) ? result : (result?.records || []);
-    rows.value = filterOrgProfiles(returned, filters);
-  } catch { rows.value = []; }
-  finally { loading.value = false; }
+    const returned = Array.isArray(result)
+      ? result
+      : (Array.isArray(result?.records) ? result.records
+        : (Array.isArray(result?.list) ? result.list : null));
+    if (!returned) throw new Error('机构经营画像返回数据格式无效');
+    if (!mounted || currentRequest !== requestSequence) return;
+    queryRows.value = returned;
+  } catch {
+    if (!mounted || currentRequest !== requestSequence) return;
+    queryRows.value = [];
+    loadError.value = '机构经营画像列表加载失败，请刷新重试';
+  } finally {
+    if (mounted && currentRequest === requestSequence) loading.value = false;
+  }
 }
 function openEdit(row) {
+  const rowStatus = profileStatus(row);
   dialog.form = {
     orgCode: row.orgCode, orgName: row.orgName,
     orgNature: row.orgNature || 'OTHER', operatingLevel: row.operatingLevel || 'NONE',
     ownerOperatingOrgCode: row.ownerOperatingOrgCode || '', cityCode: row.cityCode || '', cityName: row.cityName || '',
-    lng: row.lng ?? null, lat: row.lat ?? null, status: row.status === 0 || row.status === '0' ? 'ACTIVE' : (row.status || 'ACTIVE'),
+    lng: row.lng ?? null, lat: row.lat ?? null, status: rowStatus === 'ACTIVE' ? 'ACTIVE' : (rowStatus === 'DISABLED' ? 'DISABLED' : 'DISABLED'),
     remark: row.remark || '', version: row.version, reason: ''
   };
   dialog.show = true;
+}
+function openLocation(row) {
+  locationDialog.org = row ? { ...row } : null;
+  locationDialog.show = true;
+}
+async function onLocationSaved() {
+  await reload();
 }
 async function save() {
   if (!dialog.form.orgCode) return;
@@ -185,11 +272,17 @@ async function save() {
     dialog.show = false; ElMessage.success('画像已保存'); await reload();
   } finally { dialog.saving = false; }
 }
-onMounted(reload);
+onMounted(() => { mounted = true; reload(); });
+onUnmounted(() => { mounted = false; requestSequence += 1; });
 </script>
 
 <style scoped>
 .filters { padding-bottom: var(--space-3); }
 .readonly-tip { color: var(--color-text-muted); font-size: 12px; margin-bottom: var(--space-3); }
 .hint { display: block; color: var(--color-text-muted); font-size: 12px; line-height: 18px; }
+.readiness-summary { display: grid; grid-template-columns: repeat(6, minmax(96px, 1fr)); gap: var(--space-2); margin-bottom: var(--space-3); }
+.readiness-item { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); min-height: 42px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-surface-soft); color: var(--color-text-muted); font-size: 12px; }
+.readiness-item strong { color: var(--color-text-strong); font-size: 18px; font-weight: 600; }
+.error-state { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-danger-fg); border-radius: var(--radius-control); color: var(--color-danger-fg); background: var(--color-danger-bg); }
+@media (max-width: 1100px) { .readiness-summary { grid-template-columns: repeat(3, minmax(120px, 1fr)); } }
 </style>

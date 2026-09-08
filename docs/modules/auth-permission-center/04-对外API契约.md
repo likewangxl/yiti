@@ -951,3 +951,12 @@ public interface OrgGroupApi {
 `OrgGroupDTO.memberCodes()` 是 `memberOrgCodes` 的只读集合视图，供发布校验等调用方安全读取直接成员；不会展开组织子树。`OrgGroupScopeDTO.deniedReasonCode` 仅用于内部审计/诊断，不得向普通用户暴露角色或绑定细节。组停用、无成员、画像缺失、机构停用和任一查询异常均不能返回全量范围。
 
 `report-analytics-center` 是只读消费者：它只能调用上述 `OrgGroupApi` 并传递/接收规范化 `ROLE_CODE`，不得调用 `AuditLogHandler`、治理 `AuditLogService` 或 auth 的 Mapper/Entity 来补写审计。配置写入接口在 auth 服务事务内自行持久化审计。
+
+
+### 11.2 位置台账的最小坐标投影
+
+`OrgProfileDTO` 新增 nullable `locationSource`，其余公开方法签名不变。`getActiveProfiles` 只对本次请求、已通过外部有效性与 ACTIVE 画像筛选的机构批量补充坐标；不展开子树，不返回详细营业地址。
+
+来源值：`PROFILE` 表示原画像合法坐标；`MANUAL` 表示位置台账的人工核定；`GEOCODE_VERIFIED` 表示经城市/精度校验并确认的地址解析。合法且非演示的原画像坐标优先；台账仅可补充与有效画像城市一致、状态 VERIFIED 且来源可信的坐标。关闭能力、表缺失或读取异常时仅跳过位置补充，不能令已取得的合法画像消失。未定位机构的位置来源应视为不可用。
+
+`OrgLocationDTO` 仅用于 auth 管理 REST，不作为跨模块地址查询接口；report 仅通过 `OrgGroupApi` 消费坐标和位置来源，再投影到同一屏级授权机构集合，不依赖位置 Mapper、Entity 或 Service。

@@ -19,6 +19,8 @@ public enum AuthErrorCode {
     ORG_GROUP_MEMBER_INVALID("AUTH-40014", "机构组成员不合法"),
     ORG_GROUP_ROLE_INVALID("AUTH-40015", "机构组角色绑定不合法"),
     ORG_CONFIG_VERSION_REQUIRED("AUTH-40016", "更新配置必须提供版本"),
+    ORG_LOCATION_INVALID("AUTH-40017", "机构位置配置不合法"),
+    ORG_LOCATION_CANDIDATE_INVALID("AUTH-40018", "机构位置候选令牌无效或已过期"),
 
     // 401 认证失败
     LOGIN_FAILED("AUTH-40101", "用户名或密码错误"),
@@ -39,6 +41,7 @@ public enum AuthErrorCode {
     HIGH_RISK_ACTION_MISSING_REASON("AUTH-40307", "高危动作缺少原因"),
     PERMISSION_CACHE_UNAVAILABLE("AUTH-40308", "权限缓存不可用"),
     ORG_GROUP_UNAUTHORIZED("AUTH-40309", "当前用户无机构组授权"),
+    ORG_LOCATION_PERMISSION_DENIED("AUTH-40310", "机构位置数据范围拒绝"),
 
     // 404 资源不存在
     ROLE_NOT_FOUND("AUTH-40401", "角色不存在"),
@@ -57,14 +60,18 @@ public enum AuthErrorCode {
     USERNAME_DUPLICATE("AUTH-40905", "用户名已存在"),
     ORG_GROUP_VERSION_CONFLICT("AUTH-40906", "机构组配置已被其他管理员修改"),
     ORG_PROFILE_VERSION_CONFLICT("AUTH-40907", "机构画像配置已被其他管理员修改"),
+    ORG_LOCATION_VERSION_CONFLICT("AUTH-40908", "机构位置配置已被其他管理员修改"),
 
     // 500 内部错误
     INTERNAL_ERROR("AUTH-50001", "权限服务内部错误"),
     CACHE_ERROR("AUTH-50002", "缓存服务异常"),
     ORG_CONFIG_AUDIT_FAILED("AUTH-50003", "高危机构配置审计写入失败，变更已回滚"),
+    ORG_LOCATION_AUDIT_FAILED("AUTH-50004", "机构位置审计写入失败，变更已回滚"),
 
     // 503 服务暂不可用
-    AUTH_SERVICE_UNAVAILABLE("AUTH-50301", "认证服务暂不可用，请稍后重试");
+    AUTH_SERVICE_UNAVAILABLE("AUTH-50301", "认证服务暂不可用，请稍后重试"),
+    ORG_LOCATION_STORAGE_UNAVAILABLE("AUTH-50302", "机构位置存储能力不可用，请稍后重试"),
+    ORG_LOCATION_GEOCODING_UNAVAILABLE("AUTH-50303", "机构地址解析能力不可用，请稍后重试");
 
     private final String code;
     private final String message;

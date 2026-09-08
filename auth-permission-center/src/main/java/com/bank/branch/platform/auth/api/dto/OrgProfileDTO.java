@@ -19,6 +19,8 @@ public class OrgProfileDTO {
     private BigDecimal lng;
     private BigDecimal lat;
     private String coordSys;
+    /** 运行时坐标来源；旧画像坐标由画像链路标记，位置台账补充仅在服务端确认后提供。 */
+    private String locationSource;
     private String status;
     private Integer version;
     private String createdBy;

@@ -9,6 +9,7 @@ import com.bank.branch.platform.auth.entity.ExtOrgInfo;
 import com.bank.branch.platform.auth.entity.PtOrgGroup;
 import com.bank.branch.platform.auth.entity.PtOrgGroupMember;
 import com.bank.branch.platform.auth.entity.PtOrgProfile;
+import com.bank.branch.platform.auth.location.persistence.PtOrgLocation;
 import com.bank.branch.platform.auth.entity.PtRole;
 import com.bank.branch.platform.auth.entity.PtRoleOrgGroup;
 import com.bank.branch.platform.auth.api.dto.OrgGroupRoleCheckDTO;
@@ -19,6 +20,8 @@ import com.bank.branch.platform.auth.mapper.OrgMapper;
 import com.bank.branch.platform.auth.mapper.RoleMapper;
 import com.bank.branch.platform.auth.mapper.RoleOrgGroupMapper;
 import com.bank.branch.platform.auth.mapper.UserRoleMapper;
+import com.bank.branch.platform.auth.location.service.OrgLocationService;
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.apache.ibatis.session.Configuration;
@@ -73,6 +76,8 @@ class OrgGroupServiceTest {
     private UserRoleMapper userRoleMapper;
     @Mock
     private OrgGroupAuditService orgGroupAuditService;
+    @Mock
+    private OrgLocationService orgLocationService;
 
     @InjectMocks
     private OrgGroupService service;
@@ -264,7 +269,9 @@ class OrgGroupServiceTest {
     @Test
     void adminListApisFailClosedWhenLookupFails() {
         when(orgMapper.selectAll()).thenThrow(new IllegalStateException("db unavailable"));
-        assertThat(service.listProfiles(null)).isEmpty();
+        assertThatThrownBy(() -> service.listProfiles(null))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("认证服务暂不可用");
 
         when(orgGroupMapper.selectList(any())).thenThrow(new IllegalStateException("db unavailable"));
         assertThat(service.listGroups()).isEmpty();
@@ -289,6 +296,107 @@ class OrgGroupServiceTest {
                 .extracting(OrgProfileDTO::getOrgCode)
                 .containsExactly("ORG_BAOJI");
         assertThat(service.listProfiles("ORG_XIAN", "宝鸡")).isEmpty();
+    }
+
+    @Test
+    void listProfilesOverlaysVerifiedLocationAndDoesNotTrustDemoCoordinates() {
+        ExtOrgInfo demoOrg = org("ORG_DEMO", "HQ", 0);
+        ExtOrgInfo realOrg = org("ORG_REAL", "HQ", 0);
+        ExtOrgInfo disabledOrg = org("ORG_DISABLED", "HQ", 0);
+        PtOrgProfile demo = profile("ORG_DEMO");
+        demo.setStatus("ACTIVE");
+        demo.setCityCode("610100");
+        demo.setLng(new BigDecimal("108.1000000"));
+        demo.setLat(new BigDecimal("34.1000000"));
+        demo.setCoordSys("GCJ02");
+        demo.setRemark("SCREEN_MAP_DEMO_20260824");
+        PtOrgProfile real = profile("ORG_REAL");
+        real.setStatus("ACTIVE");
+        real.setCityCode("610100");
+        real.setLng(new BigDecimal("108.2000000"));
+        real.setLat(new BigDecimal("34.2000000"));
+        real.setCoordSys("GCJ02");
+        PtOrgProfile disabled = profile("ORG_DISABLED");
+        disabled.setStatus("DISABLED");
+        disabled.setCityCode("610100");
+        disabled.setLng(new BigDecimal("108.3000000"));
+        disabled.setLat(new BigDecimal("34.3000000"));
+        disabled.setCoordSys("GCJ02");
+        when(orgMapper.selectAll()).thenReturn(List.of(demoOrg, realOrg, disabledOrg));
+        when(orgProfileMapper.selectList(any())).thenReturn(List.of(demo, real, disabled));
+        PtOrgLocation verified = runtimeLocation("ORG_DEMO", "108.9000000", "34.9000000");
+        when(orgLocationService.findRuntimeLocations(any(), any())).thenReturn(Map.of("ORG_DEMO", verified));
+
+        List<OrgProfileDTO> result = service.listProfiles(null);
+
+        OrgProfileDTO demoResult = result.stream().filter(item -> "ORG_DEMO".equals(item.getOrgCode()))
+                .findFirst().orElseThrow();
+        OrgProfileDTO realResult = result.stream().filter(item -> "ORG_REAL".equals(item.getOrgCode()))
+                .findFirst().orElseThrow();
+        OrgProfileDTO disabledResult = result.stream().filter(item -> "ORG_DISABLED".equals(item.getOrgCode()))
+                .findFirst().orElseThrow();
+        assertThat(demoResult.getLng()).isEqualByComparingTo("108.9000000");
+        assertThat(demoResult.getLat()).isEqualByComparingTo("34.9000000");
+        assertThat(demoResult.getLocationSource()).isEqualTo(OrgLocationService.SOURCE_GEOCODE_VERIFIED);
+        assertThat(realResult.getLng()).isEqualByComparingTo("108.2000000");
+        assertThat(realResult.getLat()).isEqualByComparingTo("34.2000000");
+        assertThat(realResult.getLocationSource()).isEqualTo(OrgLocationService.SOURCE_PROFILE);
+        assertThat(disabledResult.getStatus()).isEqualTo("DISABLED");
+        assertThat(disabledResult.getLng()).isEqualByComparingTo("108.3000000");
+        verify(orgLocationService).findRuntimeLocations(any(), any());
+    }
+
+    @Test
+    void listProfilesClearsDemoCoordinatesWhenNoVerifiedLocationExists() {
+        ExtOrgInfo demoOrg = org("ORG_DEMO", "HQ", 0);
+        PtOrgProfile demo = profile("ORG_DEMO");
+        demo.setStatus("ACTIVE");
+        demo.setCityCode("610100");
+        demo.setLng(new BigDecimal("108.1000000"));
+        demo.setLat(new BigDecimal("34.1000000"));
+        demo.setCoordSys("GCJ02");
+        demo.setRemark("screen_map_demo fixture");
+        when(orgMapper.selectAll()).thenReturn(List.of(demoOrg));
+        when(orgProfileMapper.selectList(any())).thenReturn(List.of(demo));
+        when(orgLocationService.findRuntimeLocations(any(), any())).thenReturn(Map.of());
+
+        OrgProfileDTO result = service.listProfiles(null).get(0);
+
+        assertThat(result.getStatus()).isEqualTo("ACTIVE");
+        assertThat(result.getLng()).isNull();
+        assertThat(result.getLat()).isNull();
+        assertThat(result.getCoordSys()).isNull();
+        assertThat(result.getLocationSource()).isNull();
+    }
+
+    @Test
+    void activeProfilesPreferExistingRealCoordinatesOverLocationLedger() {
+        ExtOrgInfo realOrg = org("ORG_REAL", "HQ", 0);
+        ExtOrgInfo missingOrg = org("ORG_MISSING", "HQ", 0);
+        PtOrgProfile real = profile("ORG_REAL");
+        real.setStatus("ACTIVE");
+        real.setCityCode("610100");
+        real.setLng(new BigDecimal("108.2000000"));
+        real.setLat(new BigDecimal("34.2000000"));
+        real.setCoordSys("GCJ02");
+        PtOrgProfile missing = profile("ORG_MISSING");
+        missing.setStatus("ACTIVE");
+        missing.setCityCode("610100");
+        when(orgMapper.selectByOrgCodes(any())).thenReturn(List.of(realOrg, missingOrg));
+        when(orgProfileMapper.selectList(any())).thenReturn(List.of(real, missing));
+        when(orgLocationService.findRuntimeLocations(any(), any())).thenReturn(Map.of(
+                "ORG_REAL", runtimeLocation("ORG_REAL", "108.9000000", "34.9000000"),
+                "ORG_MISSING", runtimeLocation("ORG_MISSING", "108.8000000", "34.8000000")));
+
+        Map<String, OrgProfileDTO> result = service.getActiveProfiles(Set.of("ORG_REAL", "ORG_MISSING"));
+
+        assertThat(result.get("ORG_REAL").getLng()).isEqualByComparingTo("108.2000000");
+        assertThat(result.get("ORG_REAL").getLat()).isEqualByComparingTo("34.2000000");
+        assertThat(result.get("ORG_REAL").getLocationSource()).isEqualTo(OrgLocationService.SOURCE_PROFILE);
+        assertThat(result.get("ORG_MISSING").getLng()).isEqualByComparingTo("108.8000000");
+        assertThat(result.get("ORG_MISSING").getLat()).isEqualByComparingTo("34.8000000");
+        assertThat(result.get("ORG_MISSING").getLocationSource())
+                .isEqualTo(OrgLocationService.SOURCE_GEOCODE_VERIFIED);
     }
 
     @Test
@@ -476,6 +584,18 @@ class OrgGroupServiceTest {
         profile.setOrgNature("LOCAL_BRANCH");
         profile.setOperatingLevel("PRIMARY");
         return profile;
+    }
+
+    private static PtOrgLocation runtimeLocation(String orgCode, String lng, String lat) {
+        PtOrgLocation location = new PtOrgLocation();
+        location.setOrgCode(orgCode);
+        location.setCityCode("610100");
+        location.setStatus("VERIFIED");
+        location.setLocationSource(OrgLocationService.SOURCE_GEOCODE_VERIFIED);
+        location.setLng(new BigDecimal(lng));
+        location.setLat(new BigDecimal(lat));
+        location.setCoordSys("GCJ02");
+        return location;
     }
 
     private static com.bank.branch.platform.auth.entity.PtOrgGroupMember member(
