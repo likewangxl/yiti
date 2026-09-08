@@ -199,7 +199,7 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(wrapper.find('[data-testid="selected-institution"]').text()).toContain('西安市分行');
   });
 
-  it('排名支持净增切换：负数参与排序，null 不进入 TOP10 但保留明细', async () => {
+  it('排名支持净增切换：负数参与排序，null 不进入当前指标前十矩阵', async () => {
     const wrapper = mountDashboard({ model: extendedModel });
     const increaseButton = wrapper.get('[data-ranking-mode="increase"]');
     await increaseButton.trigger('click');
@@ -207,8 +207,28 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(topRows[0].text()).toContain('榆林市分行');
     expect(topRows[1].text()).toContain('西安市分行');
     expect(topRows.some(row => row.text().includes('宝鸡市分行'))).toBe(false);
-    expect(wrapper.get('[data-testid="ranking-detail-ORG-3"]').text()).toContain('—');
+    expect(wrapper.find('[data-testid="ranking-detail-ORG-3"]').exists()).toBe(false);
     expect(wrapper.findAll('.panorama-detail-table thead th')).toHaveLength(3);
+  });
+
+  it('机构矩阵只渲染当前指标前十，切换指标后仍按当前指标重排', async () => {
+    const matrixRankings = Array.from({ length: 12 }, (_, index) => ({
+      orgCode: `M-${index + 1}`,
+      name: `矩阵机构${index + 1}`,
+      deposit: 120 - index,
+      increase: index === 0 ? -1 : 13 - index,
+      average: 100 - index
+    }));
+    const wrapper = mountDashboard({ model: { ...extendedModel, rankings: matrixRankings } });
+    const visibleRows = () => wrapper.findAll('.panorama-detail-table tbody tr');
+    expect(visibleRows()).toHaveLength(10);
+    expect(visibleRows()[0].text()).toContain('矩阵机构1');
+    expect(visibleRows().at(-1).text()).toContain('矩阵机构10');
+    await wrapper.get('[data-ranking-mode="increase"]').trigger('click');
+    expect(visibleRows()).toHaveLength(10);
+    expect(visibleRows()[0].text()).toContain('矩阵机构2');
+    expect(visibleRows().at(-1).text()).toContain('矩阵机构11');
+    expect(visibleRows().some(row => row.text().includes('矩阵机构12'))).toBe(false);
   });
 
   it('目标率图形限制在 100%，文字保留实际超额完成率且范围不写死年度', () => {

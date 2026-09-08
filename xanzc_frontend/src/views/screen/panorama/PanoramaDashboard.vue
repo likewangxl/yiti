@@ -205,7 +205,7 @@
               <span class="panorama-section-kicker">行领导经营视图</span>
               <h2>机构经营诊断与矩阵</h2>
             </div>
-            <span>共 {{ leadershipMatrixRows.length }} 家</span>
+            <span>共 {{ leadershipTotalCount }} 家</span>
           </div>
           <article class="panorama-panel panorama-target-panel">
             <div v-if="targetProgressActual !== null" class="panorama-target-summary">
@@ -221,7 +221,7 @@
           <article class="panorama-panel panorama-ranking-panel panorama-ranking-detail-panel">
             <div class="panorama-panel-heading">
               <div><span class="panorama-section-kicker">机构经营矩阵</span><h2>全辖机构对比</h2></div>
-              <span>TOP {{ Math.min(10, topRankings.length) }} / 共 {{ leadershipMatrixRows.length }} 家</span>
+              <span>TOP {{ Math.min(10, leadershipMatrixRows.length) }} / 共 {{ leadershipTotalCount }} 家</span>
             </div>
             <div class="panorama-panel-toolbar">
               <div class="panorama-segmented" role="group" aria-label="排名指标">
@@ -238,14 +238,14 @@
             </div>
             <div class="panorama-matrix-legend" aria-label="机构矩阵规则">
               <span><i class="is-up" />达标</span><span><i class="is-warning" />未达标</span><span><i class="is-muted" />未知</span>
-              <small>目标差 = 存款余额 − 金额目标</small>
+              <small>目标差 = 存款余额 − 金额目标 · 其余机构请从机构目录查看</small>
             </div>
             <div class="panorama-detail-table-wrap">
             <table class="panorama-detail-table">
-              <caption class="panorama-visually-hidden">机构经营矩阵，金额目标差、完成率和趋势均按已有绑定展示</caption>
+              <caption class="panorama-visually-hidden">当前指标前十机构经营矩阵，金额目标差、完成率和趋势均按已有绑定展示</caption>
               <thead><tr><th scope="col">机构</th><th scope="col">经营目标 / {{ rankingMetricInfo.label }}</th><th scope="col">余额 / 趋势</th></tr></thead>
               <tbody>
-                <tr v-for="(item, index) in leadershipMatrixRows" :key="item.orgCode || index" :data-testid="rankingRowTestId(item)" :data-org-code="item.orgCode || ''" tabindex="0" @click="selectRanking(item)" @keydown.enter="selectRanking(item)">
+                <tr v-for="(item, index) in leadershipMatrixRows" :key="item.orgCode || index" data-testid="ranking-row" :data-org-code="item.orgCode || ''" tabindex="0" @click="selectRanking(item)" @keydown.enter="selectRanking(item)">
                   <td :title="item.name || item.orgName || '—'"><span class="panorama-matrix-rank">{{ rankingPosition(item) || '—' }}</span>{{ item.name || item.orgName || '—' }}</td>
                   <td>
                     <span :class="statusClass(item.status)">{{ statusLabel(item.status) }} {{ formatPercent(item.rate) }}</span>
@@ -321,7 +321,6 @@ import {
   findKpi,
   finiteMetric,
   rankingValue,
-  sortRankingRows,
   topRankingRows
 } from './panoramaViewModel.js';
 import {
@@ -463,13 +462,17 @@ const targetPeriodLabel = computed(() => {
 const rankingMetric = ref('deposit');
 const rankingMetricOptions = RANKING_METRICS;
 const rankingMetricInfo = computed(() => rankingMetricOptions.find(item => item.key === rankingMetric.value) || rankingMetricOptions[0]);
-const rankingDetailRows = computed(() => sortRankingRows(safeModel.value.rankings, rankingMetric.value));
 const topRankings = computed(() => topRankingRows(safeModel.value.rankings, rankingMetric.value, 10));
 const rankingMax = computed(() => {
   const values = topRankings.value.map(item => Math.abs(rankingValue(item, rankingMetric.value) ?? 0));
   return Math.max(0, ...values);
 });
 const leadershipInsights = computed(() => buildProvinceInsights(safeModel.value));
+const leadershipTotalCount = computed(() => safeModel.value.rankings.length || leadershipInsights.value.sampleSize);
+const visibleRankingRows = computed(() => {
+  if (safeModel.value.rankings.length) return topRankings.value;
+  return topRankingRows(leadershipInsights.value.rows, rankingMetric.value, 10);
+});
 const diagnosticCards = computed(() => {
   const diagnostics = leadershipInsights.value.diagnostics;
   const coverage = leadershipInsights.value.coverage;
@@ -506,8 +509,7 @@ const diagnosticCards = computed(() => {
 });
 const leadershipMatrixRows = computed(() => {
   const rowsByCode = new Map(leadershipInsights.value.rows.map(item => [String(item.orgCode), item]));
-  const sourceRows = rankingDetailRows.value.length ? rankingDetailRows.value : leadershipInsights.value.rows;
-  return sourceRows.map((item, index) => {
+  return visibleRankingRows.value.map((item, index) => {
     const insight = rowsByCode.get(String(item?.orgCode || '')) || {};
     return {
       ...item,
@@ -622,21 +624,16 @@ function rankingDisplayValue(item) {
 }
 
 function rankingPosition(item) {
-  const index = topRankings.value.findIndex(entry => String(entry?.orgCode || '') === String(item?.orgCode || ''));
+  const index = visibleRankingRows.value.findIndex(entry => String(entry?.orgCode || '') === String(item?.orgCode || ''));
   if (index === -1) return null;
   const currentValue = rankingValue(item, rankingMetric.value);
   if (currentValue === null) return null;
   let rank = 1;
   for (let cursor = 1; cursor <= index; cursor += 1) {
-    const previousValue = rankingValue(topRankings.value[cursor], rankingMetric.value);
+    const previousValue = rankingValue(visibleRankingRows.value[cursor], rankingMetric.value);
     if (previousValue !== currentValue) rank = cursor + 1;
   }
   return rank;
-}
-
-function rankingRowTestId(item) {
-  const position = rankingPosition(item);
-  return position ? 'ranking-row' : `ranking-detail-${item?.orgCode || 'row'}`;
 }
 
 function rankingBarStyle(item) {

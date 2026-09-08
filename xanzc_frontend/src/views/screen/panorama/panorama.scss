@@ -237,16 +237,17 @@
 .panorama-matrix-legend i.is-muted { background: #7e91b9; }
 .panorama-matrix-legend small { margin-left: auto; color: #718fc2; white-space: nowrap; }
 .panorama-ranking-detail-panel .panorama-detail-table-wrap { padding-right: 8px; padding-left: 8px; }
-.panorama-ranking-detail-panel .panorama-detail-table th { padding-top: 3px; padding-bottom: 3px; font-size: 9px; }
+.panorama-ranking-detail-panel .panorama-detail-table th { padding-top: 5px; padding-bottom: 5px; font-size: 10px; line-height: 16px; }
 .panorama-ranking-detail-panel > .panorama-panel-heading { min-height: 35px; padding: 4px 9px 3px; }
 .panorama-ranking-detail-panel > .panorama-panel-heading h2 { margin: 0; font-size: 13px; }
 .panorama-ranking-detail-panel > .panorama-panel-heading .panorama-section-kicker { display: none; }
-.panorama-ranking-detail-panel .panorama-detail-table td { padding-top: 1px; padding-bottom: 1px; line-height: 10px; }
-.panorama-ranking-detail-panel .panorama-detail-table td small { display: block; margin-top: 0; color: #7d9bd0; font-size: 8px; line-height: 8px; }
-.panorama-ranking-detail-panel .panorama-detail-table td strong { color: var(--panorama-text); font-size: 12px; line-height: 10px; }
+.panorama-ranking-detail-panel .panorama-detail-table td { padding-top: 6px; padding-bottom: 6px; line-height: 16px; }
+.panorama-ranking-detail-panel .panorama-detail-table td > span { font-size: 12px; line-height: 16px; }
+.panorama-ranking-detail-panel .panorama-detail-table td small { display: block; margin-top: 0; color: #7d9bd0; font-size: 10px; line-height: 16px; }
+.panorama-ranking-detail-panel .panorama-detail-table td strong { color: var(--panorama-text); font-size: 12px; line-height: 16px; }
 .panorama-ranking-detail-panel .panorama-detail-table td .is-up,
 .panorama-ranking-detail-panel .panorama-detail-table td .is-down,
-.panorama-ranking-detail-panel .panorama-detail-table td .is-warning { font-size: 10px; }
+.panorama-ranking-detail-panel .panorama-detail-table td .is-warning { font-size: 12px; }
 .panorama-matrix-rank { display: inline-grid; width: 16px; height: 16px; margin-right: 4px; place-items: center; border: 1px solid rgba(117, 180, 255, .4); border-radius: 50%; color: #dbe8ff; font-size: 8px; vertical-align: -3px; }
 .panorama-ranking-panel .panorama-detail-table tbody tr { cursor: pointer; }
 .panorama-ranking-panel .panorama-detail-table tbody tr:focus-visible { outline: 1px solid var(--panorama-cyan); outline-offset: -1px; }
@@ -424,7 +425,7 @@
   .panorama-kpi-unit { margin-left: 4px; font-size: 10px; }
   .panorama-kpi-change { font-size: 12px; }
   .panorama-kpi-change small { margin-top: 3px; font-size: 9px; }
-  .panorama-workspace { height: max(520px, min(820px, calc(100vh - var(--panorama-viewport-offset, 0px) - 245px))); min-height: 520px; }
+  .panorama-workspace { height: max(720px, min(900px, calc(100vh - var(--panorama-viewport-offset, 0px) - 65px))); min-height: 720px; }
   .panorama-left-column { grid-template-rows: minmax(145px, .82fr) minmax(168px, 1fr) minmax(132px, .8fr); }
   .panorama-center-column { grid-template-rows: minmax(340px, 1.65fr) minmax(150px, .75fr); }
   .panorama-right-column { grid-template-rows: minmax(0, 1fr); }
