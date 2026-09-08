@@ -137,7 +137,8 @@
 .panorama-diagnostic-unit { color: #8fa9d6; font-size: 10px; }
 .panorama-diagnostic-card small { grid-column: 1 / -1; overflow: hidden; margin-top: 4px; color: #718fc2; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 
-.panorama-workspace { display: grid; grid-template-columns: minmax(0, 30fr) minmax(0, 40fr) minmax(0, 30fr); gap: 14px; height: max(500px, min(820px, calc(100vh - var(--panorama-viewport-offset, 0px) - 275px))); min-height: 500px; margin: 0 clamp(16px, 2vw, 30px) 18px; }
+/* 十行矩阵需要完整行高；视口高度不足时由页面滚动，不能被桌面宽度断点压缩。 */
+.panorama-workspace { display: grid; grid-template-columns: minmax(0, 30fr) minmax(0, 40fr) minmax(0, 30fr); gap: 14px; height: max(720px, min(820px, calc(100vh - var(--panorama-viewport-offset, 0px) - 275px))); min-height: 720px; margin: 0 clamp(16px, 2vw, 30px) 18px; }
 .panorama-column { min-width: 0; min-height: 0; display: grid; gap: 14px; }
 .panorama-left-column { grid-template-rows: minmax(128px, .72fr) minmax(176px, 1fr) minmax(140px, .85fr); }
 .panorama-center-column { grid-template-rows: minmax(300px, 1.7fr) minmax(164px, .84fr); }
