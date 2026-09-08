@@ -54,7 +54,9 @@ const slotLabels = {
   attention: '经营关注',
   branches: '支行机构',
   branchTrend: '支行趋势',
-  citySummary: '城市汇总'
+  citySummary: '城市汇总',
+  depositIncrease: '存款较上月净增',
+  depositAverage: '存款月均余额'
 };
 
 const issueEntries = computed(() => Object.entries(state.slotIssues.value || {})

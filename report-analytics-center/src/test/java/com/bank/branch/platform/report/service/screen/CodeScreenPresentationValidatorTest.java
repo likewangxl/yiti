@@ -135,6 +135,34 @@ class CodeScreenPresentationValidatorTest {
     }
 
     @Test
+    void acceptsNewDepositSlotsAndDepositIncreaseOnlyTrend() {
+        String increase = validBind("{\"value\":\"存款净增\"}", "{\"value\":\"YUAN\"}");
+        CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-deposit-increase", "depositIncrease", increase));
+
+        String average = validBind("{\"value\":\"存款月均\"}", "{\"value\":\"HUNDRED_MILLION\"}");
+        CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-deposit-average", "depositAverage", average));
+
+        String trend = "{\"dsId\":12,\"period\":\"LAST_6M_EOM\","
+                + "\"fields\":{\"date\":\"月份\",\"depositIncrease\":\"净增\"},"
+                + "\"units\":{\"depositIncrease\":\"TEN_THOUSAND\"}}";
+        CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-trend-increase", "trend", trend));
+    }
+
+    @Test
+    void rankingAcceptsOptionalIncreaseAndAverageAmountFields() {
+        String ranking = "{\"dsId\":12,\"period\":\"LATEST\","
+                + "\"fields\":{\"orgCode\":\"机构号\",\"name\":\"机构名称\","
+                + "\"value\":\"存款余额\",\"increase\":\"存款净增\",\"average\":\"存款月均\"},"
+                + "\"units\":{\"value\":\"YUAN\",\"increase\":\"TEN_THOUSAND\","
+                + "\"average\":\"HUNDRED_MILLION\"}}";
+        CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-ranking", "ranking", ranking));
+    }
+
+    @Test
     void rejectsUnitsThatDoNotMatchSemanticField() {
         String amountAsRatio = validBind("{\"value\":\"存款余额\"}", "{\"value\":\"PERCENT\"}");
         assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
@@ -156,6 +184,18 @@ class CodeScreenPresentationValidatorTest {
         String missingUnit = validBind("{\"value\":\"存款余额\"}", "{}");
         assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
                 draft("ChartWidget", "w-deposit-no-unit", "deposit", missingUnit), List.of()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String invalidNewAmountUnit = validBind("{\"value\":\"存款净增\"}", "{\"value\":\"COUNT\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-deposit-increase-bad-unit", "depositIncrease", invalidNewAmountUnit), List.of()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String rankingWrongUnit = "{\"dsId\":12,\"period\":\"LATEST\","
+                + "\"fields\":{\"orgCode\":\"机构号\",\"name\":\"机构名称\",\"value\":\"存款余额\","
+                + "\"increase\":\"存款净增\"},\"units\":{\"value\":\"YUAN\",\"increase\":\"PERCENT\"}}";
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-ranking-bad-unit", "ranking", rankingWrongUnit), List.of()))
                 .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
     }
 
@@ -192,6 +232,40 @@ class CodeScreenPresentationValidatorTest {
                 "{\"deposit\":\"YUAN\"}");
         assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
                 MAPPER.readTree(metricAsDate), "trend", datasource))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String newMetricAsDimension = validBind("{\"date\":\"org_code\",\"depositIncrease\":\"org_name\"}",
+                "{\"depositIncrease\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(newMetricAsDimension), "trend", datasource))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String depositIncreaseValueAsDimension = validBind("{\"value\":\"org_code\"}",
+                "{\"value\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(depositIncreaseValueAsDimension), "depositIncrease", datasource))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String depositAverageValueAsDimension = validBind("{\"value\":\"org_name\"}",
+                "{\"value\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(depositAverageValueAsDimension), "depositAverage", datasource))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String rankingIncreaseAsDimension = validBind(
+                "{\"orgCode\":\"org_code\",\"name\":\"org_name\","
+                        + "\"value\":\"存款余额\",\"increase\":\"org_code\"}",
+                "{\"value\":\"YUAN\",\"increase\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(rankingIncreaseAsDimension), "ranking", datasource))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String rankingAverageAsDimension = validBind(
+                "{\"orgCode\":\"org_code\",\"name\":\"org_name\","
+                        + "\"value\":\"存款余额\",\"average\":\"org_name\"}",
+                "{\"value\":\"YUAN\",\"average\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(rankingAverageAsDimension), "ranking", datasource))
                 .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
     }
 }

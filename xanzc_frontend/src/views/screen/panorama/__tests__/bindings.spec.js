@@ -13,7 +13,7 @@ import {
 describe('panorama bindings contract', () => {
   it('公开固定槽位、字段语义和单位白名单', () => {
     expect(Object.keys(BINDING_SLOTS)).toEqual([
-      'deposit', 'loan', 'customers', 'revenue', 'rate', 'trend',
+      'deposit', 'depositIncrease', 'depositAverage', 'loan', 'customers', 'revenue', 'rate', 'trend',
       'composition', 'ranking', 'attention', 'branches', 'branchTrend', 'citySummary'
     ]);
     expect(UNIT_VALUES).toEqual([
@@ -22,11 +22,26 @@ describe('panorama bindings contract', () => {
     ]);
     expect(BINDING_SLOTS.branches.required).toEqual(['orgCode']);
     expect(BINDING_SLOTS.trend.required).toEqual(['date']);
-    expect(BINDING_SLOTS.trend.atLeastOneOf).toEqual(['deposit', 'loan']);
+    expect(BINDING_SLOTS.trend.atLeastOneOf).toEqual(['deposit', 'loan', 'depositIncrease']);
+    expect(BINDING_SLOTS.depositIncrease).toMatchObject({
+      label: '存款较上月净增',
+      innerType: 'METRIC_CARD',
+      required: ['value']
+    });
+    expect(BINDING_SLOTS.depositAverage).toMatchObject({
+      label: '存款月均余额',
+      innerType: 'METRIC_CARD',
+      required: ['value']
+    });
+    expect(BINDING_SLOTS.ranking.fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ semantic: 'increase', unitKinds: ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'] }),
+      expect.objectContaining({ semantic: 'average', unitKinds: ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'] })
+    ]));
     expect(BINDING_SLOTS.citySummary.oneOfRequired).toEqual(['cityCode', 'orgCode']);
     expect(BINDING_SLOTS.trend.fields).toEqual(expect.arrayContaining([
       expect.objectContaining({ semantic: 'deposit' }),
-      expect.objectContaining({ semantic: 'loan' })
+      expect.objectContaining({ semantic: 'loan' }),
+      expect.objectContaining({ semantic: 'depositIncrease' })
     ]));
   });
 
@@ -45,6 +60,9 @@ describe('panorama bindings contract', () => {
       expect.objectContaining({ col: 'amount', label: '存款余额', role: 'METRIC', amountScale: 'HUNDRED_MILLION_YUAN' }),
       expect.objectContaining({ col: 'legacy_metric', role: 'METRIC' })
     ]));
+    expect(getDatasourceFieldOptions({
+      configJson: JSON.stringify({ fieldMeta: [{ col: 'missing_role' }] })
+    })).toEqual([expect.objectContaining({ col: 'missing_role', role: 'UNKNOWN' })]);
 
     const wideOptions = getDatasourceFieldOptions({
       sourceKind: 'WIDE_TABLE',
@@ -92,5 +110,36 @@ describe('panorama bindings contract', () => {
       .toContain('缺少单位: count');
     expect(validateBinding('citySummary', { dsId: 2, fields: { deposit: 'deposit' }, units: { deposit: 'YUAN' } }))
       .toContain('至少选择一个身份字段: cityCode、orgCode');
+  });
+
+  it('新存款金额槽位只接受金额单位，且净增趋势可以独立满足趋势条件', () => {
+    expect(validateBinding('depositIncrease', {
+      dsId: 2, fields: { value: 'increase' }, units: { value: 'YUAN' }
+    })).toEqual([]);
+    expect(validateBinding('depositAverage', {
+      dsId: 2, fields: { value: 'average' }, units: { value: 'HUNDRED_MILLION' }
+    })).toEqual([]);
+    expect(validateBinding('depositIncrease', {
+      dsId: 2, fields: { value: 'increase' }, units: { value: 'COUNT' }
+    })).toContain('单位不适用: value');
+    expect(validateBinding('trend', {
+      dsId: 2, fields: { date: 'date', depositIncrease: 'increase' }, units: { depositIncrease: 'YUAN' }
+    })).toEqual([]);
+    expect(validateBinding('trend', {
+      dsId: 2, fields: { date: 'date', depositIncrease: 'increase' }, units: { depositIncrease: 'COUNT' }
+    })).toContain('单位不适用: depositIncrease');
+  });
+
+  it('排名可选净增和月均字段仍要求明确金额单位', () => {
+    expect(validateBinding('ranking', {
+      dsId: 2,
+      fields: { orgCode: 'org', name: 'name', value: 'deposit', increase: 'increase', average: 'average' },
+      units: { value: 'YUAN', increase: 'TEN_THOUSAND', average: 'HUNDRED_MILLION' }
+    })).toEqual([]);
+    expect(validateBinding('ranking', {
+      dsId: 2,
+      fields: { orgCode: 'org', name: 'name', value: 'deposit', increase: 'increase' },
+      units: { value: 'YUAN', increase: 'PERCENT' }
+    })).toContain('单位不适用: increase');
   });
 });

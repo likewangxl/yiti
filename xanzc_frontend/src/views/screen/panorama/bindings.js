@@ -56,11 +56,14 @@ const singleMetric = (label, kind = 'amount') => Object.freeze({
 /**
  * 槽位 semantic 说明：
  * - branches 只要求 orgCode；orgName/cityCode 由授权 panoramaInstitutions 优先补齐。
- * - trend/branchTrend 必须有 date，并至少配置 deposit 或 loan 之一。
+ * - trend 必须有 date，并至少配置 deposit、loan 或 depositIncrease 之一；
+ *   branchTrend 保持支行原有 deposit/loan/customers/rate 形状。
  * - citySummary 必须有 cityCode，并至少配置一个可展示指标。
  */
 export const BINDING_SLOTS = Object.freeze({
   deposit: singleMetric('存款余额'),
+  depositIncrease: singleMetric('存款较上月净增'),
+  depositAverage: singleMetric('存款月均余额'),
   loan: singleMetric('贷款余额'),
   customers: singleMetric('客户总量', 'count'),
   revenue: singleMetric('营收'),
@@ -69,11 +72,12 @@ export const BINDING_SLOTS = Object.freeze({
     label: '经营趋势',
     innerType: 'LINE_TREND',
     required: ['date'],
-    atLeastOneOf: ['deposit', 'loan'],
+    atLeastOneOf: ['deposit', 'loan', 'depositIncrease'],
     fields: Object.freeze([
       field('date', '日期', { required: true, kind: 'dimension' }),
       field('deposit', '存款余额', { unitKinds: amountUnits }),
       field('loan', '贷款余额', { unitKinds: amountUnits }),
+      field('depositIncrease', '存款较上月净增', { unitKinds: amountUnits }),
       field('customers', '客户总量', { unitKinds: countUnits }),
       field('rate', '完成率', { unitKinds: ratioUnits })
     ])
@@ -95,6 +99,8 @@ export const BINDING_SLOTS = Object.freeze({
       field('orgCode', '机构号', { required: true, kind: 'dimension' }),
       field('name', '机构名称', { required: true, kind: 'dimension' }),
       field('value', '排名值', { required: true, unitKinds: amountUnits }),
+      field('increase', '存款较上月净增', { unitKinds: amountUnits }),
+      field('average', '存款月均余额', { unitKinds: amountUnits }),
       field('change', '较上期变化', { unitKinds: ratioUnits })
     ])
   }),
@@ -283,7 +289,11 @@ export function getDatasourceFieldOptions(datasource = {}) {
       builtin: item?.builtin === true
     });
   };
-  for (const item of Array.isArray(config?.fieldMeta) ? config.fieldMeta : []) add(item);
+  // fieldMeta is an explicit output schema: a missing/unknown role must stay
+  // unknown so the editor's DIM/METRIC filter fails closed. Legacy metrics
+  // entries still default to METRIC below because their source kind defines
+  // them as numeric output columns.
+  for (const item of Array.isArray(config?.fieldMeta) ? config.fieldMeta : []) add(item, 'UNKNOWN');
   for (const item of Array.isArray(config?.metrics) ? config.metrics : []) add(item);
 
   // 这些列由 ScreenQueryEngine 的固定 SELECT 形状产生，而不是 datasource

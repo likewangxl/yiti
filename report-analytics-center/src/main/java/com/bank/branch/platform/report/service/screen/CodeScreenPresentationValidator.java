@@ -33,7 +33,8 @@ public final class CodeScreenPresentationValidator {
             .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
     private static final Set<String> SLOTS = Set.of(
             "deposit", "loan", "customers", "revenue", "rate", "trend", "composition",
-            "ranking", "attention", "branches", "branchTrend", "citySummary");
+            "ranking", "attention", "branches", "branchTrend", "citySummary",
+            "depositIncrease", "depositAverage");
     private static final Set<String> UNITS = Set.of(
             "YUAN", "TEN_THOUSAND", "HUNDRED_MILLION", "COUNT", "TEN_THOUSAND_COUNT",
             "PERCENT", "RATIO");
@@ -185,7 +186,12 @@ public final class CodeScreenPresentationValidator {
         if (!present.containsAll(REQUIRED_FIELDS.get(bindingKey))) {
             throw invalid();
         }
-        if (("trend".equals(bindingKey) || "branchTrend".equals(bindingKey))
+        if ("trend".equals(bindingKey)
+                && !present.contains("deposit") && !present.contains("loan")
+                && !present.contains("depositIncrease")) {
+            throw invalid();
+        }
+        if ("branchTrend".equals(bindingKey)
                 && !present.contains("deposit") && !present.contains("loan")) {
             throw invalid();
         }
@@ -387,14 +393,16 @@ public final class CodeScreenPresentationValidator {
     private static Map<String, Set<String>> fieldKeys() {
         Map<String, Set<String>> result = new HashMap<>();
         result.put("deposit", Set.of("value", "change", "date"));
+        result.put("depositIncrease", Set.of("value", "change", "date"));
+        result.put("depositAverage", Set.of("value", "change", "date"));
         result.put("loan", Set.of("value", "change", "date"));
         result.put("customers", Set.of("value", "change", "date"));
         result.put("revenue", Set.of("value", "change", "date"));
         result.put("rate", Set.of("value", "change", "date"));
-        result.put("trend", Set.of("date", "deposit", "loan", "customers", "rate"));
+        result.put("trend", Set.of("date", "deposit", "loan", "depositIncrease", "customers", "rate"));
         result.put("branchTrend", Set.of("date", "deposit", "loan", "customers", "rate"));
         result.put("composition", Set.of("name", "value"));
-        result.put("ranking", Set.of("orgCode", "name", "value", "change"));
+        result.put("ranking", Set.of("orgCode", "name", "value", "increase", "average", "change"));
         result.put("attention", Set.of("label", "count"));
         result.put("branches", Set.of("orgCode", "orgName", "cityCode", "cityName", "ownerOperatingOrgCode",
                 "parentOrgCode",
@@ -406,6 +414,8 @@ public final class CodeScreenPresentationValidator {
     private static Map<String, Set<String>> requiredFields() {
         Map<String, Set<String>> result = new HashMap<>();
         result.put("deposit", Set.of("value"));
+        result.put("depositIncrease", Set.of("value"));
+        result.put("depositAverage", Set.of("value"));
         result.put("loan", Set.of("value"));
         result.put("customers", Set.of("value"));
         result.put("revenue", Set.of("value"));
@@ -575,7 +585,7 @@ public final class CodeScreenPresentationValidator {
         Set<String> count = Set.of("COUNT", "TEN_THOUSAND_COUNT");
         Set<String> ratio = Set.of("PERCENT", "RATIO");
         return switch (slot) {
-            case "deposit", "loan", "revenue" -> switch (field) {
+            case "deposit", "depositIncrease", "depositAverage", "loan", "revenue" -> switch (field) {
                 case "value" -> amount;
                 case "change" -> ratio;
                 default -> Set.of();
@@ -589,7 +599,13 @@ public final class CodeScreenPresentationValidator {
                 case "value", "change" -> ratio;
                 default -> Set.of();
             };
-            case "trend", "branchTrend" -> switch (field) {
+            case "trend" -> switch (field) {
+                case "deposit", "loan", "depositIncrease" -> amount;
+                case "customers" -> count;
+                case "rate" -> ratio;
+                default -> Set.of();
+            };
+            case "branchTrend" -> switch (field) {
                 case "deposit", "loan" -> amount;
                 case "customers" -> count;
                 case "rate" -> ratio;
@@ -599,7 +615,7 @@ public final class CodeScreenPresentationValidator {
                     ? Set.of("YUAN", "TEN_THOUSAND", "HUNDRED_MILLION", "PERCENT", "RATIO")
                     : Set.of();
             case "ranking" -> switch (field) {
-                case "value" -> amount;
+                case "value", "increase", "average" -> amount;
                 case "change" -> ratio;
                 default -> Set.of();
             };

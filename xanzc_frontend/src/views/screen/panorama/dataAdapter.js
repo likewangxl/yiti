@@ -130,8 +130,9 @@ function metricKind(slot, semantic, unit = null) {
       || (slot === 'rate' && semantic === 'value')) return 'ratio';
   // 构成值允许按比例绑定；只有单位明确为百分数/比例时才走比例换算，
   // 这样同一个 semantic=value 仍可安全表示金额构成。
-  if (semantic === 'value' && (unit === 'PERCENT' || unit === 'RATIO')) return 'ratio';
-  // value in composition/ranking is an amount by the product contract unless the binding says PERCENT/RATIO.
+  if (slot === 'composition' && semantic === 'value' && (unit === 'PERCENT' || unit === 'RATIO')) return 'ratio';
+  // Ranking and amount KPI value fields are always amounts; only composition
+  // value can opt into a ratio unit.
   return 'amount';
 }
 
@@ -173,10 +174,10 @@ function convertMetric(value, unit, kind, slot, semantic, issues) {
 
 function displayUnit(slot, semantic, unit) {
   const kind = metricKind(slot, semantic, unit);
-  if (kind === 'count') return '万户';
-  if (kind === 'ratio') return '%';
+  if (kind === 'count') return ['COUNT', 'TEN_THOUSAND_COUNT'].includes(unit) ? '万户' : null;
+  if (kind === 'ratio') return ['PERCENT', 'RATIO'].includes(unit) ? '%' : null;
   // Panorama model amount values are canonical 亿元 regardless of original raw unit.
-  return unit ? '亿元' : null;
+  return ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'].includes(unit) ? '亿元' : null;
 }
 
 function readDimension(row, binding, semantic, table, slot, issues, required = false) {
@@ -258,7 +259,14 @@ function adaptTrend(slot, table, binding, model, issues) {
     const date = readDimension(row, binding, 'date', table, slot, issues, true);
     const deposit = readMetric(row, binding, 'deposit', table, slot, issues).value;
     const loan = readMetric(row, binding, 'loan', table, slot, issues).value;
-    model.trend.push({ date: date === undefined ? null : date, deposit, loan });
+    const trendRow = { date: date === undefined ? null : date, deposit, loan };
+    // Only the full-screen trend gained the optional net-increase series. Keep
+    // branchTrend's legacy row shape byte-for-byte compatible for consumers
+    // that compare rows rather than reading properties defensively.
+    if (slot === 'trend' && binding.fields?.depositIncrease) {
+      trendRow.depositIncrease = readMetric(row, binding, 'depositIncrease', table, slot, issues).value;
+    }
+    model.trend.push(trendRow);
   }
 }
 
@@ -283,10 +291,16 @@ function adaptRanking(table, binding, model, issues) {
     const orgCode = readDimension(row, binding, 'orgCode', table, 'ranking', issues, true);
     const name = readDimension(row, binding, 'name', table, 'ranking', issues, true);
     const value = readMetric(row, binding, 'value', table, 'ranking', issues, true);
+    const increase = binding.fields?.increase
+      ? readMetric(row, binding, 'increase', table, 'ranking', issues).value : null;
+    const average = binding.fields?.average
+      ? readMetric(row, binding, 'average', table, 'ranking', issues).value : null;
     const change = binding.fields?.change
       ? readMetric(row, binding, 'change', table, 'ranking', issues).value : null;
     // 统一模型以 deposit 作为排名主指标；binding semantic 仍保留 value 以避免猜列名。
-    model.rankings.push({ orgCode: orgCode ?? '', name: name ?? '', deposit: value.value, change });
+    model.rankings.push({
+      orgCode: orgCode ?? '', name: name ?? '', deposit: value.value, increase, average, change
+    });
   }
 }
 
@@ -499,6 +513,8 @@ function adaptSlot(slot, table, binding, model, issues, options) {
     case 'customers':
     case 'revenue':
     case 'rate':
+    case 'depositIncrease':
+    case 'depositAverage':
       adaptSingle(slot, table, binding, model, issues); break;
     case 'trend':
       adaptTrend(slot, table, binding, model, issues); break;
