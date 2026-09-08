@@ -94,6 +94,14 @@ const compositionUnsupportedDatasource = {
     ]
   })
 };
+const autoDatasource = {
+  id: 83, dsName: '机构指标汇总（明确指标目录）', dsType: 'SINGLE', sourceKind: 'WIDE_TABLE', bizLine: 'COMMON', status: 'ACTIVE',
+  configJson: JSON.stringify({
+    table: 'ORG_INDEX_RESULT', scopeMode: 'GLOBAL', aggregation: { groupBy: 'NONE', agg: 'SUM' },
+    fieldMeta: [{ col: 'manual_deposit', role: 'METRIC' }],
+    metrics: [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }]
+  })
+};
 
 describe('PanoramaBindings', () => {
   beforeEach(() => {
@@ -234,6 +242,59 @@ describe('PanoramaBindings', () => {
     expect(wrapper.find('[data-testid="field-option-deposit-value"]').element.disabled).toBe(false);
     expect(wrapper.find('[data-testid="unit-deposit-value"]').element.disabled).toBe(false);
     expect(wrapper.find('[data-testid="datasource-required-hint"]').exists()).toBe(false);
+  });
+
+  it('选择展示内容时只对唯一明确候选自动填来源、字段和亿元单位，并显示待核验摘要', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({
+      ...canvas,
+      canvasStyleJson: JSON.stringify({ presentation: { type: 'CODE', template: 'branch-overview-v1' } }),
+      canvasDraftJson: JSON.stringify({ components: [] })
+    });
+    api.listScreenDatasources.mockResolvedValue([autoDatasource]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="binding-auto-preview"]').exists()).toBe(true));
+    await wrapper.find('[data-testid="slot-depositAverage"]').trigger('click');
+
+    expect(wrapper.find('[data-testid="slot-datasource"]').element.value).toBe('83');
+    expect(wrapper.find('[data-testid="field-option-depositAverage-value"]').element.value).toBe('一般性存款月均余额-机构');
+    expect(wrapper.find('[data-testid="unit-depositAverage-value"]').element.value).toBe('HUNDRED_MILLION');
+    expect(wrapper.find('[data-testid="binding-auto-notice"]').text()).toContain('待核验');
+    expect(wrapper.find('[data-testid="binding-auto-applied"]').text()).toContain('机构指标汇总');
+  });
+
+  it('一键配置空白展示内容不覆盖已有手工字段，且来源切换按语义预填', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({
+      ...canvas,
+      canvasStyleJson: JSON.stringify({ presentation: { type: 'CODE', template: 'branch-overview-v1' } }),
+      canvasDraftJson: JSON.stringify({ components: [{
+        id: 'deposit', component: 'ChartWidget', blockId: 41, innerType: 'METRIC_CARD',
+        propValue: { bindingKey: 'deposit' },
+        bindJson: JSON.stringify({ dsId: 83, period: 'LATEST', fields: { value: 'manual_deposit' }, units: { value: 'YUAN' } })
+      }] })
+    });
+    const switchedSource = {
+      ...autoDatasource,
+      id: 84,
+      dsName: '切换后的机构指标',
+      configJson: JSON.stringify({
+        table: 'ORG_INDEX_RESULT', scopeMode: 'GLOBAL', aggregation: { groupBy: 'NONE', agg: 'SUM' },
+        fieldMeta: [{ col: 'manual_deposit', role: 'METRIC' }],
+        metrics: [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }]
+      })
+    };
+    api.listScreenDatasources.mockResolvedValue([autoDatasource, switchedSource]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="binding-auto-preview"]').exists()).toBe(true));
+
+    await wrapper.find('[data-testid="binding-auto-empty"]').trigger('click');
+    expect(wrapper.vm.collectValidBindings().bindings.deposit.fields.value).toBe('manual_deposit');
+    await wrapper.find('[data-testid="slot-depositAverage"]').trigger('click');
+    await wrapper.find('[data-testid="slot-datasource"]').setValue('84');
+    expect(wrapper.find('[data-testid="field-option-depositAverage-value"]').element.value).toBe('一般性存款月均余额-机构');
+    expect(wrapper.find('[data-testid="unit-depositAverage-value"]').element.value).toBe('HUNDRED_MILLION');
   });
 
   it('已选择数据源但没有适用字段时明确提示，不猜测字段', async () => {
@@ -377,6 +438,7 @@ describe('PanoramaBindings', () => {
     await vi.waitFor(() => expect(wrapper.find('[data-testid="slot-datasource"] option[value="77"]').exists()).toBe(true));
     await wrapper.find('[data-testid="slot-datasource"]').setValue('77');
     await wrapper.find('[data-testid="field-option-deposit-value"]').setValue('deposit_raw');
+    await wrapper.find('[data-testid="unit-deposit-value"]').setValue('HUNDRED_MILLION');
     await wrapper.find('[data-testid="binding-save"]').trigger('click');
     expect(api.saveScreenCanvas).toHaveBeenCalledWith(expect.objectContaining({
       screenId: 9, expectedVersion: 4,
@@ -458,6 +520,7 @@ describe('PanoramaBindings', () => {
     await wrapper.find('[data-testid="conversion-confirm"]').setValue(true);
     await wrapper.find('[data-testid="slot-datasource"]').setValue('77');
     await wrapper.find('[data-testid="field-option-deposit-value"]').setValue('deposit_raw');
+    await wrapper.find('[data-testid="unit-deposit-value"]').setValue('HUNDRED_MILLION');
 
     await wrapper.find('[data-testid="binding-save"]').trigger('click');
     await vi.waitFor(() => expect(api.saveScreenCanvas).toHaveBeenCalledWith(expect.objectContaining({ screenId: 9 })));

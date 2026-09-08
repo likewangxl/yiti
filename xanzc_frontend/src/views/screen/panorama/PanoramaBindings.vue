@@ -4,13 +4,14 @@
       <div>
         <span class="panorama-bindings__eyebrow">大屏管理</span>
         <h1 id="panorama-bindings-title">经营全景大屏管理</h1>
-        <p>选择展示指标和已授权数据源，保存草稿后再预览或发布。</p>
+        <p>按当前大屏范围选择展示内容和已授权数据来源；自动配置只应用明确且唯一的候选，保存草稿后再预览或发布。</p>
       </div>
       <div class="panorama-bindings__actions">
         <button type="button" data-testid="binding-back-workspace" :disabled="writing" @click="navigateWorkspace">返回工作区</button>
         <button type="button" data-testid="binding-datasources" :disabled="writing" @click="navigateDatasources">管理数据源</button>
         <button type="button" data-testid="binding-new-screen" :disabled="writing" @click="openSettings(null)">新建大屏</button>
         <button type="button" data-testid="binding-settings" :disabled="writing || !screenReady" @click="openSettings(activeScreen)">大屏设置</button>
+        <button type="button" data-testid="binding-auto-empty" :disabled="writing || loading || !screenReady" @click="applyDefaultsToEmpty">一键配置空白内容</button>
         <button type="button" data-testid="binding-preview" :disabled="!screenReady || writing" @click="preview">预览</button>
         <button type="button" data-testid="binding-save" :disabled="writing || !screenReady" @click="saveDraft">保存草稿</button>
         <button type="button" data-testid="binding-publish" :disabled="writing || !screenReady" @click="publishDraft">发布</button>
@@ -20,6 +21,7 @@
 
     <p v-if="error" class="panorama-bindings__error" role="alert">{{ error }}</p>
     <p v-if="conflict" class="panorama-bindings__conflict" data-testid="binding-conflict" role="alert">{{ conflict }}</p>
+    <p v-if="autoNotice" class="panorama-bindings__auto-notice" data-testid="binding-auto-notice" role="status">{{ autoNotice }}</p>
     <p v-if="loading" class="panorama-bindings__loading" role="status">正在读取服务端屏配置…</p>
 
     <div class="panorama-bindings__screen-bar">
@@ -51,12 +53,12 @@
 
     <div class="panorama-bindings__body">
       <nav class="panorama-bindings__slots" aria-label="经营指标区域">
-        <h2>槽位</h2>
+        <h2>展示内容</h2>
         <button v-for="slot in slotOrder" :key="slot" type="button"
                 :class="{ 'is-active': selectedSlot === slot, 'is-bound': Boolean(bindingState[slot]?.dsId) }"
                 :data-testid="`slot-${slot}`" @click="selectSlot(slot)">
-          <span>{{ BINDING_SLOTS[slot].label }}</span>
-          <small>{{ bindingState[slot]?.dsId ? '已配置' : '未绑定' }}</small>
+          <span>{{ presentationLabel(slot) }}</span>
+          <small>{{ slotStatusLabel(slot) }}</small>
         </button>
       </nav>
 
@@ -65,11 +67,9 @@
           <header class="panorama-bindings__editor-head">
             <div>
               <h2>{{ selectedSpec.label }}</h2>
-              <p v-if="selectedSlot === 'composition'">{{ compositionMode === 'columns' ? '对公金额/零售金额均需绑定' : '名称/构成值均需绑定' }}</p>
-              <p v-else-if="selectedSpec.oneOfRequired?.length">{{ selectedSpec.oneOfRequired.join('、') }}至少选择一个；{{ selectedSpec.atLeastOneOf?.length ? `${selectedSpec.atLeastOneOf.join('、')}至少选择一个` : '' }}</p>
-              <p v-else>{{ selectedSpec.required?.join('、') || '无必填字段' }}为必填</p>
+              <p data-testid="binding-guidance">{{ selectedGuidance }}</p>
             </div>
-            <span v-if="selectedBinding?.dsId" class="panorama-bindings__bound">已选择数据源</span>
+            <span v-if="selectedBinding?.dsId" class="panorama-bindings__bound">已选择数据来源<span v-if="autoReviewSlots.has(selectedSlot)">·待核验</span></span>
           </header>
 
           <div v-if="selectedSlot === 'composition'" class="panorama-bindings__composition-mode">
@@ -86,7 +86,7 @@
             </p>
           </div>
 
-          <label class="panorama-bindings__field-label" for="panorama-datasource">数据源</label>
+          <label class="panorama-bindings__field-label" for="panorama-datasource">数据配置</label>
           <PanoramaDatasourcePicker
             id="panorama-datasource"
             data-testid="slot-datasource"
@@ -94,22 +94,22 @@
             v-model="selectedDatasourceId"
             @change="onDatasourceChange"
           />
-          <p data-testid="datasource-option-count" class="panorama-bindings__hint">当前屏可选数据源：{{ selectableDatasourceCount }} 个</p>
-          <p v-if="!selectableDatasourceCount" class="panorama-bindings__hint">当前屏范围没有可用的数据源。</p>
-          <p v-if="!selectedDatasource" data-testid="datasource-required-hint" class="panorama-bindings__hint">请先选择数据源，再配置字段和单位。</p>
-          <p v-else-if="selectedFieldSpecs.length && !hasApplicableFieldOptions" data-testid="datasource-fields-unavailable-hint" class="panorama-bindings__hint">已选择数据源，但没有适用字段候选，请核对字段角色或元数据。</p>
+          <p data-testid="datasource-option-count" class="panorama-bindings__hint">当前屏可选数据源：{{ selectableDatasourceCount }} 个数据来源</p>
+          <p v-if="!selectableDatasourceCount" class="panorama-bindings__hint">当前屏范围没有可用的数据来源。</p>
+          <p v-if="!selectedDatasource" data-testid="datasource-required-hint" class="panorama-bindings__hint">请先选择数据源（数据来源），再配置展示字段和单位。</p>
+          <p v-else-if="selectedFieldSpecs.length && !hasApplicableFieldOptions" data-testid="datasource-fields-unavailable-hint" class="panorama-bindings__hint">已选择数据来源，但没有适用字段候选（展示字段），请核对字段角色或元数据。</p>
 
           <div class="panorama-bindings__fields">
             <div v-for="fieldSpec in selectedFieldSpecs" :key="fieldSpec.semantic" class="panorama-bindings__field-row">
               <label :for="`panorama-field-${fieldSpec.semantic}`">
-                {{ fieldSpec.label }}<em v-if="fieldSpec.required">必填</em>
+                {{ fieldSpec.label }}<em v-if="fieldSpec.required">需要配置</em>
               </label>
               <select :id="`panorama-field-${fieldSpec.semantic}`"
                       :data-testid="`field-option-${selectedSlot}-${fieldSpec.semantic}`"
                       :disabled="!selectedDatasource"
                       :value="selectedBinding.fields[fieldSpec.semantic] || ''"
                       @change="setField(fieldSpec.semantic, $event.target.value)">
-                <option value="">未绑定</option>
+                <option value="">待配置</option>
                 <option v-for="option in fieldOptionsFor(fieldSpec.semantic)" :key="option.col" :value="option.col">
                   {{ option.label }}（{{ option.col }}）
                 </option>
@@ -130,12 +130,28 @@
           <select id="panorama-period" data-testid="binding-period" v-model="selectedBinding.period">
             <option v-for="period in PERIOD_VALUES" :key="period" :value="period">{{ PERIOD_LABELS[period] }}</option>
           </select>
-          <p class="panorama-bindings__hint">字段候选来自数据源已保存的字段说明；单位缺失时不会猜测。</p>
+          <p class="panorama-bindings__hint">字段候选来自数据来源已保存的字段说明；单位缺失时不会猜测，可随时修改配置。</p>
           <p v-if="selectedSlot === 'citySummary'" class="panorama-bindings__hint">城市汇总必须选择已按城市汇总的数据源；系统不会把支行机构数据相加成城市指标。</p>
         </template>
-        <p v-else>请选择一个槽位。</p>
+        <p v-else>请选择一个展示内容。</p>
       </main>
     </div>
+
+    <section v-if="screenReady" class="panorama-bindings__auto-preview" data-testid="binding-auto-preview" aria-labelledby="binding-auto-preview-title">
+      <div class="panorama-bindings__auto-preview-head">
+        <div>
+          <h2 id="binding-auto-preview-title">自动配置预览</h2>
+          <p>已应用的内容仍可修改；缺口、歧义和待核验来源不会被标记为真实联调完成。</p>
+        </div>
+        <span>{{ autoPreview.applied.length }} 项已应用 · {{ autoPreview.gaps.length }} 项待处理</span>
+      </div>
+      <div v-if="autoPreview.applied.length" class="panorama-bindings__auto-preview-list" data-testid="binding-auto-applied">
+        <p v-for="item in autoPreview.applied" :key="`applied-${item.slot}`">{{ item.summary }}</p>
+      </div>
+      <div v-if="autoPreview.gaps.length" class="panorama-bindings__auto-preview-list is-gap" data-testid="binding-auto-gaps">
+        <p v-for="item in autoPreview.gaps" :key="`gap-${item.slot}`">{{ presentationLabel(item.slot) }}：{{ item.message }}</p>
+      </div>
+    </section>
 
     <PanoramaIntegrationReadiness
       :slot-order="slotOrder"
@@ -149,7 +165,7 @@
 
     <footer class="panorama-bindings__footer">
       <label for="panorama-publish-reason">发布原因</label>
-      <input id="panorama-publish-reason" data-testid="publish-reason" v-model="publishReason" maxlength="500" placeholder="发布时必填" />
+      <input id="panorama-publish-reason" data-testid="publish-reason" v-model="publishReason" maxlength="500" placeholder="发布时需要填写原因" />
       <span>当前版本 {{ canvasVersion ?? '-' }}</span>
     </footer>
 
@@ -188,6 +204,13 @@ import {
   validateBinding
 } from './bindings';
 import { RETAIL_SLOT_ORDER, RETAIL_BINDING_SLOTS } from './retailBindings';
+import {
+  applyDefaultBindings,
+  bindingPreview,
+  prefillBindingForDatasource,
+  resolveDefaultBinding,
+  AUTO_BIND_STATUS
+} from './defaultBindings';
 import PanoramaSettings from './PanoramaSettings.vue';
 import PanoramaIntegrationReadiness from './PanoramaIntegrationReadiness.vue';
 import PanoramaDatasourcePicker from './PanoramaDatasourcePicker.vue';
@@ -218,6 +241,10 @@ const screenReady = ref(false);
 const settingsVisible = ref(false);
 const settingsTarget = ref(null);
 const compositionMode = ref('rows');
+const autoNotice = ref('');
+const autoGaps = ref([]);
+const autoReviewSlots = reactive(new Set());
+const manualSlots = reactive(new Set());
 let loadGeneration = 0;
 let disposed = false;
 let settingsRefreshGeneration = 0;
@@ -229,6 +256,9 @@ const slotOrder = computed(() => isRetailTemplate.value ? RETAIL_SLOT_ORDER : SL
 function changeTemplate() {
   selectedSlot.value = slotOrder.value.find(slot => bindingState[slot]) || slotOrder.value[0];
   conversionAccepted.value = draftComponents.value.length === 0;
+  autoNotice.value = '';
+  autoGaps.value = [];
+  applyDefaultToSlot(selectedSlot.value);
 }
 const writing = computed(() => saving.value || publishing.value || discarding.value);
 const templateSpec = slot => (isRetailTemplate.value ? RETAIL_BINDING_SLOTS[slot] : BINDING_SLOTS[slot]);
@@ -294,9 +324,49 @@ const legacyComponents = computed(() => draftComponents.value.length && !isCodeP
   ? draftComponents.value : []);
 
 const screenScope = computed(() => ({
+  viewLevel: activeScreen.value?.viewLevel || activeScreen.value?.view_level || 'BRANCH',
   bizLine: activeScreen.value?.bizLine || activeScreen.value?.biz_line || 'COMMON',
-  orgScopeMode: activeScreen.value?.orgScopeMode || activeScreen.value?.org_scope_mode || 'LEGACY_CONTEXT'
+  orgScopeMode: activeScreen.value?.orgScopeMode || activeScreen.value?.org_scope_mode || 'LEGACY_CONTEXT',
+  orgGroupCode: activeScreen.value?.orgGroupCode || activeScreen.value?.org_group_code || ''
 }));
+
+const autoPreview = computed(() => bindingPreview({
+  template: selectedTemplate.value,
+  screenScope: screenScope.value,
+  datasources: datasources.value,
+  bindings: bindingState,
+  slots: slotOrder.value
+}));
+
+function presentationLabel(slot) {
+  return templateSpec(slot)?.label || slot;
+}
+
+function slotStatusLabel(slot) {
+  if (autoReviewSlots.has(slot)) return '已配置·待核验';
+  return bindingState[slot]?.dsId ? '已配置' : '待配置';
+}
+
+function fieldLabel(slot, semantic) {
+  return templateSpec(slot)?.fields?.find(item => item.semantic === semantic)?.label || semantic;
+}
+
+const selectedGuidance = computed(() => {
+  if (!selectedSpec.value) return '请选择展示内容';
+  if (selectedSlot.value === 'composition') {
+    return compositionMode.value === 'columns'
+      ? '对公金额/零售金额均需绑定；对公业务、零售业务都需要配置，来源必须明确返回一行双列数据。'
+      : '构成名称/构成值均需绑定（两项都需要配置），来源必须明确声明对应字段。';
+  }
+  const labels = (selectedSpec.value.required || []).map(semantic => fieldLabel(selectedSlot.value, semantic));
+  const oneOf = (selectedSpec.value.oneOfRequired || []).map(semantic => fieldLabel(selectedSlot.value, semantic));
+  const anyOf = (selectedSpec.value.atLeastOneOf || []).map(semantic => fieldLabel(selectedSlot.value, semantic));
+  const parts = [];
+  if (labels.length) parts.push(`${labels.join('、')}需要配置`);
+  if (oneOf.length) parts.push(`身份字段请选择${oneOf.join('或')}`);
+  if (anyOf.length) parts.push(`${anyOf.join('、')}至少配置一项`);
+  return parts.join('；') || '可按需要配置展示字段，单位必须有明确依据。';
+});
 
 function isCompositionColumnsDatasource(source = {}) {
   const config = parseDatasourceConfig(source.configJson);
@@ -332,6 +402,71 @@ function emptyBinding(slot = '') {
   };
 }
 
+function writeBinding(slot, binding) {
+  if (!binding) return;
+  bindingState[slot] = {
+    ...emptyBinding(slot),
+    ...binding,
+    fields: { ...(binding.fields || {}) },
+    units: { ...(binding.units || {}) }
+  };
+}
+
+function autoInput(slot = selectedSlot.value, existing = bindingState[slot]) {
+  return {
+    slot,
+    template: selectedTemplate.value,
+    screenScope: screenScope.value,
+    datasources: datasources.value,
+    existingBinding: existing,
+    // 用户明确切换过构成模式后尊重其选择；初次进入时让默认解析器根据
+    // 固定对公/零售列契约尝试双列模式，不把列式来源误当成行式来源。
+    mode: slot === 'composition' && manualSlots.has(slot) ? compositionMode.value : undefined
+  };
+}
+
+function applyDefaultToSlot(slot = selectedSlot.value) {
+  if (!screenReady.value || !slot || manualSlots.has(slot)) return null;
+  const current = bindingState[slot] || emptyBinding(slot);
+  if (current.dsId || Object.keys(current.fields || {}).length) return null;
+  const result = resolveDefaultBinding(autoInput(slot, current));
+  if (result.status === AUTO_BIND_STATUS.APPLIED && result.binding) {
+    writeBinding(slot, result.binding);
+    if (slot === 'composition' && result.binding.fields?.corporate && result.binding.fields?.retail) {
+      compositionMode.value = 'columns';
+    }
+    autoReviewSlots.add(slot);
+    autoGaps.value = autoGaps.value.filter(item => item.slot !== slot);
+    autoNotice.value = `${presentationLabel(slot)}已配置·待核验：请核对来源范围和返回结果。`;
+  } else if (result.gap) {
+    const existing = autoGaps.value.filter(item => item.slot !== slot);
+    autoGaps.value = [...existing, { slot, status: result.status, message: result.gap }];
+    autoNotice.value = `${presentationLabel(slot)}暂未自动配置：${result.gap}`;
+  }
+  return result;
+}
+
+function applyDefaultsToEmpty() {
+  if (!screenReady.value) return null;
+  const result = applyDefaultBindings({
+    template: selectedTemplate.value,
+    screenScope: screenScope.value,
+    datasources: datasources.value,
+    bindings: bindingState,
+    slots: slotOrder.value
+  });
+  for (const slot of result.applied) {
+    writeBinding(slot, result.bindings[slot]);
+    autoReviewSlots.add(slot);
+  }
+  for (const slot of result.preserved) autoReviewSlots.delete(slot);
+  autoGaps.value = result.gaps;
+  autoNotice.value = result.applied.length
+    ? `已为 ${result.applied.length} 项空白展示内容应用明确候选；${result.gaps.length} 项仍需处理，已配置内容未被覆盖。`
+    : (result.gaps.length ? `没有新增自动配置；${result.gaps.length} 项展示内容存在缺口或歧义。` : '没有空白展示内容。');
+  return result;
+}
+
 function parse(value, fallback = {}) {
   try {
     const parsed = typeof value === 'string' ? JSON.parse(value) : value;
@@ -358,6 +493,10 @@ function clearCanvasState() {
   bindingState[selectedSlot.value] = emptyBinding(selectedSlot.value);
   compositionMode.value = 'rows';
   conversionAccepted.value = false;
+  autoNotice.value = '';
+  autoGaps.value = [];
+  autoReviewSlots.clear();
+  manualSlots.clear();
   screenReady.value = false;
 }
 
@@ -372,6 +511,10 @@ function resetBindings(components) {
   selectedSlot.value = first;
   if (!bindingState[first]) bindingState[first] = emptyBinding(first);
   compositionMode.value = getCompositionMode(bindingState.composition || {});
+  autoReviewSlots.clear();
+  manualSlots.clear();
+  autoGaps.value = [];
+  autoNotice.value = '';
 }
 
 async function loadScreens() {
@@ -474,6 +617,7 @@ function selectSlot(slot) {
   if (!Object.prototype.hasOwnProperty.call(BINDING_SLOTS, slot)) return;
   selectedSlot.value = slot;
   if (!bindingState[slot]) bindingState[slot] = emptyBinding(slot);
+  applyDefaultToSlot(slot);
 }
 
 function setCompositionMode(value) {
@@ -486,6 +630,8 @@ function setCompositionMode(value) {
     delete binding.units[semantic];
   }
   compositionMode.value = nextMode;
+  manualSlots.add(selectedSlot.value);
+  autoReviewSlots.delete(selectedSlot.value);
   conflict.value = '';
 }
 
@@ -505,17 +651,36 @@ function onDatasourceChange(value) {
     if (!binding.fields[semantic]) delete binding.units[semantic];
   }
   fillProvenUnits(binding);
+  const source = selectedDatasource.value;
+  if (source) {
+    const result = prefillBindingForDatasource({
+      slot: selectedSlot.value,
+      template: selectedTemplate.value,
+      screenScope: screenScope.value,
+      datasource: source,
+      binding,
+      mode: selectedSlot.value === 'composition' && manualSlots.has(selectedSlot.value)
+        ? compositionMode.value : undefined
+    });
+    if (result.binding) writeBinding(selectedSlot.value, result.binding);
+    if (result.status === AUTO_BIND_STATUS.APPLIED && result.appliedSemantics?.length) {
+      autoReviewSlots.add(selectedSlot.value);
+      autoNotice.value = `${presentationLabel(selectedSlot.value)}已按当前数据来源预填明确字段，可继续修改配置。`;
+    } else if (result.gap) {
+      autoGaps.value = [...autoGaps.value.filter(item => item.slot !== selectedSlot.value), {
+        slot: selectedSlot.value, status: result.status, message: result.gap
+      }];
+      autoNotice.value = `${presentationLabel(selectedSlot.value)}：${result.gap}`;
+    }
+  }
   conflict.value = '';
 }
 
 function fillProvenUnits(binding) {
+  // amountScale 是字段展示元数据，不是查询结果的输入单位；旧实现把所有
+  // amountScale 都写成 YUAN，会把亿元/万元来源静默换算错。单位只能由已保存
+  // 绑定、受控宽表口径或用户明确选择提供。
   if (!binding?.fields || !binding?.units) return;
-  const source = datasources.value.find(item => String(item.id) === String(binding.dsId));
-  const options = getDatasourceFieldOptions(source || {});
-  for (const [semantic, column] of Object.entries(binding.fields)) {
-    if (binding.units[semantic]) continue;
-    if (options.some(option => option.col === column && option.amountScale)) binding.units[semantic] = 'YUAN';
-  }
 }
 
 function setField(semantic, value) {
@@ -525,16 +690,15 @@ function setField(semantic, value) {
     delete binding.fields[semantic];
     delete binding.units[semantic];
   }
-  // amountScale 只证明 rows 的原始金额按元返回；管理端显示“原始元值”并保存 YUAN。
-  if (value && !binding.units[semantic]) {
-    const option = fieldOptionsFor(semantic).find(item => item.col === value);
-    if (option?.amountScale) binding.units[semantic] = 'YUAN';
-  }
+  manualSlots.add(selectedSlot.value);
+  autoReviewSlots.delete(selectedSlot.value);
 }
 
 function setUnit(semantic, value) {
   if (value) selectedBinding.value.units[semantic] = value;
   else delete selectedBinding.value.units[semantic];
+  manualSlots.add(selectedSlot.value);
+  autoReviewSlots.delete(selectedSlot.value);
 }
 
 function unitFor(semantic) {
@@ -545,12 +709,27 @@ function unitFor(semantic) {
 function unitHint(semantic) {
   const column = selectedBinding.value.fields?.[semantic];
   const option = fieldOptionsFor(semantic).find(item => item.col === column);
-  return option?.amountScale ? '数据源已声明金额展示尺度，按原始元值保存，运行时只换算一次。' : '';
+  return option?.amountScale ? '数据来源声明了原始元值展示尺度；它不等于输入单位，请确认后选择。' : '';
 }
 
 function unitLabel(unit) {
   return ({ YUAN: '原始元值（YUAN）', TEN_THOUSAND: '原始万元', HUNDRED_MILLION: '原始亿元',
     COUNT: '原始个数', TEN_THOUSAND_COUNT: '原始万户', PERCENT: '百分数', RATIO: '比例（运行时转百分数）' })[unit] || unit;
+}
+
+function friendlyBindingIssue(slot, message) {
+  let output = String(message || '');
+  const spec = templateSpec(slot);
+  for (const field of spec?.fields || []) {
+    output = output.replaceAll(`字段: ${field.semantic}`, `展示内容：${field.label}`)
+      .replaceAll(`字段 ${field.semantic}`, `展示内容“${field.label}”`)
+      .replaceAll(`字段类型或元数据不匹配：${field.semantic}`, `展示内容“${field.label}”的字段类型或元数据不匹配`)
+      .replaceAll(`单位: ${field.semantic}`, `展示内容“${field.label}”的单位`)
+      .replaceAll(`单位未绑定字段: ${field.semantic}`, `展示内容“${field.label}”的单位未绑定字段`)
+      .replaceAll(`单位无效: ${field.semantic}`, `展示内容“${field.label}”的单位无效`)
+      .replaceAll(`单位不适用: ${field.semantic}`, `展示内容“${field.label}”的单位不适用`);
+  }
+  return output;
 }
 
 function collectValidBindings() {
@@ -588,11 +767,11 @@ function collectValidBindings() {
         problems.push(`${BINDING_SLOTS[slot].label}：columns 模式仅允许 WIDE_TABLE 且表为 ORG_INDEX_RESULT`);
       }
     }
-    if (slotProblems.length) problems.push(...slotProblems.map(message => `${BINDING_SLOTS[slot].label}：${message}`));
+    if (slotProblems.length) problems.push(...slotProblems.map(message => `${presentationLabel(slot)}：${friendlyBindingIssue(slot, message)}`));
     let fieldProblemCount = 0;
     for (const [semantic, column] of Object.entries(candidate.fields || {})) {
       if (!fieldOptionsForBinding(slot, semantic, candidate.dsId).some(option => option.col === column)) {
-        problems.push(`${BINDING_SLOTS[slot].label}：字段类型或元数据不匹配：${semantic}`);
+        problems.push(`${presentationLabel(slot)}：展示内容“${fieldLabel(slot, semantic)}”的字段类型或元数据不匹配`);
         fieldProblemCount += 1;
       }
     }
@@ -613,7 +792,7 @@ function savePayload(targetId = activeScreenId.value) {
   }
   const { bindings, problems } = collectValidBindings();
   if (problems.length) throw new Error(problems.join('；'));
-  if (!Object.keys(bindings).length) throw new Error('至少绑定一个经营槽位后才能保存');
+  if (!Object.keys(bindings).length) throw new Error('至少配置一个展示内容后才能保存');
   if (isRetailTemplate.value && !isRetailScreen.value) throw new Error('零售经营模板仅适用于零售条线大屏，请先核对大屏设置');
   const presentation = { type: 'CODE', template: selectedTemplate.value };
   const style = { ...canvasStyle.value, presentation };
@@ -623,11 +802,15 @@ function savePayload(targetId = activeScreenId.value) {
 }
 
 function adoptSaveResponse(resp, fallbackComponents) {
+  const reviewSlots = new Set(autoReviewSlots);
   if (resp && Number.isSafeInteger(resp.canvasVersion)) canvas.value = { ...canvas.value, canvasVersion: resp.canvasVersion };
   const draft = parse(resp?.canvasDraftJson, null);
   draftComponents.value = Array.isArray(draft?.components) ? draft.components : fallbackComponents;
   canvasStyle.value = { ...canvasStyle.value, presentation: { type: 'CODE', template: selectedTemplate.value } };
   resetBindings(draftComponents.value);
+  for (const slot of reviewSlots) {
+    if (bindingState[slot]?.dsId) autoReviewSlots.add(slot);
+  }
 }
 
 function writeIsCurrent(targetId, token) {
@@ -779,7 +962,10 @@ onBeforeUnmount(() => {
   loading.value = false;
 });
 
-defineExpose({ loadScreens, loadCanvas, saveDraft, publishDraft, discardDraft, collectValidBindings, onSettingsSaved });
+defineExpose({
+  loadScreens, loadCanvas, saveDraft, publishDraft, discardDraft, collectValidBindings, onSettingsSaved,
+  applyDefaultToSlot, applyDefaultsToEmpty, autoPreview
+});
 </script>
 
 <style scoped>
@@ -799,6 +985,7 @@ button:disabled { cursor:not-allowed; opacity:.55; }
 .panorama-bindings__error, .panorama-bindings__conflict { max-width:1240px; margin:0 auto 14px; padding:10px 14px; border-radius:6px; }
 .panorama-bindings__error { color:#a11a2b; background:#fff0f1; border:1px solid #ffd2d6; }
 .panorama-bindings__conflict { color:#8b5b00; background:#fff8e5; border:1px solid #f6df9d; }
+.panorama-bindings__auto-notice { max-width:1240px; margin:0 auto 14px; padding:10px 14px; border-radius:6px; color:#355487; background:#eef5ff; border:1px solid #cbdcf8; }
 .panorama-bindings__loading { max-width:1240px; margin:0 auto 14px; color:#4767d8; }
 .panorama-bindings__legacy { max-width:1240px; margin:0 auto 14px; display:flex; flex-direction:column; gap:8px; padding:12px 16px; color:#714c00; background:#fff8e5; border:1px solid #f6df9d; border-radius:8px; font-size:13px; }
 .panorama-bindings__body { display:grid; grid-template-columns:240px minmax(0,1fr); gap:14px; }
@@ -822,5 +1009,12 @@ button:disabled { cursor:not-allowed; opacity:.55; }
 .panorama-bindings__footer { justify-content:flex-end; margin-top:14px; }
 .panorama-bindings__footer input { min-width:280px; }
 .panorama-bindings__settings-panel { position:fixed; top:0; right:0; bottom:0; z-index:40; width:min(720px, 100vw); overflow:auto; box-shadow:-8px 0 28px rgba(31,45,61,.22); }
+.panorama-bindings__auto-preview { max-width:1240px; margin:14px auto 0; padding:16px; border:1px solid #e3eaf2; border-radius:8px; background:#fff; }
+.panorama-bindings__auto-preview-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; }
+.panorama-bindings__auto-preview-head h2 { margin:0 0 4px; font-size:15px; }
+.panorama-bindings__auto-preview-head p, .panorama-bindings__auto-preview-head > span { color:#718096; font-size:12px; }
+.panorama-bindings__auto-preview-list { display:grid; gap:5px; margin-top:10px; }
+.panorama-bindings__auto-preview-list p { margin:0; padding:7px 10px; background:#f5fbf8; color:#166b4b; font-size:12px; border-radius:5px; }
+.panorama-bindings__auto-preview-list.is-gap p { background:#fff8e5; color:#8b5b00; }
 @media (max-width: 760px) { .panorama-bindings__header, .panorama-bindings__body { display:block; } .panorama-bindings__actions { margin-top:12px; } .panorama-bindings__slots { margin-bottom:14px; } .panorama-bindings__field-row { grid-template-columns:1fr; } .panorama-bindings__unit-hint { grid-column:auto; } .panorama-bindings__footer { flex-wrap:wrap; justify-content:flex-start; } }
 </style>

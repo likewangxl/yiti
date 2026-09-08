@@ -1,0 +1,222 @@
+// @vitest-environment happy-dom
+import { describe, expect, it } from 'vitest';
+import {
+  applyDefaultBindings,
+  resolveDefaultBinding,
+  summarizeBinding
+} from '../defaultBindings';
+
+const screenScope = {
+  viewLevel: 'PROVINCE',
+  bizLine: 'COMMON',
+  orgScopeMode: 'LEGACY_CONTEXT'
+};
+
+function source(id, config, extra = {}) {
+  return {
+    id,
+    dsName: `来源${id}`,
+    sourceKind: 'WIDE_TABLE',
+    bizLine: 'COMMON',
+    status: 'ACTIVE',
+    configJson: JSON.stringify(config),
+    ...extra
+  };
+}
+
+function orgWideSource(id, metrics, aggregation = { groupBy: 'NONE', agg: 'SUM' }, extra = {}, configExtra = {}) {
+  return source(id, {
+    table: 'ORG_INDEX_RESULT',
+    subjectCol: 'org_code',
+    scopeMode: 'GLOBAL',
+    aggregation,
+    metrics,
+    ...configExtra
+  }, extra);
+}
+
+describe('defaultBindings', () => {
+  it('只在固定指标编码唯一且语义完整时自动绑定，并按已确认宽表口径设为亿元', () => {
+    const result = resolveDefaultBinding({
+      slot: 'depositAverage',
+      template: 'branch-overview-v1',
+      screenScope,
+      datasources: [orgWideSource(9014, [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }])]
+    });
+
+    expect(result.status).toBe('applied');
+    expect(result.binding).toMatchObject({
+      dsId: 9014,
+      fields: { value: '一般性存款月均余额-机构' },
+      units: { value: 'HUNDRED_MILLION' }
+    });
+    expect(result.binding.fields.value).not.toBe('M_0265');
+  });
+
+  it('同一语义存在多个可用来源时保留缺口，不按数组首项猜测', () => {
+    const result = resolveDefaultBinding({
+      slot: 'depositAverage',
+      template: 'branch-overview-v1',
+      screenScope,
+      datasources: [
+        orgWideSource(9014, [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }]),
+        orgWideSource(9015, [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }], { groupBy: 'SUBJECT', agg: 'SUM' })
+      ]
+    });
+
+    expect(result.status).toBe('ambiguous');
+    expect(result.binding).toBeNull();
+    expect(result.gap).toContain('多个');
+    expect(result.candidates).toHaveLength(2);
+  });
+
+  it('相同一行结构仅多了无关指标时稳定消除等价候选，范围或过滤不同仍保留歧义', () => {
+    const sameShape = [
+      orgWideSource(9014, [
+        { metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 },
+        { metricCode: 'M_0277', metricName: '对公一般性存款余额-机构', slot: 18 },
+        { metricCode: 'M_0266', metricName: '一般性存款月均余额较上月-机构', slot: 51 }
+      ]),
+      orgWideSource(9010, [
+        { metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 },
+        { metricCode: 'M_0277', metricName: '对公一般性存款余额-机构', slot: 18 }
+      ])
+    ];
+    const collapsed = resolveDefaultBinding({ slot: 'depositAverage', template: 'branch-overview-v1', screenScope, datasources: sameShape });
+    expect(collapsed.status).toBe('applied');
+    expect(collapsed.binding.dsId).toBe(9010);
+    expect(collapsed.candidates).toHaveLength(1);
+
+    const differentFilter = resolveDefaultBinding({
+      slot: 'depositAverage', template: 'branch-overview-v1', screenScope,
+      datasources: [
+        ...sameShape,
+        orgWideSource(9016, [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }],
+          { groupBy: 'NONE', agg: 'SUM', filters: [{ col: 'org_code', op: 'IN', value: 'A,B' }] })
+      ]
+    });
+    expect(differentFilter.status).toBe('ambiguous');
+    expect(differentFilter.candidates.map(item => item.id)).toContain(9016);
+  });
+
+  it('按当前机构范围过滤来源，命名机构组不能套用全局汇总', () => {
+    const result = resolveDefaultBinding({
+      slot: 'depositAverage',
+      template: 'branch-overview-v1',
+      screenScope: { ...screenScope, orgScopeMode: 'NAMED_GROUP' },
+      datasources: [orgWideSource(9014, [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }])]
+    });
+
+    expect(result.status).toBe('missing');
+    expect(result.gap).toContain('范围');
+  });
+
+  it('固定对公/零售指标成对且一行来源明确时自动选择双列展示配置', () => {
+    const result = resolveDefaultBinding({
+      slot: 'composition', template: 'branch-overview-v1', screenScope,
+      datasources: [orgWideSource(9014, [
+        { metricCode: 'M_0277', metricName: '对公一般性存款余额-机构', slot: 18 },
+        { metricCode: 'M_0309', metricName: '零售一般性存款余额-机构', slot: 30 }
+      ])]
+    });
+    expect(result.status).toBe('applied');
+    expect(result.binding.fields).toEqual({
+      corporate: '对公一般性存款余额-机构',
+      retail: '零售一般性存款余额-机构'
+    });
+    expect(result.binding.units).toEqual({ corporate: 'HUNDRED_MILLION', retail: 'HUNDRED_MILLION' });
+  });
+
+  it('一键配置只写入空展示内容，已保存/手工配置保持不变', () => {
+    const existing = {
+      deposit: { dsId: 33, period: 'LATEST', fields: { value: 'manual_deposit' }, units: { value: 'YUAN' } },
+      depositAverage: null
+    };
+    const result = applyDefaultBindings({
+      template: 'branch-overview-v1',
+      screenScope,
+      datasources: [
+        orgWideSource(9014, [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }])
+      ],
+      bindings: existing
+    });
+
+    expect(result.bindings.deposit).toEqual(existing.deposit);
+    expect(result.bindings.depositAverage).toMatchObject({ dsId: 9014 });
+    expect(result.applied).toContain('depositAverage');
+  });
+
+  it('切换模板时零售来源与共用来源隔离', () => {
+    const result = resolveDefaultBinding({
+      slot: 'retailAum',
+      template: 'retail-overview-v1',
+      screenScope: { viewLevel: 'PROVINCE', bizLine: 'RETAIL', orgScopeMode: 'NAMED_GROUP' },
+      datasources: [
+        orgWideSource(1, [{ metricCode: 'RETAIL_AUM', metricName: 'aum', semantic: 'aum', unit: 'HUNDRED_MILLION' }]),
+        source(2, {
+          table: 'ORG_INDEX_RESULT', subjectCol: 'org_code', scopeMode: 'NAMED_GROUP',
+          aggregation: { groupBy: 'SUBJECT', agg: 'SUM' },
+          metrics: [{ metricCode: 'RETAIL_AUM', metricName: 'aum', semantic: 'aum', unit: 'HUNDRED_MILLION' }]
+        }, { bizLine: 'RETAIL' })
+      ]
+    });
+
+    expect(result.status).toBe('applied');
+    expect(result.binding.dsId).toBe(2);
+  });
+
+  it('缺少明确单位、常量目标、对公贷款和城市身份时均不自动绑定', () => {
+    const missingUnit = resolveDefaultBinding({
+      slot: 'depositAverage', template: 'branch-overview-v1', screenScope,
+      datasources: [source(1, {
+        table: 'OTHER_TABLE',
+        metrics: [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', semantic: 'depositAverage' }]
+      })]
+    });
+    const constant = resolveDefaultBinding({
+      slot: 'rate', template: 'branch-overview-v1', screenScope,
+      datasources: [source(2, {
+        sourceType: 'CONSTANT',
+        fields: [{ col: 'rate', semantic: 'completionRate', role: 'METRIC', unit: 'PERCENT' }]
+      })]
+    });
+    const corporateLoan = resolveDefaultBinding({
+      slot: 'loan', template: 'branch-overview-v1', screenScope,
+      datasources: [orgWideSource(3, [{ metricCode: 'M_0347', metricName: '对公一般性贷款余额-机构', semantic: 'loan', unit: 'HUNDRED_MILLION' }])]
+    });
+    const city = resolveDefaultBinding({
+      slot: 'citySummary', template: 'branch-overview-v1', screenScope,
+      datasources: [orgWideSource(4, [{ metricCode: 'M_0277', metricName: '对公一般性存款余额-机构', semantic: 'deposit', unit: 'HUNDRED_MILLION' }], { groupBy: 'SUBJECT', agg: 'SUM' })]
+    });
+
+    expect(missingUnit.status).toBe('missing');
+    expect(missingUnit.gap).toContain('单位');
+    expect(constant.status).toBe('blocked');
+    expect(constant.gap).toContain('常量');
+    expect(corporateLoan.status).toBe('blocked');
+    expect(corporateLoan.gap).toContain('对公');
+    expect(city.status).toBe('missing');
+    expect(city.gap).toContain('城市');
+  });
+
+  it('维度元数据即使错误携带单位也只按身份字段处理，不抛异常', () => {
+    const result = resolveDefaultBinding({
+      slot: 'citySummary', template: 'branch-overview-v1', screenScope,
+      datasources: [orgWideSource(7, [{ metricCode: 'M_0277', metricName: '对公一般性存款余额-机构', semantic: 'deposit', unit: 'HUNDRED_MILLION' }],
+        { groupBy: 'SUBJECT', agg: 'SUM' }, {}, {
+          fieldMeta: [{ col: 'city_code', semantic: 'cityCode', role: 'DIM', unit: 'YUAN' }]
+        })]
+    });
+    expect(result.status).toBe('applied');
+    expect(result.binding.fields.cityCode).toBe('city_code');
+    expect(result.binding.units.cityCode).toBeUndefined();
+  });
+
+  it('摘要使用业务语言并显示来源、字段、单位', () => {
+    expect(summarizeBinding('存款月均余额', {
+      dsId: 9014,
+      fields: { value: '一般性存款月均余额-机构' },
+      units: { value: 'HUNDRED_MILLION' }
+    }, [{ id: 9014, dsName: '机构指标汇总' }])).toContain('机构指标汇总 → 一般性存款月均余额-机构（亿元）');
+  });
+});
