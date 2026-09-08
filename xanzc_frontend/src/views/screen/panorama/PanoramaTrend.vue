@@ -1,8 +1,26 @@
 <template>
-  <section class="panorama-trend" :class="{ 'is-compact': compact }" :aria-label="title">
+  <section class="panorama-trend" :class="{ 'is-compact': compact }" :aria-label="title" data-testid="panorama-trend">
     <div class="panorama-panel-heading">
       <h2>{{ title }}</h2>
-      <span v-if="dataDate" class="panorama-panel-date">{{ dataDate }}</span>
+      <div class="panorama-trend-heading-actions">
+        <div v-if="switchable" class="panorama-segmented panorama-trend-switch" role="group" aria-label="趋势指标">
+          <button
+            type="button"
+            data-trend-mode="depositIncrease"
+            :class="{ active: metricMode === 'depositIncrease' }"
+            :disabled="!canShowDepositIncrease"
+            @click="metricMode = 'depositIncrease'"
+          >存款净增</button>
+          <button
+            type="button"
+            data-trend-mode="deposit"
+            :class="{ active: metricMode === 'deposit' }"
+            :disabled="!hasBalance"
+            @click="metricMode = 'deposit'"
+          >存贷款余额</button>
+        </div>
+        <span v-if="dataDate" class="panorama-panel-date">{{ dataDate }}</span>
+      </div>
     </div>
     <v-chart
       v-if="hasChart"
@@ -16,7 +34,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { LineChart } from 'echarts/charts';
@@ -27,6 +45,7 @@ import {
   TooltipComponent
 } from 'echarts/components';
 import VChart from 'vue-echarts';
+import { defaultTrendMetric, finiteMetric, hasTrendMetric } from './panoramaViewModel.js';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent, AxisPointerComponent]);
 
@@ -36,30 +55,58 @@ const props = defineProps({
   title: { type: String, default: '主要指标趋势' },
   dataDate: { type: String, default: '' },
   compact: { type: Boolean, default: false },
+  switchable: { type: Boolean, default: false },
   series: {
     type: Array,
-    default: () => [
-      { key: 'deposit', label: '存款余额', color: '#42e8ef' },
-      { key: 'loan', label: '贷款余额', color: '#a77bff' }
-    ]
+    default: null
   }
 });
 
 const sourceRows = computed(() => (Array.isArray(props.rows) ? props.rows : props.trend));
-const normalizedSeries = computed(() => (Array.isArray(props.series) ? props.series : [])
-  .map((item, index) => ({
+const metricMode = ref(defaultTrendMetric(sourceRows.value));
+const canShowDepositIncrease = computed(() => hasTrendMetric(sourceRows.value, 'depositIncrease'));
+const hasBalance = computed(() => hasTrendMetric(sourceRows.value, 'deposit') || hasTrendMetric(sourceRows.value, 'loan'));
+watch(sourceRows, rows => {
+  if (!hasTrendMetric(rows, metricMode.value)) metricMode.value = defaultTrendMetric(rows);
+});
+
+const normalizedSeries = computed(() => {
+  const configured = Array.isArray(props.series) && props.series.length ? props.series : null;
+  if (!props.switchable) {
+    const stableSeries = configured || [
+      { key: 'deposit', label: '存款余额', color: '#42e8ef' },
+      { key: 'loan', label: '贷款余额', color: '#a77bff' }
+    ];
+    return stableSeries.map((item, index) => ({
+      key: String(item?.key || '').trim(),
+      label: String(item?.label || item?.key || '').trim(),
+      color: item?.color || (index ? '#a77bff' : '#42e8ef')
+    })).filter(item => item.key);
+  }
+
+  const defaultDeposit = {
+    key: metricMode.value,
+    label: metricMode.value === 'depositIncrease' ? '存款净增' : '存款余额',
+    color: '#42e8ef'
+  };
+  const deposit = (configured || []).find(item => item?.key === 'deposit') || defaultDeposit;
+  const loan = (configured || []).find(item => item?.key === 'loan') || {
+    key: 'loan', label: '贷款余额', color: '#a77bff'
+  };
+  if (metricMode.value === 'depositIncrease') {
+    return [{ key: 'depositIncrease', label: '存款净增', color: deposit.color || '#42e8ef' }];
+  }
+  return [deposit, loan].map((item, index) => ({
     key: String(item?.key || '').trim(),
     label: String(item?.label || item?.key || '').trim(),
     color: item?.color || (index ? '#a77bff' : '#42e8ef')
-  }))
-  .filter(item => item.key));
+  })).filter(item => item.key && hasTrendMetric(sourceRows.value, item.key));
+});
 
 const labels = computed(() => sourceRows.value.map(row => String(row?.date ?? row?.label ?? '')));
 
 function finiteValue(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
+  return finiteMetric(value);
 }
 
 function formatPointValue(value) {
@@ -113,7 +160,9 @@ const hasChart = computed(() => labels.value.some(Boolean)
 const option = computed(() => ({
   animation: true,
   color: normalizedSeries.value.map(item => item.color),
-  grid: { top: 34, right: 30, bottom: 26, left: 48, containLabel: true },
+  grid: props.compact
+    ? { top: 21, right: 22, bottom: 21, left: 40, containLabel: true }
+    : { top: 34, right: 30, bottom: 26, left: 48, containLabel: true },
   tooltip: {
     trigger: 'axis',
     axisPointer: { type: 'line' },

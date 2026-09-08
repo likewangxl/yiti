@@ -54,6 +54,24 @@ const model = {
   citySummaries: {}
 };
 
+const extendedModel = {
+  ...model,
+  kpis: [
+    ...model.kpis,
+    { key: 'depositIncrease', label: '存款较上月净增', value: 0, unit: '亿元', change: null },
+    { key: 'depositAverage', label: '月均余额', value: null, unit: '亿元', change: null }
+  ],
+  rankings: [
+    { orgCode: 'ORG-1', name: '西安市分行', deposit: 100, increase: -2, average: null, change: -2, cityCode: '610100' },
+    { orgCode: 'ORG-2', name: '榆林市分行', deposit: 90, increase: 5, average: 7, change: 5, cityCode: '610800' },
+    { orgCode: 'ORG-3', name: '宝鸡市分行', deposit: 80, increase: null, average: 10, change: null, cityCode: '610300' }
+  ],
+  trend: [
+    { date: '2026-08', deposit: 1253, loan: 948, depositIncrease: -3 },
+    { date: '2026-09', deposit: 1286, loan: 968, depositIncrease: 0 }
+  ]
+};
+
 const mounted = [];
 
 function mountDashboard(overrides = {}, options = {}) {
@@ -85,6 +103,16 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(cards[1].text()).not.toContain('NaN');
     expect(cards[2].text()).toContain('0');
     expect(wrapper.find('[data-testid="panorama-demo-badge"]').exists()).toBe(false);
+  });
+
+  it('核心 KPI 不截断新绑定，存款经营小卡单独显示净增 0 与未绑定月均', () => {
+    const wrapper = mountDashboard({ model: extendedModel });
+    expect(wrapper.findAll('[data-testid="panorama-kpi"]')).toHaveLength(4);
+    const operationCards = wrapper.findAll('[data-testid="deposit-operation-card"]');
+    expect(operationCards).toHaveLength(2);
+    expect(operationCards[0].text()).toContain('0');
+    expect(operationCards[1].text()).toContain('—');
+    expect(operationCards[1].text()).toContain('未绑定');
   });
 
   it('演示模式明确标识，真实错误和加载态有可访问反馈', () => {
@@ -151,5 +179,46 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     const wrapper = mountDashboard();
     await wrapper.get('.stub-select-branch').trigger('click');
     expect(wrapper.find('[data-testid="selected-institution"]').text()).toContain('西安市分行');
+  });
+
+  it('排名支持净增切换：负数参与排序，null 不进入 TOP10 但保留明细', async () => {
+    const wrapper = mountDashboard({ model: extendedModel });
+    const increaseButton = wrapper.get('[data-ranking-mode="increase"]');
+    await increaseButton.trigger('click');
+    const topRows = wrapper.findAll('[data-testid="ranking-row"]');
+    expect(topRows[0].text()).toContain('榆林市分行');
+    expect(topRows[1].text()).toContain('西安市分行');
+    expect(topRows.some(row => row.text().includes('宝鸡市分行'))).toBe(false);
+    expect(wrapper.get('[data-testid="ranking-detail-ORG-3"]').text()).toContain('—');
+    expect(wrapper.findAll('.panorama-detail-table thead th')).toHaveLength(3);
+  });
+
+  it('目标率图形限制在 100%，文字保留实际超额完成率且范围不写死年度', () => {
+    const wrapper = mountDashboard({
+      model: {
+        ...extendedModel,
+        kpis: [...extendedModel.kpis, { key: 'rate', label: '目标完成率', value: 125, unit: '%', period: 'LAST_1M' }]
+      }
+    });
+    expect(wrapper.get('[data-testid="target-progress-value"]').text()).toContain('125');
+    expect(wrapper.get('[data-testid="target-progress-ring"]').attributes('style')).toContain('--target-progress: 100%');
+    expect(wrapper.get('.panorama-target-panel').text()).not.toContain('年度目标');
+  });
+
+  it('趋势默认净增并可切换回余额，采用真实绑定数据', async () => {
+    const wrapper = mountDashboard({ model: extendedModel });
+    const chart = () => JSON.parse(wrapper.findAll('[data-testid="chart-option"]').at(-1).attributes('data-option'));
+    expect(chart().series[0].name).toContain('净增');
+    expect(chart().series[0].data).toEqual([-3, 0]);
+    expect(wrapper.get('[data-testid="panorama-trend"]').classes()).toContain('is-compact');
+    await wrapper.get('[data-trend-mode="deposit"]').trigger('click');
+    expect(chart().series[0].name).toContain('余额');
+    expect(chart().series[0].data).toEqual([1253, 1286]);
+  });
+
+  it('地图范围标题使用全辖机构分布', () => {
+    const wrapper = mountDashboard({ model: extendedModel });
+    expect(wrapper.get('.panorama-map-panel').text()).toContain('全辖机构分布');
+    expect(wrapper.get('.panorama-map-panel').text()).not.toContain('陕西省分行机构分布');
   });
 });

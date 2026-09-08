@@ -1,5 +1,5 @@
 <template>
-  <main class="screen-preview" aria-label="经营全景本地演示">
+  <main class="screen-preview" aria-label="经营全景本地演示" style="--panorama-viewport-offset: 78px">
     <div class="screen-preview__source screen-preview__source--top" data-testid="preview-source-top">
       本地演示 · 非业务数据
     </div>
@@ -48,6 +48,7 @@ function goBack() {
 
 <style scoped>
 .screen-preview {
+  --panorama-viewport-offset: 78px;
   min-height: 100vh;
   box-sizing: border-box;
   color: #eaf2ff;
@@ -71,6 +72,7 @@ function goBack() {
 
 .screen-preview :deep(.panorama-dashboard) {
   flex: 1;
+  min-height: 0;
 }
 
 /* Dashboard 仍收到 demo=true 以保留组件语义，但外壳只保留顶部唯一演示标识。 */
