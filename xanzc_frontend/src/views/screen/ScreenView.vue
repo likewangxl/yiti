@@ -37,7 +37,7 @@
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getScreenView } from '@/api/screen';
-import { stageStyle } from '@/views/screen/designer/utils/scale';
+import { stageStyle } from '@/views/screen/components/runtime-utils/scale';
 import { GLOBAL_PERIOD_INJECT_KEY } from '@/utils/globalPeriod';
 import { runtimeSchemaVersion } from '@/utils/screenScope';
 import ScreenRenderer from './components/ScreenRenderer.vue';
@@ -47,8 +47,7 @@ const route = useRoute();
 const router = useRouter();
 
 // 全屏周期过滤器联动上下文(spec 2026-07-17 §5.3):screen 级响应式 globalPeriod,默认 null=不干预。
-// PeriodFilter 组件切换时写入,BlockContainer watch 后按纯函数判定覆盖自身周期重新取数;
-// 设计器 DesignerV2 不 provide 该键 → 画布内 PeriodFilter 仅静态展示,不触发联动。
+// PeriodFilter 组件切换时写入,BlockContainer watch 后按纯函数判定覆盖自身周期重新取数。
 const globalPeriod = ref(null);
 provide(GLOBAL_PERIOD_INJECT_KEY, globalPeriod);
 

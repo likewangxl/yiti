@@ -179,28 +179,28 @@ describe('AppSidebar 主导航', () => {
     expect(flyout.querySelector('[aria-current="page"]')?.getAttribute('aria-label')).toBe('线索管理');
   });
 
-  it('点击大屏设计器时阻止当前工作区导航，使用固定命名窗口并聚焦', async () => {
+  it('点击大屏管理时阻止当前工作区导航，使用固定命名窗口并聚焦', async () => {
     const focus = vi.fn();
     const open = vi.spyOn(window, 'open').mockReturnValue({ focus });
     const sidebar = mountSidebar();
-    const designer = sidebar.find('[aria-label="大屏设计器"]');
+    const designer = sidebar.find('[aria-label="大屏管理"]');
     const event = new MouseEvent('click', { bubbles: true, cancelable: true });
 
     designer.element.dispatchEvent(event);
     await nextTick();
 
     expect(event.defaultPrevented).toBe(true);
-    expect(open).toHaveBeenCalledWith('/#/screen-admin/designer', 'yiti-screen-designer');
+    expect(open).toHaveBeenCalledWith('/#/screen-admin/designer', 'yiti-screen-admin');
     expect(open.mock.calls[0]).toHaveLength(2);
     expect(focus).toHaveBeenCalledTimes(1);
     expect(routerLinkNavigate).not.toHaveBeenCalled();
     expect(errorMessage).not.toHaveBeenCalled();
   });
 
-  it('设计器弹窗被阻止时给出明确错误且不降级为当前页打开', async () => {
+  it('大屏管理弹窗被阻止时给出明确错误且不降级为当前页打开', async () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     const sidebar = mountSidebar();
-    const designer = sidebar.find('[aria-label="大屏设计器"]');
+    const designer = sidebar.find('[aria-label="大屏管理"]');
     const event = new MouseEvent('click', { bubbles: true, cancelable: true });
 
     designer.element.dispatchEvent(event);
@@ -208,7 +208,7 @@ describe('AppSidebar 主导航', () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(open).toHaveBeenCalledTimes(1);
-    expect(errorMessage).toHaveBeenCalledWith('大屏设计器窗口打开失败，请允许浏览器弹出窗口后重试');
+    expect(errorMessage).toHaveBeenCalledWith('大屏管理窗口打开失败，请允许浏览器弹出窗口后重试');
     expect(routerLinkNavigate).not.toHaveBeenCalled();
   });
 

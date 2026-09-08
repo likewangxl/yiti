@@ -29,12 +29,12 @@
             class="item root-item"
             :class="{ active: isCurrentMenu(m) }"
             :aria-current="isCurrentMenu(m) ? 'page' : undefined"
-            :aria-label="m.menuName"
-            :title="m.menuName"
+            :aria-label="menuLabel(m)"
+            :title="menuLabel(m)"
             @click.capture="handleMenuClick($event, m)"
           >
             <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M5 5h14v14H5zM8 9h8M8 13h8" /></svg></span>
-            <span class="item-label">{{ m.menuName }}</span>
+            <span class="item-label">{{ menuLabel(m) }}</span>
           </router-link>
 
           <!-- 分组节点（有 children）—— button 维护展开状态；折叠侧栏时点击后显示可访问的浮出子菜单。 -->
@@ -46,12 +46,12 @@
               :data-menu-group="m.resourceId"
               :aria-controls="groupPanelId(m.resourceId)"
               :aria-expanded="isGroupOpen(m.resourceId) ? 'true' : 'false'"
-              :aria-label="m.menuName"
-              :title="m.menuName"
+              :aria-label="menuLabel(m)"
+              :title="menuLabel(m)"
               @click="toggle(m.resourceId, $event)"
             >
               <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M4 6h16M4 12h16M4 18h16" /></svg></span>
-              <span class="item-label">{{ m.menuName }}</span>
+              <span class="item-label">{{ menuLabel(m) }}</span>
               <span class="chev" aria-hidden="true">▸</span>
             </button>
             <div
@@ -60,7 +60,7 @@
               :id="groupPanelId(m.resourceId)"
               class="children"
               role="group"
-              :aria-label="`${m.menuName}子菜单`"
+              :aria-label="`${menuLabel(m)}子菜单`"
             >
               <router-link
                 v-for="c in m.children" :key="c.resourceId"
@@ -68,12 +68,12 @@
                 class="item"
                 :class="{ active: isCurrentMenu(c) }"
                 :aria-current="isCurrentMenu(c) ? 'page' : undefined"
-                :aria-label="c.menuName"
-                :title="c.menuName"
+                :aria-label="menuLabel(c)"
+                :title="menuLabel(c)"
                 @click.capture="handleMenuClick($event, c)"
               >
                 <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="3" /></svg></span>
-                <span class="item-label">{{ c.menuName }}</span>
+                <span class="item-label">{{ menuLabel(c) }}</span>
               </router-link>
             </div>
             <!-- 浮出菜单 Teleport 到 body，避免被侧栏的纵向滚动容器横向裁切。 -->
@@ -85,7 +85,7 @@
                 class="children children--flyout"
                 :style="collapsedFlyoutStyle"
                 role="group"
-                :aria-label="`${m.menuName}子菜单`"
+                :aria-label="`${menuLabel(m)}子菜单`"
               >
                 <router-link
                   v-for="c in m.children" :key="c.resourceId"
@@ -93,12 +93,12 @@
                   class="item"
                   :class="{ active: isCurrentMenu(c) }"
                   :aria-current="isCurrentMenu(c) ? 'page' : undefined"
-                  :aria-label="c.menuName"
-                  :title="c.menuName"
+                  :aria-label="menuLabel(c)"
+                  :title="menuLabel(c)"
                   @click.capture="handleMenuClick($event, c)"
                 >
                   <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="3" /></svg></span>
-                  <span class="item-label">{{ c.menuName }}</span>
+                  <span class="item-label">{{ menuLabel(c) }}</span>
                 </router-link>
               </div>
             </Teleport>
@@ -115,8 +115,8 @@ import { useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { useMenuStore } from '@/stores/menu';
 import {
-  SCREEN_DESIGNER_ROUTE_PATH,
-  openScreenDesignerWindow
+  SCREEN_ADMIN_ROUTE_PATH,
+  openScreenAdminWindow
 } from '@/utils/screenDesignerWindow';
 
 const route = useRoute();
@@ -159,14 +159,18 @@ function groupPanelId(resourceId) {
   return `sidebar-group-${String(resourceId)}`;
 }
 
-/** 设计器使用独立命名窗口，当前工作区保持原路由与页签不变。 */
+/** 大屏管理使用独立命名窗口，当前工作区保持原路由与页签不变。 */
 function handleMenuClick(event, menu) {
-  if (menu?.resourceUrl !== SCREEN_DESIGNER_ROUTE_PATH) return;
+  if (menu?.resourceUrl !== SCREEN_ADMIN_ROUTE_PATH) return;
   event.preventDefault();
   event.stopPropagation();
-  if (!openScreenDesignerWindow()) {
-    ElMessage.error('大屏设计器窗口打开失败，请允许浏览器弹出窗口后重试');
+  if (!openScreenAdminWindow()) {
+    ElMessage.error('大屏管理窗口打开失败，请允许浏览器弹出窗口后重试');
   }
+}
+
+function menuLabel(menu) {
+  return menu?.resourceUrl === SCREEN_ADMIN_ROUTE_PATH ? '大屏管理' : menu?.menuName;
 }
 
 // 默认展开全部分组节点（按 resourceId）；tree 变化（首次加载/改名刷新）后重建展开态

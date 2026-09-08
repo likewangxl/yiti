@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 const routerSource = readFileSync(new URL('../../router/index.js', import.meta.url), 'utf8');
 const routePattern = /\{\s*path:\s*'([^']+)'\s*,\s*name:\s*'([^']+)'\s*,\s*component:\s*\(\)\s*=>\s*import\('\@\/([^']+)'\)/g;
-const excludedViews = new Set(['views/screen/ScreenView.vue', 'views/screen/designer/DesignerV2.vue']);
+const excludedViews = new Set([
+  'views/screen/ScreenView.vue',
+  'views/screen/panorama/PanoramaBindings.vue'
+]);
 const namedRoutes = [...routerSource.matchAll(routePattern)]
   .map(([, path, name, view]) => ({ path, name, view }))
   .filter(route => !route.view.includes('/redengine/') && !excludedViews.has(route.view));

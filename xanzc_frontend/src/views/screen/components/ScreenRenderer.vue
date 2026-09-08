@@ -28,8 +28,8 @@
 import { computed } from 'vue';
 import BlockContainer from './BlockContainer.vue';
 import MapCenter from './MapCenter.vue';
-import { findWidget } from '@/views/screen/designer/widgets';
-import { canvasBackgroundStyle, componentBackgroundStyle } from '@/views/screen/designer/utils/background';
+import { findRuntimeWidget } from '@/views/screen/components/runtimeWidgets';
+import { canvasBackgroundStyle, componentBackgroundStyle } from '@/views/screen/components/runtime-utils/background';
 
 const props = defineProps({
   renderPackage: { type: Object, default: () => ({ components: [], bindSnapshots: {}, canvasStyle: {} }) },
@@ -42,9 +42,9 @@ const props = defineProps({
 });
 const RUNTIME_HEADER_HEIGHT = 72;
 /**
- * 渲染列表:Group 成组节点(设计器多选成组产物)在运行时只是坐标容器,无自身视觉——
+ * 渲染列表:历史发布包中的 Group 节点在运行时只是坐标容器,无自身视觉——
  * 展开为"绝对坐标子节点"(组左上角 + 子相对坐标,透明度相乘)后走既有按 component 分派分支,
- * 模板零改动(最小适配)。组隐藏则子组件整体不渲染;组不嵌套(设计器 makeGroup 已保证)。
+ * 模板零改动(最小适配)。组隐藏则子组件整体不渲染;已发布包中的组不嵌套。
  */
 const components = computed(() => {
   const out = [];
@@ -67,7 +67,7 @@ const components = computed(() => {
 });
 const stageCss = computed(() => ({
   position: 'relative', width: '1920px', height: '1080px',
-  // 背景三选一(纯色/渐变/图片)与设计器画布共用同一纯函数;solid 无色值兜底 transparent(既有契约)
+  // 背景三选一(纯色/渐变/图片);solid 无色值兜底 transparent(既有契约)
   ...canvasBackgroundStyle(props.renderPackage.canvasStyle || {}, 'transparent')
 }));
 function absStyle(c) {
@@ -76,7 +76,7 @@ function absStyle(c) {
   return { position: 'absolute', top: (s.top ?? 0) + 'px', left: (s.left ?? 0) + 'px',
     width: (s.width ?? 0) + 'px', height: (s.height ?? 0) + 'px',
     opacity: s.opacity ?? 1,
-    // 组件级背景(CommonAttr 外观区:透明/纯色/渐变),缺省空对象与现状零差异
+    // 组件级背景(透明/纯色/渐变),缺省空对象与现状零差异
     ...componentBackgroundStyle(s) };
 }
 // 外层运行态标题是 y=0..72 的浮层；仅顶部复合地图按组件自身 top 补齐剩余安全区。
@@ -85,10 +85,27 @@ function runtimeHeaderInset(c) {
   const top = Number(c?.style?.top);
   return Math.max(0, RUNTIME_HEADER_HEIGHT - (Number.isFinite(top) ? top : 0));
 }
-function widgetOf(component) { return findWidget(component); }
-/** 从 bindSnapshots 合成 BlockContainer 需要的 block(bindJson/styleJson/drillJson 字符串);
- *  快照缺失时返回 null，由模板 v-if 隔离，不直接传给 BlockContainer。 */
+function widgetOf(component) { return findRuntimeWidget(component); }
+/**
+ * 从发布包快照或历史组件的 __block 合成 BlockContainer 需要的 block。
+ * __block 是旧发布包曾内嵌的可信区块身份，优先保留它；新包则从 bindSnapshots 按 blockId 读取。
+ * 两条路径都在渲染层完成字符串化，避免把未解析对象传给既有 BlockContainer 契约。
+ */
 function blockOf(c) {
+  if (c?.__block && typeof c.__block === 'object') {
+    const legacy = c.__block;
+    return {
+      ...legacy,
+      id: legacy.id ?? legacy.blockId ?? c.blockId,
+      componentType: c.innerType || legacy.componentType,
+      bindJson: typeof legacy.bindJson === 'string'
+        ? legacy.bindJson : JSON.stringify(legacy.bind || {}),
+      styleJson: typeof legacy.styleJson === 'string'
+        ? legacy.styleJson : JSON.stringify(legacy.styleCfg || {}),
+      drillJson: typeof legacy.drillJson === 'string'
+        ? legacy.drillJson : JSON.stringify(legacy.drill || {})
+    };
+  }
   const snap = (props.renderPackage.bindSnapshots || {})[String(c.blockId)];
   if (!snap) return null;
   return {

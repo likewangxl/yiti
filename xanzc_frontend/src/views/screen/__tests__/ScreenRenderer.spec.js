@@ -13,7 +13,7 @@ const stubs = {
   BlockContainer: {
     template: '<div class="stub-block" :data-bind="block && block.bindJson" '
       + ':data-style="block && block.styleJson" :data-drill="block && block.drillJson" '
-      + ':data-type="block && block.componentType" />',
+      + ':data-type="block && block.componentType" :data-context="JSON.stringify(context)" />',
     props: ['block', 'context']
   },
   MapCenter: {
@@ -73,6 +73,29 @@ describe('ScreenRenderer.vue', () => {
     expect(stub.attributes('data-style')).toBe(JSON.stringify({ title: '存款' }));
     expect(stub.attributes('data-drill')).toBe(JSON.stringify({ drillEnabled: false }));
     expect(stub.attributes('data-type')).toBe('METRIC_CARD');
+  });
+
+  it('历史组件携带 __block 时沿用嵌入区块身份，并把运行时上下文原样传给 BlockContainer', () => {
+    const c = {
+      id: 'legacy-w', component: 'ChartWidget', innerType: 'LINE_TREND', blockId: 503,
+      __block: {
+        id: 503,
+        componentType: 'LINE_TREND',
+        bindJson: JSON.stringify({ dsId: 12, period: 'LAST_10D' }),
+        styleJson: JSON.stringify({ title: '历史趋势' }),
+        drillJson: JSON.stringify({ drillEnabled: true })
+      },
+      style: { top: 0, left: 0, width: 200, height: 100 }, isShow: true
+    };
+    const context = { screenCode: 'LEGACY_SCREEN', orgCode: 'O1', empId: 'E1', schemaVersion: 1 };
+    const wrapper = mount(ScreenRenderer, {
+      props: { renderPackage: pkg([c]), context },
+      global: { stubs }
+    });
+    const stub = wrapper.find('.stub-block');
+    expect(stub.attributes('data-type')).toBe('LINE_TREND');
+    expect(stub.attributes('data-bind')).toBe(JSON.stringify({ dsId: 12, period: 'LAST_10D' }));
+    expect(JSON.parse(stub.attributes('data-context'))).toEqual(context);
   });
 
   it('ChartWidget 缺 bindSnapshot(如草稿预览态 bindSnapshots 恒空)不裸传 null 崩溃,渲染占位', () => {

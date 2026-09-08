@@ -6,7 +6,7 @@ const mainSource = readFileSync(new URL('../../main.js', import.meta.url), 'utf8
 const routePattern = /\{\s*path:\s*'([^']+)'\s*,\s*name:\s*'([^']+)'\s*,\s*component:\s*\(\)\s*=>\s*import\('\@\/([^']+)'\)/g;
 const excludedScreenViews = new Set([
   'views/screen/ScreenView.vue',
-  'views/screen/designer/DesignerV2.vue'
+  'views/screen/panorama/PanoramaBindings.vue'
 ]);
 const independentPageNames = new Set(['Login', 'NoAccess', 'Workspace', 'ReportDash']);
 
@@ -16,7 +16,7 @@ const normalRoutes = namedRoutes.filter(route =>
 );
 
 describe('普通后台路由 CRUD 审计矩阵', () => {
-  it('精确覆盖 77 个命名路由，并明确排除红色引擎和大屏运行/设计器', () => {
+  it('精确覆盖 77 个命名路由，并明确排除红色引擎和大屏运行/管理页', () => {
     expect(normalRoutes).toHaveLength(77);
     expect(normalRoutes.some(route => route.view.includes('/redengine/'))).toBe(false);
     expect(normalRoutes.some(route => excludedScreenViews.has(route.view))).toBe(false);

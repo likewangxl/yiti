@@ -52,8 +52,8 @@ import SparklineCard from './SparklineCard.vue';
 const props = defineProps({
   block: { type: Object, required: true },
   context: { type: Object, default: () => ({}) },
-  // ChartWidget 组件节点的 propValue（barMode/carousel/valueField 等图表形态配置）——
-  // 设计态由 chart-widget/Component.vue、运行态由 ScreenRenderer 透传；旧 5 类图表不消费
+  // 发布组件节点的 propValue（barMode/carousel/valueField 等图表形态配置）——
+  // 运行态由 ScreenRenderer 透传；旧 5 类图表不消费
   propValue: { type: Object, default: () => ({}) }
 });
 
@@ -113,7 +113,7 @@ const guide = ref('');    // 引导态（非报错）：缺必填上下文参数
 const drillItem = ref(null); // { col, label } —— 非空即钻取态
 
 // 全屏周期过滤器联动(spec 2026-07-17 §5.3):ScreenView provide 的 screen 级响应式周期。
-// 设计器/独立预览未 provide → 兜底 null,取数行为与现状完全一致(零联动)。
+// 未提供 ScreenView 联动上下文时兜底 null,取数行为与现状完全一致(零联动)。
 const globalPeriod = inject(GLOBAL_PERIOD_INJECT_KEY, null);
 /** 联动判定入参快照(是否响应/最终周期两处共用,判定逻辑全在 utils/globalPeriod 纯函数) */
 function periodCtx() {
@@ -208,7 +208,7 @@ function onItemClick({ col, label, row }) {
 }
 
 // 全局周期变化 → 仅"应响应联动"的区块重新取数(SINGLE 数据源/显式豁免组件不动);
-// 未 provide(设计器态)时 globalPeriod 为 null,不注册 watch,零行为差异
+// 未提供 globalPeriod 时为 null,不注册 watch,零行为差异
 if (globalPeriod) {
   watch(globalPeriod, val => {
     const currentSchema = props.context?.schemaVersion ?? props.context?.runtimeSchemaVersion ?? 1;
@@ -232,8 +232,7 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer); });
 
 <style scoped>
 /*
- * 结构兜底：运行态由 screen shell 提供这些约束，设计器通过 ChartWidget 复用本组件时
- * 不一定经过同一层 shell；只声明尺寸/溢出，不复制 screen 主题视觉。
+ * 结构兜底：运行态由 screen shell 提供这些约束；这里只声明尺寸/溢出，不复制 screen 主题视觉。
  */
 .scr-block {
   height: 100%;
@@ -252,7 +251,7 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer); });
 }
 
 /* 引导占位态（缺必填上下文参数）——柔和青灰、非红字，与 .scr-block-err 错误态视觉区分；
-   scoped 随组件 chunk 生效，设计器预览与全屏大屏两个入口均可读，不依赖 screen.scss 是否被引入 */
+   scoped 随组件 chunk 生效，不依赖 screen.scss 是否被引入 */
 .scr-block-guide {
   height: 100%;
   min-height: 48px;
