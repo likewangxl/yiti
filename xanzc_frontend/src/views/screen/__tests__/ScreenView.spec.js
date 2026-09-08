@@ -137,6 +137,21 @@ describe('ScreenView.vue', () => {
     });
   });
 
+  it('零售模板使用独立全景运行入口，保留 RETAIL 与已发布数据身份', async () => {
+    getScreenViewMock.mockResolvedValue({
+      screenName: '零售经营总览', bizLine: 'RETAIL',
+      renderPackageJson: JSON.stringify({
+        canvasStyle: { presentation: { type: 'CODE', template: 'retail-overview-v1' } },
+        components: []
+      })
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(wrapper.find('.stub-panorama-runtime').exists()).toBe(true);
+    expect(wrapper.find('.stub-renderer').exists()).toBe(false);
+    expect(wrapper.find('.screen-presentation-unsupported').exists()).toBe(false);
+  });
+
   it('presentation=null 兼容旧画布，继续走旧 ScreenRenderer', async () => {
     getScreenViewMock.mockResolvedValue({
       screenName: '旧画布兼容屏',

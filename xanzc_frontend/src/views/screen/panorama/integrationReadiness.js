@@ -391,7 +391,19 @@ export function analyzeIntegrationReadiness(input = {}, canvasArg, datasourcesAr
   );
   const canvasId = idOf(pick(canvas, 'screenId', 'screen_id'));
   const screen = explicitScreen || screens.find(item => idOf(item?.id) === canvasId) || null;
-  const entries = SLOT_ORDER.map(slot => entryFor(slot, bindingState, datasources, screen));
+  const slotOrder = Array.isArray(input.slotOrder) ? input.slotOrder.filter(slot => BINDING_SLOTS[slot]) : SLOT_ORDER;
+  const entries = slotOrder.map(slot => {
+    const entry = entryFor(slot, bindingState, datasources, screen);
+    if (slotOrder.includes('retailAum') && entry.status !== READINESS_STATUS.UNCONFIGURED) {
+      const source = datasources.find(item => String(item.id) === String(bindingState[slot]?.dsId));
+      if (screenBizLineOf(screen) !== 'RETAIL' || text(pick(source, 'bizLine', 'biz_line') || 'COMMON').toUpperCase() !== 'RETAIL') {
+        entry.issues.push({ code: 'RETAIL_SCOPE_REQUIRED', message: '零售模板必须使用零售条线大屏与数据源' });
+        entry.status = READINESS_STATUS.CONFIG_ERROR;
+        entry.statusLabel = READINESS_STATUS_LABELS[entry.status];
+      }
+    }
+    return entry;
+  });
   const statusCounts = Object.fromEntries(Object.values(READINESS_STATUS).map(status => [status, 0]));
   for (const entry of entries) statusCounts[entry.status] += 1;
   const issues = entries.flatMap(entry => entry.issues.map(issue => ({ slot: entry.slot, ...issue })));
@@ -402,7 +414,7 @@ export function analyzeIntegrationReadiness(input = {}, canvasArg, datasourcesAr
     screenName: text(pick(screen, 'screenName', 'screen_name')) || null,
     screenFound: Boolean(screen),
     canvasLoaded: Boolean(canvas && typeof canvas === 'object'),
-    slotCount: SLOT_COUNT,
+    slotCount: entries.length,
     entries,
     slots: entries,
     configuredCount: entries.filter(item => item.status !== READINESS_STATUS.UNCONFIGURED).length,

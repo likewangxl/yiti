@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   BINDING_SLOTS,
+  BRANCH_SLOT_ORDER,
+  ALL_SLOT_ORDER,
   UNIT_VALUES,
   buildCodeComponents,
   buildBinding,
@@ -14,10 +16,13 @@ import {
 
 describe('panorama bindings contract', () => {
   it('公开固定槽位、字段语义和单位白名单', () => {
-    expect(Object.keys(BINDING_SLOTS)).toEqual([
+    expect(BRANCH_SLOT_ORDER).toEqual([
       'deposit', 'depositIncrease', 'depositAverage', 'loan', 'customers', 'revenue', 'rate', 'trend',
       'composition', 'ranking', 'attention', 'branches', 'branchTrend', 'citySummary'
     ]);
+    expect(ALL_SLOT_ORDER).toEqual(Object.keys(BINDING_SLOTS));
+    expect(ALL_SLOT_ORDER).toContain('retailAum');
+    expect(BRANCH_SLOT_ORDER).not.toContain('retailAum');
     expect(UNIT_VALUES).toEqual([
       'YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION', 'COUNT',
       'TEN_THOUSAND_COUNT', 'PERCENT', 'RATIO'

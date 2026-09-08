@@ -26,6 +26,11 @@ const routes = [
     name: 'ScreenPreview',
     component: () => import('@/views/screen/panorama/PanoramaPreview.vue'),
     meta: { title: '本地演示预览', public: true, hideInMenu: true }
+  }, {
+    path: '/screen-preview/retail',
+    name: 'RetailScreenPreview',
+    component: () => import('@/views/screen/panorama/RetailPreview.vue'),
+    meta: { title: '零售经营本地预览', public: true, hideInMenu: true }
   }] : []),
   // 经营大屏：顶层全屏路由（不进 DefaultLayout，无 sidebar/header；仍走登录守卫）
   {

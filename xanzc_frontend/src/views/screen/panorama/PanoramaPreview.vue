@@ -2,6 +2,7 @@
   <main class="screen-preview" aria-label="经营全景本地演示" style="--panorama-viewport-offset: 78px">
     <div class="screen-preview__source screen-preview__source--top" data-testid="preview-source-top">
       <span>本地演示 · 非业务数据</span>
+      <button type="button" data-action="preview-retail" @click="router.push('/screen-preview/retail')">零售经营总览</button>
       <button type="button" data-action="configure-real-data" @click="goToDesigner">配置真实数据</button>
     </div>
 

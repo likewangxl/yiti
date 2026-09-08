@@ -33,10 +33,15 @@
       <span v-if="activeScreen" class="panorama-bindings__screen-meta">
         {{ activeScreen.screenCode || activeScreen.screen_code }} · {{ activeScreen.bizLine || activeScreen.biz_line || 'COMMON' }}
       </span>
+      <label for="panorama-template-select">展示模板</label>
+      <select id="panorama-template-select" v-model="selectedTemplate" data-testid="template-select" :disabled="writing || loading || !screenReady" @change="changeTemplate">
+        <option value="branch-overview-v1">分行经营总览</option>
+        <option value="retail-overview-v1" :disabled="!isRetailScreen">零售经营总览（零售条线）</option>
+      </select>
     </div>
 
     <div v-if="legacyComponents.length" class="panorama-bindings__legacy" data-testid="legacy-conversion-warning">
-      <strong>检测到旧拖拽组件</strong>
+      <strong>检测到旧布局或其他模板的组件</strong>
       <span>代码模板会替换当前草稿组件树；已发布快照不会自动修改。请先确认保留当前已发布版本后再转换。</span>
       <label>
         <input v-model="conversionAccepted" type="checkbox" data-testid="conversion-confirm" />
@@ -127,6 +132,7 @@
     </div>
 
     <PanoramaIntegrationReadiness
+      :slot-order="slotOrder"
       v-if="screenReady"
       :screens="screens"
       :screen="activeScreen"
@@ -175,6 +181,7 @@ import {
   normalizeBinding,
   validateBinding
 } from './bindings';
+import { RETAIL_SLOT_ORDER, RETAIL_BINDING_SLOTS } from './retailBindings';
 import PanoramaSettings from './PanoramaSettings.vue';
 import PanoramaIntegrationReadiness from './PanoramaIntegrationReadiness.vue';
 
@@ -208,9 +215,17 @@ let loadGeneration = 0;
 let disposed = false;
 let settingsRefreshGeneration = 0;
 
-const slotOrder = SLOT_ORDER;
+const selectedTemplate = ref('branch-overview-v1');
+const isRetailTemplate = computed(() => selectedTemplate.value === 'retail-overview-v1');
+const isRetailScreen = computed(() => String(activeScreen.value?.bizLine || activeScreen.value?.biz_line || '').toUpperCase() === 'RETAIL');
+const slotOrder = computed(() => isRetailTemplate.value ? RETAIL_SLOT_ORDER : SLOT_ORDER);
+function changeTemplate() {
+  selectedSlot.value = slotOrder.value.find(slot => bindingState[slot]) || slotOrder.value[0];
+  conversionAccepted.value = draftComponents.value.length === 0;
+}
 const writing = computed(() => saving.value || publishing.value || discarding.value);
-const selectedSpec = computed(() => BINDING_SLOTS[selectedSlot.value] || null);
+const templateSpec = slot => (isRetailTemplate.value ? RETAIL_BINDING_SLOTS[slot] : BINDING_SLOTS[slot]);
+const selectedSpec = computed(() => templateSpec(selectedSlot.value) || null);
 const selectedBinding = computed(() => {
   if (!bindingState[selectedSlot.value]) bindingState[selectedSlot.value] = emptyBinding(selectedSlot.value);
   return bindingState[selectedSlot.value];
@@ -227,7 +242,7 @@ const selectedDatasourceId = computed({
   set: value => { selectedBinding.value.dsId = value ? Number(value) : null; }
 });
 function fieldOptionsForBinding(slot, semantic, dsId) {
-  const fieldSpec = BINDING_SLOTS[slot]?.fields?.find(item => item.semantic === semantic);
+  const fieldSpec = templateSpec(slot)?.fields?.find(item => item.semantic === semantic);
   if (!fieldSpec) return [];
   const source = datasources.value.find(item => String(item.id) === String(dsId));
   const expectedRole = fieldSpec.kind === 'dimension' ? 'DIM' : 'METRIC';
@@ -239,7 +254,7 @@ function fieldOptionsForBinding(slot, semantic, dsId) {
   // institution directory.  Only the engine's built-in ORG_INDEX_RESULT
   // org_code dimension is safe here; a configured org_name (or a free-form
   // dimension) cannot establish an institution identity.
-  if (slot === 'citySummary' && semantic === 'orgCode'
+  if (['citySummary', 'retailRanking', ...(isRetailTemplate.value ? ['branches'] : [])].includes(slot) && semantic === 'orgCode'
       && String(screenScope.value.orgScopeMode).toUpperCase() === 'NAMED_GROUP') {
     return options.filter(option => option.col === 'org_code' && option.builtin === true);
   }
@@ -252,7 +267,7 @@ function fieldOptionsFor(semantic) {
 const canvasVersion = computed(() => canvas.value?.canvasVersion ?? null);
 
 const isCodePresentation = computed(() => canvasStyle.value?.presentation?.type === 'CODE'
-  && canvasStyle.value?.presentation?.template === 'branch-overview-v1');
+  && canvasStyle.value?.presentation?.template === selectedTemplate.value);
 
 // 任何仍有内容的旧坐标画布都需要用户确认转换；不能只检查 ChartWidget，
 // 否则 Group/Text 等旧节点会在保存时被静默删除。
@@ -272,7 +287,7 @@ function isCompositionColumnsDatasource(source = {}) {
 
 /** 既有 helper 负责 bizLine + NAMED_GROUP 收窄；本页再做 ACTIVE 状态过滤。 */
 const availableDatasources = computed(() => filterDatasourcesByMeta(
-  datasources.value.filter(source => source?.status === 'ACTIVE' || source?.status === 1 || source?.status === '1' || source?.status === true),
+  datasources.value.filter(source => !isRetailTemplate.value || String(source.bizLine || source.biz_line || '').toUpperCase() === 'RETAIL').filter(source => source?.status === 'ACTIVE' || source?.status === 1 || source?.status === '1' || source?.status === true),
   null,
   screenScope.value
 ).reduce((list, source) => {
@@ -290,7 +305,7 @@ const availableDatasources = computed(() => filterDatasourcesByMeta(
 function emptyBinding(slot = '') {
   return {
     dsId: null,
-    period: slot === 'trend' || slot === 'branchTrend' ? 'LAST_6M_EOM' : 'LATEST',
+    period: slot === 'trend' || slot === 'branchTrend' || slot === 'retailTrend' ? 'LAST_6M_EOM' : 'LATEST',
     fields: {},
     units: {}
   };
@@ -332,7 +347,7 @@ function resetBindings(components) {
     if (!Object.prototype.hasOwnProperty.call(BINDING_SLOTS, slot)) continue;
     bindingState[slot] = normalizeBinding(parse(component.bindJson, {}), slot);
   }
-  const first = SLOT_ORDER.find(slot => bindingState[slot]) || SLOT_ORDER[0];
+  const first = slotOrder.value.find(slot => bindingState[slot]) || slotOrder.value[0];
   selectedSlot.value = first;
   if (!bindingState[first]) bindingState[first] = emptyBinding(first);
   compositionMode.value = getCompositionMode(bindingState.composition || {});
@@ -415,6 +430,7 @@ async function loadCanvas(requestedId = activeScreenId.value) {
     if (!resp || typeof resp !== 'object') throw new Error('服务端未返回当前屏草稿，已停止加载');
     canvas.value = resp;
     canvasStyle.value = parse(resp.canvasStyleJson, {});
+    selectedTemplate.value = canvasStyle.value?.presentation?.template || (isRetailScreen.value ? 'retail-overview-v1' : 'branch-overview-v1');
     const draft = parse(resp.canvasDraftJson, { components: [] });
     draftComponents.value = Array.isArray(draft.components) ? draft.components : [];
     resetBindings(draftComponents.value);
@@ -517,9 +533,21 @@ function unitLabel(unit) {
 function collectValidBindings() {
   const next = {};
   const problems = [];
-  for (const slot of SLOT_ORDER) {
-    const candidate = bindingState[slot];
+  for (const slot of slotOrder.value) {
+    let candidate = bindingState[slot];
+    if (isRetailTemplate.value && slot === 'branches' && candidate) {
+      // 共用机构槽在零售屏只保存身份，避免遗留分行指标成为隐性配置。
+      const identities = new Set(RETAIL_BINDING_SLOTS.branches.fields.map(item => item.semantic));
+      candidate = { ...candidate, fields: Object.fromEntries(Object.entries(candidate.fields || {}).filter(([key]) => identities.has(key))), units: {} };
+    }
     if (!candidate || !candidate.dsId) continue;
+    if (isRetailTemplate.value) {
+      const source = datasources.value.find(item => String(item.id) === String(candidate.dsId));
+      if (String(source?.bizLine || source?.biz_line || '').toUpperCase() !== 'RETAIL') {
+        problems.push(`${BINDING_SLOTS[slot].label}：零售模板仅允许零售条线数据源`);
+        continue;
+      }
+    }
     const mode = slot === 'composition'
       ? (compositionMode.value === 'columns' || getCompositionMode(candidate) === 'columns' ? 'columns' : 'rows')
       : null;
@@ -563,7 +591,8 @@ function savePayload(targetId = activeScreenId.value) {
   const { bindings, problems } = collectValidBindings();
   if (problems.length) throw new Error(problems.join('；'));
   if (!Object.keys(bindings).length) throw new Error('至少绑定一个经营槽位后才能保存');
-  const presentation = { type: 'CODE', template: 'branch-overview-v1' };
+  if (isRetailTemplate.value && !isRetailScreen.value) throw new Error('零售经营模板仅适用于零售条线大屏，请先核对大屏设置');
+  const presentation = { type: 'CODE', template: selectedTemplate.value };
   const style = { ...canvasStyle.value, presentation };
   const components = buildCodeComponents(bindings, draftComponents.value);
   if (!components.length) throw new Error('没有可保存的代码组件');
@@ -574,7 +603,7 @@ function adoptSaveResponse(resp, fallbackComponents) {
   if (resp && Number.isSafeInteger(resp.canvasVersion)) canvas.value = { ...canvas.value, canvasVersion: resp.canvasVersion };
   const draft = parse(resp?.canvasDraftJson, null);
   draftComponents.value = Array.isArray(draft?.components) ? draft.components : fallbackComponents;
-  canvasStyle.value = { ...canvasStyle.value, presentation: { type: 'CODE', template: 'branch-overview-v1' } };
+  canvasStyle.value = { ...canvasStyle.value, presentation: { type: 'CODE', template: selectedTemplate.value } };
   resetBindings(draftComponents.value);
 }
 

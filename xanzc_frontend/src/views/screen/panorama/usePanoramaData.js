@@ -6,7 +6,14 @@ import {
   applyBranchTrend,
   createEmptyPanoramaModel
 } from './dataAdapter';
-import { BINDING_SLOTS, isBindingSlot, normalizeBinding } from './bindings';
+import { adaptRetailResults, createEmptyRetailModel } from './retailDataAdapter';
+import {
+  RETAIL_SLOT_ORDER,
+  RETAIL_TEMPLATE,
+  isRetailBindingSlot,
+  normalizeRetailBinding
+} from './retailBindings';
+import { BRANCH_SLOT_ORDER, isBindingSlot, normalizeBinding } from './bindings';
 
 const MAX_CONCURRENCY = 3;
 
@@ -45,6 +52,20 @@ function flattenComponents(components, out = []) {
   return out;
 }
 
+function presentationTemplate(pkg) {
+  const canvasStyle = parseJson(pkg?.canvasStyle ?? pkg?.canvas_style, {});
+  const presentation = parseJson(canvasStyle?.presentation, {});
+  return String(presentation?.template || pkg?.presentation?.template || '').trim();
+}
+
+function isRetailPackage(pkg) {
+  return presentationTemplate(pkg) === RETAIL_TEMPLATE;
+}
+
+function allowedSlotsForPackage(pkg) {
+  return new Set(isRetailPackage(pkg) ? RETAIL_SLOT_ORDER : BRANCH_SLOT_ORDER);
+}
+
 function permissionStatus(error) {
   const status = error?.status ?? error?.response?.status ?? error?.response?.data?.status;
   if (status === 401 || status === 403) return status;
@@ -69,6 +90,8 @@ function addIssue(issues, slot, code, message, field = '') {
 
 function packageBindings(view) {
   const pkg = screenPackage(view);
+  const allowedSlots = allowedSlotsForPackage(pkg);
+  const retailPackage = isRetailPackage(pkg);
   const snapshots = isObject(pkg.bindSnapshots) ? pkg.bindSnapshots
     : isObject(view?.bindSnapshots) ? view.bindSnapshots : {};
   const components = flattenComponents(pkg.components || view?.components || []);
@@ -78,16 +101,22 @@ function packageBindings(view) {
     if (component?.component !== 'ChartWidget') continue;
     const slot = component?.propValue?.bindingKey;
     if (!isBindingSlot(slot) || slots.has(slot)) continue;
+    if (!allowedSlots.has(slot)) {
+      addIssue(issues, slot, 'SLOT_NOT_ALLOWED_FOR_TEMPLATE', `槽位不属于当前模板: ${slot}`);
+      continue;
+    }
     const blockId = component.blockId;
     const snapshot = snapshots[String(blockId)];
     if (!snapshot || !isObject(snapshot.bind)) {
       addIssue(issues, slot, 'MISSING_BINDING_SNAPSHOT', '发布组件缺少可信 bindSnapshots 身份');
       continue;
     }
-    const binding = normalizeBinding(snapshot.bind, slot);
+    const binding = retailPackage && isRetailBindingSlot(slot)
+      ? normalizeRetailBinding(snapshot.bind, slot)
+      : normalizeBinding(snapshot.bind, slot);
     slots.set(slot, { slot, blockId, binding, component, snapshot });
   }
-  return { package: pkg, slots, issues };
+  return { package: pkg, slots, issues, template: presentationTemplate(pkg), retail: retailPackage };
 }
 
 function stableSerialize(value) {
@@ -230,10 +259,12 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     if (!alive.value || disposed.value) return model.value;
     const view = currentView();
     const context = contextSnapshot(contextSource);
+    const packageInfo = packageBindings(view);
+    const retail = packageInfo.retail;
     const preserveModel = Boolean(loadOptions.preserveModel);
     const onlySlots = Array.isArray(loadOptions.onlySlots)
       ? new Set(loadOptions.onlySlots) : null;
-    const branchOnly = preserveModel && onlySlots?.has('branchTrend');
+    const branchOnly = !retail && preserveModel && onlySlots?.has('branchTrend');
     const kind = branchOnly ? 'branch' : 'screen';
     const currentGeneration = kind === 'branch'
       ? ++branchGeneration.value : ++screenGeneration.value;
@@ -241,14 +272,14 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     if (kind === 'screen') branchGeneration.value += 1;
     generation.value += 1;
     if (!preserveModel) {
-      model.value = createEmptyPanoramaModel();
+      model.value = retail ? createEmptyRetailModel({ view }) : createEmptyPanoramaModel();
       error.value = '';
     }
     pendingLoads += 1;
     loading.value = true;
     try {
-      const { slots, issues: packageIssues } = packageBindings(view);
-      const allIssues = [...packageIssues];
+      const { slots } = packageInfo;
+      const allIssues = [...packageInfo.issues];
       const selectedBranch = String(loadOptions.branchOrgCode ?? branchOrgCode.value ?? '').trim();
       const requests = [];
       for (const [slot, entry] of slots.entries()) {
@@ -277,7 +308,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
 
       const permissionError = settled.find(item => permissionStatus(item.error));
       if (permissionError) {
-        model.value = createEmptyPanoramaModel();
+        model.value = retail ? createEmptyRetailModel({ view }) : createEmptyPanoramaModel();
         error.value = errorMessage(permissionError.error, `没有权限（${permissionStatus(permissionError.error)}）`);
         return model.value;
       }
@@ -307,11 +338,16 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         nextModel.issues = [...screenIssues, ...branchIssues];
         model.value = nextModel;
       } else {
-        const nextModel = adaptPanoramaResults(resultMap, {
-          view,
-          panoramaInstitutions: view.panoramaInstitutions || view.panorama_institutions,
-          title: view.screenName || view.screen_name
-        });
+        const nextModel = retail
+          ? adaptRetailResults(resultMap, {
+            view,
+            panoramaInstitutions: view.panoramaInstitutions || view.panorama_institutions
+          })
+          : adaptPanoramaResults(resultMap, {
+            view,
+            panoramaInstitutions: view.panoramaInstitutions || view.panorama_institutions,
+            title: view.screenName || view.screen_name
+          });
         nextModel.issues = [...allIssues, ...(nextModel.issues || [])];
         model.value = nextModel;
       }
@@ -331,6 +367,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     const next = String(orgCode || '').trim();
     branchOrgCode.value = next;
     if (!next) return model.value;
+    if (isRetailPackage(screenPackage(currentView()))) return model.value;
     return load({ onlySlots: ['branchTrend'], branchOrgCode: next, preserveModel: true });
   }
 

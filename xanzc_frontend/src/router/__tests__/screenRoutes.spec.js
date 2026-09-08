@@ -46,4 +46,13 @@ describe('大屏路由资源契约', () => {
       expect(route).toBeUndefined();
     }
   });
+  it('零售预览同样仅开发环境公开注册，正式运行仍需原资源', async () => {
+    const { default: router } = await import('@/router');
+    const route = router.getRoutes().find(item => item.name === 'RetailScreenPreview');
+    if (import.meta.env.DEV) {
+      expect(route?.path).toBe('/screen-preview/retail');
+      expect(route?.meta.public).toBe(true);
+    } else expect(route).toBeUndefined();
+  });
+
 });

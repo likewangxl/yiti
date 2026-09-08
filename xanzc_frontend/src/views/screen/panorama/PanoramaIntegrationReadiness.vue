@@ -22,7 +22,7 @@
 
     <div class="readiness-table-wrap">
       <table class="readiness-table">
-        <caption class="visually-hidden">14 个经营大屏绑定槽位的静态接入检查</caption>
+        <caption class="visually-hidden">{{ readiness.slotCount }} 个经营大屏绑定槽位的静态接入检查</caption>
         <thead>
           <tr>
             <th scope="col">槽位</th>
@@ -131,6 +131,7 @@ import { analyzeOrgProfiles } from '@/utils/orgProfileReadiness';
 import { analyzeIntegrationReadiness } from './integrationReadiness';
 
 const props = defineProps({
+  slotOrder: { type: Array, default: undefined },
   screens: { type: Array, default: () => [] },
   screen: { type: Object, default: null },
   canvas: { type: Object, default: null },
@@ -142,6 +143,7 @@ const router = useRouter();
 const disposed = ref(false);
 const checkGeneration = ref(0);
 const readiness = computed(() => analyzeIntegrationReadiness({
+  slotOrder: props.slotOrder,
   screens: props.screens,
   screen: props.screen,
   canvas: props.canvas,

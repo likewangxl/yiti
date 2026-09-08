@@ -26,6 +26,39 @@ function viewWithSlots(bindings = {}) {
   };
 }
 
+function retailViewWithSlots(bindings = {}) {
+  const fields = {
+    retailAum: { value: 'aum' },
+    retailTrend: { date: 'date', aum: 'aum' },
+    branches: { orgCode: 'org_code' },
+    deposit: { value: 'deposit' },
+    branchTrend: { date: 'date', deposit: 'deposit' }
+  };
+  const units = {
+    retailAum: { value: 'YUAN' },
+    retailTrend: { aum: 'YUAN' },
+    branches: {},
+    deposit: { value: 'YUAN' },
+    branchTrend: { deposit: 'YUAN' }
+  };
+  const components = Object.entries(bindings).map(([slot, blockId]) => ({
+    id: `node-${slot}`, component: 'ChartWidget', blockId,
+    innerType: 'METRIC_CARD', propValue: { bindingKey: slot }
+  }));
+  return {
+    screenCode: 'RETAIL_CODE', runtimeSchemaVersion: 2,
+    renderPackage: {
+      canvasStyle: { presentation: { type: 'CODE', template: 'retail-overview-v1' } },
+      components,
+      bindSnapshots: Object.fromEntries(Object.entries(bindings).map(([slot, blockId]) => [String(blockId), {
+        bind: { dsId: 9, period: 'LATEST', fields: fields[slot] || { value: `${slot}_col` }, units: units[slot] || { value: 'YUAN' } },
+        componentType: 'METRIC_CARD'
+      }]))
+    },
+    panoramaInstitutions: []
+  };
+}
+
 describe('usePanoramaData', () => {
   beforeEach(() => { queryScreenData.mockReset(); });
   afterEach(() => vi.restoreAllMocks());
@@ -125,5 +158,43 @@ describe('usePanoramaData', () => {
     expect(state.model.value.issues.some(item => item.slot === 'branchTrend')).toBe(false);
     expect(state.model.value.institutions.find(item => item.orgCode === 'B')?.trend)
       .toEqual([{ date: '2026-09', deposit: 1, loan: null }]);
+  });
+
+  it('按发布 template 动态选择零售槽位，跨模板槽位不请求且零售不启用 branchTrend drill', async () => {
+    queryScreenData.mockImplementation(request => {
+      if (request.blockId === 31) return Promise.resolve({ columns: ['aum'], rows: [[100000000]] });
+      if (request.blockId === 34) return Promise.resolve({ columns: ['org_code'], rows: [['A']] });
+      return Promise.resolve({ columns: ['value'], rows: [[100000000]] });
+    });
+    const state = usePanoramaData(ref(retailViewWithSlots({ retailAum: 31, deposit: 32, branchTrend: 33, branches: 34 })),
+      ref({ screenCode: 'RETAIL_CODE' }), { autoLoad: false });
+    await state.refresh();
+    expect(queryScreenData.mock.calls.map(([request]) => request.blockId)).toEqual(expect.arrayContaining([31, 34]));
+    expect(queryScreenData.mock.calls.map(([request]) => request.blockId)).not.toEqual(expect.arrayContaining([32, 33]));
+    expect(state.model.value.kpis).toEqual([{ key: 'retailAum', label: '零售AUM', value: 1, unit: '亿元', change: null }]);
+    const count = queryScreenData.mock.calls.length;
+    await state.selectBranch('A');
+    expect(queryScreenData).toHaveBeenCalledTimes(count);
+  });
+
+  it('零售 403 清空零售模型并保留错误，切屏迟到结果不能污染新模型', async () => {
+    let resolveOld;
+    queryScreenData.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }));
+    const view = ref(retailViewWithSlots({ retailAum: 41 }));
+    const state = usePanoramaData(view, ref({ screenCode: 'RETAIL_CODE' }), { autoLoad: false });
+    const oldLoad = state.refresh();
+    await nextTick();
+    view.value = viewWithSlots({ deposit: 42 });
+    queryScreenData.mockResolvedValueOnce({ columns: ['deposit_col'], rows: [[200000000]] });
+    const newLoad = state.refresh();
+    await newLoad;
+    resolveOld({ columns: ['aum'], rows: [[100000000]] });
+    await oldLoad;
+    expect(state.model.value.kpis).toEqual([{ key: 'deposit', label: '存款余额', value: 2, unit: '亿元', change: null }]);
+
+    queryScreenData.mockRejectedValueOnce(Object.assign(new Error('零售禁止'), { response: { status: 403 }, status: 403 }));
+    await state.refresh();
+    expect(state.error.value).toContain('零售禁止');
+    expect(state.model.value.kpis).toEqual([]);
   });
 });

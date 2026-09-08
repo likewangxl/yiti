@@ -62,4 +62,10 @@ describe('PanoramaPreview 本地演示入口', () => {
     await wrapper.get('[data-action="configure-real-data"]').trigger('click');
     expect(push).toHaveBeenCalledWith('/screen-admin/designer');
   });
+  it('分行演示可切到零售演示', async () => {
+    const wrapper = mount(PanoramaPreview);
+    await wrapper.get('[data-action="preview-retail"]').trigger('click');
+    expect(push).toHaveBeenCalledWith('/screen-preview/retail');
+  });
+
 });

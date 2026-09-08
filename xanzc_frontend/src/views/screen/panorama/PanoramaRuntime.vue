@@ -1,6 +1,6 @@
 <template>
   <section class="panorama-runtime" data-testid="panorama-runtime">
-    <PanoramaDashboard
+    <component :is="isRetail ? RetailDashboard : PanoramaDashboard"
       :model="model"
       :loading="loading"
       :error="error"
@@ -26,6 +26,8 @@
 import { computed, toRef } from 'vue';
 import { useRouter } from 'vue-router';
 import PanoramaDashboard from './PanoramaDashboard.vue';
+import RetailDashboard from './RetailDashboard.vue';
+import { BINDING_SLOTS } from './bindings';
 import { usePanoramaData } from './usePanoramaData';
 
 const props = defineProps({
@@ -34,6 +36,8 @@ const props = defineProps({
 });
 const emit = defineEmits(['back', 'configure', 'refresh', 'branch-select']);
 const router = useRouter();
+
+const isRetail = computed(() => props.view?.renderPackage?.canvasStyle?.presentation?.template === 'retail-overview-v1');
 
 const state = usePanoramaData(toRef(props, 'view'), toRef(props, 'context'));
 // Pull refs to the script top level so Vue's template ref unwrapping passes
@@ -62,7 +66,7 @@ const slotLabels = {
 const issueEntries = computed(() => Object.entries(state.slotIssues.value || {})
   .flatMap(([slot, issues]) => (Array.isArray(issues) ? issues : []).map((issue, index) => ({
     key: `${slot}:${issue.code || index}`,
-    label: slotLabels[slot] || slot,
+    label: BINDING_SLOTS[slot]?.label || slotLabels[slot] || slot,
     message: issue.message || issue.code || '取数失败'
   }))));
 

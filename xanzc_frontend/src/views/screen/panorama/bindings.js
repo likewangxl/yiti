@@ -1,3 +1,5 @@
+import { RETAIL_BINDING_SLOTS, RETAIL_SLOT_ORDER } from './retailBindings';
+
 /**
  * 代码化经营大屏的绑定契约。
  *
@@ -182,13 +184,29 @@ export const BINDING_SLOTS = Object.freeze({
       field('revenue', '营收', { unitKinds: amountUnits }),
       field('rate', '完成率', { unitKinds: ratioUnits })
     ])
-  })
+  }),
+  // 零售模板槽位进入全局身份白名单；branches 保留这里的分行完整契约，
+  // 零售管理页通过 RETAIL_BINDING_SLOTS.branches 只展示身份字段。
+  ...Object.fromEntries(Object.entries(RETAIL_BINDING_SLOTS).filter(([slot]) => slot !== 'branches'))
 });
 
-export const SLOT_ORDER = Object.freeze(Object.keys(BINDING_SLOTS));
+/** 既有分行模板的 14 个槽位，供旧管理页、预检和兼容测试继续使用。 */
+export const BRANCH_SLOT_ORDER = Object.freeze([
+  'deposit', 'depositIncrease', 'depositAverage', 'loan', 'customers', 'revenue', 'rate', 'trend',
+  'composition', 'ranking', 'attention', 'branches', 'branchTrend', 'citySummary'
+]);
+
+// 保持历史导出语义；零售管理/运行时显式使用 RETAIL_SLOT_ORDER。
+export const SLOT_ORDER = BRANCH_SLOT_ORDER;
+
+/** 全局代码化组件构建顺序，包含分行槽位和零售新增槽位。 */
+export const ALL_SLOT_ORDER = Object.freeze([
+  ...BRANCH_SLOT_ORDER,
+  ...RETAIL_SLOT_ORDER.filter(slot => !BRANCH_SLOT_ORDER.includes(slot))
+]);
 
 const SLOT_INNER_TYPES = Object.freeze(Object.fromEntries(
-  SLOT_ORDER.map(slot => [slot, BINDING_SLOTS[slot].innerType])
+  ALL_SLOT_ORDER.map(slot => [slot, BINDING_SLOTS[slot].innerType])
 ));
 
 function parseJson(value, fallback = {}) {
@@ -232,7 +250,8 @@ export function normalizeBinding(raw = {}, slot = raw?.slot) {
   const source = parseJson(raw, {});
   const out = {};
   if (source.dsId !== undefined && source.dsId !== null && source.dsId !== '') out.dsId = source.dsId;
-  const defaultPeriod = slot === 'trend' || slot === 'branchTrend' ? 'LAST_6M_EOM' : 'LATEST';
+  const defaultPeriod = ['trend', 'branchTrend', 'retailTrend'].includes(slot)
+    ? 'LAST_6M_EOM' : 'LATEST';
   out.period = String(source.period || defaultPeriod);
   out.fields = {};
   for (const [semantic, column] of Object.entries(source.fields || {})) {
@@ -415,7 +434,7 @@ export function buildCodeComponents(bindings = {}, existingComponents = []) {
     const slot = existingBindingKey(component);
     if (isBindingSlot(slot) && !oldBySlot.has(slot)) oldBySlot.set(slot, component);
   }
-  return SLOT_ORDER
+  return ALL_SLOT_ORDER
     .filter(slot => bindings[slot])
     .map(slot => {
       const old = oldBySlot.get(slot);

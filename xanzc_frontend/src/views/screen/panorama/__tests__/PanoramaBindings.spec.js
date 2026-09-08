@@ -80,6 +80,45 @@ describe('PanoramaBindings', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
+  it('零售空草稿只展示零售指标，明确保存零售模板且不继承全行数据源', async () => {
+    api.listScreens.mockResolvedValue([{ ...screen, bizLine: 'RETAIL', screenName: '零售经营总览' }]);
+    api.getScreenCanvas.mockResolvedValue({ ...canvas, canvasDraftJson: JSON.stringify({ components: [] }) });
+    api.listScreenDatasources.mockResolvedValue([
+      datasource, { ...datasource, id: 88, dsName: '零售客户资产', bizLine: 'RETAIL' }
+    ]);
+    api.saveScreenCanvas.mockResolvedValue({ canvasVersion: 5 });
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="slot-retailAum"]').exists()).toBe(true));
+    expect(wrapper.find('[data-testid="slot-deposit"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="slot-datasource"] option[value="77"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="readiness-slot-retailAum"]').exists()).toBe(true);
+    await wrapper.find('[data-testid="slot-datasource"]').setValue('88');
+    await wrapper.find('[data-testid="field-option-retailAum-value"]').setValue('deposit_raw');
+    await wrapper.find('[data-testid="unit-retailAum-value"]').setValue('HUNDRED_MILLION');
+    await wrapper.find('[data-testid="binding-save"]').trigger('click');
+    await vi.waitFor(() => expect(api.saveScreenCanvas).toHaveBeenCalled());
+    expect(api.saveScreenCanvas.mock.lastCall[0].canvasStyle.presentation.template).toBe('retail-overview-v1');
+    expect(api.saveScreenCanvas.mock.lastCall[0].components[0].propValue.bindingKey).toBe('retailAum');
+    wrapper.unmount();
+  });
+
+  it('零售命名机构组排名只能用引擎机构号标识机构，不能选择机构名称', async () => {
+    api.listScreens.mockResolvedValue([{ ...screen, bizLine: 'RETAIL', orgScopeMode: 'NAMED_GROUP' }]);
+    api.getScreenCanvas.mockResolvedValue({ ...canvas, canvasDraftJson: JSON.stringify({ components: [] }) });
+    api.listScreenDatasources.mockResolvedValue([{ ...datasource, id: 88, bizLine: 'RETAIL', configJson: JSON.stringify({
+      table: 'ORG_INDEX_RESULT', subjectCol: 'org_code', aggregation: { groupBy: 'SUBJECT' },
+      fieldMeta: [{ col: 'amount', role: 'METRIC' }, { col: 'org_name', role: 'DIM' }]
+    }) }]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="slot-retailRanking"]').exists()).toBe(true));
+    await wrapper.find('[data-testid="slot-retailRanking"]').trigger('click');
+    await wrapper.find('[data-testid="slot-datasource"]').setValue('88');
+    const identity = wrapper.get('[data-testid="field-option-retailRanking-orgCode"]');
+    expect(identity.find('option[value="org_code"]').exists()).toBe(true);
+    expect(identity.find('option[value="org_name"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it('读取服务端草稿并显示转换提示，不把旧组件静默当作新绑定树', async () => {
     api.listScreens.mockResolvedValue([screen]);
     api.getScreenCanvas.mockResolvedValue(canvas);
