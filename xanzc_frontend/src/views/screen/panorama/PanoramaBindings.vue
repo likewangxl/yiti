@@ -153,6 +153,16 @@
       </div>
     </section>
 
+    <PanoramaDataVerification
+      v-if="screenReady"
+      :screen="activeScreen"
+      :canvas="canvas"
+      :datasources="datasources"
+      :slot-order="slotOrder"
+      :binding-state="bindingState"
+      :disabled="writing || loading"
+    />
+
     <PanoramaIntegrationReadiness
       :slot-order="slotOrder"
       v-if="screenReady"
@@ -213,6 +223,7 @@ import {
 } from './defaultBindings';
 import PanoramaSettings from './PanoramaSettings.vue';
 import PanoramaIntegrationReadiness from './PanoramaIntegrationReadiness.vue';
+import PanoramaDataVerification from './PanoramaDataVerification.vue';
 import PanoramaDatasourcePicker from './PanoramaDatasourcePicker.vue';
 
 const props = defineProps({ screenId: { type: [Number, String], default: '' } });

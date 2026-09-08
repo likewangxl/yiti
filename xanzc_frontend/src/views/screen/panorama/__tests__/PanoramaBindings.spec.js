@@ -5,6 +5,7 @@ import { mount } from '@vue/test-utils';
 const api = vi.hoisted(() => ({
   listScreens: vi.fn(),
   getScreenCanvas: vi.fn(),
+  getScreenView: vi.fn(),
   listScreenDatasources: vi.fn(),
   saveScreenCanvas: vi.fn(),
   publishScreenCanvas: vi.fn(),
