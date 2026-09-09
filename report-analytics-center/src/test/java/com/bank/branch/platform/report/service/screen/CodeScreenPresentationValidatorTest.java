@@ -185,6 +185,31 @@ class CodeScreenPresentationValidatorTest {
     }
 
     @Test
+    void acceptsSourcePresentationMetadataForCodeAndLegacyCanvasStyles() {
+        String metadata = "\"dataNotice\":\"系统联调数据：当前指标结果含测试计算\","
+                + "\"metricLabels\":{\"deposit\":\"一般性存款余额\",\"loan\":\"对公一般性贷款余额\"}";
+        CodeScreenPresentationValidator.validateCanvasStyle("{" + metadata + "}");
+        CodeScreenPresentationValidator.validateCanvasStyle("{" + metadata + ","
+                + "\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"}}");
+    }
+
+    @Test
+    void rejectsInvalidSourceNoticeLengthMarkupAndMetricLabelKey() {
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"dataNotice\":\"<script>alert(1)</script>\"}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"dataNotice\":\"" + "x".repeat(241) + "\"}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"metricLabels\":{\"unknown\":\"不在白名单\"}}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"metricLabels\":{\"deposit\":\"<b>余额</b>\"}}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
     void rejectsUnknownPresentationType() {
         assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(
                 style.replace("\"CODE\"", "\"UNKNOWN\""),

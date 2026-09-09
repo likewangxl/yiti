@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,6 +43,39 @@ class CanvasStyleDTOJsonContractTest {
         assertThat(actual.getBgGradient().getTo()).isEqualTo("#222222");
         assertThat(actual.getBgGradient().getAngle()).isEqualByComparingTo(new BigDecimal("45.5"));
         assertThat(actual.getBgImage()).isEqualTo("https://example.test/background.png");
+    }
+
+    @Test
+    void acceptsSourceNoticeAndMetricLabelsAsOptionalCanvasStyleMetadata() throws Exception {
+        String json = """
+                {
+                  "schemaVersion": 1,
+                  "dataNotice": "系统联调数据：当前指标结果含测试计算",
+                  "metricLabels": {
+                    "deposit": "一般性存款余额",
+                    "loan": "对公一般性贷款余额"
+                  }
+                }
+                """;
+
+        CanvasStyleDTO actual = objectMapper.readValue(json, CanvasStyleDTO.class);
+
+        assertThat(actual.getDataNotice()).isEqualTo("系统联调数据：当前指标结果含测试计算");
+        assertThat(actual.getMetricLabels()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "deposit", "一般性存款余额",
+                "loan", "对公一般性贷款余额"));
+        assertThat(objectMapper.valueToTree(actual).path("dataNotice").asText())
+                .isEqualTo("系统联调数据：当前指标结果含测试计算");
+    }
+
+    @Test
+    void rejectsNonTextualSourceNoticeMetadata() {
+        assertThatThrownBy(() -> objectMapper.readValue(
+                "{\"dataNotice\":{\"text\":\"no\"}}", CanvasStyleDTO.class))
+                .isInstanceOf(com.fasterxml.jackson.databind.JsonMappingException.class);
+        assertThatThrownBy(() -> objectMapper.readValue(
+                "{\"metricLabels\":{\"deposit\":{\"text\":\"no\"}}}", CanvasStyleDTO.class))
+                .isInstanceOf(com.fasterxml.jackson.databind.JsonMappingException.class);
     }
 
     @Test

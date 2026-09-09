@@ -26,4 +26,16 @@ public class CanvasStyleDTO {
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private CodeScreenPresentationDTO presentation;
+
+    /**
+     * 可选的运行时数据口径说明；保存在既有 canvasStyle JSON 中，不新增表字段。
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String dataNotice;
+
+    /**
+     * 可选的代码化 KPI 展示标签覆盖；键和值均由服务端白名单校验。
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Map<String, String> metricLabels;
 }

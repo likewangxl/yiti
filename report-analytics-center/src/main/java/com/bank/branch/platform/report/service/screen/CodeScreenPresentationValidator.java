@@ -45,6 +45,12 @@ public final class CodeScreenPresentationValidator {
             "YUAN", "TEN_THOUSAND", "HUNDRED_MILLION", "COUNT", "TEN_THOUSAND_COUNT",
             "PERCENT", "RATIO");
     private static final Set<String> PERIODS = Set.of("LATEST", "LAST_10D", "LAST_1M", "LAST_6M_EOM");
+    private static final int DATA_NOTICE_MAX_LENGTH = 240;
+    private static final int METRIC_LABEL_MAX_LENGTH = 40;
+    private static final Set<String> METRIC_LABEL_KEYS = Set.of(
+            "deposit", "depositIncrease", "depositAverage", "loan", "customers", "revenue", "rate",
+            "retailAum", "retailDeposit", "retailDepositAverage", "retailRevenue", "retailValueCustomers",
+            "retailLoan", "retailNplRate");
     private static final Set<String> WIDE_TABLES = Set.of(
             "EMP_INDEX_RESULT", "ORG_INDEX_RESULT", "CUST_INDEX_RESULT");
     private static final Map<String, Set<String>> FIELD_KEYS = fieldKeys();
@@ -65,12 +71,23 @@ public final class CodeScreenPresentationValidator {
 
     /** 返回 CODE 画布模板；历史样式无 presentation 时返回 null，未知声明按非法配置拒绝。 */
     public static String presentationTemplate(JsonNode canvasStyle) {
+        validateSourcePresentationMetadata(canvasStyle);
         JsonNode presentation = canvasStyle == null ? null : canvasStyle.path("presentation");
         if (presentation == null || presentation.isMissingNode() || presentation.isNull()) {
             return null;
         }
         validatePresentation(presentation);
         return presentation.path("template").asText();
+    }
+
+    /**
+     * 校验已解析画布样式中的运行时展示元数据。
+     *
+     * <p>这些字段复用既有 canvasStyle JSON，不改变数据库结构；它们仍须在服务端
+     * 通过长度、纯文本和指标键白名单校验，不能仅依赖前端下拉框或 JsonNode 取值。</p>
+     */
+    public static void validateCanvasStyle(String canvasStyleJson) {
+        validateSourcePresentationMetadata(readObject(canvasStyleJson, RptErrorCode.SCREEN_LAYOUT_INVALID));
     }
 
     /** 保存阶段校验样式与草稿组件形状；不要求新 ChartWidget 已经获得 blockId。 */
@@ -392,6 +409,46 @@ public final class CodeScreenPresentationValidator {
                 || !CODE_TYPE.equals(presentation.path("type").asText())
                 || (!BRANCH_OVERVIEW_TEMPLATE.equals(presentation.path("template").asText())
                 && !RETAIL_OVERVIEW_TEMPLATE.equals(presentation.path("template").asText()))) {
+            throw invalid();
+        }
+    }
+
+    private static void validateSourcePresentationMetadata(JsonNode canvasStyle) {
+        if (canvasStyle == null || !canvasStyle.isObject()) {
+            return;
+        }
+        JsonNode dataNotice = canvasStyle.get("dataNotice");
+        if (dataNotice != null && !dataNotice.isNull()) {
+            validatePlainText(dataNotice, DATA_NOTICE_MAX_LENGTH, true);
+        }
+        JsonNode metricLabels = canvasStyle.get("metricLabels");
+        if (metricLabels == null || metricLabels.isNull()) {
+            return;
+        }
+        if (!metricLabels.isObject()) {
+            throw invalid();
+        }
+        Iterator<Map.Entry<String, JsonNode>> entries = metricLabels.fields();
+        while (entries.hasNext()) {
+            Map.Entry<String, JsonNode> entry = entries.next();
+            if (!METRIC_LABEL_KEYS.contains(entry.getKey())) {
+                throw invalid();
+            }
+            validatePlainText(entry.getValue(), METRIC_LABEL_MAX_LENGTH, false);
+        }
+    }
+
+    private static void validatePlainText(JsonNode node, int maxLength, boolean allowBlank) {
+        if (node == null || !node.isTextual()) {
+            throw invalid();
+        }
+        String value = node.asText();
+        if (!allowBlank && value.trim().isEmpty()) {
+            throw invalid();
+        }
+        if (value.codePointCount(0, value.length()) > maxLength
+                || value.chars().anyMatch(ch -> ch < 0x20 || ch == 0x7F)
+                || value.indexOf('<') >= 0 || value.indexOf('>') >= 0) {
             throw invalid();
         }
     }

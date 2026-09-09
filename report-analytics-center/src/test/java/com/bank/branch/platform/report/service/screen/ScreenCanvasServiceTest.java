@@ -172,6 +172,27 @@ class ScreenCanvasServiceTest {
     }
 
     @Test
+    void save_preservesSourcePresentationMetadataInCanvasStyleJson() {
+        when(screenMapper.selectById(7L)).thenReturn(screen(7L, 3));
+        when(canvasMapper.bumpVersion(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
+        ScreenCanvasSaveReqDTO request = req(7L, 3,
+                comp("TextLabel", null, Map.of("top", 10, "left", 10, "width", 100, "height", 40)));
+        CanvasStyleDTO style = new CanvasStyleDTO();
+        style.setDataNotice("系统联调数据：当前指标结果含测试计算");
+        style.setMetricLabels(Map.of("deposit", "一般性存款余额", "loan", "对公一般性贷款余额"));
+        request.setCanvasStyle(style);
+
+        service.saveCanvas(request);
+
+        ArgumentCaptor<String> styleJson = ArgumentCaptor.forClass(String.class);
+        verify(canvasMapper).bumpVersion(eq(7L), eq(3), styleJson.capture(), anyString(), anyString());
+        assertThat(styleJson.getValue())
+                .contains("\"dataNotice\":\"系统联调数据：当前指标结果含测试计算\"")
+                .contains("\"deposit\":\"一般性存款余额\"")
+                .contains("\"loan\":\"对公一般性贷款余额\"");
+    }
+
+    @Test
     void save_namedGroupAlwaysWritesDraftSchemaVersion2() {
         RptScreen namedGroup = screen(7L, 3);
         namedGroup.setOrgScopeMode("NAMED_GROUP");

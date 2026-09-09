@@ -149,6 +149,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         RptScreen s = requireScreen(req.getScreenId());
         List<CanvasComponentDTO> comps = req.getComponents() == null ? List.of() : req.getComponents();
         String styleJson = writeJson(req.getCanvasStyle());
+        CodeScreenPresentationValidator.validateCanvasStyle(styleJson);
         String template = codeTemplate(styleJson);
         boolean codePresentation = template != null;
         validateRetailTemplateScreenLine(s, template);

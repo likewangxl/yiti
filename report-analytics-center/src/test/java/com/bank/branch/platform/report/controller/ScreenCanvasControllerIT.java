@@ -77,7 +77,9 @@ class ScreenCanvasControllerIT extends BaseControllerIT {
     void saveThenLoad_roundTrips_andBumpsVersion() throws Exception {
         String body = """
                 {"screenId":%d,"expectedVersion":0,
-                 "canvasStyle":{"schemaVersion":1,"adaptor":"keepProportion"},
+                 "canvasStyle":{"schemaVersion":1,"adaptor":"keepProportion",
+                    "dataNotice":"系统联调数据：当前指标结果含测试计算",
+                    "metricLabels":{"deposit":"一般性存款余额","loan":"对公一般性贷款余额"}},
                  "components":[{"id":"w-1","component":"TextLabel",
                     "style":{"top":10,"left":10,"width":200,"height":48},
                     "propValue":{"text":"TEST_SCR"}}]}
@@ -90,7 +92,10 @@ class ScreenCanvasControllerIT extends BaseControllerIT {
         mvc.perform(get("/api/screen/admin/canvas/" + screenId))
                 .andExpect(jsonPath("$.data.canvasVersion").value(1))
                 .andExpect(jsonPath("$.data.canvasDraftJson").value(
-                        org.hamcrest.Matchers.containsString("TextLabel")));
+                        org.hamcrest.Matchers.allOf(
+                                org.hamcrest.Matchers.containsString("TextLabel"),
+                                org.hamcrest.Matchers.containsString("dataNotice"),
+                                org.hamcrest.Matchers.containsString("一般性存款余额"))));
     }
 
     @Test
