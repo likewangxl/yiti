@@ -102,4 +102,16 @@ describe('source presentation', () => {
     expect(wrapper.find('[data-testid="source-dashboard"]').text()).toContain('一般性存款余额|12|亿元');
     expect(wrapper.html()).not.toContain('<testing');
   });
+
+  it('运行时根与来源条使用沉浸式深色视觉类名', () => {
+    const view = {
+      renderPackage: {
+        canvasStyle: { dataNotice: '系统联调数据' }
+      }
+    };
+    const wrapper = mount(PanoramaRuntime, { props: { view, context: {} } });
+
+    expect(wrapper.get('[data-testid="panorama-runtime"]').classes()).toContain('panorama-runtime--immersive');
+    expect(wrapper.get('[data-testid="panorama-data-notice"]').classes()).toContain('panorama-runtime__data-notice--muted');
+  });
 });

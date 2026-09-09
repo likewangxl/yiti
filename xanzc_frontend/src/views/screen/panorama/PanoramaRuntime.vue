@@ -1,8 +1,8 @@
 <template>
-  <section class="panorama-runtime" data-testid="panorama-runtime">
+  <section class="panorama-runtime panorama-runtime--immersive" data-testid="panorama-runtime">
     <div
       v-if="dataNotice"
-      class="panorama-runtime__data-notice"
+      class="panorama-runtime__data-notice panorama-runtime__data-notice--muted"
       data-testid="panorama-data-notice"
       role="note"
       aria-label="数据来源说明"
@@ -116,7 +116,13 @@ defineExpose({ ...state, refresh: state.refresh, selectBranch: state.selectBranc
 </script>
 
 <style scoped>
-.panorama-runtime { min-height: 100vh; position: relative; }
+.panorama-runtime {
+  min-height: 100vh;
+  position: relative;
+  box-sizing: border-box;
+  color: #dce8f5;
+  background: #071a31;
+}
 .panorama-runtime__data-notice {
   position: relative;
   z-index: 3;
@@ -124,14 +130,15 @@ defineExpose({ ...state, refresh: state.refresh, selectBranch: state.selectBranc
   width: min(100% - 32px, 1180px);
   margin: 0 auto 10px;
   padding: 8px 14px;
-  color: #ffe6ac;
-  background: rgba(45, 35, 15, .9);
-  border: 1px solid rgba(246, 191, 73, .6);
-  border-radius: 6px;
-  box-shadow: 0 5px 18px rgba(0, 0, 0, .2);
+  color: #b8c9dc;
+  background: rgba(13, 36, 62, .88);
+  border: 1px solid rgba(116, 151, 188, .38);
+  border-radius: 5px;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, .18);
   font-size: 12px;
   line-height: 1.5;
 }
+.panorama-runtime__data-notice--muted { letter-spacing: .01em; }
 .panorama-runtime__issues {
   position: fixed;
   right: 16px;

@@ -194,14 +194,14 @@
           </div>
           <article class="panorama-panel panorama-target-panel">
             <div v-if="targetProgressActual !== null" class="panorama-target-summary">
-              <span class="panorama-target-summary-label">目标完成</span>
+              <span class="panorama-target-summary-label">{{ targetMetricLabel }}</span>
               <div class="panorama-target-ring" data-testid="target-progress-ring" :style="{ '--target-progress': `${targetProgressVisual}%` }">
                 <strong data-testid="target-progress-value">{{ formatMetric(targetProgressActual) }}<small>%</small></strong>
               </div>
               <span class="panorama-target-gap">{{ targetDistanceSummary.text }}</span>
               <span class="panorama-target-period">{{ targetPeriodLabel }}</span>
             </div>
-            <div v-else class="panorama-unbound" data-testid="target-unbound">{{ targetKpi ? '目标完成率暂无有效数据' : '目标完成率未绑定' }}<span v-if="targetKpi" class="panorama-visually-hidden">未绑定</span></div>
+            <div v-else class="panorama-unbound" data-testid="target-unbound">{{ targetUnboundLabel }}<span v-if="targetKpi" class="panorama-visually-hidden">未绑定</span></div>
           </article>
           <article class="panorama-panel panorama-ranking-panel panorama-ranking-detail-panel">
             <div class="panorama-panel-heading">
@@ -394,6 +394,13 @@ const institutionCountLabel = computed(() => {
 const targetKpi = computed(() => safeModel.value.kpis.find(item => [
   'rate', 'targetRate', 'completionRate', 'targetCompletionRate', 'target'
 ].includes(item?.key)) || null);
+const targetMetricLabel = computed(() => {
+  const label = targetKpi.value?.label;
+  return typeof label === 'string' && label.trim() ? label.trim() : '目标完成率';
+});
+const targetUnboundLabel = computed(() => targetKpi.value
+  ? `${targetMetricLabel.value}暂无有效数据`
+  : `${targetMetricLabel.value}未绑定`);
 const targetProgressActual = computed(() => finiteMetric(targetKpi.value?.value));
 const targetProgressVisual = computed(() => clampProgress(targetProgressActual.value) ?? 0);
 const targetDistanceSummary = computed(() => summarizeTargetDistance(targetProgressActual.value));
@@ -428,7 +435,7 @@ const diagnosticCards = computed(() => {
         ? 'neutral'
         : 'achieved';
   const targetStatusDetail = targetStatus.hasData
-    ? `已提供完成率${leadershipInsights.value.coverage.rate.available}家 / 未提供${Math.max(0, leadershipInsights.value.coverage.rate.total - leadershipInsights.value.coverage.rate.available)}家`
+    ? `已提供${targetMetricLabel.value}${leadershipInsights.value.coverage.rate.available}家 / 未提供${Math.max(0, leadershipInsights.value.coverage.rate.total - leadershipInsights.value.coverage.rate.available)}家`
     : targetStatus.detail;
   return [
     {
@@ -443,7 +450,7 @@ const diagnosticCards = computed(() => {
       label: '目标进度',
       text: distance.text,
       state: distance.state,
-      note: '全辖目标完成率'
+      note: targetMetricLabel.value
     },
     {
       key: 'targetStatus',

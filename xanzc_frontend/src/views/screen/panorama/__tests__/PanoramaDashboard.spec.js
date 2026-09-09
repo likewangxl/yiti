@@ -277,6 +277,19 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(wrapper.get('.panorama-target-panel').text()).not.toContain('年度目标');
   });
 
+  it('目标摘要和目标进度诊断消费 targetKpi 的展示标签覆盖', () => {
+    const wrapper = mountDashboard({
+      model: {
+        ...extendedModel,
+        kpis: [...extendedModel.kpis, { key: 'rate', label: '已设目标机构完成率', value: 72, unit: '%', period: 'LATEST' }]
+      }
+    });
+
+    expect(wrapper.get('.panorama-target-summary-label').text()).toBe('已设目标机构完成率');
+    expect(wrapper.get('[data-diagnostic="targetDistance"]').text()).toContain('已设目标机构完成率');
+    expect(wrapper.get('.panorama-target-panel').text()).not.toContain('目标完成');
+  });
+
   it('趋势默认净增并可切换回余额，采用真实绑定数据', async () => {
     const wrapper = mountDashboard({ model: extendedModel });
     const chart = () => JSON.parse(wrapper.findAll('[data-testid="chart-option"]').at(-1).attributes('data-option'));
