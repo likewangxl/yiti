@@ -8,7 +8,12 @@
     :data-region-count="renderedRegionCount"
     aria-label="真实行政区三维地图"
   >
-    <canvas ref="canvasRef" class="panorama-map__canvas" aria-hidden="true"></canvas>
+    <canvas
+      ref="canvasRef"
+      class="panorama-map__canvas"
+      :class="{ 'is-hidden': fallbackActive }"
+      aria-hidden="true"
+    ></canvas>
 
     <div v-if="fallbackActive" class="panorama-map__fallback" role="region" aria-label="二维真实行政区地图回退">
       <svg
@@ -188,11 +193,12 @@ let mapGroup = null;
 let pointGroup = null;
 let cameraTarget = null;
 let resizeObserver = null;
-let animationFrame = null;
 let pointerHandler = null;
+let contextLostHandler = null;
 let raycaster = null;
 let pointer = null;
 let disposed = false;
+let handlingFailure = false;
 
 const projection = computed(() => createProjection(props.geoJson));
 const projectedRegions = computed(() => projectGeoJson(props.geoJson, projection.value));
@@ -484,6 +490,14 @@ function shapeFromPolygon(polygon) {
 }
 
 function buildThreeMap() {
+  try {
+    buildThreeMapUnsafe();
+  } catch (error) {
+    activateFallback('rebuild', error);
+  }
+}
+
+function buildThreeMapUnsafe() {
   if (!scene) {
     renderedRegionCount.value = 0;
     return;
@@ -570,35 +584,37 @@ function buildThreeMap() {
 
 function resizeRenderer() {
   if (!renderer || !camera || !containerRef.value) return;
-  const width = Math.max(1, containerRef.value.clientWidth || 800);
-  const height = Math.max(1, containerRef.value.clientHeight || 520);
-  renderer.setSize(width, height, false);
-  const aspect = width / height;
-  const map = worldBounds();
-  // Fit the actual projected bounds to the viewport. A large fixed padding made
-  // the tall Shaanxi province occupy only a small strip in wide panorama panels;
-  // the tilted extrusion is already accounted for by the camera orientation.
-  const fitPadding = props.mode === 'province' ? 1.02 : 1.0;
-  const cameraHeight = Math.max(map.height * fitPadding, map.width / aspect * fitPadding, 5);
-  const cameraWidth = cameraHeight * aspect;
-  camera.left = -cameraWidth / 2;
-  camera.right = cameraWidth / 2;
-  camera.top = cameraHeight / 2;
-  camera.bottom = -cameraHeight / 2;
-  camera.updateProjectionMatrix();
-  updateCameraPose();
-  renderFrame();
+  try {
+    const width = Math.max(1, containerRef.value.clientWidth || 800);
+    const height = Math.max(1, containerRef.value.clientHeight || 520);
+    renderer.setSize(width, height, false);
+    const aspect = width / height;
+    const map = worldBounds();
+    // Fit the actual projected bounds to the viewport. A large fixed padding made
+    // the tall Shaanxi province occupy only a small strip in wide panorama panels;
+    // the tilted extrusion is already accounted for by the camera orientation.
+    const fitPadding = props.mode === 'province' ? 1.02 : 1.0;
+    const cameraHeight = Math.max(map.height * fitPadding, map.width / aspect * fitPadding, 5);
+    const cameraWidth = cameraHeight * aspect;
+    camera.left = -cameraWidth / 2;
+    camera.right = cameraWidth / 2;
+    camera.top = cameraHeight / 2;
+    camera.bottom = -cameraHeight / 2;
+    camera.updateProjectionMatrix();
+    updateCameraPose();
+    renderFrame();
+  } catch (error) {
+    activateFallback('resize', error);
+  }
 }
 
 function renderFrame() {
-  if (!renderer || !scene || !camera || disposed) return;
-  renderer.render(scene, camera);
-}
-
-function animate() {
-  if (disposed || !renderer) return;
-  renderFrame();
-  animationFrame = window.requestAnimationFrame(animate);
+  if (!renderer || !scene || !camera || disposed || fallbackActive.value) return;
+  try {
+    renderer.render(scene, camera);
+  } catch (error) {
+    activateFallback('render', error);
+  }
 }
 
 function pointerPosition(event) {
@@ -621,16 +637,41 @@ function onThreePointer(event) {
   if (target.type === 'point') selectPoint(target.point);
 }
 
+function activateFallback(reason, error) {
+  if (disposed) return;
+  const firstFailure = !fallbackActive.value;
+  fallbackActive.value = true;
+  webglReady.value = false;
+  if (firstFailure) {
+    console.warn(`[PanoramaMap] WebGL ${reason} failed, using SVG fallback.`, error);
+  }
+  if (handlingFailure) return;
+  handlingFailure = true;
+  try {
+    disposeThree();
+  } finally {
+    handlingFailure = false;
+  }
+  renderedRegionCount.value = projectedRegions.value.length;
+}
+
+function onWebGLContextLost(event) {
+  event?.preventDefault?.();
+  activateFallback('context lost');
+}
+
 function setupThree() {
   if (!canvasRef.value || !containerRef.value) return;
   let context = null;
   try {
-    context = canvasRef.value.getContext?.('webgl2') || canvasRef.value.getContext?.('webgl')
-      || canvasRef.value.getContext?.('experimental-webgl');
+    // Three.js r185 requires WebGL2; trying WebGL1 first can create a renderer
+    // that later fails during the first draw and leaves a white canvas covering
+    // the real SVG fallback.
+    context = canvasRef.value.getContext?.('webgl2');
   } catch {
     context = null;
   }
-  if (typeof window === 'undefined' || typeof window.WebGLRenderingContext === 'undefined' || !context) {
+  if (typeof window === 'undefined' || typeof window.WebGL2RenderingContext === 'undefined' || !context) {
     fallbackActive.value = true;
     return;
   }
@@ -648,28 +689,32 @@ function setupThree() {
     const light = new THREE.DirectionalLight(0x9ec7ff, 2.3);
     light.position.set(-3, -4, 10);
     scene.add(light);
+    contextLostHandler = onWebGLContextLost;
+    renderer.domElement.addEventListener('webglcontextlost', contextLostHandler, false);
     buildThreeMap();
+    if (fallbackActive.value || !renderer) return;
     pointerHandler = onThreePointer;
     renderer.domElement.addEventListener('pointerup', pointerHandler);
     resizeRenderer();
+    if (fallbackActive.value || !renderer) return;
     webglReady.value = true;
-    animate();
   } catch (error) {
     // 创建上下文失败是普通低配浏览器情况，保留 SVG 真实几何回退并释放半成品。
-    console.warn('[PanoramaMap] WebGL unavailable, using SVG fallback.', error);
-    fallbackActive.value = true;
-    webglReady.value = false;
-    disposeThree();
+    activateFallback('setup', error);
   }
 }
 
 function disposeThree() {
-  if (animationFrame != null && typeof window !== 'undefined') window.cancelAnimationFrame(animationFrame);
-  animationFrame = null;
   if (renderer?.domElement && pointerHandler) renderer.domElement.removeEventListener('pointerup', pointerHandler);
+  if (renderer?.domElement && contextLostHandler) {
+    renderer.domElement.removeEventListener('webglcontextlost', contextLostHandler);
+  }
   pointerHandler = null;
+  contextLostHandler = null;
   disposeObject(scene);
-  renderer?.dispose?.();
+  const activeRenderer = renderer;
+  try { activeRenderer?.forceContextLoss?.(); } catch { /* context may already be lost */ }
+  try { activeRenderer?.dispose?.(); } catch { /* disposal must not block SVG fallback */ }
   renderer = null;
   scene = null;
   camera = null;
@@ -683,8 +728,9 @@ function disposeThree() {
 }
 
 function rebuildThreeMap() {
-  if (!webglReady.value) return;
+  if (!webglReady.value || fallbackActive.value) return;
   buildThreeMap();
+  if (fallbackActive.value || !renderer) return;
   resizeRenderer();
 }
 

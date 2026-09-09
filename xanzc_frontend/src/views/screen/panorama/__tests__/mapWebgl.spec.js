@@ -31,6 +31,7 @@ const geoJson = {
 
 describe('PanoramaMap WebGL 初始化', () => {
   it('WebGL 初始化后真实 GeoJSON 被构造成可渲染区域，不能静默得到空场景', async () => {
+    vi.stubGlobal('WebGL2RenderingContext', function WebGL2RenderingContext() {});
     vi.stubGlobal('WebGLRenderingContext', function WebGLRenderingContext() {});
     HTMLCanvasElement.prototype.getContext = vi.fn(() => ({}));
     vi.stubGlobal('requestAnimationFrame', vi.fn(() => 0));
