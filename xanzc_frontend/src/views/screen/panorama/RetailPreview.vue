@@ -60,11 +60,11 @@ function goToDesigner() {
 .retail-preview :deep(.retail-demo-badge) { display: none; }
 .retail-preview__footer { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; padding: 8px 20px 12px; border-top: 1px solid rgba(100, 151, 227, .22); color: #7992bd; font-size: 11px; line-height: 1.5; }
 @media (min-width: 1100px) {
-  /* 提示栏与页脚参与实际高度分配，避免估算偏移把面板挤出视口。 */
-  .retail-preview { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+  /* 页面随完整经营内容增高，页脚始终位于所有面板之后。 */
+  .retail-preview { height: auto; min-height: 100vh; }
   .retail-preview__source,
   .retail-preview__footer { flex: 0 0 auto; }
-  .retail-preview :deep(.retail-dashboard) { height: auto; flex: 1 1 0; }
+  .retail-preview :deep(.retail-dashboard) { height: auto; flex: 1 0 auto; }
 }
 @media (max-width: 760px) { .retail-preview__source { flex-wrap: wrap; gap: 6px 10px; padding: 7px 12px; font-size: 11px; } .retail-preview__footer { justify-content: flex-start; padding-right: 12px; padding-left: 12px; } }
 </style>

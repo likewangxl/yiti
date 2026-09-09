@@ -137,7 +137,7 @@ describe('RetailDashboard 零售经营总览', () => {
     expect(attention.findAll('li')).toHaveLength(2);
   });
 
-  it('长内容保留在独立可滚动区域，并提供键盘语义而不引入下拉筛选', () => {
+  it('长内容完整保留且可键盘聚焦，不引入下拉筛选', () => {
     const longModel = {
       ...model,
       segments: Array.from({ length: 12 }, (_, index) => ({

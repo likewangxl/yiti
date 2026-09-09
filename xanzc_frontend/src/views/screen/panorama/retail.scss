@@ -103,9 +103,9 @@
 
 .retail-main-grid { display: grid; grid-template-columns: minmax(0, .83fr) minmax(0, 1.58fr) minmax(0, .9fr); align-items: stretch; gap: 14px; margin: 0 clamp(16px, 2vw, 30px) 18px; }
 .retail-column { min-width: 0; min-height: 0; display: grid; gap: 14px; align-content: stretch; }
-.retail-column--left { grid-template-rows: minmax(0, .95fr) minmax(0, 1.2fr) minmax(0, 1fr); }
-.retail-column--center { grid-template-rows: minmax(0, 1.65fr) minmax(0, 1fr); }
-.retail-column--right { grid-template-rows: minmax(0, 1.45fr) minmax(0, 1fr); }
+.retail-column--left { grid-template-rows: max-content max-content minmax(max-content, 1fr); }
+.retail-column--center { grid-template-rows: minmax(440px, 1.65fr) minmax(270px, 1fr); }
+.retail-column--right { grid-template-rows: max-content minmax(max-content, 1fr); }
 .retail-panel { min-width: 0; overflow: hidden; border: 1px solid var(--retail-border); border-radius: 9px; background: linear-gradient(145deg, rgba(12, 33, 82, .91), rgba(5, 18, 52, .88)); box-shadow: inset 0 0 24px rgba(62, 112, 215, .05), 0 7px 22px rgba(0, 0, 0, .16); }
 .retail-panel__heading { min-height: 58px; display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px 9px; border-bottom: 1px solid var(--retail-border-soft); }
 .retail-panel__heading > div:first-child { min-width: 0; }
@@ -333,15 +333,8 @@
 }
 
 @media (min-width: 1100px) {
-  /* 桌面大屏由外层 viewport/flex 容器分配高度；超长内容仅在面板内部滚动。 */
-  .retail-dashboard {
-    height: 100vh;
-    height: 100dvh;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
+  /* 面板按完整内容计算高度，页面可向下延伸，不把数据压进内部滚动区。 */
+  .retail-dashboard { height: auto; min-height: 100vh; }
   .retail-dashboard > .retail-header,
   .retail-dashboard > .retail-demo-badge,
   .retail-dashboard > .retail-loading,
@@ -349,8 +342,6 @@
   .retail-dashboard > .retail-kpi-grid,
   .retail-dashboard > .retail-insight-strip { flex: 0 0 auto; }
   .retail-main-grid {
-    flex: 1 1 auto;
-    min-height: 0;
     height: auto;
     grid-template-columns: minmax(0, .83fr) minmax(0, 1.58fr) minmax(0, .9fr);
   }
@@ -492,4 +483,20 @@
   .retail-kpi__number strong { font-size: 18px; }
   .retail-map-panel__meta { flex-wrap: wrap; gap: 3px; }
   .retail-map-hint { flex-basis: 100%; }
+}
+
+/* 经营内容全部展开；滚动仅保留给独立打开的机构目录。 */
+.retail-main-grid .retail-scroll-region {
+  flex: 0 0 auto;
+  max-height: none;
+  overflow: visible;
+}
+.retail-ranking-row__name,
+.retail-attention-list__main strong,
+.retail-attention-list__main small,
+.retail-target-row__top strong,
+.retail-segment-row__identity span {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
