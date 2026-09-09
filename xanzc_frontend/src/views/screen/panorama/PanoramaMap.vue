@@ -791,6 +791,7 @@ onBeforeUnmount(() => {
 }
 
 .panorama-map__canvas { z-index: 1; }
+.panorama-map__canvas.is-hidden { display: none; }
 .panorama-map__fallback { z-index: 1; padding: 18px 52px 24px 22px; }
 .panorama-map__svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .panorama-map__region path { fill: rgba(58, 83, 177, .76); stroke: #83b9ff; stroke-width: .24; vector-effect: non-scaling-stroke; cursor: pointer; transition: fill .2s ease; }
