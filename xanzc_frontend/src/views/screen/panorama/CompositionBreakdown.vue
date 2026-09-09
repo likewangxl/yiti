@@ -76,10 +76,7 @@
         <div class="composition-breakdown__detail-copy">
           <div class="composition-breakdown__detail-heading">
             <span class="composition-breakdown__detail-name" :title="item.name">{{ item.name }}</span>
-            <strong class="composition-breakdown__detail-share">
-              <template v-if="breakdown.shareMode === 'percent'">{{ item.valueText }}{{ item.unit }}</template>
-              <template v-else>{{ item.shareText }}</template>
-            </strong>
+            <strong class="composition-breakdown__detail-share" :aria-label="`占比 ${formatCompositionPercent(item.share)}`">{{ formatCompositionPercent(item.share) }}</strong>
           </div>
           <div class="composition-breakdown__detail-value">
             <template v-if="breakdown.shareMode === 'percent'">
@@ -99,7 +96,7 @@
 
 <script setup>
 import { computed } from 'vue';
-import { buildCompositionBreakdown, COMPOSITION_COLORS } from './compositionBreakdown.js';
+import { buildCompositionBreakdown, COMPOSITION_COLORS, formatCompositionPercent } from './compositionBreakdown.js';
 
 const props = defineProps({
   items: { type: Array, default: () => [] }

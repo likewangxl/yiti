@@ -111,25 +111,11 @@
           <div class="panorama-panel-heading">
             <div>
               <span class="panorama-section-kicker">业务结构</span>
-              <h2>业务构成与贡献</h2>
+              <h2>业务构成与占比</h2>
             </div>
             <span>{{ compositionHeadingMeta }}</span>
           </div>
-          <div v-if="compositionItems.length" class="panorama-composition-layout">
-            <v-chart class="panorama-composition-chart" :option="compositionOption" autoresize aria-label="业务结构矩形份额图" />
-            <div class="panorama-composition-list">
-              <div v-for="(item, index) in compositionItems" :key="item.name || index" class="panorama-composition-row">
-                <span class="panorama-composition-mark" :style="{ backgroundColor: compositionColor(index) }" />
-                <div class="panorama-composition-copy">
-                  <span class="panorama-composition-name">{{ item.name || '—' }}</span>
-                  <span class="panorama-composition-share">{{ compositionShareText(item.value) }}</span>
-                </div>
-                <strong>{{ formatMetric(item.value) }}</strong>
-                <small>{{ item.unit || '' }}</small>
-              </div>
-            </div>
-          </div>
-          <div v-else class="panorama-empty">暂无业务结构数据</div>
+          <CompositionBreakdown class="panorama-composition-content" :items="safeModel.composition" />
         </article>
 
         <article class="panorama-panel panorama-attention-panel">
@@ -300,11 +286,6 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
-import { use } from 'echarts/core';
-import { CanvasRenderer } from 'echarts/renderers';
-import { TreemapChart } from 'echarts/charts';
-import { TooltipComponent } from 'echarts/components';
-import VChart from 'vue-echarts';
 import {
   Aim, Coin, Close, OfficeBuilding, Refresh, Setting, TrendCharts, UserFilled
 } from '@element-plus/icons-vue';
@@ -312,6 +293,7 @@ import PanoramaMap from './PanoramaMap.vue';
 import CityPanorama from './CityPanorama.vue';
 import PanoramaInstitutionDirectory from './PanoramaInstitutionDirectory.vue';
 import PanoramaTrend from './PanoramaTrend.vue';
+import CompositionBreakdown from './CompositionBreakdown.vue';
 import { provinceGeo } from './geography.js';
 import {
   RANKING_METRICS,
@@ -330,7 +312,6 @@ import {
   summarizeTargetDistance
 } from './leadershipInsights.js';
 
-use([CanvasRenderer, TreemapChart, TooltipComponent]);
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -402,47 +383,6 @@ const compositionHeadingMeta = computed(() => {
   if (units.length === 1) return units[0];
   return '指标口径';
 });
-const compositionShareAvailable = computed(() => {
-  const units = [...new Set(compositionItems.value.map(item => String(item?.unit || '').trim()).filter(Boolean))];
-  const values = compositionItems.value.map(item => finiteValue(item.value));
-  return units.length <= 1 && values.length > 0 && values.every(value => value !== null && value >= 0) && values.reduce((sum, value) => sum + value, 0) > 0;
-});
-const compositionChartData = computed(() => {
-  if (!compositionShareAvailable.value) return [];
-  return compositionItems.value
-    .map((item, index) => ({
-      name: item.name || `业务${index + 1}`,
-      value: finiteValue(item.value),
-      unit: item.unit || compositionHeadingMeta.value,
-      itemStyle: { color: compositionColor(index) }
-    }))
-    .filter(item => item.value !== null && item.value > 0);
-});
-const compositionOption = computed(() => ({
-  animation: true,
-  tooltip: {
-    trigger: 'item',
-    formatter: params => `${params.name}<br/>${formatMetric(params.value)} ${params.data?.unit || ''} · ${compositionShareText(params.value)}`
-  },
-  series: [{
-    type: 'treemap',
-    roam: false,
-    nodeClick: false,
-    breadcrumb: { show: false },
-    visibleMin: 0,
-    squareRatio: 1.15,
-    label: {
-      show: true,
-      color: '#eff7ff',
-      fontSize: 11,
-      lineHeight: 16,
-      formatter: params => `${params.name}\n${formatMetric(params.value)} ${params.data?.unit || ''}\n${compositionShareText(params.value)}`
-    },
-    upperLabel: { show: false },
-    itemStyle: { borderColor: '#07183e', borderWidth: 2, gapWidth: 2 },
-    data: compositionChartData.value
-  }]
-}));
 const institutionCountLabel = computed(() => {
   const located = safeModel.value.institutions.filter(item => item?.located && item?.lng != null && item?.lat != null).length;
   const total = safeModel.value.institutions.length;
@@ -601,24 +541,6 @@ function changeClass(value) {
 function kpiIcon(key, index) {
   const icons = { deposit: OfficeBuilding, loan: Coin, customers: UserFilled, revenue: TrendCharts, target: Aim };
   return icons[key] || [OfficeBuilding, Coin, UserFilled, TrendCharts][index % 4];
-}
-
-function compositionColor(index) {
-  return ['#38d9ef', '#8559e6', '#4c86ff', '#f6b849'][index % 4];
-}
-
-function compositionPercent(value) {
-  if (!compositionShareAvailable.value) return null;
-  const values = compositionItems.value.map(item => finiteValue(item.value)).filter(item => item !== null);
-  const total = values.reduce((sum, item) => sum + item, 0);
-  const number = finiteValue(value);
-  if (total <= 0 || number === null) return 0;
-  return Number(Math.max(0, Math.min(100, (number / total) * 100)).toFixed(1));
-}
-
-function compositionShareText(value) {
-  const percent = compositionPercent(value);
-  return percent === null ? '占比 —（单位或数值不可比）' : `占比 ${percent}%`;
 }
 
 function rankingDisplayValue(item) {

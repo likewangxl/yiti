@@ -134,6 +134,9 @@
 .panorama-diagnostic-label { color: var(--panorama-text-dim); font-size: 11px; line-height: 1.35; }
 .panorama-diagnostic-card strong { display: block; color: #eef5ff; font-size: 19px; line-height: 1.4; overflow-wrap: anywhere; }
 .panorama-diagnostic-card strong.is-muted { color: var(--panorama-text-dim); }
+/* 摘要以业务文字表达净减和目标差，整句保持克制的蓝青色；不覆盖KPI、错误提示的警示色。 */
+.panorama-diagnostics-strip .panorama-diagnostic-card strong:not(.is-muted),
+.city-leadership-strip .city-leadership-card strong:not(.is-muted) { color: #c4e3f1 !important; }
 .panorama-diagnostic-unit { color: #8fa9d6; font-size: 10px; }
 .panorama-diagnostic-card small { color: #718fc2; font-size: 9px; line-height: 1.35; overflow-wrap: anywhere; }
 
@@ -182,16 +185,9 @@
 .panorama-mini-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: auto 12px 10px; padding-top: 7px; border-top: 1px solid rgba(121, 161, 248, .12); color: #7896c9; font-size: 10px; }
 .panorama-mini-summary span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panorama-mini-summary i { width: 6px; height: 6px; display: inline-block; margin-right: 5px; border-radius: 50%; background: var(--panorama-cyan); box-shadow: 0 0 8px var(--panorama-cyan); }
-.panorama-composition-layout { display: grid; grid-template-columns: minmax(145px, .92fr) minmax(0, 1.08fr); align-items: stretch; gap: 8px; height: calc(100% - 49px); padding: 5px 12px 9px; }
-.panorama-composition-chart { width: 100%; height: 100%; min-height: 140px; }
-.panorama-composition-list { min-height: 0; max-height: 100%; padding: 4px 0 6px; overflow: auto; }
-.panorama-composition-row { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto auto; align-items: center; gap: 7px; padding: 8px 0; border-bottom: 1px solid rgba(121, 161, 248, .11); }
-.panorama-composition-mark { width: 9px; height: 9px; border-radius: 2px; }
-.panorama-composition-copy { min-width: 0; }
-.panorama-composition-name { display: block; overflow: hidden; color: #b6c7eb; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.panorama-composition-share { display: block; margin-top: 4px; color: #7896c9; font-size: 9px; }
-.panorama-composition-row strong { color: var(--panorama-text); font-size: 15px; }
-.panorama-composition-row small { color: var(--panorama-text-dim); font-size: 10px; }
+.panorama-composition-panel { display: flex; flex-direction: column; }
+.panorama-composition-panel > .panorama-panel-heading { flex-shrink: 0; }
+.panorama-composition-content { flex: 1; min-height: 0; }
 .panorama-target-summary { display: grid; grid-template-columns: auto minmax(72px, .8fr) minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 52px; padding: 7px 10px; }
 .panorama-target-summary-label { color: var(--panorama-text-dim); font-size: 10px; white-space: nowrap; }
 .panorama-target-ring { width: 92px; height: 33px; display: grid; place-items: center; border: 1px solid rgba(76, 221, 235, .32); border-radius: 5px; background: linear-gradient(90deg, rgba(77, 232, 239, .32) var(--target-progress), rgba(43, 100, 169, .15) var(--target-progress)); box-shadow: 0 0 16px rgba(55, 212, 236, .12); position: relative; }
@@ -477,7 +473,6 @@
   .panorama-live-state { display: none; }
   .panorama-panel-subheading { flex-wrap: wrap; }
   .panorama-map-hint-inline { width: 100%; margin-left: 0; }
-  .panorama-composition-layout { grid-template-columns: minmax(110px, .78fr) minmax(0, 1.22fr); }
   .panorama-target-summary { grid-template-columns: auto minmax(74px, auto) minmax(0, 1fr); gap: 6px; }
   .panorama-target-period { display: none; }
   .panorama-trend-heading-actions { gap: 5px; }

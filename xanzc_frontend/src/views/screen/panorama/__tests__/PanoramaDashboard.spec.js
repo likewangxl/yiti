@@ -142,6 +142,21 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(summary).not.toContain('下降机构数');
   });
 
+  it('业务构成使用独立占比组件，每项金额只显示一次', () => {
+    const wrapper = mountDashboard({ model: { ...model, composition: [
+      { name: '对公业务', value: 714.26, unit: '亿元' },
+      { name: '零售业务', value: 572.16, unit: '亿元' }
+    ] } });
+    const component = wrapper.findComponent({ name: 'CompositionBreakdown' });
+    expect(component.exists()).toBe(true);
+    expect(component.props('items')).toHaveLength(2);
+    const text = component.text();
+    expect(text).toContain('55.5%');
+    expect(text).toContain('44.5%');
+    expect(text.match(/714\.26/g)).toHaveLength(1);
+    expect(text.match(/572\.16/g)).toHaveLength(1);
+  });
+
   it('演示模式明确标识，真实错误和加载态有可访问反馈', () => {
     const wrapper = mountDashboard({ demo: true, loading: true, error: '取数失败' });
     expect(wrapper.find('[data-testid="panorama-demo-badge"]').text()).toContain('演示数据');
