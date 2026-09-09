@@ -1,7 +1,15 @@
 <template>
   <section class="panorama-runtime" data-testid="panorama-runtime">
+    <div
+      v-if="dataNotice"
+      class="panorama-runtime__data-notice"
+      data-testid="panorama-data-notice"
+      role="note"
+      aria-label="数据来源说明"
+    >{{ dataNotice }}</div>
+
     <component :is="isRetail ? RetailDashboard : PanoramaDashboard"
-      :model="model"
+      :model="dashboardModel"
       :loading="loading"
       :error="error"
       :demo="false"
@@ -29,6 +37,7 @@ import PanoramaDashboard from './PanoramaDashboard.vue';
 import RetailDashboard from './RetailDashboard.vue';
 import { BINDING_SLOTS } from './bindings';
 import { usePanoramaData } from './usePanoramaData';
+import { applyMetricLabels, resolveSourcePresentation } from './sourcePresentation';
 
 const props = defineProps({
   view: { type: Object, default: () => ({}) },
@@ -45,6 +54,12 @@ const state = usePanoramaData(toRef(props, 'view'), toRef(props, 'context'));
 const model = state.model;
 const loading = state.loading;
 const error = state.error;
+const sourcePresentation = computed(() => resolveSourcePresentation(props.view));
+const dataNotice = computed(() => sourcePresentation.value.dataNotice);
+const dashboardModel = computed(() => applyMetricLabels(
+  model.value,
+  sourcePresentation.value.metricLabels
+));
 
 const slotLabels = {
   deposit: '存款余额',
@@ -102,6 +117,21 @@ defineExpose({ ...state, refresh: state.refresh, selectBranch: state.selectBranc
 
 <style scoped>
 .panorama-runtime { min-height: 100vh; position: relative; }
+.panorama-runtime__data-notice {
+  position: relative;
+  z-index: 3;
+  box-sizing: border-box;
+  width: min(100% - 32px, 1180px);
+  margin: 0 auto 10px;
+  padding: 8px 14px;
+  color: #ffe6ac;
+  background: rgba(45, 35, 15, .9);
+  border: 1px solid rgba(246, 191, 73, .6);
+  border-radius: 6px;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, .2);
+  font-size: 12px;
+  line-height: 1.5;
+}
 .panorama-runtime__issues {
   position: fixed;
   right: 16px;
