@@ -123,6 +123,25 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(operationCards[1].text()).toContain('未绑定');
   });
 
+  it('分行主营摘要使用直接业务文案，移除技术覆盖和模糊下降指标', () => {
+    const wrapper = mountDashboard({
+      model: {
+        ...extendedModel,
+        kpis: [
+          ...extendedModel.kpis.filter(item => !['depositIncrease', 'rate'].includes(item.key)),
+          { key: 'depositIncrease', value: -1.88, unit: '亿元' },
+          { key: 'rate', value: 86.5, unit: '%' }
+        ]
+      }
+    });
+    const summary = wrapper.get('[data-testid="leadership-diagnostics"]').text();
+    expect(summary).toContain('存款较上月净减1.88亿元');
+    expect(summary).toContain('距目标还差13.5个百分点');
+    expect(summary).toContain('未完成目标机构1家');
+    expect(summary).not.toContain('可比指标覆盖');
+    expect(summary).not.toContain('下降机构数');
+  });
+
   it('演示模式明确标识，真实错误和加载态有可访问反馈', () => {
     const wrapper = mountDashboard({ demo: true, loading: true, error: '取数失败' });
     expect(wrapper.find('[data-testid="panorama-demo-badge"]').text()).toContain('演示数据');

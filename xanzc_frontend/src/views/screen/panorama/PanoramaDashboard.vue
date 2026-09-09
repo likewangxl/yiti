@@ -72,8 +72,7 @@
         :data-diagnostic="card.key"
       >
         <span class="panorama-diagnostic-label">{{ card.label }}</span>
-        <strong :class="diagnosticValueClass(card)">{{ diagnosticValueText(card) }}</strong>
-        <span v-if="card.unit" class="panorama-diagnostic-unit">{{ card.unit }}</span>
+        <strong :class="diagnosticValueClass(card)">{{ card.text }}</strong>
         <small>{{ card.note }}</small>
       </article>
     </section>
@@ -213,7 +212,7 @@
               <div class="panorama-target-ring" data-testid="target-progress-ring" :style="{ '--target-progress': `${targetProgressVisual}%` }">
                 <strong data-testid="target-progress-value">{{ formatMetric(targetProgressActual) }}<small>%</small></strong>
               </div>
-              <span class="panorama-target-gap">目标差 {{ formatSignedMetric(targetProgressActual - 100) }} 百分点</span>
+              <span class="panorama-target-gap">{{ targetDistanceSummary.text }}</span>
               <span class="panorama-target-period">{{ targetPeriodLabel }}</span>
             </div>
             <div v-else class="panorama-unbound" data-testid="target-unbound">{{ targetKpi ? '目标完成率暂无有效数据' : '目标完成率未绑定' }}<span v-if="targetKpi" class="panorama-visually-hidden">未绑定</span></div>
@@ -325,8 +324,10 @@ import {
 } from './panoramaViewModel.js';
 import {
   buildProvinceInsights,
-  coverageLabel,
-  statusLabel
+  statusLabel,
+  summarizeDepositMovement,
+  summarizeProvinceTargetStatus,
+  summarizeTargetDistance
 } from './leadershipInsights.js';
 
 use([CanvasRenderer, TreemapChart, TooltipComponent]);
@@ -455,6 +456,7 @@ const targetKpi = computed(() => safeModel.value.kpis.find(item => [
 ].includes(item?.key)) || null);
 const targetProgressActual = computed(() => finiteMetric(targetKpi.value?.value));
 const targetProgressVisual = computed(() => clampProgress(targetProgressActual.value) ?? 0);
+const targetDistanceSummary = computed(() => summarizeTargetDistance(targetProgressActual.value));
 const targetPeriodLabel = computed(() => {
   const period = String(targetKpi.value?.periodLabel || targetKpi.value?.periodName || targetKpi.value?.period || '').trim();
   return ({ LATEST: '最新数据', LAST_10D: '近10天', LAST_1M: '近1个月', LAST_6M_EOM: '近6个月月末' }[period] || period || '统计周期');
@@ -475,35 +477,40 @@ const visibleRankingRows = computed(() => {
 });
 const diagnosticCards = computed(() => {
   const diagnostics = leadershipInsights.value.diagnostics;
-  const coverage = leadershipInsights.value.coverage;
+  const movement = summarizeDepositMovement(diagnostics.depositIncrease);
+  const distance = summarizeTargetDistance(diagnostics.targetRate);
+  const targetStatus = summarizeProvinceTargetStatus(leadershipInsights.value);
+  const targetStatusState = !targetStatus.hasData
+    ? 'unknown'
+    : leadershipInsights.value.statusCounts.below > 0
+      ? 'below'
+      : leadershipInsights.value.statusCounts.unknown > 0
+        ? 'neutral'
+        : 'achieved';
+  const targetStatusDetail = targetStatus.hasData
+    ? `已提供完成率${leadershipInsights.value.coverage.rate.available}家 / 未提供${Math.max(0, leadershipInsights.value.coverage.rate.total - leadershipInsights.value.coverage.rate.available)}家`
+    : targetStatus.detail;
   return [
     {
-      key: 'depositIncrease',
-      label: '存款净增',
-      value: diagnostics.depositIncrease,
-      unit: '亿元',
-      note: '省级已绑定口径'
+      key: 'depositMovement',
+      label: '存款经营',
+      text: movement.text,
+      state: movement.state,
+      note: '较上月存款变动'
     },
     {
-      key: 'targetGapPoints',
-      label: '目标差百分点',
-      value: diagnostics.targetGapPoints,
-      unit: '百分点',
-      note: '完成率 − 100'
+      key: 'targetDistance',
+      label: '目标进度',
+      text: distance.text,
+      state: distance.state,
+      note: '全辖目标完成率'
     },
     {
-      key: 'decliningCount',
-      label: '下降机构数',
-      value: diagnostics.decliningCount,
-      unit: '家',
-      note: `可判断 ${coverageLabel(leadershipInsights.value.decliningCoverage)} · 趋势/净增`
-    },
-    {
-      key: 'coverage',
-      label: '可比指标覆盖',
-      value: coverageLabel(coverage.rate),
-      unit: '完成率',
-      note: `存款 ${coverageLabel(coverage.deposit)} · 完成率 ${coverageLabel(coverage.rate)}`
+      key: 'targetStatus',
+      label: '目标机构',
+      text: targetStatus.headline,
+      state: targetStatusState,
+      note: targetStatusDetail
     }
   ];
 });
@@ -566,16 +573,11 @@ function formatSignedMetric(value) {
   return `${prefix}${formatMetric(number)}`;
 }
 
-function diagnosticValueText(card) {
-  if (card.key === 'coverage') return card.value || '—';
-  return card.value === null || card.value === undefined ? '—' : formatSignedMetric(card.value);
-}
-
 function diagnosticValueClass(card) {
-  if (card.key === 'coverage') return '';
-  const value = finiteValue(card.value);
-  if (value === null) return 'is-muted';
-  return value < 0 ? 'is-down' : 'is-up';
+  if (card.state === 'unknown') return 'is-muted';
+  if (card.state === 'down' || card.state === 'below') return 'is-down';
+  if (card.state === 'above' || card.state === 'up' || card.state === 'achieved') return 'is-up';
+  return 'is-muted';
 }
 
 function statusClass(status) {

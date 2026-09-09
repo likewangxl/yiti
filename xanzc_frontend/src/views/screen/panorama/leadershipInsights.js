@@ -21,6 +21,61 @@ export function finiteMetric(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function summaryNumber(value) {
+  const number = finiteMetric(value);
+  return number === null ? null : new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(number);
+}
+
+export function summarizeDepositMovement(value) {
+  const number = finiteMetric(value);
+  if (number === null) return { text: '存款较上月暂无数据', state: 'unknown', value: null };
+  if (number < 0) return { text: `存款较上月净减${summaryNumber(Math.abs(number))}亿元`, state: 'down', value: number };
+  if (number > 0) return { text: `存款较上月净增${summaryNumber(number)}亿元`, state: 'up', value: number };
+  return { text: '存款较上月持平', state: 'flat', value: 0 };
+}
+
+export function summarizeTargetDistance(value) {
+  const number = finiteMetric(value);
+  if (number === null) return { text: '目标完成率暂无数据', state: 'unknown', value: null };
+  const gap = round(number - 100, 1);
+  if (gap < 0) return { text: `距目标还差${summaryNumber(Math.abs(gap))}个百分点`, state: 'below', value: gap };
+  if (gap > 0) return { text: `超目标${summaryNumber(gap)}个百分点`, state: 'above', value: gap };
+  return { text: '已达到目标', state: 'achieved', value: 0 };
+}
+
+export function summarizeProvinceTargetStatus(insights = {}) {
+  const available = Number(insights?.coverage?.rate?.available) || 0;
+  const total = Number(insights?.coverage?.rate?.total) || 0;
+  if (!available || !total) {
+    return { hasData: false, headline: '目标机构暂无数据', detail: '暂无可用目标完成率' };
+  }
+  const below = Number(insights?.statusCounts?.below) || 0;
+  const unknown = Math.max(0, total - available);
+  return {
+    hasData: true,
+    headline: `未完成目标机构${below}家`,
+    detail: `完成率低于100%，已提供${available}/${total}家`
+  };
+}
+
+export function summarizeCityTargetStatus(insights = {}) {
+  const sampleSize = Number(insights?.sampleSize) || 0;
+  if (!sampleSize) {
+    return { hasData: false, achievedText: '暂无', belowText: '', unknownText: '暂无' };
+  }
+  const available = Number(insights?.coverage?.rate?.available) || 0;
+  if (!available) {
+    return { hasData: false, achievedText: '暂无', belowText: '', unknownText: '暂无' };
+  }
+  const counts = insights?.statusCounts || {};
+  return {
+    hasData: true,
+    achievedText: `已完成目标${Number(counts.achieved) || 0}家`,
+    belowText: `未完成目标${Number(counts.below) || 0}家`,
+    unknownText: `未提供${Number(counts.unknown) || 0}家`
+  };
+}
+
 function round(value, digits = 2) {
   const number = finiteMetric(value);
   if (number === null) return null;

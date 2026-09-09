@@ -103,7 +103,7 @@ function createInstitutions() {
         loan: loans[index],
         customers: customers[index],
         revenue: revenues[index],
-        target: city.rate,
+        target: null,
         rate: round(city.rate - (index % 3) * 1.1, 1)
       };
       const coordinate = missingCoordinate ? null : coordinatesFor(city, index);

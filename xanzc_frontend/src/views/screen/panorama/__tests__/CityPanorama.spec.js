@@ -118,4 +118,27 @@ describe('CityPanorama 市级支行全景', () => {
     expect(wrapper.find('[data-testid="city-kpi-deposit"]').text()).toContain('未绑定');
     expect(wrapper.find('[data-testid="city-kpi-deposit"]').text()).not.toContain('200');
   });
+
+  it('市级摘要只呈现全市目标状态和目标距离，选中支行不改变摘要，位次只在详情出现', async () => {
+    const cityModel = {
+      ...model,
+      citySummaries: {
+        '610100': {
+          kpis: [{ key: 'rate', value: 91, unit: '%' }],
+          dataDate: '2026-09-06'
+        }
+      }
+    };
+    const wrapper = mountCity({ model: cityModel });
+    const summary = wrapper.get('[data-testid="city-leadership-diagnostics"]');
+    const before = summary.text();
+    expect(before).toContain('已完成目标0家');
+    expect(before).toContain('未完成目标6家');
+    expect(before).toContain('未提供1家');
+    expect(before).toContain('距目标还差9个百分点');
+    expect(before).not.toContain('同城展示观察');
+    await wrapper.get('[data-testid="branch-row"]').trigger('click');
+    expect(summary.text()).toBe(before);
+    expect(wrapper.get('[data-testid="branch-observation"]').text()).toContain('存款余额位次');
+  });
 });

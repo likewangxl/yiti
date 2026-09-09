@@ -129,13 +129,13 @@
 :is(.panorama-dashboard, .city-panorama) .is-up { color: var(--panorama-up) !important; }
 :is(.panorama-dashboard, .city-panorama) .is-down { color: var(--panorama-danger) !important; }
 
-.panorama-diagnostics-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 clamp(16px, 2vw, 30px) 12px; }
-.panorama-diagnostic-card { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 7px; padding: 8px 12px 7px; border: 1px solid rgba(119, 163, 255, .22); border-radius: 6px; background: linear-gradient(105deg, rgba(14, 39, 94, .65), rgba(8, 21, 57, .6)); }
-.panorama-diagnostic-label { overflow: hidden; color: var(--panorama-text-dim); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.panorama-diagnostic-card strong { overflow: hidden; color: #eef5ff; font-size: 19px; text-overflow: ellipsis; white-space: nowrap; }
+.panorama-diagnostics-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 clamp(16px, 2vw, 30px) 12px; }
+.panorama-diagnostic-card { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; row-gap: 3px; padding: 8px 12px 7px; border: 1px solid rgba(119, 163, 255, .22); border-radius: 6px; background: linear-gradient(105deg, rgba(14, 39, 94, .65), rgba(8, 21, 57, .6)); }
+.panorama-diagnostic-label { color: var(--panorama-text-dim); font-size: 11px; line-height: 1.35; }
+.panorama-diagnostic-card strong { display: block; color: #eef5ff; font-size: 19px; line-height: 1.4; overflow-wrap: anywhere; }
 .panorama-diagnostic-card strong.is-muted { color: var(--panorama-text-dim); }
 .panorama-diagnostic-unit { color: #8fa9d6; font-size: 10px; }
-.panorama-diagnostic-card small { grid-column: 1 / -1; overflow: hidden; margin-top: 4px; color: #718fc2; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.panorama-diagnostic-card small { color: #718fc2; font-size: 9px; line-height: 1.35; overflow-wrap: anywhere; }
 
 /* 十行矩阵需要完整行高；视口高度不足时由页面滚动，不能被桌面宽度断点压缩。 */
 .panorama-workspace { display: grid; grid-template-columns: minmax(0, 30fr) minmax(0, 40fr) minmax(0, 30fr); gap: 14px; height: max(720px, min(820px, calc(100vh - var(--panorama-viewport-offset, 0px) - 275px))); min-height: 720px; margin: 0 clamp(16px, 2vw, 30px) 18px; }
@@ -197,7 +197,7 @@
 .panorama-target-ring { width: 92px; height: 33px; display: grid; place-items: center; border: 1px solid rgba(76, 221, 235, .32); border-radius: 5px; background: linear-gradient(90deg, rgba(77, 232, 239, .32) var(--target-progress), rgba(43, 100, 169, .15) var(--target-progress)); box-shadow: 0 0 16px rgba(55, 212, 236, .12); position: relative; }
 .panorama-target-ring strong { position: relative; z-index: 1; color: #effcff; font-size: 20px; }
 .panorama-target-ring strong small { margin-left: 2px; font-size: 10px; }
-.panorama-target-gap { color: #dce9ff; font-size: 11px; white-space: nowrap; }
+.panorama-target-gap { color: #dce9ff; font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
 .panorama-target-period { color: var(--panorama-text-dim); font-size: 9px; white-space: nowrap; }
 .panorama-target-track { display: none; }
 .panorama-trend-heading-actions { display: flex; align-items: center; gap: 8px; }
@@ -289,12 +289,12 @@
 .city-kpi small { color: var(--panorama-text-dim); font-size: 11px; }
 .city-kpi em { margin-left: auto; color: var(--panorama-up); font-size: 12px; font-style: normal; }
 .city-summary-unbound { margin: -5px 22px 9px; color: var(--panorama-amber); font-size: 11px; text-align: right; }
-.city-leadership-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 22px 10px; }
-.city-leadership-card { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 7px; padding: 7px 11px 6px; border: 1px solid rgba(119, 163, 255, .22); border-radius: 6px; background: linear-gradient(105deg, rgba(14, 39, 94, .65), rgba(8, 21, 57, .6)); }
-.city-leadership-card > span { overflow: hidden; color: var(--panorama-text-dim); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.city-leadership-card strong { overflow: hidden; color: #eef5ff; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.city-leadership-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 22px 10px; }
+.city-leadership-card { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; row-gap: 3px; padding: 7px 11px 6px; border: 1px solid rgba(119, 163, 255, .22); border-radius: 6px; background: linear-gradient(105deg, rgba(14, 39, 94, .65), rgba(8, 21, 57, .6)); }
+.city-leadership-card > span { color: var(--panorama-text-dim); font-size: 10px; line-height: 1.35; }
+.city-leadership-card strong { display: block; color: #eef5ff; font-size: 16px; line-height: 1.4; overflow-wrap: anywhere; }
 .city-leadership-card strong.is-muted { color: var(--panorama-text-dim); }
-.city-leadership-card small { grid-column: 1 / -1; overflow: hidden; margin-top: 3px; color: #718fc2; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.city-leadership-card small { color: #718fc2; font-size: 9px; line-height: 1.35; overflow-wrap: anywhere; }
 
 .city-workspace { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(380px, 1fr); grid-template-rows: 350px 430px; gap: 12px; height: auto; min-height: 780px; margin: 0 22px 12px; }
 .city-map-panel { grid-column: 1; grid-row: 1 / span 2; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
@@ -467,7 +467,7 @@
   .city-workspace { margin-right: 12px; margin-left: 12px; }
   .panorama-kpi-grid,
   .city-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .panorama-diagnostics-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-right: 12px; margin-left: 12px; }
+  .panorama-diagnostics-strip { grid-template-columns: 1fr; margin-right: 12px; margin-left: 12px; }
   .panorama-kpi:nth-child(2) { border-right: 0; }
   .panorama-kpi:nth-child(-n + 2) { border-bottom: 1px solid rgba(121, 161, 248, .16); }
   .panorama-kpi { min-height: 82px; padding: 10px; gap: 8px; }
@@ -488,7 +488,7 @@
   .city-title-block { text-align: center; }
   .city-header-actions { justify-content: center; }
   .city-detail-body { grid-template-columns: 1fr; }
-  .city-leadership-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-right: 12px; margin-left: 12px; }
+  .city-leadership-strip { grid-template-columns: 1fr; margin-right: 12px; margin-left: 12px; }
   .city-detail-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .city-detail-observation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .city-map-toolbar { align-items: flex-start; flex-direction: column; padding: 0 10px 8px; }

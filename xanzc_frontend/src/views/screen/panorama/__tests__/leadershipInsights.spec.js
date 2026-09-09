@@ -3,7 +3,11 @@ import {
   buildCityInsights,
   buildProvinceInsights,
   deriveTrendObservation,
-  resolveDepositTarget
+  resolveDepositTarget,
+  summarizeCityTargetStatus,
+  summarizeDepositMovement,
+  summarizeProvinceTargetStatus,
+  summarizeTargetDistance
 } from '../leadershipInsights.js';
 
 const branches = [
@@ -42,6 +46,17 @@ const branches = [
 ];
 
 describe('leadershipInsights 经营诊断纯计算', () => {
+  it('摘要文案区分净增/净减/持平/暂无数据，并区分目标差、达标和超目标', () => {
+    expect(summarizeDepositMovement(-1.88)).toMatchObject({ text: '存款较上月净减1.88亿元', state: 'down' });
+    expect(summarizeDepositMovement(2.4)).toMatchObject({ text: '存款较上月净增2.4亿元', state: 'up' });
+    expect(summarizeDepositMovement(0)).toMatchObject({ text: '存款较上月持平', state: 'flat' });
+    expect(summarizeDepositMovement(null)).toMatchObject({ text: '存款较上月暂无数据', state: 'unknown' });
+    expect(summarizeTargetDistance(86.5)).toMatchObject({ text: '距目标还差13.5个百分点', state: 'below' });
+    expect(summarizeTargetDistance(100)).toMatchObject({ text: '已达到目标', state: 'achieved' });
+    expect(summarizeTargetDistance(125)).toMatchObject({ text: '超目标25个百分点', state: 'above' });
+    expect(summarizeTargetDistance(null)).toMatchObject({ text: '目标完成率暂无数据', state: 'unknown' });
+  });
+
   it('只在实际余额和金额目标都可证明时计算目标差，不把完成率当目标金额', () => {
     expect(resolveDepositTarget(branches[0])).toBe(110);
     expect(resolveDepositTarget({ metrics: { deposit: 100, target: 98, rate: 98 } })).toBe(98);
@@ -69,6 +84,18 @@ describe('leadershipInsights 经营诊断纯计算', () => {
     expect(insights.rows.find(row => row.orgCode === 'A')).toMatchObject({ targetGap: -10, trendState: '连续下降' });
   });
 
+  it('省级目标摘要只统计完成率低于100%的机构，未提供完成率不冒充未完成', () => {
+    const insights = buildProvinceInsights({ institutions: branches });
+    expect(summarizeProvinceTargetStatus(insights)).toEqual({
+      hasData: true,
+      headline: '未完成目标机构2家',
+      detail: '完成率低于100%，已提供3/4家'
+    });
+    expect(summarizeProvinceTargetStatus(buildProvinceInsights({
+      institutions: [{ orgCode: 'UNKNOWN', metrics: { deposit: 1, rate: null } }]
+    }))).toMatchObject({ hasData: false, headline: '目标机构暂无数据' });
+  });
+
   it('没有净增或可比较趋势时下降数量保持未知，并显示可判断样本为 0', () => {
     const insights = buildProvinceInsights({
       institutions: [{ orgCode: 'NO-TREND', metrics: { deposit: 10, rate: null }, trend: [] }]
@@ -93,6 +120,17 @@ describe('leadershipInsights 经营诊断纯计算', () => {
     });
     expect(insights.selected('C')).toMatchObject({ rank: null, total: 2, medianDifference: null });
     expect(insights.diagnostics.targetGapPoints).toBe(-9);
+  });
+
+  it('市级目标摘要给出已完成/未完成/未提供三分列，不受选中支行影响', () => {
+    const insights = buildCityInsights({ cityCode: '610100', citySummary: { kpis: [{ key: 'rate', value: 91 }] }, institutions: branches });
+    expect(summarizeCityTargetStatus(insights)).toEqual({
+      hasData: true,
+      achievedText: '已完成目标1家',
+      belowText: '未完成目标1家',
+      unknownText: '未提供1家'
+    });
+    expect(summarizeTargetDistance(insights.diagnostics.targetRate).text).toBe('距目标还差9个百分点');
   });
 
   it('趋势只有一个有效点时不伪造首末变化；连续下降需要三个不同日期', () => {
