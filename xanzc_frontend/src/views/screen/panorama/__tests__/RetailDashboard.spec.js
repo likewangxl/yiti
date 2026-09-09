@@ -18,6 +18,14 @@ vi.mock('vue-echarts', () => ({
   }
 }));
 
+vi.mock('element-plus', () => ({
+  ElDialog: {
+    name: 'ElDialog',
+    props: { modelValue: Boolean, title: String },
+    template: '<div v-if="modelValue" class="el-dialog-stub" role="dialog" aria-modal="true"><h2>{{ title }}</h2><slot /><slot name="footer" /></div>'
+  }
+}));
+
 import RetailDashboard from '../RetailDashboard.vue';
 
 const model = {
@@ -135,6 +143,84 @@ describe('RetailDashboard 零售经营总览', () => {
     expect(attention.text()).toContain('零售金融部');
     expect(attention.text()).toContain('2026-09-15');
     expect(attention.findAll('li')).toHaveLength(2);
+  });
+
+  it('事项行是原生按钮，点击后展示演示详情、责任范围与数据日期，并可关闭恢复焦点', async () => {
+    const wrapper = mountDashboard({
+      demo: true,
+      model: {
+        ...model,
+        scopeLabel: '陕西省全辖（示例）',
+        attention: [{
+          label: '重点客户维护',
+          count: 4,
+          owner: '零售金融部',
+          deadline: '2026-09-15',
+          detail: {
+            description: '维护重点客户关系',
+            coordination: '请零售金融部协调客户经理跟进',
+            source: '本地演示台账'
+          }
+        }]
+      }
+    });
+    const row = wrapper.get('[data-testid="retail-attention-row"]');
+    expect(row.element.tagName).toBe('BUTTON');
+    expect(row.attributes('type')).toBe('button');
+    expect(row.attributes('aria-label')).toContain('重点客户维护');
+    await row.trigger('click');
+    const detail = wrapper.get('[data-testid="retail-attention-detail"]');
+    expect(detail.text()).toContain('重点客户维护');
+    expect(detail.get('[data-testid="retail-attention-detail-count"]').text()).toBe('4');
+    expect(detail.text()).toContain('零售金融部');
+    expect(detail.text()).toContain('2026-09-15');
+    expect(detail.text()).toContain('陕西省全辖（示例）');
+    expect(detail.text()).toContain('2026-09-06');
+    expect(detail.text()).toContain('维护重点客户关系');
+    expect(detail.text()).toContain('请零售金融部协调客户经理跟进');
+    expect(detail.text()).toContain('本地演示台账');
+    expect(detail.text()).toContain('本地演示 · 非业务数据');
+    await wrapper.get('[data-action="close-retail-attention"]').trigger('click');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[data-testid="retail-attention-detail"]').exists()).toBe(false);
+    expect(document.activeElement).toBe(row.element);
+  });
+
+  it('正式事项不展示演示扩展，数量区分 0 与缺失值，行使用原生按钮激活', async () => {
+    const wrapper = mountDashboard({
+      model: {
+        ...model,
+        attention: [
+          { label: '零事项', count: 0, owner: null, deadline: null, detail: { description: '不应展示' } },
+          { label: '缺失事项', count: null, owner: null, deadline: null }
+        ]
+      }
+    });
+    const zeroRow = wrapper.findAll('[data-testid="retail-attention-row"]')[0];
+    expect(zeroRow.element.tagName).toBe('BUTTON');
+    await zeroRow.trigger('click');
+    const zeroDetail = wrapper.get('[data-testid="retail-attention-detail"]');
+    expect(zeroDetail.get('[data-testid="retail-attention-detail-count"]').text()).toBe('0');
+    expect(zeroDetail.text()).toContain('未提供事项说明');
+    expect(zeroDetail.text()).toContain('未提供协调要求');
+    expect(zeroDetail.text()).not.toContain('不应展示');
+    await wrapper.get('[data-action="close-retail-attention"]').trigger('click');
+    await wrapper.vm.$nextTick();
+
+    const missingRow = wrapper.findAll('[data-testid="retail-attention-row"]')[1];
+    await missingRow.trigger('click');
+    expect(wrapper.get('[data-testid="retail-attention-detail-count"]').text()).toBe('—');
+  });
+
+  it('换屏或授权错误时清空事项详情，不残留上一个事项', async () => {
+    const wrapper = mountDashboard();
+    await wrapper.get('[data-testid="retail-attention-row"]').trigger('click');
+    expect(wrapper.find('[data-testid="retail-attention-detail"]').exists()).toBe(true);
+    await wrapper.setProps({ model: { ...model, attention: [] } });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[data-testid="retail-attention-detail"]').exists()).toBe(false);
+    await wrapper.setProps({ model, error: '403 Forbidden' });
+    expect(wrapper.find('[data-testid="retail-attention-detail"]').exists()).toBe(false);
   });
 
   it('长内容完整保留且可键盘聚焦，不引入下拉筛选', () => {

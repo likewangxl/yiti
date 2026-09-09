@@ -58,15 +58,45 @@ export const retailDemoModel = Object.freeze({
   ]),
   rankings: demoRankings,
   attention: Object.freeze([
-    { label: '重点客户维护', count: 4, owner: '零售金融部', deadline: '2026-09-15' },
-    { label: '风险数据待核验', count: 0, owner: null, deadline: null },
-    { label: '收入目标沟通', count: 2, owner: '计划财务部', deadline: '2026-09-20' }
+    {
+      label: '重点客户维护', count: 4, owner: '零售金融部', deadline: '2026-09-15',
+      detail: {
+        description: '示例中有4项重点客户维护安排待确认，需明确维护责任、客户沟通计划与回访反馈方式。',
+        coordination: '请零售金融部协调相关机构确认维护安排，并在截止日前反馈推进情况。',
+        source: '重点客户维护清单（演示）'
+      }
+    },
+    {
+      label: '风险数据待核验', count: 0, owner: null, deadline: null,
+      detail: {
+        description: '当前示例数量为0，责任部门与核验期限尚未提供；该数值不能用于判断风险已核验或事项已完成。',
+        coordination: '补齐责任部门、核验期限与数据来源后，再确认是否需要进一步协调。',
+        source: '风险数据核验清单（演示）'
+      }
+    },
+    {
+      label: '收入目标沟通', count: 2, owner: '计划财务部', deadline: '2026-09-20',
+      detail: {
+        description: '示例中有2项收入目标口径沟通事项，需核对统计期间和收入归集范围，确保实际值与目标可比。',
+        coordination: '请计划财务部与零售金融部确认目标口径及归集说明，形成一致的反馈结论。',
+        source: '零售收入目标沟通台账（演示）'
+      }
+    },
+    {
+      label: '资产负增机构跟进', count: 1, owner: '零售金融部', deadline: '2026-09-18',
+      detail: {
+        description: '渭南市分行AUM较上月净减4.20亿元，需核查客户资产流出原因、统计口径及后续维护安排。',
+        coordination: '请零售金融部会同渭南市分行核实负增原因，明确责任人与跟进计划；不以单月负增直接作绩效结论。',
+        source: '机构AUM月度监测清单（演示）'
+      }
+    }
   ]),
   targets: Object.freeze([
     { name: '年度AUM净增', actual: 72.30, target: 60.00 },
     { name: '年度储蓄余额净增', actual: -3.60, target: 12.00 },
     { name: '年度零售收入', actual: 12.68, target: 16.00 },
-    { name: '年度财富中收净增', actual: null, target: null }
+    { name: '年度财富中收净增', actual: null, target: null },
+    { name: '年度个人贷款净增', actual: 18.35, target: 25.00 }
   ]),
   institutions: demoInstitutions,
   issues: Object.freeze([])

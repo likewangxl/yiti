@@ -18,4 +18,17 @@ describe('retailDemoModel', () => {
     expect(retailDemoModel.targets.some(item => item.target <= 0)).toBe(true);
     expect(retailDemoModel.institutions.some(item => !item.cityCode)).toBe(true);
   });
+  it('新增资产负增跟进与个贷净增目标，详情示例能与经营数据核对', () => {
+    const followup = retailDemoModel.attention.find(item => item.label === '资产负增机构跟进');
+    const negativeInstitutions = retailDemoModel.rankings.filter(item => item.increase < 0);
+    expect(followup).toBeDefined();
+    expect(followup.count).toBe(negativeInstitutions.length);
+    expect(followup.detail.description).toContain(negativeInstitutions[0].name);
+    expect(followup.detail.description).toContain(Math.abs(negativeInstitutions[0].increase).toFixed(2));
+    expect(retailDemoModel.attention).toHaveLength(4);
+    expect(retailDemoModel.attention.every(item => item.detail.description && item.detail.coordination && item.detail.source)).toBe(true);
+    expect(retailDemoModel.targets).toHaveLength(5);
+    expect(retailDemoModel.targets.find(item => item.name === '年度个人贷款净增')).toMatchObject({ actual: 18.35, target: 25 });
+  });
+
 });

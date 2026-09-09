@@ -168,17 +168,35 @@
           <p class="retail-panel__note">责任归属与跟进时限</p>
           <ul v-if="safeModel.attention.length" class="retail-attention-list retail-scroll-region" tabindex="0" aria-label="经营关注事项">
             <li v-for="(item, index) in safeModel.attention" :key="`${item.label || 'attention'}-${index}`">
-              <span class="retail-attention-list__mark">!</span>
-              <div class="retail-attention-list__main">
-                <strong>{{ item.label || '—' }}</strong>
-                <small>责任 {{ item.owner || '未提供' }} · 期限 {{ item.deadline || '未提供' }}</small>
-              </div>
-              <b>{{ formatMetric(item.count) }}</b>
+              <button
+                type="button"
+                class="retail-attention-row"
+                data-testid="retail-attention-row"
+                :aria-label="`查看事项详情：${item.label || '—'}`"
+                @click="openAttention(item, $event)"
+              >
+                <span class="retail-attention-list__mark" aria-hidden="true">!</span>
+                <span class="retail-attention-list__main">
+                  <strong>{{ item.label || '—' }}</strong>
+                  <small>责任 {{ item.owner || '未提供' }} · 期限 {{ item.deadline || '未提供' }}</small>
+                </span>
+                <b>{{ formatMetric(item.count) }}</b>
+                <span class="retail-attention-row__arrow" aria-hidden="true">›</span>
+              </button>
             </li>
           </ul>
           <div v-else class="retail-empty">暂无来源已确认事项</div>
         </article>
       </div>
+
+      <RetailAttentionDetails
+        v-if="selectedAttention"
+        :item="selectedAttention"
+        :demo="demo"
+        :scope-label="safeModel.scopeLabel"
+        :data-date="displayDate"
+        @close="closeAttention"
+      />
 
       <div class="retail-column retail-column--center">
         <article class="retail-panel retail-map-panel">
@@ -390,6 +408,7 @@ import {
 } from '@element-plus/icons-vue';
 import PanoramaMap from './PanoramaMap.vue';
 import RetailTrend from './RetailTrend.vue';
+import RetailAttentionDetails from './RetailAttentionDetails.vue';
 import { provinceGeo } from './geography.js';
 import {
   buildRetailLeadershipInsights,
@@ -424,10 +443,12 @@ const selectedCityName = ref('');
 const directoryOpen = ref(false);
 const directorySearch = ref('');
 const selectedInstitution = ref(null);
+const selectedAttention = ref(null);
 const directoryDialogRef = ref(null);
 const directorySearchRef = ref(null);
 const rootRef = ref(null);
 const focusBeforeDirectory = ref(null);
+const focusBeforeAttention = ref(null);
 
 const safeModel = computed(() => {
   const source = props.model && typeof props.model === 'object' ? props.model : {};
@@ -699,6 +720,18 @@ function openInstitution(item) {
   openDirectory(false);
 }
 
+function openAttention(item, event) {
+  focusBeforeAttention.value = event?.currentTarget || document.activeElement;
+  selectedAttention.value = item || null;
+}
+
+function closeAttention({ restoreFocus = true } = {}) {
+  selectedAttention.value = null;
+  const target = focusBeforeAttention.value;
+  focusBeforeAttention.value = null;
+  if (restoreFocus) nextTick(() => target?.focus?.());
+}
+
 async function openDirectory(resetSearch = true) {
   focusBeforeDirectory.value = document.activeElement;
   if (resetSearch) {
@@ -766,6 +799,7 @@ function clearTransientState() {
   selectedInstitution.value = null;
   rankingMetric.value = 'aum';
   rankingOrder.value = 'leading';
+  closeAttention({ restoreFocus: false });
   closeDirectory();
 }
 
