@@ -6,7 +6,7 @@
     :data-selected-region="selectedRegionCode || ''"
     :data-webgl-ready="webglReady ? 'true' : 'false'"
     :data-region-count="renderedRegionCount"
-    aria-label="真实行政区三维地图"
+    :aria-label="fallbackActive ? '真实行政区二维地图' : '真实行政区三维地图'"
   >
     <canvas
       ref="canvasRef"
@@ -140,7 +140,9 @@
     </div>
 
     <p v-if="fallbackActive" class="panorama-map__fallback-status" role="status" aria-live="polite">
-      当前浏览器不可用 WebGL，已切换为可交互的二维真实行政区地图；点击城市标签进入市级机构地图。
+      {{ mode === 'province'
+        ? '三维地图暂不可用，已切换为二维地图；可缩放、点击城市查看机构。'
+        : '三维地图暂不可用，已切换为二维地图；可缩放、点击网点查看详情。' }}
     </p>
     <p v-else-if="webglReady" class="panorama-map__fallback-status" role="status" aria-live="polite">
       {{ mode === 'province'

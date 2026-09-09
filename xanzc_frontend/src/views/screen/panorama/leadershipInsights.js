@@ -38,8 +38,9 @@ export function summarizeTargetDistance(value) {
   const number = finiteMetric(value);
   if (number === null) return { text: '目标完成率暂无数据', state: 'unknown', value: null };
   const gap = round(number - 100, 1);
-  if (gap < 0) return { text: `距目标还差${summaryNumber(Math.abs(gap))}个百分点`, state: 'below', value: gap };
-  if (gap > 0) return { text: `超目标${summaryNumber(gap)}个百分点`, state: 'above', value: gap };
+  // 是否达标取决于原始完成率，不能因显示舍入而把99.99%判为已达到目标。
+  if (number < 100) return { text: gap === 0 ? '距目标还差不到0.1个百分点' : `距目标还差${summaryNumber(Math.abs(gap))}个百分点`, state: 'below', value: gap };
+  if (number > 100) return { text: gap === 0 ? '超目标不到0.1个百分点' : `超目标${summaryNumber(gap)}个百分点`, state: 'above', value: gap };
   return { text: '已达到目标', state: 'achieved', value: 0 };
 }
 

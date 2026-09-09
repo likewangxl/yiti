@@ -507,7 +507,7 @@ const diagnosticCards = computed(() => {
     },
     {
       key: 'targetStatus',
-      label: '目标机构',
+      label: '机构目标完成情况',
       text: targetStatus.headline,
       state: targetStatusState,
       note: targetStatusDetail

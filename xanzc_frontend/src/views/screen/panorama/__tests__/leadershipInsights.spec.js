@@ -133,6 +133,11 @@ describe('leadershipInsights 经营诊断纯计算', () => {
     expect(summarizeTargetDistance(insights.diagnostics.targetRate).text).toBe('距目标还差9个百分点');
   });
 
+  it('接近100%的显示舍入不能把未达标或超额误判为刚好达标', () => {
+    expect(summarizeTargetDistance(99.99)).toMatchObject({ state: 'below', text: '距目标还差不到0.1个百分点' });
+    expect(summarizeTargetDistance(100.01)).toMatchObject({ state: 'above', text: '超目标不到0.1个百分点' });
+  });
+
   it('趋势只有一个有效点时不伪造首末变化；连续下降需要三个不同日期', () => {
     expect(deriveTrendObservation([{ date: '2026-09', deposit: 10 }])).toMatchObject({
       first: 10,

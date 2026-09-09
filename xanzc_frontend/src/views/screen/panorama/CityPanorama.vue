@@ -25,15 +25,15 @@
     <div v-if="summaryUnbound" class="city-summary-unbound" data-testid="city-summary-unbound">市级汇总未绑定，无法据下级机构加总</div>
     <section class="city-leadership-strip" data-testid="city-leadership-diagnostics" aria-label="市级经营诊断">
       <article class="city-leadership-card">
-        <span>目标机构</span>
+        <span>机构目标完成情况</span>
         <strong :class="cityInsightStateClass(cityTargetStatusState)">{{ cityTargetStatusText }}</strong>
-        <small v-if="cityTargetStatus.hasData">完成率样本 {{ coverageLabel(cityInsights.coverage.rate) }}</small>
-        <small v-else>完成率暂无提供</small>
+        <small v-if="cityTargetStatus.hasData">目标完成率达到100%视为完成</small>
+        <small v-else>暂无目标完成率数据</small>
       </article>
       <article class="city-leadership-card">
         <span>目标进度</span>
         <strong :class="cityInsightStateClass(cityTargetDistance.state)">{{ cityTargetDistance.text }}</strong>
-        <small>市级汇总直接绑定 · 不平均下级完成率</small>
+        <small>本市整体目标完成进度</small>
       </article>
     </section>
     <span class="panorama-visually-hidden" data-testid="selected-org-code">{{ selectedOrgCode }}</span>
