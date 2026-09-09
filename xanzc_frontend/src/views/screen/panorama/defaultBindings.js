@@ -389,6 +389,20 @@ function hasExplicitOrgContext(source) {
   return Boolean(text(config.subjectCol || config.subjectParam || config.orgCode || config.org_code));
 }
 
+const INSTITUTION_LIST_SLOTS = new Set(['branches', 'ranking', 'retailRanking']);
+
+/**
+ * CUSTOM_SQL 只有在配置明确声明逐行 TABLE 结果，并把 org_code 声明为 DIM 时，
+ * 才能作为机构列表来源。scopeMode 描述权限范围，不代替 SQL 输出粒度证明。
+ */
+function isCustomSqlInstitutionTable(source) {
+  const config = datasourceConfig(source);
+  const sourceKind = upper(source?.sourceKind || source?.source_kind || config.sourceKind);
+  if (sourceKind !== 'CUSTOM_SQL' || explicitSourceShape(source) !== 'TABLE') return false;
+  return sourceFields(source).some(candidate => upper(candidate.col) === 'ORG_CODE'
+    && candidate.role === 'DIM');
+}
+
 function sourceStructureIssue(source, screen, slot, mode) {
   const config = datasourceConfig(source);
   const sourceKind = upper(source?.sourceKind || source?.source_kind || config.sourceKind);
@@ -410,7 +424,12 @@ function sourceStructureIssue(source, screen, slot, mode) {
   if (sourceKind === 'WIDE_TABLE' && ['branches', 'ranking', 'retailRanking'].includes(slot) && groupBy !== 'SUBJECT') {
     return '机构展示需要 WIDE_TABLE 明确按 SUBJECT 聚合';
   }
-  if (['branches', 'ranking', 'retailRanking'].includes(slot) && scopeMode === 'GLOBAL') {
+  if (INSTITUTION_LIST_SLOTS.has(slot) && sourceKind === 'CUSTOM_SQL'
+      && !isCustomSqlInstitutionTable(source)) {
+    return '机构展示需要 CUSTOM_SQL 明确 TABLE 逐机构结构和 org_code 机构维度';
+  }
+  if (INSTITUTION_LIST_SLOTS.has(slot) && scopeMode === 'GLOBAL'
+      && !(sourceKind === 'CUSTOM_SQL' && isCustomSqlInstitutionTable(source))) {
     return '机构展示不能使用全局汇总来源';
   }
   if (sourceKind !== 'WIDE_TABLE' && SINGLE_VALUE_SLOTS.has(slot) && explicitSourceShape(source) !== 'SINGLE') {

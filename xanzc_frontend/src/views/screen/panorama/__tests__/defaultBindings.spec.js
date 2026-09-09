@@ -35,6 +35,19 @@ function orgWideSource(id, metrics, aggregation = { groupBy: 'NONE', agg: 'SUM' 
   }, extra);
 }
 
+function customSqlInstitutionTable(id, resultShape = 'TABLE', extra = {}, configExtra = {}) {
+  return source(id, {
+    resultShape,
+    scopeMode: 'GLOBAL',
+    fields: [
+      { col: 'org_code', alias: '机构号', role: 'DIM' },
+      { col: 'org_name', alias: '机构名称', role: 'DIM' },
+      { col: 'deposit', alias: '存款余额', semantic: 'rankingValue', role: 'METRIC', unit: 'HUNDRED_MILLION' }
+    ],
+    ...configExtra
+  }, { sourceKind: 'CUSTOM_SQL', ...extra });
+}
+
 describe('defaultBindings', () => {
   it('只在固定指标编码唯一且语义完整时自动绑定，并按已确认宽表口径设为亿元', () => {
     const result = resolveDefaultBinding({
@@ -167,6 +180,52 @@ describe('defaultBindings', () => {
 
     expect(result.status).toBe('missing');
     expect(result.gap).toContain('范围');
+  });
+
+  it('GLOBAL 权限范围下允许明确 TABLE 逐机构 CUSTOM_SQL 保留已有机构排名绑定', () => {
+    const existing = {
+      dsId: 9020,
+      period: 'LATEST',
+      fields: { orgCode: 'org_code', name: 'org_name', value: 'deposit' },
+      units: { value: 'HUNDRED_MILLION' }
+    };
+    const result = resolveDefaultBinding({
+      slot: 'ranking',
+      template: 'branch-overview-v1',
+      screenScope,
+      existingBinding: existing,
+      datasources: [customSqlInstitutionTable(9020)]
+    });
+
+    expect(result.status).toBe('preserved');
+    expect(result.binding).toEqual(existing);
+    expect(result.source.id).toBe(9020);
+  });
+
+  it('CUSTOM_SQL 机构列表仍拒绝 SINGLE、缺 org_code 维度和 NAMED_GROUP', () => {
+    const single = resolveDefaultBinding({
+      slot: 'ranking', template: 'branch-overview-v1', screenScope,
+      datasources: [customSqlInstitutionTable(9021, 'SINGLE')]
+    });
+    const noOrgCode = resolveDefaultBinding({
+      slot: 'ranking', template: 'branch-overview-v1', screenScope,
+      datasources: [customSqlInstitutionTable(9022, 'TABLE', {}, {
+        fields: [{ col: 'org_name', alias: '机构名称', role: 'DIM' },
+          { col: 'deposit', alias: '存款余额', semantic: 'rankingValue', role: 'METRIC', unit: 'HUNDRED_MILLION' }]
+      })]
+    });
+    const namedGroup = resolveDefaultBinding({
+      slot: 'ranking', template: 'branch-overview-v1',
+      screenScope: { ...screenScope, orgScopeMode: 'NAMED_GROUP' },
+      datasources: [customSqlInstitutionTable(9023)]
+    });
+
+    expect(single.status).toBe('missing');
+    expect(single.gap).toContain('TABLE');
+    expect(noOrgCode.status).toBe('missing');
+    expect(noOrgCode.gap).toContain('org_code');
+    expect(namedGroup.status).toBe('missing');
+    expect(namedGroup.gap).toContain('机构指标宽表');
   });
 
   it('固定对公/零售指标成对且一行来源明确时自动选择双列展示配置', () => {
