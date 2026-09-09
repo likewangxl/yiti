@@ -93,22 +93,24 @@
             </div>
             <span>月度口径</span>
           </header>
-          <div class="retail-savings__cards">
-            <div class="retail-data-card" data-testid="retail-deposit-balance">
-              <span>储蓄余额</span>
-              <strong :class="{ 'is-empty': !hasValue(depositKpi?.value) }">{{ formatMetric(depositKpi?.value) }}</strong>
-              <small>时点余额 · 亿元</small>
+          <div class="retail-savings__body retail-scroll-region" tabindex="0" role="region" aria-label="储蓄核心指标内容">
+            <div class="retail-savings__cards">
+              <div class="retail-data-card" data-testid="retail-deposit-balance">
+                <span>储蓄余额</span>
+                <strong :class="{ 'is-empty': !hasValue(depositKpi?.value) }">{{ formatMetric(depositKpi?.value) }}</strong>
+                <small>时点余额 · 亿元</small>
+              </div>
+              <div class="retail-data-card" data-testid="retail-deposit-average">
+                <span>月日均余额</span>
+                <strong :class="{ 'is-empty': !hasValue(depositAverage?.value) }">{{ formatMetric(depositAverage?.value) }}</strong>
+                <small v-if="hasValue(depositAverage?.value)">月内日均 · 亿元</small>
+                <small v-else>未绑定 · 亿元</small>
+              </div>
             </div>
-            <div class="retail-data-card" data-testid="retail-deposit-average">
-              <span>月日均余额</span>
-              <strong :class="{ 'is-empty': !hasValue(depositAverage?.value) }">{{ formatMetric(depositAverage?.value) }}</strong>
-              <small v-if="hasValue(depositAverage?.value)">月内日均 · 亿元</small>
-              <small v-else>未绑定 · 亿元</small>
+            <div class="retail-savings__footer">
+              <span class="retail-savings__signal"><i></i>余额较上期变化</span>
+              <strong data-testid="retail-deposit-change" :class="changeClass(depositKpi)">{{ changeText(depositKpi, '—') }}</strong>
             </div>
-          </div>
-          <div class="retail-savings__footer">
-            <span class="retail-savings__signal"><i></i>余额较上期变化</span>
-            <strong data-testid="retail-deposit-change" :class="changeClass(depositKpi)">{{ changeText(depositKpi, '—') }}</strong>
           </div>
         </article>
 
@@ -123,7 +125,7 @@
           <p class="retail-panel__note retail-segment-scope-note" data-testid="retail-segment-scope-note" title="客户占比与资产占比仅使用客户数和AUM均已提供且非负的同一分层分母">
             分层内占比 · {{ segmentCoverageLabel }}，非全客群（分层口径以业务定义为准）
           </p>
-          <div v-if="segmentComparisons.length" class="retail-segment-list">
+          <div v-if="segmentComparisons.length" class="retail-segment-list retail-scroll-region" tabindex="0" aria-label="客户分层列表">
             <div class="retail-segment-compare-head" aria-hidden="true">
               <span>客户占比 / 资产占比</span>
               <span>客户数</span>
@@ -164,7 +166,7 @@
             <span>{{ safeModel.attention.length ? `${safeModel.attention.length} 条` : '暂无数据' }}</span>
           </header>
           <p class="retail-panel__note">责任归属与跟进时限</p>
-          <ul v-if="safeModel.attention.length" class="retail-attention-list">
+          <ul v-if="safeModel.attention.length" class="retail-attention-list retail-scroll-region" tabindex="0" aria-label="经营关注事项">
             <li v-for="(item, index) in safeModel.attention" :key="`${item.label || 'attention'}-${index}`">
               <span class="retail-attention-list__mark">!</span>
               <div class="retail-attention-list__main">
@@ -241,7 +243,7 @@
             <span>完成率<small>%</small></span>
             <span>不良率<small>%</small></span>
           </div>
-          <ol v-if="filteredRankings.length" class="retail-ranking-list">
+          <ol v-if="filteredRankings.length" class="retail-ranking-list retail-scroll-region" tabindex="0" aria-label="机构排名列表">
             <li
               v-for="(item, index) in filteredRankings"
               :key="item.orgCode || `${item.name}-${index}`"
@@ -275,7 +277,7 @@
             </div>
             <span>金额：亿元</span>
           </header>
-          <div v-if="safeModel.targets.length" class="retail-target-list">
+          <div v-if="safeModel.targets.length" class="retail-target-list retail-scroll-region" tabindex="0" role="region" aria-label="零售经营目标列表">
             <div v-for="(target, index) in safeModel.targets" :key="`${target.name || 'target'}-${index}`" class="retail-target-row" :data-target-name="target.name || `目标${index + 1}`">
               <div class="retail-target-row__top">
                 <strong>{{ target.name || '—' }}</strong>
@@ -324,7 +326,7 @@
           <span>{{ filteredInstitutions.length }} / {{ safeModel.institutions.length }} 家</span>
         </div>
         <div class="retail-directory-dialog__body">
-          <div class="retail-directory-list">
+          <div class="retail-directory-list retail-scroll-region" tabindex="0" role="region" aria-label="零售机构目录列表">
             <button
               v-for="institution in filteredInstitutions"
               :key="institution.orgCode || institution.name"

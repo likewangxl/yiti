@@ -60,7 +60,7 @@
 .retail-header__context strong { color: var(--retail-text); font-size: 17px; }
 .retail-eyebrow,
 .retail-kicker,
-.retail-title-kicker { color: #72b9ed; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
+.retail-title-kicker { display: block; line-height: 1.2; color: #72b9ed; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
 .retail-header__title { text-align: center; }
 .retail-header__title h1 { margin: 2px 0 0; color: #f5f8ff; font-size: clamp(28px, 2.7vw, 48px); font-weight: 800; line-height: 1.08; letter-spacing: .18em; text-shadow: 0 0 22px rgba(114, 176, 255, .3); }
 .retail-header__title > span:last-child { display: block; margin-top: 5px; color: #a8bdf0; font-size: 14px; }
@@ -101,20 +101,24 @@
 .retail-insight-item > small { grid-column: 1 / -1; margin-top: 3px; overflow: hidden; color: #7692c4; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .retail-insight-item--wide > strong { color: #d2bcff; }
 
-.retail-main-grid { display: grid; grid-template-columns: minmax(260px, .83fr) minmax(490px, 1.58fr) minmax(300px, .9fr); align-items: stretch; gap: 14px; height: max(520px, min(820px, calc(100vh - var(--retail-preview-offset, 0px) - 300px))); margin: 0 clamp(16px, 2vw, 30px) 18px; }
+.retail-main-grid { display: grid; grid-template-columns: minmax(0, .83fr) minmax(0, 1.58fr) minmax(0, .9fr); align-items: stretch; gap: 14px; margin: 0 clamp(16px, 2vw, 30px) 18px; }
 .retail-column { min-width: 0; min-height: 0; display: grid; gap: 14px; align-content: stretch; }
-.retail-column--left { grid-template-rows: minmax(170px, auto) minmax(230px, auto) minmax(200px, 1fr); }
-.retail-column--center { grid-template-rows: minmax(480px, 1fr) minmax(250px, auto); }
-.retail-column--right { grid-template-rows: minmax(450px, 1.25fr) minmax(280px, 1fr); }
+.retail-column--left { grid-template-rows: minmax(0, .95fr) minmax(0, 1.2fr) minmax(0, 1fr); }
+.retail-column--center { grid-template-rows: minmax(0, 1.65fr) minmax(0, 1fr); }
+.retail-column--right { grid-template-rows: minmax(0, 1.45fr) minmax(0, 1fr); }
 .retail-panel { min-width: 0; overflow: hidden; border: 1px solid var(--retail-border); border-radius: 9px; background: linear-gradient(145deg, rgba(12, 33, 82, .91), rgba(5, 18, 52, .88)); box-shadow: inset 0 0 24px rgba(62, 112, 215, .05), 0 7px 22px rgba(0, 0, 0, .16); }
-.retail-panel__heading { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px 9px; border-bottom: 1px solid var(--retail-border-soft); }
+.retail-panel__heading { min-height: 58px; display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px 9px; border-bottom: 1px solid var(--retail-border-soft); }
 .retail-panel__heading > div:first-child { min-width: 0; }
 .retail-panel__heading h2 { margin: 4px 0 0; color: #edf4ff; font-size: 18px; line-height: 1.1; }
 .retail-panel__heading > span:last-child { color: #8ca6d7; font-size: 10px; white-space: nowrap; }
 .retail-panel__note { margin: 8px 14px 0; color: #819ac8; font-size: 10px; line-height: 1.5; }
 .retail-empty { display: grid; min-height: 100px; place-items: center; padding: 15px; color: #8fa9db; font-size: 12px; }
+.retail-scroll-region { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; -ms-overflow-style: none; }
+.retail-scroll-region::-webkit-scrollbar { width: 0; height: 0; }
+.retail-scroll-region:focus-visible { outline: 1px solid rgba(71, 233, 239, .58); outline-offset: -1px; }
 
 .retail-savings-panel { display: flex; min-height: 0; flex-direction: column; }
+.retail-savings__body { min-height: 0; flex: 1 1 auto; }
 .retail-savings__cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 11px 12px 7px; }
 .retail-data-card { min-width: 0; padding: 10px 10px 8px; border: 1px solid rgba(75, 193, 255, .38); border-radius: 6px; background: rgba(19, 54, 117, .38); }
 .retail-data-card > span { display: block; color: #9eb6e4; font-size: 10px; }
@@ -128,7 +132,7 @@
 .retail-savings__footer strong.is-down { color: var(--retail-danger); }
 .retail-savings__footer strong.is-empty { color: #7a93c2; }
 
-.retail-segments-panel { min-height: 0; display: flex; flex-direction: column; }
+.retail-segments-panel { min-height: 0; display: flex; flex-direction: column; container: retail-segments / inline-size; }
 .retail-segment-list { min-height: 0; flex: 1 1 auto; padding: 8px 12px 11px; overflow: auto; }
 .retail-segment-compare-head { display: grid; grid-template-columns: minmax(74px, .72fr) minmax(126px, 1.2fr) 45px 47px 58px; align-items: end; gap: 7px; padding: 0 0 4px; color: #718fc1; font-size: 8px; }
 .retail-segment-compare-head span:first-child { grid-column: 2; }
@@ -149,6 +153,7 @@
 .retail-share--aum > i b { background: var(--retail-violet); }
 .retail-share strong { color: #b9cbed; font-size: 9px; text-align: right; }
 .retail-segment-row__average { color: #d0ddf9; font-size: 10px; font-style: normal; text-align: right; }
+
 
 .retail-attention-panel { min-height: 0; display: flex; flex-direction: column; }
 .retail-attention-list { min-height: 0; flex: 1 1 auto; margin: 6px 12px 10px; padding: 0; overflow: auto; list-style: none; }
@@ -178,6 +183,11 @@
 .retail-map-hint { margin-left: auto; color: #7793c4; }
 .retail-clear-city { margin-left: auto; padding-top: 4px; padding-bottom: 4px; }
 .retail-map { width: 100%; min-height: 0; flex: 1 1 auto; }
+.retail-dashboard .retail-map-panel .retail-map { min-width: 0; min-height: 0; height: auto; flex: 1 1 0; }
+.retail-map-panel__heading,
+.retail-map-toolbar,
+.retail-scope-note,
+.retail-selected-city { flex: 0 0 auto; }
 /* 零售页自己的城市筛选说明已替代分行市级下钻提示，避免误导到 CityPanorama。 */
 .retail-map .panorama-map__fallback-status { display: none !important; }
 .retail-scope-note { margin: 0; padding: 7px 13px 9px; border-top: 1px solid rgba(121, 161, 248, .12); color: #7f9aca; font-size: 10px; text-align: center; }
@@ -282,9 +292,6 @@
   .retail-kpi-grid { margin-top: 9px; margin-bottom: 10px; }
   .retail-kpi { min-height: 78px; padding-top: 8px; padding-bottom: 8px; }
   .retail-main-grid { gap: 10px; }
-  .retail-column--left { grid-template-rows: minmax(145px, auto) minmax(195px, auto) minmax(165px, 1fr); }
-  .retail-column--center { grid-template-rows: minmax(390px, 1fr) minmax(190px, auto); }
-  .retail-column--right { grid-template-rows: minmax(430px, 1.45fr) minmax(205px, 1fr); }
   .retail-panel__heading { min-height: 48px; padding-top: 7px; padding-bottom: 7px; }
   .retail-ranking-row { min-height: 39px; padding-top: 3px; padding-bottom: 3px; }
   .retail-segment-row { min-height: 36px; }
@@ -321,10 +328,37 @@
   .retail-share { grid-template-columns: 11px minmax(18px, 1fr) 31px; gap: 3px; }
   .retail-ranking-matrix-head,
   .retail-ranking-row { grid-template-columns: 23px minmax(72px, 1fr) 49px repeat(4, minmax(39px, .65fr)); gap: 4px; }
-  .retail-column--center { grid-template-rows: minmax(300px, 1fr) minmax(180px, auto); }
-  .retail-column--right { grid-template-rows: minmax(330px, 1.2fr) minmax(190px, 1fr); }
   .retail-segment-row { min-height: 36px; font-size: 10px; }
   .retail-ranking-row { min-height: 50px; }
+}
+
+@media (min-width: 1100px) {
+  /* 桌面大屏由外层 viewport/flex 容器分配高度；超长内容仅在面板内部滚动。 */
+  .retail-dashboard {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .retail-dashboard > .retail-header,
+  .retail-dashboard > .retail-demo-badge,
+  .retail-dashboard > .retail-loading,
+  .retail-dashboard > .retail-error,
+  .retail-dashboard > .retail-kpi-grid,
+  .retail-dashboard > .retail-insight-strip { flex: 0 0 auto; }
+  .retail-main-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    grid-template-columns: minmax(0, .83fr) minmax(0, 1.58fr) minmax(0, .9fr);
+  }
+  .retail-panel__note,
+  .retail-ranking-toolbar,
+  .retail-ranking-matrix-head,
+  .retail-ranking-matrix-note,
+  .retail-ranking-hint { flex: 0 0 auto; }
 }
 
 @media (max-width: 1099px) {
@@ -377,4 +411,85 @@
 
 @media (prefers-reduced-motion: reduce) {
   .retail-live-state i.is-loading { animation: none; }
+}
+
+@container retail-segments (max-width: 410px) {
+  .retail-segment-compare-head { display: none; }
+  .retail-segment-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas:
+      'identity comparison comparison'
+      'customers aum average';
+    gap: 5px;
+    min-height: 58px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .retail-segment-row__identity { grid-area: identity; }
+  .retail-segment-row__comparison { grid-area: comparison; }
+  .retail-segment-row > strong,
+  .retail-segment-row > small,
+  .retail-segment-row__average {
+    min-width: 0;
+    display: grid;
+    align-content: center;
+    gap: 1px;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .retail-segment-row > strong { grid-area: customers; }
+  .retail-segment-row > small { grid-area: aum; }
+  .retail-segment-row__average { grid-area: average; }
+  .retail-segment-row > strong::before,
+  .retail-segment-row > small::before,
+  .retail-segment-row__average::before {
+    color: #718fc1;
+    font-size: 8px;
+    font-weight: 400;
+    line-height: 1;
+  }
+  .retail-segment-row > strong::before { content: '客户数'; }
+  .retail-segment-row > small::before { content: 'AUM'; }
+  .retail-segment-row__average::before { content: '户均AUM'; }
+}
+
+@media (min-width: 1100px) and (max-height: 900px) {
+  .retail-header { padding-top: 5px; padding-bottom: 5px; }
+  .retail-header__title h1 { font-size: clamp(26px, 2.5vw, 38px); }
+  .retail-kpi { min-height: 66px; padding-top: 6px; padding-bottom: 6px; }
+  .retail-kpi-grid { margin-top: 8px; margin-bottom: 8px; }
+  .retail-insight-strip { margin-bottom: 8px; }
+  .retail-main-grid { margin-bottom: 10px; }
+  .retail-column { gap: 10px; }
+  .retail-panel__heading { min-height: 44px; padding: 6px 10px; gap: 6px; }
+  .retail-panel__heading h2 { font-size: 15px; }
+  .retail-panel__note { margin: 4px 10px 0; font-size: 9px; }
+  .retail-data-card { padding: 6px 8px; }
+  .retail-data-card strong { margin-top: 3px; font-size: 20px; }
+  .retail-savings__cards { padding: 7px 10px 5px; }
+  .retail-savings__footer { margin: 0 10px 7px; padding-top: 5px; }
+  .retail-attention-list li { min-height: 34px; }
+  .retail-ranking-row { min-height: 34px; }
+  .retail-ranking-toolbar { padding: 7px 9px 0; gap: 5px; }
+  .retail-ranking-matrix-note, .retail-ranking-hint { font-size: 8px; }
+  .retail-map-toolbar { min-height: 32px; padding: 5px 10px; gap: 6px; }
+  .retail-scope-note { padding: 4px 10px; font-size: 9px; }
+}
+@media (min-width: 1100px) and (max-width: 1700px) {
+  .retail-ranking-matrix-head, .retail-ranking-row { grid-template-columns: 20px minmax(0, 1.3fr) repeat(5, minmax(0, 1fr)); gap: 3px; }
+  .retail-ranking-row__sort-value { font-size: 10px; }
+  .retail-ranking-row__metric { font-size: 9px; }
+  .retail-panel__heading > span:last-child { font-size: 9px; }
+}
+@media (min-width: 1100px) and (max-width: 1280px) {
+  .retail-kpi { grid-template-columns: 28px minmax(0, 1fr); gap: 3px 6px; }
+  .retail-kpi__glyph { width: 27px; height: 27px; }
+  .retail-kpi__change { grid-column: 2; display: flex; justify-content: flex-end; gap: 5px; }
+  .retail-kpi__change small { margin-top: 0; }
+  .retail-kpi__number strong { font-size: 18px; }
+  .retail-map-panel__meta { flex-wrap: wrap; gap: 3px; }
+  .retail-map-hint { flex-basis: 100%; }
 }

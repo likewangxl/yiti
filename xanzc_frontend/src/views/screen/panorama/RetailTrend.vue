@@ -139,14 +139,22 @@ const option = computed(() => ({
 
 <style scoped>
 .retail-trend { display: flex; min-height: 0; flex-direction: column; }
-.retail-trend__heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 52px; padding: 10px 15px; border-bottom: 1px solid rgba(121, 161, 248, .17); }
-.retail-trend__heading h2 { margin: 4px 0 0; color: #eef4ff; font-size: 18px; }
+.retail-trend__heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: 0 0 auto; min-height: 48px; padding: 10px 15px; border-bottom: 1px solid rgba(121, 161, 248, .17); }
+.retail-trend__heading h2 { margin: 4px 0 0; color: #eef4ff; font-size: 18px; line-height: 1.1; }
 .retail-trend__meta { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 11px; color: #8fa9db; font-size: 10px; white-space: nowrap; }
 .retail-trend__legend { display: inline-flex; align-items: center; gap: 5px; }
 .retail-trend__legend i { width: 16px; height: 3px; display: inline-block; border-radius: 2px; background: #47e9ef; }
 .retail-trend__legend i.is-violet { background: #a77bff; }
-.retail-trend__chart { width: 100%; min-height: 205px; flex: 1 1 auto; }
-.retail-empty { display: grid; min-height: 205px; place-items: center; color: #8fa9db; font-size: 12px; }
+.retail-trend__chart { width: 100%; height: 0; min-width: 0; min-height: 0; flex: 1 1 auto; }
+.retail-empty { display: grid; min-height: 0; flex: 1 1 auto; place-items: center; color: #8fa9db; font-size: 12px; }
+@media (min-width: 1100px) and (max-height: 900px) {
+  .retail-trend__heading { padding: 6px 10px; min-height: 44px; }
+  .retail-trend__heading h2 { font-size: 15px; }
+  .retail-trend__meta { gap: 6px; font-size: 9px; }
+}
+@media (max-width: 1099px) {
+  .retail-trend__chart, .retail-empty { min-height: 205px; }
+}
 @media (max-width: 760px) {
   .retail-trend__heading { align-items: flex-start; flex-direction: column; gap: 7px; }
   .retail-trend__meta { justify-content: flex-start; white-space: normal; }

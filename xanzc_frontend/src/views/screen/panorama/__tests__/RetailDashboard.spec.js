@@ -137,6 +137,55 @@ describe('RetailDashboard 零售经营总览', () => {
     expect(attention.findAll('li')).toHaveLength(2);
   });
 
+  it('长内容保留在独立可滚动区域，并提供键盘语义而不引入下拉筛选', () => {
+    const longModel = {
+      ...model,
+      segments: Array.from({ length: 12 }, (_, index) => ({
+        name: `客户分层${index + 1}`,
+        customers: index + 1,
+        aum: index + 2
+      })),
+      rankings: Array.from({ length: 14 }, (_, index) => ({
+        orgCode: `ORG-${index + 1}`,
+        name: `机构${index + 1}`,
+        aum: index + 1,
+        increase: index,
+        rate: 80 + index,
+        nplRate: 1 + index / 10
+      })),
+      attention: Array.from({ length: 10 }, (_, index) => ({
+        label: `待协调事项${index + 1}`,
+        count: index,
+        owner: '零售金融部',
+        deadline: '2026-09-15'
+      })),
+      targets: Array.from({ length: 9 }, (_, index) => ({
+        name: `经营目标${index + 1}`,
+        actual: index + 1,
+        target: index + 2
+      }))
+    };
+    const wrapper = mountDashboard({ model: longModel });
+    const regions = [
+      ['.retail-savings__body', '储蓄核心指标内容'],
+      ['.retail-segment-list', '客户分层列表'],
+      ['.retail-attention-list', '经营关注事项'],
+      ['.retail-ranking-list', '机构排名列表'],
+      ['.retail-target-list', '零售经营目标列表']
+    ];
+
+    regions.forEach(([selector, label]) => {
+      const region = wrapper.get(selector);
+      expect(region.attributes('tabindex')).toBe('0');
+      expect(region.attributes('aria-label')).toBe(label);
+    });
+    expect(wrapper.findAll('[data-testid="retail-segment-row"]')).toHaveLength(12);
+    expect(wrapper.findAll('[data-testid="retail-ranking-row"]')).toHaveLength(14);
+    expect(wrapper.get('[data-testid="retail-attention"]').findAll('li')).toHaveLength(10);
+    expect(wrapper.findAll('.retail-target-row')).toHaveLength(9);
+    expect(wrapper.findAll('select')).toHaveLength(0);
+  });
+
   it('机构行打开本地详情，详情仅展示目录身份和对应排名指标，Escape 可关闭', async () => {
     const wrapper = mountDashboard();
     await wrapper.get('[data-testid="retail-ranking-row"]').trigger('click');
