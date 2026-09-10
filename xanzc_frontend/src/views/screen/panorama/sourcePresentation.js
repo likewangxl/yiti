@@ -23,7 +23,34 @@ const KPI_LABEL_KEYS = Object.freeze([
 ]);
 const KPI_LABEL_KEY_SET = new Set(KPI_LABEL_KEYS);
 const MAX_DATA_NOTICE_LENGTH = 240;
+const MAX_SOURCE_AVAILABILITY_MESSAGE_LENGTH = 120;
 const MAX_METRIC_LABEL_LENGTH = 40;
+const SOURCE_STATUSES = new Set(['AVAILABLE', 'NO_SOURCE', 'NO_ROWS', 'NO_VALUES', 'PARTIAL', 'HISTORICAL']);
+const SOURCE_SLOTS = new Set(['deposit', 'depositIncrease', 'depositAverage', 'loan', 'customers', 'revenue', 'rate', 'trend', 'ranking', 'composition', 'attention', 'branches', 'branchTrend', 'citySummary']);
+const SOURCE_FIELD_KEYS = Object.freeze({
+  deposit: new Set(['value', 'change', 'date']),
+  depositIncrease: new Set(['value', 'change', 'date']),
+  depositAverage: new Set(['value', 'change', 'date']),
+  loan: new Set(['value', 'change', 'date']),
+  customers: new Set(['value', 'change', 'date']),
+  revenue: new Set(['value', 'change', 'date']),
+  rate: new Set(['value', 'change', 'date']),
+  trend: new Set(['date', 'deposit', 'loan', 'depositIncrease', 'customers', 'rate']),
+  composition: new Set(['name', 'value', 'corporate', 'retail']),
+  ranking: new Set(['orgCode', 'name', 'value', 'increase', 'average', 'change']),
+  attention: new Set(['label', 'count']),
+  branches: new Set(['orgCode', 'orgName', 'cityCode', 'cityName', 'ownerOperatingOrgCode', 'parentOrgCode', 'lng', 'lat', 'coordSys', 'located', 'deposit', 'loan', 'customers', 'target', 'rate']),
+  branchTrend: new Set(['date', 'deposit', 'loan', 'customers', 'rate']),
+  citySummary: new Set(['orgCode', 'cityCode', 'cityName', 'deposit', 'loan', 'customers', 'revenue', 'rate'])
+});
+const SOURCE_LABELS = Object.freeze({
+  deposit: '存款余额', depositAverage: '存款月均余额',
+  loan: '贷款余额', customers: '客户总量', revenue: '营收', rate: '目标完成率',
+  depositIncrease: '存款较上月净增', trend: '经营趋势', composition: '业务构成',
+  ranking: '机构排名', attention: '经营关注', branches: '支行机构', branchTrend: '支行趋势',
+  citySummary: '城市汇总', corporate: '对公业务', retail: '零售业务', increase: '存款较上月净增',
+  average: '存款月均余额', value: '指标值', date: '数据日期'
+});
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -73,6 +100,47 @@ function normalizeMetricLabels(value) {
   return labels;
 }
 
+function normalizeDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return '';
+  const date = value.trim();
+  const parsed = new Date(`${date}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date ? '' : date;
+}
+
+function normalizeAvailabilityEntry(value) {
+  const source = parseRecord(value);
+  const status = SOURCE_STATUSES.has(source.status) ? source.status : '';
+  if (!status) return {};
+  const result = { status, message: normalizeText(source.message, MAX_SOURCE_AVAILABILITY_MESSAGE_LENGTH, true) };
+  const dataDate = normalizeDate(source.dataDate);
+  if (dataDate) result.dataDate = dataDate;
+  return result;
+}
+
+function normalizeSourceAvailability(value) {
+  const source = parseRecord(value);
+  const result = {};
+  for (const slot of SOURCE_SLOTS) {
+    if (!own(source, slot)) continue;
+    const entry = parseRecord(source[slot]);
+    const normalized = {};
+    const direct = normalizeAvailabilityEntry(entry);
+    if (!direct.status) continue;
+    Object.assign(normalized, direct);
+    const fields = parseRecord(entry.fields);
+    const fieldResult = {};
+    for (const [semantic, fieldValue] of Object.entries(fields)) {
+      if (!SOURCE_FIELD_KEYS[slot]?.has(semantic)) continue;
+      const field = normalizeAvailabilityEntry(fieldValue);
+      if (!field.status && !field.message && !field.dataDate) continue;
+      fieldResult[semantic] = field;
+    }
+    if (Object.keys(fieldResult).length) normalized.fields = fieldResult;
+    if (Object.keys(normalized).length) result[slot] = normalized;
+  }
+  return result;
+}
+
 /**
  * 读取已保存的 canvasStyle 展示元数据。
  * @param {object} view 当前大屏视图响应
@@ -82,8 +150,36 @@ export function resolveSourcePresentation(view) {
   const canvasStyle = canvasStyleOf(view);
   return {
     dataNotice: normalizeText(canvasStyle.dataNotice, MAX_DATA_NOTICE_LENGTH),
-    metricLabels: normalizeMetricLabels(canvasStyle.metricLabels)
+    metricLabels: normalizeMetricLabels(canvasStyle.metricLabels),
+    sourceAvailability: normalizeSourceAvailability(canvasStyle.sourceAvailability)
   };
+}
+
+/** 返回具体语义的运行时/静态状态，供组件就近展示缺失原因。 */
+export function resolveDataStatus(presentation, runtimeIssues, slot, semantic = '') {
+  const issues = Array.isArray(runtimeIssues)
+    ? runtimeIssues.filter(item => item?.slot === slot)
+    : runtimeIssues?.[slot];
+  const issueList = Array.isArray(issues) ? issues : [];
+  const availability = presentation?.sourceAvailability?.[slot];
+  const staticEntry = availability?.fields?.[semantic] || availability;
+  const issue = issueList.find(item => item?.field === 'request' || item?.code === 'REQUEST_FAILED')
+    || issueList.find(item => item?.field === semantic)
+    || issueList.find(item => !item?.field || item.field === 'value' || !semantic);
+  if (issue?.code === 'NO_VALUES' && ['NO_VALUES', 'PARTIAL'].includes(staticEntry?.status) && staticEntry.message) {
+    return { status: staticEntry.status, message: staticEntry.message };
+  }
+  if (issue) {
+    if (issue.code === 'NO_VALUES') {
+      const label = SOURCE_LABELS[semantic] || SOURCE_LABELS[slot] || '当前指标';
+      return { status: 'NO_VALUES', message: `${label}当前无有效值` };
+    }
+    return { status: 'RUNTIME', message: normalizeText(issue.message, MAX_DATA_NOTICE_LENGTH, true) || '取数失败' };
+  }
+  if (staticEntry?.status && staticEntry.status !== 'AVAILABLE') {
+    return { status: staticEntry.status, message: staticEntry.message || '暂无有效数据' };
+  }
+  return { status: 'UNAVAILABLE', message: '暂无有效数据' };
 }
 
 /**
@@ -109,4 +205,4 @@ export function applyMetricLabels(model, metricLabels) {
   return changed ? { ...model, kpis } : model;
 }
 
-export { KPI_LABEL_KEYS, MAX_DATA_NOTICE_LENGTH, MAX_METRIC_LABEL_LENGTH };
+export { KPI_LABEL_KEYS, MAX_DATA_NOTICE_LENGTH, MAX_SOURCE_AVAILABILITY_MESSAGE_LENGTH, MAX_METRIC_LABEL_LENGTH, SOURCE_STATUSES };

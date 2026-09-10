@@ -17,6 +17,9 @@ import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
 /**
  * 代码化经营大屏的纯 JSON 契约校验器。
@@ -47,6 +50,9 @@ public final class CodeScreenPresentationValidator {
     private static final Set<String> PERIODS = Set.of("LATEST", "LAST_10D", "LAST_1M", "LAST_6M_EOM");
     private static final int DATA_NOTICE_MAX_LENGTH = 240;
     private static final int METRIC_LABEL_MAX_LENGTH = 40;
+    private static final int SOURCE_AVAILABILITY_MESSAGE_MAX_LENGTH = 120;
+    private static final Set<String> SOURCE_AVAILABILITY_STATUSES = Set.of(
+            "AVAILABLE", "NO_SOURCE", "NO_ROWS", "NO_VALUES", "PARTIAL", "HISTORICAL");
     private static final Set<String> METRIC_LABEL_KEYS = Set.of(
             "deposit", "depositIncrease", "depositAverage", "loan", "customers", "revenue", "rate",
             "retailAum", "retailDeposit", "retailDepositAverage", "retailRevenue", "retailValueCustomers",
@@ -422,19 +428,95 @@ public final class CodeScreenPresentationValidator {
             validatePlainText(dataNotice, DATA_NOTICE_MAX_LENGTH, true);
         }
         JsonNode metricLabels = canvasStyle.get("metricLabels");
-        if (metricLabels == null || metricLabels.isNull()) {
-            return;
-        }
-        if (!metricLabels.isObject()) {
-            throw invalid();
-        }
-        Iterator<Map.Entry<String, JsonNode>> entries = metricLabels.fields();
-        while (entries.hasNext()) {
-            Map.Entry<String, JsonNode> entry = entries.next();
-            if (!METRIC_LABEL_KEYS.contains(entry.getKey())) {
+        if (metricLabels != null && !metricLabels.isNull()) {
+            if (!metricLabels.isObject()) {
                 throw invalid();
             }
-            validatePlainText(entry.getValue(), METRIC_LABEL_MAX_LENGTH, false);
+            Iterator<Map.Entry<String, JsonNode>> entries = metricLabels.fields();
+            while (entries.hasNext()) {
+                Map.Entry<String, JsonNode> entry = entries.next();
+                if (!METRIC_LABEL_KEYS.contains(entry.getKey())) {
+                    throw invalid();
+                }
+                validatePlainText(entry.getValue(), METRIC_LABEL_MAX_LENGTH, false);
+            }
+        }
+        validateSourceAvailability(canvasStyle.get("sourceAvailability"));
+    }
+
+    private static void validateSourceAvailability(JsonNode availability) {
+        if (availability == null || availability.isMissingNode()) {
+            return;
+        }
+        if (!availability.isObject() || availability.size() > BRANCH_SLOTS.size()) {
+            throw invalid();
+        }
+        Iterator<Map.Entry<String, JsonNode>> slots = availability.fields();
+        while (slots.hasNext()) {
+            Map.Entry<String, JsonNode> slot = slots.next();
+            if (!BRANCH_SLOTS.contains(slot.getKey()) || !slot.getValue().isObject()) {
+                throw invalid();
+            }
+            validateAvailabilityNode(slot.getValue(), FIELD_KEYS.get(slot.getKey()), true);
+        }
+    }
+
+    private static void validateAvailabilityNode(JsonNode node, Set<String> allowedFields,
+                                                  boolean allowNestedFields) {
+        Set<String> allowed = new HashSet<>(Set.of("status", "message", "dataDate"));
+        if (allowNestedFields) {
+            allowed.add("fields");
+        }
+        Iterator<String> names = node.fieldNames();
+        while (names.hasNext()) {
+            if (!allowed.contains(names.next())) {
+                throw invalid();
+            }
+        }
+        JsonNode status = node.get("status");
+        if (status == null || !status.isTextual()
+                || !SOURCE_AVAILABILITY_STATUSES.contains(status.asText())) {
+            throw invalid();
+        }
+        JsonNode message = node.get("message");
+        if (node.has("message")) {
+            validatePlainText(message, SOURCE_AVAILABILITY_MESSAGE_MAX_LENGTH, true);
+        }
+        if (node.has("dataDate")) {
+            validateDataDate(node.get("dataDate"));
+        }
+        if (!allowNestedFields) {
+            return;
+        }
+        JsonNode fields = node.get("fields");
+        if (fields == null) {
+            return;
+        }
+        if (fields.isNull()) {
+            throw invalid();
+        }
+        if (!fields.isObject() || allowedFields == null || fields.size() > allowedFields.size()) {
+            throw invalid();
+        }
+        Iterator<Map.Entry<String, JsonNode>> entries = fields.fields();
+        while (entries.hasNext()) {
+            Map.Entry<String, JsonNode> entry = entries.next();
+            if (!allowedFields.contains(entry.getKey()) || !entry.getValue().isObject()) {
+                throw invalid();
+            }
+            validateAvailabilityNode(entry.getValue(), Set.of(), false);
+        }
+    }
+
+    private static void validateDataDate(JsonNode dataDate) {
+        if (dataDate == null || dataDate.isNull()
+                || !dataDate.isTextual() || !dataDate.asText().matches("\\d{4}-\\d{2}-\\d{2}")) {
+            throw invalid();
+        }
+        try {
+            LocalDate.parse(dataDate.asText(), DateTimeFormatter.ISO_LOCAL_DATE);
+        } catch (DateTimeParseException ex) {
+            throw invalid();
         }
     }
 

@@ -6,6 +6,25 @@ const binding = (slot, fields, units = {}) => ({
 });
 
 describe('panorama data adapter', () => {
+  it('合法数值字段为 null 时分类为 NO_VALUES，非空非法字符串仍为 INVALID_NUMBER', () => {
+    const missing = adaptPanoramaResults({ deposit: {
+      binding: binding('deposit', { value: 'amount' }, { value: 'YUAN' }),
+      response: { columns: ['amount'], rows: [[null]] }
+    } });
+    expect(missing.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'deposit', code: 'NO_VALUES', field: 'value' })
+    ]));
+    expect(missing.issues.some(item => item.slot === 'deposit' && item.code === 'INVALID_NUMBER')).toBe(false);
+
+    const invalid = adaptPanoramaResults({ deposit: {
+      binding: binding('deposit', { value: 'amount' }, { value: 'YUAN' }),
+      response: { columns: ['amount'], rows: [['bad']] }
+    } });
+    expect(invalid.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'deposit', code: 'INVALID_NUMBER', field: 'value' })
+    ]));
+  });
+
   it('解析 columns/rows 二维数据，保留 0 与 null，不从日期或列名猜语义', () => {
     const model = adaptPanoramaResults({
       deposit: {
@@ -24,7 +43,9 @@ describe('panorama data adapter', () => {
     expect(model.kpis.find(item => item.key === 'deposit')).toMatchObject({ value: 0, unit: '亿元' });
     expect(model.kpis.find(item => item.key === 'loan')).toMatchObject({ value: null, unit: '亿元' });
     expect(model.dataDate).toBe('2026-09-01');
-    expect(model.issues).toEqual([]);
+    expect(model.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'loan', code: 'NO_VALUES', field: 'value' })
+    ]));
   });
 
   it('columnsMeta amountScale 仍代表原始元值的展示预设，raw 100000000 只换算为 1 亿元一次', () => {
@@ -326,7 +347,9 @@ describe('panorama data adapter', () => {
       }
     });
     expect(emptyValue.composition).toEqual([{ name: '空值', value: null, unit: '亿元' }]);
-    expect(emptyValue.issues).toEqual([]);
+    expect(emptyValue.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'composition', code: 'NO_VALUES', field: 'value' })
+    ]));
 
     const mismatchedUnit = adaptPanoramaResults({
       composition: {

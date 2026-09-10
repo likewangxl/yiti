@@ -218,6 +218,9 @@ function readMetric(row, binding, semantic, table, slot, issues, required = fals
   }
   const raw = row[column] === undefined ? null : row[column];
   const unit = resolveInputUnit(binding, semantic, columnMeta(table, column));
+  if (raw === null || raw === undefined || raw === '') {
+    issue(issues, slot, 'NO_VALUES', `字段 ${semantic} 当前无有效值`, semantic);
+  }
   return {
     value: convertMetric(raw, unit, metricKind(slot, semantic, unit), slot, semantic, issues),
     unit: displayUnit(slot, semantic, unit)
@@ -375,6 +378,10 @@ function compositionBindingState(binding, table, issues, slot) {
 function compositionMetric(row, binding, semantic, table, slot, issues) {
   const column = binding?.fields?.[semantic];
   const raw = row[column];
+  if (raw === null || raw === undefined || raw === '') {
+    issue(issues, slot, 'NO_VALUES', `字段 ${semantic} 当前无有效值`, semantic);
+    return { value: null, unit: displayUnit(slot, semantic, resolveInputUnit(binding, semantic, columnMeta(table, column))) };
+  }
   if (numeric(raw) === null) {
     issue(issues, slot, 'INVALID_NUMBER', `字段 ${semantic} 不是数值`, semantic);
     return null;

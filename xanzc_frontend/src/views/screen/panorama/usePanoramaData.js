@@ -255,6 +255,52 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     return settled.map((result, index) => ({ ...requests[index], ...result }));
   }
 
+  async function prefetchBranchTrends(modelValue, packageInfo, view, context, generationToken, allIssues, branchesResponse, branchesEntry) {
+    if (packageInfo.retail || !branchesResponse || !Array.isArray(modelValue?.institutions)) return {};
+    const entry = packageInfo.slots.get('branchTrend');
+    if (!entry) return {};
+    const directory = Array.isArray(view.panoramaInstitutions || view.panorama_institutions)
+      ? (view.panoramaInstitutions || view.panorama_institutions) : [];
+    const authorizedCodes = new Set(directory.map(item => String(typeof item === 'object' ? item?.orgCode : item || '').trim()).filter(Boolean));
+    const branchColumn = branchesEntry?.binding?.fields?.orgCode;
+    const branchColumnIndex = Array.isArray(branchesResponse.columns) ? branchesResponse.columns.indexOf(branchColumn) : -1;
+    const sourceCodes = new Set((Array.isArray(branchesResponse.rows) ? branchesResponse.rows : [])
+      .map(row => branchColumnIndex >= 0 ? String(row?.[branchColumnIndex] || '').trim() : '')
+      .filter(Boolean));
+    const codes = modelValue.institutions
+      .map(item => String(item?.orgCode || '').trim())
+      .filter(code => code && authorizedCodes.has(code) && sourceCodes.has(code))
+      .slice(0, 20);
+    if (!codes.length) return {};
+    const requests = codes.map(code => {
+      const { body, schema } = makeRequest(entry, view, context, code);
+      return { slot: 'branchTrend', entry, body, schema, branchOrgCode: code };
+    });
+    const settled = await runQueue(requests, 'screen', generationToken);
+    if (!alive.value || disposed.value || screenGeneration.value !== generationToken) return {};
+    const permissionItem = settled.find(item => permissionStatus(item.error));
+    if (permissionItem) return { permissionError: permissionItem.error };
+    for (const item of settled) {
+      const institution = modelValue.institutions.find(candidate => String(candidate?.orgCode) === item.branchOrgCode);
+      if (!institution) continue;
+      if (item.cancelled) continue;
+      if (item.error) {
+        const message = `机构 ${item.branchOrgCode}：${errorMessage(item.error)}`;
+        institution.trendIssue = message;
+        addIssue(allIssues, 'branchTrend', 'PREFETCH_FAILED', message, item.branchOrgCode);
+        continue;
+      }
+      if (!item.response) {
+        institution.trendIssue = `机构 ${item.branchOrgCode}：数据源返回为空`;
+        addIssue(allIssues, 'branchTrend', 'PREFETCH_NO_VALUES', institution.trendIssue, item.branchOrgCode);
+        continue;
+      }
+      applyBranchTrend(modelValue, item.response, item.entry.binding, item.branchOrgCode);
+      institution.trendIssue = Array.isArray(institution.trend) && institution.trend.length
+        ? '' : `机构 ${item.branchOrgCode}：最新周期无有效趋势值`;
+    }
+  }
+
   async function load(loadOptions = {}) {
     if (!alive.value || disposed.value) return model.value;
     const view = currentView();
@@ -348,6 +394,13 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
             panoramaInstitutions: view.panoramaInstitutions || view.panorama_institutions,
             title: view.screenName || view.screen_name
           });
+        const prefetchResult = await prefetchBranchTrends(nextModel, packageInfo, view, context, currentGeneration, allIssues, resultMap.branches?.response, packageInfo.slots.get('branches'));
+        if (!alive.value || disposed.value || screenGeneration.value !== currentGeneration) return model.value;
+        if (prefetchResult?.permissionError) {
+          model.value = retail ? createEmptyRetailModel({ view }) : createEmptyPanoramaModel();
+          error.value = errorMessage(prefetchResult.permissionError, `没有权限（${permissionStatus(prefetchResult.permissionError)}）`);
+          return model.value;
+        }
         nextModel.issues = [...allIssues, ...(nextModel.issues || [])];
         model.value = nextModel;
       }
@@ -368,6 +421,11 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     branchOrgCode.value = next;
     if (!next) return model.value;
     if (isRetailPackage(screenPackage(currentView()))) return model.value;
+    const selectedInstitution = model.value?.institutions?.find(item => String(item?.orgCode) === next);
+    if (selectedInstitution) {
+      selectedInstitution.trend = [];
+      selectedInstitution.trendIssue = '';
+    }
     return load({ onlySlots: ['branchTrend'], branchOrgCode: next, preserveModel: true });
   }
 

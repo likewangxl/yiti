@@ -38,4 +38,10 @@ public class CanvasStyleDTO {
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Map<String, String> metricLabels;
+
+    /**
+     * 可选的数据源可用性说明；仅描述绑定槽位的展示状态，不参与数据请求或权限判断。
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Map<String, SourceAvailabilityDTO> sourceAvailability;
 }

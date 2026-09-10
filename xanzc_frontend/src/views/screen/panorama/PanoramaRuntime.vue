@@ -10,6 +10,7 @@
 
     <component :is="isRetail ? RetailDashboard : PanoramaDashboard"
       :model="dashboardModel"
+      :source-presentation="dashboardSourcePresentation"
       :loading="loading"
       :error="error"
       :demo="false"
@@ -61,6 +62,10 @@ const dashboardModel = computed(() => applyMetricLabels(
   model.value,
   sourcePresentation.value.metricLabels
 ));
+const dashboardSourcePresentation = computed(() => ({
+  ...sourcePresentation.value,
+  runtimeIssues: state.slotIssues.value || {}
+}));
 
 const slotLabels = {
   deposit: '存款余额',
@@ -78,9 +83,12 @@ const slotLabels = {
   depositIncrease: '存款较上月净增',
   depositAverage: '存款月均余额'
 };
+const locallyExplainedNoValueSlots = new Set(Object.keys(slotLabels));
 
 const issueEntries = computed(() => Object.entries(state.slotIssues.value || {})
-  .flatMap(([slot, issues]) => (Array.isArray(issues) ? issues : []).map((issue, index) => ({
+  .flatMap(([slot, issues]) => (Array.isArray(issues) ? issues : [])
+    .filter(issue => !(issue?.code === 'NO_VALUES' && locallyExplainedNoValueSlots.has(slot)))
+    .map((issue, index) => ({
     key: `${slot}:${issue.code || index}`,
     label: BINDING_SLOTS[slot]?.label || slotLabels[slot] || slot,
     message: issue.message || issue.code || '取数失败'

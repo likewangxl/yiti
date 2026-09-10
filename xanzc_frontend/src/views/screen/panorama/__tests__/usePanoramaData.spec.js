@@ -85,6 +85,97 @@ describe('usePanoramaData', () => {
     expect(queryScreenData).toHaveBeenCalledTimes(4);
   });
 
+  it('初屏预取授权目录与 branches 交集的支行趋势，最多20家且并发不超过3', async () => {
+    let active = 0; let maxActive = 0;
+    queryScreenData.mockImplementation(request => new Promise(resolve => {
+      active += 1; maxActive = Math.max(maxActive, active);
+      setTimeout(() => {
+        active -= 1;
+        if (request.blockId === 21) {
+          resolve({ columns: ['org_code'], rows: [['A'], ['B'], ['C'], ['D'], ['X']] });
+        } else {
+          resolve({ columns: ['date', 'deposit'], rows: Array.from({ length: 19 }, (_, index) => [`2026-${String(index + 1).padStart(2, '0')}`, 1]) });
+        }
+      }, 1);
+    }));
+    const view = viewWithSlots({ branches: 21, branchTrend: 22 });
+    view.panoramaInstitutions = ['A', 'B', 'C', 'D', 'X', 'Y'].map(orgCode => ({ orgCode }));
+    view.renderPackage.bindSnapshots['21'].bind.fields = { orgCode: 'org_code' };
+    view.renderPackage.bindSnapshots['21'].bind.units = {};
+    view.renderPackage.bindSnapshots['22'].bind.fields = { date: 'date', deposit: 'deposit' };
+    view.renderPackage.bindSnapshots['22'].bind.units = { deposit: 'HUNDRED_MILLION' };
+    const state = usePanoramaData(ref(view), ref({ screenCode: 'SCR_CODE' }), { autoLoad: false });
+    await state.refresh();
+    expect(maxActive).toBeLessThanOrEqual(3);
+    expect(queryScreenData.mock.calls.filter(([request]) => request.blockId === 22)).toHaveLength(5);
+    expect(state.model.value.institutions.filter(item => ['A', 'B', 'C', 'D', 'X'].includes(item.orgCode)).every(item => item.trend.length === 19)).toBe(true);
+    expect(state.model.value.institutions.find(item => item.orgCode === 'Y')?.trend || []).toHaveLength(0);
+  });
+
+  it('刷新期间旧代预取迟到不得覆盖新代模型', async () => {
+    const trendResolvers = [];
+    queryScreenData.mockImplementation(request => {
+      if (request.blockId === 21) return Promise.resolve({ columns: ['org_code'], rows: [['A']] });
+      return new Promise(resolve => trendResolvers.push(resolve));
+    });
+    const view = viewWithSlots({ branches: 21, branchTrend: 22 });
+    view.panoramaInstitutions = [{ orgCode: 'A' }];
+    view.renderPackage.bindSnapshots['21'].bind.fields = { orgCode: 'org_code' };
+    view.renderPackage.bindSnapshots['21'].bind.units = {};
+    view.renderPackage.bindSnapshots['22'].bind.fields = { date: 'date', deposit: 'deposit' };
+    view.renderPackage.bindSnapshots['22'].bind.units = { deposit: 'HUNDRED_MILLION' };
+    const context = ref({ screenCode: 'SCR_CODE' });
+    const state = usePanoramaData(ref(view), context, { autoLoad: false });
+    const first = state.refresh();
+    await vi.waitFor(() => expect(trendResolvers).toHaveLength(1));
+    context.value = { ...context.value, dateTo: '2026-09-10' };
+    const second = state.refresh();
+    await vi.waitFor(() => expect(trendResolvers).toHaveLength(2));
+    trendResolvers[1]({ columns: ['date', 'deposit'], rows: [['NEW', 2]] });
+    await second;
+    trendResolvers[0]({ columns: ['date', 'deposit'], rows: [['OLD', 1]] });
+    await first;
+    expect(state.model.value.institutions.find(item => item.orgCode === 'A')?.trend).toEqual([{ date: 'NEW', deposit: 2, loan: null }]);
+  });
+
+  it('预取任一机构返回403时 fail-close，不发布主体模型', async () => {
+    queryScreenData.mockImplementation(request => {
+      if (request.blockId === 21) return Promise.resolve({ columns: ['org_code'], rows: [['A'], ['B']] });
+      if (request.contextParams?.orgCode === 'B') return Promise.reject(Object.assign(new Error('没有权限（403）'), { status: 403, response: { status: 403 } }));
+      return Promise.resolve({ columns: ['date', 'deposit'], rows: [['2026-09', 1]] });
+    });
+    const view = viewWithSlots({ branches: 21, branchTrend: 22 });
+    view.panoramaInstitutions = [{ orgCode: 'A' }, { orgCode: 'B' }];
+    view.renderPackage.bindSnapshots['21'].bind.fields = { orgCode: 'org_code' };
+    view.renderPackage.bindSnapshots['21'].bind.units = {};
+    view.renderPackage.bindSnapshots['22'].bind.fields = { date: 'date', deposit: 'deposit' };
+    view.renderPackage.bindSnapshots['22'].bind.units = { deposit: 'HUNDRED_MILLION' };
+    const state = usePanoramaData(ref(view), ref({ screenCode: 'SCR_CODE' }), { autoLoad: false });
+    await state.refresh();
+    expect(state.model.value.kpis).toEqual([]);
+    expect(state.model.value.institutions).toEqual([]);
+    expect(state.error.value).toContain('403');
+  });
+
+  it('预取普通500只标记对应机构趋势错误并保留主体模型', async () => {
+    queryScreenData.mockImplementation(request => {
+      if (request.blockId === 21) return Promise.resolve({ columns: ['org_code'], rows: [['A'], ['B']] });
+      if (request.contextParams?.orgCode === 'B') return Promise.reject(Object.assign(new Error('趋势服务暂不可用'), { status: 500, response: { status: 500 } }));
+      return Promise.resolve({ columns: ['date', 'deposit'], rows: [['2026-09', 1]] });
+    });
+    const view = viewWithSlots({ branches: 21, branchTrend: 22 });
+    view.panoramaInstitutions = [{ orgCode: 'A' }, { orgCode: 'B' }];
+    view.renderPackage.bindSnapshots['21'].bind.fields = { orgCode: 'org_code' };
+    view.renderPackage.bindSnapshots['21'].bind.units = {};
+    view.renderPackage.bindSnapshots['22'].bind.fields = { date: 'date', deposit: 'deposit' };
+    view.renderPackage.bindSnapshots['22'].bind.units = { deposit: 'HUNDRED_MILLION' };
+    const state = usePanoramaData(ref(view), ref({ screenCode: 'SCR_CODE' }), { autoLoad: false });
+    await state.refresh();
+    expect(state.model.value.institutions).toHaveLength(2);
+    expect(state.model.value.institutions.find(item => item.orgCode === 'B')?.trendIssue).toContain('趋势服务暂不可用');
+    expect(state.error.value).toBe('');
+  });
+
   it('切换机构后旧 branchTrend 迟到响应不能污染新机构', async () => {
     const pending = [];
     queryScreenData.mockImplementation(request => new Promise(resolve => pending.push({ request, resolve })));

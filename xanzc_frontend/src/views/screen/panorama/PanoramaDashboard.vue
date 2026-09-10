@@ -55,7 +55,8 @@
         <div class="panorama-kpi-body">
           <span class="panorama-kpi-label">{{ kpi.label || kpiLabel(kpi.key) }}</span>
           <strong class="panorama-kpi-value">{{ formatMetric(kpi.value) }}</strong>
-          <span v-if="kpi.unit" class="panorama-kpi-unit">{{ kpi.unit }}</span>
+        <span v-if="kpi.unit" class="panorama-kpi-unit">{{ kpi.unit }}</span>
+        <small v-if="!hasMetric(kpi.value)" class="panorama-unbound-label" :data-testid="`kpi-status-${kpi.key}`">{{ sourceStatus('kpi', kpi.key).message }}</small>
         </div>
         <div v-if="formatChange(kpi.change) !== null" class="panorama-kpi-change" :class="changeClass(kpi.change)">
           {{ kpi.change >= 0 ? '↑' : '↓' }} {{ Math.abs(Number(kpi.change)).toFixed(1) }}%
@@ -97,7 +98,7 @@
               <span class="panorama-deposit-card-label">{{ item.label }}</span>
               <strong :class="{ 'is-muted': !hasMetric(item.value) }">{{ formatMetric(item.value) }}</strong>
               <span v-if="item.unit" class="panorama-deposit-card-unit">{{ item.unit }}</span>
-              <small v-if="!hasMetric(item.value)" class="panorama-unbound-label">暂无有效数据<span class="panorama-visually-hidden">未绑定</span></small>
+              <small v-if="!hasMetric(item.value)" class="panorama-unbound-label" data-testid="deposit-operation-status">{{ sourceStatus(item.key, 'value').message }}<span class="panorama-visually-hidden">未绑定</span></small>
               <small v-else class="panorama-deposit-card-note">{{ item.note }}</small>
             </article>
           </div>
@@ -115,7 +116,7 @@
             </div>
             <span>{{ compositionHeadingMeta }}</span>
           </div>
-          <CompositionBreakdown class="panorama-composition-content" :items="safeModel.composition" />
+          <CompositionBreakdown class="panorama-composition-content" :items="safeModel.composition" :source-status="sourceStatus('composition', 'value')" />
         </article>
 
         <article class="panorama-panel panorama-attention-panel">
@@ -133,7 +134,7 @@
               <strong>{{ formatMetric(item.count) }}</strong>
             </li>
           </ul>
-          <div v-else class="panorama-empty">暂无流程与经营关注数据</div>
+          <div v-else class="panorama-empty" data-testid="attention-status">{{ sourceStatus('attention', '').message }}</div>
         </article>
       </div>
 
@@ -201,7 +202,7 @@
               <span class="panorama-target-gap">{{ targetDistanceSummary.text }}</span>
               <span class="panorama-target-period">{{ targetPeriodLabel }}</span>
             </div>
-            <div v-else class="panorama-unbound" data-testid="target-unbound">{{ targetUnboundLabel }}<span v-if="targetKpi" class="panorama-visually-hidden">未绑定</span></div>
+            <div v-else class="panorama-unbound" data-testid="target-unbound">{{ sourceStatus('rate', 'value').message }}<span v-if="targetKpi" class="panorama-visually-hidden">未绑定</span></div>
           </article>
           <article class="panorama-panel panorama-ranking-panel panorama-ranking-detail-panel">
             <div class="panorama-panel-heading">
@@ -238,12 +239,12 @@
                   </td>
                   <td>
                     <strong>{{ formatMetric(item.deposit) }}</strong>
-                    <small :class="trendClass(item.trendState)">{{ item.trendState || '—' }}<template v-if="item.trend?.change !== null"> · {{ formatSignedMetric(item.trend.change) }}</template></small>
+                    <small :class="item.trendIssue ? 'is-muted' : trendClass(item.trendState)" :title="item.trendIssue || ''">{{ item.trendIssue || item.trendState || '—' }}<template v-if="!item.trendIssue && item.trend?.change !== null"> · {{ formatSignedMetric(item.trend.change) }}</template></small>
                   </td>
                 </tr>
               </tbody>
             </table>
-            <div v-if="!leadershipMatrixRows.length" class="panorama-empty">暂无机构经营矩阵绑定</div>
+            <div v-if="!leadershipMatrixRows.length || (rankingMetric === 'increase' && !topRankings.length)" class="panorama-empty" data-testid="ranking-status">{{ rankingMetric === 'increase' ? sourceStatus('ranking', 'increase').message : '暂无机构经营矩阵绑定' }}</div>
             </div>
           </article>
         </article>
@@ -268,6 +269,7 @@
         :city-code="selectedRegion?.code || ''"
         :city-name="selectedRegion?.name || ''"
         :initial-org-code="cityInitialOrgCode"
+        :source-presentation="sourcePresentation"
         @close="closeCity"
         @back="closeCity"
         @refresh="emit('refresh')"
@@ -311,15 +313,25 @@ import {
   summarizeProvinceTargetStatus,
   summarizeTargetDistance
 } from './leadershipInsights.js';
+import { resolveDataStatus } from './sourcePresentation';
 
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
-  demo: { type: Boolean, default: false }
+  demo: { type: Boolean, default: false },
+  sourcePresentation: { type: Object, default: () => ({}) }
 });
 const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select']);
+
+function sourceStatus(slot, semantic = '') {
+  const mappedSlot = slot === 'kpi'
+    ? ({ customers: 'customers', revenue: 'revenue', rate: 'rate', deposit: 'deposit', loan: 'loan' }[semantic] || semantic)
+    : slot;
+  const mappedSemantic = semantic;
+  return resolveDataStatus(props.sourcePresentation, props.sourcePresentation?.runtimeIssues, mappedSlot, mappedSemantic);
+}
 
 const rootRef = ref(null);
 const cityDialogRef = ref(null);
@@ -426,6 +438,8 @@ const diagnosticCards = computed(() => {
   const diagnostics = leadershipInsights.value.diagnostics;
   const movement = summarizeDepositMovement(diagnostics.depositIncrease);
   const distance = summarizeTargetDistance(diagnostics.targetRate);
+  const movementSource = sourceStatus('trend', 'depositIncrease');
+  const targetSource = sourceStatus('rate', 'value');
   const targetStatus = summarizeProvinceTargetStatus(leadershipInsights.value);
   const targetStatusState = !targetStatus.hasData
     ? 'unknown'
@@ -441,14 +455,14 @@ const diagnosticCards = computed(() => {
     {
       key: 'depositMovement',
       label: '存款经营',
-      text: movement.text,
+      text: movement.state === 'unknown' && movementSource.status !== 'UNAVAILABLE' ? movementSource.message : movement.text,
       state: movement.state,
       note: '较上月存款变动'
     },
     {
       key: 'targetDistance',
       label: '目标进度',
-      text: distance.text,
+      text: distance.state === 'unknown' && targetSource.status !== 'UNAVAILABLE' ? targetSource.message : distance.text,
       state: distance.state,
       note: targetMetricLabel.value
     },
@@ -465,6 +479,7 @@ const leadershipMatrixRows = computed(() => {
   const rowsByCode = new Map(leadershipInsights.value.rows.map(item => [String(item.orgCode), item]));
   return visibleRankingRows.value.map((item, index) => {
     const insight = rowsByCode.get(String(item?.orgCode || '')) || {};
+    const institution = safeModel.value.institutions.find(entry => String(entry?.orgCode || '') === String(item?.orgCode || '')) || {};
     return {
       ...item,
       ...insight,
@@ -476,6 +491,7 @@ const leadershipMatrixRows = computed(() => {
       targetGap: insight.targetGap ?? null,
       trend: insight.trend || { state: '无趋势数据', change: null },
       trendState: insight.trendState || '无趋势数据',
+      trendIssue: institution.trendIssue || item?.trendIssue || '',
       status: insight.status || 'unknown',
       rate: insight.rate ?? null
     };
@@ -505,6 +521,9 @@ function kpiLabel(key) {
 function formatMetric(value) {
   const number = finiteValue(value);
   if (number === null) return '—';
+  if (number !== 0 && Math.abs(number) < 0.01) {
+    return new Intl.NumberFormat('en-US', { maximumFractionDigits: 8, minimumFractionDigits: 4 }).format(number);
+  }
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, minimumFractionDigits: Number.isInteger(number) ? 0 : 2 }).format(number);
 }
 

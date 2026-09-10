@@ -19,6 +19,7 @@
         <span class="city-kpi-label">{{ kpi.label || '指标' }}</span>
         <strong>{{ cityMetricText(kpi) }}</strong>
         <small v-if="kpi.unit && !summaryUnbound">{{ kpi.unit }}</small>
+        <em v-if="!hasMetric(kpi.value)" class="city-kpi-status" :data-testid="`city-kpi-status-${kpi.key}`">{{ cityStatus('citySummary', kpi.key).message }}</em>
         <em v-if="formatChange(kpi.change) !== null" :class="changeClass(kpi.change)">{{ kpi.change >= 0 ? '↑' : '↓' }} {{ Math.abs(Number(kpi.change)).toFixed(1) }}%</em>
       </article>
     </section>
@@ -32,7 +33,7 @@
       </article>
       <article class="city-leadership-card">
         <span>目标进度</span>
-        <strong :class="cityInsightStateClass(cityTargetDistance.state)">{{ cityTargetDistance.text }}</strong>
+        <strong :class="cityInsightStateClass(cityTargetDistance.state)">{{ cityTargetDistance.state === 'unknown' ? cityStatus('citySummary', 'rate').message : cityTargetDistance.text }}</strong>
         <small>本市整体目标完成进度</small>
       </article>
     </section>
@@ -73,8 +74,8 @@
             <span class="city-branch-name">{{ branch.orgName || branch.orgCode || '—' }}</span>
             <strong>{{ formatMetric(branch.metrics?.deposit) }}</strong>
             <span class="city-branch-loan">{{ formatMetric(branch.metrics?.loan) }}</span>
-            <span class="city-branch-customers">{{ formatMetric(branch.metrics?.customers) }}</span>
-            <span :class="rateClass(branch.metrics?.rate)">{{ formatPercent(branch.metrics?.rate) }}</span>
+            <span class="city-branch-customers" :title="!hasMetric(branch.metrics?.customers) ? cityStatus('branches', 'customers').message : ''">{{ formatMetric(branch.metrics?.customers) }}<small v-if="!hasMetric(branch.metrics?.customers)" class="city-inline-status">源数据缺失</small></span>
+            <span :class="rateClass(branch.metrics?.rate)" :title="!hasMetric(branch.metrics?.rate) ? cityStatus('branches', 'rate').message : ''">{{ formatPercent(branch.metrics?.rate) }}<small v-if="!hasMetric(branch.metrics?.rate)" class="city-inline-status">源数据缺失</small></span>
           </button>
         </div>
         <div v-else class="panorama-empty">暂无匹配支行</div>
@@ -92,9 +93,9 @@
           <div class="city-detail-metrics">
             <div><span>存款余额（亿元）</span><strong>{{ formatMetric(selectedBranch.metrics?.deposit) }}</strong></div>
             <div><span>贷款余额（亿元）</span><strong>{{ formatMetric(selectedBranch.metrics?.loan) }}</strong></div>
-            <div><span>客户总量（万户）</span><strong>{{ formatMetric(selectedBranch.metrics?.customers) }}</strong></div>
-            <div><span>目标完成率</span><strong>{{ formatPercent(selectedBranch.metrics?.rate) }}</strong></div>
-            <div><span>实际目标差（亿元）</span><strong :class="signedClass(selectedBranchInsight?.targetGap)">{{ signedMetricText(selectedBranchInsight?.targetGap) }}</strong></div>
+            <div><span>客户总量（万户）</span><strong>{{ formatMetric(selectedBranch.metrics?.customers) }}</strong><small v-if="!hasMetric(selectedBranch.metrics?.customers)" class="city-inline-status">{{ cityStatus('branches', 'customers').message }}</small></div>
+            <div><span>目标完成率</span><strong>{{ formatPercent(selectedBranch.metrics?.rate) }}</strong><small v-if="!hasMetric(selectedBranch.metrics?.rate)" class="city-inline-status">{{ cityStatus('branches', 'rate').message }}</small></div>
+            <div><span>实际目标差（亿元）</span><strong :class="signedClass(selectedBranchInsight?.targetGap)">{{ signedMetricText(selectedBranchInsight?.targetGap) }}</strong><small v-if="selectedBranchInsight?.targetGap == null" class="city-inline-status" :title="cityStatus('branches', 'target').message">{{ cityStatus('branches', 'target').message }}</small></div>
           </div>
           <div class="city-detail-observation" data-testid="branch-observation">
             <div><span>存款余额位次：</span><strong>{{ selectedBranchInsight?.rank ? `第${selectedBranchInsight.rank}名/${selectedBranchInsight.total}家` : '—' }}</strong></div>
@@ -106,6 +107,7 @@
           <ul v-if="selectedBranch.attention?.length" class="city-detail-attention">
             <li v-for="(item, index) in selectedBranch.attention" :key="item.label || index"><span>!</span>{{ item.label || '—' }} <strong>{{ formatMetric(item.count) }}</strong></li>
           </ul>
+          <small v-else class="city-inline-status" data-testid="branch-detail-attention-status" :title="cityStatus('attention', '').message">{{ cityStatus('attention', '').message }}</small>
         </div>
       </section>
     </section>
@@ -124,13 +126,15 @@ import {
   summarizeCityTargetStatus,
   summarizeTargetDistance
 } from './leadershipInsights.js';
+import { resolveDataStatus } from './sourcePresentation';
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
   demo: { type: Boolean, default: false },
   cityCode: { type: String, default: '' },
   cityName: { type: String, default: '' },
-  initialOrgCode: { type: String, default: '' }
+  initialOrgCode: { type: String, default: '' },
+  sourcePresentation: { type: Object, default: () => ({}) }
 });
 const emit = defineEmits(['close', 'back', 'refresh', 'fullscreen', 'branch-select']);
 
@@ -143,6 +147,10 @@ const selectedOrgCode = ref(props.initialOrgCode || '');
 const detailExpanded = ref(true);
 const rootRef = ref(null);
 
+function cityStatus(slot, semantic = '') {
+  return resolveDataStatus(props.sourcePresentation, props.sourcePresentation?.runtimeIssues, slot, semantic);
+}
+
 const safeModel = computed(() => ({
   title: '', dataDate: '', kpis: [], trend: [], institutions: [], citySummaries: {},
   ...(props.model && typeof props.model === 'object' ? props.model : {})
@@ -154,10 +162,14 @@ const citySummary = computed(() => {
 });
 const summaryUnbound = computed(() => !citySummary.value || !Array.isArray(citySummary.value.kpis));
 const cityKpiCards = computed(() => {
-  if (summaryUnbound.value) {
-    return ['deposit', 'loan', 'customers', 'target'].map(key => ({ key, label: ({ deposit: '存款余额', loan: '贷款余额', customers: '客户总量', target: '目标完成率' })[key], value: null, unit: key === 'customers' ? '万户' : key === 'target' ? '%' : '亿元', change: null }));
-  }
-  return citySummary.value.kpis.slice(0, 4);
+  const source = new Map((Array.isArray(citySummary.value?.kpis) ? citySummary.value.kpis : []).map(item => [item?.key, item]));
+  return ['deposit', 'loan', 'customers', 'revenue'].map(key => source.get(key) || {
+    key,
+    label: ({ deposit: '存款余额', loan: '贷款余额', customers: '客户总量', revenue: '营收' })[key],
+    value: null,
+    unit: key === 'customers' ? '万户' : '亿元',
+    change: null
+  });
 });
 const cityTitle = computed(() => props.cityName ? `${props.cityName} · 支行经营全景` : (citySummary.value?.title || safeModel.value.title || '市级支行经营全景'));
 const displayDate = computed(() => citySummary.value?.dataDate || safeModel.value.dataDate || '—');
@@ -197,7 +209,7 @@ const cityInsights = computed(() => buildCityInsights({
 const cityTargetStatus = computed(() => summarizeCityTargetStatus(cityInsights.value));
 const cityTargetStatusText = computed(() => cityTargetStatus.value.hasData
   ? [cityTargetStatus.value.achievedText, cityTargetStatus.value.belowText, cityTargetStatus.value.unknownText].filter(Boolean).join(' / ')
-  : cityTargetStatus.value.achievedText);
+  : cityStatus('citySummary', 'rate').message);
 const cityTargetStatusState = computed(() => {
   if (!cityTargetStatus.value.hasData) return 'unknown';
   if (cityInsights.value.statusCounts.below > 0) return 'below';
@@ -216,6 +228,9 @@ function finiteValue(value) {
 function formatMetric(value) {
   const number = finiteValue(value);
   if (number === null) return '—';
+  if (number !== 0 && Math.abs(number) < 0.01) {
+    return new Intl.NumberFormat('en-US', { maximumFractionDigits: 8, minimumFractionDigits: 4 }).format(number);
+  }
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, minimumFractionDigits: Number.isInteger(number) ? 0 : 2 }).format(number);
 }
 function formatPercent(value) {
@@ -242,6 +257,9 @@ function cityInsightStateClass(state) {
 function formatChange(value) {
   return finiteValue(value);
 }
+function hasMetric(value) {
+  return finiteValue(value) !== null;
+}
 function changeClass(value) {
   const number = finiteValue(value);
   return number !== null && number < 0 ? 'is-down' : 'is-up';
@@ -251,7 +269,7 @@ function rateClass(value) {
   return number !== null && number < 80 ? 'is-warning' : 'is-up';
 }
 function cityMetricText(kpi) {
-  return summaryUnbound.value ? '未绑定' : formatMetric(kpi?.value);
+  return formatMetric(kpi?.value);
 }
 function selectBranch(orgCode) {
   const code = String(orgCode || '');

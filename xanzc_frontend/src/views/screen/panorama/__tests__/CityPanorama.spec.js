@@ -61,7 +61,7 @@ describe('CityPanorama 市级支行全景', () => {
 
   it('只按显式 cityCode 筛选机构，缺失值显示 — 且不出现 NaN', () => {
     const wrapper = mountCity();
-    expect(wrapper.find('[data-testid="city-kpi-deposit"]').text()).toContain('未绑定');
+    expect(wrapper.find('[data-testid="city-kpi-deposit"]').text()).toContain('暂无有效数据');
     expect(wrapper.text()).not.toContain('NaN');
     expect(wrapper.findAll('[data-testid="branch-row"]')).toHaveLength(5);
     expect(wrapper.find('[data-testid="branch-missing-coordinates"]').text()).toContain('无坐标');
@@ -115,8 +115,20 @@ describe('CityPanorama 市级支行全景', () => {
   it('无 citySummaries 时市级 KPI 显示未绑定，禁止把下级存款加总成市级值', () => {
     const wrapper = mountCity({ model: { ...model, citySummaries: {} } });
     expect(wrapper.find('[data-testid="city-summary-unbound"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="city-kpi-deposit"]').text()).toContain('未绑定');
+    expect(wrapper.find('[data-testid="city-kpi-deposit"]').text()).toContain('暂无有效数据');
     expect(wrapper.find('[data-testid="city-kpi-deposit"]').text()).not.toContain('200');
+  });
+
+  it('市级固定保留存款、贷款、客户、营收四张卡，并就近显示字段状态', () => {
+    const wrapper = mountCity({
+      model: { ...model, citySummaries: { '610100': { kpis: [{ key: 'deposit', value: 12, unit: '亿元' }, { key: 'loan', value: 8, unit: '亿元' }] } } },
+      sourcePresentation: {
+        sourceAvailability: { citySummary: { fields: { customers: { status: 'NO_SOURCE', message: '客户主数据缺少机构归属' }, revenue: { status: 'NO_SOURCE', message: '现有收入来源关键金额字段为空' } } } }
+      }
+    });
+    expect(wrapper.findAll('[data-testid^="city-kpi-"]').filter(item => item.attributes('data-testid').match(/^city-kpi-(deposit|loan|customers|revenue)$/))).toHaveLength(4);
+    expect(wrapper.get('[data-testid="city-kpi-status-customers"]').text()).toContain('客户主数据缺少机构归属');
+    expect(wrapper.get('[data-testid="city-kpi-status-revenue"]').text()).toContain('现有收入来源');
   });
 
   it('市级摘要只呈现全市目标状态和目标距离，选中支行不改变摘要，位次只在详情出现', async () => {

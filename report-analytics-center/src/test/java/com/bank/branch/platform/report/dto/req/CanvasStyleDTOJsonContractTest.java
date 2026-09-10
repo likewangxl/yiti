@@ -79,6 +79,44 @@ class CanvasStyleDTOJsonContractTest {
     }
 
     @Test
+    void acceptsAndSerializesNestedSourceAvailabilityMetadata() throws Exception {
+        String json = """
+                {
+                  "sourceAvailability": {
+                    "deposit": {
+                      "status": "AVAILABLE",
+                      "message": "测试数据已就绪",
+                      "dataDate": "2026-09-10",
+                      "fields": {
+                        "value": {"status": "AVAILABLE", "dataDate": "2026-09-10"}
+                      }
+                    }
+                  }
+                }
+                """;
+
+        CanvasStyleDTO actual = objectMapper.readValue(json, CanvasStyleDTO.class);
+
+        assertThat(actual.getSourceAvailability()).containsKey("deposit");
+        assertThat(actual.getSourceAvailability().get("deposit").getStatus())
+                .isEqualTo(SourceAvailabilityStatus.AVAILABLE);
+        assertThat(actual.getSourceAvailability().get("deposit").getFields().get("value").getDataDate())
+                .isEqualTo("2026-09-10");
+        assertThat(objectMapper.valueToTree(actual).path("sourceAvailability").path("deposit")
+                .path("status").asText()).isEqualTo("AVAILABLE");
+    }
+
+    @Test
+    void rejectsUnknownSourceAvailabilityStatusAndNestedFields() {
+        assertThatThrownBy(() -> objectMapper.readValue(
+                "{\"sourceAvailability\":{\"deposit\":{\"status\":\"UNKNOWN\"}}}", CanvasStyleDTO.class))
+                .isInstanceOf(com.fasterxml.jackson.databind.JsonMappingException.class);
+        assertThatThrownBy(() -> objectMapper.readValue(
+                "{\"sourceAvailability\":{\"deposit\":{\"status\":\"AVAILABLE\",\"unexpected\":true}}}", CanvasStyleDTO.class))
+                .isInstanceOf(com.fasterxml.jackson.databind.JsonMappingException.class);
+    }
+
+    @Test
     void doesNotIgnoreUnknownCanvasStyleFields() {
         assertThatThrownBy(() -> objectMapper.readValue(
                 "{\"backgroundType\":\"solid\",\"unexpected\":true}", CanvasStyleDTO.class))

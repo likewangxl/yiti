@@ -210,6 +210,46 @@ class CodeScreenPresentationValidatorTest {
     }
 
     @Test
+    void acceptsSourceAvailabilityAndRejectsInvalidAvailabilityMetadata() {
+        CodeScreenPresentationValidator.validateCanvasStyle("""
+                {"presentation":{"type":"CODE","template":"branch-overview-v1"},
+                 "sourceAvailability":{"deposit":{"status":"AVAILABLE","message":"测试数据已就绪",
+                 "dataDate":"2026-09-10","fields":{"value":{"status":"AVAILABLE","dataDate":"2026-09-10"}}}}}
+                """);
+
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"sourceAvailability\":{\"unknownSlot\":{\"status\":\"AVAILABLE\"}}}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"sourceAvailability\":{\"deposit\":{\"status\":\"UNKNOWN\"}}}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"sourceAvailability\":{\"deposit\":{\"status\":\"AVAILABLE\",\"fields\":{\"unknown\":{\"status\":\"AVAILABLE\"}}}}}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"sourceAvailability\":{\"deposit\":{\"status\":\"AVAILABLE\",\"message\":\"<b>x</b>\"}}}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"sourceAvailability\":{\"deposit\":{\"status\":\"AVAILABLE\",\"dataDate\":\"2026-02-30\"}}}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"sourceAvailability\":{\"deposit\":null}}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"sourceAvailability\":{\"deposit\":{\"status\":\"AVAILABLE\",\"message\":null}}}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"sourceAvailability\":{\"deposit\":{\"status\":\"AVAILABLE\",\"fields\":null}}}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"sourceAvailability\":{\"deposit\":{\"status\":\"AVAILABLE\",\"message\":\"bad\\ntext\"}}}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"sourceAvailability\":{\"deposit\":{\"status\":\"AVAILABLE\",\"dataDate\":20260910}}}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
     void rejectsUnknownPresentationType() {
         assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(
                 style.replace("\"CODE\"", "\"UNKNOWN\""),

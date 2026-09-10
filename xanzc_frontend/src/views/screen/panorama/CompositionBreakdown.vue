@@ -99,10 +99,24 @@ import { computed } from 'vue';
 import { buildCompositionBreakdown, COMPOSITION_COLORS, formatCompositionPercent } from './compositionBreakdown.js';
 
 const props = defineProps({
-  items: { type: Array, default: () => [] }
+  items: { type: Array, default: () => [] },
+  sourceStatus: { type: Object, default: () => ({}) }
 });
 
-const breakdown = computed(() => buildCompositionBreakdown(props.items));
+const breakdown = computed(() => {
+  const result = buildCompositionBreakdown(props.items);
+  const status = props.sourceStatus;
+  if (Array.isArray(props.items) && props.items.length < 2 && result.trackState === 'valid') {
+    return { ...result, trackState: 'unavailable', shareMode: 'unavailable', statusMessage: status?.message || '构成明细不完整，无法计算占比', baseNote: '等待完整构成明细' };
+  }
+  if (!status || !status.status || status.status === 'AVAILABLE' || status.status === 'UNAVAILABLE') return result;
+  return {
+    ...result,
+    trackState: 'unavailable',
+    shareMode: 'unavailable',
+    statusMessage: status.message || result.statusMessage || '暂无有效构成数据'
+  };
+});
 
 function segmentColor(index) {
   return COMPOSITION_COLORS[index % COMPOSITION_COLORS.length];

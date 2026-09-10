@@ -113,6 +113,26 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(wrapper.find('[data-testid="panorama-demo-badge"]').exists()).toBe(false);
   });
 
+  it('缺失可见指标就近显示字段级来源原因，且运行时 issue 优先', async () => {
+    const wrapper = mountDashboard({
+      model: { ...model, kpis: model.kpis.map(item => item.key === 'loan' ? { ...item, value: null } : item), composition: [{ name: '对公', value: 10, unit: '亿元' }], attention: [], rankings: [] },
+      sourcePresentation: {
+        sourceAvailability: {
+          loan: { status: 'NO_SOURCE', message: '贷款来源暂无机构范围数据' },
+          composition: { fields: { value: { status: 'PARTIAL', message: '最新周期构成项不完整' } } },
+          attention: { status: 'NO_SOURCE', message: '尚无按当前机构范围聚合的流程与经营关注数据源' },
+          ranking: { fields: { increase: { status: 'NO_VALUES', message: '最新周期无有效值' } } }
+        },
+        runtimeIssues: { loan: [{ field: 'value', message: '请求字段为空' }] }
+      }
+    });
+    expect(wrapper.get('[data-testid="kpi-status-loan"]').text()).toContain('请求字段为空');
+    expect(wrapper.get('[data-testid="attention-status"]').text()).toContain('尚无按当前机构范围');
+    expect(wrapper.get('[data-testid="composition-breakdown"]').text()).toContain('最新周期构成项不完整');
+    await wrapper.get('[data-ranking-mode="increase"]').trigger('click');
+    expect(wrapper.get('[data-testid="ranking-status"]').text()).toContain('最新周期无有效值');
+  });
+
   it('核心 KPI 不截断新绑定，存款经营小卡单独显示净增 0 与未绑定月均', () => {
     const wrapper = mountDashboard({ model: extendedModel });
     expect(wrapper.findAll('[data-testid="panorama-kpi"]')).toHaveLength(4);
@@ -121,6 +141,12 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(operationCards[0].text()).toContain('0');
     expect(operationCards[1].text()).toContain('—');
     expect(operationCards[1].text()).toContain('未绑定');
+  });
+
+  it('极小非零月均值保留有效精度，不与0或缺失混淆', () => {
+    const wrapper = mountDashboard({ model: { ...extendedModel, kpis: [...extendedModel.kpis.map(item => item.key === 'depositAverage' ? { ...item, value: 0.00043837 } : item)] } });
+    expect(wrapper.findAll('[data-testid="deposit-operation-card"]')[1].text()).toContain('0.000438');
+    expect(wrapper.findAll('[data-testid="deposit-operation-card"]')[1].text()).toContain('0.00043837');
   });
 
   it('分行主营摘要使用直接业务文案，移除技术覆盖和模糊下降指标', () => {
