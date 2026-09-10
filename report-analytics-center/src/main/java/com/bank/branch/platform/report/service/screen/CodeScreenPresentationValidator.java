@@ -261,6 +261,9 @@ public final class CodeScreenPresentationValidator {
                 throw invalid();
             }
             Set<String> unitKinds = unitKinds(bindingKey, entry.getKey());
+            if (unitKinds.isEmpty() && "orgCode".equals(entry.getKey())) {
+                throw invalid();
+            }
             if (!unitKinds.isEmpty() && !unitKinds.contains(entry.getValue().asText())) {
                 throw invalid();
             }
@@ -690,7 +693,7 @@ public final class CodeScreenPresentationValidator {
         result.put("branchTrend", Set.of("date", "deposit", "loan", "customers", "rate"));
         result.put("composition", Set.of("name", "value", "corporate", "retail"));
         result.put("ranking", Set.of("orgCode", "name", "value", "increase", "average", "change"));
-        result.put("attention", Set.of("label", "count"));
+        result.put("attention", Set.of("orgCode", "label", "count"));
         result.put("branches", Set.of("orgCode", "orgName", "cityCode", "cityName", "ownerOperatingOrgCode",
                 "parentOrgCode",
                 "lng", "lat", "coordSys", "located", "deposit", "loan", "customers", "target", "rate"));

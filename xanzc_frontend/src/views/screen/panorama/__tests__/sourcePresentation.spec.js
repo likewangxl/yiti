@@ -83,6 +83,17 @@ describe('source presentation', () => {
     });
   });
 
+  it('经营关注允许按机构号声明字段并保留中文字段语义', () => {
+    const result = resolveSourcePresentation({ renderPackage: { canvasStyle: {
+      sourceAvailability: {
+        attention: { status: 'AVAILABLE', fields: {
+          orgCode: { status: 'AVAILABLE', message: '机构号' }
+        } }
+      }
+    } } });
+    expect(result.sourceAvailability.attention.fields.orgCode).toEqual({ status: 'AVAILABLE', message: '机构号' });
+  });
+
   it('运行时字段 issue 优先于静态声明，未声明时返回明确泛化空态', () => {
     const presentation = resolveSourcePresentation({ renderPackage: { canvasStyle: {
       sourceAvailability: { ranking: { status: 'PARTIAL', fields: { increase: { status: 'NO_VALUES', message: '静态说明' } } } }

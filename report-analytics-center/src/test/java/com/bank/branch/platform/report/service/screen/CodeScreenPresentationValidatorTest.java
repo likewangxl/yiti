@@ -42,7 +42,8 @@ class CodeScreenPresentationValidatorTest {
         datasource.setId(12L);
         datasource.setSourceKind("WIDE_TABLE");
         datasource.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","
-                + "\"metrics\":[{\"metricCode\":\"M1\",\"metricName\":\"存款余额\",\"slot\":1}],"
+                + "\"metrics\":[{\"metricCode\":\"M1\",\"metricName\":\"存款余额\",\"slot\":1},"
+                + "{\"metricCode\":\"M_ATTENTION\",\"metricName\":\"测试待跟进任务数-机构\",\"slot\":2}],"
                 + "\"aggregation\":{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\"}}");
         return datasource;
     }
@@ -246,6 +247,53 @@ class CodeScreenPresentationValidatorTest {
                 .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
         assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
                 "{\"sourceAvailability\":{\"deposit\":{\"status\":\"AVAILABLE\",\"dataDate\":20260910}}}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
+    void acceptsBranchAttentionOrgCodeAndSourceAvailabilityField() throws Exception {
+        String bind = validBind(
+                "{\"orgCode\":\"org_code\",\"label\":\"org_code\","
+                        + "\"count\":\"测试待跟进任务数-机构\"}",
+                "{\"count\":\"COUNT\"}");
+        CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(bind), "attention", orgSubjectDatasource());
+
+        CodeScreenPresentationValidator.validateCanvasStyle("""
+                {"presentation":{"type":"CODE","template":"branch-overview-v1"},
+                 "sourceAvailability":{"attention":{"status":"AVAILABLE",
+                 "fields":{"orgCode":{"status":"AVAILABLE"},
+                 "label":{"status":"AVAILABLE"},
+                 "count":{"status":"AVAILABLE"}}}}}
+                """);
+    }
+
+    @Test
+    void attentionOrgCodeRejectsUnitsAndUnknownFieldsAndRetailAttentionRemainsUnchanged() {
+        String withOrgCodeUnit = validBind(
+                "{\"orgCode\":\"机构号\",\"label\":\"事项\",\"count\":\"数量\"}",
+                "{\"orgCode\":\"COUNT\",\"count\":\"COUNT\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-attention-org-unit", "attention", withOrgCodeUnit)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String unknown = validBind(
+                "{\"orgCode\":\"机构号\",\"label\":\"事项\",\"count\":\"数量\",\"owner\":\"负责人\"}",
+                "{\"count\":\"COUNT\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-attention-unknown", "attention", unknown)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"sourceAvailability\":{\"attention\":{\"status\":\"AVAILABLE\","
+                        + "\"fields\":{\"owner\":{\"status\":\"AVAILABLE\"}}}}}"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String retailOrgCode = validBind(
+                "{\"orgCode\":\"机构号\",\"label\":\"事项\",\"count\":\"数量\"}",
+                "{\"count\":\"COUNT\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-retail-attention-org", "retailAttention", retailOrgCode)))
                 .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
     }
 

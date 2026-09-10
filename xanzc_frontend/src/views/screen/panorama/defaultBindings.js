@@ -99,7 +99,8 @@ const METRIC_RULES = Object.freeze({
   },
   attention: {
     label: { semantics: ['attentionLabel', 'label'] },
-    count: { semantics: ['attentionCount', 'count'] }
+    count: { semantics: ['attentionCount', 'count'] },
+    orgCode: { builtin: ['org_code'], semantics: ['orgCode'] }
   },
   branches: {
     orgCode: { builtin: ['org_code'], semantics: ['orgCode'] },
@@ -518,6 +519,7 @@ function optionalCandidateSemantics(template, slot, mode) {
   // 机构列表的名称是引擎固定输出的身份维度。它可以补充机构号，
   // 但不能把其他可选指标一并按名称猜测。
   if (slot === 'branches') return ['orgName'];
+  if (slot === 'attention') return ['orgCode'];
   const required = new Set(requiredSemantics(template, slot, mode));
   const candidates = [];
   for (const semantic of spec.atLeastOneOf || []) if (!required.has(semantic)) candidates.push(semantic);

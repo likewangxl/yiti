@@ -225,6 +225,68 @@ describe('panorama data adapter', () => {
     expect(model.trend).toEqual([]);
   });
 
+  it('attention 按授权目录挂载四个机构，且全辖列表保留合法行', () => {
+    const model = adaptPanoramaResults({
+      attention: {
+        binding: binding('attention', { label: 'org_code', count: 'TEST_BRANCH_ATTENTION', orgCode: 'org_code' }, { count: 'COUNT' }),
+        response: { columns: ['org_code', 'TEST_BRANCH_ATTENTION'], rows: [
+          ['A', 1], ['B', 2], ['C', 3], ['D', 4]
+        ] }
+      }
+    }, { view: { orgScopeMode: 'NAMED_GROUP', panoramaInstitutions: ['A', 'B', 'C', 'D'].map(orgCode => ({ orgCode, orgName: `机构${orgCode}` })) } });
+    expect(model.attention).toEqual([
+      { label: '机构A', count: 1 }, { label: '机构B', count: 2 },
+      { label: '机构C', count: 3 }, { label: '机构D', count: 4 }
+    ]);
+    expect(model.institutions.map(item => item.attention)).toEqual([
+      [{ label: '机构A', count: 1 }], [{ label: '机构B', count: 2 }],
+      [{ label: '机构C', count: 3 }], [{ label: '机构D', count: 4 }]
+    ]);
+  });
+
+  it('attention 越组或空机构号只报告 issue，不挂载到任何机构', () => {
+    const model = adaptPanoramaResults({
+      attention: {
+        binding: binding('attention', { label: 'label', count: 'count', orgCode: 'org_code' }, { count: 'COUNT' }),
+        response: { columns: ['org_code', 'label', 'count'], rows: [['OUT', '越组', 1], ['', '空机构', 2]] }
+      }
+    }, { view: { orgScopeMode: 'NAMED_GROUP', panoramaInstitutions: [{ orgCode: 'A' }] } });
+    expect(model.institutions[0].attention).toEqual([]);
+    expect(model.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'attention', code: 'UNAUTHORIZED_ORG' }),
+      expect.objectContaining({ slot: 'attention', code: 'MISSING_ORG_CODE' })
+    ]));
+  });
+
+  it('attention 未绑定机构号保持全辖兼容，不新增机构', () => {
+    const model = adaptPanoramaResults({
+      attention: {
+        binding: binding('attention', { label: 'label', count: 'count' }, { count: 'COUNT' }),
+        response: { columns: ['label', 'count'], rows: [['全辖关注', 4]] }
+      }
+    }, { view: { orgScopeMode: 'NAMED_GROUP', panoramaInstitutions: [{ orgCode: 'A' }] } });
+    expect(model.attention).toEqual([{ label: '全辖关注', count: 4 }]);
+    expect(model.institutions).toHaveLength(1);
+    expect(model.institutions[0].attention).toEqual([]);
+  });
+
+  it('attention 重复机构号 fail closed，且 attention 先于 branches 时仍能挂载', () => {
+    const model = adaptPanoramaResults({
+      attention: {
+        binding: binding('attention', { label: 'label', count: 'count', orgCode: 'org_code' }, { count: 'COUNT' }),
+        response: { columns: ['org_code', 'label', 'count'], rows: [['A', '重复1', 1], ['A', '重复2', 2]] }
+      },
+      branches: {
+        binding: binding('branches', { orgCode: 'org_code' }, {}),
+        response: { columns: ['org_code'], rows: [['A']] }
+      }
+    }, { view: { orgScopeMode: 'NAMED_GROUP', panoramaInstitutions: [{ orgCode: 'A' }] } });
+    expect(model.institutions[0].attention).toEqual([]);
+    expect(model.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'attention', code: 'DUPLICATE_ORG_CODE' })
+    ]));
+  });
+
   it('命名机构组无目录时不回退 rows，目录存在时绑定失败也保留机构空行', () => {
     const noDirectory = adaptPanoramaResults({
       branches: {

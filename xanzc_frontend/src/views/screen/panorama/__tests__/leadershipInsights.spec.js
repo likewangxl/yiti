@@ -176,4 +176,23 @@ describe('leadershipInsights 经营诊断纯计算', () => {
       ]
     }).selected('Y')).toMatchObject({ rank: 1, total: 2 });
   });
+
+  it('金额类派生值保留微小差额，不提前舍入为 -0；百分点仍按一位', () => {
+    const tinyGap = buildProvinceInsights({ institutions: [{
+      orgCode: 'TINY', metrics: { deposit: 100.123455, target: 100.123456, rate: 99.9 }, trend: [
+        { date: '2026-08', deposit: 100.123455 },
+        { date: '2026-09', deposit: 100.123456 }
+      ]
+    }] });
+    expect(tinyGap.rows[0].targetGap).toBe(-0.000001);
+    expect(Object.is(tinyGap.rows[0].targetGap, -0)).toBe(false);
+    expect(tinyGap.rows[0].trend.change).toBe(0.000001);
+
+    const city = buildCityInsights({ cityCode: '610100', institutions: [
+      { orgCode: 'A', cityCode: '610100', metrics: { deposit: 100.123455, rate: 90 } },
+      { orgCode: 'B', cityCode: '610100', metrics: { deposit: 100.123457, rate: 90 } }
+    ] });
+    expect(city.selected('A').medianDifference).toBe(-0.000001);
+    expect(summarizeTargetDistance(99.94).value).toBe(-0.1);
+  });
 });

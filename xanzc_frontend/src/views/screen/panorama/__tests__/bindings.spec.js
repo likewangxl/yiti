@@ -28,6 +28,10 @@ describe('panorama bindings contract', () => {
       'TEN_THOUSAND_COUNT', 'PERCENT', 'RATIO'
     ]);
     expect(BINDING_SLOTS.branches.required).toEqual(['orgCode']);
+    expect(BINDING_SLOTS.attention.required).toEqual(['label', 'count']);
+    expect(BINDING_SLOTS.attention.fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ semantic: 'orgCode', label: '机构号', kind: 'dimension', required: false })
+    ]));
     expect(BINDING_SLOTS.trend.required).toEqual(['date']);
     expect(BINDING_SLOTS.trend.atLeastOneOf).toEqual(['deposit', 'loan', 'depositIncrease']);
     expect(BINDING_SLOTS.depositIncrease).toMatchObject({

@@ -106,6 +106,25 @@ describe('defaultBindings', () => {
     expect(result.binding.fields).toEqual({ orgCode: 'org_code', orgName: 'org_name' });
   });
 
+  it('经营关注来源可把机构号作为可选维度候选', () => {
+    const result = resolveDefaultBinding({
+      slot: 'attention', template: 'branch-overview-v1', screenScope,
+      datasources: [source(9018, {
+        resultShape: 'TABLE', scopeMode: 'SUBJECT',
+        fields: [
+          { col: 'org_code', alias: '机构号', semantic: 'orgCode', role: 'DIM' },
+          { col: 'TEST_BRANCH_ATTENTION', alias: '关注事项', semantic: 'attentionLabel', role: 'DIM' },
+          { col: 'attention_count', alias: '数量', semantic: 'attentionCount', role: 'METRIC', unit: 'COUNT' }
+        ]
+      }, { sourceKind: 'CUSTOM_SQL' })]
+    });
+    expect(result.status).toBe('applied');
+    expect(result.binding.fields).toEqual({
+      label: 'TEST_BRANCH_ATTENTION', count: 'attention_count', orgCode: 'org_code'
+    });
+    expect(result.binding.units.count).toBe('COUNT');
+  });
+
   it('非宽表来源没有明确结果结构时不因 dsType 或名称自动当作单值', () => {
     const custom = source(9017, {
       semantic: 'depositAverage',

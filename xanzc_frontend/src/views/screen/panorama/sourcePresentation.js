@@ -38,7 +38,7 @@ const SOURCE_FIELD_KEYS = Object.freeze({
   trend: new Set(['date', 'deposit', 'loan', 'depositIncrease', 'customers', 'rate']),
   composition: new Set(['name', 'value', 'corporate', 'retail']),
   ranking: new Set(['orgCode', 'name', 'value', 'increase', 'average', 'change']),
-  attention: new Set(['label', 'count']),
+  attention: new Set(['label', 'count', 'orgCode']),
   branches: new Set(['orgCode', 'orgName', 'cityCode', 'cityName', 'ownerOperatingOrgCode', 'parentOrgCode', 'lng', 'lat', 'coordSys', 'located', 'deposit', 'loan', 'customers', 'target', 'rate']),
   branchTrend: new Set(['date', 'deposit', 'loan', 'customers', 'rate']),
   citySummary: new Set(['orgCode', 'cityCode', 'cityName', 'deposit', 'loan', 'customers', 'revenue', 'rate'])
@@ -49,7 +49,7 @@ const SOURCE_LABELS = Object.freeze({
   depositIncrease: '存款较上月净增', trend: '经营趋势', composition: '业务构成',
   ranking: '机构排名', attention: '经营关注', branches: '支行机构', branchTrend: '支行趋势',
   citySummary: '城市汇总', corporate: '对公业务', retail: '零售业务', increase: '存款较上月净增',
-  average: '存款月均余额', value: '指标值', date: '数据日期'
+  average: '存款月均余额', value: '指标值', date: '数据日期', orgCode: '机构号'
 });
 
 function isRecord(value) {

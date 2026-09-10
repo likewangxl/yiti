@@ -12,6 +12,7 @@ const RATE_KEYS = Object.freeze([
 const DEPOSIT_TARGET_KEYS = Object.freeze([
   'depositTarget', 'targetDeposit', 'deposit_target', 'target'
 ]);
+const AMOUNT_FRACTION_DIGITS = 6;
 
 export function finiteMetric(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -82,6 +83,10 @@ function round(value, digits = 2) {
   if (number === null) return null;
   const scale = 10 ** digits;
   return Math.round((number + Number.EPSILON) * scale) / scale;
+}
+
+function roundAmount(value) {
+  return round(value, AMOUNT_FRACTION_DIGITS);
 }
 
 function sourceObjects(row) {
@@ -177,7 +182,7 @@ export function deriveTrendObservation(rows = []) {
     return { first: first.value, last: last.value, change: null, firstDate: first.date, lastDate: last.date, state: '样本不足', points: values.length };
   }
   const deltas = values.slice(1).map((item, index) => item.value - values[index].value);
-  const change = round(last.value - first.value);
+  const change = roundAmount(last.value - first.value);
   const latestDelta = deltas.at(-1);
   const allDeclining = values.length >= 3 && deltas.every(delta => delta < 0);
   const state = allDeclining ? '连续下降' : latestDelta < 0 ? '最新回落' : latestDelta > 0 ? '最新回升' : '最新持平';
@@ -247,7 +252,7 @@ function normalizeRow(row, index = 0) {
     customers: rankValue(row, 'customers'),
     rate,
     target,
-    targetGap: deposit !== null && target !== null ? round(deposit - target) : null,
+    targetGap: deposit !== null && target !== null ? roundAmount(deposit - target) : null,
     increase,
     periodChange,
     trend,
@@ -360,7 +365,7 @@ export function buildCityInsights({ cityCode = '', citySummary = null, instituti
         rank: rank.rank,
         total: rank.total,
         median: depositMedian,
-        medianDifference: row.deposit === null || depositMedian === null ? null : round(row.deposit - depositMedian)
+        medianDifference: row.deposit === null || depositMedian === null ? null : roundAmount(row.deposit - depositMedian)
       };
     }
   };

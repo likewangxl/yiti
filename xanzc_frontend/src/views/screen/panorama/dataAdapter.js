@@ -457,15 +457,63 @@ function adaptRanking(table, binding, model, issues) {
   }
 }
 
-function adaptAttention(table, binding, model, issues) {
+function adaptAttention(table, binding, model, issues, options, pendingAttention) {
   if (!table?.rows?.length) {
     issue(issues, 'attention', 'NO_ROWS', '数据响应没有关注事项');
     return;
   }
+  const hasOrgCode = Boolean(binding.fields?.orgCode);
+  const scopeMode = String(options?.view?.orgScopeMode || options?.view?.org_scope_mode || '').toUpperCase();
+  const directory = directoryFrom(options);
+  const directoryByCode = new Map(directory.map(item => [String(item.orgCode), item]));
+  const rowCodes = new Map();
+  if (hasOrgCode && scopeMode === 'NAMED_GROUP') {
+    for (const row of table.rows) {
+      const rawCode = readDimension(row, binding, 'orgCode', table, 'attention', [], false);
+      const code = asText(rawCode).trim();
+      if (code) rowCodes.set(code, (rowCodes.get(code) || 0) + 1);
+    }
+  }
   for (const row of table.rows) {
     const label = readDimension(row, binding, 'label', table, 'attention', issues, true);
     const count = readMetric(row, binding, 'count', table, 'attention', issues, true);
-    model.attention.push({ label: label ?? '', count: count.value });
+    let orgCode = '';
+    let directoryItem = null;
+    if (hasOrgCode) {
+      orgCode = asText(readDimension(row, binding, 'orgCode', table, 'attention', issues, true)).trim();
+      if (scopeMode === 'NAMED_GROUP') {
+        if (!orgCode) {
+          issue(issues, 'attention', 'MISSING_ORG_CODE', '关注事项缺少机构号', 'orgCode');
+          continue;
+        }
+        directoryItem = directoryByCode.get(orgCode);
+        if (!directoryItem) {
+          issue(issues, 'attention', 'UNAUTHORIZED_ORG', `机构未在授权目录中: ${orgCode}`, 'orgCode');
+          continue;
+        }
+        if ((rowCodes.get(orgCode) || 0) > 1) {
+          issue(issues, 'attention', 'DUPLICATE_ORG_CODE', `关注事项存在重复机构: ${orgCode}`, 'orgCode');
+          continue;
+        }
+      } else if (orgCode) {
+        directoryItem = directoryByCode.get(orgCode) || null;
+      }
+    }
+    const displayLabel = directoryItem?.orgName || (hasOrgCode && directoryItem ? orgCode : (label ?? ''));
+    const item = { label: displayLabel, count: count.value };
+    model.attention.push(item);
+    if (hasOrgCode && directoryItem && pendingAttention) {
+      const pending = pendingAttention.get(orgCode) || [];
+      pending.push(item);
+      pendingAttention.set(orgCode, pending);
+    }
+  }
+}
+
+function attachPendingAttention(model, pendingAttention) {
+  for (const [orgCode, items] of pendingAttention.entries()) {
+    const institution = model.institutions.find(item => String(item.orgCode) === String(orgCode));
+    if (institution) institution.attention.push(...items.map(item => ({ ...item })));
   }
 }
 
@@ -661,7 +709,7 @@ function adaptCitySummary(table, binding, model, issues, options) {
   }
 }
 
-function adaptSlot(slot, table, binding, model, issues, options) {
+function adaptSlot(slot, table, binding, model, issues, options, pendingAttention) {
   switch (slot) {
     case 'deposit':
     case 'loan':
@@ -678,7 +726,7 @@ function adaptSlot(slot, table, binding, model, issues, options) {
     case 'ranking':
       adaptRanking(table, binding, model, issues); break;
     case 'attention':
-      adaptAttention(table, binding, model, issues); break;
+      adaptAttention(table, binding, model, issues, options, pendingAttention); break;
     case 'branches':
       adaptBranches(table, binding, model, issues, options); break;
     case 'branchTrend':
@@ -699,6 +747,7 @@ function adaptSlot(slot, table, binding, model, issues, options) {
 export function adaptPanoramaResults(results = {}, options = {}) {
   const model = createEmptyPanoramaModel();
   const issues = [];
+  const pendingAttention = new Map();
   for (const slot of SLOT_ORDER) {
     const result = results?.[slot];
     if (!result) continue;
@@ -706,7 +755,7 @@ export function adaptPanoramaResults(results = {}, options = {}) {
     const table = parseTableResponse(result.response, slot, issues);
     if (!table) continue;
     const beforeIssueCount = issues.length;
-    adaptSlot(slot, table, binding, model, issues, options);
+    adaptSlot(slot, table, binding, model, issues, options, pendingAttention);
     if (!model.dataDate) {
       const date = responseDataDate(table);
       if (date) model.dataDate = date;
@@ -726,6 +775,7 @@ export function adaptPanoramaResults(results = {}, options = {}) {
       issue(issues, 'branches', 'NO_AUTHORIZED_DIRECTORY', '命名机构组未返回授权机构目录');
     }
   }
+  attachPendingAttention(model, pendingAttention);
   const title = options?.title || options?.view?.screenName || options?.view?.screen_name;
   if (title) model.title = String(title);
   model.issues = issues;

@@ -130,7 +130,8 @@ export const BINDING_SLOTS = Object.freeze({
     required: ['label', 'count'],
     fields: Object.freeze([
       field('label', '关注事项', { required: true, kind: 'dimension' }),
-      field('count', '数量', { required: true, unitKinds: countUnits })
+      field('count', '数量', { required: true, unitKinds: countUnits }),
+      field('orgCode', '机构号', { kind: 'dimension' })
     ])
   }),
   branches: Object.freeze({
