@@ -7,7 +7,7 @@
 //   - ScreenDataController             POST /api/screen/data
 //
 // 大屏展示类接口一律不给 mock 兜底（宁可空屏不给假数据，同 Dashboard.vue 先例）。
-import { call } from './http';
+import http, { call } from './http';
 
 // ===== 数据源管理 =====
 export function listScreenDatasources(params = {}) {
@@ -206,6 +206,14 @@ export function saveOrgGroupRoles(groupCode, data) {
 }
 
 // ===== 大屏运行时 =====
+/**
+ * 当前用户可访问的大屏目录由服务端按发布、启用和屏级权限过滤。
+ * 这是目录入口的唯一请求，必须直接走原始 HTTP GET，不能用 mock 或旧目录兜底。
+ */
+export function listAvailableScreens() {
+  return http.get('/api/screen/view/catalog');
+}
+
 // preview='draft' 读草稿包(需登录 + REPORT/READ 权限,详见 ScreenViewController);不传读发布态。
 // silent:false(默认)——整屏加载失败要提示;区块级取数走 queryScreenData 单独 silent。
 export function getScreenView(screenCode, preview) {

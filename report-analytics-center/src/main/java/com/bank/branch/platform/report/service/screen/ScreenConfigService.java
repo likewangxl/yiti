@@ -5,6 +5,7 @@ import com.bank.branch.platform.report.dto.req.ScreenCreateReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenMetadataUpdateReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenSaveReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDetailRespDTO;
+import com.bank.branch.platform.report.dto.resp.ScreenEntryRespDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenViewRespDTO;
 import com.bank.branch.platform.report.dto.resp.MapRegionMetricDTO;
 
@@ -17,6 +18,9 @@ public interface ScreenConfigService {
 
     /** 屏列表（概要，不含区块） */
     List<ScreenDetailRespDTO> listScreens();
+
+    /** 当前用户可见且已有有效发布包的大屏运行时目录。 */
+    List<ScreenEntryRespDTO> listAuthorizedPublishedScreens();
 
     /** 屏详情（含区块） */
     ScreenDetailRespDTO getScreen(Long id);

@@ -4,6 +4,7 @@ import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.report.dto.resp.ScreenEntryRespDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenRenderRespDTO;
 import com.bank.branch.platform.report.service.screen.ScreenConfigService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,6 +16,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * 大屏运行时整屏配置读取.
@@ -38,5 +41,12 @@ public class ScreenViewController {
         // 管理端读取资源；普通查看者不能借用 published 端点读取草稿。
         String state = "draft".equalsIgnoreCase(preview) ? "draft" : "published";
         return ResponseWrapper.success(configService.getRenderByCode(screenCode, state));
+    }
+
+    @GetMapping("/catalog")
+    @BizAuth(bizType = BizType.REPORT, action = BizAction.READ)
+    @Operation(summary = "读取当前用户可见的大屏运行时目录")
+    public ResponseWrapper<List<ScreenEntryRespDTO>> catalog() {
+        return ResponseWrapper.success(configService.listAuthorizedPublishedScreens());
     }
 }

@@ -224,6 +224,15 @@ const routes = [
           fallbackToAuthorizedMenu: true
         }
       },
+      {
+        path: 'screens',
+        name: 'ScreenCenter',
+        component: () => import('@/views/screen/ScreenCenter.vue'),
+        meta: {
+          title: '大屏中心',
+          requiredResource: '/api/screen/view/*'
+        }
+      },
       { path: 'workspace/announcements', name: 'AnnouncementList', component: () => import('@/views/workspace/AnnouncementList.vue'), meta: { title: '公告列表', group: '工作台' } },
       { path: 'announcement/:id', name: 'AnnouncementDetail', component: () => import('@/views/system/AnnouncementDetail.vue'), meta: { title: '公告详情' } },
       { path: 'workspace/notifications', name: 'NotificationList', component: () => import('@/views/workspace/NotificationList.vue'), meta: { title: '通知列表', group: '工作台' } },
