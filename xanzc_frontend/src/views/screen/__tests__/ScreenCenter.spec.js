@@ -20,7 +20,7 @@ import { useUserStore } from '@/stores/user';
 const catalog = [
   {
     screenCode: 'SCR_PROVINCE', screenName: '分行经营总览', viewLevel: 'PROVINCE', bizLine: 'COMMON',
-    template: 'branch-overview-v1', dataMode: 'DEMO'
+    template: 'branch-overview-v1', dataMode: 'TEST'
   },
   {
     screenCode: 'SCR_RETAIL_OVERVIEW', screenName: '零售经营总览', viewLevel: 'BRANCH', bizLine: 'RETAIL',
@@ -51,6 +51,7 @@ describe('ScreenCenter.vue', () => {
     expect(center.text()).toContain('2个可访问大屏');
     expect(center.text()).toContain('分行经营总览');
     expect(center.text()).toContain('零售经营总览');
+    expect(center.text()).toContain('测试库数据');
     expect(center.text()).toContain('演示数据');
 
     await center.find('[data-screen-code="SCR_RETAIL_OVERVIEW"] button').trigger('click');

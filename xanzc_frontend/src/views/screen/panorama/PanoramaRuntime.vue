@@ -41,7 +41,8 @@ import { applyMetricLabels, resolveSourcePresentation } from './sourcePresentati
 
 const props = defineProps({
   view: { type: Object, default: () => ({}) },
-  context: { type: Object, default: () => ({}) }
+  context: { type: Object, default: () => ({}) },
+  backPath: { type: String, default: '' }
 });
 const emit = defineEmits(['back', 'configure', 'refresh', 'branch-select']);
 const router = useRouter();
@@ -92,6 +93,10 @@ function onRefresh() {
 
 function onBack() {
   emit('back');
+  if (props.backPath) {
+    if (router?.push) router.push(props.backPath);
+    return;
+  }
   if (router?.back && window.history.length > 1) router.back();
   else if (router?.push) router.push('/workspace');
   else if (window.history.length > 1) window.history.back();

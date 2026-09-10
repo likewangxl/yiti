@@ -201,5 +201,5 @@ const option = computed(() => ({
 <style scoped>
 .panorama-trend { display: flex; min-height: 0; flex-direction: column; }
 .panorama-trend-chart { width: 100%; height: auto; min-height: 170px; flex: 1 1 auto; }
-.panorama-trend.is-compact .panorama-trend-chart { min-height: 0; }
+.panorama-trend.is-compact .panorama-trend-chart { min-height: 170px; }
 </style>

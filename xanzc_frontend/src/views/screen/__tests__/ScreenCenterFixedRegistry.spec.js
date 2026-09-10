@@ -19,7 +19,7 @@ import { useUserStore } from '@/stores/user';
 const catalog = [
   {
     screenCode: 'SCR_PROVINCE', screenName: '分行经营总览', viewLevel: 'PROVINCE', bizLine: 'COMMON',
-    template: 'branch-overview-v1', dataMode: 'DEMO'
+    template: 'branch-overview-v1', dataMode: 'TEST'
   },
   {
     screenCode: 'SCR_RETAIL_OVERVIEW', screenName: '零售经营总览', viewLevel: 'BRANCH', bizLine: 'RETAIL',
@@ -42,6 +42,7 @@ describe('ScreenCenter fixed code screens', () => {
     await flushPromises();
 
     expect(wrapper.findAll('[data-screen-card]')).toHaveLength(2);
+    expect(wrapper.text()).toContain('测试库数据');
     expect(wrapper.text()).toContain('演示数据');
     expect(wrapper.text()).not.toContain('旧发布屏');
 

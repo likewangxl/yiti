@@ -67,10 +67,9 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     /** 运行时查询以 ACTIVE 精确过滤，持久化状态必须先在写入边界规范为该枚举。 */
     private static final Set<String> SCREEN_STATUSES = Set.of("ACTIVE", "DISABLED");
     private static final String RUNTIME_CATALOG_SCREEN_CODE = "catalog";
-    private static final String CODE_SCREEN_DATA_MODE = "DEMO";
     private static final List<RuntimeCatalogRegistration> CODE_SCREEN_CATALOG = List.of(
-            new RuntimeCatalogRegistration("SCR_PROVINCE", "分行经营总览", "branch-overview-v1", "COMMON"),
-            new RuntimeCatalogRegistration("SCR_RETAIL_OVERVIEW", "零售经营总览", "retail-overview-v1", "RETAIL"));
+            new RuntimeCatalogRegistration("SCR_PROVINCE", "分行经营总览", "branch-overview-v1", "COMMON", "TEST"),
+            new RuntimeCatalogRegistration("SCR_RETAIL_OVERVIEW", "零售经营总览", "retail-overview-v1", "RETAIL", "DEMO"));
     /** 逐屏目录校验中可安全排除的授权失败；带 cause 的同码异常表示基础设施失败，必须继续抛出。 */
     private static final Set<String> CATALOG_AUTH_REJECTION_CODES = Set.of(
             RptErrorCode.SCREEN_ACCESS_DENIED.getCode(),
@@ -1234,7 +1233,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         entry.setViewLevel(screen.getViewLevel());
         entry.setBizLine(registration.bizLine());
         entry.setTemplate(registration.template());
-        entry.setDataMode(CODE_SCREEN_DATA_MODE);
+        entry.setDataMode(registration.dataMode());
         return entry;
     }
 
@@ -1243,7 +1242,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     }
 
     private record RuntimeCatalogRegistration(String screenCode, String screenName,
-                                              String template, String bizLine) {
+                                              String template, String bizLine, String dataMode) {
     }
 
     private boolean hasV2Map(RptScreen screen) {

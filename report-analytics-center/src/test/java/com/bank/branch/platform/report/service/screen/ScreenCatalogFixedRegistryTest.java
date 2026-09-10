@@ -62,7 +62,8 @@ class ScreenCatalogFixedRegistryTest {
                 .containsExactly("分行经营总览", "零售经营总览");
         assertThat(entries).extracting(ScreenEntryRespDTO::getBizLine)
                 .containsExactly("COMMON", "RETAIL");
-        assertThat(entries).allSatisfy(entry -> assertThat(entry.getDataMode()).isEqualTo("DEMO"));
+        assertThat(entries).extracting(ScreenEntryRespDTO::getDataMode)
+                .containsExactly("TEST", "DEMO");
     }
 
     @Test

@@ -1,11 +1,11 @@
 <template>
-  <main class="code-screen-page" data-demo="true" aria-label="演示大屏" :aria-busy="state === 'loading' ? 'true' : 'false'">
+  <main class="code-screen-page" :data-demo="activeTemplate === 'retail-overview-v1' ? 'true' : undefined" :data-mode="activeTemplate === 'branch-overview-v1' ? 'TEST' : undefined" :aria-label="activeTemplate === 'branch-overview-v1' ? '测试大屏' : '演示大屏'" :aria-busy="state === 'loading' ? 'true' : 'false'">
     <header class="code-screen-page__banner">
       <div class="code-screen-page__banner-meta">
-        <strong>演示数据</strong>
-        <span>非业务数据</span>
+        <strong>{{ activeTemplate === 'branch-overview-v1' ? '测试库数据' : '演示数据' }}</strong>
+        <span>{{ activeTemplate === 'branch-overview-v1' ? '非生产业务数据' : '非业务数据' }}</span>
         <span data-testid="demo-updated-at">更新时间 {{ lastUpdated }}</span>
-        <button type="button" data-action="refresh-demo" @click="refreshDemo">刷新</button>
+        <button type="button" data-action="refresh-demo" @click="refreshScreen">刷新</button>
         <button type="button" data-action="back-to-screen-center" @click="backToCenter">返回大屏中心</button>
       </div>
     </header>
@@ -22,25 +22,24 @@
 
     <section v-else-if="state === 'unsupported'" class="code-screen-page__state code-screen-page__state--error" data-testid="code-screen-unsupported" role="alert">
       <h2>大屏模板不可用</h2>
-      <p>目录未返回受支持的演示模板或数据模式。</p>
+      <p>目录或发布包未返回受支持的模板或数据模式。</p>
       <button type="button" data-action="back-to-screen-center" @click="backToCenter">返回大屏中心</button>
     </section>
 
-    <section v-else-if="state === 'error'" class="code-screen-page__state code-screen-page__state--error" role="alert">
+    <section v-else-if="state === 'error'" class="code-screen-page__state code-screen-page__state--error" data-testid="code-screen-error" role="alert">
       <h2>大屏目录确认失败</h2>
       <p>{{ errorMessage }}</p>
       <button type="button" data-action="back-to-screen-center" @click="backToCenter">返回大屏中心</button>
     </section>
 
     <section v-else class="code-screen-page__content">
-      <PanoramaDashboard
+      <PanoramaRuntime
         v-if="activeTemplate === 'branch-overview-v1'"
-        :model="demoModel"
-        :loading="false"
-        error=""
-        :demo="true"
-        @refresh="refreshDemo"
-        @back="backToCenter"
+        ref="runtimeRef"
+        :view="runtimeView"
+        :context="runtimeContext"
+        back-path="/screens"
+        @refresh="onRuntimeRefresh"
       />
       <RetailDashboard
         v-else-if="activeTemplate === 'retail-overview-v1'"
@@ -48,7 +47,7 @@
         :loading="false"
         error=""
         :demo="true"
-        @refresh="refreshDemo"
+        @refresh="refreshScreen"
         @back="backToCenter"
       />
     </section>
@@ -58,16 +57,15 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { listAvailableScreens } from '@/api/screen';
+import { getScreenView, listAvailableScreens } from '@/api/screen';
 import { useUserStore } from '@/stores/user';
-import PanoramaDashboard from './panorama/PanoramaDashboard.vue';
 import RetailDashboard from './panorama/RetailDashboard.vue';
-import { demoModel } from './panorama/demoModel.js';
+import PanoramaRuntime from './panorama/PanoramaRuntime.vue';
 import { retailDemoModel } from './panorama/retailDemoModel.js';
 
 const CATALOG_REGISTRATIONS = Object.freeze({
-  'branch-overview-v1': Object.freeze({ screenCode: 'SCR_PROVINCE', screenName: '分行经营总览' }),
-  'retail-overview-v1': Object.freeze({ screenCode: 'SCR_RETAIL_OVERVIEW', screenName: '零售经营总览' })
+  'branch-overview-v1': Object.freeze({ screenCode: 'SCR_PROVINCE', screenName: '分行经营总览', dataMode: 'TEST' }),
+  'retail-overview-v1': Object.freeze({ screenCode: 'SCR_RETAIL_OVERVIEW', screenName: '零售经营总览', dataMode: 'DEMO' })
 });
 
 const route = useRoute();
@@ -76,6 +74,8 @@ const userStore = useUserStore();
 const state = ref('loading');
 const errorMessage = ref('');
 const activeEntry = ref(null);
+const runtimeView = ref(null);
+const runtimeRef = ref(null);
 const lastUpdated = ref(formatDemoTime(new Date()));
 let loadGeneration = 0;
 
@@ -98,10 +98,26 @@ function resolveCatalogEntry(catalog, template) {
     && entry.screenCode === expected.screenCode
     && entry.template === template);
   if (!matches.length) return { kind: 'forbidden', entry: null };
-  if (matches.length !== 1 || matches[0].dataMode !== 'DEMO') {
+  if (matches.length !== 1 || matches[0].dataMode !== expected.dataMode) {
     return { kind: 'unsupported', entry: null };
   }
   return { kind: 'ready', entry: { ...matches[0], screenName: expected.screenName } };
+}
+
+const runtimeContext = computed(() => ({
+  screenCode: activeEntry.value?.screenCode,
+  schemaVersion: runtimeView.value?.runtimeSchemaVersion,
+  runtimeSchemaVersion: runtimeView.value?.runtimeSchemaVersion
+}));
+
+function parseRuntimeView(response, entry) {
+  if (!response || response.state !== 'published' || response.screenCode !== entry.screenCode
+      || response.runtimeSchemaVersion !== 2 || !response.renderPackageJson) throw new Error('发布包不可用');
+  let renderPackage;
+  try { renderPackage = JSON.parse(response.renderPackageJson); } catch { throw new Error('渲染包解析失败'); }
+  const presentation = renderPackage?.canvasStyle?.presentation;
+  if (presentation?.type !== 'CODE' || presentation?.template !== entry.template) throw new Error('发布包模板不匹配');
+  return { ...response, renderPackage };
 }
 
 async function loadCatalog() {
@@ -122,6 +138,13 @@ async function loadCatalog() {
       return;
     }
     activeEntry.value = resolved.entry;
+    runtimeView.value = null;
+    if (activeTemplate.value === 'branch-overview-v1') {
+      const parsedRuntimeView = parseRuntimeView(await getScreenView(resolved.entry.screenCode), resolved.entry);
+      if (generation !== loadGeneration) return;
+      runtimeView.value = parsedRuntimeView;
+    }
+    if (generation !== loadGeneration) return;
     lastUpdated.value = formatDemoTime(new Date());
     state.value = 'ready';
   } catch (error) {
@@ -131,7 +154,16 @@ async function loadCatalog() {
   }
 }
 
-function refreshDemo() {
+function refreshScreen() {
+  if (activeTemplate.value === 'branch-overview-v1') {
+    runtimeRef.value?.refresh?.();
+    lastUpdated.value = formatDemoTime(new Date());
+    return;
+  }
+  lastUpdated.value = formatDemoTime(new Date());
+}
+
+function onRuntimeRefresh() {
   lastUpdated.value = formatDemoTime(new Date());
 }
 

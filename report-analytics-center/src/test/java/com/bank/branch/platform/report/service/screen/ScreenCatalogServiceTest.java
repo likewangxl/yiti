@@ -76,7 +76,8 @@ class ScreenCatalogServiceTest {
                 .containsExactly("branch-overview-v1", "retail-overview-v1");
         assertThat(result).extracting(ScreenEntryRespDTO::getBizLine)
                 .containsExactly("COMMON", "RETAIL");
-        assertThat(result).allSatisfy(entry -> assertThat(entry.getDataMode()).isEqualTo("DEMO"));
+        assertThat(result).extracting(ScreenEntryRespDTO::getDataMode)
+                .containsExactly("TEST", "DEMO");
     }
 
     @Test

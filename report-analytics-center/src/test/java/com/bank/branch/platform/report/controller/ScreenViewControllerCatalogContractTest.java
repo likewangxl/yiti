@@ -44,7 +44,7 @@ class ScreenViewControllerCatalogContractTest {
         entry.setViewLevel("PROVINCE");
         entry.setBizLine("COMMON");
         entry.setTemplate("branch-overview-v1");
-        entry.setDataMode("DEMO");
+        entry.setDataMode("TEST");
         when(configService.listAuthorizedCodeScreens()).thenReturn(List.of(entry));
 
         mockMvc.perform(get("/api/screen/view/catalog"))
@@ -55,7 +55,7 @@ class ScreenViewControllerCatalogContractTest {
                 .andExpect(jsonPath("$.data[0].viewLevel").value("PROVINCE"))
                 .andExpect(jsonPath("$.data[0].bizLine").value("COMMON"))
                 .andExpect(jsonPath("$.data[0].template").value("branch-overview-v1"))
-                .andExpect(jsonPath("$.data[0].dataMode").value("DEMO"))
+                .andExpect(jsonPath("$.data[0].dataMode").value("TEST"))
                 .andExpect(jsonPath("$.data[0].id").doesNotExist())
                 .andExpect(jsonPath("$.data[0].allowedRoleCodes").doesNotExist());
 

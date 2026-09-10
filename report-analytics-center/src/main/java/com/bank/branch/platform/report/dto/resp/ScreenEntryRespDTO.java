@@ -17,6 +17,6 @@ public class ScreenEntryRespDTO {
     /** 代码化展示模板；目录只注册受支持的固定模板。 */
     private String template;
 
-    /** 展示数据模式；代码化目录当前只允许本地演示数据。 */
+    /** 展示数据模式；固定注册项按 TEST/DEMO 分别声明。 */
     private String dataMode;
 }

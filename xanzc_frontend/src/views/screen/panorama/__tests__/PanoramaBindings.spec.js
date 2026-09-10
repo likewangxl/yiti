@@ -30,6 +30,7 @@ const { dashboardStub } = vi.hoisted(() => ({
     template: '<div data-testid="runtime-dashboard">'
       + '<div data-testid="runtime-kpi">{{ model?.kpis?.[0]?.value }}</div>'
       + '<button data-action="runtime-configure" @click="$emit(\'configure\')">配置</button>'
+      + '<button data-action="runtime-back" @click="$emit(\'back\')">返回</button>'
       + '</div>'
   }
 }));
@@ -502,6 +503,17 @@ describe('PanoramaBindings', () => {
 
     await wrapper.find('[data-action="runtime-configure"]').trigger('click');
     expect(router.push).toHaveBeenCalledWith({ path: '/screen-admin/designer', query: { screenId: '9' } });
+  });
+
+  it('Runtime 带 backPath 时只导航一次并保留 back 事件', async () => {
+    const view = { screenId: 9, screenCode: 'SCR_CODE', runtimeSchemaVersion: 2,
+      renderPackage: { canvasStyle: { presentation: { type: 'CODE', template: 'branch-overview-v1' } }, components: [] } };
+    const wrapper = mount(PanoramaRuntime, { props: { view, context: { screenCode: 'SCR_CODE' }, backPath: '/screens' } });
+    await wrapper.get('[data-action="runtime-back"]').trigger('click');
+    expect(router.push).toHaveBeenCalledTimes(1);
+    expect(router.push).toHaveBeenCalledWith('/screens');
+    expect(router.back).not.toHaveBeenCalled();
+    expect(wrapper.emitted('back')).toHaveLength(1);
   });
 
   it('屏 A 保存未返回时切到屏 B，迟到的 A 响应不能覆盖 B 草稿', async () => {

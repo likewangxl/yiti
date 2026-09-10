@@ -76,7 +76,7 @@
         <div class="screen-card__body">
           <div class="screen-card__title-row">
             <h2>{{ displayName(screen) }}</h2>
-            <span class="screen-card__demo-badge">演示数据</span>
+            <span class="screen-card__demo-badge">{{ dataModeLabel(screen.dataMode) }}</span>
           </div>
           <p class="screen-card__code">编码：{{ screen.screenCode }}</p>
           <div class="screen-card__meta">
@@ -105,6 +105,10 @@ const BIZ_LINE_FILTERS = Object.freeze([
 const BIZ_LINE_LABELS = Object.freeze({ COMMON: '综合', CORP: '对公', RETAIL: '零售' });
 const VIEW_LEVEL_LABELS = Object.freeze({ PROVINCE: '全辖', BRANCH: '机构', PERSON: '个人' });
 const SUPPORTED_TEMPLATES = new Set(['branch-overview-v1', 'retail-overview-v1']);
+const REGISTERED_MODES = Object.freeze({
+  'branch-overview-v1': 'TEST',
+  'retail-overview-v1': 'DEMO'
+});
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -141,12 +145,16 @@ function viewLevelLabel(value) {
   return VIEW_LEVEL_LABELS[normalized] || '未指定视角';
 }
 
+function dataModeLabel(value) {
+  return value === 'TEST' ? '测试库数据' : '演示数据';
+}
+
 function normalizeCatalog(catalog) {
   if (!Array.isArray(catalog)) throw new Error('大屏目录响应格式无效');
   return catalog.filter((screen) => screen
     && screen.screenCode
     && SUPPORTED_TEMPLATES.has(screen.template)
-    && screen.dataMode === 'DEMO');
+    && screen.dataMode === REGISTERED_MODES[screen.template]);
 }
 
 async function loadCatalog() {
@@ -169,7 +177,7 @@ async function loadCatalog() {
 
 function openScreen(screen) {
   const template = screen?.template;
-  if (!SUPPORTED_TEMPLATES.has(template) || screen?.dataMode !== 'DEMO') return;
+  if (!SUPPORTED_TEMPLATES.has(template) || screen?.dataMode !== REGISTERED_MODES[template]) return;
   router.push({ name: 'CodeScreenPage', params: { template } });
 }
 

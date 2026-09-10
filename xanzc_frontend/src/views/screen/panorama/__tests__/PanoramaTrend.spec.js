@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { mount } from '@vue/test-utils';
 
 vi.mock('vue-echarts', () => ({
@@ -16,6 +18,10 @@ function chartOption(wrapper) {
 }
 
 describe('PanoramaTrend', () => {
+  it('compact 图表首次挂载保留非零最小高度', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/screen/panorama/PanoramaTrend.vue'), 'utf8');
+    expect(source).toContain('.panorama-trend.is-compact .panorama-trend-chart { min-height: 170px; }');
+  });
   it('省级可切换趋势默认只绘制净增，余额模式再绘制存贷款余额', async () => {
     const wrapper = mount(PanoramaTrend, {
       props: {

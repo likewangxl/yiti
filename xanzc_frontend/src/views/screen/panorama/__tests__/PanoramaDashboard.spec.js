@@ -265,6 +265,26 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(visibleRows().some(row => row.text().includes('矩阵机构12'))).toBe(false);
   });
 
+  it('排名值不同显示连续名次', () => {
+    const rankings = [100, 90, 80, 70].map((deposit, index) => ({
+      orgCode: `R-${index + 1}`, name: `排名机构${index + 1}`, deposit
+    }));
+    const institutions = rankings.map(item => ({ orgCode: item.orgCode, orgName: item.name, metrics: {}, trend: [], attention: [] }));
+    const wrapper = mountDashboard({ model: { ...extendedModel, rankings, institutions } });
+    const rows = wrapper.findAll('[data-testid="ranking-row"]');
+    expect(rows.map(row => row.find('.panorama-matrix-rank').text())).toEqual(['1', '2', '3', '4']);
+  });
+
+  it('相同值并列且下一位采用竞赛排名', () => {
+    const rankings = [100, 100, 90].map((deposit, index) => ({
+      orgCode: `T-${index + 1}`, name: `并列机构${index + 1}`, deposit
+    }));
+    const institutions = rankings.map(item => ({ orgCode: item.orgCode, orgName: item.name, metrics: {}, trend: [], attention: [] }));
+    const wrapper = mountDashboard({ model: { ...extendedModel, rankings, institutions } });
+    const rows = wrapper.findAll('[data-testid="ranking-row"]');
+    expect(rows.map(row => row.find('.panorama-matrix-rank').text())).toEqual(['1', '1', '3']);
+  });
+
   it('目标率图形限制在 100%，文字保留实际超额完成率且范围不写死年度', () => {
     const wrapper = mountDashboard({
       model: {

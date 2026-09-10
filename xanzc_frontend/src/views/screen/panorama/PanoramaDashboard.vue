@@ -560,9 +560,9 @@ function rankingPosition(item) {
   const currentValue = rankingValue(item, rankingMetric.value);
   if (currentValue === null) return null;
   let rank = 1;
-  for (let cursor = 1; cursor <= index; cursor += 1) {
+  for (let cursor = 0; cursor < index; cursor += 1) {
     const previousValue = rankingValue(visibleRankingRows.value[cursor], rankingMetric.value);
-    if (previousValue !== currentValue) rank = cursor + 1;
+    if (previousValue > currentValue) rank = cursor + 2;
   }
   return rank;
 }
