@@ -19,8 +19,8 @@ public interface ScreenConfigService {
     /** 屏列表（概要，不含区块） */
     List<ScreenDetailRespDTO> listScreens();
 
-    /** 当前用户可见且已有有效发布包的大屏运行时目录。 */
-    List<ScreenEntryRespDTO> listAuthorizedPublishedScreens();
+    /** 当前用户可见的固定代码化大屏目录；仅要求 ACTIVE 实体和运行时范围授权。 */
+    List<ScreenEntryRespDTO> listAuthorizedCodeScreens();
 
     /** 屏详情（含区块） */
     ScreenDetailRespDTO getScreen(Long id);

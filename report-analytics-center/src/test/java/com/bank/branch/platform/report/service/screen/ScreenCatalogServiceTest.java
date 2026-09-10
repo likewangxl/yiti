@@ -2,9 +2,9 @@ package com.bank.branch.platform.report.service.screen;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.exception.BizException;
-import com.bank.branch.platform.report.dto.resp.ScreenEntryRespDTO;
 import com.bank.branch.platform.report.dto.req.ScreenCreateReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenMetadataUpdateReqDTO;
+import com.bank.branch.platform.report.dto.resp.ScreenEntryRespDTO;
 import com.bank.branch.platform.report.entity.RptScreen;
 import com.bank.branch.platform.report.enums.RptErrorCode;
 import com.bank.branch.platform.report.mapper.RptScreenBlockMapper;
@@ -35,7 +35,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 当前用户可见的大屏运行时目录服务契约。 */
+/** 当前用户可见的代码化大屏目录服务契约。 */
 @ExtendWith(MockitoExtension.class)
 class ScreenCatalogServiceTest {
 
@@ -58,108 +58,80 @@ class ScreenCatalogServiceTest {
     }
 
     @Test
-    void catalog_filtersActivePublishedPackagesAndSortsByScreenCode() {
-        RptScreen b = screen("B", "B屏", "ACTIVE", 2, validPackage());
-        RptScreen a = screen("A", "A屏", "ACTIVE", 1, validPackage());
-        RptScreen draft = screen("DRAFT", "草稿", "ACTIVE", 0, validPackage());
-        RptScreen disabled = screen("DISABLED", "禁用", "DISABLED", 1, validPackage());
-        RptScreen blank = screen("BLANK", "空包", "ACTIVE", 1, " \t\r\n");
-        RptScreen missing = screen("MISSING", "无包", "ACTIVE", 1, null);
-        RptScreen nonObject = screen("NON_OBJECT", "非对象包", "ACTIVE", 1, "[]");
-        when(screenMapper.selectList(any(Wrapper.class)))
-                .thenReturn(List.of(b, a, draft, disabled, blank, missing, nonObject));
+    void catalog_returnsOnlyFixedCodeRegistrationsAndDoesNotRequirePublishedCanvas() {
+        RptScreen province = screen("SCR_PROVINCE", "数据库旧名称", "PROVINCE", "COMMON", "ACTIVE", 0, null);
+        RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "数据库零售名称", "BRANCH", "RETAIL", "ACTIVE", 0, null);
+        RptScreen old = screen("SCR_OLD", "旧发布屏", "BRANCH", "COMMON", "ACTIVE", 1,
+                "{\"schemaVersion\":1,\"components\":[]}");
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(old, retail, province));
         when(scopeAuthorizationService.authorize(any(RptScreen.class))).thenReturn(Set.of());
 
-        List<ScreenEntryRespDTO> result = service.listAuthorizedPublishedScreens();
+        List<ScreenEntryRespDTO> result = service.listAuthorizedCodeScreens();
 
         assertThat(result).extracting(ScreenEntryRespDTO::getScreenCode)
-                .containsExactly("A", "B");
-        assertThat(result).allSatisfy(entry -> {
-            assertThat(entry.getScreenName()).isNotBlank();
-            assertThat(entry.getViewLevel()).isEqualTo("BRANCH");
-            assertThat(entry.getBizLine()).isEqualTo("COMMON");
-        });
-        assertThat(result.toString()).doesNotContain("非对象包", "NON_OBJECT");
+                .containsExactly("SCR_PROVINCE", "SCR_RETAIL_OVERVIEW");
+        assertThat(result).extracting(ScreenEntryRespDTO::getScreenName)
+                .containsExactly("分行经营总览", "零售经营总览");
+        assertThat(result).extracting(ScreenEntryRespDTO::getTemplate)
+                .containsExactly("branch-overview-v1", "retail-overview-v1");
+        assertThat(result).extracting(ScreenEntryRespDTO::getBizLine)
+                .containsExactly("COMMON", "RETAIL");
+        assertThat(result).allSatisfy(entry -> assertThat(entry.getDataMode()).isEqualTo("DEMO"));
     }
 
     @Test
-    void catalog_excludesDeniedOrInvalidScreensWithoutLeakingTheirMetadata() {
-        RptScreen allowed = screen("ALLOWED", "允许屏", "ACTIVE", 1, validPackage());
-        RptScreen denied = screen("SECRET", "敏感屏名称", "ACTIVE", 1, validPackage());
-        RptScreen invalid = screen("BROKEN", "非法屏名称", "ACTIVE", 1, "not-json");
-        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(denied, invalid, allowed));
-        when(scopeAuthorizationService.authorize(denied))
-                .thenThrow(new com.bank.branch.platform.report.exception.RptException(
-                        RptErrorCode.SCREEN_ACCESS_DENIED));
-        when(scopeAuthorizationService.authorize(allowed)).thenReturn(Set.of());
+    void catalog_excludesInactiveUnknownAndInvalidScopeWithoutLeakingMetadata() {
+        RptScreen inactive = screen("SCR_PROVINCE", "停用屏", "PROVINCE", "COMMON", "DISABLED", 0, null);
+        RptScreen unknown = screen("SCR_OLD", "旧屏敏感名称", "BRANCH", "COMMON", "ACTIVE", 0, null);
+        RptScreen invalid = screen("SCR_RETAIL_OVERVIEW", "非法范围名称", "BRANCH", "BAD_LINE", "ACTIVE", 0, null);
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(inactive, unknown, invalid));
 
-        List<ScreenEntryRespDTO> result = service.listAuthorizedPublishedScreens();
-
-        assertThat(result).extracting(ScreenEntryRespDTO::getScreenCode)
-                .containsExactly("ALLOWED");
-        assertThat(result.toString()).doesNotContain("SECRET", "敏感屏名称", "BROKEN", "非法屏名称");
+        assertThat(service.listAuthorizedCodeScreens()).isEmpty();
+        verify(scopeAuthorizationService, never()).authorize(any(RptScreen.class));
     }
 
     @Test
-    void catalog_excludesNamedGroupScopeDenialAndRangeDenial() {
-        RptScreen roleDenied = screen("ROLE_DENIED", "角色拒绝", "ACTIVE", 1, validPackage());
-        RptScreen rangeDenied = screen("RANGE_DENIED", "范围拒绝", "ACTIVE", 1, validPackage());
-        roleDenied.setOrgScopeMode("NAMED_GROUP");
-        rangeDenied.setOrgScopeMode("NAMED_GROUP");
-        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(roleDenied, rangeDenied));
-        when(scopeAuthorizationService.authorize(roleDenied))
-                .thenThrow(new com.bank.branch.platform.report.exception.RptException(
-                        RptErrorCode.SCREEN_ACCESS_DENIED));
-        when(scopeAuthorizationService.authorize(rangeDenied))
-                .thenThrow(new com.bank.branch.platform.report.exception.RptException(
-                        RptErrorCode.SCREEN_SCOPE_INVALID));
+    void catalog_excludesDeniedRegisteredScreenWithoutLeakingMetadata() {
+        RptScreen denied = screen("SCR_RETAIL_OVERVIEW", "敏感零售名称", "BRANCH", "RETAIL", "ACTIVE", 0, null);
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(denied));
+        when(scopeAuthorizationService.authorize(denied)).thenThrow(
+                new com.bank.branch.platform.report.exception.RptException(RptErrorCode.SCREEN_ACCESS_DENIED));
 
-        assertThat(service.listAuthorizedPublishedScreens()).isEmpty();
+        assertThat(service.listAuthorizedCodeScreens()).isEmpty();
+    }
+
+    @Test
+    void catalog_namedGroupRequiresNonEmptyAuthorizedScope() {
+        RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "零售经营总览", "BRANCH", "RETAIL", "ACTIVE", 0, null);
+        retail.setOrgScopeMode("NAMED_GROUP");
+        retail.setOrgGroupCode("GROUP_RETAIL");
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(retail));
+        when(scopeAuthorizationService.authorize(retail)).thenReturn(Set.of());
+
+        assertThat(service.listAuthorizedCodeScreens()).isEmpty();
     }
 
     @Test
     void catalog_infrastructureFailureIsPropagatedInsteadOfBecomingEmpty() {
         when(screenMapper.selectList(any(Wrapper.class))).thenThrow(new IllegalStateException("database offline"));
 
-        assertThatThrownBy(() -> service.listAuthorizedPublishedScreens())
+        assertThatThrownBy(() -> service.listAuthorizedCodeScreens())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("database offline");
     }
 
     @Test
     void catalog_authorizationInfrastructureFailureWithKnownCodeIsPropagated() {
-        RptScreen screen = screen("AUTH_INFRA", "授权基础设施故障", "ACTIVE", 1, validPackage());
-        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
-        when(scopeAuthorizationService.authorize(screen))
-                .thenThrow(new com.bank.branch.platform.report.exception.RptException(
+        RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "零售经营总览", "BRANCH", "RETAIL", "ACTIVE", 0, null);
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(retail));
+        when(scopeAuthorizationService.authorize(retail)).thenThrow(
+                new com.bank.branch.platform.report.exception.RptException(
                         RptErrorCode.SCREEN_ACCESS_DENIED, new IllegalStateException("role store offline")));
 
-        assertThatThrownBy(() -> service.listAuthorizedPublishedScreens())
+        assertThatThrownBy(() -> service.listAuthorizedCodeScreens())
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_ACCESS_DENIED.getCode())
                 .hasCauseInstanceOf(IllegalStateException.class);
-    }
-
-    @Test
-    void catalog_preservesPublishedScreenWhenDraftExists() {
-        RptScreen publishedWithDraft = screen("PUBLISHED_DRAFT", "已发布有草稿", "ACTIVE", 2, validPackage());
-        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(publishedWithDraft));
-        when(scopeAuthorizationService.authorize(publishedWithDraft)).thenReturn(Set.of());
-
-        assertThat(service.listAuthorizedPublishedScreens())
-                .extracting(ScreenEntryRespDTO::getScreenCode)
-                .containsExactly("PUBLISHED_DRAFT");
-    }
-
-    @Test
-    void catalog_acceptsHistoricalObjectPackageWithoutSchemaVersionOrBindSnapshots() {
-        RptScreen historical = screen("HISTORICAL", "历史旧包", "ACTIVE", 1, "{\"components\":[]}");
-        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(historical));
-        when(scopeAuthorizationService.authorize(historical)).thenReturn(Set.of());
-
-        assertThat(service.listAuthorizedPublishedScreens())
-                .extracting(ScreenEntryRespDTO::getScreenCode)
-                .containsExactly("HISTORICAL");
     }
 
     @Test
@@ -167,7 +139,8 @@ class ScreenCatalogServiceTest {
         Set<String> fields = Arrays.stream(ScreenEntryRespDTO.class.getDeclaredFields())
                 .map(Field::getName).collect(Collectors.toSet());
 
-        assertThat(fields).containsExactlyInAnyOrder("screenCode", "screenName", "viewLevel", "bizLine");
+        assertThat(fields).containsExactlyInAnyOrder(
+                "screenCode", "screenName", "viewLevel", "bizLine", "template", "dataMode");
     }
 
     @Test
@@ -187,7 +160,7 @@ class ScreenCatalogServiceTest {
 
     @Test
     void updateScreenMetadata_rejectsExactCatalogRouteCode() {
-        RptScreen existing = screen("EXISTING", "既有屏", "ACTIVE", 1, validPackage());
+        RptScreen existing = screen("EXISTING", "既有屏", "BRANCH", "COMMON", "ACTIVE", 0, null);
         existing.setId(11L);
         when(screenMapper.selectById(11L)).thenReturn(existing);
         ScreenMetadataUpdateReqDTO req = new ScreenMetadataUpdateReqDTO();
@@ -205,21 +178,18 @@ class ScreenCatalogServiceTest {
         verify(canvasMapper, never()).updateMetadataCas(any(RptScreen.class), anyInt(), any(String.class));
     }
 
-    private RptScreen screen(String code, String name, String status, int publishStatus, String packageJson) {
+    private RptScreen screen(String code, String name, String viewLevel, String bizLine,
+                             String status, int publishStatus, String packageJson) {
         RptScreen screen = new RptScreen();
         screen.setId((long) Math.abs(code.hashCode()));
         screen.setScreenCode(code);
         screen.setScreenName(name);
-        screen.setViewLevel("BRANCH");
-        screen.setBizLine("COMMON");
+        screen.setViewLevel(viewLevel);
+        screen.setBizLine(bizLine);
         screen.setOrgScopeMode("LEGACY_CONTEXT");
         screen.setStatus(status);
         screen.setPublishStatus(publishStatus);
         screen.setCanvasPublishedJson(packageJson);
         return screen;
-    }
-
-    private String validPackage() {
-        return "{\"schemaVersion\":1,\"components\":[],\"bindSnapshots\":{}}";
     }
 }

@@ -39,6 +39,13 @@ const routes = [
     component: () => import('@/views/screen/ScreenView.vue'),
     meta: { title: '经营大屏', requiredResource: '/api/screen/view/*' }
   },
+  // 代码化大屏只接受 ScreenCenter 后端目录确认过的固定模板；页面自身仍复核目录授权。
+  {
+    path: '/screen-pages/:template',
+    name: 'CodeScreenPage',
+    component: () => import('@/views/screen/CodeScreenPage.vue'),
+    meta: { title: '代码化大屏', requiredResource: '/api/screen/view/*', hideInMenu: true }
+  },
   // 大屏管理：历史 designer 路径继续兼容，但入口改为绑定/发布管理页，不再暴露为菜单。
   // 保留原路径和权限资源，刷新、直达和会话恢复仍经全局守卫 Fail Close。
   {

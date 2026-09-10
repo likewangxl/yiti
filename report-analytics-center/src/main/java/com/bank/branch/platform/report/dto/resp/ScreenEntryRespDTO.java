@@ -13,4 +13,10 @@ public class ScreenEntryRespDTO {
     private String viewLevel;
 
     private String bizLine;
+
+    /** 代码化展示模板；目录只注册受支持的固定模板。 */
+    private String template;
+
+    /** 展示数据模式；代码化目录当前只允许本地演示数据。 */
+    private String dataMode;
 }

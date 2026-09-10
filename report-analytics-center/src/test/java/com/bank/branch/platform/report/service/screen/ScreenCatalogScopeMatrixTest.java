@@ -79,8 +79,8 @@ class ScreenCatalogScopeMatrixTest {
 
     @Test
     void catalog_realScopeAuthorizationShowsDifferentMenusForRoleSubsetsAndRejectsSysAdminBypass() {
-        RptScreen corp = namedGroupScreen(101L, "SCR_CORP", "公司经营屏", "GROUP_CORP");
-        RptScreen retail = namedGroupScreen(102L, "SCR_RETAIL", "零售经营屏", "GROUP_RETAIL");
+        RptScreen corp = namedGroupScreen(101L, "SCR_PROVINCE", "分行经营总览", "COMMON", "GROUP_CORP");
+        RptScreen retail = namedGroupScreen(102L, "SCR_RETAIL_OVERVIEW", "零售经营总览", "RETAIL", "GROUP_RETAIL");
         when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(corp, retail));
         when(accessRoleMapper.selectList(any(Wrapper.class))).thenAnswer(invocation -> {
             // 目录按 screenCode 稳定排序，按每次目录调用重置的查找序号对应 CORP/RETAIL 屏。
@@ -96,7 +96,7 @@ class ScreenCatalogScopeMatrixTest {
         // E_CORP 命中同角色白名单和 GROUP_CORP 的有效范围，只看到 CORP 菜单。
         assertThat(catalogForCurrentUser())
                 .extracting(ScreenEntryRespDTO::getScreenCode)
-                .containsExactly("SCR_CORP");
+                .containsExactly("SCR_PROVINCE");
         verify(orgGroupApi).resolveAuthorizedScope("E_CORP", "GROUP_CORP", Set.of(CORP_ROLE));
 
         // 同一目录数据下，E_RETAIL 的菜单子集切换到 RETAIL。
@@ -104,7 +104,7 @@ class ScreenCatalogScopeMatrixTest {
         currentRoles.set(Set.of(RETAIL_ROLE));
         assertThat(catalogForCurrentUser())
                 .extracting(ScreenEntryRespDTO::getScreenCode)
-                .containsExactly("SCR_RETAIL");
+                .containsExactly("SCR_RETAIL_OVERVIEW");
         verify(orgGroupApi).resolveAuthorizedScope("E_RETAIL", "GROUP_RETAIL", Set.of(RETAIL_ROLE));
 
         // SYS_ADMIN 没有屏级白名单交集，不能绕过屏级角色或机构范围门禁。
@@ -116,12 +116,12 @@ class ScreenCatalogScopeMatrixTest {
 
     @Test
     void catalog_realScopeAuthorizationRejectsBlankNamedGroupWhitelist() {
-        RptScreen screen = namedGroupScreen(201L, "SCR_NAMED_EMPTY", "空白角色屏", "GROUP_EMPTY");
+        RptScreen screen = namedGroupScreen(201L, "SCR_RETAIL_OVERVIEW", "零售经营总览", "RETAIL", "GROUP_EMPTY");
         when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
         when(accessRoleMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
         currentRoles.set(Set.of(CORP_ROLE));
 
-        assertThat(configService.listAuthorizedPublishedScreens()).isEmpty();
+        assertThat(configService.listAuthorizedCodeScreens()).isEmpty();
         verify(orgGroupApi, never()).resolveAuthorizedScope(anyString(), anyString(), anyCollection());
     }
 
@@ -129,21 +129,21 @@ class ScreenCatalogScopeMatrixTest {
     void catalog_realScopeAuthorizationKeepsLegacyContextCompatibleWithBlankWhitelist() {
         RptScreen screen = new RptScreen();
         screen.setId(301L);
-        screen.setScreenCode("SCR_LEGACY_EMPTY");
-        screen.setScreenName("旧上下文屏");
+        screen.setScreenCode("SCR_PROVINCE");
+        screen.setScreenName("分行经营总览");
         screen.setViewLevel("BRANCH");
         screen.setBizLine("COMMON");
         screen.setOrgScopeMode("LEGACY_CONTEXT");
         screen.setStatus("ACTIVE");
-        screen.setPublishStatus(1);
-        screen.setCanvasPublishedJson(validPackage());
+        screen.setPublishStatus(0);
+        screen.setCanvasPublishedJson(null);
         when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
         when(accessRoleMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
         currentRoles.set(Set.of());
 
-        assertThat(configService.listAuthorizedPublishedScreens())
+        assertThat(configService.listAuthorizedCodeScreens())
                 .extracting(ScreenEntryRespDTO::getScreenCode)
-                .containsExactly("SCR_LEGACY_EMPTY");
+                .containsExactly("SCR_PROVINCE");
     }
 
     private void group(String code, Set<String> members) {
@@ -157,7 +157,7 @@ class ScreenCatalogScopeMatrixTest {
 
     private List<ScreenEntryRespDTO> catalogForCurrentUser() {
         roleLookupIndex.set(0);
-        return configService.listAuthorizedPublishedScreens();
+        return configService.listAuthorizedCodeScreens();
     }
 
     private OrgGroupScopeDTO resolvedScope(String currentEmpId, String groupCode,
@@ -182,22 +182,18 @@ class ScreenCatalogScopeMatrixTest {
         return role;
     }
 
-    private RptScreen namedGroupScreen(long id, String code, String name, String groupCode) {
+    private RptScreen namedGroupScreen(long id, String code, String name, String bizLine, String groupCode) {
         RptScreen screen = new RptScreen();
         screen.setId(id);
         screen.setScreenCode(code);
         screen.setScreenName(name);
         screen.setViewLevel("BRANCH");
-        screen.setBizLine("COMMON");
+        screen.setBizLine(bizLine);
         screen.setOrgScopeMode("NAMED_GROUP");
         screen.setOrgGroupCode(groupCode);
         screen.setStatus("ACTIVE");
-        screen.setPublishStatus(1);
-        screen.setCanvasPublishedJson(validPackage());
+        screen.setPublishStatus(0);
+        screen.setCanvasPublishedJson(null);
         return screen;
-    }
-
-    private String validPackage() {
-        return "{\"schemaVersion\":1,\"components\":[],\"bindSnapshots\":{}}";
     }
 }

@@ -43,7 +43,9 @@ class ScreenViewControllerCatalogContractTest {
         entry.setScreenName("省分行经营总览");
         entry.setViewLevel("PROVINCE");
         entry.setBizLine("COMMON");
-        when(configService.listAuthorizedPublishedScreens()).thenReturn(List.of(entry));
+        entry.setTemplate("branch-overview-v1");
+        entry.setDataMode("DEMO");
+        when(configService.listAuthorizedCodeScreens()).thenReturn(List.of(entry));
 
         mockMvc.perform(get("/api/screen/view/catalog"))
                 .andExpect(status().isOk())
@@ -52,10 +54,12 @@ class ScreenViewControllerCatalogContractTest {
                 .andExpect(jsonPath("$.data[0].screenName").value("省分行经营总览"))
                 .andExpect(jsonPath("$.data[0].viewLevel").value("PROVINCE"))
                 .andExpect(jsonPath("$.data[0].bizLine").value("COMMON"))
+                .andExpect(jsonPath("$.data[0].template").value("branch-overview-v1"))
+                .andExpect(jsonPath("$.data[0].dataMode").value("DEMO"))
                 .andExpect(jsonPath("$.data[0].id").doesNotExist())
                 .andExpect(jsonPath("$.data[0].allowedRoleCodes").doesNotExist());
 
-        verify(configService).listAuthorizedPublishedScreens();
+        verify(configService).listAuthorizedCodeScreens();
         verify(configService, never()).getRenderByCode(anyString(), anyString());
     }
 }

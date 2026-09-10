@@ -47,6 +47,6 @@ public class ScreenViewController {
     @BizAuth(bizType = BizType.REPORT, action = BizAction.READ)
     @Operation(summary = "读取当前用户可见的大屏运行时目录")
     public ResponseWrapper<List<ScreenEntryRespDTO>> catalog() {
-        return ResponseWrapper.success(configService.listAuthorizedPublishedScreens());
+        return ResponseWrapper.success(configService.listAuthorizedCodeScreens());
     }
 }

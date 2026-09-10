@@ -1,6 +1,6 @@
 # 报表分析中心 — 对外 API 契约
 
-统一大屏入口通过 `GET /api/screen/view/catalog` 向前端提供当前用户的已授权发布屏概要，仅返回屏编码、名称、视角和业务条线。复用 `GET /api/screen/view/*` 资源与既有运行时屏级授权，不新增跨模块 Java API，也不以管理端屏列表替代运行目录。完整 REST 契约见 [03 接口设计](03-接口设计与报文.md#73-大屏中心目录)。
+统一大屏入口通过 `GET /api/screen/view/catalog` 向前端提供当前用户的已授权代码化页面概要，返回屏编码、名称、视角、业务条线、模板及数据模式。复用 `GET /api/screen/view/*` 资源与既有运行时屏级授权，不新增跨模块 Java API，也不以管理端屏列表替代运行目录。完整 REST 契约见 [03 接口设计](03-接口设计与报文.md#73-大屏中心目录)。
 
 > 代码化经营大屏补充：继续只通过现有 screen REST 服务前端，不新增跨模块 Java API，也不改既有 `PT_RESOURCE` 的路径/授权。`CanvasStyleDTO.presentation`、运行响应 `panoramaInstitutions` 及 NAMED_GROUP 单机构收窄语义见 [03 接口设计](03-接口设计与报文.md#代码化经营大屏契约)。机构画像通过 auth 的 `OrgGroupApi.getActiveProfiles` 与已授权成员集合求交，不能改用管理端接口或跨模块私表查询。机构组直接成员才是授权集合，经营上下级关系不会自动授权子树。
 

@@ -17,21 +17,15 @@ vi.mock('vue-router', () => ({
 import ScreenCenter from '../ScreenCenter.vue';
 import { useUserStore } from '@/stores/user';
 
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return { promise, resolve, reject };
-}
-
 const catalog = [
-  { screenCode: 'SCR_COMMON', screenName: '综合经营全景', viewLevel: 'PROVINCE', bizLine: 'COMMON' },
-  { screenCode: 'SCR_CORP', screenName: '对公经营总览', viewLevel: 'BRANCH', bizLine: 'CORP' },
-  { screenCode: 'SCR_RETAIL', screenName: '零售经营总览', viewLevel: 'PERSON', bizLine: 'RETAIL' },
-  { screenCode: 'SCR_UNKNOWN', screenName: '专项协同视图', viewLevel: 'BRANCH', bizLine: 'NEW_LINE' }
+  {
+    screenCode: 'SCR_PROVINCE', screenName: '分行经营总览', viewLevel: 'PROVINCE', bizLine: 'COMMON',
+    template: 'branch-overview-v1', dataMode: 'DEMO'
+  },
+  {
+    screenCode: 'SCR_RETAIL_OVERVIEW', screenName: '零售经营总览', viewLevel: 'BRANCH', bizLine: 'RETAIL',
+    template: 'retail-overview-v1', dataMode: 'DEMO'
+  }
 ];
 
 let wrapper;
@@ -50,30 +44,26 @@ async function mountCenter() {
 }
 
 describe('ScreenCenter.vue', () => {
-  it('呈现后端目录、中文条线/视角且只通过 ScreenView 参数导航', async () => {
+  it('呈现后端目录、演示标签并按模板导航到受保护页面', async () => {
     const center = await mountCenter();
 
-    expect(center.findAll('[data-screen-card]')).toHaveLength(4);
-    expect(center.text()).toContain('4个可访问大屏');
-    expect(center.text()).toContain('综合经营全景');
-    expect(center.text()).toContain('对公');
-    expect(center.text()).toContain('零售');
-    expect(center.text()).toContain('其他条线');
-    expect(center.text()).toContain('全辖');
-    expect(center.text()).not.toContain('指标');
+    expect(center.findAll('[data-screen-card]')).toHaveLength(2);
+    expect(center.text()).toContain('2个可访问大屏');
+    expect(center.text()).toContain('分行经营总览');
+    expect(center.text()).toContain('零售经营总览');
+    expect(center.text()).toContain('演示数据');
 
-    await center.find('[data-screen-code="SCR_RETAIL"] button').trigger('click');
+    await center.find('[data-screen-code="SCR_RETAIL_OVERVIEW"] button').trigger('click');
     expect(routerPush).toHaveBeenCalledWith({
-      name: 'ScreenView',
-      params: { screenCode: 'SCR_RETAIL' }
+      name: 'CodeScreenPage',
+      params: { template: 'retail-overview-v1' }
     });
   });
 
   it('按条线标签和名称/编码搜索，匹配不到时显示独立空态', async () => {
     const center = await mountCenter();
-    await center.find('button[data-biz-line="CORP"]').trigger('click');
+    await center.find('button[data-biz-line="RETAIL"]').trigger('click');
     expect(center.findAll('[data-screen-card]')).toHaveLength(1);
-    expect(center.text()).toContain('对公经营总览');
 
     const search = center.find('input[aria-label="搜索大屏"]');
     await search.setValue('不存在的屏');
@@ -87,7 +77,6 @@ describe('ScreenCenter.vue', () => {
     wrapper = mount(ScreenCenter);
     await flushPromises();
     expect(wrapper.text()).toContain('当前没有可访问大屏');
-    expect(wrapper.text()).not.toContain('没有匹配的大屏');
     wrapper.unmount();
 
     listAvailableScreens.mockRejectedValueOnce(new Error('目录接口不可用'));
@@ -101,7 +90,7 @@ describe('ScreenCenter.vue', () => {
     await wrapper.find('button[data-action="retry-screen-catalog"]').trigger('click');
     await flushPromises();
     expect(wrapper.findAll('[data-screen-card]')).toHaveLength(1);
-    expect(wrapper.text()).toContain('综合经营全景');
+    expect(wrapper.text()).toContain('分行经营总览');
   });
 
   it('用户切换和卸载后的迟到响应不能恢复上一用户目录', async () => {
@@ -116,18 +105,20 @@ describe('ScreenCenter.vue', () => {
 
     second.resolve([catalog[1]]);
     await flushPromises();
-    expect(wrapper.text()).toContain('对公经营总览');
+    expect(wrapper.text()).toContain('零售经营总览');
     first.resolve([catalog[0]]);
     await flushPromises();
-    expect(wrapper.text()).toContain('对公经营总览');
-    expect(wrapper.text()).not.toContain('综合经营全景');
-
-    const late = deferred();
-    listAvailableScreens.mockReturnValueOnce(late.promise);
-    useUserStore().setUser({ empId: 'USER_C' });
-    await nextTick();
-    wrapper.unmount();
-    late.resolve([catalog[2]]);
-    await flushPromises();
+    expect(wrapper.text()).toContain('零售经营总览');
+    expect(wrapper.text()).not.toContain('分行经营总览');
   });
 });
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}

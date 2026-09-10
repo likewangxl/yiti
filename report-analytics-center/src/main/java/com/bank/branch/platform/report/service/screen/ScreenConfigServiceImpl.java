@@ -51,8 +51,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.time.LocalDate;
 import java.math.BigDecimal;
-import java.io.IOException;
-import java.util.Comparator;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -69,6 +67,10 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     /** 运行时查询以 ACTIVE 精确过滤，持久化状态必须先在写入边界规范为该枚举。 */
     private static final Set<String> SCREEN_STATUSES = Set.of("ACTIVE", "DISABLED");
     private static final String RUNTIME_CATALOG_SCREEN_CODE = "catalog";
+    private static final String CODE_SCREEN_DATA_MODE = "DEMO";
+    private static final List<RuntimeCatalogRegistration> CODE_SCREEN_CATALOG = List.of(
+            new RuntimeCatalogRegistration("SCR_PROVINCE", "分行经营总览", "branch-overview-v1", "COMMON"),
+            new RuntimeCatalogRegistration("SCR_RETAIL_OVERVIEW", "零售经营总览", "retail-overview-v1", "RETAIL"));
     /** 逐屏目录校验中可安全排除的授权失败；带 cause 的同码异常表示基础设施失败，必须继续抛出。 */
     private static final Set<String> CATALOG_AUTH_REJECTION_CODES = Set.of(
             RptErrorCode.SCREEN_ACCESS_DENIED.getCode(),
@@ -143,34 +145,32 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         return screenMapper.selectList(qw).stream().map(s -> toDetail(s, null)).collect(Collectors.toList());
     }
 
-    /**
-     * 查询运行时目录候选并逐屏复用在线授权门禁。
-     *
-     * <p>查询条件先收紧 ACTIVE、已发布状态和非空发布包；发布后的草稿状态 2 仍然使用
-     * 不可变发布包。逐屏授权或包契约失败只排除该屏，授权适配器携带 cause 的异常继续向上
-     * 抛出，避免把数据库、机构组或角色基础设施故障伪装成空目录。</p>
-     */
+    /** 查询代码化大屏固定目录，并逐屏复用在线授权门禁。 */
     @Override
-    public List<ScreenEntryRespDTO> listAuthorizedPublishedScreens() {
+    public List<ScreenEntryRespDTO> listAuthorizedCodeScreens() {
         LambdaQueryWrapper<RptScreen> query = new LambdaQueryWrapper<RptScreen>()
                 .eq(RptScreen::getStatus, "ACTIVE")
-                .in(RptScreen::getPublishStatus, 1, 2)
-                .isNotNull(RptScreen::getCanvasPublishedJson)
-                .ne(RptScreen::getCanvasPublishedJson, "")
-                .orderByAsc(RptScreen::getScreenCode)
-                .orderByAsc(RptScreen::getScreenName)
+                .in(RptScreen::getScreenCode, CODE_SCREEN_CATALOG.stream()
+                        .map(RuntimeCatalogRegistration::screenCode).collect(Collectors.toList()))
                 .orderByAsc(RptScreen::getId);
         List<RptScreen> candidates = screenMapper.selectList(query);
-        return candidates.stream()
-                // Mapper 条件是数据库边界；这里再次确认，既保证单元测试/旁路 Mapper 返回值不放宽，
-                // 也明确将仅含空白的历史发布列视为无发布包。
-                .filter(this::isPublishedCatalogCandidate)
-                .sorted(Comparator.comparing(RptScreen::getScreenCode, String.CASE_INSENSITIVE_ORDER)
-                        .thenComparing(RptScreen::getScreenName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
-                        .thenComparing(RptScreen::getId, Comparator.nullsLast(Long::compareTo)))
-                .filter(this::isAuthorizedCatalogScreen)
-                .map(this::toScreenEntry)
-                .collect(Collectors.toList());
+        Map<String, List<RptScreen>> byCode = candidates.stream()
+                .filter(screen -> screen != null && "ACTIVE".equals(screen.getStatus()))
+                .collect(Collectors.groupingBy(screen -> normalizeScreenCode(screen.getScreenCode())));
+        List<ScreenEntryRespDTO> result = new ArrayList<>();
+        for (RuntimeCatalogRegistration registration : CODE_SCREEN_CATALOG) {
+            List<RptScreen> screens = byCode.getOrDefault(registration.screenCode(), List.of());
+            // 重复 ACTIVE 编码与详情运行时一样按配置错误 fail-close，不能挑一行泄漏不确定元数据。
+            if (screens.size() != 1) {
+                continue;
+            }
+            RptScreen screen = screens.get(0);
+            if (!isValidCodeScreenScope(screen, registration) || !isAuthorizedCatalogScreen(screen)) {
+                continue;
+            }
+            result.add(toScreenEntry(screen, registration));
+        }
+        return result;
     }
 
     @Override
@@ -1193,31 +1193,18 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         return scopeAuthorizationService.authorize(screen);
     }
 
-    /** 目录候选的数据库状态边界；空白发布 JSON 与 null 等价于无有效发布包。 */
-    private boolean isPublishedCatalogCandidate(RptScreen screen) {
-        if (screen == null || !"ACTIVE".equals(screen.getStatus())
-                || (screen.getPublishStatus() == null
-                || (screen.getPublishStatus() != 1 && screen.getPublishStatus() != 2))
-                || screen.getCanvasPublishedJson() == null
-                || screen.getCanvasPublishedJson().isBlank()
-                || screen.getScreenCode() == null || screen.getScreenCode().isBlank()
-                || screen.getScreenName() == null || screen.getScreenName().isBlank()
-                || screen.getViewLevel() == null || screen.getViewLevel().isBlank()
-                || RUNTIME_CATALOG_SCREEN_CODE.equals(screen.getScreenCode().trim())
-                || !VIEW_LEVELS.contains(screen.getViewLevel().trim().toUpperCase(Locale.ROOT))
-                || !BIZ_LINES.contains(normalizeBizLine(screen.getBizLine()))
-                || !SCOPE_MODES.contains(normalizeScopeMode(screen.getOrgScopeMode()))) {
-            return false;
-        }
-        try {
-            validateCatalogPublishedPackage(screen.getCanvasPublishedJson());
-            return true;
-        } catch (BizException ex) {
-            if (RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED.getCode().equals(ex.getCode())) {
-                return false;
-            }
-            throw ex;
-        }
+    /** 代码化目录只接受固定注册屏的有效状态和范围配置，发布包/画布状态不参与判断。 */
+    private boolean isValidCodeScreenScope(RptScreen screen, RuntimeCatalogRegistration registration) {
+        return screen != null
+                && "ACTIVE".equals(screen.getStatus())
+                && screen.getScreenCode() != null
+                && !screen.getScreenCode().isBlank()
+                && !RUNTIME_CATALOG_SCREEN_CODE.equals(screen.getScreenCode().trim())
+                && screen.getViewLevel() != null
+                && VIEW_LEVELS.contains(screen.getViewLevel().trim().toUpperCase(Locale.ROOT))
+                && BIZ_LINES.contains(normalizeBizLine(screen.getBizLine()))
+                && registration.bizLine().equals(normalizeBizLine(screen.getBizLine()))
+                && SCOPE_MODES.contains(normalizeScopeMode(screen.getOrgScopeMode()));
     }
 
     /** 每个候选屏都必须经过与详情/渲染相同的屏级白名单、机构组和数据范围授权。 */
@@ -1235,29 +1222,28 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         }
     }
 
-    /** 按运行时发布包契约做无副作用的 JSON 对象预检，不读取可变草稿行。 */
-    private void validateCatalogPublishedPackage(String packageJson) {
-        try {
-            // 历史 getRenderByCode 只原样返回发布包；目录不能用新版 bindSnapshots 身份校验
-            // 隐藏仍可打开的 schemaVersion 缺失/旧格式对象包。可信绑定校验仍留在实际取数链路。
-            PublishedScreenPackageValidator.read(packageJson);
-        } catch (IOException | IllegalArgumentException ex) {
-            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
-        }
-    }
-
     /** 仅吞掉无底层 cause 的逐屏授权拒绝；带 cause 的同码异常是基础设施故障。 */
     private boolean isCatalogAuthorizationRejection(BizException ex) {
         return CATALOG_AUTH_REJECTION_CODES.contains(ex.getCode()) && ex.getCause() == null;
     }
 
-    private ScreenEntryRespDTO toScreenEntry(RptScreen screen) {
+    private ScreenEntryRespDTO toScreenEntry(RptScreen screen, RuntimeCatalogRegistration registration) {
         ScreenEntryRespDTO entry = new ScreenEntryRespDTO();
         entry.setScreenCode(screen.getScreenCode());
-        entry.setScreenName(screen.getScreenName());
+        entry.setScreenName(registration.screenName());
         entry.setViewLevel(screen.getViewLevel());
-        entry.setBizLine(normalizeBizLine(screen.getBizLine()));
+        entry.setBizLine(registration.bizLine());
+        entry.setTemplate(registration.template());
+        entry.setDataMode(CODE_SCREEN_DATA_MODE);
         return entry;
+    }
+
+    private String normalizeScreenCode(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private record RuntimeCatalogRegistration(String screenCode, String screenName,
+                                              String template, String bizLine) {
     }
 
     private boolean hasV2Map(RptScreen screen) {
