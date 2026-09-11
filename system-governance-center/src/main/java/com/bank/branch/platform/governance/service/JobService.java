@@ -17,6 +17,7 @@ import com.bank.branch.platform.governance.mapper.JobRunLogMapper;
 import com.bank.branch.platform.governance.api.dto.RegisterJobCmd;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.CronExpression;
 import org.quartz.CronScheduleBuilder;
@@ -29,6 +30,7 @@ import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.quartz.TriggerBuilder;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,9 +38,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -55,10 +59,18 @@ import static org.quartz.CronScheduleBuilder.cronSchedule;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConfigurationProperties(prefix = "governance.scheduler")
 public class JobService {
 
     private final JobConfMapper jobConfMapper;
     private final JobRunLogMapper jobRunLogMapper;
+
+    /**
+     * Optional Scheduler job-key allowlist. An empty or absent value preserves
+     * the existing behavior and permits every configured job.
+     */
+    @Setter
+    private Set<String> allowedJobKeys = new LinkedHashSet<>();
 
     /**
      * Quartz Scheduler bean（V1.6 P3.1 启动同步引入）。
@@ -109,6 +121,11 @@ public class JobService {
         int success = 0;
         int failed = 0;
         for (SysJobConf job : activeJobs) {
+            if (!isJobAllowed(job.getJobKey())) {
+                log.info("[JobService.syncJobsOnStartup] jobKey={} 不在 Scheduler 允许集合，跳过同步",
+                        job.getJobKey());
+                continue;
+            }
             try {
                 scheduleQuartzJob(job);
                 success++;
@@ -411,6 +428,7 @@ public class JobService {
             throw new BizException(GovErrorCode.TASK_NOT_FOUND.getCode(),
                     GovErrorCode.TASK_NOT_FOUND.getMessage());
         }
+        assertJobAllowed(conf.getJobKey());
         if (scheduler == null) {
             throw new BizException(GovErrorCode.JOB_PAUSE_FAILED.getCode(),
                     "Scheduler 未启用，无法暂停任务");
@@ -438,12 +456,13 @@ public class JobService {
      */
     @Transactional
     public void resumeJob(String jobId) {
-        log.info("[JobService.resumeJob] jobId={}", jobId);
         SysJobConf conf = jobConfMapper.selectById(jobId);
         if (conf == null) {
             throw new BizException(GovErrorCode.TASK_NOT_FOUND.getCode(),
                     GovErrorCode.TASK_NOT_FOUND.getMessage());
         }
+        assertJobAllowed(conf.getJobKey());
+        log.info("[JobService.resumeJob] jobId={}", jobId);
         if (scheduler == null) {
             throw new BizException(GovErrorCode.JOB_RESUME_FAILED.getCode(),
                     "Scheduler 未启用，无法恢复任务");
@@ -484,14 +503,15 @@ public class JobService {
      */
     public JobTriggerRespDTO triggerJob(String jobId, String reason, String dataDate,
                                         String allocDate, String operatorEmpId) {
-        log.info("[JobService.triggerJob] jobId={}, reason={}, dataDate={}, allocDate={}, operatorEmpId={}",
-                jobId, reason, dataDate, allocDate, operatorEmpId);
-
         SysJobConf conf = jobConfMapper.selectById(jobId);
         if (conf == null) {
             throw new BizException(GovErrorCode.TASK_NOT_FOUND.getCode(),
                     GovErrorCode.TASK_NOT_FOUND.getMessage());
         }
+
+        assertJobAllowed(conf.getJobKey());
+        log.info("[JobService.triggerJob] jobId={}, reason={}, dataDate={}, allocDate={}, operatorEmpId={}",
+                jobId, reason, dataDate, allocDate, operatorEmpId);
 
         return triggerConfiguredJob(conf, "MANUAL", reason, dataDate, allocDate, operatorEmpId);
     }
@@ -512,13 +532,14 @@ public class JobService {
      */
     public JobTriggerRespDTO triggerJobByKey(String jobKey, String triggerType, String reason,
                                              String dataDate, String allocDate, String operatorEmpId) {
-        log.info("[JobService.triggerJobByKey] jobKey={}, triggerType={}, reason={}, dataDate={}, allocDate={}, operatorEmpId={}",
-                jobKey, triggerType, reason, dataDate, allocDate, operatorEmpId);
         SysJobConf conf = jobConfMapper.selectByJobKey(jobKey);
         if (conf == null) {
             throw new BizException(GovErrorCode.TASK_NOT_FOUND.getCode(),
                     GovErrorCode.TASK_NOT_FOUND.getMessage());
         }
+        assertJobAllowed(conf.getJobKey());
+        log.info("[JobService.triggerJobByKey] jobKey={}, triggerType={}, reason={}, dataDate={}, allocDate={}, operatorEmpId={}",
+                jobKey, triggerType, reason, dataDate, allocDate, operatorEmpId);
         return triggerConfiguredJob(conf, triggerType, reason, dataDate, allocDate, operatorEmpId);
     }
 
@@ -538,6 +559,7 @@ public class JobService {
      */
     private JobTriggerRespDTO triggerConfiguredJob(SysJobConf conf, String triggerType, String reason,
                                                    String dataDate, String allocDate, String operatorEmpId) {
+        assertJobAllowed(conf.getJobKey());
         String normalizedTriggerType = normalizeTriggerType(triggerType);
 
         // 校验是否允许业务触发（历史字段名称为 allow_manual_trigger，AUTO 协调触发同样受其保护）。
@@ -619,6 +641,7 @@ public class JobService {
      */
     @Transactional
     public String registerJob(RegisterJobCmd cmd) {
+        assertJobAllowed(cmd.getJobKey());
         log.info("[JobService.registerJob] jobKey={} cronExpr={}", cmd.getJobKey(), cmd.getCronExpr());
 
         // 1. 校验 cron 表达式
@@ -691,6 +714,7 @@ public class JobService {
      */
     @Transactional
     public void unregisterJob(String jobKey) {
+        assertJobAllowed(jobKey);
         log.info("[JobService.unregisterJob] jobKey={}", jobKey);
         if (scheduler != null) {
             try {
@@ -726,6 +750,7 @@ public class JobService {
     @SuppressWarnings("unchecked")
     private void scheduleQuartzJobWithData(SysJobConf conf, Map<String, String> jobData)
             throws SchedulerException, ClassNotFoundException {
+        assertJobAllowed(conf.getJobKey());
         Class<? extends Job> clazz;
         try {
             clazz = (Class<? extends Job>) Class.forName(conf.getQuartzJobClass());
@@ -761,6 +786,29 @@ public class JobService {
             .forJob(detail)
             .build();
         scheduler.scheduleJob(detail, trigger);
+    }
+
+    /**
+     * Check the optional scheduler fence before any Quartz operation or job-state write.
+     * Blank entries are ignored so an empty/unset configuration keeps legacy behavior.
+     */
+    private void assertJobAllowed(String jobKey) {
+        if (isJobAllowed(jobKey)) {
+            return;
+        }
+        throw new BizException(GovErrorCode.JOB_NOT_ALLOWED.getCode(),
+                GovErrorCode.JOB_NOT_ALLOWED.getMessage() + ": " + jobKey);
+    }
+
+    private boolean isJobAllowed(String jobKey) {
+        if (allowedJobKeys == null) {
+            return true;
+        }
+        Set<String> configuredKeys = allowedJobKeys.stream()
+                .filter(key -> key != null && !key.isBlank())
+                .map(String::trim)
+                .collect(Collectors.toSet());
+        return configuredKeys.isEmpty() || configuredKeys.contains(jobKey);
     }
 
     // ── 私有方法：实体 → DTO 转换 ──────────────────────────────────

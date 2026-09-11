@@ -4,7 +4,7 @@
 > 关联文档: `01-功能规格.md` / `02-后端架构.md` / `03-接口设计与报文.md`
 > 契约层: 所有跨模块调用必须通过本文件定义的 `*Api` 接口, 禁止直接访问本模块的 mapper/entity/serviceImpl
 > 契约位置: `com.bank.branch.platform.performance.api.*`
-> 最后更新: **2026-08-27**（原业绩分配预览查询口径同步；此前一次实质更新 2026-07-19）
+> 最后更新: **2026-09-11**（分行大屏不可变批次只读契约；此前一次实质更新 2026-08-27）
 
 > **2026-08-27 口径同步**：`AllocApi.getLastApprovedAllocPreview` 现从
 > `CUST_ALLOC_RELATION` 的 `is_original='2'` 候选中，按 `source_batch_id`（空/NULL 按自身
@@ -1574,3 +1574,43 @@ boolean isJobRunning(String jobKey);
 
 `isJobRunning(jobKey)` 仅返回治理执行日志中是否存在 `RUNNING` 记录，供协调器避免同一任务重复排队；
 返回 false 不构成跨节点锁，最终并发语义由 Quartz JobDetail 的 `@DisallowConcurrentExecution` 保证。
+
+## 18. BranchDashboardBatchQueryApi（分行大屏批次只读）
+
+**接口位置：** `com.bank.branch.platform.performance.api.BranchDashboardBatchQueryApi`
+
+**调用方：** report-analytics-center、分行大屏前端的后端聚合层。
+
+```java
+Optional<BranchDashboardBatchDTO> latest(
+    String groupCode,
+    Collection<String> currentAuthorizedOrgCodes);
+
+Optional<BranchDashboardBatchDTO> byId(
+    String batchId,
+    Collection<String> currentAuthorizedOrgCodes);
+```
+
+实现只读 `BRANCH_DASHBOARD_BATCH` 的 SUCCESS `PERF_RUN_TASK` 快照，不暴露 entity、mapper
+或内部 service。每次调用都重新读取当前 `OrgGroupApi` 成员并与调用方当前授权机构集合求交集；
+已移出机构、已不在当前组的机构和未授权行不会返回。成员快照发生变化或授权集合不足时返回
+`PARTIAL` 状态与 `quality.missing` 原因，不能把旧快照报为 `COMPLETE`。不存在、状态不匹配、
+组不匹配或无法反序列化时 fail-close 为空。
+
+`BranchDashboardBatchDTO` 的核心字段如下：
+
+| 字段 | 语义 |
+| --- | --- |
+| `batchId/groupCode/dataDate/version/status/calculatedAt` | 不可变批次身份、业务日、版本、状态和计算时刻 |
+| `memberOrgCodes` | 批次成员快照；查询时会按当前交集过滤 |
+| `sourceAsOf` | financial、marketing、target、revenue 截至日，targetEffectiveDate 及各采集时刻 |
+| `quality` | 值数量与机构覆盖数量、缺失项、混合期间、更新但不完整日期 |
+| `metricContracts` | 指标单位、小数位、ORG 维度、槽位、分类、名称、详细说明及 rate 的分子/分母指标编码 |
+| `definitionDigest` | 本批次指标合同摘要，便于确认单位、槽位和定义未漂移 |
+| `sourceModes` | 各来源模式；TEST 营收为 `TEST_MANUAL` |
+| `rows` | 当前批次各机构的 `orgCode/dataDate/metricValues` |
+| `historyRows/historyCoverage` | 窗口内实际金融行及逐日机构/指标覆盖；缺日不补零 |
+| `latestAttempt` | `latest` 附带的最近一次尝试 ID、状态、日期、开始时刻和脱敏失败信息；用于提示页面回退到旧成功批次 |
+
+公共 DTO 只含机构编码、日期、指标值和质量信息，不含客户 PII。调用方应按 `batchId` 锁定同一
+次刷新内的其余请求，并将 `PARTIAL`、`FAILED` 最新尝试或旧批次回退提示展示给用户。

@@ -3,6 +3,14 @@ package com.bank.branch.platform.report.service.screen;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.performance.api.BranchDashboardBatchQueryApi;
+import com.bank.branch.platform.performance.api.dto.BranchDashboardBatchAttemptDTO;
+import com.bank.branch.platform.performance.api.dto.BranchDashboardBatchDTO;
+import com.bank.branch.platform.performance.api.dto.BranchDashboardBatchRowDTO;
+import com.bank.branch.platform.performance.api.dto.BranchDashboardHistoryCoverageDTO;
+import com.bank.branch.platform.performance.api.dto.BranchDashboardMetricContractDTO;
+import com.bank.branch.platform.performance.api.dto.BranchDashboardQualityDTO;
+import com.bank.branch.platform.performance.api.dto.BranchDashboardSourceAsOfDTO;
 import com.bank.branch.platform.report.dto.req.ScreenDataReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDataRespDTO;
 import com.bank.branch.platform.report.entity.RptScreenDatasource;
@@ -18,6 +26,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
@@ -28,13 +37,21 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Optional;
 
 /**
  * 大屏查询执行引擎（核心）.
@@ -81,6 +98,10 @@ public class ScreenQueryEngine {
     private final int maxRows;
     private final OrgApi orgApi;
 
+    /** 由 performance 提供的不可变批次查询契约；未配置 batchPolicy 时完全不参与旧路径。 */
+    @Autowired(required = false)
+    private BranchDashboardBatchQueryApi batchQueryApi;
+
     public ScreenQueryEngine(
             @Qualifier("rptReadOnlyDataSource") DataSource readOnlyDataSource,
             OrgApi orgApi,
@@ -101,6 +122,11 @@ public class ScreenQueryEngine {
         this.whitelistUpper = whitelistTables.stream()
                 .map(t -> t.trim().toUpperCase(java.util.Locale.ROOT))
                 .collect(java.util.stream.Collectors.toSet());
+    }
+
+    /** 包级测试注入点；生产环境由 Spring 注入 performance 公共只读契约。 */
+    void setBatchQueryApi(BranchDashboardBatchQueryApi batchQueryApi) {
+        this.batchQueryApi = batchQueryApi;
     }
 
     /** 校验自定义 SQL 模板（保存/试跑/每次执行都调用），失败抛 RPT-43002 */
@@ -124,18 +150,523 @@ public class ScreenQueryEngine {
 
     /** 正式取数（LIMIT = maxRows） */
     public ScreenDataRespDTO query(RptScreenDatasource ds, ScreenDataReqDTO req) {
-        BuiltQuery q = build(ds.getSourceKind(), ds.getConfigJson(), req, maxRows, LocalDate.now());
-        ScreenDataRespDTO resp = execute(q);
-        fillColumnsMeta(resp, ds.getConfigJson());
-        return resp;
+        return queryAt(ds, req, LocalDate.now(), maxRows);
     }
 
     /** 配置态试跑（LIMIT = 10），与正式取数一样透出 columnsMeta */
     public ScreenDataRespDTO tryRun(String sourceKind, String configJson, ScreenDataReqDTO req) {
-        BuiltQuery q = build(sourceKind, configJson, req, 10, LocalDate.now());
+        return tryRunAt(sourceKind, configJson, req, LocalDate.now(), 10);
+    }
+
+    /**
+     * 正式取数的可测试入口，允许固定“当前日期”验证未来日期和时效边界。
+     * 运行时质量预检只应用于命名机构组的 ORG 宽表 LATEST 聚合。
+    */
+    ScreenDataRespDTO queryAt(RptScreenDatasource ds, ScreenDataReqDTO req, LocalDate today, int limit) {
+        return runAt(ds.getSourceKind(), ds.getConfigJson(), req, today, limit);
+    }
+
+    /** 配置态试跑的可测试入口，与正式取数共用同一完整批次预检和 SQL 构造路径。 */
+    ScreenDataRespDTO tryRunAt(String sourceKind, String configJson, ScreenDataReqDTO req,
+                               LocalDate today, int limit) {
+        return runAt(sourceKind, configJson, req, today, limit);
+    }
+
+    private ScreenDataRespDTO runAt(String sourceKind, String configJson, ScreenDataReqDTO req,
+                                    LocalDate today, int limit) {
+        JsonNode cfg = readConfig(configJson);
+        if (usesImmutableBatch(sourceKind, cfg, req)) {
+            return runImmutableBatch(cfg, req, today, limit);
+        }
+        if (needsWideBatchResolution(sourceKind, cfg, req, today)) {
+            // 先在建立连接前校验授权集合，空集合直接 fail-close，避免任何全量查询旁路。
+            authorizedOrgCodes(req);
+            // 预检和主查询必须共享同一只读事务快照，避免预检后源行变化导致 quality 与 rows 不一致。
+            try (Connection conn = readOnlyDataSource.getConnection()) {
+                boolean autoCommit = conn.getAutoCommit();
+                conn.setReadOnly(true);
+                conn.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
+                if (autoCommit) {
+                    conn.setAutoCommit(false);
+                }
+                try {
+                    BatchResolution resolution = resolveWideBatchIfRequired(sourceKind, cfg, req, today, conn);
+                    BuiltQuery q = build(sourceKind, configJson, req, limit, today, resolution);
+                    ScreenDataRespDTO resp = execute(q, conn);
+                    if (autoCommit) {
+                        conn.commit();
+                    }
+                    attachQuality(resp, resolution);
+                    fillColumnsMeta(resp, configJson);
+                    return resp;
+                } catch (SQLException e) {
+                    if (autoCommit) {
+                        try {
+                            conn.rollback();
+                        } catch (SQLException rollbackFailure) {
+                            e.addSuppressed(rollbackFailure);
+                        }
+                    }
+                    throw e;
+                }
+            } catch (SQLException e) {
+                log.warn("[ScreenQueryEngine] 完整批次取数失败 cause={}", e.getMessage());
+                throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED, e);
+            }
+        }
+        BuiltQuery q = build(sourceKind, configJson, req, limit, today, null);
         ScreenDataRespDTO resp = execute(q);
         fillColumnsMeta(resp, configJson);
         return resp;
+    }
+
+    /**
+     * 分行机构组数据源的不可变批次路径。batchPolicy 采用“对象存在即启用”，因此不会把
+     * performance 快照误当成旧宽表 SQL 的旁路；旧数据源没有该配置时仍走原路径。
+     */
+    private boolean usesImmutableBatch(String sourceKind, JsonNode cfg, ScreenDataReqDTO req) {
+        return "WIDE_TABLE".equals(sourceKind)
+                && "ORG_INDEX_RESULT".equals(cfg.path("table").asText())
+                && isNamedGroup(cfg, req)
+                && cfg.path("batchPolicy").isObject();
+    }
+
+    private ScreenDataRespDTO runImmutableBatch(JsonNode cfg, ScreenDataReqDTO req,
+                                                LocalDate today, int limit) {
+        // 即使批次数据由 performance 提供，report 配置的槽位仍必须接受同一 1..400 校验；
+        // 槽位只用于契约/列元数据，不进入任何 SQL 字符串。
+        configuredSlotCols(cfg.path("metrics"));
+        List<String> authorized = authorizedOrgCodes(req);
+        String groupCode = trimToNull(req.getServerGroupCode());
+        if (groupCode == null) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        if (batchQueryApi == null) {
+            throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED,
+                    new IllegalStateException("BranchDashboardBatchQueryApi unavailable"));
+        }
+        BatchPolicy policy = batchPolicy(cfg);
+        Optional<BranchDashboardBatchDTO> found;
+        try {
+            String batchId = trimToNull(req.getBatchId());
+            found = batchId == null
+                    ? batchQueryApi.latest(groupCode, authorized)
+                    : batchQueryApi.byId(batchId, authorized);
+        } catch (RuntimeException ex) {
+            log.warn("[ScreenQueryEngine] 不可变批次查询失败 groupCode={} batchId={} cause={}",
+                    groupCode, req.getBatchId(), ex.toString());
+            throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED, ex);
+        }
+        if (found == null || found.isEmpty()) {
+            return noImmutableBatch(cfg, authorized.size(), policy.maxAgeDays(),
+                    "当前机构组或授权范围内没有可见不可变批次");
+        }
+
+        BranchDashboardBatchDTO snapshot = found.get();
+        if (!groupCode.equals(trimToNull(snapshot.getGroupCode()))) {
+            return noImmutableBatch(cfg, authorized.size(), policy.maxAgeDays(),
+                    "不可变批次机构组与当前屏不一致");
+        }
+        BranchDashboardQualityDTO sourceQuality = snapshot.getQuality();
+        int expectedSubjects = sourceQuality == null || sourceQuality.getExpectedSubjects() <= 0
+                ? snapshot.getMemberOrgCodes() == null ? 0 : snapshot.getMemberOrgCodes().size()
+                : sourceQuality.getExpectedSubjects();
+        int receivedSubjects = sourceQuality == null ? 0 : sourceQuality.getReceivedSubjects();
+        boolean selectedComplete = sourceQuality != null && sourceQuality.isSelectedComplete();
+        // performance 的公共快照 DTO 对外使用 COMPLETE；SUCCESS 仅保留为旧快照兼容值。
+        String snapshotStatus = trimToNull(snapshot.getStatus());
+        boolean validStatus = "SUCCESS".equalsIgnoreCase(snapshotStatus)
+                || "COMPLETE".equalsIgnoreCase(snapshotStatus);
+        boolean futureDate = snapshot.getDataDate() == null || snapshot.getDataDate().isAfter(today);
+        boolean fullCoverage = selectedComplete && expectedSubjects > 0
+                && receivedSubjects == expectedSubjects;
+        // requiredComplete=false 只影响契约兼容，不允许 PARTIAL 批次进入汇总，避免返回半组合计。
+        if (!validStatus || futureDate || !fullCoverage) {
+            return noImmutableBatch(cfg, expectedSubjects, policy.maxAgeDays(),
+                    immutableBatchFailureMessage(snapshot, sourceQuality, futureDate));
+        }
+
+        int ageDays = Math.max(0, (int) ChronoUnit.DAYS.between(snapshot.getDataDate(), today));
+        boolean stale = policy.maxAgeDays() != null && ageDays > policy.maxAgeDays();
+        ScreenDataRespDTO response = mapImmutableBatch(cfg, req, snapshot, today, limit, authorized);
+        if ("SUBJECT".equals(cfg.path("aggregation").path("groupBy").asText())) {
+            response = appendOrgNames(response);
+        }
+        response.setQuality(toImmutableQuality(snapshot, sourceQuality, expectedSubjects, receivedSubjects,
+                policy.maxAgeDays(), ageDays,
+                stale ? "STALE" : "COMPLETE",
+                stale ? "最近完整不可变批次已超过允许时效" : "授权机构范围内最近完整不可变批次"));
+        fillImmutableColumnsMeta(response, cfg, snapshot);
+        return response;
+    }
+
+    private String immutableBatchFailureMessage(BranchDashboardBatchDTO snapshot,
+                                                BranchDashboardQualityDTO quality,
+                                                boolean futureDate) {
+        if (futureDate) {
+            return "不可变批次日期晚于当前业务日期";
+        }
+        if (quality != null && quality.getMissing() != null && !quality.getMissing().isEmpty()) {
+            return "不可变批次机构或指标覆盖不完整";
+        }
+        return "不可变批次状态不可用于完整汇总";
+    }
+
+    private ScreenDataRespDTO noImmutableBatch(JsonNode cfg, int expectedSubjects,
+                                               Integer maxAgeDays, String message) {
+        ScreenDataRespDTO response = new ScreenDataRespDTO(batchColumns(cfg), List.of());
+        ScreenDataRespDTO.Quality quality = new ScreenDataRespDTO.Quality(
+                null, null, null, "NO_COMPLETE_BATCH", expectedSubjects, 0,
+                maxAgeDays, null, message);
+        quality.setExpected(0);
+        quality.setReceived(0);
+        quality.setSelectedComplete(false);
+        quality.setMixedPeriod(false);
+        quality.setMissing(List.of(message));
+        quality.setMissingSubjects(List.of());
+        quality.setNewerIncomplete(List.of());
+        response.setQuality(quality);
+        fillColumnsMeta(response, cfg.toString());
+        return response;
+    }
+
+    private BatchPolicy batchPolicy(JsonNode cfg) {
+        JsonNode policy = cfg.path("batchPolicy");
+        Integer maxAgeDays = policy.has("maxAgeDays") ? policy.path("maxAgeDays").asInt() : null;
+        boolean requiredComplete = !policy.has("requiredComplete")
+                || policy.path("requiredComplete").asBoolean();
+        return new BatchPolicy(maxAgeDays, requiredComplete);
+    }
+
+    private List<String> batchColumns(JsonNode cfg) {
+        JsonNode aggregation = cfg.path("aggregation");
+        String groupBy = aggregation.path("groupBy").asText();
+        List<String> columns = new ArrayList<>();
+        if (aggregation.isMissingNode() || aggregation.isNull()) {
+            columns.add("data_date");
+        } else if ("SUBJECT".equals(groupBy)) {
+            columns.add("org_code");
+        } else if ("DATE".equals(groupBy)) {
+            columns.add("data_date");
+        }
+        cfg.path("metrics").forEach(metric -> columns.add(metricAlias(metric)));
+        return columns;
+    }
+
+    private String metricAlias(JsonNode metric) {
+        String alias = metric.path("metricName").asText();
+        alias = alias.replaceAll("[`'\"\\\\]", "");
+        if (alias.isBlank()) {
+            alias = metric.path("metricCode").asText();
+        }
+        return alias;
+    }
+
+    private ScreenDataRespDTO mapImmutableBatch(JsonNode cfg, ScreenDataReqDTO req,
+                                                BranchDashboardBatchDTO snapshot, LocalDate today,
+                                                int limit, List<String> authorized) {
+        String groupBy = cfg.path("aggregation").path("groupBy").asText();
+        String agg = cfg.path("aggregation").path("agg").asText();
+        boolean rawRows = cfg.path("aggregation").isMissingNode()
+                || cfg.path("aggregation").isNull();
+        ResolvedPeriod period = ScreenPeriodResolver.resolve(req.getPeriod(), req.getDateFrom(), req.getDateTo(), today);
+        String requested = trimToNull(req.getServerRequestedOrgCode());
+        if (requested != null && !authorized.contains(requested)) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        Set<String> visibleMembers = new LinkedHashSet<>(authorized);
+        if (requested != null) {
+            visibleMembers.retainAll(List.of(requested));
+        }
+        List<BranchDashboardBatchRowDTO> sourceRows = snapshot.getRows() == null
+                ? List.of() : snapshot.getRows();
+        // LATEST 必须使用选中不可变批次的 rows；historyRows 只服务于历史周期，避免历史金融列
+        // 覆盖当前批次已计算的客户/目标/率等输出指标。
+        if (!period.latestOnly() && (rawRows || "DATE".equals(groupBy))) {
+            sourceRows = snapshot.getHistoryRows() == null || snapshot.getHistoryRows().isEmpty()
+                    ? sourceRows : snapshot.getHistoryRows();
+        }
+        List<BranchDashboardBatchRowDTO> visibleRows = sourceRows.stream()
+                .filter(row -> row != null && visibleMembers.contains(row.getOrgCode()))
+                .filter(row -> row.getDataDate() != null && !row.getDataDate().isAfter(today))
+                .sorted(Comparator.comparing(BranchDashboardBatchRowDTO::getDataDate)
+                        .thenComparing(BranchDashboardBatchRowDTO::getOrgCode,
+                                Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+        if (!period.latestOnly()) {
+            visibleRows = visibleRows.stream()
+                    .filter(row -> !row.getDataDate().isBefore(period.from())
+                            && !row.getDataDate().isAfter(period.to()))
+                    .toList();
+        } else {
+            LocalDate selectedDate = snapshot.getDataDate();
+            visibleRows = visibleRows.stream()
+                    .filter(row -> selectedDate.equals(row.getDataDate()))
+                    .toList();
+        }
+
+        List<List<Object>> rows = new ArrayList<>();
+        if (rawRows) {
+            for (BranchDashboardBatchRowDTO row : visibleRows.stream().limit(limit).toList()) {
+                List<Object> output = new ArrayList<>();
+                output.add(row.getDataDate().toString());
+                output.addAll(metricValues(cfg, List.of(row), snapshot, agg, false, 1));
+                rows.add(output);
+            }
+        } else if ("SUBJECT".equals(groupBy)) {
+            for (BranchDashboardBatchRowDTO row : visibleRows.stream()
+                    .filter(r -> snapshot.getDataDate().equals(r.getDataDate()))
+                    .limit(limit)
+                    .toList()) {
+                List<Object> output = new ArrayList<>();
+                output.add(row.getOrgCode());
+                output.addAll(metricValues(cfg, List.of(row), snapshot, agg, false, 1));
+                rows.add(output);
+            }
+        } else if ("DATE".equals(groupBy)) {
+            Map<LocalDate, List<BranchDashboardBatchRowDTO>> byDate = new LinkedHashMap<>();
+            for (BranchDashboardBatchRowDTO row : visibleRows) {
+                byDate.computeIfAbsent(row.getDataDate(), ignored -> new ArrayList<>()).add(row);
+            }
+            for (Map.Entry<LocalDate, List<BranchDashboardBatchRowDTO>> entry : byDate.entrySet()) {
+                List<Object> output = new ArrayList<>();
+                output.add(entry.getKey().toString());
+                output.addAll(metricValues(cfg, entry.getValue(), snapshot, agg, true, visibleMembers.size()));
+                rows.add(output);
+                if (rows.size() >= limit) {
+                    break;
+                }
+            }
+        } else {
+            if (!visibleRows.isEmpty()) {
+                rows.add(metricValues(cfg, visibleRows, snapshot, agg, true, visibleMembers.size()));
+            }
+        }
+        return new ScreenDataRespDTO(batchColumns(cfg), rows);
+    }
+
+    private List<Object> metricValues(JsonNode cfg, List<BranchDashboardBatchRowDTO> rows,
+                                      BranchDashboardBatchDTO snapshot, String agg, boolean aggregate,
+                                      int expectedSubjects) {
+        List<Object> values = new ArrayList<>();
+        for (JsonNode metric : cfg.path("metrics")) {
+            String code = metric.path("metricCode").asText();
+            BranchDashboardMetricContractDTO contract = snapshot.getMetricContracts() == null
+                    ? null : snapshot.getMetricContracts().get(code);
+            if (!aggregate) {
+                values.add(valueOf(rows.get(0), code));
+            } else {
+                values.add(aggregateMetric(code, rows, contract, agg, expectedSubjects));
+            }
+        }
+        return values;
+    }
+
+    private Object valueOf(BranchDashboardBatchRowDTO row, String metricCode) {
+        if (row.getMetricValues() == null) {
+            return null;
+        }
+        return row.getMetricValues().get(metricCode);
+    }
+
+    private BigDecimal aggregateMetric(String metricCode, List<BranchDashboardBatchRowDTO> rows,
+                                       BranchDashboardMetricContractDTO contract, String agg,
+                                       int expectedSubjects) {
+        List<BigDecimal> values = rows.stream().map(row -> valueOf(row, metricCode))
+                .filter(BigDecimal.class::isInstance).map(BigDecimal.class::cast).toList();
+        if (values.isEmpty() || values.size() != expectedSubjects) {
+            return null;
+        }
+        if (isPercent(contract) && "SUM".equals(agg)) {
+            RatioContract ratio = ratioContract(contract);
+            if (ratio == null) {
+                // 百分率不是可加指标；等 performance 合同提供明确分子/分母前保持空值 fail-close。
+                return null;
+            }
+            BigDecimal numerator = sumMetric(rows, ratio.numeratorCode(), expectedSubjects);
+            BigDecimal denominator = sumMetric(rows, ratio.denominatorCode(), expectedSubjects);
+            return denominator == null || denominator.signum() == 0 || numerator == null
+                    ? null : numerator.divide(denominator, 8, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100));
+        }
+        return switch (agg) {
+            case "SUM" -> values.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+            case "AVG" -> values.stream().reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .divide(BigDecimal.valueOf(values.size()), 8, RoundingMode.HALF_UP);
+            case "MAX" -> values.stream().max(Comparator.naturalOrder()).orElse(null);
+            case "MIN" -> values.stream().min(Comparator.naturalOrder()).orElse(null);
+            case "COUNT" -> BigDecimal.valueOf(values.size());
+            default -> null;
+        };
+    }
+
+    private BigDecimal sumMetric(List<BranchDashboardBatchRowDTO> rows, String metricCode,
+                                 int expectedSubjects) {
+        List<BigDecimal> values = rows.stream().map(row -> valueOf(row, metricCode))
+                .filter(BigDecimal.class::isInstance).map(BigDecimal.class::cast).toList();
+        return values.size() != expectedSubjects
+                ? null : values.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private boolean isPercent(BranchDashboardMetricContractDTO contract) {
+        if (contract == null || contract.getUnit() == null) {
+            return false;
+        }
+        String unit = contract.getUnit().trim().toUpperCase(java.util.Locale.ROOT);
+        return "%".equals(unit) || "PERCENT".equals(unit) || "百分比".equals(unit)
+                || "PCT".equals(unit);
+    }
+
+    /** 百分率汇总直接使用 performance 合同的 typed 分子/分母，不猜业务指标别名。 */
+    private RatioContract ratioContract(BranchDashboardMetricContractDTO contract) {
+        if (contract == null) {
+            return null;
+        }
+        String numerator = trimToNull(contract.getNumeratorMetricCode());
+        String denominator = trimToNull(contract.getDenominatorMetricCode());
+        return numerator == null || denominator == null
+                ? null : new RatioContract(numerator, denominator);
+    }
+
+    private ScreenDataRespDTO.Quality toImmutableQuality(BranchDashboardBatchDTO snapshot,
+                                                         BranchDashboardQualityDTO sourceQuality,
+                                                         int expectedSubjects,
+                                                         int receivedSubjects,
+                                                         Integer maxAgeDays, int ageDays,
+                                                         String status, String message) {
+        String effectiveMessage = messageWithLatestAttempt(snapshot, message);
+        ScreenDataRespDTO.Quality quality = new ScreenDataRespDTO.Quality(
+                snapshot.getBatchId(),
+                snapshot.getDataDate() == null ? null : snapshot.getDataDate().toString(),
+                snapshot.getVersion(), status, expectedSubjects, receivedSubjects,
+                maxAgeDays, ageDays, effectiveMessage);
+        quality.setExpected(sourceQuality == null ? null : sourceQuality.getExpected());
+        quality.setReceived(sourceQuality == null ? null : sourceQuality.getReceived());
+        quality.setDataClassification(snapshot.getDataClassification());
+        quality.setSelectedComplete(sourceQuality != null && sourceQuality.isSelectedComplete());
+        quality.setMixedPeriod(sourceQuality != null && sourceQuality.isMixedPeriod());
+        quality.setMissing(sourceQuality == null || sourceQuality.getMissing() == null
+                ? List.of() : List.copyOf(sourceQuality.getMissing()));
+        quality.setMissingSubjects(sourceQuality == null || sourceQuality.getMissingSubjects() == null
+                ? List.of() : List.copyOf(sourceQuality.getMissingSubjects()));
+        quality.setNewerIncomplete(sourceQuality == null || sourceQuality.getNewerIncomplete() == null
+                ? List.of() : List.copyOf(sourceQuality.getNewerIncomplete()));
+        quality.setHistoryCoverage(historyCoverage(snapshot.getHistoryCoverage()));
+        quality.setCalculatedAt(toShanghaiIso(snapshot.getCalculatedAt()));
+        quality.setSourceAsOf(sourceAsOf(snapshot.getSourceAsOf()));
+        return quality;
+    }
+
+    private List<ScreenDataRespDTO.HistoryCoverage> historyCoverage(
+            List<BranchDashboardHistoryCoverageDTO> source) {
+        if (source == null || source.isEmpty()) {
+            return List.of();
+        }
+        return source.stream().filter(java.util.Objects::nonNull)
+                .map(item -> new ScreenDataRespDTO.HistoryCoverage(
+                        asIso(item.getDataDate()),
+                        item.getExpected(),
+                        item.getReceived(),
+                        item.getExpectedSubjects(),
+                        item.getReceivedSubjects(),
+                        item.isComplete(),
+                        item.getMissingSubjects() == null ? List.of() : List.copyOf(item.getMissingSubjects()),
+                        item.getMissing() == null ? List.of() : List.copyOf(item.getMissing())))
+                .toList();
+    }
+
+    /**
+     * latest 查询可能回退到上一份 SUCCESS 快照，而最近一次计算尝试已经 FAILED/RUNNING。
+     * 保持质量状态枚举表示当前返回快照，同时把回退原因放进 message，避免静态 AVAILABLE
+     * 覆盖运行时事实或让页面误以为返回的是最新成功计算。
+     */
+    private String messageWithLatestAttempt(BranchDashboardBatchDTO snapshot, String message) {
+        BranchDashboardBatchAttemptDTO attempt = snapshot.getLatestAttempt();
+        if (attempt == null || trimToNull(attempt.getStatus()) == null) {
+            return message;
+        }
+        String attemptStatus = attempt.getStatus().trim();
+        if ("SUCCESS".equalsIgnoreCase(attemptStatus) || "COMPLETE".equalsIgnoreCase(attemptStatus)) {
+            return message;
+        }
+        StringBuilder detail = new StringBuilder("最近一次批次尝试状态=").append(attemptStatus);
+        if (trimToNull(attempt.getAttemptId()) != null) {
+            detail.append("；最近尝试批次编号=").append(attempt.getAttemptId().trim());
+        }
+        if (trimToNull(attempt.getMessage()) != null) {
+            detail.append("：").append(attempt.getMessage().trim());
+        }
+        return message == null || message.isBlank()
+                ? detail.toString() : message + "；" + detail;
+    }
+
+    private Map<String, String> sourceAsOf(BranchDashboardSourceAsOfDTO source) {
+        if (source == null) {
+            return null;
+        }
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("financial", asIso(source.getFinancial()));
+        result.put("marketing", asIso(source.getMarketing()));
+        result.put("target", asIso(source.getTarget()));
+        result.put("revenue", asIso(source.getRevenue()));
+        result.put("targetEffectiveDate", asIso(source.getTargetEffectiveDate()));
+        result.put("financialCollectedAt", toShanghaiIso(source.getFinancialCollectedAt()));
+        result.put("marketingCollectedAt", toShanghaiIso(source.getMarketingCollectedAt()));
+        result.put("targetCollectedAt", toShanghaiIso(source.getTargetCollectedAt()));
+        result.put("revenueCollectedAt", toShanghaiIso(source.getRevenueCollectedAt()));
+        result.values().removeIf(java.util.Objects::isNull);
+        return result;
+    }
+
+    private String asIso(LocalDate date) {
+        return date == null ? null : date.toString();
+    }
+
+    private String toShanghaiIso(LocalDateTime dateTime) {
+        return dateTime == null ? null : OffsetDateTime.of(dateTime, ZoneOffset.ofHours(8)).toString();
+    }
+
+    private void fillImmutableColumnsMeta(ScreenDataRespDTO response, JsonNode cfg,
+                                          BranchDashboardBatchDTO snapshot) {
+        Map<String, BranchDashboardMetricContractDTO> contracts = snapshot.getMetricContracts() == null
+                ? Map.of() : snapshot.getMetricContracts();
+        Map<String, JsonNode> metrics = new LinkedHashMap<>();
+        cfg.path("metrics").forEach(metric -> metrics.put(metricAlias(metric), metric));
+        List<ScreenDataRespDTO.ColumnMeta> meta = new ArrayList<>();
+        for (String col : response.getColumns()) {
+            if ("org_code".equals(col) || "org_name".equals(col) || "data_date".equals(col)) {
+                meta.add(new ScreenDataRespDTO.ColumnMeta(col, null, "DIM", null, null));
+                continue;
+            }
+            JsonNode metric = metrics.get(col);
+            String code = metric == null ? null : metric.path("metricCode").asText(null);
+            BranchDashboardMetricContractDTO contract = code == null ? null : contracts.get(code);
+            meta.add(new ScreenDataRespDTO.ColumnMeta(
+                    col,
+                    contract == null ? null : contract.getMetricName(),
+                    "METRIC",
+                    contract == null ? null : canonicalUnit(contract.getUnit()),
+                    contract == null ? null : contract.getDecimalPlaces()));
+        }
+        response.setColumnsMeta(meta);
+    }
+
+    private String canonicalUnit(String unit) {
+        if (unit == null || unit.isBlank()) {
+            return null;
+        }
+        return switch (unit.trim().toUpperCase(java.util.Locale.ROOT)) {
+            case "元", "YUAN", "RMB" -> "YUAN";
+            case "户", "COUNT", "个", "人" -> "COUNT";
+            case "%", "PERCENT", "PCT", "百分比" -> "PERCENT";
+            default -> unit.trim();
+        };
+    }
+
+    private record BatchPolicy(Integer maxAgeDays, boolean requiredComplete) {
+    }
+
+    private record RatioContract(String numeratorCode, String denominatorCode) {
     }
 
     /**
@@ -196,6 +727,11 @@ public class ScreenQueryEngine {
 
     /** 包级可见，供单测注入固定 today */
     BuiltQuery build(String sourceKind, String configJson, ScreenDataReqDTO req, int limit, LocalDate today) {
+        return build(sourceKind, configJson, req, limit, today, null);
+    }
+
+    private BuiltQuery build(String sourceKind, String configJson, ScreenDataReqDTO req, int limit,
+                             LocalDate today, BatchResolution resolution) {
         JsonNode cfg = readConfig(configJson);
         if (isNamedGroup(cfg, req) && !"WIDE_TABLE".equals(sourceKind)) {
             // 本期只为内置机构宽表建立了可证明的机构范围约束；CUSTOM_SQL 延期，不能留下
@@ -203,7 +739,7 @@ public class ScreenQueryEngine {
             throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
         }
         return switch (sourceKind == null ? "" : sourceKind) {
-            case "WIDE_TABLE" -> buildWideTableQuery(cfg, req, limit, today);
+            case "WIDE_TABLE" -> buildWideTableQuery(cfg, req, limit, today, resolution);
             case "KPI_RESULT" -> buildKpiQuery(cfg, req, limit, today);
             case "KPI_DETAIL" -> buildKpiDetailQuery(cfg, req, limit, today);
             case "CUSTOM_SQL" -> buildCustomQuery(cfg, req, limit, today);
@@ -214,7 +750,11 @@ public class ScreenQueryEngine {
     private JsonNode readConfig(String configJson) {
         try {
             // schemaVersion 读时兼容集中在 ScreenConfigSchema 唯一入口（旧数据视为版本 1）
-            return ScreenConfigSchema.withDefaults(objectMapper.readTree(configJson == null ? "{}" : configJson));
+            JsonNode config = ScreenConfigSchema.withDefaults(
+                    objectMapper.readTree(configJson == null ? "{}" : configJson));
+            validateQualityPolicy(config);
+            validateBatchPolicy(config);
+            return config;
         } catch (Exception e) {
             throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID, e);
         }
@@ -230,7 +770,8 @@ public class ScreenQueryEngine {
     private static final Map<String, String> WIDE_FILTER_OPS = Map.of(
             "EQ", "=", "NE", "<>", "GT", ">", "GE", ">=", "LT", "<", "LE", "<=");
 
-    private BuiltQuery buildWideTableQuery(JsonNode cfg, ScreenDataReqDTO req, int limit, LocalDate today) {
+    private BuiltQuery buildWideTableQuery(JsonNode cfg, ScreenDataReqDTO req, int limit, LocalDate today,
+                                           BatchResolution resolution) {
         String table = cfg.path("table").asText();
         String[] meta = WIDE_TABLES.get(table);
         if (meta == null) {
@@ -246,7 +787,7 @@ public class ScreenQueryEngine {
         }
         if (cfg.path("aggregation").isObject()) {
             // 有 aggregation → 聚合形态（跨主体，不再要求主体上下文参数）；无则明细行为完全不变
-            return buildWideTableAggQuery(cfg, meta, table, req, limit, today);
+            return buildWideTableAggQuery(cfg, meta, table, req, limit, today, resolution);
         }
         StringBuilder cols = new StringBuilder("data_date");
         for (JsonNode m : metrics) {
@@ -297,7 +838,8 @@ public class ScreenQueryEngine {
      * 禁止任何字符串拼接用户值。
      */
     private BuiltQuery buildWideTableAggQuery(JsonNode cfg, String[] meta, String table,
-                                              ScreenDataReqDTO req, int limit, LocalDate today) {
+                                              ScreenDataReqDTO req, int limit, LocalDate today,
+                                              BatchResolution resolution) {
         JsonNode agg = cfg.path("aggregation");
         String groupBy = agg.path("groupBy").asText();
         if (!WIDE_AGG_GROUP_BYS.contains(groupBy)) {
@@ -328,23 +870,37 @@ public class ScreenQueryEngine {
             aggCols.append(aggFunc).append("(val_").append(slot).append(") AS `").append(alias).append("`");
         }
 
-        String versionCond = "version = COALESCE((SELECT current_version FROM SYS_CONTROL WHERE scope_dim = '"
-                + meta[2] + "' AND is_valid = 1 ORDER BY latest_data_date DESC LIMIT 1), 'V1')";
+        String versionCond = wideVersionCondition(meta[2], null);
         String selectPrefix = switch (groupBy) {
             case "SUBJECT" -> meta[0] + ", ";
             case "DATE" -> "data_date, ";
             default -> "";
         };
         StringBuilder sql = new StringBuilder("SELECT ").append(selectPrefix).append(aggCols)
-                .append(" FROM ").append(table)
-                .append(" WHERE ").append(versionCond);
+                .append(" FROM ").append(table).append(" WHERE ");
 
         List<Object> params = new ArrayList<>();
+        if (resolution != null && resolution.version() != null) {
+            sql.append("version = ?");
+            params.add(resolution.version());
+        } else {
+            sql.append(versionCond);
+        }
         if (isNamedGroup(cfg, req)) {
             appendOrgScopePredicate(sql, params, meta[0], req);
         }
         ResolvedPeriod p = ScreenPeriodResolver.resolve(req.getPeriod(), req.getDateFrom(), req.getDateTo(), today);
-        if (p.latestOnly()) {
+        boolean strictNamedGroupLatest = isStrictNamedGroupLatest(cfg, req, table, p);
+        if (strictNamedGroupLatest) {
+            if (resolution != null) {
+                // 预检得到的日期即为本次批次身份的一部分；NULL 保持无完整批次时主查询零行。
+                sql.append(" AND data_date = ?");
+                params.add(resolution.dataDate());
+            } else {
+                appendLatestCompleteDatePredicate(sql, params, table, meta, req, today, slotCols);
+            }
+            appendRequiredSlotPredicates(sql, slotCols);
+        } else if (p.latestOnly()) {
             sql.append(" AND data_date = (SELECT MAX(data_date) FROM ").append(table)
                     .append(" WHERE ").append(versionCond).append(")");
         } else {
@@ -361,10 +917,309 @@ public class ScreenQueryEngine {
             case "SUBJECT" -> sql.append(" GROUP BY ").append(meta[0])
                     .append(" ORDER BY `").append(firstAlias).append("` DESC LIMIT ").append(limit);
             case "DATE" -> sql.append(" GROUP BY data_date ORDER BY data_date LIMIT ").append(limit);
-            default -> sql.append(" LIMIT ").append(limit);
+            default -> {
+                // NONE 的聚合在 SQL 上天然会产生一行空合计；严格完整批次没有日期时必须零行。
+                if (strictNamedGroupLatest) {
+                    sql.append(" HAVING COUNT(*) > 0");
+                }
+                sql.append(" LIMIT ").append(limit);
+            }
         }
         return new BuiltQuery(sql.toString(), params,
                 "ORG_INDEX_RESULT".equals(table) && "SUBJECT".equals(groupBy));
+    }
+
+    private boolean isStrictNamedGroupLatest(JsonNode cfg, ScreenDataReqDTO req, String table,
+                                             ResolvedPeriod period) {
+        return "ORG_INDEX_RESULT".equals(table) && period.latestOnly() && isNamedGroup(cfg, req);
+    }
+
+    private String wideVersionCondition(String scopeDim, String alias) {
+        String prefix = alias == null || alias.isBlank() ? "" : alias + ".";
+        return prefix + "version = COALESCE((SELECT current_version FROM SYS_CONTROL WHERE scope_dim = '"
+                + scopeDim + "' AND is_valid = 1 ORDER BY latest_data_date DESC LIMIT 1), 'V1')";
+    }
+
+    /**
+     * 生成命名机构组最近完整日期：先排除未来日期，再按日期聚合并要求每个授权机构都有
+     * 至少一行且全部配置槽位非空。机构编码和日期均为 JDBC 绑定值。
+     */
+    private void appendLatestCompleteDatePredicate(StringBuilder sql, List<Object> params, String table,
+                                                   String[] meta, ScreenDataReqDTO req, LocalDate today,
+                                                   Set<String> slotCols) {
+        List<String> codes = authorizedOrgCodes(req);
+        sql.append(" AND data_date = (SELECT MAX(complete_batch.data_date) FROM (SELECT candidate.data_date FROM ")
+                .append(table).append(" candidate WHERE ")
+                .append(wideVersionCondition(meta[2], "candidate"))
+                .append(" AND candidate.data_date <= ?")
+                .append(" AND candidate.org_code IN (")
+                .append(String.join(", ", java.util.Collections.nCopies(codes.size(), "?")))
+                .append(") GROUP BY candidate.data_date HAVING COUNT(DISTINCT CASE WHEN ");
+        appendSlotNotNullCondition(sql, slotCols, "candidate");
+        sql.append(" THEN candidate.org_code END) = ? AND COUNT(*) = ?");
+        sql.append(") complete_batch)");
+        params.add(today);
+        params.addAll(codes);
+        params.add(codes.size());
+        params.add(codes.size());
+    }
+
+    private void appendRequiredSlotPredicates(StringBuilder sql, Set<String> slotCols) {
+        for (String slotCol : slotCols) {
+            sql.append(" AND ").append(slotCol).append(" IS NOT NULL");
+        }
+    }
+
+    private void appendSlotNotNullCondition(StringBuilder sql, Set<String> slotCols, String alias) {
+        boolean first = true;
+        for (String slotCol : slotCols) {
+            if (!first) {
+                sql.append(" AND ");
+            }
+            sql.append(alias).append('.').append(slotCol).append(" IS NOT NULL");
+            first = false;
+        }
+    }
+
+    /** 只对 qualityPolicy 允许的两个字段做严格校验，避免未知键改变运行时语义。 */
+    private void validateQualityPolicy(JsonNode cfg) {
+        JsonNode policy = cfg.path("qualityPolicy");
+        if (policy.isMissingNode()) {
+            return;
+        }
+        if (!policy.isObject()) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
+        Set<String> allowed = Set.of("maxAgeDays", "requiredComplete");
+        var fields = policy.fieldNames();
+        while (fields.hasNext()) {
+            if (!allowed.contains(fields.next())) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
+        }
+        if (policy.has("maxAgeDays")) {
+            JsonNode maxAgeDays = policy.path("maxAgeDays");
+            if (!maxAgeDays.isIntegralNumber() || !maxAgeDays.canConvertToInt() || maxAgeDays.asInt() < 0) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
+        }
+        if (policy.has("requiredComplete") && !policy.path("requiredComplete").isBoolean()) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
+    }
+
+    /** 不可变批次适配器的严格配置：对象存在即启用，groupCode 只能来自服务端屏元数据。 */
+    private void validateBatchPolicy(JsonNode cfg) {
+        JsonNode policy = cfg.path("batchPolicy");
+        if (policy.isMissingNode()) {
+            return;
+        }
+        if (!policy.isObject()) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
+        Set<String> allowed = Set.of("maxAgeDays", "requiredComplete");
+        var fields = policy.fieldNames();
+        while (fields.hasNext()) {
+            if (!allowed.contains(fields.next())) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
+        }
+        if (policy.has("maxAgeDays")) {
+            JsonNode maxAgeDays = policy.path("maxAgeDays");
+            if (!maxAgeDays.isIntegralNumber() || !maxAgeDays.canConvertToInt() || maxAgeDays.asInt() < 0) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
+        }
+        if (policy.has("requiredComplete") && !policy.path("requiredComplete").isBoolean()) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
+    }
+
+    private QualityPolicy qualityPolicy(JsonNode cfg) {
+        JsonNode policy = cfg.path("qualityPolicy");
+        if (policy.isMissingNode()) {
+            return new QualityPolicy(null, true);
+        }
+        Integer maxAgeDays = policy.has("maxAgeDays") ? policy.path("maxAgeDays").asInt() : null;
+        boolean requiredComplete = !policy.has("requiredComplete")
+                || policy.path("requiredComplete").asBoolean();
+        return new QualityPolicy(maxAgeDays, requiredComplete);
+    }
+
+    /**
+     * 命名机构组 ORG 宽表的运行时完整批次预检。其他 sourceKind、周期和范围保持原有单查询路径。
+     */
+    private boolean needsWideBatchResolution(String sourceKind, JsonNode cfg,
+                                              ScreenDataReqDTO req, LocalDate today) {
+        if (!"WIDE_TABLE".equals(sourceKind)
+                || !"ORG_INDEX_RESULT".equals(cfg.path("table").asText())
+                || !cfg.path("aggregation").isObject()
+                || !isNamedGroup(cfg, req)) {
+            return false;
+        }
+        return ScreenPeriodResolver.resolve(req.getPeriod(), req.getDateFrom(), req.getDateTo(), today)
+                .latestOnly();
+    }
+
+    private BatchResolution resolveWideBatchIfRequired(String sourceKind, JsonNode cfg,
+                                                       ScreenDataReqDTO req, LocalDate today,
+                                                       Connection conn) throws SQLException {
+        if (!needsWideBatchResolution(sourceKind, cfg, req, today)) {
+            return null;
+        }
+        String[] meta = WIDE_TABLES.get("ORG_INDEX_RESULT");
+        Set<String> slotCols = configuredSlotCols(cfg.path("metrics"));
+        List<String> codes = authorizedOrgCodes(req);
+        QualityPolicy policy = qualityPolicy(cfg);
+
+        StringBuilder sql = new StringBuilder(
+                "SELECT candidate.version AS batch_version, candidate.data_date, "
+                        + "COUNT(DISTINCT CASE WHEN ");
+        appendSlotNotNullCondition(sql, slotCols, "candidate");
+        sql.append(" THEN candidate.org_code END) AS received_subjects FROM ORG_INDEX_RESULT candidate")
+                .append(" WHERE ").append(wideVersionCondition(meta[2], "candidate"))
+                .append(" AND candidate.data_date <= ? AND candidate.org_code IN (")
+                .append(String.join(", ", java.util.Collections.nCopies(codes.size(), "?")))
+                .append(") GROUP BY candidate.version, candidate.data_date HAVING COUNT(DISTINCT CASE WHEN ");
+        appendSlotNotNullCondition(sql, slotCols, "candidate");
+        sql.append(" THEN candidate.org_code END) = ? AND COUNT(*) = ? "
+                + "ORDER BY candidate.data_date DESC LIMIT 1");
+
+        try (PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
+            stmt.setQueryTimeout(QUERY_TIMEOUT_SEC);
+            int index = 1;
+            stmt.setObject(index++, java.sql.Date.valueOf(today));
+            for (String code : codes) {
+                stmt.setObject(index++, code);
+            }
+            stmt.setObject(index++, codes.size());
+            stmt.setObject(index, codes.size());
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (!rs.next()) {
+                    return BatchResolution.noComplete(codes.size(), policy.maxAgeDays());
+                }
+                String version = trimToNull(rs.getString(1));
+                LocalDate dataDate = asLocalDate(rs.getObject(2));
+                int received = rs.getInt(3);
+                if (rs.wasNull()) {
+                    received = 0;
+                }
+                int ageDays = dataDate == null
+                        ? 0
+                        : Math.max(0, (int) ChronoUnit.DAYS.between(dataDate, today));
+                boolean stale = policy.maxAgeDays() != null && ageDays > policy.maxAgeDays();
+                return new BatchResolution(
+                        version,
+                        dataDate,
+                        codes.size(),
+                        received,
+                        policy.maxAgeDays(),
+                        dataDate == null ? null : ageDays,
+                        stale ? "STALE" : "COMPLETE",
+                        stale ? "最近完整批次已超过允许时效" : "授权机构范围内最近完整批次");
+            }
+        } catch (SQLException e) {
+            log.warn("[ScreenQueryEngine] 完整批次预检失败 sql={} cause={}", sql, e.getMessage());
+            throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED, e);
+        }
+    }
+
+    private Set<String> configuredSlotCols(JsonNode metrics) {
+        if (!metrics.isArray() || metrics.isEmpty()) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
+        Set<String> slotCols = new LinkedHashSet<>();
+        for (JsonNode metric : metrics) {
+            int slot = metric.path("slot").asInt();
+            if (slot < 1 || slot > 400) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
+            slotCols.add("val_" + slot);
+        }
+        return slotCols;
+    }
+
+    private List<String> authorizedOrgCodes(ScreenDataReqDTO req) {
+        if (req == null) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        List<String> source = req.getServerAuthorizedOrgCodes();
+        if (source == null || source.isEmpty()) {
+            source = req.getServerOrgCodes();
+        }
+        if (source == null || source.isEmpty()) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        LinkedHashSet<String> codes = new LinkedHashSet<>();
+        for (String code : source) {
+            if (code == null || code.isBlank()) {
+                throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+            }
+            codes.add(code.trim());
+        }
+        if (codes.isEmpty()) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        return new ArrayList<>(codes);
+    }
+
+    private String trimToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private LocalDate asLocalDate(Object value) {
+        if (value instanceof java.sql.Date date) {
+            return date.toLocalDate();
+        }
+        if (value instanceof LocalDate date) {
+            return date;
+        }
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toLocalDateTime().toLocalDate();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(String.valueOf(value));
+        } catch (RuntimeException ex) {
+            throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED, ex);
+        }
+    }
+
+    private void attachQuality(ScreenDataRespDTO response, BatchResolution resolution) {
+        if (resolution != null) {
+            response.setQuality(resolution.toQuality());
+        }
+    }
+
+    private record QualityPolicy(Integer maxAgeDays, boolean requiredComplete) {
+    }
+
+    private record BatchResolution(String version, LocalDate dataDate, int expectedSubjects,
+                                   int receivedSubjects, Integer maxAgeDays, Integer ageDays,
+                                   String status, String message) {
+
+        private static BatchResolution noComplete(int expectedSubjects, Integer maxAgeDays) {
+            return new BatchResolution(null, null, expectedSubjects, 0, maxAgeDays, null,
+                    "NO_COMPLETE_BATCH", "授权机构范围内没有包含全部必需指标的完整批次");
+        }
+
+        private ScreenDataRespDTO.Quality toQuality() {
+            String batchId = version == null || dataDate == null
+                    ? null
+                    : "ORG:" + version + ":" + dataDate;
+            return new ScreenDataRespDTO.Quality(
+                    batchId,
+                    dataDate == null ? null : dataDate.toString(),
+                    version,
+                    status,
+                    expectedSubjects,
+                    receivedSubjects,
+                    maxAgeDays,
+                    ageDays,
+                    message);
+        }
     }
 
     /** filters 逐条追加（col/op 白名单校验，违规 43009；值全部 ? 绑定，IN 逗号拆分多 ?） */
@@ -570,14 +1425,34 @@ public class ScreenQueryEngine {
         if (!"org_code".equals(subjectCol)) {
             throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
         }
-        List<String> codes = req.getServerOrgCodes();
-        if (codes == null || codes.isEmpty()) {
-            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
-        }
+        List<String> codes = outputOrgCodes(req);
         sql.append(" AND ").append(subjectCol).append(" IN (")
                 .append(String.join(", ", java.util.Collections.nCopies(codes.size(), "?")))
                 .append(")");
         params.addAll(codes);
+    }
+
+    /** 主查询可按服务端已核验的单机构条件收窄；完整性预检始终调用 authorizedOrgCodes。 */
+    private List<String> outputOrgCodes(ScreenDataReqDTO req) {
+        List<String> codes = req == null ? null : req.getServerOrgCodes();
+        if (codes == null || codes.isEmpty()) {
+            return authorizedOrgCodes(req);
+        }
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        for (String code : codes) {
+            if (code == null || code.isBlank()) {
+                throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+            }
+            normalized.add(code.trim());
+        }
+        if (normalized.isEmpty()) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        List<String> authorized = authorizedOrgCodes(req);
+        if (!authorized.containsAll(normalized)) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        return new ArrayList<>(normalized);
     }
 
     private String ctxParam(ScreenDataReqDTO req, String name) {
@@ -590,9 +1465,16 @@ public class ScreenQueryEngine {
     }
 
     private ScreenDataRespDTO execute(BuiltQuery q) {
-        ScreenDataRespDTO response;
-        try (Connection conn = readOnlyDataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(q.sql())) {
+        try (Connection conn = readOnlyDataSource.getConnection()) {
+            return execute(q, conn);
+        } catch (SQLException e) {
+            log.warn("[ScreenQueryEngine] 取数失败 sql={} cause={}", q.sql(), e.getMessage());
+            throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED, e);
+        }
+    }
+
+    private ScreenDataRespDTO execute(BuiltQuery q, Connection conn) throws SQLException {
+        try (PreparedStatement stmt = conn.prepareStatement(q.sql())) {
             stmt.setQueryTimeout(QUERY_TIMEOUT_SEC);
             for (int i = 0; i < q.params().size(); i++) {
                 Object v = q.params().get(i);
@@ -616,13 +1498,10 @@ public class ScreenQueryEngine {
                     }
                     rows.add(row);
                 }
-                response = new ScreenDataRespDTO(columns, rows);
+                ScreenDataRespDTO response = new ScreenDataRespDTO(columns, rows);
+                return q.enrichOrgNames() ? appendOrgNames(response) : response;
             }
-        } catch (SQLException e) {
-            log.warn("[ScreenQueryEngine] 取数失败 sql={} cause={}", q.sql(), e.getMessage());
-            throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED, e);
         }
-        return q.enrichOrgNames() ? appendOrgNames(response) : response;
     }
 
     /**

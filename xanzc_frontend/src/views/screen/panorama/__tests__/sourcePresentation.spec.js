@@ -104,6 +104,19 @@ describe('source presentation', () => {
     expect(resolveDataStatus(presentation, {}, 'ranking', 'increase')).toEqual({ status: 'NO_VALUES', message: '静态说明' });
   });
 
+  it('运行时 Quality 的 PARTIAL/NO_COMPLETE_BATCH 优先静态 AVAILABLE', () => {
+    const presentation = {
+      sourceAvailability: { deposit: { status: 'AVAILABLE', message: '' } },
+      runtimeQuality: {
+        status: 'NO_COMPLETE_BATCH',
+        message: '授权机构范围内没有完整批次'
+      }
+    };
+    expect(resolveDataStatus(presentation, [], 'deposit', 'value')).toEqual({
+      status: 'NO_COMPLETE_BATCH', message: '授权机构范围内没有完整批次'
+    });
+  });
+
   it('NO_VALUES 运行诊断优先使用静态中文说明，真正错误仍优先，缺静态时不泄漏 semantic', () => {
     const presentation = resolveSourcePresentation({ renderPackage: { canvasStyle: {
       sourceAvailability: {

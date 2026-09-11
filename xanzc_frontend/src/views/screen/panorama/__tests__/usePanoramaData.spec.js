@@ -63,6 +63,15 @@ describe('usePanoramaData', () => {
   beforeEach(() => { queryScreenData.mockReset(); });
   afterEach(() => vi.restoreAllMocks());
 
+  const batchQuality = (overrides = {}) => ({
+    batchId: 'opaque-batch-1', dataDate: '2026-09-10', version: 'V7', status: 'COMPLETE',
+    dataClassification: 'TEST',
+    calculatedAt: '2026-09-11T01:02:03Z', expected: 14, received: 14,
+    expectedSubjects: 4, receivedSubjects: 4, sourceAsOf: { financial: '2026-09-10' },
+    missingSubjects: [], missing: [], mixedPeriod: false, selectedComplete: true,
+    newerIncomplete: [], ...overrides
+  });
+
   it('发布组件只从 blockId -> bindSnapshots 取身份，schema2 不把 dsId 上送且普通槽位不继承 URL 机构上下文', async () => {
     queryScreenData.mockResolvedValue({ columns: ['value'], rows: [[100000000]], columnsMeta: [{ col: 'value', role: 'METRIC', amountScale: 'YUAN' }] });
     const state = usePanoramaData(ref(viewWithSlots({ deposit: 11 })), ref({ screenCode: 'SCR_CODE', orgCode: 'URL_SCOPE', empId: 'URL_EMP' }), { autoLoad: false });
@@ -136,6 +145,168 @@ describe('usePanoramaData', () => {
     trendResolvers[0]({ columns: ['date', 'deposit'], rows: [['OLD', 1]] });
     await first;
     expect(state.model.value.institutions.find(item => item.orgCode === 'A')?.trend).toEqual([{ date: 'NEW', deposit: 2, loan: null }]);
+  });
+
+  it('严格批次模式先锁定首个 LATEST 的不透明 batchId，后续槽位和趋势预取透传同一批次', async () => {
+    const pending = [];
+    queryScreenData.mockImplementation(request => new Promise((resolve, reject) => {
+      pending.push({ request, resolve, reject });
+    }));
+    const view = viewWithSlots({ deposit: 11, loan: 12 });
+    const state = usePanoramaData(ref(view), ref({ screenCode: 'SCR_CODE' }), {
+      autoLoad: false, batchRequired: true
+    });
+    const loading = state.refresh();
+    await nextTick();
+    expect(pending).toHaveLength(1);
+    expect(pending[0].request).not.toHaveProperty('batchId');
+    pending[0].resolve({
+      quality: batchQuality(), columns: ['deposit_col'], rows: [[100000000]],
+      columnsMeta: [{ col: 'deposit_col', role: 'METRIC', unit: 'YUAN', decimals: 2 }]
+    });
+    await vi.waitFor(() => expect(pending).toHaveLength(2));
+    expect(pending[1].request.batchId).toBe('opaque-batch-1');
+    pending[1].resolve({
+      quality: batchQuality(), columns: ['loan_col'], rows: [[200000000]],
+      columnsMeta: [{ col: 'loan_col', role: 'METRIC', unit: 'YUAN', decimals: 2 }]
+    });
+    await loading;
+    expect(state.model.value.quality).toMatchObject({ batchId: 'opaque-batch-1', status: 'COMPLETE' });
+    expect(state.model.value.kpis).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'deposit', value: 1 }),
+      expect.objectContaining({ key: 'loan', value: 2 })
+    ]));
+  });
+
+  it('严格批次趋势预取只取当前前四家机构，并为每个请求透传锁定批次', async () => {
+    queryScreenData.mockImplementation(request => {
+      if (request.blockId === 11) {
+        return Promise.resolve({ quality: batchQuality(), columns: ['value'], rows: [[100000000]] });
+      }
+      if (request.blockId === 21) {
+        return Promise.resolve({ quality: batchQuality(), columns: ['org_code'], rows: [['A'], ['B'], ['C'], ['D'], ['E']] });
+      }
+      return Promise.resolve({ quality: batchQuality(), columns: ['date', 'deposit'], rows: [['2026-09-10', 100000000]] });
+    });
+    const view = viewWithSlots({ deposit: 11, branches: 21, branchTrend: 22 });
+    view.panoramaInstitutions = ['A', 'B', 'C', 'D', 'E'].map(orgCode => ({ orgCode }));
+    view.renderPackage.bindSnapshots['21'].bind.fields = { orgCode: 'org_code' };
+    view.renderPackage.bindSnapshots['21'].bind.units = {};
+    view.renderPackage.bindSnapshots['22'].bind.fields = { date: 'date', deposit: 'deposit' };
+    view.renderPackage.bindSnapshots['22'].bind.units = { deposit: 'YUAN' };
+    const state = usePanoramaData(ref(view), ref({ screenCode: 'SCR_CODE' }), {
+      autoLoad: false, batchRequired: true
+    });
+
+    await state.refresh();
+
+    const trendCalls = queryScreenData.mock.calls
+      .map(([request]) => request)
+      .filter(request => request.blockId === 22);
+    expect(trendCalls).toHaveLength(4);
+    expect(trendCalls.every(request => request.batchId === 'opaque-batch-1')).toBe(true);
+    expect(state.model.value.quality).toMatchObject({ batchId: 'opaque-batch-1', status: 'COMPLETE' });
+  });
+
+  it('严格批次首响应无完整批次时不再请求其余槽位，并清空可见模型', async () => {
+    queryScreenData.mockResolvedValue({
+      quality: {
+        batchId: null, dataDate: null, version: null, status: 'NO_COMPLETE_BATCH',
+        selectedComplete: false, message: '没有完整批次'
+      }, columns: [], rows: []
+    });
+    const state = usePanoramaData(ref(viewWithSlots({ deposit: 11, loan: 12 })), ref({ screenCode: 'SCR_CODE' }), {
+      autoLoad: false, batchRequired: true
+    });
+    await state.refresh();
+    expect(queryScreenData).toHaveBeenCalledTimes(1);
+    expect(state.model.value.kpis).toEqual([]);
+    expect(state.model.value.quality).toMatchObject({ status: 'NO_COMPLETE_BATCH', batchId: null });
+  });
+
+  it('严格批次后续响应缺少或混入其他 batchId 时弃用整轮模型，不沿用首槽或旧模型', async () => {
+    const pending = [];
+    queryScreenData.mockImplementation(request => new Promise((resolve, reject) => {
+      pending.push({ request, resolve, reject });
+    }));
+    const state = usePanoramaData(ref(viewWithSlots({ deposit: 11, loan: 12 })), ref({ screenCode: 'SCR_CODE' }), {
+      autoLoad: false, batchRequired: true
+    });
+    const loading = state.refresh();
+    await nextTick();
+    pending[0].resolve({ quality: batchQuality(), columns: ['deposit_col'], rows: [[100000000]] });
+    await vi.waitFor(() => expect(pending).toHaveLength(2));
+    pending[1].resolve({ columns: ['loan_col'], rows: [[200000000]] });
+    await loading;
+    expect(state.model.value.kpis).toEqual([]);
+    expect(state.model.value.qualityGuard).toMatchObject({ code: 'QUALITY_MISSING' });
+  });
+
+  it('严格批次后续响应混入不同 dataClassification 时 fail-close，不发布混分类模型', async () => {
+    const pending = [];
+    queryScreenData.mockImplementation(request => new Promise((resolve, reject) => {
+      pending.push({ request, resolve, reject });
+    }));
+    const state = usePanoramaData(ref(viewWithSlots({ deposit: 11, loan: 12 })), ref({ screenCode: 'SCR_CODE' }), {
+      autoLoad: false, batchRequired: true
+    });
+    const loading = state.refresh();
+    await nextTick();
+    pending[0].resolve({ quality: batchQuality(), columns: ['deposit_col'], rows: [[100000000]] });
+    await vi.waitFor(() => expect(pending).toHaveLength(2));
+    pending[1].resolve({ quality: batchQuality({ dataClassification: 'PROD' }), columns: ['loan_col'], rows: [[200000000]] });
+    await loading;
+    expect(state.model.value.kpis).toEqual([]);
+    expect(state.model.value.qualityGuard).toMatchObject({ code: 'DATA_CLASSIFICATION_MISMATCH' });
+  });
+
+  it('严格批次首响应分类不是 TEST/PROD 时 fail-close，不发布未知分类模型', async () => {
+    queryScreenData.mockResolvedValue({
+      quality: batchQuality({ dataClassification: 'UNKNOWN' }),
+      columns: ['deposit_col'], rows: [[100000000]],
+      columnsMeta: [{ col: 'deposit_col', role: 'METRIC', unit: 'YUAN', decimals: 2 }]
+    });
+    const state = usePanoramaData(ref(viewWithSlots({ deposit: 11, loan: 12 })), ref({ screenCode: 'SCR_CODE' }), {
+      autoLoad: false, batchRequired: true
+    });
+    await state.refresh();
+    expect(state.model.value.kpis).toEqual([]);
+    expect(state.model.value.qualityGuard).toMatchObject({ code: 'QUALITY_NOT_USABLE' });
+  });
+
+  it('严格批次机构下钻携带已锁定 batchId，迟到/混批响应清空旧整屏模型', async () => {
+    const pending = [];
+    queryScreenData.mockImplementation(request => new Promise((resolve, reject) => {
+      pending.push({ request, resolve, reject });
+    }));
+    const view = viewWithSlots({ branches: 21, branchTrend: 22 });
+    view.panoramaInstitutions = [{ orgCode: 'A' }];
+    view.renderPackage.bindSnapshots['21'].bind.fields = { orgCode: 'org_code' };
+    view.renderPackage.bindSnapshots['21'].bind.units = {};
+    view.renderPackage.bindSnapshots['22'].bind.fields = { date: 'date', deposit: 'deposit' };
+    view.renderPackage.bindSnapshots['22'].bind.units = { deposit: 'YUAN' };
+    const state = usePanoramaData(ref(view), ref({ screenCode: 'SCR_CODE' }), {
+      autoLoad: false, batchRequired: true
+    });
+    const initial = state.refresh();
+    await nextTick();
+    expect(pending[0].request.blockId).toBe(21);
+    pending[0].resolve({ quality: batchQuality(), columns: ['org_code'], rows: [['A']] });
+    await vi.waitFor(() => expect(pending.some(item => item.request.blockId === 22)).toBe(true));
+    const prefetch = pending.find(item => item.request.blockId === 22);
+    expect(prefetch.request.batchId).toBe('opaque-batch-1');
+    prefetch.resolve({ quality: batchQuality(), columns: ['date', 'deposit'], rows: [['2026-09', 100000000]] });
+    await initial;
+    expect(state.model.value.quality?.batchId).toBe('opaque-batch-1');
+
+    const drill = state.selectBranch('A');
+    await vi.waitFor(() => expect(pending.filter(item => item.request.blockId === 22).length).toBeGreaterThan(1));
+    const drillRequest = pending.filter(item => item.request.blockId === 22).at(-1);
+    expect(drillRequest.request.batchId).toBe('opaque-batch-1');
+    drillRequest.resolve({ quality: batchQuality({ batchId: 'opaque-batch-2' }), columns: ['date', 'deposit'], rows: [['2026-09', 200000000]] });
+    await drill;
+    expect(state.model.value.kpis).toEqual([]);
+    expect(state.model.value.qualityGuard).toMatchObject({ code: 'BATCH_MISMATCH' });
   });
 
   it('预取任一机构返回403时 fail-close，不发布主体模型', async () => {

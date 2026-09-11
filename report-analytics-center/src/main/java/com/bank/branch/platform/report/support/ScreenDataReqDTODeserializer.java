@@ -89,6 +89,7 @@ public class ScreenDataReqDTODeserializer extends StdDeserializer<ScreenDataReqD
             case "dateFrom" -> request.setDateFrom(context.readValue(parser, String.class));
             case "dateTo" -> request.setDateTo(context.readValue(parser, String.class));
             case "contextParams" -> request.setContextParams(parser.getCodec().readValue(parser, STRING_MAP));
+            case "batchId" -> request.setBatchId(context.readValue(parser, String.class));
             // 保持 @JsonIgnore 原有语义：客户端可传，但不会注入服务端授权上下文或命名机构组标记。
             case "serverOrgCodes", "namedGroup" -> parser.skipChildren();
             default -> context.handleUnknownProperty(parser, this, request, fieldName);

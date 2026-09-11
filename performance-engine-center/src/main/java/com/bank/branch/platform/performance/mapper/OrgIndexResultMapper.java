@@ -141,6 +141,14 @@ public interface OrgIndexResultMapper extends BaseMapper<OrgIndexResult> {
     List<String> selectDistinctOrgCodesByDate(@Param("dataDate") LocalDate dataDate);
 
     /**
+     * 查询指定版本在截止日之前实际存在的金融业务日，按日期倒序返回。
+     * <p>批次服务据此逐日检查组成员和必需指标完整性；缺日不会被补成零值。</p>
+     */
+    List<LocalDate> selectDistinctDataDatesBefore(@Param("version") String version,
+                                                  @Param("dateTo") LocalDate dateTo,
+                                                  @Param("limit") Integer limit);
+
+    /**
      * KPI 分值计算：取某数据日期下某 slot 的全部机构实际值（同机构多版本取最新 version）.
      *
      * <p>列名 {@code val_${slot}} 属 common-dev-guide §5 允许的动态列名例外，

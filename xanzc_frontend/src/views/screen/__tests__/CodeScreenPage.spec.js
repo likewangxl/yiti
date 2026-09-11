@@ -179,7 +179,7 @@ describe('CodeScreenPage', () => {
     expect(listAvailableScreens).toHaveBeenCalledTimes(1);
     await page.find('[data-action="refresh-demo"]').trigger('click');
     expect(listAvailableScreens).toHaveBeenCalledTimes(1);
-    expect(page.find('[data-testid="demo-updated-at"]').text()).toContain('更新时间');
+    expect(page.find('[data-testid="demo-updated-at"]').text()).toContain('本次查询/刷新时间');
   });
 
   it('page refresh invokes runtime refresh exactly once', async () => {
@@ -188,6 +188,6 @@ describe('CodeScreenPage', () => {
     await page.find('[data-action="refresh-demo"]').trigger('click');
     expect(runtimeRefresh).toHaveBeenCalledTimes(1);
     expect(page.find('[data-testid="demo-updated-at"]').text()).toBeTruthy();
-    expect(page.find('[data-testid="demo-updated-at"]').text()).toContain('更新时间');
+    expect(page.find('[data-testid="demo-updated-at"]').text()).toContain('本次查询/刷新时间');
   });
 });

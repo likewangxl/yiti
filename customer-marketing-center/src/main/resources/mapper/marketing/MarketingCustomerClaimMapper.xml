@@ -336,4 +336,76 @@
         WHERE id = #{id}
         FOR UPDATE
     </select>
+
+    <!--
+        分行大屏机构营销快照：请求机构由服务层先去空去重并限制 500 个。
+        客户主档的 ASSIGNED + main_org_id 是当前机构归属事实；任务表没有独立
+        record_status 删除字段，FIRST_TOUCH 且 PENDING/IN_PROGRESS、cancel_time 为空表示在途任务。
+        客户和任务各自先聚合，再回连 requested，避免认领历史关系放大统计。
+    -->
+    <select id="selectOrgMarketingSnapshots"
+            resultMap="MARKETING_ORG_SNAPSHOT_RESULT">
+        SELECT requested.org_code,
+               COALESCE(customer_stats.valid_customer_count, 0) AS valid_customer_count,
+               COALESCE(task_stats.pending_follow_up_task_count, 0) AS pending_follow_up_task_count,
+               COALESCE(
+                   GREATEST(customer_stats.source_updated_at, task_stats.source_updated_at),
+                   customer_stats.source_updated_at,
+                   task_stats.source_updated_at
+               ) AS source_updated_at
+        FROM (
+            <foreach collection="orgCodes" item="orgCode" separator=" UNION ALL ">
+                SELECT #{orgCode} AS org_code
+            </foreach>
+        ) requested
+        LEFT JOIN (
+            SELECT c.main_org_id AS org_code,
+                   COUNT(DISTINCT c.id) AS valid_customer_count,
+                   MAX(COALESCE(c.updated_time, c.created_time)) AS source_updated_at
+            FROM MARKETING_CUSTOMER_INFO c
+            WHERE c.record_status = 'ACTIVE'
+              AND c.ownership_status = 'ASSIGNED'
+              AND c.main_org_id IS NOT NULL
+              AND c.main_org_id IN
+              <foreach collection="orgCodes" item="orgCode" open="(" separator="," close=")">
+                  #{orgCode}
+              </foreach>
+            GROUP BY c.main_org_id
+        ) customer_stats ON customer_stats.org_code = requested.org_code
+        LEFT JOIN (
+            SELECT t.org_id AS org_code,
+                   COUNT(DISTINCT t.id) AS pending_follow_up_task_count,
+                   MAX(COALESCE(
+                           GREATEST(
+                               COALESCE(t.updated_time, t.created_time),
+                               COALESCE(c.updated_time, c.created_time)
+                           ),
+                           COALESCE(t.updated_time, t.created_time),
+                           COALESCE(c.updated_time, c.created_time)
+                   )) AS source_updated_at
+            FROM MARKETING_TOUCH_TASK t
+            JOIN MARKETING_CUSTOMER_INFO c
+              ON c.id = t.cust_id
+             AND c.record_status = 'ACTIVE'
+             AND c.ownership_status = 'ASSIGNED'
+             AND c.main_org_id = t.org_id
+            WHERE t.task_type = 'FIRST_TOUCH'
+              AND t.task_status IN ('PENDING', 'IN_PROGRESS')
+              AND t.cancel_time IS NULL
+              AND t.org_id IS NOT NULL
+              AND t.org_id IN
+              <foreach collection="orgCodes" item="orgCode" open="(" separator="," close=")">
+                  #{orgCode}
+              </foreach>
+            GROUP BY t.org_id
+        ) task_stats ON task_stats.org_code = requested.org_code
+    </select>
+
+    <resultMap id="MARKETING_ORG_SNAPSHOT_RESULT"
+               type="com.bank.branch.platform.customer.dto.marketing.customer.MarketingOrgSnapshotRow">
+        <result property="orgCode" column="org_code"/>
+        <result property="validCustomerCount" column="valid_customer_count" javaType="java.lang.Long"/>
+        <result property="pendingFollowUpTaskCount" column="pending_follow_up_task_count" javaType="java.lang.Long"/>
+        <result property="sourceUpdatedAt" column="source_updated_at" javaType="java.time.LocalDateTime"/>
+    </resultMap>
 </mapper>

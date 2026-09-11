@@ -6,18 +6,31 @@ import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.report.dto.req.ScreenDataReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDataRespDTO;
 import com.bank.branch.platform.report.entity.RptScreenDatasource;
+import com.bank.branch.platform.performance.api.BranchDashboardBatchQueryApi;
+import com.bank.branch.platform.performance.api.dto.BranchDashboardBatchAttemptDTO;
+import com.bank.branch.platform.performance.api.dto.BranchDashboardBatchDTO;
+import com.bank.branch.platform.performance.api.dto.BranchDashboardBatchRowDTO;
+import com.bank.branch.platform.performance.api.dto.BranchDashboardHistoryCoverageDTO;
+import com.bank.branch.platform.performance.api.dto.BranchDashboardMetricContractDTO;
+import com.bank.branch.platform.performance.api.dto.BranchDashboardQualityDTO;
+import com.bank.branch.platform.performance.api.dto.BranchDashboardSourceAsOfDTO;
 import org.junit.jupiter.api.Test;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -26,6 +39,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -331,6 +345,509 @@ class ScreenQueryEngineTest {
     }
 
     @Test
+    void buildWideNamedGroup_latest_selectsLatestCompleteAuthorizedBatchWithBoundTodayAndSlots() {
+        String cfg = "{\"scopeMode\":\"NAMED_GROUP\",\"table\":\"ORG_INDEX_RESULT\","
+                + "\"subjectCol\":\"org_code\",\"subjectParam\":\"orgCode\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\",\"metricName\":\"存款余额\",\"slot\":3},"
+                + "{\"metricCode\":\"M_0002\",\"metricName\":\"贷款余额\",\"slot\":7}],"
+                + "\"aggregation\":{\"groupBy\":\"NONE\",\"agg\":\"SUM\"}}";
+        ScreenDataReqDTO request = req("LATEST", Map.of());
+        request.setNamedGroup(true);
+        request.setServerOrgCodes(List.of("001", "002"));
+
+        var q = engine.build("WIDE_TABLE", cfg, request, 1000, TODAY);
+
+        assertThat(q.sql()).contains("data_date <= ?");
+        assertThat(q.sql()).contains(
+                "COUNT(DISTINCT CASE WHEN candidate.val_3 IS NOT NULL AND candidate.val_7 IS NOT NULL "
+                        + "THEN candidate.org_code END) = ?");
+        assertThat(q.sql()).contains("GROUP BY candidate.data_date");
+        assertThat(q.sql()).contains("MAX(complete_batch.data_date)");
+        assertThat(q.sql()).contains("org_code IN (?, ?)");
+        assertThat(q.params()).containsExactly(
+                "001", "002", TODAY, "001", "002", 2, 2);
+    }
+
+    @Test
+    void buildWideNamedGroup_qualityPolicy_rejectsUnknownFields() {
+        String cfg = "{\"scopeMode\":\"NAMED_GROUP\",\"table\":\"ORG_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricName\":\"存款余额\",\"slot\":3}],"
+                + "\"qualityPolicy\":{\"maxAgeDays\":1,\"requiredComplete\":true,\"unknown\":true},"
+                + "\"aggregation\":{\"groupBy\":\"NONE\",\"agg\":\"SUM\"}}";
+        ScreenDataReqDTO request = req("LATEST", Map.of());
+        request.setNamedGroup(true);
+        request.setServerOrgCodes(List.of("001"));
+
+        assertThatThrownBy(() -> engine.build("WIDE_TABLE", cfg, request, 1000, TODAY))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+    }
+
+    @Test
+    void queryWideNamedGroup_latest_fallsBackToOldCompleteDate_andReportsFreshQuality() throws Exception {
+        RuntimeJdbcFixture jdbc = runtimeJdbc(
+                "V2", LocalDate.of(2026, 7, 10), 2, true,
+                List.of("存款余额"), List.of(List.of(300)));
+        ScreenQueryEngine queryEngine = engine(jdbc.dataSource(), mock(OrgApi.class));
+        RptScreenDatasource datasource = datasource(namedOrgQualityConfig(2));
+        ScreenDataReqDTO request = namedGroupRequest("001", "002");
+
+        ScreenDataRespDTO response = queryEngine.queryAt(datasource, request, TODAY, 1000);
+
+        assertThat(response.getRows()).containsExactly(List.of(300));
+        assertThat(response.getQuality()).isNotNull();
+        assertThat(response.getQuality().getBatchId()).isEqualTo("ORG:V2:2026-07-10");
+        assertThat(response.getQuality().getDataDate()).isEqualTo("2026-07-10");
+        assertThat(response.getQuality().getVersion()).isEqualTo("V2");
+        assertThat(response.getQuality().getStatus()).isEqualTo("COMPLETE");
+        assertThat(response.getQuality().getExpectedSubjects()).isEqualTo(2);
+        assertThat(response.getQuality().getReceivedSubjects()).isEqualTo(2);
+        assertThat(response.getQuality().getMaxAgeDays()).isEqualTo(2);
+        assertThat(response.getQuality().getAgeDays()).isEqualTo(2);
+        verify(jdbc.preflight()).setObject(1, Date.valueOf(TODAY));
+        verify(jdbc.preflight()).setObject(2, "001");
+        verify(jdbc.preflight()).setObject(3, "002");
+        verify(jdbc.preflight()).setObject(4, 2);
+        verify(jdbc.preflight()).setObject(5, 2);
+        verify(jdbc.main()).setObject(1, "V2");
+        verify(jdbc.main()).setObject(2, "001");
+        verify(jdbc.main()).setObject(3, "002");
+        verify(jdbc.main()).setObject(4, Date.valueOf(LocalDate.of(2026, 7, 10)));
+        verify(jdbc.connection(), times(2)).prepareStatement(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void queryWideNamedGroup_latest_staleBoundaryUsesStrictGreaterThan() throws Exception {
+        RuntimeJdbcFixture jdbc = runtimeJdbc(
+                "V2", LocalDate.of(2026, 7, 9), 2, true,
+                List.of("存款余额"), List.of(List.of(300)));
+        ScreenQueryEngine queryEngine = engine(jdbc.dataSource(), mock(OrgApi.class));
+
+        ScreenDataRespDTO response = queryEngine.queryAt(
+                datasource(namedOrgQualityConfig(2)), namedGroupRequest("001", "002"), TODAY, 1000);
+
+        assertThat(response.getRows()).containsExactly(List.of(300));
+        assertThat(response.getQuality().getStatus()).isEqualTo("STALE");
+        assertThat(response.getQuality().getAgeDays()).isEqualTo(3);
+    }
+
+    @Test
+    void queryWideNamedGroup_latest_withoutCompleteBatchReturnsNoRowsAndQuality() throws Exception {
+        RuntimeJdbcFixture jdbc = runtimeJdbc(
+                null, null, 0, false,
+                List.of("存款余额"), List.of());
+        ScreenQueryEngine queryEngine = engine(jdbc.dataSource(), mock(OrgApi.class));
+
+        ScreenDataRespDTO response = queryEngine.queryAt(
+                datasource(namedOrgQualityConfig(2)), namedGroupRequest("001", "002"), TODAY, 1000);
+
+        assertThat(response.getRows()).isEmpty();
+        assertThat(response.getQuality().getStatus()).isEqualTo("NO_COMPLETE_BATCH");
+        assertThat(response.getQuality().getBatchId()).isNull();
+        assertThat(response.getQuality().getExpectedSubjects()).isEqualTo(2);
+        assertThat(response.getQuality().getReceivedSubjects()).isZero();
+        assertThat(response.getQuality().getDataDate()).isNull();
+    }
+
+    @Test
+    void tryRunWideNamedGroup_latest_usesSameQualityResolutionPath() throws Exception {
+        RuntimeJdbcFixture jdbc = runtimeJdbc(
+                "V2", LocalDate.of(2026, 7, 10), 2, true,
+                List.of("存款余额"), List.of(List.of(300)));
+        ScreenQueryEngine queryEngine = engine(jdbc.dataSource(), mock(OrgApi.class));
+
+        ScreenDataRespDTO response = queryEngine.tryRunAt(
+                "WIDE_TABLE", namedOrgQualityConfig(2), namedGroupRequest("001", "002"), TODAY, 10);
+
+        assertThat(response.getQuality().getBatchId()).isEqualTo("ORG:V2:2026-07-10");
+        assertThat(response.getQuality().getStatus()).isEqualTo("COMPLETE");
+        assertThat(response.getQuality().getExpectedSubjects()).isEqualTo(2);
+        assertThat(response.getRows()).containsExactly(List.of(300));
+    }
+
+    @Test
+    void queryWideNamedGroup_emptyAuthorizedGroupFailsClosedBeforeDatabaseAccess() throws Exception {
+        DataSource dataSource = mock(DataSource.class);
+        ScreenQueryEngine queryEngine = engine(dataSource, mock(OrgApi.class));
+
+        ScreenDataReqDTO request = namedGroupRequest();
+
+        assertThatThrownBy(() -> queryEngine.queryAt(
+                datasource(namedOrgQualityConfig(2)), request, TODAY, 1000))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43015");
+        verify(dataSource, never()).getConnection();
+    }
+
+    @Test
+    void batchPolicy_byIdUsesOpaqueBatchAndFullAuthorizedScopeWhileSingleOrgOnlyFiltersOutput() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        BranchDashboardBatchDTO snapshot = BranchDashboardBatchDTO.builder()
+                .batchId("RUN-20260710-01")
+                .groupCode("GROUP_CORP")
+                .dataDate(LocalDate.of(2026, 7, 10))
+                .version("V2")
+                .status("COMPLETE")
+                .calculatedAt(LocalDateTime.of(2026, 7, 10, 18, 0))
+                .memberOrgCodes(List.of("001", "002"))
+                .sourceAsOf(BranchDashboardSourceAsOfDTO.builder()
+                        .financial(LocalDate.of(2026, 7, 10))
+                        .marketing(LocalDate.of(2026, 7, 10))
+                        .target(LocalDate.of(2026, 7, 10))
+                        .revenue(LocalDate.of(2026, 7, 10))
+                        .build())
+                .quality(BranchDashboardQualityDTO.builder()
+                        .expected(2)
+                        .received(2)
+                        .expectedSubjects(2)
+                        .receivedSubjects(2)
+                        .selectedComplete(true)
+                        .mixedPeriod(false)
+                        .build())
+                .metricContracts(Map.of("M_0001", BranchDashboardMetricContractDTO.builder()
+                        .metricCode("M_0001").metricName("存款余额").unit("YUAN").decimalPlaces(2).build()))
+                .rows(List.of(
+                        BranchDashboardBatchRowDTO.builder().orgCode("001")
+                                .dataDate(LocalDate.of(2026, 7, 10))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(300))).build(),
+                        BranchDashboardBatchRowDTO.builder().orgCode("002")
+                                .dataDate(LocalDate.of(2026, 7, 10))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(500))).build()))
+                .build();
+        when(batchApi.byId("RUN-20260710-01", List.of("001", "002")))
+                .thenReturn(Optional.of(snapshot));
+
+        OrgApi orgApi = mock(OrgApi.class);
+        when(orgApi.getOrgsByCodes(List.of("002"))).thenReturn(List.of(org("002", "二支行")));
+        ScreenQueryEngine queryEngine = engine(null, orgApi);
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("001", "002");
+        request.setServerGroupCode("GROUP_CORP");
+        request.setBatchId("RUN-20260710-01");
+        request.setServerRequestedOrgCode("002");
+        String config = "{\"scopeMode\":\"NAMED_GROUP\",\"table\":\"ORG_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\",\"metricName\":\"存款余额\",\"slot\":3}],"
+                + "\"aggregation\":{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\"},"
+                + "\"batchPolicy\":{\"maxAgeDays\":2,\"requiredComplete\":true}}";
+
+        ScreenDataRespDTO response = queryEngine.tryRunAt(
+                "WIDE_TABLE", config, request, TODAY, 10);
+
+        assertThat(response.getRows()).containsExactly(List.of("002", "二支行", BigDecimal.valueOf(500)));
+        assertThat(response.getQuality().getBatchId()).isEqualTo("RUN-20260710-01");
+        assertThat(response.getQuality().getStatus()).isEqualTo("COMPLETE");
+        assertThat(response.getQuality().getSourceAsOf().get("financial")).isEqualTo("2026-07-10");
+        verify(batchApi).byId("RUN-20260710-01", List.of("001", "002"));
+    }
+
+    @Test
+    void batchPolicy_subjectKeepsOrgNameAndAlignsAllMetricColumns() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        OrgApi orgApi = mock(OrgApi.class);
+        when(orgApi.getOrgsByCodes(List.of("002"))).thenReturn(List.of(org("002", "二支行")));
+        BranchDashboardBatchDTO snapshot = BranchDashboardBatchDTO.builder()
+                .batchId("RUN-20260710-SUBJECT")
+                .groupCode("GROUP_CORP")
+                .dataDate(LocalDate.of(2026, 7, 10))
+                .version("V2")
+                .status("COMPLETE")
+                .memberOrgCodes(List.of("001", "002"))
+                .quality(BranchDashboardQualityDTO.builder()
+                        .expectedSubjects(2).receivedSubjects(2).selectedComplete(true).build())
+                .metricContracts(Map.of(
+                        "M_0001", BranchDashboardMetricContractDTO.builder()
+                                .metricCode("M_0001").metricName("存款余额").unit("YUAN").build(),
+                        "M_0002", BranchDashboardMetricContractDTO.builder()
+                                .metricCode("M_0002").metricName("客户数").unit("COUNT").build()))
+                .rows(List.of(
+                        BranchDashboardBatchRowDTO.builder().orgCode("001")
+                                .dataDate(LocalDate.of(2026, 7, 10))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(300),
+                                        "M_0002", BigDecimal.valueOf(4))).build(),
+                        BranchDashboardBatchRowDTO.builder().orgCode("002")
+                                .dataDate(LocalDate.of(2026, 7, 10))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(500),
+                                        "M_0002", BigDecimal.valueOf(8))).build()))
+                .build();
+        when(batchApi.byId("RUN-20260710-SUBJECT", List.of("001", "002")))
+                .thenReturn(Optional.of(snapshot));
+
+        ScreenQueryEngine queryEngine = engine(null, orgApi);
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("001", "002");
+        request.setServerGroupCode("GROUP_CORP");
+        request.setBatchId("RUN-20260710-SUBJECT");
+        request.setServerRequestedOrgCode("002");
+        String config = "{\"scopeMode\":\"NAMED_GROUP\",\"table\":\"ORG_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\",\"metricName\":\"存款余额\",\"slot\":3},"
+                + "{\"metricCode\":\"M_0002\",\"metricName\":\"客户数\",\"slot\":7}],"
+                + "\"aggregation\":{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\"},"
+                + "\"batchPolicy\":{\"requiredComplete\":true}}";
+
+        ScreenDataRespDTO response = queryEngine.queryAt(
+                datasource(config), request, TODAY, 10);
+
+        assertThat(response.getColumns()).containsExactly("org_code", "org_name", "存款余额", "客户数");
+        assertThat(response.getRows()).containsExactly(
+                List.of("002", "二支行", BigDecimal.valueOf(500), BigDecimal.valueOf(8)));
+        assertThat(response.getColumnsMeta()).extracting(ScreenDataRespDTO.ColumnMeta::getRole)
+                .containsExactly("DIM", "DIM", "METRIC", "METRIC");
+    }
+
+    @Test
+    void batchPolicy_rawWideTrendUsesSameSnapshotQualityAndFiltersOnlyRequestedOrg() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        BranchDashboardBatchDTO snapshot = BranchDashboardBatchDTO.builder()
+                .batchId("RUN-20260710-02")
+                .groupCode("GROUP_CORP")
+                .dataDate(LocalDate.of(2026, 7, 10))
+                .version("V2")
+                .status("COMPLETE")
+                .memberOrgCodes(List.of("001", "002"))
+                .quality(BranchDashboardQualityDTO.builder()
+                        .expectedSubjects(2).receivedSubjects(2).selectedComplete(true).build())
+                .metricContracts(Map.of("M_0001", BranchDashboardMetricContractDTO.builder()
+                        .metricCode("M_0001").metricName("存款余额").unit("YUAN").build()))
+                .rows(List.of(
+                        BranchDashboardBatchRowDTO.builder().orgCode("001")
+                                .dataDate(LocalDate.of(2026, 7, 10))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(300))).build(),
+                        BranchDashboardBatchRowDTO.builder().orgCode("002")
+                                .dataDate(LocalDate.of(2026, 7, 10))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(500))).build()))
+                .historyRows(List.of(
+                        BranchDashboardBatchRowDTO.builder().orgCode("002")
+                                .dataDate(LocalDate.of(2026, 7, 9))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(480))).build(),
+                        BranchDashboardBatchRowDTO.builder().orgCode("002")
+                                .dataDate(LocalDate.of(2026, 7, 10))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(500))).build()))
+                .build();
+        when(batchApi.latest("GROUP_CORP", List.of("001", "002"))).thenReturn(Optional.of(snapshot));
+
+        ScreenQueryEngine queryEngine = engine(null, mock(OrgApi.class));
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("002");
+        request.setServerAuthorizedOrgCodes(List.of("001", "002"));
+        request.setServerGroupCode("GROUP_CORP");
+        request.setServerRequestedOrgCode("002");
+        request.setPeriod("LAST_1M");
+        String config = "{\"scopeMode\":\"NAMED_GROUP\",\"table\":\"ORG_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\",\"metricName\":\"存款余额\",\"slot\":3}],"
+                + "\"batchPolicy\":{\"maxAgeDays\":2}}";
+
+        ScreenDataRespDTO response = queryEngine.queryAt(
+                datasource(config), request, TODAY, 10);
+
+        assertThat(response.getColumns()).containsExactly("data_date", "存款余额");
+        assertThat(response.getRows()).containsExactly(
+                List.of("2026-07-09", BigDecimal.valueOf(480)),
+                List.of("2026-07-10", BigDecimal.valueOf(500)));
+        assertThat(response.getQuality().getBatchId()).isEqualTo("RUN-20260710-02");
+        assertThat(response.getQuality().getExpectedSubjects()).isEqualTo(2);
+        verify(batchApi).latest("GROUP_CORP", List.of("001", "002"));
+    }
+
+    @Test
+    void batchPolicy_latestDateUsesSnapshotRowsBeforeHistoryRows() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        BranchDashboardBatchDTO snapshot = BranchDashboardBatchDTO.builder()
+                .batchId("RUN-20260710-03").groupCode("GROUP_CORP")
+                .dataDate(LocalDate.of(2026, 7, 10)).version("V2").status("COMPLETE")
+                .memberOrgCodes(List.of("001", "002"))
+                .quality(BranchDashboardQualityDTO.builder()
+                        .expectedSubjects(2).receivedSubjects(2).selectedComplete(true).build())
+                .metricContracts(Map.of(
+                        "M_0001", BranchDashboardMetricContractDTO.builder()
+                                .metricCode("M_0001").metricName("存款余额").unit("YUAN").build(),
+                        "M_0002", BranchDashboardMetricContractDTO.builder()
+                                .metricCode("M_0002").metricName("客户数").unit("COUNT").build()))
+                .rows(List.of(
+                        BranchDashboardBatchRowDTO.builder().orgCode("001")
+                                .dataDate(LocalDate.of(2026, 7, 10))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(300),
+                                        "M_0002", BigDecimal.valueOf(4))).build(),
+                        BranchDashboardBatchRowDTO.builder().orgCode("002")
+                                .dataDate(LocalDate.of(2026, 7, 10))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(500),
+                                        "M_0002", BigDecimal.valueOf(6))).build()))
+                // historyRows 只有金融列，LATEST 不能误读这份历史投影。
+                .historyRows(List.of(
+                        BranchDashboardBatchRowDTO.builder().orgCode("001")
+                                .dataDate(LocalDate.of(2026, 7, 10))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(300))).build(),
+                        BranchDashboardBatchRowDTO.builder().orgCode("002")
+                                .dataDate(LocalDate.of(2026, 7, 10))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(500))).build()))
+                .build();
+        when(batchApi.latest("GROUP_CORP", List.of("001", "002"))).thenReturn(Optional.of(snapshot));
+
+        ScreenQueryEngine queryEngine = engine(null, mock(OrgApi.class));
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("001", "002");
+        request.setServerGroupCode("GROUP_CORP");
+        String config = "{\"scopeMode\":\"NAMED_GROUP\",\"table\":\"ORG_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\",\"metricName\":\"存款余额\",\"slot\":3},"
+                + "{\"metricCode\":\"M_0002\",\"metricName\":\"客户数\",\"slot\":7}],"
+                + "\"aggregation\":{\"groupBy\":\"DATE\",\"agg\":\"SUM\"},"
+                + "\"batchPolicy\":{\"requiredComplete\":true}}";
+
+        ScreenDataRespDTO response = queryEngine.queryAt(
+                datasource(config), request, TODAY, 10);
+
+        assertThat(response.getRows()).containsExactly(
+                List.of("2026-07-10", BigDecimal.valueOf(800), BigDecimal.valueOf(10)));
+        assertThat(response.getQuality().getStatus()).isEqualTo("COMPLETE");
+    }
+
+    @Test
+    void batchPolicy_latestFailedAttemptIsVisibleWhileReturningLastCompleteSnapshot() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        BranchDashboardBatchDTO snapshot = BranchDashboardBatchDTO.builder()
+                .batchId("RUN-20260712-FAILED-RETRY")
+                .groupCode("GROUP_CORP")
+                .dataDate(TODAY)
+                .version("V2")
+                .status("COMPLETE")
+                .memberOrgCodes(List.of("001"))
+                .latestAttempt(BranchDashboardBatchAttemptDTO.builder()
+                        .attemptId("ATTEMPT-FAILED-20260712")
+                        .status("FAILED").message("target source timeout").build())
+                .quality(BranchDashboardQualityDTO.builder()
+                        .expectedSubjects(1).receivedSubjects(1).selectedComplete(true).build())
+                .metricContracts(Map.of("M_0001", BranchDashboardMetricContractDTO.builder()
+                        .metricCode("M_0001").metricName("存款余额").unit("YUAN").build()))
+                .rows(List.of(BranchDashboardBatchRowDTO.builder().orgCode("001")
+                        .dataDate(TODAY).metricValues(Map.of("M_0001", BigDecimal.valueOf(300))).build()))
+                .build();
+        when(batchApi.latest("GROUP_CORP", List.of("001"))).thenReturn(Optional.of(snapshot));
+
+        ScreenQueryEngine queryEngine = engine(null, mock(OrgApi.class));
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("001");
+        request.setServerGroupCode("GROUP_CORP");
+        String config = "{\"scopeMode\":\"NAMED_GROUP\",\"table\":\"ORG_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\",\"metricName\":\"存款余额\",\"slot\":3}],"
+                + "\"batchPolicy\":{\"requiredComplete\":true}}";
+
+        ScreenDataRespDTO response = queryEngine.queryAt(
+                datasource(config), request, TODAY, 10);
+
+        assertThat(response.getRows()).containsExactly(List.of("2026-07-12", BigDecimal.valueOf(300)));
+        assertThat(response.getQuality().getStatus()).isEqualTo("COMPLETE");
+        assertThat(response.getQuality().getMessage())
+                .contains("最近一次批次尝试状态=FAILED")
+                .contains("最近尝试批次编号=ATTEMPT-FAILED-20260712")
+                .contains("target source timeout");
+        assertThat(response.getQuality().getBatchId()).isEqualTo("RUN-20260712-FAILED-RETRY");
+    }
+
+    @Test
+    void batchPolicy_qualityCarriesHistoryCoverageAndDataClassification() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        LocalDate historyDate = LocalDate.of(2026, 7, 9);
+        BranchDashboardBatchDTO snapshot = BranchDashboardBatchDTO.builder()
+                .batchId("RUN-20260712-COVERAGE")
+                .groupCode("GROUP_CORP")
+                .dataDate(TODAY)
+                .version("V2")
+                .status("COMPLETE")
+                .dataClassification("TEST")
+                .memberOrgCodes(List.of("001"))
+                .quality(BranchDashboardQualityDTO.builder()
+                        .expectedSubjects(1).receivedSubjects(1).selectedComplete(true).build())
+                .historyCoverage(List.of(BranchDashboardHistoryCoverageDTO.builder()
+                        .dataDate(historyDate)
+                        .expected(2).received(1)
+                        .expectedSubjects(1).receivedSubjects(0)
+                        .complete(false)
+                        .missingSubjects(List.of("001"))
+                        .missing(List.of("001:M_ACTUAL"))
+                        .build()))
+                .metricContracts(Map.of("M_0001", BranchDashboardMetricContractDTO.builder()
+                        .metricCode("M_0001").metricName("存款余额").unit("YUAN").build()))
+                .rows(List.of(BranchDashboardBatchRowDTO.builder().orgCode("001")
+                        .dataDate(TODAY).metricValues(Map.of("M_0001", BigDecimal.valueOf(300))).build()))
+                .historyRows(List.of(BranchDashboardBatchRowDTO.builder().orgCode("001")
+                        .dataDate(historyDate).metricValues(Map.of("M_0001", BigDecimal.valueOf(280))).build()))
+                .build();
+        when(batchApi.latest("GROUP_CORP", List.of("001"))).thenReturn(Optional.of(snapshot));
+
+        ScreenQueryEngine queryEngine = engine(null, mock(OrgApi.class));
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("001");
+        request.setServerGroupCode("GROUP_CORP");
+        request.setPeriod("LAST_1M");
+        String config = "{\"scopeMode\":\"NAMED_GROUP\",\"table\":\"ORG_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\",\"metricName\":\"存款余额\",\"slot\":3}],"
+                + "\"batchPolicy\":{\"requiredComplete\":true}}";
+
+        ScreenDataRespDTO response = queryEngine.queryAt(
+                datasource(config), request, TODAY, 10);
+
+        assertThat(response.getQuality().getDataClassification()).isEqualTo("TEST");
+        assertThat(response.getQuality().getHistoryCoverage()).hasSize(1);
+        ScreenDataRespDTO.HistoryCoverage coverage = response.getQuality().getHistoryCoverage().get(0);
+        assertThat(coverage.getDataDate()).isEqualTo("2026-07-09");
+        assertThat(coverage.getExpected()).isEqualTo(2);
+        assertThat(coverage.getReceived()).isEqualTo(1);
+        assertThat(coverage.getExpectedSubjects()).isEqualTo(1);
+        assertThat(coverage.getReceivedSubjects()).isZero();
+        assertThat(coverage.getComplete()).isFalse();
+        assertThat(coverage.getMissingSubjects()).containsExactly("001");
+        assertThat(coverage.getMissing()).containsExactly("001:M_ACTUAL");
+    }
+
+    @Test
+    void batchPolicy_groupRateUsesContractNumeratorAndDenominatorInsteadOfSummingPercentages() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        Map<String, BranchDashboardMetricContractDTO> contracts = new LinkedHashMap<>();
+        contracts.put("M_ACTUAL", BranchDashboardMetricContractDTO.builder()
+                .metricCode("M_ACTUAL").metricName("实际").unit("YUAN").build());
+        contracts.put("M_TARGET", BranchDashboardMetricContractDTO.builder()
+                .metricCode("M_TARGET").metricName("目标").unit("YUAN").build());
+        contracts.put("M_RATE", BranchDashboardMetricContractDTO.builder()
+                .metricCode("M_RATE").metricName("完成率").unit("PERCENT")
+                .numeratorMetricCode("M_ACTUAL").denominatorMetricCode("M_TARGET").build());
+        BranchDashboardBatchDTO snapshot = BranchDashboardBatchDTO.builder()
+                .batchId("RUN-20260710-04").groupCode("GROUP_CORP")
+                .dataDate(LocalDate.of(2026, 7, 10)).version("V2").status("COMPLETE")
+                .memberOrgCodes(List.of("001", "002"))
+                .quality(BranchDashboardQualityDTO.builder()
+                        .expectedSubjects(2).receivedSubjects(2).selectedComplete(true).build())
+                .metricContracts(contracts)
+                .rows(List.of(
+                        BranchDashboardBatchRowDTO.builder().orgCode("001")
+                                .dataDate(LocalDate.of(2026, 7, 10)).metricValues(Map.of(
+                                        "M_ACTUAL", BigDecimal.valueOf(100),
+                                        "M_TARGET", BigDecimal.valueOf(200),
+                                        "M_RATE", BigDecimal.valueOf(50))).build(),
+                        BranchDashboardBatchRowDTO.builder().orgCode("002")
+                                .dataDate(LocalDate.of(2026, 7, 10)).metricValues(Map.of(
+                                        "M_ACTUAL", BigDecimal.valueOf(300),
+                                        "M_TARGET", BigDecimal.valueOf(300),
+                                        "M_RATE", BigDecimal.valueOf(100))).build()))
+                .build();
+        when(batchApi.latest("GROUP_CORP", List.of("001", "002"))).thenReturn(Optional.of(snapshot));
+
+        ScreenQueryEngine queryEngine = engine(null, mock(OrgApi.class));
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("001", "002");
+        request.setServerGroupCode("GROUP_CORP");
+        String config = "{\"scopeMode\":\"NAMED_GROUP\",\"table\":\"ORG_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_RATE\",\"metricName\":\"完成率\",\"slot\":3}],"
+                + "\"aggregation\":{\"groupBy\":\"NONE\",\"agg\":\"SUM\"},"
+                + "\"batchPolicy\":{\"requiredComplete\":true}}";
+
+        ScreenDataRespDTO response = queryEngine.queryAt(
+                datasource(config), request, TODAY, 10);
+
+        assertThat(response.getRows()).hasSize(1);
+        assertThat((BigDecimal) response.getRows().get(0).get(0))
+                .isEqualByComparingTo("80");
+    }
+
+    @Test
     void buildWideAgg_groupByNone_range_bindsFromToInOrder() {
         var q = engine.build("WIDE_TABLE", wideAggCfg("{\"groupBy\":\"NONE\",\"agg\":\"SUM\"}"),
                 req("LAST_10D", Map.of()), 1000, TODAY);
@@ -596,6 +1113,23 @@ class ScreenQueryEngineTest {
                 + "{\"col\":\"存款余额\",\"role\":\"METRIC\",\"unit\":\"元\",\"decimals\":2}]}";
     }
 
+    private static String namedOrgQualityConfig(int maxAgeDays) {
+        return "{\"scopeMode\":\"NAMED_GROUP\",\"table\":\"ORG_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricName\":\"存款余额\",\"slot\":3},"
+                + "{\"metricName\":\"贷款余额\",\"slot\":7}],"
+                + "\"qualityPolicy\":{\"maxAgeDays\":" + maxAgeDays
+                + ",\"requiredComplete\":true},"
+                + "\"aggregation\":{\"groupBy\":\"NONE\",\"agg\":\"SUM\"}}";
+    }
+
+    private static ScreenDataReqDTO namedGroupRequest(String... codes) {
+        ScreenDataReqDTO request = new ScreenDataReqDTO();
+        request.setPeriod("LATEST");
+        request.setNamedGroup(true);
+        request.setServerOrgCodes(Arrays.asList(codes));
+        return request;
+    }
+
     private static RptScreenDatasource datasource(String config) {
         RptScreenDatasource datasource = new RptScreenDatasource();
         datasource.setSourceKind("WIDE_TABLE");
@@ -649,5 +1183,52 @@ class ScreenQueryEngineTest {
     }
 
     private record JdbcFixture(DataSource dataSource, ResultSet resultSet) {
+    }
+
+    private static RuntimeJdbcFixture runtimeJdbc(String version, LocalDate dataDate, int received,
+                                                  boolean hasBatch, List<String> columns,
+                                                  List<List<Object>> values) throws Exception {
+        DataSource dataSource = mock(DataSource.class);
+        Connection connection = mock(Connection.class);
+        PreparedStatement preflight = mock(PreparedStatement.class);
+        PreparedStatement main = mock(PreparedStatement.class);
+        ResultSet batchResult = mock(ResultSet.class);
+        ResultSet mainResult = mock(ResultSet.class);
+        ResultSetMetaData metadata = mock(ResultSetMetaData.class);
+
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.prepareStatement(anyString())).thenReturn(preflight, main);
+        when(preflight.executeQuery()).thenReturn(batchResult);
+        when(main.executeQuery()).thenReturn(mainResult);
+        if (hasBatch) {
+            when(batchResult.next()).thenReturn(true, false);
+            when(batchResult.getString(1)).thenReturn(version);
+            when(batchResult.getObject(2)).thenReturn(Date.valueOf(dataDate));
+            when(batchResult.getInt(3)).thenReturn(received);
+            when(batchResult.wasNull()).thenReturn(false);
+        } else {
+            when(batchResult.next()).thenReturn(false);
+        }
+        when(mainResult.getMetaData()).thenReturn(metadata);
+        when(metadata.getColumnCount()).thenReturn(columns.size());
+        for (int i = 0; i < columns.size(); i++) {
+            when(metadata.getColumnLabel(i + 1)).thenReturn(columns.get(i));
+        }
+        Iterator<List<Object>> iterator = values.iterator();
+        List<Object>[] current = new List[]{null};
+        when(mainResult.next()).thenAnswer(invocation -> {
+            if (!iterator.hasNext()) {
+                return false;
+            }
+            current[0] = iterator.next();
+            return true;
+        });
+        when(mainResult.getObject(anyInt())).thenAnswer(invocation ->
+                current[0].get(invocation.getArgument(0, Integer.class) - 1));
+        return new RuntimeJdbcFixture(dataSource, connection, preflight, main);
+    }
+
+    private record RuntimeJdbcFixture(DataSource dataSource, Connection connection,
+                                      PreparedStatement preflight, PreparedStatement main) {
     }
 }

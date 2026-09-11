@@ -477,6 +477,7 @@ export function buildScreenDataRequest(input = {}) {
     };
     if (input.dateFrom !== undefined && input.dateFrom !== null) request.dateFrom = input.dateFrom;
     if (input.dateTo !== undefined && input.dateTo !== null) request.dateTo = input.dateTo;
+    if (input.batchId !== undefined && input.batchId !== null && String(input.batchId).trim()) request.batchId = input.batchId;
     return request;
   }
   if (schemaVersion === 2) {
@@ -493,6 +494,7 @@ export function buildScreenDataRequest(input = {}) {
     };
     if (input.dateFrom !== undefined && input.dateFrom !== null) request.dateFrom = input.dateFrom;
     if (input.dateTo !== undefined && input.dateTo !== null) request.dateTo = input.dateTo;
+    if (input.batchId !== undefined && input.batchId !== null && String(input.batchId).trim()) request.batchId = input.batchId;
     return request;
   }
   if (schemaVersion !== 1) {
@@ -512,6 +514,7 @@ export function buildScreenDataRequest(input = {}) {
   };
   if (input.dateFrom !== undefined && input.dateFrom !== null) request.dateFrom = input.dateFrom;
   if (input.dateTo !== undefined && input.dateTo !== null) request.dateTo = input.dateTo;
+  if (input.batchId !== undefined && input.batchId !== null && String(input.batchId).trim()) request.batchId = input.batchId;
   return request;
 }
 

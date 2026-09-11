@@ -91,6 +91,20 @@ describe('screenScope 业务条线、机构范围与地图配置契约', () => {
     });
   });
 
+  it('批次锁定只作为顶层 batchId 透传，初始空值不进入请求', () => {
+    expect(buildScreenDataRequest({
+      schemaVersion: 2, screenCode: 'SCR_BRANCH', blockId: 8,
+      period: 'LATEST', contextParams: {}, batchId: 'opaque-perf-run-1'
+    })).toMatchObject({
+      schemaVersion: 2, screenCode: 'SCR_BRANCH', blockId: 8,
+      period: 'LATEST', contextParams: {}, batchId: 'opaque-perf-run-1'
+    });
+    expect(buildScreenDataRequest({
+      schemaVersion: 2, screenCode: 'SCR_BRANCH', blockId: 8,
+      period: 'LATEST', contextParams: {}, batchId: '  '
+    })).not.toHaveProperty('batchId');
+  });
+
   it('v1/v2 运行时请求剔除 nullish 可选字段，但所有非空日期与上下文原样保留', () => {
     expect(buildScreenDataRequest({ schemaVersion: 1, screenCode: 'SCR_BRANCH', dsId: 9002,
       period: 'RANGE', dateFrom: '2026-08-01', dateTo: '2026-08-13',

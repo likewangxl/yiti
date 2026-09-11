@@ -109,6 +109,16 @@
         ORDER BY org_code
     </select>
 
+    <!-- 分行大屏批次：只返回当前版本实际存在的业务日，缺日不补零。 -->
+    <select id="selectDistinctDataDatesBefore" resultType="java.time.LocalDate">
+        SELECT DISTINCT data_date
+        FROM ORG_INDEX_RESULT
+        WHERE version = #{version}
+          AND data_date &lt;= #{dateTo}
+        ORDER BY data_date DESC
+        LIMIT #{limit}
+    </select>
+
     <!--
       KPI 分值计算：取某日某 slot 的全部机构实际值（同机构多版本按 updated_time 取最新行）。
       val_${slot} 动态列名属 common-dev-guide §5 合法例外，Service 层强制校验 slot ∈ [1,400]。

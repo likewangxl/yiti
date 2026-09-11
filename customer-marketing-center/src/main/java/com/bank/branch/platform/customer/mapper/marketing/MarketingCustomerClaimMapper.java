@@ -2,6 +2,7 @@ package com.bank.branch.platform.customer.mapper.marketing;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
+import com.bank.branch.platform.customer.dto.marketing.customer.MarketingOrgSnapshotRow;
 import com.bank.branch.platform.customer.dto.resp.ClaimedCustomerRespDTO;
 import com.bank.branch.platform.customer.entity.marketing.MarketingCustomerClaim;
 import org.apache.ibatis.annotations.Mapper;
@@ -52,4 +53,9 @@ public interface MarketingCustomerClaimMapper extends BaseMapper<MarketingCustom
 
     /** 取消/触达前锁定目标认领行。 */
     MarketingCustomerClaim selectForUpdate(@Param("id") Long id);
+
+    /**
+     * 按机构聚合有效营销客户和在途触达任务；结果只供客户域快照服务内部组装公共 DTO。
+     */
+    List<MarketingOrgSnapshotRow> selectOrgMarketingSnapshots(@Param("orgCodes") List<String> orgCodes);
 }

@@ -30,8 +30,8 @@ const model = {
   kpis: [
     { key: 'deposit', label: '存款余额', value: 1286.42, unit: '亿元', change: 6.8 },
     { key: 'loan', label: '贷款余额', value: null, unit: '亿元', change: null },
-    { key: 'customers', label: '客户总量', value: 0, unit: '万户', change: 0 },
-    { key: 'revenue', label: '营收', value: 32.68, unit: '亿元', change: 8.1 }
+    { key: 'customers', label: '营销有效归属客户数', value: 0, unit: '万户', change: 0 },
+    { key: 'revenue', label: '手工测试收入', value: 32.68, unit: '亿元', change: 8.1 }
   ],
   trend: [
     { date: '2026-08', deposit: 1253, loan: 948 },

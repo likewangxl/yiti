@@ -512,8 +512,8 @@ function kpiLabel(key) {
   return {
     deposit: '存款余额',
     loan: '贷款余额',
-    customers: '客户总量',
-    revenue: '营收',
+    customers: '营销有效归属客户数',
+    revenue: '手工测试收入',
     rate: '目标完成率'
   }[key] || '指标';
 }

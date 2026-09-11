@@ -21,7 +21,7 @@ const CITY_FIXTURES = Object.freeze([
 
 const TREND_MONTHS = Object.freeze(['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09']);
 const TREND_FACTORS = Object.freeze([0.914, 0.931, 0.948, 0.966, 0.982, 1]);
-// 独立于贷款/营收示意因子的存款余额序列；首月净增相对声明的上月基期计算。
+// 独立于贷款/手工测试收入示意因子的存款余额序列；首月净增相对声明的上月基期计算。
 const DEPOSIT_BASELINE = 1270.50;
 const DEPOSIT_BALANCE_TREND = Object.freeze([1268.12, 1261.40, 1277.86, 1293.08, 1288.30, 1286.42]);
 // 独立的月内平均余额演示值，不从月末趋势点平均推导。
@@ -63,7 +63,7 @@ function cityKpis(city) {
   return [
     { key: 'deposit', label: '存款余额', value: city.deposit, unit: '亿元', change: 4.8 },
     { key: 'loan', label: '贷款余额', value: city.loan, unit: '亿元', change: 3.9 },
-    { key: 'customers', label: '客户总量', value: city.customers, unit: '万户', change: 2.6 },
+    { key: 'customers', label: '营销有效归属客户数', value: city.customers, unit: '万户', change: 2.6 },
     { key: 'rate', label: '目标完成率', value: city.rate, unit: '%', change: null }
   ];
 }
@@ -178,8 +178,8 @@ export const demoModel = Object.freeze({
   kpis: [
     { key: 'deposit', label: '存款余额', value: 1286.42, unit: '亿元', change: depositGrowthPercentAt(DEPOSIT_BALANCE_TREND.length - 1) },
     { key: 'loan', label: '贷款余额', value: 968.35, unit: '亿元', change: 5.4 },
-    { key: 'customers', label: '客户总量', value: 186.24, unit: '万户', change: 4.1 },
-    { key: 'revenue', label: '营收', value: 32.68, unit: '亿元', change: 8.1 },
+    { key: 'customers', label: '营销有效归属客户数', value: 186.24, unit: '万户', change: 4.1 },
+    { key: 'revenue', label: '手工测试收入', value: 32.68, unit: '亿元', change: 8.1 },
     { key: 'rate', label: '目标完成率', value: 86.5, unit: '%', change: null },
     { key: 'depositIncrease', label: '存款较上月净增', value: depositIncreaseAt(DEPOSIT_BALANCE_TREND.length - 1), unit: '亿元', change: null },
     { key: 'depositAverage', label: '存款月均余额', value: DEPOSIT_AVERAGE_FIXTURE, unit: '亿元', change: null }

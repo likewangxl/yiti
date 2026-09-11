@@ -125,11 +125,24 @@ describe('PanoramaInstitutionDirectory 机构目录', () => {
     expect(wrapper.emitted('branch-select')).toEqual([['ORG-003']]);
     expect(wrapper.get('[data-testid="institution-directory-detail"]').text()).toContain('待维护机构');
     expect(wrapper.get('[data-testid="institution-directory-detail"]').text()).toContain('3.40');
-    expect(wrapper.get('[data-testid="institution-directory-detail"]').text()).toContain('客户总量');
+    expect(wrapper.get('[data-testid="institution-directory-detail"]').text()).toContain('营销有效归属客户数');
     expect(wrapper.get('[data-testid="institution-directory-detail"]').text()).toContain('0');
     expect(wrapper.get('[data-testid="institution-directory-detail"]').text()).toContain('—');
     expect(wrapper.get('[data-testid="institution-directory-detail"]').text()).toContain('2026-08');
     expect(wrapper.find('[data-testid="institution-directory-map"]').exists()).toBe(false);
+  });
+
+  it('万户客户的小样本 7 户保留可读精度，不舍入成 0.00', async () => {
+    const wrapper = mountDirectory({
+      model: {
+        dataDate: '2026-09-07',
+        institutions: [{ orgCode: 'SMALL-7', orgName: '七户支行', metrics: { customers: 0.0007 }, trend: [] }]
+      }
+    });
+    await wrapper.get('[data-org-code="SMALL-7"]').trigger('click');
+    const detail = wrapper.get('[data-testid="institution-directory-detail"]').text();
+    expect(detail).toContain('0.0007');
+    expect(detail).not.toContain('0.00万户');
   });
 
   it('Escape、遮罩关闭和焦点恢复只影响机构目录自己的滚动锁', async () => {

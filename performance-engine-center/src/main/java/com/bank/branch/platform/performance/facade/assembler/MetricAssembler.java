@@ -26,7 +26,8 @@ public final class MetricAssembler {
                 .metricCode(entity.getMetricCode())
                 .metricName(entity.getMetricName())
                 .metricNameEn(entity.getMetricNameEn())
-                .description(entity.getMetricDesc())
+                .description(entity.getDescription())
+                .metricDesc(entity.getMetricDesc())
                 .baseDim(entity.getBaseDim())
                 .metricLevel(entity.getMetricLevel())
                 .calcFreq(entity.getCalcFreq())
@@ -35,6 +36,9 @@ public final class MetricAssembler {
                 .valSlot(entity.getValSlot())
                 .status(entity.getStatus())
                 .refMetricCodes(entity.getRefMetricCodes())
+                .unit(entity.getUnit())
+                .decimalPlaces(entity.getDecimalPlaces())
+                .metricCategory(entity.getMetricCategory())
                 .build();
     }
 

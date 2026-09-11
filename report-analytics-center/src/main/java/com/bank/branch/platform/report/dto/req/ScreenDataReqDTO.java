@@ -50,11 +50,26 @@ public class ScreenDataReqDTO {
     /** 上下文参数：orgCode / empId（大屏路由参数透传） */
     private Map<String, String> contextParams;
 
+    /** 不可变分行批次 ID；为空时由服务端选择当前机构组最近批次。客户端不可伪造机构组或授权集合。 */
+    private String batchId;
+
     /** 服务端授权后注入的机构集合，不接受 JSON 输入。 */
     @JsonIgnore
     private List<String> serverOrgCodes;
 
+    /** 服务端完整授权机构集合；单机构下钻时 serverOrgCodes 可收窄，但批次完整性始终使用此集合。 */
+    @JsonIgnore
+    private List<String> serverAuthorizedOrgCodes;
+
     /** 服务端标记：命名机构组请求。 */
     @JsonIgnore
     private boolean namedGroup;
+
+    /** 服务端核验后的机构组编码，来源于当前屏元数据，不接受 JSON 输入。 */
+    @JsonIgnore
+    private String serverGroupCode;
+
+    /** 服务端核验后的单机构收窄条件，仅过滤批次输出，不参与完整批次选择。 */
+    @JsonIgnore
+    private String serverRequestedOrgCode;
 }

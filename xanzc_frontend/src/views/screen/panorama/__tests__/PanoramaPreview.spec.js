@@ -36,10 +36,10 @@ describe('PanoramaPreview 本地演示入口', () => {
     expect(wrapper.find('.stub-dashboard').attributes('data-title')).toBe(demoModel.title);
     expect(wrapper.text()).toContain('本地演示 · 非业务数据');
     expect(wrapper.find('[data-testid="preview-source-top"]').text()).toContain('本地演示 · 非业务数据');
-    expect(wrapper.find('[data-testid="demo-updated-at"]').text()).toContain('本地演示更新时间');
+    expect(wrapper.find('[data-testid="demo-updated-at"]').text()).toContain('本地演示本次查询/刷新时间');
   });
 
-  it('刷新只更新时间提示，不声称后端成功', async () => {
+  it('刷新只更新本次查询/刷新时间提示，不声称后端成功', async () => {
     const wrapper = mount(PanoramaPreview);
     const before = wrapper.find('[data-testid="demo-updated-at"]').text();
     vi.setSystemTime(new Date('2026-09-07T09:01:00+08:00'));

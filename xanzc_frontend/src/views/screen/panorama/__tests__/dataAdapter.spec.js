@@ -75,6 +75,73 @@ describe('panorama data adapter', () => {
     expect(model.issues).toEqual([]);
   });
 
+  it('新批次 columnsMeta 的权威原始单位与发布绑定冲突时不换算正常值', () => {
+    const model = adaptPanoramaResults({
+      deposit: {
+        binding: binding('deposit', { value: 'deposit_amount' }, { value: 'HUNDRED_MILLION' }),
+        response: {
+          quality: { batchId: 'batch-1', status: 'COMPLETE', selectedComplete: true },
+          columns: ['deposit_amount'], rows: [[100000000]],
+          columnsMeta: [{ col: 'deposit_amount', role: 'METRIC', unit: 'YUAN', decimals: 2 }]
+        }
+      }
+    });
+    expect(model.kpis[0]).toMatchObject({ value: null, unit: null });
+    expect(model.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'deposit', code: 'UNIT_MISMATCH', field: 'value' })
+    ]));
+  });
+
+  it('新批次 columnsMeta 的中文元单位可归一为原始元并只换算一次', () => {
+    const model = adaptPanoramaResults({
+      deposit: {
+        binding: binding('deposit', { value: 'deposit_amount' }, { value: 'YUAN' }),
+        response: {
+          quality: { batchId: 'batch-1', status: 'COMPLETE', selectedComplete: true },
+          columns: ['deposit_amount'], rows: [[100000000]],
+          columnsMeta: [{ col: 'deposit_amount', role: 'METRIC', unit: '元', decimals: 2 }]
+        }
+      }
+    });
+    expect(model.kpis[0]).toMatchObject({ value: 1, unit: '亿元' });
+    expect(model.issues).toEqual([]);
+  });
+
+  it('新批次把 DIM 列绑定到指标时留空并记录角色口径异常', () => {
+    const model = adaptPanoramaResults({
+      deposit: {
+        binding: binding('deposit', { value: 'deposit_amount' }, { value: 'YUAN' }),
+        response: {
+          quality: { batchId: 'batch-1', status: 'COMPLETE', selectedComplete: true },
+          columns: ['deposit_amount'], rows: [[100000000]],
+          columnsMeta: [{ col: 'deposit_amount', role: 'DIM', unit: null, decimals: null }]
+        }
+      }
+    });
+    expect(model.kpis[0]).toMatchObject({ value: null, unit: null });
+    expect(model.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'deposit', code: 'ROLE_MISMATCH', field: 'value' })
+    ]));
+  });
+
+  it('新批次 METRIC 列缺少 columnsMeta UNIT 时留空并标为口径/数据缺项，不误报缺值', () => {
+    const model = adaptPanoramaResults({
+      deposit: {
+        binding: binding('deposit', { value: 'deposit_amount' }, { value: 'YUAN' }),
+        response: {
+          quality: { batchId: 'batch-1', status: 'COMPLETE', selectedComplete: true },
+          columns: ['deposit_amount'], rows: [[100000000]],
+          columnsMeta: [{ col: 'deposit_amount', role: 'METRIC', unit: null, decimals: 2 }]
+        }
+      }
+    });
+    expect(model.kpis[0]).toMatchObject({ value: null, unit: null });
+    expect(model.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'deposit', code: 'MISSING_METADATA_UNIT', field: 'value', message: expect.stringContaining('口径/数据缺项') })
+    ]));
+    expect(model.issues.some(item => item.slot === 'deposit' && item.code === 'NO_VALUES')).toBe(false);
+  });
+
   it('未知单位保留 null 并记录 slot issue，不按名称猜测', () => {
     const model = adaptPanoramaResults({
       deposit: {

@@ -8,6 +8,12 @@
       aria-label="数据来源说明"
     >{{ dataNotice }}</div>
 
+    <BatchQualityBanner
+      :quality="model.quality"
+      :quality-guard="model.qualityGuard"
+      :queried-at="model.queriedAt || lastQueriedAt"
+    />
+
     <component :is="isRetail ? RetailDashboard : PanoramaDashboard"
       :model="dashboardModel"
       :source-presentation="dashboardSourcePresentation"
@@ -36,6 +42,7 @@ import { computed, toRef } from 'vue';
 import { useRouter } from 'vue-router';
 import PanoramaDashboard from './PanoramaDashboard.vue';
 import RetailDashboard from './RetailDashboard.vue';
+import BatchQualityBanner from './BatchQualityBanner.vue';
 import { BINDING_SLOTS } from './bindings';
 import { usePanoramaData } from './usePanoramaData';
 import { applyMetricLabels, resolveSourcePresentation } from './sourcePresentation';
@@ -43,19 +50,23 @@ import { applyMetricLabels, resolveSourcePresentation } from './sourcePresentati
 const props = defineProps({
   view: { type: Object, default: () => ({}) },
   context: { type: Object, default: () => ({}) },
-  backPath: { type: String, default: '' }
+  backPath: { type: String, default: '' },
+  batchRequired: { type: Boolean, default: false }
 });
 const emit = defineEmits(['back', 'configure', 'refresh', 'branch-select']);
 const router = useRouter();
 
 const isRetail = computed(() => props.view?.renderPackage?.canvasStyle?.presentation?.template === 'retail-overview-v1');
 
-const state = usePanoramaData(toRef(props, 'view'), toRef(props, 'context'));
+const state = usePanoramaData(toRef(props, 'view'), toRef(props, 'context'), {
+  batchRequired: props.batchRequired
+});
 // Pull refs to the script top level so Vue's template ref unwrapping passes
 // plain model/loading/error values to the presentational Dashboard.
 const model = state.model;
 const loading = state.loading;
 const error = state.error;
+const lastQueriedAt = computed(() => state.lastQueriedAt?.value || '');
 const sourcePresentation = computed(() => resolveSourcePresentation(props.view));
 const dataNotice = computed(() => sourcePresentation.value.dataNotice);
 const dashboardModel = computed(() => applyMetricLabels(
@@ -64,14 +75,15 @@ const dashboardModel = computed(() => applyMetricLabels(
 ));
 const dashboardSourcePresentation = computed(() => ({
   ...sourcePresentation.value,
-  runtimeIssues: state.slotIssues.value || {}
+  runtimeIssues: state.slotIssues.value || {},
+  runtimeQuality: model.value?.qualityGuard || model.value?.quality || null
 }));
 
 const slotLabels = {
   deposit: '存款余额',
   loan: '贷款余额',
-  customers: '客户总量',
-  revenue: '营收',
+  customers: '营销有效归属客户数',
+  revenue: '手工测试收入',
   rate: '目标完成率',
   trend: '经营趋势',
   composition: '业务构成',
@@ -81,7 +93,8 @@ const slotLabels = {
   branchTrend: '支行趋势',
   citySummary: '城市汇总',
   depositIncrease: '存款较上月净增',
-  depositAverage: '存款月均余额'
+  depositAverage: '存款月均余额',
+  batch: '批次质量'
 };
 const locallyExplainedNoValueSlots = new Set(Object.keys(slotLabels));
 

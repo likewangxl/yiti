@@ -1,0 +1,76 @@
+# 分行大屏不可变批次的隔离联调 profile。
+#
+# 与 redengine-task-e2e 一起启用以复用 yit_test 数据源和外发隔离；仅恢复内存 Quartz。
+# 启动参数：-Dspring-boot.run.profiles=redengine-task-e2e,branch-dashboard-e2e
+# 调度任务仍由 SYS_JOB_CONF/JobApi 注册和触发，cron 由下方配置交给声明式 Registrar，不恢复 @Scheduled。
+
+spring:
+  quartz:
+    enabled: true
+    auto-startup: true
+    job-store-type: memory
+    overwrite-existing-jobs: false
+    startup-delay: 0s
+    jdbc:
+      initialize-schema: never
+    properties:
+      org.quartz.jobStore.class: org.quartz.simpl.RAMJobStore
+      # application.yml 的 JDBC 专属属性不能遗留给 RAMJobStore。
+      org.quartz.jobStore.driverDelegateClass:
+      org.quartz.jobStore.tablePrefix:
+      org.quartz.jobStore.isClustered: false
+      org.quartz.jobStore.clusterCheckinInterval:
+      org.quartz.jobStore.misfireThreshold:
+  task:
+    scheduling:
+      enabled: false
+  autoconfigure:
+    exclude:
+      # 只继续排除 @Scheduled 基础设施；QuartzAutoConfiguration 在本 profile 恢复。
+      - org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfiguration
+
+redengine:
+  task:
+    # 大屏联调恢复 Quartz 承载，但不启动红色引擎旧任务调度器。
+    scheduler:
+      enabled: false
+
+perf:
+  branch-dashboard:
+    enabled: true
+    data-classification: TEST
+    group-code: ${BRANCH_DASHBOARD_GROUP_CODE:ORG_GRP_PRIMARY_OPERATING_UNITS}
+    target-plan-code: ${BRANCH_DASHBOARD_TARGET_PLAN_CODE:TEST_BRANCH_Q3_20260910}
+    actual-metric-code: ${BRANCH_DASHBOARD_ACTUAL_METRIC_CODE:M_0309}
+    upstream-metric-codes:
+      - M_0309
+      - M_0314
+      - M_0347
+      - TEST_BRANCH_MOM
+      - TEST_BRANCH_CORP_DEP
+      - TEST_BRANCH_REVENUE
+    customer-metric-code: ${BRANCH_DASHBOARD_CUSTOMER_METRIC_CODE:TEST_BRANCH_CUSTOMERS}
+    attention-metric-code: ${BRANCH_DASHBOARD_ATTENTION_METRIC_CODE:TEST_BRANCH_ATTENTION}
+    target-metric-code: ${BRANCH_DASHBOARD_TARGET_METRIC_CODE:TEST_BRANCH_TARGET}
+    org-rate-metric-code: ${BRANCH_DASHBOARD_ORG_RATE_METRIC_CODE:TEST_BRANCH_RATE_ORG}
+    group-contribution-metric-code: ${BRANCH_DASHBOARD_GROUP_RATE_METRIC_CODE:TEST_BRANCH_RATE_GROUP_CONTRIB}
+    history-days: ${BRANCH_DASHBOARD_HISTORY_DAYS:30}
+    cron: ${BRANCH_DASHBOARD_CRON:0 */5 * * * ?}
+    expected-units:
+      M_0309: YUAN
+      M_0314: YUAN
+      M_0347: YUAN
+      TEST_BRANCH_MOM: YUAN
+      TEST_BRANCH_CORP_DEP: YUAN
+      TEST_BRANCH_REVENUE: YUAN
+      TEST_BRANCH_CUSTOMERS: COUNT
+      TEST_BRANCH_ATTENTION: COUNT
+      TEST_BRANCH_TARGET: YUAN
+      TEST_BRANCH_RATE_ORG: PERCENT
+      TEST_BRANCH_RATE_GROUP_CONTRIB: PERCENT
+
+governance:
+  scheduler:
+    # 隔离 profile 只允许分行批次任务进入 Quartz，其他 job 继续 fail-close。
+    allowed-job-keys:
+      - BRANCH_DASHBOARD_BATCH

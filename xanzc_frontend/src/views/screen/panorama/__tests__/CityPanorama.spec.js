@@ -39,7 +39,7 @@ const model = {
   kpis: [
     { key: 'deposit', label: '存款余额', value: null, unit: '亿元', change: 6.2 },
     { key: 'loan', label: '贷款余额', value: 392.18, unit: '亿元', change: null },
-    { key: 'customers', label: '客户总量', value: 73.28, unit: '万户', change: 3.8 },
+    { key: 'customers', label: '营销有效归属客户数', value: 73.28, unit: '万户', change: 3.8 },
     { key: 'target', label: '目标完成率', value: 88.6, unit: '%', change: null }
   ],
   trend: [], composition: [], rankings: [], attention: [], issues: [], citySummaries: {}, institutions
@@ -119,7 +119,7 @@ describe('CityPanorama 市级支行全景', () => {
     expect(wrapper.find('[data-testid="city-kpi-deposit"]').text()).not.toContain('200');
   });
 
-  it('市级固定保留存款、贷款、客户、营收四张卡，并就近显示字段状态', () => {
+  it('市级固定保留存款、贷款、营销客户、手工测试收入四张卡，并就近显示字段状态', () => {
     const wrapper = mountCity({
       model: { ...model, citySummaries: { '610100': { kpis: [{ key: 'deposit', value: 12, unit: '亿元' }, { key: 'loan', value: 8, unit: '亿元' }] } } },
       sourcePresentation: {

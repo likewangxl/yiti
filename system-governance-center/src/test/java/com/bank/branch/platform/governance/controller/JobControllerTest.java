@@ -294,4 +294,16 @@ class JobControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("GOV-50004"));
     }
+
+    @Test
+    void triggerJob_schedulerAllowlistError_returnsBizError() throws Exception {
+        when(jobService.triggerJob(anyString(), anyString(), any(), any(), anyString()))
+                .thenThrow(new BizException("GOV-40303", "任务未列入当前 Scheduler 允许集合: RED_ENGINE_TASK_WINDOW"));
+
+        mockMvc.perform(post("/api/admin/sys/jobs/J_BLOCKED/trigger")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\": \"测试\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("GOV-40303"));
+    }
 }

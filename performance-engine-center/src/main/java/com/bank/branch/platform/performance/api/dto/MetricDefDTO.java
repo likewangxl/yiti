@@ -21,6 +21,8 @@ public class MetricDefDTO {
     private String metricNameEn;
     /** 指标说明. */
     private String description;
+    /** 指标口径原始短说明（metric_desc）。 */
+    private String metricDesc;
     /** 基础维度: EMP/ORG/CUST. */
     private String baseDim;
     /** 指标层级: 1/2/3. */
@@ -37,4 +39,10 @@ public class MetricDefDTO {
     private String status;
     /** 引用指标编码列表 (JSON 数组字符串). */
     private String refMetricCodes;
+    /** 展示单位。 */
+    private String unit;
+    /** 展示小数位。 */
+    private Integer decimalPlaces;
+    /** 指标分类。 */
+    private String metricCategory;
 }

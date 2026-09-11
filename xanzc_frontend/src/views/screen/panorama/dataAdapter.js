@@ -13,6 +13,16 @@ const DISPLAY_UNIT_LABELS = Object.freeze({
 const AMOUNT_SCALES_PROVING_YUAN = new Set([
   'YUAN', 'TEN_THOUSAND_YUAN', 'HUNDRED_MILLION_YUAN'
 ]);
+
+const CONTRACT_UNIT_ALIASES = Object.freeze({
+  YUAN: 'YUAN', 元: 'YUAN', 人民币元: 'YUAN', CNY: 'YUAN', RMB: 'YUAN',
+  TEN_THOUSAND: 'TEN_THOUSAND', 万元: 'TEN_THOUSAND',
+  HUNDRED_MILLION: 'HUNDRED_MILLION', 亿元: 'HUNDRED_MILLION',
+  COUNT: 'COUNT', 户: 'COUNT', 人: 'COUNT', 个: 'COUNT', 项: 'COUNT', 件: 'COUNT',
+  TEN_THOUSAND_COUNT: 'TEN_THOUSAND_COUNT', 万户: 'TEN_THOUSAND_COUNT', 万个: 'TEN_THOUSAND_COUNT', 万项: 'TEN_THOUSAND_COUNT',
+  PERCENT: 'PERCENT', PCT: 'PERCENT', '%': 'PERCENT', 百分比: 'PERCENT', 百分数: 'PERCENT',
+  RATIO: 'RATIO', 比例: 'RATIO'
+});
 const COMPOSITION_AMOUNT_UNITS = new Set(['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION']);
 const COMPOSITION_RATIO_UNITS = new Set(['PERCENT', 'RATIO']);
 
@@ -118,11 +128,36 @@ function columnMeta(table, column) {
  * *_YUAN 标记解释为原始元值。显式 units 始终优先，因此 ORG_INDEX_RESULT 若声明
  * HUNDRED_MILLION 就按亿元原值读取，不会再次缩放。
  */
-function resolveInputUnit(binding, semantic, meta) {
+function normalizeContractUnit(value) {
+  const textValue = asText(value).trim();
+  if (!textValue) return null;
+  const key = textValue.toUpperCase();
+  return CONTRACT_UNIT_ALIASES[key] || CONTRACT_UNIT_ALIASES[textValue] || null;
+}
+
+/**
+ * 新批次响应的 columnsMeta 是原始单位权威来源；旧响应仍沿用发布绑定和
+ * amountScale 兼容逻辑。返回 conflict 时调用方必须留空，不能把绑定单位
+ * 当作事实继续换算。
+ */
+function resolveInputUnit(binding, semantic, meta, authoritative = false) {
   const explicit = binding?.units?.[semantic];
-  if (UNIT_VALUES.includes(explicit)) return explicit;
-  if (AMOUNT_SCALES_PROVING_YUAN.has(asText(meta?.amountScale).toUpperCase())) return 'YUAN';
-  return null;
+  const boundUnit = UNIT_VALUES.includes(explicit) ? explicit : null;
+  const metaRawUnit = meta?.unit;
+  if (authoritative && (!meta || asText(metaRawUnit).trim() === '')) {
+    return { unit: null, conflict: true, metadataMissing: true };
+  }
+  // amountScale 是旧展示预设，历史 rows 仍以元为基准；新批次优先使用
+  // columnsMeta.unit 的 YUAN/COUNT/PERCENT 契约字段。
+  const scaleUnit = AMOUNT_SCALES_PROVING_YUAN.has(asText(meta?.amountScale).toUpperCase())
+    ? 'YUAN' : null;
+  const metaUnit = normalizeContractUnit(metaRawUnit)
+    || (!boundUnit ? normalizeContractUnit(scaleUnit) : null);
+  if (authoritative && metaRawUnit && !metaUnit) return { unit: null, conflict: true };
+  if (metaUnit) {
+    return { unit: metaUnit, conflict: Boolean(boundUnit && boundUnit !== metaUnit) };
+  }
+  return { unit: boundUnit, conflict: false };
 }
 
 function numeric(value) {
@@ -217,7 +252,21 @@ function readMetric(row, binding, semantic, table, slot, issues, required = fals
     return { value: null, unit: null };
   }
   const raw = row[column] === undefined ? null : row[column];
-  const unit = resolveInputUnit(binding, semantic, columnMeta(table, column));
+  const meta = columnMeta(table, column);
+  if (table?.quality && meta?.role && String(meta.role).toUpperCase() !== 'METRIC') {
+    issue(issues, slot, 'ROLE_MISMATCH', `字段 ${semantic} 输出角色不匹配`, semantic);
+    return { value: null, unit: null };
+  }
+  const resolvedUnit = resolveInputUnit(binding, semantic, meta, Boolean(table?.quality));
+  if (resolvedUnit.metadataMissing) {
+    issue(issues, slot, 'MISSING_METADATA_UNIT', `字段 ${semantic} 缺少单位元数据，属于口径/数据缺项`, semantic);
+    return { value: null, unit: null };
+  }
+  if (resolvedUnit.conflict) {
+    issue(issues, slot, 'UNIT_MISMATCH', `字段 ${semantic} 的响应单位与发布绑定不一致`, semantic);
+    return { value: null, unit: null };
+  }
+  const unit = resolvedUnit.unit;
   if (raw === null || raw === undefined || raw === '') {
     issue(issues, slot, 'NO_VALUES', `字段 ${semantic} 当前无有效值`, semantic);
   }
@@ -378,9 +427,19 @@ function compositionBindingState(binding, table, issues, slot) {
 function compositionMetric(row, binding, semantic, table, slot, issues) {
   const column = binding?.fields?.[semantic];
   const raw = row[column];
+  const meta = columnMeta(table, column);
+  const resolvedUnit = resolveInputUnit(binding, semantic, meta, Boolean(table?.quality));
+  if (resolvedUnit.metadataMissing) {
+    issue(issues, slot, 'MISSING_METADATA_UNIT', `字段 ${semantic} 缺少单位元数据，属于口径/数据缺项`, semantic);
+    return { value: null, unit: null };
+  }
   if (raw === null || raw === undefined || raw === '') {
     issue(issues, slot, 'NO_VALUES', `字段 ${semantic} 当前无有效值`, semantic);
-    return { value: null, unit: displayUnit(slot, semantic, resolveInputUnit(binding, semantic, columnMeta(table, column))) };
+    return { value: null, unit: displayUnit(
+      slot,
+      semantic,
+      resolvedUnit.unit
+    ) };
   }
   if (numeric(raw) === null) {
     issue(issues, slot, 'INVALID_NUMBER', `字段 ${semantic} 不是数值`, semantic);

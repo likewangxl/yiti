@@ -25,6 +25,7 @@ public enum GovErrorCode {
     // 403 禁止操作
     PAST_DATE_NOT_MODIFIABLE("GOV-40301", "过去日期不可修改"),
     JOB_MANUAL_NOT_ALLOWED("GOV-40302", "该任务不允许手动触发"),
+    JOB_NOT_ALLOWED("GOV-40303", "任务未列入当前 Scheduler 允许集合"),
 
     // 409 冲突
     DICT_CODE_DUPLICATE("GOV-40901", "字典编码重复"),

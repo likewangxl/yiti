@@ -62,16 +62,29 @@ boolean isJobRunning(String jobKey);
 ### 4.1 配置读取与注册
 
 - `getJobConf` 找不到任务时返回 `Optional.empty()`；其他调用异常由 Facade 按实现策略处理。
-- `registerJob` 校验 Cron 和 `quartzJobClass`，在事务中写入/更新 `SYS_JOB_CONF`。同 `jobKey` 为覆盖语义；Scheduler 可用时同步注册 JobDetail/CronTrigger，不可用时仅写配置。
+- `registerJob` 先校验可选配置 `governance.scheduler.allowed-job-keys`；集合非空且不包含 `jobKey` 时返回 `GOV-40303`，不写入/更新 `SYS_JOB_CONF`。通过门禁后再校验 Cron 和 `quartzJobClass`，并在事务中写入/更新配置；同 `jobKey` 为覆盖语义；Scheduler 可用时同步注册 JobDetail/CronTrigger，不可用时仅写配置。
 - `RegisterJobCmd` 字段为 `jobKey`、`jobName`、`cronExpr`、`quartzJobClass`（必填语义）、`jobData`（透传 JobDataMap）、`misfirePolicy`（默认 `FIRE_ONCE_NOW`）、`allowManualTrigger`（默认 true）、`remark`。
 - `unregisterJob` 尝试解除 Quartz Job 后删除配置记录；Scheduler 删除失败记录日志并继续完成配置删除，调用方仍应检查运行状态。
 
 ### 4.2 触发与运行状态
 
 - `triggerType` 为空按 `MANUAL` 处理，只接受 `MANUAL`/`AUTO`；两者都受 `allowManualTrigger` 保护。
-- 治理层再次检查 `jobKey` 对应配置和 Scheduler；手动触发的理由由调用方/REST 参数校验保证，`dataDate`、`allocDate` 可选并透传给 Job。
-- 成功返回 `JobTriggerRespDTO`；`runLogId` 可能为空，因为执行日志由 Quartz 全局监听器异步创建。找不到任务为 `GOV-40004`，禁止触发为 `GOV-40302`，Scheduler 失败为 `GOV-50004`。
+- 治理层再次检查 `jobKey` 对应配置、可选允许集合和 Scheduler；手动触发的理由由调用方/REST 参数校验保证，`dataDate`、`allocDate` 可选并透传给 Job。按 ID 的管理端触发同样在 Service 层解析 JobKey 后执行该门禁。
+- 成功返回 `JobTriggerRespDTO`；`runLogId` 可能为空，因为执行日志由 Quartz 全局监听器异步创建。找不到任务为 `GOV-40004`，禁止触发为 `GOV-40302`，不在 Scheduler 允许集合为 `GOV-40303`，Scheduler 失败为 `GOV-50004`。
 - `isJobRunning` 按 `jobKey` 查询 `SYS_JOB_RUN_LOG` 的 `RUNNING` 记录；任务不存在返回 `false`。
+
+### 4.3 Scheduler JobKey 允许集合
+
+`governance.scheduler.allowed-job-keys` 由运行 profile 提供，值为 JobKey 字符串集合。未设置或为空表示不启用限制并保持正式环境原有行为；非空时仅允许集合内任务进入 Quartz。该门禁覆盖启动同步、`registerJob`、`triggerJobByKey`、管理端按 ID 触发、恢复和底层 JobDetail/Trigger 注册；拒绝发生在配置状态写入、运行日志写入和 Quartz 调用前。
+
+示例（隔离大屏 profile）：
+
+```yaml
+governance:
+  scheduler:
+    allowed-job-keys:
+      - BRANCH_DASHBOARD_BATCH
+```
 
 `JobConfDTO` 字段：`id`、`jobKey`、`jobName`、`cronExpr`、`status`（`ACTIVE/PAUSED`）、`allowManualTrigger`、`lastRunTime`、`nextRunTime`、`remark`。
 

@@ -14,6 +14,12 @@ import {
   normalizeRetailBinding
 } from './retailBindings';
 import { BRANCH_SLOT_ORDER, isBindingSlot, normalizeBinding } from './bindings';
+import {
+  compareBatchQuality,
+  isUsableBatchQuality,
+  mergeBatchQualities,
+  readBatchQuality
+} from './batchQuality';
 
 const MAX_CONCURRENCY = 3;
 
@@ -75,6 +81,19 @@ function permissionStatus(error) {
 
 function errorMessage(error, fallback = '取数失败') {
   return String(error?.message || error?.response?.data?.message || fallback);
+}
+
+function batchGuard(code, message, status = 'PARTIAL') {
+  return { code, status, message };
+}
+
+function emptyModel(retail, view, queriedAt, quality = null, qualityGuard = null) {
+  const next = retail ? createEmptyRetailModel({ view }) : createEmptyPanoramaModel();
+  next.quality = quality || null;
+  next.qualityGuard = qualityGuard || null;
+  next.batchId = quality?.batchId || null;
+  next.queriedAt = queriedAt || '';
+  return next;
 }
 
 function contextSnapshot(context) {
@@ -154,6 +173,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
   let activeTasks = 0;
   let pendingLoads = 0;
   let watchReady = false;
+  const lastQueriedAt = ref('');
 
   function currentView() { return valueOf(viewSource) || {}; }
 
@@ -163,7 +183,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
       ? runtimeSchemaVersion(view) : explicit;
   }
 
-  function makeRequest(bindingEntry, view, context, selectedBranch) {
+  function makeRequest(bindingEntry, view, context, selectedBranch, batchId = '') {
     const schema = schemaVersion(view, context);
     const screenCode = String(context.screenCode || view.screenCode || view.screen_code || '').trim();
     const branchCode = String(selectedBranch || '').trim();
@@ -183,7 +203,8 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
       period: bindingEntry.binding.period || 'LATEST',
       dateFrom: context.dateFrom,
       dateTo: context.dateTo,
-      contextParams: requestContext
+      contextParams: requestContext,
+      batchId: batchId || undefined
     });
     return { body, schema };
   }
@@ -255,7 +276,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     return settled.map((result, index) => ({ ...requests[index], ...result }));
   }
 
-  async function prefetchBranchTrends(modelValue, packageInfo, view, context, generationToken, allIssues, branchesResponse, branchesEntry) {
+  async function prefetchBranchTrends(modelValue, packageInfo, view, context, generationToken, allIssues, branchesResponse, branchesEntry, batchState = null) {
     if (packageInfo.retail || !branchesResponse || !Array.isArray(modelValue?.institutions)) return {};
     const entry = packageInfo.slots.get('branchTrend');
     if (!entry) return {};
@@ -270,35 +291,54 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     const codes = modelValue.institutions
       .map(item => String(item?.orgCode || '').trim())
       .filter(code => code && authorizedCodes.has(code) && sourceCodes.has(code))
-      .slice(0, 20);
+      // The live batch contract prefetches only the four institution trends
+      // used by the current screen; retain the legacy 20-row compatibility
+      // path for old non-batch packages.
+      .slice(0, batchState?.required ? 4 : 20);
     if (!codes.length) return {};
     const requests = codes.map(code => {
-      const { body, schema } = makeRequest(entry, view, context, code);
+      const { body, schema } = makeRequest(entry, view, context, code, batchState?.quality?.batchId || '');
       return { slot: 'branchTrend', entry, body, schema, branchOrgCode: code };
     });
     const settled = await runQueue(requests, 'screen', generationToken);
     if (!alive.value || disposed.value || screenGeneration.value !== generationToken) return {};
     const permissionItem = settled.find(item => permissionStatus(item.error));
     if (permissionItem) return { permissionError: permissionItem.error };
+    const batchQualities = [];
     for (const item of settled) {
       const institution = modelValue.institutions.find(candidate => String(candidate?.orgCode) === item.branchOrgCode);
       if (!institution) continue;
       if (item.cancelled) continue;
       if (item.error) {
+        if (batchState?.required) {
+          return { qualityError: batchGuard('REQUEST_FAILED', `机构 ${item.branchOrgCode}：${errorMessage(item.error)}`) };
+        }
         const message = `机构 ${item.branchOrgCode}：${errorMessage(item.error)}`;
         institution.trendIssue = message;
         addIssue(allIssues, 'branchTrend', 'PREFETCH_FAILED', message, item.branchOrgCode);
         continue;
       }
       if (!item.response) {
+        if (batchState?.required) {
+          return { qualityError: batchGuard('QUALITY_MISSING', `机构 ${item.branchOrgCode}：响应缺少 report Quality`) };
+        }
         institution.trendIssue = `机构 ${item.branchOrgCode}：数据源返回为空`;
         addIssue(allIssues, 'branchTrend', 'PREFETCH_NO_VALUES', institution.trendIssue, item.branchOrgCode);
         continue;
+      }
+      if (batchState?.required) {
+        const quality = readBatchQuality(item.response);
+        const comparison = compareBatchQuality(batchState.quality, quality);
+        if (!comparison.ok) {
+          return { qualityError: batchGuard(comparison.code, `机构 ${item.branchOrgCode}：${comparison.message}`) };
+        }
+        batchQualities.push(quality);
       }
       applyBranchTrend(modelValue, item.response, item.entry.binding, item.branchOrgCode);
       institution.trendIssue = Array.isArray(institution.trend) && institution.trend.length
         ? '' : `机构 ${item.branchOrgCode}：最新周期无有效趋势值`;
     }
+    return { qualities: batchQualities };
   }
 
   async function load(loadOptions = {}) {
@@ -307,6 +347,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     const context = contextSnapshot(contextSource);
     const packageInfo = packageBindings(view);
     const retail = packageInfo.retail;
+    const requiresBatch = Boolean(options.batchRequired && !retail);
     const preserveModel = Boolean(loadOptions.preserveModel);
     const onlySlots = Array.isArray(loadOptions.onlySlots)
       ? new Set(loadOptions.onlySlots) : null;
@@ -317,8 +358,10 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     // A full refresh changes the screen/context and invalidates prior branch selections.
     if (kind === 'screen') branchGeneration.value += 1;
     generation.value += 1;
+    const queriedAt = new Date().toISOString();
+    lastQueriedAt.value = queriedAt;
     if (!preserveModel) {
-      model.value = retail ? createEmptyRetailModel({ view }) : createEmptyPanoramaModel();
+      model.value = emptyModel(retail, view, queriedAt);
       error.value = '';
     }
     pendingLoads += 1;
@@ -327,6 +370,13 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
       const { slots } = packageInfo;
       const allIssues = [...packageInfo.issues];
       const selectedBranch = String(loadOptions.branchOrgCode ?? branchOrgCode.value ?? '').trim();
+      const clearBatchModel = (quality, guard) => {
+        const next = emptyModel(retail, view, queriedAt, quality, guard);
+        if (guard) addIssue(allIssues, 'batch', guard.code, guard.message);
+        next.issues = [...allIssues];
+        model.value = next;
+        return next;
+      };
       const requests = [];
       for (const [slot, entry] of slots.entries()) {
         if (onlySlots && !onlySlots.has(slot)) continue;
@@ -341,22 +391,90 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
           continue;
         }
         try {
-          const { body, schema } = makeRequest(entry, view, context, selectedBranch);
+          const requestBatchId = requiresBatch && branchOnly ? model.value?.quality?.batchId || '' : '';
+          const { body, schema } = makeRequest(entry, view, context, selectedBranch, requestBatchId);
           requests.push({ slot, entry, body, schema });
         } catch (requestError) {
           addIssue(allIssues, slot, 'INVALID_REQUEST', errorMessage(requestError, '运行请求不合法'));
         }
       }
-      const settled = await runQueue(requests, kind, currentGeneration);
+      let settled = [];
+      const batchState = { required: requiresBatch, quality: null, qualities: [] };
+      const isCurrent = () => alive.value && !disposed.value
+        && (kind === 'branch' ? branchGeneration.value === currentGeneration : screenGeneration.value === currentGeneration);
+
+      if (requiresBatch && branchOnly) {
+        batchState.quality = model.value?.quality || null;
+        if (!isUsableBatchQuality(batchState.quality)) {
+          return clearBatchModel(batchState.quality, batchGuard(
+            'NO_COMPLETE_BATCH', '当前页面没有可用于机构下钻的完整批次'
+          ));
+        }
+      }
+
+      if (requiresBatch && !branchOnly) {
+        const anchor = requests.find(item => String(item.entry?.binding?.period || '').toUpperCase() === 'LATEST');
+        if (!anchor) {
+          return clearBatchModel(null, batchGuard('NO_LATEST_BATCH_ANCHOR', '本轮没有可锁定批次的 LATEST 槽位', 'NO_COMPLETE_BATCH'));
+        }
+        const anchorSettled = await runQueue([anchor], kind, currentGeneration);
+        if (!isCurrent()) return model.value;
+        const anchorItem = anchorSettled[0];
+        const anchorPermission = permissionStatus(anchorItem?.error);
+        if (anchorPermission) {
+          model.value = emptyModel(retail, view, queriedAt);
+          error.value = errorMessage(anchorItem.error, `没有权限（${anchorPermission}）`);
+          return model.value;
+        }
+        if (anchorItem?.error) {
+          return clearBatchModel(null, batchGuard('REQUEST_FAILED', errorMessage(anchorItem.error)));
+        }
+        const anchorQuality = readBatchQuality(anchorItem?.response);
+        if (!isUsableBatchQuality(anchorQuality)) {
+          const status = anchorQuality?.status === 'NO_COMPLETE_BATCH' ? 'NO_COMPLETE_BATCH' : 'PARTIAL';
+          return clearBatchModel(anchorQuality, batchGuard(
+            anchorQuality ? 'QUALITY_NOT_USABLE' : 'QUALITY_MISSING',
+            anchorQuality?.message || '首个 LATEST 响应没有可用完整批次', status
+          ));
+        }
+        batchState.quality = anchorQuality;
+        batchState.qualities.push(anchorQuality);
+        const rest = requests.filter(item => item !== anchor).map(item => ({
+          ...item,
+          body: { ...item.body, batchId: anchorQuality.batchId }
+        }));
+        const restSettled = await runQueue(rest, kind, currentGeneration);
+        if (!isCurrent()) return model.value;
+        settled = [anchorItem, ...restSettled];
+      } else {
+        settled = await runQueue(requests, kind, currentGeneration);
+      }
       const isCurrentLoad = alive.value && !disposed.value
         && (kind === 'branch' ? branchGeneration.value === currentGeneration : screenGeneration.value === currentGeneration);
       if (!isCurrentLoad) return model.value;
 
       const permissionError = settled.find(item => permissionStatus(item.error));
       if (permissionError) {
-        model.value = retail ? createEmptyRetailModel({ view }) : createEmptyPanoramaModel();
+        model.value = emptyModel(retail, view, queriedAt);
         error.value = errorMessage(permissionError.error, `没有权限（${permissionStatus(permissionError.error)}）`);
         return model.value;
+      }
+
+      if (requiresBatch) {
+        for (const item of settled) {
+          if (item.cancelled) {
+            return clearBatchModel(batchState.quality, batchGuard('STALE_RESPONSE', '本轮请求已被新一轮刷新接管', 'PARTIAL'));
+          }
+          if (item.error) {
+            return clearBatchModel(batchState.quality, batchGuard('REQUEST_FAILED', errorMessage(item.error)));
+          }
+          const quality = readBatchQuality(item.response);
+          const comparison = compareBatchQuality(batchState.quality, quality);
+          if (!comparison.ok) {
+            return clearBatchModel(batchState.quality, batchGuard(comparison.code, comparison.message));
+          }
+          batchState.qualities.push(quality);
+        }
       }
 
       const resultMap = {};
@@ -382,6 +500,12 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         const screenIssues = (nextModel.issues || []).filter(item => item?.slot !== 'branchTrend');
         const branchIssues = allIssues.filter(item => item?.slot === 'branchTrend');
         nextModel.issues = [...screenIssues, ...branchIssues];
+        if (requiresBatch) {
+          nextModel.quality = mergeBatchQualities([...(batchState.qualities || [])]);
+          nextModel.batchId = nextModel.quality?.batchId || null;
+          nextModel.qualityGuard = null;
+          nextModel.queriedAt = queriedAt;
+        }
         model.value = nextModel;
       } else {
         const nextModel = retail
@@ -394,14 +518,25 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
             panoramaInstitutions: view.panoramaInstitutions || view.panorama_institutions,
             title: view.screenName || view.screen_name
           });
-        const prefetchResult = await prefetchBranchTrends(nextModel, packageInfo, view, context, currentGeneration, allIssues, resultMap.branches?.response, packageInfo.slots.get('branches'));
+        const prefetchResult = await prefetchBranchTrends(nextModel, packageInfo, view, context, currentGeneration, allIssues, resultMap.branches?.response, packageInfo.slots.get('branches'), batchState);
         if (!alive.value || disposed.value || screenGeneration.value !== currentGeneration) return model.value;
         if (prefetchResult?.permissionError) {
-          model.value = retail ? createEmptyRetailModel({ view }) : createEmptyPanoramaModel();
+          model.value = emptyModel(retail, view, queriedAt);
           error.value = errorMessage(prefetchResult.permissionError, `没有权限（${permissionStatus(prefetchResult.permissionError)}）`);
           return model.value;
         }
+        if (prefetchResult?.qualityError) {
+          return clearBatchModel(batchState.quality, prefetchResult.qualityError);
+        }
         nextModel.issues = [...allIssues, ...(nextModel.issues || [])];
+        if (requiresBatch) {
+          nextModel.quality = mergeBatchQualities([
+            ...(batchState.qualities || []), ...(prefetchResult?.qualities || [])
+          ]);
+          nextModel.batchId = nextModel.quality?.batchId || null;
+          nextModel.qualityGuard = null;
+          nextModel.queriedAt = queriedAt;
+        }
         model.value = nextModel;
       }
       error.value = '';
@@ -462,6 +597,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     model,
     loading,
     error,
+    lastQueriedAt,
     slotIssues,
     branchOrgCode,
     generation,

@@ -25,7 +25,7 @@ const KPI_LABEL_KEY_SET = new Set(KPI_LABEL_KEYS);
 const MAX_DATA_NOTICE_LENGTH = 240;
 const MAX_SOURCE_AVAILABILITY_MESSAGE_LENGTH = 120;
 const MAX_METRIC_LABEL_LENGTH = 40;
-const SOURCE_STATUSES = new Set(['AVAILABLE', 'NO_SOURCE', 'NO_ROWS', 'NO_VALUES', 'PARTIAL', 'HISTORICAL']);
+const SOURCE_STATUSES = new Set(['AVAILABLE', 'NO_SOURCE', 'NO_ROWS', 'NO_VALUES', 'PARTIAL', 'STALE', 'NO_COMPLETE_BATCH', 'HISTORICAL']);
 const SOURCE_SLOTS = new Set(['deposit', 'depositIncrease', 'depositAverage', 'loan', 'customers', 'revenue', 'rate', 'trend', 'ranking', 'composition', 'attention', 'branches', 'branchTrend', 'citySummary']);
 const SOURCE_FIELD_KEYS = Object.freeze({
   deposit: new Set(['value', 'change', 'date']),
@@ -45,7 +45,7 @@ const SOURCE_FIELD_KEYS = Object.freeze({
 });
 const SOURCE_LABELS = Object.freeze({
   deposit: '存款余额', depositAverage: '存款月均余额',
-  loan: '贷款余额', customers: '客户总量', revenue: '营收', rate: '目标完成率',
+  loan: '贷款余额', customers: '营销有效归属客户数', revenue: '手工测试收入', rate: '目标完成率',
   depositIncrease: '存款较上月净增', trend: '经营趋势', composition: '业务构成',
   ranking: '机构排名', attention: '经营关注', branches: '支行机构', branchTrend: '支行趋势',
   citySummary: '城市汇总', corporate: '对公业务', retail: '零售业务', increase: '存款较上月净增',
@@ -175,6 +175,21 @@ export function resolveDataStatus(presentation, runtimeIssues, slot, semantic = 
       return { status: 'NO_VALUES', message: `${label}当前无有效值` };
     }
     return { status: 'RUNTIME', message: normalizeText(issue.message, MAX_DATA_NOTICE_LENGTH, true) || '取数失败' };
+  }
+  // Quality is returned by report for the whole batch. It takes precedence over
+  // a static AVAILABLE declaration, which only describes configured source
+  // readiness and cannot certify this refresh's data.
+  const runtimeQuality = presentation?.runtimeQuality;
+  const qualityStatus = String(runtimeQuality?.guardStatus || runtimeQuality?.status || '').toUpperCase();
+  if (qualityStatus && qualityStatus !== 'COMPLETE') {
+    return {
+      status: qualityStatus,
+      message: normalizeText(runtimeQuality?.guardMessage || runtimeQuality?.message, MAX_DATA_NOTICE_LENGTH, true)
+        || ({ STALE: '当前展示为超过时效的完整批次', PARTIAL: '本次批次数据不完整', NO_COMPLETE_BATCH: '当前没有完整批次' }[qualityStatus] || '本次批次质量不可用')
+    };
+  }
+  if (runtimeQuality?.mixedPeriod === true) {
+    return { status: 'MIXED_PERIOD', message: '本次批次存在混合统计期间，请核对数据日期' };
   }
   if (staticEntry?.status && staticEntry.status !== 'AVAILABLE') {
     return { status: staticEntry.status, message: staticEntry.message || '暂无有效数据' };

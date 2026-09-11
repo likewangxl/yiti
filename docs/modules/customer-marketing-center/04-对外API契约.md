@@ -101,3 +101,23 @@
 - 批量查询遵守接口实现的上限，超过上限由业务异常返回；不得拆成跨模块逐行 Mapper 查询。
 - 业务模块只能依赖上述 API、DTO 和事件，不得将 Entity 字段、SQL 列或缓存键当作契约。
 - 修改接口、DTO、事件字段或 REST 资源时，必须同步更新本模块 `03`、资源授权和契约检查。
+
+## 9. `MarketingOrgSnapshotQueryApi`
+
+分行大屏按机构读取客户营销当前状态，唯一公开方法为：
+
+```java
+List<MarketingOrgSnapshotDTO> batchQueryOrgSnapshots(List<String> orgCodes, LocalDate asOfDate);
+```
+
+| 字段 | 语义 |
+|---|---|
+| `orgCode` | 去空去重后的机构编码，输出顺序与首次出现顺序一致 |
+| `validCustomerCount` | `MARKETING_CUSTOMER_INFO` 中 `record_status = ACTIVE`、`ownership_status = ASSIGNED` 且 `main_org_id` 为该机构的去重客户数 |
+| `pendingFollowUpTaskCount` | 有效营销客户的 `FIRST_TOUCH` 任务中，状态为 `PENDING` 或 `IN_PROGRESS` 且 `cancel_time` 为空的数量 |
+| `asOfDate` | 请求截至日；null 归一为当前日期，未来日期拒绝 |
+| `sourceAsOfDate` | 实际读取的当前状态日期 |
+| `sourceUpdatedAt` | 相关客户或任务记录的最新更新时间；零值机构为空 |
+| `sourceMode` | 固定为 `CURRENT_STATE`，表示不提供历史状态回放 |
+
+输入机构编码去空去重后最多 500 个；null/空输入返回空集合。服务端要求聚合 Mapper 对每个请求机构返回唯一且非空的计数行，缺行、重复、未请求机构、空/负计数或 Mapper 异常统一以 `CUST-50001` 失败关闭，禁止以补零掩盖查询异常。调用方不得依赖 `MarketingOrgSnapshotRow`、`MarketingCustomerClaimMapper` 或任何实体字段。

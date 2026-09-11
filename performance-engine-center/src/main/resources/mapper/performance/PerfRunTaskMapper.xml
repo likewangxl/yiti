@@ -147,6 +147,13 @@
          WHERE id = #{id}
     </update>
 
+    <update id="updateBatchContext">
+        UPDATE PERF_RUN_TASK
+           SET data_date = #{dataDate},
+               data_version = #{dataVersion}
+         WHERE id = #{id}
+    </update>
+
     <!--
         V1.2 Task Q5.2：清理 cutoff 之前全部 SUCCESS 状态任务.
         FAILED / RUNNING / PENDING / PARTIAL / CANCELLED 保留；

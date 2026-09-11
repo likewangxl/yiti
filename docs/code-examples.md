@@ -100,3 +100,37 @@
 | Pinia store | `src/stores/user.js`（setup 风格）；备选 `src/stores/menu.js`（幂等 load + 索引缓存） | |
 
 ⚠️ `canSee` 前端菜单权限过滤目前只在红色引擎子系统使用；主平台 `DefaultLayout`/`AppSidebar` 不做按资源过滤，权限依赖后端 403。新功能要做前端菜单过滤时参照 `canSee.js`，而非主平台现状。
+
+### 分行大屏不可变批次
+
+批次手工入口、治理触发和测试都复用同一个 Service；自动模式把空日期交给 Service 选择最近
+完整金融业务日，不能在 Quartz 层回退成固定日期：
+
+```java
+BranchDashboardBatchDTO result = batchService.runBatch(
+        requestedDate,                 // null = 自动选择最近完整日
+        "MANUAL",                      // Quartz 使用 "AUTO"
+        operatorEmpId);                // AUTO 可为 null，Service 使用系统 startedBy
+if (!"COMPLETE".equals(result.getStatus())) {
+    throw new IllegalStateException("batch failed: " + result.getStatus());
+}
+```
+
+跨模块查询只依赖公开 QueryApi，并把当前授权机构集合传入；不要读取 `PERF_RUN_TASK`、entity 或
+mapper：
+
+```java
+Optional<BranchDashboardBatchDTO> snapshot = batchQueryApi.latest(
+        groupCode, currentAuthorizedOrgCodes);
+snapshot.ifPresent(dto -> {
+    String batchId = dto.getBatchId();
+    if ("PARTIAL".equals(dto.getStatus())) {
+        // 展示 quality.missing；不要把被过滤机构聚合回页面
+    }
+});
+```
+
+成功写入由批次存储边界一次提交五个专用机构槽位、不可变 JSON 和 SUCCESS 任务；计算、输入
+完整性或序列化失败由独立事务记录 FAILED。Quartz 包装类使用 `@DisallowConcurrentExecution`
+且不标注 `@Component`，由治理 `JobApi`/`SYS_JOB_CONF` 注册，禁止恢复旧的
+`MetricSchedulerService.register()` 路径。

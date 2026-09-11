@@ -278,6 +278,8 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
             ensureNamedGroupDatasourceSafe(probe);
             dataReq.setNamedGroup(true);
             dataReq.setServerOrgCodes(new ArrayList<>(members));
+            dataReq.setServerAuthorizedOrgCodes(new ArrayList<>(members));
+            dataReq.setServerGroupCode(req.getTestOrgGroupCode().trim());
         }
         // try/finally 兜底：engine.tryRun 执行阶段抛异常也必须留痕，不能只审计成功路径
         boolean success = false;
@@ -323,6 +325,8 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
             Set<String> members = scopeAuthorizationService.testGroupMemberCodes(req.getTestOrgGroupCode());
             dataReq.setNamedGroup(true);
             dataReq.setServerOrgCodes(new ArrayList<>(members));
+            dataReq.setServerAuthorizedOrgCodes(new ArrayList<>(members));
+            dataReq.setServerGroupCode(req.getTestOrgGroupCode().trim());
         }
         boolean success = false;
         try {
@@ -384,14 +388,18 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
                 if (authorizedOrgCodes == null || authorizedOrgCodes.isEmpty()) {
                     throw new RptException(RptErrorCode.SCREEN_ACCESS_DENIED);
                 }
+                req.setServerAuthorizedOrgCodes(new ArrayList<>(authorizedOrgCodes));
+                req.setServerGroupCode(screen.getOrgGroupCode());
                 String requestedOrgCode = requestedOrgCode(req);
                 if (requestedOrgCode != null) {
                     if (!authorizedOrgCodes.contains(requestedOrgCode)) {
                         throw new RptException(RptErrorCode.SCREEN_ACCESS_DENIED);
                     }
                     req.setServerOrgCodes(List.of(requestedOrgCode));
+                    req.setServerRequestedOrgCode(requestedOrgCode);
                 } else {
                     req.setServerOrgCodes(new java.util.ArrayList<>(authorizedOrgCodes));
+                    req.setServerRequestedOrgCode(null);
                 }
             } else {
                 if (!isBizLineCompatible(screen.getBizLine(), ds.getBizLine())) {
@@ -432,6 +440,7 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         // fieldMeta / scopeMode 对全 source_kind 通用（spec 2026-07-17 §3.2/§4），统一在分派前校验
         validateFieldMeta(cfg);
         validateScopeMode(cfg);
+        validateBatchPolicy(cfg);
         switch (kind == null ? "" : kind) {
             case "WIDE_TABLE" -> {
                 String table = cfg.path("table").asText();
@@ -474,6 +483,12 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
                 if (cfg.hasNonNull("scopeMode")) {
                     // readJson 已补默认 SUBJECT，此处恒透传，确保 Guard 执行期判定不丢失
                     newCfg.set("scopeMode", cfg.get("scopeMode"));
+                }
+                if (cfg.hasNonNull("qualityPolicy")) {
+                    newCfg.set("qualityPolicy", cfg.get("qualityPolicy"));
+                }
+                if (cfg.hasNonNull("batchPolicy")) {
+                    newCfg.set("batchPolicy", cfg.get("batchPolicy"));
                 }
                 String dsType = "TIMESERIES";
                 JsonNode agg = cfg.path("aggregation");
@@ -614,6 +629,33 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
      */
     private void validateScopeMode(JsonNode cfg) {
         if (!SCOPE_MODES.contains(cfg.path("scopeMode").asText())) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
+    }
+
+    /** 不可变批次策略只允许时效与完整性开关，groupCode 始终由服务端屏元数据注入。 */
+    private void validateBatchPolicy(JsonNode cfg) {
+        JsonNode policy = cfg.path("batchPolicy");
+        if (policy.isMissingNode()) {
+            return;
+        }
+        if (!policy.isObject()) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
+        Set<String> allowed = Set.of("maxAgeDays", "requiredComplete");
+        var fields = policy.fieldNames();
+        while (fields.hasNext()) {
+            if (!allowed.contains(fields.next())) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
+        }
+        if (policy.has("maxAgeDays")) {
+            JsonNode maxAgeDays = policy.path("maxAgeDays");
+            if (!maxAgeDays.isIntegralNumber() || !maxAgeDays.canConvertToInt() || maxAgeDays.asInt() < 0) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
+        }
+        if (policy.has("requiredComplete") && !policy.path("requiredComplete").isBoolean()) {
             throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
         }
     }

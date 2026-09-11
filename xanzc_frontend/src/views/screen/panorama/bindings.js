@@ -85,8 +85,8 @@ export const BINDING_SLOTS = Object.freeze({
   depositIncrease: singleMetric('存款较上月净增'),
   depositAverage: singleMetric('存款月均余额'),
   loan: singleMetric('贷款余额'),
-  customers: singleMetric('客户总量', 'count'),
-  revenue: singleMetric('营收'),
+  customers: singleMetric('营销有效归属客户数', 'count'),
+  revenue: singleMetric('手工测试收入'),
   rate: singleMetric('目标完成率', 'ratio'),
   trend: Object.freeze({
     label: '经营趋势',
@@ -98,7 +98,7 @@ export const BINDING_SLOTS = Object.freeze({
       field('deposit', '存款余额', { unitKinds: amountUnits }),
       field('loan', '贷款余额', { unitKinds: amountUnits }),
       field('depositIncrease', '存款较上月净增', { unitKinds: amountUnits }),
-      field('customers', '客户总量', { unitKinds: countUnits }),
+      field('customers', '营销有效归属客户数', { unitKinds: countUnits }),
       field('rate', '完成率', { unitKinds: ratioUnits })
     ])
   }),
@@ -151,7 +151,7 @@ export const BINDING_SLOTS = Object.freeze({
       field('located', '是否已定位', { kind: 'dimension' }),
       field('deposit', '存款余额', { unitKinds: amountUnits }),
       field('loan', '贷款余额', { unitKinds: amountUnits }),
-      field('customers', '客户总量', { unitKinds: countUnits }),
+      field('customers', '营销有效归属客户数', { unitKinds: countUnits }),
       field('target', '目标值', { unitKinds: amountUnits }),
       field('rate', '完成率', { unitKinds: ratioUnits })
     ])
@@ -165,7 +165,7 @@ export const BINDING_SLOTS = Object.freeze({
       field('date', '日期', { required: true, kind: 'dimension' }),
       field('deposit', '存款余额', { unitKinds: amountUnits }),
       field('loan', '贷款余额', { unitKinds: amountUnits }),
-      field('customers', '客户总量', { unitKinds: countUnits }),
+      field('customers', '营销有效归属客户数', { unitKinds: countUnits }),
       field('rate', '完成率', { unitKinds: ratioUnits })
     ])
   }),
@@ -181,8 +181,8 @@ export const BINDING_SLOTS = Object.freeze({
       field('cityName', '城市名称', { kind: 'dimension' }),
       field('deposit', '存款余额', { unitKinds: amountUnits }),
       field('loan', '贷款余额', { unitKinds: amountUnits }),
-      field('customers', '客户总量', { unitKinds: countUnits }),
-      field('revenue', '营收', { unitKinds: amountUnits }),
+      field('customers', '营销有效归属客户数', { unitKinds: countUnits }),
+      field('revenue', '手工测试收入', { unitKinds: amountUnits }),
       field('rate', '完成率', { unitKinds: ratioUnits })
     ])
   }),

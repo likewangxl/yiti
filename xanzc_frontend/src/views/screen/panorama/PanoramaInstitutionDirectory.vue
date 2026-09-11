@@ -212,8 +212,8 @@ const filters = Object.freeze([
 const metricDefinitions = Object.freeze([
   { key: 'deposit', label: '存款余额', unit: '亿元' },
   { key: 'loan', label: '贷款余额', unit: '亿元' },
-  { key: 'customers', label: '客户总量', unit: '万户' },
-  { key: 'revenue', label: '营收', unit: '亿元' },
+  { key: 'customers', label: '营销有效归属客户数', unit: '万户' },
+  { key: 'revenue', label: '手工测试收入', unit: '亿元' },
   { key: 'target', label: '目标值', unit: '%' },
   { key: 'rate', label: '目标完成率', unit: '%' }
 ]);
@@ -301,6 +301,9 @@ function locationSourceLabel(institution) {
 function formatMetric(value) {
   const number = finiteValue(value);
   if (number === null) return '—';
+  if (number !== 0 && Math.abs(number) < 0.01) {
+    return new Intl.NumberFormat('en-US', { maximumFractionDigits: 8, minimumFractionDigits: 4 }).format(number);
+  }
   return new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 2,
     minimumFractionDigits: Number.isInteger(number) ? 0 : 2

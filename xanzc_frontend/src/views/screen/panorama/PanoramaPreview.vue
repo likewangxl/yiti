@@ -16,7 +16,7 @@
     />
 
     <footer class="screen-preview__footer">
-      <span data-testid="demo-updated-at">本地演示更新时间 {{ lastUpdated }}</span>
+      <span data-testid="demo-updated-at">本地演示本次查询/刷新时间 {{ lastUpdated }}</span>
       <span>坐标为 GCJ-02 近似示意，仅用于开发态视觉验收</span>
       <span data-testid="demo-refresh-note">刷新仅更新本地演示时间，不产生服务端结果</span>
     </footer>

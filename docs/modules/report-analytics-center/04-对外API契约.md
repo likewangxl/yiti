@@ -55,7 +55,11 @@
 
 **详见：[03-接口设计与报文.md](./03-接口设计与报文.md)**
 
-### 2.1 不对外暴露的内容
+### 2.1 大屏运行时质量扩展
+
+外部仍只有既有 `POST /api/screen/data`，不新增批次端点。请求顶层 `batchId` 可空；非空时锁定性能批次 ID，空值由服务端按当前屏机构组和完整授权集合选择最新可见完整批次。响应新增可空 `quality` 与 `columnsMeta` 扩展，旧客户端可忽略。启用 `batchPolicy` 的分行数据源在任一周期返回同一批次 ID；`COMPLETE`、`STALE` 和 `NO_COMPLETE_BATCH` 的语义、来源截至日期、`dataClassification` 及 typed `historyCoverage` 字段以 [03-接口设计与报文](03-接口设计与报文.md#721-运行时批次质量与不可变快照) 为准。
+
+### 2.2 不对外暴露的内容
 - 不对外暴露 Java API 接口（`*Api.java`）
 - 不对外暴露 Service 接口
 - 不对外暴露 Entity

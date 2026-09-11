@@ -22,7 +22,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "spring.quartz", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(
+        name = {"spring.quartz.enabled", "redengine.task.scheduler.enabled"},
+        havingValue = "true",
+        matchIfMissing = true)
 public class ReTaskScheduler {
 
     /** 任务域唯一调度键，不能从请求参数覆盖。 */

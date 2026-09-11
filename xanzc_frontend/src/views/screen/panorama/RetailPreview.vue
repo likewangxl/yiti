@@ -15,7 +15,7 @@
     />
 
     <footer class="retail-preview__footer">
-      <span data-testid="retail-demo-updated-at">本地演示更新时间 {{ lastUpdated }}</span>
+      <span data-testid="retail-demo-updated-at">本地演示本次查询/刷新时间 {{ lastUpdated }}</span>
       <span>示例截止 {{ retailDemoModel.dataDate }} · 机构资料为演示样例</span>
       <span>刷新仅更新本地演示时间，不产生服务端结果</span>
     </footer>

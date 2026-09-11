@@ -116,6 +116,8 @@ Quartz 心跳和 OBS/Session 结果。日志和截图脱敏后归档。
    操作人、Trace 和验证结果。当前恢复接口没有理由请求体，理由必须留在受控工单/审计
    记录中，不得自行扩展请求格式。
 
+若当前活动 profile 配置了非空 `governance.scheduler.allowed-job-keys`，恢复前还必须确认目标 JobKey 在允许集合内；否则接口返回 `GOV-40303`，不会更新任务状态或调用 Quartz。修改允许集合属于部署配置变更，不通过 `SYS_JOB_CONF` 或 Quartz 表手工补写。
+
 ### 4.3 人工触发
 
 人工触发是高风险动作，需 `SYS_CONFIG/JOB_TRIGGER` 授权和理由：
@@ -139,6 +141,8 @@ POST /api/admin/sys/jobs/{jobId}/trigger
 
 - 先核对活动 profile 中 Quartz 是否启用、JobStore 是否为 JDBC、自动启动策略和表前缀；
   再查启动日志是否完成 Scheduler 初始化。
+- 若 profile 配置了 `governance.scheduler.allowed-job-keys`，先核对精确集合内容；集合非空时，
+  不在集合内的 `ACTIVE` 任务会被启动同步有意跳过，且不应因此修改 `SYS_JOB_CONF` 状态。
 - 对照 `SYS_JOB_CONF` 检查任务状态、Cron、`quartz_job_class` 和
   `allow_manual_trigger`；类加载或 Cron 校验失败时按日志定位，不手工写 Quartz 表。
 - 查看 `QRTZ_SCHEDULER_STATE` 心跳和 `QRTZ_TRIGGERS` 状态，区分单实例未启动、

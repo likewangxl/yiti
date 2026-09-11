@@ -48,3 +48,50 @@ Sol 规划和独立复核；一个 Luna 顺序修改后端契约与前端组件/
 - 标准指标结果导入因当前对象存储不可用而未落库；本批次采用测试库受控 DML fallback，只插入缺失基期行、只更新专用空槽并保留前像/逐值对账，不由 report 代码写上游数据。
 - `attention` 绑定增加可选机构号，使全局关注列表仍按 `label`/`count` 展示，并可将每行安全关联到服务端授权目录中的机构；该字段不改变屏级或机构范围授权。
 - 第三阶段十四槽已保存发布，接口返回逐值与测试库一致，越组访问继续拒绝；前端 34 个文件 270 项、生产构建和后端聚合包构建通过。官方 Playwright CLI 无 mock 验证已覆盖 17 次刷新查询、4 项机构排名、4 张城市卡和 0 个 console error/warning。最终页面暴露的金额差 `-0` 显示问题已按 TDD 修复并经更新截图确认，榆林目标差正确显示为 `-0.004221` 亿元；第三阶段已完成视觉冻结，测试数据仍不代表生产经营事实。
+
+## 分行大屏数据治理与自动批次（2026-09-11）
+
+### 目标与边界
+
+- 把指标名称、业务说明、单位、小数位、维度、频率、计算方式和测试/正式分类作为可校验契约；未确认的存款、贷款、月均和营收继续明确标为 TEST，不把 RAND 或人工样本提升为正式经营口径。
+- 以 `PERF_RUN_TASK` 的专用任务类型记录每个机构组、数据日期和版本的一次完整大屏批次，保存成员快照、必需指标、目标方案、每来源截至时间、覆盖数、缺失明细以及本批不可变输出快照。现有 schema 已能承载，不新增 DDL，也不把 report 变成上游写入方。
+- 自动汇总只通过领域 API 读取客户营销数据，通过 performance 自身目标能力读取动态目标，再由 performance 写入本域 `ORG_INDEX_RESULT`。存贷款等源指标仍由既有指标流水线提供；没有可信来源时批次失败或保持测试说明。
+- 调度继续使用治理中心 `JobApi`/Quartz，不增加 `@Scheduled`。手工触发与定时触发必须调用同一个批次 Service；测试 profile 继续保持外发隔离。
+
+### 跨模块契约
+
+1. `customer-marketing-center` 提供只读机构经营快照 API：输入机构编码集合和截至日期，输出每机构有效客户数、待跟进任务数和源数据截至时间。聚合、去重和状态解释在客户域内部完成，不向消费者暴露 mapper/entity。
+2. `performance-engine-center` 提供批次编排和只读查询 API：解析命名机构组，校验指标定义和单位，读取客户快照、目标值和已落地实际指标，原子更新本域专用槽位，并把批次状态、质量摘要和不可变输出写入 `PERF_RUN_TASK`；查询方可按 latest 或明确 batchId 读取。
+3. `report-analytics-center` 的 WIDE_TABLE 最新批次查询按当前版本、授权机构范围和配置的全部必需槽位选择最近完整日期；不得使用全库 `MAX(data_date)`。分行发布源启用批次策略后，通过 performance 公共 API 读取不可变批次。响应增加向后兼容的批次质量元数据，包含 batchId、数据日期、版本、完整性、机构覆盖、每来源截至时间、缺失指标和时效。
+4. `xanzc_frontend` 首个批次响应锁定 batchId 并透传本轮其余请求，顶栏区分各来源“数据截至时间”和“本次刷新时间”，在旧批次、混合期间、部分覆盖或无完整批次时显示清晰状态；静态 `sourceAvailability` 不能覆盖运行时质量失败。
+5. `system-governance-center` 提供可选 JobKey 允许集合；默认空集合保持正式行为，隔离 profile 只启动、注册和触发分行批次任务，RAM Quartz 与现有外发禁用配置并存。
+
+### TDD 与实施顺序
+
+1. Red：客户域聚合 API 先覆盖机构去重、有效状态、截至日期、零值机构和输入上限；再实现 mapper/service/facade。
+2. Red：绩效批次先覆盖单位/维度/测试分类校验、动态目标、除零、成员缺失、幂等重跑、批次终态和失败可追溯；再实现 Service、Quartz 包装和同服务手工入口。
+3. Red：report 先固化“全库未来日期、组内缺机构、必需槽位为 null、旧完整批次回退”四种错误场景；再实现完整批次 SQL和质量 DTO。
+4. Red：前端先断言数据截至时间与刷新时间分离，以及 STALE/PARTIAL/NO_COMPLETE_BATCH 的展示，再实现页面状态。
+5. 更新 performance/report/customer 对外契约、代码示例和资源数据；运行契约检查。跨模块测试前先 `mvn clean install -DskipTests` 刷新 SNAPSHOT。
+
+### 验收标准
+
+- 同一页面本轮 14 个槽位只能使用同一 batchId、版本和机构组成员快照；任何必需机构或必需值缺失都不能被 SUM 忽略后显示为正常合计。客户当前状态与财务历史日期必须分别记录 sourceAsOf，并显示混合期间提醒。
+- 客户和待跟进值能由现有 `MARKETING_*` 关系重新汇总；目标修改后重跑下一批即可更新目标与完成率，不再依赖一次性人工复制。
+- 批次重复执行不产生重复业务关系，只覆盖该批次日期/version 下的专用指标槽位；失败留下可读任务记录且不被 report 选为完整批次。
+- 页面明确显示 TEST、数据截至日期、刷新时间、覆盖机构数和时效状态；当前测试库 14 槽无 mock 浏览器验收保持可用，越组访问继续拒绝。
+- JDK 17 目标模块测试、跨模块聚合包、前端定向测试和生产构建通过；官方 `playwright-cli` 归档无 mock route、请求/响应、console 和截图证据；Sol 独立检查实际 diff 与运行结果后才可完成。
+
+### 本次独立验收记录（2026-09-11；Sol 终审通过，有边界）
+
+独立验收已完成，Sol 已批准本次 TEST 测试库演示交付（有边界）。证据集中归档于 [`../runtime/branch-data-governance/`](../runtime/branch-data-governance/)；本节记录实际证据和已知边界，不将交付表述为 PROD 或整个仓库全量测试通过。
+
+- 独立后端与治理证据：[`customer-final-independent.log`](../runtime/branch-data-governance/customer-final-independent.log) 记录 10 项；[`performance-final-independent-v2.log`](../runtime/branch-data-governance/performance-final-independent-v2.log) 记录 23 项；[`metric-assembler-final.log`](../runtime/branch-data-governance/metric-assembler-final.log) 记录 1 项；[`report-final-independent-v2.log`](../runtime/branch-data-governance/report-final-independent-v2.log) 记录 57 项；[`governance-final-independent.log`](../runtime/branch-data-governance/governance-final-independent.log) 记录 29 项单测和 1 项 IT；[`retask-final-independent.log`](../runtime/branch-data-governance/retask-final-independent.log) 记录 8 项。
+- 前端独立证据：[`frontend-scoped-final-v4.log`](../runtime/branch-data-governance/frontend-scoped-final-v4.log) 记录 38 个文件、329 项测试；[`frontend-build-final-v4.log`](../runtime/branch-data-governance/frontend-build-final-v4.log) 记录生产构建成功。额外 npm 全量测试存在无关测试失败/OOM，详见 [`frontend-final-independent-v2.log`](../runtime/branch-data-governance/frontend-final-independent-v2.log)，不把它表述为全仓全量通过。
+- 后端包证据：[`backend-package-clean-final.log`](../runtime/branch-data-governance/backend-package-clean-final.log) 记录 clean package/install 成功；[`embedded-module-hashes.json`](../runtime/branch-data-governance/embedded-module-hashes.json) 核对五个模块的内嵌哈希一致，避免 bootstrap 复用旧 fat jar。
+- 批次与目标回归：[`initial-live.json`](../runtime/branch-data-governance/initial-live.json)、[`target-changed-live.json`](../runtime/branch-data-governance/target-changed-live.json)、[`restored-live.json`](../runtime/branch-data-governance/restored-live.json)、[`final-live.json`](../runtime/branch-data-governance/final-live.json) 均保持 14 槽、4 家机构和 44/44 覆盖；目标按 1220 万 → 1230 万 → 1220 万变化，完成率按 85.922959 → 85.224398 → 85.922959 回归，触发方式为 AUTO，旧批次保持不变。`target-scenario-journal.json` 的 `restored=true`。
+- 未来日期失败回退证据：[`failure-fallback-live.json`](../runtime/branch-data-governance/failure-fallback-live.json) 记录未来日期失败留痕，并回退到旧成功批次。
+- 官方 CLI 证据：[`browser-acceptance-summary.json`](../runtime/branch-data-governance/browser-acceptance-summary.json) 记录新官方 CLI 会话 35 次请求（17+1+17），全部 HTTP 200/code 0；同一轮请求使用同一 `batchId`，无 routes，`consoleErrors`、`requestFailures`、`browserErrors` 均为空，页面无横向溢出。`dashboard-final.png` 与 [`dashboard-drill.png`](../runtime/branch-data-governance/dashboard-drill.png) 为真实页面截图，已由根代理目视核验。
+- 目录额外 CLI 证据：[`browser-directory.log`](../runtime/branch-data-governance/browser-directory.log) 覆盖 4 家机构目录；待定位宝鸡机构仍显示 2 户，即 `0.0002` 万户，并保留已有指标。截图为 [`dashboard-directory.png`](../runtime/branch-data-governance/dashboard-directory.png)。
+- 运行状态：[`runtime-manifest.json`](../runtime/branch-data-governance/runtime-manifest.json) 记录最终 PID `49492` 和默认 5 分钟调度。页面继续明确显示金融 `2026-08-30` 的 `STALE`（12 天）、营销 `2026-09-11`，以及 13 项元数据警告；金融历史日期和营销当前状态没有被合并。
+- 已知非阻断风险：审计中偶发 `start_time` 比 `end_time` 晚 1 秒，原因登记为 `DATETIME(0)` 小数舍入与数据库 `NOW` 精度差异，已登记为 P2；本轮未修改共享 SQL。

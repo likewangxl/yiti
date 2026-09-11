@@ -154,6 +154,11 @@ public interface PerfRunTaskMapper extends BaseMapper<PerfRunTask> {
                                @Param("errorMsg") String errorMsg,
                                @Param("paramsJson") String paramsJson);
 
+    /** 更新分行批次最终选定的业务日和数据版本，不修改全局 SYS_CONTROL。 */
+    int updateBatchContext(@Param("id") String id,
+                           @Param("dataDate") LocalDate dataDate,
+                           @Param("dataVersion") String dataVersion);
+
     /**
      * 删除 cutoff 之前全部 {@code status = 'SUCCESS'} 的 run_task（V1.2 Task Q5.2）.
      *

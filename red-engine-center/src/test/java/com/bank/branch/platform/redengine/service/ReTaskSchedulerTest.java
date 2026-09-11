@@ -10,6 +10,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.event.EventListener;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -80,10 +81,37 @@ class ReTaskSchedulerTest {
                         org.springframework.boot.autoconfigure.condition.ConditionalOnProperty.class);
 
         assertThat(condition).isNotNull();
-        assertThat(condition.prefix()).isEqualTo("spring.quartz");
-        assertThat(condition.name()).containsExactly("enabled");
+        assertThat(condition.prefix()).isEmpty();
+        assertThat(condition.name()).containsExactly(
+                "spring.quartz.enabled", "redengine.task.scheduler.enabled");
         assertThat(condition.havingValue()).isEqualTo("true");
         assertThat(condition.matchIfMissing()).isTrue();
+    }
+
+    @Test
+    void schedulerBeanIsDisabledWithTaskSchedulerPropertyEvenWhenQuartzIsEnabled() {
+        new ApplicationContextRunner()
+                .withPropertyValues(
+                        "spring.quartz.enabled=true",
+                        "redengine.task.scheduler.enabled=false")
+                .withUserConfiguration(ReTaskScheduler.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(ReTaskScheduler.class);
+                });
+    }
+
+    @Test
+    void schedulerBeanDefaultsToEnabledWhenTaskSchedulerPropertyIsMissing() {
+        new ApplicationContextRunner()
+                .withPropertyValues("spring.quartz.enabled=true")
+                .withBean(JobApi.class, () -> jobApi)
+                .withBean(ReTaskManagementService.class, () -> managementService)
+                .withUserConfiguration(ReTaskScheduler.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(ReTaskScheduler.class);
+                });
     }
 
     @Test

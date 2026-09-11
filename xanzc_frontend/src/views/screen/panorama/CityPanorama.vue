@@ -93,7 +93,7 @@
           <div class="city-detail-metrics">
             <div><span>存款余额（亿元）</span><strong>{{ formatMetric(selectedBranch.metrics?.deposit) }}</strong></div>
             <div><span>贷款余额（亿元）</span><strong>{{ formatMetric(selectedBranch.metrics?.loan) }}</strong></div>
-            <div><span>客户总量（万户）</span><strong>{{ formatMetric(selectedBranch.metrics?.customers) }}</strong><small v-if="!hasMetric(selectedBranch.metrics?.customers)" class="city-inline-status">{{ cityStatus('branches', 'customers').message }}</small></div>
+            <div><span>营销有效归属客户数（万户）</span><strong>{{ formatMetric(selectedBranch.metrics?.customers) }}</strong><small v-if="!hasMetric(selectedBranch.metrics?.customers)" class="city-inline-status">{{ cityStatus('branches', 'customers').message }}</small></div>
             <div><span>目标完成率</span><strong>{{ formatPercent(selectedBranch.metrics?.rate) }}</strong><small v-if="!hasMetric(selectedBranch.metrics?.rate)" class="city-inline-status">{{ cityStatus('branches', 'rate').message }}</small></div>
             <div><span>实际目标差（亿元）</span><strong :class="signedClass(selectedBranchInsight?.targetGap)">{{ signedMetricText(selectedBranchInsight?.targetGap) }}</strong><small v-if="selectedBranchInsight?.targetGap == null" class="city-inline-status" :title="cityStatus('branches', 'target').message">{{ cityStatus('branches', 'target').message }}</small></div>
           </div>
@@ -165,7 +165,7 @@ const cityKpiCards = computed(() => {
   const source = new Map((Array.isArray(citySummary.value?.kpis) ? citySummary.value.kpis : []).map(item => [item?.key, item]));
   return ['deposit', 'loan', 'customers', 'revenue'].map(key => source.get(key) || {
     key,
-    label: ({ deposit: '存款余额', loan: '贷款余额', customers: '客户总量', revenue: '营收' })[key],
+    label: ({ deposit: '存款余额', loan: '贷款余额', customers: '营销有效归属客户数', revenue: '手工测试收入' })[key],
     value: null,
     unit: key === 'customers' ? '万户' : '亿元',
     change: null

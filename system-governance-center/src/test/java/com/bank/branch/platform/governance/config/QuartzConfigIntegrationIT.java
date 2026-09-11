@@ -39,7 +39,17 @@ import static org.assertj.core.api.Assertions.assertThat;
         // 但显式声明便于阅读）
         "spring.quartz.startup-delay=0s",
         // 跳过 src/test/resources/schema.sql / data.sql 初始化，本测试仅验证 Quartz 装配，无需 governance 业务表
-        "spring.sql.init.mode=never"
+        "spring.sql.init.mode=never",
+        // 模拟主配置继承到 branch-dashboard 的 JDBC 专属 jobStore 属性；RAMJobStore 仍应正常启动。
+        "spring.quartz.properties.org.quartz.scheduler.instanceName=governance-memory-test",
+        "spring.quartz.properties.org.quartz.threadPool.threadCount=5",
+        "spring.quartz.properties.org.quartz.threadPool.threadPriority=5",
+        "spring.quartz.properties.org.quartz.jobStore.class=org.quartz.simpl.RAMJobStore",
+        "spring.quartz.properties.org.quartz.jobStore.driverDelegateClass=org.quartz.impl.jdbcjobstore.StdJDBCDelegate",
+        "spring.quartz.properties.org.quartz.jobStore.tablePrefix=QRTZ_",
+        "spring.quartz.properties.org.quartz.jobStore.isClustered=true",
+        "spring.quartz.properties.org.quartz.jobStore.clusterCheckinInterval=20000",
+        "spring.quartz.properties.org.quartz.jobStore.misfireThreshold=60000"
 })
 class QuartzConfigIntegrationIT {
 
@@ -58,6 +68,7 @@ class QuartzConfigIntegrationIT {
         assertThat(scheduler.isStarted()).isTrue();
         assertThat(scheduler.getMetaData().getJobStoreClass().getSimpleName())
                 .isEqualTo("RAMJobStore");
+        assertThat(scheduler.getMetaData().getThreadPoolSize()).isEqualTo(5);
     }
 
     /**

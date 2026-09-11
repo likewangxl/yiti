@@ -4,7 +4,7 @@
       <div class="code-screen-page__banner-meta">
         <strong>{{ activeTemplate === 'branch-overview-v1' ? '测试库数据' : '演示数据' }}</strong>
         <span>{{ activeTemplate === 'branch-overview-v1' ? '非生产业务数据' : '非业务数据' }}</span>
-        <span data-testid="demo-updated-at">更新时间 {{ lastUpdated }}</span>
+        <span data-testid="demo-updated-at">本次查询/刷新时间 {{ lastUpdated }}</span>
         <button type="button" data-action="refresh-demo" @click="refreshScreen">刷新</button>
         <button type="button" data-action="back-to-screen-center" @click="backToCenter">返回大屏中心</button>
       </div>
@@ -38,6 +38,7 @@
         ref="runtimeRef"
         :view="runtimeView"
         :context="runtimeContext"
+        :batch-required="true"
         back-path="/screens"
         @refresh="onRuntimeRefresh"
       />
