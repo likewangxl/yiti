@@ -30,11 +30,11 @@ describe('mapReliefGeometry', () => {
     expect(isReliefAppearance()).toBe(false);
   });
 
-  it('按归一化地图尺度生成 0.6~0.8 的厚挤出、底座和随厚度抬升的标签层', () => {
+  it('按归一化地图尺度生成 0.95~1.2 的厚挤出、底座和随厚度抬升的标签层', () => {
     const config = createReliefGeometryConfig({ worldWidth: 10, worldHeight: 9 });
 
-    expect(config.depth).toBeGreaterThanOrEqual(0.6);
-    expect(config.depth).toBeLessThanOrEqual(0.8);
+    expect(config.depth).toBeGreaterThanOrEqual(0.95);
+    expect(config.depth).toBeLessThanOrEqual(1.2);
     expect(config.baseDepth).toBeGreaterThan(0);
     expect(config.baseDepth).toBeLessThan(config.depth);
     expect(config.fitHeight).toBeGreaterThanOrEqual(0.85);

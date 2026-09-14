@@ -7,8 +7,8 @@
 
 export const RELIEF_APPEARANCE = 'relief';
 
-const MIN_DEPTH = 0.6;
-const MAX_DEPTH = 0.8;
+const MIN_DEPTH = 0.95;
+const MAX_DEPTH = 1.2;
 
 function finitePositive(value, fallback) {
   const number = Number(value);
@@ -28,8 +28,8 @@ export function createReliefGeometryConfig(options = {}) {
   const worldWidth = finitePositive(options.worldWidth, 10);
   const worldHeight = finitePositive(options.worldHeight, 10);
   const worldScale = Math.max(worldWidth, worldHeight, 1);
-  const depth = clamp(worldScale * 0.072, MIN_DEPTH, MAX_DEPTH);
-  const baseDepth = clamp(depth * 0.22, 0.11, 0.18);
+  const depth = clamp(worldScale * 0.10, MIN_DEPTH, MAX_DEPTH);
+  const baseDepth = clamp(depth * 0.24, 0.20, 0.27);
   return {
     depth,
     baseDepth,
@@ -39,8 +39,8 @@ export function createReliefGeometryConfig(options = {}) {
     shadowSpread: clamp(worldScale * 0.014, 0.08, 0.16),
     labelLift: 0.075,
     fitHeight: 0.88,
-    rotationX: -0.26,
-    rotationZ: 0.018,
+    rotationX: -0.38,
+    rotationZ: -0.10,
     cameraOffsetY: -6,
     cameraOffsetZ: 14
   };

@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
+const renderSpy = vi.hoisted(() => vi.fn());
 
 vi.mock('three', async () => {
   const actual = await vi.importActual('three');
@@ -12,7 +13,7 @@ vi.mock('three', async () => {
     setPixelRatio() {}
     setClearColor() {}
     setSize() {}
-    render() {}
+    render(scene, camera) { renderSpy(scene, camera); }
     dispose() {}
   }
   return { ...actual, WebGLRenderer: WebGLRendererStub };
@@ -57,4 +58,40 @@ describe('PanoramaMap WebGL 初始化', () => {
     expect(wrapper.find('.panorama-map__fallback').exists()).toBe(false);
     wrapper.unmount();
   });
+  it('synchronizes lights when appearance changes on an existing component', async () => {
+    vi.stubGlobal('WebGL2RenderingContext', function() {});
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({}));
+    const wrapper = mount(PanoramaMap, { props: { geoJson } });
+    await nextTick();
+    const scene = renderSpy.mock.calls.at(-1)[0];
+    const classicIntensity = scene.children.find(o => o.isAmbientLight).intensity;
+    await wrapper.setProps({ appearance: 'relief' });
+    expect(scene.children.filter(o => o.isPointLight).length).toBeGreaterThan(0);
+    expect(scene.children.find(o => o.isAmbientLight).intensity).toBeLessThan(classicIntensity);
+    await wrapper.setProps({ appearance: 'classic' });
+    expect(scene.children.filter(o => o.isPointLight)).toHaveLength(0);
+    expect(scene.children.find(o => o.isAmbientLight).intensity).toBe(classicIntensity);
+    wrapper.unmount();
+  });
+
+  it('reprojects DOM city labels after ResizeObserver changes the camera aspect', async () => {
+    let resize;
+    vi.stubGlobal('ResizeObserver', class { constructor(fn) { resize = fn; } observe() {} disconnect() {} });
+    vi.stubGlobal('WebGL2RenderingContext', function() {});
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({}));
+    const fixture = structuredClone(geoJson);
+    fixture.features[0].properties.center = [108.15, 34.2];
+    const wrapper = mount(PanoramaMap, { props: { geoJson: fixture, appearance: 'relief' } });
+    let width = 900;
+    Object.defineProperty(wrapper.element, 'clientWidth', { get: () => width });
+    Object.defineProperty(wrapper.element, 'clientHeight', { get: () => 700 });
+    resize(); await nextTick();
+    const before = wrapper.get('.panorama-map__region-label-hit').attributes('style');
+    width = 400;
+    resize(); await nextTick();
+    expect(wrapper.get('.panorama-map__region-label-hit').attributes('style')).not.toBe(before);
+    wrapper.unmount();
+    vi.unstubAllGlobals();
+  });
+
 });

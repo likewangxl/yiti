@@ -14,6 +14,7 @@ const qaDirValue = process.env.SCREEN_QA_DIR === 'off'
   : (process.env.SCREEN_QA_DIR || '/tmp/yiti-corp-relief-qa/browser');
 const qaDir = qaDirValue ? path.resolve(qaDirValue) : '';
 const viewports = [
+  { width: 1420, height: 1032 },
   { width: 1783, height: 909 },
   { width: 1920, height: 1080 },
   { width: 1366, height: 768 },
@@ -173,8 +174,9 @@ function runCodeSource(width, height, screenshotPath) {
       if (innerWidth >= 1100 && (!mapRect || mapRect.height < 510)) failures.push({type: 'map-too-small', height: mapRect?.height});
       if (map?.dataset.webglReady === 'true') {
         const labels = [...map.querySelectorAll('.panorama-map__region-label-hit')].map(el => el.getBoundingClientRect());
+        // The top-face labels exclude the now deeper sidewalls and layered base.
         const labelSpan = labels.length ? Math.max(...labels.map(r => r.bottom)) - Math.min(...labels.map(r => r.top)) : 0;
-        if (labelSpan < mapRect.height * 0.54) failures.push({type: 'map-content-too-small', labelSpan, canvasHeight: mapRect.height});
+        if (labelSpan < mapRect.height * 0.52) failures.push({type: 'map-content-too-small', labelSpan, canvasHeight: mapRect.height});
         if (labels.some(r => r.left < mapRect.left || r.right > mapRect.right || r.top < mapRect.top || r.bottom > mapRect.bottom)) failures.push({type: 'map-label-clipped'});
       }
       const pageWidth = Math.max(document.documentElement.scrollWidth, document.body?.scrollWidth || 0);

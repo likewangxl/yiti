@@ -4,6 +4,7 @@
     class="panorama-map"
     :data-mode="mode"
     :data-appearance="appearance"
+    :data-material-ready="surfaceReady ? 'true' : 'false'"
     :data-selected-region="selectedRegionCode || ''"
     :data-webgl-ready="webglReady ? 'true' : 'false'"
     :data-region-count="renderedRegionCount"
@@ -161,6 +162,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import * as THREE from 'three';
+import reliefSurfaceUrl from '@/assets/maps/relief-surface-grain.png';
 import { Aim, Minus, Plus } from '@element-plus/icons-vue';
 import {
   clusterPoints,
@@ -196,6 +198,14 @@ const zoom = ref(1);
 const activeCluster = ref(null);
 const viewCenter = ref({ x: 0, y: 0 });
 
+const overlayRevision = ref(0);
+const surfaceReady = ref(false);
+let focusedPoint = false;
+let surfaceTexture = null;
+let ambientLight = null;
+let keyLight = null;
+let surfaceLight = null;
+let rimLight = null;
 let renderer = null;
 let scene = null;
 let camera = null;
@@ -356,6 +366,7 @@ function mapSurfaceZ() {
 }
 
 function webglOverlayPoint(worldPoint, z = mapSurfaceZ()) {
+  void overlayRevision.value;
   if (webglReady.value && camera && mapGroup) {
     mapGroup.updateMatrixWorld(true);
     const point = new THREE.Vector3(worldPoint.x, worldPoint.y, z).applyMatrix4(mapGroup.matrixWorld);
@@ -431,6 +442,7 @@ function zoomBy(factor) {
 }
 
 function resetView() {
+  focusedPoint = false;
   zoom.value = 1;
   activeCluster.value = null;
   viewCenter.value = { x: 0, y: 0 };
@@ -442,14 +454,21 @@ function resetView() {
 
 function updateCameraPose() {
   if (!camera || !cameraTarget) return;
+  if (focusedPoint && mapGroup) {
+    mapGroup.updateMatrixWorld(true);
+    cameraTarget.set(viewCenter.value.x, viewCenter.value.y, mapSurfaceZ()).applyMatrix4(mapGroup.matrixWorld);
+  } else cameraTarget.set(0, 0, 0);
   const yOffset = reliefEnabled.value ? reliefConfig.value.cameraOffsetY : -6;
   const zOffset = reliefEnabled.value ? reliefConfig.value.cameraOffsetZ : 14;
   camera.position.set(cameraTarget.x, cameraTarget.y + yOffset, cameraTarget.z + zOffset);
   camera.lookAt(cameraTarget);
+  camera.updateMatrixWorld(true);
+  overlayRevision.value += 1;
 }
 
 function focusOnPoint(point) {
   if (!point) return;
+  focusedPoint = true;
   viewCenter.value = { x: Number(point.x) || 0, y: Number(point.y) || 0 };
   if (!cameraTarget || !mapGroup) return;
   mapGroup.updateMatrixWorld(true);
@@ -467,7 +486,7 @@ function updatePointMarkerScale() {
 function disposeMaterial(material) {
   const materials = Array.isArray(material) ? material : [material];
   materials.filter(Boolean).forEach(item => {
-    if (item.map?.dispose) item.map.dispose();
+    if (item.map?.dispose && item.map !== surfaceTexture) item.map.dispose();
     item.dispose?.();
   });
 }
@@ -523,9 +542,9 @@ function shapeFromPolygon(polygon) {
   return shape;
 }
 
-function addReliefContour(ring, material, z, userData) {
+function addReliefContour(ring, material, z, userData, scale = 1) {
   if (!Array.isArray(ring) || ring.length < 2) return;
-  const points = ring.map(point => new THREE.Vector3(point.x, point.y, z));
+  const points = ring.map(point => new THREE.Vector3(point.x * scale, point.y * scale, z));
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   const line = new THREE.LineLoop(geometry, material);
   line.userData = userData;
@@ -552,21 +571,61 @@ function buildThreeMap() {
   }
 }
 
+function ensureSurfaceTexture() {
+  if (!reliefEnabled.value || surfaceTexture) return;
+  surfaceTexture = new THREE.TextureLoader().load(reliefSurfaceUrl, texture => {
+    if (disposed || !renderer) { texture.dispose(); return; }
+    surfaceReady.value = true;
+    renderFrame();
+  });
+  surfaceTexture.wrapS = surfaceTexture.wrapT = THREE.RepeatWrapping;
+  surfaceTexture.repeat.set(.055, .055);
+  surfaceTexture.colorSpace = THREE.NoColorSpace;
+}
+
+function syncLighting() {
+  if (!scene) return;
+  if (!ambientLight) { ambientLight = new THREE.AmbientLight(0xaac7ff); scene.add(ambientLight); }
+  if (!keyLight) {
+    keyLight = new THREE.DirectionalLight(0xb8dfff);
+    keyLight.position.set(-3, -4, 10); scene.add(keyLight);
+  }
+  ambientLight.intensity = reliefEnabled.value ? .42 : 1.65;
+  keyLight.intensity = reliefEnabled.value ? 2.2 : 2.3;
+  keyLight.color.setHex(reliefEnabled.value ? 0xb8dfff : 0x9ec7ff);
+  if (reliefEnabled.value) {
+    if (!surfaceLight) {
+      surfaceLight = new THREE.PointLight(0x79baff, 46, 30, 2);
+      surfaceLight.position.set(-4, 3, 7); scene.add(surfaceLight);
+      rimLight = new THREE.DirectionalLight(0x795bff, 1.25);
+      rimLight.position.set(5, 3, 2); scene.add(rimLight);
+    }
+  } else {
+    for (const light of [surfaceLight, rimLight]) { if (light) { scene.remove(light); light.dispose?.(); } }
+    surfaceLight = rimLight = null;
+  }
+}
+
 function buildThreeMapUnsafe() {
   if (!scene) {
     renderedRegionCount.value = 0;
     return;
   }
+  syncLighting();
+  ensureSurfaceTexture();
   clearMapGroup();
   const polygons = projectGeoJson(props.geoJson, projection.value);
   renderedRegionCount.value = polygons.length;
   const relief = reliefEnabled.value;
   const config = reliefConfig.value;
   const topMaterial = new THREE.MeshPhongMaterial({
-    color: relief ? 0x125ccc : 0x304ea4,
+    color: relief ? 0x1057b9 : 0x304ea4,
     emissive: relief ? 0x09235e : 0x101a58,
-    emissiveIntensity: relief ? 0.24 : 0.65,
-    shininess: relief ? 65 : 70,
+    emissiveIntensity: relief ? 0.10 : 0.65,
+    shininess: relief ? 48 : 70,
+    map: relief ? surfaceTexture : null,
+    bumpMap: relief ? surfaceTexture : null,
+    bumpScale: relief ? .075 : 1,
     specular: relief ? 0x579bdf : 0x111111,
     transparent: true,
     opacity: relief ? 0.98 : 0.93
@@ -575,14 +634,17 @@ function buildThreeMapUnsafe() {
     color: relief ? 0x536bff : 0x6f43ba,
     emissive: relief ? 0x17136a : 0x31135f,
     emissiveIntensity: relief ? 0.72 : 0.88,
-    shininess: relief ? 100 : 85,
+    shininess: relief ? 75 : 85,
+    map: relief ? surfaceTexture : null,
+    bumpMap: relief ? surfaceTexture : null,
+    bumpScale: relief ? .075 : 1,
     transparent: true,
     opacity: relief ? 0.99 : 0.96
   });
   const sideMaterial = new THREE.MeshPhongMaterial({
     color: relief ? 0x0a255f : (props.mode === 'province' ? 0x1d3479 : 0x152763),
     emissive: relief ? 0x061638 : (props.mode === 'province' ? 0x10245d : 0x090f35),
-    emissiveIntensity: relief ? 0.42 : (props.mode === 'province' ? 0.58 : 0.35),
+    emissiveIntensity: relief ? 0.12 : (props.mode === 'province' ? 0.58 : 0.35),
     shininess: relief ? 36 : (props.mode === 'province' ? 36 : 25),
     transparent: true,
     opacity: relief ? 0.98 : (props.mode === 'province' ? 0.96 : 0.92)
@@ -639,14 +701,14 @@ function buildThreeMapUnsafe() {
       addReliefGroundShadow(
         polygon,
         shadowMaterial,
-        -config.baseDepth - config.shadowGap,
+        -config.baseDepth * 1.8 - config.shadowGap,
         userData,
         config.shadowSpread * 1.35
       );
       addReliefGroundShadow(
         polygon,
         shadowGlowMaterial,
-        -config.baseDepth - config.shadowGap * 0.58,
+        -config.baseDepth * 1.8 - config.shadowGap * 0.58,
         userData,
         config.shadowSpread * 0.58
       );
@@ -659,8 +721,14 @@ function buildThreeMapUnsafe() {
       });
       const baseMesh = new THREE.Mesh(baseGeometry, [baseTopMaterial, baseSideMaterial]);
       baseMesh.position.z = -config.baseDepth;
+      baseMesh.scale.set(1.055, 1.055, 1);
       baseMesh.userData = userData;
       mapGroup.add(baseMesh);
+      const lowerBase = new THREE.Mesh(baseGeometry, [baseTopMaterial, baseSideMaterial]);
+      lowerBase.position.z = -config.baseDepth * 1.65;
+      lowerBase.scale.set(1.085, 1.085, .55);
+      lowerBase.userData = userData;
+      mapGroup.add(lowerBase);
 
       const geometry = new THREE.ExtrudeGeometry(shapeFromPolygon(polygon), {
         depth: config.depth,
@@ -677,8 +745,8 @@ function buildThreeMapUnsafe() {
       const topMaterialForPolygon = selected ? selectedContourMaterial : topContourMaterial;
       addReliefContour(polygon.outer, topMaterialForPolygon, config.depth + config.contourLift, userData);
       polygon.holes.forEach(ring => addReliefContour(ring, topMaterialForPolygon, config.depth + config.contourLift, userData));
-      addReliefContour(polygon.outer, bottomContourMaterial, -config.baseDepth - config.contourLift, userData);
-      polygon.holes.forEach(ring => addReliefContour(ring, bottomContourMaterial, -config.baseDepth - config.contourLift, userData));
+      addReliefContour(polygon.outer, bottomContourMaterial, -config.baseDepth * 1.65 - config.contourLift, userData, 1.085);
+      polygon.holes.forEach(ring => addReliefContour(ring, bottomContourMaterial, -config.baseDepth * 1.65 - config.contourLift, userData, 1.085));
     });
   } else {
     const edgeMaterial = new THREE.LineBasicMaterial({
@@ -778,6 +846,7 @@ function resizeRenderer() {
     }
     camera.zoom = zoom.value;
     camera.updateProjectionMatrix();
+    overlayRevision.value += 1;
     renderFrame();
   } catch (error) {
     activateFallback('resize', error);
@@ -853,6 +922,8 @@ function setupThree() {
   }
   try {
     renderer = new THREE.WebGLRenderer({ canvas: canvasRef.value, alpha: true, antialias: true });
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.NoToneMapping;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(0x07163d, 0);
     scene = new THREE.Scene();
@@ -861,16 +932,7 @@ function setupThree() {
     updateCameraPose();
     raycaster = new THREE.Raycaster();
     pointer = new THREE.Vector2();
-    scene.add(new THREE.AmbientLight(0xaac7ff, reliefEnabled.value ? 0.8 : 1.65));
-    const light = new THREE.DirectionalLight(0x9ec7ff, reliefEnabled.value ? 1.6 : 2.3);
-    light.position.set(-3, -4, 10);
-    scene.add(light);
-    if (reliefEnabled.value) {
-      // A local light adds material depth without inventing terrain or data shading.
-      const surfaceLight = new THREE.PointLight(0x75bdff, 65, 30, 2);
-      surfaceLight.position.set(-3, 3, 6);
-      scene.add(surfaceLight);
-    }
+    syncLighting();
     contextLostHandler = onWebGLContextLost;
     renderer.domElement.addEventListener('webglcontextlost', contextLostHandler, false);
     buildThreeMap();
@@ -897,6 +959,10 @@ function disposeThree() {
   const activeRenderer = renderer;
   try { activeRenderer?.forceContextLoss?.(); } catch { /* context may already be lost */ }
   try { activeRenderer?.dispose?.(); } catch { /* disposal must not block SVG fallback */ }
+  surfaceTexture?.dispose?.();
+  surfaceTexture = null;
+  surfaceReady.value = false;
+  ambientLight = keyLight = surfaceLight = rimLight = null;
   renderer = null;
   scene = null;
   camera = null;
