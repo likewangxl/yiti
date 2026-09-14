@@ -3,6 +3,7 @@
     ref="containerRef"
     class="panorama-map"
     :data-mode="mode"
+    :data-appearance="appearance"
     :data-selected-region="selectedRegionCode || ''"
     :data-webgl-ready="webglReady ? 'true' : 'false'"
     :data-region-count="renderedRegionCount"
@@ -167,6 +168,12 @@ import {
   filterRenderablePoints,
   projectGeoJson
 } from './mapGeometry';
+import {
+  fitReliefView,
+  createReliefGeometryConfig,
+  getReliefSurfaceZ,
+  isReliefAppearance
+} from './mapReliefGeometry';
 
 const props = defineProps({
   geoJson: { type: Object, default: () => ({ type: 'FeatureCollection', features: [] }) },
@@ -174,7 +181,8 @@ const props = defineProps({
   selectedOrgCode: { type: [String, Number], default: null },
   mode: { type: String, default: 'province' },
   selectedRegionCode: { type: [String, Number], default: null },
-  demo: { type: Boolean, default: false }
+  demo: { type: Boolean, default: false },
+  appearance: { type: String, default: 'classic' }
 });
 
 const emit = defineEmits(['region-select', 'branch-select']);
@@ -204,6 +212,12 @@ let handlingFailure = false;
 
 const projection = computed(() => createProjection(props.geoJson));
 const projectedRegions = computed(() => projectGeoJson(props.geoJson, projection.value));
+const appearance = computed(() => (isReliefAppearance(props.appearance) ? 'relief' : 'classic'));
+const reliefEnabled = computed(() => appearance.value === 'relief');
+const reliefConfig = computed(() => createReliefGeometryConfig({
+  worldWidth: projection.value.width,
+  worldHeight: projection.value.height
+}));
 const renderablePoints = computed(() => filterRenderablePoints(props.points, { demo: props.demo }));
 const unmappedPoints = computed(() => (Array.isArray(props.points) ? props.points : [])
   .filter(point => !renderablePoints.value.includes(point)));
@@ -337,7 +351,11 @@ function regionLabelWorldPoint(region) {
   return region.labelWorld || baseRegionLabelWorldPoint(region);
 }
 
-function webglOverlayPoint(worldPoint, z = 0.38) {
+function mapSurfaceZ() {
+  return reliefEnabled.value ? getReliefSurfaceZ(reliefConfig.value) : 0.38;
+}
+
+function webglOverlayPoint(worldPoint, z = mapSurfaceZ()) {
   if (webglReady.value && camera && mapGroup) {
     mapGroup.updateMatrixWorld(true);
     const point = new THREE.Vector3(worldPoint.x, worldPoint.y, z).applyMatrix4(mapGroup.matrixWorld);
@@ -353,12 +371,16 @@ function regionLabelStyle(region) {
 }
 
 function cityHaloStyle(region) {
-  const point = webglOverlayPoint(regionLabelWorldPoint(region), 0.34);
+  const point = webglOverlayPoint(regionLabelWorldPoint(region), reliefEnabled.value
+    ? reliefConfig.value.depth + reliefConfig.value.contourLift
+    : 0.34);
   return { left: `${point.x}%`, top: `${point.y}%` };
 }
 
 function pointStyle(point) {
-  const screen = webglOverlayPoint(point, 0.42);
+  const screen = webglOverlayPoint(point, reliefEnabled.value
+    ? reliefConfig.value.depth + reliefConfig.value.contourLift + 0.02
+    : 0.42);
   return { left: `${screen.x}%`, top: `${screen.y}%` };
 }
 
@@ -420,7 +442,9 @@ function resetView() {
 
 function updateCameraPose() {
   if (!camera || !cameraTarget) return;
-  camera.position.set(cameraTarget.x, cameraTarget.y - 6, cameraTarget.z + 14);
+  const yOffset = reliefEnabled.value ? reliefConfig.value.cameraOffsetY : -6;
+  const zOffset = reliefEnabled.value ? reliefConfig.value.cameraOffsetZ : 14;
+  camera.position.set(cameraTarget.x, cameraTarget.y + yOffset, cameraTarget.z + zOffset);
   camera.lookAt(cameraTarget);
 }
 
@@ -429,7 +453,7 @@ function focusOnPoint(point) {
   viewCenter.value = { x: Number(point.x) || 0, y: Number(point.y) || 0 };
   if (!cameraTarget || !mapGroup) return;
   mapGroup.updateMatrixWorld(true);
-  cameraTarget.set(Number(point.x) || 0, Number(point.y) || 0, 0.32).applyMatrix4(mapGroup.matrixWorld);
+  cameraTarget.set(Number(point.x) || 0, Number(point.y) || 0, mapSurfaceZ()).applyMatrix4(mapGroup.matrixWorld);
   updateCameraPose();
 }
 
@@ -467,8 +491,16 @@ function clearMapGroup() {
   }
   mapGroup = new THREE.Group();
   pointGroup = new THREE.Group();
-  mapGroup.rotation.x = props.mode === 'province' ? -0.30 : -0.24;
-  mapGroup.rotation.z = props.mode === 'province' ? 0.025 : 0.018;
+  if (reliefEnabled.value) {
+    mapGroup.rotation.x = reliefConfig.value.rotationX;
+    mapGroup.rotation.z = reliefConfig.value.rotationZ;
+  } else {
+    mapGroup.rotation.x = props.mode === 'province' ? -0.30 : -0.24;
+    mapGroup.rotation.z = props.mode === 'province' ? 0.025 : 0.018;
+  }
+  // Relief points must sit on the same tilted top plane as their source map.
+  // Keep the existing classic point group untouched for retail compatibility.
+  if (reliefEnabled.value) pointGroup.rotation.copy(mapGroup.rotation);
   scene?.add(mapGroup);
   scene?.add(pointGroup);
 }
@@ -491,6 +523,27 @@ function shapeFromPolygon(polygon) {
   return shape;
 }
 
+function addReliefContour(ring, material, z, userData) {
+  if (!Array.isArray(ring) || ring.length < 2) return;
+  const points = ring.map(point => new THREE.Vector3(point.x, point.y, z));
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const line = new THREE.LineLoop(geometry, material);
+  line.userData = userData;
+  mapGroup.add(line);
+}
+
+function addReliefGroundShadow(polygon, material, z, userData, spread) {
+  if (!polygon.outer.length) return;
+  const geometry = new THREE.ShapeGeometry(shapeFromPolygon(polygon));
+  const shadow = new THREE.Mesh(geometry, material);
+  shadow.position.z = z;
+  // GeoJSON is projected around the province center, so a small uniform expansion
+  // keeps the shadow attached to its source polygon while softening the footprint.
+  shadow.scale.setScalar(1 + (spread / Math.max(projection.value.width, projection.value.height, 1)));
+  shadow.userData = { ...userData, decorative: true };
+  mapGroup.add(shadow);
+}
+
 function buildThreeMap() {
   try {
     buildThreeMapUnsafe();
@@ -507,67 +560,167 @@ function buildThreeMapUnsafe() {
   clearMapGroup();
   const polygons = projectGeoJson(props.geoJson, projection.value);
   renderedRegionCount.value = polygons.length;
+  const relief = reliefEnabled.value;
+  const config = reliefConfig.value;
   const topMaterial = new THREE.MeshPhongMaterial({
-    color: 0x304ea4,
-    emissive: 0x101a58,
-    emissiveIntensity: 0.65,
-    shininess: 70,
+    color: relief ? 0x125ccc : 0x304ea4,
+    emissive: relief ? 0x09235e : 0x101a58,
+    emissiveIntensity: relief ? 0.24 : 0.65,
+    shininess: relief ? 65 : 70,
+    specular: relief ? 0x579bdf : 0x111111,
     transparent: true,
-    opacity: 0.93
+    opacity: relief ? 0.98 : 0.93
   });
   const selectedTopMaterial = new THREE.MeshPhongMaterial({
-    color: 0x6f43ba,
-    emissive: 0x31135f,
-    emissiveIntensity: 0.88,
-    shininess: 85,
+    color: relief ? 0x536bff : 0x6f43ba,
+    emissive: relief ? 0x17136a : 0x31135f,
+    emissiveIntensity: relief ? 0.72 : 0.88,
+    shininess: relief ? 100 : 85,
     transparent: true,
-    opacity: 0.96
+    opacity: relief ? 0.99 : 0.96
   });
   const sideMaterial = new THREE.MeshPhongMaterial({
-    color: props.mode === 'province' ? 0x1d3479 : 0x152763,
-    emissive: props.mode === 'province' ? 0x10245d : 0x090f35,
-    emissiveIntensity: props.mode === 'province' ? 0.58 : 0.35,
-    shininess: props.mode === 'province' ? 36 : 25,
+    color: relief ? 0x0a255f : (props.mode === 'province' ? 0x1d3479 : 0x152763),
+    emissive: relief ? 0x061638 : (props.mode === 'province' ? 0x10245d : 0x090f35),
+    emissiveIntensity: relief ? 0.42 : (props.mode === 'province' ? 0.58 : 0.35),
+    shininess: relief ? 36 : (props.mode === 'province' ? 36 : 25),
     transparent: true,
-    opacity: props.mode === 'province' ? 0.96 : 0.92
+    opacity: relief ? 0.98 : (props.mode === 'province' ? 0.96 : 0.92)
   });
-  const edgeMaterial = new THREE.LineBasicMaterial({
-    color: props.mode === 'province' ? 0xb8d4ff : 0x83b9ff,
-    transparent: true,
-    opacity: 0.96
-  });
-  const sideGlowMaterial = props.mode === 'province'
-    ? new THREE.LineBasicMaterial({ color: 0xa979ff, transparent: true, opacity: 0.42 })
-    : null;
-
-  polygons.forEach(polygon => {
-    if (!polygon.outer.length) return;
-    const geometry = new THREE.ExtrudeGeometry(shapeFromPolygon(polygon), {
-      depth: props.mode === 'province' ? 0.28 : 0.18,
-      bevelEnabled: false,
-      steps: 1,
-      curveSegments: 1
+  if (relief) {
+    const baseTopMaterial = new THREE.MeshPhongMaterial({
+      color: 0x0e347b,
+      emissive: 0x050d2e,
+      emissiveIntensity: 0.32,
+      shininess: 25,
+      transparent: true,
+      opacity: 0.96
     });
-    const selected = polygon.code && String(polygon.code) === String(props.selectedRegionCode);
-    const mesh = new THREE.Mesh(geometry, [selected ? selectedTopMaterial : topMaterial, sideMaterial]);
-    mesh.userData = { type: 'region', code: polygon.code, name: polygon.name };
-    mapGroup.add(mesh);
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), edgeMaterial);
-    edges.userData = mesh.userData;
-    mapGroup.add(edges);
-    if (sideGlowMaterial) {
-      const glowEdges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), sideGlowMaterial);
-      glowEdges.position.z = -0.022;
-      glowEdges.scale.setScalar(1.004);
-      glowEdges.userData = mesh.userData;
-      mapGroup.add(glowEdges);
-    }
-  });
+    const baseSideMaterial = new THREE.MeshPhongMaterial({
+      color: 0x07183f,
+      emissive: 0x030b24,
+      emissiveIntensity: 0.22,
+      shininess: 18,
+      transparent: true,
+      opacity: 0.94
+    });
+    const topContourMaterial = new THREE.LineBasicMaterial({
+      color: 0x6cefff,
+      transparent: true,
+      opacity: 0.98
+    });
+    const selectedContourMaterial = new THREE.LineBasicMaterial({
+      color: 0xe0b6ff,
+      transparent: true,
+      opacity: 0.99
+    });
+    const bottomContourMaterial = new THREE.LineBasicMaterial({
+      color: 0xb86dff,
+      transparent: true,
+      opacity: 0.88
+    });
+    const shadowMaterial = new THREE.MeshBasicMaterial({
+      color: 0x02091e,
+      transparent: true,
+      opacity: 0.27,
+      depthWrite: false
+    });
+    const shadowGlowMaterial = new THREE.MeshBasicMaterial({
+      color: 0x071c52,
+      transparent: true,
+      opacity: 0.13,
+      depthWrite: false
+    });
+
+    polygons.forEach(polygon => {
+      if (!polygon.outer.length) return;
+      const userData = { type: 'region', code: polygon.code, name: polygon.name };
+      const selected = polygon.code && String(polygon.code) === String(props.selectedRegionCode);
+      addReliefGroundShadow(
+        polygon,
+        shadowMaterial,
+        -config.baseDepth - config.shadowGap,
+        userData,
+        config.shadowSpread * 1.35
+      );
+      addReliefGroundShadow(
+        polygon,
+        shadowGlowMaterial,
+        -config.baseDepth - config.shadowGap * 0.58,
+        userData,
+        config.shadowSpread * 0.58
+      );
+
+      const baseGeometry = new THREE.ExtrudeGeometry(shapeFromPolygon(polygon), {
+        depth: config.baseDepth,
+        bevelEnabled: false,
+        steps: 1,
+        curveSegments: 1
+      });
+      const baseMesh = new THREE.Mesh(baseGeometry, [baseTopMaterial, baseSideMaterial]);
+      baseMesh.position.z = -config.baseDepth;
+      baseMesh.userData = userData;
+      mapGroup.add(baseMesh);
+
+      const geometry = new THREE.ExtrudeGeometry(shapeFromPolygon(polygon), {
+        depth: config.depth,
+        bevelEnabled: true,
+        bevelThickness: 0.012,
+        bevelSize: 0.012,
+        bevelSegments: 1,
+        steps: 1,
+        curveSegments: 1
+      });
+      const mesh = new THREE.Mesh(geometry, [selected ? selectedTopMaterial : topMaterial, sideMaterial]);
+      mesh.userData = userData;
+      mapGroup.add(mesh);
+      const topMaterialForPolygon = selected ? selectedContourMaterial : topContourMaterial;
+      addReliefContour(polygon.outer, topMaterialForPolygon, config.depth + config.contourLift, userData);
+      polygon.holes.forEach(ring => addReliefContour(ring, topMaterialForPolygon, config.depth + config.contourLift, userData));
+      addReliefContour(polygon.outer, bottomContourMaterial, -config.baseDepth - config.contourLift, userData);
+      polygon.holes.forEach(ring => addReliefContour(ring, bottomContourMaterial, -config.baseDepth - config.contourLift, userData));
+    });
+  } else {
+    const edgeMaterial = new THREE.LineBasicMaterial({
+      color: props.mode === 'province' ? 0xb8d4ff : 0x83b9ff,
+      transparent: true,
+      opacity: 0.96
+    });
+    const sideGlowMaterial = props.mode === 'province'
+      ? new THREE.LineBasicMaterial({ color: 0xa979ff, transparent: true, opacity: 0.42 })
+      : null;
+
+    polygons.forEach(polygon => {
+      if (!polygon.outer.length) return;
+      const geometry = new THREE.ExtrudeGeometry(shapeFromPolygon(polygon), {
+        depth: props.mode === 'province' ? 0.28 : 0.18,
+        bevelEnabled: false,
+        steps: 1,
+        curveSegments: 1
+      });
+      const selected = polygon.code && String(polygon.code) === String(props.selectedRegionCode);
+      const mesh = new THREE.Mesh(geometry, [selected ? selectedTopMaterial : topMaterial, sideMaterial]);
+      mesh.userData = { type: 'region', code: polygon.code, name: polygon.name };
+      mapGroup.add(mesh);
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), edgeMaterial);
+      edges.userData = mesh.userData;
+      mapGroup.add(edges);
+      if (sideGlowMaterial) {
+        const glowEdges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), sideGlowMaterial);
+        glowEdges.position.z = -0.022;
+        glowEdges.scale.setScalar(1.004);
+        glowEdges.userData = mesh.userData;
+        mapGroup.add(glowEdges);
+      }
+    });
+  }
 
   drawablePoints.value.forEach(point => {
     const projected = projection.value.project([point.lng, point.lat]);
     const group = new THREE.Group();
-    group.position.set(projected.x, projected.y, 0.32);
+    group.position.set(projected.x, projected.y, relief
+      ? config.depth + config.contourLift + 0.02
+      : 0.32);
     group.userData = { type: 'point', point };
     const selected = String(point.orgCode) === String(props.selectedOrgCode);
     const dotMaterial = new THREE.MeshBasicMaterial({ color: selected ? 0xf2c7ff : 0x56edee });
@@ -591,19 +744,40 @@ function resizeRenderer() {
     const height = Math.max(1, containerRef.value.clientHeight || 520);
     renderer.setSize(width, height, false);
     const aspect = width / height;
-    const map = worldBounds();
-    // Fit the actual projected bounds to the viewport. A large fixed padding made
-    // the tall Shaanxi province occupy only a small strip in wide panorama panels;
-    // the tilted extrusion is already accounted for by the camera orientation.
-    const fitPadding = props.mode === 'province' ? 1.02 : 1.0;
-    const cameraHeight = Math.max(map.height * fitPadding, map.width / aspect * fitPadding, 5);
-    const cameraWidth = cameraHeight * aspect;
-    camera.left = -cameraWidth / 2;
-    camera.right = cameraWidth / 2;
-    camera.top = cameraHeight / 2;
-    camera.bottom = -cameraHeight / 2;
-    camera.updateProjectionMatrix();
     updateCameraPose();
+    camera.updateMatrixWorld(true);
+
+    if (reliefEnabled.value && mapGroup) {
+      // Project actual region vertices, excluding oversized decorative shadows.
+      // Projecting an already-rotated world AABB adds empty corners twice and
+      // makes the map much smaller than the available canvas.
+      mapGroup.updateMatrixWorld(true);
+      const vertices = [];
+      const vertex = new THREE.Vector3();
+      mapGroup.traverse(object => {
+        const position = object.geometry?.attributes?.position;
+        if (!object.isMesh || object.userData?.type !== 'region' || object.userData?.decorative || !position) return;
+        for (let index = 0; index < position.count; index += 1) {
+          vertex.fromBufferAttribute(position, index)
+            .applyMatrix4(object.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
+          vertices.push({ x: vertex.x, y: vertex.y });
+        }
+      });
+      const fit = fitReliefView(vertices, { aspect, fitHeight: reliefConfig.value.fitHeight });
+      if (fit) Object.assign(camera, fit);
+    } else {
+      const map = worldBounds();
+      // Preserve the classic camera fit for retail and other existing callers.
+      const fitPadding = props.mode === 'province' ? 1.02 : 1.0;
+      const cameraHeight = Math.max(map.height * fitPadding, map.width / aspect * fitPadding, 5);
+      const cameraWidth = cameraHeight * aspect;
+      camera.left = -cameraWidth / 2;
+      camera.right = cameraWidth / 2;
+      camera.top = cameraHeight / 2;
+      camera.bottom = -cameraHeight / 2;
+    }
+    camera.zoom = zoom.value;
+    camera.updateProjectionMatrix();
     renderFrame();
   } catch (error) {
     activateFallback('resize', error);
@@ -632,7 +806,7 @@ function onThreePointer(event) {
   pointerPosition(event);
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects([mapGroup, pointGroup], true);
-  const hit = hits.find(item => item.object.userData?.type);
+  const hit = hits.find(item => item.object.userData?.type && !item.object.userData.decorative);
   if (!hit) return;
   const target = hit.object.userData;
   if (target.type === 'region') selectRegion(target);
@@ -687,10 +861,16 @@ function setupThree() {
     updateCameraPose();
     raycaster = new THREE.Raycaster();
     pointer = new THREE.Vector2();
-    scene.add(new THREE.AmbientLight(0xaac7ff, 1.65));
-    const light = new THREE.DirectionalLight(0x9ec7ff, 2.3);
+    scene.add(new THREE.AmbientLight(0xaac7ff, reliefEnabled.value ? 0.8 : 1.65));
+    const light = new THREE.DirectionalLight(0x9ec7ff, reliefEnabled.value ? 1.6 : 2.3);
     light.position.set(-3, -4, 10);
     scene.add(light);
+    if (reliefEnabled.value) {
+      // A local light adds material depth without inventing terrain or data shading.
+      const surfaceLight = new THREE.PointLight(0x75bdff, 65, 30, 2);
+      surfaceLight.position.set(-3, 3, 6);
+      scene.add(surfaceLight);
+    }
     contextLostHandler = onWebGLContextLost;
     renderer.domElement.addEventListener('webglcontextlost', contextLostHandler, false);
     buildThreeMap();
@@ -746,7 +926,7 @@ onMounted(() => {
   }
 });
 
-watch(() => [props.geoJson, props.points, props.selectedOrgCode, props.selectedRegionCode, props.mode, props.demo], () => {
+watch(() => [props.geoJson, props.points, props.selectedOrgCode, props.selectedRegionCode, props.mode, props.demo, props.appearance], () => {
   activeCluster.value = null;
   rebuildThreeMap();
 }, { deep: true });
@@ -772,6 +952,24 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   background: radial-gradient(circle at 52% 44%, rgba(46, 72, 157, .38), rgba(4, 14, 47, .98) 70%);
   color: #d8e8ff;
+}
+
+.panorama-map[data-appearance='relief'] {
+  border-color: rgba(74, 164, 255, .56);
+  background:
+    radial-gradient(circle at 52% 41%, rgba(24, 100, 224, .34), transparent 46%),
+    radial-gradient(circle at 50% 68%, rgba(97, 47, 188, .18), transparent 52%),
+    linear-gradient(180deg, rgba(4, 20, 62, .94), rgba(2, 9, 31, .99));
+  box-shadow: inset 0 0 30px rgba(39, 109, 228, .12), 0 0 22px rgba(24, 89, 213, .16);
+}
+
+.panorama-map[data-appearance='relief']::after {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: '';
+  background: radial-gradient(ellipse at 50% 84%, rgba(38, 79, 178, .2), transparent 58%);
 }
 
 .panorama-map::before {
@@ -810,6 +1008,7 @@ onBeforeUnmount(() => {
 .panorama-map__region-label-layer { position: absolute; z-index: 4; inset: 0; pointer-events: none; }
 .panorama-map__region-label-hit { position: absolute; transform: translate(-50%, -50%); padding: 1px 3px; border: 1px solid transparent; border-radius: 3px; color: rgba(227, 239, 255, .82); background: transparent; text-shadow: 0 1px 3px #05133b, 0 0 5px #05133b; font-size: 11px; white-space: nowrap; cursor: pointer; pointer-events: auto; }
 .panorama-map__region-label-hit:hover, .panorama-map__region-label-hit:focus-visible, .panorama-map__region-label-hit.is-selected { border-color: #f0caff; color: #fff1ff; background: rgba(101, 61, 175, .88); outline: 2px solid rgba(210, 160, 255, .32); }
+.panorama-map[data-appearance='relief'] .panorama-map__region-label-hit { color: rgba(237, 247, 255, .94); font-weight: 700; text-shadow: 0 1px 4px #03133d, 0 0 8px #03133d; }
 
 .panorama-map__point-layer { position: absolute; z-index: 3; inset: 0; pointer-events: none; }
 .panorama-map__point-hit { position: absolute; transform: translate(-50%, -50%); min-width: 22px; min-height: 22px; padding: 0; border: 0; border-radius: 999px; color: #fff; background: transparent; cursor: pointer; pointer-events: auto; }

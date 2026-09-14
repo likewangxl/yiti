@@ -4,8 +4,8 @@ import { mount } from '@vue/test-utils';
 
 vi.mock('../PanoramaMap.vue', () => ({
   default: {
-    props: ['geoJson', 'points', 'demo', 'mode', 'selectedRegionCode'],
-    template: '<div data-testid="corporate-map" :data-mode="mode" />'
+    props: ['geoJson', 'points', 'demo', 'mode', 'selectedRegionCode', 'appearance'],
+    template: '<div data-testid="corporate-map" :data-mode="mode" :data-appearance="appearance" />'
   }
 }));
 
@@ -14,6 +14,13 @@ vi.mock('../CorporateTrend.vue', () => ({
 }));
 
 describe('CorporateDashboard 对公经营总览', () => {
+  it('只为对公页启用选定的浮雕地图外观', async () => {
+    const { default: Dashboard } = await import('../CorporateDashboard.vue');
+    const wrapper = mount(Dashboard, { props: { demo: true, model: {} } });
+    expect(wrapper.get('[data-testid="corporate-map"]').attributes('data-appearance')).toBe('relief');
+    wrapper.unmount();
+  });
+
   it('以对公业务语义呈现 KPI、重点客群信贷、经营关注、排名和目标', async () => {
     const { default: CorporateDashboard } = await import('../CorporateDashboard.vue');
     const wrapper = mount(CorporateDashboard, {

@@ -61,6 +61,17 @@ describe('PanoramaMap', () => {
     expect(wrapper.attributes('data-selected-region')).toBe('610100');
   });
 
+  it('relief 是显式 opt-in 外观，默认地图保持 classic', async () => {
+    const classic = mount(PanoramaMap, { props: { geoJson } });
+    const relief = mount(PanoramaMap, { props: { geoJson, appearance: 'relief' } });
+    await nextTick();
+
+    expect(classic.attributes('data-appearance')).toBe('classic');
+    expect(relief.attributes('data-appearance')).toBe('relief');
+    classic.unmount();
+    relief.unmount();
+  });
+
   it('省模式只保留城市行政区选择，不展开机构点位；市模式才启用点位层', async () => {
     const province = mount(PanoramaMap, { props: { geoJson, points } });
     await nextTick();

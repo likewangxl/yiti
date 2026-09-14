@@ -43,4 +43,18 @@ describe('PanoramaMap WebGL 初始化', () => {
     expect(wrapper.find('.panorama-map__fallback').exists()).toBe(false);
     wrapper.unmount();
   });
+
+  it('relief 外观在同一真实 GeoJSON 上构建挤出层并完成倾斜 fit', async () => {
+    vi.stubGlobal('WebGL2RenderingContext', function WebGL2RenderingContext() {});
+    vi.stubGlobal('WebGLRenderingContext', function WebGLRenderingContext() {});
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({}));
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 0));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const wrapper = mount(PanoramaMap, { props: { geoJson, appearance: 'relief' } });
+    await nextTick();
+    expect(wrapper.attributes('data-appearance')).toBe('relief');
+    expect(wrapper.attributes('data-webgl-ready')).toBe('true');
+    expect(wrapper.find('.panorama-map__fallback').exists()).toBe(false);
+    wrapper.unmount();
+  });
 });

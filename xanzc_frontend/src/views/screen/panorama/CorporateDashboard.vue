@@ -151,7 +151,7 @@
             <button v-if="selectedCityCode" type="button" class="corporate-clear-city" data-action="clear-city" @click="clearCity">显示全部机构</button>
             <span v-else class="corporate-map-hint">点击城市筛选机构排名</span>
           </div>
-          <PanoramaMap class="corporate-map" :geo-json="provinceGeoJson" :points="safeModel.institutions" :demo="demo" mode="province" :selected-region-code="selectedCityCode" @region-select="selectCity" />
+          <PanoramaMap class="corporate-map" appearance="relief" :geo-json="provinceGeoJson" :points="safeModel.institutions" :demo="demo" mode="province" :selected-region-code="selectedCityCode" @region-select="selectCity" />
           <p class="corporate-scope-note" data-testid="corporate-scope-note">{{ safeModel.scopeLabel }} KPI 与趋势不随城市筛选变化；城市选择只影响机构分析。</p>
           <p v-if="selectedCityCode" class="corporate-selected-city" data-testid="corporate-selected-city">当前机构分析：{{ selectedCityName }}（{{ filteredRankings.length }} 家有排名记录）</p>
         </article>
