@@ -41,7 +41,7 @@
 ## 页面入口与权限
 
 - 开发视觉入口：`/#/screen-preview/corporate`，明确“本地演示 · 非业务数据”。
-- 大屏中心：服务端逐屏授权后返回 `SCR_CORP_OVERVIEW`、`corporate-overview-v1`、`DEMO`；受保护页面 `/#/screen-pages/corporate-overview-v1` 再次复核目录授权，沿用零售现有演示展示模式。
+- 大屏中心：服务端逐屏授权后返回 `SCR_CORP_OVERVIEW`、`corporate-overview-v1`、`LIVE`；受保护页面 `/#/screen-pages/corporate-overview-v1` 再次复核目录授权并读取匹配的已发布对公CODE包，按接口取数；LIVE不代表生产业务数据已获认证。
 - 实际来源运行：通过现有 `/#/screen/:screenCode` 的草稿/发布包选择对公模板、按可信 `blockId/bindSnapshots` 取数；不会把中心演示数据回填为正式结果。
 - 管理页选择CORP屏，使用对公模板和已授权CORP来源；仍执行草稿版本冲突、保存/发布验证。后端兼容版本必须先部署，旧服务不能启用新模板。
 
@@ -62,3 +62,7 @@
 - 城市筛选仅影响机构、负增排序、目录搜索、缺失城市机构详情、事项Enter打开、Tab/反向Tab约束、Escape关闭、焦点恢复、背景滚动恢复、刷新时间与手机弹窗均通过。反向Tab问题先在真实浏览器失败，再修复并复验通过。
 - 隔离HTTP mock验证正式绑定路径显示123.45亿元、403清空旧值、中心对公DEMO目录授权、管理页CORP默认模板/12槽/自动配置/草稿保存请求契约。全部业务请求拦截于`http://127.0.0.1:8092/api/**`，逐请求响应和未知路由404均记录；仅开发态mock，非真实数据联调、保存或发布。
 - 本地视觉与交互会话未注册mock route，未请求业务指标API；最终控制台0错误0警告。原始CLI命令、console、请求/响应摘要、路由清单、截图及Red/Green记录在受限临时目录`/tmp/yiti-corporate-qa`。真实源绑定与后端部署尚未执行，不修改现有真实发布包。
+
+## 接入跟进
+
+后续真实源盘点、LIVE入口变化与尚未满足的条件见[2026-09-14接入核查](corporate-live-data-audit-20260914.md)。上文“本轮验收记录”保留首次演示交付时的历史事实。

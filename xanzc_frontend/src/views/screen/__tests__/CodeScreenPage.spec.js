@@ -28,7 +28,6 @@ vi.mock('vue-router', () => ({
   useRoute: () => routeState
 }));
 vi.mock('../panorama/PanoramaDashboard.vue', () => ({ default: branchStub }));
-vi.mock('../panorama/CorporateDashboard.vue', () => ({ default: { template: '<div data-testid="corporate-dashboard">对公经营总览</div>' } }));
 vi.mock('../panorama/RetailDashboard.vue', () => ({ default: retailStub }));
 vi.mock('../panorama/PanoramaRuntime.vue', () => ({ default: runtimeStub }));
 
@@ -42,6 +41,10 @@ const branch = {
 const retail = {
   screenCode: 'SCR_RETAIL_OVERVIEW', screenName: '零售经营总览', viewLevel: 'BRANCH', bizLine: 'RETAIL',
   template: 'retail-overview-v1', dataMode: 'DEMO'
+};
+const corporate = {
+  screenCode: 'SCR_CORP_OVERVIEW', screenName: '对公经营总览', viewLevel: 'PROVINCE', bizLine: 'CORP',
+  template: 'corporate-overview-v1', dataMode: 'LIVE'
 };
 
 let wrapper;
@@ -63,14 +66,23 @@ async function mountPage() {
 }
 
 describe('CodeScreenPage', () => {
-  it('对公页复核目录授权后展示独立对公演示并标明数据性质', async () => {
+  it('对公页复核目录授权后读取可信发布包并展示已接入数据说明', async () => {
     routeState.params.template = 'corporate-overview-v1';
-    listAvailableScreens.mockResolvedValue([{ screenCode: 'SCR_CORP_OVERVIEW', screenName: '对公经营总览', template: 'corporate-overview-v1', dataMode: 'DEMO' }]);
+    listAvailableScreens.mockResolvedValue([corporate]);
+    getScreenView.mockResolvedValue({ state: 'published', screenCode: 'SCR_CORP_OVERVIEW', runtimeSchemaVersion: 2,
+      renderPackageJson: JSON.stringify({
+        canvasStyle: { presentation: { type: 'CODE', template: 'corporate-overview-v1' } },
+        components: []
+      }) });
     const page = await mountPage();
-    expect(page.find('[data-testid="corporate-dashboard"]').exists()).toBe(true);
-    expect(page.attributes('data-demo')).toBe('true');
-    expect(page.text()).toContain('非业务数据');
-    expect(getScreenView).not.toHaveBeenCalled();
+    expect(page.find('[data-testid="panorama-runtime"]').exists()).toBe(true);
+    expect(page.find('[data-testid="corporate-dashboard"]').exists()).toBe(false);
+    expect(page.attributes('data-demo')).toBeUndefined();
+    expect(page.attributes('data-mode')).toBe('LIVE');
+    expect(page.text()).toContain('已接入数据');
+    expect(page.text()).toContain('统计口径与环境见来源说明');
+    expect(getScreenView).toHaveBeenCalledWith('SCR_CORP_OVERVIEW');
+    expect(page.findComponent(runtimeStub).props('view')).toMatchObject({ screenCode: 'SCR_CORP_OVERVIEW', state: 'published' });
   });
 
   it('rechecks protected catalog and renders branch TEST runtime with explicit test marker', async () => {
@@ -94,6 +106,17 @@ describe('CodeScreenPage', () => {
     const page = await mountPage();
     expect(page.find('[data-testid="retail-dashboard"]').exists()).toBe(true);
     expect(page.find('[data-testid="panorama-runtime"]').exists()).toBe(false);
+  });
+
+  it('对公页刷新调用运行时真实取数，而不是只更新本地演示时间', async () => {
+    routeState.params.template = 'corporate-overview-v1';
+    listAvailableScreens.mockResolvedValue([corporate]);
+    getScreenView.mockResolvedValue({ state: 'published', screenCode: 'SCR_CORP_OVERVIEW', runtimeSchemaVersion: 2,
+      renderPackageJson: JSON.stringify({ canvasStyle: { presentation: { type: 'CODE', template: 'corporate-overview-v1' } }, components: [] }) });
+    const page = await mountPage();
+    runtimeRefresh.mockClear();
+    await page.find('[data-action="refresh-demo"]').trigger('click');
+    expect(runtimeRefresh).toHaveBeenCalledTimes(1);
   });
 
   it('hides the dashboard internal demo badge because the page banner is the single marker', async () => {

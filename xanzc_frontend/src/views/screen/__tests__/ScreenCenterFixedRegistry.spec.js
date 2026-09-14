@@ -24,6 +24,10 @@ const catalog = [
   {
     screenCode: 'SCR_RETAIL_OVERVIEW', screenName: '零售经营总览', viewLevel: 'BRANCH', bizLine: 'RETAIL',
     template: 'retail-overview-v1', dataMode: 'DEMO'
+  },
+  {
+    screenCode: 'SCR_CORP_OVERVIEW', screenName: '对公经营总览', viewLevel: 'PROVINCE', bizLine: 'CORP',
+    template: 'corporate-overview-v1', dataMode: 'LIVE'
   }
 ];
 
@@ -37,13 +41,15 @@ beforeEach(() => {
 afterEach(() => wrapper?.unmount());
 
 describe('ScreenCenter fixed code screens', () => {
-  it('renders only registered demo templates and routes to protected template page', async () => {
+  it('renders only registered templates with data mode labels and routes to protected pages', async () => {
     wrapper = mount(ScreenCenter);
     await flushPromises();
 
-    expect(wrapper.findAll('[data-screen-card]')).toHaveLength(2);
+    expect(wrapper.findAll('[data-screen-card]')).toHaveLength(3);
     expect(wrapper.text()).toContain('测试库数据');
     expect(wrapper.text()).toContain('演示数据');
+    expect(wrapper.text()).toContain('已接入数据');
+    expect(wrapper.text()).toContain('统计口径与环境见来源说明');
     expect(wrapper.text()).not.toContain('旧发布屏');
 
     await wrapper.find('[data-screen-code="SCR_RETAIL_OVERVIEW"] button').trigger('click');

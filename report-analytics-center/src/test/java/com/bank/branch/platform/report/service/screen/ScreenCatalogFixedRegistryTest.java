@@ -44,10 +44,11 @@ class ScreenCatalogFixedRegistryTest {
     }
 
     @Test
-    void catalog_usesOnlyRegisteredCodeTemplatesAndDoesNotRequirePublishedCanvas() {
+    void catalog_usesOnlyRegisteredCodeTemplatesAndRequiresPublishedCorporatePackage() {
         RptScreen province = screen("SCR_PROVINCE", "数据库旧名称", "PROVINCE", "COMMON", "ACTIVE", 0, null);
         RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "数据库零售名称", "BRANCH", "RETAIL", "ACTIVE", 0, null);
-        RptScreen corporate = screen("SCR_CORP_OVERVIEW", "数据库对公名称", "PROVINCE", "CORP", "ACTIVE", 0, null);
+        RptScreen corporate = screen("SCR_CORP_OVERVIEW", "数据库对公名称", "PROVINCE", "CORP", "ACTIVE", 1,
+                "{\"schemaVersion\":2,\"canvasStyle\":{\"presentation\":{\"type\":\"CODE\",\"template\":\"corporate-overview-v1\"}},\"components\":[],\"bindSnapshots\":{}}");
         RptScreen oldPublished = screen("SCR_OLD_PUBLISHED", "旧发布屏", "BRANCH", "COMMON", "ACTIVE", 1,
                 "{\"schemaVersion\":1,\"components\":[]}");
         when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(oldPublished, retail, corporate, province));
@@ -64,7 +65,24 @@ class ScreenCatalogFixedRegistryTest {
         assertThat(entries).extracting(ScreenEntryRespDTO::getBizLine)
                 .containsExactly("COMMON", "RETAIL", "CORP");
         assertThat(entries).extracting(ScreenEntryRespDTO::getDataMode)
-                .containsExactly("TEST", "DEMO", "DEMO");
+                .containsExactly("TEST", "DEMO", "LIVE");
+    }
+
+    @Test
+    void catalog_filtersCorporateWhenPublishedTemplateIsMissingOrMismatched() {
+        RptScreen province = screen("SCR_PROVINCE", "分行经营总览", "PROVINCE", "COMMON", "ACTIVE", 0, null);
+        RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "零售经营总览", "BRANCH", "RETAIL", "ACTIVE", 0, null);
+        RptScreen corporate = screen("SCR_CORP_OVERVIEW", "对公经营总览", "PROVINCE", "CORP", "ACTIVE", 1,
+                "{\"schemaVersion\":2,\"canvasStyle\":{\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"}},\"components\":[],\"bindSnapshots\":{}}");
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(corporate, retail, province));
+        when(scopeAuthorizationService.authorize(any(RptScreen.class))).thenReturn(Set.of());
+
+        assertThat(service.listAuthorizedCodeScreens()).extracting(ScreenEntryRespDTO::getScreenCode)
+                .containsExactly("SCR_PROVINCE", "SCR_RETAIL_OVERVIEW");
+
+        corporate.setCanvasPublishedJson(null);
+        assertThat(service.listAuthorizedCodeScreens()).extracting(ScreenEntryRespDTO::getScreenCode)
+                .containsExactly("SCR_PROVINCE", "SCR_RETAIL_OVERVIEW");
     }
 
     @Test

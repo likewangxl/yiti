@@ -82,6 +82,7 @@
           <div class="screen-card__meta">
             <span data-biz-label>{{ bizLineLabel(screen.bizLine) }}</span>
             <span>{{ viewLevelLabel(screen.viewLevel) }}</span>
+            <span v-if="screen.dataMode === 'LIVE'" data-testid="screen-live-source-note">统计口径与环境见来源说明</span>
           </div>
           <button type="button" class="screen-card__open" @click="openScreen(screen)">进入大屏</button>
         </div>
@@ -108,7 +109,7 @@ const SUPPORTED_TEMPLATES = new Set(['branch-overview-v1', 'retail-overview-v1',
 const REGISTERED_MODES = Object.freeze({
   'branch-overview-v1': 'TEST',
   'retail-overview-v1': 'DEMO',
-  'corporate-overview-v1': 'DEMO'
+  'corporate-overview-v1': 'LIVE'
 });
 
 const router = useRouter();
@@ -147,7 +148,10 @@ function viewLevelLabel(value) {
 }
 
 function dataModeLabel(value) {
-  return value === 'TEST' ? '测试库数据' : '演示数据';
+  if (value === 'TEST') return '测试库数据';
+  if (value === 'LIVE') return '已接入数据';
+  if (value === 'DEMO') return '演示数据';
+  return '数据模式未知';
 }
 
 function normalizeCatalog(catalog) {

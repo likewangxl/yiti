@@ -1,9 +1,10 @@
 <template>
-  <main class="code-screen-page" :data-demo="['retail-overview-v1', 'corporate-overview-v1'].includes(activeTemplate) ? 'true' : undefined" :data-mode="activeTemplate === 'branch-overview-v1' ? 'TEST' : undefined" :aria-label="activeTemplate === 'branch-overview-v1' ? '测试大屏' : '演示大屏'" :aria-busy="state === 'loading' ? 'true' : 'false'">
+  <main class="code-screen-page" :data-demo="activeDataMode === 'DEMO' ? 'true' : undefined" :data-mode="activeDataMode || undefined" :aria-label="dataModeAriaLabel(activeDataMode)" :aria-busy="state === 'loading' ? 'true' : 'false'">
     <header class="code-screen-page__banner">
       <div class="code-screen-page__banner-meta">
-        <strong>{{ activeTemplate === 'branch-overview-v1' ? '测试库数据' : '演示数据' }}</strong>
-        <span>{{ activeTemplate === 'branch-overview-v1' ? '非生产业务数据' : '非业务数据' }}</span>
+        <strong>{{ dataModeLabel(activeDataMode) }}</strong>
+        <span v-if="dataModeDescription(activeDataMode)">{{ dataModeDescription(activeDataMode) }}</span>
+        <span v-if="activeDataMode === 'LIVE'">统计口径与环境见来源说明</span>
         <span data-testid="demo-updated-at">本次查询/刷新时间 {{ lastUpdated }}</span>
         <button type="button" data-action="refresh-demo" @click="refreshScreen">刷新</button>
         <button type="button" data-action="back-to-screen-center" @click="backToCenter">返回大屏中心</button>
@@ -34,18 +35,13 @@
 
     <section v-else class="code-screen-page__content">
       <PanoramaRuntime
-        v-if="activeTemplate === 'branch-overview-v1'"
+        v-if="['branch-overview-v1', 'corporate-overview-v1'].includes(activeTemplate)"
         ref="runtimeRef"
         :view="runtimeView"
         :context="runtimeContext"
-        :batch-required="true"
+        :batch-required="activeTemplate === 'branch-overview-v1'"
         back-path="/screens"
         @refresh="onRuntimeRefresh"
-      />
-      <CorporateDashboard
-        v-else-if="activeTemplate === 'corporate-overview-v1'"
-        :model="corporateDemoModel" :loading="false" error="" :demo="true"
-        @refresh="refreshScreen" @back="backToCenter"
       />
       <RetailDashboard
         v-else-if="activeTemplate === 'retail-overview-v1'"
@@ -65,15 +61,13 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getScreenView, listAvailableScreens } from '@/api/screen';
 import { useUserStore } from '@/stores/user';
-import CorporateDashboard from './panorama/CorporateDashboard.vue';
-import { corporateDemoModel } from './panorama/corporateDemoModel.js';
 import RetailDashboard from './panorama/RetailDashboard.vue';
 import PanoramaRuntime from './panorama/PanoramaRuntime.vue';
 import { retailDemoModel } from './panorama/retailDemoModel.js';
 
 const CATALOG_REGISTRATIONS = Object.freeze({
   'branch-overview-v1': Object.freeze({ screenCode: 'SCR_PROVINCE', screenName: '分行经营总览', dataMode: 'TEST' }),
-  'corporate-overview-v1': Object.freeze({ screenCode: 'SCR_CORP_OVERVIEW', screenName: '对公经营总览', dataMode: 'DEMO' }),
+  'corporate-overview-v1': Object.freeze({ screenCode: 'SCR_CORP_OVERVIEW', screenName: '对公经营总览', dataMode: 'LIVE' }),
   'retail-overview-v1': Object.freeze({ screenCode: 'SCR_RETAIL_OVERVIEW', screenName: '零售经营总览', dataMode: 'DEMO' })
 });
 
@@ -89,11 +83,32 @@ const lastUpdated = ref(formatDemoTime(new Date()));
 let loadGeneration = 0;
 
 const activeTemplate = computed(() => String(route.params.template || ''));
+const activeDataMode = computed(() => activeEntry.value?.dataMode || '');
 
 function formatDemoTime(value) {
   const date = value instanceof Date ? value : new Date(value);
   const pad = number => String(number).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function dataModeLabel(mode) {
+  if (mode === 'TEST') return '测试库数据';
+  if (mode === 'LIVE') return '已接入数据';
+  if (mode === 'DEMO') return '演示数据';
+  return '数据状态确认中';
+}
+
+function dataModeDescription(mode) {
+  if (mode === 'TEST') return '非生产业务数据';
+  if (mode === 'DEMO') return '非业务数据';
+  return '';
+}
+
+function dataModeAriaLabel(mode) {
+  if (mode === 'TEST') return '测试大屏';
+  if (mode === 'LIVE') return '已接入数据大屏';
+  if (mode === 'DEMO') return '演示大屏';
+  return '经营大屏';
 }
 
 function isForbidden(error) {
@@ -132,6 +147,7 @@ function parseRuntimeView(response, entry) {
 async function loadCatalog() {
   const generation = ++loadGeneration;
   activeEntry.value = null;
+  runtimeView.value = null;
   errorMessage.value = '';
   if (!userStore.user) {
     state.value = 'forbidden';
@@ -147,8 +163,7 @@ async function loadCatalog() {
       return;
     }
     activeEntry.value = resolved.entry;
-    runtimeView.value = null;
-    if (activeTemplate.value === 'branch-overview-v1') {
+    if (['branch-overview-v1', 'corporate-overview-v1'].includes(activeTemplate.value)) {
       const parsedRuntimeView = parseRuntimeView(await getScreenView(resolved.entry.screenCode), resolved.entry);
       if (generation !== loadGeneration) return;
       runtimeView.value = parsedRuntimeView;
@@ -158,13 +173,15 @@ async function loadCatalog() {
     state.value = 'ready';
   } catch (error) {
     if (generation !== loadGeneration) return;
+    activeEntry.value = null;
+    runtimeView.value = null;
     state.value = isForbidden(error) ? 'forbidden' : 'error';
     errorMessage.value = error?.message || '请稍后重试';
   }
 }
 
 function refreshScreen() {
-  if (activeTemplate.value === 'branch-overview-v1') {
+  if (['branch-overview-v1', 'corporate-overview-v1'].includes(activeTemplate.value)) {
     runtimeRef.value?.refresh?.();
     lastUpdated.value = formatDemoTime(new Date());
     return;

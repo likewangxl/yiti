@@ -70,7 +70,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     private static final List<RuntimeCatalogRegistration> CODE_SCREEN_CATALOG = List.of(
             new RuntimeCatalogRegistration("SCR_PROVINCE", "分行经营总览", "branch-overview-v1", "COMMON", "TEST"),
             new RuntimeCatalogRegistration("SCR_RETAIL_OVERVIEW", "零售经营总览", "retail-overview-v1", "RETAIL", "DEMO"),
-            new RuntimeCatalogRegistration("SCR_CORP_OVERVIEW", "对公经营总览", "corporate-overview-v1", "CORP", "DEMO"));
+            new RuntimeCatalogRegistration("SCR_CORP_OVERVIEW", "对公经营总览", "corporate-overview-v1", "CORP", "LIVE"));
     /** 逐屏目录校验中可安全排除的授权失败；带 cause 的同码异常表示基础设施失败，必须继续抛出。 */
     private static final Set<String> CATALOG_AUTH_REJECTION_CODES = Set.of(
             RptErrorCode.SCREEN_ACCESS_DENIED.getCode(),
@@ -165,7 +165,9 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                 continue;
             }
             RptScreen screen = screens.get(0);
-            if (!isValidCodeScreenScope(screen, registration) || !isAuthorizedCatalogScreen(screen)) {
+            if (!isValidCodeScreenScope(screen, registration)
+                    || !hasRequiredPublishedPackage(screen, registration)
+                    || !isAuthorizedCatalogScreen(screen)) {
                 continue;
             }
             result.add(toScreenEntry(screen, registration));
@@ -1297,6 +1299,26 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             throw ex;
         } catch (Exception ex) {
             throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
+        }
+    }
+
+    /**
+     * LIVE 对公入口必须有可信的已发布 CODE 包；历史分行/零售目录继续兼容未发布画布。
+     */
+    private boolean hasRequiredPublishedPackage(RptScreen screen, RuntimeCatalogRegistration registration) {
+        if (!CodeScreenPresentationValidator.CORPORATE_OVERVIEW_TEMPLATE.equals(registration.template())) {
+            return true;
+        }
+        if (screen == null
+                || !(Integer.valueOf(1).equals(screen.getPublishStatus())
+                || Integer.valueOf(2).equals(screen.getPublishStatus()))) {
+            return false;
+        }
+        try {
+            return registration.template().equals(publishedCodeTemplate(screen.getCanvasPublishedJson()));
+        } catch (RuntimeException ex) {
+            // 目录是入口授权边界；发布包解析或信任校验失败时按无入口处理，不能泄漏旧元数据。
+            return false;
         }
     }
 

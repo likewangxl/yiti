@@ -498,4 +498,4 @@ public class SysControlUpdatedListener {
 
 ## 对公经营模板
 
-`corporate-overview-v1` 复用既有 screen REST 与授权机构目录，不新增跨模块 Java API。仅消费CORP数据源，沿用已保存块身份、发布快照、屏级授权和元数据引用校验；数据产品定义见[对公经营总览契约](../../corporate-screen-design-and-acceptance.md)。中心登记为明确标识的DEMO；正式数据通过既有草稿/发布入口绑定启用。
+`corporate-overview-v1` 复用既有 screen REST 与授权机构目录，不新增跨模块 Java API。仅消费CORP数据源，沿用已保存块身份、发布快照、屏级授权和元数据引用校验；数据产品定义见[对公经营总览契约](../../corporate-screen-design-and-acceptance.md)。中心登记为LIVE接口取数模式，仅在对公CODE发布包就绪后开放；LIVE不代表生产或业务真实性认证，实际来源通过既有草稿/发布入口绑定启用。

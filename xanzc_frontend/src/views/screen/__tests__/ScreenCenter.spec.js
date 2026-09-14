@@ -45,7 +45,7 @@ async function mountCenter() {
 
 describe('ScreenCenter.vue', () => {
   it('对公目录可筛选并导航到独立模板', async () => {
-    listAvailableScreens.mockResolvedValue([...catalog, { screenCode: 'SCR_CORP_OVERVIEW', screenName: '对公经营总览', bizLine: 'CORP', template: 'corporate-overview-v1', dataMode: 'DEMO' }]);
+    listAvailableScreens.mockResolvedValue([...catalog, { screenCode: 'SCR_CORP_OVERVIEW', screenName: '对公经营总览', bizLine: 'CORP', template: 'corporate-overview-v1', dataMode: 'LIVE' }]);
     const center = await mountCenter();
     await center.find('button[data-biz-line="CORP"]').trigger('click');
     expect(center.findAll('[data-screen-card]')).toHaveLength(1);
