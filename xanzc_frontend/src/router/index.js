@@ -27,6 +27,11 @@ const routes = [
     component: () => import('@/views/screen/panorama/PanoramaPreview.vue'),
     meta: { title: '本地演示预览', public: true, hideInMenu: true }
   }, {
+    path: '/screen-preview/corporate',
+    name: 'CorporateScreenPreview',
+    component: () => import('@/views/screen/panorama/CorporatePreview.vue'),
+    meta: { title: '对公经营本地预览', public: true, hideInMenu: true }
+  }, {
     path: '/screen-preview/retail',
     name: 'RetailScreenPreview',
     component: () => import('@/views/screen/panorama/RetailPreview.vue'),

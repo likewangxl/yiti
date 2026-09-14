@@ -7,6 +7,7 @@ import {
   normalizeBinding,
   validateBinding
 } from './bindings';
+import { CORPORATE_TEMPLATE, isCorporateBindingSlot } from './corporateBindings';
 import { isDatasourceCompatible } from '@/utils/screenScope';
 import { isNamedGroupSafeDatasource } from '../designer/widgets/chart-widget/dsFilter';
 
@@ -92,6 +93,21 @@ function screenBizLineOf(screen) {
 
 function screenOrgScopeModeOf(screen) {
   return text(pick(screen, 'orgScopeMode', 'org_scope_mode', 'ORG_SCOPE_MODE') || 'LEGACY_CONTEXT').toUpperCase();
+}
+
+function corporateScopeIssues(slot, source, screen, template = '') {
+  if ((slot === 'branches' && template !== CORPORATE_TEMPLATE)
+      || (!isCorporateBindingSlot(slot) && template !== CORPORATE_TEMPLATE)) return [];
+  const screenLine = screenBizLineOf(screen);
+  const sourceLine = text(pick(source, 'bizLine', 'biz_line', 'BIZ_LINE') || '').toUpperCase();
+  const issues = [];
+  if (screenLine !== 'CORP' || sourceLine !== 'CORP') {
+    issues.push({
+      code: 'CORPORATE_SCOPE_REQUIRED',
+      message: '对公模板仅允许 CORP 条线大屏与 CORP 数据源'
+    });
+  }
+  return issues;
 }
 
 function scopeIssues(screen, source) {
@@ -209,7 +225,7 @@ function groupByValue(config) {
 }
 
 function missingDateGroupBy(slot, source, config, sql) {
-  if (slot !== 'trend' && slot !== 'branchTrend') return false;
+  if (slot !== 'trend' && slot !== 'branchTrend' && slot !== 'corpTrend') return false;
   const kind = sourceKindOf(source, config);
   if (kind === 'WIDE_TABLE' || text(pick(source, 'dsType', 'ds_type')).toUpperCase() === 'TIMESERIES') {
     return groupByValue(config) !== 'DATE';
@@ -313,7 +329,7 @@ function normalizeArguments(input, canvasArg, datasourcesArg, bindingStateArg) {
   };
 }
 
-function entryFor(slot, bindingState, datasources, screen) {
+function entryFor(slot, bindingState, datasources, screen, template = '') {
   const raw = bindingState?.[slot];
   const empty = !raw || typeof raw !== 'object' || raw.dsId === undefined || raw.dsId === null || raw.dsId === '';
   const normalized = normalizeBinding(raw || {}, slot);
@@ -356,6 +372,7 @@ function entryFor(slot, bindingState, datasources, screen) {
 
   const config = sourceConfig(source);
   entry.issues.push(...scopeIssues(screen, source));
+  entry.issues.push(...corporateScopeIssues(slot, source, screen, template));
   if (slot === 'composition' && getCompositionMode(binding) === 'columns'
       && !isCompositionColumnsDatasource(source, config)) {
     entry.issues.push({
@@ -391,9 +408,14 @@ export function analyzeIntegrationReadiness(input = {}, canvasArg, datasourcesAr
   );
   const canvasId = idOf(pick(canvas, 'screenId', 'screen_id'));
   const screen = explicitScreen || screens.find(item => idOf(item?.id) === canvasId) || null;
+  const explicitTemplate = text(input?.template || '').toLowerCase();
+  const corporateSlotOrder = Array.isArray(input?.slotOrder)
+    && input.slotOrder.some(slot => isCorporateBindingSlot(slot) && slot !== 'branches');
+  const template = explicitTemplate === CORPORATE_TEMPLATE || corporateSlotOrder
+    ? CORPORATE_TEMPLATE : text(input?.template || '');
   const slotOrder = Array.isArray(input.slotOrder) ? input.slotOrder.filter(slot => BINDING_SLOTS[slot]) : SLOT_ORDER;
   const entries = slotOrder.map(slot => {
-    const entry = entryFor(slot, bindingState, datasources, screen);
+    const entry = entryFor(slot, bindingState, datasources, screen, template);
     if (slotOrder.includes('retailAum') && entry.status !== READINESS_STATUS.UNCONFIGURED) {
       const source = datasources.find(item => String(item.id) === String(bindingState[slot]?.dsId));
       if (screenBizLineOf(screen) !== 'RETAIL' || text(pick(source, 'bizLine', 'biz_line') || 'COMMON').toUpperCase() !== 'RETAIL') {

@@ -4,6 +4,11 @@ import {
   normalizeBinding
 } from './bindings';
 import { RETAIL_BINDING_SLOTS, RETAIL_SLOT_ORDER, RETAIL_TEMPLATE } from './retailBindings';
+import {
+  CORPORATE_BINDING_SLOTS,
+  CORPORATE_SLOT_ORDER,
+  CORPORATE_TEMPLATE
+} from './corporateBindings';
 import { isDatasourceCompatible, normalizeScreenScope } from '@/utils/screenScope';
 
 /**
@@ -35,14 +40,18 @@ const UNIT_LABELS = Object.freeze({
 });
 const AMOUNT_FIELD_NAMES = new Set([
   'value', 'deposit', 'depositIncrease', 'depositAverage', 'loan', 'revenue',
-  'rate', 'corporate', 'retail', 'actual', 'target', 'aum', 'increase', 'nplRate'
+  'rate', 'corporate', 'retail', 'actual', 'target', 'aum', 'increase', 'nplRate',
+  'corpDeposit', 'corpDepositAverage', 'corpLoan', 'corpRevenue', 'corpNplRate',
+  'corpTrend.deposit', 'corpTrend.loan', 'corpSegments.loan', 'corpRanking.deposit',
+  'corpRanking.increase'
 ]);
 const SINGLE_VALUE_SLOTS = new Set([
   'deposit', 'depositIncrease', 'depositAverage', 'loan', 'customers', 'revenue', 'rate',
   'retailAum', 'retailDeposit', 'retailDepositAverage', 'retailRevenue', 'retailValueCustomers',
-  'retailLoan', 'retailNplRate'
+  'retailLoan', 'retailNplRate',
+  'corpDeposit', 'corpDepositAverage', 'corpLoan', 'corpRevenue', 'corpCustomers', 'corpNplRate'
 ]);
-const TIME_SERIES_SLOTS = new Set(['trend', 'retailTrend', 'branchTrend']);
+const TIME_SERIES_SLOTS = new Set(['trend', 'retailTrend', 'branchTrend', 'corpTrend']);
 const DIMENSION_SEMANTICS = new Set([
   'date', 'dataDate', 'orgCode', 'orgName', 'cityCode', 'cityName', 'ownerOperatingOrgCode',
   'parentOrgCode', 'lng', 'lat', 'coordSys', 'located', 'name', 'label', 'owner', 'deadline'
@@ -153,6 +162,72 @@ const RETAIL_SEMANTICS = Object.freeze({
   retailAttention: { label: ['attentionLabel', 'label'], count: ['attentionCount', 'count'], owner: ['owner'], deadline: ['deadline'] },
   retailTargets: { name: ['targetName'], actual: ['actual', 'actualValue'], target: ['target', 'targetValue'] },
   branches: METRIC_RULES.branches
+});
+
+/**
+ * 对公来源只允许显式声明 corp 语义；不能从“存款”“贷款”等列名或来源名称
+ * 推断为对公指标。这里的别名仍是数据源 metadata 的语义声明，而非名称匹配。
+ */
+const CORPORATE_SEMANTICS = Object.freeze({
+  corpDeposit: {
+    value: ['corpDeposit', 'corporateDeposit', 'corp.deposit'],
+    change: ['corpDepositChange', 'corporateDepositChange'], date: ['date', 'dataDate']
+  },
+  corpDepositAverage: {
+    value: ['corpDepositAverage', 'corporateDepositAverage', 'corp.depositAverage'],
+    change: ['corpDepositAverageChange'], date: ['date', 'dataDate']
+  },
+  corpLoan: {
+    value: ['corpLoan', 'corporateLoan', 'corp.loan'],
+    change: ['corpLoanChange', 'corporateLoanChange'], date: ['date', 'dataDate']
+  },
+  corpRevenue: {
+    value: ['corpRevenue', 'corporateRevenue', 'corp.revenue'],
+    change: ['corpRevenueChange', 'corporateRevenueChange'], date: ['date', 'dataDate']
+  },
+  corpCustomers: {
+    value: ['corpCustomers', 'corporateCustomers', 'corp.customerCount'],
+    change: ['corpCustomersChange'], date: ['date', 'dataDate']
+  },
+  corpNplRate: {
+    value: ['corpNplRate', 'corporateNplRate', 'corp.nplRate'],
+    change: ['corpNplRateChange'], date: ['date', 'dataDate']
+  },
+  corpTrend: {
+    date: ['date', 'dataDate'],
+    deposit: ['corpDeposit', 'corporateDeposit', 'corp.deposit'],
+    loan: ['corpLoan', 'corporateLoan', 'corp.loan']
+  },
+  corpSegments: {
+    name: ['corpSegmentName', 'corporateSegmentName'],
+    customers: ['corpCustomers', 'corporateCustomers', 'corp.customerCount'],
+    loan: ['corpLoan', 'corporateLoan', 'corp.loan']
+  },
+  corpRanking: {
+    orgCode: { builtin: ['org_code'], semantics: ['orgCode'] },
+    name: { builtin: ['org_name'], semantics: ['orgName'] },
+    deposit: ['corpDeposit', 'corporateDeposit', 'corp.deposit'],
+    increase: ['corpDepositIncrease', 'corporateDepositIncrease', 'corp.depositIncrease'],
+    rate: ['corpDepositRate', 'corporateDepositRate', 'corp.completionRate'],
+    nplRate: ['corpNplRate', 'corporateNplRate', 'corp.nplRate']
+  },
+  corpAttention: {
+    label: ['corpAttentionLabel', 'corporateAttentionLabel'],
+    count: ['corpAttentionCount', 'corporateAttentionCount'],
+    owner: ['corpAttentionOwner', 'corporateAttentionOwner'],
+    deadline: ['corpAttentionDeadline', 'corporateAttentionDeadline']
+  },
+  corpTargets: {
+    name: ['corpTargetName', 'corporateTargetName'],
+    actual: ['corpActual', 'corporateActual'],
+    target: ['corpTarget', 'corporateTarget']
+  },
+  branches: METRIC_RULES.branches
+});
+
+const CORPORATE_RATIO_SEMANTICS = Object.freeze({
+  corpNplRate: new Set(['value']),
+  corpRanking: new Set(['rate', 'nplRate'])
 });
 
 function object(value) {
@@ -312,6 +387,12 @@ function sourceFields(source) {
 }
 
 function metricRule(template, slot, semantic) {
+  if (template === CORPORATE_TEMPLATE) {
+    const explicit = CORPORATE_SEMANTICS[slot]?.[semantic];
+    if (Array.isArray(explicit)) return { semantics: explicit };
+    if (explicit && typeof explicit === 'object') return explicit;
+    if (slot === 'branches') return METRIC_RULES.branches[semantic] || null;
+  }
   if (template === RETAIL_TEMPLATE) {
     const explicit = RETAIL_SEMANTICS[slot]?.[semantic];
     if (Array.isArray(explicit)) return { semantics: explicit };
@@ -324,13 +405,28 @@ function metricRule(template, slot, semantic) {
 }
 
 function fieldSpec(template, slot, semantic) {
-  const slots = template === RETAIL_TEMPLATE ? RETAIL_BINDING_SLOTS : BINDING_SLOTS;
+  const slots = template === CORPORATE_TEMPLATE
+    ? CORPORATE_BINDING_SLOTS
+    : template === RETAIL_TEMPLATE ? RETAIL_BINDING_SLOTS : BINDING_SLOTS;
   return slots[slot]?.fields?.find(field => field.semantic === semantic) || null;
 }
 
 function slotSpec(template, slot) {
-  const slots = template === RETAIL_TEMPLATE ? RETAIL_BINDING_SLOTS : BINDING_SLOTS;
+  const slots = template === CORPORATE_TEMPLATE
+    ? CORPORATE_BINDING_SLOTS
+    : template === RETAIL_TEMPLATE ? RETAIL_BINDING_SLOTS : BINDING_SLOTS;
   return slots[slot] || null;
+}
+
+function corporateRatioAggregationUnsafe(source, template, slot, semantic) {
+  if (template !== CORPORATE_TEMPLATE || !CORPORATE_RATIO_SEMANTICS[slot]?.has(semantic)) return false;
+  const config = datasourceConfig(source);
+  const sourceKind = upper(source?.sourceKind || source?.source_kind || config.sourceKind);
+  if (sourceKind !== 'WIDE_TABLE') return false;
+  const aggregation = object(config.aggregation);
+  const agg = upper(config.agg || config.aggregate || aggregation.agg || aggregation.aggregate
+    || aggregation.type || aggregation.function);
+  return agg === 'SUM';
 }
 
 function candidateMatches(rule, candidate) {
@@ -348,7 +444,8 @@ function amountSemantic(template, slot, semantic) {
 function confirmedUnit(source, candidate, template, slot, semantic) {
   const config = datasourceConfig(source);
   const table = upper(config.table);
-  if (source?.sourceKind === 'WIDE_TABLE' && table === 'ORG_INDEX_RESULT'
+  if (template !== CORPORATE_TEMPLATE
+      && upper(source?.sourceKind || source?.source_kind) === 'WIDE_TABLE' && table === 'ORG_INDEX_RESULT'
       && CONFIRMED_ORG_AMOUNT_CODES.has(candidate.metricCode) && amountSemantic(template, slot, semantic)) {
     return 'HUNDRED_MILLION';
   }
@@ -366,6 +463,7 @@ function sourceIsActive(source) {
 function sourceLineAllowed(source, screen, template) {
   const sourceLine = upper(source?.bizLine || source?.biz_line || '');
   const screenLine = upper(screen.bizLine || 'COMMON');
+  if (template === CORPORATE_TEMPLATE) return screenLine === 'CORP' && sourceLine === 'CORP';
   if (template === RETAIL_TEMPLATE) return sourceLine === 'RETAIL';
   return isDatasourceCompatible(screenLine, sourceLine);
 }
@@ -390,7 +488,7 @@ function hasExplicitOrgContext(source) {
   return Boolean(text(config.subjectCol || config.subjectParam || config.orgCode || config.org_code));
 }
 
-const INSTITUTION_LIST_SLOTS = new Set(['branches', 'ranking', 'retailRanking']);
+const INSTITUTION_LIST_SLOTS = new Set(['branches', 'ranking', 'retailRanking', 'corpRanking']);
 
 /**
  * CUSTOM_SQL 只有在配置明确声明逐行 TABLE 结果，并把 org_code 声明为 DIM 时，
@@ -422,7 +520,7 @@ function sourceStructureIssue(source, screen, slot, mode) {
       return '趋势展示需要 WIDE_TABLE 明确按 DATE 聚合';
     }
   }
-  if (sourceKind === 'WIDE_TABLE' && ['branches', 'ranking', 'retailRanking'].includes(slot) && groupBy !== 'SUBJECT') {
+  if (sourceKind === 'WIDE_TABLE' && ['branches', 'ranking', 'retailRanking', 'corpRanking'].includes(slot) && groupBy !== 'SUBJECT') {
     return '机构展示需要 WIDE_TABLE 明确按 SUBJECT 聚合';
   }
   if (INSTITUTION_LIST_SLOTS.has(slot) && sourceKind === 'CUSTOM_SQL'
@@ -518,6 +616,12 @@ function optionalCandidateSemantics(template, slot, mode) {
   if (!spec) return [];
   // 机构列表的名称是引擎固定输出的身份维度。它可以补充机构号，
   // 但不能把其他可选指标一并按名称猜测。
+  if (template === CORPORATE_TEMPLATE) {
+    const required = new Set(requiredSemantics(template, slot, mode));
+    return (slotSpec(template, slot)?.fields || [])
+      .map(field => field.semantic)
+      .filter(semantic => !required.has(semantic));
+  }
   if (slot === 'branches') return ['orgName'];
   if (slot === 'attention') return ['orgCode'];
   const required = new Set(requiredSemantics(template, slot, mode));
@@ -532,6 +636,7 @@ function candidateFor(source, template, slot, semantic) {
     const expected = fieldSpec(template, slot, semantic);
     if (!expected) return false;
     if (candidate.role !== upper(expected.kind === 'dimension' ? 'DIM' : 'METRIC')) return false;
+    if (corporateRatioAggregationUnsafe(source, template, slot, semantic)) return false;
     return candidateMatches(rule, candidate);
   });
   return fields;
@@ -556,7 +661,13 @@ function candidateBindingForSource({ source, template, slot, mode, required, opt
       continue;
     }
     if (!candidates.length) {
-      if (requiredSet.has(semantic)) issues.push(`没有找到展示内容“${fieldSpec(template, slot, semantic)?.label || semantic}”的明确字段`);
+      if (requiredSet.has(semantic)) {
+        if (corporateRatioAggregationUnsafe(source, template, slot, semantic)) {
+          issues.push('对公比率来源不能按 SUM 聚合，需提供同范围预计算结果');
+        } else {
+          issues.push(`没有找到展示内容“${fieldSpec(template, slot, semantic)?.label || semantic}”的明确字段`);
+        }
+      }
       continue;
     }
     const candidate = candidates[0];
@@ -786,7 +897,11 @@ export function resolveDefaultBinding(input = {}) {
  */
 export function applyDefaultBindings(input = {}) {
   const template = input.template || BRANCH_TEMPLATE;
-  const order = Array.isArray(input.slots) ? input.slots : (template === RETAIL_TEMPLATE ? RETAIL_SLOT_ORDER : SLOT_ORDER);
+  const order = Array.isArray(input.slots)
+    ? input.slots
+    : (template === CORPORATE_TEMPLATE
+      ? CORPORATE_SLOT_ORDER
+      : template === RETAIL_TEMPLATE ? RETAIL_SLOT_ORDER : SLOT_ORDER);
   const current = input.bindings && typeof input.bindings === 'object' ? input.bindings : {};
   const bindings = Object.fromEntries(Object.entries(current).map(([slot, binding]) => [slot, cloneBinding(binding, slot)]));
   const applied = [];
@@ -841,7 +956,11 @@ export function summarizeBinding(label, binding, datasources = []) {
 }
 
 export function bindingPreview({ template = BRANCH_TEMPLATE, screenScope, datasources, bindings, slots } = {}) {
-  const order = Array.isArray(slots) ? slots : (template === RETAIL_TEMPLATE ? RETAIL_SLOT_ORDER : SLOT_ORDER);
+  const order = Array.isArray(slots)
+    ? slots
+    : (template === CORPORATE_TEMPLATE
+      ? CORPORATE_SLOT_ORDER
+      : template === RETAIL_TEMPLATE ? RETAIL_SLOT_ORDER : SLOT_ORDER);
   const applied = [];
   const gaps = [];
   for (const slot of order) {

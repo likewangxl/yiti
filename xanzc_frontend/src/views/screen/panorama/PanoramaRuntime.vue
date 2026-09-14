@@ -14,7 +14,7 @@
       :queried-at="model.queriedAt || lastQueriedAt"
     />
 
-    <component :is="isRetail ? RetailDashboard : PanoramaDashboard"
+    <component :is="isCorporate ? CorporateDashboard : isRetail ? RetailDashboard : PanoramaDashboard"
       :model="dashboardModel"
       :source-presentation="dashboardSourcePresentation"
       :loading="loading"
@@ -41,6 +41,7 @@
 import { computed, toRef } from 'vue';
 import { useRouter } from 'vue-router';
 import PanoramaDashboard from './PanoramaDashboard.vue';
+import CorporateDashboard from './CorporateDashboard.vue';
 import RetailDashboard from './RetailDashboard.vue';
 import BatchQualityBanner from './BatchQualityBanner.vue';
 import { BINDING_SLOTS } from './bindings';
@@ -56,6 +57,7 @@ const props = defineProps({
 const emit = defineEmits(['back', 'configure', 'refresh', 'branch-select']);
 const router = useRouter();
 
+const isCorporate = computed(() => props.view?.renderPackage?.canvasStyle?.presentation?.template === 'corporate-overview-v1');
 const isRetail = computed(() => props.view?.renderPackage?.canvasStyle?.presentation?.template === 'retail-overview-v1');
 
 const state = usePanoramaData(toRef(props, 'view'), toRef(props, 'context'), {

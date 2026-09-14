@@ -111,6 +111,20 @@ class RetailScreenCanvasServiceTest {
                 anyString(), anyInt(), anyString());
     }
 
+    @Test
+    void saveRejectsCommonDatasourceForCorporateTemplateEvenOnCorporateScreen() {
+        RptScreen screen = screen(7L, 3, "CORP");
+        screen.setScreenCode("SCR_CORP_OVERVIEW");
+        RptScreenDatasource datasource = datasource(12L, "COMMON");
+        when(screenMapper.selectById(7L)).thenReturn(screen);
+        when(dsMapper.selectById(12L)).thenReturn(datasource);
+
+        assertThatThrownBy(() -> service.saveCanvas(saveRequest(screen.getId(), 3,
+                corporateDepositChart(), corporateStyle())))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_BIZ_LINE_MISMATCH.getCode());
+        verify(canvasMapper, never()).bumpVersion(anyLong(), anyInt(), anyString(), anyString(), anyString());
+    }
+
     private RptScreen screen(long id, int version, String bizLine) {
         RptScreen screen = new RptScreen();
         screen.setId(id);
@@ -144,6 +158,15 @@ class RetailScreenCanvasServiceTest {
         return style;
     }
 
+    private CanvasStyleDTO corporateStyle() {
+        CodeScreenPresentationDTO presentation = new CodeScreenPresentationDTO();
+        presentation.setType("CODE");
+        presentation.setTemplate("corporate-overview-v1");
+        CanvasStyleDTO style = new CanvasStyleDTO();
+        style.setPresentation(presentation);
+        return style;
+    }
+
     private String styleJson(CanvasStyleDTO style) {
         return "{\"presentation\":{\"type\":\"CODE\",\"template\":\""
                 + style.getPresentation().getTemplate() + "\"}}";
@@ -166,6 +189,16 @@ class RetailScreenCanvasServiceTest {
         chart.setPropValue(Map.of("bindingKey", "retailAum"));
         chart.setBindJson("{\"dsId\":12,\"period\":\"LATEST\","
                 + "\"fields\":{\"value\":\"aum\"},\"units\":{\"value\":\"YUAN\"}}");
+        return chart;
+    }
+
+    private CanvasComponentDTO corporateDepositChart() {
+        CanvasComponentDTO chart = new CanvasComponentDTO();
+        chart.setId("w-deposit");
+        chart.setComponent("ChartWidget");
+        chart.setPropValue(Map.of("bindingKey", "corpDeposit"));
+        chart.setBindJson("{\"dsId\":12,\"period\":\"LATEST\","
+                + "\"fields\":{\"value\":\"deposit\"},\"units\":{\"value\":\"YUAN\"}}");
         return chart;
     }
 }

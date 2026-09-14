@@ -73,7 +73,7 @@ const hasPresentation = computed(() => Object.prototype.hasOwnProperty.call(
   view.value?.renderPackage?.canvasStyle || {}, 'presentation'
 ) && presentation.value !== null && presentation.value !== undefined);
 const isPanoramaPresentation = computed(() => presentation.value?.type === 'CODE'
-  && ['branch-overview-v1', 'retail-overview-v1'].includes(presentation.value?.template));
+  && ['branch-overview-v1', 'retail-overview-v1', 'corporate-overview-v1'].includes(presentation.value?.template));
 const unsupportedPresentation = computed(() => Boolean(
   view.value?.renderPackage && hasPresentation.value && !isPanoramaPresentation.value
 ));

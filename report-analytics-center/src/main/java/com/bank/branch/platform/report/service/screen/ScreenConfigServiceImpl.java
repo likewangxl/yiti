@@ -69,7 +69,8 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     private static final String RUNTIME_CATALOG_SCREEN_CODE = "catalog";
     private static final List<RuntimeCatalogRegistration> CODE_SCREEN_CATALOG = List.of(
             new RuntimeCatalogRegistration("SCR_PROVINCE", "分行经营总览", "branch-overview-v1", "COMMON", "TEST"),
-            new RuntimeCatalogRegistration("SCR_RETAIL_OVERVIEW", "零售经营总览", "retail-overview-v1", "RETAIL", "DEMO"));
+            new RuntimeCatalogRegistration("SCR_RETAIL_OVERVIEW", "零售经营总览", "retail-overview-v1", "RETAIL", "DEMO"),
+            new RuntimeCatalogRegistration("SCR_CORP_OVERVIEW", "对公经营总览", "corporate-overview-v1", "CORP", "DEMO"));
     /** 逐屏目录校验中可安全排除的授权失败；带 cause 的同码异常表示基础设施失败，必须继续抛出。 */
     private static final Set<String> CATALOG_AUTH_REJECTION_CODES = Set.of(
             RptErrorCode.SCREEN_ACCESS_DENIED.getCode(),
@@ -439,7 +440,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             String template = CodeScreenPresentationValidator.presentationTemplate(root.path("canvasStyle"));
             boolean code = template != null;
             if (code) {
-                validateRetailTemplateScreenLine(screen, template);
+                validateCodeTemplateScreenLine(screen, template);
                 // CODE runtime must pass the existing immutable identity validator as well as
                 // the slot/units validator. The latter alone would allow a snapshot map whose
                 // keys do not match ChartWidget blockIds.
@@ -485,10 +486,10 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             }
             try {
                 CodeScreenPresentationValidator.validateBindAgainstDatasource(bind, bindingKey, datasource, template);
-                validateRetailTemplateDatasourceLine(template, datasource);
+                validateCodeTemplateDatasourceLine(template, datasource);
                 if ("NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())
                         && ("branches".equals(bindingKey) || "citySummary".equals(bindingKey)
-                        || "retailRanking".equals(bindingKey))) {
+                        || "retailRanking".equals(bindingKey) || "corpRanking".equals(bindingKey))) {
                     try {
                         // The immutable package must satisfy the same server-side identity rule as
                         // save/publish/metadata transitions. A stale package must never reach the
@@ -726,8 +727,8 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     private void validateExistingBlockBindings(RptScreen screen) {
         String draftTemplate = codeTemplate(screen.getCanvasStyleJson());
         String publishedTemplate = publishedCodeTemplate(screen.getCanvasPublishedJson());
-        validateRetailTemplateScreenLine(screen, draftTemplate);
-        validateRetailTemplateScreenLine(screen, publishedTemplate);
+        validateCodeTemplateScreenLine(screen, draftTemplate);
+        validateCodeTemplateScreenLine(screen, publishedTemplate);
         List<BlockBinding> bindings = new ArrayList<>();
         List<ScreenBlockDTO> draftBlocks = listBlocks(screen.getId());
         for (ScreenBlockDTO block : draftBlocks) {
@@ -753,7 +754,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                     normalizeBizLine(datasource.getBizLine()))) {
                 throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
             }
-            validateRetailTemplateDatasourceLine(binding.template(), datasource);
+            validateCodeTemplateDatasourceLine(binding.template(), datasource);
             if ("NAMED_GROUP".equals(normalizeScopeMode(screen.getOrgScopeMode()))
                     && !isNamedGroupSafeDatasource(datasource)) {
                 throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
@@ -886,6 +887,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                     && "SUBJECT".equals(config.path("aggregation").path("groupBy").asText());
             boolean requiresNamedSubject = "branches".equals(bindingKey)
                     || "retailRanking".equals(bindingKey)
+                    || "corpRanking".equals(bindingKey)
                     || ("citySummary".equals(bindingKey) && bind.path("fields").has("orgCode"));
             if (requiresNamedSubject && (!namedSubject
                     || !"org_code".equals(bind.path("fields").path("orgCode").asText()))) {
@@ -900,7 +902,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
 
     private boolean isNamedGroupCodeBinding(String bindingKey) {
         return "branches".equals(bindingKey) || "citySummary".equals(bindingKey)
-                || "retailRanking".equals(bindingKey);
+                || "retailRanking".equals(bindingKey) || "corpRanking".equals(bindingKey);
     }
 
     /**
@@ -1298,20 +1300,31 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         }
     }
 
-    /** RETAIL CODE 模板必须挂在 RETAIL 屏上，不能以 COMMON 屏伪装零售经营口径。 */
-    private void validateRetailTemplateScreenLine(RptScreen screen, String template) {
-        if (CodeScreenPresentationValidator.RETAIL_OVERVIEW_TEMPLATE.equals(template)
-                && !"RETAIL".equals(normalizeBizLine(screen.getBizLine()))) {
+    /** 业务专属 CODE 模板必须挂在对应条线屏上，不能以其他条线伪装经营口径。 */
+    private void validateCodeTemplateScreenLine(RptScreen screen, String template) {
+        String requiredLine = requiredTemplateBizLine(template);
+        if (requiredLine != null && !requiredLine.equals(normalizeBizLine(screen.getBizLine()))) {
             throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
         }
     }
 
-    /** RETAIL CODE 模板的每个绑定都必须来自 RETAIL 数据源，COMMON 全行源不能贴零售标签。 */
-    private void validateRetailTemplateDatasourceLine(String template, RptScreenDatasource datasource) {
-        if (CodeScreenPresentationValidator.RETAIL_OVERVIEW_TEMPLATE.equals(template)
-                && (datasource == null || !"RETAIL".equals(normalizeBizLine(datasource.getBizLine())))) {
+    /** 业务专属 CODE 模板的每个绑定都必须来自对应条线数据源，COMMON 源不能贴专属标签。 */
+    private void validateCodeTemplateDatasourceLine(String template, RptScreenDatasource datasource) {
+        String requiredLine = requiredTemplateBizLine(template);
+        if (requiredLine != null
+                && (datasource == null || !requiredLine.equals(normalizeBizLine(datasource.getBizLine())))) {
             throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
         }
+    }
+
+    private String requiredTemplateBizLine(String template) {
+        if (CodeScreenPresentationValidator.RETAIL_OVERVIEW_TEMPLATE.equals(template)) {
+            return "RETAIL";
+        }
+        if (CodeScreenPresentationValidator.CORPORATE_OVERVIEW_TEMPLATE.equals(template)) {
+            return "CORP";
+        }
+        return null;
     }
 
     /**

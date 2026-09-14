@@ -18,6 +18,7 @@ class CodeScreenPresentationValidatorTest {
 
     private final String style = "{\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"}}";
     private final String retailStyle = "{\"presentation\":{\"type\":\"CODE\",\"template\":\"retail-overview-v1\"}}";
+    private final String corporateStyle = "{\"presentation\":{\"type\":\"CODE\",\"template\":\"corporate-overview-v1\"}}";
 
     private String draft(String component, String id, String bindingKey, String bindJson) {
         return "{\"components\":[{\"component\":\"" + component + "\",\"id\":\""
@@ -81,6 +82,18 @@ class CodeScreenPresentationValidatorTest {
         return datasource;
     }
 
+    private RptScreenDatasource corporateRankingDatasource() {
+        RptScreenDatasource datasource = retailRankingDatasource();
+        datasource.setBizLine("CORP");
+        datasource.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","
+                + "\"aggregation\":{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\"},"
+                + "\"metrics\":[{\"metricCode\":\"DEP\",\"metricName\":\"deposit\",\"slot\":1},"
+                + "{\"metricCode\":\"INC\",\"metricName\":\"increase\",\"slot\":2},"
+                + "{\"metricCode\":\"RATE\",\"metricName\":\"rate\",\"slot\":3},"
+                + "{\"metricCode\":\"NPL\",\"metricName\":\"nplRate\",\"slot\":4}]}");
+        return datasource;
+    }
+
     @Test
     void acceptsBranchOverviewWithRequiredDepositBinding() {
         org.assertj.core.api.Assertions.assertThat(CodeScreenPresentationValidator.isCodePresentation(style)).isTrue();
@@ -118,6 +131,66 @@ class CodeScreenPresentationValidatorTest {
                 draft("ChartWidget", "w-branches", "branches", branches));
         CodeScreenPresentationValidator.validateBindAgainstDatasource(
                 MAPPER.readTree(ranking), "retailRanking", retailRankingDatasource());
+    }
+
+    @Test
+    void acceptsCorporateOverviewWithCorporateSlotsAndSharedBranches() throws Exception {
+        org.assertj.core.api.Assertions.assertThat(CodeScreenPresentationValidator.isCodePresentation(corporateStyle))
+                .isTrue();
+
+        String single = validBind("{\"value\":\"对公余额\",\"change\":\"较上期\",\"date\":\"日期\"}",
+                "{\"value\":\"YUAN\",\"change\":\"PERCENT\"}");
+        String trend = "{\"dsId\":12,\"period\":\"LAST_6M_EOM\","
+                + "\"fields\":{\"date\":\"日期\",\"deposit\":\"对公存款\",\"loan\":\"对公贷款\"},"
+                + "\"units\":{\"deposit\":\"HUNDRED_MILLION\",\"loan\":\"YUAN\"}}";
+        String segments = validBind("{\"name\":\"客户层级\",\"customers\":\"客户数\",\"loan\":\"贷款余额\"}",
+                "{\"customers\":\"TEN_THOUSAND_COUNT\",\"loan\":\"HUNDRED_MILLION\"}");
+        String ranking = validBind("{\"orgCode\":\"org_code\",\"name\":\"org_name\",\"deposit\":\"deposit\","
+                        + "\"increase\":\"increase\",\"rate\":\"rate\",\"nplRate\":\"nplRate\"}",
+                "{\"deposit\":\"YUAN\",\"increase\":\"TEN_THOUSAND\",\"rate\":\"RATIO\",\"nplRate\":\"PERCENT\"}");
+        String attention = validBind("{\"label\":\"事项\",\"count\":\"数量\",\"owner\":\"负责人\",\"deadline\":\"期限\"}",
+                "{\"count\":\"COUNT\"}");
+        String targets = validBind("{\"name\":\"年度收入\",\"actual\":\"实际\",\"target\":\"目标\"}",
+                "{\"actual\":\"YUAN\",\"target\":\"HUNDRED_MILLION\"}");
+        String branches = validBind("{\"orgCode\":\"org_code\",\"deposit\":\"对公存款\"}",
+                "{\"deposit\":\"YUAN\"}");
+
+        CodeScreenPresentationValidator.validateDraft(corporateStyle,
+                draft("ChartWidget", "w-deposit", "corpDeposit", single));
+        CodeScreenPresentationValidator.validateDraft(corporateStyle,
+                draft("ChartWidget", "w-trend", "corpTrend", trend));
+        CodeScreenPresentationValidator.validateDraft(corporateStyle,
+                draft("ChartWidget", "w-segments", "corpSegments", segments));
+        CodeScreenPresentationValidator.validateDraft(corporateStyle,
+                draft("ChartWidget", "w-ranking", "corpRanking", ranking));
+        CodeScreenPresentationValidator.validateDraft(corporateStyle,
+                draft("ChartWidget", "w-attention", "corpAttention", attention));
+        CodeScreenPresentationValidator.validateDraft(corporateStyle,
+                draft("ChartWidget", "w-targets", "corpTargets", targets));
+        CodeScreenPresentationValidator.validateDraft(corporateStyle,
+                draft("ChartWidget", "w-branches", "branches", branches));
+        CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(ranking), "corpRanking", corporateRankingDatasource());
+    }
+
+    @Test
+    void corporateTemplateRejectsRetailAndBranchSlotsAndAcceptsCorporateMetadata() {
+        String branchBind = validBind("{\"value\":\"余额\"}", "{\"value\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(corporateStyle,
+                draft("ChartWidget", "w-branch-slot", "deposit", branchBind)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String retailBind = validBind("{\"value\":\"零售AUM\"}", "{\"value\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(corporateStyle,
+                draft("ChartWidget", "w-retail-slot", "retailAum", retailBind)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        CodeScreenPresentationValidator.validateCanvasStyle("""
+                {"presentation":{"type":"CODE","template":"corporate-overview-v1"},
+                 "metricLabels":{"corpDeposit":"对公存款余额","corpNplRate":"对公不良率"},
+                 "sourceAvailability":{"corpDeposit":{"status":"AVAILABLE","dataDate":"2026-09-10",
+                 "fields":{"value":{"status":"AVAILABLE"}}}}}
+                """);
     }
 
     @Test

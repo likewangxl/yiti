@@ -1,4 +1,11 @@
 import { RETAIL_BINDING_SLOTS, RETAIL_SLOT_ORDER } from './retailBindings';
+import {
+  CORPORATE_BINDING_SLOTS,
+  CORPORATE_SLOT_ORDER,
+  isCorporateBindingSlot,
+  normalizeCorporateBinding,
+  validateCorporateBinding
+} from './corporateBindings';
 
 /**
  * 代码化经营大屏的绑定契约。
@@ -188,7 +195,10 @@ export const BINDING_SLOTS = Object.freeze({
   }),
   // 零售模板槽位进入全局身份白名单；branches 保留这里的分行完整契约，
   // 零售管理页通过 RETAIL_BINDING_SLOTS.branches 只展示身份字段。
-  ...Object.fromEntries(Object.entries(RETAIL_BINDING_SLOTS).filter(([slot]) => slot !== 'branches'))
+  ...Object.fromEntries(Object.entries(RETAIL_BINDING_SLOTS).filter(([slot]) => slot !== 'branches')),
+  // 对公模板拥有独立的 corp* 身份；branches 仍由基础模板声明完整契约，
+  // 对公/零售管理页各自只消费 corporate/retail 的身份槽定义。
+  ...Object.fromEntries(Object.entries(CORPORATE_BINDING_SLOTS).filter(([slot]) => slot !== 'branches'))
 });
 
 /** 既有分行模板的 14 个槽位，供旧管理页、预检和兼容测试继续使用。 */
@@ -203,7 +213,8 @@ export const SLOT_ORDER = BRANCH_SLOT_ORDER;
 /** 全局代码化组件构建顺序，包含分行槽位和零售新增槽位。 */
 export const ALL_SLOT_ORDER = Object.freeze([
   ...BRANCH_SLOT_ORDER,
-  ...RETAIL_SLOT_ORDER.filter(slot => !BRANCH_SLOT_ORDER.includes(slot))
+  ...RETAIL_SLOT_ORDER.filter(slot => !BRANCH_SLOT_ORDER.includes(slot)),
+  ...CORPORATE_SLOT_ORDER.filter(slot => !BRANCH_SLOT_ORDER.includes(slot))
 ]);
 
 const SLOT_INNER_TYPES = Object.freeze(Object.fromEntries(
@@ -248,10 +259,11 @@ export function getCompositionFieldSpecs(mode = 'rows') {
 
 /** 只取运行时需要的绑定字段，避免把旧 block 的 display 配置带进代码绑定。 */
 export function normalizeBinding(raw = {}, slot = raw?.slot) {
+  if (isCorporateBindingSlot(slot) && slot !== 'branches') return normalizeCorporateBinding(raw, slot);
   const source = parseJson(raw, {});
   const out = {};
   if (source.dsId !== undefined && source.dsId !== null && source.dsId !== '') out.dsId = source.dsId;
-  const defaultPeriod = ['trend', 'branchTrend', 'retailTrend'].includes(slot)
+  const defaultPeriod = ['trend', 'branchTrend', 'retailTrend', 'corpTrend'].includes(slot)
     ? 'LAST_6M_EOM' : 'LATEST';
   out.period = String(source.period || defaultPeriod);
   out.fields = {};
@@ -274,6 +286,12 @@ export function buildBinding(dsId, fields = {}, units = {}, period) {
 }
 
 export function validateBinding(slot, raw = {}) {
+  if (isCorporateBindingSlot(slot) && slot !== 'branches') {
+    const issues = validateCorporateBinding(slot, raw);
+    const normalized = normalizeCorporateBinding(raw, slot);
+    if (!PERIOD_VALUES.includes(normalized.period) && !issues.includes('周期无效')) issues.push('周期无效');
+    return issues;
+  }
   const issues = [];
   if (!isBindingSlot(slot)) return ['槽位不受支持'];
   const binding = normalizeBinding(raw, slot);

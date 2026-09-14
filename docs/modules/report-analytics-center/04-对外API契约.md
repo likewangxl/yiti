@@ -495,3 +495,7 @@ public class SysControlUpdatedListener {
 ## 零售经营模板
 
 `retail-overview-v1` 复用既有 screen REST 与 auth 公开机构画像接口；不新增跨模块 Java API，不修改 PT_RESOURCE。模板绑定、原始单位与机构目录边界详见 [零售经营总览契约](../../retail-screen-design-and-acceptance.md#零售绑定契约)。启用前须部署兼容校验器，并经原大屏保存/发布流程配置 RETAIL 来源。
+
+## 对公经营模板
+
+`corporate-overview-v1` 复用既有 screen REST 与授权机构目录，不新增跨模块 Java API。仅消费CORP数据源，沿用已保存块身份、发布快照、屏级授权和元数据引用校验；数据产品定义见[对公经营总览契约](../../corporate-screen-design-and-acceptance.md)。中心登记为明确标识的DEMO；正式数据通过既有草稿/发布入口绑定启用。

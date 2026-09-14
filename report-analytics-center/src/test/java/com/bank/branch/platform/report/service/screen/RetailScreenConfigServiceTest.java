@@ -67,6 +67,18 @@ class RetailScreenConfigServiceTest {
     }
 
     @Test
+    void metadataCannotMoveCorporateTemplateToRetailScreen() {
+        RptScreen screen = corporateScreen(7L, "CORP", "LEGACY_CONTEXT");
+        when(screenMapper.selectById(7L)).thenReturn(screen);
+
+        ScreenMetadataUpdateReqDTO req = metadataRequest("RETAIL", "LEGACY_CONTEXT");
+
+        assertThatThrownBy(() -> service.updateScreenMetadata(7L, req))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_BIZ_LINE_MISMATCH.getCode());
+        verify(canvasMapper, never()).updateMetadataCas(any(RptScreen.class), anyInt(), anyString());
+    }
+
+    @Test
     void metadataCannotKeepRetailTemplateOnCommonDatasource() {
         RptScreen screen = retailScreen(7L, "RETAIL", "LEGACY_CONTEXT");
         RptScreenBlock block = codeBlock(31L, "{\"dsId\":12}");
@@ -153,6 +165,17 @@ class RetailScreenConfigServiceTest {
         screen.setCanvasStyleJson("{\"presentation\":{\"type\":\"CODE\","
                 + "\"template\":\"retail-overview-v1\"}}");
         screen.setCanvasDraftJson("{\"schemaVersion\":2,\"components\":[]}");
+        screen.setCanvasPublishedJson("{\"schemaVersion\":2,\"canvasStyle\":"
+                + screen.getCanvasStyleJson() + ",\"components\":[],\"bindSnapshots\":{}}");
+        return screen;
+    }
+
+    private RptScreen corporateScreen(long id, String bizLine, String scopeMode) {
+        RptScreen screen = retailScreen(id, bizLine, scopeMode);
+        screen.setScreenCode("SCR_CORP_OVERVIEW");
+        screen.setScreenName("对公经营总览");
+        screen.setCanvasStyleJson("{\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"corporate-overview-v1\"}}");
         screen.setCanvasPublishedJson("{\"schemaVersion\":2,\"canvasStyle\":"
                 + screen.getCanvasStyleJson() + ",\"components\":[],\"bindSnapshots\":{}}");
         return screen;

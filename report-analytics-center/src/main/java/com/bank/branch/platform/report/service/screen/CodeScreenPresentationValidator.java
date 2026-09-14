@@ -32,6 +32,7 @@ public final class CodeScreenPresentationValidator {
     public static final String CODE_TYPE = "CODE";
     public static final String BRANCH_OVERVIEW_TEMPLATE = "branch-overview-v1";
     public static final String RETAIL_OVERVIEW_TEMPLATE = "retail-overview-v1";
+    public static final String CORPORATE_OVERVIEW_TEMPLATE = "corporate-overview-v1";
 
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
@@ -43,7 +44,11 @@ public final class CodeScreenPresentationValidator {
             "retailAum", "retailDeposit", "retailDepositAverage", "retailRevenue", "retailLoan",
             "retailValueCustomers", "retailNplRate", "retailTrend", "retailSegments", "retailRanking",
             "retailAttention", "retailTargets", "branches");
-    private static final Set<String> SLOTS = union(BRANCH_SLOTS, RETAIL_SLOTS);
+    private static final Set<String> CORPORATE_SLOTS = Set.of(
+            "corpDeposit", "corpDepositAverage", "corpLoan", "corpRevenue", "corpCustomers",
+            "corpNplRate", "corpTrend", "corpSegments", "corpRanking", "corpAttention",
+            "corpTargets", "branches");
+    private static final Set<String> SLOTS = union(union(BRANCH_SLOTS, RETAIL_SLOTS), CORPORATE_SLOTS);
     private static final Set<String> UNITS = Set.of(
             "YUAN", "TEN_THOUSAND", "HUNDRED_MILLION", "COUNT", "TEN_THOUSAND_COUNT",
             "PERCENT", "RATIO");
@@ -56,7 +61,8 @@ public final class CodeScreenPresentationValidator {
     private static final Set<String> METRIC_LABEL_KEYS = Set.of(
             "deposit", "depositIncrease", "depositAverage", "loan", "customers", "revenue", "rate",
             "retailAum", "retailDeposit", "retailDepositAverage", "retailRevenue", "retailValueCustomers",
-            "retailLoan", "retailNplRate");
+            "retailLoan", "retailNplRate", "corpDeposit", "corpDepositAverage", "corpLoan", "corpRevenue",
+            "corpCustomers", "corpNplRate");
     private static final Set<String> WIDE_TABLES = Set.of(
             "EMP_INDEX_RESULT", "ORG_INDEX_RESULT", "CUST_INDEX_RESULT");
     private static final Map<String, Set<String>> FIELD_KEYS = fieldKeys();
@@ -204,7 +210,8 @@ public final class CodeScreenPresentationValidator {
         }
         String period = bind.path("period").asText(null);
         if (period == null || period.isBlank()) {
-            period = ("trend".equals(bindingKey) || "branchTrend".equals(bindingKey))
+            period = ("trend".equals(bindingKey) || "branchTrend".equals(bindingKey)
+                    || "corpTrend".equals(bindingKey) || "retailTrend".equals(bindingKey))
                     ? "LAST_6M_EOM" : "LATEST";
         }
         if (!PERIODS.contains(period)) {
@@ -239,6 +246,10 @@ public final class CodeScreenPresentationValidator {
         }
         if ("retailTrend".equals(bindingKey)
                 && !present.contains("aum") && !present.contains("deposit")) {
+            throw invalid();
+        }
+        if ("corpTrend".equals(bindingKey)
+                && !present.contains("deposit") && !present.contains("loan")) {
             throw invalid();
         }
         if ("branchTrend".equals(bindingKey)
@@ -330,7 +341,8 @@ public final class CodeScreenPresentationValidator {
                 throw invalid();
             }
         }
-        if ("retailRanking".equals(bindingKey) && isOrgSubjectAggregation(datasource)
+        if (("retailRanking".equals(bindingKey) || "corpRanking".equals(bindingKey))
+                && isOrgSubjectAggregation(datasource)
                 && !"org_code".equals(fields.path("orgCode").asText())) {
             // NAMED_GROUP runtime uses the engine's subject aggregate. org_name is only a
             // display dimension and cannot be accepted as the catalog identity.
@@ -417,7 +429,8 @@ public final class CodeScreenPresentationValidator {
         if (presentation == null || !presentation.isObject()
                 || !CODE_TYPE.equals(presentation.path("type").asText())
                 || (!BRANCH_OVERVIEW_TEMPLATE.equals(presentation.path("template").asText())
-                && !RETAIL_OVERVIEW_TEMPLATE.equals(presentation.path("template").asText()))) {
+                && !RETAIL_OVERVIEW_TEMPLATE.equals(presentation.path("template").asText())
+                && !CORPORATE_OVERVIEW_TEMPLATE.equals(presentation.path("template").asText()))) {
             throw invalid();
         }
     }
@@ -444,20 +457,42 @@ public final class CodeScreenPresentationValidator {
                 validatePlainText(entry.getValue(), METRIC_LABEL_MAX_LENGTH, false);
             }
         }
-        validateSourceAvailability(canvasStyle.get("sourceAvailability"));
+        validateSourceAvailability(canvasStyle.get("sourceAvailability"), metadataSlots(canvasStyle));
+    }
+
+    /** 返回来源可用性元数据在当前模板下可声明的槽位；历史样式继续沿用分行槽位。 */
+    private static Set<String> metadataSlots(JsonNode canvasStyle) {
+        JsonNode presentation = canvasStyle == null ? null : canvasStyle.path("presentation");
+        String template = presentation == null || !presentation.isObject()
+                ? null : presentation.path("template").asText(null);
+        if (RETAIL_OVERVIEW_TEMPLATE.equals(template)) {
+            return RETAIL_SLOTS;
+        }
+        if (CORPORATE_OVERVIEW_TEMPLATE.equals(template)) {
+            return CORPORATE_SLOTS;
+        }
+        if (BRANCH_OVERVIEW_TEMPLATE.equals(template)) {
+            return BRANCH_SLOTS;
+        }
+        return BRANCH_SLOTS;
     }
 
     private static void validateSourceAvailability(JsonNode availability) {
+        validateSourceAvailability(availability, null);
+    }
+
+    private static void validateSourceAvailability(JsonNode availability, Set<String> allowedSlots) {
         if (availability == null || availability.isMissingNode()) {
             return;
         }
-        if (!availability.isObject() || availability.size() > BRANCH_SLOTS.size()) {
+        Set<String> permittedSlots = allowedSlots == null ? BRANCH_SLOTS : allowedSlots;
+        if (!availability.isObject() || availability.size() > permittedSlots.size()) {
             throw invalid();
         }
-        Iterator<Map.Entry<String, JsonNode>> slots = availability.fields();
-        while (slots.hasNext()) {
-            Map.Entry<String, JsonNode> slot = slots.next();
-            if (!BRANCH_SLOTS.contains(slot.getKey()) || !slot.getValue().isObject()) {
+        Iterator<Map.Entry<String, JsonNode>> entries = availability.fields();
+        while (entries.hasNext()) {
+            Map.Entry<String, JsonNode> slot = entries.next();
+            if (!permittedSlots.contains(slot.getKey()) || !slot.getValue().isObject()) {
                 throw invalid();
             }
             validateAvailabilityNode(slot.getValue(), FIELD_KEYS.get(slot.getKey()), true);
@@ -545,6 +580,9 @@ public final class CodeScreenPresentationValidator {
         if (RETAIL_OVERVIEW_TEMPLATE.equals(template)) {
             return RETAIL_SLOTS;
         }
+        if (CORPORATE_OVERVIEW_TEMPLATE.equals(template)) {
+            return CORPORATE_SLOTS;
+        }
         throw invalid();
     }
 
@@ -554,6 +592,9 @@ public final class CodeScreenPresentationValidator {
         }
         if (RETAIL_SLOTS.contains(bindingKey)) {
             return RETAIL_OVERVIEW_TEMPLATE;
+        }
+        if (CORPORATE_SLOTS.contains(bindingKey)) {
+            return CORPORATE_OVERVIEW_TEMPLATE;
         }
         throw invalid();
     }
@@ -711,6 +752,17 @@ public final class CodeScreenPresentationValidator {
         result.put("retailRanking", Set.of("orgCode", "name", "aum", "increase", "rate", "nplRate"));
         result.put("retailAttention", Set.of("label", "count", "owner", "deadline"));
         result.put("retailTargets", Set.of("name", "actual", "target"));
+        result.put("corpDeposit", Set.of("value", "change", "date"));
+        result.put("corpDepositAverage", Set.of("value", "change", "date"));
+        result.put("corpLoan", Set.of("value", "change", "date"));
+        result.put("corpRevenue", Set.of("value", "change", "date"));
+        result.put("corpCustomers", Set.of("value", "change", "date"));
+        result.put("corpNplRate", Set.of("value", "change", "date"));
+        result.put("corpTrend", Set.of("date", "deposit", "loan"));
+        result.put("corpSegments", Set.of("name", "customers", "loan"));
+        result.put("corpRanking", Set.of("orgCode", "name", "deposit", "increase", "rate", "nplRate"));
+        result.put("corpAttention", Set.of("label", "count", "owner", "deadline"));
+        result.put("corpTargets", Set.of("name", "actual", "target"));
         return Map.copyOf(result);
     }
 
@@ -744,6 +796,17 @@ public final class CodeScreenPresentationValidator {
         result.put("retailRanking", Set.of("orgCode", "name", "aum"));
         result.put("retailAttention", Set.of("label", "count"));
         result.put("retailTargets", Set.of("name", "actual", "target"));
+        result.put("corpDeposit", Set.of("value"));
+        result.put("corpDepositAverage", Set.of("value"));
+        result.put("corpLoan", Set.of("value"));
+        result.put("corpRevenue", Set.of("value"));
+        result.put("corpCustomers", Set.of("value"));
+        result.put("corpNplRate", Set.of("value"));
+        result.put("corpTrend", Set.of("date"));
+        result.put("corpSegments", Set.of("name", "customers", "loan"));
+        result.put("corpRanking", Set.of("orgCode", "name", "deposit"));
+        result.put("corpAttention", Set.of("label", "count"));
+        result.put("corpTargets", Set.of("name", "actual", "target"));
         return Map.copyOf(result);
     }
 
@@ -999,6 +1062,39 @@ public final class CodeScreenPresentationValidator {
             };
             case "retailAttention" -> "count".equals(field) ? Set.of("COUNT") : Set.of();
             case "retailTargets" -> switch (field) {
+                case "actual", "target" -> amount;
+                default -> Set.of();
+            };
+            case "corpDeposit", "corpDepositAverage", "corpLoan", "corpRevenue" -> switch (field) {
+                case "value" -> amount;
+                case "change" -> ratio;
+                default -> Set.of();
+            };
+            case "corpCustomers" -> switch (field) {
+                case "value" -> count;
+                case "change" -> ratio;
+                default -> Set.of();
+            };
+            case "corpNplRate" -> switch (field) {
+                case "value", "change" -> ratio;
+                default -> Set.of();
+            };
+            case "corpTrend" -> switch (field) {
+                case "deposit", "loan" -> amount;
+                default -> Set.of();
+            };
+            case "corpSegments" -> switch (field) {
+                case "customers" -> count;
+                case "loan" -> amount;
+                default -> Set.of();
+            };
+            case "corpRanking" -> switch (field) {
+                case "deposit", "increase" -> amount;
+                case "rate", "nplRate" -> ratio;
+                default -> Set.of();
+            };
+            case "corpAttention" -> "count".equals(field) ? Set.of("COUNT") : Set.of();
+            case "corpTargets" -> switch (field) {
                 case "actual", "target" -> amount;
                 default -> Set.of();
             };

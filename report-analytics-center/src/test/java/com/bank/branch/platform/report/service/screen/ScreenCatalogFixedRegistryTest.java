@@ -47,23 +47,24 @@ class ScreenCatalogFixedRegistryTest {
     void catalog_usesOnlyRegisteredCodeTemplatesAndDoesNotRequirePublishedCanvas() {
         RptScreen province = screen("SCR_PROVINCE", "数据库旧名称", "PROVINCE", "COMMON", "ACTIVE", 0, null);
         RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "数据库零售名称", "BRANCH", "RETAIL", "ACTIVE", 0, null);
+        RptScreen corporate = screen("SCR_CORP_OVERVIEW", "数据库对公名称", "PROVINCE", "CORP", "ACTIVE", 0, null);
         RptScreen oldPublished = screen("SCR_OLD_PUBLISHED", "旧发布屏", "BRANCH", "COMMON", "ACTIVE", 1,
                 "{\"schemaVersion\":1,\"components\":[]}");
-        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(oldPublished, retail, province));
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(oldPublished, retail, corporate, province));
         when(scopeAuthorizationService.authorize(any(RptScreen.class))).thenReturn(Set.of());
 
         List<ScreenEntryRespDTO> entries = service.listAuthorizedCodeScreens();
 
         assertThat(entries).extracting(ScreenEntryRespDTO::getScreenCode)
-                .containsExactly("SCR_PROVINCE", "SCR_RETAIL_OVERVIEW");
+                .containsExactly("SCR_PROVINCE", "SCR_RETAIL_OVERVIEW", "SCR_CORP_OVERVIEW");
         assertThat(entries).extracting(ScreenEntryRespDTO::getTemplate)
-                .containsExactly("branch-overview-v1", "retail-overview-v1");
+                .containsExactly("branch-overview-v1", "retail-overview-v1", "corporate-overview-v1");
         assertThat(entries).extracting(ScreenEntryRespDTO::getScreenName)
-                .containsExactly("分行经营总览", "零售经营总览");
+                .containsExactly("分行经营总览", "零售经营总览", "对公经营总览");
         assertThat(entries).extracting(ScreenEntryRespDTO::getBizLine)
-                .containsExactly("COMMON", "RETAIL");
+                .containsExactly("COMMON", "RETAIL", "CORP");
         assertThat(entries).extracting(ScreenEntryRespDTO::getDataMode)
-                .containsExactly("TEST", "DEMO");
+                .containsExactly("TEST", "DEMO", "DEMO");
     }
 
     @Test

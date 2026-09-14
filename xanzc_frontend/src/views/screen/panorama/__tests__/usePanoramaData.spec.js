@@ -60,6 +60,25 @@ function retailViewWithSlots(bindings = {}) {
 }
 
 describe('usePanoramaData', () => {
+  it('对公发布仅查询对公槽，保留零值，403清空并禁止全行趋势串用', async () => {
+    const view = retailViewWithSlots({ corpDeposit: 51, retailAum: 52, deposit: 53, branchTrend: 54 });
+    view.renderPackage.canvasStyle.presentation.template = 'corporate-overview-v1';
+    view.renderPackage.bindSnapshots['51'].bind = { dsId: 9, period: 'LATEST', fields: { value: 'value' }, units: { value: 'YUAN' } };
+    queryScreenData.mockResolvedValue({ columns: ['value'], rows: [[0]] });
+    const state = usePanoramaData(ref(view), ref({}), { autoLoad: false });
+    await state.refresh();
+    expect(queryScreenData).toHaveBeenCalledTimes(1);
+    expect(queryScreenData.mock.calls[0][0].blockId).toBe(51);
+    expect(state.model.value.kpis.find(item => item.key === 'corpDeposit')?.value).toBe(0);
+    await state.selectBranch('A');
+    expect(queryScreenData).toHaveBeenCalledTimes(1);
+    queryScreenData.mockRejectedValue({ status: 403, message: '无权访问' });
+    await state.refresh();
+    expect(state.error.value).toBe('无权访问');
+    expect(state.model.value.kpis.every(item => item.value == null)).toBe(true);
+    state.dispose();
+  });
+
   beforeEach(() => { queryScreenData.mockReset(); });
   afterEach(() => vi.restoreAllMocks());
 

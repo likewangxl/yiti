@@ -1,5 +1,5 @@
 <template>
-  <main class="code-screen-page" :data-demo="activeTemplate === 'retail-overview-v1' ? 'true' : undefined" :data-mode="activeTemplate === 'branch-overview-v1' ? 'TEST' : undefined" :aria-label="activeTemplate === 'branch-overview-v1' ? '测试大屏' : '演示大屏'" :aria-busy="state === 'loading' ? 'true' : 'false'">
+  <main class="code-screen-page" :data-demo="['retail-overview-v1', 'corporate-overview-v1'].includes(activeTemplate) ? 'true' : undefined" :data-mode="activeTemplate === 'branch-overview-v1' ? 'TEST' : undefined" :aria-label="activeTemplate === 'branch-overview-v1' ? '测试大屏' : '演示大屏'" :aria-busy="state === 'loading' ? 'true' : 'false'">
     <header class="code-screen-page__banner">
       <div class="code-screen-page__banner-meta">
         <strong>{{ activeTemplate === 'branch-overview-v1' ? '测试库数据' : '演示数据' }}</strong>
@@ -42,6 +42,11 @@
         back-path="/screens"
         @refresh="onRuntimeRefresh"
       />
+      <CorporateDashboard
+        v-else-if="activeTemplate === 'corporate-overview-v1'"
+        :model="corporateDemoModel" :loading="false" error="" :demo="true"
+        @refresh="refreshScreen" @back="backToCenter"
+      />
       <RetailDashboard
         v-else-if="activeTemplate === 'retail-overview-v1'"
         :model="retailDemoModel"
@@ -60,12 +65,15 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getScreenView, listAvailableScreens } from '@/api/screen';
 import { useUserStore } from '@/stores/user';
+import CorporateDashboard from './panorama/CorporateDashboard.vue';
+import { corporateDemoModel } from './panorama/corporateDemoModel.js';
 import RetailDashboard from './panorama/RetailDashboard.vue';
 import PanoramaRuntime from './panorama/PanoramaRuntime.vue';
 import { retailDemoModel } from './panorama/retailDemoModel.js';
 
 const CATALOG_REGISTRATIONS = Object.freeze({
   'branch-overview-v1': Object.freeze({ screenCode: 'SCR_PROVINCE', screenName: '分行经营总览', dataMode: 'TEST' }),
+  'corporate-overview-v1': Object.freeze({ screenCode: 'SCR_CORP_OVERVIEW', screenName: '对公经营总览', dataMode: 'DEMO' }),
   'retail-overview-v1': Object.freeze({ screenCode: 'SCR_RETAIL_OVERVIEW', screenName: '零售经营总览', dataMode: 'DEMO' })
 });
 
@@ -189,6 +197,6 @@ onBeforeUnmount(() => { loadGeneration += 1; });
 .code-screen-page__state h2 { color: #eaf2ff; }
 .code-screen-page__state--error h2 { color: #ffd6d1; }
 .code-screen-page__content { min-height: calc(100vh - 42px); }
-.code-screen-page :deep(.panorama-demo-badge), .code-screen-page :deep(.retail-demo-badge) { display: none; }
+.code-screen-page :deep(.panorama-demo-badge), .code-screen-page :deep(.retail-demo-badge), .code-screen-page :deep(.corporate-demo-badge) { display: none; }
 @media (max-width: 720px) { .code-screen-page__banner { justify-content: flex-start; padding: 7px 12px; } .code-screen-page__banner-meta { flex-wrap: wrap; gap: 6px 10px; } }
 </style>

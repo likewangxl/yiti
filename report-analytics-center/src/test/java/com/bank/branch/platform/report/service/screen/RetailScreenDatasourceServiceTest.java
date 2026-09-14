@@ -160,6 +160,39 @@ class RetailScreenDatasourceServiceTest {
         verify(dsMapper).updateById(any(RptScreenDatasource.class));
     }
 
+    @Test
+    void updateReferencedCorporateCodeDatasourceCannotChangeToCommonLine() {
+        RptScreenDatasource existing = datasource(12L, "CORP", "MONTHLY");
+        RptScreen screen = corporateReferenceScreen();
+        RptScreenBlock block = new RptScreenBlock();
+        block.setId(31L);
+        block.setScreenId(7L);
+        block.setBindJson("{\"dsId\":12}");
+        when(dsMapper.selectById(12L)).thenReturn(existing);
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
+        when(blockMapper.selectList(any(Wrapper.class))).thenReturn(List.of(block));
+
+        assertThatThrownBy(() -> service.update(12L, datasourceUpdateToCommon()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_BIZ_LINE_MISMATCH.getCode());
+        verify(dsMapper, never()).updateById(any(RptScreenDatasource.class));
+    }
+
+    @Test
+    void queryCorporateCodeScreenRejectsCommonDatasourceBeforeEngine() {
+        RptScreen screen = corporateReferenceScreen();
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
+        when(dsMapper.selectById(12L)).thenReturn(datasource(12L, "COMMON", "MONTHLY"));
+
+        ScreenDataReqDTO req = new ScreenDataReqDTO();
+        req.setSchemaVersion(1);
+        req.setScreenCode("SCR_CORP_OVERVIEW");
+        req.setDsId(12L);
+
+        assertThatThrownBy(() -> service.queryData(req))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_BIZ_LINE_MISMATCH.getCode());
+        verify(engine, never()).query(any(), any());
+    }
+
     private RptScreenDatasource datasource(long id, String bizLine, String cycleType) {
         RptScreenDatasource datasource = new RptScreenDatasource();
         datasource.setId(id);
@@ -199,6 +232,25 @@ class RetailScreenDatasourceServiceTest {
         }
         screen.setCanvasPublishedJson(publishedPackage(publishedTemplate,
                 "retail-overview-v1".equals(publishedTemplate) ? "retailAum" : "deposit"));
+        return screen;
+    }
+
+    private RptScreen corporateReferenceScreen() {
+        RptScreen screen = new RptScreen();
+        screen.setId(7L);
+        screen.setScreenCode("SCR_CORP_OVERVIEW");
+        screen.setStatus("ACTIVE");
+        screen.setBizLine("CORP");
+        screen.setOrgScopeMode("LEGACY_CONTEXT");
+        screen.setCanvasStyleJson("{\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"corporate-overview-v1\"}}");
+        screen.setCanvasDraftJson("{\"components\":[{\"component\":\"ChartWidget\","
+                + "\"blockId\":31,\"propValue\":{\"bindingKey\":\"corpDeposit\"}}]}");
+        screen.setCanvasPublishedJson("{\"schemaVersion\":1,\"canvasStyle\":"
+                + screen.getCanvasStyleJson() + ",\"components\":[{\"component\":\"ChartWidget\","
+                + "\"blockId\":31,\"propValue\":{\"bindingKey\":\"corpDeposit\"}}],"
+                + "\"bindSnapshots\":{\"31\":{\"componentType\":\"CODE\","
+                + "\"bind\":{\"dsId\":12},\"styleCfg\":{},\"drill\":{}}}}");
         return screen;
     }
 

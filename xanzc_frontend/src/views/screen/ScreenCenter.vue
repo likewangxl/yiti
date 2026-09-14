@@ -104,10 +104,11 @@ const BIZ_LINE_FILTERS = Object.freeze([
 ]);
 const BIZ_LINE_LABELS = Object.freeze({ COMMON: '综合', CORP: '对公', RETAIL: '零售' });
 const VIEW_LEVEL_LABELS = Object.freeze({ PROVINCE: '全辖', BRANCH: '机构', PERSON: '个人' });
-const SUPPORTED_TEMPLATES = new Set(['branch-overview-v1', 'retail-overview-v1']);
+const SUPPORTED_TEMPLATES = new Set(['branch-overview-v1', 'retail-overview-v1', 'corporate-overview-v1']);
 const REGISTERED_MODES = Object.freeze({
   'branch-overview-v1': 'TEST',
-  'retail-overview-v1': 'DEMO'
+  'retail-overview-v1': 'DEMO',
+  'corporate-overview-v1': 'DEMO'
 });
 
 const router = useRouter();

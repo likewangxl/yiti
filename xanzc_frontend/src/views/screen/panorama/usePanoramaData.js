@@ -6,6 +6,8 @@ import {
   applyBranchTrend,
   createEmptyPanoramaModel
 } from './dataAdapter';
+import { adaptCorporateResults, createEmptyCorporateModel } from './corporateDataAdapter';
+import { CORPORATE_TEMPLATE, CORPORATE_SLOT_ORDER, normalizeCorporateBinding } from './corporateBindings';
 import { adaptRetailResults, createEmptyRetailModel } from './retailDataAdapter';
 import {
   RETAIL_SLOT_ORDER,
@@ -68,8 +70,12 @@ function isRetailPackage(pkg) {
   return presentationTemplate(pkg) === RETAIL_TEMPLATE;
 }
 
+function isCorporatePackage(pkg) {
+  return presentationTemplate(pkg) === CORPORATE_TEMPLATE;
+}
+
 function allowedSlotsForPackage(pkg) {
-  return new Set(isRetailPackage(pkg) ? RETAIL_SLOT_ORDER : BRANCH_SLOT_ORDER);
+  return new Set(isCorporatePackage(pkg) ? CORPORATE_SLOT_ORDER : isRetailPackage(pkg) ? RETAIL_SLOT_ORDER : BRANCH_SLOT_ORDER);
 }
 
 function permissionStatus(error) {
@@ -88,7 +94,8 @@ function batchGuard(code, message, status = 'PARTIAL') {
 }
 
 function emptyModel(retail, view, queriedAt, quality = null, qualityGuard = null) {
-  const next = retail ? createEmptyRetailModel({ view }) : createEmptyPanoramaModel();
+  const next = isCorporatePackage(screenPackage(view)) ? createEmptyCorporateModel({ view })
+    : retail ? createEmptyRetailModel({ view }) : createEmptyPanoramaModel();
   next.quality = quality || null;
   next.qualityGuard = qualityGuard || null;
   next.batchId = quality?.batchId || null;
@@ -130,12 +137,13 @@ function packageBindings(view) {
       addIssue(issues, slot, 'MISSING_BINDING_SNAPSHOT', '发布组件缺少可信 bindSnapshots 身份');
       continue;
     }
-    const binding = retailPackage && isRetailBindingSlot(slot)
+    const binding = isCorporatePackage(pkg) ? normalizeCorporateBinding(snapshot.bind, slot)
+      : retailPackage && isRetailBindingSlot(slot)
       ? normalizeRetailBinding(snapshot.bind, slot)
       : normalizeBinding(snapshot.bind, slot);
     slots.set(slot, { slot, blockId, binding, component, snapshot });
   }
-  return { package: pkg, slots, issues, template: presentationTemplate(pkg), retail: retailPackage };
+  return { package: pkg, slots, issues, template: presentationTemplate(pkg), retail: retailPackage, corporate: isCorporatePackage(pkg) };
 }
 
 function stableSerialize(value) {
@@ -277,7 +285,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
   }
 
   async function prefetchBranchTrends(modelValue, packageInfo, view, context, generationToken, allIssues, branchesResponse, branchesEntry, batchState = null) {
-    if (packageInfo.retail || !branchesResponse || !Array.isArray(modelValue?.institutions)) return {};
+    if (packageInfo.retail || packageInfo.corporate || !branchesResponse || !Array.isArray(modelValue?.institutions)) return {};
     const entry = packageInfo.slots.get('branchTrend');
     if (!entry) return {};
     const directory = Array.isArray(view.panoramaInstitutions || view.panorama_institutions)
@@ -347,11 +355,11 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     const context = contextSnapshot(contextSource);
     const packageInfo = packageBindings(view);
     const retail = packageInfo.retail;
-    const requiresBatch = Boolean(options.batchRequired && !retail);
+    const requiresBatch = Boolean(options.batchRequired && !retail && !packageInfo.corporate);
     const preserveModel = Boolean(loadOptions.preserveModel);
     const onlySlots = Array.isArray(loadOptions.onlySlots)
       ? new Set(loadOptions.onlySlots) : null;
-    const branchOnly = !retail && preserveModel && onlySlots?.has('branchTrend');
+    const branchOnly = !retail && !packageInfo.corporate && preserveModel && onlySlots?.has('branchTrend');
     const kind = branchOnly ? 'branch' : 'screen';
     const currentGeneration = kind === 'branch'
       ? ++branchGeneration.value : ++screenGeneration.value;
@@ -508,7 +516,9 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         }
         model.value = nextModel;
       } else {
-        const nextModel = retail
+        const nextModel = packageInfo.corporate
+          ? adaptCorporateResults(resultMap, { view, panoramaInstitutions: view.panoramaInstitutions || view.panorama_institutions })
+          : retail
           ? adaptRetailResults(resultMap, {
             view,
             panoramaInstitutions: view.panoramaInstitutions || view.panorama_institutions
@@ -555,7 +565,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     const next = String(orgCode || '').trim();
     branchOrgCode.value = next;
     if (!next) return model.value;
-    if (isRetailPackage(screenPackage(currentView()))) return model.value;
+    if (isRetailPackage(screenPackage(currentView())) || isCorporatePackage(screenPackage(currentView()))) return model.value;
     const selectedInstitution = model.value?.institutions?.find(item => String(item?.orgCode) === next);
     if (selectedInstitution) {
       selectedInstitution.trend = [];

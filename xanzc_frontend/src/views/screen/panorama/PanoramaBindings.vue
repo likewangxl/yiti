@@ -39,6 +39,7 @@
       <select id="panorama-template-select" v-model="selectedTemplate" data-testid="template-select" :disabled="writing || loading || !screenReady" @change="changeTemplate">
         <option value="branch-overview-v1">分行经营总览</option>
         <option value="retail-overview-v1" :disabled="!isRetailScreen">零售经营总览（零售条线）</option>
+        <option value="corporate-overview-v1" :disabled="!isCorporateScreen">对公经营总览（对公条线）</option>
       </select>
     </div>
 
@@ -215,6 +216,11 @@ import {
 } from './bindings';
 import { RETAIL_SLOT_ORDER, RETAIL_BINDING_SLOTS } from './retailBindings';
 import {
+  CORPORATE_BINDING_SLOTS,
+  CORPORATE_SLOT_ORDER,
+  CORPORATE_TEMPLATE
+} from './corporateBindings';
+import {
   applyDefaultBindings,
   bindingPreview,
   prefillBindingForDatasource,
@@ -262,8 +268,12 @@ let settingsRefreshGeneration = 0;
 
 const selectedTemplate = ref('branch-overview-v1');
 const isRetailTemplate = computed(() => selectedTemplate.value === 'retail-overview-v1');
+const isCorporateTemplate = computed(() => selectedTemplate.value === CORPORATE_TEMPLATE);
 const isRetailScreen = computed(() => String(activeScreen.value?.bizLine || activeScreen.value?.biz_line || '').toUpperCase() === 'RETAIL');
-const slotOrder = computed(() => isRetailTemplate.value ? RETAIL_SLOT_ORDER : SLOT_ORDER);
+const isCorporateScreen = computed(() => String(activeScreen.value?.bizLine || activeScreen.value?.biz_line || '').toUpperCase() === 'CORP');
+const slotOrder = computed(() => isCorporateTemplate.value
+  ? CORPORATE_SLOT_ORDER
+  : isRetailTemplate.value ? RETAIL_SLOT_ORDER : SLOT_ORDER);
 function changeTemplate() {
   selectedSlot.value = slotOrder.value.find(slot => bindingState[slot]) || slotOrder.value[0];
   conversionAccepted.value = draftComponents.value.length === 0;
@@ -272,7 +282,9 @@ function changeTemplate() {
   applyDefaultToSlot(selectedSlot.value);
 }
 const writing = computed(() => saving.value || publishing.value || discarding.value);
-const templateSpec = slot => (isRetailTemplate.value ? RETAIL_BINDING_SLOTS[slot] : BINDING_SLOTS[slot]);
+const templateSpec = slot => (isCorporateTemplate.value
+  ? CORPORATE_BINDING_SLOTS[slot]
+  : isRetailTemplate.value ? RETAIL_BINDING_SLOTS[slot] : BINDING_SLOTS[slot]);
 const selectedSpec = computed(() => templateSpec(selectedSlot.value) || null);
 const selectedBinding = computed(() => {
   if (!bindingState[selectedSlot.value]) bindingState[selectedSlot.value] = emptyBinding(selectedSlot.value);
@@ -302,7 +314,7 @@ function fieldOptionsForBinding(slot, semantic, dsId) {
   // institution directory.  Only the engine's built-in ORG_INDEX_RESULT
   // org_code dimension is safe here; a configured org_name (or a free-form
   // dimension) cannot establish an institution identity.
-  if (['citySummary', 'retailRanking', ...(isRetailTemplate.value ? ['branches'] : [])].includes(slot) && semantic === 'orgCode'
+  if (['citySummary', 'retailRanking', 'corpRanking', ...(isRetailTemplate.value || isCorporateTemplate.value ? ['branches'] : [])].includes(slot) && semantic === 'orgCode'
       && String(screenScope.value.orgScopeMode).toUpperCase() === 'NAMED_GROUP') {
     return options.filter(option => option.col === 'org_code' && option.builtin === true);
   }
@@ -387,7 +399,10 @@ function isCompositionColumnsDatasource(source = {}) {
 
 /** 既有 helper 负责 bizLine + NAMED_GROUP 收窄；本页再做 ACTIVE 状态过滤。 */
 const availableDatasources = computed(() => filterDatasourcesByMeta(
-  datasources.value.filter(source => !isRetailTemplate.value || String(source.bizLine || source.biz_line || '').toUpperCase() === 'RETAIL').filter(source => source?.status === 'ACTIVE' || source?.status === 1 || source?.status === '1' || source?.status === true),
+  datasources.value
+    .filter(source => !isRetailTemplate.value || String(source.bizLine || source.biz_line || '').toUpperCase() === 'RETAIL')
+    .filter(source => !isCorporateTemplate.value || String(source.bizLine || source.biz_line || '').toUpperCase() === 'CORP')
+    .filter(source => source?.status === 'ACTIVE' || source?.status === 1 || source?.status === '1' || source?.status === true),
   null,
   screenScope.value
 ).reduce((list, source) => {
@@ -407,7 +422,8 @@ const selectableDatasourceCount = computed(() => availableDatasources.value
 function emptyBinding(slot = '') {
   return {
     dsId: null,
-    period: slot === 'trend' || slot === 'branchTrend' || slot === 'retailTrend' ? 'LAST_6M_EOM' : 'LATEST',
+    period: slot === 'trend' || slot === 'branchTrend' || slot === 'retailTrend' || slot === 'corpTrend'
+      ? 'LAST_6M_EOM' : 'LATEST',
     fields: {},
     units: {}
   };
@@ -609,7 +625,8 @@ async function loadCanvas(requestedId = activeScreenId.value) {
     if (!resp || typeof resp !== 'object') throw new Error('服务端未返回当前屏草稿，已停止加载');
     canvas.value = resp;
     canvasStyle.value = parse(resp.canvasStyleJson, {});
-    selectedTemplate.value = canvasStyle.value?.presentation?.template || (isRetailScreen.value ? 'retail-overview-v1' : 'branch-overview-v1');
+    selectedTemplate.value = canvasStyle.value?.presentation?.template
+      || (isCorporateScreen.value ? CORPORATE_TEMPLATE : isRetailScreen.value ? 'retail-overview-v1' : 'branch-overview-v1');
     const draft = parse(resp.canvasDraftJson, { components: [] });
     draftComponents.value = Array.isArray(draft.components) ? draft.components : [];
     resetBindings(draftComponents.value);
@@ -757,9 +774,12 @@ function collectValidBindings() {
   const problems = [];
   for (const slot of slotOrder.value) {
     let candidate = bindingState[slot];
-    if (isRetailTemplate.value && slot === 'branches' && candidate) {
-      // 共用机构槽在零售屏只保存身份，避免遗留分行指标成为隐性配置。
-      const identities = new Set(RETAIL_BINDING_SLOTS.branches.fields.map(item => item.semantic));
+    if ((isRetailTemplate.value || isCorporateTemplate.value) && slot === 'branches' && candidate) {
+      // 零售/对公模板的共享机构槽只保存身份，避免遗留分行指标成为隐性配置。
+      const identitySpec = isCorporateTemplate.value
+        ? CORPORATE_BINDING_SLOTS.branches
+        : RETAIL_BINDING_SLOTS.branches;
+      const identities = new Set(identitySpec.fields.map(item => item.semantic));
       candidate = { ...candidate, fields: Object.fromEntries(Object.entries(candidate.fields || {}).filter(([key]) => identities.has(key))), units: {} };
     }
     if (!candidate || !candidate.dsId) continue;
@@ -770,11 +790,18 @@ function collectValidBindings() {
         continue;
       }
     }
+    if (isCorporateTemplate.value) {
+      const source = datasources.value.find(item => String(item.id) === String(candidate.dsId));
+      if (!isCorporateScreen.value || String(source?.bizLine || source?.biz_line || '').toUpperCase() !== 'CORP') {
+        problems.push(`${templateSpec(slot)?.label || slot}：对公模板仅允许对公条线大屏与数据源`);
+        continue;
+      }
+    }
     const mode = slot === 'composition'
       ? (compositionMode.value === 'columns' || getCompositionMode(candidate) === 'columns' ? 'columns' : 'rows')
       : null;
     let slotProblems = validateBinding(slot, candidate);
-    if (slot === 'composition' && mode === 'columns') {
+    if (!isCorporateTemplate.value && slot === 'composition' && mode === 'columns') {
       // The shared validator derives columns mode from its two semantic
       // fields. When the user has just selected columns and has not filled a
       // field yet, replace the legacy row errors with mode-specific guidance.
@@ -814,6 +841,7 @@ function savePayload(targetId = activeScreenId.value) {
   if (problems.length) throw new Error(problems.join('；'));
   if (!Object.keys(bindings).length) throw new Error('至少配置一个展示内容后才能保存');
   if (isRetailTemplate.value && !isRetailScreen.value) throw new Error('零售经营模板仅适用于零售条线大屏，请先核对大屏设置');
+  if (isCorporateTemplate.value && !isCorporateScreen.value) throw new Error('对公经营模板仅适用于对公条线大屏，请先核对大屏设置');
   const presentation = { type: 'CODE', template: selectedTemplate.value };
   const style = { ...canvasStyle.value, presentation };
   const components = buildCodeComponents(bindings, draftComponents.value);

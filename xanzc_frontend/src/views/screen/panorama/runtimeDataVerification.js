@@ -1,5 +1,7 @@
 import { getScreenCanvas, getScreenView, queryScreenData } from '@/api/screen';
-import { ALL_SLOT_ORDER, BINDING_SLOTS } from './bindings';
+import { ALL_SLOT_ORDER, BINDING_SLOTS, validateBinding } from './bindings';
+import { CORPORATE_SLOT_ORDER, CORPORATE_TEMPLATE, isCorporateBindingSlot } from './corporateBindings';
+import { RETAIL_SLOT_ORDER, RETAIL_TEMPLATE } from './retailBindings';
 
 /**
  * 代码化大屏“验证已保存草稿数据”的运行时核验服务。
@@ -65,16 +67,17 @@ export const SLOT_STATUS_LABELS = Object.freeze({
 const SINGLE_VALUE_SLOTS = new Set([
   'deposit', 'depositIncrease', 'depositAverage', 'loan', 'customers', 'revenue', 'rate',
   'retailAum', 'retailDeposit', 'retailDepositAverage', 'retailRevenue',
-  'retailValueCustomers', 'retailLoan', 'retailNplRate'
+  'retailValueCustomers', 'retailLoan', 'retailNplRate',
+  'corpDeposit', 'corpDepositAverage', 'corpLoan', 'corpRevenue', 'corpCustomers', 'corpNplRate'
 ]);
-const TREND_SLOTS = new Set(['trend', 'branchTrend', 'retailTrend']);
+const TREND_SLOTS = new Set(['trend', 'branchTrend', 'retailTrend', 'corpTrend']);
 const DIMENSION_FIELDS = new Set([
   'date', 'orgCode', 'orgName', 'cityCode', 'cityName', 'ownerOperatingOrgCode',
-  'parentOrgCode', 'lng', 'lat', 'coordSys', 'located', 'label', 'name'
+  'parentOrgCode', 'lng', 'lat', 'coordSys', 'located', 'label', 'name', 'owner', 'deadline'
 ]);
 const METRIC_FIELDS = new Set([
   'value', 'change', 'deposit', 'depositIncrease', 'depositAverage', 'loan',
-  'customers', 'revenue', 'rate', 'target', 'count', 'increase', 'average',
+  'customers', 'revenue', 'rate', 'target', 'actual', 'count', 'increase', 'average',
   'corporate', 'retail', 'aum', 'income', 'nplRate', 'valueRate'
 ]);
 const FATAL_ISSUES = new Set([
@@ -382,6 +385,18 @@ function bindingConfigIssues(slot, rawBinding) {
     }
     if (specField.unitKinds?.length && !binding.units?.[semantic]) {
       issues.push({ code: 'MISSING_UNIT', message: `缺少单位: ${semantic}`, field: semantic });
+    }
+  }
+  // 对公模板拥有独立的字段/单位白名单；共享运行时只负责把契约错误
+  // 转换为逐槽核验结果，不能把未知单位或跨槽字段带入请求。
+  if (isCorporateBindingSlot(slot)) {
+    for (const message of validateBinding(slot, rawBinding)) {
+      const field = /(?:字段|单位)(?:不受支持|无效|不适用|未绑定字段|缺少)[：: ]*([\w.-]+)/.exec(message)?.[1] || '';
+      const code = message.includes('缺少单位') ? 'MISSING_UNIT'
+        : message.includes('单位') ? 'INVALID_UNIT' : 'BINDING_INVALID';
+      if (!issues.some(item => item.code === code && item.message === message)) {
+        issues.push({ code, message, ...(field ? { field } : {}) });
+      }
     }
   }
   return issues;
@@ -873,8 +888,12 @@ export function createRuntimeDataVerificationService(dependencies = {}) {
 
   async function verify(input = {}) {
     const token = ++generation;
+    const template = text(input.template).toLowerCase();
+    const defaultSlotOrder = template === CORPORATE_TEMPLATE
+      ? CORPORATE_SLOT_ORDER
+      : template === RETAIL_TEMPLATE ? RETAIL_SLOT_ORDER : ALL_SLOT_ORDER;
     const slotOrder = [...new Set(
-      (Array.isArray(input.slotOrder) && input.slotOrder.length ? input.slotOrder : ALL_SLOT_ORDER)
+      (Array.isArray(input.slotOrder) && input.slotOrder.length ? input.slotOrder : defaultSlotOrder)
         .map(slot => text(slot)).filter(Boolean)
     )];
     const pending = initialResults(slotOrder);

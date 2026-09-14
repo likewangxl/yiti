@@ -369,8 +369,8 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
                 throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
             }
             String runtimeTemplate = runtimeCodeTemplate(screen, req);
-            validateRetailTemplateScreenLine(screen, runtimeTemplate);
-            validateRetailTemplateDatasourceLine(runtimeTemplate, ds);
+            validateCodeTemplateScreenLine(screen, runtimeTemplate);
+            validateCodeTemplateDatasourceLine(runtimeTemplate, ds);
             if ("NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())) {
                 if (scopeAuthorizationService == null) {
                     // 命名组运行时没有 auth 适配器时必须拒绝，不能退回旧 DATA_SCOPE 全局口径。
@@ -1105,28 +1105,39 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         };
     }
 
-    /** RETAIL CODE 模板只能挂在 RETAIL 屏上；历史坐标画布不触发该专属约束。 */
-    private void validateRetailTemplateScreenLine(RptScreen screen) {
-        validateRetailTemplateScreenLine(screen, codeTemplate(screen));
+    /** 业务专属 CODE 模板只能挂在对应条线屏上；历史坐标画布不触发该专属约束。 */
+    private void validateCodeTemplateScreenLine(RptScreen screen) {
+        validateCodeTemplateScreenLine(screen, codeTemplate(screen));
     }
 
-    private void validateRetailTemplateScreenLine(RptScreen screen, String template) {
-        if (CodeScreenPresentationValidator.RETAIL_OVERVIEW_TEMPLATE.equals(template)
-                && !"RETAIL".equals(normalizeBizLine(screen.getBizLine()))) {
+    private void validateCodeTemplateScreenLine(RptScreen screen, String template) {
+        String requiredLine = requiredTemplateBizLine(template);
+        if (requiredLine != null && !requiredLine.equals(normalizeBizLine(screen.getBizLine()))) {
             throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
         }
     }
 
-    /** 已被 RETAIL CODE 屏引用的数据源必须保持 RETAIL，COMMON 全行源不能伪装零售口径。 */
-    private void validateRetailTemplateDatasourceLine(RptScreen screen, RptScreenDatasource datasource) {
-        validateRetailTemplateDatasourceLine(codeTemplate(screen), datasource);
+    /** 已被业务专属 CODE 屏引用的数据源必须保持对应条线。 */
+    private void validateCodeTemplateDatasourceLine(RptScreen screen, RptScreenDatasource datasource) {
+        validateCodeTemplateDatasourceLine(codeTemplate(screen), datasource);
     }
 
-    private void validateRetailTemplateDatasourceLine(String template, RptScreenDatasource datasource) {
-        if (CodeScreenPresentationValidator.RETAIL_OVERVIEW_TEMPLATE.equals(template)
-                && (datasource == null || !"RETAIL".equals(normalizeBizLine(datasource.getBizLine())))) {
+    private void validateCodeTemplateDatasourceLine(String template, RptScreenDatasource datasource) {
+        String requiredLine = requiredTemplateBizLine(template);
+        if (requiredLine != null
+                && (datasource == null || !requiredLine.equals(normalizeBizLine(datasource.getBizLine())))) {
             throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
         }
+    }
+
+    private String requiredTemplateBizLine(String template) {
+        if (CodeScreenPresentationValidator.RETAIL_OVERVIEW_TEMPLATE.equals(template)) {
+            return "RETAIL";
+        }
+        if (CodeScreenPresentationValidator.CORPORATE_OVERVIEW_TEMPLATE.equals(template)) {
+            return "CORP";
+        }
+        return null;
     }
 
     /** 正式取数只认当前不可变发布包模板；草稿预览才读取当前可变画布样式。 */
@@ -1184,13 +1195,13 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
             }
             if (referencedByDraft) {
                 String draftTemplate = codeTemplate(screen);
-                validateRetailTemplateScreenLine(screen, draftTemplate);
-                validateRetailTemplateDatasourceLine(draftTemplate, candidate);
+                validateCodeTemplateScreenLine(screen, draftTemplate);
+                validateCodeTemplateDatasourceLine(draftTemplate, candidate);
             }
             if (referencedByPublished) {
                 for (String publishedTemplate : publishedCodeTemplates(screen, dsId)) {
-                    validateRetailTemplateScreenLine(screen, publishedTemplate);
-                    validateRetailTemplateDatasourceLine(publishedTemplate, candidate);
+                    validateCodeTemplateScreenLine(screen, publishedTemplate);
+                    validateCodeTemplateDatasourceLine(publishedTemplate, candidate);
                 }
             }
             if ("NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())) {

@@ -28,6 +28,7 @@ vi.mock('vue-router', () => ({
   useRoute: () => routeState
 }));
 vi.mock('../panorama/PanoramaDashboard.vue', () => ({ default: branchStub }));
+vi.mock('../panorama/CorporateDashboard.vue', () => ({ default: { template: '<div data-testid="corporate-dashboard">对公经营总览</div>' } }));
 vi.mock('../panorama/RetailDashboard.vue', () => ({ default: retailStub }));
 vi.mock('../panorama/PanoramaRuntime.vue', () => ({ default: runtimeStub }));
 
@@ -62,6 +63,16 @@ async function mountPage() {
 }
 
 describe('CodeScreenPage', () => {
+  it('对公页复核目录授权后展示独立对公演示并标明数据性质', async () => {
+    routeState.params.template = 'corporate-overview-v1';
+    listAvailableScreens.mockResolvedValue([{ screenCode: 'SCR_CORP_OVERVIEW', screenName: '对公经营总览', template: 'corporate-overview-v1', dataMode: 'DEMO' }]);
+    const page = await mountPage();
+    expect(page.find('[data-testid="corporate-dashboard"]').exists()).toBe(true);
+    expect(page.attributes('data-demo')).toBe('true');
+    expect(page.text()).toContain('非业务数据');
+    expect(getScreenView).not.toHaveBeenCalled();
+  });
+
   it('rechecks protected catalog and renders branch TEST runtime with explicit test marker', async () => {
     const page = await mountPage();
     expect(page.find('[data-testid="panorama-runtime"]').exists()).toBe(true);

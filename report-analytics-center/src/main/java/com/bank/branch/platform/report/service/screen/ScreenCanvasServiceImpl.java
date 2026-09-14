@@ -152,7 +152,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         CodeScreenPresentationValidator.validateCanvasStyle(styleJson);
         String template = codeTemplate(styleJson);
         boolean codePresentation = template != null;
-        validateRetailTemplateScreenLine(s, template);
+        validateCodeTemplateScreenLine(s, template);
 
         // 1) 结构化校验:组件类型白名单 + innerType + 坐标/尺寸范围。
         //    Group 节点的 children 一并摊平校验(children 为相对组左上角坐标,恒落在
@@ -315,7 +315,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         }
         // 发布必须重做屏/数据源业务条线矩阵校验，不能只依赖保存时的草稿检查。
         String template = codeTemplate(s.getCanvasStyleJson());
-        validateRetailTemplateScreenLine(s, template);
+        validateCodeTemplateScreenLine(s, template);
         CodeScreenPresentationValidator.validateDraft(s.getCanvasStyleJson(),
                 s.getCanvasDraftJson(), rows);
         validatePublishedDatasourceLines(s, rows, draftBlockIds, draft.path("components"), template);
@@ -854,7 +854,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             return;
         }
         String screenLine = normalizeBizLine(screen.getBizLine());
-        validateRetailTemplateScreenLine(screen, template);
+        validateCodeTemplateScreenLine(screen, template);
         for (RptScreenBlock block : rows) {
             if (!draftBlockIds.contains(block.getId())) {
                 continue;
@@ -868,7 +868,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
                 throw new RptException(dataSource == null
                         ? RptErrorCode.SCREEN_DS_NOT_FOUND : RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
             }
-            validateRetailTemplateDatasourceLine(template, dataSource);
+            validateCodeTemplateDatasourceLine(template, dataSource);
             if (namedGroup && !isNamedGroupSafeDatasource(dataSource)) {
                 throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
             }
@@ -902,6 +902,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             // column; org_name is a display dimension and cannot scope a city aggregate.
             boolean requiresNamedSubject = "branches".equals(bindingKey)
                     || "retailRanking".equals(bindingKey)
+                    || "corpRanking".equals(bindingKey)
                     || ("citySummary".equals(bindingKey) && bind.path("fields").has("orgCode"));
             if (requiresNamedSubject && (!namedSubject || !orgIdentity)) {
                 throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
@@ -935,7 +936,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
                                               boolean codePresentation, String template) {
         String screenLine = normalizeBizLine(screen.getBizLine());
         boolean namedGroup = "NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode());
-        validateRetailTemplateScreenLine(screen, template);
+        validateCodeTemplateScreenLine(screen, template);
         for (CanvasComponentDTO chart : chartNodes) {
             Long dsId = readDsId(chart.getBindJson());
             // 设计器可先放空图表；一旦声明绑定，保存时立即验证，避免非法绑定进入草稿。
@@ -949,7 +950,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             if (!isBizLineCompatible(screenLine, datasource.getBizLine())) {
                 throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
             }
-            validateRetailTemplateDatasourceLine(template, datasource);
+            validateCodeTemplateDatasourceLine(template, datasource);
             if (namedGroup && !isNamedGroupSafeDatasource(datasource)) {
                 throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
             }
@@ -984,6 +985,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
                     && "SUBJECT".equals(aggregation.path("groupBy").asText());
             boolean requiresNamedSubject = "branches".equals(bindingKey)
                     || "retailRanking".equals(bindingKey)
+                    || "corpRanking".equals(bindingKey)
                     || ("citySummary".equals(bindingKey) && fields.has("orgCode"));
             if (!fields.isObject()
                     || (requiresNamedSubject && (!namedSubject
@@ -1074,7 +1076,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         }
         String template = CodeScreenPresentationValidator.presentationTemplate(root.path("canvasStyle"));
         if (template != null) {
-            validateRetailTemplateScreenLine(screen, template);
+            validateCodeTemplateScreenLine(screen, template);
             validateCodePublishedDatasourceBindings(root, trustedBindings, template);
         }
         if (scopeAuthorizationService != null) {
@@ -1109,7 +1111,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             if (!isBizLineCompatible(screenLine, datasource.getBizLine())) {
                 throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
             }
-            validateRetailTemplateDatasourceLine(template, datasource);
+            validateCodeTemplateDatasourceLine(template, datasource);
             if (namedGroup && !isNamedGroupSafeDatasource(datasource)) {
                 throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
             }
@@ -1146,7 +1148,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
                 throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
             }
             validateCodeDatasourceBinding(bindingKey, bind.toString(), datasource, template);
-            validateRetailTemplateDatasourceLine(template, datasource);
+            validateCodeTemplateDatasourceLine(template, datasource);
         }
     }
 
@@ -1232,26 +1234,37 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         }
     }
 
-    /** RETAIL CODE 模板只能保存/发布到 RETAIL 屏。 */
-    private void validateRetailTemplateScreenLine(RptScreen screen, String template) {
-        if (CodeScreenPresentationValidator.RETAIL_OVERVIEW_TEMPLATE.equals(template)
-                && !"RETAIL".equals(normalizeBizLine(screen.getBizLine()))) {
+    /** 业务专属 CODE 模板只能保存/发布到对应条线屏。 */
+    private void validateCodeTemplateScreenLine(RptScreen screen, String template) {
+        String requiredLine = requiredTemplateBizLine(template);
+        if (requiredLine != null && !requiredLine.equals(normalizeBizLine(screen.getBizLine()))) {
             throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
         }
     }
 
-    /** RETAIL CODE 模板只能绑定 RETAIL 数据源，禁止 COMMON 全行源贴零售标签。 */
-    private void validateRetailTemplateDatasourceLine(String template,
-                                                      com.bank.branch.platform.report.entity.RptScreenDatasource datasource) {
-        if (CodeScreenPresentationValidator.RETAIL_OVERVIEW_TEMPLATE.equals(template)
-                && (datasource == null || !"RETAIL".equals(normalizeBizLine(datasource.getBizLine())))) {
+    /** 业务专属 CODE 模板只能绑定对应条线数据源。 */
+    private void validateCodeTemplateDatasourceLine(String template,
+                                                    com.bank.branch.platform.report.entity.RptScreenDatasource datasource) {
+        String requiredLine = requiredTemplateBizLine(template);
+        if (requiredLine != null
+                && (datasource == null || !requiredLine.equals(normalizeBizLine(datasource.getBizLine())))) {
             throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
         }
+    }
+
+    private String requiredTemplateBizLine(String template) {
+        if (CodeScreenPresentationValidator.RETAIL_OVERVIEW_TEMPLATE.equals(template)) {
+            return "RETAIL";
+        }
+        if (CodeScreenPresentationValidator.CORPORATE_OVERVIEW_TEMPLATE.equals(template)) {
+            return "CORP";
+        }
+        return null;
     }
 
     private boolean isNamedGroupCodeBinding(String bindingKey) {
         return "branches".equals(bindingKey) || "citySummary".equals(bindingKey)
-                || "retailRanking".equals(bindingKey);
+                || "retailRanking".equals(bindingKey) || "corpRanking".equals(bindingKey);
     }
 
     private boolean isNamedGroupSafeDatasource(com.bank.branch.platform.report.entity.RptScreenDatasource ds) {

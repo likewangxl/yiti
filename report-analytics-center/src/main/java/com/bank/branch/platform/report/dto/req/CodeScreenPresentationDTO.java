@@ -13,6 +13,6 @@ public class CodeScreenPresentationDTO {
     /** 当前仅支持 CODE。 */
     private String type;
 
-    /** 当前支持 branch-overview-v1 与 retail-overview-v1；未知模板拒绝。 */
+    /** 当前支持 branch-overview-v1、retail-overview-v1 与 corporate-overview-v1；未知模板拒绝。 */
     private String template;
 }

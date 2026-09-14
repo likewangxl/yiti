@@ -19,14 +19,25 @@ const KPI_LABEL_KEYS = Object.freeze([
   'retailRevenue',
   'retailValueCustomers',
   'retailLoan',
-  'retailNplRate'
+  'retailNplRate',
+  'corpDeposit',
+  'corpDepositAverage',
+  'corpLoan',
+  'corpRevenue',
+  'corpCustomers',
+  'corpNplRate'
 ]);
 const KPI_LABEL_KEY_SET = new Set(KPI_LABEL_KEYS);
 const MAX_DATA_NOTICE_LENGTH = 240;
 const MAX_SOURCE_AVAILABILITY_MESSAGE_LENGTH = 120;
 const MAX_METRIC_LABEL_LENGTH = 40;
 const SOURCE_STATUSES = new Set(['AVAILABLE', 'NO_SOURCE', 'NO_ROWS', 'NO_VALUES', 'PARTIAL', 'STALE', 'NO_COMPLETE_BATCH', 'HISTORICAL']);
-const SOURCE_SLOTS = new Set(['deposit', 'depositIncrease', 'depositAverage', 'loan', 'customers', 'revenue', 'rate', 'trend', 'ranking', 'composition', 'attention', 'branches', 'branchTrend', 'citySummary']);
+const SOURCE_SLOTS = new Set([
+  'deposit', 'depositIncrease', 'depositAverage', 'loan', 'customers', 'revenue', 'rate', 'trend',
+  'ranking', 'composition', 'attention', 'branches', 'branchTrend', 'citySummary',
+  'corpDeposit', 'corpDepositAverage', 'corpLoan', 'corpRevenue', 'corpCustomers', 'corpNplRate',
+  'corpTrend', 'corpSegments', 'corpRanking', 'corpAttention', 'corpTargets'
+]);
 const SOURCE_FIELD_KEYS = Object.freeze({
   deposit: new Set(['value', 'change', 'date']),
   depositIncrease: new Set(['value', 'change', 'date']),
@@ -41,7 +52,18 @@ const SOURCE_FIELD_KEYS = Object.freeze({
   attention: new Set(['label', 'count', 'orgCode']),
   branches: new Set(['orgCode', 'orgName', 'cityCode', 'cityName', 'ownerOperatingOrgCode', 'parentOrgCode', 'lng', 'lat', 'coordSys', 'located', 'deposit', 'loan', 'customers', 'target', 'rate']),
   branchTrend: new Set(['date', 'deposit', 'loan', 'customers', 'rate']),
-  citySummary: new Set(['orgCode', 'cityCode', 'cityName', 'deposit', 'loan', 'customers', 'revenue', 'rate'])
+  citySummary: new Set(['orgCode', 'cityCode', 'cityName', 'deposit', 'loan', 'customers', 'revenue', 'rate']),
+  corpDeposit: new Set(['value', 'change', 'date']),
+  corpDepositAverage: new Set(['value', 'change', 'date']),
+  corpLoan: new Set(['value', 'change', 'date']),
+  corpRevenue: new Set(['value', 'change', 'date']),
+  corpCustomers: new Set(['value', 'change', 'date']),
+  corpNplRate: new Set(['value', 'change', 'date']),
+  corpTrend: new Set(['date', 'deposit', 'loan']),
+  corpSegments: new Set(['name', 'customers', 'loan']),
+  corpRanking: new Set(['orgCode', 'name', 'deposit', 'increase', 'rate', 'nplRate']),
+  corpAttention: new Set(['label', 'count', 'owner', 'deadline']),
+  corpTargets: new Set(['name', 'actual', 'target'])
 });
 const SOURCE_LABELS = Object.freeze({
   deposit: '存款余额', depositAverage: '存款月均余额',
@@ -49,7 +71,13 @@ const SOURCE_LABELS = Object.freeze({
   depositIncrease: '存款较上月净增', trend: '经营趋势', composition: '业务构成',
   ranking: '机构排名', attention: '经营关注', branches: '支行机构', branchTrend: '支行趋势',
   citySummary: '城市汇总', corporate: '对公业务', retail: '零售业务', increase: '存款较上月净增',
-  average: '存款月均余额', value: '指标值', date: '数据日期', orgCode: '机构号'
+  average: '存款月均余额', value: '指标值', date: '数据日期', orgCode: '机构号',
+  corpDeposit: '对公存款余额', corpDepositAverage: '对公存款月日均', corpLoan: '对公贷款余额',
+  corpRevenue: '对公营业收入', corpCustomers: '有效对公客户', corpNplRate: '对公不良率',
+  corpTrend: '对公经营趋势', corpSegments: '对公重点客群', corpRanking: '对公机构排名',
+  corpAttention: '对公经营关注', corpTargets: '对公目标',
+  owner: '责任部门/人', deadline: '截止日期', actual: '实际值', target: '目标值',
+  nplRate: '对公贷款不良率'
 });
 
 function isRecord(value) {
