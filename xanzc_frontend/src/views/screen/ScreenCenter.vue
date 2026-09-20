@@ -61,9 +61,10 @@
     <section v-else class="screen-center__grid" aria-label="可访问大屏列表">
       <article
         v-for="screen in filteredScreens"
-        :key="screen.template"
+        :key="screen.key || screen.template || screen.screenCode"
         class="screen-card"
         data-screen-card
+        :data-screen-kind="screen.kind || 'catalog'"
         :data-screen-code="screen.screenCode"
         :data-template="screen.template"
       >
@@ -76,15 +77,22 @@
         <div class="screen-card__body">
           <div class="screen-card__title-row">
             <h2>{{ displayName(screen) }}</h2>
-            <span class="screen-card__mode-badge">{{ dataModeLabel(screen.dataMode) }}</span>
+            <span v-if="!isPersonalScreen(screen)" class="screen-card__mode-badge">{{ dataModeLabel(screen.dataMode) }}</span>
           </div>
-          <p class="screen-card__code">编码：{{ screen.screenCode }}</p>
+          <p v-if="!isPersonalScreen(screen)" class="screen-card__code">编码：{{ screen.screenCode }}</p>
+          <p v-else class="screen-card__description">个人核心指标、今日优先事项、我的客户、我发起的业务进度</p>
           <div class="screen-card__meta">
-            <span data-biz-label>{{ bizLineLabel(screen.bizLine) }}</span>
-            <span>{{ viewLevelLabel(screen.viewLevel) }}</span>
-            <span v-if="screen.dataMode === 'LIVE'" data-testid="screen-live-source-note">统计口径与环境见来源说明</span>
+            <template v-if="isPersonalScreen(screen)">
+              <span>个人</span>
+              <span>本人业务数据</span>
+            </template>
+            <template v-else>
+              <span data-biz-label>{{ bizLineLabel(screen.bizLine) }}</span>
+              <span>{{ viewLevelLabel(screen.viewLevel) }}</span>
+              <span v-if="screen.dataMode === 'LIVE'" data-testid="screen-live-source-note">统计口径与环境见来源说明</span>
+            </template>
           </div>
-          <button type="button" class="screen-card__open" @click="openScreen(screen)">进入大屏</button>
+          <button type="button" class="screen-card__open" @click="openScreen(screen)">{{ isPersonalScreen(screen) ? '进入驾驶舱' : '进入大屏' }}</button>
         </div>
       </article>
     </section>
@@ -95,6 +103,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { listAvailableScreens } from '@/api/screen';
+import { useMenuStore } from '@/stores/menu';
 import { useUserStore } from '@/stores/user';
 
 const BIZ_LINE_FILTERS = Object.freeze([
@@ -111,8 +120,17 @@ const REGISTERED_MODES = Object.freeze({
   'retail-overview-v1': Object.freeze(['TEST', 'LIVE']),
   'corporate-overview-v1': Object.freeze(['TEST', 'LIVE'])
 });
+const PERSONAL_SCREEN = Object.freeze({
+  key: 'personal-dashboard',
+  kind: 'personal',
+  screenCode: 'personal-dashboard',
+  screenName: '我的经营驾驶舱',
+  viewLevel: 'PERSON',
+  bizLine: 'COMMON'
+});
 
 const router = useRouter();
+const menuStore = useMenuStore();
 const userStore = useUserStore();
 const screens = ref([]);
 const activeBizLine = ref('ALL');
@@ -127,11 +145,18 @@ const filteredScreens = computed(() => {
     const bizLine = String(screen.bizLine || '').toUpperCase();
     if (activeBizLine.value !== 'ALL' && bizLine !== activeBizLine.value) return false;
     if (!keyword) return true;
-    return [screen.screenName, screen.screenCode]
+    const searchValues = isPersonalScreen(screen)
+      ? [screen.screenName, screen.screenCode, '个人', '个人大屏', 'personal', 'personal-dashboard']
+      : [screen.screenName, screen.screenCode];
+    return searchValues
       .filter(Boolean)
       .some((value) => String(value).toLocaleLowerCase().includes(keyword));
   });
 });
+
+function isPersonalScreen(screen) {
+  return screen?.kind === 'personal';
+}
 
 function displayName(screen) {
   return String(screen?.screenName || screen?.screenCode || '未命名大屏');
@@ -170,10 +195,31 @@ async function loadCatalog() {
   loading.value = true;
   loadError.value = '';
   screens.value = [];
+  if (!userStore.user) {
+    loading.value = false;
+    return;
+  }
+
+  const menuRequest = Promise.resolve()
+    .then(() => menuStore.load())
+    .then(() => generation === loadGeneration
+      && Boolean(userStore.user)
+      && menuStore.loaded === true
+      && menuStore.hasUrl('/workspace'))
+    .catch(() => false);
+  const catalogRequest = Promise.resolve().then(() => listAvailableScreens());
+
   try {
-    const catalog = await listAvailableScreens();
+    const catalog = await catalogRequest;
     if (generation !== loadGeneration) return;
-    screens.value = normalizeCatalog(catalog);
+    const normalizedCatalog = normalizeCatalog(catalog);
+    // 机构目录是页面主体，菜单授权迟到时先展示已确认的机构结果，避免授权接口延迟阻塞目录。
+    screens.value = normalizedCatalog;
+    loading.value = normalizedCatalog.length === 0;
+
+    const hasPersonalAccess = await menuRequest;
+    if (generation !== loadGeneration || loadError.value) return;
+    if (hasPersonalAccess) screens.value = [PERSONAL_SCREEN, ...screens.value];
   } catch (error) {
     if (generation !== loadGeneration) return;
     screens.value = [];
@@ -184,6 +230,11 @@ async function loadCatalog() {
 }
 
 function openScreen(screen) {
+  if (isPersonalScreen(screen)) {
+    if (!userStore.user || menuStore.loaded !== true || !menuStore.hasUrl('/workspace')) return;
+    router.push({ name: 'PersonalDashboard', query: { from: 'screen-center' } });
+    return;
+  }
   const template = screen?.template;
   if (!SUPPORTED_TEMPLATES.has(template) || !hasRegisteredMode(screen)) return;
   router.push({ name: 'CodeScreenPage', params: { template } });
@@ -234,6 +285,7 @@ onBeforeUnmount(() => {
 .screen-card h2 { margin-bottom: 7px; overflow: hidden; color: var(--color-text); font-size: 17px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
 .screen-card__mode-badge { flex: 0 0 auto; padding: 4px 7px; color: var(--color-warning-700, #8a5a00); background: var(--color-warning-100, #fff5d6); border-radius: 10px; font-size: 11px; white-space: nowrap; }
 .screen-card__code { overflow: hidden; margin-bottom: 12px; color: var(--color-text-muted); font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.screen-card__description { margin-bottom: 12px; color: var(--color-text-muted); font-size: 13px; line-height: 1.6; }
 .screen-card__meta { display: flex; flex-wrap: wrap; gap: 7px; color: var(--color-text-muted); font-size: 12px; }
 .screen-card__meta span { padding: 4px 8px; background: var(--color-surface-soft); border-radius: 12px; }
 .screen-card__open { align-self: flex-start; min-height: 34px; margin-top: auto; padding: 0 14px; color: var(--color-brand-700); background: transparent; border: 1px solid var(--color-brand-300); border-radius: var(--radius-control); font: inherit; cursor: pointer; }

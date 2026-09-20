@@ -1,6 +1,6 @@
 # 个人经营驾驶舱：设计与验收说明
 
-状态：容器与聚合实现完成，官方 CLI 合成前端验收已通过；真实后端业务联调仍待部署和回填。正式路由为 `#/personal-dashboard`，登录态顶层路由，`requiredMenu=/workspace`、`hideInMenu=true`；工作台提供“我的经营驾驶舱”入口。
+状态：容器与聚合实现完成，官方 CLI 合成前端验收已通过；真实后端业务联调仍待部署和回填。正式路由为 `#/personal-dashboard`，登录态顶层路由，`requiredMenu=/workspace`、`hideInMenu=true`；工作台与大屏中心提供“我的经营驾驶舱”入口。
 
 ## 目标与页面布局
 
@@ -37,11 +37,18 @@
 
 导航只接受 `customer`、`touch`、`asset`、`support`、`todo`、`todos`、`customers`、`progress` 等受控 kind，不接受任意 URL。客户详情严格请求 `/api/marketing/customers/:id`；工作流按 `ASSET_PROJECT`、`SUPPORT`、`TARGET_ADJUST`、`ALLOC_ADJUST` 映射既有页面，未知类型回工作台；业务进度“查看更多”提供资产立项和中台支持两个入口。
 
+## 大屏中心个人入口
+
+大屏中心的个人卡片是前端本地入口，不属于报表大屏目录，不伪造 `catalog` 条目，也不加入固定模板白名单。页面只有在当前用户存在、`useMenuStore.load()` 成功且已加载菜单命中 `/workspace` 时才显示卡片；菜单失败、退出、切换用户和迟到响应都会清理旧授权。机构目录仍按服务端返回、固定模板白名单和数据模式过滤，目录失败继续显示失败态，不能用个人卡片伪造目录成功。
+
+个人卡片与机构卡片共用网格，默认“全部/综合”可见，对公和零售筛选不显示；搜索支持“我的经营驾驶舱”“个人大屏”和 `personal-dashboard`。卡片展示“个人”“本人业务数据”及个人核心指标、今日优先事项、我的客户、我发起的业务进度四区说明，点击进入 `#/personal-dashboard?from=screen-center`。个人页只识别这个受控来源值，返回大屏中心；工作台来源仍返回工作台。
+
 ## 实现文件
 
 - [personalDashboard.js](/Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend/src/api/personalDashboard.js) 及其测试：7 源真实 HTTP、字段投影、分区状态和排序。
 - [PersonalDashboardPage.vue](/Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend/src/views/screen/personal/PersonalDashboardPage.vue) 及其测试：Session 确认、代际清理、导航、全屏和既有弹窗复用。
 - [PersonalDashboard.vue](/Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend/src/views/screen/personal/PersonalDashboard.vue)：四区视觉展示。
+- [ScreenCenter.vue](/Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend/src/views/screen/ScreenCenter.vue) 及测试：服务端机构目录与菜单授权个人入口、筛选搜索、代际清理和受控导航。
 - [router/index.js](/Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend/src/router/index.js) 及路由测试；[workspace/Index.vue](/Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend/src/views/workspace/Index.vue) 及入口回归测试。
 
 ## 验收矩阵
@@ -50,7 +57,10 @@
 | --- | --- | --- |
 | 后端相关测试 | 55 项通过 | 主代理汇总的后端测试结果；不等于真实库联调。 |
 | 前端个人驾驶舱定向测试 | 30 项通过 | API 4、容器 8、展示 5、工作台 12、路由 1；另有最新 Personal + Page + Corporate 22 项回归通过，属于额外子集，不能与 30 项相加。 |
-| 生产构建 | 通过 | `vite build` 通过；保留既有 Sass legacy API 与大 chunk 警告。 |
+| 大屏中心个人入口定向测试 | 13 项通过 | 覆盖工作台菜单有/无、当前用户缺失、菜单失败、机构目录空/失败、菜单迟到空态、筛选搜索计数、点击导航及切换/退出迟到响应；固定模板注册表 2 项回归通过。 |
+| 本轮个人页与大屏中心前端定向回归 | 31 项通过 | ScreenCenter 13、固定模板注册表 2、个人页容器 9、个人展示 6、个人路由 1；未触及真实后端。 |
+| 生产构建 | 通过（本轮重跑） | `vite build` 通过；保留既有 Sass legacy API 与大 chunk 警告。 |
+| 大屏中心官方 CLI 合成验收 | 通过（合成） | 空机构目录个人卡片、中文搜索、零售筛选隐藏、中心→个人（`from=screen-center`）→中心、无 `/workspace` 授权隐藏均通过；证据：[本轮 README](/Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/docs/superpowers/evidence/2026-09-20-personal-screen-center/README.md)，原始资料 `/tmp/personal-screen-center-evidence/`。不代表真实后端联调。 |
 | 主代理 CLI 未登录访问 | 通过 | `route-list` 为 `No active routes`；`/api/auth/current-user` 返回 401 后跳转登录。 |
 | personal_ui 合成业务浏览器验收 | 通过（合成） | 官方 CLI 覆盖 6 指标、6 事项、6 客户、6 业务；1440/1920 首屏四标题可见；客户详情抽屉、触达详情、业务入口、刷新通过；workflow 500 与 customer 403 保留其他分区；console 0 errors/0 warnings。证据：[README](/Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/docs/superpowers/evidence/2026-09-20-personal-dashboard/README.md)，原始资料 `/tmp/personal-dashboard-evidence`。 |
 | 图标与布局 QA | 通过（合成） | 主代理已查看 3 尺寸真实截图并完成布局/图标检查；该结果仍属于前端合成 mock 验收。 |

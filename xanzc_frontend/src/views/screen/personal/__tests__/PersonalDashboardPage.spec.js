@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   buildPersonalDashboardModel: vi.fn()
 }));
 const router = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn() }));
+const route = vi.hoisted(() => ({ fullPath: '/personal-dashboard', query: {} }));
 const store = vi.hoisted(() => ({
   user: { empId: 'E-1' }, displayName: '旧用户', orgName: '旧机构',
   setUser: vi.fn()
@@ -21,7 +22,7 @@ vi.mock('@/api/personalDashboard', () => api);
 vi.mock('@/stores/user', () => ({ useUserStore: () => store }));
 vi.mock('@/stores/menu', () => ({ useMenuStore: () => authStore }));
 vi.mock('@/stores/permission', () => ({ usePermissionStore: () => authStore }));
-vi.mock('vue-router', () => ({ useRouter: () => router, useRoute: () => ({ fullPath: '/personal-dashboard' }) }));
+vi.mock('vue-router', () => ({ useRouter: () => router, useRoute: () => route }));
 vi.mock('element-plus', () => ({ ElMessage: ui }));
 vi.mock('@/components/MarketingCustomerDetailDrawer.vue', () => ({
   default: { name: 'MarketingCustomerDetailDrawer', props: ['modelValue', 'customer', 'loading'], template: '<aside data-testid="customer-drawer" />' }
@@ -32,9 +33,9 @@ vi.mock('@/components/TouchTaskDetailDialog.vue', () => ({
 vi.mock('../PersonalDashboard.vue', () => ({
   default: {
     name: 'PersonalDashboard',
-    props: ['model', 'loading'],
+    props: ['model', 'loading', 'backLabel'],
     emits: ['refresh', 'back', 'navigate', 'fullscreen'],
-    template: '<main data-testid="personal-dashboard-stub"><button data-action="refresh" @click="$emit(\'refresh\')">刷新</button><button data-action="back" @click="$emit(\'back\')">返回</button><button data-action="fullscreen" @click="$emit(\'fullscreen\')">全屏</button><button data-action="customer" @click="$emit(\'navigate\', { kind: \'customer\', id: \'C-1\' })">客户</button><button data-action="touch" @click="$emit(\'navigate\', { kind: \'touch\', id: \'T-1\', mode: \'supplement\' })">触达</button><button data-action="asset" @click="$emit(\'navigate\', { kind: \'asset\', id: \'A-1\' })">资产</button><button data-action="unknown" @click="$emit(\'navigate\', { kind: \'todo\', id: \'W-1\', bizType: \'UNKNOWN\' })">未知待办</button><button data-action="progress" @click="$emit(\'navigate\', { kind: \'progress\' })">进度</button></main>'
+    template: '<main data-testid="personal-dashboard-stub"><span data-testid="back-label">{{ backLabel }}</span><button data-action="refresh" @click="$emit(\'refresh\')">刷新</button><button data-action="back" @click="$emit(\'back\')">返回</button><button data-action="fullscreen" @click="$emit(\'fullscreen\')">全屏</button><button data-action="customer" @click="$emit(\'navigate\', { kind: \'customer\', id: \'C-1\' })">客户</button><button data-action="touch" @click="$emit(\'navigate\', { kind: \'touch\', id: \'T-1\', mode: \'supplement\' })">触达</button><button data-action="asset" @click="$emit(\'navigate\', { kind: \'asset\', id: \'A-1\' })">资产</button><button data-action="unknown" @click="$emit(\'navigate\', { kind: \'todo\', id: \'W-1\', bizType: \'UNKNOWN\' })">未知待办</button><button data-action="progress" @click="$emit(\'navigate\', { kind: \'progress\' })">进度</button></main>'
   }
 }));
 
@@ -71,6 +72,7 @@ beforeEach(() => {
   api.buildPersonalDashboardModel.mockReset();
   router.push.mockReset();
   router.back.mockReset();
+  route.query = {};
   store.setUser.mockReset();
   Object.values(ui).forEach(fn => fn.mockReset());
   api.loadPersonalDashboard.mockResolvedValue(sources);
@@ -79,6 +81,24 @@ beforeEach(() => {
 });
 
 describe('PersonalDashboardPage', () => {
+  it('从大屏中心进入时返回大屏中心，其他来源只返回工作台', async () => {
+    route.query = { from: 'screen-center' };
+    const centerWrapper = mountPage();
+    await flushPromises();
+    expect(centerWrapper.get('[data-testid="back-label"]').text()).toBe('返回大屏中心');
+    await centerWrapper.get('[data-action="back"]').trigger('click');
+    expect(router.push).toHaveBeenLastCalledWith('/screens');
+    centerWrapper.unmount();
+
+    route.query = { from: 'unexpected', returnUrl: '/unsafe' };
+    const workspaceWrapper = mountPage();
+    await flushPromises();
+    expect(workspaceWrapper.get('[data-testid="back-label"]').text()).toBe('返回工作台');
+    await workspaceWrapper.get('[data-action="back"]').trigger('click');
+    expect(router.push).toHaveBeenLastCalledWith('/workspace');
+    workspaceWrapper.unmount();
+  });
+
   it('先严格确认当前 Session 身份，再加载聚合数据，并使用服务端新身份', async () => {
     const wrapper = mountPage();
     await flushPromises();

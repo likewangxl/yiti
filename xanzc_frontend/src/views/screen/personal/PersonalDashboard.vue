@@ -26,7 +26,7 @@
         <button type="button" class="personal-icon-action" data-action="fullscreen" aria-label="全屏显示个人经营驾驶舱" title="全屏" @click="emit('fullscreen')">
           <FullScreen aria-hidden="true" />
         </button>
-        <button type="button" class="personal-icon-action" data-action="back" aria-label="返回工作台" title="返回工作台" @click="emit('back')">
+        <button type="button" class="personal-icon-action" data-action="back" :aria-label="backLabel" :title="backLabel" @click="emit('back')">
           <Back aria-hidden="true" />
         </button>
       </div>
@@ -210,7 +210,8 @@ import {
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
-  loading: { type: Boolean, default: false }
+  loading: { type: Boolean, default: false },
+  backLabel: { type: String, default: '返回工作台' }
 });
 
 const emit = defineEmits(['refresh', 'back', 'navigate', 'fullscreen']);
@@ -221,6 +222,7 @@ const metrics = computed(() => normalizeSection(model.value.metrics));
 const priorities = computed(() => normalizeSection(model.value.priorities));
 const customers = computed(() => normalizeSection(model.value.customers));
 const progress = computed(() => normalizeSection(model.value.progress));
+const backLabel = computed(() => props.backLabel || '返回工作台');
 
 function normalizeSection(section) {
   return section && typeof section === 'object' ? section : {};

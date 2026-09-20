@@ -3,6 +3,7 @@
     <PersonalDashboard
       :model="model"
       :loading="loading"
+      :back-label="backLabel"
       @refresh="refresh"
       @back="goBack"
       @navigate="navigateToItem"
@@ -37,9 +38,9 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import http, { API_BASE } from '@/api/http';
 import {
   buildPersonalDashboardModel,
@@ -53,6 +54,7 @@ import TouchTaskDetailDialog from '@/components/TouchTaskDetailDialog.vue';
 import PersonalDashboard from './PersonalDashboard.vue';
 
 const router = useRouter();
+const route = useRoute();
 const userStore = useUserStore();
 const menuStore = useMenuStore();
 const permissionStore = usePermissionStore();
@@ -71,6 +73,8 @@ const progressChooserVisible = ref(false);
 const progressChooserRef = ref(null);
 const customerRequestGeneration = ref(0);
 let expectedStoreEmpId = '';
+const fromScreenCenter = computed(() => route.query?.from === 'screen-center');
+const backLabel = computed(() => fromScreenCenter.value ? '返回大屏中心' : '返回工作台');
 
 function identityFromStore() {
   return {
@@ -183,7 +187,7 @@ function refresh() {
 }
 
 function goBack() {
-  router.push('/workspace');
+  router.push(fromScreenCenter.value ? '/screens' : '/workspace');
 }
 
 async function openCustomer(id) {

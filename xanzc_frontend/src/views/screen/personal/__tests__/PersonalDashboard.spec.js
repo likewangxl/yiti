@@ -147,6 +147,16 @@ describe('PersonalDashboard 个人经营驾驶舱', () => {
     expect(wrapper.emitted('refresh')).toHaveLength(1);
     expect(wrapper.emitted('fullscreen')).toHaveLength(1);
     expect(wrapper.emitted('back')).toHaveLength(1);
+    expect(wrapper.get('[data-action="back"]').attributes('aria-label')).toBe('返回工作台');
+    wrapper.unmount();
+  });
+
+  it('允许个人页按受控来源替换返回按钮文案', async () => {
+    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
+    const wrapper = mount(PersonalDashboard, { props: { model, backLabel: '返回大屏中心' } });
+
+    expect(wrapper.get('[data-action="back"]').attributes('aria-label')).toBe('返回大屏中心');
+    expect(wrapper.get('[data-action="back"]').attributes('title')).toBe('返回大屏中心');
     wrapper.unmount();
   });
 
