@@ -34,6 +34,13 @@ public class CanvasStyleDTO {
     private String dataNotice;
 
     /**
+     * 可选的可信数据分类；仅允许 TEST/LIVE/PROD，由代码化画布校验器做枚举校验。
+     * LIVE 与 PROD 在运行目录均表示接口数据，不代表已完成生产真实性认证。
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String dataClassification;
+
+    /**
      * 可选的代码化 KPI 展示标签覆盖；键和值均由服务端白名单校验。
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)

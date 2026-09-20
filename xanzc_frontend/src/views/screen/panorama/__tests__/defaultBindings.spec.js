@@ -48,6 +48,35 @@ function customSqlInstitutionTable(id, resultShape = 'TABLE', extra = {}, config
   }, { sourceKind: 'CUSTOM_SQL', ...extra });
 }
 
+function m98Source(id, profile, extra = {}) {
+  return source(id, {
+    schemaVersion: 2,
+    scopeMode: 'NAMED_GROUP',
+    profile,
+    mode: 'SUMMARY'
+  }, {
+    sourceKind: 'M98_STAT',
+    dsType: 'SINGLE',
+    bizLine: profile.startsWith('CORP_') ? 'CORP' : 'RETAIL',
+    ...extra
+  });
+}
+
+function namedKpiOrgSource(id = 9802, extra = {}) {
+  return source(id, {
+    schemaVersion: 2,
+    scopeMode: 'NAMED_GROUP',
+    schemeCode: 'KPI0724',
+    subjectType: 'ORG',
+    mode: 'SNAPSHOT'
+  }, {
+    sourceKind: 'KPI_DETAIL',
+    dsType: 'SINGLE',
+    bizLine: 'CORP',
+    ...extra
+  });
+}
+
 describe('defaultBindings', () => {
   it('只在固定指标编码唯一且语义完整时自动绑定，并按已确认宽表口径设为亿元', () => {
     const result = resolveDefaultBinding({
@@ -360,5 +389,74 @@ describe('defaultBindings', () => {
       fields: { orgCode: 'org_code' },
       units: {}
     }, [{ id: 9015, dsName: '机构指标按机构统计' }])).not.toContain('单位待确认');
+  });
+
+  it('M98 SUMMARY 只对应固定单值槽位，单位未知时不自动猜测', () => {
+    const sourceM98 = m98Source(9801, 'CORP_REVENUE');
+    const missingUnit = resolveDefaultBinding({
+      template: 'corporate-overview-v1',
+      slot: 'corpRevenue',
+      screenScope: { viewLevel: 'PROVINCE', bizLine: 'CORP', orgScopeMode: 'NAMED_GROUP' },
+      datasources: [sourceM98]
+    });
+    const preserved = resolveDefaultBinding({
+      template: 'corporate-overview-v1',
+      slot: 'corpRevenue',
+      screenScope: { viewLevel: 'PROVINCE', bizLine: 'CORP', orgScopeMode: 'NAMED_GROUP' },
+      existingBinding: {
+        dsId: 9801, period: 'LATEST', fields: { value: 'amount', date: 'data_date' }, units: { value: 'YUAN' }
+      },
+      datasources: [sourceM98]
+    });
+    const wrongSlot = resolveDefaultBinding({
+      template: 'corporate-overview-v1',
+      slot: 'corpLoan',
+      screenScope: { viewLevel: 'PROVINCE', bizLine: 'CORP', orgScopeMode: 'NAMED_GROUP' },
+      existingBinding: {
+        dsId: 9801, period: 'LATEST', fields: { value: 'amount' }, units: { value: 'YUAN' }
+      },
+      datasources: [sourceM98]
+    });
+
+    expect(missingUnit.status).toBe('missing');
+    expect(missingUnit.gap).toContain('单位');
+    expect(preserved.status).toBe('preserved');
+    expect(wrongSlot.status).toBe('missing');
+  });
+
+  it('KPI_DETAIL ORG 快照只为对公目标/关注使用固定输出列，机构列表仍拒绝', () => {
+    const sourceKpi = namedKpiOrgSource();
+    const targets = resolveDefaultBinding({
+      template: 'corporate-overview-v1',
+      slot: 'corpTargets',
+      screenScope: { viewLevel: 'PROVINCE', bizLine: 'CORP', orgScopeMode: 'NAMED_GROUP' },
+      existingBinding: {
+        dsId: 9802, period: 'LATEST',
+        fields: { name: 'metric_name', actual: 'actual_value', target: 'target_value' },
+        units: { actual: 'YUAN', target: 'YUAN' }
+      },
+      datasources: [sourceKpi]
+    });
+    const attention = resolveDefaultBinding({
+      template: 'corporate-overview-v1',
+      slot: 'corpAttention',
+      screenScope: { viewLevel: 'PROVINCE', bizLine: 'CORP', orgScopeMode: 'NAMED_GROUP' },
+      existingBinding: {
+        dsId: 9802, period: 'LATEST', fields: { label: 'attention_label', count: 'attention_count' },
+        units: { count: 'COUNT' }
+      },
+      datasources: [sourceKpi]
+    });
+    const branches = resolveDefaultBinding({
+      template: 'corporate-overview-v1',
+      slot: 'branches',
+      screenScope: { viewLevel: 'PROVINCE', bizLine: 'CORP', orgScopeMode: 'NAMED_GROUP' },
+      existingBinding: { dsId: 9802, period: 'LATEST', fields: { orgCode: 'org_code' }, units: {} },
+      datasources: [sourceKpi]
+    });
+
+    expect(targets.status).toBe('preserved');
+    expect(attention.status).toBe('preserved');
+    expect(branches.status).toBe('missing');
   });
 });

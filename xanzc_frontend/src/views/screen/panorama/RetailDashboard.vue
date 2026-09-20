@@ -45,8 +45,8 @@
         <div class="retail-kpi__copy">
           <span class="retail-kpi__label">{{ kpi.label }}</span>
           <div class="retail-kpi__number">
-            <strong>{{ formatMetric(kpi.value) }}</strong>
-            <small>{{ kpi.unit }}</small>
+            <strong :title="`${kpi.value ?? '—'} ${kpi.unit}`">{{ displayKpi(kpi).text }}</strong>
+            <small>{{ displayKpi(kpi).unit }}</small>
           </div>
         </div>
         <span
@@ -219,6 +219,7 @@
           </div>
           <PanoramaMap
             class="retail-map"
+            appearance="relief"
             :geo-json="provinceGeoJson"
             :points="safeModel.institutions"
             :demo="demo"
@@ -581,6 +582,17 @@ function formatMetric(value) {
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(number);
 }
 
+function displayKpi(kpi) {
+  let value=finiteValue(kpi.value),unit=kpi.unit;
+  if(value===null)return {text:'—',unit};
+  if(unit==='亿元' && value!==0 && Math.abs(value)<1) {
+    value*=10000;unit='万元';
+    if(Math.abs(value)<1) {value*=10000;unit='元';}
+  } else if(unit==='万户' && value!==0 && Math.abs(value)<1) {value*=10000;unit='户';}
+  const text=new Intl.NumberFormat('en-US',{minimumFractionDigits:unit==='户'?0:2,maximumFractionDigits:value!==0&&Math.abs(value)<0.01?8:2}).format(value);
+  return {text,unit};
+}
+
 function formatChange(value) {
   return finiteValue(value);
 }
@@ -803,9 +815,50 @@ function clearTransientState() {
   closeDirectory();
 }
 
-watch(() => [props.model, props.error], ([model, error], previous = []) => {
-  if (error || model !== previous[0]) clearTransientState();
+function scopeSignature(model = {}) {
+  const source = model && typeof model === 'object' ? model : {};
+  return JSON.stringify([
+    source.scopeCode,
+    source.scopeId,
+    source.scopeVersion,
+    source.scopeKey,
+    source.authorizedScope,
+    source.permissionVersion,
+    source.dataScopeKey,
+    source.scopeLabel
+  ].map(value => value == null ? '' : String(value)));
+}
+
+const lastScopeSignature = ref(scopeSignature(props.model));
+watch(() => props.model, model => {
+  const nextSignature = scopeSignature(model);
+  const scopeChanged = nextSignature !== lastScopeSignature.value;
+  lastScopeSignature.value = nextSignature;
+  if (props.error || scopeChanged) {
+    clearTransientState();
+    return;
+  }
+  // 运行时刷新会先短暂返回空模型；在 loading 期间保留用户筛选，避免界面闪退。
+  if (props.loading) return;
+  // 同一授权范围刷新后，只清理已经从新结果中消失的选择。
+  if (selectedCityCode.value) {
+    const cityStillPresent = safeModel.value.rankings.some(row => String(row?.cityCode || row?.city_code || '') === selectedCityCode.value)
+      || safeModel.value.institutions.some(row => String(row?.cityCode || row?.city_code || '') === selectedCityCode.value);
+    if (!cityStillPresent) clearCity();
+  }
+  if (selectedInstitution.value) {
+    const code = String(selectedInstitution.value.orgCode || '');
+    if (!safeModel.value.institutions.some(row => String(row?.orgCode || '') === code)
+      && !safeModel.value.rankings.some(row => String(row?.orgCode || '') === code)) selectedInstitution.value = null;
+  }
+  if (selectedAttention.value) {
+    const label = String(selectedAttention.value.label || '');
+    if (!safeModel.value.attention.some(item => String(item?.label || '') === label)) {
+      closeAttention({ restoreFocus: false });
+    }
+  }
 }, { deep: true });
+watch(() => props.error, error => { if (error) clearTransientState(); });
 </script>
 
 <style src="./retail.scss" lang="scss"></style>

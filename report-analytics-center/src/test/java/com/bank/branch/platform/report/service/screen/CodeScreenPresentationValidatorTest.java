@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** CODE 经营全景画布契约的纯单元测试；不启动 Spring，也不连接数据库。 */
@@ -94,12 +95,56 @@ class CodeScreenPresentationValidatorTest {
         return datasource;
     }
 
+    private RptScreenDatasource m98Datasource(String profile) {
+        RptScreenDatasource datasource = new RptScreenDatasource();
+        datasource.setId(12L);
+        datasource.setBizLine(profile.startsWith("CORP") ? "CORP" : "RETAIL");
+        datasource.setSourceKind("M98_STAT");
+        datasource.setDsType("SINGLE");
+        datasource.setConfigJson("{\"schemaVersion\":2,\"scopeMode\":\"NAMED_GROUP\","
+                + "\"profile\":\"" + profile + "\",\"mode\":\"SUMMARY\"}");
+        return datasource;
+    }
+
+    private RptScreenDatasource namedKpiOrgDatasource() {
+        RptScreenDatasource datasource = new RptScreenDatasource();
+        datasource.setId(12L);
+        datasource.setSourceKind("KPI_DETAIL");
+        datasource.setDsType("SINGLE");
+        datasource.setConfigJson("{\"schemaVersion\":2,\"scopeMode\":\"NAMED_GROUP\","
+                + "\"schemeCode\":\"KPI0724\",\"subjectType\":\"ORG\","
+                + "\"mode\":\"SNAPSHOT\"}");
+        return datasource;
+    }
+
     @Test
     void acceptsBranchOverviewWithRequiredDepositBinding() {
         org.assertj.core.api.Assertions.assertThat(CodeScreenPresentationValidator.isCodePresentation(style)).isTrue();
         String bind = validBind("{\"value\":\"存款余额\"}", "{\"value\":\"HUNDRED_MILLION\"}");
         CodeScreenPresentationValidator.validateDraft(style,
                 draft("ChartWidget", "w-deposit", "deposit", bind), List.of(block(bind)));
+    }
+
+    @Test
+    void dataClassificationIsAValidatedEnumAndNeverInferredFromDataNotice() throws Exception {
+        String testStyle = "{\"dataClassification\":\"TEST\",\"dataNotice\":\"测试库数据\","
+                + "\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"}}";
+        assertThat(CodeScreenPresentationValidator.dataClassification(MAPPER.readTree(testStyle)))
+                .isEqualTo("TEST");
+
+        String liveStyle = "{\"dataClassification\":\"LIVE\",\"dataNotice\":\"测试库数据\","
+                + "\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"}}";
+        assertThat(CodeScreenPresentationValidator.dataClassification(MAPPER.readTree(liveStyle)))
+                .isEqualTo("LIVE");
+
+        String invalidStyle = testStyle.replace("TEST", "DEMO");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.dataClassification(
+                MAPPER.readTree(invalidStyle)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        String nonTextStyle = testStyle.replace("\"TEST\"", "12");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.dataClassification(
+                MAPPER.readTree(nonTextStyle)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
     }
 
     @Test
@@ -248,6 +293,34 @@ class CodeScreenPresentationValidatorTest {
         assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
                 MAPPER.readTree(forged), "retailRanking", retailRankingDatasource()))
                 .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
+    void m98SummaryHasFixedOutputRolesAndCannotBindBranchesOrRanking() throws Exception {
+        String revenue = validBind("{\"value\":\"amount\",\"date\":\"data_date\"}",
+                "{\"value\":\"YUAN\"}");
+        CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(revenue), "corpRevenue", m98Datasource("CORP_REVENUE"));
+
+        String branches = validBind("{\"orgCode\":\"org_code\",\"deposit\":\"amount\"}",
+                "{\"deposit\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(branches), "branches", m98Datasource("CORP_REVENUE")))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String ranking = validBind("{\"orgCode\":\"org_code\",\"name\":\"org_code\",\"value\":\"amount\"}",
+                "{\"value\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(ranking), "corpRanking", m98Datasource("CORP_REVENUE")))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
+    void namedKpiOrgSnapshotExposesDerivedAttentionLabelAndNullSafeCount() throws Exception {
+        String bind = validBind("{\"label\":\"attention_label\",\"count\":\"attention_count\"}",
+                "{\"count\":\"COUNT\"}");
+        CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(bind), "corpAttention", namedKpiOrgDatasource());
     }
 
     @Test

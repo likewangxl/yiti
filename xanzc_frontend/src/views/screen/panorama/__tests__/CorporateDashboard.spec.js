@@ -4,8 +4,9 @@ import { mount } from '@vue/test-utils';
 
 vi.mock('../PanoramaMap.vue', () => ({
   default: {
-    props: ['geoJson', 'points', 'demo', 'mode', 'selectedRegionCode', 'appearance'],
-    template: '<div data-testid="corporate-map" :data-mode="mode" :data-appearance="appearance" />'
+    props: ['geoJson', 'points', 'demo', 'mode', 'selectedRegionCode', 'appearance', 'metricLabel', 'metricValues'],
+    emits: ['region-select'],
+    template: '<div data-testid="corporate-map" :data-mode="mode" :data-appearance="appearance" :data-metric-label="metricLabel"><button type="button" data-action="stub-select-city" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">选西安</button></div>'
   }
 }));
 
@@ -14,6 +15,22 @@ vi.mock('../CorporateTrend.vue', () => ({
 }));
 
 describe('CorporateDashboard 对公经营总览', () => {
+  it('画像关闭和刷新过渡保留搜索与选中，混层值不标为城市汇总', async () => {
+    const {default:Dashboard}=await import('../CorporateDashboard.vue');
+    const model={scopeLabel:'授权组A',rankings:[{orgCode:'A',name:'甲机构',cityCode:'610100',deposit:1}],institutions:[{orgCode:'A',orgName:'甲机构',cityCode:'610100'}]};
+    const wrapper=mount(Dashboard,{props:{model,sourcePresentation:{sourceAvailability:{corpRanking:{status:'PARTIAL',message:'混合层级测试对照'},corpAttention:{status:'NO_SOURCE',message:'尚未接入'}}}}});
+    await wrapper.get('[data-testid="corporate-ranking-row"]').trigger('click');
+    await wrapper.get('[data-testid="corporate-directory-search"]').setValue('甲');
+    await wrapper.get('button[aria-label="关闭机构目录"]').trigger('click');
+    expect(wrapper.get('[data-testid="corporate-ranking-row"]').attributes('aria-current')).toBe('true');
+    await wrapper.setProps({loading:true,model:{scopeLabel:'授权组A',institutions:[],rankings:[]}});
+    await wrapper.setProps({loading:false,model:{...model}});
+    await wrapper.get('[data-testid="corporate-ranking-row"]').trigger('click');
+    expect(wrapper.get('[data-testid="corporate-directory-search"]').element.value).toBe('甲');
+    expect(wrapper.findComponent('[data-testid="corporate-map"]').props('metricValues')).toEqual({});
+    expect(wrapper.get('[data-testid="corporate-leadership-insights"]').text()).not.toContain('0项');
+    wrapper.unmount();
+  });
   it('只为对公页启用选定的浮雕地图外观', async () => {
     const { default: Dashboard } = await import('../CorporateDashboard.vue');
     const wrapper = mount(Dashboard, { props: { demo: true, model: {} } });
@@ -107,6 +124,95 @@ describe('CorporateDashboard 对公经营总览', () => {
     await wrapper.get('[data-testid="corporate-directory-dialog"]').trigger('keydown', { key: 'Escape' });
     await wrapper.vm.$nextTick();
     expect(wrapper.find('[data-testid="corporate-directory-dialog"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('经营观察按目标缺口、负增/落后机构、协调事项和数据缺项组织', async () => {
+    const { default: CorporateDashboard } = await import('../CorporateDashboard.vue');
+    const wrapper = mount(CorporateDashboard, {
+      props: {
+        model: {
+          rankings: [{ orgCode: 'A', name: '甲', deposit: 100, increase: -2, rate: 80 }],
+          targets: [{ name: '对公存款', actual: 80, target: 100 }],
+          attention: [{ label: '甲机构待跟进任务', count: 2 }]
+        }
+      }
+    });
+    const items = wrapper.findAll('[data-testid="corporate-leadership-insights"] .corporate-insight-item');
+    expect(items.map(item => item.find('span').text())).toEqual(['目标缺口', '负增 / 落后机构', '协调事项', '数据缺项']);
+    expect(items[0].text()).toContain('有缺口 1 项');
+    expect(items[1].text()).toContain('1');
+    expect(items[2].text()).toContain('2');
+    expect(items[3].text()).toContain('');
+    wrapper.unmount();
+  });
+
+  it('刷新保持有效的城市、指标、顺序和目录筛选，范围变化才清理旧筛选', async () => {
+    const { default: CorporateDashboard } = await import('../CorporateDashboard.vue');
+    const baseModel = {
+      scopeLabel: '全辖机构',
+      rankings: [
+        { orgCode: 'A', name: '甲', cityCode: '610100', deposit: 100, increase: -2, rate: 80 },
+        { orgCode: 'B', name: '乙', cityCode: '610800', deposit: 80, increase: 4, rate: 95 }
+      ],
+      institutions: [{ orgCode: 'A', name: '甲', cityCode: '610100', cityName: '西安市', located: true }]
+    };
+    const wrapper = mount(CorporateDashboard, { props: { model: baseModel } });
+    await wrapper.get('[data-action="stub-select-city"]').trigger('click');
+    await wrapper.get('[data-ranking-metric="increase"]').trigger('click');
+    await wrapper.get('[data-ranking-order="lagging"]').trigger('click');
+    expect(wrapper.get('[data-testid="corporate-selected-city"]').text()).toContain('西安市');
+    await wrapper.setProps({ model: { ...baseModel, kpis: [{ key: 'corpDeposit', value: 101 }] } });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.get('[data-ranking-metric="increase"]').classes()).toContain('active');
+    expect(wrapper.get('[data-ranking-order="lagging"]').classes()).toContain('active');
+    expect(wrapper.get('[data-testid="corporate-selected-city"]').text()).toContain('西安市');
+    await wrapper.setProps({ model: { ...baseModel, scopeLabel: '仅西安机构', rankings: [] } });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[data-testid="corporate-selected-city"]').exists()).toBe(false);
+    expect(wrapper.get('[data-ranking-metric="deposit"]').classes()).toContain('active');
+    wrapper.unmount();
+  });
+
+  it('混合层级排名只保留数值对照，隐藏业务名次和领先短板并禁用无来源指标', async () => {
+    const { default: CorporateDashboard } = await import('../CorporateDashboard.vue');
+    const wrapper = mount(CorporateDashboard, {
+      props: {
+        sourcePresentation: {
+          sourceAvailability: {
+            corpRanking: {
+              status: 'PARTIAL',
+              message: '混合层级测试对照，仅按数值排序，不代表同层绩效排名',
+              fields: {
+                increase: { status: 'NO_SOURCE', message: '净增来源暂无数据' },
+                rate: { status: 'NO_SOURCE', message: '完成率来源暂无数据' },
+                nplRate: { status: 'NO_SOURCE', message: '不良率来源暂无数据' }
+              }
+            }
+          }
+        },
+        model: { rankings: [{ orgCode: 'A', name: '甲', deposit: 100, increase: null, rate: null }] }
+      }
+    });
+    expect(wrapper.get('[data-testid="corporate-ranking-title"]').text()).toContain('数值对照');
+    expect(wrapper.text()).toContain('混合层级测试对照');
+    expect(wrapper.find('[data-ranking-order="leading"]').exists()).toBe(false);
+    expect(wrapper.get('[data-ranking-metric="increase"]').element.disabled).toBe(true);
+    expect(wrapper.get('[data-testid="corporate-ranking-row"] .corporate-ranking-row__number').text()).toBe('·');
+    wrapper.unmount();
+  });
+
+  it('对公协调来源未接入时明确显示未接入，不把空数组误报为0项', async () => {
+    const { default: CorporateDashboard } = await import('../CorporateDashboard.vue');
+    const wrapper = mount(CorporateDashboard, {
+      props: {
+        sourcePresentation: { sourceAvailability: { corpAttention: { status: 'NO_SOURCE', message: '对公协调来源尚未绑定' } } },
+        model: { attention: [] }
+      }
+    });
+    expect(wrapper.get('[data-testid="corporate-leadership-insights"] .corporate-insight-item:nth-child(3)').text()).toContain('—');
+    expect(wrapper.get('[data-testid="corporate-attention"]').text()).toContain('未接入');
+    expect(wrapper.get('[data-testid="corporate-attention"]').text()).toContain('尚未绑定');
     wrapper.unmount();
   });
 });

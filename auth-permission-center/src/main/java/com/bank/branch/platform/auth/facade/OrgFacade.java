@@ -2,6 +2,7 @@ package com.bank.branch.platform.auth.facade;
 
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UniqueUserOrgDTO;
 import com.bank.branch.platform.auth.service.OrgService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Set;
+import java.util.Collection;
 
 /**
  * 组织机构 Facade 实现
@@ -58,6 +60,17 @@ public class OrgFacade implements OrgApi {
     @Override
     public List<OrgDTO> getOrgsByNames(java.util.Collection<String> orgNames) {
         return orgService.getOrgsByNames(orgNames);
+    }
+
+    /**
+     * 查询全局唯一机构归属且命中授权机构集合的员工映射。
+     *
+     * @param orgCodes 调用方已授权的机构编码集合
+     * @return 仅唯一归属员工的工号与机构编码映射
+     */
+    @Override
+    public List<UniqueUserOrgDTO> listUniqueUserOrgs(Collection<String> orgCodes) {
+        return orgService.listUniqueUserOrgs(orgCodes);
     }
 
     /**

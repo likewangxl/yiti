@@ -1,7 +1,9 @@
 package com.bank.branch.platform.auth.api;
 
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UniqueUserOrgDTO;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -62,6 +64,17 @@ public interface OrgApi {
      * @return 命中的机构 DTO 列表（含重名）
      */
     List<OrgDTO> getOrgsByNames(java.util.Collection<String> orgNames);
+
+    /**
+     * 查询全局唯一机构归属且机构编码属于授权集合的员工映射。
+     *
+     * <p>仅返回在 {@code EXT_USER_ORG} 中恰好归属一个机构、且该唯一机构命中
+     * {@code orgCodes} 的员工；结果不代表全部员工。空或全空白入参返回空列表。</p>
+     *
+     * @param orgCodes 调用方已授权的机构编码集合
+     * @return 员工工号到唯一机构编码的映射
+     */
+    List<UniqueUserOrgDTO> listUniqueUserOrgs(Collection<String> orgCodes);
 
     /**
      * 查询指定机构及其所有下属机构（含自身）

@@ -7,6 +7,7 @@ import com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO;
 import com.bank.branch.platform.auth.api.dto.OrgUserDTO;
 import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
 import com.bank.branch.platform.auth.api.dto.UserRoleItemDTO;
+import com.bank.branch.platform.auth.api.dto.UniqueUserOrgDTO;
 import com.bank.branch.platform.auth.entity.ExtOrgInfo;
 import com.bank.branch.platform.auth.entity.ExtUserOrg;
 import com.bank.branch.platform.auth.entity.PtUser;
@@ -22,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -207,6 +209,32 @@ public class OrgService {
             return List.of();
         }
         return rows.stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    /**
+     * 查询全局唯一机构归属且命中授权机构集合的员工映射。
+     *
+     * <p>先由 mapper 对 EXT_USER_ORG 全表按员工聚合并排除多机构员工，再过滤授权机构；
+     * 不能先按授权机构过滤，否则会把多机构员工误判为唯一归属。</p>
+     *
+     * @param orgCodes 调用方已授权的机构编码集合
+     * @return 仅唯一归属员工的工号与机构编码映射
+     */
+    public List<UniqueUserOrgDTO> listUniqueUserOrgs(Collection<String> orgCodes) {
+        if (orgCodes == null || orgCodes.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> distinct = new LinkedHashSet<>();
+        for (String orgCode : orgCodes) {
+            if (orgCode != null && !orgCode.isBlank()) {
+                distinct.add(orgCode.trim());
+            }
+        }
+        if (distinct.isEmpty()) {
+            return List.of();
+        }
+        List<UniqueUserOrgDTO> rows = userOrgMapper.selectUniqueUserOrgs(distinct);
+        return rows == null || rows.isEmpty() ? List.of() : rows;
     }
 
     /**

@@ -3,6 +3,7 @@ package com.bank.branch.platform.report.service.screen;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.report.dto.resp.ScreenEntryRespDTO;
 import com.bank.branch.platform.report.entity.RptScreen;
+import com.bank.branch.platform.report.entity.RptScreenDatasource;
 import com.bank.branch.platform.report.mapper.RptScreenBlockMapper;
 import com.bank.branch.platform.report.mapper.RptScreenDatasourceMapper;
 import com.bank.branch.platform.report.mapper.RptScreenMapPointMapper;
@@ -21,6 +22,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /** 新代码化大屏目录的固定注册表契约。 */
@@ -41,14 +43,19 @@ class ScreenCatalogFixedRegistryTest {
         service = new ScreenConfigServiceImpl(screenMapper, blockMapper, datasourceMapper,
                 mapPointMapper, currentUserApi);
         ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        lenient().when(datasourceMapper.selectById(12L)).thenReturn(datasource(12L, "COMMON"));
+        lenient().when(datasourceMapper.selectById(13L)).thenReturn(datasource(13L, "RETAIL"));
+        lenient().when(datasourceMapper.selectById(14L)).thenReturn(datasource(14L, "CORP"));
     }
 
     @Test
-    void catalog_usesOnlyRegisteredCodeTemplatesAndRequiresPublishedCorporatePackage() {
-        RptScreen province = screen("SCR_PROVINCE", "数据库旧名称", "PROVINCE", "COMMON", "ACTIVE", 0, null);
-        RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "数据库零售名称", "BRANCH", "RETAIL", "ACTIVE", 0, null);
+    void catalog_usesOnlyRegisteredCodeTemplatesAndRequiresTrustedPublishedPackages() {
+        RptScreen province = screen("SCR_PROVINCE", "数据库旧名称", "PROVINCE", "COMMON", "ACTIVE", 1,
+                codePackage("branch-overview-v1", "TEST", 12L));
+        RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "数据库零售名称", "BRANCH", "RETAIL", "ACTIVE", 1,
+                codePackage("retail-overview-v1", null, 13L));
         RptScreen corporate = screen("SCR_CORP_OVERVIEW", "数据库对公名称", "PROVINCE", "CORP", "ACTIVE", 1,
-                "{\"schemaVersion\":2,\"canvasStyle\":{\"presentation\":{\"type\":\"CODE\",\"template\":\"corporate-overview-v1\"}},\"components\":[],\"bindSnapshots\":{}}");
+                codePackage("corporate-overview-v1", null, 14L));
         RptScreen oldPublished = screen("SCR_OLD_PUBLISHED", "旧发布屏", "BRANCH", "COMMON", "ACTIVE", 1,
                 "{\"schemaVersion\":1,\"components\":[]}");
         when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(oldPublished, retail, corporate, province));
@@ -65,24 +72,56 @@ class ScreenCatalogFixedRegistryTest {
         assertThat(entries).extracting(ScreenEntryRespDTO::getBizLine)
                 .containsExactly("COMMON", "RETAIL", "CORP");
         assertThat(entries).extracting(ScreenEntryRespDTO::getDataMode)
-                .containsExactly("TEST", "DEMO", "LIVE");
+                .containsExactly("TEST", "LIVE", "LIVE");
     }
 
     @Test
-    void catalog_filtersCorporateWhenPublishedTemplateIsMissingOrMismatched() {
-        RptScreen province = screen("SCR_PROVINCE", "分行经营总览", "PROVINCE", "COMMON", "ACTIVE", 0, null);
-        RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "零售经营总览", "BRANCH", "RETAIL", "ACTIVE", 0, null);
+    void catalog_filtersAnyCodeScreenWhenPublishedTemplateIsMissingMismatchedOrEmpty() {
+        RptScreen province = screen("SCR_PROVINCE", "分行经营总览", "PROVINCE", "COMMON", "ACTIVE", 1,
+                codePackage("branch-overview-v1", "TEST", 12L));
+        RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "零售经营总览", "BRANCH", "RETAIL", "ACTIVE", 1, null);
         RptScreen corporate = screen("SCR_CORP_OVERVIEW", "对公经营总览", "PROVINCE", "CORP", "ACTIVE", 1,
                 "{\"schemaVersion\":2,\"canvasStyle\":{\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"}},\"components\":[],\"bindSnapshots\":{}}");
         when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(corporate, retail, province));
         when(scopeAuthorizationService.authorize(any(RptScreen.class))).thenReturn(Set.of());
 
         assertThat(service.listAuthorizedCodeScreens()).extracting(ScreenEntryRespDTO::getScreenCode)
-                .containsExactly("SCR_PROVINCE", "SCR_RETAIL_OVERVIEW");
+                .containsExactly("SCR_PROVINCE");
 
-        corporate.setCanvasPublishedJson(null);
+        retail.setCanvasPublishedJson(codePackage("retail-overview-v1", "TEST", 13L));
+        corporate.setCanvasPublishedJson(codePackage("corporate-overview-v1", null, 14L));
+        assertThat(service.listAuthorizedCodeScreens()).extracting(ScreenEntryRespDTO::getScreenCode)
+                .containsExactly("SCR_PROVINCE", "SCR_RETAIL_OVERVIEW", "SCR_CORP_OVERVIEW");
+        assertThat(service.listAuthorizedCodeScreens()).extracting(ScreenEntryRespDTO::getDataMode)
+                .containsExactly("TEST", "TEST", "LIVE");
+
+        corporate.setCanvasPublishedJson("{\"schemaVersion\":2,\"canvasStyle\":{},\"components\":[],\"bindSnapshots\":{}}");
         assertThat(service.listAuthorizedCodeScreens()).extracting(ScreenEntryRespDTO::getScreenCode)
                 .containsExactly("SCR_PROVINCE", "SCR_RETAIL_OVERVIEW");
+        corporate.setCanvasPublishedJson(codePackage("corporate-overview-v1", null, 14L)
+                .replace("\"schemaVersion\":2", "\"schemaVersion\":1"));
+        assertThat(service.listAuthorizedCodeScreens()).extracting(ScreenEntryRespDTO::getScreenCode)
+                .containsExactly("SCR_PROVINCE", "SCR_RETAIL_OVERVIEW");
+        corporate.setCanvasPublishedJson("malformed");
+        assertThat(service.listAuthorizedCodeScreens()).extracting(ScreenEntryRespDTO::getScreenCode)
+                .containsExactly("SCR_PROVINCE", "SCR_RETAIL_OVERVIEW");
+    }
+
+    @Test
+    void unpublishedCorporateIsNotExposedEvenWhenScreenAuthorizationSucceeds() {
+        RptScreen corporate = screen("SCR_CORP_OVERVIEW", "对公经营总览", "PROVINCE", "CORP", "ACTIVE", 0, null);
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(corporate));
+        when(scopeAuthorizationService.authorize(corporate)).thenReturn(Set.of());
+        assertThat(service.listAuthorizedCodeScreens()).isEmpty();
+    }
+
+    @Test
+    void catalog_rejectsInvalidDataClassificationAndNeverInfersModeFromNotice() {
+        RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "零售经营总览", "BRANCH", "RETAIL", "ACTIVE", 1,
+                "{\"schemaVersion\":2,\"canvasStyle\":{\"dataClassification\":\"DEMO\",\"dataNotice\":\"测试库数据\",\"presentation\":{\"type\":\"CODE\",\"template\":\"retail-overview-v1\"}},\"components\":[],\"bindSnapshots\":{}}");
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(retail));
+        when(scopeAuthorizationService.authorize(retail)).thenReturn(Set.of());
+        assertThat(service.listAuthorizedCodeScreens()).isEmpty();
     }
 
     @Test
@@ -100,7 +139,8 @@ class ScreenCatalogFixedRegistryTest {
 
     @Test
     void catalog_propagatesAuthorizationInfrastructureFailure() {
-        RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "零售经营总览", "BRANCH", "RETAIL", "ACTIVE", 0, null);
+        RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "零售经营总览", "BRANCH", "RETAIL", "ACTIVE", 1,
+                codePackage("retail-overview-v1", null, 13L));
         when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(retail));
         when(scopeAuthorizationService.authorize(retail)).thenThrow(
                 new com.bank.branch.platform.report.exception.RptException(
@@ -124,5 +164,35 @@ class ScreenCatalogFixedRegistryTest {
         screen.setPublishStatus(publishStatus);
         screen.setCanvasPublishedJson(publishedJson);
         return screen;
+    }
+
+    private String codePackage(String template, String dataClassification, long dsId) {
+        String bindingKey = switch (template) {
+            case "branch-overview-v1" -> "deposit";
+            case "retail-overview-v1" -> "retailAum";
+            case "corporate-overview-v1" -> "corpDeposit";
+            default -> throw new IllegalArgumentException("unknown template");
+        };
+        String bind = "{\"dsId\":" + dsId
+                + ",\"period\":\"LATEST\",\"fields\":{\"value\":\"value\"},"
+                + "\"units\":{\"value\":\"YUAN\"}}";
+        String escapedBind = bind.replace("\\", "\\\\").replace("\"", "\\\"");
+        String classification = dataClassification == null ? "" : "\"dataClassification\":\""
+                + dataClassification + "\",";
+        return "{\"schemaVersion\":2,\"canvasStyle\":{" + classification
+                + "\"presentation\":{\"type\":\"CODE\",\"template\":\"" + template
+                + "\"}},\"components\":[{\"component\":\"ChartWidget\",\"id\":\"w-"
+                + bindingKey + "\",\"blockId\":" + dsId + ",\"propValue\":{\"bindingKey\":\""
+                + bindingKey + "\"},\"bindJson\":\"" + escapedBind + "\"}],\"bindSnapshots\":{\""
+                + dsId + "\":{\"componentType\":\"ChartWidget\",\"bind\": " + bind + "}}}";
+    }
+
+    private RptScreenDatasource datasource(long id, String bizLine) {
+        RptScreenDatasource datasource = new RptScreenDatasource();
+        datasource.setId(id);
+        datasource.setBizLine(bizLine);
+        datasource.setSourceKind("CUSTOM_SQL");
+        datasource.setConfigJson("{\"fieldMeta\":[{\"col\":\"value\",\"role\":\"METRIC\"}]}");
+        return datasource;
     }
 }

@@ -6,6 +6,7 @@ import com.bank.branch.platform.report.dto.req.ScreenCreateReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenMetadataUpdateReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenEntryRespDTO;
 import com.bank.branch.platform.report.entity.RptScreen;
+import com.bank.branch.platform.report.entity.RptScreenDatasource;
 import com.bank.branch.platform.report.enums.RptErrorCode;
 import com.bank.branch.platform.report.mapper.RptScreenBlockMapper;
 import com.bank.branch.platform.report.mapper.RptScreenCanvasMapper;
@@ -58,13 +59,17 @@ class ScreenCatalogServiceTest {
     }
 
     @Test
-    void catalog_returnsOnlyFixedCodeRegistrationsAndDoesNotRequirePublishedCanvas() {
-        RptScreen province = screen("SCR_PROVINCE", "数据库旧名称", "PROVINCE", "COMMON", "ACTIVE", 0, null);
-        RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "数据库零售名称", "BRANCH", "RETAIL", "ACTIVE", 0, null);
+    void catalog_returnsOnlyFixedCodeRegistrationsWithTrustedRuntimePackages() {
+        RptScreen province = screen("SCR_PROVINCE", "数据库旧名称", "PROVINCE", "COMMON", "ACTIVE", 1,
+                codePackage("branch-overview-v1", "TEST", 12L));
+        RptScreen retail = screen("SCR_RETAIL_OVERVIEW", "数据库零售名称", "BRANCH", "RETAIL", "ACTIVE", 1,
+                codePackage("retail-overview-v1", null, 13L));
         RptScreen old = screen("SCR_OLD", "旧发布屏", "BRANCH", "COMMON", "ACTIVE", 1,
                 "{\"schemaVersion\":1,\"components\":[]}");
         when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(old, retail, province));
         when(scopeAuthorizationService.authorize(any(RptScreen.class))).thenReturn(Set.of());
+        when(datasourceMapper.selectById(12L)).thenReturn(datasource(12L, "COMMON"));
+        when(datasourceMapper.selectById(13L)).thenReturn(datasource(13L, "RETAIL"));
 
         List<ScreenEntryRespDTO> result = service.listAuthorizedCodeScreens();
 
@@ -77,7 +82,7 @@ class ScreenCatalogServiceTest {
         assertThat(result).extracting(ScreenEntryRespDTO::getBizLine)
                 .containsExactly("COMMON", "RETAIL");
         assertThat(result).extracting(ScreenEntryRespDTO::getDataMode)
-                .containsExactly("TEST", "DEMO");
+                .containsExactly("TEST", "LIVE");
     }
 
     @Test
@@ -192,5 +197,34 @@ class ScreenCatalogServiceTest {
         screen.setPublishStatus(publishStatus);
         screen.setCanvasPublishedJson(packageJson);
         return screen;
+    }
+
+    private String codePackage(String template, String dataClassification, long dsId) {
+        String bindingKey = switch (template) {
+            case "branch-overview-v1" -> "deposit";
+            case "retail-overview-v1" -> "retailAum";
+            default -> throw new IllegalArgumentException("unknown template");
+        };
+        String bind = "{\"dsId\":" + dsId
+                + ",\"period\":\"LATEST\",\"fields\":{\"value\":\"value\"},"
+                + "\"units\":{\"value\":\"YUAN\"}}";
+        String escapedBind = bind.replace("\\", "\\\\").replace("\"", "\\\"");
+        String classification = dataClassification == null ? "" : "\"dataClassification\":\""
+                + dataClassification + "\",";
+        return "{\"schemaVersion\":2,\"canvasStyle\":{" + classification
+                + "\"presentation\":{\"type\":\"CODE\",\"template\":\"" + template
+                + "\"}},\"components\":[{\"component\":\"ChartWidget\",\"id\":\"w-"
+                + bindingKey + "\",\"blockId\":" + dsId + ",\"propValue\":{\"bindingKey\":\""
+                + bindingKey + "\"},\"bindJson\":\"" + escapedBind + "\"}],\"bindSnapshots\":{\""
+                + dsId + "\":{\"componentType\":\"ChartWidget\",\"bind\": " + bind + "}}}";
+    }
+
+    private RptScreenDatasource datasource(long id, String bizLine) {
+        RptScreenDatasource datasource = new RptScreenDatasource();
+        datasource.setId(id);
+        datasource.setBizLine(bizLine);
+        datasource.setSourceKind("CUSTOM_SQL");
+        datasource.setConfigJson("{\"fieldMeta\":[{\"col\":\"value\",\"role\":\"METRIC\"}]}");
+        return datasource;
     }
 }

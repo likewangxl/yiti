@@ -69,7 +69,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     private static final String RUNTIME_CATALOG_SCREEN_CODE = "catalog";
     private static final List<RuntimeCatalogRegistration> CODE_SCREEN_CATALOG = List.of(
             new RuntimeCatalogRegistration("SCR_PROVINCE", "分行经营总览", "branch-overview-v1", "COMMON", "TEST"),
-            new RuntimeCatalogRegistration("SCR_RETAIL_OVERVIEW", "零售经营总览", "retail-overview-v1", "RETAIL", "DEMO"),
+            new RuntimeCatalogRegistration("SCR_RETAIL_OVERVIEW", "零售经营总览", "retail-overview-v1", "RETAIL", "LIVE"),
             new RuntimeCatalogRegistration("SCR_CORP_OVERVIEW", "对公经营总览", "corporate-overview-v1", "CORP", "LIVE"));
     /** 逐屏目录校验中可安全排除的授权失败；带 cause 的同码异常表示基础设施失败，必须继续抛出。 */
     private static final Set<String> CATALOG_AUTH_REJECTION_CODES = Set.of(
@@ -166,11 +166,16 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             }
             RptScreen screen = screens.get(0);
             if (!isValidCodeScreenScope(screen, registration)
-                    || !hasRequiredPublishedPackage(screen, registration)
                     || !isAuthorizedCatalogScreen(screen)) {
                 continue;
             }
-            result.add(toScreenEntry(screen, registration));
+            String dataMode = catalogDataMode(screen, registration);
+            if (dataMode == null) {
+                continue;
+            }
+            ScreenEntryRespDTO entry = toScreenEntry(screen, registration);
+            entry.setDataMode(dataMode);
+            result.add(entry);
         }
         return result;
     }
@@ -878,6 +883,10 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         if (!isNamedGroupCodeBinding(bindingKey)) {
             return;
         }
+        if (M98StatPolicy.SOURCE_KIND.equals(datasource.getSourceKind())
+                && !M98StatPolicy.allowsCodeBinding(bindingKey)) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
         try {
             JsonNode config = objectMapper.readTree(datasource.getConfigJson() == null
                     ? "{}" : datasource.getConfigJson());
@@ -903,7 +912,8 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     }
 
     private boolean isNamedGroupCodeBinding(String bindingKey) {
-        return "branches".equals(bindingKey) || "citySummary".equals(bindingKey)
+        return "branches".equals(bindingKey) || "ranking".equals(bindingKey)
+                || "citySummary".equals(bindingKey)
                 || "retailRanking".equals(bindingKey) || "corpRanking".equals(bindingKey);
     }
 
@@ -1196,7 +1206,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         return scopeAuthorizationService.authorize(screen);
     }
 
-    /** 代码化目录只接受固定注册屏的有效状态和范围配置，发布包/画布状态不参与判断。 */
+    /** 代码化目录只接受固定注册屏的有效状态、范围配置和授权结果；发布包由目录模式校验。 */
     private boolean isValidCodeScreenScope(RptScreen screen, RuntimeCatalogRegistration registration) {
         return screen != null
                 && "ACTIVE".equals(screen.getStatus())
@@ -1303,22 +1313,39 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     }
 
     /**
-     * LIVE 对公入口必须有可信的已发布 CODE 包；历史分行/零售目录继续兼容未发布画布。
+     * 目录只开放当前 ACTIVE 屏的可信 schema2 CODE 发布包；历史坐标、空包、错模板、坏绑定均
+     * 按未接入处理，不能再回退到任何前端演示入口。缺省分类沿用注册项的接口数据模式，显式
+     * TEST 分类才标为测试库数据；dataNotice 只用于展示说明，不能参与分类判断。
      */
-    private boolean hasRequiredPublishedPackage(RptScreen screen, RuntimeCatalogRegistration registration) {
-        if (!CodeScreenPresentationValidator.CORPORATE_OVERVIEW_TEMPLATE.equals(registration.template())) {
-            return true;
-        }
-        if (screen == null
-                || !(Integer.valueOf(1).equals(screen.getPublishStatus())
-                || Integer.valueOf(2).equals(screen.getPublishStatus()))) {
-            return false;
-        }
+    private String catalogDataMode(RptScreen screen, RuntimeCatalogRegistration registration) {
         try {
-            return registration.template().equals(publishedCodeTemplate(screen.getCanvasPublishedJson()));
-        } catch (RuntimeException ex) {
-            // 目录是入口授权边界；发布包解析或信任校验失败时按无入口处理，不能泄漏旧元数据。
-            return false;
+            if (screen == null
+                    || !(Integer.valueOf(1).equals(screen.getPublishStatus())
+                    || Integer.valueOf(2).equals(screen.getPublishStatus()))
+                    || screen.getCanvasPublishedJson() == null
+                    || screen.getCanvasPublishedJson().isBlank()) {
+                return null;
+            }
+            JsonNode root = PublishedScreenPackageValidator.read(screen.getCanvasPublishedJson());
+            JsonNode schemaVersion = root.path("schemaVersion");
+            if (!schemaVersion.isIntegralNumber() || !schemaVersion.canConvertToInt()
+                    || schemaVersion.intValue() != 2) {
+                return null;
+            }
+            String publishedTemplate = CodeScreenPresentationValidator.presentationTemplate(
+                    root.path("canvasStyle"));
+            if (!registration.template().equals(publishedTemplate)) {
+                return null;
+            }
+            PublishedScreenPackageValidator.requireTrustedBindings(root);
+            CodeScreenPresentationValidator.validatePublishedPackage(root);
+            validateCodeDatasourceBindings(screen, root, publishedTemplate);
+            String classification = CodeScreenPresentationValidator.dataClassification(
+                    root.path("canvasStyle"));
+            return "TEST".equals(classification) ? "TEST" : registration.dataMode();
+        } catch (Exception ex) {
+            // 目录是入口授权边界；发布包解析、schema、模板、绑定或来源校验失败时按未接入处理。
+            return null;
         }
     }
 
@@ -1406,16 +1433,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
 
     /** 命名机构组只允许服务端可外层约束的 org_code 宽表主体。 */
     private boolean isNamedGroupSafeDatasource(RptScreenDatasource ds) {
-        if (!"WIDE_TABLE".equals(ds.getSourceKind())) {
-            return false;
-        }
-        try {
-            JsonNode cfg = objectMapper.readTree(ds.getConfigJson() == null ? "{}" : ds.getConfigJson());
-            return "ORG_INDEX_RESULT".equals(cfg.path("table").asText())
-                    && "org_code".equals(cfg.path("subjectCol").asText());
-        } catch (Exception e) {
-            return false;
-        }
+        return ScreenNamedGroupDatasourcePolicy.isSafe(ds);
     }
 
     /** 元数据 CAS 成功后在同一事务内写入治理审计；审计失败必须让 CAS 回滚。 */

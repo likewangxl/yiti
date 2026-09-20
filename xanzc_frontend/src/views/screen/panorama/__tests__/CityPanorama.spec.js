@@ -153,4 +153,30 @@ describe('CityPanorama 市级支行全景', () => {
     expect(summary.text()).toBe(before);
     expect(wrapper.get('[data-testid="branch-observation"]').text()).toContain('存款余额位次');
   });
+
+  it('接收父层快照后恢复搜索、关注、排序、页码、选中机构和详情展开状态', () => {
+    const wrapper = mountCity({
+      initialState: {
+        search: '测试支行',
+        attentionOnly: false,
+        sortDescending: false,
+        page: 2,
+        selectedOrgCode: 'ORG-6',
+        detailExpanded: false
+      }
+    });
+    expect(wrapper.get('[data-testid="branch-search"]').element.value).toBe('测试支行');
+    expect(wrapper.get('[data-testid="deposit-sort"]').text()).toContain('↑');
+    expect(wrapper.get('[data-testid="branch-page-prev"]').element.disabled).toBe(false);
+    expect(wrapper.get('[data-testid="selected-org-code"]').text()).toContain('ORG-6');
+    expect(wrapper.get('[data-testid="branch-detail"]').attributes('aria-expanded')).toBe('false');
+  });
+
+  it('每次可见筛选状态变化都向父层发出完整快照', async () => {
+    const wrapper = mountCity();
+    await wrapper.get('[data-testid="branch-search"]').setValue('高新');
+    await wrapper.get('[data-testid="attention-filter"]').trigger('click');
+    const snapshots = wrapper.emitted('state-change') || [];
+    expect(snapshots.at(-1)?.[0]).toMatchObject({ search: '高新', attentionOnly: true, sortDescending: true, page: 1 });
+  });
 });

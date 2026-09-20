@@ -89,7 +89,7 @@ const hasChart = computed(() => labels.value.some(Boolean)
 const option = computed(() => ({
   animation: true,
   color: seriesDefinitions.map(item => item.color),
-  grid: { top: 29, right: 26, bottom: 26, left: 46, containLabel: true },
+  grid: { top: 29, right: 44, bottom: 26, left: 46, containLabel: true },
   tooltip: {
     trigger: 'axis',
     axisPointer: { type: 'line' },

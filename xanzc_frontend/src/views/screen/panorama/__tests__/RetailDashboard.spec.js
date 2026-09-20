@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 
@@ -88,6 +90,12 @@ afterEach(() => {
 });
 
 describe('RetailDashboard 零售经营总览', () => {
+  it('小额主库收入按万元显示，不将非零收入四舍五入为零', () => {
+    const wrapper=mount(RetailDashboard,{props:{model:{kpis:[{key:'retailRevenue',label:'零售FTP收入',value:0.00020804809717,unit:'亿元'}]}}});
+    const card=wrapper.findAll('[data-testid="retail-kpi"]').find(card=>card.text().includes('零售FTP收入'));
+    expect(card.text()).toContain('2.08');expect(card.text()).toContain('万元');
+    wrapper.unmount();
+  });
   it('固定渲染六项零售 KPI，零值保留且 AUM 不由存款与贷款相加', () => {
     const wrapper = mountDashboard();
     expect(wrapper.findAll('[data-testid="retail-kpi"]')).toHaveLength(6);
@@ -303,6 +311,56 @@ describe('RetailDashboard 零售经营总览', () => {
     expect(wrapper.find('[data-testid="retail-selected-city"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="retail-scope-note"]').text()).toContain('当前大屏授权范围');
   });
+
+  it('同一授权范围刷新保留城市、指标、顺序、目录搜索和有效机构选择', async () => {
+    const wrapper = mountDashboard();
+    await wrapper.get('[data-action="select-xian"]').trigger('click');
+    await wrapper.get('[data-ranking-metric="increase"]').trigger('click');
+    await wrapper.get('[data-ranking-order="lagging"]').trigger('click');
+    await wrapper.get('[data-action="open-retail-directory"]').trigger('click');
+    await wrapper.get('[data-testid="retail-directory-search"]').setValue('西安');
+    await wrapper.get('[data-testid="retail-directory-row"]').trigger('click');
+    expect(wrapper.get('[data-testid="retail-directory-search"]').element.value).toBe('西安');
+    expect(wrapper.get('[data-testid="retail-institution-dialog"]').exists()).toBe(true);
+
+    await wrapper.setProps({ model: {
+      ...model,
+      kpis: model.kpis.map(item => item.key === 'retailDeposit' ? { ...item, value: 1290 } : item)
+    }, loading: false });
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.get('[data-testid="retail-selected-city"]').text()).toContain('西安市');
+    expect(wrapper.get('[data-ranking-metric="increase"]').classes()).toContain('active');
+    expect(wrapper.get('[data-ranking-order="lagging"]').classes()).toContain('active');
+    expect(wrapper.get('[data-testid="retail-directory-search"]').element.value).toBe('西安');
+    expect(wrapper.get('[data-testid="retail-institution-dialog"]').exists()).toBe(true);
+  });
+
+  it('loading期间的空模型过渡不丢失当前筛选状态', async () => {
+    const wrapper = mountDashboard();
+    await wrapper.get('[data-action="select-xian"]').trigger('click');
+    await wrapper.get('[data-ranking-metric="increase"]').trigger('click');
+    await wrapper.get('[data-ranking-order="lagging"]').trigger('click');
+
+    await wrapper.setProps({
+      loading: true,
+      model: { ...model, kpis: [], trend: [], rankings: [], institutions: [] }
+    });
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.get('[data-testid="retail-selected-city"]').text()).toContain('西安市');
+    expect(wrapper.get('[data-ranking-metric="increase"]').classes()).toContain('active');
+    expect(wrapper.get('[data-ranking-order="lagging"]').classes()).toContain('active');
+  });
+
+  it('桌面三列按运行时 chrome 高度自然分配可视区', () => {
+    const stylesheet = readFileSync(resolve(process.cwd(), 'src/views/screen/panorama/retail.scss'), 'utf8');
+    expect(stylesheet).toContain('@media (min-width: 1501px)');
+    expect(stylesheet).toContain('height: calc(100dvh - var(--cockpit-chrome-height, 0px))');
+    expect(stylesheet).toContain('min-height: calc(100dvh - var(--cockpit-chrome-height, 0px))');
+    expect(stylesheet).toContain('.retail-main-grid {\n    flex: 1 1 0;');
+  });
+
   it('区分目标未配置和实际值待更新，并直说距目标或超目标金额', () => {
     const wrapper = mountDashboard({ model: { ...model, targets: [
       { name: '收入待更新', actual: null, target: 10 },

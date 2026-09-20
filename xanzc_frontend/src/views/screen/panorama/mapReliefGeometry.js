@@ -7,8 +7,8 @@
 
 export const RELIEF_APPEARANCE = 'relief';
 
-const MIN_DEPTH = 0.95;
-const MAX_DEPTH = 1.2;
+const MIN_DEPTH = 0.24;
+const MAX_DEPTH = 0.36;
 
 function finitePositive(value, fallback) {
   const number = Number(value);
@@ -28,8 +28,8 @@ export function createReliefGeometryConfig(options = {}) {
   const worldWidth = finitePositive(options.worldWidth, 10);
   const worldHeight = finitePositive(options.worldHeight, 10);
   const worldScale = Math.max(worldWidth, worldHeight, 1);
-  const depth = clamp(worldScale * 0.10, MIN_DEPTH, MAX_DEPTH);
-  const baseDepth = clamp(depth * 0.24, 0.20, 0.27);
+  const depth = clamp(worldScale * 0.03, MIN_DEPTH, MAX_DEPTH);
+  const baseDepth = clamp(depth * 0.15, 0.035, 0.055);
   return {
     depth,
     baseDepth,
@@ -39,11 +39,53 @@ export function createReliefGeometryConfig(options = {}) {
     shadowSpread: clamp(worldScale * 0.014, 0.08, 0.16),
     labelLift: 0.075,
     fitHeight: 0.88,
-    rotationX: -0.38,
-    rotationZ: -0.10,
-    cameraOffsetY: -6,
+    rotationX: -0.32,
+    rotationZ: -0.19,
+    cameraOffsetY: -8,
     cameraOffsetZ: 14
   };
+}
+
+/** Linear-light vertex colors for the side wall; geographic positions remain untouched. */
+export function createReliefWallColors(positions, depth) {
+  const height = finitePositive(depth, MIN_DEPTH);
+  const linear = value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4;
+  const bottom = [10, 19, 50].map(value => linear(value / 255));
+  const top = [91, 116, 205].map(value => linear(value / 255));
+  const colors = new Float32Array(positions.length);
+  for (let index = 0; index < positions.length; index += 3) {
+    const z = Number(positions[index + 2]);
+    const ratio = Number.isFinite(z) ? clamp(z / height, 0, 1) : 0;
+    for (let channel = 0; channel < 3; channel += 1) {
+      colors[index + channel] = bottom[channel] + (top[channel] - bottom[channel]) * ratio;
+    }
+  }
+  return colors;
+}
+
+/** Smooth duplicated vertical wall vertices without rounding cap/bevel normals or moving boundaries. */
+export function smoothReliefWallNormals(positions, normals) {
+  const result = new Float32Array(normals);
+  const sums = new Map();
+  const keyAt = index => `${positions[index].toFixed(5)},${positions[index + 1].toFixed(5)}`;
+  for (let index = 0; index < normals.length; index += 3) {
+    if (Math.abs(normals[index + 2]) > .001) continue;
+    const key = keyAt(index);
+    const sum = sums.get(key) || [0, 0];
+    sum[0] += normals[index];
+    sum[1] += normals[index + 1];
+    sums.set(key, sum);
+  }
+  for (let index = 0; index < normals.length; index += 3) {
+    if (Math.abs(normals[index + 2]) > .001) continue;
+    const sum = sums.get(keyAt(index));
+    const length = Math.hypot(...sum);
+    if (length <= 1e-8) continue;
+    result[index] = sum[0] / length;
+    result[index + 1] = sum[1] / length;
+    result[index + 2] = 0;
+  }
+  return result;
 }
 
 /** 顶面上的标签、城市光环和点位 marker 统一使用这个 z。 */

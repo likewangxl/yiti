@@ -52,6 +52,14 @@ const SINGLE_VALUE_SLOTS = new Set([
   'corpDeposit', 'corpDepositAverage', 'corpLoan', 'corpRevenue', 'corpCustomers', 'corpNplRate'
 ]);
 const TIME_SERIES_SLOTS = new Set(['trend', 'retailTrend', 'branchTrend', 'corpTrend']);
+const M98_PROFILE_SLOTS = Object.freeze({
+  CORP_REVENUE: 'corpRevenue',
+  RETAIL_REVENUE: 'retailRevenue',
+  RETAIL_LOAN: 'retailLoan',
+  CORP_NPL_RATE: 'corpNplRate',
+  RETAIL_NPL_RATE: 'retailNplRate'
+});
+const M98_PROFILES = new Set(Object.keys(M98_PROFILE_SLOTS));
 const DIMENSION_SEMANTICS = new Set([
   'date', 'dataDate', 'orgCode', 'orgName', 'cityCode', 'cityName', 'ownerOperatingOrgCode',
   'parentOrgCode', 'lng', 'lat', 'coordSys', 'located', 'name', 'label', 'owner', 'deadline'
@@ -381,7 +389,34 @@ function sourceFields(source) {
       addBuiltin('org_name', '机构名称');
     }
   } else if (sourceKind === 'KPI_DETAIL' && upper(config.mode) === 'SNAPSHOT') {
-    addBuiltin('metric_code', '指标编码');
+    if (isNamedKpiOrgSnapshot(source)) {
+      for (const [col, role, label, semantics] of [
+        ['org_code', 'DIM', '机构号', ['orgCode']],
+        ['org_name', 'DIM', '机构名称', ['orgName']],
+        ['data_date', 'DIM', '数据日期', ['date', 'dataDate']],
+        ['metric_code', 'DIM', '指标编码', ['metricCode']],
+        ['metric_name', 'DIM', '指标名称', ['corpTargetName', 'corporateTargetName']],
+        ['actual_value', 'METRIC', '实际值', ['corpActual', 'corporateActual']],
+        ['target_value', 'METRIC', '目标值', ['corpTarget', 'corporateTarget']],
+        ['weight', 'METRIC', '权重', []],
+        ['score', 'METRIC', '得分', []],
+        ['completion_rate', 'METRIC', '完成率', []],
+        ['gap', 'METRIC', '缺口', []],
+        ['attention_label', 'DIM', '关注事项', ['corpAttentionLabel', 'corporateAttentionLabel']],
+        ['attention_count', 'METRIC', '关注数量', ['corpAttentionCount', 'corporateAttentionCount']]
+      ]) add({ col, role, alias: label, semantic: semantics });
+    } else {
+      addBuiltin('metric_code', '指标编码');
+    }
+  } else if (sourceKind === 'M98_STAT' && isStrictM98Summary(source)) {
+    const profile = upper(config.profile);
+    addBuiltin('data_date', '数据日期');
+    add({
+      col: profile.endsWith('_NPL_RATE') ? 'ratio' : 'amount',
+      role: 'METRIC',
+      alias: '统计值',
+      semantic: M98_PROFILE_SLOTS[profile]
+    });
   }
   return records;
 }
@@ -476,9 +511,47 @@ function sourceScopeMode(source) {
   return upper(datasourceConfig(source)?.scopeMode || 'SUBJECT');
 }
 
+function hasExactKeys(value, keys) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+
+function sourceDsType(source, config) {
+  return upper(source?.dsType || source?.ds_type || config?.dsType);
+}
+
+function isNamedKpiOrgSnapshot(source) {
+  const config = datasourceConfig(source);
+  return upper(source?.sourceKind || source?.source_kind || config.sourceKind) === 'KPI_DETAIL'
+    && sourceDsType(source, config) === 'SINGLE'
+    && hasExactKeys(config, ['mode', 'schemeCode', 'schemaVersion', 'scopeMode', 'subjectType'])
+    && Number(config.schemaVersion) === 2
+    && upper(config.scopeMode) === 'NAMED_GROUP'
+    && upper(config.subjectType) === 'ORG'
+    && upper(config.mode) === 'SNAPSHOT'
+    && Boolean(text(config.schemeCode));
+}
+
+function isStrictM98Summary(source) {
+  const config = datasourceConfig(source);
+  const profile = upper(config.profile);
+  const expectedLine = profile.startsWith('CORP_') ? 'CORP' : profile.startsWith('RETAIL_') ? 'RETAIL' : '';
+  return upper(source?.sourceKind || source?.source_kind || config.sourceKind) === 'M98_STAT'
+    && sourceDsType(source, config) === 'SINGLE'
+    && hasExactKeys(config, ['mode', 'profile', 'schemaVersion', 'scopeMode'])
+    && Number(config.schemaVersion) === 2
+    && upper(config.scopeMode) === 'NAMED_GROUP'
+    && upper(config.mode) === 'SUMMARY'
+    && M98_PROFILES.has(profile)
+    && upper(source?.bizLine || source?.biz_line) === expectedLine;
+}
+
 function explicitSourceShape(source) {
   const config = datasourceConfig(source);
   const schema = object(config.schema || config.outputSchema || config.resultSchema);
+  if (isStrictM98Summary(source)) return 'SINGLE';
   return upper(config.resultShape || config.outputShape || config.rowShape || config.cardinality
     || schema.shape || schema.resultShape || schema.cardinality);
 }
@@ -509,6 +582,22 @@ function sourceStructureIssue(source, screen, slot, mode) {
   const groupBy = configGroup(source);
   const scopeMode = sourceScopeMode(source);
   const named = upper(screen.orgScopeMode) === 'NAMED_GROUP';
+
+  if (sourceKind === 'M98_STAT') {
+    if (!isStrictM98Summary(source)) return 'M98 SUMMARY 来源配置不符合严格 schema2/NAMED_GROUP/SINGLE 契约';
+    const profile = upper(config.profile);
+    if (!named) return 'M98 SUMMARY 来源仅允许 NAMED_GROUP 屏';
+    if (M98_PROFILE_SLOTS[profile] !== slot) return `M98 ${profile} 只能绑定对应单值展示内容`;
+    return '';
+  }
+  if (sourceKind === 'KPI_DETAIL') {
+    if (!isNamedKpiOrgSnapshot(source)) return 'KPI_DETAIL 机构快照必须是 schema2/NAMED_GROUP/ORG/SNAPSHOT/SINGLE';
+    if (!named) return 'KPI_DETAIL 机构快照仅允许 NAMED_GROUP 屏';
+    if (upper(screen.bizLine) !== 'CORP' || !['corpTargets', 'corpAttention'].includes(slot)) {
+      return 'KPI_DETAIL 机构快照仅用于 CORP 的目标或关注单值内容';
+    }
+    return '';
+  }
 
   if (sourceKind === 'WIDE_TABLE' && SINGLE_VALUE_SLOTS.has(slot) && groupBy !== 'NONE') {
     return '单值展示需要 WIDE_TABLE 明确按 NONE 聚合为一行';

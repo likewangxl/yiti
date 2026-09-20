@@ -53,6 +53,7 @@ class ScreenCanvasServiceTest {
     @Mock private CurrentUserApi currentUserApi;
     @Mock private com.bank.branch.platform.report.mapper.RptScreenPublishLogMapper publishLogMapper;
     @Mock private com.bank.branch.platform.governance.api.AuditApi auditApi;
+    @Mock private ScreenScopeAuthorizationService scopeAuthorizationService;
 
     private ScreenCanvasServiceImpl service;
 
@@ -120,6 +121,34 @@ class ScreenCanvasServiceTest {
         datasource.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","
                 + "\"metrics\":[{\"metricCode\":\"M1\",\"metricName\":\"balance\",\"slot\":1}]}");
         return datasource;
+    }
+
+    private RptScreenDatasource m98Datasource(long id, String profile) {
+        RptScreenDatasource datasource = datasource(id, "SINGLE", "M98_STAT");
+        datasource.setBizLine(profile.startsWith("CORP") ? "CORP" : "RETAIL");
+        datasource.setConfigJson("{\"schemaVersion\":2,\"scopeMode\":\"NAMED_GROUP\","
+                + "\"profile\":\"" + profile + "\",\"mode\":\"SUMMARY\"}");
+        return datasource;
+    }
+
+    private RptScreenDatasource namedKpiDatasource(long id) {
+        RptScreenDatasource datasource = datasource(id, "SINGLE", "KPI_DETAIL");
+        datasource.setBizLine("CORP");
+        datasource.setConfigJson("{\"schemaVersion\":2,\"scopeMode\":\"NAMED_GROUP\","
+                + "\"schemeCode\":\"KPI0724\",\"subjectType\":\"ORG\","
+                + "\"mode\":\"SNAPSHOT\"}");
+        return datasource;
+    }
+
+    private RptScreenBlock publishBlock(long id, String bindJson) {
+        RptScreenBlock block = new RptScreenBlock();
+        block.setId(id);
+        block.setScreenId(7L);
+        block.setComponentType("TABLE_LIST");
+        block.setBindJson(bindJson);
+        block.setStyleJson("{}");
+        block.setDrillJson("{}");
+        return block;
     }
 
     @Test
@@ -203,6 +232,83 @@ class ScreenCanvasServiceTest {
                 comp("TextLabel", null, Map.of("top", 10, "left", 10, "width", 100, "height", 40))));
 
         assertThat(resp.getCanvasDraftJson()).contains("\"schemaVersion\":2");
+    }
+
+    @Test
+    void save_namedGroupM98SummaryDatasource_isAcceptedBySharedSafetyPolicy() {
+        RptScreen namedGroup = screen(7L, 3);
+        namedGroup.setBizLine("CORP");
+        namedGroup.setOrgScopeMode("NAMED_GROUP");
+        when(screenMapper.selectById(7L)).thenReturn(namedGroup);
+        when(dsMapper.selectById(3L)).thenReturn(m98Datasource(3L, "CORP_REVENUE"));
+        when(canvasMapper.bumpVersion(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
+
+        var resp = service.saveCanvas(req(7L, 3, boundChart("METRIC_CARD", 3L)));
+
+        assertThat(resp.getCanvasVersion()).isEqualTo(4);
+        assertThat(resp.getCanvasDraftJson()).contains("\\\"dsId\\\":3");
+    }
+
+    @Test
+    void save_namedGroupKpiOrgSnapshot_targetAndAttentionDatasource_isAccepted() {
+        RptScreen namedGroup = screen(7L, 3);
+        namedGroup.setBizLine("CORP");
+        namedGroup.setOrgScopeMode("NAMED_GROUP");
+        when(screenMapper.selectById(7L)).thenReturn(namedGroup);
+        when(dsMapper.selectById(3L)).thenReturn(namedKpiDatasource(3L));
+        when(canvasMapper.bumpVersion(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
+        CanvasComponentDTO target = boundChart("KPI_DETAIL_TABLE", 3L);
+        CanvasComponentDTO attention = boundChart("KPI_DETAIL_TABLE", 3L);
+        attention.setId("w-attention");
+
+        var resp = service.saveCanvas(req(7L, 3, target, attention));
+
+        assertThat(resp.getCanvasVersion()).isEqualTo(4);
+        verify(blockMapper, org.mockito.Mockito.times(2)).insert(any(RptScreenBlock.class));
+    }
+
+    @Test
+    void publish_namedGroupKpiOrgSnapshot_targetAndAttentionBindings_areAccepted() {
+        RptScreen screen = screen(7L, 5);
+        screen.setBizLine("CORP");
+        screen.setOrgScopeMode("NAMED_GROUP");
+        screen.setOrgGroupCode("GROUP_1");
+        screen.setCanvasStyleJson("{\"schemaVersion\":2,\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"corporate-overview-v1\"}}");
+        String targetBind = "{\"dsId\":3,\"period\":\"LATEST\",\"fields\":{"
+                + "\"name\":\"org_name\",\"actual\":\"actual_value\",\"target\":\"target_value\"},"
+                + "\"units\":{\"actual\":\"YUAN\",\"target\":\"YUAN\"}}";
+        String attentionBind = "{\"dsId\":3,\"period\":\"LATEST\",\"fields\":{"
+                + "\"label\":\"attention_label\",\"count\":\"attention_count\"},"
+                + "\"units\":{\"count\":\"COUNT\"}}";
+        screen.setCanvasDraftJson("{\"schemaVersion\":2,\"components\":["
+                + "{\"id\":\"w-target\",\"component\":\"ChartWidget\",\"innerType\":\"TABLE_LIST\","
+                + "\"blockId\":1001,\"propValue\":{\"bindingKey\":\"corpTargets\"},"
+                + "\"bindJson\":" + new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(targetBind)
+                + ",\"style\":{\"top\":0,\"left\":0,\"width\":100,\"height\":100}},"
+                + "{\"id\":\"w-attention\",\"component\":\"ChartWidget\",\"innerType\":\"TABLE_LIST\","
+                + "\"blockId\":1002,\"propValue\":{\"bindingKey\":\"corpAttention\"},"
+                + "\"bindJson\":" + new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(attentionBind)
+                + ",\"style\":{\"top\":0,\"left\":0,\"width\":100,\"height\":100}}]}");
+        when(screenMapper.selectById(7L)).thenReturn(screen);
+        RptScreenBlock target = publishBlock(1001L, targetBind);
+        RptScreenBlock attention = publishBlock(1002L, attentionBind);
+        when(blockMapper.selectList(any())).thenReturn(List.of(target, attention));
+        when(dsMapper.selectById(3L)).thenReturn(namedKpiDatasource(3L));
+        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString()))
+                .thenReturn(1);
+        when(publishLogMapper.selectList(any())).thenReturn(List.of());
+        org.mockito.Mockito.doNothing().when(scopeAuthorizationService).validatePublishRoles(any(RptScreen.class));
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+
+        var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
+        req.setScreenId(7L);
+        req.setExpectedVersion(5);
+        req.setReason("发布 KPI 目标和关注项");
+
+        service.publishCanvas(req);
+
+        verify(canvasMapper).applyPublishedCas(eq(7L), eq(5), anyString(), anyString(), anyString(), anyInt(), anyString());
     }
 
     @Test

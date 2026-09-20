@@ -260,7 +260,13 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         fake.setDsType(req.getDsType());
         fake.setSourceKind(req.getSourceKind());
         fake.setConfigJson(req.getConfigJson());
-        fake.setBizLine("COMMON");
+        String tryRunBizLine = "COMMON";
+        if (M98StatPolicy.SOURCE_KIND.equals(req.getSourceKind())) {
+            String profile = readJson(req.getConfigJson()).path("profile").asText();
+            String requiredLine = M98StatPolicy.requiredBizLine(profile);
+            tryRunBizLine = requiredLine == null ? "COMMON" : requiredLine;
+        }
+        fake.setBizLine(tryRunBizLine);
         applyValidated(probe, fake);
 
         ScreenDataReqDTO dataReq = new ScreenDataReqDTO();
@@ -437,6 +443,9 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
     private void applyValidated(RptScreenDatasource e, ScreenDatasourceSaveReqDTO req) {
         String kind = req.getSourceKind();
         JsonNode cfg = readJson(req.getConfigJson());
+        if (isExplicitBizLine(req.getBizLine())) {
+            e.setBizLine(normalizeBizLine(req.getBizLine()));
+        }
         // fieldMeta / scopeMode 对全 source_kind 通用（spec 2026-07-17 §3.2/§4），统一在分派前校验
         validateFieldMeta(cfg);
         validateScopeMode(cfg);
@@ -551,6 +560,18 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
                 }
                 e.setConfigJson(req.getConfigJson());
                 e.setDsType(expectedDsType);
+            }
+            case "M98_STAT" -> {
+                // M98 只接受固定命名组 SUMMARY 模板；查询表名、列名和过滤条件均不由配置提供。
+                String effectiveLine = req.getBizLine() == null || req.getBizLine().isBlank()
+                        ? e.getBizLine() : req.getBizLine();
+                M98StatPolicy.validateConfig(cfg, effectiveLine);
+                if (req.getDsType() != null && !req.getDsType().isBlank()
+                        && !"SINGLE".equals(req.getDsType())) {
+                    throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+                }
+                e.setConfigJson(req.getConfigJson());
+                e.setDsType("SINGLE");
             }
             case "CUSTOM_SQL" -> {
                 String sql = cfg.path("sql").asText();
@@ -1328,14 +1349,12 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         }
     }
 
-    /** NAMED_GROUP 目前只接受可由服务端 org_code 集合直接支配的 ORG 宽表。 */
+    /**
+     * NAMED_GROUP 只接受当前已有的 ORG 宽表，或严格的 KPI_DETAIL/ORG/SNAPSHOT 内置模板。
+     * CUSTOM_SQL、KPI_RESULT、EMP 和 TREND 均没有本次可证明的机构范围落点，必须拒绝。
+     */
     private void ensureNamedGroupDatasourceSafe(RptScreenDatasource datasource) {
-        if (!"WIDE_TABLE".equals(datasource.getSourceKind())) {
-            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
-        }
-        JsonNode config = readJson(datasource.getConfigJson());
-        if (!"ORG_INDEX_RESULT".equals(config.path("table").asText())
-                || !"org_code".equals(config.path("subjectCol").asText())) {
+        if (!ScreenNamedGroupDatasourcePolicy.isSafe(datasource)) {
             throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
         }
     }

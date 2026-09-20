@@ -1,6 +1,7 @@
 import { computed, getCurrentInstance, isRef, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { queryScreenData } from '@/api/screen';
 import { buildScreenDataRequest, runtimeSchemaVersion } from '@/utils/screenScope';
+import { collectSourceQualities } from './sourceQuality';
 import {
   adaptPanoramaResults,
   applyBranchTrend,
@@ -539,6 +540,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
           return clearBatchModel(batchState.quality, prefetchResult.qualityError);
         }
         nextModel.issues = [...allIssues, ...(nextModel.issues || [])];
+        nextModel.sourceQualities = collectSourceQualities(resultMap);
         if (requiresBatch) {
           nextModel.quality = mergeBatchQualities([
             ...(batchState.qualities || []), ...(prefetchResult?.qualities || [])

@@ -294,6 +294,7 @@ public interface BizScopeApi {
 package com.bank.branch.platform.auth.api;
 
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UniqueUserOrgDTO;
 import java.util.List;
 import java.util.Set;
 
@@ -341,6 +342,15 @@ public interface OrgApi {
     OrgDTO getUserMainOrg(String empId);
 
     /**
+     * 查询全局唯一机构归属且机构编码属于授权集合的员工映射。
+     * 仅返回在 EXT_USER_ORG 中恰好归属一个机构的员工，不代表全部员工。
+     *
+     * @param orgCodes 调用方已授权的机构编码集合
+     * @return 员工工号到唯一机构编码的映射；空或全空白入参返回空列表
+     */
+    List<UniqueUserOrgDTO> listUniqueUserOrgs(java.util.Collection<String> orgCodes);
+
+    /**
      * 模糊搜索机构
      *
      * @param keyword 搜索关键字（机构名称模糊匹配）
@@ -355,6 +365,7 @@ public interface OrgApi {
 - `getOrgSubtreeCodes()` 高频调用，必须缓存（Redis key: `auth:org-subtree:{orgCode}`，TTL=5min）
 - `getOrg()` 和 `getUserMainOrg()` 建议缓存
 - `searchOrgs()` 直接查库，不缓存（实时性要求高）
+- `listUniqueUserOrgs()` 必须先在 `EXT_USER_ORG` 全表按 `USER_ID` 聚合并以 `COUNT(DISTINCT ORG_CODE)=1` 排除多机构员工，再过滤 `orgCodes`；空/全空白入参不得发 SQL
 
 ---
 
@@ -713,7 +724,24 @@ public class OrgDTO {
 }
 ```
 
-### 8.4 BizScopeDTO
+### 8.4 UniqueUserOrgDTO
+
+```java
+package com.bank.branch.platform.auth.api.dto;
+
+/**
+ * 全局唯一机构归属的员工映射；不代表全部员工。
+ */
+public class UniqueUserOrgDTO {
+    /** 员工ID，对应 EXT_USER_ORG.USER_ID */
+    private String empId;
+    /** 唯一机构编码，对应 EXT_USER_ORG.ORG_CODE */
+    private String orgCode;
+    // getter/setter 省略
+}
+```
+
+### 8.5 BizScopeDTO
 
 ```java
 package com.bank.branch.platform.auth.api.dto;
@@ -736,7 +764,7 @@ public class BizScopeDTO {
 }
 ```
 
-### 8.5 DataScopeContext
+### 8.6 DataScopeContext
 
 ```java
 package com.bank.branch.platform.auth.api.dto;
@@ -766,7 +794,7 @@ public record DataScopeContext(
 ) {}
 ```
 
-### 8.6 CheckPermissionResultDTO
+### 8.7 CheckPermissionResultDTO
 
 ```java
 package com.bank.branch.platform.auth.api.dto;
@@ -791,7 +819,7 @@ public class CheckPermissionResultDTO {
 
 ---
 
-### 8.7 UserDTO（2026-07-19 补齐，`UserApi` 主要返回类型）
+### 8.8 UserDTO（2026-07-19 补齐，`UserApi` 主要返回类型）
 
 ```java
 package com.bank.branch.platform.auth.api.dto;

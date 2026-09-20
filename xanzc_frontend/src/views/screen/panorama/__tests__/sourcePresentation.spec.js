@@ -39,6 +39,14 @@ vi.mock('../usePanoramaData', () => ({
 import PanoramaRuntime from '../PanoramaRuntime.vue';
 
 describe('source presentation', () => {
+  it('不同合法来源日期作为溯源提示，不能伪装成取数失败遮住页面', () => {
+    runtimeIssues.value={corpRevenue:[{code:'MIXED_DATES',message:'不同来源统计期间不同'}]};
+    const wrapper=mount(PanoramaRuntime,{props:{view:{},context:{}}});
+    expect(wrapper.find('[data-testid="panorama-slot-issues"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="runtime-source-summary"]').text()).toContain('统计日期不同');
+    expect(wrapper.get('[data-testid="runtime-source-details"]').text()).toContain('不同来源统计期间不同');
+    wrapper.unmount();runtimeIssues.value={};
+  });
   it('右下诊断保留真正请求错误，过滤已就近解释的 NO_VALUES', () => {
     runtimeIssues.value = {
       deposit: [{ code: 'NO_VALUES', field: 'value', message: '字段 value 当前无有效值' }],

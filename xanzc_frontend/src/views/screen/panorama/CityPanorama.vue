@@ -17,8 +17,8 @@
     <section class="city-kpi-grid" aria-label="市级核心指标">
       <article v-for="(kpi, index) in cityKpiCards" :key="kpi.key || index" class="city-kpi" :data-testid="`city-kpi-${kpi.key || index}`">
         <span class="city-kpi-label">{{ kpi.label || '指标' }}</span>
-        <strong>{{ cityMetricText(kpi) }}</strong>
-        <small v-if="kpi.unit && !summaryUnbound">{{ kpi.unit }}</small>
+        <strong :title="metricTitle(kpi.value)">{{ displayCityKpi(kpi).text }}</strong>
+        <small v-if="displayCityKpi(kpi).unit && !summaryUnbound">{{ displayCityKpi(kpi).unit }}</small>
         <em v-if="!hasMetric(kpi.value)" class="city-kpi-status" :data-testid="`city-kpi-status-${kpi.key}`">{{ cityStatus('citySummary', kpi.key).message }}</em>
         <em v-if="formatChange(kpi.change) !== null" :class="changeClass(kpi.change)">{{ kpi.change >= 0 ? '↑' : '↓' }} {{ Math.abs(Number(kpi.change)).toFixed(1) }}%</em>
       </article>
@@ -50,6 +50,7 @@
         </div>
         <PanoramaMap
           class="city-map"
+          appearance="relief"
           :class="{ 'is-attention-filter': attentionOnly }"
           :geo-json="cityGeoJson"
           :points="mapInstitutions"
@@ -91,9 +92,9 @@
         </div>
         <div v-if="detailExpanded" class="city-detail-body">
           <div class="city-detail-metrics">
-            <div><span>存款余额（亿元）</span><strong>{{ formatMetric(selectedBranch.metrics?.deposit) }}</strong></div>
-            <div><span>贷款余额（亿元）</span><strong>{{ formatMetric(selectedBranch.metrics?.loan) }}</strong></div>
-            <div><span>营销有效归属客户数（万户）</span><strong>{{ formatMetric(selectedBranch.metrics?.customers) }}</strong><small v-if="!hasMetric(selectedBranch.metrics?.customers)" class="city-inline-status">{{ cityStatus('branches', 'customers').message }}</small></div>
+            <div><span>存款余额</span><strong :title="metricTitle(selectedBranch.metrics?.deposit)">{{ displayCityMetric(selectedBranch.metrics?.deposit, '亿元', 'deposit').text }}<small>{{ displayCityMetric(selectedBranch.metrics?.deposit, '亿元', 'deposit').unit }}</small></strong></div>
+            <div><span>贷款余额</span><strong :title="metricTitle(selectedBranch.metrics?.loan)">{{ displayCityMetric(selectedBranch.metrics?.loan, '亿元', 'loan').text }}<small>{{ displayCityMetric(selectedBranch.metrics?.loan, '亿元', 'loan').unit }}</small></strong></div>
+            <div><span>营销有效归属客户数</span><strong :title="metricTitle(selectedBranch.metrics?.customers)">{{ displayCityMetric(selectedBranch.metrics?.customers, '万户', 'customers').text }}<small>{{ displayCityMetric(selectedBranch.metrics?.customers, '万户', 'customers').unit }}</small></strong><small v-if="!hasMetric(selectedBranch.metrics?.customers)" class="city-inline-status">{{ cityStatus('branches', 'customers').message }}</small></div>
             <div><span>目标完成率</span><strong>{{ formatPercent(selectedBranch.metrics?.rate) }}</strong><small v-if="!hasMetric(selectedBranch.metrics?.rate)" class="city-inline-status">{{ cityStatus('branches', 'rate').message }}</small></div>
             <div><span>实际目标差（亿元）</span><strong :class="signedClass(selectedBranchInsight?.targetGap)">{{ signedMetricText(selectedBranchInsight?.targetGap) }}</strong><small v-if="selectedBranchInsight?.targetGap == null" class="city-inline-status" :title="cityStatus('branches', 'target').message">{{ cityStatus('branches', 'target').message }}</small></div>
           </div>
@@ -134,17 +135,19 @@ const props = defineProps({
   cityCode: { type: String, default: '' },
   cityName: { type: String, default: '' },
   initialOrgCode: { type: String, default: '' },
+  initialState: { type: Object, default: () => ({}) },
   sourcePresentation: { type: Object, default: () => ({}) }
 });
-const emit = defineEmits(['close', 'back', 'refresh', 'fullscreen', 'branch-select']);
+const emit = defineEmits(['close', 'back', 'refresh', 'fullscreen', 'branch-select', 'state-change']);
 
-const search = ref('');
-const attentionOnly = ref(false);
-const sortDescending = ref(true);
-const page = ref(1);
+const initialState = props.initialState && typeof props.initialState === 'object' ? props.initialState : {};
+const search = ref(String(initialState.search || ''));
+const attentionOnly = ref(Boolean(initialState.attentionOnly));
+const sortDescending = ref(initialState.sortDescending === undefined ? true : Boolean(initialState.sortDescending));
+const page = ref(Math.max(1, Number(initialState.page) || 1));
 const pageSize = 5;
-const selectedOrgCode = ref(props.initialOrgCode || '');
-const detailExpanded = ref(true);
+const selectedOrgCode = ref(props.initialOrgCode || String(initialState.selectedOrgCode || ''));
+const detailExpanded = ref(initialState.detailExpanded === undefined ? true : Boolean(initialState.detailExpanded));
 const rootRef = ref(null);
 
 function cityStatus(slot, semantic = '') {
@@ -233,6 +236,34 @@ function formatMetric(value) {
   }
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, minimumFractionDigits: Number.isInteger(number) ? 0 : 2 }).format(number);
 }
+function formatDisplayMetric(value, unit = '', key = '') {
+  const number = finiteValue(value);
+  const raw = value === null || value === undefined ? '' : String(value);
+  if (number === null) return { text: '—', unit: unit || '', raw };
+  const normalizedUnit = String(unit || '').trim();
+  const customerMetric = normalizedUnit === '万户' || key === 'customers';
+  const amountMetric = normalizedUnit === '亿元' || ['deposit', 'loan', 'revenue'].includes(key);
+  if (customerMetric && number !== 0 && Math.abs(number) < 1) {
+    const households = Math.round(number * 10000);
+    return { text: households === 0 ? '<1' : new Intl.NumberFormat('en-US').format(households), unit: '户', raw };
+  }
+  if (amountMetric && normalizedUnit !== '%' && number !== 0 && Math.abs(number) < 1) {
+    const wanYuan = number * 10000;
+    const digits = Math.abs(wanYuan) >= 100 ? 2 : 4;
+    return { text: new Intl.NumberFormat('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(wanYuan), unit: '万元', raw };
+  }
+  return { text: formatMetric(number), unit: normalizedUnit || (customerMetric ? '万户' : amountMetric ? '亿元' : ''), raw };
+}
+function displayCityKpi(kpi) {
+  return formatDisplayMetric(kpi?.value, kpi?.unit || (kpi?.key === 'customers' ? '万户' : '亿元'), kpi?.key);
+}
+function displayCityMetric(value, unit, key) {
+  return formatDisplayMetric(value, unit, key);
+}
+function metricTitle(value) {
+  const number = finiteValue(value);
+  return number === null ? '' : `原始值：${String(value)}`;
+}
 function formatPercent(value) {
   const number = finiteValue(value);
   return number === null ? '—' : `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 1, minimumFractionDigits: 1 }).format(number)}%`;
@@ -269,7 +300,7 @@ function rateClass(value) {
   return number !== null && number < 80 ? 'is-warning' : 'is-up';
 }
 function cityMetricText(kpi) {
-  return formatMetric(kpi?.value);
+  return displayCityKpi(kpi).text;
 }
 function selectBranch(orgCode) {
   const code = String(orgCode || '');
@@ -281,6 +312,18 @@ function selectBranch(orgCode) {
 function toggleSort() {
   sortDescending.value = !sortDescending.value;
   page.value = 1;
+}
+
+function emitState() {
+  emit('state-change', {
+    cityCode: props.cityCode,
+    search: search.value,
+    attentionOnly: attentionOnly.value,
+    sortDescending: sortDescending.value,
+    page: page.value,
+    selectedOrgCode: selectedOrgCode.value,
+    detailExpanded: detailExpanded.value
+  });
 }
 function requestFullscreen() {
   emit('fullscreen');
@@ -302,6 +345,7 @@ watch(cityInstitutions, list => {
 });
 watch([search, attentionOnly], () => { page.value = 1; });
 watch(totalPages, value => { if (page.value > value) page.value = value; });
+watch([search, attentionOnly, sortDescending, page, selectedOrgCode, detailExpanded], emitState, { flush: 'post' });
 </script>
 
 <style src="./panorama.scss" lang="scss"></style>

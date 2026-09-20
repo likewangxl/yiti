@@ -3,6 +3,7 @@ package com.bank.branch.platform.auth.mapper;
 import com.bank.branch.platform.auth.entity.ExtOrgInfo;
 import com.bank.branch.platform.auth.entity.ExtUserOrg;
 import com.bank.branch.platform.auth.entity.PtUser;
+import com.bank.branch.platform.auth.api.dto.UniqueUserOrgDTO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -51,6 +52,15 @@ public interface UserOrgMapper {
      */
     List<com.bank.branch.platform.auth.api.dto.UserDeptNameDTO> selectDeptNamesByUserIds(
             @Param("userIds") List<String> userIds);
+
+    /**
+     * 查询全表中恰好归属一个机构、且该机构属于授权机构集合的员工映射。
+     *
+     * @param orgCodes 授权机构编码集合（调用方保证非空、已去重去空白）
+     * @return 员工工号与唯一机构编码映射
+     */
+    List<UniqueUserOrgDTO> selectUniqueUserOrgs(
+            @Param("orgCodes") java.util.Collection<String> orgCodes);
 
     /**
      * 根据用户ID查询用户所属机构的完整信息列表（JOIN EXT_ORG_INFO）。

@@ -54,8 +54,9 @@
         <div class="panorama-kpi-icon" aria-hidden="true"><component :is="kpiIcon(kpi.key, index)" /></div>
         <div class="panorama-kpi-body">
           <span class="panorama-kpi-label">{{ kpi.label || kpiLabel(kpi.key) }}</span>
-          <strong class="panorama-kpi-value">{{ formatMetric(kpi.value) }}</strong>
-        <span v-if="kpi.unit" class="panorama-kpi-unit">{{ kpi.unit }}</span>
+          <strong class="panorama-kpi-value" :title="metricTitle(kpi.value)">{{ displayKpi(kpi).text }}</strong>
+        <span v-if="displayKpi(kpi).unit" class="panorama-kpi-unit">{{ displayKpi(kpi).unit }}</span>
+        <span class="panorama-visually-hidden">原始值 {{ displayKpi(kpi).raw }}</span>
         <small v-if="!hasMetric(kpi.value)" class="panorama-unbound-label" :data-testid="`kpi-status-${kpi.key}`">{{ sourceStatus('kpi', kpi.key).message }}</small>
         </div>
         <div v-if="formatChange(kpi.change) !== null" class="panorama-kpi-change" :class="changeClass(kpi.change)">
@@ -71,6 +72,7 @@
         :key="card.key"
         class="panorama-diagnostic-card"
         :data-diagnostic="card.key"
+        :data-diagnostic-state="card.state"
       >
         <span class="panorama-diagnostic-label">{{ card.label }}</span>
         <strong :class="diagnosticValueClass(card)">{{ card.text }}</strong>
@@ -96,14 +98,15 @@
               data-testid="deposit-operation-card"
             >
               <span class="panorama-deposit-card-label">{{ item.label }}</span>
-              <strong :class="{ 'is-muted': !hasMetric(item.value) }">{{ formatMetric(item.value) }}</strong>
-              <span v-if="item.unit" class="panorama-deposit-card-unit">{{ item.unit }}</span>
+              <strong :class="{ 'is-muted': !hasMetric(item.value) }" :title="metricTitle(item.value)">{{ displayOperation(item).text }}</strong>
+              <span v-if="displayOperation(item).unit" class="panorama-deposit-card-unit">{{ displayOperation(item).unit }}</span>
+              <span class="panorama-visually-hidden">原始值 {{ displayOperation(item).raw }}</span>
               <small v-if="!hasMetric(item.value)" class="panorama-unbound-label" data-testid="deposit-operation-status">{{ sourceStatus(item.key, 'value').message }}<span class="panorama-visually-hidden">未绑定</span></small>
               <small v-else class="panorama-deposit-card-note">{{ item.note }}</small>
             </article>
           </div>
           <div class="panorama-mini-summary">
-            <span><i class="is-cyan"></i>余额基准 {{ formatMetric(findKpi(safeModel.kpis, 'deposit').value) }} 亿元</span>
+            <span><i class="is-cyan"></i>余额基准 {{ displayKpi(findKpi(safeModel.kpis, 'deposit')).text }} {{ displayKpi(findKpi(safeModel.kpis, 'deposit')).unit }}</span>
             <span>{{ displayDate }}</span>
           </div>
         </article>
@@ -164,6 +167,10 @@
           </div>
           <PanoramaMap
             class="panorama-map"
+            appearance="relief"
+            :metric-label="rankingMetricInfo.label"
+            :metric-values="provinceMapMetricValues"
+            :data-metric-label="rankingMetricInfo.label"
             :geo-json="provinceGeoJson"
             :points="safeModel.institutions"
             :demo="demo"
@@ -178,7 +185,7 @@
               <small>当前机构</small>
               <strong>{{ selectedInstitution.orgName || selectedInstitution.orgCode }}</strong>
             </div>
-            <span>{{ formatMetric(selectedInstitution.metrics?.deposit) }} 亿元</span>
+              <span data-testid="selected-institution-metric">{{ selectedInstitutionMetric.label }} {{ selectedInstitutionMetric.text }} {{ selectedInstitutionMetric.unit }}</span>
           </div>
         </article>
         <PanoramaTrend :trend="safeModel.trend" :data-date="displayDate" title="主要指标趋势" switchable compact class="panorama-panel panorama-trend-panel" />
@@ -194,12 +201,16 @@
             <span>共 {{ leadershipTotalCount }} 家</span>
           </div>
           <article class="panorama-panel panorama-target-panel">
+            <div class="panorama-target-heading"><span>目标进度</span><small>{{ targetMetricLabel }} · {{ targetPeriodLabel }}</small></div>
             <div v-if="targetProgressActual !== null" class="panorama-target-summary">
               <span class="panorama-target-summary-label">{{ targetMetricLabel }}</span>
               <div class="panorama-target-ring" data-testid="target-progress-ring" :style="{ '--target-progress': `${targetProgressVisual}%` }">
                 <strong data-testid="target-progress-value">{{ formatMetric(targetProgressActual) }}<small>%</small></strong>
               </div>
-              <span class="panorama-target-gap">{{ targetDistanceSummary.text }}</span>
+              <div class="panorama-target-bullet" data-testid="target-progress-bullet">
+                <span class="panorama-target-bullet__track"><i :style="{ width: `${targetProgressVisual}%` }"></i></span>
+                <small>{{ targetDistanceSummary.text }}</small>
+              </div>
               <span class="panorama-target-period">{{ targetPeriodLabel }}</span>
             </div>
             <div v-else class="panorama-unbound" data-testid="target-unbound">{{ sourceStatus('rate', 'value').message }}<span v-if="targetKpi" class="panorama-visually-hidden">未绑定</span></div>
@@ -235,7 +246,8 @@
                   <td :title="item.name || item.orgName || '—'"><span class="panorama-matrix-rank">{{ rankingPosition(item) || '—' }}</span>{{ item.name || item.orgName || '—' }}</td>
                   <td>
                     <span :class="statusClass(item.status)">{{ statusLabel(item.status) }} {{ formatPercent(item.rate) }}</span>
-                    <small>目标差 {{ formatSignedMetric(item.targetGap) }} · {{ formatMetric(rankingDisplayValue(item)) }}</small>
+                    <small>目标差 {{ formatSignedMetric(item.targetGap) }} · {{ formatRankingValue(item) }}</small>
+                    <span class="panorama-matrix-bar" aria-hidden="true"><i :class="{ 'is-negative': rankingDisplayValue(item) !== null && rankingDisplayValue(item) < 0 }" :style="rankingBarStyle(item)"></i></span>
                   </td>
                   <td>
                     <strong>{{ formatMetric(item.deposit) }}</strong>
@@ -252,7 +264,7 @@
     </section>
 
     <div
-      v-if="cityOpen"
+      v-if="cityOpen && selectedRegion"
       ref="cityDialogRef"
       class="panorama-city-modal"
       data-testid="city-panorama-modal"
@@ -269,11 +281,13 @@
         :city-code="selectedRegion?.code || ''"
         :city-name="selectedRegion?.name || ''"
         :initial-org-code="cityInitialOrgCode"
+        :initial-state="cityStateCache[selectedRegion?.code] || {}"
         :source-presentation="sourcePresentation"
         @close="closeCity"
         @back="closeCity"
         @refresh="emit('refresh')"
         @branch-select="selectInstitution"
+        @state-change="saveCityState"
       />
     </div>
 
@@ -287,7 +301,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import {
   Aim, Coin, Close, OfficeBuilding, Refresh, Setting, TrendCharts, UserFilled
 } from '@element-plus/icons-vue';
@@ -341,8 +355,24 @@ const selectedRegionCode = ref('');
 const selectedOrgCode = ref('');
 const directoryOpen = ref(false);
 const cityInitialOrgCode = ref('');
+const cityStateCache = ref({});
 const focusBeforeCity = ref(null);
 const overflowBeforeCity = ref('');
+
+function scopeSignature(model = {}) {
+  const source = model && typeof model === 'object' ? model : {};
+  return JSON.stringify([
+    source.scopeCode,
+    source.scopeId,
+    source.scopeVersion,
+    source.scopeKey,
+    source.authorizedScope,
+    source.permissionVersion,
+    source.dataScopeKey,
+    source.scopeLabel
+  ].map(value => value == null ? '' : String(value)));
+}
+const lastScopeSignature = ref(`${scopeSignature(props.model)}|${props.sourcePresentation?.scopeIdentity || ''}`);
 
 const safeModel = computed(() => {
   const source = props.model && typeof props.model === 'object' ? props.model : {};
@@ -423,6 +453,37 @@ const targetPeriodLabel = computed(() => {
 const rankingMetric = ref('deposit');
 const rankingMetricOptions = RANKING_METRICS;
 const rankingMetricInfo = computed(() => rankingMetricOptions.find(item => item.key === rankingMetric.value) || rankingMetricOptions[0]);
+const provinceMapMetricValues = computed(() => {
+  const values = {};
+  const summaries = safeModel.value.citySummaries && typeof safeModel.value.citySummaries === 'object'
+    ? safeModel.value.citySummaries
+    : {};
+  const summaryKeys = {
+    deposit: ['deposit'],
+    increase: ['depositIncrease', 'increase'],
+    average: ['depositAverage', 'average']
+  };
+  Object.entries(summaries).forEach(([cityCode, summary]) => {
+    const rows = Array.isArray(summary?.kpis) ? summary.kpis : [];
+    const source = rows.find(item => summaryKeys[rankingMetric.value]?.includes(item?.key));
+    const metric = finiteValue(source?.value);
+    if (metric !== null) values[String(cityCode)] = formatRankingValueWithUnit({ [rankingMetric.value]: metric });
+  });
+  const candidates = new Map();
+  safeModel.value.rankings.forEach(row => {
+    const cityCode = String(row?.cityCode || row?.city_code || '').trim();
+    const metric = rankingValue(row, rankingMetric.value);
+    if (!cityCode || metric === null || values[cityCode] !== undefined) return;
+    const rows = candidates.get(cityCode) || [];
+    rows.push(metric);
+    candidates.set(cityCode, rows);
+  });
+  candidates.forEach((rows, cityCode) => {
+    // Several branch rows are ambiguous on the province map; never sum them.
+    if (rows.length === 1) values[cityCode] = formatRankingValueWithUnit({ [rankingMetric.value]: rows[0] });
+  });
+  return values;
+});
 const topRankings = computed(() => topRankingRows(safeModel.value.rankings, rankingMetric.value, 10));
 const rankingMax = computed(() => {
   const values = topRankings.value.map(item => Math.abs(rankingValue(item, rankingMetric.value) ?? 0));
@@ -434,11 +495,49 @@ const visibleRankingRows = computed(() => {
   if (safeModel.value.rankings.length) return topRankings.value;
   return topRankingRows(leadershipInsights.value.rows, rankingMetric.value, 10);
 });
+const underperformingRows = computed(() => leadershipInsights.value.rows.filter(row => row.status === 'below'));
+const underperformingCountLabel = computed(() => leadershipInsights.value.coverage.rate.available
+  ? `${underperformingRows.value.length}家`
+  : '—');
+const underperformingNames = computed(() => underperformingRows.value.slice(0, 3).map(row => row.name).join('、') || (
+  leadershipInsights.value.coverage.rate.available ? '暂无未达标机构' : '完成率来源暂无有效值'
+));
+const coordinationSummary = computed(() => {
+  if (!Array.isArray(props.model?.attention)) return { total: null, organizations: 0, names: '待跟进任务来源暂无数据' };
+  const rows = safeModel.value.attention;
+  const counts = rows.map(item => finiteValue(item?.count)).filter(value => value !== null && value >= 0);
+  const total = counts.length ? counts.reduce((sum, value) => sum + value, 0) : null;
+  const activeRows = rows.filter(item => {
+    const count = finiteValue(item?.count);
+    return count !== null && count > 0;
+  });
+  return {
+    total,
+    organizations: activeRows.length,
+    names: activeRows.slice(0, 3).map(item => String(item?.label || '—')).join('、') || '当前返回没有待跟进任务'
+  };
+});
+const coordinationCountLabel = computed(() => coordinationSummary.value.total === null
+  ? '—'
+  : `待跟进${formatMetric(coordinationSummary.value.total)}项`);
+const coordinationNames = computed(() => coordinationSummary.value.total === null
+  ? coordinationSummary.value.names
+  : `涉及${coordinationSummary.value.organizations}家机构${coordinationSummary.value.names === '当前返回没有待跟进任务' ? '' : ` · ${coordinationSummary.value.names}`}`);
+const selectedInstitutionMetric = computed(() => {
+  const institution = selectedInstitution.value;
+  const ranking = institution
+    ? safeModel.value.rankings.find(item => String(item?.orgCode || '') === String(institution.orgCode || ''))
+    : null;
+  const raw = ranking?.[rankingMetric.value]
+    ?? institution?.metrics?.[rankingMetric.value]
+    ?? institution?.[rankingMetric.value]
+    ?? null;
+  return { label: rankingMetricInfo.value.label, ...formatDisplayMetric(raw, rankingMetricInfo.value.unit, rankingMetric.value) };
+});
 const diagnosticCards = computed(() => {
   const diagnostics = leadershipInsights.value.diagnostics;
   const movement = summarizeDepositMovement(diagnostics.depositIncrease);
   const distance = summarizeTargetDistance(diagnostics.targetRate);
-  const movementSource = sourceStatus('trend', 'depositIncrease');
   const targetSource = sourceStatus('rate', 'value');
   const targetStatus = summarizeProvinceTargetStatus(leadershipInsights.value);
   const targetStatusState = !targetStatus.hasData
@@ -453,25 +552,27 @@ const diagnosticCards = computed(() => {
     : targetStatus.detail;
   return [
     {
-      key: 'depositMovement',
-      label: '存款经营',
-      text: movement.state === 'unknown' && movementSource.status !== 'UNAVAILABLE' ? movementSource.message : movement.text,
-      state: movement.state,
-      note: '较上月存款变动'
-    },
-    {
       key: 'targetDistance',
-      label: '目标进度',
+      label: '目标缺口',
       text: distance.state === 'unknown' && targetSource.status !== 'UNAVAILABLE' ? targetSource.message : distance.text,
       state: distance.state,
-      note: targetMetricLabel.value
+      note: `${movement.text} · ${targetMetricLabel.value}`
     },
     {
       key: 'targetStatus',
-      label: '机构目标完成情况',
+      label: '未达标机构',
       text: targetStatus.headline,
       state: targetStatusState,
       note: targetStatusDetail
+    },
+    {
+      key: 'coordination',
+      label: '协调事项',
+      text: coordinationCountLabel.value === '—'
+        ? sourceStatus('attention', '').message
+        : coordinationSummary.value.total === 0 ? '暂无待跟进任务' : coordinationCountLabel.value,
+      state: coordinationCountLabel.value === '—' ? 'unknown' : coordinationSummary.value.total === 0 ? 'neutral' : 'below',
+      note: coordinationNames.value
     }
   ];
 });
@@ -525,6 +626,52 @@ function formatMetric(value) {
     return new Intl.NumberFormat('en-US', { maximumFractionDigits: 8, minimumFractionDigits: 4 }).format(number);
   }
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, minimumFractionDigits: Number.isInteger(number) ? 0 : 2 }).format(number);
+}
+
+function formatDisplayMetric(value, unit = '', key = '') {
+  const number = finiteValue(value);
+  const raw = value === null || value === undefined ? '' : String(value);
+  if (number === null) return { text: '—', unit: unit || '', raw };
+  const normalizedUnit = String(unit || '').trim();
+  const customerMetric = normalizedUnit === '万户' || key === 'customers';
+  const amountMetric = normalizedUnit === '亿元' || ['deposit', 'loan', 'revenue', 'depositIncrease', 'depositAverage', 'increase', 'average'].includes(key);
+  if (customerMetric && number !== 0 && Math.abs(number) < 1) {
+    const households = Math.round(number * 10000);
+    return { text: households === 0 ? '<1' : new Intl.NumberFormat('en-US').format(households), unit: '户', raw };
+  }
+  if (amountMetric && normalizedUnit !== '%' && number !== 0 && Math.abs(number) < 1) {
+    const wanYuan = number * 10000;
+    const digits = Math.abs(wanYuan) >= 100 ? 2 : 4;
+    return {
+      text: new Intl.NumberFormat('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(wanYuan),
+      unit: '万元',
+      raw
+    };
+  }
+  const inferredUnit = normalizedUnit || (customerMetric ? '万户' : amountMetric ? '亿元' : '');
+  return { text: formatMetric(number), unit: inferredUnit, raw };
+}
+
+function displayKpi(kpi) {
+  return formatDisplayMetric(kpi?.value, kpi?.unit || (kpi?.key === 'customers' ? '万户' : '亿元'), kpi?.key);
+}
+
+function displayOperation(item) {
+  return formatDisplayMetric(item?.value, item?.unit || '亿元', item?.key);
+}
+
+function metricTitle(value) {
+  const number = finiteValue(value);
+  return number === null ? '' : `原始值：${String(value)}`;
+}
+
+function formatRankingValue(item) {
+  return formatMetric(rankingDisplayValue(item));
+}
+
+function formatRankingValueWithUnit(item) {
+  const display = formatDisplayMetric(rankingDisplayValue(item), rankingMetricInfo.value.unit, rankingMetric.value);
+  return display.text === '—' ? '—' : `${display.text}${display.unit}`;
 }
 
 function formatPercent(value) {
@@ -617,7 +764,7 @@ async function openCity(region, initialOrgCode = '') {
   if (!code) return;
   selectedRegion.value = { code, name: String(region?.name || code) };
   selectedRegionCode.value = code;
-  cityInitialOrgCode.value = String(initialOrgCode || '');
+  cityInitialOrgCode.value = String(initialOrgCode || cityStateCache.value[code]?.selectedOrgCode || '');
   focusBeforeCity.value = document.activeElement;
   overflowBeforeCity.value = document.body.style.overflow;
   document.body.style.overflow = 'hidden';
@@ -625,6 +772,12 @@ async function openCity(region, initialOrgCode = '') {
   document.addEventListener('keydown', onDocumentEscape);
   await nextTick();
   cityDialogRef.value?.focus();
+}
+
+function saveCityState(state = {}) {
+  const code = String(selectedRegion.value?.code || '');
+  if (!code || !state || typeof state !== 'object') return;
+  cityStateCache.value = { ...cityStateCache.value, [code]: { ...state } };
 }
 
 function restoreCityState() {
@@ -638,11 +791,33 @@ function restoreCityState() {
 function closeCity() {
   if (!cityOpen.value) return;
   cityOpen.value = false;
-  selectedRegion.value = null;
-  selectedRegionCode.value = '';
   cityInitialOrgCode.value = '';
   restoreCityState();
 }
+
+function clearScopeState() {
+  closeCity();
+  directoryOpen.value = false;
+  selectedOrgCode.value = '';
+  selectedRegionCode.value = '';
+  selectedRegion.value = null;
+  cityInitialOrgCode.value = '';
+  cityStateCache.value = {};
+}
+watch(() => [props.error, props.loading, props.model, props.sourcePresentation?.scopeIdentity], ([error, loading, model, identity]) => {
+  if (error) { clearScopeState(); return; }
+  if (loading) return;
+  const signature = `${scopeSignature(model)}|${identity || ''}`;
+  if (lastScopeSignature.value !== signature) clearScopeState();
+  lastScopeSignature.value = signature;
+  const allowed = new Set(safeModel.value.institutions.map(item => String(item.orgCode)));
+  const cities = new Set(safeModel.value.institutions.map(item => String(item.cityCode || '')));
+  if (selectedOrgCode.value && !allowed.has(selectedOrgCode.value)) selectedOrgCode.value = '';
+  if (selectedRegionCode.value && !cities.has(selectedRegionCode.value)) { closeCity(); selectedRegionCode.value=''; selectedRegion.value=null; }
+  cityStateCache.value = Object.fromEntries(Object.entries(cityStateCache.value).filter(([city])=>cities.has(city)).map(([city,state])=>[
+    city, {...state, selectedOrgCode: allowed.has(String(state.selectedOrgCode)) ? state.selectedOrgCode : ''}
+  ]));
+}, { deep: true });
 
 // 分页按钮被禁用时浏览器可能把焦点移到 body，Escape 仍应关闭当前模态层。
 function onDocumentEscape(event) {

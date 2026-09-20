@@ -228,4 +228,73 @@ describe('integrationReadiness', () => {
       expect.objectContaining({ code: 'COMPOSITION_COLUMNS_DATASOURCE_UNSUPPORTED' })
     ]));
   });
+
+  it('命名机构组放行严格 M98 单值来源并保留显式单位要求', () => {
+    const m98 = source({
+      id: 9801,
+      dsName: 'M98 对公收入',
+      dsType: 'SINGLE',
+      sourceKind: 'M98_STAT',
+      bizLine: 'CORP',
+      configJson: JSON.stringify({
+        schemaVersion: 2, scopeMode: 'NAMED_GROUP', profile: 'CORP_REVENUE', mode: 'SUMMARY'
+      })
+    });
+    const result = analyzeIntegrationReadiness({
+      template: 'corporate-overview-v1',
+      slotOrder: ['corpRevenue'],
+      screens: [{ ...screen, bizLine: 'CORP', orgScopeMode: 'NAMED_GROUP' }],
+      canvas: { screenId: 9 },
+      datasources: [m98],
+      bindingState: {
+        corpRevenue: {
+          dsId: 9801, period: 'LATEST', fields: { value: 'amount', date: 'data_date' }, units: { value: 'YUAN' }
+        }
+      }
+    });
+    const entry = result.entries[0];
+    expect(entry.status).toBe(READINESS_STATUS.STRUCTURALLY_AVAILABLE);
+    expect(entry.issues).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'NAMED_GROUP_DATASOURCE_UNSAFE' })
+    ]));
+    expect(entry.mappedFields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ column: 'amount', role: 'METRIC' }),
+      expect.objectContaining({ column: 'data_date', role: 'DIM' })
+    ]));
+  });
+
+  it('命名机构组放行 KPI_DETAIL ORG 快照的目标和关注输出列', () => {
+    const kpi = source({
+      id: 9802,
+      dsName: '机构 KPI 快照',
+      dsType: 'SINGLE',
+      sourceKind: 'KPI_DETAIL',
+      bizLine: 'CORP',
+      configJson: JSON.stringify({
+        schemaVersion: 2, scopeMode: 'NAMED_GROUP', schemeCode: 'KPI0724', subjectType: 'ORG', mode: 'SNAPSHOT'
+      })
+    });
+    const result = analyzeIntegrationReadiness({
+      template: 'corporate-overview-v1',
+      slotOrder: ['corpTargets', 'corpAttention'],
+      screens: [{ ...screen, bizLine: 'CORP', orgScopeMode: 'NAMED_GROUP' }],
+      canvas: { screenId: 9 },
+      datasources: [kpi],
+      bindingState: {
+        corpTargets: {
+          dsId: 9802, period: 'LATEST',
+          fields: { name: 'metric_name', actual: 'actual_value', target: 'target_value' },
+          units: { actual: 'YUAN', target: 'YUAN' }
+        },
+        corpAttention: {
+          dsId: 9802, period: 'LATEST',
+          fields: { label: 'attention_label', count: 'attention_count' },
+          units: { count: 'COUNT' }
+        }
+      }
+    });
+    expect(result.entries.map(entry => entry.status)).toEqual([
+      READINESS_STATUS.STRUCTURALLY_AVAILABLE, READINESS_STATUS.STRUCTURALLY_AVAILABLE
+    ]);
+  });
 });

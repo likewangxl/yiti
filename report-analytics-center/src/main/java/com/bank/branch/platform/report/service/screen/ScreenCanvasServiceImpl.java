@@ -888,6 +888,10 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         if (!isNamedGroupCodeBinding(bindingKey)) {
             return;
         }
+        if (M98StatPolicy.SOURCE_KIND.equals(datasource.getSourceKind())
+                && !M98StatPolicy.allowsCodeBinding(bindingKey)) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
         try {
             JsonNode cfg = objectMapper.readTree(datasource.getConfigJson() == null ? "{}" : datasource.getConfigJson());
             JsonNode bind = objectMapper.readTree(bindJson == null ? "{}" : bindJson);
@@ -972,6 +976,10 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
                 : String.valueOf(chart.getPropValue().get("bindingKey"));
         if (!isNamedGroupCodeBinding(bindingKey)) {
             return;
+        }
+        if (M98StatPolicy.SOURCE_KIND.equals(datasource.getSourceKind())
+                && !M98StatPolicy.allowsCodeBinding(bindingKey)) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
         }
         try {
             JsonNode cfg = objectMapper.readTree(datasource.getConfigJson() == null ? "{}" : datasource.getConfigJson());
@@ -1263,21 +1271,13 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
     }
 
     private boolean isNamedGroupCodeBinding(String bindingKey) {
-        return "branches".equals(bindingKey) || "citySummary".equals(bindingKey)
+        return "branches".equals(bindingKey) || "ranking".equals(bindingKey)
+                || "citySummary".equals(bindingKey)
                 || "retailRanking".equals(bindingKey) || "corpRanking".equals(bindingKey);
     }
 
     private boolean isNamedGroupSafeDatasource(com.bank.branch.platform.report.entity.RptScreenDatasource ds) {
-        if (!"WIDE_TABLE".equals(ds.getSourceKind())) {
-            return false;
-        }
-        try {
-            JsonNode cfg = objectMapper.readTree(ds.getConfigJson() == null ? "{}" : ds.getConfigJson());
-            return "ORG_INDEX_RESULT".equals(cfg.path("table").asText())
-                    && "org_code".equals(cfg.path("subjectCol").asText());
-        } catch (Exception e) {
-            return false;
-        }
+        return ScreenNamedGroupDatasourcePolicy.isSafe(ds);
     }
 
     private boolean isBizLineCompatible(String screenLine, String dataSourceLine) {

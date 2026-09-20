@@ -9,7 +9,7 @@ import {
 } from './bindings';
 import { CORPORATE_TEMPLATE, isCorporateBindingSlot } from './corporateBindings';
 import { isDatasourceCompatible } from '@/utils/screenScope';
-import { isNamedGroupSafeDatasource } from '../designer/widgets/chart-widget/dsFilter';
+import { isNamedGroupSafeDatasource as isNamedGroupWideDatasource } from '../designer/widgets/chart-widget/dsFilter';
 
 /**
  * 绑定管理页的状态只描述“配置能否被结构化理解”。它不执行查询、试跑、列探测，
@@ -87,6 +87,92 @@ function sourceKindOf(source, config) {
   return text(pick(source, 'sourceKind', 'source_kind') || config.sourceKind).toUpperCase();
 }
 
+const M98_PROFILE_SLOTS = Object.freeze({
+  CORP_REVENUE: 'corpRevenue',
+  RETAIL_REVENUE: 'retailRevenue',
+  RETAIL_LOAN: 'retailLoan',
+  CORP_NPL_RATE: 'corpNplRate',
+  RETAIL_NPL_RATE: 'retailNplRate'
+});
+const M98_PROFILES = new Set(Object.keys(M98_PROFILE_SLOTS));
+
+function hasExactKeys(value, keys) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+
+function sourceDsTypeOf(source) {
+  const config = sourceConfig(source);
+  return text(pick(source, 'dsType', 'ds_type') || config.dsType).toUpperCase();
+}
+
+function isNamedKpiOrgSnapshot(source) {
+  const config = sourceConfig(source);
+  return sourceKindOf(source, config) === 'KPI_DETAIL'
+    && sourceDsTypeOf(source) === 'SINGLE'
+    && hasExactKeys(config, ['mode', 'schemeCode', 'schemaVersion', 'scopeMode', 'subjectType'])
+    && Number(config.schemaVersion) === 2
+    && text(config.scopeMode).toUpperCase() === 'NAMED_GROUP'
+    && text(config.subjectType).toUpperCase() === 'ORG'
+    && text(config.mode).toUpperCase() === 'SNAPSHOT'
+    && Boolean(text(config.schemeCode));
+}
+
+function isStrictM98Summary(source) {
+  const config = sourceConfig(source);
+  const profile = text(config.profile).toUpperCase();
+  const expectedLine = profile.startsWith('CORP_') ? 'CORP' : profile.startsWith('RETAIL_') ? 'RETAIL' : '';
+  return sourceKindOf(source, config) === 'M98_STAT'
+    && sourceDsTypeOf(source) === 'SINGLE'
+    && hasExactKeys(config, ['mode', 'profile', 'schemaVersion', 'scopeMode'])
+    && Number(config.schemaVersion) === 2
+    && text(config.scopeMode).toUpperCase() === 'NAMED_GROUP'
+    && text(config.mode).toUpperCase() === 'SUMMARY'
+    && M98_PROFILES.has(profile)
+    && text(pick(source, 'bizLine', 'biz_line') || '').toUpperCase() === expectedLine;
+}
+
+function namedGroupSourceAllowed(source, slot, template) {
+  if (isNamedGroupWideDatasource(source)) return true;
+  if (template === CORPORATE_TEMPLATE && ['corpTargets', 'corpAttention'].includes(slot)
+      && isNamedKpiOrgSnapshot(source)) return true;
+  const config = sourceConfig(source);
+  const profile = text(config.profile).toUpperCase();
+  return isStrictM98Summary(source) && M98_PROFILE_SLOTS[profile] === slot;
+}
+
+function fixedOutputFieldOptions(source) {
+  const options = getDatasourceFieldOptions(source).map(item => ({ ...item }));
+  const seen = new Set(options.map(item => item.col));
+  const add = (col, role, label = col) => {
+    if (seen.has(col)) return;
+    seen.add(col);
+    options.push({ col, role, label, amountScale: null, unit: null, builtin: true });
+  };
+  if (isNamedKpiOrgSnapshot(source)) {
+    add('org_code', 'DIM', '机构号');
+    add('org_name', 'DIM', '机构名称');
+    add('data_date', 'DIM', '数据日期');
+    add('metric_code', 'DIM', '指标编码');
+    add('metric_name', 'DIM', '指标名称');
+    add('actual_value', 'METRIC', '实际值');
+    add('target_value', 'METRIC', '目标值');
+    add('weight', 'METRIC', '权重');
+    add('score', 'METRIC', '得分');
+    add('completion_rate', 'METRIC', '完成率');
+    add('gap', 'METRIC', '缺口');
+    add('attention_label', 'DIM', '关注事项');
+    add('attention_count', 'METRIC', '关注数量');
+  } else if (isStrictM98Summary(source)) {
+    const profile = text(sourceConfig(source).profile).toUpperCase();
+    add('data_date', 'DIM', '数据日期');
+    add(M98_PROFILE_SLOTS[profile] && profile.endsWith('_NPL_RATE') ? 'ratio' : 'amount', 'METRIC', '统计值');
+  }
+  return options;
+}
+
 function screenBizLineOf(screen) {
   return text(pick(screen, 'bizLine', 'biz_line', 'BIZ_LINE') || 'COMMON').toUpperCase();
 }
@@ -110,7 +196,7 @@ function corporateScopeIssues(slot, source, screen, template = '') {
   return issues;
 }
 
-function scopeIssues(screen, source) {
+function scopeIssues(screen, source, slot = '', template = '') {
   if (!screen || !source) return [];
 
   const issues = [];
@@ -123,10 +209,10 @@ function scopeIssues(screen, source) {
     });
   }
 
-  if (screenOrgScopeModeOf(screen) === 'NAMED_GROUP' && !isNamedGroupSafeDatasource(source)) {
+  if (screenOrgScopeModeOf(screen) === 'NAMED_GROUP' && !namedGroupSourceAllowed(source, slot, template)) {
     issues.push({
       code: 'NAMED_GROUP_DATASOURCE_UNSAFE',
-      message: '命名机构组屏仅允许 ORG_INDEX_RESULT + org_code 的 WIDE_TABLE 数据源'
+      message: '命名机构组屏仅允许受控机构宽表、KPI_DETAIL ORG 快照或匹配条线的 M98 SUMMARY 单值来源'
     });
   }
   return issues;
@@ -264,7 +350,7 @@ function unitLabel(unit) {
 }
 
 function fieldDetails(slot, binding, source) {
-  const options = getDatasourceFieldOptions(source || {});
+  const options = fixedOutputFieldOptions(source || {});
   const spec = BINDING_SLOTS[slot];
   const fields = Object.entries(binding.fields || {}).map(([semantic, column]) => {
     const fieldSpec = (spec?.fields || []).find(item => item.semantic === semantic);
@@ -291,7 +377,7 @@ function fieldDetails(slot, binding, source) {
 
 function hardIssues(slot, raw, binding, source) {
   const issues = validateBinding(slot, { ...raw, ...binding, dsId: idOf(binding.dsId) || binding.dsId });
-  const options = getDatasourceFieldOptions(source || {});
+  const options = fixedOutputFieldOptions(source || {});
   const spec = BINDING_SLOTS[slot];
   for (const [semantic, column] of Object.entries(binding.fields || {})) {
     const fieldSpec = (spec?.fields || []).find(item => item.semantic === semantic);
@@ -371,7 +457,7 @@ function entryFor(slot, bindingState, datasources, screen, template = '') {
   }
 
   const config = sourceConfig(source);
-  entry.issues.push(...scopeIssues(screen, source));
+  entry.issues.push(...scopeIssues(screen, source, slot, template));
   entry.issues.push(...corporateScopeIssues(slot, source, screen, template));
   if (slot === 'composition' && getCompositionMode(binding) === 'columns'
       && !isCompositionColumnsDatasource(source, config)) {

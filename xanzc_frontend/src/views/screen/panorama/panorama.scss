@@ -493,3 +493,93 @@
   .panorama-city-modal { padding: 0; }
   .panorama-city-modal > .city-panorama { width: 100vw; height: 100vh; border-radius: 0; }
 }
+
+/* 运行态顶部 chrome 由 PanoramaRuntime 提供，画布高度必须从它下面开始计算。 */
+.panorama-dashboard {
+  height: calc(100dvh - var(--cockpit-chrome-height, 0px));
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(103, 196, 255, .45) transparent;
+}
+.panorama-dashboard::-webkit-scrollbar { width: 6px; }
+.panorama-dashboard::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(103, 196, 255, .45); }
+.screen-preview .panorama-dashboard { height: auto; min-height: 0; overflow-y: visible; }
+.panorama-kpi-grid { margin-top: 10px; margin-bottom: 10px; border: 0; border-radius: 0; background: transparent; box-shadow: none; gap: 9px; }
+.panorama-kpi { min-height: 88px; border: 1px solid rgba(104, 180, 255, .28); border-radius: 9px; background: linear-gradient(135deg, rgba(16, 48, 115, .9), rgba(6, 22, 60, .9)); box-shadow: inset 0 1px 0 rgba(214, 243, 255, .08), 0 10px 28px rgba(0, 0, 0, .16); }
+.panorama-kpi:nth-child(2) { border-color: rgba(169, 121, 255, .42); }
+.panorama-kpi:nth-child(3) { border-color: rgba(77, 232, 239, .34); }
+.panorama-kpi:nth-child(4) { border-color: rgba(255, 196, 94, .3); }
+.panorama-kpi-value { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panorama-diagnostics-strip { gap: 9px; margin-bottom: 10px; }
+.panorama-diagnostic-card { min-height: 68px; border: 0; border-left: 3px solid var(--panorama-cyan); border-radius: 0 7px 7px 0; background: linear-gradient(105deg, rgba(16, 49, 111, .82), rgba(7, 24, 65, .68)); }
+.panorama-diagnostic-card:nth-child(2) { border-left-color: var(--panorama-amber); }
+.panorama-diagnostic-card:nth-child(3) { border-left-color: var(--panorama-violet); }
+.panorama-diagnostic-card strong { font-size: clamp(15px, 1.1vw, 20px); }
+.panorama-workspace { height: clamp(540px, calc(100dvh - var(--cockpit-chrome-height, 0px) - 300px), 730px); min-height: 540px; grid-template-columns: minmax(0, 29fr) minmax(0, 42fr) minmax(0, 29fr); gap: 12px; margin-bottom: 14px; }
+.panorama-left-column { grid-template-rows: minmax(150px, .74fr) minmax(205px, 1fr) minmax(170px, .88fr); }
+.panorama-center-column { grid-template-rows: minmax(330px, 1.28fr) minmax(220px, .84fr); }
+.panorama-panel { border-radius: 8px; border-color: rgba(104, 180, 255, .25); }
+.panorama-map-panel { background: linear-gradient(160deg, rgba(7, 28, 74, .82), rgba(3, 13, 38, .8)); }
+.panorama-map-panel .panorama-panel-heading { min-height: 46px; }
+.panorama-selected-institution { border-color: rgba(77, 232, 239, .56); background: rgba(5, 26, 67, .93); }
+.panorama-leadership-panel { display: flex; flex-direction: column; }
+.panorama-leadership-panel > .panorama-ranking-panel { flex: 1 1 auto; min-height: 0; }
+.panorama-matrix-bar { display: block; height: 3px; margin-top: 4px; overflow: hidden; border-radius: 999px; background: rgba(117, 150, 223, .2); }
+.panorama-matrix-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--panorama-cyan), var(--panorama-blue)); }
+.panorama-matrix-bar i.is-negative { background: linear-gradient(90deg, var(--panorama-danger), #bb63ff); }
+.panorama-target-panel { padding: 0 10px 8px; border-color: rgba(77, 232, 239, .35); background: rgba(6, 25, 64, .72); }
+.panorama-target-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-height: 28px; padding-top: 7px; color: #dceaff; font-size: 11px; }
+.panorama-target-heading small { color: var(--panorama-text-dim); font-size: 9px; }
+.panorama-target-summary { grid-template-columns: auto 86px minmax(0, 1fr) auto; min-height: 55px; gap: 8px; padding: 5px 0 0; }
+.panorama-target-ring { width: 86px; height: 31px; }
+.panorama-target-bullet { min-width: 0; display: grid; align-content: center; gap: 4px; }
+.panorama-target-bullet__track { height: 7px; display: block; overflow: hidden; border-radius: 999px; background: rgba(105, 150, 230, .2); }
+.panorama-target-bullet__track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--panorama-cyan), var(--panorama-violet)); }
+.panorama-target-bullet small { overflow: hidden; color: #9fb7e3; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 城市下钻把地图收窄，把右侧空间给机构比较和趋势画像。 */
+.panorama-city-modal { height: calc(100dvh - var(--cockpit-chrome-height, 0px)); padding: clamp(12px, 2vh, 22px) clamp(12px, 2vw, 30px); }
+.panorama-city-modal > .city-panorama { width: 100%; height: 100%; min-height: 0; overflow: auto; }
+.city-panorama { min-height: 0; overflow-y: auto; }
+.city-workspace { grid-template-columns: minmax(300px, 38fr) minmax(560px, 62fr); grid-template-rows: minmax(235px, .75fr) minmax(360px, 1.25fr); height: calc(100% - 214px); min-height: 600px; gap: 12px; }
+.city-map-panel { grid-column: 1; grid-row: 1 / span 2; }
+.city-list-panel { grid-column: 2; grid-row: 1; }
+.city-detail-panel { grid-column: 2; grid-row: 2; min-height: 0; }
+.city-detail-body { grid-template-columns: minmax(205px, .76fr) minmax(300px, 1.24fr); grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 8px; }
+.city-detail-metrics { grid-column: 1; grid-row: 1 / span 2; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; }
+.city-detail-observation { grid-column: 1; grid-row: 3; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; }
+.city-detail-trend { grid-column: 2; grid-row: 1 / span 3; min-height: 0; }
+.city-detail-panel .city-detail-trend { min-height: 0; }
+.city-detail-panel .city-detail-trend .panorama-trend-chart { min-height: 0; }
+.city-list-panel { min-height: 0; }
+.city-branch-list { min-height: 0; flex: 1 1 auto; overflow: auto; }
+.city-detail-metrics strong small { margin-left: 4px; color: var(--panorama-text-dim); font-size: 9px; font-weight: 500; }
+.city-detail-attention { grid-column: 1 / span 2; }
+
+@media (min-width: 761px) and (max-width: 1500px) {
+  .panorama-workspace { height: clamp(540px, calc(100dvh - var(--cockpit-chrome-height, 0px) - 240px), 680px); min-height: 540px; }
+  .panorama-center-column { grid-template-rows: minmax(300px, 1.2fr) minmax(210px, .86fr); }
+  .city-workspace { grid-template-columns: minmax(270px, 38fr) minmax(500px, 62fr); grid-template-rows: minmax(165px, .32fr) minmax(390px, .68fr); height: auto; min-height: 580px; }
+  .city-detail-body { grid-template-columns: minmax(190px, .78fr) minmax(280px, 1.22fr); }
+}
+
+@media (min-width: 1501px) {
+  .city-workspace { grid-template-rows: minmax(165px, .32fr) minmax(420px, .68fr); height: calc(100% - 315px); min-height: 585px; }
+}
+
+@media (max-width: 1099px) {
+  .panorama-dashboard { height: auto; min-height: calc(100dvh - var(--cockpit-chrome-height, 0px)); }
+  .panorama-workspace { height: auto; min-height: 0; }
+  .panorama-center-column { grid-template-rows: auto; }
+  .city-workspace { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; min-height: 0; }
+  .city-map-panel, .city-list-panel, .city-detail-panel { grid-column: auto; grid-row: auto; }
+  .city-detail-body { grid-template-columns: 1fr; grid-template-rows: auto auto minmax(230px, 1fr) auto; }
+  .city-detail-metrics, .city-detail-observation, .city-detail-trend, .city-detail-attention { grid-column: auto; grid-row: auto; }
+  .city-detail-trend { min-height: 230px; }
+}
+
+@media (max-width: 760px) {
+  .panorama-target-summary { grid-template-columns: auto minmax(74px, auto) minmax(0, 1fr); }
+  .panorama-target-period { display: none; }
+}

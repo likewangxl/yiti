@@ -69,6 +69,16 @@ class CanvasStyleDTOJsonContractTest {
     }
 
     @Test
+    void acceptsAndSerializesExplicitDataClassification() throws Exception {
+        CanvasStyleDTO actual = objectMapper.readValue(
+                "{\"dataClassification\":\"TEST\"}", CanvasStyleDTO.class);
+
+        assertThat(actual.getDataClassification()).isEqualTo("TEST");
+        assertThat(objectMapper.valueToTree(actual).path("dataClassification").asText())
+                .isEqualTo("TEST");
+    }
+
+    @Test
     void rejectsNonTextualSourceNoticeMetadata() {
         assertThatThrownBy(() -> objectMapper.readValue(
                 "{\"dataNotice\":{\"text\":\"no\"}}", CanvasStyleDTO.class))

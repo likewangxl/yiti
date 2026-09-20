@@ -6,6 +6,8 @@
     :data-appearance="appearance"
     :data-material-ready="surfaceReady ? 'true' : 'false'"
     :data-selected-region="selectedRegionCode || ''"
+    :data-hovered-region="hoveredRegionCode"
+    @pointerleave="setHoveredRegion('')"
     :data-webgl-ready="webglReady ? 'true' : 'false'"
     :data-region-count="renderedRegionCount"
     :aria-label="fallbackActive ? '真实行政区二维地图' : '真实行政区三维地图'"
@@ -16,6 +18,7 @@
       :class="{ 'is-hidden': fallbackActive }"
       aria-hidden="true"
     ></canvas>
+    <span v-if="metricLabel" class="panorama-map__metric-heading" data-testid="map-metric-label">{{ metricLabel }}</span>
 
     <div v-if="fallbackActive" class="panorama-map__fallback" role="region" aria-label="二维真实行政区地图回退">
       <svg
@@ -29,7 +32,7 @@
           v-for="region in fallbackRegions"
           :key="region.key"
           class="panorama-map__region"
-          :class="{ 'is-selected': region.code && String(region.code) === String(selectedRegionCode) }"
+          :class="{ 'is-selected': region.code && String(region.code) === String(selectedRegionCode), 'is-hovered': String(region.code) === hoveredRegionCode }"
         >
           <path
             :d="region.path"
@@ -40,6 +43,8 @@
             tabindex="0"
             :aria-label="`选择${region.name || '行政区'}`"
             @click.stop="selectRegion(region)"
+            @pointerenter="setHoveredRegion(region.code)"
+            @pointerleave="setHoveredRegion('')"
             @keydown.enter.stop="selectRegion(region)"
             @keydown.space.prevent.stop="selectRegion(region)"
           />
@@ -55,6 +60,7 @@
         </g>
         <g v-for="region in regionLabels" :key="`${region.key}:label`" class="panorama-map__region-label">
           <text :x="region.label.x" :y="region.label.y" role="button" tabindex="0" @click.stop="selectRegion(region)" @keydown.enter.stop="selectRegion(region)">{{ region.name }}</text>
+          <text v-if="metricValues[region.code] != null" :x="region.label.x" :y="region.label.y + 3" data-testid="map-region-metric" class="panorama-map__metric-svg">{{ metricValues[region.code] }}</text>
         </g>
       </svg>
     </div>
@@ -64,11 +70,15 @@
         :key="`${region.key}:overlay-label`"
         type="button"
         class="panorama-map__region-label-hit"
-        :class="{ 'is-selected': region.code && String(region.code) === String(selectedRegionCode) }"
+        :class="{ 'is-selected': region.code && String(region.code) === String(selectedRegionCode), 'is-hovered': String(region.code) === hoveredRegionCode }"
         :style="regionLabelStyle(region)"
         :aria-label="`选择${region.name}`"
         @click.stop="selectRegion(region)"
-      >{{ region.name }}</button>
+        @pointerenter="setHoveredRegion(region.code)"
+        @pointerleave="setHoveredRegion('')"
+        @focus="setHoveredRegion(region.code)"
+        @blur="setHoveredRegion('')"
+      >{{ region.name }}<small v-if="metricValues[region.code] != null" data-testid="map-region-metric" class="panorama-map__metric-value">{{ metricValues[region.code] }}</small></button>
     </div>
     <div
       v-if="mode === 'province' && !fallbackActive"
@@ -107,7 +117,7 @@
       >
         <span v-if="point.isCluster" class="panorama-map__cluster-count">{{ point.count }}</span>
         <span v-else class="panorama-map__point-dot" aria-hidden="true"></span>
-        <span v-if="showPointLabels && !point.isCluster" class="panorama-map__point-label">{{ point.orgName || point.orgCode }}</span>
+        <span v-if="showPointLabels && !point.isCluster" class="panorama-map__point-label">{{ point.orgName || point.orgCode }}<small v-if="metricValues[point.orgCode] != null" class="panorama-map__metric-value">{{ metricValues[point.orgCode] }}</small></span>
       </button>
     </div>
 
@@ -132,6 +142,7 @@
       >
         <span>{{ member.orgName || member.orgCode }}</span>
         <small>{{ member.orgCode }}</small>
+        <small v-if="metricValues[member.orgCode] != null" class="panorama-map__metric-value">{{ metricValues[member.orgCode] }}</small>
       </button>
     </div>
 
@@ -173,14 +184,19 @@ import {
 import {
   fitReliefView,
   createReliefGeometryConfig,
+  createReliefWallColors,
+  smoothReliefWallNormals,
   getReliefSurfaceZ,
   isReliefAppearance
 } from './mapReliefGeometry';
 
+import { layoutMapLabels } from './mapLabelLayout';
 const props = defineProps({
   geoJson: { type: Object, default: () => ({ type: 'FeatureCollection', features: [] }) },
   points: { type: Array, default: () => [] },
   selectedOrgCode: { type: [String, Number], default: null },
+  metricLabel: { type: String, default: '' },
+  metricValues: { type: Object, default: () => ({}) },
   mode: { type: String, default: 'province' },
   selectedRegionCode: { type: [String, Number], default: null },
   demo: { type: Boolean, default: false },
@@ -200,6 +216,8 @@ const viewCenter = ref({ x: 0, y: 0 });
 
 const overlayRevision = ref(0);
 const surfaceReady = ref(false);
+const hoveredRegionCode = ref('');
+let regionSurfaces = [];
 let focusedPoint = false;
 let surfaceTexture = null;
 let ambientLight = null;
@@ -337,8 +355,9 @@ const regionLabels = computed(() => {
 
   return candidates.map(region => {
     const base = baseRegionLabelWorldPoint(region);
-    const labelWidth = Math.max(4.5, String(region.name).length * 2.4);
-    const labelHeight = 5;
+    const metricText = props.metricValues[region.code];
+    const labelWidth = Math.max(4.5, String(region.name).length * 2.4, metricText == null ? 0 : String(metricText).length * 1.4);
+    const labelHeight = metricText == null ? 5 : 8;
     let selected = base;
     let selectedScreen = svgPoint(base);
     for (const [offsetX, offsetY] of offsets) {
@@ -376,8 +395,21 @@ function webglOverlayPoint(worldPoint, z = mapSurfaceZ()) {
   return svgPoint(worldPoint);
 }
 
+const metricLabelPositions = computed(() => {
+  void overlayRevision.value;
+  if (!Object.keys(props.metricValues).length) return {};
+  const width=containerRef.value?.clientWidth || 800;
+  const height=containerRef.value?.clientHeight || 520;
+  return layoutMapLabels(regionLabels.value.map(region => {
+    const point=webglOverlayPoint(regionLabelWorldPoint(region));
+    const value=props.metricValues[region.code];
+    return {key:region.key,...point,
+      width:Math.max(String(region.name).length*12+10,value==null?0:String(value).length*6.5+10)/width*100,
+      height:(value==null?20:34)/height*100};
+  }));
+});
 function regionLabelStyle(region) {
-  const point = webglOverlayPoint(regionLabelWorldPoint(region));
+  const point = metricLabelPositions.value[region.key] || webglOverlayPoint(regionLabelWorldPoint(region));
   return { left: `${point.x}%`, top: `${point.y}%` };
 }
 
@@ -500,6 +532,8 @@ function disposeObject(root) {
 }
 
 function clearMapGroup() {
+  hoveredRegionCode.value = '';
+  regionSurfaces = [];
   if (mapGroup) {
     disposeObject(mapGroup);
     scene?.remove(mapGroup);
@@ -590,14 +624,14 @@ function syncLighting() {
     keyLight = new THREE.DirectionalLight(0xb8dfff);
     keyLight.position.set(-3, -4, 10); scene.add(keyLight);
   }
-  ambientLight.intensity = reliefEnabled.value ? .42 : 1.65;
-  keyLight.intensity = reliefEnabled.value ? 2.2 : 2.3;
-  keyLight.color.setHex(reliefEnabled.value ? 0xb8dfff : 0x9ec7ff);
+  ambientLight.intensity = reliefEnabled.value ? .7 : 1.65;
+  keyLight.intensity = reliefEnabled.value ? 3.1 : 2.3;
+  keyLight.color.setHex(reliefEnabled.value ? 0xd4efff : 0x9ec7ff);
   if (reliefEnabled.value) {
     if (!surfaceLight) {
-      surfaceLight = new THREE.PointLight(0x79baff, 46, 30, 2);
+      surfaceLight = new THREE.PointLight(0x79dfff, 38, 30, 2);
       surfaceLight.position.set(-4, 3, 7); scene.add(surfaceLight);
-      rimLight = new THREE.DirectionalLight(0x795bff, 1.25);
+      rimLight = new THREE.DirectionalLight(0x688eff, .9);
       rimLight.position.set(5, 3, 2); scene.add(rimLight);
     }
   } else {
@@ -618,7 +652,16 @@ function buildThreeMapUnsafe() {
   renderedRegionCount.value = polygons.length;
   const relief = reliefEnabled.value;
   const config = reliefConfig.value;
-  const topMaterial = new THREE.MeshPhongMaterial({
+  const topMaterial = relief ? new THREE.MeshStandardMaterial({
+    color: 0x304c9c,
+    emissive: 0x172451,
+    emissiveIntensity: .24,
+    metalness: .16,
+    roughness: .62,
+    map: surfaceTexture,
+    bumpMap: surfaceTexture,
+    bumpScale: .024
+  }) : new THREE.MeshPhongMaterial({
     color: relief ? 0x1057b9 : 0x304ea4,
     emissive: relief ? 0x09235e : 0x101a58,
     emissiveIntensity: relief ? 0.10 : 0.65,
@@ -630,7 +673,16 @@ function buildThreeMapUnsafe() {
     transparent: true,
     opacity: relief ? 0.98 : 0.93
   });
-  const selectedTopMaterial = new THREE.MeshPhongMaterial({
+  const selectedTopMaterial = relief ? new THREE.MeshStandardMaterial({
+    color: 0x7256bd,
+    emissive: 0x392369,
+    emissiveIntensity: .4,
+    metalness: .12,
+    roughness: .48,
+    map: surfaceTexture,
+    bumpMap: surfaceTexture,
+    bumpScale: .024
+  }) : new THREE.MeshPhongMaterial({
     color: relief ? 0x536bff : 0x6f43ba,
     emissive: relief ? 0x17136a : 0x31135f,
     emissiveIntensity: relief ? 0.72 : 0.88,
@@ -641,7 +693,12 @@ function buildThreeMapUnsafe() {
     transparent: true,
     opacity: relief ? 0.99 : 0.96
   });
-  const sideMaterial = new THREE.MeshPhongMaterial({
+  const sideMaterial = relief ? new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    vertexColors: true,
+    metalness: .12,
+    roughness: .58
+  }) : new THREE.MeshPhongMaterial({
     color: relief ? 0x0a255f : (props.mode === 'province' ? 0x1d3479 : 0x152763),
     emissive: relief ? 0x061638 : (props.mode === 'province' ? 0x10245d : 0x090f35),
     emissiveIntensity: relief ? 0.12 : (props.mode === 'province' ? 0.58 : 0.35),
@@ -651,15 +708,15 @@ function buildThreeMapUnsafe() {
   });
   if (relief) {
     const baseTopMaterial = new THREE.MeshPhongMaterial({
-      color: 0x0e347b,
+      color: 0x152954,
       emissive: 0x050d2e,
-      emissiveIntensity: 0.32,
+      emissiveIntensity: 0.15,
       shininess: 25,
       transparent: true,
       opacity: 0.96
     });
     const baseSideMaterial = new THREE.MeshPhongMaterial({
-      color: 0x07183f,
+      color: 0x0b1634,
       emissive: 0x030b24,
       emissiveIntensity: 0.22,
       shininess: 18,
@@ -667,19 +724,19 @@ function buildThreeMapUnsafe() {
       opacity: 0.94
     });
     const topContourMaterial = new THREE.LineBasicMaterial({
-      color: 0x6cefff,
+      color: 0x8aa8f0,
       transparent: true,
-      opacity: 0.98
+      opacity: 0.72
     });
     const selectedContourMaterial = new THREE.LineBasicMaterial({
-      color: 0xe0b6ff,
+      color: 0xd1efff,
       transparent: true,
       opacity: 0.99
     });
     const bottomContourMaterial = new THREE.LineBasicMaterial({
-      color: 0xb86dff,
+      color: 0x7166be,
       transparent: true,
-      opacity: 0.88
+      opacity: 0.45
     });
     const shadowMaterial = new THREE.MeshBasicMaterial({
       color: 0x02091e,
@@ -721,14 +778,9 @@ function buildThreeMapUnsafe() {
       });
       const baseMesh = new THREE.Mesh(baseGeometry, [baseTopMaterial, baseSideMaterial]);
       baseMesh.position.z = -config.baseDepth;
-      baseMesh.scale.set(1.055, 1.055, 1);
+      baseMesh.scale.set(1.018, 1.018, 1);
       baseMesh.userData = userData;
       mapGroup.add(baseMesh);
-      const lowerBase = new THREE.Mesh(baseGeometry, [baseTopMaterial, baseSideMaterial]);
-      lowerBase.position.z = -config.baseDepth * 1.65;
-      lowerBase.scale.set(1.085, 1.085, .55);
-      lowerBase.userData = userData;
-      mapGroup.add(lowerBase);
 
       const geometry = new THREE.ExtrudeGeometry(shapeFromPolygon(polygon), {
         depth: config.depth,
@@ -739,14 +791,23 @@ function buildThreeMapUnsafe() {
         steps: 1,
         curveSegments: 1
       });
-      const mesh = new THREE.Mesh(geometry, [selected ? selectedTopMaterial : topMaterial, sideMaterial]);
+      const mesh = new THREE.Mesh(geometry, [(selected ? selectedTopMaterial : topMaterial).clone(), sideMaterial.clone()]);
+      geometry.setAttribute('color', new THREE.BufferAttribute(
+        createReliefWallColors(geometry.attributes.position.array, config.depth), 3
+      ));
+      geometry.setAttribute('normal', new THREE.BufferAttribute(
+        smoothReliefWallNormals(geometry.attributes.position.array, geometry.attributes.normal.array), 3
+      ));
       mesh.userData = userData;
+      mesh.userData.restColor = mesh.material[0].color.getHex();
+      mesh.userData.restEmissive = mesh.material[0].emissive.getHex();
+      regionSurfaces.push(mesh);
       mapGroup.add(mesh);
       const topMaterialForPolygon = selected ? selectedContourMaterial : topContourMaterial;
       addReliefContour(polygon.outer, topMaterialForPolygon, config.depth + config.contourLift, userData);
       polygon.holes.forEach(ring => addReliefContour(ring, topMaterialForPolygon, config.depth + config.contourLift, userData));
-      addReliefContour(polygon.outer, bottomContourMaterial, -config.baseDepth * 1.65 - config.contourLift, userData, 1.085);
-      polygon.holes.forEach(ring => addReliefContour(ring, bottomContourMaterial, -config.baseDepth * 1.65 - config.contourLift, userData, 1.085));
+      addReliefContour(polygon.outer, bottomContourMaterial, -config.baseDepth - config.contourLift, userData, 1.018);
+      polygon.holes.forEach(ring => addReliefContour(ring, bottomContourMaterial, -config.baseDepth - config.contourLift, userData, 1.018));
     });
   } else {
     const edgeMaterial = new THREE.LineBasicMaterial({
@@ -882,6 +943,29 @@ function onThreePointer(event) {
   if (target.type === 'point') selectPoint(target.point);
 }
 
+/** Highlight all polygons of one city without changing the business selection or rebuilding geometry. */
+function setHoveredRegion(code) {
+  const next = reliefEnabled.value && code ? String(code) : '';
+  if (next === hoveredRegionCode.value) return;
+  hoveredRegionCode.value = next;
+  regionSurfaces.forEach(mesh => {
+    const active = next && String(mesh.userData.code) === next;
+    mesh.material[0].color.setHex(active ? 0xa27aeb : mesh.userData.restColor);
+    mesh.material[0].emissive.setHex(active ? 0x4b2b82 : mesh.userData.restEmissive);
+    mesh.material[1].color.setHex(active ? 0xb9a5ff : 0xffffff);
+  });
+  if (renderer?.domElement) renderer.domElement.style.cursor = next ? 'pointer' : '';
+  renderFrame();
+}
+
+function onThreeHover(event) {
+  if (!reliefEnabled.value || !renderer || !camera || !raycaster || !pointer) return;
+  pointerPosition(event);
+  raycaster.setFromCamera(pointer, camera);
+  const hit = raycaster.intersectObjects(regionSurfaces, false)[0];
+  setHoveredRegion(hit?.object.userData.code || '');
+}
+
 function activateFallback(reason, error) {
   if (disposed) return;
   const firstFailure = !fallbackActive.value;
@@ -939,6 +1023,7 @@ function setupThree() {
     if (fallbackActive.value || !renderer) return;
     pointerHandler = onThreePointer;
     renderer.domElement.addEventListener('pointerup', pointerHandler);
+    renderer.domElement.addEventListener('pointermove', onThreeHover);
     resizeRenderer();
     if (fallbackActive.value || !renderer) return;
     webglReady.value = true;
@@ -949,6 +1034,8 @@ function setupThree() {
 }
 
 function disposeThree() {
+  renderer?.domElement?.removeEventListener('pointermove', onThreeHover);
+  regionSurfaces = [];
   if (renderer?.domElement && pointerHandler) renderer.domElement.removeEventListener('pointerup', pointerHandler);
   if (renderer?.domElement && contextLostHandler) {
     renderer.domElement.removeEventListener('webglcontextlost', contextLostHandler);
@@ -1063,7 +1150,8 @@ onBeforeUnmount(() => {
 .panorama-map__region path { fill: rgba(58, 83, 177, .76); stroke: #83b9ff; stroke-width: .24; vector-effect: non-scaling-stroke; cursor: pointer; transition: fill .2s ease; }
 .panorama-map__region path:hover,
 .panorama-map__region path:focus-visible,
-.panorama-map__region.is-selected path { fill: rgba(131, 84, 217, .9); stroke: #f3c8ff; outline: none; }
+.panorama-map__region.is-selected path,
+.panorama-map__region.is-hovered path { fill: rgba(131, 84, 217, .9); stroke: #f3c8ff; outline: none; }
 .panorama-map__region-label text { fill: rgba(227, 239, 255, .88); font-size: 2.1px; text-anchor: middle; pointer-events: auto; cursor: pointer; }
 .panorama-map__city-halo-svg { fill: rgba(75, 233, 255, .78); stroke: rgba(151, 249, 255, .98); stroke-width: .28; pointer-events: none; filter: drop-shadow(0 0 1.1px rgba(73, 235, 255, .95)); }
 .panorama-map__city-halo-svg.is-violet { fill: rgba(188, 116, 255, .78); stroke: rgba(237, 190, 255, .98); filter: drop-shadow(0 0 1.1px rgba(205, 130, 255, .95)); }
@@ -1072,8 +1160,11 @@ onBeforeUnmount(() => {
 .panorama-map__city-halo::after { content: ''; position: absolute; inset: -4px; border: 1px solid currentColor; border-radius: 50%; opacity: .38; }
 .panorama-map__city-halo.is-violet { border-color: rgba(226, 173, 255, .98); background: radial-gradient(circle, rgba(231, 176, 255, .96) 0 2px, rgba(172, 96, 247, .4) 3px 5px, rgba(172, 96, 247, 0) 72%); box-shadow: 0 0 7px rgba(197, 119, 255, .92), inset 0 0 7px rgba(214, 143, 255, .68); color: #d28cff; }
 .panorama-map__region-label-layer { position: absolute; z-index: 4; inset: 0; pointer-events: none; }
+.panorama-map__metric-heading { position: absolute; z-index: 4; top: 10px; left: 12px; padding: 4px 8px; border-radius: 4px; color: #8ce6e1; background: #07182ccc; font-size: 11px; pointer-events: none; }
+.panorama-map__metric-value { display: block; font-size: 10px; color: #96eee6; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.panorama-map__metric-svg { fill: #96eee6 !important; font-size: 2px !important; pointer-events: none; }
 .panorama-map__region-label-hit { position: absolute; transform: translate(-50%, -50%); padding: 1px 3px; border: 1px solid transparent; border-radius: 3px; color: rgba(227, 239, 255, .82); background: transparent; text-shadow: 0 1px 3px #05133b, 0 0 5px #05133b; font-size: 11px; white-space: nowrap; cursor: pointer; pointer-events: auto; }
-.panorama-map__region-label-hit:hover, .panorama-map__region-label-hit:focus-visible, .panorama-map__region-label-hit.is-selected { border-color: #f0caff; color: #fff1ff; background: rgba(101, 61, 175, .88); outline: 2px solid rgba(210, 160, 255, .32); }
+.panorama-map__region-label-hit:hover, .panorama-map__region-label-hit:focus-visible, .panorama-map__region-label-hit.is-selected, .panorama-map__region-label-hit.is-hovered { border-color: #f0caff; color: #fff1ff; background: rgba(101, 61, 175, .88); outline: 2px solid rgba(210, 160, 255, .32); }
 .panorama-map[data-appearance='relief'] .panorama-map__region-label-hit { color: rgba(237, 247, 255, .94); font-weight: 700; text-shadow: 0 1px 4px #03133d, 0 0 8px #03133d; }
 
 .panorama-map__point-layer { position: absolute; z-index: 3; inset: 0; pointer-events: none; }

@@ -56,6 +56,8 @@ public final class CodeScreenPresentationValidator {
     private static final int DATA_NOTICE_MAX_LENGTH = 240;
     private static final int METRIC_LABEL_MAX_LENGTH = 40;
     private static final int SOURCE_AVAILABILITY_MESSAGE_MAX_LENGTH = 120;
+    /** 运行目录只消费可信包内的明确分类；DEMO 等展示文案不能成为安全标签。 */
+    private static final Set<String> DATA_CLASSIFICATIONS = Set.of("TEST", "LIVE", "PROD");
     private static final Set<String> SOURCE_AVAILABILITY_STATUSES = Set.of(
             "AVAILABLE", "NO_SOURCE", "NO_ROWS", "NO_VALUES", "PARTIAL", "HISTORICAL");
     private static final Set<String> METRIC_LABEL_KEYS = Set.of(
@@ -90,6 +92,23 @@ public final class CodeScreenPresentationValidator {
         }
         validatePresentation(presentation);
         return presentation.path("template").asText();
+    }
+
+    /**
+     * 读取可信画布声明的数据分类。缺省返回 {@code null}，由运行目录按模板约定使用接口数据模式；
+     * 显式值必须来自白名单，不能通过 dataNotice 等自由文本推断。
+     */
+    public static String dataClassification(JsonNode canvasStyle) {
+        if (canvasStyle == null || !canvasStyle.isObject()
+                || !canvasStyle.has("dataClassification")) {
+            return null;
+        }
+        JsonNode classification = canvasStyle.get("dataClassification");
+        if (classification == null || !classification.isTextual()
+                || !DATA_CLASSIFICATIONS.contains(classification.asText())) {
+            throw invalid();
+        }
+        return classification.asText();
     }
 
     /**
@@ -326,6 +345,10 @@ public final class CodeScreenPresentationValidator {
                 && !isInstitutionWideTable(datasource)) {
             throw invalid();
         }
+        if (M98StatPolicy.SOURCE_KIND.equals(datasource.getSourceKind())
+                && !M98StatPolicy.allowsCodeBinding(bindingKey)) {
+            throw invalid();
+        }
         Map<String, String> outputRoles = outputRoles(datasource);
         JsonNode fields = bind.path("fields");
         Iterator<Map.Entry<String, JsonNode>> entries = fields.fields();
@@ -439,6 +462,7 @@ public final class CodeScreenPresentationValidator {
         if (canvasStyle == null || !canvasStyle.isObject()) {
             return;
         }
+        dataClassification(canvasStyle);
         JsonNode dataNotice = canvasStyle.get("dataNotice");
         if (dataNotice != null && !dataNotice.isNull()) {
             validatePlainText(dataNotice, DATA_NOTICE_MAX_LENGTH, true);
@@ -844,6 +868,7 @@ public final class CodeScreenPresentationValidator {
                 roles.put("KPI总分", "METRIC");
             }
             case "KPI_DETAIL" -> addKpiDetailColumns(roles, config);
+            case "M98_STAT" -> roles.putAll(M98StatPolicy.outputRoles(config));
             case "CUSTOM_SQL" -> addFieldMetaColumns(roles, config.path("fieldMeta"), true);
             default -> throw invalid();
         }
@@ -895,6 +920,23 @@ public final class CodeScreenPresentationValidator {
     private static void addKpiDetailColumns(Map<String, String> roles, JsonNode config) {
         String mode = config.path("mode").asText();
         if ("SNAPSHOT".equals(mode)) {
+            if ("NAMED_GROUP".equalsIgnoreCase(config.path("scopeMode").asText())
+                    && "ORG".equals(config.path("subjectType").asText())) {
+                roles.put("org_code", "DIM");
+                roles.put("org_name", "DIM");
+                roles.put("data_date", "DIM");
+                roles.put("metric_code", "DIM");
+                roles.put("metric_name", "DIM");
+                roles.put("actual_value", "METRIC");
+                roles.put("target_value", "METRIC");
+                roles.put("weight", "METRIC");
+                roles.put("score", "METRIC");
+                roles.put("completion_rate", "METRIC");
+                roles.put("gap", "METRIC");
+                roles.put("attention_label", "DIM");
+                roles.put("attention_count", "METRIC");
+                return;
+            }
             roles.put("metric_code", "DIM");
             roles.put("细项名称", "DIM");
             roles.put("目标值", "METRIC");

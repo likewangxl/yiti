@@ -41,6 +41,28 @@
     </select>
 
     <!--
+        仅返回全局唯一机构归属员工：必须先对 EXT_USER_ORG 全表按 USER_ID 聚合，
+        再在外层过滤授权机构；若先 WHERE ORG_CODE IN，会将多机构员工误判为唯一归属。
+    -->
+    <select id="selectUniqueUserOrgs"
+            resultType="com.bank.branch.platform.auth.api.dto.UniqueUserOrgDTO">
+        SELECT unique_org.USER_ID AS emp_id,
+               unique_org.ORG_CODE AS org_code
+        FROM (
+            SELECT USER_ID,
+                   MIN(ORG_CODE) AS ORG_CODE
+            FROM EXT_USER_ORG
+            GROUP BY USER_ID
+            HAVING COUNT(DISTINCT ORG_CODE) = 1
+        ) unique_org
+        WHERE unique_org.ORG_CODE IN
+        <foreach collection="orgCodes" item="orgCode" open="(" separator="," close=")">
+            #{orgCode}
+        </foreach>
+        ORDER BY unique_org.USER_ID ASC
+    </select>
+
+    <!--
         根据用户ID查询用户所属机构的完整信息，通过 JOIN EXT_ORG_INFO 获取机构详情。
         P_ID 不含下划线，使用别名 p_id 确保 underscore-to-camel 能正确映射到 pId 字段。
         只返回 ORGAN_STATE = 0（启用）的机构，避免将已注销机构加入权限计算。

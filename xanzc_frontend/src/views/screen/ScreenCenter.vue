@@ -48,8 +48,8 @@
 
     <section v-else-if="screens.length === 0" class="screen-center__state" aria-live="polite">
       <span class="screen-center__state-icon" aria-hidden="true">▣</span>
-      <h2>当前没有可访问大屏</h2>
-      <p>获得大屏访问权限后，对应页面会显示在这里。</p>
+      <h2>当前没有已接入大屏</h2>
+      <p>尚未接入的授权大屏需要完成可信发布和数据源绑定后，才会显示在这里。</p>
     </section>
 
     <section v-else-if="filteredScreens.length === 0" class="screen-center__state" aria-live="polite">
@@ -76,7 +76,7 @@
         <div class="screen-card__body">
           <div class="screen-card__title-row">
             <h2>{{ displayName(screen) }}</h2>
-            <span class="screen-card__demo-badge">{{ dataModeLabel(screen.dataMode) }}</span>
+            <span class="screen-card__mode-badge">{{ dataModeLabel(screen.dataMode) }}</span>
           </div>
           <p class="screen-card__code">编码：{{ screen.screenCode }}</p>
           <div class="screen-card__meta">
@@ -107,9 +107,9 @@ const BIZ_LINE_LABELS = Object.freeze({ COMMON: '综合', CORP: '对公', RETAIL
 const VIEW_LEVEL_LABELS = Object.freeze({ PROVINCE: '全辖', BRANCH: '机构', PERSON: '个人' });
 const SUPPORTED_TEMPLATES = new Set(['branch-overview-v1', 'retail-overview-v1', 'corporate-overview-v1']);
 const REGISTERED_MODES = Object.freeze({
-  'branch-overview-v1': 'TEST',
-  'retail-overview-v1': 'DEMO',
-  'corporate-overview-v1': 'LIVE'
+  'branch-overview-v1': Object.freeze(['TEST']),
+  'retail-overview-v1': Object.freeze(['TEST', 'LIVE']),
+  'corporate-overview-v1': Object.freeze(['TEST', 'LIVE'])
 });
 
 const router = useRouter();
@@ -150,8 +150,11 @@ function viewLevelLabel(value) {
 function dataModeLabel(value) {
   if (value === 'TEST') return '测试库数据';
   if (value === 'LIVE') return '已接入数据';
-  if (value === 'DEMO') return '演示数据';
   return '数据模式未知';
+}
+
+function hasRegisteredMode(screen) {
+  return REGISTERED_MODES[screen?.template]?.includes(screen?.dataMode) || false;
 }
 
 function normalizeCatalog(catalog) {
@@ -159,7 +162,7 @@ function normalizeCatalog(catalog) {
   return catalog.filter((screen) => screen
     && screen.screenCode
     && SUPPORTED_TEMPLATES.has(screen.template)
-    && screen.dataMode === REGISTERED_MODES[screen.template]);
+    && hasRegisteredMode(screen));
 }
 
 async function loadCatalog() {
@@ -182,7 +185,7 @@ async function loadCatalog() {
 
 function openScreen(screen) {
   const template = screen?.template;
-  if (!SUPPORTED_TEMPLATES.has(template) || screen?.dataMode !== REGISTERED_MODES[template]) return;
+  if (!SUPPORTED_TEMPLATES.has(template) || !hasRegisteredMode(screen)) return;
   router.push({ name: 'CodeScreenPage', params: { template } });
 }
 
@@ -229,7 +232,7 @@ onBeforeUnmount(() => {
 .screen-card__body { display: flex; flex: 1 1 auto; min-width: 0; flex-direction: column; }
 .screen-card__title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .screen-card h2 { margin-bottom: 7px; overflow: hidden; color: var(--color-text); font-size: 17px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
-.screen-card__demo-badge { flex: 0 0 auto; padding: 4px 7px; color: var(--color-warning-700, #8a5a00); background: var(--color-warning-100, #fff5d6); border-radius: 10px; font-size: 11px; white-space: nowrap; }
+.screen-card__mode-badge { flex: 0 0 auto; padding: 4px 7px; color: var(--color-warning-700, #8a5a00); background: var(--color-warning-100, #fff5d6); border-radius: 10px; font-size: 11px; white-space: nowrap; }
 .screen-card__code { overflow: hidden; margin-bottom: 12px; color: var(--color-text-muted); font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .screen-card__meta { display: flex; flex-wrap: wrap; gap: 7px; color: var(--color-text-muted); font-size: 12px; }
 .screen-card__meta span { padding: 4px 8px; background: var(--color-surface-soft); border-radius: 12px; }

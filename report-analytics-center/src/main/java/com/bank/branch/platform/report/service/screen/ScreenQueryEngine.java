@@ -97,6 +97,7 @@ public class ScreenQueryEngine {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final int maxRows;
     private final OrgApi orgApi;
+    private final M98StatQuery m98StatQuery;
 
     /** 由 performance 提供的不可变批次查询契约；未配置 batchPolicy 时完全不参与旧路径。 */
     @Autowired(required = false)
@@ -122,6 +123,7 @@ public class ScreenQueryEngine {
         this.whitelistUpper = whitelistTables.stream()
                 .map(t -> t.trim().toUpperCase(java.util.Locale.ROOT))
                 .collect(java.util.stream.Collectors.toSet());
+        this.m98StatQuery = new M98StatQuery(readOnlyDataSource, orgApi);
     }
 
     /** 包级测试注入点；生产环境由 Spring 注入 performance 公共只读契约。 */
@@ -177,6 +179,21 @@ public class ScreenQueryEngine {
         JsonNode cfg = readConfig(configJson);
         if (usesImmutableBatch(sourceKind, cfg, req)) {
             return runImmutableBatch(cfg, req, today, limit);
+        }
+        if (isNamedKpiDetail(cfg, sourceKind, req)) {
+            // 命名组 KPI 细项只返回服务端已核验机构集合的交集；不使用客户端 orgCode，
+            // 也不走逐机构 latest，确保同一响应只有一个共同数据日期。
+            List<String> authorized = namedGroupAuthorizedOrgCodes(req);
+            BuiltQuery q = build(sourceKind, configJson, req, limit, today, null);
+            ScreenDataRespDTO resp = execute(q);
+            attachKpiDetailQuality(resp, authorized);
+            fillColumnsMeta(resp, configJson);
+            return resp;
+        }
+        if (isNamedM98Stat(cfg, sourceKind, req)) {
+            List<String> authorized = namedGroupAuthorizedOrgCodes(req);
+            List<String> output = namedGroupOutputOrgCodes(req);
+            return m98StatQuery.query(cfg.path("profile").asText(), authorized, output, today, limit);
         }
         if (needsWideBatchResolution(sourceKind, cfg, req, today)) {
             // 先在建立连接前校验授权集合，空集合直接 fail-close，避免任何全量查询旁路。
@@ -733,15 +750,19 @@ public class ScreenQueryEngine {
     private BuiltQuery build(String sourceKind, String configJson, ScreenDataReqDTO req, int limit,
                              LocalDate today, BatchResolution resolution) {
         JsonNode cfg = readConfig(configJson);
-        if (isNamedGroup(cfg, req) && !"WIDE_TABLE".equals(sourceKind)) {
-            // 本期只为内置机构宽表建立了可证明的机构范围约束；CUSTOM_SQL 延期，不能留下
-            // 看似有标记/外层包装但无法长期审计等价性的旁路。
+        if (isNamedGroup(cfg, req)
+                && !"WIDE_TABLE".equals(sourceKind)
+                && !isNamedKpiDetailConfig(sourceKind, cfg)
+                && !isNamedM98StatConfig(sourceKind, cfg)) {
+            // 命名组只能绑定服务端可证明机构约束的内置查询；CUSTOM_SQL/KPI_RESULT 及
+            // KPI_DETAIL 的 EMP/TREND 组合没有本次 ORG 快照的固定安全落点。
             throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
         }
         return switch (sourceKind == null ? "" : sourceKind) {
             case "WIDE_TABLE" -> buildWideTableQuery(cfg, req, limit, today, resolution);
             case "KPI_RESULT" -> buildKpiQuery(cfg, req, limit, today);
             case "KPI_DETAIL" -> buildKpiDetailQuery(cfg, req, limit, today);
+            case "M98_STAT" -> buildM98StatQuery(cfg, req, limit, today);
             case "CUSTOM_SQL" -> buildCustomQuery(cfg, req, limit, today);
             default -> throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
         };
@@ -1311,6 +1332,10 @@ public class ScreenQueryEngine {
         if (schemeCode.isBlank()) {
             throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
         }
+        if ("NAMED_GROUP".equalsIgnoreCase(cfg.path("scopeMode").asText())
+                || (req != null && req.isNamedGroup())) {
+            return buildNamedKpiDetailSnapshot(cfg, req, limit);
+        }
         String subjectType = cfg.path("subjectType").asText();
         String ctxName = KPI_DETAIL_SUBJECT_PARAMS.get(subjectType);
         if (ctxName == null) {
@@ -1322,6 +1347,127 @@ public class ScreenQueryEngine {
             case "TREND" -> buildKpiDetailTrend(cfg, schemeCode, subjectType, ctxParam(req, ctxName), req, limit, today);
             default -> throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
         };
+    }
+
+    /**
+     * 命名机构组 KPI_DETAIL 的固定 ORG 快照查询。
+     *
+     * <p>外层只绑定 serverOrgCodes（其已由 serverAuthorizedOrgCodes 收口），共同日期子查询
+     * 使用完整授权集合；因此某机构缺数据时只返回有数据的交集行，并通过 quality 暴露 PARTIAL，
+     * 不按机构各取 latest，也不补造缺失机构行。</p>
+     */
+    private BuiltQuery buildNamedKpiDetailSnapshot(JsonNode cfg, ScreenDataReqDTO req, int limit) {
+        if (!isNamedKpiDetailConfig("KPI_DETAIL", cfg)) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
+        String schemeCode = cfg.path("schemeCode").asText();
+        List<String> outputCodes = namedGroupOutputOrgCodes(req);
+        List<String> authorizedCodes = namedGroupAuthorizedOrgCodes(req);
+        List<String> metricCodes = namedKpiMetricCodes(cfg);
+
+        StringBuilder sql = new StringBuilder(
+                "SELECT s.subject_id AS org_code, o.ORG_NAME AS org_name, s.data_date AS data_date, "
+                        + "s.metric_code AS metric_code, COALESCE(d.metric_name, s.metric_code) AS metric_name, "
+                        + "s.actual_value AS actual_value, s.target_value AS target_value, "
+                        + "s.weight AS weight, s.score AS score, "
+                        + KPI_COMPLETE_RATE_EXPR + " AS completion_rate, "
+                        + "s.target_value - s.actual_value AS gap, "
+                        + "CONCAT(COALESCE(o.ORG_NAME, s.subject_id), ' ', "
+                        + "COALESCE(d.metric_name, s.metric_code), '目标待跟进') AS attention_label, "
+                        + "CASE WHEN s.actual_value IS NULL OR s.target_value IS NULL "
+                        + "OR s.target_value <= 0 THEN NULL "
+                        + "WHEN s.actual_value < s.target_value THEN 1 ELSE 0 END AS attention_count "
+                        + "FROM PERF_KPI_SCORE s "
+                        + "LEFT JOIN PERF_METRIC_DEF d ON d.metric_code = s.metric_code AND d.deleted = 0 "
+                        + "LEFT JOIN EXT_ORG_INFO o ON o.ORG_CODE = s.subject_id "
+                        + "WHERE s.scheme_code = ? AND s.subject_type = ? AND s.subject_id IN (");
+        List<Object> params = new ArrayList<>();
+        params.add(schemeCode);
+        params.add("ORG");
+        appendPlaceholders(sql, outputCodes.size());
+        sql.append(") AND s.data_date = (SELECT MAX(common.data_date) FROM PERF_KPI_SCORE common "
+                + "WHERE common.scheme_code = ? AND common.subject_type = ? AND common.subject_id IN (");
+        params.addAll(outputCodes);
+        params.add(schemeCode);
+        params.add("ORG");
+        appendPlaceholders(sql, authorizedCodes.size());
+        sql.append(")");
+        params.addAll(authorizedCodes);
+        if (!metricCodes.isEmpty()) {
+            sql.append(" AND common.metric_code IN (");
+            appendPlaceholders(sql, metricCodes.size());
+            sql.append(")");
+            params.addAll(metricCodes);
+        }
+        sql.append(")");
+        if (!metricCodes.isEmpty()) {
+            sql.append(" AND s.metric_code IN (");
+            appendPlaceholders(sql, metricCodes.size());
+            sql.append(")");
+            params.addAll(metricCodes);
+        }
+        sql.append(" ORDER BY s.subject_id, s.metric_code LIMIT ").append(limit);
+        return new BuiltQuery(sql.toString(), params);
+    }
+
+    private void appendPlaceholders(StringBuilder sql, int count) {
+        if (count <= 0) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        sql.append(String.join(", ", java.util.Collections.nCopies(count, "?")));
+    }
+
+    private boolean isNamedKpiDetail(JsonNode cfg, String sourceKind, ScreenDataReqDTO req) {
+        return isNamedGroup(cfg, req) && isNamedKpiDetailConfig(sourceKind, cfg);
+    }
+
+    private BuiltQuery buildM98StatQuery(JsonNode cfg, ScreenDataReqDTO req, int limit, LocalDate today) {
+        if (!isNamedM98StatConfig("M98_STAT", cfg)) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
+        List<String> authorized = namedGroupAuthorizedOrgCodes(req);
+        List<String> output = namedGroupOutputOrgCodes(req);
+        M98StatQuery.ScreenQueryPlan plan = m98StatQuery.previewPlan(
+                cfg.path("profile").asText(), authorized, output, today, limit);
+        return new BuiltQuery(plan.sql(), plan.params());
+    }
+
+    /** 命名组 KPI_DETAIL 的精确组合；旧 SUBJECT/EMP/TREND 路径仍由既有分支处理。 */
+    private boolean isNamedKpiDetailConfig(String sourceKind, JsonNode cfg) {
+        return "KPI_DETAIL".equals(sourceKind)
+                && cfg.path("schemaVersion").isIntegralNumber()
+                && cfg.path("schemaVersion").asInt() == 2
+                && "NAMED_GROUP".equalsIgnoreCase(cfg.path("scopeMode").asText())
+                && "ORG".equals(cfg.path("subjectType").asText())
+                && "SNAPSHOT".equals(cfg.path("mode").asText())
+                && !cfg.path("schemeCode").asText().isBlank();
+    }
+
+    private boolean isNamedM98Stat(JsonNode cfg, String sourceKind, ScreenDataReqDTO req) {
+        return isNamedGroup(cfg, req) && isNamedM98StatConfig(sourceKind, cfg);
+    }
+
+    private boolean isNamedM98StatConfig(String sourceKind, JsonNode cfg) {
+        return M98StatPolicy.SOURCE_KIND.equals(sourceKind) && M98StatPolicy.isStrictConfig(cfg);
+    }
+
+    private List<String> namedKpiMetricCodes(JsonNode cfg) {
+        JsonNode metrics = cfg.path("metrics");
+        if (metrics.isMissingNode() || metrics.isNull()) {
+            return List.of();
+        }
+        if (!metrics.isArray() || metrics.isEmpty()) {
+            throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
+        LinkedHashSet<String> codes = new LinkedHashSet<>();
+        for (JsonNode metric : metrics) {
+            String code = metric.path("metricCode").asText();
+            if (code.isBlank()) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
+            codes.add(code.trim());
+        }
+        return new ArrayList<>(codes);
     }
 
     /** SNAPSHOT：主体最新 data_date 当日全部细项，列清单固定（一行一细项） */
@@ -1416,7 +1562,7 @@ public class ScreenQueryEngine {
 
     private boolean isNamedGroup(JsonNode cfg, ScreenDataReqDTO req) {
         return "NAMED_GROUP".equalsIgnoreCase(cfg.path("scopeMode").asText())
-                || req.isNamedGroup();
+                || (req != null && req.isNamedGroup());
     }
 
     /** 追加服务端机构范围谓词，机构编码永不拼接到 SQL。 */
@@ -1453,6 +1599,83 @@ public class ScreenQueryEngine {
             throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
         }
         return new ArrayList<>(normalized);
+    }
+
+    /** 命名组 KPI 日期选择使用完整服务端授权集合，缺失或空集合一律拒绝。 */
+    private List<String> namedGroupAuthorizedOrgCodes(ScreenDataReqDTO req) {
+        if (req == null) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        return requiredOrgCodes(req.getServerAuthorizedOrgCodes());
+    }
+
+    /** 命名组 KPI 外层结果只接受 serverOrgCodes，并验证其为完整授权集合的子集。 */
+    private List<String> namedGroupOutputOrgCodes(ScreenDataReqDTO req) {
+        List<String> authorized = namedGroupAuthorizedOrgCodes(req);
+        List<String> output = requiredOrgCodes(req == null ? null : req.getServerOrgCodes());
+        if (!authorized.containsAll(output)) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        return output;
+    }
+
+    private List<String> requiredOrgCodes(Collection<String> source) {
+        if (source == null || source.isEmpty()) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        LinkedHashSet<String> codes = new LinkedHashSet<>();
+        for (String code : source) {
+            if (code == null || code.isBlank()) {
+                throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+            }
+            codes.add(code.trim());
+        }
+        if (codes.isEmpty()) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        return new ArrayList<>(codes);
+    }
+
+    /** 从命名组 KPI 固定结果列推导质量摘要，不为缺失机构创建任何虚假行。 */
+    private void attachKpiDetailQuality(ScreenDataRespDTO response, List<String> authorizedCodes) {
+        List<String> columns = response.getColumns() == null ? List.of() : response.getColumns();
+        int orgIndex = columns.indexOf("org_code");
+        int dateIndex = columns.indexOf("data_date");
+        LinkedHashSet<String> receivedCodes = new LinkedHashSet<>();
+        String dataDate = null;
+        if (response.getRows() != null) {
+            for (List<Object> row : response.getRows()) {
+                if (row == null) {
+                    continue;
+                }
+                if (orgIndex >= 0 && orgIndex < row.size()) {
+                    String code = normalizeOrgCode(row.get(orgIndex));
+                    if (code != null) {
+                        receivedCodes.add(code);
+                    }
+                }
+                if (dataDate == null && dateIndex >= 0 && dateIndex < row.size() && row.get(dateIndex) != null) {
+                    String value = String.valueOf(row.get(dateIndex)).trim();
+                    if (!value.isEmpty()) {
+                        dataDate = value;
+                    }
+                }
+            }
+        }
+        List<String> missing = authorizedCodes.stream()
+                .filter(code -> !receivedCodes.contains(code)).toList();
+        int expected = authorizedCodes.size();
+        int received = receivedCodes.size();
+        String status = expected == received ? "COMPLETE" : "PARTIAL";
+        ScreenDataRespDTO.Quality quality = new ScreenDataRespDTO.Quality(
+                null, dataDate, null, status, expected, received, null, null,
+                "COMPLETE".equals(status) ? null : "仅返回授权机构与 KPI 数据的交集");
+        quality.setSelectedComplete("COMPLETE".equals(status));
+        quality.setMixedPeriod(false);
+        quality.setMissing(List.of());
+        quality.setMissingSubjects(missing);
+        quality.setNewerIncomplete(List.of());
+        response.setQuality(quality);
     }
 
     private String ctxParam(ScreenDataReqDTO req, String name) {

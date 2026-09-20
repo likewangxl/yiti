@@ -24,7 +24,7 @@ const catalog = [
   },
   {
     screenCode: 'SCR_RETAIL_OVERVIEW', screenName: '零售经营总览', viewLevel: 'BRANCH', bizLine: 'RETAIL',
-    template: 'retail-overview-v1', dataMode: 'DEMO'
+    template: 'retail-overview-v1', dataMode: 'LIVE'
   }
 ];
 
@@ -53,7 +53,7 @@ describe('ScreenCenter.vue', () => {
     expect(routerPush).toHaveBeenCalledWith({ name: 'CodeScreenPage', params: { template: 'corporate-overview-v1' } });
   });
 
-  it('呈现后端目录、演示标签并按模板导航到受保护页面', async () => {
+  it('呈现后端目录、接口数据标签并按模板导航到受保护页面', async () => {
     const center = await mountCenter();
 
     expect(center.findAll('[data-screen-card]')).toHaveLength(2);
@@ -61,7 +61,7 @@ describe('ScreenCenter.vue', () => {
     expect(center.text()).toContain('分行经营总览');
     expect(center.text()).toContain('零售经营总览');
     expect(center.text()).toContain('测试库数据');
-    expect(center.text()).toContain('演示数据');
+    expect(center.text()).toContain('已接入数据');
 
     await center.find('[data-screen-code="SCR_RETAIL_OVERVIEW"] button').trigger('click');
     expect(routerPush).toHaveBeenCalledWith({
@@ -86,7 +86,7 @@ describe('ScreenCenter.vue', () => {
     listAvailableScreens.mockResolvedValueOnce([]);
     wrapper = mount(ScreenCenter);
     await flushPromises();
-    expect(wrapper.text()).toContain('当前没有可访问大屏');
+    expect(wrapper.text()).toContain('当前没有已接入大屏');
     wrapper.unmount();
 
     listAvailableScreens.mockRejectedValueOnce(new Error('目录接口不可用'));

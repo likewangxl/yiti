@@ -359,6 +359,83 @@ class ScreenDatasourceServiceTest {
     }
 
     @Test
+    void save_kpiDetailNamedGroup_orgSnapshot_isAcceptedWithStrictConfig() {
+        when(kpiSchemeMapper.selectCount(any())).thenReturn(1L);
+
+        service.save(kpiDetailReq(namedKpiNamedGroupConfig()));
+
+        ArgumentCaptor<RptScreenDatasource> cap = ArgumentCaptor.forClass(RptScreenDatasource.class);
+        verify(dsMapper).insert(cap.capture());
+        assertThat(cap.getValue().getDsType()).isEqualTo("SINGLE");
+        assertThat(cap.getValue().getConfigJson()).contains("\"scopeMode\":\"NAMED_GROUP\"")
+                .contains("\"subjectType\":\"ORG\"")
+                .contains("\"mode\":\"SNAPSHOT\"");
+    }
+
+    @Test
+    void save_kpiDetailNamedGroup_empOrTrend_remainsRejected() {
+        when(kpiSchemeMapper.selectCount(any())).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.save(kpiDetailReq(namedKpiNamedGroupConfig()
+                        .replace("\"subjectType\":\"ORG\"", "\"subjectType\":\"EMP\""))))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_DS_CONFIG_INVALID.getCode());
+        assertThatThrownBy(() -> service.save(kpiDetailReq(namedKpiNamedGroupConfig()
+                        .replace("\"mode\":\"SNAPSHOT\"", "\"mode\":\"TREND\""))))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_DS_CONFIG_INVALID.getCode());
+        verify(dsMapper, never()).insert(any(RptScreenDatasource.class));
+    }
+
+    @Test
+    void tryRun_kpiDetailNamedGroup_resolvesServerMemberCodesAndKeepsContextUntrusted() {
+        when(kpiSchemeMapper.selectCount(any())).thenReturn(1L);
+        when(scopeAuthorizationService.testGroupMemberCodes("G_CORP"))
+                .thenReturn(Set.of("128", "129"));
+        when(engine.tryRun(any(), any(), any())).thenReturn(new ScreenDataRespDTO(List.of("org_code"),
+                List.of(List.of("128"))));
+
+        ScreenTryRunReqDTO req = new ScreenTryRunReqDTO();
+        req.setSourceKind("KPI_DETAIL");
+        req.setConfigJson(namedKpiNamedGroupConfig());
+        req.setTestOrgGroupCode("G_CORP");
+        req.setContextParams(Map.of("orgCode", "forged-client-org"));
+        req.setReason("验证命名组 KPI 试跑");
+
+        service.tryRun(req);
+
+        ArgumentCaptor<ScreenDataReqDTO> dataReq = ArgumentCaptor.forClass(ScreenDataReqDTO.class);
+        verify(engine).tryRun(org.mockito.ArgumentMatchers.eq("KPI_DETAIL"),
+                org.mockito.ArgumentMatchers.anyString(), dataReq.capture());
+        assertThat(dataReq.getValue().getServerOrgCodes()).containsExactlyInAnyOrder("128", "129");
+        assertThat(dataReq.getValue().getServerAuthorizedOrgCodes()).containsExactlyInAnyOrder("128", "129");
+        assertThat(dataReq.getValue().getContextParams()).containsEntry("orgCode", "forged-client-org");
+    }
+
+    @Test
+    void update_namedGroupPublishedKpiDetail_rechecksAndAcceptsStrictConfig() {
+        when(kpiSchemeMapper.selectCount(any())).thenReturn(1L);
+        RptScreenDatasource existing = new RptScreenDatasource();
+        existing.setId(6L);
+        existing.setDsCode("SCRDS_KPI");
+        existing.setDsName("命名组 KPI");
+        existing.setDsType("SINGLE");
+        existing.setSourceKind("KPI_DETAIL");
+        existing.setBizLine("COMMON");
+        existing.setStatus("ACTIVE");
+        existing.setConfigJson(namedKpiNamedGroupConfig());
+        when(dsMapper.selectById(6L)).thenReturn(existing);
+
+        RptScreen screen = namedGroupRuntimeScreen();
+        screen.setCanvasPublishedJson("{\"bindSnapshots\":{\"31\":{\"bind\":{\"dsId\":6}}}}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+
+        service.update(6L, kpiDetailReq(namedKpiNamedGroupConfig()));
+
+        verify(dsMapper).updateById(any(RptScreenDatasource.class));
+    }
+
+    @Test
     void save_kpiDetail_illegalValueCol_throws43009() {
         when(kpiSchemeMapper.selectCount(any())).thenReturn(1L);
         assertThatThrownBy(() -> service.save(kpiDetailReq(
@@ -367,6 +444,38 @@ class ScreenDatasourceServiceTest {
                         + "\"metrics\":[{\"metricCode\":\"M_D1\",\"metricName\":\"存款细项\"}]}")))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43009");
+    }
+
+    @Test
+    void save_m98SummaryNamedGroup_enforcesProfileLineAndSingle() {
+        service.save(m98Req("CORP_REVENUE", "CORP", "SINGLE"));
+
+        ArgumentCaptor<RptScreenDatasource> cap = ArgumentCaptor.forClass(RptScreenDatasource.class);
+        verify(dsMapper).insert(cap.capture());
+        assertThat(cap.getValue().getSourceKind()).isEqualTo("M98_STAT");
+        assertThat(cap.getValue().getDsType()).isEqualTo("SINGLE");
+        assertThat(cap.getValue().getConfigJson()).contains("\"profile\":\"CORP_REVENUE\"")
+                .contains("\"mode\":\"SUMMARY\"");
+    }
+
+    @Test
+    void save_m98RejectsUnknownProfileWrongLineTrendAndExtraSqlConfig() {
+        assertThatThrownBy(() -> service.save(m98Req("CORP_LOAN", "CORP", "SINGLE")))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_DS_CONFIG_INVALID.getCode());
+        assertThatThrownBy(() -> service.save(m98Req("CORP_REVENUE", "RETAIL", "SINGLE")))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_BIZ_LINE_MISMATCH.getCode());
+        assertThatThrownBy(() -> service.save(m98Req("CORP_REVENUE", "CORP", "TIMESERIES")))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_DS_CONFIG_INVALID.getCode());
+        ScreenDatasourceSaveReqDTO extra = m98Req("CORP_REVENUE", "CORP", "SINGLE");
+        extra.setConfigJson(extra.getConfigJson().replace("\"mode\":\"SUMMARY\"}",
+                "\"mode\":\"SUMMARY\",\"sql\":\"SELECT 1\"}"));
+        assertThatThrownBy(() -> service.save(extra))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_DS_CONFIG_INVALID.getCode());
+        verify(dsMapper, never()).insert(any(RptScreenDatasource.class));
     }
 
     @Test
@@ -1004,6 +1113,18 @@ class ScreenDatasourceServiceTest {
         return req;
     }
 
+    private ScreenDatasourceSaveReqDTO m98Req(String profile, String bizLine, String dsType) {
+        ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
+        req.setDsName("M98统计");
+        req.setBizLine(bizLine);
+        req.setSourceKind("M98_STAT");
+        req.setDsType(dsType);
+        req.setConfigJson("{\"schemaVersion\":2,\"scopeMode\":\"NAMED_GROUP\","
+                + "\"profile\":\"" + profile + "\",\"mode\":\"SUMMARY\"}");
+        req.setReason("测试保存 M98 统计数据源");
+        return req;
+    }
+
     private void mockSlotEmp() {
         when(slotDao.selectByCodes(anyList())).thenReturn(
                 List.of(new ScreenMetricSlotDao.MetricSlot("M_0001", "存款余额", 3, "EMP")));
@@ -1053,6 +1174,12 @@ class ScreenDatasourceServiceTest {
         ds.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","
                 + "\"aggregation\":{\"groupBy\":\"SUBJECT\"}}");
         return ds;
+    }
+
+    private String namedKpiNamedGroupConfig() {
+        return "{\"schemaVersion\":2,\"scopeMode\":\"NAMED_GROUP\","
+                + "\"schemeCode\":\"KPI0724\",\"subjectType\":\"ORG\",\"mode\":\"SNAPSHOT\","
+                + "\"metrics\":[{\"metricCode\":\"M0277\"}]}";
     }
 
     private ScreenDataReqDTO namedGroupRequest() {

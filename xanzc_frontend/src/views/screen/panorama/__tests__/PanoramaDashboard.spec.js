@@ -6,6 +6,7 @@ import { mount } from '@vue/test-utils';
 vi.mock('../PanoramaMap.vue', () => ({
   default: {
     name: 'PanoramaMap',
+    props: ['metricLabel', 'metricValues'],
     template: '<div class="panorama-map-stub"><button type="button" class="stub-select-region" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">选择西安</button><button type="button" class="stub-select-branch" @click="$emit(\'branch-select\', \'ORG-1\')">选择支行</button></div>',
     emits: ['region-select', 'branch-select']
   }
@@ -351,5 +352,85 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     const wrapper = mountDashboard({ model: extendedModel });
     expect(wrapper.get('.panorama-map-panel').text()).toContain('全辖机构分布');
     expect(wrapper.get('.panorama-map-panel').text()).not.toContain('陕西省分行机构分布');
+  });
+
+  it('分行三项行动区明确展示目标缺口、未达标机构和协调事项，且指标切换同步地图口径', async () => {
+    const wrapper = mountDashboard({
+      model: {
+        ...extendedModel,
+        attention: [{ label: '宝鸡市分行', count: 2 }],
+        citySummaries: { '610100': { kpis: [{ key: 'deposit', value: 42.5, unit: '亿元' }] } }
+      }
+    });
+    const diagnostics = wrapper.findAll('[data-testid="leadership-diagnostics"] [data-diagnostic]');
+    expect(diagnostics.map(card => card.find('.panorama-diagnostic-label').text())).toEqual(['目标缺口', '未达标机构', '协调事项']);
+    expect(diagnostics[0].text()).toContain('目标');
+    expect(diagnostics[1].text()).toContain('未完成目标机构');
+    expect(diagnostics[2].text()).toContain('2');
+
+    const map = wrapper.findComponent({ name: 'PanoramaMap' });
+    expect(map.props('metricLabel')).toBe('存款余额');
+    expect(map.props('metricValues')).toMatchObject({ '610100': '42.50亿元' });
+    await wrapper.get('[data-ranking-mode="increase"]').trigger('click');
+    expect(map.props('metricLabel')).toBe('存款净增');
+  });
+
+  it('权限错误清除城市弹层与搜索缓存，恢复后不复用旧选择', async () => {
+    const wrapper=mountDashboard({model:extendedModel});
+    await wrapper.get('.stub-select-region').trigger('click');
+    await nextTick();
+    await wrapper.get('[data-testid="branch-search"]').setValue('旧条件');
+    await wrapper.setProps({error:'没有权限（403）',model:{institutions:[]}});
+    expect(wrapper.find('[data-testid="city-panorama-modal"]').exists()).toBe(false);
+    await wrapper.setProps({error:'',model:extendedModel});
+    await wrapper.get('.stub-select-region').trigger('click');await nextTick();
+    expect(wrapper.get('[data-testid="branch-search"]').element.value).toBe('');
+  });
+
+  it('排名点击带 cityCode 的机构直接打开对应城市画像', async () => {
+    const wrapper = mountDashboard({ model: extendedModel });
+    await wrapper.get('[data-testid="ranking-row"]').trigger('click');
+    await nextTick();
+    expect(wrapper.find('[data-testid="city-panorama-modal"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="city-panorama-modal"]').attributes('aria-label')).toContain('西安市');
+  });
+
+  it('城市画像关闭后恢复搜索、关注、排序、分页、选中和展开状态', async () => {
+    const wrapper = mountDashboard({
+      model: {
+        ...extendedModel,
+        institutions: Array.from({ length: 7 }, (_, index) => ({
+          orgCode: `CITY-${index + 1}`,
+          orgName: `西安支行${index + 1}`,
+          cityCode: '610100',
+          located: true,
+          lng: 108.8 + index / 100,
+          lat: 34.1 + index / 100,
+          metrics: { deposit: 10 - index, rate: 90 },
+          attention: index === 0 ? [{ label: '待跟进', count: 1 }] : [],
+          trend: []
+        }))
+      }
+    });
+    await wrapper.get('.stub-select-region').trigger('click');
+    await nextTick();
+    const modal = wrapper.get('[data-testid="city-panorama-modal"]');
+    await modal.get('[data-testid="branch-search"]').setValue('西安支行');
+    await modal.get('[data-testid="attention-filter"]').trigger('click');
+    await modal.get('[data-testid="deposit-sort"]').trigger('click');
+    await modal.get('[data-testid="branch-page-next"]').trigger('click');
+    await modal.get('[data-testid="branch-row"]').trigger('click');
+    await modal.get('[data-testid="branch-detail"] [data-action="toggle-detail"]').trigger('click');
+    await modal.get('[data-action="city-close"]').trigger('click');
+    expect(wrapper.find('[data-testid="city-panorama-modal"]').exists()).toBe(false);
+
+    await wrapper.get('.stub-select-region').trigger('click');
+    await nextTick();
+    const reopened = wrapper.get('[data-testid="city-panorama-modal"]');
+    expect(reopened.get('[data-testid="branch-search"]').element.value).toBe('西安支行');
+    expect(reopened.get('[data-testid="attention-filter"]').classes()).toContain('active');
+    expect(reopened.get('[data-testid="deposit-sort"]').text()).toContain('↑');
+    expect(reopened.get('[data-testid="branch-page-next"]').element.disabled).toBe(true);
+    expect(reopened.get('[data-testid="branch-detail"]').attributes('aria-expanded')).toBe('false');
   });
 });

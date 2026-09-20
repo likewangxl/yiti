@@ -31,6 +31,34 @@ const geoJson = {
 };
 
 describe('PanoramaMap WebGL 初始化', () => {
+  it('悬停使同一城市所有地块变色，离开后恢复且不触发业务筛选', async () => {
+    vi.stubGlobal('WebGL2RenderingContext', function() {});
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({}));
+    const fixture = structuredClone(geoJson);
+    const ring = fixture.features[0].geometry.coordinates;
+    fixture.features[0].geometry = { type: 'MultiPolygon', coordinates: [ring, ring.map(r => r.map(([x,y]) => [x + 1.2, y]))] };
+    fixture.features.push({ type: 'Feature', properties: { adcode: 610300, name: '宝鸡市' }, geometry: { type: 'Polygon', coordinates: ring.map(r => r.map(([x,y]) => [x, y + 1.3])) } });
+    const wrapper = mount(PanoramaMap, { props: { geoJson: fixture, appearance: 'relief', selectedRegionCode: '610300' } });
+    await nextTick();
+    const meshes = [];
+    renderSpy.mock.calls.at(-1)[0].traverse(mesh => {
+      if (mesh.isMesh && mesh.material?.[0]?.isMeshStandardMaterial) meshes.push(mesh);
+    });
+    expect(meshes).toHaveLength(3);
+    const before = meshes.map(mesh => mesh.material[0].color.getHex());
+    const label = wrapper.get('[aria-label="选择西安市"]');
+    await label.trigger('pointerenter');
+    expect(wrapper.attributes('data-hovered-region')).toBe('610100');
+    meshes.forEach((mesh, index) => {
+      if (String(mesh.userData.code) === '610100') expect(mesh.material[0].color.getHex()).not.toBe(before[index]);
+      else expect(mesh.material[0].color.getHex()).toBe(before[index]);
+    });
+    expect(wrapper.emitted('region-select')).toBeUndefined();
+    await label.trigger('pointerleave');
+    expect(meshes.map(mesh => mesh.material[0].color.getHex())).toEqual(before);
+    wrapper.unmount();
+    vi.unstubAllGlobals();
+  });
   it('WebGL 初始化后真实 GeoJSON 被构造成可渲染区域，不能静默得到空场景', async () => {
     vi.stubGlobal('WebGL2RenderingContext', function WebGL2RenderingContext() {});
     vi.stubGlobal('WebGLRenderingContext', function WebGLRenderingContext() {});

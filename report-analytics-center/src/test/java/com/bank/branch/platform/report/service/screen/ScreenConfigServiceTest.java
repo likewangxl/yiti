@@ -153,6 +153,29 @@ class ScreenConfigServiceTest {
         return datasource;
     }
 
+    private RptScreenDatasource namedGroupM98Datasource(String profile) {
+        RptScreenDatasource datasource = new RptScreenDatasource();
+        datasource.setId(3L);
+        datasource.setBizLine(profile.startsWith("CORP") ? "CORP" : "RETAIL");
+        datasource.setDsType("SINGLE");
+        datasource.setSourceKind("M98_STAT");
+        datasource.setConfigJson("{\"schemaVersion\":2,\"scopeMode\":\"NAMED_GROUP\","
+                + "\"profile\":\"" + profile + "\",\"mode\":\"SUMMARY\"}");
+        return datasource;
+    }
+
+    private RptScreenDatasource namedGroupKpiDatasource() {
+        RptScreenDatasource datasource = new RptScreenDatasource();
+        datasource.setId(3L);
+        datasource.setBizLine("CORP");
+        datasource.setDsType("SINGLE");
+        datasource.setSourceKind("KPI_DETAIL");
+        datasource.setConfigJson("{\"schemaVersion\":2,\"scopeMode\":\"NAMED_GROUP\","
+                + "\"schemeCode\":\"KPI0724\",\"subjectType\":\"ORG\","
+                + "\"mode\":\"SNAPSHOT\"}");
+        return datasource;
+    }
+
     @Test
     void createScreen_insertsMetadataOnly_andNeverCreatesBlocks() {
         doAnswer(invocation -> {
@@ -432,6 +455,71 @@ class ScreenConfigServiceTest {
         assertThat(service.updateScreenMetadata(7L, req)).isEqualTo(7L);
         verify(canvasMapper).updateMetadataCas(any(RptScreen.class), org.mockito.ArgumentMatchers.eq(4),
                 org.mockito.ArgumentMatchers.eq("E001"));
+    }
+
+    @Test
+    void updateMetadata_allowsNamedGroupM98SummaryOnMatchingCorporateSlot() {
+        RptScreen existing = legacyCodeScreen(7L);
+        existing.setBizLine("CORP");
+        existing.setCanvasStyleJson("{\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"corporate-overview-v1\"}}");
+        String component = "{\"component\":\"ChartWidget\",\"blockId\":31,"
+                + "\"propValue\":{\"bindingKey\":\"corpRevenue\"}}";
+        existing.setCanvasDraftJson("{\"schemaVersion\":1,\"components\":[" + component + "]}");
+        existing.setCanvasPublishedJson("{\"schemaVersion\":1,\"canvasStyle\":"
+                + existing.getCanvasStyleJson() + ",\"components\":[" + component + "],"
+                + "\"bindSnapshots\":{\"31\":{\"componentType\":\"CODE\","
+                + "\"bind\":{\"dsId\":3,\"fields\":{\"value\":\"amount\","
+                + "\"date\":\"data_date\"},\"units\":{\"value\":\"YUAN\"}},"
+                + "\"styleCfg\":{},\"drill\":{}}}}");
+        RptScreenBlock block = codeBranchBlock();
+        block.setBindJson("{\"dsId\":3,\"fields\":{\"value\":\"amount\","
+                + "\"date\":\"data_date\"},\"units\":{\"value\":\"YUAN\"}}");
+        block.setComponentType("CODE");
+        ScreenMetadataUpdateReqDTO req = metadataReq();
+        req.setBizLine("CORP");
+        req.setOrgScopeMode("NAMED_GROUP");
+
+        when(screenMapper.selectById(7L)).thenReturn(existing);
+        when(blockMapper.selectList(any(Wrapper.class))).thenReturn(List.of(block));
+        when(accessRoleMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
+        when(dsMapper.selectBatchIds(any())).thenReturn(List.of(namedGroupM98Datasource("CORP_REVENUE")));
+        when(canvasMapper.updateMetadataCas(any(RptScreen.class), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyString())).thenReturn(1);
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        doNothing().when(scopeAuthorizationService).validateForSave(any(RptScreen.class), any(), anyBoolean());
+
+        assertThat(service.updateScreenMetadata(7L, req)).isEqualTo(7L);
+    }
+
+    @Test
+    void updateMetadata_allowsNamedGroupKpiOrgSnapshotForTargetAndAttentionBlocks() {
+        RptScreen existing = configuredScreen(7L);
+        existing.setBizLine("CORP");
+        existing.setOrgScopeMode("NAMED_GROUP");
+        existing.setOrgGroupCode("GROUP_1");
+        RptScreenBlock target = codeBranchBlock();
+        target.setComponentType("KPI_DETAIL_TABLE");
+        target.setBindJson("{\"dsId\":3}");
+        RptScreenBlock attention = codeBranchBlock();
+        attention.setId(32L);
+        attention.setComponentType("KPI_DETAIL_TABLE");
+        attention.setBindJson("{\"dsId\":3}");
+        ScreenMetadataUpdateReqDTO req = metadataReq();
+        req.setBizLine("CORP");
+        req.setOrgScopeMode("NAMED_GROUP");
+        req.setOrgGroupCode("GROUP_1");
+
+        when(screenMapper.selectById(7L)).thenReturn(existing);
+        when(blockMapper.selectList(any(Wrapper.class))).thenReturn(List.of(target, attention));
+        when(accessRoleMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
+        when(dsMapper.selectBatchIds(any())).thenReturn(List.of(namedGroupKpiDatasource()));
+        when(canvasMapper.updateMetadataCas(any(RptScreen.class), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyString())).thenReturn(1);
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        doNothing().when(scopeAuthorizationService).validateForSave(any(RptScreen.class), any(), anyBoolean());
+
+        assertThat(service.updateScreenMetadata(7L, req)).isEqualTo(7L);
     }
 
     @Test

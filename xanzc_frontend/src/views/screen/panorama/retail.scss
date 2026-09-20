@@ -529,3 +529,19 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+/* 运行时顶栏和来源行占用的高度由外层注入；宽屏用剩余可视区承载三列，内容超出时仍允许页面自然滚动。 */
+@media (min-width: 1501px) {
+  .retail-dashboard {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - var(--cockpit-chrome-height, 0px));
+    min-height: calc(100dvh - var(--cockpit-chrome-height, 0px));
+  }
+
+  .retail-main-grid {
+    flex: 1 1 0;
+    min-height: 0;
+    height: auto;
+  }
+}

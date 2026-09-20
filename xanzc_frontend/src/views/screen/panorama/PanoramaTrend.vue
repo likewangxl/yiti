@@ -161,8 +161,8 @@ const option = computed(() => ({
   animation: true,
   color: normalizedSeries.value.map(item => item.color),
   grid: props.compact
-    ? { top: 21, right: 22, bottom: 21, left: 40, containLabel: true }
-    : { top: 34, right: 30, bottom: 26, left: 48, containLabel: true },
+    ? { top: 21, right: 44, bottom: 21, left: 40, containLabel: true }
+    : { top: 34, right: 44, bottom: 26, left: 48, containLabel: true },
   tooltip: {
     trigger: 'axis',
     axisPointer: { type: 'line' },

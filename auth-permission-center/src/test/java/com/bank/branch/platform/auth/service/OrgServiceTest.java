@@ -2,6 +2,7 @@ package com.bank.branch.platform.auth.service;
 
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.OrgTreeNodeDTO;
+import com.bank.branch.platform.auth.api.dto.UniqueUserOrgDTO;
 import com.bank.branch.platform.auth.entity.ExtOrgInfo;
 import com.bank.branch.platform.auth.entity.ExtUserOrg;
 import com.bank.branch.platform.auth.mapper.OrgMapper;
@@ -93,6 +94,29 @@ class OrgServiceTest {
         assertThat(orgService.getOrgsByCodes(List.of())).isEmpty();
         assertThat(orgService.getOrgsByCodes(List.of("  "))).isEmpty();
         verify(orgMapper, never()).selectByOrgCodes(any());
+    }
+
+    @Test
+    void listUniqueUserOrgs_emptyOrBlankInput_returnsEmptyNoQuery() {
+        assertThat(orgService.listUniqueUserOrgs(null)).isEmpty();
+        assertThat(orgService.listUniqueUserOrgs(List.of())).isEmpty();
+        assertThat(orgService.listUniqueUserOrgs(java.util.Arrays.asList("  ", null))).isEmpty();
+        verify(userOrgMapper, never()).selectUniqueUserOrgs(any());
+    }
+
+    @Test
+    void listUniqueUserOrgs_mapsAuthorizedUniqueRows() {
+        UniqueUserOrgDTO row = new UniqueUserOrgDTO();
+        row.setEmpId("E001");
+        row.setOrgCode("ORG001");
+        when(userOrgMapper.selectUniqueUserOrgs(Set.of("ORG001"))).thenReturn(List.of(row));
+
+        List<UniqueUserOrgDTO> result = orgService.listUniqueUserOrgs(
+                java.util.Arrays.asList(" ORG001 ", "ORG001", null));
+
+        assertThat(result).extracting(UniqueUserOrgDTO::getEmpId, UniqueUserOrgDTO::getOrgCode)
+                .containsExactly(tuple("E001", "ORG001"));
+        verify(userOrgMapper).selectUniqueUserOrgs(Set.of("ORG001"));
     }
 
     @Test

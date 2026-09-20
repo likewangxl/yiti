@@ -17,6 +17,6 @@ public class ScreenEntryRespDTO {
     /** 代码化展示模板；目录只注册受支持的固定模板。 */
     private String template;
 
-    /** 展示数据模式；固定注册项按 TEST/DEMO/LIVE 分别声明，LIVE 表示接口取数而非生产环境承诺。 */
+    /** 展示数据模式；固定注册项仅返回 TEST/LIVE，LIVE 表示接口取数而非生产环境承诺。 */
     private String dataMode;
 }

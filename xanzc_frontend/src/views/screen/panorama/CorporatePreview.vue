@@ -29,6 +29,7 @@ import CorporateDashboard from './CorporateDashboard.vue';
 import { corporateDemoModel } from './corporateDemoModel.js';
 
 const router = useRouter();
+const props = defineProps({ backPath: { type: String, default: '/screen-preview' } });
 const lastUpdated = ref(formatDemoTime(new Date()));
 
 function formatDemoTime(value) {
@@ -42,7 +43,7 @@ function refreshDemo() {
 }
 
 function goBack() {
-  router.push('/screen-preview');
+  router.push(props.backPath);
 }
 
 function goToDesigner() {
