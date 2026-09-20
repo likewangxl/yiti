@@ -4,13 +4,14 @@ import lombok.Builder;
 import lombok.Value;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 /**
  * 门户工作台使用的绩效指标卡片 DTO（不可变对象）
  *
  * <p>由 {@link com.bank.branch.platform.portal.convert.MetricCardProjection}
  * 从 {@link com.bank.branch.platform.portal.adapter.dto.MetricCardDTO} 投影而来，
- * 仅保留前端工作台卡片渲染所需的 7 个字段。</p>
+ * 仅保留前端工作台卡片渲染所需的字段。</p>
  */
 @Value
 @Builder
@@ -33,6 +34,12 @@ public class PortalMetricCard {
 
     /** 趋势方向（UP / DOWN / FLAT） */
     String trend;
+
+    /** 环比变化率 */
+    BigDecimal changeRate;
+
+    /** 指标数据时间 */
+    LocalDateTime dataTime;
 
     /** 单位（元 / 笔 / % 等） */
     String unit;

@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 /**
@@ -88,5 +89,28 @@ class MetricAdapterTest {
         // then
         assertThat(result).isNotNull().isEmpty();
         verify(mockApi).getUserMetricCards("E10001");
+    }
+
+    @Test
+    void shouldThrowWhenMetricApiBeanIsMissingForWorkspace() {
+        MetricAdapter adapter = new MetricAdapter();
+
+        assertThatThrownBy(() -> adapter.fetchForWorkspace("E10001"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("unavailable");
+    }
+
+    @Test
+    void shouldPropagateMetricApiFailureForWorkspace() {
+        MetricAdapter adapter = new MetricAdapter();
+        MetricApi mockApi = mock(MetricApi.class);
+        adapter.setMetricApi(mockApi);
+        when(mockApi.getUserMetricCards("E10001"))
+                .thenThrow(new RuntimeException("远程服务不可用"));
+
+        assertThatThrownBy(() -> adapter.fetchForWorkspace("E10001"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("failed")
+                .hasCauseInstanceOf(RuntimeException.class);
     }
 }

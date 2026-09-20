@@ -112,7 +112,7 @@ public class WorkspaceService {
                 : CompletableFuture.completedFuture(Collections.emptyList());
 
         CompletableFuture<List<PortalMetricCard>> fMetrics = supplyAsync(
-                () -> metricAdapter.fetch(empId), "metricCards", errors);
+                () -> metricAdapter.fetchForWorkspace(empId), "metricCards", errors);
 
         // 整体超时 2 秒
         try {

@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -89,6 +90,30 @@ class SupportControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.page.total").value(1));
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
+    @DisplayName("GET /api/support-requests?onlyMine=true 强制传当前员工创建人")
+    void listPage_onlyMine_shouldPassCurrentEmpIdToService() throws Exception {
+        PageResult<SupportRequestListItemDTO> page = PageResult.of(1, 20, 0L, List.of());
+
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
+        when(supportService.listPageAsDTO(isNull(), isNull(), eq("ORG001"), eq(1), eq(20),
+                eq(true), eq("E10001"))).thenReturn(page);
+
+        mockMvc.perform(get("/api/support-requests")
+                        .param("onlyMine", "true")
+                        .param("empId", "OTHER")
+                        .param("pageNo", "1")
+                        .param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.page.total").value(0));
+
+        verify(supportService).listPageAsDTO(isNull(), isNull(), eq("ORG001"), eq(1), eq(20),
+                eq(true), eq("E10001"));
     }
 
     // ==================== GET /api/support-requests/{id} ====================

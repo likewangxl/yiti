@@ -32,6 +32,8 @@ public final class MetricCardProjection {
                 .currentValue(formatNumber(src.getCurrentValue()))
                 .targetValue(formatNumber(src.getTargetValue()))
                 .completionRate(src.getAchievementRate()) // 字段重命名
+                .changeRate(src.getChangeRate())
+                .dataTime(src.getDataTime())
                 .build();
     }
 

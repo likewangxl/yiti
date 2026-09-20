@@ -120,7 +120,7 @@ class WorkspaceServiceTest {
                 .trend("UP")
                 .unit("元")
                 .build();
-        when(metricAdapter.fetch("E10001")).thenReturn(List.of(card));
+        when(metricAdapter.fetchForWorkspace("E10001")).thenReturn(List.of(card));
 
         // 执行
         WorkspaceDTO result = workspaceService.getWorkspace();
@@ -165,7 +165,7 @@ class WorkspaceServiceTest {
         PageResult<NotificationDTO> emptyPage = PageResult.of(1, 5, 0, Collections.emptyList());
         when(notifyApi.queryNotifications(eq("E10001"), isNull(), any(PageRequest.class)))
                 .thenReturn(emptyPage);
-        when(metricAdapter.fetch("E10001")).thenReturn(Collections.emptyList());
+        when(metricAdapter.fetchForWorkspace("E10001")).thenReturn(Collections.emptyList());
 
         WorkspaceDTO result = workspaceService.getWorkspace();
 
@@ -193,7 +193,7 @@ class WorkspaceServiceTest {
         PageResult<NotificationDTO> emptyPage = PageResult.of(1, 5, 0, Collections.emptyList());
         when(notifyApi.queryNotifications(eq("E10001"), isNull(), any(PageRequest.class)))
                 .thenReturn(emptyPage);
-        when(metricAdapter.fetch("E10001")).thenReturn(Collections.emptyList());
+        when(metricAdapter.fetchForWorkspace("E10001")).thenReturn(Collections.emptyList());
 
         WorkspaceDTO result = workspaceService.getWorkspace();
 
@@ -216,12 +216,31 @@ class WorkspaceServiceTest {
         PageResult<NotificationDTO> emptyPage = PageResult.of(1, 5, 0, Collections.emptyList());
         when(notifyApi.queryNotifications(eq("E10001"), isNull(), any(PageRequest.class)))
                 .thenReturn(emptyPage);
-        when(metricAdapter.fetch("E10001")).thenReturn(Collections.emptyList());
+        when(metricAdapter.fetchForWorkspace("E10001")).thenReturn(Collections.emptyList());
 
         WorkspaceDTO result = workspaceService.getWorkspace();
 
         assertThat(result.getShortcuts()).isEmpty();
         assertThat(result.getAggregateErrors()).containsKey("shortcuts");
+    }
+
+    @Test
+    void getWorkspaceShouldCollectErrorWhenMetricAdapterFails() {
+        stubCurrentUser();
+        when(shortcutService.listMyShortcuts()).thenReturn(Collections.emptyList());
+        when(workflowQueryAdapter.countPending("E10001")).thenReturn(0);
+        when(workflowQueryAdapter.listPending("E10001", 5)).thenReturn(Collections.emptyList());
+        when(notifyApi.countUnread("E10001")).thenReturn(0);
+        PageResult<NotificationDTO> emptyPage = PageResult.of(1, 5, 0, Collections.emptyList());
+        when(notifyApi.queryNotifications(eq("E10001"), isNull(), any(PageRequest.class)))
+                .thenReturn(emptyPage);
+        when(metricAdapter.fetchForWorkspace("E10001"))
+                .thenThrow(new IllegalStateException("MetricApi bean is unavailable"));
+
+        WorkspaceDTO result = workspaceService.getWorkspace();
+
+        assertThat(result.getMetricCards()).isEmpty();
+        assertThat(result.getAggregateErrors()).containsKey("metricCards");
     }
 
     // ────────── 5. PortalTodoItem → TodoItemDTO 转换 ──────────
@@ -250,7 +269,7 @@ class WorkspaceServiceTest {
         PageResult<NotificationDTO> emptyPage = PageResult.of(1, 5, 0, Collections.emptyList());
         when(notifyApi.queryNotifications(eq("E10001"), isNull(), any(PageRequest.class)))
                 .thenReturn(emptyPage);
-        when(metricAdapter.fetch("E10001")).thenReturn(Collections.emptyList());
+        when(metricAdapter.fetchForWorkspace("E10001")).thenReturn(Collections.emptyList());
 
         WorkspaceDTO result = workspaceService.getWorkspace();
 
@@ -293,7 +312,7 @@ class WorkspaceServiceTest {
         when(notifyApi.countUnread("E10001")).thenReturn(0);
         when(notifyApi.queryNotifications(eq("E10001"), isNull(), any(PageRequest.class)))
                 .thenReturn(notifPage);
-        when(metricAdapter.fetch("E10001")).thenReturn(Collections.emptyList());
+        when(metricAdapter.fetchForWorkspace("E10001")).thenReturn(Collections.emptyList());
 
         WorkspaceDTO result = workspaceService.getWorkspace();
 
@@ -326,7 +345,7 @@ class WorkspaceServiceTest {
         when(shortcutService.listMyShortcuts()).thenReturn(Collections.emptyList());
         when(workflowQueryAdapter.countPending(EMP_ID)).thenReturn(0);
         when(workflowQueryAdapter.listPending(EMP_ID, 5)).thenReturn(Collections.emptyList());
-        when(metricAdapter.fetch(EMP_ID)).thenReturn(Collections.emptyList());
+        when(metricAdapter.fetchForWorkspace(EMP_ID)).thenReturn(Collections.emptyList());
 
         WorkspaceDTO result = serviceWithNullNotify.getWorkspace();
 

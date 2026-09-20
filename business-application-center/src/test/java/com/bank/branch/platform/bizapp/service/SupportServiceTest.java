@@ -9,6 +9,8 @@ import com.bank.branch.platform.bizapp.enums.SupportScenario;
 import com.bank.branch.platform.bizapp.enums.SupportSourceType;
 import com.bank.branch.platform.bizapp.enums.SupportStatus;
 import com.bank.branch.platform.bizapp.event.SupportSubmittedEvent;
+import com.bank.branch.platform.common.security.context.DataScopeContext;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
@@ -32,6 +34,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -43,6 +46,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -463,6 +467,98 @@ class SupportServiceTest {
         // then
         assertThat(result.getTotal()).isEqualTo(1L);
         assertThat(result.getRecords()).hasSize(1);
+    }
+
+    @Test
+    void listPage_onlyMine_shouldForceCreatorFilterEvenForAllScope() {
+        DataScopeContext context = new DataScopeContext();
+        context.setScope(DataScopeType.ALL);
+        context.setEmpId("E10001");
+        context.setOrgCode("ORG001");
+        DataScopeContext.set(context);
+        try {
+            SupportRequest sr = buildRequest("SR001", SupportStatus.DRAFT);
+            when(supportMapper.selectPageForSupportByCreator(any(), any(), eq("ORG001"),
+                    eq("E10001"), anyInt(), anyInt())).thenReturn(List.of(sr));
+            when(supportMapper.countPageForSupportByCreator(any(), any(), eq("ORG001"),
+                    eq("E10001"))).thenReturn(1L);
+
+            PageResult<SupportRequest> result = supportService.listPage(
+                    null, null, "ORG001", 1, 20, true, "E10001");
+
+            assertThat(result.getTotal()).isEqualTo(1L);
+            assertThat(result.getRecords()).containsExactly(sr);
+            verify(supportMapper).selectPageForSupportByCreator(any(), any(), eq("ORG001"),
+                    eq("E10001"), eq(0), eq(20));
+            verify(supportMapper, never()).selectPageForSupport(any(), any(), any(), anyInt(), anyInt());
+        } finally {
+            DataScopeContext.clear();
+        }
+    }
+
+    @Test
+    void listPage_onlyMine_withoutCreatorEmpId_shouldFailCloseWithoutMapperQuery() {
+        DataScopeContext.clear();
+
+        PageResult<SupportRequest> result = supportService.listPage(
+                null, null, "ORG001", 1, 20, true, " ");
+
+        assertThat(result.getTotal()).isZero();
+        assertThat(result.getRecords()).isEmpty();
+        verifyNoInteractions(supportMapper);
+    }
+
+    @Test
+    void listPage_onlyMine_shouldIntersectOrgScopeAndCreator() {
+        DataScopeContext context = new DataScopeContext();
+        context.setScope(DataScopeType.ORG);
+        context.setEmpId("E10001");
+        context.setOrgCode("ORG001");
+        DataScopeContext.set(context);
+        try {
+            SupportRequest sr = buildRequest("SR001", SupportStatus.DRAFT);
+            when(supportMapper.selectPageForSupportByCreator(any(), any(), eq("ORG001"),
+                    eq("E10001"), anyInt(), anyInt())).thenReturn(List.of(sr));
+            when(supportMapper.countPageForSupportByCreator(any(), any(), eq("ORG001"),
+                    eq("E10001"))).thenReturn(1L);
+
+            PageResult<SupportRequest> result = supportService.listPage(
+                    null, null, "OTHER_ORG", 1, 20, true, "E10001");
+
+            assertThat(result.getTotal()).isEqualTo(1L);
+            verify(supportMapper).selectPageForSupportByCreator(any(), any(), eq("ORG001"),
+                    eq("E10001"), eq(0), eq(20));
+            verify(supportMapper, never()).selectPageForSupportByOrgCodes(any(), any(), any(), anyInt(), anyInt());
+        } finally {
+            DataScopeContext.clear();
+        }
+    }
+
+    @Test
+    void listPage_onlyMine_shouldIntersectOrgSubtreeScopeAndCreator() {
+        DataScopeContext context = new DataScopeContext();
+        context.setScope(DataScopeType.ORG_SUBTREE);
+        context.setEmpId("E10001");
+        context.setOrgCode("ORG001");
+        context.setOrgSubtreeCodes(Set.of("ORG001", "ORG002"));
+        DataScopeContext.set(context);
+        try {
+            SupportRequest sr = buildRequest("SR001", SupportStatus.DRAFT);
+            when(supportMapper.selectPageForSupportByCreator(any(), any(), eq("ORG001"),
+                    eq("E10001"), anyInt(), anyInt())).thenReturn(List.of(sr));
+            when(supportMapper.countPageForSupportByCreator(any(), any(), eq("ORG001"),
+                    eq("E10001"))).thenReturn(1L);
+
+            PageResult<SupportRequest> result = supportService.listPage(
+                    null, null, "OTHER_ORG", 1, 20, true, "E10001");
+
+            assertThat(result.getTotal()).isEqualTo(1L);
+            verify(supportMapper).selectPageForSupportByCreator(any(), any(), eq("ORG001"),
+                    eq("E10001"), eq(0), eq(20));
+            verify(supportMapper, never()).selectPageForSupportByOrgCodes(any(), any(), any(), anyInt(), anyInt());
+        } finally {
+            DataScopeContext.clear();
+        }
     }
 
     @Test

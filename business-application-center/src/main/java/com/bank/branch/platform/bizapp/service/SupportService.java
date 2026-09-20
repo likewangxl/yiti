@@ -599,6 +599,27 @@ public class SupportService {
      */
     public PageResult<SupportRequest> listPage(String keyword, String status,
                                                 String ownerOrgId, int pageNo, int pageSize) {
+        return listPage(keyword, status, ownerOrgId, pageNo, pageSize, false, null);
+    }
+
+    /**
+     * 发起侧分页查询，并可由服务端强制限定当前创建人。
+     *
+     * <p>{@code onlyMine} 只接受 Controller 根据当前会话得到的员工号，调用方不能传入
+     * 任意员工号。开启后仍保留当前机构/数据范围条件，并与创建人条件取交集。</p>
+     *
+     * @param keyword       关键词
+     * @param status        状态筛选
+     * @param ownerOrgId    归属机构
+     * @param pageNo        页码
+     * @param pageSize      每页大小
+     * @param onlyMine      是否只查询当前创建人的申请
+     * @param creatorEmpId  当前会话员工号，仅由服务端注入
+     * @return 分页结果（Entity）
+     */
+    public PageResult<SupportRequest> listPage(String keyword, String status,
+                                                String ownerOrgId, int pageNo, int pageSize,
+                                                boolean onlyMine, String creatorEmpId) {
         log.info("[SupportService.listPage] ownerOrgId={}, pageNo={}, pageSize={}", ownerOrgId, pageNo, pageSize);
 
         DataScopeContext ctx = DataScopeContext.current();
@@ -607,6 +628,18 @@ public class SupportService {
         }
 
         int offset = (pageNo - 1) * pageSize;
+        if (onlyMine) {
+            // onlyMine 缺少会话员工号时 fail close，不能退化为机构/全量查询。
+            if (!StringUtils.hasText(creatorEmpId)) {
+                return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
+            }
+            List<SupportRequest> records = supportMapper.selectPageForSupportByCreator(
+                    keyword, status, ownerOrgId, creatorEmpId, offset, pageSize);
+            long total = supportMapper.countPageForSupportByCreator(
+                    keyword, status, ownerOrgId, creatorEmpId);
+            return PageResult.of(pageNo, pageSize, total, records);
+        }
+
         List<SupportRequest> records;
         long total;
         if (ctx != null && (ctx.getScope() == DataScopeType.SELF_CREATED
@@ -685,7 +718,26 @@ public class SupportService {
      */
     public PageResult<SupportRequestListItemDTO> listPageAsDTO(String keyword, String status,
                                                                String ownerOrgId, int pageNo, int pageSize) {
-        PageResult<SupportRequest> page = listPage(keyword, status, ownerOrgId, pageNo, pageSize);
+        return listPageAsDTO(keyword, status, ownerOrgId, pageNo, pageSize, false, null);
+    }
+
+    /**
+     * 发起侧分页查询 DTO 版本，并支持服务端固定的本人创建人过滤。
+     *
+     * @param keyword       关键词
+     * @param status        状态筛选
+     * @param ownerOrgId    归属机构
+     * @param pageNo        页码
+     * @param pageSize      每页大小
+     * @param onlyMine      是否只查询当前创建人的申请
+     * @param creatorEmpId  当前会话员工号，仅由服务端注入
+     * @return 分页 DTO
+     */
+    public PageResult<SupportRequestListItemDTO> listPageAsDTO(String keyword, String status,
+                                                               String ownerOrgId, int pageNo, int pageSize,
+                                                               boolean onlyMine, String creatorEmpId) {
+        PageResult<SupportRequest> page = listPage(keyword, status, ownerOrgId, pageNo, pageSize,
+                onlyMine, creatorEmpId);
         List<SupportRequestListItemDTO> items = supportRequestDTOConverter.toListItems(page.getRecords());
         enrichActiveTaskMetadata(page.getRecords(), items);
         return PageResult.of(pageNo, pageSize, page.getTotal(), items);

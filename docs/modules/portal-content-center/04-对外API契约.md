@@ -28,7 +28,7 @@ int getUnreadNotificationCount(String empId);
 | `shortcuts` | `List<ShortcutDTO>` | 系统/个人快捷入口 |
 | `aggregateErrors` | `Map<String,String>` | 聚合分支错误摘要 |
 
-`TodoItemDTO` 字段为 `taskId`、`processInstanceId`、`processName`、`taskTitle`、`initiatorName`、`initiatedTime`、`lightStatus`、`overdueInfo`、`bizDetailUrl`；`NotificationItemDTO` 字段为 `notificationId`、`title`、`summary`、`sentTime`、`readStatus`、`bizType`、`bizId`、`bizDetailUrl`；`PortalMetricCard` 字段为 `metricCode`、`metricName`、`currentValue`、`targetValue`、`completionRate`、`trend`、`unit`。这些集合不承诺固定条数。
+`TodoItemDTO` 字段为 `taskId`、`processInstanceId`、`processName`、`taskTitle`、`initiatorName`、`initiatedTime`、`lightStatus`、`overdueInfo`、`bizDetailUrl`；`NotificationItemDTO` 字段为 `notificationId`、`title`、`summary`、`sentTime`、`readStatus`、`bizType`、`bizId`、`bizDetailUrl`；`PortalMetricCard` 字段为 `metricCode`、`metricName`、`currentValue`、`targetValue`、`completionRate`、`trend`、`changeRate`、`dataTime`、`unit`。这些集合不承诺固定条数。
 
 ## 3. `ProductApi`
 

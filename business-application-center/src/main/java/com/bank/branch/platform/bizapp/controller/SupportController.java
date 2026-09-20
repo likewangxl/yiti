@@ -64,11 +64,15 @@ public class SupportController {
     public ResponseWrapper<SupportRequestListItemDTO> listPage(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "false") boolean onlyMine,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         log.info("[SupportController.listPage] pageNo={}, pageSize={}", pageNo, pageSize);
         String orgCode = currentUserApi.getCurrentOrgCode();
-        PageResult<SupportRequestListItemDTO> result = supportService.listPageAsDTO(keyword, status, orgCode, pageNo, pageSize);
+        PageResult<SupportRequestListItemDTO> result = onlyMine
+                ? supportService.listPageAsDTO(keyword, status, orgCode, pageNo, pageSize,
+                true, currentUserApi.getCurrentEmpId())
+                : supportService.listPageAsDTO(keyword, status, orgCode, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 
