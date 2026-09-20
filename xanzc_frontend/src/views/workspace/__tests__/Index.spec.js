@@ -169,6 +169,16 @@ describe('Workspace Index', () => {
     expect(summaryItems[1].text()).toContain('未读4条');
   });
 
+  it('工作台提供个人经营驾驶舱入口并跳转正式登录态路由', async () => {
+    wrapper = mountPage();
+    await settle();
+
+    const entry = wrapper.find('button[aria-label="打开我的经营驾驶舱"]');
+    expect(entry.exists()).toBe(true);
+    await entry.trigger('click');
+    expect(routerPush).toHaveBeenLastCalledWith('/personal-dashboard');
+  });
+
   it('加载期间与空态互斥，待办和已办分别显示准确的空文案', async () => {
     const announcementRequest = deferred();
     const notificationRequest = deferred();

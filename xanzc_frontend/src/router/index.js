@@ -20,6 +20,18 @@ const routes = [
     component: () => import('@/views/login/Index.vue'),
     meta: { title: '登录', public: true }
   },
+  // 个人经营驾驶舱：独立全屏容器，沿用工作台菜单门禁和平台登录态。
+  {
+    path: '/personal-dashboard',
+    name: 'PersonalDashboard',
+    component: () => import('@/views/screen/personal/PersonalDashboardPage.vue'),
+    meta: {
+      title: '我的经营驾驶舱',
+      hideInMenu: true,
+      fullBleed: true,
+      requiredMenu: '/workspace'
+    }
+  },
   // 本地视觉验收入口：只在 Vite 开发环境编译进路由，生产包没有该入口。
   ...(import.meta.env.DEV ? [{
     path: '/screen-preview',

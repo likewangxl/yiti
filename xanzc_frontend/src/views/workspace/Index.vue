@@ -4,6 +4,16 @@
       <div class="workspace-heading">
         <PageTitle id="workspace-title" title="工作台" />
         <p class="workspace-desc">集中查看待处理事项、通知和流程转交进度。</p>
+        <el-button
+          type="primary"
+          plain
+          size="small"
+          class="workspace-personal-cockpit-entry"
+          aria-label="打开我的经营驾驶舱"
+          @click="router.push('/personal-dashboard')"
+        >
+          我的经营驾驶舱
+        </el-button>
       </div>
       <dl class="workspace-summary" aria-label="工作台事项摘要">
         <div class="summary-item">
