@@ -25,6 +25,9 @@ public class MetricCardDTO {
     /** 当前值 */
     private BigDecimal currentValue;
 
+    /** 上月末值，用于个人核心指标卡片参考 */
+    private BigDecimal previousValue;
+
     /** 目标值 */
     private BigDecimal targetValue;
 
@@ -39,6 +42,12 @@ public class MetricCardDTO {
 
     /** 环比变化率 */
     private BigDecimal changeRate;
+
+    /** 比较口径（如 PREVIOUS_MONTH_END）；旧来源为空 */
+    private String comparisonType;
+
+    /** 数据来源口径（如 EMP_LATEST_IMPORT）；旧来源为空 */
+    private String sourceType;
 
     /** 统计周期（DAY / WEEK / MONTH / QUARTER / YEAR） */
     private String period;

@@ -110,6 +110,27 @@ public interface MetricApi {
     List<MetricCardDTO> getUserMetricCards(String empId);
 
     /**
+     * 获取个人经营驾驶舱核心指标卡片。
+     *
+     * <p>该方法独立于 KPI 方案，从当前 ACTIVE、未删除的 EMP 指标定义中按语义候选选择最多六项，
+     * 再读取当前认证员工的最新导入 EMP 宽表行。指标名称末尾的「-员工」只用于匹配，返回仍保留数据库原始
+     * metricCode、metricName 和 unit。</p>
+     *
+     * <p>候选顺序先尝试六个核心语义；当前日期有真实值的核心项优先，之后用有限备选池补足，
+     * 最后才保留核心定义但本人当前值为 null 的卡片。实际值为 0 仍视为已产出值；同一规范化名称
+     * 命中多个不同 code/slot 时跳过该歧义项。候选总数受限，EMP 宽表按 slot 一次批量读取三日期。</p>
+     *
+     * <p>实际值使用该员工截至今日最新导入的宽表行；上期默认按前一自然月月末、去年同期按
+     * {@code currentDate.minusYears(1)} 选择该员工同日最新导入行。所有指标共用选定行，值为 0 保留，NULL 表示本人没有产出数据。
+     * 名称含「较」的增量指标不再次计算环比；目标值和完成率在个人目标口径明确前保持 null。</p>
+     *
+     * @param empId 当前员工工号
+     * @return 最多六张个人核心指标卡片；没有本人宽表行时返回匹配核心定义的 null 卡片
+     * @throws PerfException 当前用户身份映射或本人宽表行口径无效
+     */
+    List<MetricCardDTO> getPersonalCoreMetricCards(String empId);
+
+    /**
      * 查询单个指标定义.
      *
      * @param metricCode 指标编码

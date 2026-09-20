@@ -65,7 +65,9 @@ describe('personalDashboard API 聚合', () => {
         value: {
           metricCards: [{
             metricCode: 'DEPOSIT', metricName: '存款余额', currentValue: 0,
-            targetValue: null, completionRate: 88.5, unit: '元',
+            previousValue: 1200, comparisonType: 'PREVIOUS_MONTH_END',
+            sourceType: 'EMP_LATEST_IMPORT',
+            targetValue: null, completionRate: 0, unit: null,
             dataTime: '2026-09-20T00:00:00', changeRate: 6.7
           }],
           aggregateErrors: {
@@ -85,11 +87,85 @@ describe('personalDashboard API 聚合', () => {
     expect(model.identity).toEqual({ name: '李经理', orgName: '西安支行' });
     expect(model.metrics.items[0]).toMatchObject({
       metricCode: 'DEPOSIT', currentValue: 0, targetValue: null,
-      achievementRate: 88.5, dataDate: '2026-09-20T00:00:00', mom: 6.7
+      previousValue: 1200, comparisonType: 'PREVIOUS_MONTH_END',
+      sourceType: 'EMP_LATEST_IMPORT',
+      achievementRate: 0, dataDate: '2026-09-20T00:00:00', mom: 6.7
     });
     expect(model.metrics.status).toBe('ready');
     expect(model.metrics.message).toContain('指标部分不可用');
     expect(model.metrics.message).not.toContain('不能归入指标');
+    expect(model.metrics.sourceType).toBe('EMP_LATEST_IMPORT');
+  });
+
+  it('保留后端返回顺序并最多展示六项，不填充指标', () => {
+    const cards = Array.from({ length: 7 }, (_, index) => ({
+      metricCode: 'REAL_' + index,
+      metricName: '真实指标 ' + index,
+      currentValue: index,
+      previousValue: index === 0 ? 0 : null,
+      completionRate: index === 0 ? 0 : null,
+      dataTime: '2026-09-20'
+    }));
+    const model = buildPersonalDashboardModel({
+      workspace: { status: 'fulfilled', value: { metricCards: cards } },
+      todos: { status: 'fulfilled', value: page([], 0) },
+      touchPending: { status: 'fulfilled', value: page([], 0) },
+      touchInProgress: { status: 'fulfilled', value: page([], 0) },
+      customers: { status: 'fulfilled', value: page([], 0) },
+      assets: { status: 'fulfilled', value: page([], 0) },
+      supports: { status: 'fulfilled', value: page([], 0) }
+    });
+
+    expect(model.metrics.items.map(item => item.metricCode)).toEqual(cards.slice(0, 6).map(card => card.metricCode));
+    expect(model.metrics.items).toHaveLength(6);
+    expect(model.metrics.items[0]).toMatchObject({ previousValue: 0, achievementRate: 0 });
+  });
+
+  it('全部当前值为空时提示数据日期暂无员工指标结果，不伪称未接指标', () => {
+    const model = buildPersonalDashboardModel({
+      workspace: {
+        status: 'fulfilled',
+        value: {
+          metricCards: [
+            { metricCode: 'A', metricName: '指标 A', currentValue: null, dataTime: '2026-09-20' },
+            { metricCode: 'B', metricName: '指标 B', currentValue: null, dataTime: '2026-09-20' }
+          ]
+        }
+      },
+      todos: { status: 'fulfilled', value: page([], 0) },
+      touchPending: { status: 'fulfilled', value: page([], 0) },
+      touchInProgress: { status: 'fulfilled', value: page([], 0) },
+      customers: { status: 'fulfilled', value: page([], 0) },
+      assets: { status: 'fulfilled', value: page([], 0) },
+      supports: { status: 'fulfilled', value: page([], 0) }
+    });
+
+    expect(model.metrics.message).toContain('当前账号在该数据日期暂无所选指标结果');
+    expect(model.metrics.message).not.toContain('未接指标');
+    expect(model.metrics.status).toBe('ready');
+  });
+
+  it('没有员工宽表行时提示暂无员工指标结果，不伪造数据日期', () => {
+    const model = buildPersonalDashboardModel({
+      workspace: {
+        status: 'fulfilled',
+        value: {
+          metricCards: [
+            { metricCode: 'A', metricName: '指标 A', currentValue: null, dataTime: null },
+            { metricCode: 'B', metricName: '指标 B', currentValue: null, dataTime: null }
+          ]
+        }
+      },
+      todos: { status: 'fulfilled', value: page([], 0) },
+      touchPending: { status: 'fulfilled', value: page([], 0) },
+      touchInProgress: { status: 'fulfilled', value: page([], 0) },
+      customers: { status: 'fulfilled', value: page([], 0) },
+      assets: { status: 'fulfilled', value: page([], 0) },
+      supports: { status: 'fulfilled', value: page([], 0) }
+    });
+
+    expect(model.metrics.message).toContain('当前账号暂无员工指标结果');
+    expect(model.metrics.message).not.toContain('该数据日期');
   });
 
   it('分区失败独立保留成功项，触达按 canOperateTask/canWriteLog 判定动作且不合并 total', () => {

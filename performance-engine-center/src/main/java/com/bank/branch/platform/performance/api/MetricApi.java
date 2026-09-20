@@ -37,6 +37,18 @@ public interface MetricApi {
     List<MetricCardDTO> getUserMetricCards(String empId);
 
     /**
+     * 获取个人经营驾驶舱核心指标卡片。
+     *
+     * <p>该查询独立于 KPI 方案：从当前 ACTIVE EMP 指标定义和当前员工最新导入 EMP 宽表读取，
+     * 返回最多六张核心卡片。目标值和完成率在未建立个人目标口径前保持 null。</p>
+     *
+     * @param empId 当前员工工号
+     * @return 个人核心指标卡片；没有本人宽表行时返回匹配核心定义的 null 卡片
+     * @throws com.bank.branch.platform.performance.exception.PerfException 当前用户身份映射或本人宽表行口径无效
+     */
+    List<MetricCardDTO> getPersonalCoreMetricCards(String empId);
+
+    /**
      * 查询单个指标定义.
      *
      * @param metricCode 指标编码

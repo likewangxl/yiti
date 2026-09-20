@@ -108,6 +108,70 @@
             </foreach>
     </select>
 
+    <!-- 个人经营快照：取本人截至今日数据日期最新的一行。 -->
+    <select id="selectLatestRowForEmployee"
+            resultType="com.bank.branch.platform.performance.entity.EmpIndexResult">
+        SELECT id,
+               data_date AS dataDate,
+               version,
+               emp_id AS empId,
+               created_time AS createdTime,
+               updated_time AS updatedTime
+        FROM EMP_INDEX_RESULT
+        WHERE emp_id = #{empId}
+          AND data_date &lt;= #{today}
+        ORDER BY data_date DESC, updated_time DESC, version DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 个人经营快照：按本人、指定日期取每个日期最新的一行。 -->
+    <select id="selectLatestRowsForEmployeeDates"
+            resultType="com.bank.branch.platform.performance.entity.EmpIndexResult">
+        SELECT id, dataDate, version, empId, createdTime, updatedTime
+        FROM (
+            SELECT id,
+                   data_date AS dataDate,
+                   version,
+                   emp_id AS empId,
+                   created_time AS createdTime,
+                   updated_time AS updatedTime,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY data_date
+                       ORDER BY updated_time DESC, version DESC, id DESC
+                   ) AS rowNo
+            FROM EMP_INDEX_RESULT
+            WHERE emp_id = #{empId}
+              AND data_date &lt;= #{today}
+              AND data_date IN
+            <foreach collection="dates" item="d" open="(" separator="," close=")">
+                #{d}
+            </foreach>
+        ) latest
+        WHERE rowNo = 1
+        ORDER BY dataDate DESC, updatedTime DESC, version DESC, id DESC
+    </select>
+
+    <!--
+      个人经营快照值：rowId 已由上面的本人查询选定，但 SQL 仍固定 emp_id 和 today，
+      防止 rowId 误传时跨员工或未来日期读取。slot 只接受服务层校验后的 1..400 整数。
+    -->
+    <select id="selectSlotValuesByRowIdsAndSlotsRaw"
+            resultType="com.bank.branch.platform.performance.mapper.EmpRowSlotValueRow">
+        <foreach collection="slots" item="slot" separator=" UNION ALL ">
+            SELECT r.id AS rowId,
+                   r.data_date AS dataDate,
+                   #{slot} AS slot,
+                   r.val_${slot} AS metricValue
+            FROM EMP_INDEX_RESULT r
+            WHERE r.emp_id = #{empId}
+              AND r.data_date &lt;= #{today}
+              AND r.id IN
+            <foreach collection="rowIds" item="rowId" open="(" separator="," close=")">
+                #{rowId}
+            </foreach>
+        </foreach>
+    </select>
+
     <!--
       V1.7（V2 修复）：取多 metricCode 对应的 val_slot 行，查 perf_metric_def 表.
       返回每行 {metricCode, valSlot}，由接口 default 方法在 Java 端聚合成 Map<code, slot>。

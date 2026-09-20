@@ -7,15 +7,17 @@ const model = {
   metrics: {
     status: 'ready',
     message: '个人指标',
+    sourceType: 'EMP_LATEST_IMPORT',
     items: [
       {
         metricCode: 'customerCount',
         metricName: '我的客户数',
         currentValue: 0,
-        previousValue: null,
+        previousValue: 0,
+        comparisonType: 'PREVIOUS_MONTH_END',
         targetValue: 100,
-        achievementRate: null,
-        unit: '户',
+        achievementRate: 0,
+        unit: null,
         dataDate: '2026-09-20',
         mom: null
       },
@@ -24,6 +26,7 @@ const model = {
         metricName: '存款余额',
         currentValue: 1280,
         previousValue: 1200,
+        comparisonType: 'PREVIOUS_MONTH_END',
         targetValue: null,
         achievementRate: 88.5,
         unit: '万元',
@@ -89,10 +92,13 @@ describe('PersonalDashboard 个人经营驾驶舱', () => {
     expect(wrapper.attributes('aria-label')).toBe('个人经营驾驶舱');
     expect(wrapper.text()).toContain('我的经营驾驶舱');
     expect(wrapper.text()).toContain('李经理');
+    expect(wrapper.text()).toContain('本人经营指标 · 最新导入快照（非考核结算）');
     expect(wrapper.findAll('[data-testid="personal-metric"]')).toHaveLength(2);
     expect(wrapper.find('[data-testid="personal-metric"]').text()).toContain('0');
-    expect(wrapper.findAll('[data-testid="personal-metric"]')[0].find('.personal-metric__previous').exists()).toBe(false);
-    expect(wrapper.text()).toContain('完成率 88.50%');
+    expect(wrapper.findAll('[data-testid="personal-metric"]')[0].find('.personal-metric__previous').text()).toContain('上月末值 0');
+    expect(wrapper.text()).toContain('完成率 0.00%');
+    expect(wrapper.text()).toContain('单位未配置');
+    expect(wrapper.text()).toContain('较上月末');
     expect(wrapper.text()).not.toContain('1280 /');
     expect(wrapper.text()).toContain('当前返回事项按最近跟进时间展示');
     expect(wrapper.text()).toContain('陕西省一家名称很长的客户有限公司');
@@ -208,6 +214,93 @@ describe('PersonalDashboard 个人经营驾驶舱', () => {
     expect(wrapper.text()).not.toContain('普通客户');
     expect(wrapper.get('[data-testid="personal-metric"]').text()).toContain('—');
     expect(wrapper.get('[data-testid="personal-metric"]').find('.personal-metric__previous').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('目标和完成率为空时只显示未关联考核目标，有效零值仍显示', async () => {
+    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
+    const wrapper = mount(PersonalDashboard, {
+      props: {
+        model: {
+          metrics: {
+            status: 'ready',
+            items: [{
+              metricCode: 'loan', metricName: '贷款余额', currentValue: 0,
+              targetValue: null, achievementRate: null, unit: ''
+            }]
+          }
+        }
+      }
+    });
+
+    const card = wrapper.get('[data-testid="personal-metric"]');
+    expect(card.text()).toContain('0');
+    expect(card.text()).toContain('单位未配置');
+    expect(card.text()).toContain('未关联考核目标');
+    expect(card.text()).not.toContain('目标 —');
+    expect(card.text()).not.toContain('完成率 —');
+    wrapper.unmount();
+  });
+
+  it('旧来源没有比较口径时保留上期文案，不误标为上月末', async () => {
+    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
+    const wrapper = mount(PersonalDashboard, {
+      props: {
+        model: {
+          metrics: {
+            status: 'ready',
+            items: [{
+              metricCode: 'legacy', metricName: '旧周期指标', currentValue: 110,
+              previousValue: 100, mom: 10, unit: '户'
+            }]
+          }
+        }
+      }
+    });
+
+    const card = wrapper.get('[data-testid="personal-metric"]');
+    expect(card.text()).toContain('上期值 100');
+    expect(card.text()).toContain('较上期 10.00%');
+    expect(card.text()).not.toContain('较上月末');
+    wrapper.unmount();
+  });
+
+  it('全部当前值为空时保留真实卡片并呈现后端数据日期提示', async () => {
+    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
+    const wrapper = mount(PersonalDashboard, {
+      props: {
+        model: {
+          metrics: {
+            status: 'ready',
+            message: '当前账号暂无员工指标结果',
+            items: [{ metricName: '指标 A', currentValue: null }]
+          }
+        }
+      }
+    });
+
+    expect(wrapper.findAll('[data-testid="personal-metric"]')).toHaveLength(1);
+    expect(wrapper.text()).toContain('当前账号暂无员工指标结果');
+    expect(wrapper.text()).not.toContain('未接指标');
+    wrapper.unmount();
+  });
+
+  it('有数据日期但全部当前值为空时保留按日期提示', async () => {
+    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
+    const wrapper = mount(PersonalDashboard, {
+      props: {
+        model: {
+          metrics: {
+            status: 'ready',
+            message: '当前账号在该数据日期暂无所选指标结果',
+            items: [{ metricName: '指标 A', currentValue: null, dataDate: '2026-09-20' }]
+          }
+        }
+      }
+    });
+
+    expect(wrapper.text()).toContain('当前账号在该数据日期暂无所选指标结果');
+    expect(wrapper.text()).not.toContain('当前账号暂无员工指标结果');
     wrapper.unmount();
   });
 });

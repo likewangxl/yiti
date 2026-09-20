@@ -105,12 +105,36 @@ class MetricAdapterTest {
         MetricAdapter adapter = new MetricAdapter();
         MetricApi mockApi = mock(MetricApi.class);
         adapter.setMetricApi(mockApi);
-        when(mockApi.getUserMetricCards("E10001"))
+        when(mockApi.getPersonalCoreMetricCards("E10001"))
                 .thenThrow(new RuntimeException("远程服务不可用"));
 
         assertThatThrownBy(() -> adapter.fetchForWorkspace("E10001"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("failed")
                 .hasCauseInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void shouldUsePersonalCoreMetricQueryForWorkspace() {
+        MetricAdapter adapter = new MetricAdapter();
+        MetricApi mockApi = mock(MetricApi.class);
+        adapter.setMetricApi(mockApi);
+        MetricCardDTO dto = new MetricCardDTO();
+        dto.setMetricCode("DEPOSIT_BALANCE");
+        dto.setPreviousValue(new BigDecimal("100"));
+        dto.setCurrentValue(new BigDecimal("120"));
+        dto.setComparisonType("PREVIOUS_MONTH_END");
+        dto.setSourceType("EMP_LATEST_IMPORT");
+        when(mockApi.getPersonalCoreMetricCards("E10001"))
+                .thenReturn(Collections.singletonList(dto));
+
+        List<PortalMetricCard> result = adapter.fetchForWorkspace("E10001");
+
+        assertThat(result).singleElement().satisfies(card ->
+                assertThat(card.getPreviousValue()).isEqualTo("100.00"));
+        assertThat(result.get(0).getComparisonType()).isEqualTo("PREVIOUS_MONTH_END");
+        assertThat(result.get(0).getSourceType()).isEqualTo("EMP_LATEST_IMPORT");
+        verify(mockApi).getPersonalCoreMetricCards("E10001");
+        verify(mockApi, never()).getUserMetricCards("E10001");
     }
 }

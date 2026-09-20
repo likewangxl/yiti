@@ -224,6 +224,13 @@
   line-height: 1.16;
 }
 
+.personal-metrics-panel__scope {
+  margin: 4px 0 0;
+  color: var(--personal-muted);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
 .personal-panel__count {
   flex: 0 0 auto;
   color: #a7c4eb;

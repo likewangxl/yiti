@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.facade;
 
+import com.bank.branch.platform.performance.api.dto.MetricCardDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
@@ -11,6 +12,7 @@ import com.bank.branch.platform.performance.mapper.EmpMetricValueRow;
 import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.OrgMetricValueRow;
 import com.bank.branch.platform.performance.service.MetricDefService;
+import com.bank.branch.platform.performance.service.PersonalCoreMetricService;
 import com.bank.branch.platform.performance.service.SysControlService;
 import com.bank.branch.platform.performance.support.PerformanceServiceTestBase;
 import org.junit.jupiter.api.DisplayName;
@@ -53,11 +55,28 @@ class MetricApiImplTest extends PerformanceServiceTestBase {
     @Mock
     private CustIndexResultMapper custIndexResultMapper;
 
+    @Mock
+    private PersonalCoreMetricService personalCoreMetricService;
+
     @InjectMocks
     private MetricApiImpl metricApi;
 
     // V1.3 R2.5 起 getUserMetricCards 已落地; UOE 断言迁移到 MetricApiImplCardsTest 的行为断言.
     // 本 TestBase 保留原 Test 类的其他用例 (getEmpMetricValues 等), 不再断言 getUserMetricCards UOE.
+
+    @Test
+    @DisplayName("getPersonalCoreMetricCards：委托独立个人核心指标服务，不走旧 KPI 卡片路径")
+    void getPersonalCoreMetricCards_delegatesToPersonalService() {
+        List<MetricCardDTO> expected = List.of(MetricCardDTO.builder()
+                .metricCode("M_PERSONAL")
+                .currentValue(new BigDecimal("1"))
+                .build());
+        when(personalCoreMetricService.getPersonalCoreMetricCards("E001"))
+                .thenReturn(expected);
+
+        assertThat(metricApi.getPersonalCoreMetricCards("E001"))
+                .isSameAs(expected);
+    }
 
     @Test
     @DisplayName("getEmpMetricValues：按 metricCodes 映射到 slot 并查 EMP 宽表，返回 (metricCode -> value)")

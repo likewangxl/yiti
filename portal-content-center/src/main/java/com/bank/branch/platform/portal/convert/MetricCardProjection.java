@@ -30,9 +30,12 @@ public final class MetricCardProjection {
                 .unit(src.getUnit())
                 .trend(src.getTrend())
                 .currentValue(formatNumber(src.getCurrentValue()))
+                .previousValue(formatNumber(src.getPreviousValue()))
                 .targetValue(formatNumber(src.getTargetValue()))
                 .completionRate(src.getAchievementRate()) // 字段重命名
                 .changeRate(src.getChangeRate())
+                .comparisonType(src.getComparisonType())
+                .sourceType(src.getSourceType())
                 .dataTime(src.getDataTime())
                 .build();
     }

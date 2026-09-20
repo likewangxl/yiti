@@ -11,7 +11,9 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -265,5 +267,65 @@ class PerformanceMetricApiBridgeTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getDataTime()).isNull();
+    }
+
+    @Test
+    void shouldUsePersonalCoreMetricQueryAndKeepPreviousValue() {
+        com.bank.branch.platform.performance.api.MetricApi mockApi =
+                mock(com.bank.branch.platform.performance.api.MetricApi.class);
+        com.bank.branch.platform.performance.api.dto.MetricCardDTO source =
+                com.bank.branch.platform.performance.api.dto.MetricCardDTO.builder()
+                        .metricCode("DEPOSIT_BALANCE")
+                        .metricName("对公一般性存款余额")
+                        .currentValue(new BigDecimal("120"))
+                        .previousValue(new BigDecimal("100"))
+                        .mom(new BigDecimal("20"))
+                        .dataDate(LocalDate.of(2026, 9, 20))
+                        .build();
+        when(mockApi.getPersonalCoreMetricCards(" E10001 "))
+                .thenReturn(Collections.singletonList(source));
+
+        PerformanceMetricApiBridge bridge = new PerformanceMetricApiBridge(mockApi);
+
+        List<MetricCardDTO> result = bridge.getPersonalCoreMetricCards(" E10001 ");
+
+        assertThat(result).singleElement().satisfies(card -> {
+            assertThat(card.getMetricCode()).isEqualTo("DEPOSIT_BALANCE");
+            assertThat(card.getPreviousValue()).isEqualByComparingTo("100");
+            assertThat(card.getChangeRate()).isEqualByComparingTo("20");
+            assertThat(card.getComparisonType()).isEqualTo("PREVIOUS_MONTH_END");
+            assertThat(card.getSourceType()).isEqualTo("EMP_LATEST_IMPORT");
+            assertThat(card.getDataTime()).isEqualTo(LocalDateTime.of(2026, 9, 20, 0, 0));
+        });
+        verify(mockApi).getPersonalCoreMetricCards(" E10001 ");
+    }
+
+    @Test
+    void shouldFailStrictlyWhenPersonalCoreSourceIsNull() {
+        com.bank.branch.platform.performance.api.MetricApi mockApi =
+                mock(com.bank.branch.platform.performance.api.MetricApi.class);
+        when(mockApi.getPersonalCoreMetricCards("E10001")).thenReturn(null);
+
+        PerformanceMetricApiBridge bridge = new PerformanceMetricApiBridge(mockApi);
+
+        assertThatThrownBy(() -> bridge.getPersonalCoreMetricCards("E10001"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("returned null");
+    }
+
+    @Test
+    void shouldLeaveSourceTypeNullForLegacyCards() {
+        com.bank.branch.platform.performance.api.MetricApi mockApi =
+                mock(com.bank.branch.platform.performance.api.MetricApi.class);
+        com.bank.branch.platform.performance.api.dto.MetricCardDTO source =
+                com.bank.branch.platform.performance.api.dto.MetricCardDTO.builder()
+                        .metricCode("LEGACY")
+                        .build();
+        when(mockApi.getUserMetricCards("E10001")).thenReturn(Collections.singletonList(source));
+
+        PerformanceMetricApiBridge bridge = new PerformanceMetricApiBridge(mockApi);
+
+        assertThat(bridge.getUserMetricCards("E10001")).singleElement()
+                .satisfies(card -> assertThat(card.getSourceType()).isNull());
     }
 }

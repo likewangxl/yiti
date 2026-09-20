@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
  * <p>bootstrap 模块同时依赖 portal 与 performance，由本桥接类完成：</p>
  * <ul>
  *   <li>注入 performance.api.MetricApi（V1.1 P2.6 已交付）</li>
- *   <li>调用 getUserMetricCards 取得 performance MetricCardDTO 列表</li>
+ *   <li>兼容入口调用 getUserMetricCards；个人工作台调用 getPersonalCoreMetricCards</li>
  *   <li>逐项投影为 portal MetricCardDTO（trend 字段由 performance.mom 推导：&gt;0 UP / =0 FLAT / &lt;0 DOWN / null null）</li>
  *   <li>注册为 Spring @Service，让 portal MetricAdapter 通过 portal.adapter.MetricApi 类型注入到本实现</li>
  * </ul>
@@ -43,12 +43,30 @@ public class PerformanceMetricApiBridge implements MetricApi {
     public List<MetricCardDTO> getUserMetricCards(String empId) {
         List<com.bank.branch.platform.performance.api.dto.MetricCardDTO> source =
                 performanceMetricApi.getUserMetricCards(empId);
+        return project(source, null, null, false);
+    }
+
+    @Override
+    public List<MetricCardDTO> getPersonalCoreMetricCards(String empId) {
+        List<com.bank.branch.platform.performance.api.dto.MetricCardDTO> source =
+                performanceMetricApi.getPersonalCoreMetricCards(empId);
+        return project(source, "PREVIOUS_MONTH_END", "EMP_LATEST_IMPORT", true);
+    }
+
+    private List<MetricCardDTO> project(
+            List<com.bank.branch.platform.performance.api.dto.MetricCardDTO> source,
+            String comparisonType,
+            String sourceType,
+            boolean strict) {
         if (source == null) {
+            if (strict) {
+                throw new IllegalStateException("MetricApi.getPersonalCoreMetricCards returned null");
+            }
             return Collections.emptyList();
         }
         return source.stream()
                 .filter(Objects::nonNull)
-                .map(this::toPortalDto)
+                .map(src -> toPortalDto(src, comparisonType, sourceType))
                 .collect(Collectors.toList());
     }
 
@@ -62,16 +80,21 @@ public class PerformanceMetricApiBridge implements MetricApi {
      * dataTime 由 performance.dataDate.atStartOfDay() 而来。</p>
      */
     private MetricCardDTO toPortalDto(
-            com.bank.branch.platform.performance.api.dto.MetricCardDTO src) {
+            com.bank.branch.platform.performance.api.dto.MetricCardDTO src,
+            String comparisonType,
+            String sourceType) {
         MetricCardDTO dto = new MetricCardDTO();
         dto.setMetricCode(src.getMetricCode());
         dto.setMetricName(src.getMetricName());
         dto.setCurrentValue(src.getCurrentValue());
+        dto.setPreviousValue(src.getPreviousValue());
         dto.setTargetValue(src.getTargetValue());
         dto.setAchievementRate(src.getAchievementRate());
         dto.setUnit(src.getUnit());
         dto.setTrend(deriveTrend(src.getMom()));
         dto.setChangeRate(src.getMom());
+        dto.setComparisonType(comparisonType);
+        dto.setSourceType(sourceType);
         dto.setDataTime(toDataTime(src.getDataDate()));
         return dto;
     }

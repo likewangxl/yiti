@@ -42,6 +42,7 @@
         <div>
           <span class="personal-kicker">Core metrics</span>
           <h2 id="personal-metrics-heading">个人核心指标</h2>
+          <p class="personal-metrics-panel__scope">{{ metricScopeLabel(metrics) }}</p>
         </div>
         <span class="personal-panel__count">{{ metricCountLabel(metrics) }}</span>
       </header>
@@ -55,15 +56,16 @@
           </div>
           <div class="personal-metric__value-line">
             <strong :title="displayText(metric.currentValue)">{{ formatValue(metric.currentValue) }}</strong>
-            <span>{{ displayText(metric.unit, '') }}</span>
+            <span>{{ displayText(metric.unit, '单位未配置') }}</span>
           </div>
           <div class="personal-metric__details">
-            <span v-if="hasValue(metric.previousValue)" class="personal-metric__previous">上期 {{ formatValue(metric.previousValue) }}</span>
-            <span class="personal-metric__target">目标 {{ formatValue(metric.targetValue) }}</span>
-            <span class="personal-metric__achievement">完成率 {{ formatRate(metric.achievementRate) }}</span>
+            <span v-if="hasValue(metric.previousValue)" class="personal-metric__previous">{{ previousLabel(metric) }} {{ formatValue(metric.previousValue) }}</span>
+            <span v-if="hasValue(metric.targetValue)" class="personal-metric__target">目标 {{ formatValue(metric.targetValue) }}</span>
+            <span v-if="hasValue(metric.achievementRate)" class="personal-metric__achievement">完成率 {{ formatRate(metric.achievementRate) }}</span>
+            <span v-if="!hasValue(metric.targetValue) && !hasValue(metric.achievementRate)" class="personal-metric__target-note">未关联考核目标</span>
           </div>
           <div class="personal-metric__foot">
-            <span>环比 {{ formatRate(metric.mom) }}</span>
+            <span v-if="showMetricChange(metric)">{{ changeLabel(metric) }} {{ formatRate(metric.mom) }}</span>
             <span>{{ formatDataDate(metric.dataDate) }}</span>
           </div>
         </article>
@@ -285,6 +287,12 @@ function metricCountLabel(section) {
   return `${count} 项已展示`;
 }
 
+function metricScopeLabel(section) {
+  return String(section?.sourceType || '').toUpperCase() === 'EMP_LATEST_IMPORT'
+    ? '本人经营指标 · 最新导入快照（非考核结算）'
+    : '本人经营指标 · 按有效数据日期';
+}
+
 function listCountLabel(section, suffix) {
   const total = finiteNumber(section?.total);
   return total === null ? '近期清单' : `${formatValue(total)} ${suffix}`;
@@ -327,6 +335,22 @@ function metricIcon(code, index) {
   if (key.includes('business') || key.includes('application')) return Briefcase;
   if (key.includes('trend') || key.includes('rate') || key.includes('achievement')) return TrendCharts;
   return [DataAnalysis, OfficeBuilding, TrendCharts, Briefcase][index % 4];
+}
+
+function showMetricChange(metric) {
+  return hasValue(metric?.mom);
+}
+
+function isPreviousMonthEnd(metric) {
+  return String(metric?.comparisonType || '').toUpperCase() === 'PREVIOUS_MONTH_END';
+}
+
+function previousLabel(metric) {
+  return isPreviousMonthEnd(metric) ? '上月末值' : '上期值';
+}
+
+function changeLabel(metric) {
+  return isPreviousMonthEnd(metric) ? '较上月末' : '较上期';
 }
 
 function urgency(value) {

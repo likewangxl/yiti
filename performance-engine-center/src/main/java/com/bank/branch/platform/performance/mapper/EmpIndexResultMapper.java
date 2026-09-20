@@ -218,6 +218,53 @@ public interface EmpIndexResultMapper extends BaseMapper<EmpIndexResult> {
                                                      @Param("slot") Integer slot);
 
     /**
+     * 查询本人截至今日最新导入的宽表行。
+     * 排序固定为数据日期、更新时间、版本、主键，避免多版本并列时不稳定。
+     */
+    EmpIndexResult selectLatestRowForEmployee(@Param("empId") String empId,
+                                              @Param("today") LocalDate today);
+
+    /**
+     * 按本人和指定日期批量查询每个日期最新的一行；不存在的日期不返回。
+     */
+    List<EmpIndexResult> selectLatestRowsForEmployeeDates(@Param("empId") String empId,
+                                                           @Param("dates") List<LocalDate> dates,
+                                                           @Param("today") LocalDate today);
+
+    /**
+     * 按已选定宽表行 ID 和多个 slot 批量读取值。
+     * SQL 仍固定带 empId，rowId 即使被错误传入也不能跨员工读取。
+     */
+    default Map<Long, Map<Integer, BigDecimal>> selectSlotValuesByRowIdsAndSlots(
+            String empId, List<Long> rowIds, LocalDate today, List<Integer> slots) {
+        if (rowIds == null || rowIds.isEmpty() || slots == null || slots.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<EmpRowSlotValueRow> rows = selectSlotValuesByRowIdsAndSlotsRaw(
+                empId, rowIds, today, slots);
+        if (rows == null || rows.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, Map<Integer, BigDecimal>> result = new LinkedHashMap<>();
+        for (EmpRowSlotValueRow row : rows) {
+            if (row == null || row.getRowId() == null || row.getSlot() == null
+                    || row.getMetricValue() == null) {
+                continue;
+            }
+            result.computeIfAbsent(row.getRowId(), ignored -> new LinkedHashMap<>())
+                    .put(row.getSlot(), row.getMetricValue());
+        }
+        return result;
+    }
+
+    /** 多 slot 行值查询的底层强类型投影。 */
+    List<EmpRowSlotValueRow> selectSlotValuesByRowIdsAndSlotsRaw(
+            @Param("empId") String empId,
+            @Param("rowIds") List<Long> rowIds,
+            @Param("today") LocalDate today,
+            @Param("slots") List<Integer> slots);
+
+    /**
      * V1.7：取多个 metricCode 对应的 val_slot 映射（一次查询，查 perf_metric_def）.
      *
      * @param metricCodes 指标编码列表

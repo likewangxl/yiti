@@ -18,6 +18,7 @@ import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
 import com.bank.branch.platform.performance.service.KpiItemService;
 import com.bank.branch.platform.performance.service.KpiSchemeService;
 import com.bank.branch.platform.performance.service.MetricDefService;
+import com.bank.branch.platform.performance.service.PersonalCoreMetricService;
 import com.bank.branch.platform.performance.service.SysControlService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -69,6 +70,8 @@ public class MetricApiImpl implements MetricApi {
     private final KpiItemService kpiItemService;
     /** V1.3 R2.5 新增: 读员工目标值（subjectType=EMP）. */
     private final PerfTargetValueMapper perfTargetValueMapper;
+    /** 个人经营驾驶舱核心指标查询，与 KPI 方案卡片保持独立。 */
+    private final PersonalCoreMetricService personalCoreMetricService;
 
     /**
      * 查询员工工作台指标卡片（V1.5 P3.1: 按 (metricCode, cycleType) 组合去重，修复 V1.4 M01 首命中歧义）.
@@ -168,6 +171,16 @@ public class MetricApiImpl implements MetricApi {
             cards.add(buildCard(empId, def, key.cycleType(), version, latestDate));
         }
         return cards;
+    }
+
+    /**
+     * 获取个人经营驾驶舱核心指标卡片。
+     *
+     * <p>独立委托个人核心指标服务，不改变既有 KPI 方案卡片契约。</p>
+     */
+    @Override
+    public List<MetricCardDTO> getPersonalCoreMetricCards(String empId) {
+        return personalCoreMetricService.getPersonalCoreMetricCards(empId);
     }
 
     /**

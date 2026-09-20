@@ -24,4 +24,15 @@ public interface MetricApi {
      * @return 指标卡片列表
      */
     List<MetricCardDTO> getUserMetricCards(String empId);
+
+    /**
+     * 查询个人驾驶舱核心指标卡片。
+     *
+     * <p>该入口由 bootstrap 桥接到 performance 的个人核心指标查询，
+     * 与兼容性的 {@link #getUserMetricCards(String)} 保持独立。</p>
+     *
+     * @param empId 当前登录员工工号，原样透传
+     * @return 个人核心指标卡片列表
+     */
+    List<MetricCardDTO> getPersonalCoreMetricCards(String empId);
 }

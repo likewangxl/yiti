@@ -103,6 +103,18 @@ function asTotal(value) {
   return Number.isInteger(number) && number >= 0 ? number : null;
 }
 
+function hasMetricValue(value) {
+  if (value === null || value === undefined || value === '') return false;
+  if (typeof value === 'boolean') return false;
+  if (typeof value === 'string' && value.trim() === '') return false;
+  const number = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(number);
+}
+
+function hasMetricDate(value) {
+  return value !== null && value !== undefined && String(value).trim() !== '';
+}
+
 function sourceError(source) {
   if (!source || source.status === 'fulfilled') return null;
   const reason = source.reason || {};
@@ -330,6 +342,9 @@ function buildMetrics(workspaceSource) {
     metricCode: card?.metricCode,
     metricName: card?.metricName,
     currentValue: hasOwn(card, 'currentValue') ? card.currentValue : null,
+    previousValue: hasOwn(card, 'previousValue') ? card.previousValue : null,
+    comparisonType: hasOwn(card, 'comparisonType') ? card.comparisonType : null,
+    sourceType: hasOwn(card, 'sourceType') ? card.sourceType : null,
     targetValue: hasOwn(card, 'targetValue') ? card.targetValue : null,
     achievementRate: hasOwn(card, 'completionRate') ? card.completionRate : null,
     unit: card?.unit,
@@ -338,11 +353,18 @@ function buildMetrics(workspaceSource) {
   }));
   const messages = [];
   if (metricError) messages.push(metricError);
-  if (raw.length > 6) messages.push('展示前6项个人指标');
+  const allActualMissing = items.length > 0 && !items.some(item => hasMetricValue(item.currentValue));
+  const hasDataDate = items.some(item => hasMetricDate(item.dataDate));
+  if (allActualMissing) {
+    messages.push(hasDataDate
+      ? '当前账号在该数据日期暂无所选指标结果'
+      : '当前账号暂无员工指标结果');
+  }
   return {
     status: items.length ? 'ready' : metricError || !hasMetricCards ? 'error' : 'empty',
     message: joinMessages(messages),
     items,
+    sourceType: items.find(item => asText(item.sourceType))?.sourceType || null,
     total: null
   };
 }

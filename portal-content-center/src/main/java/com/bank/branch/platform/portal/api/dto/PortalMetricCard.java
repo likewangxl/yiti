@@ -26,6 +26,9 @@ public class PortalMetricCard {
     /** 当前值（格式化后的字符串，保留两位小数） */
     String currentValue;
 
+    /** 上月末值（格式化后的字符串，保留两位小数） */
+    String previousValue;
+
     /** 目标值（格式化后的字符串，保留两位小数） */
     String targetValue;
 
@@ -37,6 +40,12 @@ public class PortalMetricCard {
 
     /** 环比变化率 */
     BigDecimal changeRate;
+
+    /** 比较口径（如 PREVIOUS_MONTH_END）；旧来源为空 */
+    String comparisonType;
+
+    /** 数据来源口径（如 EMP_LATEST_IMPORT）；旧来源为空 */
+    String sourceType;
 
     /** 指标数据时间 */
     LocalDateTime dataTime;

@@ -63,7 +63,7 @@ public class MetricAdapter {
             throw new IllegalStateException("MetricApi bean is unavailable");
         }
         try {
-            List<MetricCardDTO> source = metricApi.getUserMetricCards(empId);
+            List<MetricCardDTO> source = metricApi.getPersonalCoreMetricCards(empId);
             if (source == null) {
                 throw new IllegalStateException("MetricApi returned null metric cards");
             }
@@ -71,7 +71,7 @@ public class MetricAdapter {
         } catch (IllegalStateException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new IllegalStateException("MetricApi.getUserMetricCards failed", ex);
+            throw new IllegalStateException("MetricApi.getPersonalCoreMetricCards failed", ex);
         }
     }
 
