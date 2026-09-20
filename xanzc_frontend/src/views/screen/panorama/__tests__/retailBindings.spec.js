@@ -8,6 +8,7 @@ import {
   validateBinding
 } from '../bindings';
 import {
+  RETAIL_AMOUNT_UNITS,
   RETAIL_BINDING_SLOTS,
   RETAIL_SLOT_ORDER,
   RETAIL_TEMPLATE,
@@ -35,7 +36,7 @@ describe('retail panorama bindings contract', () => {
     ]));
     expect(RETAIL_BINDING_SLOTS.retailTrend.atLeastOneOf).toEqual(['aum', 'deposit']);
     expect(RETAIL_BINDING_SLOTS.retailSegments.required).toEqual(['name', 'customers', 'aum']);
-    expect(RETAIL_BINDING_SLOTS.retailRanking.required).toEqual(['orgCode', 'name', 'aum']);
+    expect(RETAIL_BINDING_SLOTS.retailRanking.required).toEqual(['orgCode', 'name']);
     expect(RETAIL_BINDING_SLOTS.retailAttention.required).toEqual(['label', 'count']);
     expect(RETAIL_BINDING_SLOTS.retailTargets.required).toEqual(['name', 'actual', 'target']);
   });
@@ -96,5 +97,34 @@ describe('retail panorama bindings contract', () => {
     expect(validateBinding('retailAum', {
       dsId: 1, fields: { value: 'aum' }, units: { value: 'YUAN' }
     })).toEqual([]);
+  });
+
+  it('零售机构排名以机构身份为必填，并支持存款、月日均和日期维度', () => {
+    expect(RETAIL_BINDING_SLOTS.retailRanking.required).toEqual(['orgCode', 'name']);
+    expect(RETAIL_BINDING_SLOTS.retailRanking.atLeastOneOf).toEqual(['aum', 'deposit']);
+    expect(RETAIL_BINDING_SLOTS.retailRanking.fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ semantic: 'deposit', unitKinds: RETAIL_AMOUNT_UNITS }),
+      expect.objectContaining({ semantic: 'average', unitKinds: RETAIL_AMOUNT_UNITS }),
+      expect.objectContaining({ semantic: 'date', kind: 'dimension' })
+    ]));
+    expect(validateRetailBinding('retailRanking', {
+      dsId: 1,
+      fields: { orgCode: 'org', name: 'name', deposit: 'deposit', average: 'average', date: 'date' },
+      units: { deposit: 'YUAN', average: 'YUAN' }
+    })).toEqual([]);
+    expect(validateRetailBinding('retailRanking', {
+      dsId: 1, fields: { orgCode: 'org', name: 'name' }
+    })).toContain('至少选择一个字段: aum、deposit');
+  });
+
+  it('月日均趋势字段允许绑定但仍要求 AUM 或存款时点余额', () => {
+    expect(RETAIL_BINDING_SLOTS.retailTrend.fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ semantic: 'depositAverage', unitKinds: RETAIL_AMOUNT_UNITS })
+    ]));
+    expect(validateRetailBinding('retailTrend', {
+      dsId: 1,
+      fields: { date: 'date', depositAverage: 'average' },
+      units: { depositAverage: 'YUAN' }
+    })).toContain('至少选择一个字段: aum、deposit');
   });
 });

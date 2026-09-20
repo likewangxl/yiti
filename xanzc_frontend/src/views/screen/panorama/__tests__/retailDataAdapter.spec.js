@@ -78,8 +78,12 @@ describe('retailDataAdapter', () => {
         response: table(['targetName', 'actualRaw', 'targetRaw'], [['AUM', 20000, 3]])
       }
     });
-    expect(model.trend).toEqual([{ date: '2026-08', aum: 1, deposit: 2 }]);
-    expect(model.rankings).toEqual([{ orgCode: 'A', name: '甲', aum: 1, increase: 1, rate: 3, nplRate: 2, cityCode: null }]);
+    expect(model.trend).toEqual([{ date: '2026-08', aum: 1, deposit: 2, depositAverage: null }]);
+    expect(model.rankings).toEqual([{
+      orgCode: 'A', name: '甲', orgName: null, aum: 1, deposit: null, average: null, date: null,
+      increase: 1, rate: 3, nplRate: 2, cityCode: null, orgNature: null,
+      operatingLevel: null, ownerOperatingOrgCode: null
+    }]);
     expect(model.targets).toEqual([{ name: 'AUM', actual: 2, target: 3 }]);
   });
 
@@ -99,8 +103,12 @@ describe('retailDataAdapter', () => {
       }
     });
     expect(model.kpis).toEqual([{ key: 'retailAum', label: '零售AUM', value: null, unit: null, change: null }]);
-    expect(model.trend).toEqual([{ date: 'D2', aum: 3, deposit: null }]);
-    expect(model.rankings).toEqual([{ orgCode: 'B', name: '乙', aum: 3, increase: null, rate: null, nplRate: null, cityCode: null }]);
+    expect(model.trend).toEqual([{ date: 'D2', aum: 3, deposit: null, depositAverage: null }]);
+    expect(model.rankings).toEqual([{
+      orgCode: 'B', name: '乙', orgName: null, aum: 3, deposit: null, average: null, date: null,
+      increase: null, rate: null, nplRate: null, cityCode: null, orgNature: null,
+      operatingLevel: null, ownerOperatingOrgCode: null
+    }]);
     expect(model.issues).toEqual(expect.arrayContaining([
       expect.objectContaining({ slot: 'retailAum', code: 'INVALID_ROW_COUNT' }),
       expect.objectContaining({ slot: 'retailTrend', code: 'DUPLICATE_DATE' }),
@@ -144,8 +152,12 @@ describe('retailDataAdapter', () => {
         response: table(['loan', 'loan'], [[100000000, 200000000]])
       }
     });
-    expect(model.trend).toEqual([{ date: 'D2', aum: 2, deposit: null }]);
-    expect(model.rankings).toEqual([{ orgCode: 'B', name: '乙', aum: 2, increase: null, rate: null, nplRate: null, cityCode: null }]);
+    expect(model.trend).toEqual([{ date: 'D2', aum: 2, deposit: null, depositAverage: null }]);
+    expect(model.rankings).toEqual([{
+      orgCode: 'B', name: '乙', orgName: null, aum: 2, deposit: null, average: null, date: null,
+      increase: null, rate: null, nplRate: null, cityCode: null, orgNature: null,
+      operatingLevel: null, ownerOperatingOrgCode: null
+    }]);
     expect(model.kpis).toEqual([{ key: 'retailLoan', label: '个人贷款', value: null, unit: null, change: null }]);
     expect(model.issues).toEqual(expect.arrayContaining([
       expect.objectContaining({ slot: 'retailTrend', code: 'MISSING_DIMENSION' }),
@@ -167,7 +179,9 @@ describe('retailDataAdapter', () => {
       }
     });
     expect(model.rankings).toEqual([{
-      orgCode: 'AUTH', name: '返回名称', aum: 1, increase: null, rate: null, nplRate: null, cityCode: '610100'
+      orgCode: 'AUTH', name: '返回名称', orgName: '目录名称', aum: 1, deposit: null, average: null,
+      date: null, increase: null, rate: null, nplRate: null, cityCode: '610100',
+      orgNature: null, operatingLevel: null, ownerOperatingOrgCode: null
     }]);
     expect(model.issues).toEqual(expect.arrayContaining([
       expect.objectContaining({ slot: 'retailRanking', code: 'UNAUTHORIZED_ORG', message: '来源包含授权目录外机构，已排除' })
@@ -217,5 +231,50 @@ describe('retailDataAdapter', () => {
     expect(model.issues).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'MIXED_DATES' })
     ]));
+  });
+
+  it('存款排名保留 deposit、月日均和日期，并从权威目录补充同层筛选身份', () => {
+    const model = adaptRetailResults({
+      retailRanking: {
+        binding: binding('retailRanking', {
+          orgCode: 'code', name: 'label', deposit: 'deposit', average: 'average', date: 'date'
+        }, { deposit: 'YUAN', average: 'YUAN' }),
+        response: table(
+          ['code', 'label', 'deposit', 'average', 'date'],
+          [['AUTH', '来源名称', 120000000, 100000000, '2026-08']]
+        )
+      }
+    }, {
+      view: {
+        orgScopeMode: 'NAMED_GROUP',
+        panoramaInstitutions: [{
+          orgCode: 'AUTH', orgName: '目录名称', cityCode: '610100', orgNature: 'BRANCH',
+          operatingLevel: 'PRIMARY', ownerOperatingOrgCode: 'ROOT'
+        }]
+      }
+    });
+    expect(model.rankings).toEqual([expect.objectContaining({
+      orgCode: 'AUTH', name: '来源名称', aum: null, deposit: 1.2, average: 1,
+      date: '2026-08', orgNature: 'BRANCH', operatingLevel: 'PRIMARY',
+      ownerOperatingOrgCode: 'ROOT'
+    })]);
+  });
+
+  it('月日均趋势保留 depositAverage 金额序列，同时允许旧 AUM/deposit 形状', () => {
+    const model = adaptRetailResults({
+      retailTrend: {
+        binding: binding('retailTrend', {
+          date: 'month', deposit: 'deposit', depositAverage: 'average'
+        }, { deposit: 'YUAN', depositAverage: 'YUAN' }),
+        response: table(
+          ['month', 'deposit', 'average'],
+          [['2026-08', 200000000, 180000000], ['2026-09', 210000000, 190000000]]
+        )
+      }
+    });
+    expect(model.trend).toEqual([
+      { date: '2026-08', aum: null, deposit: 2, depositAverage: 1.8 },
+      { date: '2026-09', aum: null, deposit: 2.1, depositAverage: 1.9 }
+    ]);
   });
 });

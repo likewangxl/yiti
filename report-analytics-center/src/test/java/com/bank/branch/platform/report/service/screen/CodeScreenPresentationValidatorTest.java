@@ -77,9 +77,11 @@ class CodeScreenPresentationValidatorTest {
         datasource.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","
                 + "\"aggregation\":{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\"},"
                 + "\"metrics\":[{\"metricCode\":\"AUM\",\"metricName\":\"aum\",\"slot\":1},"
-                + "{\"metricCode\":\"INC\",\"metricName\":\"increase\",\"slot\":2},"
-                + "{\"metricCode\":\"RATE\",\"metricName\":\"rate\",\"slot\":3},"
-                + "{\"metricCode\":\"NPL\",\"metricName\":\"nplRate\",\"slot\":4}]}" );
+                + "{\"metricCode\":\"DEP\",\"metricName\":\"deposit\",\"slot\":2},"
+                + "{\"metricCode\":\"AVG\",\"metricName\":\"average\",\"slot\":3},"
+                + "{\"metricCode\":\"INC\",\"metricName\":\"increase\",\"slot\":4},"
+                + "{\"metricCode\":\"RATE\",\"metricName\":\"rate\",\"slot\":5},"
+                + "{\"metricCode\":\"NPL\",\"metricName\":\"nplRate\",\"slot\":6}]}" );
         return datasource;
     }
 
@@ -92,6 +94,23 @@ class CodeScreenPresentationValidatorTest {
                 + "{\"metricCode\":\"INC\",\"metricName\":\"increase\",\"slot\":2},"
                 + "{\"metricCode\":\"RATE\",\"metricName\":\"rate\",\"slot\":3},"
                 + "{\"metricCode\":\"NPL\",\"metricName\":\"nplRate\",\"slot\":4}]}");
+        return datasource;
+    }
+
+    private RptScreenDatasource retailDepositRankingDatasource() {
+        RptScreenDatasource datasource = new RptScreenDatasource();
+        datasource.setId(12L);
+        datasource.setBizLine("RETAIL");
+        datasource.setSourceKind("CUSTOM_SQL");
+        datasource.setConfigJson("{\"fieldMeta\":["
+                + "{\"col\":\"org_code\",\"role\":\"DIM\"},"
+                + "{\"col\":\"org_name\",\"role\":\"DIM\"},"
+                + "{\"col\":\"deposit\",\"role\":\"METRIC\"},"
+                + "{\"col\":\"average\",\"role\":\"METRIC\"},"
+                + "{\"col\":\"increase\",\"role\":\"METRIC\"},"
+                + "{\"col\":\"rate\",\"role\":\"METRIC\"},"
+                + "{\"col\":\"nplRate\",\"role\":\"METRIC\"},"
+                + "{\"col\":\"data_date\",\"role\":\"DIM\"}]}" );
         return datasource;
     }
 
@@ -292,6 +311,97 @@ class CodeScreenPresentationValidatorTest {
                 "{\"aum\":\"YUAN\"}");
         assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
                 MAPPER.readTree(forged), "retailRanking", retailRankingDatasource()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
+    void retailRankingAcceptsDepositAverageAndDateWithoutMappingDepositToAum() throws Exception {
+        String ranking = validBind(
+                "{\"orgCode\":\"org_code\",\"name\":\"org_name\","
+                        + "\"deposit\":\"deposit\",\"average\":\"average\","
+                        + "\"date\":\"data_date\",\"increase\":\"increase\","
+                        + "\"rate\":\"rate\",\"nplRate\":\"nplRate\"}",
+                "{\"deposit\":\"YUAN\",\"average\":\"TEN_THOUSAND\","
+                        + "\"increase\":\"HUNDRED_MILLION\",\"rate\":\"RATIO\","
+                        + "\"nplRate\":\"PERCENT\"}");
+
+        CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-deposit-ranking", "retailRanking", ranking));
+        CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(ranking), "retailRanking", retailDepositRankingDatasource());
+    }
+
+    @Test
+    void retailRankingDepositKeepsNamedGroupOrgSubjectBoundary() throws Exception {
+        String valid = validBind(
+                "{\"orgCode\":\"org_code\",\"name\":\"org_name\",\"deposit\":\"deposit\"}",
+                "{\"deposit\":\"YUAN\"}");
+        CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(valid), "retailRanking", retailRankingDatasource());
+
+        String forged = valid.replace("\"org_code\"", "\"org_name\"");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(forged), "retailRanking", retailRankingDatasource()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
+    void retailRankingRequiresOrgIdentityAndAtLeastOneAmountMetric() {
+        String neitherAumNorDeposit = validBind(
+                "{\"orgCode\":\"org_code\",\"name\":\"org_name\"}", "{}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-ranking-without-amount", "retailRanking", neitherAumNorDeposit)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String depositOnly = validBind(
+                "{\"orgCode\":\"org_code\",\"name\":\"org_name\",\"deposit\":\"deposit\"}",
+                "{\"deposit\":\"HUNDRED_MILLION\"}");
+        CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-deposit-only-ranking", "retailRanking", depositOnly));
+    }
+
+    @Test
+    void retailRankingStrictlyChecksDepositAverageAmountUnitsAndDateDimension() {
+        String depositAsRatio = validBind(
+                "{\"orgCode\":\"org_code\",\"name\":\"org_name\",\"deposit\":\"deposit\"}",
+                "{\"deposit\":\"RATIO\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-ranking-deposit-ratio", "retailRanking", depositAsRatio)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String averageAsCount = validBind(
+                "{\"orgCode\":\"org_code\",\"name\":\"org_name\",\"deposit\":\"deposit\","
+                        + "\"average\":\"average\"}",
+                "{\"deposit\":\"YUAN\",\"average\":\"COUNT\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-ranking-average-count", "retailRanking", averageAsCount)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String dateWithUnit = validBind(
+                "{\"orgCode\":\"org_code\",\"name\":\"org_name\",\"deposit\":\"deposit\","
+                        + "\"date\":\"data_date\"}",
+                "{\"deposit\":\"YUAN\",\"date\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(retailStyle,
+                draft("ChartWidget", "w-ranking-date-unit", "retailRanking", dateWithUnit)))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
+    void retailRankingDatasourceRejectsMetricDimensionRoleSwaps() throws Exception {
+        String depositBoundToDate = validBind(
+                "{\"orgCode\":\"org_code\",\"name\":\"org_name\","
+                        + "\"deposit\":\"data_date\"}",
+                "{\"deposit\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(depositBoundToDate), "retailRanking", retailDepositRankingDatasource()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String dateBoundToDeposit = validBind(
+                "{\"orgCode\":\"org_code\",\"name\":\"org_name\","
+                        + "\"deposit\":\"deposit\",\"date\":\"deposit\"}",
+                "{\"deposit\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(dateBoundToDeposit), "retailRanking", retailDepositRankingDatasource()))
                 .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
     }
 

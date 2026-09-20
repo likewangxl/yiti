@@ -68,7 +68,8 @@ export const RETAIL_BINDING_SLOTS = Object.freeze({
     fields: Object.freeze([
       field('date', '日期', { required: true, kind: 'dimension' }),
       field('aum', '零售AUM', { unitKinds: RETAIL_AMOUNT_UNITS }),
-      field('deposit', '储蓄存款余额', { unitKinds: RETAIL_AMOUNT_UNITS })
+      field('deposit', '储蓄存款余额', { unitKinds: RETAIL_AMOUNT_UNITS }),
+      field('depositAverage', '储蓄月日均', { unitKinds: RETAIL_AMOUNT_UNITS })
     ])
   }),
   retailSegments: Object.freeze({
@@ -84,11 +85,17 @@ export const RETAIL_BINDING_SLOTS = Object.freeze({
   retailRanking: Object.freeze({
     label: '零售机构排名',
     innerType: 'RANK_LIST',
-    required: ['orgCode', 'name', 'aum'],
+    required: ['orgCode', 'name'],
+    atLeastOneOf: ['aum', 'deposit'],
     fields: Object.freeze([
       field('orgCode', '机构号', { required: true, kind: 'dimension' }),
       field('name', '机构名称', { required: true, kind: 'dimension' }),
-      field('aum', '零售AUM', { required: true, unitKinds: RETAIL_AMOUNT_UNITS }),
+      // AUM is a legacy ranking metric. Keep its semantic so old published
+      // bindings remain valid while real retail rankings can use deposits.
+      field('aum', '零售AUM', { unitKinds: RETAIL_AMOUNT_UNITS }),
+      field('deposit', '储蓄存款余额', { unitKinds: RETAIL_AMOUNT_UNITS }),
+      field('average', '储蓄月日均', { unitKinds: RETAIL_AMOUNT_UNITS }),
+      field('date', '数据日期', { kind: 'dimension' }),
       field('increase', '较上月AUM净增', { unitKinds: RETAIL_AMOUNT_UNITS }),
       field('rate', 'AUM年度目标完成率', { unitKinds: RETAIL_RATIO_UNITS }),
       field('nplRate', '个贷不良率', { unitKinds: RETAIL_RATIO_UNITS })

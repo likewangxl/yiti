@@ -310,7 +310,9 @@ function adaptTrend(table, binding, model, issues) {
       ? readMetric(row, binding, 'aum', 'retailTrend', issues).value : null;
     const deposit = fieldColumn(binding, 'deposit')
       ? readMetric(row, binding, 'deposit', 'retailTrend', issues).value : null;
-    model.trend.push({ date, aum, deposit });
+    const depositAverage = fieldColumn(binding, 'depositAverage')
+      ? readMetric(row, binding, 'depositAverage', 'retailTrend', issues).value : null;
+    model.trend.push({ date, aum, deposit, depositAverage });
   }
 }
 
@@ -331,6 +333,7 @@ function directoryFrom(options = {}) {
   const source = options?.panoramaInstitutions
     || options?.view?.panoramaInstitutions
     || options?.view?.panorama_institutions
+    || options?.authoritative?.panoramaInstitutions
     || [];
   if (!Array.isArray(source)) return [];
   return source.map(item => ({
@@ -338,6 +341,10 @@ function directoryFrom(options = {}) {
     orgName: emptyValue(pick(item, 'orgName', 'org_name')),
     cityCode: emptyValue(pick(item, 'cityCode', 'city_code')),
     cityName: emptyValue(pick(item, 'cityName', 'city_name')),
+    orgNature: emptyValue(pick(item, 'orgNature', 'org_nature')),
+    operatingLevel: emptyValue(pick(item, 'operatingLevel', 'operating_level')),
+    ownerOperatingOrgCode: emptyValue(pick(item, 'ownerOperatingOrgCode', 'owner_operating_org_code')),
+    parentOrgCode: emptyValue(pick(item, 'parentOrgCode', 'parent_org_code')),
     lng: numeric(pick(item, 'lng', 'longitude')),
     lat: numeric(pick(item, 'lat', 'latitude')),
     coordSys: emptyValue(pick(item, 'coordSys', 'coord_sys')),
@@ -373,6 +380,8 @@ function normalizeInstitutionIdentity(raw = {}) {
     orgName: emptyValue(pick(raw, 'orgName', 'org_name')),
     cityCode: emptyValue(pick(raw, 'cityCode', 'city_code')),
     cityName: emptyValue(pick(raw, 'cityName', 'city_name')),
+    orgNature: emptyValue(pick(raw, 'orgNature', 'org_nature')),
+    operatingLevel: emptyValue(pick(raw, 'operatingLevel', 'operating_level')),
     ownerOperatingOrgCode: emptyValue(pick(raw, 'ownerOperatingOrgCode', 'owner_operating_org_code')),
     parentOrgCode: emptyValue(pick(raw, 'parentOrgCode', 'parent_org_code')),
     lng: coordinateOk ? lng : null,
@@ -383,7 +392,8 @@ function normalizeInstitutionIdentity(raw = {}) {
 }
 
 function scopeMode(options = {}) {
-  return String(options?.view?.orgScopeMode || options?.view?.org_scope_mode || '').toUpperCase();
+  return String(options?.orgScopeMode || options?.org_scope_mode
+    || options?.view?.orgScopeMode || options?.view?.org_scope_mode || '').toUpperCase();
 }
 
 function adaptRanking(table, binding, model, issues, options) {
@@ -406,6 +416,13 @@ function adaptRanking(table, binding, model, issues, options) {
   }
   for (const [key, count] of orgCounts.entries()) if (count > 1) duplicateOrgs.add(key);
   const seen = new Set();
+  const hasAum = Boolean(fieldColumn(binding, 'aum'));
+  const hasDeposit = Boolean(fieldColumn(binding, 'deposit'));
+  if (!hasAum && !hasDeposit) {
+    issue(issues, 'retailRanking', 'MISSING_METRIC', '排名至少需要 aum 或 deposit');
+    return;
+  }
+  model.rankingBoundFields = Object.freeze(Object.keys(binding?.fields || {}));
   for (const row of table.rows) {
     const orgCode = readDimension(row, binding, 'orgCode', 'retailRanking', issues, true);
     const code = orgCode === null ? '' : String(orgCode).trim();
@@ -427,16 +444,42 @@ function adaptRanking(table, binding, model, issues, options) {
     }
     seen.add(code);
     const name = readDimension(row, binding, 'name', 'retailRanking', issues, true);
-    const aum = readMetric(row, binding, 'aum', 'retailRanking', issues, true).value;
+    if (name === null) {
+      issue(issues, 'retailRanking', 'MISSING_DIMENSION', '排名行缺少机构名称，已跳过', 'name');
+      continue;
+    }
+    const authority = directoryByCode.get(code) || null;
+    const aum = hasAum
+      ? readMetric(row, binding, 'aum', 'retailRanking', issues).value : null;
+    const deposit = hasDeposit
+      ? readMetric(row, binding, 'deposit', 'retailRanking', issues).value : null;
+    const average = fieldColumn(binding, 'average')
+      ? readMetric(row, binding, 'average', 'retailRanking', issues).value : null;
+    const date = fieldColumn(binding, 'date')
+      ? readDimension(row, binding, 'date', 'retailRanking', issues) : null;
     const increase = fieldColumn(binding, 'increase')
       ? readMetric(row, binding, 'increase', 'retailRanking', issues).value : null;
     const rate = fieldColumn(binding, 'rate')
       ? readMetric(row, binding, 'rate', 'retailRanking', issues).value : null;
     const nplRate = fieldColumn(binding, 'nplRate')
       ? readMetric(row, binding, 'nplRate', 'retailRanking', issues).value : null;
-    // NAMED_GROUP 只允许目录补充 cityCode；名称、城市名称、坐标不由目录猜测。
-    const cityCode = namedGroup ? (directoryByCode.get(code)?.cityCode ?? null) : null;
-    model.rankings.push({ orgCode: code || null, name, aum, increase, rate, nplRate, cityCode });
+    // 目录是机构身份的权威来源；排名查询的 name 仍保留为来源展示值。
+    model.rankings.push({
+      orgCode: code || null,
+      name,
+      orgName: authority?.orgName ?? null,
+      aum,
+      deposit,
+      average,
+      date: date === null ? null : String(date),
+      increase,
+      rate,
+      nplRate,
+      cityCode: authority?.cityCode ?? null,
+      orgNature: authority?.orgNature ?? null,
+      operatingLevel: authority?.operatingLevel ?? null,
+      ownerOperatingOrgCode: authority?.ownerOperatingOrgCode ?? null
+    });
   }
 }
 
@@ -473,6 +516,8 @@ const IDENTITY_FIELDS = Object.freeze([
   ['orgName', 'orgName', 'org_name'],
   ['cityCode', 'cityCode', 'city_code'],
   ['cityName', 'cityName', 'city_name'],
+  ['orgNature', 'orgNature', 'org_nature'],
+  ['operatingLevel', 'operatingLevel', 'operating_level'],
   ['ownerOperatingOrgCode', 'ownerOperatingOrgCode', 'owner_operating_org_code'],
   ['parentOrgCode', 'parentOrgCode', 'parent_org_code'],
   ['lng', 'lng', 'longitude'],

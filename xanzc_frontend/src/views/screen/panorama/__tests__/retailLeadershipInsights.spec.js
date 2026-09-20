@@ -49,4 +49,25 @@ describe('retailLeadershipInsights 零售经营观察派生', () => {
       targetGapCount: 1
     });
   });
+
+  it('存款排名缺失量按已绑定字段统计，未绑定 rate/npl 不算业务异常', () => {
+    expect(buildRetailLeadershipInsights({
+      rankings: [
+        { orgCode: 'A', deposit: 10, average: 9, increase: -1 },
+        { orgCode: 'B', deposit: 8, average: null, increase: null }
+      ],
+      rankingBoundFields: ['orgCode', 'name', 'deposit', 'average', 'increase']
+    })).toMatchObject({
+      negativeGrowthCount: 1,
+      growthComparableCount: 1,
+      growthSampleCount: 2,
+      missingMetricCount: 2
+    });
+    expect(buildRetailLeadershipInsights({
+      rankings: [
+        { orgCode: 'A', deposit: 10, average: 9, increase: -1, rate: null, nplRate: null },
+        { orgCode: 'B', deposit: 8, average: null, increase: null, rate: null, nplRate: null }
+      ]
+    }).missingMetricCount).toBe(2);
+  });
 });

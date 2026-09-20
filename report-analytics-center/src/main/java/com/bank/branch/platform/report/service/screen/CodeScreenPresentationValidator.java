@@ -255,6 +255,8 @@ public final class CodeScreenPresentationValidator {
         }
         if ("composition".equals(bindingKey)) {
             validateCompositionShape(present);
+        } else if ("retailRanking".equals(bindingKey)) {
+            validateRetailRankingShape(present, required);
         } else if (!present.containsAll(required)) {
             throw invalid();
         }
@@ -291,7 +293,8 @@ public final class CodeScreenPresentationValidator {
                 throw invalid();
             }
             Set<String> unitKinds = unitKinds(bindingKey, entry.getKey());
-            if (unitKinds.isEmpty() && "orgCode".equals(entry.getKey())) {
+            if (unitKinds.isEmpty() && ("orgCode".equals(entry.getKey())
+                    || ("retailRanking".equals(bindingKey) && "date".equals(entry.getKey())))) {
                 throw invalid();
             }
             if (!unitKinds.isEmpty() && !unitKinds.contains(entry.getValue().asText())) {
@@ -660,6 +663,14 @@ public final class CodeScreenPresentationValidator {
         }
     }
 
+    /** 零售机构排名必须有机构身份，排名指标可以来自 AUM 或一般性存款。 */
+    private static void validateRetailRankingShape(Set<String> present, Set<String> required) {
+        if (!present.containsAll(required)
+                || (!present.contains("aum") && !present.contains("deposit"))) {
+            throw invalid();
+        }
+    }
+
     /** 双列两个指标必须使用同一类单位：金额或比例。 */
     private static void validateCompositionUnitKinds(Set<String> present, JsonNode units) {
         if (!present.contains("corporate") || !present.contains("retail")) {
@@ -773,7 +784,8 @@ public final class CodeScreenPresentationValidator {
         result.put("retailTrend", Set.of("date", "aum", "deposit", "depositAverage", "revenue",
                 "loan", "valueCustomers", "nplRate"));
         result.put("retailSegments", Set.of("name", "customers", "aum"));
-        result.put("retailRanking", Set.of("orgCode", "name", "aum", "increase", "rate", "nplRate"));
+        result.put("retailRanking", Set.of("orgCode", "name", "aum", "deposit", "average", "date",
+                "increase", "rate", "nplRate"));
         result.put("retailAttention", Set.of("label", "count", "owner", "deadline"));
         result.put("retailTargets", Set.of("name", "actual", "target"));
         result.put("corpDeposit", Set.of("value", "change", "date"));
@@ -817,7 +829,7 @@ public final class CodeScreenPresentationValidator {
         result.put("retailNplRate", Set.of("value"));
         result.put("retailTrend", Set.of("date"));
         result.put("retailSegments", Set.of("name", "customers", "aum"));
-        result.put("retailRanking", Set.of("orgCode", "name", "aum"));
+        result.put("retailRanking", Set.of("orgCode", "name"));
         result.put("retailAttention", Set.of("label", "count"));
         result.put("retailTargets", Set.of("name", "actual", "target"));
         result.put("corpDeposit", Set.of("value"));
@@ -1098,7 +1110,7 @@ public final class CodeScreenPresentationValidator {
                 default -> Set.of();
             };
             case "retailRanking" -> switch (field) {
-                case "aum", "increase" -> amount;
+                case "aum", "deposit", "average", "increase" -> amount;
                 case "rate", "nplRate" -> ratio;
                 default -> Set.of();
             };
