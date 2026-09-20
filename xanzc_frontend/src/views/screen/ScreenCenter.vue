@@ -93,6 +93,8 @@
             </template>
           </div>
           <button type="button" class="screen-card__open" @click="openScreen(screen)">{{ isPersonalScreen(screen) ? '进入驾驶舱' : '进入大屏' }}</button>
+          <button v-if="screen.screenCode === 'SCR_CORP_OVERVIEW' && screen.template === 'corporate-overview-v1' && screen.dataMode === 'LIVE'"
+            type="button" class="screen-card__open" data-action="open-branch-operating" @click="router.push('/branch-operating')">支行经营总览</button>
         </div>
       </article>
     </section>

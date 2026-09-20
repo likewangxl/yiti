@@ -1,0 +1,23 @@
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+ ✓ src/views/screen/panorama/__tests__/branchOperatingModel.spec.js  (4 tests) 9ms
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+ ✓ src/views/screen/__tests__/BranchOperatingPage.spec.js  (3 tests) 64ms
+ ✓ src/views/screen/__tests__/ScreenCenter.spec.js  (13 tests) 182ms
+ ✓ src/views/screen/panorama/__tests__/usePanoramaData.singleOrg.spec.js  (7 tests) 191ms
+ ✓ src/views/screen/panorama/__tests__/usePanoramaData.spec.js  (19 tests) 436ms
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+ ✓ src/views/screen/panorama/__tests__/BranchOperatingDashboard.spec.js  (7 tests) 249ms
+
+ Test Files  6 passed (6)
+      Tests  53 passed (53)
+   Start at  17:13:56
+   Duration  3.08s (transform 1.63s, setup 0ms, collect 4.60s, tests 1.13s, environment 3.31s, prepare 1.59s)
+

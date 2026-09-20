@@ -1,0 +1,59 @@
+### Result
+1. [GET] http://127.0.0.1:8092/api/auth/current-user => [200] OK
+3. [GET] http://127.0.0.1:8092/api/auth/my-menus => [200] OK
+4. [GET] http://127.0.0.1:8092/api/auth/permissions => [200] OK
+39. [GET] http://127.0.0.1:8092/api/screen/view/catalog => [200] OK
+41. [GET] http://127.0.0.1:8092/api/screen/view/SCR_CORP_OVERVIEW => [200] OK
+42. [GET] http://127.0.0.1:8092/api/admin/touch-tasks/summary?orgCode=109&startDate=2026-09-01&endDate=2026-09-20 => [200] OK
+43. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+44. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+45. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+49. [GET] http://127.0.0.1:8092/api/screen/view/catalog => [200] OK
+50. [GET] http://127.0.0.1:8092/api/screen/view/catalog => [200] OK
+54. [GET] http://127.0.0.1:8092/api/screen/view/SCR_CORP_OVERVIEW => [200] OK
+55. [GET] http://127.0.0.1:8092/api/admin/touch-tasks/summary?orgCode=109&startDate=2026-09-01&endDate=2026-09-20 => [200] OK
+56. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+57. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+58. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+61. [POST] http://127.0.0.1:8092/api/screen/data
+62. [POST] http://127.0.0.1:8092/api/screen/data
+63. [POST] http://127.0.0.1:8092/api/screen/data
+111. [GET] http://127.0.0.1:8092/api/auth/my-menus => [200] OK
+113. [GET] http://127.0.0.1:8092/api/auth/permissions => [200] OK
+145. [GET] http://127.0.0.1:8092/api/screen/view/catalog => [200] OK
+148. [GET] http://127.0.0.1:8092/api/screen/view/SCR_CORP_OVERVIEW => [200] OK
+149. [GET] http://127.0.0.1:8092/api/admin/touch-tasks/summary?orgCode=109&startDate=2026-09-01&endDate=2026-09-20 => [200] OK
+150. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+151. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+152. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+153. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+154. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+155. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+156. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+157. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+164. [GET] http://127.0.0.1:8092/api/screen/view/catalog => [200] OK
+165. [GET] http://127.0.0.1:8092/api/screen/view/SCR_CORP_OVERVIEW => [200] OK
+166. [GET] http://127.0.0.1:8092/api/admin/touch-tasks/summary?orgCode=109&startDate=2026-09-01&endDate=2026-09-20 => [200] OK
+167. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+168. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+169. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+170. [GET] http://127.0.0.1:8092/api/admin/touch-tasks/summary?orgCode=110&startDate=2026-09-01&endDate=2026-09-20 => [200] OK
+172. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+173. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+174. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+175. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+176. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+177. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+178. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+179. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+180. [GET] http://127.0.0.1:8092/api/admin/touch-tasks/summary?orgCode=109&startDate=2026-09-01&endDate=2026-09-20 => [200] OK
+181. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+182. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+183. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+185. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+186. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+187. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+188. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+189. [POST] http://127.0.0.1:8092/api/screen/data => [200] OK
+
+Note: 133 static requests not shown, run with --static option to see them.

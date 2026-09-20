@@ -1,0 +1,21 @@
+### Result
+{
+  "viewport": [
+    1920,
+    1080
+  ],
+  "document": [
+    1920,
+    1080
+  ],
+  "panels": [
+    437,
+    910,
+    473
+  ],
+  "selected": "109"
+}
+### Ran Playwright code
+```js
+await page.evaluate('() => ({viewport:[innerWidth,innerHeight],document:[document.documentElement.scrollWidth,document.documentElement.scrollHeight],panels:[...document.querySelectorAll(".branch-operating-main-grid > div")].map(e=>Math.round(e.getBoundingClientRect().width)),selected:document.querySelector("select").value})');
+```

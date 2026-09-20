@@ -1,0 +1,6 @@
+### Result
+{"loanActive":true,"sourceDetailsOpened":true}
+### Ran Playwright code
+```js
+await (async page => { await page.locator("[data-trend-key=loan]").click(); const loan = await page.locator("[data-trend-key=loan]").getAttribute("class"); await page.locator("[data-trend-key=deposit]").click(); await page.locator(".branch-operating-source-bar summary").click(); const details = await page.locator(".branch-operating-source-bar details").getAttribute("open"); await page.locator(".branch-operating-source-bar summary").click(); return { loanActive:loan.includes("is-active"), sourceDetailsOpened:details !== null }; })(page);
+```

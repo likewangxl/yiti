@@ -1,0 +1,9 @@
+### Result
+{"title":"高新开发区支行","values":["—","—","—","—","—","—"]}
+### Ran Playwright code
+```js
+await (async page => { await page.locator("[data-testid=branch-operating-branch-select]").selectOption("109"); return {title:await page.locator("h1").innerText(),values:await page.locator(".branch-operating-kpi__value-line strong").allTextContents()}; })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8092/#/branch-operating?orgCode=109
+- Page Title: 银行营销 · 业务执行 · 绩效平台

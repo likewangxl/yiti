@@ -109,6 +109,53 @@ function contextSnapshot(context) {
   return isObject(value) ? value : {};
 }
 
+function contextOrgCode(context) {
+  const value = contextSnapshot(context);
+  return String(value.orgCode ?? value.org_code ?? '').trim();
+}
+
+function publishedInstitutions(view) {
+  const source = view?.panoramaInstitutions ?? view?.panorama_institutions;
+  return Array.isArray(source) ? source : [];
+}
+
+function institutionOrgCode(item) {
+  if (isObject(item)) return String(item.orgCode ?? item.org_code ?? '').trim();
+  return String(item ?? '').trim();
+}
+
+function resolveSingleOrgScope(view, context) {
+  const scopeMode = String(view?.orgScopeMode ?? view?.org_scope_mode ?? '').trim().toUpperCase();
+  const orgCode = contextOrgCode(context);
+  const directory = publishedInstitutions(view);
+  if (scopeMode !== 'NAMED_GROUP') {
+    return {
+      valid: false,
+      orgCode,
+      directory: [],
+      message: `singleOrg 仅允许 NAMED_GROUP 机构范围，当前为 ${scopeMode || '未提供'}`
+    };
+  }
+  if (!orgCode) {
+    return {
+      valid: false,
+      orgCode,
+      directory: [],
+      message: 'singleOrg 缺少上下文机构号'
+    };
+  }
+  const selected = directory.find(item => institutionOrgCode(item) === orgCode);
+  if (!selected) {
+    return {
+      valid: false,
+      orgCode,
+      directory: [],
+      message: `singleOrg 上下文机构不在授权目录中: ${orgCode}`
+    };
+  }
+  return { valid: true, orgCode, directory: [selected], message: '' };
+}
+
 function addIssue(issues, slot, code, message, field = '') {
   const key = `${slot}|${code}|${field}`;
   if (issues.some(item => `${item.slot}|${item.code}|${item.field || ''}` === key)) return;
@@ -174,6 +221,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
   const generation = ref(0);
   const screenGeneration = ref(0);
   const branchGeneration = ref(0);
+  const renderedSingleOrgCode = ref('');
   const alive = ref(true);
   const disposed = ref(false);
   const requestCache = new Map();
@@ -200,7 +248,9 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     // orgCode/empId must never narrow ordinary slots (it can be stale from a
     // previous detail view); only the explicit branchTrend drill carries the
     // selected authorised branch code.
-    const requestContext = bindingEntry.slot === 'branchTrend'
+    const requestContext = options.singleOrg
+      ? { orgCode: contextOrgCode(context) }
+      : bindingEntry.slot === 'branchTrend'
       ? { orgCode: branchCode }
       : {};
     const body = buildScreenDataRequest({
@@ -286,7 +336,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
   }
 
   async function prefetchBranchTrends(modelValue, packageInfo, view, context, generationToken, allIssues, branchesResponse, branchesEntry, batchState = null) {
-    if (packageInfo.retail || packageInfo.corporate || !branchesResponse || !Array.isArray(modelValue?.institutions)) return {};
+    if (options.singleOrg || packageInfo.retail || packageInfo.corporate || !branchesResponse || !Array.isArray(modelValue?.institutions)) return {};
     const entry = packageInfo.slots.get('branchTrend');
     if (!entry) return {};
     const directory = Array.isArray(view.panoramaInstitutions || view.panorama_institutions)
@@ -355,11 +405,15 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     const view = currentView();
     const context = contextSnapshot(contextSource);
     const packageInfo = packageBindings(view);
+    const singleOrgScope = options.singleOrg ? resolveSingleOrgScope(view, context) : null;
     const retail = packageInfo.retail;
     const requiresBatch = Boolean(options.batchRequired && !retail && !packageInfo.corporate);
-    const preserveModel = Boolean(loadOptions.preserveModel);
+    const requestedPreserveModel = Boolean(loadOptions.preserveModel);
     const onlySlots = Array.isArray(loadOptions.onlySlots)
       ? new Set(loadOptions.onlySlots) : null;
+    const canPreserveSingleOrgModel = !options.singleOrg
+      || (singleOrgScope?.valid && renderedSingleOrgCode.value === singleOrgScope.orgCode);
+    const preserveModel = requestedPreserveModel && canPreserveSingleOrgModel;
     const branchOnly = !retail && !packageInfo.corporate && preserveModel && onlySlots?.has('branchTrend');
     const kind = branchOnly ? 'branch' : 'screen';
     const currentGeneration = kind === 'branch'
@@ -371,11 +425,30 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     lastQueriedAt.value = queriedAt;
     if (!preserveModel) {
       model.value = emptyModel(retail, view, queriedAt);
+      if (options.singleOrg) renderedSingleOrgCode.value = '';
       error.value = '';
     }
     pendingLoads += 1;
     loading.value = true;
     try {
+      if (options.singleOrg && !singleOrgScope.valid) {
+        // Invalid context changes must invalidate both full-screen and drill generations;
+        // otherwise a response from the previously selected institution could repopulate
+        // the cleared single-org model.
+        screenGeneration.value += 1;
+        branchGeneration.value += 1;
+        const nextModel = emptyModel(retail, view, queriedAt);
+        nextModel.issues = [...packageInfo.issues, {
+          slot: 'singleOrg',
+          code: 'SINGLE_ORG_SCOPE_INVALID',
+          message: singleOrgScope.message
+        }];
+        model.value = nextModel;
+        renderedSingleOrgCode.value = '';
+        error.value = singleOrgScope.message;
+        return nextModel;
+      }
+      if (options.singleOrg) branchOrgCode.value = singleOrgScope.orgCode;
       const { slots } = packageInfo;
       const allIssues = [...packageInfo.issues];
       const selectedBranch = String(loadOptions.branchOrgCode ?? branchOrgCode.value ?? '').trim();
@@ -389,6 +462,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
       const requests = [];
       for (const [slot, entry] of slots.entries()) {
         if (onlySlots && !onlySlots.has(slot)) continue;
+        if (options.singleOrg && (slot === 'ranking' || slot === 'citySummary')) continue;
         if (slot === 'branchTrend' && !branchOnly) {
           // branchTrend is deliberately lazy: it is fetched only after an
           // explicit institution selection, so an untouched slot is not an
@@ -517,16 +591,23 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         }
         model.value = nextModel;
       } else {
+        const adapterInstitutions = options.singleOrg
+          ? singleOrgScope.directory
+          : (Array.isArray(view.panoramaInstitutions || view.panorama_institutions)
+            ? (view.panoramaInstitutions || view.panorama_institutions) : []);
+        const adapterView = options.singleOrg
+          ? { ...view, panoramaInstitutions: adapterInstitutions, panorama_institutions: adapterInstitutions }
+          : view;
         const nextModel = packageInfo.corporate
-          ? adaptCorporateResults(resultMap, { view, panoramaInstitutions: view.panoramaInstitutions || view.panorama_institutions })
+          ? adaptCorporateResults(resultMap, { view: adapterView, panoramaInstitutions: adapterInstitutions })
           : retail
           ? adaptRetailResults(resultMap, {
-            view,
-            panoramaInstitutions: view.panoramaInstitutions || view.panorama_institutions
+            view: adapterView,
+            panoramaInstitutions: adapterInstitutions
           })
           : adaptPanoramaResults(resultMap, {
-            view,
-            panoramaInstitutions: view.panoramaInstitutions || view.panorama_institutions,
+            view: adapterView,
+            panoramaInstitutions: adapterInstitutions,
             title: view.screenName || view.screen_name
           });
         const prefetchResult = await prefetchBranchTrends(nextModel, packageInfo, view, context, currentGeneration, allIssues, resultMap.branches?.response, packageInfo.slots.get('branches'), batchState);
@@ -551,6 +632,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         }
         model.value = nextModel;
       }
+      if (options.singleOrg && !branchOnly) renderedSingleOrgCode.value = singleOrgScope.orgCode;
       error.value = '';
       return model.value;
     } finally {
@@ -565,6 +647,20 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
 
   async function selectBranch(orgCode) {
     const next = String(orgCode || '').trim();
+    if (options.singleOrg) {
+      const scope = resolveSingleOrgScope(currentView(), contextSnapshot(contextSource));
+      branchOrgCode.value = scope.orgCode;
+      if (!scope.valid) return load();
+      if (!next || next !== scope.orgCode) return model.value;
+      if (renderedSingleOrgCode.value !== scope.orgCode) return load();
+      if (isRetailPackage(screenPackage(currentView())) || isCorporatePackage(screenPackage(currentView()))) return model.value;
+      const selectedInstitution = model.value?.institutions?.find(item => String(item?.orgCode) === scope.orgCode);
+      if (selectedInstitution) {
+        selectedInstitution.trend = [];
+        selectedInstitution.trendIssue = '';
+      }
+      return load({ onlySlots: ['branchTrend'], branchOrgCode: scope.orgCode, preserveModel: true });
+    }
     branchOrgCode.value = next;
     if (!next) return model.value;
     if (isRetailPackage(screenPackage(currentView())) || isCorporatePackage(screenPackage(currentView()))) return model.value;
@@ -599,10 +695,12 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     if (options.autoLoad !== false) onMounted(() => { watchReady = true; refresh(); });
   }
   if (options.watch !== false) {
+    const watchOptions = { deep: true };
+    if (options.singleOrg) watchOptions.flush = 'sync';
     watch(() => [valueOf(viewSource), contextSnapshot(contextSource)], () => {
       if (!watchReady || !alive.value) return;
       refresh();
-    }, { deep: true });
+    }, watchOptions);
   }
 
   return {

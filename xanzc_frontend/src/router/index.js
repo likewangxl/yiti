@@ -63,6 +63,12 @@ const routes = [
     component: () => import('@/views/screen/CodeScreenPage.vue'),
     meta: { title: '代码化大屏', requiredResource: '/api/screen/view/*', hideInMenu: true }
   },
+  {
+    path: '/branch-operating',
+    name: 'BranchOperatingPage',
+    component: () => import('@/views/screen/BranchOperatingPage.vue'),
+    meta: { title: '支行经营总览', requiredResource: '/api/screen/view/*', hideInMenu: true }
+  },
   // 大屏管理：历史 designer 路径继续兼容，但入口改为绑定/发布管理页，不再暴露为菜单。
   // 保留原路径和权限资源，刷新、直达和会话恢复仍经全局守卫 Fail Close。
   {
