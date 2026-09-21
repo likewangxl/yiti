@@ -1,0 +1,111 @@
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+ ✓ src/views/screen/panorama/__tests__/RetailDashboard.spec.js  (27 tests) 3481ms
+ ✓ src/views/screen/panorama/__tests__/usePanoramaData.spec.js  (19 tests) 471ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaBindings.spec.js  (20 tests) 2057ms
+ ✓ src/views/screen/panorama/__tests__/defaultBindings.spec.js  (19 tests) 36ms
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+ ✓ src/views/screen/panorama/__tests__/PanoramaDashboard.spec.js  (25 tests) 1884ms
+ ✓ src/views/screen/panorama/__tests__/BranchOperatingDashboard.spec.js  (12 tests) 520ms
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+ ✓ src/views/screen/__tests__/ScreenCenter.spec.js  (14 tests) 299ms
+ ✓ src/views/screen/panorama/__tests__/CorporateDashboard.spec.js  (9 tests) 1458ms
+ ✓ src/views/screen/panorama/__tests__/sourcePresentation.spec.js  (13 tests) 163ms
+ ✓ src/views/screen/panorama/__tests__/corporateIntegration.spec.js  (8 tests) 46ms
+ ✓ src/views/screen/panorama/__tests__/usePanoramaData.singleOrg.spec.js  (7 tests) 206ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaSettings.spec.js  (9 tests) 428ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaInstitutionDirectory.spec.js  (8 tests) 263ms
+ ✓ src/views/screen/panorama/__tests__/CityPanorama.spec.js  (9 tests) 433ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaIntegrationReadiness.spec.js  (7 tests) 288ms
+ ✓ src/views/screen/panorama/__tests__/CompositionBreakdown.spec.js  (7 tests) 128ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaDataVerification.spec.js  (6 tests) 211ms
+ ✓ src/views/screen/panorama/__tests__/mapWebgl.spec.js  (5 tests) 190ms
+ ✓ src/views/screen/panorama/__tests__/mapComponent.spec.js  (8 tests) 432ms
+stderr | src/views/screen/panorama/__tests__/mapResilience.spec.js > PanoramaMap WebGL 故障回退与资源生命周期 > contextlost 立即停绘制、释放资源并隐藏 canvas，保留 SVG 城市交互
+[PanoramaMap] WebGL context lost failed, using SVG fallback. undefined
+
+stderr | src/views/screen/panorama/__tests__/mapResilience.spec.js > PanoramaMap WebGL 故障回退与资源生命周期 > render 与 resize 异常都切换到真实 SVG 回退而不让异常遮住地图
+[PanoramaMap] WebGL render failed, using SVG fallback. Error: render failed
+    at /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend/src/views/screen/panorama/__tests__/mapResilience.spec.js:108:30
+    at runTest (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:781:11)
+    at runSuite (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:909:15)
+    at runSuite (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:909:15)
+    at runFiles (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:958:5)
+    at startTests (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:967:3)
+    at file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:116:7
+    at withEnv (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:83:5)
+    at run (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:105:3)
+    at runBaseTests (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/vendor/base.Ybri3C14.js:30:3)
+[PanoramaMap] WebGL resize failed, using SVG fallback. Error: resize failed
+    at /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend/src/views/screen/panorama/__tests__/mapResilience.spec.js:120:30
+    at runTest (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:781:11)
+    at runSuite (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:909:15)
+    at runSuite (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:909:15)
+    at runFiles (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:958:5)
+    at startTests (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:967:3)
+    at file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:116:7
+    at withEnv (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:83:5)
+    at run (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:105:3)
+    at runBaseTests (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/vendor/base.Ybri3C14.js:30:3)
+
+ ✓ src/views/screen/panorama/__tests__/mapResilience.spec.js  (4 tests) 205ms
+ ✓ src/views/screen/panorama/__tests__/BatchQualityBanner.spec.js  (4 tests) 67ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaDatasourcePicker.spec.js  (4 tests) 634ms
+ ✓ src/views/screen/__tests__/BranchOperatingPage.spec.js  (3 tests) 99ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaPreview.spec.js  (5 tests) 139ms
+ ✓ src/views/screen/panorama/__tests__/RetailDashboardLeadership.spec.js  (3 tests) 277ms
+ ✓ src/views/screen/panorama/__tests__/RetailTrend.spec.js  (4 tests) 97ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaBindingsVerification.spec.js  (1 test) 181ms
+ ✓ src/views/screen/panorama/__tests__/RuntimeCockpit.spec.js  (1 test) 89ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaTrend.spec.js  (4 tests) 80ms
+ ✓ src/views/screen/panorama/__tests__/MapMetricLabels.spec.js  (1 test) 97ms
+ ✓ src/views/screen/panorama/__tests__/CorporateTrend.spec.js  (2 tests) 54ms
+ ✓ src/views/screen/panorama/__tests__/dataAdapter.spec.js  (32 tests) 30ms
+ ✓ src/views/screen/panorama/__tests__/TrendLayout.spec.js  (3 tests) 63ms
+ ✓ src/views/screen/panorama/__tests__/retailDataAdapter.spec.js  (11 tests) 25ms
+ ✓ src/views/screen/panorama/__tests__/integrationReadiness.spec.js  (11 tests) 32ms
+ ✓ src/views/screen/panorama/__tests__/bindings.spec.js  (9 tests) 34ms
+ ✓ src/views/screen/panorama/__tests__/runtimeDataVerification.spec.js  (12 tests) 151ms
+ ✓ src/views/screen/panorama/__tests__/leadershipInsights.spec.js  (11 tests) 19ms
+ ✓ src/views/screen/panorama/__tests__/corporateDataAdapter.spec.js  (5 tests) 14ms
+ ✓ src/views/screen/panorama/__tests__/branchOperatingModel.spec.js  (7 tests) 16ms
+ ✓ src/views/screen/panorama/__tests__/retailBindings.spec.js  (5 tests) 13ms
+ ✓ src/views/screen/panorama/__tests__/batchQuality.spec.js  (4 tests) 11ms
+ ✓ src/views/screen/panorama/__tests__/mapGeometry.spec.js  (7 tests) 15ms
+ ✓ src/views/screen/panorama/__tests__/retailDisplayInsights.spec.js  (7 tests) 12ms
+ ✓ src/views/screen/panorama/__tests__/mapRelief.spec.js  (5 tests) 31ms
+ ✓ src/views/screen/panorama/__tests__/branchOperatingSource.spec.js  (5 tests) 14ms
+ ✓ src/views/screen/panorama/__tests__/corporateBindings.spec.js  (2 tests) 9ms
+ ✓ src/views/screen/panorama/__tests__/retailLeadershipInsights.spec.js  (4 tests) 10ms
+ ✓ src/views/screen/panorama/__tests__/corporateLeadershipInsights.spec.js  (3 tests) 11ms
+ ✓ src/views/screen/panorama/__tests__/richModel.spec.js  (2 tests) 9ms
+ ✓ src/views/screen/panorama/__tests__/retailDemoModel.spec.js  (2 tests) 9ms
+ ✓ src/views/screen/panorama/__tests__/panoramaViewModel.spec.js  (3 tests) 7ms
+ ✓ src/views/screen/panorama/__tests__/corporateDemoModel.spec.js  (1 test) 7ms
+ ✓ src/views/screen/panorama/__tests__/mapGeography.spec.js  (4 tests) 9ms
+ ✓ src/views/screen/panorama/__tests__/sourceQuality.spec.js  (2 tests) 6ms
+ ✓ src/views/screen/panorama/__tests__/mapLabelLayout.spec.js  (1 test) 6ms
+
+ Test Files  56 passed (56)
+      Tests  426 passed (426)
+   Start at  09:34:07
+   Duration  63.77s (transform 11.36s, setup 9ms, collect 57.52s, tests 15.58s, environment 28.03s, prepare 10.61s)

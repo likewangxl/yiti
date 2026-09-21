@@ -1,0 +1,23 @@
+{
+  "source": "Official playwright-cli DOM results",
+  "defaultOrg": "330",
+  "defaultName": "宝鸡分行宝鸡金台支行",
+  "viewport": [
+    1920,
+    1080
+  ],
+  "documentSize": [
+    1920,
+    1080
+  ],
+  "loading": false,
+  "alerts": [],
+  "loanSourceDisabled": true,
+  "smallViewport": [
+    1366,
+    768
+  ],
+  "mockRoutes": [],
+  "lastScreenshot": "/Users/likewang/.codex/visualizations/2026/09/20/01a0bdae-5891-7792-9f90-70dcd4a1ddb0/branch-overview-v2-20260921.png",
+  "afterFinalBackendRestart": "Browser sessions closed externally; final extra refresh was not run"
+}

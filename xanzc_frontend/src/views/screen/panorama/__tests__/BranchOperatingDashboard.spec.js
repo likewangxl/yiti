@@ -56,6 +56,35 @@ function chartOption(wrapper) {
 }
 
 describe('BranchOperatingDashboard 单支行经营大屏', () => {
+  it('单目标不重复展示明细，单点余额明确不能判断趋势', () => {
+    const wrapper = mount(BranchOperatingDashboard, { props: { model: {
+      targets: [{ key: 'deposit', label: '存款目标', actual: 0, target: 500, unit: '万元' }],
+      trend: [{ date: '2026-06-30', deposit: null }, { date: '2026-07-22', deposit: 120.8 }]
+    } } });
+    expect(wrapper.findAll('.branch-operating-target-row')).toHaveLength(0);
+    expect(wrapper.text()).toContain('仅有1期余额');
+    wrapper.unmount();
+  });
+  it('支行金额按万元标注图轴，展示独立考核日期，任务数保留整数', () => {
+    const wrapper = mount(BranchOperatingDashboard, { props: { model: {
+      trendUnit: '万元', trend: [{ date: '2026-07-22', deposit: 120.7989, loan: null }],
+      targetDate: '2026-09-18', targets: [{ key: 'deposit', label: '存款目标', actual: 0, target: 500, gap: 500, unit: '万元' }],
+      kpis: [{ key: 'touchTotal', label: '触达任务', value: 2, unit: '项' }]
+    } } });
+    expect(chartOption(wrapper).yAxis.name).toBe('万元');
+    expect(wrapper.text()).toContain('考核截至 2026-09-18');
+    expect(wrapper.get('.branch-operating-kpi__value-line strong').text()).toBe('2');
+    wrapper.unmount();
+  });
+  it('四种任务状态全为零时不绘制均分环图，预警不产生扇区', () => {
+    const wrapper = mount(BranchOperatingDashboard, { props: { model: { marketing: [
+      { label: '待触达', count: 0 }, { label: '进行中', count: 0 }, { label: '已完成', count: 0 },
+      { label: '已取消', count: 0 }, { label: 'SLA预警', count: 4 }
+    ] } } });
+    expect(wrapper.find('[data-testid="branch-operating-marketing-chart"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="branch-operating-marketing-bars"]').text()).toContain('4');
+    wrapper.unmount();
+  });
   let wrappers = [];
 
   afterEach(() => {
@@ -178,5 +207,56 @@ describe('BranchOperatingDashboard 单支行经营大屏', () => {
     expect(wrapper.get('[data-testid="branch-operating-teams-empty"]').text()).toContain('暂无团队贡献数据');
     expect(wrapper.findAll('[data-testid="branch-operating-project"]')).toHaveLength(0);
     expect(wrapper.text()).not.toContain('示例项目');
+  });
+
+  it('新经营驾驶舱使用多样化视觉区块，并把余额趋势与目标口径分开', () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      kpis: [
+        { ...model.kpis[0], key: 'corpDeposit', label: '对公存款余额' },
+        ...model.kpis.slice(1),
+        { key: 'corpDepositAverage', label: '对公存款月均', value: 126.4, unit: '亿元' }
+      ],
+      marketing: [
+        { key: 'PENDING', label: '待处理', count: 8 },
+        { key: 'IN_PROGRESS', label: '进行中', count: 5 },
+        { key: 'SUCCESS', label: '已完成', count: 13 },
+        { key: 'CANCELLED', label: '已取消', count: 2 },
+        { key: 'SLA_WARNING', label: 'SLA预警', count: 1 }
+      ],
+      projects: [],
+      teams: []
+    } });
+
+    expect(wrapper.get('[data-testid="branch-operating-target-focus"]').classes()).toContain('branch-operating-target-focus');
+    expect(wrapper.get('[data-testid="branch-operating-target-ring"]').attributes('aria-label')).toContain('完成率');
+    expect(wrapper.get('[data-testid="branch-operating-period-compare"]').text()).toContain('月均');
+    expect(wrapper.get('[data-testid="branch-operating-marketing-chart"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="branch-operating-marketing-bars"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="branch-operating-projects-empty"]').classes()).toContain('branch-operating-empty--compact');
+    expect(wrapper.get('[data-testid="branch-operating-teams-empty"]').classes()).toContain('branch-operating-empty--compact');
+
+    const options = wrapper.findAll('[data-testid="branch-operating-chart"]')
+      .map(chart => JSON.parse(chart.attributes('data-option')));
+    expect(options.some(option => option.series?.some(series => series.type === 'bar'))).toBe(true);
+    expect(options.some(option => option.series?.some(series => series.type === 'pie'))).toBe(true);
+  });
+
+  it('单一真实存款余额只绘制一条带面积的折线，月均缺一值时对照板收起', () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      composition: [],
+      marketing: [],
+      trend: [{ date: '2026-09', deposit: 128.6 }],
+      kpis: model.kpis.filter(kpi => kpi.key !== 'loan')
+    } });
+
+    const option = chartOption(wrapper);
+    expect(option.series).toHaveLength(1);
+    expect(option.series[0].name).toBe('存款余额');
+    expect(option.series[0].type).toBe('line');
+    expect(option.series[0].areaStyle).toBeTruthy();
+    expect(wrapper.find('[data-testid="branch-operating-period-compare"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="branch-operating-composition-empty"]').classes()).toContain('branch-operating-empty--compact');
   });
 });

@@ -1,0 +1,73 @@
+{
+  "source": "Official playwright-cli page.request results observed in this task; no credentials or raw amounts retained",
+  "records": [
+    {
+      "request": {
+        "schemaVersion": 2,
+        "screenCode": "SCR_CORP_OVERVIEW",
+        "blockId": 54,
+        "period": "LATEST",
+        "contextParams": {
+          "orgCode": "330"
+        }
+      },
+      "http": 200,
+      "code": "0",
+      "rowCount": 1,
+      "dataDate": "2026-07-22",
+      "qualityStatus": "STALE",
+      "amounts": "omitted"
+    },
+    {
+      "request": {
+        "schemaVersion": 2,
+        "screenCode": "SCR_CORP_OVERVIEW",
+        "blockId": 89,
+        "period": "LATEST",
+        "contextParams": {
+          "orgCode": "330"
+        }
+      },
+      "http": 200,
+      "code": "0",
+      "rowCount": 1,
+      "dataDate": "2026-07-24",
+      "qualityStatus": "PARTIAL",
+      "amounts": "omitted"
+    },
+    {
+      "request": {
+        "schemaVersion": 2,
+        "screenCode": "SCR_CORP_OVERVIEW",
+        "blockId": 90,
+        "period": "LATEST",
+        "contextParams": {
+          "orgCode": "330"
+        }
+      },
+      "http": 200,
+      "code": "0",
+      "rowCount": 1,
+      "dataDate": "2026-07-24",
+      "qualityStatus": "PARTIAL",
+      "amounts": "omitted"
+    },
+    {
+      "request": {
+        "schemaVersion": 2,
+        "screenCode": "SCR_CORP_OVERVIEW",
+        "blockId": 91,
+        "period": "LATEST",
+        "contextParams": {
+          "orgCode": "330"
+        }
+      },
+      "http": 200,
+      "code": "0",
+      "rowCount": 1,
+      "dataDate": "2026-09-18",
+      "qualityStatus": "PARTIAL",
+      "amounts": "omitted"
+    }
+  ]
+}
