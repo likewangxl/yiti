@@ -13,15 +13,12 @@ vi.mock('../usePanoramaData', () => ({ usePanoramaData: () => ({
 }) }));
 import PanoramaRuntime from '../PanoramaRuntime.vue';
 describe('投屏数据状态', () => {
-  it('首屏保留测试性质、日期和过期状态，溯源详情默认收起且可展开', async () => {
+  it('首屏不再显示环境、日期、批次和来源口径状态条', () => {
     const wrapper = mount(PanoramaRuntime, { props: { view: { renderPackage: { canvasStyle: { dataNotice: '来自测试库接口' } } } } });
-    const summary = wrapper.get('[data-testid="runtime-source-summary"]');
-    expect(summary.text()).toContain('TEST');
-    expect(summary.text()).toContain('2026-08-30');
-    expect(summary.text()).toContain('过期');
-    expect(wrapper.get('[data-testid="runtime-source-details"]').attributes('open')).toBeUndefined();
-    expect(wrapper.get('[data-testid="runtime-source-details"]').text()).toContain('batch-evidence');
-    expect(wrapper.text()).toContain('来自测试库接口');
+    expect(wrapper.find('[data-testid="runtime-source-summary"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="runtime-source-details"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('来自测试库接口');
+    expect(wrapper.text()).toContain('经营内容');
     wrapper.unmount();
   });
 });

@@ -45,7 +45,7 @@
         <div class="retail-kpi__copy">
           <span class="retail-kpi__label">{{ kpi.label }}</span>
           <div class="retail-kpi__number">
-            <strong :title="`${kpi.value ?? '—'} ${kpi.unit}`">{{ displayKpi(kpi).text }}</strong>
+            <strong :class="{ 'is-empty': !hasValue(kpi.value) }" :title="`${kpi.value ?? '—'} ${kpi.unit}`">{{ displayKpi(kpi).text }}</strong>
             <small>{{ displayKpi(kpi).unit }}</small>
           </div>
         </div>
@@ -61,26 +61,50 @@
     </section>
 
     <section class="retail-insight-strip" data-testid="retail-leadership-insights" aria-label="经营观察">
-      <div class="retail-insight-item">
-        <span>负增机构</span>
-        <strong>{{ growthCountLabel }}</strong>
-        <small>{{ growthSampleLabel }}</small>
-      </div>
-      <div class="retail-insight-item">
-        <span>已达标目标</span>
-        <strong>{{ insightCount(leadershipInsights.achievedTargetCount) }}</strong>
-        <small>有效目标 {{ insightCount(leadershipInsights.validTargetCount) }} 项</small>
-      </div>
-      <div class="retail-insight-item">
-        <span>缺指标</span>
-        <strong>{{ insightCount(leadershipInsights.missingMetricCount) }}</strong>
-        <small>排名矩阵空值单元</small>
-      </div>
-      <div class="retail-insight-item retail-insight-item--wide">
-        <span>目标有效数 / 缺口</span>
-        <strong>{{ targetValidityLabel }}</strong>
-        <small>{{ targetGapLabel }}</small>
-      </div>
+      <template v-if="hasDepositRankingShape">
+        <div class="retail-insight-item">
+          <span>机构数据覆盖</span>
+          <strong>{{ institutionDataCoverageLabel }}</strong>
+          <small>有余额或月日均记录</small>
+        </div>
+        <div class="retail-insight-item">
+          <span>月均低于余额</span>
+          <strong>{{ insightCount(displayInsights.averageBelowBalanceCount) }} 家</strong>
+          <small>余额与月日均可比样本</small>
+        </div>
+        <div class="retail-insight-item">
+          <span>目标有效数 / 达标</span>
+          <strong>{{ insightCount(displayInsights.validTargetCount) }} / {{ insightCount(displayInsights.achievedTargetCount) }}</strong>
+          <small>仅统计目标值大于 0 的来源</small>
+        </div>
+        <div class="retail-insight-item retail-insight-item--wide">
+          <span>当前数据日期覆盖</span>
+          <strong>{{ institutionDateCoverageLabel }}</strong>
+          <small>{{ rankingDataDate || '日期待确认' }} · 当前批次覆盖</small>
+        </div>
+      </template>
+      <template v-else>
+        <div class="retail-insight-item">
+          <span>负增机构</span>
+          <strong>{{ growthCountLabel }}</strong>
+          <small>{{ growthSampleLabel }}</small>
+        </div>
+        <div class="retail-insight-item">
+          <span>已达标目标</span>
+          <strong>{{ insightCount(leadershipInsights.achievedTargetCount) }}</strong>
+          <small>有效目标 {{ insightCount(leadershipInsights.validTargetCount) }} 项</small>
+        </div>
+        <div class="retail-insight-item">
+          <span>缺指标</span>
+          <strong>{{ insightCount(leadershipInsights.missingMetricCount) }}</strong>
+          <small>历史AUM矩阵空值单元</small>
+        </div>
+        <div class="retail-insight-item retail-insight-item--wide">
+          <span>目标有效数 / 缺口</span>
+          <strong>{{ targetValidityLabel }}</strong>
+          <small>{{ targetGapLabel }}</small>
+        </div>
+      </template>
     </section>
 
     <section class="retail-main-grid">
@@ -97,19 +121,23 @@
             <div class="retail-savings__cards">
               <div class="retail-data-card" data-testid="retail-deposit-balance">
                 <span>储蓄余额</span>
-                <strong :class="{ 'is-empty': !hasValue(depositKpi?.value) }">{{ formatMetric(depositKpi?.value) }}</strong>
-                <small>时点余额 · 亿元</small>
+                <strong :class="{ 'is-empty': !hasValue(depositComparison.balance) }">{{ formatAmount(depositComparison.balance, depositComparisonValues).text }}</strong>
+                <small>时点余额 · {{ formatAmount(depositComparison.balance, depositComparisonValues).unit }}</small>
               </div>
               <div class="retail-data-card" data-testid="retail-deposit-average">
                 <span>月日均余额</span>
-                <strong :class="{ 'is-empty': !hasValue(depositAverage?.value) }">{{ formatMetric(depositAverage?.value) }}</strong>
-                <small v-if="hasValue(depositAverage?.value)">月内日均 · 亿元</small>
-                <small v-else>未绑定 · 亿元</small>
+                <strong :class="{ 'is-empty': !hasValue(depositComparison.average) }">{{ formatAmount(depositComparison.average, depositComparisonValues).text }}</strong>
+                <small v-if="hasValue(depositComparison.average)">月内日均 · {{ formatAmount(depositComparison.average, depositComparisonValues).unit }}</small>
+                <small v-else>未绑定 · 待确认</small>
               </div>
             </div>
             <div class="retail-savings__footer">
               <span class="retail-savings__signal"><i></i>余额较上期变化</span>
               <strong data-testid="retail-deposit-change" :class="changeClass(depositKpi)">{{ changeText(depositKpi, '—') }}</strong>
+              <span class="retail-savings__difference" data-testid="retail-deposit-difference">
+                月日均 − 时点余额 {{ depositComparison.difference === null ? '—' : formatAmount(depositComparison.difference, depositComparisonValues).text }} {{ formatAmount(depositComparison.difference, depositComparisonValues).unit }}
+                <small>口径对照，不代表净增</small>
+              </span>
             </div>
           </div>
         </article>
@@ -118,11 +146,11 @@
           <header class="retail-panel__heading">
             <div>
               <span class="retail-kicker">客户结构</span>
-              <h2>客户分层与资产</h2>
+              <h2>客户分层</h2>
             </div>
-            <span>万户 / 亿元 · 万元/户</span>
+            <span>{{ segmentComparisons.length ? '万户 / 亿元 · 万元/户' : '口径待确认' }}</span>
           </header>
-          <p class="retail-panel__note retail-segment-scope-note" data-testid="retail-segment-scope-note" title="客户占比与资产占比仅使用客户数和AUM均已提供且非负的同一分层分母">
+          <p v-if="segmentComparisons.length" class="retail-panel__note retail-segment-scope-note" data-testid="retail-segment-scope-note" title="客户占比与资产占比仅使用客户数和资产额均已提供且非负的同一分层分母">
             分层内占比 · {{ segmentCoverageLabel }}，非全客群（分层口径以业务定义为准）
           </p>
           <div v-if="segmentComparisons.length" class="retail-segment-list retail-scroll-region" tabindex="0" aria-label="客户分层列表">
@@ -154,20 +182,34 @@
               <em class="retail-segment-row__average">{{ formatMetric(segment.averageAum) }}</em>
             </div>
           </div>
-          <div v-else class="retail-empty">暂无客户分层数据</div>
+          <div v-else class="retail-empty">价值客户口径与客户分层数据源尚未接入</div>
         </article>
 
         <article class="retail-panel retail-attention-panel" data-testid="retail-attention">
           <header class="retail-panel__heading">
             <div>
               <span class="retail-kicker">经营关注</span>
-              <h2>需要协调的事项</h2>
+              <h2>需要关注 / 数据核验</h2>
             </div>
-            <span>{{ safeModel.attention.length ? `${safeModel.attention.length} 条` : '暂无数据' }}</span>
+            <span>{{ attentionItems.length ? `${attentionItems.length} 条` : '暂无数据' }}</span>
           </header>
-          <p class="retail-panel__note">责任归属与跟进时限</p>
-          <ul v-if="safeModel.attention.length" class="retail-attention-list retail-scroll-region" tabindex="0" aria-label="经营关注事项">
-            <li v-for="(item, index) in safeModel.attention" :key="`${item.label || 'attention'}-${index}`">
+          <p class="retail-panel__note">责任归属与跟进时限；只展示已有来源事项，缺来源或日期标为核验，不生成客户任务</p>
+          <section v-if="hasDepositRankingShape && institutionDifferenceItems.length" class="retail-attention-difference" data-testid="retail-attention-difference-list" aria-label="日均与时点差额关注">
+            <header>
+              <strong>日均与时点差额关注</strong>
+              <small>同日口径对照，不代表净增 / 风险结论</small>
+            </header>
+            <ul>
+              <li v-for="item in institutionDifferenceItems" :key="`difference-${item.orgCode || item.name}`">
+                <button type="button" data-testid="retail-attention-difference-row" @click="openInstitution(item)">
+                  <span>{{ item.name || item.orgName || item.orgCode || '—' }}</span>
+                  <strong>{{ formatAmount(item.difference, institutionDifferenceValues).text }} {{ formatAmount(item.difference, institutionDifferenceValues).unit }}</strong>
+                </button>
+              </li>
+            </ul>
+          </section>
+          <ul v-if="attentionItems.length" class="retail-attention-list retail-scroll-region" tabindex="0" aria-label="经营关注事项">
+            <li v-for="(item, index) in attentionItems" :key="`${item.label || 'attention'}-${item._issueKey || index}`">
               <button
                 type="button"
                 class="retail-attention-row"
@@ -175,17 +217,17 @@
                 :aria-label="`查看事项详情：${item.label || '—'}`"
                 @click="openAttention(item, $event)"
               >
-                <span class="retail-attention-list__mark" aria-hidden="true">!</span>
+                <span class="retail-attention-list__mark" :class="{ 'is-verification': item.isVerification }" aria-hidden="true">{{ item.isVerification ? '?' : '!' }}</span>
                 <span class="retail-attention-list__main">
                   <strong>{{ item.label || '—' }}</strong>
-                  <small>责任 {{ item.owner || '未提供' }} · 期限 {{ item.deadline || '未提供' }}</small>
+                  <small>{{ item.verificationSummary || `${item.isVerification ? '核验' : '责任'} ${item.owner || '未提供'} · 日期 ${item.deadline || '未提供'}` }}</small>
                 </span>
                 <b>{{ formatMetric(item.count) }}</b>
                 <span class="retail-attention-row__arrow" aria-hidden="true">›</span>
               </button>
             </li>
           </ul>
-          <div v-else class="retail-empty">暂无来源已确认事项</div>
+          <div v-else-if="!institutionDifferenceItems.length" class="retail-empty">暂无来源已确认事项</div>
         </article>
       </div>
 
@@ -220,6 +262,10 @@
           <PanoramaMap
             class="retail-map"
             appearance="relief"
+            label-layout="callout"
+            :city-details="retailMapCityDetails"
+            :metric-label="retailMapMetricLabel"
+            :metric-values="retailMapMetricValues"
             :geo-json="provinceGeoJson"
             :points="safeModel.institutions"
             :demo="demo"
@@ -235,7 +281,69 @@
       </div>
 
       <div class="retail-column retail-column--right">
-        <article class="retail-panel retail-ranking-panel">
+        <article v-if="hasDepositRankingShape" class="retail-panel retail-institution-comparison" data-testid="retail-institution-comparison">
+          <header class="retail-panel__heading">
+            <div>
+              <span class="retail-kicker">机构存款对照</span>
+              <h2>{{ institutionDepositView.title }}</h2>
+            </div>
+            <span>{{ institutionRows.length }} 家 · {{ rankingDataDate || '日期待确认' }}</span>
+          </header>
+          <div class="retail-institution-toolbar">
+            <div class="retail-segmented" role="group" aria-label="机构类型筛选">
+              <button
+                v-for="option in institutionDepositView.filterOptions"
+                :key="option.key"
+                type="button"
+                :data-institution-filter="option.key"
+                :class="{ active: institutionDepositView.filter === option.key }"
+                @click="institutionFilter = option.key; institutionPage = 1"
+              >{{ option.label }} {{ option.count }}</button>
+            </div>
+            <div class="retail-segmented" role="group" aria-label="机构存款指标">
+              <button type="button" data-ranking-metric="deposit" :class="{ active: institutionMetric === 'deposit' }" @click="institutionMetric = 'deposit'">余额</button>
+              <button type="button" data-ranking-metric="average" :class="{ active: institutionMetric === 'average' }" @click="institutionMetric = 'average'">月日均</button>
+            </div>
+          </div>
+          <p class="retail-panel__note retail-institution-note">{{ institutionDepositView.subtitle }} · 单位 {{ institutionMetricUnit }} · 当前筛选月均低于余额 {{ institutionAverageBelowBalanceCount }} 家 · 口径对照，不代表净增</p>
+          <div v-if="institutionRows.length" class="retail-institution-table-head" aria-hidden="true">
+            <span>机构</span>
+            <span>余额<small>{{ institutionMetricUnit }}</small></span>
+            <span>月日均<small>{{ institutionMetricUnit }}</small></span>
+            <span>差额<small>月均−余额</small></span>
+            <span>日期</span>
+          </div>
+          <ol v-if="institutionRows.length" class="retail-institution-list retail-scroll-region" tabindex="0" aria-label="机构存款对照列表">
+            <li
+              v-for="(item, index) in institutionPageRows"
+              :key="item.orgCode || `${item.name}-${index}`"
+              class="retail-institution-row"
+              data-testid="retail-institution-row"
+              :data-org-code="item.orgCode || ''"
+              tabindex="0"
+              @click="openInstitution(item)"
+              @keydown.enter="openInstitution(item)"
+              @keydown.space.prevent="openInstitution(item)"
+            >
+              <span class="retail-institution-row__name"><strong>{{ item.name || item.orgName || item.orgCode || '—' }}</strong><small>{{ item.institutionType === 'primary' ? '已分类经营机构' : '其他待分类' }}</small></span>
+              <strong :data-testid="institutionMetric === 'deposit' ? 'retail-institution-value' : undefined" :class="{ 'is-active': institutionMetric === 'deposit' }">{{ formatAmount(item.deposit, institutionMetricValues).text }}</strong>
+              <strong :data-testid="institutionMetric === 'average' ? 'retail-institution-value' : undefined" :class="{ 'is-active': institutionMetric === 'average' }">{{ formatAmount(item.average, institutionMetricValues).text }}</strong>
+              <span data-testid="retail-institution-difference" :class="{ 'is-negative': item.difference < 0, 'is-positive': item.difference > 0 }">{{ formatAmount(item.difference, institutionMetricValues).text }}</span>
+              <small>{{ item.date || rankingDataDate || '—' }}</small>
+            </li>
+          </ol>
+          <div v-else class="retail-empty">暂无机构存款余额或月日均数据</div>
+          <footer v-if="institutionRows.length" class="retail-institution-footer">
+            <span>点击机构查看存款、月日均与差额</span>
+            <div v-if="institutionPageCount > 1" class="retail-pagination" role="group" aria-label="机构存款对照分页">
+              <button type="button" :disabled="institutionPage <= 1" @click="institutionPage -= 1">上一页</button>
+              <span>{{ institutionPage }} / {{ institutionPageCount }}</span>
+              <button type="button" :disabled="institutionPage >= institutionPageCount" @click="institutionPage += 1">下一页</button>
+            </div>
+          </footer>
+        </article>
+
+        <article v-else class="retail-panel retail-ranking-panel">
           <header class="retail-panel__heading">
             <div>
               <span class="retail-kicker">机构贡献 / 短板</span>
@@ -243,7 +351,7 @@
             </div>
             <span>按同口径机构</span>
           </header>
-          <div class="retail-ranking-toolbar">
+          <div v-if="filteredRankings.length || loading" class="retail-ranking-toolbar">
             <div class="retail-segmented" role="group" aria-label="机构排名指标">
               <button v-for="option in rankingMetricOptions" :key="option.key" type="button" :data-ranking-metric="option.key" :class="{ active: rankingMetric === option.key }" @click="rankingMetric = option.key">{{ option.label }}</button>
             </div>
@@ -284,11 +392,11 @@
             </li>
           </ol>
           <p v-if="filteredRankings.length" class="retail-ranking-matrix-note">四项指标同屏展示；颜色仅作视觉区分，不代表风险阈值。</p>
-          <div v-else class="retail-empty">暂无机构排名绑定</div>
-          <p class="retail-ranking-hint">点击机构查看资产、净增和风险指标</p>
+          <div v-else class="retail-empty">暂无机构存款排名数据源</div>
+          <p v-if="filteredRankings.length" class="retail-ranking-hint">点击机构查看存款、净增和风险指标</p>
         </article>
 
-        <article class="retail-panel retail-target-panel">
+        <article class="retail-panel retail-target-panel" :class="{ 'retail-target-panel--empty': !safeModel.targets.length }" data-testid="retail-target-panel">
           <header class="retail-panel__heading">
             <div>
               <span class="retail-kicker">目标追踪</span>
@@ -313,7 +421,10 @@
               <div v-else class="retail-target-bar is-empty" aria-hidden="true"><i style="width: 0%"></i></div>
             </div>
           </div>
-          <div v-else class="retail-empty">暂无目标绑定</div>
+          <div v-else class="retail-target-empty" data-testid="retail-target-empty">
+            <strong>目标未接入</strong>
+            <span>暂无可复用的有效目标值，待配置后显示完成情况</span>
+          </div>
         </article>
       </div>
     </section>
@@ -369,28 +480,43 @@
               <div><dt>城市</dt><dd>{{ institutionCity(selectedInstitution) }}</dd></div>
               <div><dt>定位</dt><dd>{{ selectedInstitution.located ? '已定位' : '资料待核' }}</dd></div>
             </dl>
-            <section class="retail-directory-detail__metrics" aria-label="本机构排名指标">
-              <h4>本机构排名指标</h4>
-              <div v-if="selectedInstitutionRanking" class="retail-directory-detail__metric-grid">
-                <div><span>AUM</span><strong>{{ formatMetric(selectedInstitutionRanking.aum) }}</strong><small>亿元</small></div>
-                <div><span>较上月净增</span><strong>{{ formatMetric(selectedInstitutionRanking.increase) }}</strong><small>亿元</small></div>
-                <div><span>AUM完成率</span><strong>{{ formatMetric(selectedInstitutionRanking.rate) }}</strong><small>%</small></div>
-                <div><span>个贷不良率</span><strong>{{ formatMetric(selectedInstitutionRanking.nplRate) }}</strong><small>%</small></div>
-              </div>
-              <p v-else>暂无本机构排名数据</p>
-            </section>
-            <section class="retail-directory-detail__rank" data-testid="retail-directory-ranking-context" aria-label="同口径机构排名">
-              <h4>同口径机构排名</h4>
-              <div>
-                <span>当前口径</span>
-                <strong>{{ rankingMetricInfo.label }}</strong>
-              </div>
-              <div>
-                <span>排名</span>
-                <strong>{{ selectedInstitutionRankLabel }}</strong>
-                <small>可比样本 {{ comparableSampleLabel }} 家</small>
-              </div>
-            </section>
+            <template v-if="hasDepositRankingShape">
+              <section class="retail-directory-detail__metrics" aria-label="本机构存款对照">
+                <h4>本机构存款对照</h4>
+                <div v-if="selectedInstitutionRanking" class="retail-directory-detail__metric-grid">
+                  <div><span>余额</span><strong>{{ formatAmount(selectedInstitutionRanking.deposit, institutionMetricValues).text }}</strong><small>{{ institutionMetricUnit }}</small></div>
+                  <div><span>月日均</span><strong>{{ formatAmount(selectedInstitutionRanking.average, institutionMetricValues).text }}</strong><small>{{ institutionMetricUnit }}</small></div>
+                  <div><span>月均 − 余额</span><strong>{{ formatAmount(selectedInstitutionRanking.difference, institutionMetricValues).text }}</strong><small>口径差额</small></div>
+                  <div><span>数据日期</span><strong>{{ selectedInstitutionRanking.date || rankingDataDate || '—' }}</strong><small>来源日期</small></div>
+                </div>
+                <p v-else>暂无本机构存款数据</p>
+              </section>
+              <p class="retail-directory-detail__source-note">数值对照，不代表净增；机构类型混合时不提供业务名次。</p>
+            </template>
+            <template v-else>
+              <section class="retail-directory-detail__metrics" aria-label="本机构排名指标">
+                <h4>本机构排名指标</h4>
+                <div v-if="selectedInstitutionRanking" class="retail-directory-detail__metric-grid">
+                  <div><span>AUM</span><strong>{{ formatMetric(selectedInstitutionRanking.aum) }}</strong><small>亿元</small></div>
+                  <div><span>较上月净增</span><strong>{{ formatMetric(selectedInstitutionRanking.increase) }}</strong><small>亿元</small></div>
+                  <div><span>AUM完成率</span><strong>{{ formatMetric(selectedInstitutionRanking.rate) }}</strong><small>%</small></div>
+                  <div><span>个贷不良率</span><strong>{{ formatMetric(selectedInstitutionRanking.nplRate) }}</strong><small>%</small></div>
+                </div>
+                <p v-else>暂无本机构排名数据</p>
+              </section>
+              <section class="retail-directory-detail__rank" data-testid="retail-directory-ranking-context" aria-label="同口径机构排名">
+                <h4>同口径机构排名</h4>
+                <div>
+                  <span>当前口径</span>
+                  <strong>{{ rankingMetricInfo.label }}</strong>
+                </div>
+                <div>
+                  <span>排名</span>
+                  <strong>{{ selectedInstitutionRankLabel }}</strong>
+                  <small>可比样本 {{ comparableSampleLabel }} 家</small>
+                </div>
+              </section>
+            </template>
           </aside>
           <aside v-else class="retail-directory-detail retail-directory-detail--empty">
             <span class="retail-kicker">本机构身份</span>
@@ -408,6 +534,7 @@ import {
   Close, Coin, OfficeBuilding, Refresh, Setting, TrendCharts, UserFilled, WarningFilled
 } from '@element-plus/icons-vue';
 import PanoramaMap from './PanoramaMap.vue';
+import { buildCityMapDetails, cityMapMetricValues } from './cityMapDetails.js';
 import RetailTrend from './RetailTrend.vue';
 import RetailAttentionDetails from './RetailAttentionDetails.vue';
 import { provinceGeo } from './geography.js';
@@ -415,6 +542,12 @@ import {
   buildRetailLeadershipInsights,
   buildSegmentComparisons
 } from './retailLeadershipInsights.js';
+import {
+  buildDepositComparison,
+  buildInstitutionDepositView,
+  buildRetailDisplayInsights,
+  normalizeInstitutionRow
+} from './retailDisplayInsights.js';
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -425,12 +558,13 @@ const props = defineProps({
 const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select']);
 
 const KPI_DEFINITIONS = Object.freeze([
-  { key: 'retailAum', label: '零售AUM', unit: '亿元' },
-  { key: 'retailDeposit', label: '储蓄余额', unit: '亿元' },
+  { key: 'retailAum', label: '零售AUM', unit: '', emptyText: '暂无数据源', emptyTitle: '当前未接入理财、基金、保险等客户金融资产来源' },
+  { key: 'retailDeposit', label: '零售一般性存款余额', unit: '亿元' },
   { key: 'retailRevenue', label: '零售营业收入', unit: '亿元' },
-  { key: 'retailValueCustomers', label: '价值客户', unit: '万户' },
+  { key: 'retailValueCustomers', label: '价值客户', unit: '', emptyText: '口径未配置', emptyTitle: '当前没有经业务确认的价值客户门槛和数据源' },
   { key: 'retailLoan', label: '个人贷款', unit: '亿元' },
-  { key: 'retailNplRate', label: '个贷不良率', unit: '%' }
+  { key: 'retailNplRate', label: '个贷不良率', unit: '%' },
+  { key: 'retailDepositAverage', label: '零售存款月日均', unit: '亿元', emptyText: '暂无数据源', emptyTitle: '当前未接入零售存款月日均来源' }
 ]);
 const rankingMetricOptions = Object.freeze([
   { key: 'aum', label: 'AUM', unit: '亿元' },
@@ -439,6 +573,10 @@ const rankingMetricOptions = Object.freeze([
 ]);
 const rankingMetric = ref('aum');
 const rankingOrder = ref('leading');
+const institutionMetric = ref('deposit');
+const institutionFilter = ref('');
+const institutionPage = ref(1);
+const institutionPageSize = 8;
 const selectedCityCode = ref('');
 const selectedCityName = ref('');
 const directoryOpen = ref(false);
@@ -465,6 +603,7 @@ const safeModel = computed(() => {
     targets: [],
     institutions: [],
     issues: [],
+    sourceQualities: {},
     ...source,
     kpis: Array.isArray(source.kpis) ? source.kpis : [],
     trend: Array.isArray(source.trend) ? source.trend : [],
@@ -473,7 +612,8 @@ const safeModel = computed(() => {
     attention: Array.isArray(source.attention) ? source.attention : [],
     targets: Array.isArray(source.targets) ? source.targets : [],
     institutions: Array.isArray(source.institutions) ? source.institutions : [],
-    issues: Array.isArray(source.issues) ? source.issues : []
+    issues: Array.isArray(source.issues) ? source.issues : [],
+    sourceQualities: source.sourceQualities && typeof source.sourceQualities === 'object' ? source.sourceQualities : {}
   };
 });
 
@@ -490,12 +630,19 @@ const kpiCards = computed(() => KPI_DEFINITIONS.map(definition => {
     label: bound?.label || definition.label,
     unit: bound?.unit || definition.unit,
     value: bound?.value ?? null,
-    change: bound?.change ?? null
+    change: bound?.change ?? null,
+    isBound: Boolean(bound),
+    emptyText: definition.emptyText,
+    emptyTitle: definition.emptyTitle
   };
 }));
 const depositKpi = computed(() => findKpi('retailDeposit') || { key: 'retailDeposit', label: '储蓄余额', unit: '亿元', value: null, change: null });
 const depositAverage = computed(() => findKpi('retailDepositAverage') || { key: 'retailDepositAverage', label: '储蓄月日均', unit: '亿元', value: null, change: null });
-const displayDate = computed(() => safeModel.value.dataDate || '—');
+const displayDate = computed(() => safeModel.value.sourceQualities?.retailRanking?.dataDate
+  || safeModel.value.sourceQualities?.rankings?.dataDate
+  || safeModel.value.sourceQualities?.retailTrend?.dataDate
+  || safeModel.value.dataDate
+  || '—');
 const provinceGeoJson = provinceGeo || null;
 const today = computed(() => {
   const now = new Date();
@@ -505,6 +652,29 @@ const rankingMetricInfo = computed(() => rankingMetricOptions.find(item => item.
 const segmentComparisons = computed(() => buildSegmentComparisons(safeModel.value.segments));
 const segmentCoverageLabel = computed(() => `${segmentComparisons.value.length}组有效`);
 const leadershipInsights = computed(() => buildRetailLeadershipInsights(safeModel.value));
+const displayInsights = computed(() => buildRetailDisplayInsights(safeModel.value));
+const hasDepositRankingShape = computed(() => safeModel.value.rankings.some(row => row
+  && typeof row === 'object'
+  && ['deposit', 'average', 'depositAverage', 'depositBalance'].some(key => Object.prototype.hasOwnProperty.call(row, key))));
+const retailMapCityDetails = computed(() => buildCityMapDetails(safeModel.value, { business: 'retail', geoJson: provinceGeoJson }));
+const retailMapMetricKey = computed(() => hasDepositRankingShape.value ? institutionMetric.value : rankingMetric.value);
+const retailMapMetricLabel = computed(() => hasDepositRankingShape.value
+  ? (institutionMetric.value === 'average' ? '零售存款月日均' : '零售存款余额')
+  : `零售${rankingMetricInfo.value.label}`);
+const retailMapMetricValues = computed(() => cityMapMetricValues(retailMapCityDetails.value, retailMapMetricKey.value));
+const depositComparison = computed(() => buildDepositComparison({
+  balance: depositKpi.value?.value,
+  average: depositAverage.value?.value
+}));
+const depositComparisonValues = computed(() => [depositComparison.value.balance, depositComparison.value.average]);
+const rankingDataDate = computed(() => {
+  const qualities = safeModel.value.sourceQualities || {};
+  return qualities?.retailRanking?.dataDate
+    || qualities?.rankings?.dataDate
+    || qualities?.retailDeposit?.dataDate
+    || safeModel.value.dataDate
+    || '';
+});
 const growthCountLabel = computed(() => leadershipInsights.value.growthComparableCount > 0
   ? String(leadershipInsights.value.negativeGrowthCount)
   : '—');
@@ -526,6 +696,97 @@ const filteredRankings = computed(() => {
     return rankingOrder.value === 'leading' ? b - a : a - b;
   });
 });
+const institutionDepositView = computed(() => {
+  const rows = safeModel.value.rankings.filter(row => !selectedCityCode.value
+    || String(row?.cityCode || row?.city_code || '') === selectedCityCode.value);
+  return buildInstitutionDepositView(rows, institutionFilter.value || undefined);
+});
+const institutionRows = computed(() => institutionDepositView.value.filteredRows);
+const institutionPageCount = computed(() => Math.max(1, Math.ceil(institutionRows.value.length / institutionPageSize)));
+const institutionPageRows = computed(() => {
+  const page = Math.min(Math.max(institutionPage.value, 1), institutionPageCount.value);
+  const start = (page - 1) * institutionPageSize;
+  return institutionRows.value.slice(start, start + institutionPageSize);
+});
+const institutionMetricValues = computed(() => institutionRows.value
+  .map(row => institutionMetric.value === 'average' ? finiteValue(row?.average) : finiteValue(row?.deposit))
+  .filter(value => value !== null));
+const institutionMetricUnit = computed(() => chooseAmountUnit(institutionMetricValues.value));
+const institutionAverageBelowBalanceCount = computed(() => institutionRows.value
+  .filter(row => finiteValue(row?.average) !== null
+    && finiteValue(row?.deposit) !== null
+    && finiteValue(row.average) < finiteValue(row.deposit)).length);
+const institutionDifferenceItems = computed(() => institutionRows.value
+  .filter(row => finiteValue(row?.difference) !== null && finiteValue(row.difference) < 0)
+  .sort((left, right) => left.difference - right.difference)
+  .slice(0, 3));
+const institutionDifferenceValues = computed(() => institutionDifferenceItems.value.map(row => row.difference));
+const institutionDataCoverageLabel = computed(() => {
+  const coverage = displayInsights.value.institutionCoverage;
+  return coverage.total ? `${coverage.available}/${coverage.total} 家` : '—';
+});
+const institutionDateCoverageLabel = computed(() => {
+  const coverage = displayInsights.value.dataDateCoverage;
+  return coverage.total ? `${coverage.available}/${coverage.total} 家` : '—';
+});
+const attentionItems = computed(() => {
+  const sourceItems = safeModel.value.attention.map(item => ({ ...item, isVerification: Boolean(item?.isVerification || item?.type === 'verification' || item?.kind === 'issue') }));
+  const dateIssueCodes = new Set(['MIXED_DATES', 'DATE_MISMATCH']);
+  const slotLabels = {
+    retailDeposit: '零售一般性存款余额',
+    retailDepositAverage: '零售存款月日均',
+    retailRevenue: '零售营业收入',
+    retailLoan: '个人贷款',
+    retailNplRate: '个贷不良率',
+    retailAum: '零售AUM',
+    retailTrend: '零售存款趋势',
+    retailRanking: '机构存款对比'
+  };
+  const issueGroups = new Map();
+  safeModel.value.issues
+    .filter(item => item && typeof item === 'object')
+    .forEach((item, index) => {
+      const kpi = safeModel.value.kpis.find(entry => String(entry?.key || '') === String(item.slot || ''));
+      const isDateIssue = dateIssueCodes.has(String(item.code || '').toUpperCase());
+      const baseLabel = isDateIssue ? '指标统计日期不一致' : (item.label || item.title || item.message || '数据来源待核验');
+      const metric = item.metricLabel || item.metricName || item.fieldLabel
+        || (isDateIssue ? (kpi?.label || slotLabels[item.slot] || item.slot || '相关指标') : item.field)
+        || item.code || '相关指标';
+      const actualDate = item.actualDate || item.dataDate || item.date || item.periodDate || kpi?.date || kpi?.dataDate || '';
+      const key = String(baseLabel);
+      const group = issueGroups.get(key) || {
+        first: item,
+        label: baseLabel,
+        lines: [],
+        dates: [],
+        index
+      };
+      const line = `${metric}：${actualDate || '日期待确认'}`;
+      if (!group.lines.includes(line)) group.lines.push(line);
+      if (actualDate && !group.dates.includes(String(actualDate))) group.dates.push(String(actualDate));
+      issueGroups.set(key, group);
+    });
+  const issueItems = [...issueGroups.values()].map(group => {
+    const item = group.first;
+    const description = item.detail?.description || item.message || item.description || '来源字段或数据日期需要核对';
+    return {
+      ...item,
+      label: group.lines.length > 1 ? `${group.label}（${group.lines.length}项）` : group.label,
+      count: item.count ?? null,
+      owner: item.owner || '数据核验',
+      deadline: item.deadline || group.dates.join('、') || '待确认',
+      verificationSummary: dateIssueCodes.has(String(item.code || '').toUpperCase()) ? group.lines.join('；') : '',
+      isVerification: true,
+      detail: {
+        ...(item.detail || {}),
+        description: `${description}；${group.lines.join('；')}`,
+        source: item.detail?.source || item.source || '数据质量提示'
+      },
+      _issueKey: item.key || group.index
+    };
+  });
+  return [...sourceItems, ...issueItems];
+});
 const rankingMax = computed(() => Math.max(0, ...filteredRankings.value.map(row => Math.abs(finiteValue(row?.[rankingMetric.value]) ?? 0))));
 const filteredInstitutions = computed(() => {
   const query = directorySearch.value.trim().toLocaleLowerCase();
@@ -538,7 +799,8 @@ const filteredInstitutions = computed(() => {
 const selectedInstitutionRanking = computed(() => {
   const code = String(selectedInstitution.value?.orgCode || '');
   if (!code) return null;
-  return safeModel.value.rankings.find(item => String(item?.orgCode || '') === code) || null;
+  const row = safeModel.value.rankings.find(item => String(item?.orgCode || '') === code) || null;
+  return hasDepositRankingShape.value && row ? normalizeInstitutionRow(row) : row;
 });
 const comparableRankings = computed(() => filteredRankings.value.filter(item => rankingValue(item) !== null));
 const comparableSampleLabel = computed(() => String(comparableRankings.value.length));
@@ -582,9 +844,26 @@ function formatMetric(value) {
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(number);
 }
 
+function chooseAmountUnit(values = []) {
+  const numbers = values.map(finiteValue).filter(value => value !== null);
+  const max = numbers.length ? Math.max(...numbers.map(value => Math.abs(value))) : 0;
+  return max > 0 && max < 1 ? '万元' : '亿元';
+}
+
+function formatAmount(value, values = []) {
+  const number = finiteValue(value);
+  const unit = chooseAmountUnit(values);
+  if (number === null) return { text: '—', unit };
+  const scaled = unit === '万元' ? number * 10000 : number;
+  return {
+    text: new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(scaled),
+    unit
+  };
+}
+
 function displayKpi(kpi) {
   let value=finiteValue(kpi.value),unit=kpi.unit;
-  if(value===null)return {text:'—',unit};
+  if(value===null)return {text:kpi.isBound ? '暂无有效值' : (kpi.emptyText || '—'),unit:''};
   if(unit==='亿元' && value!==0 && Math.abs(value)<1) {
     value*=10000;unit='万元';
     if(Math.abs(value)<1) {value*=10000;unit='元';}
@@ -623,13 +902,15 @@ function kpiGlyph(key, index) {
     retailRevenue: TrendCharts,
     retailValueCustomers: UserFilled,
     retailLoan: Coin,
-    retailNplRate: WarningFilled
+    retailNplRate: WarningFilled,
+    retailDepositAverage: OfficeBuilding
   }[key] || [Coin, OfficeBuilding, TrendCharts, UserFilled][index % 4]);
 }
 
 function kpiTitle(kpi) {
   const date = kpi?.date || kpi?.dataDate || kpi?.periodDate;
-  return date ? `${kpi.label} · 数据日期 ${date}` : '';
+  if (date) return `${kpi.label} · 数据日期 ${date}`;
+  return kpi?.emptyTitle || '';
 }
 
 function segmentColor(index) {
@@ -811,6 +1092,9 @@ function clearTransientState() {
   selectedInstitution.value = null;
   rankingMetric.value = 'aum';
   rankingOrder.value = 'leading';
+  institutionMetric.value = 'deposit';
+  institutionFilter.value = '';
+  institutionPage.value = 1;
   closeAttention({ restoreFocus: false });
   closeDirectory();
 }
@@ -853,10 +1137,11 @@ watch(() => props.model, model => {
   }
   if (selectedAttention.value) {
     const label = String(selectedAttention.value.label || '');
-    if (!safeModel.value.attention.some(item => String(item?.label || '') === label)) {
+    if (!attentionItems.value.some(item => String(item?.label || '') === label)) {
       closeAttention({ restoreFocus: false });
     }
   }
+  if (institutionPage.value > institutionPageCount.value) institutionPage.value = institutionPageCount.value;
 }, { deep: true });
 watch(() => props.error, error => { if (error) clearTransientState(); });
 </script>

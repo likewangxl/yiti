@@ -12,11 +12,11 @@ describe('getScreenView', () => {
 
   it('不传 preview 时 params 为空对象(读发布态,silent:false 走全局 toast)', async () => {
     await getScreenView('SCR_TEST');
-    expect(call).toHaveBeenCalledWith('get', '/screen/view/SCR_TEST', { params: {} }, null);
+    expect(call).toHaveBeenCalledWith('get', '/screen/view/SCR_TEST', { params: {}, timeout: 60000 }, null);
   });
 
   it('preview=draft 时透传到 params.preview(读草稿态)', async () => {
     await getScreenView('SCR_TEST', 'draft');
-    expect(call).toHaveBeenCalledWith('get', '/screen/view/SCR_TEST', { params: { preview: 'draft' } }, null);
+    expect(call).toHaveBeenCalledWith('get', '/screen/view/SCR_TEST', { params: { preview: 'draft' }, timeout: 60000 }, null);
   });
 });

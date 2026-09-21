@@ -1,0 +1,170 @@
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+ ✓ src/views/screen/panorama/__tests__/defaultBindings.spec.js  (19 tests) 92ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaSettings.spec.js  (9 tests) 1351ms
+ ✓ src/views/screen/panorama/__tests__/usePanoramaData.singleOrg.spec.js  (7 tests) 253ms
+ ✓ src/views/screen/panorama/__tests__/usePanoramaData.spec.js  (19 tests) 669ms
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+ ✓ src/views/screen/panorama/__tests__/PanoramaIntegrationReadiness.spec.js  (7 tests) 2239ms
+ ✓ src/views/screen/panorama/__tests__/BranchOperatingDashboard.spec.js  (15 tests) 6783ms
+ ❯ src/views/screen/panorama/__tests__/CorporateDashboard.spec.js  (9 tests | 3 failed) 24223ms
+   ❯ src/views/screen/panorama/__tests__/CorporateDashboard.spec.js > CorporateDashboard 对公经营总览 > 画像关闭和刷新过渡保留搜索与选中，混层值不标为城市汇总
+     → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+   ❯ src/views/screen/panorama/__tests__/CorporateDashboard.spec.js > CorporateDashboard 对公经营总览 > 只为对公页启用选定的浮雕地图外观
+     → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+   ❯ src/views/screen/panorama/__tests__/CorporateDashboard.spec.js > CorporateDashboard 对公经营总览 > 以对公业务语义呈现 KPI、重点客群信贷、经营关注、排名和目标
+     → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ✓ src/views/screen/panorama/__tests__/PanoramaInstitutionDirectory.spec.js  (8 tests) 3832ms
+ ✓ src/views/screen/panorama/__tests__/corporateIntegration.spec.js  (8 tests) 612ms
+ ✓ src/views/screen/panorama/__tests__/sourcePresentation.spec.js  (13 tests) 1118ms
+ ✓ src/views/screen/panorama/__tests__/CompositionBreakdown.spec.js  (11 tests) 1552ms
+ ✓ src/views/screen/panorama/__tests__/CityPanorama.spec.js  (9 tests) 3751ms
+ ✓ src/views/screen/panorama/__tests__/mapWebgl.spec.js  (5 tests) 1653ms
+ ✓ src/views/screen/panorama/__tests__/RetailDashboard.spec.js  (27 tests) 16002ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaDashboard.spec.js  (27 tests) 18324ms
+ ✓ src/views/screen/panorama/__tests__/mapResilience.spec.js  (4 tests) 1711ms
+stderr | src/views/screen/panorama/__tests__/mapResilience.spec.js > PanoramaMap WebGL 故障回退与资源生命周期 > contextlost 立即停绘制、释放资源并隐藏 canvas，保留 SVG 城市交互
+[PanoramaMap] WebGL context lost failed, using SVG fallback. undefined
+
+stderr | src/views/screen/panorama/__tests__/mapResilience.spec.js > PanoramaMap WebGL 故障回退与资源生命周期 > render 与 resize 异常都切换到真实 SVG 回退而不让异常遮住地图
+[PanoramaMap] WebGL render failed, using SVG fallback. Error: render failed
+    at /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend/src/views/screen/panorama/__tests__/mapResilience.spec.js:108:30
+    at runTest (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:781:11)
+    at runSuite (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:909:15)
+    at runSuite (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:909:15)
+    at runFiles (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:958:5)
+    at startTests (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:967:3)
+    at file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:116:7
+    at withEnv (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:83:5)
+    at run (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:105:3)
+    at runBaseTests (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/vendor/base.Ybri3C14.js:30:3)
+[PanoramaMap] WebGL resize failed, using SVG fallback. Error: resize failed
+    at /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend/src/views/screen/panorama/__tests__/mapResilience.spec.js:120:30
+    at runTest (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:781:11)
+    at runSuite (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:909:15)
+    at runSuite (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:909:15)
+    at runFiles (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:958:5)
+    at startTests (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:967:3)
+    at file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:116:7
+    at withEnv (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:83:5)
+    at run (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:105:3)
+    at runBaseTests (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/vendor/base.Ybri3C14.js:30:3)
+
+ ✓ src/views/screen/panorama/__tests__/PanoramaDataVerification.spec.js  (6 tests) 949ms
+ ✓ src/views/screen/panorama/__tests__/mapComponent.spec.js  (8 tests) 2678ms
+ ✓ src/views/screen/panorama/__tests__/MapMetricLabels.spec.js  (4 tests) 2945ms
+ ✓ src/views/screen/panorama/__tests__/BatchQualityBanner.spec.js  (4 tests) 903ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaPreview.spec.js  (5 tests) 1698ms
+ ✓ src/views/screen/panorama/__tests__/RuntimeCockpit.spec.js  (1 test) 602ms
+ ✓ src/views/screen/panorama/__tests__/dataAdapter.spec.js  (32 tests) 334ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaBindings.spec.js  (20 tests) 13066ms
+ ✓ src/views/screen/panorama/__tests__/RetailTrend.spec.js  (4 tests) 797ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaTrend.spec.js  (4 tests) 630ms
+ ✓ src/views/screen/panorama/__tests__/retailDataAdapter.spec.js  (11 tests) 248ms
+ ✓ src/views/screen/panorama/__tests__/branchTestDataset.spec.js  (7 tests) 445ms
+ ✓ src/views/screen/panorama/__tests__/integrationReadiness.spec.js  (11 tests) 281ms
+ ✓ src/views/screen/panorama/__tests__/bindings.spec.js  (9 tests) 25ms
+ ✓ src/views/screen/panorama/__tests__/leadershipInsights.spec.js  (11 tests) 328ms
+ ✓ src/views/screen/panorama/__tests__/CorporateTrend.spec.js  (2 tests) 563ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaDatasourcePicker.spec.js  (4 tests) 5337ms
+ ✓ src/views/screen/panorama/__tests__/corporateDataAdapter.spec.js  (5 tests) 168ms
+ ✓ src/views/screen/panorama/__tests__/branchOperatingModel.spec.js  (7 tests) 144ms
+ ❯ src/views/screen/panorama/__tests__/BusinessMapDetails.spec.js  (8 tests | 2 failed) 3268ms
+   ❯ src/views/screen/panorama/__tests__/BusinessMapDetails.spec.js > 多机构城市缺少汇总时显示机构数，对公不完整批次不透出排名值
+     → expected '99亿元' to be '暂无数据' // Object.is equality
+   ❯ src/views/screen/panorama/__tests__/BusinessMapDetails.spec.js > 保留对公旧城市存款汇总契约，显式跨业务汇总不回退通用字段
+     → expected '暂无数据' to be '9万元' // Object.is equality
+ ✓ src/views/screen/panorama/__tests__/batchQuality.spec.js  (4 tests) 263ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaBindingsVerification.spec.js  (1 test) 1269ms
+ ✓ src/views/screen/panorama/__tests__/TrendLayout.spec.js  (3 tests) 749ms
+ ✓ src/views/screen/panorama/__tests__/retailBindings.spec.js  (5 tests) 317ms
+ ✓ src/views/screen/panorama/__tests__/mapGeometry.spec.js  (7 tests) 204ms
+ ✓ src/views/screen/panorama/__tests__/cityMapDetails.spec.js  (5 tests) 19ms
+ ✓ src/views/screen/panorama/__tests__/TargetWaterIntegration.spec.js  (1 test) 1307ms
+ ✓ src/views/screen/panorama/__tests__/retailDisplayInsights.spec.js  (7 tests) 141ms
+ ✓ src/views/screen/panorama/__tests__/branchOperatingSource.spec.js  (5 tests) 185ms
+ ✓ src/views/screen/panorama/__tests__/retailLeadershipInsights.spec.js  (4 tests) 20ms
+ ✓ src/views/screen/panorama/__tests__/mapRelief.spec.js  (5 tests) 208ms
+ ✓ src/views/screen/panorama/__tests__/mapLabelLayout.spec.js  (3 tests) 187ms
+ ✓ src/views/screen/panorama/__tests__/corporateBindings.spec.js  (2 tests) 110ms
+ ✓ src/views/screen/panorama/__tests__/corporateLeadershipInsights.spec.js  (3 tests) 215ms
+ ✓ src/views/screen/panorama/__tests__/richModel.spec.js  (2 tests) 178ms
+ ✓ src/views/screen/panorama/__tests__/retailDemoModel.spec.js  (2 tests) 85ms
+ ✓ src/views/screen/panorama/__tests__/corporateDemoModel.spec.js  (1 test) 15ms
+ ✓ src/views/screen/panorama/__tests__/panoramaViewModel.spec.js  (3 tests) 36ms
+ ✓ src/views/screen/panorama/__tests__/sourceQuality.spec.js  (2 tests) 12ms
+ ✓ src/views/screen/panorama/__tests__/RetailDashboardLeadership.spec.js  (3 tests) 1110ms
+ ✓ src/views/screen/panorama/__tests__/runtimeDataVerification.spec.js  (12 tests) 184ms
+ ✓ src/views/screen/panorama/__tests__/mapGeography.spec.js  (4 tests) 18ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/screen/panorama/__tests__/BusinessMapDetails.spec.js > 多机构城市缺少汇总时显示机构数，对公不完整批次不透出排名值
+AssertionError: expected '99亿元' to be '暂无数据' // Object.is equality
+
+- Expected
++ Received
+
+- 暂无数据
++ 99亿元
+
+ ❯ src/views/screen/panorama/__tests__/BusinessMapDetails.spec.js:64:38
+     62|   const wrapper = shallowMount(CorporateDashboard, { props: { model, s…
+     63|   const detail = wrapper.findComponent({ name: 'PanoramaMap' }).props(…
+     64|   expect(valueOf(detail, 'deposit')).toBe('暂无数据');
+       |                                      ^
+     65|   expect(valueOf(detail.institutions[0], 'deposit')).toBe('暂无数据');
+     66|   wrapper.unmount();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/views/screen/panorama/__tests__/BusinessMapDetails.spec.js > 保留对公旧城市存款汇总契约，显式跨业务汇总不回退通用字段
+AssertionError: expected '暂无数据' to be '9万元' // Object.is equality
+
+- Expected
++ Received
+
+- 9万元
++ 暂无数据
+
+ ❯ src/views/screen/panorama/__tests__/BusinessMapDetails.spec.js:70:95
+     68| it('保留对公旧城市存款汇总契约，显式跨业务汇总不回退通用字段', () => {
+     69|   const model = { citySummaries: { '610100': { kpis: [{ key: 'deposit'…
+     70|   expect(valueOf(buildCityMapDetails(model, { business: 'corporate' })…
+       |                                                                                               ^
+     71|   model.citySummaries['610100'].kpis.push({ key: 'retailDeposit', valu…
+     72|   expect(valueOf(buildCityMapDetails(model, { business: 'corporate' })…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/views/screen/panorama/__tests__/CorporateDashboard.spec.js > CorporateDashboard 对公经营总览 > 画像关闭和刷新过渡保留搜索与选中，混层值不标为城市汇总
+ FAIL  src/views/screen/panorama/__tests__/CorporateDashboard.spec.js > CorporateDashboard 对公经营总览 > 只为对公页启用选定的浮雕地图外观
+ FAIL  src/views/screen/panorama/__tests__/CorporateDashboard.spec.js > CorporateDashboard 对公经营总览 > 以对公业务语义呈现 KPI、重点客群信贷、经营关注、排名和目标
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ Test Files  2 failed | 56 passed (58)
+      Tests  5 failed | 439 passed (444)
+   Start at  10:54:33
+   Duration  88.04s (transform 51.76s, setup 24ms, collect 455.08s, tests 126.41s, environment 179.81s, prepare 82.05s)
+

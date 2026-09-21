@@ -153,7 +153,7 @@
             <button v-if="selectedCityCode" type="button" class="corporate-clear-city" data-action="clear-city" @click="clearCity">显示全部机构</button>
             <span v-else class="corporate-map-hint">点击城市筛选机构排名</span>
           </div>
-          <PanoramaMap class="corporate-map" appearance="relief" :metric-label="rankingMetricInfo.label" :metric-values="corporateMapMetricValues" :data-metric-label="rankingMetricInfo.label" :geo-json="provinceGeoJson" :points="safeModel.institutions" :demo="demo" mode="province" :selected-region-code="selectedCityCode" @region-select="selectCity" />
+          <PanoramaMap class="corporate-map" appearance="relief" label-layout="callout" :city-details="corporateMapCityDetails" :metric-label="rankingMetricInfo.label" :metric-values="corporateMapMetricValues" :data-metric-label="rankingMetricInfo.label" :geo-json="provinceGeoJson" :points="safeModel.institutions" :demo="demo" mode="province" :selected-region-code="selectedCityCode" @region-select="selectCity" />
           <p class="corporate-scope-note" data-testid="corporate-scope-note">{{ safeModel.scopeLabel }} KPI 与趋势不随城市筛选变化；城市选择只影响机构分析。</p>
           <p v-if="selectedCityCode" class="corporate-selected-city" data-testid="corporate-selected-city">当前机构分析：{{ selectedCityName }}（{{ filteredRankings.length }} 家有排名记录）</p>
         </article>
@@ -230,6 +230,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Close, Coin, OfficeBuilding, Refresh, Setting, TrendCharts, UserFilled, WarningFilled } from '@element-plus/icons-vue';
 import PanoramaMap from './PanoramaMap.vue';
+import { buildCityMapDetails, cityMapMetricValues } from './cityMapDetails.js';
 import CorporateTrend from './CorporateTrend.vue';
 import { provinceGeo } from './geography.js';
 import { buildCorporateLeadershipInsights, buildSegmentComparisons, finiteMetric } from './corporateLeadershipInsights.js';
@@ -338,59 +339,17 @@ const missingDataSummary = computed(() => {
     note: `${count === null ? '排名指标暂无完整样本' : `排名空值单元 ${count} 个`} · 运行说明 ${issueCount} 条`
   };
 });
-const corporateMapMetricValues = computed(() => {
-  if (rankingPartial.value) return {};
-  const values = {};
-  const summaryKeys = {
-    deposit: ['corpDeposit', 'deposit'],
-    increase: ['increase', 'corpDepositIncrease', 'depositIncrease'],
-    rate: ['rate', 'completionRate']
-  };
-  Object.entries(safeModel.value.citySummaries).forEach(([cityCode, summary]) => {
-    const rows = Array.isArray(summary?.kpis) ? summary.kpis : [];
-    const source = rows.find(item => summaryKeys[rankingMetric.value]?.includes(item?.key));
-    const metric = finiteMetric(source?.value);
-    if (metric !== null) {
-      const display = formatDisplayMetric(metric, rankingMetricInfo.value.unit, rankingMetric.value);
-      values[String(cityCode)] = `${display.text}${display.unit}`;
-    }
-  });
-  const byCity = new Map();
-  safeModel.value.rankings.forEach(row => {
-    const cityCode = String(row?.cityCode || row?.city_code || '').trim();
-    const metric = rankingValue(row);
-    if (!cityCode || metric === null || values[cityCode] !== undefined) return;
-    const rows = byCity.get(cityCode) || [];
-    rows.push(metric);
-    byCity.set(cityCode, rows);
-  });
-  byCity.forEach((rows, cityCode) => {
-    if (rows.length === 1) {
-      const display = formatDisplayMetric(rows[0], rankingMetricInfo.value.unit, rankingMetric.value);
-      values[cityCode] = `${display.text}${display.unit}`;
-    }
-  });
-  // With several authorized institutions in one city there is no safe city
-  // KPI to display. Keep the map informative with a count label rather than
-  // inventing an aggregate for the selected metric.
-  const cityInstitutionCodes = new Map();
-  [...safeModel.value.institutions, ...safeModel.value.rankings].forEach(row => {
-    const cityCode = String(row?.cityCode || row?.city_code || '').trim();
-    const orgCode = String(row?.orgCode || row?.org_code || '').trim();
-    if (!cityCode || !orgCode) return;
-    const codes = cityInstitutionCodes.get(cityCode) || new Set();
-    codes.add(orgCode);
-    cityInstitutionCodes.set(cityCode, codes);
-  });
-  cityInstitutionCodes.forEach((codes, cityCode) => {
-    if (values[cityCode] === undefined && codes.size) values[cityCode] = `${codes.size}家机构`;
-  });
-  return values;
-});
-const corporateMapMetricLabel = computed(() => {
-  const values = Object.values(corporateMapMetricValues.value);
-  return values.some(value => String(value).endsWith('家机构')) ? `${rankingMetricInfo.value.label} / 机构数` : rankingMetricInfo.value.label;
-});
+const corporateMapRankingUnavailable = computed(() => ['NO_SOURCE', 'NO_ROWS', 'NO_VALUES', 'NO_COMPLETE_BATCH'].includes(String(props.sourcePresentation?.sourceAvailability?.corpRanking?.status || '').toUpperCase()));
+const corporateMapCityDetails = computed(() => buildCityMapDetails(
+  corporateMapRankingUnavailable.value ? { ...safeModel.value, rankings: [] } : safeModel.value,
+  {
+    business: 'corporate',
+    geoJson: provinceGeoJson,
+    allowCityMetrics: !rankingPartial.value && !corporateMapRankingUnavailable.value,
+    scopeLabel: rankingPartial.value && !corporateMapRankingUnavailable.value ? '混合层级 · 机构原值，不作汇总' : ''
+  }
+));
+const corporateMapMetricValues = computed(() => rankingPartial.value || corporateMapRankingUnavailable.value ? {} : cityMapMetricValues(corporateMapCityDetails.value, rankingMetric.value));
 const filteredRankings = computed(() => {
   const source = safeModel.value.rankings.filter(row => !selectedCityCode.value || String(row?.cityCode || '') === selectedCityCode.value);
   return [...source].sort((left, right) => {

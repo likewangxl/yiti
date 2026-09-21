@@ -100,6 +100,7 @@ describe('PanoramaDashboard 省级经营大屏', () => {
 
   afterEach(() => {
     mounted.splice(0).forEach(wrapper => wrapper.unmount());
+    vi.useRealTimers();
     document.body.style.overflow = '';
   });
 
@@ -150,23 +151,25 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(wrapper.findAll('[data-testid="deposit-operation-card"]')[1].text()).toContain('0.00043837');
   });
 
-  it('分行主营摘要使用直接业务文案，移除技术覆盖和模糊下降指标', () => {
+  it('分行重点完成情况使用明确完成率，不再展示净增、协调事项等重复摘要', () => {
     const wrapper = mountDashboard({
       model: {
         ...extendedModel,
         kpis: [
           ...extendedModel.kpis.filter(item => !['depositIncrease', 'rate'].includes(item.key)),
           { key: 'depositIncrease', value: -1.88, unit: '亿元' },
-          { key: 'rate', value: 86.5, unit: '%' }
+          { key: 'rate', value: 86.5, unit: '%' },
+          { key: 'corporateDepositRate', label: '对公存款目标完成率', value: 86.5, unit: '%' }
         ]
       }
     });
     const summary = wrapper.get('[data-testid="leadership-diagnostics"]').text();
-    expect(summary).toContain('存款较上月净减1.88亿元');
+    expect(summary).toContain('对公存款目标完成率');
+    expect(summary).toContain('86.5%');
     expect(summary).toContain('距目标还差13.5个百分点');
-    expect(summary).toContain('未完成目标机构1家');
-    expect(summary).not.toContain('可比指标覆盖');
-    expect(summary).not.toContain('下降机构数');
+    expect(summary).toContain('辖内机构达标率');
+    expect(summary).not.toContain('存款较上月净减');
+    expect(summary).not.toContain('协调事项');
   });
 
   it('业务构成使用独立占比组件，每项金额只显示一次', () => {
@@ -254,10 +257,11 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(document.body.style.overflow).toBe('');
   });
 
-  it('地图选中机构会显示机构详情，不从名称猜 cityCode', async () => {
+  it('地图选中机构后保留高亮状态，不占用地图空间显示摘要', async () => {
     const wrapper = mountDashboard();
     await wrapper.get('.stub-select-branch').trigger('click');
-    expect(wrapper.find('[data-testid="selected-institution"]').text()).toContain('西安市分行');
+    expect(wrapper.emitted('branch-select')).toEqual([['ORG-1']]);
+    expect(wrapper.find('[data-testid="selected-institution"]').exists()).toBe(false);
   });
 
   it('排名支持净增切换：负数参与排序，null 不进入当前指标前十矩阵', async () => {
@@ -290,6 +294,81 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(visibleRows()[0].text()).toContain('矩阵机构2');
     expect(visibleRows().at(-1).text()).toContain('矩阵机构11');
     expect(visibleRows().some(row => row.text().includes('矩阵机构12'))).toBe(false);
+  });
+
+  it('排名表提供轮播暂停控件，切换排名指标时保持首行对齐', async () => {
+    const wrapper = mountDashboard({ model: extendedModel });
+    const toggle = wrapper.get('.panorama-carousel-toggle');
+    expect(toggle.text()).toBe('暂停轮播');
+    expect(toggle.attributes('aria-pressed')).toBe('false');
+    await toggle.trigger('click');
+    expect(toggle.text()).toBe('继续轮播');
+    expect(toggle.attributes('aria-pressed')).toBe('true');
+    await wrapper.get('[data-ranking-mode="increase"]').trigger('click');
+    expect(wrapper.findAll('[data-testid="ranking-row"]')[0].text()).toContain('榆林市分行');
+  });
+
+  it('排名表每次只向上轮播一行，动画结束后将该行循环到队尾', async () => {
+    vi.useFakeTimers();
+    const wrapper = mountDashboard({ model: extendedModel });
+    const viewport = wrapper.get('.panorama-ranking-carousel').element;
+    const table = wrapper.get('.panorama-detail-table').element;
+    const firstRow = wrapper.findAll('[data-testid="ranking-row"]')[0].element;
+    const initialRows = wrapper.findAll('[data-testid="ranking-row"]').map(row => row.text());
+    Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 120 });
+    Object.defineProperty(table, 'scrollHeight', { configurable: true, value: 480 });
+    firstRow.getBoundingClientRect = () => ({ height: 48 });
+
+    await vi.advanceTimersByTimeAsync(3200);
+    await nextTick();
+    const body = wrapper.get('.panorama-ranking-carousel tbody');
+    expect(body.classes()).toContain('is-advancing');
+    expect(body.attributes('style')).toContain('translate3d(0, -48px, 0)');
+
+    await vi.advanceTimersByTimeAsync(560);
+    await nextTick();
+    const cycledRows = wrapper.findAll('[data-testid="ranking-row"]').map(row => row.text());
+    expect(cycledRows[0]).toBe(initialRows[1]);
+    expect(cycledRows.at(-1)).toBe(initialRows[0]);
+  });
+
+  it('流程与经营关注分两行显示事项和机构，并每次向上轮播一条', async () => {
+    vi.useFakeTimers();
+    const attention = [
+      { label: '授信调查任务待处理', count: 2, orgCode: 'ORG-1', orgName: '西安市分行' },
+      { label: '客户回访即将到期', count: 1, orgCode: 'ORG-2', orgName: '榆林市分行' },
+      { label: '存款目标进度偏慢', count: 3, orgCode: 'ORG-3', orgName: '宝鸡市分行' }
+    ];
+    const wrapper = mountDashboard({ model: { ...extendedModel, attention } });
+    const rows = () => wrapper.findAll('.panorama-attention-list li');
+    expect(rows()[0].find('.panorama-attention-copy > span').text()).toBe('授信调查任务待处理');
+    expect(rows()[0].find('.panorama-attention-copy small').text()).toBe('西安市分行');
+    expect(rows()[0].find('strong').exists()).toBe(false);
+    expect(wrapper.get('.panorama-attention-heading-meta').text()).toContain('事项明细');
+    expect(wrapper.get('.panorama-attention-heading-meta').text()).not.toContain('项需跟进');
+
+    const viewport = wrapper.get('.panorama-attention-carousel').element;
+    Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 80 });
+    Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 180 });
+    rows()[0].element.getBoundingClientRect = () => ({ height: 48 });
+    await vi.advanceTimersByTimeAsync(3600);
+    await nextTick();
+    expect(rows()[0].attributes('style')).toContain('translate3d(0, -48px, 0)');
+
+    await vi.advanceTimersByTimeAsync(520);
+    await nextTick();
+    expect(rows()[0].find('.panorama-attention-copy > span').text()).toBe('客户回访即将到期');
+  });
+
+  it('只有机构汇总数量时不冒充具体事项', () => {
+    const wrapper = mountDashboard({
+      model: {
+        ...extendedModel,
+        attention: [{ label: 'ORG-1', count: 5, orgCode: 'ORG-1', orgName: '西安市分行' }]
+      }
+    });
+    expect(wrapper.find('.panorama-attention-list').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="attention-status"]').text()).toContain('仅提供机构汇总数量');
   });
 
   it('排名值不同显示连续名次', () => {
@@ -325,7 +404,7 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(wrapper.get('.panorama-target-panel').text()).not.toContain('年度目标');
   });
 
-  it('目标摘要和目标进度诊断消费 targetKpi 的展示标签覆盖', () => {
+  it('零售目标只在下方目标进度展示，顶部对公完成率缺来源时显示明确标注的演示值', () => {
     const wrapper = mountDashboard({
       model: {
         ...extendedModel,
@@ -334,7 +413,9 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     });
 
     expect(wrapper.get('.panorama-target-summary-label').text()).toBe('已设目标机构完成率');
-    expect(wrapper.get('[data-diagnostic="targetDistance"]').text()).toContain('已设目标机构完成率');
+    expect(wrapper.get('[data-diagnostic="corporateDepositCompletion"]').text()).toContain('对公存款目标完成率');
+    expect(wrapper.get('[data-diagnostic="corporateDepositCompletion"]').text()).toContain('93.6%');
+    expect(wrapper.get('[data-diagnostic="corporateDepositCompletion"]').text()).toContain('演示值·非业务数据');
     expect(wrapper.get('.panorama-target-panel').text()).toContain('零售贷款目标完成率');
   });
 
@@ -384,19 +465,28 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(wrapper.get('.panorama-map-panel').text()).not.toContain('陕西省分行机构分布');
   });
 
-  it('分行三项行动区明确展示目标缺口、未达标机构和协调事项，且指标切换同步地图口径', async () => {
+  it('分行重点完成情况区展示对公存款、对公贷款、对公营业收入和辖内机构达标率，且指标切换同步地图口径', async () => {
     const wrapper = mountDashboard({
       model: {
         ...extendedModel,
+        kpis: [
+          ...extendedModel.kpis,
+          { key: 'corporateDepositRate', label: '对公存款目标完成率', value: 93.6, unit: '%', date: '2026-09-06' },
+          { key: 'corporateLoanRate', label: '对公贷款目标完成率', value: 88.2, unit: '%', date: '2026-09-06' },
+          { key: 'corporateRevenueRate', label: '对公营业收入目标完成率', value: 91.8, unit: '%', date: '2026-09-06' }
+        ],
         attention: [{ label: '宝鸡市分行', count: 2 }],
         citySummaries: { '610100': { kpis: [{ key: 'deposit', value: 42.5, unit: '亿元' }] } }
       }
     });
     const diagnostics = wrapper.findAll('[data-testid="leadership-diagnostics"] [data-diagnostic]');
-    expect(diagnostics.map(card => card.find('.panorama-diagnostic-label').text())).toEqual(['目标缺口', '未达标机构', '协调事项']);
-    expect(diagnostics[0].text()).toContain('目标');
-    expect(diagnostics[1].text()).toContain('未完成目标机构');
-    expect(diagnostics[2].text()).toContain('2');
+    expect(diagnostics.map(card => card.find('.panorama-diagnostic-label').text())).toEqual(['对公存款目标完成率', '对公贷款目标完成率', '对公营业收入目标完成率', '辖内机构达标率']);
+    expect(diagnostics[0].text()).toContain('93.6%');
+    expect(diagnostics[1].text()).toContain('88.2%');
+    expect(diagnostics[2].text()).toContain('91.8%');
+    expect(diagnostics[2].find('[role="progressbar"]').attributes('aria-valuenow')).toBe('91.8');
+    expect(diagnostics[3].text()).toContain('0/1家');
+    expect(diagnostics[3].find('[role="progressbar"]').attributes('aria-valuenow')).toBe('0');
 
     const map = wrapper.findComponent({ name: 'PanoramaMap' });
     expect(map.props('metricLabel')).toBe('存款余额');

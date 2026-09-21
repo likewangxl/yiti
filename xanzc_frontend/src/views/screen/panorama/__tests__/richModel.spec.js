@@ -34,13 +34,14 @@ describe('panorama rich demo model contract', () => {
   });
 
   it('经营关注使用明确示例条目，不拼成总量', () => {
-    expect(demoModel.attention).toEqual([
-      { label: '在途任务', count: 48 },
-      { label: '待审批', count: 18 },
-      { label: '临近时限', count: 6 },
-      { label: '超时任务', count: 3 },
-      { label: '目标待跟进', count: 4 }
+    expect(demoModel.attention.map(item => ({ label: item.label, count: item.count }))).toEqual([
+      { label: '客户授信调查任务在途', count: 48 },
+      { label: '营销方案等待审批', count: 18 },
+      { label: '客户回访任务即将到期', count: 6 },
+      { label: '贷后检查任务已超时', count: 3 },
+      { label: '存款目标进度偏慢待跟进', count: 4 }
     ]);
+    expect(demoModel.attention.every(item => item.orgCode && item.orgName)).toBe(true);
     expect(demoModel.disclaimer).toContain('非业务数据');
   });
 });

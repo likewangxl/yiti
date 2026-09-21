@@ -567,8 +567,11 @@ function adaptAttention(table, binding, model, issues, options, pendingAttention
         directoryItem = directoryByCode.get(orgCode) || null;
       }
     }
-    const displayLabel = directoryItem?.orgName || (hasOrgCode && directoryItem ? orgCode : (label ?? ''));
-    const item = { label: displayLabel, count: count.value };
+    const item = { label: label ?? '', count: count.value };
+    if (hasOrgCode) {
+      item.orgCode = orgCode;
+      item.orgName = directoryItem?.orgName || '';
+    }
     model.attention.push(item);
     if (hasOrgCode && directoryItem && pendingAttention) {
       const pending = pendingAttention.get(orgCode) || [];

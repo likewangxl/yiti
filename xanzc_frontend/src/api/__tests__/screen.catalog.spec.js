@@ -15,6 +15,6 @@ describe('listAvailableScreens', () => {
 
     await expect(listAvailableScreens()).resolves.toBe(catalog);
     expect(rawGet).toHaveBeenCalledTimes(1);
-    expect(rawGet).toHaveBeenCalledWith('/api/screen/view/catalog');
+    expect(rawGet).toHaveBeenCalledWith('/api/screen/view/catalog', { timeout: 60000 });
   });
 });

@@ -96,13 +96,40 @@ describe('RetailDashboard 零售经营总览', () => {
     expect(card.text()).toContain('2.08');expect(card.text()).toContain('万元');
     wrapper.unmount();
   });
-  it('固定渲染六项零售 KPI，零值保留且 AUM 不由存款与贷款相加', () => {
+  it('保留六项零售 KPI 并增加月日均卡片，已绑定值按原口径展示', () => {
     const wrapper = mountDashboard();
-    expect(wrapper.findAll('[data-testid="retail-kpi"]')).toHaveLength(6);
+    expect(wrapper.findAll('[data-testid="retail-kpi"]')).toHaveLength(7);
     expect(wrapper.get('[data-kpi-key="retailAum"]').text()).toContain('1,824.60');
-    expect(wrapper.get('[data-kpi-key="retailAum"]').text()).not.toContain('2,254.77');
+    expect(wrapper.get('[data-kpi-key="retailValueCustomers"]').text()).toContain('86.24');
     expect(wrapper.get('[data-kpi-key="retailNplRate"]').text()).toContain('↑ 0.20pp');
     expect(wrapper.get('[data-kpi-key="retailNplRate"] .retail-kpi__change').classes()).toContain('is-risk');
+  });
+
+  it('AUM 和价值客户未绑定时保留组件并显示明确缺失状态', () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      kpis: model.kpis.filter(item => !['retailAum', 'retailValueCustomers'].includes(item.key))
+    } });
+    expect(wrapper.get('[data-kpi-key="retailAum"]').text()).toContain('暂无数据源');
+    expect(wrapper.get('[data-kpi-key="retailValueCustomers"]').text()).toContain('口径未配置');
+  });
+
+  it('AUM 和价值客户槽位已绑定但无有效值时不误报为未配置', () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      kpis: [
+        { key: 'retailAum', label: '零售AUM', value: null, unit: '亿元' },
+        { key: 'retailValueCustomers', label: '价值客户', value: null, unit: '万户' }
+      ]
+    } });
+    expect(wrapper.get('[data-kpi-key="retailAum"]').text()).toContain('暂无有效值');
+    expect(wrapper.get('[data-kpi-key="retailAum"]').text()).not.toContain('暂无数据源');
+    expect(wrapper.get('[data-kpi-key="retailValueCustomers"]').text()).toContain('暂无有效值');
+  });
+
+  it('未接入客户分层时明确说明价值客户口径和数据源缺失', () => {
+    const wrapper = mountDashboard({ model: { ...model, segments: [] } });
+    expect(wrapper.get('[data-testid="retail-segments"]').text()).toContain('价值客户口径与客户分层数据源尚未接入');
   });
 
   it('储蓄经营使用单独的月日均字段，客户分层不求和重叠客户', () => {
@@ -371,6 +398,135 @@ describe('RetailDashboard 零售经营总览', () => {
     expect(wrapper.get('[data-target-name="收入待更新"]').text()).not.toContain('无有效目标');
     expect(wrapper.get('[data-target-name="收入缺口"]').text()).toContain('距目标 2.00 亿元');
     expect(wrapper.get('[data-target-name="资产超额"]').text()).toContain('超目标 2.00 亿元');
+  });
+
+  it('零售顶部保留六项原指标并增加月日均卡片，缺失值用状态文案', () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      kpis: model.kpis.filter(item => item.key !== 'retailDepositAverage')
+    } });
+    expect(wrapper.findAll('[data-testid="retail-kpi"]')).toHaveLength(7);
+    expect(wrapper.get('[data-kpi-key="retailDepositAverage"]').text()).toContain('暂无数据源');
+  });
+
+  it('机构存款对比默认筛选分行，切换月日均后显示口径差额而非净增', async () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      kpis: model.kpis,
+      trend: [
+        { date: '2026-07', deposit: 100, depositAverage: 99 },
+        { date: '2026-08', deposit: 103, depositAverage: 102 }
+      ],
+      rankings: [
+        { orgCode: 'P1', name: '甲分行', deposit: 100, average: 98, date: '2026-09-06', orgNature: 'PRIMARY' },
+        { orgCode: 'P2', name: '乙分行', deposit: 80, average: 81, date: '2026-09-06', operatingLevel: 'SECONDARY_BRANCH' },
+        { orgCode: 'O1', name: '待分类机构', deposit: 50, average: 49, date: '2026-09-06', orgNature: 'NONE' }
+      ],
+      institutions: [
+        { orgCode: 'P1', name: '甲分行', cityCode: '610100' },
+        { orgCode: 'P2', name: '乙分行', cityCode: '610500' },
+        { orgCode: 'O1', name: '待分类机构', cityCode: null }
+      ]
+    } });
+    const panel = wrapper.get('[data-testid="retail-institution-comparison"]');
+    expect(panel.text()).toContain('不汇总');
+    expect(panel.text()).not.toContain('排名');
+    expect(panel.get('[data-institution-filter="primary"]').classes()).toContain('active');
+    expect(panel.findAll('[data-testid="retail-institution-row"]')).toHaveLength(2);
+    expect(panel.text()).toContain('月均低于余额');
+    await panel.get('[data-ranking-metric="average"]').trigger('click');
+    expect(panel.get('[data-testid="retail-institution-value"]').text()).toContain('98.00');
+    expect(panel.get('[data-testid="retail-institution-difference"]').text()).toContain('-2.00');
+    expect(panel.text()).toContain('口径对照，不代表净增');
+  });
+
+  it('观察条展示机构覆盖、月均低于时点余额数量、目标和当前日期覆盖', () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      rankings: [
+        { orgCode: 'P1', deposit: 100, average: 98, date: '2026-09-06', orgNature: 'PRIMARY' },
+        { orgCode: 'P2', deposit: 80, average: 82, date: '2026-09-06', orgNature: 'PRIMARY' },
+        { orgCode: 'P3', deposit: null, average: null, date: null, orgNature: 'PRIMARY' }
+      ],
+      institutions: [{ orgCode: 'P1' }, { orgCode: 'P2' }, { orgCode: 'P3' }]
+    } });
+    const strip = wrapper.get('[data-testid="retail-leadership-insights"]');
+    expect(strip.text()).toContain('机构数据覆盖');
+    expect(strip.text()).toContain('2/3');
+    expect(strip.text()).toContain('月均低于余额');
+    expect(strip.text()).toContain('1 家');
+    expect(strip.text()).toContain('日期覆盖');
+    expect(strip.text()).toContain('2026-09-06');
+  });
+
+  it('重复的数据日期核验项合并展示指标和实际日期，不生成三条相同事项', () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      issues: [
+        { label: '数据日期待核验', metricLabel: '存款余额', actualDate: '2026-09-18' },
+        { label: '数据日期待核验', metricLabel: '存款月日均', actualDate: '2026-09-19' },
+        { label: '数据日期待核验', metricLabel: '机构对比', actualDate: '2026-09-19' }
+      ]
+    } });
+    const attention = wrapper.get('[data-testid="retail-attention"]');
+    expect(attention.findAll('[data-testid="retail-attention-row"]')).toHaveLength(3);
+    expect(attention.text()).toContain('数据日期待核验（3项）');
+    expect(attention.text()).toContain('2026-09-18、2026-09-19');
+  });
+
+  it('日期不一致事项使用已绑定指标标签和 KPI 日期，避免泛化为日期待确认', () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      kpis: [
+        { key: 'retailRevenue', label: '零售FTP收入', value: 1, unit: '亿元', date: '2026-07-24' },
+        { key: 'retailLoan', label: '个人贷款', value: 2, unit: '亿元', date: '2026-07-24' },
+        { key: 'retailNplRate', label: '个贷不良率', value: 1, unit: '%', date: '2026-07-24' },
+        { key: 'retailDeposit', label: '零售一般性存款余额', value: 3, unit: '亿元', date: '2026-09-19' }
+      ],
+      attention: [],
+      issues: [
+        { slot: 'retailRevenue', code: 'MIXED_DATES', message: '日期不一致' },
+        { slot: 'retailLoan', code: 'MIXED_DATES', message: '日期不一致' },
+        { slot: 'retailNplRate', code: 'MIXED_DATES', message: '日期不一致' },
+        { slot: 'retailDeposit', code: 'MIXED_DATES', message: '日期不一致' }
+      ]
+    } });
+    const attention = wrapper.get('[data-testid="retail-attention"]');
+    expect(attention.findAll('[data-testid="retail-attention-row"]')).toHaveLength(1);
+    expect(attention.text()).toContain('指标统计日期不一致（4项）');
+    expect(attention.text()).toContain('零售FTP收入：2026-07-24');
+    expect(attention.text()).toContain('零售一般性存款余额：2026-09-19');
+    expect(attention.text()).not.toContain('日期待确认');
+  });
+
+  it('关注面板补充当前已分类机构的月均低于余额差额，点击仍打开机构存款详情', async () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      attention: [],
+      issues: [],
+      rankings: [
+        { orgCode: 'P1', name: '甲分行', deposit: 100, average: 98, orgNature: 'PRIMARY' },
+        { orgCode: 'P2', name: '乙分行', deposit: 80, average: 70, orgNature: 'PRIMARY' },
+        { orgCode: 'P3', name: '丙分行', deposit: 60, average: 58, orgNature: 'PRIMARY' },
+        { orgCode: 'P4', name: '丁分行', deposit: 40, average: 39, orgNature: 'PRIMARY' }
+      ],
+      institutions: [
+        { orgCode: 'P1', name: '甲分行' },
+        { orgCode: 'P2', name: '乙分行' },
+        { orgCode: 'P3', name: '丙分行' },
+        { orgCode: 'P4', name: '丁分行' }
+      ]
+    } });
+    const panel = wrapper.get('[data-testid="retail-attention"]');
+    const list = panel.get('[data-testid="retail-attention-difference-list"]');
+    expect(list.text()).toContain('日均与时点差额关注');
+    expect(list.text()).toContain('乙分行');
+    expect(list.text()).toContain('-10.00');
+    expect(list.findAll('[data-testid="retail-attention-difference-row"]')).toHaveLength(3);
+    expect(list.text()).toContain('不代表净增');
+    await list.findAll('[data-testid="retail-attention-difference-row"]')[0].trigger('click');
+    expect(wrapper.get('[data-testid="retail-institution-dialog"]').text()).toContain('乙分行');
+    expect(wrapper.get('[data-testid="retail-institution-dialog"]').text()).toContain('月日均');
   });
 
 });

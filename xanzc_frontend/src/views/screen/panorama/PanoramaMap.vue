@@ -8,7 +8,14 @@
     :data-material-ready="surfaceReady ? 'true' : 'false'"
     :data-selected-region="selectedRegionCode || ''"
     :data-hovered-region="hoveredRegionCode"
-    @pointerleave="setHoveredRegion('')"
+    :data-zoom="zoom.toFixed(2)"
+    :data-pan-enabled="mode === 'city' && zoom > 1 ? 'true' : 'false'"
+    :class="{ 'is-dragging': dragging }"
+    @pointerdown="startPan"
+    @pointermove="movePan"
+    @pointerup="endPan"
+    @pointercancel="endPan"
+    @pointerleave="leaveHoveredRegion"
     @keydown.esc="setHoveredRegion('')"
     :data-webgl-ready="webglReady ? 'true' : 'false'"
     :data-region-count="renderedRegionCount"
@@ -46,7 +53,7 @@
             :aria-label="`选择${region.name || '行政区'}`"
             @click.stop="selectRegion(region)"
             @pointerenter="setHoveredRegion(region.code)"
-            @pointerleave="setHoveredRegion('')"
+            @pointerleave="leaveHoveredRegion"
             @keydown.enter.stop="selectRegion(region)"
             @keydown.space.prevent.stop="selectRegion(region)"
           />
@@ -103,17 +110,25 @@
         :aria-describedby="isCalloutLayout && String(region.code) === hoveredRegionCode ? cityTooltipId : undefined"
         @click.stop="selectRegion(region)"
         @pointerenter="setHoveredRegion(region.code)"
-        @pointerleave="setHoveredRegion('')"
+        @pointerleave="leaveHoveredRegion"
         @focus="setHoveredRegion(region.code)"
         @blur="setHoveredRegion('')"
       ><span v-if="isCalloutLayout" class="panorama-map__city-marker" aria-hidden="true"></span><span class="panorama-map__city-name">{{ region.name }}</span><small v-if="isCalloutLayout || metricValues[region.code] != null" data-testid="map-region-metric" class="panorama-map__metric-value">{{ isCalloutLayout ? metricDisplayValue(region) : metricValues[region.code] }}</small></button>
     </div>
     <Teleport to="body">
-      <aside ref="cityDetailRef" v-if="activeCityDetail" :data-city-code="activeCityDetail.region.code" :id="cityTooltipId" role="tooltip" class="panorama-map__city-detail" :style="cityDetailStyle">
+      <aside ref="cityDetailRef" v-if="activeCityDetail" :data-city-code="activeCityDetail.region.code" :id="cityTooltipId" role="tooltip" class="panorama-map__city-detail" :class="{ 'has-institution-metrics': hasInstitutionMetrics }" :style="cityDetailStyle" @pointerenter="keepCityDetail" @pointerleave="leaveHoveredRegion" @focusin="keepCityDetail" @focusout="leaveHoveredRegion" @keydown.esc="setHoveredRegion('')">
         <header><div><small>地市经营概览</small><h3>{{ activeCityDetail.region.name }}</h3></div><span class="panorama-map__detail-status">{{ activeCityDetail.scopeLabel || '当前授权范围' }}</span></header>
         <div class="panorama-map__detail-counts"><span>机构 <b>{{ activeCityDetail.institutionCount ?? '—' }} 家</b></span><span>已定位 <b>{{ activeCityDetail.locatedCount ?? '—' }} 家</b></span></div>
-        <div class="panorama-map__detail-metrics"><div v-for="metric in activeCityDetail.metrics" :key="metric.key"><span>{{ metric.label }}</span><strong :class="{ 'is-empty': metric.value === '暂无数据' }">{{ metric.value }}</strong></div></div>
-        <div v-if="activeCityDetail.institutions.length" class="panorama-map__detail-institutions"><span>辖内机构</span><p>{{ activeCityDetail.institutions.slice(0, 3).map(item => item.orgName || item.orgCode).join(' · ') }}<template v-if="activeCityDetail.institutions.length > 3"> 等 {{ activeCityDetail.institutions.length }} 家</template></p></div>
+        <div v-if="!hasInstitutionMetrics || activeCityDetail.metrics.some(metric => metric.value !== '暂无数据')" class="panorama-map__detail-metrics"><div v-for="metric in activeCityDetail.metrics" :key="metric.key"><span>{{ metric.label }}</span><strong :class="{ 'is-empty': metric.value === '暂无数据' }">{{ metric.value }}</strong></div></div>
+        <div v-if="hasInstitutionMetrics" class="panorama-map__detail-institution-list" data-testid="map-institution-metrics" tabindex="0" aria-label="地市授权机构业务明细">
+          <article v-for="institution in activeCityDetail.institutions" :key="institution.orgCode">
+            <h4>{{ institution.orgName || institution.orgCode }}</h4>
+            <dl><div v-for="metric in institution.metrics.filter(item => item.value !== '暂无数据')" :key="metric.key"><dt>{{ metric.label }}</dt><dd>{{ metric.value }}</dd></div></dl>
+            <p v-if="institution.metrics.every(item => item.value === '暂无数据')">暂无业务数据</p>
+            <small>数据日期 {{ institution.dataDate || '暂无' }}</small>
+          </article>
+        </div>
+        <div v-else-if="activeCityDetail.institutions.length" class="panorama-map__detail-institutions"><span>辖内机构</span><p>{{ activeCityDetail.institutions.slice(0, 3).map(item => item.orgName || item.orgCode).join(' · ') }}<template v-if="activeCityDetail.institutions.length > 3"> 等 {{ activeCityDetail.institutions.length }} 家</template></p></div>
         <footer><span>数据日期 {{ activeCityDetail.dataDate || '暂无' }}</span><span>点击城市查看详情 →</span></footer>
       </aside>
     </Teleport>
@@ -150,7 +165,7 @@
         :data-cluster-id="point.isCluster ? point.id : undefined"
         :aria-label="point.isCluster ? `聚合点，${point.count} 个机构，点击放大` : `${point.orgName || point.orgCode}，点击查看详情`"
         type="button"
-        @click.stop="point.isCluster ? zoomToCluster(point) : selectPoint(point)"
+        @click.stop="activatePoint(point)"
       >
         <span v-if="point.isCluster" class="panorama-map__cluster-count">{{ point.count }}</span>
         <span v-else class="panorama-map__point-dot" aria-hidden="true"></span>
@@ -184,20 +199,20 @@
     </div>
 
     <div class="panorama-map__controls" role="group" aria-label="地图视图控制">
-      <button type="button" aria-label="放大地图" title="放大地图" @click="zoomBy(1.35)"><Plus aria-hidden="true" /></button>
-      <button type="button" aria-label="缩小地图" title="缩小地图" @click="zoomBy(1 / 1.35)"><Minus aria-hidden="true" /></button>
+      <button type="button" aria-label="放大地图" title="放大地图" :disabled="zoom >= MAX_ZOOM" @click="zoomBy(1.35)"><Plus aria-hidden="true" /></button>
+      <button type="button" aria-label="缩小地图" title="缩小地图" :disabled="zoom <= MIN_ZOOM" @click="zoomBy(1 / 1.35)"><Minus aria-hidden="true" /></button>
       <button type="button" aria-label="重置地图视图" title="重置地图视图" @click="resetView"><Aim aria-hidden="true" /></button>
     </div>
 
     <p v-if="fallbackActive" class="panorama-map__fallback-status" role="status" aria-live="polite">
       {{ mode === 'province'
         ? '三维地图暂不可用，已切换为二维地图；可缩放、点击城市查看机构。'
-        : '三维地图暂不可用，已切换为二维地图；可缩放、点击网点查看详情。' }}
+        : '三维地图暂不可用，已切换为二维地图；放大后可拖动地图，点击网点查看详情。' }}
     </p>
     <p v-else-if="webglReady" class="panorama-map__fallback-status" role="status" aria-live="polite">
       {{ mode === 'province'
         ? '三维真实行政区地图，坐标系 GCJ-02；点击城市标签进入市级机构地图，光环为行政中心装饰。'
-        : '三维真实行政区地图，坐标系 GCJ-02。' }}
+        : '三维真实行政区地图，坐标系 GCJ-02；放大后可拖动地图。' }}
     </p>
 
     <p v-if="mode === 'city' && unmappedPoints.length" class="panorama-map__unmapped" aria-label="未绘制机构状态">
@@ -244,6 +259,9 @@ const props = defineProps({
 
 const emit = defineEmits(['region-select', 'branch-select']);
 
+const MIN_ZOOM = 0.65;
+const MAX_ZOOM = 12;
+
 const containerRef = ref(null);
 const canvasRef = ref(null);
 const fallbackActive = ref(false);
@@ -252,6 +270,7 @@ const renderedRegionCount = ref(0);
 const zoom = ref(1);
 const activeCluster = ref(null);
 const viewCenter = ref({ x: 0, y: 0 });
+const dragging = ref(false);
 
 const overlayRevision = ref(0);
 const surfaceReady = ref(false);
@@ -302,7 +321,14 @@ const pointClusters = computed(() => clusterPoints(drawablePoints.value, {
   demo: props.demo
 }));
 
-const showPointLabels = computed(() => pointClusters.value.length <= 8);
+// A branch name is business information, not optional map decoration. Clustering
+// already collapses points that are too close, so every remaining single point
+// keeps its label even when the city has more than eight branches.
+const showPointLabels = computed(() => props.mode === 'city');
+
+let panPointerId = null;
+let panOrigin = null;
+let suppressActivationUntil = 0;
 
 function worldBounds() {
   const bounds = projection.value.bounds;
@@ -546,6 +572,7 @@ watch(activeCityDetail, async () => {
   cityDetailHeight.value = cityDetailRef.value?.offsetHeight || 420;
 });
 function repositionCityDetail() { if (hoveredRegionCode.value) overlayRevision.value += 1; }
+const hasInstitutionMetrics = computed(() => activeCityDetail.value?.institutions.some(item => Array.isArray(item.metrics)) || false);
 const cityDetailStyle = computed(() => {
   void overlayRevision.value;
   const rect = containerRef.value?.getBoundingClientRect();
@@ -582,13 +609,21 @@ function pointStyle(point) {
 }
 
 function selectRegion(region) {
+  if (Date.now() < suppressActivationUntil) return;
   emit('region-select', { code: String(region.code || ''), name: region.name || '' });
 }
 
 function selectPoint(point) {
+  if (Date.now() < suppressActivationUntil) return;
   if (!point?.orgCode) return;
   activeCluster.value = null;
   emit('branch-select', point.orgCode);
+}
+
+function activatePoint(point) {
+  if (Date.now() < suppressActivationUntil) return;
+  if (point?.isCluster) zoomToCluster(point);
+  else selectPoint(point);
 }
 
 function clusterContainsSelected(cluster) {
@@ -601,7 +636,7 @@ function zoomToCluster(cluster) {
   if (!cluster?.isCluster) return;
   // At the hard zoom limit another zoom has no visual effect. Keep the cluster
   // actionable by opening a keyboard accessible member picker instead.
-  if (zoom.value >= 4 - 0.001) {
+  if (zoom.value >= MAX_ZOOM - 0.001) {
     activeCluster.value = cluster;
     return;
   }
@@ -613,6 +648,60 @@ function closeClusterPicker() {
   activeCluster.value = null;
 }
 
+function clampViewCenter(center) {
+  const bounds = worldBounds();
+  const scale = Math.max(1, zoom.value);
+  const limitX = bounds.width * (1 - 1 / scale) / 2;
+  const limitY = bounds.height * (1 - 1 / scale) / 2;
+  return {
+    x: Math.max(-limitX, Math.min(limitX, center.x)),
+    y: Math.max(-limitY, Math.min(limitY, center.y))
+  };
+}
+
+function startPan(event) {
+  if (props.mode !== 'city' || zoom.value <= 1 || event.isPrimary === false || event.button > 0) return;
+  if (event.target?.closest?.('.panorama-map__controls, .panorama-map__cluster-picker')) return;
+  panPointerId = event.pointerId;
+  panOrigin = {
+    clientX: event.clientX,
+    clientY: event.clientY,
+    centerX: viewCenter.value.x,
+    centerY: viewCenter.value.y,
+    moved: false
+  };
+  dragging.value = true;
+  containerRef.value?.setPointerCapture?.(event.pointerId);
+}
+
+function movePan(event) {
+  if (!dragging.value || event.pointerId !== panPointerId || !panOrigin) return;
+  const dx = event.clientX - panOrigin.clientX;
+  const dy = event.clientY - panOrigin.clientY;
+  if (!panOrigin.moved && Math.hypot(dx, dy) < 4) return;
+  panOrigin.moved = true;
+  event.preventDefault?.();
+  const width = Math.max(1, containerRef.value?.clientWidth || 800);
+  const height = Math.max(1, containerRef.value?.clientHeight || 520);
+  const bounds = worldBounds();
+  viewCenter.value = clampViewCenter({
+    x: panOrigin.centerX - (dx / width) * bounds.width / zoom.value,
+    y: panOrigin.centerY + (dy / height) * bounds.height / zoom.value
+  });
+  focusedPoint = true;
+  updateCameraPose();
+  renderFrame();
+}
+
+function endPan(event) {
+  if (!dragging.value || event.pointerId !== panPointerId) return;
+  if (panOrigin?.moved) suppressActivationUntil = Date.now() + 250;
+  try { containerRef.value?.releasePointerCapture?.(panPointerId); } catch { /* pointer capture may already be gone */ }
+  dragging.value = false;
+  panPointerId = null;
+  panOrigin = null;
+}
+
 function applyCameraZoom() {
   if (!camera) return;
   camera.zoom = zoom.value;
@@ -621,7 +710,13 @@ function applyCameraZoom() {
 }
 
 function zoomBy(factor) {
-  zoom.value = Math.min(4, Math.max(0.65, zoom.value * Number(factor || 1)));
+  zoom.value = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom.value * Number(factor || 1)));
+  if (zoom.value <= 1) {
+    focusedPoint = false;
+    viewCenter.value = { x: 0, y: 0 };
+  } else {
+    viewCenter.value = clampViewCenter(viewCenter.value);
+  }
   updatePointMarkerScale();
   applyCameraZoom();
   renderFrame();
@@ -1089,6 +1184,7 @@ function pointerPosition(event) {
 }
 
 function onThreePointer(event) {
+  if (Date.now() < suppressActivationUntil || panOrigin?.moved) return;
   if (!raycaster || !pointer || !renderer || !camera) return;
   pointerPosition(event);
   raycaster.setFromCamera(pointer, camera);
@@ -1101,7 +1197,15 @@ function onThreePointer(event) {
 }
 
 /** Highlight all polygons of one city without changing the business selection or rebuilding geometry. */
+let cityLeaveTimer = null;
+function keepCityDetail() { clearTimeout(cityLeaveTimer); }
+function leaveHoveredRegion() {
+  keepCityDetail();
+  if (hasInstitutionMetrics.value) cityLeaveTimer = setTimeout(() => setHoveredRegion(''), 350);
+  else setHoveredRegion('');
+}
 function setHoveredRegion(code) {
+  keepCityDetail();
   const next = (reliefEnabled.value || isCalloutLayout.value) && code ? String(code) : '';
   if (next === hoveredRegionCode.value) return;
   hoveredRegionCode.value = next;
@@ -1120,7 +1224,8 @@ function onThreeHover(event) {
   pointerPosition(event);
   raycaster.setFromCamera(pointer, camera);
   const hit = raycaster.intersectObjects(regionSurfaces, false)[0];
-  setHoveredRegion(hit?.object.userData.code || '');
+  if (hit) setHoveredRegion(hit.object.userData.code);
+  else leaveHoveredRegion();
 }
 
 function activateFallback(reason, error) {
@@ -1243,6 +1348,7 @@ watch(() => [props.geoJson, props.points, props.selectedOrgCode, props.selectedR
 }, { deep: true });
 
 onBeforeUnmount(() => {
+  keepCityDetail();
   window.removeEventListener('scroll', repositionCityDetail, true);
   disposed = true;
   resizeObserver?.disconnect?.();
@@ -1265,6 +1371,9 @@ onBeforeUnmount(() => {
   background: radial-gradient(circle at 52% 44%, rgba(46, 72, 157, .38), rgba(4, 14, 47, .98) 70%);
   color: #d8e8ff;
 }
+
+.panorama-map[data-mode='city'][data-pan-enabled='true'] { cursor: grab; touch-action: none; }
+.panorama-map[data-mode='city'][data-pan-enabled='true'].is-dragging { cursor: grabbing; user-select: none; }
 
 .panorama-map[data-appearance='relief'] {
   border-color: rgba(74, 164, 255, .56);
@@ -1335,7 +1444,10 @@ onBeforeUnmount(() => {
 .panorama-map__point-hit { position: absolute; transform: translate(-50%, -50%); min-width: 22px; min-height: 22px; padding: 0; border: 0; border-radius: 999px; color: #fff; background: transparent; cursor: pointer; pointer-events: auto; }
 .panorama-map__point-dot { display: block; width: 10px; height: 10px; margin: auto; border: 2px solid #83fbff; border-radius: 50%; background: #37dce1; box-shadow: 0 0 8px #37dce1, 0 0 22px rgba(55, 220, 225, .8); }
 .panorama-map__point-hit.is-selected .panorama-map__point-dot { width: 13px; height: 13px; border-color: #f4d5ff; background: #d783ff; box-shadow: 0 0 9px #d783ff, 0 0 28px rgba(215, 131, 255, .95); }
-.panorama-map__point-label { display: block; position: absolute; top: 18px; left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 2px 6px; border: 1px solid rgba(112, 192, 255, .5); border-radius: 4px; background: rgba(10, 27, 73, .9); font-size: 11px; }
+.panorama-map__point-label { display: block; position: absolute; z-index: 1; top: 18px; left: 50%; transform: translateX(-50%); max-width: 180px; white-space: nowrap; padding: 2px 6px; border: 1px solid rgba(112, 192, 255, .5); border-radius: 4px; color: #eef7ff; background: rgba(6, 22, 62, .94); box-shadow: 0 2px 8px rgba(0, 7, 28, .46); font-size: 11px; line-height: 1.35; text-shadow: 0 1px 2px #020918; }
+.panorama-map__point-hit:hover .panorama-map__point-label,
+.panorama-map__point-hit:focus-visible .panorama-map__point-label,
+.panorama-map__point-hit.is-selected .panorama-map__point-label { z-index: 2; border-color: #b6f7ff; background: rgba(17, 47, 104, .98); }
 .panorama-map__cluster-count { display: grid; place-items: center; width: 25px; height: 25px; border: 2px solid #83fbff; border-radius: 50%; background: rgba(25, 103, 182, .9); box-shadow: 0 0 12px rgba(71, 229, 255, .85); font-size: 11px; }
 .panorama-map__cluster-picker { position: absolute; z-index: 7; top: 50%; right: 58px; min-width: 170px; max-width: min(250px, calc(100% - 72px)); max-height: min(260px, calc(100% - 32px)); padding: 8px; overflow: auto; border: 1px solid rgba(128, 221, 255, .72); border-radius: 8px; background: rgba(7, 22, 61, .94); box-shadow: 0 8px 28px rgba(0, 0, 0, .38), 0 0 18px rgba(73, 209, 255, .2); transform: translateY(-50%); }
 .panorama-map__cluster-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 5px; color: #e7f5ff; font-size: 12px; }
@@ -1348,6 +1460,7 @@ onBeforeUnmount(() => {
 .panorama-map__controls { position: absolute; z-index: 5; right: 14px; bottom: 14px; display: grid; gap: 5px; }
 .panorama-map__controls button { width: 32px; height: 32px; border: 1px solid rgba(138, 193, 255, .6); border-radius: 5px; background: rgba(12, 33, 89, .88); color: #dbeaff; font-size: 20px; line-height: 1; cursor: pointer; }
 .panorama-map__controls button:hover, .panorama-map__controls button:focus-visible { border-color: #82f4ff; outline: 2px solid rgba(130, 244, 255, .5); }
+.panorama-map__controls button:disabled { cursor: not-allowed; opacity: .42; }
 .panorama-map__fallback-status { position: absolute; z-index: 4; left: 14px; bottom: 12px; max-width: calc(100% - 100px); margin: 0; color: rgba(194, 221, 255, .78); font-size: 11px; pointer-events: none; }
 .panorama-map__empty { position: absolute; z-index: 4; inset: 50% auto auto 50%; transform: translate(-50%, -50%); margin: 0; color: rgba(194, 221, 255, .82); font-size: 13px; white-space: nowrap; }
 .panorama-map__unmapped { position: absolute; z-index: 6; bottom: 42px; left: 12px; max-width: min(245px, 50%); margin: 0; padding: 8px 10px; border: 1px solid rgba(255, 181, 79, .5); border-radius: 6px; background: rgba(28, 25, 57, .86); color: #ffe2a8; font-size: 11px; }
@@ -1374,6 +1487,14 @@ onBeforeUnmount(() => {
 .panorama-map[data-label-layout='callout'] .panorama-map__region-label-hit:is(:hover,:focus-visible,.is-hovered,.is-selected) { border-color: var(--city-accent); background: #142b52; outline: none; box-shadow: 0 0 0 2px color-mix(in srgb,var(--city-accent) 12%,transparent), 0 4px 16px #020b24; }
 .panorama-map[data-label-layout='callout'] .panorama-map__city-halo { color: var(--city-accent); border-color: var(--city-accent); background: radial-gradient(circle,var(--city-accent) 0 2px,color-mix(in srgb,var(--city-accent) 28%,transparent) 3px 5px,transparent 72%); box-shadow: 0 0 7px color-mix(in srgb,var(--city-accent) 45%,transparent), inset 0 0 7px color-mix(in srgb,var(--city-accent) 25%,transparent); }
 .panorama-map__city-detail { position: fixed; z-index: 3100; pointer-events: none; box-sizing: border-box; padding: 16px; border: 1px solid color-mix(in srgb,var(--city-accent) 55%,#203658); border-radius: 12px; background: linear-gradient(145deg,rgba(18,38,73,.98),rgba(5,17,41,.98)); color: #eaf2ff; box-shadow: 0 18px 50px rgba(0,4,20,.55), inset 0 1px 0 rgba(210,230,255,.08); font-family: 'PingFang SC','Microsoft YaHei',sans-serif; }
+.panorama-map__city-detail.has-institution-metrics { pointer-events: auto; max-height: calc(100vh - 24px); overflow-y: auto; }
+.panorama-map__detail-institution-list { margin-top: 12px; max-height: 220px; overflow-y: auto; overscroll-behavior: contain; }
+.panorama-map__detail-institution-list article { padding: 8px 0; border-top: 1px solid #304966; }
+.panorama-map__detail-institution-list h4 { margin: 0 0 6px; font-size: 12px; color: #d4eaff; }
+.panorama-map__detail-institution-list dl { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+.panorama-map__detail-institution-list dt { color: #91a8ca; font-size: 10px; }
+.panorama-map__detail-institution-list dd { margin: 2px 0 0; font-size: 12px; }
+.panorama-map__detail-institution-list small { display: block; color: #91a8ca; font-size: 9px; margin-top: 6px; }
 .panorama-map__city-detail header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .panorama-map__city-detail header small { color: #91a8ca; font-size: 10px; letter-spacing: .08em; }
 .panorama-map__city-detail h3 { margin: 3px 0 0; font-size: 19px; color: #f4f8ff; }

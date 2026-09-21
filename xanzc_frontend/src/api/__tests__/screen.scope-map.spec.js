@@ -163,7 +163,7 @@ describe('大屏范围与机构配置 API', () => {
     });
     await queryScreenData({ screenCode: 'SCR_RETAIL', blockId: 9, period: 'LATEST', schemaVersion: 2, dsId: 4 });
     expect(call).toHaveBeenLastCalledWith('post', '/screen/data', {
-      data: { screenCode: 'SCR_RETAIL', blockId: 9, period: 'LATEST', schemaVersion: 2 }, silent: true
+      data: { screenCode: 'SCR_RETAIL', blockId: 9, period: 'LATEST', schemaVersion: 2 }, silent: true, timeout: 60000
     }, null);
   });
 
@@ -214,7 +214,7 @@ describe('大屏范围与机构配置 API', () => {
         schemaVersion: 1, previewState: 'draft', screenCode: 'SCR_DRAFT', blockId: 19,
         period: 'LATEST', contextParams: { orgCode: '128' }
       },
-      silent: true
+      silent: true, timeout: 60000
     }, null);
   });
 

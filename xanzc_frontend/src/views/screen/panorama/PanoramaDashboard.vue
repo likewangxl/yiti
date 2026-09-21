@@ -66,16 +66,22 @@
       </article>
     </section>
 
-    <section class="panorama-diagnostics-strip" data-testid="leadership-diagnostics" aria-label="经营诊断">
+    <section class="panorama-diagnostics-strip" data-testid="leadership-diagnostics" aria-label="重点指标完成情况">
       <article
-        v-for="card in diagnosticCards"
+        v-for="card in leadershipCompletionCards"
         :key="card.key"
         class="panorama-diagnostic-card"
         :data-diagnostic="card.key"
         :data-diagnostic-state="card.state"
       >
-        <span class="panorama-diagnostic-label">{{ card.label }}</span>
-        <strong :class="diagnosticValueClass(card)">{{ card.text }}</strong>
+        <div class="panorama-completion-summary">
+          <span class="panorama-diagnostic-label">{{ card.label }}</span>
+          <span v-if="card.hasData" :class="diagnosticValueClass(card)">{{ card.statusText }}</span>
+        </div>
+        <div class="panorama-completion-track" role="progressbar" :aria-label="card.label" :aria-valuenow="card.hasData ? card.rate : undefined" aria-valuemin="0" aria-valuemax="100">
+          <i :style="{ width: `${card.progress}%` }" aria-hidden="true"></i>
+          <strong>{{ card.text }}</strong>
+        </div>
         <small>{{ card.note }}</small>
       </article>
     </section>
@@ -128,16 +134,42 @@
               <span class="panorama-section-kicker">执行提醒</span>
               <h2>流程与经营关注</h2>
             </div>
-            <span>{{ safeModel.attention.length ? '需跟进' : '暂无数据' }}</span>
+            <div class="panorama-attention-heading-meta">
+              <span>{{ attentionPresentationRows.length ? '事项明细' : '暂无明细' }}</span>
+              <button
+                v-if="attentionPresentationRows.length > 1"
+                type="button"
+                class="panorama-carousel-toggle"
+                :aria-pressed="attentionUserPaused"
+                @click="attentionUserPaused = !attentionUserPaused"
+              >{{ attentionUserPaused ? '继续轮播' : '暂停轮播' }}</button>
+            </div>
           </div>
-          <ul v-if="safeModel.attention.length" class="panorama-attention-list">
-            <li v-for="(item, index) in safeModel.attention" :key="item.label || index">
+          <ul
+            v-if="attentionPresentationRows.length"
+            ref="attentionCarouselRef"
+            class="panorama-attention-list panorama-attention-carousel"
+            aria-label="流程与经营关注逐条向上轮播"
+            @mouseenter="attentionInteractionPaused = true"
+            @mouseleave="attentionInteractionPaused = false"
+            @focusin="attentionInteractionPaused = true"
+            @focusout="attentionInteractionPaused = false"
+          >
+            <li
+              v-for="item in attentionCarouselRows"
+              :key="item.carouselKey"
+              :class="{ 'is-advancing': attentionAnimating }"
+              :style="attentionCarouselStyle"
+              tabindex="0"
+            >
               <span class="panorama-attention-mark">!</span>
-              <span>{{ item.label || '—' }}</span>
-              <strong>{{ formatMetric(item.count) }}</strong>
+              <span class="panorama-attention-copy">
+                <span :title="item.detail">{{ item.detail }}</span>
+                <small :title="item.orgName">{{ item.orgName }}</small>
+              </span>
             </li>
           </ul>
-          <div v-else class="panorama-empty" data-testid="attention-status">{{ sourceStatus('attention', '').message }}</div>
+          <div v-else class="panorama-empty" data-testid="attention-status">{{ attentionEmptyMessage }}</div>
         </article>
       </div>
 
@@ -182,13 +214,6 @@
             @region-select="openCity"
             @branch-select="selectInstitution"
           />
-          <div v-if="selectedInstitution" class="panorama-selected-institution" data-testid="selected-institution">
-            <div>
-              <small>当前机构</small>
-              <strong>{{ selectedInstitution.orgName || selectedInstitution.orgCode }}</strong>
-            </div>
-              <span data-testid="selected-institution-metric">{{ selectedInstitutionMetric.label }} {{ selectedInstitutionMetric.text }} {{ selectedInstitutionMetric.unit }}</span>
-          </div>
         </article>
         <PanoramaTrend :trend="safeModel.trend" :data-date="displayDate" title="主要指标趋势" switchable compact class="panorama-panel panorama-trend-panel" />
       </div>
@@ -243,19 +268,36 @@
                   @click="rankingMetric = metric.key"
                 >{{ metric.label.replace('存款', '') }}</button>
               </div>
-              <span class="panorama-unit-note">单位：{{ rankingMetricInfo.unit }}</span>
+              <div class="panorama-ranking-toolbar-meta">
+                <span class="panorama-unit-note">单位：{{ rankingMetricInfo.unit }}</span>
+                <button
+                  type="button"
+                  class="panorama-carousel-toggle"
+                  :disabled="leadershipMatrixRows.length < 2"
+                  :aria-pressed="carouselUserPaused"
+                  @click="carouselUserPaused = !carouselUserPaused"
+                >{{ carouselUserPaused ? '继续轮播' : '暂停轮播' }}</button>
+              </div>
             </div>
             <div class="panorama-matrix-legend" aria-label="机构矩阵规则">
               <span><i class="is-up" />达标</span><span><i class="is-warning" />未达标</span><span><i class="is-muted" />未知</span>
               <small>目标差 = 存款余额 − 金额目标 · 其余机构请从机构目录查看</small>
             </div>
-            <div class="panorama-detail-table-wrap">
+            <div
+              ref="rankingCarouselRef"
+              class="panorama-detail-table-wrap panorama-ranking-carousel"
+              aria-label="机构排名逐条向上轮播"
+              @mouseenter="carouselInteractionPaused = true"
+              @mouseleave="carouselInteractionPaused = false"
+              @focusin="carouselInteractionPaused = true"
+              @focusout="carouselInteractionPaused = false"
+            >
             <table class="panorama-detail-table">
               <caption class="panorama-visually-hidden">当前指标前十机构经营矩阵，金额目标差、完成率和趋势均按已有绑定展示</caption>
               <thead><tr><th scope="col">机构</th><th scope="col">经营目标 / {{ rankingMetricInfo.label }}</th><th scope="col">余额 / 趋势</th></tr></thead>
-              <tbody>
-                <tr v-for="(item, index) in leadershipMatrixRows" :key="item.orgCode || index" data-testid="ranking-row" :data-org-code="item.orgCode || ''" tabindex="0" @click="selectRanking(item)" @keydown.enter="selectRanking(item)">
-                  <td :title="item.name || item.orgName || '—'"><span class="panorama-matrix-rank">{{ rankingPosition(item) || '—' }}</span>{{ item.name || item.orgName || '—' }}</td>
+              <tbody ref="rankingCarouselBodyRef" :class="{ 'is-advancing': carouselAnimating }" :style="rankingCarouselStyle">
+                <tr v-for="(item, index) in carouselRankingRows" :key="item.orgCode || index" data-testid="ranking-row" :data-org-code="item.orgCode || ''" tabindex="0" @click="selectRanking(item)" @keydown.enter="selectRanking(item)">
+                  <td :title="item.name || item.orgName || '—'"><span class="panorama-matrix-rank" :class="{ 'is-top-three': isTopThreeRanking(item) }">{{ rankingPosition(item) || '—' }}</span>{{ item.name || item.orgName || '—' }}</td>
                   <td>
                     <span :class="statusClass(item.status)">{{ statusLabel(item.status) }} {{ formatPercent(item.rate) }}</span>
                     <small>目标差 {{ formatSignedMetric(item.targetGap) }} · {{ formatRankingValue(item) }}</small>
@@ -313,7 +355,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   Aim, Coin, Close, OfficeBuilding, Refresh, Setting, TrendCharts, UserFilled
 } from '@element-plus/icons-vue';
@@ -334,10 +376,7 @@ import {
 } from './panoramaViewModel.js';
 import {
   buildProvinceInsights,
-  statusLabel,
-  summarizeDepositMovement,
-  summarizeProvinceTargetStatus,
-  summarizeTargetDistance
+  statusLabel
 } from './leadershipInsights.js';
 import { buildCityMapDetails } from './cityMapDetails.js';
 import { resolveDataStatus } from './sourcePresentation';
@@ -436,7 +475,6 @@ const provinceMapCityDetails = computed(() => buildCityMapDetails(safeModel.valu
     ? provinceGeo.features.map(feature => feature?.properties?.adcode ?? feature?.properties?.cityCode)
     : []
 }));
-const selectedInstitution = computed(() => safeModel.value.institutions.find(item => item?.orgCode === selectedOrgCode.value) || null);
 const compositionItems = computed(() => safeModel.value.composition.filter(item => item && typeof item === 'object'));
 const compositionHeadingMeta = computed(() => {
   const units = [...new Set(compositionItems.value.map(item => String(item?.unit || '').trim()).filter(Boolean))];
@@ -466,6 +504,27 @@ const targetPeriodLabel = computed(() => {
     || '统计周期');
 });
 const rankingMetric = ref('deposit');
+const attentionCarouselRef = ref(null);
+const attentionCarouselOffset = ref(0);
+const attentionCarouselShift = ref(0);
+const attentionAnimating = ref(false);
+const attentionUserPaused = ref(false);
+const attentionInteractionPaused = ref(false);
+let attentionCarouselTimer = null;
+let attentionCarouselCommitTimer = null;
+const ATTENTION_CAROUSEL_INTERVAL = 3600;
+const ATTENTION_CAROUSEL_TRANSITION = 520;
+const rankingCarouselRef = ref(null);
+const rankingCarouselBodyRef = ref(null);
+const rankingCarouselOffset = ref(0);
+const rankingCarouselShift = ref(0);
+const carouselAnimating = ref(false);
+const carouselUserPaused = ref(false);
+const carouselInteractionPaused = ref(false);
+let rankingCarouselTimer = null;
+let rankingCarouselCommitTimer = null;
+const RANKING_CAROUSEL_INTERVAL = 3200;
+const RANKING_CAROUSEL_TRANSITION = 560;
 const rankingMetricOptions = RANKING_METRICS;
 const rankingMetricInfo = computed(() => rankingMetricOptions.find(item => item.key === rankingMetric.value) || rankingMetricOptions[0]);
 const provinceMapMetricValues = computed(() => {
@@ -510,84 +569,152 @@ const visibleRankingRows = computed(() => {
   if (safeModel.value.rankings.length) return topRankings.value;
   return topRankingRows(leadershipInsights.value.rows, rankingMetric.value, 10);
 });
-const underperformingRows = computed(() => leadershipInsights.value.rows.filter(row => row.status === 'below'));
-const underperformingCountLabel = computed(() => leadershipInsights.value.coverage.rate.available
-  ? `${underperformingRows.value.length}家`
-  : '—');
-const underperformingNames = computed(() => underperformingRows.value.slice(0, 3).map(row => row.name).join('、') || (
-  leadershipInsights.value.coverage.rate.available ? '暂无未达标机构' : '完成率来源暂无有效值'
-));
-const coordinationSummary = computed(() => {
-  if (!Array.isArray(props.model?.attention)) return { total: null, organizations: 0, names: '待跟进任务来源暂无数据' };
-  const rows = safeModel.value.attention;
-  const counts = rows.map(item => finiteValue(item?.count)).filter(value => value !== null && value >= 0);
-  const total = counts.length ? counts.reduce((sum, value) => sum + value, 0) : null;
-  const activeRows = rows.filter(item => {
-    const count = finiteValue(item?.count);
-    return count !== null && count > 0;
-  });
+const attentionPresentationRows = computed(() => {
+  const institutions = new Map(safeModel.value.institutions.map(item => [String(item?.orgCode || ''), item]));
+  return safeModel.value.attention.map((item, index) => {
+    const orgCode = String(item?.orgCode || '').trim();
+    const institution = institutions.get(orgCode);
+    const orgName = String(item?.orgName || item?.organizationName || institution?.orgName || institution?.name || '').trim();
+    const rawDetail = String(item?.detail || item?.message || item?.title || item?.label || '').trim();
+    const detailLooksLikeOrg = rawDetail && (rawDetail === orgCode || rawDetail === orgName);
+    if (!rawDetail || detailLooksLikeOrg) return null;
+    return {
+      ...item,
+      detail: rawDetail,
+      orgName: orgName || '全辖机构',
+      carouselKey: `${orgCode}|${rawDetail}|${index}`
+    };
+  }).filter(Boolean);
+});
+const attentionEmptyMessage = computed(() => {
+  if (safeModel.value.attention.length) return '当前来源仅提供机构汇总数量，暂无具体流程或事项明细';
+  return sourceStatus('attention', '').message;
+});
+const attentionCarouselRows = computed(() => {
+  const rows = attentionPresentationRows.value;
+  if (rows.length < 2) return rows;
+  const offset = attentionCarouselOffset.value % rows.length;
+  return offset ? [...rows.slice(offset), ...rows.slice(0, offset)] : rows;
+});
+const attentionCarouselStyle = computed(() => ({
+  transform: `translate3d(0, -${attentionCarouselShift.value}px, 0)`,
+  transitionDuration: attentionAnimating.value ? `${ATTENTION_CAROUSEL_TRANSITION}ms` : '0ms'
+}));
+
+function resetAttentionCarousel() {
+  if (attentionCarouselCommitTimer) window.clearTimeout(attentionCarouselCommitTimer);
+  attentionCarouselCommitTimer = null;
+  attentionAnimating.value = false;
+  attentionCarouselShift.value = 0;
+  attentionCarouselOffset.value = 0;
+}
+
+function advanceAttentionCarousel() {
+  if (
+    attentionAnimating.value
+    || attentionUserPaused.value
+    || attentionInteractionPaused.value
+    || attentionPresentationRows.value.length < 2
+  ) return;
+  const viewport = attentionCarouselRef.value;
+  const firstRow = viewport?.querySelector('li');
+  if (!viewport || !firstRow || viewport.scrollHeight <= viewport.clientHeight + 1) return;
+  const rowHeight = firstRow.getBoundingClientRect().height || firstRow.offsetHeight;
+  if (!rowHeight) return;
+  attentionCarouselShift.value = rowHeight;
+  attentionAnimating.value = true;
+  attentionCarouselCommitTimer = window.setTimeout(() => {
+    attentionCarouselOffset.value = (attentionCarouselOffset.value + 1) % attentionPresentationRows.value.length;
+    attentionAnimating.value = false;
+    attentionCarouselShift.value = 0;
+    attentionCarouselCommitTimer = null;
+  }, ATTENTION_CAROUSEL_TRANSITION);
+}
+
+function startAttentionCarousel() {
+  if (attentionCarouselTimer) window.clearInterval(attentionCarouselTimer);
+  attentionCarouselTimer = window.setInterval(advanceAttentionCarousel, ATTENTION_CAROUSEL_INTERVAL);
+}
+function completionCard(card) {
+  const rate = finiteValue(card?.rate);
   return {
-    total,
-    organizations: activeRows.length,
-    names: activeRows.slice(0, 3).map(item => String(item?.label || '—')).join('、') || '当前返回没有待跟进任务'
+    key: `${card?.key || 'target'}Completion`,
+    label: card?.label || '指标目标完成率',
+    text: rate === null ? '—' : formatPercent(rate),
+    rate,
+    progress: rate === null ? 0 : Math.max(0, Math.min(100, rate)),
+    hasData: rate !== null,
+    state: rate === null ? 'unknown' : rate >= 100 ? 'achieved' : 'below',
+    statusText: rate === null ? '' : rate >= 100 ? '已达标' : '未达标',
+    demoOnly: Boolean(card?.demoOnly),
+    note: rate === null
+      ? '暂无目标数据'
+      : card?.demoOnly
+        ? `${card.gapText} · 演示值·非业务数据`
+        : `${card.gapText} · 数据日期 ${card.date || displayDate.value}`
   };
-});
-const coordinationCountLabel = computed(() => coordinationSummary.value.total === null
-  ? '—'
-  : `待跟进${formatMetric(coordinationSummary.value.total)}项`);
-const coordinationNames = computed(() => coordinationSummary.value.total === null
-  ? coordinationSummary.value.names
-  : `涉及${coordinationSummary.value.organizations}家机构${coordinationSummary.value.names === '当前返回没有待跟进任务' ? '' : ` · ${coordinationSummary.value.names}`}`);
-const selectedInstitutionMetric = computed(() => {
-  const institution = selectedInstitution.value;
-  const ranking = institution
-    ? safeModel.value.rankings.find(item => String(item?.orgCode || '') === String(institution.orgCode || ''))
-    : null;
-  const raw = ranking?.[rankingMetric.value]
-    ?? institution?.metrics?.[rankingMetric.value]
-    ?? institution?.[rankingMetric.value]
-    ?? null;
-  return { label: rankingMetricInfo.value.label, ...formatDisplayMetric(raw, rankingMetricInfo.value.unit, rankingMetric.value) };
-});
-const diagnosticCards = computed(() => {
-  const diagnostics = leadershipInsights.value.diagnostics;
-  const movement = summarizeDepositMovement(diagnostics.depositIncrease);
-  const distance = summarizeTargetDistance(diagnostics.targetRate);
-  const targetSource = sourceStatus('rate', 'value');
-  const targetStatus = summarizeProvinceTargetStatus(leadershipInsights.value);
-  const targetStatusState = !targetStatus.hasData
-    ? 'unknown'
-    : leadershipInsights.value.statusCounts.below > 0
-      ? 'below'
-      : leadershipInsights.value.statusCounts.unknown > 0
-        ? 'neutral'
-        : 'achieved';
-  const targetStatusDetail = targetStatus.hasData
-    ? `已提供${targetMetricLabel.value}${leadershipInsights.value.coverage.rate.available}家 / 未提供${Math.max(0, leadershipInsights.value.coverage.rate.total - leadershipInsights.value.coverage.rate.available)}家`
-    : targetStatus.detail;
+}
+
+function targetGapText(rate) {
+  const value = finiteValue(rate);
+  if (value === null) return '暂无目标数据';
+  const gap = Math.round((value - 100) * 10) / 10;
+  const gapText = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(Math.abs(gap));
+  if (value < 100) return gap === 0 ? '距目标还差不到0.1个百分点' : `距目标还差${gapText}个百分点`;
+  if (value > 100) return gap === 0 ? '超目标不到0.1个百分点' : `超目标${gapText}个百分点`;
+  return '已达到目标';
+}
+
+function kpiCompletionCard(keys, key, fallbackLabel, demoRate = null) {
+  const item = safeModel.value.kpis.find(kpi => keys.includes(String(kpi?.key || '')));
+  const sourceRate = finiteValue(item?.value);
+  const fallbackRate = finiteValue(demoRate);
+  const rate = sourceRate === null ? fallbackRate : sourceRate;
+  return completionCard({
+    key,
+    label: stripTestModifier(item?.label) || fallbackLabel,
+    rate,
+    gapText: targetGapText(rate),
+    date: item?.date || item?.dataDate || displayDate.value,
+    demoOnly: sourceRate === null && fallbackRate !== null
+  });
+}
+
+const leadershipCompletionCards = computed(() => {
+  const available = leadershipInsights.value.coverage.rate.available;
+  const achieved = leadershipInsights.value.statusCounts.achieved;
+  const institutionRate = available > 0 ? achieved / available * 100 : null;
   return [
+    kpiCompletionCard(
+      ['corporateDepositRate', 'corpDepositRate', 'corporateDepositCompletionRate'],
+      'corporateDeposit',
+      '对公存款目标完成率',
+      93.6
+    ),
+    kpiCompletionCard(
+      ['corporateLoanRate', 'corpLoanRate', 'corporateLoanCompletionRate'],
+      'corporateLoan',
+      '对公贷款目标完成率',
+      88.2
+    ),
+    kpiCompletionCard(
+      ['corporateRevenueRate', 'corpRevenueRate', 'revenueRate', 'incomeRate', 'operatingRevenueRate', 'revenueCompletionRate'],
+      'corporateRevenue',
+      '对公营业收入目标完成率',
+      91.8
+    ),
     {
-      key: 'targetDistance',
-      label: '目标缺口',
-      text: distance.state === 'unknown' && targetSource.status !== 'UNAVAILABLE' ? targetSource.message : distance.text,
-      state: distance.state,
-      note: `${movement.text} · ${targetMetricLabel.value}`
-    },
-    {
-      key: 'targetStatus',
-      label: '未达标机构',
-      text: targetStatus.headline,
-      state: targetStatusState,
-      note: targetStatusDetail
-    },
-    {
-      key: 'coordination',
-      label: '协调事项',
-      text: coordinationCountLabel.value === '—'
-        ? sourceStatus('attention', '').message
-        : coordinationSummary.value.total === 0 ? '暂无待跟进任务' : coordinationCountLabel.value,
-      state: coordinationCountLabel.value === '—' ? 'unknown' : coordinationSummary.value.total === 0 ? 'neutral' : 'below',
-      note: coordinationNames.value
+      key: 'institutionCompletion',
+      label: '辖内机构达标率',
+      text: institutionRate === null ? '—' : formatPercent(institutionRate),
+      rate: institutionRate,
+      progress: institutionRate === null ? 0 : Math.max(0, Math.min(100, institutionRate)),
+      hasData: institutionRate !== null,
+      state: institutionRate === null ? 'unknown' : institutionRate >= 100 ? 'achieved' : 'below',
+      statusText: institutionRate === null ? '' : `${achieved}/${available}家`,
+      note: institutionRate === null
+        ? '暂无机构目标完成率'
+        : `已达标${achieved}家 · 未达标${leadershipInsights.value.statusCounts.below}家 · 未提供${leadershipInsights.value.statusCounts.unknown}家`
     }
   ];
 });
@@ -613,6 +740,53 @@ const leadershipMatrixRows = computed(() => {
     };
   });
 });
+const carouselRankingRows = computed(() => {
+  const rows = leadershipMatrixRows.value;
+  if (rows.length < 2) return rows;
+  const offset = rankingCarouselOffset.value % rows.length;
+  return offset ? [...rows.slice(offset), ...rows.slice(0, offset)] : rows;
+});
+const rankingCarouselStyle = computed(() => ({
+  transform: `translate3d(0, -${rankingCarouselShift.value}px, 0)`,
+  transitionDuration: carouselAnimating.value ? `${RANKING_CAROUSEL_TRANSITION}ms` : '0ms'
+}));
+
+function resetRankingCarousel() {
+  if (rankingCarouselCommitTimer) window.clearTimeout(rankingCarouselCommitTimer);
+  rankingCarouselCommitTimer = null;
+  carouselAnimating.value = false;
+  rankingCarouselShift.value = 0;
+  rankingCarouselOffset.value = 0;
+}
+
+function advanceRankingCarousel() {
+  if (
+    carouselAnimating.value
+    || carouselUserPaused.value
+    || carouselInteractionPaused.value
+    || leadershipMatrixRows.value.length < 2
+  ) return;
+  const viewport = rankingCarouselRef.value;
+  const body = rankingCarouselBodyRef.value;
+  const firstRow = body?.querySelector('tr');
+  const table = body?.closest('table');
+  if (!viewport || !firstRow || !table || table.scrollHeight <= viewport.clientHeight + 1) return;
+  const rowHeight = firstRow.getBoundingClientRect().height || firstRow.offsetHeight;
+  if (!rowHeight) return;
+  rankingCarouselShift.value = rowHeight;
+  carouselAnimating.value = true;
+  rankingCarouselCommitTimer = window.setTimeout(() => {
+    rankingCarouselOffset.value = (rankingCarouselOffset.value + 1) % leadershipMatrixRows.value.length;
+    carouselAnimating.value = false;
+    rankingCarouselShift.value = 0;
+    rankingCarouselCommitTimer = null;
+  }, RANKING_CAROUSEL_TRANSITION);
+}
+
+function startRankingCarousel() {
+  if (rankingCarouselTimer) window.clearInterval(rankingCarouselTimer);
+  rankingCarouselTimer = window.setInterval(advanceRankingCarousel, RANKING_CAROUSEL_INTERVAL);
+}
 
 function finiteValue(value) {
   if (typeof value === 'boolean' || (typeof value !== 'number' && typeof value !== 'string')) return null;
@@ -748,6 +922,11 @@ function rankingPosition(item) {
   return rank;
 }
 
+function isTopThreeRanking(item) {
+  const position = rankingPosition(item);
+  return position !== null && position <= 3;
+}
+
 function rankingBarStyle(item) {
   const value = rankingDisplayValue(item);
   if (value === null || rankingMax.value <= 0) return { width: '0%' };
@@ -834,6 +1013,22 @@ watch(() => [props.error, props.loading, props.model, props.sourcePresentation?.
   ]));
 }, { deep: true });
 
+watch([rankingMetric, () => leadershipMatrixRows.value.map(item => item.orgCode).join('|')], () => {
+  resetRankingCarousel();
+});
+
+watch(() => attentionPresentationRows.value.map(item => item.carouselKey).join('|'), () => {
+  resetAttentionCarousel();
+});
+
+onMounted(() => {
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false;
+  carouselUserPaused.value = reduceMotion;
+  attentionUserPaused.value = reduceMotion;
+  startRankingCarousel();
+  startAttentionCarousel();
+});
+
 // 分页按钮被禁用时浏览器可能把焦点移到 body，Escape 仍应关闭当前模态层。
 function onDocumentEscape(event) {
   if (cityOpen.value && event.key === 'Escape') {
@@ -870,6 +1065,10 @@ function onCityDialogKeydown(event) {
 }
 
 onBeforeUnmount(() => {
+  if (attentionCarouselTimer) window.clearInterval(attentionCarouselTimer);
+  if (attentionCarouselCommitTimer) window.clearTimeout(attentionCarouselCommitTimer);
+  if (rankingCarouselTimer) window.clearInterval(rankingCarouselTimer);
+  if (rankingCarouselCommitTimer) window.clearTimeout(rankingCarouselCommitTimer);
   if (cityOpen.value) restoreCityState();
 });
 </script>

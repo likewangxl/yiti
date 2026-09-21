@@ -302,12 +302,16 @@ describe('panorama data adapter', () => {
       }
     }, { view: { orgScopeMode: 'NAMED_GROUP', panoramaInstitutions: ['A', 'B', 'C', 'D'].map(orgCode => ({ orgCode, orgName: `机构${orgCode}` })) } });
     expect(model.attention).toEqual([
-      { label: '机构A', count: 1 }, { label: '机构B', count: 2 },
-      { label: '机构C', count: 3 }, { label: '机构D', count: 4 }
+      { label: 'A', count: 1, orgCode: 'A', orgName: '机构A' },
+      { label: 'B', count: 2, orgCode: 'B', orgName: '机构B' },
+      { label: 'C', count: 3, orgCode: 'C', orgName: '机构C' },
+      { label: 'D', count: 4, orgCode: 'D', orgName: '机构D' }
     ]);
     expect(model.institutions.map(item => item.attention)).toEqual([
-      [{ label: '机构A', count: 1 }], [{ label: '机构B', count: 2 }],
-      [{ label: '机构C', count: 3 }], [{ label: '机构D', count: 4 }]
+      [{ label: 'A', count: 1, orgCode: 'A', orgName: '机构A' }],
+      [{ label: 'B', count: 2, orgCode: 'B', orgName: '机构B' }],
+      [{ label: 'C', count: 3, orgCode: 'C', orgName: '机构C' }],
+      [{ label: 'D', count: 4, orgCode: 'D', orgName: '机构D' }]
     ]);
   });
 

@@ -200,6 +200,6 @@ onBeforeUnmount(() => { loadGeneration += 1; });
 .code-screen-page__state h2 { color: #eaf2ff; }
 .code-screen-page__state--error h2 { color: #ffd6d1; }
 .code-screen-page__content { min-height: 0; }
-.code-screen-page :deep(.panorama-runtime) { --cockpit-chrome-height: 82px; min-height: calc(100dvh - 42px); }
+.code-screen-page :deep(.panorama-runtime) { --cockpit-chrome-height: 42px; min-height: calc(100dvh - 42px); }
 @media (max-width: 720px) { .code-screen-page__banner { height: auto; justify-content: flex-start; padding: 7px 12px; } .code-screen-page__banner-meta { flex-wrap: wrap; gap: 6px 10px; } .code-screen-page :deep(.panorama-runtime) { min-height: calc(100dvh - 42px); } }
 </style>

@@ -9,6 +9,10 @@
 // 大屏展示类接口一律不给 mock 兜底（宁可空屏不给假数据，同 Dashboard.vue 先例）。
 import http, { call } from './http';
 
+// 运行时目录和发布包需完成屏级角色、机构组和数据范围校验。
+// 公网或跨机房数据库下可能超过通用 15s 超时，为目录、发布包和区块取数留出完整授权校验时间。
+const SCREEN_RUNTIME_READ_TIMEOUT_MS = 60000;
+
 // ===== 数据源管理 =====
 export function listScreenDatasources(params = {}) {
   // 后端 DTO 只声明 dsType/keyword；bizLine 由前端按返回 DTO 过滤，不能发送未声明查询字段。
@@ -211,14 +215,14 @@ export function saveOrgGroupRoles(groupCode, data) {
  * 这是目录入口的唯一请求，必须直接走原始 HTTP GET，不能用 mock 或旧目录兜底。
  */
 export function listAvailableScreens() {
-  return http.get('/api/screen/view/catalog');
+  return http.get('/api/screen/view/catalog', { timeout: SCREEN_RUNTIME_READ_TIMEOUT_MS });
 }
 
 // preview='draft' 读草稿包(需登录 + REPORT/READ 权限,详见 ScreenViewController);不传读发布态。
 // silent:false(默认)——整屏加载失败要提示;区块级取数走 queryScreenData 单独 silent。
 export function getScreenView(screenCode, preview) {
   const params = preview ? { preview } : {};
-  return call('get', `/screen/view/${screenCode}`, { params }, null);
+  return call('get', `/screen/view/${screenCode}`, { params, timeout: SCREEN_RUNTIME_READ_TIMEOUT_MS }, null);
 }
 
 /**
@@ -276,7 +280,7 @@ function normalizeScreenDataBody(body = {}) {
 export function queryScreenData(body) {
   // silent:true —— 大屏区块取数失败不弹全局 toast，由 BlockContainer 按业务码内联展示（引导态/错误态），
   // 避免一屏多区块并行失败时 toast 轰炸（配合 http.js 响应拦截器的 silent 分支）
-  return call('post', '/screen/data', { data: normalizeScreenDataBody(body), silent: true }, null);
+  return call('post', '/screen/data', { data: normalizeScreenDataBody(body), silent: true, timeout: SCREEN_RUNTIME_READ_TIMEOUT_MS }, null);
 }
 
 // ===== 画布设计器 V2(双态) =====

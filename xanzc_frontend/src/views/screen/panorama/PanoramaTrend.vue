@@ -173,7 +173,7 @@ const option = computed(() => ({
   legend: {
     show: normalizedSeries.value.length > 1,
     top: 4,
-    left: 2,
+    left: 'center',
     itemWidth: 18,
     itemHeight: 3,
     textStyle: { color: '#9fb2da', fontSize: 11 }

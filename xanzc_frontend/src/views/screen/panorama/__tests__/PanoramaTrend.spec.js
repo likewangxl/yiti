@@ -35,7 +35,9 @@ describe('PanoramaTrend', () => {
     expect(chartOption(wrapper).series).toHaveLength(1);
     expect(chartOption(wrapper).series[0]).toMatchObject({ name: '存款净增', data: [-2, 0] });
     await wrapper.get('[data-trend-mode="deposit"]').trigger('click');
-    expect(chartOption(wrapper).series.map(item => item.name)).toEqual(['存款余额', '贷款余额']);
+    const option = chartOption(wrapper);
+    expect(option.series.map(item => item.name)).toEqual(['存款余额', '贷款余额']);
+    expect(option.legend.left).toBe('center');
   });
 
   it('City 传入显式 series 时保持存贷款两条原始序列，不显示省级切换控件', () => {

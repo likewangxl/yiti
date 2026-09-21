@@ -61,6 +61,37 @@ describe('PanoramaMap', () => {
     expect(wrapper.attributes('data-selected-region')).toBe('610100');
   });
 
+  it('支行超过 8 家时仍在地图上显示每个未聚合点的名称', async () => {
+    const manyPoints = Array.from({ length: 9 }, (_, index) => ({
+      orgCode: `BRANCH-${index}`,
+      orgName: `测试${index + 1}号支行`,
+      lng: 108.05 + index * 0.11,
+      lat: 34.5,
+      coordSys: 'GCJ02'
+    }));
+    const wrapper = mount(PanoramaMap, { props: { geoJson, points: manyPoints, mode: 'city' } });
+    await nextTick();
+    expect(wrapper.findAll('.panorama-map__point-label')).toHaveLength(9);
+    expect(wrapper.text()).toContain('测试9号支行');
+    wrapper.unmount();
+  });
+
+  it('放大后可通过拖动平移地图，且拖动不误触发支行选择', async () => {
+    const wrapper = mount(PanoramaMap, { props: { geoJson, points, mode: 'city' } });
+    await wrapper.find('button[aria-label="放大地图"]').trigger('click');
+    await nextTick();
+    const marker = wrapper.get('[data-org-code="A"]');
+    const before = marker.attributes('style');
+    await marker.trigger('pointerdown', { pointerId: 7, clientX: 200, clientY: 180, button: 0, isPrimary: true });
+    await marker.trigger('pointermove', { pointerId: 7, clientX: 280, clientY: 220, buttons: 1, isPrimary: true });
+    await marker.trigger('pointerup', { pointerId: 7, clientX: 280, clientY: 220, button: 0, isPrimary: true });
+    await nextTick();
+    expect(wrapper.attributes('data-pan-enabled')).toBe('true');
+    expect(marker.attributes('style')).not.toBe(before);
+    expect(wrapper.emitted('branch-select')).toBeUndefined();
+    wrapper.unmount();
+  });
+
   it('relief 是显式 opt-in 外观，默认地图保持 classic', async () => {
     const classic = mount(PanoramaMap, { props: { geoJson } });
     const relief = mount(PanoramaMap, { props: { geoJson, appearance: 'relief' } });
@@ -111,7 +142,9 @@ describe('PanoramaMap', () => {
     const wrapper = mount(PanoramaMap, { props: { geoJson, points: clusteredPoints, mode: 'city', demo: true } });
     await nextTick();
     const plus = wrapper.find('button[aria-label="放大地图"]');
-    for (let index = 0; index < 5; index += 1) await plus.trigger('click');
+    for (let index = 0; index < 12; index += 1) await plus.trigger('click');
+    expect(wrapper.attributes('data-zoom')).toBe('12.00');
+    expect(plus.attributes()).toHaveProperty('disabled');
     const cluster = wrapper.find('.panorama-map__point-hit.is-cluster');
     expect(cluster.exists()).toBe(true);
     await cluster.trigger('click');

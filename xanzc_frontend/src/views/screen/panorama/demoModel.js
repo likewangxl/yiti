@@ -181,6 +181,9 @@ export const demoModel = Object.freeze({
     { key: 'customers', label: '营销有效归属客户数', value: 186.24, unit: '万户', change: 4.1 },
     { key: 'revenue', label: '手工测试收入', value: 32.68, unit: '亿元', change: 8.1 },
     { key: 'rate', label: '目标完成率', value: 86.5, unit: '%', change: null },
+    { key: 'corporateDepositRate', label: '对公存款目标完成率', value: 93.6, unit: '%', date: '2026-09-06', change: null },
+    { key: 'corporateLoanRate', label: '对公贷款目标完成率', value: 88.2, unit: '%', date: '2026-09-06', change: null },
+    { key: 'corporateRevenueRate', label: '对公营业收入目标完成率', value: 91.8, unit: '%', date: '2026-09-06', change: null },
     { key: 'depositIncrease', label: '存款较上月净增', value: depositIncreaseAt(DEPOSIT_BALANCE_TREND.length - 1), unit: '亿元', change: null },
     { key: 'depositAverage', label: '存款月均余额', value: DEPOSIT_AVERAGE_FIXTURE, unit: '亿元', change: null }
   ],
@@ -209,11 +212,11 @@ export const demoModel = Object.freeze({
     }))
     .sort((left, right) => right.deposit - left.deposit),
   attention: [
-    { label: '在途任务', count: 48 },
-    { label: '待审批', count: 18 },
-    { label: '临近时限', count: 6 },
-    { label: '超时任务', count: 3 },
-    { label: '目标待跟进', count: 4 }
+    { label: '客户授信调查任务在途', count: 48, orgCode: institutions[0]?.orgCode, orgName: institutions[0]?.orgName },
+    { label: '营销方案等待审批', count: 18, orgCode: institutions[1]?.orgCode, orgName: institutions[1]?.orgName },
+    { label: '客户回访任务即将到期', count: 6, orgCode: institutions[2]?.orgCode, orgName: institutions[2]?.orgName },
+    { label: '贷后检查任务已超时', count: 3, orgCode: institutions[3]?.orgCode, orgName: institutions[3]?.orgName },
+    { label: '存款目标进度偏慢待跟进', count: 4, orgCode: institutions[4]?.orgCode, orgName: institutions[4]?.orgName }
   ],
   issues: [],
   institutions,

@@ -1,7 +1,9 @@
 const DISPLAY_UNITS = Object.freeze({
   YUAN: '元',
   TEN_THOUSAND: '万元',
+  TEN_THOUSAND_YUAN: '万元',
   HUNDRED_MILLION: '亿元',
+  HUNDRED_MILLION_YUAN: '亿元',
   COUNT: '个',
   TEN_THOUSAND_COUNT: '万户',
   PERCENT: '%'
@@ -22,6 +24,26 @@ const CITY_METRIC_DEFINITIONS = Object.freeze([
   },
   { key: 'revenue', label: '手工测试收入', aliases: ['revenue'], unit: '亿元', kind: 'amount' }
 ]);
+
+// Summary keys are business-specific; generic ranking fields belong to the
+// business model passed by the page and are never sourced from branch KPIs.
+function businessDefinitions(business) {
+  const retail = business === 'retail';
+  const prefix = retail ? 'retail' : 'corp';
+  const name = retail ? '零售' : '对公';
+  const definitions = [
+    ['deposit', `${name}存款余额`, 'Deposit', ['deposit', 'depositBalance', 'balance'], '亿元', 'amount'],
+    ['average', `${name}存款月日均`, 'DepositAverage', ['average', 'depositAverage', 'averageDeposit', 'monthAverage'], '亿元', 'amount'],
+    ['loan', retail ? '个人贷款' : '对公贷款余额', 'Loan', ['loan'], '亿元', 'amount'],
+    ['increase', `${name}存款净增`, 'DepositIncrease', ['increase', 'depositIncrease'], '亿元', 'amount'],
+    ['revenue', `${name}营业收入`, 'Revenue', ['revenue'], '亿元', 'amount'],
+    [retail ? 'valueCustomers' : 'customers', retail ? '零售价值客户' : '有效对公客户', retail ? 'ValueCustomers' : 'Customers', retail ? ['valueCustomers'] : ['customers'], '万户', 'customers'],
+    ['rate', `${name}目标完成率`, 'CompletionRate', ['rate', 'completionRate'], '%', 'rate'],
+    ['nplRate', retail ? '个贷不良率' : '对公不良率', 'NplRate', ['nplRate'], '%', 'rate']
+  ];
+  if (retail) definitions.unshift(['aum', '零售AUM', 'Aum', ['aum'], '亿元', 'amount']);
+  return definitions.map(([key, label, suffix, aliases, unit, kind]) => ({ key, label, aliases, summaryAliases: [`${prefix}${suffix}`], legacySummaryAliases: !retail ? ({ deposit: ['deposit'], increase: ['increase', 'depositIncrease'], rate: ['rate', 'completionRate'] }[key] || []) : [], unit, kind }));
+}
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -114,7 +136,7 @@ function sourceModel(input) {
 
 function sourceKpi(summary, definition) {
   const kpis = Array.isArray(summary?.kpis) ? summary.kpis : [];
-  const source = kpis.find(item => definition.aliases.includes(text(item?.key)));
+  const source = kpis.find(item => (definition.summaryAliases || definition.aliases).includes(text(item?.key)));
   if (source) return source;
   if (kpis.some(item => text(item?.key).startsWith('retail'))) return null;
   return kpis.find(item => definition.legacySummaryAliases?.includes(text(item?.key))) || null;
@@ -136,25 +158,36 @@ function readMetricSource(source, aliases) {
   return null;
 }
 
-function fallbackMetricSource(definition, cityInstitutions, cityRankings) {
+function fallbackMetricSource(definition, cityInstitutions, cityRankings, business) {
   if (cityInstitutions.length !== 1) return null;
-  const ranking = cityRankings.length === 1 ? readMetricSource(cityRankings[0], definition.aliases) : null;
+  const ranking = cityRankings.length === 1 && (!business || (orgCodeOf(cityInstitutions[0]) && orgCodeOf(cityRankings[0]) === orgCodeOf(cityInstitutions[0]))) ? readMetricSource(cityRankings[0], definition.aliases) : null;
   if (ranking && finiteMetric(ranking.value) !== null) return ranking;
+  if (business) return null;
   const institution = readMetricSource(cityInstitutions[0], definition.aliases);
   return institution && finiteMetric(institution.value) !== null ? institution : null;
 }
 
-function buildCityDetail(code, summary, institutions, rankings, modelDate) {
+function buildCityDetail(code, summary, institutions, rankings, modelDate, definitions, business, options) {
   const cityInstitutions = institutions.filter(item => cityCodeOf(item) === code);
   const cityRankings = rankings.filter(item => cityCodeOf(item) === code);
   let fallbackUsed = false;
   const detailInstitutions = cityInstitutions.map(item => {
     const orgCode = orgCodeOf(item);
-    return { orgCode, orgName: orgNameOf(item, orgCode) };
+    const identity = { orgCode, orgName: orgNameOf(item, orgCode) };
+    if (!business) return identity;
+    const matches = cityRankings.filter(row => orgCodeOf(row) === orgCode);
+    const ranking = orgCode && matches.length === 1 ? matches[0] : null;
+    return { ...identity, dataDate: ranking ? (text(ranking.date ?? ranking.dataDate) || text(modelDate)) : '', metrics: definitions
+      .filter(definition => ['deposit', 'average', 'aum', 'increase', 'rate', 'nplRate'].includes(definition.key))
+      .map(definition => {
+        const source = readMetricSource(ranking, definition.aliases);
+        return { key: definition.key, label: definition.label, value: formatCityMapMetric(source?.value, source?.unit || definition.unit, definition.kind) };
+      }) };
+
   });
-  const metrics = CITY_METRIC_DEFINITIONS.map(definition => {
-    const source = sourceKpi(summary, definition);
-    const fallback = source === null ? fallbackMetricSource(definition, cityInstitutions, cityRankings) : null;
+  const metrics = definitions.map(definition => {
+    const source = options.allowCityMetrics === false ? null : sourceKpi(summary, definition);
+    const fallback = source === null && options.allowCityMetrics !== false ? fallbackMetricSource(definition, cityInstitutions, cityRankings, business) : null;
     if (fallback) fallbackUsed = true;
     const metricSource = source || fallback;
     const formatted = formatCityMapMetric(metricSource?.value, metricSource?.unit || definition.unit, definition.kind);
@@ -164,14 +197,17 @@ function buildCityDetail(code, summary, institutions, rankings, modelDate) {
       value: formatted
     };
   });
+  const institutionDates = [...new Set(detailInstitutions.map(item => item.dataDate).filter(Boolean))];
   const detail = {
     institutionCount: cityInstitutions.length,
     locatedCount: cityInstitutions.filter(isLocated).length,
-    dataDate: text(summary?.dataDate) || text(modelDate),
+    dataDate: (options.allowCityMetrics === false ? '' : text(summary?.dataDate)) || (business ? (institutionDates.length === 1 ? institutionDates[0] : '') : text(modelDate)),
     metrics,
     institutions: detailInstitutions
   };
-  if (fallbackUsed) detail.scopeLabel = '当前范围单家机构';
+  if (options.scopeLabel) detail.scopeLabel = options.scopeLabel;
+  else if (fallbackUsed) detail.scopeLabel = '当前范围单家机构';
+  else if (business && !metrics.some(metric => metric.value !== '暂无数据')) detail.scopeLabel = '地市汇总未接入 · 下列为机构明细';
   return detail;
 }
 
@@ -182,6 +218,13 @@ function buildCityDetail(code, summary, institutions, rankings, modelDate) {
  */
 export function buildCityMapDetails(input = {}, options = {}) {
   const model = sourceModel(input);
+  const business = ['retail', 'corporate'].includes(options.business) ? options.business : '';
+  const definitions = business ? businessDefinitions(business) : CITY_METRIC_DEFINITIONS;
+  // Runtime quality dates belong to a specific source slot; the model date may
+  // have been populated by an unrelated KPI and is unsafe for business rows.
+  const detailSourceDate = business
+    ? model.sourceQualities?.[business === 'retail' ? 'retailRanking' : 'corpRanking']?.dataDate
+    : model.dataDate;
   const institutions = Array.isArray(model.institutions) ? model.institutions.filter(isRecord) : [];
   const rankings = Array.isArray(model.rankings) ? model.rankings.filter(isRecord) : [];
   const summaries = isRecord(model.citySummaries) ? model.citySummaries : {};
@@ -198,7 +241,7 @@ export function buildCityMapDetails(input = {}, options = {}) {
 
   return Object.fromEntries([...cityCodes].map(code => [
     code,
-    buildCityDetail(code, summaries[code], institutions, rankings, model.dataDate)
+    buildCityDetail(code, summaries[code], institutions, rankings, detailSourceDate, definitions, business, options)
   ]));
 }
 
@@ -206,3 +249,12 @@ export function buildCityMapDetails(input = {}, options = {}) {
 export const buildProvinceMapCityDetails = buildCityMapDetails;
 
 export { CITY_METRIC_DEFINITIONS };
+
+/** Project the same vetted metric as the hover card; never synthesize a total. */
+export function cityMapMetricValues(details, key) {
+  return Object.fromEntries(Object.entries(details).flatMap(([code, detail]) => {
+    const metric = detail.metrics.find(item => item.key === key);
+    if (metric && metric.value !== '暂无数据') return [[code, metric.value]];
+    return detail.institutionCount > 0 ? [[code, `${detail.institutionCount}家机构`]] : [];
+  }));
+}

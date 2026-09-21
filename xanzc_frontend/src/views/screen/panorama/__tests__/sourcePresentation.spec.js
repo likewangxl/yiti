@@ -42,9 +42,8 @@ describe('source presentation', () => {
   it('不同合法来源日期作为溯源提示，不能伪装成取数失败遮住页面', () => {
     runtimeIssues.value={corpRevenue:[{code:'MIXED_DATES',message:'不同来源统计期间不同'}]};
     const wrapper=mount(PanoramaRuntime,{props:{view:{},context:{}}});
-    expect(wrapper.find('[data-testid="panorama-slot-issues"]').exists()).toBe(false);
-    expect(wrapper.get('[data-testid="runtime-source-summary"]').text()).toContain('统计日期不同');
-    expect(wrapper.get('[data-testid="runtime-source-details"]').text()).toContain('不同来源统计期间不同');
+    expect(wrapper.get('[data-testid="panorama-slot-issues"]').text()).toContain('不同来源统计期间不同');
+    expect(wrapper.find('[data-testid="runtime-source-summary"]').exists()).toBe(false);
     wrapper.unmount();runtimeIssues.value={};
   });
   it('右下诊断保留真正请求错误，过滤已就近解释的 NO_VALUES', () => {
@@ -215,7 +214,7 @@ describe('source presentation', () => {
     expect(source.kpis[0].values).toEqual([12]);
   });
 
-  it('运行时在大屏上方显示来源说明，并把标签覆盖限制在展示模型', () => {
+  it('运行时不显示顶部来源说明，但标签覆盖仍限制在展示模型', () => {
     const view = {
       renderPackage: {
         canvasStyle: {
@@ -226,13 +225,13 @@ describe('source presentation', () => {
     };
     const wrapper = mount(PanoramaRuntime, { props: { view, context: {} } });
 
-    expect(wrapper.find('[data-testid="panorama-data-notice"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="panorama-data-notice"]').text()).toBe('系统联调数据：<测试计算>');
+    expect(wrapper.find('[data-testid="panorama-data-notice"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('系统联调数据');
     expect(wrapper.find('[data-testid="source-dashboard"]').text()).toContain('一般性存款余额|12|亿元');
     expect(wrapper.html()).not.toContain('<testing');
   });
 
-  it('运行时根与来源条使用沉浸式深色视觉类名', () => {
+  it('运行时根保留沉浸式深色视觉类名，不再渲染来源条', () => {
     const view = {
       renderPackage: {
         canvasStyle: { dataNotice: '系统联调数据' }
@@ -241,6 +240,6 @@ describe('source presentation', () => {
     const wrapper = mount(PanoramaRuntime, { props: { view, context: {} } });
 
     expect(wrapper.get('[data-testid="panorama-runtime"]').classes()).toContain('panorama-runtime--immersive');
-    expect(wrapper.get('[data-testid="panorama-data-notice"]').classes()).toContain('panorama-runtime__data-notice--muted');
+    expect(wrapper.find('[data-testid="panorama-data-notice"]').exists()).toBe(false);
   });
 });
