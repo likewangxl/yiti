@@ -1,0 +1,41 @@
+
+> xanzc-frontend@0.1.0 test
+> vitest run --run src/views/screen/panorama/__tests__/PanoramaDashboard.spec.js
+
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+ ❯ src/views/screen/panorama/__tests__/PanoramaDashboard.spec.js  (26 tests | 1 failed) 1422ms
+   ❯ src/views/screen/panorama/__tests__/PanoramaDashboard.spec.js > PanoramaDashboard 省级经营大屏 > 分行省级地图启用城市引导标注
+     → expected undefined to be 'callout' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/screen/panorama/__tests__/PanoramaDashboard.spec.js > PanoramaDashboard 省级经营大屏 > 分行省级地图启用城市引导标注
+AssertionError: expected undefined to be 'callout' // Object.is equality
+
+- Expected: 
+"callout"
+
++ Received: 
+undefined
+
+ ❯ src/views/screen/panorama/__tests__/PanoramaDashboard.spec.js:353:81
+    351|   it('分行省级地图启用城市引导标注', () => {
+    352|     const wrapper = mountDashboard();
+    353|     expect(wrapper.findComponent({ name: 'PanoramaMap' }).props('label…
+       |                                                                                 ^
+    354|   });
+    355| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 25 passed (26)
+   Start at  09:57:38
+   Duration  5.28s (transform 1.34s, setup 0ms, collect 2.65s, tests 1.42s, environment 513ms, prepare 159ms)
+

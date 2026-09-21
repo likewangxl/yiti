@@ -1,0 +1,4 @@
+[   98038ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://127.0.0.1:8092/node_modules/.vite/deps/three.js?v=ae7a88c0:274
+[   98038ms] [WARNING] [PanoramaMap] WebGL context lost failed, using SVG fallback. undefined @ http://127.0.0.1:8092/src/views/screen/panorama/PanoramaMap.vue?t=1789956692955:895
+[  298014ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://127.0.0.1:8092/node_modules/.vite/deps/three.js?v=ae7a88c0:274
+[  298014ms] [WARNING] [PanoramaMap] WebGL context lost failed, using SVG fallback. undefined @ http://127.0.0.1:8092/src/views/screen/panorama/PanoramaMap.vue?t=1789956896929:895
