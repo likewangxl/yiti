@@ -161,7 +161,7 @@
 .panorama-dashboard .panorama-map[data-webgl-ready="true"] .panorama-map__fallback-status { display: none; }
 .panorama-scope-chip { padding: 3px 8px; border: 1px solid rgba(96, 214, 255, .28); border-radius: 999px; color: #9fefff; background: rgba(45, 122, 181, .18); }
 .panorama-map-hint-inline { margin-left: auto; color: #7793c4; }
-.panorama-selected-institution { position: absolute; right: 14px; bottom: 36px; left: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px solid rgba(103, 177, 255, .5); border-radius: 5px; background: rgba(7, 26, 69, .9); }
+.panorama-selected-institution { position: relative; flex: 0 0 auto; margin: 8px 14px 12px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px solid rgba(103, 177, 255, .5); border-radius: 5px; background: rgba(7, 26, 69, .9); }
 .panorama-selected-institution small,
 .panorama-selected-institution strong { display: block; }
 .panorama-selected-institution small { color: var(--panorama-text-dim); font-size: 10px; }
@@ -516,9 +516,9 @@
 .panorama-diagnostic-card:nth-child(2) { border-left-color: var(--panorama-amber); }
 .panorama-diagnostic-card:nth-child(3) { border-left-color: var(--panorama-violet); }
 .panorama-diagnostic-card strong { font-size: clamp(15px, 1.1vw, 20px); }
-.panorama-workspace { height: clamp(540px, calc(100dvh - var(--cockpit-chrome-height, 0px) - 300px), 730px); min-height: 540px; grid-template-columns: minmax(0, 29fr) minmax(0, 42fr) minmax(0, 29fr); gap: 12px; margin-bottom: 14px; }
+.panorama-workspace { height: clamp(680px, calc(100dvh - var(--cockpit-chrome-height, 0px) - 300px), 780px); min-height: 680px; grid-template-columns: minmax(0, 29fr) minmax(0, 42fr) minmax(0, 29fr); gap: 12px; margin-bottom: 14px; }
 .panorama-left-column { grid-template-rows: minmax(150px, .74fr) minmax(205px, 1fr) minmax(170px, .88fr); }
-.panorama-center-column { grid-template-rows: minmax(330px, 1.28fr) minmax(220px, .84fr); }
+.panorama-center-column { grid-template-rows: minmax(450px, 1.28fr) minmax(220px, .84fr); }
 .panorama-panel { border-radius: 8px; border-color: rgba(104, 180, 255, .25); }
 .panorama-map-panel { background: linear-gradient(160deg, rgba(7, 28, 74, .82), rgba(3, 13, 38, .8)); }
 .panorama-map-panel .panorama-panel-heading { min-height: 46px; }
@@ -558,8 +558,8 @@
 .city-detail-attention { grid-column: 1 / span 2; }
 
 @media (min-width: 761px) and (max-width: 1500px) {
-  .panorama-workspace { height: clamp(540px, calc(100dvh - var(--cockpit-chrome-height, 0px) - 240px), 680px); min-height: 540px; }
-  .panorama-center-column { grid-template-rows: minmax(300px, 1.2fr) minmax(210px, .86fr); }
+  .panorama-workspace { height: clamp(680px, calc(100dvh - var(--cockpit-chrome-height, 0px) - 240px), 760px); min-height: 680px; }
+  .panorama-center-column { grid-template-rows: minmax(450px, 1.2fr) minmax(210px, .86fr); }
   .city-workspace { grid-template-columns: minmax(270px, 38fr) minmax(500px, 62fr); grid-template-rows: minmax(165px, .32fr) minmax(390px, .68fr); height: auto; min-height: 580px; }
   .city-detail-body { grid-template-columns: minmax(190px, .78fr) minmax(280px, 1.22fr); }
 }

@@ -6,7 +6,7 @@ import { mount } from '@vue/test-utils';
 vi.mock('../PanoramaMap.vue', () => ({
   default: {
     name: 'PanoramaMap',
-    props: ['metricLabel', 'metricValues'],
+    props: ['metricLabel', 'metricValues', 'labelLayout'],
     template: '<div class="panorama-map-stub"><button type="button" class="stub-select-region" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">选择西安</button><button type="button" class="stub-select-branch" @click="$emit(\'branch-select\', \'ORG-1\')">选择支行</button></div>',
     emits: ['region-select', 'branch-select']
   }
@@ -346,6 +346,11 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     await wrapper.get('[data-trend-mode="deposit"]').trigger('click');
     expect(chart().series[0].name).toContain('余额');
     expect(chart().series[0].data).toEqual([1253, 1286]);
+  });
+
+  it('分行省级地图启用城市引导标注', () => {
+    const wrapper = mountDashboard();
+    expect(wrapper.findComponent({ name: 'PanoramaMap' }).props('labelLayout')).toBe('callout');
   });
 
   it('地图范围标题使用全辖机构分布', () => {

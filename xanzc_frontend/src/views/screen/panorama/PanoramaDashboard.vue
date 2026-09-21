@@ -168,6 +168,7 @@
           <PanoramaMap
             class="panorama-map"
             appearance="relief"
+            label-layout="callout"
             :metric-label="rankingMetricInfo.label"
             :metric-values="provinceMapMetricValues"
             :data-metric-label="rankingMetricInfo.label"

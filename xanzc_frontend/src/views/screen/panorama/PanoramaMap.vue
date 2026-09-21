@@ -4,6 +4,7 @@
     class="panorama-map"
     :data-mode="mode"
     :data-appearance="appearance"
+    :data-label-layout="isCalloutLayout ? 'callout' : 'inline'"
     :data-material-ready="surfaceReady ? 'true' : 'false'"
     :data-selected-region="selectedRegionCode || ''"
     :data-hovered-region="hoveredRegionCode"
@@ -50,21 +51,44 @@
           />
           <circle
             v-if="mode === 'province' && regionLabels.some(item => item.key === region.key)"
-            :cx="region.label.x"
-            :cy="region.label.y"
+            :cx="fallbackRegionMarkerPoint(region).x"
+            :cy="fallbackRegionMarkerPoint(region).y"
             r="1.55"
             class="panorama-map__city-halo-svg"
             :class="{ 'is-violet': regionLabels.findIndex(item => item.key === region.key) % 2 === 1 }"
             aria-hidden="true"
           />
         </g>
-        <g v-for="region in regionLabels" :key="`${region.key}:label`" class="panorama-map__region-label">
+        <g v-if="!isCalloutLayout" v-for="region in regionLabels" :key="`${region.key}:label`" class="panorama-map__region-label">
           <text :x="region.label.x" :y="region.label.y" role="button" tabindex="0" @click.stop="selectRegion(region)" @keydown.enter.stop="selectRegion(region)">{{ region.name }}</text>
           <text v-if="metricValues[region.code] != null" :x="region.label.x" :y="region.label.y + 3" data-testid="map-region-metric" class="panorama-map__metric-svg">{{ metricValues[region.code] }}</text>
         </g>
       </svg>
     </div>
-    <div v-if="!fallbackActive" class="panorama-map__region-label-layer" aria-label="可选择城市标签">
+    <svg
+      v-if="isCalloutLayout"
+      class="panorama-map__callout-lines"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <g v-for="region in regionLabels" :key="`${region.key}:callout`" class="panorama-map__callout" :data-city-code="region.code">
+        <polyline
+          :points="calloutLinePoints(region)"
+          data-testid="map-city-callout-line"
+          :data-city-code="region.code"
+          class="panorama-map__callout-line"
+        />
+        <line
+          :x1="calloutLayout[region.key]?.anchor.x"
+          :y1="calloutLayout[region.key]?.anchor.y"
+          :x2="calloutLayout[region.key]?.anchor.x"
+          :y2="calloutLayout[region.key]?.anchor.y"
+          class="panorama-map__callout-anchor"
+        />
+      </g>
+    </svg>
+    <div v-if="!fallbackActive || isCalloutLayout" class="panorama-map__region-label-layer" aria-label="可选择城市标签">
       <button
         v-for="region in regionLabels"
         :key="`${region.key}:overlay-label`"
@@ -72,13 +96,14 @@
         class="panorama-map__region-label-hit"
         :class="{ 'is-selected': region.code && String(region.code) === String(selectedRegionCode), 'is-hovered': String(region.code) === hoveredRegionCode }"
         :style="regionLabelStyle(region)"
+        :data-city-code="isCalloutLayout ? region.code : undefined"
         :aria-label="`选择${region.name}`"
         @click.stop="selectRegion(region)"
         @pointerenter="setHoveredRegion(region.code)"
         @pointerleave="setHoveredRegion('')"
         @focus="setHoveredRegion(region.code)"
         @blur="setHoveredRegion('')"
-      >{{ region.name }}<small v-if="metricValues[region.code] != null" data-testid="map-region-metric" class="panorama-map__metric-value">{{ metricValues[region.code] }}</small></button>
+      >{{ region.name }}<small v-if="isCalloutLayout || metricValues[region.code] != null" data-testid="map-region-metric" class="panorama-map__metric-value">{{ isCalloutLayout ? metricDisplayValue(region) : metricValues[region.code] }}</small></button>
     </div>
     <div
       v-if="mode === 'province' && !fallbackActive"
@@ -190,7 +215,7 @@ import {
   isReliefAppearance
 } from './mapReliefGeometry';
 
-import { layoutMapLabels } from './mapLabelLayout';
+import { layoutMapCallouts, layoutMapLabels } from './mapLabelLayout';
 const props = defineProps({
   geoJson: { type: Object, default: () => ({ type: 'FeatureCollection', features: [] }) },
   points: { type: Array, default: () => [] },
@@ -200,7 +225,8 @@ const props = defineProps({
   mode: { type: String, default: 'province' },
   selectedRegionCode: { type: [String, Number], default: null },
   demo: { type: Boolean, default: false },
-  appearance: { type: String, default: 'classic' }
+  appearance: { type: String, default: 'classic' },
+  labelLayout: { type: String, default: 'inline' }
 });
 
 const emit = defineEmits(['region-select', 'branch-select']);
@@ -241,6 +267,7 @@ let handlingFailure = false;
 const projection = computed(() => createProjection(props.geoJson));
 const projectedRegions = computed(() => projectGeoJson(props.geoJson, projection.value));
 const appearance = computed(() => (isReliefAppearance(props.appearance) ? 'relief' : 'classic'));
+const isCalloutLayout = computed(() => props.mode === 'province' && props.labelLayout === 'callout');
 const reliefEnabled = computed(() => appearance.value === 'relief');
 const reliefConfig = computed(() => createReliefGeometryConfig({
   worldWidth: projection.value.width,
@@ -283,6 +310,25 @@ function svgPoint(point) {
   return {
     x: 50 + ((point.x - center.x - (bounds.minX + bounds.width / 2)) / bounds.width) * 100 * zoom.value,
     y: 50 - ((point.y - center.y - (bounds.minY + bounds.height / 2)) / bounds.height) * 100 * zoom.value
+  };
+}
+
+// The fallback SVG keeps `preserveAspectRatio="xMidYMid meet"` so a wide map
+// does not stretch the province. Convert its square viewBox coordinates back to
+// the full container before positioning the shared HTML callout layer.
+const fallbackInsets = Object.freeze({ left: 22, right: 52, top: 18, bottom: 24 });
+
+function fallbackOverlayPoint(point) {
+  const width = Math.max(1, containerRef.value?.clientWidth || 800);
+  const height = Math.max(1, containerRef.value?.clientHeight || 520);
+  const svgWidth = Math.max(1, width - fallbackInsets.left - fallbackInsets.right);
+  const svgHeight = Math.max(1, height - fallbackInsets.top - fallbackInsets.bottom);
+  const scale = Math.min(svgWidth, svgHeight) / 100;
+  const offsetX = (svgWidth - scale * 100) / 2;
+  const offsetY = (svgHeight - scale * 100) / 2;
+  return {
+    x: ((fallbackInsets.left + offsetX + point.x * scale) / width) * 100,
+    y: ((fallbackInsets.top + offsetY + point.y * scale) / height) * 100
   };
 }
 
@@ -372,12 +418,30 @@ const regionLabels = computed(() => {
       }
     }
     placed.push({ x: selectedScreen.x, y: selectedScreen.y, width: labelWidth, height: labelHeight });
-    return { ...region, labelWorld: selected, label: selectedScreen };
+    return {
+      ...region,
+      // Keep the projected administrative centre immutable for leader lines
+      // and halos; `labelWorld` remains the legacy inline-label avoidance point.
+      anchorWorld: base,
+      anchor: svgPoint(base),
+      labelWorld: selected,
+      label: selectedScreen
+    };
   });
 });
 
 function regionLabelWorldPoint(region) {
   return region.labelWorld || baseRegionLabelWorldPoint(region);
+}
+
+function regionAnchorWorldPoint(region) {
+  return region.anchorWorld || baseRegionLabelWorldPoint(region);
+}
+
+function fallbackRegionMarkerPoint(region) {
+  const labeledRegion = regionLabels.value.find(item => item.key === region.key);
+  if (isCalloutLayout.value) return labeledRegion?.anchor || region.label;
+  return region.label;
 }
 
 function mapSurfaceZ() {
@@ -395,6 +459,11 @@ function webglOverlayPoint(worldPoint, z = mapSurfaceZ()) {
   return svgPoint(worldPoint);
 }
 
+function overlayPoint(worldPoint, z = mapSurfaceZ()) {
+  const projected = webglOverlayPoint(worldPoint, z);
+  return fallbackActive.value ? fallbackOverlayPoint(projected) : projected;
+}
+
 const metricLabelPositions = computed(() => {
   void overlayRevision.value;
   if (!Object.keys(props.metricValues).length) return {};
@@ -408,13 +477,52 @@ const metricLabelPositions = computed(() => {
       height:(value==null?20:34)/height*100};
   }));
 });
+
+function metricDisplayValue(region) {
+  const value = props.metricValues?.[region.code];
+  return value == null || String(value).trim() === '' ? '暂无数据' : String(value);
+}
+
+const calloutLayout = computed(() => {
+  if (!isCalloutLayout.value) return {};
+  void overlayRevision.value;
+  const width = Math.max(1, containerRef.value?.clientWidth || 800);
+  const height = Math.max(1, containerRef.value?.clientHeight || 520);
+  return layoutMapCallouts(regionLabels.value.map(region => {
+    const metric = metricDisplayValue(region);
+    const widthPixels = Math.max(
+      String(region.name || '').length * 12 + 12,
+      metric.length * 6.5 + 12
+    );
+    return {
+      key: region.key,
+      anchor: overlayPoint(regionAnchorWorldPoint(region)),
+      width: (widthPixels / width) * 100,
+      height: 30 / height * 100
+    };
+  }), {
+    // Reserve the title band and the lower-right zoom controls.
+    bounds: { left: 8, right: 84, top: 14, bottom: 84 },
+    minGap: 2
+  });
+});
+
+function calloutLinePoints(region) {
+  return (calloutLayout.value[region.key]?.points || [])
+    .map(([x, y]) => `${Number(x).toFixed(3)},${Number(y).toFixed(3)}`)
+    .join(' ');
+}
+
 function regionLabelStyle(region) {
-  const point = metricLabelPositions.value[region.key] || webglOverlayPoint(regionLabelWorldPoint(region));
+  const point = isCalloutLayout.value
+    ? calloutLayout.value[region.key]?.label
+    : metricLabelPositions.value[region.key] || webglOverlayPoint(regionLabelWorldPoint(region));
   return { left: `${point.x}%`, top: `${point.y}%` };
 }
 
 function cityHaloStyle(region) {
-  const point = webglOverlayPoint(regionLabelWorldPoint(region), reliefEnabled.value
+  const worldPoint = isCalloutLayout.value ? regionAnchorWorldPoint(region) : regionLabelWorldPoint(region);
+  const point = overlayPoint(worldPoint, reliefEnabled.value
     ? reliefConfig.value.depth + reliefConfig.value.contourLift
     : 0.34);
   return { left: `${point.x}%`, top: `${point.y}%` };
@@ -867,7 +975,11 @@ function buildThreeMapUnsafe() {
 }
 
 function resizeRenderer() {
-  if (!renderer || !camera || !containerRef.value) return;
+  if (!containerRef.value) return;
+  // The SVG fallback still needs a reactive revision: its `meet` letterbox is
+  // converted to container percentages for the shared HTML callout layer.
+  overlayRevision.value += 1;
+  if (!renderer || !camera) return;
   try {
     const width = Math.max(1, containerRef.value.clientWidth || 800);
     const height = Math.max(1, containerRef.value.clientHeight || 520);
@@ -907,7 +1019,6 @@ function resizeRenderer() {
     }
     camera.zoom = zoom.value;
     camera.updateProjectionMatrix();
-    overlayRevision.value += 1;
     renderFrame();
   } catch (error) {
     activateFallback('resize', error);
@@ -1159,6 +1270,9 @@ onBeforeUnmount(() => {
 .panorama-map__city-halo { position: absolute; width: 18px; height: 18px; transform: translate(-50%, -50%); border: 1px solid rgba(132, 247, 255, .94); border-radius: 50%; background: radial-gradient(circle, rgba(112, 249, 255, .94) 0 2px, rgba(50, 211, 237, .34) 3px 5px, rgba(50, 211, 237, 0) 72%); box-shadow: 0 0 7px rgba(76, 233, 255, .88), inset 0 0 7px rgba(104, 242, 255, .66); color: #68efff; opacity: .9; }
 .panorama-map__city-halo::after { content: ''; position: absolute; inset: -4px; border: 1px solid currentColor; border-radius: 50%; opacity: .38; }
 .panorama-map__city-halo.is-violet { border-color: rgba(226, 173, 255, .98); background: radial-gradient(circle, rgba(231, 176, 255, .96) 0 2px, rgba(172, 96, 247, .4) 3px 5px, rgba(172, 96, 247, 0) 72%); box-shadow: 0 0 7px rgba(197, 119, 255, .92), inset 0 0 7px rgba(214, 143, 255, .68); color: #d28cff; }
+.panorama-map__callout-lines { position: absolute; z-index: 3; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.panorama-map__callout-line { fill: none; stroke: rgba(102, 226, 239, .94); stroke-width: 1.2px; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 1px rgba(53, 205, 229, .6)); }
+.panorama-map__callout-anchor { fill: none; stroke: rgba(202, 255, 255, .98); stroke-width: 2.4px; vector-effect: non-scaling-stroke; stroke-linecap: round; }
 .panorama-map__region-label-layer { position: absolute; z-index: 4; inset: 0; pointer-events: none; }
 .panorama-map__metric-heading { position: absolute; z-index: 4; top: 10px; left: 12px; padding: 4px 8px; border-radius: 4px; color: #8ce6e1; background: #07182ccc; font-size: 11px; pointer-events: none; }
 .panorama-map__metric-value { display: block; font-size: 10px; color: #96eee6; font-variant-numeric: tabular-nums; line-height: 1.25; }
@@ -1166,6 +1280,8 @@ onBeforeUnmount(() => {
 .panorama-map__region-label-hit { position: absolute; transform: translate(-50%, -50%); padding: 1px 3px; border: 1px solid transparent; border-radius: 3px; color: rgba(227, 239, 255, .82); background: transparent; text-shadow: 0 1px 3px #05133b, 0 0 5px #05133b; font-size: 11px; white-space: nowrap; cursor: pointer; pointer-events: auto; }
 .panorama-map__region-label-hit:hover, .panorama-map__region-label-hit:focus-visible, .panorama-map__region-label-hit.is-selected, .panorama-map__region-label-hit.is-hovered { border-color: #f0caff; color: #fff1ff; background: rgba(101, 61, 175, .88); outline: 2px solid rgba(210, 160, 255, .32); }
 .panorama-map[data-appearance='relief'] .panorama-map__region-label-hit { color: rgba(237, 247, 255, .94); font-weight: 700; text-shadow: 0 1px 4px #03133d, 0 0 8px #03133d; }
+.panorama-map[data-label-layout='callout'] .panorama-map__region-label-hit { min-width: 42px; padding: 2px 4px; color: rgba(232, 247, 255, .96); font-weight: 700; line-height: 1.2; text-align: center; text-shadow: 0 1px 4px #03133d, 0 0 8px #03133d; }
+.panorama-map[data-label-layout='callout'] .panorama-map__metric-value { color: #8cf3e8; font-size: 10px; font-weight: 600; }
 
 .panorama-map__point-layer { position: absolute; z-index: 3; inset: 0; pointer-events: none; }
 .panorama-map__point-hit { position: absolute; transform: translate(-50%, -50%); min-width: 22px; min-height: 22px; padding: 0; border: 0; border-radius: 999px; color: #fff; background: transparent; cursor: pointer; pointer-events: auto; }
