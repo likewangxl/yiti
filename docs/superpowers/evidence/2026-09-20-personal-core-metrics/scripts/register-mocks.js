@@ -51,7 +51,7 @@ async page => {
     {
       metricCode: 'GENERAL_DEPOSIT_MONTH_AVG',
       metricName: '一般性存款月均余额',
-      currentValue: 123.45,
+      currentValue: 123456789012,
       previousValue: 120,
       targetValue: null,
       completionRate: null,

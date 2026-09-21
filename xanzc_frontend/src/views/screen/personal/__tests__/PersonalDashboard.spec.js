@@ -98,6 +98,7 @@ describe('PersonalDashboard 个人经营驾驶舱', () => {
     expect(wrapper.findAll('[data-testid="personal-metric"]')[0].find('.personal-metric__previous').text()).toContain('上月末值 0');
     expect(wrapper.text()).toContain('完成率 0.00%');
     expect(wrapper.text()).toContain('单位未配置');
+    expect(wrapper.findAll('[data-testid="personal-metric"]')[0].find('.personal-metric__unit').text()).toBe('单位未配置');
     expect(wrapper.text()).toContain('较上月末');
     expect(wrapper.text()).not.toContain('1280 /');
     expect(wrapper.text()).toContain('当前返回事项按最近跟进时间展示');

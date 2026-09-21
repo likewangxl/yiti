@@ -9,8 +9,12 @@ async page => {
     scopeNote: text.includes('本人经营指标 · 最新导入快照（非考核结算）'),
     metricCards: await cards.count(),
     metricNames: await cards.locator('.personal-metric__name').allTextContents(),
+    metricGridColumns: await page.locator('.personal-metrics-grid').evaluate(el => getComputedStyle(el).gridTemplateColumns.trim().split(/\s+/).length),
+    metricNameWhiteSpace: await page.locator('.personal-metric__name').first().evaluate(el => getComputedStyle(el).whiteSpace),
+    metricUnitOverflow: await page.locator('.personal-metric__unit').first().evaluate(el => ({ overflow: getComputedStyle(el).overflow, textOverflow: getComputedStyle(el).textOverflow })),
     hasZero: text.includes('0'),
     hasMissingUnit: text.includes('单位未配置'),
+    hasLargeValue: text.includes('123,456,789,012'),
     hasPreviousMonthValue: text.includes('上月末值 120'),
     hasPreviousMonthLabel: text.includes('较上月末 2.88%'),
     hasNoDailyLabel: !text.includes('日环比') && !text.includes('环比'),
@@ -21,12 +25,15 @@ async page => {
       .every(title => text.includes(title))
   };
   const failed = [
-    'heading', 'scopeNote', 'hasZero', 'hasMissingUnit', 'hasPreviousMonthValue',
+    'heading', 'scopeNote', 'hasZero', 'hasMissingUnit', 'hasLargeValue', 'hasPreviousMonthValue',
     'hasPreviousMonthLabel', 'hasNoDailyLabel', 'hasUnlinkedTarget',
     'hasNoFakeTarget', 'hasDataDate', 'hasFourZoneHeadings'
   ].filter(key => !result[key]);
   if (result.metricCards !== 6) failed.push('metricCards=6');
   if (result.metricNames.length !== 6) failed.push('metricNames=6');
+  if (result.metricGridColumns !== 3) failed.push('metricGridColumns=3');
+  if (result.metricNameWhiteSpace !== 'normal') failed.push('metricNameWhiteSpace=normal');
+  if (result.metricUnitOverflow.overflow !== 'visible' || result.metricUnitOverflow.textOverflow !== 'clip') failed.push('metricUnitOverflow=visible');
   if (failed.length) throw new Error('core assertions failed: ' + failed.join(','));
   return result;
 }

@@ -56,7 +56,7 @@
           </div>
           <div class="personal-metric__value-line">
             <strong :title="displayText(metric.currentValue)">{{ formatValue(metric.currentValue) }}</strong>
-            <span>{{ displayText(metric.unit, '单位未配置') }}</span>
+            <span class="personal-metric__unit">{{ displayText(metric.unit, '单位未配置') }}</span>
           </div>
           <div class="personal-metric__details">
             <span v-if="hasValue(metric.previousValue)" class="personal-metric__previous">{{ previousLabel(metric) }} {{ formatValue(metric.previousValue) }}</span>

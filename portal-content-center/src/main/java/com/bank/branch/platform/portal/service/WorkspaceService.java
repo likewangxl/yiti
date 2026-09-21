@@ -14,12 +14,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -36,12 +39,17 @@ import java.util.stream.Collectors;
 @Service
 public class WorkspaceService {
 
+    private static final Duration NORMAL_SOURCE_TIMEOUT = Duration.ofSeconds(2);
+    private static final Duration METRIC_SOURCE_TIMEOUT = Duration.ofSeconds(5);
+
     private final ShortcutService shortcutService;
     private final NotifyApi notifyApi;
     private final WorkflowQueryAdapter workflowQueryAdapter;
     private final MetricAdapter metricAdapter;
     private final CurrentUserApi currentUserApi;
     private final Executor portalAggregateExecutor;
+    private final Duration normalSourceTimeout;
+    private final Duration metricSourceTimeout;
 
     /**
      * 构造函数注入，显式使用 @Qualifier 指定线程池
@@ -56,26 +64,42 @@ public class WorkspaceService {
      * @param currentUserApi         当前用户 API
      * @param portalAggregateExecutor 工作台聚合专用线程池
      */
+    @Autowired
     public WorkspaceService(ShortcutService shortcutService,
                             @Autowired(required = false) NotifyApi notifyApi,
                             WorkflowQueryAdapter workflowQueryAdapter,
                             MetricAdapter metricAdapter,
                             CurrentUserApi currentUserApi,
                             @Qualifier("portalAggregateExecutor") Executor portalAggregateExecutor) {
+        this(shortcutService, notifyApi, workflowQueryAdapter, metricAdapter,
+                currentUserApi, portalAggregateExecutor,
+                NORMAL_SOURCE_TIMEOUT, METRIC_SOURCE_TIMEOUT);
+    }
+
+    /** 包私有测试构造器：允许用毫秒级 deadline 覆盖超时测试，不改变生产配置。 */
+    WorkspaceService(ShortcutService shortcutService,
+                     NotifyApi notifyApi,
+                     WorkflowQueryAdapter workflowQueryAdapter,
+                     MetricAdapter metricAdapter,
+                     CurrentUserApi currentUserApi,
+                     Executor portalAggregateExecutor,
+                     Duration normalSourceTimeout,
+                     Duration metricSourceTimeout) {
         this.shortcutService = shortcutService;
         this.notifyApi = notifyApi;
         this.workflowQueryAdapter = workflowQueryAdapter;
         this.metricAdapter = metricAdapter;
         this.currentUserApi = currentUserApi;
         this.portalAggregateExecutor = portalAggregateExecutor;
+        this.normalSourceTimeout = Objects.requireNonNull(normalSourceTimeout, "normalSourceTimeout");
+        this.metricSourceTimeout = Objects.requireNonNull(metricSourceTimeout, "metricSourceTimeout");
     }
 
     /**
      * A.1 工作台数据聚合（5+1 路并行 + 降级）
      *
-     * <p>并行查询 shortcuts、todoCount、recentTodos、unreadNotificationCount、
-     * recentNotifications、metricCards 六个维度数据，整体超时 2 秒。
-     * 任何子查询失败时降级为默认值（0 或空列表），并将错误收集到 aggregateErrors。</p>
+     * <p>六个来源同时启动；普通来源各自使用 2 秒 deadline，metricCards 独立允许 5 秒。
+     * 任一来源失败或超时都降级为默认值，并将对应错误收集到 aggregateErrors。</p>
      *
      * @return 工作台聚合数据 DTO
      */
@@ -83,21 +107,28 @@ public class WorkspaceService {
         String empId = currentUserApi.getCurrentEmpId();
         Map<String, String> errors = new ConcurrentHashMap<>();
 
-        // 6 个 CompletableFuture 并行执行
+        // 指标先提交，避免有界执行器排队时被普通来源占满；所有 future 仍同时开始计时。
+        CompletableFuture<List<PortalMetricCard>> fMetrics = supplyAsync(
+                () -> metricAdapter.fetchForWorkspace(empId), "metricCards",
+                metricSourceTimeout, errors);
+
         CompletableFuture<List<ShortcutDTO>> fShortcuts = supplyAsync(
-                () -> shortcutService.listMyShortcuts(), "shortcuts", errors);
+                () -> shortcutService.listMyShortcuts(), "shortcuts",
+                normalSourceTimeout, errors);
 
         CompletableFuture<Integer> fTodoCount = supplyAsync(
-                () -> workflowQueryAdapter.countPending(empId), "todoCount", errors);
+                () -> workflowQueryAdapter.countPending(empId), "todoCount",
+                normalSourceTimeout, errors);
 
         CompletableFuture<List<TodoItemDTO>> fRecentTodos = supplyAsync(
                 () -> workflowQueryAdapter.listPending(empId, 5).stream()
                         .map(this::toTodoItemDTO).collect(Collectors.toList()),
-                "recentTodos", errors);
+                "recentTodos", normalSourceTimeout, errors);
 
         // notifyApi 可为 null（V1 降级），直接返回默认值
         CompletableFuture<Integer> fUnreadCount = notifyApi != null
-                ? supplyAsync(() -> notifyApi.countUnread(empId), "unreadNotificationCount", errors)
+                ? supplyAsync(() -> notifyApi.countUnread(empId), "unreadNotificationCount",
+                normalSourceTimeout, errors)
                 : CompletableFuture.completedFuture(0);
 
         CompletableFuture<List<NotificationItemDTO>> fRecentNotif = notifyApi != null
@@ -108,16 +139,12 @@ public class WorkspaceService {
                     PageResult<NotificationDTO> result = notifyApi.queryNotifications(empId, null, page);
                     return result.getRecords().stream()
                             .map(this::toNotificationItemDTO).collect(Collectors.toList());
-                }, "recentNotifications", errors)
+                }, "recentNotifications", normalSourceTimeout, errors)
                 : CompletableFuture.completedFuture(Collections.emptyList());
 
-        CompletableFuture<List<PortalMetricCard>> fMetrics = supplyAsync(
-                () -> metricAdapter.fetchForWorkspace(empId), "metricCards", errors);
-
-        // 整体超时 2 秒
+        // 每个 future 已有自身 deadline；allOf 只等待这些 bounded futures 完成，不提前截断 metrics。
         try {
             CompletableFuture.allOf(fShortcuts, fTodoCount, fRecentTodos, fUnreadCount, fRecentNotif, fMetrics)
-                    .orTimeout(2, TimeUnit.SECONDS)
                     .join();
         } catch (Exception ex) {
             log.warn("[WorkspaceService] aggregate timeout or error", ex);
@@ -168,36 +195,60 @@ public class WorkspaceService {
     }
 
     /**
-     * 通用异步任务封装，自动捕获异常放入 errors map
+     * 通用异步任务封装：在有界执行器提交后启动独立 deadline，异常和超时写入 errors。
      *
      * @param supplier 数据提供者
      * @param name     任务名称（用于 error map 的 key）
+     * @param timeout  当前来源 deadline
      * @param errors   错误收集 map
      * @param <T>      返回值类型
      * @return CompletableFuture
      */
     private <T> CompletableFuture<T> supplyAsync(Supplier<T> supplier, String name,
+                                                  Duration timeout,
                                                   Map<String, String> errors) {
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return supplier.get();
-            } catch (Exception ex) {
-                String msg = ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName();
-                errors.put(name, msg);
-                throw new CompletionException(ex);
-            }
-        }, portalAggregateExecutor)
-        .exceptionally(ex -> {
-            errors.putIfAbsent(name, "error");
-            return null;
-        });
+        CompletableFuture<T> task;
+        try {
+            task = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return supplier.get();
+                } catch (Exception ex) {
+                    throw new CompletionException(ex);
+                }
+            }, portalAggregateExecutor);
+        } catch (RejectedExecutionException ex) {
+            errors.putIfAbsent(name, failureMessage(ex));
+            return CompletableFuture.completedFuture(null);
+        }
+        return task.orTimeout(timeout.toMillis(), TimeUnit.MILLISECONDS)
+                .exceptionally(ex -> {
+                    errors.putIfAbsent(name, failureMessage(ex));
+                    return null;
+                });
+    }
+
+    private String failureMessage(Throwable failure) {
+        Throwable cause = failure;
+        while (cause instanceof CompletionException && cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        if (cause instanceof TimeoutException) {
+            return "查询超时，请刷新重试";
+        }
+        if (cause instanceof RejectedExecutionException) {
+            return "服务繁忙，请稍后重试";
+        }
+        String message = cause.getMessage();
+        return message != null && !message.isBlank()
+                ? message
+                : cause.getClass().getSimpleName();
     }
 
     /**
      * 安全获取 CompletableFuture 的结果，null 时返回默认值
      *
-     * <p>当 exceptionally 处理后 future 以 null 完成时，getNow 返回 null 而非 fallback，
-     * 因此需要额外的 null 检查。</p>
+     * <p>调用方只在 allOf 等待 bounded futures 完成后读取，因此 join 不会把 pending
+     * 误判为空列表；future 的异常已在 supplyAsync 中转为默认值并登记错误。</p>
      *
      * @param future       异步任务
      * @param defaultValue 默认值
@@ -205,7 +256,7 @@ public class WorkspaceService {
      * @return 任务结果或默认值
      */
     private <T> T getOrDefault(CompletableFuture<T> future, T defaultValue) {
-        T result = future.getNow(defaultValue);
+        T result = future.join();
         return result != null ? result : defaultValue;
     }
 

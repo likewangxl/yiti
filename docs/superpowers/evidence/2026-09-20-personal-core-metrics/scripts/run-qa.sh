@@ -33,6 +33,10 @@ FRONTEND_DIR="$(cd "$SCRIPT_DIR/../../../../../xanzc_frontend" && pwd)"
  "$CLI" -s="$SESSION" run-code --filename "$SCRIPT_DIR/assert-core.js" > "$EVIDENCE_DIR/assertions-core.json"
  "$CLI" -s="$SESSION" screenshot --filename "$EVIDENCE_DIR/core-1440x900.png"
  "$CLI" -s="$SESSION" screenshot --filename "$EVIDENCE_DIR/core-1440x900-full.png" --full-page
+ "$CLI" -s="$SESSION" resize 1601 900
+ "$CLI" -s="$SESSION" run-code --filename "$SCRIPT_DIR/assert-bounds.js" > "$EVIDENCE_DIR/assertions-bounds-1601.json"
+ "$CLI" -s="$SESSION" resize 390 844
+ "$CLI" -s="$SESSION" run-code --filename "$SCRIPT_DIR/assert-bounds.js" > "$EVIDENCE_DIR/assertions-bounds-390.json"
 
  "$CLI" -s="$SESSION" goto "$BASE_URL/?qa=empty#/personal-dashboard"
  "$CLI" -s="$SESSION" resize 1440 900

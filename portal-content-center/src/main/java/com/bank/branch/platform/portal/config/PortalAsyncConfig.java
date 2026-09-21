@@ -22,8 +22,8 @@ public class PortalAsyncConfig {
         executor.setQueueCapacity(32);
         executor.setThreadNamePrefix("portal-agg-");
         executor.setKeepAliveSeconds(60);
-        // queue 满时降级到调用线程，避免请求被静默丢弃
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        // 拒绝交给 WorkspaceService 按来源降级，避免 CallerRunsPolicy 绕过来源 deadline。
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         executor.initialize();
         return executor;
     }

@@ -9,6 +9,7 @@ import com.bank.branch.platform.portal.adapter.MetricAdapter;
 import com.bank.branch.platform.portal.adapter.WorkflowQueryAdapter;
 import com.bank.branch.platform.portal.adapter.dto.PortalTodoItem;
 import com.bank.branch.platform.portal.api.dto.*;
+import com.bank.branch.platform.portal.config.PortalAsyncConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,10 +17,17 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -241,6 +249,115 @@ class WorkspaceServiceTest {
 
         assertThat(result.getMetricCards()).isEmpty();
         assertThat(result.getAggregateErrors()).containsKey("metricCards");
+    }
+
+    @Test
+    void getWorkspaceShouldMarkEachPendingSourceWithTimeoutError() {
+        stubCurrentUser();
+        Executor neverRuns = command -> { };
+        WorkspaceService timedService = new WorkspaceService(
+                shortcutService, notifyApi, workflowQueryAdapter,
+                metricAdapter, currentUserApi, neverRuns,
+                Duration.ofMillis(20), Duration.ofMillis(100));
+
+        WorkspaceDTO result = timedService.getWorkspace();
+
+        assertThat(result.getAggregateErrors()).containsKeys(
+                "shortcuts", "todoCount", "recentTodos", "unreadNotificationCount",
+                "recentNotifications", "metricCards");
+        assertThat(result.getAggregateErrors().get("metricCards"))
+                .isEqualTo("查询超时，请刷新重试");
+    }
+
+    @Test
+    void getWorkspaceShouldKeepMetricsWhenTheyOutliveNormalDeadlineButMeetMetricDeadline()
+            throws Exception {
+        stubCurrentUser();
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        try {
+            AtomicInteger submitted = new AtomicInteger();
+            Executor metricsDelayed = command -> {
+                if (submitted.getAndIncrement() < 2) {
+                    scheduler.schedule(command, 100, TimeUnit.MILLISECONDS);
+                } else {
+                    command.run();
+                }
+            };
+            PortalMetricCard card = PortalMetricCard.builder()
+                    .metricCode("DEPOSIT")
+                    .metricName("存款余额")
+                    .currentValue("100")
+                    .build();
+            when(metricAdapter.fetchForWorkspace(EMP_ID)).thenReturn(List.of(card));
+
+            WorkspaceService timedService = new WorkspaceService(
+                    shortcutService, notifyApi, workflowQueryAdapter,
+                    metricAdapter, currentUserApi, metricsDelayed,
+                    Duration.ofMillis(20), Duration.ofSeconds(1));
+            WorkspaceDTO result = timedService.getWorkspace();
+
+            assertThat(result.getMetricCards()).containsExactly(card);
+            assertThat(result.getAggregateErrors()).containsKey("shortcuts")
+                    .doesNotContainKey("metricCards");
+        } finally {
+            scheduler.shutdownNow();
+        }
+    }
+
+    @Test
+    void getWorkspaceShouldKeepMetricsWhenOrdinarySourceFails() {
+        stubCurrentUser();
+        Executor syncExecutor = Runnable::run;
+        when(shortcutService.listMyShortcuts()).thenThrow(new RuntimeException("shortcut down"));
+        PortalMetricCard card = PortalMetricCard.builder()
+                .metricCode("DEPOSIT")
+                .metricName("存款余额")
+                .currentValue("100")
+                .build();
+        when(metricAdapter.fetchForWorkspace(EMP_ID)).thenReturn(List.of(card));
+
+        WorkspaceService serviceWithFailure = new WorkspaceService(
+                shortcutService, notifyApi, workflowQueryAdapter,
+                metricAdapter, currentUserApi, syncExecutor,
+                Duration.ofMillis(20), Duration.ofSeconds(1));
+        WorkspaceDTO result = serviceWithFailure.getWorkspace();
+
+        assertThat(result.getMetricCards()).containsExactly(card);
+        assertThat(result.getAggregateErrors()).containsKey("shortcuts")
+                .doesNotContainKey("metricCards");
+    }
+
+    @Test
+    void getWorkspaceShouldDegradeEverySourceWhenExecutorRejects() {
+        stubCurrentUser();
+        Executor rejectingExecutor = command -> {
+            throw new RejectedExecutionException("executor saturated");
+        };
+        WorkspaceService rejectedService = new WorkspaceService(
+                shortcutService, notifyApi, workflowQueryAdapter,
+                metricAdapter, currentUserApi, rejectingExecutor,
+                Duration.ofMillis(20), Duration.ofSeconds(1));
+
+        WorkspaceDTO result = rejectedService.getWorkspace();
+
+        assertThat(result.getMetricCards()).isEmpty();
+        assertThat(result.getAggregateErrors()).containsKeys(
+                "shortcuts", "todoCount", "recentTodos", "unreadNotificationCount",
+                "recentNotifications", "metricCards");
+        assertThat(result.getAggregateErrors().get("metricCards"))
+                .isEqualTo("服务繁忙，请稍后重试");
+    }
+
+    @Test
+    void portalAggregateExecutorUsesAbortPolicyForDeadlineIntegrity() {
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor)
+                new PortalAsyncConfig().portalAggregateExecutor();
+        try {
+            assertThat(executor.getThreadPoolExecutor().getRejectedExecutionHandler())
+                    .isInstanceOf(java.util.concurrent.ThreadPoolExecutor.AbortPolicy.class);
+        } finally {
+            executor.shutdown();
+        }
     }
 
     // ────────── 5. PortalTodoItem → TodoItemDTO 转换 ──────────
