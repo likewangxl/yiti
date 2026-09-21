@@ -1,0 +1,775 @@
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO]
+[INFO] Branch Platform                                                    [pom]
+[INFO] Common                                                             [pom]
+[INFO] Common Web                                                         [jar]
+[INFO] Common Trace                                                       [jar]
+[INFO] Common Security                                                    [jar]
+[INFO] Common AOP                                                         [jar]
+[INFO] Common DB                                                          [jar]
+[INFO] Auth Permission Center                                             [jar]
+[INFO] System Governance Center                                           [jar]
+[INFO] Workflow Center                                                    [jar]
+[INFO] Portal Content Center                                              [jar]
+[INFO] Customer Marketing Center                                          [jar]
+[INFO] Business Application Center                                        [jar]
+[INFO] Performance Engine Center                                          [jar]
+[INFO] Report Analytics Center                                            [jar]
+[INFO] Red Engine Center                                                  [jar]
+[INFO] 浦爱云盾应用中心                                                           [jar]
+[INFO] SOAP Gateway Center                                                [jar]
+[INFO] Bootstrap                                                          [jar]
+[INFO]
+[INFO] --------------< com.bank.branch.platform:branch-platform >--------------
+[INFO] Building Branch Platform 1.0.0-SNAPSHOT                           [1/19]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ branch-platform ---
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ branch-platform ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ branch-platform ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ branch-platform ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/branch-platform/1.0.0-SNAPSHOT/branch-platform-1.0.0-SNAPSHOT.pom
+[INFO]
+[INFO] ------------------< com.bank.branch.platform:common >-------------------
+[INFO] Building Common 1.0.0-SNAPSHOT                                    [2/19]
+[INFO]   from common/pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ common ---
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ common ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ common ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ common ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/common/1.0.0-SNAPSHOT/common-1.0.0-SNAPSHOT.pom
+[INFO]
+[INFO] ----------------< com.bank.branch.platform:common-web >-----------------
+[INFO] Building Common Web 1.0.0-SNAPSHOT                                [3/19]
+[INFO]   from common/common-web/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ common-web ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-web/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ common-web ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ common-web ---
+[INFO] Changes detected - recompiling the module! :source
+[INFO] Compiling 19 source files with javac [debug target 17] to target/classes
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ common-web ---
+[INFO] skip non existing resourceDirectory /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-web/src/test/resources
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ common-web ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 7 source files with javac [debug target 17] to target/test-classes
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ common-web ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ common-web ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-web/target/common-web-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ common-web ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ common-web ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ common-web ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-web/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/common-web/1.0.0-SNAPSHOT/common-web-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-web/target/common-web-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/common-web/1.0.0-SNAPSHOT/common-web-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] ---------------< com.bank.branch.platform:common-trace >----------------
+[INFO] Building Common Trace 1.0.0-SNAPSHOT                              [4/19]
+[INFO]   from common/common-trace/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ common-trace ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-trace/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ common-trace ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ common-trace ---
+[INFO] Changes detected - recompiling the module! :source
+[INFO] Compiling 5 source files with javac [debug target 17] to target/classes
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ common-trace ---
+[INFO] skip non existing resourceDirectory /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-trace/src/test/resources
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ common-trace ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 3 source files with javac [debug target 17] to target/test-classes
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ common-trace ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ common-trace ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-trace/target/common-trace-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ common-trace ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ common-trace ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ common-trace ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-trace/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/common-trace/1.0.0-SNAPSHOT/common-trace-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-trace/target/common-trace-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/common-trace/1.0.0-SNAPSHOT/common-trace-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --------------< com.bank.branch.platform:common-security >--------------
+[INFO] Building Common Security 1.0.0-SNAPSHOT                           [5/19]
+[INFO]   from common/common-security/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ common-security ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-security/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ common-security ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ common-security ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 11 source files with javac [debug target 17] to target/classes
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ common-security ---
+[INFO] skip non existing resourceDirectory /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-security/src/test/resources
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ common-security ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 10 source files with javac [debug target 17] to target/test-classes
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ common-security ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ common-security ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-security/target/common-security-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ common-security ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ common-security ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ common-security ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-security/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/common-security/1.0.0-SNAPSHOT/common-security-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-security/target/common-security-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/common-security/1.0.0-SNAPSHOT/common-security-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] ----------------< com.bank.branch.platform:common-aop >-----------------
+[INFO] Building Common AOP 1.0.0-SNAPSHOT                                [6/19]
+[INFO]   from common/common-aop/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ common-aop ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-aop/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ common-aop ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ common-aop ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 8 source files with javac [debug target 17] to target/classes
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ common-aop ---
+[INFO] Copying 1 resource from src/test/resources to target/test-classes
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ common-aop ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 4 source files with javac [debug target 17] to target/test-classes
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ common-aop ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ common-aop ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-aop/target/common-aop-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ common-aop ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ common-aop ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ common-aop ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-aop/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/common-aop/1.0.0-SNAPSHOT/common-aop-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-aop/target/common-aop-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/common-aop/1.0.0-SNAPSHOT/common-aop-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] -----------------< com.bank.branch.platform:common-db >-----------------
+[INFO] Building Common DB 1.0.0-SNAPSHOT                                 [7/19]
+[INFO]   from common/common-db/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ common-db ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-db/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ common-db ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ common-db ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 6 source files with javac [debug target 17] to target/classes
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ common-db ---
+[INFO] skip non existing resourceDirectory /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-db/src/test/resources
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ common-db ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 5 source files with javac [debug target 17] to target/test-classes
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ common-db ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ common-db ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-db/target/common-db-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ common-db ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ common-db ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ common-db ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-db/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/common-db/1.0.0-SNAPSHOT/common-db-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/common/common-db/target/common-db-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/common-db/1.0.0-SNAPSHOT/common-db-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] ----------< com.bank.branch.platform:auth-permission-center >-----------
+[INFO] Building Auth Permission Center 1.0.0-SNAPSHOT                    [8/19]
+[INFO]   from auth-permission-center/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ auth-permission-center ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/auth-permission-center/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ auth-permission-center ---
+[INFO] Copying 10 resources from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ auth-permission-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 160 source files with javac [debug target 17] to target/classes
+[WARNING] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/auth-permission-center/src/main/java/com/bank/branch/platform/auth/controller/AuthController.java:[254,70] com.bank.branch.platform.auth.api.dto 中的 com.bank.branch.platform.auth.api.dto.SwitchRoleReqDTO 已过时, 且标记为待删除
+[WARNING] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/auth-permission-center/src/main/java/com/bank/branch/platform/auth/controller/AuthController.java:[254,70] com.bank.branch.platform.auth.api.dto 中的 com.bank.branch.platform.auth.api.dto.SwitchRoleReqDTO 已过时, 且标记为待删除
+[WARNING] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/auth-permission-center/src/main/java/com/bank/branch/platform/auth/controller/AuthController.java:[254,70] com.bank.branch.platform.auth.api.dto 中的 com.bank.branch.platform.auth.api.dto.SwitchRoleReqDTO 已过时, 且标记为待删除
+[WARNING] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/auth-permission-center/src/main/java/com/bank/branch/platform/auth/controller/AuthController.java:[254,70] com.bank.branch.platform.auth.api.dto 中的 com.bank.branch.platform.auth.api.dto.SwitchRoleReqDTO 已过时, 且标记为待删除
+[WARNING] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/auth-permission-center/src/main/java/com/bank/branch/platform/auth/controller/AuthController.java:[254,70] com.bank.branch.platform.auth.api.dto 中的 com.bank.branch.platform.auth.api.dto.SwitchRoleReqDTO 已过时, 且标记为待删除
+[WARNING] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/auth-permission-center/src/main/java/com/bank/branch/platform/auth/controller/AuthController.java:[257,51] com.bank.branch.platform.auth.service.AuthService 中的 switchRole(java.lang.String,jakarta.servlet.http.HttpSession) 已过时, 且标记为待删除
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ auth-permission-center ---
+[INFO] Copying 4 resources from src/test/resources to target/test-classes
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ auth-permission-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 40 source files with javac [debug target 17] to target/test-classes
+[WARNING] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/auth-permission-center/src/test/java/com/bank/branch/platform/auth/service/AuthServiceTest.java:[220,43] com.bank.branch.platform.auth.service.AuthService 中的 switchRole(java.lang.String,jakarta.servlet.http.HttpSession) 已过时, 且标记为待删除
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ auth-permission-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ auth-permission-center ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/auth-permission-center/target/auth-permission-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ auth-permission-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ auth-permission-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ auth-permission-center ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/auth-permission-center/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/auth-permission-center/1.0.0-SNAPSHOT/auth-permission-center-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/auth-permission-center/target/auth-permission-center-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/auth-permission-center/1.0.0-SNAPSHOT/auth-permission-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] ---------< com.bank.branch.platform:system-governance-center >----------
+[INFO] Building System Governance Center 1.0.0-SNAPSHOT                  [9/19]
+[INFO]   from system-governance-center/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ system-governance-center ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/system-governance-center/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ system-governance-center ---
+[INFO] Copying 11 resources from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ system-governance-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 114 source files with javac [debug target 17] to target/classes
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ system-governance-center ---
+[INFO] Copying 2 resources from src/test/resources to target/test-classes
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ system-governance-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 38 source files with javac [debug target 17] to target/test-classes
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/system-governance-center/src/test/java/com/bank/branch/platform/governance/service/FileServiceTest.java: 某些输入文件使用了未经检查或不安全的操作。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/system-governance-center/src/test/java/com/bank/branch/platform/governance/service/FileServiceTest.java: 有关详细信息, 请使用 -Xlint:unchecked 重新编译。
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ system-governance-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ system-governance-center ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/system-governance-center/target/system-governance-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ system-governance-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ system-governance-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ system-governance-center ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/system-governance-center/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/system-governance-center/1.0.0-SNAPSHOT/system-governance-center-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/system-governance-center/target/system-governance-center-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/system-governance-center/1.0.0-SNAPSHOT/system-governance-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --------------< com.bank.branch.platform:workflow-center >--------------
+[INFO] Building Workflow Center 1.0.0-SNAPSHOT                          [10/19]
+[INFO]   from workflow-center/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ workflow-center ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/workflow-center/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ workflow-center ---
+[INFO] Copying 15 resources from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ workflow-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 103 source files with javac [debug target 17] to target/classes
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ workflow-center ---
+[INFO] Copying 4 resources from src/test/resources to target/test-classes
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ workflow-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 44 source files with javac [debug target 17] to target/test-classes
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/workflow-center/src/test/java/com/bank/branch/platform/workflow/service/TodoQueryServiceTest.java: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/workflow-center/src/test/java/com/bank/branch/platform/workflow/service/TodoQueryServiceTest.java使用了未经检查或不安全的操作。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/workflow-center/src/test/java/com/bank/branch/platform/workflow/service/TodoQueryServiceTest.java: 有关详细信息, 请使用 -Xlint:unchecked 重新编译。
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ workflow-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ workflow-center ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/workflow-center/target/workflow-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ workflow-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ workflow-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ workflow-center ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/workflow-center/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/workflow-center/1.0.0-SNAPSHOT/workflow-center-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/workflow-center/target/workflow-center-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/workflow-center/1.0.0-SNAPSHOT/workflow-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] -----------< com.bank.branch.platform:portal-content-center >-----------
+[INFO] Building Portal Content Center 1.0.0-SNAPSHOT                    [11/19]
+[INFO]   from portal-content-center/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ portal-content-center ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/portal-content-center/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ portal-content-center ---
+[INFO] Copying 9 resources from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ portal-content-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 130 source files with javac [debug target 17] to target/classes
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/portal-content-center/src/main/java/com/bank/branch/platform/portal/service/WorkspaceService.java: 某些输入文件使用或覆盖了已过时的 API。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/portal-content-center/src/main/java/com/bank/branch/platform/portal/service/WorkspaceService.java: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ portal-content-center ---
+[INFO] Copying 11 resources from src/test/resources to target/test-classes
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ portal-content-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 43 source files with javac [debug target 17] to target/test-classes
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/portal-content-center/src/test/java/com/bank/branch/platform/portal/adapter/WorkflowQueryAdapterTest.java: 某些输入文件使用或覆盖了已过时的 API。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/portal-content-center/src/test/java/com/bank/branch/platform/portal/adapter/WorkflowQueryAdapterTest.java: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/portal-content-center/src/test/java/com/bank/branch/platform/portal/service/UserProductRelationServiceTest.java: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/portal-content-center/src/test/java/com/bank/branch/platform/portal/service/UserProductRelationServiceTest.java使用了未经检查或不安全的操作。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/portal-content-center/src/test/java/com/bank/branch/platform/portal/service/UserProductRelationServiceTest.java: 有关详细信息, 请使用 -Xlint:unchecked 重新编译。
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ portal-content-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ portal-content-center ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/portal-content-center/target/portal-content-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ portal-content-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ portal-content-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ portal-content-center ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/portal-content-center/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/portal-content-center/1.0.0-SNAPSHOT/portal-content-center-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/portal-content-center/target/portal-content-center-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/portal-content-center/1.0.0-SNAPSHOT/portal-content-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] ---------< com.bank.branch.platform:customer-marketing-center >---------
+[INFO] Building Customer Marketing Center 1.0.0-SNAPSHOT                [12/19]
+[INFO]   from customer-marketing-center/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ customer-marketing-center ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/customer-marketing-center/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ customer-marketing-center ---
+[INFO] Copying 26 resources from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ customer-marketing-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 272 source files with javac [debug target 17] to target/classes
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/customer-marketing-center/src/main/java/com/bank/branch/platform/customer/service/ClaimService.java: 某些输入文件使用或覆盖了已过时的 API。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/customer-marketing-center/src/main/java/com/bank/branch/platform/customer/service/ClaimService.java: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ customer-marketing-center ---
+[INFO] Copying 1 resource from src/test/resources to target/test-classes
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ customer-marketing-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 104 source files with javac [debug target 17] to target/test-classes
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/customer-marketing-center/src/test/java/com/bank/branch/platform/customer/service/AssetProjectServiceTest.java: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/customer-marketing-center/src/test/java/com/bank/branch/platform/customer/service/AssetProjectServiceTest.java使用了未经检查或不安全的操作。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/customer-marketing-center/src/test/java/com/bank/branch/platform/customer/service/AssetProjectServiceTest.java: 有关详细信息, 请使用 -Xlint:unchecked 重新编译。
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ customer-marketing-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ customer-marketing-center ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/customer-marketing-center/target/customer-marketing-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ customer-marketing-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ customer-marketing-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ customer-marketing-center ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/customer-marketing-center/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/customer-marketing-center/1.0.0-SNAPSHOT/customer-marketing-center-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/customer-marketing-center/target/customer-marketing-center-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/customer-marketing-center/1.0.0-SNAPSHOT/customer-marketing-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --------< com.bank.branch.platform:business-application-center >--------
+[INFO] Building Business Application Center 1.0.0-SNAPSHOT              [13/19]
+[INFO]   from business-application-center/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ business-application-center ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/business-application-center/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ business-application-center ---
+[INFO] Copying 2 resources from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ business-application-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 45 source files with javac [debug target 17] to target/classes
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ business-application-center ---
+[INFO] Copying 2 resources from src/test/resources to target/test-classes
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ business-application-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 23 source files with javac [debug target 17] to target/test-classes
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/business-application-center/src/test/java/com/bank/branch/platform/bizapp/service/SupportDeptServiceWorkflowTest.java: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/business-application-center/src/test/java/com/bank/branch/platform/bizapp/service/SupportDeptServiceWorkflowTest.java使用了未经检查或不安全的操作。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/business-application-center/src/test/java/com/bank/branch/platform/bizapp/service/SupportDeptServiceWorkflowTest.java: 有关详细信息, 请使用 -Xlint:unchecked 重新编译。
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ business-application-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ business-application-center ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/business-application-center/target/business-application-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ business-application-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ business-application-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ business-application-center ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/business-application-center/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/business-application-center/1.0.0-SNAPSHOT/business-application-center-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/business-application-center/target/business-application-center-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/business-application-center/1.0.0-SNAPSHOT/business-application-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] ---------< com.bank.branch.platform:performance-engine-center >---------
+[INFO] Building Performance Engine Center 1.0.0-SNAPSHOT                [14/19]
+[INFO]   from performance-engine-center/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ performance-engine-center ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/performance-engine-center/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ performance-engine-center ---
+[INFO] Copying 37 resources from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ performance-engine-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 420 source files with javac [debug target 17] to target/classes
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/performance-engine-center/src/main/java/com/bank/branch/platform/performance/service/engine/GroovyExecutorImpl.java: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/performance-engine-center/src/main/java/com/bank/branch/platform/performance/service/engine/GroovyExecutorImpl.java使用或覆盖了已过时的 API。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/performance-engine-center/src/main/java/com/bank/branch/platform/performance/service/engine/GroovyExecutorImpl.java: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ performance-engine-center ---
+[INFO] Copying 1 resource from src/test/resources to target/test-classes
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ performance-engine-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 237 source files with javac [debug target 17] to target/test-classes
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/performance-engine-center/src/test/java/com/bank/branch/platform/performance/service/adjust/AllocAdjustServiceTest.java: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/performance-engine-center/src/test/java/com/bank/branch/platform/performance/service/adjust/AllocAdjustServiceTest.java使用或覆盖了已过时的 API。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/performance-engine-center/src/test/java/com/bank/branch/platform/performance/service/adjust/AllocAdjustServiceTest.java: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/performance-engine-center/src/test/java/com/bank/branch/platform/performance/service/MetricDefServiceScopeTest.java: 某些输入文件使用了未经检查或不安全的操作。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/performance-engine-center/src/test/java/com/bank/branch/platform/performance/service/MetricDefServiceScopeTest.java: 有关详细信息, 请使用 -Xlint:unchecked 重新编译。
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ performance-engine-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ performance-engine-center ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/performance-engine-center/target/performance-engine-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ performance-engine-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ performance-engine-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ performance-engine-center ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/performance-engine-center/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/performance-engine-center/1.0.0-SNAPSHOT/performance-engine-center-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/performance-engine-center/target/performance-engine-center-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/performance-engine-center/1.0.0-SNAPSHOT/performance-engine-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] ----------< com.bank.branch.platform:report-analytics-center >----------
+[INFO] Building Report Analytics Center 1.0.0-SNAPSHOT                  [15/19]
+[INFO]   from report-analytics-center/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ report-analytics-center ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/report-analytics-center/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ report-analytics-center ---
+[INFO] Copying 8 resources from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ report-analytics-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 256 source files with javac [debug target 17] to target/classes
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/report-analytics-center/src/main/java/com/bank/branch/platform/report/support/SqlSafeValidator.java: 某些输入文件使用或覆盖了已过时的 API。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/report-analytics-center/src/main/java/com/bank/branch/platform/report/support/SqlSafeValidator.java: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ report-analytics-center ---
+[INFO] Copying 4 resources from src/test/resources to target/test-classes
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ report-analytics-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 80 source files with javac [debug target 17] to target/test-classes
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/report-analytics-center/src/test/java/com/bank/branch/platform/report/controller/ScreenConfigAdminControllerContractTest.java: 某些输入文件使用或覆盖了已过时的 API。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/report-analytics-center/src/test/java/com/bank/branch/platform/report/controller/ScreenConfigAdminControllerContractTest.java: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/report-analytics-center/src/test/java/com/bank/branch/platform/report/service/SqlProbeServiceTest.java: 某些输入文件使用了未经检查或不安全的操作。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/report-analytics-center/src/test/java/com/bank/branch/platform/report/service/SqlProbeServiceTest.java: 有关详细信息, 请使用 -Xlint:unchecked 重新编译。
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ report-analytics-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ report-analytics-center ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/report-analytics-center/target/report-analytics-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ report-analytics-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ report-analytics-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ report-analytics-center ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/report-analytics-center/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/report-analytics-center/1.0.0-SNAPSHOT/report-analytics-center-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/report-analytics-center/target/report-analytics-center-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/report-analytics-center/1.0.0-SNAPSHOT/report-analytics-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] -------------< com.bank.branch.platform:red-engine-center >-------------
+[INFO] Building Red Engine Center 1.0.0-SNAPSHOT                        [16/19]
+[INFO]   from red-engine-center/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ red-engine-center ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/red-engine-center/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ red-engine-center ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ red-engine-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 142 source files with javac [debug target 17] to target/classes
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ red-engine-center ---
+[INFO] Copying 3 resources from src/test/resources to target/test-classes
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ red-engine-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 32 source files with javac [debug target 17] to target/test-classes
+[WARNING] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/red-engine-center/src/test/java/com/bank/branch/platform/redengine/controller/ReCockpitControllerTest.java:[38,42] org.springframework.web.servlet.DispatcherServlet 中的 setThrowExceptionIfNoHandlerFound(boolean) 已过时, 且标记为待删除
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/red-engine-center/src/test/java/com/bank/branch/platform/redengine/service/ReTaskWorkflowServiceTest.java: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/red-engine-center/src/test/java/com/bank/branch/platform/redengine/service/ReTaskWorkflowServiceTest.java使用了未经检查或不安全的操作。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/red-engine-center/src/test/java/com/bank/branch/platform/redengine/service/ReTaskWorkflowServiceTest.java: 有关详细信息, 请使用 -Xlint:unchecked 重新编译。
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ red-engine-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ red-engine-center ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/red-engine-center/target/red-engine-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ red-engine-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ red-engine-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ red-engine-center ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/red-engine-center/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/red-engine-center/1.0.0-SNAPSHOT/red-engine-center-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/red-engine-center/target/red-engine-center-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/red-engine-center/1.0.0-SNAPSHOT/red-engine-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] ---------< com.bank.branch.platform:yundun-application-center >---------
+[INFO] Building 浦爱云盾应用中心 1.0.0-SNAPSHOT                                 [17/19]
+[INFO]   from yundun-application-center/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ yundun-application-center ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/yundun-application-center/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ yundun-application-center ---
+[INFO] Copying 2 resources from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ yundun-application-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 26 source files with javac [debug target 17] to target/classes
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/yundun-application-center/src/main/java/com/bank/branch/platform/yundun/service/AccountabilityViolationService.java: 某些输入文件使用或覆盖了已过时的 API。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/yundun-application-center/src/main/java/com/bank/branch/platform/yundun/service/AccountabilityViolationService.java: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ yundun-application-center ---
+[INFO] skip non existing resourceDirectory /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/yundun-application-center/src/test/resources
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ yundun-application-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 13 source files with javac [debug target 17] to target/test-classes
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/yundun-application-center/src/test/java/com/bank/branch/platform/yundun/service/AccountabilityViolationBatchImportTest.java: 某些输入文件使用了未经检查或不安全的操作。
+[INFO] /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/yundun-application-center/src/test/java/com/bank/branch/platform/yundun/service/AccountabilityViolationBatchImportTest.java: 有关详细信息, 请使用 -Xlint:unchecked 重新编译。
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ yundun-application-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ yundun-application-center ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/yundun-application-center/target/yundun-application-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ yundun-application-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ yundun-application-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ yundun-application-center ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/yundun-application-center/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/yundun-application-center/1.0.0-SNAPSHOT/yundun-application-center-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/yundun-application-center/target/yundun-application-center-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/yundun-application-center/1.0.0-SNAPSHOT/yundun-application-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] ------------< com.bank.branch.platform:soap-gateway-center >------------
+[INFO] Building SOAP Gateway Center 1.0.0-SNAPSHOT                      [18/19]
+[INFO]   from soap-gateway-center/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ soap-gateway-center ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/soap-gateway-center/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ soap-gateway-center ---
+[INFO] skip non existing resourceDirectory /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/soap-gateway-center/src/main/resources
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ soap-gateway-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 29 source files with javac [debug target 17] to target/classes
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ soap-gateway-center ---
+[INFO] Copying 1 resource from src/test/resources to target/test-classes
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ soap-gateway-center ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 9 source files with javac [debug target 17] to target/test-classes
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ soap-gateway-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ soap-gateway-center ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/soap-gateway-center/target/soap-gateway-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ soap-gateway-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ soap-gateway-center ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ soap-gateway-center ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/soap-gateway-center/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/soap-gateway-center/1.0.0-SNAPSHOT/soap-gateway-center-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/soap-gateway-center/target/soap-gateway-center-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/soap-gateway-center/1.0.0-SNAPSHOT/soap-gateway-center-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] -----------------< com.bank.branch.platform:bootstrap >-----------------
+[INFO] Building Bootstrap 1.0.0-SNAPSHOT                                [19/19]
+[INFO]   from bootstrap/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ bootstrap ---
+[INFO] Deleting /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/bootstrap/target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ bootstrap ---
+[INFO] Copying 7 resources from src/main/resources to target/classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ bootstrap ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 6 source files with javac [debug target 17] to target/classes
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ bootstrap ---
+[INFO] Copying 20 resources from src/test/resources to target/test-classes
+[INFO]
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ bootstrap ---
+[INFO] Changes detected - recompiling the module! :dependency
+[INFO] Compiling 34 source files with javac [debug target 17] to target/test-classes
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ bootstrap ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ bootstrap ---
+[INFO] Building jar: /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/bootstrap/target/bootstrap-1.0.0-SNAPSHOT.jar
+[INFO]
+[INFO] --- spring-boot:3.2.3:repackage (repackage) @ bootstrap ---
+[INFO] Replacing main artifact /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/bootstrap/target/bootstrap-1.0.0-SNAPSHOT.jar with repackaged archive, adding nested dependencies in BOOT-INF/.
+[INFO] The original artifact has been renamed to /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/bootstrap/target/bootstrap-1.0.0-SNAPSHOT.jar.original
+[INFO]
+[INFO] --- failsafe:3.2.5:integration-test (default) @ bootstrap ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- failsafe:3.2.5:verify (default) @ bootstrap ---
+[INFO] Tests are skipped.
+[INFO]
+[INFO] --- install:3.1.2:install (default-install) @ bootstrap ---
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/bootstrap/pom.xml to /Users/likewang/.m2/repository/com/bank/branch/platform/bootstrap/1.0.0-SNAPSHOT/bootstrap-1.0.0-SNAPSHOT.pom
+[INFO] Installing /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/bootstrap/target/bootstrap-1.0.0-SNAPSHOT.jar to /Users/likewang/.m2/repository/com/bank/branch/platform/bootstrap/1.0.0-SNAPSHOT/bootstrap-1.0.0-SNAPSHOT.jar
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for Branch Platform 1.0.0-SNAPSHOT:
+[INFO]
+[INFO] Branch Platform .................................... SUCCESS [  0.845 s]
+[INFO] Common ............................................. SUCCESS [  0.040 s]
+[INFO] Common Web ......................................... SUCCESS [  3.557 s]
+[INFO] Common Trace ....................................... SUCCESS [  0.560 s]
+[INFO] Common Security .................................... SUCCESS [  1.455 s]
+[INFO] Common AOP ......................................... SUCCESS [  1.292 s]
+[INFO] Common DB .......................................... SUCCESS [  1.492 s]
+[INFO] Auth Permission Center ............................. SUCCESS [  8.852 s]
+[INFO] System Governance Center ........................... SUCCESS [  6.091 s]
+[INFO] Workflow Center .................................... SUCCESS [  8.662 s]
+[INFO] Portal Content Center .............................. SUCCESS [  7.500 s]
+[INFO] Customer Marketing Center .......................... SUCCESS [ 14.817 s]
+[INFO] Business Application Center ........................ SUCCESS [  3.822 s]
+[INFO] Performance Engine Center .......................... SUCCESS [ 32.255 s]
+[INFO] Report Analytics Center ............................ SUCCESS [ 43.283 s]
+[INFO] Red Engine Center .................................. SUCCESS [ 50.024 s]
+[INFO] 浦爱云盾应用中心 ........................................... SUCCESS [ 24.645 s]
+[INFO] SOAP Gateway Center ................................ SUCCESS [ 20.655 s]
+[INFO] Bootstrap .......................................... SUCCESS [ 19.176 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  04:09 min
+[INFO] Finished at: 2026-09-21T11:29:26+08:00
+[INFO] ------------------------------------------------------------------------

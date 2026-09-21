@@ -68,6 +68,12 @@ describe('CityPanorama 市级支行全景', () => {
     expect(wrapper.findAll('[data-testid="branch-row"]').some(row => row.text().includes('—'))).toBe(true);
   });
 
+  it('下钻标题只展示业务标题，剥离末尾测试修饰且不出现领导视图文案', () => {
+    const wrapper = mountCity({ model: { ...model, title: '西安市支行经营全景（测试）' } });
+    expect(wrapper.get('.city-title-block h1').text()).toBe('西安市支行经营全景');
+    expect(wrapper.text()).not.toContain('领导视图');
+  });
+
   it('支持搜索、经营关注筛选、按存款排序和五条分页', async () => {
     const wrapper = mountCity();
     await wrapper.get('[data-testid="branch-search"]').setValue('高新');

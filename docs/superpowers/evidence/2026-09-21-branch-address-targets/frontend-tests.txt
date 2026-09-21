@@ -1,0 +1,36 @@
+
+> xanzc-frontend@0.1.0 test
+> vitest run --run src/views/screen/components/__tests__/CompletionWaterGauge.spec.js src/views/screen/panorama/__tests__/targetPresentation.spec.js src/views/screen/panorama/__tests__/PanoramaDashboard.spec.js src/views/screen/panorama/__tests__/TargetWaterIntegration.spec.js src/views/screen/panorama/__tests__/loanRate.spec.js src/views/screen/panorama/__tests__/geographicIdentity.spec.js src/views/screen/panorama/__tests__/dataAdapter.spec.js src/views/screen/panorama/__tests__/sourcePresentation.spec.js src/views/screen/panorama/__tests__/usePanoramaData.spec.js src/views/screen/panorama/__tests__/PanoramaBindings.spec.js src/views/screen/panorama/__tests__/bindings.spec.js src/views/screen/panorama/__tests__/CompositionBreakdown.spec.js
+
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+ ✓ src/views/screen/panorama/__tests__/targetPresentation.spec.js  (6 tests) 38ms
+ ✓ src/views/screen/panorama/__tests__/bindings.spec.js  (9 tests) 32ms
+ ✓ src/views/screen/panorama/__tests__/loanRate.spec.js  (4 tests) 73ms
+ ✓ src/views/screen/panorama/__tests__/dataAdapter.spec.js  (32 tests) 114ms
+ ✓ src/views/screen/panorama/__tests__/geographicIdentity.spec.js  (2 tests) 24ms
+ ✓ src/views/screen/components/__tests__/CompletionWaterGauge.spec.js  (14 tests) 124ms
+ ✓ src/views/screen/panorama/__tests__/CompositionBreakdown.spec.js  (11 tests) 237ms
+ ✓ src/views/screen/panorama/__tests__/usePanoramaData.spec.js  (22 tests) 438ms
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+ ✓ src/views/screen/panorama/__tests__/sourcePresentation.spec.js  (14 tests) 110ms
+ ✓ src/views/screen/panorama/__tests__/TargetWaterIntegration.spec.js  (2 tests) 231ms
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+ ✓ src/views/screen/panorama/__tests__/PanoramaDashboard.spec.js  (27 tests) 1566ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaBindings.spec.js  (21 tests) 1799ms
+
+ Test Files  12 passed (12)
+      Tests  164 passed (164)
+   Start at  11:37:09
+   Duration  9.86s (transform 5.62s, setup 3ms, collect 20.62s, tests 4.79s, environment 10.51s, prepare 6.79s)

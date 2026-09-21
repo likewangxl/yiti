@@ -1,0 +1,11 @@
+OK     auth-permission-center
+OK     system-governance-center
+OK     workflow-center
+OK     customer-marketing-center
+OK     business-application-center
+OK     portal-content-center
+OK     performance-engine-center
+OK     report-analytics-center
+OK     red-engine-center
+OK     common
+OK     soap-gateway-center

@@ -39,7 +39,7 @@ public final class CodeScreenPresentationValidator {
     private static final Set<String> BRANCH_SLOTS = Set.of(
             "deposit", "loan", "customers", "revenue", "rate", "trend", "composition",
             "ranking", "attention", "branches", "branchTrend", "citySummary",
-            "depositIncrease", "depositAverage");
+            "depositIncrease", "depositAverage", "loanRate");
     private static final Set<String> RETAIL_SLOTS = Set.of(
             "retailAum", "retailDeposit", "retailDepositAverage", "retailRevenue", "retailLoan",
             "retailValueCustomers", "retailNplRate", "retailTrend", "retailSegments", "retailRanking",
@@ -62,6 +62,7 @@ public final class CodeScreenPresentationValidator {
             "AVAILABLE", "NO_SOURCE", "NO_ROWS", "NO_VALUES", "PARTIAL", "HISTORICAL");
     private static final Set<String> METRIC_LABEL_KEYS = Set.of(
             "deposit", "depositIncrease", "depositAverage", "loan", "customers", "revenue", "rate",
+            "loanRate",
             "retailAum", "retailDeposit", "retailDepositAverage", "retailRevenue", "retailValueCustomers",
             "retailLoan", "retailNplRate", "corpDeposit", "corpDepositAverage", "corpLoan", "corpRevenue",
             "corpCustomers", "corpNplRate");
@@ -788,6 +789,7 @@ public final class CodeScreenPresentationValidator {
         result.put("customers", Set.of("value", "change", "date"));
         result.put("revenue", Set.of("value", "change", "date"));
         result.put("rate", Set.of("value", "change", "date"));
+        result.put("loanRate", Set.of("value", "change", "date"));
         result.put("trend", Set.of("date", "deposit", "loan", "depositIncrease", "customers", "rate"));
         result.put("branchTrend", Set.of("date", "deposit", "loan", "customers", "rate"));
         result.put("composition", Set.of("name", "value", "corporate", "retail"));
@@ -834,6 +836,7 @@ public final class CodeScreenPresentationValidator {
         result.put("customers", Set.of("value"));
         result.put("revenue", Set.of("value"));
         result.put("rate", Set.of("value"));
+        result.put("loanRate", Set.of("value"));
         result.put("trend", Set.of("date"));
         result.put("branchTrend", Set.of("date"));
         result.put("composition", Set.of("name", "value"));
@@ -1073,6 +1076,10 @@ public final class CodeScreenPresentationValidator {
                 default -> Set.of();
             };
             case "rate" -> switch (field) {
+                case "value", "change" -> ratio;
+                default -> Set.of();
+            };
+            case "loanRate" -> switch (field) {
                 case "value", "change" -> ratio;
                 default -> Set.of();
             };

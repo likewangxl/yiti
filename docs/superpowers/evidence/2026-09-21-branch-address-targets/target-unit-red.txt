@@ -1,0 +1,29 @@
+
+> xanzc-frontend@0.1.0 test
+> vitest run --run src/views/screen/panorama/__tests__/targetPresentation.spec.js
+
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+ ❯ src/views/screen/panorama/__tests__/targetPresentation.spec.js  (6 tests | 1 failed) 16ms
+   ❯ src/views/screen/panorama/__tests__/targetPresentation.spec.js > 目标金额与完成率分离 > 金额目标不能作为存款完成率，旧target仅接受明确百分比单位
+     → expected 500 to be null
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/screen/panorama/__tests__/targetPresentation.spec.js > 目标金额与完成率分离 > 金额目标不能作为存款完成率，旧target仅接受明确百分比单位
+AssertionError: expected 500 to be null
+ ❯ src/views/screen/panorama/__tests__/targetPresentation.spec.js:101:84
+     99| describe('目标金额与完成率分离', () => {
+    100|   it('金额目标不能作为存款完成率，旧target仅接受明确百分比单位', () =>…
+    101|     expect(buildTargetCards({kpis:[{key:'target',value:500,unit:'万元'…
+       |                                                                                    ^
+    102|     expect(buildTargetCards({kpis:[{key:'target',value:80,unit:'%'}]})…
+    103|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed (6)
+   Start at  11:34:45
+   Duration  746ms (transform 38ms, setup 0ms, collect 34ms, tests 16ms, environment 0ms, prepare 180ms)

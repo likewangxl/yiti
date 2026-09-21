@@ -184,6 +184,29 @@ describe('PanoramaBindings', () => {
     expect(api.listOrgGroups).not.toHaveBeenCalled();
   });
 
+  it('分行默认保留14项并提供可选 loanRate 入口，配置后才写入组件', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({ ...canvas, canvasDraftJson: JSON.stringify({ components: [] }) });
+    api.listScreenDatasources.mockResolvedValue([datasource]);
+    api.saveScreenCanvas.mockResolvedValue({ canvasVersion: 5 });
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="integration-readiness"]').exists()).toBe(true));
+    expect(wrapper.findAll('[data-testid^="readiness-slot-"]')).toHaveLength(14);
+    expect(wrapper.find('[data-testid="slot-loanRate"]').exists()).toBe(true);
+    await wrapper.find('[data-testid="slot-loanRate"]').trigger('click');
+    await wrapper.find('[data-testid="slot-datasource"]').setValue('77');
+    await wrapper.find('[data-testid="field-option-loanRate-value"]').setValue('deposit_raw');
+    await wrapper.find('[data-testid="unit-loanRate-value"]').setValue('PERCENT');
+    await wrapper.find('[data-testid="binding-save"]').trigger('click');
+
+    await vi.waitFor(() => expect(api.saveScreenCanvas).toHaveBeenCalled());
+    expect(api.saveScreenCanvas.mock.lastCall[0].components).toEqual(expect.arrayContaining([
+      expect.objectContaining({ propValue: { bindingKey: 'loanRate' } })
+    ]));
+    wrapper.unmount();
+  });
+
   it('屏选择器切换到 B 时传递选中的 ID，并加载 B 画布', async () => {
     const screenB = { ...screen, id: 10, screenCode: 'SCR_OTHER', screenName: '另一张屏' };
     const canvasB = { ...canvas, screenId: 10, screenCode: 'SCR_OTHER', canvasVersion: 8 };

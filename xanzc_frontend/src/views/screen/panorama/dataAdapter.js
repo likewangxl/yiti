@@ -174,7 +174,7 @@ function metricKind(slot, semantic, unit = null) {
   if (slot === 'attention' && semantic === 'count') return 'rawCount';
   if (semantic === 'customers' || (slot === 'customers' && semantic === 'value') || semantic === 'count') return 'count';
   if (semantic === 'rate' || semantic === 'change'
-      || (slot === 'rate' && semantic === 'value')) return 'ratio';
+      || (['rate', 'loanRate'].includes(slot) && semantic === 'value')) return 'ratio';
   // 构成指标允许按比例绑定；只有单位明确为百分数/比例时才走比例换算，
   // 这样旧的 semantic=value 以及双列指标都可安全表示金额或比例构成。
   if (slot === 'composition' && ['value', 'corporate', 'retail'].includes(semantic)
@@ -494,13 +494,21 @@ function adaptComposition(table, binding, model, issues, slot = 'composition') {
   );
 }
 
-function adaptRanking(table, binding, model, issues) {
+function adaptRanking(table, binding, model, issues, options) {
+  const directory = directoryFrom(options);
+  const byCode = new Map(directory.map(item => [String(item.orgCode), item]));
+  const namedGroup = String(options?.view?.orgScopeMode || options?.view?.org_scope_mode || '').toUpperCase() === 'NAMED_GROUP';
   if (!table?.rows?.length) {
     issue(issues, 'ranking', 'NO_ROWS', '数据响应没有排名行');
     return;
   }
   for (const row of table.rows) {
     const orgCode = readDimension(row, binding, 'orgCode', table, 'ranking', issues, true);
+    const institution = byCode.get(String(orgCode ?? ''));
+    if (namedGroup && !institution) {
+      issue(issues, 'ranking', 'UNAUTHORIZED_ORG', '排名机构不在当前授权机构目录内', 'orgCode');
+      continue;
+    }
     const name = readDimension(row, binding, 'name', table, 'ranking', issues, true);
     const value = readMetric(row, binding, 'value', table, 'ranking', issues, true);
     const increase = binding.fields?.increase
@@ -511,7 +519,8 @@ function adaptRanking(table, binding, model, issues) {
       ? readMetric(row, binding, 'change', table, 'ranking', issues).value : null;
     // 统一模型以 deposit 作为排名主指标；binding semantic 仍保留 value 以避免猜列名。
     model.rankings.push({
-      orgCode: orgCode ?? '', name: name ?? '', deposit: value.value, increase, average, change
+      orgCode: orgCode ?? '', name: name ?? '', deposit: value.value, increase, average, change,
+      ...(institution ? { name: institution.orgName || name || '', cityCode: institution.cityCode, cityName: institution.cityName || '' } : {})
     });
   }
 }
@@ -654,7 +663,7 @@ function adaptBranches(table, binding, model, issues, options) {
       coordSys: row ? readDimension(row, binding, 'coordSys', table, 'branches', issues) : '',
       located: row ? readDimension(row, binding, 'located', table, 'branches', issues) : false
     });
-    if (!item.cityCode && row && binding.fields?.cityCode) {
+    if (!directoryItem && !item.cityCode && row && binding.fields?.cityCode) {
       item.cityCode = asText(readDimension(row, binding, 'cityCode', table, 'branches', issues));
     }
     if (!row) {
@@ -775,6 +784,7 @@ function adaptSlot(slot, table, binding, model, issues, options, pendingAttentio
     case 'customers':
     case 'revenue':
     case 'rate':
+    case 'loanRate':
     case 'depositIncrease':
     case 'depositAverage':
       adaptSingle(slot, table, binding, model, issues); break;
@@ -783,7 +793,7 @@ function adaptSlot(slot, table, binding, model, issues, options, pendingAttentio
     case 'composition':
       adaptComposition(table, binding, model, issues); break;
     case 'ranking':
-      adaptRanking(table, binding, model, issues); break;
+      adaptRanking(table, binding, model, issues, options); break;
     case 'attention':
       adaptAttention(table, binding, model, issues, options, pendingAttention); break;
     case 'branches':

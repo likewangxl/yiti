@@ -61,6 +61,12 @@
           <span>{{ presentationLabel(slot) }}</span>
           <small>{{ slotStatusLabel(slot) }}</small>
         </button>
+        <button v-if="isBranchTemplate && !slotOrder.includes('loanRate')" type="button"
+                :class="{ 'is-active': selectedSlot === 'loanRate', 'is-bound': Boolean(bindingState.loanRate?.dsId) }"
+                data-testid="slot-loanRate" @click="selectSlot('loanRate')">
+          <span>{{ presentationLabel('loanRate') }}</span>
+          <small>可选·待配置</small>
+        </button>
       </nav>
 
       <main class="panorama-bindings__editor" aria-live="polite">
@@ -205,6 +211,7 @@ import {
 import { filterDatasourcesByMeta, parseDatasourceConfig } from '../designer/widgets/chart-widget/dsFilter';
 import {
   BINDING_SLOTS,
+  BRANCH_OPTIONAL_SLOT_ORDER,
   PERIOD_LABELS,
   PERIOD_VALUES,
   SLOT_ORDER,
@@ -269,11 +276,21 @@ let settingsRefreshGeneration = 0;
 const selectedTemplate = ref('branch-overview-v1');
 const isRetailTemplate = computed(() => selectedTemplate.value === 'retail-overview-v1');
 const isCorporateTemplate = computed(() => selectedTemplate.value === CORPORATE_TEMPLATE);
+const isBranchTemplate = computed(() => !isRetailTemplate.value && !isCorporateTemplate.value);
 const isRetailScreen = computed(() => String(activeScreen.value?.bizLine || activeScreen.value?.biz_line || '').toUpperCase() === 'RETAIL');
 const isCorporateScreen = computed(() => String(activeScreen.value?.bizLine || activeScreen.value?.biz_line || '').toUpperCase() === 'CORP');
-const slotOrder = computed(() => isCorporateTemplate.value
-  ? CORPORATE_SLOT_ORDER
-  : isRetailTemplate.value ? RETAIL_SLOT_ORDER : SLOT_ORDER);
+const slotOrder = computed(() => {
+  const base = isCorporateTemplate.value
+    ? CORPORATE_SLOT_ORDER
+    : isRetailTemplate.value ? RETAIL_SLOT_ORDER : SLOT_ORDER;
+  if (!isBranchTemplate.value) return base;
+  const hasOptionalBinding = BRANCH_OPTIONAL_SLOT_ORDER.some(slot => {
+    const binding = bindingState[slot];
+    return selectedSlot.value === slot || Boolean(binding?.dsId)
+      || Object.keys(binding?.fields || {}).length > 0;
+  });
+  return hasOptionalBinding ? [...base, ...BRANCH_OPTIONAL_SLOT_ORDER] : base;
+});
 function changeTemplate() {
   selectedSlot.value = slotOrder.value.find(slot => bindingState[slot]) || slotOrder.value[0];
   conversionAccepted.value = draftComponents.value.length === 0;

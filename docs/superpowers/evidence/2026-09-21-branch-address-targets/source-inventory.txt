@@ -1,0 +1,4 @@
+item	n
+screen_direct_members	4
+verified_address_institutions	52
+loan_target_rows	0

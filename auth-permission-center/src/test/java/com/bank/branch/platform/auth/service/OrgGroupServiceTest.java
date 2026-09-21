@@ -370,7 +370,7 @@ class OrgGroupServiceTest {
     }
 
     @Test
-    void activeProfilesPreferExistingRealCoordinatesOverLocationLedger() {
+    void activeProfilesPreferLatestVerifiedAddressLocationOverOldProfileCoordinates() {
         ExtOrgInfo realOrg = org("ORG_REAL", "HQ", 0);
         ExtOrgInfo missingOrg = org("ORG_MISSING", "HQ", 0);
         PtOrgProfile real = profile("ORG_REAL");
@@ -390,9 +390,9 @@ class OrgGroupServiceTest {
 
         Map<String, OrgProfileDTO> result = service.getActiveProfiles(Set.of("ORG_REAL", "ORG_MISSING"));
 
-        assertThat(result.get("ORG_REAL").getLng()).isEqualByComparingTo("108.2000000");
-        assertThat(result.get("ORG_REAL").getLat()).isEqualByComparingTo("34.2000000");
-        assertThat(result.get("ORG_REAL").getLocationSource()).isEqualTo(OrgLocationService.SOURCE_PROFILE);
+        assertThat(result.get("ORG_REAL").getLng()).isEqualByComparingTo("108.9000000");
+        assertThat(result.get("ORG_REAL").getLat()).isEqualByComparingTo("34.9000000");
+        assertThat(result.get("ORG_REAL").getLocationSource()).isEqualTo(OrgLocationService.SOURCE_GEOCODE_VERIFIED);
         assertThat(result.get("ORG_MISSING").getLng()).isEqualByComparingTo("108.8000000");
         assertThat(result.get("ORG_MISSING").getLat()).isEqualByComparingTo("34.8000000");
         assertThat(result.get("ORG_MISSING").getLocationSource())

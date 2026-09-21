@@ -613,7 +613,7 @@ public class OrgGroupService {
 
     /**
      * 仅为当前调用方已经筛出的有效画像补充位置台账坐标；详细地址永不进入跨模块画像 DTO。
-     * 画像自身存在合法 GCJ02 坐标时保持其优先级，位置表只作为 fallback。
+     * 以已核验地址台账的定位为优先；仅无有效台账定位时使用非演示画像坐标。
      */
     private void supplementRuntimeLocations(Map<String, OrgProfileDTO> profiles) {
         if (orgLocationService == null || profiles == null || profiles.isEmpty()) {
@@ -635,6 +635,15 @@ public class OrgGroupService {
             if (profile == null) {
                 continue;
             }
+            PtOrgLocation location = locations.get(entry.getKey());
+            if (location != null && validGcj02Coordinate(location.getLng(), location.getLat(),
+                    location.getCoordSys())) {
+                profile.setLng(location.getLng());
+                profile.setLat(location.getLat());
+                profile.setCoordSys(OrgLocationService.COORD_SYS_GCJ02);
+                profile.setLocationSource(location.getLocationSource());
+                continue;
+            }
             boolean demoCoordinates = isScreenMapDemo(profile);
             if (demoCoordinates) {
                 // 演示脚本中的坐标不是生产位置；只有已确认位置台账可以覆盖它。
@@ -647,14 +656,6 @@ public class OrgGroupService {
                     profile.setLocationSource(OrgLocationService.SOURCE_PROFILE);
                 }
                 continue;
-            }
-            PtOrgLocation location = locations.get(entry.getKey());
-            if (location != null && validGcj02Coordinate(location.getLng(), location.getLat(),
-                    location.getCoordSys())) {
-                profile.setLng(location.getLng());
-                profile.setLat(location.getLat());
-                profile.setCoordSys(OrgLocationService.COORD_SYS_GCJ02);
-                profile.setLocationSource(location.getLocationSource());
             }
         }
     }

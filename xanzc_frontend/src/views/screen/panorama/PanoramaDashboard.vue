@@ -12,7 +12,7 @@
         <span>数据日期 {{ displayDate }}</span>
       </div>
       <div class="panorama-title-block">
-        <h1>{{ safeModel.title || '分行经营总览' }}</h1>
+        <h1>{{ displayTitle }}</h1>
         <span>{{ scopeLabel }}</span>
       </div>
       <div class="panorama-header-actions">
@@ -146,7 +146,7 @@
           <div class="panorama-panel-heading">
             <div>
               <span class="panorama-section-kicker">机构视图</span>
-              <h2>全辖机构分布</h2>
+              <h2>辖区机构分布</h2>
             </div>
             <div class="panorama-map-heading-actions">
               <span>{{ institutionCountLabel }}</span>
@@ -194,25 +194,38 @@
       </div>
 
       <div class="panorama-column panorama-right-column">
-        <article class="panorama-panel panorama-leadership-panel">
-          <div class="panorama-panel-heading panorama-leadership-heading">
-            <div>
-              <span class="panorama-section-kicker">行领导经营视图</span>
+          <article class="panorama-panel panorama-leadership-panel">
+            <div class="panorama-panel-heading panorama-leadership-heading">
+              <div>
+              <span class="panorama-section-kicker">经营分析</span>
               <h2>机构经营诊断与矩阵</h2>
             </div>
             <span>共 {{ leadershipTotalCount }} 家</span>
           </div>
-          <article class="panorama-panel panorama-target-panel">
+          <article class="panorama-panel panorama-target-panel panorama-target-dual">
             <div class="panorama-target-heading"><span>目标进度</span><small>{{ targetPeriodLabel }}</small></div>
-            <div v-if="targetProgressActual !== null" class="panorama-target-summary panorama-target-water-summary">
-              <CompletionWaterGauge :value="targetProgressActual" :label="targetMetricLabel" />
-              <div class="panorama-target-water-copy">
-                <span class="panorama-target-summary-label">{{ targetMetricLabel }}</span>
-                <strong class="panorama-target-distance">{{ targetDistanceSummary.text }}</strong>
-                <small class="panorama-target-water-reference">目标基准 100% · 水位随完成率变化</small>
-              </div>
+            <div class="panorama-target-cards" data-testid="target-cards">
+              <article
+                v-for="card in targetCards"
+                :key="card.key"
+                class="panorama-target-card"
+                :data-target-key="card.key"
+                data-testid="target-card"
+              >
+                <div class="panorama-target-card-heading">
+                  <span>{{ card.label }}</span>
+                  <small>{{ card.date }}</small>
+                </div>
+                <div class="panorama-target-summary panorama-target-water-summary">
+                  <CompletionWaterGauge :value="card.value" :label="card.label" :variant="card.variant" />
+                  <div class="panorama-target-water-copy">
+                    <span class="panorama-target-summary-label">{{ card.label }}</span>
+                    <strong class="panorama-target-distance">{{ card.hasData ? card.gapText : card.message }}</strong>
+                    <small class="panorama-target-water-reference">目标基准 100% · 水位随完成率变化</small>
+                  </div>
+                </div>
+              </article>
             </div>
-            <div v-else class="panorama-unbound" data-testid="target-unbound">{{ sourceStatus('rate', 'value').message }}<span v-if="targetKpi" class="panorama-visually-hidden">未绑定</span></div>
           </article>
           <article class="panorama-panel panorama-ranking-panel panorama-ranking-detail-panel">
             <div class="panorama-panel-heading">
@@ -328,6 +341,7 @@ import {
 } from './leadershipInsights.js';
 import { buildCityMapDetails } from './cityMapDetails.js';
 import { resolveDataStatus } from './sourcePresentation';
+import { buildTargetCards, stripTestModifier } from './targetPresentation.js';
 
 
 const props = defineProps({
@@ -404,6 +418,7 @@ const depositOperationCards = computed(() => [
   { ...findKpi(safeModel.value.kpis, 'depositAverage'), label: '月均余额', note: '周期平均' }
 ]);
 const displayDate = computed(() => safeModel.value.dataDate || '—');
+const displayTitle = computed(() => stripTestModifier(safeModel.value.title) || '分行经营总览');
 const scopeLabel = computed(() => String(
   safeModel.value.scopeLabel
     || safeModel.value.scopeName
@@ -433,26 +448,22 @@ const compositionHeadingMeta = computed(() => {
 const institutionCountLabel = computed(() => {
   const located = safeModel.value.institutions.filter(item => item?.located && item?.lng != null && item?.lat != null).length;
   const total = safeModel.value.institutions.length;
+  const unassigned = safeModel.value.institutions.filter(item => !String(item?.cityCode || item?.city_code || '').trim()).length;
   const cityCount = new Set(safeModel.value.institutions
-    .map(item => String(item?.cityCode || '').trim())
+    .map(item => String(item?.cityCode || item?.city_code || '').trim())
     .filter(Boolean)).size;
-  return `共 ${cityCount}个地市 / ${total}家机构 / 已定位 ${located}家`;
+  const locationLabel = unassigned ? `待确认归属 ${unassigned}家 / 已定位 ${located}家` : `已定位 ${located}家`;
+  return `共 ${cityCount}个地市 / ${total}家机构 / ${locationLabel}`;
 });
-const targetKpi = computed(() => safeModel.value.kpis.find(item => [
-  'rate', 'targetRate', 'completionRate', 'targetCompletionRate', 'target'
-].includes(item?.key)) || null);
-const targetMetricLabel = computed(() => {
-  const label = targetKpi.value?.label;
-  return typeof label === 'string' && label.trim() ? label.trim() : '目标完成率';
-});
-const targetUnboundLabel = computed(() => targetKpi.value
-  ? `${targetMetricLabel.value}暂无有效数据`
-  : `${targetMetricLabel.value}未绑定`);
-const targetProgressActual = computed(() => finiteMetric(targetKpi.value?.value));
-const targetDistanceSummary = computed(() => summarizeTargetDistance(targetProgressActual.value));
+const targetCards = computed(() => buildTargetCards(safeModel.value));
+const depositTargetCard = computed(() => targetCards.value[0]);
+const targetMetricLabel = computed(() => depositTargetCard.value?.label || '零售存款目标完成率');
 const targetPeriodLabel = computed(() => {
-  const period = String(targetKpi.value?.periodLabel || targetKpi.value?.periodName || targetKpi.value?.period || '').trim();
-  return ({ LATEST: '最新数据', LAST_10D: '近10天', LAST_1M: '近1个月', LAST_6M_EOM: '近6个月月末' }[period] || period || '统计周期');
+  const period = String(depositTargetCard.value?.period || '').trim();
+  return ({ LATEST: '最新数据', LAST_10D: '近10天', LAST_1M: '近1个月', LAST_6M_EOM: '近6个月月末' }[period]
+    || period
+    || (depositTargetCard.value?.bound ? depositTargetCard.value.date : '')
+    || '统计周期');
 });
 const rankingMetric = ref('deposit');
 const rankingMetricOptions = RANKING_METRICS;

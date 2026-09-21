@@ -1,0 +1,18 @@
+
+> xanzc-frontend@0.1.0 test
+> vitest run --run src/views/screen/panorama/__tests__/targetPresentation.spec.js src/views/screen/panorama/__tests__/PanoramaDashboard.spec.js
+
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+ ✓ src/views/screen/panorama/__tests__/targetPresentation.spec.js  (7 tests) 9ms
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+ ✓ src/views/screen/panorama/__tests__/PanoramaDashboard.spec.js  (27 tests) 1270ms
+
+ Test Files  2 passed (2)
+      Tests  34 passed (34)
+   Start at  11:40:16
+   Duration  4.92s (transform 1.35s, setup 0ms, collect 2.52s, tests 1.28s, environment 475ms, prepare 346ms)

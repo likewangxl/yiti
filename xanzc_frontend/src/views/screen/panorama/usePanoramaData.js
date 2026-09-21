@@ -16,7 +16,12 @@ import {
   isRetailBindingSlot,
   normalizeRetailBinding
 } from './retailBindings';
-import { BRANCH_SLOT_ORDER, isBindingSlot, normalizeBinding } from './bindings';
+import {
+  BRANCH_OPTIONAL_SLOT_ORDER,
+  BRANCH_SLOT_ORDER,
+  isBindingSlot,
+  normalizeBinding
+} from './bindings';
 import {
   compareBatchQuality,
   isUsableBatchQuality,
@@ -75,8 +80,18 @@ function isCorporatePackage(pkg) {
   return presentationTemplate(pkg) === CORPORATE_TEMPLATE;
 }
 
+function branchPackageSlots(pkg) {
+  const components = flattenComponents(pkg?.components || []);
+  const optional = BRANCH_OPTIONAL_SLOT_ORDER.filter(slot => components.some(component =>
+    component?.component === 'ChartWidget' && component?.propValue?.bindingKey === slot
+  ));
+  return new Set([...BRANCH_SLOT_ORDER, ...optional]);
+}
+
 function allowedSlotsForPackage(pkg) {
-  return new Set(isCorporatePackage(pkg) ? CORPORATE_SLOT_ORDER : isRetailPackage(pkg) ? RETAIL_SLOT_ORDER : BRANCH_SLOT_ORDER);
+  if (isCorporatePackage(pkg)) return new Set(CORPORATE_SLOT_ORDER);
+  if (isRetailPackage(pkg)) return new Set(RETAIL_SLOT_ORDER);
+  return branchPackageSlots(pkg);
 }
 
 function permissionStatus(error) {
@@ -189,6 +204,11 @@ function packageBindings(view) {
       : retailPackage && isRetailBindingSlot(slot)
       ? normalizeRetailBinding(snapshot.bind, slot)
       : normalizeBinding(snapshot.bind, slot);
+    if (BRANCH_OPTIONAL_SLOT_ORDER.includes(slot)
+        && (!Number.isSafeInteger(Number(binding?.dsId)) || Number(binding.dsId) <= 0)) {
+      addIssue(issues, slot, 'MISSING_DATASOURCE', '可选槽位未配置有效数据源');
+      continue;
+    }
     slots.set(slot, { slot, blockId, binding, component, snapshot });
   }
   return { package: pkg, slots, issues, template: presentationTemplate(pkg), retail: retailPackage, corporate: isCorporatePackage(pkg) };

@@ -335,7 +335,7 @@ describe('PanoramaDashboard 省级经营大屏', () => {
 
     expect(wrapper.get('.panorama-target-summary-label').text()).toBe('已设目标机构完成率');
     expect(wrapper.get('[data-diagnostic="targetDistance"]').text()).toContain('已设目标机构完成率');
-    expect(wrapper.get('.panorama-target-panel').text()).not.toContain('目标完成');
+    expect(wrapper.get('.panorama-target-panel').text()).toContain('零售贷款目标完成率');
   });
 
   it('趋势默认净增并可切换回余额，采用真实绑定数据', async () => {
@@ -378,9 +378,9 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     });
   });
 
-  it('地图范围标题使用全辖机构分布', () => {
+  it('地图范围标题使用辖区机构分布', () => {
     const wrapper = mountDashboard({ model: extendedModel });
-    expect(wrapper.get('.panorama-map-panel').text()).toContain('全辖机构分布');
+    expect(wrapper.get('.panorama-map-panel').text()).toContain('辖区机构分布');
     expect(wrapper.get('.panorama-map-panel').text()).not.toContain('陕西省分行机构分布');
   });
 

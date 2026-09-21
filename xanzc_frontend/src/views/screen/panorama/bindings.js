@@ -193,6 +193,9 @@ export const BINDING_SLOTS = Object.freeze({
       field('rate', '完成率', { unitKinds: ratioUnits })
     ])
   }),
+  // loanRate is an optional independent ratio card. It must never be inferred
+  // from the legacy rate binding or from the loan amount.
+  loanRate: singleMetric('零售贷款目标完成率', 'ratio'),
   // 零售模板槽位进入全局身份白名单；branches 保留这里的分行完整契约，
   // 零售管理页通过 RETAIL_BINDING_SLOTS.branches 只展示身份字段。
   ...Object.fromEntries(Object.entries(RETAIL_BINDING_SLOTS).filter(([slot]) => slot !== 'branches')),
@@ -207,12 +210,16 @@ export const BRANCH_SLOT_ORDER = Object.freeze([
   'composition', 'ranking', 'attention', 'branches', 'branchTrend', 'citySummary'
 ]);
 
+/** 新增的可选分行槽位单独列出，避免改变旧14槽位发布包的顺序与计数。 */
+export const BRANCH_OPTIONAL_SLOT_ORDER = Object.freeze(['loanRate']);
+
 // 保持历史导出语义；零售管理/运行时显式使用 RETAIL_SLOT_ORDER。
 export const SLOT_ORDER = BRANCH_SLOT_ORDER;
 
 /** 全局代码化组件构建顺序，包含分行槽位和零售新增槽位。 */
 export const ALL_SLOT_ORDER = Object.freeze([
   ...BRANCH_SLOT_ORDER,
+  ...BRANCH_OPTIONAL_SLOT_ORDER,
   ...RETAIL_SLOT_ORDER.filter(slot => !BRANCH_SLOT_ORDER.includes(slot)),
   ...CORPORATE_SLOT_ORDER.filter(slot => !BRANCH_SLOT_ORDER.includes(slot))
 ]);

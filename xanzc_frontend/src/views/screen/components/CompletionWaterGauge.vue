@@ -1,9 +1,10 @@
 <template>
   <div
     class="completion-water-gauge"
-    :class="`tone-${tone}`"
+    :class="[`tone-${tone}`, `variant-${variant}`]"
     :data-level="levelAttribute"
     :data-tone="tone"
+    :data-variant="variant"
     data-testid="completion-water-gauge"
     role="img"
     :aria-label="ariaLabel"
@@ -16,12 +17,22 @@
     >
       <defs>
         <linearGradient :id="gradientId('front')" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" :stop-color="toneColor" stop-opacity="0.94" />
-          <stop offset="1" :stop-color="toneColor" stop-opacity="0.62" />
+          <stop
+            v-for="stop in frontStops"
+            :key="`front-${stop.offset}`"
+            :offset="stop.offset"
+            :stop-color="stop.color"
+            :stop-opacity="stop.opacity"
+          />
         </linearGradient>
         <linearGradient :id="gradientId('back')" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" :stop-color="toneColor" stop-opacity="0.38" />
-          <stop offset="1" :stop-color="toneColor" stop-opacity="0.18" />
+          <stop
+            v-for="stop in backStops"
+            :key="`back-${stop.offset}`"
+            :offset="stop.offset"
+            :stop-color="stop.color"
+            :stop-opacity="stop.opacity"
+          />
         </linearGradient>
         <clipPath :id="clipId">
           <circle cx="50" cy="50" r="44" />
@@ -80,17 +91,27 @@ export default {
 import { computed, getCurrentInstance } from 'vue';
 
 const DEFAULT_LABEL = '目标完成率';
-const TONE_COLORS = {
-  coral: '#ff827f',
-  gold: '#f1c96b',
-  cyan: '#45d7e7',
-  green: '#6fdb95',
-  unknown: '#3d6b9f'
-};
+const PALETTES = Object.freeze({
+  deposit: Object.freeze({
+    coral: Object.freeze({ front: ['#a6f7ff', '#45d7e7', '#2e8bff'], back: ['#d8fbff', '#69dff0', '#3d8dff'], edge: '#45d7e7' }),
+    gold: Object.freeze({ front: ['#b9f8ff', '#45d7e7', '#2784e8'], back: ['#e1fdff', '#6be1ed', '#3f93ec'], edge: '#45d7e7' }),
+    cyan: Object.freeze({ front: ['#d0fbff', '#45d7e7', '#1976d2'], back: ['#e9feff', '#7be6f0', '#378ce0'], edge: '#45d7e7' }),
+    green: Object.freeze({ front: ['#d8ffff', '#45d7e7', '#1267c4'], back: ['#edffff', '#82e9ef', '#3185d5'], edge: '#45d7e7' }),
+    unknown: Object.freeze({ front: ['#8bd8e8', '#287bbd', '#1e4e92'], back: ['#b9eff5', '#4093c9', '#2a5c9e'], edge: '#3d8db6' })
+  }),
+  loan: Object.freeze({
+    coral: Object.freeze({ front: ['#f3c4ff', '#a855f7', '#4f46e5'], back: ['#fbe2ff', '#c084fc', '#6366f1'], edge: '#a855f7' }),
+    gold: Object.freeze({ front: ['#f8d7ff', '#c026d3', '#4f46e5'], back: ['#fde7ff', '#d946ef', '#6366f1'], edge: '#c026d3' }),
+    cyan: Object.freeze({ front: ['#d8d4ff', '#8b5cf6', '#3157c8'], back: ['#eceaff', '#a78bfa', '#526ee0'], edge: '#8b5cf6' }),
+    green: Object.freeze({ front: ['#eadbff', '#8b5cf6', '#4338ca'], back: ['#f5eeff', '#a78bfa', '#6366f1'], edge: '#8b5cf6' }),
+    unknown: Object.freeze({ front: ['#c4b5fd', '#6d55c7', '#31327f'], back: ['#e4ddff', '#8876d9', '#49499a'], edge: '#6d55c7' })
+  })
+});
 
 const props = defineProps({
-  value: { type: Number, default: null },
-  label: { type: String, default: '目标完成率' }
+  value: { type: [Number, String], default: null },
+  label: { type: String, default: '目标完成率' },
+  variant: { type: String, default: 'deposit' }
 });
 
 // 每个组件实例独立生成 defs id，避免同屏多个 SVG 相互引用 clip/渐变。
@@ -98,7 +119,11 @@ const instanceId = getCurrentInstance().uid;
 const gradientId = name => `completion-water-gauge-${instanceId}-${name}`;
 const clipId = `completion-water-gauge-${instanceId}-clip`;
 
-const rawValue = computed(() => (Number.isFinite(props.value) ? props.value : null));
+const rawValue = computed(() => {
+  if (props.value === null || props.value === undefined || props.value === '' || typeof props.value === 'boolean') return null;
+  const number = Number(props.value);
+  return Number.isFinite(number) ? number : null;
+});
 const hasValue = computed(() => rawValue.value !== null);
 const level = computed(() => {
   if (!hasValue.value) return null;
@@ -112,7 +137,19 @@ const tone = computed(() => {
   if (rawValue.value < 100) return 'cyan';
   return 'green';
 });
-const toneColor = computed(() => TONE_COLORS[tone.value]);
+const variant = computed(() => props.variant === 'loan' ? 'loan' : 'deposit');
+const palette = computed(() => PALETTES[variant.value][tone.value]);
+const toneColor = computed(() => palette.value.edge);
+const frontStops = computed(() => palette.value.front.map((color, index, colors) => ({
+  offset: `${(index / Math.max(1, colors.length - 1)) * 100}%`,
+  color,
+  opacity: index === 0 ? 0.92 : index === colors.length - 1 ? 0.64 : 0.82
+})));
+const backStops = computed(() => palette.value.back.map((color, index, colors) => ({
+  offset: `${(index / Math.max(1, colors.length - 1)) * 100}%`,
+  color,
+  opacity: index === 0 ? 0.42 : index === colors.length - 1 ? 0.18 : 0.3
+})));
 const safeLabel = computed(() => {
   const label = props.label.trim();
   return label || DEFAULT_LABEL;

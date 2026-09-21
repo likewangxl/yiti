@@ -5,6 +5,7 @@
  * 生成给 Dashboard 的展示模型，不写回画布配置，也不参与数据请求或权限判断。
  */
 
+import { BINDING_SLOTS, BRANCH_OPTIONAL_SLOT_ORDER } from './bindings';
 import { RETAIL_BINDING_SLOTS } from './retailBindings';
 const KPI_LABEL_KEYS = Object.freeze([
   'deposit',
@@ -14,6 +15,7 @@ const KPI_LABEL_KEYS = Object.freeze([
   'customers',
   'revenue',
   'rate',
+  ...BRANCH_OPTIONAL_SLOT_ORDER,
   'retailAum',
   'retailDeposit',
   'retailDepositAverage',
@@ -36,6 +38,7 @@ const SOURCE_STATUSES = new Set(['AVAILABLE', 'NO_SOURCE', 'NO_ROWS', 'NO_VALUES
 const SOURCE_SLOTS = new Set([
   ...Object.keys(RETAIL_BINDING_SLOTS),
   'deposit', 'depositIncrease', 'depositAverage', 'loan', 'customers', 'revenue', 'rate', 'trend',
+  ...BRANCH_OPTIONAL_SLOT_ORDER,
   'ranking', 'composition', 'attention', 'branches', 'branchTrend', 'citySummary',
   'corpDeposit', 'corpDepositAverage', 'corpLoan', 'corpRevenue', 'corpCustomers', 'corpNplRate',
   'corpTrend', 'corpSegments', 'corpRanking', 'corpAttention', 'corpTargets'
@@ -56,6 +59,7 @@ const SOURCE_FIELD_KEYS = Object.freeze({
   branches: new Set(['orgCode', 'orgName', 'cityCode', 'cityName', 'ownerOperatingOrgCode', 'parentOrgCode', 'lng', 'lat', 'coordSys', 'located', 'deposit', 'loan', 'customers', 'target', 'rate']),
   branchTrend: new Set(['date', 'deposit', 'loan', 'customers', 'rate']),
   citySummary: new Set(['orgCode', 'cityCode', 'cityName', 'deposit', 'loan', 'customers', 'revenue', 'rate']),
+  loanRate: new Set(BINDING_SLOTS.loanRate.fields.map(field => field.semantic)),
   corpDeposit: new Set(['value', 'change', 'date']),
   corpDepositAverage: new Set(['value', 'change', 'date']),
   corpLoan: new Set(['value', 'change', 'date']),
@@ -72,6 +76,7 @@ const SOURCE_LABELS = Object.freeze({
   ...Object.fromEntries(Object.entries(RETAIL_BINDING_SLOTS).map(([slot, spec]) => [slot, spec.label])),
   deposit: '存款余额', depositAverage: '存款月均余额',
   loan: '贷款余额', customers: '营销有效归属客户数', revenue: '手工测试收入', rate: '目标完成率',
+  loanRate: '零售贷款目标完成率',
   depositIncrease: '存款较上月净增', trend: '经营趋势', composition: '业务构成',
   ranking: '机构排名', attention: '经营关注', branches: '支行机构', branchTrend: '支行趋势',
   citySummary: '城市汇总', corporate: '对公业务', retail: '零售业务', increase: '存款较上月净增',

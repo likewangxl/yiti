@@ -577,3 +577,21 @@
 .panorama-target-water-copy .panorama-target-summary-label { display: block; font-size: 11px; white-space: normal; line-height: 1.5; }
 .panorama-target-distance { display: block; margin-top: 7px; color: #cceaf5; font-size: clamp(12px, .85vw, 16px); line-height: 1.6; font-weight: 600; }
 .panorama-target-water-reference { display: block; margin-top: 8px; color: #718aac; font-size: 10px; }
+
+/* Composition includes totals, quality notice and both detail cards: size the row
+   from its content instead of clipping it into a fractional desktop track. */
+.panorama-dashboard .panorama-left-column { grid-template-rows: auto max-content minmax(170px, 1fr); }
+.panorama-dashboard .panorama-composition-panel .panorama-composition-content { flex: 0 0 auto; height: auto; overflow: visible; }
+.panorama-dashboard .panorama-composition-panel .composition-breakdown__details { max-height: none; overflow: visible; }
+
+.panorama-target-dual { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 8px 0 4px; }
+.panorama-target-card { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 10px 5px; border: 1px solid rgba(115, 159, 220, .15); border-radius: 9px; background: rgba(11, 31, 67, .38); text-align: center; }
+.panorama-target-card .panorama-target-summary-label { white-space: normal; line-height: 1.5; }
+.panorama-target-card .panorama-target-distance { margin-top: 0; font-size: 11px; line-height: 1.5; }
+.panorama-target-card .panorama-target-water-reference { margin-top: 0; font-size: 9px; }
+.panorama-target-panel.panorama-target-dual { display: block; padding: 0 10px 8px; }
+.panorama-target-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding-top: 8px; }
+.panorama-target-card-heading { display: grid; gap: 3px; color: #cbdcf3; font-size: 11px; line-height: 1.4; }
+.panorama-target-card-heading small { color: #819abd; font-size: 9px; }
+.panorama-target-card .panorama-target-summary { display: flex; flex-direction: column; gap: 8px; padding: 0; min-height: 0; }
+.panorama-target-card .panorama-target-summary-label, .panorama-target-card .panorama-target-water-reference { display: none; }

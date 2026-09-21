@@ -128,6 +128,7 @@ import {
   summarizeTargetDistance
 } from './leadershipInsights.js';
 import { resolveDataStatus } from './sourcePresentation';
+import { stripTestModifier } from './targetPresentation.js';
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -174,7 +175,10 @@ const cityKpiCards = computed(() => {
     change: null
   });
 });
-const cityTitle = computed(() => props.cityName ? `${props.cityName} · 支行经营全景` : (citySummary.value?.title || safeModel.value.title || '市级支行经营全景'));
+const cityTitle = computed(() => {
+  const title = props.cityName ? `${props.cityName} · 支行经营全景` : (citySummary.value?.title || safeModel.value.title || '市级支行经营全景');
+  return stripTestModifier(title);
+});
 const displayDate = computed(() => citySummary.value?.dataDate || safeModel.value.dataDate || '—');
 const cityGeoJson = computed(() => cityGeoByCode?.[props.cityCode] || null);
 const cityInstitutions = computed(() => {

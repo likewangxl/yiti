@@ -1,0 +1,46 @@
+
+> xanzc-frontend@0.1.0 test
+> vitest run --run src/views/screen/panorama/__tests__/geographicIdentity.spec.js
+
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+ ❯ src/views/screen/panorama/__tests__/geographicIdentity.spec.js  (2 tests | 2 failed) 16ms
+   ❯ src/views/screen/panorama/__tests__/geographicIdentity.spec.js > 地图按最新授权机构归属关联 > 名称与地址所属城市不同，以机构编码关联目录城市，并过滤范围外机构
+     → expected [ { orgCode: 'A', …(5) }, …(1) ] to have a length of 1 but got 2
+   ❯ src/views/screen/panorama/__tests__/geographicIdentity.spec.js > 地图按最新授权机构归属关联 > 目录缺城市不能用旧数据行城市或机构名称代替地址归属
+     → expected '610800' to be '' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/screen/panorama/__tests__/geographicIdentity.spec.js > 地图按最新授权机构归属关联 > 名称与地址所属城市不同，以机构编码关联目录城市，并过滤范围外机构
+AssertionError: expected [ { orgCode: 'A', …(5) }, …(1) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/views/screen/panorama/__tests__/geographicIdentity.spec.js:7:28
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/views/screen/panorama/__tests__/geographicIdentity.spec.js > 地图按最新授权机构归属关联 > 目录缺城市不能用旧数据行城市或机构名称代替地址归属
+AssertionError: expected '610800' to be '' // Object.is equality
+
+- Expected
++ Received
+
++ 610800
+
+ ❯ src/views/screen/panorama/__tests__/geographicIdentity.spec.js:13:44
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  11:14:30
+   Duration  668ms (transform 77ms, setup 0ms, collect 90ms, tests 16ms, environment 0ms, prepare 159ms)

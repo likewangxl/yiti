@@ -83,4 +83,29 @@ describe('CompletionWaterGauge', () => {
     expect(first.get('[data-testid="completion-water-gauge"]').attributes('aria-label')).toBe('季度目标 60.00%');
     expect(first.find('clipPath').attributes('id')).not.toBe(second.find('clipPath').attributes('id'));
   });
+
+  it('贷款变体使用独立色系，并让前后水体各自包含明显的多色渐变', () => {
+    const wrapper = mountGauge(72, { variant: 'loan', label: '零售贷款目标完成率' });
+    const gauge = wrapper.get('[data-testid="completion-water-gauge"]');
+
+    expect(gauge.attributes('data-variant')).toBe('loan');
+    expect(gauge.attributes('aria-label')).toBe('零售贷款目标完成率 72.00%');
+    const gradients = gauge.findAll('linearGradient');
+    expect(gradients).toHaveLength(2);
+    gradients.forEach(gradient => {
+      const colors = gradient.findAll('stop').map(stop => stop.attributes('stop-color'));
+      expect(colors.length).toBeGreaterThanOrEqual(2);
+      expect(new Set(colors).size).toBeGreaterThanOrEqual(2);
+    });
+    expect(gauge.find('circle.completion-water-gauge__edge').attributes('stroke')).toMatch(/^#/);
+  });
+
+  it('默认变体仍是存款蓝青色系并兼容旧调用', () => {
+    const wrapper = mountGauge(72);
+    const gauge = wrapper.get('[data-testid="completion-water-gauge"]');
+    expect(gauge.attributes('data-variant')).toBe('deposit');
+    const colors = gauge.findAll('linearGradient').at(0).findAll('stop').map(stop => stop.attributes('stop-color'));
+    expect(new Set(colors).size).toBeGreaterThanOrEqual(2);
+    expect(colors.some(color => ['#45d7e7', '#29b9e7', '#2e8bff', '#0d6efd'].includes(color))).toBe(true);
+  });
 });

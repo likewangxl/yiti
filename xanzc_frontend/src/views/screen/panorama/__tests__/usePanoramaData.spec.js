@@ -101,6 +101,29 @@ describe('usePanoramaData', () => {
     expect(queryScreenData.mock.calls[0][0]).not.toHaveProperty('dsId');
   });
 
+  it('历史14槽发布包不因可选 loanRate 自动增加请求', async () => {
+    queryScreenData.mockResolvedValue({ columns: ['value'], rows: [[100000000]] });
+    const state = usePanoramaData(ref(viewWithSlots({ deposit: 11 })), ref({ screenCode: 'SCR_CODE' }), { autoLoad: false });
+    await state.refresh();
+    expect(queryScreenData.mock.calls.map(([request]) => request.blockId)).toEqual([11]);
+  });
+
+  it('发布包明确配置有效 loanRate 组件时才请求该独立槽位', async () => {
+    queryScreenData.mockResolvedValue({ columns: ['value'], rows: [[42]] });
+    const state = usePanoramaData(ref(viewWithSlots({ loanRate: 15 })), ref({ screenCode: 'SCR_CODE' }), { autoLoad: false });
+    await state.refresh();
+    expect(queryScreenData.mock.calls.map(([request]) => request.blockId)).toEqual([15]);
+  });
+
+  it('loanRate 组件缺少有效数据源时不发请求', async () => {
+    queryScreenData.mockResolvedValue({ columns: ['value'], rows: [[42]] });
+    const view = viewWithSlots({ loanRate: 16 });
+    view.renderPackage.bindSnapshots['16'].bind.dsId = null;
+    const state = usePanoramaData(ref(view), ref({ screenCode: 'SCR_CODE' }), { autoLoad: false });
+    await state.refresh();
+    expect(queryScreenData).not.toHaveBeenCalled();
+  });
+
   it('相同请求去重且并发不超过 3 个', async () => {
     let running = 0; let maxRunning = 0;
     queryScreenData.mockImplementation(() => new Promise(resolve => {

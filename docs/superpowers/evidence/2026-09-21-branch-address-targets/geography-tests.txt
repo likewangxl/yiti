@@ -1,0 +1,14 @@
+
+> xanzc-frontend@0.1.0 test
+> vitest run --run src/views/screen/panorama/__tests__/geographicIdentity.spec.js src/views/screen/panorama/__tests__/dataAdapter.spec.js
+
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+ ✓ src/views/screen/panorama/__tests__/geographicIdentity.spec.js  (2 tests) 10ms
+ ✓ src/views/screen/panorama/__tests__/dataAdapter.spec.js  (32 tests) 34ms
+
+ Test Files  2 passed (2)
+      Tests  34 passed (34)
+   Start at  11:15:32
+   Duration  1.16s (transform 156ms, setup 0ms, collect 303ms, tests 44ms, environment 1ms, prepare 586ms)

@@ -91,6 +91,33 @@ describe('source presentation', () => {
     });
   });
 
+  it('保留 loanRate 独立标签和来源字段状态，不映射为旧 rate', () => {
+    const result = resolveSourcePresentation({ renderPackage: { canvasStyle: {
+      metricLabels: { rate: '存款目标完成率', loanRate: '零售贷款目标完成率' },
+      sourceAvailability: {
+        loanRate: { status: 'NO_SOURCE', message: '贷款目标来源尚未接入', fields: {
+          value: { status: 'NO_VALUES', message: '当前无有效值' }
+        } }
+      }
+    } } });
+    expect(result.metricLabels).toEqual({ rate: '存款目标完成率', loanRate: '零售贷款目标完成率' });
+    expect(result.sourceAvailability.loanRate).toEqual({
+      status: 'NO_SOURCE', message: '贷款目标来源尚未接入',
+      fields: { value: { status: 'NO_VALUES', message: '当前无有效值' } }
+    });
+    expect(resolveDataStatus(result, [], 'loanRate', 'value')).toEqual({
+      status: 'NO_VALUES', message: '当前无有效值'
+    });
+    const model = { kpis: [
+      { key: 'loanRate', label: '旧标签', value: null, unit: '%' },
+      { key: 'rate', label: '旧存款标签', value: 88, unit: '%' }
+    ] };
+    expect(applyMetricLabels(model, result.metricLabels).kpis).toEqual([
+      { key: 'loanRate', label: '零售贷款目标完成率', value: null, unit: '%' },
+      { key: 'rate', label: '存款目标完成率', value: 88, unit: '%' }
+    ]);
+  });
+
   it('经营关注允许按机构号声明字段并保留中文字段语义', () => {
     const result = resolveSourcePresentation({ renderPackage: { canvasStyle: {
       sourceAvailability: {
