@@ -12,6 +12,26 @@ function mountBreakdown(items) {
 }
 
 describe('CompositionBreakdown', () => {
+  it('过期完整批次保留可计算的比例带，同时展示时效提示', () => {
+    const wrapper = mount(CompositionBreakdown, { props: {
+      items: [{ name: '对公业务', value: 42, unit: '亿元' }, { name: '零售业务', value: 58, unit: '亿元' }],
+      sourceStatus: { status: 'STALE', message: '最近完整不可变批次已超过允许时效' }
+    } });
+    expect(wrapper.get('[data-testid="composition-track"]').attributes('data-state')).toBe('valid');
+    expect(wrapper.findAll('[data-testid="composition-segment"]')).toHaveLength(2);
+    expect(wrapper.findAll('[data-testid="composition-segment"]')[0].attributes('style')).toContain('42%');
+    expect(wrapper.text()).toContain('最近完整不可变批次已超过允许时效');
+  });
+
+  it.each(['STALE', 'PARTIAL', 'NO_COMPLETE_BATCH'])('%s 不得使缺失构成被绘制为有效比例', status => {
+    const wrapper = mount(CompositionBreakdown, { props: {
+      items: [{ name: '对公业务', value: 42, unit: '亿元' }, { name: '零售业务', value: null, unit: '亿元' }],
+      sourceStatus: { status, message: '批次提示' }
+    } });
+    expect(wrapper.get('[data-testid="composition-track"]').attributes('data-state')).toBe('unavailable');
+    expect(wrapper.findAll('[data-testid="composition-segment"]')).toHaveLength(0);
+  });
+
   it('金额构成以真实合计、100%基准带和两列明细呈现，金额各只显示一次', () => {
     const wrapper = mountBreakdown([
       { name: '对公业务', value: 714.26, unit: '亿元' },

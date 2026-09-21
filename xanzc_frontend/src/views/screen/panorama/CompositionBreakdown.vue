@@ -3,6 +3,7 @@
     class="composition-breakdown"
     data-testid="composition-breakdown"
     aria-label="业务构成比例"
+    tabindex="0"
   >
     <header class="composition-breakdown__header">
       <div class="composition-breakdown__total-block">
@@ -51,6 +52,7 @@
     <p
       v-if="breakdown.statusMessage"
       class="composition-breakdown__status"
+      :class="{ 'is-stale': sourceStatus?.status === 'STALE' }"
       :data-state="breakdown.trackState"
       role="status"
     >
@@ -109,6 +111,10 @@ const breakdown = computed(() => {
   if (Array.isArray(props.items) && props.items.length < 2 && result.trackState === 'valid') {
     return { ...result, trackState: 'unavailable', shareMode: 'unavailable', statusMessage: status?.message || '构成明细不完整，无法计算占比', baseNote: '等待完整构成明细' };
   }
+  // STALE denotes a complete historical batch: freshness does not invalidate its ratios.
+  if (status?.status === 'STALE' && result.trackState === 'valid') {
+    return { ...result, statusMessage: status.message || '当前展示为超过时效的完整批次' };
+  }
   if (!status || !status.status || status.status === 'AVAILABLE' || status.status === 'UNAVAILABLE') return result;
   return {
     ...result,
@@ -135,7 +141,9 @@ function segmentColor(index) {
   height: 100%;
   box-sizing: border-box;
   padding: 10px 12px 12px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
   color: var(--composition-text);
   background: transparent;
   font-family: "DIN Alternate", "SFMono-Regular", "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -279,7 +287,8 @@ function segmentColor(index) {
   line-height: 1.45;
 }
 
-.composition-breakdown__status[data-state="unavailable"] {
+.composition-breakdown__status[data-state="unavailable"],
+.composition-breakdown__status.is-stale {
   color: #e5c77c;
 }
 
