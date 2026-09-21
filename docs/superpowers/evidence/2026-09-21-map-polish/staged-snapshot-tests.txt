@@ -1,0 +1,14 @@
+
+> xanzc-frontend@0.1.0 test
+> vitest run --run src/views/screen/panorama/__tests__/cityDetails.owned.spec.js src/views/screen/panorama/__tests__/MapLabels.owned.spec.js
+
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+ ✓ src/views/screen/panorama/__tests__/cityDetails.owned.spec.js  (5 tests) 54ms
+ ✓ src/views/screen/panorama/__tests__/MapLabels.owned.spec.js  (4 tests) 384ms
+
+ Test Files  2 passed (2)
+      Tests  9 passed (9)
+   Start at  10:56:51
+   Duration  5.04s (transform 1.72s, setup 0ms, collect 2.58s, tests 438ms, environment 802ms, prepare 806ms)

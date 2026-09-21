@@ -1,0 +1,13 @@
+
+> xanzc-frontend@0.1.0 test
+> vitest run --run src/views/screen/components/__tests__/CompletionWaterGauge.spec.js
+
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+ ✓ src/views/screen/components/__tests__/CompletionWaterGauge.spec.js  (12 tests) 194ms
+
+ Test Files  1 passed (1)
+      Tests  12 passed (12)
+   Start at  10:51:32
+   Duration  4.31s (transform 330ms, setup 0ms, collect 674ms, tests 194ms, environment 1.18s, prepare 693ms)

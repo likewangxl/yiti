@@ -1,0 +1,53 @@
+
+> xanzc-frontend@0.1.0 test
+> vitest run --run src/views/screen/panorama/__tests__/TargetWaterIntegration.spec.js src/views/screen/panorama/__tests__/PanoramaDashboard.spec.js src/views/screen/components/__tests__/CompletionWaterGauge.spec.js src/views/screen/panorama/__tests__/cityMapDetails.spec.js src/views/screen/panorama/__tests__/MapMetricLabels.spec.js src/views/screen/panorama/__tests__/mapLabelLayout.spec.js src/views/screen/panorama/__tests__/mapComponent.spec.js src/views/screen/panorama/__tests__/mapWebgl.spec.js src/views/screen/panorama/__tests__/mapResilience.spec.js src/views/screen/panorama/__tests__/mapRelief.spec.js
+
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+ ✓ src/views/screen/panorama/__tests__/mapLabelLayout.spec.js  (3 tests) 73ms
+ ✓ src/views/screen/panorama/__tests__/mapRelief.spec.js  (5 tests) 85ms
+ ✓ src/views/screen/panorama/__tests__/cityMapDetails.spec.js  (5 tests) 196ms
+ ✓ src/views/screen/components/__tests__/CompletionWaterGauge.spec.js  (12 tests) 342ms
+stderr | src/views/screen/panorama/__tests__/mapResilience.spec.js > PanoramaMap WebGL 故障回退与资源生命周期 > contextlost 立即停绘制、释放资源并隐藏 canvas，保留 SVG 城市交互
+[PanoramaMap] WebGL context lost failed, using SVG fallback. undefined
+
+stderr | src/views/screen/panorama/__tests__/mapResilience.spec.js > PanoramaMap WebGL 故障回退与资源生命周期 > render 与 resize 异常都切换到真实 SVG 回退而不让异常遮住地图
+[PanoramaMap] WebGL render failed, using SVG fallback. Error: render failed
+    at /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend/src/views/screen/panorama/__tests__/mapResilience.spec.js:108:30
+    at runTest (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:781:11)
+    at runSuite (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:909:15)
+    at runSuite (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:909:15)
+    at runFiles (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:958:5)
+    at startTests (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:967:3)
+    at file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:116:7
+    at withEnv (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:83:5)
+    at run (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:105:3)
+    at runBaseTests (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/vendor/base.Ybri3C14.js:30:3)
+[PanoramaMap] WebGL resize failed, using SVG fallback. Error: resize failed
+    at /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend/src/views/screen/panorama/__tests__/mapResilience.spec.js:120:30
+    at runTest (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:781:11)
+    at runSuite (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:909:15)
+    at runSuite (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:909:15)
+    at runFiles (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:958:5)
+    at startTests (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:967:3)
+    at file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:116:7
+    at withEnv (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:83:5)
+    at run (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:105:3)
+    at runBaseTests (file:///Users/likewang/workspace/cx-wsp/%E4%B8%80%E4%BD%93%E5%8C%96%E7%BB%8F%E8%90%A5%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F/yiti/xanzc_frontend/node_modules/.pnpm/vitest@1.6.1_@types+node@26.5.1_happy-dom@20.14.5_sass@1.104.1/node_modules/vitest/dist/vendor/base.Ybri3C14.js:30:3)
+
+ ✓ src/views/screen/panorama/__tests__/mapResilience.spec.js  (4 tests) 617ms
+ ✓ src/views/screen/panorama/__tests__/mapWebgl.spec.js  (5 tests) 628ms
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+ ✓ src/views/screen/panorama/__tests__/mapComponent.spec.js  (8 tests) 1018ms
+ ✓ src/views/screen/panorama/__tests__/MapMetricLabels.spec.js  (4 tests) 965ms
+ ✓ src/views/screen/panorama/__tests__/TargetWaterIntegration.spec.js  (1 test) 361ms
+ ✓ src/views/screen/panorama/__tests__/PanoramaDashboard.spec.js  (27 tests) 3314ms
+
+ Test Files  10 passed (10)
+      Tests  74 passed (74)
+   Start at  10:44:13
+   Duration  13.56s (transform 4.76s, setup 40ms, collect 24.72s, tests 7.60s, environment 19.00s, prepare 7.11s)

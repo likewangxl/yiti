@@ -1,0 +1,40 @@
+
+> xanzc-frontend@0.1.0 test
+> vitest run --run src/views/screen/panorama/__tests__/TargetWaterIntegration.spec.js
+
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+
+ ❯ src/views/screen/panorama/__tests__/TargetWaterIntegration.spec.js  (1 test | 1 failed) 101ms
+   ❯ src/views/screen/panorama/__tests__/TargetWaterIntegration.spec.js > 目标完成率水位图集成 > 只用一个水位图表现完成率，保留真实超额数值和目标差距
+     → expected [] to have a length of 1 but got +0
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/screen/panorama/__tests__/TargetWaterIntegration.spec.js > 目标完成率水位图集成 > 只用一个水位图表现完成率，保留真实超额数值和目标差距
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/views/screen/panorama/__tests__/TargetWaterIntegration.spec.js:10:71
+      8|   it('只用一个水位图表现完成率，保留真实超额数值和目标差距', () => {
+      9|     const wrapper=mount(PanoramaDashboard,{props:{model:{kpis:[{key:'r…
+     10|     expect(wrapper.findAll('[data-testid="completion-water-gauge"]')).…
+       |                                                                       ^
+     11|     expect(wrapper.get('[data-testid="target-progress-value"]').text()…
+     12|     expect(wrapper.get('[data-testid="completion-water-gauge"]').attri…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  10:34:53
+   Duration  3.82s (transform 1.40s, setup 0ms, collect 2.71s, tests 101ms, environment 414ms, prepare 162ms)

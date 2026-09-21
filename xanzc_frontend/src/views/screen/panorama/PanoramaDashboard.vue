@@ -171,6 +171,7 @@
             label-layout="callout"
             :metric-label="rankingMetricInfo.label"
             :metric-values="provinceMapMetricValues"
+            :city-details="provinceMapCityDetails"
             :data-metric-label="rankingMetricInfo.label"
             :geo-json="provinceGeoJson"
             :points="safeModel.institutions"
@@ -202,17 +203,14 @@
             <span>共 {{ leadershipTotalCount }} 家</span>
           </div>
           <article class="panorama-panel panorama-target-panel">
-            <div class="panorama-target-heading"><span>目标进度</span><small>{{ targetMetricLabel }} · {{ targetPeriodLabel }}</small></div>
-            <div v-if="targetProgressActual !== null" class="panorama-target-summary">
-              <span class="panorama-target-summary-label">{{ targetMetricLabel }}</span>
-              <div class="panorama-target-ring" data-testid="target-progress-ring" :style="{ '--target-progress': `${targetProgressVisual}%` }">
-                <strong data-testid="target-progress-value">{{ formatMetric(targetProgressActual) }}<small>%</small></strong>
+            <div class="panorama-target-heading"><span>目标进度</span><small>{{ targetPeriodLabel }}</small></div>
+            <div v-if="targetProgressActual !== null" class="panorama-target-summary panorama-target-water-summary">
+              <CompletionWaterGauge :value="targetProgressActual" :label="targetMetricLabel" />
+              <div class="panorama-target-water-copy">
+                <span class="panorama-target-summary-label">{{ targetMetricLabel }}</span>
+                <strong class="panorama-target-distance">{{ targetDistanceSummary.text }}</strong>
+                <small class="panorama-target-water-reference">目标基准 100% · 水位随完成率变化</small>
               </div>
-              <div class="panorama-target-bullet" data-testid="target-progress-bullet">
-                <span class="panorama-target-bullet__track"><i :style="{ width: `${targetProgressVisual}%` }"></i></span>
-                <small>{{ targetDistanceSummary.text }}</small>
-              </div>
-              <span class="panorama-target-period">{{ targetPeriodLabel }}</span>
             </div>
             <div v-else class="panorama-unbound" data-testid="target-unbound">{{ sourceStatus('rate', 'value').message }}<span v-if="targetKpi" class="panorama-visually-hidden">未绑定</span></div>
           </article>
@@ -311,10 +309,10 @@ import CityPanorama from './CityPanorama.vue';
 import PanoramaInstitutionDirectory from './PanoramaInstitutionDirectory.vue';
 import PanoramaTrend from './PanoramaTrend.vue';
 import CompositionBreakdown from './CompositionBreakdown.vue';
+import CompletionWaterGauge from '../components/CompletionWaterGauge.vue';
 import { provinceGeo } from './geography.js';
 import {
   RANKING_METRICS,
-  clampProgress,
   coreKpis,
   findKpi,
   finiteMetric,
@@ -328,6 +326,7 @@ import {
   summarizeProvinceTargetStatus,
   summarizeTargetDistance
 } from './leadershipInsights.js';
+import { buildCityMapDetails } from './cityMapDetails.js';
 import { resolveDataStatus } from './sourcePresentation';
 
 
@@ -417,6 +416,11 @@ const today = computed(() => {
   return `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
 });
 const provinceGeoJson = provinceGeo || null;
+const provinceMapCityDetails = computed(() => buildCityMapDetails(safeModel.value, {
+  cityCodes: Array.isArray(provinceGeo?.features)
+    ? provinceGeo.features.map(feature => feature?.properties?.adcode ?? feature?.properties?.cityCode)
+    : []
+}));
 const selectedInstitution = computed(() => safeModel.value.institutions.find(item => item?.orgCode === selectedOrgCode.value) || null);
 const compositionItems = computed(() => safeModel.value.composition.filter(item => item && typeof item === 'object'));
 const compositionHeadingMeta = computed(() => {
@@ -445,7 +449,6 @@ const targetUnboundLabel = computed(() => targetKpi.value
   ? `${targetMetricLabel.value}暂无有效数据`
   : `${targetMetricLabel.value}未绑定`);
 const targetProgressActual = computed(() => finiteMetric(targetKpi.value?.value));
-const targetProgressVisual = computed(() => clampProgress(targetProgressActual.value) ?? 0);
 const targetDistanceSummary = computed(() => summarizeTargetDistance(targetProgressActual.value));
 const targetPeriodLabel = computed(() => {
   const period = String(targetKpi.value?.periodLabel || targetKpi.value?.periodName || targetKpi.value?.period || '').trim();

@@ -56,3 +56,26 @@ describe('地图指标联动显示', () => {
     wrapper.unmount();
   });
 });
+
+
+describe('城市悬浮详情', () => {
+  it('悬停和键盘聚焦展示已有指标、机构与日期，离开后收起', async () => {
+    const wrapper=mount(PanoramaMap,{global:{stubs:{Teleport:true}},props:{geoJson,labelLayout:'callout',metricValues:{'610100':'125万元'},cityDetails:{'610100':{institutionCount:2,locatedCount:1,dataDate:'2026-08-30',metrics:[{key:'deposit',label:'存款余额',value:'125万元'},{key:'loan',label:'贷款余额',value:'暂无数据'}],institutions:[{orgCode:'A',orgName:'西安一支行'},{orgCode:'B',orgName:'西安二支行'}]}}}});
+    const label=wrapper.get('button[data-city-code="610100"]');
+    await label.trigger('pointerenter');
+    const tooltip=wrapper.get('[role="tooltip"]');
+    expect(tooltip.text()).toContain('125万元');
+    expect(tooltip.text()).toContain('贷款余额');
+    expect(tooltip.text()).toContain('2026-08-30');
+    expect(tooltip.text()).toContain('西安一支行');
+    expect(tooltip.text()).toContain('2 家');
+    expect(wrapper.findAll('[data-testid="map-city-callout-line"]')[0].element.tagName.toLowerCase()).toBe('path');
+    await label.trigger('pointerleave');
+    expect(wrapper.find('[role="tooltip"]').exists()).toBe(false);
+    await label.trigger('focus');
+    expect(wrapper.find('[role="tooltip"]').exists()).toBe(true);
+    await label.trigger('blur');
+    expect(wrapper.find('[role="tooltip"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+});

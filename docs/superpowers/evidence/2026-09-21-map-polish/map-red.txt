@@ -1,0 +1,119 @@
+
+> xanzc-frontend@0.1.0 test
+> vitest run --run src/views/screen/panorama/__tests__/mapLabelLayout.spec.js src/views/screen/panorama/__tests__/MapMetricLabels.spec.js
+
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+ ❯ src/views/screen/panorama/__tests__/mapLabelLayout.spec.js  (3 tests | 1 failed) 17ms
+   ❯ src/views/screen/panorama/__tests__/mapLabelLayout.spec.js > 城市标注视觉排布 > 左右两列使用相同的等距行，不因地市集中在南部而堆积
+     → expected 41 to be less than 25
+ ❯ src/views/screen/panorama/__tests__/MapMetricLabels.spec.js  (4 tests | 1 failed) 216ms
+   ❯ src/views/screen/panorama/__tests__/MapMetricLabels.spec.js > 城市悬浮详情 > 悬停和键盘聚焦展示已有指标、机构与日期，离开后收起
+     → Unable to get [role="tooltip"] within: <section data-v-b6b11a20="" class="panorama-map" data-mode="province" data-appearance="classic" data-label-layout="callout" data-material-ready="false" data-selected-region="" data-hovered-region="" data-webgl-ready="false" data-region-count="0" aria-label="真实行政区二维地图" citydetails="[object Object]"><canvas data-v-b6b11a20="" class="panorama-map__canvas is-hidden" aria-hidden="true"></canvas>
+  <!--v-if-->
+  <div data-v-b6b11a20="" class="panorama-map__fallback" role="region" aria-label="二维真实行政区地图回退"><svg data-v-b6b11a20="" class="panorama-map__svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" role="group" aria-label="可选择行政区">
+      <g data-v-b6b11a20="" class="panorama-map__region">
+        <path data-v-b6b11a20="" d="M 0.000 100.000 L 50.000 100.000 L 50.000 50.000 L 0.000 50.000 L 0.000 100.000 Z" fill-rule="evenodd" data-region-code="610100" data-region-name="西安市" role="button" tabindex="0" aria-label="选择西安市"></path>
+        <circle data-v-b6b11a20="" cx="25" cy="75" r="1.55" class="panorama-map__city-halo-svg" aria-hidden="true"></circle>
+      </g>
+      <g data-v-b6b11a20="" class="panorama-map__region">
+        <path data-v-b6b11a20="" d="M 50.000 50.000 L 100.000 50.000 L 100.000 0.000 L 50.000 0.000 L 50.000 50.000 Z" fill-rule="evenodd" data-region-code="610200" data-region-name="铜川市" role="button" tabindex="0" aria-label="选择铜川市"></path>
+        <circle data-v-b6b11a20="" cx="39.99999999999986" cy="39.99999999999986" r="1.55" class="panorama-map__city-halo-svg is-violet" aria-hidden="true"></circle>
+      </g>
+      <!--v-if-->
+    </svg></div><svg data-v-b6b11a20="" class="panorama-map__callout-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+    <g data-v-b6b11a20="" class="panorama-map__callout" data-city-code="610100">
+      <polyline data-v-b6b11a20="" points="33.188,72.404 20.480,72.404 14.000,72.404" data-testid="map-city-callout-line" data-city-code="610100" class="panorama-map__callout-line"></polyline>
+      <line data-v-b6b11a20="" x1="33.1875" y1="72.40384615384615" x2="33.1875" y2="72.40384615384615" class="panorama-map__callout-anchor"></line>
+    </g>
+    <g data-v-b6b11a20="" class="panorama-map__callout" data-city-code="610200">
+      <polyline data-v-b6b11a20="" points="42.150,40.231 72.960,40.231 78.000,40.231" data-testid="map-city-callout-line" data-city-code="610200" class="panorama-map__callout-line"></polyline>
+      <line data-v-b6b11a20="" x1="42.14999999999992" y1="40.230769230769106" x2="42.14999999999992" y2="40.230769230769106" class="panorama-map__callout-anchor"></line>
+    </g>
+  </svg>
+  <div data-v-b6b11a20="" class="panorama-map__region-label-layer" aria-label="可选择城市标签"><button data-v-b6b11a20="" type="button" class="panorama-map__region-label-hit" style="left: 11%; top: 72.40384615384615%;" data-city-code="610100" aria-label="选择西安市">西安市<small data-v-b6b11a20="" data-testid="map-region-metric" class="panorama-map__metric-value">125万元</small></button><button data-v-b6b11a20="" type="button" class="panorama-map__region-label-hit" style="left: 81%; top: 40.230769230769106%;" data-city-code="610200" aria-label="选择铜川市">铜川市<small data-v-b6b11a20="" data-testid="map-region-metric" class="panorama-map__metric-value">暂无数据</small></button></div>
+  <!--v-if-->
+  <!--v-if-->
+  <!--v-if-->
+  <!--v-if-->
+  <div data-v-b6b11a20="" class="panorama-map__controls" role="group" aria-label="地图视图控制"><button data-v-b6b11a20="" type="button" aria-label="放大地图" title="放大地图"><svg data-v-b6b11a20="" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true">
+        <path fill="currentColor" d="M480 480V128a32 32 0 0 1 64 0v352h352a32 32 0 1 1 0 64H544v352a32 32 0 1 1-64 0V544H128a32 32 0 0 1 0-64z"></path>
+      </svg></button><button data-v-b6b11a20="" type="button" aria-label="缩小地图" title="缩小地图"><svg data-v-b6b11a20="" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true">
+        <path fill="currentColor" d="M128 544h768a32 32 0 1 0 0-64H128a32 32 0 0 0 0 64"></path>
+      </svg></button><button data-v-b6b11a20="" type="button" aria-label="重置地图视图" title="重置地图视图"><svg data-v-b6b11a20="" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true">
+        <path fill="currentColor" d="M512 896a384 384 0 1 0 0-768 384 384 0 0 0 0 768m0 64a448 448 0 1 1 0-896 448 448 0 0 1 0 896"></path>
+        <path fill="currentColor" d="M512 96a32 32 0 0 1 32 32v192a32 32 0 0 1-64 0V128a32 32 0 0 1 32-32m0 576a32 32 0 0 1 32 32v192a32 32 0 1 1-64 0V704a32 32 0 0 1 32-32M96 512a32 32 0 0 1 32-32h192a32 32 0 0 1 0 64H128a32 32 0 0 1-32-32m576 0a32 32 0 0 1 32-32h192a32 32 0 1 1 0 64H704a32 32 0 0 1-32-32"></path>
+      </svg></button></div>
+  <p data-v-b6b11a20="" class="panorama-map__fallback-status" role="status" aria-live="polite">三维地图暂不可用，已切换为二维地图；可缩放、点击城市查看机构。</p>
+  <!--v-if-->
+</section>
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/screen/panorama/__tests__/MapMetricLabels.spec.js > 城市悬浮详情 > 悬停和键盘聚焦展示已有指标、机构与日期，离开后收起
+Error: Unable to get [role="tooltip"] within: <section data-v-b6b11a20="" class="panorama-map" data-mode="province" data-appearance="classic" data-label-layout="callout" data-material-ready="false" data-selected-region="" data-hovered-region="" data-webgl-ready="false" data-region-count="0" aria-label="真实行政区二维地图" citydetails="[object Object]"><canvas data-v-b6b11a20="" class="panorama-map__canvas is-hidden" aria-hidden="true"></canvas>
+  <!--v-if-->
+  <div data-v-b6b11a20="" class="panorama-map__fallback" role="region" aria-label="二维真实行政区地图回退"><svg data-v-b6b11a20="" class="panorama-map__svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" role="group" aria-label="可选择行政区">
+      <g data-v-b6b11a20="" class="panorama-map__region">
+        <path data-v-b6b11a20="" d="M 0.000 100.000 L 50.000 100.000 L 50.000 50.000 L 0.000 50.000 L 0.000 100.000 Z" fill-rule="evenodd" data-region-code="610100" data-region-name="西安市" role="button" tabindex="0" aria-label="选择西安市"></path>
+        <circle data-v-b6b11a20="" cx="25" cy="75" r="1.55" class="panorama-map__city-halo-svg" aria-hidden="true"></circle>
+      </g>
+      <g data-v-b6b11a20="" class="panorama-map__region">
+        <path data-v-b6b11a20="" d="M 50.000 50.000 L 100.000 50.000 L 100.000 0.000 L 50.000 0.000 L 50.000 50.000 Z" fill-rule="evenodd" data-region-code="610200" data-region-name="铜川市" role="button" tabindex="0" aria-label="选择铜川市"></path>
+        <circle data-v-b6b11a20="" cx="39.99999999999986" cy="39.99999999999986" r="1.55" class="panorama-map__city-halo-svg is-violet" aria-hidden="true"></circle>
+      </g>
+      <!--v-if-->
+    </svg></div><svg data-v-b6b11a20="" class="panorama-map__callout-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+    <g data-v-b6b11a20="" class="panorama-map__callout" data-city-code="610100">
+      <polyline data-v-b6b11a20="" points="33.188,72.404 20.480,72.404 14.000,72.404" data-testid="map-city-callout-line" data-city-code="610100" class="panorama-map__callout-line"></polyline>
+      <line data-v-b6b11a20="" x1="33.1875" y1="72.40384615384615" x2="33.1875" y2="72.40384615384615" class="panorama-map__callout-anchor"></line>
+    </g>
+    <g data-v-b6b11a20="" class="panorama-map__callout" data-city-code="610200">
+      <polyline data-v-b6b11a20="" points="42.150,40.231 72.960,40.231 78.000,40.231" data-testid="map-city-callout-line" data-city-code="610200" class="panorama-map__callout-line"></polyline>
+      <line data-v-b6b11a20="" x1="42.14999999999992" y1="40.230769230769106" x2="42.14999999999992" y2="40.230769230769106" class="panorama-map__callout-anchor"></line>
+    </g>
+  </svg>
+  <div data-v-b6b11a20="" class="panorama-map__region-label-layer" aria-label="可选择城市标签"><button data-v-b6b11a20="" type="button" class="panorama-map__region-label-hit" style="left: 11%; top: 72.40384615384615%;" data-city-code="610100" aria-label="选择西安市">西安市<small data-v-b6b11a20="" data-testid="map-region-metric" class="panorama-map__metric-value">125万元</small></button><button data-v-b6b11a20="" type="button" class="panorama-map__region-label-hit" style="left: 81%; top: 40.230769230769106%;" data-city-code="610200" aria-label="选择铜川市">铜川市<small data-v-b6b11a20="" data-testid="map-region-metric" class="panorama-map__metric-value">暂无数据</small></button></div>
+  <!--v-if-->
+  <!--v-if-->
+  <!--v-if-->
+  <!--v-if-->
+  <div data-v-b6b11a20="" class="panorama-map__controls" role="group" aria-label="地图视图控制"><button data-v-b6b11a20="" type="button" aria-label="放大地图" title="放大地图"><svg data-v-b6b11a20="" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true">
+        <path fill="currentColor" d="M480 480V128a32 32 0 0 1 64 0v352h352a32 32 0 1 1 0 64H544v352a32 32 0 1 1-64 0V544H128a32 32 0 0 1 0-64z"></path>
+      </svg></button><button data-v-b6b11a20="" type="button" aria-label="缩小地图" title="缩小地图"><svg data-v-b6b11a20="" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true">
+        <path fill="currentColor" d="M128 544h768a32 32 0 1 0 0-64H128a32 32 0 0 0 0 64"></path>
+      </svg></button><button data-v-b6b11a20="" type="button" aria-label="重置地图视图" title="重置地图视图"><svg data-v-b6b11a20="" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true">
+        <path fill="currentColor" d="M512 896a384 384 0 1 0 0-768 384 384 0 0 0 0 768m0 64a448 448 0 1 1 0-896 448 448 0 0 1 0 896"></path>
+        <path fill="currentColor" d="M512 96a32 32 0 0 1 32 32v192a32 32 0 0 1-64 0V128a32 32 0 0 1 32-32m0 576a32 32 0 0 1 32 32v192a32 32 0 1 1-64 0V704a32 32 0 0 1 32-32M96 512a32 32 0 0 1 32-32h192a32 32 0 0 1 0 64H128a32 32 0 0 1-32-32m576 0a32 32 0 0 1 32-32h192a32 32 0 1 1 0 64H704a32 32 0 0 1-32-32"></path>
+      </svg></button></div>
+  <p data-v-b6b11a20="" class="panorama-map__fallback-status" role="status" aria-live="polite">三维地图暂不可用，已切换为二维地图；可缩放、点击城市查看机构。</p>
+  <!--v-if-->
+</section>
+ ❯ VueWrapper.get node_modules/.pnpm/@vue+test-utils@2.5.0_@vue+compiler-dom@3.5.42_@vue+server-renderer@3.5.42_vue@3.5.42/node_modules/@vue/test-utils/dist/vue-test-utils.cjs.js:7324:15
+    7322|             return result;
+    7323|         }
+    7324|         throw new Error(`Unable to get ${selector} within: ${this.html…
+       |               ^
+    7325|     }
+    7326|     getComponent(selector) {
+ ❯ src/views/screen/panorama/__tests__/MapMetricLabels.spec.js:66:27
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/views/screen/panorama/__tests__/mapLabelLayout.spec.js > 城市标注视觉排布 > 左右两列使用相同的等距行，不因地市集中在南部而堆积
+AssertionError: expected 41 to be less than 25
+ ❯ src/views/screen/panorama/__tests__/mapLabelLayout.spec.js:59:21
+     57|     const right=result.filter(r=>r.side==='right').map(r=>r.label.y);
+     58|     expect(left).toEqual(right);
+     59|     expect(left[0]).toBeLessThan(25);
+       |                     ^
+     60|     left.slice(2).forEach((y,i)=>expect(y-left[i+1]).toBeCloseTo(left[…
+     61|     const path=createMapCalloutPath(result[0]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 5 passed (7)
+   Start at  10:28:33
+   Duration  3.31s (transform 1.18s, setup 1ms, collect 1.70s, tests 233ms, environment 687ms, prepare 407ms)

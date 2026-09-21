@@ -6,7 +6,7 @@ import { mount } from '@vue/test-utils';
 vi.mock('../PanoramaMap.vue', () => ({
   default: {
     name: 'PanoramaMap',
-    props: ['metricLabel', 'metricValues', 'labelLayout'],
+    props: ['metricLabel', 'metricValues', 'labelLayout', 'cityDetails'],
     template: '<div class="panorama-map-stub"><button type="button" class="stub-select-region" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">选择西安</button><button type="button" class="stub-select-branch" @click="$emit(\'branch-select\', \'ORG-1\')">选择支行</button></div>',
     emits: ['region-select', 'branch-select']
   }
@@ -320,7 +320,8 @@ describe('PanoramaDashboard 省级经营大屏', () => {
       }
     });
     expect(wrapper.get('[data-testid="target-progress-value"]').text()).toContain('125');
-    expect(wrapper.get('[data-testid="target-progress-ring"]').attributes('style')).toContain('--target-progress: 100%');
+    expect(wrapper.get('[data-testid="completion-water-gauge"]').attributes('data-level')).toBe('100');
+    expect(wrapper.find('[data-testid="target-progress-bullet"]').exists()).toBe(false);
     expect(wrapper.get('.panorama-target-panel').text()).not.toContain('年度目标');
   });
 
@@ -351,6 +352,30 @@ describe('PanoramaDashboard 省级经营大屏', () => {
   it('分行省级地图启用城市引导标注', () => {
     const wrapper = mountDashboard();
     expect(wrapper.findComponent({ name: 'PanoramaMap' }).props('labelLayout')).toBe('callout');
+  });
+
+  it('向省级地图传入按授权机构和城市汇总构建的城市详情', () => {
+    const wrapper = mountDashboard({
+      model: {
+        ...extendedModel,
+        institutions: [
+          ...model.institutions,
+          { orgCode: 'ORG-3', orgName: '宝鸡支行', cityCode: '610300', located: true, lng: 107.1, lat: 34.3 }
+        ],
+        citySummaries: {
+          '610100': { dataDate: '2026-09-01', kpis: [{ key: 'deposit', label: '存款余额', value: 125, unit: '万元' }] }
+        }
+      }
+    });
+    const map = wrapper.findComponent({ name: 'PanoramaMap' });
+    expect(map.props('cityDetails')['610100']).toMatchObject({
+      institutionCount: 1,
+      locatedCount: 1,
+      dataDate: '2026-09-01'
+    });
+    expect(map.props('cityDetails')['610100'].metrics.find(metric => metric.key === 'deposit')).toEqual({
+      key: 'deposit', label: '存款余额', value: '125万元'
+    });
   });
 
   it('地图范围标题使用全辖机构分布', () => {

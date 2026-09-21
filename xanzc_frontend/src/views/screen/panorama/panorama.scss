@@ -190,11 +190,7 @@
 .panorama-composition-content { flex: 1; min-height: 0; }
 .panorama-target-summary { display: grid; grid-template-columns: auto minmax(72px, .8fr) minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 52px; padding: 7px 10px; }
 .panorama-target-summary-label { color: var(--panorama-text-dim); font-size: 10px; white-space: nowrap; }
-.panorama-target-ring { width: 92px; height: 33px; display: grid; place-items: center; border: 1px solid rgba(76, 221, 235, .32); border-radius: 5px; background: linear-gradient(90deg, rgba(77, 232, 239, .32) var(--target-progress), rgba(43, 100, 169, .15) var(--target-progress)); box-shadow: 0 0 16px rgba(55, 212, 236, .12); position: relative; }
-.panorama-target-ring strong { position: relative; z-index: 1; color: #effcff; font-size: 20px; }
-.panorama-target-ring strong small { margin-left: 2px; font-size: 10px; }
 .panorama-target-gap { color: #dce9ff; font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
-.panorama-target-period { color: var(--panorama-text-dim); font-size: 9px; white-space: nowrap; }
 .panorama-target-track { display: none; }
 .panorama-trend-heading-actions { display: flex; align-items: center; gap: 8px; }
 .panorama-trend-switch button { padding: 5px 8px; font-size: 10px; }
@@ -439,9 +435,6 @@
   .panorama-target-panel .panorama-panel-heading { min-height: 34px; padding: 5px 10px 4px; }
   .panorama-target-panel .panorama-section-kicker { display: none; }
   .panorama-target-panel .panorama-panel-heading h2 { margin: 0; font-size: 14px; }
-  .panorama-target-ring { width: 88px; height: 30px; }
-  .panorama-target-ring strong { font-size: 17px; }
-  .panorama-target-ring strong small { font-size: 10px; }
   .panorama-target-meta { gap: 3px; font-size: 10px; }
   .panorama-target-meta small { font-size: 11px; }
   .panorama-target-track { height: 3px; margin-top: 2px; }
@@ -474,7 +467,6 @@
   .panorama-panel-subheading { flex-wrap: wrap; }
   .panorama-map-hint-inline { width: 100%; margin-left: 0; }
   .panorama-target-summary { grid-template-columns: auto minmax(74px, auto) minmax(0, 1fr); gap: 6px; }
-  .panorama-target-period { display: none; }
   .panorama-trend-heading-actions { gap: 5px; }
   .panorama-trend-switch button { padding: 5px 7px; font-size: 10px; }
   .city-kpi { padding: 10px; }
@@ -532,11 +524,6 @@
 .panorama-target-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-height: 28px; padding-top: 7px; color: #dceaff; font-size: 11px; }
 .panorama-target-heading small { color: var(--panorama-text-dim); font-size: 9px; }
 .panorama-target-summary { grid-template-columns: auto 86px minmax(0, 1fr) auto; min-height: 55px; gap: 8px; padding: 5px 0 0; }
-.panorama-target-ring { width: 86px; height: 31px; }
-.panorama-target-bullet { min-width: 0; display: grid; align-content: center; gap: 4px; }
-.panorama-target-bullet__track { height: 7px; display: block; overflow: hidden; border-radius: 999px; background: rgba(105, 150, 230, .2); }
-.panorama-target-bullet__track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--panorama-cyan), var(--panorama-violet)); }
-.panorama-target-bullet small { overflow: hidden; color: #9fb7e3; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 城市下钻把地图收窄，把右侧空间给机构比较和趋势画像。 */
 .panorama-city-modal { height: calc(100dvh - var(--cockpit-chrome-height, 0px)); padding: clamp(12px, 2vh, 22px) clamp(12px, 2vw, 30px); }
@@ -581,5 +568,12 @@
 
 @media (max-width: 760px) {
   .panorama-target-summary { grid-template-columns: auto minmax(74px, auto) minmax(0, 1fr); }
-  .panorama-target-period { display: none; }
 }
+
+/* One completion visual; the companion text explains the distance to target. */
+.panorama-target-panel:has(.panorama-target-water-summary) { flex: 0 0 auto; }
+.panorama-target-summary.panorama-target-water-summary { grid-template-columns: 104px minmax(0, 1fr); gap: 16px; padding: 10px 4px 6px; min-height: 112px; }
+.panorama-target-water-copy { min-width: 0; }
+.panorama-target-water-copy .panorama-target-summary-label { display: block; font-size: 11px; white-space: normal; line-height: 1.5; }
+.panorama-target-distance { display: block; margin-top: 7px; color: #cceaf5; font-size: clamp(12px, .85vw, 16px); line-height: 1.6; font-weight: 600; }
+.panorama-target-water-reference { display: block; margin-top: 8px; color: #718aac; font-size: 10px; }

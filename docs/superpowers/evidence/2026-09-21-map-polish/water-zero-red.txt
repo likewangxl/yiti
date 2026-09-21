@@ -1,0 +1,36 @@
+
+> xanzc-frontend@0.1.0 test
+> vitest run --run src/views/screen/components/__tests__/CompletionWaterGauge.spec.js
+
+
+ RUN  v1.6.1 /Users/likewang/workspace/cx-wsp/一体化经营管理系统/yiti/xanzc_frontend
+
+ ❯ src/views/screen/components/__tests__/CompletionWaterGauge.spec.js  (12 tests | 1 failed) 117ms
+   ❯ src/views/screen/components/__tests__/CompletionWaterGauge.spec.js > CompletionWaterGauge > 以两位小数显示零值，并将水位与颜色标记为珊瑚色段
+     → expected [ DOMWrapper{ …(3) }, …(1) ] to have a length of +0 but got 2
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/screen/components/__tests__/CompletionWaterGauge.spec.js > CompletionWaterGauge > 以两位小数显示零值，并将水位与颜色标记为珊瑚色段
+AssertionError: expected [ DOMWrapper{ …(3) }, …(1) ] to have a length of +0 but got 2
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ ❯ src/views/screen/components/__tests__/CompletionWaterGauge.spec.js:22:35
+     20|     expect(gauge.attributes('aria-label')).toBe('目标完成率 0.00%');
+     21|     expect(gauge.find('[data-testid="target-progress-value"]').text())…
+     22|     expect(gauge.findAll('path')).toHaveLength(0);
+       |                                   ^
+     23|     expect(gauge.find('clipPath').exists()).toBe(true);
+     24|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 11 passed (12)
+   Start at  10:42:38
+   Duration  2.02s (transform 211ms, setup 0ms, collect 324ms, tests 117ms, environment 583ms, prepare 220ms)

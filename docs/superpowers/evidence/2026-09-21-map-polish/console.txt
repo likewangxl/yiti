@@ -1,0 +1,6 @@
+### Result
+Total messages: 5 (Errors: 0, Warnings: 1)
+Returning 2 messages for level "info"
+
+[LOG] THREE.WebGLRenderer: Context Lost. @ http://127.0.0.1:8092/node_modules/.vite/deps/three.js?v=ae7a88c0:274
+[WARNING] [PanoramaMap] WebGL context lost failed, using SVG fallback. undefined @ http://127.0.0.1:8092/src/views/screen/panorama/PanoramaMap.vue?t=1789958526599:929

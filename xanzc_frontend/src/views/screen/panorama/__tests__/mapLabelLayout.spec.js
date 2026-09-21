@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { layoutMapCallouts, layoutMapLabels } from '../mapLabelLayout';
+import { createMapCalloutPath, layoutMapCallouts, layoutMapLabels } from '../mapLabelLayout';
 describe('投影后地图标签避让', () => {
   it('相邻城市带数值的标签不重叠，且保留地图内边距', () => {
     const labels=Array.from({length:5},(_,i)=>({key:String(i),x:50+i,y:50,width:14,height:10}));
@@ -45,5 +45,22 @@ describe('投影后地图标签避让', () => {
         expect(row.label.y - rows[index].label.y).toBeGreaterThanOrEqual(8);
       });
     });
+  });
+});
+
+
+describe('城市标注视觉排布', () => {
+  it('左右两列使用相同的等距行，不因地市集中在南部而堆积', () => {
+    const labels=Array.from({length:10},(_,i)=>({key:String(i),anchor:{x:35+i*3,y:60+i},width:16,height:8}));
+    const result=Object.values(layoutMapCallouts(labels,{bounds:{left:5,right:88,top:15,bottom:85}}));
+    const left=result.filter(r=>r.side==='left').map(r=>r.label.y);
+    const right=result.filter(r=>r.side==='right').map(r=>r.label.y);
+    expect(left).toEqual(right);
+    expect(left[0]).toBeLessThan(25);
+    left.slice(2).forEach((y,i)=>expect(y-left[i+1]).toBeCloseTo(left[1]-left[0]));
+    const path=createMapCalloutPath(result[0]);
+    expect(path).toContain(' C ');
+    expect(path).toContain(' L ');
+    expect(path.startsWith(`M ${result[0].anchor.x} ${result[0].anchor.y}`)).toBe(true);
   });
 });

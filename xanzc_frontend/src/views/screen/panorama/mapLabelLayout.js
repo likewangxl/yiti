@@ -52,7 +52,6 @@ export function layoutMapCallouts(labels = [], options = {}) {
     top: finiteNumber(options.bounds?.top, 14),
     bottom: finiteNumber(options.bounds?.bottom, 84)
   };
-  const minGap = Math.max(0, finiteNumber(options.minGap, 2));
   const normalized = source.map((label, index) => ({
     label,
     index,
@@ -76,36 +75,13 @@ export function layoutMapCallouts(labels = [], options = {}) {
   const sideRows = (rows, side) => {
     const sorted = rows.slice().sort((a, b) => a.anchor.y - b.anchor.y || a.index - b.index);
     if (!sorted.length) return [];
-    const heights = sorted.map(row => row.height);
-    const totalHeight = heights.reduce((sum, height) => sum + height, 0);
-    const availableHeight = Math.max(0, bounds.bottom - bounds.top);
-    const gap = sorted.length > 1
-      ? Math.max(0, Math.min(minGap, (availableHeight - totalHeight) / (sorted.length - 1)))
-      : 0;
-    const ideal = sorted.map(row => clamp(
-      row.anchor.y,
-      bounds.top + row.height / 2,
-      bounds.bottom - row.height / 2
-    ));
-    const positions = [];
-    sorted.forEach((row, index) => {
-      const previous = positions[index - 1];
-      const minimum = previous == null
-        ? bounds.top + row.height / 2
-        : previous + heights[index - 1] / 2 + gap + row.height / 2;
-      positions.push(Math.max(ideal[index], minimum));
-    });
-
-    const lastBottom = positions.at(-1) + sorted.at(-1).height / 2;
-    if (lastBottom > bounds.bottom) {
-      const shift = lastBottom - bounds.bottom;
-      for (let index = 0; index < positions.length; index += 1) positions[index] -= shift;
-    }
-    const firstTop = positions[0] - sorted[0].height / 2;
-    if (firstTop < bounds.top) {
-      const shift = bounds.top - firstTop;
-      for (let index = 0; index < positions.length; index += 1) positions[index] += shift;
-    }
+    // Both columns share evenly spaced rows, independent of dense city geography.
+    const rowHeight = Math.max(...normalized.map(row => row.height));
+    const first = bounds.top + rowHeight / 2;
+    const last = bounds.bottom - rowHeight / 2;
+    const positions = sorted.map((_, index) => sorted.length === 1
+      ? (first + last) / 2
+      : first + (last - first) * index / (sorted.length - 1));
 
     const maxWidth = Math.max(...sorted.map(row => row.width), 0);
     const columnX = side === 'left'
@@ -144,4 +120,17 @@ export function layoutMapCallouts(labels = [], options = {}) {
     ...sideRows(left, 'left'),
     ...sideRows(right, 'right')
   ].map(position => [position.key, position]));
+}
+
+
+/** Curved geographic leader with a short horizontal landing beside the label. */
+export function createMapCalloutPath(position) {
+  if (!position) return '';
+  const { anchor, elbow, edge, side } = position;
+  const direction = side === 'left' ? -1 : 1;
+  const span = Math.abs(anchor.x - elbow.x);
+  const lift = (position.label.y < 50 ? -1 : 1) * Math.min(9, Math.max(5, span * .24));
+  const controlX = anchor.x + direction * Math.max(5, span * .45);
+  const approachX = elbow.x - direction * Math.max(3, span * .22);
+  return `M ${anchor.x} ${anchor.y} C ${controlX} ${anchor.y + lift}, ${approachX} ${elbow.y}, ${elbow.x} ${elbow.y} L ${edge.x} ${edge.y}`;
 }
