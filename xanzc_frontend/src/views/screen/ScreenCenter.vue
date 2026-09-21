@@ -79,8 +79,9 @@
             <h2>{{ displayName(screen) }}</h2>
             <span v-if="!isPersonalScreen(screen)" class="screen-card__mode-badge">{{ dataModeLabel(screen.dataMode) }}</span>
           </div>
-          <p v-if="!isPersonalScreen(screen)" class="screen-card__code">编码：{{ screen.screenCode }}</p>
-          <p v-else class="screen-card__description">个人核心指标、今日优先事项、我的客户、我发起的业务进度</p>
+          <p v-if="isPersonalScreen(screen)" class="screen-card__description">个人核心指标、今日优先事项、我的客户、我发起的业务进度</p>
+          <p v-else-if="isBranchOperatingScreen(screen)" class="screen-card__description">{{ screen.description }}</p>
+          <p v-else class="screen-card__code">编码：{{ screen.screenCode }}</p>
           <div class="screen-card__meta">
             <template v-if="isPersonalScreen(screen)">
               <span>个人</span>
@@ -92,9 +93,12 @@
               <span v-if="screen.dataMode === 'LIVE'" data-testid="screen-live-source-note">统计口径与环境见来源说明</span>
             </template>
           </div>
-          <button type="button" class="screen-card__open" @click="openScreen(screen)">{{ isPersonalScreen(screen) ? '进入驾驶舱' : '进入大屏' }}</button>
-          <button v-if="screen.screenCode === 'SCR_CORP_OVERVIEW' && screen.template === 'corporate-overview-v1' && screen.dataMode === 'LIVE'"
-            type="button" class="screen-card__open" data-action="open-branch-operating" @click="router.push('/branch-operating')">支行经营总览</button>
+          <button
+            type="button"
+            class="screen-card__open"
+            :data-action="isBranchOperatingScreen(screen) ? 'open-branch-operating' : undefined"
+            @click="openScreen(screen)"
+          >{{ isPersonalScreen(screen) ? '进入驾驶舱' : '进入大屏' }}</button>
         </div>
       </article>
     </section>
@@ -130,6 +134,16 @@ const PERSONAL_SCREEN = Object.freeze({
   viewLevel: 'PERSON',
   bizLine: 'COMMON'
 });
+const BRANCH_OPERATING_SCREEN = Object.freeze({
+  key: 'branch-operating',
+  kind: 'branch-operating',
+  screenCode: 'branch-operating',
+  screenName: '支行经营总览',
+  viewLevel: 'BRANCH',
+  bizLine: 'COMMON',
+  dataMode: 'LIVE',
+  description: '查看单支行核心指标、经营趋势与目标完成情况'
+});
 
 const router = useRouter();
 const menuStore = useMenuStore();
@@ -158,6 +172,10 @@ const filteredScreens = computed(() => {
 
 function isPersonalScreen(screen) {
   return screen?.kind === 'personal';
+}
+
+function isBranchOperatingScreen(screen) {
+  return screen?.kind === 'branch-operating';
 }
 
 function displayName(screen) {
@@ -192,6 +210,18 @@ function normalizeCatalog(catalog) {
     && hasRegisteredMode(screen));
 }
 
+function hasBranchOperatingSource(catalog) {
+  return catalog.some((screen) => screen
+    && screen.screenCode === 'SCR_CORP_OVERVIEW'
+    && screen.template === 'corporate-overview-v1'
+    && screen.dataMode === 'LIVE');
+}
+
+function buildScreenDirectory(catalog) {
+  if (!hasBranchOperatingSource(catalog)) return catalog;
+  return [...catalog, BRANCH_OPERATING_SCREEN];
+}
+
 async function loadCatalog() {
   const generation = ++loadGeneration;
   loading.value = true;
@@ -215,9 +245,10 @@ async function loadCatalog() {
     const catalog = await catalogRequest;
     if (generation !== loadGeneration) return;
     const normalizedCatalog = normalizeCatalog(catalog);
+    const screenDirectory = buildScreenDirectory(normalizedCatalog);
     // 机构目录是页面主体，菜单授权迟到时先展示已确认的机构结果，避免授权接口延迟阻塞目录。
-    screens.value = normalizedCatalog;
-    loading.value = normalizedCatalog.length === 0;
+    screens.value = screenDirectory;
+    loading.value = screenDirectory.length === 0;
 
     const hasPersonalAccess = await menuRequest;
     if (generation !== loadGeneration || loadError.value) return;
@@ -235,6 +266,10 @@ function openScreen(screen) {
   if (isPersonalScreen(screen)) {
     if (!userStore.user || menuStore.loaded !== true || !menuStore.hasUrl('/workspace')) return;
     router.push({ name: 'PersonalDashboard', query: { from: 'screen-center' } });
+    return;
+  }
+  if (isBranchOperatingScreen(screen)) {
+    router.push({ name: 'BranchOperatingPage' });
     return;
   }
   const template = screen?.template;

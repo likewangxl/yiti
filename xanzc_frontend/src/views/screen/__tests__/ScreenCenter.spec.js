@@ -55,13 +55,38 @@ async function mountCenter() {
 }
 
 describe('ScreenCenter.vue', () => {
-  it('对公目录可筛选并导航到独立模板', async () => {
+  it('对公卡片保持对公导航，并基于 LIVE 授权呈现独立支行入口', async () => {
     listAvailableScreens.mockResolvedValue([...catalog, { screenCode: 'SCR_CORP_OVERVIEW', screenName: '对公经营总览', bizLine: 'CORP', template: 'corporate-overview-v1', dataMode: 'LIVE' }]);
     const center = await mountCenter();
+    expect(center.text()).toContain('5个可访问大屏');
+
     await center.find('button[data-biz-line="CORP"]').trigger('click');
     expect(center.findAll('[data-screen-card]')).toHaveLength(1);
-    await center.find('[data-screen-code="SCR_CORP_OVERVIEW"] button').trigger('click');
+    const corporateCard = center.find('[data-screen-code="SCR_CORP_OVERVIEW"]');
+    expect(corporateCard.find('[data-action="open-branch-operating"]').exists()).toBe(false);
+    await corporateCard.find('button.screen-card__open').trigger('click');
     expect(routerPush).toHaveBeenCalledWith({ name: 'CodeScreenPage', params: { template: 'corporate-overview-v1' } });
+
+    await center.find('button[data-biz-line="COMMON"]').trigger('click');
+    await center.find('input[aria-label="搜索大屏"]').setValue('支行经营总览');
+    expect(center.findAll('[data-screen-card]')).toHaveLength(1);
+    const branchCard = center.find('[data-screen-kind="branch-operating"]');
+    expect(branchCard.exists()).toBe(true);
+    expect(branchCard.find('.screen-card__description').exists()).toBe(true);
+    expect(branchCard.text()).not.toContain('编码：branch-operating');
+    await branchCard.find('button.screen-card__open').trigger('click');
+    expect(routerPush).toHaveBeenLastCalledWith({ name: 'BranchOperatingPage' });
+  });
+
+  it('没有对公 LIVE 授权时不显示支行独立入口', async () => {
+    listAvailableScreens.mockResolvedValue([...catalog, {
+      screenCode: 'SCR_CORP_OVERVIEW', screenName: '对公经营总览', bizLine: 'CORP',
+      template: 'corporate-overview-v1', dataMode: 'TEST'
+    }]);
+    const center = await mountCenter();
+
+    expect(center.find('[data-screen-kind="branch-operating"]').exists()).toBe(false);
+    expect(center.text()).not.toContain('支行经营总览');
   });
 
   it('呈现后端目录、接口数据标签并按模板导航到受保护页面', async () => {

@@ -3,11 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 
-const { listAvailableScreens, routerPush } = vi.hoisted(() => ({
+const { listAvailableScreens, routerPush, menuStore } = vi.hoisted(() => ({
   listAvailableScreens: vi.fn(),
-  routerPush: vi.fn()
+  routerPush: vi.fn(),
+  menuStore: {
+    loaded: true,
+    loading: false,
+    load: vi.fn(),
+    hasUrl: vi.fn()
+  }
 }));
 vi.mock('@/api/screen', () => ({ listAvailableScreens }));
+vi.mock('@/stores/menu', () => ({ useMenuStore: () => menuStore }));
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
   useRoute: () => ({ params: { template: 'branch-overview-v1' } })
@@ -36,6 +43,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   setActivePinia(createPinia());
   useUserStore().setUser({ empId: 'USER_A' });
+  menuStore.loaded = true;
+  menuStore.loading = false;
+  menuStore.load.mockResolvedValue([]);
+  menuStore.hasUrl.mockReturnValue(false);
   listAvailableScreens.mockResolvedValue(catalog);
 });
 afterEach(() => wrapper?.unmount());
@@ -51,7 +62,7 @@ describe('ScreenCenter fixed code screens', () => {
     wrapper = mount(ScreenCenter);
     await flushPromises();
 
-    expect(wrapper.findAll('[data-screen-card]')).toHaveLength(3);
+    expect(wrapper.findAll('[data-screen-card]')).toHaveLength(4);
     expect(wrapper.text()).toContain('测试库数据');
     expect(wrapper.text()).toContain('已接入数据');
     expect(wrapper.text()).toContain('已接入数据');
@@ -63,5 +74,19 @@ describe('ScreenCenter fixed code screens', () => {
       name: 'CodeScreenPage',
       params: { template: 'retail-overview-v1' }
     });
+
+    const branchCard = wrapper.find('[data-screen-kind="branch-operating"]');
+    expect(branchCard.exists()).toBe(true);
+    expect(branchCard.find('.screen-card__description').exists()).toBe(true);
+    await branchCard.find('button.screen-card__open').trigger('click');
+    expect(routerPush).toHaveBeenLastCalledWith({ name: 'BranchOperatingPage' });
+  });
+
+  it('没有对公 LIVE 目录授权时不派生支行卡片', async () => {
+    listAvailableScreens.mockResolvedValue([{ ...catalog[2], dataMode: 'TEST' }]);
+    wrapper = mount(ScreenCenter);
+    await flushPromises();
+
+    expect(wrapper.find('[data-screen-kind="branch-operating"]').exists()).toBe(false);
   });
 });
