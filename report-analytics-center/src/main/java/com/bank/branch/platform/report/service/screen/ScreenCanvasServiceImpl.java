@@ -190,7 +190,7 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         if (screenMapService != null) {
             screenMapService.validateDraftStructure(unboundDraftJson);
         }
-        validateDraftDatasourceLines(s, chartNodes, codePresentation, template);
+        validateDraftDatasourceLines(s, chartNodes, codePresentation, template, styleJson);
 
         List<RptScreenBlock> existingBlocksToUpdate = new ArrayList<>();
         for (CanvasComponentDTO c : chartNodes) {
@@ -851,6 +851,20 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         // CODE 的 datasource schema 是新绑定契约，即使挂在未声明条线的历史 screen 上也必须
         // 在 publish 侧从当前 datasource 重新证明；旧坐标 canvas 才保留无条线兼容路径。
         if (!explicitLine && !namedGroup && !codePresentation) {
+            for (RptScreenBlock block : rows) {
+                if (!draftBlockIds.contains(block.getId())) {
+                    continue;
+                }
+                Long dsId = readDsId(block.getBindJson());
+                if (dsId == null) {
+                    continue;
+                }
+                var datasource = dsMapper.selectById(dsId);
+                if (datasource != null && FreeReportScreenPolicy.SOURCE_KIND.equals(datasource.getSourceKind())) {
+                    CodeScreenPresentationValidator.validateDatasourceClassification(
+                            readCanvasStyle(screen.getCanvasStyleJson()), datasource);
+                }
+            }
             return;
         }
         String screenLine = normalizeBizLine(screen.getBizLine());
@@ -872,9 +886,14 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             if (namedGroup && !isNamedGroupSafeDatasource(dataSource)) {
                 throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
             }
+            if (FreeReportScreenPolicy.SOURCE_KIND.equals(dataSource.getSourceKind())) {
+                CodeScreenPresentationValidator.validateDatasourceClassification(
+                        readCanvasStyle(screen.getCanvasStyleJson()), dataSource);
+            }
             if (codePresentation) {
                 String bindingKey = codeBindingKey(draftComponents, block.getId());
-                validateCodeDatasourceBinding(bindingKey, block.getBindJson(), dataSource, template);
+                validateCodeDatasourceBinding(bindingKey, block.getBindJson(), dataSource, template,
+                        screen.getCanvasStyleJson());
                 if (namedGroup) {
                     validateCodeNamedGroupBinding(bindingKey, block.getBindJson(), dataSource);
                 }
@@ -937,7 +956,8 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
 
     /** 保存画布也必须执行同一条线矩阵与命名组主体校验，不能等到发布才发现错误。 */
     private void validateDraftDatasourceLines(RptScreen screen, List<CanvasComponentDTO> chartNodes,
-                                              boolean codePresentation, String template) {
+                                              boolean codePresentation, String template,
+                                              String canvasStyleJson) {
         String screenLine = normalizeBizLine(screen.getBizLine());
         boolean namedGroup = "NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode());
         validateCodeTemplateScreenLine(screen, template);
@@ -958,9 +978,14 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             if (namedGroup && !isNamedGroupSafeDatasource(datasource)) {
                 throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
             }
+            if (FreeReportScreenPolicy.SOURCE_KIND.equals(datasource.getSourceKind())) {
+                CodeScreenPresentationValidator.validateDatasourceClassification(
+                        readCanvasStyle(canvasStyleJson), datasource);
+            }
             if (codePresentation) {
                 String bindingKey = chartBindingKey(chart);
-                validateCodeDatasourceBinding(bindingKey, chart.getBindJson(), datasource, template);
+                validateCodeDatasourceBinding(bindingKey, chart.getBindJson(), datasource, template,
+                        canvasStyleJson);
             }
             if (codePresentation && namedGroup) {
                 validateCodeNamedGroupBinding(chart, datasource);
@@ -1020,12 +1045,28 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
 
     private void validateCodeDatasourceBinding(String bindingKey, String bindJson,
                                                com.bank.branch.platform.report.entity.RptScreenDatasource datasource,
-                                               String template) {
+                                               String template, String canvasStyleJson) {
+        validateCodeDatasourceBinding(bindingKey, bindJson, datasource, template,
+                readCanvasStyle(canvasStyleJson));
+    }
+
+    private void validateCodeDatasourceBinding(String bindingKey, String bindJson,
+                                               com.bank.branch.platform.report.entity.RptScreenDatasource datasource,
+                                               String template, JsonNode canvasStyle) {
         try {
             JsonNode bind = objectMapper.readTree(bindJson == null ? "{}" : bindJson);
-            CodeScreenPresentationValidator.validateBindAgainstDatasource(bind, bindingKey, datasource, template);
+            CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                    bind, bindingKey, datasource, template, canvasStyle);
         } catch (RptException ex) {
             throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, ex);
+        }
+    }
+
+    private JsonNode readCanvasStyle(String styleJson) {
+        try {
+            return objectMapper.readTree(styleJson == null || styleJson.isBlank() ? "{}" : styleJson);
         } catch (Exception ex) {
             throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, ex);
         }
@@ -1155,7 +1196,8 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             if (datasource == null) {
                 throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
             }
-            validateCodeDatasourceBinding(bindingKey, bind.toString(), datasource, template);
+            validateCodeDatasourceBinding(bindingKey, bind.toString(), datasource, template,
+                    root.path("canvasStyle"));
             validateCodeTemplateDatasourceLine(template, datasource);
         }
     }

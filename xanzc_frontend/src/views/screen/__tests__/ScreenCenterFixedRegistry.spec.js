@@ -77,6 +77,9 @@ describe('ScreenCenter fixed code screens', () => {
 
     const branchCard = wrapper.find('[data-screen-kind="branch-operating"]');
     expect(branchCard.exists()).toBe(true);
+    expect(branchCard.find('.screen-card__mode-badge').text()).toBe('测试数据');
+    expect(branchCard.find('.screen-card__description').text()).toContain('数据库测试场景');
+    expect(branchCard.find('.screen-card__description').text()).toContain('系统存量');
     expect(branchCard.find('.screen-card__description').exists()).toBe(true);
     await branchCard.find('button.screen-card__open').trigger('click');
     expect(routerPush).toHaveBeenLastCalledWith({ name: 'BranchOperatingPage' });

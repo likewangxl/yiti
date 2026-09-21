@@ -50,7 +50,10 @@ public class ScreenDataReqDTO {
     /** 上下文参数：orgCode / empId（大屏路由参数透传） */
     private Map<String, String> contextParams;
 
-    /** 不可变分行批次 ID；为空时由服务端选择当前机构组最近批次。客户端不可伪造机构组或授权集合。 */
+    /**
+     * 不可变分行批次 ID；为空时由服务端选择当前机构组最近批次。客户端不可伪造机构组或授权集合。
+     * FREE_REPORT 使用数据源配置中的固定 TEST_BRANCH_* 批次，此字段不会覆盖配置批次。
+     */
     private String batchId;
 
     /** 服务端授权后注入的机构集合，不接受 JSON 输入。 */

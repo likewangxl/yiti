@@ -11,7 +11,7 @@ import java.util.Map;
 @Data
 public class ScreenTryRunReqDTO {
 
-    /** WIDE_TABLE / KPI_RESULT / CUSTOM_SQL */
+    /** WIDE_TABLE / KPI_RESULT / KPI_DETAIL / M98_STAT / FREE_REPORT / CUSTOM_SQL */
     @NotBlank
     private String sourceKind;
 

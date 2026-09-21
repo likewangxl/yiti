@@ -90,6 +90,21 @@ class ScreenDatasourceServiceTest {
         return req;
     }
 
+    private RptScreenDatasource freeReportDatasource(long id) {
+        RptScreenDatasource datasource = new RptScreenDatasource();
+        datasource.setId(id);
+        datasource.setDsCode("SCRDS_FREE");
+        datasource.setDsName("分支经营测试批次");
+        datasource.setDsType("SINGLE");
+        datasource.setSourceKind("FREE_REPORT");
+        datasource.setBizLine("COMMON");
+        datasource.setStatus("ACTIVE");
+        datasource.setConfigJson("{\"schemaVersion\":2,\"scopeMode\":\"NAMED_GROUP\","
+                + "\"dataClassification\":\"TEST\",\"profile\":\"BRANCH_OVERVIEW\","
+                + "\"batchId\":\"TEST_BRANCH_OPERATING_20260921\"}");
+        return datasource;
+    }
+
     /** 直接调用服务层也不能绕过 HTTP DTO 的高危审计原因校验。 */
     @Test
     void save_missingReasonFailsClosedBeforeInsert() {
@@ -960,6 +975,68 @@ class ScreenDatasourceServiceTest {
                 .contains("publishedReferences")
                 .contains("SCR_ALPHA")
                 .contains("SCR_BETA");
+    }
+
+    @Test
+    void update_publishedCodeLiveCanvasRejectsFreeReportClassificationChange() {
+        RptScreenDatasource existing = freeReportDatasource(6L);
+        when(dsMapper.selectById(6L)).thenReturn(existing);
+        RptScreen screen = new RptScreen();
+        screen.setId(71L);
+        screen.setScreenCode("SCR_BRANCH");
+        screen.setBizLine("COMMON");
+        screen.setCanvasPublishedJson("{\"schemaVersion\":2,\"canvasStyle\":{"
+                + "\"dataClassification\":\"LIVE\",\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"branch-overview-v1\"}},"
+                + "\"components\":[{\"component\":\"ChartWidget\",\"blockId\":11}],"
+                + "\"bindSnapshots\":{\"11\":{\"bind\":{\"dsId\":6}}}}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+
+        ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
+        req.setDsName("分支经营测试批次");
+        req.setSourceKind("FREE_REPORT");
+        req.setDsType("SINGLE");
+        req.setBizLine("COMMON");
+        req.setStatus("ACTIVE");
+        req.setConfigJson("{\"schemaVersion\":2,\"scopeMode\":\"NAMED_GROUP\","
+                + "\"dataClassification\":\"TEST\",\"profile\":\"BRANCH_OVERVIEW\","
+                + "\"batchId\":\"TEST_BRANCH_OPERATING_20260922\"}");
+        req.setReason("校验发布引用来源分类");
+
+        assertThatThrownBy(() -> service.update(6L, req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        verify(dsMapper, never()).updateById(any(RptScreenDatasource.class));
+    }
+
+    @Test
+    void update_publishedFreeReportWithoutCanvasStyleRejectsMissingClassification() {
+        RptScreenDatasource existing = freeReportDatasource(6L);
+        when(dsMapper.selectById(6L)).thenReturn(existing);
+        RptScreen screen = new RptScreen();
+        screen.setId(71L);
+        screen.setScreenCode("SCR_BRANCH");
+        screen.setBizLine("COMMON");
+        screen.setCanvasPublishedJson("{\"schemaVersion\":2,\"components\":["
+                + "{\"component\":\"ChartWidget\",\"blockId\":11}],"
+                + "\"bindSnapshots\":{\"11\":{\"bind\":{\"dsId\":6}}}}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+
+        ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
+        req.setDsName("分支经营测试批次");
+        req.setSourceKind("FREE_REPORT");
+        req.setDsType("SINGLE");
+        req.setBizLine("COMMON");
+        req.setStatus("ACTIVE");
+        req.setConfigJson("{\"schemaVersion\":2,\"scopeMode\":\"NAMED_GROUP\","
+                + "\"dataClassification\":\"TEST\",\"profile\":\"BRANCH_OVERVIEW\","
+                + "\"batchId\":\"TEST_BRANCH_OPERATING_20260922\"}");
+        req.setReason("校验缺少画布来源分类");
+
+        assertThatThrownBy(() -> service.update(6L, req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        verify(dsMapper, never()).updateById(any(RptScreenDatasource.class));
     }
 
     /** 放开语义编辑不放松已发布引用屏的业务条线安全矩阵。 */

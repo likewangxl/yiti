@@ -282,6 +282,9 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
             }
             Set<String> members = scopeAuthorizationService.testGroupMemberCodes(req.getTestOrgGroupCode());
             ensureNamedGroupDatasourceSafe(probe);
+            if (members == null || members.isEmpty()) {
+                throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+            }
             dataReq.setNamedGroup(true);
             dataReq.setServerOrgCodes(new ArrayList<>(members));
             dataReq.setServerAuthorizedOrgCodes(new ArrayList<>(members));
@@ -329,6 +332,9 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
             }
             ensureNamedGroupDatasourceSafe(datasource);
             Set<String> members = scopeAuthorizationService.testGroupMemberCodes(req.getTestOrgGroupCode());
+            if (members == null || members.isEmpty()) {
+                throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+            }
             dataReq.setNamedGroup(true);
             dataReq.setServerOrgCodes(new ArrayList<>(members));
             dataReq.setServerAuthorizedOrgCodes(new ArrayList<>(members));
@@ -377,6 +383,7 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
             String runtimeTemplate = runtimeCodeTemplate(screen, req);
             validateCodeTemplateScreenLine(screen, runtimeTemplate);
             validateCodeTemplateDatasourceLine(runtimeTemplate, ds);
+            validateRuntimeCodeDatasourceClassification(screen, req, runtimeTemplate, ds);
             if ("NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())) {
                 if (scopeAuthorizationService == null) {
                     // 命名组运行时没有 auth 适配器时必须拒绝，不能退回旧 DATA_SCOPE 全局口径。
@@ -560,6 +567,20 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
                 }
                 e.setConfigJson(req.getConfigJson());
                 e.setDsType(expectedDsType);
+            }
+            case "FREE_REPORT" -> {
+                // FREE_REPORT 只消费已存在的 TEST 分支经营批次；批次状态、报表名前缀和
+                // COL_DEFS 完整元数据由引擎使用只读连接再次核验，保存路径不写入自由报表表。
+                String line = normalizeBizLine(req.getBizLine() == null ? e.getBizLine() : req.getBizLine());
+                FreeReportScreenPolicy.validateConfig(cfg, line);
+                if (req.getDsType() != null && !req.getDsType().isBlank()
+                        && !"SINGLE".equals(req.getDsType())) {
+                    throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+                }
+                // 先用严格 JSON 解析保留重复键拒绝语义，再让引擎读取批次元数据。
+                engine.validateFreeReportSource(FreeReportScreenPolicy.parseConfig(req.getConfigJson()));
+                e.setConfigJson(req.getConfigJson());
+                e.setDsType("SINGLE");
             }
             case "M98_STAT" -> {
                 // M98 只接受固定命名组 SUMMARY 模板；查询表名、列名和过滤条件均不由配置提供。
@@ -1196,6 +1217,45 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         }
     }
 
+    private JsonNode readCanvasStyle(String styleJson) {
+        try {
+            return objectMapper.readTree(styleJson == null || styleJson.isBlank() ? "{}" : styleJson);
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, ex);
+        }
+    }
+
+    /** FREE_REPORT 绑定到 CODE 画布时，运行态只能消费明确标记为 TEST 的样式。 */
+    private void validateRuntimeCodeDatasourceClassification(RptScreen screen, ScreenDataReqDTO req,
+                                                              String template, RptScreenDatasource datasource) {
+        if (datasource == null
+                || !FreeReportScreenPolicy.SOURCE_KIND.equals(datasource.getSourceKind())) {
+            return;
+        }
+        JsonNode style = runtimeCodeCanvasStyle(screen, req);
+        CodeScreenPresentationValidator.validateDatasourceClassification(style, datasource);
+    }
+
+    private JsonNode runtimeCodeCanvasStyle(RptScreen screen, ScreenDataReqDTO req) {
+        if (req != null && "draft".equalsIgnoreCase(req.getPreviewState())) {
+            try {
+                return objectMapper.readTree(screen == null || screen.getCanvasStyleJson() == null
+                        || screen.getCanvasStyleJson().isBlank() ? "{}" : screen.getCanvasStyleJson());
+            } catch (Exception ex) {
+                throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, ex);
+            }
+        }
+        try {
+            JsonNode root = PublishedScreenPackageValidator.read(
+                    screen == null ? null : screen.getCanvasPublishedJson());
+            return root.path("canvasStyle");
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
+        }
+    }
+
     private void validateReferencedScreenLines(Long dsId, RptScreenDatasource candidate) {
         if (screenMapper == null || blockMapper == null) {
             return;
@@ -1218,16 +1278,74 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
                 String draftTemplate = codeTemplate(screen);
                 validateCodeTemplateScreenLine(screen, draftTemplate);
                 validateCodeTemplateDatasourceLine(draftTemplate, candidate);
+                if (FreeReportScreenPolicy.SOURCE_KIND.equals(candidate.getSourceKind())) {
+                    CodeScreenPresentationValidator.validateDatasourceClassification(
+                            readCanvasStyle(screen.getCanvasStyleJson()), candidate);
+                }
             }
             if (referencedByPublished) {
                 for (String publishedTemplate : publishedCodeTemplates(screen, dsId)) {
                     validateCodeTemplateScreenLine(screen, publishedTemplate);
                     validateCodeTemplateDatasourceLine(publishedTemplate, candidate);
                 }
+                validatePublishedCodeDatasourceClassification(screen, dsId, candidate);
             }
             if ("NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())) {
                 ensureNamedGroupDatasourceSafe(candidate);
             }
+        }
+    }
+
+    /** 原地编辑数据源时同时检查当前发布包及归档包的 CODE classification。 */
+    private void validatePublishedCodeDatasourceClassification(RptScreen screen, Long dsId,
+                                                               RptScreenDatasource candidate) {
+        if (candidate == null || !FreeReportScreenPolicy.SOURCE_KIND.equals(candidate.getSourceKind())) {
+            return;
+        }
+        validatePublishedCodeDatasourceClassification(screen == null ? null : screen.getCanvasPublishedJson(),
+                dsId, candidate);
+        if (publishLogMapper == null || screen == null || screen.getId() == null) {
+            return;
+        }
+        List<RptScreenPublishLog> archives = publishLogMapper.selectList(
+                new LambdaQueryWrapper<RptScreenPublishLog>()
+                        .eq(RptScreenPublishLog::getScreenId, screen.getId()));
+        if (archives != null) {
+            for (RptScreenPublishLog archive : archives) {
+                validatePublishedCodeDatasourceClassification(archive.getSnapshotJson(), dsId, candidate);
+            }
+        }
+    }
+
+    private void validatePublishedCodeDatasourceClassification(String publishedJson, Long dsId,
+                                                               RptScreenDatasource candidate) {
+        if (candidate == null || !FreeReportScreenPolicy.SOURCE_KIND.equals(candidate.getSourceKind())) {
+            return;
+        }
+        if (publishedJson == null || publishedJson.isBlank()) {
+            return;
+        }
+        try {
+            JsonNode root = PublishedScreenPackageValidator.read(publishedJson);
+            JsonNode style = root.path("canvasStyle");
+            // FREE_REPORT 引用必须有可验证的画布来源分类；缺少 canvasStyle 也 fail-close。
+            if (!style.isObject()) {
+                throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+            }
+            CodeScreenPresentationValidator.presentationTemplate(style);
+            Map<Long, JsonNode> snapshots = PublishedScreenPackageValidator.requireTrustedBindings(root);
+            boolean referenced = snapshots.values().stream()
+                    .map(snapshot -> snapshot.path("bind").path("dsId"))
+                    .anyMatch(value -> value.isIntegralNumber() && dsId != null
+                            && dsId.equals(value.longValue()));
+            if (referenced) {
+                CodeScreenPresentationValidator.validateDatasourceClassification(
+                        style, candidate);
+            }
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
         }
     }
 
@@ -1350,8 +1468,8 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
     }
 
     /**
-     * NAMED_GROUP 只接受当前已有的 ORG 宽表，或严格的 KPI_DETAIL/ORG/SNAPSHOT 内置模板。
-     * CUSTOM_SQL、KPI_RESULT、EMP 和 TREND 均没有本次可证明的机构范围落点，必须拒绝。
+     * NAMED_GROUP 只接受当前已有的 ORG 宽表、严格的 KPI_DETAIL/ORG/SNAPSHOT 模板或
+     * 固定 TEST FREE_REPORT；CUSTOM_SQL、KPI_RESULT、EMP 和 TREND 均没有可证明的机构范围落点。
      */
     private void ensureNamedGroupDatasourceSafe(RptScreenDatasource datasource) {
         if (!ScreenNamedGroupDatasourcePolicy.isSafe(datasource)) {

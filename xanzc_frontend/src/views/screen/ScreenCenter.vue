@@ -77,7 +77,7 @@
         <div class="screen-card__body">
           <div class="screen-card__title-row">
             <h2>{{ displayName(screen) }}</h2>
-            <span v-if="!isPersonalScreen(screen)" class="screen-card__mode-badge">{{ dataModeLabel(screen.dataMode) }}</span>
+            <span v-if="!isPersonalScreen(screen)" class="screen-card__mode-badge">{{ screenDataModeLabel(screen) }}</span>
           </div>
           <p v-if="isPersonalScreen(screen)" class="screen-card__description">个人核心指标、今日优先事项、我的客户、我发起的业务进度</p>
           <p v-else-if="isBranchOperatingScreen(screen)" class="screen-card__description">{{ screen.description }}</p>
@@ -141,8 +141,8 @@ const BRANCH_OPERATING_SCREEN = Object.freeze({
   screenName: '支行经营总览',
   viewLevel: 'BRANCH',
   bizLine: 'COMMON',
-  dataMode: 'LIVE',
-  description: '查看单支行核心指标、经营趋势与目标完成情况'
+  dataMode: 'TEST',
+  description: '数据库测试场景，可切换系统存量数据后查看单支行核心指标、经营趋势与目标完成情况'
 });
 
 const router = useRouter();
@@ -196,6 +196,12 @@ function dataModeLabel(value) {
   if (value === 'TEST') return '测试库数据';
   if (value === 'LIVE') return '已接入数据';
   return '数据模式未知';
+}
+
+function screenDataModeLabel(screen) {
+  return isBranchOperatingScreen(screen) && screen?.dataMode === 'TEST'
+    ? '测试数据'
+    : dataModeLabel(screen?.dataMode);
 }
 
 function hasRegisteredMode(screen) {

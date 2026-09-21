@@ -72,6 +72,9 @@ describe('ScreenCenter.vue', () => {
     expect(center.findAll('[data-screen-card]')).toHaveLength(1);
     const branchCard = center.find('[data-screen-kind="branch-operating"]');
     expect(branchCard.exists()).toBe(true);
+    expect(branchCard.find('.screen-card__mode-badge').text()).toBe('测试数据');
+    expect(branchCard.find('.screen-card__description').text()).toContain('数据库测试场景');
+    expect(branchCard.find('.screen-card__description').text()).toContain('系统存量');
     expect(branchCard.find('.screen-card__description').exists()).toBe(true);
     expect(branchCard.text()).not.toContain('编码：branch-operating');
     await branchCard.find('button.screen-card__open').trigger('click');

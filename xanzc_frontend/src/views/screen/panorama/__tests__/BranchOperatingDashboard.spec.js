@@ -112,7 +112,11 @@ describe('BranchOperatingDashboard 单支行经营大屏', () => {
     expect(wrapper.find('[data-testid="branch-operating-map"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="branch-operating-composition"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="branch-operating-targets"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="branch-operating-targets"] .branch-operating-target-body').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="branch-operating-targets"] .branch-operating-target-focus-column').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="branch-operating-targets"] .branch-operating-target-list').exists()).toBe(true);
     expect(wrapper.find('[data-testid="branch-operating-projects"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="branch-operating-project-table"]').text()).toContain('园区综合授信');
     expect(wrapper.find('[data-testid="branch-operating-teams"]').exists()).toBe(true);
   });
 
@@ -154,6 +158,7 @@ describe('BranchOperatingDashboard 单支行经营大屏', () => {
     expect(firstOption.series[0].data).toEqual([124, null, 128.6]);
     expect(firstOption.series[1].data).toEqual([82, 84, null]);
     expect(firstOption.yAxis.name).toBe('亿元');
+    expect(firstOption.grid.top).toBe(28);
     expect(wrapper.get('[data-target-key="deposit"]').classes()).toContain('is-active');
     expect(wrapper.get('[data-target-key="loan"]').classes()).not.toContain('is-active');
 
@@ -240,6 +245,111 @@ describe('BranchOperatingDashboard 单支行经营大屏', () => {
       .map(chart => JSON.parse(chart.attributes('data-option')));
     expect(options.some(option => option.series?.some(series => series.type === 'bar'))).toBe(true);
     expect(options.some(option => option.series?.some(series => series.type === 'pie'))).toBe(true);
+  });
+
+  it('业务构成有来源数据时优先占据右上区块，月均对照作为辅助信息保留', () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      kpis: [
+        ...model.kpis,
+        { key: 'corpDeposit', label: '对公存款余额', value: 58, unit: '万元', dataDate: '2026-09-20' },
+        { key: 'corpDepositAverage', label: '对公存款月均', value: 55, unit: '万元', dataDate: '2026-09-20' }
+      ],
+      composition: [
+        { name: '对公存款', value: 58, unit: '万元' },
+        { name: '零售存款', value: 42, unit: '万元' }
+      ]
+    } });
+
+    expect(wrapper.get('[data-testid="branch-operating-composition-title"]').text()).toBe('业务构成');
+    expect(wrapper.findAll('.branch-operating-composition-row')).toHaveLength(2);
+    expect(wrapper.get('[data-testid="branch-operating-composition"]').text()).toContain('对公存款');
+    expect(wrapper.get('[data-testid="branch-operating-period-compare"]').text()).toContain('月均');
+  });
+
+  it('标准存款时点与月均成对且同口径时展示存款对照，禁止混配单位或日期', () => {
+    const pairKpis = (average) => [
+      { key: 'deposit', label: '存款余额', value: 128.6, unit: '万元', dataDate: '2026-09-20' },
+      average
+    ];
+    const pairWrapper = mountDashboard({ model: {
+      ...model,
+      composition: [],
+      kpis: pairKpis({ key: 'depositAverage', label: '存款月均', value: 120, unit: '万元', dataDate: '2026-09-20' })
+    } });
+
+    expect(pairWrapper.get('[data-testid="branch-operating-period-compare"]').text()).toContain('存款');
+    expect(pairWrapper.get('[data-testid="branch-operating-period-compare"]').text()).toContain('万元');
+
+    const mismatchedUnitWrapper = mountDashboard({ model: {
+      ...model,
+      composition: [],
+      kpis: pairKpis({ key: 'depositAverage', label: '存款月均', value: 120, unit: '亿元', dataDate: '2026-09-20' })
+    } });
+    expect(mismatchedUnitWrapper.find('[data-testid="branch-operating-period-compare"]').exists()).toBe(false);
+
+    const mismatchedDateWrapper = mountDashboard({ model: {
+      ...model,
+      composition: [],
+      kpis: pairKpis({ key: 'depositAverage', label: '存款月均', value: 120, unit: '万元', dataDate: '2026-09-19' })
+    } });
+    expect(mismatchedDateWrapper.find('[data-testid="branch-operating-period-compare"]').exists()).toBe(false);
+  });
+
+  it('团队 increaseUnit 为万元时显示存款增量金额，缺少单位时兼容百分比', () => {
+    const amountWrapper = mountDashboard({ model: {
+      ...model,
+      teams: [{ name: '公司金融部', rate: 86, increase: 12.5, increaseUnit: '万元', pending: 2 }]
+    } });
+    const amountTable = amountWrapper.get('[data-testid="branch-operating-teams"]');
+
+    expect(amountTable.find('thead').text()).toContain('存款增量');
+    expect(amountTable.find('tbody td:nth-child(3)').text()).toBe('+12.50 万元');
+
+    const percentWrapper = mountDashboard({ model: {
+      ...model,
+      teams: [{ name: '公司金融部', rate: 86, increase: 4.2, pending: 2 }]
+    } });
+    const percentTable = percentWrapper.get('[data-testid="branch-operating-teams"]');
+
+    expect(percentTable.find('thead').text()).toContain('增幅');
+    expect(percentTable.find('tbody td:nth-child(3)').text()).toBe('+4.20%');
+  });
+
+  it('TEST 来源缺少 KPI 状态时明确标记为测试数据', () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      sourceLabel: '经营分析 TEST 数据源',
+      kpis: [{ ...model.kpis[0], status: '' }]
+    } });
+
+    expect(wrapper.get('[data-kpi-key="deposit"] .branch-operating-kpi__status').text()).toBe('测试数据');
+  });
+
+  it('完整来源数据在紧凑布局中保留全部目标、项目和团队行', () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      targets: [
+        ...model.targets,
+        { key: 'customer', label: '客户增长', actual: 420, target: 500, unit: '户', rate: 84, gap: 80 }
+      ],
+      projects: [
+        { name: '园区综合授信', status: '推进中', amount: 12.5, unit: '亿元', owner: '公司金融部', days: 9 },
+        { name: '科创企业池', status: '待审批', amount: 8.2, unit: '亿元', owner: '普惠金融部', days: 12 },
+        { name: '供应链融资', status: '推进中', amount: 6.4, unit: '亿元', owner: '交易银行部', days: 18 },
+        { name: '重点客户回访', status: '已完成', amount: 2.1, unit: '万元', owner: '零售金融部', days: 0 }
+      ],
+      teams: [
+        { name: '公司金融部', rate: 86, increase: 12.5, increaseUnit: '万元', pending: 2 },
+        { name: '普惠金融部', rate: 74, increase: 8.4, increaseUnit: '万元', pending: 1 },
+        { name: '零售金融部', rate: 91, increase: 5.2, increaseUnit: '万元', pending: 0 }
+      ]
+    } });
+
+    expect(wrapper.findAll('[data-testid="branch-operating-kpi"]')).toHaveLength(6);
+    expect(wrapper.findAll('.branch-operating-target-row')).toHaveLength(3);
+    expect(wrapper.findAll('[data-testid="branch-operating-project"]')).toHaveLength(4);
+    expect(wrapper.findAll('[data-testid="branch-operating-team"]')).toHaveLength(3);
   });
 
   it('单一真实存款余额只绘制一条带面积的折线，月均缺一值时对照板收起', () => {

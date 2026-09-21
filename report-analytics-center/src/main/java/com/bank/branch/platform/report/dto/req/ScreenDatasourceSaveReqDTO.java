@@ -16,7 +16,7 @@ public class ScreenDatasourceSaveReqDTO {
     /** TIMESERIES/SINGLE；WIDE_TABLE/KPI_RESULT 会被服务端强制 TIMESERIES */
     private String dsType;
 
-    /** WIDE_TABLE / KPI_RESULT / CUSTOM_SQL */
+    /** WIDE_TABLE / KPI_RESULT / KPI_DETAIL / M98_STAT / FREE_REPORT / CUSTOM_SQL */
     @NotBlank
     private String sourceKind;
 

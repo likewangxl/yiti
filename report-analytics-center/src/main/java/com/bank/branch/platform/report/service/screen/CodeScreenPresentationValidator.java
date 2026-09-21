@@ -112,6 +112,21 @@ public final class CodeScreenPresentationValidator {
     }
 
     /**
+     * FREE_REPORT 只能挂在明确标记为 TEST 的 CODE 画布上。
+     * 该检查由保存/发布/运行时持有 canvasStyle 与数据源对象的服务调用，避免把
+     * classification 仅当作前端展示文案。
+     */
+    public static void validateDatasourceClassification(JsonNode canvasStyle,
+                                                         RptScreenDatasource datasource) {
+        if (datasource == null || !FreeReportScreenPolicy.SOURCE_KIND.equals(datasource.getSourceKind())) {
+            return;
+        }
+        if (!FreeReportScreenPolicy.DATA_CLASSIFICATION.equals(dataClassification(canvasStyle))) {
+            throw invalid();
+        }
+    }
+
+    /**
      * 校验已解析画布样式中的运行时展示元数据。
      *
      * <p>这些字段复用既有 canvasStyle JSON，不改变数据库结构；它们仍须在服务端
@@ -374,6 +389,14 @@ public final class CodeScreenPresentationValidator {
             // display dimension and cannot be accepted as the catalog identity.
             throw invalid();
         }
+    }
+
+    /** 绑定校验与画布来源分类联动的便捷入口。 */
+    public static void validateBindAgainstDatasource(JsonNode bind, String bindingKey,
+                                                      RptScreenDatasource datasource,
+                                                      String template, JsonNode canvasStyle) {
+        validateBindAgainstDatasource(bind, bindingKey, datasource, template);
+        validateDatasourceClassification(canvasStyle, datasource);
     }
 
     private static void validateBindJson(String bindJson, String bindingKey, String template) {
@@ -881,6 +904,10 @@ public final class CodeScreenPresentationValidator {
             }
             case "KPI_DETAIL" -> addKpiDetailColumns(roles, config);
             case "M98_STAT" -> roles.putAll(M98StatPolicy.outputRoles(config));
+            case "FREE_REPORT" -> {
+                FreeReportScreenPolicy.validateConfig(config);
+                roles.putAll(FreeReportScreenPolicy.outputRoles());
+            }
             case "CUSTOM_SQL" -> addFieldMetaColumns(roles, config.path("fieldMeta"), true);
             default -> throw invalid();
         }

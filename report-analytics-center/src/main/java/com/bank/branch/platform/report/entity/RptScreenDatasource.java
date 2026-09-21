@@ -30,7 +30,7 @@ public class RptScreenDatasource {
     /** 能力标签：TIMESERIES 时序 / SINGLE 单值 */
     private String dsType;
 
-    /** 来源：WIDE_TABLE / KPI_RESULT / CUSTOM_SQL */
+    /** 来源：WIDE_TABLE / KPI_RESULT / KPI_DETAIL / M98_STAT / FREE_REPORT / CUSTOM_SQL */
     private String sourceKind;
 
     /** 数据归属条线：CORP / RETAIL / COMMON；不得由名称推断。 */

@@ -492,7 +492,8 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                 throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
             }
             try {
-                CodeScreenPresentationValidator.validateBindAgainstDatasource(bind, bindingKey, datasource, template);
+                CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                        bind, bindingKey, datasource, template, root.path("canvasStyle"));
                 validateCodeTemplateDatasourceLine(template, datasource);
                 if ("NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())
                         && ("branches".equals(bindingKey) || "citySummary".equals(bindingKey)

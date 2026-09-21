@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.report.dto.req.CanvasComponentDTO;
 import com.bank.branch.platform.report.dto.req.CanvasStyleDTO;
+import com.bank.branch.platform.report.dto.req.CodeScreenPresentationDTO;
 import com.bank.branch.platform.report.dto.req.ScreenCanvasDiscardReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenCanvasSaveReqDTO;
 import com.bank.branch.platform.report.entity.RptScreen;
@@ -140,6 +141,14 @@ class ScreenCanvasServiceTest {
         return datasource;
     }
 
+    private RptScreenDatasource freeReportDatasource(long id) {
+        RptScreenDatasource datasource = datasource(id, "SINGLE", "FREE_REPORT");
+        datasource.setConfigJson("{\"schemaVersion\":2,\"scopeMode\":\"NAMED_GROUP\","
+                + "\"dataClassification\":\"TEST\",\"profile\":\"BRANCH_OVERVIEW\","
+                + "\"batchId\":\"TEST_BRANCH_OPERATING_20260921\"}");
+        return datasource;
+    }
+
     private RptScreenBlock publishBlock(long id, String bindJson) {
         RptScreenBlock block = new RptScreenBlock();
         block.setId(id);
@@ -167,6 +176,33 @@ class ScreenCanvasServiceTest {
                 comp("EvilWidget", null, Map.of("top", 10, "left", 10, "width", 100, "height", 40)))))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43006");
+    }
+
+    @Test
+    void saveCodeCanvasWithLiveClassificationRejectsFreeReportDatasource() {
+        RptScreen screen = screen(7L, 0);
+        screen.setBizLine("COMMON");
+        when(screenMapper.selectById(7L)).thenReturn(screen);
+        when(dsMapper.selectById(12L)).thenReturn(freeReportDatasource(12L));
+
+        CanvasStyleDTO style = new CanvasStyleDTO();
+        style.setDataClassification("LIVE");
+        CodeScreenPresentationDTO presentation = new CodeScreenPresentationDTO();
+        presentation.setType("CODE");
+        presentation.setTemplate("branch-overview-v1");
+        style.setPresentation(presentation);
+
+        CanvasComponentDTO chart = boundChart("TABLE_LIST", 12L);
+        chart.setPropValue(Map.of("bindingKey", "attention"));
+        chart.setBindJson("{\"dsId\":12,\"period\":\"LATEST\",\"fields\":{"
+                + "\"label\":\"status\",\"count\":\"count\"},\"units\":{\"count\":\"COUNT\"}}");
+        ScreenCanvasSaveReqDTO request = req(7L, 0, chart);
+        request.setCanvasStyle(style);
+
+        assertThatThrownBy(() -> service.saveCanvas(request))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43006");
+        verify(canvasMapper, never()).bumpVersion(anyLong(), anyInt(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -309,6 +345,38 @@ class ScreenCanvasServiceTest {
         service.publishCanvas(req);
 
         verify(canvasMapper).applyPublishedCas(eq(7L), eq(5), anyString(), anyString(), anyString(), anyInt(), anyString());
+    }
+
+    @Test
+    void publishCodeCanvasWithLiveClassificationRejectsFreeReportDatasource() {
+        RptScreen screen = screen(7L, 5);
+        screen.setBizLine("COMMON");
+        screen.setCanvasStyleJson("{\"schemaVersion\":1,\"dataClassification\":\"LIVE\","
+                + "\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"}}");
+        String bind = "{\"dsId\":12,\"period\":\"LATEST\",\"fields\":{\"label\":\"status\","
+                + "\"count\":\"count\"},\"units\":{\"count\":\"COUNT\"}}";
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        screen.setCanvasDraftJson("{\"schemaVersion\":1,\"components\":["
+                + "{\"id\":\"w-attention\",\"component\":\"ChartWidget\","
+                + "\"innerType\":\"TABLE_LIST\",\"blockId\":1001,"
+                + "\"propValue\":{\"bindingKey\":\"attention\"},"
+                + "\"bindJson\":" + mapper.valueToTree(bind)
+                + ",\"style\":{\"top\":0,\"left\":0,\"width\":100,\"height\":100}}]}");
+        RptScreenBlock block = publishBlock(1001L, bind);
+        when(screenMapper.selectById(7L)).thenReturn(screen);
+        when(blockMapper.selectList(any())).thenReturn(List.of(block));
+        when(dsMapper.selectById(12L)).thenReturn(freeReportDatasource(12L));
+
+        var request = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
+        request.setScreenId(7L);
+        request.setExpectedVersion(5);
+        request.setReason("发布分支经营大屏");
+
+        assertThatThrownBy(() -> service.publishCanvas(request))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        verify(canvasMapper, never()).applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(),
+                anyInt(), anyString());
     }
 
     @Test

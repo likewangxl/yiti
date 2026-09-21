@@ -1,6 +1,7 @@
 package com.bank.branch.platform.report.service.screen;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
 import com.bank.branch.platform.report.dto.req.ScreenDataReqDTO;
@@ -90,6 +91,19 @@ class ScreenDatasourceRuntimeContractTest {
         return ds;
     }
 
+    private RptScreenDatasource freeReportDatasource() {
+        RptScreenDatasource ds = new RptScreenDatasource();
+        ds.setId(12L);
+        ds.setStatus("ACTIVE");
+        ds.setSourceKind("FREE_REPORT");
+        ds.setDsType("SINGLE");
+        ds.setBizLine("COMMON");
+        ds.setConfigJson("{\"schemaVersion\":2,\"scopeMode\":\"NAMED_GROUP\","
+                + "\"dataClassification\":\"TEST\",\"profile\":\"BRANCH_OVERVIEW\","
+                + "\"batchId\":\"TEST_BRANCH_OPERATING_20260921\"}");
+        return ds;
+    }
+
     private RptScreen legacyScreen() {
         RptScreen screen = new RptScreen();
         screen.setId(8L);
@@ -173,6 +187,63 @@ class ScreenDatasourceRuntimeContractTest {
 
         verify(dsMapper).selectById(12L);
         verify(engine).query(any(), any());
+    }
+
+    @Test
+    void runtimeRejectsFreeReportWhenPublishedCodeCanvasIsLive() {
+        RptScreen screen = new RptScreen();
+        screen.setId(7L);
+        screen.setScreenCode("SCR_BRANCH");
+        screen.setStatus("ACTIVE");
+        screen.setBizLine("COMMON");
+        screen.setOrgScopeMode("NAMED_GROUP");
+        screen.setOrgGroupCode("GROUP_BRANCH");
+        screen.setPublishStatus(1);
+        screen.setCanvasPublishedJson("{\"schemaVersion\":2,\"canvasStyle\":{"
+                + "\"dataClassification\":\"LIVE\",\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"branch-overview-v1\"}},"
+                + "\"components\":[{\"component\":\"ChartWidget\",\"blockId\":11}],"
+                + "\"bindSnapshots\":{\"11\":{\"bind\":{\"dsId\":12}}}}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(dsMapper.selectById(12L)).thenReturn(freeReportDatasource());
+
+        ScreenDataReqDTO req = new ScreenDataReqDTO();
+        req.setSchemaVersion(2);
+        req.setScreenCode("SCR_BRANCH");
+        req.setBlockId(11L);
+
+        assertThatThrownBy(() -> service.queryData(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        verify(engine, never()).query(any(), any());
+    }
+
+    @Test
+    void runtimeRejectsFreeReportWhenPublishedCanvasHasNoCodeOrTestClassification() {
+        RptScreen screen = new RptScreen();
+        screen.setId(7L);
+        screen.setScreenCode("SCR_BRANCH");
+        screen.setStatus("ACTIVE");
+        screen.setBizLine("COMMON");
+        screen.setOrgScopeMode("NAMED_GROUP");
+        screen.setOrgGroupCode("GROUP_BRANCH");
+        screen.setPublishStatus(1);
+        screen.setCanvasPublishedJson("{\"schemaVersion\":2,\"canvasStyle\":{"
+                + "\"dataClassification\":\"LIVE\"},"
+                + "\"components\":[{\"component\":\"ChartWidget\",\"blockId\":11}],"
+                + "\"bindSnapshots\":{\"11\":{\"bind\":{\"dsId\":12}}}}");
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(dsMapper.selectById(12L)).thenReturn(freeReportDatasource());
+
+        ScreenDataReqDTO req = new ScreenDataReqDTO();
+        req.setSchemaVersion(2);
+        req.setScreenCode("SCR_BRANCH");
+        req.setBlockId(11L);
+
+        assertThatThrownBy(() -> service.queryData(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        verify(engine, never()).query(any(), any());
     }
 
     /**

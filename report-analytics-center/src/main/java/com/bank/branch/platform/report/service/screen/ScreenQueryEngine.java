@@ -98,6 +98,8 @@ public class ScreenQueryEngine {
     private final int maxRows;
     private final OrgApi orgApi;
     private final M98StatQuery m98StatQuery;
+    /** FREE_REPORT 的固定批次只读查询器；不使用自由报表业务 mapper。 */
+    private final FreeReportScreenQuery freeReportScreenQuery;
 
     /** 由 performance 提供的不可变批次查询契约；未配置 batchPolicy 时完全不参与旧路径。 */
     @Autowired(required = false)
@@ -124,6 +126,7 @@ public class ScreenQueryEngine {
                 .map(t -> t.trim().toUpperCase(java.util.Locale.ROOT))
                 .collect(java.util.stream.Collectors.toSet());
         this.m98StatQuery = new M98StatQuery(readOnlyDataSource, orgApi);
+        this.freeReportScreenQuery = new FreeReportScreenQuery(readOnlyDataSource);
     }
 
     /** 包级测试注入点；生产环境由 Spring 注入 performance 公共只读契约。 */
@@ -148,6 +151,11 @@ public class ScreenQueryEngine {
                 throw new RptException(RptErrorCode.SCREEN_DS_SQL_INVALID);
             }
         }
+    }
+
+    /** 保存 FREE_REPORT 数据源时的只读批次和列定义校验。 */
+    public void validateFreeReportSource(JsonNode config) {
+        freeReportScreenQuery.validateConfiguredSource(config);
     }
 
     /** 正式取数（LIMIT = maxRows） */
@@ -177,6 +185,13 @@ public class ScreenQueryEngine {
     private ScreenDataRespDTO runAt(String sourceKind, String configJson, ScreenDataReqDTO req,
                                     LocalDate today, int limit) {
         JsonNode cfg = readConfig(configJson);
+        if (FreeReportScreenPolicy.SOURCE_KIND.equals(sourceKind)) {
+            cfg = FreeReportScreenPolicy.parseConfig(configJson);
+            List<String> authorized = namedGroupAuthorizedOrgCodes(req);
+            List<String> output = namedGroupOutputOrgCodes(req);
+            return freeReportScreenQuery.query(cfg, authorized, output,
+                    req == null ? null : req.getServerRequestedOrgCode(), limit);
+        }
         if (usesImmutableBatch(sourceKind, cfg, req)) {
             return runImmutableBatch(cfg, req, today, limit);
         }
@@ -750,10 +765,14 @@ public class ScreenQueryEngine {
     private BuiltQuery build(String sourceKind, String configJson, ScreenDataReqDTO req, int limit,
                              LocalDate today, BatchResolution resolution) {
         JsonNode cfg = readConfig(configJson);
+        if (FreeReportScreenPolicy.SOURCE_KIND.equals(sourceKind)) {
+            cfg = FreeReportScreenPolicy.parseConfig(configJson);
+        }
         if (isNamedGroup(cfg, req)
                 && !"WIDE_TABLE".equals(sourceKind)
                 && !isNamedKpiDetailConfig(sourceKind, cfg)
-                && !isNamedM98StatConfig(sourceKind, cfg)) {
+                && !isNamedM98StatConfig(sourceKind, cfg)
+                && !FreeReportScreenPolicy.SOURCE_KIND.equals(sourceKind)) {
             // 命名组只能绑定服务端可证明机构约束的内置查询；CUSTOM_SQL/KPI_RESULT 及
             // KPI_DETAIL 的 EMP/TREND 组合没有本次 ORG 快照的固定安全落点。
             throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
@@ -763,6 +782,7 @@ public class ScreenQueryEngine {
             case "KPI_RESULT" -> buildKpiQuery(cfg, req, limit, today);
             case "KPI_DETAIL" -> buildKpiDetailQuery(cfg, req, limit, today);
             case "M98_STAT" -> buildM98StatQuery(cfg, req, limit, today);
+            case "FREE_REPORT" -> buildFreeReportQuery(cfg, req, limit);
             case "CUSTOM_SQL" -> buildCustomQuery(cfg, req, limit, today);
             default -> throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
         };
@@ -1432,6 +1452,15 @@ public class ScreenQueryEngine {
         return new BuiltQuery(plan.sql(), plan.params());
     }
 
+    private BuiltQuery buildFreeReportQuery(JsonNode cfg, ScreenDataReqDTO req, int limit) {
+        FreeReportScreenPolicy.validateConfig(cfg);
+        List<String> authorized = namedGroupAuthorizedOrgCodes(req);
+        List<String> output = namedGroupOutputOrgCodes(req);
+        FreeReportScreenQuery.ScreenQueryPlan plan = freeReportScreenQuery.previewPlan(
+                cfg, authorized, output, req == null ? null : req.getServerRequestedOrgCode(), limit);
+        return new BuiltQuery(plan.sql(), plan.params());
+    }
+
     /** 命名组 KPI_DETAIL 的精确组合；旧 SUBJECT/EMP/TREND 路径仍由既有分支处理。 */
     private boolean isNamedKpiDetailConfig(String sourceKind, JsonNode cfg) {
         return "KPI_DETAIL".equals(sourceKind)
@@ -1602,7 +1631,7 @@ public class ScreenQueryEngine {
     }
 
     /** 命名组 KPI 日期选择使用完整服务端授权集合，缺失或空集合一律拒绝。 */
-    private List<String> namedGroupAuthorizedOrgCodes(ScreenDataReqDTO req) {
+    List<String> namedGroupAuthorizedOrgCodes(ScreenDataReqDTO req) {
         if (req == null) {
             throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
         }
@@ -1610,7 +1639,7 @@ public class ScreenQueryEngine {
     }
 
     /** 命名组 KPI 外层结果只接受 serverOrgCodes，并验证其为完整授权集合的子集。 */
-    private List<String> namedGroupOutputOrgCodes(ScreenDataReqDTO req) {
+    List<String> namedGroupOutputOrgCodes(ScreenDataReqDTO req) {
         List<String> authorized = namedGroupAuthorizedOrgCodes(req);
         List<String> output = requiredOrgCodes(req == null ? null : req.getServerOrgCodes());
         if (!authorized.containsAll(output)) {
