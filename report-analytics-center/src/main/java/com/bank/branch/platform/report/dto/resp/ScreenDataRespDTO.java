@@ -65,6 +65,11 @@ public class ScreenDataRespDTO {
         /** 批次来源分类，例如 TEST 或 PROD；取自不可变批次快照。 */
         private String dataClassification;
 
+        /**
+         * 主体值口径，仅由 TEST 不可变批次快照明确声明时输出；旧响应保持为空。
+         */
+        private String subjectValueMode;
+
         /** COMPLETE、STALE 或 NO_COMPLETE_BATCH。 */
         private String status;
 

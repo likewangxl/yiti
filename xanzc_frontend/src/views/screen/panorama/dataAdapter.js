@@ -718,6 +718,86 @@ function adaptCitySummary(table, binding, model, issues, options) {
     issue(issues, 'citySummary', 'NO_AUTHORIZED_DIRECTORY', '按机构号解析城市必须有授权机构目录');
     return;
   }
+  // TEST 不可变快照显式声明 EXCLUSIVE 时，rows 是机构粒度的主体值：按最新授权目录
+  // 归一化到城市后再合计。没有这个服务端质量标志的旧包继续走下方重复城市 fail-close。
+  if (hasOrgIdentity && table?.quality?.subjectValueMode === 'EXCLUSIVE') {
+    const cityGroups = new Map();
+    for (const row of rows) {
+      const orgCode = readDimension(row, binding, 'orgCode', table, 'citySummary', issues, true);
+      const orgKey = orgCode === null || orgCode === undefined ? '' : String(orgCode).trim();
+      const directoryItem = orgKey ? directoryByOrg.get(orgKey) : null;
+      if (!directoryItem) {
+        if (orgKey) issue(issues, 'citySummary', 'UNAUTHORIZED_ORG', `机构未在授权目录中: ${orgKey}`, 'orgCode');
+        continue;
+      }
+      const cityCode = String(directoryItem.cityCode || '').trim();
+      if (!cityCode) {
+        issue(issues, 'citySummary', 'MISSING_CITY_MAPPING', `授权机构缺少城市映射: ${orgKey}`, 'orgCode');
+        continue;
+      }
+      let group = cityGroups.get(cityCode);
+      if (!group) {
+        group = { rows: [], orgCodes: new Set(), duplicateOrgCodes: new Set() };
+        cityGroups.set(cityCode, group);
+      }
+      if (group.orgCodes.has(orgKey)) {
+        group.duplicateOrgCodes.add(orgKey);
+      } else {
+        group.orgCodes.add(orgKey);
+        group.rows.push({ row, directoryItem });
+      }
+    }
+
+    for (const [cityCode, group] of cityGroups) {
+      if (group.duplicateOrgCodes.size) {
+        for (const orgCode of group.duplicateOrgCodes) {
+          issue(issues, 'citySummary', 'DUPLICATE_ORG_CODE',
+            `城市汇总存在重复机构: ${orgCode}`, 'orgCode');
+        }
+        continue;
+      }
+      const city = { kpis: [], dataDate: responseDataDate(table) };
+      const first = group.rows[0];
+      const rowCityName = binding.fields?.cityName
+        ? readDimension(first.row, binding, 'cityName', table, 'citySummary', issues) : null;
+      if (first.directoryItem.cityName) city.cityName = first.directoryItem.cityName;
+      else if (rowCityName !== null && rowCityName !== undefined && rowCityName !== '') city.cityName = rowCityName;
+
+      const expectedSubjects = directory.filter(item => String(item.cityCode) === cityCode).length;
+      const completeSubjects = group.orgCodes.size === expectedSubjects;
+      const multiSubject = group.rows.length > 1;
+      for (const semantic of ['deposit', 'loan', 'customers', 'revenue', 'rate']) {
+        if (!binding.fields?.[semantic]) continue;
+        const metrics = group.rows.map(({ row }) =>
+          readMetric(row, binding, semantic, table, 'citySummary', issues));
+        const firstMetric = metrics.find(metric => metric && metric.unit !== null && metric.unit !== undefined);
+        let value = null;
+        if (!completeSubjects) {
+          issue(issues, 'citySummary', 'INSUFFICIENT_COVERAGE',
+            `城市指标 ${semantic} 缺少授权机构行，不能显示部分合计`, semantic);
+        } else if (multiSubject && semantic === 'rate') {
+          issue(issues, 'citySummary', 'RATE_CITY_SOURCE_REQUIRED',
+            '多机构城市完成率不相加或平均，需独立城市比例来源', 'rate');
+        } else if (metrics.every(metric => metric && metric.value !== null && metric.value !== undefined)) {
+          value = metrics.reduce((sum, metric) => sum + metric.value, 0);
+        } else if (multiSubject) {
+          issue(issues, 'citySummary', 'INSUFFICIENT_COVERAGE',
+            `城市指标 ${semantic} 机构覆盖不足，无法形成完整城市合计`, semantic);
+        } else {
+          value = metrics[0]?.value ?? null;
+        }
+        city.kpis.push({
+          key: semantic,
+          label: BINDING_SLOTS[semantic]?.label || semantic,
+          value,
+          unit: firstMetric?.unit ?? null,
+          change: null
+        });
+      }
+      model.citySummaries[cityCode] = city;
+    }
+    return;
+  }
   const seenCities = new Set();
   const duplicateCities = new Set();
   for (const row of rows) {

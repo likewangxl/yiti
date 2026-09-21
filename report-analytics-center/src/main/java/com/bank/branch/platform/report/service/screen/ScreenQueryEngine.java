@@ -575,6 +575,12 @@ public class ScreenQueryEngine {
         quality.setExpected(sourceQuality == null ? null : sourceQuality.getExpected());
         quality.setReceived(sourceQuality == null ? null : sourceQuality.getReceived());
         quality.setDataClassification(snapshot.getDataClassification());
+        String subjectValueMode = snapshot.getSourceModes() == null
+                ? null : trimToNull(snapshot.getSourceModes().get("subjectValueMode"));
+        if ("TEST".equalsIgnoreCase(trimToNull(snapshot.getDataClassification()))
+                && "EXCLUSIVE".equalsIgnoreCase(subjectValueMode)) {
+            quality.setSubjectValueMode("EXCLUSIVE");
+        }
         quality.setSelectedComplete(sourceQuality != null && sourceQuality.isSelectedComplete());
         quality.setMixedPeriod(sourceQuality != null && sourceQuality.isMixedPeriod());
         quality.setMissing(sourceQuality == null || sourceQuality.getMissing() == null

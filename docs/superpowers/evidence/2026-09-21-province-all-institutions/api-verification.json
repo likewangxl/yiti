@@ -1,0 +1,40 @@
+{
+  "institutions": 52,
+  "cityCounts": {
+    "610100": 32,
+    "610300": 5,
+    "610400": 2,
+    "610500": 5,
+    "610800": 8
+  },
+  "results": {
+    "rate": {
+      "rows": 1,
+      "batchId": "4e515a39213157a8906a1d876fd56faa",
+      "quality": "COMPLETE",
+      "testValue": 90.64
+    },
+    "loanRate": {
+      "rows": 1,
+      "batchId": "4e515a39213157a8906a1d876fd56faa",
+      "quality": "COMPLETE",
+      "testValue": 86.44
+    },
+    "citySummary": {
+      "rows": 52,
+      "batchId": "4e515a39213157a8906a1d876fd56faa",
+      "quality": "COMPLETE"
+    },
+    "branches": {
+      "rows": 52,
+      "batchId": "4e515a39213157a8906a1d876fd56faa",
+      "quality": "COMPLETE"
+    },
+    "composition": {
+      "rows": 1,
+      "batchId": "4e515a39213157a8906a1d876fd56faa",
+      "quality": "COMPLETE"
+    }
+  },
+  "realApi": true
+}

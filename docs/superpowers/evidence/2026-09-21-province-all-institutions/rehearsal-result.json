@@ -1,0 +1,21 @@
+{
+  "backupRestorePassed": true,
+  "idempotent": true,
+  "oldRowsUnchanged": {
+    "PERF_RUN_TASK": 20395,
+    "PERF_METRIC_DEF": 184,
+    "PT_ORG_GROUP": 3,
+    "PT_ORG_GROUP_MEMBER": 202,
+    "PT_ROLE_ORG_GROUP": 7,
+    "RPT_SCREEN": 6,
+    "RPT_SCREEN_BLOCK": 46,
+    "RPT_SCREEN_DATASOURCE": 31,
+    "RPT_SCREEN_PUBLISH_LOG": 24
+  },
+  "insertions": {
+    "PERF_METRIC_DEF": 15,
+    "PERF_RUN_TASK": 1
+  },
+  "snapshotExactMatch": true,
+  "networkDisabled": true
+}
