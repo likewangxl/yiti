@@ -21,7 +21,7 @@
 | S14 | VERIFIED | `69ff255f` | - | `usePanoramaData.js`、`presentation/runtime/`、`PanoramaRuntime.vue`及测试、sourcePresentation状态适配 | 查询语义指纹、迟到隔离、批次保留与统一运行状态已实现；主代理已复核 | S14核心51项、相关运行时26文件162项通过；生产构建通过 | 网络原始证据留S17 | Vitest/Vite输出 | 真实来源日期/批次质量取决于隔离后端返回 | 创建S14提交；等待S13后进入S16 |
 | S15 | VERIFIED | `e7804933` | - | `presentation/migration/`、`PresentationEditor.vue`、`PanoramaBindings.vue`及测试、操作指南 | 旧配置确定性迁移预览与本地草稿应用已实现；不自动保存/发布 | 迁移/编辑器/Bindings 37项通过；presentation目录95项通过；生产构建通过 | 持久化转换→发布→回退留S17隔离测试屏 | Vitest/Vite输出与操作指南 | 真实测试屏、expectedVersion冲突和发布回退需隔离环境 | 进入S16前完成S12～S14；S17执行真实迁移台账 |
 | S16 | VERIFIED | `6b818cb3` | - | 集成回归、范围/保护区/契约检查与本状态文档 | 本轮范围无新增越界或新增回归；三组基线失败已独立归因 | F1 723/724、F2 64/65、B1 325/325、B2 6/8、B3成功、C1/范围/构建通过；blockResults修复后相关147项通过 | N/A；真实浏览器属S17 | 命令输出、Surefire报告、范围检查和基线哈希 | Retail CRLF、旧客户路由测试、FreeReport实体泄露为基线失败；S11/S13仍BLOCKED_DATA | 进入S17隔离运行与浏览器验收 |
-| S17 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S16、隔离运行环境 |
+| S17 | BLOCKED_ENV | `c1c4312b` | - | `S17_ACCEPTANCE.md`与外部CLI证据目录 | 前端服务与官方CLI受控mock验收完成，并据此修复4个真实缺陷；无mock后端验收未完成 | CLI页面/交互/截图通过；console无错误；真实后端未启动 | 前端8092、MySQL3306运行；后端18080未运行 | `S17_ACCEPTANCE.md`、外部脚本/截图 | 缺yiti_test凭据、签认navigationRules和真实数据口径；mock非联调 | 提供隔离凭据与业务签认后重跑无mock B01～B10 |
 
 ## S00 任务记录
 
@@ -161,3 +161,11 @@
 - B1大屏纯逻辑325/325通过；B2架构6/8通过，两个失败均指向基线未修改的`FreeReportController.listBatches`暴露Entity；B3使用JDK17完成19模块聚合构建；C1契约检查通过。未连接真库、未运行未核安全profile的IT。
 - S16审查发现并回派S14真实blockResults缺口；修复后相关23文件147项、主代理核心71项和生产构建通过。该修复只在大屏运行时暴露发布块只读结果，没有上游写操作。
 - 结论：S16按“本轮无新增回归、基线失败完整保留”验收；不能表述为全仓全绿。S17必须继续报告三组基线失败及S11/S13数据阻塞。
+
+## S17 任务记录
+
+- 启动本机MySQL 8.4并用命令行强制只绑定`127.0.0.1:3306`；启动Vite前端`127.0.0.1:8092`。`screen-scope-e2e`所需数据库凭据环境变量不存在，现有本地凭据也无法只读登录，因此未启动后端、未连接默认`yiti`。
+- 使用仓库官方`playwright-cli`读取help后执行受控开发态mock页面验收；路由、响应、请求序列、console和三张截图已归档到外部S17目录，mock性质明确，未冒充真实联调。
+- 页面验证12家全量排名、指标切换/滚动、显式总量结构、趋势、明细文本、地图缺坐标列表、省→市停留和综合→公司授权复核导航。console仅有Vite连接debug，无error/pageerror/页面alert。
+- 浏览器验收发现并修复四项真实问题：运行时未暴露blockResults、明细维度被数值化、composition绑定拒绝total、市级内部默认选中误触发机构导航；相应单元/集成/构建均重新通过。
+- 真实B01/B02/B07/B08/B09及真实数据B05/B06/B10仍受环境和业务数据阻塞；最终状态为`BLOCKED_ENV`，准确表述是“大屏软件改造完成，真实限定范围验收未完成”。
