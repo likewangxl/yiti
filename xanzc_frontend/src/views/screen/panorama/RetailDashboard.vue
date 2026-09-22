@@ -187,6 +187,18 @@
           <div v-else class="retail-empty">价值客户口径与客户分层数据源尚未接入</div>
         </article>
 
+        <article v-if="compositionTabsEnabled" class="retail-panel retail-composition-panel" data-testid="retail-composition">
+          <header class="retail-panel__heading">
+            <div><span class="retail-kicker">业务结构</span><h2>存款 / 贷款 / 收入结构</h2></div>
+            <span>公司 / 零售</span>
+          </header>
+          <CompositionTabsWidget
+            class="retail-composition-content"
+            :model="compositionTabsModel"
+            @business-line-select="selectCompositionBusinessLine"
+          />
+        </article>
+
         <article class="retail-panel retail-attention-panel" data-testid="retail-attention">
           <header class="retail-panel__heading">
             <div>
@@ -543,6 +555,8 @@ import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.v
 import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsModel';
 import SeriesTableWidgets from '../presentation/widgets/SeriesTableWidgets.vue';
 import { buildDisplaySeriesTableModel } from '../presentation/model/displaySeriesTableModel';
+import CompositionTabsWidget from '../presentation/widgets/CompositionTabsWidget.vue';
+import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
 import { provinceGeo } from './geography.js';
 import {
   buildRetailLeadershipInsights,
@@ -559,7 +573,8 @@ const props = defineProps({
   model: { type: Object, default: () => ({}) },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
-  demo: { type: Boolean, default: false }
+  demo: { type: Boolean, default: false },
+  sourcePresentation: { type: Object, default: () => ({}) }
 });
 const configuredMetrics = computed(() => buildDisplayMetricsModel(
   props.sourcePresentation?.displayPresentation, safeModel.value
@@ -567,7 +582,7 @@ const configuredMetrics = computed(() => buildDisplayMetricsModel(
 const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(
   props.sourcePresentation?.displayPresentation, safeModel.value
 ));
-const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select']);
+const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select', 'business-line-select']);
 
 const KPI_DEFINITIONS = Object.freeze([
   { key: 'retailAum', label: '零售AUM', unit: '', emptyText: '暂无数据源', emptyTitle: '当前未接入理财、基金、保险等客户金融资产来源' },
@@ -628,6 +643,25 @@ const safeModel = computed(() => {
     sourceQualities: source.sourceQualities && typeof source.sourceQualities === 'object' ? source.sourceQualities : {}
   };
 });
+
+const compositionTabsModel = computed(() => buildCompositionTabsModel(
+  props.sourcePresentation?.displayPresentation || props.sourcePresentation,
+  safeModel.value
+));
+const compositionTabsEnabled = computed(() => compositionTabsModel.value.enabled
+  && compositionTabsModel.value.components.length > 0);
+const institutionContext = computed(() => ({
+  orgCode: String(safeModel.value.orgCode || safeModel.value.institution?.orgCode || '').trim(),
+  orgName: String(safeModel.value.orgName || safeModel.value.institution?.orgName || '').trim(),
+  cityCode: String(safeModel.value.cityCode || safeModel.value.institution?.cityCode || '').trim(),
+  cityName: String(safeModel.value.cityName || safeModel.value.institution?.cityName || '').trim()
+}));
+function selectCompositionBusinessLine(payload = {}) {
+  const businessLine = String(payload.businessLine || '').trim().toUpperCase();
+  const tabKey = String(payload.tabKey || '').trim();
+  if (!['CORP', 'RETAIL'].includes(businessLine) || !tabKey) return;
+  emit('business-line-select', { businessLine, tabKey, context: institutionContext.value });
+}
 
 function findKpi(key) {
   return safeModel.value.kpis.find(item => String(item?.key || '') === key) || null;

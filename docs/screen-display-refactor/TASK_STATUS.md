@@ -13,7 +13,7 @@
 | S06 | VERIFIED | `34acb94c` | - | `presentationEditorModel.js`、`PresentationEditor.vue`及测试、`PanoramaBindings.vue`与集成测试、操作指南、`TASK_STATUS.md` | 三栏组件工作台已接入现有草稿保存与冲突链，主代理已复核 | presentation与Bindings共51项通过；生产构建及范围/格式检查通过 | 浏览器真实验收留S17 | Vitest/Vite输出与操作指南 | 新组件必须先绑定已有blockId；高级字段映射暂保留 | 创建S06聚焦提交并进入S07/S08 |
 | S07 | VERIFIED | `6743219a` | - | `displayMetricsModel.js`、`MetricDisplayWidgets.vue`及测试；四类Dashboard/Runtime/Page最小接入；文档与`TASK_STATUS.md` | 新协议指标卡/完成情况驱动运行展示，旧包回归保持；主代理已复核 | 模型/组件/分行/对公/支行相关71项通过；生产构建通过 | 浏览器真实数据验收留S17 | Vitest/Vite输出与代码化大屏文档 | Retail套件1项既有CRLF静态文本断言失败，retail.scss未改；真实来源仍UNCONFIRMED | 创建S07提交并进入S08 |
 | S08 | VERIFIED | `14a77355` | - | `displaySeriesTableModel.js`、`SeriesTableWidgets.vue`及测试；四类Dashboard最小接入；文档与`TASK_STATUS.md` | 新协议趋势/明细表由配置驱动，旧固定展示保持兼容；主代理已复核 | 模型/组件/分行/对公/支行相关63项通过；生产构建通过 | 浏览器真实数据验收留S17 | Vitest/Vite输出与代码化大屏文档 | 不支持的混合单位同轴明确拒绝；真实趋势来源仍UNCONFIRMED | 创建S08提交并进入S09/S10 |
-| S09 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S07、S08 |
+| S09 | VERIFIED | `f946dc8c` | - | `compositionTabsModel.js`、`CompositionTabsWidget.vue`及测试；四类Dashboard/Runtime接入；代码化大屏文档 | 三类业务结构页签已接入新展示协议，旧协议保持兼容；主代理已复核 | S09模型/组件/集成16项通过；相邻Dashboard 100项通过、1项既有CRLF断言失败；生产构建通过 | 浏览器真实验收留S17 | Vitest/Vite输出与代码化大屏文档 | 真实结构分母和指标来源仍UNCONFIRMED；导航动作留S13 | 创建S09提交并进入S10 |
 | S10 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S07、S08 |
 | S11 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S01、S02 |
 | S12 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S10、S11 |
@@ -95,3 +95,10 @@
 - 明细表按visible过滤、按配置列顺序显示，来源行保持稳定顺序；列标题和显示格式独立于字段身份。
 - 分行/对公/零售/支行运行页接入统一SeriesTableWidgets；新趋势存在时隐藏原固定趋势，旧包不受影响。
 - 相关63项测试和生产构建通过；未修改业务查询、趋势计算或共享组件目录，浏览器验收留S17。
+
+## S09 任务记录
+
+- Red：新增四类Dashboard集成测试；未接入时9项中8项稳定失败，分别证明新结构组件缺失、旧固定结构未隐藏以及条线动作未携带机构上下文。
+- Green：综合、对公、零售、支行Dashboard接入`COMPOSITION_TABS`，`PanoramaRuntime`只转发固定`businessLine + tabKey + context`动作，不拼接URL；新协议存在可见结构组件时隐藏旧结构，旧协议继续原路径。
+- 业务结构按配置读取公司、零售和核定总量；缺总量、零分母、负数、单位冲突或缺一方均明确显示不可计算，不把两条线强制归一为100%，也未擅自增加中收结构。
+- 主代理独立复核：模型/组件/集成16项通过；四类相邻Dashboard共100项通过。另1项`RetailDashboard.spec.js`仍因未修改的`retail.scss`为CRLF而失败，与S07记录一致；生产构建通过，仅有既有Sass弃用和chunk体积提示。

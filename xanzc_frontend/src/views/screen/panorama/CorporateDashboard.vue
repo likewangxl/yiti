@@ -124,6 +124,18 @@
           <div v-else class="corporate-empty">暂无重点客群数据</div>
         </article>
 
+        <article v-if="compositionTabsEnabled" class="corporate-panel corporate-composition-panel" data-testid="corporate-composition">
+          <header class="corporate-panel__heading">
+            <div><span class="corporate-kicker">业务结构</span><h2>存款 / 贷款 / 收入结构</h2></div>
+            <span>公司 / 零售</span>
+          </header>
+          <CompositionTabsWidget
+            class="corporate-composition-content"
+            :model="compositionTabsModel"
+            @business-line-select="selectCompositionBusinessLine"
+          />
+        </article>
+
         <article class="corporate-panel corporate-attention-panel" data-testid="corporate-attention">
           <header class="corporate-panel__heading">
             <div><span class="corporate-kicker">经营协调</span><h2>需要协调的事项</h2></div>
@@ -241,6 +253,8 @@ import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.v
 import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsModel';
 import SeriesTableWidgets from '../presentation/widgets/SeriesTableWidgets.vue';
 import { buildDisplaySeriesTableModel } from '../presentation/model/displaySeriesTableModel';
+import CompositionTabsWidget from '../presentation/widgets/CompositionTabsWidget.vue';
+import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -255,7 +269,7 @@ const configuredMetrics = computed(() => buildDisplayMetricsModel(
 const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(
   props.sourcePresentation?.displayPresentation, safeModel.value
 ));
-const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select']);
+const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select', 'business-line-select']);
 
 const KPI_DEFINITIONS = Object.freeze([
   { key: 'corpDeposit', label: '对公存款余额', unit: '亿元' },
@@ -312,6 +326,25 @@ const safeModel = computed(() => {
     kpis: Array.isArray(source.kpis) ? source.kpis : [], trend: Array.isArray(source.trend) ? source.trend : [], segments: Array.isArray(source.segments) ? source.segments : [], rankings: Array.isArray(source.rankings) ? source.rankings : [], attention: Array.isArray(source.attention) ? source.attention : [], targets: Array.isArray(source.targets) ? source.targets : [], institutions: Array.isArray(source.institutions) ? source.institutions : [], issues: Array.isArray(source.issues) ? source.issues : [], citySummaries: source.citySummaries && typeof source.citySummaries === 'object' ? source.citySummaries : {}
   };
 });
+
+const compositionTabsModel = computed(() => buildCompositionTabsModel(
+  props.sourcePresentation?.displayPresentation || props.sourcePresentation,
+  safeModel.value
+));
+const compositionTabsEnabled = computed(() => compositionTabsModel.value.enabled
+  && compositionTabsModel.value.components.length > 0);
+const institutionContext = computed(() => ({
+  orgCode: String(safeModel.value.orgCode || safeModel.value.institution?.orgCode || '').trim(),
+  orgName: String(safeModel.value.orgName || safeModel.value.institution?.orgName || '').trim(),
+  cityCode: String(safeModel.value.cityCode || safeModel.value.institution?.cityCode || '').trim(),
+  cityName: String(safeModel.value.cityName || safeModel.value.institution?.cityName || '').trim()
+}));
+function selectCompositionBusinessLine(payload = {}) {
+  const businessLine = String(payload.businessLine || '').trim().toUpperCase();
+  const tabKey = String(payload.tabKey || '').trim();
+  if (!['CORP', 'RETAIL'].includes(businessLine) || !tabKey) return;
+  emit('business-line-select', { businessLine, tabKey, context: institutionContext.value });
+}
 
 function findKpi(key) { return safeModel.value.kpis.find(item => String(item?.key || '') === key) || null; }
 const kpiCards = computed(() => KPI_DEFINITIONS.map(definition => {

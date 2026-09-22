@@ -81,18 +81,26 @@
 
       <article class="branch-operating-panel branch-operating-composition-panel" data-testid="branch-operating-composition">
         <header class="branch-operating-panel__heading"><div><span class="branch-operating-kicker">{{ compositionRows.length ? 'Business mix' : 'Point vs average' }}</span><h2 data-testid="branch-operating-composition-title">{{ compositionRows.length ? '业务构成' : periodRows.length ? '时点与月均对照' : '业务构成' }}</h2></div><span class="branch-operating-panel__meta">{{ compositionRows.length ? '来源构成 · 按值展示' : '同日金额 · 非增量' }}</span></header>
-        <div v-if="compositionRows.length" class="branch-operating-composition-list" tabindex="0" role="region" aria-label="业务结构列表">
-          <div v-for="(item, index) in compositionRows" :key="`${item.name || 'composition'}-${index}`" class="branch-operating-composition-row"><div class="branch-operating-composition-row__label"><i :style="{ backgroundColor: palette[index % palette.length] }" aria-hidden="true"></i><strong>{{ displayText(item.name) }}</strong></div><div class="branch-operating-composition-row__bar" aria-hidden="true"><i :style="{ width: `${barWidth(item.value, compositionMax)}%`, backgroundColor: palette[index % palette.length] }"></i></div><span class="branch-operating-composition-row__value">{{ formatMetric(item.value) }} <small>{{ displayText(item.unit, '') }}</small></span></div>
-        </div>
-        <div v-if="periodRows.length" class="branch-operating-period-compare" :class="{ 'branch-operating-period-compare--secondary': compositionRows.length }" data-testid="branch-operating-period-compare">
-          <p class="branch-operating-period-compare__note">时点余额与月均金额同一日期对照，不能相减为净增</p>
-          <div v-for="row in periodRows" :key="row.key" class="branch-operating-period-row">
-            <div class="branch-operating-period-row__head"><strong>{{ row.label }}</strong><span>{{ row.date }}</span></div>
-            <div class="branch-operating-period-row__track" aria-hidden="true"><i class="is-point" :style="{ width: `${periodWidth(row.point)}%` }"></i><b class="is-average" :style="{ left: `${periodWidth(row.average)}%` }"></b></div>
-            <div class="branch-operating-period-row__values"><span><i class="branch-operating-period-dot is-point"></i>时点 <b>{{ formatMetric(row.point) }}</b> {{ row.unit }}</span><span><i class="branch-operating-period-dot is-average"></i>月均 <b>{{ formatMetric(row.average) }}</b> {{ row.unit }}</span></div>
+        <CompositionTabsWidget
+          v-if="compositionTabsEnabled"
+          class="branch-operating-composition-content"
+          :model="compositionTabsModel"
+          @business-line-select="selectCompositionBusinessLine"
+        />
+        <template v-else>
+          <div v-if="compositionRows.length" class="branch-operating-composition-list" tabindex="0" role="region" aria-label="业务结构列表">
+            <div v-for="(item, index) in compositionRows" :key="`${item.name || 'composition'}-${index}`" class="branch-operating-composition-row"><div class="branch-operating-composition-row__label"><i :style="{ backgroundColor: palette[index % palette.length] }" aria-hidden="true"></i><strong>{{ displayText(item.name) }}</strong></div><div class="branch-operating-composition-row__bar" aria-hidden="true"><i :style="{ width: `${barWidth(item.value, compositionMax)}%`, backgroundColor: palette[index % palette.length] }"></i></div><span class="branch-operating-composition-row__value">{{ formatMetric(item.value) }} <small>{{ displayText(item.unit, '') }}</small></span></div>
           </div>
-        </div>
-        <div v-if="!compositionRows.length && !periodRows.length" class="branch-operating-empty branch-operating-empty--compact" data-testid="branch-operating-composition-empty"><DataAnalysis aria-hidden="true" /><span>{{ sectionGap('comparison', sectionGap('composition', '暂无业务结构数据')) }}</span></div>
+          <div v-if="periodRows.length" class="branch-operating-period-compare" :class="{ 'branch-operating-period-compare--secondary': compositionRows.length }" data-testid="branch-operating-period-compare">
+            <p class="branch-operating-period-compare__note">时点余额与月均金额同一日期对照，不能相减为净增</p>
+            <div v-for="row in periodRows" :key="row.key" class="branch-operating-period-row">
+              <div class="branch-operating-period-row__head"><strong>{{ row.label }}</strong><span>{{ row.date }}</span></div>
+              <div class="branch-operating-period-row__track" aria-hidden="true"><i class="is-point" :style="{ width: `${periodWidth(row.point)}%` }"></i><b class="is-average" :style="{ left: `${periodWidth(row.average)}%` }"></b></div>
+              <div class="branch-operating-period-row__values"><span><i class="branch-operating-period-dot is-point"></i>时点 <b>{{ formatMetric(row.point) }}</b> {{ row.unit }}</span><span><i class="branch-operating-period-dot is-average"></i>月均 <b>{{ formatMetric(row.average) }}</b> {{ row.unit }}</span></div>
+            </div>
+          </div>
+          <div v-if="!compositionRows.length && !periodRows.length" class="branch-operating-empty branch-operating-empty--compact" data-testid="branch-operating-composition-empty"><DataAnalysis aria-hidden="true" /><span>{{ sectionGap('comparison', sectionGap('composition', '暂无业务结构数据')) }}</span></div>
+        </template>
       </article>
 
       <article class="branch-operating-panel branch-operating-trend-panel" data-testid="branch-operating-trend">
@@ -156,13 +164,33 @@ import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.v
 import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsModel';
 import SeriesTableWidgets from '../presentation/widgets/SeriesTableWidgets.vue';
 import { buildDisplaySeriesTableModel } from '../presentation/model/displaySeriesTableModel';
+import CompositionTabsWidget from '../presentation/widgets/CompositionTabsWidget.vue';
+import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
 
 const props = defineProps({ model: { type: Object, default: () => ({}) }, sourcePresentation: { type: Object, default: null }, loading: { type: Boolean, default: false }, error: { type: String, default: '' } });
 const configuredMetrics = computed(() => buildDisplayMetricsModel(props.sourcePresentation, props.model || {}));
 const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(props.sourcePresentation, props.model || {}));
-const emit = defineEmits(['refresh', 'back', 'branch-select']);
+const emit = defineEmits(['refresh', 'back', 'branch-select', 'business-line-select']);
 const rootRef = ref(null); const selectedMetric = ref('deposit'); const trendMode = ref('all'); const isFullscreen = ref(false);
 const safeModel = computed(() => (props.model && typeof props.model === 'object' ? props.model : {}));
+const compositionTabsModel = computed(() => buildCompositionTabsModel(
+  props.sourcePresentation?.displayPresentation || props.sourcePresentation,
+  safeModel.value
+));
+const compositionTabsEnabled = computed(() => compositionTabsModel.value.enabled
+  && compositionTabsModel.value.components.length > 0);
+const institutionContext = computed(() => ({
+  orgCode: String(safeModel.value.orgCode || safeModel.value.institution?.orgCode || '').trim(),
+  orgName: String(safeModel.value.orgName || safeModel.value.institution?.orgName || '').trim(),
+  cityCode: String(safeModel.value.cityCode || safeModel.value.institution?.cityCode || '').trim(),
+  cityName: String(safeModel.value.cityName || safeModel.value.institution?.cityName || '').trim()
+}));
+function selectCompositionBusinessLine(payload = {}) {
+  const businessLine = String(payload.businessLine || '').trim().toUpperCase();
+  const tabKey = String(payload.tabKey || '').trim();
+  if (!['CORP', 'RETAIL'].includes(businessLine) || !tabKey) return;
+  emit('business-line-select', { businessLine, tabKey, context: institutionContext.value });
+}
 function listOf(key) { return computed(() => (Array.isArray(safeModel.value[key]) ? safeModel.value[key].filter(item => item && typeof item === 'object') : [])); }
 const institutions = listOf('institutions'); const composition = listOf('composition'); const marketing = listOf('marketing'); const targets = listOf('targets'); const projects = listOf('projects'); const attention = listOf('attention'); const teams = listOf('teams');
 const teamIncreaseUnit = computed(() => teams.value.map(team => normalizeIncreaseUnit(team?.increaseUnit)).find(Boolean) || '');

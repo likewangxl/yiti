@@ -127,7 +127,18 @@
             </div>
             <span>{{ compositionHeadingMeta }}</span>
           </div>
-          <CompositionBreakdown class="panorama-composition-content" :items="safeModel.composition" :source-status="sourceStatus('composition', 'value')" />
+          <CompositionTabsWidget
+            v-if="compositionTabsEnabled"
+            class="panorama-composition-content"
+            :model="compositionTabsModel"
+            @business-line-select="selectCompositionBusinessLine"
+          />
+          <CompositionBreakdown
+            v-else
+            class="panorama-composition-content"
+            :items="safeModel.composition"
+            :source-status="sourceStatus('composition', 'value')"
+          />
         </article>
 
         <article class="panorama-panel panorama-attention-panel">
@@ -367,6 +378,8 @@ import PanoramaInstitutionDirectory from './PanoramaInstitutionDirectory.vue';
 import PanoramaTrend from './PanoramaTrend.vue';
 import CompositionBreakdown from './CompositionBreakdown.vue';
 import CompletionWaterGauge from '../components/CompletionWaterGauge.vue';
+import CompositionTabsWidget from '../presentation/widgets/CompositionTabsWidget.vue';
+import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
 import { provinceGeo } from './geography.js';
 import {
   RANKING_METRICS,
@@ -396,7 +409,7 @@ const props = defineProps({
   demo: { type: Boolean, default: false },
   sourcePresentation: { type: Object, default: () => ({}) }
 });
-const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select']);
+const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select', 'business-line-select']);
 
 function sourceStatus(slot, semantic = '') {
   const mappedSlot = slot === 'kpi'
@@ -463,6 +476,24 @@ const configuredMetrics = computed(() => buildDisplayMetricsModel(
 const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(
   props.sourcePresentation?.displayPresentation, safeModel.value
 ));
+const compositionTabsModel = computed(() => buildCompositionTabsModel(
+  props.sourcePresentation?.displayPresentation || props.sourcePresentation,
+  safeModel.value
+));
+const compositionTabsEnabled = computed(() => compositionTabsModel.value.enabled
+  && compositionTabsModel.value.components.length > 0);
+const institutionContext = computed(() => ({
+  orgCode: String(safeModel.value.orgCode || safeModel.value.institution?.orgCode || '').trim(),
+  orgName: String(safeModel.value.orgName || safeModel.value.institution?.orgName || '').trim(),
+  cityCode: String(safeModel.value.cityCode || safeModel.value.institution?.cityCode || '').trim(),
+  cityName: String(safeModel.value.cityName || safeModel.value.institution?.cityName || '').trim()
+}));
+function selectCompositionBusinessLine(payload = {}) {
+  const businessLine = String(payload.businessLine || '').trim().toUpperCase();
+  const tabKey = String(payload.tabKey || '').trim();
+  if (!['CORP', 'RETAIL'].includes(businessLine) || !tabKey) return;
+  emit('business-line-select', { businessLine, tabKey, context: institutionContext.value });
+}
 const kpiCards = computed(() => coreKpis(safeModel.value.kpis));
 const depositOperationCards = computed(() => [
   { ...findKpi(safeModel.value.kpis, 'depositIncrease'), label: '较上月净增', note: '月度变动' },

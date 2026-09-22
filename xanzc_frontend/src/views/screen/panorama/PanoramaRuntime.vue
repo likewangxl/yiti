@@ -8,6 +8,7 @@
       :demo="false"
       @refresh="onRefresh"
       @branch-select="onBranchSelect"
+      @business-line-select="onBusinessLineSelect"
       @back="onBack"
       @configure="onConfigure"
     />
@@ -39,7 +40,7 @@ const props = defineProps({
   backPath: { type: String, default: '' },
   batchRequired: { type: Boolean, default: false }
 });
-const emit = defineEmits(['back', 'configure', 'refresh', 'branch-select']);
+const emit = defineEmits(['back', 'configure', 'refresh', 'branch-select', 'business-line-select']);
 const router = useRouter();
 
 const isCorporate = computed(() => props.view?.renderPackage?.canvasStyle?.presentation?.template === 'corporate-overview-v1');
@@ -125,6 +126,17 @@ function onBranchSelect(payload) {
   if (!code) return state.model.value;
   emit('branch-select', code);
   return state.selectBranch(code);
+}
+
+function onBusinessLineSelect(payload) {
+  const businessLine = String(payload?.businessLine || '').trim().toUpperCase();
+  const tabKey = String(payload?.tabKey || '').trim();
+  if (!['CORP', 'RETAIL'].includes(businessLine) || !tabKey) return;
+  emit('business-line-select', {
+    businessLine,
+    tabKey,
+    context: payload?.context && typeof payload.context === 'object' ? payload.context : {}
+  });
 }
 
 defineExpose({ ...state, refresh: state.refresh, selectBranch: state.selectBranch });
