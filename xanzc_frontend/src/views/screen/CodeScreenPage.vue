@@ -53,11 +53,12 @@ import { useRoute, useRouter } from 'vue-router';
 import { getScreenView, listAvailableScreens } from '@/api/screen';
 import { useUserStore } from '@/stores/user';
 import PanoramaRuntime from './panorama/PanoramaRuntime.vue';
+import { BUSINESS_LINE_TARGETS, parseNavigationQuery, resolveInstitution } from './presentation/navigation/navigationModel';
 
 const CATALOG_REGISTRATIONS = Object.freeze({
-  'branch-overview-v1': Object.freeze({ screenCode: 'SCR_PROVINCE', screenName: '分行经营总览', dataModes: Object.freeze(['TEST']) }),
-  'corporate-overview-v1': Object.freeze({ screenCode: 'SCR_CORP_OVERVIEW', screenName: '对公经营总览', dataModes: Object.freeze(['TEST', 'LIVE']) }),
-  'retail-overview-v1': Object.freeze({ screenCode: 'SCR_RETAIL_OVERVIEW', screenName: '零售经营总览', dataModes: Object.freeze(['TEST', 'LIVE']) })
+  'branch-overview-v1': Object.freeze({ ...BUSINESS_LINE_TARGETS.COMMON, screenName: '分行经营总览', dataModes: Object.freeze(['TEST']) }),
+  'corporate-overview-v1': Object.freeze({ ...BUSINESS_LINE_TARGETS.CORP, screenName: '对公经营总览', dataModes: Object.freeze(['TEST', 'LIVE']) }),
+  'retail-overview-v1': Object.freeze({ ...BUSINESS_LINE_TARGETS.RETAIL, screenName: '零售经营总览', dataModes: Object.freeze(['TEST', 'LIVE']) })
 });
 const SUPPORTED_TEMPLATES = new Set(Object.keys(CATALOG_REGISTRATIONS));
 
@@ -74,6 +75,7 @@ let loadGeneration = 0;
 
 const activeTemplate = computed(() => String(route.params.template || ''));
 const activeDataMode = computed(() => activeEntry.value?.dataMode || '');
+const navigationContext = computed(() => parseNavigationQuery(route.query));
 
 function formatRuntimeTime(value) {
   const date = value instanceof Date ? value : new Date(value);
@@ -100,12 +102,16 @@ function dataModeAriaLabel(mode) {
 }
 
 function isForbidden(error) {
-  return Number(error?.response?.status || error?.status) === 403;
+  return Number(error?.response?.status || error?.status) === 403
+    || ['ORG_NOT_AUTHORIZED', 'ORG_LAYER_UNCONFIRMED', 'ORG_NOT_DISPLAYABLE', 'CITY_NOT_AUTHORIZED', 'NAVIGATION_CONTEXT_MISMATCH'].includes(error?.code);
 }
 
 function resolveCatalogEntry(catalog, template) {
   const expected = CATALOG_REGISTRATIONS[template];
   if (!expected || !Array.isArray(catalog)) return { kind: 'unsupported', entry: null };
+  if (navigationContext.value.businessLine && navigationContext.value.businessLine !== expected.businessLine) {
+    return { kind: 'unsupported', entry: null };
+  }
   const matches = catalog.filter(entry => entry
     && entry.screenCode === expected.screenCode
     && entry.template === template);
@@ -119,7 +125,14 @@ function resolveCatalogEntry(catalog, template) {
 const runtimeContext = computed(() => ({
   screenCode: activeEntry.value?.screenCode,
   schemaVersion: runtimeView.value?.runtimeSchemaVersion,
-  runtimeSchemaVersion: runtimeView.value?.runtimeSchemaVersion
+  runtimeSchemaVersion: runtimeView.value?.runtimeSchemaVersion,
+  orgCode: navigationContext.value.orgCode,
+  cityCode: navigationContext.value.cityCode,
+  businessLine: navigationContext.value.businessLine || activeEntry.value?.bizLine || '',
+  period: navigationContext.value.period,
+  metricKey: navigationContext.value.metricKey,
+  navigationView: navigationContext.value.view,
+  navigationState: navigationContext.value.state
 }));
 
 function parseRuntimeView(response, entry) {
@@ -133,6 +146,38 @@ function parseRuntimeView(response, entry) {
       || Array.isArray(renderPackage.bindSnapshots)) throw new Error('发布包身份不可用');
   const presentation = renderPackage?.canvasStyle?.presentation;
   if (presentation?.type !== 'CODE' || presentation?.template !== entry.template) throw new Error('发布包模板不匹配');
+  const orgCode = navigationContext.value.orgCode;
+  if (orgCode) {
+    const resolved = resolveInstitution({ ...response, renderPackage }, orgCode);
+    if (!resolved.authorized) {
+      const error = new Error('当前机构不在目标屏授权目录中');
+      error.code = 'ORG_NOT_AUTHORIZED';
+      throw error;
+    }
+    if (!resolved.layer.known) {
+      const error = new Error('当前机构经营层级待确认');
+      error.code = 'ORG_LAYER_UNCONFIRMED';
+      throw error;
+    }
+    if (!resolved.layer.displayable) {
+      const error = new Error('当前机构不属于允许展示的经营层级');
+      error.code = 'ORG_NOT_DISPLAYABLE';
+      throw error;
+    }
+    if (navigationContext.value.cityCode && String(resolved.institution.cityCode || '') !== navigationContext.value.cityCode) {
+      const error = new Error('当前机构与城市上下文不一致');
+      error.code = 'NAVIGATION_CONTEXT_MISMATCH';
+      throw error;
+    }
+  } else if (navigationContext.value.cityCode) {
+    const directory = Array.isArray(response.panoramaInstitutions || response.panorama_institutions)
+      ? (response.panoramaInstitutions || response.panorama_institutions) : [];
+    if (!directory.some(item => String(item?.cityCode || item?.city_code || '') === navigationContext.value.cityCode)) {
+      const error = new Error('当前城市不在目标屏授权目录中');
+      error.code = 'CITY_NOT_AUTHORIZED';
+      throw error;
+    }
+  }
   return { ...response, renderPackage };
 }
 
@@ -183,7 +228,7 @@ function backToCenter() {
   router.push('/screens');
 }
 
-watch(() => [route.params.template, userStore.user], loadCatalog);
+watch(() => [route.params.template, route.query, userStore.user], loadCatalog, { deep: true });
 onMounted(loadCatalog);
 onBeforeUnmount(() => { loadGeneration += 1; });
 </script>

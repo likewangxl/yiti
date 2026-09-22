@@ -17,7 +17,7 @@
 | S10 | VERIFIED | `91612586` | - | `institutionRankingModel.js`、`InstitutionRankingWidget.vue`及测试；四类Dashboard接入；代码化大屏文档 | 新协议全量机构排名与可控轮播已实现，旧TOP10仅保留旧协议；主代理已复核 | S10模型/组件/集成43项通过；相关回归528项通过、1项既有CRLF断言失败；生产构建通过 | >10家真实机构验收留S17 | Vitest/Vite输出与代码化大屏文档 | 真实排名指标/方向/总分来源仍UNCONFIRMED；真实接口若截断将明确不完整 | 创建S10提交并进入S11/S12 |
 | S11 | BLOCKED_DATA | `69789625` | - | `institutionViewModel.js`及测试；既有`PanoramaInstitutionDTO`/授权目录只读复核 | 展示/统计集合分离模型已实现；真实机构白名单因D03/D04未确认未接运行页 | 模型7项通过；现有后端授权目录字段与activeProfiles链已复核 | 未连接真实机构画像/数据库 | Vitest输出、BUSINESS_DECISIONS D03/D04/X05、现有DTO源码 | 缺允许的operatingLevel/orgNature值或签认名单，禁止名称/编码猜测 | 获得D03/D04口径后接入运行页；当前继续S12可独立能力 |
 | S12 | VERIFIED | `667c0ede` | - | `presentation/map/`、`PanoramaMap.vue`、`CityPanorama.vue`、三类Dashboard/排名指标同步及测试 | 新协议地图指标/日期/图例/着色、视野与下钻事件已实现；旧地图回归保持 | S12核心30项、地图生命周期20项及相关presentation/map回归152项通过；生产构建通过 | 最终三页视觉与真实机构范围留S17 | Vitest/Vite输出 | S11机构层级白名单仍BLOCKED_DATA；缺坐标不造点 | 创建S12提交并进入S13/S14 |
-| S13 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S09、S12 |
+| S13 | BLOCKED_DATA | `6ecd5b36` | - | `presentation/navigation/`、CodeScreenPage/BranchOperatingPage/PanoramaRuntime/CityPanorama、经营入口卡片及测试 | 固定路由、query恢复、目标屏/机构重新授权与fail-close已实现；机构级真实闭环受D03规则阻塞 | S13核心8文件54项通过；相关运行时19项通过；生产构建通过 | 省/市/条线与旧URL浏览器验收留S17；机构级待规则 | Vitest/Vite输出 | 后端运行视图未提供签认navigationRules，禁止名称/编码/示例机构猜测 | 创建S13提交；获规则后解除X05 |
 | S14 | VERIFIED | `69ff255f` | - | `usePanoramaData.js`、`presentation/runtime/`、`PanoramaRuntime.vue`及测试、sourcePresentation状态适配 | 查询语义指纹、迟到隔离、批次保留与统一运行状态已实现；主代理已复核 | S14核心51项、相关运行时26文件162项通过；生产构建通过 | 网络原始证据留S17 | Vitest/Vite输出 | 真实来源日期/批次质量取决于隔离后端返回 | 创建S14提交；等待S13后进入S16 |
 | S15 | VERIFIED | `e7804933` | - | `presentation/migration/`、`PresentationEditor.vue`、`PanoramaBindings.vue`及测试、操作指南 | 旧配置确定性迁移预览与本地草稿应用已实现；不自动保存/发布 | 迁移/编辑器/Bindings 37项通过；presentation目录95项通过；生产构建通过 | 持久化转换→发布→回退留S17隔离测试屏 | Vitest/Vite输出与操作指南 | 真实测试屏、expectedVersion冲突和发布回退需隔离环境 | 进入S16前完成S12～S14；S17执行真实迁移台账 |
 | S16 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S07～S15 |
@@ -141,3 +141,11 @@
 - 同一查询身份刷新失败时，仅可保留上一完整可用批次并显式标`STALE/REQUEST_FAILED`及原日期；403立即清空。切屏、机构、条线、查询定义或卸载时迟到结果不能写回。
 - 主代理指出并修正初版把通用configVersion纳入查询身份的问题，否则只改标题也会重打数据源；最终改为来源定义哈希/结构指纹。
 - 主代理独立复核运行状态、Banner、Runtime和取数核心51项通过；执行者扩大到26文件162项和生产构建通过。真实网络、403和批次响应证据留S17。
+
+## S13 任务记录
+
+- 新增固定`COMMON/CORP/RETAIL`目标表和query序列化：只使用现有`/screen-pages/:template`与`/branch-operating`，保存城市、机构、条线、周期、排名指标和可序列化视图状态；未改全局router或守卫。
+- 条线切换按`listAvailableScreens -> getScreenView -> panoramaInstitutions机构交集`重新确认，非法条线、模板不匹配、跨屏机构不交集和快速迟到导航均fail-close；组件不接受任意URL或路径。
+- 删除BranchOperatingPage中`/支行$/`、示例`330/109`、目录第一家和主机构等猜测/回退。机构身份只能来自目标屏授权目录；机构层级只能按服务端显式`navigationRules`的operatingLevel/orgNature集合判断。
+- 大屏中心本轮经营主卡片改为固定省级代码化入口；个人卡片显示、排序和打开行为由既有测试保护。旧`/branch-operating`URL保留，但缺orgCode、越权或规则未确认时明确拒绝，不回退全行。
+- 主代理独立复核8个核心文件54项及生产构建通过。当前运行响应没有签认`navigationRules`，因此机构级路径按`BLOCKED_DATA/X05`记录；省/市/条线软件链已完成，不能把夹具规则当真实业务口径。

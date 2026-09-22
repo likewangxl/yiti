@@ -78,7 +78,9 @@ describe('ScreenCenter.vue', () => {
     expect(branchCard.find('.screen-card__description').exists()).toBe(true);
     expect(branchCard.text()).not.toContain('编码：branch-operating');
     await branchCard.find('button.screen-card__open').trigger('click');
-    expect(routerPush).toHaveBeenLastCalledWith({ name: 'BranchOperatingPage' });
+    expect(routerPush).toHaveBeenLastCalledWith({
+      name: 'CodeScreenPage', params: { template: 'branch-overview-v1' }, query: { businessLine: 'COMMON' }
+    });
   });
 
   it('没有对公 LIVE 授权时不显示支行独立入口', async () => {

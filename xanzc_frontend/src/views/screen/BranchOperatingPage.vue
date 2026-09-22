@@ -18,7 +18,12 @@
         </template>
       </div></details>
     </div>
-    <BranchOperatingDashboard :model="dashboard" :source-presentation="branchDisplayPresentation"
+    <section v-if="navigationBlocked" class="branch-operating-navigation-blocked" data-testid="branch-operating-navigation-blocked" role="alert">
+      <h2>机构范围待确认</h2>
+      <p>{{ pageError || '当前旧链接缺少已确认的机构上下文，未进入机构主路径。' }}</p>
+      <button type="button" data-action="back-to-screen-center" @click="router.push('/screens')">返回大屏中心</button>
+    </section>
+    <BranchOperatingDashboard v-else :model="dashboard" :source-presentation="branchDisplayPresentation"
       :loading="loading || (!isTestSource && financialLoading)" :error="visibleError"
       @refresh="initialize" @back="router.push('/screens')" @branch-select="selectBranch" />
   </section>
@@ -29,11 +34,10 @@ import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { listAvailableScreens, getScreenView, queryScreenData } from '@/api/screen';
 import { getTouchSummary } from '@/api/customerMarketing';
-import { useUserStore } from '@/stores/user';
 import { usePanoramaData } from './panorama/usePanoramaData';
 import { buildBranchOperatingModel, parseBranchSource, toBranchDisplayUnits } from './panorama/branchOperatingModel';
 import BranchOperatingDashboard from './panorama/BranchOperatingDashboard.vue';
-import { loadBranchDeposit, chooseCoveredBranch } from './panorama/branchOperatingSource';
+import { loadBranchDeposit } from './panorama/branchOperatingSource';
 import {
   BRANCH_TEST_SCREEN_CODE,
   BRANCH_TEST_SOURCE_LABEL,
@@ -42,10 +46,12 @@ import {
   buildBranchTestRequest,
   parseBranchTestView
 } from './panorama/branchTestDataset';
+import { buildNavigationQuery, navigationRulesOf, resolveInstitution } from './presentation/navigation/navigationModel';
 
-const router = useRouter(), route = useRoute(), user = useUserStore();
+const router = useRouter(), route = useRoute();
 const view = ref({}), context = ref({}), institutions = ref([]), selected = ref('');
 const touch = ref(null), touchError = ref(''), loading = ref(false), pageError = ref('');
+const navigationBlocked = ref(false);
 const testModel = ref(null);
 let generation = 0;
 const sourceMode = computed(() => String(route.query?.source || '').trim().toLowerCase() === 'live' ? 'live' : 'test');
@@ -104,6 +110,13 @@ function clearPageState() {
   context.value = {};
   institutions.value = [];
   selected.value = '';
+  navigationBlocked.value = false;
+}
+
+function navigationBlock(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
 }
 
 async function queryTestModel(token) {
@@ -181,8 +194,14 @@ async function loadSelected() {
 async function selectBranch(value) {
   const code = String(typeof value === 'object' ? value.orgCode || '' : value || '').trim();
   if (!institutions.value.some(i => String(i.orgCode) === code)) return;
+  const resolved = resolveInstitution(view.value, code, navigationRulesOf(view.value));
+  if (!resolved.authorized || !resolved.layer.known || !resolved.layer.displayable) {
+    navigationBlocked.value = true;
+    pageError.value = resolved.layer.known ? '当前机构不属于允许展示的经营层级。' : '当前机构经营层级待确认。';
+    return;
+  }
   selected.value = code;
-  router.replace({ query: { ...route.query, orgCode: code } });
+  router.replace({ query: buildNavigationQuery({ ...route.query, orgCode: code }) });
   return loadSelected();
 }
 
@@ -208,10 +227,17 @@ async function initializeTest(token) {
   if (token !== generation) return;
   const available = branchTestInstitutions(listing, view.value);
   if (!available.length) throw new Error('TEST 授权目录暂无返回机构');
-  institutions.value = available;
+  const rules = navigationRulesOf(view.value);
+  if (!rules) throw navigationBlock('ORG_LAYER_UNCONFIRMED', 'TEST 机构层级规则待确认，未进入机构主路径。');
+  institutions.value = available.filter(item => resolveInstitution(view.value, item.orgCode, rules).layer.displayable);
+  if (!institutions.value.length) throw navigationBlock('ORG_NOT_DISPLAYABLE', 'TEST 授权目录没有已确认的可展示机构。');
   const routeCode = String(route.query?.orgCode || '').trim();
-  const preferred = [routeCode, '330'].find(code => available.some(item => String(item.orgCode) === code));
-  selected.value = preferred || String(available[0].orgCode);
+  if (!routeCode) throw navigationBlock('ORG_REQUIRED', '旧链接必须携带已授权机构号，未使用默认或示例机构。');
+  const resolved = resolveInstitution(view.value, routeCode, rules);
+  if (!resolved.authorized) throw navigationBlock('ORG_NOT_AUTHORIZED', '当前机构不在 TEST 屏授权目录中。');
+  if (!resolved.layer.known) throw navigationBlock('ORG_LAYER_UNCONFIRMED', '当前机构经营层级待确认。');
+  if (!resolved.layer.displayable) throw navigationBlock('ORG_NOT_DISPLAYABLE', '当前机构不属于允许展示的经营层级。');
+  selected.value = routeCode;
   await queryTestModel(token);
 }
 
@@ -244,27 +270,25 @@ async function initialize() {
     const response = await getScreenView('SCR_CORP_OVERVIEW');
     if (token !== generation) return;
     view.value = parseBranchSource(response);
-    // 名称筛选只决定本页候选展示，不推定层级/地域，更不增加后端授权范围。
-    institutions.value = (view.value.panoramaInstitutions || []).filter(i => i.orgNature === 'LOCAL_BRANCH'
-      || (!['DEPARTMENT', 'SECONDARY_BRANCH'].includes(i.orgNature) && /支行$/.test(i.orgName || '')));
-    if (!institutions.value.length) throw new Error('已授权目录暂无支行，请完善机构画像或授权范围');
-    let coveredCode = '';
-    if (!route.query.orgCode && !selected.value && view.value.branchDepositBinding) {
-      const target = view.value.renderPackage.components.find(c => c.propValue?.bindingKey === 'corpTargets');
-      const request = blockId => queryScreenData({ schemaVersion: 2, screenCode: view.value.screenCode, blockId, period: 'LATEST', contextParams: {} });
-      const coverage = await Promise.allSettled([request(view.value.branchDepositBinding.blockId), target ? request(target.blockId) : Promise.resolve(null)]);
-      if (token !== generation) return;
-      const denied = coverage.find(r => r.status === 'rejected' && [401, 403].includes(Number(r.reason?.response?.status || r.reason?.status)));
-      if (denied) throw denied.reason;
-      coveredCode = chooseCoveredBranch(coverage[0].value, coverage[1].value, view.value.branchDepositBinding, institutions.value);
-    }
-    const candidates = [route.query.orgCode, selected.value, coveredCode, user.user?.mainOrgCode, '109'];
-    selected.value = String(candidates.find(code => institutions.value.some(i => String(i.orgCode) === String(code))) || institutions.value[0].orgCode);
+    const rules = navigationRulesOf(view.value);
+    if (!rules) throw navigationBlock('ORG_LAYER_UNCONFIRMED', '授权机构层级规则待确认，未进入机构主路径。');
+    const directory = Array.isArray(view.value.panoramaInstitutions || view.value.panorama_institutions)
+      ? (view.value.panoramaInstitutions || view.value.panorama_institutions) : [];
+    institutions.value = directory.filter(item => resolveInstitution(view.value, item.orgCode, rules).layer.displayable);
+    if (!institutions.value.length) throw new Error('已授权目录暂无已确认的可展示机构');
+    const routeCode = String(route.query?.orgCode || '').trim();
+    if (!routeCode) throw navigationBlock('ORG_REQUIRED', '旧链接必须携带已授权机构号，未使用默认或示例机构。');
+    const resolved = resolveInstitution(view.value, routeCode, rules);
+    if (!resolved.authorized) throw navigationBlock('ORG_NOT_AUTHORIZED', '当前机构不在目标屏授权目录中。');
+    if (!resolved.layer.known) throw navigationBlock('ORG_LAYER_UNCONFIRMED', '当前机构经营层级待确认。');
+    if (!resolved.layer.displayable) throw navigationBlock('ORG_NOT_DISPLAYABLE', '当前机构不属于允许展示的经营层级。');
+    selected.value = routeCode;
     await loadSelected();
   } catch (error) {
     if (token !== generation) return;
     clearPageState();
     pageError.value = error.message || '数据来源加载失败';
+    navigationBlocked.value = Boolean(error?.code?.startsWith('ORG_'));
     loading.value = false;
   }
 }

@@ -19,7 +19,7 @@ const { listAvailableScreens, getScreenView, queryScreenData, routerPush, runtim
   runtimeRefresh
   };
 });
-const routeState = reactive({ params: { template: 'branch-overview-v1' } });
+const routeState = reactive({ params: { template: 'branch-overview-v1' }, query: {} });
 vi.mock('@/api/screen', () => ({ listAvailableScreens, getScreenView, queryScreenData }));
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
@@ -68,6 +68,7 @@ beforeEach(() => {
   setActivePinia(createPinia());
   useUserStore().setUser({ empId: 'USER_A' });
   routeState.params.template = 'branch-overview-v1';
+  routeState.query = {};
   listAvailableScreens.mockResolvedValue([branch, retail]);
   getScreenView.mockResolvedValue(runtimeResponse('SCR_PROVINCE', 'branch-overview-v1', 'TEST'));
 });
@@ -243,5 +244,35 @@ describe('CodeScreenPage', () => {
     expect(runtimeRefresh).toHaveBeenCalledTimes(1);
     expect(page.find('[data-testid="runtime-updated-at"]').text()).toBeTruthy();
     expect(page.find('[data-testid="runtime-updated-at"]').text()).toContain('本次查询/刷新时间');
+  });
+
+  it('preserves navigation context in runtime and rejects an org outside target screen directory', async () => {
+    routeState.query = {
+      cityCode: '610100', orgCode: 'ORG-1', businessLine: 'COMMON', period: 'LATEST', metricKey: 'deposit',
+      view: JSON.stringify({ zoom: 2 }), state: JSON.stringify({ page: 2 })
+    };
+    getScreenView.mockResolvedValue({
+      ...runtimeResponse('SCR_PROVINCE', 'branch-overview-v1'),
+      navigationRules: { allowedOperatingLevels: ['PRIMARY_BRANCH'], allowedOrgNatures: ['BRANCH'] },
+      panoramaInstitutions: [{ orgCode: 'ORG-1', cityCode: '610100', operatingLevel: 'PRIMARY_BRANCH', orgNature: 'BRANCH' }]
+    });
+    const page = await mountPage();
+    expect(page.findComponent(runtimeStub).props('context')).toMatchObject({
+      screenCode: 'SCR_PROVINCE', orgCode: 'ORG-1', cityCode: '610100', businessLine: 'COMMON', period: 'LATEST', metricKey: 'deposit',
+      navigationView: { zoom: 2 }, navigationState: { page: 2 }
+    });
+
+    page.unmount();
+    routeState.query = { orgCode: 'OUTSIDE', businessLine: 'COMMON' };
+    const forbidden = await mountPage();
+    expect(forbidden.find('[data-testid="code-screen-forbidden"]').exists()).toBe(true);
+    expect(forbidden.find('[data-testid="panorama-runtime"]').exists()).toBe(false);
+  });
+
+  it('rejects a tampered businessLine query instead of rendering the route template', async () => {
+    routeState.query = { businessLine: 'RETAIL' };
+    const page = await mountPage();
+    expect(page.find('[data-testid="code-screen-unsupported"]').exists()).toBe(true);
+    expect(page.find('[data-testid="panorama-runtime"]').exists()).toBe(false);
   });
 });

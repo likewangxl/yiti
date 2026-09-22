@@ -135,8 +135,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { computed, inject, onMounted, ref, watch } from 'vue';
+import * as VueRouter from 'vue-router';
 import { Back, Close, FullScreen, Location, Refresh } from '@element-plus/icons-vue';
 import PanoramaMap from './PanoramaMap.vue';
 import PresentationMapWidget from '../presentation/map/PresentationMapWidget.vue';
@@ -164,8 +164,12 @@ const props = defineProps({
   rankingMetricKey: { type: String, default: '' }
 });
 const emit = defineEmits(['close', 'back', 'refresh', 'fullscreen', 'branch-select', 'state-change', 'map-context']);
-const router = typeof useRouter === 'function' ? useRouter() : null;
-const route = typeof useRoute === 'function' ? useRoute() : null;
+const router = VueRouter.routerKey
+  ? inject(VueRouter.routerKey, null)
+  : (typeof VueRouter.useRouter === 'function' ? VueRouter.useRouter() : null);
+const route = VueRouter.routeLocationKey
+  ? inject(VueRouter.routeLocationKey, null)
+  : (typeof VueRouter.useRoute === 'function' ? VueRouter.useRoute() : null);
 
 const initialState = props.initialState && typeof props.initialState === 'object' ? props.initialState : {};
 const search = ref(String(initialState.search || ''));

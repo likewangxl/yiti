@@ -24,11 +24,12 @@ import BranchOperatingPage from '../BranchOperatingPage.vue';
 import { BRANCH_TEST_COLUMNS, BRANCH_TEST_SCREEN_CODE } from '../panorama/branchTestDataset';
 
 const testInstitutions = [
-  { orgCode: '330', orgName: '测试三三〇支行', orgNature: 'LOCAL_BRANCH' },
-  { orgCode: '331', orgName: '测试三三一支行', orgNature: 'LOCAL_BRANCH' }
+  { orgCode: '330', orgName: '测试三三〇支行', orgNature: 'BRANCH', operatingLevel: 'PRIMARY_BRANCH' },
+  { orgCode: '331', orgName: '测试三三一支行', orgNature: 'BRANCH', operatingLevel: 'PRIMARY_BRANCH' }
 ];
 const testView = {
   state: 'published', screenCode: BRANCH_TEST_SCREEN_CODE, runtimeSchemaVersion: 2, orgScopeMode: 'NAMED_GROUP',
+  navigationRules: { allowedOperatingLevels: ['PRIMARY_BRANCH'], allowedOrgNatures: ['BRANCH'] },
   panoramaInstitutions: testInstitutions,
   renderPackageJson: JSON.stringify({
     schemaVersion: 2,
@@ -75,9 +76,11 @@ describe('支行总览入口', () => {
     expect(wrapper.text()).toContain('测试');
   });
   it('使用授权支行编码查询本月触达，真实空值保留缺失', async () => {
+    routeState.query = { source: 'live', orgCode: '109' };
     api.catalog.mockResolvedValue([{ screenCode: 'SCR_CORP_OVERVIEW', template: 'corporate-overview-v1', dataMode: 'LIVE' }]);
     api.view.mockResolvedValue({ state: 'published', screenCode: 'SCR_CORP_OVERVIEW', runtimeSchemaVersion: 2, orgScopeMode: 'NAMED_GROUP',
-      panoramaInstitutions: [{ orgCode: '109', orgName: '高新开发区支行', orgNature: 'OTHER' }],
+      navigationRules: { allowedOperatingLevels: ['PRIMARY_BRANCH'], allowedOrgNatures: ['BRANCH'] },
+      panoramaInstitutions: [{ orgCode: '109', orgName: '高新开发区支行', orgNature: 'BRANCH', operatingLevel: 'PRIMARY_BRANCH' }],
       renderPackageJson: JSON.stringify({ schemaVersion: 2, components: [], bindSnapshots: {}, canvasStyle: { dataClassification: 'LIVE', presentation: { template: 'corporate-overview-v1' } } }) });
     api.touch.mockResolvedValue({ orgId: '109', pendingCount: 0 });
     const wrapper = mount(BranchOperatingPage);
@@ -89,7 +92,7 @@ describe('支行总览入口', () => {
   });
 
   it('默认进入 TEST 屏，先列举机构再按默认 330 查询模型，且不调用触达或旧 live hook', async () => {
-    routeState.query = {};
+    routeState.query = { orgCode: '330' };
     api.view.mockResolvedValue(testView);
     api.data.mockImplementation(async request => request.contextParams?.orgCode
       ? testResponse([request.contextParams.orgCode]) : testResponse());
@@ -119,7 +122,7 @@ describe('支行总览入口', () => {
   });
 
   it('TEST 显式机构查询失败时清空视图、机构和旧模型，不回退到存量数据', async () => {
-    routeState.query = {};
+    routeState.query = { orgCode: '330' };
     api.view.mockResolvedValue(testView);
     api.data.mockImplementation(async request => request.contextParams?.orgCode
       ? Promise.reject(new Error('TEST 查询失败')) : testResponse());
@@ -133,23 +136,24 @@ describe('支行总览入口', () => {
   });
 
   it('场景按钮切换会重新加载另一套视图，不把 TEST 机构模型带入系统存量', async () => {
-    routeState.query = {};
+    routeState.query = { orgCode: '330' };
     api.view.mockImplementation(async screenCode => screenCode === BRANCH_TEST_SCREEN_CODE ? testView : {
       state: 'published', screenCode: 'SCR_CORP_OVERVIEW', runtimeSchemaVersion: 2, orgScopeMode: 'NAMED_GROUP',
-      panoramaInstitutions: [{ orgCode: '109', orgName: '系统存量支行', orgNature: 'OTHER' }],
+      navigationRules: { allowedOperatingLevels: ['PRIMARY_BRANCH'], allowedOrgNatures: ['BRANCH'] },
+      panoramaInstitutions: [{ orgCode: '330', orgName: '系统存量支行', orgNature: 'BRANCH', operatingLevel: 'PRIMARY_BRANCH' }],
       renderPackageJson: JSON.stringify({ schemaVersion: 2, components: [], bindSnapshots: {}, canvasStyle: { dataClassification: 'LIVE', presentation: { template: 'corporate-overview-v1' } } })
     });
     api.catalog.mockResolvedValue([{ screenCode: 'SCR_CORP_OVERVIEW', template: 'corporate-overview-v1', dataMode: 'LIVE' }]);
     api.data.mockImplementation(async request => request.contextParams?.orgCode
       ? testResponse([request.contextParams.orgCode]) : testResponse());
-    api.touch.mockResolvedValue({ orgId: '109', pendingCount: 0 });
+    api.touch.mockResolvedValue({ orgId: '330', pendingCount: 0 });
     const wrapper = mount(BranchOperatingPage);
     await flushPromises();
     expect(wrapper.get('[data-testid="branch-operating-test-banner"]').exists()).toBe(true);
     await wrapper.get('[data-testid="branch-operating-source-live"]').trigger('click');
     await flushPromises();
     expect(api.view).toHaveBeenCalledWith('SCR_CORP_OVERVIEW');
-    expect(api.touch).toHaveBeenCalledWith(expect.objectContaining({ orgCode: '109' }));
+    expect(api.touch).toHaveBeenCalledWith(expect.objectContaining({ orgCode: '330' }));
     expect(wrapper.find('[data-testid="branch-operating-test-banner"]').exists()).toBe(false);
     expect(wrapper.text()).toContain('系统存量支行');
     expect(wrapper.text()).not.toContain('测试三三〇支行');
@@ -162,6 +166,32 @@ describe('支行总览入口', () => {
     expect(wrapper.get('[data-testid="branch-operating-test-banner"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('测试三三〇支行');
     expect(wrapper.text()).not.toContain('系统存量支行');
+    wrapper.unmount();
+  });
+
+  it('旧链接缺少机构上下文时显示待确认，不从目录第一家或示例编码回退', async () => {
+    routeState.query = {};
+    api.view.mockResolvedValue(testView);
+    api.data.mockResolvedValue(testResponse());
+    const wrapper = mount(BranchOperatingPage);
+    await flushPromises();
+    expect(wrapper.find('[data-testid="branch-operating-navigation-blocked"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('旧链接必须携带已授权机构号');
+    expect(api.data).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it('机构名称带支行后缀但没有服务端层级规则时拒绝主路径', async () => {
+    routeState.query = { source: 'live', orgCode: 'ORG-NAME-ONLY' };
+    api.catalog.mockResolvedValue([{ screenCode: 'SCR_CORP_OVERVIEW', template: 'corporate-overview-v1', dataMode: 'LIVE' }]);
+    api.view.mockResolvedValue({ state: 'published', screenCode: 'SCR_CORP_OVERVIEW', runtimeSchemaVersion: 2, orgScopeMode: 'NAMED_GROUP',
+      panoramaInstitutions: [{ orgCode: 'ORG-NAME-ONLY', orgName: '名称支行' }],
+      renderPackageJson: JSON.stringify({ schemaVersion: 2, components: [], bindSnapshots: {}, canvasStyle: { dataClassification: 'LIVE', presentation: { template: 'corporate-overview-v1' } } }) });
+    const wrapper = mount(BranchOperatingPage);
+    await flushPromises();
+    expect(wrapper.find('[data-testid="branch-operating-navigation-blocked"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('层级规则待确认');
+    expect(api.touch).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });

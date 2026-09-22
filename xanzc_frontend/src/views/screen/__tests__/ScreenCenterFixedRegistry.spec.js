@@ -82,11 +82,21 @@ describe('ScreenCenter fixed code screens', () => {
     expect(branchCard.find('.screen-card__description').text()).toContain('系统存量');
     expect(branchCard.find('.screen-card__description').exists()).toBe(true);
     await branchCard.find('button.screen-card__open').trigger('click');
-    expect(routerPush).toHaveBeenLastCalledWith({ name: 'BranchOperatingPage' });
+    expect(routerPush).toHaveBeenLastCalledWith({
+      name: 'CodeScreenPage', params: { template: 'branch-overview-v1' }, query: { businessLine: 'COMMON' }
+    });
   });
 
   it('没有对公 LIVE 目录授权时不派生支行卡片', async () => {
     listAvailableScreens.mockResolvedValue([{ ...catalog[2], dataMode: 'TEST' }]);
+    wrapper = mount(ScreenCenter);
+    await flushPromises();
+
+    expect(wrapper.find('[data-screen-kind="branch-operating"]').exists()).toBe(false);
+  });
+
+  it('只有对公 LIVE、没有分行综合 TEST 授权时不派生支行卡片', async () => {
+    listAvailableScreens.mockResolvedValue([catalog[2]]);
     wrapper = mount(ScreenCenter);
     await flushPromises();
 

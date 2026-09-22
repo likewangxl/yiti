@@ -217,10 +217,15 @@ function normalizeCatalog(catalog) {
 }
 
 function hasBranchOperatingSource(catalog) {
-  return catalog.some((screen) => screen
+  const hasCorporateLive = catalog.some((screen) => screen
     && screen.screenCode === 'SCR_CORP_OVERVIEW'
     && screen.template === 'corporate-overview-v1'
     && screen.dataMode === 'LIVE');
+  const hasProvinceTest = catalog.some((screen) => screen
+    && screen.screenCode === 'SCR_PROVINCE'
+    && screen.template === 'branch-overview-v1'
+    && screen.dataMode === 'TEST');
+  return hasCorporateLive && hasProvinceTest;
 }
 
 function buildScreenDirectory(catalog) {
@@ -275,7 +280,9 @@ function openScreen(screen) {
     return;
   }
   if (isBranchOperatingScreen(screen)) {
-    router.push({ name: 'BranchOperatingPage' });
+    // 经营主路径统一从省级代码化大屏进入；旧 /branch-operating URL 仍由其
+    // 自身页面受保护兼容，不再把独立机构选择页作为中心入口。
+    router.push({ name: 'CodeScreenPage', params: { template: 'branch-overview-v1' }, query: { businessLine: 'COMMON' } });
     return;
   }
   const template = screen?.template;
