@@ -222,6 +222,52 @@ describe('PanoramaBindings', () => {
     wrapper.unmount();
   });
 
+  it('真实画布响应从 blocks.bindJson 按 blockId 读取迁移身份，不要求 bindSnapshots', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({
+      ...canvas,
+      canvasStyleJson: JSON.stringify({ presentation: { type: 'CODE', template: 'branch-overview-v1' } }),
+      canvasDraftJson: JSON.stringify({ components: [{
+        id: 'block-backed', component: 'ChartWidget', innerType: 'METRIC_CARD', blockId: 41,
+        propValue: { bindingKey: 'deposit' }, bindJson: '{}'
+      }] }),
+      blocks: [{ id: 41, componentType: 'METRIC_CARD', bindJson: JSON.stringify({
+        dsId: 77, period: 'LATEST', sourceKind: 'WIDE_TABLE', metricCode: 'M_DEP',
+        fields: { value: 'deposit_raw' }, units: { value: 'YUAN' }, dimension: 'ORG'
+      }) }]
+    });
+    api.listScreenDatasources.mockResolvedValue([datasource]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="legacy-migration-preview"]').exists()).toBe(true));
+    expect(wrapper.find('[data-testid="migration-status-migrated"]').text()).toContain('1');
+    expect(wrapper.find('[data-testid="migration-status-missing"]').text()).toContain('0');
+    expect(api.saveScreenCanvas).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('真实画布响应的损坏 bindJson 进入缺字段并保持保存 fail-close', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({
+      ...canvas,
+      canvasStyleJson: JSON.stringify({ presentation: { type: 'CODE', template: 'branch-overview-v1' } }),
+      canvasDraftJson: JSON.stringify({ components: [{
+        id: 'broken-block', component: 'ChartWidget', innerType: 'METRIC_CARD', blockId: 42,
+        propValue: { bindingKey: 'deposit' }, styleJson: JSON.stringify({ title: '不能补造身份' })
+      }] }),
+      blocks: [{ id: 42, componentType: 'METRIC_CARD', bindJson: '{"dsId":77,' }]
+    });
+    api.listScreenDatasources.mockResolvedValue([datasource]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="legacy-migration-preview"]').exists()).toBe(true));
+    expect(wrapper.find('[data-testid="migration-status-migrated"]').text()).toContain('0');
+    expect(wrapper.find('[data-testid="migration-status-missing"]').text()).toContain('1');
+    expect(wrapper.text()).toContain('bindJson');
+    expect(api.saveScreenCanvas).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
   it('旧草稿 JSON 损坏时仍显示迁移缺字段状态并阻止无损声明', async () => {
     api.listScreens.mockResolvedValue([screen]);
     api.getScreenCanvas.mockResolvedValue({ ...canvas,
@@ -399,6 +445,7 @@ describe('PanoramaBindings', () => {
     api.listScreens.mockResolvedValue([screen]);
     const presentation = {
       type: 'CODE', template: 'branch-overview-v1', displaySchemaVersion: 1,
+      institutionRules: { allowedOperatingLevels: ['PRIMARY'], allowedOrgNatures: ['SECONDARY_BRANCH'] },
       display: { components: [{
         componentId: 'deposit-card', componentType: 'METRIC_CARD', layoutRegion: 'LEFT', order: 0, visible: true,
         text: { titleMode: 'CUSTOM', title: '存款余额', subtitle: '', description: '' },

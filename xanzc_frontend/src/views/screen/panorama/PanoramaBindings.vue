@@ -439,11 +439,11 @@ const legacyMigrationSource = computed(() => {
     ?? canvas.value?.renderPackage ?? canvas.value?.canvasPublished, null);
   const bindSnapshots = published?.bindSnapshots || parse(canvas.value?.bindSnapshots, {});
   return published
-    ? { renderPackage: published, bindSnapshots, canvasStyle: canvasStyle.value }
+    ? { renderPackage: published, blocks: canvas.value?.blocks, bindSnapshots, canvasStyle: canvasStyle.value }
     : { renderPackageJson: canvas.value?.renderPackageJson, canvasDraftJson: canvas.value?.canvasDraftJson,
       canvasStyleJson: canvas.value?.canvasStyleJson,
       components: draftComponents.value,
-      bindSnapshots, canvasStyle: canvasStyle.value };
+      blocks: canvas.value?.blocks, bindSnapshots, canvasStyle: canvasStyle.value };
 });
 
 const screenScope = computed(() => ({

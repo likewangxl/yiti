@@ -57,22 +57,31 @@ const LAYOUT_BY_TYPE = Object.freeze({
   DETAIL_TABLE: 'BOTTOM'
 });
 
+// 新展示运行包需要明确的机构目录过滤规则。该默认值来自已核对的真实
+// 机构分类枚举；迁移器不从机构名称、数量或标题推导规则。
+const DEFAULT_INSTITUTION_RULES = Object.freeze({
+  allowedOperatingLevels: Object.freeze(['PRIMARY']),
+  allowedOrgNatures: Object.freeze(['SECONDARY_BRANCH'])
+});
+
 // 这是旧 bindingKey 的编码清单，不是标题或模糊别名匹配。新增旧槽位必须先进入清单和测试。
 const RULES = Object.freeze([
   {
     type: 'METRIC_CARD',
     keys: [
-      'deposit', 'loan', 'revenue', 'customers', 'customerCount', 'aum', 'nplRate',
-      'corpDeposit', 'corpLoan', 'corpRevenue', 'corpCustomers', 'corpNplRate',
-      'retailAum', 'retailDeposit', 'retailLoan', 'retailRevenue', 'retailCustomers',
-      'retailNplRate', 'branchDeposit', 'branchLoan', 'branchRevenue', 'branchCustomers'
+      'deposit', 'loan', 'revenue', 'customers', 'customerCount', 'aum', 'nplRate', 'rate',
+      'depositIncrease', 'depositAverage', 'loanRate',
+      'corpDeposit', 'corpDepositAverage', 'corpLoan', 'corpRevenue', 'corpCustomers', 'corpNplRate',
+      'retailAum', 'retailDeposit', 'retailDepositAverage', 'retailLoan', 'retailRevenue',
+      'retailCustomers', 'retailValueCustomers', 'retailNplRate',
+      'branchDeposit', 'branchLoan', 'branchRevenue', 'branchCustomers'
     ]
   },
   {
     type: 'COMPLETION',
     keys: [
-      'completion', 'completionRate', 'rate', 'target', 'targets',
-      'corpTargets', 'retailTargets', 'branchTargets', 'corpCompletion', 'retailCompletion'
+      'completion', 'completionRate', 'target', 'targets',
+      'branchTargets', 'corpCompletion', 'retailCompletion'
     ]
   },
   {
@@ -85,7 +94,7 @@ const RULES = Object.freeze([
   },
   {
     type: 'RANKING',
-    keys: ['ranking', 'corpRanking', 'retailRanking', 'branchRanking', 'citySummary', 'institutionRanking']
+    keys: ['ranking', 'corpRanking', 'retailRanking', 'branchRanking', 'institutionRanking']
   },
   {
     type: 'MAP',
@@ -93,7 +102,11 @@ const RULES = Object.freeze([
   },
   {
     type: 'DETAIL_TABLE',
-    keys: ['attention', 'details', 'detail', 'branches', 'branchList', 'projects', 'team', 'teams', 'corpAttention']
+    keys: [
+      'attention', 'details', 'detail', 'branches', 'branchList', 'projects', 'team', 'teams',
+      'citySummary', 'corpSegments', 'corpAttention', 'corpTargets',
+      'retailSegments', 'retailAttention', 'retailTargets'
+    ]
   }
 ]);
 
@@ -116,6 +129,9 @@ const INNER_TYPE_TO_COMPONENT = Object.freeze({
   COMPOSITION: 'COMPOSITION_TABS',
   RANK_LIST: 'RANKING',
   RANKING: 'RANKING',
+  FLOW_STATUS: 'DETAIL_TABLE',
+  TABLE: 'DETAIL_TABLE',
+  DATA_TABLE: 'DETAIL_TABLE',
   MAP: 'MAP',
   MAP_CENTER: 'MAP',
   TABLE_LIST: 'DETAIL_TABLE',
@@ -123,7 +139,12 @@ const INNER_TYPE_TO_COMPONENT = Object.freeze({
 });
 
 const DATE_FIELDS = new Set(['date', 'dataDate', 'data_date', 'period', 'month', 'statDate', 'stat_date']);
-const IDENTITY_FIELDS = new Set(['orgCode', 'org_code', 'orgName', 'org_name', 'name', 'label', 'date', 'dataDate', 'data_date', 'period', 'month']);
+const IDENTITY_FIELDS = new Set([
+  'orgCode', 'org_code', 'orgName', 'org_name', 'name', 'label', 'cityCode', 'city_code',
+  'cityName', 'city_name', 'ownerOperatingOrgCode', 'owner_operating_org_code',
+  'parentOrgCode', 'parent_org_code', 'lng', 'lat', 'coordSys', 'coord_sys', 'located',
+  'date', 'dataDate', 'data_date', 'period', 'month', 'statDate', 'stat_date'
+]);
 const MAIN_FIELD_PRIORITY = Object.freeze(['value', 'amount', 'actual', 'rate', 'count', 'deposit', 'loan', 'revenue', 'aum']);
 
 function isObject(value) {
@@ -143,6 +164,60 @@ function parseJson(value, fallback = null) {
   if (typeof value !== 'string' || !value.trim()) return fallback;
   try { return JSON.parse(value); } catch { return fallback; }
 }
+
+/**
+ * 画布区块的 bindJson 是服务端返回的可信绑定入口，但它仍必须经过
+ * 对象形状校验。数组、标量和损坏 JSON 都不能被迁移器当成绑定对象。
+ */
+function parseObjectJson(value) {
+  if (isObject(value)) return deepClone(value);
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return isObject(parsed) ? deepClone(parsed) : null;
+  } catch {
+    return null;
+  }
+}
+
+const BLOCK_SOURCE_IDENTITY_KEYS = Object.freeze([
+  'sourceKind', 'source_kind', 'metricCode', 'metric_code', 'metricName', 'metric_name',
+  'dimension', 'formula', 'sourceId', 'source_id', 'datasourceId', 'datasource_id',
+  'sourceDefinition', 'source_definition'
+]);
+
+/**
+ * 将真实画布响应中的 blocks 转成迁移器使用的 blockId -> snapshot 映射。
+ * 这里不从 styleJson/title/name 推断槽位或指标，且对损坏 bindJson 留下显式
+ * fail-close 标记，便于逐项显示“缺字段”而不是把损坏项静默当成空绑定。
+ */
+export function buildBindSnapshotsFromBlocks(blocks) {
+  if (!Array.isArray(blocks)) return null;
+  const snapshots = {};
+  for (const block of blocks) {
+    if (!isObject(block)) continue;
+    const blockId = positiveId(block.id ?? block.blockId);
+    if (!blockId) continue;
+    const bind = parseObjectJson(block.bindJson);
+    if (!bind) {
+      snapshots[String(blockId)] = {
+        __invalidBindJson: true,
+        invalidReason: `blocks[${blockId}].bindJson 必须是有效对象`
+      };
+      continue;
+    }
+    const snapshot = { bind };
+    const componentType = text(block.componentType || block.component_type).toUpperCase();
+    if (componentType) snapshot.componentType = componentType;
+    for (const key of BLOCK_SOURCE_IDENTITY_KEYS) {
+      if (hasOwn(block, key)) snapshot[key] = deepClone(block[key]);
+    }
+    snapshots[String(blockId)] = snapshot;
+  }
+  return snapshots;
+}
+
+export const buildMigrationSnapshotsFromBlocks = buildBindSnapshotsFromBlocks;
 
 function positiveId(value) {
   const number = typeof value === 'number' ? value : Number(value);
@@ -241,13 +316,23 @@ function extractLegacyPackage(source) {
     parsedSource.metricLabels,
     parsedSource.presentation?.metricLabels
   ) || {};
+  const rawBlocks = Array.isArray(parsedSource.blocks) ? parsedSource.blocks
+    : (Array.isArray(root.blocks) ? root.blocks : null);
+  const blockSnapshots = rawBlocks?.length ? buildBindSnapshotsFromBlocks(rawBlocks) : null;
   return {
     root,
     source: parsedSource,
     canvasStyle: deepClone(style),
     components,
-    bindSnapshots: snapshots,
+    // 新画布 API 只返回 blocks；仅在没有有效 blocks 时兼容旧发布包快照。
+    bindSnapshots: blockSnapshots || snapshots,
+    blocks: rawBlocks ? deepClone(rawBlocks) : [],
     metricLabels,
+    institutionRules: firstObject(
+      style.presentation?.institutionRules,
+      parsedSource.institutionRules,
+      parsedSource.presentation?.institutionRules
+    ),
     presentation: extractPresentation(parsedSource) || extractPresentation(root),
     componentShapeIssue
   };
@@ -316,13 +401,22 @@ function unitFor(bind, semantic, fields) {
 }
 
 function sourceMeta(snapshot, bind) {
-  const sourceKind = text(bind?.sourceKind || snapshot?.sourceKind || bind?.source_kind || snapshot?.source_kind).toUpperCase();
+  const identity = firstObject(
+    bind?.sourceIdentity, bind?.source_identity,
+    bind?.sourceDefinition, bind?.source_definition,
+    snapshot?.sourceIdentity, snapshot?.source_identity,
+    snapshot?.sourceDefinition, snapshot?.source_definition
+  ) || {};
+  const sourceKind = text(bind?.sourceKind || snapshot?.sourceKind || bind?.source_kind || snapshot?.source_kind
+    || identity.sourceKind || identity.source_kind).toUpperCase();
   return {
     sourceKind,
-    metricCode: text(bind?.metricCode || bind?.metric_code || snapshot?.metricCode || snapshot?.metric_code),
-    metricName: text(bind?.metricName || bind?.metric_name || snapshot?.metricName || snapshot?.metric_name),
-    dimension: text(bind?.dimension || snapshot?.dimension).toUpperCase() || 'ORG',
-    formula: text(bind?.formula || snapshot?.formula)
+    metricCode: text(bind?.metricCode || bind?.metric_code || snapshot?.metricCode || snapshot?.metric_code
+      || identity.metricCode || identity.metric_code),
+    metricName: text(bind?.metricName || bind?.metric_name || snapshot?.metricName || snapshot?.metric_name
+      || identity.metricName || identity.metric_name),
+    dimension: text(bind?.dimension || snapshot?.dimension || identity.dimension).toUpperCase() || 'ORG',
+    formula: text(bind?.formula || snapshot?.formula || identity.formula)
   };
 }
 
@@ -330,11 +424,12 @@ function resolveRule(bindingKey) {
   return RULE_BY_KEY.get(text(bindingKey).toLowerCase()) || null;
 }
 
-function structureType(component, rule) {
-  const encoded = INNER_TYPE_TO_COMPONENT[innerTypeOf(component)] || null;
+function structureType(component, rule, snapshot) {
+  const encodedType = innerTypeOf(component) || text(snapshot?.componentType).toUpperCase();
+  const encoded = INNER_TYPE_TO_COMPONENT[encodedType] || null;
   if (!encoded || !rule) return encoded;
   // TABLE_LIST 在旧版同时承载排名和明细，bindingKey 是其正式身份编码，允许这一个明确例外。
-  if (innerTypeOf(component) === 'TABLE_LIST' && ['RANKING', 'DETAIL_TABLE'].includes(rule.type)) return rule.type;
+  if (encodedType === 'TABLE_LIST' && ['RANKING', 'DETAIL_TABLE'].includes(rule.type)) return rule.type;
   return encoded;
 }
 
@@ -485,9 +580,13 @@ function makeDetailComponent(input) {
   const { entries, bindingKey, metricLabels, bind, blockId, meta, base } = input;
   if (!entries.length) return { status: MIGRATION_STATUS.MISSING_FIELDS, reasons: ['缺少明细列字段'] };
   const columns = [];
+  let sourceUnit = null;
   for (const item of entries) {
-    const unit = unitFor(bind, item.semantic, bind.fields);
+    // 维度列没有原始数值单位，使用 AUTO 仅表示列按原始标量展示；
+    // 至少一个指标列仍必须携带真实单位，作为 dataRef 的来源单位。
+    const unit = IDENTITY_FIELDS.has(item.semantic) ? 'AUTO' : unitFor(bind, item.semantic, bind.fields);
     if (!unit) return { status: MIGRATION_STATUS.MISSING_FIELDS, reasons: [`明细字段 ${item.semantic} 缺少原始单位`] };
+    if (unit !== 'AUTO' && !sourceUnit) sourceUnit = unit;
     columns.push({
       columnKey: safeToken(item.semantic, `column-${columns.length + 1}`),
       field: item.field,
@@ -496,7 +595,8 @@ function makeDetailComponent(input) {
       visible: true
     });
   }
-  const component = baseComponent({ ...base, componentType: 'DETAIL_TABLE', title: text(metricLabels?.[bindingKey]), blockId, unit: columns[0].unit, meta });
+  if (!sourceUnit) return { status: MIGRATION_STATUS.MISSING_FIELDS, reasons: ['明细表缺少可作为来源单位的指标字段'] };
+  const component = baseComponent({ ...base, componentType: 'DETAIL_TABLE', title: text(metricLabels?.[bindingKey]), blockId, unit: sourceUnit, meta });
   component.format.displayUnit = 'AUTO';
   component.content.columns = columns;
   return { status: MIGRATION_STATUS.MIGRATED, component };
@@ -524,6 +624,10 @@ function convertComponent(entry, context) {
   if (!rule) return { ...baseEntry, status: MIGRATION_STATUS.UNRESOLVED, reasons: [`bindingKey 未登记: ${bindingKey}`] };
   if (!blockId) return { ...baseEntry, status: MIGRATION_STATUS.MISSING_FIELDS, reasons: ['缺少有效 blockId'] };
   const snapshot = snapshotOf(context.bindSnapshots, blockId);
+  if (snapshot?.__invalidBindJson) {
+    return { ...baseEntry, status: MIGRATION_STATUS.MISSING_FIELDS,
+      reasons: [snapshot.invalidReason || `blocks[${blockId}].bindJson 不是有效对象`] };
+  }
   const bind = bindOf(snapshot);
   if (!snapshot || !bind) return { ...baseEntry, status: MIGRATION_STATUS.MISSING_FIELDS, reasons: ['缺少 bindSnapshots[blockId].bind'] };
   const fields = fieldsOf(bind);
@@ -532,10 +636,12 @@ function convertComponent(entry, context) {
   if (!units || !Object.keys(units).length) return { ...baseEntry, status: MIGRATION_STATUS.MISSING_FIELDS, reasons: ['缺少 bind.units'] };
   if (!fieldEntries(fields).length) return { ...baseEntry, status: MIGRATION_STATUS.MISSING_FIELDS, reasons: ['bind.fields 未声明有效字段编码'] };
   const meta = sourceMeta(snapshot, bind);
-  const encodedType = structureType(component, rule);
+  const encodedType = structureType(component, rule, snapshot);
   const expectedType = rule.type;
-  if (innerTypeOf(component) && !encodedType) {
-    return { ...baseEntry, status: MIGRATION_STATUS.NEEDS_CONFIRMATION, reasons: [`旧组件结构未登记: ${innerTypeOf(component)}`] };
+  const resolvedInnerType = innerTypeOf(component) || text(snapshot.componentType).toUpperCase();
+  baseEntry.innerType = resolvedInnerType;
+  if (resolvedInnerType && !encodedType) {
+    return { ...baseEntry, status: MIGRATION_STATUS.NEEDS_CONFIRMATION, reasons: [`旧组件结构未登记: ${resolvedInnerType}`] };
   }
   const base = {
     componentId: stableComponentId(bindingKey, blockId, component.id, baseEntry.sourceIndex, context.usedIds),
@@ -551,7 +657,7 @@ function convertComponent(entry, context) {
     componentType: expectedType
   };
   if (encodedType && encodedType !== expectedType) {
-    return { ...common, status: MIGRATION_STATUS.NEEDS_CONFIRMATION, reasons: [`旧组件结构 ${innerTypeOf(component)} 与 bindingKey 类型不一致`] };
+    return { ...common, status: MIGRATION_STATUS.NEEDS_CONFIRMATION, reasons: [`旧组件结构 ${resolvedInnerType} 与 bindingKey 类型不一致`] };
   }
   let converted;
   const input = { entries: fieldEntries(fields), bindingKey, metricLabels: context.metricLabels, bind, blockId, meta, base };
@@ -574,6 +680,7 @@ function emptyPresentation(options = {}) {
   return {
     ...(options.type ? { type: options.type } : { type: 'CODE' }),
     ...(options.template ? { template: options.template } : { template: 'branch-overview-v1' }),
+    institutionRules: deepClone(options.institutionRules || DEFAULT_INSTITUTION_RULES),
     displaySchemaVersion: 1,
     display: { components: [] }
   };
@@ -645,7 +752,8 @@ export function previewLegacyMigration(source, options = {}) {
       type: options.type || extracted.canvasStyle?.presentation?.type
         || extracted.root?.canvasStyle?.presentation?.type || extracted.root?.type,
       template: options.template || extracted.canvasStyle?.presentation?.template
-        || extracted.root?.canvasStyle?.presentation?.template || extracted.root?.template
+        || extracted.root?.canvasStyle?.presentation?.template || extracted.root?.template,
+      institutionRules: options.institutionRules || extracted.institutionRules || DEFAULT_INSTITUTION_RULES
     }),
     ...(isObject(extracted.canvasStyle?.presentation) ? {
       type: extracted.canvasStyle.presentation.type || options.type || 'CODE',

@@ -27,6 +27,11 @@ const FORMAT_KEYS = new Set(['displayUnit', 'decimals', 'thousandsSeparator', 'n
 const INTERACTION_KEYS = new Set(['action', 'target']);
 const CONTENT_KEYS = new Set(['mainField', 'subFields', 'series', 'columns', 'tabs', 'rankingMetrics']);
 
+const DEFAULT_INSTITUTION_RULES = Object.freeze({
+  allowedOperatingLevels: Object.freeze(['PRIMARY']),
+  allowedOrgNatures: Object.freeze(['SECONDARY_BRANCH'])
+});
+
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -114,6 +119,8 @@ function normalizePresentationSource(source, options = {}) {
     ...presentation,
     ...(hasOwn(presentation, 'type') ? {} : (options.type ? { type: options.type } : {})),
     ...(hasOwn(presentation, 'template') ? {} : (options.template ? { template: options.template } : {})),
+    institutionRules: hasOwn(presentation, 'institutionRules')
+      ? presentation.institutionRules : deepClone(DEFAULT_INSTITUTION_RULES),
     displaySchemaVersion: DISPLAY_SCHEMA_VERSION,
     display: {
       ...(isObject(presentation.display) ? presentation.display : {}),

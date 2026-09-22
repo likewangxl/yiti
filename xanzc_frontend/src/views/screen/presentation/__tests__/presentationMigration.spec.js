@@ -72,7 +72,166 @@ function legacyPackage(overrides = {}) {
   };
 }
 
+function templateFixture(template) {
+  const metric = (bindingKey, blockId, field = 'value', unit = 'YUAN') => ({
+    component: { id: `old-${bindingKey}`, component: 'ChartWidget', innerType: 'METRIC_CARD', blockId,
+      propValue: { bindingKey } },
+    bind: { dsId: 8000 + blockId, fields: { value: field }, units: { value: unit }, sourceKind: 'WIDE_TABLE' }
+  });
+  const detail = (bindingKey, blockId, fields, units) => ({
+    component: { id: `old-${bindingKey}`, component: 'ChartWidget', innerType: 'TABLE_LIST', blockId,
+      propValue: { bindingKey } },
+    bind: { dsId: 8000 + blockId, fields, units, sourceKind: 'WIDE_TABLE' }
+  });
+  const trend = (bindingKey, blockId, fields, units) => ({
+    component: { id: `old-${bindingKey}`, component: 'ChartWidget', innerType: 'LINE_TREND', blockId,
+      propValue: { bindingKey } },
+    bind: { dsId: 8000 + blockId, fields, units, sourceKind: 'WIDE_TABLE' }
+  });
+  const composition = (bindingKey, blockId) => ({
+    component: { id: `old-${bindingKey}`, component: 'ChartWidget', innerType: 'PIE_SHARE', blockId,
+      propValue: { bindingKey } },
+    bind: { dsId: 8000 + blockId, fields: { corporate: 'corp', retail: 'retail' },
+      units: { corporate: 'YUAN', retail: 'YUAN' }, sourceKind: 'WIDE_TABLE' }
+  });
+  const ranking = (bindingKey, blockId, metric = 'value') => ({
+    component: { id: `old-${bindingKey}`, component: 'ChartWidget', innerType: 'RANK_LIST', blockId,
+      propValue: { bindingKey } },
+    bind: { dsId: 8000 + blockId, fields: { orgCode: 'org_code', name: 'org_name', [metric]: metric },
+      units: { [metric]: 'YUAN' }, direction: 'DESC', sourceKind: 'WIDE_TABLE' }
+  });
+  const branchIdentity = (bindingKey, blockId, metric = 'deposit') => detail(bindingKey, blockId,
+    { orgCode: 'org_code', orgName: 'org_name', [metric]: metric }, { [metric]: 'YUAN' });
+
+  const entries = template === 'branch-overview-v1'
+    ? [
+      metric('deposit', 1), metric('depositIncrease', 2, 'increase'), metric('depositAverage', 3, 'average'),
+      metric('loan', 4, 'loan'), metric('customers', 5, 'customers', 'COUNT'), metric('revenue', 6, 'revenue'),
+      metric('rate', 7, 'rate', 'PERCENT'), trend('trend', 8, { date: 'data_date', deposit: 'deposit' }, { deposit: 'YUAN' }),
+      composition('composition', 9), ranking('ranking', 10),
+      detail('attention', 11, { label: 'label', count: 'count' }, { count: 'COUNT' }), branchIdentity('branches', 12),
+      trend('branchTrend', 13, { date: 'data_date', deposit: 'deposit' }, { deposit: 'YUAN' }),
+      detail('citySummary', 14, { cityCode: 'city_code', deposit: 'deposit' }, { deposit: 'YUAN' }),
+      metric('loanRate', 15, 'loan_rate', 'PERCENT')
+    ]
+    : template === 'corporate-overview-v1'
+      ? [
+        metric('corpDeposit', 21), metric('corpDepositAverage', 22, 'average'), metric('corpLoan', 23, 'loan'),
+        metric('corpRevenue', 24, 'revenue'), metric('corpCustomers', 25, 'customers', 'COUNT'), metric('corpNplRate', 26, 'npl', 'PERCENT'),
+        trend('corpTrend', 27, { date: 'data_date', deposit: 'deposit' }, { deposit: 'YUAN' }),
+        detail('corpSegments', 28, { name: 'segment', customers: 'customers', loan: 'loan' }, { customers: 'COUNT', loan: 'YUAN' }),
+        ranking('corpRanking', 29, 'deposit'), detail('corpAttention', 30, { label: 'label', count: 'count' }, { count: 'COUNT' }),
+        detail('corpTargets', 31, { name: 'target_name', actual: 'actual', target: 'target' }, { actual: 'YUAN', target: 'YUAN' }),
+        branchIdentity('branches', 32)
+      ]
+      : [
+        metric('retailAum', 41, 'aum'), metric('retailDeposit', 42, 'deposit'), metric('retailDepositAverage', 43, 'average'),
+        metric('retailRevenue', 44, 'revenue'), metric('retailValueCustomers', 45, 'customers', 'COUNT'), metric('retailLoan', 46, 'loan'),
+        metric('retailNplRate', 47, 'npl', 'PERCENT'), trend('retailTrend', 48, { date: 'data_date', deposit: 'deposit' }, { deposit: 'YUAN' }),
+        detail('retailSegments', 49, { name: 'segment', customers: 'customers', aum: 'aum' }, { customers: 'COUNT', aum: 'YUAN' }),
+        ranking('retailRanking', 50, 'deposit'), detail('retailAttention', 51, { label: 'label', count: 'count' }, { count: 'COUNT' }),
+        detail('retailTargets', 52, { name: 'target_name', actual: 'actual', target: 'target' }, { actual: 'YUAN', target: 'YUAN' }),
+        branchIdentity('branches', 53)
+      ];
+  return {
+    canvasStyle: { presentation: { type: 'CODE', template } },
+    components: entries.map(item => item.component),
+    blocks: entries.map(item => ({ id: item.component.blockId, componentType: item.component.innerType, bindJson: JSON.stringify(item.bind) }))
+  };
+}
+
 describe('旧经营大屏配置迁移', () => {
+  it('从画布 blocks 的 bindJson 构造可信快照，不依赖不存在的 bindSnapshots，也不猜标题', () => {
+    const result = previewLegacyMigration({
+      canvasStyle: { presentation: { type: 'CODE', template: 'branch-overview-v1' } },
+      canvasDraftJson: JSON.stringify({ components: [{
+        id: 'block-backed-deposit', component: 'ChartWidget', innerType: 'METRIC_CARD', blockId: 901,
+        propValue: { bindingKey: 'deposit' }, styleJson: JSON.stringify({ title: '不能用作指标身份' })
+      }] }),
+      blocks: [{ id: 901, componentType: 'METRIC_CARD', bindJson: JSON.stringify({
+        dsId: 7001, period: 'LATEST', sourceKind: 'WIDE_TABLE', metricCode: 'M_DEP', metricName: '存款余额',
+        fields: { value: 'deposit_raw' }, units: { value: 'HUNDRED_MILLION' }, dimension: 'ORG'
+      }) }]
+    });
+
+    expect(result.summary).toEqual({ migrated: 1, unresolved: 0, missingFields: 0, needsConfirmation: 0 });
+    expect(result.presentation.display.components[0]).toMatchObject({
+      componentType: 'METRIC_CARD',
+      text: { titleMode: 'AUTO', title: '' },
+      dataRefs: [expect.objectContaining({ blockId: 901, metricCode: 'M_DEP', unit: 'HUNDRED_MILLION' })]
+    });
+    expect(result.presentation.display.components[0].dataRefs[0]).not.toHaveProperty('title');
+  });
+
+  it('真实旧槽位映射到确定组件类型并生成可保存的完整展示草稿', () => {
+    const metric = (bindingKey, blockId, unit = 'YUAN') => ({
+      id: `old-${bindingKey}`, component: 'ChartWidget', innerType: 'METRIC_CARD', blockId,
+      propValue: { bindingKey }
+    });
+    const components = [
+      metric('depositIncrease', 911), metric('depositAverage', 912), metric('loanRate', 913),
+      { id: 'old-city', component: 'ChartWidget', innerType: 'TABLE_LIST', blockId: 914,
+        propValue: { bindingKey: 'citySummary' } },
+      { id: 'old-branch-trend', component: 'ChartWidget', innerType: 'LINE_TREND', blockId: 915,
+        propValue: { bindingKey: 'branchTrend' } }
+    ];
+    const blocks = [
+      { id: 911, componentType: 'METRIC_CARD', bindJson: JSON.stringify({
+        dsId: 7011, sourceKind: 'WIDE_TABLE', fields: { value: 'increase' }, units: { value: 'YUAN' }
+      }) },
+      { id: 912, componentType: 'METRIC_CARD', bindJson: JSON.stringify({
+        dsId: 7012, sourceKind: 'WIDE_TABLE', fields: { value: 'average' }, units: { value: 'YUAN' }
+      }) },
+      { id: 913, componentType: 'METRIC_CARD', bindJson: JSON.stringify({
+        dsId: 7013, sourceKind: 'KPI_DETAIL', fields: { value: 'loan_rate' }, units: { value: 'PERCENT' }
+      }) },
+      { id: 914, componentType: 'TABLE_LIST', bindJson: JSON.stringify({
+        dsId: 7014, sourceKind: 'WIDE_TABLE', fields: { cityCode: 'city_code', deposit: 'deposit' },
+        units: { deposit: 'YUAN' }
+      }) },
+      { id: 915, componentType: 'LINE_TREND', bindJson: JSON.stringify({
+        dsId: 7015, sourceKind: 'WIDE_TABLE', fields: { date: 'data_date', deposit: 'deposit' },
+        units: { deposit: 'YUAN' }
+      }) }
+    ];
+    const result = previewLegacyMigration({
+      canvasStyle: { presentation: { type: 'CODE', template: 'branch-overview-v1' } },
+      components,
+      blocks
+    });
+
+    expect(result.summary).toEqual({ migrated: 5, unresolved: 0, missingFields: 0, needsConfirmation: 0 });
+    expect(result.presentation.display.components.map(item => [item.componentType, item.dataRefs[0].blockId]))
+      .toEqual(expect.arrayContaining([
+        ['METRIC_CARD', 911], ['METRIC_CARD', 912], ['METRIC_CARD', 913],
+        ['DETAIL_TABLE', 914], ['TREND', 915]
+      ]));
+    expect(validateDisplayConfig(result.presentation)).toEqual([]);
+  });
+
+  it.each(['branch-overview-v1', 'corporate-overview-v1', 'retail-overview-v1'])
+    ('分行/对公/零售真实槽位夹具均可生成完整迁移草稿：%s', template => {
+      const result = previewLegacyMigration(templateFixture(template));
+      expect(result.summary.unresolved).toBe(0);
+      expect(result.summary.missingFields).toBe(0);
+      expect(result.summary.needsConfirmation).toBe(0);
+      expect(result.presentation.display.components.length).toBeGreaterThan(0);
+    });
+
+  it('blocks.bindJson 损坏时 fail-close，不使用标题或其他字段补造绑定', () => {
+    const result = previewLegacyMigration({
+      canvasDraftJson: JSON.stringify({ components: [{
+        id: 'broken-bind', component: 'ChartWidget', innerType: 'METRIC_CARD', blockId: 902,
+        propValue: { bindingKey: 'deposit' }, styleJson: JSON.stringify({ title: '存款余额' })
+      }] }),
+      blocks: [{ id: 902, componentType: 'METRIC_CARD', bindJson: '{"dsId":7002,' }]
+    });
+
+    expect(result.summary).toEqual({ migrated: 0, unresolved: 0, missingFields: 1, needsConfirmation: 0 });
+    expect(result.presentation.display.components).toEqual([]);
+    expect(result.missingFields[0].reasons.join('；')).toMatch(/bindJson/);
+  });
+
   it('按编码和可信绑定快照迁移，不按中文标题猜测，并显示四类状态', () => {
     const result = previewLegacyMigration(legacyPackage());
 

@@ -36,6 +36,7 @@ describe('经营大屏展示编辑器状态模型', () => {
 
     expect(session.presentation).toEqual({
       ...legacyPresentation,
+      institutionRules: { allowedOperatingLevels: ['PRIMARY'], allowedOrgNatures: ['SECONDARY_BRANCH'] },
       displaySchemaVersion: 1,
       display: { components: [] }
     });
