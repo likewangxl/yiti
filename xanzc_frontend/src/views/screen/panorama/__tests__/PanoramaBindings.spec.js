@@ -83,7 +83,8 @@ const compositionColumnsDatasource = {
       { col: 'name_raw', alias: '构成名称', role: 'DIM' },
       { col: 'value_raw', alias: '构成值', role: 'METRIC' },
       { col: 'corporate_raw', alias: '对公', role: 'METRIC' },
-      { col: 'retail_raw', alias: '零售', role: 'METRIC' }
+      { col: 'retail_raw', alias: '零售', role: 'METRIC' },
+      { col: 'total_raw', alias: '总量', role: 'METRIC' }
     ]
   })
 };
@@ -558,6 +559,41 @@ describe('PanoramaBindings', () => {
     await wrapper.find('[data-testid="binding-save"]').trigger('click');
     expect(wrapper.find('.panorama-bindings__error').text()).toContain('仅允许 WIDE_TABLE 且表为 ORG_INDEX_RESULT');
     expect(api.saveScreenCanvas).not.toHaveBeenCalled();
+  });
+
+  it('columns 模式字段选择器允许可选 total，保存时保留总量绑定', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({
+      ...canvas,
+      canvasStyleJson: JSON.stringify({ presentation: { type: 'CODE', template: 'branch-overview-v1' } }),
+      canvasDraftJson: JSON.stringify({ components: [] })
+    });
+    api.listScreenDatasources.mockResolvedValue([compositionColumnsDatasource]);
+    api.saveScreenCanvas.mockResolvedValue({ canvasVersion: 5 });
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+
+    await vi.waitFor(() => expect(api.listScreenDatasources).toHaveBeenCalled());
+    await wrapper.find('[data-testid="slot-composition"]').trigger('click');
+    await wrapper.find('[data-testid="composition-mode"]').setValue('columns');
+    await wrapper.find('[data-testid="slot-datasource"]').setValue('79');
+    expect(wrapper.find('[data-testid="field-option-composition-total"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="field-option-composition-total"] option[value="total_raw"]').exists()).toBe(true);
+    await wrapper.find('[data-testid="field-option-composition-corporate"]').setValue('corporate_raw');
+    await wrapper.find('[data-testid="field-option-composition-retail"]').setValue('retail_raw');
+    await wrapper.find('[data-testid="field-option-composition-total"]').setValue('total_raw');
+    await wrapper.find('[data-testid="unit-composition-corporate"]').setValue('YUAN');
+    await wrapper.find('[data-testid="unit-composition-retail"]').setValue('YUAN');
+    await wrapper.find('[data-testid="unit-composition-total"]').setValue('YUAN');
+    await wrapper.find('[data-testid="binding-save"]').trigger('click');
+
+    await vi.waitFor(() => expect(api.saveScreenCanvas).toHaveBeenCalled());
+    const saved = api.saveScreenCanvas.mock.lastCall[0].components
+      .find(item => item.propValue?.bindingKey === 'composition');
+    expect(JSON.parse(saved.bindJson)).toMatchObject({
+      fields: { corporate: 'corporate_raw', retail: 'retail_raw', total: 'total_raw' },
+      units: { corporate: 'YUAN', retail: 'YUAN', total: 'YUAN' }
+    });
+    wrapper.unmount();
   });
 
   it('保存代码草稿固定 presentation 和组件样式，发布必须填写 reason；冲突保留编辑态', async () => {

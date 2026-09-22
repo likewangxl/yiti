@@ -292,6 +292,26 @@ describe('defaultBindings', () => {
     expect(result.binding.units).toEqual({ corporate: 'HUNDRED_MILLION', retail: 'HUNDRED_MILLION' });
   });
 
+  it('双列构成在来源明确声明总量指标时自动带出可选 total，旧两列来源不受影响', () => {
+    const result = resolveDefaultBinding({
+      slot: 'composition', template: 'branch-overview-v1', screenScope,
+      datasources: [orgWideSource(9019, [
+        { metricCode: 'M_0277', metricName: '对公一般性存款余额-机构', slot: 18 },
+        { metricCode: 'M_0309', metricName: '零售一般性存款余额-机构', slot: 30 },
+        { metricCode: 'M_TOTAL', metricName: '一般性存款总额-机构', semantic: 'compositionTotal', unit: 'HUNDRED_MILLION', slot: 31 }
+      ])]
+    });
+    expect(result.status).toBe('applied');
+    expect(result.binding.fields).toEqual({
+      corporate: '对公一般性存款余额-机构',
+      retail: '零售一般性存款余额-机构',
+      total: '一般性存款总额-机构'
+    });
+    expect(result.binding.units).toEqual({
+      corporate: 'HUNDRED_MILLION', retail: 'HUNDRED_MILLION', total: 'HUNDRED_MILLION'
+    });
+  });
+
   it('一键配置只写入空展示内容，已保存/手工配置保持不变', () => {
     const existing = {
       deposit: { dsId: 33, period: 'LATEST', fields: { value: 'manual_deposit' }, units: { value: 'YUAN' } },

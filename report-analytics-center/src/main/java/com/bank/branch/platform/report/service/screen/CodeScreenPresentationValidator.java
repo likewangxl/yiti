@@ -370,7 +370,7 @@ public final class CodeScreenPresentationValidator {
                 || bind.path("dsId").longValue() != datasource.getId()) {
             throw invalid();
         }
-        // The new fixed two-column conversion is intentionally scoped to the
+        // The new fixed column conversion is intentionally scoped to the
         // institution wide table. Legacy row bindings retain their existing
         // datasource support; this branch must not turn CUSTOM_SQL or another
         // source kind into a new composition execution path.
@@ -731,10 +731,11 @@ public final class CodeScreenPresentationValidator {
         return node.asText();
     }
 
-    /** 业务构成只能是旧的 name/value 行形状或固定的 corporate/retail 双列形状。 */
+    /** 业务构成只能是旧的 name/value 行形状或固定的 corporate/retail[/total] 列式形状。 */
     private static void validateCompositionShape(Set<String> present) {
         boolean hasRowField = present.contains("name") || present.contains("value");
-        boolean hasColumnField = present.contains("corporate") || present.contains("retail");
+        boolean hasColumnField = present.contains("corporate") || present.contains("retail")
+                || present.contains("total");
         if (hasRowField && hasColumnField) {
             throw invalid();
         }
@@ -762,11 +763,13 @@ public final class CodeScreenPresentationValidator {
         if (!present.contains("corporate") || !present.contains("retail")) {
             return;
         }
-        String corporate = units.path("corporate").asText(null);
-        String retail = units.path("retail").asText(null);
-        String corporateKind = compositionUnitKind(corporate);
-        String retailKind = compositionUnitKind(retail);
-        if (corporateKind == null || retailKind == null || !corporateKind.equals(retailKind)) {
+        String expectedKind = compositionUnitKind(units.path("corporate").asText(null));
+        String retailKind = compositionUnitKind(units.path("retail").asText(null));
+        if (expectedKind == null || retailKind == null || !expectedKind.equals(retailKind)) {
+            throw invalid();
+        }
+        if (present.contains("total")
+                && !expectedKind.equals(compositionUnitKind(units.path("total").asText(null)))) {
             throw invalid();
         }
     }
@@ -787,7 +790,7 @@ public final class CodeScreenPresentationValidator {
     private static boolean isCompositionColumns(JsonNode bind) {
         JsonNode fields = bind == null ? null : bind.path("fields");
         return fields != null && fields.isObject()
-                && (fields.has("corporate") || fields.has("retail"));
+                && (fields.has("corporate") || fields.has("retail") || fields.has("total"));
     }
 
     private static boolean isInstitutionWideTable(RptScreenDatasource datasource) {
@@ -854,7 +857,7 @@ public final class CodeScreenPresentationValidator {
         result.put("loanRate", Set.of("value", "change", "date"));
         result.put("trend", Set.of("date", "deposit", "loan", "depositIncrease", "customers", "rate"));
         result.put("branchTrend", Set.of("date", "deposit", "loan", "customers", "rate"));
-        result.put("composition", Set.of("name", "value", "corporate", "retail"));
+        result.put("composition", Set.of("name", "value", "corporate", "retail", "total"));
         result.put("ranking", Set.of("orgCode", "name", "value", "increase", "average", "change"));
         result.put("attention", Set.of("orgCode", "label", "count"));
         result.put("branches", Set.of("orgCode", "orgName", "cityCode", "cityName", "ownerOperatingOrgCode",
@@ -1158,7 +1161,7 @@ public final class CodeScreenPresentationValidator {
                 default -> Set.of();
             };
             case "composition" -> switch (field) {
-                case "value", "corporate", "retail" ->
+                case "value", "corporate", "retail", "total" ->
                         Set.of("YUAN", "TEN_THOUSAND", "HUNDRED_MILLION", "PERCENT", "RATIO");
                 default -> Set.of();
             };

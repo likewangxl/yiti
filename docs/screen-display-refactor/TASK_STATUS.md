@@ -103,6 +103,7 @@
 - Green：综合、对公、零售、支行Dashboard接入`COMPOSITION_TABS`，`PanoramaRuntime`只转发固定`businessLine + tabKey + context`动作，不拼接URL；新协议存在可见结构组件时隐藏旧结构，旧协议继续原路径。
 - 业务结构按配置读取公司、零售和核定总量；缺总量、零分母、负数、单位冲突或缺一方均明确显示不可计算，不把两条线强制归一为100%，也未擅自增加中收结构。
 - 主代理独立复核：模型/组件/集成16项通过；四类相邻Dashboard共100项通过。另1项`RetailDashboard.spec.js`仍因未修改的`retail.scss`为CRLF而失败，与S07记录一致；生产构建通过，仅有既有Sass弃用和chunk体积提示。
+- S17浏览器发现旧composition绑定协议未允许新展示所需的可选核定总量。已把`total`作为columns模式可选METRIC端到端接入前后端校验、配置选择、自动绑定、运行适配和来源状态；对公/零售仍必需，total若配置必须与两者同类且有明确单位。前端116项、后端Validator 38项及构建通过，旧两列/旧Breakdown兼容。
 
 ## S10 任务记录
 

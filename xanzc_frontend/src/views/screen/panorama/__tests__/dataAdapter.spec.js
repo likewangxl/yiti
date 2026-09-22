@@ -591,4 +591,78 @@ describe('panorama data adapter', () => {
       expect.objectContaining({ slot: 'composition', code: 'UNIT_UNBOUND_FIELD' })
     ]));
   });
+
+  it('composition columns 可选读取 total 的单位/角色校验，但旧 CompositionBreakdown 仍只输出对公和零售', () => {
+    const model = adaptPanoramaResults({
+      composition: {
+        binding: binding('composition', { corporate: 'corp', retail: 'retail', total: 'total' }, {
+          corporate: 'TEN_THOUSAND', retail: 'YUAN', total: 'HUNDRED_MILLION'
+        }),
+        response: {
+          columns: ['corp', 'retail', 'total'], rows: [[10000, 200000000, 3]],
+          columnsMeta: [
+            { col: 'corp', role: 'METRIC', unit: 'TEN_THOUSAND' },
+            { col: 'retail', role: 'METRIC', unit: 'YUAN' },
+            { col: 'total', role: 'METRIC', unit: 'HUNDRED_MILLION' }
+          ]
+        }
+      }
+    });
+    expect(model.composition).toEqual([
+      { name: '对公业务', value: 1, unit: '亿元' },
+      { name: '零售业务', value: 2, unit: '亿元' }
+    ]);
+    expect(model.issues).toEqual([]);
+  });
+
+  it('composition columns 拒绝 total 的混类单位或 DIM 角色', () => {
+    const mixed = adaptPanoramaResults({
+      composition: {
+        binding: binding('composition', { corporate: 'corp', retail: 'retail', total: 'total' }, {
+          corporate: 'YUAN', retail: 'YUAN', total: 'PERCENT'
+        }),
+        response: { columns: ['corp', 'retail', 'total'], rows: [[1, 2, 3]] }
+      }
+    });
+    expect(mixed.composition).toEqual([]);
+    expect(mixed.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'composition', code: 'MIXED_UNIT_KIND' })
+    ]));
+
+    const dimension = adaptPanoramaResults({
+      composition: {
+        binding: binding('composition', { corporate: 'corp', retail: 'retail', total: 'total' }, {
+          corporate: 'YUAN', retail: 'YUAN', total: 'YUAN'
+        }),
+        response: {
+          quality: { batchId: 'batch-1', status: 'COMPLETE', selectedComplete: true },
+          columns: ['corp', 'retail', 'total'], rows: [[1, 2, 3]],
+          columnsMeta: [
+            { col: 'corp', role: 'METRIC', unit: 'YUAN' },
+            { col: 'retail', role: 'METRIC', unit: 'YUAN' },
+            { col: 'total', role: 'DIM', unit: null }
+          ]
+        }
+      }
+    });
+    expect(dimension.composition).toEqual([]);
+    expect(dimension.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'composition', code: 'ROLE_MISMATCH', field: 'total' })
+    ]));
+  });
+
+  it('旧 composition 行模式不接受仅列式的 total 字段，但仍不要求分母', () => {
+    const model = adaptPanoramaResults({
+      composition: {
+        binding: binding('composition', { name: 'kind', value: 'amount', total: 'total' }, {
+          value: 'YUAN', total: 'YUAN'
+        }),
+        response: { columns: ['kind', 'amount', 'total'], rows: [['对公', 1, 2]] }
+      }
+    });
+    expect(model.composition).toEqual([]);
+    expect(model.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'composition', code: 'UNSUPPORTED_FIELD', field: 'total' })
+    ]));
+  });
 });

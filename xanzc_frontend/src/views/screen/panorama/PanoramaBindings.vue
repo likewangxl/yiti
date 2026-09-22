@@ -98,7 +98,7 @@
             </select>
             <p data-testid="composition-mode-hint" class="panorama-bindings__hint">
               {{ compositionMode === 'columns'
-                ? '双列模式要求数据源返回恰好一行，固定对公/零售标签；不会按名称自动绑定。'
+                ? '双列模式要求数据源返回恰好一行，固定对公/零售标签；总量/分母可选但必须与两列同类且明确为指标。'
                 : '行模式允许多行，每行必须包含构成名称和构成值。' }}
             </p>
           </div>
@@ -353,7 +353,8 @@ const selectedBinding = computed(() => {
 const selectedFieldSpecs = computed(() => {
   if (!selectedSpec.value) return [];
   if (selectedSlot.value !== 'composition') return selectedSpec.value.fields || [];
-  const semantics = compositionMode.value === 'columns' ? ['corporate', 'retail'] : ['name', 'value'];
+  const semantics = compositionMode.value === 'columns'
+    ? ['corporate', 'retail', 'total'] : ['name', 'value'];
   return (selectedSpec.value.fields || []).filter(fieldSpec => semantics.includes(fieldSpec.semantic));
 });
 const selectedDatasource = computed(() => datasources.value.find(item => String(item.id) === String(selectedBinding.value.dsId)) || null);
@@ -477,7 +478,7 @@ const selectedGuidance = computed(() => {
   if (!selectedSpec.value) return '请选择展示内容';
   if (selectedSlot.value === 'composition') {
     return compositionMode.value === 'columns'
-      ? '对公金额/零售金额均需绑定；对公业务、零售业务都需要配置，来源必须明确返回一行双列数据。'
+      ? '对公金额/零售金额均需绑定；总量/分母可选，若配置必须是同类且有明确单位的指标，来源必须返回一行双列数据。'
       : '构成名称/构成值均需绑定（两项都需要配置），来源必须明确声明对应字段。';
   }
   const labels = (selectedSpec.value.required || []).map(semantic => fieldLabel(selectedSlot.value, semantic));
@@ -770,7 +771,7 @@ function setCompositionMode(value) {
   if (selectedSlot.value !== 'composition') return;
   const nextMode = value === 'columns' ? 'columns' : 'rows';
   const binding = selectedBinding.value;
-  const obsolete = nextMode === 'columns' ? ['name', 'value'] : ['corporate', 'retail'];
+  const obsolete = nextMode === 'columns' ? ['name', 'value'] : ['corporate', 'retail', 'total'];
   for (const semantic of obsolete) {
     delete binding.fields[semantic];
     delete binding.units[semantic];

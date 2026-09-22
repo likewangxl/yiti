@@ -54,7 +54,8 @@ class CodeScreenPresentationValidatorTest {
         RptScreenDatasource datasource = orgSubjectDatasource();
         datasource.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","
                 + "\"metrics\":[{\"metricCode\":\"CORP\",\"metricName\":\"对公余额\",\"slot\":1},"
-                + "{\"metricCode\":\"RETAIL\",\"metricName\":\"零售余额\",\"slot\":2}],"
+                + "{\"metricCode\":\"RETAIL\",\"metricName\":\"零售余额\",\"slot\":2},"
+                + "{\"metricCode\":\"TOTAL\",\"metricName\":\"总余额\",\"slot\":3}],"
                 + "\"aggregation\":{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\"}}");
         return datasource;
     }
@@ -725,6 +726,60 @@ class CodeScreenPresentationValidatorTest {
                 + "\"components\":[" + component + "],\"bindSnapshots\":{\"12\":{\"bind\":"
                 + MAPPER.readTree(columns) + "}}}";
         CodeScreenPresentationValidator.validatePublishedPackage(published);
+    }
+
+    @Test
+    void compositionColumnsAcceptOptionalTotalAndKeepLegacyTwoColumnShape() throws Exception {
+        String withTotal = validBind(
+                "{\"corporate\":\"对公余额\",\"retail\":\"零售余额\",\"total\":\"总余额\"}",
+                "{\"corporate\":\"TEN_THOUSAND\",\"retail\":\"YUAN\",\"total\":\"HUNDRED_MILLION\"}");
+        CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-composition-total", "composition", withTotal));
+        CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(withTotal), "composition", compositionDatasource());
+
+        String legacy = validBind("{\"corporate\":\"对公余额\",\"retail\":\"零售余额\"}",
+                "{\"corporate\":\"PERCENT\",\"retail\":\"RATIO\"}");
+        CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-composition-legacy-columns", "composition", legacy));
+    }
+
+    @Test
+    void compositionTotalMustBeMetricWithSameUnitKindAndNoOrphanUnit() throws Exception {
+        String mixedKind = validBind(
+                "{\"corporate\":\"对公余额\",\"retail\":\"零售余额\",\"total\":\"总占比\"}",
+                "{\"corporate\":\"YUAN\",\"retail\":\"YUAN\",\"total\":\"PERCENT\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-composition-total-mixed", "composition", mixedKind), List.of()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String missingUnit = validBind(
+                "{\"corporate\":\"对公余额\",\"retail\":\"零售余额\",\"total\":\"总余额\"}",
+                "{\"corporate\":\"YUAN\",\"retail\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-composition-total-missing-unit", "composition", missingUnit), List.of()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String orphanUnit = validBind(
+                "{\"corporate\":\"对公余额\",\"retail\":\"零售余额\"}",
+                "{\"corporate\":\"YUAN\",\"retail\":\"YUAN\",\"total\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-composition-total-orphan-unit", "composition", orphanUnit), List.of()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String dimensionTotal = validBind(
+                "{\"corporate\":\"对公余额\",\"retail\":\"零售余额\",\"total\":\"org_name\"}",
+                "{\"corporate\":\"YUAN\",\"retail\":\"YUAN\",\"total\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(dimensionTotal), "composition", compositionDatasource()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        String rowsWithTotal = validBind(
+                "{\"name\":\"业务类型\",\"value\":\"余额\",\"total\":\"总余额\"}",
+                "{\"value\":\"YUAN\",\"total\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-composition-total-rows", "composition", rowsWithTotal), List.of()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
     }
 
     @Test

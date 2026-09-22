@@ -104,7 +104,8 @@ const METRIC_RULES = Object.freeze({
     name: { semantics: ['compositionName', 'businessName'] },
     value: { semantics: ['compositionValue', 'businessValue'] },
     corporate: { semantics: ['corporate', 'corporateDeposit', 'composition.corporate'], codes: ['M_0277'] },
-    retail: { semantics: ['retail', 'retailDeposit', 'composition.retail'], codes: ['M_0309'] }
+    retail: { semantics: ['retail', 'retailDeposit', 'composition.retail'], codes: ['M_0309'] },
+    total: { semantics: ['total', 'compositionTotal', 'composition.total', 'compositionDenominator'] }
   },
   ranking: {
     orgCode: { builtin: ['org_code'], semantics: ['orgCode'] },
@@ -703,6 +704,7 @@ function requiredSemantics(template, slot, mode) {
 function optionalCandidateSemantics(template, slot, mode) {
   const spec = slotSpec(template, slot);
   if (!spec) return [];
+  if (slot === 'composition' && mode === 'columns') return ['total'];
   // 机构列表的名称是引擎固定输出的身份维度。它可以补充机构号，
   // 但不能把其他可选指标一并按名称猜测。
   if (template === CORPORATE_TEMPLATE) {
@@ -746,6 +748,10 @@ function candidateBindingForSource({ source, template, slot, mode, required, opt
   for (const semantic of allSemantics) {
     const candidates = candidateFor(source, template, slot, semantic);
     if (candidates.length > 1) {
+      // total is an optional denominator. Do not make an otherwise complete
+      // legacy two-column binding ambiguous merely because several optional
+      // totals were declared; the user can select one explicitly.
+      if (semantic === 'total' && !requiredSet.has(semantic)) continue;
       issues.push(`展示内容“${fieldSpec(template, slot, semantic)?.label || semantic}”有多个可用字段，请选择`);
       continue;
     }

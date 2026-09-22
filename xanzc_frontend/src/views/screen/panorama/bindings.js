@@ -59,7 +59,8 @@ const compositionRowFields = Object.freeze([
 
 const compositionColumnFields = Object.freeze([
   field('corporate', '对公业务', { required: true, unitKinds: compositionValueUnits }),
-  field('retail', '零售业务', { required: true, unitKinds: compositionValueUnits })
+  field('retail', '零售业务', { required: true, unitKinds: compositionValueUnits }),
+  field('total', '总量/分母', { unitKinds: compositionValueUnits })
 ]);
 
 /** 业务构成绑定的两种固定形状；管理页按模式消费，不允许自由扩展字段。 */
@@ -305,12 +306,15 @@ export function validateBinding(slot, raw = {}) {
   if (!Number.isSafeInteger(binding.dsId) || binding.dsId <= 0) issues.push('数据源无效');
   const spec = BINDING_SLOTS[slot];
   if (!PERIOD_VALUES.includes(binding.period)) issues.push('周期无效');
-  const allowedFields = new Set((spec.fields || []).map(item => item.semantic));
+  const compositionMode = slot === 'composition' ? getCompositionMode(binding) : null;
+  const allowedFields = new Set((slot === 'composition'
+    ? getCompositionFieldSpecs(compositionMode)
+    : spec.fields || []).map(item => item.semantic));
   for (const semantic of Object.keys(raw.fields || {})) {
     if (!allowedFields.has(semantic)) issues.push(`字段不受支持: ${semantic}`);
   }
   if (slot === 'composition') {
-    const mode = getCompositionMode(binding);
+    const mode = compositionMode;
     const hasRowField = hasSelectedField(binding.fields, 'name') || hasSelectedField(binding.fields, 'value');
     if (mode === 'columns' && hasRowField) {
       issues.push('构成字段模式不能混用');
@@ -351,12 +355,13 @@ export function validateBinding(slot, raw = {}) {
       issues.push(`单位不适用: ${semantic}`);
     }
   }
-  if (slot === 'composition' && getCompositionMode(binding) === 'columns'
+  if (slot === 'composition' && compositionMode === 'columns'
       && hasSelectedField(binding.fields, 'corporate') && hasSelectedField(binding.fields, 'retail')) {
     const unitKind = unit => amountUnits.includes(unit) ? 'amount' : ratioUnits.includes(unit) ? 'ratio' : null;
-    const corporateKind = unitKind(binding.units?.corporate);
-    const retailKind = unitKind(binding.units?.retail);
-    if (corporateKind && retailKind && corporateKind !== retailKind) {
+    const kinds = ['corporate', 'retail', 'total']
+      .filter(semantic => hasSelectedField(binding.fields, semantic))
+      .map(semantic => unitKind(binding.units?.[semantic]));
+    if (kinds.some(kind => kind && kind !== kinds.find(Boolean))) {
       issues.push('构成单位类型必须一致');
     }
   }

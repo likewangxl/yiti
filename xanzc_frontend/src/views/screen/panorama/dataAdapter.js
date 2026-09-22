@@ -177,7 +177,7 @@ function metricKind(slot, semantic, unit = null) {
       || (['rate', 'loanRate'].includes(slot) && semantic === 'value')) return 'ratio';
   // 构成指标允许按比例绑定；只有单位明确为百分数/比例时才走比例换算，
   // 这样旧的 semantic=value 以及双列指标都可安全表示金额或比例构成。
-  if (slot === 'composition' && ['value', 'corporate', 'retail'].includes(semantic)
+  if (slot === 'composition' && ['value', 'corporate', 'retail', 'total'].includes(semantic)
       && (unit === 'PERCENT' || unit === 'RATIO')) return 'ratio';
   // Ranking and amount KPI value fields are always amounts; only composition
   // value can opt into a ratio unit.
@@ -349,7 +349,10 @@ function compositionFieldSelected(binding, semantic) {
 function compositionBindingState(binding, table, issues, slot) {
   const fields = binding?.fields && isObject(binding.fields) ? binding.fields : {};
   const units = binding?.units && isObject(binding.units) ? binding.units : {};
-  const allowedFields = new Set(['name', 'value', 'corporate', 'retail']);
+  const mode = getCompositionMode(binding);
+  const allowedFields = mode === 'columns'
+    ? new Set(['corporate', 'retail', 'total'])
+    : new Set(['name', 'value']);
   let valid = true;
   for (const semantic of Object.keys(fields)) {
     if (!allowedFields.has(semantic)) {
@@ -358,7 +361,6 @@ function compositionBindingState(binding, table, issues, slot) {
     }
   }
 
-  const mode = getCompositionMode(binding);
   const hasRowsField = compositionFieldSelected(binding, 'name') || compositionFieldSelected(binding, 'value');
   const requiredFields = mode === 'columns' ? ['corporate', 'retail'] : ['name', 'value'];
   if (mode === 'columns' && hasRowsField) {
@@ -387,7 +389,9 @@ function compositionBindingState(binding, table, issues, slot) {
 
   // Legacy rows keep readMetric's historical missing/invalid-unit and null
   // behavior. The new columns shape requires both units before conversion.
-  const metricFields = mode === 'columns' ? ['corporate', 'retail'] : [];
+  const metricFields = mode === 'columns'
+    ? ['corporate', 'retail', ...(compositionFieldSelected(binding, 'total') ? ['total'] : [])]
+    : [];
   const metricKinds = [];
   for (const semantic of metricFields) {
     const unit = units[semantic];
@@ -399,7 +403,8 @@ function compositionBindingState(binding, table, issues, slot) {
       metricKinds.push(kind);
     }
   }
-  if (mode === 'columns' && metricKinds.length === 2 && metricKinds[0] !== metricKinds[1]) {
+  if (mode === 'columns' && metricKinds.length >= 2
+      && metricKinds.some(kind => kind !== metricKinds[0])) {
     issue(issues, slot, 'MIXED_UNIT_KIND', '构成单位类型必须一致');
     valid = false;
   }
@@ -409,7 +414,8 @@ function compositionBindingState(binding, table, issues, slot) {
   // left to the server-side datasource validator, while a contradictory role
   // must fail closed at runtime as well.
   const roleFields = mode === 'columns'
-    ? [['corporate', 'METRIC'], ['retail', 'METRIC']]
+    ? [['corporate', 'METRIC'], ['retail', 'METRIC'],
+      ...(compositionFieldSelected(binding, 'total') ? [['total', 'METRIC']] : [])]
     : [];
   for (const [semantic, expectedRole] of roleFields) {
     const column = fields[semantic];
@@ -474,7 +480,9 @@ function adaptComposition(table, binding, model, issues, slot = 'composition') {
 
   const requiredSemantics = ['corporate', 'retail'];
   const row = table.rows[0];
-  for (const semantic of requiredSemantics) {
+  const configuredSemantics = [...requiredSemantics,
+    ...(compositionFieldSelected(binding, 'total') ? ['total'] : [])];
+  for (const semantic of configuredSemantics) {
     const column = binding.fields?.[semantic];
     if (!Object.prototype.hasOwnProperty.call(row, column)) {
       issue(issues, slot, 'MISSING_COLUMN', `响应缺少列: ${column}`, semantic);
