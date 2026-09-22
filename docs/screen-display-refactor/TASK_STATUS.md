@@ -12,7 +12,7 @@
 | S05 | VERIFIED | `796bd95f` | - | `businessSourceCandidates.js`及测试、`PanoramaDatasourcePicker.vue`、`PanoramaBindings.vue`、操作指南、`TASK_STATUS.md` | 业务化来源分类/搜索/兼容/禁用说明已接入现有绑定页；主代理已复核 | 候选模型、Picker、Bindings共31项通过；生产构建与范围/格式检查通过 | N/A；未调用后端写接口 | Vitest与Vite构建输出、操作指南 | 真实候选仍取决于目标环境API；不新增上游能力 | 创建S05聚焦提交并进入S06 |
 | S06 | VERIFIED | `34acb94c` | - | `presentationEditorModel.js`、`PresentationEditor.vue`及测试、`PanoramaBindings.vue`与集成测试、操作指南、`TASK_STATUS.md` | 三栏组件工作台已接入现有草稿保存与冲突链，主代理已复核 | presentation与Bindings共51项通过；生产构建及范围/格式检查通过 | 浏览器真实验收留S17 | Vitest/Vite输出与操作指南 | 新组件必须先绑定已有blockId；高级字段映射暂保留 | 创建S06聚焦提交并进入S07/S08 |
 | S07 | VERIFIED | `6743219a` | - | `displayMetricsModel.js`、`MetricDisplayWidgets.vue`及测试；四类Dashboard/Runtime/Page最小接入；文档与`TASK_STATUS.md` | 新协议指标卡/完成情况驱动运行展示，旧包回归保持；主代理已复核 | 模型/组件/分行/对公/支行相关71项通过；生产构建通过 | 浏览器真实数据验收留S17 | Vitest/Vite输出与代码化大屏文档 | Retail套件1项既有CRLF静态文本断言失败，retail.scss未改；真实来源仍UNCONFIRMED | 创建S07提交并进入S08 |
-| S08 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S02、S06 |
+| S08 | VERIFIED | `14a77355` | - | `displaySeriesTableModel.js`、`SeriesTableWidgets.vue`及测试；四类Dashboard最小接入；文档与`TASK_STATUS.md` | 新协议趋势/明细表由配置驱动，旧固定展示保持兼容；主代理已复核 | 模型/组件/分行/对公/支行相关63项通过；生产构建通过 | 浏览器真实数据验收留S17 | Vitest/Vite输出与代码化大屏文档 | 不支持的混合单位同轴明确拒绝；真实趋势来源仍UNCONFIRMED | 创建S08提交并进入S09/S10 |
 | S09 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S07、S08 |
 | S10 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S07、S08 |
 | S11 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S01、S02 |
@@ -87,3 +87,11 @@
 - 0/null、负数、超100、金额换算、COUNT、RATIO/PERCENT单次转换和换源清旧值均有纯测试；完成率文本保留原值，progress才钳制。
 - PanoramaRuntime把发布presentation传给分行/对公/零售Dashboard；支行live页面从renderPackage读取presentation。旧KPI区仅在新协议未启用时显示。
 - 相关71项测试及生产构建通过。RetailDashboard套件的静态SCSS断言因仓库现有CRLF与期望LF不一致失败1项，本轮未修改retail.scss；其余零售行为测试和构建通过，按存量问题记录。
+
+## S08 任务记录
+
+- 展示模型仅解析新协议中visible的TREND/DETAIL_TABLE实例；旧协议保持原分支。系列和列使用稳定key、显式字段/名称/单位及数组顺序。
+- 趋势只读已有blockResults或model.trend；缺日期和重复日期记录问题并停止图表，金额/计数/比例混合时拒绝共轴。0/null分别保留，不生成历史值。
+- 明细表按visible过滤、按配置列顺序显示，来源行保持稳定顺序；列标题和显示格式独立于字段身份。
+- 分行/对公/零售/支行运行页接入统一SeriesTableWidgets；新趋势存在时隐藏原固定趋势，旧包不受影响。
+- 相关63项测试和生产构建通过；未修改业务查询、趋势计算或共享组件目录，浏览器验收留S17。

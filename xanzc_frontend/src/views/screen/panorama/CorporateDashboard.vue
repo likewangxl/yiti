@@ -52,6 +52,7 @@
         </span>
       </article>
     </section>
+    <SeriesTableWidgets v-if="configuredSeriesTables.components.length" :components="configuredSeriesTables.components" />
 
     <section class="corporate-insight-strip" data-testid="corporate-leadership-insights" aria-label="经营观察">
       <div class="corporate-insight-item corporate-insight-item--gap">
@@ -160,7 +161,7 @@
         </article>
         <div class="corporate-trend-zone">
           <p class="corporate-global-scope" data-testid="corporate-global-trend-scope">全辖趋势 · {{ safeModel.scopeLabel }} · 城市筛选不改变</p>
-          <CorporateTrend class="corporate-panel corporate-trend-panel" :trend="safeModel.trend" :data-date="displayDate" :scope-label="safeModel.scopeLabel" />
+          <CorporateTrend v-if="!configuredSeriesTables.hasTrend" class="corporate-panel corporate-trend-panel" :trend="safeModel.trend" :data-date="displayDate" :scope-label="safeModel.scopeLabel" />
         </div>
       </div>
 
@@ -238,6 +239,8 @@ import { buildCorporateLeadershipInsights, buildSegmentComparisons, finiteMetric
 import { resolveDataStatus } from './sourcePresentation';
 import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.vue';
 import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsModel';
+import SeriesTableWidgets from '../presentation/widgets/SeriesTableWidgets.vue';
+import { buildDisplaySeriesTableModel } from '../presentation/model/displaySeriesTableModel';
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -247,6 +250,9 @@ const props = defineProps({
   sourcePresentation: { type: Object, default: () => ({}) }
 });
 const configuredMetrics = computed(() => buildDisplayMetricsModel(
+  props.sourcePresentation?.displayPresentation, safeModel.value
+));
+const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(
   props.sourcePresentation?.displayPresentation, safeModel.value
 ));
 const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select']);

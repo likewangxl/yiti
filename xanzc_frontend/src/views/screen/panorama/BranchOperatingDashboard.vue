@@ -42,6 +42,7 @@
       </article>
       <div v-if="!kpiCards.length" class="branch-operating-empty branch-operating-empty--kpis" data-testid="branch-operating-kpis-empty"><DataAnalysis aria-hidden="true" /><span>暂无核心指标数据</span></div>
     </section>
+    <SeriesTableWidgets v-if="configuredSeriesTables.components.length" :components="configuredSeriesTables.components" />
 
     <section class="branch-operating-main-grid" aria-label="支行经营分析">
       <article class="branch-operating-panel branch-operating-target-panel" data-testid="branch-operating-targets">
@@ -153,9 +154,12 @@ const statusPalette = Object.freeze({ PENDING: '#ffc45e', IN_PROGRESS: '#47e9ef'
 const statusLabels = Object.freeze({ PENDING: '待处理', IN_PROGRESS: '进行中', SUCCESS: '已完成', CANCELLED: '已取消' });
 import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.vue';
 import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsModel';
+import SeriesTableWidgets from '../presentation/widgets/SeriesTableWidgets.vue';
+import { buildDisplaySeriesTableModel } from '../presentation/model/displaySeriesTableModel';
 
 const props = defineProps({ model: { type: Object, default: () => ({}) }, sourcePresentation: { type: Object, default: null }, loading: { type: Boolean, default: false }, error: { type: String, default: '' } });
 const configuredMetrics = computed(() => buildDisplayMetricsModel(props.sourcePresentation, props.model || {}));
+const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(props.sourcePresentation, props.model || {}));
 const emit = defineEmits(['refresh', 'back', 'branch-select']);
 const rootRef = ref(null); const selectedMetric = ref('deposit'); const trendMode = ref('all'); const isFullscreen = ref(false);
 const safeModel = computed(() => (props.model && typeof props.model === 'object' ? props.model : {}));

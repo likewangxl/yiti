@@ -66,6 +66,7 @@
         </div>
       </article>
     </section>
+    <SeriesTableWidgets v-if="configuredSeriesTables.components.length" :components="configuredSeriesTables.components" />
 
     <section class="panorama-diagnostics-strip" data-testid="leadership-diagnostics" aria-label="重点指标完成情况">
       <article
@@ -216,7 +217,7 @@
             @branch-select="selectInstitution"
           />
         </article>
-        <PanoramaTrend :trend="safeModel.trend" :data-date="displayDate" title="主要指标趋势" switchable compact class="panorama-panel panorama-trend-panel" />
+        <PanoramaTrend v-if="!configuredSeriesTables.hasTrend" :trend="safeModel.trend" :data-date="displayDate" title="主要指标趋势" switchable compact class="panorama-panel panorama-trend-panel" />
       </div>
 
       <div class="panorama-column panorama-right-column">
@@ -384,6 +385,8 @@ import { resolveDataStatus } from './sourcePresentation';
 import { buildTargetCards, stripTestModifier } from './targetPresentation.js';
 import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.vue';
 import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsModel';
+import SeriesTableWidgets from '../presentation/widgets/SeriesTableWidgets.vue';
+import { buildDisplaySeriesTableModel } from '../presentation/model/displaySeriesTableModel';
 
 
 const props = defineProps({
@@ -455,6 +458,9 @@ const safeModel = computed(() => {
   };
 });
 const configuredMetrics = computed(() => buildDisplayMetricsModel(
+  props.sourcePresentation?.displayPresentation, safeModel.value
+));
+const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(
   props.sourcePresentation?.displayPresentation, safeModel.value
 ));
 const kpiCards = computed(() => coreKpis(safeModel.value.kpis));

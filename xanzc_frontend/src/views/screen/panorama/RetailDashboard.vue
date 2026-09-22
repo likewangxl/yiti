@@ -60,6 +60,7 @@
         </span>
       </article>
     </section>
+    <SeriesTableWidgets v-if="configuredSeriesTables.components.length" :components="configuredSeriesTables.components" />
 
     <section class="retail-insight-strip" data-testid="retail-leadership-insights" aria-label="经营观察">
       <template v-if="hasDepositRankingShape">
@@ -278,7 +279,7 @@
           <p v-if="selectedCityCode" class="retail-selected-city" data-testid="retail-selected-city">当前机构分析：{{ selectedCityName }}（{{ filteredRankings.length }} 家有排名记录）</p>
         </article>
 
-        <RetailTrend class="retail-panel retail-trend-panel" :trend="safeModel.trend" :data-date="displayDate" :scope-label="safeModel.scopeLabel" />
+        <RetailTrend v-if="!configuredSeriesTables.hasTrend" class="retail-panel retail-trend-panel" :trend="safeModel.trend" :data-date="displayDate" :scope-label="safeModel.scopeLabel" />
       </div>
 
       <div class="retail-column retail-column--right">
@@ -540,6 +541,8 @@ import RetailTrend from './RetailTrend.vue';
 import RetailAttentionDetails from './RetailAttentionDetails.vue';
 import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.vue';
 import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsModel';
+import SeriesTableWidgets from '../presentation/widgets/SeriesTableWidgets.vue';
+import { buildDisplaySeriesTableModel } from '../presentation/model/displaySeriesTableModel';
 import { provinceGeo } from './geography.js';
 import {
   buildRetailLeadershipInsights,
@@ -559,6 +562,9 @@ const props = defineProps({
   demo: { type: Boolean, default: false }
 });
 const configuredMetrics = computed(() => buildDisplayMetricsModel(
+  props.sourcePresentation?.displayPresentation, safeModel.value
+));
+const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(
   props.sourcePresentation?.displayPresentation, safeModel.value
 ));
 const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select']);
