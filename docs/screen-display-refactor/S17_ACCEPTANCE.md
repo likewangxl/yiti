@@ -1,7 +1,9 @@
 # S17 运行与浏览器验收记录
 
-日期：2026-09-22  
-代码：`feat/code-screen-panorama` / 当前 HEAD（最终提交见Git日志）  
+日期：2026-09-22
+
+代码：`feat/code-screen-panorama` / 当前 HEAD（最终提交见Git日志）
+
 结论：前端真实进程与官方 CLI 的受控开发态 mock 验收通过；真实后端/数据库联调为 `BLOCKED_ENV`，本记录不把 mock 证据当作真实数据或权限证据。
 
 ## 1. 启动状态
