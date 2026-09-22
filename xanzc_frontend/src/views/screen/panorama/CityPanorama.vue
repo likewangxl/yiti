@@ -180,6 +180,8 @@ const pageSize = 5;
 const selectedOrgCode = ref(props.initialOrgCode || String(initialState.selectedOrgCode || ''));
 const detailExpanded = ref(initialState.detailExpanded === undefined ? true : Boolean(initialState.detailExpanded));
 const rootRef = ref(null);
+let navigationQuerySyncReady = false;
+let initialNavigationSnapshot = '';
 
 const routeNavigation = computed(() => parseNavigationQuery(route?.query || {}));
 
@@ -196,7 +198,7 @@ function navigationStateSnapshot() {
 }
 
 function replaceNavigationQuery(overrides = {}) {
-  if (!router?.replace) return;
+  if (!router?.replace || !navigationQuerySyncReady) return;
   const context = {
     ...routeNavigation.value,
     cityCode: props.cityCode,
@@ -215,11 +217,13 @@ function clearNavigationContext() {
 }
 
 function backToProvince() {
+  navigationQuerySyncReady = true;
   void clearNavigationContext();
   emit('back');
 }
 
 function closeCity() {
+  navigationQuerySyncReady = true;
   void clearNavigationContext();
   emit('close');
 }
@@ -380,11 +384,18 @@ function rateClass(value) {
 function cityMetricText(kpi) {
   return displayCityKpi(kpi).text;
 }
-function selectBranch(orgCode) {
+function setSelectedBranch(orgCode) {
   const code = String(orgCode || '');
-  if (!code || !cityInstitutions.value.some(item => item.orgCode === code)) return;
+  if (!code || !cityInstitutions.value.some(item => item.orgCode === code)) return false;
   selectedOrgCode.value = code;
   detailExpanded.value = true;
+  return true;
+}
+
+function selectBranch(orgCode) {
+  const code = String(orgCode || '');
+  if (!setSelectedBranch(code)) return;
+  navigationQuerySyncReady = true;
   void replaceNavigationQuery({ orgCode: code });
   emit('branch-select', code);
 }
@@ -395,6 +406,11 @@ function toggleSort() {
 
 function emitState() {
   const state = navigationStateSnapshot();
+  if (!navigationQuerySyncReady && JSON.stringify(state) === initialNavigationSnapshot) {
+    emit('state-change', state);
+    return;
+  }
+  navigationQuerySyncReady = true;
   void replaceNavigationQuery({ state });
   emit('state-change', state);
 }
@@ -406,15 +422,16 @@ function requestFullscreen() {
   }
 }
 onMounted(() => {
-  if (props.cityCode) void replaceNavigationQuery({ orgCode: selectedOrgCode.value || routeNavigation.value.orgCode || '' });
   if ((!selectedOrgCode.value || !cityInstitutions.value.some(item => item.orgCode === selectedOrgCode.value)) && cityInstitutions.value.length) {
-    selectBranch(cityInstitutions.value[0].orgCode);
+    setSelectedBranch(cityInstitutions.value[0].orgCode);
   }
+  initialNavigationSnapshot = JSON.stringify(navigationStateSnapshot());
 });
 watch(cityInstitutions, list => {
   if (!list.length) return;
   if (!selectedOrgCode.value || !list.some(item => item.orgCode === selectedOrgCode.value)) {
-    selectBranch(list[0].orgCode);
+    setSelectedBranch(list[0].orgCode);
+    if (!navigationQuerySyncReady) initialNavigationSnapshot = JSON.stringify(navigationStateSnapshot());
   }
 });
 watch([search, attentionOnly], () => { page.value = 1; });

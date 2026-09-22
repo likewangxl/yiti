@@ -151,6 +151,7 @@
 - 条线切换按`listAvailableScreens -> getScreenView -> panoramaInstitutions机构交集`重新确认，非法条线、模板不匹配、跨屏机构不交集和快速迟到导航均fail-close；组件不接受任意URL或路径。
 - 删除BranchOperatingPage中`/支行$/`、示例`330/109`、目录第一家和主机构等猜测/回退。机构身份只能来自目标屏授权目录；机构层级只能按服务端显式`navigationRules`的operatingLevel/orgNature集合判断。
 - 大屏中心本轮经营主卡片改为固定省级代码化入口；个人卡片显示、排序和打开行为由既有测试保护。旧`/branch-operating`URL保留，但缺orgCode、越权或规则未确认时明确拒绝，不回退全行。
+- S17浏览器发现点击城市后，市级组件初始化默认首家机构会误触发外部机构导航。现已拆分内部默认选中与用户明确选择：初始化/目录变化只更新市级详情，只有用户点击地图或列表机构才发`branch-select`和更新query；新增组件语义测试并通过。
 - 主代理独立复核8个核心文件54项及生产构建通过。当前运行响应没有签认`navigationRules`，因此机构级路径按`BLOCKED_DATA/X05`记录；省/市/条线软件链已完成，不能把夹具规则当真实业务口径。
 
 ## S16 任务记录

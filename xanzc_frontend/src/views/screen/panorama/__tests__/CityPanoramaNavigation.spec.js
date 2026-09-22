@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 
 const router = vi.hoisted(() => ({ replace: vi.fn().mockResolvedValue(undefined), push: vi.fn() }));
@@ -25,6 +25,24 @@ function mountCity() {
 }
 
 describe('CityPanorama query navigation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    route.query = { businessLine: 'COMMON', period: 'LATEST', metricKey: 'deposit' };
+  });
+
+  it('打开城市后停留在市级：初始化首家只用于内部详情，不发机构导航或改 route；用户点击才导航', async () => {
+    const wrapper = mountCity();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.emitted('branch-select')).toBeUndefined();
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid="selected-org-code"]').text()).toContain('ORG-1');
+
+    await wrapper.get('[data-testid="branch-row"]').trigger('click');
+    expect(wrapper.emitted('branch-select')).toContainEqual(['ORG-1']);
+    expect(router.replace).toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
   it('mount and visible state persist city/org/business context through replace query', async () => {
     const wrapper = mountCity();
     await wrapper.get('[data-testid="branch-search"]').setValue('一号');
