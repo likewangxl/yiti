@@ -43,6 +43,12 @@
       <div v-if="!kpiCards.length" class="branch-operating-empty branch-operating-empty--kpis" data-testid="branch-operating-kpis-empty"><DataAnalysis aria-hidden="true" /><span>暂无核心指标数据</span></div>
     </section>
     <SeriesTableWidgets v-if="configuredSeriesTables.components.length" :components="configuredSeriesTables.components" />
+    <InstitutionRankingWidget
+      v-if="institutionRankingEnabled"
+      class="branch-operating-panel branch-operating-ranking-panel"
+      :model="institutionRankingModel"
+      :title="institutionRankingTitle"
+    />
 
     <section class="branch-operating-main-grid" aria-label="支行经营分析">
       <article class="branch-operating-panel branch-operating-target-panel" data-testid="branch-operating-targets">
@@ -165,7 +171,9 @@ import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsMo
 import SeriesTableWidgets from '../presentation/widgets/SeriesTableWidgets.vue';
 import { buildDisplaySeriesTableModel } from '../presentation/model/displaySeriesTableModel';
 import CompositionTabsWidget from '../presentation/widgets/CompositionTabsWidget.vue';
+import InstitutionRankingWidget from '../presentation/widgets/InstitutionRankingWidget.vue';
 import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
+import { buildInstitutionRankingModel } from '../presentation/model/institutionRankingModel';
 
 const props = defineProps({ model: { type: Object, default: () => ({}) }, sourcePresentation: { type: Object, default: null }, loading: { type: Boolean, default: false }, error: { type: String, default: '' } });
 const configuredMetrics = computed(() => buildDisplayMetricsModel(props.sourcePresentation, props.model || {}));
@@ -173,6 +181,36 @@ const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(props
 const emit = defineEmits(['refresh', 'back', 'branch-select', 'business-line-select']);
 const rootRef = ref(null); const selectedMetric = ref('deposit'); const trendMode = ref('all'); const isFullscreen = ref(false);
 const safeModel = computed(() => (props.model && typeof props.model === 'object' ? props.model : {}));
+function presentationOf(source) {
+  if (!source || typeof source !== 'object') return {};
+  if (source.displaySchemaVersion !== undefined || source.display) return source;
+  if (source.presentation && typeof source.presentation === 'object') return source.presentation;
+  return source.canvasStyle?.presentation || source.renderPackage?.canvasStyle?.presentation || {};
+}
+const rankingComponent = computed(() => {
+  const presentation = presentationOf(props.sourcePresentation);
+  if (presentation.displaySchemaVersion !== 1) return null;
+  const components = Array.isArray(presentation.display?.components) ? presentation.display.components : [];
+  return components.find(component => component?.componentType === 'RANKING' && component.visible !== false) || null;
+});
+const institutionRankingEnabled = computed(() => Boolean(rankingComponent.value));
+const institutionRankingModel = computed(() => {
+  const component = rankingComponent.value;
+  if (!component) return { enabled: false, metrics: [], rows: [], expected: [], rankable: [], missing: [] };
+  const institutions = Array.isArray(safeModel.value.institutions) ? safeModel.value.institutions : [];
+  const rows = Array.isArray(safeModel.value.rankings) ? safeModel.value.rankings : [];
+  return buildInstitutionRankingModel({
+    institutions,
+    sourceAuthorized: true,
+    rows,
+    rankingMetrics: Array.isArray(component.content?.rankingMetrics) ? component.content.rankingMetrics : []
+  });
+});
+const institutionRankingTitle = computed(() => {
+  const component = rankingComponent.value;
+  const title = component?.text?.titleMode === 'CUSTOM' ? component?.text?.title : component?.title;
+  return String(title || '机构排名').trim() || '机构排名';
+});
 const compositionTabsModel = computed(() => buildCompositionTabsModel(
   props.sourcePresentation?.displayPresentation || props.sourcePresentation,
   safeModel.value

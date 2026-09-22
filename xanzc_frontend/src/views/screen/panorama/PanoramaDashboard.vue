@@ -265,7 +265,13 @@
               </article>
             </div>
           </article>
-          <article class="panorama-panel panorama-ranking-panel panorama-ranking-detail-panel">
+          <InstitutionRankingWidget
+            v-if="institutionRankingEnabled"
+            class="panorama-panel panorama-ranking-panel panorama-ranking-detail-panel"
+            :model="institutionRankingModel"
+            :title="institutionRankingTitle"
+          />
+          <article v-else class="panorama-panel panorama-ranking-panel panorama-ranking-detail-panel">
             <div class="panorama-panel-heading">
               <div><span class="panorama-section-kicker">机构经营矩阵</span><h2>全辖机构对比</h2></div>
               <span>TOP {{ Math.min(10, leadershipMatrixRows.length) }} / 共 {{ leadershipTotalCount }} 家</span>
@@ -379,7 +385,9 @@ import PanoramaTrend from './PanoramaTrend.vue';
 import CompositionBreakdown from './CompositionBreakdown.vue';
 import CompletionWaterGauge from '../components/CompletionWaterGauge.vue';
 import CompositionTabsWidget from '../presentation/widgets/CompositionTabsWidget.vue';
+import InstitutionRankingWidget from '../presentation/widgets/InstitutionRankingWidget.vue';
 import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
+import { buildInstitutionRankingModel } from '../presentation/model/institutionRankingModel';
 import { provinceGeo } from './geography.js';
 import {
   RANKING_METRICS,
@@ -469,6 +477,34 @@ const safeModel = computed(() => {
     issues: Array.isArray(source.issues) ? source.issues : [],
     citySummaries: source.citySummaries && typeof source.citySummaries === 'object' ? source.citySummaries : {}
   };
+});
+function presentationOf(source) {
+  if (!source || typeof source !== 'object') return {};
+  if (source.displaySchemaVersion !== undefined || source.display) return source;
+  if (source.presentation && typeof source.presentation === 'object') return source.presentation;
+  return source.canvasStyle?.presentation || source.renderPackage?.canvasStyle?.presentation || {};
+}
+const rankingComponent = computed(() => {
+  const presentation = presentationOf(props.sourcePresentation?.displayPresentation || props.sourcePresentation);
+  if (presentation.displaySchemaVersion !== 1) return null;
+  const components = Array.isArray(presentation.display?.components) ? presentation.display.components : [];
+  return components.find(component => component?.componentType === 'RANKING' && component.visible !== false) || null;
+});
+const institutionRankingEnabled = computed(() => Boolean(rankingComponent.value));
+const institutionRankingModel = computed(() => {
+  const component = rankingComponent.value;
+  if (!component) return { enabled: false, metrics: [], rows: [], expected: [], rankable: [], missing: [] };
+  return buildInstitutionRankingModel({
+    institutions: safeModel.value.institutions,
+    sourceAuthorized: true,
+    rows: safeModel.value.rankings,
+    rankingMetrics: Array.isArray(component.content?.rankingMetrics) ? component.content.rankingMetrics : []
+  });
+});
+const institutionRankingTitle = computed(() => {
+  const component = rankingComponent.value;
+  const title = component?.text?.titleMode === 'CUSTOM' ? component?.text?.title : component?.title;
+  return String(title || '机构排名').trim() || '机构排名';
 });
 const configuredMetrics = computed(() => buildDisplayMetricsModel(
   props.sourcePresentation?.displayPresentation, safeModel.value

@@ -295,6 +295,13 @@
       </div>
 
       <div class="retail-column retail-column--right">
+        <InstitutionRankingWidget
+          v-if="institutionRankingEnabled"
+          class="retail-panel retail-ranking-panel"
+          :model="institutionRankingModel"
+          :title="institutionRankingTitle"
+        />
+        <template v-else>
         <article v-if="hasDepositRankingShape" class="retail-panel retail-institution-comparison" data-testid="retail-institution-comparison">
           <header class="retail-panel__heading">
             <div>
@@ -409,6 +416,7 @@
           <div v-else class="retail-empty">暂无机构存款排名数据源</div>
           <p v-if="filteredRankings.length" class="retail-ranking-hint">点击机构查看存款、净增和风险指标</p>
         </article>
+        </template>
 
         <article class="retail-panel retail-target-panel" :class="{ 'retail-target-panel--empty': !safeModel.targets.length }" data-testid="retail-target-panel">
           <header class="retail-panel__heading">
@@ -556,7 +564,9 @@ import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsMo
 import SeriesTableWidgets from '../presentation/widgets/SeriesTableWidgets.vue';
 import { buildDisplaySeriesTableModel } from '../presentation/model/displaySeriesTableModel';
 import CompositionTabsWidget from '../presentation/widgets/CompositionTabsWidget.vue';
+import InstitutionRankingWidget from '../presentation/widgets/InstitutionRankingWidget.vue';
 import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
+import { buildInstitutionRankingModel } from '../presentation/model/institutionRankingModel';
 import { provinceGeo } from './geography.js';
 import {
   buildRetailLeadershipInsights,
@@ -642,6 +652,34 @@ const safeModel = computed(() => {
     issues: Array.isArray(source.issues) ? source.issues : [],
     sourceQualities: source.sourceQualities && typeof source.sourceQualities === 'object' ? source.sourceQualities : {}
   };
+});
+function presentationOf(source) {
+  if (!source || typeof source !== 'object') return {};
+  if (source.displaySchemaVersion !== undefined || source.display) return source;
+  if (source.presentation && typeof source.presentation === 'object') return source.presentation;
+  return source.canvasStyle?.presentation || source.renderPackage?.canvasStyle?.presentation || {};
+}
+const rankingComponent = computed(() => {
+  const presentation = presentationOf(props.sourcePresentation?.displayPresentation || props.sourcePresentation);
+  if (presentation.displaySchemaVersion !== 1) return null;
+  const components = Array.isArray(presentation.display?.components) ? presentation.display.components : [];
+  return components.find(component => component?.componentType === 'RANKING' && component.visible !== false) || null;
+});
+const institutionRankingEnabled = computed(() => Boolean(rankingComponent.value));
+const institutionRankingModel = computed(() => {
+  const component = rankingComponent.value;
+  if (!component) return { enabled: false, metrics: [], rows: [], expected: [], rankable: [], missing: [] };
+  return buildInstitutionRankingModel({
+    institutions: safeModel.value.institutions,
+    sourceAuthorized: true,
+    rows: safeModel.value.rankings,
+    rankingMetrics: Array.isArray(component.content?.rankingMetrics) ? component.content.rankingMetrics : []
+  });
+});
+const institutionRankingTitle = computed(() => {
+  const component = rankingComponent.value;
+  const title = component?.text?.titleMode === 'CUSTOM' ? component?.text?.title : component?.title;
+  return String(title || '机构排名').trim() || '机构排名';
 });
 
 const compositionTabsModel = computed(() => buildCompositionTabsModel(
