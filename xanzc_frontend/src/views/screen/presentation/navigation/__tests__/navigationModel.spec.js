@@ -70,6 +70,19 @@ describe('S13 navigation contract', () => {
     expect(classifyInstitutionLayer({ orgName: '某某支行', orgCode: '001' }, rules)).toMatchObject({ known: false, displayable: false, reason: 'LAYER_UNCONFIRMED' });
   });
 
+  it('优先读取 ScreenRenderRespDTO 的 institutionRules，不被旧 navigationRules 覆盖', () => {
+    const response = {
+      screenCode: 'SCR_PROVINCE',
+      institutionRules: { allowedOperatingLevels: ['PRIMARY'], allowedOrgNatures: ['SECONDARY_BRANCH'] },
+      navigationRules: { allowedOperatingLevels: ['DENIED'], allowedOrgNatures: ['DENIED'] },
+      panoramaInstitutions: [{ orgCode: 'ORG-1', operatingLevel: 'PRIMARY', orgNature: 'SECONDARY_BRANCH' }]
+    };
+    expect(resolveInstitution(response, 'ORG-1')).toMatchObject({
+      authorized: true,
+      layer: { known: true, displayable: true }
+    });
+  });
+
   it('rechecks target catalog and view, then requires current org in target authorization directory', async () => {
     const listAvailableScreens = vi.fn().mockResolvedValue(entries);
     const getScreenView = vi.fn().mockImplementation(screenCode => view(screenCode));

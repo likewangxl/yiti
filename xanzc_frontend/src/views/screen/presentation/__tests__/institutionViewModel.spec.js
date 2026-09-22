@@ -132,6 +132,16 @@ describe('institutionViewModel', () => {
     expect(result.displayInstitutions.map(item => item.orgCode)).toEqual(['A', 'B']);
   });
 
+  it('不把旧 navigationRules 当作新展示协议的授权规则', () => {
+    const result = buildInstitutionViewModel({
+      panoramaInstitutions: directory,
+      navigationRules: rules
+    });
+
+    expect(result.status).toBe('UNCONFIRMED');
+    expect(result.displayInstitutions).toEqual([]);
+  });
+
   it('机构规则任一维度为空时 fail-close，不展示授权目录', () => {
     const result = buildInstitutionViewModel(directory, {
       allowedOperatingLevels: ['BRANCH_1'],
@@ -142,6 +152,16 @@ describe('institutionViewModel', () => {
     expect(result.displayInstitutions).toEqual([]);
     expect(result.issues).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'FILTER_RULES_UNCONFIRMED' })
+    ]));
+  });
+
+  it('发布响应缺少 panoramaInstitutions 时 fail-close，不把空数组当作已确认目录', () => {
+    const result = buildInstitutionViewModel({ institutionRules: rules });
+
+    expect(result.status).toBe('UNCONFIRMED');
+    expect(result.displayInstitutions).toEqual([]);
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'AUTHORIZED_DIRECTORY_REQUIRED' })
     ]));
   });
 });

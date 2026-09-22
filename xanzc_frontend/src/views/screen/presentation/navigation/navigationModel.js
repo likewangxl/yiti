@@ -127,7 +127,11 @@ function valuesOf(value) {
 
 function rulesOf(source) {
   if (!source || typeof source !== 'object' || Array.isArray(source)) return null;
-  const rules = source.navigationRules || source.navigation?.rules || source.institutionNavigationRules || source;
+  // ScreenRenderRespDTO exposes the authoritative rules as institutionRules.
+  // Keep older navigation payloads working, but never let them override the
+  // response field when both shapes happen to be present.
+  const rules = source.institutionRules ?? source.navigationRules
+    ?? source.navigation?.rules ?? source.institutionNavigationRules ?? source;
   if (!rules || typeof rules !== 'object' || Array.isArray(rules)) return null;
   if (rules.allowedOperatingLevels instanceof Set
       || rules.allowedOrgNatures instanceof Set
@@ -142,7 +146,7 @@ function rulesOf(source) {
 }
 
 export function navigationRulesOf(view) {
-  return rulesOf(view?.navigationRules || view?.navigation?.rules || view?.institutionNavigationRules);
+  return rulesOf(view);
 }
 
 /**

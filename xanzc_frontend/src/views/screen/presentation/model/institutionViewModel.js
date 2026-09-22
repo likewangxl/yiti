@@ -136,14 +136,12 @@ export function buildInstitutionViewModel(input = [], rules = {}, options = {}) 
   let config = rules;
   let opts = options;
   if (object(input) && !Array.isArray(input)) {
-    directory = input.authorizedDirectory ?? input.panoramaInstitutions ?? input.panorama_institutions
-      ?? input.directory ?? input.institutions ?? [];
-    config = input.institutionRules
-      ?? input.navigationRules
-      ?? input.presentation?.institutionRules
-      ?? input.renderPackage?.canvasStyle?.presentation?.institutionRules
-      ?? input.render_package?.canvasStyle?.presentation?.institutionRules
-      ?? input.rules ?? input.filters ?? rules ?? {};
+    const directoryKey = ['authorizedDirectory', 'panoramaInstitutions', 'panorama_institutions', 'directory', 'institutions']
+      .find(key => Object.prototype.hasOwnProperty.call(input, key));
+    directory = directoryKey ? input[directoryKey] : null;
+    // New runtime authorization is supplied by ScreenRenderRespDTO only.
+    // The legacy navigationRules field must not silently become a display rule.
+    config = input.institutionRules ?? rules ?? {};
     opts = { ...input, ...options };
   }
   const issues = [];

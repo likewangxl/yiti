@@ -50,6 +50,7 @@ import {
 } from '../presentation/navigation/navigationModel';
 import RuntimeStatusBanner from '../presentation/runtime/RuntimeStatusBanner.vue';
 import { buildRuntimePresentation } from '../presentation/runtime/runtimeState';
+import { buildInstitutionViewModel } from '../presentation/model/institutionViewModel';
 
 const props = defineProps({
   view: { type: Object, default: () => ({}) },
@@ -85,6 +86,88 @@ function parseObject(value) {
     return null;
   }
 }
+
+const INSTITUTION_NON_METRIC_KEYS = new Set([
+  'orgCode', 'org_code', 'orgName', 'org_name', 'cityCode', 'city_code', 'cityName', 'city_name',
+  'ownerOperatingOrgCode', 'owner_operating_org_code', 'parentOrgCode', 'parent_org_code',
+  'operatingLevel', 'operating_level', 'orgNature', 'org_nature', 'lng', 'longitude', 'lat', 'latitude',
+  'coordSys', 'coord_sys', 'located', 'locationSource', 'location_source', 'active', 'authorized',
+  'isActive', 'isAuthorized', 'status', 'contributionStatus', 'aggregateAllowed', 'duplicateName',
+  'locationStatus', 'name', 'label', 'trend', 'attention', 'metrics', 'metricValues', 'values'
+]);
+
+function institutionCode(item) {
+  if (!item || typeof item !== 'object') return '';
+  return String(item.orgCode ?? item.org_code ?? '').trim();
+}
+
+function contributionMetrics(item) {
+  const metrics = item && typeof item.metrics === 'object' && !Array.isArray(item.metrics)
+    ? { ...item.metrics } : {};
+  if (!item || typeof item !== 'object') return metrics;
+  for (const [key, value] of Object.entries(item)) {
+    if (INSTITUTION_NON_METRIC_KEYS.has(key) || (value !== null && typeof value === 'object')) continue;
+    metrics[key] = value;
+  }
+  return metrics;
+}
+
+/**
+ * 当前查询模型只提供指标贡献，不提供机构身份。按 orgCode 合并贡献，
+ * 防止 ranking/branches 两个槽位把同一机构重复扩成展示节点。
+ */
+function collectInstitutionContributions(currentModel) {
+  const byCode = new Map();
+  for (const source of [currentModel?.institutions, currentModel?.rankings]) {
+    if (!Array.isArray(source)) continue;
+    for (const item of source) {
+      const orgCode = institutionCode(item);
+      if (!orgCode) continue;
+      const previous = byCode.get(orgCode);
+      byCode.set(orgCode, {
+        orgCode,
+        metrics: { ...(previous?.metrics || {}), ...contributionMetrics(item) }
+      });
+    }
+  }
+  return [...byCode.values()];
+}
+
+function institutionRuntimeIssues(result) {
+  if (!result) return [];
+  return (Array.isArray(result.issues) ? result.issues : []).map(item => ({
+    slot: 'institutions',
+    code: item?.code || 'INSTITUTION_UNAVAILABLE',
+    field: item?.orgCode ? 'orgCode' : undefined,
+    message: item?.orgCode ? `机构 ${item.orgCode}：${item.message || item.code}` : (item?.message || item?.code)
+  }));
+}
+
+function mergeInstitutionRuntimeModel(currentModel, result) {
+  if (!result) return currentModel;
+  const previousByCode = new Map((Array.isArray(currentModel?.institutions) ? currentModel.institutions : [])
+    .map(item => [institutionCode(item), item]));
+  const displayInstitutions = result.displayInstitutions.map(item => {
+    const previous = previousByCode.get(item.orgCode);
+    return previous ? {
+      ...previous,
+      ...item,
+      // directory identity and the validated view-model flags win; query-only
+      // trend/attention fields remain available to the legacy directory UI.
+      metrics: { ...(previous.metrics || {}), ...(item.metrics || {}) }
+    } : item;
+  });
+  const displayCodes = new Set(displayInstitutions.map(item => item.orgCode));
+  const rankings = Array.isArray(currentModel?.rankings)
+    ? currentModel.rankings.filter(item => displayCodes.has(institutionCode(item))) : currentModel?.rankings;
+  return {
+    ...currentModel,
+    institutions: displayInstitutions,
+    rankings,
+    issues: [...(Array.isArray(currentModel?.issues) ? currentModel.issues : []), ...institutionRuntimeIssues(result)]
+  };
+}
+
 const displayPresentation = computed(() => {
   const pkg = parseObject(props.view?.renderPackage ?? props.view?.render_package
     ?? props.view?.renderPackageJson ?? props.view?.render_package_json) || {};
@@ -94,11 +177,29 @@ const displayPresentation = computed(() => {
   const staticAvailability = parseObject(style.sourceAvailability) || parseObject(presentation.sourceAvailability);
   return staticAvailability ? { ...presentation, sourceAvailability: staticAvailability } : presentation;
 });
+const institutionDisplayModel = computed(() => {
+  if (displayPresentation.value?.displaySchemaVersion !== 1) return null;
+  // The directory and rules must come from the render response. In particular,
+  // navigationRules and query rows are not substitutes for this authorization input.
+  return buildInstitutionViewModel({
+    panoramaInstitutions: props.view?.panoramaInstitutions,
+    institutionRules: props.view?.institutionRules,
+    contributions: collectInstitutionContributions(model.value)
+  });
+});
+const institutionRuntimeIssueGroups = computed(() => {
+  const groups = { ...(state.slotIssues.value || {}) };
+  const issues = institutionRuntimeIssues(institutionDisplayModel.value);
+  if (issues.length) groups.institutions = issues;
+  return groups;
+});
 const dashboardModel = computed(() => {
   const labelled = applyMetricLabels(model.value, sourcePresentation.value.metricLabels);
+  const institutionModel = institutionDisplayModel.value;
+  const displayModel = mergeInstitutionRuntimeModel(labelled, institutionModel);
   const title = props.view?.screenName || props.view?.screen_name;
-  return title && labelled && labelled.title !== String(title)
-    ? { ...labelled, title: String(title) } : labelled;
+  return title && displayModel && displayModel.title !== String(title)
+    ? { ...displayModel, title: String(title) } : displayModel;
 });
 const runtimePresentation = computed(() => {
   const sourceMetadata = model.value?.sourceMetadata || {};
@@ -109,7 +210,7 @@ const runtimePresentation = computed(() => {
   return buildRuntimePresentation({
     enabled: displayPresentation.value?.displaySchemaVersion === 1,
     configuredSlots: model.value?.configuredSlots || [],
-    runtimeIssues: state.slotIssues.value || {},
+    runtimeIssues: institutionRuntimeIssueGroups.value,
     sourceQualities: model.value?.sourceQualities || {},
     sourceDates: model.value?.sourceDates || {},
     staticAvailability: displayPresentation.value?.sourceAvailability || sourcePresentation.value.sourceAvailability || {},
@@ -126,7 +227,7 @@ const dashboardSourcePresentation = computed(() => ({
   ...sourcePresentation.value,
   displayPresentation: props.view?.renderPackage?.canvasStyle?.presentation || null,
   scopeIdentity: [props.view?.screenCode, props.view?.orgScopeMode, props.view?.orgGroupCode, props.context?.orgCode].map(v => v || '').join('|'),
-  runtimeIssues: state.slotIssues.value || {},
+  runtimeIssues: institutionRuntimeIssueGroups.value,
   runtimeQuality: model.value?.qualityGuard || model.value?.quality || null,
   runtimeState: runtimePresentation.value
 }));
@@ -162,15 +263,16 @@ const slotLabels = {
   citySummary: '城市汇总',
   depositIncrease: '存款较上月净增',
   depositAverage: '存款月均余额',
+  institutions: '机构目录',
   batch: '批次质量'
 };
 const locallyExplainedNoValueSlots = new Set(Object.keys(slotLabels));
 
-const allIssueEntries = computed(() => Object.entries(state.slotIssues.value || {})
+const allIssueEntries = computed(() => Object.entries(institutionRuntimeIssueGroups.value)
   .flatMap(([slot, issues]) => (Array.isArray(issues) ? issues : [])
     .filter(issue => !(issue?.code === 'NO_VALUES' && locallyExplainedNoValueSlots.has(slot)))
     .map((issue, index) => ({
-    key: `${slot}:${issue.code || index}`,
+    key: `${slot}:${issue.code || index}:${issue.field || ''}:${issue.message || ''}`,
     code: issue.code,
     label: sourcePresentation.value.metricLabels?.[slot] || BINDING_SLOTS[slot]?.label || slotLabels[slot] || slot,
     message: issue.message || issue.code || '取数失败'
