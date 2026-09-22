@@ -20,7 +20,7 @@
 | S13 | BLOCKED_DATA | `6ecd5b36` | - | `presentation/navigation/`、CodeScreenPage/BranchOperatingPage/PanoramaRuntime/CityPanorama、经营入口卡片及测试 | 固定路由、query恢复、目标屏/机构重新授权与fail-close已实现；机构级真实闭环受D03规则阻塞 | S13核心8文件54项通过；相关运行时19项通过；生产构建通过 | 省/市/条线与旧URL浏览器验收留S17；机构级待规则 | Vitest/Vite输出 | 后端运行视图未提供签认navigationRules，禁止名称/编码/示例机构猜测 | 创建S13提交；获规则后解除X05 |
 | S14 | VERIFIED | `69ff255f` | - | `usePanoramaData.js`、`presentation/runtime/`、`PanoramaRuntime.vue`及测试、sourcePresentation状态适配 | 查询语义指纹、迟到隔离、批次保留与统一运行状态已实现；主代理已复核 | S14核心51项、相关运行时26文件162项通过；生产构建通过 | 网络原始证据留S17 | Vitest/Vite输出 | 真实来源日期/批次质量取决于隔离后端返回 | 创建S14提交；等待S13后进入S16 |
 | S15 | VERIFIED | `e7804933` | - | `presentation/migration/`、`PresentationEditor.vue`、`PanoramaBindings.vue`及测试、操作指南 | 旧配置确定性迁移预览与本地草稿应用已实现；不自动保存/发布 | 迁移/编辑器/Bindings 37项通过；presentation目录95项通过；生产构建通过 | 持久化转换→发布→回退留S17隔离测试屏 | Vitest/Vite输出与操作指南 | 真实测试屏、expectedVersion冲突和发布回退需隔离环境 | 进入S16前完成S12～S14；S17执行真实迁移台账 |
-| S16 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S07～S15 |
+| S16 | VERIFIED | `6b818cb3` | - | 集成回归、范围/保护区/契约检查与本状态文档 | 本轮范围无新增越界或新增回归；三组基线失败已独立归因 | F1 723/724、F2 64/65、B1 325/325、B2 6/8、B3成功、C1/范围/构建通过；blockResults修复后相关147项通过 | N/A；真实浏览器属S17 | 命令输出、Surefire报告、范围检查和基线哈希 | Retail CRLF、旧客户路由测试、FreeReport实体泄露为基线失败；S11/S13仍BLOCKED_DATA | 进入S17隔离运行与浏览器验收 |
 | S17 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S16、隔离运行环境 |
 
 ## S00 任务记录
@@ -150,3 +150,11 @@
 - 删除BranchOperatingPage中`/支行$/`、示例`330/109`、目录第一家和主机构等猜测/回退。机构身份只能来自目标屏授权目录；机构层级只能按服务端显式`navigationRules`的operatingLevel/orgNature集合判断。
 - 大屏中心本轮经营主卡片改为固定省级代码化入口；个人卡片显示、排序和打开行为由既有测试保护。旧`/branch-operating`URL保留，但缺orgCode、越权或规则未确认时明确拒绝，不回退全行。
 - 主代理独立复核8个核心文件54项及生产构建通过。当前运行响应没有签认`navigationRules`，因此机构级路径按`BLOCKED_DATA/X05`记录；省/市/条线软件链已完成，不能把夹具规则当真实业务口径。
+
+## S16 任务记录
+
+- 独立执行累计范围检查、检查器10项、`git diff --check`和受限文件逐hunk复核；保护区没有新增修改，`ScreenCenter.vue`只改本轮经营卡片目标，个人卡片逻辑和测试未改语义。
+- F1共724项：723通过，唯一失败为基线即存在的`RetailDashboard.spec.js`对CRLF样式文本的静态断言；`retail.scss`和测试文件哈希与基线一致。F2共65项：64通过，唯一失败为基线`customerMarketingRoutes.spec.js`查找不存在路由，router/测试文件均未改。
+- B1大屏纯逻辑325/325通过；B2架构6/8通过，两个失败均指向基线未修改的`FreeReportController.listBatches`暴露Entity；B3使用JDK17完成19模块聚合构建；C1契约检查通过。未连接真库、未运行未核安全profile的IT。
+- S16审查发现并回派S14真实blockResults缺口；修复后相关23文件147项、主代理核心71项和生产构建通过。该修复只在大屏运行时暴露发布块只读结果，没有上游写操作。
+- 结论：S16按“本轮无新增回归、基线失败完整保留”验收；不能表述为全仓全绿。S17必须继续报告三组基线失败及S11/S13数据阻塞。
