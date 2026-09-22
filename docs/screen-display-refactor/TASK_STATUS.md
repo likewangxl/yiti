@@ -15,7 +15,7 @@
 | S08 | VERIFIED | `14a77355` | - | `displaySeriesTableModel.js`、`SeriesTableWidgets.vue`及测试；四类Dashboard最小接入；文档与`TASK_STATUS.md` | 新协议趋势/明细表由配置驱动，旧固定展示保持兼容；主代理已复核 | 模型/组件/分行/对公/支行相关63项通过；生产构建通过 | 浏览器真实数据验收留S17 | Vitest/Vite输出与代码化大屏文档 | 不支持的混合单位同轴明确拒绝；真实趋势来源仍UNCONFIRMED | 创建S08提交并进入S09/S10 |
 | S09 | VERIFIED | `f946dc8c` | - | `compositionTabsModel.js`、`CompositionTabsWidget.vue`及测试；四类Dashboard/Runtime接入；代码化大屏文档 | 三类业务结构页签已接入新展示协议，旧协议保持兼容；主代理已复核 | S09模型/组件/集成16项通过；相邻Dashboard 100项通过、1项既有CRLF断言失败；生产构建通过 | 浏览器真实验收留S17 | Vitest/Vite输出与代码化大屏文档 | 真实结构分母和指标来源仍UNCONFIRMED；导航动作留S13 | 创建S09提交并进入S10 |
 | S10 | VERIFIED | `91612586` | - | `institutionRankingModel.js`、`InstitutionRankingWidget.vue`及测试；四类Dashboard接入；代码化大屏文档 | 新协议全量机构排名与可控轮播已实现，旧TOP10仅保留旧协议；主代理已复核 | S10模型/组件/集成43项通过；相关回归528项通过、1项既有CRLF断言失败；生产构建通过 | >10家真实机构验收留S17 | Vitest/Vite输出与代码化大屏文档 | 真实排名指标/方向/总分来源仍UNCONFIRMED；真实接口若截断将明确不完整 | 创建S10提交并进入S11/S12 |
-| S11 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S01、S02 |
+| S11 | BLOCKED_DATA | `69789625` | - | `institutionViewModel.js`及测试；既有`PanoramaInstitutionDTO`/授权目录只读复核 | 展示/统计集合分离模型已实现；真实机构白名单因D03/D04未确认未接运行页 | 模型7项通过；现有后端授权目录字段与activeProfiles链已复核 | 未连接真实机构画像/数据库 | Vitest输出、BUSINESS_DECISIONS D03/D04/X05、现有DTO源码 | 缺允许的operatingLevel/orgNature值或签认名单，禁止名称/编码猜测 | 获得D03/D04口径后接入运行页；当前继续S12可独立能力 |
 | S12 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S10、S11 |
 | S13 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S09、S12 |
 | S14 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S04、S07～S13 |
@@ -110,3 +110,10 @@
 - 新协议不做TOP10或五条裁切；0/1/7/23/200家、并列、负数、合法0、缺数、服务端`limit/hasMore/truncated`不完整提示均有测试。手动切换、hover/focus、页面隐藏会暂停，继续按钮恢复，卸载清理计时器。
 - 主代理纠正了“每行必须重复active/authorized”的错误前提：当前`PanoramaInstitutionDTO`已经由后端`authorizeRuntime + activeProfiles`生成，DTO没有这两个字段；运行接入用`sourceAuthorized:true`声明目录来源可信，仅显式false时排除。
 - 主代理独立复核：S10模型/组件/集成43项及生产构建通过；扩大相关回归为528/529通过，唯一失败仍为未修改`retail.scss`的CRLF静态断言。真实超过10家机构和真实指标方向留S17核验。
+
+## S11 任务记录
+
+- 新增机构展示模型：只接受服务端授权目录，按显式`allowedOperatingLevels`/`allowedOrgNatures`白名单过滤；缺规则返回`UNCONFIRMED`空集合，不按名称、编码长度或前端角色猜测。
+- 合法0、无指标和无坐标机构保留各自状态；目录外指标记录拒绝；同名不合并；父子或经营归属同时展示时标记`CANNOT_AGGREGATE`，不现场改写上级正式值。
+- 主代理回读`PanoramaInstitutionDTO`和`ScreenConfigServiceImpl.buildPanoramaInstitutions`：运行DTO已经包含`operatingLevel/orgNature/city/坐标`，并由`authorizeRuntime + activeProfiles`保证授权和ACTIVE；无需改后端契约。
+- 停止条件触发：D03/D04尚未给出允许的层级/性质枚举或签认机构清单，当前不能安全接入运行过滤。模型7项通过，但任务按`BLOCKED_DATA/X05`记录，不把单元夹具当真实机构口径。
