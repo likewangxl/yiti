@@ -4,13 +4,13 @@
 
 代码：`feat/code-screen-panorama` / 当前 HEAD（最终提交见Git日志）
 
-结论：前端真实进程与官方 CLI 的受控开发态 mock 验收通过；真实后端/数据库联调为 `BLOCKED_ENV`，本记录不把 mock 证据当作真实数据或权限证据。
+结论：已连接 `192.168.50.100/yiti`，在关闭调度与外发的本地后端上完成真实登录、三屏迁移保存、TEST 屏发布/回退和无 mock 页面验收。最终发布态已恢复原包，三个经营屏保留 `displaySchemaVersion=1` 新草稿。状态为 `VERIFIED_REAL_WITH_LIMITATIONS`；不把仍缺失的业务数据、5 家缺坐标或未执行的故障注入写成通过。
 
 ## 1. 启动状态
 
 - 前端：Vite，`127.0.0.1:8092`，命令级环境变量设置 host/port/strictPort/proxyTarget；未修改共享配置。
-- MySQL：本机 MySQL 8.4，运行时强制 `bind-address=127.0.0.1`，监听 `3306`。
-- 后端：未启动。`application-screen-scope-e2e.yml`只允许`yiti_test`，但本机没有`YITI_SCREEN_SCOPE_DB_USERNAME/YITI_SCREEN_SCOPE_DB_PASSWORD`；现有本地配置凭据也无法只读连接。未尝试默认`application.yml`的`yiti`业务库，未改数据库。
+- MySQL：目标库为 `192.168.50.100:3306/yiti`；本机 MySQL 仍监听 `127.0.0.1:3306`，不参与本次后端连接。
+- 后端：`127.0.0.1:18080`，使用 `screen-scope-e2e` 并以命令级环境变量把主数据源和报表只读数据源指向目标库；Quartz、启动同步和 OBS 外发保持关闭。
 - 官方CLI：仓库安装的`@playwright/cli 0.1.18`；先执行`playwright-cli --help`和`--help route/run-code`核对能力。
 
 当前监听：
@@ -18,7 +18,7 @@
 ```text
 127.0.0.1:8092  frontend vite
 127.0.0.1:3306  local mysql
-127.0.0.1:18080 not listening
+127.0.0.1:18080 backend (datasource 192.168.50.100/yiti)
 ```
 
 ## 2. 浏览器执行方式
@@ -79,22 +79,30 @@ debug [vite] connected.
 
 | 场景 | 状态 | 说明 |
 | --- | --- | --- |
-| B01 标题 | PARTIAL_MOCK | 运行展示已验证；真实保存/回读/发布未验证 |
-| B02 换源与内容 | PARTIAL_MOCK | 组件数据/单位链可见；真实候选与保存未验证 |
-| B03 趋势和表格 | PASS_MOCK | 受控响应下系列、列、维度文本通过 |
-| B04 结构页签 | PASS_MOCK | 显式总量、公司/零售/其他及条线动作通过 |
-| B05 地图 | PARTIAL_MOCK | 省→市停留、缺坐标列表通过；真实机构画像规则未签认 |
-| B06 导航 | PARTIAL_MOCK | 综合→公司和城市状态通过；真实账号/目录未验证 |
-| B07 刷新异常 | UNIT_ONLY | 迟到、403、混批由单测覆盖；真实网络故障未验证 |
-| B08 发布回退 | BLOCKED_ENV | 需要获准隔离测试屏和后端数据库凭据 |
-| B09 非大屏 | UNIT_ONLY | F2保护区64/65，唯一失败为基线旧路由测试；未做真实页面抽查 |
-| B10 全量排名 | PASS_MOCK | 12家、切指标、滚动均通过；不是真实机构数据 |
+| B01 标题 | PARTIAL_REAL | 新草稿真实保存/重读/发布字段未丢；未额外写入临时验收标题 |
+| B02 换源与内容 | PARTIAL_REAL | 真实旧绑定、字段、单位、内容迁入并回读一致；未改写共享数据源 |
+| B03 趋势和表格 | PARTIAL_REAL | 三个机构表均只显示7家允许机构；真实趋势当前无可绘制历史，明确显示空态 |
+| B04 结构页签 | PARTIAL_REAL | 公司/零售结构与导航动作可见；核定总量来源未接入，页面未计算占比 |
+| B05 地图 | PASS_REAL | 7家目录、2家可信点位、5家待定位列表；地图复用排名指标并显示亿元 |
+| B06 导航 | PASS_REAL | 综合/公司/零售真实目录复核和快速直达均成功，63个请求全200、无console错误 |
+| B07 刷新异常 | PARTIAL_REAL | 真实刷新/快速切页无串数；迟到、403、混批仍由单测覆盖，未对目标服务注入故障 |
+| B08 发布回退 | PASS_REAL | TEST屏完成迁移→保存→发布→原归档回退；原包SHA-256恢复一致，随后重存新草稿 |
+| B09 非大屏 | PASS_WITH_BASELINE_WARNINGS | 7个只读页面、66个响应全200、无写请求/console错误；保留4类既有缺路由warning |
+| B10 全量排名 | PARTIAL_REAL | 当前规则下7/7家全部可排名、未参与0家；>10家压力由单测/mock覆盖，真实范围只有7家 |
 
-## 5. 未解除条件
+## 5. 真实执行与最终状态
 
-1. D03/D04：允许展示的`operatingLevel/orgNature`枚举或签认机构名单尚未提供；S11/S13保持fail-close。
-2. 隔离数据库凭据缺失，后端不能在`screen-scope-e2e`安全启动；因此无真实登录、权限、数据源、草稿保存、发布、回退和真实请求响应证据。
-3. D01/D02/D05/D07相关真实指标编码、KPI方案、目标、分母和排序方向仍需业务签认。
-4. 基线失败继续保留：Retail CSS换行断言、旧客户路由测试、FreeReport Controller两项架构守护。
+- 三屏草稿：`SCR_PROVINCE` 15个旧槽位→16个展示组件，`SCR_CORP_OVERVIEW` 10→10，`SCR_RETAIL_OVERVIEW` 8→8；三次均 `unresolved=0 / missingFields=0 / needsConfirmation=0`。
+- 机构规则：后端返回 `allowedOperatingLevels=[PRIMARY]`、`allowedOrgNatures=[SECONDARY_BRANCH]`；运行目录严格为7家。
+- 坐标：仅复用授权范围内 ACTIVE 旧点位，来源 `LEGACY_MAP_POINT`；2家已定位、5家保留在待定位列表，未伪造坐标。
+- 发布回退：原发布包哈希 `c1fbc532...3a82f`；每轮回退均恢复相同哈希和无 `displaySchemaVersion` 的旧包。最终线上为旧发布包，三屏为新草稿。
+- 最终页面：配置化整页、地图1个、排名7行、旧排名0行、旧硬编码 `93.6/88.2/91.8` 均不存在；20个API响应全200，console错误/警告均为0。
+- 最终截图：`E:\cx-workspace\runtime\screen-display-refactor\S17-20260922\published-final-1920x1080.png`。
 
-满足以上条件后，必须重新执行无mock B01～B10；本次结果只能表述为“大屏软件改造完成，真实限定范围验收未完成”。
+## 6. 保留限制
+
+1. 7家中仍有5家没有获准坐标；地图保留可访问清单，不能宣称点位已补齐。
+2. 业务结构总量和真实趋势历史未接入；页面明确空态，不补算、不造曲线。
+3. B01/B02未为了验收写入临时标题或改共享来源；B07未对真实服务注入403/延迟；B10真实范围不足10家。
+4. 非大屏只读抽查出现既有菜单指向4个未注册路由的 Vue Router warning；本轮未修改这些功能。
+5. 基线失败继续保留：Retail CSS换行断言、旧客户路由测试、FreeReport Controller两项架构守护。

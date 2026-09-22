@@ -21,7 +21,7 @@
 | S14 | VERIFIED | `69ff255f` | - | `usePanoramaData.js`、`presentation/runtime/`、`PanoramaRuntime.vue`及测试、sourcePresentation状态适配 | 查询语义指纹、迟到隔离、批次保留与统一运行状态已实现；主代理已复核 | S14核心51项、相关运行时26文件162项通过；生产构建通过 | 网络原始证据留S17 | Vitest/Vite输出 | 真实来源日期/批次质量取决于隔离后端返回 | 创建S14提交；等待S13后进入S16 |
 | S15 | VERIFIED | `e7804933` | - | `presentation/migration/`、`PresentationEditor.vue`、`PanoramaBindings.vue`及测试、操作指南 | 旧配置确定性迁移预览与本地草稿应用已实现；不自动保存/发布 | 迁移/编辑器/Bindings 37项通过；presentation目录95项通过；生产构建通过 | 持久化转换→发布→回退留S17隔离测试屏 | Vitest/Vite输出与操作指南 | 真实测试屏、expectedVersion冲突和发布回退需隔离环境 | 进入S16前完成S12～S14；S17执行真实迁移台账 |
 | S16 | VERIFIED | `6b818cb3` | - | 集成回归、范围/保护区/契约检查与本状态文档 | 本轮范围无新增越界或新增回归；三组基线失败已独立归因 | F1 723/724、F2 64/65、B1 325/325、B2 6/8、B3成功、C1/范围/构建通过；blockResults修复后相关147项通过 | N/A；真实浏览器属S17 | 命令输出、Surefire报告、范围检查和基线哈希 | Retail CRLF、旧客户路由测试、FreeReport实体泄露为基线失败；S11/S13仍BLOCKED_DATA | 进入S17隔离运行与浏览器验收 |
-| S17 | BLOCKED_ENV | `c1c4312b` | - | `S17_ACCEPTANCE.md`与外部CLI证据目录 | 前端服务与官方CLI受控mock验收完成，并据此修复4个真实缺陷；无mock后端验收未完成 | CLI页面/交互/截图通过；console无错误；真实后端未启动 | 前端8092、MySQL3306运行；后端18080未运行 | `S17_ACCEPTANCE.md`、外部脚本/截图 | 缺yiti_test凭据、签认navigationRules和真实数据口径；mock非联调 | 提供隔离凭据与业务签认后重跑无mock B01～B10 |
+| S17 | VERIFIED_REAL_WITH_LIMITATIONS | `c1c4312b` | 当前HEAD | 大屏迁移/机构规则/整页布局修复、`S17_ACCEPTANCE.md`与外部CLI证据 | 三屏真实草稿完成；TEST屏发布回退闭环；最终线上恢复旧包 | presentation相关178项、构建、真实CLI/API/截图通过 | 前端8092、后端18080连接192.168.50.100/yiti；调度/外发关闭 | `S17_ACCEPTANCE.md`、`E:\cx-workspace\runtime\screen-display-refactor\S17-20260922` | 5家缺坐标、结构总量/趋势历史缺源、真实故障注入和>10家范围未覆盖 | 业务补齐点位与来源后再做发布审批；当前不自动发布新草稿 |
 
 ## S00 任务记录
 
@@ -164,8 +164,9 @@
 
 ## S17 任务记录
 
-- 启动本机MySQL 8.4并用命令行强制只绑定`127.0.0.1:3306`；启动Vite前端`127.0.0.1:8092`。`screen-scope-e2e`所需数据库凭据环境变量不存在，现有本地凭据也无法只读登录，因此未启动后端、未连接默认`yiti`。
-- 使用仓库官方`playwright-cli`读取help后执行受控开发态mock页面验收；路由、响应、请求序列、console和三张截图已归档到外部S17目录，mock性质明确，未冒充真实联调。
-- 页面验证12家全量排名、指标切换/滚动、显式总量结构、趋势、明细文本、地图缺坐标列表、省→市停留和综合→公司授权复核导航。console仅有Vite连接debug，无error/pageerror/页面alert。
-- 浏览器验收发现并修复四项真实问题：运行时未暴露blockResults、明细维度被数值化、composition绑定拒绝total、市级内部默认选中误触发机构导航；相应单元/集成/构建均重新通过。
-- 真实B01/B02/B07/B08/B09及真实数据B05/B06/B10仍受环境和业务数据阻塞；最终状态为`BLOCKED_ENV`，准确表述是“大屏软件改造完成，真实限定范围验收未完成”。
+- 用户明确指定 `192.168.50.100/yiti` 后，使用关闭调度/外发的 `screen-scope-e2e` 启动后端18080；主/只读数据源日志均回读为目标库，API文档与真实登录成功。
+- 先备份四张大屏相关表；所有修改只经受保护API和expectedVersion/CAS完成，未直接执行DML。三个经营屏均生成完整v1新草稿，迁移项无未识别/缺字段/待确认。
+- 明确采用整页配置化；真实页面发现并修复排名默认方向、身份目录吸收、固定地图迁入、统一模型字段/单位、机构明细越界行、预期过滤误报及指标卡布局问题。
+- 后端规则固定返回 `PRIMARY + SECONDARY_BRANCH`，真实目录由114家收窄为7家；只复用授权ACTIVE旧点位，2家定位、5家待定位，未造坐标。
+- TEST屏多轮执行发布/回退；最终回退到原发布归档，SHA-256恢复一致，并重新保存最终新草稿。最终线上仍为旧包，避免验收发布遗留。
+- 官方CLI无mock验收：最终页面地图1个、7/7排名、三个明细均7家、无旧硬编码率；20个API全200，console无错误/警告。非大屏7页只读抽查66个响应全200、无写请求，保留既有缺路由warning。
