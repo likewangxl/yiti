@@ -119,6 +119,7 @@ function emptyModel(retail, view, queriedAt, quality = null, qualityGuard = null
   next.sourceQualities = {};
   next.sourceDates = {};
   next.sourceMetadata = {};
+  next.blockResults = {};
   next.configuredSlots = [];
   next.permissionStatus = null;
   return next;
@@ -307,6 +308,93 @@ function collectSourceMetadata(results = {}) {
       sourceAsOf: quality?.sourceAsOf || null,
       hasRows: responseRowsPresent(result.response)
     }]];
+  }));
+}
+
+function cloneRawValue(value) {
+  if (Array.isArray(value)) return value.map(cloneRawValue);
+  if (isObject(value)) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cloneRawValue(item)]));
+  return value;
+}
+
+/**
+ * 把统一二维表响应整理成展示协议只读 block 结果。
+ * 这里只按服务端 columns 与发布绑定 units 原样映射，不从标题或列名猜测业务字段。
+ */
+function normalizeBlockResult(blockId, binding, response) {
+  const table = unwrapResponse(response);
+  if (!isObject(table) || !Array.isArray(table.columns) || !Array.isArray(table.rows)) return null;
+  const columns = table.columns.map(column => {
+    if (typeof column === 'string') return column;
+    if (isObject(column)) return String(column.col ?? column.name ?? column.key ?? '').trim();
+    return String(column ?? '').trim();
+  });
+  if (!columns.length || columns.some(column => !column)) return null;
+  const rawRows = table.rows.flatMap(rawRow => {
+    if (!Array.isArray(rawRow)) return [];
+    const row = {};
+    columns.forEach((column, index) => { row[column] = rawRow[index] === undefined ? null : cloneRawValue(rawRow[index]); });
+    return [Object.freeze(row)];
+  });
+  const reservedKeys = new Set(['blockId', 'rows', 'columns', 'columnsMeta', 'units', 'unitByField', 'quality', 'dataDate', 'aliasIssues']);
+  const aliasIssues = [];
+  const aliases = [];
+  const rawOwners = new Map();
+  for (const [semantic, rawColumnValue] of Object.entries(binding?.fields || {})) {
+    const rawColumn = String(rawColumnValue ?? '').trim();
+    if (!semantic || !rawColumn || reservedKeys.has(semantic)) {
+      aliasIssues.push({ code: 'INVALID_SEMANTIC_ALIAS', semantic, rawColumn });
+      continue;
+    }
+    if (!columns.includes(rawColumn)) {
+      aliasIssues.push({ code: 'MISSING_ALIAS_COLUMN', semantic, rawColumn });
+      continue;
+    }
+    if (rawOwners.has(rawColumn) && rawOwners.get(rawColumn) !== semantic) {
+      aliasIssues.push({ code: 'DUPLICATE_ALIAS_COLUMN', semantic, rawColumn });
+      continue;
+    }
+    rawOwners.set(rawColumn, semantic);
+    aliases.push([semantic, rawColumn]);
+  }
+  const rows = rawRows.map(rawRow => {
+    const row = { ...rawRow };
+    for (const [semantic, rawColumn] of aliases) {
+      if (!Object.prototype.hasOwnProperty.call(row, semantic)
+        && Object.prototype.hasOwnProperty.call(row, rawColumn)) row[semantic] = row[rawColumn];
+    }
+    return Object.freeze(row);
+  });
+  const columnsMeta = Object.freeze(Array.isArray(table.columnsMeta)
+    ? table.columnsMeta.map(meta => isObject(meta) ? Object.freeze(cloneRawValue(meta)) : meta) : []);
+  const unitByField = Object.fromEntries(columnsMeta.flatMap(meta => {
+    const column = String(meta?.col ?? meta?.name ?? '').trim();
+    const unit = meta?.unit ?? meta?.amountScale;
+    return column && unit ? [[column, cloneRawValue(unit)]] : [];
+  }));
+  const quality = readBatchQuality(table);
+  const firstRow = Object.fromEntries(Object.entries(rows[0] || {})
+    .filter(([key]) => !reservedKeys.has(key)));
+  const result = {
+    ...firstRow,
+    blockId,
+    rows,
+    columns: Object.freeze([...columns]),
+    columnsMeta,
+    units: Object.freeze(cloneRawValue(binding?.units || {})),
+    unitByField: Object.freeze(unitByField),
+    ...(aliasIssues.length ? { aliasIssues } : {}),
+    ...(quality ? { quality } : {}),
+    ...(responseDataDate(table) ? { dataDate: responseDataDate(table) } : {})
+  };
+  return Object.freeze(result);
+}
+
+function collectBlockResults(results = {}) {
+  return Object.fromEntries(Object.entries(results).flatMap(([, result]) => {
+    const blockId = result?.blockId;
+    const normalized = normalizeBlockResult(blockId, result?.binding, result?.response);
+    return blockId !== undefined && blockId !== null && normalized ? [[String(blockId), normalized]] : [];
   }));
 }
 
@@ -540,6 +628,15 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
       if (options.singleOrg) renderedSingleOrgCode.value = '';
       error.value = '';
     }
+    if (branchOnly) {
+      const branchEntry = packageInfo.slots.get('branchTrend');
+      const branchBlockKey = branchEntry?.blockId === undefined || branchEntry?.blockId === null
+        ? '' : String(branchEntry.blockId);
+      if (branchBlockKey && model.value?.blockResults && Object.prototype.hasOwnProperty.call(model.value.blockResults, branchBlockKey)) {
+        const { [branchBlockKey]: _removed, ...remainingBlocks } = model.value.blockResults;
+        model.value = { ...model.value, blockResults: remainingBlocks };
+      }
+    }
     pendingLoads += 1;
     loading.value = true;
     try {
@@ -701,7 +798,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
           addIssue(allIssues, item.slot, 'REQUEST_FAILED', errorMessage(item.error), 'request');
           continue;
         }
-        resultMap[item.slot] = { binding: item.entry.binding, response: item.response };
+        resultMap[item.slot] = { blockId: item.entry.blockId, binding: item.entry.binding, response: item.response };
       }
 
       if (branchOnly) {
@@ -716,6 +813,10 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         const screenIssues = (nextModel.issues || []).filter(item => item?.slot !== 'branchTrend');
         const branchIssues = allIssues.filter(item => item?.slot === 'branchTrend');
         nextModel.issues = [...screenIssues, ...branchIssues];
+        const branchBlocks = collectBlockResults(resultMap);
+        if (Object.keys(branchBlocks).length) {
+          nextModel.blockResults = { ...(nextModel.blockResults || {}), ...branchBlocks };
+        }
         if (requiresBatch) {
           nextModel.quality = mergeBatchQualities([...(batchState.qualities || [])]);
           nextModel.batchId = nextModel.quality?.batchId || null;
@@ -759,6 +860,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         nextModel.sourceQualities = collectSourceQualities(resultMap);
         nextModel.sourceDates = collectSourceDates(resultMap);
         nextModel.sourceMetadata = collectSourceMetadata(resultMap);
+        nextModel.blockResults = collectBlockResults(resultMap);
         nextModel.configuredSlots = [...slots.keys()];
         nextModel.permissionStatus = null;
         if (requiresBatch) {
@@ -862,5 +964,7 @@ export {
   packageBindings,
   queryIdentity,
   collectSourceDates,
-  collectSourceMetadata
+  collectSourceMetadata,
+  normalizeBlockResult,
+  collectBlockResults
 };
