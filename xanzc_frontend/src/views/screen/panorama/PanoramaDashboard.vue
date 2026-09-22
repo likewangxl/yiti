@@ -210,7 +210,23 @@
             <span class="panorama-legend-dot is-violet" />机构分布
             <span class="panorama-map-hint-inline">点击城市查看下钻</span>
           </div>
+          <PresentationMapWidget
+            v-if="presentationMapEnabled"
+            class="panorama-map"
+            :presentation="sourcePresentation"
+            :model="safeModel"
+            :geo-json="provinceGeoJson"
+            mode="province"
+            :metric-key="activeMapMetricKey"
+            :selected-org-code="selectedOrgCode"
+            :selected-region-code="selectedRegionCode"
+            :data-date="displayDate"
+            :demo="demo"
+            @region-select="openCity"
+            @branch-select="selectInstitution"
+          />
           <PanoramaMap
+            v-else
             class="panorama-map"
             appearance="relief"
             label-layout="callout"
@@ -270,6 +286,7 @@
             class="panorama-panel panorama-ranking-panel panorama-ranking-detail-panel"
             :model="institutionRankingModel"
             :title="institutionRankingTitle"
+            @metric-change="syncMapMetric"
           />
           <article v-else class="panorama-panel panorama-ranking-panel panorama-ranking-detail-panel">
             <div class="panorama-panel-heading">
@@ -356,11 +373,13 @@
         :initial-org-code="cityInitialOrgCode"
         :initial-state="cityStateCache[selectedRegion?.code] || {}"
         :source-presentation="sourcePresentation"
+        :ranking-metric-key="activeMapMetricKey"
         @close="closeCity"
         @back="closeCity"
-        @refresh="emit('refresh')"
-        @branch-select="selectInstitution"
-        @state-change="saveCityState"
+            @refresh="emit('refresh')"
+            @branch-select="selectInstitution"
+            @map-context="emit('map-context', $event)"
+            @state-change="saveCityState"
       />
     </div>
 
@@ -386,6 +405,8 @@ import CompositionBreakdown from './CompositionBreakdown.vue';
 import CompletionWaterGauge from '../components/CompletionWaterGauge.vue';
 import CompositionTabsWidget from '../presentation/widgets/CompositionTabsWidget.vue';
 import InstitutionRankingWidget from '../presentation/widgets/InstitutionRankingWidget.vue';
+import PresentationMapWidget from '../presentation/map/PresentationMapWidget.vue';
+import { findVisibleMapComponent } from '../presentation/map/mapModel';
 import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
 import { buildInstitutionRankingModel } from '../presentation/model/institutionRankingModel';
 import { provinceGeo } from './geography.js';
@@ -417,7 +438,7 @@ const props = defineProps({
   demo: { type: Boolean, default: false },
   sourcePresentation: { type: Object, default: () => ({}) }
 });
-const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select', 'business-line-select']);
+const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select', 'business-line-select', 'map-context']);
 
 function sourceStatus(slot, semantic = '') {
   const mappedSlot = slot === 'kpi'
@@ -490,6 +511,8 @@ const rankingComponent = computed(() => {
   const components = Array.isArray(presentation.display?.components) ? presentation.display.components : [];
   return components.find(component => component?.componentType === 'RANKING' && component.visible !== false) || null;
 });
+const mapComponent = computed(() => findVisibleMapComponent(props.sourcePresentation?.displayPresentation || props.sourcePresentation));
+const presentationMapEnabled = computed(() => Boolean(mapComponent.value));
 const institutionRankingEnabled = computed(() => Boolean(rankingComponent.value));
 const institutionRankingModel = computed(() => {
   const component = rankingComponent.value;
@@ -498,7 +521,8 @@ const institutionRankingModel = computed(() => {
     institutions: safeModel.value.institutions,
     sourceAuthorized: true,
     rows: safeModel.value.rankings,
-    rankingMetrics: Array.isArray(component.content?.rankingMetrics) ? component.content.rankingMetrics : []
+    rankingMetrics: Array.isArray(component.content?.rankingMetrics) ? component.content.rankingMetrics : [],
+    activeMetricKey: selectedMapMetricKey.value
   });
 });
 const institutionRankingTitle = computed(() => {
@@ -583,6 +607,7 @@ const targetPeriodLabel = computed(() => {
     || '统计周期');
 });
 const rankingMetric = ref('deposit');
+const selectedMapMetricKey = ref('');
 const attentionCarouselRef = ref(null);
 const attentionCarouselOffset = ref(0);
 const attentionCarouselShift = ref(0);
@@ -606,6 +631,9 @@ const RANKING_CAROUSEL_INTERVAL = 3200;
 const RANKING_CAROUSEL_TRANSITION = 560;
 const rankingMetricOptions = RANKING_METRICS;
 const rankingMetricInfo = computed(() => rankingMetricOptions.find(item => item.key === rankingMetric.value) || rankingMetricOptions[0]);
+const activeMapMetricKey = computed(() => selectedMapMetricKey.value
+  || institutionRankingModel.value.activeMetricKey
+  || String(mapComponent.value?.content?.mainField || '').trim());
 const provinceMapMetricValues = computed(() => {
   const values = {};
   const summaries = safeModel.value.citySummaries && typeof safeModel.value.citySummaries === 'object'
@@ -1019,6 +1047,14 @@ function selectInstitution(orgCode) {
   emit('branch-select', code);
 }
 
+function syncMapMetric(payload = {}) {
+  const key = String(payload?.metricKey || '').trim();
+  if (!key) return;
+  const options = institutionRankingModel.value.metrics || [];
+  if (options.length && !options.some(item => item.metricKey === key)) return;
+  selectedMapMetricKey.value = key;
+}
+
 function selectRanking(item) {
   const code = String(item?.orgCode || '');
   const institution = safeModel.value.institutions.find(entry => entry?.orgCode === code);
@@ -1072,6 +1108,7 @@ function clearScopeState() {
   closeCity();
   directoryOpen.value = false;
   selectedOrgCode.value = '';
+  selectedMapMetricKey.value = '';
   selectedRegionCode.value = '';
   selectedRegion.value = null;
   cityInitialOrgCode.value = '';

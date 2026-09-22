@@ -273,7 +273,23 @@
             <button v-if="selectedCityCode" type="button" class="retail-clear-city" data-action="clear-city" @click="clearCity">显示全部机构</button>
             <span v-else class="retail-map-hint">点击城市筛选机构排名</span>
           </div>
+          <PresentationMapWidget
+            v-if="presentationMapEnabled"
+            class="retail-map"
+            :presentation="sourcePresentation"
+            :model="safeModel"
+            :geo-json="provinceGeoJson"
+            mode="province"
+            :metric-key="activeMapMetricKey"
+            :selected-region-code="selectedCityCode"
+            :data-date="displayDate"
+            :demo="demo"
+            @region-select="selectCity"
+            @branch-select="openInstitutionFromMap"
+            @map-context="emit('map-context', $event)"
+          />
           <PanoramaMap
+            v-else
             class="retail-map"
             appearance="relief"
             label-layout="callout"
@@ -300,6 +316,7 @@
           class="retail-panel retail-ranking-panel"
           :model="institutionRankingModel"
           :title="institutionRankingTitle"
+          @metric-change="syncMapMetric"
         />
         <template v-else>
         <article v-if="hasDepositRankingShape" class="retail-panel retail-institution-comparison" data-testid="retail-institution-comparison">
@@ -565,6 +582,8 @@ import SeriesTableWidgets from '../presentation/widgets/SeriesTableWidgets.vue';
 import { buildDisplaySeriesTableModel } from '../presentation/model/displaySeriesTableModel';
 import CompositionTabsWidget from '../presentation/widgets/CompositionTabsWidget.vue';
 import InstitutionRankingWidget from '../presentation/widgets/InstitutionRankingWidget.vue';
+import PresentationMapWidget from '../presentation/map/PresentationMapWidget.vue';
+import { findVisibleMapComponent } from '../presentation/map/mapModel';
 import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
 import { buildInstitutionRankingModel } from '../presentation/model/institutionRankingModel';
 import { provinceGeo } from './geography.js';
@@ -592,7 +611,7 @@ const configuredMetrics = computed(() => buildDisplayMetricsModel(
 const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(
   props.sourcePresentation?.displayPresentation, safeModel.value
 ));
-const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select', 'business-line-select']);
+const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select', 'business-line-select', 'map-context']);
 
 const KPI_DEFINITIONS = Object.freeze([
   { key: 'retailAum', label: '零售AUM', unit: '', emptyText: '暂无数据源', emptyTitle: '当前未接入理财、基金、保险等客户金融资产来源' },
@@ -609,6 +628,7 @@ const rankingMetricOptions = Object.freeze([
   { key: 'rate', label: '完成率', unit: '%' }
 ]);
 const rankingMetric = ref('aum');
+const selectedMapMetricKey = ref('');
 const rankingOrder = ref('leading');
 const institutionMetric = ref('deposit');
 const institutionFilter = ref('');
@@ -665,6 +685,8 @@ const rankingComponent = computed(() => {
   const components = Array.isArray(presentation.display?.components) ? presentation.display.components : [];
   return components.find(component => component?.componentType === 'RANKING' && component.visible !== false) || null;
 });
+const mapComponent = computed(() => findVisibleMapComponent(props.sourcePresentation?.displayPresentation || props.sourcePresentation));
+const presentationMapEnabled = computed(() => Boolean(mapComponent.value));
 const institutionRankingEnabled = computed(() => Boolean(rankingComponent.value));
 const institutionRankingModel = computed(() => {
   const component = rankingComponent.value;
@@ -673,7 +695,8 @@ const institutionRankingModel = computed(() => {
     institutions: safeModel.value.institutions,
     sourceAuthorized: true,
     rows: safeModel.value.rankings,
-    rankingMetrics: Array.isArray(component.content?.rankingMetrics) ? component.content.rankingMetrics : []
+    rankingMetrics: Array.isArray(component.content?.rankingMetrics) ? component.content.rankingMetrics : [],
+    activeMetricKey: selectedMapMetricKey.value
   });
 });
 const institutionRankingTitle = computed(() => {
@@ -733,6 +756,9 @@ const today = computed(() => {
   return `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
 });
 const rankingMetricInfo = computed(() => rankingMetricOptions.find(item => item.key === rankingMetric.value) || rankingMetricOptions[0]);
+const activeMapMetricKey = computed(() => selectedMapMetricKey.value
+  || institutionRankingModel.value.activeMetricKey
+  || String(mapComponent.value?.content?.mainField || '').trim());
 const segmentComparisons = computed(() => buildSegmentComparisons(safeModel.value.segments));
 const segmentCoverageLabel = computed(() => `${segmentComparisons.value.length}组有效`);
 const leadershipInsights = computed(() => buildRetailLeadershipInsights(safeModel.value));
@@ -1073,6 +1099,14 @@ function clearCity() {
   selectedCityName.value = '';
 }
 
+function syncMapMetric(payload = {}) {
+  const key = String(payload?.metricKey || '').trim();
+  if (!key) return;
+  const options = institutionRankingModel.value.metrics || [];
+  if (options.length && !options.some(item => item.metricKey === key)) return;
+  selectedMapMetricKey.value = key;
+}
+
 function institutionName(institution) {
   return institution?.name || institution?.orgName || institution?.orgCode || '未命名机构';
 }
@@ -1095,6 +1129,10 @@ function openInstitution(item) {
   };
   emit('branch-select', code);
   openDirectory(false);
+}
+
+function openInstitutionFromMap(orgCode) {
+  openInstitution({ orgCode: String(orgCode || '') });
 }
 
 function openAttention(item, event) {
@@ -1174,6 +1212,7 @@ function clearTransientState() {
   selectedCityName.value = '';
   directorySearch.value = '';
   selectedInstitution.value = null;
+  selectedMapMetricKey.value = '';
   rankingMetric.value = 'aum';
   rankingOrder.value = 'leading';
   institutionMetric.value = 'deposit';

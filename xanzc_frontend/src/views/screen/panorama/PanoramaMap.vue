@@ -9,7 +9,7 @@
     :data-selected-region="selectedRegionCode || ''"
     :data-hovered-region="hoveredRegionCode"
     :data-zoom="zoom.toFixed(2)"
-    :data-pan-enabled="mode === 'city' && zoom > 1 ? 'true' : 'false'"
+    :data-pan-enabled="mode !== 'province' && zoom > 1 ? 'true' : 'false'"
     :class="{ 'is-dragging': dragging }"
     @pointerdown="startPan"
     @pointermove="movePan"
@@ -41,13 +41,15 @@
           v-for="region in fallbackRegions"
           :key="region.key"
           class="panorama-map__region"
-          :class="{ 'is-selected': region.code && String(region.code) === String(selectedRegionCode), 'is-hovered': String(region.code) === hoveredRegionCode }"
+          :class="{ 'is-selected': region.code && String(region.code) === String(selectedRegionCode), 'is-hovered': String(region.code) === hoveredRegionCode, 'is-metric-missing': metricState(region) === 'MISSING' }"
         >
           <path
             :d="region.path"
             fill-rule="evenodd"
             :data-region-code="region.code"
             :data-region-name="region.name"
+            :data-metric-state="metricState(region)"
+            :style="metricStyle(region)"
             role="button"
             tabindex="0"
             :aria-label="`选择${region.name || '行政区'}`"
@@ -149,7 +151,7 @@
       暂无可用的真实行政区边界数据。
     </p>
 
-    <div v-if="mode === 'city'" class="panorama-map__point-layer" aria-label="可定位机构">
+    <div v-if="mode !== 'province'" class="panorama-map__point-layer" aria-label="可定位机构">
       <button
         v-for="point in pointClusters"
         :key="point.isCluster ? point.id : point.orgCode"
@@ -215,7 +217,7 @@
         : '三维真实行政区地图，坐标系 GCJ-02；放大后可拖动地图。' }}
     </p>
 
-    <p v-if="mode === 'city' && unmappedPoints.length" class="panorama-map__unmapped" aria-label="未绘制机构状态">
+    <p v-if="mode !== 'province' && unmappedPoints.length" class="panorama-map__unmapped" aria-label="未绘制机构状态">
       <strong>未绘制 {{ unmappedPoints.length }} 个机构</strong>
       <span>缺少有效 GCJ-02 坐标或坐标系未确认</span>
     </p>
@@ -249,12 +251,16 @@ const props = defineProps({
   selectedOrgCode: { type: [String, Number], default: null },
   metricLabel: { type: String, default: '' },
   metricValues: { type: Object, default: () => ({}) },
+  metricNumericValues: { type: Object, default: () => ({}) },
+  metricColors: { type: Object, default: () => ({}) },
+  colorByMetric: { type: Boolean, default: false },
   cityDetails: { type: Object, default: () => ({}) },
   mode: { type: String, default: 'province' },
   selectedRegionCode: { type: [String, Number], default: null },
   demo: { type: Boolean, default: false },
   appearance: { type: String, default: 'classic' },
-  labelLayout: { type: String, default: 'inline' }
+  labelLayout: { type: String, default: 'inline' },
+  viewFit: { type: Object, default: () => ({}) }
 });
 
 const emit = defineEmits(['region-select', 'branch-select']);
@@ -311,7 +317,7 @@ const reliefConfig = computed(() => createReliefGeometryConfig({
 const renderablePoints = computed(() => filterRenderablePoints(props.points, { demo: props.demo }));
 const unmappedPoints = computed(() => (Array.isArray(props.points) ? props.points : [])
   .filter(point => !renderablePoints.value.includes(point)));
-const drawablePoints = computed(() => props.mode === 'city' ? renderablePoints.value : []);
+const drawablePoints = computed(() => props.mode !== 'province' ? renderablePoints.value : []);
 
 const pointClusters = computed(() => clusterPoints(drawablePoints.value, {
   projection: projection.value,
@@ -324,7 +330,7 @@ const pointClusters = computed(() => clusterPoints(drawablePoints.value, {
 // A branch name is business information, not optional map decoration. Clustering
 // already collapses points that are too close, so every remaining single point
 // keeps its label even when the city has more than eight branches.
-const showPointLabels = computed(() => props.mode === 'city');
+const showPointLabels = computed(() => props.mode !== 'province');
 
 let panPointerId = null;
 let panOrigin = null;
@@ -525,6 +531,22 @@ function metricDisplayValue(region) {
   return value == null || String(value).trim() === '' ? '暂无数据' : String(value);
 }
 
+function metricState(region) {
+  if (!props.colorByMetric) return undefined;
+  const value = props.metricNumericValues?.[region.code];
+  return value === null || value === undefined || value === '' || !Number.isFinite(Number(value)) ? 'MISSING' : 'READY';
+}
+
+function metricStyle(region) {
+  if (!props.colorByMetric) return undefined;
+  const color = props.metricColors?.[region.code] || '#65738a';
+  return { fill: color };
+}
+
+function metricColorForCode(code) {
+  return props.metricColors?.[code] || '#65738a';
+}
+
 const calloutLayout = computed(() => {
   if (!isCalloutLayout.value) return {};
   void overlayRevision.value;
@@ -660,7 +682,7 @@ function clampViewCenter(center) {
 }
 
 function startPan(event) {
-  if (props.mode !== 'city' || zoom.value <= 1 || event.isPrimary === false || event.button > 0) return;
+  if (props.mode === 'province' || zoom.value <= 1 || event.isPrimary === false || event.button > 0) return;
   if (event.target?.closest?.('.panorama-map__controls, .panorama-map__cluster-picker')) return;
   panPointerId = event.pointerId;
   panOrigin = {
@@ -1040,7 +1062,9 @@ function buildThreeMapUnsafe() {
         steps: 1,
         curveSegments: 1
       });
-      const mesh = new THREE.Mesh(geometry, [(selected ? selectedTopMaterial : topMaterial).clone(), sideMaterial.clone()]);
+      const regionTopMaterial = (selected ? selectedTopMaterial : topMaterial).clone();
+      if (props.colorByMetric) regionTopMaterial.color.set(metricColorForCode(polygon.code));
+      const mesh = new THREE.Mesh(geometry, [regionTopMaterial, sideMaterial.clone()]);
       geometry.setAttribute('color', new THREE.BufferAttribute(
         createReliefWallColors(geometry.attributes.position.array, config.depth), 3
       ));
@@ -1077,7 +1101,9 @@ function buildThreeMapUnsafe() {
         curveSegments: 1
       });
       const selected = polygon.code && String(polygon.code) === String(props.selectedRegionCode);
-      const mesh = new THREE.Mesh(geometry, [selected ? selectedTopMaterial : topMaterial, sideMaterial]);
+      const regionTopMaterial = (selected ? selectedTopMaterial : topMaterial).clone();
+      if (props.colorByMetric) regionTopMaterial.color.set(metricColorForCode(polygon.code));
+      const mesh = new THREE.Mesh(geometry, [regionTopMaterial, sideMaterial.clone()]);
       mesh.userData = { type: 'region', code: polygon.code, name: polygon.name };
       mapGroup.add(mesh);
       const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), edgeMaterial);
@@ -1145,12 +1171,19 @@ function resizeRenderer() {
           vertices.push({ x: vertex.x, y: vertex.y });
         }
       });
-      const fit = fitReliefView(vertices, { aspect, fitHeight: reliefConfig.value.fitHeight });
+      const configuredFitHeight = Number(props.viewFit?.reliefFitHeight);
+      const fit = fitReliefView(vertices, {
+        aspect,
+        fitHeight: Number.isFinite(configuredFitHeight) && configuredFitHeight > 0 ? configuredFitHeight : reliefConfig.value.fitHeight
+      });
       if (fit) Object.assign(camera, fit);
     } else {
       const map = worldBounds();
       // Preserve the classic camera fit for retail and other existing callers.
-      const fitPadding = props.mode === 'province' ? 1.02 : 1.0;
+      const configuredPadding = Number(props.viewFit?.classicPadding);
+      const fitPadding = Number.isFinite(configuredPadding) && configuredPadding > 0
+        ? configuredPadding
+        : props.mode === 'province' ? 1.02 : 1.0;
       const cameraHeight = Math.max(map.height * fitPadding, map.width / aspect * fitPadding, 5);
       const cameraWidth = cameraHeight * aspect;
       camera.left = -cameraWidth / 2;
@@ -1342,7 +1375,11 @@ onMounted(() => {
   }
 });
 
-watch(() => [props.geoJson, props.points, props.selectedOrgCode, props.selectedRegionCode, props.mode, props.demo, props.appearance], () => {
+watch(() => [
+  props.geoJson, props.points, props.selectedOrgCode, props.selectedRegionCode, props.mode,
+  props.demo, props.appearance, props.metricNumericValues, props.metricColors, props.colorByMetric,
+  props.viewFit
+], () => {
   activeCluster.value = null;
   rebuildThreeMap();
 }, { deep: true });

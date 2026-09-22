@@ -124,6 +124,32 @@ describe('PanoramaMap', () => {
     wrapper.unmount();
   });
 
+  it('新 MAP 分支可按当前指标着色，缺数区域使用中性色且保留标签', async () => {
+    const metricGeoJson = {
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', properties: { adcode: '610100', name: '西安市' }, geometry: { type: 'Polygon', coordinates: [[[108, 34], [109, 34], [109, 35], [108, 35], [108, 34]]] } },
+        { type: 'Feature', properties: { adcode: '610200', name: '铜川市' }, geometry: { type: 'Polygon', coordinates: [[[109, 34], [110, 34], [110, 35], [109, 35], [109, 34]]] } }
+      ]
+    };
+    const wrapper = mount(PanoramaMap, {
+      props: {
+        geoJson: metricGeoJson,
+        colorByMetric: true,
+        metricValues: { '610100': '100.00亿元', '610200': '暂无数据' },
+        metricNumericValues: { '610100': 100, '610200': null },
+        metricColors: { '610100': '#f4c95d', '610200': '#65738a' }
+      }
+    });
+    await nextTick();
+    const paths = wrapper.findAll('.panorama-map__region path');
+    expect(paths[0].attributes('data-metric-state')).toBe('READY');
+    expect(paths[0].attributes('style')).toContain('#f4c95d');
+    expect(paths[1].attributes('data-metric-state')).toBe('MISSING');
+    expect(paths[1].attributes('style')).toContain('#65738a');
+    wrapper.unmount();
+  });
+
   it('开发环境显式 demo=true 时显示合法演示点，默认仍排除演示点', async () => {
     vi.stubEnv('DEV', true);
     const hidden = mount(PanoramaMap, { props: { geoJson, points: clusteredPoints, mode: 'city' } });

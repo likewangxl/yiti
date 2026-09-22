@@ -54,6 +54,7 @@ describe('InstitutionRankingWidget', () => {
     expect(buttons).toHaveLength(2);
     expect(buttons[0].attributes('aria-selected')).toBe('true');
     await buttons[1].trigger('click');
+    expect(wrapper.emitted('metric-change')).toContainEqual([{ metricKey: 'increase' }]);
     expect(wrapper.get('[data-ranking-metric="increase"]').attributes('aria-selected')).toBe('true');
     expect(wrapper.get('[data-action="toggle-ranking-carousel"]').text()).toContain('继续');
     await vi.advanceTimersByTimeAsync(3000);
@@ -62,6 +63,13 @@ describe('InstitutionRankingWidget', () => {
     expect(wrapper.get('[data-action="toggle-ranking-carousel"]').text()).toContain('暂停');
     await vi.advanceTimersByTimeAsync(1000);
     expect(wrapper.get('[data-ranking-metric="deposit"]').attributes('aria-selected')).toBe('true');
+  });
+
+  it('自动轮播切换时发出固定 metric-change 事件', async () => {
+    vi.useFakeTimers();
+    const wrapper = mountWidget({ interval: 1000 });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(wrapper.emitted('metric-change')).toContainEqual([{ metricKey: 'increase' }]);
   });
 
   it('hover和focus暂停轮播，离开后恢复，卸载清理定时器', async () => {

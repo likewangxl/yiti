@@ -77,6 +77,7 @@ const props = defineProps({
   title: { type: String, default: '' },
   interval: { type: Number, default: 10000 }
 });
+const emit = defineEmits(['metric-change']);
 
 const activeMetricKey = ref('');
 const userPaused = ref(false);
@@ -103,13 +104,16 @@ function selectMetric(metricKey) {
   if (!metricOptions.value.some(item => item.metricKey === metricKey)) return;
   activeMetricKey.value = metricKey;
   userPaused.value = true;
+  emit('metric-change', { metricKey });
   syncCarousel();
 }
 
 function advanceMetric() {
   if (userPaused.value || interactionPaused.value || pageHidden.value || metricOptions.value.length < 2) return;
   const index = metricOptions.value.findIndex(item => item.metricKey === activeMetricKey.value);
-  activeMetricKey.value = metricOptions.value[(index + 1) % metricOptions.value.length].metricKey;
+  const metricKey = metricOptions.value[(index + 1) % metricOptions.value.length].metricKey;
+  activeMetricKey.value = metricKey;
+  emit('metric-change', { metricKey });
 }
 
 function stopCarousel() {

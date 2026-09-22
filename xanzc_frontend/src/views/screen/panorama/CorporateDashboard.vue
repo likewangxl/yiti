@@ -167,7 +167,22 @@
             <button v-if="selectedCityCode" type="button" class="corporate-clear-city" data-action="clear-city" @click="clearCity">显示全部机构</button>
             <span v-else class="corporate-map-hint">点击城市筛选机构排名</span>
           </div>
-          <PanoramaMap class="corporate-map" appearance="relief" label-layout="callout" :city-details="corporateMapCityDetails" :metric-label="rankingMetricInfo.label" :metric-values="corporateMapMetricValues" :data-metric-label="rankingMetricInfo.label" :geo-json="provinceGeoJson" :points="safeModel.institutions" :demo="demo" mode="province" :selected-region-code="selectedCityCode" @region-select="selectCity" />
+          <PresentationMapWidget
+            v-if="presentationMapEnabled"
+            class="corporate-map"
+            :presentation="sourcePresentation"
+            :model="safeModel"
+            :geo-json="provinceGeoJson"
+            mode="province"
+            :metric-key="activeMapMetricKey"
+            :selected-region-code="selectedCityCode"
+            :data-date="displayDate"
+            :demo="demo"
+            @region-select="selectCity"
+            @branch-select="openInstitutionFromMap"
+            @map-context="emit('map-context', $event)"
+          />
+          <PanoramaMap v-else class="corporate-map" appearance="relief" label-layout="callout" :city-details="corporateMapCityDetails" :metric-label="rankingMetricInfo.label" :metric-values="corporateMapMetricValues" :data-metric-label="rankingMetricInfo.label" :geo-json="provinceGeoJson" :points="safeModel.institutions" :demo="demo" mode="province" :selected-region-code="selectedCityCode" @region-select="selectCity" />
           <p class="corporate-scope-note" data-testid="corporate-scope-note">{{ safeModel.scopeLabel }} KPI 与趋势不随城市筛选变化；城市选择只影响机构分析。</p>
           <p v-if="selectedCityCode" class="corporate-selected-city" data-testid="corporate-selected-city">当前机构分析：{{ selectedCityName }}（{{ filteredRankings.length }} 家有排名记录）</p>
         </article>
@@ -183,6 +198,7 @@
           class="corporate-panel corporate-ranking-panel"
           :model="institutionRankingModel"
           :title="institutionRankingTitle"
+          @metric-change="syncMapMetric"
         />
         <article v-else class="corporate-panel corporate-ranking-panel">
           <header class="corporate-panel__heading">
@@ -261,6 +277,8 @@ import SeriesTableWidgets from '../presentation/widgets/SeriesTableWidgets.vue';
 import { buildDisplaySeriesTableModel } from '../presentation/model/displaySeriesTableModel';
 import CompositionTabsWidget from '../presentation/widgets/CompositionTabsWidget.vue';
 import InstitutionRankingWidget from '../presentation/widgets/InstitutionRankingWidget.vue';
+import PresentationMapWidget from '../presentation/map/PresentationMapWidget.vue';
+import { findVisibleMapComponent } from '../presentation/map/mapModel';
 import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
 import { buildInstitutionRankingModel } from '../presentation/model/institutionRankingModel';
 
@@ -277,7 +295,7 @@ const configuredMetrics = computed(() => buildDisplayMetricsModel(
 const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(
   props.sourcePresentation?.displayPresentation, safeModel.value
 ));
-const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select', 'business-line-select']);
+const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select', 'business-line-select', 'map-context']);
 
 const KPI_DEFINITIONS = Object.freeze([
   { key: 'corpDeposit', label: '对公存款余额', unit: '亿元' },
@@ -293,6 +311,7 @@ const rankingMetricOptions = Object.freeze([
   { key: 'rate', label: '完成率', unit: '%' }
 ]);
 const rankingMetric = ref('deposit');
+const selectedMapMetricKey = ref('');
 const rankingOrder = ref('leading');
 const selectedCityCode = ref('');
 const selectedCityName = ref('');
@@ -346,6 +365,8 @@ const rankingComponent = computed(() => {
   const components = Array.isArray(presentation.display?.components) ? presentation.display.components : [];
   return components.find(component => component?.componentType === 'RANKING' && component.visible !== false) || null;
 });
+const mapComponent = computed(() => findVisibleMapComponent(props.sourcePresentation?.displayPresentation || props.sourcePresentation));
+const presentationMapEnabled = computed(() => Boolean(mapComponent.value));
 const institutionRankingEnabled = computed(() => Boolean(rankingComponent.value));
 const institutionRankingModel = computed(() => {
   const component = rankingComponent.value;
@@ -354,7 +375,8 @@ const institutionRankingModel = computed(() => {
     institutions: safeModel.value.institutions,
     sourceAuthorized: true,
     rows: safeModel.value.rankings,
-    rankingMetrics: Array.isArray(component.content?.rankingMetrics) ? component.content.rankingMetrics : []
+    rankingMetrics: Array.isArray(component.content?.rankingMetrics) ? component.content.rankingMetrics : [],
+    activeMetricKey: selectedMapMetricKey.value
   });
 });
 const institutionRankingTitle = computed(() => {
@@ -393,6 +415,9 @@ const displayDate = computed(() => safeModel.value.dataDate || '—');
 const provinceGeoJson = provinceGeo || null;
 const today = computed(() => { const now = new Date(); return `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`; });
 const rankingMetricInfo = computed(() => rankingMetricOptions.find(item => item.key === rankingMetric.value) || rankingMetricOptions[0]);
+const activeMapMetricKey = computed(() => selectedMapMetricKey.value
+  || institutionRankingModel.value.activeMetricKey
+  || String(mapComponent.value?.content?.mainField || '').trim());
 const segmentComparisons = computed(() => buildSegmentComparisons(safeModel.value.segments));
 const leadershipInsights = computed(() => buildCorporateLeadershipInsights(safeModel.value));
 const growthCountLabel = computed(() => leadershipInsights.value.growthComparableCount > 0 ? String(leadershipInsights.value.negativeGrowthCount) : '—');
@@ -513,9 +538,17 @@ function targetProgressWidth(target) { const value = targetProgress(target); ret
 function targetGap(target) { const actual = finiteMetric(target?.actual); const expected = finiteMetric(target?.target); return actual === null || expected === null ? null : actual - expected; }
 function selectCity(region) { const code = String(region?.code || '').trim(); if (!code) return; selectedCityCode.value = code; selectedCityName.value = String(region?.name || code); }
 function clearCity() { selectedCityCode.value = ''; selectedCityName.value = ''; }
+function syncMapMetric(payload = {}) {
+  const key = String(payload?.metricKey || '').trim();
+  if (!key) return;
+  const options = institutionRankingModel.value.metrics || [];
+  if (options.length && !options.some(item => item.metricKey === key)) return;
+  selectedMapMetricKey.value = key;
+}
 function institutionName(institution) { return institution?.name || institution?.orgName || institution?.orgCode || '未命名机构'; }
 function institutionCity(institution) { return institution?.cityName || String(institution?.cityCode || '').trim() || '城市待维护'; }
 function openInstitution(item) { const code = String(item?.orgCode || '').trim(); if (!code) return; focusBeforeDirectory.value = document.activeElement; const identity = safeModel.value.institutions.find(entry => String(entry?.orgCode || '') === code); selectedInstitution.value = identity || { orgCode: code, name: item?.name || item?.orgName || code, cityCode: item?.cityCode || null, cityName: item?.cityName || null, located: false }; emit('branch-select', code); directoryOpen.value = true; lockBodyScroll(); nextTick(() => directorySearchRef.value?.focus?.()); }
+function openInstitutionFromMap(orgCode) { openInstitution({ orgCode: String(orgCode || '') }); }
 function selectInstitution(institution) { selectedInstitution.value = institution; emit('branch-select', institution.orgCode); }
 function lockBodyScroll() { document.body.style.overflow = 'hidden'; }
 function unlockBodyScroll() { if (!selectedAttention.value && !directoryOpen.value) document.body.style.overflow = ''; }
@@ -529,7 +562,7 @@ function trapTab(event, container) { if (event.key !== 'Tab') return; const focu
 function onDirectoryKeydown(event) { if (event.key === 'Escape') { event.preventDefault(); closeDirectory(); return; } trapTab(event, directoryDialogRef.value); }
 function onAttentionKeydown(event) { if (event.key === 'Escape') { event.preventDefault(); closeAttention(); return; } trapTab(event, attentionDialogRef.value); }
 function onDocumentKeydown(event) { if (event.key === 'Escape') { event.preventDefault(); closeOverlays(); } }
-function clearTransientState() { clearCity(); directorySearch.value = ''; selectedInstitution.value = null; rankingMetric.value = 'deposit'; rankingOrder.value = 'leading'; closeAttention({ restoreFocus: false }); closeDirectory({ restoreFocus: false }); }
+function clearTransientState() { clearCity(); directorySearch.value = ''; selectedInstitution.value = null; selectedMapMetricKey.value = ''; rankingMetric.value = 'deposit'; rankingOrder.value = 'leading'; closeAttention({ restoreFocus: false }); closeDirectory({ restoreFocus: false }); }
 
 function scopeSignature(model = {}) {
   const source = model && typeof model === 'object' ? model : {};

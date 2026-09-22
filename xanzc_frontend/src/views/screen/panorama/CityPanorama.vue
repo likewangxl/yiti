@@ -7,10 +7,10 @@
         <span>全市经营口径</span>
       </div>
       <div class="city-header-actions">
-        <button type="button" data-action="city-back" @click="emit('back')"><component :is="Back" /> 返回全省</button>
+        <button type="button" data-action="city-back" @click="backToProvince"><component :is="Back" /> 返回全省</button>
         <button type="button" data-action="city-refresh" aria-label="刷新市级数据" @click="emit('refresh')"><component :is="Refresh" /></button>
         <button type="button" data-action="city-fullscreen" aria-label="市级全屏" @click="requestFullscreen"><component :is="FullScreen" /></button>
-        <button type="button" data-action="city-close" aria-label="关闭市级全景" @click="emit('close')"><component :is="Close" /></button>
+        <button type="button" data-action="city-close" aria-label="关闭市级全景" @click="closeCity"><component :is="Close" /></button>
       </div>
     </header>
 
@@ -48,7 +48,25 @@
             <button type="button" data-testid="attention-filter" :class="{ active: attentionOnly }" @click="attentionOnly = !attentionOnly">经营关注</button>
           </div>
         </div>
+        <PresentationMapWidget
+          v-if="mapPresentationEnabled"
+          class="city-map"
+          :presentation="sourcePresentation"
+          :model="safeModel"
+          :geo-json="cityGeoJson"
+          :mode="'city'"
+          :city-code="cityCode"
+          :city-name="cityName"
+          :metric-key="rankingMetricKey"
+          :selected-org-code="selectedOrgCode"
+          :selected-region-code="cityCode"
+          :data-date="displayDate"
+          :demo="demo"
+          @branch-select="selectBranch"
+          @map-context="emit('map-context', $event)"
+        />
         <PanoramaMap
+          v-else
           class="city-map"
           appearance="relief"
           :class="{ 'is-attention-filter': attentionOnly }"
@@ -63,6 +81,7 @@
         />
         <div class="city-map-legend"><span><i class="is-cyan" />支行</span><span><i class="is-amber" />经营关注</span><span><i class="is-ring" />聚合网点</span></div>
         <div class="city-coordinate-note">已定位 {{ locatedInstitutions.length }} 家 <span>|</span> 待补充坐标 {{ missingCoordinates.length }} 家</div>
+        <p v-if="!cityInstitutions.length" class="city-inline-status city-no-visible-institutions" data-testid="city-no-visible-institutions" role="status">当前城市暂无可见机构</p>
       </article>
 
       <article class="panorama-panel city-list-panel">
@@ -117,8 +136,11 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { Back, Close, FullScreen, Location, Refresh } from '@element-plus/icons-vue';
 import PanoramaMap from './PanoramaMap.vue';
+import PresentationMapWidget from '../presentation/map/PresentationMapWidget.vue';
+import { findVisibleMapComponent } from '../presentation/map/mapModel';
 import PanoramaTrend from './PanoramaTrend.vue';
 import { cityGeoByCode } from './geography.js';
 import {
@@ -129,6 +151,7 @@ import {
 } from './leadershipInsights.js';
 import { resolveDataStatus } from './sourcePresentation';
 import { stripTestModifier } from './targetPresentation.js';
+import { buildNavigationQuery, parseNavigationQuery } from '../presentation/navigation/navigationModel';
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -137,9 +160,12 @@ const props = defineProps({
   cityName: { type: String, default: '' },
   initialOrgCode: { type: String, default: '' },
   initialState: { type: Object, default: () => ({}) },
-  sourcePresentation: { type: Object, default: () => ({}) }
+  sourcePresentation: { type: Object, default: () => ({}) },
+  rankingMetricKey: { type: String, default: '' }
 });
-const emit = defineEmits(['close', 'back', 'refresh', 'fullscreen', 'branch-select', 'state-change']);
+const emit = defineEmits(['close', 'back', 'refresh', 'fullscreen', 'branch-select', 'state-change', 'map-context']);
+const router = typeof useRouter === 'function' ? useRouter() : null;
+const route = typeof useRoute === 'function' ? useRoute() : null;
 
 const initialState = props.initialState && typeof props.initialState === 'object' ? props.initialState : {};
 const search = ref(String(initialState.search || ''));
@@ -150,6 +176,49 @@ const pageSize = 5;
 const selectedOrgCode = ref(props.initialOrgCode || String(initialState.selectedOrgCode || ''));
 const detailExpanded = ref(initialState.detailExpanded === undefined ? true : Boolean(initialState.detailExpanded));
 const rootRef = ref(null);
+
+const routeNavigation = computed(() => parseNavigationQuery(route?.query || {}));
+
+function navigationStateSnapshot() {
+  return {
+    cityCode: props.cityCode,
+    search: search.value,
+    attentionOnly: attentionOnly.value,
+    sortDescending: sortDescending.value,
+    page: page.value,
+    selectedOrgCode: selectedOrgCode.value,
+    detailExpanded: detailExpanded.value
+  };
+}
+
+function replaceNavigationQuery(overrides = {}) {
+  if (!router?.replace) return;
+  const context = {
+    ...routeNavigation.value,
+    cityCode: props.cityCode,
+    orgCode: selectedOrgCode.value,
+    ...overrides
+  };
+  const query = buildNavigationQuery({
+    ...context,
+    state: overrides.state === null ? null : (overrides.state || navigationStateSnapshot())
+  });
+  return router.replace({ query });
+}
+
+function clearNavigationContext() {
+  return replaceNavigationQuery({ cityCode: '', orgCode: '', state: null });
+}
+
+function backToProvince() {
+  void clearNavigationContext();
+  emit('back');
+}
+
+function closeCity() {
+  void clearNavigationContext();
+  emit('close');
+}
 
 function cityStatus(slot, semantic = '') {
   return resolveDataStatus(props.sourcePresentation, props.sourcePresentation?.runtimeIssues, slot, semantic);
@@ -181,6 +250,7 @@ const cityTitle = computed(() => {
 });
 const displayDate = computed(() => citySummary.value?.dataDate || safeModel.value.dataDate || '—');
 const cityGeoJson = computed(() => cityGeoByCode?.[props.cityCode] || null);
+const mapPresentationEnabled = computed(() => Boolean(findVisibleMapComponent(props.sourcePresentation)));
 const cityInstitutions = computed(() => {
   if (!props.cityCode) return [];
   return safeModel.value.institutions.filter(item => item && String(item.cityCode || '') === String(props.cityCode));
@@ -311,6 +381,7 @@ function selectBranch(orgCode) {
   if (!code || !cityInstitutions.value.some(item => item.orgCode === code)) return;
   selectedOrgCode.value = code;
   detailExpanded.value = true;
+  void replaceNavigationQuery({ orgCode: code });
   emit('branch-select', code);
 }
 function toggleSort() {
@@ -319,15 +390,9 @@ function toggleSort() {
 }
 
 function emitState() {
-  emit('state-change', {
-    cityCode: props.cityCode,
-    search: search.value,
-    attentionOnly: attentionOnly.value,
-    sortDescending: sortDescending.value,
-    page: page.value,
-    selectedOrgCode: selectedOrgCode.value,
-    detailExpanded: detailExpanded.value
-  });
+  const state = navigationStateSnapshot();
+  void replaceNavigationQuery({ state });
+  emit('state-change', state);
 }
 function requestFullscreen() {
   emit('fullscreen');
@@ -337,6 +402,7 @@ function requestFullscreen() {
   }
 }
 onMounted(() => {
+  if (props.cityCode) void replaceNavigationQuery({ orgCode: selectedOrgCode.value || routeNavigation.value.orgCode || '' });
   if ((!selectedOrgCode.value || !cityInstitutions.value.some(item => item.orgCode === selectedOrgCode.value)) && cityInstitutions.value.length) {
     selectBranch(cityInstitutions.value[0].orgCode);
   }

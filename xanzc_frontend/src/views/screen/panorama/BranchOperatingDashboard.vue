@@ -48,6 +48,7 @@
       class="branch-operating-panel branch-operating-ranking-panel"
       :model="institutionRankingModel"
       :title="institutionRankingTitle"
+      @metric-change="syncMapMetric"
     />
 
     <section class="branch-operating-main-grid" aria-label="支行经营分析">
@@ -179,7 +180,7 @@ const props = defineProps({ model: { type: Object, default: () => ({}) }, source
 const configuredMetrics = computed(() => buildDisplayMetricsModel(props.sourcePresentation, props.model || {}));
 const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(props.sourcePresentation, props.model || {}));
 const emit = defineEmits(['refresh', 'back', 'branch-select', 'business-line-select']);
-const rootRef = ref(null); const selectedMetric = ref('deposit'); const trendMode = ref('all'); const isFullscreen = ref(false);
+const rootRef = ref(null); const selectedMetric = ref('deposit'); const selectedMapMetricKey = ref(''); const trendMode = ref('all'); const isFullscreen = ref(false);
 const safeModel = computed(() => (props.model && typeof props.model === 'object' ? props.model : {}));
 function presentationOf(source) {
   if (!source || typeof source !== 'object') return {};
@@ -203,7 +204,8 @@ const institutionRankingModel = computed(() => {
     institutions,
     sourceAuthorized: true,
     rows,
-    rankingMetrics: Array.isArray(component.content?.rankingMetrics) ? component.content.rankingMetrics : []
+    rankingMetrics: Array.isArray(component.content?.rankingMetrics) ? component.content.rankingMetrics : [],
+    activeMetricKey: selectedMapMetricKey.value
   });
 });
 const institutionRankingTitle = computed(() => {
@@ -363,6 +365,13 @@ function teamTone(team) { const rate = finiteMetric(team?.rate); return rate ===
 function teamState(team) { const rate = finiteMetric(team?.rate); return rate === null ? '完成率未提供' : rate >= 100 ? '达成' : rate < 60 ? '需协调' : '推进中'; }
 function marketingStatusKey(item) { const raw = String(item?.key ?? item?.status ?? item?.label ?? '').trim().toUpperCase(); if (raw.includes('SLA') || raw.includes('预警')) return 'SLA_WARNING'; if (raw === 'PENDING' || raw.includes('待处理') || raw.includes('待触达')) return 'PENDING'; if (raw === 'IN_PROGRESS' || raw.includes('进行中')) return 'IN_PROGRESS'; if (raw === 'SUCCESS' || raw.includes('完成') || raw.includes('成功')) return 'SUCCESS'; if (raw === 'CANCELLED' || raw.includes('取消')) return 'CANCELLED'; return ''; }
 function selectBranch(value) { const code = String(value || '').trim(); if (code) emit('branch-select', code); }
+function syncMapMetric(payload = {}) {
+  const key = String(payload?.metricKey || '').trim();
+  if (!key) return;
+  const options = institutionRankingModel.value.metrics || [];
+  if (options.length && !options.some(item => item.metricKey === key)) return;
+  selectedMapMetricKey.value = key;
+}
 async function toggleFullscreen() { try { if (document.fullscreenElement) await document.exitFullscreen?.(); else await rootRef.value?.requestFullscreen?.(); } catch { /* fullscreen is optional */ } }
 function onFullscreenChange() { isFullscreen.value = Boolean(document.fullscreenElement); }
 onMounted(() => document.addEventListener('fullscreenchange', onFullscreenChange)); onBeforeUnmount(() => document.removeEventListener('fullscreenchange', onFullscreenChange));
