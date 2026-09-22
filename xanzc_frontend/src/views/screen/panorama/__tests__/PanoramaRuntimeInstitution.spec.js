@@ -130,9 +130,9 @@ function makeModel() {
   };
 }
 
-function mountRuntime(view) {
+function mountRuntime(view, model = makeModel()) {
   harness.state = {
-    model: ref(makeModel()),
+    model: ref(model),
     loading: ref(false),
     error: ref(''),
     lastQueriedAt: ref(''),
@@ -192,6 +192,24 @@ describe('PanoramaRuntime institutionViewModel 接入', () => {
     expect(dashboardModel.institutions).toEqual([]);
     expect(wrapper.get('[data-testid="presentation-runtime-status"]').text())
       .toContain('机构展示必须使用服务端授权目录');
+    wrapper.unmount();
+  });
+
+  it('v1 机构规则过滤目录外查询行时不再把预期过滤误报为运行故障', () => {
+    const model = makeModel();
+    model.issues = [
+      { slot: 'ranking', code: 'UNAUTHORIZED_ORG', message: '目录外行已过滤' },
+      { slot: 'ranking', code: 'MISSING_COLUMN', message: '真实字段缺失' }
+    ];
+    const wrapper = mountRuntime(makeView('branch-overview-v1'), model);
+    const dashboardModel = JSON.parse(wrapper.get('[data-testid="dashboard-probe"]').text());
+
+    expect(dashboardModel.issues).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'UNAUTHORIZED_ORG' })
+    ]));
+    expect(dashboardModel.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'MISSING_COLUMN' })
+    ]));
     wrapper.unmount();
   });
 

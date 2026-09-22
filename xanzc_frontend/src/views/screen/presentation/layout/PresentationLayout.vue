@@ -171,7 +171,7 @@ function onMapContext(payload) {
 <style scoped>
 .presentation-layout { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; margin: 12px 0; min-width: 0; }
 .presentation-layout__component { grid-column: span 12; min-width: 0; }
-.presentation-layout__component[data-layout-region="HEADER"] { grid-column: span 12; }
+.presentation-layout__component[data-layout-region="HEADER"] { grid-column: span 3; }
 .presentation-layout__component[data-layout-region="LEFT"],
 .presentation-layout__component[data-layout-region="CENTER"],
 .presentation-layout__component[data-layout-region="RIGHT"] { grid-column: span 4; }
@@ -179,11 +179,13 @@ function onMapContext(payload) {
 .presentation-layout__component[data-layout-region="OVERLAY"] { grid-column: span 12; }
 .presentation-layout__empty { grid-column: 1 / -1; margin: 0; padding: 28px; border: 1px dashed rgba(106,157,220,.35); border-radius: 8px; color: #9fc2df; text-align: center; }
 @media (max-width: 900px) {
+  .presentation-layout__component[data-layout-region="HEADER"],
   .presentation-layout__component[data-layout-region="LEFT"],
   .presentation-layout__component[data-layout-region="CENTER"],
   .presentation-layout__component[data-layout-region="RIGHT"] { grid-column: span 6; }
 }
 @media (max-width: 620px) {
+  .presentation-layout__component[data-layout-region="HEADER"],
   .presentation-layout__component[data-layout-region="LEFT"],
   .presentation-layout__component[data-layout-region="CENTER"],
   .presentation-layout__component[data-layout-region="RIGHT"] { grid-column: 1 / -1; }

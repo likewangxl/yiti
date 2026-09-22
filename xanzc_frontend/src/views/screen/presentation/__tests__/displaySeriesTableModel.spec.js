@@ -45,6 +45,23 @@ describe('displaySeriesTableModel', () => {
     expect(result.components[0].rows[1].cells[1].text).toBe('—');
   });
 
+  it('机构维度明细只展示 institutionViewModel 已授权目录中的机构', () => {
+    const result = buildDisplaySeriesTableModel(presentation([{ componentId: 'table', componentType: 'DETAIL_TABLE', visible: true,
+      format: { decimals: 0 }, content: { columns: [
+        { columnKey: 'orgCode', field: 'orgCode', label: '机构', unit: 'AUTO', visible: true },
+        { columnKey: 'deposit', field: 'deposit', label: '存款', unit: 'YUAN', visible: true }
+      ] }, dataRefs: ref(5) }]), {
+      institutions: [{ orgCode: 'A', orgName: '甲机构' }],
+      blockResults: { 5: [
+        { orgCode: 'A', deposit: 1 },
+        { orgCode: 'B', deposit: 2 }
+      ] }
+    });
+
+    expect(result.components[0].rows).toHaveLength(1);
+    expect(result.components[0].rows[0].key).toBe('A');
+  });
+
   it('AUTO维度保留原始文本，空值使用emptyText且对象不会被字符串化', () => {
     const result = buildDisplaySeriesTableModel(presentation([{ componentId: 'table', componentType: 'DETAIL_TABLE', visible: true,
       format: { decimals: 2, emptyText: '暂无' }, content: { columns: [

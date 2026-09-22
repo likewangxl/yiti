@@ -21,6 +21,18 @@ function sourceRows(model, component, ref) {
   return Array.isArray(model?.items) ? model.items : Array.isArray(model?.rankings) ? model.rankings : [];
 }
 
+function authorizedDetailRows(rows, model, ref) {
+  if (String(ref?.dimension || '').toUpperCase() !== 'ORG') return rows;
+  const directory = Array.isArray(model?.institutions) ? model.institutions
+    : Array.isArray(model?.authorizedDirectory) ? model.authorizedDirectory : [];
+  if (!directory.length) return rows;
+  const hasOrgIdentity = rows.some(row => record(row)
+    && String(row.orgCode ?? row.org_code ?? '').trim());
+  if (!hasOrgIdentity) return rows;
+  const allowed = new Set(directory.map(item => String(item?.orgCode ?? item?.org_code ?? '').trim()).filter(Boolean));
+  return rows.filter(row => allowed.has(String(row?.orgCode ?? row?.org_code ?? '').trim()));
+}
+
 function emptyTextOf(value) {
   return typeof value === 'string' && value.trim() ? value : '—';
 }
@@ -95,7 +107,10 @@ export function buildDisplaySeriesTableModel(source, model = {}) {
     .filter(({ component }) => TYPES.has(component?.componentType) && component.visible !== false)
     .sort((a, b) => (a.component.order ?? a.index) - (b.component.order ?? b.index) || a.index - b.index)
     .map(({ component }) => {
-      const rows = sourceRows(model, component, component.dataRefs?.[0] || {});
+      const ref = component.dataRefs?.[0] || {};
+      const source = sourceRows(model, component, ref);
+      const rows = component.componentType === 'DETAIL_TABLE'
+        ? authorizedDetailRows(source, model, ref) : source;
       return component.componentType === 'TREND' ? trendModel(component, rows) : tableModel(component, rows);
     });
   return { enabled: true, components, hasTrend: components.some(item => item.componentType === 'TREND'), hasTable: components.some(item => item.componentType === 'DETAIL_TABLE') };

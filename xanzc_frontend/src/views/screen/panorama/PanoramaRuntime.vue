@@ -160,11 +160,16 @@ function mergeInstitutionRuntimeModel(currentModel, result) {
   const displayCodes = new Set(displayInstitutions.map(item => item.orgCode));
   const rankings = Array.isArray(currentModel?.rankings)
     ? currentModel.rankings.filter(item => displayCodes.has(institutionCode(item))) : currentModel?.rankings;
+  // 新协议的服务端目录已经按 institutionRules 收窄；旧命名组查询仍可能返回组内
+  // 其他合法行，适配器会先拒绝合并并产生 UNAUTHORIZED_ORG。这里把这种“预期过滤”
+  // 从页面故障中移除，其他缺列、单位、权限等真实问题继续保留。
+  const sourceIssues = (Array.isArray(currentModel?.issues) ? currentModel.issues : [])
+    .filter(issue => issue?.code !== 'UNAUTHORIZED_ORG');
   return {
     ...currentModel,
     institutions: displayInstitutions,
     rankings,
-    issues: [...(Array.isArray(currentModel?.issues) ? currentModel.issues : []), ...institutionRuntimeIssues(result)]
+    issues: [...sourceIssues, ...institutionRuntimeIssues(result)]
   };
 }
 
@@ -188,7 +193,11 @@ const institutionDisplayModel = computed(() => {
   });
 });
 const institutionRuntimeIssueGroups = computed(() => {
-  const groups = { ...(state.slotIssues.value || {}) };
+  const groups = Object.fromEntries(Object.entries(state.slotIssues.value || {}).map(([slot, issues]) => [
+    slot,
+    institutionDisplayModel.value && Array.isArray(issues)
+      ? issues.filter(issue => issue?.code !== 'UNAUTHORIZED_ORG') : issues
+  ]));
   const issues = institutionRuntimeIssues(institutionDisplayModel.value);
   if (issues.length) groups.institutions = issues;
   return groups;

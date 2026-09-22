@@ -218,13 +218,23 @@ describe('旧经营大屏配置迁移', () => {
       }],
       blocks: [{ id: 916, componentType: 'RANK_LIST', bindJson: JSON.stringify({
         dsId: 7016,
-        fields: { orgCode: 'org_code', name: 'org_name', value: 'deposit' },
+        fields: { orgCode: 'org_code', name: 'org_name', value: 'deposit_raw' },
         units: { value: 'YUAN' }
       }) }]
     });
 
     expect(result.summary).toEqual({ migrated: 1, unresolved: 0, missingFields: 0, needsConfirmation: 0 });
-    expect(result.presentation.display.components[0].content.rankingMetrics[0].direction).toBe('DESC');
+    const ranking = result.presentation.display.components.find(component => component.componentType === 'RANKING');
+    const map = result.presentation.display.components.find(component => component.componentType === 'MAP');
+    expect(ranking.content.rankingMetrics[0]).toMatchObject({
+      field: 'deposit', unit: 'HUNDRED_MILLION', direction: 'DESC'
+    });
+    expect(map).toMatchObject({
+      componentType: 'MAP',
+      content: expect.objectContaining({ mainField: 'value' }),
+      dataRefs: [expect.objectContaining({ blockId: 916, unit: 'YUAN' })]
+    });
+    expect(validateDisplayConfig(result.presentation)).toEqual([]);
   });
 
   it('仅含机构身份字段的 branches 由新协议机构规则接管，不伪造数值单位', () => {

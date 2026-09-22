@@ -552,18 +552,27 @@ function makeRankingComponent(input) {
   const metrics = entries.filter(item => !IDENTITY_FIELDS.has(item.semantic));
   if (!metrics.length) return { status: MIGRATION_STATUS.MISSING_FIELDS, reasons: ['缺少排名指标字段'] };
   const rankingMetrics = [];
+  let sourceUnit = null;
   for (const item of metrics) {
     const unit = unitFor(bind, item.semantic, bind.fields);
     if (!unit) return { status: MIGRATION_STATUS.MISSING_FIELDS, reasons: [`排名字段 ${item.semantic} 缺少原始单位`] };
+    if (!sourceUnit) sourceUnit = unit;
+    const modelUnit = ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'].includes(unit)
+      ? 'HUNDRED_MILLION' : unit;
     rankingMetrics.push({
       metricKey: safeToken(item.semantic, `metric-${rankingMetrics.length + 1}`),
-      field: item.field,
+      // 经营大屏适配器把 ranking.value 归一为统一模型的 deposit；其余排名语义
+      // 保持原键。展示协议必须消费统一模型字段，不能写数据库物理列名或请求别名。
+      field: item.semantic === 'value' ? 'deposit' : item.semantic,
       label: labelFor(bindingKey, item.field, metricLabels, bind, item.semantic),
-      unit,
+      unit: modelUnit,
       direction: resolvedDirection || 'DESC'
     });
   }
-  const component = baseComponent({ ...base, componentType: 'RANKING', title: text(metricLabels?.[bindingKey]), blockId, unit: rankingMetrics[0].unit, meta });
+  const component = baseComponent({
+    ...base, componentType: 'RANKING', title: text(metricLabels?.[bindingKey]), blockId, unit: sourceUnit, meta
+  });
+  component.format.displayUnit = rankingMetrics[0].unit;
   component.content.rankingMetrics = rankingMetrics;
   return {
     status: resolvedDirection
@@ -708,6 +717,36 @@ function emptyPresentation(options = {}) {
   };
 }
 
+function appendDerivedMap(presentation, context) {
+  const components = presentation.display.components;
+  if (components.some(component => component.componentType === 'MAP')) return;
+  const ranking = components.find(component => component.componentType === 'RANKING');
+  const metric = ranking?.content?.rankingMetrics?.[0];
+  const reference = ranking?.dataRefs?.[0];
+  if (!metric || !reference?.blockId || !reference.unit) return;
+  const componentId = stableComponentId('map', reference.blockId, '', components.length, context.usedIds);
+  context.usedIds.add(componentId);
+  const component = baseComponent({
+    componentId,
+    componentType: 'MAP',
+    order: context.orders.CENTER || 0,
+    visible: true,
+    title: '',
+    blockId: reference.blockId,
+    unit: reference.unit,
+    meta: {
+      metricCode: reference.metricCode,
+      metricName: reference.metricName || metric.label,
+      dimension: reference.dimension || 'ORG',
+      formula: reference.formula
+    }
+  });
+  component.format.displayUnit = metric.unit;
+  component.content.mainField = metric.metricKey;
+  components.push(component);
+  context.orders.CENTER = component.order + 1;
+}
+
 function alreadyMigratedResult(source, presentation, options = {}) {
   const components = Array.isArray(presentation?.display?.components) ? presentation.display.components : [];
   const entries = components.map((component, index) => ({
@@ -790,6 +829,9 @@ export function previewLegacyMigration(source, options = {}) {
   presentation.display.components = entries
     .filter(entry => entry.status === MIGRATION_STATUS.MIGRATED && entry.component)
     .map(entry => deepClone(entry.component));
+  // 三个历史经营屏的地图是固定页面模块，不存在独立 ChartWidget。整页配置化后
+  // 必须把已确定的机构排名主指标复用为 MAP，才能保留地图能力且不发明新的数据源。
+  appendDerivedMap(presentation, context);
   return buildResult(source, presentation, entries);
 }
 
