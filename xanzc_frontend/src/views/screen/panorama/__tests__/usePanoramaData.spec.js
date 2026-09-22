@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { nextTick, ref } from 'vue';
+import { defineComponent, nextTick, ref, toRef } from 'vue';
+import { mount } from '@vue/test-utils';
 
 const queryScreenData = vi.fn();
 vi.mock('@/api/screen', () => ({ queryScreenData: (...args) => queryScreenData(...args) }));
 
-import { usePanoramaData } from '../usePanoramaData';
+import { queryIdentity, usePanoramaData } from '../usePanoramaData';
 
 function viewWithSlots(bindings = {}) {
   const components = Object.entries(bindings).map(([slot, blockId]) => ({
@@ -351,6 +352,28 @@ describe('usePanoramaData', () => {
     expect(state.model.value.qualityGuard).toMatchObject({ code: 'BATCH_MISMATCH' });
   });
 
+  it('同一完整批次重复刷新失败时保留旧整屏数据，并明确标注旧批次过期说明', async () => {
+    queryScreenData
+      .mockResolvedValueOnce({ quality: batchQuality(), columns: ['deposit_col'], rows: [[100000000]],
+        columnsMeta: [{ col: 'deposit_col', role: 'METRIC', unit: 'YUAN' }] })
+      .mockRejectedValueOnce(Object.assign(new Error('报表服务暂不可用'), { status: 500 }));
+    const state = usePanoramaData(ref(viewWithSlots({ deposit: 11 })), ref({ screenCode: 'SCR_CODE' }), {
+      autoLoad: false, batchRequired: true
+    });
+
+    await state.refresh();
+    expect(state.model.value.kpis).toEqual([expect.objectContaining({ key: 'deposit', value: 1 })]);
+    const refresh = state.refresh();
+    await refresh;
+
+    expect(state.model.value.kpis).toEqual([expect.objectContaining({ key: 'deposit', value: 1 })]);
+    expect(state.model.value.quality).toMatchObject({ batchId: 'opaque-batch-1', dataDate: '2026-09-10' });
+    expect(state.model.value.qualityGuard).toMatchObject({
+      code: 'REQUEST_FAILED', status: 'STALE', message: '报表服务暂不可用'
+    });
+    expect(state.error.value).toContain('报表服务暂不可用');
+  });
+
   it('预取任一机构返回403时 fail-close，不发布主体模型', async () => {
     queryScreenData.mockImplementation(request => {
       if (request.blockId === 21) return Promise.resolve({ columns: ['org_code'], rows: [['A'], ['B']] });
@@ -500,5 +523,58 @@ describe('usePanoramaData', () => {
     await state.refresh();
     expect(state.error.value).toContain('零售禁止');
     expect(state.model.value.kpis).toEqual([]);
+  });
+
+  it('标题和绑定单位等纯展示变化不重新取数，配置版本或查询日期变化才推进代际并重取', async () => {
+    queryScreenData.mockResolvedValue({ columns: ['deposit_col', 'deposit_col_v2'], rows: [[100000000, 100000000]] });
+    const initialView = viewWithSlots({ deposit: 11 });
+    const Harness = defineComponent({
+      props: { view: { type: Object, required: true }, context: { type: Object, required: true } },
+      setup(props) {
+        return usePanoramaData(toRef(props, 'view'), toRef(props, 'context'));
+      },
+      template: '<div />'
+    });
+    const wrapper = mount(Harness, {
+      props: { view: initialView, context: { screenCode: 'SCR_CODE', dateTo: '2026-09-20' } }
+    });
+    await vi.waitFor(() => expect(queryScreenData).toHaveBeenCalledTimes(1));
+    const firstGeneration = wrapper.vm.generation;
+
+    const displayOnlyView = structuredClone(initialView);
+    displayOnlyView.screenName = '换一个标题';
+    displayOnlyView.renderPackage.bindSnapshots['11'].bind.units = { value: 'HUNDRED_MILLION' };
+    await wrapper.setProps({ view: displayOnlyView });
+    await nextTick();
+    expect(queryScreenData).toHaveBeenCalledTimes(1);
+    expect(wrapper.vm.generation).toBe(firstGeneration);
+
+    const versionChangedView = structuredClone(displayOnlyView);
+    versionChangedView.canvasVersion = 2;
+    await wrapper.setProps({ view: versionChangedView });
+    await nextTick();
+    expect(queryScreenData).toHaveBeenCalledTimes(1);
+
+    const queryBindingChangedView = structuredClone(versionChangedView);
+    queryBindingChangedView.renderPackage.bindSnapshots['11'].bind.fields.value = 'deposit_col_v2';
+    queryBindingChangedView.renderPackage.bindSnapshots['11'].bind.units.value = 'YUAN';
+    await wrapper.setProps({ view: queryBindingChangedView });
+    await vi.waitFor(() => expect(queryScreenData).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(wrapper.vm.loading).toBe(false));
+    expect(wrapper.vm.generation).toBeGreaterThan(firstGeneration);
+
+    const sourceChangedView = structuredClone(queryBindingChangedView);
+    sourceChangedView.renderPackage.bindSnapshots['11'].sourceDefinition = { definitionHash: 'hash-v2', datasourceId: 9 };
+    expect(queryIdentity(sourceChangedView, { screenCode: 'SCR_CODE', dateTo: '2026-09-20' }))
+      .not.toBe(queryIdentity(queryBindingChangedView, { screenCode: 'SCR_CODE', dateTo: '2026-09-20' }));
+    await wrapper.setProps({ view: sourceChangedView });
+    await vi.waitFor(() => expect(queryScreenData).toHaveBeenCalledTimes(3));
+
+    await wrapper.setProps({ context: { screenCode: 'SCR_CODE', dateTo: '2026-09-21' } });
+    await vi.waitFor(() => expect(queryScreenData).toHaveBeenCalledTimes(4));
+    await vi.waitFor(() => expect(wrapper.vm.model.kpis).toEqual([
+      expect.objectContaining({ key: 'deposit', value: 1 })
+    ]));
+    wrapper.unmount();
   });
 });

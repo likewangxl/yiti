@@ -18,7 +18,7 @@
 | S11 | BLOCKED_DATA | `69789625` | - | `institutionViewModel.js`及测试；既有`PanoramaInstitutionDTO`/授权目录只读复核 | 展示/统计集合分离模型已实现；真实机构白名单因D03/D04未确认未接运行页 | 模型7项通过；现有后端授权目录字段与activeProfiles链已复核 | 未连接真实机构画像/数据库 | Vitest输出、BUSINESS_DECISIONS D03/D04/X05、现有DTO源码 | 缺允许的operatingLevel/orgNature值或签认名单，禁止名称/编码猜测 | 获得D03/D04口径后接入运行页；当前继续S12可独立能力 |
 | S12 | VERIFIED | `667c0ede` | - | `presentation/map/`、`PanoramaMap.vue`、`CityPanorama.vue`、三类Dashboard/排名指标同步及测试 | 新协议地图指标/日期/图例/着色、视野与下钻事件已实现；旧地图回归保持 | S12核心30项、地图生命周期20项及相关presentation/map回归152项通过；生产构建通过 | 最终三页视觉与真实机构范围留S17 | Vitest/Vite输出 | S11机构层级白名单仍BLOCKED_DATA；缺坐标不造点 | 创建S12提交并进入S13/S14 |
 | S13 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S09、S12 |
-| S14 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S04、S07～S13 |
+| S14 | VERIFIED | `69ff255f` | - | `usePanoramaData.js`、`presentation/runtime/`、`PanoramaRuntime.vue`及测试、sourcePresentation状态适配 | 查询语义指纹、迟到隔离、批次保留与统一运行状态已实现；主代理已复核 | S14核心51项、相关运行时26文件162项通过；生产构建通过 | 网络原始证据留S17 | Vitest/Vite输出 | 真实来源日期/批次质量取决于隔离后端返回 | 创建S14提交；等待S13后进入S16 |
 | S15 | VERIFIED | `e7804933` | - | `presentation/migration/`、`PresentationEditor.vue`、`PanoramaBindings.vue`及测试、操作指南 | 旧配置确定性迁移预览与本地草稿应用已实现；不自动保存/发布 | 迁移/编辑器/Bindings 37项通过；presentation目录95项通过；生产构建通过 | 持久化转换→发布→回退留S17隔离测试屏 | Vitest/Vite输出与操作指南 | 真实测试屏、expectedVersion冲突和发布回退需隔离环境 | 进入S16前完成S12～S14；S17执行真实迁移台账 |
 | S16 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S07～S15 |
 | S17 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S16、隔离运行环境 |
@@ -133,3 +133,11 @@
 - 无坐标机构不造点，保留在地图旁可访问列表并可发出固定机构上下文；无可见机构城市显示明确空态。城市/机构事件只包含稳定身份字段，不拼URL。
 - 复用现有WebGL→SVG回退、ResizeObserver、上下文丢失处理和资源释放；新增局部`viewFit`只影响新MAP实例，不改旧全局缩放。
 - 主代理独立复核核心模型/组件/Dashboard/Map 30项通过；执行者扩大地图生命周期20项、相关presentation/map共152项及生产构建通过。S11真实层级规则仍为X05，浏览器视觉验收留S17。
+
+## S14 任务记录
+
+- 复用既有generation、请求去重、并发上限3、严格批次和403清空机制；新增查询语义指纹，只包含屏/机构/条线/日期、绑定字段和S04来源定义/哈希。标题、单位和通用画布版本变化不重取，查询字段或来源快照变化才推进新代际。
+- 保留逐槽`sourceDates/sourceQualities/sourceMetadata`，统一未配置、缺数、目标不适用、过期、错误和权限失效状态；合法0仍为READY，不从其他组件补值，不把不同日期伪装成同一快照。
+- 同一查询身份刷新失败时，仅可保留上一完整可用批次并显式标`STALE/REQUEST_FAILED`及原日期；403立即清空。切屏、机构、条线、查询定义或卸载时迟到结果不能写回。
+- 主代理指出并修正初版把通用configVersion纳入查询身份的问题，否则只改标题也会重打数据源；最终改为来源定义哈希/结构指纹。
+- 主代理独立复核运行状态、Banner、Runtime和取数核心51项通过；执行者扩大到26文件162项和生产构建通过。真实网络、403和批次响应证据留S17。

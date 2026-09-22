@@ -116,6 +116,11 @@ function emptyModel(retail, view, queriedAt, quality = null, qualityGuard = null
   next.qualityGuard = qualityGuard || null;
   next.batchId = quality?.batchId || null;
   next.queriedAt = queriedAt || '';
+  next.sourceQualities = {};
+  next.sourceDates = {};
+  next.sourceMetadata = {};
+  next.configuredSlots = [];
+  next.permissionStatus = null;
   return next;
 }
 
@@ -225,6 +230,87 @@ function requestKey(body) {
 }
 
 /**
+ * 查询身份只包含会改变服务端请求或绑定解释的字段。
+ * 标题、metricLabels、展示单位和 display 子协议属于纯展示配置，不能因为
+ * 保存这些字段就重新打穿数据源；只有查询定义/来源快照变化才推进身份。
+ */
+function queryIdentity(view, context, options = {}) {
+  const packageInfo = packageBindings(view);
+  const contextValue = contextSnapshot(context);
+  const bindings = [...packageInfo.slots.entries()].map(([slot, entry]) => {
+    const sourceDefinition = entry.snapshot?.sourceDefinition ?? entry.snapshot?.source_definition
+      ?? entry.binding?.sourceDefinition ?? entry.binding?.source_definition ?? null;
+    return {
+      slot,
+      blockId: entry.blockId,
+      dsId: entry.binding?.dsId ?? null,
+      period: entry.binding?.period || 'LATEST',
+      fields: entry.binding?.fields || {},
+      sourceDefinitionHash: entry.snapshot?.definitionHash
+        ?? entry.snapshot?.definition_hash ?? entry.snapshot?.sourceDefinitionHash
+        ?? entry.snapshot?.source_definition_hash ?? entry.binding?.definitionHash
+        ?? entry.binding?.definition_hash ?? entry.binding?.sourceDefinitionHash
+        ?? entry.binding?.source_definition_hash ?? sourceDefinition?.definitionHash
+        ?? sourceDefinition?.definition_hash ?? null,
+      sourceDefinition
+    };
+  });
+  return requestKey({
+    screenCode: String(contextValue.screenCode || view?.screenCode || view?.screen_code || '').trim(),
+    schemaVersion: contextValue.schemaVersion ?? contextValue.runtimeSchemaVersion ?? runtimeSchemaVersion(view),
+    previewState: view?.state === 'draft' || contextValue.previewState === 'draft' ? 'draft' : '',
+    dateFrom: contextValue.dateFrom || '',
+    dateTo: contextValue.dateTo || '',
+    orgCode: contextOrgCode(contextValue),
+    businessLine: String(contextValue.businessLine || contextValue.bizLine || view?.bizLine || '').trim().toUpperCase(),
+    orgScopeMode: String(view?.orgScopeMode || view?.org_scope_mode || '').trim().toUpperCase(),
+    orgGroupCode: String(view?.orgGroupCode || view?.org_group_code || '').trim(),
+    template: packageInfo.template,
+    singleOrg: Boolean(options.singleOrg),
+    bindings
+  });
+}
+
+function unwrapResponse(response) {
+  if (!isObject(response)) return response;
+  if (response.columns === undefined && response.rows === undefined && isObject(response.data)) return response.data;
+  return response;
+}
+
+function responseDataDate(response) {
+  const table = unwrapResponse(response);
+  const quality = readBatchQuality(table);
+  return String(quality?.dataDate || table?.dataDate || table?.data_date || table?.date || '').trim();
+}
+
+function responseRowsPresent(response) {
+  const table = unwrapResponse(response);
+  return Array.isArray(table?.rows) && table.rows.length > 0;
+}
+
+function collectSourceDates(results = {}) {
+  return Object.fromEntries(Object.entries(results).flatMap(([slot, result]) => {
+    if (result?.error || !result?.response) return [];
+    const date = responseDataDate(result.response);
+    return date ? [[slot, date]] : [];
+  }));
+}
+
+function collectSourceMetadata(results = {}) {
+  return Object.fromEntries(Object.entries(results).flatMap(([slot, result]) => {
+    if (result?.error || !result?.response) return [];
+    const quality = readBatchQuality(result.response);
+    return [[slot, {
+      dataDate: responseDataDate(result.response),
+      batchId: quality?.batchId || null,
+      qualityStatus: quality?.status || null,
+      sourceAsOf: quality?.sourceAsOf || null,
+      hasRows: responseRowsPresent(result.response)
+    }]];
+  }));
+}
+
+/**
  * 代码化大屏运行时取数。
  * - 请求身份来自发布 components + bindSnapshots，绝不按标题或旧组件推断；
  * - 队列并发固定不超过三，同一身份请求共享 in-flight Promise；
@@ -251,6 +337,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
   let pendingLoads = 0;
   let watchReady = false;
   const lastQueriedAt = ref('');
+  let committedQueryIdentity = '';
 
   function currentView() { return valueOf(viewSource) || {}; }
 
@@ -425,6 +512,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     const view = currentView();
     const context = contextSnapshot(contextSource);
     const packageInfo = packageBindings(view);
+    const currentQueryIdentity = queryIdentity(view, context, options);
     const singleOrgScope = options.singleOrg ? resolveSingleOrgScope(view, context) : null;
     const retail = packageInfo.retail;
     const requiresBatch = Boolean(options.batchRequired && !retail && !packageInfo.corporate);
@@ -434,6 +522,9 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     const canPreserveSingleOrgModel = !options.singleOrg
       || (singleOrgScope?.valid && renderedSingleOrgCode.value === singleOrgScope.orgCode);
     const preserveModel = requestedPreserveModel && canPreserveSingleOrgModel;
+    const retainablePreviousBatch = !preserveModel
+      && Boolean(committedQueryIdentity && committedQueryIdentity === currentQueryIdentity)
+      && isUsableBatchQuality(model.value?.quality);
     const branchOnly = !retail && !packageInfo.corporate && preserveModel && onlySlots?.has('branchTrend');
     const kind = branchOnly ? 'branch' : 'screen';
     const currentGeneration = kind === 'branch'
@@ -444,7 +535,8 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     const queriedAt = new Date().toISOString();
     lastQueriedAt.value = queriedAt;
     if (!preserveModel) {
-      model.value = emptyModel(retail, view, queriedAt);
+      if (!retainablePreviousBatch) model.value = emptyModel(retail, view, queriedAt);
+      model.value.configuredSlots = [...packageInfo.slots.keys()];
       if (options.singleOrg) renderedSingleOrgCode.value = '';
       error.value = '';
     }
@@ -458,6 +550,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         screenGeneration.value += 1;
         branchGeneration.value += 1;
         const nextModel = emptyModel(retail, view, queriedAt);
+        nextModel.configuredSlots = [...packageInfo.slots.keys()];
         nextModel.issues = [...packageInfo.issues, {
           slot: 'singleOrg',
           code: 'SINGLE_ORG_SCOPE_INVALID',
@@ -472,8 +565,24 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
       const { slots } = packageInfo;
       const allIssues = [...packageInfo.issues];
       const selectedBranch = String(loadOptions.branchOrgCode ?? branchOrgCode.value ?? '').trim();
+      const retainPreviousBatch = guard => {
+        const previous = model.value;
+        const next = { ...previous,
+          quality: previous?.quality || null,
+          qualityGuard: { ...guard, status: 'STALE', refreshStatus: guard?.status || null },
+          queriedAt,
+          configuredSlots: [...slots.keys()],
+          permissionStatus: null,
+          issues: [...(previous?.issues || []), { slot: 'batch', code: guard?.code, message: guard?.message }]
+        };
+        model.value = next;
+        error.value = guard?.message || '刷新未完成，保留上一完整批次';
+        return next;
+      };
       const clearBatchModel = (quality, guard) => {
+        if (retainablePreviousBatch && guard?.code !== 'PERMISSION_DENIED') return retainPreviousBatch(guard);
         const next = emptyModel(retail, view, queriedAt, quality, guard);
+        next.configuredSlots = [...slots.keys()];
         if (guard) addIssue(allIssues, 'batch', guard.code, guard.message);
         next.issues = [...allIssues];
         model.value = next;
@@ -526,6 +635,8 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         const anchorPermission = permissionStatus(anchorItem?.error);
         if (anchorPermission) {
           model.value = emptyModel(retail, view, queriedAt);
+          model.value.configuredSlots = [...slots.keys()];
+          model.value.permissionStatus = anchorPermission;
           error.value = errorMessage(anchorItem.error, `没有权限（${anchorPermission}）`);
           return model.value;
         }
@@ -559,6 +670,8 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
       const permissionError = settled.find(item => permissionStatus(item.error));
       if (permissionError) {
         model.value = emptyModel(retail, view, queriedAt);
+        model.value.configuredSlots = [...slots.keys()];
+        model.value.permissionStatus = permissionStatus(permissionError.error);
         error.value = errorMessage(permissionError.error, `没有权限（${permissionStatus(permissionError.error)}）`);
         return model.value;
       }
@@ -634,6 +747,8 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         if (!alive.value || disposed.value || screenGeneration.value !== currentGeneration) return model.value;
         if (prefetchResult?.permissionError) {
           model.value = emptyModel(retail, view, queriedAt);
+          model.value.configuredSlots = [...slots.keys()];
+          model.value.permissionStatus = permissionStatus(prefetchResult.permissionError);
           error.value = errorMessage(prefetchResult.permissionError, `没有权限（${permissionStatus(prefetchResult.permissionError)}）`);
           return model.value;
         }
@@ -642,6 +757,10 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         }
         nextModel.issues = [...allIssues, ...(nextModel.issues || [])];
         nextModel.sourceQualities = collectSourceQualities(resultMap);
+        nextModel.sourceDates = collectSourceDates(resultMap);
+        nextModel.sourceMetadata = collectSourceMetadata(resultMap);
+        nextModel.configuredSlots = [...slots.keys()];
+        nextModel.permissionStatus = null;
         if (requiresBatch) {
           nextModel.quality = mergeBatchQualities([
             ...(batchState.qualities || []), ...(prefetchResult?.qualities || [])
@@ -653,6 +772,7 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         model.value = nextModel;
       }
       if (options.singleOrg && !branchOnly) renderedSingleOrgCode.value = singleOrgScope.orgCode;
+      committedQueryIdentity = currentQueryIdentity;
       error.value = '';
       return model.value;
     } finally {
@@ -715,10 +835,10 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
     if (options.autoLoad !== false) onMounted(() => { watchReady = true; refresh(); });
   }
   if (options.watch !== false) {
-    const watchOptions = { deep: true };
-    if (options.singleOrg) watchOptions.flush = 'sync';
-    watch(() => [valueOf(viewSource), contextSnapshot(contextSource)], () => {
+    const watchOptions = { flush: options.singleOrg ? 'sync' : 'pre' };
+    watch(() => queryIdentity(currentView(), contextSnapshot(contextSource), options), (next, previous) => {
       if (!watchReady || !alive.value) return;
+      if (next === previous) return;
       refresh();
     }, watchOptions);
   }
@@ -737,4 +857,10 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
   };
 }
 
-export { MAX_CONCURRENCY, packageBindings };
+export {
+  MAX_CONCURRENCY,
+  packageBindings,
+  queryIdentity,
+  collectSourceDates,
+  collectSourceMetadata
+};
