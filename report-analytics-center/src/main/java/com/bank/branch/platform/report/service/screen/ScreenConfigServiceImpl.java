@@ -31,6 +31,7 @@ import com.bank.branch.platform.report.mapper.RptScreenMapPointMapper;
 import com.bank.branch.platform.report.mapper.RptScreenAccessRoleMapper;
 import com.bank.branch.platform.report.mapper.RptScreenMapper;
 import com.bank.branch.platform.report.support.PublishedScreenPackageValidator;
+import com.bank.branch.platform.report.service.screen.presentation.PublishedDatasourceDefinition;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -491,10 +492,13 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             if (datasource == null) {
                 throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
             }
+            RptScreenDatasource effective = PublishedDatasourceDefinition.effective(
+                    snapshot, datasource, objectMapper, PublishedDatasourceDefinition.requiredFor(root));
             try {
                 CodeScreenPresentationValidator.validateBindAgainstDatasource(
-                        bind, bindingKey, datasource, template, root.path("canvasStyle"));
+                        bind, bindingKey, effective, template, root.path("canvasStyle"));
                 validateCodeTemplateDatasourceLine(template, datasource);
+                validateCodeTemplateDatasourceLine(template, effective);
                 if ("NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())
                         && ("branches".equals(bindingKey) || "citySummary".equals(bindingKey)
                         || "retailRanking".equals(bindingKey) || "corpRanking".equals(bindingKey))) {
@@ -502,7 +506,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                         // The immutable package must satisfy the same server-side identity rule as
                         // save/publish/metadata transitions. A stale package must never reach the
                         // frontend with an org_name pretending to be an orgCode.
-                        validateCodeNamedGroupBinding(bindingKey, bind.toString(), datasource);
+                        validateCodeNamedGroupBinding(bindingKey, bind.toString(), effective);
                     } catch (RptException ex) {
                         if (RptErrorCode.SCREEN_DS_CONFIG_INVALID.getCode().equals(ex.getCode())) {
                             throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);

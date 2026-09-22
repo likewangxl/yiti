@@ -27,6 +27,7 @@ import com.bank.branch.platform.report.entity.RptScreenPublishLog;
 import com.bank.branch.platform.report.support.ScreenConfigSchema;
 import com.bank.branch.platform.report.support.ScreenMetricSlotDao;
 import com.bank.branch.platform.report.support.PublishedScreenPackageValidator;
+import com.bank.branch.platform.report.service.screen.presentation.PublishedDatasourceDefinition;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -375,13 +376,17 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         try {
             validatePreviewState(req);
             RptScreen screen = resolveRuntimeScreen(req);
-            RptScreenDatasource ds = resolveRuntimeDatasource(req, screen);
+            RuntimeDatasourceResolution resolution = resolveRuntimeDatasource(req, screen);
+            RptScreenDatasource currentDatasource = resolution.current();
+            RptScreenDatasource ds = resolution.effective();
             // 状态入库统一大写；运行时仍按规范化值判断，避免历史小写 disabled 被当作 ACTIVE 绕过。
-            if (ds == null || !"ACTIVE".equals(normalizedDatasourceStatus(ds.getStatus()))) {
+            if (currentDatasource == null
+                    || !"ACTIVE".equals(normalizedDatasourceStatus(currentDatasource.getStatus()))) {
                 throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
             }
             String runtimeTemplate = runtimeCodeTemplate(screen, req);
             validateCodeTemplateScreenLine(screen, runtimeTemplate);
+            validateCodeTemplateDatasourceLine(runtimeTemplate, currentDatasource);
             validateCodeTemplateDatasourceLine(runtimeTemplate, ds);
             validateRuntimeCodeDatasourceClassification(screen, req, runtimeTemplate, ds);
             if ("NAMED_GROUP".equalsIgnoreCase(screen.getOrgScopeMode())) {
@@ -389,9 +394,11 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
                     // 命名组运行时没有 auth 适配器时必须拒绝，不能退回旧 DATA_SCOPE 全局口径。
                     throw new RptException(RptErrorCode.SCREEN_ACCESS_DENIED);
                 }
-                if (!isBizLineCompatible(screen.getBizLine(), ds.getBizLine())) {
+                if (!isBizLineCompatible(screen.getBizLine(), currentDatasource.getBizLine())
+                        || !isBizLineCompatible(screen.getBizLine(), ds.getBizLine())) {
                     throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
                 }
+                ensureNamedGroupDatasourceSafe(currentDatasource);
                 ensureNamedGroupDatasourceSafe(ds);
                 // 命名机构组权限在屏级同角色门禁中已完成；将服务端机构集合注入引擎，
                 // 不再信任客户端 orgCodes 及旧 DATA_SCOPE 主体参数；单个 orgCode 只允许
@@ -415,7 +422,8 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
                     req.setServerRequestedOrgCode(null);
                 }
             } else {
-                if (!isBizLineCompatible(screen.getBizLine(), ds.getBizLine())) {
+                if (!isBizLineCompatible(screen.getBizLine(), currentDatasource.getBizLine())
+                        || !isBizLineCompatible(screen.getBizLine(), ds.getBizLine())) {
                     throw new RptException(RptErrorCode.SCREEN_BIZ_LINE_MISMATCH);
                 }
                 // schemaVersion=1 保持旧 DATA_SCOPE 逻辑，但屏与 dsId 已先由服务端绑定核验。
@@ -790,9 +798,10 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         return screens.get(0);
     }
 
-    private RptScreenDatasource resolveRuntimeDatasource(ScreenDataReqDTO req, RptScreen screen) {
+    private RuntimeDatasourceResolution resolveRuntimeDatasource(ScreenDataReqDTO req, RptScreen screen) {
         if ("draft".equalsIgnoreCase(req.getPreviewState())) {
-            return resolveDraftDatasource(req, screen);
+            RptScreenDatasource datasource = resolveDraftDatasource(req, screen);
+            return new RuntimeDatasourceResolution(datasource, datasource);
         }
         boolean schemaV2 = requiresSchemaV2(screen);
         if (schemaV2) {
@@ -809,12 +818,19 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
             if (publishedPackageBindingEvidence(screen.getCanvasPublishedJson(), null).untrusted()) {
                 throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED);
             }
-            Long resolvedDsId = readPublishedDsId(screen.getCanvasPublishedJson(), req.getBlockId());
+            JsonNode publishedBinding = readPublishedBindingSnapshot(
+                    screen.getCanvasPublishedJson(), req.getBlockId());
+            Long resolvedDsId = publishedBinding == null ? null
+                    : publishedBinding.path("bind").path("dsId").longValue();
             if (resolvedDsId == null) {
                 throw new RptException(RptErrorCode.SCREEN_BLOCK_NOT_PUBLISHED);
             }
             // 客户端 dsId 即使同时传入也不参与解析，防止跨屏数据源拼接。
-            return dsMapper.selectById(resolvedDsId);
+            RptScreenDatasource current = dsMapper.selectById(resolvedDsId);
+            boolean required = publishedDefinitionRequired(screen.getCanvasPublishedJson());
+            RptScreenDatasource effective = PublishedDatasourceDefinition.effective(
+                    publishedBinding, current, objectMapper, required);
+            return new RuntimeDatasourceResolution(current, effective);
         }
         // 历史 v1 也不能因显式版本就接受任意 dsId：它必须来自当前屏可验证的发布绑定。
         if (!Integer.valueOf(1).equals(req.getSchemaVersion()) || req.getDsId() == null) {
@@ -827,7 +843,8 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         if (!evidence.bound()) {
             throw new RptException(RptErrorCode.SCREEN_BLOCK_NOT_PUBLISHED);
         }
-        return dsMapper.selectById(req.getDsId());
+        RptScreenDatasource datasource = dsMapper.selectById(req.getDsId());
+        return new RuntimeDatasourceResolution(datasource, datasource);
     }
 
     /**
@@ -1035,13 +1052,21 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         }
     }
 
-    private Long readPublishedDsId(String publishedJson, Long blockId) {
+    private JsonNode readPublishedBindingSnapshot(String publishedJson, Long blockId) {
         try {
             JsonNode root = PublishedScreenPackageValidator.read(publishedJson);
-            JsonNode snapshot = PublishedScreenPackageValidator.requireTrustedBindings(root).get(blockId);
-            return snapshot == null ? null : snapshot.path("bind").path("dsId").longValue();
+            return PublishedScreenPackageValidator.requireTrustedBindings(root).get(blockId);
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private boolean publishedDefinitionRequired(String publishedJson) {
+        try {
+            return PublishedDatasourceDefinition.requiredFor(
+                    PublishedScreenPackageValidator.read(publishedJson));
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
         }
     }
 
@@ -1642,5 +1667,9 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         String traceId = MdcUtils.getTraceId();
         return traceId == null || traceId.isBlank()
                 ? UUID.randomUUID().toString().replace("-", "") : traceId;
+    }
+
+    private record RuntimeDatasourceResolution(RptScreenDatasource current,
+                                               RptScreenDatasource effective) {
     }
 }

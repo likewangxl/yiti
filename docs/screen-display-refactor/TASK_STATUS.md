@@ -8,7 +8,7 @@
 | S01 | VERIFIED | `dced49aaec6220b56991d774b0cae8435115d795` | - | `DATA_CAPABILITIES.md`、`BUSINESS_DECISIONS.md`、`TASK_STATUS.md` | 源码与会议纪要只读盘点完成；主代理已逐项复核 | 15/12/13槽位覆盖、6来源、D01～D12、外部依赖、链接和敏感模式检查均通过；范围检查与`git diff --check`通过 | N/A；未连接数据库、未调用运行API | 本目录两份S01文档 | 具体配置、真实数据与业务口径仍为UNCONFIRMED | 等用户评估消耗后再决定是否执行S02 |
 | S02 | VERIFIED | `40aa91ea` | - | 前端`screen/presentation/contract/`与测试；后端`dto/req/presentation/`与`ScreenPresentationContractTest`；`PRESENTATION_CONTRACT.md`、`TASK_STATUS.md` | 七类组件展示子协议已实现并经主代理复核 | 前端9项、后端6项定向测试通过；模块结构4项和BizAuth 2项通过；范围/格式检查通过 | N/A；纯契约任务 | 本地测试输出与本任务文档 | 保存发布尚未接线，属于S03；两个既有Controller实体依赖架构测试失败与本轮无关 | 创建S02聚焦提交后进入S03 |
 | S03 | VERIFIED | `06cdfe07` | - | `CodeScreenPresentationDTO`、`ScreenDisplayPayloadDTO`、`ScreenDisplayContractValidator`、`CodeScreenPresentationValidator`、`ScreenCanvasServiceTest`、`ScreenPresentationDisplayPayloadTest`及大屏契约文档 | 展示配置已接入既有JSON校验、CAS保存、发布包和回滚校验，并经主代理复核 | 展示/画布/配置相关147项测试通过；契约/范围/格式检查通过 | N/A；未连接数据库和浏览器 | 定向Surefire报告与三份契约文档 | 新block需先保存取得ID再被display引用；真实持久化留S17 | 创建S03聚焦提交并进入S04 |
-| S04 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S03 |
+| S04 | VERIFIED | `7ab88468` | - | `PublishedDatasourceDefinition`、`ScreenCanvasServiceImpl`、`ScreenDatasourceServiceImpl`、`ScreenConfigServiceImpl`及对应测试/文档 | 新展示发布包已冻结服务端来源定义；运行仍校验当前启停/权限；主代理已复核 | 展示/画布/配置/数据源相关256项通过；契约/范围/格式检查通过 | N/A；未连接数据库和浏览器 | Surefire报告与大屏契约文档 | 只冻结查询定义，不冻结上游结果；旧包保持兼容 | 创建S04聚焦提交并进入S05 |
 | S05 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S02、S03 |
 | S06 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S03、S05 |
 | S07 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S02、S06 |
@@ -55,3 +55,11 @@
 - 既有Canvas保存无需新增表或端点：canvasStyle、组件树和block更新仍在同一事务/CAS；发布包复制同一style，回滚恢复归档style和组件树。定向服务测试验证字段保存、发布快照及新协议回滚。
 - 当前前端若同一次创建新ChartWidget并配置展示引用，必须先保存获得blockId再二次保存；没有引入客户端临时ID旁路。
 - 主代理终审扩展到 `CodeScreenPresentationValidatorTest`、`ScreenConfigServiceTest` 和完整 `ScreenCanvasServiceTest`，相关147项均通过；严格未知字段/枚举、当前组件树block归属、保存字段保留、发布快照和新协议回滚均有断言。
+
+## S04 任务记录
+
+- 新展示协议发布时，服务端从已校验数据源生成 `sourceDefinition`；字段规范化后计算SHA-256。敏感连接键拒绝，客户端内容不参与。
+- 正式取数解析 `screenCode + blockId` 后读取当前数据源做存在/ACTIVE/条线/命名组与权限校验，再以发布定义构造只读有效来源交给既有查询引擎。草稿预览和旧包维持原路径。
+- `ScreenConfigServiceImpl` 的运行包校验同样使用快照语义，避免共享数据源修改使旧新协议页面无法回读；当前数据源安全状态仍是即时门禁。
+- 定向测试验证配置字段顺序规范化、当前配置变更后仍使用旧定义、哈希篡改、敏感键、缺快照、旧包兼容和新协议回滚。未新增表、REST、连接配置或上游写入。
+- 主代理终审扩展至展示校验、画布、屏配置、数据源保存与运行时共256项测试；新增运行链断言证明当前配置改成另一槽位后，查询引擎仍收到发布定义。范围内未改查询公式、SQL白名单或上游模块。

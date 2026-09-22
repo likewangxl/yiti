@@ -1355,12 +1355,22 @@ class ScreenCanvasServiceTest {
         String codeStyle = displayStyleJson(1201L);
         String bind = "{\"dsId\":12,\"period\":\"LATEST\","
                 + "\"fields\":{\"value\":\"balance\"},\"units\":{\"value\":\"YUAN\"}}";
-        logEntry.setSnapshotJson("{\"schemaVersion\":1,\"canvasStyle\":" + codeStyle
+        String archivedJson = "{\"schemaVersion\":1,\"canvasStyle\":" + codeStyle
                 + ",\"components\":[{\"component\":\"ChartWidget\",\"id\":\"w-code\","
                 + "\"blockId\":1201,\"propValue\":{\"bindingKey\":\"deposit\"},"
                 + "\"bindJson\":" + new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(bind)
                 + "}],\"bindSnapshots\":{\"1201\":{\"componentType\":\"CODE\","
-                + "\"bind\":" + bind + ",\"styleCfg\":{},\"drill\":{}}}}");
+                + "\"bind\":" + bind + ",\"styleCfg\":{},\"drill\":{}}}}";
+        try {
+            var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            var archive = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(archivedJson);
+            var snapshot = (com.fasterxml.jackson.databind.node.ObjectNode) archive.path("bindSnapshots").path("1201");
+            com.bank.branch.platform.report.service.screen.presentation.PublishedDatasourceDefinition.write(
+                    snapshot, codeDatasource(12L), mapper);
+            logEntry.setSnapshotJson(archive.toString());
+        } catch (Exception ex) {
+            throw new AssertionError(ex);
+        }
         when(publishLogMapper.selectById(201L)).thenReturn(logEntry);
         when(blockMapper.selectList(any())).thenReturn(List.of());
         when(dsMapper.selectById(12L)).thenReturn(codeDatasource(12L));
@@ -1504,7 +1514,8 @@ class ScreenCanvasServiceTest {
         verify(canvasMapper).applyPublishedCas(eq(7L), eq(1), published.capture(),
                 eq(s.getCanvasStyleJson()), eq(s.getCanvasDraftJson()), eq(1), anyString());
         assertThat(published.getValue()).contains("\"displaySchemaVersion\":1",
-                "\"componentId\":\"deposit-card\"", "\"bindSnapshots\":{\"1201\"");
+                "\"componentId\":\"deposit-card\"", "\"bindSnapshots\":{\"1201\"",
+                "\"sourceDefinition\":{", "\"definitionHash\":");
         CodeScreenPresentationValidator.validatePublishedPackage(published.getValue());
     }
 

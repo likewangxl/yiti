@@ -15,6 +15,7 @@ import com.bank.branch.platform.report.dto.resp.ScreenCanvasSaveRespDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenPublishLogRespDTO;
 import com.bank.branch.platform.report.entity.RptScreen;
 import com.bank.branch.platform.report.entity.RptScreenBlock;
+import com.bank.branch.platform.report.entity.RptScreenDatasource;
 import com.bank.branch.platform.report.entity.RptScreenPublishLog;
 import com.bank.branch.platform.report.enums.RptErrorCode;
 import com.bank.branch.platform.report.exception.RptException;
@@ -24,6 +25,7 @@ import com.bank.branch.platform.report.mapper.RptScreenDatasourceMapper;
 import com.bank.branch.platform.report.mapper.RptScreenMapper;
 import com.bank.branch.platform.report.mapper.RptScreenPublishLogMapper;
 import com.bank.branch.platform.report.support.PublishedScreenPackageValidator;
+import com.bank.branch.platform.report.service.screen.presentation.PublishedDatasourceDefinition;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -342,6 +344,11 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
                         b.getStyleJson() == null ? "{}" : b.getStyleJson()));
                 snap.set("drill", objectMapper.readTree(
                         b.getDrillJson() == null ? "{}" : b.getDrillJson()));
+                if (PublishedDatasourceDefinition.requiredFor(pkg)) {
+                    Long datasourceId = bind.path("dsId").isIntegralNumber() ? bind.path("dsId").longValue() : null;
+                    RptScreenDatasource datasource = datasourceId == null ? null : dsMapper.selectById(datasourceId);
+                    PublishedDatasourceDefinition.write(snap, datasource, objectMapper);
+                }
             } catch (Exception e) {
                 throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, e);
             }
@@ -1196,9 +1203,12 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             if (datasource == null) {
                 throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
             }
-            validateCodeDatasourceBinding(bindingKey, bind.toString(), datasource, template,
+            RptScreenDatasource effective = PublishedDatasourceDefinition.effective(
+                    snapshot, datasource, objectMapper, PublishedDatasourceDefinition.requiredFor(root));
+            validateCodeDatasourceBinding(bindingKey, bind.toString(), effective, template,
                     root.path("canvasStyle"));
             validateCodeTemplateDatasourceLine(template, datasource);
+            validateCodeTemplateDatasourceLine(template, effective);
         }
     }
 
@@ -1230,7 +1240,9 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             if (datasource == null) {
                 throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
             }
-            validateCodeNamedGroupBinding(bindingKey, snapshot.path("bind").toString(), datasource);
+            RptScreenDatasource effective = PublishedDatasourceDefinition.effective(
+                    snapshot, datasource, objectMapper, PublishedDatasourceDefinition.requiredFor(root));
+            validateCodeNamedGroupBinding(bindingKey, snapshot.path("bind").toString(), effective);
         }
     }
 

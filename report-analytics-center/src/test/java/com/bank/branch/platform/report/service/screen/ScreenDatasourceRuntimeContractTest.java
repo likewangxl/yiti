@@ -566,4 +566,62 @@ class ScreenDatasourceRuntimeContractTest {
         verify(blockMapper, never()).selectById(11L);
         verify(engine).query(any(), any());
     }
+
+    @Test
+    void displayRuntimeUsesPublishedDefinitionWhileCurrentDatasourceStillControlsStatusAndPermission() {
+        RptScreen screen = namedScreen();
+        RptScreenDatasource published = datasource();
+        published.setDsType("SINGLE");
+        screen.setCanvasPublishedJson(publishedPackageWithDefinition(published));
+        RptScreenDatasource current = datasource();
+        current.setDsType("SINGLE");
+        current.setConfigJson("{\"scopeMode\":\"NAMED_GROUP\",\"table\":\"ORG_INDEX_RESULT\","
+                + "\"subjectCol\":\"org_code\",\"metrics\":[{\"metricName\":\"已修改\",\"slot\":99}]}");
+        when(scopeAuthorizationService.authorize(any())).thenReturn(Set.of("ORG_1"));
+        when(screenMapper.selectList(any())).thenReturn(List.of(screen));
+        when(dsMapper.selectById(12L)).thenReturn(current);
+        when(engine.query(any(), any())).thenReturn(new ScreenDataRespDTO(List.of("c"), List.of()));
+
+        ScreenDataReqDTO req = new ScreenDataReqDTO();
+        req.setSchemaVersion(2);
+        req.setScreenCode("SCR_RETAIL");
+        req.setBlockId(11L);
+        service.queryData(req);
+
+        ArgumentCaptor<RptScreenDatasource> used = ArgumentCaptor.forClass(RptScreenDatasource.class);
+        verify(engine).query(used.capture(), any());
+        assertThat(used.getValue().getConfigJson()).contains("\"slot\":3").doesNotContain("\"slot\":99");
+    }
+
+    private String publishedPackageWithDefinition(RptScreenDatasource datasource) {
+        try {
+            var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            var root = mapper.createObjectNode();
+            root.put("schemaVersion", 2);
+            var presentation = root.putObject("canvasStyle").putObject("presentation");
+            presentation.put("type", "CODE");
+            presentation.put("template", "retail-overview-v1");
+            presentation.put("displaySchemaVersion", 1);
+            var displayComponent = presentation.putObject("display").putArray("components").addObject();
+            displayComponent.put("componentId", "retail-deposit");
+            displayComponent.put("componentType", "METRIC_CARD");
+            displayComponent.put("layoutRegion", "LEFT");
+            displayComponent.put("order", 0);
+            displayComponent.put("visible", true);
+            displayComponent.putObject("text").put("titleMode", "AUTO").put("title", "");
+            displayComponent.putObject("format").put("displayUnit", "YUAN").put("decimals", 2);
+            displayComponent.putObject("content").put("mainField", "value");
+            displayComponent.putObject("interaction").put("action", "NONE");
+            displayComponent.putArray("dataRefs").addObject().put("blockId", 11).put("role", "PRIMARY")
+                    .put("metricCode", "M1").put("metricName", "余额").put("unit", "YUAN").put("dimension", "ORG");
+            root.putArray("components").addObject().put("component", "ChartWidget").put("blockId", 11);
+            var snapshot = root.putObject("bindSnapshots").putObject("11");
+            snapshot.putObject("bind").put("dsId", 12);
+            com.bank.branch.platform.report.service.screen.presentation.PublishedDatasourceDefinition.write(
+                    snapshot, datasource, mapper);
+            return root.toString();
+        } catch (Exception ex) {
+            throw new AssertionError(ex);
+        }
+    }
 }
