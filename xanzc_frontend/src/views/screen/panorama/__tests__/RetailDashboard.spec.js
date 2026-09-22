@@ -381,7 +381,7 @@ describe('RetailDashboard 零售经营总览', () => {
   });
 
   it('桌面三列按运行时 chrome 高度自然分配可视区', () => {
-    const stylesheet = readFileSync(resolve(process.cwd(), 'src/views/screen/panorama/retail.scss'), 'utf8');
+    const stylesheet = readFileSync(resolve(process.cwd(), 'src/views/screen/panorama/retail.scss'), 'utf8').replace(/\r\n/g, '\n');
     expect(stylesheet).toContain('@media (min-width: 1501px)');
     expect(stylesheet).toContain('height: calc(100dvh - var(--cockpit-chrome-height, 0px))');
     expect(stylesheet).toContain('min-height: calc(100dvh - var(--cockpit-chrome-height, 0px))');

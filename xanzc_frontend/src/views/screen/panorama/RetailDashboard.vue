@@ -32,6 +32,24 @@
     <div v-if="loading" class="retail-loading" role="status">加载中…</div>
     <div v-if="error" class="retail-error" role="alert">{{ error }}</div>
 
+    <PresentationLayout
+      v-if="presentationLayoutEnabled"
+      :presentation="sourcePresentation"
+      :model="safeModel"
+      :geo-json="provinceGeoJson"
+      mode="province"
+      :metric-key="activeMapMetricKey"
+      :selected-region-code="selectedCityCode"
+      :selected-org-code="selectedInstitution?.orgCode || ''"
+      :data-date="displayDate"
+      :demo="demo"
+      @region-select="selectCity"
+      @branch-select="openInstitutionFromMap"
+      @map-context="emit('map-context', $event)"
+      @metric-change="syncMapMetric"
+      @business-line-select="selectCompositionBusinessLine"
+    />
+    <template v-else>
     <MetricDisplayWidgets v-if="configuredMetrics.enabled" :components="configuredMetrics.components" />
     <section v-else class="retail-kpi-grid" aria-label="零售核心指标">
       <article
@@ -467,6 +485,7 @@
         </article>
       </div>
     </section>
+    </template>
 
     <div
       v-if="directoryOpen"
@@ -586,6 +605,8 @@ import PresentationMapWidget from '../presentation/map/PresentationMapWidget.vue
 import { findVisibleMapComponent } from '../presentation/map/mapModel';
 import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
 import { buildInstitutionRankingModel } from '../presentation/model/institutionRankingModel';
+import PresentationLayout from '../presentation/layout/PresentationLayout.vue';
+import { isConfiguredPresentation } from '../presentation/layout/presentationLayoutModel';
 import { provinceGeo } from './geography.js';
 import {
   buildRetailLeadershipInsights,
@@ -612,6 +633,7 @@ const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(
   props.sourcePresentation?.displayPresentation, safeModel.value
 ));
 const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select', 'business-line-select', 'map-context']);
+const presentationLayoutEnabled = computed(() => isConfiguredPresentation(props.sourcePresentation));
 
 const KPI_DEFINITIONS = Object.freeze([
   { key: 'retailAum', label: '零售AUM', unit: '', emptyText: '暂无数据源', emptyTitle: '当前未接入理财、基金、保险等客户金融资产来源' },

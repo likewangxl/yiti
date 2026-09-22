@@ -32,6 +32,24 @@
     <div v-if="loading" class="corporate-loading" role="status">加载中…</div>
     <div v-if="error" class="corporate-error" role="alert">{{ error }}</div>
 
+    <PresentationLayout
+      v-if="presentationLayoutEnabled"
+      :presentation="sourcePresentation"
+      :model="safeModel"
+      :geo-json="provinceGeoJson"
+      mode="province"
+      :metric-key="activeMapMetricKey"
+      :selected-region-code="selectedCityCode"
+      :selected-org-code="selectedInstitution?.orgCode || ''"
+      :data-date="displayDate"
+      :demo="demo"
+      @region-select="selectCity"
+      @branch-select="openInstitutionFromMap"
+      @map-context="emit('map-context', $event)"
+      @metric-change="syncMapMetric"
+      @business-line-select="selectCompositionBusinessLine"
+    />
+    <template v-else>
     <MetricDisplayWidgets v-if="configuredMetrics.enabled" :components="configuredMetrics.components" />
     <section v-else class="corporate-kpi-grid" aria-label="对公核心指标">
       <article
@@ -236,6 +254,7 @@
         </article>
       </div>
     </section>
+    </template>
 
     <div v-if="selectedAttention" class="corporate-attention-dialog-backdrop" data-testid="corporate-attention-detail" role="dialog" aria-modal="true" aria-label="对公经营事项详情" @click.self="closeAttention">
       <section ref="attentionDialogRef" class="corporate-attention-dialog" tabindex="-1" @keydown="onAttentionKeydown">
@@ -281,6 +300,8 @@ import PresentationMapWidget from '../presentation/map/PresentationMapWidget.vue
 import { findVisibleMapComponent } from '../presentation/map/mapModel';
 import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
 import { buildInstitutionRankingModel } from '../presentation/model/institutionRankingModel';
+import PresentationLayout from '../presentation/layout/PresentationLayout.vue';
+import { isConfiguredPresentation } from '../presentation/layout/presentationLayoutModel';
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -296,6 +317,7 @@ const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(
   props.sourcePresentation?.displayPresentation, safeModel.value
 ));
 const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select', 'business-line-select', 'map-context']);
+const presentationLayoutEnabled = computed(() => isConfiguredPresentation(props.sourcePresentation));
 
 const KPI_DEFINITIONS = Object.freeze([
   { key: 'corpDeposit', label: '对公存款余额', unit: '亿元' },

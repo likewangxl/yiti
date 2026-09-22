@@ -31,7 +31,24 @@
 
     <div v-if="loading" class="branch-operating-notice branch-operating-notice--loading" role="status"><Refresh class="branch-operating-notice__icon" aria-hidden="true" />正在刷新经营数据，请稍候</div>
     <div v-if="error" class="branch-operating-notice branch-operating-notice--error" role="alert"><WarningFilled class="branch-operating-notice__icon" aria-hidden="true" />{{ error }}</div>
+    <div v-if="demo" class="branch-operating-demo-badge" data-testid="branch-operating-demo-badge">演示数据 · 仅视觉预览</div>
 
+    <PresentationLayout
+      v-if="presentationLayoutEnabled"
+      :presentation="sourcePresentation"
+      :model="safeModel"
+      :geo-json="provinceGeoJson"
+      mode="province"
+      :metric-key="activeMapMetricKey"
+      :selected-org-code="safeModel.orgCode || ''"
+      :data-date="displayDate"
+      :demo="demo"
+      @branch-select="emit('branch-select', $event)"
+      @map-context="emit('map-context', $event)"
+      @metric-change="syncMapMetric"
+      @business-line-select="selectCompositionBusinessLine"
+    />
+    <template v-else>
     <MetricDisplayWidgets v-if="configuredMetrics.enabled" :components="configuredMetrics.components" />
     <section v-else class="branch-operating-kpis" aria-label="支行核心经营指标">
       <article v-for="(kpi, index) in kpiCards" :key="kpi.key || `kpi-${index}`" class="branch-operating-kpi" data-testid="branch-operating-kpi" :data-kpi-key="kpi.key || `kpi-${index}`" :class="`is-${kpiTone(kpi)}`" :style="{ '--kpi-accent': kpiAccent(index, kpi) }">
@@ -150,6 +167,7 @@
     </section>
 
     <footer class="branch-operating-footer"><span>数据来源 {{ sourceLabel }}</span><span class="branch-operating-footer__hint">指标空值按“—”展示，历史对比不足时不作推算</span></footer>
+    </template>
   </main>
 </template>
 
@@ -175,12 +193,16 @@ import CompositionTabsWidget from '../presentation/widgets/CompositionTabsWidget
 import InstitutionRankingWidget from '../presentation/widgets/InstitutionRankingWidget.vue';
 import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
 import { buildInstitutionRankingModel } from '../presentation/model/institutionRankingModel';
+import PresentationLayout from '../presentation/layout/PresentationLayout.vue';
+import { isConfiguredPresentation } from '../presentation/layout/presentationLayoutModel';
+import { provinceGeo } from './geography.js';
 
-const props = defineProps({ model: { type: Object, default: () => ({}) }, sourcePresentation: { type: Object, default: null }, loading: { type: Boolean, default: false }, error: { type: String, default: '' } });
+const props = defineProps({ model: { type: Object, default: () => ({}) }, sourcePresentation: { type: Object, default: null }, loading: { type: Boolean, default: false }, error: { type: String, default: '' }, demo: { type: Boolean, default: false } });
 const configuredMetrics = computed(() => buildDisplayMetricsModel(props.sourcePresentation, props.model || {}));
 const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(props.sourcePresentation, props.model || {}));
-const emit = defineEmits(['refresh', 'back', 'branch-select', 'business-line-select']);
+const emit = defineEmits(['refresh', 'back', 'branch-select', 'business-line-select', 'map-context']);
 const rootRef = ref(null); const selectedMetric = ref('deposit'); const selectedMapMetricKey = ref(''); const trendMode = ref('all'); const isFullscreen = ref(false);
+const presentationLayoutEnabled = computed(() => isConfiguredPresentation(props.sourcePresentation));
 const safeModel = computed(() => (props.model && typeof props.model === 'object' ? props.model : {}));
 function presentationOf(source) {
   if (!source || typeof source !== 'object') return {};
@@ -213,6 +235,8 @@ const institutionRankingTitle = computed(() => {
   const title = component?.text?.titleMode === 'CUSTOM' ? component?.text?.title : component?.title;
   return String(title || '机构排名').trim() || '机构排名';
 });
+const activeMapMetricKey = computed(() => selectedMapMetricKey.value || institutionRankingModel.value.activeMetricKey || '');
+const provinceGeoJson = provinceGeo || null;
 const compositionTabsModel = computed(() => buildCompositionTabsModel(
   props.sourcePresentation?.displayPresentation || props.sourcePresentation,
   safeModel.value

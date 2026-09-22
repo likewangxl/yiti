@@ -49,6 +49,24 @@
     <div v-if="loading" class="panorama-loading" role="status">加载中…</div>
     <div v-if="error" class="panorama-error" role="alert">{{ error }}</div>
 
+    <PresentationLayout
+      v-if="presentationLayoutEnabled"
+      :presentation="sourcePresentation"
+      :model="safeModel"
+      :geo-json="provinceGeoJson"
+      mode="province"
+      :metric-key="activeMapMetricKey"
+      :selected-region-code="selectedRegionCode"
+      :selected-org-code="selectedOrgCode"
+      :data-date="displayDate"
+      :demo="demo"
+      @region-select="openCity"
+      @branch-select="selectInstitution"
+      @map-context="emit('map-context', $event)"
+      @metric-change="syncMapMetric"
+      @business-line-select="selectCompositionBusinessLine"
+    />
+    <template v-else>
     <MetricDisplayWidgets v-if="configuredMetrics.enabled" :components="configuredMetrics.components" />
     <section v-else class="panorama-kpi-grid" aria-label="核心指标">
       <article v-for="(kpi, index) in kpiCards" :key="kpi.key || index" class="panorama-kpi" data-testid="panorama-kpi">
@@ -352,6 +370,7 @@
         </article>
       </div>
     </section>
+    </template>
 
     <div
       v-if="cityOpen && selectedRegion"
@@ -429,6 +448,8 @@ import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.v
 import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsModel';
 import SeriesTableWidgets from '../presentation/widgets/SeriesTableWidgets.vue';
 import { buildDisplaySeriesTableModel } from '../presentation/model/displaySeriesTableModel';
+import PresentationLayout from '../presentation/layout/PresentationLayout.vue';
+import { isConfiguredPresentation } from '../presentation/layout/presentationLayoutModel';
 
 
 const props = defineProps({
@@ -474,6 +495,7 @@ function scopeSignature(model = {}) {
   ].map(value => value == null ? '' : String(value)));
 }
 const lastScopeSignature = ref(`${scopeSignature(props.model)}|${props.sourcePresentation?.scopeIdentity || ''}`);
+const presentationLayoutEnabled = computed(() => isConfiguredPresentation(props.sourcePresentation));
 
 const safeModel = computed(() => {
   const source = props.model && typeof props.model === 'object' ? props.model : {};
@@ -775,7 +797,8 @@ function targetGapText(rate) {
 function kpiCompletionCard(keys, key, fallbackLabel, demoRate = null) {
   const item = safeModel.value.kpis.find(kpi => keys.includes(String(kpi?.key || '')));
   const sourceRate = finiteValue(item?.value);
-  const fallbackRate = finiteValue(demoRate);
+  // 演示值只允许由明确的 demo 视觉预览触发；真实运行缺数必须保持缺数态。
+  const fallbackRate = props.demo ? finiteValue(demoRate) : null;
   const rate = sourceRate === null ? fallbackRate : sourceRate;
   return completionCard({
     key,
@@ -783,7 +806,7 @@ function kpiCompletionCard(keys, key, fallbackLabel, demoRate = null) {
     rate,
     gapText: targetGapText(rate),
     date: item?.date || item?.dataDate || displayDate.value,
-    demoOnly: sourceRate === null && fallbackRate !== null
+    demoOnly: props.demo && sourceRate === null && fallbackRate !== null
   });
 }
 

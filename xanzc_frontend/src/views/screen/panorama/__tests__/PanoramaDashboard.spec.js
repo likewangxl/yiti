@@ -213,6 +213,15 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(wrapper.find('[role="alert"]').text()).toContain('取数失败');
   });
 
+  it('真实运行缺少对公完成率时保持缺数态，不回退演示完成率', () => {
+    const wrapper = mountDashboard({ demo: false, model: { ...extendedModel, kpis: extendedModel.kpis.filter(item => !String(item.key).toLowerCase().includes('corporate') && !String(item.key).toLowerCase().includes('corp')) } });
+    const text = wrapper.get('[data-testid="leadership-diagnostics"]').text();
+    expect(text).not.toContain('93.6%');
+    expect(text).not.toContain('88.2%');
+    expect(text).not.toContain('91.8%');
+    expect(text).toContain('暂无目标数据');
+  });
+
   it('刷新、返回、配置入口通过事件交给容器', async () => {
     const wrapper = mountDashboard();
     await wrapper.get('[data-action="refresh"]').trigger('click');
@@ -425,6 +434,7 @@ describe('PanoramaDashboard 省级经营大屏', () => {
 
   it('零售目标只在下方目标进度展示，顶部对公完成率缺来源时显示明确标注的演示值', () => {
     const wrapper = mountDashboard({
+      demo: true,
       model: {
         ...extendedModel,
         kpis: [...extendedModel.kpis, { key: 'rate', label: '已设目标机构完成率', value: 72, unit: '%', period: 'LATEST' }]
