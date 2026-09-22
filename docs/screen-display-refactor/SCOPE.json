@@ -1,0 +1,206 @@
+{
+  "version": 1,
+  "purpose": "本轮仅经营大屏展示、专属组件配置、专属保存发布和现有数据只读消费；默认拒绝未列路径。",
+  "baselineCommit": "dced49aaec6220b56991d774b0cae8435115d795",
+  "pathSemantics": "仓库相对路径，统一 /，精确文件与目录前缀匹配；deny优先，restricted其次，最后才是allow；必须核对基线后的已提交、暂存、未暂存、未跟踪、重命名前后、删除和内容差异。",
+  "defaultAction": "DENY",
+  "allowedExistingFiles": [
+    "xanzc_frontend/src/views/screen/ScreenCenter.vue",
+    "xanzc_frontend/src/views/screen/CodeScreenPage.vue",
+    "xanzc_frontend/src/views/screen/BranchOperatingPage.vue",
+    "xanzc_frontend/src/views/screen/panorama/PanoramaBindings.vue",
+    "xanzc_frontend/src/views/screen/panorama/PanoramaSettings.vue",
+    "xanzc_frontend/src/views/screen/panorama/PanoramaDatasourcePicker.vue",
+    "xanzc_frontend/src/views/screen/panorama/PanoramaRuntime.vue",
+    "xanzc_frontend/src/views/screen/panorama/PanoramaDashboard.vue",
+    "xanzc_frontend/src/views/screen/panorama/CorporateDashboard.vue",
+    "xanzc_frontend/src/views/screen/panorama/RetailDashboard.vue",
+    "xanzc_frontend/src/views/screen/panorama/BranchOperatingDashboard.vue",
+    "xanzc_frontend/src/views/screen/panorama/CityPanorama.vue",
+    "xanzc_frontend/src/views/screen/panorama/PanoramaMap.vue",
+    "xanzc_frontend/src/views/screen/panorama/PanoramaTrend.vue",
+    "xanzc_frontend/src/views/screen/panorama/CorporateTrend.vue",
+    "xanzc_frontend/src/views/screen/panorama/RetailTrend.vue",
+    "xanzc_frontend/src/views/screen/panorama/CompositionBreakdown.vue",
+    "xanzc_frontend/src/views/screen/panorama/bindings.js",
+    "xanzc_frontend/src/views/screen/panorama/corporateBindings.js",
+    "xanzc_frontend/src/views/screen/panorama/retailBindings.js",
+    "xanzc_frontend/src/views/screen/panorama/defaultBindings.js",
+    "xanzc_frontend/src/views/screen/panorama/dataAdapter.js",
+    "xanzc_frontend/src/views/screen/panorama/corporateDataAdapter.js",
+    "xanzc_frontend/src/views/screen/panorama/retailDataAdapter.js",
+    "xanzc_frontend/src/views/screen/panorama/panoramaViewModel.js",
+    "xanzc_frontend/src/views/screen/panorama/branchOperatingModel.js",
+    "xanzc_frontend/src/views/screen/panorama/branchOperatingSource.js",
+    "xanzc_frontend/src/views/screen/panorama/usePanoramaData.js",
+    "xanzc_frontend/src/views/screen/panorama/panorama.scss",
+    "xanzc_frontend/src/views/screen/panorama/corporate.scss",
+    "xanzc_frontend/src/views/screen/panorama/retail.scss",
+    "xanzc_frontend/src/views/screen/panorama/branchOperating.scss",
+    "xanzc_frontend/src/views/screen/admin/Datasources.vue",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/dto/req/CodeScreenPresentationDTO.java",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/dto/req/CanvasStyleDTO.java",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/dto/req/CanvasComponentDTO.java",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/dto/req/ScreenCanvasSaveReqDTO.java",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/dto/resp/ScreenDataRespDTO.java",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/dto/resp/ScreenRenderRespDTO.java",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/dto/resp/PanoramaInstitutionDTO.java",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/service/screen/ScreenCanvasServiceImpl.java",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/service/screen/ScreenConfigServiceImpl.java",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/service/screen/ScreenDatasourceServiceImpl.java",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/service/screen/CodeScreenPresentationValidator.java",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/support/PublishedScreenPackageValidator.java",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/support/ScreenConfigSchema.java"
+  ],
+  "allowedNewFilePrefixes": [
+    "xanzc_frontend/src/views/screen/presentation/",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/service/screen/presentation/",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/dto/req/presentation/",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/dto/resp/presentation/"
+  ],
+  "testOnlyPrefixes": [
+    "xanzc_frontend/src/views/screen/presentation/__tests__/",
+    "xanzc_frontend/src/views/screen/panorama/__tests__/",
+    "xanzc_frontend/src/views/screen/__tests__/",
+    "xanzc_frontend/src/views/screen/admin/__tests__/Datasources.",
+    "report-analytics-center/src/test/java/com/bank/branch/platform/report/service/screen/",
+    "report-analytics-center/src/test/java/com/bank/branch/platform/report/support/",
+    "report-analytics-center/src/test/java/com/bank/branch/platform/report/controller/Screen"
+  ],
+  "restrictedFiles": [
+    {
+      "path": "xanzc_frontend/src/views/screen/ScreenCenter.vue",
+      "rule": "仅本轮经营屏卡片的显示与跳转；个人卡片、其权限/排序/点击行为保持原样，必须逐hunk复核。"
+    },
+    {
+      "path": "xanzc_frontend/src/api/screen.js",
+      "rule": "仅大屏专属新增封装或错误明确传播；既有导出签名与旧调用语义不得改变。优先新建presentation内专用封装。"
+    },
+    {
+      "path": "report-analytics-center/src/main/java/com/bank/branch/platform/report/service/screen/ScreenQueryEngine.java",
+      "rule": "仅调用链追踪和新展示协议必需的定向适配；既有SQL模板、计算公式、表白名单、授权过滤、限额与旧结果语义保持不变。不能扩展跨模块私表直查。"
+    },
+    {
+      "path": "docs/modules/report-analytics-center/03-接口设计与报文.md",
+      "rule": "仅新增或修订本轮大屏契约段落。"
+    },
+    {
+      "path": "docs/modules/report-analytics-center/04-对外API契约.md",
+      "rule": "仅说明本轮大屏只读消费边界，不新增report对业务模块反向API。"
+    },
+    {
+      "path": "docs/modules/report-analytics-center/06-并发与事务策略.md",
+      "rule": "仅大屏草稿CAS、发布快照、回滚及局部并发语义。"
+    },
+    {
+      "path": "docs/modules/report-analytics-center/07-审计要求.md",
+      "rule": "仅大屏本轮配置/发布审计。"
+    },
+    {
+      "path": "docs/modules/report-analytics-center/10-大屏设计器操作指南.md",
+      "rule": "仅本轮经营大屏配置与旧版兼容操作。"
+    },
+    {
+      "path": "docs/modules/report-analytics-center/11-代码化经营大屏.md",
+      "rule": "仅本轮经营大屏协议与说明。"
+    },
+    {
+      "path": "docs/code-examples.md",
+      "rule": "仅登记本轮大屏实现入口，不整理其他模块。"
+    },
+    {
+      "path": "docs/分行经营大屏改造方案-2026-09-22.md",
+      "rule": "仅追加新范围声明和执行计划链接，保留历史方案。"
+    }
+  ],
+  "documentationPrefixes": [
+    "docs/screen-display-refactor/"
+  ],
+  "deniedPrefixes": [
+    "common/",
+    "auth-permission-center/",
+    "performance-engine-center/",
+    "customer-marketing-center/",
+    "business-application-center/",
+    "portal-content-center/",
+    "red-engine-center/",
+    "yundun-application-center/",
+    "workflow-center/",
+    "system-governance-center/",
+    "soap-gateway-center/",
+    "bootstrap/",
+    "xanzc_frontend/src/components/",
+    "xanzc_frontend/src/layouts/",
+    "xanzc_frontend/src/stores/",
+    "xanzc_frontend/src/styles/",
+    "xanzc_frontend/src/utils/",
+    "xanzc_frontend/src/router/",
+    "xanzc_frontend/src/views/screen/personal/",
+    "xanzc_frontend/src/views/screen/admin/OrgProfiles",
+    "xanzc_frontend/src/views/screen/admin/OrgGroups",
+    "xanzc_frontend/src/views/screen/admin/OrgLocationDialog",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/entity/",
+    "report-analytics-center/src/main/java/com/bank/branch/platform/report/mapper/",
+    "report-analytics-center/src/main/resources/",
+    "report-analytics-center/src/test/resources/",
+    "docs/schema/",
+    "docs/superpowers/sql/",
+    "ops/"
+  ],
+  "deniedExactFiles": [
+    "AGENTS.md",
+    "IMPLEMENTATION_PLAN.md",
+    "pom.xml",
+    "report-analytics-center/pom.xml",
+    "xanzc_frontend/package.json",
+    "xanzc_frontend/package-lock.json",
+    "xanzc_frontend/pnpm-lock.yaml",
+    "xanzc_frontend/vite.config.js",
+    "xanzc_frontend/vitest.config.js",
+    "xanzc_frontend/src/main.js",
+    "xanzc_frontend/src/App.vue",
+    "xanzc_frontend/src/api/http.js"
+  ],
+  "contentRestrictions": [
+    "所有AGENTS.md只读；所有非大屏业务代码默认只读，包括未列出的文件。",
+    "不得通过允许文件中的跨域副作用绕过路径边界；不得修改被保护模块的运行行为、请求或共享样式。",
+    "仅在新的presentation配置显式启用时进入新行为；旧大屏、个人看板与非大屏功能保持兼容。",
+    "不新增REST路径、不改变现有资源授权要求；若无法复用既有受保护端点，记录BLOCKED_SCOPE。",
+    "不新增数据表、字段、索引、数据库脚本、插件依赖、全局环境文件或调度。",
+    "不改KPI/目标/指标导入和计算规则，不补造数据、不触发既有导入/重算接口来凑验收。",
+    "测试文件允许修改不等于允许访问真库；纯测试与真库测试必须按执行计划分门禁。",
+    "新文件必须属于任务卡冻结的清单；testOnlyPrefixes下仅允许测试文件，不能放生产代码。",
+    "现有用户改动只记录与保留，不作为本任务失败依据，也不得回退；重叠无法分离则停该文件。",
+    "受限文件通过路径检查后仍需人工逐hunk复核；范围清单自身变更不能自动扩大授权。"
+  ],
+  "taskIds": [
+    "S00",
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S05",
+    "S06",
+    "S07",
+    "S08",
+    "S09",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17"
+  ],
+  "outsideScopeIds": [
+    "X01",
+    "X02",
+    "X03",
+    "X04",
+    "X05",
+    "X06",
+    "X07"
+  ],
+  "scopeApproval": "只记录用户已给出的边界。任何新增路径或越界行为先完成只读证据和影响说明，再取得用户明确扩展授权。"
+}
