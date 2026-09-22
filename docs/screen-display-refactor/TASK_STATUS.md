@@ -11,7 +11,7 @@
 | S04 | VERIFIED | `7ab88468` | - | `PublishedDatasourceDefinition`、`ScreenCanvasServiceImpl`、`ScreenDatasourceServiceImpl`、`ScreenConfigServiceImpl`及对应测试/文档 | 新展示发布包已冻结服务端来源定义；运行仍校验当前启停/权限；主代理已复核 | 展示/画布/配置/数据源相关256项通过；契约/范围/格式检查通过 | N/A；未连接数据库和浏览器 | Surefire报告与大屏契约文档 | 只冻结查询定义，不冻结上游结果；旧包保持兼容 | 创建S04聚焦提交并进入S05 |
 | S05 | VERIFIED | `796bd95f` | - | `businessSourceCandidates.js`及测试、`PanoramaDatasourcePicker.vue`、`PanoramaBindings.vue`、操作指南、`TASK_STATUS.md` | 业务化来源分类/搜索/兼容/禁用说明已接入现有绑定页；主代理已复核 | 候选模型、Picker、Bindings共31项通过；生产构建与范围/格式检查通过 | N/A；未调用后端写接口 | Vitest与Vite构建输出、操作指南 | 真实候选仍取决于目标环境API；不新增上游能力 | 创建S05聚焦提交并进入S06 |
 | S06 | VERIFIED | `34acb94c` | - | `presentationEditorModel.js`、`PresentationEditor.vue`及测试、`PanoramaBindings.vue`与集成测试、操作指南、`TASK_STATUS.md` | 三栏组件工作台已接入现有草稿保存与冲突链，主代理已复核 | presentation与Bindings共51项通过；生产构建及范围/格式检查通过 | 浏览器真实验收留S17 | Vitest/Vite输出与操作指南 | 新组件必须先绑定已有blockId；高级字段映射暂保留 | 创建S06聚焦提交并进入S07/S08 |
-| S07 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S02、S06 |
+| S07 | VERIFIED | `6743219a` | - | `displayMetricsModel.js`、`MetricDisplayWidgets.vue`及测试；四类Dashboard/Runtime/Page最小接入；文档与`TASK_STATUS.md` | 新协议指标卡/完成情况驱动运行展示，旧包回归保持；主代理已复核 | 模型/组件/分行/对公/支行相关71项通过；生产构建通过 | 浏览器真实数据验收留S17 | Vitest/Vite输出与代码化大屏文档 | Retail套件1项既有CRLF静态文本断言失败，retail.scss未改；真实来源仍UNCONFIRMED | 创建S07提交并进入S08 |
 | S08 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S02、S06 |
 | S09 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S07、S08 |
 | S10 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S07、S08 |
@@ -79,3 +79,11 @@
 - 页面接入左侧组件列表、中间即时预览、右侧属性区。旧无display配置需显式启用；已有display配置自动加载。保存通过现有saveCanvas/CAS，409和普通失败均保留本地会话。
 - 新建未绑定组件阻止保存；删除只移除展示引用。切屏/路由切换及浏览器关闭对dirty配置提示。旧高级字段映射、设置、角色、发布、回滚入口保持原语义。
 - 生产构建成功；仅有既有Sass API弃用和chunk体积提示。未启动服务、未调用真实写接口，浏览器验收留S17。
+
+## S07 任务记录
+
+- 展示模型仅在 `displaySchemaVersion=1` 下启用，按visible/区域/order稳定解析METRIC_CARD和COMPLETION，多实例互不覆盖；旧presentation返回disabled并走原Dashboard。
+- 标题按CUSTOM/指标名称快照解析，身份仍来自componentId/dataRef。主副字段只读现有blockResults/kpis/targets，不新增actual/target公式或模拟值。
+- 0/null、负数、超100、金额换算、COUNT、RATIO/PERCENT单次转换和换源清旧值均有纯测试；完成率文本保留原值，progress才钳制。
+- PanoramaRuntime把发布presentation传给分行/对公/零售Dashboard；支行live页面从renderPackage读取presentation。旧KPI区仅在新协议未启用时显示。
+- 相关71项测试及生产构建通过。RetailDashboard套件的静态SCSS断言因仓库现有CRLF与期望LF不一致失败1项，本轮未修改retail.scss；其余零售行为测试和构建通过，按存量问题记录。

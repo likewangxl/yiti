@@ -18,7 +18,8 @@
         </template>
       </div></details>
     </div>
-    <BranchOperatingDashboard :model="dashboard" :loading="loading || (!isTestSource && financialLoading)" :error="visibleError"
+    <BranchOperatingDashboard :model="dashboard" :source-presentation="branchDisplayPresentation"
+      :loading="loading || (!isTestSource && financialLoading)" :error="visibleError"
       @refresh="initialize" @back="router.push('/screens')" @branch-select="selectBranch" />
   </section>
 </template>
@@ -79,6 +80,14 @@ const dashboard = computed(() => {
     orgCode: selected.value, orgName: institutions.value.find(i => String(i.orgCode) === selected.value)?.orgName || '支行经营总览',
     institutions: institutions.value, financial: financial.value, touch: touch.value, touchError: touchError.value, view: view.value, touchPeriod: touchPeriod.value
   }));
+});
+const branchDisplayPresentation = computed(() => {
+  if (isTestSource.value) return null;
+  let pkg = view.value?.renderPackage;
+  if (!pkg && typeof view.value?.renderPackageJson === 'string') {
+    try { pkg = JSON.parse(view.value.renderPackageJson); } catch { pkg = null; }
+  }
+  return pkg?.canvasStyle?.presentation || null;
 });
 const visibleError = computed(() => pageError.value || (!isTestSource.value && view.value.screenCode ? state.error.value : '')
   || (!isTestSource.value && (financial.value.issues || []).some(i => i.code === 'REQUEST_FAILED')

@@ -32,7 +32,8 @@
     <div v-if="loading" class="branch-operating-notice branch-operating-notice--loading" role="status"><Refresh class="branch-operating-notice__icon" aria-hidden="true" />正在刷新经营数据，请稍候</div>
     <div v-if="error" class="branch-operating-notice branch-operating-notice--error" role="alert"><WarningFilled class="branch-operating-notice__icon" aria-hidden="true" />{{ error }}</div>
 
-    <section class="branch-operating-kpis" aria-label="支行核心经营指标">
+    <MetricDisplayWidgets v-if="configuredMetrics.enabled" :components="configuredMetrics.components" />
+    <section v-else class="branch-operating-kpis" aria-label="支行核心经营指标">
       <article v-for="(kpi, index) in kpiCards" :key="kpi.key || `kpi-${index}`" class="branch-operating-kpi" data-testid="branch-operating-kpi" :data-kpi-key="kpi.key || `kpi-${index}`" :class="`is-${kpiTone(kpi)}`" :style="{ '--kpi-accent': kpiAccent(index, kpi) }">
         <div class="branch-operating-kpi__topline"><span class="branch-operating-kpi__mark" aria-hidden="true"></span><span class="branch-operating-kpi__label">{{ displayText(kpi.label, '未命名指标') }}</span><span class="branch-operating-kpi__status">{{ statusText(kpi.status) }}</span></div>
         <div class="branch-operating-kpi__value-line"><strong :class="{ 'is-empty': finiteMetric(kpi.value) === null }">{{ ['项', '户', '人'].includes(kpi.unit) ? formatCount(kpi.value) : formatMetric(kpi.value) }}</strong><span>{{ displayText(kpi.unit, '') }}</span></div>
@@ -150,7 +151,11 @@ use([CanvasRenderer, BarChart, LineChart, PieChart, GridComponent, TooltipCompon
 const palette = Object.freeze(['#47e9ef', '#a77bff', '#ff7486', '#ffc45e', '#5896ff']);
 const statusPalette = Object.freeze({ PENDING: '#ffc45e', IN_PROGRESS: '#47e9ef', SUCCESS: '#a77bff', CANCELLED: '#ff7486' });
 const statusLabels = Object.freeze({ PENDING: '待处理', IN_PROGRESS: '进行中', SUCCESS: '已完成', CANCELLED: '已取消' });
-const props = defineProps({ model: { type: Object, default: () => ({}) }, loading: { type: Boolean, default: false }, error: { type: String, default: '' } });
+import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.vue';
+import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsModel';
+
+const props = defineProps({ model: { type: Object, default: () => ({}) }, sourcePresentation: { type: Object, default: null }, loading: { type: Boolean, default: false }, error: { type: String, default: '' } });
+const configuredMetrics = computed(() => buildDisplayMetricsModel(props.sourcePresentation, props.model || {}));
 const emit = defineEmits(['refresh', 'back', 'branch-select']);
 const rootRef = ref(null); const selectedMetric = ref('deposit'); const trendMode = ref('all'); const isFullscreen = ref(false);
 const safeModel = computed(() => (props.model && typeof props.model === 'object' ? props.model : {}));

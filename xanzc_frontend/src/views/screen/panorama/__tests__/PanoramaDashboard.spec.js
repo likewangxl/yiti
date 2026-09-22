@@ -98,6 +98,25 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     document.body.style.overflow = '';
   });
 
+  it('新展示协议用组件实例替换固定KPI区，旧业务身份仍来自dataRef', () => {
+    const wrapper = mountDashboard({
+      sourcePresentation: { displayPresentation: {
+        displaySchemaVersion: 1,
+        display: { components: [{
+          componentId: 'deposit-custom', componentType: 'METRIC_CARD', layoutRegion: 'LEFT', order: 0, visible: true,
+          text: { titleMode: 'CUSTOM', title: '全行存款', subtitle: '', description: '' },
+          format: { displayUnit: 'HUNDRED_MILLION', decimals: 2, thousandsSeparator: true, negativeStyle: 'SIGNED', emptyText: '—' },
+          content: { mainField: 'value', subFields: [] }, interaction: { action: 'NONE' },
+          dataRefs: [{ blockId: 1, role: 'PRIMARY', metricCode: 'deposit', metricName: '存款余额', unit: 'HUNDRED_MILLION', dimension: 'ORG' }]
+        }] }
+      } }
+    });
+    expect(wrapper.find('[data-testid="presentation-metric-widgets"]').exists()).toBe(true);
+    expect(wrapper.find('[data-component-id="deposit-custom"]').text()).toContain('全行存款');
+    expect(wrapper.find('[data-component-id="deposit-custom"]').text()).toContain('1,286.42亿元');
+    expect(wrapper.find('.panorama-kpi-grid').exists()).toBe(false);
+  });
+
   afterEach(() => {
     mounted.splice(0).forEach(wrapper => wrapper.unmount());
     vi.useRealTimers();

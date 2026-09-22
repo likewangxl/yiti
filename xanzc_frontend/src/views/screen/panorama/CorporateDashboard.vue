@@ -32,7 +32,8 @@
     <div v-if="loading" class="corporate-loading" role="status">加载中…</div>
     <div v-if="error" class="corporate-error" role="alert">{{ error }}</div>
 
-    <section class="corporate-kpi-grid" aria-label="对公核心指标">
+    <MetricDisplayWidgets v-if="configuredMetrics.enabled" :components="configuredMetrics.components" />
+    <section v-else class="corporate-kpi-grid" aria-label="对公核心指标">
       <article
         v-for="(kpi, index) in kpiCards"
         :key="kpi.key"
@@ -235,6 +236,8 @@ import CorporateTrend from './CorporateTrend.vue';
 import { provinceGeo } from './geography.js';
 import { buildCorporateLeadershipInsights, buildSegmentComparisons, finiteMetric } from './corporateLeadershipInsights.js';
 import { resolveDataStatus } from './sourcePresentation';
+import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.vue';
+import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsModel';
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -243,6 +246,9 @@ const props = defineProps({
   demo: { type: Boolean, default: false },
   sourcePresentation: { type: Object, default: () => ({}) }
 });
+const configuredMetrics = computed(() => buildDisplayMetricsModel(
+  props.sourcePresentation?.displayPresentation, safeModel.value
+));
 const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select']);
 
 const KPI_DEFINITIONS = Object.freeze([

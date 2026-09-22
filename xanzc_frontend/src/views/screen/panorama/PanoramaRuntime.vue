@@ -60,6 +60,7 @@ const dashboardModel = computed(() => applyMetricLabels(
 ));
 const dashboardSourcePresentation = computed(() => ({
   ...sourcePresentation.value,
+  displayPresentation: props.view?.renderPackage?.canvasStyle?.presentation || null,
   scopeIdentity: [props.view?.screenCode, props.view?.orgScopeMode, props.view?.orgGroupCode, props.context?.orgCode].map(v => v || '').join('|'),
   runtimeIssues: state.slotIssues.value || {},
   runtimeQuality: model.value?.qualityGuard || model.value?.quality || null

@@ -32,7 +32,8 @@
     <div v-if="loading" class="retail-loading" role="status">加载中…</div>
     <div v-if="error" class="retail-error" role="alert">{{ error }}</div>
 
-    <section class="retail-kpi-grid" aria-label="零售核心指标">
+    <MetricDisplayWidgets v-if="configuredMetrics.enabled" :components="configuredMetrics.components" />
+    <section v-else class="retail-kpi-grid" aria-label="零售核心指标">
       <article
         v-for="(kpi, index) in kpiCards"
         :key="kpi.key"
@@ -537,6 +538,8 @@ import PanoramaMap from './PanoramaMap.vue';
 import { buildCityMapDetails, cityMapMetricValues } from './cityMapDetails.js';
 import RetailTrend from './RetailTrend.vue';
 import RetailAttentionDetails from './RetailAttentionDetails.vue';
+import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.vue';
+import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsModel';
 import { provinceGeo } from './geography.js';
 import {
   buildRetailLeadershipInsights,
@@ -555,6 +558,9 @@ const props = defineProps({
   error: { type: String, default: '' },
   demo: { type: Boolean, default: false }
 });
+const configuredMetrics = computed(() => buildDisplayMetricsModel(
+  props.sourcePresentation?.displayPresentation, safeModel.value
+));
 const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select']);
 
 const KPI_DEFINITIONS = Object.freeze([

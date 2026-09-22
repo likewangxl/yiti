@@ -49,7 +49,8 @@
     <div v-if="loading" class="panorama-loading" role="status">加载中…</div>
     <div v-if="error" class="panorama-error" role="alert">{{ error }}</div>
 
-    <section class="panorama-kpi-grid" aria-label="核心指标">
+    <MetricDisplayWidgets v-if="configuredMetrics.enabled" :components="configuredMetrics.components" />
+    <section v-else class="panorama-kpi-grid" aria-label="核心指标">
       <article v-for="(kpi, index) in kpiCards" :key="kpi.key || index" class="panorama-kpi" data-testid="panorama-kpi">
         <div class="panorama-kpi-icon" aria-hidden="true"><component :is="kpiIcon(kpi.key, index)" /></div>
         <div class="panorama-kpi-body">
@@ -381,6 +382,8 @@ import {
 import { buildCityMapDetails } from './cityMapDetails.js';
 import { resolveDataStatus } from './sourcePresentation';
 import { buildTargetCards, stripTestModifier } from './targetPresentation.js';
+import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.vue';
+import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsModel';
 
 
 const props = defineProps({
@@ -451,6 +454,9 @@ const safeModel = computed(() => {
     citySummaries: source.citySummaries && typeof source.citySummaries === 'object' ? source.citySummaries : {}
   };
 });
+const configuredMetrics = computed(() => buildDisplayMetricsModel(
+  props.sourcePresentation?.displayPresentation, safeModel.value
+));
 const kpiCards = computed(() => coreKpis(safeModel.value.kpis));
 const depositOperationCards = computed(() => [
   { ...findKpi(safeModel.value.kpis, 'depositIncrease'), label: '较上月净增', note: '月度变动' },
