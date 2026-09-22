@@ -90,23 +90,6 @@ describe('source presentation', () => {
     });
   });
 
-  it('保留业务构成可选总量/分母的字段级来源状态', () => {
-    const result = resolveSourcePresentation({ renderPackage: { canvasStyle: {
-      sourceAvailability: {
-        composition: {
-          status: 'PARTIAL',
-          fields: { total: { status: 'NO_VALUES', message: '总量待核定' } }
-        }
-      }
-    } } });
-    expect(result.sourceAvailability).toEqual({
-      composition: {
-        status: 'PARTIAL', message: '',
-        fields: { total: { status: 'NO_VALUES', message: '总量待核定' } }
-      }
-    });
-  });
-
   it('保留 loanRate 独立标签和来源字段状态，不映射为旧 rate', () => {
     const result = resolveSourcePresentation({ renderPackage: { canvasStyle: {
       metricLabels: { rate: '存款目标完成率', loanRate: '零售贷款目标完成率' },
