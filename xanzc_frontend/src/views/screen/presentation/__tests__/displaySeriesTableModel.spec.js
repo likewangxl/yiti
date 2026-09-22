@@ -44,4 +44,40 @@ describe('displaySeriesTableModel', () => {
     expect(result.components[0].rows[0].cells[0].text).toBe('0元');
     expect(result.components[0].rows[1].cells[1].text).toBe('—');
   });
+
+  it('AUTO维度保留原始文本，空值使用emptyText且对象不会被字符串化', () => {
+    const result = buildDisplaySeriesTableModel(presentation([{ componentId: 'table', componentType: 'DETAIL_TABLE', visible: true,
+      format: { decimals: 2, emptyText: '暂无' }, content: { columns: [
+        { columnKey: 'orgName', field: 'orgName', label: '机构名称', unit: 'AUTO', visible: true },
+        { columnKey: 'orgCode', field: 'orgCode', label: '机构编码', unit: 'AUTO', visible: true },
+        { columnKey: 'zero', field: 'zero', label: '零值', unit: 'AUTO', visible: true },
+        { columnKey: 'nullValue', field: 'nullValue', label: '空值', unit: 'AUTO', visible: true },
+        { columnKey: 'undefinedValue', field: 'undefinedValue', label: '缺值', unit: 'AUTO', visible: true },
+        { columnKey: 'emptyValue', field: 'emptyValue', label: '空文本', unit: 'AUTO', visible: true },
+        { columnKey: 'unsafe', field: 'unsafe', label: '备注', unit: 'AUTO', visible: true },
+        { columnKey: 'objectValue', field: 'objectValue', label: '对象', unit: 'AUTO', visible: true }
+      ] }, dataRefs: ref(3) }]), { blockResults: { 3: [{
+      orgName: '西安分行', orgCode: '001', zero: 0, nullValue: null,
+      unsafe: '<script>alert(1)</script>', objectValue: { html: '<script>alert(2)</script>' }
+    }] } });
+    const cells = result.components[0].rows[0].cells;
+
+    expect(result.components[0].columns.map(item => item.columnKey)).toEqual([
+      'orgName', 'orgCode', 'zero', 'nullValue', 'undefinedValue', 'emptyValue', 'unsafe', 'objectValue'
+    ]);
+    expect(cells.map(cell => cell.key)).toEqual([
+      'orgName', 'orgCode', 'zero', 'nullValue', 'undefinedValue', 'emptyValue', 'unsafe', 'objectValue'
+    ]);
+    expect(cells.map(cell => cell.text)).toEqual([
+      '西安分行', '001', '0', '暂无', '暂无', '暂无', '<script>alert(1)</script>', '暂无'
+    ]);
+  });
+
+  it('数值单位仍按小数位和单位格式化', () => {
+    expect(buildDisplaySeriesTableModel(presentation([{ componentId: 'table', componentType: 'DETAIL_TABLE', visible: true,
+      format: { decimals: 2 }, content: { columns: [
+        { columnKey: 'amount', field: 'amount', label: '金额', unit: 'YUAN', visible: true }
+      ] }, dataRefs: ref(4) }]), { blockResults: { 4: [{ amount: '1234.5' }] } })
+      .components[0].rows[0].cells[0].text).toBe('1,234.50元');
+  });
 });

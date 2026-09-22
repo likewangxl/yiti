@@ -21,9 +21,23 @@ function sourceRows(model, component, ref) {
   return Array.isArray(model?.items) ? model.items : Array.isArray(model?.rankings) ? model.rankings : [];
 }
 
-function displayValue(value, unit, decimals = 2) {
+function emptyTextOf(value) {
+  return typeof value === 'string' && value.trim() ? value : '—';
+}
+
+function displayAutoValue(value, emptyText) {
+  if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return emptyText;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : emptyText;
+  if (typeof value === 'bigint' || typeof value === 'boolean') return String(value);
+  return emptyText;
+}
+
+function displayValue(value, unit, decimals = 2, configuredEmptyText = '—') {
+  const emptyText = emptyTextOf(configuredEmptyText);
+  if (unit === 'AUTO') return displayAutoValue(value, emptyText);
   const number = finite(value);
-  if (number === null) return '—';
+  if (number === null) return emptyText;
   const normalized = unit === 'RATIO' ? number * 100 : number;
   const label = ({ YUAN: '元', TEN_THOUSAND: '万元', HUNDRED_MILLION: '亿元', COUNT: '个', TEN_THOUSAND_COUNT: '万户', PERCENT: '%', RATIO: '%' })[unit] || '';
   return `${new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(normalized)}${label}`;
@@ -62,7 +76,9 @@ function tableModel(component, rows) {
   const columns = (component.content?.columns || []).filter(column => column.visible !== false).map(column => ({ ...column }));
   const normalizedRows = rows.filter(record).map((row, sourceIndex) => ({
     key: String(row.orgCode ?? row.id ?? row.code ?? sourceIndex), sourceIndex,
-    cells: columns.map(column => ({ key: column.columnKey, value: row[column.field], text: displayValue(row[column.field], column.unit, component.format?.decimals ?? 2) }))
+    cells: columns.map(column => ({ key: column.columnKey, value: row[column.field], text: displayValue(
+      row[column.field], column.unit, component.format?.decimals ?? 2, component.format?.emptyText
+    ) }))
   }));
   return {
     componentId: component.componentId, componentType: 'DETAIL_TABLE', title: component.text?.title || '明细',

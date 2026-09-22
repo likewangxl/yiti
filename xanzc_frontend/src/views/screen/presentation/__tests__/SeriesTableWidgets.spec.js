@@ -20,4 +20,16 @@ describe('SeriesTableWidgets', () => {
     expect(wrapper.findAll('th').map(node => node.text())).toEqual(['贷款', '存款']);
     expect(wrapper.findAll('td').map(node => node.text())).toEqual(['0元', '—']);
   });
+
+  it('将恶意字符串作为纯文本渲染，不创建HTML节点', () => {
+    const unsafe = '<script>alert(1)</script>';
+    const wrapper = mount(SeriesTableWidgets, { props: { components: [{
+      componentId: 'table', componentType: 'DETAIL_TABLE', title: '明细', state: 'READY', issues: [],
+      columns: [{ columnKey: 'orgName', label: '机构名称' }],
+      rows: [{ key: '001', cells: [{ key: 'orgName', text: unsafe }] }]
+    }] } });
+
+    expect(wrapper.find('td').text()).toBe(unsafe);
+    expect(wrapper.find('script').exists()).toBe(false);
+  });
 });
