@@ -9,7 +9,7 @@
 | S02 | VERIFIED | `40aa91ea` | - | 前端`screen/presentation/contract/`与测试；后端`dto/req/presentation/`与`ScreenPresentationContractTest`；`PRESENTATION_CONTRACT.md`、`TASK_STATUS.md` | 七类组件展示子协议已实现并经主代理复核 | 前端9项、后端6项定向测试通过；模块结构4项和BizAuth 2项通过；范围/格式检查通过 | N/A；纯契约任务 | 本地测试输出与本任务文档 | 保存发布尚未接线，属于S03；两个既有Controller实体依赖架构测试失败与本轮无关 | 创建S02聚焦提交后进入S03 |
 | S03 | VERIFIED | `06cdfe07` | - | `CodeScreenPresentationDTO`、`ScreenDisplayPayloadDTO`、`ScreenDisplayContractValidator`、`CodeScreenPresentationValidator`、`ScreenCanvasServiceTest`、`ScreenPresentationDisplayPayloadTest`及大屏契约文档 | 展示配置已接入既有JSON校验、CAS保存、发布包和回滚校验，并经主代理复核 | 展示/画布/配置相关147项测试通过；契约/范围/格式检查通过 | N/A；未连接数据库和浏览器 | 定向Surefire报告与三份契约文档 | 新block需先保存取得ID再被display引用；真实持久化留S17 | 创建S03聚焦提交并进入S04 |
 | S04 | VERIFIED | `7ab88468` | - | `PublishedDatasourceDefinition`、`ScreenCanvasServiceImpl`、`ScreenDatasourceServiceImpl`、`ScreenConfigServiceImpl`及对应测试/文档 | 新展示发布包已冻结服务端来源定义；运行仍校验当前启停/权限；主代理已复核 | 展示/画布/配置/数据源相关256项通过；契约/范围/格式检查通过 | N/A；未连接数据库和浏览器 | Surefire报告与大屏契约文档 | 只冻结查询定义，不冻结上游结果；旧包保持兼容 | 创建S04聚焦提交并进入S05 |
-| S05 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S02、S03 |
+| S05 | VERIFIED | `796bd95f` | - | `businessSourceCandidates.js`及测试、`PanoramaDatasourcePicker.vue`、`PanoramaBindings.vue`、操作指南、`TASK_STATUS.md` | 业务化来源分类/搜索/兼容/禁用说明已接入现有绑定页；主代理已复核 | 候选模型、Picker、Bindings共31项通过；生产构建与范围/格式检查通过 | N/A；未调用后端写接口 | Vitest与Vite构建输出、操作指南 | 真实候选仍取决于目标环境API；不新增上游能力 | 创建S05聚焦提交并进入S06 |
 | S06 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S03、S05 |
 | S07 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S02、S06 |
 | S08 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S02、S06 |
@@ -63,3 +63,11 @@
 - `ScreenConfigServiceImpl` 的运行包校验同样使用快照语义，避免共享数据源修改使旧新协议页面无法回读；当前数据源安全状态仍是即时门禁。
 - 定向测试验证配置字段顺序规范化、当前配置变更后仍使用旧定义、哈希篡改、敏感键、缺快照、旧包兼容和新协议回滚。未新增表、REST、连接配置或上游写入。
 - 主代理终审扩展至展示校验、画布、屏配置、数据源保存与运行时共256项测试；新增运行链断言证明当前配置改成另一槽位后，查询引擎仍收到发布定义。范围内未改查询公式、SQL白名单或上游模块。
+
+## S05 任务记录
+
+- Red：业务候选测试在 `businessSourceCandidates.js` 不存在时失败；随后实现分类、字段元数据、搜索过滤、机构组安全组合、禁用原因、换源字段清理和最新请求门。
+- 配置页复用现有数据源列表API，不新增端点。候选按指标/KPI/受控来源展示名称、编码、条线、维度、结果形状、指标及公式说明；搜索身份使用服务端编码与元数据，不从页面标题猜测。
+- 前端不再用旧helper误删后端已支持的机构组KPI快照；只允许schema2/ORG/SNAPSHOT/SINGLE。CUSTOM_SQL和其他不安全组合保留不可选说明。
+- 加载失败继续由现有代际和错误路径显式抛出；未修改 `api/http.js`，没有fallback成功或数据源试跑。
+- 主代理复核确认旧Picker回退标签和既有Bindings测试保持通过，生产构建成功；构建只有既有Sass API弃用和大chunk提示，不影响本任务产物。

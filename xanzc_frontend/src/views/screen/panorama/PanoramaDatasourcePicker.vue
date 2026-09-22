@@ -19,7 +19,16 @@
         :value="sourceKey(source)"
         :label="sourceLabel(source)"
         :disabled="isDisabled(source)"
-      />
+      >
+        <div v-if="source.category" class="panorama-datasource-picker__option">
+          <strong>{{ source.name || source.dsName || source.ds_name || source.dsCode }}</strong>
+          <span>{{ source.category || '受控来源' }} · {{ source.code || source.dsCode || '无编码' }} · {{ source.dimension || 'COMMON' }} / {{ source.shape || source.dsType || 'SINGLE' }}</span>
+          <small v-if="source.disabledReason">{{ source.disabledReason }}</small>
+          <small v-else-if="source.metrics?.length">{{ source.metrics.map(item => `${item.metricName || item.metricCode}${item.unit ? ` [${item.unit}]` : ''}`).join('、') }}</small>
+          <small v-if="source.formula">{{ source.formula }}</small>
+        </div>
+        <template v-else>{{ sourceLabel(source) }}</template>
+      </el-option>
     </el-select>
   </div>
 </template>
@@ -56,7 +65,7 @@ function sourceKey(source = {}) {
 }
 
 function sourceLabel(source = {}) {
-  const label = source.dsName || source.ds_name || source.dsCode || `数据源 #${source.id}`;
+  const label = source.displayLabel || source.dsName || source.ds_name || source.dsCode || `数据源 #${source.id}`;
   return source.__compositionColumnsUnsupported ? `${label}（当前双列模式不支持）` : label;
 }
 
@@ -72,3 +81,10 @@ function onChange(value) {
   emit('change', normalizeId(value));
 }
 </script>
+
+<style scoped>
+.panorama-datasource-picker__option { display: grid; min-width: 420px; padding: 4px 0; line-height: 1.35; }
+.panorama-datasource-picker__option strong { color: #1f2937; font-size: 13px; }
+.panorama-datasource-picker__option span { color: #64748b; font-size: 11px; }
+.panorama-datasource-picker__option small { color: #8a5b1d; white-space: normal; }
+</style>

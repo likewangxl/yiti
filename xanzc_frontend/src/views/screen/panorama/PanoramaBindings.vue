@@ -208,7 +208,7 @@ import {
   publishScreenCanvas,
   saveScreenCanvas
 } from '@/api/screen';
-import { filterDatasourcesByMeta, parseDatasourceConfig } from '../designer/widgets/chart-widget/dsFilter';
+import { parseDatasourceConfig } from '../designer/widgets/chart-widget/dsFilter';
 import {
   BINDING_SLOTS,
   BRANCH_OPTIONAL_SLOT_ORDER,
@@ -238,6 +238,7 @@ import PanoramaSettings from './PanoramaSettings.vue';
 import PanoramaIntegrationReadiness from './PanoramaIntegrationReadiness.vue';
 import PanoramaDataVerification from './PanoramaDataVerification.vue';
 import PanoramaDatasourcePicker from './PanoramaDatasourcePicker.vue';
+import { buildBusinessSourceCandidates } from '../presentation/sources/businessSourceCandidates';
 
 const props = defineProps({ screenId: { type: [Number, String], default: '' } });
 const emit = defineEmits(['saved', 'published', 'discarded', 'preview', 'error']);
@@ -414,15 +415,11 @@ function isCompositionColumnsDatasource(source = {}) {
   return sourceKind === 'WIDE_TABLE' && config?.table === 'ORG_INDEX_RESULT';
 }
 
-/** 既有 helper 负责 bizLine + NAMED_GROUP 收窄；本页再做 ACTIVE 状态过滤。 */
-const availableDatasources = computed(() => filterDatasourcesByMeta(
-  datasources.value
+/** 业务候选模型统一解释后端已支持的范围组合，并保留不兼容来源的禁用原因。 */
+const scopedDatasources = computed(() => datasources.value
     .filter(source => !isRetailTemplate.value || String(source.bizLine || source.biz_line || '').toUpperCase() === 'RETAIL')
     .filter(source => !isCorporateTemplate.value || String(source.bizLine || source.biz_line || '').toUpperCase() === 'CORP')
-    .filter(source => source?.status === 'ACTIVE' || source?.status === 1 || source?.status === '1' || source?.status === true),
-  null,
-  screenScope.value
-).reduce((list, source) => {
+  .reduce((list, source) => {
   if (selectedSlot.value !== 'composition' || compositionMode.value !== 'columns') return list.concat(source);
   if (isCompositionColumnsDatasource(source)) return list.concat(source);
   // Keep an already persisted incompatible source visible and marked so the
@@ -433,6 +430,11 @@ const availableDatasources = computed(() => filterDatasourcesByMeta(
   }
   return list;
 }, []));
+const availableDatasources = computed(() => buildBusinessSourceCandidates(scopedDatasources.value, {
+  screenBizLine: screenScope.value.bizLine,
+  scopeMode: screenScope.value.orgScopeMode,
+  expectedShape: selectedSpec.value?.innerType === 'LINE_TREND' ? 'TIMESERIES' : 'SINGLE'
+}));
 const selectableDatasourceCount = computed(() => availableDatasources.value
   .filter(source => !source.__compositionColumnsUnsupported && !source.disabled).length);
 
