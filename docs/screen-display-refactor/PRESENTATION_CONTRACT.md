@@ -16,6 +16,10 @@
       "type": "CODE",
       "template": "branch-overview-v1",
       "displaySchemaVersion": 1,
+      "institutionRules": {
+        "allowedOperatingLevels": ["PRIMARY"],
+        "allowedOrgNatures": ["SECONDARY_BRANCH"]
+      },
       "display": {
         "components": []
       }
@@ -23,6 +27,8 @@
   }
 }
 ```
+
+`institutionRules` 是新展示协议的服务端机构过滤契约。两个字段都必须是非空、无重复的字符串数组；运行时按精确集合与服务端已授权的 ACTIVE 画像求交，缺失或空规则保持 fail-close，不按机构名称、编码长度或前端角色猜测。三个经营模板迁移使用已核验的 `PRIMARY` / `SECONDARY_BRANCH` 集合；发布响应会在 `ScreenRenderRespDTO.institutionRules` 原样返回同一规则。画像坐标优先使用已核验 GCJ-02；缺失时仅可复用当前授权 `orgCode` 的 `RPT_SCREEN_MAP_POINT` ACTIVE 点位并标记 `locationSource=LEGACY_MAP_POINT`，不造点、不扩大机构范围。
 
 - `display.components` 是有序数组，数组顺序和每项 `order` 均保留；渲染时按模板区域、order、原数组顺序稳定排序。
 - `componentId` 在当前屏展示配置内唯一且稳定。复制组件必须生成新ID；标题和组件类型不能作为身份。

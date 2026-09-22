@@ -11,6 +11,7 @@ import com.bank.branch.platform.report.dto.req.ScreenBlockDTO;
 import com.bank.branch.platform.report.dto.req.ScreenCreateReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenMetadataUpdateReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenSaveReqDTO;
+import com.bank.branch.platform.report.dto.req.presentation.InstitutionRulesDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDetailRespDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenEntryRespDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenViewRespDTO;
@@ -45,6 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -412,6 +414,11 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             d.setState("published");
         }
         boolean codePresentation = validateRenderPackage(s, d.getRenderPackageJson());
+        InstitutionRulesDTO institutionRules = codePresentation
+                ? institutionRulesFromPackage(d.getRenderPackageJson()) : null;
+        boolean strictInstitutionRules = codePresentation
+                && hasDisplaySchemaVersion(d.getRenderPackageJson());
+        d.setInstitutionRules(institutionRules);
         // CODE 画布的组件身份来自 bindSnapshots，不使用旧坐标点位及其逐机构指标 N+1 路径。
         // 历史画布继续保留原有 PROVINCE 实时点位语义。
         if (!codePresentation && "PROVINCE".equals(s.getViewLevel()) && !hasV2Map(s)) {
@@ -424,7 +431,8 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             d.setMapRegionMetrics(List.of());
         }
         if (codePresentation && "NAMED_GROUP".equals(normalizeScopeMode(s.getOrgScopeMode()))) {
-            d.setPanoramaInstitutions(buildPanoramaInstitutions(s, authorizedOrgCodes));
+            d.setPanoramaInstitutions(buildPanoramaInstitutions(
+                    s, authorizedOrgCodes, institutionRules, strictInstitutionRules));
         } else {
             d.setPanoramaInstitutions(List.of());
         }
@@ -467,6 +475,29 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             throw e;
         } catch (Exception e) {
             throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, e);
+        }
+    }
+
+    private InstitutionRulesDTO institutionRulesFromPackage(String packageJson) {
+        try {
+            JsonNode root = objectMapper.readTree(packageJson == null || packageJson.isBlank()
+                    ? "{}" : packageJson);
+            return CodeScreenPresentationValidator.institutionRules(root.path("canvasStyle"));
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
+        }
+    }
+
+    private boolean hasDisplaySchemaVersion(String packageJson) {
+        try {
+            JsonNode root = objectMapper.readTree(packageJson == null || packageJson.isBlank()
+                    ? "{}" : packageJson);
+            JsonNode presentation = root.path("canvasStyle").path("presentation");
+            return presentation.isObject() && presentation.hasNonNull("displaySchemaVersion");
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
         }
     }
 
@@ -528,9 +559,14 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
      * activeProfiles 的额外键不会进入响应；授权 code 缺画像或画像非 ACTIVE 时 fail-close。
      */
     private List<PanoramaInstitutionDTO> buildPanoramaInstitutions(RptScreen screen,
-                                                                     Set<String> authorizedOrgCodes) {
+                                                                     Set<String> authorizedOrgCodes,
+                                                                     InstitutionRulesDTO institutionRules,
+                                                                     boolean strictInstitutionRules) {
         if (scopeAuthorizationService == null || authorizedOrgCodes == null
                 || authorizedOrgCodes.isEmpty()) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        if (strictInstitutionRules && institutionRules == null) {
             throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
         }
         Map<String, OrgProfileDTO> profiles = scopeAuthorizationService.activeProfiles(
@@ -538,7 +574,9 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         if (profiles == null) {
             throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
         }
-        List<PanoramaInstitutionDTO> result = new ArrayList<>();
+        List<String> eligibleCodes = new ArrayList<>();
+        Map<String, OrgProfileDTO> eligibleProfiles = new LinkedHashMap<>();
+        boolean needsLegacyPointFallback = false;
         for (String authorizedCode : authorizedOrgCodes) {
             if (authorizedCode == null || authorizedCode.isBlank()) {
                 throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
@@ -552,6 +590,20 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             if ("DEPARTMENT".equalsIgnoreCase(profile.getOrgNature())) {
                 continue;
             }
+            if (institutionRules != null && !matchesInstitutionRules(profile, institutionRules)) {
+                continue;
+            }
+            eligibleCodes.add(authorizedCode);
+            eligibleProfiles.put(authorizedCode, profile);
+            if (strictInstitutionRules && !profileLocationUsable(profile)) {
+                needsLegacyPointFallback = true;
+            }
+        }
+        Map<String, RptScreenMapPoint> legacyPoints = needsLegacyPointFallback
+                ? loadAuthorizedLegacyMapPoints(authorizedOrgCodes) : Map.of();
+        List<PanoramaInstitutionDTO> result = new ArrayList<>();
+        for (String authorizedCode : eligibleCodes) {
+            OrgProfileDTO profile = eligibleProfiles.get(authorizedCode);
             PanoramaInstitutionDTO dto = new PanoramaInstitutionDTO();
             dto.setOrgCode(authorizedCode);
             dto.setOrgName(profile.getOrgName());
@@ -561,15 +613,21 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             dto.setOperatingLevel(profile.getOperatingLevel());
             dto.setOrgNature(profile.getOrgNature());
             dto.setCoordSys(profile.getCoordSys());
-            boolean demo = profile.getRemark() != null
-                    && profile.getRemark().toUpperCase(Locale.ROOT).contains("SCREEN_MAP_DEMO");
-            boolean located = validPanoramaCoordinate(profile)
-                    && (!demo || trustedRuntimeLocationSource(profile.getLocationSource()));
+            boolean located = profileLocationUsable(profile);
             dto.setLocated(located);
             if (!located) {
-                dto.setLng(null);
-                dto.setLat(null);
-                dto.setLocationSource(null);
+                RptScreenMapPoint legacyPoint = legacyPoints.get(authorizedCode);
+                if (strictInstitutionRules && validLegacyMapPoint(legacyPoint)) {
+                    dto.setLng(legacyPoint.getLng());
+                    dto.setLat(legacyPoint.getLat());
+                    dto.setCoordSys("GCJ02");
+                    dto.setLocated(true);
+                    dto.setLocationSource("LEGACY_MAP_POINT");
+                } else {
+                    dto.setLng(null);
+                    dto.setLat(null);
+                    dto.setLocationSource(null);
+                }
             } else {
                 dto.setLng(profile.getLng());
                 dto.setLat(profile.getLat());
@@ -578,6 +636,70 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             result.add(dto);
         }
         return result;
+    }
+
+    private boolean matchesInstitutionRules(OrgProfileDTO profile, InstitutionRulesDTO rules) {
+        Set<String> levels = normalizeRuleSet(rules.getAllowedOperatingLevels());
+        Set<String> natures = normalizeRuleSet(rules.getAllowedOrgNatures());
+        if (levels.isEmpty() || natures.isEmpty()) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        return levels.contains(normalizeRuleValue(profile.getOperatingLevel()))
+                && natures.contains(normalizeRuleValue(profile.getOrgNature()));
+    }
+
+    private Set<String> normalizeRuleSet(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return Set.of();
+        }
+        return values.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(this::normalizeRuleValue)
+                .collect(Collectors.toCollection(HashSet::new));
+    }
+
+    private String normalizeRuleValue(String value) {
+        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private boolean profileLocationUsable(OrgProfileDTO profile) {
+        boolean demo = profile.getRemark() != null
+                && profile.getRemark().toUpperCase(Locale.ROOT).contains("SCREEN_MAP_DEMO");
+        return validPanoramaCoordinate(profile)
+                && (!demo || trustedRuntimeLocationSource(profile.getLocationSource()));
+    }
+
+    /** 只查询当前屏已授权机构的 ACTIVE 旧点位，不能把全表点位带入 CODE 目录。 */
+    private Map<String, RptScreenMapPoint> loadAuthorizedLegacyMapPoints(Set<String> authorizedOrgCodes) {
+        if (authorizedOrgCodes == null || authorizedOrgCodes.isEmpty()) {
+            return Map.of();
+        }
+        List<RptScreenMapPoint> rows = pointMapper.selectList(new LambdaQueryWrapper<RptScreenMapPoint>()
+                .in(RptScreenMapPoint::getOrgCode, authorizedOrgCodes)
+                .eq(RptScreenMapPoint::getStatus, "ACTIVE")
+                .orderByAsc(RptScreenMapPoint::getOrgCode)
+                .orderByAsc(RptScreenMapPoint::getId));
+        Map<String, RptScreenMapPoint> result = new LinkedHashMap<>();
+        if (rows == null) {
+            return result;
+        }
+        for (RptScreenMapPoint row : rows) {
+            if (row == null || row.getOrgCode() == null || !authorizedOrgCodes.contains(row.getOrgCode().trim())
+                    || !validLegacyMapPoint(row)) {
+                continue;
+            }
+            result.putIfAbsent(row.getOrgCode().trim(), row);
+        }
+        return result;
+    }
+
+    private boolean validLegacyMapPoint(RptScreenMapPoint point) {
+        return point != null && "ACTIVE".equalsIgnoreCase(point.getStatus())
+                && point.getLng() != null && point.getLat() != null
+                && point.getLng().compareTo(BigDecimal.valueOf(-180)) >= 0
+                && point.getLng().compareTo(BigDecimal.valueOf(180)) <= 0
+                && point.getLat().compareTo(BigDecimal.valueOf(-90)) >= 0
+                && point.getLat().compareTo(BigDecimal.valueOf(90)) <= 0;
     }
 
     /** 已认证的位置台账来源可以覆盖旧 demo 标记；画像来源或未知来源仍保持 fail-close。 */

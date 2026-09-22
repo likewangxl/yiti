@@ -1529,7 +1529,9 @@ class ScreenCanvasServiceTest {
 
     private String displayStyleJson(long blockId) {
         return "{\"schemaVersion\":2,\"presentation\":{\"type\":\"CODE\","
-                + "\"template\":\"branch-overview-v1\",\"displaySchemaVersion\":1,\"display\":{"
+                + "\"template\":\"branch-overview-v1\",\"displaySchemaVersion\":1,"
+                + "\"institutionRules\":{\"allowedOperatingLevels\":[\"PRIMARY\"],"
+                + "\"allowedOrgNatures\":[\"SECONDARY_BRANCH\"]},\"display\":{"
                 + "\"components\":[{\"componentId\":\"deposit-card\",\"componentType\":\"METRIC_CARD\","
                 + "\"layoutRegion\":\"LEFT\",\"order\":0,\"visible\":true,"
                 + "\"text\":{\"titleMode\":\"AUTO\",\"title\":\"\",\"subtitle\":\"\",\"description\":\"\"},"

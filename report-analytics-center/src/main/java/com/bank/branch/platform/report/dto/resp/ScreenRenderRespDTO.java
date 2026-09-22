@@ -1,6 +1,7 @@
 package com.bank.branch.platform.report.dto.resp;
 
 import com.bank.branch.platform.report.dto.req.MapPointDTO;
+import com.bank.branch.platform.report.dto.req.presentation.InstitutionRulesDTO;
 import lombok.Data;
 
 import java.util.List;
@@ -37,4 +38,7 @@ public class ScreenRenderRespDTO {
 
     /** CODE 全景屏的已授权机构目录；旧坐标画布保持空列表。 */
     private List<PanoramaInstitutionDTO> panoramaInstitutions;
+
+    /** CODE 展示协议声明的机构过滤规则；与发布包中的 presentation.institutionRules 一致。 */
+    private InstitutionRulesDTO institutionRules;
 }

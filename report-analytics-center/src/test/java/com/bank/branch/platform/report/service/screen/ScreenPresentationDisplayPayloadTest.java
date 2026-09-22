@@ -16,6 +16,7 @@ import com.bank.branch.platform.report.dto.req.presentation.ScreenInteractionAct
 import com.bank.branch.platform.report.dto.req.presentation.ScreenLayoutRegion;
 import com.bank.branch.platform.report.dto.req.presentation.ScreenSourceDimension;
 import com.bank.branch.platform.report.dto.req.presentation.ScreenTitleMode;
+import com.bank.branch.platform.report.dto.req.presentation.InstitutionRulesDTO;
 import com.bank.branch.platform.report.enums.RptErrorCode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,6 +36,7 @@ class ScreenPresentationDisplayPayloadTest {
         presentation.setType("CODE");
         presentation.setTemplate("branch-overview-v1");
         presentation.setDisplaySchemaVersion(1);
+        presentation.setInstitutionRules(institutionRules());
         ScreenDisplayPayloadDTO payload = new ScreenDisplayPayloadDTO();
         payload.setComponents(java.util.List.of(component(12L)));
         presentation.setDisplay(payload);
@@ -68,6 +70,7 @@ class ScreenPresentationDisplayPayloadTest {
         presentation.setType("CODE");
         presentation.setTemplate("branch-overview-v1");
         presentation.setDisplaySchemaVersion(1);
+        presentation.setInstitutionRules(institutionRules());
         ScreenDisplayPayloadDTO payload = new ScreenDisplayPayloadDTO();
         payload.setComponents(java.util.List.of(component(12L)));
         presentation.setDisplay(payload);
@@ -144,6 +147,7 @@ class ScreenPresentationDisplayPayloadTest {
             presentation.setType("CODE");
             presentation.setTemplate("branch-overview-v1");
             presentation.setDisplaySchemaVersion(1);
+            presentation.setInstitutionRules(institutionRules());
             ScreenDisplayPayloadDTO payload = new ScreenDisplayPayloadDTO();
             payload.setComponents(java.util.List.of(component(12L)));
             presentation.setDisplay(payload);
@@ -190,6 +194,13 @@ class ScreenPresentationDisplayPayloadTest {
         ref.setDimension(ScreenSourceDimension.ORG);
         component.setDataRefs(java.util.List.of(ref));
         return component;
+    }
+
+    private InstitutionRulesDTO institutionRules() {
+        InstitutionRulesDTO rules = new InstitutionRulesDTO();
+        rules.setAllowedOperatingLevels(java.util.List.of("PRIMARY"));
+        rules.setAllowedOrgNatures(java.util.List.of("SECONDARY_BRANCH"));
+        return rules;
     }
 
     private String draftJson(long blockId) {

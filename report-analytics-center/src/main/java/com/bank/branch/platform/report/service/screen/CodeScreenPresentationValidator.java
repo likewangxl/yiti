@@ -1,6 +1,7 @@
 package com.bank.branch.platform.report.service.screen;
 
 import com.bank.branch.platform.report.dto.req.CodeScreenPresentationDTO;
+import com.bank.branch.platform.report.dto.req.presentation.InstitutionRulesDTO;
 import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayComponentDTO;
 import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayContractValidator;
 import com.bank.branch.platform.report.entity.RptScreenBlock;
@@ -99,6 +100,27 @@ public final class CodeScreenPresentationValidator {
         }
         validatePresentation(presentation);
         return presentation.path("template").asText();
+    }
+
+    /**
+     * 读取 CODE presentation 的机构展示规则。调用方应先经过本类的画布/发布包校验；
+     * 缺省规则返回 null，以便历史 CODE 画布保持兼容，新 displaySchemaVersion=1 画布
+     * 则已在 presentation 校验阶段因缺规则 fail-close。
+     */
+    public static InstitutionRulesDTO institutionRules(JsonNode canvasStyle) {
+        JsonNode presentation = canvasStyle == null ? null : canvasStyle.path("presentation");
+        if (presentation == null || !presentation.isObject()
+                || !presentation.has("institutionRules")
+                || presentation.path("institutionRules").isNull()) {
+            return null;
+        }
+        validateInstitutionRules(presentation, false);
+        try {
+            return STRICT_PRESENTATION_MAPPER.treeToValue(
+                    presentation.path("institutionRules"), InstitutionRulesDTO.class);
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, ex);
+        }
     }
 
     /**
@@ -501,12 +523,20 @@ public final class CodeScreenPresentationValidator {
         boolean hasVersion = presentation.has("displaySchemaVersion")
                 && !presentation.path("displaySchemaVersion").isNull();
         boolean hasDisplay = presentation.has("display") && !presentation.path("display").isNull();
+        boolean hasInstitutionRules = presentation.has("institutionRules")
+                && !presentation.path("institutionRules").isNull();
         if (!hasVersion && !hasDisplay) {
+            if (hasInstitutionRules) {
+                validateInstitutionRules(presentation, false);
+            }
             return;
         }
         if (!hasVersion || !hasDisplay) {
             throw invalid();
         }
+        // 新展示协议必须把机构层级/性质白名单作为发布配置的一部分；空数组、缺失
+        // 任一维度和重复值均拒绝保存，避免前端自行扩大展示集合。
+        validateInstitutionRules(presentation, true);
         try {
             CodeScreenPresentationDTO dto = STRICT_PRESENTATION_MAPPER.treeToValue(
                     presentation, CodeScreenPresentationDTO.class);
@@ -519,6 +549,44 @@ public final class CodeScreenPresentationValidator {
             throw ex;
         } catch (Exception ex) {
             throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, ex);
+        }
+    }
+
+    private static void validateInstitutionRules(JsonNode presentation, boolean required) {
+        JsonNode rules = presentation == null ? null : presentation.get("institutionRules");
+        if (rules == null || rules.isNull()) {
+            if (required) {
+                throw invalid();
+            }
+            return;
+        }
+        if (!rules.isObject()) {
+            throw invalid();
+        }
+        Set<String> allowedKeys = Set.of("allowedOperatingLevels", "allowedOrgNatures");
+        Iterator<String> fieldNames = rules.fieldNames();
+        while (fieldNames.hasNext()) {
+            if (!allowedKeys.contains(fieldNames.next())) {
+                throw invalid();
+            }
+        }
+        validateRuleValues(rules.get("allowedOperatingLevels"));
+        validateRuleValues(rules.get("allowedOrgNatures"));
+    }
+
+    private static void validateRuleValues(JsonNode values) {
+        if (values == null || !values.isArray() || values.isEmpty()) {
+            throw invalid();
+        }
+        Set<String> seen = new HashSet<>();
+        for (JsonNode value : values) {
+            if (value == null || !value.isTextual() || value.asText().trim().isEmpty()) {
+                throw invalid();
+            }
+            String normalized = value.asText().trim().toUpperCase(Locale.ROOT);
+            if (!seen.add(normalized)) {
+                throw invalid();
+            }
         }
     }
 

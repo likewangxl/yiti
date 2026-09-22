@@ -24,6 +24,10 @@ export const validDisplayConfig = Object.freeze({
     type: 'CODE',
     template: 'branch-overview-v1',
     displaySchemaVersion: 1,
+    institutionRules: {
+      allowedOperatingLevels: ['PRIMARY'],
+      allowedOrgNatures: ['SECONDARY_BRANCH']
+    },
     display: {
       components: [
         base('deposit-card', 'METRIC_CARD', 11, {
@@ -69,6 +73,10 @@ export const invalidDuplicateConfig = Object.freeze({
   type: 'CODE',
   template: 'branch-overview-v1',
   displaySchemaVersion: 1,
+  institutionRules: {
+    allowedOperatingLevels: ['PRIMARY'],
+    allowedOrgNatures: ['SECONDARY_BRANCH']
+  },
   display: {
     components: [
       {

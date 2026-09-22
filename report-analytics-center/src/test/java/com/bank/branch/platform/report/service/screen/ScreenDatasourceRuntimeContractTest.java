@@ -602,6 +602,9 @@ class ScreenDatasourceRuntimeContractTest {
             presentation.put("type", "CODE");
             presentation.put("template", "retail-overview-v1");
             presentation.put("displaySchemaVersion", 1);
+            var institutionRules = presentation.putObject("institutionRules");
+            institutionRules.putArray("allowedOperatingLevels").add("PRIMARY");
+            institutionRules.putArray("allowedOrgNatures").add("SECONDARY_BRANCH");
             var displayComponent = presentation.putObject("display").putArray("components").addObject();
             displayComponent.put("componentId", "retail-deposit");
             displayComponent.put("componentType", "METRIC_CARD");

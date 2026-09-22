@@ -452,6 +452,69 @@ class CodeScreenPresentationValidatorTest {
     }
 
     @Test
+    void newDisplayPresentationRequiresExplicitInstitutionRulesAndRoundTripsExactSets() throws Exception {
+        String display = "\"display\":{\"components\":[{\"componentId\":\"deposit-card\","
+                + "\"componentType\":\"METRIC_CARD\",\"layoutRegion\":\"LEFT\","
+                + "\"order\":0,\"visible\":true,\"text\":{\"titleMode\":\"AUTO\"},"
+                + "\"format\":{\"displayUnit\":\"YUAN\"},\"content\":{\"mainField\":\"value\"},"
+                + "\"interaction\":{\"action\":\"NONE\"},"
+                + "\"dataRefs\":[{\"blockId\":1,\"role\":\"PRIMARY\",\"unit\":\"YUAN\"}]}]}";
+        String json = "{\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"branch-overview-v1\",\"displaySchemaVersion\":1,"
+                + "\"institutionRules\":{\"allowedOperatingLevels\":[\"PRIMARY\"],"
+                + "\"allowedOrgNatures\":[\"SECONDARY_BRANCH\"]}," + display + "}}";
+
+        CodeScreenPresentationValidator.validateCanvasStyle(json);
+
+        com.bank.branch.platform.report.dto.req.CodeScreenPresentationDTO presentation =
+                MAPPER.treeToValue(MAPPER.readTree(json).path("presentation"),
+                        com.bank.branch.platform.report.dto.req.CodeScreenPresentationDTO.class);
+        assertThat(presentation.getInstitutionRules().getAllowedOperatingLevels())
+                .containsExactly("PRIMARY");
+        assertThat(presentation.getInstitutionRules().getAllowedOrgNatures())
+                .containsExactly("SECONDARY_BRANCH");
+    }
+
+    @Test
+    void newDisplayPresentationWithoutRulesFailsClosed() {
+        String display = "\"display\":{\"components\":[{\"componentId\":\"deposit-card\","
+                + "\"componentType\":\"METRIC_CARD\",\"layoutRegion\":\"LEFT\","
+                + "\"order\":0,\"visible\":true,\"text\":{\"titleMode\":\"AUTO\"},"
+                + "\"format\":{\"displayUnit\":\"YUAN\"},\"content\":{\"mainField\":\"value\"},"
+                + "\"interaction\":{\"action\":\"NONE\"},"
+                + "\"dataRefs\":[{\"blockId\":1,\"role\":\"PRIMARY\",\"unit\":\"YUAN\"}]}]}";
+        String json = "{\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"branch-overview-v1\",\"displaySchemaVersion\":1,"
+                + display + "}}";
+
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(json))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
+    void institutionRulesRejectEmptyPartialDuplicateAndUnknownValues() {
+        String prefix = "{\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"branch-overview-v1\",\"displaySchemaVersion\":1,"
+                + "\"display\":{\"components\":[{\"componentId\":\"deposit-card\","
+                + "\"componentType\":\"METRIC_CARD\",\"layoutRegion\":\"LEFT\","
+                + "\"order\":0,\"visible\":true,\"text\":{\"titleMode\":\"AUTO\"},"
+                + "\"format\":{\"displayUnit\":\"YUAN\"},\"content\":{\"mainField\":\"value\"},"
+                + "\"interaction\":{\"action\":\"NONE\"},"
+                + "\"dataRefs\":[{\"blockId\":1,\"role\":\"PRIMARY\",\"unit\":\"YUAN\"}]}]},"
+                + "\"institutionRules\":";
+        String suffix = "}}";
+
+        for (String rules : List.of(
+                "{\"allowedOperatingLevels\":[],\"allowedOrgNatures\":[\"SECONDARY_BRANCH\"]}",
+                "{\"allowedOperatingLevels\":[\"PRIMARY\"],\"allowedOrgNatures\":[]}",
+                "{\"allowedOperatingLevels\":[\"PRIMARY\",\"PRIMARY\"],\"allowedOrgNatures\":[\"SECONDARY_BRANCH\"]}",
+                "{\"allowedOperatingLevels\":[\"PRIMARY\"],\"allowedOrgNatures\":[\"SECONDARY_BRANCH\"],\"extra\":true}")) {
+            assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(prefix + rules + suffix))
+                    .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        }
+    }
+
+    @Test
     void rejectsInvalidSourceNoticeLengthMarkupAndMetricLabelKey() {
         assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
                 "{\"dataNotice\":\"<script>alert(1)</script>\"}"))

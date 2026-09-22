@@ -35,6 +35,46 @@ describe('经营大屏展示子协议', () => {
     expect(normalized.components[2].content.series).toHaveLength(2);
   });
 
+  it('保存并保留服务端显式机构规则，不把规则降级为前端默认值', () => {
+    const normalized = normalizeDisplayConfig(validDisplayConfig.presentation);
+
+    expect(normalized.institutionRules).toEqual({
+      allowedOperatingLevels: ['PRIMARY'],
+      allowedOrgNatures: ['SECONDARY_BRANCH']
+    });
+    expect(validateDisplayConfig({
+      ...validDisplayConfig.presentation,
+      institutionRules: { allowedOperatingLevels: [], allowedOrgNatures: [] }
+    })).toEqual(expect.arrayContaining([
+      expect.stringContaining('机构层级白名单'),
+      expect.stringContaining('机构性质白名单')
+    ]));
+
+    const duplicate = structuredClone(validDisplayConfig.presentation);
+    duplicate.institutionRules.allowedOperatingLevels = ['PRIMARY', 'primary'];
+    expect(validateDisplayConfig(duplicate)).toEqual(expect.arrayContaining([
+      expect.stringContaining('不能重复')
+    ]));
+
+    const unknown = structuredClone(validDisplayConfig.presentation);
+    unknown.institutionRules.extra = 'NO_GUESS';
+    expect(validateDisplayConfig(unknown)).toEqual(expect.arrayContaining([
+      expect.stringContaining('未知字段')
+    ]));
+  });
+
+  it('缺少规则保持旧编辑器兼容；显式部分规则仍 fail-close', () => {
+    const missing = structuredClone(validDisplayConfig.presentation);
+    delete missing.institutionRules;
+    expect(validateDisplayConfig(missing)).toEqual([]);
+
+    const partial = structuredClone(validDisplayConfig.presentation);
+    partial.institutionRules.allowedOrgNatures = [];
+    expect(validateDisplayConfig(partial)).toEqual(expect.arrayContaining([
+      expect.stringContaining('机构性质白名单')
+    ]));
+  });
+
   it('按自定义标题、指标名称快照、旧覆盖、模板默认的顺序解析标题', () => {
     const component = validDisplayConfig.presentation.display.components[0];
     expect(resolveComponentTitle(component, {

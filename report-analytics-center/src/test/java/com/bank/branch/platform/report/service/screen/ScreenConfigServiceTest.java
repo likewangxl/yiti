@@ -22,6 +22,7 @@ import com.bank.branch.platform.report.mapper.RptScreenCanvasMapper;
 import com.bank.branch.platform.report.mapper.RptScreenDatasourceMapper;
 import com.bank.branch.platform.report.mapper.RptScreenMapPointMapper;
 import com.bank.branch.platform.report.mapper.RptScreenMapper;
+import com.bank.branch.platform.report.service.screen.presentation.PublishedDatasourceDefinition;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -810,6 +811,69 @@ class ScreenConfigServiceTest {
     }
 
     @Test
+    void getRenderByCode_newPresentationReturnsRulesFiltersDirectoryAndUsesAuthorizedLegacyPointFallback() {
+        RptScreen screen = codeNamedRuntimeScreen();
+        screen.setCanvasPublishedJson(codePackageWithInstitutionRules());
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
+        when(dsMapper.selectById(12L)).thenReturn(codeRuntimeDatasource());
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        when(scopeAuthorizationService.authorize(screen))
+                .thenReturn(new java.util.LinkedHashSet<>(List.of("PROFILE", "FALLBACK", "FILTERED")));
+
+        OrgProfileDTO profile = profile("PROFILE", "ACTIVE", "SECONDARY_BRANCH", "GCJ02",
+                new BigDecimal("108.90"), new BigDecimal("34.20"), null);
+        profile.setLocationSource("PROFILE");
+        OrgProfileDTO fallback = profile("FALLBACK", "ACTIVE", "SECONDARY_BRANCH", null,
+                null, null, null);
+        OrgProfileDTO filtered = profile("FILTERED", "ACTIVE", "BRANCH", "GCJ02",
+                new BigDecimal("108.92"), new BigDecimal("34.22"), null);
+        when(scopeAuthorizationService.activeProfiles(any(RptScreen.class), any(Set.class)))
+                .thenReturn(Map.of("PROFILE", profile, "FALLBACK", fallback, "FILTERED", filtered));
+
+        RptScreenMapPoint fallbackPoint = new RptScreenMapPoint();
+        fallbackPoint.setOrgCode("FALLBACK");
+        fallbackPoint.setOrgName("旧点位机构");
+        fallbackPoint.setLng(new BigDecimal("108.91"));
+        fallbackPoint.setLat(new BigDecimal("34.21"));
+        fallbackPoint.setStatus("ACTIVE");
+        RptScreenMapPoint unauthorizedPoint = new RptScreenMapPoint();
+        unauthorizedPoint.setOrgCode("NOT_AUTHORIZED");
+        unauthorizedPoint.setOrgName("越权点位");
+        unauthorizedPoint.setLng(new BigDecimal("109.01"));
+        unauthorizedPoint.setLat(new BigDecimal("34.31"));
+        unauthorizedPoint.setStatus("ACTIVE");
+        when(pointMapper.selectList(any(Wrapper.class)))
+                .thenReturn(List.of(fallbackPoint, unauthorizedPoint));
+
+        ScreenRenderRespDTO render = service.getRenderByCode(screen.getScreenCode(), "published");
+
+        assertThat(render.getInstitutionRules().getAllowedOperatingLevels()).containsExactly("PRIMARY");
+        assertThat(render.getInstitutionRules().getAllowedOrgNatures()).containsExactly("SECONDARY_BRANCH");
+        assertThat(render.getPanoramaInstitutions()).extracting("orgCode")
+                .containsExactly("PROFILE", "FALLBACK");
+        assertThat(render.getPanoramaInstitutions().get(0))
+                .extracting("lng", "lat", "locationSource")
+                .containsExactly(new BigDecimal("108.90"), new BigDecimal("34.20"), "PROFILE");
+        assertThat(render.getPanoramaInstitutions().get(1))
+                .extracting("lng", "lat", "coordSys", "locationSource")
+                .containsExactly(new BigDecimal("108.91"), new BigDecimal("34.21"), "GCJ02",
+                        "LEGACY_MAP_POINT");
+        verify(pointMapper).selectList(any(Wrapper.class));
+    }
+
+    @Test
+    void getRenderByCode_newPresentationWithoutInstitutionRulesFailsClosed() {
+        RptScreen screen = codeNamedRuntimeScreen();
+        screen.setCanvasPublishedJson(codePackageWithoutInstitutionRules());
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+
+        assertThatThrownBy(() -> service.getRenderByCode(screen.getScreenCode(), "published"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        verify(pointMapper, never()).selectList(any(Wrapper.class));
+    }
+
+    @Test
     void getRenderByCode_codeNamedGroupMissingOrInactiveProfileFailsScopeClosed() {
         RptScreen screen = codeNamedRuntimeScreen();
         when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
@@ -920,6 +984,45 @@ class ScreenConfigServiceTest {
                 + "\"bindSnapshots\":{\"1\":{\"bind\":{\"dsId\":12,\"period\":\"LATEST\",\"fields\":{\"value\":\"balance\"},\"units\":{\"value\":\"YUAN\"}}}}}";
     }
 
+    private String codePackageWithInstitutionRules() {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.node.ObjectNode root =
+                    (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(codePackage());
+            com.fasterxml.jackson.databind.node.ObjectNode presentation =
+                    (com.fasterxml.jackson.databind.node.ObjectNode) root.path("canvasStyle").path("presentation");
+            presentation.put("displaySchemaVersion", 1);
+            presentation.set("institutionRules", mapper.readTree(
+                    "{\"allowedOperatingLevels\":[\"PRIMARY\"],"
+                            + "\"allowedOrgNatures\":[\"SECONDARY_BRANCH\"]}"));
+            presentation.set("display", mapper.readTree(
+                    "{\"components\":[{\"componentId\":\"deposit-card\","
+                            + "\"componentType\":\"METRIC_CARD\",\"layoutRegion\":\"LEFT\","
+                            + "\"order\":0,\"visible\":true,\"text\":{\"titleMode\":\"AUTO\"},"
+                            + "\"format\":{\"displayUnit\":\"YUAN\"},\"content\":{\"mainField\":\"value\"},"
+                            + "\"interaction\":{\"action\":\"NONE\"},"
+                            + "\"dataRefs\":[{\"blockId\":1,\"role\":\"PRIMARY\",\"unit\":\"YUAN\"}]}]}"));
+            PublishedDatasourceDefinition.write(
+                    (com.fasterxml.jackson.databind.node.ObjectNode) root.path("bindSnapshots").path("1"),
+                    codeRuntimeDatasource(), mapper);
+            return root.toString();
+        } catch (Exception ex) {
+            throw new AssertionError(ex);
+        }
+    }
+
+    private String codePackageWithoutInstitutionRules() {
+        return codePackage().replace(
+                "\"template\":\"branch-overview-v1\"",
+                "\"template\":\"branch-overview-v1\",\"displaySchemaVersion\":1,"
+                        + "\"display\":{\"components\":[{\"componentId\":\"deposit-card\","
+                        + "\"componentType\":\"METRIC_CARD\",\"layoutRegion\":\"LEFT\","
+                        + "\"order\":0,\"visible\":true,\"text\":{\"titleMode\":\"AUTO\"},"
+                        + "\"format\":{\"displayUnit\":\"YUAN\"},\"content\":{\"mainField\":\"value\"},"
+                        + "\"interaction\":{\"action\":\"NONE\"},"
+                        + "\"dataRefs\":[{\"blockId\":1,\"role\":\"PRIMARY\",\"unit\":\"YUAN\"}]}]}");
+    }
+
     private String codeCitySummaryOrgNamePackage() {
         return "{\"schemaVersion\":2,\"canvasStyle\":{\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"}},"
                 + "\"components\":[{\"component\":\"ChartWidget\",\"id\":\"w-city\",\"blockId\":1,"
@@ -932,6 +1035,7 @@ class ScreenConfigServiceTest {
         RptScreenDatasource datasource = new RptScreenDatasource();
         datasource.setId(12L);
         datasource.setSourceKind("WIDE_TABLE");
+        datasource.setDsType("SINGLE");
         datasource.setBizLine("COMMON");
         datasource.setStatus("ACTIVE");
         datasource.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","

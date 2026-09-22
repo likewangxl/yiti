@@ -119,4 +119,29 @@ describe('institutionViewModel', () => {
       expect.objectContaining({ code: 'DUPLICATE_ORG_CODE', orgCode: 'A' })
     ]));
   });
+
+  it('从发布响应的 institutionRules 消费精确集合，不按名称或编码补规则', () => {
+    const result = buildInstitutionViewModel({
+      institutionRules: rules,
+      panoramaInstitutions: directory,
+      contributions: [{ orgCode: 'A', metrics: { deposit: 1 } }]
+    });
+
+    expect(result.status).toBe('READY');
+    expect(result.filters).toEqual(rules);
+    expect(result.displayInstitutions.map(item => item.orgCode)).toEqual(['A', 'B']);
+  });
+
+  it('机构规则任一维度为空时 fail-close，不展示授权目录', () => {
+    const result = buildInstitutionViewModel(directory, {
+      allowedOperatingLevels: ['BRANCH_1'],
+      allowedOrgNatures: []
+    });
+
+    expect(result.status).toBe('UNCONFIRMED');
+    expect(result.displayInstitutions).toEqual([]);
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'FILTER_RULES_UNCONFIRMED' })
+    ]));
+  });
 });

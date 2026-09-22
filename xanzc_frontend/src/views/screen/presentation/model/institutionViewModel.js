@@ -136,8 +136,14 @@ export function buildInstitutionViewModel(input = [], rules = {}, options = {}) 
   let config = rules;
   let opts = options;
   if (object(input) && !Array.isArray(input)) {
-    directory = input.authorizedDirectory ?? input.directory ?? input.institutions ?? [];
-    config = input.rules ?? input.filters ?? rules ?? {};
+    directory = input.authorizedDirectory ?? input.panoramaInstitutions ?? input.panorama_institutions
+      ?? input.directory ?? input.institutions ?? [];
+    config = input.institutionRules
+      ?? input.navigationRules
+      ?? input.presentation?.institutionRules
+      ?? input.renderPackage?.canvasStyle?.presentation?.institutionRules
+      ?? input.render_package?.canvasStyle?.presentation?.institutionRules
+      ?? input.rules ?? input.filters ?? rules ?? {};
     opts = { ...input, ...options };
   }
   const issues = [];
@@ -149,12 +155,14 @@ export function buildInstitutionViewModel(input = [], rules = {}, options = {}) 
     };
   }
 
-  config = object(config?.filters) ? config.filters : (object(config?.rules) ? config.rules : config);
+  config = object(config?.institutionRules)
+    ? config.institutionRules
+    : (object(config?.filters) ? config.filters : (object(config?.rules) ? config.rules : config));
   const allowedLevels = listRule(config, 'allowedOperatingLevels', 'allowed_operating_levels');
   const allowedNatures = listRule(config, 'allowedOrgNatures', 'allowed_org_natures');
   const levelRule = ruleSet(allowedLevels);
   const natureRule = ruleSet(allowedNatures);
-  const hasRules = levelRule.size > 0 || natureRule.size > 0;
+  const hasRules = levelRule.size > 0 && natureRule.size > 0;
   const contributionUnknown = [];
   const unknownKeys = new Set();
   const addUnknown = (record, reason, message) => {

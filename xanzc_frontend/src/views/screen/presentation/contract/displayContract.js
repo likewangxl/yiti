@@ -32,7 +32,7 @@ const UNIT_KINDS = Object.freeze({
 });
 
 const ALLOWED_KEYS = Object.freeze({
-  presentation: new Set(['type', 'template', 'displaySchemaVersion', 'display']),
+  presentation: new Set(['type', 'template', 'displaySchemaVersion', 'institutionRules', 'display']),
   display: new Set(['components']),
   component: new Set(['componentId', 'componentType', 'layoutRegion', 'order', 'visible', 'text', 'format', 'content', 'interaction', 'dataRefs']),
   text: new Set(['titleMode', 'title', 'subtitle', 'description']),
@@ -105,15 +105,29 @@ function normalizeComponent(raw = {}) {
   };
 }
 
+function normalizeInstitutionRules(value) {
+  if (!object(value)) return null;
+  return {
+    allowedOperatingLevels: Array.isArray(value.allowedOperatingLevels)
+      ? [...value.allowedOperatingLevels] : [],
+    allowedOrgNatures: Array.isArray(value.allowedOrgNatures)
+      ? [...value.allowedOrgNatures] : []
+  };
+}
+
 /** 旧 presentation 没有展示子协议时返回 null，调用方继续走原展示路径。 */
 export function normalizeDisplayConfig(presentation) {
   if (!object(presentation) || presentation.displaySchemaVersion === undefined) return null;
-  return {
+  const normalized = {
     displaySchemaVersion: presentation.displaySchemaVersion,
     components: Array.isArray(presentation.display?.components)
       ? presentation.display.components.map(normalizeComponent)
       : []
   };
+  if (Object.prototype.hasOwnProperty.call(presentation, 'institutionRules')) {
+    normalized.institutionRules = normalizeInstitutionRules(presentation.institutionRules);
+  }
+  return normalized;
 }
 
 export function resolveComponentTitle(component, context = {}) {
@@ -238,10 +252,49 @@ function validateComponent(component, index, issues) {
   }
 }
 
+function validateInstitutionRules(rules, issues) {
+  const prefix = 'institutionRules ';
+  if (!object(rules)) {
+    issues.push(`${prefix}必须是对象`);
+    return;
+  }
+  unknownKeys(rules, new Set(['allowedOperatingLevels', 'allowedOrgNatures']), prefix, issues);
+  for (const [key, label] of [
+    ['allowedOperatingLevels', '机构层级白名单'],
+    ['allowedOrgNatures', '机构性质白名单']
+  ]) {
+    const values = rules[key];
+    if (!Array.isArray(values) || values.length === 0) {
+      issues.push(`${prefix}${label}不能为空`);
+      continue;
+    }
+    const seen = new Set();
+    values.forEach((value, index) => {
+      if (typeof value !== 'string' || !value.trim()) {
+        issues.push(`${prefix}${label}[${index}]必须是非空文本`);
+        return;
+      }
+      const normalized = value.trim().toUpperCase();
+      if (seen.has(normalized)) issues.push(`${prefix}${label}不能重复: ${value.trim()}`);
+      seen.add(normalized);
+    });
+  }
+}
+
 export function validateDisplayConfig(presentation) {
-  if (!object(presentation) || presentation.displaySchemaVersion === undefined) return [];
+  if (!object(presentation)) return [];
+  if (presentation.displaySchemaVersion === undefined) {
+    const legacyIssues = [];
+    if (Object.prototype.hasOwnProperty.call(presentation, 'institutionRules')) {
+      validateInstitutionRules(presentation.institutionRules, legacyIssues);
+    }
+    return legacyIssues;
+  }
   const issues = [];
   unknownKeys(presentation, ALLOWED_KEYS.presentation, 'presentation ', issues);
+  if (Object.prototype.hasOwnProperty.call(presentation, 'institutionRules')) {
+    validateInstitutionRules(presentation.institutionRules, issues);
+  }
   if (presentation.displaySchemaVersion !== DISPLAY_SCHEMA_VERSION) issues.push('展示协议版本不受支持');
   unknownKeys(presentation.display, ALLOWED_KEYS.display, 'display ', issues);
   if (!Array.isArray(presentation.display?.components)) {
