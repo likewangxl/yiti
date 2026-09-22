@@ -209,6 +209,48 @@ describe('旧经营大屏配置迁移', () => {
     expect(validateDisplayConfig(result.presentation)).toEqual([]);
   });
 
+  it('真实旧 RANK_LIST 未写排序字段时沿用旧展示固定的降序语义', () => {
+    const result = previewLegacyMigration({
+      canvasStyle: { presentation: { type: 'CODE', template: 'branch-overview-v1' } },
+      components: [{
+        component: 'ChartWidget', innerType: 'RANK_LIST', blockId: 916,
+        propValue: { bindingKey: 'ranking' }
+      }],
+      blocks: [{ id: 916, componentType: 'RANK_LIST', bindJson: JSON.stringify({
+        dsId: 7016,
+        fields: { orgCode: 'org_code', name: 'org_name', value: 'deposit' },
+        units: { value: 'YUAN' }
+      }) }]
+    });
+
+    expect(result.summary).toEqual({ migrated: 1, unresolved: 0, missingFields: 0, needsConfirmation: 0 });
+    expect(result.presentation.display.components[0].content.rankingMetrics[0].direction).toBe('DESC');
+  });
+
+  it('仅含机构身份字段的 branches 由新协议机构规则接管，不伪造数值单位', () => {
+    const result = previewLegacyMigration({
+      canvasStyle: { presentation: { type: 'CODE', template: 'corporate-overview-v1' } },
+      components: [{
+        component: 'ChartWidget', innerType: 'TABLE_LIST', blockId: 917,
+        propValue: { bindingKey: 'branches' }
+      }],
+      blocks: [{ id: 917, componentType: 'TABLE_LIST', bindJson: JSON.stringify({
+        dsId: 7017,
+        fields: { orgCode: 'org_code', orgName: 'org_name' },
+        units: {}
+      }) }]
+    });
+
+    expect(result.summary).toEqual({ migrated: 1, unresolved: 0, missingFields: 0, needsConfirmation: 0 });
+    expect(result.migrated[0]).toMatchObject({
+      bindingKey: 'branches',
+      absorbedBy: 'institutionRules',
+      reasons: [expect.stringMatching(/机构规则/)]
+    });
+    expect(result.presentation.display.components).toEqual([]);
+    expect(validateDisplayConfig(result.presentation)).toEqual([]);
+  });
+
   it.each(['branch-overview-v1', 'corporate-overview-v1', 'retail-overview-v1'])
     ('分行/对公/零售真实槽位夹具均可生成完整迁移草稿：%s', template => {
       const result = previewLegacyMigration(templateFixture(template));

@@ -545,6 +545,10 @@ function makeCompositionComponent(input) {
 
 function makeRankingComponent(input) {
   const { entries, bindingKey, metricLabels, bind, blockId, meta, base } = input;
+  const declaredDirection = text(bind?.direction || bind?.sortDirection || bind?.sort_direction).toUpperCase();
+  // 历史 RANK_LIST 展示层始终按数值降序（panoramaViewModel.sortRankingRows）。
+  // 因而真实旧包缺少 direction 时仍有确定语义；其他排名结构继续要求人工确认。
+  const resolvedDirection = declaredDirection || (input.legacyRankList ? 'DESC' : '');
   const metrics = entries.filter(item => !IDENTITY_FIELDS.has(item.semantic));
   if (!metrics.length) return { status: MIGRATION_STATUS.MISSING_FIELDS, reasons: ['缺少排名指标字段'] };
   const rankingMetrics = [];
@@ -556,15 +560,15 @@ function makeRankingComponent(input) {
       field: item.field,
       label: labelFor(bindingKey, item.field, metricLabels, bind, item.semantic),
       unit,
-      direction: text(bind?.direction || bind?.sortDirection || bind?.sort_direction).toUpperCase() || 'DESC'
+      direction: resolvedDirection || 'DESC'
     });
   }
   const component = baseComponent({ ...base, componentType: 'RANKING', title: text(metricLabels?.[bindingKey]), blockId, unit: rankingMetrics[0].unit, meta });
   component.content.rankingMetrics = rankingMetrics;
   return {
-    status: text(bind?.direction || bind?.sortDirection || bind?.sort_direction)
+    status: resolvedDirection
       ? MIGRATION_STATUS.MIGRATED : MIGRATION_STATUS.NEEDS_CONFIRMATION,
-    reasons: text(bind?.direction || bind?.sortDirection || bind?.sort_direction)
+    reasons: resolvedDirection
       ? [] : ['旧排名未声明排序方向，请确认 DESC 是否符合原配置'],
     component
   };
@@ -633,8 +637,23 @@ function convertComponent(entry, context) {
   const fields = fieldsOf(bind);
   const units = unitsOf(bind);
   if (!fields || !Object.keys(fields).length) return { ...baseEntry, status: MIGRATION_STATUS.MISSING_FIELDS, reasons: ['缺少 bind.fields'] };
+  const entries = fieldEntries(fields);
+  if (!entries.length) return { ...baseEntry, status: MIGRATION_STATUS.MISSING_FIELDS, reasons: ['bind.fields 未声明有效字段编码'] };
+  // 对公/零售真实旧包的 branches 只含机构编码与名称，没有任何数值指标或单位。
+  // 新协议由后端 institutionRules + panoramaInstitutions 提供同一机构目录，故将该旧槽位
+  // 明确吸收到机构规则中；不能为满足 dataRef 校验伪造 YUAN/COUNT 等原始单位。
+  if (bindingKey === 'branches' && entries.every(item => IDENTITY_FIELDS.has(item.semantic))) {
+    return {
+      ...baseEntry,
+      status: MIGRATION_STATUS.MIGRATED,
+      snapshot: deepClone(snapshot),
+      componentType: 'DETAIL_TABLE',
+      component: null,
+      absorbedBy: 'institutionRules',
+      reasons: ['仅含机构身份字段，已由新协议机构规则与机构目录接管']
+    };
+  }
   if (!units || !Object.keys(units).length) return { ...baseEntry, status: MIGRATION_STATUS.MISSING_FIELDS, reasons: ['缺少 bind.units'] };
-  if (!fieldEntries(fields).length) return { ...baseEntry, status: MIGRATION_STATUS.MISSING_FIELDS, reasons: ['bind.fields 未声明有效字段编码'] };
   const meta = sourceMeta(snapshot, bind);
   const encodedType = structureType(component, rule, snapshot);
   const expectedType = rule.type;
@@ -660,7 +679,10 @@ function convertComponent(entry, context) {
     return { ...common, status: MIGRATION_STATUS.NEEDS_CONFIRMATION, reasons: [`旧组件结构 ${resolvedInnerType} 与 bindingKey 类型不一致`] };
   }
   let converted;
-  const input = { entries: fieldEntries(fields), bindingKey, metricLabels: context.metricLabels, bind, blockId, meta, base };
+  const input = {
+    entries, bindingKey, metricLabels: context.metricLabels, bind, blockId, meta, base,
+    legacyRankList: resolvedInnerType === 'RANK_LIST'
+  };
   if (expectedType === 'METRIC_CARD') converted = makeMetricComponent(input, 'METRIC_CARD');
   else if (expectedType === 'COMPLETION') converted = makeMetricComponent(input, 'COMPLETION');
   else if (expectedType === 'TREND') converted = makeTrendComponent(input);
