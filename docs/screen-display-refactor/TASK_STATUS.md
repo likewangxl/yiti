@@ -10,7 +10,7 @@
 | S03 | VERIFIED | `06cdfe07` | - | `CodeScreenPresentationDTO`、`ScreenDisplayPayloadDTO`、`ScreenDisplayContractValidator`、`CodeScreenPresentationValidator`、`ScreenCanvasServiceTest`、`ScreenPresentationDisplayPayloadTest`及大屏契约文档 | 展示配置已接入既有JSON校验、CAS保存、发布包和回滚校验，并经主代理复核 | 展示/画布/配置相关147项测试通过；契约/范围/格式检查通过 | N/A；未连接数据库和浏览器 | 定向Surefire报告与三份契约文档 | 新block需先保存取得ID再被display引用；真实持久化留S17 | 创建S03聚焦提交并进入S04 |
 | S04 | VERIFIED | `7ab88468` | - | `PublishedDatasourceDefinition`、`ScreenCanvasServiceImpl`、`ScreenDatasourceServiceImpl`、`ScreenConfigServiceImpl`及对应测试/文档 | 新展示发布包已冻结服务端来源定义；运行仍校验当前启停/权限；主代理已复核 | 展示/画布/配置/数据源相关256项通过；契约/范围/格式检查通过 | N/A；未连接数据库和浏览器 | Surefire报告与大屏契约文档 | 只冻结查询定义，不冻结上游结果；旧包保持兼容 | 创建S04聚焦提交并进入S05 |
 | S05 | VERIFIED | `796bd95f` | - | `businessSourceCandidates.js`及测试、`PanoramaDatasourcePicker.vue`、`PanoramaBindings.vue`、操作指南、`TASK_STATUS.md` | 业务化来源分类/搜索/兼容/禁用说明已接入现有绑定页；主代理已复核 | 候选模型、Picker、Bindings共31项通过；生产构建与范围/格式检查通过 | N/A；未调用后端写接口 | Vitest与Vite构建输出、操作指南 | 真实候选仍取决于目标环境API；不新增上游能力 | 创建S05聚焦提交并进入S06 |
-| S06 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S03、S05 |
+| S06 | VERIFIED | `34acb94c` | - | `presentationEditorModel.js`、`PresentationEditor.vue`及测试、`PanoramaBindings.vue`与集成测试、操作指南、`TASK_STATUS.md` | 三栏组件工作台已接入现有草稿保存与冲突链，主代理已复核 | presentation与Bindings共51项通过；生产构建及范围/格式检查通过 | 浏览器真实验收留S17 | Vitest/Vite输出与操作指南 | 新组件必须先绑定已有blockId；高级字段映射暂保留 | 创建S06聚焦提交并进入S07/S08 |
 | S07 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S02、S06 |
 | S08 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S02、S06 |
 | S09 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S07、S08 |
@@ -71,3 +71,11 @@
 - 前端不再用旧helper误删后端已支持的机构组KPI快照；只允许schema2/ORG/SNAPSHOT/SINGLE。CUSTOM_SQL和其他不安全组合保留不可选说明。
 - 加载失败继续由现有代际和错误路径显式抛出；未修改 `api/http.js`，没有fallback成功或数据源试跑。
 - 主代理复核确认旧Picker回退标签和既有Bindings测试保持通过，生产构建成功；构建只有既有Sass API弃用和大chunk提示，不影响本任务产物。
+
+## S06 任务记录
+
+- Red/Green：执行者先以模型不存在建立失败测试；编辑器模型9项、三栏组件5项、PanoramaBindings 22项及其余presentation测试合计51项通过。
+- 状态模型深拷贝加载配置，支持七类组件的新增、复制、删除、显隐、同区域排序、标题/内容/格式/交互、已有block绑定、dirty/cancel/commit及序列化前契约校验；编辑器内部状态不会进入发布JSON。
+- 页面接入左侧组件列表、中间即时预览、右侧属性区。旧无display配置需显式启用；已有display配置自动加载。保存通过现有saveCanvas/CAS，409和普通失败均保留本地会话。
+- 新建未绑定组件阻止保存；删除只移除展示引用。切屏/路由切换及浏览器关闭对dirty配置提示。旧高级字段映射、设置、角色、发布、回滚入口保持原语义。
+- 生产构建成功；仅有既有Sass API弃用和chunk体积提示。未启动服务、未调用真实写接口，浏览器验收留S17。

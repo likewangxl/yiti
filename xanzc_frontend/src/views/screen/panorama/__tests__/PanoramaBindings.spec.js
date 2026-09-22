@@ -328,6 +328,41 @@ describe('PanoramaBindings', () => {
     expect(wrapper.find('[data-testid="unit-depositAverage-value"]').element.value).toBe('HUNDRED_MILLION');
   });
 
+  it('加载三栏展示配置后修改标题并随现有画布保存，重开模型不丢字段', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    const presentation = {
+      type: 'CODE', template: 'branch-overview-v1', displaySchemaVersion: 1,
+      display: { components: [{
+        componentId: 'deposit-card', componentType: 'METRIC_CARD', layoutRegion: 'LEFT', order: 0, visible: true,
+        text: { titleMode: 'CUSTOM', title: '存款余额', subtitle: '', description: '' },
+        format: { displayUnit: 'HUNDRED_MILLION', decimals: 2, thousandsSeparator: true, negativeStyle: 'SIGNED', emptyText: '—' },
+        content: { mainField: 'value', subFields: [], series: [], columns: [], tabs: [], rankingMetrics: [] },
+        interaction: { action: 'NONE' },
+        dataRefs: [{ blockId: 41, role: 'PRIMARY', metricCode: 'M_DEP', metricName: '存款余额', unit: 'HUNDRED_MILLION', dimension: 'ORG' }]
+      }] }
+    };
+    const draft = { components: [{
+      id: 'deposit', component: 'ChartWidget', blockId: 41, innerType: 'METRIC_CARD',
+      propValue: { bindingKey: 'deposit' },
+      bindJson: JSON.stringify({ dsId: 77, period: 'LATEST', fields: { value: 'deposit_raw' }, units: { value: 'HUNDRED_MILLION' } })
+    }] };
+    api.getScreenCanvas.mockResolvedValue({ ...canvas, canvasStyleJson: JSON.stringify({ presentation }), canvasDraftJson: JSON.stringify(draft) });
+    api.listScreenDatasources.mockResolvedValue([datasource]);
+    api.saveScreenCanvas.mockResolvedValue({ canvasVersion: 5, canvasDraftJson: JSON.stringify(draft) });
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(wrapper.find('.presentation-editor').exists()).toBe(true));
+
+    await wrapper.find('[data-component-id="deposit-card"]').trigger('click');
+    await wrapper.find('input[placeholder="留空恢复自动标题"]').setValue('全行存款余额');
+    await wrapper.find('[data-testid="binding-save"]').trigger('click');
+    await vi.waitFor(() => expect(api.saveScreenCanvas).toHaveBeenCalled());
+
+    const saved = api.saveScreenCanvas.mock.lastCall[0].canvasStyle.presentation;
+    expect(saved.displaySchemaVersion).toBe(1);
+    expect(saved.display.components[0].text.title).toBe('全行存款余额');
+    expect(saved.display.components[0].dataRefs[0].blockId).toBe(41);
+  });
+
   it('已选择数据源但没有适用字段时明确提示，不猜测字段', async () => {
     const noMetricDatasource = {
       ...datasource,

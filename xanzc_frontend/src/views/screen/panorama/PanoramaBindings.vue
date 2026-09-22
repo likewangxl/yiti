@@ -26,7 +26,7 @@
 
     <div class="panorama-bindings__screen-bar">
       <label for="panorama-screen-select">经营大屏</label>
-      <select id="panorama-screen-select" data-testid="screen-select" v-model="activeScreenId" :disabled="writing || loading" @change="loadCanvas(activeScreenId)">
+      <select id="panorama-screen-select" data-testid="screen-select" v-model="activeScreenId" :disabled="writing || loading" @change="changeActiveScreen">
         <option value="">请选择已存在的大屏</option>
         <option v-for="screen in screens" :key="screen.id" :value="String(screen.id)">
           {{ screen.screenName || screen.screen_name || screen.screenCode || `屏幕 #${screen.id}` }}
@@ -51,6 +51,14 @@
         我确认已保留/核对当前已发布版本，并允许替换草稿组件树
       </label>
     </div>
+
+    <section v-if="screenReady" class="panorama-bindings__display-mode">
+      <div><strong>组件化展示配置</strong><p>标题、内容、来源、格式和交互在同一工作台编辑；下方保留高级字段映射。</p></div>
+      <button v-if="!displayEditorEnabled" type="button" data-testid="enable-display-editor" @click="enableDisplayEditor">启用三栏编辑器</button>
+      <span v-else>{{ displaySession.dirty ? '存在未保存组件修改' : '组件配置已同步' }}</span>
+    </section>
+    <PresentationEditor v-if="screenReady && displayEditorEnabled" v-model:session="displaySession"
+                        :block-options="displayBlockOptions" @cancel="cancelDisplayChanges" />
 
     <div class="panorama-bindings__body">
       <nav class="panorama-bindings__slots" aria-label="经营指标区域">
@@ -239,6 +247,10 @@ import PanoramaIntegrationReadiness from './PanoramaIntegrationReadiness.vue';
 import PanoramaDataVerification from './PanoramaDataVerification.vue';
 import PanoramaDatasourcePicker from './PanoramaDatasourcePicker.vue';
 import { buildBusinessSourceCandidates } from '../presentation/sources/businessSourceCandidates';
+import PresentationEditor from '../presentation/editor/PresentationEditor.vue';
+import {
+  cancelEditorSession, commitSnapshot, createPresentationEditorSession, serializeEditorSession
+} from '../presentation/editor/presentationEditorModel';
 
 const props = defineProps({ screenId: { type: [Number, String], default: '' } });
 const emit = defineEmits(['saved', 'published', 'discarded', 'preview', 'error']);
@@ -273,6 +285,8 @@ const manualSlots = reactive(new Set());
 let loadGeneration = 0;
 let disposed = false;
 let settingsRefreshGeneration = 0;
+const displayEditorEnabled = ref(false);
+const displaySession = ref(createPresentationEditorSession({}, { type: 'CODE', template: 'branch-overview-v1' }));
 
 const selectedTemplate = ref('branch-overview-v1');
 const isRetailTemplate = computed(() => selectedTemplate.value === 'retail-overview-v1');
@@ -299,6 +313,23 @@ function changeTemplate() {
   autoGaps.value = [];
   applyDefaultToSlot(selectedSlot.value);
 }
+function enableDisplayEditor() {
+  displayEditorEnabled.value = true;
+  displaySession.value = createPresentationEditorSession({
+    ...(canvasStyle.value?.presentation || {}), type: 'CODE', template: selectedTemplate.value
+  }, { type: 'CODE', template: selectedTemplate.value });
+}
+function cancelDisplayChanges() {
+  displaySession.value = cancelEditorSession(displaySession.value);
+}
+function changeActiveScreen() {
+  if (displayEditorEnabled.value && displaySession.value.dirty) {
+    conflict.value = '存在未保存的组件配置，请先保存草稿或取消本地修改后再切换大屏。';
+    activeScreenId.value = String(activeScreen.value?.id || '');
+    return false;
+  }
+  return loadCanvas(activeScreenId.value);
+}
 const writing = computed(() => saving.value || publishing.value || discarding.value);
 const templateSpec = slot => (isCorporateTemplate.value
   ? CORPORATE_BINDING_SLOTS[slot]
@@ -315,6 +346,21 @@ const selectedFieldSpecs = computed(() => {
   return (selectedSpec.value.fields || []).filter(fieldSpec => semantics.includes(fieldSpec.semantic));
 });
 const selectedDatasource = computed(() => datasources.value.find(item => String(item.id) === String(selectedBinding.value.dsId)) || null);
+const displayBlockOptions = computed(() => draftComponents.value
+  .filter(item => item?.component === 'ChartWidget' && Number.isSafeInteger(Number(item.blockId)) && Number(item.blockId) > 0)
+  .map(item => {
+    const bindingKey = String(item?.propValue?.bindingKey || '');
+    const bind = parse(item.bindJson, {});
+    return {
+      blockId: Number(item.blockId),
+      label: `${presentationLabel(bindingKey)} · block ${item.blockId}`,
+      role: 'PRIMARY',
+      metricCode: bindingKey.toUpperCase(),
+      metricName: presentationLabel(bindingKey),
+      unit: Object.values(bind.units || {})[0] || 'YUAN',
+      dimension: 'ORG'
+    };
+  }));
 const selectedDatasourceId = computed({
   get: () => selectedBinding.value.dsId ? String(selectedBinding.value.dsId) : '',
   set: value => { selectedBinding.value.dsId = value ? Number(value) : null; }
@@ -646,6 +692,10 @@ async function loadCanvas(requestedId = activeScreenId.value) {
     canvasStyle.value = parse(resp.canvasStyleJson, {});
     selectedTemplate.value = canvasStyle.value?.presentation?.template
       || (isCorporateScreen.value ? CORPORATE_TEMPLATE : isRetailScreen.value ? 'retail-overview-v1' : 'branch-overview-v1');
+    displayEditorEnabled.value = canvasStyle.value?.presentation?.displaySchemaVersion === 1;
+    displaySession.value = createPresentationEditorSession(canvasStyle.value?.presentation || {}, {
+      type: 'CODE', template: selectedTemplate.value
+    });
     const draft = parse(resp.canvasDraftJson, { components: [] });
     draftComponents.value = Array.isArray(draft.components) ? draft.components : [];
     resetBindings(draftComponents.value);
@@ -861,19 +911,22 @@ function savePayload(targetId = activeScreenId.value) {
   if (!Object.keys(bindings).length) throw new Error('至少配置一个展示内容后才能保存');
   if (isRetailTemplate.value && !isRetailScreen.value) throw new Error('零售经营模板仅适用于零售条线大屏，请先核对大屏设置');
   if (isCorporateTemplate.value && !isCorporateScreen.value) throw new Error('对公经营模板仅适用于对公条线大屏，请先核对大屏设置');
-  const presentation = { type: 'CODE', template: selectedTemplate.value };
+  const presentation = displayEditorEnabled.value
+    ? { ...serializeEditorSession(displaySession.value), type: 'CODE', template: selectedTemplate.value }
+    : { type: 'CODE', template: selectedTemplate.value };
   const style = { ...canvasStyle.value, presentation };
   const components = buildCodeComponents(bindings, draftComponents.value);
   if (!components.length) throw new Error('没有可保存的代码组件');
   return { screenId: id, expectedVersion: canvasVersion.value, canvasStyle: style, components };
 }
 
-function adoptSaveResponse(resp, fallbackComponents) {
+function adoptSaveResponse(resp, fallbackComponents, savedPresentation) {
   const reviewSlots = new Set(autoReviewSlots);
   if (resp && Number.isSafeInteger(resp.canvasVersion)) canvas.value = { ...canvas.value, canvasVersion: resp.canvasVersion };
   const draft = parse(resp?.canvasDraftJson, null);
   draftComponents.value = Array.isArray(draft?.components) ? draft.components : fallbackComponents;
-  canvasStyle.value = { ...canvasStyle.value, presentation: { type: 'CODE', template: selectedTemplate.value } };
+  canvasStyle.value = { ...canvasStyle.value, presentation: savedPresentation || { type: 'CODE', template: selectedTemplate.value } };
+  if (displayEditorEnabled.value) displaySession.value = commitSnapshot(displaySession.value);
   resetBindings(draftComponents.value);
   for (const slot of reviewSlots) {
     if (bindingState[slot]?.dsId) autoReviewSlots.add(slot);
@@ -902,7 +955,7 @@ async function saveDraft(options = {}) {
     }
     const response = await saveScreenCanvas(payload);
     if (!writeIsCurrent(targetId, token)) return false;
-    adoptSaveResponse(response, payload.components);
+    adoptSaveResponse(response, payload.components, payload.canvasStyle.presentation);
     emit('saved', response);
     return true;
   } catch (saveError) {
@@ -995,6 +1048,10 @@ async function discardDraft() {
 watch(() => props.screenId, async value => {
   const id = screenIdValue(value);
   if (id && screens.value.some(screen => Number(screen.id) === id)) {
+    if (displayEditorEnabled.value && displaySession.value.dirty) {
+      conflict.value = '外部请求切换大屏，但当前组件配置尚未保存；请先保存或取消本地修改。';
+      return;
+    }
     activeScreenId.value = String(id);
     activeScreen.value = screens.value.find(screen => Number(screen.id) === id) || null;
     await loadCanvas();
@@ -1006,13 +1063,24 @@ watch(() => route?.query?.screenId, async value => {
   const id = screenIdValue(value);
   if (id && screens.value.some(screen => Number(screen.id) === id)
       && String(id) !== String(activeScreenId.value)) {
+    if (displayEditorEnabled.value && displaySession.value.dirty) {
+      conflict.value = '路由请求切换大屏，但当前组件配置尚未保存；请先保存或取消本地修改。';
+      return;
+    }
     activeScreenId.value = String(id);
     activeScreen.value = screens.value.find(screen => Number(screen.id) === id) || null;
     await loadCanvas();
   }
 });
 
+function warnUnsavedDisplay(event) {
+  if (!displayEditorEnabled.value || !displaySession.value.dirty) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+
 onMounted(async () => {
+  window.addEventListener('beforeunload', warnUnsavedDisplay);
   loading.value = true;
   try {
     await loadScreens();
@@ -1024,6 +1092,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', warnUnsavedDisplay);
   disposed = true;
   ++loadGeneration;
   loading.value = false;
@@ -1038,6 +1107,7 @@ defineExpose({
 <style scoped>
 .panorama-bindings { color: #1f2d3d; background: #f4f7fb; min-height: 100%; padding: 24px; box-sizing: border-box; }
 .panorama-bindings__header, .panorama-bindings__screen-bar, .panorama-bindings__body, .panorama-bindings__footer { max-width: 1240px; margin: 0 auto; }
+.panorama-bindings__display-mode{max-width:1600px;margin:0 auto 12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;background:#fff;border:1px solid #e3eaf2;border-radius:8px}.panorama-bindings__display-mode p{margin:3px 0 0;color:#718096;font-size:12px}.panorama-bindings__display-mode span{color:#8b5b00;font-size:12px}
 .panorama-bindings__header { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; margin-bottom:18px; }
 .panorama-bindings__eyebrow { color:#4767d8; font-size:11px; letter-spacing:1.5px; }
 h1, h2, p { margin-top:0; }
