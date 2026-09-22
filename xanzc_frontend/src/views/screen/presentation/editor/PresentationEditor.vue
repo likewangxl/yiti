@@ -1,4 +1,7 @@
 <template>
+  <div class="presentation-editor-shell">
+    <LegacyMigrationPanel v-if="migrationPreview" :preview="migrationPreview"
+                          @preview="previewMigration" @cancel="cancelMigration" @apply="applyMigration" />
   <section class="presentation-editor" aria-label="经营大屏组件配置">
     <aside class="presentation-editor__list">
       <header><h2>页面组件</h2><span>{{ session.components.length }} 项</span></header>
@@ -76,24 +79,46 @@
       <footer><button type="button" :disabled="!session.dirty" @click="$emit('cancel')">取消本地修改</button></footer>
     </aside>
   </section>
+  </div>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue';
 import { DISPLAY_UNITS, INTERACTION_ACTIONS, resolveComponentTitle } from '../contract/displayContract';
+import LegacyMigrationPanel from '../migration/LegacyMigrationPanel.vue';
+import {
+  applyLegacyMigrationToEditorDraft,
+  previewLegacyMigration
+} from '../migration/legacyPresentationMigration';
 import {
   COMPONENT_TYPES, addComponent, bindComponent, deleteComponent, duplicateComponent, moveComponent,
   selectComponent, setComponentTitle, setComponentVisibility, updateComponentContent,
   updateComponentFormat, updateComponentInteraction, updateComponentText
 } from './presentationEditorModel';
 
-const props = defineProps({ session: { type: Object, required: true }, blockOptions: { type: Array, default: () => [] } });
-const emit = defineEmits(['update:session', 'cancel']);
+const props = defineProps({
+  session: { type: Object, required: true },
+  blockOptions: { type: Array, default: () => [] },
+  // 旧 canvas/renderPackage 或其 JSON。只用于本地预览和生成草稿，不在此组件发起保存。
+  migrationSource: { type: [Object, String], default: null },
+  legacySource: { type: [Object, String], default: null },
+  migrationPreview: { type: Object, default: null }
+});
+const emit = defineEmits(['update:session', 'cancel', 'migration-preview', 'migration-cancel', 'migration-applied']);
 const newType = ref('METRIC_CARD');
 const selectedId = computed(() => props.session.selectedComponentId);
 const selected = computed(() => props.session.components.find(item => item.componentId === selectedId.value) || null);
 const orderedComponents = computed(() => [...props.session.components].sort((a, b) => a.layoutRegion.localeCompare(b.layoutRegion) || a.order - b.order));
 const visibleComponents = computed(() => orderedComponents.value.filter(item => item.visible));
+const migrationInput = computed(() => props.migrationSource ?? props.legacySource);
+const migrationPreview = computed(() => {
+  if (props.migrationPreview) return props.migrationPreview;
+  if (!migrationInput.value) return null;
+  return previewLegacyMigration(migrationInput.value, {
+    type: props.session.presentation?.type || 'CODE',
+    template: props.session.presentation?.template || 'branch-overview-v1'
+  });
+});
 const update = next => emit('update:session', next);
 const typeLabel = type => ({ METRIC_CARD: '指标卡', COMPLETION: '完成情况', TREND: '趋势图', COMPOSITION_TABS: '业务结构', RANKING: '机构排名', MAP: '地图', DETAIL_TABLE: '明细表' }[type] || type);
 const componentTitle = component => resolveComponentTitle(component, { metricName: component.dataRefs?.[0]?.metricName });
@@ -114,8 +139,21 @@ function bind(value) {
   if (!option) return;
   update(bindComponent(props.session, selectedId.value, option.blockId, option));
 }
+function previewMigration() { emit('migration-preview', migrationPreview.value); }
+function cancelMigration() {
+  // 取消迁移只通知父级关闭预览，不改变当前会话，也不触发保存或发布；
+  // 不复用编辑器整体 cancel，避免误丢弃迁移前已经存在的本地修改。
+  emit('migration-cancel', migrationPreview.value);
+}
+function applyMigration(preview) {
+  if (!preview?.presentation) return;
+  const next = applyLegacyMigrationToEditorDraft(props.session, preview);
+  update(next);
+  emit('migration-applied', preview);
+}
 </script>
 
 <style scoped>
+.presentation-editor-shell{width:100%}
 .presentation-editor{display:grid;grid-template-columns:230px minmax(360px,1fr) 320px;gap:12px;max-width:1600px;margin:0 auto 14px;min-height:540px}.presentation-editor>aside,.presentation-editor>main{background:#fff;border:1px solid #e3eaf2;border-radius:8px;padding:14px;min-width:0}.presentation-editor header{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.presentation-editor h2{font-size:15px;margin:0}.presentation-editor__add,.presentation-editor__toolbar,.presentation-editor__row{display:flex;gap:6px;margin:12px 0}.presentation-editor__add select{min-width:0;flex:1}.presentation-editor__item{display:grid;width:100%;margin:6px 0;text-align:left}.presentation-editor__item small{color:#718096}.presentation-editor__item.active{border-color:#6b83e8;background:#f1f4ff}.presentation-editor__preview header p{font-size:12px;color:#718096}.presentation-editor__preview header span{font-size:12px;color:#16805d}.presentation-editor__preview header span.dirty{color:#b26a00}.presentation-editor__canvas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:12px;background:#07102c;border-radius:8px;min-height:430px}.presentation-editor__preview-card{padding:12px;color:#eaf2ff;background:#10284b;border:1px solid #315783;border-radius:7px;cursor:pointer}.presentation-editor__preview-card h3{margin:5px 0}.presentation-editor__preview-card p,.presentation-editor__preview-card small{color:#9fc2df;font-size:11px}.presentation-editor__properties{overflow:auto;max-height:680px}.presentation-editor__properties label{display:grid;gap:5px;margin:10px 0;font-size:12px}.presentation-editor__properties input,.presentation-editor__properties select,.presentation-editor__properties textarea{width:100%;box-sizing:border-box}.presentation-editor__toolbar{flex-wrap:wrap}.presentation-editor__toolbar .danger{color:#a11a2b}.presentation-editor__warning{padding:7px;color:#8b5b00;background:#fff8e5;border-radius:5px;font-size:12px}.presentation-editor__empty{color:#718096;font-size:13px}.presentation-editor__properties footer{margin-top:16px}@media(max-width:1100px){.presentation-editor{grid-template-columns:200px minmax(0,1fr)}.presentation-editor__properties{grid-column:1/-1;max-height:none}}@media(max-width:760px){.presentation-editor{display:block}.presentation-editor>aside,.presentation-editor>main{margin-bottom:10px}.presentation-editor__canvas{grid-template-columns:1fr}}
 </style>

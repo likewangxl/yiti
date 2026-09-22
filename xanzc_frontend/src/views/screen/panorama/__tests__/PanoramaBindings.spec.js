@@ -109,6 +109,24 @@ const autoDatasource = {
   })
 };
 
+function legacyMigrationCanvas({ bindingKey, template, label, innerType = 'METRIC_CARD', presentationType = 'LEGACY' }) {
+  const component = { id: `legacy-${bindingKey}`, component: 'ChartWidget', innerType, blockId: 41,
+    propValue: { bindingKey } };
+  const published = {
+    schemaVersion: 2,
+    canvasStyle: { presentation: { type: presentationType, template }, metricLabels: { [bindingKey]: label } },
+    components: [component],
+    bindSnapshots: { 41: { bind: { metricCode: `M_${bindingKey.toUpperCase()}`, metricName: label,
+      fields: { value: `${bindingKey}_raw` }, units: { value: 'YUAN' }, dimension: 'ORG' } } }
+  };
+  return {
+    ...canvas,
+    canvasStyleJson: JSON.stringify(published.canvasStyle),
+    canvasDraftJson: JSON.stringify({ components: [component] }),
+    canvasPublishedJson: JSON.stringify(published)
+  };
+}
+
 describe('PanoramaBindings', () => {
   beforeEach(() => {
     router.push.mockReset();
@@ -168,6 +186,54 @@ describe('PanoramaBindings', () => {
     expect(wrapper.find('[data-testid="legacy-conversion-warning"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="conversion-confirm"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="try-run"]').exists()).toBe(false);
+  });
+
+  it.each([
+    ['分行', screen, 'branch-overview-v1', 'deposit', '分行存款'],
+    ['对公', { ...screen, bizLine: 'CORP' }, 'corporate-overview-v1', 'corpDeposit', '对公存款'],
+    ['零售', { ...screen, bizLine: 'RETAIL' }, 'retail-overview-v1', 'retailAum', '零售资产']
+  ])('%s旧配置只在当前编辑器显示迁移预览，取消不写入', async (_name, screenVariant, template, bindingKey, label) => {
+    api.listScreens.mockResolvedValue([screenVariant]);
+    api.getScreenCanvas.mockResolvedValue(legacyMigrationCanvas({ bindingKey, template, label }));
+    api.listScreenDatasources.mockResolvedValue([datasource]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="legacy-migration-preview"]').exists()).toBe(true));
+    expect(wrapper.find('[data-testid="migration-status-migrated"]').text()).toContain('1');
+    expect(wrapper.find('[data-testid="migration-apply"]').exists()).toBe(true);
+    await wrapper.find('[data-testid="migration-cancel"]').trigger('click');
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="legacy-migration-preview"]').exists()).toBe(false));
+    expect(api.saveScreenCanvas).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('旧 CODE 配置未声明 displaySchemaVersion 时仍显示迁移入口', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue(legacyMigrationCanvas({
+      bindingKey: 'deposit', template: 'branch-overview-v1', label: '旧 CODE 存款', presentationType: 'CODE'
+    }));
+    api.listScreenDatasources.mockResolvedValue([datasource]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="legacy-migration-preview"]').exists()).toBe(true));
+    expect(wrapper.find('[data-testid="migration-status-migrated"]').text()).toContain('1');
+    expect(api.saveScreenCanvas).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('旧草稿 JSON 损坏时仍显示迁移缺字段状态并阻止无损声明', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({ ...canvas,
+      canvasStyleJson: JSON.stringify({ presentation: { type: 'LEGACY', template: 'branch-overview-v1' } }),
+      canvasDraftJson: '{"components":' });
+    api.listScreenDatasources.mockResolvedValue([datasource]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="legacy-migration-preview"]').exists()).toBe(true));
+    expect(wrapper.find('[data-testid="migration-status-missing"]').text()).toContain('1');
+    expect(wrapper.text()).toContain('不能声明无损完成');
+    expect(api.saveScreenCanvas).not.toHaveBeenCalled();
+    wrapper.unmount();
   });
 
   it('加载当前屏后显示 14 槽静态接入检查，未点击前不读取机构管理目录', async () => {

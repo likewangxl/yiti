@@ -19,7 +19,7 @@
 | S12 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S10、S11 |
 | S13 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S09、S12 |
 | S14 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S04、S07～S13 |
-| S15 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S03、S04、S06、S14 |
+| S15 | VERIFIED | `e7804933` | - | `presentation/migration/`、`PresentationEditor.vue`、`PanoramaBindings.vue`及测试、操作指南 | 旧配置确定性迁移预览与本地草稿应用已实现；不自动保存/发布 | 迁移/编辑器/Bindings 37项通过；presentation目录95项通过；生产构建通过 | 持久化转换→发布→回退留S17隔离测试屏 | Vitest/Vite输出与操作指南 | 真实测试屏、expectedVersion冲突和发布回退需隔离环境 | 进入S16前完成S12～S14；S17执行真实迁移台账 |
 | S16 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S07～S15 |
 | S17 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S16、隔离运行环境 |
 
@@ -117,3 +117,11 @@
 - 合法0、无指标和无坐标机构保留各自状态；目录外指标记录拒绝；同名不合并；父子或经营归属同时展示时标记`CANNOT_AGGREGATE`，不现场改写上级正式值。
 - 主代理回读`PanoramaInstitutionDTO`和`ScreenConfigServiceImpl.buildPanoramaInstitutions`：运行DTO已经包含`operatingLevel/orgNature/city/坐标`，并由`authorizeRuntime + activeProfiles`保证授权和ACTIVE；无需改后端契约。
 - 停止条件触发：D03/D04尚未给出允许的层级/性质枚举或签认机构清单，当前不能安全接入运行过滤。模型7项通过，但任务按`BLOCKED_DATA/X05`记录，不把单元夹具当真实机构口径。
+
+## S15 任务记录
+
+- 迁移只按旧`bindingKey`、`blockId -> bindSnapshots`、字段/单位结构和`metricLabels`匹配，不按中文标题猜测；逐项输出已迁移、无法确定、缺字段、待确认，未知项保留原节点快照。
+- 组件ID由旧编码和blockId确定性生成；重复转换幂等。损坏JSON、缺字段和`requireLossless`均fail-close；旧发布包保留为回退快照。
+- `PanoramaBindings`对分行/对公/零售旧包提供迁移入口；应用只修改当前编辑会话，不调用保存、发布或共享数据源写接口，取消迁移不丢弃已有本地编辑。后续保存仍走既有expectedVersion/CAS链。
+- 主代理复核发现并修正两轮问题：旧包本身也是`type=CODE`，不能用type判断是否需要迁移；同时迁移提示不能提前覆盖旧CODE原有字段校验。最终拆分“迁移候选”与“非CODE保存门禁”，原Bindings错误优先级保持。
+- 主代理独立复核：迁移/编辑器/Bindings 37项、presentation目录95项及生产构建通过。真实持久化转换、发布、回退和版本冲突只能在S17获准隔离测试屏验证。

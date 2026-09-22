@@ -58,7 +58,9 @@
       <span v-else>{{ displaySession.dirty ? '存在未保存组件修改' : '组件配置已同步' }}</span>
     </section>
     <PresentationEditor v-if="screenReady && displayEditorEnabled" v-model:session="displaySession"
-                        :block-options="displayBlockOptions" @cancel="cancelDisplayChanges" />
+                        :block-options="displayBlockOptions" :migration-source="legacyMigrationSource"
+                        @cancel="cancelDisplayChanges" @migration-cancel="dismissLegacyMigration"
+                        @migration-applied="markMigrationApplied" />
 
     <div class="panorama-bindings__body">
       <nav class="panorama-bindings__slots" aria-label="经营指标区域">
@@ -287,6 +289,8 @@ let disposed = false;
 let settingsRefreshGeneration = 0;
 const displayEditorEnabled = ref(false);
 const displaySession = ref(createPresentationEditorSession({}, { type: 'CODE', template: 'branch-overview-v1' }));
+const migrationDismissed = ref(false);
+const migrationApplied = ref(false);
 
 const selectedTemplate = ref('branch-overview-v1');
 const isRetailTemplate = computed(() => selectedTemplate.value === 'retail-overview-v1');
@@ -313,8 +317,15 @@ function changeTemplate() {
   autoGaps.value = [];
   applyDefaultToSlot(selectedSlot.value);
 }
+function dismissLegacyMigration() {
+  migrationDismissed.value = true;
+}
+function markMigrationApplied() {
+  migrationApplied.value = true;
+}
 function enableDisplayEditor() {
   displayEditorEnabled.value = true;
+  migrationApplied.value = false;
   displaySession.value = createPresentationEditorSession({
     ...(canvasStyle.value?.presentation || {}), type: 'CODE', template: selectedTemplate.value
   }, { type: 'CODE', template: selectedTemplate.value });
@@ -404,11 +415,35 @@ const canvasVersion = computed(() => canvas.value?.canvasVersion ?? null);
 
 const isCodePresentation = computed(() => canvasStyle.value?.presentation?.type === 'CODE'
   && canvasStyle.value?.presentation?.template === selectedTemplate.value);
+const hasNewDisplayPresentation = computed(() => canvasStyle.value?.presentation?.displaySchemaVersion === 1);
 
-// 任何仍有内容的旧坐标画布都需要用户确认转换；不能只检查 ChartWidget，
-// 否则 Group/Text 等旧节点会在保存时被静默删除。
-const legacyComponents = computed(() => draftComponents.value.length && !isCodePresentation.value
-  ? draftComponents.value : []);
+// 迁移候选识别不复用 isCodePresentation：旧 CODE 包本身也可能没有新展示子协议。
+const malformedLegacyDraft = computed(() => {
+  const raw = canvas.value?.canvasDraftJson;
+  if (typeof raw !== 'string' || !raw.trim()) return false;
+  try { JSON.parse(raw); return false; } catch { return true; }
+});
+const migrationCandidate = computed(() => {
+  if (hasNewDisplayPresentation.value) return [];
+  if (draftComponents.value.length) return draftComponents.value;
+  return malformedLegacyDraft.value ? [{}] : [];
+});
+// 保留旧 CODE 绑定保存链的原有语义：只有非 CODE 旧布局才进入旧组件替换确认门禁。
+const legacyComponents = computed(() => isCodePresentation.value ? [] : migrationCandidate.value);
+
+/** 旧配置只作为当前编辑器的迁移预览输入，不触发保存、发布或数据源写入。 */
+const legacyMigrationSource = computed(() => {
+  if (!migrationCandidate.value.length || migrationDismissed.value) return null;
+  const published = parse(canvas.value?.canvasPublishedJson ?? canvas.value?.renderPackageJson
+    ?? canvas.value?.renderPackage ?? canvas.value?.canvasPublished, null);
+  const bindSnapshots = published?.bindSnapshots || parse(canvas.value?.bindSnapshots, {});
+  return published
+    ? { renderPackage: published, bindSnapshots, canvasStyle: canvasStyle.value }
+    : { renderPackageJson: canvas.value?.renderPackageJson, canvasDraftJson: canvas.value?.canvasDraftJson,
+      canvasStyleJson: canvas.value?.canvasStyleJson,
+      components: draftComponents.value,
+      bindSnapshots, canvasStyle: canvasStyle.value };
+});
 
 const screenScope = computed(() => ({
   viewLevel: activeScreen.value?.viewLevel || activeScreen.value?.view_level || 'BRANCH',
@@ -589,6 +624,8 @@ function clearCanvasState() {
   bindingState[selectedSlot.value] = emptyBinding(selectedSlot.value);
   compositionMode.value = 'rows';
   conversionAccepted.value = false;
+  migrationDismissed.value = false;
+  migrationApplied.value = false;
   autoNotice.value = '';
   autoGaps.value = [];
   autoReviewSlots.clear();
@@ -698,6 +735,9 @@ async function loadCanvas(requestedId = activeScreenId.value) {
     });
     const draft = parse(resp.canvasDraftJson, { components: [] });
     draftComponents.value = Array.isArray(draft.components) ? draft.components : [];
+    // 旧组件树直接打开三栏编辑器以展示受控迁移入口；转换仍由用户在编辑器中明确应用。
+    migrationApplied.value = false;
+    if (migrationCandidate.value.length) displayEditorEnabled.value = true;
     resetBindings(draftComponents.value);
     datasources.value = Array.isArray(sourceList) ? sourceList : [];
     for (const binding of Object.values(bindingState)) fillProvenUnits(binding);
@@ -911,7 +951,11 @@ function savePayload(targetId = activeScreenId.value) {
   if (!Object.keys(bindings).length) throw new Error('至少配置一个展示内容后才能保存');
   if (isRetailTemplate.value && !isRetailScreen.value) throw new Error('零售经营模板仅适用于零售条线大屏，请先核对大屏设置');
   if (isCorporateTemplate.value && !isCorporateScreen.value) throw new Error('对公经营模板仅适用于对公条线大屏，请先核对大屏设置');
-  const presentation = displayEditorEnabled.value
+  // 旧 CODE 包打开迁移面板时，未点击“应用到当前草稿”仍沿用原有保存链；
+  // 只有新协议本身或明确应用迁移后，才序列化编辑器的 display 配置。
+  const useDisplayDraft = displayEditorEnabled.value
+    && (hasNewDisplayPresentation.value || migrationApplied.value);
+  const presentation = useDisplayDraft
     ? { ...serializeEditorSession(displaySession.value), type: 'CODE', template: selectedTemplate.value }
     : { type: 'CODE', template: selectedTemplate.value };
   const style = { ...canvasStyle.value, presentation };
@@ -922,11 +966,13 @@ function savePayload(targetId = activeScreenId.value) {
 
 function adoptSaveResponse(resp, fallbackComponents, savedPresentation) {
   const reviewSlots = new Set(autoReviewSlots);
+  const usedDisplayDraft = displayEditorEnabled.value
+    && (hasNewDisplayPresentation.value || migrationApplied.value);
   if (resp && Number.isSafeInteger(resp.canvasVersion)) canvas.value = { ...canvas.value, canvasVersion: resp.canvasVersion };
   const draft = parse(resp?.canvasDraftJson, null);
   draftComponents.value = Array.isArray(draft?.components) ? draft.components : fallbackComponents;
   canvasStyle.value = { ...canvasStyle.value, presentation: savedPresentation || { type: 'CODE', template: selectedTemplate.value } };
-  if (displayEditorEnabled.value) displaySession.value = commitSnapshot(displaySession.value);
+  if (usedDisplayDraft) displaySession.value = commitSnapshot(displaySession.value);
   resetBindings(draftComponents.value);
   for (const slot of reviewSlots) {
     if (bindingState[slot]?.dsId) autoReviewSlots.add(slot);
