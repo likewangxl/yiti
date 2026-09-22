@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getDisplayComponents,
   isConfiguredPresentation,
+  presentationForComponent,
   presentationOf
 } from '../presentationLayoutModel';
 
@@ -45,5 +46,12 @@ describe('presentation layout model', () => {
       'METRIC_CARD', 'COMPLETION', 'TREND', 'METRIC_CARD',
       'MAP', 'COMPOSITION_TABS', 'RANKING', 'DETAIL_TABLE'
     ]);
+  });
+
+  it('单张地图上下文保留排名指标配置，供地图复用字段和展示单位', () => {
+    const source = { displaySchemaVersion: 1, display: { components } };
+    const map = components.find(item => item.componentId === 'map-center');
+    expect(presentationForComponent(source, map).display.components.map(item => item.componentType))
+      .toEqual(['RANKING', 'MAP']);
   });
 });

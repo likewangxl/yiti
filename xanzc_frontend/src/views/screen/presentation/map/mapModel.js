@@ -1,4 +1,4 @@
-import { formatDisplayMetric } from '../model/displayMetricsModel';
+import { displayUnitLabel, formatDisplayMetric } from '../model/displayMetricsModel';
 
 export const MAP_MISSING_COLOR = '#65738a';
 export const MAP_PALETTE = Object.freeze({
@@ -270,7 +270,7 @@ export function buildMapModel(sourcePresentation, inputModel = {}, options = {})
     metricKey: metric.metricKey,
     field: metric.field,
     metricLabel: metric.label,
-    metricUnit: metric.unit,
+    metricUnit: displayUnitLabel(metric.unit),
     direction: metric.direction,
     viewFit: viewFitFor(level),
     dataDate: sourceDate(model, options),

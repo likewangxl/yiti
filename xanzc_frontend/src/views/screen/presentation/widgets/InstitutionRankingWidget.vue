@@ -48,7 +48,7 @@
     <div class="institution-ranking-widget__list" data-testid="institution-ranking-list" tabindex="0" role="region" aria-label="完整机构排名列表">
       <table>
         <caption class="institution-ranking-widget__visually-hidden">{{ activeMetric?.label || '机构排名' }}，含未参与排名机构</caption>
-        <thead><tr><th scope="col">排名</th><th scope="col">机构</th><th scope="col">{{ activeMetric?.unit || '指标值' }}</th></tr></thead>
+        <thead><tr><th scope="col">排名</th><th scope="col">机构</th><th scope="col">{{ displayUnitLabel(activeMetric?.unit) || '指标值' }}</th></tr></thead>
         <tbody>
           <tr
             v-for="row in displayRows"
@@ -71,6 +71,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { displayUnitLabel } from '../model/displayMetricsModel';
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -154,7 +155,7 @@ function formatValue(value) {
   if (value === null || value === undefined || value === '') return '—';
   const number = Number(value);
   if (!Number.isFinite(number)) return '—';
-  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, minimumFractionDigits: Number.isInteger(number) ? 0 : 2 }).format(number)}${activeMetric.value?.unit || ''}`;
+  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, minimumFractionDigits: Number.isInteger(number) ? 0 : 2 }).format(number)}${displayUnitLabel(activeMetric.value?.unit)}`;
 }
 
 watch(metricOptions, options => {

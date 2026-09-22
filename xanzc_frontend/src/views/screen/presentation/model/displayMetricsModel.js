@@ -45,6 +45,10 @@ function unitLabel(value) {
   return UNIT_LABELS[raw] || UNIT_LABELS[raw.toUpperCase()] || raw;
 }
 
+export function displayUnitLabel(value) {
+  return unitLabel(value);
+}
+
 function numberFormat(value, decimals, thousandsSeparator) {
   return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: decimals,

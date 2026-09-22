@@ -47,6 +47,22 @@ describe('InstitutionRankingWidget', () => {
     expect(wrapper.get('[data-testid="institution-ranking-incomplete"]').text()).toContain('缺少');
   });
 
+  it('展示协议单位枚举转换为业务中文单位', () => {
+    const wrapper = mountWidget({
+      model: {
+        activeMetricKey: 'deposit',
+        metrics: [{
+          ...model.metrics[0], unit: 'HUNDRED_MILLION',
+          rankable: [{ orgCode: 'A', name: '甲', value: 10, rank: 1, state: 'RANKABLE' }],
+          missing: []
+        }]
+      }
+    });
+    expect(wrapper.get('thead').text()).toContain('亿元');
+    expect(wrapper.get('[data-org-code="A"]').text()).toContain('10亿元');
+    expect(wrapper.text()).not.toContain('HUNDRED_MILLION');
+  });
+
   it('指标页签可键盘访问，手动选择暂停并可恢复自动轮播', async () => {
     vi.useFakeTimers();
     const wrapper = mountWidget({ interval: 1000 });

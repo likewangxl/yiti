@@ -71,11 +71,13 @@ export function getDisplayComponents(source) {
 /** 让单个 MAP 组件复用现有地图模型，同时避免选中另一张 MAP。 */
 export function presentationForComponent(source, component) {
   const presentation = presentationOf(source);
+  const ranking = (Array.isArray(presentation.display?.components) ? presentation.display.components : [])
+    .find(item => item?.componentType === 'RANKING' && item.visible !== false);
   return {
     ...presentation,
     display: {
       ...(isObject(presentation.display) ? presentation.display : {}),
-      components: component ? [component] : []
+      components: component ? [...(ranking ? [ranking] : []), component] : []
     }
   };
 }
