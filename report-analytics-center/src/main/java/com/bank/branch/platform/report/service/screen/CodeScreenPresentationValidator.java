@@ -1,10 +1,14 @@
 package com.bank.branch.platform.report.service.screen;
 
+import com.bank.branch.platform.report.dto.req.CodeScreenPresentationDTO;
+import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayComponentDTO;
+import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayContractValidator;
 import com.bank.branch.platform.report.entity.RptScreenBlock;
 import com.bank.branch.platform.report.entity.RptScreenDatasource;
 import com.bank.branch.platform.report.enums.RptErrorCode;
 import com.bank.branch.platform.report.exception.RptException;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -36,6 +40,8 @@ public final class CodeScreenPresentationValidator {
 
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
+    private static final ObjectMapper STRICT_PRESENTATION_MAPPER = MAPPER.copy()
+            .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     private static final Set<String> BRANCH_SLOTS = Set.of(
             "deposit", "loan", "customers", "revenue", "rate", "trend", "composition",
             "ranking", "attention", "branches", "branchTrend", "citySummary",
@@ -134,7 +140,12 @@ public final class CodeScreenPresentationValidator {
      * 通过长度、纯文本和指标键白名单校验，不能仅依赖前端下拉框或 JsonNode 取值。</p>
      */
     public static void validateCanvasStyle(String canvasStyleJson) {
-        validateSourcePresentationMetadata(readObject(canvasStyleJson, RptErrorCode.SCREEN_LAYOUT_INVALID));
+        JsonNode canvasStyle = readObject(canvasStyleJson, RptErrorCode.SCREEN_LAYOUT_INVALID);
+        validateSourcePresentationMetadata(canvasStyle);
+        JsonNode presentation = canvasStyle.path("presentation");
+        if (!presentation.isMissingNode() && !presentation.isNull()) {
+            validatePresentation(presentation);
+        }
     }
 
     /** 保存阶段校验样式与草稿组件形状；不要求新 ChartWidget 已经获得 blockId。 */
@@ -145,7 +156,8 @@ public final class CodeScreenPresentationValidator {
             return;
         }
         JsonNode draft = readObject(draftJson, RptErrorCode.SCREEN_LAYOUT_INVALID);
-        validateComponents(draft.path("components"), false, Set.of(), template);
+        Set<Long> blockIds = validateComponents(draft.path("components"), false, Set.of(), template);
+        validateDisplayReferences(style, blockIds, RptErrorCode.SCREEN_LAYOUT_INVALID);
     }
 
     /**
@@ -170,6 +182,7 @@ public final class CodeScreenPresentationValidator {
             }
         }
         Set<Long> blockIds = validateComponents(draft.path("components"), true, byId.keySet(), template);
+        validateDisplayReferences(style, blockIds, RptErrorCode.SCREEN_LAYOUT_INVALID);
         for (Long blockId : blockIds) {
             RptScreenBlock row = byId.get(blockId);
             if (row == null) {
@@ -197,6 +210,7 @@ public final class CodeScreenPresentationValidator {
         }
         JsonNode components = root.path("components");
         Set<Long> blockIds = validateComponents(components, true, Set.of(), template);
+        validateDisplayReferences(style, blockIds, RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED);
         JsonNode snapshots = root.path("bindSnapshots");
         if (!snapshots.isObject()) {
             throw untrusted();
@@ -450,9 +464,10 @@ public final class CodeScreenPresentationValidator {
                         || (knownBlockIds != null && !knownBlockIds.isEmpty() && !knownBlockIds.contains(idValue))) {
                     throw invalid();
                 }
-            } else if (!blockId.isMissingNode() && !blockId.isNull()
-                    && !isPositiveIntegral(blockId)) {
-                throw invalid();
+            } else if (!blockId.isMissingNode() && !blockId.isNull()) {
+                if (!isPositiveIntegral(blockId) || !blockIds.add(blockId.longValue())) {
+                    throw invalid();
+                }
             }
             JsonNode bindJson = component.path("bindJson");
             if (!bindJson.isTextual()) {
@@ -482,6 +497,53 @@ public final class CodeScreenPresentationValidator {
                 && !RETAIL_OVERVIEW_TEMPLATE.equals(presentation.path("template").asText())
                 && !CORPORATE_OVERVIEW_TEMPLATE.equals(presentation.path("template").asText()))) {
             throw invalid();
+        }
+        boolean hasVersion = presentation.has("displaySchemaVersion")
+                && !presentation.path("displaySchemaVersion").isNull();
+        boolean hasDisplay = presentation.has("display") && !presentation.path("display").isNull();
+        if (!hasVersion && !hasDisplay) {
+            return;
+        }
+        if (!hasVersion || !hasDisplay) {
+            throw invalid();
+        }
+        try {
+            CodeScreenPresentationDTO dto = STRICT_PRESENTATION_MAPPER.treeToValue(
+                    presentation, CodeScreenPresentationDTO.class);
+            if (dto.getDisplaySchemaVersion() == null
+                    || dto.getDisplaySchemaVersion() != ScreenDisplayContractValidator.VERSION
+                    || !ScreenDisplayContractValidator.validateDisplayPayload(dto.getDisplay()).isEmpty()) {
+                throw invalid();
+            }
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, ex);
+        }
+    }
+
+    /** 新展示组件只能引用当前组件树已经持有的 block；不同展示组件可共享同一 block。 */
+    private static void validateDisplayReferences(JsonNode canvasStyle, Set<Long> blockIds,
+                                                  RptErrorCode errorCode) {
+        JsonNode presentation = canvasStyle == null ? null : canvasStyle.path("presentation");
+        if (presentation == null || !presentation.isObject()
+                || !presentation.hasNonNull("displaySchemaVersion")) {
+            return;
+        }
+        try {
+            CodeScreenPresentationDTO dto = STRICT_PRESENTATION_MAPPER.treeToValue(
+                    presentation, CodeScreenPresentationDTO.class);
+            for (ScreenDisplayComponentDTO component : dto.getDisplay().getComponents()) {
+                component.getDataRefs().forEach(ref -> {
+                    if (ref.getBlockId() == null || !blockIds.contains(ref.getBlockId())) {
+                        throw new RptException(errorCode);
+                    }
+                });
+            }
+        } catch (RptException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RptException(errorCode, ex);
         }
     }
 

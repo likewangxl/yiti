@@ -1,5 +1,8 @@
 package com.bank.branch.platform.report.dto.req;
 
+import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayPayloadDTO;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import jakarta.validation.Valid;
 import lombok.Data;
 
 /**
@@ -15,4 +18,15 @@ public class CodeScreenPresentationDTO {
 
     /** 当前支持 branch-overview-v1、retail-overview-v1 与 corporate-overview-v1；未知模板拒绝。 */
     private String template;
+
+    /**
+     * 可选的展示子协议版本。版本位于 presentation 根节点；缺省表示历史 CODE 展示路径。
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Integer displaySchemaVersion;
+
+    /** displaySchemaVersion=1 时的类型化展示负载。 */
+    @Valid
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private ScreenDisplayPayloadDTO display;
 }

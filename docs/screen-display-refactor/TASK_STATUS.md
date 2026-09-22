@@ -7,7 +7,7 @@
 | S00 | VERIFIED | `dced49aaec6220b56991d774b0cae8435115d795` | - | `BASELINE.md`、`TASK_STATUS.md`、`check-scope.mjs`、`__tests__/check-scope.test.mjs` | implemented; 主代理已独立复核 | `node --test .../check-scope.test.mjs`：10 passed, exit 0；实际范围检查 exit 0；`git diff --check` exit 0 | N/A | `E:\cx-workspace\runtime\screen-display-refactor\S00-20260922-01` | 无 | 进入 S01 |
 | S01 | VERIFIED | `dced49aaec6220b56991d774b0cae8435115d795` | - | `DATA_CAPABILITIES.md`、`BUSINESS_DECISIONS.md`、`TASK_STATUS.md` | 源码与会议纪要只读盘点完成；主代理已逐项复核 | 15/12/13槽位覆盖、6来源、D01～D12、外部依赖、链接和敏感模式检查均通过；范围检查与`git diff --check`通过 | N/A；未连接数据库、未调用运行API | 本目录两份S01文档 | 具体配置、真实数据与业务口径仍为UNCONFIRMED | 等用户评估消耗后再决定是否执行S02 |
 | S02 | VERIFIED | `40aa91ea` | - | 前端`screen/presentation/contract/`与测试；后端`dto/req/presentation/`与`ScreenPresentationContractTest`；`PRESENTATION_CONTRACT.md`、`TASK_STATUS.md` | 七类组件展示子协议已实现并经主代理复核 | 前端9项、后端6项定向测试通过；模块结构4项和BizAuth 2项通过；范围/格式检查通过 | N/A；纯契约任务 | 本地测试输出与本任务文档 | 保存发布尚未接线，属于S03；两个既有Controller实体依赖架构测试失败与本轮无关 | 创建S02聚焦提交后进入S03 |
-| S03 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S02 |
+| S03 | VERIFIED | `06cdfe07` | - | `CodeScreenPresentationDTO`、`ScreenDisplayPayloadDTO`、`ScreenDisplayContractValidator`、`CodeScreenPresentationValidator`、`ScreenCanvasServiceTest`、`ScreenPresentationDisplayPayloadTest`及大屏契约文档 | 展示配置已接入既有JSON校验、CAS保存、发布包和回滚校验，并经主代理复核 | 展示/画布/配置相关147项测试通过；契约/范围/格式检查通过 | N/A；未连接数据库和浏览器 | 定向Surefire报告与三份契约文档 | 新block需先保存取得ID再被display引用；真实持久化留S17 | 创建S03聚焦提交并进入S04 |
 | S04 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S03 |
 | S05 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S02、S03 |
 | S06 | NOT_STARTED | - | - | - | - | - | - | - | - | 等 S03、S05 |
@@ -47,3 +47,11 @@
 - npm按现有锁文件安装依赖，package及锁文件未计划修改；未运行浏览器、真库或发布验证，未提交或推送。
 - 主代理复核补强来源AUTO单位拒绝、必需嵌套对象、负数样式、系列/列/页签/排名稳定身份与字段完整性，并修正Java嵌套项重复后未继续校验的问题。
 - 扩大架构检查中，`RptModuleStructureArchTest` 4项与 `RptBizAuthConsistencyArchTest` 2项通过；`RptNoEntityInControllerArchTest` 和 `RptNoEntityInControllerLocalsArchTest` 因既有 `FreeReportController.listBatches` 返回 `RptFreeReportBatch` 失败。本轮未修改该控制器或实体，按范围仅记录，不越界修复。
+
+## S03 任务记录
+
+- Red：严格展示payload测试先证明未知版本、未知字段、版本嵌套、未知枚举和非当前组件树block引用未被旧校验器拒绝。
+- Green：新增 `ScreenDisplayPayloadDTO` 并保持版本在presentation根；严格反序列化后复用S02跨字段校验。展示引用必须属于当前组件树，跨屏/悬空引用继续Fail Close。
+- 既有Canvas保存无需新增表或端点：canvasStyle、组件树和block更新仍在同一事务/CAS；发布包复制同一style，回滚恢复归档style和组件树。定向服务测试验证字段保存、发布快照及新协议回滚。
+- 当前前端若同一次创建新ChartWidget并配置展示引用，必须先保存获得blockId再二次保存；没有引入客户端临时ID旁路。
+- 主代理终审扩展到 `CodeScreenPresentationValidatorTest`、`ScreenConfigServiceTest` 和完整 `ScreenCanvasServiceTest`，相关147项均通过；严格未知字段/枚举、当前组件树block归属、保存字段保留、发布快照和新协议回滚均有断言。

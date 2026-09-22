@@ -1352,8 +1352,7 @@ class ScreenCanvasServiceTest {
                 new com.bank.branch.platform.report.entity.RptScreenPublishLog();
         logEntry.setId(201L);
         logEntry.setScreenId(7L);
-        String codeStyle = "{\"presentation\":{\"type\":\"CODE\","
-                + "\"template\":\"branch-overview-v1\"}}";
+        String codeStyle = displayStyleJson(1201L);
         String bind = "{\"dsId\":12,\"period\":\"LATEST\","
                 + "\"fields\":{\"value\":\"balance\"},\"units\":{\"value\":\"YUAN\"}}";
         logEntry.setSnapshotJson("{\"schemaVersion\":1,\"canvasStyle\":" + codeStyle
@@ -1377,7 +1376,7 @@ class ScreenCanvasServiceTest {
 
         verify(canvasMapper).applyPublishedCas(
                 eq(7L), eq(5), eq(logEntry.getSnapshotJson()),
-                org.mockito.ArgumentMatchers.contains("\"presentation\""),
+                org.mockito.ArgumentMatchers.contains("\"displaySchemaVersion\":1"),
                 org.mockito.ArgumentMatchers.contains("\"bindingKey\":\"deposit\""),
                 eq(1), anyString());
     }
@@ -1442,5 +1441,101 @@ class ScreenCanvasServiceTest {
         assertThat(list.get(0).getId()).isEqualTo(201L);
         assertThat(list.get(0).getScreenId()).isEqualTo(7L);
         assertThat(list.get(0).getPublishedBy()).isEqualTo("E001");
+    }
+
+    @Test
+    void save_displayContractPersistsWithCanvasStyleAndDraftInSameCas() {
+        RptScreen s = screen(7L, 0);
+        s.setBizLine("COMMON");
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        RptScreenBlock existing = publishBlock(1201L,
+                "{\"dsId\":12,\"period\":\"LATEST\",\"fields\":{\"value\":\"balance\"},"
+                        + "\"units\":{\"value\":\"YUAN\"}}");
+        when(blockMapper.selectById(1201L)).thenReturn(existing);
+        when(blockMapper.selectList(any())).thenReturn(List.of(existing));
+        when(dsMapper.selectById(12L)).thenReturn(codeDatasource(12L));
+        when(canvasMapper.bumpVersion(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
+
+        CanvasComponentDTO chart = boundChart("METRIC_CARD", 12L);
+        chart.setId("w-deposit");
+        chart.setBlockId(1201L);
+        chart.setPropValue(Map.of("bindingKey", "deposit"));
+        chart.setBindJson(existing.getBindJson());
+        ScreenCanvasSaveReqDTO request = req(7L, 0, chart);
+        request.setCanvasStyle(displayStyle(1201L));
+
+        var response = service.saveCanvas(request);
+
+        ArgumentCaptor<String> style = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> draft = ArgumentCaptor.forClass(String.class);
+        verify(canvasMapper).bumpVersion(eq(7L), eq(0), style.capture(), draft.capture(), anyString());
+        assertThat(style.getValue()).contains("\"displaySchemaVersion\":1", "\"componentId\":\"deposit-card\"",
+                "\"blockId\":1201", "\"subtitle\":\"\"");
+        assertThat(draft.getValue()).contains("\"blockId\":1201", "\"bindingKey\":\"deposit\"");
+        assertThat(response.getCanvasVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void publish_displayContractCopiesStyleIntoImmutablePackage() {
+        RptScreen s = screen(7L, 1);
+        s.setBizLine("COMMON");
+        s.setCanvasStyleJson(displayStyleJson(1201L));
+        String bind = "{\"dsId\":12,\"period\":\"LATEST\",\"fields\":{\"value\":\"balance\"},"
+                + "\"units\":{\"value\":\"YUAN\"}}";
+        s.setCanvasDraftJson("{\"schemaVersion\":2,\"components\":[{\"component\":\"ChartWidget\","
+                + "\"id\":\"w-deposit\",\"blockId\":1201,\"propValue\":{\"bindingKey\":\"deposit\"},"
+                + "\"bindJson\":" + quoteJson(bind) + "}]}");
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        RptScreenBlock block = publishBlock(1201L, bind);
+        block.setComponentType("METRIC_CARD");
+        when(blockMapper.selectList(any())).thenReturn(List.of(block));
+        when(dsMapper.selectById(12L)).thenReturn(codeDatasource(12L));
+        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString()))
+                .thenReturn(1);
+        when(publishLogMapper.selectList(any())).thenReturn(List.of());
+        var request = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
+        request.setScreenId(7L);
+        request.setExpectedVersion(1);
+        request.setReason("发布展示子协议");
+
+        service.publishCanvas(request);
+
+        ArgumentCaptor<String> published = ArgumentCaptor.forClass(String.class);
+        verify(canvasMapper).applyPublishedCas(eq(7L), eq(1), published.capture(),
+                eq(s.getCanvasStyleJson()), eq(s.getCanvasDraftJson()), eq(1), anyString());
+        assertThat(published.getValue()).contains("\"displaySchemaVersion\":1",
+                "\"componentId\":\"deposit-card\"", "\"bindSnapshots\":{\"1201\"");
+        CodeScreenPresentationValidator.validatePublishedPackage(published.getValue());
+    }
+
+    private CanvasStyleDTO displayStyle(long blockId) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().readValue(displayStyleJson(blockId), CanvasStyleDTO.class);
+        } catch (Exception ex) {
+            throw new AssertionError(ex);
+        }
+    }
+
+    private String displayStyleJson(long blockId) {
+        return "{\"schemaVersion\":2,\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"branch-overview-v1\",\"displaySchemaVersion\":1,\"display\":{"
+                + "\"components\":[{\"componentId\":\"deposit-card\",\"componentType\":\"METRIC_CARD\","
+                + "\"layoutRegion\":\"LEFT\",\"order\":0,\"visible\":true,"
+                + "\"text\":{\"titleMode\":\"AUTO\",\"title\":\"\",\"subtitle\":\"\",\"description\":\"\"},"
+                + "\"format\":{\"displayUnit\":\"YUAN\",\"decimals\":0,\"thousandsSeparator\":false,"
+                + "\"negativeStyle\":\"SIGNED\",\"emptyText\":\"—\"},"
+                + "\"content\":{\"mainField\":\"value\",\"subFields\":[],\"series\":[],\"columns\":[],"
+                + "\"tabs\":[],\"rankingMetrics\":[]},\"interaction\":{\"action\":\"NONE\"},"
+                + "\"dataRefs\":[{\"blockId\":" + blockId + ",\"role\":\"PRIMARY\","
+                + "\"metricCode\":\"M1\",\"metricName\":\"存款余额\",\"unit\":\"YUAN\","
+                + "\"dimension\":\"ORG\",\"formula\":\"DIRECT\"}]}]}}}";
+    }
+
+    private String quoteJson(String value) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(value);
+        } catch (Exception ex) {
+            throw new AssertionError(ex);
+        }
     }
 }

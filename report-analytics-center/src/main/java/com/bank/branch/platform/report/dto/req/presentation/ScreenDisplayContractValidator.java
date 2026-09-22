@@ -20,7 +20,10 @@ public final class ScreenDisplayContractValidator {
     private ScreenDisplayContractValidator() {
     }
 
-    /** 缺省配置表示旧展示路径，返回空问题清单。 */
+    /**
+     * 兼容 S02 聚合类型的校验入口。实际 JSON 使用
+     * {@link ScreenDisplayPayloadDTO}，版本不再嵌套在 display 节点。
+     */
     public static List<String> validate(ScreenDisplayConfigDTO config) {
         List<String> issues = new ArrayList<>();
         if (config == null) {
@@ -29,13 +32,27 @@ public final class ScreenDisplayContractValidator {
         if (config.getDisplaySchemaVersion() == null || config.getDisplaySchemaVersion() != VERSION) {
             issues.add("展示协议版本不受支持");
         }
-        if (config.getComponents() == null || config.getComponents().isEmpty()) {
+        issues.addAll(validatePayload(config.getComponents()));
+        return issues;
+    }
+
+    /** 缺省配置表示旧展示路径，返回空问题清单。 */
+    public static List<String> validateDisplayPayload(ScreenDisplayPayloadDTO payload) {
+        if (payload == null) {
+            return new ArrayList<>();
+        }
+        return validatePayload(payload.getComponents());
+    }
+
+    private static List<String> validatePayload(List<ScreenDisplayComponentDTO> components) {
+        List<String> issues = new ArrayList<>();
+        if (components == null || components.isEmpty()) {
             issues.add("components至少配置一项");
             return issues;
         }
         Set<String> componentIds = new HashSet<>();
-        for (int index = 0; index < config.getComponents().size(); index++) {
-            ScreenDisplayComponentDTO component = config.getComponents().get(index);
+        for (int index = 0; index < components.size(); index++) {
+            ScreenDisplayComponentDTO component = components.get(index);
             String prefix = "components[" + index + "] ";
             if (component == null) {
                 issues.add(prefix + "组件不能为空");
