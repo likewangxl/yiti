@@ -4,7 +4,11 @@
       v-for="item in components"
       :key="item.componentId"
       class="presentation-metric-widget"
-      :class="[`presentation-metric-widget--${String(item.componentType || '').toLowerCase()}`, `presentation-metric-widget--${String(item.layoutRegion || '').toLowerCase()}`]"
+      :class="[
+        `presentation-metric-widget--${String(item.componentType || '').toLowerCase()}`,
+        `presentation-metric-widget--${String(item.layoutRegion || '').toLowerCase()}`,
+        toneClass(item)
+      ]"
       :data-component-id="item.componentId"
       :data-component-type="item.componentType"
       :data-layout-region="item.layoutRegion"
@@ -48,6 +52,12 @@ defineProps({
 function statusText(state) {
   return ({ NO_SOURCE: '待接入', NO_VALUE: '暂无有效值' }[state] || '暂不可用');
 }
+
+function toneClass(item) {
+  const order = Number(item?.order);
+  if (!Number.isInteger(order) || order < 0) return '';
+  return `presentation-metric-widget--${['cyan', 'violet', 'blue', 'green'][order % 4]}`;
+}
 </script>
 
 <style scoped>
@@ -72,6 +82,10 @@ function statusText(state) {
 }
 .presentation-metric-widget::before { width: 3px; height: 32px; position: absolute; top: 50%; left: 0; border-radius: 0 2px 2px 0; background: var(--metric-accent); box-shadow: 0 0 12px var(--metric-accent); content: ''; transform: translateY(-50%); }
 .presentation-metric-widget--completion { --metric-accent: var(--panorama-violet, #a979ff); --metric-border: rgba(169, 121, 255, .48); background: rgba(19, 24, 74, .88); }
+.presentation-metric-widget--cyan { --metric-accent: var(--panorama-cyan, #4de8ef); --metric-border: rgba(77, 232, 239, .42); }
+.presentation-metric-widget--violet { --metric-accent: var(--panorama-violet, #a979ff); --metric-border: rgba(169, 121, 255, .48); background: rgba(19, 24, 74, .88); }
+.presentation-metric-widget--blue { --metric-accent: var(--panorama-blue, #5896ff); --metric-border: rgba(88, 150, 255, .48); background: rgba(8, 27, 72, .88); }
+.presentation-metric-widget--green { --metric-accent: #58e4b5; --metric-border: rgba(88, 228, 181, .44); background: rgba(7, 39, 61, .88); }
 .presentation-metric-widget__header { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; min-width: 0; }
 .presentation-metric-widget__header > div { min-width: 0; }
 .presentation-metric-widget__header h2 { margin: 0; overflow: hidden; color: var(--panorama-text, #eaf2ff); font-size: 13px; font-weight: 600; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }

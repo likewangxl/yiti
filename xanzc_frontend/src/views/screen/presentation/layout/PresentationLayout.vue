@@ -324,7 +324,7 @@ function onMapContext(payload) {
 .presentation-layout__main {
   display: grid;
   grid-template-columns: minmax(0, .95fr) minmax(0, 1.4fr) minmax(0, .95fr);
-  align-items: stretch;
+  align-items: start;
   gap: 12px;
   min-height: 620px;
 }
@@ -337,14 +337,26 @@ function onMapContext(payload) {
   gap: 10px;
 }
 
-.presentation-layout__column--left > .presentation-layout__component,
-.presentation-layout__column--right > .presentation-layout__component {
-  flex: 0 1 auto;
+.presentation-layout__column--left,
+.presentation-layout__column--right {
+  align-self: start;
+  height: fit-content;
 }
 
-.presentation-layout__column--left > .presentation-layout__component:first-child,
+.presentation-layout__column--left > .presentation-layout__component,
+.presentation-layout__column--right > .presentation-layout__component {
+  flex: 0 0 auto;
+}
+
+.presentation-layout__column--left > .presentation-layout__component:first-child {
+  min-height: 220px;
+  max-height: min(680px, calc(100vh - 240px));
+  overflow: auto;
+}
+
 .presentation-layout__column--right > .presentation-layout__component:first-child {
-  flex: 1 1 0;
+  min-height: 420px;
+  height: clamp(420px, calc(100vh - 292px), 820px);
 }
 
 .presentation-layout__column--center > .presentation-layout__component {
@@ -412,6 +424,7 @@ function onMapContext(payload) {
   .presentation-layout__column--center { grid-column: 1 / -1; grid-row: 1; }
   .presentation-layout__column--left { grid-column: 1; grid-row: 2; }
   .presentation-layout__column--right { grid-column: 2; grid-row: 2; }
+  .presentation-layout__column--right > .presentation-layout__component:first-child { height: clamp(380px, calc(100vh - 240px), 680px); min-height: 380px; }
   .presentation-layout__column--center > .presentation-layout__component--map-primary { min-height: 360px; }
   .presentation-layout__footer--bottom { grid-template-columns: 1fr; }
 }
@@ -424,6 +437,7 @@ function onMapContext(payload) {
   .presentation-layout__column--center { order: 1; }
   .presentation-layout__column--left { order: 2; }
   .presentation-layout__column--right { order: 3; }
+  .presentation-layout__column--right > .presentation-layout__component:first-child { height: auto; max-height: 600px; min-height: 360px; }
   .presentation-layout__column--center > .presentation-layout__component--map-primary { min-height: 300px; }
   .presentation-layout__column--center > .presentation-layout__component--trend { min-height: 180px; }
   .presentation-layout__footer--bottom > .presentation-layout__component { min-height: 210px; }

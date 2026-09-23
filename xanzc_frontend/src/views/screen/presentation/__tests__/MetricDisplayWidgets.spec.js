@@ -18,4 +18,18 @@ describe('MetricDisplayWidgets', () => {
     expect(wrapper.find('[data-component-id="completion-a"] .presentation-metric-widget__progress i').element.style.width).toBe('100%');
     expect(wrapper.find('[data-component-id="missing-a"] [data-testid="presentation-metric-status"]').text()).toContain('待接入');
   });
+
+  it('按配置顺序为同类指标卡提供青紫蓝绿 accent 层级', () => {
+    const wrapper = mount(MetricDisplayWidgets, { props: { components: [
+      { componentId: 'metric-0', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 0, title: '指标一', text: '1', state: 'READY' },
+      { componentId: 'metric-1', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 1, title: '指标二', text: '2', state: 'READY' },
+      { componentId: 'metric-2', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 2, title: '指标三', text: '3', state: 'READY' },
+      { componentId: 'metric-3', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 3, title: '指标四', text: '4', state: 'READY' }
+    ] } });
+
+    expect(wrapper.find('[data-component-id="metric-0"]').classes()).toContain('presentation-metric-widget--cyan');
+    expect(wrapper.find('[data-component-id="metric-1"]').classes()).toContain('presentation-metric-widget--violet');
+    expect(wrapper.find('[data-component-id="metric-2"]').classes()).toContain('presentation-metric-widget--blue');
+    expect(wrapper.find('[data-component-id="metric-3"]').classes()).toContain('presentation-metric-widget--green');
+  });
 });
