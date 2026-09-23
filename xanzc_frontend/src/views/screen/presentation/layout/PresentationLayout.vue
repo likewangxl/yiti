@@ -5,51 +5,105 @@
     data-schema-version="1"
     aria-label="配置化大屏"
   >
-    <div
-      v-for="component in components"
-      :key="component.componentId"
-      class="presentation-layout__component"
-      data-testid="presentation-layout-component"
-      :data-component-id="component.componentId"
-      :data-component-type="component.componentType"
-      :data-layout-region="component.layoutRegion"
-      :data-order="component.order"
+    <section v-if="headerTiers.length" class="presentation-layout__header" data-layout-region="HEADER" aria-label="核心指标">
+      <div
+        v-for="tier in headerTiers"
+        :key="tier.key"
+        class="presentation-layout__metric-tier"
+        :class="`presentation-layout__metric-tier--${tier.key.toLowerCase()}`"
+        :data-layout-tier="tier.key"
+      >
+        <div
+          v-for="component in tier.components"
+          :key="component.componentId"
+          class="presentation-layout__component"
+          :class="`presentation-layout__component--${String(component.componentType || '').toLowerCase()}`"
+          data-testid="presentation-layout-component"
+          :data-component-id="component.componentId"
+          :data-component-type="component.componentType"
+          :data-layout-region="component.layoutRegion"
+          :data-order="component.order"
+        >
+          <component
+            :is="widgetComponent(component)"
+            v-bind="widgetProps(component)"
+            @region-select="onRegionSelect"
+            @branch-select="onBranchSelect"
+            @map-context="onMapContext"
+            @metric-change="onMetricChange"
+            @business-line-select="onBusinessLineSelect"
+          />
+        </div>
+      </div>
+    </section>
+
+    <section v-if="mainComponents" class="presentation-layout__main" data-testid="presentation-layout-main" aria-label="经营分析主体">
+      <section
+        v-for="column in mainColumns"
+        :key="column.key"
+        class="presentation-layout__column"
+        :class="`presentation-layout__column--${column.key.toLowerCase()}`"
+        :data-layout-column="column.key"
+        :aria-label="column.label"
+      >
+        <div
+          v-for="component in column.components"
+          :key="component.componentId"
+          class="presentation-layout__component"
+          :class="[
+            `presentation-layout__component--${String(component.componentType || '').toLowerCase()}`,
+            component.componentType === 'MAP' ? 'presentation-layout__component--map-primary' : ''
+          ]"
+          data-testid="presentation-layout-component"
+          :data-component-id="component.componentId"
+          :data-component-type="component.componentType"
+          :data-layout-region="component.layoutRegion"
+          :data-order="component.order"
+        >
+          <component
+            :is="widgetComponent(component)"
+            v-bind="widgetProps(component)"
+            @region-select="onRegionSelect"
+            @branch-select="onBranchSelect"
+            @map-context="onMapContext"
+            @metric-change="onMetricChange"
+            @business-line-select="onBusinessLineSelect"
+          />
+        </div>
+      </section>
+    </section>
+
+    <section
+      v-for="region in footerRegions"
+      :key="region.key"
+      class="presentation-layout__footer"
+      :class="`presentation-layout__footer--${region.key.toLowerCase()}`"
+      :data-layout-region="region.key"
+      :aria-label="region.label"
     >
-      <MetricDisplayWidgets
-        v-if="['METRIC_CARD', 'COMPLETION'].includes(component.componentType)"
-        :components="metricComponents(component)"
-      />
-      <SeriesTableWidgets
-        v-else-if="['TREND', 'DETAIL_TABLE'].includes(component.componentType)"
-        :components="seriesComponents(component)"
-      />
-      <CompositionTabsWidget
-        v-else-if="component.componentType === 'COMPOSITION_TABS'"
-        :model="compositionComponentModel(component)"
-        @business-line-select="onBusinessLineSelect"
-      />
-      <InstitutionRankingWidget
-        v-else-if="component.componentType === 'RANKING'"
-        :model="rankingComponentModel(component)"
-        :title="componentTitle(component)"
-        @metric-change="onMetricChange"
-      />
-      <PresentationMapWidget
-        v-else-if="component.componentType === 'MAP'"
-        :presentation="mapPresentation(component)"
-        :model="model"
-        :geo-json="geoJson"
-        :mode="mode"
-        :metric-key="metricKey"
-        :selected-region-code="selectedRegionCode"
-        :selected-org-code="selectedOrgCode"
-        :data-date="dataDate"
-        :demo="demo"
-        @region-select="onRegionSelect"
-        @branch-select="onBranchSelect"
-        @map-context="onMapContext"
-      />
-    </div>
+      <div
+        v-for="component in region.components"
+        :key="component.componentId"
+        class="presentation-layout__component"
+        :class="`presentation-layout__component--${String(component.componentType || '').toLowerCase()}`"
+        data-testid="presentation-layout-component"
+        :data-component-id="component.componentId"
+        :data-component-type="component.componentType"
+        :data-layout-region="component.layoutRegion"
+        :data-order="component.order"
+      >
+        <component
+          :is="widgetComponent(component)"
+          v-bind="widgetProps(component)"
+          @region-select="onRegionSelect"
+          @branch-select="onBranchSelect"
+          @map-context="onMapContext"
+          @metric-change="onMetricChange"
+          @business-line-select="onBusinessLineSelect"
+        />
+      </div>
+    </section>
+
     <p v-if="!components.length" class="presentation-layout__empty" data-testid="presentation-layout-empty" role="status">
       暂无已配置的展示组件
     </p>
@@ -97,6 +151,34 @@ const emit = defineEmits([
 
 const resolvedPresentation = computed(() => presentationOf(props.presentation));
 const components = computed(() => getDisplayComponents(props.presentation));
+
+const headerComponents = computed(() => components.value.filter(component => component.layoutRegion === 'HEADER'));
+const headerTiers = computed(() => [
+  // HEADER 的前四项是首屏重点卡，后续项自动落到次级卡行；不依赖组件类型，
+  // 因为同一版本的保存配置允许用 METRIC_CARD 表达两种视觉层级。
+  { key: 'PRIMARY', components: headerComponents.value.slice(0, 4) },
+  { key: 'SECONDARY', components: headerComponents.value.slice(4) }
+].filter(tier => tier.components.length));
+
+function centerOrder(component) {
+  return ({ MAP: 0, TREND: 1, COMPOSITION_TABS: 2, RANKING: 3, DETAIL_TABLE: 4 }[component.componentType] ?? 9);
+}
+
+function sortCenterComponents(items) {
+  return [...items].sort((left, right) => centerOrder(left) - centerOrder(right)
+    || (Number.isInteger(left.order) ? left.order : 0) - (Number.isInteger(right.order) ? right.order : 0));
+}
+
+const mainColumns = computed(() => [
+  { key: 'LEFT', label: '左侧业务结构', components: components.value.filter(component => component.layoutRegion === 'LEFT') },
+  { key: 'CENTER', label: '中央地图与趋势', components: sortCenterComponents(components.value.filter(component => component.layoutRegion === 'CENTER')) },
+  { key: 'RIGHT', label: '右侧机构排名', components: components.value.filter(component => component.layoutRegion === 'RIGHT') }
+]);
+const mainComponents = computed(() => mainColumns.value.some(column => column.components.length));
+const footerRegions = computed(() => [
+  { key: 'BOTTOM', label: '明细数据', components: components.value.filter(component => component.layoutRegion === 'BOTTOM') },
+  { key: 'OVERLAY', label: '叠加内容', components: components.value.filter(component => component.layoutRegion === 'OVERLAY') }
+].filter(region => region.components.length));
 
 const metricsModel = computed(() => buildDisplayMetricsModel(resolvedPresentation.value, props.model));
 const seriesModel = computed(() => buildDisplaySeriesTableModel(resolvedPresentation.value, props.model));
@@ -147,6 +229,28 @@ function mapPresentation(component) {
   return presentationForComponent(resolvedPresentation.value, component);
 }
 
+function widgetComponent(component) {
+  if (['METRIC_CARD', 'COMPLETION'].includes(component.componentType)) return MetricDisplayWidgets;
+  if (['TREND', 'DETAIL_TABLE'].includes(component.componentType)) return SeriesTableWidgets;
+  if (component.componentType === 'COMPOSITION_TABS') return CompositionTabsWidget;
+  if (component.componentType === 'RANKING') return InstitutionRankingWidget;
+  if (component.componentType === 'MAP') return PresentationMapWidget;
+  return null;
+}
+
+function widgetProps(component) {
+  if (['METRIC_CARD', 'COMPLETION'].includes(component.componentType)) return { components: metricComponents(component) };
+  if (['TREND', 'DETAIL_TABLE'].includes(component.componentType)) return { components: seriesComponents(component) };
+  if (component.componentType === 'COMPOSITION_TABS') return { model: compositionComponentModel(component) };
+  if (component.componentType === 'RANKING') return { model: rankingComponentModel(component), title: componentTitle(component) };
+  if (component.componentType === 'MAP') return {
+    presentation: mapPresentation(component), model: props.model, geoJson: props.geoJson, mode: props.mode,
+    metricKey: props.metricKey, selectedRegionCode: props.selectedRegionCode, selectedOrgCode: props.selectedOrgCode,
+    dataDate: props.dataDate, demo: props.demo
+  };
+  return {};
+}
+
 function onMetricChange(payload) {
   emit('metric-change', payload);
 }
@@ -169,25 +273,159 @@ function onMapContext(payload) {
 </script>
 
 <style scoped>
-.presentation-layout { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; margin: 12px 0; min-width: 0; }
-.presentation-layout__component { grid-column: span 12; min-width: 0; }
-.presentation-layout__component[data-layout-region="HEADER"] { grid-column: span 3; }
-.presentation-layout__component[data-layout-region="LEFT"],
-.presentation-layout__component[data-layout-region="CENTER"],
-.presentation-layout__component[data-layout-region="RIGHT"] { grid-column: span 4; }
-.presentation-layout__component[data-layout-region="BOTTOM"],
-.presentation-layout__component[data-layout-region="OVERLAY"] { grid-column: span 12; }
-.presentation-layout__empty { grid-column: 1 / -1; margin: 0; padding: 28px; border: 1px dashed rgba(106,157,220,.35); border-radius: 8px; color: #9fc2df; text-align: center; }
-@media (max-width: 900px) {
-  .presentation-layout__component[data-layout-region="HEADER"],
-  .presentation-layout__component[data-layout-region="LEFT"],
-  .presentation-layout__component[data-layout-region="CENTER"],
-  .presentation-layout__component[data-layout-region="RIGHT"] { grid-column: span 6; }
+.presentation-layout {
+  --presentation-bg: #07183b;
+  --presentation-bg-deep: #020916;
+  --presentation-panel: rgba(8, 24, 61, .86);
+  --presentation-border: rgba(119, 163, 255, .3);
+  --presentation-border-soft: rgba(119, 163, 255, .16);
+  --presentation-text: #eaf2ff;
+  --presentation-text-dim: #8fa9db;
+  --presentation-cyan: #4de8ef;
+  --presentation-violet: #a979ff;
+  --presentation-blue: #5896ff;
+  display: flex;
+  min-width: 0;
+  margin: 10px clamp(16px, 2vw, 30px) 18px;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--panorama-text, var(--presentation-text));
+  font-variant-numeric: tabular-nums;
 }
+
+.presentation-layout__header,
+.presentation-layout__main,
+.presentation-layout__footer {
+  min-width: 0;
+}
+
+.presentation-layout__header {
+  display: grid;
+  gap: 10px;
+}
+
+.presentation-layout__metric-tier {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.presentation-layout__metric-tier--secondary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.presentation-layout__metric-tier--secondary :deep(.presentation-metric-widget) {
+  min-height: 72px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.presentation-layout__main {
+  display: grid;
+  grid-template-columns: minmax(0, .95fr) minmax(0, 1.4fr) minmax(0, .95fr);
+  align-items: stretch;
+  gap: 12px;
+  min-height: 620px;
+}
+
+.presentation-layout__column {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.presentation-layout__column--left > .presentation-layout__component,
+.presentation-layout__column--right > .presentation-layout__component {
+  flex: 0 1 auto;
+}
+
+.presentation-layout__column--left > .presentation-layout__component:first-child,
+.presentation-layout__column--right > .presentation-layout__component:first-child {
+  flex: 1 1 0;
+}
+
+.presentation-layout__column--center > .presentation-layout__component {
+  flex: 0 1 auto;
+}
+
+.presentation-layout__column--center > .presentation-layout__component--map-primary {
+  min-height: 390px;
+  flex: 1 1 450px;
+}
+
+.presentation-layout__column--center > .presentation-layout__component--trend {
+  min-height: 205px;
+  flex: 0 1 270px;
+}
+
+.presentation-layout__component {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.presentation-layout__component > * {
+  width: 100%;
+  min-width: 0;
+}
+
+.presentation-layout__footer {
+  display: grid;
+  gap: 10px;
+}
+
+.presentation-layout__footer--bottom {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-top: 2px;
+}
+
+.presentation-layout__footer--bottom > .presentation-layout__component {
+  min-height: 230px;
+}
+
+.presentation-layout__footer--overlay {
+  position: relative;
+  z-index: 2;
+}
+
+.presentation-layout__empty {
+  margin: 0;
+  padding: 28px;
+  border: 1px dashed var(--presentation-border);
+  border-radius: 8px;
+  color: var(--presentation-text-dim);
+  text-align: center;
+}
+
+@media (max-width: 1180px) {
+  .presentation-layout__main { grid-template-columns: minmax(0, .9fr) minmax(0, 1.25fr) minmax(0, .9fr); gap: 9px; }
+  .presentation-layout__metric-tier { gap: 8px; }
+  .presentation-layout__column { gap: 8px; }
+  .presentation-layout__column--center > .presentation-layout__component--map-primary { min-height: 350px; }
+}
+
+@media (max-width: 900px) {
+  .presentation-layout__main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .presentation-layout__column--center { grid-column: 1 / -1; grid-row: 1; }
+  .presentation-layout__column--left { grid-column: 1; grid-row: 2; }
+  .presentation-layout__column--right { grid-column: 2; grid-row: 2; }
+  .presentation-layout__column--center > .presentation-layout__component--map-primary { min-height: 360px; }
+  .presentation-layout__footer--bottom { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 620px) {
-  .presentation-layout__component[data-layout-region="HEADER"],
-  .presentation-layout__component[data-layout-region="LEFT"],
-  .presentation-layout__component[data-layout-region="CENTER"],
-  .presentation-layout__component[data-layout-region="RIGHT"] { grid-column: 1 / -1; }
+  .presentation-layout { margin-right: 12px; margin-left: 12px; }
+  .presentation-layout__metric-tier,
+  .presentation-layout__metric-tier--secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .presentation-layout__main { display: flex; min-height: 0; flex-direction: column; }
+  .presentation-layout__column--center { order: 1; }
+  .presentation-layout__column--left { order: 2; }
+  .presentation-layout__column--right { order: 3; }
+  .presentation-layout__column--center > .presentation-layout__component--map-primary { min-height: 300px; }
+  .presentation-layout__column--center > .presentation-layout__component--trend { min-height: 180px; }
+  .presentation-layout__footer--bottom > .presentation-layout__component { min-height: 210px; }
 }
 </style>

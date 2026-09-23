@@ -70,6 +70,47 @@ const mounted = [];
 afterEach(() => mounted.splice(0).forEach(wrapper => wrapper.unmount()));
 
 describe('PresentationLayout', () => {
+  it('将配置组件重排为重点卡/次级卡、左中右三栏，并让地图先于趋势且明细下置', () => {
+    const components = [
+      ...Array.from({ length: 4 }, (_, index) => ({
+        componentId: `metric-${index + 1}`, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: index,
+        visible: true, text: { titleMode: 'CUSTOM', title: `重点指标${index + 1}` },
+        format: { displayUnit: 'HUNDRED_MILLION' }, content: { mainField: 'value' }, dataRefs: [{ blockId: index + 1 }]
+      })),
+      ...Array.from({ length: 4 }, (_, index) => ({
+        componentId: `metric-${index + 5}`, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: index + 4,
+        visible: true, text: { titleMode: 'CUSTOM', title: `次级指标${index + 1}` },
+        format: { displayUnit: 'AUTO' }, content: { mainField: 'value' }, dataRefs: [{ blockId: index + 5 }]
+      })),
+      { componentId: 'composition', componentType: 'COMPOSITION_TABS', layoutRegion: 'LEFT', order: 0, visible: true, text: { titleMode: 'CUSTOM', title: '业务结构' }, content: { tabs: [] }, dataRefs: [] },
+      { componentId: 'trend-before-map', componentType: 'TREND', layoutRegion: 'CENTER', order: 0, visible: true, text: { titleMode: 'CUSTOM', title: '趋势一' }, content: { series: [] }, dataRefs: [] },
+      { componentId: 'map-main', componentType: 'MAP', layoutRegion: 'CENTER', order: 2, visible: true, text: { titleMode: 'CUSTOM', title: '机构地图' }, content: { mainField: 'deposit' }, dataRefs: [] },
+      { componentId: 'trend-after-map', componentType: 'TREND', layoutRegion: 'CENTER', order: 1, visible: true, text: { titleMode: 'CUSTOM', title: '趋势二' }, content: { series: [] }, dataRefs: [] },
+      { componentId: 'ranking', componentType: 'RANKING', layoutRegion: 'RIGHT', order: 0, visible: true, text: { titleMode: 'CUSTOM', title: '全量排名' }, content: { rankingMetrics: [] }, dataRefs: [] },
+      ...Array.from({ length: 3 }, (_, index) => ({
+        componentId: `detail-${index + 1}`, componentType: 'DETAIL_TABLE', layoutRegion: 'BOTTOM', order: index, visible: true,
+        text: { titleMode: 'CUSTOM', title: `明细${index + 1}` }, content: { columns: [] }, dataRefs: []
+      }))
+    ];
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        presentation: { displaySchemaVersion: 1, display: { components } },
+        model: { institutions: [], rankings: [], blockResults: {} }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+
+    expect(wrapper.find('[data-layout-tier="PRIMARY"]').findAll('[data-component-type="METRIC_CARD"]')).toHaveLength(4);
+    expect(wrapper.find('[data-layout-tier="SECONDARY"]').findAll('[data-component-type="METRIC_CARD"]')).toHaveLength(4);
+    expect(wrapper.findAll('[data-layout-column]')).toHaveLength(3);
+    expect(wrapper.find('[data-layout-column="LEFT"]').find('[data-component-id="composition"]').exists()).toBe(true);
+    expect(wrapper.find('[data-layout-column="RIGHT"]').find('[data-component-id="ranking"]').exists()).toBe(true);
+    expect(wrapper.find('[data-layout-column="CENTER"]').findAll('[data-testid="presentation-layout-component"]')
+      .map(node => node.attributes('data-component-id'))).toEqual(['map-main', 'trend-before-map', 'trend-after-map']);
+    expect(wrapper.find('[data-layout-region="BOTTOM"]').findAll('[data-component-type="DETAIL_TABLE"]')).toHaveLength(3);
+  });
+
   it('只按协议组件的 region/order/visible 渲染七类组件，且不带旧固定模块', () => {
     const wrapper = mount(PresentationLayout, {
       props: {

@@ -104,20 +104,30 @@ function selectInstitution(institution) {
 </script>
 
 <style scoped>
-.presentation-map-widget { min-width: 0; color: #eaf2ff; background: rgba(7, 24, 62, .88); border: 1px solid rgba(106, 157, 220, .35); border-radius: 8px; }
-.presentation-map-widget__header { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid rgba(106, 157, 220, .2); }
-.presentation-map-widget__kicker, .presentation-map-widget__header p, .presentation-map-widget__meta { color: #9fc2df; font-size: 11px; }
-.presentation-map-widget h2 { margin: 3px 0 0; font-size: 15px; }
-.presentation-map-widget__header p { margin: 4px 0 0; }
+.presentation-map-widget { display: flex; min-width: 0; min-height: 390px; height: 100%; flex-direction: column; color: var(--panorama-text, #eaf2ff); background: var(--panorama-panel-deep, rgba(4, 14, 39, .9)); border: 1px solid var(--panorama-border-strong, rgba(96, 214, 255, .54)); border-radius: 8px; box-shadow: inset 0 1px 0 rgba(201, 231, 255, .06), 0 10px 28px rgba(0, 0, 0, .15); }
+.presentation-map-widget__header { display: flex; min-height: 47px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--panorama-border-soft, rgba(119, 163, 255, .16)); }
+.presentation-map-widget__kicker, .presentation-map-widget__header p, .presentation-map-widget__meta { color: var(--panorama-text-dim, #8fa9db); font-size: 10px; }
+.presentation-map-widget h2 { margin: 3px 0 0; color: var(--panorama-text, #eaf2ff); font-size: 16px; font-weight: 650; }
+.presentation-map-widget h2::before { display: inline-block; width: 3px; height: 16px; margin-right: 8px; border-radius: 1px; background: var(--panorama-cyan, #4de8ef); vertical-align: -2px; content: ''; }
+.presentation-map-widget__header p { margin: 4px 0 0 11px; }
 .presentation-map-widget__meta { display: grid; gap: 4px; text-align: right; }
-.presentation-map-widget__map { min-height: 320px; border: 0; border-radius: 0; }
-.presentation-map-widget__legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 14px; border-top: 1px solid rgba(106, 157, 220, .18); color: #bcd5ff; font-size: 11px; }
+.presentation-map-widget__map { width: 100%; min-height: 0; border: 0; border-radius: 0; flex: 1 1 auto; }
+.presentation-map-widget__legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 34px; padding: 7px 14px; border-top: 1px solid var(--panorama-border-soft, rgba(119, 163, 255, .16)); color: #bcd5ff; font-size: 10px; }
 .presentation-map-widget__legend span { display: inline-flex; align-items: center; gap: 4px; }
 .presentation-map-widget__legend i { width: 10px; height: 10px; border-radius: 50%; }
-.presentation-map-widget__legend small { margin-left: auto; color: #9fc2df; }
-.presentation-map-widget__status, .presentation-map-widget__missing { margin: 8px 14px 12px; color: #f4bd5b; font-size: 11px; }
+.presentation-map-widget__legend small { margin-left: auto; color: var(--panorama-text-dim, #8fa9db); }
+.presentation-map-widget__status, .presentation-map-widget__missing { margin: 8px 14px 12px; color: var(--panorama-amber, #ffc45e); font-size: 10px; }
 .presentation-map-widget__missing { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 .presentation-map-widget__missing strong { width: 100%; }
 .presentation-map-widget__missing button { padding: 4px 7px; border: 1px solid rgba(127, 199, 255, .35); border-radius: 4px; color: #cfe5ff; background: rgba(25, 67, 121, .56); cursor: pointer; font: inherit; }
-.presentation-map-widget__missing button:focus-visible { outline: 2px solid #42e7ee; outline-offset: 2px; }
+.presentation-map-widget__missing button:focus-visible { outline: 2px solid var(--panorama-cyan, #4de8ef); outline-offset: 2px; }
+@media (max-width: 1180px) {
+  .presentation-map-widget { min-height: 350px; }
+}
+@media (max-width: 620px) {
+  .presentation-map-widget { min-height: 300px; }
+  .presentation-map-widget__header { padding-right: 10px; padding-left: 10px; }
+  .presentation-map-widget__header h2 { font-size: 14px; }
+  .presentation-map-widget__legend { padding-right: 10px; padding-left: 10px; }
+}
 </style>

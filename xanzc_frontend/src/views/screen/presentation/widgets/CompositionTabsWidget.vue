@@ -146,26 +146,32 @@ onBeforeUnmount(stopRotation);
 </script>
 
 <style scoped>
-.composition-tabs-widget { min-width: 0; padding: 14px; color: #eaf2ff; background: rgba(16, 40, 75, .84); border: 1px solid rgba(106, 157, 220, .35); border-radius: 8px; outline: none; }
+.composition-tabs-widget { display: flex; min-width: 0; min-height: 220px; height: 100%; padding: 14px; flex-direction: column; color: var(--panorama-text, #eaf2ff); background: var(--panorama-panel, rgba(8, 24, 61, .86)); border: 1px solid var(--panorama-border, rgba(119, 163, 255, .3)); border-radius: 8px; outline: none; box-shadow: inset 0 1px 0 rgba(201, 231, 255, .05), 0 8px 22px rgba(0, 0, 0, .12); }
 .composition-tabs-widget__header,.composition-tabs-widget__tabs,.composition-tabs-widget__row,.composition-tabs-widget__summary { display: flex; align-items: center; }
 .composition-tabs-widget__header { justify-content: space-between; gap: 12px; }
-.composition-tabs-widget__header h2 { margin: 0; font-size: 15px; }
-.composition-tabs-widget__header p { margin: 4px 0 0; color: #9fc2df; font-size: 11px; }
+.composition-tabs-widget__header h2 { margin: 0; color: var(--panorama-text, #eaf2ff); font-size: 16px; font-weight: 650; }
+.composition-tabs-widget__header h2::before { display: inline-block; width: 3px; height: 16px; margin-right: 8px; border-radius: 1px; background: var(--panorama-cyan, #4de8ef); vertical-align: -2px; content: ''; }
+.composition-tabs-widget__header p { margin: 4px 0 0 11px; color: var(--panorama-text-dim, #8fa9db); font-size: 10px; }
 .composition-tabs-widget__header button,.composition-tabs-widget__tabs button,.composition-tabs-widget__row button { border: 1px solid rgba(121, 161, 248, .3); border-radius: 4px; color: #bcd5ff; background: rgba(55, 112, 206, .22); font: inherit; font-size: 11px; cursor: pointer; }
 .composition-tabs-widget__header button { padding: 5px 8px; }
-.composition-tabs-widget__tabs { gap: 6px; margin-top: 12px; }
+.composition-tabs-widget__tabs { flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .composition-tabs-widget__tabs button { padding: 6px 12px; }
-.composition-tabs-widget__tabs button.is-active { color: #071a31; background: #42e7ee; }
-.composition-tabs-widget__panel { margin-top: 12px; }
-.composition-tabs-widget__summary { gap: 8px; color: #9fc2df; font-size: 11px; }
-.composition-tabs-widget__summary strong { color: #f5f9ff; font-size: 24px; }
+.composition-tabs-widget__tabs button.is-active { color: #071a31; background: var(--panorama-cyan, #4de8ef); border-color: var(--panorama-cyan, #4de8ef); }
+.composition-tabs-widget__panel { display: flex; min-height: 0; margin-top: 12px; flex: 1 1 auto; flex-direction: column; }
+.composition-tabs-widget__summary { gap: 8px; color: var(--panorama-text-dim, #8fa9db); font-size: 11px; }
+.composition-tabs-widget__summary strong { color: #f5f9ff; font-size: clamp(22px, 2vw, 30px); }
 .composition-tabs-widget__rows { display: grid; gap: 7px; margin-top: 10px; }
-.composition-tabs-widget__row { justify-content: space-between; gap: 8px; padding: 9px; border: 1px solid rgba(106, 157, 220, .24); border-radius: 5px; }
+.composition-tabs-widget__row { justify-content: space-between; gap: 8px; padding: 10px; border: 1px solid rgba(106, 157, 220, .24); border-radius: 5px; background: rgba(3, 12, 31, .22); }
 .composition-tabs-widget__row > div { display: grid; gap: 3px; min-width: 0; }
 .composition-tabs-widget__row > div span { color: #bcd5ff; font-size: 12px; }
-.composition-tabs-widget__share { color: #42e7ee; font-variant-numeric: tabular-nums; font-size: 13px; }
+.composition-tabs-widget__share { color: var(--panorama-cyan, #4de8ef); font-variant-numeric: tabular-nums; font-size: 13px; }
 .composition-tabs-widget__row button { padding: 4px 7px; white-space: nowrap; }
 .composition-tabs-widget__row--other { border-color: rgba(244, 189, 91, .38); }
 .composition-tabs-widget__row--gap { border-color: rgba(255, 116, 134, .38); }
-.composition-tabs-widget__status,.composition-tabs-widget__empty { margin: 10px 0 0; color: #f4bd5b; font-size: 11px; }
+.composition-tabs-widget__status,.composition-tabs-widget__empty { margin: 10px 0 0; color: var(--panorama-amber, #ffc45e); font-size: 11px; }
+@media (max-width: 620px) {
+  .composition-tabs-widget { min-height: 200px; padding: 12px; }
+  .composition-tabs-widget__header h2 { font-size: 14px; }
+  .composition-tabs-widget__row { padding: 8px; }
+}
 </style>

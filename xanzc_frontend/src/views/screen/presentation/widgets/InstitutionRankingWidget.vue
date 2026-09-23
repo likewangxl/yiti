@@ -189,27 +189,35 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.institution-ranking-widget { min-width: 0; color: #eaf2ff; background: rgba(7, 24, 62, .88); border: 1px solid rgba(106, 157, 220, .35); border-radius: 8px; }
+.institution-ranking-widget { display: flex; min-width: 0; min-height: 0; height: 100%; flex-direction: column; color: var(--panorama-text, #eaf2ff); background: var(--panorama-panel-deep, rgba(4, 14, 39, .9)); border: 1px solid var(--panorama-border, rgba(119, 163, 255, .3)); border-radius: 8px; box-shadow: inset 0 1px 0 rgba(201, 231, 255, .05), 0 8px 22px rgba(0, 0, 0, .12); }
 .institution-ranking-widget__header, .institution-ranking-widget__meta, .institution-ranking-widget__metrics { display: flex; align-items: center; }
-.institution-ranking-widget__header { justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid rgba(106, 157, 220, .2); }
-.institution-ranking-widget__kicker { color: #9fc2df; font-size: 11px; }
-.institution-ranking-widget h2 { margin: 3px 0 0; font-size: 15px; }
-.institution-ranking-widget__meta { flex: 0 0 auto; gap: 8px; color: #9fc2df; font-size: 11px; }
+.institution-ranking-widget__header { justify-content: space-between; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--panorama-border-soft, rgba(119, 163, 255, .16)); }
+.institution-ranking-widget__kicker { color: #72b9ed; font-size: 10px; letter-spacing: .08em; }
+.institution-ranking-widget h2 { margin: 3px 0 0; color: var(--panorama-text, #eaf2ff); font-size: 16px; font-weight: 650; }
+.institution-ranking-widget h2::before { display: inline-block; width: 3px; height: 16px; margin-right: 8px; border-radius: 1px; background: var(--panorama-violet, #a979ff); vertical-align: -2px; content: ''; }
+.institution-ranking-widget__meta { flex: 0 0 auto; gap: 8px; color: var(--panorama-text-dim, #8fa9db); font-size: 10px; }
 .institution-ranking-widget__meta button, .institution-ranking-widget__metrics button { color: #cfe5ff; background: rgba(25, 67, 121, .56); border: 1px solid rgba(127, 199, 255, .35); border-radius: 4px; cursor: pointer; font: inherit; }
 .institution-ranking-widget__meta button { padding: 4px 7px; }
 .institution-ranking-widget__meta button:disabled { cursor: default; opacity: .55; }
 .institution-ranking-widget__metrics { flex-wrap: wrap; gap: 6px; padding: 9px 14px 0; }
 .institution-ranking-widget__metrics button { padding: 4px 8px; font-size: 11px; }
-.institution-ranking-widget__metrics button[aria-selected="true"] { color: #071a31; background: #42e7ee; border-color: #42e7ee; }
-.institution-ranking-widget__meta button:focus-visible, .institution-ranking-widget__metrics button:focus-visible, .institution-ranking-widget__list:focus-visible, .institution-ranking-widget__list tr:focus-visible { outline: 2px solid #42e7ee; outline-offset: 2px; }
-.institution-ranking-widget__incomplete, .institution-ranking-widget__complete { margin: 8px 14px 0; color: #f4bd5b; font-size: 11px; }
+.institution-ranking-widget__metrics button[aria-selected="true"] { color: #071a31; background: var(--panorama-cyan, #4de8ef); border-color: var(--panorama-cyan, #4de8ef); }
+.institution-ranking-widget__meta button:focus-visible, .institution-ranking-widget__metrics button:focus-visible, .institution-ranking-widget__list:focus-visible, .institution-ranking-widget__list tr:focus-visible { outline: 2px solid var(--panorama-cyan, #4de8ef); outline-offset: 2px; }
+.institution-ranking-widget__incomplete, .institution-ranking-widget__complete { margin: 8px 14px 0; color: var(--panorama-amber, #ffc45e); font-size: 10px; line-height: 1.35; }
 .institution-ranking-widget__complete { color: #82dbd7; }
-.institution-ranking-widget__list { max-height: 320px; margin: 8px 0 0; overflow: auto; scrollbar-width: thin; }
-.institution-ranking-widget table { width: 100%; border-collapse: collapse; }
-.institution-ranking-widget th, .institution-ranking-widget td { padding: 8px 14px; border-bottom: 1px solid rgba(106, 157, 220, .16); text-align: left; white-space: nowrap; }
-.institution-ranking-widget th { color: #9fc2df; font-size: 11px; }
-.institution-ranking-widget td { font-size: 12px; }
-.institution-ranking-widget td:first-child { width: 52px; color: #82dbd7; font-variant-numeric: tabular-nums; }
+.institution-ranking-widget__list { min-height: 0; margin: 8px 0 0; flex: 1 1 auto; overflow: auto; scrollbar-width: thin; }
+.institution-ranking-widget table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.institution-ranking-widget th, .institution-ranking-widget td { padding: 8px 12px; overflow: hidden; border-bottom: 1px solid var(--panorama-border-soft, rgba(119, 163, 255, .16)); text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.institution-ranking-widget th { color: var(--panorama-text-dim, #8fa9db); background: #0b2454; font-size: 10px; font-weight: 550; }
+.institution-ranking-widget td { color: #dce9ff; font-size: 12px; }
+.institution-ranking-widget th:first-child, .institution-ranking-widget td:first-child { width: 54px; }
+.institution-ranking-widget th:last-child, .institution-ranking-widget td:last-child { width: 86px; text-align: right; }
+.institution-ranking-widget td:first-child { color: #82dbd7; font-variant-numeric: tabular-nums; }
 .institution-ranking-widget tr[data-state="MISSING"] td { color: #8ca0bd; }
 .institution-ranking-widget__visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (max-width: 620px) {
+  .institution-ranking-widget__header { padding-right: 10px; padding-left: 10px; }
+  .institution-ranking-widget__header h2 { font-size: 14px; }
+  .institution-ranking-widget th, .institution-ranking-widget td { padding-right: 8px; padding-left: 8px; }
+}
 </style>
