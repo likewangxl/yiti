@@ -21,4 +21,6 @@ public class ScreenDisplayContentDTO {
     private List<ScreenDisplayTabDTO> tabs = new ArrayList<>();
     @Valid
     private List<ScreenDisplayRankingMetricDTO> rankingMetrics = new ArrayList<>();
+    @Valid
+    private ScreenDisplayIncomeRatioDTO incomeRatio;
 }

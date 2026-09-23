@@ -60,7 +60,12 @@ const compositionRowFields = Object.freeze([
 const compositionColumnFields = Object.freeze([
   field('corporate', '对公业务', { required: true, unitKinds: compositionValueUnits }),
   field('retail', '零售业务', { required: true, unitKinds: compositionValueUnits }),
-  field('total', '总量/分母', { unitKinds: compositionValueUnits })
+  field('total', '总量/分母', { unitKinds: compositionValueUnits }),
+  field('corporateLoan', '对公贷款', { unitKinds: amountUnits }),
+  field('retailLoan', '零售贷款', { unitKinds: amountUnits }),
+  field('totalLoan', '贷款总量', { unitKinds: amountUnits }),
+  field('intermediaryIncome', '中间收入', { unitKinds: amountUnits }),
+  field('operatingRevenue', '营业收入', { unitKinds: amountUnits })
 ]);
 
 /** 业务构成绑定的两种固定形状；管理页按模式消费，不允许自由扩展字段。 */

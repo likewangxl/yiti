@@ -253,7 +253,11 @@ function defaultContent(componentType) {
   };
   if (componentType === 'COMPOSITION_TABS') return {
     ...empty,
-    tabs: [{ tabKey: 'tab-1', label: '结构', corporateField: 'corporate', retailField: 'retail', totalField: '', unit: 'YUAN' }]
+    tabs: [
+      { tabKey: 'deposit', label: '存款', corporateField: 'corporateDeposit', retailField: 'retailDeposit', totalField: 'depositTotal', unit: 'YUAN' },
+      { tabKey: 'loan', label: '贷款', corporateField: 'corporateLoan', retailField: 'retailLoan', totalField: 'loanTotal', unit: 'YUAN' }
+    ],
+    incomeRatio: { numeratorField: '', denominatorField: '', unit: 'YUAN' }
   };
   if (componentType === 'RANKING') return {
     ...empty,

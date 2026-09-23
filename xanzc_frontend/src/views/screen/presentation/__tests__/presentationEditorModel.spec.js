@@ -121,6 +121,14 @@ describe('经营大屏展示编辑器状态模型', () => {
     expect(serializeEditorSession(session).display.components).toHaveLength(7);
   });
 
+  it('创建业务结构编辑默认值时保留存款、贷款页签和中间收入配置字段', () => {
+    const session = createPresentationEditorSession(legacyPresentation);
+    const next = addComponent(session, 'COMPOSITION_TABS');
+    const component = next.presentation.display.components.find(item => item.componentType === 'COMPOSITION_TABS');
+    expect(component.content.tabs.map(item => item.tabKey)).toEqual(['deposit', 'loan']);
+    expect(component.content.incomeRatio).toEqual({ numeratorField: '', denominatorField: '', unit: 'YUAN' });
+  });
+
   it('选中、复制生成稳定不冲突 ID 并保留内容，删除展示实例不删除共享数据引用', () => {
     let session = sessionFromValidConfig();
     session = selectComponent(session, 'deposit-card');

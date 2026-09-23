@@ -847,7 +847,9 @@ public final class CodeScreenPresentationValidator {
     private static void validateCompositionShape(Set<String> present) {
         boolean hasRowField = present.contains("name") || present.contains("value");
         boolean hasColumnField = present.contains("corporate") || present.contains("retail")
-                || present.contains("total");
+                || present.contains("total") || present.contains("corporateLoan")
+                || present.contains("retailLoan") || present.contains("totalLoan")
+                || present.contains("intermediaryIncome") || present.contains("operatingRevenue");
         if (hasRowField && hasColumnField) {
             throw invalid();
         }
@@ -969,7 +971,8 @@ public final class CodeScreenPresentationValidator {
         result.put("loanRate", Set.of("value", "change", "date"));
         result.put("trend", Set.of("date", "deposit", "loan", "depositIncrease", "customers", "rate"));
         result.put("branchTrend", Set.of("date", "deposit", "loan", "customers", "rate"));
-        result.put("composition", Set.of("name", "value", "corporate", "retail", "total"));
+        result.put("composition", Set.of("name", "value", "corporate", "retail", "total",
+                "corporateLoan", "retailLoan", "totalLoan", "intermediaryIncome", "operatingRevenue"));
         result.put("ranking", Set.of("orgCode", "name", "value", "increase", "average", "change"));
         result.put("attention", Set.of("orgCode", "label", "count"));
         result.put("branches", Set.of("orgCode", "orgName", "cityCode", "cityName", "ownerOperatingOrgCode",
@@ -1275,6 +1278,7 @@ public final class CodeScreenPresentationValidator {
             case "composition" -> switch (field) {
                 case "value", "corporate", "retail", "total" ->
                         Set.of("YUAN", "TEN_THOUSAND", "HUNDRED_MILLION", "PERCENT", "RATIO");
+                case "corporateLoan", "retailLoan", "totalLoan", "intermediaryIncome", "operatingRevenue" -> amount;
                 default -> Set.of();
             };
             case "ranking" -> switch (field) {

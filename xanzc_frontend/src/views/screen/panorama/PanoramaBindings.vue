@@ -354,7 +354,7 @@ const selectedFieldSpecs = computed(() => {
   if (!selectedSpec.value) return [];
   if (selectedSlot.value !== 'composition') return selectedSpec.value.fields || [];
   const semantics = compositionMode.value === 'columns'
-    ? ['corporate', 'retail', 'total'] : ['name', 'value'];
+    ? ['corporate', 'retail', 'total', 'corporateLoan', 'retailLoan', 'totalLoan', 'intermediaryIncome', 'operatingRevenue'] : ['name', 'value'];
   return (selectedSpec.value.fields || []).filter(fieldSpec => semantics.includes(fieldSpec.semantic));
 });
 const selectedDatasource = computed(() => datasources.value.find(item => String(item.id) === String(selectedBinding.value.dsId)) || null);

@@ -176,6 +176,18 @@ describe('经营大屏展示子协议', () => {
     ]));
   });
 
+  it('接受业务结构的中间收入与营业收入明确字段，并拒绝不完整配置', () => {
+    const source = structuredClone(validDisplayConfig.presentation);
+    const composition = source.display.components.find(item => item.componentType === 'COMPOSITION_TABS');
+    composition.content.incomeRatio = { numeratorField: 'intermediaryIncome', denominatorField: 'operatingIncome', unit: 'HUNDRED_MILLION' };
+    expect(validateDisplayConfig(source)).toEqual([]);
+
+    delete composition.content.incomeRatio.denominatorField;
+    expect(validateDisplayConfig(source)).toEqual(expect.arrayContaining([
+      expect.stringContaining('营业收入字段')
+    ]));
+  });
+
   it('拒绝把AUTO当作来源原始单位以及缺少必需配置对象', () => {
     const source = structuredClone(validDisplayConfig.presentation);
     source.display.components[0].dataRefs[0].unit = 'AUTO';

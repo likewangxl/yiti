@@ -3,6 +3,7 @@ package com.bank.branch.platform.report.service.screen;
 import com.bank.branch.platform.report.entity.RptScreenBlock;
 import com.bank.branch.platform.report.dto.req.CanvasStyleDTO;
 import com.bank.branch.platform.report.dto.req.presentation.InstitutionRulesDTO;
+import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayContentDTO;
 import com.bank.branch.platform.report.entity.RptScreenDatasource;
 import com.bank.branch.platform.report.enums.RptErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,7 +57,12 @@ class CodeScreenPresentationValidatorTest {
         datasource.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","
                 + "\"metrics\":[{\"metricCode\":\"CORP\",\"metricName\":\"对公余额\",\"slot\":1},"
                 + "{\"metricCode\":\"RETAIL\",\"metricName\":\"零售余额\",\"slot\":2},"
-                + "{\"metricCode\":\"TOTAL\",\"metricName\":\"总余额\",\"slot\":3}],"
+                + "{\"metricCode\":\"TOTAL\",\"metricName\":\"总余额\",\"slot\":3},"
+                + "{\"metricCode\":\"CORP_LOAN\",\"metricName\":\"对公贷款\",\"slot\":4},"
+                + "{\"metricCode\":\"RETAIL_LOAN\",\"metricName\":\"零售贷款\",\"slot\":5},"
+                + "{\"metricCode\":\"TOTAL_LOAN\",\"metricName\":\"贷款总额\",\"slot\":6},"
+                + "{\"metricCode\":\"INTERMEDIARY\",\"metricName\":\"中间收入\",\"slot\":7},"
+                + "{\"metricCode\":\"OPERATING\",\"metricName\":\"营业收入\",\"slot\":8}],"
                 + "\"aggregation\":{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\"}}");
         return datasource;
     }
@@ -644,6 +650,13 @@ class CodeScreenPresentationValidatorTest {
                  "sourceAvailability":{"deposit":{"status":"AVAILABLE","message":"测试数据已就绪",
                  "dataDate":"2026-09-10","fields":{"value":{"status":"AVAILABLE","dataDate":"2026-09-10"}}}}}
                 """);
+        CodeScreenPresentationValidator.validateCanvasStyle("""
+                {"presentation":{"type":"CODE","template":"branch-overview-v1"},
+                 "sourceAvailability":{"composition":{"status":"PARTIAL","fields":{
+                 "corporateLoan":{"status":"AVAILABLE"},"retailLoan":{"status":"AVAILABLE"},
+                 "totalLoan":{"status":"AVAILABLE"},"intermediaryIncome":{"status":"NO_SOURCE"},
+                 "operatingRevenue":{"status":"NO_SOURCE"}}}}}
+                """);
 
         assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
                 "{\"sourceAvailability\":{\"unknownSlot\":{\"status\":\"AVAILABLE\"}}}"))
@@ -950,6 +963,70 @@ class CodeScreenPresentationValidatorTest {
         assertThatThrownBy(() -> CodeScreenPresentationValidator.validateDraft(style,
                 draft("ChartWidget", "w-composition-total-rows", "composition", rowsWithTotal), List.of()))
                 .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
+    void compositionAcceptsLoanAndIncomeSourceColumnsAsAmountMetrics() throws Exception {
+        String fields = "{\"corporate\":\"对公余额\",\"corporateLoan\":\"对公贷款\","
+                + "\"retail\":\"零售余额\",\"retailLoan\":\"零售贷款\","
+                + "\"total\":\"总余额\",\"totalLoan\":\"贷款总额\","
+                + "\"intermediaryIncome\":\"中间收入\",\"operatingRevenue\":\"营业收入\"}";
+        String units = "{\"corporate\":\"YUAN\",\"corporateLoan\":\"YUAN\","
+                + "\"retail\":\"YUAN\",\"retailLoan\":\"YUAN\","
+                + "\"total\":\"YUAN\",\"totalLoan\":\"YUAN\","
+                + "\"intermediaryIncome\":\"YUAN\",\"operatingRevenue\":\"YUAN\"}";
+
+        CodeScreenPresentationValidator.validateDraft(style,
+                draft("ChartWidget", "w-composition-business", "composition", validBind(fields, units)));
+        CodeScreenPresentationValidator.validateBindAgainstDatasource(
+                MAPPER.readTree(validBind(fields, units)), "composition", compositionDatasource());
+    }
+
+    @Test
+    void displayContentSupportsOptionalIncomeRatioConfiguration() throws Exception {
+        ScreenDisplayContentDTO content = MAPPER.readValue(
+                "{\"incomeRatio\":{\"numeratorField\":\"intermediaryIncome\","
+                        + "\"denominatorField\":\"operatingRevenue\",\"unit\":\"PERCENT\"}}",
+                ScreenDisplayContentDTO.class);
+
+        assertThat(content.getIncomeRatio()).isNotNull();
+        assertThat(content.getIncomeRatio().getNumeratorField()).isEqualTo("intermediaryIncome");
+        assertThat(content.getIncomeRatio().getDenominatorField()).isEqualTo("operatingRevenue");
+
+        ScreenDisplayContentDTO pending = MAPPER.readValue(
+                "{\"incomeRatio\":{\"numeratorField\":\"\",\"denominatorField\":\"\","
+                        + "\"unit\":\"PERCENT\"}}",
+                ScreenDisplayContentDTO.class);
+        assertThat(pending.getIncomeRatio().getNumeratorField()).isEmpty();
+    }
+
+    @Test
+    void strictCanvasSaveValidatesIncomeRatioContract() {
+        String prefix = "{\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"branch-overview-v1\",\"displaySchemaVersion\":1,"
+                + "\"institutionRules\":{\"allowedOperatingLevels\":[\"PRIMARY\"],"
+                + "\"allowedOrgNatures\":[\"SECONDARY_BRANCH\"]},"
+                + "\"display\":{\"components\":[{\"componentId\":\"composition-card\","
+                + "\"componentType\":\"METRIC_CARD\",\"layoutRegion\":\"LEFT\","
+                + "\"order\":0,\"visible\":true,\"text\":{\"titleMode\":\"AUTO\"},"
+                + "\"format\":{\"displayUnit\":\"YUAN\"},"
+                + "\"content\":{\"mainField\":\"corporate\",\"incomeRatio\":";
+        String suffix = "},\"interaction\":{\"action\":\"NONE\"},"
+                + "\"dataRefs\":[{\"blockId\":1,\"role\":\"PRIMARY\",\"unit\":\"YUAN\"}]}]}}}";
+
+        CodeScreenPresentationValidator.validateCanvasStyle(prefix
+                + "{\"numeratorField\":\"intermediaryIncome\",\"denominatorField\":\"operatingRevenue\",\"unit\":\"YUAN\"}"
+                + suffix);
+        CodeScreenPresentationValidator.validateCanvasStyle(prefix
+                + "{\"numeratorField\":\"\",\"denominatorField\":\"\",\"unit\":\"YUAN\"}"
+                + suffix);
+
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(prefix
+                + "{\"numeratorField\":\"intermediaryIncome\",\"denominatorField\":\"\",\"unit\":\"YUAN\"}"
+                + suffix)).hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(prefix
+                + "{\"numeratorField\":\"intermediaryIncome\",\"denominatorField\":\"operatingRevenue\",\"unit\":\"PERCENT\"}"
+                + suffix)).hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
     }
 
     @Test

@@ -78,7 +78,7 @@ const DIMENSION_FIELDS = new Set([
 const METRIC_FIELDS = new Set([
   'value', 'change', 'deposit', 'depositIncrease', 'depositAverage', 'loan',
   'customers', 'revenue', 'rate', 'target', 'actual', 'count', 'increase', 'average',
-  'corporate', 'retail', 'aum', 'income', 'nplRate', 'valueRate'
+  'corporate', 'retail', 'total', 'corporateLoan', 'retailLoan', 'totalLoan', 'intermediaryIncome', 'operatingRevenue', 'aum', 'income', 'nplRate', 'valueRate'
 ]);
 const FATAL_ISSUES = new Set([
   'INVALID_SHAPE', 'INVALID_COLUMNS', 'INVALID_ROWS', 'MISSING_COLUMN',

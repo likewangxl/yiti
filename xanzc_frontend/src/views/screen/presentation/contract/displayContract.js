@@ -39,12 +39,13 @@ const ALLOWED_KEYS = Object.freeze({
   component: new Set(['componentId', 'componentType', 'layoutRegion', 'order', 'visible', 'text', 'format', 'content', 'interaction', 'dataRefs']),
   text: new Set(['titleMode', 'title', 'subtitle', 'description']),
   format: new Set(['displayUnit', 'decimals', 'thousandsSeparator', 'negativeStyle', 'emptyText']),
-  content: new Set(['mainField', 'subFields', 'series', 'columns', 'tabs', 'rankingMetrics']),
+  content: new Set(['mainField', 'subFields', 'series', 'columns', 'tabs', 'rankingMetrics', 'incomeRatio']),
   interaction: new Set(['action', 'target']),
   dataRef: new Set(['blockId', 'role', 'metricCode', 'metricName', 'unit', 'dimension', 'formula']),
   series: new Set(['seriesKey', 'field', 'label', 'unit']),
   column: new Set(['columnKey', 'field', 'label', 'unit', 'visible']),
   tab: new Set(['tabKey', 'label', 'corporateField', 'retailField', 'totalField', 'unit']),
+  incomeRatio: new Set(['numeratorField', 'denominatorField', 'unit']),
   rankingMetric: new Set(['metricKey', 'field', 'label', 'unit', 'direction'])
 });
 
@@ -203,6 +204,19 @@ function validateContent(component, prefix, issues) {
       issues.push(`${prefix}tabs[${index}]标签和公司/零售字段不能为空`);
     }
     if (!DISPLAY_UNITS.includes(item.unit) || item.unit === 'AUTO') issues.push(`${prefix}tabs[${index}]单位不合法`);
+  }
+  const incomeRatio = object(content.incomeRatio) ? content.incomeRatio : null;
+  if (incomeRatio) unknownKeys(incomeRatio, ALLOWED_KEYS.incomeRatio, `${prefix}incomeRatio `, issues);
+  const numeratorField = string(incomeRatio?.numeratorField);
+  const denominatorField = string(incomeRatio?.denominatorField);
+  const targetUnit = incomeRatio?.unit;
+  const hasIncomeConfig = incomeRatio && (numeratorField || denominatorField || targetUnit !== 'YUAN');
+  if (hasIncomeConfig) {
+    if (!numeratorField) issues.push(`${prefix}中间收入字段不能为空`);
+    if (!denominatorField) issues.push(`${prefix}营业收入字段不能为空`);
+    if (!DISPLAY_UNITS.includes(targetUnit) || targetUnit === 'AUTO' || unitKind(targetUnit) !== 'amount') {
+      issues.push(`${prefix}中间收入目标单位不合法`);
+    }
   }
   for (const [index, item] of rankingMetrics.entries()) {
     if (!string(item.field) || !string(item.label)) issues.push(`${prefix}rankingMetrics[${index}]字段和标签不能为空`);

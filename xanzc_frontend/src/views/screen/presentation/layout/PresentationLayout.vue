@@ -274,6 +274,7 @@ function compositionComponentModel(component) {
     ...compositionModel.value,
     components: [item],
     tabs: item.tabs || [],
+    sections: item.sections || compositionModel.value.sections || [],
     activeTabKey: item.tabs?.[0]?.tabKey || ''
   };
 }

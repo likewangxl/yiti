@@ -177,7 +177,7 @@ function metricKind(slot, semantic, unit = null) {
       || (['rate', 'loanRate'].includes(slot) && semantic === 'value')) return 'ratio';
   // 构成指标允许按比例绑定；只有单位明确为百分数/比例时才走比例换算，
   // 这样旧的 semantic=value 以及双列指标都可安全表示金额或比例构成。
-  if (slot === 'composition' && ['value', 'corporate', 'retail', 'total'].includes(semantic)
+  if (slot === 'composition' && ['value', 'corporate', 'retail', 'total', 'corporateLoan', 'retailLoan', 'totalLoan', 'intermediaryIncome', 'operatingRevenue'].includes(semantic)
       && (unit === 'PERCENT' || unit === 'RATIO')) return 'ratio';
   // Ranking and amount KPI value fields are always amounts; only composition
   // value can opt into a ratio unit.
@@ -351,7 +351,7 @@ function compositionBindingState(binding, table, issues, slot) {
   const units = binding?.units && isObject(binding.units) ? binding.units : {};
   const mode = getCompositionMode(binding);
   const allowedFields = mode === 'columns'
-    ? new Set(['corporate', 'retail', 'total'])
+    ? new Set(['corporate', 'retail', 'total', 'corporateLoan', 'retailLoan', 'totalLoan', 'intermediaryIncome', 'operatingRevenue'])
     : new Set(['name', 'value']);
   let valid = true;
   for (const semantic of Object.keys(fields)) {
@@ -389,11 +389,10 @@ function compositionBindingState(binding, table, issues, slot) {
 
   // Legacy rows keep readMetric's historical missing/invalid-unit and null
   // behavior. The new columns shape requires both units before conversion.
-  const metricFields = mode === 'columns'
-    ? ['corporate', 'retail', ...(compositionFieldSelected(binding, 'total') ? ['total'] : [])]
-    : [];
+  const legacyMetricFields = mode === 'columns'
+    ? ['corporate', 'retail', ...(compositionFieldSelected(binding, 'total') ? ['total'] : [])] : [];
   const metricKinds = [];
-  for (const semantic of metricFields) {
+  for (const semantic of legacyMetricFields) {
     const unit = units[semantic];
     const kind = compositionUnitKind(unit);
     if (!kind) {
@@ -408,6 +407,14 @@ function compositionBindingState(binding, table, issues, slot) {
     issue(issues, slot, 'MIXED_UNIT_KIND', '构成单位类型必须一致');
     valid = false;
   }
+  const amountFields = ['corporateLoan', 'retailLoan', 'totalLoan', 'intermediaryIncome', 'operatingRevenue']
+    .filter(semantic => compositionFieldSelected(binding, semantic));
+  for (const semantic of amountFields) {
+    if (compositionUnitKind(units[semantic]) !== 'amount') {
+      issue(issues, slot, 'UNIT_MISMATCH', `字段 ${semantic} 需要金额单位`, semantic);
+      valid = false;
+    }
+  }
 
   // When the query includes metadata, a declared role is evidence that the
   // selected output column has the expected semantic role. Missing metadata is
@@ -415,7 +422,12 @@ function compositionBindingState(binding, table, issues, slot) {
   // must fail closed at runtime as well.
   const roleFields = mode === 'columns'
     ? [['corporate', 'METRIC'], ['retail', 'METRIC'],
-      ...(compositionFieldSelected(binding, 'total') ? [['total', 'METRIC']] : [])]
+      ...(compositionFieldSelected(binding, 'total') ? [['total', 'METRIC']] : []),
+      ...(compositionFieldSelected(binding, 'corporateLoan') ? [['corporateLoan', 'METRIC']] : []),
+      ...(compositionFieldSelected(binding, 'retailLoan') ? [['retailLoan', 'METRIC']] : []),
+      ...(compositionFieldSelected(binding, 'totalLoan') ? [['totalLoan', 'METRIC']] : []),
+      ...(compositionFieldSelected(binding, 'intermediaryIncome') ? [['intermediaryIncome', 'METRIC']] : []),
+      ...(compositionFieldSelected(binding, 'operatingRevenue') ? [['operatingRevenue', 'METRIC']] : [])]
     : [];
   for (const [semantic, expectedRole] of roleFields) {
     const column = fields[semantic];
@@ -481,7 +493,12 @@ function adaptComposition(table, binding, model, issues, slot = 'composition') {
   const requiredSemantics = ['corporate', 'retail'];
   const row = table.rows[0];
   const configuredSemantics = [...requiredSemantics,
-    ...(compositionFieldSelected(binding, 'total') ? ['total'] : [])];
+    ...(compositionFieldSelected(binding, 'total') ? ['total'] : []),
+    ...(compositionFieldSelected(binding, 'corporateLoan') ? ['corporateLoan'] : []),
+    ...(compositionFieldSelected(binding, 'retailLoan') ? ['retailLoan'] : []),
+    ...(compositionFieldSelected(binding, 'totalLoan') ? ['totalLoan'] : []),
+    ...(compositionFieldSelected(binding, 'intermediaryIncome') ? ['intermediaryIncome'] : []),
+    ...(compositionFieldSelected(binding, 'operatingRevenue') ? ['operatingRevenue'] : [])];
   for (const semantic of configuredSemantics) {
     const column = binding.fields?.[semantic];
     if (!Object.prototype.hasOwnProperty.call(row, column)) {

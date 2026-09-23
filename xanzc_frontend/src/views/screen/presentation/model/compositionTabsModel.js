@@ -170,14 +170,8 @@ function readTabValue(source, field, configuredUnit) {
 function addShares(tab) {
   const corporate = tab.corporate;
   const retail = tab.retail;
-  if (corporate.unitMismatch || retail.unitMismatch || tab.total.unitMismatch) {
+  if (tab.total.unitMismatch) {
     return { ...tab, state: 'UNIT_MISMATCH', statusMessage: '公司、零售与总量单位类型不一致，无法计算占比' };
-  }
-  if (!corporate.exists || !retail.exists || corporate.value === null || retail.value === null) {
-    return { ...tab, state: 'MISSING_SIDE', statusMessage: '公司或零售构成来源缺失，无法计算占比' };
-  }
-  if ([corporate.value, retail.value, tab.total.value].some(value => value !== null && value < 0)) {
-    return { ...tab, state: 'NEGATIVE_VALUE', statusMessage: '构成值不能为负，无法计算占比' };
   }
   if (tab.total.value === null) {
     return { ...tab, state: 'NO_TOTAL', statusMessage: '总量来源待接入，未计算占比' };
@@ -185,15 +179,84 @@ function addShares(tab) {
   if (tab.total.value === 0) {
     return { ...tab, state: 'ZERO_DENOMINATOR', statusMessage: '总量为0，无法计算占比' };
   }
+  if (tab.total.value < 0) {
+    return { ...tab, state: 'NEGATIVE_VALUE', statusMessage: '总量不能为负，无法计算占比' };
+  }
   const total = tab.total.value;
-  const corporateShare = corporate.value / total * 100;
-  const retailShare = retail.value / total * 100;
-  const difference = Math.round((total - corporate.value - retail.value) * 1e12) / 1e12;
-  const withShare = (item, share) => ({ ...item, share, shareText: `${formatNumber(share)}%` });
-  const next = { ...tab, corporate: withShare(corporate, corporateShare), retail: withShare(retail, retailShare), state: 'READY', statusMessage: '' };
-  if (difference > 0) next.other = { value: difference, text: formatNumber(difference), unit: tab.total.unit, share: difference / total * 100, shareText: `${formatNumber(difference / total * 100)}%` };
-  if (difference < 0) next.gap = { value: Math.abs(difference), signedValue: difference, text: formatNumber(Math.abs(difference)), unit: tab.total.unit, share: Math.abs(difference) / total * 100, shareText: `${formatNumber(Math.abs(difference) / total * 100)}%` };
+  const corporateValid = corporate.exists && corporate.value !== null && !corporate.unitMismatch && corporate.value >= 0;
+  const retailValid = retail.exists && retail.value !== null && !retail.unitMismatch && retail.value >= 0;
+  const corporateShare = corporateValid ? Math.round((corporate.value / total * 100) * 1e12) / 1e12 : null;
+  const retailShare = retailValid ? Math.round((retail.value / total * 100) * 1e12) / 1e12 : null;
+  const missingSide = corporateShare === null || retailShare === null;
+  const difference = missingSide ? null : Math.round((total - corporate.value - retail.value) * 1e12) / 1e12;
+  const withShare = (item, share) => ({ ...item, share, shareText: share === null ? '待接入' : `${formatNumber(share)}%` });
+  const hasInvalidValue = (corporate.value !== null && corporate.value < 0) || (retail.value !== null && retail.value < 0);
+  const hasUnitMismatch = corporate.unitMismatch || retail.unitMismatch;
+  const state = hasInvalidValue ? 'NEGATIVE_VALUE' : hasUnitMismatch ? 'UNIT_MISMATCH' : missingSide ? 'MISSING_SIDE' : 'READY';
+  const statusMessage = state === 'READY' ? '' : state === 'MISSING_SIDE' ? '公司或零售构成来源缺失，部分占比待接入' : state === 'NEGATIVE_VALUE' ? '构成值不能为负，无法计算占比' : '公司或零售单位类型不一致，部分无法计算占比';
+  const next = { ...tab, corporate: withShare(corporate, corporateShare), retail: withShare(retail, retailShare), state, statusMessage };
+  if (difference > 0) next.other = { value: difference, text: formatNumber(difference), unit: tab.total.unit, share: Math.round((difference / total * 100) * 1e12) / 1e12, shareText: `${formatNumber(difference / total * 100)}%` };
+  if (difference < 0) next.gap = { value: Math.abs(difference), signedValue: difference, text: formatNumber(Math.abs(difference)), unit: tab.total.unit, share: Math.round((Math.abs(difference) / total * 100) * 1e12) / 1e12, shareText: `${formatNumber(Math.abs(difference) / total * 100)}%` };
   return next;
+}
+
+function buildIntermediaryIncome(content, source) {
+  const incomeRatio = isObject(content?.incomeRatio) ? content.incomeRatio : {};
+  const numeratorField = text(incomeRatio.numeratorField);
+  const denominatorField = text(incomeRatio.denominatorField);
+  const targetUnit = text(incomeRatio.unit);
+  const pending = {
+    state: 'PENDING', ratio: null, ratioText: '待接入',
+    numerator: blankValue(targetUnit), denominator: blankValue(targetUnit), statusMessage: '中间收入与营业收入来源待接入'
+  };
+  if (!numeratorField || !denominatorField || !source) return pending;
+  const numerator = readTabValue(source, numeratorField, targetUnit);
+  const denominator = readTabValue(source, denominatorField, targetUnit);
+  const base = { state: 'MISSING', ratio: null, ratioText: '待接入', numerator, denominator, statusMessage: '中间收入或营业收入来源缺失' };
+  if (numerator.unitMismatch || denominator.unitMismatch
+      || numerator.type !== 'AMOUNT' || denominator.type !== 'AMOUNT') {
+    return { ...base, state: 'UNIT_MISMATCH', statusMessage: '中间收入与营业收入单位类型不一致，无法计算' };
+  }
+  if (!numerator.exists || !denominator.exists || numerator.value === null || denominator.value === null) return base;
+  if (numerator.value < 0 || denominator.value < 0) {
+    return { ...base, state: 'NEGATIVE_VALUE', statusMessage: '中间收入与营业收入不能为负，无法计算' };
+  }
+  if (denominator.value === 0) return { ...base, state: 'ZERO_DENOMINATOR', statusMessage: '营业收入为0，无法计算占比' };
+  const ratio = Math.round((numerator.value / denominator.value * 100) * 1e12) / 1e12;
+  return { ...base, state: 'READY', ratio, ratioText: `${formatNumber(ratio)}%`, statusMessage: '' };
+}
+
+function buildBusinessLines(tabs) {
+  const byKey = new Map(tabs.map(tab => [tab.tabKey, tab]));
+  const pending = key => ({ tabKey: key, label: key === 'deposit' ? '存款' : '贷款', state: 'PENDING', value: blankValue(''), share: null, shareText: '待接入' });
+  const shareFor = tab => {
+    if (!tab) return '待接入';
+    if (tab.corporate?.share !== null && tab.corporate?.share !== undefined) return tab.corporate.shareText;
+    if (tab.corporate?.value === null || tab.corporate?.value === undefined) return '待接入';
+    return '占比不可计算';
+  };
+  const retailShareFor = tab => {
+    if (!tab) return '待接入';
+    if (tab.retail?.share !== null && tab.retail?.share !== undefined) return tab.retail.shareText;
+    if (tab.retail?.value === null || tab.retail?.value === undefined) return '待接入';
+    return '占比不可计算';
+  };
+  return [
+    { businessLine: 'CORP', label: '公司', items: ['deposit', 'loan'].map(key => ({ ...pending(key), value: byKey.get(key)?.corporate || pending(key).value, share: byKey.get(key)?.corporate?.share ?? null, shareText: shareFor(byKey.get(key)), state: byKey.get(key)?.state || 'PENDING', total: byKey.get(key)?.total || blankValue(''), other: byKey.get(key)?.other || null, gap: byKey.get(key)?.gap || null, otherShareText: byKey.get(key)?.other?.shareText || '占比不可计算', gapShareText: byKey.get(key)?.gap?.shareText || '占比不可计算' })) },
+    { businessLine: 'RETAIL', label: '零售', items: ['deposit', 'loan'].map(key => ({ ...pending(key), value: byKey.get(key)?.retail || pending(key).value, share: byKey.get(key)?.retail?.share ?? null, shareText: retailShareFor(byKey.get(key)), state: byKey.get(key)?.state || 'PENDING', total: byKey.get(key)?.total || blankValue(''), other: byKey.get(key)?.other || null, gap: byKey.get(key)?.gap || null, otherShareText: byKey.get(key)?.other?.shareText || '占比不可计算', gapShareText: byKey.get(key)?.gap?.shareText || '占比不可计算' })) }
+  ];
+}
+
+function buildSections(tabs, intermediaryIncome) {
+  const lines = buildBusinessLines(tabs);
+  const incomeShareText = intermediaryIncome.state === 'READY'
+    ? intermediaryIncome.ratioText
+    : intermediaryIncome.state === 'PENDING' || intermediaryIncome.state === 'MISSING' ? '待接入' : '占比不可计算';
+  return [
+    { sectionKey: 'corporate', label: '公司', businessLine: 'CORP', items: lines[0].items },
+    { sectionKey: 'retail', label: '零售', businessLine: 'RETAIL', items: lines[1].items },
+    { sectionKey: 'income', label: '中间收入', businessLine: 'COMMON', items: [{ tabKey: 'income', label: '中间收入占营业收入', value: intermediaryIncome.numerator, denominator: intermediaryIncome.denominator, share: intermediaryIncome.ratio, shareText: incomeShareText, state: intermediaryIncome.state }] }
+  ];
 }
 
 function buildTab(tabConfig, source, index) {
@@ -229,6 +292,8 @@ export function buildCompositionTabsModel(sourcePresentation, model = {}, option
   const components = rawComponents.map((component, index) => {
     const configs = Array.isArray(component.content?.tabs) ? component.content.tabs : [];
     const tabs = configs.map((tabConfig, tabIndex) => buildTab(tabConfig, lookupSource(isObject(model) ? model : {}, component, tabConfig), tabIndex));
+    const source = lookupSource(isObject(model) ? model : {}, component, null);
+    const intermediaryIncome = buildIntermediaryIncome(component.content, source);
     return {
       componentId: text(component.componentId) || `composition-${index}`,
       componentType: COMPONENT_TYPE,
@@ -236,17 +301,22 @@ export function buildCompositionTabsModel(sourcePresentation, model = {}, option
       order: Number.isInteger(component.order) ? component.order : index,
       title: component.text?.titleMode === 'CUSTOM' ? text(component.text.title) : (text(component.text?.title) || ''),
       subtitle: component.text?.subtitle ?? '',
-      tabs
+      tabs,
+      businessLines: buildBusinessLines(tabs),
+      intermediaryIncome,
+      sections: buildSections(tabs, intermediaryIncome)
     };
   });
   const tabs = components.flatMap(component => component.tabs);
   const rawInterval = Number(options.intervalMs);
   const intervalMs = Number.isInteger(rawInterval) && rawInterval > 0 ? rawInterval : 10000;
-  const rotationEnabled = tabs.length > 1;
+  const sections = components[0]?.sections || [];
+  const rotationEnabled = sections.length > 1 || tabs.length > 1;
   return {
     enabled: true,
     components,
     tabs,
+    sections,
     activeTabKey: tabs[0]?.tabKey || '',
     intervalMs,
     rotationEnabled,

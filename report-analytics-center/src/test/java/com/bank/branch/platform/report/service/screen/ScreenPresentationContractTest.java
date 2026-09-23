@@ -8,6 +8,7 @@ import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayContrac
 import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayDataRefDTO;
 import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayFormatDTO;
 import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayInteractionDTO;
+import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayIncomeRatioDTO;
 import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplaySeriesDTO;
 import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayTextDTO;
 import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayUnit;
@@ -93,6 +94,39 @@ class ScreenPresentationContractTest {
         assertThat(ScreenDisplayContractValidator.validate(config))
                 .anyMatch(issue -> issue.contains("seriesKey缺失或重复"))
                 .anyMatch(issue -> issue.contains("series单位不合法"));
+    }
+
+    @Test
+    void incomeRatioAllowsPendingOrConfiguredAmountInputs() {
+        ScreenDisplayContentDTO content = config().getComponents().get(0).getContent();
+        ScreenDisplayIncomeRatioDTO pending = new ScreenDisplayIncomeRatioDTO();
+        pending.setNumeratorField("");
+        pending.setDenominatorField("");
+        pending.setUnit(ScreenDisplayUnit.YUAN);
+        content.setIncomeRatio(pending);
+        assertThat(ScreenDisplayContractValidator.validate(config())).isEmpty();
+
+        pending.setNumeratorField("intermediaryIncome");
+        pending.setDenominatorField("operatingRevenue");
+        assertThat(ScreenDisplayContractValidator.validate(config())).isEmpty();
+    }
+
+    @Test
+    void incomeRatioRejectsPartialInputsAndRatioUnit() {
+        ScreenDisplayConfigDTO config = config();
+        ScreenDisplayContentDTO content = config.getComponents().get(0).getContent();
+        ScreenDisplayIncomeRatioDTO ratio = new ScreenDisplayIncomeRatioDTO();
+        ratio.setNumeratorField("intermediaryIncome");
+        ratio.setDenominatorField("");
+        ratio.setUnit(ScreenDisplayUnit.YUAN);
+        content.setIncomeRatio(ratio);
+        assertThat(ScreenDisplayContractValidator.validate(config))
+                .anyMatch(issue -> issue.contains("incomeRatio"));
+
+        ratio.setDenominatorField("operatingRevenue");
+        ratio.setUnit(ScreenDisplayUnit.PERCENT);
+        assertThat(ScreenDisplayContractValidator.validate(config))
+                .anyMatch(issue -> issue.contains("incomeRatio"));
     }
 
     private ScreenDisplayConfigDTO config() {

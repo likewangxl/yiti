@@ -107,6 +107,24 @@ public final class ScreenDisplayContractValidator {
         validateColumns(content.getColumns(), prefix, issues);
         validateTabs(content.getTabs(), prefix, issues);
         validateRankingMetrics(content.getRankingMetrics(), prefix, issues);
+        validateIncomeRatio(content.getIncomeRatio(), prefix, issues);
+    }
+
+    private static void validateIncomeRatio(ScreenDisplayIncomeRatioDTO ratio, String prefix,
+                                            List<String> issues) {
+        if (ratio == null) {
+            return;
+        }
+        String numerator = trim(ratio.getNumeratorField());
+        String denominator = trim(ratio.getDenominatorField());
+        if (ratio.getUnit() == null || !Set.of(ScreenDisplayUnit.YUAN,
+                ScreenDisplayUnit.TEN_THOUSAND, ScreenDisplayUnit.HUNDRED_MILLION)
+                .contains(ratio.getUnit())) {
+            issues.add(prefix + "incomeRatio单位必须是金额单位");
+        }
+        if (numerator.isEmpty() != denominator.isEmpty()) {
+            issues.add(prefix + "incomeRatio分子和分母必须同时配置或同时为空");
+        }
     }
 
     private static void validateInteraction(ScreenDisplayInteractionDTO interaction, String prefix, List<String> issues) {

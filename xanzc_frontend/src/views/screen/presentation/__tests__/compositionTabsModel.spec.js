@@ -49,6 +49,12 @@ describe('compositionTabsModel', () => {
     expect(result.tabs[1]).toMatchObject({ tabKey: 'loan', state: 'READY' });
     expect(result.tabs[1].corporate.share).toBe(80);
     expect(result.tabs[1].retail.share).toBe(20);
+    expect(result.components[0].sections.map(item => item.sectionKey)).toEqual(['corporate', 'retail', 'income']);
+    expect(result.components[0].sections[0].items.map(item => item.tabKey)).toEqual(['deposit', 'loan']);
+    expect(result.sections.map(item => item.sectionKey)).toEqual(['corporate', 'retail', 'income']);
+    expect(result.sections[0].items[0]).toMatchObject({
+      total: { value: 1400 }, other: { value: 113.58 }, otherShareText: '8.11285714%'
+    });
   });
 
   it('total 缺失、缺一方、零分母和负值不计算100%，且返回明确状态', () => {
@@ -59,12 +65,14 @@ describe('compositionTabsModel', () => {
       tab('negative', { totalField: 'negativeTotal' })
     ]), {
       blockResults: { 11: {
-        corp: 40, retail: 60, missingRetail: null, zeroTotal: 0, negativeTotal: -10,
+        corp: 40, retail: 60, total: 100, missingRetail: null, zeroTotal: 0, negativeTotal: -10,
         units: { corp: 'HUNDRED_MILLION', retail: 'HUNDRED_MILLION', missingRetail: 'HUNDRED_MILLION', zeroTotal: 'HUNDRED_MILLION', negativeTotal: 'HUNDRED_MILLION' }
       } }
     });
     expect(result.tabs.map(item => item.state)).toEqual(['NO_TOTAL', 'MISSING_SIDE', 'ZERO_DENOMINATOR', 'NEGATIVE_VALUE']);
-    expect(result.tabs.every(item => item.corporate.share === null && item.retail.share === null)).toBe(true);
+    expect(result.tabs[1].corporate.share).toBeCloseTo(40);
+    expect(result.tabs[1].retail.share).toBeNull();
+    expect(result.tabs[0].corporate.share).toBeNull();
   });
 
   it('只在同类型金额单位间换算，异类型单位明确拒绝；不从未配置tab自动生成中收', () => {
@@ -82,14 +90,63 @@ describe('compositionTabsModel', () => {
     expect(result.tabs[0].corporate.value).toBeCloseTo(7.1426, 6);
     expect(result.tabs[0].retail.value).toBeCloseTo(5.7216, 6);
     expect(result.tabs[0].total.value).toBeCloseTo(12.8642, 6);
-    expect(result.tabs[1]).toMatchObject({ state: 'UNIT_MISMATCH', corporate: { share: null }, retail: { share: null } });
+    expect(result.tabs[1]).toMatchObject({ state: 'UNIT_MISMATCH', corporate: { share: null }, retail: { share: 40 } });
     expect(result.tabs.some(item => item.tabKey === 'revenue')).toBe(false);
+  });
+
+  it('公司单位冲突时仍独立计算可比的零售占比', () => {
+    const result = buildCompositionTabsModel(config([tab('deposit')]), {
+      blockResults: { 11: {
+        corp: 1, retail: 40, total: 100,
+        units: { corp: 'PERCENT', retail: 'HUNDRED_MILLION', total: 'HUNDRED_MILLION' }
+      } }
+    });
+    expect(result.tabs[0].state).toBe('UNIT_MISMATCH');
+    expect(result.tabs[0].corporate.share).toBeNull();
+    expect(result.tabs[0].retail.share).toBe(40);
   });
 
   it('模型只产出默认10秒或显式轮播间隔，不创建定时器', () => {
     const result = buildCompositionTabsModel(config([tab('deposit')]), { blockResults: { 11: {} } });
     const custom = buildCompositionTabsModel(config([tab('deposit')]), { blockResults: { 11: {} } }, { intervalMs: 15000 });
-    expect(result).toMatchObject({ intervalMs: 10000, rotationEnabled: false, rotationState: 'IDLE' });
-    expect(custom).toMatchObject({ intervalMs: 15000, rotationEnabled: false, rotationState: 'IDLE' });
+    expect(result).toMatchObject({ intervalMs: 10000, rotationEnabled: true, rotationState: 'READY' });
+    expect(custom).toMatchObject({ intervalMs: 15000, rotationEnabled: true, rotationState: 'READY' });
+  });
+
+  it('按明确配置计算中间收入占营业收入比例，且不从公司/零售字段猜测', () => {
+    const result = buildCompositionTabsModel(config([tab('deposit'), tab('loan', { label: '贷款' })], {
+      content: {
+        tabs: [tab('deposit'), tab('loan', { label: '贷款' })],
+        incomeRatio: { numeratorField: 'intermediaryIncome', denominatorField: 'operatingIncome', unit: 'HUNDRED_MILLION' }
+      }
+    }), {
+      blockResults: { 11: {
+        corp: 40, retail: 60, total: 100,
+        intermediaryIncome: 12, operatingIncome: 80,
+        units: { corp: 'HUNDRED_MILLION', retail: 'HUNDRED_MILLION', total: 'HUNDRED_MILLION', intermediaryIncome: 'TEN_THOUSAND', operatingIncome: 'HUNDRED_MILLION' }
+      } }
+    });
+    expect(result.components[0].intermediaryIncome).toMatchObject({ state: 'READY', ratio: 0.0015, ratioText: '0.0015%' });
+    expect(result.components[0].intermediaryIncome.numerator.value).toBeCloseTo(0.0012, 8);
+    expect(result.components[0].intermediaryIncome.denominator.value).toBe(80);
+  });
+
+  it('中间收入缺失、零分母、负值和单位类型错误均失败闭合，不造数', () => {
+    const make = (fields, source) => buildCompositionTabsModel(config([tab('deposit')], {
+      content: { tabs: [tab('deposit')], ...fields }
+    }), { blockResults: { 11: source } }).components[0].intermediaryIncome;
+    expect(make({ incomeRatio: { numeratorField: 'n', denominatorField: 'd', unit: 'YUAN' } }, {
+      n: null, d: 10, units: { n: 'YUAN', d: 'YUAN' }
+    })).toMatchObject({ state: 'MISSING' });
+    expect(make({ incomeRatio: { numeratorField: 'n', denominatorField: 'd', unit: 'YUAN' } }, {
+      n: 1, d: 0, units: { n: 'YUAN', d: 'YUAN' }
+    })).toMatchObject({ state: 'ZERO_DENOMINATOR', ratio: null });
+    expect(make({ incomeRatio: { numeratorField: 'n', denominatorField: 'd', unit: 'YUAN' } }, {
+      n: -1, d: 10, units: { n: 'YUAN', d: 'YUAN' }
+    })).toMatchObject({ state: 'NEGATIVE_VALUE', ratio: null });
+    expect(make({ incomeRatio: { numeratorField: 'n', denominatorField: 'd', unit: 'YUAN' } }, {
+      n: 1, d: 10, units: { n: 'PERCENT', d: 'YUAN' }
+    })).toMatchObject({ state: 'UNIT_MISMATCH', ratio: null });
+    expect(make({}, { corp: 5, retail: 5, total: 10 })).toMatchObject({ state: 'PENDING', ratio: null, ratioText: '待接入' });
   });
 });

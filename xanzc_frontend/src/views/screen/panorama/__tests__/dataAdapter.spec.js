@@ -6,6 +6,41 @@ const binding = (slot, fields, units = {}) => ({
 });
 
 describe('panorama data adapter', () => {
+  it('columns 模式适配中间收入和营业收入字段，保留金额单位与值', () => {
+    const model = adaptPanoramaResults({ composition: {
+      binding: binding('composition', {
+        corporate: 'corp', retail: 'retail', total: 'total',
+        intermediaryIncome: 'intermediate', operatingRevenue: 'revenue'
+      }, {
+        corporate: 'YUAN', retail: 'YUAN', total: 'YUAN', intermediaryIncome: 'YUAN', operatingRevenue: 'YUAN'
+      }),
+      response: {
+        columns: ['corp', 'retail', 'total', 'intermediate', 'revenue'],
+        rows: [[100, 200, 300, 30, 150]],
+        columnsMeta: ['corp', 'retail', 'total', 'intermediate', 'revenue'].map(col => ({ col, role: 'METRIC', unit: 'YUAN' }))
+      }
+    }});
+    expect(model.issues.filter(item => item.slot === 'composition')).toEqual([]);
+    expect(model.composition).toEqual([
+      { name: '对公业务', value: 1e-6, unit: '亿元' },
+      { name: '零售业务', value: 2e-6, unit: '亿元' }
+    ]);
+  });
+
+  it('columns 模式适配贷款字段为独立构成项，不覆盖存款构成项', () => {
+    const model = adaptPanoramaResults({ composition: {
+      binding: binding('composition', {
+        corporate: 'corp', retail: 'retail', corporateLoan: 'corpLoan', retailLoan: 'retailLoan', totalLoan: 'loanTotal'
+      }, { corporate: 'YUAN', retail: 'YUAN', corporateLoan: 'YUAN', retailLoan: 'YUAN', totalLoan: 'YUAN' }),
+      response: { columns: ['corp', 'retail', 'corpLoan', 'retailLoan', 'loanTotal'], rows: [[100, 200, 30, 70, 100]], columnsMeta: ['corp', 'retail', 'corpLoan', 'retailLoan', 'loanTotal'].map(col => ({ col, role: 'METRIC', unit: 'YUAN' })) }
+    }});
+    expect(model.issues.filter(item => item.slot === 'composition')).toEqual([]);
+    expect(model.composition).toEqual([
+      { name: '对公业务', value: 1e-6, unit: '亿元' },
+      { name: '零售业务', value: 2e-6, unit: '亿元' }
+    ]);
+  });
+
   it('合法数值字段为 null 时分类为 NO_VALUES，非空非法字符串仍为 INVALID_NUMBER', () => {
     const missing = adaptPanoramaResults({ deposit: {
       binding: binding('deposit', { value: 'amount' }, { value: 'YUAN' }),

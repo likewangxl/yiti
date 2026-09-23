@@ -24,7 +24,13 @@
       >{{ userPaused ? '继续轮播' : '暂停轮播' }}</button>
     </header>
 
-    <nav v-if="model.tabs?.length" class="composition-tabs-widget__tabs" role="tablist" aria-label="业务结构指标">
+    <nav v-if="model.sections?.length" class="composition-tabs-widget__tabs" role="tablist" aria-label="业务结构部分">
+      <button v-for="section in model.sections" :key="section.sectionKey" type="button" role="tab"
+        :data-testid="`composition-section-${section.sectionKey}-select`"
+        :aria-selected="section.sectionKey === activeSectionKey" :class="{ 'is-active': section.sectionKey === activeSectionKey }"
+        @click="selectSection(section.sectionKey)">{{ section.label }}</button>
+    </nav>
+    <nav v-else-if="model.tabs?.length" class="composition-tabs-widget__tabs" role="tablist" aria-label="业务结构指标">
       <button
         v-for="tab in model.tabs"
         :key="tab.tabKey"
@@ -37,7 +43,16 @@
       >{{ tab.label }}</button>
     </nav>
 
-    <article v-if="activeTab" class="composition-tabs-widget__panel" :data-testid="`composition-tab-${activeTab.tabKey}`" :data-state="activeTab.state">
+    <article v-if="model.sections?.length && activeSection" class="composition-tabs-widget__panel" :data-testid="`composition-section-${activeSection.sectionKey}`" :data-state="activeSection.state">
+      <div class="composition-tabs-widget__rows">
+        <article v-for="item in activeSection.items" :key="item.tabKey" class="composition-tabs-widget__row">
+          <div><strong>{{ item.label }}</strong><span v-if="activeSection.businessLine !== 'COMMON'">{{ valueText(item.value) }}</span><span v-else>{{ valueText(item.value) }} / {{ valueText(item.denominator) }}</span><small v-if="activeSection.businessLine !== 'COMMON'">核定总量 {{ valueText(item.total) }}</small><small v-if="item.other">其他 {{ valueText(item.other) }} {{ item.otherShareText }}</small><small v-if="item.gap">缺口 {{ valueText(item.gap) }} {{ item.gapShareText }}</small></div>
+          <span class="composition-tabs-widget__share">{{ item.shareText || '待接入' }}</span>
+          <button v-if="activeSection.businessLine !== 'COMMON'" type="button" :data-testid="`business-line-${activeSection.businessLine.toLowerCase()}-${item.tabKey}`" @click="selectBusinessLine(activeSection.businessLine, item.tabKey)">查看{{ activeSection.label }}</button>
+        </article>
+      </div>
+    </article>
+    <article v-else-if="activeTab" class="composition-tabs-widget__panel" :data-testid="`composition-tab-${activeTab.tabKey}`" :data-state="activeTab.state">
       <div class="composition-tabs-widget__summary">
         <span>核定总量</span>
         <strong>{{ activeTab.total?.text || '—' }}</strong>
@@ -62,6 +77,10 @@
           <div><strong>缺口</strong><span>{{ valueText(activeTab.gap) }}</span></div>
           <span class="composition-tabs-widget__share">{{ shareText(activeTab.gap) }}</span>
         </article>
+        <article class="composition-tabs-widget__row composition-tabs-widget__row--income" data-testid="composition-intermediary-income">
+          <div><strong>中间收入占营业收入</strong><span>{{ incomeValueText(activeComponent?.intermediaryIncome) }}</span></div>
+          <span class="composition-tabs-widget__share" data-testid="composition-intermediary-income-ratio">{{ activeComponent?.intermediaryIncome?.ratioText || '待接入' }}</span>
+        </article>
       </div>
       <p v-if="activeTab.statusMessage" class="composition-tabs-widget__status" role="status">{{ activeTab.statusMessage }}</p>
     </article>
@@ -79,15 +98,20 @@ const emit = defineEmits(['business-line-select']);
 
 const rootRef = ref(null);
 const activeTabKey = ref('');
+const activeSectionKey = ref('corporate');
 const userPaused = ref(false);
 const hoverPaused = ref(false);
 const focusPaused = ref(false);
 let rotationTimer = null;
 
 const tabs = computed(() => Array.isArray(props.model?.tabs) ? props.model.tabs : []);
+const sections = computed(() => Array.isArray(props.model?.sections) ? props.model.sections : []);
 const activeTab = computed(() => tabs.value.find(tab => tab.tabKey === activeTabKey.value) || tabs.value[0] || null);
+const activeSection = computed(() => (Array.isArray(props.model?.sections) ? props.model.sections : [])
+  .find(section => section.sectionKey === activeSectionKey.value) || props.model?.sections?.[0] || null);
 const activeComponent = computed(() => (Array.isArray(props.model?.components) ? props.model.components : [])
-  .find(component => component.tabs?.some(tab => tab.tabKey === activeTab.value?.tabKey)) || null);
+  .find(component => component.tabs?.some(tab => tab.tabKey === activeTab.value?.tabKey))
+  || (Array.isArray(props.model?.components) ? props.model.components[0] : null));
 const rotationPaused = computed(() => userPaused.value || hoverPaused.value || focusPaused.value);
 
 function selectTab(tabKey) {
@@ -97,20 +121,32 @@ function selectTab(tabKey) {
   userPaused.value = true;
 }
 
-function selectBusinessLine(businessLine) {
-  const key = String(activeTab.value?.tabKey || '');
+function selectSection(sectionKey) {
+  if (!props.model?.sections?.some(section => section.sectionKey === sectionKey)) return;
+  activeSectionKey.value = sectionKey;
+  userPaused.value = true;
+}
+
+function selectBusinessLine(businessLine, tabKey = activeTab.value?.tabKey) {
+  const key = String(tabKey || '');
   if (!key || !['CORP', 'RETAIL'].includes(businessLine)) return;
   emit('business-line-select', { businessLine, tabKey: key });
 }
 
 function advanceTab() {
-  if (rotationPaused.value || tabs.value.length < 2) return;
+  if (rotationPaused.value) return;
+  if (sections.value.length > 1) {
+    const index = sections.value.findIndex(section => section.sectionKey === activeSectionKey.value);
+    activeSectionKey.value = sections.value[(index + 1 + sections.value.length) % sections.value.length]?.sectionKey || sections.value[0]?.sectionKey || '';
+    return;
+  }
+  if (tabs.value.length < 2) return;
   const index = tabs.value.findIndex(tab => tab.tabKey === activeTabKey.value);
   activeTabKey.value = tabs.value[(index + 1 + tabs.value.length) % tabs.value.length]?.tabKey || tabs.value[0]?.tabKey || '';
 }
 
 function startRotation() {
-  if (rotationTimer || !props.model?.rotationEnabled || tabs.value.length < 2) return;
+  if (rotationTimer || !props.model?.rotationEnabled || (tabs.value.length < 2 && sections.value.length < 2)) return;
   const interval = Number.isInteger(props.model?.intervalMs) && props.model.intervalMs > 0 ? props.model.intervalMs : 10000;
   rotationTimer = globalThis.setInterval(advanceTab, interval);
 }
@@ -131,6 +167,12 @@ function shareText(value) {
   return value?.share === null || value?.share === undefined ? '占比不可计算' : (value.shareText || `${value.share}%`);
 }
 
+function incomeValueText(value) {
+  if (!value || value.state === 'PENDING' || value.state === 'MISSING') return '待接入';
+  if (value.numerator?.text && value.denominator?.text) return `${value.numerator.text} / ${value.denominator.text}`;
+  return '—';
+}
+
 watch(() => tabs.value.map(tab => tab.tabKey).join('|'), () => {
   if (!tabs.value.some(tab => tab.tabKey === activeTabKey.value)) activeTabKey.value = tabs.value[0]?.tabKey || '';
   stopRotation();
@@ -139,6 +181,7 @@ watch(() => tabs.value.map(tab => tab.tabKey).join('|'), () => {
 
 onMounted(() => {
   activeTabKey.value = props.model?.activeTabKey || tabs.value[0]?.tabKey || '';
+  activeSectionKey.value = props.model?.activeSectionKey || props.model?.sections?.[0]?.sectionKey || 'corporate';
   startRotation();
 });
 

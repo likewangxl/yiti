@@ -160,7 +160,7 @@ describe('panorama bindings contract', () => {
     expect(getCompositionMode({ fields: { corporate: '对公', retail: '零售' } })).toBe('columns');
     expect(getCompositionMode({ fields: { corporate: '对公' } })).toBe('columns');
     expect(getCompositionFieldSpecs('rows').map(item => item.semantic)).toEqual(['name', 'value']);
-    expect(getCompositionFieldSpecs('columns').map(item => item.semantic)).toEqual(['corporate', 'retail', 'total']);
+    expect(getCompositionFieldSpecs('columns').map(item => item.semantic)).toEqual(['corporate', 'retail', 'total', 'corporateLoan', 'retailLoan', 'totalLoan', 'intermediaryIncome', 'operatingRevenue']);
     expect(getCompositionFieldSpecs('columns')).toEqual(expect.arrayContaining([
       expect.objectContaining({ semantic: 'corporate', kind: 'metric', unitKinds: ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION', 'PERCENT', 'RATIO'] }),
       expect.objectContaining({ semantic: 'retail', kind: 'metric', unitKinds: ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION', 'PERCENT', 'RATIO'] }),
@@ -222,6 +222,30 @@ describe('panorama bindings contract', () => {
       dsId: 2, fields: { corporate: '对公余额', retail: '零售余额' },
       units: { corporate: 'YUAN', retail: 'YUAN', total: 'YUAN' }
     })).toContain('单位未绑定字段: total');
+  });
+
+  it('composition columns 支持中间收入和营业收入，并保持 rows 模式禁用新列', () => {
+    expect(validateBinding('composition', {
+      dsId: 2,
+      fields: { corporate: 'corp', retail: 'retail', total: 'total', intermediaryIncome: 'intermediate', operatingRevenue: 'revenue' },
+      units: { corporate: 'YUAN', retail: 'YUAN', total: 'YUAN', intermediaryIncome: 'YUAN', operatingRevenue: 'YUAN' }
+    })).toEqual([]);
+    expect(validateBinding('composition', {
+      dsId: 2, fields: { name: 'kind', value: 'amount', intermediaryIncome: 'intermediate' },
+      units: { value: 'YUAN', intermediaryIncome: 'YUAN' }
+    })).toContain('字段不受支持: intermediaryIncome');
+  });
+
+  it('composition columns 支持公司/零售贷款及贷款总量字段，rows 模式仍拒绝', () => {
+    expect(validateBinding('composition', {
+      dsId: 2,
+      fields: { corporate: 'corp', retail: 'retail', corporateLoan: 'corpLoan', retailLoan: 'retailLoan', totalLoan: 'loanTotal' },
+      units: { corporate: 'YUAN', retail: 'YUAN', corporateLoan: 'YUAN', retailLoan: 'YUAN', totalLoan: 'YUAN' }
+    })).toEqual([]);
+    expect(validateBinding('composition', {
+      dsId: 2, fields: { name: 'kind', value: 'amount', corporateLoan: 'corpLoan' },
+      units: { value: 'YUAN', corporateLoan: 'YUAN' }
+    })).toContain('字段不受支持: corporateLoan');
   });
 
   it('composition 双列字段和单位随组件快照往返保留', () => {
