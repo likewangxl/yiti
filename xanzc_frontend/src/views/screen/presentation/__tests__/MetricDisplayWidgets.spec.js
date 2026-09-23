@@ -32,4 +32,30 @@ describe('MetricDisplayWidgets', () => {
     expect(wrapper.find('[data-component-id="metric-2"]').classes()).toContain('presentation-metric-widget--blue');
     expect(wrapper.find('[data-component-id="metric-3"]').classes()).toContain('presentation-metric-widget--green');
   });
+
+  it('为十个分行业务指标使用互不重复的显式 Element Plus 图标，旧组件不补图标', () => {
+    const ids = [
+      'business-retail-deposit-balance', 'business-retail-deposit-rate',
+      'business-retail-loan-balance', 'business-retail-loan-rate',
+      'business-corp-deposit-balance', 'business-corp-deposit-rate',
+      'business-corp-loan-balance', 'business-corp-loan-rate',
+      'business-revenue-operating', 'business-revenue-fee'
+    ];
+    const wrapper = mount(MetricDisplayWidgets, { props: { components: [
+      ...ids.map((componentId, order) => ({
+        componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order,
+        title: componentId, text: '1.00万元', state: 'READY', subFields: []
+      })),
+      { componentId: 'legacy-card', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 10, title: '旧卡片', text: '1', state: 'READY', subFields: [] }
+    ] } });
+
+    const icons = wrapper.findAll('[data-testid="presentation-metric-icon"]');
+    expect(icons).toHaveLength(10);
+    expect(icons.map(node => node.attributes('data-icon'))).toEqual([
+      'Wallet', 'TrendCharts', 'Coin', 'DataAnalysis', 'OfficeBuilding',
+      'Histogram', 'Money', 'PieChart', 'Tickets', 'CreditCard'
+    ]);
+    expect(new Set(icons.map(node => node.attributes('data-icon'))).size).toBe(10);
+    expect(wrapper.find('[data-component-id="legacy-card"] [data-testid="presentation-metric-icon"]').exists()).toBe(false);
+  });
 });

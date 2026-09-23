@@ -70,6 +70,40 @@ const mounted = [];
 afterEach(() => mounted.splice(0).forEach(wrapper => wrapper.unmount()));
 
 describe('PresentationLayout', () => {
+  it('仅按 business componentId 前缀把分行顶部指标分成零售、对公和收入三组', () => {
+    const groupedHeader = [
+      'business-retail-deposit-balance', 'business-retail-deposit-rate',
+      'business-retail-loan-balance', 'business-retail-loan-rate',
+      'business-corp-deposit-balance', 'business-corp-deposit-rate',
+      'business-corp-loan-balance', 'business-corp-loan-rate',
+      'business-revenue-operating', 'business-revenue-fee'
+    ].map((componentId, order) => ({
+      componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order, visible: true,
+      text: { titleMode: 'CUSTOM', title: componentId },
+      format: { displayUnit: 'TEN_THOUSAND' },
+      content: { mainField: componentId.includes('rate') ? '测试_对公贷款目标完成率' : '测试_直营存款' },
+      dataRefs: [{ blockId: 31, unit: componentId.includes('rate') ? 'PERCENT' : 'YUAN' }]
+    }));
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        presentation: { displaySchemaVersion: 1, display: { components: groupedHeader } },
+        model: { blockResults: { 31: { value: 88, unit: 'PERCENT' } } }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+
+    expect(wrapper.find('[data-layout-mode="grouped"]').exists()).toBe(true);
+    expect(wrapper.find('[data-layout-mode="generic"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-layout-group]')).toHaveLength(3);
+    expect(wrapper.find('[data-layout-group="RETAIL"]').attributes('data-group-prefix')).toBe('business-retail-');
+    expect(wrapper.find('[data-layout-group="CORP"]').attributes('data-group-prefix')).toBe('business-corp-');
+    expect(wrapper.find('[data-layout-group="REVENUE"]').attributes('data-group-prefix')).toBe('business-revenue-');
+    expect(wrapper.find('[data-layout-group="RETAIL"]').findAll('[data-testid="presentation-layout-component"]')).toHaveLength(4);
+    expect(wrapper.find('[data-layout-group="CORP"]').findAll('[data-testid="presentation-layout-component"]')).toHaveLength(4);
+    expect(wrapper.find('[data-layout-group="REVENUE"]').findAll('[data-testid="presentation-layout-component"]')).toHaveLength(2);
+  });
+
   it('将配置组件重排为重点卡/次级卡、左中右三栏，并让地图先于趋势且明细下置', () => {
     const components = [
       ...Array.from({ length: 4 }, (_, index) => ({
@@ -101,6 +135,8 @@ describe('PresentationLayout', () => {
     });
     mounted.push(wrapper);
 
+    expect(wrapper.find('[data-layout-mode="generic"]').exists()).toBe(true);
+    expect(wrapper.find('[data-layout-mode="grouped"]').exists()).toBe(false);
     expect(wrapper.find('[data-layout-tier="PRIMARY"]').findAll('[data-component-type="METRIC_CARD"]')).toHaveLength(4);
     expect(wrapper.find('[data-layout-tier="SECONDARY"]').findAll('[data-component-type="METRIC_CARD"]')).toHaveLength(4);
     expect(wrapper.findAll('[data-layout-column]')).toHaveLength(3);

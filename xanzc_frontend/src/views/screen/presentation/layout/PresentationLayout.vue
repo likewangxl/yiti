@@ -5,7 +5,53 @@
     data-schema-version="1"
     aria-label="配置化大屏"
   >
-    <section v-if="headerTiers.length" class="presentation-layout__header" data-layout-region="HEADER" aria-label="核心指标">
+    <section
+      v-if="headerGroups.length"
+      class="presentation-layout__header presentation-layout__header--grouped"
+      data-layout-region="HEADER"
+      data-layout-mode="grouped"
+      aria-label="核心指标分组"
+    >
+      <section
+        v-for="group in headerGroups"
+        :key="group.key"
+        class="presentation-layout__metric-group"
+        :class="`presentation-layout__metric-group--${group.key.toLowerCase()}`"
+        :data-layout-group="group.key"
+        :data-group-prefix="group.prefix"
+        :aria-label="group.label"
+      >
+        <header class="presentation-layout__metric-group-header">
+          <h2>{{ group.label }}</h2>
+          <small>{{ group.components.length }}项</small>
+        </header>
+        <div class="presentation-layout__metric-group-grid" :data-layout-tier="group.key">
+          <div
+            v-for="component in group.components"
+            :key="component.componentId"
+            class="presentation-layout__component"
+            :class="`presentation-layout__component--${String(component.componentType || '').toLowerCase()}`"
+            data-testid="presentation-layout-component"
+            :data-component-id="component.componentId"
+            :data-component-type="component.componentType"
+            :data-layout-region="component.layoutRegion"
+            :data-order="component.order"
+          >
+            <component
+              :is="widgetComponent(component)"
+              v-bind="widgetProps(component)"
+              @region-select="onRegionSelect"
+              @branch-select="onBranchSelect"
+              @map-context="onMapContext"
+              @metric-change="onMetricChange"
+              @business-line-select="onBusinessLineSelect"
+            />
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section v-else-if="headerTiers.length" class="presentation-layout__header" data-layout-region="HEADER" data-layout-mode="generic" aria-label="核心指标">
       <div
         v-for="tier in headerTiers"
         :key="tier.key"
@@ -153,6 +199,29 @@ const resolvedPresentation = computed(() => presentationOf(props.presentation));
 const components = computed(() => getDisplayComponents(props.presentation));
 
 const headerComponents = computed(() => components.value.filter(component => component.layoutRegion === 'HEADER'));
+const HEADER_GROUP_DEFINITIONS = Object.freeze([
+  { key: 'RETAIL', prefix: 'business-retail-', label: '零售业务' },
+  { key: 'CORP', prefix: 'business-corp-', label: '对公业务' },
+  { key: 'REVENUE', prefix: 'business-revenue-', label: '营业收入' }
+]);
+
+function headerGroupFor(component) {
+  const componentId = String(component?.componentId || '');
+  return HEADER_GROUP_DEFINITIONS.find(group => componentId.startsWith(group.prefix)) || null;
+}
+
+const headerGroups = computed(() => {
+  // Grouping is opt-in through the stable componentId prefixes. A mixed
+  // configuration stays on the generic layout so an unrecognised card is
+  // never silently dropped from the header.
+  if (!headerComponents.value.length
+    || !headerComponents.value.every(component => headerGroupFor(component)
+      && ['METRIC_CARD', 'COMPLETION'].includes(component.componentType))) return [];
+  return HEADER_GROUP_DEFINITIONS
+    .map(group => ({ ...group, components: headerComponents.value.filter(component => headerGroupFor(component)?.key === group.key) }))
+    .filter(group => group.components.length);
+});
+
 const headerTiers = computed(() => [
   // HEADER 的前四项是首屏重点卡，后续项自动落到次级卡行；不依赖组件类型，
   // 因为同一版本的保存配置允许用 METRIC_CARD 表达两种视觉层级。
@@ -304,6 +373,89 @@ function onMapContext(payload) {
   gap: 10px;
 }
 
+.presentation-layout__header--grouped {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.presentation-layout__metric-group {
+  display: flex;
+  min-width: 0;
+  padding: 8px;
+  flex-direction: column;
+  gap: 7px;
+  background: rgba(7, 22, 56, .68);
+  border: 1px solid var(--presentation-border-soft);
+  border-radius: 9px;
+}
+
+.presentation-layout__metric-group--retail { --group-accent: var(--presentation-cyan); }
+.presentation-layout__metric-group--corp { --group-accent: var(--presentation-violet); }
+.presentation-layout__metric-group--revenue { --group-accent: var(--presentation-blue); }
+
+.presentation-layout__metric-group-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.presentation-layout__metric-group-header::before {
+  width: 3px;
+  height: 16px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+  background: var(--group-accent, var(--presentation-cyan));
+  box-shadow: 0 0 9px var(--group-accent, var(--presentation-cyan));
+  content: '';
+}
+
+.presentation-layout__metric-group-header h2 {
+  min-width: 0;
+  margin: 0 auto 0 0;
+  overflow: hidden;
+  color: var(--presentation-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presentation-layout__metric-group-header small {
+  flex: 0 0 auto;
+  color: var(--presentation-text-dim);
+  font-size: 10px;
+}
+
+.presentation-layout__metric-group-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.presentation-layout__metric-group--revenue .presentation-layout__metric-group-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.presentation-layout__metric-group-grid > .presentation-layout__component {
+  min-width: 0;
+  min-height: 0;
+}
+
+.presentation-layout__header--grouped :deep(.presentation-metric-widget) {
+  min-height: 74px;
+  padding: 10px 12px;
+}
+
+.presentation-layout__header--grouped :deep(.presentation-metric-widget__value) {
+  font-size: clamp(15px, 1.3vw, 25px);
+}
+
 .presentation-layout__metric-tier {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -415,11 +567,16 @@ function onMapContext(payload) {
 @media (max-width: 1180px) {
   .presentation-layout__main { grid-template-columns: minmax(0, .9fr) minmax(0, 1.25fr) minmax(0, .9fr); gap: 9px; }
   .presentation-layout__metric-tier { gap: 8px; }
+  .presentation-layout__header--grouped { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .presentation-layout__metric-group--revenue { grid-column: 1 / -1; }
+  .presentation-layout__metric-group--revenue .presentation-layout__metric-group-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .presentation-layout__column { gap: 8px; }
   .presentation-layout__column--center > .presentation-layout__component--map-primary { min-height: 350px; }
 }
 
 @media (max-width: 900px) {
+  .presentation-layout__header--grouped { grid-template-columns: minmax(0, 1fr); }
+  .presentation-layout__metric-group--revenue { grid-column: auto; }
   .presentation-layout__main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .presentation-layout__column--center { grid-column: 1 / -1; grid-row: 1; }
   .presentation-layout__column--left { grid-column: 1; grid-row: 2; }

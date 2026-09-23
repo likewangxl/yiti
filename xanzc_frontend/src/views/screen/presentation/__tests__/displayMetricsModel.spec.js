@@ -87,4 +87,25 @@ describe('displayMetricsModel', () => {
     expect(second.components[0]).toMatchObject({ value: null, text: '—', state: 'NO_VALUE' });
     expect(second.components[0].subFields[0]).toMatchObject({ value: null, text: '—' });
   });
+
+  it('显式主字段缺失时不回退 block 的 value，按待接入处理；value 主字段仍读取兼容值', () => {
+    const config = { displaySchemaVersion: 1, display: { components: [
+      component('explicit-field', 'METRIC_CARD', {
+        content: { mainField: '测试_对公贷款目标完成率', subFields: [] },
+        format: { displayUnit: 'PERCENT', decimals: 2, emptyText: '待接入' },
+        dataRefs: [ref(31, '', '对公贷款完成率', 'PERCENT')]
+      }),
+      component('value-field', 'METRIC_CARD', {
+        content: { mainField: 'value', subFields: [] },
+        format: { displayUnit: 'YUAN', decimals: 2 },
+        dataRefs: [ref(32, '', '存款余额', 'YUAN')]
+      })
+    ] } };
+    const result = buildDisplayMetricsModel(config, {
+      blockResults: { 31: { value: 86.4, unit: 'PERCENT' }, 32: { value: 123.45, unit: 'YUAN' } }
+    });
+
+    expect(result.components[0]).toMatchObject({ value: null, text: '待接入', state: 'NO_SOURCE' });
+    expect(result.components[1]).toMatchObject({ value: 123.45, text: '123.45元', state: 'READY' });
+  });
 });

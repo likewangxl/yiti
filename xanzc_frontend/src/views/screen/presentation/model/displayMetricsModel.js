@@ -140,10 +140,14 @@ function resolveSource(model, component, ref, field) {
 
 function sourceValue(source, field, componentType) {
   if (!source) return { present: false, value: null, unit: null };
+  // `value` is the legacy single-value contract. Once a component names an
+  // explicit field, that field is the complete data contract: falling back to
+  // the block's generic value can show a different metric under the right
+  // title (for example a missing corporate rate displaying a retail rate).
   const candidates = componentType === 'COMPLETION' && field === 'value'
-    ? ['value', 'rate', 'completionRate', 'completion_rate'] : [field, 'value'];
+    ? ['value', 'rate', 'completionRate', 'completion_rate'] : [field];
   const key = candidates.find(candidate => Object.prototype.hasOwnProperty.call(source, candidate));
-  if (!key) return { present: true, value: null, unit: source.unit || null };
+  if (!key) return { present: false, value: null, unit: source.unit || source.unitCode || null };
   return { present: true, value: source[key], unit: source.unit || source.unitCode || null };
 }
 
@@ -163,14 +167,14 @@ function buildComponent(component, model, index, options) {
   const format = isObject(component?.format) ? component.format : {};
   const sourceUnit = main.unit || ref.unit || '';
   const formatted = formatDisplayMetric(main.value, format, sourceUnit);
-  const state = !source ? 'NO_SOURCE' : main.value === null || finite(main.value) === null ? 'NO_VALUE' : 'READY';
+  const state = !source || !main.present ? 'NO_SOURCE' : main.value === null || finite(main.value) === null ? 'NO_VALUE' : 'READY';
   const subFields = (Array.isArray(content.subFields) ? content.subFields : []).map((entry, subIndex) => {
     const definition = typeof entry === 'string' ? { field: entry, label: entry } : (isObject(entry) ? entry : {});
     const subField = text(definition.field) || text(definition.key);
     const subValue = sourceValue(source, subField, 'METRIC_CARD');
     const subFormat = { ...format, displayUnit: definition.unit || format.displayUnit };
     const subFormatted = formatDisplayMetric(subValue.value, subFormat, subValue.unit || definition.unit || ref.unit || '');
-    return { ...definition, key: definition.key || subField || `sub-${subIndex}`, field: subField, value: finite(subValue.value), text: subFormatted.text, unit: subFormatted.unit, state: !source ? 'NO_SOURCE' : subValue.value === null ? 'NO_VALUE' : 'READY' };
+    return { ...definition, key: definition.key || subField || `sub-${subIndex}`, field: subField, value: finite(subValue.value), text: subFormatted.text, unit: subFormatted.unit, state: !source || !subValue.present ? 'NO_SOURCE' : subValue.value === null ? 'NO_VALUE' : 'READY' };
   });
   const result = {
     componentId: text(component?.componentId) || `component-${index}`,

@@ -14,40 +14,87 @@
       :data-layout-region="item.layoutRegion"
       :data-state="item.state"
     >
-      <header class="presentation-metric-widget__header">
-        <div>
-          <h2>{{ item.title || '—' }}</h2>
-          <p v-if="item.subtitle">{{ item.subtitle }}</p>
-        </div>
-        <small v-if="item.metricName">{{ item.metricName }}</small>
-      </header>
-      <strong class="presentation-metric-widget__value" data-testid="presentation-metric-value">{{ item.text }}</strong>
-      <span v-if="item.state !== 'READY'" class="presentation-metric-widget__status" data-testid="presentation-metric-status">
-        {{ statusText(item.state) }}
-      </span>
       <div
-        v-if="item.componentType === 'COMPLETION'"
-        class="presentation-metric-widget__progress"
-        role="progressbar"
-        :aria-label="item.title || '完成情况'"
-        :aria-valuenow="item.progress === null ? undefined : item.progress"
-        aria-valuemin="0"
-        aria-valuemax="100"
-      ><i :style="{ width: `${item.progress === null ? 0 : item.progress}%` }" aria-hidden="true"></i></div>
-      <small v-if="item.description" class="presentation-metric-widget__description">{{ item.description }}</small>
-      <ul v-if="item.subFields?.length" class="presentation-metric-widget__sub-fields">
-        <li v-for="subField in item.subFields" :key="subField.key">
-          <span>{{ subField.label || subField.field || '辅助指标' }}</span><strong>{{ subField.text }}</strong>
-        </li>
-      </ul>
+        v-if="iconFor(item)"
+        class="presentation-metric-widget__icon"
+        data-testid="presentation-metric-icon"
+        :data-icon="iconName(item)"
+        aria-hidden="true"
+      ><component :is="iconFor(item)" /></div>
+      <div class="presentation-metric-widget__content">
+        <header class="presentation-metric-widget__header">
+          <div>
+            <h2>{{ item.title || '—' }}</h2>
+            <p v-if="item.subtitle">{{ item.subtitle }}</p>
+          </div>
+          <small v-if="item.metricName">{{ item.metricName }}</small>
+        </header>
+        <strong class="presentation-metric-widget__value" data-testid="presentation-metric-value">{{ item.text }}</strong>
+        <span v-if="item.state !== 'READY'" class="presentation-metric-widget__status" data-testid="presentation-metric-status">
+          {{ statusText(item.state) }}
+        </span>
+        <div
+          v-if="item.componentType === 'COMPLETION'"
+          class="presentation-metric-widget__progress"
+          role="progressbar"
+          :aria-label="item.title || '完成情况'"
+          :aria-valuenow="item.progress === null ? undefined : item.progress"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        ><i :style="{ width: `${item.progress === null ? 0 : item.progress}%` }" aria-hidden="true"></i></div>
+        <small v-if="item.description" class="presentation-metric-widget__description">{{ item.description }}</small>
+        <ul v-if="item.subFields?.length" class="presentation-metric-widget__sub-fields">
+          <li v-for="subField in item.subFields" :key="subField.key">
+            <span>{{ subField.label || subField.field || '辅助指标' }}</span><strong>{{ subField.text }}</strong>
+          </li>
+        </ul>
+      </div>
     </article>
   </section>
 </template>
 
 <script setup>
+import {
+  Coin,
+  CreditCard,
+  DataAnalysis,
+  Histogram,
+  Money,
+  OfficeBuilding,
+  PieChart,
+  Tickets,
+  TrendCharts,
+  Wallet
+} from '@element-plus/icons-vue';
+
 defineProps({
   components: { type: Array, default: () => [] }
 });
+
+const METRIC_ICONS = Object.freeze({
+  'business-retail-deposit-balance': ['Wallet', Wallet],
+  'business-retail-deposit-rate': ['TrendCharts', TrendCharts],
+  'business-retail-loan-balance': ['Coin', Coin],
+  'business-retail-loan-rate': ['DataAnalysis', DataAnalysis],
+  'business-corp-deposit-balance': ['OfficeBuilding', OfficeBuilding],
+  'business-corp-deposit-rate': ['Histogram', Histogram],
+  'business-corp-loan-balance': ['Money', Money],
+  'business-corp-loan-rate': ['PieChart', PieChart],
+  'business-revenue-operating': ['Tickets', Tickets],
+  'business-revenue-fee': ['CreditCard', CreditCard]
+});
+
+function iconEntry(item) {
+  return METRIC_ICONS[String(item?.componentId || '')] || null;
+}
+
+function iconFor(item) {
+  return iconEntry(item)?.[1] || null;
+}
+
+function iconName(item) {
+  return iconEntry(item)?.[0] || '';
+}
 
 function statusText(state) {
   return ({ NO_SOURCE: '待接入', NO_VALUE: '暂无有效值' }[state] || '暂不可用');
@@ -66,12 +113,12 @@ function toneClass(item) {
   --metric-accent: var(--panorama-cyan, #4de8ef);
   --metric-border: rgba(77, 232, 239, .42);
   position: relative;
-  display: grid;
+  display: flex;
   min-width: 0;
   min-height: 82px;
   height: 100%;
-  align-content: center;
-  gap: 4px;
+  align-items: center;
+  gap: 10px;
   padding: 12px 16px;
   overflow: hidden;
   color: var(--panorama-text, #eaf2ff);
@@ -81,6 +128,21 @@ function toneClass(item) {
   box-shadow: inset 0 1px 0 rgba(201, 231, 255, .06), 0 8px 22px rgba(0, 0, 0, .14);
 }
 .presentation-metric-widget::before { width: 3px; height: 32px; position: absolute; top: 50%; left: 0; border-radius: 0 2px 2px 0; background: var(--metric-accent); box-shadow: 0 0 12px var(--metric-accent); content: ''; transform: translateY(-50%); }
+.presentation-metric-widget__icon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  color: var(--metric-accent);
+  font-size: 22px;
+  background: rgba(55, 115, 205, .2);
+  border: 1px solid var(--metric-border);
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(77, 232, 239, .12);
+}
+.presentation-metric-widget__content { display: grid; min-width: 0; width: 100%; align-content: center; gap: 4px; }
 .presentation-metric-widget--completion { --metric-accent: var(--panorama-violet, #a979ff); --metric-border: rgba(169, 121, 255, .48); background: rgba(19, 24, 74, .88); }
 .presentation-metric-widget--cyan { --metric-accent: var(--panorama-cyan, #4de8ef); --metric-border: rgba(77, 232, 239, .42); }
 .presentation-metric-widget--violet { --metric-accent: var(--panorama-violet, #a979ff); --metric-border: rgba(169, 121, 255, .48); background: rgba(19, 24, 74, .88); }
@@ -106,6 +168,7 @@ function toneClass(item) {
 }
 @media (max-width: 620px) {
   .presentation-metric-widget { min-height: 76px; padding: 10px 12px; }
+  .presentation-metric-widget__icon { width: 28px; height: 28px; flex-basis: 28px; font-size: 19px; }
   .presentation-metric-widget__header h2 { font-size: 12px; }
   .presentation-metric-widget__value { font-size: clamp(16px, 5.2vw, 22px); }
 }
