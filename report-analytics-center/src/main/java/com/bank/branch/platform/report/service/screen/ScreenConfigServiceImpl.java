@@ -586,6 +586,14 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         List<String> eligibleCodes = new ArrayList<>();
         Map<String, OrgProfileDTO> eligibleProfiles = new LinkedHashMap<>();
         boolean needsLegacyPointFallback = false;
+        List<String> configuredDisplayOrgCodes = institutionRules == null
+                ? null : institutionRules.getDisplayOrgCodes();
+        Set<String> displayOrgCodes = configuredDisplayOrgCodes == null
+                ? Set.of() : new HashSet<>(configuredDisplayOrgCodes);
+        if (configuredDisplayOrgCodes != null && displayOrgCodes.isEmpty()) {
+            // 发布包校验已经拒绝空白名单；这里保留 fail-close，防止内部调用绕过包校验。
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
         for (String authorizedCode : authorizedOrgCodes) {
             if (authorizedCode == null || authorizedCode.isBlank()) {
                 throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
@@ -595,6 +603,11 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                     || profile.getOrgCode() == null
                     || !authorizedCode.equals(profile.getOrgCode().trim())) {
                 throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+            }
+            // displayOrgCodes 只收窄已授权集合；白名单中的未授权编码不会被 activeProfiles
+            // 或本循环带入，因此不能借展示配置扩大权限边界。
+            if (configuredDisplayOrgCodes != null && !displayOrgCodes.contains(authorizedCode)) {
+                continue;
             }
             if ("DEPARTMENT".equalsIgnoreCase(profile.getOrgNature())) {
                 continue;

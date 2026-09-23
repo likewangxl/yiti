@@ -538,6 +538,58 @@ class CodeScreenPresentationValidatorTest {
     }
 
     @Test
+    void institutionRulesAcceptOptionalDisplayOrgCodesAndRoundTripExactValues() throws Exception {
+        String json = "{\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"branch-overview-v1\",\"displaySchemaVersion\":1,"
+                + "\"display\":{\"components\":[{\"componentId\":\"deposit-card\","
+                + "\"componentType\":\"METRIC_CARD\",\"layoutRegion\":\"LEFT\","
+                + "\"order\":0,\"visible\":true,\"text\":{\"titleMode\":\"AUTO\"},"
+                + "\"format\":{\"displayUnit\":\"YUAN\"},\"content\":{\"mainField\":\"value\"},"
+                + "\"interaction\":{\"action\":\"NONE\"},"
+                + "\"dataRefs\":[{\"blockId\":1,\"role\":\"PRIMARY\",\"unit\":\"YUAN\"}]}]},"
+                + "\"institutionRules\":{\"allowedOperatingLevels\":[\"PRIMARY\"],"
+                + "\"allowedOrgNatures\":[\"SECONDARY_BRANCH\"],"
+                + "\"displayOrgCodes\":[\"ORG_001\",\"BR-02\"]}}}";
+
+        CodeScreenPresentationValidator.validateCanvasStyle(json);
+        InstitutionRulesDTO rules = CodeScreenPresentationValidator.institutionRules(
+                MAPPER.readTree(json));
+
+        assertThat(rules.getDisplayOrgCodes()).containsExactly("ORG_001", "BR-02");
+    }
+
+    @Test
+    void institutionRulesRejectInvalidDisplayOrgCodes() {
+        String prefix = "{\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"branch-overview-v1\",\"displaySchemaVersion\":1,"
+                + "\"display\":{\"components\":[{\"componentId\":\"deposit-card\","
+                + "\"componentType\":\"METRIC_CARD\",\"layoutRegion\":\"LEFT\","
+                + "\"order\":0,\"visible\":true,\"text\":{\"titleMode\":\"AUTO\"},"
+                + "\"format\":{\"displayUnit\":\"YUAN\"},\"content\":{\"mainField\":\"value\"},"
+                + "\"interaction\":{\"action\":\"NONE\"},"
+                + "\"dataRefs\":[{\"blockId\":1,\"role\":\"PRIMARY\",\"unit\":\"YUAN\"}]}]},"
+                + "\"institutionRules\":{\"allowedOperatingLevels\":[\"PRIMARY\"],"
+                + "\"allowedOrgNatures\":[\"SECONDARY_BRANCH\"],\"displayOrgCodes\":";
+        String suffix = "}}}";
+
+        for (String displayOrgCodes : List.of(
+                "[]",
+                "[\"\"]",
+                "[\"ORG_001\",\"ORG_001\"]",
+                "[\"ORG_001\",\"org_001\"]",
+                "[\"ORG 001\"]",
+                "[\"ORG/001\"]",
+                "[\"" + "x".repeat(65) + "\"]",
+                "[\"机构001\"]",
+                "[1]",
+                "null")) {
+            assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                    prefix + displayOrgCodes + suffix))
+                    .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        }
+    }
+
+    @Test
     void institutionRulesRejectInvalidExcludedOrgNameKeywords() {
         String prefix = "{\"presentation\":{\"type\":\"CODE\","
                 + "\"template\":\"branch-overview-v1\",\"displaySchemaVersion\":1,"

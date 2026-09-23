@@ -25,6 +25,7 @@ import java.util.Set;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.regex.Pattern;
 
 /**
  * 代码化经营大屏的纯 JSON 契约校验器。
@@ -64,6 +65,7 @@ public final class CodeScreenPresentationValidator {
     private static final int METRIC_LABEL_MAX_LENGTH = 40;
     private static final int SOURCE_AVAILABILITY_MESSAGE_MAX_LENGTH = 120;
     private static final int INSTITUTION_NAME_KEYWORD_MAX_LENGTH = 40;
+    private static final Pattern DISPLAY_ORG_CODE_PATTERN = Pattern.compile("[A-Za-z0-9_-]{1,64}");
     /** 运行目录只消费可信包内的明确分类；DEMO 等展示文案不能成为安全标签。 */
     private static final Set<String> DATA_CLASSIFICATIONS = Set.of("TEST", "LIVE", "PROD");
     private static final Set<String> SOURCE_AVAILABILITY_STATUSES = Set.of(
@@ -565,7 +567,7 @@ public final class CodeScreenPresentationValidator {
             throw invalid();
         }
         Set<String> allowedKeys = Set.of("allowedOperatingLevels", "allowedOrgNatures",
-                "excludedOrgNameKeywords");
+                "excludedOrgNameKeywords", "displayOrgCodes");
         Iterator<String> fieldNames = rules.fieldNames();
         while (fieldNames.hasNext()) {
             if (!allowedKeys.contains(fieldNames.next())) {
@@ -575,6 +577,7 @@ public final class CodeScreenPresentationValidator {
         validateRuleValues(rules.get("allowedOperatingLevels"));
         validateRuleValues(rules.get("allowedOrgNatures"));
         validateExcludedOrgNameKeywords(rules.get("excludedOrgNameKeywords"));
+        validateDisplayOrgCodes(rules.get("displayOrgCodes"));
     }
 
     private static void validateExcludedOrgNameKeywords(JsonNode keywords) {
@@ -605,6 +608,27 @@ public final class CodeScreenPresentationValidator {
             }
             String normalized = value.asText().trim().toUpperCase(Locale.ROOT);
             if (!seen.add(normalized)) {
+                throw invalid();
+            }
+        }
+    }
+
+    /**
+     * 校验机构编码展示白名单。编码必须保持原样匹配授权集合，不能通过空白、Unicode
+     * 或大小写归一化制造一个服务端无法精确识别的机构身份。
+     */
+    private static void validateDisplayOrgCodes(JsonNode values) {
+        if (values == null) {
+            return;
+        }
+        if (!values.isArray() || values.isEmpty()) {
+            throw invalid();
+        }
+        Set<String> seen = new HashSet<>();
+        for (JsonNode value : values) {
+            if (value == null || !value.isTextual()
+                    || !DISPLAY_ORG_CODE_PATTERN.matcher(value.asText()).matches()
+                    || !seen.add(value.asText().toUpperCase(Locale.ROOT))) {
                 throw invalid();
             }
         }

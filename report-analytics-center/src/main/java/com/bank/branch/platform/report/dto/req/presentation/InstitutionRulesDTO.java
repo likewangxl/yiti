@@ -26,4 +26,10 @@ public class InstitutionRulesDTO {
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private List<String> excludedOrgNameKeywords;
+
+    /**
+     * 可选的机构编码展示白名单；运行时只会与已授权且画像有效的机构集合求交。
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private List<String> displayOrgCodes;
 }

@@ -897,6 +897,37 @@ class ScreenConfigServiceTest {
     }
 
     @Test
+    void getRenderByCode_displayOrgCodesIntersectsAuthorizedProfilesWithoutExpandingScope() {
+        RptScreen screen = codeNamedRuntimeScreen();
+        screen.setCanvasPublishedJson(codePackageWithDisplayOrgCodes());
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
+        when(dsMapper.selectById(12L)).thenReturn(codeRuntimeDatasource());
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        Set<String> authorized = new java.util.LinkedHashSet<>(List.of("PROFILE", "FALLBACK", "FILTERED"));
+        when(scopeAuthorizationService.authorize(screen)).thenReturn(authorized);
+
+        OrgProfileDTO visible = profile("PROFILE", "ACTIVE", "SECONDARY_BRANCH", "GCJ02",
+                new BigDecimal("108.90"), new BigDecimal("34.20"), null);
+        OrgProfileDTO authorizedButNotDisplayed = profile("FALLBACK", "ACTIVE", "SECONDARY_BRANCH", "GCJ02",
+                new BigDecimal("108.91"), new BigDecimal("34.21"), null);
+        OrgProfileDTO filteredByRule = profile("FILTERED", "ACTIVE", "BRANCH", "GCJ02",
+                new BigDecimal("108.92"), new BigDecimal("34.22"), null);
+        OrgProfileDTO displayOnly = profile("DISPLAY_ONLY", "ACTIVE", "SECONDARY_BRANCH", "GCJ02",
+                new BigDecimal("108.93"), new BigDecimal("34.23"), null);
+        when(scopeAuthorizationService.activeProfiles(any(RptScreen.class), any(Set.class)))
+                .thenReturn(Map.of("PROFILE", visible, "FALLBACK", authorizedButNotDisplayed,
+                        "FILTERED", filteredByRule, "DISPLAY_ONLY", displayOnly));
+
+        ScreenRenderRespDTO render = service.getRenderByCode(screen.getScreenCode(), "published");
+
+        assertThat(render.getInstitutionRules().getDisplayOrgCodes())
+                .containsExactly("PROFILE", "FILTERED", "DISPLAY_ONLY");
+        assertThat(render.getPanoramaInstitutions()).extracting("orgCode")
+                .containsExactly("PROFILE");
+        assertThat(authorized).containsExactly("PROFILE", "FALLBACK", "FILTERED");
+    }
+
+    @Test
     void getRenderByCode_nameKeywordExclusionMissingOrgNameFailsClosed() {
         RptScreen screen = codeNamedRuntimeScreen();
         screen.setCanvasPublishedJson(codePackageWithExcludedOrgNameKeywords());
@@ -1130,6 +1161,22 @@ class ScreenConfigServiceTest {
             com.fasterxml.jackson.databind.node.ObjectNode rules =
                     (com.fasterxml.jackson.databind.node.ObjectNode) presentation.path("institutionRules");
             rules.set("excludedOrgNameKeywords", mapper.readTree("[\"小微支行\",\"社区支行\"]"));
+            return root.toString();
+        } catch (Exception ex) {
+            throw new AssertionError(ex);
+        }
+    }
+
+    private String codePackageWithDisplayOrgCodes() {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.node.ObjectNode root =
+                    (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(codePackageWithInstitutionRules());
+            com.fasterxml.jackson.databind.node.ObjectNode presentation =
+                    (com.fasterxml.jackson.databind.node.ObjectNode) root.path("canvasStyle").path("presentation");
+            com.fasterxml.jackson.databind.node.ObjectNode rules =
+                    (com.fasterxml.jackson.databind.node.ObjectNode) presentation.path("institutionRules");
+            rules.set("displayOrgCodes", mapper.readTree("[\"PROFILE\",\"FILTERED\",\"DISPLAY_ONLY\"]"));
             return root.toString();
         } catch (Exception ex) {
             throw new AssertionError(ex);
