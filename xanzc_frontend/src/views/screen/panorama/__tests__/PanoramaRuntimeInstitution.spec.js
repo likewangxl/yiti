@@ -7,8 +7,11 @@ const harness = vi.hoisted(() => ({
   state: null,
   router: { push: vi.fn(), back: vi.fn() },
   dashboardStub: {
-    props: { model: { type: Object, default: () => ({}) } },
-    template: '<main data-testid="dashboard-probe">{{ JSON.stringify(model) }}</main>'
+    props: {
+      model: { type: Object, default: () => ({}) },
+      sourcePresentation: { type: Object, default: () => ({}) }
+    },
+    template: '<main data-testid="dashboard-probe" :data-runtime-state="JSON.stringify(sourcePresentation.runtimeState)">{{ JSON.stringify(model) }}</main>'
   }
 }));
 
@@ -173,24 +176,30 @@ describe('PanoramaRuntime institutionViewModel 接入', () => {
     wrapper.unmount();
   });
 
-  it('v1 缺 institutionRules 时 fail-close，并在统一运行状态显示原因', () => {
+  it('v1 缺 institutionRules 时 fail-close，并在 runtimeState 保留原因', () => {
     const wrapper = mountRuntime(makeView('branch-overview-v1', { institutionRules: undefined }));
     const dashboardModel = JSON.parse(wrapper.get('[data-testid="dashboard-probe"]').text());
+    const runtimeState = JSON.parse(wrapper.get('[data-testid="dashboard-probe"]').attributes('data-runtime-state'));
 
     expect(dashboardModel.institutions).toEqual([]);
-    expect(wrapper.get('[data-testid="presentation-runtime-status"]').attributes('data-state')).toBe('UNCONFIGURED');
-    expect(wrapper.get('[data-testid="presentation-runtime-status"]').text())
+    expect(wrapper.find('[data-testid="presentation-runtime-status"]').exists()).toBe(false);
+    expect(runtimeState).toMatchObject({ status: 'UNCONFIGURED' });
+    expect(runtimeState.slots.institutions.status).toBe('UNCONFIGURED');
+    expect(runtimeState.slots.institutions.message)
       .toContain('未提供允许的机构层级或机构性质白名单');
-    expect(wrapper.text()).toContain('未提供允许的机构层级或机构性质白名单');
     wrapper.unmount();
   });
 
-  it('v1 缺服务端 panoramaInstitutions 时 fail-close，不使用查询机构行补目录', () => {
+  it('v1 缺服务端 panoramaInstitutions 时 fail-close，不使用查询机构行补目录且保留 runtimeState 原因', () => {
     const wrapper = mountRuntime(makeView('branch-overview-v1', { panoramaInstitutions: undefined }));
     const dashboardModel = JSON.parse(wrapper.get('[data-testid="dashboard-probe"]').text());
+    const runtimeState = JSON.parse(wrapper.get('[data-testid="dashboard-probe"]').attributes('data-runtime-state'));
 
     expect(dashboardModel.institutions).toEqual([]);
-    expect(wrapper.get('[data-testid="presentation-runtime-status"]').text())
+    expect(wrapper.find('[data-testid="presentation-runtime-status"]').exists()).toBe(false);
+    expect(runtimeState).toMatchObject({ status: 'UNCONFIGURED' });
+    expect(runtimeState.slots.institutions.status).toBe('UNCONFIGURED');
+    expect(runtimeState.slots.institutions.message)
       .toContain('机构展示必须使用服务端授权目录');
     wrapper.unmount();
   });

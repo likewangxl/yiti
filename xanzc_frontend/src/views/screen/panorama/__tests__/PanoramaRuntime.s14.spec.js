@@ -4,7 +4,10 @@ import { mount } from '@vue/test-utils';
 import { ref } from 'vue';
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(), back: vi.fn() }) }));
-vi.mock('../PanoramaDashboard.vue', () => ({ default: { template: '<main data-testid="legacy-dashboard">经营内容</main>' } }));
+vi.mock('../PanoramaDashboard.vue', () => ({ default: {
+  props: { sourcePresentation: { type: Object, default: () => ({}) } },
+  template: '<main data-testid="legacy-dashboard"><span data-testid="runtime-state-probe">{{ JSON.stringify(sourcePresentation.runtimeState) }}</span>经营内容</main>'
+} }));
 vi.mock('../CorporateDashboard.vue', () => ({ default: { template: '<main>对公内容</main>' } }));
 vi.mock('../RetailDashboard.vue', () => ({ default: { template: '<main>零售内容</main>' } }));
 vi.mock('../usePanoramaData', () => ({ usePanoramaData: () => ({
@@ -30,7 +33,7 @@ vi.mock('../usePanoramaData', () => ({ usePanoramaData: () => ({
 import PanoramaRuntime from '../PanoramaRuntime.vue';
 
 describe('PanoramaRuntime S14', () => {
-  it('新展示协议挂载统一质量状态，并将来源日期逐槽传给状态条', () => {
+  it('新展示协议不渲染顶部质量面板，但仍向 Dashboard 透传质量、批次和来源日期', () => {
     const view = {
       screenCode: 'SCR_CODE',
       renderPackage: { canvasStyle: { presentation: {
@@ -40,9 +43,13 @@ describe('PanoramaRuntime S14', () => {
     };
     const wrapper = mount(PanoramaRuntime, { props: { view, context: {} } });
 
-    expect(wrapper.get('[data-testid="presentation-runtime-status"]').attributes('data-state')).toBe('STALE');
-    expect(wrapper.get('[data-testid="presentation-runtime-batch"]').text()).toContain('B-OLD');
-    expect(wrapper.findAll('[data-testid="presentation-runtime-source-date"]').length).not.toBe(0);
+    expect(wrapper.find('[data-testid="presentation-runtime-status"]').exists()).toBe(false);
+    const runtimeState = JSON.parse(wrapper.get('[data-testid="runtime-state-probe"]').text());
+    expect(runtimeState).toMatchObject({
+      status: 'STALE',
+      batch: { batchId: 'B-OLD', dataDate: '2026-09-20', status: 'STALE' },
+      sourceDates: { deposit: '2026-09-20', customers: '2026-09-19' }
+    });
     expect(wrapper.text()).toContain('客户当前无有效值');
     wrapper.unmount();
   });

@@ -1,7 +1,5 @@
 <template>
   <section class="panorama-runtime panorama-runtime--immersive" data-testid="panorama-runtime">
-    <RuntimeStatusBanner :runtime="runtimePresentation" />
-
     <component :is="isCorporate ? CorporateDashboard : isRetail ? RetailDashboard : PanoramaDashboard"
       :model="dashboardModel"
       :source-presentation="dashboardSourcePresentation"
@@ -48,7 +46,6 @@ import {
   routeForBusinessLine,
   routeForInstitution
 } from '../presentation/navigation/navigationModel';
-import RuntimeStatusBanner from '../presentation/runtime/RuntimeStatusBanner.vue';
 import { buildRuntimePresentation } from '../presentation/runtime/runtimeState';
 import { buildInstitutionViewModel } from '../presentation/model/institutionViewModel';
 
