@@ -33,9 +33,19 @@
         </header>
         <div
           class="presentation-metric-widget__value-line"
-          :class="{ 'presentation-metric-widget__value-line--grouped': grouped }"
+          :class="{
+            'presentation-metric-widget__value-line--grouped': grouped,
+            'presentation-metric-widget__value-line--ring': shouldUseCompletionRing(item)
+          }"
         >
-          <strong class="presentation-metric-widget__value" data-testid="presentation-metric-value">{{ item.text }}</strong>
+          <CompletionRingGauge
+            v-if="shouldUseCompletionRing(item)"
+            :value="item.value"
+            :text="item.text"
+            :label="item.title || '完成率'"
+            :accent="ringAccent(item)"
+          />
+          <strong v-else class="presentation-metric-widget__value" data-testid="presentation-metric-value">{{ item.text }}</strong>
           <span
             v-if="grouped"
             class="presentation-metric-widget__month-delta"
@@ -78,8 +88,9 @@ import {
   TrendCharts,
   Wallet
 } from '@element-plus/icons-vue';
+import CompletionRingGauge from './CompletionRingGauge.vue';
 
-defineProps({
+const props = defineProps({
   components: { type: Array, default: () => [] },
   grouped: { type: Boolean, default: false }
 });
@@ -97,6 +108,13 @@ const METRIC_ICONS = Object.freeze({
   'business-revenue-fee': ['CreditCard', CreditCard]
 });
 
+const COMPLETION_RING_IDS = Object.freeze([
+  'business-retail-deposit-rate',
+  'business-retail-loan-rate',
+  'business-corp-deposit-rate',
+  'business-corp-loan-rate'
+]);
+
 function iconEntry(item) {
   return METRIC_ICONS[String(item?.componentId || '')] || null;
 }
@@ -107,6 +125,18 @@ function iconFor(item) {
 
 function iconName(item) {
   return iconEntry(item)?.[0] || '';
+}
+
+function shouldUseCompletionRing(item) {
+  return props.grouped
+    && item?.componentType === 'METRIC_CARD'
+    && COMPLETION_RING_IDS.includes(String(item?.componentId || ''));
+}
+
+function ringAccent(item) {
+  return String(item?.componentId || '').includes('-deposit-')
+    ? 'var(--panorama-cyan, #4de8ef)'
+    : 'var(--panorama-violet, #a979ff)';
 }
 
 function statusText(state) {
@@ -169,6 +199,8 @@ function toneClass(item) {
 .presentation-metric-widget__header small { flex: 0 0 auto; }
 .presentation-metric-widget__value-line { min-width: 0; max-width: 100%; margin-top: 2px; }
 .presentation-metric-widget__value-line--grouped { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; }
+.presentation-metric-widget__value-line--ring { align-items: center; flex-wrap: nowrap; gap: 8px; min-height: 64px; }
+.presentation-metric-widget__value-line--ring .presentation-metric-widget__month-delta { flex: 1 1 0; }
 .presentation-metric-widget__value { display: block; min-width: 0; max-width: 100%; margin: 0; color: #f4f8ff; font-size: clamp(18px, 1.55vw, 30px); font-weight: 750; line-height: 1.12; overflow-wrap: anywhere; word-break: break-word; }
 .presentation-metric-widget__value-line--grouped .presentation-metric-widget__value { display: inline; }
 .presentation-metric-widget__month-delta { min-width: 0; max-width: 100%; color: var(--panorama-text-dim, #8fa9db); font-size: 10px; font-weight: 550; line-height: 1.25; overflow-wrap: anywhere; word-break: break-word; }

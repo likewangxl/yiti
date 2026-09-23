@@ -113,4 +113,72 @@ describe('MetricDisplayWidgets', () => {
     });
     expect(genericWrapper.find('[data-testid="presentation-metric-month-delta"]').exists()).toBe(false);
   });
+
+  it('仅分组的四张显式完成率指标卡使用环形图，并保留图标和较上月行', () => {
+    const rateIds = [
+      'business-retail-deposit-rate',
+      'business-retail-loan-rate',
+      'business-corp-deposit-rate',
+      'business-corp-loan-rate'
+    ];
+    const wrapper = mount(MetricDisplayWidgets, {
+      props: {
+        grouped: true,
+        components: [
+          ...rateIds.map((componentId, order) => ({
+            componentId,
+            componentType: 'METRIC_CARD',
+            layoutRegion: 'HEADER',
+            order,
+            title: componentId,
+            text: order === 0 ? '90.64%' : order === 1 ? '125.00%' : order === 2 ? '-4.00%' : '待接入',
+            value: order === 0 ? 90.64 : order === 1 ? 125 : order === 2 ? -4 : null,
+            state: order === 3 ? 'NO_SOURCE' : 'READY',
+            monthDelta: { state: 'READY', text: '较上月 +1.00个百分点' },
+            subFields: []
+          })),
+          {
+            componentId: 'business-retail-deposit-balance', componentType: 'METRIC_CARD', layoutRegion: 'HEADER',
+            title: '存款余额', text: '125.00亿元', value: 125, state: 'READY', subFields: []
+          },
+          {
+            componentId: 'legacy-card', componentType: 'METRIC_CARD', layoutRegion: 'HEADER',
+            title: '旧卡片', text: '1.00亿元', value: 1, state: 'READY', subFields: []
+          },
+          {
+            componentId: 'legacy-completion', componentType: 'COMPLETION', layoutRegion: 'RIGHT',
+            title: '旧完成情况', text: '80.00%', progress: 80, value: 80, state: 'READY', subFields: []
+          }
+        ]
+      }
+    });
+
+    expect(wrapper.findAll('[data-testid="completion-ring-gauge"]')).toHaveLength(4);
+    expect(wrapper.find('[data-component-id="business-retail-deposit-rate"] [data-testid="presentation-metric-icon"]').exists()).toBe(true);
+    expect(wrapper.find('[data-component-id="business-retail-loan-rate"] [data-testid="presentation-metric-icon"]').exists()).toBe(true);
+    expect(wrapper.findAll('[data-testid="presentation-metric-month-delta"]')).toHaveLength(7);
+    expect(wrapper.find('[data-component-id="business-retail-deposit-rate"] [data-testid="completion-ring-gauge"]').attributes('data-progress')).toBe('90.64');
+    expect(wrapper.find('[data-component-id="business-retail-loan-rate"] [data-testid="completion-ring-gauge"]').attributes('data-progress')).toBe('100');
+    expect(wrapper.find('[data-component-id="business-corp-deposit-rate"] [data-testid="completion-ring-gauge"]').attributes('data-progress')).toBe('0');
+    expect(wrapper.find('[data-component-id="business-corp-loan-rate"] [data-testid="completion-ring-gauge"]').attributes('data-state')).toBe('MISSING');
+    expect(wrapper.find('[data-component-id="business-retail-deposit-balance"] [data-testid="completion-ring-gauge"]').exists()).toBe(false);
+    expect(wrapper.find('[data-component-id="legacy-card"] [data-testid="completion-ring-gauge"]').exists()).toBe(false);
+    expect(wrapper.find('[data-component-id="legacy-completion"] .presentation-metric-widget__progress').exists()).toBe(true);
+    expect(wrapper.find('[data-component-id="legacy-completion"] [data-testid="completion-ring-gauge"]').exists()).toBe(false);
+  });
+
+  it('非分组时即使组件ID匹配也保留普通指标卡展示', () => {
+    const wrapper = mount(MetricDisplayWidgets, {
+      props: {
+        grouped: false,
+        components: [{
+          componentId: 'business-retail-deposit-rate', componentType: 'METRIC_CARD', layoutRegion: 'HEADER',
+          title: '存款完成率', text: '90.64%', value: 90.64, state: 'READY', subFields: []
+        }]
+      }
+    });
+
+    expect(wrapper.find('[data-testid="completion-ring-gauge"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="presentation-metric-value"]').text()).toBe('90.64%');
+  });
 });
