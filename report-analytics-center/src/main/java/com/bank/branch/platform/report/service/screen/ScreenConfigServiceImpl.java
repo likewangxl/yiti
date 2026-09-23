@@ -602,6 +602,9 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             if (institutionRules != null && !matchesInstitutionRules(profile, institutionRules)) {
                 continue;
             }
+            if (institutionRules != null && matchesExcludedOrgNameKeyword(profile, institutionRules)) {
+                continue;
+            }
             eligibleCodes.add(authorizedCode);
             eligibleProfiles.put(authorizedCode, profile);
             if (strictInstitutionRules && !profileLocationUsable(profile)) {
@@ -655,6 +658,32 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         }
         return levels.contains(normalizeRuleValue(profile.getOperatingLevel()))
                 && natures.contains(normalizeRuleValue(profile.getOrgNature()));
+    }
+
+    /**
+     * 按发布包中的临时名称关键词过滤已通过经营层级/性质白名单的机构。
+     * 画像名称是该规则的唯一输入；规则启用时名称缺失必须拒绝，避免把未知机构
+     * 当作可展示机构放行。此处只返回展示过滤结果，不修改授权集合或画像对象。
+     */
+    private boolean matchesExcludedOrgNameKeyword(OrgProfileDTO profile, InstitutionRulesDTO rules) {
+        List<String> keywords = rules.getExcludedOrgNameKeywords();
+        if (keywords == null || keywords.isEmpty()) {
+            return false;
+        }
+        String orgName = profile.getOrgName();
+        if (orgName == null || orgName.isBlank()) {
+            throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+        }
+        String normalizedName = orgName.trim().toUpperCase(Locale.ROOT);
+        for (String keyword : keywords) {
+            if (keyword == null || keyword.isBlank()) {
+                throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
+            }
+            if (normalizedName.contains(keyword.trim().toUpperCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Set<String> normalizeRuleSet(List<String> values) {

@@ -63,6 +63,7 @@ public final class CodeScreenPresentationValidator {
     private static final int DATA_NOTICE_MAX_LENGTH = 240;
     private static final int METRIC_LABEL_MAX_LENGTH = 40;
     private static final int SOURCE_AVAILABILITY_MESSAGE_MAX_LENGTH = 120;
+    private static final int INSTITUTION_NAME_KEYWORD_MAX_LENGTH = 40;
     /** 运行目录只消费可信包内的明确分类；DEMO 等展示文案不能成为安全标签。 */
     private static final Set<String> DATA_CLASSIFICATIONS = Set.of("TEST", "LIVE", "PROD");
     private static final Set<String> SOURCE_AVAILABILITY_STATUSES = Set.of(
@@ -563,7 +564,8 @@ public final class CodeScreenPresentationValidator {
         if (!rules.isObject()) {
             throw invalid();
         }
-        Set<String> allowedKeys = Set.of("allowedOperatingLevels", "allowedOrgNatures");
+        Set<String> allowedKeys = Set.of("allowedOperatingLevels", "allowedOrgNatures",
+                "excludedOrgNameKeywords");
         Iterator<String> fieldNames = rules.fieldNames();
         while (fieldNames.hasNext()) {
             if (!allowedKeys.contains(fieldNames.next())) {
@@ -572,6 +574,24 @@ public final class CodeScreenPresentationValidator {
         }
         validateRuleValues(rules.get("allowedOperatingLevels"));
         validateRuleValues(rules.get("allowedOrgNatures"));
+        validateExcludedOrgNameKeywords(rules.get("excludedOrgNameKeywords"));
+    }
+
+    private static void validateExcludedOrgNameKeywords(JsonNode keywords) {
+        if (keywords == null) {
+            return;
+        }
+        if (!keywords.isArray() || keywords.isEmpty()) {
+            throw invalid();
+        }
+        Set<String> seen = new HashSet<>();
+        for (JsonNode keyword : keywords) {
+            validatePlainText(keyword, INSTITUTION_NAME_KEYWORD_MAX_LENGTH, false);
+            String normalized = keyword.asText().trim().toUpperCase(Locale.ROOT);
+            if (!seen.add(normalized)) {
+                throw invalid();
+            }
+        }
     }
 
     private static void validateRuleValues(JsonNode values) {

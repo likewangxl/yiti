@@ -2,6 +2,7 @@ package com.bank.branch.platform.report.service.screen;
 
 import com.bank.branch.platform.report.entity.RptScreenBlock;
 import com.bank.branch.platform.report.dto.req.CanvasStyleDTO;
+import com.bank.branch.platform.report.dto.req.presentation.InstitutionRulesDTO;
 import com.bank.branch.platform.report.entity.RptScreenDatasource;
 import com.bank.branch.platform.report.enums.RptErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -510,6 +511,60 @@ class CodeScreenPresentationValidatorTest {
                 "{\"allowedOperatingLevels\":[\"PRIMARY\",\"PRIMARY\"],\"allowedOrgNatures\":[\"SECONDARY_BRANCH\"]}",
                 "{\"allowedOperatingLevels\":[\"PRIMARY\"],\"allowedOrgNatures\":[\"SECONDARY_BRANCH\"],\"extra\":true}")) {
             assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(prefix + rules + suffix))
+                    .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        }
+    }
+
+    @Test
+    void institutionRulesAcceptOptionalExcludedOrgNameKeywords() throws Exception {
+        String prefix = "{\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"branch-overview-v1\",\"displaySchemaVersion\":1,"
+                + "\"display\":{\"components\":[{\"componentId\":\"deposit-card\","
+                + "\"componentType\":\"METRIC_CARD\",\"layoutRegion\":\"LEFT\","
+                + "\"order\":0,\"visible\":true,\"text\":{\"titleMode\":\"AUTO\"},"
+                + "\"format\":{\"displayUnit\":\"YUAN\"},\"content\":{\"mainField\":\"value\"},"
+                + "\"interaction\":{\"action\":\"NONE\"},"
+                + "\"dataRefs\":[{\"blockId\":1,\"role\":\"PRIMARY\",\"unit\":\"YUAN\"}]}]},"
+                + "\"institutionRules\":{\"allowedOperatingLevels\":[\"PRIMARY\"],"
+                + "\"allowedOrgNatures\":[\"SECONDARY_BRANCH\"],"
+                + "\"excludedOrgNameKeywords\":[\"小微支行\",\"社区支行\"]}}}";
+
+        CodeScreenPresentationValidator.validateCanvasStyle(prefix);
+        InstitutionRulesDTO rules = CodeScreenPresentationValidator.institutionRules(
+                MAPPER.readTree(prefix));
+
+        assertThat(rules.getExcludedOrgNameKeywords())
+                .containsExactly("小微支行", "社区支行");
+    }
+
+    @Test
+    void institutionRulesRejectInvalidExcludedOrgNameKeywords() {
+        String prefix = "{\"presentation\":{\"type\":\"CODE\","
+                + "\"template\":\"branch-overview-v1\",\"displaySchemaVersion\":1,"
+                + "\"display\":{\"components\":[{\"componentId\":\"deposit-card\","
+                + "\"componentType\":\"METRIC_CARD\",\"layoutRegion\":\"LEFT\","
+                + "\"order\":0,\"visible\":true,\"text\":{\"titleMode\":\"AUTO\"},"
+                + "\"format\":{\"displayUnit\":\"YUAN\"},\"content\":{\"mainField\":\"value\"},"
+                + "\"interaction\":{\"action\":\"NONE\"},"
+                + "\"dataRefs\":[{\"blockId\":1,\"role\":\"PRIMARY\",\"unit\":\"YUAN\"}]}]},"
+                + "\"institutionRules\":{\"allowedOperatingLevels\":[\"PRIMARY\"],"
+                + "\"allowedOrgNatures\":[\"SECONDARY_BRANCH\"],"
+                + "\"excludedOrgNameKeywords\":";
+        String suffix = "}}}";
+
+        for (String keywords : List.of(
+                "[]",
+                "[\"\"]",
+                "[\"   \t\"]",
+                "[\"小微支行\",\"小微支行\"]",
+                "[\"小微支行\",\" 小微支行 \"]",
+                "[\"<script>\"]",
+                "[\"line\\nfeed\"]",
+                "[\"" + "x".repeat(41) + "\"]",
+                "[1]",
+                "null")) {
+            assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                    prefix + keywords + suffix))
                     .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
         }
     }

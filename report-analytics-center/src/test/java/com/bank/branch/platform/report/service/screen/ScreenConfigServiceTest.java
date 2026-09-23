@@ -863,6 +863,59 @@ class ScreenConfigServiceTest {
     }
 
     @Test
+    void getRenderByCode_newPresentationExcludesNameKeywordsAfterWhitelistWithoutMutatingScope() {
+        RptScreen screen = codeNamedRuntimeScreen();
+        screen.setCanvasPublishedJson(codePackageWithExcludedOrgNameKeywords());
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
+        when(dsMapper.selectById(12L)).thenReturn(codeRuntimeDatasource());
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        Set<String> authorized = new java.util.LinkedHashSet<>(List.of("VISIBLE", "SMALL", "OUTSIDE"));
+        when(scopeAuthorizationService.authorize(screen)).thenReturn(authorized);
+
+        OrgProfileDTO visible = profile("VISIBLE", "ACTIVE", "SECONDARY_BRANCH", "GCJ02",
+                new BigDecimal("108.90"), new BigDecimal("34.20"), null);
+        visible.setOrgName("普通经营机构");
+        OrgProfileDTO small = profile("SMALL", "ACTIVE", "SECONDARY_BRANCH", "GCJ02",
+                new BigDecimal("108.91"), new BigDecimal("34.21"), null);
+        small.setOrgName("某小微支行");
+        OrgProfileDTO outside = profile("OUTSIDE", "ACTIVE", "OUTLET", "GCJ02",
+                new BigDecimal("108.92"), new BigDecimal("34.22"), null);
+        outside.setOperatingLevel("SUBORDINATE");
+        outside.setOrgName("社区支行");
+        when(scopeAuthorizationService.activeProfiles(any(RptScreen.class), any(Set.class)))
+                .thenReturn(Map.of("VISIBLE", visible, "SMALL", small, "OUTSIDE", outside));
+
+        ScreenRenderRespDTO render = service.getRenderByCode(screen.getScreenCode(), "published");
+
+        assertThat(render.getPanoramaInstitutions()).extracting("orgCode")
+                .containsExactly("VISIBLE");
+        assertThat(authorized).containsExactly("VISIBLE", "SMALL", "OUTSIDE");
+        assertThat(visible.getOperatingLevel()).isEqualTo("PRIMARY");
+        assertThat(small.getOperatingLevel()).isEqualTo("PRIMARY");
+        assertThat(render.getInstitutionRules().getExcludedOrgNameKeywords())
+                .containsExactly("小微支行", "社区支行");
+    }
+
+    @Test
+    void getRenderByCode_nameKeywordExclusionMissingOrgNameFailsClosed() {
+        RptScreen screen = codeNamedRuntimeScreen();
+        screen.setCanvasPublishedJson(codePackageWithExcludedOrgNameKeywords());
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(screen));
+        when(dsMapper.selectById(12L)).thenReturn(codeRuntimeDatasource());
+        ReflectionTestUtils.setField(service, "scopeAuthorizationService", scopeAuthorizationService);
+        when(scopeAuthorizationService.authorize(screen)).thenReturn(Set.of("MISSING_NAME"));
+
+        OrgProfileDTO missingName = profile("MISSING_NAME", "ACTIVE", "SECONDARY_BRANCH", "GCJ02",
+                new BigDecimal("108.90"), new BigDecimal("34.20"), null);
+        missingName.setOrgName(null);
+        when(scopeAuthorizationService.activeProfiles(any(RptScreen.class), any(Set.class)))
+                .thenReturn(Map.of("MISSING_NAME", missingName));
+
+        assertThatThrownBy(() -> service.getRenderByCode(screen.getScreenCode(), "published"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_SCOPE_INVALID.getCode());
+    }
+
+    @Test
     void getRenderByCode_newPresentationWithoutInstitutionRulesFailsClosed() {
         RptScreen screen = codeNamedRuntimeScreen();
         screen.setCanvasPublishedJson(codePackageWithoutInstitutionRules());
@@ -1061,6 +1114,22 @@ class ScreenConfigServiceTest {
             PublishedDatasourceDefinition.write(
                     (com.fasterxml.jackson.databind.node.ObjectNode) root.path("bindSnapshots").path("1"),
                     codeRuntimeDatasource(), mapper);
+            return root.toString();
+        } catch (Exception ex) {
+            throw new AssertionError(ex);
+        }
+    }
+
+    private String codePackageWithExcludedOrgNameKeywords() {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.node.ObjectNode root =
+                    (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(codePackageWithInstitutionRules());
+            com.fasterxml.jackson.databind.node.ObjectNode presentation =
+                    (com.fasterxml.jackson.databind.node.ObjectNode) root.path("canvasStyle").path("presentation");
+            com.fasterxml.jackson.databind.node.ObjectNode rules =
+                    (com.fasterxml.jackson.databind.node.ObjectNode) presentation.path("institutionRules");
+            rules.set("excludedOrgNameKeywords", mapper.readTree("[\"小微支行\",\"社区支行\"]"));
             return root.toString();
         } catch (Exception ex) {
             throw new AssertionError(ex);

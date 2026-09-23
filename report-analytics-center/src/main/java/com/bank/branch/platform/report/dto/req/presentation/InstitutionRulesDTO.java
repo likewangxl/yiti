@@ -19,4 +19,11 @@ public class InstitutionRulesDTO {
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private List<String> allowedOrgNatures;
+
+    /**
+     * 临时按机构画像名称排除的关键词；缺省时不启用名称排除。
+     * 关键词只影响展示目录，不改变授权机构集合或画像经营值。
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private List<String> excludedOrgNameKeywords;
 }
