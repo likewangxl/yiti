@@ -70,6 +70,45 @@ const mounted = [];
 afterEach(() => mounted.splice(0).forEach(wrapper => wrapper.unmount()));
 
 describe('PresentationLayout', () => {
+  it('成对收入卡合并为包含关系图表并保留两个原值', () => {
+    const revenueComponents = [
+      ['business-revenue-operating', '营业收入', '营业收入', 'YUAN'],
+      ['business-revenue-fee', '中间业务收入', '中间业务收入', 'YUAN']
+    ].map(([componentId, title, mainField, unit], order) => ({
+      componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order, visible: true,
+      text: { titleMode: 'CUSTOM', title }, format: { displayUnit: 'TEN_THOUSAND', decimals: 2 },
+      content: { mainField }, dataRefs: [{ blockId: 31, unit }]
+    }));
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        presentation: { displaySchemaVersion: 1, display: { components: revenueComponents } },
+        model: { blockResults: { 31: { 营业收入: 200000000, 中间业务收入: 50000000, unitByField: { 营业收入: 'YUAN', 中间业务收入: 'YUAN' } } } }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+    expect(wrapper.find('[data-layout-group="REVENUE"] [data-testid="revenue-share-chart"]').exists()).toBe(true);
+    expect(wrapper.find('[data-layout-group="REVENUE"] [data-testid="revenue-share-chart"]').text()).toContain('25.0%');
+    expect(wrapper.find('[data-layout-group="REVENUE"] [data-testid="metric-widget"]').exists()).toBe(false);
+  });
+
+  it('收入组有额外已配置指标时仍展示该指标', () => {
+    const ids = ['business-revenue-operating', 'business-revenue-fee', 'business-revenue-other'];
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        presentation: { displaySchemaVersion: 1, display: { components: ids.map((componentId, order) => ({
+          componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order, visible: true,
+          text: { titleMode: 'CUSTOM', title: componentId }, content: { mainField: 'value' }, dataRefs: [{ blockId: order + 1, unit: 'YUAN' }]
+        })) } },
+        model: { blockResults: { 1: { value: 100, unit: 'YUAN' }, 2: { value: 20, unit: 'YUAN' }, 3: { value: 5, unit: 'YUAN' } } }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+    expect(wrapper.find('[data-component-id="business-revenue-share"]').exists()).toBe(true);
+    expect(wrapper.find('[data-component-id="business-revenue-other"]').exists()).toBe(true);
+  });
+
   it('只净化展示文案，不改动指标绑定字段和原始配置', () => {
     const metric = {
       componentId: 'business-retail-deposit-balance', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 0, visible: true,
@@ -129,7 +168,7 @@ describe('PresentationLayout', () => {
     expect(wrapper.find('[data-layout-group="REVENUE"]').attributes('data-group-prefix')).toBe('business-revenue-');
     expect(wrapper.find('[data-layout-group="RETAIL"]').findAll('[data-testid="presentation-layout-component"]')).toHaveLength(4);
     expect(wrapper.find('[data-layout-group="CORP"]').findAll('[data-testid="presentation-layout-component"]')).toHaveLength(4);
-    expect(wrapper.find('[data-layout-group="REVENUE"]').findAll('[data-testid="presentation-layout-component"]')).toHaveLength(2);
+    expect(wrapper.find('[data-layout-group="REVENUE"]').findAll('[data-testid="presentation-layout-component"]')).toHaveLength(1);
     expect(wrapper.find('[data-layout-group="RETAIL"] [data-testid="metric-widget"]').attributes('data-grouped')).toBe('true');
   });
 

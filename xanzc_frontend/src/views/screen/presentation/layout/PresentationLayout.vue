@@ -26,8 +26,14 @@
           <small>{{ group.components.length }}项</small>
         </header>
         <div class="presentation-layout__metric-group-grid" :data-layout-tier="group.key">
+          <div v-if="isRevenuePair(group)" class="presentation-layout__component presentation-layout__component--revenue-share" data-testid="presentation-layout-component" data-component-id="business-revenue-share" data-component-type="REVENUE_SHARE" data-layout-region="HEADER">
+            <RevenueShareWidget
+              :operating="metricById.get('business-revenue-operating')"
+              :intermediary="metricById.get('business-revenue-fee')"
+            />
+          </div>
           <div
-            v-for="component in group.components"
+            v-for="component in displayGroupComponents(group)"
             :key="component.componentId"
             class="presentation-layout__component"
             :class="`presentation-layout__component--${String(component.componentType || '').toLowerCase()}`"
@@ -160,6 +166,7 @@
 import { computed } from 'vue';
 
 import MetricDisplayWidgets from '../widgets/MetricDisplayWidgets.vue';
+import RevenueShareWidget from '../widgets/RevenueShareWidget.vue';
 import SeriesTableWidgets from '../widgets/SeriesTableWidgets.vue';
 import CompositionTabsWidget from '../widgets/CompositionTabsWidget.vue';
 import InstitutionRankingWidget from '../widgets/InstitutionRankingWidget.vue';
@@ -255,6 +262,15 @@ const seriesModel = computed(() => buildDisplaySeriesTableModel(resolvedPresenta
 const compositionModel = computed(() => buildCompositionTabsModel(resolvedPresentation.value, props.model));
 
 const metricById = computed(() => new Map(metricsModel.value.components.map(item => [item.componentId, item])));
+function isRevenuePair(group) {
+  return group.key === 'REVENUE'
+    && group.components.some(component => component.componentId === 'business-revenue-operating')
+    && group.components.some(component => component.componentId === 'business-revenue-fee');
+}
+function displayGroupComponents(group) {
+  if (!isRevenuePair(group)) return group.components;
+  return group.components.filter(component => !['business-revenue-operating', 'business-revenue-fee'].includes(component.componentId));
+}
 const seriesById = computed(() => new Map(seriesModel.value.components.map(item => [item.componentId, item])));
 const compositionById = computed(() => new Map(compositionModel.value.components.map(item => [item.componentId, item])));
 
@@ -468,6 +484,7 @@ function onMapContext(payload) {
 }
 
 .presentation-layout__header--grouped :deep(.presentation-metric-widget) {
+  box-sizing: border-box;
   min-height: 74px;
   padding: 10px 12px;
 }
@@ -496,7 +513,7 @@ function onMapContext(payload) {
 .presentation-layout__main {
   display: grid;
   grid-template-columns: minmax(0, .95fr) minmax(0, 1.4fr) minmax(0, .95fr);
-  align-items: start;
+  align-items: stretch;
   gap: 12px;
   min-height: 620px;
 }
@@ -511,8 +528,7 @@ function onMapContext(payload) {
 
 .presentation-layout__column--left,
 .presentation-layout__column--right {
-  align-self: start;
-  height: fit-content;
+  align-self: stretch;
 }
 
 .presentation-layout__column--left > .presentation-layout__component,
@@ -522,13 +538,14 @@ function onMapContext(payload) {
 
 .presentation-layout__column--left > .presentation-layout__component:first-child {
   min-height: 220px;
-  max-height: min(680px, calc(100vh - 240px));
+  flex: 1 1 auto;
   overflow: auto;
 }
 
 .presentation-layout__column--right > .presentation-layout__component:first-child {
   min-height: 420px;
-  height: clamp(420px, calc(100vh - 292px), 820px);
+  height: auto;
+  flex: 1 1 auto;
 }
 
 .presentation-layout__column--center > .presentation-layout__component {
@@ -589,7 +606,7 @@ function onMapContext(payload) {
   .presentation-layout__metric-tier { gap: 8px; }
   .presentation-layout__header--grouped { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .presentation-layout__metric-group--revenue { grid-column: 1 / -1; }
-  .presentation-layout__metric-group--revenue .presentation-layout__metric-group-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .presentation-layout__metric-group--revenue .presentation-layout__metric-group-grid { grid-template-columns: minmax(0, 1fr); }
   .presentation-layout__column { gap: 8px; }
   .presentation-layout__column--center > .presentation-layout__component--map-primary { min-height: 350px; }
 }
@@ -601,7 +618,7 @@ function onMapContext(payload) {
   .presentation-layout__column--center { grid-column: 1 / -1; grid-row: 1; }
   .presentation-layout__column--left { grid-column: 1; grid-row: 2; }
   .presentation-layout__column--right { grid-column: 2; grid-row: 2; }
-  .presentation-layout__column--right > .presentation-layout__component:first-child { height: clamp(380px, calc(100vh - 240px), 680px); min-height: 380px; }
+  .presentation-layout__column--right > .presentation-layout__component:first-child { height: auto; min-height: 380px; }
   .presentation-layout__column--center > .presentation-layout__component--map-primary { min-height: 360px; }
   .presentation-layout__footer--bottom { grid-template-columns: 1fr; }
 }

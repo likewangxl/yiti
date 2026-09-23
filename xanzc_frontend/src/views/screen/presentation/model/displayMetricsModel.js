@@ -348,6 +348,7 @@ function buildComponent(component, model, index, options) {
     blockId: ref.blockId,
     value: finite(formatted.value),
     rawValue: main.value,
+    sourceUnit,
     unit: formatted.unit,
     text: formatted.text,
     state,
