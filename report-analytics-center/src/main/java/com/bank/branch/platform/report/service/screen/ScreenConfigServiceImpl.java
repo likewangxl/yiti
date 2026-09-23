@@ -413,7 +413,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             d.setRenderPackageJson(s.getCanvasPublishedJson());
             d.setState("published");
         }
-        boolean codePresentation = validateRenderPackage(s, d.getRenderPackageJson());
+        boolean codePresentation = validateRenderPackage(s, d.getRenderPackageJson(), !draft);
         InstitutionRulesDTO institutionRules = codePresentation
                 ? institutionRulesFromPackage(d.getRenderPackageJson()) : null;
         boolean strictInstitutionRules = codePresentation
@@ -449,7 +449,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     /**
      * CODE 包在运行时再次按不可变快照校验；旧包保持历史解析路径。
      */
-    private boolean validateRenderPackage(RptScreen screen, String packageJson) {
+    private boolean validateRenderPackage(RptScreen screen, String packageJson, boolean publishedPackage) {
         try {
             JsonNode root = objectMapper.readTree(packageJson == null || packageJson.isBlank()
                     ? "{}" : packageJson);
@@ -468,7 +468,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                     throw new RptException(RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED, ex);
                 }
                 CodeScreenPresentationValidator.validatePublishedPackage(strictRoot);
-                validateCodeDatasourceBindings(screen, strictRoot, template);
+                validateCodeDatasourceBindings(screen, strictRoot, template, publishedPackage);
             }
             return code;
         } catch (RptException e) {
@@ -501,8 +501,16 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         }
     }
 
-    /** CODE 运行/草稿预览按发布包快照的真实 dsId 校验字段存在性和 DIM/METRIC 角色。 */
+    /** CODE 运行/草稿预览按 bindSnapshot 的真实 dsId 校验字段存在性和 DIM/METRIC 角色。 */
     private void validateCodeDatasourceBindings(RptScreen screen, JsonNode root, String template) {
+        validateCodeDatasourceBindings(screen, root, template, true);
+    }
+
+    /**
+     * 校验 CODE 绑定的当前数据源字段；草稿预览使用当前数据源，发布包仍强制不可变来源快照。
+     */
+    private void validateCodeDatasourceBindings(RptScreen screen, JsonNode root, String template,
+                                                boolean publishedPackage) {
         JsonNode components = root.path("components");
         JsonNode snapshots = root.path("bindSnapshots");
         if (!components.isArray() || !snapshots.isObject()) {
@@ -524,7 +532,8 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
                 throw new RptException(RptErrorCode.SCREEN_DS_NOT_FOUND);
             }
             RptScreenDatasource effective = PublishedDatasourceDefinition.effective(
-                    snapshot, datasource, objectMapper, PublishedDatasourceDefinition.requiredFor(root));
+                    snapshot, datasource, objectMapper,
+                    publishedPackage && PublishedDatasourceDefinition.requiredFor(root));
             try {
                 CodeScreenPresentationValidator.validateBindAgainstDatasource(
                         bind, bindingKey, effective, template, root.path("canvasStyle"));
@@ -792,7 +801,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             }
             pkg.put("schemaVersion", hasV2MapInComponents(pkg.path("components")) ? 2 : 1);
             String packageJson = pkg.toString();
-            validateRenderPackage(s, packageJson);
+            validateRenderPackage(s, packageJson, false);
             return packageJson;
         } catch (RptException e) {
             throw e;

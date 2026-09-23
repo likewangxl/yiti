@@ -47,6 +47,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -961,6 +962,61 @@ class ScreenConfigServiceTest {
         assertThat(pkg.path("bindSnapshots").has("999")).isFalse();
     }
 
+    @Test
+    void getRenderByCode_draftNewDisplayProtocolUsesCurrentDatasourceAndScreenBlockOnBothValidations()
+            throws Exception {
+        RptScreen s = configuredScreen(8L);
+        s.setCanvasStyleJson(newDisplayProtocolCanvasStyle(101L));
+        s.setCanvasDraftJson("{\"schemaVersion\":1,\"components\":["
+                + "{\"component\":\"ChartWidget\",\"id\":\"w-deposit\",\"blockId\":101,"
+                + "\"propValue\":{\"bindingKey\":\"deposit\"},"
+                + "\"bindJson\":\"{\\\"dsId\\\":12,\\\"period\\\":\\\"LATEST\\\","
+                + "\\\"fields\\\":{\\\"value\\\":\\\"balance\\\"},"
+                + "\\\"units\\\":{\\\"value\\\":\\\"YUAN\\\"}}\"}]}" );
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(s));
+        when(resourceApi.hasResourcePermission("E001", "R_RPT_SCR_CV_GET")).thenReturn(true);
+        RptScreenBlock block = new RptScreenBlock();
+        block.setId(101L);
+        block.setScreenId(8L);
+        block.setComponentType("METRIC_CARD");
+        block.setBindJson("{\"dsId\":12,\"period\":\"LATEST\","
+                + "\"fields\":{\"value\":\"balance\"},\"units\":{\"value\":\"YUAN\"}}");
+        block.setStyleJson("{}");
+        block.setDrillJson("{}");
+        RptScreenBlock otherScreen = new RptScreenBlock();
+        otherScreen.setId(999L);
+        otherScreen.setScreenId(99L);
+        otherScreen.setComponentType("METRIC_CARD");
+        otherScreen.setBindJson(block.getBindJson());
+        otherScreen.setStyleJson("{}");
+        otherScreen.setDrillJson("{}");
+        when(blockMapper.selectList(any(Wrapper.class))).thenReturn(List.of(block, otherScreen));
+        when(dsMapper.selectById(12L)).thenReturn(codeRuntimeDatasource());
+
+        ScreenRenderRespDTO render = service.getRenderByCode(s.getScreenCode(), "draft");
+
+        com.fasterxml.jackson.databind.JsonNode pkg = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(render.getRenderPackageJson());
+        assertThat(render.getState()).isEqualTo("draft");
+        assertThat(pkg.path("bindSnapshots").fieldNames()).toIterable().containsExactly("101");
+        assertThat(pkg.path("bindSnapshots").path("101").path("bind").path("dsId").asInt())
+                .isEqualTo(12);
+        assertThat(pkg.path("bindSnapshots").path("101").has("sourceDefinition")).isFalse();
+        verify(dsMapper, times(2)).selectById(12L);
+    }
+
+    @Test
+    void getRenderByCode_publishedNewDisplayProtocolWithoutSourceDefinitionFailsClosed() {
+        RptScreen s = configuredScreen(8L);
+        s.setCanvasPublishedJson(codePackageWithoutSourceDefinition());
+        when(screenMapper.selectList(any(Wrapper.class))).thenReturn(List.of(s));
+        when(dsMapper.selectById(12L)).thenReturn(codeRuntimeDatasource());
+
+        assertThatThrownBy(() -> service.getRenderByCode(s.getScreenCode(), "published"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED.getCode());
+    }
+
     private RptScreen codeNamedRuntimeScreen() {
         RptScreen screen = new RptScreen();
         screen.setId(19L);
@@ -1021,6 +1077,32 @@ class ScreenConfigServiceTest {
                         + "\"format\":{\"displayUnit\":\"YUAN\"},\"content\":{\"mainField\":\"value\"},"
                         + "\"interaction\":{\"action\":\"NONE\"},"
                         + "\"dataRefs\":[{\"blockId\":1,\"role\":\"PRIMARY\",\"unit\":\"YUAN\"}]}]}");
+    }
+
+    private String newDisplayProtocolCanvasStyle(long blockId) {
+        return "{\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\","
+                + "\"displaySchemaVersion\":1,"
+                + "\"institutionRules\":{\"allowedOperatingLevels\":[\"PRIMARY\"],"
+                + "\"allowedOrgNatures\":[\"SECONDARY_BRANCH\"]},"
+                + "\"display\":{\"components\":[{\"componentId\":\"deposit-card\","
+                + "\"componentType\":\"METRIC_CARD\",\"layoutRegion\":\"LEFT\","
+                + "\"order\":0,\"visible\":true,\"text\":{\"titleMode\":\"AUTO\"},"
+                + "\"format\":{\"displayUnit\":\"YUAN\"},\"content\":{\"mainField\":\"value\"},"
+                + "\"interaction\":{\"action\":\"NONE\"},\"dataRefs\":[{\"blockId\":"
+                + blockId + ",\"role\":\"PRIMARY\",\"unit\":\"YUAN\"}]}]}}}";
+    }
+
+    private String codePackageWithoutSourceDefinition() {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.node.ObjectNode root =
+                    (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(codePackageWithInstitutionRules());
+            ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("bindSnapshots").path("1"))
+                    .remove(PublishedDatasourceDefinition.NODE);
+            return root.toString();
+        } catch (Exception ex) {
+            throw new AssertionError(ex);
+        }
     }
 
     private String codeCitySummaryOrgNamePackage() {
