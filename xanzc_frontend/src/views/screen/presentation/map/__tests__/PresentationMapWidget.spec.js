@@ -33,7 +33,7 @@ const model = {
 };
 
 const mapStub = {
-  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'mode', 'selectedRegionCode', 'selectedOrgCode'],
+  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints'],
   template: '<div data-testid="panorama-map-stub"><button data-city="610100" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">城市</button><button data-org="A" @click="$emit(\'branch-select\', \'A\')">机构</button></div>'
 };
 
@@ -47,6 +47,8 @@ describe('PresentationMapWidget', () => {
     expect(wrapper.get('[data-testid="presentation-map-data-date"]').text()).toContain('2026-09-22');
     expect(wrapper.get('[data-testid="presentation-map-legend-missing"]').text()).toContain('暂无数据');
     expect(wrapper.getComponent(mapStub).props('metricValues')).toMatchObject({ '610100': '100.00亿元' });
+    expect(wrapper.getComponent(mapStub).props('showProvincePoints')).toBe(true);
+    expect(wrapper.getComponent(mapStub).props('metricValues')).toMatchObject({ A: '20.00亿元' });
   });
 
   it('无坐标机构由旁侧可访问列表进入，并向上发固定上下文事件', async () => {
@@ -61,5 +63,6 @@ describe('PresentationMapWidget', () => {
     await wrapper.get('[data-testid="panorama-map-stub"] [data-city="610100"]').trigger('click');
     expect(wrapper.emitted('region-select')).toContainEqual([{ code: '610100', name: '西安市' }]);
     expect(wrapper.emitted('map-context')).toContainEqual([expect.objectContaining({ level: 'CITY', cityCode: '610100' })]);
+    expect(wrapper.getComponent(mapStub).props('showProvincePoints')).toBe(false);
   });
 });

@@ -22,6 +22,7 @@
       :metric-colors="mapModel.metricColors"
       :color-by-metric="true"
       :mode="mode"
+      :show-province-points="mode === 'province'"
       :selected-region-code="selectedRegionCode"
       :demo="demo"
       :view-fit="{ ...(mapModel.viewFit || {}), ...viewFit }"

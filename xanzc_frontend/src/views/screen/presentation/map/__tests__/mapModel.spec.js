@@ -62,6 +62,14 @@ describe('S12 MAP 展示适配', () => {
     expect(result.legend.some(item => item.key === 'missing' && item.color === '#65738a')).toBe(true);
   });
 
+  it('省级机构点模型提供可定位机构的当前指标文本，未定位机构不生成点值', () => {
+    const result = buildMapModel(presentation, model, { metricKey: 'deposit', level: 'province' });
+    expect(result.points.map(item => item.orgCode)).toEqual(['A', 'B', 'C']);
+    expect(result.metricValues.A).toBe('20.00亿元');
+    expect(result.metricRawValues.A).toBe(20);
+    expect(result.metricValues.B).toBeUndefined();
+  });
+
   it('不把多个机构行相加，也不以 ownerOperatingOrgCode 替代 cityCode', () => {
     const province = buildMapModel(presentation, model, { metricKey: 'increase', level: 'province' });
     expect(province.metricValues['610100']).toBe('暂无数据');

@@ -251,11 +251,22 @@ export function buildMapModel(sourcePresentation, inputModel = {}, options = {})
     : level === 'institution'
       ? institutions.filter(item => orgCodeOf(item) === selectedOrgCode)
       : institutions;
-  const points = scopedInstitutions.map(item => ({
-    ...item,
-    metricValue: finite(pointMetricValue(item, rankings, metric.field).value),
-    metricText: formatMapMetric(pointMetricValue(item, rankings, metric.field).value, format, metric.unit)
-  }));
+  const pointMetricValues = {};
+  const pointMetricRawValues = {};
+  const points = scopedInstitutions.map(item => {
+    const source = pointMetricValue(item, rankings, metric.field);
+    const metricValue = finite(source.value);
+    const orgCode = orgCodeOf(item);
+    if (orgCode && metricValue !== null && isLocated(item)) {
+      pointMetricRawValues[orgCode] = metricValue;
+      pointMetricValues[orgCode] = formatMapMetric(metricValue, format, source.unit || metric.unit);
+    }
+    return {
+      ...item,
+      metricValue,
+      metricText: formatMapMetric(source.value, format, source.unit || metric.unit)
+    };
+  });
   const missingCoordinates = points.filter(item => !isLocated(item));
   const locatedPoints = points.filter(isLocated);
   const status = level === 'city' && !points.length ? 'NO_VISIBLE_INSTITUTIONS' : 'READY';
@@ -274,8 +285,8 @@ export function buildMapModel(sourcePresentation, inputModel = {}, options = {})
     direction: metric.direction,
     viewFit: viewFitFor(level),
     dataDate: sourceDate(model, options),
-    metricValues,
-    metricRawValues: rawValues,
+    metricValues: { ...metricValues, ...pointMetricValues },
+    metricRawValues: { ...rawValues, ...pointMetricRawValues },
     metricStates,
     metricColors,
     points,

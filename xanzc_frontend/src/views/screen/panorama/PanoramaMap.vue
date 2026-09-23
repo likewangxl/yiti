@@ -151,7 +151,7 @@
       暂无可用的真实行政区边界数据。
     </p>
 
-    <div v-if="mode !== 'province'" class="panorama-map__point-layer" aria-label="可定位机构">
+    <div v-if="pointLayerEnabled" class="panorama-map__point-layer" aria-label="可定位机构">
       <button
         v-for="point in pointClusters"
         :key="point.isCluster ? point.id : point.orgCode"
@@ -171,7 +171,7 @@
       >
         <span v-if="point.isCluster" class="panorama-map__cluster-count">{{ point.count }}</span>
         <span v-else class="panorama-map__point-dot" aria-hidden="true"></span>
-        <span v-if="showPointLabels && !point.isCluster" class="panorama-map__point-label">{{ point.orgName || point.orgCode }}<small v-if="metricValues[point.orgCode] != null" class="panorama-map__metric-value">{{ metricValues[point.orgCode] }}</small></span>
+        <span v-if="showPointLabels && !point.isCluster" class="panorama-map__point-label">{{ point.orgName || point.orgCode }}<small v-if="pointMetricDisplayValue(point) != null" class="panorama-map__metric-value">{{ pointMetricDisplayValue(point) }}</small></span>
       </button>
     </div>
 
@@ -196,7 +196,7 @@
       >
         <span>{{ member.orgName || member.orgCode }}</span>
         <small>{{ member.orgCode }}</small>
-        <small v-if="metricValues[member.orgCode] != null" class="panorama-map__metric-value">{{ metricValues[member.orgCode] }}</small>
+        <small v-if="pointMetricDisplayValue(member) != null" class="panorama-map__metric-value">{{ pointMetricDisplayValue(member) }}</small>
       </button>
     </div>
 
@@ -256,6 +256,7 @@ const props = defineProps({
   colorByMetric: { type: Boolean, default: false },
   cityDetails: { type: Object, default: () => ({}) },
   mode: { type: String, default: 'province' },
+  showProvincePoints: { type: Boolean, default: false },
   selectedRegionCode: { type: [String, Number], default: null },
   demo: { type: Boolean, default: false },
   appearance: { type: String, default: 'classic' },
@@ -317,7 +318,8 @@ const reliefConfig = computed(() => createReliefGeometryConfig({
 const renderablePoints = computed(() => filterRenderablePoints(props.points, { demo: props.demo }));
 const unmappedPoints = computed(() => (Array.isArray(props.points) ? props.points : [])
   .filter(point => !renderablePoints.value.includes(point)));
-const drawablePoints = computed(() => props.mode !== 'province' ? renderablePoints.value : []);
+const pointLayerEnabled = computed(() => props.mode !== 'province' || props.showProvincePoints);
+const drawablePoints = computed(() => pointLayerEnabled.value ? renderablePoints.value : []);
 
 const pointClusters = computed(() => clusterPoints(drawablePoints.value, {
   projection: projection.value,
@@ -330,7 +332,7 @@ const pointClusters = computed(() => clusterPoints(drawablePoints.value, {
 // A branch name is business information, not optional map decoration. Clustering
 // already collapses points that are too close, so every remaining single point
 // keeps its label even when the city has more than eight branches.
-const showPointLabels = computed(() => props.mode !== 'province');
+const showPointLabels = computed(() => pointLayerEnabled.value);
 
 let panPointerId = null;
 let panOrigin = null;
@@ -624,10 +626,20 @@ function cityHaloStyle(region) {
 }
 
 function pointStyle(point) {
-  const screen = webglOverlayPoint(point, reliefEnabled.value
+  const screen = overlayPoint(point, reliefEnabled.value
     ? reliefConfig.value.depth + reliefConfig.value.contourLift + 0.02
     : 0.42);
   return { left: `${screen.x}%`, top: `${screen.y}%` };
+}
+
+function pointMetricDisplayValue(point) {
+  const code = point?.orgCode;
+  const value = code == null ? undefined : props.metricValues?.[code];
+  if (value !== null && value !== undefined && String(value).trim() !== '') return value;
+  const fallback = point?.metricText ?? point?.metricDisplayValue;
+  if (fallback === null || fallback === undefined || String(fallback).trim() === '') return null;
+  if (String(fallback).trim() === '暂无数据') return null;
+  return fallback;
 }
 
 function selectRegion(region) {
@@ -1378,7 +1390,7 @@ onMounted(() => {
 watch(() => [
   props.geoJson, props.points, props.selectedOrgCode, props.selectedRegionCode, props.mode,
   props.demo, props.appearance, props.metricNumericValues, props.metricColors, props.colorByMetric,
-  props.viewFit
+  props.viewFit, props.showProvincePoints
 ], () => {
   activeCluster.value = null;
   rebuildThreeMap();

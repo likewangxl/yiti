@@ -115,6 +115,26 @@ describe('PanoramaMap', () => {
     city.unmount();
   });
 
+  it('省模式显式开启机构点位时显示合法点、可访问名称和指标，非法坐标仍不造点', async () => {
+    const wrapper = mount(PanoramaMap, {
+      props: {
+        geoJson,
+        points: [{ ...points[0], metricText: '20.00亿元' }, points[1], points[2]],
+        metricValues: { A: '20.00亿元' },
+        showProvincePoints: true
+      }
+    });
+    await nextTick();
+    expect(wrapper.find('.panorama-map__point-layer').exists()).toBe(true);
+    expect(wrapper.get('[data-org-code="A"]').attributes('aria-label')).toContain('有效支行');
+    expect(wrapper.get('[data-org-code="A"] .panorama-map__point-label').text()).toContain('20.00亿元');
+    expect(wrapper.find('[data-org-code="B"]').exists()).toBe(false);
+    expect(wrapper.find('[data-org-code="C"]').exists()).toBe(false);
+    await wrapper.get('[data-org-code="A"]').trigger('click');
+    expect(wrapper.emitted('branch-select')).toContainEqual(['A']);
+    wrapper.unmount();
+  });
+
   it('省级真实 GeoJSON 的十个地市都保留可点击标签，不因展示上限截断', async () => {
     const wrapper = mount(PanoramaMap, { props: { geoJson: provinceGeo } });
     await nextTick();
