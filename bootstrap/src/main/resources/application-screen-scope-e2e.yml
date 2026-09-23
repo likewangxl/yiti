@@ -79,6 +79,13 @@ obs:
   # ObsStorageClient 保留 Bean，但不创建真实 ObsClient；误调用明确 fail-close。
   enabled: false
 
+auth:
+  org-location:
+    # 大屏优先读取已核验的 PT_ORG_LOCATION 台账；开关仍可由环境变量关闭。
+    storage-enabled: ${YITI_SCREEN_SCOPE_ORG_LOCATION_STORAGE_ENABLED:true}
+    # screen-scope-e2e 不因刷新大屏触发地址解析外联。
+    geocoding-enabled: false
+
 platform:
   soap:
     netty:

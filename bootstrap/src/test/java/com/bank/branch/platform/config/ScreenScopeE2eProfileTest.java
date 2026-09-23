@@ -3,13 +3,17 @@ package com.bank.branch.platform.config;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.EnumerablePropertySource;
+import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.MutablePropertySources;
 import org.springframework.core.env.PropertySource;
+import org.springframework.core.env.PropertySourcesPropertyResolver;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -80,6 +84,25 @@ class ScreenScopeE2eProfileTest {
         assertThat(properties.getProperty("perf.scheduler.startup-sync.enabled")).isEqualTo(false);
     }
 
+    @Test
+    void profile_enablesLocationStorageByDefaultWhileKeepingGeocodingOffAndAllowsStorageOverride()
+            throws IOException {
+        PropertySource<?> properties = loadProfile();
+
+        assertThat(properties.getProperty("auth.org-location.storage-enabled"))
+                .isEqualTo("${YITI_SCREEN_SCOPE_ORG_LOCATION_STORAGE_ENABLED:true}");
+        assertThat(properties.getProperty("auth.org-location.geocoding-enabled"))
+                .isEqualTo(false);
+
+        assertThat(resolve(properties.getProperty("auth.org-location.storage-enabled"), Map.of()))
+                .isEqualTo("true");
+        assertThat(resolve(properties.getProperty("auth.org-location.storage-enabled"),
+                Map.of("YITI_SCREEN_SCOPE_ORG_LOCATION_STORAGE_ENABLED", "false")))
+                .isEqualTo("false");
+        assertThat(resolve(properties.getProperty("auth.org-location.geocoding-enabled"), Map.of()))
+                .isEqualTo("false");
+    }
+
     private PropertySource<?> loadProfile() throws IOException {
         Resource resource = new ClassPathResource(PROFILE_RESOURCE);
         assertThat(resource.exists()).isTrue();
@@ -91,6 +114,14 @@ class ScreenScopeE2eProfileTest {
     private String[] propertyNames(PropertySource<?> properties) {
         assertThat(properties).isInstanceOf(EnumerablePropertySource.class);
         return ((EnumerablePropertySource<?>) properties).getPropertyNames();
+    }
+
+    private String resolve(Object value, Map<String, Object> environment) {
+        assertThat(value).isNotNull();
+        MutablePropertySources sources = new MutablePropertySources();
+        sources.addFirst(new MapPropertySource("test-environment", environment));
+        return new PropertySourcesPropertyResolver(sources)
+                .resolveRequiredPlaceholders(String.valueOf(value));
     }
 
     private void assertYitiTestUrl(Object value) {
