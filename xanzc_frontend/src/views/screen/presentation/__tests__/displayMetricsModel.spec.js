@@ -108,4 +108,195 @@ describe('displayMetricsModel', () => {
     expect(result.components[0]).toMatchObject({ value: null, text: '待接入', state: 'NO_SOURCE' });
     expect(result.components[1]).toMatchObject({ value: 123.45, text: '123.45元', state: 'READY' });
   });
+
+  it('分组业务卡按当前数据日期计算上一个自然月月末差值，并区分金额与完成率百分点', () => {
+    const amount = component('business-retail-deposit-balance', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'retailDeposit', '零售存款余额', 'HUNDRED_MILLION')],
+      content: { mainField: 'retailDeposit', subFields: [] },
+      format: { displayUnit: 'HUNDRED_MILLION', decimals: 2, thousandsSeparator: true, negativeStyle: 'SIGNED' }
+    });
+    const rate = component('business-retail-deposit-rate', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'retailDepositRate', '零售存款完成率', 'RATIO')],
+      content: { mainField: 'retailDepositRate', subFields: [] },
+      format: { displayUnit: 'PERCENT', decimals: 2, thousandsSeparator: true, negativeStyle: 'SIGNED' }
+    });
+    const result = buildDisplayMetricsModel({
+      template: 'branch-overview-v1', displaySchemaVersion: 1,
+      display: { components: [amount, rate] }
+    }, {
+      dataDate: '2027-01-15',
+      blockResults: {
+        31: { retailDeposit: 125, retailDepositRate: 0.9064, unit: 'HUNDRED_MILLION' },
+        57: { rows: [
+          { data_date: '2027-01-15', retailDeposit: 125, retailDepositRate: 0.9064 },
+          { data_date: '2026-12-31', retailDeposit: 100, retailDepositRate: 0.8 }
+        ] }
+      }
+    });
+
+    expect(result.components[0].monthDelta).toMatchObject({
+      state: 'READY', value: 25, text: '较上月 +25.00亿元'
+    });
+    expect(result.components[1].monthDelta).toMatchObject({
+      state: 'READY', value: 10.64, text: '较上月 +10.64个百分点'
+    });
+  });
+
+  it('上月月末缺值、日期非法、重复日期或历史来源不唯一时不计算差值', () => {
+    const card = component('business-corp-loan-balance', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'loan', '对公贷款余额', 'HUNDRED_MILLION')],
+      content: { mainField: 'loan', subFields: [] },
+      format: { displayUnit: 'HUNDRED_MILLION', decimals: 2 }
+    });
+    const presentation = { template: 'branch-overview-v1', displaySchemaVersion: 1, display: { components: [card] } };
+    const base = {
+      dataDate: '2026-09-21',
+      blockResults: {
+        31: { loan: 8 },
+        57: { rows: [
+          { date: '2026-09-21', loan: 8 },
+          { date: '2026-08-31', loan: 6 }
+        ] }
+      }
+    };
+    expect(buildDisplayMetricsModel(presentation, base).components[0].monthDelta.text).toBe('较上月 +2.00亿元');
+    for (const model of [
+      { ...base, dataDate: '2026-02-30' },
+      { ...base, blockResults: { ...base.blockResults, 57: { rows: [
+        { date: '2026-09-21', loan: 8 }, { date: '2026-08-31', loan: null }
+      ] } } },
+      { ...base, blockResults: { ...base.blockResults, 57: { rows: [
+        { date: '2026-09-21', loan: 8 }, { date: '2026-08-31', loan: 6 }, { date: '2026-08-31', loan: 7 }
+      ] } } },
+      { ...base, blockResults: {
+        ...base.blockResults,
+        58: { rows: [{ date: '2026-09-21', loan: 8 }, { date: '2026-08-31', loan: 6 }] }
+      } }
+    ]) {
+      expect(buildDisplayMetricsModel(presentation, model).components[0].monthDelta)
+        .toMatchObject({ state: 'NO_VALUE', text: '较上月 暂无数据', value: null });
+    }
+
+    expect(buildDisplayMetricsModel(presentation, {
+      ...base,
+      blockResults: { ...base.blockResults, 57: {
+        unitByField: { loan: 'YUAN' }, rows: base.blockResults[57].rows
+      } }
+    }).components[0].monthDelta).toMatchObject({ state: 'NO_VALUE', text: '较上月 暂无数据' });
+
+    expect(buildDisplayMetricsModel(presentation, {
+      ...base,
+      blockResults: {
+        31: { loan: 8, unitByField: { loan: 'HUNDRED_MILLION' } },
+        57: {
+          columnsMeta: [{ name: 'loan', unit: null, amountScale: 'HUNDRED_MILLION' }],
+          unitByField: { loan: 'YUAN' }, rows: base.blockResults[57].rows
+        }
+      }
+    }).components[0].monthDelta).toMatchObject({ state: 'NO_VALUE', text: '较上月 暂无数据' });
+  });
+
+  it('当前值和上月月末值为零时仍生成有效的零差值', () => {
+    const card = component('business-revenue-fee', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'fee', '手续费收入', 'HUNDRED_MILLION')],
+      content: { mainField: 'fee', subFields: [] },
+      format: { displayUnit: 'HUNDRED_MILLION', decimals: 2 }
+    });
+    const result = buildDisplayMetricsModel({ displaySchemaVersion: 1, display: { components: [card] } }, {
+      dataDate: '2026-09-21',
+      blockResults: {
+        31: { fee: 0 },
+        57: { rows: [{ date: '2026-09-21', fee: 0 }, { date: '2026-08-31', fee: 0 }] }
+      }
+    });
+    expect(result.components[0].monthDelta).toMatchObject({
+      state: 'READY', value: 0, text: '较上月 0.00亿元'
+    });
+  });
+
+  it('当前值低于上月月末值时显示金额负差和负百分点', () => {
+    const amount = component('business-corp-loan-balance', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'loan', '对公贷款余额', 'HUNDRED_MILLION')],
+      content: { mainField: 'loan', subFields: [] },
+      format: { displayUnit: 'HUNDRED_MILLION', decimals: 2, thousandsSeparator: true }
+    });
+    const rate = component('business-corp-loan-rate', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'loanRate', '对公贷款完成率', 'RATIO')],
+      content: { mainField: 'loanRate', subFields: [] },
+      format: { displayUnit: 'PERCENT', decimals: 2, thousandsSeparator: true }
+    });
+    const result = buildDisplayMetricsModel({
+      template: 'branch-overview-v1', displaySchemaVersion: 1,
+      display: { components: [amount, rate] }
+    }, {
+      dataDate: '2026-09-21',
+      blockResults: {
+        31: { loan: 80, loanRate: 0.8 },
+        57: { rows: [
+          { date: '2026-09-21', loan: 80, loanRate: 0.8 },
+          { date: '2026-08-31', loan: 100, loanRate: 0.9 }
+        ] }
+      }
+    });
+
+    expect(result.components[0].monthDelta).toMatchObject({
+      state: 'READY', value: -20, text: '较上月 -20.00亿元'
+    });
+    expect(result.components[1].monthDelta).toMatchObject({
+      state: 'READY', value: -10, text: '较上月 -10.00个百分点'
+    });
+  });
+
+  it('比例卡 displayUnit 为 RATIO 时仍按百分比点计算差值', () => {
+    const card = component('business-retail-deposit-rate-ratio', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'depositRate', '零售存款完成率', 'RATIO')],
+      content: { mainField: 'depositRate', subFields: [] },
+      format: { displayUnit: 'RATIO', decimals: 2, thousandsSeparator: true }
+    });
+    const result = buildDisplayMetricsModel({ displaySchemaVersion: 1, display: { components: [card] } }, {
+      dataDate: '2026-09-21',
+      blockResults: {
+        31: { depositRate: 0.9064 },
+        57: { rows: [
+          { date: '2026-09-21', depositRate: 0.9064 },
+          { date: '2026-08-31', depositRate: 0.8 }
+        ] }
+      }
+    });
+    expect(result.components[0].monthDelta).toMatchObject({
+      state: 'READY', value: 10.64, text: '较上月 +10.64个百分点'
+    });
+  });
+
+  it('通用卡不生成分组业务差值元数据', () => {
+    const card = component('legacy-card', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'loan', '贷款余额', 'HUNDRED_MILLION')],
+      content: { mainField: 'loan', subFields: [] }
+    });
+    const result = buildDisplayMetricsModel({ displaySchemaVersion: 1, display: { components: [card] } }, {
+      dataDate: '2026-09-21', blockResults: { 31: { loan: 8 } }
+    });
+    expect(result.components[0]).not.toHaveProperty('monthDelta');
+  });
+
+  it('普通 KPI 保持来源单位优先于 dataRef 单位', () => {
+    const card = component('legacy-unit-card', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(1, 'loan', '贷款余额', 'HUNDRED_MILLION')],
+      content: { mainField: 'value', subFields: [] },
+      format: { displayUnit: 'AUTO', decimals: 2 }
+    });
+    const result = buildDisplayMetricsModel({ displaySchemaVersion: 1, display: { components: [card] } }, {
+      kpis: [{ key: 'loan', value: 8, unit: 'YUAN' }]
+    });
+    expect(result.components[0]).toMatchObject({ value: 8, text: '8.00元', unit: '元' });
+  });
 });

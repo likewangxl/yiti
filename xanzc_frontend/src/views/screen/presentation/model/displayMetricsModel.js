@@ -138,8 +138,43 @@ function resolveSource(model, component, ref, field) {
   return null;
 }
 
-function sourceValue(source, field, componentType) {
-  if (!source) return { present: false, value: null, unit: null };
+function sourceUnit(source, key, fallbackUnit = '') {
+  const metadata = Array.isArray(source?.columnsMeta)
+    ? source.columnsMeta.find(item => text(item?.col ?? item?.name ?? item?.key) === text(key)) : null;
+  // amountScale is a display scaling hint, not a data unit. When metadata
+  // names this field but has no unit, continue with unitByField/ref below.
+  if (metadata && text(metadata.unit)) return metadata.unit;
+  const fieldUnit = source?.unitByField?.[key];
+  if (text(fieldUnit)) return fieldUnit;
+  const sourceUnitValue = source?.unit || source?.unitCode || null;
+  const hasFieldMetadata = Boolean(metadata) || Object.keys(source?.unitByField || {}).length > 0;
+  if (hasFieldMetadata && text(fallbackUnit)) return fallbackUnit;
+  if (text(sourceUnitValue)) {
+    // Keep legacy KPI sources' source.unit precedence. A wide block that
+    // exposes a field with an explicit ratio ref must not inherit a block
+    // level amount unit when its field metadata is unavailable.
+    const sourceKind = canonicalUnit(sourceUnitValue);
+    const fallbackKind = canonicalUnit(fallbackUnit);
+    const sourceIsRatio = ['RATIO', 'PERCENT'].includes(sourceKind);
+    const fallbackIsRatio = ['RATIO', 'PERCENT'].includes(fallbackKind);
+    const sourceIsAmount = ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'].includes(sourceKind);
+    const fallbackIsAmount = ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'].includes(fallbackKind);
+    if (sourceIsRatio !== fallbackIsRatio && (sourceIsAmount || fallbackIsAmount)) return fallbackUnit;
+    return sourceUnitValue;
+  }
+  return text(fallbackUnit) ? fallbackUnit : null;
+}
+
+function explicitSourceUnit(source, key) {
+  const metadata = Array.isArray(source?.columnsMeta)
+    ? source.columnsMeta.find(item => text(item?.col ?? item?.name ?? item?.key) === text(key)) : null;
+  if (metadata && text(metadata.unit)) return { present: true, unit: metadata.unit };
+  const fieldUnit = source?.unitByField?.[key];
+  return text(fieldUnit) ? { present: true, unit: fieldUnit } : { present: false, unit: null };
+}
+
+function sourceValue(source, field, componentType, fallbackUnit = '') {
+  if (!source) return { present: false, value: null, unit: null, key: null };
   // `value` is the legacy single-value contract. Once a component names an
   // explicit field, that field is the complete data contract: falling back to
   // the block's generic value can show a different metric under the right
@@ -147,8 +182,131 @@ function sourceValue(source, field, componentType) {
   const candidates = componentType === 'COMPLETION' && field === 'value'
     ? ['value', 'rate', 'completionRate', 'completion_rate'] : [field];
   const key = candidates.find(candidate => Object.prototype.hasOwnProperty.call(source, candidate));
-  if (!key) return { present: false, value: null, unit: source.unit || source.unitCode || null };
-  return { present: true, value: source[key], unit: source.unit || source.unitCode || null };
+  if (!key) return { present: false, value: null, unit: sourceUnit(source, field, fallbackUnit), key: null };
+  return { present: true, value: source[key], unit: sourceUnit(source, key, fallbackUnit), key };
+}
+
+const BUSINESS_HEADER_COMPONENT = /^business-(?:retail|corp|revenue)-/;
+const HISTORY_DATE_FIELDS = Object.freeze(['date', 'dataDate', 'data_date']);
+
+function isBusinessHeaderComponent(component) {
+  return text(component?.layoutRegion).toUpperCase() === 'HEADER'
+    && BUSINESS_HEADER_COMPONENT.test(text(component?.componentId));
+}
+
+function parseDateKey(value) {
+  const key = text(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return null;
+  const [year, month, day] = key.split('-').map(Number);
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(0, 0, 0, 0);
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return { key, year, month, day };
+}
+
+function previousMonthEnd(dataDate) {
+  const current = parseDateKey(dataDate);
+  if (!current) return null;
+  const date = new Date(0);
+  date.setUTCFullYear(current.year, current.month - 1, 0);
+  date.setUTCHours(0, 0, 0, 0);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${String(year).padStart(4, '0')}-${month}-${day}`;
+}
+
+function rowDateKey(row) {
+  if (!isObject(row)) return '';
+  for (const key of HISTORY_DATE_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(row, key) && text(row[key])) return text(row[key]);
+  }
+  return '';
+}
+
+function unavailableMonthDelta() {
+  return { state: 'NO_VALUE', value: null, rawValue: null, unit: '', text: '较上月 暂无数据' };
+}
+
+function signedText(value, formattedText) {
+  return value > 0 ? `+${formattedText}` : formattedText;
+}
+
+function formatMonthDelta(currentValue, previousValue, format, sourceUnit, ratio) {
+  // A RATIO display unit is still rendered as a percentage, but its raw
+  // value is fractional. Normalize both sides to PERCENT before subtracting
+  // so the result is expressed in percentage points rather than 0.xx points.
+  const comparisonFormat = ratio ? { ...format, displayUnit: 'PERCENT' } : format;
+  const current = formatDisplayMetric(currentValue, comparisonFormat, sourceUnit);
+  const previous = formatDisplayMetric(previousValue, comparisonFormat, sourceUnit);
+  if (current.value === null || previous.value === null) return unavailableMonthDelta();
+  const displayDelta = current.value - previous.value;
+  if (!Number.isFinite(displayDelta)) return unavailableMonthDelta();
+  const decimals = Number.isInteger(format?.decimals) && format.decimals >= 0 && format.decimals <= 8
+    ? format.decimals : 2;
+  const thousandsSeparator = format?.thousandsSeparator !== false;
+  if (ratio) {
+    const number = numberFormat(displayDelta, decimals, thousandsSeparator);
+    return {
+      state: 'READY', value: displayDelta, rawValue: finite(currentValue) - finite(previousValue), unit: '个百分点',
+      text: `较上月 ${signedText(displayDelta, number)}个百分点`
+    };
+  }
+  const formatted = formatDisplayMetric(
+    finite(currentValue) - finite(previousValue),
+    { ...format, negativeStyle: 'SIGNED' },
+    sourceUnit
+  );
+  if (formatted.value === null) return unavailableMonthDelta();
+  return {
+    state: 'READY', value: formatted.value, rawValue: finite(currentValue) - finite(previousValue), unit: formatted.unit,
+    text: `较上月 ${signedText(formatted.value, formatted.text)}`
+  };
+}
+
+/**
+ * 只从 blockResults 中选择一个同时含当前日和上月月末的历史结果。
+ * 当前历史值必须与主卡值一致，避免把另一指标或另一批次的历史行误当作比较基准。
+ */
+function buildMonthDelta(model, component, ref, field, main, format) {
+  const dataDate = text(model?.dataDate);
+  const previousDate = previousMonthEnd(dataDate);
+  if (!previousDate || finite(main?.value) === null || !field) return unavailableMonthDelta();
+  const currentDate = dataDate;
+  const blockResults = isObject(model?.blockResults) ? model.blockResults : {};
+  const candidates = [];
+  for (const [key, source] of Object.entries(blockResults)) {
+    if (!isObject(source) || !Array.isArray(source.rows)) continue;
+    const sourceId = text(source.blockId ?? key);
+    if (text(ref?.blockId) && sourceId === text(ref.blockId)) continue;
+    const currentRows = source.rows.filter(row => rowDateKey(row) === currentDate);
+    const previousRows = source.rows.filter(row => rowDateKey(row) === previousDate);
+    if (!currentRows.length || !previousRows.length) continue;
+    if (!currentRows.some(row => Object.prototype.hasOwnProperty.call(row, field))
+      || !previousRows.some(row => Object.prototype.hasOwnProperty.call(row, field))) continue;
+    candidates.push({ source, currentRows, previousRows });
+  }
+  if (candidates.length !== 1) return unavailableMonthDelta();
+  const [{ source: historicalSource, currentRows, previousRows }] = candidates;
+  if (currentRows.length !== 1 || previousRows.length !== 1) return unavailableMonthDelta();
+  const historicalCurrent = finite(currentRows[0][field]);
+  const historicalPrevious = finite(previousRows[0][field]);
+  const mainValue = finite(main.value);
+  if (historicalCurrent === null || historicalPrevious === null || mainValue === null
+    || historicalCurrent !== mainValue) return unavailableMonthDelta();
+  const sourceUnit = main.unit || ref.unit || '';
+  const currentUnit = canonicalUnit(sourceUnit);
+  const historicalUnit = explicitSourceUnit(historicalSource, field);
+  if (historicalUnit.present) {
+    const normalizedHistoricalUnit = canonicalUnit(historicalUnit.unit);
+    if (!currentUnit || !normalizedHistoricalUnit || currentUnit !== normalizedHistoricalUnit) return unavailableMonthDelta();
+  }
+  const canonicalDisplayUnit = canonicalUnit(format?.displayUnit);
+  const ratio = currentUnit === 'RATIO' || currentUnit === 'PERCENT'
+    || canonicalDisplayUnit === 'RATIO' || canonicalDisplayUnit === 'PERCENT';
+  return formatMonthDelta(mainValue, historicalPrevious, format, sourceUnit, ratio);
 }
 
 function componentTitle(component, ref, source, templateTitle) {
@@ -163,7 +321,7 @@ function buildComponent(component, model, index, options) {
   const content = isObject(component?.content) ? component.content : {};
   const field = text(content.mainField) || 'value';
   const source = resolveSource(model, component, ref, field);
-  const main = sourceValue(source, field, component.componentType);
+  const main = sourceValue(source, field, component.componentType, ref.unit);
   const format = isObject(component?.format) ? component.format : {};
   const sourceUnit = main.unit || ref.unit || '';
   const formatted = formatDisplayMetric(main.value, format, sourceUnit);
@@ -171,7 +329,7 @@ function buildComponent(component, model, index, options) {
   const subFields = (Array.isArray(content.subFields) ? content.subFields : []).map((entry, subIndex) => {
     const definition = typeof entry === 'string' ? { field: entry, label: entry } : (isObject(entry) ? entry : {});
     const subField = text(definition.field) || text(definition.key);
-    const subValue = sourceValue(source, subField, 'METRIC_CARD');
+    const subValue = sourceValue(source, subField, 'METRIC_CARD', definition.unit || format.displayUnit || ref.unit);
     const subFormat = { ...format, displayUnit: definition.unit || format.displayUnit };
     const subFormatted = formatDisplayMetric(subValue.value, subFormat, subValue.unit || definition.unit || ref.unit || '');
     return { ...definition, key: definition.key || subField || `sub-${subIndex}`, field: subField, value: finite(subValue.value), text: subFormatted.text, unit: subFormatted.unit, state: !source || !subValue.present ? 'NO_SOURCE' : subValue.value === null ? 'NO_VALUE' : 'READY' };
@@ -195,6 +353,9 @@ function buildComponent(component, model, index, options) {
     state,
     subFields
   };
+  if (isBusinessHeaderComponent(component)) {
+    result.monthDelta = buildMonthDelta(model, component, ref, main.key || field, main, format);
+  }
   if (component.componentType === 'COMPLETION') {
     result.progress = result.value === null ? null : Math.max(0, Math.min(100, result.value));
   }

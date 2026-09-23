@@ -86,4 +86,31 @@ describe('MetricDisplayWidgets', () => {
     });
     expect(genericWrapper.find('.presentation-metric-widget__header small').text()).toBe('测试_直营存款余额');
   });
+
+  it('分组卡在主值后显示较上月差值，通用卡不显示该文案', () => {
+    const groupedWrapper = mount(MetricDisplayWidgets, {
+      props: {
+        grouped: true,
+        components: [{
+          componentId: 'business-retail-deposit-balance', componentType: 'METRIC_CARD', layoutRegion: 'HEADER',
+          title: '存款余额', text: '125.00亿元', state: 'READY',
+          monthDelta: { state: 'READY', text: '较上月 +25.00亿元' }, subFields: []
+        }]
+      }
+    });
+    expect(groupedWrapper.find('[data-testid="presentation-metric-month-delta"]').text()).toBe('较上月 +25.00亿元');
+    expect(groupedWrapper.find('.presentation-metric-widget__value-line').text()).toContain('125.00亿元较上月 +25.00亿元');
+
+    const genericWrapper = mount(MetricDisplayWidgets, {
+      props: {
+        grouped: false,
+        components: [{
+          componentId: 'legacy-card', componentType: 'METRIC_CARD', layoutRegion: 'HEADER',
+          title: '存款余额', text: '125.00亿元', state: 'READY',
+          monthDelta: { state: 'READY', text: '较上月 +25.00亿元' }, subFields: []
+        }]
+      }
+    });
+    expect(genericWrapper.find('[data-testid="presentation-metric-month-delta"]').exists()).toBe(false);
+  });
 });

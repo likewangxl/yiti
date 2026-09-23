@@ -31,7 +31,17 @@
           </div>
           <small v-if="item.metricName && !grouped" :title="item.metricName">{{ item.metricName }}</small>
         </header>
-        <strong class="presentation-metric-widget__value" data-testid="presentation-metric-value">{{ item.text }}</strong>
+        <div
+          class="presentation-metric-widget__value-line"
+          :class="{ 'presentation-metric-widget__value-line--grouped': grouped }"
+        >
+          <strong class="presentation-metric-widget__value" data-testid="presentation-metric-value">{{ item.text }}</strong>
+          <span
+            v-if="grouped"
+            class="presentation-metric-widget__month-delta"
+            data-testid="presentation-metric-month-delta"
+          >{{ item.monthDelta?.text || '较上月 暂无数据' }}</span>
+        </div>
         <span v-if="item.state !== 'READY'" class="presentation-metric-widget__status" data-testid="presentation-metric-status">
           {{ statusText(item.state) }}
         </span>
@@ -157,7 +167,11 @@ function toneClass(item) {
 .presentation-metric-widget--grouped .presentation-metric-widget__header h2 { max-width: 100%; overflow: visible; text-overflow: clip; }
 .presentation-metric-widget__header p,.presentation-metric-widget__header small,.presentation-metric-widget__description { margin: 3px 0 0; overflow: hidden; color: var(--panorama-text-dim, #8fa9db); font-size: 10px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
 .presentation-metric-widget__header small { flex: 0 0 auto; }
-.presentation-metric-widget__value { display: block; min-width: 0; max-width: 100%; margin-top: 2px; color: #f4f8ff; font-size: clamp(18px, 1.55vw, 30px); font-weight: 750; line-height: 1.12; overflow-wrap: anywhere; word-break: break-word; }
+.presentation-metric-widget__value-line { min-width: 0; max-width: 100%; margin-top: 2px; }
+.presentation-metric-widget__value-line--grouped { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; }
+.presentation-metric-widget__value { display: block; min-width: 0; max-width: 100%; margin: 0; color: #f4f8ff; font-size: clamp(18px, 1.55vw, 30px); font-weight: 750; line-height: 1.12; overflow-wrap: anywhere; word-break: break-word; }
+.presentation-metric-widget__value-line--grouped .presentation-metric-widget__value { display: inline; }
+.presentation-metric-widget__month-delta { min-width: 0; max-width: 100%; color: var(--panorama-text-dim, #8fa9db); font-size: 10px; font-weight: 550; line-height: 1.25; overflow-wrap: anywhere; word-break: break-word; }
 .presentation-metric-widget__status { display: block; margin-top: 2px; color: var(--panorama-amber, #ffc45e); font-size: 10px; line-height: 1.25; }
 .presentation-metric-widget__progress { height: 7px; margin-top: 4px; overflow: hidden; background: rgba(2, 9, 22, .72); border: 1px solid rgba(133, 164, 222, .42); border-radius: 4px; }
 .presentation-metric-widget__progress i { display: block; height: 100%; background: var(--metric-accent); border-radius: inherit; box-shadow: 0 0 8px var(--metric-accent); }
