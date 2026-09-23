@@ -3,11 +3,11 @@
     <header class="presentation-map-widget__header">
       <div>
         <span class="presentation-map-widget__kicker">地图视图</span>
-        <h2>{{ mapModel.title || '地图' }}</h2>
-        <p v-if="mapModel.subtitle">{{ mapModel.subtitle }}</p>
+        <h2>{{ screenDisplayText(mapModel.title) || '地图' }}</h2>
+        <p v-if="mapModel.subtitle">{{ screenDisplayText(mapModel.subtitle) }}</p>
       </div>
       <div class="presentation-map-widget__meta">
-        <span data-testid="presentation-map-metric">{{ mapModel.metricLabel || '指标待配置' }}</span>
+        <span data-testid="presentation-map-metric">{{ displayMetricLabel || '指标待配置' }}</span>
         <span data-testid="presentation-map-data-date">数据日期 {{ mapModel.dataDate || '—' }}</span>
       </div>
     </header>
@@ -16,7 +16,7 @@
       :geo-json="geoJson"
       :points="mapModel.points"
       :selected-org-code="selectedOrgCode"
-      :metric-label="mapModel.metricLabel"
+      :metric-label="displayMetricLabel"
       :metric-values="mapModel.metricValues"
       :metric-numeric-values="mapModel.metricRawValues"
       :metric-colors="mapModel.metricColors"
@@ -35,7 +35,7 @@
 
     <div class="presentation-map-widget__legend" aria-label="地图图例">
       <span v-for="item in mapModel.legend" :key="item.key" :data-testid="`presentation-map-legend-${item.key}`"><i :style="{ backgroundColor: item.color }" aria-hidden="true"></i>{{ item.label }}</span>
-      <small>{{ mapModel.metricLabel || '当前指标' }} · {{ mapModel.metricUnit || '单位待补充' }}</small>
+      <small>{{ displayMetricLabel || '当前指标' }} · {{ mapModel.metricUnit || '单位待补充' }}</small>
     </div>
 
     <p v-if="mapModel.noVisibleInstitutions" class="presentation-map-widget__status" data-testid="map-no-visible" role="status">当前城市暂无可见机构</p>
@@ -54,6 +54,7 @@ import {
   mapContextForCity,
   mapContextForInstitution
 } from './mapModel';
+import { screenDisplayText } from '../model/screenDisplayText';
 
 const props = defineProps({
   presentation: { type: Object, default: () => ({}) },
@@ -79,6 +80,7 @@ const mapModel = computed(() => buildMapModel(props.presentation, props.model, {
   dataDate: props.dataDate,
   geoJson: props.geoJson
 }));
+const displayMetricLabel = computed(() => screenDisplayText(mapModel.value.metricLabel));
 
 function contextMeta() {
   return { metricKey: mapModel.value.metricKey, dataDate: mapModel.value.dataDate };

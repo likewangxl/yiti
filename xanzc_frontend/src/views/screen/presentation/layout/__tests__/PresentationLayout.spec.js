@@ -70,6 +70,34 @@ const mounted = [];
 afterEach(() => mounted.splice(0).forEach(wrapper => wrapper.unmount()));
 
 describe('PresentationLayout', () => {
+  it('只净化展示文案，不改动指标绑定字段和原始配置', () => {
+    const metric = {
+      componentId: 'business-retail-deposit-balance', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 0, visible: true,
+      text: { titleMode: 'CUSTOM', title: '测试_直营存款余额' },
+      format: { displayUnit: 'YUAN' }, content: { mainField: '测试_直营存款余额' },
+      dataRefs: [{ blockId: 31, metricName: '测试_直营存款余额', unit: 'YUAN' }]
+    };
+    const ranking = {
+      componentId: 'ranking', componentType: 'RANKING', layoutRegion: 'RIGHT', order: 0, visible: true,
+      text: { titleMode: 'CUSTOM', title: '测试_直营机构排名' },
+      content: { rankingMetrics: [{ metricKey: 'deposit', field: 'deposit', label: '测试_直营存款余额', unit: 'YUAN' }] }
+    };
+    const wrapper = mount(PresentationLayout, {
+      props: { presentation: { displaySchemaVersion: 1, display: { components: [metric, ranking] } },
+        model: { blockResults: { 31: { '测试_直营存款余额': 100, unit: 'YUAN' } }, institutions: [{ orgCode: 'A', orgName: 'A' }], rankings: [{ orgCode: 'A', deposit: 100 }] } },
+      global: { stubs: {
+        ...stubs,
+        MetricDisplayWidgets: { props: ['components'], template: '<div data-testid="sanitized-metric">{{ components[0]?.title }}|{{ components[0]?.metricName }}|{{ components[0]?.value }}</div>' },
+        InstitutionRankingWidget: { props: ['model', 'title'], template: '<div data-testid="sanitized-ranking">{{ title }}|{{ model.metric?.label }}</div>' }
+      } }
+    });
+    mounted.push(wrapper);
+    expect(wrapper.find('[data-testid="sanitized-metric"]').text()).toBe('存款余额|存款余额|100');
+    expect(wrapper.find('[data-testid="sanitized-ranking"]').text()).toBe('机构排名|存款余额');
+    expect(metric.content.mainField).toBe('测试_直营存款余额');
+    expect(metric.dataRefs[0].metricName).toBe('测试_直营存款余额');
+  });
+
   it('仅按 business componentId 前缀把分行顶部指标分成零售、对公和收入三组', () => {
     const groupedHeader = [
       'business-retail-deposit-balance', 'business-retail-deposit-rate',

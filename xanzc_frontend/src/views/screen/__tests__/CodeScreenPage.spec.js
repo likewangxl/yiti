@@ -107,7 +107,9 @@ describe('CodeScreenPage', () => {
     const page = await mountPage();
     expect(page.find('[data-testid="panorama-runtime"]').exists()).toBe(true);
     expect(page.find('[data-mode="TEST"]').exists()).toBe(true);
-    expect(page.text()).toContain('测试库数据');
+    expect(page.text()).toContain('非生产联调数据');
+    expect(page.text()).not.toContain('测试');
+    expect(page.attributes('aria-label')).toBe('非生产联调大屏');
     expect(page.text()).toContain('非生产业务数据');
     expect(getScreenView).toHaveBeenCalledWith('SCR_PROVINCE');
     const runtime = page.findComponent(runtimeStub);

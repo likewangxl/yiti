@@ -284,13 +284,38 @@ function buildTab(tabConfig, source, index) {
   return addShares(base);
 }
 
+function legacyProvinceRingConfigs(component, template) {
+  const tabs = Array.isArray(component?.content?.tabs) ? component.content.tabs : [];
+  const first = tabs[0];
+  if (template !== 'branch-overview-v1'
+      || component?.componentId !== 'legacy-composition-64'
+      || component?.dataRefs?.[0]?.blockId !== 64
+      || tabs.length !== 1
+      || first?.tabKey !== 'business-structure'
+      || first.corporateField !== '测试_直营对公存款'
+      || first.retailField !== '测试_直营零售存款'
+      || first.totalField) return tabs;
+
+  // 已保存的旧省分行草稿只声明了存款分项。同一块响应还提供存款/贷款核定总量
+  // 与贷款两条线，且有逐列原始单位；收入仅有总量，分项必须保持待接入。
+  // 此兼容范围限定为该组件和绑定身份，不按指标名称模糊搜索其他数据源。
+  return [
+    { tabKey: 'deposit', label: '存款', corporateField: first.corporateField,
+      retailField: first.retailField, totalField: '测试_直营存款余额', unit: 'HUNDRED_MILLION' },
+    { tabKey: 'loan', label: '贷款', corporateField: '测试_直营对公贷款',
+      retailField: '测试_直营零售贷款', totalField: '测试_直营贷款余额', unit: 'HUNDRED_MILLION' },
+    { tabKey: 'income', label: '收入', corporateField: '', retailField: '',
+      totalField: '测试_直营营业收入', unit: 'HUNDRED_MILLION' }
+  ];
+}
+
 /** 将displaySchemaVersion=1的COMPOSITION_TABS适配为只读页签模型。 */
 export function buildCompositionTabsModel(sourcePresentation, model = {}, options = {}) {
   const presentation = presentationFrom(sourcePresentation);
   if (!presentation || presentation.displaySchemaVersion !== 1) return { enabled: false, components: [], tabs: [] };
   const rawComponents = sortComponents(Array.isArray(presentation.display?.components) ? presentation.display.components : []);
   const components = rawComponents.map((component, index) => {
-    const configs = Array.isArray(component.content?.tabs) ? component.content.tabs : [];
+    const configs = legacyProvinceRingConfigs(component, presentation.template);
     const tabs = configs.map((tabConfig, tabIndex) => buildTab(tabConfig, lookupSource(isObject(model) ? model : {}, component, tabConfig), tabIndex));
     const source = lookupSource(isObject(model) ? model : {}, component, null);
     const intermediaryIncome = buildIntermediaryIncome(component.content, source);

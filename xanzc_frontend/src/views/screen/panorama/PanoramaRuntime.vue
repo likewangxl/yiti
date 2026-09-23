@@ -17,7 +17,7 @@
       <strong>部分数据暂不可用</strong>
       <ul>
         <li v-for="item in issueEntries" :key="item.key">
-          <span>{{ item.label }}：</span>{{ item.message }}
+          <span>{{ screenDisplayText(item.label) }}：</span>{{ screenDisplayText(item.message) }}
         </li>
       </ul>
     </aside>
@@ -48,6 +48,7 @@ import {
 } from '../presentation/navigation/navigationModel';
 import { buildRuntimePresentation } from '../presentation/runtime/runtimeState';
 import { buildInstitutionViewModel } from '../presentation/model/institutionViewModel';
+import { screenDisplayText } from '../presentation/model/screenDisplayText';
 
 const props = defineProps({
   view: { type: Object, default: () => ({}) },
@@ -258,7 +259,7 @@ const slotLabels = {
   deposit: '存款余额',
   loan: '贷款余额',
   customers: '营销有效归属客户数',
-  revenue: '手工测试收入',
+  revenue: '手工联调收入',
   rate: '目标完成率',
   trend: '经营趋势',
   composition: '业务构成',

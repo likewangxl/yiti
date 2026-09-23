@@ -3,80 +3,124 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import CompositionTabsWidget from '../widgets/CompositionTabsWidget.vue';
 
-const model = {
-  enabled: true,
-  intervalMs: 100,
-  rotationEnabled: true,
-  rotationState: 'READY',
-  tabs: [
-    { tabKey: 'deposit', label: '存款', unit: '亿元', state: 'READY', corporate: { value: 40, text: '40', share: 40, shareText: '40%' }, retail: { value: 60, text: '60', share: 60, shareText: '60%' }, total: { value: 100, text: '100' }, other: null, gap: null, statusMessage: '' },
-    { tabKey: 'loan', label: '贷款', unit: '亿元', state: 'NO_TOTAL', corporate: { value: 2, text: '2', share: null, shareText: '占比不可计算' }, retail: { value: 3, text: '3', share: null, shareText: '占比不可计算' }, total: { value: null, text: '—' }, other: null, gap: null, statusMessage: '总量来源待接入，未计算占比' }
-  ],
-  components: [{ tabs: [], intermediaryIncome: { state: 'READY', ratio: 15, ratioText: '15%', numerator: { value: 12, text: '12', unit: '亿元' }, denominator: { value: 80, text: '80', unit: '亿元' } } }]
-};
+const readyRing = (ringKey, label, corporateShare, retailShare) => ({
+  ringKey,
+  tabKey: ringKey,
+  label,
+  corporate: { value: corporateShare, text: String(corporateShare), unit: '亿元', share: corporateShare, shareText: `${corporateShare}%` },
+  retail: { value: retailShare, text: String(retailShare), unit: '亿元', share: retailShare, shareText: `${retailShare}%` },
+  total: { value: 100, text: '100', unit: '亿元' },
+  other: null,
+  gap: null,
+  state: 'READY'
+});
 
 describe('CompositionTabsWidget', () => {
-  afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks(); });
+  afterEach(() => { vi.restoreAllMocks(); });
 
-  it('支持自动切换、手动暂停/恢复、hover/focus暂停，并在卸载时清理timer', async () => {
-    vi.useFakeTimers();
-    const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
-    const wrapper = mount(CompositionTabsWidget, { props: { model } });
-    expect(wrapper.find('[data-testid="composition-tab-deposit"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="composition-tab-loan"]').exists()).toBe(false);
+  it('以存款、贷款、收入三枚圆环呈现公司/零售构成，不显示页签或轮播控制', async () => {
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+    const wrapper = mount(CompositionTabsWidget, { props: { model: {
+      title: '业务结构',
+      rotationEnabled: true,
+      rings: [
+        readyRing('deposit', '存款', 40, 60),
+        { ringKey: 'loan', label: '贷款', tabKey: 'loan', corporate: { value: null, text: '—', unit: '亿元', share: null }, retail: { value: 3, text: '3', unit: '亿元', share: null }, total: { value: null, text: '—', unit: '亿元' }, other: null, gap: null, state: 'PENDING' },
+        readyRing('income', '收入', 30, 70)
+      ]
+    } } });
 
-    vi.advanceTimersByTime(100);
-    await wrapper.vm.$nextTick();
-    expect(wrapper.find('[data-testid="composition-tab-loan"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="composition-ring-deposit"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="composition-ring-loan"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="composition-ring-income"]').exists()).toBe(true);
+    expect(wrapper.findAll('[role="tablist"]').length).toBe(0);
+    expect(wrapper.find('[data-testid="composition-tabs-pause"]').exists()).toBe(false);
+    expect(setIntervalSpy).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="composition-ring-deposit"]').text()).toContain('40%');
+    expect(wrapper.find('[data-testid="composition-ring-loan"]').text()).toContain('待接入');
+    expect(wrapper.find('[data-testid="composition-ring-loan-visual"]').attributes('style')).toBeUndefined();
+    const income = wrapper.find('[data-testid="composition-ring-income"]');
+    expect(income.text()).toContain('核定总量');
 
-    await wrapper.find('[data-testid="composition-tab-deposit-select"]').trigger('click');
-    expect(wrapper.find('[data-testid="composition-tabs-pause"]').text()).toContain('继续');
-    vi.advanceTimersByTime(200);
-    expect(wrapper.find('[data-testid="composition-tab-deposit"]').exists()).toBe(true);
-
-    await wrapper.find('[data-testid="composition-tabs-pause"]').trigger('click');
-    expect(wrapper.find('[data-testid="composition-tabs-pause"]').text()).toContain('暂停');
-    await wrapper.find('[data-testid="composition-tabs-root"]').trigger('mouseenter');
-    vi.advanceTimersByTime(200);
-    expect(wrapper.find('[data-testid="composition-tab-deposit"]').exists()).toBe(true);
-    await wrapper.find('[data-testid="composition-tabs-root"]').trigger('mouseleave');
-    await wrapper.find('[data-testid="composition-tabs-root"]').trigger('focusin');
-    vi.advanceTimersByTime(200);
-    expect(wrapper.find('[data-testid="composition-tab-deposit"]').exists()).toBe(true);
-    await wrapper.find('[data-testid="composition-tabs-root"]').trigger('focusout');
-
-    wrapper.unmount();
-    expect(clearIntervalSpy).toHaveBeenCalled();
-  });
-
-  it('公司/零售点击只发出固定业务身份与tabKey，不拼接URL', async () => {
-    const wrapper = mount(CompositionTabsWidget, { props: { model } });
-    await wrapper.find('[data-testid="business-line-corp"]').trigger('click');
-    await wrapper.find('[data-testid="business-line-retail"]').trigger('click');
+    await wrapper.find('[data-testid="business-line-deposit-corp"]').trigger('click');
+    await wrapper.find('[data-testid="business-line-deposit-retail"]').trigger('click');
     expect(wrapper.emitted('business-line-select')).toEqual([
       [{ businessLine: 'CORP', tabKey: 'deposit' }],
       [{ businessLine: 'RETAIL', tabKey: 'deposit' }]
     ]);
-    expect(JSON.stringify(wrapper.emitted('business-line-select'))).not.toContain('http');
   });
 
-  it('展示中间收入占营业收入比例第三部分，未接入时显示待接入', () => {
-    const wrapper = mount(CompositionTabsWidget, { props: { model } });
-    expect(wrapper.find('[data-testid="composition-intermediary-income"]').text()).toContain('中间收入占营业收入');
-    expect(wrapper.find('[data-testid="composition-intermediary-income-ratio"]').text()).toContain('15%');
-    const pending = mount(CompositionTabsWidget, { props: { model: { ...model, components: [{ intermediaryIncome: { state: 'PENDING', ratio: null, ratioText: '待接入' } }] } } });
-    expect(pending.find('[data-testid="composition-intermediary-income-ratio"]').text()).toContain('待接入');
-  });
-
-  it('三部分公司/零售行显示核定总量与其他或缺口', () => {
+  it('旧业务结构 tab 只兼容映射到存款环，保留公司/零售原值且总量缺失时为空环', () => {
     const wrapper = mount(CompositionTabsWidget, { props: { model: {
-      sections: [{ sectionKey: 'corporate', label: '公司', businessLine: 'CORP', items: [{
-        tabKey: 'deposit', label: '存款', value: { value: 40, text: '40', unit: '亿元' }, shareText: '40%',
-        total: { value: 100, text: '100', unit: '亿元' }, other: { value: 10, text: '10', unit: '亿元' }, otherShareText: '10%'
-      }] }]
+      tabs: [{
+        tabKey: 'business-structure',
+        label: '业务结构',
+        corporateField: '测试_直营对公存款',
+        retailField: '测试_直营零售存款',
+        corporate: { value: 12, text: '12', unit: '元', share: null },
+        retail: { value: 8, text: '8', unit: '元', share: null },
+        total: { value: null, text: '—', unit: '元' },
+        state: 'NO_TOTAL',
+        statusMessage: '总量来源待接入'
+      }]
     } } });
-    expect(wrapper.find('[data-testid="composition-section-corporate"]').text()).toContain('核定总量 100 亿元');
-    expect(wrapper.find('[data-testid="composition-section-corporate"]').text()).toContain('其他 10 亿元');
-    expect(wrapper.find('[data-testid="composition-section-corporate"]').text()).toContain('10%');
+
+    const deposit = wrapper.find('[data-testid="composition-ring-deposit"]');
+    expect(deposit.attributes('data-state')).toBe('PENDING');
+    expect(deposit.text()).toContain('公司 12');
+    expect(deposit.text()).toContain('零售 8');
+    expect(deposit.text()).toContain('核定总量');
+    expect(deposit.text()).toContain('待接入');
+    expect(wrapper.find('[data-testid="composition-ring-loan"]').attributes('data-state')).toBe('PENDING');
+    expect(wrapper.find('[data-testid="composition-ring-income"]').attributes('data-state')).toBe('PENDING');
+    expect(wrapper.text()).not.toContain('测试_直营');
+  });
+
+  it('缺口和其他只展示模型提供的真实状态，不凭空补占比', () => {
+    const wrapper = mount(CompositionTabsWidget, { props: { model: { rings: [{
+      ...readyRing('deposit', '存款', 40, 40),
+      other: { value: 20, text: '20', unit: '亿元' },
+      otherShareText: '20%'
+    }, {
+      ...readyRing('loan', '贷款', 60, 60),
+      gap: { value: 20, text: '20', unit: '亿元' },
+      gapShareText: '20%'
+    }] } } });
+    expect(wrapper.find('[data-testid="composition-ring-deposit"]').text()).toContain('其他 20 亿元（20%）');
+    expect(wrapper.find('[data-testid="composition-ring-loan"]').text()).toContain('缺口 20 亿元（20%）');
+    expect(wrapper.find('[data-testid="composition-ring-income"]').attributes('data-state')).toBe('PENDING');
+  });
+
+  it('圆环中和图例把金额、占比收敛到可读精度，计算仍使用模型原值', () => {
+    const wrapper = mount(CompositionTabsWidget, { props: { model: { rings: [{
+      ringKey: 'deposit', tabKey: 'deposit', label: '存款', state: 'READY',
+      corporate: { value: 11.94750925, text: '11.94750925', unit: '亿元', share: 52.79611313, shareText: '52.79611313%' },
+      retail: { value: 10.68201505, text: '10.68201505', unit: '亿元', share: 47.20388687, shareText: '47.20388687%' },
+      total: { value: 22.6295243, text: '22.6295243', unit: '亿元' }
+    }] } } });
+    const deposit = wrapper.get('[data-testid="composition-ring-deposit"]');
+    expect(deposit.get('.composition-ring__center strong').text()).toBe('22.63');
+    expect(deposit.text()).toContain('公司 11.95');
+    expect(deposit.text()).toContain('52.8%');
+    expect(deposit.text()).not.toContain('52.79611313%');
+  });
+
+  it('已知收入总量但缺公司/零售分项时正确标注总量，超额缺口时不用截断圆环伪装完整占比', () => {
+    const wrapper = mount(CompositionTabsWidget, { props: { model: { rings: [{
+      ringKey: 'income', tabKey: 'income', label: '收入', state: 'MISSING_SIDE',
+      corporate: { value: null, share: null }, retail: { value: null, share: null },
+      total: { value: 0.17, text: '0.17', unit: '亿元' }
+    }, {
+      ...readyRing('loan', '贷款', 60, 60),
+      gap: { value: 20, text: '20', unit: '亿元', share: 20, shareText: '20%' }
+    }] } } });
+    const income = wrapper.get('[data-testid="composition-ring-income"]');
+    expect(income.text()).toContain('0.17');
+    expect(income.text()).toContain('核定总量');
+    expect(income.text()).not.toContain('核定总量待接入');
+    const loan = wrapper.get('[data-testid="composition-ring-loan"]');
+    expect(loan.attributes('data-state')).toBe('PENDING');
+    expect(loan.text()).toContain('缺口 20 亿元');
+    expect(loan.get('[data-testid="composition-ring-loan-visual"]').attributes('style')).toBeUndefined();
   });
 });

@@ -26,6 +26,30 @@ const config = (tabs, overrides = {}) => ({
 });
 
 describe('compositionTabsModel', () => {
+  it('精确兼容省分行旧业务结构绑定，从同一块已返回列构造存款和贷款环，收入分项缺失则留空', () => {
+    const legacy = config([{ tabKey: 'business-structure', label: '业务结构', corporateField: '测试_直营对公存款', retailField: '测试_直营零售存款', totalField: '', unit: 'YUAN' }], {
+      componentId: 'legacy-composition-64', dataRefs: [{ blockId: 64, role: 'PRIMARY', unit: 'YUAN' }]
+    });
+    legacy.template = 'branch-overview-v1';
+    const result = buildCompositionTabsModel(legacy, { blockResults: { 64: {
+      '测试_直营存款余额': 2262952430,
+      '测试_直营对公存款': 1194750925.07,
+      '测试_直营零售存款': 1068201504.93,
+      '测试_直营贷款余额': 1882980490,
+      '测试_直营对公贷款': 1120758514,
+      '测试_直营零售贷款': 762221976,
+      '测试_直营营业收入': 16972143.28,
+      unitByField: Object.fromEntries(['测试_直营存款余额', '测试_直营对公存款', '测试_直营零售存款', '测试_直营贷款余额', '测试_直营对公贷款', '测试_直营零售贷款', '测试_直营营业收入'].map(key => [key, 'YUAN']))
+    } } });
+    expect(result.tabs.map(item => item.tabKey)).toEqual(['deposit', 'loan', 'income']);
+    expect(result.tabs[0]).toMatchObject({ state: 'READY', total: { value: 22.6295243 } });
+    expect(result.tabs[0].corporate.share).toBeCloseTo(52.8, 1);
+    expect(result.tabs[1]).toMatchObject({ state: 'READY', total: { value: 18.8298049 } });
+    expect(result.tabs[1].corporate.share).toBeCloseTo(59.5, 1);
+    expect(result.tabs[2]).toMatchObject({ state: 'MISSING_SIDE', corporate: { share: null }, retail: { share: null } });
+    expect(result.tabs[2].total.value).toBeCloseTo(0.1697214328, 8);
+  });
+
   it('旧 presentation 不启用配置化结构页签', () => {
     expect(buildCompositionTabsModel({ type: 'CODE', template: 'branch-overview-v1' }, { composition: [] }))
       .toMatchObject({ enabled: false, components: [], tabs: [] });

@@ -16,7 +16,7 @@
         <span>{{ scopeLabel }}</span>
       </div>
       <div class="panorama-header-actions">
-        <span class="panorama-live-state"><i :class="{ 'is-loading': loading, 'is-error': error }"></i>{{ loading ? '正在取数' : error ? '数据异常' : '经营监测' }}</span>
+        <span class="panorama-live-state"><i :class="{ 'is-loading': loading, 'is-error': error, 'is-caution': dataQualityNotice !== '经营监测' }"></i>{{ loading ? '正在取数' : error ? '数据异常' : dataQualityNotice }}</span>
         <button
           type="button"
           class="panorama-icon-action"
@@ -427,6 +427,7 @@ import InstitutionRankingWidget from '../presentation/widgets/InstitutionRanking
 import PresentationMapWidget from '../presentation/map/PresentationMapWidget.vue';
 import { findVisibleMapComponent } from '../presentation/map/mapModel';
 import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
+import { screenDisplayText } from '../presentation/model/screenDisplayText';
 import { buildInstitutionRankingModel } from '../presentation/model/institutionRankingModel';
 import { provinceGeo } from './geography.js';
 import {
@@ -582,14 +583,20 @@ const depositOperationCards = computed(() => [
   { ...findKpi(safeModel.value.kpis, 'depositAverage'), label: '月均余额', note: '周期平均' }
 ]);
 const displayDate = computed(() => safeModel.value.dataDate || '—');
-const displayTitle = computed(() => stripTestModifier(safeModel.value.title) || '分行经营总览');
-const scopeLabel = computed(() => String(
+const dataQualityNotice = computed(() => {
+  const qualities = Object.values(safeModel.value.sourceQualities || {}).filter(item => item && typeof item === 'object');
+  const nonProduction = qualities.some(item => ['TEST', 'DEMO'].includes(String(item.dataClassification || '').toUpperCase()));
+  const stale = qualities.some(item => String(item.status || '').toUpperCase() === 'STALE');
+  return [nonProduction ? '非生产联调数据' : '', stale ? '已过期' : ''].filter(Boolean).join(' · ') || '经营监测';
+});
+const displayTitle = computed(() => screenDisplayText(stripTestModifier(safeModel.value.title)) || '分行经营总览');
+const scopeLabel = computed(() => screenDisplayText(String(
   safeModel.value.scopeLabel
     || safeModel.value.scopeName
     || safeModel.value.regionName
     || safeModel.value.orgScopeName
     || '全辖机构'
-));
+)));
 const today = computed(() => {
   const now = new Date();
   return `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
@@ -933,7 +940,7 @@ function kpiLabel(key) {
     deposit: '存款余额',
     loan: '贷款余额',
     customers: '营销有效归属客户数',
-    revenue: '手工测试收入',
+    revenue: '手工联调收入',
     rate: '目标完成率'
   }[key] || '指标';
 }

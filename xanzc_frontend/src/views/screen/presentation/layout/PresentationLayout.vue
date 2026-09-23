@@ -168,6 +168,7 @@ import { buildDisplayMetricsModel } from '../model/displayMetricsModel';
 import { buildDisplaySeriesTableModel } from '../model/displaySeriesTableModel';
 import { buildCompositionTabsModel } from '../model/compositionTabsModel';
 import { buildInstitutionRankingModel } from '../model/institutionRankingModel';
+import { screenDisplayText } from '../model/screenDisplayText';
 import {
   componentTitle,
   getDisplayComponents,
@@ -259,12 +260,25 @@ const compositionById = computed(() => new Map(compositionModel.value.components
 
 function metricComponents(component) {
   const item = metricById.value.get(component.componentId);
-  return item ? [item] : [];
+  return item ? [{
+    ...item,
+    title: screenDisplayText(item.title),
+    subtitle: screenDisplayText(item.subtitle),
+    description: screenDisplayText(item.description),
+    metricName: screenDisplayText(item.metricName),
+    subFields: item.subFields?.map(field => ({ ...field, label: screenDisplayText(field.label) }))
+  }] : [];
 }
 
 function seriesComponents(component) {
   const item = seriesById.value.get(component.componentId);
-  return item ? [item] : [];
+  return item ? [{
+    ...item,
+    title: screenDisplayText(item.title),
+    subtitle: screenDisplayText(item.subtitle),
+    series: item.series?.map(series => ({ ...series, label: screenDisplayText(series.label) })),
+    columns: item.columns?.map(column => ({ ...column, label: screenDisplayText(column.label) }))
+  }] : [];
 }
 
 function compositionComponentModel(component) {
@@ -286,13 +300,15 @@ function rankingComponentModel(component) {
   const rows = Array.isArray(props.model?.rankings)
     ? props.model.rankings
     : Array.isArray(props.model?.rankingRows) ? props.model.rankingRows : [];
-  return buildInstitutionRankingModel({
+  const result = buildInstitutionRankingModel({
     institutions,
     sourceAuthorized: true,
     rows,
     rankingMetrics: Array.isArray(component.content?.rankingMetrics) ? component.content.rankingMetrics : [],
     activeMetricKey: props.metricKey
   });
+  const metrics = result.metrics.map(metric => ({ ...metric, label: screenDisplayText(metric.label) }));
+  return { ...result, metrics, metric: metrics.find(metric => metric.metricKey === result.activeMetricKey) || null };
 }
 
 function mapPresentation(component) {
@@ -315,7 +331,7 @@ function widgetProps(component) {
   };
   if (['TREND', 'DETAIL_TABLE'].includes(component.componentType)) return { components: seriesComponents(component) };
   if (component.componentType === 'COMPOSITION_TABS') return { model: compositionComponentModel(component) };
-  if (component.componentType === 'RANKING') return { model: rankingComponentModel(component), title: componentTitle(component) };
+  if (component.componentType === 'RANKING') return { model: rankingComponentModel(component), title: screenDisplayText(componentTitle(component)) };
   if (component.componentType === 'MAP') return {
     presentation: mapPresentation(component), model: props.model, geoJson: props.geoJson, mode: props.mode,
     metricKey: props.metricKey, selectedRegionCode: props.selectedRegionCode, selectedOrgCode: props.selectedOrgCode,

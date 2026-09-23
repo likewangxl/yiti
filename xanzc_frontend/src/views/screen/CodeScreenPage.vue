@@ -84,7 +84,7 @@ function formatRuntimeTime(value) {
 }
 
 function dataModeLabel(mode) {
-  if (mode === 'TEST') return '测试库数据';
+  if (mode === 'TEST') return '非生产联调数据';
   if (mode === 'LIVE') return '已接入数据';
   return '数据状态确认中';
 }
@@ -96,7 +96,7 @@ function dataModeDescription(mode) {
 }
 
 function dataModeAriaLabel(mode) {
-  if (mode === 'TEST') return '测试大屏';
+  if (mode === 'TEST') return '非生产联调大屏';
   if (mode === 'LIVE') return '已接入数据大屏';
   return '经营大屏';
 }

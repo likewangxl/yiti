@@ -91,6 +91,7 @@
 .city-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .panorama-live-state { display: inline-flex; align-items: center; gap: 6px; margin-right: 7px; color: #9ab3e2; font-size: 11px; white-space: nowrap; }
 .panorama-live-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--panorama-up); box-shadow: 0 0 8px var(--panorama-up); }
+.panorama-live-state i.is-caution { background: var(--panorama-amber); box-shadow: 0 0 8px var(--panorama-amber); }
 .panorama-segmented { display: inline-flex; overflow: hidden; border: 1px solid rgba(125, 161, 232, .26); border-radius: 6px; }
 .panorama-segmented button,
 .city-filter-tabs button,

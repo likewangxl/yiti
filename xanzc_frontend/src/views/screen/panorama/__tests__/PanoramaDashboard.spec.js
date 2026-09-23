@@ -93,6 +93,17 @@ function mountDashboard(overrides = {}, options = {}) {
   return wrapper;
 }
 
+it('非生产且过期的省分行数据在页眉明确披露来源状态，不出现临时命名', () => {
+  const wrapper = mountDashboard({ model: {
+    ...model,
+    sourceQualities: { composition: { dataClassification: 'TEST', status: 'STALE', dataDate: '2026-09-21' } }
+  } });
+  const notice = wrapper.get('.panorama-live-state');
+  expect(notice.text()).toContain('非生产联调数据');
+  expect(notice.text()).toContain('已过期');
+  expect(notice.text()).not.toContain('测试');
+});
+
 describe('PanoramaDashboard 省级经营大屏', () => {
   beforeEach(() => {
     document.body.style.overflow = '';

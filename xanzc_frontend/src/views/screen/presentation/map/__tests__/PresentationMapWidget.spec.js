@@ -38,6 +38,18 @@ const mapStub = {
 };
 
 describe('PresentationMapWidget', () => {
+  it('地图指标展示名称清理临时前缀，原始字段仍用于取数', () => {
+    const configured = structuredClone(presentation);
+    configured.display.components[0].dataRefs[0].metricName = '测试_直营存款余额';
+    const wrapper = mount(PresentationMapWidget, {
+      props: { presentation: configured, model, geoJson, mode: 'province', metricKey: 'deposit' },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+    expect(wrapper.get('[data-testid="presentation-map-metric"]').text()).toBe('存款余额');
+    expect(wrapper.getComponent(mapStub).props('metricLabel')).toBe('存款余额');
+    expect(configured.display.components[0].dataRefs[0].metricName).toBe('测试_直营存款余额');
+  });
+
   it('把 MAP 配置适配到既有 PanoramaMap，并展示当前指标/日期/图例', () => {
     const wrapper = mount(PresentationMapWidget, {
       props: { presentation, model, geoJson, mode: 'province', metricKey: 'deposit' },
