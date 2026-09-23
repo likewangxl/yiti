@@ -25,6 +25,7 @@ const NEGATIVE_STYLES = new Set(['SIGNED', 'COLOR', 'NONE']);
 const DATA_REF_ROLES = new Set(['PRIMARY', 'SECONDARY', 'DIMENSION']);
 const SOURCE_DIMENSIONS = new Set(['ORG', 'EMP', 'CUST', 'COMMON']);
 const SORT_DIRECTIONS = new Set(['ASC', 'DESC']);
+const INSTITUTION_NAME_KEYWORD_MAX_LENGTH = 40;
 const UNIT_KINDS = Object.freeze({
   YUAN: 'amount', TEN_THOUSAND: 'amount', HUNDRED_MILLION: 'amount',
   COUNT: 'count', TEN_THOUSAND_COUNT: 'count',
@@ -107,12 +108,17 @@ function normalizeComponent(raw = {}) {
 
 function normalizeInstitutionRules(value) {
   if (!object(value)) return null;
-  return {
+  const normalized = {
     allowedOperatingLevels: Array.isArray(value.allowedOperatingLevels)
       ? [...value.allowedOperatingLevels] : [],
     allowedOrgNatures: Array.isArray(value.allowedOrgNatures)
       ? [...value.allowedOrgNatures] : []
   };
+  if (Object.prototype.hasOwnProperty.call(value, 'excludedOrgNameKeywords')) {
+    normalized.excludedOrgNameKeywords = Array.isArray(value.excludedOrgNameKeywords)
+      ? [...value.excludedOrgNameKeywords] : [];
+  }
+  return normalized;
 }
 
 /** 旧 presentation 没有展示子协议时返回 null，调用方继续走原展示路径。 */
@@ -252,13 +258,23 @@ function validateComponent(component, index, issues) {
   }
 }
 
+function validPlainText(value, maxLength) {
+  if (typeof value !== 'string' || !value.trim()) return false;
+  if ([...value].length > maxLength) return false;
+  if (value.includes('<') || value.includes('>')) return false;
+  return ![...value].some(character => {
+    const codePoint = character.codePointAt(0);
+    return codePoint < 0x20 || codePoint === 0x7F;
+  });
+}
+
 function validateInstitutionRules(rules, issues) {
   const prefix = 'institutionRules ';
   if (!object(rules)) {
     issues.push(`${prefix}必须是对象`);
     return;
   }
-  unknownKeys(rules, new Set(['allowedOperatingLevels', 'allowedOrgNatures']), prefix, issues);
+  unknownKeys(rules, new Set(['allowedOperatingLevels', 'allowedOrgNatures', 'excludedOrgNameKeywords']), prefix, issues);
   for (const [key, label] of [
     ['allowedOperatingLevels', '机构层级白名单'],
     ['allowedOrgNatures', '机构性质白名单']
@@ -278,6 +294,23 @@ function validateInstitutionRules(rules, issues) {
       if (seen.has(normalized)) issues.push(`${prefix}${label}不能重复: ${value.trim()}`);
       seen.add(normalized);
     });
+  }
+  if (Object.prototype.hasOwnProperty.call(rules, 'excludedOrgNameKeywords')) {
+    const keywords = rules.excludedOrgNameKeywords;
+    if (!Array.isArray(keywords) || keywords.length === 0) {
+      issues.push(`${prefix}机构名称排除关键词不能为空`);
+    } else {
+      const seen = new Set();
+      keywords.forEach((value, index) => {
+        if (!validPlainText(value, INSTITUTION_NAME_KEYWORD_MAX_LENGTH)) {
+          issues.push(`${prefix}机构名称排除关键词[${index}]必须是合法非空文本`);
+          return;
+        }
+        const normalized = value.trim().toUpperCase();
+        if (seen.has(normalized)) issues.push(`${prefix}机构名称排除关键词不能重复: ${value.trim()}`);
+        seen.add(normalized);
+      });
+    }
   }
 }
 

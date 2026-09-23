@@ -63,6 +63,34 @@ describe('经营大屏展示子协议', () => {
     ]));
   });
 
+  it('支持名称排除关键词并严格拒绝空值、重复值、非文本和危险文本', () => {
+    const source = structuredClone(validDisplayConfig.presentation);
+    source.institutionRules.excludedOrgNameKeywords = ['小微支行', '社区支行'];
+    expect(normalizeDisplayConfig(source).institutionRules).toEqual({
+      allowedOperatingLevels: ['PRIMARY'],
+      allowedOrgNatures: ['SECONDARY_BRANCH'],
+      excludedOrgNameKeywords: ['小微支行', '社区支行']
+    });
+    expect(validateDisplayConfig(source)).toEqual([]);
+
+    const invalidValues = [
+      [],
+      [''],
+      ['小微支行', ' 小微支行 '],
+      [123],
+      ['a'.repeat(41)],
+      ['a\nb'],
+      ['a<b']
+    ];
+    for (const excludedOrgNameKeywords of invalidValues) {
+      const invalid = structuredClone(validDisplayConfig.presentation);
+      invalid.institutionRules.excludedOrgNameKeywords = excludedOrgNameKeywords;
+      expect(validateDisplayConfig(invalid)).toEqual(expect.arrayContaining([
+        expect.stringContaining('名称排除关键词')
+      ]));
+    }
+  });
+
   it('缺少规则保持旧编辑器兼容；显式部分规则仍 fail-close', () => {
     const missing = structuredClone(validDisplayConfig.presentation);
     delete missing.institutionRules;

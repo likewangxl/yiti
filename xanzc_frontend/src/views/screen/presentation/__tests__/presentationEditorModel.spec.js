@@ -36,7 +36,11 @@ describe('经营大屏展示编辑器状态模型', () => {
 
     expect(session.presentation).toEqual({
       ...legacyPresentation,
-      institutionRules: { allowedOperatingLevels: ['PRIMARY'], allowedOrgNatures: ['SECONDARY_BRANCH'] },
+      institutionRules: {
+        allowedOperatingLevels: ['PRIMARY', 'SUBORDINATE'],
+        allowedOrgNatures: ['LOCAL_BRANCH', 'SECONDARY_BRANCH', 'OUTLET'],
+        excludedOrgNameKeywords: ['小微支行', '社区支行']
+      },
       displaySchemaVersion: 1,
       display: { components: [] }
     });
@@ -44,6 +48,32 @@ describe('经营大屏展示编辑器状态模型', () => {
     expect(session.dirty).toBe(false);
     expect(session.selectedComponentId).toBeNull();
     expect(source).toEqual(legacyPresentation);
+  });
+
+  it('按模板选择机构展示默认规则，保留已有明确规则', () => {
+    const branch = createPresentationEditorSession({ type: 'CODE', template: 'branch-overview-v1' });
+    expect(branch.presentation.institutionRules).toEqual({
+      allowedOperatingLevels: ['PRIMARY', 'SUBORDINATE'],
+      allowedOrgNatures: ['LOCAL_BRANCH', 'SECONDARY_BRANCH', 'OUTLET'],
+      excludedOrgNameKeywords: ['小微支行', '社区支行']
+    });
+
+    const corporate = createPresentationEditorSession({ type: 'CODE', template: 'corporate-overview-v1' });
+    expect(corporate.presentation.institutionRules).toEqual({
+      allowedOperatingLevels: ['PRIMARY'],
+      allowedOrgNatures: ['SECONDARY_BRANCH']
+    });
+
+    const explicitRules = {
+      allowedOperatingLevels: ['CUSTOM_LEVEL'],
+      allowedOrgNatures: ['CUSTOM_NATURE']
+    };
+    const existing = createPresentationEditorSession({
+      type: 'CODE',
+      template: 'branch-overview-v1',
+      institutionRules: explicitRules
+    });
+    expect(existing.presentation.institutionRules).toEqual(explicitRules);
   });
 
   it('加载 displaySchemaVersion=1 时深拷贝，保留 0、false 和空字符串', () => {

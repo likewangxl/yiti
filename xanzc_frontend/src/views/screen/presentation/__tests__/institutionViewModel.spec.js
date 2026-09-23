@@ -164,4 +164,56 @@ describe('institutionViewModel', () => {
       expect.objectContaining({ code: 'AUTHORIZED_DIRECTORY_REQUIRED' })
     ]));
   });
+
+  it('启用名称排除规则时按授权目录画像名称排除小微/社区支行，缺名 fail-close', () => {
+    const result = buildInstitutionViewModel([
+      { orgCode: 'PRIMARY', orgName: '西安分行', operatingLevel: 'BRANCH_1', orgNature: 'BRANCH', active: true, authorized: true },
+      { orgCode: 'MICRO', orgName: '高新小微支行', operatingLevel: 'BRANCH_1', orgNature: 'BRANCH', active: true, authorized: true },
+      { orgCode: 'COMMUNITY', orgName: '幸福社区支行', operatingLevel: 'BRANCH_1', orgNature: 'BRANCH', active: true, authorized: true },
+      { orgCode: 'MISSING_NAME', operatingLevel: 'BRANCH_1', orgNature: 'BRANCH', active: true, authorized: true }
+    ], {
+      ...rules,
+      excludedOrgNameKeywords: ['小微支行', '社区支行']
+    });
+
+    expect(result.displayInstitutions.map(item => item.orgCode)).toEqual(['PRIMARY']);
+    expect(result.contributionUnknown).toEqual(expect.arrayContaining([
+      expect.objectContaining({ orgCode: 'MICRO', reason: 'ORG_NAME_EXCLUDED_KEYWORD' }),
+      expect.objectContaining({ orgCode: 'COMMUNITY', reason: 'ORG_NAME_EXCLUDED_KEYWORD' }),
+      expect.objectContaining({ orgCode: 'MISSING_NAME', reason: 'ORG_NAME_MISSING' })
+    ]));
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'ORG_NAME_EXCLUDED_KEYWORD', orgCode: 'MICRO' }),
+      expect.objectContaining({ code: 'ORG_NAME_MISSING', orgCode: 'MISSING_NAME' })
+    ]));
+    expect(result.filters).toEqual({
+      ...rules,
+      excludedOrgNameKeywords: ['小微支行', '社区支行']
+    });
+  });
+
+  it('未提供名称排除字段时保持旧行为，允许白名单机构缺少名称', () => {
+    const result = buildInstitutionViewModel([
+      { orgCode: 'NO_NAME', operatingLevel: 'BRANCH_1', orgNature: 'BRANCH', active: true, authorized: true }
+    ], rules);
+
+    expect(result.displayInstitutions).toEqual([
+      expect.objectContaining({ orgCode: 'NO_NAME', orgName: null })
+    ]);
+  });
+
+  it('名称排除字段存在但格式无效时 fail-close，不展示授权目录', () => {
+    for (const excludedOrgNameKeywords of [[], [''], '小微支行', ['小微支行', ' 小微支行 '], [null]]) {
+      const result = buildInstitutionViewModel(directory, {
+        ...rules,
+        excludedOrgNameKeywords
+      });
+
+      expect(result.status).toBe('UNCONFIRMED');
+      expect(result.displayInstitutions).toEqual([]);
+      expect(result.issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: 'EXCLUDED_ORG_NAME_KEYWORDS_INVALID' })
+      ]));
+    }
+  });
 });

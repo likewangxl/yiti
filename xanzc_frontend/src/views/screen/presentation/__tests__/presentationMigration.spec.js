@@ -141,6 +141,45 @@ function templateFixture(template) {
 }
 
 describe('旧经营大屏配置迁移', () => {
+  it('分行经营总览迁移使用新的机构展示默认规则，其他模板保留旧默认且显式规则不覆盖', () => {
+    const branch = previewLegacyMigration({
+      canvasStyle: { presentation: { type: 'CODE', template: 'branch-overview-v1' } },
+      components: []
+    });
+    expect(branch.presentation.institutionRules).toEqual({
+      allowedOperatingLevels: ['PRIMARY', 'SUBORDINATE'],
+      allowedOrgNatures: ['LOCAL_BRANCH', 'SECONDARY_BRANCH', 'OUTLET'],
+      excludedOrgNameKeywords: ['小微支行', '社区支行']
+    });
+
+    const retail = previewLegacyMigration({
+      canvasStyle: { presentation: { type: 'CODE', template: 'retail-overview-v1' } },
+      components: []
+    });
+    expect(retail.presentation.institutionRules).toEqual({
+      allowedOperatingLevels: ['PRIMARY'],
+      allowedOrgNatures: ['SECONDARY_BRANCH']
+    });
+
+    const explicit = previewLegacyMigration({
+      canvasStyle: {
+        presentation: {
+          type: 'CODE',
+          template: 'branch-overview-v1',
+          institutionRules: {
+            allowedOperatingLevels: ['CUSTOM_LEVEL'],
+            allowedOrgNatures: ['CUSTOM_NATURE']
+          }
+        }
+      },
+      components: []
+    });
+    expect(explicit.presentation.institutionRules).toEqual({
+      allowedOperatingLevels: ['CUSTOM_LEVEL'],
+      allowedOrgNatures: ['CUSTOM_NATURE']
+    });
+  });
+
   it('从画布 blocks 的 bindJson 构造可信快照，不依赖不存在的 bindSnapshots，也不猜标题', () => {
     const result = previewLegacyMigration({
       canvasStyle: { presentation: { type: 'CODE', template: 'branch-overview-v1' } },

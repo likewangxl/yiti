@@ -70,6 +70,58 @@ describe('S13 navigation contract', () => {
     expect(classifyInstitutionLayer({ orgName: '某某支行', orgCode: '001' }, rules)).toMatchObject({ known: false, displayable: false, reason: 'LAYER_UNCONFIRMED' });
   });
 
+  it('启用名称排除规则时分类和机构解析都拒绝命中机构，缺名 fail-close', () => {
+    const rules = {
+      allowedOperatingLevels: ['PRIMARY_BRANCH'],
+      allowedOrgNatures: ['BRANCH'],
+      excludedOrgNameKeywords: ['小微支行', '社区支行']
+    };
+    expect(classifyInstitutionLayer({ orgName: '高新小微支行', operatingLevel: 'PRIMARY_BRANCH', orgNature: 'BRANCH' }, rules))
+      .toMatchObject({ known: true, displayable: false, reason: 'ORG_NAME_EXCLUDED_KEYWORD' });
+    expect(classifyInstitutionLayer({ operatingLevel: 'PRIMARY_BRANCH', orgNature: 'BRANCH' }, rules))
+      .toMatchObject({ known: false, displayable: false, reason: 'ORG_NAME_MISSING' });
+
+    const response = {
+      institutionRules: rules,
+      panoramaInstitutions: [
+        { orgCode: 'MICRO', orgName: '高新小微支行', operatingLevel: 'PRIMARY_BRANCH', orgNature: 'BRANCH' },
+        { orgCode: 'ORDINARY', orgName: '高新支行', operatingLevel: 'PRIMARY_BRANCH', orgNature: 'BRANCH' },
+        { orgCode: 'MISSING', operatingLevel: 'PRIMARY_BRANCH', orgNature: 'BRANCH' }
+      ]
+    };
+    expect(resolveInstitution(response, 'MICRO')).toMatchObject({
+      authorized: true,
+      layer: { known: true, displayable: false, reason: 'ORG_NAME_EXCLUDED_KEYWORD' }
+    });
+    expect(resolveInstitution(response, 'MISSING')).toMatchObject({
+      authorized: true,
+      reason: 'ORG_NAME_MISSING',
+      layer: { known: false, displayable: false, reason: 'ORG_NAME_MISSING' }
+    });
+    expect(resolveInstitution(response, 'ORDINARY')).toMatchObject({
+      authorized: true,
+      layer: { known: true, displayable: true }
+    });
+  });
+
+  it('名称排除字段存在但格式无效时导航 fail-close', () => {
+    const response = {
+      institutionRules: {
+        allowedOperatingLevels: ['PRIMARY_BRANCH'],
+        allowedOrgNatures: ['BRANCH'],
+        excludedOrgNameKeywords: []
+      },
+      panoramaInstitutions: [
+        { orgCode: 'ORDINARY', orgName: '高新支行', operatingLevel: 'PRIMARY_BRANCH', orgNature: 'BRANCH' }
+      ]
+    };
+
+    expect(resolveInstitution(response, 'ORDINARY')).toMatchObject({
+      authorized: true,
+      layer: { known: false, displayable: false, reason: 'LAYER_UNCONFIRMED' }
+    });
+  });
+
   it('优先读取 ScreenRenderRespDTO 的 institutionRules，不被旧 navigationRules 覆盖', () => {
     const response = {
       screenCode: 'SCR_PROVINCE',

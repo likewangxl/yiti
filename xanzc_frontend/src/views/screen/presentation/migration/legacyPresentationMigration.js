@@ -57,12 +57,25 @@ const LAYOUT_BY_TYPE = Object.freeze({
   DETAIL_TABLE: 'BOTTOM'
 });
 
-// 新展示运行包需要明确的机构目录过滤规则。该默认值来自已核对的真实
-// 机构分类枚举；迁移器不从机构名称、数量或标题推导规则。
+// 非分行模板的旧机构目录过滤默认值。迁移器不从机构名称、数量或标题推导规则。
 const DEFAULT_INSTITUTION_RULES = Object.freeze({
   allowedOperatingLevels: Object.freeze(['PRIMARY']),
   allowedOrgNatures: Object.freeze(['SECONDARY_BRANCH'])
 });
+
+// 分行经营总览需要同时展示一级机构和普通下属支行，并按显式规则排除
+// 小微/社区支行；机构身份仍由服务端授权目录提供。
+const BRANCH_OVERVIEW_INSTITUTION_RULES = Object.freeze({
+  allowedOperatingLevels: Object.freeze(['PRIMARY', 'SUBORDINATE']),
+  allowedOrgNatures: Object.freeze(['LOCAL_BRANCH', 'SECONDARY_BRANCH', 'OUTLET']),
+  excludedOrgNameKeywords: Object.freeze(['小微支行', '社区支行'])
+});
+
+function defaultInstitutionRules(template) {
+  return template === 'branch-overview-v1'
+    ? BRANCH_OVERVIEW_INSTITUTION_RULES
+    : DEFAULT_INSTITUTION_RULES;
+}
 
 // 这是旧 bindingKey 的编码清单，不是标题或模糊别名匹配。新增旧槽位必须先进入清单和测试。
 const RULES = Object.freeze([
@@ -708,10 +721,11 @@ function convertComponent(entry, context) {
 }
 
 function emptyPresentation(options = {}) {
+  const template = options.template || 'branch-overview-v1';
   return {
     ...(options.type ? { type: options.type } : { type: 'CODE' }),
-    ...(options.template ? { template: options.template } : { template: 'branch-overview-v1' }),
-    institutionRules: deepClone(options.institutionRules || DEFAULT_INSTITUTION_RULES),
+    template,
+    institutionRules: deepClone(options.institutionRules ?? defaultInstitutionRules(template)),
     displaySchemaVersion: 1,
     display: { components: [] }
   };
@@ -808,17 +822,22 @@ export function previewLegacyMigration(source, options = {}) {
   const extracted = extractLegacyPackage(source);
   const existingPresentation = extracted.presentation;
   if (existingPresentation) return alreadyMigratedResult(source, existingPresentation, options);
+  const template = options.template || extracted.canvasStyle?.presentation?.template
+    || extracted.root?.canvasStyle?.presentation?.template || extracted.root?.template
+    || 'branch-overview-v1';
+  const type = options.type || extracted.canvasStyle?.presentation?.type
+    || extracted.root?.canvasStyle?.presentation?.type || extracted.root?.type;
+  const institutionRules = options.institutionRules ?? extracted.institutionRules
+    ?? defaultInstitutionRules(template);
   const presentation = {
     ...emptyPresentation({
-      type: options.type || extracted.canvasStyle?.presentation?.type
-        || extracted.root?.canvasStyle?.presentation?.type || extracted.root?.type,
-      template: options.template || extracted.canvasStyle?.presentation?.template
-        || extracted.root?.canvasStyle?.presentation?.template || extracted.root?.template,
-      institutionRules: options.institutionRules || extracted.institutionRules || DEFAULT_INSTITUTION_RULES
+      type,
+      template,
+      institutionRules
     }),
     ...(isObject(extracted.canvasStyle?.presentation) ? {
-      type: extracted.canvasStyle.presentation.type || options.type || 'CODE',
-      template: extracted.canvasStyle.presentation.template || options.template || 'branch-overview-v1'
+      type: extracted.canvasStyle.presentation.type || type || 'CODE',
+      template: extracted.canvasStyle.presentation.template || template
     } : {})
   };
   const context = { bindSnapshots: extracted.bindSnapshots, metricLabels: extracted.metricLabels, usedIds: new Set(), orders: {} };

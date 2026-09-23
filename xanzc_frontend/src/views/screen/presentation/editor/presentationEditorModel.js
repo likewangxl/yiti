@@ -32,12 +32,24 @@ const DEFAULT_INSTITUTION_RULES = Object.freeze({
   allowedOrgNatures: Object.freeze(['SECONDARY_BRANCH'])
 });
 
+const BRANCH_OVERVIEW_INSTITUTION_RULES = Object.freeze({
+  allowedOperatingLevels: Object.freeze(['PRIMARY', 'SUBORDINATE']),
+  allowedOrgNatures: Object.freeze(['LOCAL_BRANCH', 'SECONDARY_BRANCH', 'OUTLET']),
+  excludedOrgNameKeywords: Object.freeze(['小微支行', '社区支行'])
+});
+
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function hasOwn(value, key) {
   return isObject(value) && Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function defaultInstitutionRules(template) {
+  return template === 'branch-overview-v1'
+    ? BRANCH_OVERVIEW_INSTITUTION_RULES
+    : DEFAULT_INSTITUTION_RULES;
 }
 
 /**
@@ -115,12 +127,14 @@ function normalizePresentationSource(source, options = {}) {
     throw modelError('DISPLAY_SCHEMA_VERSION_UNSUPPORTED', '仅支持 displaySchemaVersion=1');
   }
 
+  const template = hasOwn(presentation, 'template') ? presentation.template : options.template;
+
   const result = {
     ...presentation,
     ...(hasOwn(presentation, 'type') ? {} : (options.type ? { type: options.type } : {})),
     ...(hasOwn(presentation, 'template') ? {} : (options.template ? { template: options.template } : {})),
     institutionRules: hasOwn(presentation, 'institutionRules')
-      ? presentation.institutionRules : deepClone(DEFAULT_INSTITUTION_RULES),
+      ? presentation.institutionRules : deepClone(defaultInstitutionRules(template)),
     displaySchemaVersion: DISPLAY_SCHEMA_VERSION,
     display: {
       ...(isObject(presentation.display) ? presentation.display : {}),

@@ -122,7 +122,37 @@ export function routeForInstitution(context = {}, baseQuery = {}) {
 }
 
 function valuesOf(value) {
-  return (Array.isArray(value) ? value : []).map(upper).filter(Boolean);
+  const values = value instanceof Set ? [...value] : (Array.isArray(value) ? value : []);
+  return values.map(upper).filter(Boolean);
+}
+
+function keywordValuesOf(value) {
+  const values = value instanceof Set ? [...value] : (Array.isArray(value) ? value : []);
+  return values.map(text).filter(Boolean);
+}
+
+function validOrgNameKeyword(value) {
+  if (typeof value !== 'string' || !text(value)) return false;
+  if ([...value].length > 40 || value.includes('<') || value.includes('>')) return false;
+  return ![...value].some(character => {
+    const codePoint = character.codePointAt(0);
+    return codePoint < 0x20 || codePoint === 0x7F;
+  });
+}
+
+function validOrgNameKeywordRule(value) {
+  // navigationRulesOf returns normalized Set instances; an empty Set means the
+  // optional rule was not configured. Raw payloads must provide a non-empty list.
+  if (value instanceof Set) return [...value].every(validOrgNameKeyword);
+  if (!Array.isArray(value) || value.length === 0) return false;
+  const seen = new Set();
+  return value.every(keyword => {
+    if (!validOrgNameKeyword(keyword)) return false;
+    const normalized = keyword.trim().toUpperCase();
+    if (seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
 }
 
 function rulesOf(source) {
@@ -133,16 +163,24 @@ function rulesOf(source) {
   const rules = source.institutionRules ?? source.navigationRules
     ?? source.navigation?.rules ?? source.institutionNavigationRules ?? source;
   if (!rules || typeof rules !== 'object' || Array.isArray(rules)) return null;
-  if (rules.allowedOperatingLevels instanceof Set
-      || rules.allowedOrgNatures instanceof Set
-      || rules.hiddenOperatingLevels instanceof Set
-      || rules.hiddenOrgNatures instanceof Set) return rules;
   const allowedOperatingLevels = new Set(valuesOf(rules.allowedOperatingLevels ?? rules.operatingLevels));
   const allowedOrgNatures = new Set(valuesOf(rules.allowedOrgNatures ?? rules.orgNatures));
   const hiddenOperatingLevels = new Set(valuesOf(rules.hiddenOperatingLevels ?? rules.excludedOperatingLevels));
   const hiddenOrgNatures = new Set(valuesOf(rules.hiddenOrgNatures ?? rules.excludedOrgNatures));
-  if (!allowedOperatingLevels.size && !allowedOrgNatures.size && !hiddenOperatingLevels.size && !hiddenOrgNatures.size) return null;
-  return { allowedOperatingLevels, allowedOrgNatures, hiddenOperatingLevels, hiddenOrgNatures };
+  const keywordKeys = ['excludedOrgNameKeywords', 'excluded_org_name_keywords']
+    .filter(key => Object.prototype.hasOwnProperty.call(rules, key));
+  if (keywordKeys.some(key => !validOrgNameKeywordRule(rules[key]))) return null;
+  const excludedOrgNameKeywords = new Set(keywordValuesOf(rules.excludedOrgNameKeywords
+    ?? rules.excluded_org_name_keywords));
+  if (!allowedOperatingLevels.size && !allowedOrgNatures.size && !hiddenOperatingLevels.size
+      && !hiddenOrgNatures.size) return null;
+  return {
+    allowedOperatingLevels,
+    allowedOrgNatures,
+    hiddenOperatingLevels,
+    hiddenOrgNatures,
+    excludedOrgNameKeywords
+  };
 }
 
 export function navigationRulesOf(view) {
@@ -151,14 +189,21 @@ export function navigationRulesOf(view) {
 
 /**
  * 只根据调用方提供的服务端规则与画像字段识别层级。
- * 没有规则时一律待确认；orgName/orgCode 永远不参与判断。
+ * 没有规则时一律待确认；orgCode 不参与判断，orgName 仅在服务端明确提供
+ * excludedOrgNameKeywords 时用于名称排除。
  */
 export function classifyInstitutionLayer(institution = {}, explicitRules = null) {
   const rules = rulesOf(explicitRules);
   if (!rules) return { known: false, displayable: false, value: '', reason: 'LAYER_UNCONFIRMED' };
-  const values = [institution?.operatingLevel, institution?.operating_level, institution?.orgNature, institution?.org_nature]
-    .map(upper)
-    .filter(Boolean);
+  if (rules.excludedOrgNameKeywords?.size) {
+    const orgName = text(institution?.orgName ?? institution?.org_name);
+    if (!orgName) return { known: false, displayable: false, value: '', reason: 'ORG_NAME_MISSING' };
+    const excludedKeyword = [...rules.excludedOrgNameKeywords]
+      .find(keyword => orgName.toUpperCase().includes(keyword.toUpperCase()));
+    if (excludedKeyword) {
+      return { known: true, displayable: false, value: excludedKeyword, reason: 'ORG_NAME_EXCLUDED_KEYWORD' };
+    }
+  }
   const operatingLevels = valuesOf([institution?.operatingLevel, institution?.operating_level]);
   const orgNatures = valuesOf([institution?.orgNature, institution?.org_nature]);
   const hidden = operatingLevels.find(value => rules.hiddenOperatingLevels.has(value))
@@ -187,7 +232,13 @@ export function resolveInstitution(view, orgCode, explicitRules = undefined) {
   const institution = institutionDirectory(view).find(item => institutionCode(item) === code) || null;
   if (!institution) return { orgCode: code, authorized: false, institution: null, layer: classifyInstitutionLayer({}, rules), reason: 'ORG_NOT_AUTHORIZED' };
   const layer = classifyInstitutionLayer(institution, rules);
-  return { orgCode: code, authorized: true, institution, layer, reason: layer.known ? layer.reason : 'LAYER_UNCONFIRMED' };
+  return {
+    orgCode: code,
+    authorized: true,
+    institution,
+    layer,
+    reason: layer.reason || (layer.known ? '' : 'LAYER_UNCONFIRMED')
+  };
 }
 
 function catalogEntry(catalog, target) {
