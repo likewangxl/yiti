@@ -115,6 +115,14 @@ const COMPLETION_RING_IDS = Object.freeze([
   'business-corp-loan-rate'
 ]);
 
+// 圆环颜色按业务 ID 固定，配置顺序变化时仍能区分零售/对公与存款/贷款。
+const COMPLETION_RING_ACCENTS = Object.freeze({
+  'business-retail-deposit-rate': 'var(--panorama-cyan, #4de8ef)',
+  'business-retail-loan-rate': 'var(--panorama-blue, #5896ff)',
+  'business-corp-deposit-rate': 'var(--panorama-violet, #a979ff)',
+  'business-corp-loan-rate': 'var(--panorama-up, #58e4b5)'
+});
+
 function iconEntry(item) {
   return METRIC_ICONS[String(item?.componentId || '')] || null;
 }
@@ -134,9 +142,8 @@ function shouldUseCompletionRing(item) {
 }
 
 function ringAccent(item) {
-  return String(item?.componentId || '').includes('-deposit-')
-    ? 'var(--panorama-cyan, #4de8ef)'
-    : 'var(--panorama-violet, #a979ff)';
+  return COMPLETION_RING_ACCENTS[String(item?.componentId || '')]
+    || 'var(--metric-accent, var(--panorama-cyan, #4de8ef))';
 }
 
 function statusText(state) {

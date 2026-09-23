@@ -167,6 +167,39 @@ describe('MetricDisplayWidgets', () => {
     expect(wrapper.find('[data-component-id="legacy-completion"] [data-testid="completion-ring-gauge"]').exists()).toBe(false);
   });
 
+  it('按零售/对公与存款/贷款维度为四张完成率圆环使用互不重复的颜色', () => {
+    const accentsById = {
+      'business-retail-deposit-rate': 'var(--panorama-cyan, #4de8ef)',
+      'business-retail-loan-rate': 'var(--panorama-blue, #5896ff)',
+      'business-corp-deposit-rate': 'var(--panorama-violet, #a979ff)',
+      'business-corp-loan-rate': 'var(--panorama-up, #58e4b5)'
+    };
+    const wrapper = mount(MetricDisplayWidgets, {
+      props: {
+        grouped: true,
+        components: Object.keys(accentsById).map((componentId, order) => ({
+          componentId,
+          componentType: 'METRIC_CARD',
+          layoutRegion: 'HEADER',
+          order,
+          title: componentId,
+          text: '80.00%',
+          value: 80,
+          state: 'READY',
+          subFields: []
+        }))
+      }
+    });
+
+    const actualAccents = Object.keys(accentsById).map(componentId => {
+      const style = wrapper.find(`[data-component-id="${componentId}"] [data-testid="completion-ring-gauge"]`).attributes('style');
+      return style.match(/--completion-ring-accent:\s*([^;]+)/)?.[1]?.trim();
+    });
+
+    expect(actualAccents).toEqual(Object.values(accentsById));
+    expect(new Set(actualAccents).size).toBe(4);
+  });
+
   it('非分组时即使组件ID匹配也保留普通指标卡展示', () => {
     const wrapper = mount(MetricDisplayWidgets, {
       props: {
