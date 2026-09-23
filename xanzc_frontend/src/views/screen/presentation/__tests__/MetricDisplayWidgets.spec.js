@@ -58,4 +58,32 @@ describe('MetricDisplayWidgets', () => {
     expect(new Set(icons.map(node => node.attributes('data-icon'))).size).toBe(10);
     expect(wrapper.find('[data-component-id="legacy-card"] [data-testid="presentation-metric-icon"]').exists()).toBe(false);
   });
+
+  it('分组卡隐藏原始来源字段，完整展示业务标题并保留来源 title；通用卡仍显示 metricName', () => {
+    const wrapper = mount(MetricDisplayWidgets, {
+      props: {
+        grouped: true,
+        components: [{
+          componentId: 'business-retail-deposit-rate', componentType: 'METRIC_CARD', layoutRegion: 'HEADER',
+          title: '存款完成率', metricName: '测试_零售存款目标完成率', text: '86.40%', state: 'READY', subFields: []
+        }]
+      }
+    });
+    const groupedCard = wrapper.find('[data-component-id="business-retail-deposit-rate"]');
+    expect(groupedCard.classes()).toContain('presentation-metric-widget--grouped');
+    expect(groupedCard.find('h2').text()).toBe('存款完成率');
+    expect(groupedCard.find('.presentation-metric-widget__header small').exists()).toBe(false);
+    expect(groupedCard.attributes('title')).toBe('测试_零售存款目标完成率');
+
+    const genericWrapper = mount(MetricDisplayWidgets, {
+      props: {
+        grouped: false,
+        components: [{
+          componentId: 'legacy-card', componentType: 'METRIC_CARD', layoutRegion: 'HEADER',
+          title: '存款余额', metricName: '测试_直营存款余额', text: '1.00万元', state: 'READY', subFields: []
+        }]
+      }
+    });
+    expect(genericWrapper.find('.presentation-metric-widget__header small').text()).toBe('测试_直营存款余额');
+  });
 });

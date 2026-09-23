@@ -7,12 +7,14 @@
       :class="[
         `presentation-metric-widget--${String(item.componentType || '').toLowerCase()}`,
         `presentation-metric-widget--${String(item.layoutRegion || '').toLowerCase()}`,
+        grouped ? 'presentation-metric-widget--grouped' : '',
         toneClass(item)
       ]"
       :data-component-id="item.componentId"
       :data-component-type="item.componentType"
       :data-layout-region="item.layoutRegion"
       :data-state="item.state"
+      :title="grouped && item.metricName ? item.metricName : undefined"
     >
       <div
         v-if="iconFor(item)"
@@ -27,7 +29,7 @@
             <h2>{{ item.title || '—' }}</h2>
             <p v-if="item.subtitle">{{ item.subtitle }}</p>
           </div>
-          <small v-if="item.metricName">{{ item.metricName }}</small>
+          <small v-if="item.metricName && !grouped" :title="item.metricName">{{ item.metricName }}</small>
         </header>
         <strong class="presentation-metric-widget__value" data-testid="presentation-metric-value">{{ item.text }}</strong>
         <span v-if="item.state !== 'READY'" class="presentation-metric-widget__status" data-testid="presentation-metric-status">
@@ -68,7 +70,8 @@ import {
 } from '@element-plus/icons-vue';
 
 defineProps({
-  components: { type: Array, default: () => [] }
+  components: { type: Array, default: () => [] },
+  grouped: { type: Boolean, default: false }
 });
 
 const METRIC_ICONS = Object.freeze({
@@ -151,6 +154,7 @@ function toneClass(item) {
 .presentation-metric-widget__header { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; min-width: 0; }
 .presentation-metric-widget__header > div { min-width: 0; }
 .presentation-metric-widget__header h2 { margin: 0; overflow: hidden; color: var(--panorama-text, #eaf2ff); font-size: 13px; font-weight: 600; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.presentation-metric-widget--grouped .presentation-metric-widget__header h2 { max-width: 100%; overflow: visible; text-overflow: clip; }
 .presentation-metric-widget__header p,.presentation-metric-widget__header small,.presentation-metric-widget__description { margin: 3px 0 0; overflow: hidden; color: var(--panorama-text-dim, #8fa9db); font-size: 10px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
 .presentation-metric-widget__header small { flex: 0 0 auto; }
 .presentation-metric-widget__value { display: block; min-width: 0; max-width: 100%; margin-top: 2px; color: #f4f8ff; font-size: clamp(18px, 1.55vw, 30px); font-weight: 750; line-height: 1.12; overflow-wrap: anywhere; word-break: break-word; }

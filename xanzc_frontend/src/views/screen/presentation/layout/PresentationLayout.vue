@@ -308,7 +308,10 @@ function widgetComponent(component) {
 }
 
 function widgetProps(component) {
-  if (['METRIC_CARD', 'COMPLETION'].includes(component.componentType)) return { components: metricComponents(component) };
+  if (['METRIC_CARD', 'COMPLETION'].includes(component.componentType)) return {
+    components: metricComponents(component),
+    grouped: headerGroups.value.length > 0 && component.layoutRegion === 'HEADER'
+  };
   if (['TREND', 'DETAIL_TABLE'].includes(component.componentType)) return { components: seriesComponents(component) };
   if (component.componentType === 'COMPOSITION_TABS') return { model: compositionComponentModel(component) };
   if (component.componentType === 'RANKING') return { model: rankingComponentModel(component), title: componentTitle(component) };

@@ -59,7 +59,7 @@ const presentation = {
 };
 
 const stubs = {
-  MetricDisplayWidgets: { props: ['components'], template: '<div data-testid="metric-widget"><span v-for="item in components" :key="item.componentId">{{ item.componentId }}</span></div>' },
+  MetricDisplayWidgets: { props: ['components', 'grouped'], template: '<div data-testid="metric-widget" :data-grouped="grouped ? \'true\' : \'false\'"><span v-for="item in components" :key="item.componentId">{{ item.componentId }}</span></div>' },
   SeriesTableWidgets: { props: ['components'], template: '<div data-testid="series-widget"><span v-for="item in components" :key="item.componentId">{{ item.componentId }}</span></div>' },
   CompositionTabsWidget: { props: ['model'], template: '<div data-testid="structure-widget">{{ model.components?.[0]?.componentId }}</div>' },
   InstitutionRankingWidget: { props: ['model', 'title'], template: '<div data-testid="ranking-widget">{{ title }}</div>' },
@@ -102,6 +102,7 @@ describe('PresentationLayout', () => {
     expect(wrapper.find('[data-layout-group="RETAIL"]').findAll('[data-testid="presentation-layout-component"]')).toHaveLength(4);
     expect(wrapper.find('[data-layout-group="CORP"]').findAll('[data-testid="presentation-layout-component"]')).toHaveLength(4);
     expect(wrapper.find('[data-layout-group="REVENUE"]').findAll('[data-testid="presentation-layout-component"]')).toHaveLength(2);
+    expect(wrapper.find('[data-layout-group="RETAIL"] [data-testid="metric-widget"]').attributes('data-grouped')).toBe('true');
   });
 
   it('将配置组件重排为重点卡/次级卡、左中右三栏，并让地图先于趋势且明细下置', () => {
@@ -137,6 +138,7 @@ describe('PresentationLayout', () => {
 
     expect(wrapper.find('[data-layout-mode="generic"]').exists()).toBe(true);
     expect(wrapper.find('[data-layout-mode="grouped"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="metric-widget"]').attributes('data-grouped')).toBe('false');
     expect(wrapper.find('[data-layout-tier="PRIMARY"]').findAll('[data-component-type="METRIC_CARD"]')).toHaveLength(4);
     expect(wrapper.find('[data-layout-tier="SECONDARY"]').findAll('[data-component-type="METRIC_CARD"]')).toHaveLength(4);
     expect(wrapper.findAll('[data-layout-column]')).toHaveLength(3);
