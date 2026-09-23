@@ -91,6 +91,37 @@ describe('经营大屏展示子协议', () => {
     }
   });
 
+  it('保存并保留可选 displayOrgCodes，并严格拒绝空值、非法值和重复编码', () => {
+    const source = structuredClone(validDisplayConfig.presentation);
+    source.institutionRules.displayOrgCodes = ['ORG-001', 'ORG-002'];
+
+    expect(normalizeDisplayConfig(source).institutionRules).toEqual({
+      allowedOperatingLevels: ['PRIMARY'],
+      allowedOrgNatures: ['SECONDARY_BRANCH'],
+      displayOrgCodes: ['ORG-001', 'ORG-002']
+    });
+    expect(validateDisplayConfig(source)).toEqual([]);
+
+    const invalidValues = [
+      [],
+      [''],
+      ['ORG-001', ' org-001 '],
+      ['ORG-001', 'org-001'],
+      [123],
+      ['ORG-001', '<ORG-002>'],
+      ['ORG-001', 'A\nB'],
+      ['ORG 001'],
+      ['机构001']
+    ];
+    for (const displayOrgCodes of invalidValues) {
+      const invalid = structuredClone(validDisplayConfig.presentation);
+      invalid.institutionRules.displayOrgCodes = displayOrgCodes;
+      expect(validateDisplayConfig(invalid)).toEqual(expect.arrayContaining([
+        expect.stringContaining('展示机构编码')
+      ]));
+    }
+  });
+
   it('缺少规则保持旧编辑器兼容；显式部分规则仍 fail-close', () => {
     const missing = structuredClone(validDisplayConfig.presentation);
     delete missing.institutionRules;

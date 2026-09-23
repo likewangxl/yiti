@@ -3,6 +3,7 @@ import {
   BUSINESS_LINE_TARGETS,
   buildNavigationQuery,
   classifyInstitutionLayer,
+  navigationRulesOf,
   parseNavigationQuery,
   resolveAuthorizedScreen,
   resolveInstitution,
@@ -130,6 +131,48 @@ describe('S13 navigation contract', () => {
       panoramaInstitutions: [{ orgCode: 'ORG-1', operatingLevel: 'PRIMARY', orgNature: 'SECONDARY_BRANCH' }]
     };
     expect(resolveInstitution(response, 'ORG-1')).toMatchObject({
+      authorized: true,
+      layer: { known: true, displayable: true }
+    });
+  });
+
+  it('启用 displayOrgCodes 时导航直达拒绝不在展示编码白名单的授权机构', () => {
+    const response = {
+      institutionRules: {
+        allowedOperatingLevels: ['PRIMARY'],
+        allowedOrgNatures: ['SECONDARY_BRANCH'],
+        displayOrgCodes: ['ORG-1']
+      },
+      panoramaInstitutions: [
+        { orgCode: 'ORG-1', operatingLevel: 'PRIMARY', orgNature: 'SECONDARY_BRANCH' },
+        { orgCode: 'ORG-2', operatingLevel: 'PRIMARY', orgNature: 'SECONDARY_BRANCH' }
+      ]
+    };
+
+    expect(resolveInstitution(response, 'ORG-1')).toMatchObject({
+      authorized: true,
+      layer: { known: true, displayable: true }
+    });
+    expect(resolveInstitution(response, 'ORG-2')).toMatchObject({
+      authorized: false,
+      reason: 'ORG_NOT_IN_DISPLAY_LIST'
+    });
+    expect(resolveInstitution(response, 'ORG-2', response.institutionRules)).toMatchObject({
+      authorized: false,
+      reason: 'ORG_NOT_IN_DISPLAY_LIST'
+    });
+
+    expect(navigationRulesOf({
+      ...response,
+      institutionRules: { ...response.institutionRules, displayOrgCodes: ['ORG-1', 'org-1'] }
+    })).toBeNull();
+  });
+
+  it('显式传入 navigationRulesOf 生成的 Set 规则时仍保留机构层级与白名单判断', () => {
+    const source = view('SCR_PROVINCE');
+    const rules = navigationRulesOf(source);
+
+    expect(resolveInstitution(source, 'ORG-1', rules)).toMatchObject({
       authorized: true,
       layer: { known: true, displayable: true }
     });

@@ -31,6 +31,7 @@ const UNIT_KINDS = Object.freeze({
   COUNT: 'count', TEN_THOUSAND_COUNT: 'count',
   PERCENT: 'ratio', RATIO: 'ratio'
 });
+const DISPLAY_ORG_CODE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 const ALLOWED_KEYS = Object.freeze({
   presentation: new Set(['type', 'template', 'displaySchemaVersion', 'institutionRules', 'display']),
@@ -117,6 +118,10 @@ function normalizeInstitutionRules(value) {
   if (Object.prototype.hasOwnProperty.call(value, 'excludedOrgNameKeywords')) {
     normalized.excludedOrgNameKeywords = Array.isArray(value.excludedOrgNameKeywords)
       ? [...value.excludedOrgNameKeywords] : [];
+  }
+  if (Object.prototype.hasOwnProperty.call(value, 'displayOrgCodes')) {
+    normalized.displayOrgCodes = Array.isArray(value.displayOrgCodes)
+      ? [...value.displayOrgCodes] : [];
   }
   return normalized;
 }
@@ -274,7 +279,9 @@ function validateInstitutionRules(rules, issues) {
     issues.push(`${prefix}必须是对象`);
     return;
   }
-  unknownKeys(rules, new Set(['allowedOperatingLevels', 'allowedOrgNatures', 'excludedOrgNameKeywords']), prefix, issues);
+  unknownKeys(rules, new Set([
+    'allowedOperatingLevels', 'allowedOrgNatures', 'excludedOrgNameKeywords', 'displayOrgCodes'
+  ]), prefix, issues);
   for (const [key, label] of [
     ['allowedOperatingLevels', '机构层级白名单'],
     ['allowedOrgNatures', '机构性质白名单']
@@ -308,6 +315,23 @@ function validateInstitutionRules(rules, issues) {
         }
         const normalized = value.trim().toUpperCase();
         if (seen.has(normalized)) issues.push(`${prefix}机构名称排除关键词不能重复: ${value.trim()}`);
+        seen.add(normalized);
+      });
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(rules, 'displayOrgCodes')) {
+    const codes = rules.displayOrgCodes;
+    if (!Array.isArray(codes) || codes.length === 0) {
+      issues.push(`${prefix}展示机构编码不能为空`);
+    } else {
+      const seen = new Set();
+      codes.forEach((value, index) => {
+        if (typeof value !== 'string' || !DISPLAY_ORG_CODE_PATTERN.test(value)) {
+          issues.push(`${prefix}展示机构编码[${index}]必须是合法非空文本`);
+          return;
+        }
+        const normalized = value.toUpperCase();
+        if (seen.has(normalized)) issues.push(`${prefix}展示机构编码不能重复: ${value.trim()}`);
         seen.add(normalized);
       });
     }

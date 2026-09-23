@@ -96,6 +96,28 @@ function invalidExcludedOrgNameKeywords(config) {
   });
 }
 
+function validDisplayOrgCode(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value);
+}
+
+function invalidDisplayOrgCodes(config) {
+  const keys = ['displayOrgCodes', 'display_org_codes']
+    .filter(key => hasOwn(config, key));
+  if (!keys.length) return false;
+  const seen = new Set();
+  return keys.some(key => {
+    const values = config[key];
+    if (!Array.isArray(values) || values.length === 0) return true;
+    return values.some(value => {
+      if (!validDisplayOrgCode(value)) return true;
+      const normalized = value.toUpperCase();
+      if (seen.has(normalized)) return true;
+      seen.add(normalized);
+      return false;
+    });
+  });
+}
+
 function ruleSet(values) {
   return new Set(values.map(value => text(value).toUpperCase()));
 }
@@ -161,7 +183,8 @@ function addIssue(issues, code, orgCode, message) {
  *
  * 机构身份只来自服务端授权目录；metrics 仅作为目录记录自身或同目录编码的
  * 已授权结果补充。展示过滤不会修改上级指标，也不会从名称或编码推断机构属性；
- * 名称仅按服务端显式提供的排除关键词执行过滤。
+ * 名称仅按服务端显式提供的排除关键词执行过滤，displayOrgCodes 仅作为服务端
+ * 明确提供的精确展示白名单。
  */
 export function buildInstitutionViewModel(input = [], rules = {}, options = {}) {
   let directory = input;
@@ -191,12 +214,16 @@ export function buildInstitutionViewModel(input = [], rules = {}, options = {}) 
   const allowedLevels = listRule(config, 'allowedOperatingLevels', 'allowed_operating_levels');
   const allowedNatures = listRule(config, 'allowedOrgNatures', 'allowed_org_natures');
   const excludedOrgNameKeywords = listRule(config, 'excludedOrgNameKeywords', 'excluded_org_name_keywords');
+  const displayOrgCodes = listRule(config, 'displayOrgCodes', 'display_org_codes');
   const invalidNameExclusionRule = invalidExcludedOrgNameKeywords(config);
+  const invalidDisplayOrgCodeRule = invalidDisplayOrgCodes(config);
   const hasNameExclusionRule = excludedOrgNameKeywords.length > 0;
+  const hasDisplayOrgCodeRule = hasOwn(config, 'displayOrgCodes') || hasOwn(config, 'display_org_codes');
   const levelRule = ruleSet(allowedLevels);
   const natureRule = ruleSet(allowedNatures);
+  const displayOrgCodeRule = new Set(displayOrgCodes);
   const hasRules = levelRule.size > 0 && natureRule.size > 0;
-  const rulesConfirmed = hasRules && !invalidNameExclusionRule;
+  const rulesConfirmed = hasRules && !invalidNameExclusionRule && !invalidDisplayOrgCodeRule;
   const contributionUnknown = [];
   const unknownKeys = new Set();
   const addUnknown = (record, reason, message) => {
@@ -215,6 +242,9 @@ export function buildInstitutionViewModel(input = [], rules = {}, options = {}) 
   if (!hasRules) addIssue(issues, 'FILTER_RULES_UNCONFIRMED', '', '未提供允许的机构层级或机构性质白名单，拒绝猜测展示集合');
   if (invalidNameExclusionRule) {
     addIssue(issues, 'EXCLUDED_ORG_NAME_KEYWORDS_INVALID', '', '机构名称排除关键词规则格式无效，拒绝展示集合');
+  }
+  if (invalidDisplayOrgCodeRule) {
+    addIssue(issues, 'DISPLAY_ORG_CODES_INVALID', '', '展示机构编码规则格式无效，拒绝展示集合');
   }
 
   const contributions = new Map();
@@ -256,10 +286,19 @@ export function buildInstitutionViewModel(input = [], rules = {}, options = {}) 
       addIssue(issues, 'INACTIVE', item.orgCode, '机构已停用');
       continue;
     }
+    if (hasDisplayOrgCodeRule && !invalidDisplayOrgCodeRule && !displayOrgCodeRule.has(item.orgCode)) {
+      addUnknown(item, 'DISPLAY_ORG_CODE_NOT_ALLOWED', '机构编码不在当前屏展示编码白名单');
+      addIssue(issues, 'DISPLAY_ORG_CODE_NOT_ALLOWED', item.orgCode, '机构编码不在当前屏展示编码白名单');
+      continue;
+    }
     if (!rulesConfirmed) {
       addUnknown(item,
-        invalidNameExclusionRule ? 'EXCLUDED_ORG_NAME_KEYWORDS_INVALID' : 'FILTER_RULES_UNCONFIRMED',
-        invalidNameExclusionRule ? '机构名称排除关键词规则格式无效' : '机构过滤规则未确认');
+        invalidNameExclusionRule
+          ? 'EXCLUDED_ORG_NAME_KEYWORDS_INVALID'
+          : (invalidDisplayOrgCodeRule ? 'DISPLAY_ORG_CODES_INVALID' : 'FILTER_RULES_UNCONFIRMED'),
+        invalidNameExclusionRule
+          ? '机构名称排除关键词规则格式无效'
+          : (invalidDisplayOrgCodeRule ? '展示机构编码规则格式无效' : '机构过滤规则未确认'));
       continue;
     }
     if (levelRule.size > 0) {
@@ -354,7 +393,8 @@ export function buildInstitutionViewModel(input = [], rules = {}, options = {}) 
       allowedOperatingLevels: [...allowedLevels],
       allowedOrgNatures: [...allowedNatures],
       ...(hasOwn(config, 'excludedOrgNameKeywords') || hasOwn(config, 'excluded_org_name_keywords')
-        ? { excludedOrgNameKeywords: [...excludedOrgNameKeywords] } : {})
+        ? { excludedOrgNameKeywords: [...excludedOrgNameKeywords] } : {}),
+      ...(hasDisplayOrgCodeRule ? { displayOrgCodes: [...displayOrgCodes] } : {})
     },
     counts: {
       authorized: displayInstitutions.length,

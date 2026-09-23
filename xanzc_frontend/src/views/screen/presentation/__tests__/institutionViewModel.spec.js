@@ -216,4 +216,37 @@ describe('institutionViewModel', () => {
       ]));
     }
   });
+
+  it('配置 displayOrgCodes 时只展示授权目录中同时满足画像规则且在编码白名单的机构', () => {
+    const result = buildInstitutionViewModel([
+      ...directory,
+      { orgCode: 'OUTSIDE', orgName: '其他机构', operatingLevel: 'BRANCH_1', orgNature: 'BRANCH', active: true, authorized: true },
+      { orgCode: 'WRONG_LEVEL', orgName: '不满足层级', operatingLevel: 'MICRO', orgNature: 'BRANCH', active: true, authorized: true }
+    ], {
+      ...rules,
+      displayOrgCodes: ['A', 'OUTSIDE']
+    });
+
+    expect(result.displayInstitutions.map(item => item.orgCode)).toEqual(['A', 'OUTSIDE']);
+    expect(result.filters).toEqual({ ...rules, displayOrgCodes: ['A', 'OUTSIDE'] });
+    expect(result.contributionUnknown).toEqual(expect.arrayContaining([
+      expect.objectContaining({ orgCode: 'B', reason: 'DISPLAY_ORG_CODE_NOT_ALLOWED' })
+    ]));
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'DISPLAY_ORG_CODE_NOT_ALLOWED', orgCode: 'B' })
+    ]));
+    expect(result.displayInstitutions.map(item => item.orgCode)).not.toContain('WRONG_LEVEL');
+  });
+
+  it('displayOrgCodes 显式为空或格式无效时 fail-close，不退回旧的层级/性质规则', () => {
+    for (const displayOrgCodes of [[], [''], ['A', ' a '], ['A', 'a'], [123], 'A']) {
+      const result = buildInstitutionViewModel(directory, { ...rules, displayOrgCodes });
+
+      expect(result.status).toBe('UNCONFIRMED');
+      expect(result.displayInstitutions).toEqual([]);
+      expect(result.issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: 'DISPLAY_ORG_CODES_INVALID' })
+      ]));
+    }
+  });
 });

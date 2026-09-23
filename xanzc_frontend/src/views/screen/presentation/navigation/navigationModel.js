@@ -131,6 +131,32 @@ function keywordValuesOf(value) {
   return values.map(text).filter(Boolean);
 }
 
+function validDisplayOrgCode(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value);
+}
+
+function displayOrgCodesOf(rules) {
+  const keys = ['displayOrgCodes', 'display_org_codes']
+    .filter(key => Object.prototype.hasOwnProperty.call(rules, key));
+  if (!keys.length) return { enabled: false, valid: true, values: new Set() };
+  const source = rules[keys[0]];
+  if (source instanceof Set && source.size === 0) {
+    return { enabled: false, valid: true, values: new Set() };
+  }
+  const values = source instanceof Set ? [...source] : source;
+  if (!Array.isArray(values) || values.length === 0) return { enabled: true, valid: false, values: new Set() };
+  const normalized = new Set();
+  const seen = new Set();
+  for (const value of values) {
+    if (!validDisplayOrgCode(value)) return { enabled: true, valid: false, values: new Set() };
+    const duplicateKey = value.toUpperCase();
+    if (seen.has(duplicateKey)) return { enabled: true, valid: false, values: new Set() };
+    seen.add(duplicateKey);
+    normalized.add(value);
+  }
+  return { enabled: true, valid: true, values: normalized };
+}
+
 function validOrgNameKeyword(value) {
   if (typeof value !== 'string' || !text(value)) return false;
   if ([...value].length > 40 || value.includes('<') || value.includes('>')) return false;
@@ -167,6 +193,8 @@ function rulesOf(source) {
   const allowedOrgNatures = new Set(valuesOf(rules.allowedOrgNatures ?? rules.orgNatures));
   const hiddenOperatingLevels = new Set(valuesOf(rules.hiddenOperatingLevels ?? rules.excludedOperatingLevels));
   const hiddenOrgNatures = new Set(valuesOf(rules.hiddenOrgNatures ?? rules.excludedOrgNatures));
+  const displayOrgCodes = displayOrgCodesOf(rules);
+  if (!displayOrgCodes.valid) return null;
   const keywordKeys = ['excludedOrgNameKeywords', 'excluded_org_name_keywords']
     .filter(key => Object.prototype.hasOwnProperty.call(rules, key));
   if (keywordKeys.some(key => !validOrgNameKeywordRule(rules[key]))) return null;
@@ -179,7 +207,8 @@ function rulesOf(source) {
     allowedOrgNatures,
     hiddenOperatingLevels,
     hiddenOrgNatures,
-    excludedOrgNameKeywords
+    excludedOrgNameKeywords,
+    displayOrgCodes: displayOrgCodes.values
   };
 }
 
@@ -189,12 +218,18 @@ export function navigationRulesOf(view) {
 
 /**
  * 只根据调用方提供的服务端规则与画像字段识别层级。
- * 没有规则时一律待确认；orgCode 不参与判断，orgName 仅在服务端明确提供
- * excludedOrgNameKeywords 时用于名称排除。
+ * 没有规则时一律待确认；orgCode 仅在服务端明确提供 displayOrgCodes 时参与
+ * 编码白名单判断，orgName 仅在服务端明确提供 excludedOrgNameKeywords 时用于名称排除。
  */
 export function classifyInstitutionLayer(institution = {}, explicitRules = null) {
   const rules = rulesOf(explicitRules);
   if (!rules) return { known: false, displayable: false, value: '', reason: 'LAYER_UNCONFIRMED' };
+  if (rules.displayOrgCodes?.size) {
+    const code = institutionCode(institution);
+    if (!code || !rules.displayOrgCodes.has(code)) {
+      return { known: false, displayable: false, value: '', reason: 'ORG_NOT_IN_DISPLAY_LIST' };
+    }
+  }
   if (rules.excludedOrgNameKeywords?.size) {
     const orgName = text(institution?.orgName ?? institution?.org_name);
     if (!orgName) return { known: false, displayable: false, value: '', reason: 'ORG_NAME_MISSING' };
@@ -227,10 +262,19 @@ function institutionDirectory(view) {
 /** 解析一个目标屏的机构授权，不把查询结果或旧页面机构当授权目录。 */
 export function resolveInstitution(view, orgCode, explicitRules = undefined) {
   const code = text(orgCode);
-  const rules = explicitRules === undefined ? navigationRulesOf(view) : explicitRules;
+  const rules = explicitRules === undefined ? navigationRulesOf(view) : navigationRulesOf(explicitRules);
   if (!code) return { orgCode: '', authorized: false, institution: null, layer: classifyInstitutionLayer({}, rules), reason: 'ORG_REQUIRED' };
   const institution = institutionDirectory(view).find(item => institutionCode(item) === code) || null;
   if (!institution) return { orgCode: code, authorized: false, institution: null, layer: classifyInstitutionLayer({}, rules), reason: 'ORG_NOT_AUTHORIZED' };
+  if (rules?.displayOrgCodes?.size && !rules.displayOrgCodes.has(code)) {
+    return {
+      orgCode: code,
+      authorized: false,
+      institution: null,
+      layer: { known: false, displayable: false, value: '', reason: 'ORG_NOT_IN_DISPLAY_LIST' },
+      reason: 'ORG_NOT_IN_DISPLAY_LIST'
+    };
+  }
   const layer = classifyInstitutionLayer(institution, rules);
   return {
     orgCode: code,
