@@ -37,6 +37,25 @@ describe('MetricDisplayWidgets', () => {
     expect(wrapper.find('[data-component-id="metric-3"]').classes()).toContain('presentation-metric-widget--green');
   });
 
+  it('按金额显示单位标记元、万元和亿元卡片，供窄屏字号适配', () => {
+    const wrapper = mount(MetricDisplayWidgets, {
+      props: {
+        grouped: true,
+        components: [
+          { componentId: 'yuan', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', title: '元', unit: '元', text: '1,068,201,500.00元', state: 'READY' },
+          { componentId: 'ten-thousand', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', title: '万元', unit: '万元', text: '106,820.15万元', state: 'READY' },
+          { componentId: 'hundred-million', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', title: '亿元', unit: '亿元', text: '10.68亿元', state: 'READY' },
+          { componentId: 'rate', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', title: '完成率', unit: '%', text: '90.64%', state: 'READY' }
+        ]
+      }
+    });
+
+    expect(wrapper.find('[data-component-id="yuan"]').classes()).toContain('presentation-metric-widget--unit-yuan');
+    expect(wrapper.find('[data-component-id="ten-thousand"]').classes()).toContain('presentation-metric-widget--unit-ten-thousand');
+    expect(wrapper.find('[data-component-id="hundred-million"]').classes()).toContain('presentation-metric-widget--unit-hundred-million');
+    expect(wrapper.find('[data-component-id="rate"]').classes().some(item => item.startsWith('presentation-metric-widget--unit-'))).toBe(false);
+  });
+
   it('为十个分行业务指标使用互不重复的显式 Element Plus 图标，旧组件不补图标', () => {
     const ids = [
       'business-retail-deposit-balance', 'business-retail-deposit-rate',

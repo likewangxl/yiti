@@ -104,6 +104,32 @@ it('非生产且过期的省分行数据在页眉明确披露来源状态，不�
   expect(notice.text()).not.toContain('测试');
 });
 
+it('配置化页头用金额单位下拉框替代来源状态，并把选择传给展示布局', async () => {
+  const wrapper = mountDashboard({
+    sourcePresentation: {
+      displayPresentation: { displaySchemaVersion: 1, display: { components: [] } }
+    }
+  }, {
+    stubs: {
+      PresentationLayout: {
+        props: ['amountUnit'],
+        template: '<div data-testid="presentation-layout-stub" :data-amount-unit="amountUnit" />'
+      }
+    }
+  });
+  const select = wrapper.get('[data-testid="panorama-amount-unit"]');
+  expect(select.element.value).toBe('TEN_THOUSAND');
+  expect(wrapper.find('.panorama-live-state').exists()).toBe(false);
+  await select.setValue('YUAN');
+  expect(wrapper.get('[data-testid="presentation-layout-stub"]').attributes('data-amount-unit')).toBe('YUAN');
+});
+
+it('旧版固定布局保留来源状态，不显示不会生效的金额单位下拉框', () => {
+  const wrapper = mountDashboard();
+  expect(wrapper.find('[data-testid="panorama-amount-unit"]').exists()).toBe(false);
+  expect(wrapper.get('.panorama-live-state').text()).toContain('经营监测');
+});
+
 describe('PanoramaDashboard 省级经营大屏', () => {
   beforeEach(() => {
     document.body.style.overflow = '';

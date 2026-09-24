@@ -9,6 +9,7 @@
         `presentation-metric-widget--${String(item.layoutRegion || '').toLowerCase()}`,
         grouped ? 'presentation-metric-widget--grouped' : '',
         shouldUseCompletionRing(item) ? 'presentation-metric-widget--dial' : '',
+        amountUnitClass(item),
         toneClass(item)
       ]"
       :data-component-id="item.componentId"
@@ -156,6 +157,16 @@ function toneClass(item) {
   if (!Number.isInteger(order) || order < 0) return '';
   return `presentation-metric-widget--${['cyan', 'violet', 'blue', 'green'][order % 4]}`;
 }
+
+function amountUnitClass(item) {
+  const unit = String(item?.unit || '').trim().toUpperCase();
+  const token = ({
+    元: 'yuan', YUAN: 'yuan',
+    万元: 'ten-thousand', TEN_THOUSAND: 'ten-thousand',
+    亿元: 'hundred-million', HUNDRED_MILLION: 'hundred-million'
+  })[unit];
+  return token ? `presentation-metric-widget--unit-${token}` : '';
+}
 </script>
 
 <style scoped>
@@ -209,11 +220,23 @@ function toneClass(item) {
 .presentation-metric-widget__header small { flex: 0 0 auto; }
 .presentation-metric-widget__value-line { min-width: 0; max-width: 100%; margin-top: 2px; }
 .presentation-metric-widget__value-line--grouped { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; }
-.presentation-metric-widget__value-line--ring { align-items: center; flex-wrap: nowrap; gap: 4px; min-height: 100px; margin-top: 0; }
-.presentation-metric-widget__value-line--ring .presentation-metric-widget__month-delta { flex: 1 1 0; }
-.presentation-metric-widget--dial .presentation-metric-widget__status { position: absolute; right: 12px; bottom: 7px; }
+.presentation-metric-widget__value-line--ring { align-items: center; flex-wrap: wrap; gap: 0 8px; min-height: 100px; margin-top: 0; }
+.presentation-metric-widget__value-line--ring .presentation-metric-widget__month-delta {
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 2px;
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+  font-size: clamp(8px, .66vw, 10px);
+}
+.presentation-metric-widget--dial .presentation-metric-widget__status { position: static; margin-top: 0; }
 .presentation-metric-widget__value { display: block; min-width: 0; max-width: 100%; margin: 0; color: #f4f8ff; font-size: clamp(18px, 1.55vw, 30px); font-weight: 750; line-height: 1.12; overflow-wrap: anywhere; word-break: break-word; }
 .presentation-metric-widget__value-line--grouped .presentation-metric-widget__value { display: inline; }
+.presentation-metric-widget--grouped.presentation-metric-widget--unit-yuan .presentation-metric-widget__value { font-size: clamp(12px, .9vw, 18px); }
+.presentation-metric-widget--grouped.presentation-metric-widget--unit-ten-thousand .presentation-metric-widget__value { font-size: clamp(14px, 1.15vw, 22px); }
+.presentation-metric-widget--grouped.presentation-metric-widget--unit-hundred-million .presentation-metric-widget__value { font-size: clamp(16px, 1.35vw, 26px); }
 .presentation-metric-widget__month-delta { min-width: 0; max-width: 100%; color: var(--panorama-text-dim, #8fa9db); font-size: 10px; font-weight: 550; line-height: 1.25; overflow-wrap: anywhere; word-break: break-word; }
 .presentation-metric-widget__status { display: block; margin-top: 2px; color: var(--panorama-amber, #ffc45e); font-size: 10px; line-height: 1.25; }
 .presentation-metric-widget__progress { height: 7px; margin-top: 4px; overflow: hidden; background: rgba(2, 9, 22, .72); border: 1px solid rgba(133, 164, 222, .42); border-radius: 4px; }

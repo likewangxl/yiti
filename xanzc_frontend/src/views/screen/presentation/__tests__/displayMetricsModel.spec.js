@@ -144,6 +144,78 @@ describe('displayMetricsModel', () => {
     });
   });
 
+  it('金额单位选择只覆盖分组页头金额卡和营业收入，并同步换算较上月金额', () => {
+    const amount = component('business-retail-deposit-balance', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'retailDeposit', '零售存款余额', 'YUAN')],
+      content: { mainField: 'retailDeposit', subFields: [] },
+      format: { displayUnit: 'TEN_THOUSAND', decimals: 2, thousandsSeparator: true }
+    });
+    const rate = component('business-retail-deposit-rate', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'retailDepositRate', '零售存款完成率', 'RATIO')],
+      content: { mainField: 'retailDepositRate', subFields: [] },
+      format: { displayUnit: 'PERCENT', decimals: 2, thousandsSeparator: true }
+    });
+    const revenue = component('business-revenue-operating', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'revenue', '营业收入', 'YUAN')],
+      content: { mainField: 'revenue', subFields: [] },
+      format: { displayUnit: 'TEN_THOUSAND', decimals: 2, thousandsSeparator: true }
+    });
+    const presentation = {
+      template: 'branch-overview-v1', displaySchemaVersion: 1,
+      display: { components: [amount, rate, revenue] }
+    };
+    const model = {
+      dataDate: '2026-09-21',
+      blockResults: {
+        31: { retailDeposit: 1068201500, retailDepositRate: 0.9064, revenue: 200000000, unitByField: {
+          retailDeposit: 'YUAN', retailDepositRate: 'RATIO', revenue: 'YUAN'
+        } },
+        57: { rows: [
+          { date: '2026-09-21', retailDeposit: 1068201500, retailDepositRate: 0.9064, revenue: 200000000 },
+          { date: '2026-08-31', retailDeposit: 1056201500, retailDepositRate: 0.8, revenue: 190000000 }
+        ], unitByField: { retailDeposit: 'YUAN', retailDepositRate: 'RATIO', revenue: 'YUAN' } }
+      }
+    };
+
+    const result = buildDisplayMetricsModel(presentation, model, { amountUnit: 'YUAN' });
+    expect(result.components.find(item => item.componentId === 'business-retail-deposit-balance')).toMatchObject({
+      text: '1,068,201,500.00元', unit: '元', sourceUnit: 'YUAN',
+      monthDelta: { text: '较上月 +12,000,000.00元', unit: '元' }
+    });
+    expect(result.components.find(item => item.componentId === 'business-revenue-operating')).toMatchObject({
+      text: '200,000,000.00元', unit: '元'
+    });
+    expect(result.components.find(item => item.componentId === 'business-retail-deposit-rate')).toMatchObject({
+      text: '90.64%', monthDelta: { text: '较上月 +10.64个百分点' }
+    });
+  });
+
+  it('金额较上月先按原值相减再换算，避免目标单位分别四舍五入丢失差值', () => {
+    const card = component('business-corp-loan-balance', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'loan', '对公贷款余额', 'YUAN')],
+      content: { mainField: 'loan', subFields: [] },
+      format: { displayUnit: 'TEN_THOUSAND', decimals: 2, thousandsSeparator: true }
+    });
+    const result = buildDisplayMetricsModel({
+      template: 'branch-overview-v1', displaySchemaVersion: 1,
+      display: { components: [card] }
+    }, {
+      dataDate: '2026-09-21',
+      blockResults: {
+        31: { loan: 1000040, unit: 'YUAN' },
+        57: { rows: [{ date: '2026-09-21', loan: 1000040 }, { date: '2026-08-31', loan: 999980 }], unitByField: { loan: 'YUAN' } }
+      }
+    }, { amountUnit: 'TEN_THOUSAND' });
+
+    expect(result.components[0].monthDelta).toMatchObject({
+      state: 'READY', value: 0.006, text: '较上月 +0.01万元'
+    });
+  });
+
   it('上月月末缺值、日期非法、重复日期或历史来源不唯一时不计算差值', () => {
     const card = component('business-corp-loan-balance', 'METRIC_CARD', {
       layoutRegion: 'HEADER',

@@ -40,6 +40,10 @@ function canonicalUnit(value) {
   return UNIT_ALIASES[raw] || UNIT_ALIASES[raw.toUpperCase()] || null;
 }
 
+function isAmountUnit(value) {
+  return ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'].includes(canonicalUnit(value));
+}
+
 function unitLabel(value) {
   const raw = text(value);
   return UNIT_LABELS[raw] || UNIT_LABELS[raw.toUpperCase()] || raw;
@@ -235,33 +239,40 @@ function signedText(value, formattedText) {
 }
 
 function formatMonthDelta(currentValue, previousValue, format, sourceUnit, ratio) {
+  const currentRaw = finite(currentValue);
+  const previousRaw = finite(previousValue);
+  if (currentRaw === null || previousRaw === null) return unavailableMonthDelta();
+  // 先在来源单位上做差，再一次性换算和格式化。分别格式化当期/上期
+  // 再相减会把小额差值在目标单位的舍入误差放大成错误的 0。
+  const rawDelta = currentRaw - previousRaw;
+  if (!Number.isFinite(rawDelta)) return unavailableMonthDelta();
   // A RATIO display unit is still rendered as a percentage, but its raw
-  // value is fractional. Normalize both sides to PERCENT before subtracting
-  // so the result is expressed in percentage points rather than 0.xx points.
+  // value is fractional. Normalize the delta to PERCENT so the result is
+  // expressed in percentage points rather than 0.xx points.
   const comparisonFormat = ratio ? { ...format, displayUnit: 'PERCENT' } : format;
-  const current = formatDisplayMetric(currentValue, comparisonFormat, sourceUnit);
-  const previous = formatDisplayMetric(previousValue, comparisonFormat, sourceUnit);
-  if (current.value === null || previous.value === null) return unavailableMonthDelta();
-  const displayDelta = current.value - previous.value;
-  if (!Number.isFinite(displayDelta)) return unavailableMonthDelta();
   const decimals = Number.isInteger(format?.decimals) && format.decimals >= 0 && format.decimals <= 8
     ? format.decimals : 2;
   const thousandsSeparator = format?.thousandsSeparator !== false;
   if (ratio) {
+    const converted = formatDisplayMetric(rawDelta, comparisonFormat, sourceUnit);
+    if (converted.value === null) return unavailableMonthDelta();
+    // Keep the model value in display units while removing binary floating
+    // point noise (for example 0.9064 - 0.8 -> 10.639999999999993).
+    const displayDelta = Number(converted.value.toFixed(12));
     const number = numberFormat(displayDelta, decimals, thousandsSeparator);
     return {
-      state: 'READY', value: displayDelta, rawValue: finite(currentValue) - finite(previousValue), unit: '个百分点',
+      state: 'READY', value: displayDelta, rawValue: rawDelta, unit: '个百分点',
       text: `较上月 ${signedText(displayDelta, number)}个百分点`
     };
   }
   const formatted = formatDisplayMetric(
-    finite(currentValue) - finite(previousValue),
+    rawDelta,
     { ...format, negativeStyle: 'SIGNED' },
     sourceUnit
   );
   if (formatted.value === null) return unavailableMonthDelta();
   return {
-    state: 'READY', value: formatted.value, rawValue: finite(currentValue) - finite(previousValue), unit: formatted.unit,
+    state: 'READY', value: formatted.value, rawValue: rawDelta, unit: formatted.unit,
     text: `较上月 ${signedText(formatted.value, formatted.text)}`
   };
 }
@@ -324,7 +335,11 @@ function buildComponent(component, model, index, options) {
   const main = sourceValue(source, field, component.componentType, ref.unit);
   const format = isObject(component?.format) ? component.format : {};
   const sourceUnit = main.unit || ref.unit || '';
-  const formatted = formatDisplayMetric(main.value, format, sourceUnit);
+  const selectedAmountUnit = canonicalUnit(options?.amountUnit);
+  const displayFormat = selectedAmountUnit && isBusinessHeaderComponent(component) && isAmountUnit(sourceUnit)
+    ? { ...format, displayUnit: selectedAmountUnit }
+    : format;
+  const formatted = formatDisplayMetric(main.value, displayFormat, sourceUnit);
   const state = !source || !main.present ? 'NO_SOURCE' : main.value === null || finite(main.value) === null ? 'NO_VALUE' : 'READY';
   const subFields = (Array.isArray(content.subFields) ? content.subFields : []).map((entry, subIndex) => {
     const definition = typeof entry === 'string' ? { field: entry, label: entry } : (isObject(entry) ? entry : {});
@@ -355,7 +370,7 @@ function buildComponent(component, model, index, options) {
     subFields
   };
   if (isBusinessHeaderComponent(component)) {
-    result.monthDelta = buildMonthDelta(model, component, ref, main.key || field, main, format);
+    result.monthDelta = buildMonthDelta(model, component, ref, main.key || field, main, displayFormat);
   }
   if (component.componentType === 'COMPLETION') {
     result.progress = result.value === null ? null : Math.max(0, Math.min(100, result.value));

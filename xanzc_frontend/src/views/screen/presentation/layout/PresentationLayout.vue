@@ -24,7 +24,15 @@
       >
         <header class="presentation-layout__metric-group-header">
           <h2>{{ group.label }}</h2>
-          <small>{{ group.components.length }}项</small>
+          <button
+            v-if="isBranchOverview && ['RETAIL', 'CORP'].includes(group.key)"
+            type="button"
+            class="presentation-layout__metric-group-more"
+            data-action="business-line-more"
+            :data-business-line="group.key"
+            @click="onBusinessLineMore(group.key)"
+          >查看更多</button>
+          <small v-else>{{ group.components.length }}项</small>
         </header>
         <div class="presentation-layout__metric-group-grid" :data-layout-tier="group.key">
           <div v-if="isRevenuePair(group)" class="presentation-layout__component presentation-layout__component--revenue-share" data-testid="presentation-layout-component" data-component-id="business-revenue-share" data-component-type="REVENUE_SHARE" data-layout-region="HEADER">
@@ -218,7 +226,8 @@ const props = defineProps({
   selectedRegionCode: { type: [String, Number], default: '' },
   selectedOrgCode: { type: [String, Number], default: '' },
   dataDate: { type: String, default: '' },
-  demo: { type: Boolean, default: false }
+  demo: { type: Boolean, default: false },
+  amountUnit: { type: String, default: '' }
 });
 
 const emit = defineEmits([
@@ -315,7 +324,9 @@ function isBranchTrendComponent(column, component) {
     && branchTrendComponents.value.some(item => item.componentId === component.componentId);
 }
 
-const metricsModel = computed(() => buildDisplayMetricsModel(resolvedPresentation.value, props.model));
+const metricsModel = computed(() => buildDisplayMetricsModel(resolvedPresentation.value, props.model, {
+  amountUnit: props.amountUnit
+}));
 const seriesModel = computed(() => buildDisplaySeriesTableModel(resolvedPresentation.value, props.model));
 const compositionModel = computed(() => buildCompositionTabsModel(resolvedPresentation.value, props.model));
 
@@ -429,6 +440,11 @@ function onBusinessLineSelect(payload) {
   emit('business-line-select', payload);
 }
 
+function onBusinessLineMore(businessLine) {
+  if (!['RETAIL', 'CORP'].includes(businessLine)) return;
+  emit('business-line-select', { businessLine, tabKey: 'deposit' });
+}
+
 function onRegionSelect(payload) {
   emit('region-select', payload);
 }
@@ -531,6 +547,26 @@ function onMapContext(payload) {
   font-size: 10px;
 }
 
+.presentation-layout__metric-group-more {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--group-accent, var(--presentation-cyan)) 55%, transparent);
+  border-radius: 4px;
+  color: var(--presentation-text-dim);
+  background: rgba(22, 66, 132, .28);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.presentation-layout__metric-group-more:hover,
+.presentation-layout__metric-group-more:focus-visible {
+  border-color: var(--group-accent, var(--presentation-cyan));
+  color: var(--presentation-cyan);
+  outline: none;
+}
+
 .presentation-layout__metric-group-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -555,7 +591,7 @@ function onMapContext(payload) {
 }
 
 .presentation-layout__header--grouped :deep(.presentation-metric-widget__value) {
-  font-size: clamp(15px, 1.3vw, 25px);
+  font-size: clamp(13px, 1.1vw, 22px);
 }
 
 .presentation-layout__metric-tier {

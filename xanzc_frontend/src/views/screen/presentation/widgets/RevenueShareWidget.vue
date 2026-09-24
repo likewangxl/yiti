@@ -15,8 +15,8 @@
       </template>
     </div>
     <div class="revenue-share-widget__amounts">
-      <div><span>营业收入</span><strong>{{ operating.text || '—' }}</strong><small>{{ operating.monthDelta?.text || '较上月 暂无数据' }}</small></div>
-      <div><span>其中 · 中间业务收入</span><strong>{{ intermediary.text || '—' }}</strong><small>{{ intermediary.monthDelta?.text || '较上月 暂无数据' }}</small></div>
+      <div :data-display-unit="amountUnitToken(operating)"><span>营业收入</span><strong>{{ operating.text || '—' }}</strong><small>{{ operating.monthDelta?.text || '较上月 暂无数据' }}</small></div>
+      <div :data-display-unit="amountUnitToken(intermediary)"><span>其中 · 中间业务收入</span><strong>{{ intermediary.text || '—' }}</strong><small>{{ intermediary.monthDelta?.text || '较上月 暂无数据' }}</small></div>
     </div>
   </section>
 </template>
@@ -30,6 +30,11 @@ const props = defineProps({
   intermediary: { type: Object, default: () => ({}) }
 });
 const share = computed(() => buildRevenueShareModel(props.operating, props.intermediary));
+
+function amountUnitToken(item) {
+  const unit = String(item?.unit || '').trim().toUpperCase();
+  return ({ 元: 'YUAN', YUAN: 'YUAN', 万元: 'TEN_THOUSAND', TEN_THOUSAND: 'TEN_THOUSAND', 亿元: 'HUNDRED_MILLION', HUNDRED_MILLION: 'HUNDRED_MILLION' })[unit] || '';
+}
 </script>
 
 <style scoped>
@@ -42,6 +47,12 @@ const share = computed(() => buildRevenueShareModel(props.operating, props.inter
 .revenue-share-widget__amounts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .revenue-share-widget__amounts > div { display: grid; min-width: 0; gap: 2px; }
 .revenue-share-widget__amounts span { color: #a9c1ed; font-size: 10px; }
-.revenue-share-widget__amounts strong { overflow: hidden; color: #f4f8ff; font-size: clamp(12px, 1vw, 17px); text-overflow: ellipsis; white-space: nowrap; }
-.revenue-share-widget__amounts small { color: #8fa9db; font-size: 9px; }
+.revenue-share-widget__amounts strong { display: block; min-width: 0; color: #f4f8ff; font-size: clamp(10px, .85vw, 15px); line-height: 1.15; overflow-wrap: anywhere; word-break: break-word; }
+.revenue-share-widget__amounts small { display: block; min-width: 0; color: #8fa9db; font-size: 9px; line-height: 1.2; overflow-wrap: anywhere; word-break: break-word; }
+.revenue-share-widget__amounts > div[data-display-unit="YUAN"] strong { font-size: clamp(8px, .7vw, 13px); }
+.revenue-share-widget__amounts > div[data-display-unit="TEN_THOUSAND"] strong { font-size: clamp(10px, .85vw, 15px); }
+.revenue-share-widget__amounts > div[data-display-unit="HUNDRED_MILLION"] strong { font-size: clamp(12px, 1vw, 17px); }
+@media (max-width: 1500px) {
+  .revenue-share-widget__amounts { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
 </style>

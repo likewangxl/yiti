@@ -16,7 +16,15 @@
         <span>{{ scopeLabel }}</span>
       </div>
       <div class="panorama-header-actions">
-        <span class="panorama-live-state"><i :class="{ 'is-loading': loading, 'is-error': error, 'is-caution': dataQualityNotice !== '经营监测' }"></i>{{ loading ? '正在取数' : error ? '数据异常' : dataQualityNotice }}</span>
+        <label v-if="presentationLayoutEnabled" class="panorama-amount-unit-control">
+          <span class="panorama-visually-hidden">金额单位</span>
+          <select v-model="amountUnit" data-testid="panorama-amount-unit" aria-label="金额单位">
+            <option value="YUAN">元</option>
+            <option value="TEN_THOUSAND">万元</option>
+            <option value="HUNDRED_MILLION">亿元</option>
+          </select>
+        </label>
+        <span v-else class="panorama-live-state"><i :class="{ 'is-loading': loading, 'is-error': error, 'is-caution': dataQualityNotice !== '经营监测' }"></i>{{ loading ? '正在取数' : error ? '数据异常' : dataQualityNotice }}</span>
         <button
           type="button"
           class="panorama-icon-action"
@@ -60,6 +68,7 @@
       :selected-org-code="selectedOrgCode"
       :data-date="displayDate"
       :demo="demo"
+      :amount-unit="amountUnit"
       @region-select="openCity"
       @branch-select="selectInstitution"
       @map-context="emit('map-context', $event)"
@@ -497,6 +506,7 @@ function scopeSignature(model = {}) {
 }
 const lastScopeSignature = ref(`${scopeSignature(props.model)}|${props.sourcePresentation?.scopeIdentity || ''}`);
 const presentationLayoutEnabled = computed(() => isConfiguredPresentation(props.sourcePresentation));
+const amountUnit = ref('TEN_THOUSAND');
 
 const safeModel = computed(() => {
   const source = props.model && typeof props.model === 'object' ? props.model : {};
@@ -1222,6 +1232,21 @@ onBeforeUnmount(() => {
 <style src="./panorama.scss" lang="scss"></style>
 
 <style scoped>
+.panorama-amount-unit-control { display: inline-flex; min-width: 0; align-items: center; }
+.panorama-amount-unit-control select {
+  min-width: 68px;
+  padding: 6px 22px 6px 8px;
+  border: 1px solid rgba(121, 161, 248, .42);
+  border-radius: 5px;
+  color: #cce3ff;
+  background: rgba(8, 27, 72, .92);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.panorama-amount-unit-control select:hover,
+.panorama-amount-unit-control select:focus-visible { border-color: var(--panorama-cyan); outline: none; }
 .panorama-map-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .panorama-map-heading-actions > span { color: var(--panorama-text-dim); font-size: 11px; white-space: nowrap; }
 .panorama-directory-button { padding: 5px 8px; border: 1px solid rgba(121, 161, 248, .3); border-radius: 5px; color: #bcd5ff; background: rgba(55, 112, 206, .22); font: inherit; font-size: 11px; cursor: pointer; }

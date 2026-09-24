@@ -70,6 +70,93 @@ const mounted = [];
 afterEach(() => mounted.splice(0).forEach(wrapper => wrapper.unmount()));
 
 describe('PresentationLayout', () => {
+  it('零售和对公分组显示查看更多并沿用业务线事件，营业收入组不显示入口', async () => {
+    const components = [
+      ['business-retail-deposit-balance', '零售存款余额'],
+      ['business-corp-deposit-balance', '对公存款余额'],
+      ['business-revenue-operating', '营业收入'],
+      ['business-revenue-fee', '中间业务收入']
+    ].map(([componentId, title], order) => ({
+      componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order, visible: true,
+      text: { titleMode: 'CUSTOM', title }, format: { displayUnit: 'TEN_THOUSAND' },
+      content: { mainField: 'value' }, dataRefs: [{ blockId: order + 1, unit: 'YUAN' }]
+    }));
+    const wrapper = mount(PresentationLayout, {
+      props: { presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components } }, model: { blockResults: {} } },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+
+    expect(wrapper.find('[data-layout-group="RETAIL"] [data-action="business-line-more"]').text()).toBe('查看更多');
+    expect(wrapper.find('[data-layout-group="CORP"] [data-action="business-line-more"]').text()).toBe('查看更多');
+    expect(wrapper.find('[data-layout-group="REVENUE"] [data-action="business-line-more"]').exists()).toBe(false);
+    await wrapper.find('[data-layout-group="RETAIL"] [data-action="business-line-more"]').trigger('click');
+    await wrapper.find('[data-layout-group="CORP"] [data-action="business-line-more"]').trigger('click');
+    expect(wrapper.emitted('business-line-select')).toEqual([
+      [{ businessLine: 'RETAIL', tabKey: 'deposit' }],
+      [{ businessLine: 'CORP', tabKey: 'deposit' }]
+    ]);
+  });
+
+  it('非分行配置保留分组项数，不出现经营总览入口', () => {
+    const components = ['business-retail-deposit-balance', 'business-corp-deposit-balance']
+      .map((componentId, order) => ({
+        componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order, visible: true,
+        text: { titleMode: 'CUSTOM', title: componentId }, format: { displayUnit: 'TEN_THOUSAND' },
+        content: { mainField: 'value' }, dataRefs: [{ blockId: order + 1, unit: 'YUAN' }]
+      }));
+    const wrapper = mount(PresentationLayout, {
+      props: { presentation: { displaySchemaVersion: 1, display: { components } }, model: { blockResults: {} } },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+
+    expect(wrapper.find('[data-layout-group="RETAIL"] [data-action="business-line-more"]').exists()).toBe(false);
+    expect(wrapper.find('[data-layout-group="RETAIL"] .presentation-layout__metric-group-header small').text()).toBe('1项');
+  });
+
+  it('把金额单位传入指标模型，金额与较上月同步变更而完成率保持百分比', () => {
+    const components = [
+      {
+        componentId: 'business-retail-deposit-balance', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 0, visible: true,
+        text: { titleMode: 'CUSTOM', title: '零售存款余额' }, format: { displayUnit: 'TEN_THOUSAND', decimals: 2 },
+        content: { mainField: 'deposit' }, dataRefs: [{ blockId: 31, metricCode: 'deposit', unit: 'YUAN' }]
+      },
+      {
+        componentId: 'business-retail-deposit-rate', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 1, visible: true,
+        text: { titleMode: 'CUSTOM', title: '零售存款完成率' }, format: { displayUnit: 'PERCENT', decimals: 2 },
+        content: { mainField: 'rate' }, dataRefs: [{ blockId: 31, metricCode: 'rate', unit: 'RATIO' }]
+      }
+    ];
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        amountUnit: 'YUAN',
+        presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components } },
+        dataDate: '2026-09-21',
+        model: {
+          dataDate: '2026-09-21',
+          blockResults: {
+            31: { deposit: 1068201500, rate: 0.9064, unitByField: { deposit: 'YUAN', rate: 'RATIO' } },
+            57: { rows: [{ date: '2026-09-21', deposit: 1068201500, rate: 0.9064 }, { date: '2026-08-31', deposit: 1056201500, rate: 0.8 }], unitByField: { deposit: 'YUAN', rate: 'RATIO' } }
+          }
+        }
+      },
+      global: {
+        stubs: {
+          ...stubs,
+          MetricDisplayWidgets: { props: ['components', 'grouped'], template: '<div data-testid="metric-widget"><span v-for="item in components" :key="item.componentId">{{ item.text }} {{ item.monthDelta?.text }}</span></div>' }
+        }
+      }
+    });
+    mounted.push(wrapper);
+    const text = wrapper.findAll('[data-layout-group="RETAIL"] [data-testid="metric-widget"]')
+      .map(node => node.text()).join(' ');
+    expect(text).toContain('1,068,201,500.00元');
+    expect(text).toContain('较上月 +12,000,000.00元');
+    expect(text).toContain('90.64%');
+    expect(text).toContain('较上月 +10.64个百分点');
+  });
+
   it('成对收入卡合并为包含关系图表并保留两个原值', () => {
     const revenueComponents = [
       ['business-revenue-operating', '营业收入', '营业收入', 'YUAN'],
