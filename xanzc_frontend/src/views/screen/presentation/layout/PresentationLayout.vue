@@ -1,6 +1,7 @@
 <template>
   <section
     class="presentation-layout"
+    :class="{ 'presentation-layout--branch-overview': isBranchOverview }"
     data-testid="presentation-layout"
     data-schema-version="1"
     aria-label="配置化大屏"
@@ -89,12 +90,21 @@
       </div>
     </section>
 
-    <section v-if="mainComponents" class="presentation-layout__main" data-testid="presentation-layout-main" aria-label="经营分析主体">
+    <section
+      v-if="mainComponents"
+      class="presentation-layout__main"
+      :class="{ 'presentation-layout__main--branch-overview': isBranchOverview }"
+      data-testid="presentation-layout-main"
+      aria-label="经营分析主体"
+    >
       <section
         v-for="column in mainColumns"
         :key="column.key"
         class="presentation-layout__column"
-        :class="`presentation-layout__column--${column.key.toLowerCase()}`"
+        :class="[
+          `presentation-layout__column--${column.key.toLowerCase()}`,
+          isBranchOverview && column.key === 'LEFT' ? 'presentation-layout__column--branch-overview' : ''
+        ]"
         :data-layout-column="column.key"
         :aria-label="column.label"
       >
@@ -111,6 +121,7 @@
           :data-component-type="component.componentType"
           :data-layout-region="component.layoutRegion"
           :data-order="component.order"
+          :data-visible-rows="isBranchOverview && component.componentType === 'RANKING' ? 10 : undefined"
         >
           <component
             :is="widgetComponent(component)"
@@ -205,6 +216,7 @@ const emit = defineEmits([
 
 const resolvedPresentation = computed(() => presentationOf(props.presentation));
 const components = computed(() => getDisplayComponents(props.presentation));
+const isBranchOverview = computed(() => resolvedPresentation.value?.template === 'branch-overview-v1');
 
 const headerComponents = computed(() => components.value.filter(component => component.layoutRegion === 'HEADER'));
 const HEADER_GROUP_DEFINITIONS = Object.freeze([
@@ -246,11 +258,26 @@ function sortCenterComponents(items) {
     || (Number.isInteger(left.order) ? left.order : 0) - (Number.isInteger(right.order) ? right.order : 0));
 }
 
-const mainColumns = computed(() => [
-  { key: 'LEFT', label: '左侧业务结构', components: components.value.filter(component => component.layoutRegion === 'LEFT') },
-  { key: 'CENTER', label: '中央地图与趋势', components: sortCenterComponents(components.value.filter(component => component.layoutRegion === 'CENTER')) },
-  { key: 'RIGHT', label: '右侧机构排名', components: components.value.filter(component => component.layoutRegion === 'RIGHT') }
-]);
+const mainColumns = computed(() => {
+  const leftComponents = components.value.filter(component => component.layoutRegion === 'LEFT');
+  const centerComponents = components.value.filter(component => component.layoutRegion === 'CENTER');
+  const branchTrendComponents = isBranchOverview.value
+    ? centerComponents.filter(component => component.componentType === 'TREND')
+    : [];
+  return [
+    {
+      key: 'LEFT',
+      label: '左侧业务结构',
+      components: [...leftComponents, ...branchTrendComponents]
+    },
+    {
+      key: 'CENTER',
+      label: isBranchOverview.value ? '中央地图' : '中央地图与趋势',
+      components: sortCenterComponents(centerComponents.filter(component => !branchTrendComponents.includes(component)))
+    },
+    { key: 'RIGHT', label: '右侧机构排名', components: components.value.filter(component => component.layoutRegion === 'RIGHT') }
+  ];
+});
 const mainComponents = computed(() => mainColumns.value.some(column => column.components.length));
 const footerRegions = computed(() => [
   { key: 'BOTTOM', label: '明细数据', components: components.value.filter(component => component.layoutRegion === 'BOTTOM') },
@@ -347,7 +374,14 @@ function widgetProps(component) {
   };
   if (['TREND', 'DETAIL_TABLE'].includes(component.componentType)) return { components: seriesComponents(component) };
   if (component.componentType === 'COMPOSITION_TABS') return { model: compositionComponentModel(component) };
-  if (component.componentType === 'RANKING') return { model: rankingComponentModel(component), title: screenDisplayText(componentTitle(component)) };
+  if (component.componentType === 'RANKING') return {
+    model: rankingComponentModel(component),
+    title: screenDisplayText(componentTitle(component)),
+    paginate: isBranchOverview.value,
+    pageSize: 10,
+    pageInterval: 5000,
+    metricCarousel: !isBranchOverview.value
+  };
   if (component.componentType === 'MAP') return {
     presentation: mapPresentation(component), model: props.model, geoJson: props.geoJson, mode: props.mode,
     metricKey: props.metricKey, selectedRegionCode: props.selectedRegionCode, selectedOrgCode: props.selectedOrgCode,
@@ -562,6 +596,79 @@ function onMapContext(payload) {
   flex: 0 1 270px;
 }
 
+/* 分行总览把趋势放到业务结构下方，主区按排名表头加十行可视高度规划。
+   排名组件收到分页模式后只保留当前十条 DOM 行，页面高度不会随总数增长。 */
+.presentation-layout--branch-overview .presentation-layout__main,
+.presentation-layout__main--branch-overview {
+  height: 580px;
+  min-height: 580px;
+  max-height: 580px;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr) 225px;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child {
+  min-height: 0;
+  overflow: visible;
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component--trend {
+  min-height: 225px;
+  height: 225px;
+  flex: none;
+  grid-row: 2;
+}
+
+/* 三个业务结构环在固定主区里压缩装饰间距，保留名称、数值和图例的完整可读内容。 */
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-tabs-widget) {
+  box-sizing: border-box;
+  min-height: 0;
+  height: 100%;
+  padding: 9px;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-tabs-widget__rings) {
+  margin-top: 7px;
+  gap: 5px;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring-card) {
+  padding: 5px 4px;
+  gap: 4px;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring) {
+  width: 64px;
+  height: 64px;
+  margin-top: 0;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring::after) {
+  inset: 8px;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring-card__legend) {
+  gap: 3px;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring-card__legend button) {
+  padding: 2px 3px;
+  font-size: 9px;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring-card__status) {
+  min-height: 0;
+  font-size: 8px;
+}
+
 .presentation-layout__component {
   display: flex;
   min-width: 0;
@@ -615,6 +722,8 @@ function onMapContext(payload) {
   .presentation-layout__header--grouped { grid-template-columns: minmax(0, 1fr); }
   .presentation-layout__metric-group--revenue { grid-column: auto; }
   .presentation-layout__main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .presentation-layout--branch-overview .presentation-layout__main,
+  .presentation-layout__main--branch-overview { height: auto; min-height: 0; max-height: none; }
   .presentation-layout__column--center { grid-column: 1 / -1; grid-row: 1; }
   .presentation-layout__column--left { grid-column: 1; grid-row: 2; }
   .presentation-layout__column--right { grid-column: 2; grid-row: 2; }
@@ -628,12 +737,23 @@ function onMapContext(payload) {
   .presentation-layout__metric-tier,
   .presentation-layout__metric-tier--secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .presentation-layout__main { display: flex; min-height: 0; flex-direction: column; }
+  .presentation-layout--branch-overview .presentation-layout__main,
+  .presentation-layout__main--branch-overview { height: auto; min-height: 0; max-height: none; }
   .presentation-layout__column--center { order: 1; }
   .presentation-layout__column--left { order: 2; }
   .presentation-layout__column--right { order: 3; }
   .presentation-layout__column--right > .presentation-layout__component:first-child { height: auto; max-height: 600px; min-height: 360px; }
   .presentation-layout__column--center > .presentation-layout__component--map-primary { min-height: 300px; }
   .presentation-layout__column--center > .presentation-layout__component--trend { min-height: 180px; }
+  .presentation-layout--branch-overview .presentation-layout__column--branch-overview {
+    display: flex;
+    gap: 10px;
+  }
+  .presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component--trend {
+    height: 225px;
+    min-height: 225px;
+    flex: 0 0 225px;
+  }
   .presentation-layout__footer--bottom > .presentation-layout__component { min-height: 210px; }
 }
 </style>

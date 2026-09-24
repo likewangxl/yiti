@@ -2,6 +2,7 @@
   <section
     class="institution-ranking-widget"
     data-testid="institution-ranking-widget"
+    :data-pagination-mode="paginate ? 'pages' : 'scroll'"
     :aria-label="title || '机构排名'"
     @mouseenter="hoverPaused = true"
     @mouseleave="hoverPaused = false"
@@ -18,7 +19,7 @@
         <button
           type="button"
           data-action="toggle-ranking-carousel"
-          :disabled="metricOptions.length < 2"
+          :disabled="!canToggleCarousel"
           :aria-pressed="userPaused"
           @click="toggleUserPause"
         >{{ userPaused ? '继续轮播' : '暂停轮播' }}</button>
@@ -45,7 +46,26 @@
       {{ activeMetric.summary }}
     </p>
 
-    <div class="institution-ranking-widget__list" data-testid="institution-ranking-list" tabindex="0" role="region" aria-label="完整机构排名列表">
+    <div v-if="paginate" class="institution-ranking-widget__pagination" role="group" aria-label="机构排名分页">
+      <button
+        type="button"
+        data-action="ranking-page-previous"
+        aria-label="上一页机构排名"
+        :disabled="pageCount < 2"
+        @click="movePage(-1)"
+      >上一页</button>
+      <span data-testid="institution-ranking-page" aria-live="polite">第 {{ pageIndex + 1 }}/{{ pageCount }} 页</span>
+      <span data-testid="institution-ranking-range">{{ pageRangeStart }}–{{ pageRangeEnd }}/{{ totalRowCount }}</span>
+      <button
+        type="button"
+        data-action="ranking-page-next"
+        aria-label="下一页机构排名"
+        :disabled="pageCount < 2"
+        @click="movePage(1)"
+      >下一页</button>
+    </div>
+
+    <div class="institution-ranking-widget__list" data-testid="institution-ranking-list" tabindex="0" role="region" :aria-label="paginate ? '当前页机构排名列表' : '完整机构排名列表'">
       <table>
         <caption class="institution-ranking-widget__visually-hidden">{{ activeMetric?.label || '机构排名' }}，含未参与排名机构</caption>
         <thead><tr><th scope="col">排名</th><th scope="col">机构</th><th scope="col">{{ displayUnitLabel(activeMetric?.unit) || '指标值' }}</th></tr></thead>
@@ -76,7 +96,11 @@ import { displayUnitLabel } from '../model/displayMetricsModel';
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
   title: { type: String, default: '' },
-  interval: { type: Number, default: 10000 }
+  interval: { type: Number, default: 10000 },
+  paginate: { type: Boolean, default: false },
+  pageSize: { type: Number, default: 10 },
+  pageInterval: { type: Number, default: 5000 },
+  metricCarousel: { type: Boolean, default: true }
 });
 const emit = defineEmits(['metric-change']);
 
@@ -85,26 +109,47 @@ const userPaused = ref(false);
 const hoverPaused = ref(false);
 const focusPaused = ref(false);
 const pageHidden = ref(false);
-let carouselTimer = null;
+const pageIndex = ref(0);
+let metricTimer = null;
+let pageTimer = null;
 let mounted = false;
 
 const metricOptions = computed(() => Array.isArray(props.model?.metrics) ? props.model.metrics.filter(item => item && item.metricKey) : []);
 const activeMetric = computed(() => metricOptions.value.find(item => item.metricKey === activeMetricKey.value) || metricOptions.value[0] || props.model?.metric || null);
 const interactionPaused = computed(() => hoverPaused.value || focusPaused.value);
-const displayRows = computed(() => [
+const allRows = computed(() => [
   ...(activeMetric.value?.rankable || []),
   ...(activeMetric.value?.missing || [])
 ]);
+const normalizedPageSize = computed(() => {
+  const number = Number(props.pageSize);
+  if (!Number.isFinite(number) || number <= 0) return 10;
+  return Math.min(10, Math.floor(number));
+});
+const totalRowCount = computed(() => allRows.value.length);
+const pageCount = computed(() => Math.max(1, Math.ceil(totalRowCount.value / normalizedPageSize.value)));
+const displayRows = computed(() => props.paginate
+  ? allRows.value.slice(pageIndex.value * normalizedPageSize.value, (pageIndex.value + 1) * normalizedPageSize.value)
+  : allRows.value);
+const pageRangeStart = computed(() => totalRowCount.value ? pageIndex.value * normalizedPageSize.value + 1 : 0);
+const pageRangeEnd = computed(() => totalRowCount.value ? Math.min((pageIndex.value + 1) * normalizedPageSize.value, totalRowCount.value) : 0);
+const canToggleCarousel = computed(() => props.paginate ? pageCount.value > 1 : props.metricCarousel && metricOptions.value.length > 1);
 
 function normalizeInterval(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : 10000;
 }
 
+function normalizePageInterval(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 5000;
+}
+
 function selectMetric(metricKey) {
   if (!metricOptions.value.some(item => item.metricKey === metricKey)) return;
   activeMetricKey.value = metricKey;
-  userPaused.value = true;
+  pageIndex.value = 0;
+  if (!props.paginate) userPaused.value = true;
   emit('metric-change', { metricKey });
   syncCarousel();
 }
@@ -117,27 +162,47 @@ function advanceMetric() {
   emit('metric-change', { metricKey });
 }
 
-function stopCarousel() {
-  if (carouselTimer) window.clearInterval(carouselTimer);
-  carouselTimer = null;
+function advancePage() {
+  if (userPaused.value || interactionPaused.value || pageHidden.value || pageCount.value < 2) return;
+  pageIndex.value = (pageIndex.value + 1) % pageCount.value;
 }
 
-function startCarousel() {
-  stopCarousel();
-  if (!mounted || userPaused.value || pageHidden.value || metricOptions.value.length < 2) return;
-  carouselTimer = window.setInterval(advanceMetric, normalizeInterval(props.interval));
+function movePage(offset) {
+  if (!props.paginate || pageCount.value < 2) return;
+  pageIndex.value = (pageIndex.value + offset + pageCount.value) % pageCount.value;
+  userPaused.value = true;
+  syncCarousel();
+}
+
+function stopMetricCarousel() {
+  if (metricTimer) window.clearInterval(metricTimer);
+  metricTimer = null;
+}
+
+function stopPageCarousel() {
+  if (pageTimer) window.clearInterval(pageTimer);
+  pageTimer = null;
+}
+
+function stopCarousel() {
+  stopMetricCarousel();
+  stopPageCarousel();
 }
 
 function syncCarousel() {
-  if (!mounted || userPaused.value || pageHidden.value || metricOptions.value.length < 2) {
-    stopCarousel();
+  stopCarousel();
+  if (!mounted || userPaused.value || pageHidden.value) return;
+  if (props.paginate) {
+    if (pageCount.value > 1) pageTimer = window.setInterval(advancePage, normalizePageInterval(props.pageInterval));
     return;
   }
-  if (!carouselTimer) startCarousel();
+  if (props.metricCarousel && metricOptions.value.length > 1) {
+    metricTimer = window.setInterval(advanceMetric, normalizeInterval(props.interval));
+  }
 }
 
 function toggleUserPause() {
-  if (metricOptions.value.length < 2) return;
+  if (!canToggleCarousel.value) return;
   userPaused.value = !userPaused.value;
   syncCarousel();
 }
@@ -161,6 +226,7 @@ function formatValue(value) {
 watch(metricOptions, options => {
   if (!options.length) {
     activeMetricKey.value = '';
+    pageIndex.value = 0;
     syncCarousel();
     return;
   }
@@ -168,11 +234,25 @@ watch(metricOptions, options => {
     activeMetricKey.value = props.model?.activeMetricKey && options.some(item => item.metricKey === props.model.activeMetricKey)
       ? props.model.activeMetricKey : options[0].metricKey;
   }
+  pageIndex.value = 0;
   syncCarousel();
 }, { immediate: true });
 
+watch(() => props.model?.metrics, () => {
+  pageIndex.value = 0;
+  syncCarousel();
+}, { deep: true });
+
+watch([pageCount, () => props.paginate], () => {
+  pageIndex.value = Math.min(pageIndex.value, pageCount.value - 1);
+  syncCarousel();
+});
+
 watch(() => props.model?.activeMetricKey, value => {
-  if (!userPaused.value && metricOptions.value.some(item => item.metricKey === value)) activeMetricKey.value = value;
+  if (!userPaused.value && metricOptions.value.some(item => item.metricKey === value)) {
+    activeMetricKey.value = value;
+    pageIndex.value = 0;
+  }
 });
 
 onMounted(() => {
@@ -205,6 +285,10 @@ onBeforeUnmount(() => {
 .institution-ranking-widget__meta button:focus-visible, .institution-ranking-widget__metrics button:focus-visible, .institution-ranking-widget__list:focus-visible, .institution-ranking-widget__list tr:focus-visible { outline: 2px solid var(--panorama-cyan, #4de8ef); outline-offset: 2px; }
 .institution-ranking-widget__incomplete, .institution-ranking-widget__complete { margin: 8px 14px 0; color: var(--panorama-amber, #ffc45e); font-size: 10px; line-height: 1.35; }
 .institution-ranking-widget__complete { color: #82dbd7; }
+.institution-ranking-widget__pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 14px 0; color: var(--panorama-text-dim, #8fa9db); font-size: 10px; }
+.institution-ranking-widget__pagination button { padding: 3px 7px; color: #cfe5ff; background: rgba(25, 67, 121, .56); border: 1px solid rgba(127, 199, 255, .35); border-radius: 4px; cursor: pointer; font: inherit; }
+.institution-ranking-widget__pagination button:disabled { cursor: default; opacity: .5; }
+.institution-ranking-widget__pagination button:focus-visible { outline: 2px solid var(--panorama-cyan, #4de8ef); outline-offset: 2px; }
 .institution-ranking-widget__list { min-height: 0; margin: 8px 0 0; flex: 1 1 auto; overflow: auto; scrollbar-width: thin; }
 .institution-ranking-widget table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .institution-ranking-widget th, .institution-ranking-widget td { padding: 8px 12px; overflow: hidden; border-bottom: 1px solid var(--panorama-border-soft, rgba(119, 163, 255, .16)); text-align: left; text-overflow: ellipsis; white-space: nowrap; }

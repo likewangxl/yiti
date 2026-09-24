@@ -62,7 +62,7 @@ const stubs = {
   MetricDisplayWidgets: { props: ['components', 'grouped'], template: '<div data-testid="metric-widget" :data-grouped="grouped ? \'true\' : \'false\'"><span v-for="item in components" :key="item.componentId">{{ item.componentId }}</span></div>' },
   SeriesTableWidgets: { props: ['components'], template: '<div data-testid="series-widget"><span v-for="item in components" :key="item.componentId">{{ item.componentId }}</span></div>' },
   CompositionTabsWidget: { props: ['model'], template: '<div data-testid="structure-widget">{{ model.components?.[0]?.componentId }}</div>' },
-  InstitutionRankingWidget: { props: ['model', 'title'], template: '<div data-testid="ranking-widget">{{ title }}</div>' },
+  InstitutionRankingWidget: { props: ['model', 'title', 'paginate', 'pageSize', 'pageInterval', 'metricCarousel'], template: '<div data-testid="ranking-widget" :data-paginate="paginate ? \'true\' : \'false\'" :data-page-size="pageSize" :data-page-interval="pageInterval" :data-metric-carousel="metricCarousel ? \'true\' : \'false\'">{{ title }}</div>' },
   PresentationMapWidget: { props: ['presentation'], template: '<div data-testid="map-widget">地图</div>' }
 };
 
@@ -214,6 +214,38 @@ describe('PresentationLayout', () => {
     expect(wrapper.find('[data-layout-column="CENTER"]').findAll('[data-testid="presentation-layout-component"]')
       .map(node => node.attributes('data-component-id'))).toEqual(['map-main', 'trend-before-map', 'trend-after-map']);
     expect(wrapper.find('[data-layout-region="BOTTOM"]').findAll('[data-component-type="DETAIL_TABLE"]')).toHaveLength(3);
+  });
+
+  it('分行总览把中央趋势视觉放到左侧业务结构下方，同时保留保存区域', () => {
+    const components = [
+      { componentId: 'structure', componentType: 'COMPOSITION_TABS', layoutRegion: 'LEFT', order: 0, visible: true, text: { titleMode: 'CUSTOM', title: '业务结构' }, content: { tabs: [] }, dataRefs: [] },
+      { componentId: 'trend', componentType: 'TREND', layoutRegion: 'CENTER', order: 1, visible: true, text: { titleMode: 'CUSTOM', title: '趋势' }, content: { series: [] }, dataRefs: [] },
+      { componentId: 'branch-trend', componentType: 'TREND', layoutRegion: 'CENTER', order: 2, visible: true, text: { titleMode: 'CUSTOM', title: '支行趋势' }, content: { series: [] }, dataRefs: [] },
+      { componentId: 'map', componentType: 'MAP', layoutRegion: 'CENTER', order: 0, visible: true, text: { titleMode: 'CUSTOM', title: '机构地图' }, content: { mainField: 'deposit' }, dataRefs: [] },
+      { componentId: 'ranking', componentType: 'RANKING', layoutRegion: 'RIGHT', order: 0, visible: true, text: { titleMode: 'CUSTOM', title: '机构排名' }, content: { rankingMetrics: [] }, dataRefs: [] }
+    ];
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        presentation: { type: 'CODE', template: 'branch-overview-v1', displaySchemaVersion: 1, display: { components } },
+        model: { institutions: [], rankings: [], blockResults: {} }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+
+    expect(wrapper.find('.presentation-layout--branch-overview').exists()).toBe(true);
+    expect(wrapper.find('[data-layout-column="LEFT"]').findAll('[data-testid="presentation-layout-component"]')
+      .map(node => node.attributes('data-component-id'))).toEqual(['structure', 'trend', 'branch-trend']);
+    expect(wrapper.find('[data-layout-column="CENTER"]').findAll('[data-testid="presentation-layout-component"]')
+      .map(node => node.attributes('data-component-id'))).toEqual(['map']);
+    expect(wrapper.find('[data-component-id="trend"]').attributes('data-layout-region')).toBe('CENTER');
+    expect(wrapper.get('[data-testid="presentation-layout-main"]').classes()).toContain('presentation-layout__main--branch-overview');
+    expect(wrapper.get('[data-layout-column="LEFT"]').classes()).toContain('presentation-layout__column--branch-overview');
+    expect(wrapper.get('[data-layout-column="LEFT"]').findAll('.presentation-layout__component--trend')).toHaveLength(2);
+    expect(wrapper.get('[data-layout-column="RIGHT"] .presentation-layout__component--ranking').attributes('data-visible-rows')).toBe('10');
+    expect(wrapper.get('[data-testid="ranking-widget"]').attributes()).toMatchObject({
+      'data-paginate': 'true', 'data-page-size': '10', 'data-page-interval': '5000', 'data-metric-carousel': 'false'
+    });
   });
 
   it('只按协议组件的 region/order/visible 渲染七类组件，且不带旧固定模块', () => {

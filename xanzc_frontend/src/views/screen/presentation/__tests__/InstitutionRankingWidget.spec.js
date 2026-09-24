@@ -35,6 +35,16 @@ function mountWidget(overrides = {}) {
   return wrapper;
 }
 
+function rankingRows(count, prefix = '机构') {
+  return Array.from({ length: count }, (_, index) => ({
+    orgCode: `${prefix}-${index + 1}`,
+    name: `${prefix}${index + 1}`,
+    value: 120 - index,
+    rank: index + 1,
+    state: 'RANKABLE'
+  }));
+}
+
 describe('InstitutionRankingWidget', () => {
   it('将全部可排名机构和缺数机构放在同一可滚动列表，不截断为TOP10', () => {
     const wrapper = mountWidget();
@@ -168,5 +178,103 @@ describe('InstitutionRankingWidget', () => {
 
     expect(list.element.scrollTop).toBe(137);
     expect(wrapper.findAll('[data-testid="institution-ranking-row"]')).toHaveLength(200);
+  });
+
+  it('分行分页模式每页最多10条，5秒翻页并在最后一页后循环', async () => {
+    vi.useFakeTimers();
+    const rows = rankingRows(39);
+    const wrapper = mountWidget({
+      model: {
+        activeMetricKey: 'deposit',
+        metrics: [{ ...model.metrics[0], rankable: rows, missing: [], receivedCount: 39, expectedCount: 39, incomplete: false, summary: '已获得 39/39 家授权机构' }]
+      },
+      paginate: true,
+      pageSize: 10,
+      pageInterval: 5000,
+      metricCarousel: false
+    });
+
+    const visibleRows = () => wrapper.findAll('[data-testid="institution-ranking-row"]');
+    expect(visibleRows()).toHaveLength(10);
+    expect(visibleRows()[0].attributes('data-org-code')).toBe('机构-1');
+    expect(visibleRows().at(-1).attributes('data-org-code')).toBe('机构-10');
+    expect(wrapper.get('[data-testid="institution-ranking-page"]').text()).toContain('1/4');
+    expect(wrapper.get('[data-testid="institution-ranking-range"]').text()).toContain('1–10/39');
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(visibleRows()[0].attributes('data-org-code')).toBe('机构-11');
+    expect(visibleRows().at(-1).attributes('data-org-code')).toBe('机构-20');
+    expect(wrapper.get('[data-testid="institution-ranking-page"]').text()).toContain('2/4');
+
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(visibleRows()[0].attributes('data-org-code')).toBe('机构-31');
+    expect(visibleRows().at(-1).attributes('data-org-code')).toBe('机构-39');
+    expect(wrapper.get('[data-testid="institution-ranking-page"]').text()).toContain('4/4');
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(visibleRows()[0].attributes('data-org-code')).toBe('机构-1');
+    expect(visibleRows()).toHaveLength(10);
+  });
+
+  it('分行分页暂停同时停止自动翻页，指标切换和数据变化回到第一页', async () => {
+    vi.useFakeTimers();
+    const rows = rankingRows(21);
+    const wrapper = mountWidget({
+      model: {
+        activeMetricKey: 'deposit',
+        metrics: [
+          { ...model.metrics[0], rankable: rows, missing: [], receivedCount: 21, expectedCount: 21, incomplete: false, summary: '已获得 21/21 家授权机构' },
+          { ...model.metrics[1], rankable: rankingRows(21, '净增机构'), missing: [], receivedCount: 21, expectedCount: 21, incomplete: false, summary: '已获得 21/21 家授权机构' }
+        ]
+      },
+      paginate: true,
+      pageSize: 10,
+      pageInterval: 5000,
+      metricCarousel: false
+    });
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(wrapper.get('[data-testid="institution-ranking-page"]').text()).toContain('2/3');
+    await wrapper.get('[data-action="toggle-ranking-carousel"]').trigger('click');
+    expect(wrapper.get('[data-action="toggle-ranking-carousel"]').text()).toContain('继续');
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(wrapper.get('[data-testid="institution-ranking-page"]').text()).toContain('2/3');
+
+    await wrapper.get('[data-ranking-metric="increase"]').trigger('click');
+    expect(wrapper.get('[data-testid="institution-ranking-page"]').text()).toContain('1/3');
+    expect(wrapper.find('[data-org-code="净增机构-1"]').exists()).toBe(true);
+
+    await wrapper.setProps({ model: { ...wrapper.props('model'), metrics: [{ ...wrapper.props('model').metrics[1], rankable: rankingRows(4, '新机构'), receivedCount: 4, expectedCount: 4 }] } });
+    expect(wrapper.get('[data-testid="institution-ranking-page"]').text()).toContain('1/1');
+    expect(wrapper.findAll('[data-testid="institution-ranking-row"]')).toHaveLength(4);
+  });
+
+  it('分行分页沿用 hover、focus 和卸载时的轮播暂停与清理语义', async () => {
+    vi.useFakeTimers();
+    const clearIntervalSpy = vi.spyOn(window, 'clearInterval');
+    const wrapper = mountWidget({
+      model: {
+        activeMetricKey: 'deposit',
+        metrics: [{ ...model.metrics[0], rankable: rankingRows(21), missing: [], receivedCount: 21, expectedCount: 21, incomplete: false, summary: '已获得 21/21 家授权机构' }]
+      },
+      paginate: true,
+      pageSize: 10,
+      pageInterval: 5000,
+      metricCarousel: false
+    });
+    const region = wrapper.get('[data-testid="institution-ranking-widget"]');
+
+    await region.trigger('mouseenter');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(wrapper.get('[data-testid="institution-ranking-page"]').text()).toContain('1/3');
+    await region.trigger('mouseleave');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(wrapper.get('[data-testid="institution-ranking-page"]').text()).toContain('2/3');
+    await region.trigger('focusin');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(wrapper.get('[data-testid="institution-ranking-page"]').text()).toContain('2/3');
+
+    wrapper.unmount();
+    expect(clearIntervalSpy).toHaveBeenCalled();
   });
 });
