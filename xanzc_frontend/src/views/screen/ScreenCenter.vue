@@ -33,6 +33,24 @@
       </label>
     </section>
 
+    <section v-if="showLocalPreview" class="screen-center__preview-tools" data-testid="screen-center-preview-tools" aria-label="改造版经营总览本地演示">
+      <div class="screen-center__preview-copy">
+        <p class="screen-center__preview-eyebrow">开发态入口</p>
+        <h2>改造版经营总览</h2>
+        <p>查看固定演示样例，内容标注为本地演示 · 非业务数据。</p>
+      </div>
+      <div class="screen-center__preview-actions" role="group" aria-label="经营总览本地演示入口">
+        <button type="button" data-action="open-corporate-preview" @click="openLocalPreview('CorporateScreenPreview')">
+          <strong>对公经营总览</strong>
+          <span>本地演示 · 非业务数据</span>
+        </button>
+        <button type="button" data-action="open-retail-preview" @click="openLocalPreview('RetailScreenPreview')">
+          <strong>零售经营总览</strong>
+          <span>本地演示 · 非业务数据</span>
+        </button>
+      </div>
+    </section>
+
     <section v-if="loading" class="screen-center__state screen-center__state--loading" aria-live="polite">
       <span class="screen-center__state-icon" aria-hidden="true">⌁</span>
       <h2>正在加载大屏目录</h2>
@@ -149,6 +167,7 @@ const BRANCH_OPERATING_SCREEN = Object.freeze({
 const router = useRouter();
 const menuStore = useMenuStore();
 const userStore = useUserStore();
+const showLocalPreview = import.meta.env.DEV;
 const screens = ref([]);
 const activeBizLine = ref('ALL');
 const searchKeyword = ref('');
@@ -203,6 +222,11 @@ function screenDataModeLabel(screen) {
   return isBranchOperatingScreen(screen) && screen?.dataMode === 'TEST'
     ? '测试数据'
     : dataModeLabel(screen?.dataMode);
+}
+
+function openLocalPreview(name) {
+  if (!showLocalPreview) return;
+  router.push({ name, query: { from: 'screen-center' } });
 }
 
 function hasRegisteredMode(screen) {
@@ -335,6 +359,18 @@ onBeforeUnmount(() => {
 .screen-center__search { display: flex; align-items: center; flex: 0 1 280px; gap: 8px; color: var(--color-text-muted); font-size: 13px; white-space: nowrap; }
 .screen-center__search > span { flex: 0 0 auto; }
 .screen-center__search input { box-sizing: border-box; width: 100%; min-width: 0; height: 36px; padding: 0 11px; color: var(--color-text); background: var(--color-surface-soft); border: 1px solid var(--color-border); border-radius: var(--radius-control); font: inherit; }
+.screen-center__preview-tools { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 16px; padding: 16px 18px; background: var(--color-brand-100); border: 1px solid var(--color-brand-300); border-radius: var(--radius-control); }
+.screen-center__preview-copy { min-width: 0; }
+.screen-center__preview-copy h2 { margin-bottom: 5px; color: var(--color-text); font-size: 16px; }
+.screen-center__preview-copy p { margin-bottom: 0; color: var(--color-text-muted); font-size: 12px; line-height: 1.5; }
+.screen-center__preview-copy .screen-center__preview-eyebrow { margin-bottom: 4px; color: var(--color-brand-700); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+.screen-center__preview-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; }
+.screen-center__preview-actions button { display: flex; min-width: 168px; flex-direction: column; align-items: flex-start; gap: 3px; padding: 9px 12px; color: var(--color-brand-700); background: var(--color-surface); border: 1px solid var(--color-brand-300); border-radius: var(--radius-control); font: inherit; text-align: left; cursor: pointer; }
+.screen-center__preview-actions button:hover { background: var(--color-brand-700); border-color: var(--color-brand-700); color: var(--color-surface); }
+.screen-center__preview-actions button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.screen-center__preview-actions strong { font-size: 13px; }
+.screen-center__preview-actions span { color: var(--color-text-muted); font-size: 11px; }
+.screen-center__preview-actions button:hover span { color: inherit; }
 .screen-center__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; padding-top: 20px; }
 .screen-card { display: flex; min-width: 0; min-height: 190px; padding: 20px; gap: 16px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-control); box-shadow: var(--shadow-surface); }
 .screen-card__icon { display: grid; flex: 0 0 50px; place-items: center; width: 50px; height: 50px; color: var(--color-brand-700); background: var(--color-brand-100); border-radius: 14px; }
@@ -356,5 +392,5 @@ onBeforeUnmount(() => {
 .screen-center__state--error { color: var(--color-danger-700, #b42318); }
 .screen-center__state--error .screen-center__state-icon { color: inherit; }
 .screen-center__state button { min-height: 34px; padding: 0 14px; color: var(--color-brand-700); background: transparent; border: 1px solid var(--color-brand-300); border-radius: var(--radius-control); font: inherit; cursor: pointer; }
-@media (max-width: 720px) { .screen-center__header, .screen-center__toolbar { align-items: stretch; flex-direction: column; } .screen-center__count { align-self: flex-start; } .screen-center__search { flex-basis: auto; } .screen-center__grid { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .screen-center__header, .screen-center__toolbar, .screen-center__preview-tools { align-items: stretch; flex-direction: column; } .screen-center__count { align-self: flex-start; } .screen-center__search { flex-basis: auto; } .screen-center__preview-actions { width: 100%; } .screen-center__preview-actions button { flex: 1 1 0; min-width: 0; } .screen-center__grid { grid-template-columns: 1fr; } }
 </style>

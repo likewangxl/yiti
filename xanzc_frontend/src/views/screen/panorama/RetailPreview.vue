@@ -10,6 +10,7 @@
       :loading="false"
       error=""
       :demo="true"
+      :back-label="backLabel"
       @back="goBack"
       @refresh="refreshDemo"
     />
@@ -23,12 +24,16 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import RetailDashboard from './RetailDashboard.vue';
 import { retailDemoModel } from './retailDemoModel.js';
 
 const router = useRouter();
+const route = useRoute();
+const props = defineProps({ backPath: { type: String, default: '/screen-preview' } });
+const fromScreenCenter = computed(() => route?.query?.from === 'screen-center');
+const backLabel = computed(() => fromScreenCenter.value ? '返回大屏中心' : '返回分行预览');
 const lastUpdated = ref(formatDemoTime(new Date()));
 
 function formatDemoTime(value) {
@@ -42,7 +47,7 @@ function refreshDemo() {
 }
 
 function goBack() {
-  router.push('/screen-preview');
+  router.push(fromScreenCenter.value ? '/screens' : props.backPath);
 }
 
 function goToDesigner() {

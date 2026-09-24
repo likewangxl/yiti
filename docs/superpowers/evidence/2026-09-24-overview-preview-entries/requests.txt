@@ -1,0 +1,14 @@
+### Result
+47. [GET] http://127.0.0.1:8092/api/auth/current-user => [200] OK
+49. [GET] http://127.0.0.1:8092/api/auth/my-menus => [200] OK
+50. [GET] http://127.0.0.1:8092/api/auth/permissions => [200] OK
+54. [GET] http://127.0.0.1:8092/api/notifications/unread-count => [200] OK
+55. [GET] http://127.0.0.1:8092/api/screen/view/catalog => [200] OK
+132. [GET] http://127.0.0.1:8092/api/notifications/unread-count => [200] OK
+133. [GET] http://127.0.0.1:8092/api/screen/view/catalog => [200] OK
+137. [GET] http://127.0.0.1:8092/api/notifications/unread-count => [200] OK
+138. [GET] http://127.0.0.1:8092/api/screen/view/catalog => [200] OK
+151. [GET] http://127.0.0.1:8092/api/notifications/unread-count => [200] OK
+152. [GET] http://127.0.0.1:8092/api/screen/view/catalog => [200] OK
+
+Note: 142 static requests not shown, run with --static option to see them.

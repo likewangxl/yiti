@@ -24,7 +24,7 @@
         </span>
         <button type="button" class="retail-icon-action" data-action="refresh" aria-label="刷新零售大屏" title="刷新" @click="emit('refresh')"><component :is="Refresh" /></button>
         <button v-if="!demo" type="button" class="retail-icon-action" data-action="configure" aria-label="配置零售大屏" title="配置" @click="emit('configure')"><component :is="Setting" /></button>
-        <button type="button" class="retail-icon-action" data-action="back" aria-label="返回分行预览" title="返回" @click="emit('back')"><component :is="Close" /></button>
+        <button type="button" class="retail-icon-action" data-action="back" :aria-label="backLabel" title="返回" @click="emit('back')"><component :is="Close" /></button>
       </div>
     </header>
 
@@ -624,6 +624,7 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
   demo: { type: Boolean, default: false },
+  backLabel: { type: String, default: '返回分行预览' },
   sourcePresentation: { type: Object, default: () => ({}) }
 });
 const configuredMetrics = computed(() => buildDisplayMetricsModel(

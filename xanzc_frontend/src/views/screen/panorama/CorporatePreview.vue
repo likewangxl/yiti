@@ -24,11 +24,12 @@
 
 <script setup>
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import CorporateDashboard from './CorporateDashboard.vue';
 import { corporateDemoModel } from './corporateDemoModel.js';
 
 const router = useRouter();
+const route = useRoute();
 const props = defineProps({ backPath: { type: String, default: '/screen-preview' } });
 const lastUpdated = ref(formatDemoTime(new Date()));
 
@@ -43,7 +44,7 @@ function refreshDemo() {
 }
 
 function goBack() {
-  router.push(props.backPath);
+  router.push(route?.query?.from === 'screen-center' ? '/screens' : props.backPath);
 }
 
 function goToDesigner() {

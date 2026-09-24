@@ -90,6 +90,14 @@ afterEach(() => {
 });
 
 describe('RetailDashboard 零售经营总览', () => {
+  it('演示从大屏中心进入时返回按钮使用大屏中心语义，正式页保留原文案', () => {
+    const formalWrapper = mountDashboard();
+    expect(formalWrapper.get('[data-action="back"]').attributes('aria-label')).toBe('返回分行预览');
+
+    const screenCenterWrapper = mountDashboard({ demo: true, backLabel: '返回大屏中心' });
+    expect(screenCenterWrapper.get('[data-action="back"]').attributes('aria-label')).toBe('返回大屏中心');
+  });
+
   it('小额主库收入按万元显示，不将非零收入四舍五入为零', () => {
     const wrapper=mount(RetailDashboard,{props:{model:{kpis:[{key:'retailRevenue',label:'零售FTP收入',value:0.00020804809717,unit:'亿元'}]}}});
     const card=wrapper.findAll('[data-testid="retail-kpi"]').find(card=>card.text().includes('零售FTP收入'));

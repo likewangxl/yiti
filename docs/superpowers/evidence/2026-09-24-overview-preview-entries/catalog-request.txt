@@ -1,0 +1,23 @@
+### Result
+#55 [GET] http://127.0.0.1:8092/api/screen/view/catalog
+
+  General
+    status:    [200] OK
+    duration:  5ms
+    type:      xhr
+    mimeType:  application/json
+
+  Request headers
+    accept: application/json, text/plain, */*
+    referer: http://127.0.0.1:8092/
+    user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36
+    x-trace-id: pc-1790240744047-709754
+    sec-ch-ua: "Google Chrome";v="153", "Not_A Brand";v="8", "Chromium";v="153"
+    sec-ch-ua-mobile: ?0
+    sec-ch-ua-platform: "Windows"
+
+  Response headers
+    content-type: application/json
+    content-length: 42
+
+Run `response-body 55` to read the response body.
