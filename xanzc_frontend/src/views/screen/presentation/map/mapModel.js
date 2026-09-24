@@ -240,7 +240,8 @@ export function buildMapModel(sourcePresentation, inputModel = {}, options = {})
   const selectedOrgCode = text(options.selectedOrgCode);
   const regionCodes = [...new Set([...Object.keys(summaries), ...institutions.map(cityCodeOf), ...featureCodes(options.geoJson)].filter(Boolean))];
   const directoryCoverage = institutionDirectoryCoverage(institutions);
-  const canMarkNoInstitution = level === 'province' && directoryCoverage.hasCompleteDirectory;
+  const distinguishNoInstitution = options.distinguishNoInstitution !== false;
+  const canMarkNoInstitution = distinguishNoInstitution && level === 'province' && directoryCoverage.hasCompleteDirectory;
   const rawValues = {};
   const metricValues = {};
   const sourceUnits = {};
@@ -328,7 +329,7 @@ export function buildMapModel(sourcePresentation, inputModel = {}, options = {})
       { key: 'mid', label: '中', color: MAP_PALETTE.mid },
       { key: 'low', label: '低', color: MAP_PALETTE.low },
       { key: 'missing', label: '暂无数据', color: MAP_MISSING_COLOR },
-      { key: 'no-institution', state: 'NO_INSTITUTION', label: '无经营机构', color: MAP_NO_INSTITUTION_COLOR }
+      ...(distinguishNoInstitution ? [{ key: 'no-institution', state: 'NO_INSTITUTION', label: '无经营机构', color: MAP_NO_INSTITUTION_COLOR }] : [])
     ]
   };
 }

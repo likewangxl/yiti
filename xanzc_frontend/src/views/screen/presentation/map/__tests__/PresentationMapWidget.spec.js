@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils';
 import PresentationMapWidget from '../PresentationMapWidget.vue';
 
 const presentation = {
+  screenCode: 'SCR_PROVINCE_MAP_V2',
   displaySchemaVersion: 1,
   display: {
     components: [{
@@ -93,5 +94,30 @@ describe('PresentationMapWidget', () => {
     expect(wrapper.getComponent(mapStub).props('showProvincePoints')).toBe(false);
     expect(wrapper.getComponent(mapStub).props('pointLabelLayout')).toBe('callout');
     expect(wrapper.getComponent(mapStub).props('showRegionMetrics')).toBe(false);
+  });
+
+  it('旧屏编码保留原外围标注和网点行内标签，不启用新屏专属地图样式', () => {
+    const oldPresentation = { ...presentation, screenCode: 'SCR_PROVINCE' };
+    const mapGeoJson = { ...geoJson, features: [...geoJson.features, { ...geoJson.features[0], properties: { adcode: '610600', name: '延安市' } }] };
+    const province = mount(PresentationMapWidget, {
+      props: { presentation: oldPresentation, model, geoJson: mapGeoJson, mode: 'province', metricKey: 'deposit' },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+    const oldMap = province.getComponent(mapStub);
+    expect(oldMap.props('labelLayout')).toBe('callout');
+    expect(oldMap.props('pointLabelLayout')).toBe('inline');
+    expect(oldMap.props('showRegionMetrics')).toBe(true);
+    expect(oldMap.props('showProvincePointLabels')).toBe(true);
+    expect(oldMap.props('regionStates')['610600']).toBe('MISSING');
+    expect(oldMap.props('metricValues')['610600']).toBe('暂无数据');
+    expect(province.find('[data-testid="presentation-map-legend-no-institution"]').exists()).toBe(false);
+    province.unmount();
+
+    const city = mount(PresentationMapWidget, {
+      props: { presentation: oldPresentation, model, geoJson, mode: 'city', cityCode: '610100' },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+    expect(city.getComponent(mapStub).props('pointLabelLayout')).toBe('inline');
+    city.unmount();
   });
 });

@@ -6,7 +6,7 @@ import { ref } from 'vue';
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(), back: vi.fn() }) }));
 vi.mock('../PanoramaDashboard.vue', () => ({ default: {
   props: { sourcePresentation: { type: Object, default: () => ({}) } },
-  template: '<main data-testid="legacy-dashboard"><span data-testid="runtime-state-probe">{{ JSON.stringify(sourcePresentation.runtimeState) }}</span>经营内容</main>'
+  template: '<main data-testid="legacy-dashboard" :data-screen-code="sourcePresentation.screenCode"><span data-testid="runtime-state-probe">{{ JSON.stringify(sourcePresentation.runtimeState) }}</span>经营内容</main>'
 } }));
 vi.mock('../CorporateDashboard.vue', () => ({ default: { template: '<main>对公内容</main>' } }));
 vi.mock('../RetailDashboard.vue', () => ({ default: { template: '<main>零售内容</main>' } }));
@@ -45,6 +45,7 @@ describe('PanoramaRuntime S14', () => {
 
     expect(wrapper.find('[data-testid="presentation-runtime-status"]').exists()).toBe(false);
     const runtimeState = JSON.parse(wrapper.get('[data-testid="runtime-state-probe"]').text());
+    expect(wrapper.get('[data-testid="legacy-dashboard"]').attributes('data-screen-code')).toBe('SCR_CODE');
     expect(runtimeState).toMatchObject({
       status: 'STALE',
       batch: { batchId: 'B-OLD', dataDate: '2026-09-20', status: 'STALE' },

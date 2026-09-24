@@ -232,6 +232,7 @@ const runtimePresentation = computed(() => {
 });
 const dashboardSourcePresentation = computed(() => ({
   ...sourcePresentation.value,
+  screenCode: String(props.view?.screenCode || props.view?.screen_code || '').trim(),
   displayPresentation: props.view?.renderPackage?.canvasStyle?.presentation || null,
   scopeIdentity: [props.view?.screenCode, props.view?.orgScopeMode, props.view?.orgGroupCode, props.context?.orgCode].map(v => v || '').join('|'),
   runtimeIssues: institutionRuntimeIssueGroups.value,

@@ -61,7 +61,7 @@
     <section v-else class="screen-center__grid" aria-label="可访问大屏列表">
       <article
         v-for="screen in filteredScreens"
-        :key="screen.key || screen.template || screen.screenCode"
+        :key="screen.screenCode"
         class="screen-card"
         data-screen-card
         :data-screen-kind="screen.kind || 'catalog'"
@@ -126,6 +126,7 @@ const REGISTERED_MODES = Object.freeze({
   'retail-overview-v1': Object.freeze(['TEST', 'LIVE']),
   'corporate-overview-v1': Object.freeze(['TEST', 'LIVE'])
 });
+const FIXED_SCREEN_CODES = new Set(['SCR_PROVINCE', 'SCR_CORP_OVERVIEW', 'SCR_RETAIL_OVERVIEW']);
 const PERSONAL_SCREEN = Object.freeze({
   key: 'personal-dashboard',
   kind: 'personal',
@@ -208,6 +209,10 @@ function hasRegisteredMode(screen) {
   return REGISTERED_MODES[screen?.template]?.includes(screen?.dataMode) || false;
 }
 
+function isFixedScreen(screen) {
+  return FIXED_SCREEN_CODES.has(screen?.screenCode);
+}
+
 function normalizeCatalog(catalog) {
   if (!Array.isArray(catalog)) throw new Error('大屏目录响应格式无效');
   return catalog.filter((screen) => screen
@@ -287,7 +292,11 @@ function openScreen(screen) {
   }
   const template = screen?.template;
   if (!SUPPORTED_TEMPLATES.has(template) || !hasRegisteredMode(screen)) return;
-  router.push({ name: 'CodeScreenPage', params: { template } });
+  if (isFixedScreen(screen)) {
+    router.push({ name: 'CodeScreenPage', params: { template } });
+    return;
+  }
+  router.push({ name: 'ScreenView', params: { screenCode: screen.screenCode } });
 }
 
 watch(() => userStore.user, (user) => {

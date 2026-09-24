@@ -27,8 +27,8 @@ const stubs = {
   PanoramaRuntime: {
     name: 'PanoramaRuntime',
     template: '<div class="stub-panorama-runtime" :data-screen="view?.screenName" '
-      + ':data-context="JSON.stringify(context)" />',
-    props: ['view', 'context']
+      + ':data-context="JSON.stringify(context)" :data-batch-required="String(batchRequired)" />',
+    props: ['view', 'context', 'batchRequired']
   }
 };
 
@@ -135,6 +135,7 @@ describe('ScreenView.vue', () => {
     expect(JSON.parse(wrapper.find('.stub-panorama-runtime').attributes('data-context'))).toMatchObject({
       screenCode: 'SCR_TEST', schemaVersion: 2
     });
+    expect(wrapper.find('.stub-panorama-runtime').attributes('data-batch-required')).toBe('true');
   });
 
   it('零售模板使用独立全景运行入口，保留 RETAIL 与已发布数据身份', async () => {
@@ -150,6 +151,7 @@ describe('ScreenView.vue', () => {
     expect(wrapper.find('.stub-panorama-runtime').exists()).toBe(true);
     expect(wrapper.find('.stub-renderer').exists()).toBe(false);
     expect(wrapper.find('.screen-presentation-unsupported').exists()).toBe(false);
+    expect(wrapper.find('.stub-panorama-runtime').attributes('data-batch-required')).toBe('false');
   });
 
   it('presentation=null 兼容旧画布，继续走旧 ScreenRenderer', async () => {

@@ -119,6 +119,35 @@ describe('ScreenCenter.vue', () => {
     });
   });
 
+  it('固定编码保留代码化路径，同模板的独立编码进入 ScreenView 并保持卡片编码唯一', async () => {
+    const independentScreen = {
+      screenCode: 'SCR_PROVINCE_MAP_V2', screenName: '分行地图总览', viewLevel: 'PROVINCE', bizLine: 'COMMON',
+      template: 'branch-overview-v1', dataMode: 'TEST'
+    };
+    listAvailableScreens.mockResolvedValue([...catalog, independentScreen]);
+    const center = await mountCenter();
+
+    const cards = center.findAll('[data-screen-card]');
+    expect(cards).toHaveLength(4);
+    expect(center.findAll('[data-screen-code="SCR_PROVINCE"]')).toHaveLength(1);
+    expect(center.findAll('[data-screen-code="SCR_PROVINCE_MAP_V2"]')).toHaveLength(1);
+    const cardVNodes = findVNodes(center.vm.$.subTree, node => node?.props?.['data-screen-card'] !== undefined);
+    expect(cardVNodes.find(node => node.props['data-screen-code'] === 'SCR_PROVINCE_MAP_V2')?.key)
+      .toBe('SCR_PROVINCE_MAP_V2');
+
+    await center.find('[data-screen-code="SCR_PROVINCE"] button.screen-card__open').trigger('click');
+    expect(routerPush).toHaveBeenLastCalledWith({
+      name: 'CodeScreenPage',
+      params: { template: 'branch-overview-v1' }
+    });
+
+    await center.find('[data-screen-code="SCR_PROVINCE_MAP_V2"] button.screen-card__open').trigger('click');
+    expect(routerPush).toHaveBeenLastCalledWith({
+      name: 'ScreenView',
+      params: { screenCode: 'SCR_PROVINCE_MAP_V2' }
+    });
+  });
+
   it('只有工作台菜单授权且当前用户存在时才显示个人入口', async () => {
     menuStore.hasUrl.mockReturnValue(false);
     const center = await mountCenter();
@@ -302,4 +331,13 @@ function deferred() {
     reject = rejectPromise;
   });
   return { promise, resolve, reject };
+}
+
+function findVNodes(vnode, predicate) {
+  if (!vnode) return [];
+  if (Array.isArray(vnode)) return vnode.flatMap(child => findVNodes(child, predicate));
+  const matches = predicate(vnode) ? [vnode] : [];
+  const children = vnode.children;
+  if (!Array.isArray(children)) return matches;
+  return matches.concat(children.flatMap(child => findVNodes(child, predicate)));
 }

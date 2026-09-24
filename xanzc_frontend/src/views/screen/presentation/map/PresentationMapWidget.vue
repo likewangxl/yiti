@@ -21,17 +21,17 @@
       :metric-numeric-values="mapModel.metricRawValues"
       :metric-colors="mapModel.metricColors"
       :region-states="mapModel.regionStates"
-      :show-region-metrics="false"
+      :show-region-metrics="!enhancedMap"
       :color-by-metric="true"
       :mode="mode"
       :show-province-points="mode === 'province'"
-      :show-province-point-labels="false"
+      :show-province-point-labels="!enhancedMap"
       :selected-region-code="selectedRegionCode"
       :demo="demo"
       :view-fit="{ ...(mapModel.viewFit || {}), ...viewFit }"
       appearance="relief"
-      label-layout="inline"
-      :point-label-layout="mode === 'city' ? 'callout' : 'inline'"
+      :label-layout="enhancedMap ? 'inline' : 'callout'"
+      :point-label-layout="enhancedMap && mode === 'city' ? 'callout' : 'inline'"
       class="presentation-map-widget__map"
       @region-select="onRegionSelect"
       @branch-select="onBranchSelect"
@@ -59,6 +59,7 @@ import {
   mapContextForInstitution
 } from './mapModel';
 import { screenDisplayText } from '../model/screenDisplayText';
+import { isBranchMapV2 } from '../../panorama/screenVariant.js';
 
 const props = defineProps({
   presentation: { type: Object, default: () => ({}) },
@@ -76,13 +77,15 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['region-select', 'branch-select', 'map-context']);
+const enhancedMap = computed(() => isBranchMapV2(props.presentation));
 const mapModel = computed(() => buildMapModel(props.presentation, props.model, {
   level: props.mode,
   cityCode: String(props.cityCode || ''),
   selectedOrgCode: String(props.selectedOrgCode || ''),
   metricKey: props.metricKey,
   dataDate: props.dataDate,
-  geoJson: props.geoJson
+  geoJson: props.geoJson,
+  distinguishNoInstitution: enhancedMap.value
 }));
 const displayMetricLabel = computed(() => screenDisplayText(mapModel.value.metricLabel));
 

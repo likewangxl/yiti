@@ -1,7 +1,8 @@
 <template>
   <!-- 代码化全景拥有自己的根和视觉域，不进入旧 1920×1080 舞台。 -->
   <div v-if="isPanoramaPresentation" class="screen-panorama-root">
-    <PanoramaRuntime :view="view" :context="context" />
+    <PanoramaRuntime :view="view" :context="context"
+      :batch-required="presentation?.type === 'CODE' && presentation?.template === 'branch-overview-v1'" />
   </div>
 
   <div v-else-if="unsupportedPresentation" class="screen-presentation-unsupported" role="alert">

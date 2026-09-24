@@ -94,7 +94,7 @@ describe('CityPanorama 市级支行全景', () => {
   });
 
   it('地图和列表互选，选中机构展示趋势与经营关注明细', async () => {
-    const wrapper = mountCity();
+    const wrapper = mountCity({ sourcePresentation: { screenCode: 'SCR_PROVINCE_MAP_V2' } });
     expect(wrapper.get('.city-map-stub').attributes('data-point-label-layout')).toBe('callout');
     await wrapper.get('[data-testid="branch-row"]').trigger('click');
     expect(wrapper.find('[data-testid="branch-detail"]').text()).toContain('高新科技路支行');
@@ -102,6 +102,11 @@ describe('CityPanorama 市级支行全景', () => {
     expect(wrapper.find('[data-testid="branch-detail"]').text()).toContain('审批超时');
     await wrapper.get('.map-branch-1').trigger('click');
     expect(wrapper.find('[data-testid="selected-org-code"]').text()).toContain('ORG-1');
+  });
+
+  it('旧屏的市级地图不启用新屏网点连线标注', () => {
+    const wrapper = mountCity({ sourcePresentation: { screenCode: 'SCR_PROVINCE' } });
+    expect(wrapper.get('.city-map-stub').attributes('data-point-label-layout')).toBe('inline');
   });
 
   it('支行详情可展开和收起，返回省级、刷新、全屏都由事件或能力交给容器', async () => {
