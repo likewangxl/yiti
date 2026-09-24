@@ -5,7 +5,8 @@ import { mount } from '@vue/test-utils';
 vi.mock('../PanoramaMap.vue', () => ({
   default: {
     name: 'PanoramaMap',
-    template: '<div class="city-map-stub"><button type="button" class="map-branch-1" @click="$emit(\'branch-select\', \'ORG-1\')">地图支行1</button><button type="button" class="map-branch-2" @click="$emit(\'branch-select\', \'ORG-7\')">地图支行7</button></div>',
+    props: ['pointLabelLayout'],
+    template: '<div class="city-map-stub" :data-point-label-layout="pointLabelLayout"><button type="button" class="map-branch-1" @click="$emit(\'branch-select\', \'ORG-1\')">地图支行1</button><button type="button" class="map-branch-2" @click="$emit(\'branch-select\', \'ORG-7\')">地图支行7</button></div>',
     emits: ['branch-select']
   }
 }));
@@ -94,6 +95,7 @@ describe('CityPanorama 市级支行全景', () => {
 
   it('地图和列表互选，选中机构展示趋势与经营关注明细', async () => {
     const wrapper = mountCity();
+    expect(wrapper.get('.city-map-stub').attributes('data-point-label-layout')).toBe('callout');
     await wrapper.get('[data-testid="branch-row"]').trigger('click');
     expect(wrapper.find('[data-testid="branch-detail"]').text()).toContain('高新科技路支行');
     expect(wrapper.find('[data-testid="branch-detail-trend"]').exists()).toBe(true);

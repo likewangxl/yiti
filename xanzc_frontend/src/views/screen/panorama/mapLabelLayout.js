@@ -122,6 +122,25 @@ export function layoutMapCallouts(labels = [], options = {}) {
   ].map(position => [position.key, position]));
 }
 
+/**
+ * Lay out projected branch points in the two outside callout columns.
+ *
+ * The point layout has the same output shape as `layoutMapCallouts`: each
+ * result keeps the original `anchor`, exposes the card `label` position and
+ * the three-point leader geometry (`points`). The caller owns filtering
+ * records without valid projected coordinates before calling this function.
+ * Keeping this entry point separate lets the city layout retain its existing
+ * behaviour while branch cards can use the same deterministic geometry.
+ */
+export function layoutPointCallouts(labels = [], options = {}) {
+  if (!Array.isArray(labels) || labels.length === 0) return {};
+  const ordered = labels
+    .map((label, index) => ({ label, index, key: label?.key == null ? String(index) : String(label.key) }))
+    .sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : a.index - b.index)
+    .map(entry => entry.label);
+  return layoutMapCallouts(ordered, options);
+}
+
 
 /** Curved geographic leader with a short horizontal landing beside the label. */
 export function createMapCalloutPath(position) {

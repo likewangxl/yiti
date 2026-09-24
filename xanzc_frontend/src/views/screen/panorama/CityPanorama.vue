@@ -76,6 +76,7 @@
           :demo="demo"
           :selected-org-code="selectedOrgCode"
           mode="city"
+          point-label-layout="callout"
           :selected-region-code="cityCode"
           @branch-select="selectBranch"
         />

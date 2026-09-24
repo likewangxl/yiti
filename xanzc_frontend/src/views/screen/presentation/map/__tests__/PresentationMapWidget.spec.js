@@ -33,7 +33,7 @@ const model = {
 };
 
 const mapStub = {
-  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'regionStates', 'labelLayout', 'showRegionMetrics', 'showProvincePointLabels', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints'],
+  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'regionStates', 'labelLayout', 'pointLabelLayout', 'showRegionMetrics', 'showProvincePointLabels', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints'],
   template: '<div data-testid="panorama-map-stub"><button data-city="610100" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">城市</button><button data-org="A" @click="$emit(\'branch-select\', \'A\')">机构</button></div>'
 };
 
@@ -75,6 +75,7 @@ describe('PresentationMapWidget', () => {
     expect(wrapper.getComponent(mapStub).props('labelLayout')).toBe('inline');
     expect(wrapper.getComponent(mapStub).props('showRegionMetrics')).toBe(false);
     expect(wrapper.getComponent(mapStub).props('showProvincePointLabels')).toBe(false);
+    expect(wrapper.getComponent(mapStub).props('pointLabelLayout')).toBe('inline');
   });
 
   it('无坐标机构由旁侧可访问列表进入，并向上发固定上下文事件', async () => {
@@ -90,5 +91,7 @@ describe('PresentationMapWidget', () => {
     expect(wrapper.emitted('region-select')).toContainEqual([{ code: '610100', name: '西安市' }]);
     expect(wrapper.emitted('map-context')).toContainEqual([expect.objectContaining({ level: 'CITY', cityCode: '610100' })]);
     expect(wrapper.getComponent(mapStub).props('showProvincePoints')).toBe(false);
+    expect(wrapper.getComponent(mapStub).props('pointLabelLayout')).toBe('callout');
+    expect(wrapper.getComponent(mapStub).props('showRegionMetrics')).toBe(false);
   });
 });

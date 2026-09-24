@@ -5,6 +5,7 @@
     :data-mode="mode"
     :data-appearance="appearance"
     :data-label-layout="isCalloutLayout ? 'callout' : 'inline'"
+    :data-point-label-layout="isPointCalloutLayout ? 'callout' : 'inline'"
     :data-material-ready="surfaceReady ? 'true' : 'false'"
     :data-selected-region="selectedRegionCode || ''"
     :data-hovered-region="hoveredRegionCode"
@@ -175,6 +176,32 @@
       </button>
     </div>
 
+    <svg v-if="isPointCalloutLayout && pointCallouts.length" class="panorama-map__point-callout-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <g v-for="entry in pointCallouts" :key="`${entry.key}:line`" :data-org-code="entry.point.orgCode" :class="{ 'is-active': String(entry.point.orgCode) === String(selectedOrgCode) || String(entry.point.orgCode) === hoveredPointCode }" :style="{ '--point-accent': pointCalloutAccent(entry.point) }">
+        <path :d="createMapCalloutPath(entry.position)" class="panorama-map__point-callout-line" data-testid="map-point-callout-line" :data-org-code="entry.point.orgCode" />
+        <circle :cx="entry.position.anchor.x" :cy="entry.position.anchor.y" r=".48" class="panorama-map__point-callout-anchor" />
+      </g>
+    </svg>
+    <div v-if="isPointCalloutLayout && pointCallouts.length" class="panorama-map__point-callout-cards" aria-label="网点位置标注">
+      <button
+        v-for="entry in pointCallouts"
+        :key="`${entry.key}:card`"
+        type="button"
+        class="panorama-map__point-callout-card"
+        :class="{ 'is-active': String(entry.point.orgCode) === hoveredPointCode, 'is-selected': String(entry.point.orgCode) === String(selectedOrgCode) }"
+        :style="pointCalloutCardStyle(entry)"
+        :data-org-code="entry.point.orgCode"
+        :title="entry.point.orgName || entry.point.orgCode"
+        :aria-label="`查看网点${entry.point.orgName || entry.point.orgCode}`"
+        data-testid="map-point-callout-card"
+        @pointerenter="hoveredPointCode = String(entry.point.orgCode)"
+        @pointerleave="hoveredPointCode = ''"
+        @focus="hoveredPointCode = String(entry.point.orgCode)"
+        @blur="hoveredPointCode = ''"
+        @click.stop="selectPoint(entry.point)"
+      >{{ entry.point.orgName || entry.point.orgCode }}</button>
+    </div>
+
     <div
       v-if="activeCluster"
       class="panorama-map__cluster-picker"
@@ -244,7 +271,7 @@ import {
   isReliefAppearance
 } from './mapReliefGeometry';
 
-import { createMapCalloutPath, layoutMapCallouts, layoutMapLabels } from './mapLabelLayout';
+import { createMapCalloutPath, layoutMapCallouts, layoutMapLabels, layoutPointCallouts } from './mapLabelLayout';
 const props = defineProps({
   geoJson: { type: Object, default: () => ({ type: 'FeatureCollection', features: [] }) },
   points: { type: Array, default: () => [] },
@@ -264,6 +291,7 @@ const props = defineProps({
   demo: { type: Boolean, default: false },
   appearance: { type: String, default: 'classic' },
   labelLayout: { type: String, default: 'inline' },
+  pointLabelLayout: { type: String, default: 'inline' },
   viewFit: { type: Object, default: () => ({}) }
 });
 
@@ -285,6 +313,7 @@ const dragging = ref(false);
 const overlayRevision = ref(0);
 const surfaceReady = ref(false);
 const hoveredRegionCode = ref('');
+const hoveredPointCode = ref('');
 const cityTooltipId = `panorama-city-detail-${getCurrentInstance().uid}`;
 const cityDetailRef = ref(null);
 const cityDetailHeight = ref(420);
@@ -313,6 +342,7 @@ const projection = computed(() => createProjection(props.geoJson));
 const projectedRegions = computed(() => projectGeoJson(props.geoJson, projection.value));
 const appearance = computed(() => (isReliefAppearance(props.appearance) ? 'relief' : 'classic'));
 const isCalloutLayout = computed(() => props.mode === 'province' && props.labelLayout === 'callout');
+const isPointCalloutLayout = computed(() => props.mode === 'city' && props.pointLabelLayout === 'callout');
 const reliefEnabled = computed(() => appearance.value === 'relief');
 const reliefConfig = computed(() => createReliefGeometryConfig({
   worldWidth: projection.value.width,
@@ -332,9 +362,56 @@ const pointClusters = computed(() => clusterPoints(drawablePoints.value, {
   demo: props.demo
 }));
 
+const POINT_CALLOUT_COLORS = ['#67dce8', '#f4c978', '#91bcff', '#bc9bfa', '#85d8a9'];
+const pointCallouts = computed(() => {
+  if (!isPointCalloutLayout.value || !drawablePoints.value.length) return [];
+  void overlayRevision.value;
+  const width = Math.max(1, containerRef.value?.clientWidth || 660);
+  const height = Math.max(1, containerRef.value?.clientHeight || 480);
+  const cardWidth = Math.min(132, width * .225);
+  const maxRows = Math.ceil(drawablePoints.value.length / 2);
+  const cardHeight = Math.min(26, Math.max(18, height * .76 / maxRows - 2));
+  const labels = drawablePoints.value.map((point, index) => {
+    const lng = Number(point.lng ?? point.longitude ?? point.lon);
+    const lat = Number(point.lat ?? point.latitude);
+    const worldPoint = projection.value.project([lng, lat]);
+    const anchor = overlayPoint(worldPoint, reliefEnabled.value
+      ? reliefConfig.value.depth + reliefConfig.value.contourLift + .02 : .42);
+    return {
+      key: `${String(point.orgCode || point.orgName || 'point')}:${index}`,
+      point,
+      anchor,
+      width: cardWidth / width * 100,
+      height: cardHeight / height * 100,
+      cardHeight
+    };
+  }).filter(item => Number.isFinite(item.anchor.x) && Number.isFinite(item.anchor.y));
+  const positions = layoutPointCallouts(labels, {
+    bounds: { left: 2, right: 98, top: 11, bottom: 89 }
+  });
+  return labels.map(item => ({ ...item, position: positions[item.key] }))
+    .filter(item => item.position);
+});
+
+function pointCalloutAccent(point) {
+  const code = String(point?.orgCode || point?.orgName || '');
+  let hash = 0;
+  for (const character of code) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  return POINT_CALLOUT_COLORS[hash % POINT_CALLOUT_COLORS.length];
+}
+
+function pointCalloutCardStyle(entry) {
+  return {
+    left: `${entry.position.label.x}%`,
+    top: `${entry.position.label.y}%`,
+    height: `${entry.cardHeight}px`,
+    '--point-accent': pointCalloutAccent(entry.point)
+  };
+}
+
 // City maps keep every unclustered branch name. Province presentations may hide
 // those names while leaving their point markers and selection available.
-const showPointLabels = computed(() => pointLayerEnabled.value && (props.mode !== 'province' || props.showProvincePointLabels));
+const showPointLabels = computed(() => pointLayerEnabled.value && !isPointCalloutLayout.value && (props.mode !== 'province' || props.showProvincePointLabels));
 
 let panPointerId = null;
 let panOrigin = null;
@@ -705,7 +782,7 @@ function clampViewCenter(center) {
 
 function startPan(event) {
   if (props.mode === 'province' || zoom.value <= 1 || event.isPrimary === false || event.button > 0) return;
-  if (event.target?.closest?.('.panorama-map__controls, .panorama-map__cluster-picker')) return;
+  if (event.target?.closest?.('.panorama-map__controls, .panorama-map__cluster-picker, .panorama-map__point-callout-cards')) return;
   panPointerId = event.pointerId;
   panOrigin = {
     clientX: event.clientX,
@@ -1502,6 +1579,15 @@ onBeforeUnmount(() => {
 .panorama-map[data-label-layout='callout'] .panorama-map__metric-value { color: #8cf3e8; font-size: 10px; font-weight: 600; }
 
 .panorama-map__point-layer { position: absolute; z-index: 3; inset: 0; pointer-events: none; }
+.panorama-map__point-callout-lines { position: absolute; z-index: 4; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.panorama-map__point-callout-line { fill: none; stroke: var(--point-accent); stroke-width: 1.2px; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; opacity: .62; }
+.panorama-map__point-callout-anchor { fill: var(--point-accent); stroke: #e4f7ff; stroke-width: 1px; vector-effect: non-scaling-stroke; opacity: .88; }
+.panorama-map__point-callout-lines .is-active .panorama-map__point-callout-line { stroke-width: 2px; opacity: 1; }
+.panorama-map__point-callout-lines .is-active .panorama-map__point-callout-anchor { stroke-width: 2px; opacity: 1; }
+.panorama-map__point-callout-cards { position: absolute; z-index: 5; inset: 0; pointer-events: none; }
+.panorama-map__point-callout-card { position: absolute; display: block; box-sizing: border-box; width: min(132px, 22.5%); transform: translate(-50%, -50%); padding: 2px 6px 2px 8px; overflow: hidden; border: 1px solid rgba(132, 171, 222, .4); border-left: 3px solid var(--point-accent); border-radius: 5px; color: #e7f3ff; background: rgba(7, 22, 52, .9); box-shadow: 0 2px 8px rgba(0, 6, 25, .36); text-align: left; text-overflow: ellipsis; white-space: nowrap; font: 600 11px/1.2 'PingFang SC', 'Microsoft YaHei', sans-serif; cursor: pointer; pointer-events: auto; }
+.panorama-map__point-callout-card:is(:hover,:focus-visible,.is-active,.is-selected) { border-color: var(--point-accent); border-left-width: 3px; color: #fff; background: #18355e; outline: none; box-shadow: 0 0 0 1px var(--point-accent), 0 3px 11px rgba(0, 6, 25, .5); }
+.panorama-map__point-callout-card.is-selected { font-weight: 750; }
 .panorama-map__point-hit { position: absolute; transform: translate(-50%, -50%); min-width: 22px; min-height: 22px; padding: 0; border: 0; border-radius: 999px; color: #fff; background: transparent; cursor: pointer; pointer-events: auto; }
 .panorama-map__point-dot { display: block; width: 10px; height: 10px; margin: auto; border: 2px solid #83fbff; border-radius: 50%; background: #37dce1; box-shadow: 0 0 8px #37dce1, 0 0 22px rgba(55, 220, 225, .8); }
 .panorama-map__point-hit.is-selected .panorama-map__point-dot { width: 13px; height: 13px; border-color: #f4d5ff; background: #d783ff; box-shadow: 0 0 9px #d783ff, 0 0 28px rgba(215, 131, 255, .95); }
@@ -1519,6 +1605,7 @@ onBeforeUnmount(() => {
 .panorama-map__cluster-member small { color: rgba(197, 225, 255, .68); font-size: 10px; }
 
 .panorama-map__controls { position: absolute; z-index: 5; right: 14px; bottom: 14px; display: grid; gap: 5px; }
+.panorama-map[data-point-label-layout='callout'] .panorama-map__controls { top: 12px; bottom: auto; display: flex; }
 .panorama-map__controls button { width: 32px; height: 32px; border: 1px solid rgba(138, 193, 255, .6); border-radius: 5px; background: rgba(12, 33, 89, .88); color: #dbeaff; font-size: 20px; line-height: 1; cursor: pointer; }
 .panorama-map__controls button:hover, .panorama-map__controls button:focus-visible { border-color: #82f4ff; outline: 2px solid rgba(130, 244, 255, .5); }
 .panorama-map__controls button:disabled { cursor: not-allowed; opacity: .42; }

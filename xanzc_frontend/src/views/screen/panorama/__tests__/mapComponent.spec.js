@@ -135,6 +135,37 @@ describe('PanoramaMap', () => {
     wrapper.unmount();
   });
 
+  it('市级网点标注把 26 家有效网点逐一连到两侧名称卡片，卡片可直接选择机构', async () => {
+    const densePoints = Array.from({ length: 26 }, (_, index) => ({
+      orgCode: `CITY-${index + 1}`,
+      orgName: `测试网点${index + 1}`,
+      cityCode: '610100',
+      lng: 108.7 + (index % 5) * 0.004,
+      lat: 34.2 + (index % 6) * 0.004,
+      coordSys: 'GCJ02',
+      located: true
+    }));
+    const wrapper = mount(PanoramaMap, {
+      props: {
+        geoJson,
+        points: [...densePoints, { orgCode: 'NO-COORD', orgName: '待定位网点', located: false }],
+        mode: 'city',
+        pointLabelLayout: 'callout',
+        selectedOrgCode: 'CITY-1'
+      }
+    });
+    await nextTick();
+    expect(wrapper.attributes('data-point-label-layout')).toBe('callout');
+    expect(wrapper.findAll('[data-testid="map-point-callout-line"]')).toHaveLength(26);
+    expect(wrapper.findAll('[data-testid="map-point-callout-card"]')).toHaveLength(26);
+    expect(wrapper.find('[data-testid="map-point-callout-card"][data-org-code="NO-COORD"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="map-point-callout-card"][data-org-code="CITY-1"]').classes()).toContain('is-selected');
+    expect(wrapper.find('.panorama-map__point-label').exists()).toBe(false);
+    await wrapper.get('[data-testid="map-point-callout-card"][data-org-code="CITY-26"]').trigger('click');
+    expect(wrapper.emitted('branch-select')).toContainEqual(['CITY-26']);
+    wrapper.unmount();
+  });
+
   it('省级真实 GeoJSON 的十个地市都保留可点击标签，不因展示上限截断', async () => {
     const wrapper = mount(PanoramaMap, { props: { geoJson: provinceGeo } });
     await nextTick();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createMapCalloutPath, layoutMapCallouts, layoutMapLabels } from '../mapLabelLayout';
+import { createMapCalloutPath, layoutMapCallouts, layoutMapLabels, layoutPointCallouts } from '../mapLabelLayout';
 describe('投影后地图标签避让', () => {
   it('相邻城市带数值的标签不重叠，且保留地图内边距', () => {
     const labels=Array.from({length:5},(_,i)=>({key:String(i),x:50+i,y:50,width:14,height:10}));
@@ -62,5 +62,58 @@ describe('城市标注视觉排布', () => {
     expect(path).toContain(' C ');
     expect(path).toContain(' L ');
     expect(path.startsWith(`M ${result[0].anchor.x} ${result[0].anchor.y}`)).toBe(true);
+  });
+});
+
+describe('市级网点外围标注排布', () => {
+  const bounds = { left: 8, right: 92, top: 10, bottom: 90 };
+  const labels = Array.from({ length: 26 }, (_, index) => ({
+    key: `branch-${index + 1}`,
+    anchor: {
+      x: index < 13 ? 32 + index * 0.2 : 68 + (index - 13) * 0.2,
+      y: 20 + (index % 13) * 3.5
+    },
+    width: 12,
+    height: 4
+  }));
+
+  it('空列表安全返回空对象', () => {
+    expect(layoutPointCallouts([], { bounds })).toEqual({});
+  });
+
+  it('26 个网点固定分成两列，各 13 个，保留锚点并保持卡片在边界内且不重叠', () => {
+    const positions = layoutPointCallouts(labels, { bounds });
+    const values = Object.values(positions);
+
+    expect(values).toHaveLength(26);
+    expect(values.filter(position => position.side === 'left')).toHaveLength(13);
+    expect(values.filter(position => position.side === 'right')).toHaveLength(13);
+
+    for (const source of labels) {
+      const position = positions[source.key];
+      expect(position.anchor).toEqual(source.anchor);
+      expect(position.points[0]).toEqual([source.anchor.x, source.anchor.y]);
+      expect(position.label.x - source.width / 2).toBeGreaterThanOrEqual(bounds.left);
+      expect(position.label.x + source.width / 2).toBeLessThanOrEqual(bounds.right);
+      expect(position.label.y - source.height / 2).toBeGreaterThanOrEqual(bounds.top);
+      expect(position.label.y + source.height / 2).toBeLessThanOrEqual(bounds.bottom);
+    }
+
+    for (const side of ['left', 'right']) {
+      const rows = values
+        .filter(position => position.side === side)
+        .sort((a, b) => a.label.y - b.label.y);
+      rows.slice(1).forEach((row, index) => {
+        expect(row.label.y - rows[index].label.y).toBeGreaterThanOrEqual(4);
+      });
+      rows.slice(1).forEach((row, index) => {
+        expect(row.anchor.y).toBeGreaterThan(rows[index].anchor.y);
+      });
+    }
+  });
+
+  it('相同输入始终得到相同结果', () => {
+    expect(layoutPointCallouts(labels, { bounds })).toEqual(layoutPointCallouts(labels, { bounds }));
+    expect(layoutPointCallouts([...labels].reverse(), { bounds })).toEqual(layoutPointCallouts(labels, { bounds }));
   });
 });
