@@ -273,11 +273,11 @@ describe('ScreenCenter.vue', () => {
 
     second.resolve([catalog[1]]);
     await flushPromises();
-    expect(wrapper.text()).toContain('零售经营总览');
+    expect(wrapper.find('[data-screen-code="SCR_RETAIL_OVERVIEW"]').exists()).toBe(true);
     first.resolve([catalog[0]]);
     await flushPromises();
-    expect(wrapper.text()).toContain('零售经营总览');
-    expect(wrapper.text()).not.toContain('分行经营总览');
+    expect(wrapper.find('[data-screen-code="SCR_RETAIL_OVERVIEW"]').exists()).toBe(true);
+    expect(wrapper.find('[data-screen-code="SCR_PROVINCE"]').exists()).toBe(false);
   });
 
   it('用户退出后，迟到的菜单和目录响应不能恢复个人入口', async () => {

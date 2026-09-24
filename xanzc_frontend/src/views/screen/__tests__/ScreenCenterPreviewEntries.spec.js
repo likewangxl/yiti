@@ -55,6 +55,7 @@ describe('ScreenCenter 本地演示入口', () => {
     expect(wrapper.find('[data-testid="screen-center-preview-tools"]').exists()).toBe(true);
     expect(wrapper.findAll('[data-action="open-corporate-preview"]')).toHaveLength(1);
     expect(wrapper.findAll('[data-action="open-retail-preview"]')).toHaveLength(1);
+    expect(wrapper.findAll('[data-action="open-branch-preview"]')).toHaveLength(1);
     expect(wrapper.find('[data-testid="screen-center-preview-tools"]').text()).toContain('本地演示 · 非业务数据');
   });
 
@@ -76,6 +77,12 @@ describe('ScreenCenter 本地演示入口', () => {
     await wrapper.get('[data-action="open-retail-preview"]').trigger('click');
     expect(routerPush).toHaveBeenLastCalledWith({
       name: 'RetailScreenPreview',
+      query: { from: 'screen-center' }
+    });
+
+    await wrapper.get('[data-action="open-branch-preview"]').trigger('click');
+    expect(routerPush).toHaveBeenLastCalledWith({
+      name: 'ScreenPreview',
       query: { from: 'screen-center' }
     });
   });

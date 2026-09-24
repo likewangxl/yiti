@@ -48,6 +48,10 @@
           <strong>零售经营总览</strong>
           <span>本地演示 · 非业务数据</span>
         </button>
+        <button type="button" data-action="open-branch-preview" @click="openLocalPreview('ScreenPreview')">
+          <strong>分行经营总览</strong>
+          <span>本地演示 · 非业务数据</span>
+        </button>
       </div>
     </section>
 

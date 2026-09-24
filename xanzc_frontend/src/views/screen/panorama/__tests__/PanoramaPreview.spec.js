@@ -2,8 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 
-const push = vi.fn();
-vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }));
+const { push, route } = vi.hoisted(() => ({
+  push: vi.fn(),
+  route: { query: {} }
+}));
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push }),
+  useRoute: () => route
+}));
 
 const { dashboardStub } = vi.hoisted(() => ({
   dashboardStub: {
@@ -24,6 +30,7 @@ import { demoModel } from '../demoModel.js';
 describe('PanoramaPreview 本地演示入口', () => {
   beforeEach(() => {
     push.mockReset();
+    route.query = {};
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-07T09:00:00+08:00'));
   });
@@ -54,6 +61,15 @@ describe('PanoramaPreview 本地演示入口', () => {
     const wrapper = mount(PanoramaPreview);
     await wrapper.get('[data-action="dashboard-back"]').trigger('click');
     expect(push).toHaveBeenCalledWith('/workspace');
+  });
+
+  it('从大屏中心进入时返回按钮回到大屏中心', async () => {
+    route.query = { from: 'screen-center' };
+    const wrapper = mount(PanoramaPreview);
+
+    await wrapper.get('[data-action="dashboard-back"]').trigger('click');
+
+    expect(push).toHaveBeenCalledWith('/screens');
   });
 
   it('演示标识旁提供配置真实数据入口，点击后交给现有路由守卫', async () => {

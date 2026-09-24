@@ -25,11 +25,12 @@
 
 <script setup>
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import PanoramaDashboard from './PanoramaDashboard.vue';
 import { demoModel } from './demoModel.js';
 
 const router = useRouter();
+const route = useRoute();
 const lastUpdated = ref(formatDemoTime(new Date()));
 
 function formatDemoTime(value) {
@@ -44,7 +45,7 @@ function refreshDemo() {
 
 function goBack() {
   // 工作区仍由全局路由守卫决定是否需要登录，演示页不自行探测会话或请求后端。
-  router.push('/workspace');
+  router.push(route?.query?.from === 'screen-center' ? '/screens' : '/workspace');
 }
 
 function goToDesigner() {
