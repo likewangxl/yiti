@@ -60,7 +60,7 @@
             @keydown.space.prevent.stop="selectRegion(region)"
           />
           <circle
-            v-if="mode === 'province' && regionLabels.some(item => item.key === region.key)"
+            v-if="mode === 'province' && regionLabels.some(item => item.key === region.key) && (isCalloutLayout || metricState(region) !== 'NO_INSTITUTION')"
             :cx="fallbackRegionMarkerPoint(region).x"
             :cy="fallbackRegionMarkerPoint(region).y"
             r="1.55"
@@ -69,9 +69,9 @@
             aria-hidden="true"
           />
         </g>
-        <g v-if="!isCalloutLayout" v-for="region in regionLabels" :key="`${region.key}:label`" class="panorama-map__region-label">
+        <g v-if="!isCalloutLayout" v-for="region in regionLabels" :key="`${region.key}:label`" class="panorama-map__region-label" :class="{ 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }">
           <text :x="region.label.x" :y="region.label.y" role="button" tabindex="0" @click.stop="selectRegion(region)" @keydown.enter.stop="selectRegion(region)">{{ region.name }}</text>
-          <text v-if="metricValues[region.code] != null" :x="region.label.x" :y="region.label.y + 3" data-testid="map-region-metric" class="panorama-map__metric-svg">{{ metricValues[region.code] }}</text>
+          <text v-if="showInlineRegionMetric(region)" :x="region.label.x" :y="region.label.y + 3" data-testid="map-region-metric" class="panorama-map__metric-svg">{{ metricValues[region.code] }}</text>
         </g>
       </svg>
     </div>
@@ -107,7 +107,7 @@
         class="panorama-map__region-label-hit"
         :class="{ 'is-selected': region.code && String(region.code) === String(selectedRegionCode), 'is-hovered': String(region.code) === hoveredRegionCode, 'is-missing': isCalloutLayout && metricValues[region.code] == null, 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }"
         :style="regionLabelStyle(region)"
-        :data-city-code="isCalloutLayout ? region.code : undefined"
+        :data-city-code="region.code"
         :aria-label="`选择${region.name}${metricState(region) === 'NO_INSTITUTION' ? '，无经营机构' : ''}`"
         :aria-describedby="isCalloutLayout && String(region.code) === hoveredRegionCode ? cityTooltipId : undefined"
         @click.stop="selectRegion(region)"
@@ -115,7 +115,7 @@
         @pointerleave="leaveHoveredRegion"
         @focus="setHoveredRegion(region.code)"
         @blur="setHoveredRegion('')"
-      ><span v-if="isCalloutLayout" class="panorama-map__city-marker" aria-hidden="true"></span><span class="panorama-map__city-name">{{ region.name }}</span><small v-if="isCalloutLayout || metricValues[region.code] != null" data-testid="map-region-metric" class="panorama-map__metric-value">{{ isCalloutLayout ? metricDisplayValue(region) : metricValues[region.code] }}</small></button>
+      ><span v-if="isCalloutLayout" class="panorama-map__city-marker" aria-hidden="true"></span><span class="panorama-map__city-name">{{ region.name }}</span><small v-if="isCalloutLayout || showInlineRegionMetric(region)" data-testid="map-region-metric" class="panorama-map__metric-value">{{ isCalloutLayout ? metricDisplayValue(region) : metricValues[region.code] }}</small></button>
     </div>
     <Teleport to="body">
       <aside ref="cityDetailRef" v-if="activeCityDetail" :data-city-code="activeCityDetail.region.code" :id="cityTooltipId" role="tooltip" class="panorama-map__city-detail" :class="{ 'has-institution-metrics': hasInstitutionMetrics }" :style="cityDetailStyle" @pointerenter="keepCityDetail" @pointerleave="leaveHoveredRegion" @focusin="keepCityDetail" @focusout="leaveHoveredRegion" @keydown.esc="setHoveredRegion('')">
@@ -140,7 +140,7 @@
       aria-hidden="true"
     >
       <span
-        v-for="(region, index) in regionLabels"
+        v-for="(region, index) in visibleHaloRegions"
         :key="`${region.key}:halo`"
         class="panorama-map__city-halo"
         :class="{ 'is-violet': index % 2 === 1, 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }"
@@ -254,10 +254,12 @@ const props = defineProps({
   metricNumericValues: { type: Object, default: () => ({}) },
   metricColors: { type: Object, default: () => ({}) },
   regionStates: { type: Object, default: () => ({}) },
+  showRegionMetrics: { type: Boolean, default: true },
   colorByMetric: { type: Boolean, default: false },
   cityDetails: { type: Object, default: () => ({}) },
   mode: { type: String, default: 'province' },
   showProvincePoints: { type: Boolean, default: false },
+  showProvincePointLabels: { type: Boolean, default: true },
   selectedRegionCode: { type: [String, Number], default: null },
   demo: { type: Boolean, default: false },
   appearance: { type: String, default: 'classic' },
@@ -330,10 +332,9 @@ const pointClusters = computed(() => clusterPoints(drawablePoints.value, {
   demo: props.demo
 }));
 
-// A branch name is business information, not optional map decoration. Clustering
-// already collapses points that are too close, so every remaining single point
-// keeps its label even when the city has more than eight branches.
-const showPointLabels = computed(() => pointLayerEnabled.value);
+// City maps keep every unclustered branch name. Province presentations may hide
+// those names while leaving their point markers and selection available.
+const showPointLabels = computed(() => pointLayerEnabled.value && (props.mode !== 'province' || props.showProvincePointLabels));
 
 let panPointerId = null;
 let panOrigin = null;
@@ -452,7 +453,7 @@ const regionLabels = computed(() => {
 
   return candidates.map(region => {
     const base = baseRegionLabelWorldPoint(region);
-    const metricText = props.metricValues[region.code];
+    const metricText = isCalloutLayout.value || showInlineRegionMetric(region) ? props.metricValues[region.code] : null;
     const labelWidth = Math.max(4.5, String(region.name).length * 2.4, metricText == null ? 0 : String(metricText).length * 1.4);
     const labelHeight = metricText == null ? 5 : 8;
     let selected = base;
@@ -480,6 +481,9 @@ const regionLabels = computed(() => {
     };
   });
 });
+const visibleHaloRegions = computed(() => regionLabels.value.filter(region =>
+  isCalloutLayout.value || metricState(region) !== 'NO_INSTITUTION'
+));
 
 function regionLabelWorldPoint(region) {
   return region.labelWorld || baseRegionLabelWorldPoint(region);
@@ -522,7 +526,7 @@ const metricLabelPositions = computed(() => {
   const height=containerRef.value?.clientHeight || 520;
   return layoutMapLabels(regionLabels.value.map(region => {
     const point=webglOverlayPoint(regionLabelWorldPoint(region));
-    const value=props.metricValues[region.code];
+    const value=showInlineRegionMetric(region) ? props.metricValues[region.code] : null;
     return {key:region.key,...point,
       width:Math.max(String(region.name).length*12+10,value==null?0:String(value).length*6.5+10)/width*100,
       height:(value==null?20:34)/height*100};
@@ -532,6 +536,10 @@ const metricLabelPositions = computed(() => {
 function metricDisplayValue(region) {
   const value = props.metricValues?.[region.code];
   return value == null || String(value).trim() === '' ? '暂无数据' : String(value);
+}
+
+function showInlineRegionMetric(region) {
+  return props.showRegionMetrics && metricState(region) !== 'NO_INSTITUTION' && props.metricValues?.[region.code] != null;
 }
 
 function metricState(region) {
@@ -1472,6 +1480,7 @@ onBeforeUnmount(() => {
 .panorama-map__region.is-selected path,
 .panorama-map__region.is-hovered path { fill: rgba(131, 84, 217, .9); stroke: #f3c8ff; outline: none; }
 .panorama-map__region-label text { fill: rgba(227, 239, 255, .88); font-size: 2.1px; text-anchor: middle; pointer-events: auto; cursor: pointer; }
+.panorama-map__region-label.is-no-institution text { fill: #a7b5c7; }
 .panorama-map__city-halo-svg { fill: rgba(75, 233, 255, .78); stroke: rgba(151, 249, 255, .98); stroke-width: .28; pointer-events: none; filter: drop-shadow(0 0 1.1px rgba(73, 235, 255, .95)); }
 .panorama-map__city-halo-svg.is-violet { fill: rgba(188, 116, 255, .78); stroke: rgba(237, 190, 255, .98); filter: drop-shadow(0 0 1.1px rgba(205, 130, 255, .95)); }
 .panorama-map__city-halo-layer { position: absolute; z-index: 2; inset: 0; pointer-events: none; }
@@ -1488,6 +1497,7 @@ onBeforeUnmount(() => {
 .panorama-map__region-label-hit { position: absolute; transform: translate(-50%, -50%); padding: 1px 3px; border: 1px solid transparent; border-radius: 3px; color: rgba(227, 239, 255, .82); background: transparent; text-shadow: 0 1px 3px #05133b, 0 0 5px #05133b; font-size: 11px; white-space: nowrap; cursor: pointer; pointer-events: auto; }
 .panorama-map__region-label-hit:hover, .panorama-map__region-label-hit:focus-visible, .panorama-map__region-label-hit.is-selected, .panorama-map__region-label-hit.is-hovered { border-color: #f0caff; color: #fff1ff; background: rgba(101, 61, 175, .88); outline: 2px solid rgba(210, 160, 255, .32); }
 .panorama-map[data-appearance='relief'] .panorama-map__region-label-hit { color: rgba(237, 247, 255, .94); font-weight: 700; text-shadow: 0 1px 4px #03133d, 0 0 8px #03133d; }
+.panorama-map[data-label-layout='inline'] .panorama-map__region-label-hit.is-no-institution { color: #a7b5c7; }
 .panorama-map[data-label-layout='callout'] .panorama-map__region-label-hit { min-width: 42px; padding: 2px 4px; color: rgba(232, 247, 255, .96); font-weight: 700; line-height: 1.2; text-align: center; text-shadow: 0 1px 4px #03133d, 0 0 8px #03133d; }
 .panorama-map[data-label-layout='callout'] .panorama-map__metric-value { color: #8cf3e8; font-size: 10px; font-weight: 600; }
 

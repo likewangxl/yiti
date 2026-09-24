@@ -33,7 +33,7 @@ const model = {
 };
 
 const mapStub = {
-  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'regionStates', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints'],
+  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'regionStates', 'labelLayout', 'showRegionMetrics', 'showProvincePointLabels', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints'],
   template: '<div data-testid="panorama-map-stub"><button data-city="610100" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">城市</button><button data-org="A" @click="$emit(\'branch-select\', \'A\')">机构</button></div>'
 };
 
@@ -72,6 +72,9 @@ describe('PresentationMapWidget', () => {
     expect(wrapper.getComponent(mapStub).props('regionStates')['610600']).toBe('NO_INSTITUTION');
     expect(wrapper.getComponent(mapStub).props('metricValues')['610600']).toBe('无经营机构');
     expect(wrapper.get('[data-testid="presentation-map-legend-no-institution"]').text()).toContain('无经营机构');
+    expect(wrapper.getComponent(mapStub).props('labelLayout')).toBe('inline');
+    expect(wrapper.getComponent(mapStub).props('showRegionMetrics')).toBe(false);
+    expect(wrapper.getComponent(mapStub).props('showProvincePointLabels')).toBe(false);
   });
 
   it('无坐标机构由旁侧可访问列表进入，并向上发固定上下文事件', async () => {

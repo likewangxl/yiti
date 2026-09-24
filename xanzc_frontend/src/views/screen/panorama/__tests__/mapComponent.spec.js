@@ -196,6 +196,38 @@ describe('PanoramaMap', () => {
     wrapper.unmount();
   });
 
+  it('行内布局仅在无机构地市显示地图内地名，不显示无机构文字和标注线', async () => {
+    const wrapper = mount(PanoramaMap, {
+      props: {
+        geoJson: provinceGeo,
+        points,
+        showProvincePoints: true,
+        showProvincePointLabels: false,
+        labelLayout: 'inline',
+        colorByMetric: true,
+        showRegionMetrics: false,
+        regionStates: { '610200': 'NO_INSTITUTION' },
+        metricValues: { '610100': '11.27亿元', '610200': '无经营机构' },
+        metricNumericValues: { '610100': 11.27, '610200': null },
+        metricColors: { '610100': '#f4c95d', '610200': '#26364d' }
+      }
+    });
+    await nextTick();
+    expect(wrapper.attributes('data-label-layout')).toBe('inline');
+    expect(wrapper.find('[data-testid="map-city-callout-line"]').exists()).toBe(false);
+    const tongchuan = wrapper.findAll('.panorama-map__region-label').find(label => label.text().includes('铜川市'));
+    expect(tongchuan?.text()).toBe('铜川市');
+    expect(tongchuan?.find('[data-testid="map-region-metric"]').exists()).toBe(false);
+    const xian = wrapper.findAll('.panorama-map__region-label').find(label => label.text().includes('西安市'));
+    expect(xian?.text()).toBe('西安市');
+    expect(wrapper.findAll('.panorama-map__city-halo.is-no-institution')).toHaveLength(0);
+    expect(wrapper.findAll('.panorama-map__city-halo-svg.is-no-institution')).toHaveLength(0);
+    expect(wrapper.find('[data-org-code="A"]').exists()).toBe(true);
+    expect(wrapper.find('.panorama-map__point-label').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('无经营机构');
+    wrapper.unmount();
+  });
+
   it('开发环境显式 demo=true 时显示合法演示点，默认仍排除演示点', async () => {
     vi.stubEnv('DEV', true);
     const hidden = mount(PanoramaMap, { props: { geoJson, points: clusteredPoints, mode: 'city' } });
