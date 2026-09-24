@@ -170,6 +170,32 @@ describe('PanoramaMap', () => {
     wrapper.unmount();
   });
 
+  it('无经营机构地市的地图、引线和标签有独立状态，仍能点击进入', async () => {
+    const wrapper = mount(PanoramaMap, {
+      props: {
+        geoJson: provinceGeo,
+        labelLayout: 'callout',
+        colorByMetric: true,
+        regionStates: { '610200': 'NO_INSTITUTION', '610100': 'MISSING' },
+        metricValues: { '610200': '无经营机构', '610100': '暂无数据' },
+        metricNumericValues: { '610200': null, '610100': null },
+        metricColors: { '610200': '#293245', '610100': '#65738a' }
+      }
+    });
+    await nextTick();
+    const noInstitutionPath = wrapper.get('path[data-region-code="610200"]');
+    const missingPath = wrapper.get('path[data-region-code="610100"]');
+    expect(noInstitutionPath.attributes('data-metric-state')).toBe('NO_INSTITUTION');
+    expect(missingPath.attributes('data-metric-state')).toBe('MISSING');
+    expect(wrapper.get('.panorama-map__callout[data-city-code="610200"]').classes()).toContain('is-no-institution');
+    const label = wrapper.get('button[data-city-code="610200"]');
+    expect(label.classes()).toContain('is-no-institution');
+    expect(label.text()).toContain('无经营机构');
+    await label.trigger('click');
+    expect(wrapper.emitted('region-select')).toContainEqual([{ code: '610200', name: '铜川市' }]);
+    wrapper.unmount();
+  });
+
   it('开发环境显式 demo=true 时显示合法演示点，默认仍排除演示点', async () => {
     vi.stubEnv('DEV', true);
     const hidden = mount(PanoramaMap, { props: { geoJson, points: clusteredPoints, mode: 'city' } });

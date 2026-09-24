@@ -3,6 +3,8 @@ import {
   buildMapModel,
   findVisibleMapComponent,
   formatMapMetric,
+  MAP_MISSING_COLOR,
+  MAP_NO_INSTITUTION_COLOR,
   mapContextForCity,
   mapContextForInstitution
 } from '../mapModel';
@@ -58,8 +60,86 @@ describe('S12 MAP 展示适配', () => {
     expect(result.dataDate).toBe('2026-09-22');
     expect(result.viewFit.reliefFitHeight).toBeGreaterThan(0);
     expect(result.metricValues['610100']).toBe('100.00亿元');
-    expect(result.metricStates['610200']).toMatchObject({ state: 'MISSING', color: '#65738a' });
-    expect(result.legend.some(item => item.key === 'missing' && item.color === '#65738a')).toBe(true);
+    expect(result.metricStates['610200']).toMatchObject({ state: 'MISSING', color: MAP_MISSING_COLOR });
+    expect(result.legend.some(item => item.key === 'missing' && item.color === MAP_MISSING_COLOR)).toBe(true);
+  });
+
+  it('省级地图区分无经营机构与有机构但指标缺失的地市', () => {
+    const result = buildMapModel(presentation, model, {
+      metricKey: 'deposit',
+      level: 'province',
+      geoJson: {
+        type: 'FeatureCollection',
+        features: [
+          { properties: { adcode: '610100' } },
+          { properties: { adcode: '610200' } },
+          { properties: { adcode: '610300' } }
+        ]
+      }
+    });
+
+    expect(result.regionStates).toMatchObject({ 610100: 'READY', 610200: 'MISSING', 610300: 'NO_INSTITUTION' });
+    expect(result.noInstitutionRegionCodes).toEqual(['610300']);
+    expect(result.metricStates['610200']).toMatchObject({ state: 'MISSING', text: '暂无数据', color: MAP_MISSING_COLOR });
+    expect(result.metricStates['610300']).toMatchObject({ state: 'NO_INSTITUTION', value: null, text: '无经营机构', color: MAP_NO_INSTITUTION_COLOR });
+    expect(result.metricValues['610300']).toBe('无经营机构');
+    expect(MAP_NO_INSTITUTION_COLOR).not.toBe(MAP_MISSING_COLOR);
+    expect(result.legend.some(item => item.key === 'no-institution' && item.label === '无经营机构' && item.color === MAP_NO_INSTITUTION_COLOR)).toBe(true);
+  });
+
+  it('无机构目录与有效地市汇总同时出现时保留真实指标值', () => {
+    const result = buildMapModel(presentation, {
+      ...model,
+      citySummaries: {
+        ...model.citySummaries,
+        '610300': { kpis: [{ key: 'deposit', value: 5, unit: '亿元' }] }
+      }
+    }, {
+      metricKey: 'deposit',
+      level: 'province',
+      geoJson: { type: 'FeatureCollection', features: [{ properties: { adcode: '610300' } }] }
+    });
+
+    expect(result.regionStates['610300']).toBe('READY');
+    expect(result.metricValues['610300']).toBe('5.00亿元');
+    expect(result.noInstitutionRegionCodes).toEqual([]);
+  });
+
+  it('机构目录为空或存在缺少地市归属的机构时不推断无机构地市', () => {
+    const geoJson = {
+      type: 'FeatureCollection',
+      features: [{ properties: { adcode: '610100' } }, { properties: { adcode: '610300' } }]
+    };
+    const withoutDirectory = buildMapModel(presentation, {
+      ...model,
+      institutions: []
+    }, { metricKey: 'deposit', level: 'province', geoJson });
+    expect(withoutDirectory.regionStates['610300']).toBe('MISSING');
+    expect(withoutDirectory.noInstitutionRegionCodes).toEqual([]);
+
+    const incompleteDirectory = buildMapModel(presentation, {
+      ...model,
+      institutions: [{ orgCode: 'A', cityCode: '610100' }, { orgCode: 'UNKNOWN_CITY' }]
+    }, { metricKey: 'deposit', level: 'province', geoJson });
+    expect(incompleteDirectory.regionStates['610300']).toBe('MISSING');
+    expect(incompleteDirectory.noInstitutionRegionCodes).toEqual([]);
+  });
+
+  it('无经营机构状态只用于省级地图，不影响市级与机构级模型', () => {
+    const geoJson = {
+      type: 'FeatureCollection',
+      features: [{ properties: { adcode: '610300' } }]
+    };
+    const city = buildMapModel(presentation, model, {
+      metricKey: 'deposit', level: 'city', cityCode: '610300', geoJson
+    });
+    const institution = buildMapModel(presentation, model, {
+      metricKey: 'deposit', level: 'institution', selectedOrgCode: 'A', geoJson
+    });
+    expect(city.regionStates['610300']).toBe('MISSING');
+    expect(city.noInstitutionRegionCodes).toEqual([]);
+    expect(institution.regionStates['610300']).toBe('MISSING');
+    expect(institution.noInstitutionRegionCodes).toEqual([]);
   });
 
   it('省级机构点模型提供可定位机构的当前指标文本，未定位机构不生成点值', () => {

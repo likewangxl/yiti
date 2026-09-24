@@ -20,6 +20,7 @@
       :metric-values="mapModel.metricValues"
       :metric-numeric-values="mapModel.metricRawValues"
       :metric-colors="mapModel.metricColors"
+      :region-states="mapModel.regionStates"
       :color-by-metric="true"
       :mode="mode"
       :show-province-points="mode === 'province'"

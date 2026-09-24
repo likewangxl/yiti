@@ -33,7 +33,7 @@ const model = {
 };
 
 const mapStub = {
-  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints'],
+  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'regionStates', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints'],
   template: '<div data-testid="panorama-map-stub"><button data-city="610100" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">城市</button><button data-org="A" @click="$emit(\'branch-select\', \'A\')">机构</button></div>'
 };
 
@@ -61,6 +61,17 @@ describe('PresentationMapWidget', () => {
     expect(wrapper.getComponent(mapStub).props('metricValues')).toMatchObject({ '610100': '100.00亿元' });
     expect(wrapper.getComponent(mapStub).props('showProvincePoints')).toBe(true);
     expect(wrapper.getComponent(mapStub).props('metricValues')).toMatchObject({ A: '20.00亿元' });
+  });
+
+  it('将无经营机构状态传给地图，并在图例中解释专用展示', () => {
+    const mapGeoJson = { ...geoJson, features: [...geoJson.features, { ...geoJson.features[0], properties: { adcode: '610600', name: '延安市' } }] };
+    const wrapper = mount(PresentationMapWidget, {
+      props: { presentation, model, geoJson: mapGeoJson, mode: 'province', metricKey: 'deposit' },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+    expect(wrapper.getComponent(mapStub).props('regionStates')['610600']).toBe('NO_INSTITUTION');
+    expect(wrapper.getComponent(mapStub).props('metricValues')['610600']).toBe('无经营机构');
+    expect(wrapper.get('[data-testid="presentation-map-legend-no-institution"]').text()).toContain('无经营机构');
   });
 
   it('无坐标机构由旁侧可访问列表进入，并向上发固定上下文事件', async () => {

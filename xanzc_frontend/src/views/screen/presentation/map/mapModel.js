@@ -1,6 +1,7 @@
 import { displayUnitLabel, formatDisplayMetric } from '../model/displayMetricsModel';
 
 export const MAP_MISSING_COLOR = '#65738a';
+export const MAP_NO_INSTITUTION_COLOR = '#26364d';
 export const MAP_PALETTE = Object.freeze({
   low: '#3d78ba',
   mid: '#56c7c2',
@@ -117,6 +118,14 @@ function rowsForCity(rows, cityCode) {
   return rows.filter(row => cityCodeOf(row) === cityCode);
 }
 
+function institutionDirectoryCoverage(institutions) {
+  const hasCompleteDirectory = institutions.length > 0 && institutions.every(item => Boolean(cityCodeOf(item)));
+  return {
+    hasCompleteDirectory,
+    cityCodes: hasCompleteDirectory ? new Set(institutions.map(cityCodeOf)) : new Set()
+  };
+}
+
 function regionMetricValue({ cityCode, summaries, rankings, field, metricKey }) {
   const summary = summaries[cityCode];
   const summarySource = summaryMetric(summary, field, metricKey);
@@ -209,7 +218,16 @@ export function mapContextForInstitution(institution = {}, meta = {}) {
 export function buildMapModel(sourcePresentation, inputModel = {}, options = {}) {
   const presentation = presentationOf(sourcePresentation);
   const component = findVisibleMapComponent(presentation);
-  if (!component) return { enabled: false, components: [], metricValues: {}, metricRawValues: {}, metricStates: {}, legend: [] };
+  if (!component) return {
+    enabled: false,
+    components: [],
+    metricValues: {},
+    metricRawValues: {},
+    metricStates: {},
+    regionStates: {},
+    noInstitutionRegionCodes: [],
+    legend: []
+  };
 
   const model = object(inputModel) ? inputModel : {};
   const metric = selectedMetricOf(presentation, component, options.metricKey);
@@ -221,6 +239,8 @@ export function buildMapModel(sourcePresentation, inputModel = {}, options = {})
   const cityCode = text(options.cityCode);
   const selectedOrgCode = text(options.selectedOrgCode);
   const regionCodes = [...new Set([...Object.keys(summaries), ...institutions.map(cityCodeOf), ...featureCodes(options.geoJson)].filter(Boolean))];
+  const directoryCoverage = institutionDirectoryCoverage(institutions);
+  const canMarkNoInstitution = level === 'province' && directoryCoverage.hasCompleteDirectory;
   const rawValues = {};
   const metricValues = {};
   const sourceUnits = {};
@@ -237,14 +257,22 @@ export function buildMapModel(sourcePresentation, inputModel = {}, options = {})
   const max = finiteValues.length ? Math.max(...finiteValues) : 0;
   const metricStates = Object.fromEntries(regionCodes.map(code => {
     const value = rawValues[code];
+    const noInstitution = canMarkNoInstitution && value === null && !directoryCoverage.cityCodes.has(code);
+    const state = noInstitution ? 'NO_INSTITUTION' : value === null ? 'MISSING' : 'READY';
+    const color = noInstitution ? MAP_NO_INSTITUTION_COLOR : colorFor(value, min, max);
+    const textValue = noInstitution ? '无经营机构' : metricValues[code];
     return [code, {
       value,
-      state: value === null ? 'MISSING' : 'READY',
-      color: colorFor(value, min, max),
-      text: metricValues[code],
+      state,
+      color,
+      text: textValue,
       unit: sourceUnits[code]
     }];
   }));
+  const regionStates = Object.fromEntries(Object.entries(metricStates).map(([code, state]) => [code, state.state]));
+  const noInstitutionRegionCodes = Object.entries(regionStates)
+    .filter(([, state]) => state === 'NO_INSTITUTION')
+    .map(([code]) => code);
   const metricColors = Object.fromEntries(Object.entries(metricStates).map(([code, state]) => [code, state.color]));
   const scopedInstitutions = level === 'city'
     ? institutions.filter(item => cityCodeOf(item) === cityCode)
@@ -285,9 +313,11 @@ export function buildMapModel(sourcePresentation, inputModel = {}, options = {})
     direction: metric.direction,
     viewFit: viewFitFor(level),
     dataDate: sourceDate(model, options),
-    metricValues: { ...metricValues, ...pointMetricValues },
+    metricValues: { ...metricValues, ...Object.fromEntries(noInstitutionRegionCodes.map(code => [code, '无经营机构'])), ...pointMetricValues },
     metricRawValues: { ...rawValues, ...pointMetricRawValues },
     metricStates,
+    regionStates,
+    noInstitutionRegionCodes,
     metricColors,
     points,
     locatedPoints,
@@ -297,7 +327,8 @@ export function buildMapModel(sourcePresentation, inputModel = {}, options = {})
       { key: 'high', label: '高', color: MAP_PALETTE.high },
       { key: 'mid', label: '中', color: MAP_PALETTE.mid },
       { key: 'low', label: '低', color: MAP_PALETTE.low },
-      { key: 'missing', label: '暂无数据', color: MAP_MISSING_COLOR }
+      { key: 'missing', label: '暂无数据', color: MAP_MISSING_COLOR },
+      { key: 'no-institution', state: 'NO_INSTITUTION', label: '无经营机构', color: MAP_NO_INSTITUTION_COLOR }
     ]
   };
 }
