@@ -39,10 +39,10 @@
       >{{ metric.label }}</button>
     </div>
 
-    <p v-if="activeMetric?.incomplete" class="institution-ranking-widget__incomplete" data-testid="institution-ranking-incomplete" role="status">
+    <p v-if="!paginate && activeMetric?.incomplete" class="institution-ranking-widget__incomplete" data-testid="institution-ranking-incomplete" role="status">
       {{ activeMetric.summary || '机构数据不完整，未获得机构不会宣称已全部展示' }}
     </p>
-    <p v-else-if="activeMetric" class="institution-ranking-widget__complete" data-testid="institution-ranking-complete" role="status">
+    <p v-else-if="!paginate && activeMetric" class="institution-ranking-widget__complete" data-testid="institution-ranking-complete" role="status">
       {{ activeMetric.summary }}
     </p>
 

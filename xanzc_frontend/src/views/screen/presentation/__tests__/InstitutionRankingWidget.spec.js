@@ -216,6 +216,23 @@ describe('InstitutionRankingWidget', () => {
     expect(visibleRows()).toHaveLength(10);
   });
 
+  it('分行分页模式隐藏排名列表上方的机构完整性汇总，但保留顶部覆盖数字', () => {
+    vi.useFakeTimers();
+    const wrapper = mountWidget({
+      model: {
+        activeMetricKey: 'deposit',
+        metrics: [{ ...model.metrics[0], rankable: rankingRows(11), missing: [], receivedCount: 11, expectedCount: 11, incomplete: false, summary: '已获得 11/11 家授权机构' }]
+      },
+      paginate: true,
+      pageSize: 10,
+      metricCarousel: false
+    });
+
+    expect(wrapper.get('[data-testid="institution-ranking-coverage"]').text()).toContain('11/11');
+    expect(wrapper.find('[data-testid="institution-ranking-complete"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="institution-ranking-incomplete"]').exists()).toBe(false);
+  });
+
   it('分行分页暂停同时停止自动翻页，指标切换和数据变化回到第一页', async () => {
     vi.useFakeTimers();
     const rows = rankingRows(21);
