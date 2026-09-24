@@ -220,16 +220,13 @@ function amountUnitClass(item) {
 .presentation-metric-widget__header small { flex: 0 0 auto; }
 .presentation-metric-widget__value-line { min-width: 0; max-width: 100%; margin-top: 2px; }
 .presentation-metric-widget__value-line--grouped { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; }
-.presentation-metric-widget__value-line--ring { align-items: center; flex-wrap: wrap; gap: 0 8px; min-height: 100px; margin-top: 0; }
+.presentation-metric-widget__value-line--ring { align-items: center; flex-wrap: nowrap; gap: 8px; min-height: 100px; margin-top: 0; }
+.presentation-metric-widget__value-line--ring :deep(.completion-ring-gauge) { width: min(150px, 58%); flex-basis: min(150px, 58%); }
 .presentation-metric-widget__value-line--ring .presentation-metric-widget__month-delta {
-  flex: 0 0 100%;
-  width: 100%;
-  max-width: 100%;
-  margin-top: 2px;
-  overflow-wrap: normal;
-  word-break: normal;
-  white-space: nowrap;
-  font-size: clamp(8px, .66vw, 10px);
+  flex: 1 1 0;
+  width: auto;
+  margin-top: 0;
+  font-size: 10px;
 }
 .presentation-metric-widget--dial .presentation-metric-widget__status { position: static; margin-top: 0; }
 .presentation-metric-widget__value { display: block; min-width: 0; max-width: 100%; margin: 0; color: #f4f8ff; font-size: clamp(18px, 1.55vw, 30px); font-weight: 750; line-height: 1.12; overflow-wrap: anywhere; word-break: break-word; }
