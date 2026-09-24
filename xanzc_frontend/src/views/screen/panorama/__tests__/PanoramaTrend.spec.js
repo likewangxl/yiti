@@ -6,6 +6,7 @@ import { mount } from '@vue/test-utils';
 
 vi.mock('vue-echarts', () => ({
   default: {
+    name: 'ChartSurface',
     props: { option: { type: Object, default: () => ({}) } },
     template: '<div data-testid="chart-option" :data-option="JSON.stringify(option)" />'
   }
@@ -15,6 +16,10 @@ import PanoramaTrend from '../PanoramaTrend.vue';
 
 function chartOption(wrapper) {
   return JSON.parse(wrapper.get('[data-testid="chart-option"]').attributes('data-option'));
+}
+
+function rawChartOption(wrapper) {
+  return wrapper.getComponent({ name: 'ChartSurface' }).props('option');
 }
 
 describe('PanoramaTrend', () => {
@@ -64,5 +69,42 @@ describe('PanoramaTrend', () => {
     const balanceButton = wrapper.get('[data-trend-mode="deposit"]');
     expect(balanceButton.attributes('disabled')).toBeUndefined();
     expect(chartOption(wrapper).series.map(item => item.name)).toEqual(['贷款余额']);
+  });
+
+  it('分行长金额趋势使用简明轴单位，隐藏重叠点标签且 tooltip 保留原值', () => {
+    const wrapper = mount(PanoramaTrend, {
+      props: {
+        amountFriendly: true,
+        trend: [
+          { date: '2026-08', deposit: 2221766695.77, loan: 1847721045.09 },
+          { date: '2026-09', deposit: 2221766695.77, loan: 1847721045.09 }
+        ]
+      }
+    });
+    const option = rawChartOption(wrapper);
+    expect(option.yAxis.axisLabel.formatter(2221766695.77)).toBe('22.22亿');
+    expect(option.series.every(item => item.label.show === false)).toBe(true);
+    const tooltip = option.tooltip.formatter([
+      { axisValue: '2026-08', seriesName: '存款余额', value: 2221766695.77, marker: '' },
+      { axisValue: '2026-08', seriesName: '贷款余额', value: 1847721045.09, marker: '' }
+    ]);
+    expect(tooltip).toContain('2,221,766,695.77');
+    expect(tooltip).toContain('1,847,721,045.09');
+  });
+
+  it('分行 tooltip 对日期和序列名称做 HTML 转义', () => {
+    const wrapper = mount(PanoramaTrend, {
+      props: {
+        amountFriendly: true,
+        trend: [{ date: '<2026&09>', deposit: 2221766695.77 }],
+        series: [{ key: 'deposit', label: '<存款&余额>', color: '#42e8ef' }]
+      }
+    });
+    const tooltip = rawChartOption(wrapper).tooltip.formatter([
+      { axisValue: '<2026&09>', seriesName: '<存款&余额>', value: 2221766695.77, marker: '' }
+    ]);
+    expect(tooltip).toContain('&lt;2026&amp;09&gt;');
+    expect(tooltip).toContain('&lt;存款&amp;余额&gt;');
+    expect(tooltip).not.toContain('<2026&09>');
   });
 });

@@ -108,31 +108,46 @@
         :data-layout-column="column.key"
         :aria-label="column.label"
       >
-        <div
-          v-for="component in column.components"
-          :key="component.componentId"
-          class="presentation-layout__component"
-          :class="[
-            `presentation-layout__component--${String(component.componentType || '').toLowerCase()}`,
-            component.componentType === 'MAP' ? 'presentation-layout__component--map-primary' : ''
-          ]"
-          data-testid="presentation-layout-component"
-          :data-component-id="component.componentId"
-          :data-component-type="component.componentType"
-          :data-layout-region="component.layoutRegion"
-          :data-order="component.order"
-          :data-visible-rows="isBranchOverview && component.componentType === 'RANKING' ? 10 : undefined"
-        >
-          <component
-            :is="widgetComponent(component)"
-            v-bind="widgetProps(component)"
-            @region-select="onRegionSelect"
-            @branch-select="onBranchSelect"
-            @map-context="onMapContext"
-            @metric-change="onMetricChange"
-            @business-line-select="onBusinessLineSelect"
-          />
-        </div>
+        <template v-for="component in column.components" :key="component.componentId">
+          <div
+            v-if="isBranchTrendGroup(column, component)"
+            class="presentation-layout__component presentation-layout__component--trend presentation-layout__component--trend-tabs"
+            data-testid="presentation-layout-trend-group"
+            data-component-type="TREND"
+            data-layout-region="CENTER"
+            :data-trend-count="branchTrendComponents.length"
+          >
+            <SeriesTableWidgets
+              :components="branchTrendSeriesComponents"
+              :tabbed="branchTrendComponents.length > 1"
+              trend-display-mode="branch"
+            />
+          </div>
+          <div
+            v-else-if="!isBranchTrendComponent(column, component)"
+            class="presentation-layout__component"
+            :class="[
+              `presentation-layout__component--${String(component.componentType || '').toLowerCase()}`,
+              component.componentType === 'MAP' ? 'presentation-layout__component--map-primary' : ''
+            ]"
+            data-testid="presentation-layout-component"
+            :data-component-id="component.componentId"
+            :data-component-type="component.componentType"
+            :data-layout-region="component.layoutRegion"
+            :data-order="component.order"
+            :data-visible-rows="isBranchOverview && component.componentType === 'RANKING' ? 10 : undefined"
+          >
+            <component
+              :is="widgetComponent(component)"
+              v-bind="widgetProps(component)"
+              @region-select="onRegionSelect"
+              @branch-select="onBranchSelect"
+              @map-context="onMapContext"
+              @metric-change="onMetricChange"
+              @business-line-select="onBusinessLineSelect"
+            />
+          </div>
+        </template>
       </section>
     </section>
 
@@ -258,22 +273,24 @@ function sortCenterComponents(items) {
     || (Number.isInteger(left.order) ? left.order : 0) - (Number.isInteger(right.order) ? right.order : 0));
 }
 
+const branchTrendComponents = computed(() => isBranchOverview.value
+  ? components.value.filter(component => component.layoutRegion === 'CENTER' && component.componentType === 'TREND')
+  : []);
+const branchTrendSeriesComponents = computed(() => branchTrendComponents.value.flatMap(component => seriesComponents(component)));
+
 const mainColumns = computed(() => {
   const leftComponents = components.value.filter(component => component.layoutRegion === 'LEFT');
   const centerComponents = components.value.filter(component => component.layoutRegion === 'CENTER');
-  const branchTrendComponents = isBranchOverview.value
-    ? centerComponents.filter(component => component.componentType === 'TREND')
-    : [];
   return [
     {
       key: 'LEFT',
       label: '左侧业务结构',
-      components: [...leftComponents, ...branchTrendComponents]
+      components: [...leftComponents, ...branchTrendComponents.value]
     },
     {
       key: 'CENTER',
       label: isBranchOverview.value ? '中央地图' : '中央地图与趋势',
-      components: sortCenterComponents(centerComponents.filter(component => !branchTrendComponents.includes(component)))
+      components: sortCenterComponents(centerComponents.filter(component => !branchTrendComponents.value.includes(component)))
     },
     { key: 'RIGHT', label: '右侧机构排名', components: components.value.filter(component => component.layoutRegion === 'RIGHT') }
   ];
@@ -283,6 +300,20 @@ const footerRegions = computed(() => [
   { key: 'BOTTOM', label: '明细数据', components: components.value.filter(component => component.layoutRegion === 'BOTTOM') },
   { key: 'OVERLAY', label: '叠加内容', components: components.value.filter(component => component.layoutRegion === 'OVERLAY') }
 ].filter(region => region.components.length));
+
+function isBranchTrendGroup(column, component) {
+  return isBranchOverview.value
+    && column.key === 'LEFT'
+    && component.componentType === 'TREND'
+    && component.componentId === branchTrendComponents.value[0]?.componentId;
+}
+
+function isBranchTrendComponent(column, component) {
+  return isBranchOverview.value
+    && column.key === 'LEFT'
+    && component.componentType === 'TREND'
+    && branchTrendComponents.value.some(item => item.componentId === component.componentId);
+}
 
 const metricsModel = computed(() => buildDisplayMetricsModel(resolvedPresentation.value, props.model));
 const seriesModel = computed(() => buildDisplaySeriesTableModel(resolvedPresentation.value, props.model));
@@ -608,7 +639,7 @@ function onMapContext(payload) {
 .presentation-layout--branch-overview .presentation-layout__column--branch-overview {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: minmax(0, 1fr) 225px;
+  grid-template-rows: minmax(0, 1fr) 250px;
   align-items: stretch;
   gap: 10px;
 }
@@ -621,10 +652,14 @@ function onMapContext(payload) {
 }
 
 .presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component--trend {
-  min-height: 225px;
-  height: 225px;
+  min-height: 250px;
+  height: 250px;
   flex: none;
   grid-row: 2;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component--trend-tabs {
+  grid-column: 1 / -1;
 }
 
 /* 三个业务结构环在固定主区里压缩装饰间距，保留名称、数值和图例的完整可读内容。 */
@@ -750,9 +785,9 @@ function onMapContext(payload) {
     gap: 10px;
   }
   .presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component--trend {
-    height: 225px;
-    min-height: 225px;
-    flex: 0 0 225px;
+    height: 250px;
+    min-height: 250px;
+    flex: 0 0 250px;
   }
   .presentation-layout__footer--bottom > .presentation-layout__component { min-height: 210px; }
 }

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
 import SeriesTableWidgets from '../widgets/SeriesTableWidgets.vue';
 
@@ -31,5 +32,42 @@ describe('SeriesTableWidgets', () => {
 
     expect(wrapper.find('td').text()).toBe(unsafe);
     expect(wrapper.find('script').exists()).toBe(false);
+  });
+
+  it('趋势页签模式保留全部趋势数据且一次只显示一张', async () => {
+    const wrapper = mount(SeriesTableWidgets, { attachTo: document.body, props: {
+      tabbed: true,
+      trendDisplayMode: 'branch',
+      components: [
+        { componentId: 'trend-a', componentType: 'TREND', title: '存款余额趋势', state: 'READY', rows: [{ date: '2026-01', value: 1 }], series: [{ key: 'value', label: '存款余额' }], issues: [] },
+        { componentId: 'trend-b', componentType: 'TREND', title: '支行趋势', state: 'READY', rows: [{ date: '2026-01', value: 2 }], series: [{ key: 'value', label: '支行存款' }], issues: [] }
+      ]
+    } });
+    const tabs = wrapper.findAll('[data-trend-tab]');
+    expect(tabs).toHaveLength(2);
+    expect(tabs[0].attributes('role')).toBe('tab');
+    expect(tabs[0].attributes('aria-selected')).toBe('true');
+    expect(tabs[0].attributes('tabindex')).toBe('0');
+    expect(tabs[1].attributes('tabindex')).toBe('-1');
+    expect(wrapper.get('[role="tabpanel"]').attributes('aria-labelledby')).toBe(tabs[0].attributes('id'));
+    expect(wrapper.get('[data-component-id="trend-a"]').isVisible()).toBe(true);
+    expect(wrapper.find('[data-component-id="trend-b"]').exists()).toBe(false);
+
+    await tabs[1].trigger('click');
+    expect(tabs[1].attributes('aria-selected')).toBe('true');
+    expect(wrapper.get('[data-component-id="trend-b"]').exists()).toBe(true);
+    expect(wrapper.find('[data-component-id="trend-a"]').exists()).toBe(false);
+    expect(wrapper.get('[data-component-id="trend-b"]').isVisible()).toBe(true);
+
+    await tabs[1].trigger('keydown', { key: 'Home' });
+    expect(wrapper.findAll('[data-trend-tab]')[0].attributes('aria-selected')).toBe('true');
+    await wrapper.findAll('[data-trend-tab]')[0].trigger('keydown', { key: 'ArrowRight' });
+    await nextTick();
+    expect(wrapper.findAll('[data-trend-tab]')[1].attributes('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(wrapper.findAll('[data-trend-tab]')[1].element);
+    await wrapper.findAll('[data-trend-tab]')[1].trigger('keydown', { key: 'ArrowRight' });
+    await nextTick();
+    expect(wrapper.findAll('[data-trend-tab]')[0].attributes('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(wrapper.findAll('[data-trend-tab]')[0].element);
   });
 });

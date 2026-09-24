@@ -60,7 +60,7 @@ const presentation = {
 
 const stubs = {
   MetricDisplayWidgets: { props: ['components', 'grouped'], template: '<div data-testid="metric-widget" :data-grouped="grouped ? \'true\' : \'false\'"><span v-for="item in components" :key="item.componentId">{{ item.componentId }}</span></div>' },
-  SeriesTableWidgets: { props: ['components'], template: '<div data-testid="series-widget"><span v-for="item in components" :key="item.componentId">{{ item.componentId }}</span></div>' },
+  SeriesTableWidgets: { props: ['components', 'tabbed', 'trendDisplayMode'], template: '<div data-testid="series-widget" :data-tabbed="tabbed ? \'true\' : \'false\'" :data-trend-display-mode="trendDisplayMode"><span v-for="item in components" :key="item.componentId" data-testid="series-component">{{ item.componentId }}</span></div>' },
   CompositionTabsWidget: { props: ['model'], template: '<div data-testid="structure-widget">{{ model.components?.[0]?.componentId }}</div>' },
   InstitutionRankingWidget: { props: ['model', 'title', 'paginate', 'pageSize', 'pageInterval', 'metricCarousel'], template: '<div data-testid="ranking-widget" :data-paginate="paginate ? \'true\' : \'false\'" :data-page-size="pageSize" :data-page-interval="pageInterval" :data-metric-carousel="metricCarousel ? \'true\' : \'false\'">{{ title }}</div>' },
   PresentationMapWidget: { props: ['presentation'], template: '<div data-testid="map-widget">地图</div>' }
@@ -235,13 +235,18 @@ describe('PresentationLayout', () => {
 
     expect(wrapper.find('.presentation-layout--branch-overview').exists()).toBe(true);
     expect(wrapper.find('[data-layout-column="LEFT"]').findAll('[data-testid="presentation-layout-component"]')
-      .map(node => node.attributes('data-component-id'))).toEqual(['structure', 'trend', 'branch-trend']);
+      .map(node => node.attributes('data-component-id'))).toEqual(['structure']);
+    const trendGroup = wrapper.get('[data-testid="presentation-layout-trend-group"]');
+    expect(trendGroup.classes()).toContain('presentation-layout__component--trend-tabs');
+    expect(trendGroup.attributes('data-trend-count')).toBe('2');
+    expect(trendGroup.findAll('[data-testid="series-component"]').map(node => node.text())).toEqual(['trend', 'branch-trend']);
+    expect(trendGroup.get('[data-testid="series-widget"]').attributes()).toMatchObject({ 'data-tabbed': 'true', 'data-trend-display-mode': 'branch' });
     expect(wrapper.find('[data-layout-column="CENTER"]').findAll('[data-testid="presentation-layout-component"]')
       .map(node => node.attributes('data-component-id'))).toEqual(['map']);
-    expect(wrapper.find('[data-component-id="trend"]').attributes('data-layout-region')).toBe('CENTER');
+    expect(trendGroup.attributes('data-layout-region')).toBe('CENTER');
     expect(wrapper.get('[data-testid="presentation-layout-main"]').classes()).toContain('presentation-layout__main--branch-overview');
     expect(wrapper.get('[data-layout-column="LEFT"]').classes()).toContain('presentation-layout__column--branch-overview');
-    expect(wrapper.get('[data-layout-column="LEFT"]').findAll('.presentation-layout__component--trend')).toHaveLength(2);
+    expect(wrapper.get('[data-layout-column="LEFT"]').findAll('.presentation-layout__component--trend')).toHaveLength(1);
     expect(wrapper.get('[data-layout-column="RIGHT"] .presentation-layout__component--ranking').attributes('data-visible-rows')).toBe('10');
     expect(wrapper.get('[data-testid="ranking-widget"]').attributes()).toMatchObject({
       'data-paginate': 'true', 'data-page-size': '10', 'data-page-interval': '5000', 'data-metric-carousel': 'false'

@@ -56,6 +56,7 @@ const props = defineProps({
   dataDate: { type: String, default: '' },
   compact: { type: Boolean, default: false },
   switchable: { type: Boolean, default: false },
+  amountFriendly: { type: Boolean, default: false },
   series: {
     type: Array,
     default: null
@@ -114,6 +115,41 @@ function formatPointValue(value) {
   return number === null ? '' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(number);
 }
 
+function formatRawValue(value) {
+  const number = finiteValue(Array.isArray(value) ? value[value.length - 1] : value);
+  return number === null ? '—' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 20 }).format(number);
+}
+
+function escapeTooltipText(value) {
+  return String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[character]));
+}
+
+const amountScale = computed(() => {
+  const values = optionSeries.value.flatMap(item => item.data)
+    .map(value => finiteValue(value))
+    .filter(value => value !== null);
+  const maxAbs = values.reduce((max, value) => Math.max(max, Math.abs(value)), 0);
+  if (maxAbs >= 100000000) return { divisor: 100000000, suffix: '亿' };
+  if (maxAbs >= 10000) return { divisor: 10000, suffix: '万' };
+  return { divisor: 1, suffix: '' };
+});
+
+function formatCompactValue(value) {
+  const number = finiteValue(value);
+  if (number === null) return '';
+  const scaled = number / amountScale.value.divisor;
+  const digits = Math.abs(scaled) >= 100 ? 0 : 2;
+  return `${Number(scaled.toFixed(digits))}${amountScale.value.suffix}`;
+}
+
+function tooltipFormatter(params) {
+  const items = Array.isArray(params) ? params : [params];
+  const axisLabel = escapeTooltipText(items[0]?.axisValueLabel ?? items[0]?.axisValue ?? '');
+  return [axisLabel, ...items.map(item => `${item?.marker || ''}${escapeTooltipText(item?.seriesName || '')}: ${formatRawValue(item?.value)}`)].join('<br/>');
+}
+
 const optionSeries = computed(() => normalizedSeries.value.map(item => {
   const pointCount = sourceRows.value.length;
   return {
@@ -125,7 +161,7 @@ const optionSeries = computed(() => normalizedSeries.value.map(item => {
     symbol: 'circle',
     symbolSize: 5,
     label: {
-      show: true,
+      show: props.amountFriendly ? false : true,
       position: 'top',
       color: item.color,
       fontSize: 10,
@@ -168,7 +204,8 @@ const option = computed(() => ({
     axisPointer: { type: 'line' },
     backgroundColor: 'rgba(7, 18, 53, .96)',
     borderColor: 'rgba(117, 158, 255, .38)',
-    textStyle: { color: '#e8efff', fontSize: 12 }
+    textStyle: { color: '#e8efff', fontSize: 12 },
+    ...(props.amountFriendly ? { formatter: tooltipFormatter } : {})
   },
   legend: {
     show: normalizedSeries.value.length > 1,
@@ -191,7 +228,11 @@ const option = computed(() => ({
     splitNumber: 3,
     axisLine: { show: false },
     axisTick: { show: false },
-    axisLabel: { color: '#8ea5d2', fontSize: 10 },
+    axisLabel: {
+      color: '#8ea5d2',
+      fontSize: 10,
+      ...(props.amountFriendly ? { formatter: formatCompactValue } : {})
+    },
     splitLine: { lineStyle: { color: 'rgba(104, 143, 217, .12)' } }
   },
   series: optionSeries.value
