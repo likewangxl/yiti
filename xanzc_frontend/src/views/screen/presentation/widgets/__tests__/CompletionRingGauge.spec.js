@@ -1,50 +1,49 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import CompletionRingGauge from '../CompletionRingGauge.vue';
 
-const CIRCUMFERENCE = 2 * Math.PI * 29;
+vi.mock('vue-echarts', () => ({
+  default: { name: 'VChart', props: ['option'], template: '<div class="chart-stub" />' }
+}));
+
+const optionOf = wrapper => wrapper.findComponent({ name: 'VChart' }).props('option').series[0];
 
 describe('CompletionRingGauge', () => {
+  it('使用带 0 到 100 刻度、青蓝红分段和指针的 ECharts 百分比仪表盘', () => {
+    const wrapper = mount(CompletionRingGauge, { props: { text: '90.64%', value: 90.64, accent: '#4de8ef' } });
+    const option = optionOf(wrapper);
+
+    expect(wrapper.find('[data-testid="completion-ring-value"]').text()).toBe('90.64%');
+    expect(wrapper.attributes('data-progress')).toBe('90.64');
+    expect(option).toMatchObject({
+      type: 'gauge', min: 0, max: 100, splitNumber: 10,
+      pointer: { show: true }, data: [{ value: 90.64 }]
+    });
+    expect(option.startAngle - option.endAngle).toBeGreaterThan(180);
+    expect(option.axisLine.lineStyle.color).toHaveLength(3);
+    expect(option.axisLabel.show).toBe(true);
+    expect(option.axisTick.show).toBe(true);
+    expect(option.splitLine.show).toBe(true);
+    expect(JSON.stringify(option)).not.toMatch(/km\/h|速度/);
+  });
+
   it.each([
-    { text: '90.64%', value: 90.64, accent: '#4de8ef' },
-    { text: '86.44%', value: 86.44, accent: '#a979ff' }
-  ])('保留中心百分比文本并按数值绘制环进度：$text', ({ text, value, accent }) => {
-    const wrapper = mount(CompletionRingGauge, { props: { text, value, accent } });
-
+    { value: 125, text: '125.00%', progress: 100 },
+    { value: -4, text: '-4.00%', progress: 0 }
+  ])('真实文本保留 $text，但指针限制在 0 到 100', ({ value, text, progress }) => {
+    const wrapper = mount(CompletionRingGauge, { props: { text, value } });
     expect(wrapper.find('[data-testid="completion-ring-value"]').text()).toBe(text);
-    expect(wrapper.attributes('data-state')).toBe('READY');
-    expect(wrapper.attributes('data-progress')).toBe(String(value));
-    expect(wrapper.attributes('style')).toContain(`--completion-ring-accent: ${accent}`);
-    expect(Number(wrapper.find('[data-testid="completion-ring-progress"]').attributes('stroke-dashoffset')))
-      .toBeCloseTo(CIRCUMFERENCE * (1 - value / 100), 5);
+    expect(wrapper.attributes('data-progress')).toBe(String(progress));
+    expect(optionOf(wrapper).data[0].value).toBe(progress);
   });
 
-  it('超出100时保留真实中心文本，但环形进度封顶100', () => {
-    const wrapper = mount(CompletionRingGauge, { props: { text: '125.00%', value: 125 } });
-
-    expect(wrapper.find('[data-testid="completion-ring-value"]').text()).toBe('125.00%');
-    expect(wrapper.attributes('data-progress')).toBe('100');
-    expect(Number(wrapper.find('[data-testid="completion-ring-progress"]').attributes('stroke-dashoffset')))
-      .toBeCloseTo(0, 5);
-  });
-
-  it('负值环进度为0但保留真实中心文本', () => {
-    const wrapper = mount(CompletionRingGauge, { props: { text: '-4.00%', value: -4 } });
-
-    expect(wrapper.find('[data-testid="completion-ring-value"]').text()).toBe('-4.00%');
-    expect(wrapper.attributes('data-progress')).toBe('0');
-    expect(Number(wrapper.find('[data-testid="completion-ring-progress"]').attributes('stroke-dashoffset')))
-      .toBeCloseTo(CIRCUMFERENCE, 5);
-  });
-
-  it('缺数显示空环和待接入文本，不把缺失值伪装为0%', () => {
+  it('缺数显示空值，不绘制指针，也不伪装成 0%', () => {
     const wrapper = mount(CompletionRingGauge, { props: { text: '待接入', value: null } });
-
-    expect(wrapper.find('[data-testid="completion-ring-value"]').text()).toBe('待接入');
+    expect(wrapper.find('[data-testid="completion-ring-value"]').text()).toBe('—');
+    expect(wrapper.attributes('aria-label')).toContain('待接入');
     expect(wrapper.attributes('data-state')).toBe('MISSING');
-    expect(wrapper.attributes('data-progress')).toBe('0');
-    expect(Number(wrapper.find('[data-testid="completion-ring-progress"]').attributes('stroke-dashoffset')))
-      .toBeCloseTo(CIRCUMFERENCE, 5);
+    expect(optionOf(wrapper).pointer.show).toBe(false);
+    expect(optionOf(wrapper).data).toEqual([]);
   });
 });

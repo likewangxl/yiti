@@ -8,6 +8,7 @@
         `presentation-metric-widget--${String(item.componentType || '').toLowerCase()}`,
         `presentation-metric-widget--${String(item.layoutRegion || '').toLowerCase()}`,
         grouped ? 'presentation-metric-widget--grouped' : '',
+        shouldUseCompletionRing(item) ? 'presentation-metric-widget--dial' : '',
         toneClass(item)
       ]"
       :data-component-id="item.componentId"
@@ -193,6 +194,8 @@ function toneClass(item) {
   box-shadow: 0 0 12px rgba(77, 232, 239, .12);
 }
 .presentation-metric-widget__content { display: grid; min-width: 0; width: 100%; align-content: center; gap: 4px; }
+.presentation-metric-widget--dial { min-height: 136px; padding-top: 7px; padding-bottom: 7px; }
+.presentation-metric-widget--dial .presentation-metric-widget__content { gap: 0; }
 .presentation-metric-widget--completion { --metric-accent: var(--panorama-violet, #a979ff); --metric-border: rgba(169, 121, 255, .48); background: rgba(19, 24, 74, .88); }
 .presentation-metric-widget--cyan { --metric-accent: var(--panorama-cyan, #4de8ef); --metric-border: rgba(77, 232, 239, .42); }
 .presentation-metric-widget--violet { --metric-accent: var(--panorama-violet, #a979ff); --metric-border: rgba(169, 121, 255, .48); background: rgba(19, 24, 74, .88); }
@@ -206,8 +209,9 @@ function toneClass(item) {
 .presentation-metric-widget__header small { flex: 0 0 auto; }
 .presentation-metric-widget__value-line { min-width: 0; max-width: 100%; margin-top: 2px; }
 .presentation-metric-widget__value-line--grouped { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; }
-.presentation-metric-widget__value-line--ring { align-items: center; flex-wrap: nowrap; gap: 8px; min-height: 64px; }
+.presentation-metric-widget__value-line--ring { align-items: center; flex-wrap: nowrap; gap: 4px; min-height: 100px; margin-top: 0; }
 .presentation-metric-widget__value-line--ring .presentation-metric-widget__month-delta { flex: 1 1 0; }
+.presentation-metric-widget--dial .presentation-metric-widget__status { position: absolute; right: 12px; bottom: 7px; }
 .presentation-metric-widget__value { display: block; min-width: 0; max-width: 100%; margin: 0; color: #f4f8ff; font-size: clamp(18px, 1.55vw, 30px); font-weight: 750; line-height: 1.12; overflow-wrap: anywhere; word-break: break-word; }
 .presentation-metric-widget__value-line--grouped .presentation-metric-widget__value { display: inline; }
 .presentation-metric-widget__month-delta { min-width: 0; max-width: 100%; color: var(--panorama-text-dim, #8fa9db); font-size: 10px; font-weight: 550; line-height: 1.25; overflow-wrap: anywhere; word-break: break-word; }

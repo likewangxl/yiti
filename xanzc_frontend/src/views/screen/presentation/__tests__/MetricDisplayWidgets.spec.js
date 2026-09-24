@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import MetricDisplayWidgets from '../widgets/MetricDisplayWidgets.vue';
+
+vi.mock('vue-echarts', () => ({
+  default: { name: 'VChart', props: ['option'], template: '<div class="chart-stub" />' }
+}));
 
 describe('MetricDisplayWidgets', () => {
   it('渲染多实例身份、布局区域、完成进度及空值状态', () => {
@@ -114,7 +118,7 @@ describe('MetricDisplayWidgets', () => {
     expect(genericWrapper.find('[data-testid="presentation-metric-month-delta"]').exists()).toBe(false);
   });
 
-  it('仅分组的四张显式完成率指标卡使用环形图，并保留图标和较上月行', () => {
+  it('仅分组的四张显式完成率指标卡使用仪表盘，并保留图标和较上月行', () => {
     const rateIds = [
       'business-retail-deposit-rate',
       'business-retail-loan-rate',
@@ -167,7 +171,7 @@ describe('MetricDisplayWidgets', () => {
     expect(wrapper.find('[data-component-id="legacy-completion"] [data-testid="completion-ring-gauge"]').exists()).toBe(false);
   });
 
-  it('按零售/对公与存款/贷款维度为四张完成率圆环使用互不重复的颜色', () => {
+  it('按零售/对公与存款/贷款维度为四张完成率仪表盘保留互不重复的强调色', () => {
     const accentsById = {
       'business-retail-deposit-rate': 'var(--panorama-cyan, #4de8ef)',
       'business-retail-loan-rate': 'var(--panorama-blue, #5896ff)',
