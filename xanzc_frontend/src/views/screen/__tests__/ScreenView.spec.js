@@ -27,8 +27,9 @@ const stubs = {
   PanoramaRuntime: {
     name: 'PanoramaRuntime',
     template: '<div class="stub-panorama-runtime" :data-screen="view?.screenName" '
-      + ':data-context="JSON.stringify(context)" :data-batch-required="String(batchRequired)" />',
-    props: ['view', 'context', 'batchRequired']
+      + ':data-context="JSON.stringify(context)" :data-batch-required="String(batchRequired)" '
+      + ':data-back-path="backPath || \'\'" />',
+    props: ['view', 'context', 'batchRequired', 'backPath']
   }
 };
 
@@ -71,6 +72,31 @@ describe('ScreenView.vue', () => {
     expect(wrapper.find('.scr-title').exists()).toBe(false);
     expect(wrapper.find('button.scr-back').exists()).toBe(true);
     expect(wrapper.find('.scr-clock').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="screen-draft-preview"]').text()).toContain('未发布草稿预览');
+  });
+
+  it('草稿全景从大屏中心进入时固定返回大屏中心，直达时保留默认返回行为', async () => {
+    routeState.query = { preview: 'draft', from: 'screen-center' };
+    getScreenViewMock.mockResolvedValue({
+      screenName: '草稿分行总览', state: 'draft',
+      renderPackageJson: JSON.stringify({ canvasStyle: { presentation: { type: 'CODE', template: 'branch-overview-v1' } }, components: [] }),
+      mapPoints: []
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(wrapper.find('.stub-panorama-runtime').attributes('data-back-path')).toBe('/screens');
+    expect(wrapper.find('[data-testid="screen-draft-preview"]').text()).toContain('未发布草稿预览');
+
+    wrapper.unmount();
+    routeState.query = { preview: 'draft' };
+    getScreenViewMock.mockResolvedValue({
+      screenName: '直达草稿分行总览', state: 'draft',
+      renderPackageJson: JSON.stringify({ canvasStyle: { presentation: { type: 'CODE', template: 'branch-overview-v1' } }, components: [] }),
+      mapPoints: []
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(wrapper.find('.stub-panorama-runtime').attributes('data-back-path')).toBe('');
   });
 
   it('后端返回正式态时即使 URL 带 preview=draft 也继续显示标题', async () => {
@@ -84,6 +110,7 @@ describe('ScreenView.vue', () => {
     expect(wrapper.find('.scr-title').text()).toBe('正式大屏');
     expect(wrapper.find('button.scr-back').exists()).toBe(true);
     expect(wrapper.find('.scr-clock').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="screen-draft-preview"]').exists()).toBe(false);
   });
 
   it('返回入口是真实 button，具备键盘原生语义而不是可点击 span', async () => {

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 
-const { listAvailableScreens, routerPush, menuStore } = vi.hoisted(() => ({
+const { listAvailableScreens, routerPush, menuStore, permissionStore } = vi.hoisted(() => ({
   listAvailableScreens: vi.fn(),
   routerPush: vi.fn(),
   menuStore: {
@@ -11,10 +11,17 @@ const { listAvailableScreens, routerPush, menuStore } = vi.hoisted(() => ({
     loading: false,
     load: vi.fn(),
     hasUrl: vi.fn()
+  },
+  permissionStore: {
+    loaded: true,
+    loading: false,
+    load: vi.fn(),
+    canAccess: vi.fn()
   }
 }));
 vi.mock('@/api/screen', () => ({ listAvailableScreens }));
 vi.mock('@/stores/menu', () => ({ useMenuStore: () => menuStore }));
+vi.mock('@/stores/permission', () => ({ usePermissionStore: () => permissionStore }));
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
   useRoute: () => ({ params: { template: 'branch-overview-v1' } })
@@ -47,6 +54,10 @@ beforeEach(() => {
   menuStore.loading = false;
   menuStore.load.mockResolvedValue([]);
   menuStore.hasUrl.mockReturnValue(false);
+  permissionStore.loaded = true;
+  permissionStore.loading = false;
+  permissionStore.load.mockResolvedValue([]);
+  permissionStore.canAccess.mockReturnValue(true);
   listAvailableScreens.mockResolvedValue(catalog);
 });
 afterEach(() => wrapper?.unmount());

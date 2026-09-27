@@ -1,0 +1,16 @@
+### Result
+4. [GET] http://127.0.0.1:8094/api/auth/current-user => [200] OK
+6. [GET] http://127.0.0.1:8094/api/auth/my-menus => [200] OK
+7. [GET] http://127.0.0.1:8094/api/auth/permissions => [200] OK
+11. [GET] http://127.0.0.1:8094/api/notifications/unread-count => [200] OK
+12. [GET] http://127.0.0.1:8094/api/screen/view/catalog => [200] OK
+25. [GET] http://127.0.0.1:8094/api/screen/view/SCR_PROVINCE?preview=draft => [200] OK
+28. [GET] http://127.0.0.1:8094/api/notifications/unread-count => [200] OK
+29. [GET] http://127.0.0.1:8094/api/screen/view/catalog => [200] OK
+30. [GET] http://127.0.0.1:8094/favicon.svg
+34. [GET] http://127.0.0.1:8094/api/auth/my-menus => [200] OK
+36. [GET] http://127.0.0.1:8094/api/auth/permissions => [200] OK
+40. [GET] http://127.0.0.1:8094/api/notifications/unread-count => [200] OK
+41. [GET] http://127.0.0.1:8094/api/screen/view/catalog => [200] OK
+
+Note: 28 static requests not shown, run with --static option to see them.

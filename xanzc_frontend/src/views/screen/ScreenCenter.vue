@@ -33,24 +33,23 @@
       </label>
     </section>
 
-    <section v-if="showLocalPreview" class="screen-center__preview-tools" data-testid="screen-center-preview-tools" aria-label="改造版经营总览本地演示">
+    <section v-if="draftPreviewEntries.length" class="screen-center__preview-tools" data-testid="screen-center-preview-tools" aria-label="新版草稿预览入口">
       <div class="screen-center__preview-copy">
-        <p class="screen-center__preview-eyebrow">开发态入口</p>
-        <h2>改造版经营总览</h2>
-        <p>查看固定演示样例，内容标注为本地演示 · 非业务数据。</p>
+        <p class="screen-center__preview-eyebrow">授权草稿入口</p>
+        <h2>新版草稿预览</h2>
+        <p>打开当前保存的新版布局草稿，预览结果由后端按当前用户权限确认。</p>
       </div>
-      <div class="screen-center__preview-actions" role="group" aria-label="经营总览本地演示入口">
-        <button type="button" data-action="open-corporate-preview" @click="openLocalPreview('CorporateScreenPreview')">
-          <strong>对公经营总览</strong>
-          <span>本地演示 · 非业务数据</span>
-        </button>
-        <button type="button" data-action="open-retail-preview" @click="openLocalPreview('RetailScreenPreview')">
-          <strong>零售经营总览</strong>
-          <span>本地演示 · 非业务数据</span>
-        </button>
-        <button type="button" data-action="open-branch-preview" @click="openLocalPreview('ScreenPreview')">
-          <strong>分行经营总览</strong>
-          <span>本地演示 · 非业务数据</span>
+      <div class="screen-center__preview-actions" role="group" aria-label="新版草稿预览入口">
+        <button
+          v-for="entry in draftPreviewEntries"
+          :key="entry.screenCode"
+          type="button"
+          :data-action="entry.action"
+          :data-preview-screen-code="entry.screenCode"
+          @click="openDraftPreview(entry)"
+        >
+          <strong>{{ entry.label }}</strong>
+          <span>未发布草稿预览</span>
         </button>
       </div>
     </section>
@@ -132,6 +131,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { listAvailableScreens } from '@/api/screen';
 import { useMenuStore } from '@/stores/menu';
+import { usePermissionStore } from '@/stores/permission';
 import { useUserStore } from '@/stores/user';
 
 const BIZ_LINE_FILTERS = Object.freeze([
@@ -149,6 +149,12 @@ const REGISTERED_MODES = Object.freeze({
   'corporate-overview-v1': Object.freeze(['TEST', 'LIVE'])
 });
 const FIXED_SCREEN_CODES = new Set(['SCR_PROVINCE', 'SCR_CORP_OVERVIEW', 'SCR_RETAIL_OVERVIEW']);
+const DRAFT_PREVIEW_RESOURCE = '/api/screen/admin/canvas/*';
+const DRAFT_PREVIEW_REGISTRY = Object.freeze([
+  Object.freeze({ screenCode: 'SCR_CORP_OVERVIEW', template: 'corporate-overview-v1', label: '对公经营总览', action: 'open-corporate-preview' }),
+  Object.freeze({ screenCode: 'SCR_RETAIL_OVERVIEW', template: 'retail-overview-v1', label: '零售经营总览', action: 'open-retail-preview' }),
+  Object.freeze({ screenCode: 'SCR_PROVINCE', template: 'branch-overview-v1', label: '分行经营总览', action: 'open-branch-preview' })
+]);
 const PERSONAL_SCREEN = Object.freeze({
   key: 'personal-dashboard',
   kind: 'personal',
@@ -170,9 +176,10 @@ const BRANCH_OPERATING_SCREEN = Object.freeze({
 
 const router = useRouter();
 const menuStore = useMenuStore();
+const permissionStore = usePermissionStore();
 const userStore = useUserStore();
-const showLocalPreview = import.meta.env.DEV;
 const screens = ref([]);
+const draftPreviewEntries = ref([]);
 const activeBizLine = ref('ALL');
 const searchKeyword = ref('');
 const loading = ref(false);
@@ -228,11 +235,6 @@ function screenDataModeLabel(screen) {
     : dataModeLabel(screen?.dataMode);
 }
 
-function openLocalPreview(name) {
-  if (!showLocalPreview) return;
-  router.push({ name, query: { from: 'screen-center' } });
-}
-
 function hasRegisteredMode(screen) {
   return REGISTERED_MODES[screen?.template]?.includes(screen?.dataMode) || false;
 }
@@ -266,11 +268,32 @@ function buildScreenDirectory(catalog) {
   return [...catalog, BRANCH_OPERATING_SCREEN];
 }
 
+function buildDraftPreviewEntries(catalog) {
+  return DRAFT_PREVIEW_REGISTRY.flatMap((registry) => {
+    const matches = catalog.filter(candidate => candidate
+      && candidate.screenCode === registry.screenCode
+      && candidate.template === registry.template
+      && hasRegisteredMode(candidate));
+    return matches.length === 1 ? [{ ...registry, dataMode: matches[0].dataMode }] : [];
+  });
+}
+
+function hasDraftPreviewAccess() {
+  try {
+    return Boolean(userStore.user)
+      && permissionStore.loaded === true
+      && permissionStore.canAccess(DRAFT_PREVIEW_RESOURCE);
+  } catch (_) {
+    return false;
+  }
+}
+
 async function loadCatalog() {
   const generation = ++loadGeneration;
   loading.value = true;
   loadError.value = '';
   screens.value = [];
+  draftPreviewEntries.value = [];
   if (!userStore.user) {
     loading.value = false;
     return;
@@ -283,6 +306,10 @@ async function loadCatalog() {
       && menuStore.loaded === true
       && menuStore.hasUrl('/workspace'))
     .catch(() => false);
+  const permissionRequest = Promise.resolve()
+    .then(() => permissionStore.load())
+    .then(() => generation === loadGeneration && hasDraftPreviewAccess())
+    .catch(() => false);
   const catalogRequest = Promise.resolve().then(() => listAvailableScreens());
 
   try {
@@ -293,6 +320,10 @@ async function loadCatalog() {
     // 机构目录是页面主体，菜单授权迟到时先展示已确认的机构结果，避免授权接口延迟阻塞目录。
     screens.value = screenDirectory;
     loading.value = screenDirectory.length === 0;
+
+    const canPreviewDraft = await permissionRequest;
+    if (generation !== loadGeneration) return;
+    if (canPreviewDraft) draftPreviewEntries.value = buildDraftPreviewEntries(normalizedCatalog);
 
     const hasPersonalAccess = await menuRequest;
     if (generation !== loadGeneration || loadError.value) return;
@@ -327,6 +358,18 @@ function openScreen(screen) {
   router.push({ name: 'ScreenView', params: { screenCode: screen.screenCode } });
 }
 
+function openDraftPreview(entry) {
+  if (!hasDraftPreviewAccess() || !draftPreviewEntries.value.some(candidate => candidate.screenCode === entry?.screenCode)) {
+    draftPreviewEntries.value = [];
+    return;
+  }
+  router.push({
+    name: 'ScreenView',
+    params: { screenCode: entry.screenCode },
+    query: { preview: 'draft', from: 'screen-center' }
+  });
+}
+
 watch(() => userStore.user, (user) => {
   if (user) {
     loadCatalog();
@@ -334,14 +377,23 @@ watch(() => userStore.user, (user) => {
   }
   loadGeneration += 1;
   screens.value = [];
+  draftPreviewEntries.value = [];
   loadError.value = '';
   loading.value = false;
 });
+
+watch(
+  [() => permissionStore.loaded, () => permissionStore.resourceUrls, () => userStore.user],
+  () => {
+    if (!hasDraftPreviewAccess()) draftPreviewEntries.value = [];
+  }
+);
 
 onMounted(loadCatalog);
 onBeforeUnmount(() => {
   loadGeneration += 1;
   screens.value = [];
+  draftPreviewEntries.value = [];
 });
 </script>
 

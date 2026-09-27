@@ -1,7 +1,8 @@
 <template>
   <!-- 代码化全景拥有自己的根和视觉域，不进入旧 1920×1080 舞台。 -->
   <div v-if="isPanoramaPresentation" class="screen-panorama-root">
-    <PanoramaRuntime :view="view" :context="context"
+    <div v-if="isDraftPreview" class="screen-draft-banner" data-testid="screen-draft-preview">未发布草稿预览</div>
+    <PanoramaRuntime :view="view" :context="context" :back-path="draftBackPath"
       :batch-required="presentation?.type === 'CODE' && presentation?.template === 'branch-overview-v1'" />
   </div>
 
@@ -12,6 +13,7 @@
   </div>
 
   <div v-else class="screen-root">
+    <div v-if="isDraftPreview" class="screen-draft-banner" data-testid="screen-draft-preview">未发布草稿预览</div>
     <div class="scr-stage" :style="{ transform: `translate(-50%, -50%) scale(${scale})` }">
       <div class="scr-header">
         <button type="button" class="scr-back" aria-label="返回上一页" @click="goBack">‹ 返回</button>
@@ -75,6 +77,8 @@ const hasPresentation = computed(() => Object.prototype.hasOwnProperty.call(
 ) && presentation.value !== null && presentation.value !== undefined);
 const isPanoramaPresentation = computed(() => presentation.value?.type === 'CODE'
   && ['branch-overview-v1', 'retail-overview-v1', 'corporate-overview-v1'].includes(presentation.value?.template));
+const isDraftPreview = computed(() => view.value?.state === 'draft');
+const draftBackPath = computed(() => isDraftPreview.value && route.query?.from === 'screen-center' ? '/screens' : '');
 const unsupportedPresentation = computed(() => Boolean(
   view.value?.renderPackage && hasPresentation.value && !isPanoramaPresentation.value
 ));
@@ -155,6 +159,28 @@ onBeforeUnmount(() => {
 .screen-panorama-root {
   min-height: 100vh;
   width: 100%;
+}
+
+.screen-draft-banner {
+  box-sizing: border-box;
+  position: relative;
+  z-index: 5;
+  width: 100%;
+  padding: 10px 16px;
+  color: #fff8e1;
+  background: #8a5a00;
+  border-bottom: 1px solid rgba(255, 226, 157, .75);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.screen-root > .screen-draft-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
 }
 
 .screen-presentation-unsupported {

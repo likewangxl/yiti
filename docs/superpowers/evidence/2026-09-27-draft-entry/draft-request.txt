@@ -1,0 +1,23 @@
+### Result
+#25 [GET] http://127.0.0.1:8094/api/screen/view/SCR_PROVINCE?preview=draft
+
+  General
+    status:    [200] OK
+    duration:  3ms
+    type:      xhr
+    mimeType:  application/json
+
+  Request headers
+    accept: application/json, text/plain, */*
+    referer: http://127.0.0.1:8094/?qa=manager
+    user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36
+    x-trace-id: pc-1790490691287-523622
+    sec-ch-ua: "Google Chrome";v="153", "Not_A Brand";v="8", "Chromium";v="153"
+    sec-ch-ua-mobile: ?0
+    sec-ch-ua-platform: "Windows"
+
+  Response headers
+    content-type: application/json
+    content-length: 530
+
+Run `response-body 25` to read the response body.
