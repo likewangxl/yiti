@@ -507,6 +507,7 @@ function onMapContext(payload) {
 .presentation-layout__metric-group--retail { --group-accent: var(--presentation-cyan); }
 .presentation-layout__metric-group--corp { --group-accent: var(--presentation-violet); }
 .presentation-layout__metric-group--revenue { --group-accent: var(--presentation-blue); }
+.presentation-layout__metric-group--revenue .presentation-layout__metric-group-header { min-height: 20px; }
 
 .presentation-layout__metric-group-header {
   display: flex;

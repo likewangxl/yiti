@@ -188,7 +188,8 @@ describe('PresentationLayout', () => {
     expect(revenueGroup.findAll('[data-testid="presentation-layout-component"]')).toHaveLength(1);
     expect(revenueGroup.find('[data-component-id="business-revenue-share"]').exists()).toBe(true);
     expect(chart.findAll('[data-testid="metric-widget"]')).toHaveLength(2);
-    expect(chart.text()).toContain('25.0%');
+    expect(chart.find('[role="img"]').exists()).toBe(false);
+    expect(chart.find('[data-testid="revenue-share-ratio-label"]').exists()).toBe(false);
     expect(chart.text()).toContain('20,000.00万元');
     expect(chart.text()).toContain('5,000.00万元');
   });
