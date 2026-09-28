@@ -70,7 +70,7 @@
             aria-hidden="true"
           />
         </g>
-        <g v-if="!isCalloutLayout" v-for="region in regionLabels" :key="`${region.key}:label`" class="panorama-map__region-label" :class="{ 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }">
+        <g v-if="!isCalloutLayout && !reliefEnabled" v-for="region in regionLabels" :key="`${region.key}:label`" class="panorama-map__region-label" :class="{ 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }">
           <text :x="region.label.x" :y="region.label.y" role="button" tabindex="0" @click.stop="selectRegion(region)" @keydown.enter.stop="selectRegion(region)">{{ region.name }}</text>
           <text v-if="showInlineRegionMetric(region)" :x="region.label.x" :y="region.label.y + 3" data-testid="map-region-metric" class="panorama-map__metric-svg">{{ metricValues[region.code] }}</text>
         </g>
@@ -100,7 +100,7 @@
         />
       </g>
     </svg>
-    <div v-if="!fallbackActive || isCalloutLayout" class="panorama-map__region-label-layer" aria-label="可选择城市标签">
+    <div v-if="!fallbackActive || isCalloutLayout || reliefEnabled" class="panorama-map__region-label-layer" aria-label="可选择城市标签">
       <button
         v-for="region in regionLabels"
         :key="`${region.key}:overlay-label`"
@@ -110,7 +110,7 @@
         :style="regionLabelStyle(region)"
         :data-city-code="region.code"
         :aria-label="`选择${region.name}${metricState(region) === 'NO_INSTITUTION' ? '，无经营机构' : ''}`"
-        :aria-describedby="isCalloutLayout && String(region.code) === hoveredRegionCode ? cityTooltipId : undefined"
+        :aria-describedby="cityHoverDetailsEnabled && String(region.code) === hoveredRegionCode ? cityTooltipId : undefined"
         @click.stop="selectRegion(region)"
         @pointerenter="setHoveredRegion(region.code)"
         @pointerleave="leaveHoveredRegion"
@@ -344,6 +344,7 @@ const appearance = computed(() => (isReliefAppearance(props.appearance) ? 'relie
 const isCalloutLayout = computed(() => props.mode === 'province' && props.labelLayout === 'callout');
 const isPointCalloutLayout = computed(() => props.mode === 'city' && props.pointLabelLayout === 'callout');
 const reliefEnabled = computed(() => appearance.value === 'relief');
+const cityHoverDetailsEnabled = computed(() => isCalloutLayout.value || (props.mode === 'province' && reliefEnabled.value));
 const reliefConfig = computed(() => createReliefGeometryConfig({
   worldWidth: projection.value.width,
   worldHeight: projection.value.height
@@ -493,6 +494,42 @@ function baseRegionLabelWorldPoint(region) {
   }), { x: 0, y: 0 });
 }
 
+function pointInRing(point, ring = []) {
+  let inside = false;
+  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index++) {
+    const currentPoint = ring[index];
+    const previousPoint = ring[previous];
+    const intersects = ((currentPoint.y > point.y) !== (previousPoint.y > point.y))
+      && point.x < ((previousPoint.x - currentPoint.x) * (point.y - currentPoint.y))
+        / (previousPoint.y - currentPoint.y || Number.EPSILON) + currentPoint.x;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInRegion(point, region) {
+  return Boolean(point) && pointInRing(point, region.outer)
+    && !region.holes.some(hole => pointInRing(point, hole));
+}
+
+function interiorRegionPoint(region, candidate) {
+  const points = [candidate];
+  if (region.outer.length) {
+    points.push(region.outer.reduce((center, point) => ({
+      x: center.x + point.x / region.outer.length,
+      y: center.y + point.y / region.outer.length
+    }), { x: 0, y: 0 }));
+    const bounds = region.outer.reduce((result, point) => ({
+      minX: Math.min(result.minX, point.x),
+      maxX: Math.max(result.maxX, point.x),
+      minY: Math.min(result.minY, point.y),
+      maxY: Math.max(result.maxY, point.y)
+    }), { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
+    points.push({ x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 });
+  }
+  return points.find(point => pointInRegion(point, region)) || candidate;
+}
+
 const fallbackRegions = computed(() => projectedRegions.value.map((region, index) => ({
   ...region,
   key: `${region.code || region.name || 'region'}:${region.polygonIndex}:${index}`,
@@ -528,29 +565,34 @@ const regionLabels = computed(() => {
     [1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0]
   ];
 
+  const reliefInlineProvince = reliefEnabled.value && props.mode === 'province' && !isCalloutLayout.value;
   return candidates.map(region => {
-    const base = baseRegionLabelWorldPoint(region);
+    const base = reliefInlineProvince
+      ? interiorRegionPoint(region, baseRegionLabelWorldPoint(region))
+      : baseRegionLabelWorldPoint(region);
     const metricText = isCalloutLayout.value || showInlineRegionMetric(region) ? props.metricValues[region.code] : null;
     const labelWidth = Math.max(4.5, String(region.name).length * 2.4, metricText == null ? 0 : String(metricText).length * 1.4);
     const labelHeight = metricText == null ? 5 : 8;
     let selected = base;
     let selectedScreen = svgPoint(base);
-    for (const [offsetX, offsetY] of offsets) {
-      const point = { x: base.x + offsetX * stepX, y: base.y + offsetY * stepY };
-      const screen = svgPoint(point);
-      const overlaps = placed.some(item => Math.abs(screen.x - item.x) < (labelWidth + item.width) / 2
-        && Math.abs(screen.y - item.y) < (labelHeight + item.height) / 2);
-      if (!overlaps && screen.x > 3 && screen.x < 97 && screen.y > 3 && screen.y < 97) {
-        selected = point;
-        selectedScreen = screen;
-        break;
+    if (!reliefInlineProvince) {
+      for (const [offsetX, offsetY] of offsets) {
+        const point = { x: base.x + offsetX * stepX, y: base.y + offsetY * stepY };
+        const screen = svgPoint(point);
+        const overlaps = placed.some(item => Math.abs(screen.x - item.x) < (labelWidth + item.width) / 2
+          && Math.abs(screen.y - item.y) < (labelHeight + item.height) / 2);
+        if (!overlaps && screen.x > 3 && screen.x < 97 && screen.y > 3 && screen.y < 97) {
+          selected = point;
+          selectedScreen = screen;
+          break;
+        }
       }
     }
     placed.push({ x: selectedScreen.x, y: selectedScreen.y, width: labelWidth, height: labelHeight });
     return {
       ...region,
       // Keep the projected administrative centre immutable for leader lines
-      // and halos; `labelWorld` remains the legacy inline-label avoidance point.
+      // and halos; relief inline labels use an in-region `labelWorld` anchor.
       anchorWorld: base,
       anchor: svgPoint(base),
       labelWorld: selected,
@@ -602,11 +644,17 @@ const metricLabelPositions = computed(() => {
   const width=containerRef.value?.clientWidth || 800;
   const height=containerRef.value?.clientHeight || 520;
   return layoutMapLabels(regionLabels.value.map(region => {
-    const point=webglOverlayPoint(regionLabelWorldPoint(region));
+    const point=overlayPoint(regionLabelWorldPoint(region));
     const value=showInlineRegionMetric(region) ? props.metricValues[region.code] : null;
+    const constrainToRegion = reliefEnabled.value && props.mode === 'province' && !isCalloutLayout.value;
+    const screenRegion = constrainToRegion ? {
+      outer: region.outer.map(vertex => overlayPoint(vertex)),
+      holes: region.holes.map(ring => ring.map(vertex => overlayPoint(vertex)))
+    } : null;
     return {key:region.key,...point,
       width:Math.max(String(region.name).length*12+10,value==null?0:String(value).length*6.5+10)/width*100,
-      height:(value==null?20:34)/height*100};
+      height:(value==null?20:34)/height*100,
+      contains: screenRegion ? candidate => pointInRegion(candidate, screenRegion) : undefined};
   }));
 });
 
@@ -668,7 +716,7 @@ function cityAccent(region) {
 function cityAccentStyle(region) { return { '--city-accent': cityAccent(region) }; }
 function calloutPath(region) { return createMapCalloutPath(calloutLayout.value[region.key]); }
 const activeCityDetail = computed(() => {
-  if (!isCalloutLayout.value || !hoveredRegionCode.value) return null;
+  if (!cityHoverDetailsEnabled.value || !hoveredRegionCode.value) return null;
   const region = regionLabels.value.find(item => String(item.code) === hoveredRegionCode.value);
   if (!region) return null;
   const detail = props.cityDetails[hoveredRegionCode.value] || {};
@@ -700,7 +748,7 @@ const cityDetailStyle = computed(() => {
 function regionLabelStyle(region) {
   const point = isCalloutLayout.value
     ? calloutLayout.value[region.key]?.label
-    : metricLabelPositions.value[region.key] || webglOverlayPoint(regionLabelWorldPoint(region));
+    : metricLabelPositions.value[region.key] || overlayPoint(regionLabelWorldPoint(region));
   return { left: `${point.x}%`, top: `${point.y}%`, ...(isCalloutLayout.value ? cityAccentStyle(region) : {}) };
 }
 

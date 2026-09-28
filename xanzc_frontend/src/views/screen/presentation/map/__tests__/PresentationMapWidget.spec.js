@@ -96,7 +96,7 @@ describe('PresentationMapWidget', () => {
     expect(wrapper.getComponent(mapStub).props('showRegionMetrics')).toBe(false);
   });
 
-  it('旧屏编码保留原外围标注和网点行内标签，不启用新屏专属地图样式', () => {
+  it('旧屏编码改用省级行内地市标注，保留指标、缺失状态和网点行内标签', () => {
     const oldPresentation = { ...presentation, screenCode: 'SCR_PROVINCE' };
     const mapGeoJson = { ...geoJson, features: [...geoJson.features, { ...geoJson.features[0], properties: { adcode: '610600', name: '延安市' } }] };
     const province = mount(PresentationMapWidget, {
@@ -104,7 +104,7 @@ describe('PresentationMapWidget', () => {
       global: { stubs: { PanoramaMap: mapStub } }
     });
     const oldMap = province.getComponent(mapStub);
-    expect(oldMap.props('labelLayout')).toBe('callout');
+    expect(oldMap.props('labelLayout')).toBe('inline');
     expect(oldMap.props('pointLabelLayout')).toBe('inline');
     expect(oldMap.props('showRegionMetrics')).toBe(true);
     expect(oldMap.props('showProvincePointLabels')).toBe(true);
@@ -112,6 +112,20 @@ describe('PresentationMapWidget', () => {
     expect(oldMap.props('metricValues')['610600']).toBe('暂无数据');
     expect(province.find('[data-testid="presentation-map-legend-no-institution"]').exists()).toBe(false);
     province.unmount();
+
+    const unrelated = mount(PresentationMapWidget, {
+      props: { presentation: { ...presentation, screenCode: 'SCR_RETAIL' }, model, geoJson, mode: 'province', metricKey: 'deposit' },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+    expect(unrelated.getComponent(mapStub).props('labelLayout')).toBe('callout');
+    unrelated.unmount();
+
+    const templateBranch = mount(PresentationMapWidget, {
+      props: { presentation: { ...presentation, screenCode: undefined, template: 'branch-overview-v1' }, model, geoJson, mode: 'province', metricKey: 'deposit' },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+    expect(templateBranch.getComponent(mapStub).props('labelLayout')).toBe('inline');
+    templateBranch.unmount();
 
     const city = mount(PresentationMapWidget, {
       props: { presentation: oldPresentation, model, geoJson, mode: 'city', cityCode: '610100' },

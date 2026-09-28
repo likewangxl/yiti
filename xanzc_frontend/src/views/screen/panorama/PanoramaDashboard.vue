@@ -256,7 +256,7 @@
             v-else
             class="panorama-map"
             appearance="relief"
-            label-layout="callout"
+            label-layout="inline"
             :metric-label="rankingMetricInfo.label"
             :metric-values="provinceMapMetricValues"
             :city-details="provinceMapCityDetails"

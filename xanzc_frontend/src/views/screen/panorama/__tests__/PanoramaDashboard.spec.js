@@ -496,9 +496,9 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(chart().series[0].data).toEqual([1253, 1286]);
   });
 
-  it('分行省级地图启用城市引导标注', () => {
+  it('分行省级 fallback 地图将地市名称和指标放在行政区内部', () => {
     const wrapper = mountDashboard();
-    expect(wrapper.findComponent({ name: 'PanoramaMap' }).props('labelLayout')).toBe('callout');
+    expect(wrapper.findComponent({ name: 'PanoramaMap' }).props('labelLayout')).toBe('inline');
   });
 
   it('向省级地图传入按授权机构和城市汇总构建的城市详情', () => {

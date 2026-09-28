@@ -13,6 +13,20 @@ describe('投影后地图标签避让', () => {
     expect(edge.x).toBeLessThanOrEqual(89);expect(edge.y).toBeGreaterThanOrEqual(6);
   });
 
+  it('二次避让有区域约束时不得把标签中心移出所属区域', () => {
+    const positions = layoutMapLabels([
+      { key: 'first', x: 50, y: 50, width: 20, height: 10 },
+      { key: 'second', x: 50, y: 50, width: 20, height: 10, contains: point => (
+        point.x >= 45 && point.x <= 55 && point.y >= 45 && point.y <= 55
+      ) }
+    ]);
+
+    expect(positions.second.x).toBeGreaterThanOrEqual(45);
+    expect(positions.second.x).toBeLessThanOrEqual(55);
+    expect(positions.second.y).toBeGreaterThanOrEqual(45);
+    expect(positions.second.y).toBeLessThanOrEqual(55);
+  });
+
   it('按原始行政中心锚点把标签分散到左右两列，并输出锚点到标签边缘的折线', () => {
     const labels = Array.from({ length: 10 }, (_, index) => ({
       key: `city-${index}`,

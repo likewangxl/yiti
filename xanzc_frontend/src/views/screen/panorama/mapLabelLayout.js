@@ -6,12 +6,20 @@ export function layoutMapLabels(labels) {
     for(let ring=1;ring<=5;ring++) for(const [x,y] of [[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,1],[1,-1],[-1,-1]]) offsets.push([x*ring,y*ring]);
     const w=label.width,h=label.height;
     let chosen;
+    const allowed = point => typeof label.contains === 'function' ? label.contains(point, label) !== false : true;
+    const candidate = (dx, dy) => ({
+      x: Math.max(w/2+1,Math.min(99-w/2,label.x+dx*(w+1))),
+      y: Math.max(h/2+1,Math.min(99-h/2,label.y+dy*(h+1)))
+    });
     for(const [dx,dy] of offsets) {
-      const x=Math.max(w/2+1,Math.min(99-w/2,label.x+dx*(w+1)));
-      const y=Math.max(h/2+1,Math.min(99-h/2,label.y+dy*(h+1)));
-      if(!placed.some(p=>Math.abs(x-p.x)<(w+p.width)/2+0.4&&Math.abs(y-p.y)<(h+p.height)/2+0.4)) {chosen={x,y};break;}
+      const point = candidate(dx, dy);
+      if(allowed(point) && !placed.some(p=>Math.abs(point.x-p.x)<(w+p.width)/2+0.4&&Math.abs(point.y-p.y)<(h+p.height)/2+0.4)) {chosen=point;break;}
     }
-    chosen ||= {x:Math.max(w/2+1,Math.min(99-w/2,label.x)),y:Math.max(h/2+1,Math.min(99-h/2,label.y))};
+    if (!chosen) {
+      const fallback = candidate(0, 0);
+      if (allowed(fallback)) chosen = fallback;
+      else chosen = offsets.map(([dx, dy]) => candidate(dx, dy)).find(allowed) || fallback;
+    }
     placed.push({...chosen,width:w,height:h});result[label.key]=chosen;
   }
   return result;

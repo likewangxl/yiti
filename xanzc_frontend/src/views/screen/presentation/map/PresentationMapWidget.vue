@@ -30,7 +30,7 @@
       :demo="demo"
       :view-fit="{ ...(mapModel.viewFit || {}), ...viewFit }"
       appearance="relief"
-      :label-layout="enhancedMap ? 'inline' : 'callout'"
+      :label-layout="provinceInlineMap ? 'inline' : 'callout'"
       :point-label-layout="enhancedMap && mode === 'city' ? 'callout' : 'inline'"
       class="presentation-map-widget__map"
       @region-select="onRegionSelect"
@@ -78,6 +78,12 @@ const props = defineProps({
 
 const emit = defineEmits(['region-select', 'branch-select', 'map-context']);
 const enhancedMap = computed(() => isBranchMapV2(props.presentation));
+const legacyBranchProvinceMap = computed(() => {
+  const screenCode = String(props.presentation?.screenCode ?? props.presentation?.screen_code ?? '').trim();
+  const template = String(props.presentation?.template ?? '').trim();
+  return props.mode === 'province' && (screenCode === 'SCR_PROVINCE' || template === 'branch-overview-v1');
+});
+const provinceInlineMap = computed(() => enhancedMap.value || legacyBranchProvinceMap.value);
 const mapModel = computed(() => buildMapModel(props.presentation, props.model, {
   level: props.mode,
   cityCode: String(props.cityCode || ''),
