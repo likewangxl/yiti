@@ -320,6 +320,7 @@
             :model="institutionRankingModel"
             :title="institutionRankingTitle"
             @metric-change="syncMapMetric"
+            @branch-select="selectInstitution"
           />
           <article v-else class="panorama-panel panorama-ranking-panel panorama-ranking-detail-panel">
             <div class="panorama-panel-heading">
@@ -1062,8 +1063,8 @@ function rankingBarStyle(item) {
 }
 
 function selectInstitution(orgCode) {
-  const code = String(orgCode || '');
-  if (!code || !safeModel.value.institutions.some(item => item?.orgCode === code)) return;
+  const code = String(orgCode || '').trim();
+  if (!code || !safeModel.value.institutions.some(item => String(item?.orgCode || '').trim() === code)) return;
   selectedOrgCode.value = code;
   emit('branch-select', code);
 }
@@ -1077,9 +1078,10 @@ function syncMapMetric(payload = {}) {
 }
 
 function selectRanking(item) {
-  const code = String(item?.orgCode || '');
-  const institution = safeModel.value.institutions.find(entry => entry?.orgCode === code);
+  const code = String(item?.orgCode || '').trim();
+  const institution = safeModel.value.institutions.find(entry => String(entry?.orgCode || '').trim() === code);
   if (institution) selectInstitution(code);
+  if (institution && !props.demo) return;
   const cityCode = item?.cityCode || institution?.cityCode;
   if (cityCode) {
     openCity({

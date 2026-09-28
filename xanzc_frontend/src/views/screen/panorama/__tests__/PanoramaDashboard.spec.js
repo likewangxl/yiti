@@ -579,12 +579,12 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(wrapper.get('[data-testid="branch-search"]').element.value).toBe('');
   });
 
-  it('排名点击带 cityCode 的机构直接打开对应城市画像', async () => {
+  it('正式排名点击带 cityCode 的机构直接发支行导航，不打开城市画像', async () => {
     const wrapper = mountDashboard({ model: extendedModel });
     await wrapper.get('[data-testid="ranking-row"]').trigger('click');
     await nextTick();
-    expect(wrapper.find('[data-testid="city-panorama-modal"]').exists()).toBe(true);
-    expect(wrapper.get('[data-testid="city-panorama-modal"]').attributes('aria-label')).toContain('西安市');
+    expect(wrapper.emitted('branch-select')).toEqual([['ORG-1']]);
+    expect(wrapper.find('[data-testid="city-panorama-modal"]').exists()).toBe(false);
   });
 
   it('城市画像关闭后恢复搜索、关注、排序、分页、选中和展开状态', async () => {

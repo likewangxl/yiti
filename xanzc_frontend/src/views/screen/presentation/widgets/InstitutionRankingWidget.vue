@@ -79,7 +79,18 @@
             tabindex="0"
           >
             <td>{{ row.rank ?? '—' }}</td>
-            <td>{{ row.name || row.orgName || row.orgCode || '未命名机构' }}</td>
+            <td>
+              <button
+                v-if="rowOrgCode(row)"
+                type="button"
+                data-testid="institution-ranking-name"
+                class="institution-ranking-widget__institution-link"
+                :data-org-code="rowOrgCode(row)"
+                :aria-label="`查看机构：${rowName(row)}`"
+                @click.stop="selectInstitution(row)"
+              >{{ rowName(row) }}</button>
+              <span v-else>{{ rowName(row) }}</span>
+            </td>
             <td>{{ row.state === 'MISSING' ? '未参与' : formatValue(row.value) }}</td>
           </tr>
           <tr v-if="!displayRows.length" data-testid="institution-ranking-empty"><td colspan="3">暂无授权机构数据</td></tr>
@@ -102,7 +113,7 @@ const props = defineProps({
   pageInterval: { type: Number, default: 5000 },
   metricCarousel: { type: Boolean, default: true }
 });
-const emit = defineEmits(['metric-change']);
+const emit = defineEmits(['metric-change', 'branch-select']);
 
 const activeMetricKey = ref('');
 const userPaused = ref(false);
@@ -152,6 +163,20 @@ function selectMetric(metricKey) {
   if (!props.paginate) userPaused.value = true;
   emit('metric-change', { metricKey });
   syncCarousel();
+}
+
+function rowOrgCode(row) {
+  return String(row?.orgCode || '').trim();
+}
+
+function rowName(row) {
+  return row?.name || row?.orgName || rowOrgCode(row) || '未命名机构';
+}
+
+function selectInstitution(row) {
+  const orgCode = rowOrgCode(row);
+  if (!orgCode) return;
+  emit('branch-select', orgCode);
 }
 
 function advanceMetric() {
@@ -294,6 +319,8 @@ onBeforeUnmount(() => {
 .institution-ranking-widget th, .institution-ranking-widget td { padding: 8px 12px; overflow: hidden; border-bottom: 1px solid var(--panorama-border-soft, rgba(119, 163, 255, .16)); text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .institution-ranking-widget th { color: var(--panorama-text-dim, #8fa9db); background: #0b2454; font-size: 10px; font-weight: 550; }
 .institution-ranking-widget td { color: #dce9ff; font-size: 12px; }
+.institution-ranking-widget__institution-link { display: block; width: 100%; padding: 0; overflow: hidden; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.institution-ranking-widget__institution-link:hover, .institution-ranking-widget__institution-link:focus-visible { color: #8cf3e8; text-decoration: underline; outline: 2px solid rgba(140,243,232,.42); outline-offset: 2px; border-radius: 2px; }
 .institution-ranking-widget th:first-child, .institution-ranking-widget td:first-child { width: 54px; }
 .institution-ranking-widget th:last-child, .institution-ranking-widget td:last-child { width: 86px; text-align: right; }
 .institution-ranking-widget td:first-child { color: #82dbd7; font-variant-numeric: tabular-nums; }
