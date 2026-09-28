@@ -263,6 +263,7 @@
             :data-metric-label="rankingMetricInfo.label"
             :geo-json="provinceGeoJson"
             :points="safeModel.institutions"
+            :show-province-point-labels="false"
             :demo="demo"
             :selected-org-code="selectedOrgCode"
             mode="province"

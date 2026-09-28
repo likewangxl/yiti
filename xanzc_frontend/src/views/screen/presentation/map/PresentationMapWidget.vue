@@ -25,7 +25,7 @@
       :color-by-metric="true"
       :mode="mode"
       :show-province-points="mode === 'province'"
-      :show-province-point-labels="!enhancedMap"
+      :show-province-point-labels="!provinceInlineMap"
       :selected-region-code="selectedRegionCode"
       :demo="demo"
       :view-fit="{ ...(mapModel.viewFit || {}), ...viewFit }"

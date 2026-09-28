@@ -6,7 +6,7 @@ import { mount } from '@vue/test-utils';
 vi.mock('../PanoramaMap.vue', () => ({
   default: {
     name: 'PanoramaMap',
-    props: ['metricLabel', 'metricValues', 'labelLayout', 'cityDetails'],
+    props: ['metricLabel', 'metricValues', 'labelLayout', 'cityDetails', 'showProvincePointLabels'],
     template: '<div class="panorama-map-stub"><button type="button" class="stub-select-region" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">选择西安</button><button type="button" class="stub-select-branch" @click="$emit(\'branch-select\', \'ORG-1\')">选择支行</button></div>',
     emits: ['region-select', 'branch-select']
   }
@@ -498,7 +498,9 @@ describe('PanoramaDashboard 省级经营大屏', () => {
 
   it('分行省级 fallback 地图将地市名称和指标放在行政区内部', () => {
     const wrapper = mountDashboard();
-    expect(wrapper.findComponent({ name: 'PanoramaMap' }).props('labelLayout')).toBe('inline');
+    const map = wrapper.findComponent({ name: 'PanoramaMap' });
+    expect(map.props('labelLayout')).toBe('inline');
+    expect(map.props('showProvincePointLabels')).toBe(false);
   });
 
   it('向省级地图传入按授权机构和城市汇总构建的城市详情', () => {

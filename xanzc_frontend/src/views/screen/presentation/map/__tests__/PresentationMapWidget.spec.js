@@ -96,7 +96,7 @@ describe('PresentationMapWidget', () => {
     expect(wrapper.getComponent(mapStub).props('showRegionMetrics')).toBe(false);
   });
 
-  it('旧屏编码改用省级行内地市标注，保留指标、缺失状态和网点行内标签', () => {
+  it('旧屏编码使用省级行内地市标注，保留指标和网点标记并隐藏支行名称', () => {
     const oldPresentation = { ...presentation, screenCode: 'SCR_PROVINCE' };
     const mapGeoJson = { ...geoJson, features: [...geoJson.features, { ...geoJson.features[0], properties: { adcode: '610600', name: '延安市' } }] };
     const province = mount(PresentationMapWidget, {
@@ -107,7 +107,7 @@ describe('PresentationMapWidget', () => {
     expect(oldMap.props('labelLayout')).toBe('inline');
     expect(oldMap.props('pointLabelLayout')).toBe('inline');
     expect(oldMap.props('showRegionMetrics')).toBe(true);
-    expect(oldMap.props('showProvincePointLabels')).toBe(true);
+    expect(oldMap.props('showProvincePointLabels')).toBe(false);
     expect(oldMap.props('regionStates')['610600']).toBe('MISSING');
     expect(oldMap.props('metricValues')['610600']).toBe('暂无数据');
     expect(province.find('[data-testid="presentation-map-legend-no-institution"]').exists()).toBe(false);
@@ -125,6 +125,7 @@ describe('PresentationMapWidget', () => {
       global: { stubs: { PanoramaMap: mapStub } }
     });
     expect(templateBranch.getComponent(mapStub).props('labelLayout')).toBe('inline');
+    expect(templateBranch.getComponent(mapStub).props('showProvincePointLabels')).toBe(false);
     templateBranch.unmount();
 
     const city = mount(PresentationMapWidget, {
