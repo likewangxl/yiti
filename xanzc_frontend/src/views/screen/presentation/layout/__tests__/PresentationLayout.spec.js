@@ -172,12 +172,25 @@ describe('PresentationLayout', () => {
         presentation: { displaySchemaVersion: 1, display: { components: revenueComponents } },
         model: { blockResults: { 31: { 营业收入: 200000000, 中间业务收入: 50000000, unitByField: { 营业收入: 'YUAN', 中间业务收入: 'YUAN' } } } }
       },
-      global: { stubs }
+      global: {
+        stubs: {
+          ...stubs,
+          MetricDisplayWidgets: {
+            props: ['components', 'grouped'],
+            template: '<div data-testid="metric-widget" :data-grouped="grouped ? \'true\' : \'false\'"><span v-for="item in components" :key="item.componentId">{{ item.componentId }} {{ item.text }} {{ item.monthDelta?.text }}</span></div>'
+          }
+        }
+      }
     });
     mounted.push(wrapper);
-    expect(wrapper.find('[data-layout-group="REVENUE"] [data-testid="revenue-share-chart"]').exists()).toBe(true);
-    expect(wrapper.find('[data-layout-group="REVENUE"] [data-testid="revenue-share-chart"]').text()).toContain('25.0%');
-    expect(wrapper.find('[data-layout-group="REVENUE"] [data-testid="metric-widget"]').exists()).toBe(false);
+    const revenueGroup = wrapper.get('[data-layout-group="REVENUE"]');
+    const chart = revenueGroup.get('[data-testid="revenue-share-chart"]');
+    expect(revenueGroup.findAll('[data-testid="presentation-layout-component"]')).toHaveLength(1);
+    expect(revenueGroup.find('[data-component-id="business-revenue-share"]').exists()).toBe(true);
+    expect(chart.findAll('[data-testid="metric-widget"]')).toHaveLength(2);
+    expect(chart.text()).toContain('25.0%');
+    expect(chart.text()).toContain('20,000.00万元');
+    expect(chart.text()).toContain('5,000.00万元');
   });
 
   it('收入组有额外已配置指标时仍展示该指标', () => {

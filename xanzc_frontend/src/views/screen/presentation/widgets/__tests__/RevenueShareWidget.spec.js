@@ -36,6 +36,15 @@ describe('RevenueShareWidget', () => {
     expect(intermediarySection.get('[data-testid="revenue-share-percentage"]').text()).toBe('25.0%');
     expect(intermediarySection.get('[role="img"]')).toBeTruthy();
     expect(operatingSection.find('[role="img"]').exists()).toBe(false);
+
+    const operatingCard = operatingSection.get('.presentation-metric-widget');
+    const intermediaryCard = intermediarySection.get('.presentation-metric-widget');
+    expect(operatingCard.classes()).toContain('presentation-metric-widget--grouped');
+    expect(intermediaryCard.classes()).toContain('presentation-metric-widget--grouped');
+    expect(operatingCard.get('[data-testid="presentation-metric-icon"]').attributes('data-icon')).toBe('Tickets');
+    expect(intermediaryCard.get('[data-testid="presentation-metric-icon"]').attributes('data-icon')).toBe('CreditCard');
+    expect(operatingCard.get('[data-testid="presentation-metric-icon"] svg').exists()).toBe(true);
+    expect(intermediaryCard.get('[data-testid="presentation-metric-icon"] svg').exists()).toBe(true);
   });
 
   it('金额不完整时显示待核对，不将比例缺失伪装成零', () => {
