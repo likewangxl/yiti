@@ -61,4 +61,37 @@ describe('CityPanorama query navigation', () => {
     expect(router.push).not.toHaveBeenCalled();
     wrapper.unmount();
   });
+
+  it('运行态点击支行只发出受保护导航事件，不在市级内部改选中机构或同步 route', async () => {
+    const wrapper = mount(CityPanorama, {
+      props: {
+        model: {
+          dataDate: '2026-09-22', citySummaries: {}, institutions: [
+            ...institutions,
+            { ...institutions[0], orgCode: 'ORG-2', orgName: '二号机构' }
+          ]
+        },
+        cityCode: '610100', cityName: '西安市', initialOrgCode: 'ORG-1', navigateOnBranchSelect: true
+      }
+    });
+    await wrapper.findAll('[data-testid="branch-row"]')[1].trigger('click');
+    expect(wrapper.emitted('branch-select')).toEqual([['ORG-2']]);
+    expect(wrapper.get('[data-testid="selected-org-code"]').text()).toContain('ORG-1');
+    expect(router.replace).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('运行态市级筛选和返回只交给父层，不改写源屏 route 上下文', async () => {
+    const wrapper = mount(CityPanorama, {
+      props: {
+        model: { dataDate: '2026-09-22', citySummaries: {}, institutions },
+        cityCode: '610100', cityName: '西安市', initialOrgCode: 'ORG-1', navigateOnBranchSelect: true
+      }
+    });
+    await wrapper.get('[data-testid="branch-search"]').setValue('一号');
+    await wrapper.get('[data-action="city-back"]').trigger('click');
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(wrapper.emitted('back')).toHaveLength(1);
+    wrapper.unmount();
+  });
 });

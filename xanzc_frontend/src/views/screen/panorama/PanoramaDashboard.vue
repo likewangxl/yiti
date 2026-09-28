@@ -403,6 +403,7 @@
         :initial-state="cityStateCache[selectedRegion?.code] || {}"
         :source-presentation="sourcePresentation"
         :ranking-metric-key="activeMapMetricKey"
+        :navigate-on-branch-select="!demo"
         @close="closeCity"
         @back="closeCity"
             @refresh="emit('refresh')"

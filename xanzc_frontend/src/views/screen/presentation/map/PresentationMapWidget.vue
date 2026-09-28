@@ -19,16 +19,16 @@
       :metric-label="displayMetricLabel"
       :metric-values="mapModel.metricValues"
       :metric-numeric-values="mapModel.metricRawValues"
-      :metric-colors="mapModel.metricColors"
-      :region-states="mapModel.regionStates"
-      :show-region-metrics="!enhancedMap"
+      :metric-colors="mapMetricColors"
+      :region-states="mapRegionStates"
+      :show-region-metrics="mode === 'province' && !enhancedMap"
       :color-by-metric="true"
       :mode="mode"
       :show-province-points="mode === 'province'"
       :show-province-point-labels="!provinceInlineMap"
       :selected-region-code="selectedRegionCode"
       :demo="demo"
-      :view-fit="{ ...(mapModel.viewFit || {}), ...viewFit }"
+      :view-fit="{ ...(mapModel.viewFit || {}), ...(mode === 'city' ? cityDistrictMapState.viewFit : {}), ...viewFit }"
       appearance="relief"
       :label-layout="provinceInlineMap ? 'inline' : 'callout'"
       :point-label-layout="mode === 'city' ? 'callout' : 'inline'"
@@ -38,7 +38,7 @@
     />
 
     <div class="presentation-map-widget__legend" aria-label="地图图例">
-      <span v-for="item in mapModel.legend" :key="item.key" :data-testid="`presentation-map-legend-${item.key}`"><i :style="{ backgroundColor: item.color }" aria-hidden="true"></i>{{ item.label }}</span>
+      <span v-for="item in mapLegend" :key="item.key" :data-testid="`presentation-map-legend-${item.key}`"><i :style="{ backgroundColor: item.color }" aria-hidden="true"></i>{{ item.label }}</span>
       <small>{{ displayMetricLabel || '当前指标' }} · {{ mapModel.metricUnit || '单位待补充' }}</small>
     </div>
 
@@ -55,11 +55,14 @@ import { computed } from 'vue';
 import PanoramaMap from '../../panorama/PanoramaMap.vue';
 import {
   buildMapModel,
+  MAP_MISSING_COLOR,
+  MAP_NO_INSTITUTION_COLOR,
   mapContextForCity,
   mapContextForInstitution
 } from './mapModel';
 import { screenDisplayText } from '../model/screenDisplayText';
 import { isBranchMapV2 } from '../../panorama/screenVariant.js';
+import { buildCityDistrictMapState, CITY_DISTRICT_HAS_INSTITUTION_COLOR } from '../../panorama/cityDistrictMapModel';
 
 const props = defineProps({
   presentation: { type: Object, default: () => ({}) },
@@ -93,6 +96,21 @@ const mapModel = computed(() => buildMapModel(props.presentation, props.model, {
   geoJson: props.geoJson,
   distinguishNoInstitution: enhancedMap.value
 }));
+const cityDistrictMapState = computed(() => props.mode === 'city'
+  ? buildCityDistrictMapState(props.geoJson, mapModel.value.institutions, { demo: props.demo })
+  : { regionStates: {}, metricColors: {}, viewFit: { focusRegionCodes: [], initialZoom: 1 }, occupiedRegionCodes: [], hasUnknownLocations: false });
+const mapRegionStates = computed(() => props.mode === 'city' && Object.keys(cityDistrictMapState.value.regionStates).length
+  ? cityDistrictMapState.value.regionStates : mapModel.value.regionStates);
+const mapMetricColors = computed(() => props.mode === 'city' && Object.keys(cityDistrictMapState.value.metricColors).length
+  ? cityDistrictMapState.value.metricColors : mapModel.value.metricColors);
+const mapLegend = computed(() => {
+  if (props.mode === 'city') return [
+    { key: 'has-institution', state: 'HAS_INSTITUTION', label: '有经营机构', color: CITY_DISTRICT_HAS_INSTITUTION_COLOR },
+    { key: 'no-institution', state: 'NO_INSTITUTION', label: '无经营机构', color: MAP_NO_INSTITUTION_COLOR },
+    { key: 'district-unknown', state: 'MISSING', label: '归属待确认', color: MAP_MISSING_COLOR }
+  ];
+  return [...(mapModel.value.legend || [])];
+});
 const displayMetricLabel = computed(() => screenDisplayText(mapModel.value.metricLabel));
 
 function contextMeta() {

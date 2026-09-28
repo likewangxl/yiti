@@ -1,17 +1,19 @@
 <template>
   <section class="branch-operating-page">
     <div class="branch-operating-source-bar">
-      <strong>支行经营总览 · {{ isTestSource ? 'TEST 测试数据' : (view.screenCode ? '已绑定数据源' : '核对数据来源') }}</strong>
-      <span v-if="isTestSource" data-testid="branch-operating-test-banner">测试数据 · 非实际经营数据</span>
+      <strong>支行经营总览 · {{ isParentSource ? 'TEST 测试数据' : (isTestSource ? 'TEST 测试数据' : (view.screenCode ? '已绑定数据源' : '核对数据来源')) }}</strong>
+      <span v-if="isParentSource" data-testid="branch-operating-parent-banner">测试数据 · 非实际经营数据</span>
+      <span v-else-if="isTestSource" data-testid="branch-operating-test-banner">测试数据 · 非实际经营数据</span>
       <span v-else>当前接入对公指标与触达汇总</span>
-      <span class="branch-operating-unit-note">{{ isTestSource ? '源金额：元 · 展示：万元' : '金额单位沿用来源映射，待业务核验' }}</span>
-      <nav class="branch-operating-source-switch" aria-label="数据场景">
+      <span class="branch-operating-unit-note">{{ isParentSource ? '金额单位：万元' : (isTestSource ? '源金额：元 · 展示：万元' : '金额单位沿用来源映射，待业务核验') }}</span>
+      <nav v-if="!isParentSource" class="branch-operating-source-switch" aria-label="数据场景">
         <button type="button" data-testid="branch-operating-source-test" :class="{ 'is-active': isTestSource }" @click="switchSource('test')">测试场景</button>
         <button type="button" data-testid="branch-operating-source-live" :class="{ 'is-active': !isTestSource }" @click="switchSource('live')">系统存量</button>
       </nav>
       <details><summary>来源与口径</summary><div>
         <p v-for="(source, index) in dashboard.sources" :key="index"><strong>{{ source.label }}</strong> {{ source.detail }}</p>
-        <p v-if="isTestSource">当前为 TEST 批次，展示内容仅用于接口联调，不代表实际经营数据。</p>
+        <p v-if="isParentSource">当前为分行经营总览 · 草稿预览（{{ sourceScreenCode }}），展示内容仅用于接口联调，不代表实际经营数据。</p>
+        <p v-else-if="isTestSource">当前为 TEST 批次，展示内容仅用于接口联调，不代表实际经营数据。</p>
         <template v-else>
           <p>经营关注来自考核目标差距，不代表审批待办。资产项目与团队数据未接入。</p>
           <p>触达统计区间：{{ touchPeriod.startDate }} 至 {{ touchPeriod.endDate }}；经营指标日期以各卡片为准。</p>
@@ -39,6 +41,12 @@ import { buildBranchOperatingModel, parseBranchSource, toBranchDisplayUnits } fr
 import BranchOperatingDashboard from './panorama/BranchOperatingDashboard.vue';
 import { loadBranchDeposit } from './panorama/branchOperatingSource';
 import {
+  buildParentBranchOperatingModel,
+  parseParentBranchOperatingSource,
+  PARENT_BRANCH_SOURCE_PREVIEW,
+  PARENT_BRANCH_SOURCE_SCREEN_CODES
+} from './panorama/parentBranchOperatingSource';
+import {
   BRANCH_TEST_SCREEN_CODE,
   BRANCH_TEST_SOURCE_LABEL,
   branchTestInstitutions,
@@ -52,9 +60,15 @@ const router = useRouter(), route = useRoute();
 const view = ref({}), context = ref({}), institutions = ref([]), selected = ref('');
 const touch = ref(null), touchError = ref(''), loading = ref(false), pageError = ref('');
 const navigationBlocked = ref(false);
-const testModel = ref(null);
+const testModel = ref(null), parentModel = ref(null);
 let generation = 0;
-const sourceMode = computed(() => String(route.query?.source || '').trim().toLowerCase() === 'live' ? 'live' : 'test');
+let lastInitializedRouteSignature = '';
+let lastScheduledRouteSignature = '';
+let disposed = false;
+const sourceScreenCode = computed(() => String(route.query?.sourceScreenCode || '').trim());
+const sourcePreview = computed(() => String(route.query?.sourcePreview || '').trim().toLowerCase());
+const isParentSource = computed(() => Boolean(sourceScreenCode.value));
+const sourceMode = computed(() => isParentSource.value ? 'parent' : (String(route.query?.source || '').trim().toLowerCase() === 'live' ? 'live' : 'test'));
 const isTestSource = computed(() => sourceMode.value === 'test');
 let activeSourceMode = '';
 const state = usePanoramaData(view, context, { singleOrg: true, autoLoad: false, watch: false });
@@ -81,6 +95,10 @@ function emptyTestModel() {
   };
 }
 const dashboard = computed(() => {
+  if (isParentSource.value) {
+    const model = toBranchDisplayUnits(parentModel.value || emptyTestModel());
+    return { ...model, institutions: institutions.value };
+  }
   if (isTestSource.value) return toBranchDisplayUnits(testModel.value || emptyTestModel());
   return toBranchDisplayUnits(buildBranchOperatingModel({
     orgCode: selected.value, orgName: institutions.value.find(i => String(i.orgCode) === selected.value)?.orgName || '支行经营总览',
@@ -88,13 +106,24 @@ const dashboard = computed(() => {
   }));
 });
 const branchDisplayPresentation = computed(() => {
-  if (isTestSource.value) return null;
+  if (isTestSource.value || isParentSource.value) return null;
   let pkg = view.value?.renderPackage;
   if (!pkg && typeof view.value?.renderPackageJson === 'string') {
     try { pkg = JSON.parse(view.value.renderPackageJson); } catch { pkg = null; }
   }
   return pkg?.canvasStyle?.presentation || null;
 });
+
+function routeNavigationSignature() {
+  return JSON.stringify([
+    sourceMode.value,
+    String(route.query?.orgCode || '').trim(),
+    String(route.query?.cityCode || '').trim(),
+    String(route.query?.sourceScreenCode || '').trim(),
+    String(route.query?.sourcePreview || '').trim().toLowerCase(),
+    String(route.query?.source || '').trim().toLowerCase()
+  ]);
+}
 const visibleError = computed(() => pageError.value || (!isTestSource.value && view.value.screenCode ? state.error.value : '')
   || (!isTestSource.value && (financial.value.issues || []).some(i => i.code === 'REQUEST_FAILED')
     ? '经营数据取数失败，请检查数据源连接后刷新。当前未用模拟数据补齐。' : ''));
@@ -106,11 +135,17 @@ function clearPageState() {
   touch.value = null;
   touchError.value = '';
   testModel.value = null;
+  parentModel.value = null;
   view.value = {};
   context.value = {};
   institutions.value = [];
   selected.value = '';
   navigationBlocked.value = false;
+}
+
+function parentNavigationBlock(code, message) {
+  const error = navigationBlock(code, message);
+  return error;
 }
 
 function navigationBlock(code, message) {
@@ -201,11 +236,19 @@ async function selectBranch(value) {
     return;
   }
   selected.value = code;
+  if (isParentSource.value) {
+    const query = buildNavigationQuery({
+      ...route.query, orgCode: code, cityCode: institutions.value.find(item => String(item.orgCode) === code)?.cityCode || route.query?.cityCode,
+      sourceScreenCode: sourceScreenCode.value, sourcePreview: sourcePreview.value
+    });
+    return router.replace({ query });
+  }
   router.replace({ query: buildNavigationQuery({ ...route.query, orgCode: code }) });
   return loadSelected();
 }
 
 function switchSource(mode) {
+  if (isParentSource.value) return;
   const next = mode === 'live' ? 'live' : 'test';
   const previous = sourceMode.value;
   const query = { ...route.query };
@@ -215,7 +258,9 @@ function switchSource(mode) {
   // Vue Router 的正常导航会触发下面的 route watch；保留一个 promise 后备，
   // 让嵌入式宿主使用异步 replace 时也一定重新取数，而不只切换计算模式。
   Promise.resolve(navigation).then(() => {
-    if (previous !== next && sourceMode.value === next && activeSourceMode !== next) void initialize();
+    if (!disposed && previous !== next && sourceMode.value === next && activeSourceMode !== next
+      && routeNavigationSignature() !== lastInitializedRouteSignature
+      && routeNavigationSignature() !== lastScheduledRouteSignature) void initialize();
   });
 }
 
@@ -241,15 +286,100 @@ async function initializeTest(token) {
   await queryTestModel(token);
 }
 
+function parentSourceContext() {
+  if (!PARENT_BRANCH_SOURCE_SCREEN_CODES.includes(sourceScreenCode.value)) {
+    throw parentNavigationBlock('PARENT_SOURCE_INVALID', '源屏编码不在允许的省级屏白名单中。');
+  }
+  if (sourcePreview.value && sourcePreview.value !== PARENT_BRANCH_SOURCE_PREVIEW) {
+    throw parentNavigationBlock('PARENT_SOURCE_INVALID', '源屏 preview 仅允许 draft。');
+  }
+  return { screenCode: sourceScreenCode.value, preview: sourcePreview.value };
+}
+
+function parentResolvedInstitution(source, code, cityCode) {
+  const rules = navigationRulesOf(source);
+  if (!rules) throw parentNavigationBlock('PARENT_SOURCE_RULES', '源屏机构层级规则待确认，未进入机构主路径。');
+  const resolved = resolveInstitution(source, code, rules);
+  if (!resolved.authorized) throw parentNavigationBlock('ORG_NOT_AUTHORIZED', '当前机构不在源屏授权目录中。');
+  if (!resolved.layer.known) throw parentNavigationBlock('ORG_LAYER_UNCONFIRMED', '当前机构经营层级待确认。');
+  if (!resolved.layer.displayable) throw parentNavigationBlock('ORG_NOT_DISPLAYABLE', '当前机构不属于允许展示的经营层级。');
+  if (!cityCode || String(resolved.institution?.cityCode || '') !== String(cityCode)) {
+    throw parentNavigationBlock('CITY_NOT_AUTHORIZED', '当前机构与城市上下文不一致。');
+  }
+  return resolved;
+}
+
+async function loadParentSelected() {
+  const token = ++generation;
+  loading.value = true;
+  pageError.value = '';
+  parentModel.value = null;
+  const selectedInstitution = institutions.value.find(item => String(item.orgCode) === String(selected.value));
+  context.value = {
+    screenCode: view.value.screenCode,
+    schemaVersion: view.value.runtimeSchemaVersion,
+    previewState: view.value.state === 'draft' ? PARENT_BRANCH_SOURCE_PREVIEW : undefined,
+    orgCode: selected.value,
+    cityCode: selectedInstitution?.cityCode || route.query?.cityCode
+  };
+  try {
+    await state.refresh();
+    if (token !== generation) return;
+    if (state.model.value?.permissionStatus) {
+      throw parentNavigationBlock('PARENT_SOURCE_PERMISSION', '父屏数据源权限确认失败，未进入机构主路径。');
+    }
+    parentModel.value = buildParentBranchOperatingModel({ model: state.model.value, sourceView: view.value, orgCode: selected.value });
+  } catch (error) {
+    if (token === generation) {
+      pageError.value = error.message || '父屏单机构数据请求失败';
+      if (error?.code?.startsWith('PARENT_SOURCE_')) navigationBlocked.value = true;
+    }
+  } finally {
+    if (token === generation) loading.value = false;
+  }
+}
+
+async function initializeParent(token) {
+  const contextValue = parentSourceContext();
+  const routeCode = String(route.query?.orgCode || '').trim();
+  const cityCode = String(route.query?.cityCode || '').trim();
+  if (!routeCode) throw parentNavigationBlock('ORG_REQUIRED', '父屏导航缺少机构号，未使用默认机构。');
+  const response = contextValue.preview
+    ? await getScreenView(contextValue.screenCode, contextValue.preview)
+    : await getScreenView(contextValue.screenCode);
+  if (token !== generation) return;
+  view.value = parseParentBranchOperatingSource(response, {
+    sourceScreenCode: contextValue.screenCode, sourcePreview: contextValue.preview
+  });
+  const resolved = parentResolvedInstitution(view.value, routeCode, cityCode);
+  const rules = navigationRulesOf(view.value);
+  institutions.value = (view.value.panoramaInstitutions || view.value.panorama_institutions || [])
+    .filter(item => String(item?.cityCode || item?.city_code || '') === cityCode)
+    .filter(item => {
+      const candidate = resolveInstitution(view.value, item.orgCode, rules);
+      return candidate.authorized && candidate.layer.known && candidate.layer.displayable;
+    });
+  selected.value = routeCode;
+  await loadParentSelected();
+}
+
 async function initialize() {
+  if (disposed) return;
   const token = ++generation;
   const mode = sourceMode.value;
+  lastInitializedRouteSignature = routeNavigationSignature();
+  lastScheduledRouteSignature = lastInitializedRouteSignature;
   const previousMode = activeSourceMode;
   activeSourceMode = mode;
   loading.value = true;
   pageError.value = '';
   clearPageState();
   try {
+    if (mode === 'parent') {
+      await initializeParent(token);
+      if (token === generation) loading.value = false;
+      return;
+    }
     if (mode === 'test') {
       // 首次进入 TEST 不需要刷新空 hook；从 live 切换时要用空上下文推进旧 hook
       // 代际。usePanoramaData 在空视图下不会生成任何数据请求。
@@ -288,16 +418,19 @@ async function initialize() {
     if (token !== generation) return;
     clearPageState();
     pageError.value = error.message || '数据来源加载失败';
-    navigationBlocked.value = Boolean(error?.code?.startsWith('ORG_'));
+    navigationBlocked.value = Boolean(error?.code?.startsWith('ORG_')
+      || error?.code?.startsWith('PARENT_SOURCE_') || error?.code === 'CITY_NOT_AUTHORIZED');
     loading.value = false;
   }
 }
 onMounted(initialize);
-watch(() => sourceMode.value, (next, previous) => {
-  if (next === previous) return;
+watch(() => routeNavigationSignature(), (next, previous) => {
+  if (disposed) return;
+  if (next === previous || next === lastInitializedRouteSignature || next === lastScheduledRouteSignature) return;
+  lastScheduledRouteSignature = next;
   void initialize();
 });
-onBeforeUnmount(() => { generation += 1; });
+onBeforeUnmount(() => { disposed = true; generation += 1; });
 </script>
 
 <style scoped>

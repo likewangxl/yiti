@@ -46,6 +46,27 @@ describe('PanoramaRuntime S13 navigation', () => {
     });
   });
 
+  it('草稿省级源屏机构事件只携带固定 sourceScreenCode/sourcePreview 白名单', async () => {
+    const draftView = { ...view, state: 'draft', screenCode: 'SCR_PROVINCE' };
+    const wrapper = mount(PanoramaRuntime, {
+      props: {
+        view: draftView,
+        context: {
+          screenCode: 'SCR_PROVINCE', businessLine: 'COMMON', period: 'LATEST', metricKey: 'deposit',
+          cityCode: '610100'
+        }
+      }
+    });
+    await wrapper.get('[data-action="select-branch"]').trigger('click');
+    expect(router.push).toHaveBeenCalledWith({
+      name: 'BranchOperatingPage',
+      query: expect.objectContaining({
+        cityCode: '610100', orgCode: 'ORG-1', businessLine: 'COMMON',
+        sourceScreenCode: 'SCR_PROVINCE', sourcePreview: 'draft'
+      })
+    });
+  });
+
   it('条线切换先复核目标目录/视图/机构交集，再进入固定模板路由', async () => {
     const wrapper = mount(PanoramaRuntime, { props: { view, context: { screenCode: 'SCR_PROVINCE', businessLine: 'COMMON', orgCode: 'ORG-1', cityCode: '610100' } } });
     await wrapper.get('[data-action="select-corp"]').trigger('click');

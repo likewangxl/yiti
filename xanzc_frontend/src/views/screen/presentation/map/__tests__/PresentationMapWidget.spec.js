@@ -34,7 +34,7 @@ const model = {
 };
 
 const mapStub = {
-  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'regionStates', 'labelLayout', 'pointLabelLayout', 'showRegionMetrics', 'showProvincePointLabels', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints'],
+  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'metricColors', 'regionStates', 'labelLayout', 'pointLabelLayout', 'showRegionMetrics', 'showProvincePointLabels', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints', 'viewFit'],
   template: '<div data-testid="panorama-map-stub"><button data-city="610100" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">城市</button><button data-org="A" @click="$emit(\'branch-select\', \'A\')">机构</button></div>'
 };
 
@@ -135,4 +135,53 @@ describe('PresentationMapWidget', () => {
     expect(city.getComponent(mapStub).props('pointLabelLayout')).toBe('callout');
     city.unmount();
   });
-});
+  it('city 按真实区县边界传递有机构突出态、无机构灰色和默认聚焦', () => {
+    const cityGeoJson = {
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', properties: { adcode: 'D-A', name: '甲区' }, geometry: { type: 'Polygon', coordinates: [[[108, 34], [108.5, 34], [108.5, 35], [108, 35], [108, 34]]] } },
+        { type: 'Feature', properties: { adcode: 'D-B', name: '乙区' }, geometry: { type: 'Polygon', coordinates: [[[108.5, 34], [109, 34], [109, 35], [108.5, 35], [108.5, 34]]] } }
+      ]
+    };
+    const wrapper = mount(PresentationMapWidget, {
+      props: {
+        presentation,
+        model: { ...model, institutions: [model.institutions[0]] },
+        geoJson: cityGeoJson,
+        mode: 'city',
+        cityCode: '610100',
+        metricKey: 'deposit'
+      },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+    const map = wrapper.getComponent(mapStub);
+    expect(map.props('regionStates')).toMatchObject({ 'D-A': 'HAS_INSTITUTION', 'D-B': 'NO_INSTITUTION' });
+    expect(map.props('metricColors')['D-B']).toBe('#26364d');
+    expect(map.props('showRegionMetrics')).toBe(false);
+    expect(map.props('viewFit')).toMatchObject({ focusRegionCodes: ['D-A'], initialZoom: 1.25 });
+    expect(wrapper.get('[data-testid="presentation-map-legend-has-institution"]').text()).toBe('有经营机构');
+    expect(wrapper.get('[data-testid="presentation-map-legend-no-institution"]').text()).toBe('无经营机构');
+    expect(wrapper.get('[data-testid="presentation-map-legend-district-unknown"]').text()).toBe('归属待确认');
+    expect(wrapper.find('[data-testid="presentation-map-legend-high"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="presentation-map-legend-no-institution"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('city 存在未定位机构时未确认区县保持 MISSING，不伪造无机构灰色', () => {
+    const cityGeoJson = {
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', properties: { adcode: 'D-A', name: '甲区' }, geometry: { type: 'Polygon', coordinates: [[[108, 34], [108.5, 34], [108.5, 35], [108, 35], [108, 34]]] } },
+        { type: 'Feature', properties: { adcode: 'D-B', name: '乙区' }, geometry: { type: 'Polygon', coordinates: [[[108.5, 34], [109, 34], [109, 35], [108.5, 35], [108.5, 34]]] } }
+      ]
+    };
+    const wrapper = mount(PresentationMapWidget, {
+      props: { presentation, model, geoJson: cityGeoJson, mode: 'city', cityCode: '610100', metricKey: 'deposit' },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+    const map = wrapper.getComponent(mapStub);
+    expect(map.props('regionStates')['D-A']).toBe('HAS_INSTITUTION');
+    expect(map.props('regionStates')['D-B']).toBe('MISSING');
+    expect(map.props('metricColors')['D-B']).toBe('#65738a');
+    wrapper.unmount();
+  });});

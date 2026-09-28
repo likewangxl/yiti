@@ -63,6 +63,23 @@ describe('S13 navigation contract', () => {
     expect(parseNavigationQuery({ view: '{bad', state: '[]' })).toMatchObject({ view: null, state: null });
   });
 
+  it('仅保留省级源屏导航白名单，非法 source 屏编码或 preview 不进入目标 query', () => {
+    const query = buildNavigationQuery({
+      orgCode: 'ORG-1', sourceScreenCode: 'SCR_PROVINCE', sourcePreview: 'draft'
+    });
+    expect(query).toMatchObject({ orgCode: 'ORG-1', sourceScreenCode: 'SCR_PROVINCE', sourcePreview: 'draft' });
+    expect(buildNavigationQuery({
+      orgCode: 'ORG-1', sourceScreenCode: 'SCR_CORP_OVERVIEW', sourcePreview: 'published'
+    })).toEqual({ orgCode: 'ORG-1' });
+    expect(parseNavigationQuery(query)).toMatchObject({
+      sourceScreenCode: 'SCR_PROVINCE', sourcePreview: 'draft'
+    });
+    expect(buildNavigationQuery({ orgCode: 'ORG-1', sourceScreenCode: 'SCR_PROVINCE' }))
+      .toEqual({ orgCode: 'ORG-1', sourceScreenCode: 'SCR_PROVINCE' });
+    expect(parseNavigationQuery({ orgCode: 'ORG-1', sourceScreenCode: 'SCR_PROVINCE' }))
+      .toMatchObject({ sourceScreenCode: 'SCR_PROVINCE', sourcePreview: '' });
+  });
+
   it('classifies institutions only from explicit profile fields and keeps unknown layers pending', () => {
     const rules = { allowedOperatingLevels: ['PRIMARY_BRANCH'], allowedOrgNatures: ['BRANCH'], hiddenOperatingLevels: ['COMMUNITY_BRANCH'], hiddenOrgNatures: ['COMMUNITY'] };
     expect(classifyInstitutionLayer({ operatingLevel: 'PRIMARY_BRANCH', orgNature: 'BRANCH' }, rules)).toMatchObject({ known: true, displayable: true });

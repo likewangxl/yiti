@@ -227,6 +227,36 @@ describe('PanoramaMap', () => {
     wrapper.unmount();
   });
 
+  it('有机构区县使用明确 HAS_INSTITUTION 状态、蓝青色和突出标签', async () => {
+    const districtGeoJson = {
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', properties: { adcode: 'D-A', name: '甲区' }, geometry: { type: 'Polygon', coordinates: [[[108, 34], [108.5, 34], [108.5, 35], [108, 35], [108, 34]]] } },
+        { type: 'Feature', properties: { adcode: 'D-B', name: '乙区' }, geometry: { type: 'Polygon', coordinates: [[[108.5, 34], [109, 34], [109, 35], [108.5, 35], [108.5, 34]]] } }
+      ]
+    };
+    const wrapper = mount(PanoramaMap, {
+      props: {
+        geoJson: districtGeoJson,
+        labelLayout: 'callout',
+        colorByMetric: true,
+        regionStates: { 'D-A': 'HAS_INSTITUTION', 'D-B': 'NO_INSTITUTION' },
+        metricValues: { 'D-A': '暂无数据', 'D-B': '暂无数据' },
+        metricNumericValues: { 'D-A': null, 'D-B': null },
+        metricColors: { 'D-A': '#56c7c2', 'D-B': '#26364d' }
+      }
+    });
+    await nextTick();
+    const occupiedPath = wrapper.get('path[data-region-code="D-A"]');
+    expect(occupiedPath.attributes('data-metric-state')).toBe('HAS_INSTITUTION');
+    expect(occupiedPath.attributes('style')).toContain('#56c7c2');
+    const occupiedRegion = wrapper.findAll('g.panorama-map__region').find(region => region.find('path[data-region-code="D-A"]').exists());
+    expect(occupiedRegion.classes()).toContain('is-has-institution');
+    expect(wrapper.get('button[data-city-code="D-A"]').classes()).toContain('is-has-institution');
+    expect(wrapper.get('button[data-city-code="D-B"]').classes()).toContain('is-no-institution');
+    wrapper.unmount();
+  });
+
   it('行内布局仅在无机构地市显示地图内地名，不显示无机构文字和标注线', async () => {
     const wrapper = mount(PanoramaMap, {
       props: {
@@ -256,6 +286,30 @@ describe('PanoramaMap', () => {
     expect(wrapper.find('[data-org-code="A"]').exists()).toBe(true);
     expect(wrapper.find('.panorama-map__point-label').exists()).toBe(false);
     expect(wrapper.text()).not.toContain('无经营机构');
+    wrapper.unmount();
+  });
+
+  it('city focus 使用同一投影，SVG 初始聚焦并在 reset 后回到默认 focus', async () => {
+    const wrapper = mount(PanoramaMap, {
+      props: {
+        geoJson,
+        points,
+        mode: 'city',
+        labelLayout: 'callout',
+        showRegionMetrics: false,
+        metricValues: { '610100': '—' },
+        viewFit: { focusRegionCodes: ['610100'], focusCenter: { lng: 108.5, lat: 34.5 }, initialZoom: 1.25 }
+      }
+    });
+    await nextTick();
+    expect(wrapper.find('[data-testid="map-region-metric"]').exists()).toBe(false);
+    expect(wrapper.attributes('data-zoom')).toBe('1.25');
+    expect(wrapper.attributes('data-pan-enabled')).toBe('true');
+    await wrapper.get('button[aria-label="放大地图"]').trigger('click');
+    expect(wrapper.attributes('data-zoom')).toBe('1.69');
+    await wrapper.get('button[aria-label="重置地图视图"]').trigger('click');
+    expect(wrapper.attributes('data-zoom')).toBe('1.25');
+    expect(wrapper.attributes('data-pan-enabled')).toBe('true');
     wrapper.unmount();
   });
 

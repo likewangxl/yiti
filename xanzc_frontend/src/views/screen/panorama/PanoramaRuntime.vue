@@ -302,6 +302,12 @@ const navigationContext = computed(() => {
   const context = props.context && typeof props.context === 'object' ? props.context : {};
   const template = props.view?.renderPackage?.canvasStyle?.presentation?.template;
   const fallbackLine = Object.values(BUSINESS_LINE_TARGETS).find(item => item.template === template)?.businessLine || '';
+  const screenCode = String(props.view?.screenCode || props.view?.screen_code || '').trim();
+  const sourceScreenCode = context.sourceScreenCode
+    || (['SCR_PROVINCE', 'SCR_PROVINCE_MAP_V2'].includes(screenCode)
+      && ['draft', 'published'].includes(String(props.view?.state || '').trim()) ? screenCode : '');
+  const sourcePreview = context.sourcePreview !== undefined
+    ? context.sourcePreview : (sourceScreenCode && props.view?.state === 'draft' ? 'draft' : '');
   return parseNavigationQuery(buildNavigationQuery({
     cityCode: context.cityCode,
     orgCode: context.orgCode,
@@ -310,7 +316,9 @@ const navigationContext = computed(() => {
     metricKey: context.metricKey,
     view: context.navigationView,
     state: context.navigationState,
-    source: context.source
+    source: context.source,
+    sourceScreenCode,
+    sourcePreview
   }));
 });
 

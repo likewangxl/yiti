@@ -12,7 +12,12 @@ export const BUSINESS_LINE_TARGETS = Object.freeze({
   RETAIL: Object.freeze({ businessLine: 'RETAIL', template: 'retail-overview-v1', screenCode: 'SCR_RETAIL_OVERVIEW' })
 });
 
-const QUERY_KEYS = Object.freeze(['cityCode', 'orgCode', 'businessLine', 'period', 'metricKey', 'view', 'state', 'source']);
+export const SOURCE_SCREEN_CODES = Object.freeze(['SCR_PROVINCE', 'SCR_PROVINCE_MAP_V2']);
+const SOURCE_SCREEN_CODE_SET = new Set(SOURCE_SCREEN_CODES);
+const QUERY_KEYS = Object.freeze([
+  'cityCode', 'orgCode', 'businessLine', 'period', 'metricKey', 'view', 'state', 'source',
+  'sourceScreenCode', 'sourcePreview'
+]);
 const BUSINESS_LINES = new Set(Object.keys(BUSINESS_LINE_TARGETS));
 const MAX_SERIALIZED_STATE_LENGTH = 8192;
 
@@ -59,10 +64,20 @@ function setQueryValue(query, key, value) {
   else delete query[key];
 }
 
+function sourceContextOf(context = {}, base = {}) {
+  const sourceScreenCode = text(context.sourceScreenCode ?? base.sourceScreenCode);
+  const sourcePreview = text(context.sourcePreview ?? base.sourcePreview).toLowerCase();
+  if (!SOURCE_SCREEN_CODE_SET.has(sourceScreenCode) || (sourcePreview && sourcePreview !== 'draft')) {
+    return { sourceScreenCode: '', sourcePreview: '' };
+  }
+  return { sourceScreenCode, sourcePreview };
+}
+
 /** 将页面上下文编码为 Vue Router 可接受的纯字符串 query。 */
 export function buildNavigationQuery(context = {}, baseQuery = {}) {
   const query = {};
   const base = baseQuery && typeof baseQuery === 'object' ? baseQuery : {};
+  const sourceContext = sourceContextOf(context, base);
   // 只保留白名单字段；路由目标始终由本模块生成，不能把任意 query 当 URL。
   for (const key of QUERY_KEYS) {
     if (key === 'view' || key === 'state') continue;
@@ -74,6 +89,10 @@ export function buildNavigationQuery(context = {}, baseQuery = {}) {
     if (key === 'source') {
       const value = text(context[key] ?? base[key]).toLowerCase();
       if (value === 'test' || value === 'live') query[key] = value;
+      continue;
+    }
+    if (key === 'sourceScreenCode' || key === 'sourcePreview') {
+      setQueryValue(query, key, sourceContext[key]);
       continue;
     }
     setQueryValue(query, key, context[key] ?? base[key]);
@@ -90,6 +109,7 @@ export function buildNavigationQuery(context = {}, baseQuery = {}) {
 export function parseNavigationQuery(query = {}) {
   const source = query && typeof query === 'object' ? query : {};
   const businessLine = upper(source.businessLine);
+  const sourceContext = sourceContextOf(source, source);
   return {
     cityCode: text(source.cityCode),
     orgCode: text(source.orgCode),
@@ -98,7 +118,9 @@ export function parseNavigationQuery(query = {}) {
     metricKey: text(source.metricKey),
     view: parseObject(source.view ?? source.viewport),
     state: parseObject(source.state ?? source.viewState),
-    source: ['test', 'live'].includes(text(source.source).toLowerCase()) ? text(source.source).toLowerCase() : ''
+    source: ['test', 'live'].includes(text(source.source).toLowerCase()) ? text(source.source).toLowerCase() : '',
+    sourceScreenCode: sourceContext.sourceScreenCode,
+    sourcePreview: sourceContext.sourcePreview
   };
 }
 

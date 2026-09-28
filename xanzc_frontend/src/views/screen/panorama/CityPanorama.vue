@@ -74,13 +74,17 @@
           :points="mapInstitutions"
           :attention-only="attentionOnly"
           :demo="demo"
+          color-by-metric
+          :region-states="cityDistrictMapState.regionStates"
+          :metric-colors="cityDistrictMapState.metricColors"
+          :view-fit="cityDistrictMapState.viewFit"
           :selected-org-code="selectedOrgCode"
           mode="city"
           point-label-layout="callout"
           :selected-region-code="cityCode"
           @branch-select="selectBranch"
         />
-        <div class="city-map-legend"><span><i class="is-cyan" />支行</span><span><i class="is-amber" />经营关注</span><span><i class="is-ring" />聚合网点</span></div>
+        <div class="city-map-legend"><span><i class="is-cyan" />支行</span><span><i class="is-amber" />经营关注</span><span><i class="is-ring" />聚合网点</span><span v-if="cityDistrictMapState.hasNoInstitutionRegions">无机构</span><span v-if="cityDistrictMapState.hasUnknownLocations">归属待确认</span></div>
         <div class="city-coordinate-note">已定位 {{ locatedInstitutions.length }} 家 <span>|</span> 待补充坐标 {{ missingCoordinates.length }} 家</div>
         <p v-if="!cityInstitutions.length" class="city-inline-status city-no-visible-institutions" data-testid="city-no-visible-institutions" role="status">当前城市暂无可见机构</p>
       </article>
@@ -144,6 +148,7 @@ import PresentationMapWidget from '../presentation/map/PresentationMapWidget.vue
 import { findVisibleMapComponent } from '../presentation/map/mapModel';
 import PanoramaTrend from './PanoramaTrend.vue';
 import { cityGeoByCode } from './geography.js';
+import { buildCityDistrictMapState } from './cityDistrictMapModel.js';
 import {
   buildCityInsights,
   coverageLabel,
@@ -162,7 +167,8 @@ const props = defineProps({
   initialOrgCode: { type: String, default: '' },
   initialState: { type: Object, default: () => ({}) },
   sourcePresentation: { type: Object, default: () => ({}) },
-  rankingMetricKey: { type: String, default: '' }
+  rankingMetricKey: { type: String, default: '' },
+  navigateOnBranchSelect: { type: Boolean, default: false }
 });
 const emit = defineEmits(['close', 'back', 'refresh', 'fullscreen', 'branch-select', 'state-change', 'map-context']);
 const router = VueRouter.routerKey
@@ -199,7 +205,7 @@ function navigationStateSnapshot() {
 }
 
 function replaceNavigationQuery(overrides = {}) {
-  if (!router?.replace || !navigationQuerySyncReady) return;
+  if (props.navigateOnBranchSelect || !router?.replace || !navigationQuerySyncReady) return;
   const context = {
     ...routeNavigation.value,
     cityCode: props.cityCode,
@@ -218,12 +224,20 @@ function clearNavigationContext() {
 }
 
 function backToProvince() {
+  if (props.navigateOnBranchSelect) {
+    emit('back');
+    return;
+  }
   navigationQuerySyncReady = true;
   void clearNavigationContext();
   emit('back');
 }
 
 function closeCity() {
+  if (props.navigateOnBranchSelect) {
+    emit('close');
+    return;
+  }
   navigationQuerySyncReady = true;
   void clearNavigationContext();
   emit('close');
@@ -263,6 +277,13 @@ const mapPresentationEnabled = computed(() => Boolean(findVisibleMapComponent(pr
 const cityInstitutions = computed(() => {
   if (!props.cityCode) return [];
   return safeModel.value.institutions.filter(item => item && String(item.cityCode || '') === String(props.cityCode));
+});
+const cityDistrictMapState = computed(() => {
+  const state = buildCityDistrictMapState(cityGeoJson.value, cityInstitutions.value, { demo: props.demo });
+  return {
+    ...state,
+    hasNoInstitutionRegions: Object.values(state.regionStates || {}).includes('NO_INSTITUTION')
+  };
 });
 const locatedInstitutions = computed(() => cityInstitutions.value.filter(item => item.located && item.lng != null && item.lat != null));
 const missingCoordinates = computed(() => cityInstitutions.value.filter(item => !(item.located && item.lng != null && item.lat != null)));
@@ -395,7 +416,12 @@ function setSelectedBranch(orgCode) {
 
 function selectBranch(orgCode) {
   const code = String(orgCode || '');
-  if (!setSelectedBranch(code)) return;
+  if (!cityInstitutions.value.some(item => item.orgCode === code)) return;
+  if (props.navigateOnBranchSelect) {
+    emit('branch-select', code);
+    return;
+  }
+  setSelectedBranch(code);
   navigationQuerySyncReady = true;
   void replaceNavigationQuery({ orgCode: code });
   emit('branch-select', code);
@@ -407,6 +433,10 @@ function toggleSort() {
 
 function emitState() {
   const state = navigationStateSnapshot();
+  if (props.navigateOnBranchSelect) {
+    emit('state-change', state);
+    return;
+  }
   if (!navigationQuerySyncReady && JSON.stringify(state) === initialNavigationSnapshot) {
     emit('state-change', state);
     return;

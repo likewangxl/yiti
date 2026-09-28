@@ -567,7 +567,7 @@
 }
 
 @media (min-width: 1501px) {
-  .city-workspace { grid-template-rows: minmax(165px, .32fr) minmax(420px, .68fr); height: calc(100% - 315px); min-height: 585px; }
+  .city-workspace { grid-template-rows: minmax(240px, .32fr) minmax(0, .68fr); height: calc(100% - 315px); min-height: 585px; }
 }
 
 @media (max-width: 1099px) {
