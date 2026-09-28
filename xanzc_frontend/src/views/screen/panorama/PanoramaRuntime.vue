@@ -1,5 +1,15 @@
 <template>
   <section class="panorama-runtime panorama-runtime--immersive" data-testid="panorama-runtime">
+    <div v-if="demoSupplementAvailable" class="panorama-runtime__demo" data-testid="branch-demo-supplement">
+      <span v-if="demoSupplementEnabled && demoSupplement.fields.length" :title="demoSupplement.fields.join('、')">
+        演示补齐 · 非业务数据（完成率、收入结构、历史趋势及上月比较；已有数据保留）
+      </span>
+      <span v-else>当前展示接口原始数据</span>
+      <button type="button" data-action="toggle-demo-supplement" :aria-pressed="demoSupplementEnabled"
+        @click="demoSupplementEnabled = !demoSupplementEnabled">
+        {{ demoSupplementEnabled ? '关闭演示补齐' : '开启演示补齐' }}
+      </button>
+    </div>
     <component :is="isCorporate ? CorporateDashboard : isRetail ? RetailDashboard : PanoramaDashboard"
       :model="dashboardModel"
       :source-presentation="dashboardSourcePresentation"
@@ -46,9 +56,10 @@ import {
   routeForBusinessLine,
   routeForInstitution
 } from '../presentation/navigation/navigationModel';
-import { buildRuntimePresentation } from '../presentation/runtime/runtimeState';
+import { buildRuntimePresentation, issueStatus } from '../presentation/runtime/runtimeState';
 import { buildInstitutionViewModel } from '../presentation/model/institutionViewModel';
 import { screenDisplayText } from '../presentation/model/screenDisplayText';
+import { supplementBranchDemoModel } from './branchDemoSupplement';
 
 const props = defineProps({
   view: { type: Object, default: () => ({}) },
@@ -61,6 +72,7 @@ const router = useRouter();
 const navigationError = ref('');
 const navigationPending = ref(false);
 let navigationGeneration = 0;
+const demoSupplementEnabled = ref(true);
 
 const isCorporate = computed(() => props.view?.renderPackage?.canvasStyle?.presentation?.template === 'corporate-overview-v1');
 const isRetail = computed(() => props.view?.renderPackage?.canvasStyle?.presentation?.template === 'retail-overview-v1');
@@ -200,7 +212,7 @@ const institutionRuntimeIssueGroups = computed(() => {
   if (issues.length) groups.institutions = issues;
   return groups;
 });
-const dashboardModel = computed(() => {
+const originalDashboardModel = computed(() => {
   const labelled = applyMetricLabels(model.value, sourcePresentation.value.metricLabels);
   const institutionModel = institutionDisplayModel.value;
   const displayModel = mergeInstitutionRuntimeModel(labelled, institutionModel);
@@ -230,10 +242,55 @@ const runtimePresentation = computed(() => {
     queriedAt: model.value?.queriedAt || state.lastQueriedAt?.value || ''
   });
 });
+// 只在后端确认的 TEST 分行草稿中补齐全辖展示。鉴权失败、请求失败和
+// 局部机构上下文继续显示原始状态；演示值不进入取数、授权或质量判断。
+const demoQueryFailed = computed(() => {
+  const guard = model.value?.qualityGuard;
+  const issues = Object.values(institutionRuntimeIssueGroups.value).flat();
+  // 保留旧批次时 status 可能是 STALE，查询失败原因仍在 code 中。
+  return [...issues, guard, { code: guard?.code }]
+    .some(issue => ['PERMISSION_DENIED', 'ERROR'].includes(issueStatus(issue)));
+});
+const demoSupplementAvailable = computed(() => props.view?.state === 'draft'
+  && props.view?.renderPackage?.canvasStyle?.dataClassification === 'TEST'
+  && displayPresentation.value?.template === 'branch-overview-v1'
+  && displayPresentation.value?.displaySchemaVersion === 1
+  && !props.context?.orgCode && !props.context?.cityCode && !props.context?.empId
+  && !loading.value && !error.value
+  && !model.value?.permissionStatus
+  && !demoQueryFailed.value
+  && !['PERMISSION_DENIED', 'ERROR'].includes(runtimePresentation.value.status));
+const demoDisplayPresentation = computed(() => {
+  const presentation = displayPresentation.value;
+  if (!demoSupplementAvailable.value || !demoSupplementEnabled.value) return presentation;
+  // 旧组件只保存了存款 tab，兼容适配器为收入留空字段。演示时显式展开
+  // 三个环的绑定，让补齐值可被读取；这是视图副本，不回写保存的配置。
+  const components = presentation.display?.components || [];
+  return { ...presentation, display: { ...presentation.display, components: components.map(component => {
+    const tabs = component.content?.tabs || [];
+    const first = tabs[0];
+    if (component.componentId !== 'legacy-composition-64' || component.componentType !== 'COMPOSITION_TABS'
+      || component.dataRefs?.[0]?.blockId !== 64 || tabs.length !== 1
+      || first?.tabKey !== 'business-structure' || first.corporateField !== '测试_直营对公存款'
+      || first.retailField !== '测试_直营零售存款' || first.totalField) return component;
+    return { ...component, content: { ...component.content, tabs: [
+      { tabKey: 'deposit', label: '存款', corporateField: '测试_直营对公存款', retailField: '测试_直营零售存款',
+        totalField: '测试_直营存款余额', unit: 'HUNDRED_MILLION' },
+      { tabKey: 'loan', label: '贷款', corporateField: '测试_直营对公贷款', retailField: '测试_直营零售贷款',
+        totalField: '测试_直营贷款余额', unit: 'HUNDRED_MILLION' },
+      { tabKey: 'income', label: '收入', corporateField: '测试_直营对公营业收入', retailField: '测试_直营零售营业收入',
+        totalField: '测试_直营营业收入', unit: 'HUNDRED_MILLION' }
+    ] } };
+  }) } };
+});
+const demoSupplement = computed(() => demoSupplementAvailable.value && demoSupplementEnabled.value
+  ? supplementBranchDemoModel(originalDashboardModel.value, demoDisplayPresentation.value)
+  : { model: originalDashboardModel.value, fields: [] });
+const dashboardModel = computed(() => demoSupplement.value.model);
 const dashboardSourcePresentation = computed(() => ({
   ...sourcePresentation.value,
   screenCode: String(props.view?.screenCode || props.view?.screen_code || '').trim(),
-  displayPresentation: props.view?.renderPackage?.canvasStyle?.presentation || null,
+  displayPresentation: demoDisplayPresentation.value,
   scopeIdentity: [props.view?.screenCode, props.view?.orgScopeMode, props.view?.orgGroupCode, props.context?.orgCode].map(v => v || '').join('|'),
   runtimeIssues: institutionRuntimeIssueGroups.value,
   runtimeQuality: model.value?.qualityGuard || model.value?.quality || null,
@@ -392,6 +449,31 @@ defineExpose({ ...state, refresh: state.refresh, selectBranch: state.selectBranc
   box-sizing: border-box;
   color: #dce8f5;
   background: #071a31;
+}
+.panorama-runtime__demo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 6px 16px;
+  color: #ffdf99;
+  background: #302919;
+  border-bottom: 1px solid rgba(246, 191, 73, .4);
+  font-size: 12px;
+}
+.panorama-runtime__demo button {
+  padding: 4px 8px;
+  color: #ffdf99;
+  background: transparent;
+  border: 1px solid #b68c41;
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+.panorama-runtime__demo button:focus-visible {
+  outline: 2px solid #ffdf99;
+  outline-offset: 2px;
 }
 .panorama-runtime__issues {
   position: fixed;
