@@ -276,6 +276,7 @@
             mode="province"
             :selected-region-code="selectedCityCode"
             @region-select="selectCity"
+            @branch-select="openInstitutionFromMap"
           />
           <p class="retail-scope-note" data-testid="retail-scope-note">{{ safeModel.scopeLabel }} KPI 与趋势不随城市筛选变化；城市选择只影响机构分析。</p>
           <p v-if="selectedCityCode" class="retail-selected-city" data-testid="retail-selected-city">当前机构分析：{{ selectedCityName }}（{{ filteredRankings.length }} 家有排名记录）</p>
@@ -1087,7 +1088,9 @@ function openInstitution(item) {
 }
 
 function openInstitutionFromMap(orgCode) {
-  openInstitution({ orgCode: String(orgCode || '') });
+  const code = String(orgCode || '').trim();
+  if (!code) return;
+  emit('branch-select', code);
 }
 
 function openAttention(item, event) {

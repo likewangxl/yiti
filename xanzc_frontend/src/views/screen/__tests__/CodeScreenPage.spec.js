@@ -132,6 +132,24 @@ describe('CodeScreenPage', () => {
     expect(getScreenView).toHaveBeenCalledWith('SCR_RETAIL_OVERVIEW');
   });
 
+  it('把已解析的零售源屏编码和预览状态透传给 PanoramaRuntime', async () => {
+    routeState.params.template = 'retail-overview-v1';
+    routeState.query = {
+      businessLine: 'RETAIL', metricKey: 'deposit',
+      sourceScreenCode: 'SCR_PROVINCE', sourcePreview: 'draft'
+    };
+    listAvailableScreens.mockResolvedValue([retail]);
+    getScreenView.mockResolvedValue(runtimeResponse('SCR_RETAIL_OVERVIEW', 'retail-overview-v1'));
+
+    const page = await mountPage();
+    await flushPromises();
+
+    expect(page.findComponent(runtimeStub).props('context')).toMatchObject({
+      sourceScreenCode: 'SCR_PROVINCE',
+      sourcePreview: 'draft'
+    });
+  });
+
   it('对公页刷新调用运行时真实取数，而不是只更新本地演示时间', async () => {
     routeState.params.template = 'corporate-overview-v1';
     listAvailableScreens.mockResolvedValue([corporate]);

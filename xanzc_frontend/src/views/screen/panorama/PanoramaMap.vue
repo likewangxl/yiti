@@ -125,7 +125,15 @@
         <div v-if="!hasInstitutionMetrics || activeCityDetail.metrics.some(metric => metric.value !== '暂无数据')" class="panorama-map__detail-metrics"><div v-for="metric in activeCityDetail.metrics" :key="metric.key"><span>{{ metric.label }}</span><strong :class="{ 'is-empty': metric.value === '暂无数据' }">{{ metric.value }}</strong></div></div>
         <div v-if="hasInstitutionMetrics" class="panorama-map__detail-institution-list" data-testid="map-institution-metrics" tabindex="0" aria-label="地市授权机构业务明细">
           <article v-for="institution in activeCityDetail.institutions" :key="institution.orgCode">
-            <h4>{{ institution.orgName || institution.orgCode }}</h4>
+            <h4>
+              <button
+                type="button"
+                class="panorama-map__institution-link"
+                :data-org-code="institution.orgCode || ''"
+                :aria-label="`查看机构：${institution.orgName || institution.orgCode || '未命名机构'}`"
+                @click.stop="selectPoint(institution)"
+              >{{ institution.orgName || institution.orgCode || '未命名机构' }}</button>
+            </h4>
             <dl><div v-for="metric in institution.metrics.filter(item => item.value !== '暂无数据')" :key="metric.key"><dt>{{ metric.label }}</dt><dd>{{ metric.value }}</dd></div></dl>
             <p v-if="institution.metrics.every(item => item.value === '暂无数据')">暂无业务数据</p>
             <small>数据日期 {{ institution.dataDate || '暂无' }}</small>
@@ -1695,6 +1703,9 @@ onBeforeUnmount(() => {
 .panorama-map__detail-institution-list { margin-top: 12px; max-height: 220px; overflow-y: auto; overscroll-behavior: contain; }
 .panorama-map__detail-institution-list article { padding: 8px 0; border-top: 1px solid #304966; }
 .panorama-map__detail-institution-list h4 { margin: 0 0 6px; font-size: 12px; color: #d4eaff; }
+.panorama-map__detail-institution-list h4 .panorama-map__institution-link { display: block; margin: 0; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.panorama-map__detail-institution-list h4 .panorama-map__institution-link:hover,
+.panorama-map__detail-institution-list h4 .panorama-map__institution-link:focus-visible { color: #8cf3e8; text-decoration: underline; outline: 2px solid rgba(140, 243, 232, .42); outline-offset: 2px; border-radius: 2px; }
 .panorama-map__detail-institution-list dl { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
 .panorama-map__detail-institution-list dt { color: #91a8ca; font-size: 10px; }
 .panorama-map__detail-institution-list dd { margin: 2px 0 0; font-size: 12px; }

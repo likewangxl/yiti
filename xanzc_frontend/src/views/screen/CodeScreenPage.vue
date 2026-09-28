@@ -131,6 +131,8 @@ const runtimeContext = computed(() => ({
   businessLine: navigationContext.value.businessLine || activeEntry.value?.bizLine || '',
   period: navigationContext.value.period,
   metricKey: navigationContext.value.metricKey,
+  sourceScreenCode: navigationContext.value.sourceScreenCode,
+  sourcePreview: navigationContext.value.sourcePreview,
   navigationView: navigationContext.value.view,
   navigationState: navigationContext.value.state
 }));
