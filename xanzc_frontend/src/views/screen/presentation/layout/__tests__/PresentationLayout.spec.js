@@ -61,6 +61,7 @@ const presentation = {
 const stubs = {
   MetricDisplayWidgets: { props: ['components', 'grouped'], template: '<div data-testid="metric-widget" :data-grouped="grouped ? \'true\' : \'false\'"><span v-for="item in components" :key="item.componentId">{{ item.componentId }}</span></div>' },
   SeriesTableWidgets: { props: ['components', 'tabbed', 'trendDisplayMode'], template: '<div data-testid="series-widget" :data-tabbed="tabbed ? \'true\' : \'false\'" :data-trend-display-mode="trendDisplayMode"><span v-for="item in components" :key="item.componentId" data-testid="series-component">{{ item.componentId }}</span></div>' },
+  BusinessGrowthWidget: { props: ['presentation', 'model'], template: '<div data-testid="business-growth-widget" :data-template="presentation?.template || \'\'">业务增长曲线</div>' },
   CompositionTabsWidget: { props: ['model'], template: '<div data-testid="structure-widget">{{ model.components?.[0]?.componentId }}</div>' },
   InstitutionRankingWidget: { props: ['model', 'title', 'paginate', 'pageSize', 'pageInterval', 'metricCarousel'], template: '<div data-testid="ranking-widget" :data-paginate="paginate ? \'true\' : \'false\'" :data-page-size="pageSize" :data-page-interval="pageInterval" :data-metric-carousel="metricCarousel ? \'true\' : \'false\'">{{ title }}</div>' },
   PresentationMapWidget: { props: ['presentation'], template: '<div data-testid="map-widget">地图</div>' }
@@ -303,7 +304,7 @@ describe('PresentationLayout', () => {
     expect(wrapper.find('[data-layout-region="BOTTOM"]').findAll('[data-component-type="DETAIL_TABLE"]')).toHaveLength(3);
   });
 
-  it('分行总览把中央趋势视觉放到左侧业务结构下方，同时保留保存区域', () => {
+  it('分行总览把中央趋势归组为同时可见的业务增长曲线，并保留保存区域', () => {
     const components = [
       { componentId: 'structure', componentType: 'COMPOSITION_TABS', layoutRegion: 'LEFT', order: 0, visible: true, text: { titleMode: 'CUSTOM', title: '业务结构' }, content: { tabs: [] }, dataRefs: [] },
       { componentId: 'trend', componentType: 'TREND', layoutRegion: 'CENTER', order: 1, visible: true, text: { titleMode: 'CUSTOM', title: '趋势' }, content: { series: [] }, dataRefs: [] },
@@ -326,8 +327,9 @@ describe('PresentationLayout', () => {
     const trendGroup = wrapper.get('[data-testid="presentation-layout-trend-group"]');
     expect(trendGroup.classes()).toContain('presentation-layout__component--trend-tabs');
     expect(trendGroup.attributes('data-trend-count')).toBe('2');
-    expect(trendGroup.findAll('[data-testid="series-component"]').map(node => node.text())).toEqual(['trend', 'branch-trend']);
-    expect(trendGroup.get('[data-testid="series-widget"]').attributes()).toMatchObject({ 'data-tabbed': 'true', 'data-trend-display-mode': 'branch' });
+    expect(trendGroup.get('[data-testid="business-growth-widget"]').text()).toBe('业务增长曲线');
+    expect(trendGroup.get('[data-testid="business-growth-widget"]').attributes('data-template')).toBe('branch-overview-v1');
+    expect(trendGroup.find('[data-testid="series-widget"]').exists()).toBe(false);
     expect(wrapper.find('[data-layout-column="CENTER"]').findAll('[data-testid="presentation-layout-component"]')
       .map(node => node.attributes('data-component-id'))).toEqual(['map']);
     expect(trendGroup.attributes('data-layout-region')).toBe('CENTER');

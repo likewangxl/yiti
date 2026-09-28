@@ -125,10 +125,9 @@
             data-layout-region="CENTER"
             :data-trend-count="branchTrendComponents.length"
           >
-            <SeriesTableWidgets
-              :components="branchTrendSeriesComponents"
-              :tabbed="branchTrendComponents.length > 1"
-              trend-display-mode="branch"
+            <BusinessGrowthWidget
+              :presentation="resolvedPresentation"
+              :model="props.model"
             />
           </div>
           <div
@@ -202,6 +201,7 @@ import { computed } from 'vue';
 import MetricDisplayWidgets from '../widgets/MetricDisplayWidgets.vue';
 import RevenueShareWidget from '../widgets/RevenueShareWidget.vue';
 import SeriesTableWidgets from '../widgets/SeriesTableWidgets.vue';
+import BusinessGrowthWidget from '../widgets/BusinessGrowthWidget.vue';
 import CompositionTabsWidget from '../widgets/CompositionTabsWidget.vue';
 import InstitutionRankingWidget from '../widgets/InstitutionRankingWidget.vue';
 import PresentationMapWidget from '../map/PresentationMapWidget.vue';
@@ -285,8 +285,6 @@ function sortCenterComponents(items) {
 const branchTrendComponents = computed(() => isBranchOverview.value
   ? components.value.filter(component => component.layoutRegion === 'CENTER' && component.componentType === 'TREND')
   : []);
-const branchTrendSeriesComponents = computed(() => branchTrendComponents.value.flatMap(component => seriesComponents(component)));
-
 const mainColumns = computed(() => {
   const leftComponents = components.value.filter(component => component.layoutRegion === 'LEFT');
   const centerComponents = components.value.filter(component => component.layoutRegion === 'CENTER');
@@ -675,7 +673,7 @@ function onMapContext(payload) {
 .presentation-layout--branch-overview .presentation-layout__column--branch-overview {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: minmax(0, 1fr) 250px;
+  grid-template-rows: 230px minmax(0, 340px);
   align-items: stretch;
   gap: 10px;
 }
@@ -688,8 +686,8 @@ function onMapContext(payload) {
 }
 
 .presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component--trend {
-  min-height: 250px;
-  height: 250px;
+  min-height: 340px;
+  height: 340px;
   flex: none;
   grid-row: 2;
 }
@@ -738,6 +736,17 @@ function onMapContext(payload) {
 .presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring-card__status) {
   min-height: 0;
   font-size: 8px;
+}
+
+@media (max-width: 1440px) {
+  .presentation-layout--branch-overview .presentation-layout__column--branch-overview {
+    grid-template-rows: 260px minmax(0, 310px);
+  }
+
+  .presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component--trend {
+    min-height: 310px;
+    height: 310px;
+  }
 }
 
 .presentation-layout__component {
@@ -821,9 +830,9 @@ function onMapContext(payload) {
     gap: 10px;
   }
   .presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component--trend {
-    height: 250px;
-    min-height: 250px;
-    flex: 0 0 250px;
+    height: 310px;
+    min-height: 310px;
+    flex: 0 0 310px;
   }
   .presentation-layout__footer--bottom > .presentation-layout__component { min-height: 210px; }
 }
