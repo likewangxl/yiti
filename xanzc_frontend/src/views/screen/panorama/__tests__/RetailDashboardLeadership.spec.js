@@ -73,18 +73,13 @@ describe('RetailDashboard 零售密度表达', () => {
     expect(panel.text()).toContain('80.00%');
   });
 
-  it('经营观察在净增全缺失时显示不可判断，并分别呈现达标、缺指标和目标缺口', () => {
+  it('历史 AUM 数据形态也不再展示经营观察条', () => {
     const wrapper = mountDashboard({ model: {
       ...model,
       rankings: model.rankings.map(row => ({ ...row, increase: null }))
     } });
-    const strip = wrapper.get('[data-testid="retail-leadership-insights"]');
-    expect(strip.text()).toContain('负增机构—');
-    expect(strip.text()).toContain('可判断 0/2 家');
-    expect(strip.text()).toContain('已达标目标1');
-    expect(strip.text()).toContain('缺指标4');
-    expect(strip.text()).toContain('目标有效数 / 缺口2/2');
-    expect(strip.text()).toContain('有缺口 1 项');
+    expect(wrapper.find('[data-testid="retail-leadership-insights"]').exists()).toBe(false);
+    expect(wrapper.find('.retail-main-grid').exists()).toBe(true);
   });
 
   it('同屏显示排名四项指标，并对同值机构保留并列排名', async () => {

@@ -80,53 +80,6 @@
     </section>
     <SeriesTableWidgets v-if="configuredSeriesTables.components.length" :components="configuredSeriesTables.components" />
 
-    <section class="retail-insight-strip" data-testid="retail-leadership-insights" aria-label="经营观察">
-      <template v-if="hasDepositRankingShape">
-        <div class="retail-insight-item">
-          <span>机构数据覆盖</span>
-          <strong>{{ institutionDataCoverageLabel }}</strong>
-          <small>有余额或月日均记录</small>
-        </div>
-        <div class="retail-insight-item">
-          <span>月均低于余额</span>
-          <strong>{{ insightCount(displayInsights.averageBelowBalanceCount) }} 家</strong>
-          <small>余额与月日均可比样本</small>
-        </div>
-        <div class="retail-insight-item">
-          <span>目标有效数 / 达标</span>
-          <strong>{{ insightCount(displayInsights.validTargetCount) }} / {{ insightCount(displayInsights.achievedTargetCount) }}</strong>
-          <small>仅统计目标值大于 0 的来源</small>
-        </div>
-        <div class="retail-insight-item retail-insight-item--wide">
-          <span>当前数据日期覆盖</span>
-          <strong>{{ institutionDateCoverageLabel }}</strong>
-          <small>{{ rankingDataDate || '日期待确认' }} · 当前批次覆盖</small>
-        </div>
-      </template>
-      <template v-else>
-        <div class="retail-insight-item">
-          <span>负增机构</span>
-          <strong>{{ growthCountLabel }}</strong>
-          <small>{{ growthSampleLabel }}</small>
-        </div>
-        <div class="retail-insight-item">
-          <span>已达标目标</span>
-          <strong>{{ insightCount(leadershipInsights.achievedTargetCount) }}</strong>
-          <small>有效目标 {{ insightCount(leadershipInsights.validTargetCount) }} 项</small>
-        </div>
-        <div class="retail-insight-item">
-          <span>缺指标</span>
-          <strong>{{ insightCount(leadershipInsights.missingMetricCount) }}</strong>
-          <small>历史AUM矩阵空值单元</small>
-        </div>
-        <div class="retail-insight-item retail-insight-item--wide">
-          <span>目标有效数 / 缺口</span>
-          <strong>{{ targetValidityLabel }}</strong>
-          <small>{{ targetGapLabel }}</small>
-        </div>
-      </template>
-    </section>
-
     <section class="retail-main-grid">
       <div class="retail-column retail-column--left">
         <article class="retail-panel retail-savings-panel">
@@ -608,14 +561,10 @@ import { buildInstitutionRankingModel } from '../presentation/model/institutionR
 import PresentationLayout from '../presentation/layout/PresentationLayout.vue';
 import { isConfiguredPresentation } from '../presentation/layout/presentationLayoutModel';
 import { provinceGeo } from './geography.js';
-import {
-  buildRetailLeadershipInsights,
-  buildSegmentComparisons
-} from './retailLeadershipInsights.js';
+import { buildSegmentComparisons } from './retailLeadershipInsights.js';
 import {
   buildDepositComparison,
   buildInstitutionDepositView,
-  buildRetailDisplayInsights,
   normalizeInstitutionRow
 } from './retailDisplayInsights.js';
 
@@ -784,8 +733,6 @@ const activeMapMetricKey = computed(() => selectedMapMetricKey.value
   || String(mapComponent.value?.content?.mainField || '').trim());
 const segmentComparisons = computed(() => buildSegmentComparisons(safeModel.value.segments));
 const segmentCoverageLabel = computed(() => `${segmentComparisons.value.length}组有效`);
-const leadershipInsights = computed(() => buildRetailLeadershipInsights(safeModel.value));
-const displayInsights = computed(() => buildRetailDisplayInsights(safeModel.value));
 const hasDepositRankingShape = computed(() => safeModel.value.rankings.some(row => row
   && typeof row === 'object'
   && ['deposit', 'average', 'depositAverage', 'depositBalance'].some(key => Object.prototype.hasOwnProperty.call(row, key))));
@@ -808,16 +755,6 @@ const rankingDataDate = computed(() => {
     || safeModel.value.dataDate
     || '';
 });
-const growthCountLabel = computed(() => leadershipInsights.value.growthComparableCount > 0
-  ? String(leadershipInsights.value.negativeGrowthCount)
-  : '—');
-const growthSampleLabel = computed(() => `可判断 ${leadershipInsights.value.growthComparableCount}/${leadershipInsights.value.growthSampleCount} 家`);
-const targetValidityLabel = computed(() => leadershipInsights.value.targetCount > 0
-  ? `${leadershipInsights.value.validTargetCount}/${leadershipInsights.value.targetCount}`
-  : '—');
-const targetGapLabel = computed(() => leadershipInsights.value.targetCount > 0
-  ? `有缺口 ${insightCount(leadershipInsights.value.targetGapCount)} 项 · 金额按指标分列`
-  : '未绑定目标');
 const filteredRankings = computed(() => {
   const source = safeModel.value.rankings.filter(row => !selectedCityCode.value || String(row?.cityCode || '') === selectedCityCode.value);
   return [...source].sort((left, right) => {
@@ -854,14 +791,6 @@ const institutionDifferenceItems = computed(() => institutionRows.value
   .sort((left, right) => left.difference - right.difference)
   .slice(0, 3));
 const institutionDifferenceValues = computed(() => institutionDifferenceItems.value.map(row => row.difference));
-const institutionDataCoverageLabel = computed(() => {
-  const coverage = displayInsights.value.institutionCoverage;
-  return coverage.total ? `${coverage.available}/${coverage.total} 家` : '—';
-});
-const institutionDateCoverageLabel = computed(() => {
-  const coverage = displayInsights.value.dataDateCoverage;
-  return coverage.total ? `${coverage.available}/${coverage.total} 家` : '—';
-});
 const attentionItems = computed(() => {
   const sourceItems = safeModel.value.attention.map(item => ({ ...item, isVerification: Boolean(item?.isVerification || item?.type === 'verification' || item?.kind === 'issue') }));
   const dateIssueCodes = new Set(['MIXED_DATES', 'DATE_MISMATCH']);
@@ -1059,11 +988,6 @@ function segmentBarWidth(value) {
 function shareWidth(value) {
   const number = finiteValue(value);
   return number === null ? 0 : Math.max(0, Math.min(100, number));
-}
-
-function insightCount(value) {
-  const number = finiteValue(value);
-  return number === null ? '—' : String(number);
 }
 
 function rankingValue(item) {

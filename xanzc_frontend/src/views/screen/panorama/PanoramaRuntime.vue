@@ -23,7 +23,7 @@
       @configure="onConfigure"
     />
 
-    <aside v-if="issueEntries.length" class="panorama-runtime__issues" data-testid="panorama-slot-issues" aria-live="polite">
+    <aside v-if="!isRetail && issueEntries.length" class="panorama-runtime__issues" data-testid="panorama-slot-issues" aria-live="polite">
       <strong>部分数据暂不可用</strong>
       <ul>
         <li v-for="item in issueEntries" :key="item.key">

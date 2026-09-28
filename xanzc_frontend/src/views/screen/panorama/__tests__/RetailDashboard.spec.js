@@ -448,7 +448,7 @@ describe('RetailDashboard 零售经营总览', () => {
     expect(panel.text()).toContain('口径对照，不代表净增');
   });
 
-  it('观察条展示机构覆盖、月均低于时点余额数量、目标和当前日期覆盖', () => {
+  it('不再展示机构覆盖、月均比较、目标和日期覆盖观察条，保留核心经营内容', () => {
     const wrapper = mountDashboard({ model: {
       ...model,
       rankings: [
@@ -458,13 +458,10 @@ describe('RetailDashboard 零售经营总览', () => {
       ],
       institutions: [{ orgCode: 'P1' }, { orgCode: 'P2' }, { orgCode: 'P3' }]
     } });
-    const strip = wrapper.get('[data-testid="retail-leadership-insights"]');
-    expect(strip.text()).toContain('机构数据覆盖');
-    expect(strip.text()).toContain('2/3');
-    expect(strip.text()).toContain('月均低于余额');
-    expect(strip.text()).toContain('1 家');
-    expect(strip.text()).toContain('日期覆盖');
-    expect(strip.text()).toContain('2026-09-06');
+    expect(wrapper.find('[data-testid="retail-leadership-insights"]').exists()).toBe(false);
+    expect(wrapper.find('.retail-insight-strip').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="retail-kpi"]')).toHaveLength(7);
+    expect(wrapper.find('.retail-main-grid').exists()).toBe(true);
   });
 
   it('重复的数据日期核验项合并展示指标和实际日期，不生成三条相同事项', () => {

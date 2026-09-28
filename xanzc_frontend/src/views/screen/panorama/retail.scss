@@ -96,12 +96,6 @@
 .retail-kpi__change.is-favorable { color: var(--retail-cyan); }
 .retail-kpi__change.is-empty { color: #768dbb; }
 
-.retail-insight-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(180px, 1.2fr); gap: 8px; margin: 0 clamp(16px, 2vw, 30px) 12px; }
-.retail-insight-item { min-width: 0; display: grid; grid-template-columns: auto auto; align-items: baseline; column-gap: 8px; padding: 7px 11px 6px; border: 1px solid rgba(121, 161, 248, .23); border-radius: 7px; background: linear-gradient(105deg, rgba(15, 45, 105, .72), rgba(7, 24, 64, .74)); }
-.retail-insight-item > span { overflow: hidden; color: #9bb3df; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.retail-insight-item > strong { color: var(--retail-cyan); font-size: 17px; line-height: 1; text-align: right; }
-.retail-insight-item > small { grid-column: 1 / -1; margin-top: 3px; overflow: hidden; color: #7692c4; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.retail-insight-item--wide > strong { color: #d2bcff; }
 
 .retail-main-grid { display: grid; grid-template-columns: minmax(0, .83fr) minmax(0, 1.58fr) minmax(0, .9fr); align-items: stretch; gap: 14px; margin: 0 clamp(16px, 2vw, 30px) 18px; }
 .retail-column { min-width: 0; min-height: 0; display: grid; gap: 14px; align-content: stretch; }
@@ -395,8 +389,6 @@
   .retail-main-grid { gap: 10px; margin-right: 20px; margin-left: 20px; }
   .retail-panel__heading { min-height: 48px; padding: 7px 10px; }
   .retail-panel__heading h2 { font-size: 15px; }
-  .retail-insight-strip { gap: 6px; }
-  .retail-insight-item { padding-right: 8px; padding-left: 8px; }
   .retail-segment-compare-head,
   .retail-segment-row { grid-template-columns: minmax(62px, .65fr) minmax(102px, 1.1fr) 38px 41px 50px; gap: 5px; }
   .retail-share { grid-template-columns: 11px minmax(18px, 1fr) 31px; gap: 3px; }
@@ -415,8 +407,7 @@
   .retail-dashboard > .retail-demo-badge,
   .retail-dashboard > .retail-loading,
   .retail-dashboard > .retail-error,
-  .retail-dashboard > .retail-kpi-grid,
-  .retail-dashboard > .retail-insight-strip { flex: 0 0 auto; }
+  .retail-dashboard > .retail-kpi-grid { flex: 0 0 auto; }
   .retail-main-grid {
     height: auto;
     grid-template-columns: minmax(0, .83fr) minmax(0, 1.58fr) minmax(0, .9fr);
@@ -449,8 +440,6 @@
   .retail-header__actions .retail-live-state { display: none; }
   .retail-kpi-grid,
   .retail-main-grid { margin-right: 12px; margin-left: 12px; }
-  .retail-insight-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-right: 12px; margin-left: 12px; }
-  .retail-insight-item--wide { grid-column: 1 / -1; }
   .retail-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .retail-kpi:nth-child(2n) { border-right: 0; }
   .retail-kpi:nth-child(-n + 4) { border-bottom: 1px solid rgba(121, 161, 248, .16); }
@@ -535,7 +524,6 @@
   .retail-header__title h1 { font-size: clamp(26px, 2.5vw, 38px); }
   .retail-kpi { min-height: 66px; padding-top: 6px; padding-bottom: 6px; }
   .retail-kpi-grid { margin-top: 8px; margin-bottom: 8px; }
-  .retail-insight-strip { margin-bottom: 8px; }
   .retail-main-grid { margin-bottom: 10px; }
   .retail-column { gap: 10px; }
   .retail-panel__heading { min-height: 44px; padding: 6px 10px; gap: 6px; }
