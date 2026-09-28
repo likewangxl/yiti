@@ -229,6 +229,41 @@ describe('城市悬浮详情', () => {
     wrapper.unmount();
   });
 
+  it('机构模式无经营机构地市把名称放回对应区域，有机构地市仍保留外围 callout', async () => {
+    const cityDetails = {
+      '610100': { institutionCount: 1, institutions: [{ orgCode: 'XIAN-1', orgName: '西安一支行' }] },
+      '610200': { institutionCount: 0, institutions: [] }
+    };
+    const wrapper = mount(PanoramaMap, {
+      props: {
+        geoJson: provinceGeo,
+        appearance: 'relief',
+        labelLayout: 'callout',
+        cityDetailMode: 'institutions',
+        cityDetails
+      }
+    });
+    await wrapper.vm.$nextTick();
+
+    const labels = wrapper.findAll('.panorama-map__region-label-hit[data-city-code]');
+    expect(labels).toHaveLength(10);
+    expect(new Set(labels.map(label => label.attributes('data-city-code'))).size).toBe(10);
+    expect(wrapper.get('button[data-city-code="610100"]').attributes('data-label-placement')).toBe('callout');
+    const emptyLabel = wrapper.get('button[data-city-code="610200"]');
+    expect(emptyLabel.attributes('data-label-placement')).toBe('map');
+    expect(emptyLabel.find('.panorama-map__city-marker').exists()).toBe(false);
+    expect(emptyLabel.find('[data-testid="map-region-metric"]').exists()).toBe(false);
+
+    const region = wrapper.vm.regionLabels.find(item => String(item.code) === '610200');
+    const expected = wrapper.vm.overlayPoint(wrapper.vm.interiorRegionPoint(region, wrapper.vm.regionAnchorWorldPoint(region)));
+    const style = emptyLabel.attributes('style');
+    expect(style).toContain(`left: ${expected.x}%`);
+    expect(style).toContain(`top: ${expected.y}%`);
+    await emptyLabel.trigger('click');
+    expect(wrapper.emitted('region-select')).toContainEqual([{ code: '610200', name: '铜川市' }]);
+    wrapper.unmount();
+  });
+
   it('relief inline 标签仍支持键盘聚焦详情，且离开后收起', async () => {
     const wrapper=mount(PanoramaMap,{global:{stubs:{Teleport:true}},props:{appearance:'relief',labelLayout:'inline',geoJson,metricValues:{'610100':'125万元'},cityDetails:{'610100':{institutionCount:2,locatedCount:1,dataDate:'2026-08-30',metrics:[{key:'deposit',label:'存款余额',value:'125万元'}],institutions:[{orgCode:'A',orgName:'西安一支行'}]}}}});
     const label=wrapper.get('button[data-city-code="610100"]');
