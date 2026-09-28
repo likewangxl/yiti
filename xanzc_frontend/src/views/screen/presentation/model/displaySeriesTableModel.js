@@ -18,6 +18,7 @@ function sourceRows(model, component, ref) {
     if (Array.isArray(found?.rows)) return found.rows;
   }
   if (component.componentType === 'TREND') return Array.isArray(model?.trend) ? model.trend : [];
+  if (component.componentId === 'branch-composition') return Array.isArray(model?.composition) ? model.composition : [];
   return Array.isArray(model?.items) ? model.items : Array.isArray(model?.rankings) ? model.rankings : [];
 }
 

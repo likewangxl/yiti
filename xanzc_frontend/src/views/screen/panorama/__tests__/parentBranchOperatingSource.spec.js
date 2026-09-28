@@ -145,4 +145,39 @@ describe('parentBranchOperatingSource', () => {
     ]));
     expect(model.kpis.find(item => item.key === 'loan')?.value).toBeNull();
   });
+
+  it('保留单机构展示块并过滤块内其他机构行，第一行不是当前机构时不串值', () => {
+    const pkg = JSON.parse(sourceView.renderPackageJson);
+    pkg.canvasStyle.presentation = {
+      type: 'CODE', template: 'branch-overview-v1', displaySchemaVersion: 1,
+      display: { components: [{
+        componentId: 'mix', componentType: 'COMPOSITION_TABS', layoutRegion: 'LEFT',
+        dataRefs: [{ blockId: 64 }], content: { tabs: [
+          { tabKey: 'deposit', label: '存款', corporateField: 'cd', retailField: 'rd', totalField: 'total', unit: 'HUNDRED_MILLION' }
+        ] }
+      }] }
+    };
+    const model = buildParentBranchOperatingModel({ sourceView: { ...sourceView, renderPackageJson: JSON.stringify(pkg) }, orgCode: '105', model: {
+      orgCode: '105', institutions: [{ orgCode: '105' }], blockResults: {
+        64: {
+          blockId: 64,
+          rows: [
+            { org_code: '451', cd: 999, rd: 999, total: 1998 },
+            { org_code: '105', cd: 1, rd: 2, total: 4 }
+          ],
+          columns: ['org_code', 'cd', 'rd', 'total'],
+          unit: 'HUNDRED_MILLION', dataDate: '2026-09-20'
+        }
+      },
+      citySummaries: { '610100': { kpis: [{ key: 'deposit', value: 999 }] } }
+    } });
+
+    expect(model.blockResults['64'].rows).toEqual([{ org_code: '105', cd: 1, rd: 2, total: 4 }]);
+    expect(model.blockResults['64'].cd).toBe(1);
+    expect(model.blockResults['64'].rd).toBe(2);
+    expect(model.kpis.find(item => item.key === 'corpDeposit')?.value).toBe(1);
+    expect(model.kpis.find(item => item.key === 'retailDeposit')?.value).toBe(2);
+    expect(model.kpis).not.toEqual(expect.arrayContaining([expect.objectContaining({ value: 999 })]));
+    expect(model.citySummaries).toEqual({});
+  });
 });

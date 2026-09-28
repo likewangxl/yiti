@@ -14,6 +14,9 @@
       <div class="panorama-title-block">
         <h1>{{ displayTitle }}</h1>
         <span>{{ scopeLabel }}</span>
+        <div v-if="$slots['header-context']" class="panorama-header-context">
+          <slot name="header-context" />
+        </div>
       </div>
       <div class="panorama-header-actions">
         <label v-if="presentationLayoutEnabled" class="panorama-amount-unit-control">
@@ -34,7 +37,7 @@
           @click="emit('refresh')"
         ><component :is="Refresh" /></button>
         <button
-          v-if="!demo"
+          v-if="!demo && showConfigure"
           type="button"
           class="panorama-icon-action"
           data-action="configure"
@@ -74,7 +77,14 @@
       @map-context="emit('map-context', $event)"
       @metric-change="syncMapMetric"
       @business-line-select="selectCompositionBusinessLine"
-    />
+    >
+      <template v-if="hasBranchMapSlot" #branch-map="slotProps">
+        <slot name="branch-map" v-bind="slotProps" />
+      </template>
+      <template v-if="hasBranchRankingSlot" #branch-ranking="slotProps">
+        <slot name="branch-ranking" v-bind="slotProps" />
+      </template>
+    </PresentationLayout>
     <template v-else>
     <MetricDisplayWidgets v-if="configuredMetrics.enabled" :components="configuredMetrics.components" />
     <section v-else class="panorama-kpi-grid" aria-label="核心指标">
@@ -429,7 +439,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue';
 import {
   Aim, Coin, Close, OfficeBuilding, Refresh, Setting, TrendCharts, UserFilled
 } from '@element-plus/icons-vue';
@@ -476,9 +486,13 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
   demo: { type: Boolean, default: false },
-  sourcePresentation: { type: Object, default: () => ({}) }
+  sourcePresentation: { type: Object, default: () => ({}) },
+  showConfigure: { type: Boolean, default: true }
 });
 const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select', 'business-line-select', 'map-context']);
+const slots = useSlots();
+const hasBranchMapSlot = computed(() => Boolean(slots['branch-map']));
+const hasBranchRankingSlot = computed(() => Boolean(slots['branch-ranking']));
 
 function sourceStatus(slot, semantic = '') {
   const mappedSlot = slot === 'kpi'

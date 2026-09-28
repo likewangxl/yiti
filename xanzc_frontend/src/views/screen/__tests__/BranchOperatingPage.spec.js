@@ -28,7 +28,7 @@ vi.mock('../panorama/usePanoramaData', () => ({ usePanoramaData: (view, context,
   hookHarness.options = options;
   return state;
 } }));
-vi.mock('../panorama/BranchOperatingDashboard.vue', () => ({ default: {
+vi.mock('../panorama/BranchOperatingOverview.vue', () => ({ default: {
   props: ['model', 'error', 'sourcePresentation'],
   template: '<main data-testid="branch-dashboard-probe" :data-source-presentation="sourcePresentation ? \'present\' : \'null\'">{{model.orgName}} {{model.kpis?.find(item => item.key === \'deposit\')?.value}} {{model.institutions?.map(item => item.orgCode).join(\',\')}} {{error}}</main>'
 } }));
@@ -241,7 +241,7 @@ describe('支行总览入口', () => {
     expect(api.touch).not.toHaveBeenCalled();
     expect(wrapper.find('[data-testid="branch-operating-source-switch"]').exists()).toBe(false);
     expect(wrapper.text()).toContain('TEST');
-    expect(wrapper.get('[data-testid="branch-dashboard-probe"]').attributes('data-source-presentation')).toBe('null');
+    expect(wrapper.get('[data-testid="branch-dashboard-probe"]').attributes('data-source-presentation')).toBe('present');
     expect(wrapper.get('[data-testid="branch-dashboard-probe"]').text()).toContain('12');
     wrapper.unmount();
   });

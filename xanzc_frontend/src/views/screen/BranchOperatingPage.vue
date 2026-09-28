@@ -25,7 +25,7 @@
       <p>{{ pageError || '当前旧链接缺少已确认的机构上下文，未进入机构主路径。' }}</p>
       <button type="button" data-action="back-to-screen-center" @click="router.push('/screens')">返回大屏中心</button>
     </section>
-    <BranchOperatingDashboard v-else :model="dashboard" :source-presentation="branchDisplayPresentation"
+    <BranchOperatingOverview v-else :model="dashboard" :source-presentation="branchDisplayPresentation"
       :performance-enabled="true"
       :loading="loading || (!isTestSource && financialLoading)" :error="visibleError"
       @refresh="initialize" @back="router.push('/screens')" @branch-select="selectBranch" />
@@ -39,7 +39,7 @@ import { listAvailableScreens, getScreenView, queryScreenData } from '@/api/scre
 import { getTouchSummary } from '@/api/customerMarketing';
 import { usePanoramaData } from './panorama/usePanoramaData';
 import { buildBranchOperatingModel, parseBranchSource, toBranchDisplayUnits } from './panorama/branchOperatingModel';
-import BranchOperatingDashboard from './panorama/BranchOperatingDashboard.vue';
+import BranchOperatingOverview from './panorama/BranchOperatingOverview.vue';
 import { loadBranchDeposit } from './panorama/branchOperatingSource';
 import {
   buildParentBranchOperatingModel,
@@ -107,12 +107,12 @@ const dashboard = computed(() => {
   }));
 });
 const branchDisplayPresentation = computed(() => {
-  if (isTestSource.value || isParentSource.value) return null;
   let pkg = view.value?.renderPackage;
   if (!pkg && typeof view.value?.renderPackageJson === 'string') {
     try { pkg = JSON.parse(view.value.renderPackageJson); } catch { pkg = null; }
   }
-  return pkg?.canvasStyle?.presentation || null;
+  const presentation = pkg?.canvasStyle?.presentation || null;
+  return presentation?.template === 'branch-overview-v1' ? presentation : null;
 });
 
 function routeNavigationSignature() {

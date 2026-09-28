@@ -153,6 +153,80 @@ function sourceRows(model, key, orgCode) {
   });
 }
 
+const BLOCK_IDENTITY_FIELDS = Object.freeze(['orgCode', 'org_code', 'orgId', 'org_id', 'organizationCode', 'organization_code']);
+const BLOCK_META_FIELDS = new Set(['blockId', 'rows', 'columns', 'columnsMeta', 'units', 'unitByField', 'unit', 'quality', 'dataDate', 'aliasIssues']);
+
+function presentationComponents(source) {
+  const presentation = source?.renderPackage?.canvasStyle?.presentation;
+  return Array.isArray(presentation?.display?.components)
+    ? presentation.display.components.filter(item => object(item) && item.visible !== false)
+    : [];
+}
+
+function displayReferenceKeys(source) {
+  const keys = new Set();
+  for (const component of presentationComponents(source)) {
+    for (const key of [component.componentId, component.componentType]) if (text(key)) keys.add(text(key));
+    for (const ref of Array.isArray(component.dataRefs) ? component.dataRefs : []) {
+      for (const key of [ref?.blockId, ref?.metricCode, ref?.metricName]) if (text(key)) keys.add(text(key));
+    }
+  }
+  return keys;
+}
+
+function copyValue(value, seen = new WeakMap()) {
+  if (Array.isArray(value)) return value.map(item => copyValue(item, seen));
+  if (!object(value)) return value;
+  if (seen.has(value)) return seen.get(value);
+  const clone = {};
+  seen.set(value, clone);
+  for (const [key, item] of Object.entries(value)) clone[key] = copyValue(item, seen);
+  return clone;
+}
+
+function rowOrgCode(row) {
+  if (!object(row)) return '';
+  for (const field of BLOCK_IDENTITY_FIELDS) {
+    if (hasOwn(row, field) && text(row[field])) return text(row[field]);
+  }
+  return '';
+}
+
+/** 过滤 singleOrg 原始块并重新计算首行快照，避免其他机构的第一行标量泄露。 */
+function scopeBlockResult(block, orgCode) {
+  if (!object(block) || !Array.isArray(block.rows)) return null;
+  const rows = block.rows.filter(item => object(item));
+  const hasIdentity = rows.some(row => rowOrgCode(row));
+  const scopedRows = hasIdentity ? rows.filter(row => rowOrgCode(row) === orgCode) : rows;
+  if (!scopedRows.length) return null;
+  const firstRow = scopedRows[0];
+  const metadata = Object.fromEntries(Object.entries(block).filter(([key]) => BLOCK_META_FIELDS.has(key)));
+  return { ...metadata, ...copyValue(firstRow), rows: copyValue(scopedRows) };
+}
+
+function scopedDisplayMap(map, keys) {
+  if (!object(map)) return undefined;
+  const entries = Object.entries(map).filter(([key]) => keys.has(text(key)));
+  return entries.length ? Object.fromEntries(entries.map(([key, value]) => [key, copyValue(value)])) : {};
+}
+
+function scopedSingleOrgModel(model, source, orgCode) {
+  const keys = displayReferenceKeys(source);
+  const blockResults = object(model?.blockResults)
+    ? Object.fromEntries(Object.entries(model.blockResults)
+      .filter(([key]) => keys.has(text(key)))
+      .flatMap(([key, block]) => {
+        const scoped = scopeBlockResult(block, orgCode);
+        return scoped ? [[key, scoped]] : [];
+      }))
+    : {};
+  const result = { ...model, blockResults };
+  for (const key of ['displayValues', 'metricValues']) {
+    if (object(model?.[key])) result[key] = scopedDisplayMap(model[key], keys);
+  }
+  return result;
+}
+
 /** 只消费已配置的存款/贷款页签与收入字段，禁止按总量推拆两条线。 */
 function operatingCoreKpis(model, source) {
   const blocks = object(model.blockResults) ? Object.fromEntries(Object.entries(model.blockResults)
@@ -194,8 +268,11 @@ export function buildParentBranchOperatingModel({ model = {}, sourceView, orgCod
     throw new Error('父屏单机构模型机构范围不精确');
   }
   const identity = institutionOf(model, source, code).directory;
-  const sourceKpis = Array.isArray(model?.kpis)
-    ? model.kpis.filter(item => object(item) && KPI_KEYS.has(text(item.key)))
+  // 先按单机构展示引用过滤原始块，再由经营值适配器读取，防止块的第一行
+  // 属于其他机构时先生成错误 KPI 后才被页面范围过滤。
+  const scopedModel = scopedSingleOrgModel(model, source, code);
+  const sourceKpis = Array.isArray(scopedModel?.kpis)
+    ? scopedModel.kpis.filter(item => object(item) && KPI_KEYS.has(text(item.key)))
       .filter(item => !text(item.orgCode ?? item.org_code) || text(item.orgCode ?? item.org_code) === code)
       .map(item => ({ ...item })) : [];
   const sourceKpiByKey = new Map(sourceKpis.map(item => [text(item.key), item]));
@@ -204,32 +281,32 @@ export function buildParentBranchOperatingModel({ model = {}, sourceView, orgCod
   for (const item of sourceKpis) {
     if (!CORE_KPI_DEFAULTS.some(([key]) => key === text(item.key))) scopedKpis.push(item);
   }
-  for (const item of operatingCoreKpis(model, source)) {
+  for (const item of operatingCoreKpis(scopedModel, source)) {
     const index = scopedKpis.findIndex(existing => existing.key === item.key);
     if (index < 0) scopedKpis.push(item);
     else if (scopedKpis[index].value === null || scopedKpis[index].value === undefined) scopedKpis[index] = item;
   }
-  const sourceMetadata = object(model?.sourceMetadata) ? { ...model.sourceMetadata } : {};
-  const sourceQualities = object(model?.sourceQualities) ? { ...model.sourceQualities } : {};
-  const sourceEntries = arrayOf(model?.sources);
+  const sourceMetadata = object(scopedModel?.sourceMetadata) ? { ...scopedModel.sourceMetadata } : {};
+  const sourceQualities = object(scopedModel?.sourceQualities) ? { ...scopedModel.sourceQualities } : {};
+  const sourceEntries = arrayOf(scopedModel?.sources);
   return {
     orgCode: code,
     orgName: text(identity.orgName ?? identity.org_name),
     cityCode: text(identity.cityCode ?? identity.city_code),
     cityName: text(identity.cityName ?? identity.city_name),
-    dataDate: text(model?.dataDate),
+    dataDate: text(scopedModel?.dataDate),
     sourceLabel: 'TEST 测试数据 · 非实际经营数据',
     metricLabels: object(model?.metricLabels) ? { ...model.metricLabels } : {},
     kpis: scopedKpis,
-    targets: sourceRows(model, 'targets', code),
-    targetDate: text(model?.targetDate),
-    trend: sourceRows(model, 'trend', code),
-    trendUnit: text(model?.trendUnit),
-    composition: sourceRows(model, 'composition', code),
-    marketing: sourceRows(model, 'marketing', code),
-    projects: sourceRows(model, 'projects', code),
-    teams: sourceRows(model, 'teams', code),
-    attention: sourceRows(model, 'attention', code),
+    targets: sourceRows(scopedModel, 'targets', code),
+    targetDate: text(scopedModel?.targetDate),
+    trend: sourceRows(scopedModel, 'trend', code),
+    trendUnit: text(scopedModel?.trendUnit),
+    composition: sourceRows(scopedModel, 'composition', code),
+    marketing: sourceRows(scopedModel, 'marketing', code),
+    projects: sourceRows(scopedModel, 'projects', code),
+    teams: sourceRows(scopedModel, 'teams', code),
+    attention: sourceRows(scopedModel, 'attention', code),
     institutions: [{ ...identity, orgCode: code }],
     sources: [
       { label: '数据来源', detail: `分行经营总览 · ${source.sourcePreview ? '草稿预览' : '已发布'} · 屏编码 ${source.screenCode} · 单机构查询` },
@@ -237,8 +314,11 @@ export function buildParentBranchOperatingModel({ model = {}, sourceView, orgCod
     ],
     sourceQualities,
     sourceMetadata,
-    issues: arrayOf(model?.issues),
-    gaps: object(model?.gaps) ? { ...model.gaps } : {},
+    issues: arrayOf(scopedModel?.issues),
+    gaps: object(scopedModel?.gaps) ? { ...scopedModel.gaps } : {},
+    ...(object(scopedModel?.blockResults) ? { blockResults: scopedModel.blockResults } : {}),
+    ...(object(scopedModel?.displayValues) ? { displayValues: scopedModel.displayValues } : {}),
+    ...(object(scopedModel?.metricValues) ? { metricValues: scopedModel.metricValues } : {}),
     citySummaries: {}
   };
 }

@@ -132,6 +132,33 @@
             />
           </div>
           <div
+            v-else-if="isBranchMapComponent(column, component) && ($slots['branch-map'] || $slots.map)"
+            class="presentation-layout__component presentation-layout__component--map presentation-layout__component--map-primary"
+            data-testid="presentation-layout-component"
+            data-branch-slot="map"
+            :data-component-id="component.componentId"
+            :data-component-type="component.componentType"
+            :data-layout-region="component.layoutRegion"
+            :data-order="component.order"
+          >
+            <slot v-if="$slots['branch-map']" name="branch-map" :component="component" />
+            <slot v-else name="map" :component="component" />
+          </div>
+          <div
+            v-else-if="isBranchRankingComponent(column, component) && ($slots['branch-ranking'] || $slots.ranking)"
+            class="presentation-layout__component presentation-layout__component--ranking"
+            data-testid="presentation-layout-component"
+            data-branch-slot="ranking"
+            :data-component-id="component.componentId"
+            :data-component-type="component.componentType"
+            :data-layout-region="component.layoutRegion"
+            :data-order="component.order"
+            data-visible-rows="10"
+          >
+            <slot v-if="$slots['branch-ranking']" name="branch-ranking" :component="component" />
+            <slot v-else name="ranking" :component="component" />
+          </div>
+          <div
             v-else-if="!isBranchTrendComponent(column, component)"
             class="presentation-layout__component"
             :class="[
@@ -286,6 +313,8 @@ function sortCenterComponents(items) {
 const branchTrendComponents = computed(() => isBranchOverview.value
   ? components.value.filter(component => component.layoutRegion === 'CENTER' && component.componentType === 'TREND')
   : []);
+const branchMapComponent = computed(() => components.value.find(component => component.layoutRegion === 'CENTER' && component.componentType === 'MAP') || null);
+const branchRankingComponent = computed(() => components.value.find(component => component.layoutRegion === 'RIGHT' && component.componentType === 'RANKING') || null);
 const mainColumns = computed(() => {
   const leftComponents = components.value.filter(component => component.layoutRegion === 'LEFT');
   const centerComponents = components.value.filter(component => component.layoutRegion === 'CENTER');
@@ -321,6 +350,16 @@ function isBranchTrendComponent(column, component) {
     && column.key === 'LEFT'
     && component.componentType === 'TREND'
     && branchTrendComponents.value.some(item => item.componentId === component.componentId);
+}
+
+function isBranchMapComponent(column, component) {
+  return isBranchOverview.value && column.key === 'CENTER' && component.componentType === 'MAP'
+    && component.componentId === branchMapComponent.value?.componentId;
+}
+
+function isBranchRankingComponent(column, component) {
+  return isBranchOverview.value && column.key === 'RIGHT' && component.componentType === 'RANKING'
+    && component.componentId === branchRankingComponent.value?.componentId;
 }
 
 const metricsModel = computed(() => buildDisplayMetricsModel(resolvedPresentation.value, props.model, {
@@ -846,6 +885,7 @@ function onMapContext(payload) {
   .presentation-layout__column--left { order: 2; }
   .presentation-layout__column--right { order: 3; }
   .presentation-layout__column--right > .presentation-layout__component:first-child { height: auto; max-height: 600px; min-height: 360px; }
+  .presentation-layout__column--right > .presentation-layout__component[data-branch-slot="ranking"] { height: auto; max-height: none; min-height: 0; flex: 0 0 auto; }
   .presentation-layout__column--center > .presentation-layout__component--map-primary { min-height: 300px; }
   .presentation-layout__column--center > .presentation-layout__component--trend { min-height: 180px; }
   .presentation-layout--branch-overview .presentation-layout__column--branch-overview {

@@ -40,4 +40,36 @@ describe('支行KPI统计组件', () => {
     expect(w.get('[role="alert"]').text()).toContain('权限');
     expect(w.findAll('[data-testid="branch-personal-kpi-row"]')).toHaveLength(0);
   });
+
+  it('同一机构切换数据日期会清空旧排名并按新日期重新查询', async () => {
+    const w = setup(); await flushPromises();
+    api.results.mockImplementation(async p => ({ scopeOrgCode: p.orgCode, total: 1, metrics: [{ metricCode: 'M1', metricName: '贷款净增' }], records: p.subjectType === 'EMP'
+      ? [{ subjectId: 'C', subjectName: p.dataDate, totalScore: 90, subjectType: 'EMP', metrics: { M1: { actual: 20, base: 0, target: 25, completeRate: 80, score: 90 } } }]
+      : [{ subjectId: p.orgCode, subjectName: p.orgCode, totalScore: 80, subjectType: 'ORG', metrics: { M1: { actual: 120, base: 100, target: 25, completeRate: 80, score: 80 } } }] }));
+    await w.setProps({ dataDate: '2026-09-21' });
+    await flushPromises();
+    expect(api.results).toHaveBeenLastCalledWith(expect.objectContaining({ orgCode: '105', dataDate: '2026-09-21', subjectType: 'EMP' }));
+    expect(w.text()).toContain('2026-09-21');
+  });
+
+  it('紧凑员工排名保留四列、分页和不完整提示，表格自身滚动而不裁掉底部控件', async () => {
+    api.schemes.mockResolvedValue({ records: [{ schemeCode: 'S1', schemeName: '季度考核' }], total: 1 });
+    api.results.mockImplementation(async p => p.subjectType === 'EMP'
+      ? { scopeOrgCode: p.orgCode, total: 12, metrics: [{ metricCode: 'M1', metricName: '贷款净增' }], records: Array.from({ length: 12 }, (_, index) => ({
+        subjectId: `E${index}`, subjectName: `员工${index}`, totalScore: 100 - index, subjectType: 'EMP', metrics: { M1: { actual: 20, base: 0, target: 25, completeRate: 80, score: 100 - index } }
+      })) }
+      : { scopeOrgCode: p.orgCode, total: 1, metrics: [{ metricCode: 'M1', metricName: '贷款净增' }], records: [{ subjectId: p.orgCode, subjectType: 'ORG', metrics: { M1: { actual: 120, base: 100, target: 25, completeRate: 80, score: 80 } } }] });
+    const w = mount(BranchPerformancePanel, { props: { orgCode: '105', dataDate: '2026-09-20', enabled: true, compact: true, rankingOnly: true } });
+    wrappers.push(w);
+    await flushPromises();
+    expect(w.findAll('[data-testid="branch-personal-kpi-row"]')).toHaveLength(10);
+    expect(w.get('[data-testid="branch-kpi-next"]').exists()).toBe(true);
+    expect(w.get('table thead').findAll('th')).toHaveLength(4);
+    expect(w.get('[data-testid="branch-performance-panel"]').classes()).toEqual(expect.arrayContaining(['branch-performance--compact', 'branch-performance--ranking-only']));
+    await w.get('[data-testid="branch-kpi-next"]').trigger('click');
+    expect(w.findAll('[data-testid="branch-personal-kpi-row"]')).toHaveLength(2);
+    expect(w.get('[data-testid="branch-kpi-next"]').element.disabled).toBe(true);
+    await w.get('[data-testid="branch-kpi-prev"]').trigger('click');
+    expect(w.findAll('[data-testid="branch-personal-kpi-row"]')).toHaveLength(10);
+  });
 });
