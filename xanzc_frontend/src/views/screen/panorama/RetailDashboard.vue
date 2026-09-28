@@ -267,6 +267,9 @@
             :city-details="retailMapCityDetails"
             :metric-label="retailMapMetricLabel"
             :metric-values="retailMapMetricValues"
+            :region-states="retailMapInstitutionState.regionStates"
+            :metric-colors="retailMapInstitutionState.metricColors"
+            :color-by-metric="true"
             :geo-json="provinceGeoJson"
             :points="safeModel.institutions"
             :demo="demo"
@@ -546,6 +549,7 @@ import {
 } from '@element-plus/icons-vue';
 import PanoramaMap from './PanoramaMap.vue';
 import { buildCityMapDetails, cityMapMetricValues } from './cityMapDetails.js';
+import { buildProvinceInstitutionMapState } from './provinceInstitutionMapModel.js';
 import RetailTrend from './RetailTrend.vue';
 import RetailAttentionDetails from './RetailAttentionDetails.vue';
 import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.vue';
@@ -742,6 +746,10 @@ const retailMapMetricLabel = computed(() => hasDepositRankingShape.value
   ? (institutionMetric.value === 'average' ? '零售存款月日均' : '零售存款余额')
   : `零售${rankingMetricInfo.value.label}`);
 const retailMapMetricValues = computed(() => cityMapMetricValues(retailMapCityDetails.value, retailMapMetricKey.value));
+const retailMapInstitutionState = computed(() => buildProvinceInstitutionMapState(
+  provinceGeoJson,
+  safeModel.value.institutions
+));
 const depositComparison = computed(() => buildDepositComparison({
   balance: depositKpi.value?.value,
   average: depositAverage.value?.value
