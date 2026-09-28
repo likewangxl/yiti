@@ -31,6 +31,15 @@
 
 生产 DDL（`docs/schema/ddl-performance.sql`）中 `perf_kpi_scheme.id` / `perf_target_plan.id` / `sys_control.id` / `perf_metric_def.id` 均为 `varchar(32)`（业务编码主键），与原 04 契约的 `Long` 冲突。V1.0 已全局对齐为 `String`，本条为 04/03/05 三份文档的正式统一修正。跨模块消费方应使用 `String` 类型。
 
+### 0.6 Web KPI 结果查询的机构范围补充（2026-09-28）
+
+`GET /api/perf/kpi-score/results` 是本模块 Controller 的 Web 查询入口，不新增跨模块 `*Api` 方法。
+它沿用已有 `PT_RESOURCE` 资源 `P_PERF_KPISCORE_RES` 和 `BizType.KPI_CALC` 读权限；详细请求参数与
+响应字段见 `03-接口设计与报文.md` §3.1。调用方传入 `orgCode` 时，必须同时传明确的
+`schemeCode` 与 `dataDate`，并把指定机构范围与当前 KPI_CALC 授权范围取交集。响应中的
+`scopeOrgCode` 是后端实际确认的内部机构编码，旧请求为 `null`；调用方应据此确认响应范围。
+目录解析异常、`null` 或空名单按空范围处理，不能降级为全量查询。
+
 ---
 
 ## 1. MetricApi (指标查询)

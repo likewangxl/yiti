@@ -35,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -164,6 +165,7 @@ public class KpiScoreCalcController {
      * @param schemeCode KPI 方案编码（必填）
      * @param pageNo     页码
      * @param pageSize   每页条数
+     * @param orgCode    可选机构编码；传入时必须同时明确 dataDate 和 schemeCode
      * @return 分页计分明细
      */
     @GetMapping("/results")
@@ -175,9 +177,16 @@ public class KpiScoreCalcController {
             @RequestParam(value = "subjectType", required = false) String subjectType,
             @RequestParam(value = "subjectKeyword", required = false) String subjectKeyword,
             @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
-            @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-        LocalDate dt = (dataDate != null && !dataDate.isEmpty()) ? LocalDate.parse(dataDate) : null;
-        KpiScoreGroupPageDTO page = kpiScoreCalcService.pageScoreGroups(dt, schemeCode, subjectType, subjectKeyword, pageNo, pageSize);
+            @RequestParam(value = "pageSize", defaultValue = "20") int pageSize,
+            @RequestParam(value = "orgCode", required = false) String orgCode) {
+        LocalDate dt = orgCode == null
+                ? ((dataDate != null && !dataDate.isEmpty()) ? LocalDate.parse(dataDate) : null)
+                : (StringUtils.hasText(dataDate) ? LocalDate.parse(dataDate.trim()) : null);
+        KpiScoreGroupPageDTO page = orgCode == null
+                ? kpiScoreCalcService.pageScoreGroups(
+                        dt, schemeCode, subjectType, subjectKeyword, pageNo, pageSize)
+                : kpiScoreCalcService.pageScoreGroups(
+                        dt, schemeCode, subjectType, subjectKeyword, orgCode, pageNo, pageSize);
         return ResponseWrapper.success(page);
     }
 

@@ -48,6 +48,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -497,7 +498,31 @@ public class KpiScoreCalcService {
      */
     public KpiScoreGroupPageDTO pageScoreGroups(LocalDate dataDate, String schemeCode,
                                                 String subjectType, String subjectKeyword, int pageNo, int pageSize) {
-        return groupPage(dataDate, schemeCode, subjectType, subjectKeyword,
+        return groupPage(dataDate, schemeCode, subjectType, subjectKeyword, null,
+                Math.max(1, pageNo), Math.min(100, Math.max(1, pageSize)));
+    }
+
+    /**
+     * 机构限定的 KPI 结果查询入口。
+     *
+     * <p>带机构参数的读取必须同时指定数据日期和方案编码，避免把请求解释成跨方案或空日期查询。
+     * orgCode 的范围会与当前请求的 KPI_CALC 授权范围求交集，且最终作为 Mapper scope 下推。</p>
+     *
+     * @param orgCode 机构编码（必填且非空白）
+     */
+    public KpiScoreGroupPageDTO pageScoreGroups(LocalDate dataDate, String schemeCode,
+                                                String subjectType, String subjectKeyword, String orgCode,
+                                                int pageNo, int pageSize) {
+        if (!StringUtils.hasText(orgCode)) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "orgCode 不能为空");
+        }
+        if (dataDate == null) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "dataDate 不能为空");
+        }
+        if (!StringUtils.hasText(schemeCode)) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "schemeCode 不能为空");
+        }
+        return groupPage(dataDate, schemeCode, subjectType, subjectKeyword, orgCode.trim(),
                 Math.max(1, pageNo), Math.min(100, Math.max(1, pageSize)));
     }
 
@@ -508,7 +533,7 @@ public class KpiScoreCalcService {
      */
     public KpiScoreGroupPageDTO exportScoreGroups(LocalDate dataDate, String schemeCode,
                                                   String subjectType, int cap) {
-        return groupPage(dataDate, schemeCode, subjectType, null, 1, Math.max(1, cap));
+        return groupPage(dataDate, schemeCode, subjectType, null, null, 1, Math.max(1, cap));
     }
 
     /**
@@ -545,6 +570,87 @@ public class KpiScoreCalcService {
                         ? List.of() : resolveUsernamesByUserIds(List.of(emp));
                 return KpiScopeFilter.of(selfUsernames, List.of());
         }
+    }
+
+    /**
+     * 解析带 orgCode 的结果查询范围。
+     *
+     * <p>该路径不能复用旧的「无上下文按全部」兼容行为：请求必须有 KPI_CALC 数据范围上下文，
+     * 且指定机构先解析为机构主体和员工工号，再与授权范围求交集。任何目录解析异常、null 或空名单
+     * 都返回空的受限过滤器，不能退回 {@link KpiScopeFilter#all()}。</p>
+     */
+    private KpiScopeFilter resolveKpiScopeFilterForOrg(String orgCode) {
+        DataScopeContext ctx = DataScopeContext.current();
+        if (ctx == null || ctx.getBizType() != BizType.KPI_CALC || ctx.getScope() == null) {
+            return KpiScopeFilter.of(List.of(), List.of());
+        }
+
+        KpiScopeFilter requested = strictOrgScopeFilter(orgCode);
+        if (isEmptyFilter(requested)) {
+            return requested;
+        }
+
+        if (ctx.getScope() == com.bank.branch.platform.common.security.enums.DataScopeType.ALL) {
+            return requested;
+        }
+        if (ctx.getScope() == com.bank.branch.platform.common.security.enums.DataScopeType.ORG) {
+            return sameOrg(ctx.getOrgCode(), orgCode) ? requested
+                    : KpiScopeFilter.of(List.of(), List.of());
+        }
+        if (ctx.getScope() == com.bank.branch.platform.common.security.enums.DataScopeType.ORG_SUBTREE) {
+            return normalizeOrgCodes(ctx.getOrgSubtreeCodes()).contains(orgCode)
+                    ? requested : KpiScopeFilter.of(List.of(), List.of());
+        }
+        if (ctx.getScope() == com.bank.branch.platform.common.security.enums.DataScopeType.SELF
+                || ctx.getScope() == com.bank.branch.platform.common.security.enums.DataScopeType.SELF_CREATED
+                || ctx.getScope() == com.bank.branch.platform.common.security.enums.DataScopeType.SELF_ASSIGNED) {
+            String empId = ctx.getEmpId();
+            List<String> selfUsernames = StringUtils.hasText(empId)
+                    ? resolveUsernamesByUserIds(List.of(empId)) : List.of();
+            return KpiScopeFilter.of(intersectIds(selfUsernames, requested.getEmpIds()), List.of());
+        }
+        return KpiScopeFilter.of(List.of(), List.of());
+    }
+
+    /**
+     * 解析请求机构的完整对象范围。
+     *
+     * <p>getEmpIdsByOrg 返回 USER_ID，结果表 EMP 主体存工号，故必须再经 UserApi 转换。
+     * 机构编码始终只保留当前请求的单个值；目录返回 null/空集合或转换不到工号时整体 fail-close。</p>
+     */
+    private KpiScopeFilter strictOrgScopeFilter(String orgCode) {
+        try {
+            List<String> userIds = userApi.getEmpIdsByOrg(orgCode);
+            if (userIds == null || userIds.isEmpty()) {
+                return KpiScopeFilter.of(List.of(), List.of());
+            }
+            List<String> empUsernames = resolveUsernamesByUserIds(userIds);
+            if (empUsernames.isEmpty()) {
+                return KpiScopeFilter.of(List.of(), List.of());
+            }
+            return KpiScopeFilter.of(empUsernames, List.of(orgCode));
+        } catch (Exception e) {
+            log.warn("[KpiScoreCalcService] 请求机构范围解析失败，按空范围处理 orgCode={}", orgCode, e);
+            return KpiScopeFilter.of(List.of(), List.of());
+        }
+    }
+
+    private static boolean sameOrg(String left, String right) {
+        return StringUtils.hasText(left) && StringUtils.hasText(right)
+                && left.trim().equals(right.trim());
+    }
+
+    private static Set<String> normalizeOrgCodes(Set<String> orgCodes) {
+        if (orgCodes == null || orgCodes.isEmpty()) {
+            return Set.of();
+        }
+        java.util.LinkedHashSet<String> normalized = new java.util.LinkedHashSet<>();
+        for (String orgCode : orgCodes) {
+            if (StringUtils.hasText(orgCode)) {
+                normalized.add(orgCode.trim());
+            }
+        }
+        return normalized;
     }
 
     /** 机构集合 → 范围：ORG 对象限这些机构码，EMP 对象限这些机构下属员工工号（经 UserApi 解析）. */
@@ -708,13 +814,16 @@ public class KpiScoreCalcService {
     }
 
     private KpiScoreGroupPageDTO groupPage(LocalDate dataDate, String schemeCode,
-                                           String subjectType, String subjectKeyword, int safeNo, int safeSize) {
+                                           String subjectType, String subjectKeyword, String orgCode,
+                                           int safeNo, int safeSize) {
         String sc = StringUtils.hasText(schemeCode) ? schemeCode.trim() : null;
         String st = StringUtils.hasText(subjectType) ? subjectType.trim() : null;
+        String normalizedOrgCode = StringUtils.hasText(orgCode) ? orgCode.trim() : null;
 
         KpiScoreGroupPageDTO page = new KpiScoreGroupPageDTO();
         page.setPageNo(safeNo);
         page.setPageSize(safeSize);
+        page.setScopeOrgCode(normalizedOrgCode);
         // 指标列：该方案指标，按指标名（中文）排序
         List<MetricOptionDTO> metricCols = new java.util.ArrayList<>(listSchemeMetrics(sc));
         // 选中维度时，仅保留该维度(base_dim)的指标列，过滤掉其他维度指标组
@@ -735,7 +844,8 @@ public class KpiScoreCalcService {
             return page;
         }
         // 考核计算(KPI_CALC)数据范围：本人 / 本机构+下级 / 全部
-        KpiScopeFilter scope = resolveKpiScopeFilter();
+        KpiScopeFilter scope = normalizedOrgCode == null
+                ? resolveKpiScopeFilter() : resolveKpiScopeFilterForOrg(normalizedOrgCode);
         long total = scoreMapper.countSubjectGroups(dataDate, sc, st, scope);
         if (total == 0) {
             page.setTotal(0L);
@@ -751,7 +861,7 @@ public class KpiScoreCalcService {
             page.setTotal(total);
             List<KpiSubjectGroupRow> groups = scoreMapper.selectSubjectGroups(dataDate, sc, st, scope, offset, safeSize);
             List<KpiScoreGroupRowDTO> records = buildGroupRecords(groups, dataDate, sc, metricCols);
-            enrichGroupNames(records);
+            enrichGroupNames(records, normalizedOrgCode != null);
             page.setRecords(records);
             return page;
         }
@@ -774,7 +884,7 @@ public class KpiScoreCalcService {
         page.setTotal(kwTotal);
         List<KpiSubjectGroupRow> kwGroups = scoreMapper.selectSubjectGroups(dataDate, sc, st, effective, offset, safeSize);
         List<KpiScoreGroupRowDTO> kwRecords = buildGroupRecords(kwGroups, dataDate, sc, metricCols);
-        enrichGroupNames(kwRecords);
+        enrichGroupNames(kwRecords, normalizedOrgCode != null);
         page.setRecords(kwRecords);
         return page;
     }
@@ -909,6 +1019,13 @@ public class KpiScoreCalcService {
 
     /** 回填分组行的对象姓名（EMP→员工姓名；ORG→机构名称且对象ID替换为业务机构号 dept_no）. */
     private void enrichGroupNames(List<KpiScoreGroupRowDTO> rows) {
+        enrichGroupNames(rows, false);
+    }
+
+    /**
+     * 回填分组行名称；机构限定查询保留内部 orgCode 作为 subjectId，供前端与 scopeOrgCode 精确核对。
+     */
+    private void enrichGroupNames(List<KpiScoreGroupRowDTO> rows, boolean preserveOrgSubjectId) {
         if (rows.isEmpty()) {
             return;
         }
@@ -955,7 +1072,7 @@ public class KpiScoreCalcService {
                 String orig = d.getSubjectId();
                 d.setSubjectName(orgNames.get(orig));
                 String deptNo = orgDeptNos.get(orig);
-                if (StringUtils.hasText(deptNo)) {
+                if (StringUtils.hasText(deptNo) && !preserveOrgSubjectId) {
                     d.setSubjectId(deptNo);
                 }
             }

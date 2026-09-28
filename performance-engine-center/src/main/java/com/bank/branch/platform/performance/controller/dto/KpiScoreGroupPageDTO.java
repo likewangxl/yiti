@@ -27,4 +27,10 @@ public class KpiScoreGroupPageDTO {
 
     /** 每页条数. */
     private int pageSize;
+
+    /**
+     * 由后端确认并实际应用的机构查询范围；旧的未指定机构请求保持为 {@code null}。
+     * 前端必须用该字段确认响应对应的支行范围。
+     */
+    private String scopeOrgCode;
 }
