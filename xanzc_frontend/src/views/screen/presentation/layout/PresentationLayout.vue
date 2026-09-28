@@ -707,36 +707,57 @@ function onMapContext(payload) {
 
 .presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-tabs-widget__rings) {
   margin-top: 7px;
-  gap: 5px;
+  gap: 4px;
 }
 
 .presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring-card) {
-  padding: 5px 4px;
+  padding: 3px 4px;
   gap: 4px;
 }
 
 .presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring) {
-  width: 64px;
-  height: 64px;
+  width: 80px;
+  height: 80px;
   margin-top: 0;
 }
 
 .presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring::after) {
-  inset: 8px;
+  inset: 12px;
 }
 
 .presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring-card__legend) {
-  gap: 3px;
+  gap: 4px;
 }
 
 .presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring-card__legend button) {
-  padding: 2px 3px;
-  font-size: 9px;
+  padding: 3px 4px;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring-card__heading strong) {
+  font-size: 14px;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring-card__heading span) {
+  font-size: 11px;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring__center strong) {
+  font-size: 18px;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring__center small) {
+  font-size: 10px;
+}
+
+.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring-card__legend button strong) {
+  font-size: 11px;
 }
 
 .presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child :deep(.composition-ring-card__status) {
   min-height: 0;
-  font-size: 8px;
+  font-size: 10px;
 }
 
 @media (max-width: 1440px) {
