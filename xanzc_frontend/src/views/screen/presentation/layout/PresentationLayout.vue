@@ -1,11 +1,31 @@
 <template>
   <section
     class="presentation-layout"
-    :class="{ 'presentation-layout--branch-overview': isBranchOverview }"
+    :class="{ 'presentation-layout--branch-overview': isBranchOverview, 'presentation-layout--draft-overview': draftOverviewEnabled }"
     data-testid="presentation-layout"
     data-schema-version="1"
     aria-label="配置化大屏"
   >
+    <section
+      v-if="draftOverviewEnabled && overviewSummary"
+      class="presentation-layout__overview-summary"
+      data-testid="draft-overview-summary"
+      aria-label="存款贷款总览摘要"
+    >
+      <article
+        v-for="card in overviewSummary.cards"
+        :key="card.key"
+        class="presentation-layout__overview-summary-card"
+        data-testid="draft-overview-summary-card"
+        :data-summary-key="card.key"
+      >
+        <span>{{ card.label }}</span>
+        <strong>{{ card.text }}</strong>
+        <div v-if="card.comparisons?.length" class="presentation-layout__overview-summary-card-comparisons" aria-label="三维对比">
+          <span v-for="comparison in card.comparisons" :key="comparison.key" :title="comparison.referenceDate ? `${comparison.text}（基准日 ${comparison.referenceDate}）` : comparison.text">{{ comparison.text }}</span>
+        </div>
+      </article>
+    </section>
     <section
       v-if="headerGroups.length"
       class="presentation-layout__header presentation-layout__header--grouped"
@@ -39,6 +59,7 @@
             <RevenueShareWidget
               :operating="metricById.get('business-revenue-operating')"
               :intermediary="metricById.get('business-revenue-fee')"
+              :draft-overview="draftOverviewEnabled"
             />
           </div>
           <div
@@ -233,7 +254,7 @@ import BusinessGrowthWidget from '../widgets/BusinessGrowthWidget.vue';
 import CompositionTabsWidget from '../widgets/CompositionTabsWidget.vue';
 import InstitutionRankingWidget from '../widgets/InstitutionRankingWidget.vue';
 import PresentationMapWidget from '../map/PresentationMapWidget.vue';
-import { buildDisplayMetricsModel } from '../model/displayMetricsModel';
+import { buildDisplayMetricsModel, canonicalUnit, formatDisplayMetric } from '../model/displayMetricsModel';
 import { buildDisplaySeriesTableModel } from '../model/displaySeriesTableModel';
 import { buildCompositionTabsModel } from '../model/compositionTabsModel';
 import { buildInstitutionRankingModel } from '../model/institutionRankingModel';
@@ -255,7 +276,8 @@ const props = defineProps({
   selectedOrgCode: { type: [String, Number], default: '' },
   dataDate: { type: String, default: '' },
   demo: { type: Boolean, default: false },
-  amountUnit: { type: String, default: '' }
+  amountUnit: { type: String, default: '' },
+  draftOverview: { type: Boolean, default: false }
 });
 
 const emit = defineEmits([
@@ -363,10 +385,149 @@ function isBranchRankingComponent(column, component) {
 }
 
 const metricsModel = computed(() => buildDisplayMetricsModel(resolvedPresentation.value, props.model, {
-  amountUnit: props.amountUnit
+  amountUnit: props.amountUnit,
+  draftOverview: props.draftOverview
 }));
 const seriesModel = computed(() => buildDisplaySeriesTableModel(resolvedPresentation.value, props.model));
 const compositionModel = computed(() => buildCompositionTabsModel(resolvedPresentation.value, props.model));
+
+const AMOUNT_SCALES = Object.freeze({ YUAN: 1, TEN_THOUSAND: 1e4, HUNDRED_MILLION: 1e8 });
+const SUMMARY_COMPARISONS = Object.freeze([
+  { key: 'year', label: '较上年' }, { key: 'month', label: '较上月' }, { key: 'day', label: '较上日' }
+]);
+
+function finiteSummary(value) {
+  if (value === null || value === undefined || typeof value === 'boolean' || Array.isArray(value)
+    || (typeof value === 'object' && value !== null) || (typeof value === 'string' && value.trim() === '')) return null;
+  if (!['string', 'number'].includes(typeof value)) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function sourceDateInfo(value) {
+  const explicit = value?.dataDate ?? value?.sourceDate ?? value?.date ?? value?.periodDate;
+  if (explicit !== undefined && explicit !== null && String(explicit).trim()) {
+    const date = String(explicit).trim();
+    return { date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '', valid: /^\d{4}-\d{2}-\d{2}$/.test(date) };
+  }
+  const fallback = String(props.model?.dataDate || '').trim();
+  return { date: /^\d{4}-\d{2}-\d{2}$/.test(fallback) ? fallback : '', valid: /^\d{4}-\d{2}-\d{2}$/.test(fallback) };
+}
+
+function sourceAmount(source) {
+  const value = finiteSummary(source?.value ?? source?.rawValue);
+  const unit = canonicalUnit(source?.unit ?? source?.sourceUnit);
+  if (value === null || !Object.prototype.hasOwnProperty.call(AMOUNT_SCALES, unit)) return null;
+  const sourceDate = sourceDateInfo(source);
+  return { baseValue: value * AMOUNT_SCALES[unit], date: sourceDate.date, dateValid: sourceDate.valid, unit };
+}
+
+function sameAmount(left, right) {
+  const scale = Math.max(1, Math.abs(left), Math.abs(right));
+  return Math.abs(left - right) <= Number.EPSILON * scale * 4;
+}
+
+function comparisonAmount(comparison, source) {
+  if (!comparison) return null;
+  const rawValue = finiteSummary(comparison.rawValue);
+  const value = rawValue === null ? finiteSummary(comparison.value) : rawValue;
+  const unit = canonicalUnit(rawValue === null ? (comparison.unit || source?.unit || source?.sourceUnit) : (source?.sourceUnit || source?.unit));
+  if (value === null || !Object.prototype.hasOwnProperty.call(AMOUNT_SCALES, unit)) return null;
+  return { baseValue: value * AMOUNT_SCALES[unit], referenceDate: comparison.referenceDate || '' };
+}
+
+function summaryFromComponents(componentIds) {
+  const components = componentIds.map(id => metricsModel.value.components.find(item => item.componentId === id));
+  if (components.some(item => !item)) return null;
+  const values = components.map(sourceAmount);
+  if (values.some(item => !item || !item.dateValid) || values.some(item => item.date !== values[0].date)) return null;
+  const comparisons = {};
+  for (const item of SUMMARY_COMPARISONS) {
+    const entries = components.map(component => comparisonAmount(component?.comparisons?.[item.key], component));
+    if (entries.every(Boolean) && entries.every(entry => entry.referenceDate && entry.referenceDate === entries[0].referenceDate)) {
+      comparisons[item.key] = { baseValue: entries.reduce((sum, entry) => sum + entry.baseValue, 0), referenceDate: entries[0].referenceDate };
+    }
+  }
+  return {
+    baseValue: values.reduce((sum, item) => sum + item.baseValue, 0),
+    date: values[0].date,
+    dateValid: values.every(item => item.dateValid && item.date === values[0].date),
+    unit: 'YUAN',
+    comparisons
+  };
+}
+
+function summaryFromKpi(key, componentIds) {
+  const kpis = Array.isArray(props.model?.kpis) ? props.model.kpis : [];
+  const explicit = kpis.find(item => String(item?.key || '') === key);
+  if (explicit) {
+    const metric = sourceAmount(explicit);
+    if (!metric) return null;
+    const comparisons = {};
+    for (const item of SUMMARY_COMPARISONS) {
+      const source = explicit.comparisons?.[item.key];
+      const normalized = comparisonAmount(source, explicit);
+      if (normalized) comparisons[item.key] = normalized;
+    }
+    const fallback = summaryFromComponents(componentIds);
+    const fallbackMatches = fallback && metric.dateValid && fallback.dateValid && metric.date === fallback.date
+      && sameAmount(metric.baseValue, fallback.baseValue);
+    return {
+      ...metric,
+      date: metric.date || fallback?.date || '',
+      comparisons: Object.keys(comparisons).length ? comparisons
+        : (fallbackMatches ? fallback.comparisons : {})
+    };
+  }
+
+  return summaryFromComponents(componentIds);
+}
+
+function displaySummaryValue(metric, displayUnit) {
+  if (!metric) return '—';
+  return formatDisplayMetric(metric.baseValue / AMOUNT_SCALES.YUAN, { displayUnit, decimals: 2, thousandsSeparator: true }, 'YUAN').text;
+}
+
+function summaryCardComparisons(metric, displayUnit) {
+  return SUMMARY_COMPARISONS.map(item => {
+    const source = metric?.comparisons?.[item.key];
+    if (!source) return { key: item.key, referenceDate: '', text: `${item.label} —` };
+    const formatted = formatDisplayMetric(source.baseValue / AMOUNT_SCALES.YUAN,
+      { displayUnit, decimals: 2, thousandsSeparator: true, negativeStyle: 'SIGNED' }, 'YUAN');
+    return {
+      key: item.key,
+      referenceDate: source.referenceDate || '',
+      text: `${item.label} ${formatted.value > 0 ? '+' : ''}${formatted.text}`
+    };
+  });
+}
+
+const draftOverviewEnabled = computed(() => props.draftOverview === true && isBranchOverview.value);
+const overviewSummary = computed(() => {
+  if (!draftOverviewEnabled.value) return null;
+  const deposit = summaryFromKpi('deposit', ['business-retail-deposit-balance', 'business-corp-deposit-balance']);
+  const loan = summaryFromKpi('loan', ['business-retail-loan-balance', 'business-corp-loan-balance']);
+  const sourceUnit = deposit?.unit || loan?.unit || '';
+  const displayUnit = canonicalUnit(props.amountUnit) && Object.prototype.hasOwnProperty.call(AMOUNT_SCALES, canonicalUnit(props.amountUnit))
+    ? canonicalUnit(props.amountUnit) : sourceUnit;
+  const sameDate = Boolean(deposit && loan && deposit.date && deposit.date === loan.date);
+  const totalComparisons = {};
+  for (const item of SUMMARY_COMPARISONS) {
+    const left = deposit?.comparisons?.[item.key];
+    const right = loan?.comparisons?.[item.key];
+    if (left && right && left.referenceDate && left.referenceDate === right.referenceDate) {
+      totalComparisons[item.key] = { baseValue: left.baseValue + right.baseValue, referenceDate: left.referenceDate };
+    }
+  }
+  const total = sameDate ? { baseValue: deposit.baseValue + loan.baseValue, date: deposit.date, unit: 'YUAN', comparisons: totalComparisons } : null;
+  return {
+    cards: [
+      { key: 'deposit', label: '存款总额', text: displaySummaryValue(deposit, displayUnit), comparisons: summaryCardComparisons(deposit, displayUnit) },
+      { key: 'loan', label: '贷款总额', text: displaySummaryValue(loan, displayUnit), comparisons: summaryCardComparisons(loan, displayUnit) },
+      { key: 'total', label: '存贷款合计', text: displaySummaryValue(total, displayUnit), comparisons: summaryCardComparisons(total, displayUnit) }
+    ]
+  };
+});
 
 const metricById = computed(() => new Map(metricsModel.value.components.map(item => [item.componentId, item])));
 function isRevenuePair(group) {
@@ -450,7 +611,8 @@ function widgetComponent(component) {
 function widgetProps(component) {
   if (['METRIC_CARD', 'COMPLETION'].includes(component.componentType)) return {
     components: metricComponents(component),
-    grouped: headerGroups.value.length > 0 && component.layoutRegion === 'HEADER'
+    grouped: headerGroups.value.length > 0 && component.layoutRegion === 'HEADER',
+    draftOverview: draftOverviewEnabled.value
   };
   if (['TREND', 'DETAIL_TABLE'].includes(component.componentType)) return { components: seriesComponents(component) };
   if (component.componentType === 'COMPOSITION_TABS') return { model: compositionComponentModel(component) };
@@ -516,6 +678,42 @@ function onMapContext(payload) {
   color: var(--panorama-text, var(--presentation-text));
   font-variant-numeric: tabular-nums;
 }
+
+.presentation-layout__overview-summary {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 7px 8px 6px;
+  border: 1px solid var(--presentation-border-soft);
+  border-radius: 9px;
+  background: rgba(7, 22, 56, .68);
+}
+.presentation-layout__overview-summary-card {
+  display: grid;
+  min-width: 0;
+  min-height: 56px;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 7px 11px;
+  border: 1px solid var(--presentation-border-soft);
+  border-radius: 7px;
+  background: rgba(8, 24, 61, .7);
+}
+.presentation-layout__overview-summary-card span { overflow: hidden; color: var(--presentation-text-dim); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.presentation-layout__overview-summary-card strong { color: var(--presentation-text); font-size: clamp(16px, 1.25vw, 22px); white-space: nowrap; }
+.presentation-layout__overview-summary-card-comparisons { display: grid; min-width: 0; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; color: var(--presentation-text-dim); font-size: 11px; line-height: 1.2; }
+.presentation-layout__overview-summary-card-comparisons span { min-width: 0; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+.presentation-layout--draft-overview .presentation-layout__metric-group { min-height: 0; padding: 4px; gap: 4px; }
+.presentation-layout--draft-overview .presentation-layout__metric-group-grid { align-content: start; grid-auto-rows: minmax(90px, auto); }
+.presentation-layout--draft-overview .presentation-layout__metric-group--revenue .presentation-layout__metric-group-grid { grid-auto-rows: auto; }
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widget) { min-height: 90px; padding: 6px 8px; }
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widget__icon) { width: 25px; height: 25px; flex-basis: 25px; font-size: 17px; }
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widget__comparisons) { gap: 1px 4px; font-size: 11px; }
+.presentation-layout--draft-overview .presentation-layout__main--branch-overview { height: auto; min-height: 580px; max-height: none; }
+.presentation-layout--draft-overview .presentation-layout__column--left > .presentation-layout__component:first-child { height: auto; min-height: 0; flex: 0 0 auto; }
+.presentation-layout--draft-overview .presentation-layout__column--left > .presentation-layout__component:first-child :deep(.composition-tabs-widget) { height: auto; }
 
 .presentation-layout__header,
 .presentation-layout__main,
@@ -875,6 +1073,8 @@ function onMapContext(payload) {
 }
 
 @media (max-width: 620px) {
+  .presentation-layout--draft-overview .presentation-layout__overview-summary { grid-template-columns: minmax(0, 1fr); }
+  .presentation-layout--draft-overview .presentation-layout__overview-summary-card-comparisons { grid-template-columns: minmax(0, 1fr); }
   .presentation-layout { margin-right: 12px; margin-left: 12px; }
   .presentation-layout__metric-tier,
   .presentation-layout__metric-tier--secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }

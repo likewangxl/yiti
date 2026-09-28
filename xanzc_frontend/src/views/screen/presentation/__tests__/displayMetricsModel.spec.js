@@ -371,4 +371,102 @@ describe('displayMetricsModel', () => {
     });
     expect(result.components[0]).toMatchObject({ value: 8, text: '8.00元', unit: '元' });
   });
+
+  it('draft 模式按上年末、上月末和上一自然日生成三维差值，保留日期口径与旧 monthDelta', () => {
+    const card = component('business-corp-deposit-balance', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'deposit', '存款余额', 'YUAN')],
+      content: { mainField: 'deposit', subFields: [] },
+      format: { displayUnit: 'TEN_THOUSAND', decimals: 2, thousandsSeparator: true, negativeStyle: 'SIGNED' }
+    });
+    const rate = component('business-corp-deposit-rate', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'depositRate', '存款完成率', 'RATIO')],
+      content: { mainField: 'depositRate', subFields: [] },
+      format: { displayUnit: 'PERCENT', decimals: 2, thousandsSeparator: true, negativeStyle: 'SIGNED' }
+    });
+    const result = buildDisplayMetricsModel({
+      template: 'branch-overview-v1', displaySchemaVersion: 1, display: { components: [card, rate] }
+    }, {
+      dataDate: '2028-03-02',
+      blockResults: {
+        31: { deposit: 1200000000, depositRate: 0.9064, unitByField: { deposit: 'YUAN', depositRate: 'RATIO' } },
+        57: { rows: [
+          { date: '2028-03-02', deposit: 1200000000, depositRate: 0.9064 },
+          { date: '2027-12-31', deposit: 900000000, depositRate: 0.6064 },
+          { date: '2028-02-29', deposit: 1000000000, depositRate: 0.7064 },
+          { date: '2028-03-01', deposit: 1100000000, depositRate: 0.8064 }
+        ], unitByField: { deposit: 'YUAN', depositRate: 'RATIO' } }
+      }
+    }, { amountUnit: 'TEN_THOUSAND', draftOverview: true });
+
+    expect(result.components[0].monthDelta).toMatchObject({ state: 'READY', value: 20000, text: '较上月 +20,000.00万元' });
+    expect(result.components[0].comparisons).toMatchObject({
+      year: { state: 'READY', value: 30000, text: '较上年 +30,000.00万元', referenceDate: '2027-12-31' },
+      month: { state: 'READY', value: 20000, text: '较上月 +20,000.00万元', referenceDate: '2028-02-29' },
+      day: { state: 'READY', value: 10000, text: '较上日 +10,000.00万元', referenceDate: '2028-03-01' }
+    });
+    expect(result.components[1].comparisons).toMatchObject({
+      year: { state: 'READY', value: 30, text: '较上年 +30.00个百分点' },
+      month: { state: 'READY', value: 20, text: '较上月 +20.00个百分点' },
+      day: { state: 'READY', value: 10, text: '较上日 +10.00个百分点' }
+    });
+    const yuanResult = buildDisplayMetricsModel({
+      template: 'branch-overview-v1', displaySchemaVersion: 1, display: { components: [card] }
+    }, {
+      dataDate: '2028-03-02',
+      blockResults: {
+        31: { deposit: 1200000000, unitByField: { deposit: 'YUAN' } },
+        57: { rows: [
+          { date: '2028-03-02', deposit: 1200000000 },
+          { date: '2027-12-31', deposit: 900000000 },
+          { date: '2028-02-29', deposit: 1000000000 },
+          { date: '2028-03-01', deposit: 1100000000 }
+        ], unitByField: { deposit: 'YUAN' } }
+      }
+    }, { amountUnit: 'HUNDRED_MILLION', draftOverview: true });
+    expect(yuanResult.components[0].comparisons).toMatchObject({
+      year: { value: 3, text: '较上年 +3.00亿元' },
+      month: { value: 2, text: '较上月 +2.00亿元' },
+      day: { value: 1, text: '较上日 +1.00亿元' }
+    });
+  });
+
+  it('三维差值接受0和负数，但缺失、重复、当前不一致或单位不匹配分别保持不可用', () => {
+    const card = component('business-corp-loan-balance', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'loan', '贷款余额', 'YUAN')],
+      content: { mainField: 'loan', subFields: [] },
+      format: { displayUnit: 'YUAN', decimals: 2, thousandsSeparator: true, negativeStyle: 'SIGNED' }
+    });
+    const presentation = { template: 'branch-overview-v1', displaySchemaVersion: 1, display: { components: [card] } };
+    const base = {
+      dataDate: '2028-03-02',
+      blockResults: {
+        31: { loan: 0, unitByField: { loan: 'YUAN' } },
+        57: { rows: [
+          { date: '2028-03-02', loan: 0 },
+          { date: '2027-12-31', loan: -100 },
+          { date: '2028-02-29', loan: -200 },
+          { date: '2028-03-01', loan: -300 }
+        ], unitByField: { loan: 'YUAN' } }
+      }
+    };
+    const valid = buildDisplayMetricsModel(presentation, base, { draftOverview: true }).components[0];
+    expect(valid.comparisons).toMatchObject({
+      year: { state: 'READY', value: 100 }, month: { state: 'READY', value: 200 }, day: { state: 'READY', value: 300 }
+    });
+
+    const cases = [
+      ['缺失上年末', { rows: base.blockResults[57].rows.filter(row => row.date !== '2027-12-31') }, 'year'],
+      ['重复上月末', { rows: [...base.blockResults[57].rows, { date: '2028-02-29', loan: -201 }] }, 'month'],
+      ['当前值不一致', { rows: base.blockResults[57].rows.map(row => row.date === '2028-03-02' ? { ...row, loan: 1 } : row) }, 'day'],
+      ['历史单位不匹配', { rows: base.blockResults[57].rows, unitByField: { loan: 'TEN_THOUSAND' } }, 'year']
+    ];
+    for (const [, history, key] of cases) {
+      const model = { ...base, blockResults: { ...base.blockResults, 57: history } };
+      expect(buildDisplayMetricsModel(presentation, model, { draftOverview: true }).components[0].comparisons[key])
+        .toMatchObject({ state: 'NO_VALUE', value: null });
+    }
+  });
 });

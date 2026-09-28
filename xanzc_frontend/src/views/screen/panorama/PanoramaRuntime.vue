@@ -13,6 +13,7 @@
     <component :is="isCorporate ? CorporateDashboard : isRetail ? RetailDashboard : PanoramaDashboard"
       :model="dashboardModel"
       :source-presentation="dashboardSourcePresentation"
+      :draft-overview="draftOverview"
       :loading="loading"
       :error="error"
       :demo="false"
@@ -193,6 +194,12 @@ const displayPresentation = computed(() => {
   const staticAvailability = parseObject(style.sourceAvailability) || parseObject(presentation.sourceAvailability);
   return staticAvailability ? { ...presentation, sourceAvailability: staticAvailability } : presentation;
 });
+const draftOverview = computed(() => props.view?.state === 'draft'
+  && displayPresentation.value?.template === 'branch-overview-v1'
+  && displayPresentation.value?.displaySchemaVersion === 1
+  && !String(props.context?.orgCode || '').trim()
+  && !String(props.context?.cityCode || '').trim()
+  && !String(props.context?.empId || '').trim());
 const institutionDisplayModel = computed(() => {
   if (displayPresentation.value?.displaySchemaVersion !== 1) return null;
   // The directory and rules must come from the render response. In particular,

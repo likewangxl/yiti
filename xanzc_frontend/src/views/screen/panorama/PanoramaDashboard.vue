@@ -71,6 +71,7 @@
       :selected-org-code="selectedOrgCode"
       :data-date="displayDate"
       :demo="demo"
+      :draft-overview="draftOverview"
       :amount-unit="amountUnit"
       @region-select="openCity"
       @branch-select="selectInstitution"
@@ -487,7 +488,8 @@ const props = defineProps({
   error: { type: String, default: '' },
   demo: { type: Boolean, default: false },
   sourcePresentation: { type: Object, default: () => ({}) },
-  showConfigure: { type: Boolean, default: true }
+  showConfigure: { type: Boolean, default: true },
+  draftOverview: { type: Boolean, default: false }
 });
 const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select', 'business-line-select', 'map-context']);
 const slots = useSlots();

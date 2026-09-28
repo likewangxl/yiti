@@ -222,6 +222,20 @@ function previousMonthEnd(dataDate) {
   return `${String(year).padStart(4, '0')}-${month}-${day}`;
 }
 
+function previousYearEnd(dataDate) {
+  const current = parseDateKey(dataDate);
+  if (!current) return null;
+  return `${String(current.year - 1).padStart(4, '0')}-12-31`;
+}
+
+function previousDay(dataDate) {
+  const current = parseDateKey(dataDate);
+  if (!current) return null;
+  const date = new Date(Date.UTC(current.year, current.month - 1, current.day));
+  date.setUTCDate(date.getUTCDate() - 1);
+  return `${String(date.getUTCFullYear()).padStart(4, '0')}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
 function rowDateKey(row) {
   if (!isObject(row)) return '';
   for (const key of HISTORY_DATE_FIELDS) {
@@ -230,22 +244,26 @@ function rowDateKey(row) {
   return '';
 }
 
+function unavailableComparison(label = '较上月') {
+  return { state: 'NO_VALUE', value: null, rawValue: null, unit: '', text: `${label} 暂无数据` };
+}
+
 function unavailableMonthDelta() {
-  return { state: 'NO_VALUE', value: null, rawValue: null, unit: '', text: '较上月 暂无数据' };
+  return unavailableComparison('较上月');
 }
 
 function signedText(value, formattedText) {
   return value > 0 ? `+${formattedText}` : formattedText;
 }
 
-function formatMonthDelta(currentValue, previousValue, format, sourceUnit, ratio) {
+function formatComparisonDelta(currentValue, previousValue, format, sourceUnit, ratio, label) {
   const currentRaw = finite(currentValue);
   const previousRaw = finite(previousValue);
-  if (currentRaw === null || previousRaw === null) return unavailableMonthDelta();
+  if (currentRaw === null || previousRaw === null) return unavailableComparison(label);
   // 先在来源单位上做差，再一次性换算和格式化。分别格式化当期/上期
   // 再相减会把小额差值在目标单位的舍入误差放大成错误的 0。
   const rawDelta = currentRaw - previousRaw;
-  if (!Number.isFinite(rawDelta)) return unavailableMonthDelta();
+  if (!Number.isFinite(rawDelta)) return unavailableComparison(label);
   // A RATIO display unit is still rendered as a percentage, but its raw
   // value is fractional. Normalize the delta to PERCENT so the result is
   // expressed in percentage points rather than 0.xx points.
@@ -255,14 +273,14 @@ function formatMonthDelta(currentValue, previousValue, format, sourceUnit, ratio
   const thousandsSeparator = format?.thousandsSeparator !== false;
   if (ratio) {
     const converted = formatDisplayMetric(rawDelta, comparisonFormat, sourceUnit);
-    if (converted.value === null) return unavailableMonthDelta();
+    if (converted.value === null) return unavailableComparison(label);
     // Keep the model value in display units while removing binary floating
     // point noise (for example 0.9064 - 0.8 -> 10.639999999999993).
     const displayDelta = Number(converted.value.toFixed(12));
     const number = numberFormat(displayDelta, decimals, thousandsSeparator);
     return {
       state: 'READY', value: displayDelta, rawValue: rawDelta, unit: '个百分点',
-      text: `较上月 ${signedText(displayDelta, number)}个百分点`
+      text: `${label} ${signedText(displayDelta, number)}个百分点`
     };
   }
   const formatted = formatDisplayMetric(
@@ -270,21 +288,36 @@ function formatMonthDelta(currentValue, previousValue, format, sourceUnit, ratio
     { ...format, negativeStyle: 'SIGNED' },
     sourceUnit
   );
-  if (formatted.value === null) return unavailableMonthDelta();
+  if (formatted.value === null) return unavailableComparison(label);
   return {
     state: 'READY', value: formatted.value, rawValue: rawDelta, unit: formatted.unit,
-    text: `较上月 ${signedText(formatted.value, formatted.text)}`
+    text: `${label} ${signedText(formatted.value, formatted.text)}`
   };
+}
+
+function formatMonthDelta(currentValue, previousValue, format, sourceUnit, ratio) {
+  return formatComparisonDelta(currentValue, previousValue, format, sourceUnit, ratio, '较上月');
 }
 
 /**
  * 只从 blockResults 中选择一个同时含当前日和上月月末的历史结果。
  * 当前历史值必须与主卡值一致，避免把另一指标或另一批次的历史行误当作比较基准。
  */
-function buildMonthDelta(model, component, ref, field, main, format) {
+function comparisonDate(dataDate, comparison) {
+  if (comparison === 'year') return previousYearEnd(dataDate);
+  if (comparison === 'day') return previousDay(dataDate);
+  return previousMonthEnd(dataDate);
+}
+
+function comparisonLabel(comparison) {
+  return comparison === 'year' ? '较上年' : comparison === 'day' ? '较上日' : '较上月';
+}
+
+function buildHistoricalDelta(model, component, ref, field, main, format, comparison = 'month', includeReferenceDate = false) {
   const dataDate = text(model?.dataDate);
-  const previousDate = previousMonthEnd(dataDate);
-  if (!previousDate || finite(main?.value) === null || !field) return unavailableMonthDelta();
+  const previousDate = comparisonDate(dataDate, comparison);
+  const label = comparisonLabel(comparison);
+  if (!previousDate || finite(main?.value) === null || !field) return unavailableComparison(label);
   const currentDate = dataDate;
   const blockResults = isObject(model?.blockResults) ? model.blockResults : {};
   const candidates = [];
@@ -299,25 +332,30 @@ function buildMonthDelta(model, component, ref, field, main, format) {
       || !previousRows.some(row => Object.prototype.hasOwnProperty.call(row, field))) continue;
     candidates.push({ source, currentRows, previousRows });
   }
-  if (candidates.length !== 1) return unavailableMonthDelta();
+  if (candidates.length !== 1) return unavailableComparison(label);
   const [{ source: historicalSource, currentRows, previousRows }] = candidates;
-  if (currentRows.length !== 1 || previousRows.length !== 1) return unavailableMonthDelta();
+  if (currentRows.length !== 1 || previousRows.length !== 1) return unavailableComparison(label);
   const historicalCurrent = finite(currentRows[0][field]);
   const historicalPrevious = finite(previousRows[0][field]);
   const mainValue = finite(main.value);
   if (historicalCurrent === null || historicalPrevious === null || mainValue === null
-    || historicalCurrent !== mainValue) return unavailableMonthDelta();
+    || historicalCurrent !== mainValue) return unavailableComparison(label);
   const sourceUnit = main.unit || ref.unit || '';
   const currentUnit = canonicalUnit(sourceUnit);
   const historicalUnit = explicitSourceUnit(historicalSource, field);
   if (historicalUnit.present) {
     const normalizedHistoricalUnit = canonicalUnit(historicalUnit.unit);
-    if (!currentUnit || !normalizedHistoricalUnit || currentUnit !== normalizedHistoricalUnit) return unavailableMonthDelta();
+    if (!currentUnit || !normalizedHistoricalUnit || currentUnit !== normalizedHistoricalUnit) return unavailableComparison(label);
   }
   const canonicalDisplayUnit = canonicalUnit(format?.displayUnit);
   const ratio = currentUnit === 'RATIO' || currentUnit === 'PERCENT'
     || canonicalDisplayUnit === 'RATIO' || canonicalDisplayUnit === 'PERCENT';
-  return formatMonthDelta(mainValue, historicalPrevious, format, sourceUnit, ratio);
+  const result = formatComparisonDelta(mainValue, historicalPrevious, format, sourceUnit, ratio, label);
+  return includeReferenceDate ? { ...result, referenceDate: previousDate } : result;
+}
+
+function buildMonthDelta(model, component, ref, field, main, format) {
+  return buildHistoricalDelta(model, component, ref, field, main, format, 'month');
 }
 
 function componentTitle(component, ref, source, templateTitle) {
@@ -364,6 +402,7 @@ function buildComponent(component, model, index, options) {
     value: finite(formatted.value),
     rawValue: main.value,
     sourceUnit,
+    sourceDate: text(source?.dataDate ?? source?.date ?? model?.dataDate),
     unit: formatted.unit,
     text: formatted.text,
     state,
@@ -371,6 +410,13 @@ function buildComponent(component, model, index, options) {
   };
   if (isBusinessHeaderComponent(component)) {
     result.monthDelta = buildMonthDelta(model, component, ref, main.key || field, main, displayFormat);
+    if (options?.draftOverview === true) {
+      result.comparisons = {
+        year: buildHistoricalDelta(model, component, ref, main.key || field, main, displayFormat, 'year', true),
+        month: buildHistoricalDelta(model, component, ref, main.key || field, main, displayFormat, 'month', true),
+        day: buildHistoricalDelta(model, component, ref, main.key || field, main, displayFormat, 'day', true)
+      };
+    }
   }
   if (component.componentType === 'COMPLETION') {
     result.progress = result.value === null ? null : Math.max(0, Math.min(100, result.value));

@@ -10,6 +10,7 @@
         class="revenue-share-widget__metric-card"
         :components="[revenueMetricCards.operating]"
         grouped
+        :draft-overview="draftOverview"
       />
     </div>
     <div
@@ -22,6 +23,7 @@
         class="revenue-share-widget__metric-card"
         :components="[revenueMetricCards.intermediary]"
         grouped
+        :draft-overview="draftOverview"
       />
     </div>
   </section>
@@ -33,7 +35,8 @@ import MetricDisplayWidgets from './MetricDisplayWidgets.vue';
 
 const props = defineProps({
   operating: { type: Object, default: () => ({}) },
-  intermediary: { type: Object, default: () => ({}) }
+  intermediary: { type: Object, default: () => ({}) },
+  draftOverview: { type: Boolean, default: false }
 });
 const chartState = computed(() => (
   props.operating?.state === 'READY' && props.intermediary?.state === 'READY' ? 'READY' : 'PENDING'

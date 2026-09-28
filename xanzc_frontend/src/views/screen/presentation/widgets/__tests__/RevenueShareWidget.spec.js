@@ -55,4 +55,17 @@ describe('RevenueShareWidget', () => {
     expect(wrapper.get('[data-testid="revenue-share-intermediary-section"] [data-testid="presentation-metric-status"]').text()).toContain('暂无有效值');
     expect(wrapper.text()).not.toContain('占比待核对');
   });
+
+  it('收入子卡在三维模式下各自传递上年、上月、上日对比', () => {
+    const comparisons = {
+      year: { state: 'READY', text: '较上年 +0.20亿元', referenceDate: '2027-12-31' },
+      month: { state: 'READY', text: '较上月 +0.10亿元', referenceDate: '2028-02-29' },
+      day: { state: 'READY', text: '较上日 +0.05亿元', referenceDate: '2028-03-01' }
+    };
+    const wrapper = mount(RevenueShareWidget, { props: {
+      operating: { ...operating, comparisons }, intermediary: { ...intermediary, comparisons }
+    } });
+    expect(wrapper.get('[data-testid="revenue-share-operating-section"] [data-testid="presentation-metric-comparisons"]').text()).toContain('较上年 +0.20亿元');
+    expect(wrapper.get('[data-testid="revenue-share-intermediary-section"] [data-testid="presentation-metric-comparisons"]').text()).toContain('较上日 +0.05亿元');
+  });
 });

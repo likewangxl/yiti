@@ -1,5 +1,5 @@
 <template>
-  <section class="presentation-metric-widgets" data-testid="presentation-metric-widgets" aria-label="配置化指标与完成情况">
+  <section class="presentation-metric-widgets" :class="{ 'presentation-metric-widgets--draft': draftOverview }" data-testid="presentation-metric-widgets" aria-label="配置化指标与完成情况">
     <article
       v-for="item in components"
       :key="item.componentId"
@@ -8,6 +8,7 @@
         `presentation-metric-widget--${String(item.componentType || '').toLowerCase()}`,
         `presentation-metric-widget--${String(item.layoutRegion || '').toLowerCase()}`,
         grouped ? 'presentation-metric-widget--grouped' : '',
+        draftOverview ? 'presentation-metric-widget--draft' : '',
         shouldUseCompletionRing(item) ? 'presentation-metric-widget--dial' : '',
         amountUnitClass(item),
         toneClass(item)
@@ -49,11 +50,33 @@
           />
           <strong v-else class="presentation-metric-widget__value" data-testid="presentation-metric-value">{{ item.text }}</strong>
           <span
-            v-if="grouped"
+            v-if="grouped && comparisonRows(item).length"
+            class="presentation-metric-widget__comparisons"
+            data-testid="presentation-metric-comparisons"
+          >
+            <span
+              v-for="comparison in comparisonRows(item)"
+              :key="comparison.key"
+              class="presentation-metric-widget__comparison"
+              :data-comparison="comparison.key"
+              :title="comparison.referenceDate ? `${comparison.text}（基准日 ${comparison.referenceDate}）` : comparison.text"
+            >{{ comparison.text }}</span>
+          </span>
+          <span
+            v-else-if="grouped"
             class="presentation-metric-widget__month-delta"
             data-testid="presentation-metric-month-delta"
           >{{ item.monthDelta?.text || '较上月 暂无数据' }}</span>
         </div>
+        <div
+          v-if="draftOverview && isCompletionRate(item) && finite(item.value) !== null"
+          class="presentation-metric-widget__draft-progress"
+          role="progressbar"
+          :aria-label="`${item.title || '完成率'}进度`"
+          :aria-valuenow="Math.max(0, Math.min(100, finite(item.value)))"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        ><i :style="{ width: `${Math.max(0, Math.min(100, finite(item.value)))}%` }" aria-hidden="true"></i></div>
         <span v-if="item.state !== 'READY'" class="presentation-metric-widget__status" data-testid="presentation-metric-status">
           {{ statusText(item.state) }}
         </span>
@@ -94,7 +117,8 @@ import CompletionRingGauge from './CompletionRingGauge.vue';
 
 const props = defineProps({
   components: { type: Array, default: () => [] },
-  grouped: { type: Boolean, default: false }
+  grouped: { type: Boolean, default: false },
+  draftOverview: { type: Boolean, default: false }
 });
 
 const METRIC_ICONS = Object.freeze({
@@ -138,8 +162,19 @@ function iconName(item) {
 }
 
 function shouldUseCompletionRing(item) {
-  return props.grouped
+  return !props.draftOverview && props.grouped
     && item?.componentType === 'METRIC_CARD'
+    && COMPLETION_RING_IDS.includes(String(item?.componentId || ''));
+}
+
+function finite(value) {
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function isCompletionRate(item) {
+  return item?.componentType === 'METRIC_CARD'
     && COMPLETION_RING_IDS.includes(String(item?.componentId || ''));
 }
 
@@ -166,6 +201,18 @@ function amountUnitClass(item) {
     亿元: 'hundred-million', HUNDRED_MILLION: 'hundred-million'
   })[unit];
   return token ? `presentation-metric-widget--unit-${token}` : '';
+}
+
+const COMPARISON_LABELS = Object.freeze({ year: '较上年', month: '较上月', day: '较上日' });
+
+function comparisonRows(item) {
+  const comparisons = item?.comparisons;
+  if (!comparisons || typeof comparisons !== 'object') return [];
+  return ['year', 'month', 'day'].map(key => ({
+    key,
+    referenceDate: comparisons[key]?.referenceDate || '',
+    text: comparisons[key]?.text || `${COMPARISON_LABELS[key]} 暂无数据`
+  }));
 }
 </script>
 
@@ -228,6 +275,10 @@ function amountUnitClass(item) {
   margin-top: 0;
   font-size: 10px;
 }
+.presentation-metric-widget__value-line--ring .presentation-metric-widget__comparisons {
+  flex: 1 1 0;
+  width: auto;
+}
 .presentation-metric-widget--dial .presentation-metric-widget__status { position: static; margin-top: 0; }
 .presentation-metric-widget__value { display: block; min-width: 0; max-width: 100%; margin: 0; color: #f4f8ff; font-size: clamp(18px, 1.55vw, 30px); font-weight: 750; line-height: 1.12; overflow-wrap: anywhere; word-break: break-word; }
 .presentation-metric-widget__value-line--grouped .presentation-metric-widget__value { display: inline; }
@@ -235,6 +286,20 @@ function amountUnitClass(item) {
 .presentation-metric-widget--grouped.presentation-metric-widget--unit-ten-thousand .presentation-metric-widget__value { font-size: clamp(14px, 1.15vw, 22px); }
 .presentation-metric-widget--grouped.presentation-metric-widget--unit-hundred-million .presentation-metric-widget__value { font-size: clamp(16px, 1.35vw, 26px); }
 .presentation-metric-widget__month-delta { min-width: 0; max-width: 100%; color: var(--panorama-text-dim, #8fa9db); font-size: 10px; font-weight: 550; line-height: 1.25; overflow-wrap: anywhere; word-break: break-word; }
+.presentation-metric-widget__comparisons { display: grid; width: 100%; min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 7px; color: var(--panorama-text-dim, #8fa9db); font-size: 9px; font-weight: 550; line-height: 1.25; }
+.presentation-metric-widget__comparison { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.presentation-metric-widgets--draft .presentation-metric-widget--grouped { box-sizing: border-box; min-height: 90px; height: auto; padding: 6px 8px; overflow: visible; gap: 8px; }
+.presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__icon { width: 24px; height: 24px; flex-basis: 24px; font-size: 16px; }
+.presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__content { gap: 2px; }
+.presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__header h2 { font-size: 12px; }
+.presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin-top: 0; }
+.presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value { font-size: clamp(18px, 1.1vw, 21px); line-height: 1.25; }
+.presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__comparisons { grid-template-columns: 1fr; gap: 1px; font-size: 11px; line-height: 1.15; }
+.presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__comparison { overflow: visible; text-overflow: clip; white-space: nowrap; }
+.presentation-metric-widgets--draft .presentation-metric-widget--dial,
+.presentation-metric-widgets--draft .presentation-metric-widget__value-line--ring { min-height: 0; }
+.presentation-metric-widget__draft-progress { height: 3px; margin-top: 2px; overflow: hidden; border-radius: 3px; background: rgba(119, 163, 255, .16); }
+.presentation-metric-widget__draft-progress i { display: block; height: 100%; border-radius: inherit; background: var(--metric-accent, #4de8ef); }
 .presentation-metric-widget__status { display: block; margin-top: 2px; color: var(--panorama-amber, #ffc45e); font-size: 10px; line-height: 1.25; }
 .presentation-metric-widget__progress { height: 7px; margin-top: 4px; overflow: hidden; background: rgba(2, 9, 22, .72); border: 1px solid rgba(133, 164, 222, .42); border-radius: 4px; }
 .presentation-metric-widget__progress i { display: block; height: 100%; background: var(--metric-accent); border-radius: inherit; box-shadow: 0 0 8px var(--metric-accent); }
@@ -252,5 +317,8 @@ function amountUnitClass(item) {
   .presentation-metric-widget__icon { width: 28px; height: 28px; flex-basis: 28px; font-size: 19px; }
   .presentation-metric-widget__header h2 { font-size: 12px; }
   .presentation-metric-widget__value { font-size: clamp(16px, 5.2vw, 22px); }
+  .presentation-metric-widgets--draft .presentation-metric-widget__icon { display: none; }
+  .presentation-metric-widgets--draft .presentation-metric-widget--grouped { min-height: 86px; padding-right: 8px; padding-left: 8px; }
+  .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value { font-size: 18px; }
 }
 </style>

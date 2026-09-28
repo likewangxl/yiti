@@ -274,6 +274,193 @@ describe('PresentationLayout', () => {
     expect(wrapper.find('[data-layout-group="RETAIL"] [data-testid="metric-widget"]').attributes('data-grouped')).toBe('true');
   });
 
+  it('draftOverview 在原分组上方显示存款、贷款和存贷款合计摘要，缺失或单位不兼容不补0', () => {
+    const header = ['business-corp-deposit-balance', 'business-corp-loan-balance'].map((componentId, order) => ({
+      componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order, visible: true,
+      text: { titleMode: 'CUSTOM', title: componentId }, format: { displayUnit: 'HUNDRED_MILLION' },
+      content: { mainField: 'value' }, dataRefs: [{ blockId: order + 1, metricCode: order ? 'loan' : 'deposit', unit: 'HUNDRED_MILLION' }]
+    }));
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        draftOverview: true,
+        presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components: header } },
+        model: { dataDate: '2028-03-02', kpis: [
+          { key: 'deposit', value: 120, unit: '亿元', dataDate: '2028-03-02', comparisons: {
+            year: { state: 'READY', value: 30, text: '较上年 +30.00亿元', referenceDate: '2027-12-31' }, month: { state: 'READY', value: 20, text: '较上月 +20.00亿元', referenceDate: '2028-02-29' }, day: { state: 'READY', value: 10, text: '较上日 +10.00亿元', referenceDate: '2028-03-01' }
+          } },
+          { key: 'loan', value: 80, unit: '亿元', dataDate: '2028-03-02', comparisons: {
+            year: { state: 'READY', value: 10, text: '较上年 +10.00亿元', referenceDate: '2027-12-31' }, month: { state: 'READY', value: 8, text: '较上月 +8.00亿元', referenceDate: '2028-02-29' }, day: { state: 'READY', value: 5, text: '较上日 +5.00亿元', referenceDate: '2028-03-01' }
+          } }
+        ] }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+    const summary = wrapper.get('[data-testid="draft-overview-summary"]');
+    expect(summary.findAll('[data-testid="draft-overview-summary-card"]')).toHaveLength(3);
+    expect(summary.get('[data-summary-key="deposit"]').text()).toContain('存款总额');
+    expect(summary.get('[data-summary-key="deposit"]').text()).toContain('120.00亿元');
+    expect(summary.get('[data-summary-key="loan"]').text()).toContain('80.00亿元');
+    expect(summary.get('[data-summary-key="total"]').text()).toContain('存贷款合计');
+    expect(summary.get('[data-summary-key="total"]').text()).toContain('200.00亿元');
+    const totalComparisons = summary.get('[data-summary-key="total"] .presentation-layout__overview-summary-card-comparisons');
+    expect(totalComparisons.text()).toContain('较上年 +40.00亿元');
+    expect(totalComparisons.text()).toContain('较上月 +28.00亿元');
+    expect(totalComparisons.text()).toContain('较上日 +15.00亿元');
+
+    const invalid = mount(PresentationLayout, {
+      props: {
+        draftOverview: true,
+        presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components: header } },
+        model: { dataDate: '2028-03-02', kpis: [
+          { key: 'deposit', value: 120, unit: '亿元', dataDate: '2028-03-02' },
+          { key: 'loan', value: null, unit: '万元', dataDate: '2028-03-01' }
+        ] }
+      },
+      global: { stubs }
+    });
+    mounted.push(invalid);
+    expect(invalid.get('[data-summary-key="total"]').text()).toContain('—');
+
+    const mixedUnits = mount(PresentationLayout, {
+      props: {
+        draftOverview: true,
+        presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components: header } },
+        model: { dataDate: '2028-03-02', kpis: [
+          { key: 'deposit', value: 120, unit: '亿元', dataDate: '2028-03-02' },
+          { key: 'loan', value: 8000, unit: '万元', dataDate: '2028-03-02' }
+        ] }
+      },
+      global: { stubs }
+    });
+    mounted.push(mixedUnits);
+    expect(mixedUnits.get('[data-summary-key="total"]').text()).toContain('120.80亿元');
+
+    const incompatibleUnits = mount(PresentationLayout, {
+      props: {
+        draftOverview: true,
+        presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components: header } },
+        model: { dataDate: '2028-03-02', kpis: [
+          { key: 'deposit', value: 120, unit: '亿元', dataDate: '2028-03-02' },
+          { key: 'loan', value: 80, unit: '%', dataDate: '2028-03-02' }
+        ] }
+      },
+      global: { stubs }
+    });
+    mounted.push(incompatibleUnits);
+    expect(incompatibleUnits.get('[data-summary-key="total"]').text()).toContain('—');
+
+    for (const invalidValue of [' ', true, [], {}, Infinity]) {
+      const invalidNumber = mount(PresentationLayout, {
+        props: {
+          draftOverview: true,
+          presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components: header } },
+          model: { dataDate: '2028-03-02', kpis: [
+            { key: 'deposit', value: 120, unit: '亿元', dataDate: '2028-03-02' },
+            { key: 'loan', value: invalidValue, unit: '亿元', dataDate: '2028-03-02' }
+          ] }
+        },
+        global: { stubs }
+      });
+      mounted.push(invalidNumber);
+      expect(invalidNumber.get('[data-summary-key="total"]').text()).toContain('—');
+    }
+
+    const published = mount(PresentationLayout, {
+      props: { draftOverview: false, presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components: header } }, model: {} },
+      global: { stubs }
+    });
+    mounted.push(published);
+    expect(published.find('[data-testid="draft-overview-summary"]').exists()).toBe(false);
+  });
+
+  it('总额与完整细分余额同日但数值不一致时拒绝借用细分三维差值', () => {
+    const fields = [
+      ['business-retail-deposit-balance', 'retailDeposit'],
+      ['business-corp-deposit-balance', 'corpDeposit'],
+      ['business-retail-loan-balance', 'retailLoan'],
+      ['business-corp-loan-balance', 'corpLoan']
+    ];
+    const components = fields.map(([componentId, field], order) => ({
+      componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order, visible: true,
+      text: { titleMode: 'CUSTOM', title: componentId }, format: { displayUnit: 'TEN_THOUSAND' },
+      content: { mainField: field }, dataRefs: [{ blockId: 31, metricCode: field, unit: 'TEN_THOUSAND' }]
+    }));
+    const rows = [
+      { date: '2028-03-02', retailDeposit: 10000, corpDeposit: 23000, retailLoan: 10000, corpLoan: 13000 },
+      { date: '2027-12-31', retailDeposit: 8000, corpDeposit: 16000, retailLoan: 9000, corpLoan: 12000 },
+      { date: '2028-02-29', retailDeposit: 9000, corpDeposit: 21000, retailLoan: 9500, corpLoan: 12500 },
+      { date: '2028-03-01', retailDeposit: 9500, corpDeposit: 22000, retailLoan: 9800, corpLoan: 12800 }
+    ];
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        draftOverview: true,
+        presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components } },
+        model: {
+          dataDate: '2028-03-02',
+          kpis: [
+            { key: 'deposit', value: 50000, unit: '万元', dataDate: '2028-03-02' },
+            { key: 'loan', value: 23000, unit: '万元', dataDate: '2028-03-02' }
+          ],
+          blockResults: {
+            31: { ...rows[0], unitByField: { retailDeposit: 'TEN_THOUSAND', corpDeposit: 'TEN_THOUSAND', retailLoan: 'TEN_THOUSAND', corpLoan: 'TEN_THOUSAND' } },
+            57: { rows, unitByField: { retailDeposit: 'TEN_THOUSAND', corpDeposit: 'TEN_THOUSAND', retailLoan: 'TEN_THOUSAND', corpLoan: 'TEN_THOUSAND' } }
+          }
+        }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+    expect(wrapper.get('[data-summary-key="deposit"]').text()).toContain('50,000.00万元');
+    expect(wrapper.get('[data-summary-key="total"]').text()).toContain('73,000.00万元');
+    expect(wrapper.get('[data-summary-key="total"] .presentation-layout__overview-summary-card-comparisons').text()).toContain('较上年 —');
+
+    const decimalEquivalent = mount(PresentationLayout, {
+      props: {
+        draftOverview: true,
+        presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components } },
+        model: {
+          dataDate: '2028-03-02',
+          kpis: [
+            { key: 'deposit', value: 2.3, unit: '亿元', dataDate: '2028-03-02' },
+            { key: 'loan', value: 2.3, unit: '亿元', dataDate: '2028-03-02' }
+          ],
+          blockResults: {
+            31: { ...rows[0], retailDeposit: 10000, corpDeposit: 13000, retailLoan: 10000, corpLoan: 13000, unitByField: { retailDeposit: 'TEN_THOUSAND', corpDeposit: 'TEN_THOUSAND', retailLoan: 'TEN_THOUSAND', corpLoan: 'TEN_THOUSAND' } },
+            57: { rows: [
+              { date: '2028-03-02', retailDeposit: 10000, corpDeposit: 13000, retailLoan: 10000, corpLoan: 13000 },
+              { date: '2027-12-31', retailDeposit: 8000, corpDeposit: 10000, retailLoan: 9000, corpLoan: 9000 },
+              { date: '2028-02-29', retailDeposit: 9000, corpDeposit: 11000, retailLoan: 9500, corpLoan: 10500 },
+              { date: '2028-03-01', retailDeposit: 9500, corpDeposit: 12000, retailLoan: 9800, corpLoan: 11700 }
+            ], unitByField: { retailDeposit: 'TEN_THOUSAND', corpDeposit: 'TEN_THOUSAND', retailLoan: 'TEN_THOUSAND', corpLoan: 'TEN_THOUSAND' } }
+          }
+        }
+      },
+      global: { stubs }
+    });
+    mounted.push(decimalEquivalent);
+    expect(decimalEquivalent.get('[data-summary-key="deposit"]').text()).toContain('2.30亿元');
+    expect(decimalEquivalent.get('[data-summary-key="total"]').text()).toContain('4.60亿元');
+    const decimalComparisons = decimalEquivalent.get('[data-summary-key="total"] .presentation-layout__overview-summary-card-comparisons').text();
+    expect(decimalComparisons).toContain('较上年 +1.00亿元');
+    expect(decimalComparisons).toContain('较上月 +0.60亿元');
+    expect(decimalComparisons).toContain('较上日 +0.30亿元');
+
+    const invalidDate = mount(PresentationLayout, {
+      props: {
+        draftOverview: true,
+        presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components } },
+        model: { dataDate: '2028-03-02', kpis: [
+          { key: 'deposit', value: 120, unit: '亿元', dataDate: 'not-a-date' },
+          { key: 'loan', value: 80, unit: '亿元', dataDate: '2028-03-02' }
+        ] }
+      },
+      global: { stubs }
+    });
+    mounted.push(invalidDate);
+    expect(invalidDate.get('[data-summary-key="total"]').text()).toContain('—');
+  });
+
   it('将配置组件重排为重点卡/次级卡、左中右三栏，并让地图先于趋势且明细下置', () => {
     const components = [
       ...Array.from({ length: 4 }, (_, index) => ({

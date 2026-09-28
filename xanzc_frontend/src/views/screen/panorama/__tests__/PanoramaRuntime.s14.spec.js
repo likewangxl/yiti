@@ -5,8 +5,11 @@ import { ref } from 'vue';
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(), back: vi.fn() }) }));
 vi.mock('../PanoramaDashboard.vue', () => ({ default: {
-  props: { sourcePresentation: { type: Object, default: () => ({}) } },
-  template: '<main data-testid="legacy-dashboard" :data-screen-code="sourcePresentation.screenCode"><span data-testid="runtime-state-probe">{{ JSON.stringify(sourcePresentation.runtimeState) }}</span>经营内容</main>'
+  props: {
+    sourcePresentation: { type: Object, default: () => ({}) },
+    draftOverview: { type: Boolean, default: false }
+  },
+  template: '<main data-testid="legacy-dashboard" :data-screen-code="sourcePresentation.screenCode" :data-draft-overview="String(draftOverview)"><span data-testid="runtime-state-probe">{{ JSON.stringify(sourcePresentation.runtimeState) }}</span>经营内容</main>'
 } }));
 vi.mock('../CorporateDashboard.vue', () => ({ default: { template: '<main>对公内容</main>' } }));
 vi.mock('../RetailDashboard.vue', () => ({ default: { template: '<main>零售内容</main>' } }));
@@ -46,12 +49,56 @@ describe('PanoramaRuntime S14', () => {
     expect(wrapper.find('[data-testid="presentation-runtime-status"]').exists()).toBe(false);
     const runtimeState = JSON.parse(wrapper.get('[data-testid="runtime-state-probe"]').text());
     expect(wrapper.get('[data-testid="legacy-dashboard"]').attributes('data-screen-code')).toBe('SCR_CODE');
+    expect(wrapper.get('[data-testid="legacy-dashboard"]').attributes('data-draft-overview')).toBe('false');
     expect(runtimeState).toMatchObject({
       status: 'STALE',
       batch: { batchId: 'B-OLD', dataDate: '2026-09-20', status: 'STALE' },
       sourceDates: { deposit: '2026-09-20', customers: '2026-09-19' }
     });
     expect(wrapper.text()).toContain('客户当前无有效值');
+    wrapper.unmount();
+  });
+
+  it('只有后端确认的 draft branch-overview-v1 才向新版总览传递 draftOverview', () => {
+    const view = {
+      state: 'draft',
+      renderPackage: { canvasStyle: { dataClassification: 'TEST', presentation: {
+        type: 'CODE', template: 'branch-overview-v1', displaySchemaVersion: 1,
+        display: { components: [] }
+      } } }
+    };
+    const wrapper = mount(PanoramaRuntime, { props: { view, context: {} } });
+    expect(wrapper.get('[data-testid="legacy-dashboard"]').attributes('data-draft-overview')).toBe('true');
+    wrapper.unmount();
+  });
+
+  it.each([
+    ['机构上下文', { orgCode: '105' }],
+    ['城市上下文', { cityCode: '610100' }],
+    ['员工上下文', { empId: 'EMP-105' }]
+  ])('draft branch-overview-v1 存在%s时不启用 draftOverview', (_label, context) => {
+    const view = {
+      state: 'draft',
+      renderPackage: { canvasStyle: { dataClassification: 'TEST', presentation: {
+        type: 'CODE', template: 'branch-overview-v1', displaySchemaVersion: 1,
+        display: { components: [] }
+      } } }
+    };
+    const wrapper = mount(PanoramaRuntime, { props: { view, context } });
+    expect(wrapper.get('[data-testid="legacy-dashboard"]').attributes('data-draft-overview')).toBe('false');
+    wrapper.unmount();
+  });
+
+  it('published branch-overview-v1 不启用 draftOverview', () => {
+    const view = {
+      state: 'published',
+      renderPackage: { canvasStyle: { dataClassification: 'TEST', presentation: {
+        type: 'CODE', template: 'branch-overview-v1', displaySchemaVersion: 1,
+        display: { components: [] }
+      } } }
+    };
+    const wrapper = mount(PanoramaRuntime, { props: { view, context: {} } });
+    expect(wrapper.get('[data-testid="legacy-dashboard"]').attributes('data-draft-overview')).toBe('false');
     wrapper.unmount();
   });
 });

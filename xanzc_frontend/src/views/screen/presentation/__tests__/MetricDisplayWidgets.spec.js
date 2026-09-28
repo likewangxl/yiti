@@ -137,6 +137,30 @@ describe('MetricDisplayWidgets', () => {
     expect(genericWrapper.find('[data-testid="presentation-metric-month-delta"]').exists()).toBe(false);
   });
 
+  it('新模式将上年、上月、上日三维对比集中显示，并保留精确口径文案', () => {
+    const wrapper = mount(MetricDisplayWidgets, {
+      props: {
+        grouped: true,
+        components: [{
+          componentId: 'business-corp-deposit-balance', componentType: 'METRIC_CARD', layoutRegion: 'HEADER',
+          title: '存款余额', text: '120.00亿元', state: 'READY',
+          monthDelta: { state: 'READY', text: '较上月 +20.00亿元' },
+          comparisons: {
+            year: { state: 'READY', text: '较上年 +30.00亿元', referenceDate: '2027-12-31' },
+            month: { state: 'READY', text: '较上月 +20.00亿元', referenceDate: '2028-02-29' },
+            day: { state: 'READY', text: '较上日 +10.00亿元', referenceDate: '2028-03-01' }
+          },
+          subFields: []
+        }]
+      }
+    });
+    const comparison = wrapper.get('[data-testid="presentation-metric-comparisons"]');
+    expect(comparison.text()).toContain('较上年 +30.00亿元');
+    expect(comparison.text()).toContain('较上月 +20.00亿元');
+    expect(comparison.text()).toContain('较上日 +10.00亿元');
+    expect(comparison.find('[data-comparison="year"]').attributes('title')).toContain('2027-12-31');
+  });
+
   it('仅分组的四张显式完成率指标卡使用仪表盘，并保留图标和较上月行', () => {
     const rateIds = [
       'business-retail-deposit-rate',
@@ -236,5 +260,29 @@ describe('MetricDisplayWidgets', () => {
 
     expect(wrapper.find('[data-testid="completion-ring-gauge"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="presentation-metric-value"]').text()).toBe('90.64%');
+  });
+
+  it('draft 模式完成率卡显示真实百分比和三维对比，不挂载大仪表盘', () => {
+    const wrapper = mount(MetricDisplayWidgets, {
+      props: {
+        grouped: true,
+        draftOverview: true,
+        components: [{
+          componentId: 'business-corp-deposit-rate', componentType: 'METRIC_CARD', layoutRegion: 'HEADER',
+          title: '对公存款完成率', text: '86.40%', value: 86.4, state: 'READY',
+          comparisons: {
+            year: { state: 'READY', text: '较上年 +6.40个百分点' },
+            month: { state: 'READY', text: '较上月 +2.40个百分点' },
+            day: { state: 'READY', text: '较上日 +0.40个百分点' }
+          },
+          subFields: []
+        }]
+      }
+    });
+    const card = wrapper.get('[data-component-id="business-corp-deposit-rate"]');
+    expect(card.find('[data-testid="completion-ring-gauge"]').exists()).toBe(false);
+    expect(card.get('[data-testid="presentation-metric-value"]').text()).toBe('86.40%');
+    expect(card.findAll('[data-testid="presentation-metric-comparisons"] .presentation-metric-widget__comparison')).toHaveLength(3);
+    expect(card.find('[data-testid="presentation-metric-comparisons"]').text()).toContain('较上日 +0.40个百分点');
   });
 });
