@@ -19,6 +19,25 @@ describe('RevenueShareWidget', () => {
     expect(wrapper.text()).toContain('较上月 +100万元');
   });
 
+  it('把营业收入与中间业务收入分成上下语义子卡，并将占比条归入下区', () => {
+    const wrapper = mount(RevenueShareWidget, { props: { operating, intermediary } });
+    const operatingSection = wrapper.get('[data-testid="revenue-share-operating-section"]');
+    const intermediarySection = wrapper.get('[data-testid="revenue-share-intermediary-section"]');
+
+    expect(operatingSection.attributes('aria-label')).toBe('营业收入');
+    expect(intermediarySection.attributes('aria-label')).toBe('中间业务收入');
+    expect(operatingSection.text()).toContain('2.00亿元');
+    expect(operatingSection.text()).toContain('较上月 +0.10亿元');
+    expect(operatingSection.text()).not.toContain('5000万元');
+    expect(intermediarySection.text()).toContain('5000万元');
+    expect(intermediarySection.text()).toContain('较上月 +100万元');
+    expect(intermediarySection.text()).not.toContain('2.00亿元');
+    expect(intermediarySection.get('[data-testid="revenue-share-ratio-label"]').text()).toBe('占营业收入');
+    expect(intermediarySection.get('[data-testid="revenue-share-percentage"]').text()).toBe('25.0%');
+    expect(intermediarySection.get('[role="img"]')).toBeTruthy();
+    expect(operatingSection.find('[role="img"]').exists()).toBe(false);
+  });
+
   it('金额不完整时显示待核对，不将比例缺失伪装成零', () => {
     const wrapper = mount(RevenueShareWidget, { props: { operating, intermediary: { ...intermediary, rawValue: null, state: 'NO_VALUE' } } });
     expect(wrapper.get('[data-testid="revenue-share-chart"]').attributes('data-state')).toBe('PENDING');
