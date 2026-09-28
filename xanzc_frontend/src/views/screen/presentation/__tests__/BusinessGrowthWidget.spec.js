@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 import BusinessGrowthWidget from '../widgets/BusinessGrowthWidget.vue';
 
 vi.mock('../../panorama/PanoramaTrend.vue', () => ({ default: {
-  props: ['rows', 'series', 'title', 'compact', 'amountFriendly'],
-  template: '<div data-testid="panorama-trend-mock" :data-compact="compact ? \'true\' : \'false\'" :data-amount-friendly="amountFriendly ? \'true\' : \'false\'">{{ title }}|{{ series.map(item => item.label).join(\',\') }}|{{ rows.length }}</div>'
+  props: ['rows', 'series', 'title', 'compact', 'amountFriendly', 'amountUnit'],
+  template: '<div data-testid="panorama-trend-mock" :data-compact="compact ? \'true\' : \'false\'" :data-amount-friendly="amountFriendly ? \'true\' : \'false\'" :data-amount-unit="amountUnit">{{ title }}|{{ series.map(item => item.label).join(\',\') }}|{{ rows.length }}</div>'
 } }));
 
 const presentation = {
@@ -55,6 +55,32 @@ describe('BusinessGrowthWidget', () => {
       .toEqual(['零售业务|存款,贷款|1', '对公业务|存款,贷款|1']);
     expect(wrapper.findAll('[data-testid="panorama-trend-mock"]').every(node => node.attributes('data-compact') === 'true')).toBe(true);
     expect(wrapper.findAll('[data-testid="panorama-trend-mock"]').every(node => node.attributes('data-amount-friendly') === 'true')).toBe(true);
+    expect(wrapper.get('.business-growth-widget__heading small').text()).toBe('单位：元');
+    expect(wrapper.findAll('[data-testid="panorama-trend-mock"]').every(node => node.attributes('data-amount-unit') === 'YUAN')).toBe(true);
+  });
+
+  it('动态显示并传递有效金额单位，非法选择回退元', async () => {
+    const wrapper = mount(BusinessGrowthWidget, {
+      props: {
+        amountUnit: 'TEN_THOUSAND',
+        presentation,
+        model: { blockResults: { 57: { rows, unitByField: Object.fromEntries([
+          ['测试_直营零售存款', 'YUAN'], ['测试_直营零售贷款', 'YUAN'],
+          ['测试_直营对公存款', 'YUAN'], ['测试_直营对公贷款', 'YUAN']
+        ]) } } }
+      }
+    });
+
+    expect(wrapper.get('.business-growth-widget__heading small').text()).toBe('单位：万元');
+    expect(wrapper.findAll('[data-testid="panorama-trend-mock"]').every(node => node.attributes('data-amount-unit') === 'TEN_THOUSAND')).toBe(true);
+
+    await wrapper.setProps({ amountUnit: 'HUNDRED_MILLION' });
+    expect(wrapper.get('.business-growth-widget__heading small').text()).toBe('单位：亿元');
+    expect(wrapper.findAll('[data-testid="panorama-trend-mock"]').every(node => node.attributes('data-amount-unit') === 'HUNDRED_MILLION')).toBe(true);
+
+    await wrapper.setProps({ amountUnit: 'PERCENT' });
+    expect(wrapper.get('.business-growth-widget__heading small').text()).toBe('单位：元');
+    expect(wrapper.findAll('[data-testid="panorama-trend-mock"]').every(node => node.attributes('data-amount-unit') === 'YUAN')).toBe(true);
   });
 
   it('历史四列全为空时分别显示业务线待接入空态，不渲染猜测曲线', () => {

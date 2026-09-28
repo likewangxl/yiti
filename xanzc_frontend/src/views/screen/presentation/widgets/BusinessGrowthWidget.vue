@@ -6,7 +6,7 @@
   >
     <header class="business-growth-widget__heading">
       <h2>{{ growth.title }}</h2>
-      <small>单位：元</small>
+      <small>单位：{{ amountUnitLabel }}</small>
     </header>
 
     <div class="business-growth-widget__charts">
@@ -25,6 +25,7 @@
           :title="group.title"
           :compact="true"
           :amount-friendly="true"
+          :amount-unit="normalizedAmountUnit"
         />
         <div v-else class="business-growth-widget__empty" data-testid="business-growth-empty" role="status">
           {{ group.emptyMessage }}
@@ -39,13 +40,22 @@ import { computed } from 'vue';
 
 import PanoramaTrend from '../../panorama/PanoramaTrend.vue';
 import { buildBusinessGrowthModel } from '../model/businessGrowthModel.js';
+import { canonicalUnit, unitLabel } from '../model/displayMetricsModel.js';
+
+const AMOUNT_UNITS = new Set(['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION']);
 
 const props = defineProps({
   presentation: { type: Object, default: () => ({}) },
-  model: { type: Object, default: () => ({}) }
+  model: { type: Object, default: () => ({}) },
+  amountUnit: { type: String, default: '' }
 });
 
 const growth = computed(() => buildBusinessGrowthModel(props.presentation, props.model));
+const normalizedAmountUnit = computed(() => {
+  const unit = canonicalUnit(props.amountUnit);
+  return AMOUNT_UNITS.has(unit) ? unit : 'YUAN';
+});
+const amountUnitLabel = computed(() => unitLabel(normalizedAmountUnit.value));
 </script>
 
 <style scoped>

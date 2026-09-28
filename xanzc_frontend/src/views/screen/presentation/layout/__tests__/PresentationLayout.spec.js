@@ -61,7 +61,7 @@ const presentation = {
 const stubs = {
   MetricDisplayWidgets: { props: ['components', 'grouped'], template: '<div data-testid="metric-widget" :data-grouped="grouped ? \'true\' : \'false\'"><span v-for="item in components" :key="item.componentId">{{ item.componentId }}</span></div>' },
   SeriesTableWidgets: { props: ['components', 'tabbed', 'trendDisplayMode'], template: '<div data-testid="series-widget" :data-tabbed="tabbed ? \'true\' : \'false\'" :data-trend-display-mode="trendDisplayMode"><span v-for="item in components" :key="item.componentId" data-testid="series-component">{{ item.componentId }}</span></div>' },
-  BusinessGrowthWidget: { props: ['presentation', 'model'], template: '<div data-testid="business-growth-widget" :data-template="presentation?.template || \'\'">业务增长曲线</div>' },
+  BusinessGrowthWidget: { props: ['presentation', 'model', 'amountUnit'], template: '<div data-testid="business-growth-widget" :data-template="presentation?.template || \'\'" :data-amount-unit="amountUnit">业务增长曲线</div>' },
   CompositionTabsWidget: { props: ['model'], template: '<div data-testid="structure-widget">{{ model.components?.[0]?.componentId }}</div>' },
   InstitutionRankingWidget: { props: ['model', 'title', 'paginate', 'pageSize', 'pageInterval', 'metricCarousel'], template: '<div data-testid="ranking-widget" :data-paginate="paginate ? \'true\' : \'false\'" :data-page-size="pageSize" :data-page-interval="pageInterval" :data-metric-carousel="metricCarousel ? \'true\' : \'false\'">{{ title }}</div>' },
   PresentationMapWidget: { props: ['presentation'], template: '<div data-testid="map-widget">地图</div>' }
@@ -354,6 +354,33 @@ describe('PresentationLayout', () => {
     expect(wrapper.get('[data-testid="ranking-widget"]').attributes()).toMatchObject({
       'data-paginate': 'true', 'data-page-size': '10', 'data-page-interval': '5000', 'data-metric-carousel': 'false'
     });
+  });
+
+  it('将页头金额单位传递给业务增长曲线并随选择变化', async () => {
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        amountUnit: 'TEN_THOUSAND',
+        presentation: {
+          displaySchemaVersion: 1,
+          template: 'branch-overview-v1',
+          display: {
+            components: [{
+              componentId: 'trend', componentType: 'TREND', layoutRegion: 'CENTER', order: 0, visible: true,
+              text: { titleMode: 'CUSTOM', title: '趋势' }, content: { series: [] }, dataRefs: []
+            }]
+          }
+        },
+        model: { blockResults: {} }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+
+    const widget = () => wrapper.get('[data-testid="business-growth-widget"]');
+    expect(widget().attributes('data-amount-unit')).toBe('TEN_THOUSAND');
+
+    await wrapper.setProps({ amountUnit: 'HUNDRED_MILLION' });
+    expect(widget().attributes('data-amount-unit')).toBe('HUNDRED_MILLION');
   });
 
   it('只按协议组件的 region/order/visible 渲染七类组件，且不带旧固定模块', () => {

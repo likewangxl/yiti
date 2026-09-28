@@ -128,6 +128,7 @@
             <BusinessGrowthWidget
               :presentation="resolvedPresentation"
               :model="props.model"
+              :amount-unit="props.amountUnit"
             />
           </div>
           <div

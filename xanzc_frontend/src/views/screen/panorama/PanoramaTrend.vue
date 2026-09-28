@@ -46,6 +46,7 @@ import {
 } from 'echarts/components';
 import VChart from 'vue-echarts';
 import { defaultTrendMetric, finiteMetric, hasTrendMetric } from './panoramaViewModel.js';
+import { canonicalUnit, formatDisplayMetric } from '../presentation/model/displayMetricsModel.js';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent, AxisPointerComponent]);
 
@@ -57,10 +58,17 @@ const props = defineProps({
   compact: { type: Boolean, default: false },
   switchable: { type: Boolean, default: false },
   amountFriendly: { type: Boolean, default: false },
+  amountUnit: { type: String, default: '' },
   series: {
     type: Array,
     default: null
   }
+});
+
+const AMOUNT_UNITS = new Set(['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION']);
+const selectedAmountUnit = computed(() => {
+  const unit = canonicalUnit(props.amountUnit);
+  return AMOUNT_UNITS.has(unit) ? unit : '';
 });
 
 const sourceRows = computed(() => (Array.isArray(props.rows) ? props.rows : props.trend));
@@ -120,6 +128,15 @@ function formatRawValue(value) {
   return number === null ? '—' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 20 }).format(number);
 }
 
+/**
+ * amountUnit 展示路径接收已统一为元的原值，只在显示层格式化，避免切换单位时二次换算。
+ */
+function formatSelectedAmount(value) {
+  const number = finiteValue(Array.isArray(value) ? value[value.length - 1] : value);
+  if (number === null) return '—';
+  return formatDisplayMetric(number, { displayUnit: selectedAmountUnit.value, decimals: 2 }, 'YUAN').text;
+}
+
 function escapeTooltipText(value) {
   return String(value ?? '').replace(/[&<>"']/g, character => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -147,7 +164,10 @@ function formatCompactValue(value) {
 function tooltipFormatter(params) {
   const items = Array.isArray(params) ? params : [params];
   const axisLabel = escapeTooltipText(items[0]?.axisValueLabel ?? items[0]?.axisValue ?? '');
-  return [axisLabel, ...items.map(item => `${item?.marker || ''}${escapeTooltipText(item?.seriesName || '')}: ${formatRawValue(item?.value)}`)].join('<br/>');
+  return [axisLabel, ...items.map(item => {
+    const value = selectedAmountUnit.value ? formatSelectedAmount(item?.value) : formatRawValue(item?.value);
+    return `${item?.marker || ''}${escapeTooltipText(item?.seriesName || '')}: ${value}`;
+  })].join('<br/>');
 }
 
 const optionSeries = computed(() => normalizedSeries.value.map(item => {
@@ -205,7 +225,7 @@ const option = computed(() => ({
     backgroundColor: 'rgba(7, 18, 53, .96)',
     borderColor: 'rgba(117, 158, 255, .38)',
     textStyle: { color: '#e8efff', fontSize: 12 },
-    ...(props.amountFriendly ? {
+    ...(props.amountFriendly || selectedAmountUnit.value ? {
       // 使用 body 浮层避开业务卡片 overflow:hidden 对日期和数值的裁剪。
       renderMode: 'html',
       appendTo: 'body',
@@ -238,7 +258,9 @@ const option = computed(() => ({
     axisLabel: {
       color: '#8ea5d2',
       fontSize: 10,
-      ...(props.amountFriendly ? { formatter: formatCompactValue } : {})
+      ...(selectedAmountUnit.value
+        ? { formatter: formatSelectedAmount }
+        : props.amountFriendly ? { formatter: formatCompactValue } : {})
     },
     splitLine: { lineStyle: { color: 'rgba(104, 143, 217, .12)' } }
   },

@@ -108,6 +108,47 @@ describe('PanoramaTrend', () => {
     expect(tooltip).not.toContain('<2026&09>');
   });
 
+  it('有效金额单位按原始元值格式化 tooltip 和轴，切换单位不改写原始序列', async () => {
+    const sourceRows = [{ date: '2026-09-21', deposit: 1068201500, loan: -12500 }];
+    const wrapper = mount(PanoramaTrend, {
+      props: {
+        amountFriendly: true,
+        amountUnit: 'TEN_THOUSAND',
+        trend: sourceRows
+      }
+    });
+
+    const tenThousandOption = rawChartOption(wrapper);
+    expect(tenThousandOption.series.map(item => item.data)).toEqual([[1068201500], [-12500]]);
+    expect(tenThousandOption.yAxis.axisLabel.formatter(1068201500)).toBe('106,820.15万元');
+    expect(tenThousandOption.yAxis.axisLabel.formatter(-12500)).toBe('-1.25万元');
+    expect(tenThousandOption.yAxis.axisLabel.formatter(0)).toBe('0.00万元');
+    const tenThousandTooltip = tenThousandOption.tooltip.formatter([
+      { axisValue: '2026-09-21', seriesName: '存款余额', value: 1068201500, marker: '' },
+      { axisValue: '2026-09-21', seriesName: '贷款余额', value: -12500, marker: '' },
+      { axisValue: '2026-09-21', seriesName: '空值', value: null, marker: '' }
+    ]);
+    expect(tenThousandTooltip).toContain('存款余额: 106,820.15万元');
+    expect(tenThousandTooltip).toContain('贷款余额: -1.25万元');
+    expect(tenThousandTooltip).toContain('空值: —');
+
+    await wrapper.setProps({ amountUnit: 'HUNDRED_MILLION' });
+    const hundredMillionOption = rawChartOption(wrapper);
+    expect(hundredMillionOption.yAxis.axisLabel.formatter(1068201500)).toBe('10.68亿元');
+    expect(hundredMillionOption.tooltip.formatter([
+      { axisValue: '2026-09-21', seriesName: '存款余额', value: 1068201500, marker: '' }
+    ])).toContain('存款余额: 10.68亿元');
+    expect(hundredMillionOption.series.map(item => item.data)).toEqual([[1068201500], [-12500]]);
+
+    await wrapper.setProps({ amountUnit: 'YUAN' });
+    const yuanOption = rawChartOption(wrapper);
+    expect(yuanOption.yAxis.axisLabel.formatter(1068201500)).toBe('1,068,201,500.00元');
+    expect(yuanOption.tooltip.formatter([
+      { axisValue: '2026-09-21', seriesName: '存款余额', value: 1068201500, marker: '' }
+    ])).toContain('存款余额: 1,068,201,500.00元');
+    expect(yuanOption.series.map(item => item.data)).toEqual([[1068201500], [-12500]]);
+  });
+
   it('金额友好趋势把完整原值 tooltip 挂到 body 并限制在视口内，普通趋势不启用 body 浮层', () => {
     const amountWrapper = mount(PanoramaTrend, {
       props: {
