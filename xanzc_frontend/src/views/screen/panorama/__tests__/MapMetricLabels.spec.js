@@ -173,7 +173,7 @@ describe('城市悬浮详情', () => {
       }
     });
     const hit=wrapper.get('[data-testid="map-city-callout-hit"][data-city-code="610100"]');
-    expect(wrapper.findAll('[data-testid="map-city-callout-hit"]')).toHaveLength(2);
+    expect(wrapper.findAll('[data-testid="map-city-callout-hit"]')).toHaveLength(1);
     await hit.trigger('pointerenter');
     const tooltip=wrapper.get('[role="tooltip"]');
     expect(tooltip.get('[data-testid="map-city-institution-count"]').text()).toContain('4 家');
@@ -218,11 +218,14 @@ describe('城市悬浮详情', () => {
         cityDetails:{'610100':{institutionCount:0,institutions:[]},'610200':{institutionCount:0,institutions:[]}}
       }
     });
-    await wrapper.get('[data-testid="map-city-callout-hit"][data-city-code="610200"]').trigger('pointerenter');
+    expect(wrapper.findAll('[data-testid="map-city-callout-line"]')).toHaveLength(0);
+    expect(wrapper.findAll('[data-testid="map-city-callout-hit"]')).toHaveLength(0);
+    await wrapper.get('button[data-city-code="610200"]').trigger('focus');
     const tooltip=wrapper.get('[role="tooltip"]');
     expect(tooltip.get('[data-testid="map-city-institution-count"]').text()).toContain('0 家');
     expect(tooltip.text()).toContain('无经营机构');
     expect(tooltip.findAll('[data-testid="map-city-institution-name"]')).toHaveLength(0);
+    await wrapper.get('button[data-city-code="610200"]').trigger('blur');
     wrapper.unmount();
   });
 

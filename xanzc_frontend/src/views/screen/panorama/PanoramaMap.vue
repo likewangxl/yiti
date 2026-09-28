@@ -85,7 +85,8 @@
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      <g v-for="region in regionLabels" :key="`${region.key}:callout`" class="panorama-map__callout" :class="{ 'is-active': String(region.code) === hoveredRegionCode, 'is-missing': isRegionMetricMissing(region), 'is-has-institution': metricState(region) === 'HAS_INSTITUTION', 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }" :style="cityAccentStyle(region)" :data-city-code="region.code">
+      <template v-for="region in regionLabels" :key="`${region.key}:callout`">
+      <g v-if="cityDetailMode !== 'institutions' || hasInstitutionDetail(region)" class="panorama-map__callout" :class="{ 'is-active': String(region.code) === hoveredRegionCode, 'is-missing': isRegionMetricMissing(region), 'is-has-institution': metricState(region) === 'HAS_INSTITUTION', 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }" :style="cityAccentStyle(region)" :data-city-code="region.code">
         <path :d="calloutPath(region)" class="panorama-map__callout-glow" />
         <path
           :d="calloutPath(region)"
@@ -110,6 +111,7 @@
           class="panorama-map__callout-anchor"
         />
       </g>
+      </template>
     </svg>
     <div v-if="!fallbackActive || isCalloutLayout || reliefEnabled" class="panorama-map__region-label-layer" aria-label="可选择城市标签">
       <button
@@ -303,6 +305,7 @@ import {
 } from './mapReliefGeometry';
 
 import { createMapCalloutPath, layoutMapCallouts, layoutMapLabels, layoutPointCallouts } from './mapLabelLayout';
+import { positionCityTooltip } from './mapCityTooltipLayout';
 const props = defineProps({
   geoJson: { type: Object, default: () => ({ type: 'FeatureCollection', features: [] }) },
   points: { type: Array, default: () => [] },
@@ -784,6 +787,11 @@ function cityAccent(region) {
   return cityAccents[index % cityAccents.length];
 }
 function cityAccentStyle(region) { return { '--city-accent': cityAccent(region) }; }
+function hasInstitutionDetail(region) {
+  const detail = props.cityDetails?.[region.code];
+  if (Array.isArray(detail?.institutions)) return detail.institutions.length > 0;
+  return Number(detail?.institutionCount) > 0;
+}
 function calloutPath(region) { return createMapCalloutPath(calloutLayout.value[region.key]); }
 const activeCityDetail = computed(() => {
   if (!cityHoverDetailsEnabled.value || !hoveredRegionCode.value) return null;
@@ -817,6 +825,33 @@ const cityDetailStyle = computed(() => {
   const rect = containerRef.value?.getBoundingClientRect();
   if (!rect || !activeCityDetail.value) return {};
   const width = Math.min(304, window.innerWidth - 24);
+  if (props.cityDetailMode === 'institutions' && isCalloutLayout.value) {
+    const code = String(activeCityDetail.value.region.code);
+    const label = [...(containerRef.value.querySelectorAll('.panorama-map__region-label-hit[data-city-code]') || [])]
+      .find(element => String(element.getAttribute('data-city-code')) === code);
+    const excludedRect = containerRef.value.closest?.('.presentation-map-widget')?.getBoundingClientRect?.()
+      || containerRef.value.closest?.('.panorama-map-panel')?.getBoundingClientRect?.()
+      || rect;
+    const position = positionCityTooltip({
+      mapRect: excludedRect,
+      labelRect: label?.getBoundingClientRect?.() || rect,
+      tooltipWidth: width,
+      tooltipHeight: cityDetailHeight.value,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      side: calloutLayout.value[activeCityDetail.value.region.key]?.side,
+      gap: 10,
+      margin: 12
+    });
+    if (!position) return { display: 'none' };
+    return {
+      ...cityAccentStyle(activeCityDetail.value.region),
+      width: `${position.width}px`,
+      left: `${position.left}px`,
+      top: `${position.top}px`,
+      maxHeight: `${position.maxHeight}px`,
+      overflowY: 'auto'
+    };
+  }
   return {
     ...cityAccentStyle(activeCityDetail.value.region),
     width: `${width}px`,
