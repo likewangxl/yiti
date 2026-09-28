@@ -31,7 +31,7 @@
       :view-fit="{ ...(mapModel.viewFit || {}), ...viewFit }"
       appearance="relief"
       :label-layout="provinceInlineMap ? 'inline' : 'callout'"
-      :point-label-layout="enhancedMap && mode === 'city' ? 'callout' : 'inline'"
+      :point-label-layout="mode === 'city' ? 'callout' : 'inline'"
       class="presentation-map-widget__map"
       @region-select="onRegionSelect"
       @branch-select="onBranchSelect"

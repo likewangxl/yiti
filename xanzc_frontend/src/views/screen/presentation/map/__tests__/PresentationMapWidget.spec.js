@@ -132,7 +132,7 @@ describe('PresentationMapWidget', () => {
       props: { presentation: oldPresentation, model, geoJson, mode: 'city', cityCode: '610100' },
       global: { stubs: { PanoramaMap: mapStub } }
     });
-    expect(city.getComponent(mapStub).props('pointLabelLayout')).toBe('inline');
+    expect(city.getComponent(mapStub).props('pointLabelLayout')).toBe('callout');
     city.unmount();
   });
 });

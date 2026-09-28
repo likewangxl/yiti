@@ -104,9 +104,9 @@ describe('CityPanorama 市级支行全景', () => {
     expect(wrapper.find('[data-testid="selected-org-code"]').text()).toContain('ORG-1');
   });
 
-  it('旧屏的市级地图不启用新屏网点连线标注', () => {
+  it('旧屏的市级地图同样使用网点连线标注', () => {
     const wrapper = mountCity({ sourcePresentation: { screenCode: 'SCR_PROVINCE' } });
-    expect(wrapper.get('.city-map-stub').attributes('data-point-label-layout')).toBe('inline');
+    expect(wrapper.get('.city-map-stub').attributes('data-point-label-layout')).toBe('callout');
   });
 
   it('支行详情可展开和收起，返回省级、刷新、全屏都由事件或能力交给容器', async () => {

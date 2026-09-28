@@ -76,7 +76,7 @@
           :demo="demo"
           :selected-org-code="selectedOrgCode"
           mode="city"
-          :point-label-layout="isBranchMapV2(sourcePresentation) ? 'callout' : 'inline'"
+          point-label-layout="callout"
           :selected-region-code="cityCode"
           @branch-select="selectBranch"
         />
@@ -144,7 +144,6 @@ import PresentationMapWidget from '../presentation/map/PresentationMapWidget.vue
 import { findVisibleMapComponent } from '../presentation/map/mapModel';
 import PanoramaTrend from './PanoramaTrend.vue';
 import { cityGeoByCode } from './geography.js';
-import { isBranchMapV2 } from './screenVariant.js';
 import {
   buildCityInsights,
   coverageLabel,
