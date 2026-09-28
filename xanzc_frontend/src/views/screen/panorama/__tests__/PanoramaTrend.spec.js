@@ -107,4 +107,35 @@ describe('PanoramaTrend', () => {
     expect(tooltip).toContain('&lt;存款&amp;余额&gt;');
     expect(tooltip).not.toContain('<2026&09>');
   });
+
+  it('金额友好趋势把完整原值 tooltip 挂到 body 并限制在视口内，普通趋势不启用 body 浮层', () => {
+    const amountWrapper = mount(PanoramaTrend, {
+      props: {
+        amountFriendly: true,
+        trend: [{ date: '2026-09-21', deposit: 1068201504.93, loan: 1120758514 }]
+      }
+    });
+    const amountOption = rawChartOption(amountWrapper);
+    expect(amountOption.tooltip).toMatchObject({
+      renderMode: 'html',
+      appendTo: 'body',
+      confine: true,
+      className: 'panorama-trend-tooltip'
+    });
+    const lines = amountOption.tooltip.formatter([
+      { axisValue: '2026-09-21', seriesName: '存款余额', value: 1068201504.93, marker: '' },
+      { axisValue: '2026-09-21', seriesName: '贷款余额', value: 1120758514, marker: '' }
+    ]).split('<br/>');
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toBe('2026-09-21');
+    expect(lines[1]).toContain('存款余额: 1,068,201,504.93');
+    expect(lines[2]).toContain('贷款余额: 1,120,758,514');
+
+    const regularWrapper = mount(PanoramaTrend, {
+      props: { trend: [{ date: '2026-09-21', deposit: 1, loan: 2 }] }
+    });
+    const regularTooltip = rawChartOption(regularWrapper).tooltip;
+    expect(regularTooltip).not.toHaveProperty('appendTo');
+    expect(regularTooltip).not.toHaveProperty('renderMode');
+  });
 });

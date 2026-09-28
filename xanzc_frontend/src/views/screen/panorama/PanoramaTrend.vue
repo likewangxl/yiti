@@ -205,7 +205,14 @@ const option = computed(() => ({
     backgroundColor: 'rgba(7, 18, 53, .96)',
     borderColor: 'rgba(117, 158, 255, .38)',
     textStyle: { color: '#e8efff', fontSize: 12 },
-    ...(props.amountFriendly ? { formatter: tooltipFormatter } : {})
+    ...(props.amountFriendly ? {
+      // 使用 body 浮层避开业务卡片 overflow:hidden 对日期和数值的裁剪。
+      renderMode: 'html',
+      appendTo: 'body',
+      confine: true,
+      className: 'panorama-trend-tooltip',
+      formatter: tooltipFormatter
+    } : {})
   },
   legend: {
     show: normalizedSeries.value.length > 1,
