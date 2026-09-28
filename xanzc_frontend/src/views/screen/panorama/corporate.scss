@@ -65,13 +65,6 @@
 .corporate-kpi__change.is-favorable { color: var(--corporate-cyan); }
 .corporate-kpi__change.is-empty { color: #768dbb; }
 
-.corporate-insight-strip { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)) minmax(180px,1.2fr); gap: 8px; margin: 0 clamp(16px,2vw,30px) 12px; }
-.corporate-insight-item { min-width: 0; display: grid; grid-template-columns: auto auto; align-items: baseline; column-gap: 8px; padding: 7px 11px 6px; border: 1px solid rgba(121,161,248,.23); border-radius: 7px; background: linear-gradient(105deg,rgba(15,45,105,.72),rgba(7,24,64,.74)); }
-.corporate-insight-item > span { overflow: hidden; color: #9bb3df; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.corporate-insight-item > strong { color: var(--corporate-cyan); font-size: 17px; line-height: 1; text-align: right; }
-.corporate-insight-item > small { grid-column: 1/-1; margin-top: 3px; overflow: hidden; color: #7692c4; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.corporate-insight-item--wide > strong { color: #d2bcff; }
-
 .corporate-main-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.7fr) minmax(0,1.05fr); align-items: stretch; gap: 14px; margin: 0 clamp(16px,2vw,30px) 18px; }
 .corporate-column { min-width: 0; min-height: 0; display: grid; gap: 14px; align-content: stretch; }
 .corporate-column--left { grid-template-rows: max-content minmax(max-content,1fr) minmax(max-content,1fr); }
@@ -302,8 +295,6 @@
   .corporate-header__context { font-size: 10px; }
   .corporate-header__actions .corporate-live-state { display: none; }
   .corporate-kpi-grid, .corporate-main-grid { margin-right: 12px; margin-left: 12px; }
-  .corporate-insight-strip { grid-template-columns: repeat(2,minmax(0,1fr)); margin-right: 12px; margin-left: 12px; }
-  .corporate-insight-item--wide { grid-column: 1/-1; }
   .corporate-kpi-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .corporate-kpi:nth-child(2n) { border-right: 0; }
   .corporate-kpi:nth-child(-n+4) { border-bottom: 1px solid rgba(121,161,248,.16); }
@@ -349,7 +340,6 @@
   .corporate-header__title h1 { font-size: clamp(26px,2.5vw,38px); }
   .corporate-kpi { min-height: 66px; padding-top: 6px; padding-bottom: 6px; }
   .corporate-kpi-grid { margin-top: 8px; margin-bottom: 8px; }
-  .corporate-insight-strip { margin-bottom: 8px; }
   .corporate-main-grid { margin-bottom: 10px; }
   .corporate-column { gap: 10px; }
   .corporate-panel__heading { min-height: 44px; padding: 6px 10px; gap: 6px; }
@@ -382,7 +372,7 @@
   .corporate-preview { height: 100dvh; min-height: 0; }
   .corporate-preview__source, .corporate-preview__footer { flex: 0 0 auto; }
   .corporate-preview > .corporate-dashboard { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
-  .corporate-preview .corporate-header, .corporate-preview .corporate-kpi-grid, .corporate-preview .corporate-insight-strip { flex: 0 0 auto; }
+  .corporate-preview .corporate-header, .corporate-preview .corporate-kpi-grid { flex: 0 0 auto; }
   .corporate-preview .corporate-main-grid { flex: 1 1 0; min-height: 0; }
   .corporate-preview .corporate-column--left { grid-template-rows: minmax(0,.8fr) minmax(0,1.05fr) minmax(0,1fr); }
   .corporate-preview .corporate-column--center { grid-template-rows: minmax(0,1fr) minmax(170px,.38fr); }
@@ -433,11 +423,6 @@
 .corporate-kpi:nth-child(3), .corporate-kpi:nth-child(5) { border-color: rgba(77, 232, 239, .34); }
 .corporate-kpi:nth-child(6) { border-color: rgba(255, 196, 94, .34); }
 .corporate-kpi__number strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.corporate-insight-strip { gap: 8px; }
-.corporate-insight-item { border: 0; border-left: 3px solid var(--corporate-cyan); border-radius: 0 7px 7px 0; background: linear-gradient(105deg, rgba(15, 45, 105, .82), rgba(7, 24, 64, .68)); }
-.corporate-insight-item:nth-child(2) { border-left-color: var(--corporate-danger); }
-.corporate-insight-item:nth-child(3) { border-left-color: var(--corporate-amber); }
-.corporate-insight-item:nth-child(4) { border-left-color: var(--corporate-violet); }
 .corporate-main-grid { height: clamp(560px, calc(100dvh - var(--cockpit-chrome-height, 0px) - 270px), 760px); min-height: 560px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr) minmax(0, 1.05fr); gap: 12px; }
 .corporate-column--left { grid-template-rows: minmax(125px, .65fr) minmax(190px, 1fr) minmax(150px, .88fr); }
 .corporate-column--center { grid-template-rows: minmax(300px, 1.14fr) minmax(235px, .86fr); }

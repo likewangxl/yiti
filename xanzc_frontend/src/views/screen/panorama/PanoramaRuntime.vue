@@ -23,7 +23,7 @@
       @configure="onConfigure"
     />
 
-    <aside v-if="!isRetail && issueEntries.length" class="panorama-runtime__issues" data-testid="panorama-slot-issues" aria-live="polite">
+    <aside v-if="!isRetail && !isCorporate && issueEntries.length" class="panorama-runtime__issues" data-testid="panorama-slot-issues" aria-live="polite">
       <strong>部分数据暂不可用</strong>
       <ul>
         <li v-for="item in issueEntries" :key="item.key">
@@ -38,7 +38,7 @@
 </template>
 
 <script setup>
-import { computed, ref, toRef } from 'vue';
+import { computed, onBeforeUnmount, ref, toRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { getScreenView, listAvailableScreens } from '@/api/screen';
 import PanoramaDashboard from './PanoramaDashboard.vue';
@@ -54,7 +54,8 @@ import {
   resolveAuthorizedScreen,
   resolveInstitution,
   routeForBusinessLine,
-  routeForInstitution
+  routeForInstitution,
+  SOURCE_SCREEN_CODES
 } from '../presentation/navigation/navigationModel';
 import { buildRuntimePresentation, issueStatus } from '../presentation/runtime/runtimeState';
 import { buildInstitutionViewModel } from '../presentation/model/institutionViewModel';
@@ -313,6 +314,151 @@ const navigationContext = computed(() => {
   }));
 });
 
+const PARENT_BRANCH_TEMPLATE = 'branch-overview-v1';
+
+function isRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function renderPackageOf(view) {
+  return parseObject(view?.renderPackage ?? view?.render_package
+    ?? view?.renderPackageJson ?? view?.render_package_json) || {};
+}
+
+function sourceIdentityOf(view) {
+  const renderPackage = renderPackageOf(view);
+  const canvasStyle = parseObject(renderPackage.canvasStyle ?? renderPackage.canvas_style) || {};
+  const presentation = parseObject(canvasStyle.presentation) || {};
+  return {
+    runtimeSchemaVersion: Number(view?.runtimeSchemaVersion ?? view?.runtime_schema_version),
+    template: String(presentation.template || '').trim()
+  };
+}
+
+function sourceViewError(message) {
+  return new Error(`${message}，已拒绝进入。`);
+}
+
+/** 源屏上下文只是导航线索；真正进入支行页前仍严格复核服务端返回的源屏。 */
+function assertParentBranchSourceView(view, sourceScreenCode, sourcePreview = '', options = {}) {
+  if (!isRecord(view)) throw sourceViewError('源屏机构授权复核响应无效');
+  const screenCode = String(view.screenCode || view.screen_code || '').trim();
+  if (!SOURCE_SCREEN_CODES.includes(sourceScreenCode) || screenCode !== sourceScreenCode) {
+    throw sourceViewError('源屏身份与导航上下文不一致');
+  }
+  const expectedState = sourcePreview === 'draft' ? 'draft' : 'published';
+  if (String(view.state || '').trim().toLowerCase() !== expectedState) {
+    throw sourceViewError('源屏状态与导航上下文不一致');
+  }
+  const identity = sourceIdentityOf(view);
+  if (identity.runtimeSchemaVersion !== 2) throw sourceViewError('源屏运行 schema 不是 2');
+  if (identity.template !== PARENT_BRANCH_TEMPLATE) throw sourceViewError('源屏模板身份不匹配');
+  const hasRules = Object.prototype.hasOwnProperty.call(view, 'institutionRules');
+  const rules = view.institutionRules;
+  const allowMissingRules = options.allowMissingRules === true;
+  if ((!hasRules || rules === null || rules === undefined) && allowMissingRules) return view;
+  if (!hasRules || !isRecord(rules)) {
+    throw sourceViewError('源屏机构规则缺失或无效');
+  }
+  return view;
+}
+
+function assertInstitutionDisplayable(resolved, scope = '当前机构') {
+  if (!resolved?.authorized) throw new Error(`${scope}不在授权目录中，已拒绝进入。`);
+  if (!resolved.layer?.known) throw new Error(`${scope}经营层级待确认，暂不进入机构主路径。`);
+  if (!resolved.layer.displayable) throw new Error(`${scope}不属于允许展示的经营层级，已拒绝进入。`);
+  return resolved;
+}
+
+function assertCityConsistency(leftResolved, rightResolved) {
+  const leftCityCode = String(leftResolved?.institution?.cityCode || '').trim();
+  const rightCityCode = String(rightResolved?.institution?.cityCode || '').trim();
+  if (leftCityCode && rightCityCode && leftCityCode !== rightCityCode) {
+    throw new Error('当前机构城市与源屏机构城市不一致，已拒绝进入。');
+  }
+}
+
+function navigationSignature(value) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '';
+  }
+}
+
+function navigationSnapshot(token, contextSnapshot, viewSnapshot) {
+  return {
+    token,
+    contextSnapshot,
+    viewSnapshot,
+    contextSignature: navigationSignature(contextSnapshot),
+    viewSignature: navigationSignature(viewSnapshot)
+  };
+}
+
+function navigationStillCurrent(snapshot) {
+  return snapshot.token === navigationGeneration
+    && navigationSignature(props.view) === snapshot.viewSignature
+    && navigationSignature(navigationContext.value) === snapshot.contextSignature;
+}
+
+async function resolveBusinessInstitutionSource(code, contextSnapshot) {
+  const sourceScreenCode = contextSnapshot.sourceScreenCode;
+  const sourcePreview = contextSnapshot.sourcePreview || '';
+  if (sourceScreenCode) {
+    const sourceView = await getScreenView(sourceScreenCode, sourcePreview || undefined);
+    assertParentBranchSourceView(sourceView, sourceScreenCode, sourcePreview);
+    const resolved = resolveInstitution(sourceView, code);
+    assertInstitutionDisplayable(resolved, '当前机构');
+    return { resolved, sourceScreenCode, sourcePreview };
+  }
+
+  try {
+    const result = await resolveAuthorizedScreen({
+      businessLine: 'COMMON',
+      orgCode: code,
+      listAvailableScreens,
+      getScreenView
+    });
+    const targetScreenCode = String(result?.target?.screenCode || '').trim();
+    if (!SOURCE_SCREEN_CODES.includes(targetScreenCode)) {
+      throw sourceViewError('默认源屏身份不在白名单中');
+    }
+    assertParentBranchSourceView(result.view, targetScreenCode, '');
+    const resolved = resolveInstitution(result.view, code);
+    assertInstitutionDisplayable(resolved, '当前机构');
+    return { resolved, sourceScreenCode: targetScreenCode, sourcePreview: '' };
+  } catch (error) {
+    // A published catalog/view may contain an authorized institution whose
+    // legacy row lacks layer metadata. Only this precise condition may read
+    // the already-authorized draft source to obtain the missing layer.
+    if (error?.code !== 'ORG_LAYER_UNCONFIRMED'
+      || error?.resolved?.authorized !== true
+      || !isRecord(error.view)
+      || !isRecord(error.target)) throw error;
+    const targetScreenCode = String(error.target.screenCode || '').trim();
+    if (!SOURCE_SCREEN_CODES.includes(targetScreenCode)) throw error;
+    assertParentBranchSourceView(error.view, targetScreenCode, '', { allowMissingRules: true });
+    const publishedResolved = resolveInstitution(error.view, code);
+    if (!publishedResolved.authorized) throw error;
+    const draftView = await getScreenView(targetScreenCode, 'draft');
+    assertParentBranchSourceView(draftView, targetScreenCode, 'draft');
+    const draftResolved = resolveInstitution(draftView, code);
+    assertInstitutionDisplayable(draftResolved, '当前机构');
+    assertCityConsistency(publishedResolved, draftResolved);
+    return { resolved: draftResolved, sourceScreenCode: targetScreenCode, sourcePreview: 'draft' };
+  }
+}
+
+watch(() => [props.view, props.context], () => {
+  navigationGeneration += 1;
+  navigationPending.value = false;
+}, { deep: true });
+
+onBeforeUnmount(() => {
+  navigationGeneration += 1;
+});
+
 const slotLabels = {
   deposit: '存款余额',
   loan: '贷款余额',
@@ -367,36 +513,57 @@ function onConfigure() {
   if (router?.push) router.push({ path: '/screen-admin/designer', query });
 }
 
-function onBranchSelect(payload) {
+async function onBranchSelect(payload) {
   const orgCode = typeof payload === 'object' ? payload?.orgCode : payload;
   const code = String(orgCode || '').trim();
   if (!code) return;
+  const token = ++navigationGeneration;
+  // An institution action supersedes an in-flight business-line action.
+  navigationPending.value = false;
+  const contextSnapshot = navigationContext.value;
+  const viewSnapshot = props.view;
+  const snapshot = navigationSnapshot(token, contextSnapshot, viewSnapshot);
   navigationError.value = '';
-  const resolved = resolveInstitution(props.view, code);
-  if (!resolved.authorized) {
-    navigationError.value = '当前机构不在本屏授权目录中，已拒绝进入。';
-    return;
+  try {
+    let resolved = resolveInstitution(viewSnapshot, code);
+    if (!resolved.authorized) throw new Error('当前机构不在本屏授权目录中，已拒绝进入。');
+    if (resolved.layer.known && !resolved.layer.displayable) {
+      throw new Error('当前机构不属于允许展示的经营层级，已拒绝进入。');
+    }
+
+    let sourceScreenCode = contextSnapshot.sourceScreenCode;
+    let sourcePreview = contextSnapshot.sourcePreview || '';
+    if (isRetail.value || isCorporate.value) {
+      const source = await resolveBusinessInstitutionSource(code, contextSnapshot);
+      if (!navigationStillCurrent(snapshot)) return;
+      const currentCityCode = String(contextSnapshot.cityCode || '').trim();
+      if (currentCityCode && resolved.institution?.cityCode) {
+        assertCityConsistency({ institution: { cityCode: currentCityCode } }, resolved);
+      }
+      assertCityConsistency(resolved, source.resolved);
+      resolved = source.resolved;
+      sourceScreenCode = source.sourceScreenCode;
+      sourcePreview = source.sourcePreview;
+    } else {
+      assertInstitutionDisplayable(resolved);
+    }
+    if (!navigationStillCurrent(snapshot)) return;
+    const target = routeForInstitution({
+      ...contextSnapshot,
+      orgCode: code,
+      cityCode: resolved.institution?.cityCode || contextSnapshot.cityCode,
+      businessLine: contextSnapshot.businessLine || 'COMMON',
+      sourceScreenCode,
+      sourcePreview
+    });
+    if (!target || !router?.push) throw new Error('机构导航目标不可用，已拒绝进入。');
+    if (token !== navigationGeneration) return;
+    emit('branch-select', code);
+    return router.push(target);
+  } catch (error) {
+    if (token !== navigationGeneration) return;
+    navigationError.value = error?.message || '机构导航授权复核失败，已拒绝进入。';
   }
-  if (!resolved.layer.known) {
-    navigationError.value = '当前机构经营层级待确认，暂不进入机构主路径。';
-    return;
-  }
-  if (!resolved.layer.displayable) {
-    navigationError.value = '当前机构不属于允许展示的经营层级，已拒绝进入。';
-    return;
-  }
-  const target = routeForInstitution({
-    ...navigationContext.value,
-    orgCode: code,
-    cityCode: resolved.institution?.cityCode || navigationContext.value.cityCode,
-    businessLine: navigationContext.value.businessLine || 'COMMON'
-  });
-  if (!target || !router?.push) {
-    navigationError.value = '机构导航目标不可用，已拒绝进入。';
-    return;
-  }
-  emit('branch-select', code);
-  return router.push(target);
 }
 
 async function onBusinessLineSelect(payload) {

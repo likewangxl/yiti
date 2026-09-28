@@ -7,8 +7,13 @@ const harness = vi.hoisted(() => ({ state: null }));
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(), back: vi.fn() }) }));
 vi.mock('../usePanoramaData', () => ({ usePanoramaData: () => harness.state }));
 vi.mock('../PanoramaDashboard.vue', () => ({ default: { template: '<main>分行内容</main>' } }));
-vi.mock('../CorporateDashboard.vue', () => ({ default: { template: '<main>对公内容</main>' } }));
+vi.mock('../CorporateDashboard.vue', () => ({ default: {
+  name: 'CorporateDashboard',
+  props: ['model', 'sourcePresentation', 'error'],
+  template: '<main data-testid="corporate-dashboard-probe">对公内容</main>'
+} }));
 vi.mock('../RetailDashboard.vue', () => ({ default: {
+  name: 'RetailDashboard',
   props: ['model', 'sourcePresentation', 'error'],
   template: '<main data-testid="retail-dashboard-probe">零售内容</main>'
 } }));
@@ -40,16 +45,30 @@ describe('零售经营总览展示收敛', () => {
     wrapper.unmount();
   });
 
-  it.each(['branch-overview-v1', 'corporate-overview-v1'])('%s 继续显示槽位异常提示', template => {
-    const wrapper = mountRuntime(template);
+  it('分行页面继续显示槽位异常提示', () => {
+    const wrapper = mountRuntime('branch-overview-v1');
     expect(wrapper.get('[data-testid="panorama-slot-issues"]').text()).toContain(issue.message);
     wrapper.unmount();
   });
 
-  it('零售页面仍向内容组件传递请求整体失败状态', () => {
+  it.each(['retail-overview-v1', 'corporate-overview-v1'])('%s 隐藏右下角槽位异常提示但保留核心异常透传', template => {
+    const wrapper = mountRuntime(template);
+    expect(wrapper.find('[data-testid="panorama-slot-issues"]').exists()).toBe(false);
+    const dashboard = wrapper.findComponent(template === 'corporate-overview-v1'
+      ? { name: 'CorporateDashboard' }
+      : { name: 'RetailDashboard' });
+    expect(dashboard.props('model').issues).toEqual([issue]);
+    expect(dashboard.props('sourcePresentation').runtimeIssues.retailRevenue).toEqual([issue]);
+    wrapper.unmount();
+  });
+
+  it.each(['retail-overview-v1', 'corporate-overview-v1'])('%s 仍向内容组件传递请求整体失败状态', template => {
     harness.state.error.value = '查询失败';
-    const wrapper = mountRuntime('retail-overview-v1');
-    expect(wrapper.findComponent({ name: 'RetailDashboard' }).props('error')).toBe('查询失败');
+    const wrapper = mountRuntime(template);
+    const dashboard = wrapper.findComponent(template === 'corporate-overview-v1'
+      ? { name: 'CorporateDashboard' }
+      : { name: 'RetailDashboard' });
+    expect(dashboard.props('error')).toBe('查询失败');
     wrapper.unmount();
   });
 });

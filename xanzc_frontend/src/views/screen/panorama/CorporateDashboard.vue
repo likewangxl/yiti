@@ -72,25 +72,6 @@
     </section>
     <SeriesTableWidgets v-if="configuredSeriesTables.components.length" :components="configuredSeriesTables.components" />
 
-    <section class="corporate-insight-strip" data-testid="corporate-leadership-insights" aria-label="经营观察">
-      <div class="corporate-insight-item corporate-insight-item--gap">
-        <span>目标缺口</span><strong>{{ targetGapSummary }}</strong>
-        <small>{{ targetGapNames }}</small>
-      </div>
-      <div class="corporate-insight-item">
-        <span>负增 / 落后机构</span><strong>{{ growthCountLabel }}</strong>
-        <small>{{ growthSampleLabel }} · 负增或当前指标落后</small>
-      </div>
-      <div class="corporate-insight-item">
-        <span>协调事项</span><strong>{{ attentionSummary.count }}</strong>
-        <small>{{ attentionSummary.note }}</small>
-      </div>
-      <div class="corporate-insight-item corporate-insight-item--wide">
-        <span>数据缺项</span><strong>{{ missingDataSummary.count }}</strong>
-        <small>{{ missingDataSummary.note }}</small>
-      </div>
-    </section>
-
     <section class="corporate-main-grid">
       <div class="corporate-column corporate-column--left">
         <article class="corporate-panel corporate-deposit-panel">
@@ -200,7 +181,7 @@
             @branch-select="openInstitutionFromMap"
             @map-context="emit('map-context', $event)"
           />
-          <PanoramaMap v-else class="corporate-map" appearance="relief" label-layout="callout" :city-details="corporateMapCityDetails" :metric-label="rankingMetricInfo.label" :metric-values="corporateMapMetricValues" :data-metric-label="rankingMetricInfo.label" :geo-json="provinceGeoJson" :points="safeModel.institutions" :demo="demo" mode="province" :selected-region-code="selectedCityCode" @region-select="selectCity" />
+          <PanoramaMap v-else class="corporate-map" appearance="relief" label-layout="callout" :city-details="corporateMapCityDetails" :metric-label="rankingMetricInfo.label" :metric-values="corporateMapMetricValues" :data-metric-label="rankingMetricInfo.label" :region-states="corporateMapInstitutionState.regionStates" :metric-colors="corporateMapInstitutionState.metricColors" :color-by-metric="true" :geo-json="provinceGeoJson" :points="safeModel.institutions" :demo="demo" mode="province" :selected-region-code="selectedCityCode" @region-select="selectCity" @branch-select="openInstitutionFromMap" />
           <p class="corporate-scope-note" data-testid="corporate-scope-note">{{ safeModel.scopeLabel }} KPI 与趋势不随城市筛选变化；城市选择只影响机构分析。</p>
           <p v-if="selectedCityCode" class="corporate-selected-city" data-testid="corporate-selected-city">当前机构分析：{{ selectedCityName }}（{{ filteredRankings.length }} 家有排名记录）</p>
         </article>
@@ -288,7 +269,8 @@ import PanoramaMap from './PanoramaMap.vue';
 import { buildCityMapDetails, cityMapMetricValues } from './cityMapDetails.js';
 import CorporateTrend from './CorporateTrend.vue';
 import { provinceGeo } from './geography.js';
-import { buildCorporateLeadershipInsights, buildSegmentComparisons, finiteMetric } from './corporateLeadershipInsights.js';
+import { buildSegmentComparisons, finiteMetric } from './corporateLeadershipInsights.js';
+import { buildProvinceInstitutionMapState } from './provinceInstitutionMapModel.js';
 import { resolveDataStatus } from './sourcePresentation';
 import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.vue';
 import { buildDisplayMetricsModel } from '../presentation/model/displayMetricsModel';
@@ -441,32 +423,6 @@ const activeMapMetricKey = computed(() => selectedMapMetricKey.value
   || institutionRankingModel.value.activeMetricKey
   || String(mapComponent.value?.content?.mainField || '').trim());
 const segmentComparisons = computed(() => buildSegmentComparisons(safeModel.value.segments));
-const leadershipInsights = computed(() => buildCorporateLeadershipInsights(safeModel.value));
-const growthCountLabel = computed(() => leadershipInsights.value.growthComparableCount > 0 ? String(leadershipInsights.value.negativeGrowthCount) : '—');
-const growthSampleLabel = computed(() => `可判断 ${leadershipInsights.value.growthComparableCount}/${leadershipInsights.value.growthSampleCount} 家`);
-const targetValidityLabel = computed(() => leadershipInsights.value.targetCount > 0 ? `${leadershipInsights.value.validTargetCount}/${leadershipInsights.value.targetCount}` : '—');
-const targetGapLabel = computed(() => leadershipInsights.value.targetCount > 0 ? `有缺口 ${insightCount(leadershipInsights.value.targetGapCount)} 项 · 金额按指标分列` : '未绑定目标');
-const targetGapSummary = computed(() => leadershipInsights.value.targetGapCount === null ? '—' : `有缺口 ${leadershipInsights.value.targetGapCount} 项`);
-const targetGapNames = computed(() => leadershipInsights.value.targetGapCount === null
-  ? '目标来源暂无有效值'
-  : leadershipInsights.value.targetGapNames.join('、') || '当前没有未达标目标');
-const attentionSummary = computed(() => {
-  if (attentionSourceUnavailable.value) return { count: '—', note: attentionSourceMessage.value };
-  const values = safeModel.value.attention.map(item => finiteMetric(item?.count)).filter(value => value !== null && value >= 0);
-  const total = values.length ? values.reduce((sum, value) => sum + value, 0) : null;
-  return {
-    count: safeModel.value.attention.length ? `${safeModel.value.attention.length}项` : (props.sourcePresentation?.sourceAvailability?.corpAttention?.status === 'NO_SOURCE' ? '—' : '0项'),
-    note: total === null ? '未提供事项数量' : `数量合计 ${formatCount(total)} · 逐项可查看`
-  };
-});
-const missingDataSummary = computed(() => {
-  const count = leadershipInsights.value.missingMetricCount;
-  const issueCount = safeModel.value.issues.length;
-  return {
-    count: count === null && !issueCount ? '—' : String((count || 0) + issueCount),
-    note: `${count === null ? '排名指标暂无完整样本' : `排名空值单元 ${count} 个`} · 运行说明 ${issueCount} 条`
-  };
-});
 const corporateMapRankingUnavailable = computed(() => ['NO_SOURCE', 'NO_ROWS', 'NO_VALUES', 'NO_COMPLETE_BATCH'].includes(String(props.sourcePresentation?.sourceAvailability?.corpRanking?.status || '').toUpperCase()));
 const corporateMapCityDetails = computed(() => buildCityMapDetails(
   corporateMapRankingUnavailable.value ? { ...safeModel.value, rankings: [] } : safeModel.value,
@@ -478,6 +434,10 @@ const corporateMapCityDetails = computed(() => buildCityMapDetails(
   }
 ));
 const corporateMapMetricValues = computed(() => rankingPartial.value || corporateMapRankingUnavailable.value ? {} : cityMapMetricValues(corporateMapCityDetails.value, rankingMetric.value));
+const corporateMapInstitutionState = computed(() => buildProvinceInstitutionMapState(
+  provinceGeoJson,
+  safeModel.value.institutions
+));
 const filteredRankings = computed(() => {
   const source = safeModel.value.rankings.filter(row => !selectedCityCode.value || String(row?.cityCode || '') === selectedCityCode.value);
   return [...source].sort((left, right) => {
@@ -543,7 +503,6 @@ function changeText(kpi, empty = '') { const number = formatChange(kpi?.change);
 function changeClass(kpi) { const number = formatChange(kpi?.change); if (number === null) return 'is-empty'; if (kpi?.key === 'corpNplRate') return number > 0 ? 'is-risk' : 'is-favorable'; return number < 0 ? 'is-down' : 'is-up'; }
 function kpiGlyph(key, index) { return ({ corpDeposit: OfficeBuilding, corpDepositAverage: TrendCharts, corpLoan: Coin, corpRevenue: TrendCharts, corpCustomers: UserFilled, corpNplRate: WarningFilled }[key] || [OfficeBuilding, Coin, TrendCharts, UserFilled][index % 4]); }
 function kpiTitle(kpi) { const date = kpi?.date || kpi?.dataDate || kpi?.periodDate; return date ? `${kpi.label} · 数据日期 ${date}` : ''; }
-function insightCount(value) { const number = finiteMetric(value); return number === null ? '—' : String(number); }
 function segmentColor(index) { return ['#42e7ee', '#a77bff', '#548dff', '#f4bd5b'][index % 4]; }
 function shareWidth(value) { const number = finiteMetric(value); return number === null ? 0 : Math.max(0, Math.min(100, number)); }
 function rankingValue(item) { return finiteMetric(item?.[rankingMetric.value]); }

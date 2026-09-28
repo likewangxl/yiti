@@ -4,9 +4,9 @@ import { mount } from '@vue/test-utils';
 
 vi.mock('../PanoramaMap.vue', () => ({
   default: {
-    props: ['geoJson', 'points', 'demo', 'mode', 'selectedRegionCode', 'appearance', 'metricLabel', 'metricValues'],
-    emits: ['region-select'],
-    template: '<div data-testid="corporate-map" :data-mode="mode" :data-appearance="appearance" :data-metric-label="metricLabel"><button type="button" data-action="stub-select-city" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">选西安</button></div>'
+    props: ['geoJson', 'points', 'demo', 'mode', 'selectedRegionCode', 'appearance', 'metricLabel', 'metricValues', 'metricColors', 'regionStates', 'colorByMetric'],
+    emits: ['region-select', 'branch-select'],
+    template: '<div data-testid="corporate-map" :data-mode="mode" :data-appearance="appearance" :data-metric-label="metricLabel"><button type="button" data-action="stub-select-city" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">选西安</button><button type="button" data-action="stub-select-branch" @click="$emit(\'branch-select\', \'A\')">选机构</button></div>'
   }
 }));
 
@@ -28,7 +28,7 @@ describe('CorporateDashboard 对公经营总览', () => {
     await wrapper.get('[data-testid="corporate-ranking-row"]').trigger('click');
     expect(wrapper.get('[data-testid="corporate-directory-search"]').element.value).toBe('甲');
     expect(wrapper.findComponent('[data-testid="corporate-map"]').props('metricValues')).toEqual({});
-    expect(wrapper.get('[data-testid="corporate-leadership-insights"]').text()).not.toContain('0项');
+    expect(wrapper.find('[data-testid="corporate-leadership-insights"]').exists()).toBe(false);
     wrapper.unmount();
   });
   it('只为对公页启用选定的浮雕地图外观', async () => {
@@ -127,7 +127,7 @@ describe('CorporateDashboard 对公经营总览', () => {
     wrapper.unmount();
   });
 
-  it('经营观察按目标缺口、负增/落后机构、协调事项和数据缺项组织', async () => {
+  it('移除经营观察条带但保留目标、协调事项和原始异常数据', async () => {
     const { default: CorporateDashboard } = await import('../CorporateDashboard.vue');
     const wrapper = mount(CorporateDashboard, {
       props: {
@@ -138,12 +138,10 @@ describe('CorporateDashboard 对公经营总览', () => {
         }
       }
     });
-    const items = wrapper.findAll('[data-testid="corporate-leadership-insights"] .corporate-insight-item');
-    expect(items.map(item => item.find('span').text())).toEqual(['目标缺口', '负增 / 落后机构', '协调事项', '数据缺项']);
-    expect(items[0].text()).toContain('有缺口 1 项');
-    expect(items[1].text()).toContain('1');
-    expect(items[2].text()).toContain('2');
-    expect(items[3].text()).toContain('');
+    expect(wrapper.find('[data-testid="corporate-leadership-insights"]').exists()).toBe(false);
+    expect(wrapper.get('.corporate-target-panel').text()).toContain('对公存款');
+    expect(wrapper.get('[data-testid="corporate-attention"]').text()).toContain('甲机构待跟进任务');
+    expect(wrapper.get('[data-testid="corporate-attention"]').text()).toContain('2');
     wrapper.unmount();
   });
 
@@ -210,7 +208,7 @@ describe('CorporateDashboard 对公经营总览', () => {
         model: { attention: [] }
       }
     });
-    expect(wrapper.get('[data-testid="corporate-leadership-insights"] .corporate-insight-item:nth-child(3)').text()).toContain('—');
+    expect(wrapper.find('[data-testid="corporate-leadership-insights"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="corporate-attention"]').text()).toContain('未接入');
     expect(wrapper.get('[data-testid="corporate-attention"]').text()).toContain('尚未绑定');
     wrapper.unmount();
