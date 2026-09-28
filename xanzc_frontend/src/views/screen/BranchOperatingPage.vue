@@ -26,6 +26,7 @@
       <button type="button" data-action="back-to-screen-center" @click="router.push('/screens')">返回大屏中心</button>
     </section>
     <BranchOperatingDashboard v-else :model="dashboard" :source-presentation="branchDisplayPresentation"
+      :performance-enabled="true"
       :loading="loading || (!isTestSource && financialLoading)" :error="visibleError"
       @refresh="initialize" @back="router.push('/screens')" @branch-select="selectBranch" />
   </section>

@@ -41,6 +41,18 @@ const orderedColumns = [
   'amount', 'increase', 'count', 'pending', 'days'
 ];
 
+describe('新增经营细分来源', () => {
+  it('固定二维TEST契约允许显式经营细分值，不从合计推拆', () => {
+    const table = response();
+    const row = Object.fromEntries(BRANCH_TEST_COLUMNS.map(column => [column, null]));
+    Object.assign(row, { org_code: 'B001', kind: 'kpi', key: 'intermediaryIncome', name: '中间业务收入', data_date: '2026-09-21', unit: 'YUAN', value: 50000 });
+    table.rows.push(orderedColumns.map(column => row[column]));
+    const model = buildBranchTestModel(table, view, 'B001');
+    expect(model.kpis).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'intermediaryIncome', value: 0.0005, unit: '亿元' })]));
+    expect(model.kpis.some(item => item.key === 'corpDeposit')).toBe(false);
+  });
+});
+
 function makeResponseRows() {
   const rows = [];
   const push = (orgCode, kind, key, values = {}) => {

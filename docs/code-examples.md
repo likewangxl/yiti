@@ -6,6 +6,9 @@
 
 ## 后端
 
+- 支行 KPI 只读范围交集：`performance-engine-center/src/main/java/com/bank/branch/platform/performance/service/KpiScoreCalcService.java` 的机构查询重载；新路径校验方案、日期和授权上下文，再把指定机构与用户可见范围求交，下推 Mapper，并通过 `scopeOrgCode` 明确响应身份。
+- 支行指标完成及完整排名：`xanzc_frontend/src/views/screen/panorama/branchAchievementModel.js`、`branchPerformanceModel.js`；全量分页与旧后端范围确认守护：`branchPerformanceLoader.js`；页面实现：`BranchCoreMetrics.vue`、`BranchAchievementPanel.vue`、`BranchPerformancePanel.vue`。
+
 - 代码化大屏模板声明与机构地图边界：`report-analytics-center/src/main/java/com/bank/branch/platform/report/service/screen/CodeScreenPresentationValidator.java`；前端槽位/单位适配：`xanzc_frontend/src/views/screen/panorama/bindings.js`、`dataAdapter.js`。约束与使用步骤见 `docs/modules/report-analytics-center/11-代码化经营大屏.md`。
 
 ### 文件上传 + 对象存储（华为云 OBS）

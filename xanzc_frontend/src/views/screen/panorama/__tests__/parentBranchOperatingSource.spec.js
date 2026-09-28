@@ -22,6 +22,24 @@ const sourceView = {
 };
 
 describe('parentBranchOperatingSource', () => {
+  it('从已配置单机构构成来源读取六项经营值，保留金额单位与日期', () => {
+    const pkg = JSON.parse(sourceView.renderPackageJson);
+    pkg.canvasStyle.presentation = { type: 'CODE', template: 'branch-overview-v1', displaySchemaVersion: 1, display: { components: [{
+      componentId: 'mix', componentType: 'COMPOSITION_TABS', dataRefs: [{ blockId: 64 }], content: {
+        tabs: [{ tabKey: 'deposit', label: '存款', corporateField: 'cd', retailField: 'rd', unit: 'HUNDRED_MILLION' }, { tabKey: 'loan', label: '贷款', corporateField: 'cl', retailField: 'rl', unit: 'HUNDRED_MILLION' }],
+        incomeRatio: { numeratorField: 'fee', denominatorField: 'income', unit: 'HUNDRED_MILLION' }
+      }
+    }] } };
+    const row = { cd: 1, rd: 2, cl: 3, rl: 4, fee: 0, income: 0.8 };
+    const model = buildParentBranchOperatingModel({ sourceView: { ...sourceView, renderPackageJson: JSON.stringify(pkg) }, orgCode: '105', model: {
+      institutions: [{ orgCode: '105' }], kpis: [], blockResults: { '64': { ...row, rows: [row], unit: 'HUNDRED_MILLION', dataDate: '2026-09-20' } }
+    } });
+    expect(model.kpis).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'corpDeposit', value: 1, unit: '亿元' }), expect.objectContaining({ key: 'retailDeposit', value: 2 }),
+      expect.objectContaining({ key: 'corpLoan', value: 3 }), expect.objectContaining({ key: 'retailLoan', value: 4 }),
+      expect.objectContaining({ key: 'intermediaryIncome', value: 0 }), expect.objectContaining({ key: 'revenue', value: 0.8, date: '2026-09-20' })
+    ]));
+  });
   it('只接受固定省级 draft 源屏，并校验运行包身份', () => {
     expect(PARENT_BRANCH_SOURCE_SCREEN_CODES).toEqual(['SCR_PROVINCE', 'SCR_PROVINCE_MAP_V2']);
     expect(parseParentBranchOperatingSource(sourceView, { sourceScreenCode: 'SCR_PROVINCE', sourcePreview: 'draft' }))

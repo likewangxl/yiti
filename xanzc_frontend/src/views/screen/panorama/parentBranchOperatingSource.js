@@ -1,4 +1,5 @@
 import { navigationRulesOf } from '../presentation/navigation/navigationModel';
+import { buildCompositionTabsModel } from '../presentation/model/compositionTabsModel';
 
 /**
  * 支行详情只能继承这两张省级支行经营屏的已复核数据源。
@@ -10,7 +11,7 @@ export const PARENT_BRANCH_SOURCE_PREVIEW = 'draft';
 const SOURCE_SCREEN_CODE_SET = new Set(PARENT_BRANCH_SOURCE_SCREEN_CODES);
 const TEMPLATE = 'branch-overview-v1';
 const TEST_CLASSIFICATION = 'TEST';
-const KPI_KEYS = new Set(['deposit', 'depositAverage', 'depositIncrease', 'loan', 'customers', 'revenue', 'rate']);
+const KPI_KEYS = new Set(['deposit', 'depositAverage', 'depositIncrease', 'loan', 'customers', 'revenue', 'rate', 'corpDeposit', 'retailDeposit', 'corpLoan', 'retailLoan', 'intermediaryIncome']);
 const CORE_KPI_DEFAULTS = Object.freeze([
   ['deposit', '存款余额', '亿元'],
   ['loan', '贷款余额', '亿元'],
@@ -152,6 +153,32 @@ function sourceRows(model, key, orgCode) {
   });
 }
 
+/** 只消费已配置的存款/贷款页签与收入字段，禁止按总量推拆两条线。 */
+function operatingCoreKpis(model, source) {
+  const blocks = object(model.blockResults) ? Object.fromEntries(Object.entries(model.blockResults)
+    .filter(([, result]) => Array.isArray(result?.rows) && result.rows.length === 1)) : {};
+  const presentation = source.renderPackage?.canvasStyle?.presentation;
+  const mix = buildCompositionTabsModel(presentation, { blockResults: blocks });
+  const result = [];
+  const push = (key, label, value, date) => {
+    if (!value || value.type !== 'AMOUNT' || !value.valid || value.unitMismatch) return;
+    result.push({ key, label, value: value.value, unit: value.unit, date, status: '已绑定单机构来源' });
+  };
+  for (const component of mix.components || []) {
+    const original = presentation?.display?.components?.find(item => item.componentId === component.componentId);
+    const blockId = original?.dataRefs?.[0]?.blockId;
+    const date = blocks[String(blockId)]?.dataDate || '';
+    for (const tab of component.tabs || []) {
+      if (tab.tabKey === 'deposit') { push('corpDeposit', '对公存款', tab.corporate, date); push('retailDeposit', '对私存款', tab.retail, date); }
+      if (tab.tabKey === 'loan') { push('corpLoan', '对公贷款', tab.corporate, date); push('retailLoan', '对私贷款', tab.retail, date); }
+      if (tab.tabKey === 'income') push('revenue', '营业收入', tab.total, date);
+    }
+    push('intermediaryIncome', '中间业务收入', component.intermediaryIncome?.numerator, date);
+    if (!component.tabs.some(tab => tab.tabKey === 'income' && tab.total?.valid)) push('revenue', '营业收入', component.intermediaryIncome?.denominator, date);
+  }
+  return result.filter(item => result.filter(other => other.key === item.key).length === 1);
+}
+
 /**
  * 将 usePanoramaData(singleOrg) 的模型变成 BranchOperatingDashboard 契约。
  * 这里只复制源模型已经明确给出的字段；citySummaries/rankings 等全辖字段
@@ -176,6 +203,11 @@ export function buildParentBranchOperatingModel({ model = {}, sourceView, orgCod
     || { key, label, value: null, unit, status: '源数据缺失' });
   for (const item of sourceKpis) {
     if (!CORE_KPI_DEFAULTS.some(([key]) => key === text(item.key))) scopedKpis.push(item);
+  }
+  for (const item of operatingCoreKpis(model, source)) {
+    const index = scopedKpis.findIndex(existing => existing.key === item.key);
+    if (index < 0) scopedKpis.push(item);
+    else if (scopedKpis[index].value === null || scopedKpis[index].value === undefined) scopedKpis[index] = item;
   }
   const sourceMetadata = object(model?.sourceMetadata) ? { ...model.sourceMetadata } : {};
   const sourceQualities = object(model?.sourceQualities) ? { ...model.sourceQualities } : {};

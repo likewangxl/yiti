@@ -31,7 +31,8 @@ const NUMERIC_COLUMNS = new Set([
 ]);
 const TEXT_COLUMNS = new Set(['org_code', 'kind', 'key', 'name', 'data_date', 'unit', 'status', 'owner']);
 const KPI_KEYS = Object.freeze(['deposit', 'depositAverage', 'loan', 'revenue', 'customers', 'rate']);
-const KPI_KEY_SET = new Set(KPI_KEYS);
+const OPTIONAL_KPI_KEYS = Object.freeze(['corpDeposit', 'retailDeposit', 'corpLoan', 'retailLoan', 'intermediaryIncome']);
+const KPI_KEY_SET = new Set([...KPI_KEYS, ...OPTIONAL_KPI_KEYS]);
 const BRANCH_TEST_INNER_TYPE = 'TABLE_LIST';
 const HUNDRED_MILLION = 100000000;
 const TEN_THOUSAND = 10000;
@@ -410,7 +411,7 @@ function buildHistory(rows, dataDate) {
 
 function kpiModel(row) {
   const key = row.key;
-  const amountKeys = new Set(['deposit', 'depositAverage', 'loan', 'revenue']);
+  const amountKeys = new Set(['deposit', 'depositAverage', 'loan', 'revenue', ...OPTIONAL_KPI_KEYS]);
   let value;
   let unit;
   if (amountKeys.has(key)) {
@@ -520,7 +521,7 @@ export function buildBranchTestModel(response, view, orgCode) {
   }
   const missingKpis = KPI_KEYS.filter(key => !kpiByKey.has(key) || kpiByKey.get(key).value === null);
   if (missingKpis.length) throw new Error(`KPI 数据缺口: ${missingKpis.join('、')}`);
-  const kpis = KPI_KEYS.map(key => kpiModel(kpiByKey.get(key))).filter(Boolean);
+  const kpis = [...KPI_KEYS, ...OPTIONAL_KPI_KEYS.filter(key => kpiByKey.has(key))].map(key => kpiModel(kpiByKey.get(key))).filter(Boolean);
 
   const targets = selectedRows.filter(row => row.kind === 'target').map(targetModel);
   const history = buildHistory(selectedRows.filter(row => row.kind === 'history'), quality.dataDate);

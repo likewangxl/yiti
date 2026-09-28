@@ -56,6 +56,14 @@ function chartOption(wrapper) {
 }
 
 describe('BranchOperatingDashboard 单支行经营大屏', () => {
+  it('新版主区包含六项经营指标、完成情况与个人KPI排名，保留经营明细折叠入口', () => {
+    const wrapper = mount(BranchOperatingDashboard, { props: { model } });
+    expect(wrapper.findAll('[data-testid="branch-core-metric"]')).toHaveLength(6);
+    expect(wrapper.get('[data-testid="branch-achievement-panel"]').text()).toContain('未完成');
+    expect(wrapper.get('[data-testid="branch-performance-panel"]').text()).toContain('个人排名');
+    expect(wrapper.find('details[data-testid="branch-operating-details"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
   it('单目标不重复展示明细，单点余额明确不能判断趋势', () => {
     const wrapper = mount(BranchOperatingDashboard, { props: { model: {
       targets: [{ key: 'deposit', label: '存款目标', actual: 0, target: 500, unit: '万元' }],

@@ -33,6 +33,12 @@
     <div v-if="error" class="branch-operating-notice branch-operating-notice--error" role="alert"><WarningFilled class="branch-operating-notice__icon" aria-hidden="true" />{{ error }}</div>
     <div v-if="demo" class="branch-operating-demo-badge" data-testid="branch-operating-demo-badge">演示数据 · 仅视觉预览</div>
 
+    <BranchCoreMetrics :model="safeModel" />
+    <div class="branch-operating-achievement-area"><BranchAchievementPanel :targets="targets" :loading="loading" /></div>
+    <BranchPerformancePanel :org-code="String(safeModel.orgCode || '')" :data-date="kpiDataDate" :enabled="performanceEnabled && !loading && !error" :refresh-key="performanceRefreshKey" />
+    <details class="branch-operating-details" data-testid="branch-operating-details">
+      <summary>经营趋势与协同明细<span>历史余额、业务构成、客户营销及团队贡献</span></summary>
+
     <PresentationLayout
       v-if="presentationLayoutEnabled"
       :presentation="sourcePresentation"
@@ -168,6 +174,7 @@
 
     <footer class="branch-operating-footer"><span>数据来源 {{ sourceLabel }}</span><span class="branch-operating-footer__hint">指标空值按“—”展示，历史对比不足时不作推算</span></footer>
     </template>
+    </details>
   </main>
 </template>
 
@@ -196,14 +203,18 @@ import { buildInstitutionRankingModel } from '../presentation/model/institutionR
 import PresentationLayout from '../presentation/layout/PresentationLayout.vue';
 import { isConfiguredPresentation } from '../presentation/layout/presentationLayoutModel';
 import { provinceGeo } from './geography.js';
+import BranchCoreMetrics from './BranchCoreMetrics.vue';
+import BranchAchievementPanel from './BranchAchievementPanel.vue';
+import BranchPerformancePanel from './BranchPerformancePanel.vue';
 
-const props = defineProps({ model: { type: Object, default: () => ({}) }, sourcePresentation: { type: Object, default: null }, loading: { type: Boolean, default: false }, error: { type: String, default: '' }, demo: { type: Boolean, default: false } });
+const props = defineProps({ model: { type: Object, default: () => ({}) }, sourcePresentation: { type: Object, default: null }, loading: { type: Boolean, default: false }, error: { type: String, default: '' }, demo: { type: Boolean, default: false }, performanceEnabled: { type: Boolean, default: false }, performanceRefreshKey: { type: Number, default: 0 } });
 const configuredMetrics = computed(() => buildDisplayMetricsModel(props.sourcePresentation, props.model || {}));
 const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(props.sourcePresentation, props.model || {}));
 const emit = defineEmits(['refresh', 'back', 'branch-select', 'business-line-select', 'map-context']);
 const rootRef = ref(null); const selectedMetric = ref('deposit'); const selectedMapMetricKey = ref(''); const trendMode = ref('all'); const isFullscreen = ref(false);
 const presentationLayoutEnabled = computed(() => isConfiguredPresentation(props.sourcePresentation));
 const safeModel = computed(() => (props.model && typeof props.model === 'object' ? props.model : {}));
+const kpiDataDate = computed(() => /^\d{4}-\d{2}-\d{2}$/.test(safeModel.value.targetDate || '') ? safeModel.value.targetDate : (safeModel.value.dataDate || ''));
 function presentationOf(source) {
   if (!source || typeof source !== 'object') return {};
   if (source.displaySchemaVersion !== undefined || source.display) return source;

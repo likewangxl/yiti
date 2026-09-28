@@ -29,6 +29,12 @@
   letter-spacing: .01em;
 }
 
+.branch-operating-achievement-area { margin: 0 clamp(16px, 2vw, 30px) 18px; }
+.branch-operating-details { margin: 0 0 18px; }
+.branch-operating-details > summary { margin: 0 clamp(16px, 2vw, 30px); padding: 18px 22px; cursor: pointer; color: var(--soft); border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 14px; }
+.branch-operating-details > summary span { margin-left: 18px; color: var(--muted); font-size: 12px; }
+.branch-operating-details[open] > summary { margin-bottom: 16px; }
+
 .branch-operating-dashboard::before { position: absolute; inset: 0; z-index: 0; pointer-events: none; content: ''; background: linear-gradient(90deg, rgba(28, 86, 192, .08) 1px, transparent 1px), linear-gradient(rgba(28, 86, 192, .08) 1px, transparent 1px); background-size: 80px 80px; mask-image: linear-gradient(to bottom, rgba(0, 0, 0, .72), transparent 96%); }
 
 .branch-operating-dashboard *, .branch-operating-dashboard *::before, .branch-operating-dashboard *::after { box-sizing: border-box; }
