@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 import { mount } from '@vue/test-utils';
 import PanoramaMap from '../PanoramaMap.vue';
 import { createProjection, projectGeoJson } from '../mapGeometry';
@@ -146,6 +147,82 @@ describe('城市悬浮详情', () => {
     expect(wrapper.find('[role="tooltip"]').exists()).toBe(true);
     await label.trigger('blur');
     expect(wrapper.find('[role="tooltip"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('机构模式的飞线和地市 focus 只展示全部机构名称，不泄露指标、金额、日期或定位数', async () => {
+    vi.useFakeTimers();
+    const institutionNames = ['西安一支行', '西安二支行', '西安三支行', '西安四支行'];
+    const wrapper=mount(PanoramaMap,{
+      global:{stubs:{Teleport:true}},
+      props:{
+        geoJson,
+        labelLayout:'callout',
+        cityDetailMode:'institutions',
+        metricLabel:'存款余额',
+        metricValues:{'610100':'999万元'},
+        cityDetails:{
+          '610100':{
+            institutionCount:4,
+            locatedCount:1,
+            dataDate:'2026-08-30',
+            metrics:[{key:'deposit',label:'存款余额',value:'999万元'}],
+            institutions:institutionNames.map((orgName,index)=>({orgCode:`A-${index}`,orgName}))
+          }
+        }
+      }
+    });
+    const hit=wrapper.get('[data-testid="map-city-callout-hit"][data-city-code="610100"]');
+    expect(wrapper.findAll('[data-testid="map-city-callout-hit"]')).toHaveLength(2);
+    await hit.trigger('pointerenter');
+    const tooltip=wrapper.get('[role="tooltip"]');
+    expect(tooltip.get('[data-testid="map-city-institution-count"]').text()).toContain('4 家');
+    expect(tooltip.findAll('[data-testid="map-city-institution-name"]')).toHaveLength(4);
+    institutionNames.forEach(name => expect(tooltip.text()).toContain(name));
+    expect(tooltip.text()).not.toContain('存款余额');
+    expect(tooltip.text()).not.toContain('999万元');
+    expect(tooltip.text()).not.toContain('2026-08-30');
+    expect(tooltip.text()).not.toContain('已定位');
+    expect(tooltip.text()).not.toContain('地市经营概览');
+    expect(tooltip.text()).not.toContain('当前授权范围');
+    expect(tooltip.text()).not.toContain('点击城市查看详情');
+    expect(tooltip.find('footer').exists()).toBe(false);
+    await hit.trigger('pointerleave');
+    const tooltipAfterLineLeave=wrapper.get('[role="tooltip"]');
+    await tooltipAfterLineLeave.trigger('pointerenter');
+    vi.advanceTimersByTime(350);
+    await nextTick();
+    expect(wrapper.find('[role="tooltip"]').exists()).toBe(true);
+    await tooltipAfterLineLeave.trigger('pointerleave');
+    vi.advanceTimersByTime(350);
+    await nextTick();
+    expect(wrapper.find('[role="tooltip"]').exists()).toBe(false);
+
+    const label=wrapper.get('button[data-city-code="610100"]');
+    await label.trigger('focus');
+    expect(wrapper.get('[role="tooltip"]').text()).toContain('西安四支行');
+    await label.trigger('blur');
+    vi.advanceTimersByTime(350);
+    expect(wrapper.find('[role="tooltip"]').exists()).toBe(false);
+    wrapper.unmount();
+    vi.useRealTimers();
+  });
+
+  it('机构模式无机构城市显示 0 家和明确空态', async () => {
+    const wrapper=mount(PanoramaMap,{
+      global:{stubs:{Teleport:true}},
+      props:{
+        geoJson,
+        labelLayout:'callout',
+        cityDetailMode:'institutions',
+        cityDetails:{'610100':{institutionCount:0,institutions:[]},'610200':{institutionCount:0,institutions:[]}}
+      }
+    });
+    await wrapper.get('[data-testid="map-city-callout-hit"][data-city-code="610200"]').trigger('pointerenter');
+    const tooltip=wrapper.get('[role="tooltip"]');
+    expect(tooltip.get('[data-testid="map-city-institution-count"]').text()).toContain('0 家');
+    expect(tooltip.text()).toContain('无经营机构');
+    expect(tooltip.findAll('[data-testid="map-city-institution-name"]')).toHaveLength(0);
     wrapper.unmount();
   });
 

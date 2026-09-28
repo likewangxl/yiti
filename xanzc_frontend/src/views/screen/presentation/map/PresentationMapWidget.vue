@@ -2,13 +2,16 @@
   <section class="presentation-map-widget" data-testid="presentation-map-widget" :data-level="mapModel.level" :data-status="mapModel.status">
     <header class="presentation-map-widget__header">
       <div>
-        <span class="presentation-map-widget__kicker">地图视图</span>
-        <h2>{{ screenDisplayText(mapModel.title) || '地图' }}</h2>
-        <p v-if="mapModel.subtitle">{{ screenDisplayText(mapModel.subtitle) }}</p>
+        <span class="presentation-map-widget__kicker">{{ legacyBranchProvinceMap ? '机构视图' : '地图视图' }}</span>
+        <h2>{{ legacyBranchProvinceMap ? '经营机构分布' : (screenDisplayText(mapModel.title) || '地图') }}</h2>
+        <p v-if="!legacyBranchProvinceMap && mapModel.subtitle">{{ screenDisplayText(mapModel.subtitle) }}</p>
       </div>
       <div class="presentation-map-widget__meta">
-        <span data-testid="presentation-map-metric">{{ displayMetricLabel || '指标待配置' }}</span>
-        <span data-testid="presentation-map-data-date">数据日期 {{ mapModel.dataDate || '—' }}</span>
+        <span v-if="legacyBranchProvinceMap" data-testid="presentation-map-institution-count">{{ institutionCountLabel }}</span>
+        <template v-else>
+          <span data-testid="presentation-map-metric">{{ displayMetricLabel || '指标待配置' }}</span>
+          <span data-testid="presentation-map-data-date">数据日期 {{ mapModel.dataDate || '—' }}</span>
+        </template>
       </div>
     </header>
 
@@ -16,21 +19,23 @@
       :geo-json="geoJson"
       :points="mapModel.points"
       :selected-org-code="selectedOrgCode"
-      :metric-label="displayMetricLabel"
-      :metric-values="mapModel.metricValues"
-      :metric-numeric-values="mapModel.metricRawValues"
-      :metric-colors="mapMetricColors"
-      :region-states="mapRegionStates"
-      :show-region-metrics="mode === 'province' && !enhancedMap"
+      :metric-label="legacyBranchProvinceMap ? '' : displayMetricLabel"
+      :metric-values="legacyBranchProvinceMap ? {} : mapModel.metricValues"
+      :metric-numeric-values="legacyBranchProvinceMap ? {} : mapModel.metricRawValues"
+      :metric-colors="legacyBranchProvinceMap ? legacyBranchInstitutionState.metricColors : mapMetricColors"
+      :region-states="legacyBranchProvinceMap ? legacyBranchInstitutionState.regionStates : mapRegionStates"
+      :show-region-metrics="legacyBranchProvinceMap ? false : mode === 'province' && !enhancedMap"
       :color-by-metric="true"
       :mode="mode"
-      :show-province-points="mode === 'province'"
-      :show-province-point-labels="!provinceInlineMap"
+      :show-province-points="legacyBranchProvinceMap ? false : mode === 'province'"
+      :show-province-point-labels="legacyBranchProvinceMap ? false : !provinceInlineMap"
+      :city-details="mapCityDetails"
+      :city-detail-mode="legacyBranchProvinceMap ? 'institutions' : 'metrics'"
       :selected-region-code="selectedRegionCode"
       :demo="demo"
       :view-fit="{ ...(mapModel.viewFit || {}), ...(mode === 'city' ? cityDistrictMapState.viewFit : {}), ...viewFit }"
       appearance="relief"
-      :label-layout="provinceInlineMap ? 'inline' : 'callout'"
+      :label-layout="legacyBranchProvinceMap ? 'callout' : (provinceInlineMap ? 'inline' : 'callout')"
       :point-label-layout="mode === 'city' ? 'callout' : 'inline'"
       class="presentation-map-widget__map"
       @region-select="onRegionSelect"
@@ -39,11 +44,11 @@
 
     <div class="presentation-map-widget__legend" aria-label="地图图例">
       <span v-for="item in mapLegend" :key="item.key" :data-testid="`presentation-map-legend-${item.key}`"><i :style="{ backgroundColor: item.color }" aria-hidden="true"></i>{{ item.label }}</span>
-      <small>{{ displayMetricLabel || '当前指标' }} · {{ mapModel.metricUnit || '单位待补充' }}</small>
+      <small v-if="!legacyBranchProvinceMap">{{ displayMetricLabel || '当前指标' }} · {{ mapModel.metricUnit || '单位待补充' }}</small>
     </div>
 
     <p v-if="mapModel.noVisibleInstitutions" class="presentation-map-widget__status" data-testid="map-no-visible" role="status">当前城市暂无可见机构</p>
-    <aside v-if="mapModel.missingCoordinates.length" class="presentation-map-widget__missing" data-testid="map-missing-coordinates" aria-label="缺少坐标但仍可访问的机构">
+    <aside v-if="!legacyBranchProvinceMap && mapModel.missingCoordinates.length" class="presentation-map-widget__missing" data-testid="map-missing-coordinates" aria-label="缺少坐标但仍可访问的机构">
       <strong>待定位机构 {{ mapModel.missingCoordinates.length }} 家</strong>
       <button v-for="item in mapModel.missingCoordinates" :key="item.orgCode" type="button" :data-org-code="item.orgCode" @click="selectInstitution(item)">{{ item.orgName || item.name || item.orgCode }}</button>
     </aside>
@@ -63,6 +68,8 @@ import {
 import { screenDisplayText } from '../model/screenDisplayText';
 import { isBranchMapV2 } from '../../panorama/screenVariant.js';
 import { buildCityDistrictMapState, CITY_DISTRICT_HAS_INSTITUTION_COLOR } from '../../panorama/cityDistrictMapModel';
+import { buildCityInstitutionDetails } from '../../panorama/cityMapDetails.js';
+import { buildProvinceInstitutionMapState, PROVINCE_HAS_INSTITUTION_COLOR } from '../../panorama/provinceInstitutionMapModel.js';
 
 const props = defineProps({
   presentation: { type: Object, default: () => ({}) },
@@ -84,7 +91,7 @@ const enhancedMap = computed(() => isBranchMapV2(props.presentation));
 const legacyBranchProvinceMap = computed(() => {
   const screenCode = String(props.presentation?.screenCode ?? props.presentation?.screen_code ?? '').trim();
   const template = String(props.presentation?.template ?? '').trim();
-  return props.mode === 'province' && (screenCode === 'SCR_PROVINCE' || template === 'branch-overview-v1');
+  return !enhancedMap.value && props.mode === 'province' && (screenCode === 'SCR_PROVINCE' || template === 'branch-overview-v1');
 });
 const provinceInlineMap = computed(() => enhancedMap.value || legacyBranchProvinceMap.value);
 const mapModel = computed(() => buildMapModel(props.presentation, props.model, {
@@ -104,6 +111,14 @@ const mapRegionStates = computed(() => props.mode === 'city' && Object.keys(city
 const mapMetricColors = computed(() => props.mode === 'city' && Object.keys(cityDistrictMapState.value.metricColors).length
   ? cityDistrictMapState.value.metricColors : mapModel.value.metricColors);
 const mapLegend = computed(() => {
+  if (legacyBranchProvinceMap.value) {
+    const states = new Set(Object.values(legacyBranchInstitutionState.value.regionStates || {}));
+    return [
+      states.has('HAS_INSTITUTION') && { key: 'has-institution', state: 'HAS_INSTITUTION', label: '有经营机构', color: PROVINCE_HAS_INSTITUTION_COLOR },
+      states.has('NO_INSTITUTION') && { key: 'no-institution', state: 'NO_INSTITUTION', label: '无经营机构', color: MAP_MISSING_COLOR },
+      states.has('MISSING') && { key: 'institution-unknown', state: 'MISSING', label: '归属待确认', color: MAP_MISSING_COLOR }
+    ].filter(Boolean);
+  }
   if (props.mode === 'city') return [
     { key: 'has-institution', state: 'HAS_INSTITUTION', label: '有经营机构', color: CITY_DISTRICT_HAS_INSTITUTION_COLOR },
     { key: 'no-institution', state: 'NO_INSTITUTION', label: '无经营机构', color: MAP_NO_INSTITUTION_COLOR },
@@ -111,6 +126,14 @@ const mapLegend = computed(() => {
   ];
   return [...(mapModel.value.legend || [])];
 });
+const mapCityDetails = computed(() => legacyBranchProvinceMap.value
+  ? buildCityInstitutionDetails({ institutions: mapModel.value.institutions }, { geoJson: props.geoJson })
+  : {});
+const legacyBranchInstitutionState = computed(() => buildProvinceInstitutionMapState(
+  props.geoJson,
+  mapModel.value.institutions
+));
+const institutionCountLabel = computed(() => `${mapModel.value.institutions.length} 家机构`);
 const displayMetricLabel = computed(() => screenDisplayText(mapModel.value.metricLabel));
 
 function contextMeta() {

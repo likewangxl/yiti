@@ -256,11 +256,16 @@
             v-else
             class="panorama-map"
             appearance="relief"
-            label-layout="inline"
-            :metric-label="rankingMetricInfo.label"
-            :metric-values="provinceMapMetricValues"
-            :city-details="provinceMapCityDetails"
-            :data-metric-label="rankingMetricInfo.label"
+            label-layout="callout"
+            metric-label=""
+            :metric-values="{}"
+            :metric-numeric-values="{}"
+            :metric-colors="provinceMapInstitutionState.metricColors"
+            :region-states="provinceMapInstitutionState.regionStates"
+            :show-region-metrics="false"
+            :show-province-points="false"
+            :city-details="provinceMapInstitutionDetails"
+            city-detail-mode="institutions"
             :geo-json="provinceGeoJson"
             :points="safeModel.institutions"
             :show-province-point-labels="false"
@@ -453,7 +458,8 @@ import {
   buildProvinceInsights,
   statusLabel
 } from './leadershipInsights.js';
-import { buildCityMapDetails } from './cityMapDetails.js';
+import { buildCityInstitutionDetails } from './cityMapDetails.js';
+import { buildProvinceInstitutionMapState } from './provinceInstitutionMapModel.js';
 import { resolveDataStatus } from './sourcePresentation';
 import { buildTargetCards, stripTestModifier } from './targetPresentation.js';
 import MetricDisplayWidgets from '../presentation/widgets/MetricDisplayWidgets.vue';
@@ -614,11 +620,15 @@ const today = computed(() => {
   return `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
 });
 const provinceGeoJson = provinceGeo || null;
-const provinceMapCityDetails = computed(() => buildCityMapDetails(safeModel.value, {
+const provinceMapInstitutionDetails = computed(() => buildCityInstitutionDetails(safeModel.value, {
   cityCodes: Array.isArray(provinceGeo?.features)
     ? provinceGeo.features.map(feature => feature?.properties?.adcode ?? feature?.properties?.cityCode)
     : []
 }));
+const provinceMapInstitutionState = computed(() => buildProvinceInstitutionMapState(
+  provinceGeoJson,
+  safeModel.value.institutions
+));
 const compositionItems = computed(() => safeModel.value.composition.filter(item => item && typeof item === 'object'));
 const compositionHeadingMeta = computed(() => {
   const units = [...new Set(compositionItems.value.map(item => String(item?.unit || '').trim()).filter(Boolean))];
@@ -675,37 +685,6 @@ const rankingMetricInfo = computed(() => rankingMetricOptions.find(item => item.
 const activeMapMetricKey = computed(() => selectedMapMetricKey.value
   || institutionRankingModel.value.activeMetricKey
   || String(mapComponent.value?.content?.mainField || '').trim());
-const provinceMapMetricValues = computed(() => {
-  const values = {};
-  const summaries = safeModel.value.citySummaries && typeof safeModel.value.citySummaries === 'object'
-    ? safeModel.value.citySummaries
-    : {};
-  const summaryKeys = {
-    deposit: ['deposit'],
-    increase: ['depositIncrease', 'increase'],
-    average: ['depositAverage', 'average']
-  };
-  Object.entries(summaries).forEach(([cityCode, summary]) => {
-    const rows = Array.isArray(summary?.kpis) ? summary.kpis : [];
-    const source = rows.find(item => summaryKeys[rankingMetric.value]?.includes(item?.key));
-    const metric = finiteValue(source?.value);
-    if (metric !== null) values[String(cityCode)] = formatRankingValueWithUnit({ [rankingMetric.value]: metric });
-  });
-  const candidates = new Map();
-  safeModel.value.rankings.forEach(row => {
-    const cityCode = String(row?.cityCode || row?.city_code || '').trim();
-    const metric = rankingValue(row, rankingMetric.value);
-    if (!cityCode || metric === null || values[cityCode] !== undefined) return;
-    const rows = candidates.get(cityCode) || [];
-    rows.push(metric);
-    candidates.set(cityCode, rows);
-  });
-  candidates.forEach((rows, cityCode) => {
-    // Several branch rows are ambiguous on the province map; never sum them.
-    if (rows.length === 1) values[cityCode] = formatRankingValueWithUnit({ [rankingMetric.value]: rows[0] });
-  });
-  return values;
-});
 const topRankings = computed(() => topRankingRows(safeModel.value.rankings, rankingMetric.value, 10));
 const rankingMax = computed(() => {
   const values = topRankings.value.map(item => Math.abs(rankingValue(item, rankingMetric.value) ?? 0));

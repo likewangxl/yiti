@@ -1,7 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { buildCityMapDetails } from '../cityMapDetails';
+import { buildCityInstitutionDetails, buildCityMapDetails } from '../cityMapDetails';
 
 describe('城市地图详情适配', () => {
+  it('机构模式按 cityCode 去重授权机构，包含未定位机构和零机构城市，不携带指标日期', () => {
+    const details = buildCityInstitutionDetails({
+      dataDate: '2026-09-06',
+      citySummaries: { '610100': { kpis: [{ key: 'deposit', value: 999, unit: '亿元' }] } },
+      rankings: [{ orgCode: 'A', cityCode: '610100', deposit: 999 }],
+      institutions: [
+        { orgCode: 'A', orgName: '西安一支行', cityCode: '610100', located: true, lng: 108.9, lat: 34.2, dataDate: '2026-09-01', metrics: { deposit: 999 } },
+        { orgCode: 'A', orgName: '重复名称不应出现', cityCode: '610100', located: true, lng: 108.9, lat: 34.2 },
+        { orgCode: 'B', orgName: '西安二支行', cityCode: '610100', located: false },
+        { orgName: '无编码机构', cityCode: '610100', located: false },
+        { orgCode: 'NO-CITY', orgName: '无归属机构', located: false }
+      ]
+    }, { cityCodes: ['610100', '610200'] });
+
+    expect(details).toEqual({
+      '610100': {
+        institutionCount: 2,
+        institutions: [
+          { orgCode: 'A', orgName: '西安一支行' },
+          { orgCode: 'B', orgName: '西安二支行' }
+        ]
+      },
+      '610200': { institutionCount: 0, institutions: [] }
+    });
+  });
+
   it('按城市汇总构建指标、日期和授权机构目录，保留来源单位', () => {
     const details = buildCityMapDetails({
       dataDate: '2026-09-06',

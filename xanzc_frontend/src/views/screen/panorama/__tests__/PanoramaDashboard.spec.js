@@ -6,7 +6,7 @@ import { mount } from '@vue/test-utils';
 vi.mock('../PanoramaMap.vue', () => ({
   default: {
     name: 'PanoramaMap',
-    props: ['metricLabel', 'metricValues', 'labelLayout', 'cityDetails', 'showProvincePointLabels'],
+    props: ['metricLabel', 'metricValues', 'metricNumericValues', 'metricColors', 'regionStates', 'labelLayout', 'cityDetails', 'cityDetailMode', 'showRegionMetrics', 'showProvincePoints', 'showProvincePointLabels'],
     template: '<div class="panorama-map-stub"><button type="button" class="stub-select-region" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">选择西安</button><button type="button" class="stub-select-branch" @click="$emit(\'branch-select\', \'ORG-1\')">选择支行</button></div>',
     emits: ['region-select', 'branch-select']
   }
@@ -496,14 +496,15 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(chart().series[0].data).toEqual([1253, 1286]);
   });
 
-  it('分行省级 fallback 地图将地市名称和指标放在行政区内部', () => {
+  it('分行省级 fallback 地图恢复地市 callout 并隐藏支行名称', () => {
     const wrapper = mountDashboard();
     const map = wrapper.findComponent({ name: 'PanoramaMap' });
-    expect(map.props('labelLayout')).toBe('inline');
+    expect(map.props('labelLayout')).toBe('callout');
     expect(map.props('showProvincePointLabels')).toBe(false);
+    expect(map.props('cityDetailMode')).toBe('institutions');
   });
 
-  it('向省级地图传入按授权机构和城市汇总构建的城市详情', () => {
+  it('向省级地图传入仅授权机构名称的城市详情', () => {
     const wrapper = mountDashboard({
       model: {
         ...extendedModel,
@@ -519,12 +520,11 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     const map = wrapper.findComponent({ name: 'PanoramaMap' });
     expect(map.props('cityDetails')['610100']).toMatchObject({
       institutionCount: 1,
-      locatedCount: 1,
-      dataDate: '2026-09-01'
+      institutions: [{ orgCode: 'ORG-1', orgName: '西安市分行' }]
     });
-    expect(map.props('cityDetails')['610100'].metrics.find(metric => metric.key === 'deposit')).toEqual({
-      key: 'deposit', label: '存款余额', value: '125万元'
-    });
+    expect(map.props('cityDetails')['610100'].metrics).toBeUndefined();
+    expect(map.props('cityDetails')['610100'].dataDate).toBeUndefined();
+    expect(map.props('cityDetailMode')).toBe('institutions');
   });
 
   it('地图范围标题使用辖区机构分布', () => {
@@ -533,7 +533,7 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(wrapper.get('.panorama-map-panel').text()).not.toContain('陕西省分行机构分布');
   });
 
-  it('分行重点完成情况区展示对公存款、对公贷款、对公营业收入和辖内机构达标率，且指标切换同步地图口径', async () => {
+  it('分行重点完成情况区展示对公存款、对公贷款、对公营业收入和辖内机构达标率，地图保持机构口径', async () => {
     const wrapper = mountDashboard({
       model: {
         ...extendedModel,
@@ -557,10 +557,14 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(diagnostics[3].find('[role="progressbar"]').attributes('aria-valuenow')).toBe('0');
 
     const map = wrapper.findComponent({ name: 'PanoramaMap' });
-    expect(map.props('metricLabel')).toBe('存款余额');
-    expect(map.props('metricValues')).toMatchObject({ '610100': '42.50亿元' });
+    expect(map.props('metricLabel')).toBe('');
+    expect(map.props('metricValues')).toEqual({});
+    expect(map.props('metricNumericValues')).toEqual({});
+    expect(map.props('showRegionMetrics')).toBe(false);
+    expect(map.props('showProvincePoints')).toBe(false);
     await wrapper.get('[data-ranking-mode="increase"]').trigger('click');
-    expect(map.props('metricLabel')).toBe('存款净增');
+    expect(map.props('metricLabel')).toBe('');
+    expect(map.props('metricValues')).toEqual({});
   });
 
   it('权限错误清除城市弹层与搜索缓存，恢复后不复用旧选择', async () => {

@@ -6,6 +6,7 @@
     :data-appearance="appearance"
     :data-label-layout="isCalloutLayout ? 'callout' : 'inline'"
     :data-point-label-layout="isPointCalloutLayout ? 'callout' : 'inline'"
+    :data-city-detail-mode="cityDetailMode"
     :data-material-ready="surfaceReady ? 'true' : 'false'"
     :data-selected-region="selectedRegionCode || ''"
     :data-hovered-region="hoveredRegionCode"
@@ -84,13 +85,22 @@
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      <g v-for="region in regionLabels" :key="`${region.key}:callout`" class="panorama-map__callout" :class="{ 'is-active': String(region.code) === hoveredRegionCode, 'is-missing': metricValues[region.code] == null, 'is-has-institution': metricState(region) === 'HAS_INSTITUTION', 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }" :style="cityAccentStyle(region)" :data-city-code="region.code">
+      <g v-for="region in regionLabels" :key="`${region.key}:callout`" class="panorama-map__callout" :class="{ 'is-active': String(region.code) === hoveredRegionCode, 'is-missing': isRegionMetricMissing(region), 'is-has-institution': metricState(region) === 'HAS_INSTITUTION', 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }" :style="cityAccentStyle(region)" :data-city-code="region.code">
         <path :d="calloutPath(region)" class="panorama-map__callout-glow" />
         <path
           :d="calloutPath(region)"
           data-testid="map-city-callout-line"
           :data-city-code="region.code"
           class="panorama-map__callout-line"
+        />
+        <path
+          v-if="cityDetailMode === 'institutions'"
+          :d="calloutPath(region)"
+          data-testid="map-city-callout-hit"
+          :data-city-code="region.code"
+          class="panorama-map__callout-hit"
+          @pointerenter="setHoveredRegion(region.code)"
+          @pointerleave="leaveHoveredRegion"
         />
         <line
           :x1="calloutLayout[region.key]?.anchor.x"
@@ -107,7 +117,7 @@
         :key="`${region.key}:overlay-label`"
         type="button"
         class="panorama-map__region-label-hit"
-        :class="{ 'is-selected': region.code && String(region.code) === String(selectedRegionCode), 'is-hovered': String(region.code) === hoveredRegionCode, 'is-missing': isCalloutLayout && metricValues[region.code] == null, 'is-has-institution': metricState(region) === 'HAS_INSTITUTION', 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }"
+        :class="{ 'is-selected': region.code && String(region.code) === String(selectedRegionCode), 'is-hovered': String(region.code) === hoveredRegionCode, 'is-missing': isRegionMetricMissing(region), 'is-has-institution': metricState(region) === 'HAS_INSTITUTION', 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }"
         :style="regionLabelStyle(region)"
         :data-city-code="region.code"
         :data-region-state="metricState(region)"
@@ -121,28 +131,39 @@
       ><span v-if="isCalloutLayout" class="panorama-map__city-marker" aria-hidden="true"></span><span class="panorama-map__city-name">{{ region.name }}</span><small v-if="props.showRegionMetrics && (isCalloutLayout || showInlineRegionMetric(region))" data-testid="map-region-metric" class="panorama-map__metric-value">{{ isCalloutLayout ? metricDisplayValue(region) : metricValues[region.code] }}</small></button>
     </div>
     <Teleport to="body">
-      <aside ref="cityDetailRef" v-if="activeCityDetail" :data-city-code="activeCityDetail.region.code" :id="cityTooltipId" role="tooltip" class="panorama-map__city-detail" :class="{ 'has-institution-metrics': hasInstitutionMetrics }" :style="cityDetailStyle" @pointerenter="keepCityDetail" @pointerleave="leaveHoveredRegion" @focusin="keepCityDetail" @focusout="leaveHoveredRegion" @keydown.esc="setHoveredRegion('')">
-        <header><div><small>地市经营概览</small><h3>{{ activeCityDetail.region.name }}</h3></div><span class="panorama-map__detail-status">{{ activeCityDetail.scopeLabel || '当前授权范围' }}</span></header>
-        <div class="panorama-map__detail-counts"><span>机构 <b>{{ activeCityDetail.institutionCount ?? '—' }} 家</b></span><span>已定位 <b>{{ activeCityDetail.locatedCount ?? '—' }} 家</b></span></div>
-        <div v-if="!hasInstitutionMetrics || activeCityDetail.metrics.some(metric => metric.value !== '暂无数据')" class="panorama-map__detail-metrics"><div v-for="metric in activeCityDetail.metrics" :key="metric.key"><span>{{ metric.label }}</span><strong :class="{ 'is-empty': metric.value === '暂无数据' }">{{ metric.value }}</strong></div></div>
-        <div v-if="hasInstitutionMetrics" class="panorama-map__detail-institution-list" data-testid="map-institution-metrics" tabindex="0" aria-label="地市授权机构业务明细">
-          <article v-for="institution in activeCityDetail.institutions" :key="institution.orgCode">
-            <h4>
-              <button
-                type="button"
-                class="panorama-map__institution-link"
-                :data-org-code="institution.orgCode || ''"
-                :aria-label="`查看机构：${institution.orgName || institution.orgCode || '未命名机构'}`"
-                @click.stop="selectPoint(institution)"
-              >{{ institution.orgName || institution.orgCode || '未命名机构' }}</button>
-            </h4>
-            <dl><div v-for="metric in institution.metrics.filter(item => item.value !== '暂无数据')" :key="metric.key"><dt>{{ metric.label }}</dt><dd>{{ metric.value }}</dd></div></dl>
-            <p v-if="institution.metrics.every(item => item.value === '暂无数据')">暂无业务数据</p>
-            <small>数据日期 {{ institution.dataDate || '暂无' }}</small>
-          </article>
-        </div>
-        <div v-else-if="activeCityDetail.institutions.length" class="panorama-map__detail-institutions"><span>辖内机构</span><p>{{ activeCityDetail.institutions.slice(0, 3).map(item => item.orgName || item.orgCode).join(' · ') }}<template v-if="activeCityDetail.institutions.length > 3"> 等 {{ activeCityDetail.institutions.length }} 家</template></p></div>
-        <footer><span>数据日期 {{ activeCityDetail.dataDate || '暂无' }}</span><span>点击城市查看详情 →</span></footer>
+      <aside ref="cityDetailRef" v-if="activeCityDetail" :data-city-code="activeCityDetail.region.code" :id="cityTooltipId" role="tooltip" class="panorama-map__city-detail" :class="{ 'has-institution-metrics': cityDetailInteractive }" :style="cityDetailStyle" @pointerenter="keepCityDetail" @pointerleave="leaveHoveredRegion" @focusin="keepCityDetail" @focusout="leaveHoveredRegion" @keydown.esc="setHoveredRegion('')">
+        <header v-if="cityDetailMode === 'institutions'"><h3>{{ activeCityDetail.region.name }}</h3></header>
+        <header v-else><div><small>地市经营概览</small><h3>{{ activeCityDetail.region.name }}</h3></div><span class="panorama-map__detail-status">{{ activeCityDetail.scopeLabel || '当前授权范围' }}</span></header>
+        <template v-if="cityDetailMode === 'institutions'">
+          <div class="panorama-map__detail-counts"><span>经营机构 <b data-testid="map-city-institution-count">{{ activeCityDetail.institutionCount ?? activeCityDetail.institutions.length }} 家</b></span></div>
+          <div v-if="activeCityDetail.institutions.length" class="panorama-map__detail-institution-list panorama-map__detail-institution-list--names" data-testid="map-city-institution-list" tabindex="0" aria-label="全部经营机构">
+            <span>全部经营机构</span>
+            <ul><li v-for="institution in activeCityDetail.institutions" :key="institution.orgCode || institution.orgName" data-testid="map-city-institution-name"><button type="button" :data-org-code="institution.orgCode || ''" :aria-label="`查看机构：${institution.orgName || institution.orgCode || '未命名机构'}`" @click.stop="selectPoint(institution)">{{ institution.orgName || institution.orgCode || '未命名机构' }}</button></li></ul>
+          </div>
+          <p v-else class="panorama-map__detail-institutions" data-testid="map-city-institution-empty">无经营机构</p>
+        </template>
+        <template v-else>
+          <div class="panorama-map__detail-counts"><span>机构 <b>{{ activeCityDetail.institutionCount ?? '—' }} 家</b></span><span>已定位 <b>{{ activeCityDetail.locatedCount ?? '—' }} 家</b></span></div>
+          <div v-if="!hasInstitutionMetrics || activeCityDetail.metrics.some(metric => metric.value !== '暂无数据')" class="panorama-map__detail-metrics"><div v-for="metric in activeCityDetail.metrics" :key="metric.key"><span>{{ metric.label }}</span><strong :class="{ 'is-empty': metric.value === '暂无数据' }">{{ metric.value }}</strong></div></div>
+          <div v-if="hasInstitutionMetrics" class="panorama-map__detail-institution-list" data-testid="map-institution-metrics" tabindex="0" aria-label="地市授权机构业务明细">
+            <article v-for="institution in activeCityDetail.institutions" :key="institution.orgCode">
+              <h4>
+                <button
+                  type="button"
+                  class="panorama-map__institution-link"
+                  :data-org-code="institution.orgCode || ''"
+                  :aria-label="`查看机构：${institution.orgName || institution.orgCode || '未命名机构'}`"
+                  @click.stop="selectPoint(institution)"
+                >{{ institution.orgName || institution.orgCode || '未命名机构' }}</button>
+              </h4>
+              <dl><div v-for="metric in institution.metrics.filter(item => item.value !== '暂无数据')" :key="metric.key"><dt>{{ metric.label }}</dt><dd>{{ metric.value }}</dd></div></dl>
+              <p v-if="institution.metrics.every(item => item.value === '暂无数据')">暂无业务数据</p>
+              <small>数据日期 {{ institution.dataDate || '暂无' }}</small>
+            </article>
+          </div>
+          <div v-else-if="activeCityDetail.institutions.length" class="panorama-map__detail-institutions"><span>辖内机构</span><p>{{ activeCityDetail.institutions.slice(0, 3).map(item => item.orgName || item.orgCode).join(' · ') }}<template v-if="activeCityDetail.institutions.length > 3"> 等 {{ activeCityDetail.institutions.length }} 家</template></p></div>
+          <footer><span>数据日期 {{ activeCityDetail.dataDate || '暂无' }}</span><span>点击城市查看详情 →</span></footer>
+        </template>
       </aside>
     </Teleport>
     <div
@@ -295,6 +316,7 @@ const props = defineProps({
   colorByMetric: { type: Boolean, default: false },
   cityDetails: { type: Object, default: () => ({}) },
   mode: { type: String, default: 'province' },
+  cityDetailMode: { type: String, default: 'metrics' },
   showProvincePoints: { type: Boolean, default: false },
   showProvincePointLabels: { type: Boolean, default: true },
   selectedRegionCode: { type: [String, Number], default: null },
@@ -718,6 +740,10 @@ function metricState(region) {
   return value === null || value === undefined || value === '' || !Number.isFinite(Number(value)) ? 'MISSING' : 'READY';
 }
 
+function isRegionMetricMissing(region) {
+  return props.cityDetailMode !== 'institutions' && isCalloutLayout.value && props.metricValues?.[region.code] == null;
+}
+
 function metricStyle(region) {
   if (!props.colorByMetric) return undefined;
   const color = props.metricColors?.[region.code] || '#65738a';
@@ -764,9 +790,18 @@ const activeCityDetail = computed(() => {
   const region = regionLabels.value.find(item => String(item.code) === hoveredRegionCode.value);
   if (!region) return null;
   const detail = props.cityDetails[hoveredRegionCode.value] || {};
+  const institutions = Array.isArray(detail.institutions) ? detail.institutions : [];
+  if (props.cityDetailMode === 'institutions') {
+    return {
+      region,
+      scopeLabel: detail.scopeLabel,
+      institutionCount: Number.isFinite(Number(detail.institutionCount)) ? Number(detail.institutionCount) : institutions.length,
+      institutions
+    };
+  }
   return {
     ...detail, region,
-    institutions: Array.isArray(detail.institutions) ? detail.institutions : [],
+    institutions,
     metrics: Array.isArray(detail.metrics) && detail.metrics.length ? detail.metrics : [{ key: 'current', label: props.metricLabel || '当前指标', value: metricDisplayValue(region) }]
   };
 });
@@ -776,6 +811,7 @@ watch(activeCityDetail, async () => {
 });
 function repositionCityDetail() { if (hoveredRegionCode.value) overlayRevision.value += 1; }
 const hasInstitutionMetrics = computed(() => activeCityDetail.value?.institutions.some(item => Array.isArray(item.metrics)) || false);
+const cityDetailInteractive = computed(() => props.cityDetailMode === 'institutions' || hasInstitutionMetrics.value);
 const cityDetailStyle = computed(() => {
   void overlayRevision.value;
   const rect = containerRef.value?.getBoundingClientRect();
@@ -1422,7 +1458,7 @@ let cityLeaveTimer = null;
 function keepCityDetail() { clearTimeout(cityLeaveTimer); }
 function leaveHoveredRegion() {
   keepCityDetail();
-  if (hasInstitutionMetrics.value) cityLeaveTimer = setTimeout(() => setHoveredRegion(''), 350);
+  if (cityDetailInteractive.value) cityLeaveTimer = setTimeout(() => setHoveredRegion(''), 350);
   else setHoveredRegion('');
 }
 function setHoveredRegion(code) {
@@ -1715,6 +1751,7 @@ onBeforeUnmount(() => {
 
 /* City accents connect the label, curve and geographic marker as one visual unit. */
 .panorama-map__callout-line { stroke: var(--city-accent); stroke-width: 1.35px; opacity: .72; filter: none; transition: opacity .18s, stroke-width .18s; }
+.panorama-map__callout-hit { fill: none; stroke: transparent; stroke-width: 10px; vector-effect: non-scaling-stroke; pointer-events: stroke; cursor: pointer; }
 .panorama-map__callout-glow { fill: none; stroke: var(--city-accent); stroke-width: 5px; vector-effect: non-scaling-stroke; opacity: .05; }
 .panorama-map__callout-anchor { stroke: var(--city-accent); stroke-width: 4px; }
 .panorama-map__callout.is-missing .panorama-map__callout-line { stroke-dasharray: 3 5; opacity: .38; }
@@ -1745,6 +1782,13 @@ onBeforeUnmount(() => {
 .panorama-map__city-detail { position: fixed; z-index: 3100; pointer-events: none; box-sizing: border-box; padding: 16px; border: 1px solid color-mix(in srgb,var(--city-accent) 55%,#203658); border-radius: 12px; background: linear-gradient(145deg,rgba(18,38,73,.98),rgba(5,17,41,.98)); color: #eaf2ff; box-shadow: 0 18px 50px rgba(0,4,20,.55), inset 0 1px 0 rgba(210,230,255,.08); font-family: 'PingFang SC','Microsoft YaHei',sans-serif; }
 .panorama-map__city-detail.has-institution-metrics { pointer-events: auto; max-height: calc(100vh - 24px); overflow-y: auto; }
 .panorama-map__detail-institution-list { margin-top: 12px; max-height: 220px; overflow-y: auto; overscroll-behavior: contain; }
+.panorama-map__detail-institution-list--names { max-height: min(300px, calc(100vh - 230px)); }
+.panorama-map__detail-institution-list--names > span { display: block; margin-bottom: 6px; color: #91a8ca; font-size: 10px; }
+.panorama-map__detail-institution-list--names ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.panorama-map__detail-institution-list--names li { border: 1px solid rgba(128,169,223,.18); border-radius: 5px; background: rgba(12,32,63,.72); }
+.panorama-map__detail-institution-list--names li button { display: block; width: 100%; padding: 6px 8px; border: 0; border-radius: 5px; color: #e6f2ff; background: transparent; font: inherit; font-size: 11px; line-height: 1.35; text-align: left; cursor: pointer; }
+.panorama-map__detail-institution-list--names li button:hover,
+.panorama-map__detail-institution-list--names li button:focus-visible { color: #8cf3e8; background: rgba(35,79,132,.72); outline: 2px solid rgba(140,243,232,.42); outline-offset: -2px; }
 .panorama-map__detail-institution-list article { padding: 8px 0; border-top: 1px solid #304966; }
 .panorama-map__detail-institution-list h4 { margin: 0 0 6px; font-size: 12px; color: #d4eaff; }
 .panorama-map__detail-institution-list h4 .panorama-map__institution-link { display: block; margin: 0; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }

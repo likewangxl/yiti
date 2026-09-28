@@ -245,6 +245,40 @@ export function buildCityMapDetails(input = {}, options = {}) {
   ]));
 }
 
+/**
+ * Build the province hover contract for the branch overview institution mode.
+ * Only the currently authorized institution directory is projected; summaries,
+ * rankings, business metrics and dates are deliberately excluded.
+ */
+export function buildCityInstitutionDetails(input = {}, options = {}) {
+  const model = sourceModel(input);
+  const institutions = Array.isArray(model.institutions) ? model.institutions.filter(isRecord) : [];
+  const featureCodes = Array.isArray(options.cityCodes)
+    ? options.cityCodes.map(text)
+    : Array.isArray(options.geoJson?.features)
+      ? options.geoJson.features.map(cityCodeFromFeature)
+      : [];
+  const cityCodes = new Set([...institutions.map(cityCodeOf), ...featureCodes].filter(Boolean));
+  const byCity = new Map([...cityCodes].map(code => [code, []]));
+  const seen = new Map();
+  institutions.forEach(institution => {
+    const cityCode = cityCodeOf(institution);
+    if (!cityCode || !byCity.has(cityCode)) return;
+    const orgCode = orgCodeOf(institution);
+    if (!orgCode) return;
+    const orgName = orgNameOf(institution, orgCode);
+    const citySeen = seen.get(cityCode) || new Set();
+    if (citySeen.has(orgCode)) return;
+    citySeen.add(orgCode);
+    seen.set(cityCode, citySeen);
+    byCity.get(cityCode).push({ orgCode, orgName });
+  });
+  return Object.fromEntries([...byCity].map(([code, list]) => [code, {
+    institutionCount: list.length,
+    institutions: list
+  }]));
+}
+
 // Keep a descriptive alias for callers that name the province-map projection.
 export const buildProvinceMapCityDetails = buildCityMapDetails;
 

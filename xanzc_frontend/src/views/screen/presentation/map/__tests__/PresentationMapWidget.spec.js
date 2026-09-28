@@ -34,7 +34,7 @@ const model = {
 };
 
 const mapStub = {
-  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'metricColors', 'regionStates', 'labelLayout', 'pointLabelLayout', 'showRegionMetrics', 'showProvincePointLabels', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints', 'viewFit'],
+  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'metricColors', 'regionStates', 'cityDetails', 'cityDetailMode', 'labelLayout', 'pointLabelLayout', 'showRegionMetrics', 'showProvincePointLabels', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints', 'viewFit'],
   template: '<div data-testid="panorama-map-stub"><button data-city="610100" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">城市</button><button data-org="A" @click="$emit(\'branch-select\', \'A\')">机构</button></div>'
 };
 
@@ -96,7 +96,7 @@ describe('PresentationMapWidget', () => {
     expect(wrapper.getComponent(mapStub).props('showRegionMetrics')).toBe(false);
   });
 
-  it('旧屏编码使用省级行内地市标注，保留指标和网点标记并隐藏支行名称', () => {
+  it('旧省级屏编码切换为机构视图，隐藏业务指标与机构点但保留机构占用状态', () => {
     const oldPresentation = { ...presentation, screenCode: 'SCR_PROVINCE' };
     const mapGeoJson = { ...geoJson, features: [...geoJson.features, { ...geoJson.features[0], properties: { adcode: '610600', name: '延安市' } }] };
     const province = mount(PresentationMapWidget, {
@@ -104,13 +104,27 @@ describe('PresentationMapWidget', () => {
       global: { stubs: { PanoramaMap: mapStub } }
     });
     const oldMap = province.getComponent(mapStub);
-    expect(oldMap.props('labelLayout')).toBe('inline');
+    expect(province.get('.presentation-map-widget__kicker').text()).toBe('机构视图');
+    expect(province.get('h2').text()).toBe('经营机构分布');
+    expect(province.find('[data-testid="presentation-map-metric"]').exists()).toBe(false);
+    expect(province.find('[data-testid="presentation-map-data-date"]').exists()).toBe(false);
+    expect(province.get('[data-testid="presentation-map-institution-count"]').text()).toContain('2 家机构');
+    expect(province.find('[data-testid="presentation-map-legend-high"]').exists()).toBe(false);
+    expect(province.find('[data-testid="presentation-map-legend-mid"]').exists()).toBe(false);
+    expect(province.find('[data-testid="presentation-map-legend-low"]').exists()).toBe(false);
+    expect(province.find('[data-testid="presentation-map-legend-missing"]').exists()).toBe(false);
+    expect(oldMap.props('labelLayout')).toBe('callout');
     expect(oldMap.props('pointLabelLayout')).toBe('inline');
-    expect(oldMap.props('showRegionMetrics')).toBe(true);
+    expect(oldMap.props('metricLabel')).toBe('');
+    expect(oldMap.props('metricValues')).toEqual({});
+    expect(oldMap.props('metricNumericValues')).toEqual({});
+    expect(oldMap.props('showRegionMetrics')).toBe(false);
+    expect(oldMap.props('showProvincePoints')).toBe(false);
     expect(oldMap.props('showProvincePointLabels')).toBe(false);
-    expect(oldMap.props('regionStates')['610600']).toBe('MISSING');
-    expect(oldMap.props('metricValues')['610600']).toBe('暂无数据');
-    expect(province.find('[data-testid="presentation-map-legend-no-institution"]').exists()).toBe(false);
+    expect(oldMap.props('cityDetailMode')).toBe('institutions');
+    expect(oldMap.props('regionStates')['610600']).toBe('NO_INSTITUTION');
+    expect(oldMap.props('metricColors')['610600']).toBe('#65738a');
+    expect(province.get('[data-testid="presentation-map-legend-no-institution"]').text()).toContain('无经营机构');
     province.unmount();
 
     const unrelated = mount(PresentationMapWidget, {
@@ -118,15 +132,26 @@ describe('PresentationMapWidget', () => {
       global: { stubs: { PanoramaMap: mapStub } }
     });
     expect(unrelated.getComponent(mapStub).props('labelLayout')).toBe('callout');
+    expect(unrelated.getComponent(mapStub).props('cityDetails')).toEqual({});
     unrelated.unmount();
 
     const templateBranch = mount(PresentationMapWidget, {
       props: { presentation: { ...presentation, screenCode: undefined, template: 'branch-overview-v1' }, model, geoJson, mode: 'province', metricKey: 'deposit' },
       global: { stubs: { PanoramaMap: mapStub } }
     });
-    expect(templateBranch.getComponent(mapStub).props('labelLayout')).toBe('inline');
+    expect(templateBranch.getComponent(mapStub).props('labelLayout')).toBe('callout');
     expect(templateBranch.getComponent(mapStub).props('showProvincePointLabels')).toBe(false);
+    expect(templateBranch.getComponent(mapStub).props('cityDetailMode')).toBe('institutions');
     templateBranch.unmount();
+
+    const v2TemplateBranch = mount(PresentationMapWidget, {
+      props: { presentation: { ...presentation, template: 'branch-overview-v1' }, model, geoJson, mode: 'province', metricKey: 'deposit' },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+    expect(v2TemplateBranch.getComponent(mapStub).props('labelLayout')).toBe('inline');
+    expect(v2TemplateBranch.getComponent(mapStub).props('cityDetailMode')).toBe('metrics');
+    expect(v2TemplateBranch.getComponent(mapStub).props('cityDetails')).toEqual({});
+    v2TemplateBranch.unmount();
 
     const city = mount(PresentationMapWidget, {
       props: { presentation: oldPresentation, model, geoJson, mode: 'city', cityCode: '610100' },
@@ -135,6 +160,7 @@ describe('PresentationMapWidget', () => {
     expect(city.getComponent(mapStub).props('pointLabelLayout')).toBe('callout');
     city.unmount();
   });
+
   it('city 按真实区县边界传递有机构突出态、无机构灰色和默认聚焦', () => {
     const cityGeoJson = {
       type: 'FeatureCollection',
@@ -184,4 +210,5 @@ describe('PresentationMapWidget', () => {
     expect(map.props('regionStates')['D-B']).toBe('MISSING');
     expect(map.props('metricColors')['D-B']).toBe('#65738a');
     wrapper.unmount();
-  });});
+  });
+});
