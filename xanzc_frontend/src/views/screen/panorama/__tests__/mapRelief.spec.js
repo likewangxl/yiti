@@ -24,6 +24,16 @@ describe('mapReliefGeometry', () => {
     expect(fitReliefView([], { aspect: 1 })).toBeNull();
   });
 
+  it('允许用占用区域的 camera-space bounds 中心替换全市 bounds 中心，同时保留原 fit 跨度', () => {
+    const points = [{ x: -8, y: -2 }, { x: 8, y: -2 }, { x: 8, y: 2 }, { x: -8, y: 2 }];
+    const defaultFit = fitReliefView(points, { aspect: 1 });
+    const focusedFit = fitReliefView(points, { aspect: 1, center: { x: -6, y: 1 } });
+    expect((focusedFit.left + focusedFit.right) / 2).toBeCloseTo(-6);
+    expect((focusedFit.top + focusedFit.bottom) / 2).toBeCloseTo(1);
+    expect(focusedFit.right - focusedFit.left).toBeCloseTo(defaultFit.right - defaultFit.left);
+    expect(focusedFit.top - focusedFit.bottom).toBeCloseTo(defaultFit.top - defaultFit.bottom);
+  });
+
   it('只把 relief 作为显式外观开关，默认和未知值保持 classic', () => {
     expect(RELIEF_APPEARANCE).toBe('relief');
     expect(isReliefAppearance('relief')).toBe(true);

@@ -93,8 +93,20 @@ export function getReliefSurfaceZ(config = {}) {
   return finitePositive(config.depth, 0.72) + finitePositive(config.labelLift, 0.075);
 }
 
+/** Return the camera-space bounds center for a finite point collection. */
+export function pointBoundsCenter(points) {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const point of points) {
+    if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) continue;
+    minX = Math.min(minX, point.x); maxX = Math.max(maxX, point.x);
+    minY = Math.min(minY, point.y); maxY = Math.max(maxY, point.y);
+  }
+  if (!Number.isFinite(minX)) return null;
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+}
+
 /** Fit camera-space geometry directly; a rotated world AABB would add empty corners. */
-export function fitReliefView(points, { aspect = 1, fitHeight = .88 } = {}) {
+export function fitReliefView(points, { aspect = 1, fitHeight = .88, center = null } = {}) {
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const point of points) {
     if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
@@ -105,6 +117,8 @@ export function fitReliefView(points, { aspect = 1, fitHeight = .88 } = {}) {
   const ratio = finitePositive(aspect, 1);
   const height = Math.max((maxY - minY) / clamp(fitHeight, .8, .92), (maxX - minX) / ratio / .90, .5);
   const width = height * ratio;
-  const x = (minX + maxX) / 2, y = (minY + maxY) / 2;
+  const fallbackCenter = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+  const x = Number.isFinite(center?.x) ? center.x : fallbackCenter.x;
+  const y = Number.isFinite(center?.y) ? center.y : fallbackCenter.y;
   return { left: x - width / 2, right: x + width / 2, top: y + height / 2, bottom: y - height / 2 };
 }

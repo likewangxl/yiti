@@ -328,6 +328,36 @@ describe('PanoramaMap', () => {
     wrapper.unmount();
   });
 
+  it('城市默认聚焦把有机构区域的 SVG 几何中心放到地图中心，resize/reset 不回到全市 bounds', async () => {
+    const splitGeoJson = {
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', properties: { adcode: 'D-A', name: '甲区' }, geometry: { type: 'Polygon', coordinates: [[[108, 34], [109, 34], [109, 35], [108, 35], [108, 34]]] } },
+        { type: 'Feature', properties: { adcode: 'D-B', name: '乙区' }, geometry: { type: 'Polygon', coordinates: [[[109, 34], [113, 34], [113, 35], [109, 35], [109, 34]]] } }
+      ]
+    };
+    const wrapper = mount(PanoramaMap, {
+      props: {
+        geoJson: splitGeoJson,
+        mode: 'city',
+        viewFit: { focusRegionCodes: ['D-A'], focusCenter: { lng: 111, lat: 34.5 }, focusCenterMode: 'OCCUPIED_BOUNDS', initialZoom: 1.65 }
+      }
+    });
+    await nextTick();
+    const overlayPoint = wrapper.vm.$.setupState.fallbackOverlayPoint({ x: 50, y: 50 });
+    expect(overlayPoint.x).toBeCloseTo(50, 2);
+    expect(overlayPoint.y).toBeCloseTo(50, 2);
+    const centerOfPath = () => {
+      const path = wrapper.get('path[data-region-code="D-A"]').attributes('d');
+      const xValues = [...path.matchAll(/[ML]\s*(-?\d+(?:\.\d+)?)/g)].map(match => Number(match[1]));
+      return (Math.min(...xValues) + Math.max(...xValues)) / 2;
+    };
+    expect(centerOfPath()).toBeCloseTo(50, 1);
+    await wrapper.get('button[aria-label="重置地图视图"]').trigger('click');
+    expect(centerOfPath()).toBeCloseTo(50, 1);
+    wrapper.unmount();
+  });
+
   it('空城门禁只作用于省级地图，市级下钻的 district NO_INSTITUTION 仍可按市级流程选择', async () => {
     const wrapper = mount(PanoramaMap, {
       props: {

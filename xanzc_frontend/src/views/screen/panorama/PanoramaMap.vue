@@ -32,7 +32,7 @@
     ></canvas>
     <span v-if="metricLabel" class="panorama-map__metric-heading" data-testid="map-metric-label">{{ metricLabel }}</span>
 
-    <div v-if="fallbackActive" class="panorama-map__fallback" role="region" aria-label="二维真实行政区地图回退">
+    <div v-if="fallbackActive" class="panorama-map__fallback" :class="{ 'panorama-map__fallback--city-focused': cityFocusedFallback }" :style="fallbackInsetStyle" role="region" aria-label="二维真实行政区地图回退">
       <svg
         class="panorama-map__svg"
         viewBox="0 0 100 100"
@@ -305,6 +305,7 @@ import {
   createReliefWallColors,
   smoothReliefWallNormals,
   getReliefSurfaceZ,
+  pointBoundsCenter,
   isReliefAppearance
 } from './mapReliefGeometry';
 
@@ -406,12 +407,15 @@ const cityFocus = computed(() => {
     : [rawCenter?.lng ?? rawCenter?.longitude, rawCenter?.lat ?? rawCenter?.latitude];
   const lng = Number(pair[0]);
   const lat = Number(pair[1]);
-  const center = Number.isFinite(lng) && Number.isFinite(lat)
-    ? projection.value.project([lng, lat])
-    : focusedRegions.flatMap(region => region.outer).reduce((result, point, index, points) => ({
-      x: result.x + point.x / points.length,
-      y: result.y + point.y / points.length
-    }), { x: 0, y: 0 });
+  const occupiedBoundsCenter = pointBoundsCenter(focusedRegions.flatMap(region => region.outer));
+  const center = props.viewFit?.focusCenterMode === 'OCCUPIED_BOUNDS' && occupiedBoundsCenter
+    ? occupiedBoundsCenter
+    : Number.isFinite(lng) && Number.isFinite(lat)
+      ? projection.value.project([lng, lat])
+      : focusedRegions.flatMap(region => region.outer).reduce((result, point, index, points) => ({
+        x: result.x + point.x / points.length,
+        y: result.y + point.y / points.length
+      }), { x: 0, y: 0 });
   const initialZoom = Number(props.viewFit?.initialZoom);
   return {
     active: Number.isFinite(center.x) && Number.isFinite(center.y),
@@ -522,19 +526,32 @@ function svgPoint(point) {
 // The fallback SVG keeps `preserveAspectRatio="xMidYMid meet"` so a wide map
 // does not stretch the province. Convert its square viewBox coordinates back to
 // the full container before positioning the shared HTML callout layer.
-const fallbackInsets = Object.freeze({ left: 22, right: 52, top: 18, bottom: 24 });
+const FALLBACK_INSETS = Object.freeze({ left: 22, right: 52, top: 18, bottom: 24 });
+const CITY_FOCUSED_FALLBACK_INSETS = Object.freeze({ left: 37, right: 37, top: 21, bottom: 21 });
+const cityFocusedFallback = computed(() => props.mode === 'city' && props.viewFit?.focusCenterMode === 'OCCUPIED_BOUNDS');
+const fallbackLayoutInsets = computed(() => cityFocusedFallback.value ? CITY_FOCUSED_FALLBACK_INSETS : FALLBACK_INSETS);
+const fallbackInsetStyle = computed(() => {
+  const insets = fallbackLayoutInsets.value;
+  return {
+    '--fallback-inset-left': String(insets.left) + 'px',
+    '--fallback-inset-right': String(insets.right) + 'px',
+    '--fallback-inset-top': String(insets.top) + 'px',
+    '--fallback-inset-bottom': String(insets.bottom) + 'px'
+  };
+});
 
 function fallbackOverlayPoint(point) {
   const width = Math.max(1, containerRef.value?.clientWidth || 800);
   const height = Math.max(1, containerRef.value?.clientHeight || 520);
-  const svgWidth = Math.max(1, width - fallbackInsets.left - fallbackInsets.right);
-  const svgHeight = Math.max(1, height - fallbackInsets.top - fallbackInsets.bottom);
+  const insets = fallbackLayoutInsets.value;
+  const svgWidth = Math.max(1, width - insets.left - insets.right);
+  const svgHeight = Math.max(1, height - insets.top - insets.bottom);
   const scale = Math.min(svgWidth, svgHeight) / 100;
   const offsetX = (svgWidth - scale * 100) / 2;
   const offsetY = (svgHeight - scale * 100) / 2;
   return {
-    x: ((fallbackInsets.left + offsetX + point.x * scale) / width) * 100,
-    y: ((fallbackInsets.top + offsetY + point.y * scale) / height) * 100
+    x: ((insets.left + offsetX + point.x * scale) / width) * 100,
+    y: ((insets.top + offsetY + point.y * scale) / height) * 100
   };
 }
 
@@ -1082,8 +1099,11 @@ function resetView() {
   applyDefaultFocus();
   activeCluster.value = null;
   updatePointMarkerScale();
-  applyCameraZoom();
-  renderFrame();
+  if (reliefEnabled.value && renderer) resizeRenderer();
+  else {
+    applyCameraZoom();
+    renderFrame();
+  }
 }
 
 function updateCameraPose() {
@@ -1510,6 +1530,11 @@ function resizeRenderer() {
       // makes the map much smaller than the available canvas.
       mapGroup.updateMatrixWorld(true);
       const vertices = [];
+      const focusedVertices = [];
+      const focusCodes = props.viewFit?.focusCenterMode === 'OCCUPIED_BOUNDS'
+        && cityFocus.value.active
+        ? new Set((props.viewFit?.focusRegionCodes || []).map(code => String(code)))
+        : null;
       const vertex = new THREE.Vector3();
       mapGroup.traverse(object => {
         const position = object.geometry?.attributes?.position;
@@ -1517,13 +1542,35 @@ function resizeRenderer() {
         for (let index = 0; index < position.count; index += 1) {
           vertex.fromBufferAttribute(position, index)
             .applyMatrix4(object.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
-          vertices.push({ x: vertex.x, y: vertex.y });
+          const point = { x: vertex.x, y: vertex.y };
+          vertices.push(point);
         }
       });
+      if (focusCodes?.size) {
+        const focusedWorldPoint = new THREE.Vector3();
+        projectedRegions.value
+          .filter(region => focusCodes.has(String(region.code)))
+          .flatMap(region => region.outer)
+          .forEach(point => {
+            focusedWorldPoint.set(point.x, point.y, mapSurfaceZ())
+              .applyMatrix4(mapGroup.matrixWorld)
+              .applyMatrix4(camera.matrixWorldInverse);
+            focusedVertices.push({ x: focusedWorldPoint.x, y: focusedWorldPoint.y });
+          });
+      }
       const configuredFitHeight = Number(props.viewFit?.reliefFitHeight);
       const fit = fitReliefView(vertices, {
         aspect,
-        fitHeight: Number.isFinite(configuredFitHeight) && configuredFitHeight > 0 ? configuredFitHeight : reliefConfig.value.fitHeight
+        fitHeight: Number.isFinite(configuredFitHeight) && configuredFitHeight > 0 ? configuredFitHeight : reliefConfig.value.fitHeight,
+        center: focusCodes?.size && focusedVertices.length
+          ? (() => {
+            const occupiedCenter = pointBoundsCenter(focusedVertices);
+            const focusPoint = new THREE.Vector3(cityFocus.value.center.x, cityFocus.value.center.y, mapSurfaceZ())
+              .applyMatrix4(mapGroup.matrixWorld)
+              .applyMatrix4(camera.matrixWorldInverse);
+            return occupiedCenter ? { x: occupiedCenter.x - focusPoint.x, y: occupiedCenter.y - focusPoint.y } : null;
+          })()
+          : null
       });
       if (fit) Object.assign(camera, fit);
     } else {
@@ -1810,7 +1857,7 @@ onBeforeUnmount(() => {
 
 .panorama-map__canvas { z-index: 1; }
 .panorama-map__canvas.is-hidden { display: none; }
-.panorama-map__fallback { z-index: 1; padding: 18px 52px 24px 22px; }
+.panorama-map__fallback { z-index: 1; padding: var(--fallback-inset-top, 18px) var(--fallback-inset-right, 52px) var(--fallback-inset-bottom, 24px) var(--fallback-inset-left, 22px); }
 .panorama-map__svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .panorama-map__region path { fill: rgba(58, 83, 177, .76); stroke: #83b9ff; stroke-width: .24; vector-effect: non-scaling-stroke; cursor: pointer; transition: fill .2s ease; }
 .panorama-map__region path:hover,
