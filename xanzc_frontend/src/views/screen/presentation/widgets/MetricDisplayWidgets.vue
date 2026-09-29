@@ -47,6 +47,7 @@
             :text="item.text"
             :label="item.title || '完成率'"
             :accent="ringAccent(item)"
+            :compact="draftOverview"
           />
           <strong v-else class="presentation-metric-widget__value" data-testid="presentation-metric-value">{{ item.text }}</strong>
           <span
@@ -68,16 +69,7 @@
             data-testid="presentation-metric-month-delta"
           >{{ item.monthDelta?.text || '较上月 暂无数据' }}</span>
         </div>
-        <div
-          v-if="draftOverview && isCompletionRate(item) && finite(item.value) !== null"
-          class="presentation-metric-widget__draft-progress"
-          role="progressbar"
-          :aria-label="`${item.title || '完成率'}进度`"
-          :aria-valuenow="Math.max(0, Math.min(100, finite(item.value)))"
-          aria-valuemin="0"
-          aria-valuemax="100"
-        ><i :style="{ width: `${Math.max(0, Math.min(100, finite(item.value)))}%` }" aria-hidden="true"></i></div>
-        <span v-if="item.state !== 'READY'" class="presentation-metric-widget__status" data-testid="presentation-metric-status">
+        <span v-if="item.state !== 'READY' && !(draftOverview && shouldUseCompletionRing(item))" class="presentation-metric-widget__status" data-testid="presentation-metric-status">
           {{ statusText(item.state) }}
         </span>
         <div
@@ -162,19 +154,8 @@ function iconName(item) {
 }
 
 function shouldUseCompletionRing(item) {
-  return !props.draftOverview && props.grouped
+  return props.grouped
     && item?.componentType === 'METRIC_CARD'
-    && COMPLETION_RING_IDS.includes(String(item?.componentId || ''));
-}
-
-function finite(value) {
-  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-function isCompletionRate(item) {
-  return item?.componentType === 'METRIC_CARD'
     && COMPLETION_RING_IDS.includes(String(item?.componentId || ''));
 }
 
@@ -288,18 +269,19 @@ function comparisonRows(item) {
 .presentation-metric-widget__month-delta { min-width: 0; max-width: 100%; color: var(--panorama-text-dim, #8fa9db); font-size: 10px; font-weight: 550; line-height: 1.25; overflow-wrap: anywhere; word-break: break-word; }
 .presentation-metric-widget__comparisons { display: grid; width: 100%; min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 7px; color: var(--panorama-text-dim, #8fa9db); font-size: 9px; font-weight: 550; line-height: 1.25; }
 .presentation-metric-widget__comparison { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.presentation-metric-widgets--draft .presentation-metric-widget--grouped { box-sizing: border-box; min-height: 90px; height: auto; padding: 6px 8px; overflow: visible; gap: 8px; }
+.presentation-metric-widgets--draft .presentation-metric-widget--grouped { box-sizing: border-box; min-height: 112px; height: auto; container-type: inline-size; container-name: presentation-metric-widget; padding: 6px 8px; overflow: visible; gap: 8px; }
 .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__icon { width: 24px; height: 24px; flex-basis: 24px; font-size: 16px; }
 .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__content { gap: 2px; }
 .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__header h2 { font-size: 12px; }
 .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin-top: 0; }
+.presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line--ring { grid-template-columns: 76px minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 3px; min-height: 76px; }
+.presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line--ring :deep(.completion-ring-gauge) { width: 76px; flex-basis: 76px; }
+.presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line--ring .presentation-metric-widget__comparisons,
+.presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line--ring .presentation-metric-widget__month-delta { grid-column: 2; width: auto; }
 .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value { font-size: clamp(18px, 1.1vw, 21px); line-height: 1.25; }
 .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__comparisons { grid-template-columns: 1fr; gap: 1px; font-size: 11px; line-height: 1.15; }
-.presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__comparison { overflow: visible; text-overflow: clip; white-space: nowrap; }
-.presentation-metric-widgets--draft .presentation-metric-widget--dial,
-.presentation-metric-widgets--draft .presentation-metric-widget__value-line--ring { min-height: 0; }
-.presentation-metric-widget__draft-progress { height: 3px; margin-top: 2px; overflow: hidden; border-radius: 3px; background: rgba(119, 163, 255, .16); }
-.presentation-metric-widget__draft-progress i { display: block; height: 100%; border-radius: inherit; background: var(--metric-accent, #4de8ef); }
+.presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__comparison { overflow: visible; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
+.presentation-metric-widgets--draft .presentation-metric-widget--dial { min-height: 112px; }
 .presentation-metric-widget__status { display: block; margin-top: 2px; color: var(--panorama-amber, #ffc45e); font-size: 10px; line-height: 1.25; }
 .presentation-metric-widget__progress { height: 7px; margin-top: 4px; overflow: hidden; background: rgba(2, 9, 22, .72); border: 1px solid rgba(133, 164, 222, .42); border-radius: 4px; }
 .presentation-metric-widget__progress i { display: block; height: 100%; background: var(--metric-accent); border-radius: inherit; box-shadow: 0 0 8px var(--metric-accent); }
@@ -318,7 +300,19 @@ function comparisonRows(item) {
   .presentation-metric-widget__header h2 { font-size: 12px; }
   .presentation-metric-widget__value { font-size: clamp(16px, 5.2vw, 22px); }
   .presentation-metric-widgets--draft .presentation-metric-widget__icon { display: none; }
-  .presentation-metric-widgets--draft .presentation-metric-widget--grouped { min-height: 86px; padding-right: 8px; padding-left: 8px; }
+  .presentation-metric-widgets--draft .presentation-metric-widget--grouped { min-height: 112px; padding-right: 8px; padding-left: 8px; }
+  .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line--ring { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line--ring :deep(.completion-ring-gauge) { justify-self: start; }
+  .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line--ring .presentation-metric-widget__comparisons,
+  .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line--ring .presentation-metric-widget__month-delta { grid-column: 1; }
+  .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line--ring .presentation-metric-widget__comparisons { grid-template-columns: 1fr; font-size: 11px; }
   .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value { font-size: 18px; }
+}
+@container presentation-metric-widget (max-width: 300px) {
+  .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line--ring { grid-template-columns: minmax(0, 1fr); }
+  .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line--ring :deep(.completion-ring-gauge) { justify-self: start; }
+  .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line--ring .presentation-metric-widget__comparisons,
+  .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line--ring .presentation-metric-widget__month-delta { grid-column: 1; }
+  .presentation-metric-widgets--draft .presentation-metric-widget--grouped .presentation-metric-widget__value-line--ring .presentation-metric-widget__comparisons { grid-template-columns: 1fr; }
 }
 </style>

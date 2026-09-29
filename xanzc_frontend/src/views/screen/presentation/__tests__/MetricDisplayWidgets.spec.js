@@ -201,6 +201,7 @@ describe('MetricDisplayWidgets', () => {
     });
 
     expect(wrapper.findAll('[data-testid="completion-ring-gauge"]')).toHaveLength(4);
+    expect(wrapper.find('[data-component-id="business-retail-deposit-rate"] [data-testid="completion-ring-gauge"]').attributes('data-mode')).toBe('dashboard');
     expect(wrapper.find('[data-component-id="business-retail-deposit-rate"] [data-testid="presentation-metric-icon"]').exists()).toBe(true);
     expect(wrapper.find('[data-component-id="business-retail-loan-rate"] [data-testid="presentation-metric-icon"]').exists()).toBe(true);
     expect(wrapper.findAll('[data-testid="presentation-metric-month-delta"]')).toHaveLength(7);
@@ -208,6 +209,7 @@ describe('MetricDisplayWidgets', () => {
     expect(wrapper.find('[data-component-id="business-retail-loan-rate"] [data-testid="completion-ring-gauge"]').attributes('data-progress')).toBe('100');
     expect(wrapper.find('[data-component-id="business-corp-deposit-rate"] [data-testid="completion-ring-gauge"]').attributes('data-progress')).toBe('0');
     expect(wrapper.find('[data-component-id="business-corp-loan-rate"] [data-testid="completion-ring-gauge"]').attributes('data-state')).toBe('MISSING');
+    expect(wrapper.find('[data-component-id="business-corp-loan-rate"] [data-testid="presentation-metric-status"]').text()).toContain('待接入');
     expect(wrapper.find('[data-component-id="business-retail-deposit-balance"] [data-testid="completion-ring-gauge"]').exists()).toBe(false);
     expect(wrapper.find('[data-component-id="legacy-card"] [data-testid="completion-ring-gauge"]').exists()).toBe(false);
     expect(wrapper.find('[data-component-id="legacy-completion"] .presentation-metric-widget__progress').exists()).toBe(true);
@@ -262,7 +264,7 @@ describe('MetricDisplayWidgets', () => {
     expect(wrapper.find('[data-testid="presentation-metric-value"]').text()).toBe('90.64%');
   });
 
-  it('draft 模式完成率卡显示真实百分比和三维对比，不挂载大仪表盘', () => {
+  it('draft 模式完成率卡使用紧凑圆环，显示真实百分比和三维对比', () => {
     const wrapper = mount(MetricDisplayWidgets, {
       props: {
         grouped: true,
@@ -280,9 +282,57 @@ describe('MetricDisplayWidgets', () => {
       }
     });
     const card = wrapper.get('[data-component-id="business-corp-deposit-rate"]');
-    expect(card.find('[data-testid="completion-ring-gauge"]').exists()).toBe(false);
-    expect(card.get('[data-testid="presentation-metric-value"]').text()).toBe('86.40%');
+    expect(card.find('[data-testid="completion-ring-gauge"]').attributes('data-mode')).toBe('compact');
+    expect(card.find('[data-testid="completion-ring-value"]').text()).toBe('86.40%');
+    expect(card.find('[data-testid="presentation-metric-value"]').exists()).toBe(false);
+    expect(card.find('.presentation-metric-widget__draft-progress').exists()).toBe(false);
     expect(card.findAll('[data-testid="presentation-metric-comparisons"] .presentation-metric-widget__comparison')).toHaveLength(3);
     expect(card.find('[data-testid="presentation-metric-comparisons"]').text()).toContain('较上日 +0.40个百分点');
+  });
+
+  it('draft 模式四张显式完成率卡都使用紧凑圆环，保留 125/0/负数/缺失边界和三维对比', () => {
+    const rateCases = [
+      { componentId: 'business-retail-deposit-rate', text: '125.00%', value: 125, state: 'READY' },
+      { componentId: 'business-retail-loan-rate', text: '0.00%', value: 0, state: 'READY' },
+      { componentId: 'business-corp-deposit-rate', text: '-4.00%', value: -4, state: 'READY' },
+      { componentId: 'business-corp-loan-rate', text: '待接入', value: null, state: 'NO_SOURCE' }
+    ];
+    const wrapper = mount(MetricDisplayWidgets, {
+      props: {
+        grouped: true,
+        draftOverview: true,
+        components: rateCases.map((item, order) => ({
+          ...item,
+          componentType: 'METRIC_CARD',
+          layoutRegion: 'HEADER',
+          order,
+          title: `${item.componentId} 标题`,
+          comparisons: {
+            year: { state: 'READY', text: '较上年 +1.00个百分点' },
+            month: { state: 'READY', text: '较上月 +2.00个百分点' },
+            day: { state: 'READY', text: '较上日 +3.00个百分点' }
+          },
+          subFields: []
+        }))
+      }
+    });
+
+    expect(wrapper.findAll('[data-testid="completion-ring-gauge"]')).toHaveLength(4);
+    expect(wrapper.findAll('[data-testid="completion-ring-gauge"]').every(node => node.attributes('data-mode') === 'compact')).toBe(true);
+    expect(wrapper.findAll('.presentation-metric-widget__draft-progress')).toHaveLength(0);
+    expect(wrapper.findAll('[data-testid="presentation-metric-value"]')).toHaveLength(0);
+    expect(wrapper.findAll('[data-testid="presentation-metric-comparisons"]')).toHaveLength(4);
+    expect(wrapper.findAll('[data-testid="presentation-metric-comparisons"] .presentation-metric-widget__comparison')).toHaveLength(12);
+
+    expect(wrapper.find('[data-component-id="business-retail-deposit-rate"] [data-testid="completion-ring-value"]').text()).toBe('125.00%');
+    expect(wrapper.find('[data-component-id="business-retail-deposit-rate"] [data-testid="completion-ring-gauge"]').attributes('data-progress')).toBe('100');
+    expect(wrapper.find('[data-component-id="business-retail-loan-rate"] [data-testid="completion-ring-value"]').text()).toBe('0.00%');
+    expect(wrapper.find('[data-component-id="business-retail-loan-rate"] [data-testid="completion-ring-gauge"]').attributes('data-progress')).toBe('0');
+    expect(wrapper.find('[data-component-id="business-corp-deposit-rate"] [data-testid="completion-ring-value"]').text()).toBe('-4.00%');
+    expect(wrapper.find('[data-component-id="business-corp-deposit-rate"] [data-testid="completion-ring-gauge"]').attributes('data-progress')).toBe('0');
+    expect(wrapper.find('[data-component-id="business-corp-loan-rate"] [data-testid="completion-ring-value"]').text()).toBe('—');
+    expect(wrapper.find('[data-component-id="business-corp-loan-rate"] [data-testid="completion-ring-status"]').text()).toBe('待接入');
+    expect(wrapper.find('[data-component-id="business-corp-loan-rate"] [data-testid="presentation-metric-status"]').exists()).toBe(false);
+    expect(wrapper.find('[data-component-id="business-corp-loan-rate"] [data-testid="completion-ring-gauge"]').attributes('data-state')).toBe('MISSING');
   });
 });

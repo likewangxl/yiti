@@ -1,16 +1,49 @@
 <template>
   <div
     class="completion-ring-gauge"
-    :class="{ 'completion-ring-gauge--missing': isMissing }"
+    :class="{
+      'completion-ring-gauge--missing': isMissing,
+      'completion-ring-gauge--compact': compact
+    }"
     data-testid="completion-ring-gauge"
     :data-state="isMissing ? 'MISSING' : 'READY'"
+    :data-mode="compact ? 'compact' : 'dashboard'"
     :data-progress="progress"
     role="img"
     :aria-label="ariaLabel"
     :style="{ '--completion-ring-accent': accent }"
   >
-    <VChart class="completion-ring-gauge__chart" :option="option" autoresize aria-hidden="true" />
+    <svg
+      v-if="compact"
+      class="completion-ring-gauge__svg"
+      data-testid="completion-ring-svg"
+      viewBox="0 0 80 80"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle
+        class="completion-ring-gauge__track"
+        data-testid="completion-ring-track"
+        cx="40"
+        cy="40"
+        r="34"
+        pathLength="100"
+      />
+      <circle
+        class="completion-ring-gauge__progress"
+        data-testid="completion-ring-progress"
+        cx="40"
+        cy="40"
+        r="34"
+        pathLength="100"
+        stroke-dasharray="100"
+        :class="{ 'completion-ring-gauge__progress--empty': progress === 0 }"
+        :stroke-dashoffset="arcOffset"
+      />
+    </svg>
+    <VChart v-else class="completion-ring-gauge__chart" :option="option" autoresize aria-hidden="true" />
     <span class="completion-ring-gauge__value" data-testid="completion-ring-value">{{ displayText }}</span>
+    <span v-if="compact && isMissing" class="completion-ring-gauge__status" data-testid="completion-ring-status">待接入</span>
   </div>
 </template>
 
@@ -27,7 +60,8 @@ const props = defineProps({
   text: { type: [String, Number], default: '—' },
   value: { type: [Number, String], default: null },
   accent: { type: String, default: 'var(--metric-accent, var(--panorama-cyan, #4de8ef))' },
-  label: { type: String, default: '完成率' }
+  label: { type: String, default: '完成率' },
+  compact: { type: Boolean, default: false }
 });
 
 function finite(value) {
@@ -39,6 +73,7 @@ function finite(value) {
 const numericValue = computed(() => finite(props.value));
 const isMissing = computed(() => numericValue.value === null);
 const progress = computed(() => isMissing.value ? 0 : Math.max(0, Math.min(100, numericValue.value)));
+const arcOffset = computed(() => 100 - progress.value);
 const displayText = computed(() => {
   if (isMissing.value) return '—';
   const text = props.text === null || props.text === undefined ? '' : String(props.text).trim();
@@ -114,6 +149,12 @@ const option = computed(() => ({
 }
 .completion-ring-gauge__chart { display: block; width: 100%; height: 100%; }
 .completion-ring-gauge__chart :deep(.vue-echarts-inner) { width: 100% !important; height: 100% !important; }
+.completion-ring-gauge__svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
+.completion-ring-gauge__track,
+.completion-ring-gauge__progress { fill: none; stroke-width: 7; }
+.completion-ring-gauge__track { stroke: var(--completion-ring-accent); opacity: .22; }
+.completion-ring-gauge__progress { stroke: var(--completion-ring-accent); stroke-linecap: round; }
+.completion-ring-gauge__progress--empty { visibility: hidden; }
 .completion-ring-gauge__value {
   position: absolute;
   right: 0;
@@ -129,6 +170,35 @@ const option = computed(() => ({
   white-space: nowrap;
   pointer-events: none;
 }
+.completion-ring-gauge--compact {
+  width: 76px;
+  height: 76px;
+  flex: 0 0 76px;
+}
+.completion-ring-gauge--compact .completion-ring-gauge__value {
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  width: max-content;
+  max-width: 100%;
+  overflow: visible;
+  color: var(--completion-ring-accent);
+  font-size: 13px;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+}
+.completion-ring-gauge__status {
+  position: absolute;
+  right: 0;
+  top: calc(50% + 12px);
+  left: 0;
+  color: var(--panorama-text-dim, #8fa9db);
+  font-size: 10px;
+  line-height: 1;
+  text-align: center;
+  pointer-events: none;
+}
 .completion-ring-gauge--missing .completion-ring-gauge__value {
   color: var(--panorama-text-dim, #8fa9db);
   font-size: 10px;
@@ -136,5 +206,7 @@ const option = computed(() => ({
 @media (max-width: 620px) {
   .completion-ring-gauge { width: 124px; height: 88px; flex-basis: 124px; }
   .completion-ring-gauge__value { font-size: 10px; }
+  .completion-ring-gauge--compact { width: 72px; height: 72px; flex-basis: 72px; }
+  .completion-ring-gauge--compact .completion-ring-gauge__value { font-size: 12px; }
 }
 </style>
