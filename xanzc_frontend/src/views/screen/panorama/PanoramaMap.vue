@@ -7,6 +7,7 @@
     :data-label-layout="isCalloutLayout ? 'callout' : 'inline'"
     :data-point-label-layout="isPointCalloutLayout ? 'callout' : 'inline'"
     :data-city-detail-mode="cityDetailMode"
+    :data-color-by-city="colorByCity ? 'true' : 'false'"
     :data-material-ready="surfaceReady ? 'true' : 'false'"
     :data-selected-region="selectedRegionCode || ''"
     :data-hovered-region="hoveredRegionCode"
@@ -307,6 +308,7 @@ import {
 
 import { createMapCalloutPath, layoutMapCallouts, layoutMapLabels, layoutPointCallouts } from './mapLabelLayout';
 import { positionCityTooltip } from './mapCityTooltipLayout';
+import { provinceCityColor } from './provinceCityPalette';
 const props = defineProps({
   geoJson: { type: Object, default: () => ({ type: 'FeatureCollection', features: [] }) },
   points: { type: Array, default: () => [] },
@@ -318,6 +320,7 @@ const props = defineProps({
   regionStates: { type: Object, default: () => ({}) },
   showRegionMetrics: { type: Boolean, default: true },
   colorByMetric: { type: Boolean, default: false },
+  colorByCity: { type: Boolean, default: false },
   cityDetails: { type: Object, default: () => ({}) },
   mode: { type: String, default: 'province' },
   cityDetailMode: { type: String, default: 'metrics' },
@@ -749,6 +752,12 @@ function isRegionMetricMissing(region) {
 }
 
 function metricStyle(region) {
+  if (props.colorByCity && props.mode === 'province') {
+    const baseColor = provinceCityColor(region.code);
+    const active = String(region.code) === String(hoveredRegionCode.value)
+      || String(region.code) === String(props.selectedRegionCode);
+    return { fill: active ? highlightCityColor(baseColor) : baseColor, '--city-color': baseColor };
+  }
   if (!props.colorByMetric) return undefined;
   const color = props.metricColors?.[region.code] || '#65738a';
   return { fill: color };
@@ -756,6 +765,16 @@ function metricStyle(region) {
 
 function metricColorForCode(code) {
   return props.metricColors?.[code] || '#65738a';
+}
+
+function cityColorForCode(code) {
+  return provinceCityColor(code);
+}
+
+function highlightCityColor(value) {
+  const channels = String(value).match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
+  if (!channels) return value;
+  return `#${channels.slice(1).map(channel => Math.min(255, Math.round(Number.parseInt(channel, 16) + 58)).toString(16).padStart(2, '0')).join('')}`;
 }
 
 const calloutLayout = computed(() => {
@@ -784,6 +803,7 @@ const calloutLayout = computed(() => {
 
 const cityAccents = ['#70c9ff', '#b6a0ff', '#6cdec5', '#efc58c', '#79b4ff', '#df9fcd', '#91d5b3', '#88baff', '#b5b0f6', '#e7b69a'];
 function cityAccent(region) {
+  if (props.colorByCity && props.mode === 'province') return provinceCityColor(region.code);
   const index = Math.max(0, Math.round((Number(region.code) % 10000) / 100) - 1);
   return cityAccents[index % cityAccents.length];
 }
@@ -1191,6 +1211,17 @@ function buildThreeMapUnsafe() {
   renderedRegionCount.value = polygons.length;
   const relief = reliefEnabled.value;
   const config = reliefConfig.value;
+  const applyRegionTopColor = (material, code, selected) => {
+    if (props.colorByCity && props.mode === 'province') {
+      const color = cityColorForCode(code);
+      material.color.set(color);
+      material.emissive.set(color);
+      material.emissiveIntensity = selected ? (relief ? .78 : 1.0) : (relief ? .34 : .72);
+      if (selected) material.color.offsetHSL(0, 0, .12);
+      return;
+    }
+    if (props.colorByMetric) material.color.set(metricColorForCode(code));
+  };
   const topMaterial = relief ? new THREE.MeshStandardMaterial({
     color: 0x304c9c,
     emissive: 0x172451,
@@ -1331,7 +1362,7 @@ function buildThreeMapUnsafe() {
         curveSegments: 1
       });
       const regionTopMaterial = (selected ? selectedTopMaterial : topMaterial).clone();
-      if (props.colorByMetric) regionTopMaterial.color.set(metricColorForCode(polygon.code));
+      applyRegionTopColor(regionTopMaterial, polygon.code, selected);
       const mesh = new THREE.Mesh(geometry, [regionTopMaterial, sideMaterial.clone()]);
       geometry.setAttribute('color', new THREE.BufferAttribute(
         createReliefWallColors(geometry.attributes.position.array, config.depth), 3
@@ -1344,7 +1375,13 @@ function buildThreeMapUnsafe() {
       mesh.userData.restEmissive = mesh.material[0].emissive.getHex();
       regionSurfaces.push(mesh);
       mapGroup.add(mesh);
-      const topMaterialForPolygon = selected ? selectedContourMaterial : topContourMaterial;
+      const topMaterialForPolygon = props.colorByCity && props.mode === 'province'
+        ? topContourMaterial.clone()
+        : selected ? selectedContourMaterial : topContourMaterial;
+      if (props.colorByCity && props.mode === 'province') {
+        topMaterialForPolygon.color.set(cityColorForCode(polygon.code));
+        if (selected) topMaterialForPolygon.color.offsetHSL(0, 0, .12);
+      }
       addReliefContour(polygon.outer, topMaterialForPolygon, config.depth + config.contourLift, userData);
       polygon.holes.forEach(ring => addReliefContour(ring, topMaterialForPolygon, config.depth + config.contourLift, userData));
       addReliefContour(polygon.outer, bottomContourMaterial, -config.baseDepth - config.contourLift, userData, 1.018);
@@ -1370,7 +1407,7 @@ function buildThreeMapUnsafe() {
       });
       const selected = polygon.code && String(polygon.code) === String(props.selectedRegionCode);
       const regionTopMaterial = (selected ? selectedTopMaterial : topMaterial).clone();
-      if (props.colorByMetric) regionTopMaterial.color.set(metricColorForCode(polygon.code));
+      applyRegionTopColor(regionTopMaterial, polygon.code, selected);
       const mesh = new THREE.Mesh(geometry, [regionTopMaterial, sideMaterial.clone()]);
       mesh.userData = { type: 'region', code: polygon.code, name: polygon.name };
       mapGroup.add(mesh);
@@ -1512,8 +1549,13 @@ function setHoveredRegion(code) {
   hoveredRegionCode.value = next;
   regionSurfaces.forEach(mesh => {
     const active = next && String(mesh.userData.code) === next;
-    mesh.material[0].color.setHex(active ? 0xa27aeb : mesh.userData.restColor);
-    mesh.material[0].emissive.setHex(active ? 0x4b2b82 : mesh.userData.restEmissive);
+    if (active && props.colorByCity && props.mode === 'province') {
+      mesh.material[0].color.set(cityColorForCode(mesh.userData.code)).offsetHSL(0, 0, .18);
+      mesh.material[0].emissive.set(cityColorForCode(mesh.userData.code)).offsetHSL(0, 0, .08);
+    } else {
+      mesh.material[0].color.setHex(active ? 0xa27aeb : mesh.userData.restColor);
+      mesh.material[0].emissive.setHex(active ? 0x4b2b82 : mesh.userData.restEmissive);
+    }
     mesh.material[1].color.setHex(active ? 0xb9a5ff : 0xffffff);
   });
   if (renderer?.domElement) renderer.domElement.style.cursor = next ? 'pointer' : '';
@@ -1646,7 +1688,7 @@ onMounted(() => {
 
 watch(() => [
   props.geoJson, props.points, props.selectedOrgCode, props.selectedRegionCode, props.mode,
-  props.demo, props.appearance, props.metricNumericValues, props.metricColors, props.colorByMetric,
+  props.demo, props.appearance, props.metricNumericValues, props.metricColors, props.colorByMetric, props.colorByCity,
   props.showProvincePoints
 ], () => {
   activeCluster.value = null;

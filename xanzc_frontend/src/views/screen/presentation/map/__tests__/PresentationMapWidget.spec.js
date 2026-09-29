@@ -34,7 +34,7 @@ const model = {
 };
 
 const mapStub = {
-  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'metricColors', 'regionStates', 'cityDetails', 'cityDetailMode', 'labelLayout', 'pointLabelLayout', 'showRegionMetrics', 'showProvincePointLabels', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints', 'viewFit'],
+  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'metricColors', 'regionStates', 'cityDetails', 'cityDetailMode', 'colorByCity', 'labelLayout', 'pointLabelLayout', 'showRegionMetrics', 'showProvincePointLabels', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints', 'viewFit'],
   template: '<div data-testid="panorama-map-stub"><button data-city="610100" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">城市</button><button data-org="A" @click="$emit(\'branch-select\', \'A\')">机构</button></div>'
 };
 
@@ -122,9 +122,10 @@ describe('PresentationMapWidget', () => {
     expect(oldMap.props('showProvincePoints')).toBe(false);
     expect(oldMap.props('showProvincePointLabels')).toBe(false);
     expect(oldMap.props('cityDetailMode')).toBe('institutions');
+    expect(oldMap.props('colorByCity')).toBe(true);
     expect(oldMap.props('regionStates')['610600']).toBe('NO_INSTITUTION');
     expect(oldMap.props('metricColors')['610600']).toBe('#65738a');
-    expect(province.get('[data-testid="presentation-map-legend-no-institution"]').text()).toContain('无经营机构');
+    expect(province.get('[data-testid="presentation-map-legend-city-palette"]').text()).toContain('地市分区');
     province.unmount();
 
     const unrelated = mount(PresentationMapWidget, {
@@ -133,6 +134,7 @@ describe('PresentationMapWidget', () => {
     });
     expect(unrelated.getComponent(mapStub).props('labelLayout')).toBe('callout');
     expect(unrelated.getComponent(mapStub).props('cityDetails')).toEqual({});
+    expect(unrelated.getComponent(mapStub).props('colorByCity')).toBe(false);
     unrelated.unmount();
 
     const templateBranch = mount(PresentationMapWidget, {
@@ -151,6 +153,7 @@ describe('PresentationMapWidget', () => {
     expect(v2TemplateBranch.getComponent(mapStub).props('labelLayout')).toBe('inline');
     expect(v2TemplateBranch.getComponent(mapStub).props('cityDetailMode')).toBe('metrics');
     expect(v2TemplateBranch.getComponent(mapStub).props('cityDetails')).toEqual({});
+    expect(v2TemplateBranch.getComponent(mapStub).props('colorByCity')).toBe(false);
     v2TemplateBranch.unmount();
 
     const city = mount(PresentationMapWidget, {

@@ -6,7 +6,7 @@ import { mount } from '@vue/test-utils';
 vi.mock('../PanoramaMap.vue', () => ({
   default: {
     name: 'PanoramaMap',
-    props: ['metricLabel', 'metricValues', 'metricNumericValues', 'metricColors', 'regionStates', 'labelLayout', 'cityDetails', 'cityDetailMode', 'showRegionMetrics', 'showProvincePoints', 'showProvincePointLabels'],
+    props: ['metricLabel', 'metricValues', 'metricNumericValues', 'metricColors', 'regionStates', 'labelLayout', 'cityDetails', 'cityDetailMode', 'colorByCity', 'showRegionMetrics', 'showProvincePoints', 'showProvincePointLabels'],
     template: '<div class="panorama-map-stub"><button type="button" class="stub-select-region" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">选择西安</button><button type="button" class="stub-select-branch" @click="$emit(\'branch-select\', \'ORG-1\')">选择支行</button></div>',
     emits: ['region-select', 'branch-select']
   }
@@ -502,6 +502,7 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(map.props('labelLayout')).toBe('callout');
     expect(map.props('showProvincePointLabels')).toBe(false);
     expect(map.props('cityDetailMode')).toBe('institutions');
+    expect(map.props('colorByCity')).toBe(true);
   });
 
   it('向省级地图传入仅授权机构名称的城市详情', () => {

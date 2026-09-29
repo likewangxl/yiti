@@ -5,6 +5,7 @@ import { mount } from '@vue/test-utils';
 import PanoramaMap from '../PanoramaMap.vue';
 import { createProjection, projectGeoJson } from '../mapGeometry';
 import { provinceGeo } from '../geography';
+import { provinceCityColor } from '../provinceCityPalette';
 const geoJson = { type: 'FeatureCollection', features: [{ type: 'Feature', properties: { adcode: 610100, name: '西安市', center: [108.5, 34.5] }, geometry: { type: 'Polygon', coordinates: [[[108,34],[109,34],[109,35],[108,35],[108,34]]] } }, { type: 'Feature', properties: { adcode: 610200, name: '铜川市', center: [108.8, 35.2] }, geometry: { type: 'Polygon', coordinates: [[[109,35],[110,35],[110,36],[109,36],[109,35]]] } }] };
 
 function pointInRing(point, ring) {
@@ -99,6 +100,43 @@ describe('地图指标联动显示', () => {
     await labels.find(label => label.attributes('data-city-code') === '610300').trigger('click');
     expect(wrapper.emitted('region-select')).toContainEqual([{ code: '610300', name: '宝鸡市' }]);
     wrapper.unmount();
+  });
+
+  it('colorByCity 仅在显式开启时让 SVG 地市使用 palette，metric 模式继续使用输入颜色', async () => {
+    const city = mount(PanoramaMap, {
+      props: {
+        geoJson,
+        appearance: 'relief',
+        colorByCity: true,
+        colorByMetric: true,
+        metricColors: { '610100': '#123456', '610200': '#654321' }
+      }
+    });
+    await city.vm.$nextTick();
+    expect(city.attributes('data-color-by-city')).toBe('true');
+    const cityPath = city.get('path[data-region-code="610100"]');
+    const cityBaseStyle = cityPath.attributes('style');
+    expect(cityBaseStyle).toContain(provinceCityColor('610100'));
+    await cityPath.trigger('pointerenter');
+    expect(cityPath.attributes('style')).not.toBe(cityBaseStyle);
+    await cityPath.trigger('pointerleave');
+    expect(cityPath.attributes('style')).toBe(cityBaseStyle);
+    city.unmount();
+
+    const metric = mount(PanoramaMap, {
+      props: { geoJson, colorByMetric: true, metricColors: { '610100': '#123456' } }
+    });
+    await metric.vm.$nextTick();
+    expect(metric.attributes('data-color-by-city')).toBe('false');
+    expect(metric.get('path[data-region-code="610100"]').attributes('style')).toContain('#123456');
+    metric.unmount();
+
+    const district = mount(PanoramaMap, {
+      props: { geoJson, mode: 'city', colorByCity: true, colorByMetric: true, metricColors: { '610100': '#123456' } }
+    });
+    await district.vm.$nextTick();
+    expect(district.get('path[data-region-code="610100"]').attributes('style')).toContain('#123456');
+    district.unmount();
   });
 
   it('relief inline 的初始 labelWorld 必须留在对应地市多边形内', async () => {

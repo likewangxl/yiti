@@ -20,6 +20,7 @@ vi.mock('three', async () => {
 });
 
 import PanoramaMap from '../PanoramaMap.vue';
+import { provinceCityColor } from '../provinceCityPalette';
 
 const geoJson = {
   type: 'FeatureCollection',
@@ -85,6 +86,42 @@ describe('PanoramaMap WebGL 初始化', () => {
     expect(wrapper.attributes('data-webgl-ready')).toBe('true');
     expect(wrapper.find('.panorama-map__fallback').exists()).toBe(false);
     wrapper.unmount();
+  });
+  it('省级 colorByCity 让 WebGL 顶面颜色与稳定地市 palette 一致', async () => {
+    vi.stubGlobal('WebGL2RenderingContext', function WebGL2RenderingContext() {});
+    vi.stubGlobal('WebGLRenderingContext', function WebGLRenderingContext() {});
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({}));
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 0));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const fixture = {
+      type: 'FeatureCollection',
+      features: [
+        ...geoJson.features,
+        { type: 'Feature', properties: { adcode: 610300, name: '宝鸡市' }, geometry: { type: 'Polygon', coordinates: [[[109, 34], [110, 34], [110, 35], [109, 35], [109, 34]]] } }
+      ]
+    };
+    const wrapper = mount(PanoramaMap, { props: { geoJson: fixture, appearance: 'relief', mode: 'province', colorByCity: true } });
+    await nextTick();
+    const meshes = [];
+    renderSpy.mock.calls.at(-1)[0].traverse(mesh => {
+      if (mesh.isMesh && mesh.userData?.type === 'region' && mesh.material?.[0]?.isMeshStandardMaterial) meshes.push(mesh);
+    });
+    expect(meshes.find(mesh => String(mesh.userData.code) === '610100').material[0].color.getHexString())
+      .toBe(provinceCityColor('610100').slice(1));
+    expect(meshes.find(mesh => String(mesh.userData.code) === '610300').material[0].color.getHexString())
+      .toBe(provinceCityColor('610300').slice(1));
+    expect(wrapper.attributes('data-color-by-city')).toBe('true');
+    const before = meshes.map(mesh => mesh.material[0].color.getHexString());
+    await wrapper.get('[aria-label="选择西安市"]').trigger('pointerenter');
+    expect(meshes.find(mesh => String(mesh.userData.code) === '610100').material[0].color.getHexString())
+      .not.toBe(before[meshes.findIndex(mesh => String(mesh.userData.code) === '610100')]);
+    expect(meshes.find(mesh => String(mesh.userData.code) === '610300').material[0].color.getHexString())
+      .toBe(before[meshes.findIndex(mesh => String(mesh.userData.code) === '610300')]);
+    await wrapper.get('[aria-label="选择西安市"]').trigger('pointerleave');
+    expect(meshes.find(mesh => String(mesh.userData.code) === '610100').material[0].color.getHexString())
+      .toBe(before[meshes.findIndex(mesh => String(mesh.userData.code) === '610100')]);
+    wrapper.unmount();
+    vi.unstubAllGlobals();
   });
   it('synchronizes lights when appearance changes on an existing component', async () => {
     vi.stubGlobal('WebGL2RenderingContext', function() {});

@@ -273,6 +273,7 @@
             :metric-numeric-values="{}"
             :metric-colors="provinceMapInstitutionState.metricColors"
             :region-states="provinceMapInstitutionState.regionStates"
+            :color-by-city="true"
             :show-region-metrics="false"
             :show-province-points="false"
             :city-details="provinceMapInstitutionDetails"

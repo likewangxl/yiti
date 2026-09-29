@@ -45,7 +45,7 @@ const mapStub = {
   name: 'PanoramaMap',
   props: [
     'geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'metricColors', 'regionStates',
-    'cityDetails', 'cityDetailMode', 'labelLayout', 'pointLabelLayout', 'showRegionMetrics',
+    'cityDetails', 'cityDetailMode', 'colorByCity', 'labelLayout', 'pointLabelLayout', 'showRegionMetrics',
     'showProvincePointLabels', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints', 'viewFit'
   ],
   emits: ['region-select', 'branch-select'],
@@ -80,10 +80,11 @@ describe('PresentationMapWidget legacy branch institution view', () => {
     expect(map.props('showProvincePoints')).toBe(false);
     expect(map.props('showProvincePointLabels')).toBe(false);
     expect(map.props('cityDetailMode')).toBe('institutions');
+    expect(map.props('colorByCity')).toBe(true);
     expect(map.props('regionStates')).toMatchObject({ '610100': 'HAS_INSTITUTION', '610600': 'NO_INSTITUTION' });
     expect(map.props('metricColors')['610100']).toBe('#3d78ba');
     expect(map.props('metricColors')['610600']).toBe('#65738a');
-    expect(wrapper.get('[data-testid="presentation-map-legend-no-institution"] i').attributes('style')).toContain('#65738a');
+    expect(wrapper.get('[data-testid="presentation-map-legend-city-palette"]').text()).toBe('地市分区');
     expect(map.props('cityDetails')['610100'].institutions.map(item => item.orgName)).toEqual(['甲机构', '待定位机构']);
     wrapper.unmount();
 
