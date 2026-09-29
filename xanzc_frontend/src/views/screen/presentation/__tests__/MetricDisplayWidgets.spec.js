@@ -380,4 +380,29 @@ describe('MetricDisplayWidgets', () => {
     const published = mount(MetricDisplayWidgets, { props: { grouped: true, draftOverview: false, components: [component] } });
     expect(published.get('[data-testid="presentation-metric-comparisons"]').text()).toContain('较上月 +2.40个百分点');
   });
+
+  it('draft 六张金额卡的主值都属于标题行，并保留标题左/金额右的对齐 class', () => {
+    const amountIds = [
+      'business-retail-deposit-balance', 'business-corp-deposit-balance',
+      'business-retail-loan-balance', 'business-corp-loan-balance',
+      'business-revenue-operating', 'business-revenue-fee'
+    ];
+    const wrapper = mount(MetricDisplayWidgets, {
+      props: {
+        grouped: true,
+        draftOverview: true,
+        components: amountIds.map((componentId, order) => ({
+          componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order,
+          title: componentId, text: `${order + 1}.00亿元`, value: order + 1, state: 'READY', subFields: []
+        }))
+      }
+    });
+
+    for (const componentId of amountIds) {
+      const card = wrapper.get(`[data-component-id="${componentId}"]`);
+      expect(card.find('.presentation-metric-widget__header-title-line [data-testid="presentation-metric-value"]').exists()).toBe(true);
+      expect(card.find('.presentation-metric-widget__header-value--right').exists()).toBe(true);
+      expect(card.find('.presentation-metric-widget__value-line > [data-testid="presentation-metric-value"]').exists()).toBe(false);
+    }
+  });
 });

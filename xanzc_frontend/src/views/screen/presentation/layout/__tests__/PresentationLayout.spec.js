@@ -309,8 +309,11 @@ describe('PresentationLayout', () => {
     const summary = wrapper.get('[data-testid="draft-overview-summary"]');
     expect(summary.findAll('[data-testid="draft-overview-summary-card"]').map(node => node.attributes('data-summary-key')))
       .toEqual(['deposit', 'deposit-composition', 'loan', 'loan-composition']);
+    expect(summary.findAll('[data-testid="draft-overview-card-icon"]').map(node => node.attributes('data-icon')))
+      .toEqual(['deposit', 'deposit-composition', 'loan', 'loan-composition']);
     const reserved = summary.get('[data-testid="draft-overview-reserved-slot"]');
     expect(reserved.text()).toBe('');
+    expect(reserved.find('[data-testid="draft-overview-card-icon"]').exists()).toBe(false);
     expect(reserved.attributes('aria-hidden')).toBe('true');
     expect(summary.findAll('[data-testid="draft-overview-summary-card"]')).toHaveLength(4);
     expect(wrapper.find('[data-layout-mode="grouped"] [data-layout-group="RETAIL"]').exists()).toBe(true);

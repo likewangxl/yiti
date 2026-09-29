@@ -31,7 +31,7 @@
           <div>
             <div v-if="isDraftGroupedAmount(item)" class="presentation-metric-widget__header-title-line">
               <h2>{{ item.title || '—' }}</h2>
-              <strong class="presentation-metric-widget__value presentation-metric-widget__header-value" data-testid="presentation-metric-value">{{ item.text }}</strong>
+              <strong class="presentation-metric-widget__value presentation-metric-widget__header-value presentation-metric-widget__header-value--right" data-testid="presentation-metric-value">{{ item.text }}</strong>
             </div>
             <h2 v-else>{{ item.title || '—' }}</h2>
             <p v-if="item.subtitle">{{ item.subtitle }}</p>
@@ -261,6 +261,7 @@ function comparisonRows(item) {
 .presentation-metric-widget__header-title-line { display: flex; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: 3px 8px; }
 .presentation-metric-widget__header-title-line h2 { min-width: 0; max-width: 100%; flex: 0 0 auto; }
 .presentation-metric-widget__header-value { display: inline; min-width: 0; max-width: 100%; flex: 0 1 auto; overflow-wrap: anywhere; white-space: normal; }
+.presentation-metric-widget__header-value--right { margin-left: auto; text-align: right; }
 .presentation-metric-widget__header h2 { margin: 0; overflow: hidden; color: var(--panorama-text, #eaf2ff); font-size: 13px; font-weight: 600; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .presentation-metric-widget--grouped .presentation-metric-widget__header h2 { max-width: 100%; overflow: visible; text-overflow: clip; }
 .presentation-metric-widget__header p,.presentation-metric-widget__header small,.presentation-metric-widget__description { margin: 3px 0 0; overflow: hidden; color: var(--panorama-text-dim, #8fa9db); font-size: 10px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }

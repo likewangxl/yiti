@@ -21,22 +21,31 @@
         :data-summary-key="card.key"
         :data-summary-kind="card.kind || 'TOTAL'"
       >
-        <div v-if="card.kind === 'COMPOSITION'" class="presentation-layout__overview-summary-composition" data-testid="draft-overview-composition">
-          <CompositionTabsWidget
-            :model="card.model"
-            :ring-keys="[card.ringKey]"
-            :compact="true"
-            :show-total-caption="false"
-            @business-line-select="onBusinessLineSelect"
-          />
-        </div>
-        <template v-else>
-          <div class="presentation-layout__overview-summary-card-heading">
-            <span>{{ card.label }}</span>
-            <strong>{{ card.text }}</strong>
+        <div
+          v-if="draftOverviewEnabled && overviewCardIcon(card)"
+          class="presentation-layout__overview-summary-card-icon"
+          data-testid="draft-overview-card-icon"
+          :data-icon="card.key"
+          aria-hidden="true"
+        ><component :is="overviewCardIcon(card)" /></div>
+        <div class="presentation-layout__overview-summary-card-content">
+          <div v-if="card.kind === 'COMPOSITION'" class="presentation-layout__overview-summary-composition" data-testid="draft-overview-composition">
+            <CompositionTabsWidget
+              :model="card.model"
+              :ring-keys="[card.ringKey]"
+              :compact="true"
+              :show-total-caption="false"
+              @business-line-select="onBusinessLineSelect"
+            />
           </div>
-          <OverviewBalanceChart :metric="card.metric" :display-unit="overviewSummary.displayUnit" />
-        </template>
+          <template v-else>
+            <div class="presentation-layout__overview-summary-card-heading">
+              <span>{{ card.label }}</span>
+              <strong>{{ card.text }}</strong>
+            </div>
+            <OverviewBalanceChart :metric="card.metric" :display-unit="overviewSummary.displayUnit" />
+          </template>
+        </div>
       </article>
       <div
         v-if="draftOverviewEnabled"
@@ -265,6 +274,7 @@
 
 <script setup>
 import { computed } from 'vue';
+import { Coin, DataAnalysis, PieChart, Wallet } from '@element-plus/icons-vue';
 
 import MetricDisplayWidgets from '../widgets/MetricDisplayWidgets.vue';
 import RevenueShareWidget from '../widgets/RevenueShareWidget.vue';
@@ -318,6 +328,17 @@ const HEADER_GROUP_DEFINITIONS = Object.freeze([
   { key: 'CORP', prefix: 'business-corp-', label: '对公业务' },
   { key: 'REVENUE', prefix: 'business-revenue-', label: '营业收入' }
 ]);
+
+const OVERVIEW_CARD_ICONS = Object.freeze({
+  deposit: Wallet,
+  'deposit-composition': PieChart,
+  loan: Coin,
+  'loan-composition': DataAnalysis,
+});
+
+function overviewCardIcon(card) {
+  return OVERVIEW_CARD_ICONS[card?.key] || null;
+}
 
 function headerGroupFor(component) {
   const componentId = String(component?.componentId || '');
@@ -1309,6 +1330,109 @@ function onMapContext(payload) {
 .presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widgets .presentation-metric-widget.presentation-metric-widget--grouped[data-component-type] .presentation-metric-widget__comparisons) {
   font-size: var(--draft-caption-size);
   line-height: 1.35;
+}
+
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widgets .presentation-metric-widget.presentation-metric-widget--grouped[data-component-type] .presentation-metric-widget__header > div) {
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card {
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr);
+  align-items: flex-start;
+  align-content: start;
+  column-gap: var(--draft-layout-gap);
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card-icon {
+  display: flex;
+  width: 25px;
+  height: 25px;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid var(--presentation-border);
+  border-radius: 50%;
+  color: var(--overview-icon-accent, var(--presentation-cyan));
+  background: var(--overview-icon-background, rgba(55, 115, 205, .2));
+  font-size: 17px;
+  line-height: 1;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card-icon[data-icon="deposit"] {
+  --overview-icon-accent: var(--presentation-cyan);
+  --overview-icon-background: rgba(55, 115, 205, .2);
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card-icon[data-icon="deposit-composition"] {
+  --overview-icon-accent: var(--presentation-violet);
+  --overview-icon-background: rgba(19, 24, 74, .55);
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card-icon[data-icon="loan"] {
+  --overview-icon-accent: var(--presentation-blue);
+  --overview-icon-background: rgba(8, 27, 72, .55);
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card-icon[data-icon="loan-composition"] {
+  --overview-icon-accent: #58e4b5;
+  --overview-icon-background: rgba(7, 39, 61, .55);
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card-content {
+  display: grid;
+  min-width: 0;
+  width: 100%;
+  align-content: start;
+  gap: var(--draft-layout-gap);
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card-heading {
+  width: 100%;
+  align-items: baseline;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: var(--draft-layout-gap);
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card-heading span {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card-heading strong {
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
+  flex: 0 1 auto;
+  overflow: visible;
+  text-align: right;
+  text-overflow: clip;
+  white-space: normal;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition {
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr);
+  align-items: flex-start;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition .presentation-layout__overview-summary-composition {
+  width: 100%;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition :deep(.composition-tabs-widget--compact .composition-ring-card) {
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition :deep(.composition-tabs-widget--compact .composition-ring) {
+  width: 76px;
+  height: 76px;
+}
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widget) {
+  gap: var(--draft-layout-gap);
+}
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widgets .presentation-metric-widget.presentation-metric-widget--grouped[data-component-type] .presentation-metric-widget__header-title-line) {
+  width: 100%;
+  flex-wrap: wrap;
+  gap: var(--draft-layout-gap);
+}
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widgets .presentation-metric-widget.presentation-metric-widget--grouped[data-component-type] .presentation-metric-widget__header-title-line h2) {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widgets .presentation-metric-widget.presentation-metric-widget--grouped[data-component-type] .presentation-metric-widget__header-value--right) {
+  margin-left: auto;
+  text-align: right;
+  white-space: normal;
 }
 
 /* 标题下方垂直居中，围绕完成率的原水平中心放大业务分布圆环。 */
