@@ -4,7 +4,7 @@ import { mount } from '@vue/test-utils';
 
 vi.mock('../PanoramaDashboard.vue', () => ({ default: {
   name: 'PanoramaDashboard',
-  props: ['model', 'sourcePresentation', 'showConfigure'],
+  props: ['model', 'sourcePresentation', 'showConfigure', 'draftOverview'],
   template: '<main data-testid="panorama-dashboard"><slot name="header-context" /><slot name="branch-map" /><slot name="branch-ranking" /></main>'
 } }));
 
@@ -28,6 +28,7 @@ describe('BranchOperatingOverview', () => {
 
     const dashboard = wrapper.getComponent({ name: 'PanoramaDashboard' });
     expect(dashboard.props('showConfigure')).toBe(false);
+    expect(dashboard.props('draftOverview')).toBe(true);
     expect(dashboard.props('model')).toMatchObject({ title: '延兴门西路支行', scopeLabel: '延兴门西路支行' });
     expect(wrapper.get('[data-testid="branch-incomplete-chart"]').exists()).toBe(true);
     expect(wrapper.get('[data-testid="branch-performance-panel"]').exists()).toBe(true);

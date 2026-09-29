@@ -5,6 +5,7 @@
     :loading="loading"
     :error="error"
     :demo="demo"
+    :draft-overview="true"
     :show-configure="false"
     @refresh="emit('refresh')"
     @back="emit('back')"

@@ -3,12 +3,23 @@ import { buildDisplayMetricsModel } from '../../presentation/model/displayMetric
 import { buildBranchOverviewPresentation } from '../branchOverviewPresentation.js';
 
 describe('branchOverviewPresentation', () => {
-  it('无配置时提供新版分组、中心和右侧占位，并优先读取模型单位', () => {
+  it('无配置时提供完整十项分组顶栏、存贷款构成和中心/右侧占位，并优先读取模型单位', () => {
     const presentation = buildBranchOverviewPresentation(null);
     const components = presentation.display.components;
-    expect(components.filter(item => item.layoutRegion === 'HEADER').map(item => item.componentId)).toEqual(expect.arrayContaining([
-      'business-retail-deposit-balance', 'business-corp-deposit-balance', 'business-revenue-operating'
-    ]));
+    const header = components.filter(item => item.layoutRegion === 'HEADER');
+    expect(header).toHaveLength(10);
+    expect(header.map(item => item.componentId)).toEqual([
+      'business-retail-deposit-balance', 'business-retail-deposit-rate',
+      'business-retail-loan-balance', 'business-retail-loan-rate',
+      'business-corp-deposit-balance', 'business-corp-deposit-rate',
+      'business-corp-loan-balance', 'business-corp-loan-rate',
+      'business-revenue-operating', 'business-revenue-fee'
+    ]);
+    expect(header.filter(item => item.componentId.endsWith('-rate')).every(item => item.componentType === 'COMPLETION')).toBe(true);
+    const composition = components.find(item => item.componentType === 'COMPOSITION_TABS' && item.layoutRegion === 'LEFT');
+    expect(composition).toMatchObject({ componentId: 'branch-composition' });
+    expect(composition.content.tabs.map(item => item.tabKey)).toEqual(['deposit', 'loan']);
+    expect(components.filter(item => item.componentType === 'DETAIL_TABLE')).toHaveLength(0);
     expect(components.find(item => item.componentType === 'MAP' && item.layoutRegion === 'CENTER')).toBeTruthy();
     expect(components.find(item => item.componentType === 'RANKING' && item.layoutRegion === 'RIGHT')).toBeTruthy();
     const metrics = buildDisplayMetricsModel(presentation, { kpis: [{ key: 'corpDeposit', value: 18000, unit: '万元' }] });
