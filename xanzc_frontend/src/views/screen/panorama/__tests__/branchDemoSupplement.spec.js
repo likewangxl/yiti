@@ -175,6 +175,89 @@ function model() {
 }
 
 describe('supplementBranchDemoModel', () => {
+  it('为允许的全辖 TEST 草稿补齐结算性存款 KPI、UTC 基期日期和固定比较差值', () => {
+    const source = model();
+    const before = structuredClone(source);
+    const result = supplementBranchDemoModel(source, presentation());
+    const settlement = result.model.kpis.find(item => item.key === 'settlementDeposit');
+
+    expect(source).toEqual(before);
+    expect(result.model).not.toBe(source);
+    expect(result.fields).toContain('settlementDeposit');
+    expect(settlement).toEqual({
+      key: 'settlementDeposit',
+      label: '结算性存款',
+      status: '演示数据',
+      isDemo: true,
+      value: 803456700,
+      unit: 'YUAN',
+      dataDate: '2026-09-21',
+      comparisons: {
+        day: { value: 1255000, unit: 'YUAN', referenceDate: '2026-09-20' },
+        month: { value: -3456700, unit: 'YUAN', referenceDate: '2026-08-31' },
+        year: { value: 103456700, unit: 'YUAN', referenceDate: '2025-12-31' }
+      }
+    });
+  });
+
+  it('使用 UTC 日期计算闰年昨日、上月末和上年末基期', () => {
+    const source = model();
+    source.dataDate = '2024-03-01';
+    const result = supplementBranchDemoModel(source, presentation());
+    const settlement = result.model.kpis.find(item => item.key === 'settlementDeposit');
+
+    expect(settlement).toMatchObject({
+      dataDate: '2024-03-01',
+      comparisons: {
+        day: { referenceDate: '2024-02-29' },
+        month: { referenceDate: '2024-02-29' },
+        year: { referenceDate: '2023-12-31' }
+      }
+    });
+  });
+
+  it.each([
+    ['zero', { value: 0, unit: 'YUAN' }],
+    ['null', { value: null, unit: 'YUAN' }],
+    ['illegal fields', { value: 'invalid', unit: '%', extra: 'keep-me' }]
+  ])('已有 settlementDeposit (%s) 完整保留且不补 comparisons', (_name, existing) => {
+    const source = model();
+    source.kpis = [{ key: 'settlementDeposit', label: '已有结算指标', ...existing }];
+    const before = structuredClone(source);
+    const result = supplementBranchDemoModel(source, presentation());
+
+    expect(source).toEqual(before);
+    expect(result.model.kpis).toEqual(before.kpis);
+    expect(result.model.kpis).toHaveLength(1);
+    expect(result.model.kpis[0]).not.toHaveProperty('comparisons');
+    expect(result.fields).not.toContain('settlementDeposit');
+  });
+
+  it('无效日期、缺少 blockResults 或非允许上下文时不补结算 KPI', () => {
+    const invalidDate = model();
+    invalidDate.dataDate = '2026-02-30';
+    const invalidDateResult = supplementBranchDemoModel(invalidDate, presentation());
+    expect(Boolean(invalidDateResult.model.kpis?.some(item => item.key === 'settlementDeposit'))).toBe(false);
+
+    const missingBlocks = model();
+    delete missingBlocks.blockResults;
+    const missingBlocksResult = supplementBranchDemoModel(missingBlocks, presentation());
+    expect(missingBlocksResult).toEqual({ model: missingBlocks, fields: [] });
+
+    const scopedResult = supplementBranchDemoModel(model(), presentation({ orgCode: 'ORG-1' }));
+    expect(Boolean(scopedResult.model.kpis?.some(item => item.key === 'settlementDeposit'))).toBe(false);
+  });
+
+  it('重复执行不增加第二个结算 KPI，也不覆盖第一次结果', () => {
+    const first = supplementBranchDemoModel(model(), presentation());
+    const beforeSecond = structuredClone(first.model);
+    const second = supplementBranchDemoModel(first.model, presentation());
+
+    expect(second).toEqual({ model: first.model, fields: [] });
+    expect(second.model).toEqual(beforeSecond);
+    expect(second.model.kpis.filter(item => item.key === 'settlementDeposit')).toHaveLength(1);
+  });
+
   it('只在分行 TEST 草稿全辖上下文补齐配置字段、结构和历史，并保持单位与月比较可用', () => {
     const source = model();
     const before = structuredClone(source);

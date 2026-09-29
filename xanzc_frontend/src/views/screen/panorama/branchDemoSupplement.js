@@ -26,6 +26,14 @@ const TREND_FIELDS = Object.freeze([
   '测试_直营对公存款', '测试_直营对公贷款'
 ]);
 
+// 结算性存款是 TEST 视觉演示样本，独立于其他存款指标，不从现有字段推算。
+const SETTLEMENT_DEPOSIT_VALUE = 803456700;
+const SETTLEMENT_DEPOSIT_BASES = Object.freeze({
+  day: 802201700,
+  month: 806913400,
+  year: 700000000
+});
+
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -80,6 +88,72 @@ function rowsOf(block) {
 
 function dateOf(row) {
   return text(row?.date ?? row?.data_date ?? row?.dataDate);
+}
+
+function parseUtcDate(value) {
+  const date = text(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const [year, month, day] = date.split('-').map(Number);
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const parsed = new Date(0);
+  parsed.setUTCHours(0, 0, 0, 0);
+  parsed.setUTCFullYear(year, month - 1, day);
+  return parsed.getUTCFullYear() === year
+    && parsed.getUTCMonth() === month - 1
+    && parsed.getUTCDate() === day
+    ? parsed : null;
+}
+
+function isoDate(date) {
+  return [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()]
+    .map((part, index) => String(part).padStart(index === 0 ? 4 : 2, '0')).join('-');
+}
+
+function previousDay(value) {
+  const date = parseUtcDate(value);
+  if (!date) return '';
+  date.setUTCDate(date.getUTCDate() - 1);
+  return isoDate(date);
+}
+
+function previousMonthEnd(value) {
+  const date = parseUtcDate(value);
+  if (!date) return '';
+  date.setUTCDate(0);
+  return isoDate(date);
+}
+
+function previousYearEnd(value) {
+  const date = parseUtcDate(value);
+  if (!date) return '';
+  date.setUTCFullYear(date.getUTCFullYear() - 1, 11, 31);
+  return isoDate(date);
+}
+
+function settlementKpi(dataDate) {
+  return {
+    key: 'settlementDeposit',
+    label: '结算性存款',
+    status: '演示数据',
+    isDemo: true,
+    value: SETTLEMENT_DEPOSIT_VALUE,
+    unit: 'YUAN',
+    dataDate,
+    comparisons: {
+      day: { value: SETTLEMENT_DEPOSIT_VALUE - SETTLEMENT_DEPOSIT_BASES.day, unit: 'YUAN', referenceDate: previousDay(dataDate) },
+      month: { value: SETTLEMENT_DEPOSIT_VALUE - SETTLEMENT_DEPOSIT_BASES.month, unit: 'YUAN', referenceDate: previousMonthEnd(dataDate) },
+      year: { value: SETTLEMENT_DEPOSIT_VALUE - SETTLEMENT_DEPOSIT_BASES.year, unit: 'YUAN', referenceDate: previousYearEnd(dataDate) }
+    }
+  };
+}
+
+function supplementSettlementKpi(model, dataDate, fields) {
+  const kpis = Array.isArray(model?.kpis) ? model.kpis : [];
+  if (kpis.some(item => text(item?.key) === 'settlementDeposit') || !parseUtcDate(dataDate)) {
+    return { kpis: model?.kpis, changed: false };
+  }
+  fields.add('settlementDeposit');
+  return { kpis: [...kpis, settlementKpi(dataDate)], changed: true };
 }
 
 function currentValue(block, field, dataDate = '') {
@@ -251,6 +325,7 @@ export function supplementBranchDemoModel(model, sourcePresentation) {
   if (!allowed(source, presentation, model) || !isObject(model?.blockResults)) return { model, fields: [] };
 
   const fields = new Set();
+  const settlement = supplementSettlementKpi(model, model.dataDate, fields);
   const nextBlocks = { ...model.blockResults };
   const headers = configuredHeaders(presentation);
   const headerEntry = blockEntry(model, HEADER_BLOCK);
@@ -286,6 +361,10 @@ export function supplementBranchDemoModel(model, sourcePresentation) {
     if (supplementTrend(nextTrend, trendHeader, headers, text(model.dataDate), fields)) nextBlocks[trendEntry.key] = nextTrend;
   }
 
-  const changed = Object.keys(nextBlocks).some(key => nextBlocks[key] !== model.blockResults[key]);
-  return changed ? { model: { ...model, blockResults: nextBlocks }, fields: [...fields] } : { model, fields: [] };
+  const changed = settlement.changed
+    || Object.keys(nextBlocks).some(key => nextBlocks[key] !== model.blockResults[key]);
+  if (!changed) return { model, fields: [] };
+  const nextModel = { ...model, blockResults: nextBlocks };
+  if (settlement.changed) nextModel.kpis = settlement.kpis;
+  return { model: nextModel, fields: [...fields] };
 }
