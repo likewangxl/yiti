@@ -80,7 +80,7 @@ describe('CityPanorama 市级支行全景', () => {
     expect(wrapper.text()).not.toContain('NaN');
     expect(wrapper.findAll('[data-testid="branch-row"]')).toHaveLength(5);
     expect(wrapper.find('[data-testid="branch-missing-coordinates"]').text()).toContain('无坐标');
-    expect(wrapper.findAll('[data-testid="branch-row"]').some(row => row.text().includes('—'))).toBe(true);
+    expect(wrapper.get('[data-testid="city-branch-ranking-missing"]').text()).toContain('暂无该指标有效数据');
   });
 
   it('下钻标题只展示业务标题，剥离末尾测试修饰且不出现领导视图文案', () => {
@@ -89,7 +89,7 @@ describe('CityPanorama 市级支行全景', () => {
     expect(wrapper.text()).not.toContain('领导视图');
   });
 
-  it('支持搜索、经营关注筛选、按存款排序和五条分页', async () => {
+  it('支持搜索、经营关注筛选、六指标切换和五条分页', async () => {
     const wrapper = mountCity();
     await wrapper.get('[data-testid="branch-search"]').setValue('高新');
     expect(wrapper.findAll('[data-testid="branch-row"]')).toHaveLength(1);
@@ -101,9 +101,8 @@ describe('CityPanorama 市级支行全景', () => {
     expect(wrapper.find('[data-testid="branch-row"]').text()).toContain('高新科技路支行');
 
     await wrapper.get('[data-testid="attention-filter"]').trigger('click');
-    await wrapper.get('[data-testid="deposit-sort"]').trigger('click');
-    const rows = wrapper.findAll('[data-testid="branch-row"]');
-    expect(rows[0].text()).not.toContain('高新科技路支行');
+    await wrapper.get('[data-testid="city-branch-ranking-tab"][data-tab-key="corpLoanRate"]').trigger('click');
+    expect(wrapper.get('[data-testid="city-branch-ranking-tab"][data-tab-key="corpLoanRate"]').attributes('aria-selected')).toBe('true');
     expect(wrapper.find('[data-testid="branch-page-next"]').exists()).toBe(true);
   });
 
@@ -169,15 +168,8 @@ describe('CityPanorama 市级支行全景', () => {
       }
     };
     const wrapper = mountCity({ model: cityModel });
-    const summary = wrapper.get('[data-testid="city-leadership-diagnostics"]');
-    const before = summary.text();
-    expect(before).toContain('已完成目标0家');
-    expect(before).toContain('未完成目标6家');
-    expect(before).toContain('未提供1家');
-    expect(before).toContain('距目标还差9个百分点');
-    expect(before).not.toContain('同城展示观察');
+    expect(wrapper.find('[data-testid="city-leadership-diagnostics"]').exists()).toBe(false);
     await wrapper.get('[data-testid="branch-row"]').trigger('click');
-    expect(summary.text()).toBe(before);
     expect(wrapper.get('[data-testid="branch-observation"]').text()).toContain('存款余额位次');
   });
 
@@ -193,7 +185,7 @@ describe('CityPanorama 市级支行全景', () => {
       }
     });
     expect(wrapper.get('[data-testid="branch-search"]').element.value).toBe('测试支行');
-    expect(wrapper.get('[data-testid="deposit-sort"]').text()).toContain('↑');
+    expect(wrapper.findAll('[data-testid="city-branch-ranking-tab"]')).toHaveLength(6);
     expect(wrapper.get('[data-testid="branch-page-prev"]').element.disabled).toBe(false);
     expect(wrapper.get('[data-testid="selected-org-code"]').text()).toContain('ORG-6');
     expect(wrapper.get('[data-testid="branch-detail"]').attributes('aria-expanded')).toBe('false');

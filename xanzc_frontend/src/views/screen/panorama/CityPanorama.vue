@@ -40,19 +40,6 @@
       </article>
     </section>
     <div v-if="!cityOperatingHeaderEnabled && summaryUnbound" class="city-summary-unbound" data-testid="city-summary-unbound">市级汇总未绑定，无法据下级机构加总</div>
-    <section class="city-leadership-strip" data-testid="city-leadership-diagnostics" aria-label="市级经营诊断">
-      <article class="city-leadership-card">
-        <span>机构目标完成情况</span>
-        <strong :class="cityInsightStateClass(cityTargetStatusState)">{{ cityTargetStatusText }}</strong>
-        <small v-if="cityTargetStatus.hasData">目标完成率达到100%视为完成</small>
-        <small v-else>暂无目标完成率数据</small>
-      </article>
-      <article class="city-leadership-card">
-        <span>目标进度</span>
-        <strong :class="cityInsightStateClass(cityTargetDistance.state)">{{ cityTargetDistance.state === 'unknown' ? cityStatus('citySummary', 'rate').message : cityTargetDistance.text }}</strong>
-        <small>本市整体目标完成进度</small>
-      </article>
-    </section>
     <span class="panorama-visually-hidden" data-testid="selected-org-code">{{ selectedOrgCode }}</span>
 
     <section class="city-workspace">
@@ -106,24 +93,19 @@
       </article>
 
       <article class="panorama-panel city-list-panel">
-        <div class="panorama-panel-heading"><h2>支行多指标对比 <small>{{ filteredInstitutions.length }} 家</small></h2><button type="button" data-testid="deposit-sort" class="city-sort-button" @click="toggleSort">按存款余额 {{ sortDescending ? '↓' : '↑' }}</button></div>
-        <div class="city-search-wrap"><label for="city-branch-search">搜索支行名称</label><input id="city-branch-search" data-testid="branch-search" v-model="search" type="search" placeholder="搜索支行名称" /></div>
-        <div class="city-branch-columns" aria-hidden="true"><span>#</span><span>支行</span><span>存款</span><span>贷款</span><span>客户</span><span>完成率</span></div>
-        <div v-if="pagedInstitutions.length" class="city-branch-list">
-          <button v-for="(branch, index) in pagedInstitutions" :key="branch.orgCode" type="button" class="city-branch-row" data-testid="branch-row" :class="{ selected: selectedOrgCode === branch.orgCode }" @click="selectBranch(branch.orgCode)">
-            <span class="city-branch-rank">{{ (page - 1) * pageSize + index + 1 }}</span>
-            <span class="city-branch-name">{{ branch.orgName || branch.orgCode || '—' }}</span>
-            <strong>{{ formatMetric(branch.metrics?.deposit) }}</strong>
-            <span class="city-branch-loan">{{ formatMetric(branch.metrics?.loan) }}</span>
-            <span class="city-branch-customers" :title="!hasMetric(branch.metrics?.customers) ? cityStatus('branches', 'customers').message : ''">{{ formatMetric(branch.metrics?.customers) }}<small v-if="!hasMetric(branch.metrics?.customers)" class="city-inline-status">源数据缺失</small></span>
-            <span :class="rateClass(branch.metrics?.rate)" :title="!hasMetric(branch.metrics?.rate) ? cityStatus('branches', 'rate').message : ''">{{ formatPercent(branch.metrics?.rate) }}<small v-if="!hasMetric(branch.metrics?.rate)" class="city-inline-status">源数据缺失</small></span>
-          </button>
-        </div>
-        <div v-else class="panorama-empty">暂无匹配支行</div>
+        <CityBranchRanking
+          :model="cityBranchRankingModel"
+          :search="search"
+          :page="page"
+          :page-size="pageSize"
+          @search-change="search = $event"
+          @page-change="page = $event"
+          @tab-change="selectRankingTab"
+          @branch-select="selectBranch"
+        />
         <div v-if="missingCoordinates.length" class="city-missing-coordinates" data-testid="branch-missing-coordinates">
           无坐标 {{ missingCoordinates.length }} 家：{{ missingCoordinates.map(item => item.orgName || item.orgCode).join('、') }}
         </div>
-        <div class="city-pagination"><button type="button" data-testid="branch-page-prev" :disabled="page <= 1" @click="page -= 1">‹</button><span>{{ page }} / {{ totalPages }}</span><button type="button" data-testid="branch-page-next" :disabled="page >= totalPages" @click="page += 1">›</button></div>
       </article>
       <section v-if="selectedBranch" class="panorama-panel city-detail-panel" data-testid="branch-detail" :aria-expanded="String(detailExpanded)">
         <div class="city-detail-heading">
@@ -164,18 +146,15 @@ import PresentationMapWidget from '../presentation/map/PresentationMapWidget.vue
 import { findVisibleMapComponent } from '../presentation/map/mapModel';
 import PanoramaTrend from './PanoramaTrend.vue';
 import CityOperatingHeader from './CityOperatingHeader.vue';
+import CityBranchRanking from './CityBranchRanking.vue';
 import { cityGeoByCode } from './geography.js';
 import { buildCityDistrictMapState } from './cityDistrictMapModel.js';
-import {
-  buildCityInsights,
-  coverageLabel,
-  summarizeCityTargetStatus,
-  summarizeTargetDistance
-} from './leadershipInsights.js';
+import { buildCityInsights } from './leadershipInsights.js';
 import { resolveDataStatus } from './sourcePresentation';
 import { stripTestModifier } from './targetPresentation.js';
 import { buildNavigationQuery, parseNavigationQuery } from '../presentation/navigation/navigationModel';
 import { isCityOperatingHeaderEnabled } from './cityOperatingHeaderModel.js';
+import { buildCityBranchRankingModel } from './cityBranchRankingModel.js';
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -202,6 +181,7 @@ const attentionOnly = ref(Boolean(initialState.attentionOnly));
 const sortDescending = ref(initialState.sortDescending === undefined ? true : Boolean(initialState.sortDescending));
 const page = ref(Math.max(1, Number(initialState.page) || 1));
 const pageSize = 5;
+const rankingTabKey = ref(String(initialState.rankingTabKey || 'retailDepositRate'));
 const selectedOrgCode = ref(props.initialOrgCode || String(initialState.selectedOrgCode || ''));
 const detailExpanded = ref(initialState.detailExpanded === undefined ? true : Boolean(initialState.detailExpanded));
 const cityAmountUnit = ref('TEN_THOUSAND');
@@ -219,7 +199,8 @@ function navigationStateSnapshot() {
     sortDescending: sortDescending.value,
     page: page.value,
     selectedOrgCode: selectedOrgCode.value,
-    detailExpanded: detailExpanded.value
+    detailExpanded: detailExpanded.value,
+    rankingTabKey: rankingTabKey.value
   };
 }
 
@@ -323,26 +304,25 @@ const filteredInstitutions = computed(() => {
     return sortDescending.value ? right - left : left - right;
   });
 });
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredInstitutions.value.length / pageSize)));
-const pagedInstitutions = computed(() => filteredInstitutions.value.slice((page.value - 1) * pageSize, page.value * pageSize));
 // 地图跟随当前搜索与经营关注筛选展示全部匹配机构，分页只限制右侧列表。
 const mapInstitutions = computed(() => filteredInstitutions.value);
+const cityBranchRankingModel = computed(() => buildCityBranchRankingModel({
+  cityCode: props.cityCode,
+  institutions: filteredInstitutions.value,
+  sourcePresentation: props.sourcePresentation,
+  blockResults: safeModel.value.blockResults,
+  activeTabKey: rankingTabKey.value
+}));
+const rankingTotalPages = computed(() => {
+  const count = cityBranchRankingModel.value.rows.length || cityBranchRankingModel.value.missingRows.length;
+  return Math.max(1, Math.ceil(count / pageSize));
+});
 const selectedBranch = computed(() => cityInstitutions.value.find(item => item.orgCode === selectedOrgCode.value) || null);
 const cityInsights = computed(() => buildCityInsights({
   cityCode: props.cityCode,
   citySummary: citySummary.value,
   institutions: safeModel.value.institutions
 }));
-const cityTargetStatus = computed(() => summarizeCityTargetStatus(cityInsights.value));
-const cityTargetStatusText = computed(() => cityTargetStatus.value.hasData
-  ? [cityTargetStatus.value.achievedText, cityTargetStatus.value.belowText, cityTargetStatus.value.unknownText].filter(Boolean).join(' / ')
-  : cityStatus('citySummary', 'rate').message);
-const cityTargetStatusState = computed(() => {
-  if (!cityTargetStatus.value.hasData) return 'unknown';
-  if (cityInsights.value.statusCounts.below > 0) return 'below';
-  return cityInsights.value.statusCounts.unknown > 0 ? 'neutral' : 'achieved';
-});
-const cityTargetDistance = computed(() => summarizeTargetDistance(cityInsights.value.diagnostics.targetRate));
 const selectedBranchInsight = computed(() => cityInsights.value.selected(selectedOrgCode.value));
 
 function finiteValue(value) {
@@ -406,9 +386,6 @@ function signedClass(value) {
 function trendClass(state) {
   return state === '连续下降' || state === '最新回落' ? 'is-down' : state === '最新回升' ? 'is-up' : 'is-muted';
 }
-function cityInsightStateClass(state) {
-  return ({ achieved: 'is-up', above: 'is-up', below: 'is-down', down: 'is-down', unknown: 'is-muted' })[state] || 'is-muted';
-}
 function formatChange(value) {
   return finiteValue(value);
 }
@@ -418,13 +395,6 @@ function hasMetric(value) {
 function changeClass(value) {
   const number = finiteValue(value);
   return number !== null && number < 0 ? 'is-down' : 'is-up';
-}
-function rateClass(value) {
-  const number = finiteValue(value);
-  return number !== null && number < 80 ? 'is-warning' : 'is-up';
-}
-function cityMetricText(kpi) {
-  return displayCityKpi(kpi).text;
 }
 function setSelectedBranch(orgCode) {
   const code = String(orgCode || '');
@@ -454,8 +424,8 @@ function selectCityBusinessLine(payload = {}) {
     context: { cityCode: String(props.cityCode || ''), cityName: String(props.cityName || '') }
   });
 }
-function toggleSort() {
-  sortDescending.value = !sortDescending.value;
+function selectRankingTab(key) {
+  rankingTabKey.value = String(key || 'retailDepositRate');
   page.value = 1;
 }
 
@@ -494,8 +464,8 @@ watch(cityInstitutions, list => {
   }
 });
 watch([search, attentionOnly], () => { page.value = 1; });
-watch(totalPages, value => { if (page.value > value) page.value = value; });
-watch([search, attentionOnly, sortDescending, page, selectedOrgCode, detailExpanded], emitState, { flush: 'post' });
+watch(rankingTotalPages, value => { if (page.value > value) page.value = value; });
+watch([search, attentionOnly, sortDescending, page, selectedOrgCode, detailExpanded, rankingTabKey], emitState, { flush: 'post' });
 </script>
 
 <style scoped>
@@ -511,6 +481,29 @@ watch([search, attentionOnly, sortDescending, page, selectedOrgCode, detailExpan
   font: inherit;
   font-size: 13px;
   color-scheme: dark;
+}
+
+/* 城市右栏同时承载六个指标页签、搜索、完整分页和支行详情；让排名行按内容占位，
+   详情自然落在排名下方，城市弹层本身负责纵向滚动。 */
+@media (min-width: 1100px) {
+  :global(.city-panorama .city-workspace) {
+    grid-template-rows: minmax(420px, auto) minmax(360px, auto);
+    height: auto;
+    min-height: 0;
+    align-items: stretch;
+  }
+  :global(.city-panorama .city-list-panel) {
+    min-height: 420px;
+    overflow: visible;
+  }
+  :global(.city-panorama .city-list-panel > .city-branch-ranking) {
+    height: auto;
+    min-height: 420px;
+  }
+  :global(.city-panorama .city-detail-panel) {
+    min-height: 430px;
+    overflow: visible;
+  }
 }
 </style>
 
