@@ -41,6 +41,12 @@
           </div>
         </template>
       </article>
+      <div
+        v-if="draftOverviewEnabled"
+        class="presentation-layout__overview-summary-reserved-slot"
+        data-testid="draft-overview-reserved-slot"
+        aria-hidden="true"
+      />
     </section>
     <section
       v-if="headerGroups.length"
@@ -1152,11 +1158,159 @@ function onMapContext(payload) {
   .presentation-layout__footer--bottom > .presentation-layout__component { min-height: 210px; }
 }
 
-/* 草稿分行摘要标签与下方余额标题使用同一字号和字重；保留旧摘要 DOM 的兼容选择器。 */
+/* 草稿分行统一五列网格；发布态继续使用保存的原布局。 */
+.presentation-layout--draft-overview {
+  --draft-layout-gap: 8px;
+  --draft-card-padding: 12px;
+  --draft-amount-size: clamp(14px, .9375vw, 18px);
+  --draft-caption-size: 12px;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--draft-layout-gap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card {
+  min-width: 0;
+  padding: var(--draft-card-padding);
+  gap: var(--draft-layout-gap);
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card-heading {
+  align-items: baseline;
+  justify-content: flex-start;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--draft-layout-gap);
+}
 .presentation-layout--draft-overview .presentation-layout__overview-summary-card-heading > span,
-.presentation-layout--draft-overview .presentation-layout__overview-summary-card > span {
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card-heading > strong {
+  min-width: 0;
+  max-width: 100%;
   color: var(--presentation-text);
-  font-size: var(--screen-font-size-widget-title, 12px);
+  font-size: var(--draft-amount-size);
   font-weight: 600;
+  line-height: 1.35;
+  overflow: visible;
+  text-align: left;
+  text-overflow: clip;
+  white-space: normal;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition {
+  display: flex;
+  min-height: 112px;
+  padding: var(--draft-card-padding);
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition :deep(.composition-tabs-widget) {
+  box-sizing: border-box;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-reserved-slot {
+  display: block;
+  min-width: 0;
+  grid-column: 5;
+  border: 0;
+  background: transparent;
+}
+.presentation-layout--draft-overview .presentation-layout__header--grouped {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--draft-layout-gap);
+}
+.presentation-layout--draft-overview .presentation-layout__metric-group {
+  min-width: 0;
+  padding: 0;
+  gap: var(--draft-layout-gap);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.presentation-layout--draft-overview .presentation-layout__metric-group--retail { grid-column: span 2; }
+.presentation-layout--draft-overview .presentation-layout__metric-group--corp { grid-column: span 2; }
+.presentation-layout--draft-overview .presentation-layout__metric-group--revenue { grid-column: span 1; }
+.presentation-layout--draft-overview .presentation-layout__metric-group-header {
+  min-height: 28px;
+  padding: 0;
+}
+.presentation-layout--draft-overview .presentation-layout__metric-group-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--draft-layout-gap);
+}
+.presentation-layout--draft-overview .presentation-layout__metric-group--revenue .presentation-layout__metric-group-grid {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: stretch;
+  grid-template-rows: minmax(0, 1fr);
+}
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widget) {
+  box-sizing: border-box;
+  min-height: 90px;
+  height: 100%;
+  padding: var(--draft-card-padding);
+  align-items: flex-start;
+}
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widget__content) {
+  align-content: start;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card-comparisons,
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widget__comparisons) {
+  font-size: var(--draft-caption-size);
+  line-height: 1.35;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition :deep(.composition-ring-card) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition :deep(.composition-tabs-widget--compact .composition-tabs-widget__header h2) {
+  font-size: var(--draft-amount-size);
+  font-weight: 600;
+  line-height: 1.35;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition :deep(.composition-tabs-widget--compact .composition-tabs-widget__header h2::before) {
+  display: none;
+  width: 0;
+  margin: 0;
+}
+@media (max-width: 1180px) {
+  .presentation-layout--draft-overview .presentation-layout__overview-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .presentation-layout--draft-overview .presentation-layout__overview-summary-reserved-slot { display: none; }
+}
+@media (max-width: 900px) {
+  .presentation-layout--draft-overview .presentation-layout__header--grouped {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .presentation-layout--draft-overview .presentation-layout__metric-group--retail,
+  .presentation-layout--draft-overview .presentation-layout__metric-group--corp,
+  .presentation-layout--draft-overview .presentation-layout__metric-group--revenue {
+    grid-column: auto;
+  }
+}
+@media (max-width: 620px) {
+  .presentation-layout--draft-overview .presentation-layout__overview-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* 局部压过 screenTypography 的金额字号规则，只作用于草稿分组卡。 */
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widgets .presentation-metric-widget.presentation-metric-widget--grouped[data-component-type] .presentation-metric-widget__header h2),
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widgets .presentation-metric-widget.presentation-metric-widget--grouped[data-component-type] .presentation-metric-widget__header-value),
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widgets .presentation-metric-widget.presentation-metric-widget--grouped[data-component-type] .presentation-metric-widget__value) {
+  font-size: var(--draft-amount-size);
+  font-weight: 600;
+  line-height: 1.35;
+}
+.presentation-layout--draft-overview .presentation-layout__header--grouped :deep(.presentation-metric-widgets .presentation-metric-widget.presentation-metric-widget--grouped[data-component-type] .presentation-metric-widget__comparisons) {
+  font-size: var(--draft-caption-size);
+  line-height: 1.35;
 }
 </style>

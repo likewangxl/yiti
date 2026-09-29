@@ -274,6 +274,60 @@ describe('PresentationLayout', () => {
     expect(wrapper.find('[data-layout-group="RETAIL"] [data-testid="metric-widget"]').attributes('data-grouped')).toBe('true');
   });
 
+  it('草稿分行摘要使用四卡加空第五槽，分组占五列且发布态不渲染预留槽', async () => {
+    const headerComponents = [
+      ['business-retail-deposit-balance', '零售存款余额'],
+      ['business-retail-loan-balance', '零售贷款余额'],
+      ['business-corp-deposit-balance', '对公存款余额'],
+      ['business-corp-loan-balance', '对公贷款余额'],
+      ['business-revenue-operating', '营业收入'],
+      ['business-revenue-fee', '中间业务收入']
+    ].map(([componentId, title], order) => ({
+      componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order, visible: true,
+      text: { titleMode: 'CUSTOM', title }, format: { displayUnit: 'HUNDRED_MILLION' },
+      content: { mainField: 'value' }, dataRefs: [{ blockId: order + 1, metricCode: componentId, unit: 'HUNDRED_MILLION' }]
+    }));
+    const composition = {
+      componentId: 'draft-structure', componentType: 'COMPOSITION_TABS', layoutRegion: 'LEFT', order: 0, visible: true,
+      text: { titleMode: 'CUSTOM', title: '业务结构' }, content: { tabs: [] }, dataRefs: []
+    };
+    const presentation = { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components: [...headerComponents, composition] } };
+    const model = {
+      dataDate: '2028-03-02',
+      kpis: [
+        { key: 'deposit', value: 120, unit: '亿元', dataDate: '2028-03-02' },
+        { key: 'loan', value: 80, unit: '亿元', dataDate: '2028-03-02' }
+      ]
+    };
+    const wrapper = mount(PresentationLayout, {
+      props: { draftOverview: true, presentation, model },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+
+    const summary = wrapper.get('[data-testid="draft-overview-summary"]');
+    expect(summary.findAll('[data-testid="draft-overview-summary-card"]').map(node => node.attributes('data-summary-key')))
+      .toEqual(['deposit', 'deposit-composition', 'loan', 'loan-composition']);
+    const reserved = summary.get('[data-testid="draft-overview-reserved-slot"]');
+    expect(reserved.text()).toBe('');
+    expect(reserved.attributes('aria-hidden')).toBe('true');
+    expect(summary.findAll('[data-testid="draft-overview-summary-card"]')).toHaveLength(4);
+    expect(wrapper.find('[data-layout-mode="grouped"] [data-layout-group="RETAIL"]').exists()).toBe(true);
+    expect(wrapper.find('[data-layout-mode="grouped"] [data-layout-group="CORP"]').exists()).toBe(true);
+    expect(wrapper.find('[data-layout-mode="grouped"] [data-layout-group="REVENUE"]').exists()).toBe(true);
+
+    await wrapper.get('[data-layout-group="RETAIL"] [data-action="business-line-more"]').trigger('click');
+    expect(wrapper.emitted('business-line-select')).toContainEqual([{ businessLine: 'RETAIL', tabKey: 'deposit' }]);
+
+    const published = mount(PresentationLayout, {
+      props: { draftOverview: false, presentation, model },
+      global: { stubs }
+    });
+    mounted.push(published);
+    expect(published.find('[data-testid="draft-overview-summary"]').exists()).toBe(false);
+    expect(published.find('[data-testid="draft-overview-reserved-slot"]').exists()).toBe(false);
+  });
+
   it('draftOverview 在原分组上方保留存款与贷款总额，移除存贷款合计且缺失或单位不兼容不补0', () => {
     const header = ['business-corp-deposit-balance', 'business-corp-loan-balance'].map((componentId, order) => ({
       componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order, visible: true,
