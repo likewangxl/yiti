@@ -50,6 +50,27 @@ describe('CompositionTabsWidget', () => {
     ]);
   });
 
+  it('ringKeys 只保留声明的已知圆环，compact 开启紧凑横向卡且不为未知项补零', () => {
+    const wrapper = mount(CompositionTabsWidget, { props: {
+      compact: true,
+      ringKeys: ['loan', 'unknown', 'deposit'],
+      model: { rings: [readyRing('deposit', '存款', 40, 60), readyRing('loan', '贷款', 30, 70)] }
+    } });
+
+    expect(wrapper.get('[data-testid="composition-tabs-root"]').classes()).toContain('composition-tabs-widget--compact');
+    expect(wrapper.get('[data-testid="composition-tabs-root"]').attributes('data-compact')).toBe('true');
+    expect(wrapper.findAll('[data-testid^="composition-ring-"]').filter(node => !node.attributes('data-testid').endsWith('-visual'))
+      .map(node => node.attributes('data-testid'))).toEqual(['composition-ring-deposit', 'composition-ring-loan']);
+    expect(wrapper.find('[data-testid="composition-ring-unknown"]').exists()).toBe(false);
+  });
+
+  it('未传 ringKeys 时保持默认三枚圆环兼容', () => {
+    const wrapper = mount(CompositionTabsWidget, { props: { model: { rings: [readyRing('deposit', '存款', 40, 60)] } } });
+    expect(wrapper.findAll('.composition-ring-card')).toHaveLength(3);
+    expect(wrapper.get('[data-testid="composition-ring-loan"]').attributes('data-state')).toBe('PENDING');
+    expect(wrapper.get('[data-testid="composition-ring-income"]').attributes('data-state')).toBe('PENDING');
+  });
+
   it('旧业务结构 tab 只兼容映射到存款环，保留公司/零售原值且总量缺失时为空环', () => {
     const wrapper = mount(CompositionTabsWidget, { props: { model: {
       tabs: [{

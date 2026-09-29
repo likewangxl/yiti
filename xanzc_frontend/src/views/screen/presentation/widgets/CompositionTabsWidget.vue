@@ -2,7 +2,10 @@
   <section
     ref="rootRef"
     class="composition-tabs-widget"
+    :class="{ 'composition-tabs-widget--compact': compact, 'composition-tabs-widget--single': rings.length === 1 }"
     data-testid="composition-tabs-root"
+    :data-compact="compact ? 'true' : 'false'"
+    :data-ring-count="rings.length"
     tabindex="0"
     aria-label="业务结构"
   >
@@ -81,7 +84,10 @@ import { computed, ref } from 'vue';
 import { screenDisplayText } from '../model/screenDisplayText';
 
 const props = defineProps({
-  model: { type: Object, default: () => ({}) }
+  model: { type: Object, default: () => ({}) },
+  // 页面草稿顶部只需要提升指定业务线；未传时维持原三环展示。
+  ringKeys: { type: Array, default: null },
+  compact: { type: Boolean, default: false }
 });
 const emit = defineEmits(['business-line-select']);
 
@@ -244,7 +250,14 @@ function normalizedRing(raw, definition) {
   };
 }
 
-const rings = computed(() => RING_DEFINITIONS.map(definition => normalizedRing(sourceForRing(definition.ringKey), definition)));
+const selectedRingDefinitions = computed(() => {
+  if (!Array.isArray(props.ringKeys)) return RING_DEFINITIONS;
+  const keys = new Set(props.ringKeys.map(normalizedKey));
+  return RING_DEFINITIONS.filter(definition => keys.has(normalizedKey(definition.ringKey)));
+});
+
+const rings = computed(() => selectedRingDefinitions.value
+  .map(definition => normalizedRing(sourceForRing(definition.ringKey), definition)));
 
 function shareText(value) {
   const share = finite(value?.share);
@@ -308,15 +321,39 @@ function selectBusinessLine(businessLine, tabKey) {
 .composition-ring-card__status { min-height: 14px; margin: 0; color: var(--panorama-amber, #ffc45e); font-size: 9px; line-height: 1.4; }
 .composition-ring-card__status--remainder { display: grid; gap: 2px; color: var(--panorama-text-dim, #8fa9db); }
 .composition-tabs-widget__empty { margin: 12px 0 0; color: var(--panorama-amber, #ffc45e); font-size: 11px; }
+.composition-tabs-widget--single .composition-tabs-widget__rings { grid-template-columns: minmax(0, 1fr); }
+.composition-tabs-widget--compact { min-height: 0; height: auto; padding: 7px; }
+.composition-tabs-widget--compact .composition-tabs-widget__header h2 { font-size: 12px; }
+.composition-tabs-widget--compact .composition-tabs-widget__header h2::before { width: 2px; height: 12px; margin-right: 5px; vertical-align: -2px; }
+.composition-tabs-widget--compact .composition-tabs-widget__header p { display: none; }
+.composition-tabs-widget--compact .composition-tabs-widget__rings { margin-top: 5px; grid-template-columns: minmax(0, 1fr); gap: 0; }
+.composition-tabs-widget--compact .composition-ring-card { display: grid; padding: 5px; grid-template-columns: 64px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; align-items: center; column-gap: 8px; row-gap: 3px; }
+.composition-tabs-widget--compact .composition-ring-card__heading { grid-column: 2; }
+.composition-tabs-widget--compact .composition-ring-card__heading strong { font-size: 12px; }
+.composition-tabs-widget--compact .composition-ring-card__heading span { font-size: 10px; }
+.composition-tabs-widget--compact .composition-ring { width: 64px; height: 64px; margin: 0; grid-column: 1; grid-row: 1 / span 3; }
+.composition-tabs-widget--compact .composition-ring::after { inset: 9px; }
+.composition-tabs-widget--compact .composition-ring__center strong { font-size: 12px; }
+.composition-tabs-widget--compact .composition-ring__center small { font-size: 8px; }
+.composition-tabs-widget--compact .composition-ring-card__legend { grid-column: 2; gap: 3px; }
+.composition-tabs-widget--compact .composition-ring-card__legend button { padding: 3px 4px; font-size: 11px; }
+.composition-tabs-widget--compact .composition-ring-card__legend button strong { font-size: 11px; }
+.composition-tabs-widget--compact .composition-ring-card__status { grid-column: 2; min-height: 0; font-size: 11px; }
+.composition-tabs-widget--compact .composition-tabs-widget__empty { margin-top: 4px; font-size: 9px; }
 @media (max-width: 620px) {
   .composition-tabs-widget { min-height: 200px; padding: 12px; }
   .composition-tabs-widget__header h2 { font-size: 14px; }
   .composition-tabs-widget__rings { gap: 5px; }
   .composition-ring-card { padding: 7px 5px; }
   .composition-ring-card__heading strong { font-size: 12px; }
+  .composition-tabs-widget--compact { min-height: 0; padding: 6px; }
+  .composition-tabs-widget--compact .composition-ring-card { grid-template-columns: 56px minmax(0, 1fr); }
+  .composition-tabs-widget--compact .composition-ring { width: 56px; height: 56px; }
 }
 @media (min-width: 621px) and (max-width: 1500px) {
   .composition-ring-card__legend button { grid-template-columns: 7px minmax(0, 1fr); }
   .composition-ring-card__legend button strong { grid-column: 2; }
+  .composition-tabs-widget--compact .composition-ring-card__legend button { grid-template-columns: 7px minmax(0, 1fr) auto; }
+  .composition-tabs-widget--compact .composition-ring-card__legend button strong { grid-column: auto; }
 }
 </style>

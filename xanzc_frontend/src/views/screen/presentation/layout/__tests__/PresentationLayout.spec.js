@@ -62,7 +62,7 @@ const stubs = {
   MetricDisplayWidgets: { props: ['components', 'grouped'], template: '<div data-testid="metric-widget" :data-grouped="grouped ? \'true\' : \'false\'"><span v-for="item in components" :key="item.componentId">{{ item.componentId }}</span></div>' },
   SeriesTableWidgets: { props: ['components', 'tabbed', 'trendDisplayMode'], template: '<div data-testid="series-widget" :data-tabbed="tabbed ? \'true\' : \'false\'" :data-trend-display-mode="trendDisplayMode"><span v-for="item in components" :key="item.componentId" data-testid="series-component">{{ item.componentId }}</span></div>' },
   BusinessGrowthWidget: { props: ['presentation', 'model', 'amountUnit'], template: '<div data-testid="business-growth-widget" :data-template="presentation?.template || \'\'" :data-amount-unit="amountUnit">业务增长曲线</div>' },
-  CompositionTabsWidget: { props: ['model'], template: '<div data-testid="structure-widget">{{ model.components?.[0]?.componentId }}</div>' },
+  CompositionTabsWidget: { props: ['model', 'ringKeys', 'compact'], emits: ['business-line-select'], template: '<div data-testid="structure-widget" :data-ring-keys="ringKeys?.join(\',\') || \'\'" :data-compact="compact ? \'true\' : \'false\'"><span>{{ model.components?.[0]?.componentId }}</span><button v-if="ringKeys?.length" type="button" data-testid="structure-business-line-select" @click="$emit(\'business-line-select\', { businessLine: \'CORP\', tabKey: ringKeys[0] })">选择</button></div>' },
   InstitutionRankingWidget: { props: ['model', 'title', 'paginate', 'pageSize', 'pageInterval', 'metricCarousel'], template: '<div data-testid="ranking-widget" :data-paginate="paginate ? \'true\' : \'false\'" :data-page-size="pageSize" :data-page-interval="pageInterval" :data-metric-carousel="metricCarousel ? \'true\' : \'false\'">{{ title }}</div>' },
   PresentationMapWidget: { props: ['presentation'], template: '<div data-testid="map-widget">地图</div>' }
 };
@@ -274,7 +274,7 @@ describe('PresentationLayout', () => {
     expect(wrapper.find('[data-layout-group="RETAIL"] [data-testid="metric-widget"]').attributes('data-grouped')).toBe('true');
   });
 
-  it('draftOverview 在原分组上方显示存款、贷款和存贷款合计摘要，缺失或单位不兼容不补0', () => {
+  it('draftOverview 在原分组上方保留存款与贷款总额，移除存贷款合计且缺失或单位不兼容不补0', () => {
     const header = ['business-corp-deposit-balance', 'business-corp-loan-balance'].map((componentId, order) => ({
       componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order, visible: true,
       text: { titleMode: 'CUSTOM', title: componentId }, format: { displayUnit: 'HUNDRED_MILLION' },
@@ -297,16 +297,17 @@ describe('PresentationLayout', () => {
     });
     mounted.push(wrapper);
     const summary = wrapper.get('[data-testid="draft-overview-summary"]');
-    expect(summary.findAll('[data-testid="draft-overview-summary-card"]')).toHaveLength(3);
+    expect(summary.findAll('[data-testid="draft-overview-summary-card"]')).toHaveLength(2);
+    expect(summary.findAll('[data-testid="draft-overview-summary-card"]').map(node => node.attributes('data-summary-key')))
+      .toEqual(['deposit', 'loan']);
     expect(summary.get('[data-summary-key="deposit"]').text()).toContain('存款总额');
     expect(summary.get('[data-summary-key="deposit"]').text()).toContain('120.00亿元');
     expect(summary.get('[data-summary-key="loan"]').text()).toContain('80.00亿元');
-    expect(summary.get('[data-summary-key="total"]').text()).toContain('存贷款合计');
-    expect(summary.get('[data-summary-key="total"]').text()).toContain('200.00亿元');
-    const totalComparisons = summary.get('[data-summary-key="total"] .presentation-layout__overview-summary-card-comparisons');
-    expect(totalComparisons.text()).toContain('较上年 +40.00亿元');
-    expect(totalComparisons.text()).toContain('较上月 +28.00亿元');
-    expect(totalComparisons.text()).toContain('较上日 +15.00亿元');
+    expect(summary.find('[data-summary-key="total"]').exists()).toBe(false);
+    const depositComparisons = summary.get('[data-summary-key="deposit"] .presentation-layout__overview-summary-card-comparisons');
+    expect(depositComparisons.text()).toContain('较上年 +30.00亿元');
+    expect(depositComparisons.text()).toContain('较上月 +20.00亿元');
+    expect(depositComparisons.text()).toContain('较上日 +10.00亿元');
 
     const invalid = mount(PresentationLayout, {
       props: {
@@ -320,7 +321,7 @@ describe('PresentationLayout', () => {
       global: { stubs }
     });
     mounted.push(invalid);
-    expect(invalid.get('[data-summary-key="total"]').text()).toContain('—');
+    expect(invalid.get('[data-summary-key="loan"]').text()).toContain('—');
 
     const mixedUnits = mount(PresentationLayout, {
       props: {
@@ -334,7 +335,7 @@ describe('PresentationLayout', () => {
       global: { stubs }
     });
     mounted.push(mixedUnits);
-    expect(mixedUnits.get('[data-summary-key="total"]').text()).toContain('120.80亿元');
+    expect(mixedUnits.get('[data-summary-key="loan"]').text()).toContain('0.80亿元');
 
     const incompatibleUnits = mount(PresentationLayout, {
       props: {
@@ -348,7 +349,7 @@ describe('PresentationLayout', () => {
       global: { stubs }
     });
     mounted.push(incompatibleUnits);
-    expect(incompatibleUnits.get('[data-summary-key="total"]').text()).toContain('—');
+    expect(incompatibleUnits.get('[data-summary-key="loan"]').text()).toContain('—');
 
     for (const invalidValue of [' ', true, [], {}, Infinity]) {
       const invalidNumber = mount(PresentationLayout, {
@@ -363,7 +364,7 @@ describe('PresentationLayout', () => {
         global: { stubs }
       });
       mounted.push(invalidNumber);
-      expect(invalidNumber.get('[data-summary-key="total"]').text()).toContain('—');
+      expect(invalidNumber.get('[data-summary-key="loan"]').text()).toContain('—');
     }
 
     const published = mount(PresentationLayout, {
@@ -372,6 +373,57 @@ describe('PresentationLayout', () => {
     });
     mounted.push(published);
     expect(published.find('[data-testid="draft-overview-summary"]').exists()).toBe(false);
+  });
+
+  it('未发布分行总览按总额与业务分布交错排列，左下只保留收入且其他业务结构不受过滤', async () => {
+    const composition = (componentId, layoutRegion, order) => ({
+      componentId, componentType: 'COMPOSITION_TABS', layoutRegion, order, visible: true,
+      text: { titleMode: 'CUSTOM', title: componentId },
+      content: { tabs: [
+        { tabKey: 'deposit', label: '存款', corporateField: 'corpDeposit', retailField: 'retailDeposit', totalField: 'depositTotal', unit: 'HUNDRED_MILLION' },
+        { tabKey: 'loan', label: '贷款', corporateField: 'corpLoan', retailField: 'retailLoan', totalField: 'loanTotal', unit: 'HUNDRED_MILLION' },
+        { tabKey: 'income', label: '收入', corporateField: 'corpIncome', retailField: 'retailIncome', totalField: 'incomeTotal', unit: 'HUNDRED_MILLION' }
+      ] },
+      dataRefs: [{ blockId: 31, role: 'PRIMARY', unit: 'HUNDRED_MILLION' }]
+    });
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        draftOverview: true,
+        presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components: [
+          composition('left-structure', 'LEFT', 0), composition('other-structure', 'CENTER', 0)
+        ] } },
+        model: {
+          dataDate: '2028-03-02',
+          kpis: [{ key: 'deposit', value: 120, unit: '亿元', dataDate: '2028-03-02' }, { key: 'loan', value: 80, unit: '亿元', dataDate: '2028-03-02' }],
+          blockResults: { 31: {
+            corpDeposit: 60, retailDeposit: 40, depositTotal: 100,
+            corpLoan: 30, retailLoan: 20, loanTotal: 50,
+            corpIncome: 12, retailIncome: 8, incomeTotal: 20,
+            unitByField: { corpDeposit: 'HUNDRED_MILLION', retailDeposit: 'HUNDRED_MILLION', depositTotal: 'HUNDRED_MILLION', corpLoan: 'HUNDRED_MILLION', retailLoan: 'HUNDRED_MILLION', loanTotal: 'HUNDRED_MILLION', corpIncome: 'HUNDRED_MILLION', retailIncome: 'HUNDRED_MILLION', incomeTotal: 'HUNDRED_MILLION' }
+          } }
+        }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+
+    const summaryCards = wrapper.get('[data-testid="draft-overview-summary"]').findAll('[data-testid="draft-overview-summary-card"]');
+    expect(summaryCards.map(node => node.attributes('data-summary-key')))
+      .toEqual(['deposit', 'deposit-composition', 'loan', 'loan-composition']);
+    expect(wrapper.get('[data-summary-key="deposit-composition"]').attributes('data-summary-kind')).toBe('COMPOSITION');
+    expect(wrapper.get('[data-summary-key="deposit-composition"] [data-testid="structure-widget"]').attributes('data-ring-keys')).toBe('deposit');
+    expect(wrapper.get('[data-summary-key="deposit-composition"] [data-testid="structure-widget"]').attributes('data-compact')).toBe('true');
+    expect(wrapper.get('[data-summary-key="loan-composition"] [data-testid="structure-widget"]').attributes('data-ring-keys')).toBe('loan');
+
+    const leftStructure = wrapper.get('[data-layout-column="LEFT"] [data-component-id="left-structure"] [data-testid="structure-widget"]');
+    expect(leftStructure.attributes('data-ring-keys')).toBe('income');
+    expect(leftStructure.attributes('data-compact')).toBe('false');
+    const otherStructure = wrapper.get('[data-layout-column="CENTER"] [data-component-id="other-structure"] [data-testid="structure-widget"]');
+    expect(otherStructure.attributes('data-ring-keys')).toBe('');
+    expect(otherStructure.attributes('data-compact')).toBe('false');
+
+    await wrapper.get('[data-summary-key="deposit-composition"] [data-testid="structure-business-line-select"]').trigger('click');
+    expect(wrapper.emitted('business-line-select')).toContainEqual([{ businessLine: 'CORP', tabKey: 'deposit' }]);
   });
 
   it('总额与完整细分余额同日但数值不一致时拒绝借用细分三维差值', () => {
@@ -412,8 +464,8 @@ describe('PresentationLayout', () => {
     });
     mounted.push(wrapper);
     expect(wrapper.get('[data-summary-key="deposit"]').text()).toContain('50,000.00万元');
-    expect(wrapper.get('[data-summary-key="total"]').text()).toContain('73,000.00万元');
-    expect(wrapper.get('[data-summary-key="total"] .presentation-layout__overview-summary-card-comparisons').text()).toContain('较上年 —');
+    expect(wrapper.get('[data-summary-key="loan"]').text()).toContain('23,000.00万元');
+    expect(wrapper.get('[data-summary-key="loan"] .presentation-layout__overview-summary-card-comparisons').text()).toContain('较上年 +2,000.00万元');
 
     const decimalEquivalent = mount(PresentationLayout, {
       props: {
@@ -440,11 +492,11 @@ describe('PresentationLayout', () => {
     });
     mounted.push(decimalEquivalent);
     expect(decimalEquivalent.get('[data-summary-key="deposit"]').text()).toContain('2.30亿元');
-    expect(decimalEquivalent.get('[data-summary-key="total"]').text()).toContain('4.60亿元');
-    const decimalComparisons = decimalEquivalent.get('[data-summary-key="total"] .presentation-layout__overview-summary-card-comparisons').text();
-    expect(decimalComparisons).toContain('较上年 +1.00亿元');
-    expect(decimalComparisons).toContain('较上月 +0.60亿元');
-    expect(decimalComparisons).toContain('较上日 +0.30亿元');
+    expect(decimalEquivalent.get('[data-summary-key="loan"]').text()).toContain('2.30亿元');
+    const decimalComparisons = decimalEquivalent.get('[data-summary-key="loan"] .presentation-layout__overview-summary-card-comparisons').text();
+    expect(decimalComparisons).toContain('较上年 +0.50亿元');
+    expect(decimalComparisons).toContain('较上月 +0.30亿元');
+    expect(decimalComparisons).toContain('较上日 +0.15亿元');
 
     const invalidDate = mount(PresentationLayout, {
       props: {
@@ -458,7 +510,7 @@ describe('PresentationLayout', () => {
       global: { stubs }
     });
     mounted.push(invalidDate);
-    expect(invalidDate.get('[data-summary-key="total"]').text()).toContain('—');
+    expect(invalidDate.get('[data-summary-key="deposit"]').text()).toContain('—');
   });
 
   it('将配置组件重排为重点卡/次级卡、左中右三栏，并让地图先于趋势且明细下置', () => {

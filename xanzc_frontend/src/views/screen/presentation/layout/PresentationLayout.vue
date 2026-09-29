@@ -16,14 +16,26 @@
         v-for="card in overviewSummary.cards"
         :key="card.key"
         class="presentation-layout__overview-summary-card"
+        :class="{ 'presentation-layout__overview-summary-card--composition': card.kind === 'COMPOSITION' }"
         data-testid="draft-overview-summary-card"
         :data-summary-key="card.key"
+        :data-summary-kind="card.kind || 'TOTAL'"
       >
-        <span>{{ card.label }}</span>
-        <strong>{{ card.text }}</strong>
-        <div v-if="card.comparisons?.length" class="presentation-layout__overview-summary-card-comparisons" aria-label="三维对比">
-          <span v-for="comparison in card.comparisons" :key="comparison.key" :title="comparison.referenceDate ? `${comparison.text}（基准日 ${comparison.referenceDate}）` : comparison.text">{{ comparison.text }}</span>
+        <div v-if="card.kind === 'COMPOSITION'" class="presentation-layout__overview-summary-composition" data-testid="draft-overview-composition">
+          <CompositionTabsWidget
+            :model="card.model"
+            :ring-keys="[card.ringKey]"
+            :compact="true"
+            @business-line-select="onBusinessLineSelect"
+          />
         </div>
+        <template v-else>
+          <span>{{ card.label }}</span>
+          <strong>{{ card.text }}</strong>
+          <div v-if="card.comparisons?.length" class="presentation-layout__overview-summary-card-comparisons" aria-label="三维对比">
+            <span v-for="comparison in card.comparisons" :key="comparison.key" :title="comparison.referenceDate ? `${comparison.text}（基准日 ${comparison.referenceDate}）` : comparison.text">{{ comparison.text }}</span>
+          </div>
+        </template>
       </article>
     </section>
     <section
@@ -503,6 +515,24 @@ function summaryCardComparisons(metric, displayUnit) {
 }
 
 const draftOverviewEnabled = computed(() => props.draftOverview === true && isBranchOverview.value);
+const draftOverviewCompositionComponent = computed(() => draftOverviewEnabled.value
+  ? components.value.find(component => component.layoutRegion === 'LEFT' && component.componentType === 'COMPOSITION_TABS') || null
+  : null);
+
+function overviewCompositionCard(ringKey, label) {
+  const component = draftOverviewCompositionComponent.value;
+  if (!component) return null;
+  const model = compositionComponentModel(component);
+  return {
+    key: `${ringKey}-composition`,
+    kind: 'COMPOSITION',
+    label,
+    ringKey,
+    // 只覆盖卡片标题，components/tabs/sections 继续来自同一个真实组件模型。
+    model: { ...model, title: label, subtitle: '' }
+  };
+}
+
 const overviewSummary = computed(() => {
   if (!draftOverviewEnabled.value) return null;
   const deposit = summaryFromKpi('deposit', ['business-retail-deposit-balance', 'business-corp-deposit-balance']);
@@ -510,21 +540,14 @@ const overviewSummary = computed(() => {
   const sourceUnit = deposit?.unit || loan?.unit || '';
   const displayUnit = canonicalUnit(props.amountUnit) && Object.prototype.hasOwnProperty.call(AMOUNT_SCALES, canonicalUnit(props.amountUnit))
     ? canonicalUnit(props.amountUnit) : sourceUnit;
-  const sameDate = Boolean(deposit && loan && deposit.date && deposit.date === loan.date);
-  const totalComparisons = {};
-  for (const item of SUMMARY_COMPARISONS) {
-    const left = deposit?.comparisons?.[item.key];
-    const right = loan?.comparisons?.[item.key];
-    if (left && right && left.referenceDate && left.referenceDate === right.referenceDate) {
-      totalComparisons[item.key] = { baseValue: left.baseValue + right.baseValue, referenceDate: left.referenceDate };
-    }
-  }
-  const total = sameDate ? { baseValue: deposit.baseValue + loan.baseValue, date: deposit.date, unit: 'YUAN', comparisons: totalComparisons } : null;
+  const depositComposition = overviewCompositionCard('deposit', '存款业务分布');
+  const loanComposition = overviewCompositionCard('loan', '贷款业务分布');
   return {
     cards: [
       { key: 'deposit', label: '存款总额', text: displaySummaryValue(deposit, displayUnit), comparisons: summaryCardComparisons(deposit, displayUnit) },
+      ...(depositComposition ? [depositComposition] : []),
       { key: 'loan', label: '贷款总额', text: displaySummaryValue(loan, displayUnit), comparisons: summaryCardComparisons(loan, displayUnit) },
-      { key: 'total', label: '存贷款合计', text: displaySummaryValue(total, displayUnit), comparisons: summaryCardComparisons(total, displayUnit) }
+      ...(loanComposition ? [loanComposition] : [])
     ]
   };
 });
@@ -577,6 +600,13 @@ function compositionComponentModel(component) {
   };
 }
 
+function isDraftOverviewPrimaryComposition(component) {
+  return draftOverviewEnabled.value
+    && component?.layoutRegion === 'LEFT'
+    && component?.componentType === 'COMPOSITION_TABS'
+    && component.componentId === draftOverviewCompositionComponent.value?.componentId;
+}
+
 function rankingComponentModel(component) {
   const institutions = Array.isArray(props.model?.institutions)
     ? props.model.institutions
@@ -615,7 +645,10 @@ function widgetProps(component) {
     draftOverview: draftOverviewEnabled.value
   };
   if (['TREND', 'DETAIL_TABLE'].includes(component.componentType)) return { components: seriesComponents(component) };
-  if (component.componentType === 'COMPOSITION_TABS') return { model: compositionComponentModel(component) };
+  if (component.componentType === 'COMPOSITION_TABS') {
+    const model = compositionComponentModel(component);
+    return isDraftOverviewPrimaryComposition(component) ? { model, ringKeys: ['income'] } : { model };
+  }
   if (component.componentType === 'RANKING') return {
     model: rankingComponentModel(component),
     title: screenDisplayText(componentTitle(component)),
@@ -682,7 +715,7 @@ function onMapContext(payload) {
 .presentation-layout__overview-summary {
   display: grid;
   min-width: 0;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   padding: 7px 8px 6px;
   border: 1px solid var(--presentation-border-soft);
@@ -705,6 +738,9 @@ function onMapContext(payload) {
 .presentation-layout__overview-summary-card strong { color: var(--presentation-text); font-size: clamp(16px, 1.25vw, 22px); white-space: nowrap; }
 .presentation-layout__overview-summary-card-comparisons { display: grid; min-width: 0; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; color: var(--presentation-text-dim); font-size: 11px; line-height: 1.2; }
 .presentation-layout__overview-summary-card-comparisons span { min-width: 0; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+.presentation-layout__overview-summary-card--composition { display: flex; min-height: 104px; padding: 0; }
+.presentation-layout__overview-summary-composition { display: flex; min-width: 0; width: 100%; }
+.presentation-layout__overview-summary-composition > * { width: 100%; }
 .presentation-layout--draft-overview .presentation-layout__metric-group { min-height: 0; padding: 4px; gap: 4px; }
 .presentation-layout--draft-overview .presentation-layout__metric-group-grid { align-content: start; grid-auto-rows: minmax(90px, auto); }
 .presentation-layout--draft-overview .presentation-layout__metric-group--revenue .presentation-layout__metric-group-grid { grid-auto-rows: auto; }
@@ -1051,6 +1087,7 @@ function onMapContext(payload) {
 @media (max-width: 1180px) {
   .presentation-layout__main { grid-template-columns: minmax(0, .9fr) minmax(0, 1.25fr) minmax(0, .9fr); gap: 9px; }
   .presentation-layout__metric-tier { gap: 8px; }
+  .presentation-layout__overview-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .presentation-layout__header--grouped { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .presentation-layout__metric-group--revenue { grid-column: 1 / -1; }
   .presentation-layout__metric-group--revenue .presentation-layout__metric-group-grid { grid-template-columns: minmax(0, 1fr); }
