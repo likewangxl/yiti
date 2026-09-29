@@ -1310,4 +1310,29 @@ function onMapContext(payload) {
   font-size: var(--draft-caption-size);
   line-height: 1.35;
 }
+
+/* 标题下方垂直居中，围绕完成率的原水平中心放大业务分布圆环。 */
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition {
+  align-content: stretch;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition .presentation-layout__overview-summary-card-content {
+  align-self: stretch;
+  align-content: stretch;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition :deep(.composition-tabs-widget__rings) {
+  align-items: center;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition :deep(.composition-tabs-widget--compact .composition-ring-card) {
+  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  column-gap: 20px;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition :deep(.composition-tabs-widget--compact .composition-ring) {
+  width: 96px;
+  height: 96px;
+  justify-self: center;
+}
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition :deep(.composition-tabs-widget--compact .composition-ring::after) {
+  inset: 12px;
+}
 </style>
