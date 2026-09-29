@@ -424,9 +424,10 @@
         :navigate-on-branch-select="!demo"
         @close="closeCity"
         @back="closeCity"
-            @refresh="emit('refresh')"
-            @branch-select="selectInstitution"
-            @map-context="emit('map-context', $event)"
+             @refresh="emit('refresh')"
+             @branch-select="selectInstitution"
+             @business-line-select="emit('business-line-select', $event)"
+             @map-context="emit('map-context', $event)"
             @state-change="saveCityState"
       />
     </div>

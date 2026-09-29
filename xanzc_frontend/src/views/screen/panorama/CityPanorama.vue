@@ -7,6 +7,14 @@
         <span>全市经营口径</span>
       </div>
       <div class="city-header-actions">
+        <label v-if="cityOperatingHeaderEnabled" class="city-header-amount-unit-control">
+          <span class="panorama-visually-hidden">金额单位</span>
+          <select v-model="cityAmountUnit" data-testid="city-header-amount-unit" aria-label="金额单位">
+            <option value="YUAN">元</option>
+            <option value="TEN_THOUSAND">万元</option>
+            <option value="HUNDRED_MILLION">亿元</option>
+          </select>
+        </label>
         <button type="button" data-action="city-back" @click="backToProvince"><component :is="Back" /> 返回全省</button>
         <button type="button" data-action="city-refresh" aria-label="刷新市级数据" @click="emit('refresh')"><component :is="Refresh" /></button>
         <button type="button" data-action="city-fullscreen" aria-label="市级全屏" @click="requestFullscreen"><component :is="FullScreen" /></button>
@@ -14,7 +22,15 @@
       </div>
     </header>
 
-    <section class="city-kpi-grid" aria-label="市级核心指标">
+    <CityOperatingHeader
+      v-if="cityOperatingHeaderEnabled"
+      :source-presentation="sourcePresentation"
+      :city-summary="citySummary"
+      :amount-unit="cityAmountUnit"
+      :demo="demo"
+      @business-line-select="selectCityBusinessLine"
+    />
+    <section v-else class="city-kpi-grid" aria-label="市级核心指标">
       <article v-for="(kpi, index) in cityKpiCards" :key="kpi.key || index" class="city-kpi" :data-testid="`city-kpi-${kpi.key || index}`">
         <span class="city-kpi-label">{{ kpi.label || '指标' }}</span>
         <strong :title="metricTitle(kpi.value)">{{ displayCityKpi(kpi).text }}</strong>
@@ -23,7 +39,7 @@
         <em v-if="formatChange(kpi.change) !== null" :class="changeClass(kpi.change)">{{ kpi.change >= 0 ? '↑' : '↓' }} {{ Math.abs(Number(kpi.change)).toFixed(1) }}%</em>
       </article>
     </section>
-    <div v-if="summaryUnbound" class="city-summary-unbound" data-testid="city-summary-unbound">市级汇总未绑定，无法据下级机构加总</div>
+    <div v-if="!cityOperatingHeaderEnabled && summaryUnbound" class="city-summary-unbound" data-testid="city-summary-unbound">市级汇总未绑定，无法据下级机构加总</div>
     <section class="city-leadership-strip" data-testid="city-leadership-diagnostics" aria-label="市级经营诊断">
       <article class="city-leadership-card">
         <span>机构目标完成情况</span>
@@ -147,6 +163,7 @@ import PanoramaMap from './PanoramaMap.vue';
 import PresentationMapWidget from '../presentation/map/PresentationMapWidget.vue';
 import { findVisibleMapComponent } from '../presentation/map/mapModel';
 import PanoramaTrend from './PanoramaTrend.vue';
+import CityOperatingHeader from './CityOperatingHeader.vue';
 import { cityGeoByCode } from './geography.js';
 import { buildCityDistrictMapState } from './cityDistrictMapModel.js';
 import {
@@ -158,6 +175,7 @@ import {
 import { resolveDataStatus } from './sourcePresentation';
 import { stripTestModifier } from './targetPresentation.js';
 import { buildNavigationQuery, parseNavigationQuery } from '../presentation/navigation/navigationModel';
+import { isCityOperatingHeaderEnabled } from './cityOperatingHeaderModel.js';
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -170,7 +188,7 @@ const props = defineProps({
   rankingMetricKey: { type: String, default: '' },
   navigateOnBranchSelect: { type: Boolean, default: false }
 });
-const emit = defineEmits(['close', 'back', 'refresh', 'fullscreen', 'branch-select', 'state-change', 'map-context']);
+const emit = defineEmits(['close', 'back', 'refresh', 'fullscreen', 'branch-select', 'state-change', 'map-context', 'business-line-select']);
 const router = VueRouter.routerKey
   ? inject(VueRouter.routerKey, null)
   : (typeof VueRouter.useRouter === 'function' ? VueRouter.useRouter() : null);
@@ -186,6 +204,7 @@ const page = ref(Math.max(1, Number(initialState.page) || 1));
 const pageSize = 5;
 const selectedOrgCode = ref(props.initialOrgCode || String(initialState.selectedOrgCode || ''));
 const detailExpanded = ref(initialState.detailExpanded === undefined ? true : Boolean(initialState.detailExpanded));
+const cityAmountUnit = ref('TEN_THOUSAND');
 const rootRef = ref(null);
 let navigationQuerySyncReady = false;
 let initialNavigationSnapshot = '';
@@ -257,6 +276,7 @@ const citySummary = computed(() => {
   return map[props.cityCode] || null;
 });
 const summaryUnbound = computed(() => !citySummary.value || !Array.isArray(citySummary.value.kpis));
+const cityOperatingHeaderEnabled = computed(() => isCityOperatingHeaderEnabled(props.sourcePresentation));
 const cityKpiCards = computed(() => {
   const source = new Map((Array.isArray(citySummary.value?.kpis) ? citySummary.value.kpis : []).map(item => [item?.key, item]));
   return ['deposit', 'loan', 'customers', 'revenue'].map(key => source.get(key) || {
@@ -426,6 +446,14 @@ function selectBranch(orgCode) {
   void replaceNavigationQuery({ orgCode: code });
   emit('branch-select', code);
 }
+function selectCityBusinessLine(payload = {}) {
+  const event = payload && typeof payload === 'object' && !Array.isArray(payload) ? { ...payload } : {};
+  delete event.context;
+  emit('business-line-select', {
+    ...event,
+    context: { cityCode: String(props.cityCode || ''), cityName: String(props.cityName || '') }
+  });
+}
 function toggleSort() {
   sortDescending.value = !sortDescending.value;
   page.value = 1;
@@ -469,5 +497,21 @@ watch([search, attentionOnly], () => { page.value = 1; });
 watch(totalPages, value => { if (page.value > value) page.value = value; });
 watch([search, attentionOnly, sortDescending, page, selectedOrgCode, detailExpanded], emitState, { flush: 'post' });
 </script>
+
+<style scoped>
+.city-header-amount-unit-control { display: inline-flex; align-items: center; }
+.city-header-amount-unit-control select {
+  min-width: 76px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid rgba(125, 161, 232, .22);
+  border-radius: 5px;
+  color: var(--panorama-text, #eaf2ff);
+  background: var(--panorama-panel, rgba(8, 24, 61, .78));
+  font: inherit;
+  font-size: 13px;
+  color-scheme: dark;
+}
+</style>
 
 <style src="./panorama.scss" lang="scss"></style>

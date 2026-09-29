@@ -14,6 +14,20 @@ vi.mock('vue-echarts', () => ({
   default: { props: { option: { type: Object, default: () => ({}) } }, template: '<div data-testid="chart-option" :data-option="JSON.stringify(option)" />' }
 }));
 
+const cityOperatingHeaderStub = {
+  name: 'CityOperatingHeader',
+  props: ['citySummary', 'amountUnit'],
+  emits: ['business-line-select'],
+  template: `
+    <section data-testid="city-operating-header">
+      <span data-testid="city-header-deposit">{{ citySummary?.kpis?.find(item => item.key === 'deposit')?.value ?? '—' }}</span>
+      <span data-testid="city-header-date">{{ citySummary?.dataDate || '' }}</span>
+      <span data-testid="city-header-amount-unit">{{ amountUnit }}</span>
+      <button type="button" data-testid="city-header-business-line" @click="$emit('business-line-select', { businessLine: 'CORP', tabKey: 'deposit' })">业务线</button>
+    </section>
+  `
+};
+
 import CityPanorama from '../CityPanorama.vue';
 
 const institutions = Array.from({ length: 7 }, (_, index) => ({
@@ -51,7 +65,7 @@ const mounted = [];
 function mountCity(overrides = {}) {
   const wrapper = mount(CityPanorama, {
     props: { model, cityCode: '610100', ...overrides },
-    global: { stubs: {} }
+    global: { stubs: { CityOperatingHeader: cityOperatingHeaderStub } }
   });
   mounted.push(wrapper);
   return wrapper;
@@ -191,5 +205,44 @@ describe('CityPanorama 市级支行全景', () => {
     await wrapper.get('[data-testid="attention-filter"]').trigger('click');
     const snapshots = wrapper.emitted('state-change') || [];
     expect(snapshots.at(-1)?.[0]).toMatchObject({ search: '高新', attentionOnly: true, sortDescending: true, page: 1 });
+  });
+
+  it('配置页使用当前 citySummary 顶部数据，切换城市即时更新且不泄漏父层 KPI', async () => {
+    const wrapper = mountCity({
+      sourcePresentation: { displayPresentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components: [] } } },
+      model: {
+        ...model,
+        kpis: [{ key: 'deposit', value: 999, unit: '亿元' }],
+        citySummaries: {
+          '610100': { dataDate: '2026-09-20', kpis: [{ key: 'deposit', value: 12, unit: '亿元' }] },
+          '610200': { dataDate: '', kpis: [{ key: 'deposit', value: 34, unit: '亿元' }] }
+        }
+      }
+    });
+
+    expect(wrapper.find('.city-kpi-grid').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="city-header-amount-unit"]').element.value).toBe('TEN_THOUSAND');
+    expect(wrapper.get('[data-testid="city-operating-header"]').get('[data-testid="city-header-deposit"]').text()).toBe('12');
+    expect(wrapper.get('[data-testid="city-operating-header"]').text()).not.toContain('999');
+    await wrapper.setProps({ cityCode: '610200' });
+    expect(wrapper.get('[data-testid="city-operating-header"]').get('[data-testid="city-header-deposit"]').text()).toBe('34');
+    expect(wrapper.get('[data-testid="city-header-date"]').text()).toBe('');
+    await wrapper.setProps({ cityCode: '610300' });
+    expect(wrapper.get('[data-testid="city-operating-header"]').get('[data-testid="city-header-deposit"]').text()).toBe('—');
+  });
+
+  it('城市顶部业务线事件附带当前城市上下文且不夹带选中支行', async () => {
+    const wrapper = mountCity({
+      cityName: '西安市',
+      sourcePresentation: { displayPresentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components: [] } } },
+      initialOrgCode: 'ORG-1',
+      model: { ...model, citySummaries: { '610100': { kpis: [{ key: 'deposit', value: 12, unit: '亿元' }] } } }
+    });
+
+    await wrapper.get('[data-testid="city-header-business-line"]').trigger('click');
+    expect(wrapper.emitted('business-line-select')).toEqual([[{
+      businessLine: 'CORP', tabKey: 'deposit', context: { cityCode: '610100', cityName: '西安市' }
+    }]]);
+    expect(wrapper.emitted('business-line-select')[0][0]).not.toHaveProperty('context.selectedOrgCode');
   });
 });

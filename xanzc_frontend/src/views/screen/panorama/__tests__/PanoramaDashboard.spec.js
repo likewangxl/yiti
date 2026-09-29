@@ -588,6 +588,23 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     expect(wrapper.find('[data-testid="city-panorama-modal"]').exists()).toBe(false);
   });
 
+  it('城市画像业务线事件沿原样转发给容器', async () => {
+    const cityStub = {
+      name: 'CityPanorama',
+      props: ['model', 'cityCode', 'cityName', 'sourcePresentation'],
+      emits: ['business-line-select'],
+      template: '<div data-testid="city-panorama-forward-stub"><button type="button" data-action="city-business-line" @click="$emit(\'business-line-select\', { businessLine: \'CORP\', tabKey: \'deposit\', context: { cityCode: \'610100\', cityName: \'西安市\' } })">业务线</button></div>'
+    };
+    const wrapper = mountDashboard({}, { stubs: { CityPanorama: cityStub } });
+    await wrapper.get('.stub-select-region').trigger('click');
+    await nextTick();
+
+    await wrapper.get('[data-action="city-business-line"]').trigger('click');
+    expect(wrapper.emitted('business-line-select')).toEqual([[{
+      businessLine: 'CORP', tabKey: 'deposit', context: { cityCode: '610100', cityName: '西安市' }
+    }]]);
+  });
+
   it('城市画像关闭后恢复搜索、关注、排序、分页、选中和展开状态', async () => {
     const wrapper = mountDashboard({
       model: {
