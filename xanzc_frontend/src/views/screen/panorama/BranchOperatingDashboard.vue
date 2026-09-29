@@ -206,6 +206,13 @@ import { provinceGeo } from './geography.js';
 import BranchCoreMetrics from './BranchCoreMetrics.vue';
 import BranchAchievementPanel from './BranchAchievementPanel.vue';
 import BranchPerformancePanel from './BranchPerformancePanel.vue';
+import {
+  SCREEN_CHART_AXIS_FONT_SIZE,
+  SCREEN_CHART_FONT_FAMILY,
+  SCREEN_CHART_LABEL_FONT_SIZE,
+  SCREEN_CHART_LEGEND_FONT_SIZE,
+  SCREEN_CHART_TOOLTIP_FONT_SIZE
+} from './screenChartTypography.js';
 
 const props = defineProps({ model: { type: Object, default: () => ({}) }, sourcePresentation: { type: Object, default: null }, loading: { type: Boolean, default: false }, error: { type: String, default: '' }, demo: { type: Boolean, default: false }, performanceEnabled: { type: Boolean, default: false }, performanceRefreshKey: { type: Number, default: 0 } });
 const configuredMetrics = computed(() => buildDisplayMetricsModel(props.sourcePresentation, props.model || {}));
@@ -285,28 +292,28 @@ const hasTrendChart = computed(() => trendRows.value.some(row => String(row.date
 const trendOption = computed(() => ({
   animation: true,
   color: visibleSeries.value.map(item => item.color),
-  grid: { top: 28, right: 16, bottom: 26, left: 40, containLabel: true },
+  grid: { top: 28, right: 20, bottom: 30, left: 52, containLabel: true },
   tooltip: {
     trigger: 'axis',
     axisPointer: { type: 'line' },
     backgroundColor: '#07183e',
     borderColor: 'rgba(71, 233, 239, .36)',
-    textStyle: { color: '#edf4ff', fontSize: 12 },
+    textStyle: { color: '#edf4ff', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_TOOLTIP_FONT_SIZE },
     formatter: params => {
       const items = Array.isArray(params) ? params : [params];
       const date = items[0]?.axisValue || '';
       return [date, ...items.map(item => `${item.seriesName}：${item.value == null ? '—' : formatMetric(item.value)} ${trendUnit.value}`)].join('<br/>');
     }
   },
-  legend: { show: false },
+  legend: { show: false, textStyle: { color: '#9fb2da', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_LEGEND_FONT_SIZE } },
   xAxis: {
     type: 'category', boundaryGap: true, data: trendRows.value.map(row => String(row.date ?? '')),
-    axisLine: { lineStyle: { color: 'rgba(145, 169, 216, .34)' } }, axisTick: { show: false }, axisLabel: { color: '#91a9d8', fontSize: 10 }
+    axisLine: { lineStyle: { color: 'rgba(145, 169, 216, .34)' } }, axisTick: { show: false }, axisLabel: { color: '#91a9d8', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_AXIS_FONT_SIZE }
   },
   yAxis: {
     type: 'value', name: trendUnit.value,
-    nameTextStyle: { color: '#91a9d8', fontSize: 10, padding: [0, 0, 0, -22] },
-    axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#91a9d8', fontSize: 10 }, splitNumber: 3,
+    nameTextStyle: { color: '#91a9d8', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_AXIS_FONT_SIZE, padding: [0, 0, 0, -22] },
+    axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#91a9d8', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_AXIS_FONT_SIZE }, splitNumber: 3,
     splitLine: { lineStyle: { color: 'rgba(119, 163, 255, .13)' } }
   },
   series: visibleSeries.value.map(item => ({
@@ -357,10 +364,10 @@ const marketingDonutRows = computed(() => { const rows = marketingStatusRows.val
 const marketingBarRows = computed(() => marketingRows.value.filter(item => item.count !== null || item.isSla)); const marketingBarMax = computed(() => Math.max(0, ...marketingBarRows.value.map(item => Math.abs(item.count ?? 0))));
 const marketingOption = computed(() => ({
   animation: true,
-  tooltip: { trigger: 'item', backgroundColor: '#07183e', borderColor: 'rgba(167, 123, 255, .4)', textStyle: { color: '#edf4ff', fontSize: 12 }, formatter: params => `${params.name}：${formatCount(params.value)}` },
+  tooltip: { trigger: 'item', backgroundColor: '#07183e', borderColor: 'rgba(167, 123, 255, .4)', textStyle: { color: '#edf4ff', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_TOOLTIP_FONT_SIZE }, formatter: params => `${params.name}：${formatCount(params.value)}` },
   series: [{
     name: '营销状态', type: 'pie', stillShowZeroSum: false, radius: ['54%', '76%'], center: ['50%', '50%'], avoidLabelOverlap: true,
-    label: { color: '#edf4ff', fontSize: 10, formatter: '{b}' }, labelLine: { lineStyle: { color: 'rgba(237, 244, 255, .4)' } }, itemStyle: { borderColor: '#07183e', borderWidth: 3 },
+    label: { color: '#edf4ff', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_LABEL_FONT_SIZE, formatter: '{b}' }, labelLine: { lineStyle: { color: 'rgba(237, 244, 255, .4)' } }, itemStyle: { borderColor: '#07183e', borderWidth: 3 },
     data: marketingDonutRows.value.map(item => ({ name: item.label, value: item.count, itemStyle: { color: item.color } }))
   }]
 }));

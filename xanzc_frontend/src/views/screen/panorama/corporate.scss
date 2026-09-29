@@ -1,3 +1,5 @@
+@use './screenTypography' as typography;
+
 /* 对公经营总览独立视觉层：沿用蓝紫、青色边框和陕西地图背景。 */
 .corporate-dashboard {
   --corporate-bg: #020a21;
@@ -21,7 +23,7 @@
     linear-gradient(180deg, rgba(2, 8, 28, .3), rgba(3, 12, 39, .94)),
     url('@/assets/panorama/panorama-background.png') center bottom / cover no-repeat,
     var(--corporate-bg);
-  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--screen-font-family);
   font-variant-numeric: tabular-nums;
   letter-spacing: .02em;
 }

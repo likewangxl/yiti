@@ -1,3 +1,5 @@
+@use './screenTypography' as typography;
+
 .branch-operating-dashboard {
   --bg: #020a21;
   --bg-deep: #030c27;
@@ -24,7 +26,7 @@
     linear-gradient(180deg, rgba(2, 8, 28, .3), rgba(3, 12, 39, .94)),
     url('@/assets/panorama/panorama-background.png') center bottom / cover no-repeat,
     var(--bg);
-  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--screen-font-family);
   font-variant-numeric: tabular-nums;
   letter-spacing: .01em;
 }

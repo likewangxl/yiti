@@ -375,6 +375,42 @@ describe('PresentationLayout', () => {
     expect(published.find('[data-testid="draft-overview-summary"]').exists()).toBe(false);
   });
 
+  it('总额卡保留交错顺序并接入当前、上月末、上日余额条形图，金额单位随页头切换', async () => {
+    const components = [
+      { componentId: 'business-retail-deposit-balance', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 0, visible: true, text: { titleMode: 'CUSTOM', title: '零售存款余额' }, format: { displayUnit: 'HUNDRED_MILLION' }, content: { mainField: 'value' }, dataRefs: [{ blockId: 31, metricCode: 'retailDeposit', unit: 'HUNDRED_MILLION' }] },
+      { componentId: 'business-corp-deposit-balance', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 1, visible: true, text: { titleMode: 'CUSTOM', title: '对公存款余额' }, format: { displayUnit: 'HUNDRED_MILLION' }, content: { mainField: 'value' }, dataRefs: [{ blockId: 31, metricCode: 'corpDeposit', unit: 'HUNDRED_MILLION' }] },
+      { componentId: 'business-retail-loan-balance', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 2, visible: true, text: { titleMode: 'CUSTOM', title: '零售贷款余额' }, format: { displayUnit: 'HUNDRED_MILLION' }, content: { mainField: 'value' }, dataRefs: [{ blockId: 31, metricCode: 'retailLoan', unit: 'HUNDRED_MILLION' }] },
+      { componentId: 'business-corp-loan-balance', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 3, visible: true, text: { titleMode: 'CUSTOM', title: '对公贷款余额' }, format: { displayUnit: 'HUNDRED_MILLION' }, content: { mainField: 'value' }, dataRefs: [{ blockId: 31, metricCode: 'corpLoan', unit: 'HUNDRED_MILLION' }] },
+      { componentId: 'left-structure', componentType: 'COMPOSITION_TABS', layoutRegion: 'LEFT', order: 0, visible: true, text: { titleMode: 'CUSTOM', title: '业务结构' }, content: { tabs: [] }, dataRefs: [] }
+    ];
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        amountUnit: 'HUNDRED_MILLION',
+        draftOverview: true,
+        presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components } },
+        model: {
+          dataDate: '2028-03-02',
+          kpis: [
+            { key: 'deposit', value: 120, unit: '亿元', dataDate: '2028-03-02', comparisons: { month: { value: 20, unit: '亿元', referenceDate: '2028-02-29' }, day: { value: 10, unit: '亿元', referenceDate: '2028-03-01' } } },
+            { key: 'loan', value: 80, unit: '亿元', dataDate: '2028-03-02', comparisons: { month: { value: 8, unit: '亿元', referenceDate: '2028-02-29' }, day: { value: 5, unit: '亿元', referenceDate: '2028-03-01' } } }
+          ]
+        }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+
+    expect(wrapper.get('[data-testid="draft-overview-summary"]').findAll('[data-testid="draft-overview-summary-card"]').map(node => node.attributes('data-summary-key')))
+      .toEqual(['deposit', 'deposit-composition', 'loan', 'loan-composition']);
+    expect(wrapper.get('[data-summary-key="deposit"] [data-testid="overview-balance-chart"]').attributes('data-state')).toBe('READY');
+    expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="month"]').text()).toContain('100.00亿元');
+    expect(wrapper.get('[data-summary-key="loan"] .presentation-layout__overview-summary-card-comparisons').text()).toContain('较上日 +5.00亿元');
+
+    await wrapper.setProps({ amountUnit: 'TEN_THOUSAND' });
+    expect(wrapper.get('[data-summary-key="deposit"] [data-testid="overview-balance-chart"]').attributes('data-unit')).toBe('TEN_THOUSAND');
+    expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="current"]').text()).toContain('1,200,000.00万元');
+  });
+
   it('未发布分行总览按总额与业务分布交错排列，左下只保留收入且其他业务结构不受过滤', async () => {
     const composition = (componentId, layoutRegion, order) => ({
       componentId, componentType: 'COMPOSITION_TABS', layoutRegion, order, visible: true,

@@ -40,6 +40,13 @@ import {
   TooltipComponent
 } from 'echarts/components';
 import VChart from 'vue-echarts';
+import {
+  SCREEN_CHART_AXIS_FONT_SIZE,
+  SCREEN_CHART_FONT_FAMILY,
+  SCREEN_CHART_LABEL_FONT_SIZE,
+  SCREEN_CHART_LEGEND_FONT_SIZE,
+  SCREEN_CHART_TOOLTIP_FONT_SIZE
+} from './screenChartTypography.js';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent, AxisPointerComponent]);
 
@@ -89,25 +96,25 @@ const hasChart = computed(() => labels.value.some(Boolean)
 const option = computed(() => ({
   animation: true,
   color: seriesDefinitions.map(item => item.color),
-  grid: { top: 29, right: 44, bottom: 26, left: 46, containLabel: true },
+  grid: { top: 34, right: 48, bottom: 30, left: 54, containLabel: true },
   tooltip: {
     trigger: 'axis',
     axisPointer: { type: 'line' },
     backgroundColor: 'rgba(7, 18, 53, .96)',
     borderColor: 'rgba(117, 158, 255, .38)',
-    textStyle: { color: '#e8efff', fontSize: 12 }
+    textStyle: { color: '#e8efff', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_TOOLTIP_FONT_SIZE }
   },
-  legend: { show: false, data: seriesDefinitions.map(item => item.name) },
+  legend: { show: false, data: seriesDefinitions.map(item => item.name), textStyle: { color: '#9fb2da', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_LEGEND_FONT_SIZE } },
   xAxis: {
     type: 'category', boundaryGap: false, data: labels.value,
     axisLine: { lineStyle: { color: 'rgba(130, 165, 235, .24)' } },
-    axisTick: { show: false }, axisLabel: { color: '#8ea5d2', fontSize: 10 }
+    axisTick: { show: false }, axisLabel: { color: '#8ea5d2', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_AXIS_FONT_SIZE }
   },
   yAxis: {
     type: 'value', name: '亿元',
-    nameTextStyle: { color: '#7e9bce', fontSize: 10, padding: [0, 0, 0, -28] },
+    nameTextStyle: { color: '#7e9bce', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_AXIS_FONT_SIZE, padding: [0, 0, 0, -28] },
     splitNumber: 3, axisLine: { show: false }, axisTick: { show: false },
-    axisLabel: { color: '#8ea5d2', fontSize: 10 },
+    axisLabel: { color: '#8ea5d2', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_AXIS_FONT_SIZE },
     splitLine: { lineStyle: { color: 'rgba(104, 143, 217, .12)' } }
   },
   series: series.value.map(item => ({
@@ -116,7 +123,8 @@ const option = computed(() => ({
       show: true,
       position: 'top',
       color: item.itemStyle.color,
-      fontSize: 10,
+      fontFamily: SCREEN_CHART_FONT_FAMILY,
+      fontSize: SCREEN_CHART_LABEL_FONT_SIZE,
       formatter: params => {
         const index = Number(params?.dataIndex);
         if (rows.value.length > 4 && index !== 0 && index !== rows.value.length - 1) return '';

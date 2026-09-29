@@ -1,0 +1,654 @@
+/*
+ * Code-driven screen typography.
+ *
+ * Keep every rule behind an explicit screen root so the platform desktop
+ * pages keep their own type scale. The viewport-based clamps are anchored to
+ * the 1920px acceptance viewport and grow modestly on 4K screens.
+ */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) {
+  --screen-font-family: "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  --screen-font-size-title: clamp(32px, 2.5vw, 64px);
+  --screen-font-size-section-title: clamp(16px, .9375vw, 22px);
+  --screen-font-size-widget-title: clamp(14px, .729vw, 17px);
+  --screen-font-size-content: clamp(14px, .729vw, 18px);
+  --screen-font-size-label: clamp(14px, .729vw, 18px);
+  --screen-font-size-auxiliary: clamp(12px, .625vw, 15px);
+  --screen-font-size-value: clamp(26px, 1.5vw, 38px);
+  --screen-font-size-ring-value: clamp(16px, .885vw, 20px);
+  --screen-compact-ring-size: clamp(80px, 4.1667vw, 112px);
+
+  /* Aliases shared with the summary/layout typography layer. */
+  --screen-font-body: var(--screen-font-size-content);
+  --screen-font-label: var(--screen-font-size-label);
+  --screen-font-caption: var(--screen-font-size-auxiliary);
+  --screen-font-value: var(--screen-font-size-value);
+
+  font-family: var(--screen-font-family);
+  font-size: var(--screen-font-size-content);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(button, input, select, textarea) {
+  font-family: inherit;
+}
+
+/* Main screen titles stay aligned across the legacy panorama and the three
+ * code-driven overview screens. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(
+  .panorama-title-block h1,
+  .city-title-block h1,
+  .corporate-header__title h1,
+  .retail-header__title h1,
+  .branch-operating-header h1
+) {
+  font-size: var(--screen-font-size-title);
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+/* These are the section titles measured by the screen acceptance script. A
+ * single token also overrides PresentationLayout's scoped 12px group rule,
+ * compact composition's 12px rule, and the 15/16px map/trend/ranking rules. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(
+  .presentation-layout__metric-group-header h2,
+  .presentation-map-widget h2,
+  .composition-tabs-widget__header h2,
+  .presentation-series-table h2,
+  .business-growth-widget__heading h2,
+  .institution-ranking-widget h2,
+  .corporate-trend__heading h2,
+  .retail-trend__heading h2,
+  .panorama-panel-heading h2,
+  .corporate-panel__heading h2,
+  .retail-panel__heading h2,
+  .branch-operating-panel__heading h2,
+  .city-detail-heading h2
+) {
+  font-size: var(--screen-font-size-section-title);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* The h2 inside a metric card is intentionally a separate, smaller tier from
+ * a panel heading while remaining legible above the old 12px baseline. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(
+  .presentation-metric-widget__header h2,
+  .composition-ring-card__heading strong,
+  .business-growth-widget__chart h3
+) {
+  font-size: var(--screen-font-size-widget-title);
+  line-height: 1.25;
+}
+
+/* The compact composition is used in the top summary cards. It is still a
+ * section heading, so it follows the same 18px@1920 scale while its ring and
+ * legend remain independently sized by the widget. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .composition-tabs-widget--compact .composition-tabs-widget__header h2 {
+  font-size: var(--screen-font-size-section-title);
+}
+
+/* Labels and compact metadata that were previously 8–11px. Keep the map and
+ * table geometry intact while bringing readable text up to the shared floor. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(
+  .panorama-kpi-label,
+  .city-kpi-label,
+  .corporate-kpi__label,
+  .retail-kpi__label,
+  .branch-operating-kpi__label,
+  .panorama-deposit-card-label,
+  .corporate-data-card > span,
+  .retail-data-card > span,
+  .presentation-layout__overview-summary-card > span,
+  .presentation-layout__metric-group-more,
+  .presentation-map-widget__legend,
+  .presentation-series-table th,
+  .corporate-panel__note,
+  .retail-panel__note,
+  .branch-operating-panel__meta,
+  .branch-operating-target-focus__eyebrow
+) {
+  font-size: var(--screen-font-size-label);
+  line-height: 1.35;
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(
+  .panorama-breadcrumb,
+  .panorama-eyebrow,
+  .panorama-title-kicker,
+  .panorama-section-kicker,
+  .corporate-eyebrow,
+  .corporate-kicker,
+  .corporate-title-kicker,
+  .retail-eyebrow,
+  .retail-kicker,
+  .retail-title-kicker,
+  .branch-operating-eyebrow,
+  .branch-operating-kicker,
+  .presentation-layout__overview-summary-card-comparisons,
+  .presentation-layout__overview-summary-card-comparisons span,
+  .presentation-metric-widget__header p,
+  .presentation-metric-widget__header small,
+  .presentation-metric-widget__description,
+  .presentation-metric-widget__comparisons,
+  .presentation-metric-widget__month-delta,
+  .presentation-metric-widget__status,
+  .presentation-metric-widget__sub-fields,
+  .presentation-series-table header p,
+  .presentation-series-table header small,
+  .presentation-series-table__empty,
+  .presentation-map-widget__kicker,
+  .presentation-map-widget__header p,
+  .presentation-map-widget__meta,
+  .panorama-panel-heading > span,
+  .panorama-panel-subheading,
+  .panorama-map-hint,
+  .city-map-legend,
+  .corporate-map-toolbar,
+  .retail-map-toolbar,
+  .branch-operating-footer
+) {
+  font-size: var(--screen-font-size-auxiliary);
+  line-height: 1.35;
+}
+
+/* Major values use the value tier; min-width and wrapping prevent long units
+ * from being hidden by the fixed-width KPI and summary cards. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(
+  .panorama-kpi-value,
+  .city-kpi strong,
+  .corporate-kpi__number strong,
+  .retail-kpi__number strong,
+  .branch-operating-kpi__value-line strong,
+  .panorama-deposit-card strong,
+  .corporate-data-card strong,
+  .retail-data-card strong,
+  .presentation-layout__overview-summary-card > strong,
+  .presentation-metric-widget__value
+) {
+  min-width: 0;
+  max-width: 100%;
+  font-size: var(--screen-font-size-value);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+}
+
+/* Scoped widget rules carry a data attribute. The root plus component class
+ * keeps these overrides local and gives the shared value tier precedence over
+ * the old unit-specific 12–22px declarations without using !important. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .presentation-metric-widget.presentation-metric-widget--grouped[data-component-type] .presentation-metric-widget__value {
+  font-size: clamp(24px, 1.35vw, 32px);
+}
+
+/* Draft/grouped widget styles are scoped in PresentationLayout and
+ * MetricDisplayWidgets. Include the widget ancestors so the shared type tier
+ * wins without !important. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .presentation-metric-widgets .presentation-metric-widget.presentation-metric-widget--grouped[data-component-type] .presentation-metric-widget__header h2 {
+  font-size: var(--screen-font-size-widget-title);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .presentation-metric-widgets .presentation-metric-widget[data-component-type] :is(.presentation-metric-widget__comparisons, .presentation-metric-widget__month-delta) {
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(
+  .panorama-kpi-unit,
+  .panorama-kpi-change small,
+  .city-kpi small,
+  .corporate-kpi__number small,
+  .retail-kpi__number small,
+  .branch-operating-kpi__value-line span,
+  .presentation-layout__overview-summary-card-comparisons,
+  .presentation-metric-widget__value-line,
+  .composition-ring-card__heading span
+) {
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+/* Map labels and tooltip panels are DOM overlays (or SVG text) inside child
+ * components, so they can inherit the same screen-local scale from here. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(
+  .panorama-map__metric-heading,
+  .panorama-map__region-label-hit,
+  .panorama-map__point-label,
+  .panorama-map__cluster-picker-head,
+  .panorama-map__city-detail,
+  .panorama-map__city-detail header small,
+  .panorama-map__detail-counts,
+  .panorama-map__detail-metrics span,
+  .panorama-map__detail-institution-list,
+  .panorama-map__detail-institution-list--names > span,
+  .panorama-map__detail-institution-list h4,
+  .panorama-map__detail-institution-list dt,
+  .panorama-map__point-callout-card,
+  .panorama-map__cluster-member
+) {
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .panorama-map__region-label-hit :is(.panorama-map__city-name, .panorama-map__metric-value),
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .panorama-map__point-label .panorama-map__metric-value {
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+/* Compact summary rings keep the compact geometry but use readable text. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .composition-tabs-widget.composition-tabs-widget--compact :is(.composition-ring-card__legend button, .composition-ring-card__legend button strong) {
+  font-size: var(--screen-font-size-label);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .composition-tabs-widget.composition-tabs-widget--compact .composition-ring__center strong {
+  font-size: var(--screen-font-size-ring-value);
+}
+
+/* A compact overview card gets the same responsive first column as its ring;
+ * this keeps 4K values such as 22.63 and 18.83 inside the enlarged ring. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .composition-tabs-widget[data-compact="true"] .composition-ring-card {
+  grid-template-columns: var(--screen-compact-ring-size) minmax(0, 1fr);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .composition-tabs-widget[data-compact="true"] .composition-ring {
+  width: var(--screen-compact-ring-size);
+  height: var(--screen-compact-ring-size);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .composition-tabs-widget[data-compact="true"] .composition-ring::after {
+  inset: clamp(10px, .5vw, 14px);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .composition-tabs-widget.composition-tabs-widget--compact :is(.composition-ring__center small, .composition-ring-card__heading span, .composition-ring-card__status) {
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .composition-tabs-widget .composition-ring__center strong {
+  font-size: var(--screen-font-size-ring-value);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .composition-tabs-widget .composition-ring__center small {
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .presentation-layout .composition-tabs-widget .composition-ring-card__legend button,
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .presentation-layout .composition-tabs-widget .composition-ring-card__legend button strong {
+  font-size: var(--screen-font-size-label);
+}
+
+/* Branch overview adds a deep first-child selector for the income ring. Keep
+ * its caption and legend on the same shared scale after that compact layout
+ * rule is applied. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .presentation-layout.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child .composition-ring__center small {
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .presentation-layout.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child .composition-ring-card__legend button,
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .presentation-layout.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child .composition-ring-card__legend button strong {
+  font-size: var(--screen-font-size-label);
+}
+
+/* Institution tables have enough width in the ranking panel for 14px body
+ * values; the ancestor selector beats the widget's scoped 12px cell rule. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .institution-ranking-widget table td {
+  font-size: var(--screen-font-size-label);
+}
+
+/* Keep the rightmost ranking amount column wide enough for a value plus unit
+ * at 4K. The explicit last-child selector beats the widget's fixed 86/70px
+ * table rule while preserving nowrap semantics for ordinary rows. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .institution-ranking-widget[data-testid="institution-ranking-widget"] table td:last-child {
+  width: clamp(86px, 5.5vw, 120px);
+  min-width: clamp(86px, 5.5vw, 120px);
+  max-width: clamp(86px, 5.5vw, 120px);
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+/* Existing screen sheets contain compact 7–11px text in table headers,
+ * metadata and support rows. Promote readable content to the shared 12px
+ * floor; icon glyphs, SVG coordinates and headline values are excluded. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(
+  .panorama-breadcrumb,
+  .panorama-eyebrow,
+  .panorama-title-kicker,
+  .panorama-section-kicker,
+  .panorama-live-state,
+  .panorama-demo-badge,
+  .panorama-kpi-unit,
+  .panorama-kpi-change small,
+  .panorama-diagnostic-label,
+  .panorama-completion-summary > span,
+  .panorama-diagnostic-unit,
+  .panorama-diagnostic-card small,
+  .panorama-panel-heading > span,
+  .panorama-panel-subheading,
+  .panorama-map-hint,
+  .panorama-deposit-card-unit,
+  .panorama-unbound-label,
+  .panorama-mini-summary,
+  .panorama-target-summary-label,
+  .panorama-target-gap,
+  .panorama-panel-date,
+  .panorama-unit-note,
+  .panorama-ranking-list li,
+  .panorama-ranking-list li > span:last-child,
+  .panorama-attention-heading-meta,
+  .panorama-matrix-legend,
+  .panorama-ranking-detail-panel .panorama-detail-table th,
+  .panorama-ranking-detail-panel .panorama-detail-table td small,
+  .panorama-attention-list li,
+  .panorama-attention-copy > small,
+  .panorama-detail-table,
+  .city-kpi small,
+  .city-summary-unbound,
+  .city-leadership-card > span,
+  .city-leadership-card small,
+  .city-filter-tabs button,
+  .city-map-legend,
+  .city-coordinate-note,
+  .city-list-panel .panorama-panel-heading h2 small,
+  .city-sort-button,
+  .city-branch-columns,
+  .city-branch-row,
+  .city-branch-rank,
+  .city-missing-coordinates,
+  .city-pagination,
+  .city-detail-heading span,
+  .city-detail-heading button,
+  .city-detail-metrics span,
+  .city-detail-observation span,
+  .city-detail-attention li,
+  .corporate-eyebrow,
+  .corporate-kicker,
+  .corporate-title-kicker,
+  .corporate-live-state,
+  .corporate-demo-badge,
+  .corporate-kpi__number small,
+  .corporate-kpi__change small,
+  .corporate-panel__heading > span:last-child,
+  .corporate-panel__note,
+  .corporate-data-card small,
+  .corporate-deposit__footer,
+  .corporate-segment-head,
+  .corporate-segment-row,
+  .corporate-segment-row > small,
+  .corporate-segment-row > em,
+  .corporate-attention-list__main small,
+  .corporate-map-panel__meta > span,
+  .corporate-map-toolbar,
+  .corporate-scope-note,
+  .corporate-selected-city,
+  .corporate-trend__meta,
+  .corporate-segmented button,
+  .corporate-ranking-unit,
+  .corporate-ranking-matrix-head,
+  .corporate-ranking-matrix-head small,
+  .corporate-ranking-matrix-note,
+  .corporate-ranking-hint,
+  .corporate-target-row__meta,
+  .corporate-target-invalid,
+  .corporate-attention-dialog__demo,
+  .corporate-attention-dialog dl > div,
+  .corporate-institution-dialog dl > div,
+  .corporate-attention-description p,
+  .corporate-attention-description small,
+  .corporate-attention-dialog footer button,
+  .corporate-directory-dialog__header p,
+  .retail-eyebrow,
+  .retail-kicker,
+  .retail-title-kicker,
+  .retail-live-state,
+  .retail-demo-badge,
+  .retail-kpi__number small,
+  .retail-kpi__change small,
+  .retail-panel__heading > span:last-child,
+  .retail-panel__note,
+  .retail-data-card small,
+  .retail-savings__footer,
+  .retail-savings__difference,
+  .retail-segment-compare-head,
+  .retail-segment-row,
+  .retail-segment-row > small,
+  .retail-share em,
+  .retail-share strong,
+  .retail-segment-row__average,
+  .retail-attention-list__main small,
+  .retail-attention-difference > header strong,
+  .retail-attention-difference > header small,
+  .retail-attention-difference button,
+  .retail-attention-difference button strong,
+  .retail-map-panel__meta > span,
+  .retail-map-toolbar,
+  .retail-scope-note,
+  .retail-selected-city,
+  .retail-trend__meta,
+  .retail-trend__legend,
+  .retail-trend-summary,
+  .retail-trend-summary strong,
+  .retail-segmented button,
+  .retail-ranking-unit,
+  .retail-ranking-matrix-head,
+  .retail-ranking-matrix-head small,
+  .retail-ranking-matrix-note,
+  .retail-ranking-hint,
+  .retail-institution-table-head,
+  .retail-institution-table-head small,
+  .retail-institution-row,
+  .retail-institution-row > small,
+  .retail-institution-row__name small,
+  .retail-institution-footer,
+  .retail-pagination button,
+  .retail-target-row__meta,
+  .retail-target-invalid,
+  .retail-target-empty,
+  .retail-directory-dialog__header p,
+  .retail-directory-dialog__toolbar > span,
+  .retail-directory-row__identity small,
+  .retail-directory-row > span:nth-child(2),
+  .retail-directory-row > span:last-child,
+  .retail-directory-detail dl > div,
+  .retail-directory-detail__metric-grid span,
+  .retail-directory-detail__metric-grid small,
+  .retail-directory-detail__rank > div,
+  .retail-directory-detail__rank > div > small,
+  .retail-directory-detail > p,
+  .retail-directory-detail__source-note,
+  .retail-attention-detail__demo,
+  .retail-attention-detail__facts > div,
+  .retail-attention-detail__description p,
+  .retail-attention-detail__close,
+  .branch-operating-eyebrow,
+  .branch-operating-kicker,
+  .branch-operating-branch-picker__label,
+  .branch-operating-data-date,
+  .branch-operating-live-state,
+  .branch-operating-notice,
+  .branch-operating-demo-badge,
+  .branch-operating-kpi__status,
+  .branch-operating-kpi__value-line span,
+  .branch-operating-kpi__changes,
+  .branch-operating-kpi__date,
+  .branch-operating-panel__meta,
+  .branch-operating-metric-switch button,
+  .branch-operating-target-ring span,
+  .branch-operating-target-focus__numbers small,
+  .branch-operating-target-focus__numbers em,
+  .branch-operating-target-focus__gap,
+  .branch-operating-target-bullet,
+  .branch-operating-target-match-empty,
+  .branch-operating-target-row__topline,
+  .branch-operating-target-row__numbers,
+  .branch-operating-target-row__numbers small,
+  .branch-operating-period-compare--secondary,
+  .branch-operating-period-compare__note,
+  .branch-operating-period-row__head span,
+  .branch-operating-period-row__values,
+  .branch-operating-composition-row__label,
+  .branch-operating-composition-row__value small,
+  .branch-operating-trend__legend,
+  .branch-operating-marketing-row,
+  .branch-operating-project-table-head,
+  .branch-operating-project__topline,
+  .branch-operating-project__topline span,
+  .branch-operating-project__meta,
+  .branch-operating-project__meta b,
+  .branch-operating-attention-row,
+  .branch-operating-team-table,
+  .branch-operating-footer
+) {
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+/* Main ranking values and names have room for the 14px label tier; matrix
+ * headers and units stay at the 12px auxiliary tier above. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(
+  .corporate-segment-row > strong,
+  .corporate-ranking-row__name,
+  .corporate-ranking-row__sort-value,
+  .corporate-ranking-row__metric,
+  .retail-ranking-row__name,
+  .retail-ranking-row__sort-value,
+  .retail-ranking-row__metric,
+  .retail-institution-row > strong,
+  .retail-institution-row__name strong,
+  .branch-operating-composition-row__value,
+  .branch-operating-project__topline strong,
+  .branch-operating-project__meta b
+) {
+  font-size: var(--screen-font-size-label);
+}
+
+/* PanoramaMap.vue owns scoped map styles; use its placement attribute and the
+ * screen root to override the 10px metric child without touching SVG units. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .panorama-map[data-label-layout] .panorama-map__region-label-hit[data-label-placement] .panorama-map__metric-value {
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+/* The city tooltip is teleported out of the screen root, so it cannot inherit
+ * the root token directly.
+ * Its class is screen-specific; keep the host self-contained and set the
+ * heading/body tiers explicitly for the floating panel. */
+body .panorama-map__city-detail.panorama-map__city-detail[role="tooltip"] {
+  --screen-font-family: "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  --screen-font-size-auxiliary: clamp(12px, .625vw, 15px);
+  --screen-font-size-label: clamp(14px, .729vw, 18px);
+  --screen-font-size-section-title: clamp(16px, .9375vw, 22px);
+  font-family: var(--screen-font-family);
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+body .panorama-map__city-detail.panorama-map__city-detail[role="tooltip"] h3 {
+  font-size: var(--screen-font-size-section-title);
+}
+
+body .panorama-map__city-detail.panorama-map__city-detail[role="tooltip"] :is(
+  header small,
+  .panorama-map__detail-status,
+  .panorama-map__detail-counts,
+  .panorama-map__detail-metrics span,
+  .panorama-map__detail-institution-list dt,
+  .panorama-map__detail-institution-list--names > span,
+  .panorama-map__detail-institution-list small,
+  .panorama-map__detail-institutions,
+  footer
+) {
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+body .panorama-map__city-detail.panorama-map__city-detail[role="tooltip"] :is(
+  .panorama-map__detail-counts b,
+  .panorama-map__detail-metrics strong,
+  .panorama-map__detail-institution-list--names li button,
+  .panorama-map__detail-institution-list dd
+) {
+  font-size: var(--screen-font-size-label);
+}
+
+/* Scoped branch drilldown widgets are mounted beneath the same roots but own
+ * their compact style blocks, so list their text tiers explicitly here. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(
+  .presentation-layout__metric-group-header small,
+  .completion-ring-gauge__value,
+  .business-growth-widget__heading small,
+  .business-growth-widget__empty,
+  .branch-incomplete-achievement__kicker,
+  .branch-incomplete-achievement__header p,
+  .branch-incomplete-achievement__meta,
+  .branch-incomplete-achievement__empty,
+  .branch-performance__eyebrow,
+  .branch-performance__controls label,
+  .branch-performance__controls button,
+  .branch-performance__empty,
+  .branch-performance__source,
+  .branch-performance__ranking-heading p
+) {
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .composition-tabs-widget .composition-ring-card__heading span,
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .composition-tabs-widget .composition-ring-card__status {
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+/* The two compact trend charts need real plot height after axis labels grow;
+ * restore the 170px chart floor and reserve enough room for both rows. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .business-growth-widget[data-testid="business-growth-widget"] {
+  min-height: 480px;
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .business-growth-widget[data-testid="business-growth-widget"] .business-growth-widget__charts {
+  min-height: 450px;
+  grid-template-rows: repeat(2, minmax(200px, 1fr));
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .business-growth-widget[data-testid="business-growth-widget"] .business-growth-widget__chart {
+  min-height: 200px;
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .business-growth-widget[data-testid="business-growth-widget"] .business-growth-widget__chart .panorama-trend.is-compact .panorama-trend-chart {
+  min-height: 170px;
+  flex-basis: 170px;
+}
+
+/* Branch overview uses the same non-compact income ring in its main column. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .presentation-layout.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child .composition-ring {
+  width: var(--screen-compact-ring-size);
+  height: var(--screen-compact-ring-size);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .presentation-layout.presentation-layout--branch-overview .presentation-layout__column--branch-overview > .presentation-layout__component:first-child .composition-ring::after {
+  inset: clamp(10px, .5vw, 14px);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(
+  .institution-ranking-widget__kicker,
+  .institution-ranking-widget__meta,
+  .institution-ranking-widget__meta button,
+  .institution-ranking-widget__metrics button,
+  .institution-ranking-widget__pagination,
+  .institution-ranking-widget__pagination button,
+  .presentation-map-widget__legend,
+  .presentation-map-widget__legend small,
+  .panorama-map__cluster-count,
+  .city-inline-status
+) {
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+/* These canvas/SVG labels are intentionally explicit rather than a wildcard:
+ * icon and SVG geometry sizes must keep their existing coordinate system. */
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .panorama-map[data-label-layout] .panorama-map__region-label text {
+  font-size: 2.4px;
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(
+  .presentation-layout__overview-summary-card > strong,
+  .presentation-metric-widget__value,
+  .panorama-kpi-value,
+  .city-kpi strong,
+  .corporate-kpi__number strong,
+  .retail-kpi__number strong,
+  .branch-operating-kpi__value-line strong
+) {
+  text-overflow: clip;
+}

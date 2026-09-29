@@ -47,6 +47,13 @@ import {
 import VChart from 'vue-echarts';
 import { defaultTrendMetric, finiteMetric, hasTrendMetric } from './panoramaViewModel.js';
 import { canonicalUnit, formatDisplayMetric } from '../presentation/model/displayMetricsModel.js';
+import {
+  SCREEN_CHART_AXIS_FONT_SIZE,
+  SCREEN_CHART_FONT_FAMILY,
+  SCREEN_CHART_LABEL_FONT_SIZE,
+  SCREEN_CHART_LEGEND_FONT_SIZE,
+  SCREEN_CHART_TOOLTIP_FONT_SIZE
+} from './screenChartTypography.js';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent, AxisPointerComponent]);
 
@@ -184,7 +191,8 @@ const optionSeries = computed(() => normalizedSeries.value.map(item => {
       show: props.amountFriendly ? false : true,
       position: 'top',
       color: item.color,
-      fontSize: 10,
+      fontFamily: SCREEN_CHART_FONT_FAMILY,
+      fontSize: SCREEN_CHART_LABEL_FONT_SIZE,
       formatter: params => {
         // Keep the chart readable while retaining the reference's visible endpoints.
         const showLabel = pointCount <= 4 || params.dataIndex === 0 || params.dataIndex === pointCount - 1;
@@ -217,14 +225,14 @@ const option = computed(() => ({
   animation: true,
   color: normalizedSeries.value.map(item => item.color),
   grid: props.compact
-    ? { top: 21, right: 44, bottom: 21, left: 40, containLabel: true }
-    : { top: 34, right: 44, bottom: 26, left: 48, containLabel: true },
+    ? { top: 26, right: 48, bottom: 28, left: 48, containLabel: true }
+    : { top: 38, right: 48, bottom: 30, left: 54, containLabel: true },
   tooltip: {
     trigger: 'axis',
     axisPointer: { type: 'line' },
     backgroundColor: 'rgba(7, 18, 53, .96)',
     borderColor: 'rgba(117, 158, 255, .38)',
-    textStyle: { color: '#e8efff', fontSize: 12 },
+    textStyle: { color: '#e8efff', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_TOOLTIP_FONT_SIZE },
     ...(props.amountFriendly || selectedAmountUnit.value ? {
       // 使用 body 浮层避开业务卡片 overflow:hidden 对日期和数值的裁剪。
       renderMode: 'html',
@@ -240,7 +248,7 @@ const option = computed(() => ({
     left: 'center',
     itemWidth: 18,
     itemHeight: 3,
-    textStyle: { color: '#9fb2da', fontSize: 11 }
+    textStyle: { color: '#9fb2da', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_LEGEND_FONT_SIZE }
   },
   xAxis: {
     type: 'category',
@@ -248,7 +256,7 @@ const option = computed(() => ({
     data: labels.value,
     axisLine: { lineStyle: { color: 'rgba(130, 165, 235, .24)' } },
     axisTick: { show: false },
-    axisLabel: { color: '#8ea5d2', fontSize: 10 }
+    axisLabel: { color: '#8ea5d2', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_AXIS_FONT_SIZE }
   },
   yAxis: {
     type: 'value',
@@ -257,7 +265,8 @@ const option = computed(() => ({
     axisTick: { show: false },
     axisLabel: {
       color: '#8ea5d2',
-      fontSize: 10,
+      fontFamily: SCREEN_CHART_FONT_FAMILY,
+      fontSize: SCREEN_CHART_AXIS_FONT_SIZE,
       ...(selectedAmountUnit.value
         ? { formatter: formatSelectedAmount }
         : props.amountFriendly ? { formatter: formatCompactValue } : {})

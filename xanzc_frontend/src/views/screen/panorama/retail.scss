@@ -1,3 +1,5 @@
+@use './screenTypography' as typography;
+
 /* 零售经营大屏独立视觉层：复用分行总览的蓝紫、青色边框和背景资产。 */
 .retail-dashboard {
   --retail-bg: #020a21;
@@ -22,7 +24,7 @@
     linear-gradient(180deg, rgba(2, 8, 28, .3), rgba(3, 12, 39, .94)),
     url('@/assets/panorama/panorama-background.png') center bottom / cover no-repeat,
     var(--retail-bg);
-  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--screen-font-family);
   font-variant-numeric: tabular-nums;
   letter-spacing: .02em;
 }

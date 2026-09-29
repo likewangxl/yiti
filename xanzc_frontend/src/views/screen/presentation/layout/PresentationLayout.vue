@@ -31,8 +31,11 @@
           />
         </div>
         <template v-else>
-          <span>{{ card.label }}</span>
-          <strong>{{ card.text }}</strong>
+          <div class="presentation-layout__overview-summary-card-heading">
+            <span>{{ card.label }}</span>
+            <strong>{{ card.text }}</strong>
+          </div>
+          <OverviewBalanceChart :metric="card.metric" :display-unit="overviewSummary.displayUnit" />
           <div v-if="card.comparisons?.length" class="presentation-layout__overview-summary-card-comparisons" aria-label="三维对比">
             <span v-for="comparison in card.comparisons" :key="comparison.key" :title="comparison.referenceDate ? `${comparison.text}（基准日 ${comparison.referenceDate}）` : comparison.text">{{ comparison.text }}</span>
           </div>
@@ -265,6 +268,7 @@ import RevenueShareWidget from '../widgets/RevenueShareWidget.vue';
 import SeriesTableWidgets from '../widgets/SeriesTableWidgets.vue';
 import BusinessGrowthWidget from '../widgets/BusinessGrowthWidget.vue';
 import CompositionTabsWidget from '../widgets/CompositionTabsWidget.vue';
+import OverviewBalanceChart from '../widgets/OverviewBalanceChart.vue';
 import InstitutionRankingWidget from '../widgets/InstitutionRankingWidget.vue';
 import PresentationMapWidget from '../map/PresentationMapWidget.vue';
 import { buildDisplayMetricsModel, canonicalUnit, formatDisplayMetric } from '../model/displayMetricsModel';
@@ -544,10 +548,11 @@ const overviewSummary = computed(() => {
   const depositComposition = overviewCompositionCard('deposit', '存款业务分布');
   const loanComposition = overviewCompositionCard('loan', '贷款业务分布');
   return {
+    displayUnit,
     cards: [
-      { key: 'deposit', label: '存款总额', text: displaySummaryValue(deposit, displayUnit), comparisons: summaryCardComparisons(deposit, displayUnit) },
+      { key: 'deposit', label: '存款总额', text: displaySummaryValue(deposit, displayUnit), metric: deposit, comparisons: summaryCardComparisons(deposit, displayUnit) },
       ...(depositComposition ? [depositComposition] : []),
-      { key: 'loan', label: '贷款总额', text: displaySummaryValue(loan, displayUnit), comparisons: summaryCardComparisons(loan, displayUnit) },
+      { key: 'loan', label: '贷款总额', text: displaySummaryValue(loan, displayUnit), metric: loan, comparisons: summaryCardComparisons(loan, displayUnit) },
       ...(loanComposition ? [loanComposition] : [])
     ]
   };
@@ -727,23 +732,30 @@ function onMapContext(payload) {
 }
 .presentation-layout__overview-summary-card {
   display: grid;
+  container-type: inline-size;
+  container-name: overview-summary-card;
   min-width: 0;
-  min-height: 56px;
-  align-items: center;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  min-height: 112px;
+  align-content: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
   padding: 7px 11px;
   border: 1px solid var(--presentation-border-soft);
   border-radius: 7px;
   background: rgba(8, 24, 61, .7);
 }
-.presentation-layout__overview-summary-card span { overflow: hidden; color: var(--presentation-text-dim); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.presentation-layout__overview-summary-card strong { color: var(--presentation-text); font-size: clamp(16px, 1.25vw, 22px); white-space: nowrap; }
-.presentation-layout__overview-summary-card-comparisons { display: grid; min-width: 0; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; color: var(--presentation-text-dim); font-size: 11px; line-height: 1.2; }
+.presentation-layout__overview-summary-card-heading { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 10px; }
+.presentation-layout__overview-summary-card-heading span { min-width: 0; overflow: hidden; color: var(--presentation-text-dim); font-size: var(--screen-font-label, var(--screen-font-size-label, 14px)); text-overflow: ellipsis; white-space: nowrap; }
+.presentation-layout__overview-summary-card-heading strong { min-width: 0; overflow: hidden; color: var(--presentation-text); font-size: var(--screen-font-value, var(--screen-font-size-value, clamp(16px, 1.25vw, 22px))); line-height: 1.1; overflow-wrap: anywhere; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.presentation-layout__overview-summary-card-comparisons { display: grid; min-width: 0; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; color: var(--presentation-text-dim); font-family: inherit; font-size: var(--screen-font-caption, 11px); line-height: 1.2; }
 .presentation-layout__overview-summary-card-comparisons span { min-width: 0; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
 .presentation-layout__overview-summary-card--composition { display: flex; min-height: 104px; padding: 0; }
 .presentation-layout__overview-summary-composition { display: flex; min-width: 0; width: 100%; }
 .presentation-layout__overview-summary-composition > * { width: 100%; }
+@container overview-summary-card (max-width: 360px) {
+  .presentation-layout__overview-summary-card-heading { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .presentation-layout__overview-summary-card-heading strong { max-width: 100%; overflow: visible; text-align: left; text-overflow: clip; white-space: normal; }
+}
 .presentation-layout--draft-overview .presentation-layout__metric-group { min-height: 0; padding: 4px; gap: 4px; }
 .presentation-layout--draft-overview .presentation-layout__metric-group-grid { align-content: start; grid-auto-rows: minmax(90px, auto); }
 .presentation-layout--draft-overview .presentation-layout__metric-group--revenue .presentation-layout__metric-group-grid { grid-auto-rows: auto; }

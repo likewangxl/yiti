@@ -1,3 +1,5 @@
+@use './screenTypography' as typography;
+
 /* 蓝紫经营全景：桌面端保持 26 / 48 / 26 三列，窄屏自然纵向滚动。 */
 .panorama-dashboard,
 .city-panorama {
@@ -33,7 +35,7 @@
     linear-gradient(180deg, rgba(2, 8, 28, .36), rgba(3, 12, 39, .9)),
     url('@/assets/panorama/panorama-background.png') center bottom / cover no-repeat,
     var(--panorama-bg-deep);
-  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--screen-font-family);
   font-variant-numeric: tabular-nums;
   letter-spacing: .02em;
 }
@@ -285,7 +287,7 @@
 .panorama-city-modal { position: fixed; inset: 0; z-index: 1000; display: grid; width: 100vw; height: 100vh; place-items: center; padding: 3vh 2vw; background: rgba(1, 6, 23, .78); backdrop-filter: blur(5px); }
 .panorama-city-modal > .city-panorama { width: 96vw; height: 94vh; overflow: auto; border: 1px solid rgba(117, 170, 255, .43); border-radius: 8px; background: var(--panorama-bg); box-shadow: 0 24px 88px rgba(0, 0, 0, .5); }
 
-.city-panorama { position: relative; min-height: 100%; overflow: auto; color: var(--panorama-text); background: var(--panorama-bg); font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif; font-variant-numeric: tabular-nums; }
+.city-panorama { position: relative; min-height: 100%; overflow: auto; color: var(--panorama-text); background: var(--panorama-bg); font-family: var(--screen-font-family); font-variant-numeric: tabular-nums; }
 .city-header { min-height: 80px; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(350px, 1.3fr) minmax(260px, 1fr); align-items: center; gap: 20px; padding: 11px 22px; border-bottom: 1px solid var(--panorama-border); }
 .city-breadcrumb span:first-child { display: inline-flex; align-items: center; gap: 5px; color: #d5e2ff; font-size: 14px; }
 .city-breadcrumb svg,
