@@ -66,43 +66,26 @@ async function mountCenter() {
 }
 
 describe('ScreenCenter.vue', () => {
-  it('对公卡片保持对公导航，并基于 LIVE 授权呈现独立支行入口', async () => {
+  it('全目录加载时保留正式入口，移除新版草稿和支行派生卡片', async () => {
     listAvailableScreens.mockResolvedValue([...catalog, { screenCode: 'SCR_CORP_OVERVIEW', screenName: '对公经营总览', bizLine: 'CORP', template: 'corporate-overview-v1', dataMode: 'LIVE' }]);
     const center = await mountCenter();
-    expect(center.text()).toContain('5个可访问大屏');
+    expect(center.text()).toContain('4个可访问大屏');
+    expect(center.findAll('[data-screen-card]')).toHaveLength(4);
+    expect(center.find('[data-screen-kind="branch-operating"]').exists()).toBe(false);
+    expect(center.text()).not.toContain('支行经营总览');
+    expect(center.find('[data-testid="screen-center-preview-tools"]').exists()).toBe(false);
+    expect(center.findAll('[data-action^="open-"]').filter(button => button.attributes('data-action')).length).toBe(0);
 
     await center.find('button[data-biz-line="CORP"]').trigger('click');
     expect(center.findAll('[data-screen-card]')).toHaveLength(1);
     const corporateCard = center.find('[data-screen-code="SCR_CORP_OVERVIEW"]');
-    expect(corporateCard.find('[data-action="open-branch-operating"]').exists()).toBe(false);
     await corporateCard.find('button.screen-card__open').trigger('click');
     expect(routerPush).toHaveBeenCalledWith({ name: 'CodeScreenPage', params: { template: 'corporate-overview-v1' } });
 
     await center.find('button[data-biz-line="COMMON"]').trigger('click');
     await center.find('input[aria-label="搜索大屏"]').setValue('支行经营总览');
-    expect(center.findAll('[data-screen-card]')).toHaveLength(1);
-    const branchCard = center.find('[data-screen-kind="branch-operating"]');
-    expect(branchCard.exists()).toBe(true);
-    expect(branchCard.find('.screen-card__mode-badge').text()).toBe('测试数据');
-    expect(branchCard.find('.screen-card__description').text()).toContain('数据库测试场景');
-    expect(branchCard.find('.screen-card__description').text()).toContain('系统存量');
-    expect(branchCard.find('.screen-card__description').exists()).toBe(true);
-    expect(branchCard.text()).not.toContain('编码：branch-operating');
-    await branchCard.find('button.screen-card__open').trigger('click');
-    expect(routerPush).toHaveBeenLastCalledWith({
-      name: 'CodeScreenPage', params: { template: 'branch-overview-v1' }, query: { businessLine: 'COMMON' }
-    });
-  });
-
-  it('没有对公 LIVE 授权时不显示支行独立入口', async () => {
-    listAvailableScreens.mockResolvedValue([...catalog, {
-      screenCode: 'SCR_CORP_OVERVIEW', screenName: '对公经营总览', bizLine: 'CORP',
-      template: 'corporate-overview-v1', dataMode: 'TEST'
-    }]);
-    const center = await mountCenter();
-
-    expect(center.find('[data-screen-kind="branch-operating"]').exists()).toBe(false);
-    expect(center.text()).not.toContain('支行经营总览');
+    expect(center.findAll('[data-screen-card]')).toHaveLength(0);
+    expect(center.text()).toContain('没有匹配的大屏');
   });
 
   it('呈现后端目录、接口数据标签并按模板导航到受保护页面', async () => {

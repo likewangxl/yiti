@@ -73,7 +73,7 @@ describe('ScreenCenter fixed code screens', () => {
     wrapper = mount(ScreenCenter);
     await flushPromises();
 
-    expect(wrapper.findAll('[data-screen-card]')).toHaveLength(4);
+    expect(wrapper.findAll('[data-screen-card]')).toHaveLength(3);
     expect(wrapper.text()).toContain('测试库数据');
     expect(wrapper.text()).toContain('已接入数据');
     expect(wrapper.text()).toContain('已接入数据');
@@ -86,19 +86,15 @@ describe('ScreenCenter fixed code screens', () => {
       params: { template: 'retail-overview-v1' }
     });
 
-    const branchCard = wrapper.find('[data-screen-kind="branch-operating"]');
-    expect(branchCard.exists()).toBe(true);
-    expect(branchCard.find('.screen-card__mode-badge').text()).toBe('测试数据');
-    expect(branchCard.find('.screen-card__description').text()).toContain('数据库测试场景');
-    expect(branchCard.find('.screen-card__description').text()).toContain('系统存量');
-    expect(branchCard.find('.screen-card__description').exists()).toBe(true);
-    await branchCard.find('button.screen-card__open').trigger('click');
+    expect(wrapper.find('[data-screen-kind="branch-operating"]').exists()).toBe(false);
+
+    await wrapper.find('[data-screen-code="SCR_PROVINCE"] button').trigger('click');
     expect(routerPush).toHaveBeenLastCalledWith({
-      name: 'CodeScreenPage', params: { template: 'branch-overview-v1' }, query: { businessLine: 'COMMON' }
+      name: 'CodeScreenPage', params: { template: 'branch-overview-v1' }
     });
   });
 
-  it('没有对公 LIVE 目录授权时不派生支行卡片', async () => {
+  it('目录缺少对公 LIVE 时不再派生支行卡片', async () => {
     listAvailableScreens.mockResolvedValue([{ ...catalog[2], dataMode: 'TEST' }]);
     wrapper = mount(ScreenCenter);
     await flushPromises();
@@ -106,7 +102,7 @@ describe('ScreenCenter fixed code screens', () => {
     expect(wrapper.find('[data-screen-kind="branch-operating"]').exists()).toBe(false);
   });
 
-  it('只有对公 LIVE、没有分行综合 TEST 授权时不派生支行卡片', async () => {
+  it('目录缺少分行综合 TEST 时不再派生支行卡片', async () => {
     listAvailableScreens.mockResolvedValue([catalog[2]]);
     wrapper = mount(ScreenCenter);
     await flushPromises();

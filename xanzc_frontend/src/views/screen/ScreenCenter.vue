@@ -33,27 +33,6 @@
       </label>
     </section>
 
-    <section v-if="draftPreviewEntries.length" class="screen-center__preview-tools" data-testid="screen-center-preview-tools" aria-label="新版草稿预览入口">
-      <div class="screen-center__preview-copy">
-        <p class="screen-center__preview-eyebrow">授权草稿入口</p>
-        <h2>新版草稿预览</h2>
-        <p>打开当前保存的新版布局草稿，预览结果由后端按当前用户权限确认。</p>
-      </div>
-      <div class="screen-center__preview-actions" role="group" aria-label="新版草稿预览入口">
-        <button
-          v-for="entry in draftPreviewEntries"
-          :key="entry.screenCode"
-          type="button"
-          :data-action="entry.action"
-          :data-preview-screen-code="entry.screenCode"
-          @click="openDraftPreview(entry)"
-        >
-          <strong>{{ entry.label }}</strong>
-          <span>未发布草稿预览</span>
-        </button>
-      </div>
-    </section>
-
     <section v-if="loading" class="screen-center__state screen-center__state--loading" aria-live="polite">
       <span class="screen-center__state-icon" aria-hidden="true">⌁</span>
       <h2>正在加载大屏目录</h2>
@@ -98,10 +77,9 @@
         <div class="screen-card__body">
           <div class="screen-card__title-row">
             <h2>{{ displayName(screen) }}</h2>
-            <span v-if="!isPersonalScreen(screen)" class="screen-card__mode-badge">{{ screenDataModeLabel(screen) }}</span>
+            <span v-if="!isPersonalScreen(screen)" class="screen-card__mode-badge">{{ dataModeLabel(screen.dataMode) }}</span>
           </div>
           <p v-if="isPersonalScreen(screen)" class="screen-card__description">个人核心指标、今日优先事项、我的客户、我发起的业务进度</p>
-          <p v-else-if="isBranchOperatingScreen(screen)" class="screen-card__description">{{ screen.description }}</p>
           <p v-else class="screen-card__code">编码：{{ screen.screenCode }}</p>
           <div class="screen-card__meta">
             <template v-if="isPersonalScreen(screen)">
@@ -117,7 +95,6 @@
           <button
             type="button"
             class="screen-card__open"
-            :data-action="isBranchOperatingScreen(screen) ? 'open-branch-operating' : undefined"
             @click="openScreen(screen)"
           >{{ isPersonalScreen(screen) ? '进入驾驶舱' : '进入大屏' }}</button>
         </div>
@@ -131,7 +108,6 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { listAvailableScreens } from '@/api/screen';
 import { useMenuStore } from '@/stores/menu';
-import { usePermissionStore } from '@/stores/permission';
 import { useUserStore } from '@/stores/user';
 
 const BIZ_LINE_FILTERS = Object.freeze([
@@ -149,12 +125,6 @@ const REGISTERED_MODES = Object.freeze({
   'corporate-overview-v1': Object.freeze(['TEST', 'LIVE'])
 });
 const FIXED_SCREEN_CODES = new Set(['SCR_PROVINCE', 'SCR_CORP_OVERVIEW', 'SCR_RETAIL_OVERVIEW']);
-const DRAFT_PREVIEW_RESOURCE = '/api/screen/admin/canvas/*';
-const DRAFT_PREVIEW_REGISTRY = Object.freeze([
-  Object.freeze({ screenCode: 'SCR_CORP_OVERVIEW', template: 'corporate-overview-v1', label: '对公经营总览', action: 'open-corporate-preview' }),
-  Object.freeze({ screenCode: 'SCR_RETAIL_OVERVIEW', template: 'retail-overview-v1', label: '零售经营总览', action: 'open-retail-preview' }),
-  Object.freeze({ screenCode: 'SCR_PROVINCE', template: 'branch-overview-v1', label: '分行经营总览', action: 'open-branch-preview' })
-]);
 const PERSONAL_SCREEN = Object.freeze({
   key: 'personal-dashboard',
   kind: 'personal',
@@ -163,23 +133,11 @@ const PERSONAL_SCREEN = Object.freeze({
   viewLevel: 'PERSON',
   bizLine: 'COMMON'
 });
-const BRANCH_OPERATING_SCREEN = Object.freeze({
-  key: 'branch-operating',
-  kind: 'branch-operating',
-  screenCode: 'branch-operating',
-  screenName: '支行经营总览',
-  viewLevel: 'BRANCH',
-  bizLine: 'COMMON',
-  dataMode: 'TEST',
-  description: '数据库测试场景，可切换系统存量数据后查看单支行核心指标、经营趋势与目标完成情况'
-});
 
 const router = useRouter();
 const menuStore = useMenuStore();
-const permissionStore = usePermissionStore();
 const userStore = useUserStore();
 const screens = ref([]);
-const draftPreviewEntries = ref([]);
 const activeBizLine = ref('ALL');
 const searchKeyword = ref('');
 const loading = ref(false);
@@ -205,10 +163,6 @@ function isPersonalScreen(screen) {
   return screen?.kind === 'personal';
 }
 
-function isBranchOperatingScreen(screen) {
-  return screen?.kind === 'branch-operating';
-}
-
 function displayName(screen) {
   return String(screen?.screenName || screen?.screenCode || '未命名大屏');
 }
@@ -229,12 +183,6 @@ function dataModeLabel(value) {
   return '数据模式未知';
 }
 
-function screenDataModeLabel(screen) {
-  return isBranchOperatingScreen(screen) && screen?.dataMode === 'TEST'
-    ? '测试数据'
-    : dataModeLabel(screen?.dataMode);
-}
-
 function hasRegisteredMode(screen) {
   return REGISTERED_MODES[screen?.template]?.includes(screen?.dataMode) || false;
 }
@@ -251,49 +199,11 @@ function normalizeCatalog(catalog) {
     && hasRegisteredMode(screen));
 }
 
-function hasBranchOperatingSource(catalog) {
-  const hasCorporateLive = catalog.some((screen) => screen
-    && screen.screenCode === 'SCR_CORP_OVERVIEW'
-    && screen.template === 'corporate-overview-v1'
-    && screen.dataMode === 'LIVE');
-  const hasProvinceTest = catalog.some((screen) => screen
-    && screen.screenCode === 'SCR_PROVINCE'
-    && screen.template === 'branch-overview-v1'
-    && screen.dataMode === 'TEST');
-  return hasCorporateLive && hasProvinceTest;
-}
-
-function buildScreenDirectory(catalog) {
-  if (!hasBranchOperatingSource(catalog)) return catalog;
-  return [...catalog, BRANCH_OPERATING_SCREEN];
-}
-
-function buildDraftPreviewEntries(catalog) {
-  return DRAFT_PREVIEW_REGISTRY.flatMap((registry) => {
-    const matches = catalog.filter(candidate => candidate
-      && candidate.screenCode === registry.screenCode
-      && candidate.template === registry.template
-      && hasRegisteredMode(candidate));
-    return matches.length === 1 ? [{ ...registry, dataMode: matches[0].dataMode }] : [];
-  });
-}
-
-function hasDraftPreviewAccess() {
-  try {
-    return Boolean(userStore.user)
-      && permissionStore.loaded === true
-      && permissionStore.canAccess(DRAFT_PREVIEW_RESOURCE);
-  } catch (_) {
-    return false;
-  }
-}
-
 async function loadCatalog() {
   const generation = ++loadGeneration;
   loading.value = true;
   loadError.value = '';
   screens.value = [];
-  draftPreviewEntries.value = [];
   if (!userStore.user) {
     loading.value = false;
     return;
@@ -306,24 +216,15 @@ async function loadCatalog() {
       && menuStore.loaded === true
       && menuStore.hasUrl('/workspace'))
     .catch(() => false);
-  const permissionRequest = Promise.resolve()
-    .then(() => permissionStore.load())
-    .then(() => generation === loadGeneration && hasDraftPreviewAccess())
-    .catch(() => false);
   const catalogRequest = Promise.resolve().then(() => listAvailableScreens());
 
   try {
     const catalog = await catalogRequest;
     if (generation !== loadGeneration) return;
     const normalizedCatalog = normalizeCatalog(catalog);
-    const screenDirectory = buildScreenDirectory(normalizedCatalog);
     // 机构目录是页面主体，菜单授权迟到时先展示已确认的机构结果，避免授权接口延迟阻塞目录。
-    screens.value = screenDirectory;
-    loading.value = screenDirectory.length === 0;
-
-    const canPreviewDraft = await permissionRequest;
-    if (generation !== loadGeneration) return;
-    if (canPreviewDraft) draftPreviewEntries.value = buildDraftPreviewEntries(normalizedCatalog);
+    screens.value = normalizedCatalog;
+    loading.value = normalizedCatalog.length === 0;
 
     const hasPersonalAccess = await menuRequest;
     if (generation !== loadGeneration || loadError.value) return;
@@ -343,12 +244,6 @@ function openScreen(screen) {
     router.push({ name: 'PersonalDashboard', query: { from: 'screen-center' } });
     return;
   }
-  if (isBranchOperatingScreen(screen)) {
-    // 经营主路径统一从省级代码化大屏进入；旧 /branch-operating URL 仍由其
-    // 自身页面受保护兼容，不再把独立机构选择页作为中心入口。
-    router.push({ name: 'CodeScreenPage', params: { template: 'branch-overview-v1' }, query: { businessLine: 'COMMON' } });
-    return;
-  }
   const template = screen?.template;
   if (!SUPPORTED_TEMPLATES.has(template) || !hasRegisteredMode(screen)) return;
   if (isFixedScreen(screen)) {
@@ -358,18 +253,6 @@ function openScreen(screen) {
   router.push({ name: 'ScreenView', params: { screenCode: screen.screenCode } });
 }
 
-function openDraftPreview(entry) {
-  if (!hasDraftPreviewAccess() || !draftPreviewEntries.value.some(candidate => candidate.screenCode === entry?.screenCode)) {
-    draftPreviewEntries.value = [];
-    return;
-  }
-  router.push({
-    name: 'ScreenView',
-    params: { screenCode: entry.screenCode },
-    query: { preview: 'draft', from: 'screen-center' }
-  });
-}
-
 watch(() => userStore.user, (user) => {
   if (user) {
     loadCatalog();
@@ -377,23 +260,14 @@ watch(() => userStore.user, (user) => {
   }
   loadGeneration += 1;
   screens.value = [];
-  draftPreviewEntries.value = [];
   loadError.value = '';
   loading.value = false;
 });
-
-watch(
-  [() => permissionStore.loaded, () => permissionStore.resourceUrls, () => userStore.user],
-  () => {
-    if (!hasDraftPreviewAccess()) draftPreviewEntries.value = [];
-  }
-);
 
 onMounted(loadCatalog);
 onBeforeUnmount(() => {
   loadGeneration += 1;
   screens.value = [];
-  draftPreviewEntries.value = [];
 });
 </script>
 
@@ -415,18 +289,6 @@ onBeforeUnmount(() => {
 .screen-center__search { display: flex; align-items: center; flex: 0 1 280px; gap: 8px; color: var(--color-text-muted); font-size: 13px; white-space: nowrap; }
 .screen-center__search > span { flex: 0 0 auto; }
 .screen-center__search input { box-sizing: border-box; width: 100%; min-width: 0; height: 36px; padding: 0 11px; color: var(--color-text); background: var(--color-surface-soft); border: 1px solid var(--color-border); border-radius: var(--radius-control); font: inherit; }
-.screen-center__preview-tools { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 16px; padding: 16px 18px; background: var(--color-brand-100); border: 1px solid var(--color-brand-300); border-radius: var(--radius-control); }
-.screen-center__preview-copy { min-width: 0; }
-.screen-center__preview-copy h2 { margin-bottom: 5px; color: var(--color-text); font-size: 16px; }
-.screen-center__preview-copy p { margin-bottom: 0; color: var(--color-text-muted); font-size: 12px; line-height: 1.5; }
-.screen-center__preview-copy .screen-center__preview-eyebrow { margin-bottom: 4px; color: var(--color-brand-700); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
-.screen-center__preview-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; }
-.screen-center__preview-actions button { display: flex; min-width: 168px; flex-direction: column; align-items: flex-start; gap: 3px; padding: 9px 12px; color: var(--color-brand-700); background: var(--color-surface); border: 1px solid var(--color-brand-300); border-radius: var(--radius-control); font: inherit; text-align: left; cursor: pointer; }
-.screen-center__preview-actions button:hover { background: var(--color-brand-700); border-color: var(--color-brand-700); color: var(--color-surface); }
-.screen-center__preview-actions button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
-.screen-center__preview-actions strong { font-size: 13px; }
-.screen-center__preview-actions span { color: var(--color-text-muted); font-size: 11px; }
-.screen-center__preview-actions button:hover span { color: inherit; }
 .screen-center__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; padding-top: 20px; }
 .screen-card { display: flex; min-width: 0; min-height: 190px; padding: 20px; gap: 16px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-control); box-shadow: var(--shadow-surface); }
 .screen-card__icon { display: grid; flex: 0 0 50px; place-items: center; width: 50px; height: 50px; color: var(--color-brand-700); background: var(--color-brand-100); border-radius: 14px; }
@@ -448,5 +310,5 @@ onBeforeUnmount(() => {
 .screen-center__state--error { color: var(--color-danger-700, #b42318); }
 .screen-center__state--error .screen-center__state-icon { color: inherit; }
 .screen-center__state button { min-height: 34px; padding: 0 14px; color: var(--color-brand-700); background: transparent; border: 1px solid var(--color-brand-300); border-radius: var(--radius-control); font: inherit; cursor: pointer; }
-@media (max-width: 720px) { .screen-center__header, .screen-center__toolbar, .screen-center__preview-tools { align-items: stretch; flex-direction: column; } .screen-center__count { align-self: flex-start; } .screen-center__search { flex-basis: auto; } .screen-center__preview-actions { width: 100%; } .screen-center__preview-actions button { flex: 1 1 0; min-width: 0; } .screen-center__grid { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .screen-center__header, .screen-center__toolbar { align-items: stretch; flex-direction: column; } .screen-center__count { align-self: flex-start; } .screen-center__search { flex-basis: auto; } .screen-center__grid { grid-template-columns: 1fr; } }
 </style>

@@ -45,7 +45,7 @@ const catalog = [
   }
 ];
 
-describe('ScreenCenter 新版草稿预览入口', () => {
+describe('ScreenCenter 已移除新版草稿和支行派生入口', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setActivePinia(createPinia());
@@ -53,14 +53,51 @@ describe('ScreenCenter 新版草稿预览入口', () => {
     menuStore.loaded = true;
     menuStore.loading = false;
     menuStore.load.mockResolvedValue([]);
-    menuStore.hasUrl.mockReturnValue(false);
+    menuStore.hasUrl.mockReturnValue(true);
     permissionStore.loaded = true;
     permissionStore.loading = false;
     permissionStore.load.mockResolvedValue([]);
     permissionStore.canAccess.mockReturnValue(true);
+    listAvailableScreens.mockResolvedValue(catalog);
   });
 
-  it('目录加载失败时 fail-close，不显示旧本地演示按钮', async () => {
+  it('全目录和画布预览权限场景仍只显示四个正式入口，不显示三个草稿按钮或支行卡片', async () => {
+    const wrapper = mount(ScreenCenter);
+    await flushPromises();
+
+    expect(wrapper.findAll('[data-screen-card]')).toHaveLength(4);
+    expect(wrapper.text()).toContain('4个可访问大屏');
+    expect(wrapper.text()).toContain('我的经营驾驶舱');
+    expect(wrapper.text()).toContain('分行经营总览');
+    expect(wrapper.text()).toContain('零售经营总览');
+    expect(wrapper.text()).toContain('对公经营总览');
+    expect(wrapper.find('[data-screen-kind="branch-operating"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('支行经营总览');
+    expect(wrapper.find('[data-testid="screen-center-preview-tools"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-action^="open-"]')).toHaveLength(0);
+    expect(permissionStore.load).not.toHaveBeenCalled();
+  });
+
+  it('正式目录筛选、搜索和导航继续生效，支行经营总览搜索不到', async () => {
+    const wrapper = mount(ScreenCenter);
+    await flushPromises();
+
+    await wrapper.get('button[data-biz-line="RETAIL"]').trigger('click');
+    expect(wrapper.findAll('[data-screen-card]')).toHaveLength(1);
+    expect(wrapper.get('[data-screen-code="SCR_RETAIL_OVERVIEW"]').exists()).toBe(true);
+    await wrapper.get('[data-screen-code="SCR_RETAIL_OVERVIEW"] button.screen-card__open').trigger('click');
+    expect(routerPush).toHaveBeenLastCalledWith({
+      name: 'CodeScreenPage',
+      params: { template: 'retail-overview-v1' }
+    });
+
+    await wrapper.get('button[data-biz-line="ALL"]').trigger('click');
+    await wrapper.get('input[aria-label="搜索大屏"]').setValue('支行经营总览');
+    expect(wrapper.findAll('[data-screen-card]')).toHaveLength(0);
+    expect(wrapper.text()).toContain('没有匹配的大屏');
+  });
+
+  it('目录加载失败时不显示本地草稿或支行演示入口', async () => {
     listAvailableScreens.mockRejectedValueOnce(new Error('目录接口不可用'));
 
     const wrapper = mount(ScreenCenter);
@@ -68,80 +105,7 @@ describe('ScreenCenter 新版草稿预览入口', () => {
 
     expect(wrapper.text()).toContain('大屏目录加载失败');
     expect(wrapper.find('[data-testid="screen-center-preview-tools"]').exists()).toBe(false);
+    expect(wrapper.find('[data-screen-kind="branch-operating"]').exists()).toBe(false);
     expect(wrapper.findAll('[data-action^="open-"]')).toHaveLength(0);
-  });
-
-  it('目录和画布预览权限有效时按固定编码生成三个新版草稿入口', async () => {
-    listAvailableScreens.mockResolvedValueOnce(catalog);
-
-    const wrapper = mount(ScreenCenter);
-    await flushPromises();
-
-    expect(wrapper.findAll('[data-screen-card]')).toHaveLength(4);
-    expect(wrapper.text()).toContain('4个可访问大屏');
-    expect(wrapper.find('[data-testid="screen-center-preview-tools"]').text()).toContain('新版草稿预览');
-    expect(wrapper.find('[data-testid="screen-center-preview-tools"]').text()).toContain('未发布草稿预览');
-
-    await wrapper.get('[data-action="open-corporate-preview"]').trigger('click');
-    expect(routerPush).toHaveBeenLastCalledWith({
-      name: 'ScreenView',
-      params: { screenCode: 'SCR_CORP_OVERVIEW' },
-      query: { preview: 'draft', from: 'screen-center' }
-    });
-
-    await wrapper.get('[data-action="open-retail-preview"]').trigger('click');
-    expect(routerPush).toHaveBeenLastCalledWith({
-      name: 'ScreenView',
-      params: { screenCode: 'SCR_RETAIL_OVERVIEW' },
-      query: { preview: 'draft', from: 'screen-center' }
-    });
-
-    await wrapper.get('[data-action="open-branch-preview"]').trigger('click');
-    expect(routerPush).toHaveBeenLastCalledWith({
-      name: 'ScreenView',
-      params: { screenCode: 'SCR_PROVINCE' },
-      query: { preview: 'draft', from: 'screen-center' }
-    });
-  });
-
-  it('画布预览权限未加载或无权时 fail-close，不展示任何草稿入口', async () => {
-    permissionStore.loaded = true;
-    permissionStore.canAccess.mockReturnValue(false);
-    listAvailableScreens.mockResolvedValueOnce(catalog);
-
-    const wrapper = mount(ScreenCenter);
-    await flushPromises();
-
-    expect(wrapper.find('[data-testid="screen-center-preview-tools"]').exists()).toBe(false);
-
-    wrapper.unmount();
-    permissionStore.loaded = false;
-    permissionStore.canAccess.mockReturnValue(true);
-    listAvailableScreens.mockResolvedValueOnce(catalog);
-    const pendingWrapper = mount(ScreenCenter);
-    await flushPromises();
-    expect(pendingWrapper.find('[data-testid="screen-center-preview-tools"]').exists()).toBe(false);
-  });
-
-  it('固定编码和模板出现重复匹配时不生成该草稿入口', async () => {
-    listAvailableScreens.mockResolvedValueOnce([...catalog, { ...catalog[0] }]);
-
-    const wrapper = mount(ScreenCenter);
-    await flushPromises();
-
-    expect(wrapper.find('[data-action="open-corporate-preview"]').exists()).toBe(false);
-    expect(wrapper.find('[data-action="open-retail-preview"]').exists()).toBe(true);
-    expect(wrapper.find('[data-action="open-branch-preview"]').exists()).toBe(true);
-  });
-
-  it('目录加载后权限快照失效时点击也 fail-close，不导航到草稿', async () => {
-    listAvailableScreens.mockResolvedValueOnce(catalog);
-    const wrapper = mount(ScreenCenter);
-    await flushPromises();
-
-    permissionStore.loaded = false;
-    await wrapper.get('[data-action="open-corporate-preview"]').trigger('click');
-
-    expect(routerPush).not.toHaveBeenCalled();
   });
 });
