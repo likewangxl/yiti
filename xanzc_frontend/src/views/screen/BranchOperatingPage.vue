@@ -12,7 +12,7 @@
       </nav>
       <details><summary>来源与口径</summary><div>
         <p v-for="(source, index) in dashboard.sources" :key="index"><strong>{{ source.label }}</strong> {{ source.detail }}</p>
-        <p v-if="isParentSource">当前为分行经营总览 · 草稿预览（{{ sourceScreenCode }}），展示内容仅用于接口联调，不代表实际经营数据。</p>
+        <p v-if="isParentSource">当前为分行经营总览 · {{ parentSourceStateLabel }}（{{ sourceScreenCode }}），展示内容仅用于接口联调，不代表实际经营数据。</p>
         <p v-else-if="isTestSource">当前为 TEST 批次，展示内容仅用于接口联调，不代表实际经营数据。</p>
         <template v-else>
           <p>经营关注来自考核目标差距，不代表审批待办。资产项目与团队数据未接入。</p>
@@ -69,6 +69,12 @@ let disposed = false;
 const sourceScreenCode = computed(() => String(route.query?.sourceScreenCode || '').trim());
 const sourcePreview = computed(() => String(route.query?.sourcePreview || '').trim().toLowerCase());
 const isParentSource = computed(() => Boolean(sourceScreenCode.value));
+const parentSourceStateLabel = computed(() => {
+  const state = String(view.value?.state || '').trim().toLowerCase();
+  if (state === 'published') return '已发布';
+  if (state === 'draft') return '草稿预览';
+  return '状态确认中';
+});
 const sourceMode = computed(() => isParentSource.value ? 'parent' : (String(route.query?.source || '').trim().toLowerCase() === 'live' ? 'live' : 'test'));
 const isTestSource = computed(() => sourceMode.value === 'test');
 let activeSourceMode = '';

@@ -241,8 +241,39 @@ describe('支行总览入口', () => {
     expect(api.touch).not.toHaveBeenCalled();
     expect(wrapper.find('[data-testid="branch-operating-source-switch"]').exists()).toBe(false);
     expect(wrapper.text()).toContain('TEST');
+    expect(wrapper.text()).toContain('草稿预览');
     expect(wrapper.get('[data-testid="branch-dashboard-probe"]').attributes('data-source-presentation')).toBe('present');
     expect(wrapper.get('[data-testid="branch-dashboard-probe"]').text()).toContain('12');
+    wrapper.unmount();
+  });
+
+  it('省级 published 源屏在来源说明中显示已发布，不误称草稿预览', async () => {
+    const parentView = {
+      state: 'published', screenCode: 'SCR_PROVINCE', runtimeSchemaVersion: 2, orgScopeMode: 'NAMED_GROUP',
+      institutionRules: { allowedOperatingLevels: ['NONE'], allowedOrgNatures: ['OTHER'], displayOrgCodes: ['105'] },
+      panoramaInstitutions: [{ orgCode: '105', orgName: '延兴门西路支行', cityCode: '610100', operatingLevel: 'NONE', orgNature: 'OTHER' }],
+      renderPackageJson: JSON.stringify({ schemaVersion: 2, canvasStyle: {
+        dataClassification: 'TEST', presentation: { type: 'CODE', template: 'branch-overview-v1' }
+      }, components: [], bindSnapshots: {} })
+    };
+    routeState.query = { orgCode: '105', cityCode: '610100', sourceScreenCode: 'SCR_PROVINCE' };
+    api.view.mockResolvedValue(parentView);
+    state.refresh.mockImplementation(async () => {
+      state.model.value = {
+        orgCode: '105', institutions: parentView.panoramaInstitutions,
+        kpis: [{ key: 'deposit', value: 12, unit: '亿元' }], trend: [], targets: [], attention: []
+      };
+    });
+    state.model.value = {
+      orgCode: '105', orgName: '延兴门西路支行', cityCode: '610100', dataDate: '2026-09-21',
+      kpis: [{ key: 'deposit', value: 12, unit: '亿元' }], trend: [], targets: [], attention: [],
+      institutions: parentView.panoramaInstitutions
+    };
+
+    const wrapper = mount(BranchOperatingPage);
+    await flushPromises();
+    expect(wrapper.text()).toContain('已发布');
+    expect(wrapper.text()).not.toContain('草稿预览');
     wrapper.unmount();
   });
 
