@@ -1,7 +1,7 @@
 <template>
   <!-- 代码化全景拥有自己的根和视觉域，不进入旧 1920×1080 舞台。 -->
   <div v-if="isPanoramaPresentation" class="screen-panorama-root">
-    <div v-if="isDraftPreview" class="screen-draft-banner" data-testid="screen-draft-preview">未发布草稿预览</div>
+    <div v-if="isDraftPreview && presentation?.template !== 'branch-overview-v1'" class="screen-draft-banner" data-testid="screen-draft-preview">未发布草稿预览</div>
     <PanoramaRuntime :view="view" :context="context" :back-path="draftBackPath"
       :batch-required="presentation?.type === 'CODE' && presentation?.template === 'branch-overview-v1'" />
   </div>

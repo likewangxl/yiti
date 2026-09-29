@@ -137,6 +137,37 @@ describe('MetricDisplayWidgets', () => {
     expect(genericWrapper.find('[data-testid="presentation-metric-month-delta"]').exists()).toBe(false);
   });
 
+  it('draft 分组金额卡把唯一主值放在标题同行，三维比较仍留在下方；完成率卡不进入该布局', () => {
+    const wrapper = mount(MetricDisplayWidgets, {
+      props: {
+        grouped: true,
+        draftOverview: true,
+        components: [{
+          componentId: 'business-corp-deposit-balance', componentType: 'METRIC_CARD', layoutRegion: 'HEADER',
+          title: '对公存款余额', text: '120.00亿元', state: 'READY',
+          comparisons: {
+            year: { state: 'READY', text: '较上年 +30.00亿元' },
+            month: { state: 'READY', text: '较上月 +20.00亿元' },
+            day: { state: 'READY', text: '较上日 +10.00亿元' }
+          },
+          subFields: []
+        }, {
+          componentId: 'business-corp-deposit-rate', componentType: 'METRIC_CARD', layoutRegion: 'HEADER',
+          title: '对公存款完成率', text: '86.40%', value: 86.4, state: 'READY', subFields: []
+        }]
+      }
+    });
+    const amount = wrapper.get('[data-component-id="business-corp-deposit-balance"]');
+    expect(amount.find('[data-testid="presentation-metric-value"]').element.closest('header')).not.toBeNull();
+    expect(amount.find('[data-testid="presentation-metric-value"]').text()).toBe('120.00亿元');
+    expect(amount.find('[data-testid="presentation-metric-comparisons"]').text()).toContain('较上日 +10.00亿元');
+    expect(amount.find('.presentation-metric-widget__value-line > [data-testid="presentation-metric-value"]').exists()).toBe(false);
+
+    const rate = wrapper.get('[data-component-id="business-corp-deposit-rate"]');
+    expect(rate.find('[data-testid="completion-ring-gauge"]').exists()).toBe(true);
+    expect(rate.find('[data-testid="presentation-metric-value"]').exists()).toBe(false);
+  });
+
   it('新模式将上年、上月、上日三维对比集中显示，并保留精确口径文案', () => {
     const wrapper = mount(MetricDisplayWidgets, {
       props: {

@@ -85,7 +85,7 @@ describe('ScreenView.vue', () => {
     wrapper = mount(ScreenView, { global: { stubs } });
     await flushPromises();
     expect(wrapper.find('.stub-panorama-runtime').attributes('data-back-path')).toBe('/screens');
-    expect(wrapper.find('[data-testid="screen-draft-preview"]').text()).toContain('未发布草稿预览');
+    expect(wrapper.find('[data-testid="screen-draft-preview"]').exists()).toBe(false);
 
     wrapper.unmount();
     routeState.query = { preview: 'draft' };
@@ -97,6 +97,7 @@ describe('ScreenView.vue', () => {
     wrapper = mount(ScreenView, { global: { stubs } });
     await flushPromises();
     expect(wrapper.find('.stub-panorama-runtime').attributes('data-back-path')).toBe('');
+    expect(wrapper.find('[data-testid="screen-draft-preview"]').exists()).toBe(false);
   });
 
   it('后端返回正式态时即使 URL 带 preview=draft 也继续显示标题', async () => {
@@ -163,6 +164,30 @@ describe('ScreenView.vue', () => {
       screenCode: 'SCR_TEST', schemaVersion: 2
     });
     expect(wrapper.find('.stub-panorama-runtime').attributes('data-batch-required')).toBe('true');
+  });
+
+  it('未发布分行 CODE 模板隐藏草稿横幅，但保留后端确认的草稿身份和批次要求', async () => {
+    routeState.query = { preview: 'draft' };
+    getScreenViewMock.mockResolvedValue({
+      screenName: '草稿分行总览', state: 'draft',
+      renderPackageJson: JSON.stringify({ canvasStyle: { presentation: { type: 'CODE', template: 'branch-overview-v1' } }, components: [] })
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="screen-draft-preview"]').exists()).toBe(false);
+    expect(JSON.parse(wrapper.find('.stub-panorama-runtime').attributes('data-context')).previewState).toBe('draft');
+    expect(wrapper.find('.stub-panorama-runtime').attributes('data-batch-required')).toBe('true');
+  });
+
+  it('未发布零售 CODE 模板仍保留草稿横幅，范围不扩展到其他全景模板', async () => {
+    routeState.query = { preview: 'draft' };
+    getScreenViewMock.mockResolvedValue({
+      screenName: '零售草稿总览', state: 'draft',
+      renderPackageJson: JSON.stringify({ canvasStyle: { presentation: { type: 'CODE', template: 'retail-overview-v1' } }, components: [] })
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="screen-draft-preview"]').exists()).toBe(true);
   });
 
   it('零售模板使用独立全景运行入口，保留 RETAIL 与已发布数据身份', async () => {

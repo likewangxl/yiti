@@ -71,6 +71,23 @@ describe('CompositionTabsWidget', () => {
     expect(wrapper.get('[data-testid="composition-ring-income"]').attributes('data-state')).toBe('PENDING');
   });
 
+  it('showTotalCaption=false 时只隐藏圆环中心说明，数字居中且缺失状态仍在外部保留', () => {
+    const wrapper = mount(CompositionTabsWidget, { props: {
+      showTotalCaption: false,
+      ringKeys: ['income'],
+      model: { rings: [{
+        ringKey: 'income', tabKey: 'income', label: '收入', state: 'MISSING_SIDE',
+        corporate: { value: null, text: '—', share: null }, retail: { value: null, text: '—', share: null },
+        total: { value: 0.17, text: '0.17', unit: '亿元' }
+      }] }
+    } });
+    expect(wrapper.get('[data-testid="composition-tabs-root"]').classes()).toContain('composition-tabs-widget--no-total-caption');
+    const ring = wrapper.get('[data-testid="composition-ring-income"]');
+    expect(ring.find('.composition-ring__center strong').text()).toBe('0.17');
+    expect(ring.find('.composition-ring__center small').exists()).toBe(false);
+    expect(ring.text()).toContain('待接入');
+  });
+
   it('旧业务结构 tab 只兼容映射到存款环，保留公司/零售原值且总量缺失时为空环', () => {
     const wrapper = mount(CompositionTabsWidget, { props: { model: {
       tabs: [{

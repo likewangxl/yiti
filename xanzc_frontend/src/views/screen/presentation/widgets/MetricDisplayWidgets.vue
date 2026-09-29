@@ -29,7 +29,11 @@
       <div class="presentation-metric-widget__content">
         <header class="presentation-metric-widget__header">
           <div>
-            <h2>{{ item.title || '—' }}</h2>
+            <div v-if="isDraftGroupedAmount(item)" class="presentation-metric-widget__header-title-line">
+              <h2>{{ item.title || '—' }}</h2>
+              <strong class="presentation-metric-widget__value presentation-metric-widget__header-value" data-testid="presentation-metric-value">{{ item.text }}</strong>
+            </div>
+            <h2 v-else>{{ item.title || '—' }}</h2>
             <p v-if="item.subtitle">{{ item.subtitle }}</p>
           </div>
           <small v-if="item.metricName && !grouped" :title="item.metricName">{{ item.metricName }}</small>
@@ -49,7 +53,7 @@
             :accent="ringAccent(item)"
             :compact="draftOverview"
           />
-          <strong v-else class="presentation-metric-widget__value" data-testid="presentation-metric-value">{{ item.text }}</strong>
+          <strong v-else-if="!isDraftGroupedAmount(item)" class="presentation-metric-widget__value" data-testid="presentation-metric-value">{{ item.text }}</strong>
           <span
             v-if="grouped && comparisonRows(item).length"
             class="presentation-metric-widget__comparisons"
@@ -159,6 +163,13 @@ function shouldUseCompletionRing(item) {
     && COMPLETION_RING_IDS.includes(String(item?.componentId || ''));
 }
 
+function isDraftGroupedAmount(item) {
+  return props.draftOverview
+    && props.grouped
+    && item?.componentType === 'METRIC_CARD'
+    && !shouldUseCompletionRing(item);
+}
+
 function ringAccent(item) {
   return COMPLETION_RING_ACCENTS[String(item?.componentId || '')]
     || 'var(--metric-accent, var(--panorama-cyan, #4de8ef))';
@@ -242,6 +253,9 @@ function comparisonRows(item) {
 .presentation-metric-widget--green { --metric-accent: #58e4b5; --metric-border: rgba(88, 228, 181, .44); background: rgba(7, 39, 61, .88); }
 .presentation-metric-widget__header { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; min-width: 0; }
 .presentation-metric-widget__header > div { min-width: 0; }
+.presentation-metric-widget__header-title-line { display: flex; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: 3px 8px; }
+.presentation-metric-widget__header-title-line h2 { min-width: 0; max-width: 100%; flex: 0 0 auto; }
+.presentation-metric-widget__header-value { display: inline; min-width: 0; max-width: 100%; flex: 0 1 auto; overflow-wrap: anywhere; white-space: normal; }
 .presentation-metric-widget__header h2 { margin: 0; overflow: hidden; color: var(--panorama-text, #eaf2ff); font-size: 13px; font-weight: 600; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .presentation-metric-widget--grouped .presentation-metric-widget__header h2 { max-width: 100%; overflow: visible; text-overflow: clip; }
 .presentation-metric-widget__header p,.presentation-metric-widget__header small,.presentation-metric-widget__description { margin: 3px 0 0; overflow: hidden; color: var(--panorama-text-dim, #8fa9db); font-size: 10px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }

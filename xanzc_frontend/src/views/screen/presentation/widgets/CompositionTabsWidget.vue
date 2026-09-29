@@ -2,7 +2,7 @@
   <section
     ref="rootRef"
     class="composition-tabs-widget"
-    :class="{ 'composition-tabs-widget--compact': compact, 'composition-tabs-widget--single': rings.length === 1 }"
+    :class="{ 'composition-tabs-widget--compact': compact, 'composition-tabs-widget--single': rings.length === 1, 'composition-tabs-widget--no-total-caption': !showTotalCaption }"
     data-testid="composition-tabs-root"
     :data-compact="compact ? 'true' : 'false'"
     :data-ring-count="rings.length"
@@ -40,7 +40,7 @@
         >
           <div class="composition-ring__center">
             <strong>{{ ring.totalText }}</strong>
-            <small>{{ ring.hasTotal ? '核定总量' : '核定总量待接入' }}</small>
+            <small v-if="showTotalCaption">{{ ring.hasTotal ? '核定总量' : '核定总量待接入' }}</small>
           </div>
         </div>
 
@@ -87,7 +87,8 @@ const props = defineProps({
   model: { type: Object, default: () => ({}) },
   // 页面草稿顶部只需要提升指定业务线；未传时维持原三环展示。
   ringKeys: { type: Array, default: null },
-  compact: { type: Boolean, default: false }
+  compact: { type: Boolean, default: false },
+  showTotalCaption: { type: Boolean, default: true }
 });
 const emit = defineEmits(['business-line-select']);
 
@@ -322,6 +323,7 @@ function selectBusinessLine(businessLine, tabKey) {
 .composition-ring-card__status--remainder { display: grid; gap: 2px; color: var(--panorama-text-dim, #8fa9db); }
 .composition-tabs-widget__empty { margin: 12px 0 0; color: var(--panorama-amber, #ffc45e); font-size: 11px; }
 .composition-tabs-widget--single .composition-tabs-widget__rings { grid-template-columns: minmax(0, 1fr); }
+.composition-tabs-widget--no-total-caption .composition-ring__center strong { max-width: 100%; overflow: visible; text-overflow: clip; }
 .composition-tabs-widget--compact { min-height: 0; height: auto; padding: 7px; }
 .composition-tabs-widget--compact .composition-tabs-widget__header h2 { font-size: 12px; }
 .composition-tabs-widget--compact .composition-tabs-widget__header h2::before { width: 2px; height: 12px; margin-right: 5px; vertical-align: -2px; }

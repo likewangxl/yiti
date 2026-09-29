@@ -26,6 +26,7 @@
             :model="card.model"
             :ring-keys="[card.ringKey]"
             :compact="true"
+            :show-total-caption="false"
             @business-line-select="onBusinessLineSelect"
           />
         </div>
@@ -647,7 +648,9 @@ function widgetProps(component) {
   if (['TREND', 'DETAIL_TABLE'].includes(component.componentType)) return { components: seriesComponents(component) };
   if (component.componentType === 'COMPOSITION_TABS') {
     const model = compositionComponentModel(component);
-    return isDraftOverviewPrimaryComposition(component) ? { model, ringKeys: ['income'] } : { model };
+    return isDraftOverviewPrimaryComposition(component)
+      ? { model, ringKeys: ['income'], showTotalCaption: false }
+      : { model };
   }
   if (component.componentType === 'RANKING') return {
     model: rankingComponentModel(component),
@@ -1135,5 +1138,13 @@ function onMapContext(payload) {
     flex: 0 0 310px;
   }
   .presentation-layout__footer--bottom > .presentation-layout__component { min-height: 210px; }
+}
+
+/* 草稿分行摘要标签与下方余额标题使用同一字号和字重；保留旧摘要 DOM 的兼容选择器。 */
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card-heading > span,
+.presentation-layout--draft-overview .presentation-layout__overview-summary-card > span {
+  color: var(--presentation-text);
+  font-size: var(--screen-font-size-widget-title, 12px);
+  font-weight: 600;
 }
 </style>

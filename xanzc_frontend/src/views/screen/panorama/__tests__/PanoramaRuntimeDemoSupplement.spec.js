@@ -35,7 +35,7 @@ beforeEach(() => {
 });
 
 describe('分行 TEST 草稿演示补齐', () => {
-  it('演示状态展开旧业务结构的收入绑定，关闭后恢复原配置且不修改发布包', async () => {
+  it('演示状态展开旧业务结构的收入绑定，切换服务端分类后恢复原配置且不修改发布包', async () => {
     const currentView = view();
     currentView.renderPackage.canvasStyle.presentation.display.components.push({
       componentId: 'legacy-composition-64', componentType: 'COMPOSITION_TABS', layoutRegion: 'LEFT', visible: true,
@@ -51,25 +51,26 @@ describe('分行 TEST 草稿演示补齐', () => {
     expect(tabs().find(tab => tab.tabKey === 'income')?.corporateField).toBe('测试_直营对公营业收入');
     expect(probe().props('model').blockResults[64].测试_直营对公营业收入).toBe(600);
     expect(probe().props('model').blockResults[64].测试_直营零售营业收入).toBe(400);
-    await wrapper.get('[data-action="toggle-demo-supplement"]').trigger('click');
+    const liveView = view('LIVE');
+    liveView.renderPackage.canvasStyle.presentation.display.components.push(currentView.renderPackage.canvasStyle.presentation.display.components[1]);
+    await wrapper.setProps({ view: liveView });
     expect(tabs()).toHaveLength(1);
     expect(probe().props('model').blockResults[64].测试_直营对公营业收入).toBeUndefined();
     expect(JSON.stringify(currentView)).toBe(original);
     wrapper.unmount();
   });
 
-  it('默认补齐空字段、显示性质说明，关闭后恢复源值，源模型保持不变', async () => {
+  it('默认补齐空字段但不显示补齐说明，切换分类后恢复源值，源模型保持不变', async () => {
     const original = JSON.stringify(harness.state.model.value);
     const wrapper = mount(PanoramaRuntime, { props: { view: view() } });
-    expect(wrapper.get('[data-testid="branch-demo-supplement"]').text()).toContain('演示补齐');
-    expect(wrapper.text()).toContain('非业务数据');
+    expect(wrapper.find('[data-testid="branch-demo-supplement"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="dashboard-probe"]').text()).toContain('93.6');
     expect(JSON.stringify(harness.state.model.value)).toBe(original);
-    await wrapper.get('[data-action="toggle-demo-supplement"]').trigger('click');
+    await wrapper.setProps({ view: view('LIVE') });
     expect(wrapper.get('[data-testid="dashboard-probe"]').text()).not.toContain('93.6');
-    expect(wrapper.text()).toContain('开启演示补齐');
-    await wrapper.get('[data-action="toggle-demo-supplement"]').trigger('click');
+    await wrapper.setProps({ view: view() });
     expect(wrapper.get('[data-testid="dashboard-probe"]').text()).toContain('93.6');
+    expect(wrapper.find('[data-testid="branch-demo-supplement"]').exists()).toBe(false);
     wrapper.unmount();
   });
 

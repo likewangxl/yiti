@@ -1,15 +1,5 @@
 <template>
   <section class="panorama-runtime panorama-runtime--immersive" data-testid="panorama-runtime">
-    <div v-if="demoSupplementAvailable" class="panorama-runtime__demo" data-testid="branch-demo-supplement">
-      <span v-if="demoSupplementEnabled && demoSupplement.fields.length" :title="demoSupplement.fields.join('、')">
-        演示补齐 · 非业务数据（完成率、收入结构、历史趋势及上月比较；已有数据保留）
-      </span>
-      <span v-else>当前展示接口原始数据</span>
-      <button type="button" data-action="toggle-demo-supplement" :aria-pressed="demoSupplementEnabled"
-        @click="demoSupplementEnabled = !demoSupplementEnabled">
-        {{ demoSupplementEnabled ? '关闭演示补齐' : '开启演示补齐' }}
-      </button>
-    </div>
     <component :is="isCorporate ? CorporateDashboard : isRetail ? RetailDashboard : PanoramaDashboard"
       :model="dashboardModel"
       :source-presentation="dashboardSourcePresentation"
