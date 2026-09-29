@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { supplementBranchDemoModel } from '../branchDemoSupplement.js';
+import { SETTLEMENT_DEPOSIT_MAPPINGS } from '../settlementDepositMapping.js';
 import { buildDisplayMetricsModel } from '../../presentation/model/displayMetricsModel.js';
 
 const FIELDS = Object.freeze({
@@ -30,6 +31,11 @@ const HEADER_UNITS = Object.freeze({
   [FIELDS.corpLoanRate]: 'PERCENT',
   [FIELDS.revenue]: 'YUAN',
   [FIELDS.fee]: 'YUAN'
+});
+
+const SETTLEMENT_FIELDS = Object.freeze({
+  corp: SETTLEMENT_DEPOSIT_MAPPINGS[0].fieldAlias,
+  retail: SETTLEMENT_DEPOSIT_MAPPINGS[1].fieldAlias
 });
 
 function headerComponents(fields = Object.keys(HEADER_UNITS)) {
@@ -175,52 +181,52 @@ function model() {
 }
 
 describe('supplementBranchDemoModel', () => {
-  it('为允许的全辖 TEST 草稿补齐结算性存款 KPI、UTC 基期日期和固定比较差值', () => {
+  it('为允许的全辖 TEST 草稿补齐结算性存款宽表别名、单位和历史基期', () => {
     const source = model();
     const before = structuredClone(source);
     const result = supplementBranchDemoModel(source, presentation());
-    const settlement = result.model.kpis.find(item => item.key === 'settlementDeposit');
+    const blocks = result.model.blockResults;
 
     expect(source).toEqual(before);
     expect(result.model).not.toBe(source);
-    expect(result.fields).toContain('settlementDeposit');
-    expect(settlement).toEqual({
-      key: 'settlementDeposit',
-      label: '结算性存款',
-      status: '演示数据',
-      isDemo: true,
-      value: 803456700,
-      unit: 'YUAN',
-      dataDate: '2026-09-21',
-      comparisons: {
-        day: { value: 1255000, unit: 'YUAN', referenceDate: '2026-09-20' },
-        month: { value: -3456700, unit: 'YUAN', referenceDate: '2026-08-31' },
-        year: { value: 103456700, unit: 'YUAN', referenceDate: '2025-12-31' }
-      }
+    expect(result.model.kpis).toBeUndefined();
+    expect(result.fields).toEqual(expect.arrayContaining([SETTLEMENT_FIELDS.corp, SETTLEMENT_FIELDS.retail]));
+    expect(blocks[31]).toMatchObject({
+      [SETTLEMENT_FIELDS.corp]: 500000000,
+      [SETTLEMENT_FIELDS.retail]: 303456700
+    });
+    expect(blocks[31].unitByField).toMatchObject({
+      [SETTLEMENT_FIELDS.corp]: 'YUAN',
+      [SETTLEMENT_FIELDS.retail]: 'YUAN'
+    });
+    expect(blocks[57].rows.find(row => row.data_date === '2026-09-20')).toMatchObject({
+      [SETTLEMENT_FIELDS.corp]: 500000000,
+      [SETTLEMENT_FIELDS.retail]: 302201700
+    });
+    expect(blocks[57].rows.find(row => row.data_date === '2026-08-31')).toMatchObject({
+      [SETTLEMENT_FIELDS.corp]: 500000000,
+      [SETTLEMENT_FIELDS.retail]: 306913400
+    });
+    expect(blocks[57].rows.find(row => row.data_date === '2025-12-31')).toMatchObject({
+      [SETTLEMENT_FIELDS.corp]: 430000000,
+      [SETTLEMENT_FIELDS.retail]: 270000000
     });
   });
 
-  it('使用 UTC 日期计算闰年昨日、上月末和上年末基期', () => {
+  it('使用 UTC 日期补齐闰年昨日、上月末和上年末历史行', () => {
     const source = model();
     source.dataDate = '2024-03-01';
     const result = supplementBranchDemoModel(source, presentation());
-    const settlement = result.model.kpis.find(item => item.key === 'settlementDeposit');
+    const dates = result.model.blockResults[57].rows.map(row => row.data_date);
 
-    expect(settlement).toMatchObject({
-      dataDate: '2024-03-01',
-      comparisons: {
-        day: { referenceDate: '2024-02-29' },
-        month: { referenceDate: '2024-02-29' },
-        year: { referenceDate: '2023-12-31' }
-      }
-    });
+    expect(dates).toEqual(expect.arrayContaining(['2024-02-29', '2023-12-31']));
   });
 
   it.each([
     ['zero', { value: 0, unit: 'YUAN' }],
     ['null', { value: null, unit: 'YUAN' }],
     ['illegal fields', { value: 'invalid', unit: '%', extra: 'keep-me' }]
-  ])('已有 settlementDeposit (%s) 完整保留且不补 comparisons', (_name, existing) => {
+  ])('已有 settlementDeposit (%s) 完整保留且不生成替代 KPI', (_name, existing) => {
     const source = model();
     source.kpis = [{ key: 'settlementDeposit', label: '已有结算指标', ...existing }];
     const before = structuredClone(source);
@@ -233,11 +239,12 @@ describe('supplementBranchDemoModel', () => {
     expect(result.fields).not.toContain('settlementDeposit');
   });
 
-  it('无效日期、缺少 blockResults 或非允许上下文时不补结算 KPI', () => {
+  it('无效日期、缺少 blockResults 或非允许上下文时不补结算字段', () => {
     const invalidDate = model();
     invalidDate.dataDate = '2026-02-30';
     const invalidDateResult = supplementBranchDemoModel(invalidDate, presentation());
-    expect(Boolean(invalidDateResult.model.kpis?.some(item => item.key === 'settlementDeposit'))).toBe(false);
+    expect(invalidDateResult.model.blockResults[31][SETTLEMENT_FIELDS.corp]).toBeUndefined();
+    expect(invalidDateResult.model.blockResults[31][SETTLEMENT_FIELDS.retail]).toBeUndefined();
 
     const missingBlocks = model();
     delete missingBlocks.blockResults;
@@ -245,17 +252,70 @@ describe('supplementBranchDemoModel', () => {
     expect(missingBlocksResult).toEqual({ model: missingBlocks, fields: [] });
 
     const scopedResult = supplementBranchDemoModel(model(), presentation({ orgCode: 'ORG-1' }));
-    expect(Boolean(scopedResult.model.kpis?.some(item => item.key === 'settlementDeposit'))).toBe(false);
+    expect(scopedResult.model.blockResults[31][SETTLEMENT_FIELDS.corp]).toBeUndefined();
+    expect(scopedResult.model.blockResults[31][SETTLEMENT_FIELDS.retail]).toBeUndefined();
+
+    const identityScoped = model();
+    identityScoped.identity.orgCode = 'ORG-2';
+    const identityScopedResult = supplementBranchDemoModel(identityScoped, presentation());
+    expect(identityScopedResult).toEqual({ model: identityScoped, fields: [] });
   });
 
-  it('重复执行不增加第二个结算 KPI，也不覆盖第一次结果', () => {
+  it('重复执行不覆盖已有结算字段，也不继续扩张趋势行', () => {
     const first = supplementBranchDemoModel(model(), presentation());
     const beforeSecond = structuredClone(first.model);
     const second = supplementBranchDemoModel(first.model, presentation());
 
     expect(second).toEqual({ model: first.model, fields: [] });
     expect(second.model).toEqual(beforeSecond);
-    expect(second.model.kpis.filter(item => item.key === 'settlementDeposit')).toHaveLength(1);
+    expect(second.model.blockResults[57].rows).toHaveLength(beforeSecond.blockResults[57].rows.length);
+  });
+
+  it('仅为有效总存款和总贷款 KPI 补缺失的上年比较，不覆盖已有比较', () => {
+    const source = model();
+    source.kpis = [
+      { key: 'deposit', value: 100, unit: '亿元', dataDate: '2026-09-21', comparisons: { day: { value: 1, unit: '亿元', referenceDate: '2026-09-20' } } },
+      { key: 'loan', value: 80, unit: '亿元', dataDate: '2026-09-21', comparisons: { year: { value: 7, unit: '亿元', referenceDate: '2025-12-31' } } }
+    ];
+    const result = supplementBranchDemoModel(source, presentation());
+
+    expect(result.model.kpis[0].comparisons).toMatchObject({
+      day: { value: 1, unit: '亿元', referenceDate: '2026-09-20' },
+      year: { value: 12, unit: '亿元', referenceDate: '2025-12-31' }
+    });
+    expect(result.model.kpis[1].comparisons.year).toEqual({ value: 7, unit: '亿元', referenceDate: '2025-12-31' });
+    expect(source.kpis[0].comparisons).not.toHaveProperty('year');
+  });
+
+  it('真实 raw slot 已有值时不以 TEST alias 覆盖真实字段', () => {
+    const source = model();
+    const currentBlock = source.blockResults[31];
+    currentBlock.val_26 = 501000000;
+    currentBlock.val_38 = 302456700;
+    currentBlock.unitByField.val_26 = 'YUAN';
+    currentBlock.unitByField.val_38 = 'YUAN';
+    currentBlock.rows[0].val_26 = 501000000;
+    currentBlock.rows[0].val_38 = 302456700;
+    const result = supplementBranchDemoModel(source, presentation());
+
+    expect(result.model.blockResults[31][SETTLEMENT_FIELDS.corp]).toBeUndefined();
+    expect(result.model.blockResults[31][SETTLEMENT_FIELDS.retail]).toBeUndefined();
+    expect(result.model.blockResults[31].val_26).toBe(501000000);
+    expect(result.model.blockResults[31].val_38).toBe(302456700);
+  });
+
+  it('补齐年度趋势时保留既有日期的旧日月样本口径', () => {
+    const source = model();
+    const result = supplementBranchDemoModel(source, presentation());
+    const rows = result.model.blockResults[57].rows;
+    const oldest = rows.find(row => row.data_date === '2026-08-28');
+    const month = rows.find(row => row.data_date === '2026-08-31');
+    const currentRow = rows.find(row => row.data_date === '2026-09-21');
+
+    expect(rows.length).toBeGreaterThanOrEqual(365);
+    expect(oldest[FIELDS.retailDeposit]).toBeCloseTo(current[FIELDS.retailDeposit] * 0.94, 6);
+    expect(month[FIELDS.retailDeposit]).toBeCloseTo(current[FIELDS.retailDeposit] * 0.97, 6);
+    expect(currentRow[FIELDS.retailDeposit]).toBe(current[FIELDS.retailDeposit]);
   });
 
   it('只在分行 TEST 草稿全辖上下文补齐配置字段、结构和历史，并保持单位与月比较可用', () => {
