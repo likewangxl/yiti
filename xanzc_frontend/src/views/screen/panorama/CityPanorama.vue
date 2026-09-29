@@ -107,32 +107,6 @@
           无坐标 {{ missingCoordinates.length }} 家：{{ missingCoordinates.map(item => item.orgName || item.orgCode).join('、') }}
         </div>
       </article>
-      <section v-if="selectedBranch" class="panorama-panel city-detail-panel" data-testid="branch-detail" :aria-expanded="String(detailExpanded)">
-        <div class="city-detail-heading">
-          <div><span>当前支行</span><h2>{{ selectedBranch.orgName || selectedBranch.orgCode }}</h2></div>
-          <button type="button" data-action="toggle-detail" @click="detailExpanded = !detailExpanded">{{ detailExpanded ? '收起详情' : '展开详情' }}</button>
-        </div>
-        <div v-if="detailExpanded" class="city-detail-body">
-          <div class="city-detail-metrics">
-            <div><span>存款余额</span><strong :title="metricTitle(selectedBranch.metrics?.deposit)">{{ displayCityMetric(selectedBranch.metrics?.deposit, '亿元', 'deposit').text }}<small>{{ displayCityMetric(selectedBranch.metrics?.deposit, '亿元', 'deposit').unit }}</small></strong></div>
-            <div><span>贷款余额</span><strong :title="metricTitle(selectedBranch.metrics?.loan)">{{ displayCityMetric(selectedBranch.metrics?.loan, '亿元', 'loan').text }}<small>{{ displayCityMetric(selectedBranch.metrics?.loan, '亿元', 'loan').unit }}</small></strong></div>
-            <div><span>营销有效归属客户数</span><strong :title="metricTitle(selectedBranch.metrics?.customers)">{{ displayCityMetric(selectedBranch.metrics?.customers, '万户', 'customers').text }}<small>{{ displayCityMetric(selectedBranch.metrics?.customers, '万户', 'customers').unit }}</small></strong><small v-if="!hasMetric(selectedBranch.metrics?.customers)" class="city-inline-status">{{ cityStatus('branches', 'customers').message }}</small></div>
-            <div><span>目标完成率</span><strong>{{ formatPercent(selectedBranch.metrics?.rate) }}</strong><small v-if="!hasMetric(selectedBranch.metrics?.rate)" class="city-inline-status">{{ cityStatus('branches', 'rate').message }}</small></div>
-            <div><span>实际目标差（亿元）</span><strong :class="signedClass(selectedBranchInsight?.targetGap)">{{ signedMetricText(selectedBranchInsight?.targetGap) }}</strong><small v-if="selectedBranchInsight?.targetGap == null" class="city-inline-status" :title="cityStatus('branches', 'target').message">{{ cityStatus('branches', 'target').message }}</small></div>
-          </div>
-          <div class="city-detail-observation" data-testid="branch-observation">
-            <div><span>存款余额位次：</span><strong>{{ selectedBranchInsight?.rank ? `第${selectedBranchInsight.rank}名/${selectedBranchInsight.total}家` : '—' }}</strong></div>
-            <div><span>中位余额差（亿元）</span><strong :class="signedClass(selectedBranchInsight?.medianDifference)">{{ signedMetricText(selectedBranchInsight?.medianDifference) }}</strong></div>
-            <div><span>趋势首末变化</span><strong :class="signedClass(selectedBranchInsight?.trend?.change)">{{ signedMetricText(selectedBranchInsight?.trend?.change) }}</strong></div>
-            <div><span>趋势状态</span><strong :class="trendClass(selectedBranchInsight?.trendState)">{{ selectedBranchInsight?.trendState || '—' }}</strong></div>
-          </div>
-          <PanoramaTrend :trend="selectedBranch.trend" :title="`${selectedBranch.orgName || selectedBranch.orgCode}经营趋势`" compact data-testid="branch-detail-trend" class="city-detail-trend" />
-          <ul v-if="selectedBranch.attention?.length" class="city-detail-attention">
-            <li v-for="(item, index) in selectedBranch.attention" :key="item.label || index"><span>!</span>{{ item.label || '—' }} <strong>{{ formatMetric(item.count) }}</strong></li>
-          </ul>
-          <small v-else class="city-inline-status" data-testid="branch-detail-attention-status" :title="cityStatus('attention', '').message">{{ cityStatus('attention', '').message }}</small>
-        </div>
-      </section>
     </section>
   </section>
 </template>
@@ -144,12 +118,10 @@ import { Back, Close, FullScreen, Location, Refresh } from '@element-plus/icons-
 import PanoramaMap from './PanoramaMap.vue';
 import PresentationMapWidget from '../presentation/map/PresentationMapWidget.vue';
 import { findVisibleMapComponent } from '../presentation/map/mapModel';
-import PanoramaTrend from './PanoramaTrend.vue';
 import CityOperatingHeader from './CityOperatingHeader.vue';
 import CityBranchRanking from './CityBranchRanking.vue';
 import { cityGeoByCode } from './geography.js';
 import { buildCityDistrictMapState } from './cityDistrictMapModel.js';
-import { buildCityInsights } from './leadershipInsights.js';
 import { resolveDataStatus } from './sourcePresentation';
 import { stripTestModifier } from './targetPresentation.js';
 import { buildNavigationQuery, parseNavigationQuery } from '../presentation/navigation/navigationModel';
@@ -183,7 +155,6 @@ const page = ref(Math.max(1, Number(initialState.page) || 1));
 const pageSize = 5;
 const rankingTabKey = ref(String(initialState.rankingTabKey || 'retailDepositRate'));
 const selectedOrgCode = ref(props.initialOrgCode || String(initialState.selectedOrgCode || ''));
-const detailExpanded = ref(initialState.detailExpanded === undefined ? true : Boolean(initialState.detailExpanded));
 const cityAmountUnit = ref('TEN_THOUSAND');
 const rootRef = ref(null);
 let navigationQuerySyncReady = false;
@@ -199,7 +170,6 @@ function navigationStateSnapshot() {
     sortDescending: sortDescending.value,
     page: page.value,
     selectedOrgCode: selectedOrgCode.value,
-    detailExpanded: detailExpanded.value,
     rankingTabKey: rankingTabKey.value
   };
 }
@@ -317,13 +287,6 @@ const rankingTotalPages = computed(() => {
   const count = cityBranchRankingModel.value.rows.length || cityBranchRankingModel.value.missingRows.length;
   return Math.max(1, Math.ceil(count / pageSize));
 });
-const selectedBranch = computed(() => cityInstitutions.value.find(item => item.orgCode === selectedOrgCode.value) || null);
-const cityInsights = computed(() => buildCityInsights({
-  cityCode: props.cityCode,
-  citySummary: citySummary.value,
-  institutions: safeModel.value.institutions
-}));
-const selectedBranchInsight = computed(() => cityInsights.value.selected(selectedOrgCode.value));
 
 function finiteValue(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -361,37 +324,12 @@ function formatDisplayMetric(value, unit = '', key = '') {
 function displayCityKpi(kpi) {
   return formatDisplayMetric(kpi?.value, kpi?.unit || (kpi?.key === 'customers' ? '万户' : '亿元'), kpi?.key);
 }
-function displayCityMetric(value, unit, key) {
-  return formatDisplayMetric(value, unit, key);
-}
 function metricTitle(value) {
   const number = finiteValue(value);
   return number === null ? '' : `原始值：${String(value)}`;
 }
-function formatPercent(value) {
-  const number = finiteValue(value);
-  return number === null ? '—' : `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 1, minimumFractionDigits: 1 }).format(number)}%`;
-}
-function signedMetricText(value) {
-  const number = finiteValue(value);
-  if (number === null) return '—';
-  const prefix = number > 0 ? '+' : '';
-  return `${prefix}${formatMetric(number)}`;
-}
-function signedClass(value) {
-  const number = finiteValue(value);
-  if (number === null) return 'is-muted';
-  return number < 0 ? 'is-down' : 'is-up';
-}
-function trendClass(state) {
-  return state === '连续下降' || state === '最新回落' ? 'is-down' : state === '最新回升' ? 'is-up' : 'is-muted';
-}
-function formatChange(value) {
-  return finiteValue(value);
-}
-function hasMetric(value) {
-  return finiteValue(value) !== null;
-}
+function formatChange(value) { return finiteValue(value); }
+function hasMetric(value) { return finiteValue(value) !== null; }
 function changeClass(value) {
   const number = finiteValue(value);
   return number !== null && number < 0 ? 'is-down' : 'is-up';
@@ -400,7 +338,6 @@ function setSelectedBranch(orgCode) {
   const code = String(orgCode || '');
   if (!code || !cityInstitutions.value.some(item => item.orgCode === code)) return false;
   selectedOrgCode.value = code;
-  detailExpanded.value = true;
   return true;
 }
 
@@ -465,7 +402,7 @@ watch(cityInstitutions, list => {
 });
 watch([search, attentionOnly], () => { page.value = 1; });
 watch(rankingTotalPages, value => { if (page.value > value) page.value = value; });
-watch([search, attentionOnly, sortDescending, page, selectedOrgCode, detailExpanded, rankingTabKey], emitState, { flush: 'post' });
+watch([search, attentionOnly, sortDescending, page, selectedOrgCode, rankingTabKey], emitState, { flush: 'post' });
 </script>
 
 <style scoped>
@@ -483,26 +420,55 @@ watch([search, attentionOnly, sortDescending, page, selectedOrgCode, detailExpan
   color-scheme: dark;
 }
 
-/* 城市右栏同时承载六个指标页签、搜索、完整分页和支行详情；让排名行按内容占位，
-   详情自然落在排名下方，城市弹层本身负责纵向滚动。 */
+  /* 桌面端排名面板与地图共享同一工作区高度，填充已移除详情卡留下的右栏空间。 */
 @media (min-width: 1100px) {
-  :global(.city-panorama .city-workspace) {
-    grid-template-rows: minmax(420px, auto) minmax(360px, auto);
+  .city-panorama .city-workspace {
+    grid-template-columns: minmax(300px, 38fr) minmax(560px, 62fr);
+    grid-template-rows: minmax(0, 1fr);
     height: auto;
-    min-height: 0;
+    min-height: 600px;
     align-items: stretch;
   }
-  :global(.city-panorama .city-list-panel) {
-    min-height: 420px;
+  .city-panorama .city-map-panel {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .city-panorama .city-list-panel {
+    grid-column: 2;
+    grid-row: 1;
+    min-height: 0;
     overflow: visible;
   }
-  :global(.city-panorama .city-list-panel > .city-branch-ranking) {
+  .city-panorama .city-list-panel > .city-branch-ranking {
     height: auto;
-    min-height: 420px;
+    min-height: 0;
+    flex: 1 1 auto;
   }
-  :global(.city-panorama .city-detail-panel) {
-    min-height: 430px;
-    overflow: visible;
+  .city-panorama .city-list-panel :deep(.city-branch-ranking__list) {
+    display: grid;
+    grid-auto-rows: minmax(36px, 1fr);
+    align-content: stretch;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1099px) {
+  .city-panorama .city-header {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, auto);
+    gap: 12px;
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+  .city-panorama .city-breadcrumb,
+  .city-panorama .city-title-block,
+  .city-panorama .city-header-actions {
+    min-width: 0;
+  }
+  .city-panorama .city-header-actions {
+    gap: 4px;
+  }
+  .city-panorama .city-header-actions button {
+    padding-right: 5px;
+    padding-left: 5px;
   }
 }
 </style>

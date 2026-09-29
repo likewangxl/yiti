@@ -605,7 +605,7 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     }]]);
   });
 
-  it('城市画像关闭后恢复搜索、关注、排序、分页、选中和展开状态', async () => {
+  it('城市画像关闭后恢复搜索、关注、分页和选中状态，且详情卡已移除', async () => {
     const wrapper = mountDashboard({
       model: {
         ...extendedModel,
@@ -627,10 +627,9 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     const modal = wrapper.get('[data-testid="city-panorama-modal"]');
     await modal.get('[data-testid="branch-search"]').setValue('西安支行');
     await modal.get('[data-testid="attention-filter"]').trigger('click');
-    await modal.get('[data-testid="deposit-sort"]').trigger('click');
     await modal.get('[data-testid="branch-page-next"]').trigger('click');
     await modal.get('[data-testid="branch-row"]').trigger('click');
-    await modal.get('[data-testid="branch-detail"] [data-action="toggle-detail"]').trigger('click');
+    expect(modal.find('[data-testid="branch-detail"]').exists()).toBe(false);
     await modal.get('[data-action="city-close"]').trigger('click');
     expect(wrapper.find('[data-testid="city-panorama-modal"]').exists()).toBe(false);
 
@@ -639,8 +638,7 @@ describe('PanoramaDashboard 省级经营大屏', () => {
     const reopened = wrapper.get('[data-testid="city-panorama-modal"]');
     expect(reopened.get('[data-testid="branch-search"]').element.value).toBe('西安支行');
     expect(reopened.get('[data-testid="attention-filter"]').classes()).toContain('active');
-    expect(reopened.get('[data-testid="deposit-sort"]').text()).toContain('↑');
     expect(reopened.get('[data-testid="branch-page-next"]').element.disabled).toBe(true);
-    expect(reopened.get('[data-testid="branch-detail"]').attributes('aria-expanded')).toBe('false');
+    expect(reopened.find('[data-testid="branch-detail"]').exists()).toBe(false);
   });
 });

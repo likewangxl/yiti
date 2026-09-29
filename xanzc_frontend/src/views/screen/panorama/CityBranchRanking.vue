@@ -36,7 +36,7 @@ const props = defineProps({
   search: { type: String, default: '' },
   page: { type: Number, default: 1 },
   pageSize: { type: Number, default: 8 },
-  interval: { type: Number, default: 10000 }
+  interval: { type: Number, default: 5000 }
 });
 const emit = defineEmits(['tab-change', 'search-change', 'branch-select', 'page-change']);
 const tabs = computed(() => Array.isArray(props.model?.tabs) ? props.model.tabs : []);
@@ -48,6 +48,7 @@ const focusPaused = ref(false);
 const hidden = ref(false);
 const showMissing = ref(false);
 let timer = null;
+let timerInterval = null;
 
 const filteredRows = computed(() => {
   const keyword = String(props.search || '').trim().toLocaleLowerCase();
@@ -78,13 +79,14 @@ function selectTab(key) {
   activeTabKey.value = key;
   page.value = 1;
   emit('tab-change', key);
-  syncTimer();
+  syncTimer(true);
 }
 function changePage(delta) {
   const next = Math.max(1, Math.min(totalPages.value, page.value + delta));
   if (next === page.value) return;
   page.value = next;
   emit('page-change', next);
+  syncTimer(true);
 }
 function onTabKey(event, key) {
   const index = tabs.value.findIndex(tab => tab.key === key);
@@ -95,15 +97,46 @@ function onTabKey(event, key) {
   document.getElementById(`city-branch-tab-${tabs.value[nextIndex].key}`)?.focus();
 }
 function togglePause() { paused.value = !paused.value; syncTimer(); }
-function advanceTab() {
-  if (interactionPaused.value || tabs.value.length < 2) return;
+function advanceCarousel() {
+  if (interactionPaused.value || !tabs.value.length) return;
+  if (page.value < totalPages.value) {
+    page.value += 1;
+    emit('page-change', page.value);
+    return;
+  }
+  if (tabs.value.length < 2) {
+    if (page.value > 1) {
+      page.value = 1;
+      emit('page-change', page.value);
+    }
+    return;
+  }
   const index = tabs.value.findIndex(tab => tab.key === activeTabKey.value);
-  selectTab(tabs.value[(index + 1) % tabs.value.length].key);
+  const nextTab = tabs.value[(index < 0 ? 0 : index + 1) % tabs.value.length];
+  if (!nextTab?.key) return;
+  activeTabKey.value = nextTab.key;
+  page.value = 1;
+  emit('tab-change', nextTab.key);
 }
-function stopTimer() { if (timer) window.clearInterval(timer); timer = null; }
-function syncTimer() {
+function stopTimer() {
+  if (timer !== null) {
+    window.clearInterval(timer);
+    clearInterval(timer);
+  }
+  timer = null;
+  timerInterval = null;
+}
+function syncTimer(force = false) {
+  const interval = Math.max(1000, Number(props.interval) || 5000);
+  const shouldRun = !interactionPaused.value && tabs.value.length && (tabs.value.length > 1 || totalPages.value > 1);
+  if (!shouldRun) {
+    stopTimer();
+    return;
+  }
+  if (!force && timer !== null && timerInterval === interval) return;
   stopTimer();
-  if (!interactionPaused.value && tabs.value.length > 1) timer = window.setInterval(advanceTab, Math.max(1000, Number(props.interval) || 10000));
+  timer = window.setInterval(advanceCarousel, interval);
+  timerInterval = interval;
 }
 function barWidth(value) {
   const number = Number(value);
@@ -116,15 +149,44 @@ function formatValue(value) {
 }
 function onVisibilityChange() { hidden.value = document.visibilityState === 'hidden'; syncTimer(); }
 watch(() => props.model?.activeTabKey, value => {
-  if (value && tabs.value.some(tab => tab.key === value)) { activeTabKey.value = value; page.value = 1; }
+  if (value && tabs.value.some(tab => tab.key === value)) {
+    const changed = activeTabKey.value !== value;
+    activeTabKey.value = value;
+    if (changed) page.value = 1;
+  }
   syncTimer();
 });
 watch(() => props.page, value => {
   const next = Math.max(1, Math.min(totalPages.value, Number(value) || 1));
-  if (page.value !== next) page.value = next;
+  if (page.value !== next) {
+    page.value = next;
+    syncTimer();
+  }
 });
-watch([filteredRows, () => props.search], () => { page.value = 1; });
-onMounted(() => { document.addEventListener('visibilitychange', onVisibilityChange); syncTimer(); });
+watch(totalPages, value => {
+  if (page.value > value) {
+    page.value = value;
+    emit('page-change', value);
+  }
+  syncTimer();
+}, { immediate: true });
+watch(() => props.search, (value, previous) => {
+  if (value !== previous && page.value !== 1) {
+    page.value = 1;
+    emit('page-change', 1);
+  }
+  syncTimer();
+});
+watch(() => props.interval, syncTimer);
+watch(tabs, list => {
+  if (!list.some(tab => tab.key === activeTabKey.value) && list[0]?.key) {
+    activeTabKey.value = list[0].key;
+    page.value = 1;
+    emit('tab-change', activeTabKey.value);
+  }
+  syncTimer();
+});
+onMounted(() => { document.addEventListener('visibilitychange', onVisibilityChange); onVisibilityChange(); });
 onBeforeUnmount(() => { document.removeEventListener('visibilitychange', onVisibilityChange); stopTimer(); });
 </script>
 

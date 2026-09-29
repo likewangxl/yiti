@@ -106,13 +106,39 @@ describe('CityPanorama 市级支行全景', () => {
     expect(wrapper.find('[data-testid="branch-page-next"]').exists()).toBe(true);
   });
 
-  it('地图和列表互选，选中机构展示趋势与经营关注明细', async () => {
+  it('排名轮播由父层受控：当前 tab 先完成分页，5000ms 后才切换下一个 tab', async () => {
+    vi.useFakeTimers();
+    const wrapper = mountCity();
+    const firstTab = '[data-testid="city-branch-ranking-tab"][data-tab-key="retailDepositRate"]';
+    const nextTab = '[data-testid="city-branch-ranking-tab"][data-tab-key="retailLoanRate"]';
+    expect(wrapper.get(firstTab).attributes('aria-selected')).toBe('true');
+    expect(wrapper.get('.city-branch-ranking__pagination span').text()).toBe('1 / 2');
+
+    vi.advanceTimersByTime(4999);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.get(firstTab).attributes('aria-selected')).toBe('true');
+    expect(wrapper.get('.city-branch-ranking__pagination span').text()).toBe('1 / 2');
+
+    vi.advanceTimersByTime(1);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.get(firstTab).attributes('aria-selected')).toBe('true');
+    expect(wrapper.get('.city-branch-ranking__pagination span').text()).toBe('2 / 2');
+
+    vi.advanceTimersByTime(4999);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.get(firstTab).attributes('aria-selected')).toBe('true');
+    vi.advanceTimersByTime(1);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.get(nextTab).attributes('aria-selected')).toBe('true');
+    expect(wrapper.get('.city-branch-ranking__pagination span').text()).toBe('1 / 2');
+  });
+
+  it('地图和列表互选，选中机构保持同步且不再渲染详情卡', async () => {
     const wrapper = mountCity({ sourcePresentation: { screenCode: 'SCR_PROVINCE_MAP_V2' } });
     expect(wrapper.get('.city-map-stub').attributes('data-point-label-layout')).toBe('callout');
     await wrapper.get('[data-testid="branch-row"]').trigger('click');
-    expect(wrapper.find('[data-testid="branch-detail"]').text()).toContain('高新科技路支行');
-    expect(wrapper.find('[data-testid="branch-detail-trend"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="branch-detail"]').text()).toContain('审批超时');
+    expect(wrapper.find('[data-testid="branch-detail"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="selected-org-code"]').text()).toContain('ORG-1');
     await wrapper.get('.map-branch-1').trigger('click');
     expect(wrapper.find('[data-testid="selected-org-code"]').text()).toContain('ORG-1');
   });
@@ -122,14 +148,10 @@ describe('CityPanorama 市级支行全景', () => {
     expect(wrapper.get('.city-map-stub').attributes('data-point-label-layout')).toBe('callout');
   });
 
-  it('支行详情可展开和收起，返回省级、刷新、全屏都由事件或能力交给容器', async () => {
+  it('移除支行详情卡，返回省级、刷新、全屏都由事件或能力交给容器', async () => {
     const wrapper = mountCity();
     await wrapper.get('[data-testid="branch-row"]').trigger('click');
-    const detail = wrapper.get('[data-testid="branch-detail"]');
-    await detail.get('[data-action="toggle-detail"]').trigger('click');
-    expect(detail.attributes('aria-expanded')).toBe('false');
-    await detail.get('[data-action="toggle-detail"]').trigger('click');
-    expect(detail.attributes('aria-expanded')).toBe('true');
+    expect(wrapper.find('[data-testid="branch-detail"]').exists()).toBe(false);
     await wrapper.get('[data-action="city-back"]').trigger('click');
     await wrapper.get('[data-action="city-refresh"]').trigger('click');
     await wrapper.get('[data-action="city-fullscreen"]').trigger('click');
@@ -157,7 +179,7 @@ describe('CityPanorama 市级支行全景', () => {
     expect(wrapper.get('[data-testid="city-kpi-status-revenue"]').text()).toContain('现有收入来源');
   });
 
-  it('市级摘要只呈现全市目标状态和目标距离，选中支行不改变摘要，位次只在详情出现', async () => {
+  it('市级摘要只呈现全市目标状态和目标距离，选中支行不改变摘要且不渲染详情卡', async () => {
     const cityModel = {
       ...model,
       citySummaries: {
@@ -170,7 +192,8 @@ describe('CityPanorama 市级支行全景', () => {
     const wrapper = mountCity({ model: cityModel });
     expect(wrapper.find('[data-testid="city-leadership-diagnostics"]').exists()).toBe(false);
     await wrapper.get('[data-testid="branch-row"]').trigger('click');
-    expect(wrapper.get('[data-testid="branch-observation"]').text()).toContain('存款余额位次');
+    expect(wrapper.find('[data-testid="branch-detail"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="selected-org-code"]').text()).toContain('ORG-1');
   });
 
   it('接收父层快照后恢复搜索、关注、排序、页码、选中机构和详情展开状态', () => {
@@ -180,15 +203,14 @@ describe('CityPanorama 市级支行全景', () => {
         attentionOnly: false,
         sortDescending: false,
         page: 2,
-        selectedOrgCode: 'ORG-6',
-        detailExpanded: false
+        selectedOrgCode: 'ORG-6'
       }
     });
     expect(wrapper.get('[data-testid="branch-search"]').element.value).toBe('测试支行');
     expect(wrapper.findAll('[data-testid="city-branch-ranking-tab"]')).toHaveLength(6);
     expect(wrapper.get('[data-testid="branch-page-prev"]').element.disabled).toBe(false);
     expect(wrapper.get('[data-testid="selected-org-code"]').text()).toContain('ORG-6');
-    expect(wrapper.get('[data-testid="branch-detail"]').attributes('aria-expanded')).toBe('false');
+    expect(wrapper.find('[data-testid="branch-detail"]').exists()).toBe(false);
   });
 
   it('每次可见筛选状态变化都向父层发出完整快照', async () => {

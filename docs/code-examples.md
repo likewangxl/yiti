@@ -93,6 +93,8 @@
 
 ## 前端（xanzc_frontend）
 
+- 市级支行经营全景排名布局和逐页轮播：`src/views/screen/panorama/CityPanorama.vue`、`CityBranchRanking.vue`；排名填满右栏，每5秒翻页，当前指标末页停留后才切下一指标。筛选与刷新保持有效页码，暂停、悬停、焦点、页面隐藏与卸载控制定时器；测试见相邻 `__tests__/CityBranchRanking.spec.js`。
+
 | 类型 | 范例 | 说明 |
 |---|---|---|
 | HTTP 封装 | `src/api/http.js` | `call(method,url,config,fallback)`：写操作真错必 throw、仅 GET 允许 mock 兜底；统一解包 ResponseWrapper/PageResult；401 跳登录 |
