@@ -109,6 +109,7 @@ describe('地图指标联动显示', () => {
         appearance: 'relief',
         colorByCity: true,
         colorByMetric: true,
+        regionStates: { '610100': 'HAS_INSTITUTION' },
         metricColors: { '610100': '#123456', '610200': '#654321' }
       }
     });
@@ -137,6 +138,22 @@ describe('地图指标联动显示', () => {
     await district.vm.$nextTick();
     expect(district.get('path[data-region-code="610100"]').attributes('style')).toContain('#123456');
     district.unmount();
+  });
+
+  it('colorByCity 按 regionStates 只给 HAS_INSTITUTION 彩色，NO_INSTITUTION/MISSING 保持中性灰', async () => {
+    const wrapper = mount(PanoramaMap, {
+      props: {
+        geoJson,
+        colorByCity: true,
+        colorByMetric: true,
+        regionStates: { '610100': 'HAS_INSTITUTION', '610200': 'NO_INSTITUTION' },
+        metricColors: { '610100': '#123456', '610200': '#ef4444' }
+      }
+    });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.get('path[data-region-code="610100"]').attributes('style')).toContain('#4f9da6');
+    expect(wrapper.get('path[data-region-code="610200"]').attributes('style')).toContain('#65738a');
+    wrapper.unmount();
   });
 
   it('relief inline 的初始 labelWorld 必须留在对应地市多边形内', async () => {

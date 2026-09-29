@@ -125,7 +125,8 @@ describe('PresentationMapWidget', () => {
     expect(oldMap.props('colorByCity')).toBe(true);
     expect(oldMap.props('regionStates')['610600']).toBe('NO_INSTITUTION');
     expect(oldMap.props('metricColors')['610600']).toBe('#65738a');
-    expect(province.get('[data-testid="presentation-map-legend-city-palette"]').text()).toContain('地市分区');
+    expect(province.get('[data-testid="presentation-map-legend-has-institution"]').text()).toContain('有经营机构');
+    expect(province.get('[data-testid="presentation-map-legend-no-institution"]').text()).toContain('无经营机构');
     province.unmount();
 
     const unrelated = mount(PresentationMapWidget, {

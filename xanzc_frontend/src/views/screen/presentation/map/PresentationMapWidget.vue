@@ -71,7 +71,7 @@ import { isBranchMapV2 } from '../../panorama/screenVariant.js';
 import { buildCityDistrictMapState, CITY_DISTRICT_HAS_INSTITUTION_COLOR } from '../../panorama/cityDistrictMapModel';
 import { buildCityInstitutionDetails } from '../../panorama/cityMapDetails.js';
 import { buildProvinceInstitutionMapState } from '../../panorama/provinceInstitutionMapModel.js';
-import { provinceCityPaletteGradient } from '../../panorama/provinceCityPalette.js';
+import { provinceCityPaletteGradient, PROVINCE_NEUTRAL_COLOR } from '../../panorama/provinceCityPalette.js';
 
 const props = defineProps({
   presentation: { type: Object, default: () => ({}) },
@@ -114,7 +114,12 @@ const mapMetricColors = computed(() => props.mode === 'city' && Object.keys(city
   ? cityDistrictMapState.value.metricColors : mapModel.value.metricColors);
 const mapLegend = computed(() => {
   if (legacyBranchProvinceMap.value) {
-    return [{ key: 'city-palette', label: '地市分区', color: provinceCityPaletteGradient() }];
+    const states = new Set(Object.values(legacyBranchInstitutionState.value.regionStates || {}));
+    return [
+      states.has('HAS_INSTITUTION') && { key: 'has-institution', state: 'HAS_INSTITUTION', label: '有经营机构', color: provinceCityPaletteGradient() },
+      states.has('NO_INSTITUTION') && { key: 'no-institution', state: 'NO_INSTITUTION', label: '无经营机构', color: PROVINCE_NEUTRAL_COLOR },
+      states.has('MISSING') && { key: 'institution-unknown', state: 'MISSING', label: '归属待确认', color: MAP_MISSING_COLOR }
+    ].filter(Boolean);
   }
   if (props.mode === 'city') return [
     { key: 'has-institution', state: 'HAS_INSTITUTION', label: '有经营机构', color: CITY_DISTRICT_HAS_INSTITUTION_COLOR },
@@ -169,7 +174,7 @@ function selectInstitution(institution) {
 .presentation-map-widget__legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 34px; padding: 7px 14px; border-top: 1px solid var(--panorama-border-soft, rgba(119, 163, 255, .16)); color: #bcd5ff; font-size: 10px; }
 .presentation-map-widget__legend span { display: inline-flex; align-items: center; gap: 4px; }
 .presentation-map-widget__legend i { width: 10px; height: 10px; border-radius: 50%; }
-.presentation-map-widget__legend [data-testid="presentation-map-legend-city-palette"] i { width: 32px; border-radius: 3px; }
+.presentation-map-widget__legend [data-testid="presentation-map-legend-has-institution"] i { width: 32px; border-radius: 3px; }
 .presentation-map-widget__legend small { margin-left: auto; color: var(--panorama-text-dim, #8fa9db); }
 .presentation-map-widget__status, .presentation-map-widget__missing { margin: 8px 14px 12px; color: var(--panorama-amber, #ffc45e); font-size: 10px; }
 .presentation-map-widget__missing { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }

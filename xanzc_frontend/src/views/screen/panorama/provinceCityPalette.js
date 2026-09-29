@@ -1,8 +1,10 @@
-/** Stable, high-contrast colors for the ten province-level cities. */
+/** Stable, coordinated colors for the ten province-level cities. */
 export const PROVINCE_CITY_PALETTE = Object.freeze([
-  '#2ee6d6', '#3b82f6', '#8b5cf6', '#f472b6', '#f59e0b',
-  '#22c55e', '#f97316', '#06b6d4', '#eab308', '#ef4444'
+  '#4f9da6', '#6e9bb7', '#7b82b5', '#9881ad', '#b29a70',
+  '#7fa58f', '#b07f72', '#568caf', '#9e8fbd', '#6f9f91'
 ]);
+
+export const PROVINCE_NEUTRAL_COLOR = '#65738a';
 
 const PROVINCE_CITY_CODES = Object.freeze([
   '610100', '610200', '610300', '610400', '610500',
@@ -23,7 +25,8 @@ function hash(value) {
 }
 
 /** Resolve a city code to a stable palette entry, including unknown codes. */
-export function provinceCityColor(code) {
+export function provinceCityColor(code, state = 'HAS_INSTITUTION') {
+  if (String(state || '').trim().toUpperCase() !== 'HAS_INSTITUTION') return PROVINCE_NEUTRAL_COLOR;
   const value = text(code);
   const knownIndex = PROVINCE_CITY_CODES.indexOf(value);
   const index = knownIndex >= 0 ? knownIndex : hash(value) % PROVINCE_CITY_PALETTE.length;

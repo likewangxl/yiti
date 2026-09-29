@@ -753,7 +753,7 @@ function isRegionMetricMissing(region) {
 
 function metricStyle(region) {
   if (props.colorByCity && props.mode === 'province') {
-    const baseColor = provinceCityColor(region.code);
+    const baseColor = cityColorForRegion(region);
     const active = String(region.code) === String(hoveredRegionCode.value)
       || String(region.code) === String(props.selectedRegionCode);
     return { fill: active ? highlightCityColor(baseColor) : baseColor, '--city-color': baseColor };
@@ -767,14 +767,22 @@ function metricColorForCode(code) {
   return props.metricColors?.[code] || '#65738a';
 }
 
+function cityStateForCode(code) {
+  return props.regionStates?.[code] === 'HAS_INSTITUTION' ? 'HAS_INSTITUTION' : 'MISSING';
+}
+
 function cityColorForCode(code) {
-  return provinceCityColor(code);
+  return provinceCityColor(code, cityStateForCode(code));
+}
+
+function cityColorForRegion(region) {
+  return cityColorForCode(region.code);
 }
 
 function highlightCityColor(value) {
   const channels = String(value).match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
   if (!channels) return value;
-  return `#${channels.slice(1).map(channel => Math.min(255, Math.round(Number.parseInt(channel, 16) + 58)).toString(16).padStart(2, '0')).join('')}`;
+  return `#${channels.slice(1).map(channel => Math.min(255, Math.round(Number.parseInt(channel, 16) + 24)).toString(16).padStart(2, '0')).join('')}`;
 }
 
 const calloutLayout = computed(() => {
@@ -803,7 +811,7 @@ const calloutLayout = computed(() => {
 
 const cityAccents = ['#70c9ff', '#b6a0ff', '#6cdec5', '#efc58c', '#79b4ff', '#df9fcd', '#91d5b3', '#88baff', '#b5b0f6', '#e7b69a'];
 function cityAccent(region) {
-  if (props.colorByCity && props.mode === 'province') return provinceCityColor(region.code);
+  if (props.colorByCity && props.mode === 'province') return cityColorForRegion(region);
   const index = Math.max(0, Math.round((Number(region.code) % 10000) / 100) - 1);
   return cityAccents[index % cityAccents.length];
 }
@@ -1216,8 +1224,8 @@ function buildThreeMapUnsafe() {
       const color = cityColorForCode(code);
       material.color.set(color);
       material.emissive.set(color);
-      material.emissiveIntensity = selected ? (relief ? .78 : 1.0) : (relief ? .34 : .72);
-      if (selected) material.color.offsetHSL(0, 0, .12);
+      material.emissiveIntensity = selected ? (relief ? .20 : 1.0) : (relief ? .16 : .72);
+      if (selected) material.color.set(highlightCityColor(color));
       return;
     }
     if (props.colorByMetric) material.color.set(metricColorForCode(code));
@@ -1380,7 +1388,7 @@ function buildThreeMapUnsafe() {
         : selected ? selectedContourMaterial : topContourMaterial;
       if (props.colorByCity && props.mode === 'province') {
         topMaterialForPolygon.color.set(cityColorForCode(polygon.code));
-        if (selected) topMaterialForPolygon.color.offsetHSL(0, 0, .12);
+        if (selected) topMaterialForPolygon.color.set(highlightCityColor(cityColorForCode(polygon.code)));
       }
       addReliefContour(polygon.outer, topMaterialForPolygon, config.depth + config.contourLift, userData);
       polygon.holes.forEach(ring => addReliefContour(ring, topMaterialForPolygon, config.depth + config.contourLift, userData));
@@ -1550,8 +1558,9 @@ function setHoveredRegion(code) {
   regionSurfaces.forEach(mesh => {
     const active = next && String(mesh.userData.code) === next;
     if (active && props.colorByCity && props.mode === 'province') {
-      mesh.material[0].color.set(cityColorForCode(mesh.userData.code)).offsetHSL(0, 0, .18);
-      mesh.material[0].emissive.set(cityColorForCode(mesh.userData.code)).offsetHSL(0, 0, .08);
+      const baseColor = cityColorForCode(mesh.userData.code);
+      mesh.material[0].color.set(highlightCityColor(baseColor));
+      mesh.material[0].emissive.set(baseColor);
     } else {
       mesh.material[0].color.setHex(active ? 0xa27aeb : mesh.userData.restColor);
       mesh.material[0].emissive.setHex(active ? 0x4b2b82 : mesh.userData.restEmissive);
@@ -1688,7 +1697,7 @@ onMounted(() => {
 
 watch(() => [
   props.geoJson, props.points, props.selectedOrgCode, props.selectedRegionCode, props.mode,
-  props.demo, props.appearance, props.metricNumericValues, props.metricColors, props.colorByMetric, props.colorByCity,
+  props.demo, props.appearance, props.metricNumericValues, props.metricColors, props.regionStates, props.colorByMetric, props.colorByCity,
   props.showProvincePoints
 ], () => {
   activeCluster.value = null;

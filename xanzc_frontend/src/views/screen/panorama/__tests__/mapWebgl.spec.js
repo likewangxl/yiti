@@ -22,6 +22,11 @@ vi.mock('three', async () => {
 import PanoramaMap from '../PanoramaMap.vue';
 import { provinceCityColor } from '../provinceCityPalette';
 
+function rgbSpread(hex) {
+  const values = hex.match(/../g).map(value => Number.parseInt(value, 16));
+  return Math.max(...values) - Math.min(...values);
+}
+
 const geoJson = {
   type: 'FeatureCollection',
   features: [{
@@ -100,16 +105,16 @@ describe('PanoramaMap WebGL 初始化', () => {
         { type: 'Feature', properties: { adcode: 610300, name: '宝鸡市' }, geometry: { type: 'Polygon', coordinates: [[[109, 34], [110, 34], [110, 35], [109, 35], [109, 34]]] } }
       ]
     };
-    const wrapper = mount(PanoramaMap, { props: { geoJson: fixture, appearance: 'relief', mode: 'province', colorByCity: true } });
+    const wrapper = mount(PanoramaMap, { props: { geoJson: fixture, appearance: 'relief', mode: 'province', colorByCity: true, regionStates: { '610100': 'HAS_INSTITUTION', '610300': 'NO_INSTITUTION' } } });
     await nextTick();
     const meshes = [];
     renderSpy.mock.calls.at(-1)[0].traverse(mesh => {
       if (mesh.isMesh && mesh.userData?.type === 'region' && mesh.material?.[0]?.isMeshStandardMaterial) meshes.push(mesh);
     });
     expect(meshes.find(mesh => String(mesh.userData.code) === '610100').material[0].color.getHexString())
-      .toBe(provinceCityColor('610100').slice(1));
+      .toBe(provinceCityColor('610100', 'HAS_INSTITUTION').slice(1));
     expect(meshes.find(mesh => String(mesh.userData.code) === '610300').material[0].color.getHexString())
-      .toBe(provinceCityColor('610300').slice(1));
+      .toBe(provinceCityColor('610300', 'NO_INSTITUTION').slice(1));
     expect(wrapper.attributes('data-color-by-city')).toBe('true');
     const before = meshes.map(mesh => mesh.material[0].color.getHexString());
     await wrapper.get('[aria-label="选择西安市"]').trigger('pointerenter');
@@ -120,6 +125,22 @@ describe('PanoramaMap WebGL 初始化', () => {
     await wrapper.get('[aria-label="选择西安市"]').trigger('pointerleave');
     expect(meshes.find(mesh => String(mesh.userData.code) === '610100').material[0].color.getHexString())
       .toBe(before[meshes.findIndex(mesh => String(mesh.userData.code) === '610100')]);
+    const greyMesh = meshes.find(mesh => String(mesh.userData.code) === '610300');
+    const greyBefore = greyMesh.material[0].color.getHexString();
+    await wrapper.get('[aria-label^="选择宝鸡市"]').trigger('pointerenter');
+    const greyHover = greyMesh.material[0].color.getHexString();
+    expect(rgbSpread(greyHover)).toBeLessThanOrEqual(40);
+    expect(greyHover).not.toBe(greyBefore);
+    await wrapper.get('[aria-label^="选择宝鸡市"]').trigger('pointerleave');
+    expect(greyMesh.material[0].color.getHexString()).toBe(greyBefore);
+    await wrapper.setProps({ regionStates: { '610100': 'NO_INSTITUTION', '610300': 'HAS_INSTITUTION' } });
+    await nextTick();
+    const updatedMeshes = [];
+    renderSpy.mock.calls.at(-1)[0].traverse(mesh => {
+      if (mesh.isMesh && mesh.userData?.type === 'region' && mesh.material?.[0]?.isMeshStandardMaterial) updatedMeshes.push(mesh);
+    });
+    expect(updatedMeshes.find(mesh => String(mesh.userData.code) === '610100').material[0].color.getHexString())
+      .toBe(provinceCityColor('610100', 'NO_INSTITUTION').slice(1));
     wrapper.unmount();
     vi.unstubAllGlobals();
   });
