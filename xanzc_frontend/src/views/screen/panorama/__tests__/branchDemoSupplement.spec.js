@@ -381,6 +381,14 @@ describe('supplementBranchDemoModel', () => {
     expect(header.every(item => item.monthDelta.state === 'READY')).toBe(true);
   });
 
+  it('分行 TEST 已发布 schema1 全辖上下文也允许补齐演示字段', () => {
+    const source = model();
+    const result = supplementBranchDemoModel(source, presentation({ state: 'published' }));
+
+    expect(result.model.blockResults[31][FIELDS.corpDepositRate]).toBe(93.6);
+    expect(result.fields).toContain(FIELDS.corpDepositRate);
+  });
+
   it('保留已有0、非法非空字符串和其他元信息，不覆盖已有构成值', () => {
     const source = model();
     source.blockResults[31][FIELDS.corpDepositRate] = 0;
@@ -415,8 +423,8 @@ describe('supplementBranchDemoModel', () => {
 
   it.each([
     ['unknown-template', { template: 'retail-overview-v1' }, {}],
-    ['published', { state: 'published' }, {}],
     ['live', { dataClassification: 'LIVE' }, {}],
+    ['unknown-state', { state: 'review' }, {}],
     ['org-scoped', { orgCode: 'O-1' }, {}]
   ])('%s 不处理并返回原模型', (_name, presentationOverrides) => {
     const source = model();

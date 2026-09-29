@@ -74,10 +74,25 @@ describe('分行 TEST 草稿演示补齐', () => {
     wrapper.unmount();
   });
 
+  it('TEST 分行 schema1 已发布且全辖时仍保留新版演示补齐', () => {
+    const wrapper = mount(PanoramaRuntime, { props: { view: view('TEST', 'published') } });
+    expect(wrapper.get('[data-testid="dashboard-probe"]').text()).toContain('93.6');
+    wrapper.unmount();
+  });
+
+  it('已发布旧 schema 无新版演示补齐', () => {
+    const currentView = view('TEST', 'published');
+    delete currentView.renderPackage.canvasStyle.presentation.displaySchemaVersion;
+    const wrapper = mount(PanoramaRuntime, { props: { view: currentView } });
+    expect(wrapper.get('[data-testid="dashboard-probe"]').text()).not.toContain('93.6');
+    wrapper.unmount();
+  });
+
   it.each([
     ['LIVE', 'draft', 'branch-overview-v1'],
+    ['LIVE', 'published', 'branch-overview-v1'],
     [undefined, 'draft', 'branch-overview-v1'],
-    ['TEST', 'published', 'branch-overview-v1'],
+    ['TEST', 'review', 'branch-overview-v1'],
     ['TEST', 'draft', 'corporate-overview-v1'],
     ['TEST', 'draft', 'retail-overview-v1']
   ])('分类%s、状态%s、模板%s不提供草稿演示补齐', (classification, state, template) => {

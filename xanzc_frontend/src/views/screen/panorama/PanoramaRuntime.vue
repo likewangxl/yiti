@@ -184,7 +184,7 @@ const displayPresentation = computed(() => {
   const staticAvailability = parseObject(style.sourceAvailability) || parseObject(presentation.sourceAvailability);
   return staticAvailability ? { ...presentation, sourceAvailability: staticAvailability } : presentation;
 });
-const draftOverview = computed(() => props.view?.state === 'draft'
+const draftOverview = computed(() => ['draft', 'published'].includes(String(props.view?.state || '').trim().toLowerCase())
   && displayPresentation.value?.template === 'branch-overview-v1'
   && displayPresentation.value?.displaySchemaVersion === 1
   && !String(props.context?.orgCode || '').trim()
@@ -249,8 +249,8 @@ const demoQueryFailed = computed(() => {
   return [...issues, guard, { code: guard?.code }]
     .some(issue => ['PERMISSION_DENIED', 'ERROR'].includes(issueStatus(issue)));
 });
-const demoSupplementAvailable = computed(() => props.view?.state === 'draft'
-  && props.view?.renderPackage?.canvasStyle?.dataClassification === 'TEST'
+const demoSupplementAvailable = computed(() => ['draft', 'published'].includes(String(props.view?.state || '').trim().toLowerCase())
+  && String(props.view?.renderPackage?.canvasStyle?.dataClassification || '').trim().toUpperCase() === 'TEST'
   && displayPresentation.value?.template === 'branch-overview-v1'
   && displayPresentation.value?.displaySchemaVersion === 1
   && !props.context?.orgCode && !props.context?.cityCode && !props.context?.empId
@@ -281,8 +281,17 @@ const demoDisplayPresentation = computed(() => {
     ] } };
   }) } };
 });
+const demoSupplementSourcePresentation = computed(() => {
+  const presentation = demoDisplayPresentation.value;
+  if (!presentation || typeof presentation !== 'object') return presentation;
+  return {
+    ...presentation,
+    state: String(props.view?.state || '').trim().toLowerCase(),
+    dataClassification: String(props.view?.renderPackage?.canvasStyle?.dataClassification || '').trim().toUpperCase()
+  };
+});
 const demoSupplement = computed(() => demoSupplementAvailable.value && demoSupplementEnabled.value
-  ? supplementBranchDemoModel(originalDashboardModel.value, demoDisplayPresentation.value)
+  ? supplementBranchDemoModel(originalDashboardModel.value, demoSupplementSourcePresentation.value)
   : { model: originalDashboardModel.value, fields: [] });
 const dashboardModel = computed(() => demoSupplement.value.model);
 const dashboardSourcePresentation = computed(() => ({

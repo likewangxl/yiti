@@ -425,7 +425,7 @@ function allowed(source, presentation, model) {
     ?? source?.canvasStyle?.dataClassification
     ?? source?.renderPackage?.canvasStyle?.dataClassification
     ?? presentation.dataClassification;
-  if (state !== undefined && text(state).toLowerCase() !== 'draft') return false;
+  if (!['draft', 'published'].includes(text(state).toLowerCase())) return false;
   if (classification !== undefined && text(classification).toUpperCase() !== 'TEST') return false;
   const orgCode = [source?.orgCode, source?.context?.orgCode, presentation.orgCode,
     model?.orgCode, model?.identity?.orgCode].find(value => text(value));
