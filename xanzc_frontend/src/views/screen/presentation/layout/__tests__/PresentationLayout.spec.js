@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mount } from '@vue/test-utils';
 
 import PresentationLayout from '../PresentationLayout.vue';
+import OverviewBalanceChart from '../../widgets/OverviewBalanceChart.vue';
 
 const presentation = {
   displaySchemaVersion: 1,
@@ -358,10 +359,9 @@ describe('PresentationLayout', () => {
     expect(summary.get('[data-summary-key="deposit"]').text()).toContain('120.00亿元');
     expect(summary.get('[data-summary-key="loan"]').text()).toContain('80.00亿元');
     expect(summary.find('[data-summary-key="total"]').exists()).toBe(false);
-    const depositComparisons = summary.get('[data-summary-key="deposit"] .presentation-layout__overview-summary-card-comparisons');
-    expect(depositComparisons.text()).toContain('较上年 +30.00亿元');
-    expect(depositComparisons.text()).toContain('较上月 +20.00亿元');
-    expect(depositComparisons.text()).toContain('较上日 +10.00亿元');
+    expect(summary.findAll('.presentation-layout__overview-summary-card-comparisons')).toHaveLength(0);
+    expect(wrapper.findAllComponents(OverviewBalanceChart)[0].props('metric').comparisons)
+      .toMatchObject({ year: { baseValue: 30 * 1e8, referenceDate: '2027-12-31' } });
 
     const invalid = mount(PresentationLayout, {
       props: {
@@ -429,7 +429,7 @@ describe('PresentationLayout', () => {
     expect(published.find('[data-testid="draft-overview-summary"]').exists()).toBe(false);
   });
 
-  it('总额卡保留交错顺序并接入当前、上月末、上日余额条形图，金额单位随页头切换', async () => {
+  it('总额卡保留交错顺序并接入较昨日、较上月、较上年余额条形图，金额单位随页头切换', async () => {
     const components = [
       { componentId: 'business-retail-deposit-balance', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 0, visible: true, text: { titleMode: 'CUSTOM', title: '零售存款余额' }, format: { displayUnit: 'HUNDRED_MILLION' }, content: { mainField: 'value' }, dataRefs: [{ blockId: 31, metricCode: 'retailDeposit', unit: 'HUNDRED_MILLION' }] },
       { componentId: 'business-corp-deposit-balance', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order: 1, visible: true, text: { titleMode: 'CUSTOM', title: '对公存款余额' }, format: { displayUnit: 'HUNDRED_MILLION' }, content: { mainField: 'value' }, dataRefs: [{ blockId: 31, metricCode: 'corpDeposit', unit: 'HUNDRED_MILLION' }] },
@@ -445,8 +445,8 @@ describe('PresentationLayout', () => {
         model: {
           dataDate: '2028-03-02',
           kpis: [
-            { key: 'deposit', value: 120, unit: '亿元', dataDate: '2028-03-02', comparisons: { month: { value: 20, unit: '亿元', referenceDate: '2028-02-29' }, day: { value: 10, unit: '亿元', referenceDate: '2028-03-01' } } },
-            { key: 'loan', value: 80, unit: '亿元', dataDate: '2028-03-02', comparisons: { month: { value: 8, unit: '亿元', referenceDate: '2028-02-29' }, day: { value: 5, unit: '亿元', referenceDate: '2028-03-01' } } }
+            { key: 'deposit', value: 120, unit: '亿元', dataDate: '2028-03-02', comparisons: { year: { value: 30, unit: '亿元', referenceDate: '2027-12-31' }, month: { value: 20, unit: '亿元', referenceDate: '2028-02-29' }, day: { value: 10, unit: '亿元', referenceDate: '2028-03-01' } } },
+            { key: 'loan', value: 80, unit: '亿元', dataDate: '2028-03-02', comparisons: { year: { value: 10, unit: '亿元', referenceDate: '2027-12-31' }, month: { value: 8, unit: '亿元', referenceDate: '2028-02-29' }, day: { value: 5, unit: '亿元', referenceDate: '2028-03-01' } } }
           ]
         }
       },
@@ -457,12 +457,15 @@ describe('PresentationLayout', () => {
     expect(wrapper.get('[data-testid="draft-overview-summary"]').findAll('[data-testid="draft-overview-summary-card"]').map(node => node.attributes('data-summary-key')))
       .toEqual(['deposit', 'deposit-composition', 'loan', 'loan-composition']);
     expect(wrapper.get('[data-summary-key="deposit"] [data-testid="overview-balance-chart"]').attributes('data-state')).toBe('READY');
-    expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="month"]').text()).toContain('100.00亿元');
-    expect(wrapper.get('[data-summary-key="loan"] .presentation-layout__overview-summary-card-comparisons').text()).toContain('较上日 +5.00亿元');
+    expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="day"]').text()).toContain('110.00亿元');
+    expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="day"]').text()).toContain('+10亿');
+    expect(wrapper.findAll('.presentation-layout__overview-summary-card-comparisons')).toHaveLength(0);
+    expect(wrapper.findAllComponents(OverviewBalanceChart)[0].props('metric').comparisons)
+      .toMatchObject({ year: { baseValue: 30 * 1e8, referenceDate: '2027-12-31' } });
 
     await wrapper.setProps({ amountUnit: 'TEN_THOUSAND' });
     expect(wrapper.get('[data-summary-key="deposit"] [data-testid="overview-balance-chart"]').attributes('data-unit')).toBe('TEN_THOUSAND');
-    expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="current"]').text()).toContain('1,200,000.00万元');
+    expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="day"]').text()).toContain('1,100,000.00万元');
   });
 
   it('未发布分行总览按总额与业务分布交错排列，左下只保留收入且其他业务结构不受过滤', async () => {
@@ -555,7 +558,10 @@ describe('PresentationLayout', () => {
     mounted.push(wrapper);
     expect(wrapper.get('[data-summary-key="deposit"]').text()).toContain('50,000.00万元');
     expect(wrapper.get('[data-summary-key="loan"]').text()).toContain('23,000.00万元');
-    expect(wrapper.get('[data-summary-key="loan"] .presentation-layout__overview-summary-card-comparisons').text()).toContain('较上年 +2,000.00万元');
+    expect(wrapper.findAll('.presentation-layout__overview-summary-card-comparisons')).toHaveLength(0);
+    expect(wrapper.findAllComponents(OverviewBalanceChart)[0].props('metric').comparisons).toEqual({});
+    expect(wrapper.findAllComponents(OverviewBalanceChart)[1].props('metric').comparisons)
+      .toMatchObject({ year: { baseValue: 2000 * 1e4, referenceDate: '2027-12-31' } });
 
     const decimalEquivalent = mount(PresentationLayout, {
       props: {
@@ -583,10 +589,13 @@ describe('PresentationLayout', () => {
     mounted.push(decimalEquivalent);
     expect(decimalEquivalent.get('[data-summary-key="deposit"]').text()).toContain('2.30亿元');
     expect(decimalEquivalent.get('[data-summary-key="loan"]').text()).toContain('2.30亿元');
-    const decimalComparisons = decimalEquivalent.get('[data-summary-key="loan"] .presentation-layout__overview-summary-card-comparisons').text();
-    expect(decimalComparisons).toContain('较上年 +0.50亿元');
-    expect(decimalComparisons).toContain('较上月 +0.30亿元');
-    expect(decimalComparisons).toContain('较上日 +0.15亿元');
+    expect(decimalEquivalent.findAll('.presentation-layout__overview-summary-card-comparisons')).toHaveLength(0);
+    expect(decimalEquivalent.findAllComponents(OverviewBalanceChart)[1].props('metric').comparisons)
+      .toMatchObject({
+        year: { baseValue: 0.5 * 1e8, referenceDate: '2027-12-31' },
+        month: { baseValue: 0.3 * 1e8, referenceDate: '2028-02-29' },
+        day: { baseValue: 0.15 * 1e8, referenceDate: '2028-03-01' }
+      });
 
     const invalidDate = mount(PresentationLayout, {
       props: {
@@ -600,7 +609,7 @@ describe('PresentationLayout', () => {
       global: { stubs }
     });
     mounted.push(invalidDate);
-    expect(invalidDate.get('[data-summary-key="deposit"]').text()).toContain('—');
+    expect(invalidDate.get('[data-summary-key="deposit"] [data-testid="overview-balance-chart"]').attributes('data-state')).toBe('PENDING');
   });
 
   it('将配置组件重排为重点卡/次级卡、左中右三栏，并让地图先于趋势且明细下置', () => {

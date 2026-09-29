@@ -318,7 +318,7 @@ describe('MetricDisplayWidgets', () => {
     expect(card.find('[data-testid="presentation-metric-value"]').exists()).toBe(false);
     expect(card.find('.presentation-metric-widget__draft-progress').exists()).toBe(false);
     expect(card.findAll('[data-testid="presentation-metric-comparisons"] .presentation-metric-widget__comparison')).toHaveLength(3);
-    expect(card.find('[data-testid="presentation-metric-comparisons"]').text()).toContain('较上日 +0.40个百分点');
+    expect(card.find('[data-testid="presentation-metric-comparisons"]').text()).toContain('较上日 +0.40%');
   });
 
   it('draft 模式四张显式完成率卡都使用紧凑圆环，保留 125/0/负数/缺失边界和三维对比', () => {
@@ -365,5 +365,19 @@ describe('MetricDisplayWidgets', () => {
     expect(wrapper.find('[data-component-id="business-corp-loan-rate"] [data-testid="completion-ring-status"]').text()).toBe('待接入');
     expect(wrapper.find('[data-component-id="business-corp-loan-rate"] [data-testid="presentation-metric-status"]').exists()).toBe(false);
     expect(wrapper.find('[data-component-id="business-corp-loan-rate"] [data-testid="completion-ring-gauge"]').attributes('data-state')).toBe('MISSING');
+  });
+
+  it('完成率比较只有 draft 紧凑圆环改用百分号，发布态保留百分点口径', () => {
+    const component = {
+      componentId: 'business-corp-deposit-rate', componentType: 'METRIC_CARD', layoutRegion: 'HEADER',
+      title: '对公存款完成率', text: '86.40%', value: 86.4, state: 'READY',
+      comparisons: { month: { state: 'READY', text: '较上月 +2.40个百分点' } }, subFields: []
+    };
+    const draft = mount(MetricDisplayWidgets, { props: { grouped: true, draftOverview: true, components: [component] } });
+    expect(draft.get('[data-testid="presentation-metric-comparisons"]').text()).toContain('较上月 +2.40%');
+    expect(draft.get('[data-testid="presentation-metric-comparisons"]').text()).not.toContain('个百分点');
+
+    const published = mount(MetricDisplayWidgets, { props: { grouped: true, draftOverview: false, components: [component] } });
+    expect(published.get('[data-testid="presentation-metric-comparisons"]').text()).toContain('较上月 +2.40个百分点');
   });
 });

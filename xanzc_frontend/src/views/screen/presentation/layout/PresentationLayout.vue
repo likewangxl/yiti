@@ -36,9 +36,6 @@
             <strong>{{ card.text }}</strong>
           </div>
           <OverviewBalanceChart :metric="card.metric" :display-unit="overviewSummary.displayUnit" />
-          <div v-if="card.comparisons?.length" class="presentation-layout__overview-summary-card-comparisons" aria-label="三维对比">
-            <span v-for="comparison in card.comparisons" :key="comparison.key" :title="comparison.referenceDate ? `${comparison.text}（基准日 ${comparison.referenceDate}）` : comparison.text">{{ comparison.text }}</span>
-          </div>
         </template>
       </article>
       <div

@@ -40,9 +40,21 @@
         :class="{ 'completion-ring-gauge__progress--empty': progress === 0 }"
         :stroke-dashoffset="arcOffset"
       />
+      <g transform="rotate(90 40 40)">
+        <text
+          class="completion-ring-gauge__compact-value"
+          data-testid="completion-ring-value"
+          x="40"
+          y="40"
+          text-anchor="middle"
+          dominant-baseline="central"
+          :textLength="isMissing ? undefined : 50"
+          lengthAdjust="spacingAndGlyphs"
+        >{{ displayText }}</text>
+      </g>
     </svg>
     <VChart v-else class="completion-ring-gauge__chart" :option="option" autoresize aria-hidden="true" />
-    <span class="completion-ring-gauge__value" data-testid="completion-ring-value">{{ displayText }}</span>
+    <span v-if="!compact" class="completion-ring-gauge__value" data-testid="completion-ring-value">{{ displayText }}</span>
     <span v-if="compact && isMissing" class="completion-ring-gauge__status" data-testid="completion-ring-status">待接入</span>
   </div>
 </template>
@@ -175,18 +187,13 @@ const option = computed(() => ({
   height: 76px;
   flex: 0 0 76px;
 }
-.completion-ring-gauge--compact .completion-ring-gauge__value {
-  top: 50%;
-  right: auto;
-  bottom: auto;
-  left: 50%;
-  width: max-content;
-  max-width: 100%;
-  overflow: visible;
+.completion-ring-gauge__compact-value {
   color: var(--completion-ring-accent);
+  fill: var(--completion-ring-accent);
   font-size: 13px;
-  line-height: 1;
-  transform: translate(-50%, -50%);
+  font-weight: 750;
+  text-anchor: middle;
+  pointer-events: none;
 }
 .completion-ring-gauge__status {
   position: absolute;
@@ -203,10 +210,14 @@ const option = computed(() => ({
   color: var(--panorama-text-dim, #8fa9db);
   font-size: 10px;
 }
+.completion-ring-gauge--missing .completion-ring-gauge__compact-value {
+  fill: var(--panorama-text-dim, #8fa9db);
+  font-size: 10px;
+}
 @media (max-width: 620px) {
   .completion-ring-gauge { width: 124px; height: 88px; flex-basis: 124px; }
   .completion-ring-gauge__value { font-size: 10px; }
   .completion-ring-gauge--compact { width: 72px; height: 72px; flex-basis: 72px; }
-  .completion-ring-gauge--compact .completion-ring-gauge__value { font-size: 12px; }
+  .completion-ring-gauge--compact .completion-ring-gauge__compact-value { font-size: 12px; }
 }
 </style>

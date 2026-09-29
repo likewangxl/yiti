@@ -1,10 +1,15 @@
 import { canonicalUnit, formatDisplayMetric } from '../model/displayMetricsModel';
 
 const AMOUNT_UNITS = Object.freeze(['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION']);
+const AMOUNT_UNIT_META = Object.freeze({
+  YUAN: { scale: 1, suffix: '元' },
+  TEN_THOUSAND: { scale: 1e4, suffix: '万' },
+  HUNDRED_MILLION: { scale: 1e8, suffix: '亿' }
+});
 const BAR_DEFINITIONS = Object.freeze([
-  { key: 'current', label: '当前' },
-  { key: 'month', label: '上月末', comparisonKey: 'month' },
-  { key: 'day', label: '上日', comparisonKey: 'day' }
+  { key: 'day', label: '较昨日', comparisonKey: 'day' },
+  { key: 'month', label: '较上月', comparisonKey: 'month' },
+  { key: 'year', label: '较上年', comparisonKey: 'year' }
 ]);
 
 function finite(value) {
@@ -18,7 +23,7 @@ function text(value) {
   return value === null || value === undefined ? '' : String(value).trim();
 }
 
-/** 仅接受真实存在的 ISO 日，避免把任意比较字符串展示成月末或上日。 */
+/** 仅接受真实存在的 ISO 日，避免把任意比较字符串展示成业务基准日。 */
 export function isValidOverviewDate(value) {
   const date = text(value);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
@@ -30,24 +35,32 @@ export function isValidOverviewDate(value) {
     && parsed.getUTCDate() === day;
 }
 
-function isEarlierDate(referenceDate, currentDate) {
-  return isValidOverviewDate(referenceDate)
-    && isValidOverviewDate(currentDate)
-    && referenceDate < currentDate;
+function previousDay(value) {
+  if (!isValidOverviewDate(value)) return '';
+  const [year, month, day] = text(value).split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day - 1));
+  return [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()]
+    .map((part, index) => String(part).padStart(index === 0 ? 4 : 2, '0')).join('-');
 }
 
 function previousMonthEnd(value) {
   if (!isValidOverviewDate(value)) return '';
   const [year, month] = text(value).split('-').map(Number);
   const date = new Date(Date.UTC(year, month - 1, 0));
-  return `${String(date.getUTCFullYear()).padStart(4, '0')}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+  return [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()]
+    .map((part, index) => String(part).padStart(index === 0 ? 4 : 2, '0')).join('-');
 }
 
-function previousDay(value) {
+function previousYearEnd(value) {
   if (!isValidOverviewDate(value)) return '';
-  const [year, month, day] = text(value).split('-').map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day - 1));
-  return `${String(date.getUTCFullYear()).padStart(4, '0')}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+  const year = Number(text(value).slice(0, 4)) - 1;
+  return String(year).padStart(4, '0') + '-12-31';
+}
+
+function expectedReferenceDate(definition, currentDate) {
+  if (definition.key === 'day') return previousDay(currentDate);
+  if (definition.key === 'month') return previousMonthEnd(currentDate);
+  return previousYearEnd(currentDate);
 }
 
 function normalizedUnit(displayUnit, metric) {
@@ -66,27 +79,33 @@ function displayText(value, unit) {
   }, 'YUAN').text;
 }
 
-function comparisonLabel(definition, referenceDate, currentDate) {
-  if (definition.key === 'month' && referenceDate === previousMonthEnd(currentDate)) return '上月末';
-  if (definition.key === 'day' && referenceDate === previousDay(currentDate)) return '上日';
-  return '基准日';
+function shortGrowthText(value, unit) {
+  if (value === null || value === undefined) return '—';
+  const meta = AMOUNT_UNIT_META[unit] || AMOUNT_UNIT_META.YUAN;
+  const amount = value / meta.scale;
+  const rounded = Math.round(Math.abs(amount) * 100) / 100;
+  const magnitude = String(rounded);
+  const sign = amount > 0 ? '+' : amount < 0 ? '-' : '';
+  return sign + magnitude + meta.suffix;
 }
 
-function pendingBar(definition, referenceDate = '', currentDate = '') {
+function pendingBar(definition, referenceDate = '') {
   return {
     key: definition.key,
-    label: referenceDate ? comparisonLabel(definition, referenceDate, currentDate) : definition.label,
+    label: definition.label,
     referenceDate,
     value: null,
-    percent: 0,
     text: '待接入',
+    growth: null,
+    growthText: '—',
+    percent: 0,
     state: 'PENDING'
   };
 }
 
 /**
- * 将摘要卡已有的当前总额与三维比较增量转换为只读余额条形图。
- * 基期只在增量和显式基准日均合法时还原，负基期保持待接入。
+ * 将摘要卡当前余额和比较增量转换为日/月/年三个基期条。
+ * 基期只在比较增量和项目约定的基准日都合法时还原；比较数学仍保留原始增量。
  */
 export function buildOverviewBalanceChartModel(metric, displayUnit = '') {
   const unit = normalizedUnit(displayUnit, metric);
@@ -97,31 +116,28 @@ export function buildOverviewBalanceChartModel(metric, displayUnit = '') {
     && current !== null
     && current >= 0;
 
-  const currentBar = currentReady
-    ? { key: 'current', label: '当前', referenceDate: currentDate, value: current, text: displayText(current, unit), state: 'READY' }
-    : pendingBar(BAR_DEFINITIONS[0], isValidOverviewDate(currentDate) ? currentDate : '', currentDate);
-  const bars = [currentBar];
-
-  for (const definition of BAR_DEFINITIONS.slice(1)) {
+  const bars = BAR_DEFINITIONS.map(definition => {
     const comparison = metric?.comparisons?.[definition.comparisonKey];
     const referenceDate = text(comparison?.referenceDate);
     const delta = finite(comparison?.baseValue);
-    const historical = currentReady && isEarlierDate(referenceDate, currentDate) && delta !== null
-      ? current - delta
-      : null;
+    const expectedDate = expectedReferenceDate(definition, currentDate);
+    const dateReady = isValidOverviewDate(referenceDate) && referenceDate === expectedDate;
+    const historical = currentReady && dateReady && delta !== null ? current - delta : null;
     if (historical === null || !Number.isFinite(historical) || historical < 0) {
-      bars.push(pendingBar(definition, isValidOverviewDate(referenceDate) ? referenceDate : '', currentDate));
-      continue;
+      return pendingBar(definition, isValidOverviewDate(referenceDate) ? referenceDate : '');
     }
-    bars.push({
+    return {
       key: definition.key,
-      label: comparisonLabel(definition, referenceDate, currentDate),
+      label: definition.label,
       referenceDate,
       value: historical,
       text: displayText(historical, unit),
+      growth: delta,
+      growthText: shortGrowthText(delta, unit),
+      percent: 0,
       state: 'READY'
-    });
-  }
+    };
+  });
 
   const readyValues = bars.map(item => item.value).filter(value => value !== null);
   const maxValue = readyValues.length ? Math.max(...readyValues) : null;
@@ -133,7 +149,7 @@ export function buildOverviewBalanceChartModel(metric, displayUnit = '') {
   }));
 
   return {
-    state: currentBar.state === 'READY' ? 'READY' : 'PENDING',
+    state: currentReady ? 'READY' : 'PENDING',
     unit,
     currentDate: isValidOverviewDate(currentDate) ? currentDate : '',
     maxValue,

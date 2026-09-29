@@ -64,6 +64,28 @@ describe('CompletionRingGauge', () => {
     expect(wrapper.find('[data-testid="completion-ring-scale"]').exists()).toBe(false);
   });
 
+  it('compact 百分比文本进入 SVG 内圈坐标并限制为完整可读宽度', () => {
+    const wrapper = mount(CompletionRingGauge, {
+      props: { compact: true, text: '90.64%', value: 90.64 }
+    });
+    const value = wrapper.get('[data-testid="completion-ring-value"]');
+    expect(value.element.tagName.toLowerCase()).toBe('text');
+    expect(value.classes()).toContain('completion-ring-gauge__compact-value');
+    expect(value.element.parentElement.tagName.toLowerCase()).toBe('g');
+    expect(value.element.parentElement.getAttribute('transform')).toBe('rotate(90 40 40)');
+    expect(value.attributes()).toMatchObject({
+      x: '40', y: '40', 'text-anchor': 'middle', 'dominant-baseline': 'central',
+      textLength: '50', lengthAdjust: 'spacingAndGlyphs'
+    });
+    expect(value.text()).toBe('90.64%');
+
+    const missing = mount(CompletionRingGauge, { props: { compact: true, text: '待接入', value: null } });
+    const missingValue = missing.get('[data-testid="completion-ring-value"]');
+    expect(missingValue.element.tagName.toLowerCase()).toBe('text');
+    expect(missingValue.attributes('textLength')).toBeUndefined();
+    expect(missingValue.text()).toBe('—');
+  });
+
   it.each([
     { value: 125, text: '125.00%', progress: 100 },
     { value: 0, text: '0.00%', progress: 0 },

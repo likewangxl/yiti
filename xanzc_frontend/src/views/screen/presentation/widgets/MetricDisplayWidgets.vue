@@ -200,11 +200,16 @@ const COMPARISON_LABELS = Object.freeze({ year: '较上年', month: '较上月',
 function comparisonRows(item) {
   const comparisons = item?.comparisons;
   if (!comparisons || typeof comparisons !== 'object') return [];
-  return ['year', 'month', 'day'].map(key => ({
-    key,
-    referenceDate: comparisons[key]?.referenceDate || '',
-    text: comparisons[key]?.text || `${COMPARISON_LABELS[key]} 暂无数据`
-  }));
+  return ['year', 'month', 'day'].map(key => {
+    const text = comparisons[key]?.text || `${COMPARISON_LABELS[key]} 暂无数据`;
+    return {
+      key,
+      referenceDate: comparisons[key]?.referenceDate || '',
+      text: props.draftOverview && props.grouped && shouldUseCompletionRing(item)
+        ? text.replace(/个百分点|百分点/g, '%')
+        : text
+    };
+  });
 }
 </script>
 
