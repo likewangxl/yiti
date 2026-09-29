@@ -140,7 +140,6 @@
             <div><span class="corporate-kicker">经营协调</span><h2>需要协调的事项</h2></div>
             <span>{{ attentionSourceUnavailable ? '未接入' : safeModel.attention.length ? `${safeModel.attention.length} 条` : '暂无数据' }}</span>
           </header>
-          <p class="corporate-panel__note">来源数量、责任归属与跟进时限</p>
           <ul v-if="!attentionSourceUnavailable && safeModel.attention.length" class="corporate-attention-list corporate-scroll-region" tabindex="0" aria-label="对公经营关注事项">
             <li v-for="(item, index) in safeModel.attention" :key="`${item.label || 'attention'}-${index}`">
               <button type="button" class="corporate-attention-row" data-testid="corporate-attention-row" :aria-label="`查看事项详情：${item.label || '—'}`" @click="openAttention(item, $event)">
@@ -182,11 +181,9 @@
             @map-context="emit('map-context', $event)"
           />
           <PanoramaMap v-else class="corporate-map" appearance="relief" label-layout="callout" :city-details="corporateMapCityDetails" :metric-label="rankingMetricInfo.label" :metric-values="corporateMapMetricValues" :data-metric-label="rankingMetricInfo.label" :region-states="corporateMapInstitutionState.regionStates" :metric-colors="corporateMapInstitutionState.metricColors" :color-by-metric="true" :geo-json="provinceGeoJson" :points="safeModel.institutions" :demo="demo" mode="province" :selected-region-code="selectedCityCode" @region-select="selectCity" @branch-select="openInstitutionFromMap" />
-          <p class="corporate-scope-note" data-testid="corporate-scope-note">{{ safeModel.scopeLabel }} KPI 与趋势不随城市筛选变化；城市选择只影响机构分析。</p>
           <p v-if="selectedCityCode" class="corporate-selected-city" data-testid="corporate-selected-city">当前机构分析：{{ selectedCityName }}（{{ filteredRankings.length }} 家有排名记录）</p>
         </article>
         <div class="corporate-trend-zone">
-          <p class="corporate-global-scope" data-testid="corporate-global-trend-scope">全辖趋势 · {{ safeModel.scopeLabel }} · 城市筛选不改变</p>
           <CorporateTrend v-if="!configuredSeriesTables.hasTrend" class="corporate-panel corporate-trend-panel" :trend="safeModel.trend" :data-date="displayDate" :scope-label="safeModel.scopeLabel" />
         </div>
       </div>
@@ -202,12 +199,10 @@
         <article v-else class="corporate-panel corporate-ranking-panel">
           <header class="corporate-panel__heading">
             <div><span class="corporate-kicker">{{ rankingPartial ? '机构数值对照' : '机构贡献 / 短板' }}</span><h2 data-testid="corporate-ranking-title">{{ rankingMetricInfo.label }}{{ rankingPartial ? '数值对照' : '排名' }}</h2></div>
-            <span>{{ rankingPartial ? '混合层级测试对照' : '按同口径机构' }}</span>
           </header>
           <div class="corporate-ranking-toolbar">
             <div class="corporate-segmented" role="group" aria-label="对公机构排名指标"><button v-for="option in rankingMetricOptions" :key="option.key" type="button" :data-ranking-metric="option.key" :disabled="rankingMetricUnavailable(option.key)" :title="rankingMetricUnavailable(option.key) ? rankingMetricStatus(option.key).message : ''" :class="{ active: rankingMetric === option.key }" @click="rankingMetric = option.key">{{ option.label }}</button></div>
             <div v-if="rankingBusinessOrderEnabled" class="corporate-segmented corporate-segmented--order" role="group" aria-label="排名顺序"><button type="button" data-ranking-order="leading" :class="{ active: rankingOrder === 'leading' }" @click="rankingOrder = 'leading'">领先</button><button type="button" data-ranking-order="lagging" :class="{ active: rankingOrder === 'lagging' }" @click="rankingOrder = 'lagging'">短板</button></div>
-            <span v-else class="corporate-ranking-sort-note">按数值排序 · 不展示业务名次</span>
             <span class="corporate-ranking-unit" data-testid="corporate-ranking-unit">单位：{{ rankingMetricInfo.unit }}</span>
           </div>
           <p v-if="rankingMetricUnavailable(rankingMetric)" class="corporate-ranking-source-status" data-testid="corporate-ranking-source-status">{{ rankingMetricStatus(rankingMetric).message }}</p>
@@ -217,7 +212,6 @@
                 <span class="corporate-ranking-row__number">{{ rankingPartial ? '·' : (rankingRank(item) ?? '—') }}</span><span class="corporate-ranking-row__name">{{ item.name || item.orgName || '—' }}</span><strong class="corporate-ranking-row__sort-value"><span>{{ formatRankingValue(item) }}</span><i class="corporate-ranking-row__bar" :class="{ 'is-negative': rankingValue(item) !== null && rankingValue(item) < 0 }" :style="rankingBarStyle(item)" aria-hidden="true"></i></strong><span class="corporate-ranking-row__metric" data-testid="corporate-ranking-matrix">{{ formatMatrixValue(item.deposit, '亿元', 'deposit') }}</span><span class="corporate-ranking-row__metric">{{ formatMatrixValue(item.increase, '亿元', 'increase') }}</span><span class="corporate-ranking-row__metric">{{ formatMatrixValue(item.rate, '%', 'rate') }}</span><span class="corporate-ranking-row__metric">{{ formatMatrixValue(item.nplRate, '%', 'nplRate') }}</span>
               </li>
             </ol>
-          <p v-if="filteredRankings.length" class="corporate-ranking-matrix-note">{{ rankingPartial ? '混合层级测试对照仅按数值排序，不代表同层绩效排名；指标缺失显示暂无来源。' : '四项指标同屏展示；颜色仅作视觉区分，不代表风险阈值。' }}</p>
           <div v-else class="corporate-empty">暂无机构排名绑定</div>
           <p class="corporate-ranking-hint">点击机构查看目录身份与对应指标</p>
         </article>
@@ -284,6 +278,7 @@ import { buildCompositionTabsModel } from '../presentation/model/compositionTabs
 import { buildInstitutionRankingModel } from '../presentation/model/institutionRankingModel';
 import PresentationLayout from '../presentation/layout/PresentationLayout.vue';
 import { isConfiguredPresentation } from '../presentation/layout/presentationLayoutModel';
+import { cleanOverviewLabel } from './overviewDisplayLabels.js';
 
 const props = defineProps({
   model: { type: Object, default: () => ({}) },
@@ -411,7 +406,7 @@ function selectCompositionBusinessLine(payload = {}) {
 function findKpi(key) { return safeModel.value.kpis.find(item => String(item?.key || '') === key) || null; }
 const kpiCards = computed(() => KPI_DEFINITIONS.map(definition => {
   const bound = findKpi(definition.key);
-  return { ...definition, ...(bound || {}), key: definition.key, label: bound?.label || definition.label, unit: bound?.unit || definition.unit, value: bound?.value ?? null, change: bound?.change ?? null };
+  return { ...definition, ...(bound || {}), key: definition.key, label: cleanOverviewLabel(bound?.label) || definition.label, unit: bound?.unit || definition.unit, value: bound?.value ?? null, change: bound?.change ?? null };
 }));
 const depositKpi = computed(() => findKpi('corpDeposit') || { key: 'corpDeposit', label: '对公存款余额', unit: '亿元', value: null, change: null });
 const depositAverage = computed(() => findKpi('corpDepositAverage') || { key: 'corpDepositAverage', label: '对公存款月日均', unit: '亿元', value: null, change: null });
@@ -502,7 +497,7 @@ function formatTargetAmount(value) {
 function changeText(kpi, empty = '') { const number = formatChange(kpi?.change); if (number === null) return empty; const suffix = kpi?.key === 'corpNplRate' ? 'pp' : '%'; return `${number >= 0 ? '↑' : '↓'} ${Math.abs(number).toFixed(2)}${suffix}`; }
 function changeClass(kpi) { const number = formatChange(kpi?.change); if (number === null) return 'is-empty'; if (kpi?.key === 'corpNplRate') return number > 0 ? 'is-risk' : 'is-favorable'; return number < 0 ? 'is-down' : 'is-up'; }
 function kpiGlyph(key, index) { return ({ corpDeposit: OfficeBuilding, corpDepositAverage: TrendCharts, corpLoan: Coin, corpRevenue: TrendCharts, corpCustomers: UserFilled, corpNplRate: WarningFilled }[key] || [OfficeBuilding, Coin, TrendCharts, UserFilled][index % 4]); }
-function kpiTitle(kpi) { const date = kpi?.date || kpi?.dataDate || kpi?.periodDate; return date ? `${kpi.label} · 数据日期 ${date}` : ''; }
+function kpiTitle(kpi) { const date = kpi?.date || kpi?.dataDate || kpi?.periodDate; return date ? `${cleanOverviewLabel(kpi.label)} · 数据日期 ${date}` : ''; }
 function segmentColor(index) { return ['#42e7ee', '#a77bff', '#548dff', '#f4bd5b'][index % 4]; }
 function shareWidth(value) { const number = finiteMetric(value); return number === null ? 0 : Math.max(0, Math.min(100, number)); }
 function rankingValue(item) { return finiteMetric(item?.[rankingMetric.value]); }

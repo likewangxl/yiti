@@ -71,6 +71,9 @@ describe('CorporateDashboard 对公经营总览', () => {
     expect(wrapper.text()).toContain('对公经营目标');
     expect(wrapper.find('[data-testid="corporate-demo-badge"]').text()).toContain('非业务数据');
     expect(wrapper.find('[data-testid="corporate-ranking-row"]').text()).toContain('西安分行');
+    expect(wrapper.find('[data-testid="corporate-scope-note"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="corporate-global-trend-scope"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="corporate-attention"]').find('p.corporate-panel__note').exists()).toBe(false);
   });
 
   it('排名可切换存款、净增和完成率，负数仍可排序', async () => {
@@ -124,6 +127,27 @@ describe('CorporateDashboard 对公经营总览', () => {
     await wrapper.get('[data-testid="corporate-directory-dialog"]').trigger('keydown', { key: 'Escape' });
     await wrapper.vm.$nextTick();
     expect(wrapper.find('[data-testid="corporate-directory-dialog"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('精准清理 KPI 标签中的数据标记，保留业务括号且不改写原始 model', async () => {
+    const { default: CorporateDashboard } = await import('../CorporateDashboard.vue');
+    const sourceKpis = [
+      { key: 'corpDeposit', label: '对公存款余额（本级 · 测试）', value: 1200, unit: '亿元', date: '2026-09-08' },
+      { key: 'corpDepositAverage', label: '对公存款月日均 (主库)', value: 1180, unit: '亿元', date: '2026-09-08' },
+      { key: 'corpLoan', label: '对公贷款余额（分类样本）', value: 980, unit: '亿元', date: '2026-09-08' },
+      { key: 'corpRevenue', label: '对公营业收入（贴息）', value: 24.5, unit: '亿元', date: '2026-09-08' }
+    ];
+    const wrapper = mount(CorporateDashboard, { props: { model: { kpis: sourceKpis } } });
+    expect(wrapper.get('[data-kpi-key="corpDeposit"] .corporate-kpi__label').text()).toBe('对公存款余额');
+    expect(wrapper.get('[data-kpi-key="corpDepositAverage"] .corporate-kpi__label').text()).toBe('对公存款月日均');
+    expect(wrapper.get('[data-kpi-key="corpLoan"] .corporate-kpi__label').text()).toBe('对公贷款余额');
+    expect(wrapper.get('[data-kpi-key="corpRevenue"] .corporate-kpi__label').text()).toBe('对公营业收入（贴息）');
+    expect(wrapper.get('[data-kpi-key="corpDeposit"]').attributes('title')).toContain('对公存款余额 · 数据日期');
+    expect(wrapper.get('[data-kpi-key="corpDeposit"]').attributes('title')).not.toContain('本级');
+    expect(wrapper.get('[data-kpi-key="corpDepositAverage"]').attributes('title')).not.toContain('主库');
+    expect(wrapper.get('[data-kpi-key="corpLoan"]').attributes('title')).not.toContain('分类样本');
+    expect(sourceKpis[0].label).toBe('对公存款余额（本级 · 测试）');
     wrapper.unmount();
   });
 
@@ -193,7 +217,9 @@ describe('CorporateDashboard 对公经营总览', () => {
       }
     });
     expect(wrapper.get('[data-testid="corporate-ranking-title"]').text()).toContain('数值对照');
-    expect(wrapper.text()).toContain('混合层级测试对照');
+    expect(wrapper.text()).not.toContain('混合层级测试');
+    expect(wrapper.text()).not.toContain('按数值排序');
+    expect(wrapper.find('.corporate-ranking-matrix-note').exists()).toBe(false);
     expect(wrapper.find('[data-ranking-order="leading"]').exists()).toBe(false);
     expect(wrapper.get('[data-ranking-metric="increase"]').element.disabled).toBe(true);
     expect(wrapper.get('[data-testid="corporate-ranking-row"] .corporate-ranking-row__number').text()).toBe('·');

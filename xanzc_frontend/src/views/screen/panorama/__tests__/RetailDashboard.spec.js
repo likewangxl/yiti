@@ -104,6 +104,23 @@ describe('RetailDashboard 零售经营总览', () => {
     expect(card.text()).toContain('2.08');expect(card.text()).toContain('万元');
     wrapper.unmount();
   });
+  it('精准清理 KPI 标签中的数据标记，保留业务括号且不改写原始 model', () => {
+    const sourceKpis = [
+      { key: 'retailAum', label: '零售AUM（本级 · 测试）', value: 1, unit: '亿元', date: '2026-09-08' },
+      { key: 'retailDeposit', label: '储蓄余额 (主库)', value: 2, unit: '亿元', date: '2026-09-08' },
+      { key: 'retailRevenue', label: '零售FTP收入（贴息）', value: 3, unit: '亿元' },
+      { key: 'retailLoan', label: '个人贷款（分类样本）', value: 4, unit: '亿元', date: '2026-09-08' }
+    ];
+    const wrapper = mountDashboard({ model: { ...model, kpis: sourceKpis } });
+    expect(wrapper.get('[data-kpi-key="retailAum"] .retail-kpi__label').text()).toBe('零售AUM');
+    expect(wrapper.get('[data-kpi-key="retailDeposit"] .retail-kpi__label').text()).toBe('储蓄余额');
+    expect(wrapper.get('[data-kpi-key="retailRevenue"] .retail-kpi__label').text()).toBe('零售FTP收入（贴息）');
+    expect(wrapper.get('[data-kpi-key="retailLoan"] .retail-kpi__label').text()).toBe('个人贷款');
+    expect(wrapper.get('[data-kpi-key="retailAum"]').attributes('title')).not.toContain('本级');
+    expect(wrapper.get('[data-kpi-key="retailDeposit"]').attributes('title')).not.toContain('主库');
+    expect(wrapper.get('[data-kpi-key="retailLoan"]').attributes('title')).not.toContain('分类样本');
+    expect(sourceKpis[0].label).toBe('零售AUM（本级 · 测试）');
+  });
   it('保留六项零售 KPI 并增加月日均卡片，已绑定值按原口径展示', () => {
     const wrapper = mountDashboard();
     expect(wrapper.findAll('[data-testid="retail-kpi"]')).toHaveLength(7);
@@ -151,7 +168,7 @@ describe('RetailDashboard 零售经营总览', () => {
 
   it('地图选择城市只过滤机构排名，辖内 KPI 与趋势仍使用全辖模型', async () => {
     const wrapper = mountDashboard();
-    expect(wrapper.get('[data-testid="retail-scope-note"]').text()).toContain('KPI 与趋势不随城市筛选变化');
+    expect(wrapper.find('[data-testid="retail-scope-note"]').exists()).toBe(false);
     await wrapper.get('[data-action="select-xian"]').trigger('click');
     expect(wrapper.get('[data-testid="retail-selected-city"]').text()).toContain('西安市');
     expect(wrapper.findAll('[data-testid="retail-ranking-row"]')).toHaveLength(1);
@@ -182,7 +199,7 @@ describe('RetailDashboard 零售经营总览', () => {
   it('经营关注只展示来源字段，不自动生成逾期任务', () => {
     const wrapper = mountDashboard();
     const attention = wrapper.get('[data-testid="retail-attention"]');
-    expect(attention.text()).toContain('责任归属与跟进时限');
+    expect(attention.find('p.retail-panel__note').exists()).toBe(false);
     expect(attention.text()).toContain('零售金融部');
     expect(attention.text()).toContain('2026-09-15');
     expect(attention.findAll('li')).toHaveLength(2);
@@ -344,7 +361,7 @@ describe('RetailDashboard 零售经营总览', () => {
     await wrapper.setProps({ error: '403 Forbidden', model: { ...model, kpis: [], rankings: [], institutions: [] } });
     expect(wrapper.find('[data-testid="retail-institution-dialog"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="retail-selected-city"]').exists()).toBe(false);
-    expect(wrapper.get('[data-testid="retail-scope-note"]').text()).toContain('当前大屏授权范围');
+    expect(wrapper.find('[data-testid="retail-scope-note"]').exists()).toBe(false);
   });
 
   it('同一授权范围刷新保留城市、指标、顺序、目录搜索和有效机构选择', async () => {
@@ -437,15 +454,18 @@ describe('RetailDashboard 零售经营总览', () => {
       ]
     } });
     const panel = wrapper.get('[data-testid="retail-institution-comparison"]');
-    expect(panel.text()).toContain('不汇总');
     expect(panel.text()).not.toContain('排名');
-    expect(panel.get('[data-institution-filter="primary"]').classes()).toContain('active');
+    expect(panel.find('[aria-label="机构类型筛选"]').exists()).toBe(false);
+    expect(panel.findAll('[data-institution-filter]')).toHaveLength(0);
     expect(panel.findAll('[data-testid="retail-institution-row"]')).toHaveLength(2);
-    expect(panel.text()).toContain('月均低于余额');
+    expect(panel.text()).not.toContain('月均低于余额');
+    expect(panel.findAll('.retail-institution-row__name small')).toHaveLength(0);
+    expect(panel.text()).toContain('亿元');
+    expect(panel.text()).toContain('2026-09-06');
     await panel.get('[data-ranking-metric="average"]').trigger('click');
     expect(panel.get('[data-testid="retail-institution-value"]').text()).toContain('98.00');
     expect(panel.get('[data-testid="retail-institution-difference"]').text()).toContain('-2.00');
-    expect(panel.text()).toContain('口径对照，不代表净增');
+    expect(panel.text()).not.toContain('口径对照，不代表净增');
   });
 
   it('不再展示机构覆盖、月均比较、目标和日期覆盖观察条，保留核心经营内容', () => {
@@ -502,6 +522,32 @@ describe('RetailDashboard 零售经营总览', () => {
     expect(attention.text()).toContain('零售FTP收入：2026-07-24');
     expect(attention.text()).toContain('零售一般性存款余额：2026-09-19');
     expect(attention.text()).not.toContain('日期待确认');
+  });
+
+  it('日期核验摘要清理 KPI 来源标记，保留业务括号、日期和原始来源数据', () => {
+    const sourceKpis = [
+      { key: 'retailRevenue', label: '零售FTP收入（主库）', value: 1, unit: '亿元', date: '2026-07-24' },
+      { key: 'retailLoan', label: '个人贷款（分类样本）', value: 2, unit: '亿元', date: '2026-07-24' },
+      { key: 'retailNplRate', label: '个贷不良率（贴息）', value: 1, unit: '%', date: '2026-07-24' }
+    ];
+    const sourceIssues = [
+      { slot: 'retailRevenue', code: 'MIXED_DATES', message: '日期不一致' },
+      { slot: 'retailLoan', code: 'MIXED_DATES', message: '日期不一致' },
+      { slot: 'retailNplRate', code: 'MIXED_DATES', message: '日期不一致' }
+    ];
+    const wrapper = mountDashboard({ model: { ...model, kpis: sourceKpis, attention: [], issues: sourceIssues } });
+    const attention = wrapper.get('[data-testid="retail-attention"]');
+    expect(attention.text()).toContain('零售FTP收入：2026-07-24');
+    expect(attention.text()).toContain('个人贷款：2026-07-24');
+    expect(attention.text()).toContain('个贷不良率（贴息）：2026-07-24');
+    expect(attention.text()).not.toContain('零售FTP收入（主库）');
+    expect(attention.text()).not.toContain('个人贷款（分类样本）');
+    expect(sourceKpis[0].label).toBe('零售FTP收入（主库）');
+    expect(sourceIssues).toEqual([
+      { slot: 'retailRevenue', code: 'MIXED_DATES', message: '日期不一致' },
+      { slot: 'retailLoan', code: 'MIXED_DATES', message: '日期不一致' },
+      { slot: 'retailNplRate', code: 'MIXED_DATES', message: '日期不一致' }
+    ]);
   });
 
   it('关注面板补充当前已分类机构的月均低于余额差额，点击仍打开机构存款详情', async () => {

@@ -178,7 +178,6 @@
             </div>
             <span>{{ attentionItems.length ? `${attentionItems.length} 条` : '暂无数据' }}</span>
           </header>
-          <p class="retail-panel__note">责任归属与跟进时限；只展示已有来源事项，缺来源或日期标为核验，不生成客户任务</p>
           <section v-if="hasDepositRankingShape && institutionDifferenceItems.length" class="retail-attention-difference" data-testid="retail-attention-difference-list" aria-label="日均与时点差额关注">
             <header>
               <strong>日均与时点差额关注</strong>
@@ -278,7 +277,6 @@
             @region-select="selectCity"
             @branch-select="openInstitutionFromMap"
           />
-          <p class="retail-scope-note" data-testid="retail-scope-note">{{ safeModel.scopeLabel }} KPI 与趋势不随城市筛选变化；城市选择只影响机构分析。</p>
           <p v-if="selectedCityCode" class="retail-selected-city" data-testid="retail-selected-city">当前机构分析：{{ selectedCityName }}（{{ filteredRankings.length }} 家有排名记录）</p>
         </article>
 
@@ -303,22 +301,11 @@
             <span>{{ institutionRows.length }} 家 · {{ rankingDataDate || '日期待确认' }}</span>
           </header>
           <div class="retail-institution-toolbar">
-            <div class="retail-segmented" role="group" aria-label="机构类型筛选">
-              <button
-                v-for="option in institutionDepositView.filterOptions"
-                :key="option.key"
-                type="button"
-                :data-institution-filter="option.key"
-                :class="{ active: institutionDepositView.filter === option.key }"
-                @click="institutionFilter = option.key; institutionPage = 1"
-              >{{ option.label }} {{ option.count }}</button>
-            </div>
             <div class="retail-segmented" role="group" aria-label="机构存款指标">
               <button type="button" data-ranking-metric="deposit" :class="{ active: institutionMetric === 'deposit' }" @click="institutionMetric = 'deposit'">余额</button>
               <button type="button" data-ranking-metric="average" :class="{ active: institutionMetric === 'average' }" @click="institutionMetric = 'average'">月日均</button>
             </div>
           </div>
-          <p class="retail-panel__note retail-institution-note">{{ institutionDepositView.subtitle }} · 单位 {{ institutionMetricUnit }} · 当前筛选月均低于余额 {{ institutionAverageBelowBalanceCount }} 家 · 口径对照，不代表净增</p>
           <div v-if="institutionRows.length" class="retail-institution-table-head" aria-hidden="true">
             <span>机构</span>
             <span>余额<small>{{ institutionMetricUnit }}</small></span>
@@ -338,7 +325,7 @@
               @keydown.enter="openInstitution(item)"
               @keydown.space.prevent="openInstitution(item)"
             >
-              <span class="retail-institution-row__name"><strong>{{ item.name || item.orgName || item.orgCode || '—' }}</strong><small>{{ item.institutionType === 'primary' ? '已分类经营机构' : '其他待分类' }}</small></span>
+              <span class="retail-institution-row__name"><strong>{{ item.name || item.orgName || item.orgCode || '—' }}</strong></span>
               <strong :data-testid="institutionMetric === 'deposit' ? 'retail-institution-value' : undefined" :class="{ 'is-active': institutionMetric === 'deposit' }">{{ formatAmount(item.deposit, institutionMetricValues).text }}</strong>
               <strong :data-testid="institutionMetric === 'average' ? 'retail-institution-value' : undefined" :class="{ 'is-active': institutionMetric === 'average' }">{{ formatAmount(item.average, institutionMetricValues).text }}</strong>
               <span data-testid="retail-institution-difference" :class="{ 'is-negative': item.difference < 0, 'is-positive': item.difference > 0 }">{{ formatAmount(item.difference, institutionMetricValues).text }}</span>
@@ -567,6 +554,7 @@ import PresentationLayout from '../presentation/layout/PresentationLayout.vue';
 import { isConfiguredPresentation } from '../presentation/layout/presentationLayoutModel';
 import { provinceGeo } from './geography.js';
 import { buildSegmentComparisons } from './retailLeadershipInsights.js';
+import { cleanOverviewLabel } from './overviewDisplayLabels.js';
 import {
   buildDepositComparison,
   buildInstitutionDepositView,
@@ -608,7 +596,6 @@ const rankingMetric = ref('aum');
 const selectedMapMetricKey = ref('');
 const rankingOrder = ref('leading');
 const institutionMetric = ref('deposit');
-const institutionFilter = ref('');
 const institutionPage = ref(1);
 const institutionPageSize = 8;
 const selectedCityCode = ref('');
@@ -711,7 +698,7 @@ const kpiCards = computed(() => KPI_DEFINITIONS.map(definition => {
     ...definition,
     ...(bound || {}),
     key: definition.key,
-    label: bound?.label || definition.label,
+    label: cleanOverviewLabel(bound?.label) || definition.label,
     unit: bound?.unit || definition.unit,
     value: bound?.value ?? null,
     change: bound?.change ?? null,
@@ -778,7 +765,7 @@ const filteredRankings = computed(() => {
 const institutionDepositView = computed(() => {
   const rows = safeModel.value.rankings.filter(row => !selectedCityCode.value
     || String(row?.cityCode || row?.city_code || '') === selectedCityCode.value);
-  return buildInstitutionDepositView(rows, institutionFilter.value || undefined);
+  return buildInstitutionDepositView(rows);
 });
 const institutionRows = computed(() => institutionDepositView.value.filteredRows);
 const institutionPageCount = computed(() => Math.max(1, Math.ceil(institutionRows.value.length / institutionPageSize)));
@@ -791,10 +778,6 @@ const institutionMetricValues = computed(() => institutionRows.value
   .map(row => institutionMetric.value === 'average' ? finiteValue(row?.average) : finiteValue(row?.deposit))
   .filter(value => value !== null));
 const institutionMetricUnit = computed(() => chooseAmountUnit(institutionMetricValues.value));
-const institutionAverageBelowBalanceCount = computed(() => institutionRows.value
-  .filter(row => finiteValue(row?.average) !== null
-    && finiteValue(row?.deposit) !== null
-    && finiteValue(row.average) < finiteValue(row.deposit)).length);
 const institutionDifferenceItems = computed(() => institutionRows.value
   .filter(row => finiteValue(row?.difference) !== null && finiteValue(row.difference) < 0)
   .sort((left, right) => left.difference - right.difference)
@@ -820,9 +803,9 @@ const attentionItems = computed(() => {
       const kpi = safeModel.value.kpis.find(entry => String(entry?.key || '') === String(item.slot || ''));
       const isDateIssue = dateIssueCodes.has(String(item.code || '').toUpperCase());
       const baseLabel = isDateIssue ? '指标统计日期不一致' : (item.label || item.title || item.message || '数据来源待核验');
-      const metric = item.metricLabel || item.metricName || item.fieldLabel
+      const metric = cleanOverviewLabel(item.metricLabel || item.metricName || item.fieldLabel
         || (isDateIssue ? (kpi?.label || slotLabels[item.slot] || item.slot || '相关指标') : item.field)
-        || item.code || '相关指标';
+        || item.code || '相关指标');
       const actualDate = item.actualDate || item.dataDate || item.date || item.periodDate || kpi?.date || kpi?.dataDate || '';
       const key = String(baseLabel);
       const group = issueGroups.get(key) || {
@@ -980,7 +963,7 @@ function kpiGlyph(key, index) {
 
 function kpiTitle(kpi) {
   const date = kpi?.date || kpi?.dataDate || kpi?.periodDate;
-  if (date) return `${kpi.label} · 数据日期 ${date}`;
+  if (date) return `${cleanOverviewLabel(kpi.label)} · 数据日期 ${date}`;
   return kpi?.emptyTitle || '';
 }
 
@@ -1174,7 +1157,6 @@ function clearTransientState() {
   rankingMetric.value = 'aum';
   rankingOrder.value = 'leading';
   institutionMetric.value = 'deposit';
-  institutionFilter.value = '';
   institutionPage.value = 1;
   closeAttention({ restoreFocus: false });
   closeDirectory();
