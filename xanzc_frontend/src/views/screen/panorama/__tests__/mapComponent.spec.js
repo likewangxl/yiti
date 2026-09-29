@@ -201,7 +201,7 @@ describe('PanoramaMap', () => {
     wrapper.unmount();
   });
 
-  it('无经营机构地市的地图、引线和标签有独立状态，仍能点击进入', async () => {
+  it('无经营机构地市的地图、引线和标签有独立状态，点击只提示不进入城市', async () => {
     const wrapper = mount(PanoramaMap, {
       props: {
         geoJson: provinceGeo,
@@ -223,7 +223,22 @@ describe('PanoramaMap', () => {
     expect(label.classes()).toContain('is-no-institution');
     expect(label.text()).toContain('无经营机构');
     await label.trigger('click');
-    expect(wrapper.emitted('region-select')).toContainEqual([{ code: '610200', name: '铜川市' }]);
+    expect(wrapper.find('[role="status"]').text()).toContain('无经营机构');
+    expect(wrapper.emitted('region-select')).toBeUndefined();
+    await label.trigger('keydown', { key: 'Enter' });
+    expect(wrapper.emitted('region-select')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('省级真实 GeoJSON 的十个地市 code 与名称都保持一一对应并可逐一选择', async () => {
+    const wrapper = mount(PanoramaMap, { props: { geoJson: provinceGeo } });
+    await nextTick();
+    const labels = wrapper.findAll('.panorama-map__region-label text');
+    expect(labels).toHaveLength(10);
+    expect(labels.map(label => label.text())).toEqual(expect.arrayContaining(['西安市', '安康市', '榆林市']));
+    for (const label of labels) await label.trigger('click');
+    expect(wrapper.emitted('region-select')).toHaveLength(10);
+    expect(wrapper.emitted('region-select').map(([payload]) => payload.name)).toEqual(labels.map(label => label.text()));
     wrapper.unmount();
   });
 
@@ -310,6 +325,21 @@ describe('PanoramaMap', () => {
     await wrapper.get('button[aria-label="重置地图视图"]').trigger('click');
     expect(wrapper.attributes('data-zoom')).toBe('1.25');
     expect(wrapper.attributes('data-pan-enabled')).toBe('true');
+    wrapper.unmount();
+  });
+
+  it('空城门禁只作用于省级地图，市级下钻的 district NO_INSTITUTION 仍可按市级流程选择', async () => {
+    const wrapper = mount(PanoramaMap, {
+      props: {
+        geoJson: { ...geoJson, features: [{ ...geoJson.features[0], properties: { adcode: 'D-A', name: '甲区' } }] },
+        mode: 'city', labelLayout: 'callout', regionStates: { 'D-A': 'NO_INSTITUTION' },
+        cityDetails: { 'D-A': { institutionCount: 0, institutions: [] } }
+      },
+      global: { stubs: { Teleport: true } }
+    });
+    await wrapper.get('button[data-city-code="D-A"]').trigger('click');
+    expect(wrapper.emitted('region-select') || []).toContainEqual([{ code: 'D-A', name: '甲区' }]);
+    expect(wrapper.find('[data-testid="map-activation-status"]').exists()).toBe(false);
     wrapper.unmount();
   });
 

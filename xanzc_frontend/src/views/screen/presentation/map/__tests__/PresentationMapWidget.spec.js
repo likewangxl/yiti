@@ -215,4 +215,48 @@ describe('PresentationMapWidget', () => {
     expect(map.props('metricColors')['D-B']).toBe('#65738a');
     wrapper.unmount();
   });
+
+  it('明确无经营机构的城市由 MAP 组件防御拦截，不向上发 region-select 或 map-context', async () => {
+    const mapGeoJson = { ...geoJson, features: [
+      ...geoJson.features,
+      { ...geoJson.features[0], properties: { adcode: '610200', name: '铜川市' } }
+    ] };
+    const wrapper = mount(PresentationMapWidget, {
+      props: {
+        presentation, model: { ...model, institutions: [{ ...model.institutions[0], cityCode: '610100' }] },
+        geoJson: mapGeoJson, mode: 'province', metricKey: 'deposit'
+      },
+      global: { stubs: { PanoramaMap: {
+        props: mapStub.props,
+        emits: ['region-select', 'branch-select'],
+        template: '<div data-testid="panorama-map-stub"><button data-city="610200" @click="$emit(\'region-select\', { code: \'610200\', name: \'铜川市\' })">无机构城市</button></div>'
+      } } }
+    });
+    await wrapper.get('[data-city="610200"]').trigger('click');
+    const status = wrapper.find('[role="status"]');
+    expect(status.exists()).toBe(true);
+    expect(status.text()).toContain('无经营机构');
+    expect(wrapper.emitted('region-select')).toBeUndefined();
+    expect(wrapper.emitted('map-context')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('city 下钻不使用省级 NO_INSTITUTION 门禁阻止区县选择', async () => {
+    const districtGeoJson = {
+      type: 'FeatureCollection',
+      features: [{ type: 'Feature', properties: { adcode: 'D-A', name: '甲区' }, geometry: { type: 'Polygon', coordinates: [[[108, 34], [108.5, 34], [108.5, 35], [108, 35], [108, 34]]] } }]
+    };
+    const wrapper = mount(PresentationMapWidget, {
+      props: { presentation, model: { ...model, institutions: [] }, geoJson: districtGeoJson, mode: 'city', cityCode: '610100' },
+      global: { stubs: { PanoramaMap: {
+        props: mapStub.props,
+        emits: ['region-select', 'branch-select'],
+        template: '<div data-testid="panorama-map-stub"><button data-city="D-A" @click="$emit(\'region-select\', { code: \'D-A\', name: \'甲区\' })">甲区</button></div>'
+      } } }
+    });
+    await wrapper.get('[data-city="D-A"]').trigger('click');
+    expect(wrapper.emitted('region-select')).toContainEqual([{ code: 'D-A', name: '甲区' }]);
+    expect(wrapper.find('[data-testid="map-activation-status"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
 });

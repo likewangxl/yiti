@@ -1,7 +1,7 @@
 /** Stable, coordinated colors for the ten province-level cities. */
 export const PROVINCE_CITY_PALETTE = Object.freeze([
-  '#4f9da6', '#6e9bb7', '#7b82b5', '#9881ad', '#b29a70',
-  '#7fa58f', '#b07f72', '#568caf', '#9e8fbd', '#6f9f91'
+  '#48aeb9', '#5f9fbd', '#777fbd', '#a07fbf', '#b99c70',
+  '#73ac91', '#bd806f', '#4f94b7', '#a08fbe', '#5ba894'
 ]);
 
 export const PROVINCE_NEUTRAL_COLOR = '#65738a';

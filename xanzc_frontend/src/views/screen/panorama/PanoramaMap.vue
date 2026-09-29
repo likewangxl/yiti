@@ -268,6 +268,8 @@
       <button type="button" aria-label="重置地图视图" title="重置地图视图" @click="resetView"><Aim aria-hidden="true" /></button>
     </div>
 
+    <p v-if="activationStatus" class="panorama-map__activation-status" data-testid="map-activation-status" role="status" aria-live="polite">{{ activationStatus }}</p>
+
     <p v-if="fallbackActive" class="panorama-map__fallback-status" role="status" aria-live="polite">
       {{ mode === 'province'
         ? '三维地图暂不可用，已切换为二维地图；可缩放、点击城市查看机构。'
@@ -309,6 +311,7 @@ import {
 import { createMapCalloutPath, layoutMapCallouts, layoutMapLabels, layoutPointCallouts } from './mapLabelLayout';
 import { positionCityTooltip } from './mapCityTooltipLayout';
 import { provinceCityColor } from './provinceCityPalette';
+import { pickInteractiveHit, pickRegionSurfaceHit } from './panoramaMapHit';
 const props = defineProps({
   geoJson: { type: Object, default: () => ({ type: 'FeatureCollection', features: [] }) },
   points: { type: Array, default: () => [] },
@@ -353,6 +356,7 @@ const overlayRevision = ref(0);
 const surfaceReady = ref(false);
 const hoveredRegionCode = ref('');
 const hoveredPointCode = ref('');
+const activationStatus = ref('');
 const cityTooltipId = `panorama-city-detail-${getCurrentInstance().uid}`;
 const cityDetailRef = ref(null);
 const cityDetailHeight = ref(420);
@@ -929,8 +933,39 @@ function pointMetricDisplayValue(point) {
   return fallback;
 }
 
+function announceActivationStatus(message) {
+  activationStatus.value = message;
+}
+
+function regionActivationStatus(region) {
+  const code = String(region?.code || '').trim();
+  if (!code) return '机构归属待确认';
+  const state = String(props.regionStates?.[code] || '').trim().toUpperCase();
+  if (props.mode === 'province' && state === 'NO_INSTITUTION') return '该地区无经营机构';
+  if (props.mode === 'province' && state === 'MISSING') {
+    const knownPoint = props.points.some(point => String(point?.cityCode ?? point?.city_code ?? '').trim() === code);
+    const detail = props.cityDetails?.[code];
+    const knownInstitution = Array.isArray(detail?.institutions)
+      ? detail.institutions.length > 0 : Number(detail?.institutionCount) > 0;
+    if (!knownPoint && !knownInstitution) return '机构归属待确认';
+  }
+  if (props.mode === 'province' && props.cityDetailMode === 'institutions') {
+    if (!Object.prototype.hasOwnProperty.call(props.cityDetails || {}, code)) return '机构归属待确认';
+    const detail = props.cityDetails?.[code] || {};
+    const count = Array.isArray(detail.institutions) ? detail.institutions.length : Number(detail.institutionCount);
+    if (Number.isFinite(count) && count <= 0) return '该地区无经营机构';
+  }
+  return '';
+}
+
 function selectRegion(region) {
   if (Date.now() < suppressActivationUntil) return;
+  const status = regionActivationStatus(region);
+  if (status) {
+    announceActivationStatus(status);
+    return;
+  }
+  activationStatus.value = '';
   emit('region-select', { code: String(region.code || ''), name: region.name || '' });
 }
 
@@ -1418,6 +1453,7 @@ function buildThreeMapUnsafe() {
       applyRegionTopColor(regionTopMaterial, polygon.code, selected);
       const mesh = new THREE.Mesh(geometry, [regionTopMaterial, sideMaterial.clone()]);
       mesh.userData = { type: 'region', code: polygon.code, name: polygon.name };
+      regionSurfaces.push(mesh);
       mapGroup.add(mesh);
       const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), edgeMaterial);
       edges.userData = mesh.userData;
@@ -1535,11 +1571,10 @@ function onThreePointer(event) {
   pointerPosition(event);
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects([mapGroup, pointGroup], true);
-  const hit = hits.find(item => item.object.userData?.type && !item.object.userData.decorative);
+  const hit = pickInteractiveHit(hits, regionSurfaces);
   if (!hit) return;
-  const target = hit.object.userData;
-  if (target.type === 'region') selectRegion(target);
-  if (target.type === 'point') selectPoint(target.point);
+  if (hit.kind === 'region') selectRegion(hit.object.userData);
+  if (hit.kind === 'point') selectPoint(hit.point);
 }
 
 /** Highlight all polygons of one city without changing the business selection or rebuilding geometry. */
@@ -1575,7 +1610,7 @@ function onThreeHover(event) {
   if (!reliefEnabled.value || !renderer || !camera || !raycaster || !pointer) return;
   pointerPosition(event);
   raycaster.setFromCamera(pointer, camera);
-  const hit = raycaster.intersectObjects(regionSurfaces, false)[0];
+  const hit = pickRegionSurfaceHit(raycaster.intersectObjects(regionSurfaces, false), regionSurfaces);
   if (hit) setHoveredRegion(hit.object.userData.code);
   else leaveHoveredRegion();
 }
@@ -1838,6 +1873,7 @@ onBeforeUnmount(() => {
 .panorama-map__controls button:hover, .panorama-map__controls button:focus-visible { border-color: #82f4ff; outline: 2px solid rgba(130, 244, 255, .5); }
 .panorama-map__controls button:disabled { cursor: not-allowed; opacity: .42; }
 .panorama-map__fallback-status { position: absolute; z-index: 4; left: 14px; bottom: 12px; max-width: calc(100% - 100px); margin: 0; color: rgba(194, 221, 255, .78); font-size: 11px; pointer-events: none; }
+.panorama-map__activation-status { position: absolute; z-index: 5; left: 14px; bottom: 30px; max-width: calc(100% - 100px); margin: 0; color: #ffc45e; font-size: 12px; pointer-events: none; }
 .panorama-map__empty { position: absolute; z-index: 4; inset: 50% auto auto 50%; transform: translate(-50%, -50%); margin: 0; color: rgba(194, 221, 255, .82); font-size: 13px; white-space: nowrap; }
 .panorama-map__unmapped { position: absolute; z-index: 6; bottom: 42px; left: 12px; max-width: min(245px, 50%); margin: 0; padding: 8px 10px; border: 1px solid rgba(255, 181, 79, .5); border-radius: 6px; background: rgba(28, 25, 57, .86); color: #ffe2a8; font-size: 11px; }
 .panorama-map__unmapped strong, .panorama-map__unmapped span { display: block; }

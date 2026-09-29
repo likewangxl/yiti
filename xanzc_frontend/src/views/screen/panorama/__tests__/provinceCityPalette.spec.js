@@ -19,17 +19,24 @@ describe('省级地市科技配色', () => {
     expect(new Set(colors).size).toBe(10);
     expect(colors.every(color => saturation(color) < 0.52)).toBe(true);
     expect(reordered.reverse()).toEqual(colors);
-    expect(provinceCityColor('610100', 'HAS_INSTITUTION')).toBe('#4f9da6');
-    expect(provinceCityColor('610300', 'HAS_INSTITUTION')).toBe('#7b82b5');
-    expect(provinceCityColor('610400', 'HAS_INSTITUTION')).toBe('#9881ad');
-    expect(provinceCityColor('610500', 'HAS_INSTITUTION')).toBe('#b29a70');
-    expect(provinceCityColor('610800', 'HAS_INSTITUTION')).toBe('#568caf');
+    expect(provinceCityColor('610100', 'HAS_INSTITUTION')).toBe('#48aeb9');
+    expect(provinceCityColor('610300', 'HAS_INSTITUTION')).toBe('#777fbd');
+    expect(provinceCityColor('610400', 'HAS_INSTITUTION')).toBe('#a07fbf');
+    expect(provinceCityColor('610500', 'HAS_INSTITUTION')).toBe('#b99c70');
+    expect(provinceCityColor('610800', 'HAS_INSTITUTION')).toBe('#4f94b7');
   });
 
   it('未知 code 也稳定返回 palette 颜色', () => {
     expect(provinceCityColor('UNKNOWN-CITY')).toBe(provinceCityColor('UNKNOWN-CITY'));
     expect(PROVINCE_CITY_PALETTE).toContain(provinceCityColor('UNKNOWN-CITY'));
     expect(provinceCityPaletteGradient()).toContain('linear-gradient');
+    expect(provinceCityColor('610100', 'NO_INSTITUTION')).toBe('#65738a');
+    expect(provinceCityColor('610100', 'MISSING')).toBe('#65738a');
+  });
+
+  it('新省级 palette 保持 code 稳定并提高最低饱和度，未知/无机构中性色不变', () => {
+    const colors = codes.map(code => provinceCityColor(code));
+    expect(Math.min(...colors.map(saturation))).toBeGreaterThan(0.24);
     expect(provinceCityColor('610100', 'NO_INSTITUTION')).toBe('#65738a');
     expect(provinceCityColor('610100', 'MISSING')).toBe('#65738a');
   });

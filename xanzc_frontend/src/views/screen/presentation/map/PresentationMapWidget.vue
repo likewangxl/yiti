@@ -48,7 +48,8 @@
       <small v-if="!legacyBranchProvinceMap">{{ displayMetricLabel || '当前指标' }} · {{ mapModel.metricUnit || '单位待补充' }}</small>
     </div>
 
-    <p v-if="mapModel.noVisibleInstitutions" class="presentation-map-widget__status" data-testid="map-no-visible" role="status">当前城市暂无可见机构</p>
+    <p v-if="activationStatus" class="presentation-map-widget__status" data-testid="map-activation-status" role="status" aria-live="polite">{{ activationStatus }}</p>
+    <p v-else-if="mapModel.noVisibleInstitutions" class="presentation-map-widget__status" data-testid="map-no-visible" role="status">当前城市暂无可见机构</p>
     <aside v-if="!legacyBranchProvinceMap && mapModel.missingCoordinates.length" class="presentation-map-widget__missing" data-testid="map-missing-coordinates" aria-label="缺少坐标但仍可访问的机构">
       <strong>待定位机构 {{ mapModel.missingCoordinates.length }} 家</strong>
       <button v-for="item in mapModel.missingCoordinates" :key="item.orgCode" type="button" :data-org-code="item.orgCode" @click="selectInstitution(item)">{{ item.orgName || item.name || item.orgCode }}</button>
@@ -57,7 +58,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import PanoramaMap from '../../panorama/PanoramaMap.vue';
 import {
   buildMapModel,
@@ -89,6 +90,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['region-select', 'branch-select', 'map-context']);
+const activationStatus = ref('');
 const enhancedMap = computed(() => isBranchMapV2(props.presentation));
 const legacyBranchProvinceMap = computed(() => {
   const screenCode = String(props.presentation?.screenCode ?? props.presentation?.screen_code ?? '').trim();
@@ -135,6 +137,9 @@ const legacyBranchInstitutionState = computed(() => buildProvinceInstitutionMapS
   props.geoJson,
   mapModel.value.institutions
 ));
+const effectiveRegionStates = computed(() => legacyBranchProvinceMap.value
+  ? legacyBranchInstitutionState.value.regionStates
+  : mapRegionStates.value);
 const institutionCountLabel = computed(() => `${mapModel.value.institutions.length} 家机构`);
 const displayMetricLabel = computed(() => screenDisplayText(mapModel.value.metricLabel));
 
@@ -145,6 +150,17 @@ function contextMeta() {
 function onRegionSelect(region) {
   const payload = { code: String(region?.code || ''), name: String(region?.name || '') };
   if (!payload.code) return;
+  const state = String(effectiveRegionStates.value?.[payload.code] || '').toUpperCase();
+  const knownInstitution = mapModel.value.institutions.some(item => String(item?.cityCode || item?.city_code || '').trim() === payload.code);
+  if (props.mode === 'province' && state === 'NO_INSTITUTION') {
+    activationStatus.value = '该地区无经营机构';
+    return;
+  }
+  if (props.mode === 'province' && state === 'MISSING' && !knownInstitution) {
+    activationStatus.value = '机构归属待确认';
+    return;
+  }
+  activationStatus.value = '';
   emit('region-select', payload);
   emit('map-context', mapContextForCity(payload, contextMeta()));
 }
