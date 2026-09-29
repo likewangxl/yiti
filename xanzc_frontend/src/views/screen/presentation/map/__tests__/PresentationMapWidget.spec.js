@@ -188,7 +188,7 @@ describe('PresentationMapWidget', () => {
     expect(map.props('regionStates')).toMatchObject({ 'D-A': 'HAS_INSTITUTION', 'D-B': 'NO_INSTITUTION' });
     expect(map.props('metricColors')['D-B']).toBe('#26364d');
     expect(map.props('showRegionMetrics')).toBe(false);
-    expect(map.props('viewFit')).toMatchObject({ focusRegionCodes: ['D-A'], initialZoom: 1.25 });
+    expect(map.props('viewFit')).toMatchObject({ focusRegionCodes: ['D-A'], initialZoom: 1.65 });
     expect(wrapper.get('[data-testid="presentation-map-legend-has-institution"]').text()).toBe('有经营机构');
     expect(wrapper.get('[data-testid="presentation-map-legend-no-institution"]').text()).toBe('无经营机构');
     expect(wrapper.get('[data-testid="presentation-map-legend-district-unknown"]').text()).toBe('归属待确认');

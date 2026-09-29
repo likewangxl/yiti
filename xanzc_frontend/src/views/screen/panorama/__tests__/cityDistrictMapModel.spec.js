@@ -57,7 +57,7 @@ describe('cityDistrictMapModel', () => {
     });
     expect(result.hasUnknownLocations).toBe(false);
     expect(result.viewFit.focusRegionCodes).toEqual(['D-A', 'D-B']);
-    expect(result.viewFit.initialZoom).toBe(1.25);
+    expect(result.viewFit.initialZoom).toBe(1.65);
     expect(result.viewFit.focusCenter).toEqual({ lng: 1, lat: 0.5 });
   });
 

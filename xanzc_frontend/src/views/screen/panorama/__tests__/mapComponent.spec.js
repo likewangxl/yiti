@@ -313,17 +313,17 @@ describe('PanoramaMap', () => {
         labelLayout: 'callout',
         showRegionMetrics: false,
         metricValues: { '610100': '—' },
-        viewFit: { focusRegionCodes: ['610100'], focusCenter: { lng: 108.5, lat: 34.5 }, initialZoom: 1.25 }
+        viewFit: { focusRegionCodes: ['610100'], focusCenter: { lng: 108.5, lat: 34.5 }, initialZoom: 1.65 }
       }
     });
     await nextTick();
     expect(wrapper.find('[data-testid="map-region-metric"]').exists()).toBe(false);
-    expect(wrapper.attributes('data-zoom')).toBe('1.25');
+    expect(wrapper.attributes('data-zoom')).toBe('1.65');
     expect(wrapper.attributes('data-pan-enabled')).toBe('true');
     await wrapper.get('button[aria-label="放大地图"]').trigger('click');
-    expect(wrapper.attributes('data-zoom')).toBe('1.69');
+    expect(wrapper.attributes('data-zoom')).toBe('2.23');
     await wrapper.get('button[aria-label="重置地图视图"]').trigger('click');
-    expect(wrapper.attributes('data-zoom')).toBe('1.25');
+    expect(wrapper.attributes('data-zoom')).toBe('1.65');
     expect(wrapper.attributes('data-pan-enabled')).toBe('true');
     wrapper.unmount();
   });

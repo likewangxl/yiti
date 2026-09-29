@@ -415,7 +415,7 @@ const cityFocus = computed(() => {
   const initialZoom = Number(props.viewFit?.initialZoom);
   return {
     active: Number.isFinite(center.x) && Number.isFinite(center.y),
-    zoom: Number.isFinite(initialZoom) ? Math.min(1.25, Math.max(1, initialZoom)) : 1.25,
+    zoom: Number.isFinite(initialZoom) ? Math.min(2, Math.max(1, initialZoom)) : 1.65,
     center
   };
 });

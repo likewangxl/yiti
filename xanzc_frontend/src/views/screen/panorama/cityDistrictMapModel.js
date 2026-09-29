@@ -211,7 +211,7 @@ export function buildCityDistrictMapState(geoJson, institutions, { demo = false 
     const centers = occupiedRegionCodes.map(code => featureCenter(features.get(code).polygons)).filter(Boolean);
     if (centers.length) {
       viewFit.focusRegionCodes = occupiedRegionCodes;
-      viewFit.initialZoom = 1.25;
+      viewFit.initialZoom = 1.65;
       viewFit.focusCenter = centers.reduce((center, item) => ({
         lng: center.lng + item.lng / centers.length,
         lat: center.lat + item.lat / centers.length
