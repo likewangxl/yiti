@@ -568,7 +568,6 @@ body .panorama-map__city-detail.panorama-map__city-detail[role="tooltip"] :is(
  * their compact style blocks, so list their text tiers explicitly here. */
 :is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) :is(
   .presentation-layout__metric-group-header small,
-  .completion-ring-gauge__value,
   .business-growth-widget__heading small,
   .business-growth-widget__empty,
   .branch-incomplete-achievement__kicker,
@@ -582,6 +581,14 @@ body .panorama-map__city-detail.panorama-map__city-detail[role="tooltip"] :is(
   .branch-performance__source,
   .branch-performance__ranking-heading p
 ) {
+  font-size: var(--screen-font-size-auxiliary);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .completion-ring-gauge:not(.completion-ring-gauge--missing) .completion-ring-gauge__value {
+  font-size: var(--screen-font-size-ring-value);
+}
+
+:is(.panorama-dashboard, .city-panorama, .corporate-dashboard, .retail-dashboard, .branch-operating-dashboard) .completion-ring-gauge.completion-ring-gauge--missing .completion-ring-gauge__value {
   font-size: var(--screen-font-size-auxiliary);
 }
 

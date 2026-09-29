@@ -93,5 +93,8 @@ describe('大屏共享字体层', () => {
     expect(stylesheet).toContain('min-height: 450px;');
     expect(stylesheet).toContain('.business-growth-widget__chart .panorama-trend.is-compact .panorama-trend-chart');
     expect(stylesheet).toContain('min-height: 170px;');
+    expect(stylesheet).toContain('.completion-ring-gauge:not(.completion-ring-gauge--missing) .completion-ring-gauge__value');
+    expect(stylesheet).toContain('.completion-ring-gauge.completion-ring-gauge--missing .completion-ring-gauge__value');
+    expect(stylesheet).toContain('font-size: var(--screen-font-size-ring-value);');
   });
 });
