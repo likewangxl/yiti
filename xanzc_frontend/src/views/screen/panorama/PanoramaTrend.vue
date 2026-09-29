@@ -66,6 +66,8 @@ const props = defineProps({
   switchable: { type: Boolean, default: false },
   amountFriendly: { type: Boolean, default: false },
   amountUnit: { type: String, default: '' },
+  variant: { type: String, default: '' },
+  stackedPalette: { type: String, default: 'COOL' },
   series: {
     type: Array,
     default: null
@@ -73,10 +75,40 @@ const props = defineProps({
 });
 
 const AMOUNT_UNITS = new Set(['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION']);
+const STACKED_GRADIENT_VARIANT = 'STACKED_GRADIENT';
+const STACKED_GRADIENT_COLORS = Object.freeze(['#80FFA5', '#00DDFF']);
+const STACKED_GRADIENTS = Object.freeze([
+  Object.freeze([
+    { offset: 0, color: 'rgb(128, 255, 165)' },
+    { offset: 1, color: 'rgb(1, 191, 236)' }
+  ]),
+  Object.freeze([
+    { offset: 0, color: 'rgb(0, 221, 255)' },
+    { offset: 1, color: 'rgb(77, 119, 255)' }
+  ])
+]);
+const WARM_STACKED_GRADIENT_COLORS = Object.freeze(['#FF0087', '#FFBF00']);
+// 示例面积以0.8透明度绘制在白底上；预混合白底色后以不透明面积绘制，
+// 让深色大屏保持参考图中可见的亮粉紫与黄橙，而不会再次被深色底压暗。
+const WARM_STACKED_GRADIENTS = Object.freeze([
+  Object.freeze([
+    { offset: 0, color: 'rgb(255, 51, 159)' },
+    { offset: 1, color: 'rgb(159, 51, 177)' }
+  ]),
+  Object.freeze([
+    { offset: 0, color: 'rgb(255, 204, 51)' },
+    { offset: 1, color: 'rgb(230, 101, 112)' }
+  ])
+]);
+const stackedColors = computed(() => props.stackedPalette === 'WARM'
+  ? WARM_STACKED_GRADIENT_COLORS : STACKED_GRADIENT_COLORS);
+const stackedGradients = computed(() => props.stackedPalette === 'WARM'
+  ? WARM_STACKED_GRADIENTS : STACKED_GRADIENTS);
 const selectedAmountUnit = computed(() => {
   const unit = canonicalUnit(props.amountUnit);
   return AMOUNT_UNITS.has(unit) ? unit : '';
 });
+const isStackedGradient = computed(() => props.variant === STACKED_GRADIENT_VARIANT);
 
 const sourceRows = computed(() => (Array.isArray(props.rows) ? props.rows : props.trend));
 const metricMode = ref(defaultTrendMetric(sourceRows.value));
@@ -177,18 +209,53 @@ function tooltipFormatter(params) {
   })].join('<br/>');
 }
 
-const optionSeries = computed(() => normalizedSeries.value.map(item => {
+const optionSeries = computed(() => normalizedSeries.value.map((item, index) => {
   const pointCount = sourceRows.value.length;
+  const gradient = stackedGradients.value[index % stackedGradients.value.length];
   return {
     name: item.label,
     type: 'line',
     smooth: true,
     connectNulls: false,
-    showSymbol: true,
-    symbol: 'circle',
-    symbolSize: 5,
+    ...(isStackedGradient.value
+      ? {
+        stack: 'Total',
+        showSymbol: false,
+        lineStyle: { width: 0 },
+        areaStyle: {
+          opacity: props.stackedPalette === 'WARM' ? 1 : 0.8,
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: gradient
+          }
+        },
+        emphasis: { focus: 'series' }
+      }
+      : {
+        showSymbol: true,
+        symbol: 'circle',
+        symbolSize: 5,
+        lineStyle: { color: item.color, width: 2, shadowBlur: 8, shadowColor: item.color },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: `${item.color}55` },
+              { offset: 1, color: `${item.color}00` }
+            ]
+          }
+        }
+      }),
     label: {
-      show: props.amountFriendly ? false : true,
+      show: isStackedGradient.value || props.amountFriendly ? false : true,
       position: 'top',
       color: item.color,
       fontFamily: SCREEN_CHART_FONT_FAMILY,
@@ -199,21 +266,7 @@ const optionSeries = computed(() => normalizedSeries.value.map(item => {
         return showLabel ? formatPointValue(params.value) : '';
       }
     },
-    lineStyle: { color: item.color, width: 2, shadowBlur: 8, shadowColor: item.color },
-    itemStyle: { color: item.color },
-    areaStyle: {
-      color: {
-        type: 'linear',
-        x: 0,
-        y: 0,
-        x2: 0,
-        y2: 1,
-        colorStops: [
-          { offset: 0, color: `${item.color}55` },
-          { offset: 1, color: `${item.color}00` }
-        ]
-      }
-    },
+    itemStyle: { color: isStackedGradient.value ? stackedColors.value[index % stackedColors.value.length] : item.color },
     data: sourceRows.value.map(row => finiteValue(row?.[item.key]))
   };
 }));
@@ -223,13 +276,17 @@ const hasChart = computed(() => labels.value.some(Boolean)
 
 const option = computed(() => ({
   animation: true,
-  color: normalizedSeries.value.map(item => item.color),
+  color: isStackedGradient.value
+    ? normalizedSeries.value.map((_, index) => stackedColors.value[index % stackedColors.value.length])
+    : normalizedSeries.value.map(item => item.color),
   grid: props.compact
     ? { top: 26, right: 48, bottom: 28, left: 48, containLabel: true }
     : { top: 38, right: 48, bottom: 30, left: 54, containLabel: true },
   tooltip: {
     trigger: 'axis',
-    axisPointer: { type: 'line' },
+    axisPointer: isStackedGradient.value
+      ? { type: 'cross', label: { backgroundColor: '#6a7985' } }
+      : { type: 'line' },
     backgroundColor: 'rgba(7, 18, 53, .96)',
     borderColor: 'rgba(117, 158, 255, .38)',
     textStyle: { color: '#e8efff', fontFamily: SCREEN_CHART_FONT_FAMILY, fontSize: SCREEN_CHART_TOOLTIP_FONT_SIZE },

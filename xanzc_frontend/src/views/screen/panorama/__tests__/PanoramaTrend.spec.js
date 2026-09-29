@@ -179,4 +179,120 @@ describe('PanoramaTrend', () => {
     expect(regularTooltip).not.toHaveProperty('appendTo');
     expect(regularTooltip).not.toHaveProperty('renderMode');
   });
+
+  it('STACKED_GRADIENT 变体沿用官方面积堆叠渐变样式，并使用 cross 指针', () => {
+    const wrapper = mount(PanoramaTrend, {
+      props: {
+        variant: 'STACKED_GRADIENT',
+        amountFriendly: true,
+        trend: [
+          { date: '2026-09-27', deposit: 100, loan: 80 },
+          { date: '2026-09-28', deposit: 110, loan: 90 }
+        ]
+      }
+    });
+    const option = rawChartOption(wrapper);
+
+    expect(option.tooltip.axisPointer.type).toBe('cross');
+    expect(option.series).toHaveLength(2);
+    expect(option.series.every(item => item.stack === 'Total')).toBe(true);
+    expect(option.series.every(item => item.smooth === true)).toBe(true);
+    expect(option.series.every(item => item.lineStyle.width === 0)).toBe(true);
+    expect(option.series.every(item => item.showSymbol === false)).toBe(true);
+    expect(option.series.every(item => item.label.show === false)).toBe(true);
+    expect(option.series.map(item => item.areaStyle.opacity)).toEqual([0.8, 0.8]);
+    expect(option.series[0].areaStyle.color.colorStops).toEqual([
+      { offset: 0, color: 'rgb(128, 255, 165)' },
+      { offset: 1, color: 'rgb(1, 191, 236)' }
+    ]);
+    expect(option.series[1].areaStyle.color.colorStops).toEqual([
+      { offset: 0, color: 'rgb(0, 221, 255)' },
+      { offset: 1, color: 'rgb(77, 119, 255)' }
+    ]);
+    expect(option.series.every(item => item.emphasis.focus === 'series')).toBe(true);
+  });
+
+  it('暖色堆叠配色保持示例基色，并适配白底示例在深色画布上的视觉亮度', () => {
+    const wrapper = mount(PanoramaTrend, {
+      props: {
+        variant: 'STACKED_GRADIENT', stackedPalette: 'WARM',
+        trend: [{ date: '2026-09-29', deposit: 100, loan: 80 }]
+      }
+    });
+    const option = rawChartOption(wrapper);
+    expect(option.color).toEqual(['#FF0087', '#FFBF00']);
+    expect(option.series.map(item => item.itemStyle.color)).toEqual(option.color);
+    expect(option.series.map(item => item.areaStyle.opacity)).toEqual([1, 1]);
+    expect(option.series[0].areaStyle.color.colorStops).toEqual([
+      { offset: 0, color: 'rgb(255, 51, 159)' },
+      { offset: 1, color: 'rgb(159, 51, 177)' }
+    ]);
+    expect(option.series[1].areaStyle.color.colorStops).toEqual([
+      { offset: 0, color: 'rgb(255, 204, 51)' },
+      { offset: 1, color: 'rgb(230, 101, 112)' }
+    ]);
+    expect(option.series.map(item => item.data)).toEqual([[100], [80]]);
+  });
+
+  it('未指定变体时保持原有非堆叠趋势选项', () => {
+    const wrapper = mount(PanoramaTrend, {
+      props: { trend: [{ date: '2026-09-28', deposit: 1, loan: 2 }] }
+    });
+    const option = rawChartOption(wrapper);
+
+    expect(option.tooltip.axisPointer.type).toBe('line');
+    expect(option.series.every(item => item.stack === undefined)).toBe(true);
+    expect(option.series.every(item => item.lineStyle.width === 2)).toBe(true);
+    expect(option.series.every(item => item.showSymbol === true)).toBe(true);
+  });
+
+  it('有效日轴按完整类别对齐稀疏行，缺失点为null且0保持为0', () => {
+    const wrapper = mount(PanoramaTrend, {
+      props: {
+        rows: [
+          { date: '2026-09-27', deposit: 0, loan: 2 },
+          { date: '2026-09-29', deposit: 9, loan: null }
+        ],
+        series: [
+          { key: 'deposit', label: '存款', color: '#42e8ef' },
+          { key: 'loan', label: '贷款', color: '#a77bff' }
+        ],
+        timeAxis: { granularity: 'DAY', categories: ['2026-09-27', '2026-09-28', '2026-09-29'] }
+      }
+    });
+    const option = rawChartOption(wrapper);
+    expect(option.xAxis.data).toEqual(['2026-09-27', '2026-09-28', '2026-09-29']);
+    expect(option.series.map(item => item.data)).toEqual([[0, null, 9], [2, null, null]]);
+    expect(option.xAxis.axisLabel.formatter('2026-09-27', 0)).toBe('09-27');
+  });
+
+  it('月轴直接按YYYY-MM映射已采样月末余额，tooltip保留月份且不聚合', () => {
+    const wrapper = mount(PanoramaTrend, {
+      props: {
+        rows: [
+          { date: '2025-12-31', deposit: 10, loan: 20 },
+          { date: '2026-01-31', deposit: 0, loan: 22 }
+        ],
+        series: [{ key: 'deposit', label: '存款', color: '#42e8ef' }],
+        timeAxis: { granularity: 'MONTH', categories: ['2025-12', '2026-01'] },
+        amountFriendly: true
+      }
+    });
+    const option = rawChartOption(wrapper);
+    expect(option.xAxis.data).toEqual(['2025-12', '2026-01']);
+    expect(option.series[0].data).toEqual([10, 0]);
+    expect(option.xAxis.axisLabel.formatter('2025-12', 0)).toBe('2025-12');
+    expect(option.xAxis.axisLabel.formatter('2026-01', 1)).toBe('2026-01');
+    const tooltip = option.tooltip.formatter([{ axisValue: '2026-01', axisValueLabel: '2026-01', seriesName: '存款', value: 0, marker: '' }]);
+    expect(tooltip.split('<br/>')[0]).toBe('2026-01');
+  });
+
+  it('未传时间轴时保持原有源行标签和序列数据行为', () => {
+    const wrapper = mount(PanoramaTrend, {
+      props: { trend: [{ date: '2026-09', deposit: 1, loan: 2 }] }
+    });
+    const option = rawChartOption(wrapper);
+    expect(option.xAxis.data).toEqual(['2026-09']);
+    expect(option.series.map(item => item.data)).toEqual([[1], [2]]);
+  });
 });
