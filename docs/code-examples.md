@@ -139,3 +139,9 @@ snapshot.ifPresent(dto -> {
 完整性或序列化失败由独立事务记录 FAILED。Quartz 包装类使用 `@DisallowConcurrentExecution`
 且不标注 `@Component`，由治理 `JobApi`/`SYS_JOB_CONF` 注册，禁止恢复旧的
 `MetricSchedulerService.register()` 路径。
+
+### 大屏信息卡显式比较来源
+
+- `report-analytics-center/src/main/java/com/bank/branch/platform/report/dto/req/presentation/ScreenDisplayComparisonDTO.java` 与 `CodeScreenPresentationValidator`：类型化 `display.comparisons`、开关语义、当前画布与不可变快照的受控历史区块引用。
+- `xanzc_frontend/src/views/screen/presentation/model/explicitComparisons.js`：以数据日计算昨日/上月末/上年末，唯一行及当前值一致性校验，金额单位换算、完成率百分点；缺值不得补零。
+- `xanzc_frontend/src/views/screen/panorama/usePanoramaData.js`：复用屏级授权/batchId查询历史，去重、权限与迟到响应处理，`comparisonResults`独立于增长曲线数据。

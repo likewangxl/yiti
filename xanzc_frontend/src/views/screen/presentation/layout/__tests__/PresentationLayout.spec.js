@@ -275,7 +275,7 @@ describe('PresentationLayout', () => {
     expect(wrapper.find('[data-layout-group="RETAIL"] [data-testid="metric-widget"]').attributes('data-grouped')).toBe('true');
   });
 
-  it('草稿分行摘要使用四卡加空第五槽，分组占五列且发布态不渲染预留槽', async () => {
+  it('草稿分行摘要使用四卡加结算性存款第五卡，分组占五列且发布态不渲染摘要', async () => {
     const headerComponents = [
       ['business-retail-deposit-balance', '零售存款余额'],
       ['business-retail-loan-balance', '零售贷款余额'],
@@ -308,14 +308,11 @@ describe('PresentationLayout', () => {
 
     const summary = wrapper.get('[data-testid="draft-overview-summary"]');
     expect(summary.findAll('[data-testid="draft-overview-summary-card"]').map(node => node.attributes('data-summary-key')))
-      .toEqual(['deposit', 'deposit-composition', 'loan', 'loan-composition']);
+      .toEqual(['deposit', 'deposit-composition', 'loan', 'loan-composition', 'settlementDeposit']);
+    expect(summary.find('[data-testid="draft-overview-reserved-slot"]').exists()).toBe(false);
+    expect(summary.findAll('[data-testid="draft-overview-summary-card"]')).toHaveLength(5);
     expect(summary.findAll('[data-testid="draft-overview-card-icon"]').map(node => node.attributes('data-icon')))
-      .toEqual(['deposit', 'deposit-composition', 'loan', 'loan-composition']);
-    const reserved = summary.get('[data-testid="draft-overview-reserved-slot"]');
-    expect(reserved.text()).toBe('');
-    expect(reserved.find('[data-testid="draft-overview-card-icon"]').exists()).toBe(false);
-    expect(reserved.attributes('aria-hidden')).toBe('true');
-    expect(summary.findAll('[data-testid="draft-overview-summary-card"]')).toHaveLength(4);
+      .toEqual(['deposit', 'deposit-composition', 'loan', 'loan-composition', 'settlementDeposit']);
     expect(wrapper.find('[data-layout-mode="grouped"] [data-layout-group="RETAIL"]').exists()).toBe(true);
     expect(wrapper.find('[data-layout-mode="grouped"] [data-layout-group="CORP"]').exists()).toBe(true);
     expect(wrapper.find('[data-layout-mode="grouped"] [data-layout-group="REVENUE"]').exists()).toBe(true);
@@ -330,6 +327,7 @@ describe('PresentationLayout', () => {
     mounted.push(published);
     expect(published.find('[data-testid="draft-overview-summary"]').exists()).toBe(false);
     expect(published.find('[data-testid="draft-overview-reserved-slot"]').exists()).toBe(false);
+    expect(published.find('[data-testid="draft-overview-card-icon"]').exists()).toBe(false);
   });
 
   it('draftOverview 在原分组上方保留存款与贷款总额，移除存贷款合计且缺失或单位不兼容不补0', () => {
@@ -355,9 +353,9 @@ describe('PresentationLayout', () => {
     });
     mounted.push(wrapper);
     const summary = wrapper.get('[data-testid="draft-overview-summary"]');
-    expect(summary.findAll('[data-testid="draft-overview-summary-card"]')).toHaveLength(2);
+    expect(summary.findAll('[data-testid="draft-overview-summary-card"]')).toHaveLength(3);
     expect(summary.findAll('[data-testid="draft-overview-summary-card"]').map(node => node.attributes('data-summary-key')))
-      .toEqual(['deposit', 'loan']);
+      .toEqual(['deposit', 'loan', 'settlementDeposit']);
     expect(summary.get('[data-summary-key="deposit"]').text()).toContain('存款总额');
     expect(summary.get('[data-summary-key="deposit"]').text()).toContain('120.00亿元');
     expect(summary.get('[data-summary-key="loan"]').text()).toContain('80.00亿元');
@@ -458,7 +456,7 @@ describe('PresentationLayout', () => {
     mounted.push(wrapper);
 
     expect(wrapper.get('[data-testid="draft-overview-summary"]').findAll('[data-testid="draft-overview-summary-card"]').map(node => node.attributes('data-summary-key')))
-      .toEqual(['deposit', 'deposit-composition', 'loan', 'loan-composition']);
+      .toEqual(['deposit', 'deposit-composition', 'loan', 'loan-composition', 'settlementDeposit']);
     expect(wrapper.get('[data-summary-key="deposit"] [data-testid="overview-balance-chart"]').attributes('data-state')).toBe('READY');
     expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="day"]').text()).toContain('110.00亿元');
     expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="day"]').text()).toContain('+10亿');
@@ -471,7 +469,77 @@ describe('PresentationLayout', () => {
     expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="day"]').text()).toContain('1,100,000.00万元');
   });
 
-  it('未发布分行总览按总额与业务分布交错排列，左下只保留收入且其他业务结构不受过滤', async () => {
+  it('显式总额只有较上年比较时，按同日一致细分补齐较昨日和较上月', () => {
+    const components = [
+      ['business-retail-deposit-balance', 'retailDeposit'],
+      ['business-corp-deposit-balance', 'corpDeposit'],
+      ['business-retail-loan-balance', 'retailLoan'],
+      ['business-corp-loan-balance', 'corpLoan']
+    ].map(([componentId, field], order) => ({
+      componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order, visible: true,
+      text: { titleMode: 'CUSTOM', title: componentId }, format: { displayUnit: 'HUNDRED_MILLION' },
+      content: { mainField: field }, dataRefs: [{ blockId: 31, metricCode: field, unit: 'HUNDRED_MILLION' }]
+    }));
+    const unitByField = { retailDeposit: 'HUNDRED_MILLION', corpDeposit: 'HUNDRED_MILLION', retailLoan: 'HUNDRED_MILLION', corpLoan: 'HUNDRED_MILLION' };
+    const rows = [
+      { date: '2028-03-02', retailDeposit: 40, corpDeposit: 80, retailLoan: 30, corpLoan: 50 },
+      { date: '2028-03-01', retailDeposit: 35, corpDeposit: 75, retailLoan: 27, corpLoan: 48 },
+      { date: '2028-02-29', retailDeposit: 30, corpDeposit: 70, retailLoan: 25, corpLoan: 45 },
+      { date: '2027-12-31', retailDeposit: 25, corpDeposit: 65, retailLoan: 20, corpLoan: 40 }
+    ];
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        draftOverview: true,
+        presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components } },
+        model: {
+          dataDate: '2028-03-02',
+          kpis: [{ key: 'deposit', value: 120, unit: '亿元', dataDate: '2028-03-02', comparisons: {
+            year: { value: 30, unit: '亿元', referenceDate: '2027-12-31' }
+          } }],
+          blockResults: {
+            31: { ...rows[0], dataDate: '2028-03-02', unitByField },
+            57: { rows, unitByField }
+          }
+        }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+
+    const depositChart = wrapper.get('[data-summary-key="deposit"] [data-testid="overview-balance-chart"]');
+    expect(depositChart.get('[data-bar-key="day"]').text()).toContain('110.00亿元');
+    expect(depositChart.get('[data-bar-key="day"]').text()).toContain('+10亿');
+    expect(depositChart.get('[data-bar-key="month"]').text()).toContain('100.00亿元');
+    expect(depositChart.get('[data-bar-key="year"]').text()).toContain('+30亿');
+  });
+
+  it('结算性存款即使带演示元数据也不显示演示文案', () => {
+    const header = ['business-corp-deposit-balance', 'business-corp-loan-balance'].map((componentId, order) => ({
+      componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order, visible: true,
+      text: { titleMode: 'CUSTOM', title: componentId }, format: { displayUnit: 'HUNDRED_MILLION' },
+      content: { mainField: 'value' }, dataRefs: [{ blockId: order + 1, metricCode: order ? 'loan' : 'deposit', unit: 'HUNDRED_MILLION' }]
+    }));
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        draftOverview: true,
+        presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components: header } },
+        model: { dataDate: '2028-03-02', kpis: [
+          { key: 'deposit', value: 120, unit: '亿元', dataDate: '2028-03-02', isDemo: true },
+          { key: 'loan', value: 80, unit: '亿元', dataDate: '2028-03-02' },
+          { key: 'settlementDeposit', value: 42, unit: '亿元', dataDate: '2028-03-02', isDemo: true }
+        ] }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+
+    expect(wrapper.find('[data-summary-key="settlementDeposit"] [data-testid="draft-overview-card-demo"]').exists()).toBe(false);
+    expect(wrapper.get('[data-summary-key="settlementDeposit"] .presentation-layout__overview-summary-card-heading span').text()).toBe('结算性存款');
+    expect(wrapper.get('[data-summary-key="settlementDeposit"] .presentation-layout__overview-summary-card-heading strong').text()).toContain('42.00亿元');
+    expect(wrapper.find('[data-summary-key="deposit"] [data-testid="draft-overview-card-demo"]').exists()).toBe(false);
+  });
+
+  it('未发布分行总览过滤左侧首个业务结构，增长曲线首项且不重复；其他结构保留，发布态还原', async () => {
     const composition = (componentId, layoutRegion, order) => ({
       componentId, componentType: 'COMPOSITION_TABS', layoutRegion, order, visible: true,
       text: { titleMode: 'CUSTOM', title: componentId },
@@ -486,7 +554,10 @@ describe('PresentationLayout', () => {
       props: {
         draftOverview: true,
         presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components: [
-          composition('left-structure', 'LEFT', 0), composition('other-structure', 'CENTER', 0)
+          composition('left-structure', 'LEFT', 0),
+          composition('other-structure', 'CENTER', 0),
+          { componentId: 'trend-one', componentType: 'TREND', layoutRegion: 'CENTER', order: 1, visible: true, text: { titleMode: 'CUSTOM', title: '趋势一' }, content: { series: [] }, dataRefs: [] },
+          { componentId: 'trend-two', componentType: 'TREND', layoutRegion: 'CENTER', order: 2, visible: true, text: { titleMode: 'CUSTOM', title: '趋势二' }, content: { series: [] }, dataRefs: [] }
         ] } },
         model: {
           dataDate: '2028-03-02',
@@ -505,21 +576,50 @@ describe('PresentationLayout', () => {
 
     const summaryCards = wrapper.get('[data-testid="draft-overview-summary"]').findAll('[data-testid="draft-overview-summary-card"]');
     expect(summaryCards.map(node => node.attributes('data-summary-key')))
-      .toEqual(['deposit', 'deposit-composition', 'loan', 'loan-composition']);
+      .toEqual(['deposit', 'deposit-composition', 'loan', 'loan-composition', 'settlementDeposit']);
     expect(wrapper.get('[data-summary-key="deposit-composition"]').attributes('data-summary-kind')).toBe('COMPOSITION');
     expect(wrapper.get('[data-summary-key="deposit-composition"] [data-testid="structure-widget"]').attributes('data-ring-keys')).toBe('deposit');
     expect(wrapper.get('[data-summary-key="deposit-composition"] [data-testid="structure-widget"]').attributes('data-compact')).toBe('true');
     expect(wrapper.get('[data-summary-key="loan-composition"] [data-testid="structure-widget"]').attributes('data-ring-keys')).toBe('loan');
 
-    const leftStructure = wrapper.get('[data-layout-column="LEFT"] [data-component-id="left-structure"] [data-testid="structure-widget"]');
-    expect(leftStructure.attributes('data-ring-keys')).toBe('income');
-    expect(leftStructure.attributes('data-compact')).toBe('false');
+    const leftColumn = wrapper.get('[data-layout-column="LEFT"]');
+    expect(leftColumn.attributes('aria-label')).toBe('左侧业务增长曲线');
+    expect(leftColumn.element.firstElementChild?.getAttribute('data-testid')).toBe('presentation-layout-trend-group');
+    expect(leftColumn.findAll('[data-testid="presentation-layout-trend-group"]')).toHaveLength(1);
+    expect(leftColumn.get('[data-testid="presentation-layout-trend-group"]').attributes('data-trend-count')).toBe('2');
+    expect(leftColumn.find('[data-component-id="left-structure"]').exists()).toBe(false);
+    expect(leftColumn.findAll('[data-testid="structure-widget"]')).toHaveLength(0);
     const otherStructure = wrapper.get('[data-layout-column="CENTER"] [data-component-id="other-structure"] [data-testid="structure-widget"]');
     expect(otherStructure.attributes('data-ring-keys')).toBe('');
     expect(otherStructure.attributes('data-compact')).toBe('false');
 
     await wrapper.get('[data-summary-key="deposit-composition"] [data-testid="structure-business-line-select"]').trigger('click');
     expect(wrapper.emitted('business-line-select')).toContainEqual([{ businessLine: 'CORP', tabKey: 'deposit' }]);
+
+    const published = mount(PresentationLayout, {
+      props: {
+        draftOverview: false,
+        presentation: { displaySchemaVersion: 1, template: 'branch-overview-v1', display: { components: [
+          composition('left-structure', 'LEFT', 0),
+          composition('other-structure', 'CENTER', 0),
+          { componentId: 'trend-one', componentType: 'TREND', layoutRegion: 'CENTER', order: 1, visible: true, text: { titleMode: 'CUSTOM', title: '趋势一' }, content: { series: [] }, dataRefs: [] },
+          { componentId: 'trend-two', componentType: 'TREND', layoutRegion: 'CENTER', order: 2, visible: true, text: { titleMode: 'CUSTOM', title: '趋势二' }, content: { series: [] }, dataRefs: [] }
+        ] } },
+        model: {
+          dataDate: '2028-03-02',
+          blockResults: { 31: {
+            corpDeposit: 60, retailDeposit: 40, depositTotal: 100,
+            corpLoan: 30, retailLoan: 20, loanTotal: 50,
+            corpIncome: 12, retailIncome: 8, incomeTotal: 20,
+            unitByField: { corpDeposit: 'HUNDRED_MILLION', retailDeposit: 'HUNDRED_MILLION', depositTotal: 'HUNDRED_MILLION', corpLoan: 'HUNDRED_MILLION', retailLoan: 'HUNDRED_MILLION', loanTotal: 'HUNDRED_MILLION', corpIncome: 'HUNDRED_MILLION', retailIncome: 'HUNDRED_MILLION', incomeTotal: 'HUNDRED_MILLION' }
+          } }
+        }
+      },
+      global: { stubs }
+    });
+    mounted.push(published);
+    expect(published.find('[data-testid="draft-overview-summary"]').exists()).toBe(false);
+    expect(published.get('[data-layout-column="LEFT"] [data-component-id="left-structure"] [data-testid="structure-widget"]').attributes('data-ring-keys')).toBe('');
   });
 
   it('总额与完整细分余额同日但数值不一致时拒绝借用细分三维差值', () => {
@@ -613,6 +713,94 @@ describe('PresentationLayout', () => {
     });
     mounted.push(invalidDate);
     expect(invalidDate.get('[data-summary-key="deposit"] [data-testid="overview-balance-chart"]').attributes('data-state')).toBe('PENDING');
+  });
+
+  it.each([
+    ['HUNDRED_MILLION', 1000, 900, 800, 1200],
+    ['TEN_THOUSAND', 10000000, 9000000, 8000000, 12000000]
+  ])('总览显式比较以元语义校验主值，源单位 %s 不发生二次缩放', (sourceUnit, current, day, month, year) => {
+    const header = ['business-retail-deposit-balance', 'business-corp-deposit-balance'].map((componentId, order) => ({
+      componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order, visible: true,
+      text: { titleMode: 'CUSTOM', title: componentId }, format: { displayUnit: 'HUNDRED_MILLION' },
+      content: { mainField: 'value' }, dataRefs: [{ blockId: order + 1, metricCode: 'deposit', unit: 'HUNDRED_MILLION' }]
+    }));
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        amountUnit: 'HUNDRED_MILLION',
+        draftOverview: true,
+        presentation: {
+          displaySchemaVersion: 1,
+          template: 'branch-overview-v1',
+          display: {
+            components: header,
+            comparisons: {
+              'overview-deposit': {
+                enabled: true, historyBlockId: 57, valueFields: ['deposit'], dateField: 'data_date', sourceUnit
+              }
+            }
+          }
+        },
+        model: {
+          dataDate: '2026-09-21',
+          kpis: [{ key: 'deposit', value: 1000, unit: 'HUNDRED_MILLION', dataDate: '2026-09-21' }],
+          comparisonResults: {
+            57: {
+              rows: [
+                { data_date: '2026-09-21', deposit: current },
+                { data_date: '2026-09-20', deposit: day },
+                { data_date: '2026-08-31', deposit: month },
+                { data_date: '2025-12-31', deposit: year }
+              ],
+              unitByField: { deposit: sourceUnit }
+            }
+          }
+        }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+
+    const chart = wrapper.get('[data-summary-key="deposit"] [data-testid="overview-balance-chart"]');
+    expect(chart.attributes('data-state')).toBe('READY');
+    expect(chart.get('[data-bar-key="day"]').text()).toContain('900.00亿元');
+    expect(chart.get('[data-bar-key="day"]').text()).toContain('+100亿');
+  });
+
+  it('显式比较缺历史结果时保持暂无数据语义，不把空值格式化为0', () => {
+    const header = ['business-retail-deposit-balance', 'business-corp-deposit-balance'].map((componentId, order) => ({
+      componentId, componentType: 'METRIC_CARD', layoutRegion: 'HEADER', order, visible: true,
+      text: { titleMode: 'CUSTOM', title: componentId }, format: { displayUnit: 'TEN_THOUSAND' },
+      content: { mainField: 'value' }, dataRefs: [{ blockId: order + 1, metricCode: 'deposit', unit: 'HUNDRED_MILLION' }]
+    }));
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        draftOverview: true,
+        presentation: {
+          displaySchemaVersion: 1,
+          template: 'branch-overview-v1',
+          display: {
+            components: header,
+            comparisons: {
+              'overview-deposit': {
+                enabled: true, historyBlockId: 57, valueFields: ['deposit'], dateField: 'data_date', sourceUnit: 'YUAN'
+              }
+            }
+          }
+        },
+        model: {
+          dataDate: '2026-09-21',
+          kpis: [{ key: 'deposit', value: 1000, unit: 'HUNDRED_MILLION', dataDate: '2026-09-21' }],
+          comparisonResults: {}
+        }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+
+    const card = wrapper.vm.overviewSummary.cards.find(item => item.key === 'deposit');
+    expect(card.comparisons.find(item => item.key === 'year').text).toContain('暂无数据');
+    expect(card.comparisons.find(item => item.key === 'year').text).not.toContain('0.00');
+    expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="year"]').text()).toContain('待接入');
   });
 
   it('将配置组件重排为重点卡/次级卡、左中右三栏，并让地图先于趋势且明细下置', () => {

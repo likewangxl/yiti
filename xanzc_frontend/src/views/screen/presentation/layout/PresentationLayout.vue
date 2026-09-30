@@ -19,6 +19,7 @@
         :class="{ 'presentation-layout__overview-summary-card--composition': card.kind === 'COMPOSITION' }"
         data-testid="draft-overview-summary-card"
         :data-summary-key="card.key"
+        :data-config-key="card.configKey || card.key"
         :data-summary-kind="card.kind || 'TOTAL'"
       >
         <div
@@ -47,12 +48,6 @@
           </template>
         </div>
       </article>
-      <div
-        v-if="draftOverviewEnabled"
-        class="presentation-layout__overview-summary-reserved-slot"
-        data-testid="draft-overview-reserved-slot"
-        aria-hidden="true"
-      />
     </section>
     <section
       v-if="headerGroups.length"
@@ -97,6 +92,7 @@
             :class="`presentation-layout__component--${String(component.componentType || '').toLowerCase()}`"
             data-testid="presentation-layout-component"
             :data-component-id="component.componentId"
+            :data-config-key="componentConfigKey(component)"
             :data-component-type="component.componentType"
             :data-layout-region="component.layoutRegion"
             :data-order="component.order"
@@ -171,6 +167,8 @@
             class="presentation-layout__component presentation-layout__component--trend presentation-layout__component--trend-tabs"
             data-testid="presentation-layout-trend-group"
             data-component-type="TREND"
+            data-config-key="business-growth"
+            :data-component-id="branchTrendComponents[0]?.componentId || 'legacy-trend-57'"
             data-layout-region="CENTER"
             :data-trend-count="branchTrendComponents.length"
           >
@@ -186,6 +184,7 @@
             data-testid="presentation-layout-component"
             data-branch-slot="map"
             :data-component-id="component.componentId"
+            data-config-key="institution-map"
             :data-component-type="component.componentType"
             :data-layout-region="component.layoutRegion"
             :data-order="component.order"
@@ -199,6 +198,7 @@
             data-testid="presentation-layout-component"
             data-branch-slot="ranking"
             :data-component-id="component.componentId"
+            data-config-key="institution-ranking"
             :data-component-type="component.componentType"
             :data-layout-region="component.layoutRegion"
             :data-order="component.order"
@@ -216,6 +216,7 @@
             ]"
             data-testid="presentation-layout-component"
             :data-component-id="component.componentId"
+            :data-config-key="componentConfigKey(component)"
             :data-component-type="component.componentType"
             :data-layout-region="component.layoutRegion"
             :data-order="component.order"
@@ -249,7 +250,8 @@
         class="presentation-layout__component"
         :class="`presentation-layout__component--${String(component.componentType || '').toLowerCase()}`"
         data-testid="presentation-layout-component"
-        :data-component-id="component.componentId"
+          :data-component-id="component.componentId"
+          :data-config-key="componentConfigKey(component)"
         :data-component-type="component.componentType"
         :data-layout-region="component.layoutRegion"
         :data-order="component.order"
@@ -274,7 +276,7 @@
 
 <script setup>
 import { computed } from 'vue';
-import { Coin, DataAnalysis, PieChart, Wallet } from '@element-plus/icons-vue';
+import { Coin, DataAnalysis, Money, PieChart, Wallet } from '@element-plus/icons-vue';
 
 import MetricDisplayWidgets from '../widgets/MetricDisplayWidgets.vue';
 import RevenueShareWidget from '../widgets/RevenueShareWidget.vue';
@@ -289,6 +291,9 @@ import { buildDisplaySeriesTableModel } from '../model/displaySeriesTableModel';
 import { buildCompositionTabsModel } from '../model/compositionTabsModel';
 import { buildInstitutionRankingModel } from '../model/institutionRankingModel';
 import { screenDisplayText } from '../model/screenDisplayText';
+import { buildSettlementDepositMetric } from '../../panorama/settlementDepositMapping';
+import { resolveConfiguredMetricLabel } from '../editor/runtimeComponentCatalog';
+import { computeExplicitComparison } from '../model/explicitComparisons';
 import {
   componentTitle,
   getDisplayComponents,
@@ -318,7 +323,11 @@ const emit = defineEmits([
   'business-line-select'
 ]);
 
-const resolvedPresentation = computed(() => presentationOf(props.presentation));
+const resolvedPresentation = computed(() => {
+  const presentation = presentationOf(props.presentation);
+  const rootLabels = props.presentation?.metricLabels || props.presentation?.displayPresentation?.metricLabels;
+  return rootLabels ? { ...presentation, metricLabels: rootLabels } : presentation;
+});
 const components = computed(() => getDisplayComponents(props.presentation));
 const isBranchOverview = computed(() => resolvedPresentation.value?.template === 'branch-overview-v1');
 
@@ -328,12 +337,12 @@ const HEADER_GROUP_DEFINITIONS = Object.freeze([
   { key: 'CORP', prefix: 'business-corp-', label: '对公业务' },
   { key: 'REVENUE', prefix: 'business-revenue-', label: '营业收入' }
 ]);
-
 const OVERVIEW_CARD_ICONS = Object.freeze({
   deposit: Wallet,
   'deposit-composition': PieChart,
   loan: Coin,
   'loan-composition': DataAnalysis,
+  settlementDeposit: Money
 });
 
 function overviewCardIcon(card) {
@@ -379,12 +388,13 @@ const branchTrendComponents = computed(() => isBranchOverview.value
 const branchMapComponent = computed(() => components.value.find(component => component.layoutRegion === 'CENTER' && component.componentType === 'MAP') || null);
 const branchRankingComponent = computed(() => components.value.find(component => component.layoutRegion === 'RIGHT' && component.componentType === 'RANKING') || null);
 const mainColumns = computed(() => {
-  const leftComponents = components.value.filter(component => component.layoutRegion === 'LEFT');
+  const leftComponents = components.value.filter(component => component.layoutRegion === 'LEFT'
+    && !isDraftOverviewPrimaryComposition(component));
   const centerComponents = components.value.filter(component => component.layoutRegion === 'CENTER');
   return [
     {
       key: 'LEFT',
-      label: '左侧业务结构',
+      label: draftOverviewEnabled.value ? '左侧业务增长曲线' : '左侧业务结构',
       components: [...leftComponents, ...branchTrendComponents.value]
     },
     {
@@ -423,6 +433,12 @@ function isBranchMapComponent(column, component) {
 function isBranchRankingComponent(column, component) {
   return isBranchOverview.value && column.key === 'RIGHT' && component.componentType === 'RANKING'
     && component.componentId === branchRankingComponent.value?.componentId;
+}
+
+function componentConfigKey(component) {
+  if (isBranchOverview.value && component?.componentType === 'MAP') return 'institution-map';
+  if (isBranchOverview.value && component?.componentType === 'RANKING') return 'institution-ranking';
+  return component?.componentId || '';
 }
 
 const metricsModel = computed(() => buildDisplayMetricsModel(resolvedPresentation.value, props.model, {
@@ -478,6 +494,7 @@ function comparisonAmount(comparison, source) {
 }
 
 function summaryFromComponents(componentIds) {
+  if (!Array.isArray(componentIds) || componentIds.length === 0) return null;
   const components = componentIds.map(id => metricsModel.value.components.find(item => item.componentId === id));
   if (components.some(item => !item)) return null;
   const values = components.map(sourceAmount);
@@ -504,23 +521,27 @@ function summaryFromKpi(key, componentIds) {
   if (explicit) {
     const metric = sourceAmount(explicit);
     if (!metric) return null;
-    const comparisons = {};
-    for (const item of SUMMARY_COMPARISONS) {
-      const source = explicit.comparisons?.[item.key];
-      const normalized = comparisonAmount(source, explicit);
-      if (normalized) comparisons[item.key] = normalized;
-    }
     const fallback = summaryFromComponents(componentIds);
     const fallbackMatches = fallback && metric.dateValid && fallback.dateValid && metric.date === fallback.date
       && sameAmount(metric.baseValue, fallback.baseValue);
+    const comparisons = fallbackMatches ? { ...fallback.comparisons } : {};
+    for (const item of SUMMARY_COMPARISONS) {
+      const source = explicit.comparisons?.[item.key];
+      const hasExplicitComparison = explicit.comparisons
+        && Object.prototype.hasOwnProperty.call(explicit.comparisons, item.key);
+      if (!hasExplicitComparison) continue;
+      const normalized = comparisonAmount(source, explicit);
+      if (normalized) comparisons[item.key] = normalized;
+      else delete comparisons[item.key];
+    }
     return {
       ...metric,
       date: metric.date || fallback?.date || '',
-      comparisons: Object.keys(comparisons).length ? comparisons
-        : (fallbackMatches ? fallback.comparisons : {})
+      comparisons
     };
   }
 
+  if (key === 'settlementDeposit') return buildSettlementDepositMetric(props.model);
   return summaryFromComponents(componentIds);
 }
 
@@ -532,7 +553,9 @@ function displaySummaryValue(metric, displayUnit) {
 function summaryCardComparisons(metric, displayUnit) {
   return SUMMARY_COMPARISONS.map(item => {
     const source = metric?.comparisons?.[item.key];
-    if (!source) return { key: item.key, referenceDate: '', text: `${item.label} —` };
+    if (!source || source.state === 'NO_VALUE' || finiteSummary(source.baseValue) === null) {
+      return { key: item.key, referenceDate: '', text: `${item.label} 暂无数据` };
+    }
     const formatted = formatDisplayMetric(source.baseValue / AMOUNT_SCALES.YUAN,
       { displayUnit, decimals: 2, thousandsSeparator: true, negativeStyle: 'SIGNED' }, 'YUAN');
     return {
@@ -541,6 +564,34 @@ function summaryCardComparisons(metric, displayUnit) {
       text: `${item.label} ${formatted.value > 0 ? '+' : ''}${formatted.text}`
     };
   });
+}
+
+function explicitSummaryComparisons(key, metric, displayUnit) {
+  const config = resolvedPresentation.value?.display?.comparisons?.[key];
+  if (!config) return { configured: false, comparisons: metric?.comparisons || {} };
+  if (config.enabled === false) return { configured: true, comparisons: null };
+  const source = props.model?.comparisonResults?.[String(config.historyBlockId)] || props.model?.comparisonResults?.[config.historyBlockId];
+  const rows = Array.isArray(source?.rows) ? source.rows : [];
+  const format = { displayUnit, decimals: 2, thousandsSeparator: true, negativeStyle: 'SIGNED' };
+  const mainValue = metric?.baseValue;
+  // summaryFromKpi/sourceAmount 已把主值统一换算为元；metric.unit 仅保留原始来源单位，
+  // 不能再拿它解释 baseValue，否则亿元/万元主值会被重复放大。
+  const mainUnit = 'YUAN';
+  const build = (period, label) => {
+    const result = computeExplicitComparison({ currentDate: props.model?.dataDate, period, mainValue, mainUnit, rows,
+      unitByField: source?.unitByField, valueFields: config.valueFields, dateField: config.dateField, sourceUnit: config.sourceUnit });
+    if (result.state !== 'READY') return { state: 'NO_VALUE', value: null, baseValue: null, text: `${label} 暂无数据` };
+    const formatted = formatDisplayMetric(result.value, format, mainUnit);
+    const resultUnit = canonicalUnit(result.unit || mainUnit);
+    const baseValue = Object.prototype.hasOwnProperty.call(AMOUNT_SCALES, resultUnit)
+      ? result.value * AMOUNT_SCALES[resultUnit] : null;
+    return { state: 'READY', value: formatted.value, rawValue: result.value, baseValue, unit: resultUnit, referenceDate: result.referenceDate,
+      text: `${label} ${formatted.value > 0 ? '+' : ''}${formatted.text}` };
+  };
+  return {
+    configured: true,
+    comparisons: { year: build('year', '较上年'), month: build('month', '较上月'), day: build('day', '较上日') }
+  };
 }
 
 const draftOverviewEnabled = computed(() => props.draftOverview === true && isBranchOverview.value);
@@ -552,13 +603,18 @@ function overviewCompositionCard(ringKey, label) {
   const component = draftOverviewCompositionComponent.value;
   if (!component) return null;
   const model = compositionComponentModel(component);
+  const tab = model.tabs?.find(item => item.tabKey === ringKey);
+  const tabLabel = String(tab?.label || '').trim();
+  const defaultLabel = ringKey === 'deposit' ? '存款业务分布' : ringKey === 'loan' ? '贷款业务分布' : label;
+  const heading = tabLabel && !['存款', '贷款', '业务结构'].includes(tabLabel) ? tabLabel : defaultLabel;
   return {
     key: `${ringKey}-composition`,
+    configKey: `overview-${ringKey}-composition`,
     kind: 'COMPOSITION',
-    label,
+    label: heading,
     ringKey,
-    // 只覆盖卡片标题，components/tabs/sections 继续来自同一个真实组件模型。
-    model: { ...model, title: label, subtitle: '' }
+    // 标题来自当前有效 tab；components/tabs/sections 继续来自同一个真实组件模型。
+    model: { ...model, title: heading, subtitle: '' }
   };
 }
 
@@ -566,18 +622,26 @@ const overviewSummary = computed(() => {
   if (!draftOverviewEnabled.value) return null;
   const deposit = summaryFromKpi('deposit', ['business-retail-deposit-balance', 'business-corp-deposit-balance']);
   const loan = summaryFromKpi('loan', ['business-retail-loan-balance', 'business-corp-loan-balance']);
-  const sourceUnit = deposit?.unit || loan?.unit || '';
+  const settlementDeposit = summaryFromKpi('settlementDeposit', []);
+  const sourceUnit = deposit?.unit || loan?.unit || settlementDeposit?.unit || '';
   const displayUnit = canonicalUnit(props.amountUnit) && Object.prototype.hasOwnProperty.call(AMOUNT_SCALES, canonicalUnit(props.amountUnit))
     ? canonicalUnit(props.amountUnit) : sourceUnit;
   const depositComposition = overviewCompositionCard('deposit', '存款业务分布');
   const loanComposition = overviewCompositionCard('loan', '贷款业务分布');
+  const depositComparisonState = explicitSummaryComparisons('overview-deposit', deposit, displayUnit);
+  const loanComparisonState = explicitSummaryComparisons('overview-loan', loan, displayUnit);
+  const settlementComparisonState = explicitSummaryComparisons('overview-settlementDeposit', settlementDeposit, displayUnit);
+  const depositWithComparisons = deposit ? { ...deposit, comparisonConfigured: depositComparisonState.configured, comparisons: depositComparisonState.comparisons } : deposit;
+  const loanWithComparisons = loan ? { ...loan, comparisonConfigured: loanComparisonState.configured, comparisons: loanComparisonState.comparisons } : loan;
+  const settlementWithComparisons = settlementDeposit ? { ...settlementDeposit, comparisonConfigured: settlementComparisonState.configured, comparisons: settlementComparisonState.comparisons } : settlementDeposit;
   return {
     displayUnit,
     cards: [
-      { key: 'deposit', label: '存款总额', text: displaySummaryValue(deposit, displayUnit), metric: deposit, comparisons: summaryCardComparisons(deposit, displayUnit) },
+      { key: 'deposit', configKey: 'overview-deposit', label: resolveConfiguredMetricLabel(resolvedPresentation.value, 'deposit', '存款总额'), text: displaySummaryValue(depositWithComparisons, displayUnit), metric: depositWithComparisons, comparisons: summaryCardComparisons(depositWithComparisons, displayUnit) },
       ...(depositComposition ? [depositComposition] : []),
-      { key: 'loan', label: '贷款总额', text: displaySummaryValue(loan, displayUnit), metric: loan, comparisons: summaryCardComparisons(loan, displayUnit) },
-      ...(loanComposition ? [loanComposition] : [])
+      { key: 'loan', configKey: 'overview-loan', label: resolveConfiguredMetricLabel(resolvedPresentation.value, 'loan', '贷款总额'), text: displaySummaryValue(loanWithComparisons, displayUnit), metric: loanWithComparisons, comparisons: summaryCardComparisons(loanWithComparisons, displayUnit) },
+      ...(loanComposition ? [loanComposition] : []),
+      { key: 'settlementDeposit', configKey: 'overview-settlementDeposit', label: '结算性存款', text: displaySummaryValue(settlementWithComparisons, displayUnit), metric: settlementWithComparisons, comparisons: summaryCardComparisons(settlementWithComparisons, displayUnit) }
     ]
   };
 });
