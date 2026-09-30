@@ -64,6 +64,36 @@ function view() {
   };
 }
 
+function configuredComparisonView(configs = {
+  metric: { enabled: true, historyBlockId: 12, valueFields: ['deposit_raw'], dateField: 'data_date', sourceUnit: 'YUAN' }
+}) {
+  const configuredView = structuredClone(view());
+  configuredView.renderPackage.canvasStyle.presentation = {
+    ...presentation,
+    display: { ...presentation.display, comparisons: configs }
+  };
+  return configuredView;
+}
+
+function comparisonBatchQuality(overrides = {}) {
+  return {
+    batchId: 'comparison-batch-1', dataDate: '2026-09-30', version: 'V1', status: 'COMPLETE',
+    dataClassification: 'TEST', selectedComplete: true, ...overrides
+  };
+}
+
+function comparisonMainResponse(request, quality = null) {
+  const dataDate = request?.dateTo || '2026-09-30';
+  const responses = {
+    11: { columns: ['deposit_raw'], rows: [[400]], dataDate },
+    12: { columns: ['data_date', 'deposit_raw'], rows: [[dataDate, 400]], dataDate },
+    13: { columns: ['corp_raw', 'retail_raw', 'total_raw'], rows: [[4, 6, 10]], dataDate },
+    14: { columns: ['org_code_raw', 'org_name_raw', 'value_raw'], rows: [['A', '甲', 4], ['B', '乙', 2]], dataDate }
+  };
+  const response = responses[request?.blockId] || { columns: [], rows: [], dataDate };
+  return quality ? { ...response, quality } : response;
+}
+
 describe('usePanoramaData 到新展示模型的真实 raw 结果链路', () => {
   beforeEach(() => queryScreenData.mockReset());
 
@@ -139,6 +169,231 @@ describe('usePanoramaData 到新展示模型的真实 raw 结果链路', () => {
       expect.objectContaining({ code: 'MISSING_ALIAS_COLUMN', semantic: 'value' }),
       expect.objectContaining({ code: 'DUPLICATE_ALIAS_COLUMN', semantic: 'deposit' }),
       expect.objectContaining({ code: 'INVALID_SEMANTIC_ALIAS', semantic: 'rows' })
+    ]));
+  });
+
+  it('显式比较来源用同一历史 block 的 RANGE 请求，结果单独进入 comparisonResults', async () => {
+    const configuredView = view();
+    configuredView.renderPackage.canvasStyle.presentation = {
+      ...presentation,
+      display: {
+        ...presentation.display,
+        comparisons: { metric: { enabled: true, historyBlockId: 12, valueFields: ['deposit_raw'], dateField: 'data_date', sourceUnit: 'YUAN' } }
+      }
+    };
+    const requests = [];
+    queryScreenData.mockImplementation(request => {
+      requests.push(request);
+      if (request?.blockId === 12 && request?.period === 'RANGE') return {
+        columns: ['data_date', 'deposit_raw'], rows: [
+          ['2026-09-30', 400], ['2026-08-31', 300], ['2025-12-31', 200], ['2026-09-29', 350]
+        ], unitByField: { deposit_raw: 'YUAN' }, dataDate: '2026-09-30'
+      };
+      return ({
+        11: { columns: ['deposit_raw'], rows: [[4]], unitByField: { deposit_raw: 'HUNDRED_MILLION' }, dataDate: '2026-09-30' },
+        12: { columns: ['data_date', 'deposit_raw'], rows: [['2026-09-30', 400]], unitByField: { deposit_raw: 'YUAN' }, dataDate: '2026-09-30' },
+        13: { columns: ['corp_raw', 'retail_raw', 'total_raw'], rows: [[4, 6, 10]] },
+        14: { columns: ['org_code_raw', 'org_name_raw', 'value_raw'], rows: [['A', '甲', 4], ['B', '乙', 2]] }
+      }[request?.blockId] || { columns: [], rows: [] });
+    });
+    const state = usePanoramaData(ref(configuredView), ref({ screenCode: 'SCR_CODE' }), { autoLoad: false });
+    await state.refresh();
+    expect(requests.filter(request => request.blockId === 12 && request.period === 'RANGE')).toHaveLength(1);
+    expect(requests.find(request => request.blockId === 12 && request.period === 'RANGE')).toMatchObject({ dateFrom: '2025-12-31', dateTo: '2026-09-30', screenCode: 'SCR_CODE' });
+    expect(state.model.value.comparisonResults['12']).toMatchObject({ rows: expect.any(Array), unitByField: { deposit_raw: 'YUAN' } });
+  });
+
+  it.each(['INVALID_DATE', '0001-01-01'])('数据日非法或无法计算年末时不发比较 RANGE 请求（%s）', async invalidDate => {
+    const configuredView = configuredComparisonView();
+    const requests = [];
+    queryScreenData.mockImplementation(request => {
+      requests.push(request);
+      const response = comparisonMainResponse(request);
+      response.dataDate = invalidDate;
+      return response;
+    });
+    const state = usePanoramaData(ref(configuredView), ref({ screenCode: 'SCR_CODE' }), { autoLoad: false });
+
+    await state.refresh();
+
+    expect(requests.filter(request => request.period === 'RANGE')).toHaveLength(0);
+    expect(state.model.value.comparisonResults).toEqual({});
+  });
+
+  it('比较历史引用必须同时存在可信快照和当前可见 LINE_TREND 区块', async () => {
+    const configuredView = configuredComparisonView({
+      metric: { enabled: true, historyBlockId: 11, valueFields: ['deposit_raw'], dateField: 'data_date', sourceUnit: 'YUAN' }
+    });
+    const requests = [];
+    queryScreenData.mockImplementation(request => {
+      requests.push(request);
+      return comparisonMainResponse(request);
+    });
+    const state = usePanoramaData(ref(configuredView), ref({ screenCode: 'SCR_CODE' }), { autoLoad: false });
+
+    await state.refresh();
+
+    expect(requests.filter(request => request.period === 'RANGE')).toHaveLength(0);
+    expect(state.model.value.comparisonResults).toEqual({});
+    expect(state.model.value.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'comparison', code: 'HISTORY_SOURCE_NOT_TRUSTED' })
+    ]));
+  });
+
+  it.each([401, 403])('比较来源 %s 清空主模型并保留权限错误，不复用上一轮结果', async status => {
+    const configuredView = configuredComparisonView();
+    queryScreenData.mockImplementation(request => {
+      if (request?.period === 'RANGE') return Promise.reject(Object.assign(new Error('比较来源无权访问'), { status }));
+      return comparisonMainResponse(request);
+    });
+    const state = usePanoramaData(ref(configuredView), ref({ screenCode: 'SCR_CODE' }), { autoLoad: false });
+
+    await state.refresh();
+
+    expect(state.model.value.kpis).toEqual([]);
+    expect(state.model.value.blockResults).toEqual({});
+    expect(state.model.value.comparisonResults).toEqual({});
+    expect(state.model.value.permissionStatus).toBe(status);
+    expect(state.error.value).toContain('比较来源无权访问');
+  });
+
+  it('完整批次模式拒绝比较错 batch、缺质量和 partial 响应，主值保留且比较待接入', async () => {
+    const configuredView = configuredComparisonView();
+    queryScreenData.mockImplementation(request => {
+      if (request?.period === 'RANGE') return {
+        ...comparisonMainResponse(request),
+        quality: comparisonBatchQuality({ batchId: 'comparison-batch-wrong' }),
+        unitByField: { deposit_raw: 'YUAN' }
+      };
+      return comparisonMainResponse(request, comparisonBatchQuality());
+    });
+    const state = usePanoramaData(ref(configuredView), ref({ screenCode: 'SCR_CODE' }), {
+      autoLoad: false, batchRequired: true
+    });
+
+    await state.refresh();
+
+    expect(state.model.value.kpis).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'deposit' })]));
+    expect(state.model.value.comparisonResults).toEqual({});
+    expect(state.model.value.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'comparison', code: 'BATCH_MISMATCH' })
+    ]));
+  });
+
+  it.each([
+    ['缺少 quality', { quality: undefined }, 'QUALITY_MISSING'],
+    ['partial quality', { quality: comparisonBatchQuality({ status: 'PARTIAL' }) }, 'QUALITY_NOT_USABLE']
+  ])('完整批次模式比较响应%s时保持主值、比较待接入并记录质量问题', async (_label, rangePayload, issueCode) => {
+    const configuredView = configuredComparisonView();
+    queryScreenData.mockImplementation(request => {
+      if (request?.period === 'RANGE') {
+        const response = { ...comparisonMainResponse(request), unitByField: { deposit_raw: 'YUAN' } };
+        if (rangePayload.quality !== undefined) response.quality = rangePayload.quality;
+        return response;
+      }
+      return comparisonMainResponse(request, comparisonBatchQuality());
+    });
+    const state = usePanoramaData(ref(configuredView), ref({ screenCode: 'SCR_CODE' }), {
+      autoLoad: false, batchRequired: true
+    });
+
+    await state.refresh();
+
+    expect(state.model.value.kpis).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'deposit' })]));
+    expect(state.model.value.comparisonResults).toEqual({});
+    expect(state.model.value.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'comparison', code: issueCode })
+    ]));
+  });
+
+  it('缺失历史绑定快照时不查询 RANGE，并记录不可信来源', async () => {
+    const configuredView = configuredComparisonView();
+    delete configuredView.renderPackage.bindSnapshots['12'];
+    const requests = [];
+    queryScreenData.mockImplementation(request => {
+      requests.push(request);
+      return comparisonMainResponse(request);
+    });
+    const state = usePanoramaData(ref(configuredView), ref({ screenCode: 'SCR_CODE' }), { autoLoad: false });
+
+    await state.refresh();
+
+    expect(requests.filter(request => request.period === 'RANGE')).toHaveLength(0);
+    expect(state.model.value.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'comparison', code: 'HISTORY_SOURCE_NOT_TRUSTED' })
+    ]));
+  });
+
+  it('同一历史 block 的多个比较配置只发一次 RANGE，比较来源变化触发重载而标题变化不触发', async () => {
+    const configuredView = configuredComparisonView({
+      metric: { enabled: true, historyBlockId: 12, valueFields: ['deposit_raw'], dateField: 'data_date', sourceUnit: 'YUAN' },
+      composition: { enabled: true, historyBlockId: 12, valueFields: ['deposit_raw'], dateField: 'data_date', sourceUnit: 'YUAN' }
+    });
+    const requests = [];
+    queryScreenData.mockImplementation(request => {
+      requests.push(request);
+      if (request?.period === 'RANGE') return {
+        ...comparisonMainResponse(request),
+        unitByField: { deposit_raw: 'YUAN' },
+        rows: [['2026-09-30', 400], ['2026-09-29', 350], ['2025-12-31', 200]]
+      };
+      return comparisonMainResponse(request);
+    });
+    const viewRef = ref(configuredView);
+    const contextRef = ref({ screenCode: 'SCR_CODE' });
+    const state = usePanoramaData(viewRef, contextRef, { autoLoad: false });
+    await state.refresh();
+    expect(requests.filter(request => request.period === 'RANGE')).toHaveLength(1);
+
+    const firstCount = requests.length;
+    const titleChanged = structuredClone(configuredView);
+    titleChanged.screenName = '标题变化';
+    viewRef.value = titleChanged;
+    await vi.waitFor(() => expect(requests.length).toBe(firstCount));
+
+    const sourceChanged = structuredClone(titleChanged);
+    sourceChanged.renderPackage.canvasStyle.presentation.display.comparisons.metric.valueFields = ['deposit_v2'];
+    viewRef.value = sourceChanged;
+    await state.refresh();
+    expect(requests.filter(request => request.period === 'RANGE')).toHaveLength(2);
+  });
+
+  it('比较历史旧代迟到响应不得覆盖新 generation 的结果', async () => {
+    const firstView = configuredComparisonView();
+    const requests = [];
+    const rangeResolvers = [];
+    queryScreenData.mockImplementation(request => {
+      requests.push(request);
+      if (request?.period === 'RANGE') return new Promise(resolve => rangeResolvers.push({ request, resolve }));
+      return comparisonMainResponse(request);
+    });
+    const viewRef = ref(firstView);
+    const contextRef = ref({ screenCode: 'SCR_CODE', dateTo: '2026-09-30' });
+    const state = usePanoramaData(viewRef, contextRef, { autoLoad: false });
+    const first = state.refresh();
+    await vi.waitFor(() => expect(rangeResolvers).toHaveLength(1));
+
+    contextRef.value = { ...contextRef.value, dateTo: '2026-10-31' };
+    const second = state.refresh();
+    await vi.waitFor(() => expect(rangeResolvers).toHaveLength(2));
+    rangeResolvers[1].resolve({
+      ...comparisonMainResponse(rangeResolvers[1].request),
+      unitByField: { deposit_raw: 'YUAN' },
+      rows: [['2026-10-31', 400], ['2026-10-30', 390], ['2025-12-31', 222]]
+    });
+    await second;
+    rangeResolvers[0].resolve({
+      ...comparisonMainResponse(rangeResolvers[0].request),
+      unitByField: { deposit_raw: 'YUAN' },
+      rows: [['2026-09-30', 400], ['2026-09-29', 390], ['2025-12-31', 111]]
+    });
+    await first;
+
+    expect(state.model.value.comparisonResults['12'].rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ deposit_raw: 222 })
+    ]));
+    expect(state.model.value.comparisonResults['12'].rows).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ deposit_raw: 111 })
     ]));
   });
 });

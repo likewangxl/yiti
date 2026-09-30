@@ -28,6 +28,7 @@ import {
   mergeBatchQualities,
   readBatchQuality
 } from './batchQuality';
+import { comparisonDates } from '../presentation/model/explicitComparisons';
 
 const MAX_CONCURRENCY = 3;
 
@@ -120,6 +121,7 @@ function emptyModel(retail, view, queriedAt, quality = null, qualityGuard = null
   next.sourceDates = {};
   next.sourceMetadata = {};
   next.blockResults = {};
+  next.comparisonResults = {};
   next.configuredSlots = [];
   next.permissionStatus = null;
   return next;
@@ -230,6 +232,27 @@ function requestKey(body) {
   return stableSerialize(body);
 }
 
+function presentationFromPackage(pkg) {
+  return parseJson(pkg?.canvasStyle?.presentation || pkg?.canvas_style?.presentation
+    || pkg?.renderPackage?.canvasStyle?.presentation, {});
+}
+
+function explicitComparisonConfigs(packageInfo) {
+  const presentation = presentationFromPackage(packageInfo.package);
+  const comparisons = isObject(presentation?.display?.comparisons) ? presentation.display.comparisons : {};
+  return Object.entries(comparisons).filter(([, config]) => config?.enabled === true);
+}
+
+function trustedHistoryTrendBlocks(packageInfo) {
+  const presentation = presentationFromPackage(packageInfo.package);
+  const components = Array.isArray(presentation?.display?.components) ? presentation.display.components : [];
+  return new Set(components
+    .filter(component => component?.visible !== false && component?.componentType === 'TREND')
+    .flatMap(component => Array.isArray(component.dataRefs) ? component.dataRefs : [])
+    .map(ref => ref?.blockId)
+    .filter(blockId => Number.isSafeInteger(blockId) && blockId > 0));
+}
+
 /**
  * 查询身份只包含会改变服务端请求或绑定解释的字段。
  * 标题、metricLabels、展示单位和 display 子协议属于纯展示配置，不能因为
@@ -267,6 +290,7 @@ function queryIdentity(view, context, options = {}) {
     orgScopeMode: String(view?.orgScopeMode || view?.org_scope_mode || '').trim().toUpperCase(),
     orgGroupCode: String(view?.orgGroupCode || view?.org_group_code || '').trim(),
     template: packageInfo.template,
+    comparisons: presentationFromPackage(packageInfo.package)?.display?.comparisons || {},
     singleOrg: Boolean(options.singleOrg),
     bindings
   });
@@ -367,11 +391,14 @@ function normalizeBlockResult(blockId, binding, response) {
   });
   const columnsMeta = Object.freeze(Array.isArray(table.columnsMeta)
     ? table.columnsMeta.map(meta => isObject(meta) ? Object.freeze(cloneRawValue(meta)) : meta) : []);
-  const unitByField = Object.fromEntries(columnsMeta.flatMap(meta => {
+  const unitByField = {
+    ...(isObject(table.unitByField) ? cloneRawValue(table.unitByField) : {}),
+    ...Object.fromEntries(columnsMeta.flatMap(meta => {
     const column = String(meta?.col ?? meta?.name ?? '').trim();
     const unit = meta?.unit ?? meta?.amountScale;
     return column && unit ? [[column, cloneRawValue(unit)]] : [];
-  }));
+    }))
+  };
   const quality = readBatchQuality(table);
   const firstRow = Object.fromEntries(Object.entries(rows[0] || {})
     .filter(([key]) => !reservedKeys.has(key)));
@@ -528,6 +555,70 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
   async function runQueue(requests, kind, token) {
     const settled = await Promise.all(requests.map(item => enqueueRequest(item, kind, token)));
     return settled.map((result, index) => ({ ...requests[index], ...result }));
+  }
+
+  async function loadExplicitComparisons(packageInfo, view, context, modelValue, generationToken, batchState) {
+    const configs = explicitComparisonConfigs(packageInfo);
+    const empty = (issues = []) => ({ results: {}, issues });
+    if (!configs.length) return empty();
+    const dates = comparisonDates(modelValue?.dataDate);
+    const issues = [];
+    if (!modelValue?.dataDate || !dates.year) {
+      configs.forEach(([key]) => addIssue(issues, 'comparison', 'INVALID_DATA_DATE', '主数据日无效，无法计算比较年末', key));
+      return empty(issues);
+    }
+    const historyByBlock = new Map([...packageInfo.slots.values()].map(entry => [Number(entry.blockId), entry]));
+    const trendBlockIds = trustedHistoryTrendBlocks(packageInfo);
+    const requestsByKey = new Map();
+    for (const [configKey, config] of configs) {
+      const blockId = config?.historyBlockId;
+      const entry = Number.isSafeInteger(blockId) ? historyByBlock.get(blockId) : null;
+      if (!entry || !trendBlockIds.has(blockId) || !isObject(entry.snapshot?.bind)) {
+        addIssue(issues, 'comparison', 'HISTORY_SOURCE_NOT_TRUSTED', '比较历史区块必须来自当前可见 LINE_TREND 且具备可信绑定快照', configKey);
+        continue;
+      }
+      const { body, schema } = makeRequest(entry, view, context, '', batchState?.quality?.batchId || '');
+      const rangeBody = {
+        ...body, period: 'RANGE', dateFrom: dates.year, dateTo: modelValue.dataDate,
+        batchId: batchState?.quality?.batchId || undefined
+      };
+      const dateKey = requestKey(rangeBody);
+      if (requestsByKey.has(dateKey)) continue;
+      requestsByKey.set(dateKey, { blockId, entry, body: rangeBody, schema });
+    }
+    const requests = [...requestsByKey.values()];
+    if (!requests.length) return empty(issues);
+    const settled = await runQueue(requests, 'comparison', generationToken);
+    if (!alive.value || disposed.value || screenGeneration.value !== generationToken) return empty(issues);
+    const results = {};
+    for (const item of settled) {
+      if (item.cancelled) {
+        addIssue(issues, 'comparison', 'STALE_RESPONSE', '比较历史响应已被新一轮刷新接管', String(item.blockId));
+        continue;
+      }
+      const permission = permissionStatus(item.error);
+      if (permission) return { results: {}, issues, permissionError: item.error };
+      if (item.error) {
+        addIssue(issues, 'comparison', 'REQUEST_FAILED', errorMessage(item.error), String(item.blockId));
+        continue;
+      }
+      if (!item.response) {
+        addIssue(issues, 'comparison', 'QUALITY_MISSING', '比较历史响应为空', String(item.blockId));
+        continue;
+      }
+      if (batchState?.required) {
+        const quality = readBatchQuality(item.response);
+        const comparison = compareBatchQuality(batchState.quality, quality);
+        if (!comparison.ok) {
+          addIssue(issues, 'comparison', comparison.code, comparison.message, String(item.blockId));
+          continue;
+        }
+      }
+      const normalized = normalizeBlockResult(item.blockId, item.entry.binding, item.response);
+      if (normalized) results[String(item.blockId)] = normalized;
+      else addIssue(issues, 'comparison', 'INVALID_RESPONSE', '比较历史响应不是有效二维数据', String(item.blockId));
+    }
+    return { results, issues };
   }
 
   async function prefetchBranchTrends(modelValue, packageInfo, view, context, generationToken, allIssues, branchesResponse, branchesEntry, batchState = null) {
@@ -861,6 +952,17 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         nextModel.sourceDates = collectSourceDates(resultMap);
         nextModel.sourceMetadata = collectSourceMetadata(resultMap);
         nextModel.blockResults = collectBlockResults(resultMap);
+        const comparisonLoad = await loadExplicitComparisons(packageInfo, view, context, nextModel, currentGeneration, batchState);
+        if (!alive.value || disposed.value || screenGeneration.value !== currentGeneration) return model.value;
+        if (comparisonLoad?.permissionError) {
+          model.value = emptyModel(retail, view, queriedAt);
+          model.value.configuredSlots = [...slots.keys()];
+          model.value.permissionStatus = permissionStatus(comparisonLoad.permissionError);
+          error.value = errorMessage(comparisonLoad.permissionError, `没有权限（${permissionStatus(comparisonLoad.permissionError)}）`);
+          return model.value;
+        }
+        nextModel.comparisonResults = comparisonLoad?.results || {};
+        nextModel.issues = [...(nextModel.issues || []), ...(comparisonLoad?.issues || [])];
         nextModel.configuredSlots = [...slots.keys()];
         nextModel.permissionStatus = null;
         if (requiresBatch) {

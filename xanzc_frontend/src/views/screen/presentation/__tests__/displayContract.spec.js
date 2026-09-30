@@ -212,4 +212,98 @@ describe('经营大屏展示子协议', () => {
       expect.stringContaining('负数样式')
     ]));
   });
+
+  it('比较配置放在display.comparisons并严格引用当前LINE_TREND，根comparisons拒绝', () => {
+    const source = structuredClone(validDisplayConfig.presentation);
+    const trend = source.display.components.find(item => item.componentType === 'TREND');
+    trend.dataRefs[0].blockId = 57;
+    const card = source.display.components.find(item => item.componentType === 'METRIC_CARD');
+    source.display.comparisons = {
+      [card.componentId]: { enabled: true, historyBlockId: 57, valueFields: ['value'], dateField: 'data_date', sourceUnit: 'YUAN' }
+    };
+    expect(validateDisplayConfig(source)).toEqual([]);
+    const root = structuredClone(source);
+    root.comparisons = root.display.comparisons;
+    delete root.display.comparisons;
+    expect(validateDisplayConfig(root)).toEqual(expect.arrayContaining([expect.stringContaining('未知字段')])) ;
+    const wrongType = structuredClone(source);
+    wrongType.display.comparisons[card.componentId].historyBlockId = 999;
+    expect(validateDisplayConfig(wrongType)).toEqual(expect.arrayContaining([expect.stringContaining('LINE_TREND')])) ;
+  });
+
+  it('比较字段严格限制长度、首尾空格和trim后重复', () => {
+    const baseComparison = {
+      enabled: true, historyBlockId: 57, valueFields: ['value'], dateField: 'data_date', sourceUnit: 'YUAN'
+    };
+    const makeSource = patch => {
+      const source = structuredClone(validDisplayConfig.presentation);
+      source.display.components.find(item => item.componentType === 'TREND').dataRefs[0].blockId = 57;
+      source.display.comparisons = { 'deposit-card': { ...baseComparison, ...patch } };
+      return source;
+    };
+
+    expect(validateDisplayConfig(makeSource({ valueFields: [' value'] }))).toEqual(expect.arrayContaining([
+      expect.stringContaining('valueFields')
+    ]));
+    expect(validateDisplayConfig(makeSource({ valueFields: ['value', ' value'] }))).toEqual(expect.arrayContaining([
+      expect.stringContaining('valueFields')
+    ]));
+    expect(validateDisplayConfig(makeSource({ valueFields: ['a'.repeat(101)] }))).toEqual(expect.arrayContaining([
+      expect.stringContaining('valueFields')
+    ]));
+    expect(validateDisplayConfig(makeSource({ dateField: ' data_date' }))).toEqual(expect.arrayContaining([
+      expect.stringContaining('dateField')
+    ]));
+    expect(validateDisplayConfig(makeSource({ dateField: 'd'.repeat(101) }))).toEqual(expect.arrayContaining([
+      expect.stringContaining('dateField')
+    ]));
+  });
+
+  it('比较多字段只允许金额总览，普通卡和非金额总览即时拒绝', () => {
+    const makeSource = (key, sourceUnit) => {
+      const source = structuredClone(validDisplayConfig.presentation);
+      source.display.components.find(item => item.componentType === 'TREND').dataRefs[0].blockId = 57;
+      source.display.comparisons = {
+        [key]: { enabled: true, historyBlockId: 57, valueFields: ['value', 'value2'], dateField: 'data_date', sourceUnit }
+      };
+      return source;
+    };
+
+    expect(validateDisplayConfig(makeSource('deposit-card', 'YUAN'))).toEqual(expect.arrayContaining([
+      expect.stringContaining('多个valueFields')
+    ]));
+    expect(validateDisplayConfig(makeSource('overview-deposit', 'PERCENT'))).toEqual(expect.arrayContaining([
+      expect.stringContaining('多个valueFields')
+    ]));
+    expect(validateDisplayConfig(makeSource('overview-deposit', 'HUNDRED_MILLION'))).not.toEqual(expect.arrayContaining([
+      expect.stringContaining('多个valueFields')
+    ]));
+  });
+
+  it('比较源单位必须匹配主 dataRef 类型，完成率只能使用 ratio', () => {
+    const makeSource = (key, sourceUnit) => {
+      const source = structuredClone(validDisplayConfig.presentation);
+      source.display.components.find(item => item.componentType === 'TREND').dataRefs[0].blockId = 57;
+      source.display.comparisons = {
+        [key]: { enabled: true, historyBlockId: 57, valueFields: ['value'], dateField: 'data_date', sourceUnit }
+      };
+      return source;
+    };
+
+    expect(validateDisplayConfig(makeSource('deposit-card', 'COUNT'))).toEqual(expect.arrayContaining([
+      expect.stringContaining('来源单位类型冲突')
+    ]));
+    const countCard = makeSource('deposit-card', 'RATIO');
+    countCard.display.components.find(item => item.componentId === 'deposit-card').dataRefs[0].unit = 'COUNT';
+    expect(validateDisplayConfig(countCard)).toEqual(expect.arrayContaining([
+      expect.stringContaining('来源单位类型冲突')
+    ]));
+    expect(validateDisplayConfig(makeSource('completion-card', 'YUAN'))).toEqual(expect.arrayContaining([
+      expect.stringContaining('完成率比较源单位必须是百分数或比例')
+    ]));
+    expect(validateDisplayConfig(makeSource('completion-card', 'COUNT'))).toEqual(expect.arrayContaining([
+      expect.stringContaining('来源单位类型冲突'),
+      expect.stringContaining('完成率比较源单位必须是百分数或比例')
+    ]));
+  });
 });

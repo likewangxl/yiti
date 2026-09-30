@@ -110,6 +110,16 @@ function pendingBar(definition, referenceDate = '') {
 export function buildOverviewBalanceChartModel(metric, displayUnit = '') {
   const unit = normalizedUnit(displayUnit, metric);
   const currentDate = text(metric?.date);
+  if (metric?.comparisonConfigured === true && metric?.comparisons === null) {
+    return {
+      state: 'DISABLED',
+      unit,
+      currentDate: isValidOverviewDate(currentDate) ? currentDate : '',
+      maxValue: null,
+      bars: [],
+      comparisonConfigured: true
+    };
+  }
   const current = finite(metric?.baseValue);
   const currentReady = isValidOverviewDate(currentDate)
     && metric?.dateValid !== false
@@ -153,6 +163,7 @@ export function buildOverviewBalanceChartModel(metric, displayUnit = '') {
     unit,
     currentDate: isValidOverviewDate(currentDate) ? currentDate : '',
     maxValue,
-    bars: normalizedBars
+    bars: normalizedBars,
+    comparisonConfigured: metric?.comparisonConfigured === true
   };
 }

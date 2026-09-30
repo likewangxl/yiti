@@ -469,4 +469,24 @@ describe('displayMetricsModel', () => {
         .toMatchObject({ state: 'NO_VALUE', value: null });
     }
   });
+
+  it('显式 comparisons 优先受控历史结果，关闭时不回退 monthDelta', () => {
+    const card = component('business-corp-deposit-balance', 'METRIC_CARD', {
+      layoutRegion: 'HEADER', dataRefs: [ref(31, 'deposit', '存款余额', 'YUAN')],
+      content: { mainField: 'deposit', subFields: [] }, format: { displayUnit: 'TEN_THOUSAND', decimals: 2 }
+    });
+    const presentation = { template: 'branch-overview-v1', displaySchemaVersion: 1,
+      display: { components: [card], comparisons: { 'business-corp-deposit-balance': { enabled: true, historyBlockId: 57, valueFields: ['deposit'], dateField: 'data_date', sourceUnit: 'YUAN' } } } };
+    const model = { dataDate: '2028-03-02', blockResults: { 31: { deposit: 1200000000, unitByField: { deposit: 'YUAN' } } },
+      comparisonResults: { 57: { rows: [
+        { data_date: '2028-03-02', deposit: 1200000000 }, { data_date: '2028-02-29', deposit: 1000000000 }, { data_date: '2027-12-31', deposit: 900000000 }, { data_date: '2028-03-01', deposit: 1100000000 }
+      ], unitByField: { deposit: 'YUAN' } } } };
+    const result = buildDisplayMetricsModel(presentation, model, { amountUnit: 'TEN_THOUSAND' }).components[0];
+    expect(result.comparisonConfigured).toBe(true);
+    expect(result.comparisons.month).toMatchObject({ state: 'READY', value: 20000 });
+    const disabled = buildDisplayMetricsModel({ ...presentation, display: { ...presentation.display, comparisons: { 'business-corp-deposit-balance': { enabled: false } } } }, model, { amountUnit: 'TEN_THOUSAND' }).components[0];
+    expect(disabled.comparisonConfigured).toBe(true);
+    expect(disabled.comparisons).toBeNull();
+    expect(disabled.monthDelta).toBeNull();
+  });
 });

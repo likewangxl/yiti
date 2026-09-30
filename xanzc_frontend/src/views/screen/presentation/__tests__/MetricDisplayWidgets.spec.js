@@ -381,6 +381,17 @@ describe('MetricDisplayWidgets', () => {
     expect(published.get('[data-testid="presentation-metric-comparisons"]').text()).toContain('较上月 +2.40个百分点');
   });
 
+  it('显式完成率比较在 draft 紧凑圆环中保留百分点口径', () => {
+    const component = {
+      componentId: 'business-corp-deposit-rate', componentType: 'METRIC_CARD', layoutRegion: 'HEADER',
+      title: '对公存款完成率', text: '86.40%', value: 86.4, state: 'READY', comparisonConfigured: true,
+      comparisons: { month: { state: 'READY', text: '较上月 +2.40个百分点' } }, subFields: []
+    };
+    const draft = mount(MetricDisplayWidgets, { props: { grouped: true, draftOverview: true, components: [component] } });
+    expect(draft.get('[data-testid="presentation-metric-comparisons"]').text()).toContain('较上月 +2.40个百分点');
+    expect(draft.get('[data-testid="presentation-metric-comparisons"]').text()).not.toContain('+2.40%');
+  });
+
   it('draft 六张金额卡的主值都属于标题行，并保留标题左/金额右的对齐 class', () => {
     const amountIds = [
       'business-retail-deposit-balance', 'business-corp-deposit-balance',

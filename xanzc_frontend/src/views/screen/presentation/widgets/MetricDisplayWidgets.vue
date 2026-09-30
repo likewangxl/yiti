@@ -68,7 +68,7 @@
             >{{ comparison.text }}</span>
           </span>
           <span
-            v-else-if="grouped"
+            v-else-if="grouped && !item.comparisonConfigured"
             class="presentation-metric-widget__month-delta"
             data-testid="presentation-metric-month-delta"
           >{{ item.monthDelta?.text || '较上月 暂无数据' }}</span>
@@ -205,7 +205,7 @@ function comparisonRows(item) {
     return {
       key,
       referenceDate: comparisons[key]?.referenceDate || '',
-      text: props.draftOverview && props.grouped && shouldUseCompletionRing(item)
+      text: props.draftOverview && props.grouped && shouldUseCompletionRing(item) && item?.comparisonConfigured !== true
         ? text.replace(/个百分点|百分点/g, '%')
         : text
     };

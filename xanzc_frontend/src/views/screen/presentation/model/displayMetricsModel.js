@@ -1,4 +1,5 @@
 import { resolveComponentTitle } from '../contract/displayContract';
+import { computeExplicitComparison } from './explicitComparisons';
 
 const DISPLAY_COMPONENT_TYPES = new Set(['METRIC_CARD', 'COMPLETION']);
 const REGION_ORDER = Object.freeze({ HEADER: 0, LEFT: 1, CENTER: 2, RIGHT: 3, BOTTOM: 4, OVERLAY: 5 });
@@ -358,6 +359,49 @@ function buildMonthDelta(model, component, ref, field, main, format) {
   return buildHistoricalDelta(model, component, ref, field, main, format, 'month');
 }
 
+function comparisonRowsFromSource(source) {
+  if (!isObject(source)) return [];
+  if (Array.isArray(source.rows) && source.rows.every(row => isObject(row))) {
+    return source.rows.map(row => ({ ...row, unitByField: row.unitByField || source.unitByField, units: row.units || source.units }));
+  }
+  if (Array.isArray(source.columns) && Array.isArray(source.rows)) {
+    return source.rows.map(row => ({ ...Object.fromEntries(source.columns.map((column, index) => [column?.col || column?.name || column?.key, row?.[index]])), unitByField: source.unitByField, units: source.units }));
+  }
+  return [];
+}
+
+function formatExplicitComparison(result, format, mainUnit, label) {
+  if (result?.state !== 'READY') return unavailableComparison(label);
+  const canonical = canonicalUnit(mainUnit);
+  const ratio = ['RATIO', 'PERCENT'].includes(canonical);
+  if (ratio) {
+    const number = Number(result.value.toFixed(12));
+    const decimals = Number.isInteger(format?.decimals) ? format.decimals : 2;
+    return { state: 'READY', value: number, rawValue: number, unit: '个百分点', referenceDate: result.referenceDate, text: `${label} ${number > 0 ? '+' : ''}${number.toFixed(decimals)}个百分点` };
+  }
+  const formatted = formatDisplayMetric(result.value, { ...format, negativeStyle: 'SIGNED' }, mainUnit);
+  return { state: 'READY', value: formatted.value, rawValue: result.value, unit: formatted.unit, referenceDate: result.referenceDate, text: `${label} ${formatted.value > 0 ? '+' : ''}${formatted.text}` };
+}
+
+function buildExplicitComparisons(model, config, main, ref, format) {
+  const unavailable = comparison => unavailableComparison(comparisonLabel(comparison));
+  if (!config || config.enabled === false) return { comparisonConfigured: true, comparisons: null, monthDelta: null };
+  const source = model?.comparisonResults?.[String(config.historyBlockId)] || model?.comparisonResults?.[config.historyBlockId];
+  const rows = comparisonRowsFromSource(source);
+  const common = { currentDate: text(model?.dataDate), mainValue: main?.rawValue ?? main?.value, mainUnit: ref?.unit || main?.unit, rows,
+    unitByField: source?.unitByField,
+    valueFields: config.valueFields, dateField: config.dateField, sourceUnit: config.sourceUnit };
+  return {
+    comparisonConfigured: true,
+    comparisons: {
+      year: formatExplicitComparison(computeExplicitComparison({ ...common, period: 'year' }), format, common.mainUnit, '较上年'),
+      month: formatExplicitComparison(computeExplicitComparison({ ...common, period: 'month' }), format, common.mainUnit, '较上月'),
+      day: formatExplicitComparison(computeExplicitComparison({ ...common, period: 'day' }), format, common.mainUnit, '较上日')
+    },
+    monthDelta: formatExplicitComparison(computeExplicitComparison({ ...common, period: 'month' }), format, common.mainUnit, '较上月')
+  };
+}
+
 function componentTitle(component, ref, source, templateTitle) {
   return resolveComponentTitle(component, {
     metricName: ref?.metricName || source?.label || source?.name,
@@ -365,7 +409,7 @@ function componentTitle(component, ref, source, templateTitle) {
   });
 }
 
-function buildComponent(component, model, index, options) {
+function buildComponent(component, model, index, options, presentation) {
   const ref = Array.isArray(component?.dataRefs) ? component.dataRefs[0] || {} : {};
   const content = isObject(component?.content) ? component.content : {};
   const field = text(content.mainField) || 'value';
@@ -409,9 +453,11 @@ function buildComponent(component, model, index, options) {
     subFields
   };
   if (isBusinessHeaderComponent(component)) {
-    result.monthDelta = buildMonthDelta(model, component, ref, main.key || field, main, displayFormat);
+    const explicit = presentation?.display?.comparisons?.[component.componentId];
+    if (explicit) Object.assign(result, buildExplicitComparisons(model, explicit, main, ref, displayFormat));
+    else result.monthDelta = buildMonthDelta(model, component, ref, main.key || field, main, displayFormat);
     if (options?.draftOverview === true) {
-      result.comparisons = {
+      if (!explicit) result.comparisons = {
         year: buildHistoricalDelta(model, component, ref, main.key || field, main, displayFormat, 'year', true),
         month: buildHistoricalDelta(model, component, ref, main.key || field, main, displayFormat, 'month', true),
         day: buildHistoricalDelta(model, component, ref, main.key || field, main, displayFormat, 'day', true)
@@ -440,7 +486,7 @@ export function buildDisplayMetricsModel(sourcePresentation, model = {}, options
       || ((Number.isInteger(left.component?.order) ? left.component.order : left.index)
         - (Number.isInteger(right.component?.order) ? right.component.order : right.index))
       || left.index - right.index)
-    .map(({ component, index }) => buildComponent(component, isObject(model) ? model : {}, index, options));
+    .map(({ component, index }) => buildComponent(component, isObject(model) ? model : {}, index, options, presentation));
   return {
     enabled: true,
     components,

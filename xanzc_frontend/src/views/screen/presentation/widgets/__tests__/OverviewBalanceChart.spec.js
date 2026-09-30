@@ -119,4 +119,15 @@ describe('OverviewBalanceChart', () => {
     expect(wrapper.get('[data-testid="overview-balance-bars"]').text()).not.toContain('2028-03');
     expect(wrapper.get('[data-testid="overview-balance-bars"]').attributes('aria-label')).not.toContain('2028-03');
   });
+
+  it('显式关闭比较时不显示旧的自动基期条', () => {
+    const model = buildOverviewBalanceChartModel({
+      ...metric,
+      comparisonConfigured: true,
+      comparisons: null
+    }, 'HUNDRED_MILLION');
+
+    expect(model.comparisonConfigured).toBe(true);
+    expect(model.bars).toEqual([]);
+  });
 });

@@ -35,7 +35,7 @@ const DISPLAY_ORG_CODE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 const ALLOWED_KEYS = Object.freeze({
   presentation: new Set(['type', 'template', 'displaySchemaVersion', 'institutionRules', 'display']),
-  display: new Set(['components']),
+  display: new Set(['components', 'comparisons']),
   component: new Set(['componentId', 'componentType', 'layoutRegion', 'order', 'visible', 'text', 'format', 'content', 'interaction', 'dataRefs']),
   text: new Set(['titleMode', 'title', 'subtitle', 'description']),
   format: new Set(['displayUnit', 'decimals', 'thousandsSeparator', 'negativeStyle', 'emptyText']),
@@ -352,6 +352,86 @@ function validateInstitutionRules(rules, issues) {
   }
 }
 
+function validateComparisons(presentation, issues) {
+  const comparisons = presentation.display?.comparisons;
+  if (!Object.prototype.hasOwnProperty.call(presentation.display || {}, 'comparisons')) return;
+  if (!object(comparisons)) {
+    issues.push('comparisons必须是对象');
+    return;
+  }
+  const components = Array.isArray(presentation.display?.components) ? presentation.display.components : [];
+  const allowedComponents = new Map(components.map(component => [component.componentId, component]));
+  const allowedKeys = new Set([...allowedComponents.entries()]
+    .filter(([, component]) => ['METRIC_CARD', 'COMPLETION'].includes(component?.componentType))
+    .map(([key]) => key));
+  if (presentation.template === 'branch-overview-v1') {
+    ['overview-deposit', 'overview-loan', 'overview-settlementDeposit'].forEach(key => allowedKeys.add(key));
+  }
+  const trendBlockIds = new Set(components.filter(component => component.componentType === 'TREND')
+    .flatMap(component => Array.isArray(component.dataRefs) ? component.dataRefs.map(ref => ref.blockId) : [])
+    .filter(value => Number.isSafeInteger(value) && value > 0));
+  const allowedConfigKeys = new Set(['enabled', 'historyBlockId', 'valueFields', 'dateField', 'sourceUnit']);
+  const allowedUnits = new Set(['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION', 'COUNT', 'TEN_THOUSAND_COUNT', 'PERCENT', 'RATIO']);
+  for (const [key, config] of Object.entries(comparisons)) {
+    if (!allowedKeys.has(key)) {
+      issues.push(`comparisons包含未知配置键: ${key}`);
+      continue;
+    }
+    if (!object(config)) {
+      issues.push(`comparisons.${key}必须是对象`);
+      continue;
+    }
+    Object.keys(config).forEach(property => {
+      if (!allowedConfigKeys.has(property)) issues.push(`comparisons.${key}包含未知字段: ${property}`);
+    });
+    if (typeof config.enabled !== 'boolean') {
+      issues.push(`comparisons.${key}.enabled必须是布尔值`);
+      continue;
+    }
+    if (!config.enabled) {
+      if (Object.keys(config).some(property => property !== 'enabled')) issues.push(`comparisons.${key}关闭时只允许enabled`);
+      continue;
+    }
+    if (!Number.isSafeInteger(config.historyBlockId) || !trendBlockIds.has(config.historyBlockId)) {
+      issues.push(`comparisons.${key}.historyBlockId必须引用当前屏LINE_TREND区块`);
+    }
+    const isOverviewKey = key.startsWith('overview-');
+    if (!Array.isArray(config.valueFields) || config.valueFields.length < 1 || config.valueFields.length > 8) {
+      issues.push(`comparisons.${key}.valueFields数量不合法`);
+    } else {
+      const seen = new Set();
+      config.valueFields.forEach((field, index) => {
+        const normalized = typeof field === 'string' ? field.trim() : '';
+        if (typeof field !== 'string' || !normalized || normalized.length > 100 || normalized !== field) {
+          issues.push(`comparisons.${key}.valueFields[${index}]必须是1到100个字符且不能含首尾空格`);
+        }
+        if (seen.has(normalized)) issues.push(`comparisons.${key}.valueFields不能重复`);
+        seen.add(normalized);
+      });
+    }
+    if (config.valueFields?.length > 1
+      && (!isOverviewKey || !allowedUnits.has(config.sourceUnit) || unitKind(config.sourceUnit) !== 'amount')) {
+      issues.push(`comparisons.${key}普通卡或非金额比较不能配置多个valueFields`);
+    }
+    if (typeof config.dateField !== 'string' || !config.dateField.trim()
+      || config.dateField.trim().length > 100 || config.dateField.trim() !== config.dateField) {
+      issues.push(`comparisons.${key}.dateField必须是1到100个字符且不能含首尾空格`);
+    }
+    if (typeof config.sourceUnit !== 'string' || !allowedUnits.has(config.sourceUnit)) issues.push(`comparisons.${key}.sourceUnit不合法`);
+    const sourceKind = typeof config.sourceUnit === 'string' && allowedUnits.has(config.sourceUnit)
+      ? unitKind(config.sourceUnit) : null;
+    const sourceComponent = allowedComponents.get(key);
+    const refKinds = new Set((Array.isArray(sourceComponent?.dataRefs) ? sourceComponent.dataRefs : [])
+      .map(ref => unitKind(ref?.unit)).filter(Boolean));
+    if (sourceComponent && sourceKind && refKinds.size === 1 && !refKinds.has(sourceKind)) {
+      issues.push(`comparisons.${key}来源单位类型冲突`);
+    }
+    if (sourceComponent?.componentType === 'COMPLETION' && sourceKind && sourceKind !== 'ratio') {
+      issues.push(`comparisons.${key}完成率比较源单位必须是百分数或比例`);
+    }
+  }
+}
+
 export function validateDisplayConfig(presentation) {
   if (!object(presentation)) return [];
   if (presentation.displaySchemaVersion === undefined) {
@@ -372,6 +452,7 @@ export function validateDisplayConfig(presentation) {
     issues.push('display.components必须为数组');
     return issues;
   }
+  validateComparisons(presentation, issues);
   const ids = new Set();
   for (const [index, raw] of presentation.display.components.entries()) {
     const component = normalizeComponent(raw);
