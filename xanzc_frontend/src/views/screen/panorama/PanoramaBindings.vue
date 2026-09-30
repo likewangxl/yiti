@@ -52,11 +52,12 @@
         <nav class="panorama-bindings__slots" aria-label="经营指标区域">
           <h3>{{ hasNewDisplayPresentation ? '可见组件' : '展示内容' }}</h3>
           <template v-if="hasNewDisplayPresentation">
-            <button v-for="entry in displayComponents" :key="entry.component.componentId" type="button"
-                    :class="{ 'is-active': selectedComponentId === entry.component.componentId }"
-                    :data-component-id="entry.component.componentId" @click="selectDisplayComponent(entry.component.componentId)">
-              <span>{{ displayComponentLabel(entry) }}</span>
-              <small>{{ displayComponentTypeLabel(entry.component) }}</small>
+            <button v-for="entry in catalogEntries" :key="entry.key" type="button"
+                    :class="{ 'is-active': selectedCatalogKey === entry.key }"
+                    :data-config-key="entry.key"
+                    :data-component-id="entry.sourceComponentId || undefined" @click="selectCatalogEntry(entry)">
+              <span>{{ catalogDisplayLabel(entry) }}</span>
+              <small>{{ catalogKindLabel(entry) }}</small>
             </button>
           </template>
           <template v-else>
@@ -79,16 +80,18 @@
           <template v-if="selectedSpec">
             <header class="panorama-bindings__editor-head">
               <div>
-                <h2>{{ hasNewDisplayPresentation ? displayComponentLabel(selectedDisplayComponentEntry) : selectedSpec.label }}</h2>
-                <p data-testid="binding-guidance">{{ selectedGuidance }}</p>
+                <h2>{{ hasNewDisplayPresentation ? (catalogDisplayLabel(selectedCatalogEntry) || displayComponentLabel(selectedDisplayComponentEntry)) : selectedSpec.label }}</h2>
+                <p data-testid="binding-guidance">{{ selectedCatalogReadonly ? '系统生成指标，只读展示。' : selectedGuidance }}</p>
               </div>
-              <span v-if="selectedBinding?.dsId" class="panorama-bindings__bound">已选择数据来源<span v-if="autoReviewSlots.has(selectedSlot)">·待核验</span></span>
+              <span v-if="selectedBinding?.dsId && !selectedCatalogReadonly" class="panorama-bindings__bound">已选择数据来源<span v-if="autoReviewSlots.has(selectedSlot)">·待核验</span></span>
             </header>
 
             <label class="panorama-bindings__field-label" for="panorama-component-title">标题</label>
             <input id="panorama-component-title" data-testid="component-title" :value="componentTitle"
-                   placeholder="留空恢复默认标题" :disabled="writing || loading" @input="updateComponentTitle($event.target.value)" />
+                   placeholder="留空恢复默认标题" :disabled="writing || loading || selectedCatalogEntry?.kind === 'SYSTEM_METRIC'" @input="updateComponentTitle($event.target.value)" />
             <p class="panorama-bindings__hint">{{ componentDefaultTitle }}；清空后恢复默认标题。</p>
+            <p v-if="selectedCatalogEntry?.kind === 'INSTITUTION_MAP'" class="panorama-bindings__hint">数据来自当前授权机构目录/经营画像，仅区域标题可改。</p>
+            <p v-else-if="selectedCatalogEntry?.kind === 'SYSTEM_METRIC'" class="panorama-bindings__hint">该指标由运行态系统生成，没有独立数据来源、字段或周期配置。</p>
 
             <template v-if="hasNewDisplayPresentation && selectedDisplayFieldMappings.length">
               <div v-for="mapping in selectedDisplayFieldMappings" :key="mapping.key" class="panorama-bindings__component-field">
@@ -101,12 +104,56 @@
                     {{ option.label }}（{{ option.col }}）
                   </option>
                 </select>
+                <select v-if="mapping.kind === 'growthSeries'"
+                        :data-testid="`component-series-unit-${mapping.seriesKey}`"
+                        :disabled="writing || loading"
+                        :value="mapping.unit || ''"
+                        @change="setComponentSeriesUnit(mapping, $event.target.value)">
+                  <option value="">请选择源单位</option>
+                  <option value="YUAN">元</option>
+                  <option value="TEN_THOUSAND">万元</option>
+                  <option value="HUNDRED_MILLION">亿元</option>
+                </select>
               </div>
               <p v-if="selectedDisplayFieldMissing" class="panorama-bindings__hint">当前展示字段未出现在数据来源已声明的指标候选中，保存时保留原配置。</p>
+              <p v-if="growthSeriesMissingUnit" class="panorama-bindings__hint">已编辑的增长字段缺少明确源单位，请选择元/万元/亿元后再保存。</p>
               <p v-if="isSchemaMetricCard" data-testid="component-display-unit" class="panorama-bindings__hint">展示单位：{{ displayUnitLabel(selectedDisplayUnit) }}（沿用当前组件格式）</p>
             </template>
 
-            <div v-if="selectedSlot === 'composition'" class="panorama-bindings__composition-mode">
+            <details v-if="comparisonConfigurable" class="panorama-bindings__comparison" data-testid="comparison-panel">
+              <summary>比较数据（昨日/上月末/上年末）</summary>
+              <p class="panorama-bindings__hint">基期按数据日期固定为昨日、上月末、上年末；金额按差额计算，完成率按百分点计算。</p>
+              <label class="panorama-bindings__field-label" for="comparison-mode">比较配置</label>
+              <select id="comparison-mode" class="panorama-bindings__comparison-select" data-testid="comparison-mode" :value="comparisonMode" :disabled="writing || loading" @change="setComparisonMode($event.target.value)">
+                <option value="inherit">沿用原配置</option>
+                <option value="custom">自定义比较来源</option>
+                <option value="disabled">关闭比较</option>
+              </select>
+              <template v-if="comparisonMode === 'custom'">
+                <label class="panorama-bindings__field-label" for="comparison-history-block">历史区块</label>
+                <select id="comparison-history-block" class="panorama-bindings__comparison-select" data-testid="comparison-history-block" :value="comparisonConfig?.historyBlockId || ''" :disabled="writing || loading" @change="setComparisonField('historyBlockId', Number($event.target.value) || null)">
+                  <option value="">请选择当前屏趋势区块</option>
+                  <option v-for="option in historyBlockOptions" :key="option.blockId" :value="option.blockId">{{ option.label }}</option>
+                </select>
+                <label class="panorama-bindings__field-label" for="comparison-value-fields">指标字段</label>
+                <select id="comparison-value-fields" class="panorama-bindings__comparison-select" :class="{ 'panorama-bindings__comparison-select--multiple': comparisonAllowsMultiple }" data-testid="comparison-value-fields" :multiple="comparisonAllowsMultiple" :value="comparisonAllowsMultiple ? (comparisonConfig?.valueFields || []) : (comparisonConfig?.valueFields?.[0] || '')" :disabled="writing || loading || !comparisonHistoryOption" @change="setComparisonField('valueFields', comparisonAllowsMultiple ? [...$event.target.selectedOptions].map(option => option.value) : ($event.target.value ? [$event.target.value] : []))">
+                  <option v-for="option in comparisonValueFieldOptions" :key="option.col" :value="option.col">{{ option.label }}（{{ option.col }}）</option>
+                </select>
+                <label class="panorama-bindings__field-label" for="comparison-date-field">日期字段</label>
+                <select id="comparison-date-field" class="panorama-bindings__comparison-select" data-testid="comparison-date-field" :value="comparisonConfig?.dateField || ''" :disabled="writing || loading || !comparisonHistoryOption" @change="setComparisonField('dateField', $event.target.value)">
+                  <option value="">请选择日期字段</option>
+                  <option v-for="option in comparisonDateFieldOptions" :key="option.col" :value="option.col">{{ option.label }}（{{ option.col }}）</option>
+                </select>
+                <label class="panorama-bindings__field-label" for="comparison-source-unit">源单位</label>
+                <select id="comparison-source-unit" class="panorama-bindings__comparison-select" data-testid="comparison-source-unit" :value="comparisonConfig?.sourceUnit || ''" :disabled="writing || loading" @change="setComparisonField('sourceUnit', $event.target.value)">
+                  <option value="">请选择明确源单位</option>
+                  <option v-for="unit in comparisonSourceUnitOptions" :key="unit.value" :value="unit.value">{{ unit.label }}</option>
+                </select>
+                <p v-if="comparisonConfigInvalidHint" class="panorama-bindings__hint">{{ comparisonConfigInvalidHint }}</p>
+              </template>
+            </details>
+
+            <div v-if="selectedSlot === 'composition' && !selectedCatalogReadonly" class="panorama-bindings__composition-mode">
               <label class="panorama-bindings__field-label" for="panorama-composition-mode">构成模式</label>
               <select id="panorama-composition-mode" data-testid="composition-mode"
                       :value="compositionMode" :disabled="writing || loading" @change="setCompositionMode($event.target.value)">
@@ -120,8 +167,8 @@
               </p>
             </div>
 
-            <label class="panorama-bindings__field-label" for="panorama-datasource">数据来源</label>
-            <PanoramaDatasourcePicker
+            <label v-if="!selectedCatalogReadonly" class="panorama-bindings__field-label" for="panorama-datasource">数据来源</label>
+            <PanoramaDatasourcePicker v-if="!selectedCatalogReadonly"
               id="panorama-datasource"
               data-testid="slot-datasource"
               :sources="availableDatasources"
@@ -129,13 +176,13 @@
               v-model="selectedDatasourceId"
               @change="onDatasourceChange"
             />
-            <p data-testid="datasource-option-count" class="panorama-bindings__hint">当前屏可选数据源：{{ selectableDatasourceCount }} 个数据来源</p>
-            <p v-if="sharedDatasourceComponentCount > 1" class="panorama-bindings__hint">修改数据来源会影响共用来源的其他组件，标题和展示字段仍分别保存。</p>
-            <p v-if="!selectableDatasourceCount" class="panorama-bindings__hint">当前屏范围没有可用的数据来源。</p>
-            <p v-if="!selectedDatasource" data-testid="datasource-required-hint" class="panorama-bindings__hint">请先选择数据源（数据来源），再配置展示字段和单位。</p>
-            <p v-else-if="selectedFieldSpecs.length && !hasApplicableFieldOptions" data-testid="datasource-fields-unavailable-hint" class="panorama-bindings__hint">已选择数据来源，但没有适用字段候选（展示字段），请核对字段角色或元数据。</p>
+            <p v-if="!selectedCatalogReadonly" data-testid="datasource-option-count" class="panorama-bindings__hint">当前屏可选数据源：{{ selectableDatasourceCount }} 个数据来源</p>
+            <p v-if="!selectedCatalogReadonly && sharedDatasourceComponentCount > 1" class="panorama-bindings__hint">修改数据来源会影响共用来源的其他组件，标题和展示字段仍分别保存。</p>
+            <p v-if="!selectedCatalogReadonly && !selectableDatasourceCount" class="panorama-bindings__hint">当前屏范围没有可用的数据来源。</p>
+            <p v-if="!selectedCatalogReadonly && !selectedDatasource" data-testid="datasource-required-hint" class="panorama-bindings__hint">请先选择数据源（数据来源），再配置展示字段和单位。</p>
+            <p v-else-if="!selectedCatalogReadonly && selectedFieldSpecs.length && !hasApplicableFieldOptions" data-testid="datasource-fields-unavailable-hint" class="panorama-bindings__hint">已选择数据来源，但没有适用字段候选（展示字段），请核对字段角色或元数据。</p>
 
-            <div v-if="!hasNewDisplayPresentation" class="panorama-bindings__fields">
+            <div v-if="!hasNewDisplayPresentation || selectedCatalogEntry?.kind === 'DERIVED_TOTAL'" class="panorama-bindings__fields">
               <div v-for="fieldSpec in selectedFieldSpecs" :key="fieldSpec.semantic" class="panorama-bindings__field-row">
                 <label :for="`panorama-field-${fieldSpec.semantic}`">
                   {{ fieldSpec.label }}<em v-if="fieldSpec.required">需要配置</em>
@@ -162,13 +209,13 @@
               </div>
             </div>
 
-            <label class="panorama-bindings__field-label" for="panorama-period">周期</label>
-            <select id="panorama-period" data-testid="binding-period" :disabled="writing || loading"
+            <label v-if="!selectedCatalogReadonly" class="panorama-bindings__field-label" for="panorama-period">周期</label>
+            <select v-if="!selectedCatalogReadonly" id="panorama-period" data-testid="binding-period" :disabled="writing || loading"
                     :value="selectedBinding.period" @change="setPeriod($event.target.value)">
               <option v-for="period in PERIOD_VALUES" :key="period" :value="period">{{ PERIOD_LABELS[period] }}</option>
             </select>
-            <p class="panorama-bindings__hint">字段候选来自数据来源已保存的字段说明；单位缺失时不会猜测，可随时修改配置。</p>
-            <p v-if="selectedSlot === 'citySummary'" class="panorama-bindings__hint">城市汇总必须选择已按城市汇总的数据源；系统不会把支行机构数据相加成城市指标。</p>
+            <p v-if="!selectedCatalogReadonly" class="panorama-bindings__hint">字段候选来自数据来源已保存的字段说明；单位缺失时不会猜测，可随时修改配置。</p>
+            <p v-if="!selectedCatalogReadonly && selectedSlot === 'citySummary'" class="panorama-bindings__hint">城市汇总必须选择已按城市汇总的数据源；系统不会把支行机构数据相加成城市指标。</p>
           </template>
           <p v-else>请选择一个展示内容。</p>
         </main>
@@ -218,6 +265,8 @@ import {
 } from './defaultBindings';
 import PanoramaDatasourcePicker from './PanoramaDatasourcePicker.vue';
 import { buildBusinessSourceCandidates } from '../presentation/sources/businessSourceCandidates';
+import { buildRuntimeComponentCatalog, resolveConfiguredMetricLabel } from '../presentation/editor/runtimeComponentCatalog';
+import { getEffectiveBusinessGrowthSeries } from '../presentation/model/businessGrowthModel';
 import {
   commitSnapshot,
   createPresentationEditorSession,
@@ -241,6 +290,7 @@ const draftComponents = ref([]);
 const datasources = ref([]);
 const selectedSlot = ref(SLOT_ORDER[0]);
 const selectedComponentId = ref('');
+const selectedCatalogKey = ref('');
 const bindingState = reactive({});
 const loading = ref(false);
 const saving = ref(false);
@@ -302,6 +352,72 @@ const selectedFieldSpecs = computed(() => {
   return (selectedSpec.value.fields || []).filter(fieldSpec => semantics.includes(fieldSpec.semantic));
 });
 const selectedDatasource = computed(() => datasources.value.find(item => String(item.id) === String(selectedBinding.value.dsId)) || null);
+const runtimeCatalog = computed(() => buildRuntimeComponentCatalog(hasNewDisplayPresentation.value
+  ? { ...displaySession.value?.presentation, metricLabels: canvasStyle.value?.metricLabels }
+  : canvasStyle.value));
+const catalogEntries = computed(() => runtimeCatalog.value.entries || []);
+const selectedCatalogEntry = computed(() => catalogEntries.value.find(item => item.key === selectedCatalogKey.value)
+  || catalogEntries.value[0] || null);
+const selectedCatalogReadonly = computed(() => ['SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(selectedCatalogEntry.value?.kind));
+const comparisonConfigurable = computed(() => {
+  const entry = selectedCatalogEntry.value;
+  const systemSettlement = entry?.key === 'overview-settlementDeposit';
+  return hasNewDisplayPresentation.value && (!selectedCatalogReadonly.value || systemSettlement)
+    && (systemSettlement || entry?.kind === 'DERIVED_TOTAL' || ['METRIC_CARD', 'COMPLETION'].includes(entry?.component?.componentType));
+});
+const comparisonKey = computed(() => selectedCatalogEntry.value?.key || '');
+const comparisonAllowsMultiple = computed(() => comparisonKey.value.startsWith('overview-'));
+const comparisonConfig = computed(() => comparisonKey.value
+  ? displaySession.value?.presentation?.display?.comparisons?.[comparisonKey.value] || null : null);
+const comparisonMode = computed(() => {
+  if (!comparisonConfig.value) return 'inherit';
+  return comparisonConfig.value.enabled === false ? 'disabled' : 'custom';
+});
+const historyBlockOptions = computed(() => {
+  const components = Array.isArray(displaySession.value?.presentation?.display?.components)
+    ? displaySession.value.presentation.display.components : [];
+  const draftByBlock = new Map(draftComponents.value.map(item => [Number(item?.blockId), item]));
+  return components.filter(component => component?.componentType === 'TREND' && component.visible !== false)
+    .flatMap(component => (Array.isArray(component.dataRefs) ? component.dataRefs : []).map(ref => ({ component, ref })))
+    .filter(item => Number.isSafeInteger(Number(item.ref?.blockId)) && Number(item.ref.blockId) > 0)
+    .map(item => {
+      const blockId = Number(item.ref.blockId);
+      const draft = draftByBlock.get(blockId);
+      const bindingKey = String(draft?.propValue?.bindingKey || '');
+      const binding = normalizeBinding(parse(draft?.bindJson, {}), bindingKey || 'trend');
+      const datasource = datasources.value.find(source => String(source.id) === String(binding.dsId));
+      const catalogEntry = catalogEntries.value.find(entry => entry.sourceComponentId === item.component.componentId);
+      const componentTitle = String(item.component.text?.title || '').trim();
+      const label = catalogEntry?.label || componentTitle || '业务增长曲线';
+      return { blockId, label, datasource, binding };
+    });
+});
+const comparisonHistoryOption = computed(() => historyBlockOptions.value
+  .find(option => Number(option.blockId) === Number(comparisonConfig.value?.historyBlockId)) || null);
+const comparisonValueFieldOptions = computed(() => getDatasourceFieldOptions(comparisonHistoryOption.value?.datasource || {})
+  .filter(option => String(option.role || '').toUpperCase() === 'METRIC'));
+const comparisonDateFieldOptions = computed(() => getDatasourceFieldOptions(comparisonHistoryOption.value?.datasource || {})
+  .filter(option => String(option.role || '').toUpperCase() === 'DIM'));
+const comparisonSourceUnitOptions = computed(() => [
+  { value: 'YUAN', label: '元' }, { value: 'TEN_THOUSAND', label: '万元' }, { value: 'HUNDRED_MILLION', label: '亿元' },
+  { value: 'COUNT', label: '个' }, { value: 'TEN_THOUSAND_COUNT', label: '万户' }, { value: 'PERCENT', label: '%' }, { value: 'RATIO', label: '比例' }
+].filter(option => {
+  if (['DERIVED_TOTAL', 'SYSTEM_METRIC'].includes(selectedCatalogEntry.value?.kind)) return true;
+  const nativeKinds = new Set((selectedDisplayComponent.value?.dataRefs || [])
+    .map(ref => ({ YUAN: 'amount', TEN_THOUSAND: 'amount', HUNDRED_MILLION: 'amount', COUNT: 'count', TEN_THOUSAND_COUNT: 'count', PERCENT: 'ratio', RATIO: 'ratio' }[ref?.unit]))
+    .filter(Boolean));
+  if (!nativeKinds.size) return true;
+  const optionKind = ({ YUAN: 'amount', TEN_THOUSAND: 'amount', HUNDRED_MILLION: 'amount', COUNT: 'count', TEN_THOUSAND_COUNT: 'count', PERCENT: 'ratio', RATIO: 'ratio' }[option.value]);
+  return nativeKinds.has(optionKind);
+}));
+const comparisonConfigInvalidHint = computed(() => {
+  if (comparisonMode.value !== 'custom') return '';
+  if (!comparisonConfig.value?.historyBlockId) return '请选择当前屏已有趋势区块。';
+  if (!comparisonConfig.value?.valueFields?.length) return '请选择至少一个指标字段。';
+  if (!comparisonConfig.value?.dateField) return '请选择日期字段。';
+  if (!comparisonConfig.value?.sourceUnit) return '请选择明确源单位。';
+  return '';
+});
 const displayComponents = computed(() => {
   if (!hasNewDisplayPresentation.value) return [];
   const sourceComponents = Array.isArray(displaySession.value?.presentation?.display?.components)
@@ -320,7 +436,8 @@ const displayComponents = computed(() => {
   }).filter(Boolean);
 });
 const selectedDisplayComponentEntry = computed(() => displayComponents.value
-  .find(entry => entry.component.componentId === selectedComponentId.value) || displayComponents.value[0] || null);
+  .find(entry => entry.component.componentId === selectedComponentId.value)
+  || (!hasNewDisplayPresentation.value ? displayComponents.value[0] : null));
 const selectedDisplayComponent = computed(() => selectedDisplayComponentEntry.value?.component || null);
 const isSchemaMetricCard = computed(() => hasNewDisplayPresentation.value
   && ['METRIC_CARD', 'COMPLETION'].includes(selectedDisplayComponent.value?.componentType));
@@ -328,7 +445,16 @@ const selectedDisplayFieldMappings = computed(() => {
   if (!hasNewDisplayPresentation.value || !selectedDisplayComponent.value) return [];
   const component = selectedDisplayComponent.value;
   const content = component.content || {};
-  if (['METRIC_CARD', 'COMPLETION', 'MAP'].includes(component.componentType)
+  if (selectedCatalogEntry.value?.kind === 'BUSINESS_GROWTH') {
+    const effective = selectedCatalogEntry.value.effectiveSeries
+      || getEffectiveBusinessGrowthSeries(displaySession.value?.presentation || {});
+    return effective.map(item => ({
+      key: `growth-${item.seriesKey}`, kind: 'growthSeries', seriesKey: item.seriesKey,
+      label: item.label, value: String(item.field || ''), unit: item.unit || '',
+      testId: `component-series-field-${item.seriesKey}`
+    }));
+  }
+  if (['METRIC_CARD', 'COMPLETION'].includes(component.componentType)
       && Object.prototype.hasOwnProperty.call(content, 'mainField')) {
     return [{ key: 'mainField', kind: 'mainField', label: '展示字段', value: String(content.mainField || ''), testId: 'component-main-field' }];
   }
@@ -341,7 +467,16 @@ const selectedDisplayFieldMappings = computed(() => {
   }
   if (component.componentType === 'COMPOSITION_TABS') {
     const fields = ['corporateField', 'retailField', 'totalField'];
-    return (Array.isArray(content.tabs) ? content.tabs : []).flatMap((item, index) => fields
+    const selectedTabKey = selectedCatalogEntry.value?.kind === 'COMPOSITION_TAB' ? selectedCatalogEntry.value.tabKey : '';
+    const sourceTabKey = selectedCatalogEntry.value?.sourceTabKey;
+    const tabs = Array.isArray(content.tabs) ? content.tabs : [];
+    const actualIndex = tabs.findIndex(item => item?.tabKey === selectedTabKey);
+    const sourceIndex = tabs.findIndex(item => item?.tabKey === sourceTabKey);
+    const fallbackTab = selectedTabKey && actualIndex < 0 && selectedCatalogEntry.value?.tabConfig
+      ? { item: selectedCatalogEntry.value.tabConfig, index: sourceIndex } : null;
+    const tabItems = actualIndex >= 0 ? [{ item: tabs[actualIndex], index: actualIndex }]
+      : fallbackTab ? [fallbackTab] : tabs.map((item, index) => ({ item, index }));
+    return tabItems.flatMap(({ item, index }) => fields
       .filter(field => Object.prototype.hasOwnProperty.call(item || {}, field))
       .map(field => ({ key: `tab-${item.tabKey || index}-${field}`, kind: 'tabs', index, field,
         label: `${item.label || item.tabKey || '构成'}·${field.replace('Field', '')}`,
@@ -368,11 +503,28 @@ function componentMappingItem(mapping) {
   const component = selectedDisplayComponent.value;
   if (!component || !mapping) return null;
   if (mapping.kind === 'mainField') return component.content || {};
+  if (mapping.kind === 'growthSeries') return (selectedCatalogEntry.value?.effectiveSeries || [])
+    .find(item => item.seriesKey === mapping.seriesKey) || null;
   return Array.isArray(component.content?.[mapping.kind]) ? component.content[mapping.kind][mapping.index] || null : null;
 }
 
 function componentFieldOptions(mapping) {
-  if (!selectedDatasource.value || !mapping) return [];
+  if (!mapping) return [];
+  if (selectedCatalogEntry.value?.kind === 'INSTITUTION_RANKING' && mapping.kind === 'rankingMetrics') {
+    const binding = selectedBinding.value || {};
+    const rawByNormalized = { deposit: 'value', increase: 'increase', average: 'average', change: 'change' };
+    const labels = { deposit: '指标值', increase: '净增', average: '日均', change: '变化' };
+    return Object.entries(rawByNormalized)
+      .filter(([, semantic]) => String(binding.fields?.[semantic] || '').trim())
+      .map(([field, semantic]) => ({
+        col: field,
+        label: `${labels[field]}（${binding.fields[semantic]}）`,
+        role: 'METRIC',
+        unit: 'HUNDRED_MILLION',
+        normalized: true
+      }));
+  }
+  if (!selectedDatasource.value) return [];
   const columnKey = String(componentMappingItem(mapping)?.columnKey || '');
   const dimensionColumns = new Set(['orgCode', 'orgName', 'cityCode', 'cityName', 'ownerOperatingOrgCode', 'parentOrgCode', 'coordSys', 'located', 'label']);
   const expectedRole = mapping.kind === 'columns' && dimensionColumns.has(columnKey) ? 'DIM' : 'METRIC';
@@ -380,16 +532,20 @@ function componentFieldOptions(mapping) {
   const currentKind = unitKindOf(currentUnit);
   return getDatasourceFieldOptions(selectedDatasource.value)
     .filter(option => String(option.role || '').toUpperCase() === expectedRole)
-    .filter(option => !currentKind || !option.unit
-      || (mapping.kind === 'tabs'
-        ? String(option.unit).toUpperCase() === currentUnit.toUpperCase()
-        : unitKindOf(option.unit) === currentKind));
+    .filter(option => !currentKind || !option.unit || unitKindOf(option.unit) === currentKind);
 }
 
 const selectedDisplayFieldOptions = computed(() => componentFieldOptions(selectedDisplayFieldMappings.value[0]));
 const selectedDisplayFieldMissing = computed(() => Boolean(
   selectedMainField.value && !selectedDisplayFieldOptions.value.some(option => option.col === selectedMainField.value)
 ));
+const growthSeriesMissingUnit = computed(() => {
+  if (selectedCatalogEntry.value?.kind !== 'BUSINESS_GROWTH') return false;
+  const series = Array.isArray(selectedDisplayComponent.value?.content?.series)
+    ? selectedDisplayComponent.value.content.series : [];
+  return series.some(item => ['retailDeposit', 'retailLoan', 'corpDeposit', 'corpLoan'].includes(item?.seriesKey)
+    && !String(item?.unit || '').trim());
+});
 const sharedDatasourceComponentCount = computed(() => hasNewDisplayPresentation.value
   ? displayComponents.value.filter(entry => entry.bindingKey === selectedSlot.value).length : 0);
 const selectedDisplayUnit = computed(() => String(selectedDisplayComponent.value?.format?.displayUnit || 'AUTO'));
@@ -486,15 +642,41 @@ function displayComponentTypeLabel(component = {}) {
     || component.componentType || '组件';
 }
 
+function catalogKindLabel(entry = {}) {
+  return ({ DERIVED_TOTAL: '总览指标', COMPOSITION_TAB: '业务分布', SYSTEM_METRIC: '系统生成',
+    BUSINESS_GROWTH: '增长曲线', INSTITUTION_MAP: '机构地图', INSTITUTION_RANKING: '机构排名' })[entry.kind]
+    || displayComponentTypeLabel(entry.component) || '组件';
+}
+
+function catalogDisplayLabel(entry) {
+  if (!entry) return '';
+  const sourceId = String(entry.sourceComponentId || '');
+  const context = sourceId.startsWith('business-retail-')
+    ? '零售' : sourceId.startsWith('business-corp-') ? '对公' : '';
+  return context ? `${entry.label}（${context}）` : entry.label || '';
+}
+
 const componentTitle = computed(() => {
+  if (hasNewDisplayPresentation.value && selectedCatalogEntry.value?.kind === 'DERIVED_TOTAL') {
+    return resolveConfiguredMetricLabel(canvasStyle.value, selectedCatalogEntry.value.slot, '');
+  }
+  if (hasNewDisplayPresentation.value && selectedCatalogEntry.value?.kind === 'COMPOSITION_TAB') {
+    return selectedCatalogEntry.value.label || '';
+  }
+  if (hasNewDisplayPresentation.value && selectedCatalogEntry.value?.kind === 'SYSTEM_METRIC') return '';
   if (hasNewDisplayPresentation.value && selectedDisplayComponent.value) {
     return selectedDisplayComponent.value.text?.titleMode === 'CUSTOM'
       ? String(selectedDisplayComponent.value.text.title || '') : '';
   }
-  return String(canvasStyle.value?.metricLabels?.[selectedSlot.value] || '');
+  return resolveConfiguredMetricLabel(canvasStyle.value, selectedSlot.value, '');
 });
 
 const componentDefaultTitle = computed(() => {
+  if (hasNewDisplayPresentation.value && selectedCatalogEntry.value) {
+    if (['DERIVED_TOTAL', 'COMPOSITION_TAB', 'SYSTEM_METRIC', 'INSTITUTION_MAP', 'BUSINESS_GROWTH', 'INSTITUTION_RANKING'].includes(selectedCatalogEntry.value.kind)) {
+      return selectedCatalogEntry.value.label;
+    }
+  }
   if (!hasNewDisplayPresentation.value) return presentationLabel(selectedSlot.value);
   const entry = selectedDisplayComponentEntry.value;
   return entry?.component?.dataRefs?.[0]?.metricName
@@ -506,9 +688,70 @@ function markLocalDirty() {
   localDirty.value = true;
 }
 
+function updateComparisonPresentation(next) {
+  if (!comparisonKey.value) return;
+  const comparisons = { ...(displaySession.value.presentation.display?.comparisons || {}) };
+  if (next === null) delete comparisons[comparisonKey.value];
+  else comparisons[comparisonKey.value] = next;
+  displaySession.value.presentation.display.comparisons = comparisons;
+  conflict.value = '';
+  markLocalDirty();
+}
+
+function setComparisonMode(mode) {
+  if (!comparisonConfigurable.value) return;
+  if (mode === 'inherit') {
+    updateComparisonPresentation(null);
+    return;
+  }
+  if (mode === 'disabled') {
+    updateComparisonPresentation({ enabled: false });
+    return;
+  }
+  const current = comparisonConfig.value && comparisonConfig.value.enabled !== false ? comparisonConfig.value : {};
+  updateComparisonPresentation({
+    enabled: true,
+    historyBlockId: current.historyBlockId || null,
+    valueFields: Array.isArray(current.valueFields) ? [...current.valueFields] : [],
+    dateField: current.dateField || '',
+    sourceUnit: current.sourceUnit || ''
+  });
+}
+
+function setComparisonField(field, value) {
+  if (comparisonMode.value !== 'custom') return;
+  updateComparisonPresentation({ ...(comparisonConfig.value || { enabled: true }), enabled: true, [field]: value });
+}
+
 function updateComponentTitle(value) {
   const nextValue = String(value ?? '');
-  if (hasNewDisplayPresentation.value && selectedDisplayComponent.value) {
+  if (hasNewDisplayPresentation.value && selectedCatalogEntry.value?.kind === 'SYSTEM_METRIC') {
+    return;
+  }
+  if (hasNewDisplayPresentation.value && selectedCatalogEntry.value?.kind === 'DERIVED_TOTAL') {
+    const metricLabels = { ...(canvasStyle.value?.metricLabels || {}) };
+    const trimmed = nextValue.trim();
+    if (trimmed) metricLabels[selectedCatalogEntry.value.slot] = trimmed;
+    else delete metricLabels[selectedCatalogEntry.value.slot];
+    canvasStyle.value = { ...canvasStyle.value, metricLabels };
+  } else if (hasNewDisplayPresentation.value && selectedCatalogEntry.value?.kind === 'COMPOSITION_TAB'
+      && selectedDisplayComponent.value) {
+    let tabs = Array.isArray(selectedDisplayComponent.value.content?.tabs)
+      ? selectedDisplayComponent.value.content.tabs.map(tab => ({ ...tab })) : [];
+    if (selectedCatalogEntry.value.materializedTabs?.length && selectedCatalogEntry.value.sourceTabKey
+        && !tabs.some(tab => tab?.tabKey === selectedCatalogEntry.value.tabKey)) {
+      tabs = tabs.flatMap(tab => tab?.tabKey === selectedCatalogEntry.value.sourceTabKey
+        ? selectedCatalogEntry.value.materializedTabs.map(item => ({ ...item })) : [tab]);
+    }
+    const tabIndex = tabs.findIndex(tab => String(tab?.tabKey || '') === String(selectedCatalogEntry.value.tabKey || ''));
+    if (tabIndex >= 0) {
+      const fallback = selectedCatalogEntry.value.tabKey === 'deposit' ? '存款'
+        : selectedCatalogEntry.value.tabKey === 'loan' ? '贷款' : '业务结构';
+      tabs[tabIndex].label = nextValue.trim() || fallback;
+      displaySession.value = updateModelComponentContent(displaySession.value,
+        selectedDisplayComponent.value.componentId, { tabs });
+    }
+  } else if (hasNewDisplayPresentation.value && selectedDisplayComponent.value) {
     try {
       displaySession.value = setModelComponentTitle(
         displaySession.value,
@@ -541,14 +784,38 @@ function setComponentField(mapping, value) {
     const patch = {};
     if (mapping.kind === 'mainField') {
       patch.mainField = nextValue;
+    } else if (mapping.kind === 'growthSeries') {
+      const current = Array.isArray(selectedDisplayComponent.value.content?.series)
+        ? selectedDisplayComponent.value.content.series.map(item => ({ ...item })) : [];
+      let targetIndex = current.findIndex(item => item?.seriesKey === mapping.seriesKey);
+      if (targetIndex < 0) {
+        targetIndex = current.length;
+        current.push({ seriesKey: mapping.seriesKey, field: nextValue, label: mapping.label,
+          unit: sourceUnit || mapping.unit || '' });
+      } else {
+        current[targetIndex] = { ...current[targetIndex], field: nextValue };
+        if (sourceUnit) current[targetIndex].unit = sourceUnit;
+      }
+      patch.series = current;
     } else {
-      const current = Array.isArray(selectedDisplayComponent.value.content?.[mapping.kind])
+      let current = Array.isArray(selectedDisplayComponent.value.content?.[mapping.kind])
         ? selectedDisplayComponent.value.content[mapping.kind].map(item => ({ ...item })) : [];
-      const item = { ...(current[mapping.index] || {}) };
+      let targetIndex = mapping.index;
+      if (mapping.kind === 'tabs' && selectedCatalogEntry.value?.materializedTabs?.length
+          && selectedCatalogEntry.value.sourceTabKey
+          && !current.some(item => item?.tabKey === selectedCatalogEntry.value.tabKey)) {
+        const sourceIndex = current.findIndex(item => item?.tabKey === selectedCatalogEntry.value.sourceTabKey);
+        if (sourceIndex >= 0) {
+          current = current.flatMap(item => item?.tabKey === selectedCatalogEntry.value.sourceTabKey
+            ? selectedCatalogEntry.value.materializedTabs.map(tab => ({ ...tab })) : [item]);
+          targetIndex = current.findIndex(item => item?.tabKey === selectedCatalogEntry.value.tabKey);
+        }
+      }
+      const item = { ...(current[targetIndex] || {}) };
       if (mapping.kind === 'tabs') item[mapping.field] = nextValue;
       else item.field = nextValue;
       if (sourceUnit && mapping.kind !== 'tabs') item.unit = sourceUnit;
-      current[mapping.index] = item;
+      current[targetIndex] = item;
       patch[mapping.kind] = current;
     }
     let nextSession = updateModelComponentContent(
@@ -570,6 +837,31 @@ function setComponentField(mapping, value) {
   } catch (fieldError) {
     error.value = fieldError?.message || '展示字段配置无效';
     emit('error', fieldError);
+  }
+}
+
+function setComponentSeriesUnit(mapping, value) {
+  if (mapping?.kind !== 'growthSeries' || !selectedDisplayComponent.value) return;
+  const unit = ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'].includes(String(value || '').toUpperCase())
+    ? String(value).toUpperCase() : '';
+  if (!unit) return;
+  const current = Array.isArray(selectedDisplayComponent.value.content?.series)
+    ? selectedDisplayComponent.value.content.series.map(item => ({ ...item })) : [];
+  let targetIndex = current.findIndex(item => item?.seriesKey === mapping.seriesKey);
+  if (targetIndex < 0) {
+    targetIndex = current.length;
+    current.push({ seriesKey: mapping.seriesKey, field: mapping.value, label: mapping.label, unit });
+  } else {
+    current[targetIndex] = { ...current[targetIndex], unit };
+  }
+  try {
+    displaySession.value = updateModelComponentContent(displaySession.value,
+      selectedDisplayComponent.value.componentId, { series: current });
+    conflict.value = '';
+    markLocalDirty();
+  } catch (unitError) {
+    error.value = unitError?.message || '源单位配置无效';
+    emit('error', unitError);
   }
 }
 
@@ -800,11 +1092,15 @@ async function loadCanvas(requestedId = activeScreenId.value) {
     resetBindings(draftComponents.value);
     datasources.value = Array.isArray(sourceList) ? sourceList : [];
     for (const binding of Object.values(bindingState)) fillProvenUnits(binding);
-    selectedComponentId.value = displayComponents.value[0]?.component.componentId || '';
-    if (selectedComponentId.value) {
-      selectedSlot.value = displayComponents.value[0].bindingKey;
-      if (!bindingState[selectedSlot.value]) bindingState[selectedSlot.value] = emptyBinding(selectedSlot.value);
+    selectedCatalogKey.value = catalogEntries.value[0]?.key || '';
+    selectedComponentId.value = catalogEntries.value[0]?.sourceComponentId || '';
+    const firstCatalogEntry = catalogEntries.value[0];
+    if (firstCatalogEntry?.slot) selectedSlot.value = firstCatalogEntry.slot;
+    else if (selectedComponentId.value) {
+      const firstDisplay = displayComponents.value.find(item => item.component.componentId === selectedComponentId.value);
+      if (firstDisplay) selectedSlot.value = firstDisplay.bindingKey;
     }
+    if (!bindingState[selectedSlot.value]) bindingState[selectedSlot.value] = emptyBinding(selectedSlot.value);
     conversionAccepted.value = legacyComponents.value.length === 0;
     localDirty.value = false;
     screenReady.value = true;
@@ -842,6 +1138,22 @@ function selectDisplayComponent(componentId) {
   if (!entry) return;
   selectedComponentId.value = entry.component.componentId;
   selectedSlot.value = entry.bindingKey;
+  if (!bindingState[selectedSlot.value]) bindingState[selectedSlot.value] = emptyBinding(selectedSlot.value);
+  if (selectedSlot.value === 'composition' && !manualSlots.has(selectedSlot.value)) {
+    compositionMode.value = getCompositionMode(bindingState[selectedSlot.value]);
+  }
+  conflict.value = '';
+}
+
+function selectCatalogEntry(entry) {
+  if (!entry) return;
+  selectedCatalogKey.value = entry.key;
+  selectedComponentId.value = entry.sourceComponentId || '';
+  if (entry.slot) selectedSlot.value = entry.slot;
+  else if (entry.sourceComponentId) {
+    const displayEntry = displayComponents.value.find(item => item.component.componentId === entry.sourceComponentId);
+    if (displayEntry) selectedSlot.value = displayEntry.bindingKey;
+  }
   if (!bindingState[selectedSlot.value]) bindingState[selectedSlot.value] = emptyBinding(selectedSlot.value);
   if (selectedSlot.value === 'composition' && !manualSlots.has(selectedSlot.value)) {
     compositionMode.value = getCompositionMode(bindingState[selectedSlot.value]);
@@ -1240,6 +1552,10 @@ defineExpose({
 .panorama-bindings__component-field { min-width:0; }
 .panorama-bindings__field-row select, .panorama-bindings__component-field select { min-height:34px; min-width:0; padding:0 10px; border:1px solid var(--color-border-strong, #c0c4cc); border-radius:var(--radius-control, 4px); background:var(--color-surface, #fff); color:inherit; }
 .panorama-bindings__component-field select { width:100%; max-width:100%; box-sizing:border-box; }
+.panorama-bindings__comparison { display:block; min-width:0; margin-top:16px; padding:10px 12px; border:1px solid var(--color-border, #ebeef5); border-radius:var(--radius-control, 4px); background:var(--color-surface-subtle, #fafafa); }
+.panorama-bindings__comparison summary { cursor:pointer; color:var(--color-text-strong, #303133); font-size:13px; font-weight:600; }
+.panorama-bindings__comparison-select { display:block; width:100%; max-width:100%; min-width:0; min-height:34px; box-sizing:border-box; padding:0 10px; border:1px solid var(--color-border-strong, #c0c4cc); border-radius:var(--radius-control, 4px); background:var(--color-surface, #fff); color:inherit; }
+.panorama-bindings__comparison-select--multiple { min-height:88px; padding:6px 10px; }
 .panorama-bindings__field-row em { margin-left:5px; color:var(--color-danger-700, #b42318); font-size:11px; font-style:normal; }
 .panorama-bindings__unit-hint { grid-column:2 / 4; color:var(--color-text-muted, #909399); font-size:11px; }
 .panorama-bindings__footer { display:flex; justify-content:flex-end; margin-top:14px; color:var(--color-text-muted, #909399); font-size:12px; }
