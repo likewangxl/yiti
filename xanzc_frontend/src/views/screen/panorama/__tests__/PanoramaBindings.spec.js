@@ -150,7 +150,7 @@ describe('PanoramaBindings', () => {
     await vi.waitFor(() => expect(wrapper.find('[data-testid="slot-retailAum"]').exists()).toBe(true));
     expect(wrapper.find('[data-testid="slot-deposit"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="slot-datasource"] option[value="77"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="readiness-slot-retailAum"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="readiness-slot-retailAum"]').exists()).toBe(false);
     await wrapper.find('[data-testid="slot-datasource"]').setValue('88');
     await wrapper.find('[data-testid="field-option-retailAum-value"]').setValue('deposit_raw');
     await wrapper.find('[data-testid="unit-retailAum-value"]').setValue('HUNDRED_MILLION');
@@ -189,26 +189,21 @@ describe('PanoramaBindings', () => {
     expect(wrapper.find('[data-testid="try-run"]').exists()).toBe(false);
   });
 
-  it.each([
-    ['分行', screen, 'branch-overview-v1', 'deposit', '分行存款'],
-    ['对公', { ...screen, bizLine: 'CORP' }, 'corporate-overview-v1', 'corpDeposit', '对公存款'],
-    ['零售', { ...screen, bizLine: 'RETAIL' }, 'retail-overview-v1', 'retailAum', '零售资产']
-  ])('%s旧配置只在当前编辑器显示迁移预览，取消不写入', async (_name, screenVariant, template, bindingKey, label) => {
-    api.listScreens.mockResolvedValue([screenVariant]);
-    api.getScreenCanvas.mockResolvedValue(legacyMigrationCanvas({ bindingKey, template, label }));
+  it('旧布局保留明确转换确认，不挂载迁移编辑器', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({ ...canvas,
+      canvasStyleJson: JSON.stringify({ presentation: { type: 'LEGACY', template: 'branch-overview-v1' } }) });
     api.listScreenDatasources.mockResolvedValue([datasource]);
     const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
 
-    await vi.waitFor(() => expect(wrapper.find('[data-testid="legacy-migration-preview"]').exists()).toBe(true));
-    expect(wrapper.find('[data-testid="migration-status-migrated"]').text()).toContain('1');
-    expect(wrapper.find('[data-testid="migration-apply"]').exists()).toBe(true);
-    await wrapper.find('[data-testid="migration-cancel"]').trigger('click');
-    await vi.waitFor(() => expect(wrapper.find('[data-testid="legacy-migration-preview"]').exists()).toBe(false));
-    expect(api.saveScreenCanvas).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="legacy-conversion-warning"]').exists()).toBe(true));
+    expect(wrapper.find('[data-testid="conversion-confirm"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="legacy-migration-preview"]').exists()).toBe(false);
+    expect(wrapper.find('.presentation-editor').exists()).toBe(false);
     wrapper.unmount();
   });
 
-  it('旧 CODE 配置未声明 displaySchemaVersion 时仍显示迁移入口', async () => {
+  it('旧 CODE 无 displaySchemaVersion 直接使用 legacy 槽位标题，不暴露迁移入口', async () => {
     api.listScreens.mockResolvedValue([screen]);
     api.getScreenCanvas.mockResolvedValue(legacyMigrationCanvas({
       bindingKey: 'deposit', template: 'branch-overview-v1', label: '旧 CODE 存款', presentationType: 'CODE'
@@ -216,83 +211,22 @@ describe('PanoramaBindings', () => {
     api.listScreenDatasources.mockResolvedValue([datasource]);
     const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
 
-    await vi.waitFor(() => expect(wrapper.find('[data-testid="legacy-migration-preview"]').exists()).toBe(true));
-    expect(wrapper.find('[data-testid="migration-status-migrated"]').text()).toContain('1');
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="component-title"]').exists()).toBe(true));
+    expect(wrapper.get('[data-testid="component-title"]').element.value).toBe('旧 CODE 存款');
+    expect(wrapper.find('[data-testid="legacy-migration-preview"]').exists()).toBe(false);
     expect(api.saveScreenCanvas).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 
-  it('真实画布响应从 blocks.bindJson 按 blockId 读取迁移身份，不要求 bindSnapshots', async () => {
-    api.listScreens.mockResolvedValue([screen]);
-    api.getScreenCanvas.mockResolvedValue({
-      ...canvas,
-      canvasStyleJson: JSON.stringify({ presentation: { type: 'CODE', template: 'branch-overview-v1' } }),
-      canvasDraftJson: JSON.stringify({ components: [{
-        id: 'block-backed', component: 'ChartWidget', innerType: 'METRIC_CARD', blockId: 41,
-        propValue: { bindingKey: 'deposit' }, bindJson: '{}'
-      }] }),
-      blocks: [{ id: 41, componentType: 'METRIC_CARD', bindJson: JSON.stringify({
-        dsId: 77, period: 'LATEST', sourceKind: 'WIDE_TABLE', metricCode: 'M_DEP',
-        fields: { value: 'deposit_raw' }, units: { value: 'YUAN' }, dimension: 'ORG'
-      }) }]
-    });
-    api.listScreenDatasources.mockResolvedValue([datasource]);
-    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
-
-    await vi.waitFor(() => expect(wrapper.find('[data-testid="legacy-migration-preview"]').exists()).toBe(true));
-    expect(wrapper.find('[data-testid="migration-status-migrated"]').text()).toContain('1');
-    expect(wrapper.find('[data-testid="migration-status-missing"]').text()).toContain('0');
-    expect(api.saveScreenCanvas).not.toHaveBeenCalled();
-    wrapper.unmount();
-  });
-
-  it('真实画布响应的损坏 bindJson 进入缺字段并保持保存 fail-close', async () => {
-    api.listScreens.mockResolvedValue([screen]);
-    api.getScreenCanvas.mockResolvedValue({
-      ...canvas,
-      canvasStyleJson: JSON.stringify({ presentation: { type: 'CODE', template: 'branch-overview-v1' } }),
-      canvasDraftJson: JSON.stringify({ components: [{
-        id: 'broken-block', component: 'ChartWidget', innerType: 'METRIC_CARD', blockId: 42,
-        propValue: { bindingKey: 'deposit' }, styleJson: JSON.stringify({ title: '不能补造身份' })
-      }] }),
-      blocks: [{ id: 42, componentType: 'METRIC_CARD', bindJson: '{"dsId":77,' }]
-    });
-    api.listScreenDatasources.mockResolvedValue([datasource]);
-    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
-
-    await vi.waitFor(() => expect(wrapper.find('[data-testid="legacy-migration-preview"]').exists()).toBe(true));
-    expect(wrapper.find('[data-testid="migration-status-migrated"]').text()).toContain('0');
-    expect(wrapper.find('[data-testid="migration-status-missing"]').text()).toContain('1');
-    expect(wrapper.text()).toContain('bindJson');
-    expect(api.saveScreenCanvas).not.toHaveBeenCalled();
-    wrapper.unmount();
-  });
-
-  it('旧草稿 JSON 损坏时仍显示迁移缺字段状态并阻止无损声明', async () => {
-    api.listScreens.mockResolvedValue([screen]);
-    api.getScreenCanvas.mockResolvedValue({ ...canvas,
-      canvasStyleJson: JSON.stringify({ presentation: { type: 'LEGACY', template: 'branch-overview-v1' } }),
-      canvasDraftJson: '{"components":' });
-    api.listScreenDatasources.mockResolvedValue([datasource]);
-    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
-
-    await vi.waitFor(() => expect(wrapper.find('[data-testid="legacy-migration-preview"]').exists()).toBe(true));
-    expect(wrapper.find('[data-testid="migration-status-missing"]').text()).toContain('1');
-    expect(wrapper.text()).toContain('不能声明无损完成');
-    expect(api.saveScreenCanvas).not.toHaveBeenCalled();
-    wrapper.unmount();
-  });
-
-  it('加载当前屏后显示 14 槽静态接入检查，未点击前不读取机构管理目录', async () => {
+  it('简化页面不挂载静态接入检查，也不读取机构管理目录', async () => {
     api.listScreens.mockResolvedValue([screen]);
     api.getScreenCanvas.mockResolvedValue({ ...canvas, canvasDraftJson: JSON.stringify({ components: [] }) });
     api.listScreenDatasources.mockResolvedValue([datasource]);
     const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
 
-    await vi.waitFor(() => expect(wrapper.find('[data-testid="integration-readiness"]').exists()).toBe(true));
-    expect(wrapper.findAll('[data-testid^="readiness-slot-"]')).toHaveLength(14);
-    expect(wrapper.text()).toContain('静态预检');
-    expect(wrapper.text()).toContain('未发布任何版本');
+    await vi.waitFor(() => expect(api.getScreenCanvas).toHaveBeenCalledWith(9));
+    expect(wrapper.find('[data-testid="integration-readiness"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="verification-connected"]').exists()).toBe(false);
     expect(api.listOrgProfiles).not.toHaveBeenCalled();
     expect(api.listOrgGroups).not.toHaveBeenCalled();
   });
@@ -304,8 +238,7 @@ describe('PanoramaBindings', () => {
     api.saveScreenCanvas.mockResolvedValue({ canvasVersion: 5 });
     const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
 
-    await vi.waitFor(() => expect(wrapper.find('[data-testid="integration-readiness"]').exists()).toBe(true));
-    expect(wrapper.findAll('[data-testid^="readiness-slot-"]')).toHaveLength(14);
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="slot-loanRate"]').exists()).toBe(true));
     expect(wrapper.find('[data-testid="slot-loanRate"]').exists()).toBe(true);
     await wrapper.find('[data-testid="slot-loanRate"]').trigger('click');
     await wrapper.find('[data-testid="slot-datasource"]').setValue('77');
@@ -336,16 +269,16 @@ describe('PanoramaBindings', () => {
     await vi.waitFor(() => expect(wrapper.find('.panorama-bindings__footer').text()).toContain('当前版本 8'));
   });
 
-  it('提供返回工作区和管理数据源入口，并使用路由守卫', async () => {
+  it('简化页面移除工作区、数据源和设置导航入口', async () => {
     api.listScreens.mockResolvedValue([screen]);
     api.getScreenCanvas.mockResolvedValue(canvas);
     api.listScreenDatasources.mockResolvedValue([datasource]);
     const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
     await vi.waitFor(() => expect(api.getScreenCanvas).toHaveBeenCalledWith(9));
-    await wrapper.find('[data-testid="binding-back-workspace"]').trigger('click');
-    await wrapper.find('[data-testid="binding-datasources"]').trigger('click');
-    expect(router.push).toHaveBeenNthCalledWith(1, '/workspace');
-    expect(router.push).toHaveBeenNthCalledWith(2, '/screen-admin/datasources');
+    expect(wrapper.find('[data-testid="binding-back-workspace"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="binding-datasources"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="binding-settings"]').exists()).toBe(false);
+    expect(router.push).not.toHaveBeenCalled();
   });
 
   it('字段候选来自 config fieldMeta，单位默认标记为原始元值，不调用试跑', async () => {
@@ -386,7 +319,7 @@ describe('PanoramaBindings', () => {
     expect(wrapper.find('[data-testid="datasource-required-hint"]').exists()).toBe(false);
   });
 
-  it('选择展示内容时只对唯一明确候选自动填来源、字段和亿元单位，并显示待核验摘要', async () => {
+  it('选择展示内容不会静默修改其他槽，明确切换数据源后才按受控规则预填', async () => {
     api.listScreens.mockResolvedValue([screen]);
     api.getScreenCanvas.mockResolvedValue({
       ...canvas,
@@ -396,17 +329,17 @@ describe('PanoramaBindings', () => {
     api.listScreenDatasources.mockResolvedValue([autoDatasource]);
     const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
 
-    await vi.waitFor(() => expect(wrapper.find('[data-testid="binding-auto-preview"]').exists()).toBe(true));
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="slot-depositAverage"]').exists()).toBe(true));
     await wrapper.find('[data-testid="slot-depositAverage"]').trigger('click');
 
-    expect(wrapper.find('[data-testid="slot-datasource"]').element.value).toBe('83');
+    expect(wrapper.find('[data-testid="slot-datasource"]').element.value).toBe('');
+    expect(wrapper.find('[data-testid="binding-auto-preview"]').exists()).toBe(false);
+    await wrapper.find('[data-testid="slot-datasource"]').setValue('83');
     expect(wrapper.find('[data-testid="field-option-depositAverage-value"]').element.value).toBe('一般性存款月均余额-机构');
     expect(wrapper.find('[data-testid="unit-depositAverage-value"]').element.value).toBe('HUNDRED_MILLION');
-    expect(wrapper.find('[data-testid="binding-auto-notice"]').text()).toContain('待核验');
-    expect(wrapper.find('[data-testid="binding-auto-applied"]').text()).toContain('机构指标汇总');
   });
 
-  it('一键配置空白展示内容不覆盖已有手工字段，且来源切换按语义预填', async () => {
+  it('来源切换保留已有手工字段并按语义预填当前槽', async () => {
     api.listScreens.mockResolvedValue([screen]);
     api.getScreenCanvas.mockResolvedValue({
       ...canvas,
@@ -429,19 +362,17 @@ describe('PanoramaBindings', () => {
     };
     api.listScreenDatasources.mockResolvedValue([autoDatasource, switchedSource]);
     const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
-    await vi.waitFor(() => expect(wrapper.find('[data-testid="binding-auto-preview"]').exists()).toBe(true));
-
-    await wrapper.find('[data-testid="binding-auto-empty"]').trigger('click');
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="slot-datasource"]').exists()).toBe(true));
     expect(wrapper.vm.collectValidBindings().bindings.deposit.fields.value).toBe('manual_deposit');
     await wrapper.find('[data-testid="slot-composition"]').trigger('click');
-    expect(wrapper.find('[data-testid="composition-mode"]').element.value).toBe('columns');
+    expect(wrapper.find('[data-testid="composition-mode"]').element.value).toBe('rows');
     await wrapper.find('[data-testid="slot-depositAverage"]').trigger('click');
     await wrapper.find('[data-testid="slot-datasource"]').setValue('84');
     expect(wrapper.find('[data-testid="field-option-depositAverage-value"]').element.value).toBe('一般性存款月均余额-机构');
     expect(wrapper.find('[data-testid="unit-depositAverage-value"]').element.value).toBe('HUNDRED_MILLION');
   });
 
-  it('加载三栏展示配置后修改标题并随现有画布保存，重开模型不丢字段', async () => {
+  it('加载 schema1 后修改实际组件标题和展示字段并随现有画布保存', async () => {
     api.listScreens.mockResolvedValue([screen]);
     const presentation = {
       type: 'CODE', template: 'branch-overview-v1', displaySchemaVersion: 1,
@@ -464,16 +395,18 @@ describe('PanoramaBindings', () => {
     api.listScreenDatasources.mockResolvedValue([datasource]);
     api.saveScreenCanvas.mockResolvedValue({ canvasVersion: 5, canvasDraftJson: JSON.stringify(draft) });
     const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
-    await vi.waitFor(() => expect(wrapper.find('.presentation-editor').exists()).toBe(true));
+    await vi.waitFor(() => expect(wrapper.find('[data-component-id="deposit-card"]').exists()).toBe(true));
 
     await wrapper.find('[data-component-id="deposit-card"]').trigger('click');
-    await wrapper.find('input[placeholder="留空恢复自动标题"]').setValue('全行存款余额');
+    await wrapper.find('[data-testid="component-title"]').setValue('全行存款余额');
+    await wrapper.find('[data-testid="component-main-field"]').setValue('deposit_raw');
     await wrapper.find('[data-testid="binding-save"]').trigger('click');
     await vi.waitFor(() => expect(api.saveScreenCanvas).toHaveBeenCalled());
 
     const saved = api.saveScreenCanvas.mock.lastCall[0].canvasStyle.presentation;
     expect(saved.displaySchemaVersion).toBe(1);
     expect(saved.display.components[0].text.title).toBe('全行存款余额');
+    expect(saved.display.components[0].content.mainField).toBe('deposit_raw');
     expect(saved.display.components[0].dataRefs[0].blockId).toBe(41);
   });
 
@@ -643,7 +576,7 @@ describe('PanoramaBindings', () => {
     wrapper.unmount();
   });
 
-  it('保存代码草稿固定 presentation 和组件样式，发布必须填写 reason；冲突保留编辑态', async () => {
+  it('保存冲突保留编辑态且不暴露发布操作', async () => {
     api.listScreens.mockResolvedValue([screen]);
     api.getScreenCanvas.mockResolvedValue({ ...canvas, canvasDraftJson: JSON.stringify({ components: [] }) });
     api.listScreenDatasources.mockResolvedValue([datasource]);
@@ -662,10 +595,8 @@ describe('PanoramaBindings', () => {
     }));
     await vi.waitFor(() => expect(wrapper.find('[data-testid="binding-conflict"]').exists()).toBe(true));
     expect(wrapper.find('[data-testid="binding-conflict"]').text()).toContain('版本冲突');
-    expect(api.publishScreenCanvas).not.toHaveBeenCalled();
-    await wrapper.find('[data-testid="publish-reason"]').setValue('发布经营总览');
-    await wrapper.find('[data-testid="binding-publish"]').trigger('click');
-    expect(api.publishScreenCanvas).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="binding-publish"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="publish-reason"]').exists()).toBe(false);
   });
 
   it('读取到列角色不匹配的旧绑定时，保存会拒绝而不把日期当作指标', async () => {
@@ -742,7 +673,7 @@ describe('PanoramaBindings', () => {
     api.saveScreenCanvas.mockImplementation(() => new Promise(resolve => { resolveSave = resolve; }));
     const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
     await vi.waitFor(() => expect(api.getScreenCanvas).toHaveBeenCalledWith(9));
-    await vi.waitFor(() => expect(wrapper.find('[data-testid="binding-save"]').element.disabled).toBe(false));
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="screen-select"]').element.disabled).toBe(false));
     await wrapper.find('[data-testid="conversion-confirm"]').setValue(true);
     await wrapper.find('[data-testid="slot-datasource"]').setValue('77');
     await wrapper.find('[data-testid="field-option-deposit-value"]').setValue('deposit_raw');

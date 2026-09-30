@@ -26,22 +26,18 @@ vi.mock('../PanoramaDataVerification.vue', () => ({ default: {
 } }));
 import PanoramaBindings from '../PanoramaBindings.vue';
 
-describe('大屏管理的真实草稿核验入口', () => {
-  it('把当前屏、服务端草稿版本及实时编辑绑定交给核验组件', async () => {
+describe('大屏管理的简化配置页', () => {
+  it('不挂载接入核验、目录和试跑入口', async () => {
     const wrapper = mount(PanoramaBindings, { global: { stubs: {
       PanoramaIntegrationReadiness: true, PanoramaSettings: true, PanoramaDatasourcePicker: true
     } } });
     await flushPromises();
     const verification = wrapper.findComponent({ name: 'PanoramaDataVerification' });
-    expect(verification.exists()).toBe(true);
-    expect(verification.props('screen').screenCode).toBe('SCR_VERIFY');
-    expect(verification.props('canvas').canvasVersion).toBe(4);
-    expect(verification.props('disabled')).toBe(false);
-    expect(verification.props('slotOrder')).toContain('branchTrend');
-    expect(verification.props('datasources')).toHaveLength(1);
-    expect(verification.props('bindingState').deposit).toEqual(fixture.binding);
-    await wrapper.get('[data-testid="field-option-deposit-value"]').setValue('');
-    expect(verification.props('bindingState').deposit.fields.value).toBeUndefined();
+    expect(verification.exists()).toBe(false);
+    expect(wrapper.find('[data-testid="verification-connected"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="integration-readiness"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="try-run"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="binding-datasources"]').exists()).toBe(false);
     wrapper.unmount();
   });
 });
