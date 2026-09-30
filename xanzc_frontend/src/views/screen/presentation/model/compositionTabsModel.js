@@ -350,4 +350,4 @@ export function buildCompositionTabsModel(sourcePresentation, model = {}, option
   };
 }
 
-export { canonicalUnit, unitLabel, unitType };
+export { canonicalUnit, unitLabel, unitType, legacyProvinceRingConfigs };

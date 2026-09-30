@@ -105,6 +105,43 @@ describe('buildBusinessGrowthModel', () => {
     expect(result.groups.flatMap(group => group.series).every(item => item.unit === '元')).toBe(true);
   });
 
+  it('主趋势组件的自定义标题可见，AUTO 才使用业务增长曲线', () => {
+    const source = presentation();
+    source.display.components[0].text = { titleMode: 'CUSTOM', title: '存贷款业务增长' };
+    expect(buildBusinessGrowthModel(source, modelWithRows([])).title).toBe('存贷款业务增长');
+  });
+
+  it('明确 semantic seriesKey 优先于前置的旧 generic 列名推断', () => {
+    const source = presentation([
+      { seriesKey: 'deposit', field: FIELDS.retailDeposit, label: '旧聚合', unit: 'YUAN' },
+      { seriesKey: 'retailDeposit', field: 'retail_dep_custom', label: '零售存款', unit: 'TEN_THOUSAND' },
+      { seriesKey: 'retailLoan', field: FIELDS.retailLoan, label: '零售贷款', unit: 'YUAN' },
+      { seriesKey: 'corpDeposit', field: FIELDS.corpDeposit, label: '对公存款', unit: 'YUAN' },
+      { seriesKey: 'corpLoan', field: FIELDS.corpLoan, label: '对公贷款', unit: 'YUAN' }
+    ]);
+    const result = buildBusinessGrowthModel(source, modelWithRows([{
+      date: '2026-09-28', retail_dep_custom: 2, [FIELDS.retailLoan]: 3, [FIELDS.corpDeposit]: 4, [FIELDS.corpLoan]: 5
+    }], { retail_dep_custom: 'TEN_THOUSAND', [FIELDS.retailLoan]: 'YUAN', [FIELDS.corpDeposit]: 'YUAN', [FIELDS.corpLoan]: 'YUAN' }));
+    expect(result.groups[0].fields.deposit).toBe('retail_dep_custom');
+    expect(result.groups[0].rows[0].retailDeposit).toBe(20000);
+  });
+
+  it('按已配置业务语义 seriesKey 读取自定义字段和明确源单位', () => {
+    const customFields = {
+      retailDeposit: 'retail_dep_custom', retailLoan: 'retail_loan_custom',
+      corpDeposit: 'corp_dep_custom', corpLoan: 'corp_loan_custom'
+    };
+    const source = presentation(Object.entries(customFields).map(([seriesKey, field]) => ({
+      seriesKey, field, label: seriesKey, unit: seriesKey.includes('Loan') ? 'TEN_THOUSAND' : 'YUAN'
+    })));
+    const result = buildBusinessGrowthModel(source, modelWithRows([{
+      date: '2026-09-28', retail_dep_custom: 2, retail_loan_custom: 3, corp_dep_custom: 4, corp_loan_custom: 5
+    }], { retail_dep_custom: 'YUAN', retail_loan_custom: 'TEN_THOUSAND', corp_dep_custom: 'YUAN', corp_loan_custom: 'TEN_THOUSAND' }));
+    expect(result.groups[0]).toMatchObject({ status: 'READY', fields: { deposit: 'retail_dep_custom', loan: 'retail_loan_custom' } });
+    expect(result.groups[0].rows[0]).toMatchObject({ retailDeposit: 2, retailLoan: 30000 });
+    expect(result.groups[1].rows[0]).toMatchObject({ corpDeposit: 4, corpLoan: 50000 });
+  });
+
   it.each([
     ['缺少固定字段', [{ date: '2026-09-28', [FIELDS.retailDeposit]: 1 }]],
     ['缺少单位证据', [{ date: '2026-09-28', [FIELDS.retailDeposit]: 1, [FIELDS.retailLoan]: 2, [FIELDS.corpDeposit]: 3, [FIELDS.corpLoan]: 4 }], {}],

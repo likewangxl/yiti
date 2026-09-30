@@ -3,7 +3,7 @@
     <header class="presentation-map-widget__header">
       <div>
         <span class="presentation-map-widget__kicker">{{ legacyBranchProvinceMap ? '机构视图' : '地图视图' }}</span>
-        <h2>{{ legacyBranchProvinceMap ? '经营机构分布' : (screenDisplayText(mapModel.title) || '地图') }}</h2>
+        <h2>{{ legacyBranchProvinceMap ? legacyMapTitle : (screenDisplayText(mapModel.title) || '地图') }}</h2>
         <p v-if="!legacyBranchProvinceMap && mapModel.subtitle">{{ screenDisplayText(mapModel.subtitle) }}</p>
       </div>
       <div class="presentation-map-widget__meta">
@@ -129,6 +129,13 @@ const mapLegend = computed(() => {
     { key: 'district-unknown', state: 'MISSING', label: '归属待确认', color: MAP_MISSING_COLOR }
   ];
   return [...(mapModel.value.legend || [])];
+});
+const legacyMapTitle = computed(() => {
+  if (!legacyBranchProvinceMap.value) return '经营机构分布';
+  const component = props.presentation?.display?.components?.find(item => item?.componentType === 'MAP'
+    && item.visible !== false && item?.dataRefs?.some(ref => Number(ref?.blockId) === 58));
+  return component?.text?.titleMode === 'CUSTOM' && String(component.text.title || '').trim()
+    ? String(component.text.title).trim() : '经营机构分布';
 });
 const mapCityDetails = computed(() => legacyBranchProvinceMap.value
   ? buildCityInstitutionDetails({ institutions: mapModel.value.institutions }, { geoJson: props.geoJson })

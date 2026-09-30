@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCompositionTabsModel } from '../model/compositionTabsModel';
+import { buildCompositionTabsModel, legacyProvinceRingConfigs } from '../model/compositionTabsModel';
 
 const tab = (tabKey, overrides = {}) => ({
   tabKey,
@@ -48,6 +48,8 @@ describe('compositionTabsModel', () => {
     expect(result.tabs[1].corporate.share).toBeCloseTo(59.5, 1);
     expect(result.tabs[2]).toMatchObject({ state: 'MISSING_SIDE', corporate: { share: null }, retail: { share: null } });
     expect(result.tabs[2].total.value).toBeCloseTo(0.1697214328, 8);
+    expect(legacyProvinceRingConfigs(legacy.display.components[0], legacy.template).map(item => item.tabKey))
+      .toEqual(['deposit', 'loan', 'income']);
   });
 
   it('旧 presentation 不启用配置化结构页签', () => {

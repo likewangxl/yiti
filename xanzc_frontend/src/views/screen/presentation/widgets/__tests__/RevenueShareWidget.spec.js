@@ -68,4 +68,12 @@ describe('RevenueShareWidget', () => {
     expect(wrapper.get('[data-testid="revenue-share-operating-section"] [data-testid="presentation-metric-comparisons"]').text()).toContain('较上年 +0.20亿元');
     expect(wrapper.get('[data-testid="revenue-share-intermediary-section"] [data-testid="presentation-metric-comparisons"]').text()).toContain('较上日 +0.05亿元');
   });
+
+  it('保留来源组件的自定义标题，缺省时才使用收入静态标题', () => {
+    const wrapper = mount(RevenueShareWidget, { props: {
+      operating: { ...operating, title: '全辖营业收入' }, intermediary: { ...intermediary, title: '全辖中收' }
+    } });
+    expect(wrapper.get('[data-testid="revenue-share-operating-section"]').text()).toContain('全辖营业收入');
+    expect(wrapper.get('[data-testid="revenue-share-intermediary-section"]').text()).toContain('全辖中收');
+  });
 });

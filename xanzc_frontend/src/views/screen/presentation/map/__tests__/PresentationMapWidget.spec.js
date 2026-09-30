@@ -165,6 +165,23 @@ describe('PresentationMapWidget', () => {
     city.unmount();
   });
 
+  it('旧省级机构地图尊重 MAP 组件的自定义标题，AUTO 仍使用默认标题', () => {
+    const custom = {
+      ...presentation,
+      screenCode: 'SCR_PROVINCE',
+      display: { components: [{
+        ...presentation.display.components[0], componentId: 'legacy-map-58',
+        dataRefs: [{ blockId: 58, role: 'PRIMARY', unit: 'YUAN' }],
+        text: { titleMode: 'CUSTOM', title: '全辖机构分布' }
+      }] }
+    };
+    const wrapper = mount(PresentationMapWidget, {
+      props: { presentation: custom, model, geoJson, mode: 'province', metricKey: 'deposit' },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+    expect(wrapper.get('h2').text()).toBe('全辖机构分布');
+  });
+
   it('city 按真实区县边界传递有机构突出态、无机构灰色和默认聚焦', () => {
     const cityGeoJson = {
       type: 'FeatureCollection',

@@ -3,6 +3,7 @@
     <div
       class="revenue-share-widget__section revenue-share-widget__section--operating"
       data-testid="revenue-share-operating-section"
+      data-config-key="business-revenue-operating"
       aria-label="营业收入"
       :data-display-unit="amountUnitToken(operating)"
     >
@@ -16,6 +17,7 @@
     <div
       class="revenue-share-widget__section revenue-share-widget__section--intermediary"
       data-testid="revenue-share-intermediary-section"
+      data-config-key="business-revenue-fee"
       aria-label="中间业务收入"
       :data-display-unit="amountUnitToken(intermediary)"
     >
@@ -54,7 +56,7 @@ function metricCard(item, componentId, title, order) {
     componentType: 'METRIC_CARD',
     layoutRegion: 'HEADER',
     order,
-    title,
+    title: source.title || title,
     unit: source.unit || source.sourceUnit || '',
     text: source.text || '—',
     state: source.state || 'NO_VALUE',

@@ -125,23 +125,54 @@ function configuredSeries(presentation) {
   return Array.isArray(component?.content?.series) ? component.content.series : [];
 }
 
-function configuredUnitByField(presentation) {
-  const units = new Map();
+function configuredSeriesBySemantic(presentation) {
+  const seriesBySemantic = new Map();
   const series = configuredSeries(presentation);
+  // 明确 semantic 优先于旧列名推断，避免旧 generic 项抢占新配置。
+  for (const item of series) {
+    const field = text(item?.field);
+    const semantic = Object.prototype.hasOwnProperty.call(BUSINESS_GROWTH_FIELDS, item?.seriesKey) ? item.seriesKey : '';
+    if (!semantic || !field) continue;
+    if (!seriesBySemantic.has(semantic)) seriesBySemantic.set(semantic, { field, unit: canonicalUnit(item?.unit) });
+  }
   for (const item of series) {
     const field = text(item?.field);
     const semantic = Object.entries(BUSINESS_GROWTH_FIELDS).find(([, value]) => value === field)?.[0] || '';
-    if (!semantic || !canonicalUnit(item?.unit)) continue;
-    const resolvedField = BUSINESS_GROWTH_FIELDS[semantic];
-    if (!units.has(resolvedField)) units.set(resolvedField, item.unit);
+    if (!semantic || seriesBySemantic.has(semantic) || !field) continue;
+    seriesBySemantic.set(semantic, { field, unit: canonicalUnit(item?.unit) });
   }
-  return units;
+  return seriesBySemantic;
 }
 
-function fieldUnit(block, presentation, field) {
-  const configured = configuredUnitByField(presentation);
+/** 返回分行业务增长曲线实际消费的四个稳定 semantic series。 */
+export function getEffectiveBusinessGrowthSeries(sourcePresentation) {
+  const presentation = presentationOf(sourcePresentation);
+  const configured = configuredSeriesBySemantic(presentation);
+  return Object.entries(BUSINESS_GROWTH_FIELDS).map(([semantic, fallbackField]) => {
+    const item = configured.get(semantic);
+    return {
+      seriesKey: semantic,
+      field: item?.field || fallbackField,
+      unit: item?.unit || '',
+      label: semantic === 'retailDeposit' ? '零售存款'
+        : semantic === 'retailLoan' ? '零售贷款'
+          : semantic === 'corpDeposit' ? '对公存款' : '对公贷款'
+    };
+  });
+}
+
+function configuredField(presentation, semantic) {
+  return getEffectiveBusinessGrowthSeries(presentation).find(item => item.seriesKey === semantic)?.field
+    || BUSINESS_GROWTH_FIELDS[semantic];
+}
+
+function fieldUnit(block, presentation, field, semantic) {
+  const configured = configuredSeriesBySemantic(presentation);
+  const configuredItem = configured.get(semantic)
+    || [...configured.values()].find(item => item.field === field);
   const source = block?.unitByField?.[field]
-    ?? configured.get(field);
+    ?? block?.units?.[field]
+    ?? configuredItem?.unit;
   return canonicalUnit(source);
 }
 
@@ -181,9 +212,11 @@ function emptyGroup(line, issue = '') {
 function buildGroup(line, rows, block, presentation, dateResult) {
   const deposit = line.fields.deposit;
   const loan = line.fields.loan;
-  const depositField = BUSINESS_GROWTH_FIELDS[deposit];
-  const loanField = BUSINESS_GROWTH_FIELDS[loan];
+  const depositField = configuredField(presentation, deposit);
+  const loanField = configuredField(presentation, loan);
   const base = emptyGroup(line);
+  base.fields = { deposit: depositField, loan: loanField };
+  base.series = base.series.map(series => ({ ...series, field: series.key === deposit ? depositField : loanField }));
   if (dateResult.issue) return { ...base, issue: dateResult.issue };
   if (!dateResult.rows.length) return { ...base, issue: '暂无趋势日期数据' };
   if (!dateResult.rows.every(({ row }) => Object.prototype.hasOwnProperty.call(row, depositField)
@@ -191,8 +224,8 @@ function buildGroup(line, rows, block, presentation, dateResult) {
     return { ...base, issue: '缺少固定业务线字段' };
   }
 
-  const depositUnit = fieldUnit(block, presentation, depositField);
-  const loanUnit = fieldUnit(block, presentation, loanField);
+  const depositUnit = fieldUnit(block, presentation, depositField, deposit);
+  const loanUnit = fieldUnit(block, presentation, loanField, loan);
   if (!depositUnit || !loanUnit) return { ...base, issue: '业务线金额缺少单位证据' };
 
   const normalizedRows = dateResult.rows.map(({ row, date }) => ({
@@ -216,19 +249,22 @@ function buildGroup(line, rows, block, presentation, dateResult) {
  */
 export function buildBusinessGrowthModel(sourcePresentation, model = {}) {
   const presentation = presentationOf(sourcePresentation);
+  const configuredMainTrend = mainTrendEntry(presentation);
+  const title = configuredMainTrend?.component?.text?.titleMode === 'CUSTOM'
+    && text(configuredMainTrend.component.text.title) ? text(configuredMainTrend.component.text.title) : '业务增长曲线';
   const disabled = {
     enabled: false,
-    title: '业务增长曲线',
+    title,
     sourceBlockId: null,
     groups: []
   };
   if (presentation.template !== BRANCH_TEMPLATE) return disabled;
 
-  const ref = mainTrendRef(presentation);
+  const ref = configuredMainTrend?.ref;
   if (!ref) {
     return {
       enabled: true,
-      title: '业务增长曲线',
+      title,
       sourceBlockId: null,
       sourceComponentId: null,
       groups: BUSINESS_LINES.map(line => emptyGroup(line, '未找到分行主趋势绑定'))
@@ -240,7 +276,7 @@ export function buildBusinessGrowthModel(sourcePresentation, model = {}) {
   const groups = BUSINESS_LINES.map(line => buildGroup(line, rows, block, presentation, dateResult));
   return {
     enabled: true,
-    title: '业务增长曲线',
+    title,
     sourceBlockId: SOURCE_BLOCK_ID,
     sourceComponentId: mainTrendEntry(presentation)?.component?.componentId || null,
     groups
