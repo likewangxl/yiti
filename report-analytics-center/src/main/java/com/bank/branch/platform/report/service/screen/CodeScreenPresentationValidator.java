@@ -3,6 +3,7 @@ package com.bank.branch.platform.report.service.screen;
 import com.bank.branch.platform.report.dto.req.CodeScreenPresentationDTO;
 import com.bank.branch.platform.report.dto.req.presentation.InstitutionRulesDTO;
 import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayComponentDTO;
+import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayComparisonDTO;
 import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayContractValidator;
 import com.bank.branch.platform.report.entity.RptScreenBlock;
 import com.bank.branch.platform.report.entity.RptScreenDatasource;
@@ -11,6 +12,7 @@ import com.bank.branch.platform.report.exception.RptException;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.Collection;
@@ -43,6 +45,7 @@ public final class CodeScreenPresentationValidator {
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
     private static final ObjectMapper STRICT_PRESENTATION_MAPPER = MAPPER.copy()
+            .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
             .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     private static final Set<String> BRANCH_SLOTS = Set.of(
             "deposit", "loan", "customers", "revenue", "rate", "trend", "composition",
@@ -182,7 +185,8 @@ public final class CodeScreenPresentationValidator {
         }
         JsonNode draft = readObject(draftJson, RptErrorCode.SCREEN_LAYOUT_INVALID);
         Set<Long> blockIds = validateComponents(draft.path("components"), false, Set.of(), template);
-        validateDisplayReferences(style, blockIds, RptErrorCode.SCREEN_LAYOUT_INVALID);
+        validateDisplayReferences(style, blockIds, RptErrorCode.SCREEN_LAYOUT_INVALID,
+                draft.path("components"), Map.of());
     }
 
     /**
@@ -207,7 +211,8 @@ public final class CodeScreenPresentationValidator {
             }
         }
         Set<Long> blockIds = validateComponents(draft.path("components"), true, byId.keySet(), template);
-        validateDisplayReferences(style, blockIds, RptErrorCode.SCREEN_LAYOUT_INVALID);
+        validateDisplayReferences(style, blockIds, RptErrorCode.SCREEN_LAYOUT_INVALID,
+                draft.path("components"), rowComponentTypes(byId));
         for (Long blockId : blockIds) {
             RptScreenBlock row = byId.get(blockId);
             if (row == null) {
@@ -235,11 +240,12 @@ public final class CodeScreenPresentationValidator {
         }
         JsonNode components = root.path("components");
         Set<Long> blockIds = validateComponents(components, true, Set.of(), template);
-        validateDisplayReferences(style, blockIds, RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED);
         JsonNode snapshots = root.path("bindSnapshots");
         if (!snapshots.isObject()) {
             throw untrusted();
         }
+        validateDisplayReferences(style, blockIds, RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED,
+                components, snapshotComponentTypes(snapshots));
         Set<Long> snapshotIds = new LinkedHashSet<>();
         Iterator<Map.Entry<String, JsonNode>> fields = snapshots.fields();
         while (fields.hasNext()) {
@@ -541,17 +547,64 @@ public final class CodeScreenPresentationValidator {
         // 任一维度和重复值均拒绝保存，避免前端自行扩大展示集合。
         validateInstitutionRules(presentation, true);
         try {
+            validateComparisonJsonTypes(presentation.path("display").path("comparisons"));
             CodeScreenPresentationDTO dto = STRICT_PRESENTATION_MAPPER.treeToValue(
                     presentation, CodeScreenPresentationDTO.class);
             if (dto.getDisplaySchemaVersion() == null
                     || dto.getDisplaySchemaVersion() != ScreenDisplayContractValidator.VERSION
-                    || !ScreenDisplayContractValidator.validateDisplayPayload(dto.getDisplay()).isEmpty()) {
+                    || !ScreenDisplayContractValidator.validateDisplayPayload(
+                    presentation.path("template").asText(), dto.getDisplay()).isEmpty()) {
                 throw invalid();
             }
         } catch (RptException ex) {
             throw ex;
         } catch (Exception ex) {
             throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, ex);
+        }
+    }
+
+    /** 比较配置不接受 Jackson 默认的数字/字符串标量强制转换。 */
+    private static void validateComparisonJsonTypes(JsonNode comparisons) {
+        if (comparisons == null || comparisons.isMissingNode()) {
+            return;
+        }
+        if (!comparisons.isObject()) {
+            throw invalid();
+        }
+        Iterator<Map.Entry<String, JsonNode>> entries = comparisons.fields();
+        while (entries.hasNext()) {
+            JsonNode value = entries.next().getValue();
+            if (value == null || !value.isObject()) {
+                throw invalid();
+            }
+            JsonNode enabled = value.get("enabled");
+            if (enabled != null && !enabled.isBoolean()) {
+                throw invalid();
+            }
+            JsonNode historyBlockId = value.get("historyBlockId");
+            if (historyBlockId != null
+                    && (!historyBlockId.isIntegralNumber() || !historyBlockId.canConvertToLong())) {
+                throw invalid();
+            }
+            JsonNode valueFields = value.get("valueFields");
+            if (valueFields != null) {
+                if (!valueFields.isArray()) {
+                    throw invalid();
+                }
+                for (JsonNode field : valueFields) {
+                    if (field == null || !field.isTextual()) {
+                        throw invalid();
+                    }
+                }
+            }
+            JsonNode dateField = value.get("dateField");
+            if (dateField != null && !dateField.isTextual()) {
+                throw invalid();
+            }
+            JsonNode sourceUnit = value.get("sourceUnit");
+            if (sourceUnit != null && !sourceUnit.isTextual()) {
+                throw invalid();
+            }
         }
     }
 
@@ -634,9 +687,14 @@ public final class CodeScreenPresentationValidator {
         }
     }
 
-    /** 新展示组件只能引用当前组件树已经持有的 block；不同展示组件可共享同一 block。 */
+    /**
+     * 新展示组件只能引用当前组件树已经持有的 block；不同展示组件可共享同一 block。
+     * 显式比较还必须指向同一组件树中的 LINE_TREND ChartWidget；发布包再以不可变
+     * bindSnapshots 的 componentType 复核一次，避免从其他屏或可变草稿借用历史块。
+     */
     private static void validateDisplayReferences(JsonNode canvasStyle, Set<Long> blockIds,
-                                                  RptErrorCode errorCode) {
+                                                  RptErrorCode errorCode, JsonNode components,
+                                                  Map<Long, String> trustedBlockTypes) {
         JsonNode presentation = canvasStyle == null ? null : canvasStyle.path("presentation");
         if (presentation == null || !presentation.isObject()
                 || !presentation.hasNonNull("displaySchemaVersion")) {
@@ -652,11 +710,85 @@ public final class CodeScreenPresentationValidator {
                     }
                 });
             }
+            Map<Long, String> chartTypes = chartComponentTypes(components);
+            for (Map.Entry<String, ScreenDisplayComparisonDTO> entry
+                    : dto.getDisplay().getComparisons().entrySet()) {
+                ScreenDisplayComparisonDTO comparison = entry.getValue();
+                if (comparison == null || !Boolean.TRUE.equals(comparison.getEnabled())) {
+                    continue;
+                }
+                Long historyBlockId = comparison.getHistoryBlockId();
+                if (historyBlockId == null || !blockIds.contains(historyBlockId)
+                        || !"LINE_TREND".equals(chartTypes.get(historyBlockId))) {
+                    throw new RptException(errorCode);
+                }
+                if (trustedBlockTypes != null && !trustedBlockTypes.isEmpty()
+                        && !"LINE_TREND".equals(trustedBlockTypes.get(historyBlockId))) {
+                    throw new RptException(errorCode);
+                }
+            }
         } catch (RptException ex) {
             throw ex;
         } catch (Exception ex) {
             throw new RptException(errorCode, ex);
         }
+    }
+
+    private static Map<Long, String> rowComponentTypes(Map<Long, RptScreenBlock> rows) {
+        Map<Long, String> result = new LinkedHashMap<>();
+        if (rows == null) {
+            return result;
+        }
+        for (RptScreenBlock row : rows.values()) {
+            if (row != null && row.getId() != null) {
+                result.put(row.getId(), componentType(row.getComponentType()));
+            }
+        }
+        return result;
+    }
+
+    private static Map<Long, String> snapshotComponentTypes(JsonNode snapshots) {
+        Map<Long, String> result = new LinkedHashMap<>();
+        if (snapshots == null || !snapshots.isObject()) {
+            return result;
+        }
+        Iterator<Map.Entry<String, JsonNode>> fields = snapshots.fields();
+        while (fields.hasNext()) {
+            Map.Entry<String, JsonNode> entry = fields.next();
+            long blockId = parsePositiveLong(entry.getKey());
+            if (entry.getValue() == null || !entry.getValue().isObject()) {
+                throw untrusted();
+            }
+            result.put(blockId, componentType(entry.getValue().path("componentType").asText(null)));
+        }
+        return result;
+    }
+
+    private static Map<Long, String> chartComponentTypes(JsonNode components) {
+        Map<Long, String> result = new LinkedHashMap<>();
+        collectChartComponentTypes(components, result);
+        return result;
+    }
+
+    private static void collectChartComponentTypes(JsonNode components, Map<Long, String> result) {
+        if (components == null || !components.isArray()) {
+            return;
+        }
+        for (JsonNode component : components) {
+            if (component == null || !component.isObject()) {
+                continue;
+            }
+            if ("ChartWidget".equals(component.path("component").asText())
+                    && isPositiveIntegral(component.path("blockId"))) {
+                result.put(component.path("blockId").longValue(),
+                        componentType(component.path("innerType").asText(null)));
+            }
+            collectChartComponentTypes(component.path("children"), result);
+        }
+    }
+
+    private static String componentType(String value) {
+        return value == null ? null : value;
     }
 
     private static void validateSourcePresentationMetadata(JsonNode canvasStyle) {

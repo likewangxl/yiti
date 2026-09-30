@@ -2,7 +2,9 @@ package com.bank.branch.platform.report.dto.req.presentation;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -38,10 +40,20 @@ public final class ScreenDisplayContractValidator {
 
     /** 缺省配置表示旧展示路径，返回空问题清单。 */
     public static List<String> validateDisplayPayload(ScreenDisplayPayloadDTO payload) {
+        return validateDisplayPayload(null, payload);
+    }
+
+    /**
+     * 校验带模板语义的展示负载。比较配置必须在这里和普通展示组件一起校验，
+     * 不能由前端目录或运行时兜底决定可用键。
+     */
+    public static List<String> validateDisplayPayload(String template, ScreenDisplayPayloadDTO payload) {
         if (payload == null) {
             return new ArrayList<>();
         }
-        return validatePayload(payload.getComponents());
+        List<String> issues = validatePayload(payload.getComponents());
+        validateComparisons(template, payload.getComponents(), payload.getComparisons(), issues);
+        return issues;
     }
 
     private static List<String> validatePayload(List<ScreenDisplayComponentDTO> components) {
@@ -75,6 +87,103 @@ public final class ScreenDisplayContractValidator {
             validateDataRefs(component, prefix, issues);
         }
         return issues;
+    }
+
+    private static void validateComparisons(String template, List<ScreenDisplayComponentDTO> components,
+                                            Map<String, ScreenDisplayComparisonDTO> comparisons,
+                                            List<String> issues) {
+        if (comparisons == null) {
+            issues.add("comparisons不能为空");
+            return;
+        }
+        Map<String, ScreenDisplayComponentDTO> cardComponents = new LinkedHashMap<>();
+        if (components != null) {
+            for (ScreenDisplayComponentDTO component : components) {
+                if (component != null && component.getComponentType() != null
+                        && (component.getComponentType() == ScreenComponentType.METRIC_CARD
+                        || component.getComponentType() == ScreenComponentType.COMPLETION)
+                        && !trim(component.getComponentId()).isEmpty()) {
+                    cardComponents.put(trim(component.getComponentId()), component);
+                }
+            }
+        }
+        for (Map.Entry<String, ScreenDisplayComparisonDTO> entry : comparisons.entrySet()) {
+            String key = entry.getKey();
+            ScreenDisplayComparisonDTO comparison = entry.getValue();
+            boolean branchOverview = key != null && "branch-overview-v1".equals(template)
+                    && Set.of("overview-deposit", "overview-loan", "overview-settlementDeposit").contains(key);
+            ScreenDisplayComponentDTO sourceComponent = cardComponents.get(key);
+            if ((!branchOverview && sourceComponent == null) || key == null || key.isBlank()) {
+                issues.add("comparisons键不属于当前METRIC_CARD/COMPLETION或分行总览: " + key);
+                continue;
+            }
+            if (comparison == null) {
+                issues.add("comparisons[" + key + "]不能为空");
+                continue;
+            }
+            validateComparison(key, branchOverview, comparison, sourceComponent, issues);
+        }
+    }
+
+    private static void validateComparison(String key, boolean overviewKey,
+                                           ScreenDisplayComparisonDTO comparison,
+                                           ScreenDisplayComponentDTO sourceComponent,
+                                           List<String> issues) {
+        String prefix = "comparisons[" + key + "] ";
+        if (comparison.getEnabled() == null) {
+            issues.add(prefix + "enabled不能为空");
+            return;
+        }
+        if (!comparison.getEnabled()) {
+            if (comparison.getHistoryBlockId() != null || comparison.getValueFields() != null
+                    || comparison.getDateField() != null || comparison.getSourceUnit() != null) {
+                issues.add(prefix + "enabled=false时只能配置enabled");
+            }
+            return;
+        }
+        if (comparison.getHistoryBlockId() == null || comparison.getHistoryBlockId() <= 0) {
+            issues.add(prefix + "historyBlockId必须是正整数");
+        }
+        List<String> valueFields = comparison.getValueFields();
+        if (valueFields == null || valueFields.isEmpty() || valueFields.size() > 8) {
+            issues.add(prefix + "valueFields必须是1到8个字段");
+        } else {
+            Set<String> seen = new HashSet<>();
+            for (String field : valueFields) {
+                String normalized = trim(field);
+                if (field == null || normalized.isEmpty() || normalized.length() > 100
+                        || !normalized.equals(field) || !seen.add(normalized)) {
+                    issues.add(prefix + "valueFields必须是1到8个不重复的非空字段");
+                    break;
+                }
+            }
+        }
+        String dateField = comparison.getDateField();
+        if (dateField == null || trim(dateField).isEmpty() || trim(dateField).length() > 100
+                || !trim(dateField).equals(dateField)) {
+            issues.add(prefix + "dateField必须是1到100个字符");
+        }
+        ScreenDisplayUnit sourceUnit = comparison.getSourceUnit();
+        if (sourceUnit == null || sourceUnit == ScreenDisplayUnit.AUTO || sourceUnit.kind() == null) {
+            issues.add(prefix + "sourceUnit必须是明确的金融单位");
+        }
+        if (sourceComponent != null && sourceUnit != null && sourceUnit.kind() != null) {
+            Set<String> refKinds = new HashSet<>();
+            if (sourceComponent.getDataRefs() != null) {
+                for (ScreenDisplayDataRefDTO ref : sourceComponent.getDataRefs()) {
+                    if (ref != null && ref.getUnit() != null && ref.getUnit().kind() != null) {
+                        refKinds.add(ref.getUnit().kind());
+                    }
+                }
+            }
+            if (refKinds.size() == 1 && !refKinds.contains(sourceUnit.kind())) {
+                issues.add(prefix + "sourceUnit与卡片来源单位类型冲突");
+            }
+        }
+        if (valueFields != null && valueFields.size() > 1
+                && (!overviewKey || sourceUnit == null || !"amount".equals(sourceUnit.kind()))) {
+            issues.add(prefix + "普通卡或非金额比较不能配置多个valueFields");
+        }
     }
 
     private static void validateText(ScreenDisplayTextDTO text, String prefix, List<String> issues) {
