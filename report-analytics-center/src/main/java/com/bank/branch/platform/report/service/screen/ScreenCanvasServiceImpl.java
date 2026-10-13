@@ -344,7 +344,9 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
                         b.getStyleJson() == null ? "{}" : b.getStyleJson()));
                 snap.set("drill", objectMapper.readTree(
                         b.getDrillJson() == null ? "{}" : b.getDrillJson()));
-                if (PublishedDatasourceDefinition.requiredFor(pkg)) {
+                // 每次新发布的 CODE 包都冻结数据源定义；旧包仍由运行时的
+                // requiredFor(root) 缺省路径兼容读取当前数据源。
+                if (template != null) {
                     Long datasourceId = bind.path("dsId").isIntegralNumber() ? bind.path("dsId").longValue() : null;
                     RptScreenDatasource datasource = datasourceId == null ? null : dsMapper.selectById(datasourceId);
                     PublishedDatasourceDefinition.write(snap, datasource, objectMapper);

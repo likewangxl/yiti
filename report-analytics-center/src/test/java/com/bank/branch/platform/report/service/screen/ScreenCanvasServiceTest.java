@@ -1519,6 +1519,92 @@ class ScreenCanvasServiceTest {
         CodeScreenPresentationValidator.validatePublishedPackage(published.getValue());
     }
 
+    @Test
+    void publish_legacyCodeTemplateWithoutDisplaySchemaWritesImmutableSourceDefinition() {
+        RptScreen s = screen(7L, 1);
+        s.setBizLine("COMMON");
+        s.setCanvasStyleJson("{\"schemaVersion\":2,\"presentation\":{"
+                + "\"type\":\"CODE\",\"template\":\"branch-overview-v1\"}}");
+        String bind = "{\"dsId\":12,\"period\":\"LATEST\",\"fields\":{\"value\":\"balance\"},"
+                + "\"units\":{\"value\":\"YUAN\"}}";
+        s.setCanvasDraftJson("{\"schemaVersion\":2,\"components\":[{\"component\":\"ChartWidget\","
+                + "\"id\":\"w-deposit\",\"blockId\":1201,\"propValue\":{\"bindingKey\":\"deposit\"},"
+                + "\"bindJson\":" + quoteJson(bind) + "}]}");
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        RptScreenBlock block = publishBlock(1201L, bind);
+        block.setComponentType("METRIC_CARD");
+        when(blockMapper.selectList(any())).thenReturn(List.of(block));
+        when(dsMapper.selectById(12L)).thenReturn(codeDatasource(12L));
+        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString()))
+                .thenReturn(1);
+        when(publishLogMapper.selectList(any())).thenReturn(List.of());
+
+        var request = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
+        request.setScreenId(7L);
+        request.setExpectedVersion(1);
+        request.setReason("发布历史代码化分行屏");
+
+        service.publishCanvas(request);
+
+        ArgumentCaptor<String> published = ArgumentCaptor.forClass(String.class);
+        verify(canvasMapper).applyPublishedCas(eq(7L), eq(1), published.capture(),
+                eq(s.getCanvasStyleJson()), eq(s.getCanvasDraftJson()), eq(1), anyString());
+        assertThat(published.getValue()).contains("\"sourceDefinition\":", "\"definitionHash\":");
+    }
+
+    @Test
+    void publish_corporateCodeTemplateWithoutDisplaySchemaWritesImmutableSourceDefinition() {
+        assertThat(publishLegacyCodePackage("corporate-overview-v1", "CORP", "corpDeposit", "deposit"))
+                .contains("\"sourceDefinition\":", "\"definitionHash\":");
+    }
+
+    @Test
+    void publish_retailCodeTemplateWithoutDisplaySchemaWritesImmutableSourceDefinition() {
+        assertThat(publishLegacyCodePackage("retail-overview-v1", "RETAIL", "retailAum", "aum"))
+                .contains("\"sourceDefinition\":", "\"definitionHash\":");
+    }
+
+    private String publishLegacyCodePackage(String template, String bizLine,
+                                            String bindingKey, String metricName) {
+        RptScreen s = screen(7L, 1);
+        s.setBizLine(bizLine);
+        s.setCanvasStyleJson("{\"presentation\":{"
+                + "\"type\":\"CODE\",\"template\":\"" + template + "\"}}");
+        String bind = "{\"dsId\":12,\"period\":\"LATEST\",\"fields\":{\"value\":\""
+                + metricName + "\"},\"units\":{\"value\":\"YUAN\"}}";
+        s.setCanvasDraftJson("{\"components\":[{\"component\":\"ChartWidget\","
+                + "\"id\":\"w-value\",\"blockId\":1201,\"propValue\":{\"bindingKey\":\""
+                + bindingKey + "\"},\"bindJson\":" + quoteJson(bind) + "}]}");
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        RptScreenBlock block = publishBlock(1201L, bind);
+        block.setComponentType("METRIC_CARD");
+        when(blockMapper.selectList(any())).thenReturn(List.of(block));
+        when(dsMapper.selectById(12L)).thenReturn(legacyCodeDatasource(12L, bizLine, metricName));
+        when(canvasMapper.applyPublishedCas(anyLong(), anyInt(), anyString(), anyString(), anyString(), anyInt(), anyString()))
+                .thenReturn(1);
+        when(publishLogMapper.selectList(any())).thenReturn(List.of());
+
+        var request = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
+        request.setScreenId(7L);
+        request.setExpectedVersion(1);
+        request.setReason("发布" + bizLine + "代码化大屏");
+        service.publishCanvas(request);
+
+        ArgumentCaptor<String> published = ArgumentCaptor.forClass(String.class);
+        verify(canvasMapper).applyPublishedCas(eq(7L), eq(1), published.capture(),
+                eq(s.getCanvasStyleJson()), eq(s.getCanvasDraftJson()), eq(1), anyString());
+        return published.getValue();
+    }
+
+    private RptScreenDatasource legacyCodeDatasource(long id, String bizLine, String metricName) {
+        RptScreenDatasource datasource = codeDatasource(id);
+        datasource.setBizLine(bizLine);
+        datasource.setConfigJson("{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\","
+                + "\"metrics\":[{\"metricCode\":\"M1\",\"metricName\":\""
+                + metricName + "\",\"slot\":1}]}");
+        return datasource;
+    }
+
     private CanvasStyleDTO displayStyle(long blockId) {
         try {
             return new com.fasterxml.jackson.databind.ObjectMapper().readValue(displayStyleJson(blockId), CanvasStyleDTO.class);

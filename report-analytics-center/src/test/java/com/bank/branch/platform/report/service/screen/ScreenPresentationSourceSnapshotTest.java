@@ -64,6 +64,18 @@ class ScreenPresentationSourceSnapshotTest {
     }
 
     @Test
+    void immutableDefinitionIsUsedForNewLegacyCodePackageEvenWithoutDisplaySchemaVersion() {
+        ObjectNode snapshot = mapper.createObjectNode();
+        PublishedDatasourceDefinition.write(snapshot, datasource("{\"a\":1}"), mapper);
+        RptScreenDatasource current = datasource("{\"a\":99}");
+
+        RptScreenDatasource effective = PublishedDatasourceDefinition.effective(snapshot, current, mapper, false);
+
+        assertThat(effective.getConfigJson()).isEqualTo("{\"a\":1}");
+        assertThat(effective.getStatus()).isEqualTo("ACTIVE");
+    }
+
+    @Test
     void equivalentJsonObjectOrderProducesSameDefinitionHash() {
         ObjectNode first = mapper.createObjectNode();
         ObjectNode second = mapper.createObjectNode();

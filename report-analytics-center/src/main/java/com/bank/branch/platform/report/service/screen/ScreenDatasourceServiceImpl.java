@@ -479,8 +479,12 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
                 }
                 Map<String, ScreenMetricSlotDao.MetricSlot> found = slotDao.selectByCodes(codes).stream()
                         .collect(Collectors.toMap(ScreenMetricSlotDao.MetricSlot::metricCode, Function.identity()));
-                // 全部存在 + 维度匹配，重写 metrics 快照
-                ObjectNode newCfg = objectMapper.createObjectNode();
+                // 全部存在 + 维度匹配，重写服务端权威字段；其余顶层扩展由安全副本保留，
+                // 但不会覆盖 table/主体/metrics，也不会改变 WIDE_TABLE 的固定查询分派。
+                if (!cfg.isObject()) {
+                    throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+                }
+                ObjectNode newCfg = ((ObjectNode) cfg).deepCopy();
                 newCfg.put("table", table);
                 newCfg.put("subjectCol", meta[0]);
                 newCfg.put("subjectParam", meta[1]);

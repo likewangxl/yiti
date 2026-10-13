@@ -932,6 +932,48 @@ class ScreenDatasourceServiceTest {
         assertThat(cap.getValue().getDsName()).isEqualTo("更新后的名称");
     }
 
+    @Test
+    void update_wideTable_rewritesAuthoritativeFieldsAndPreservesPoliciesAndExtensions() {
+        RptScreenDatasource existing = new RptScreenDatasource();
+        existing.setId(6L);
+        existing.setDsCode("SCRDS_WIDE");
+        existing.setDsName("机构指标");
+        existing.setDsType("TIMESERIES");
+        existing.setSourceKind("WIDE_TABLE");
+        existing.setBizLine("COMMON");
+        existing.setStatus("ACTIVE");
+        existing.setConfigJson("{\"schemaVersion\":2,\"scopeMode\":\"SUBJECT\","
+                + "\"table\":\"EMP_INDEX_RESULT\",\"metrics\":[{\"metricCode\":\"M_0001\"}]}");
+        when(dsMapper.selectById(6L)).thenReturn(existing);
+        when(slotDao.selectByCodes(anyList())).thenReturn(
+                List.of(new ScreenMetricSlotDao.MetricSlot("M_0001", "机构存款", 7, "ORG")));
+
+        ScreenDatasourceSaveReqDTO req = wideReqWith("{\"schemaVersion\":2,\"scopeMode\":\"SUBJECT\","
+                + "\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"client_subject\","
+                + "\"subjectParam\":\"clientSubject\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\",\"metricName\":\"client metric\",\"slot\":999}],"
+                + "\"batchPolicy\":{\"maxAgeDays\":7,\"requiredComplete\":true},"
+                + "\"qualityPolicy\":{\"maxAgeDays\":14,\"requiredComplete\":false},"
+                + "\"extensionMarker\":{\"uiOnly\":\"retain-me\"}}");
+        req.setDsName("机构指标更新");
+        req.setReason("保留数据源扩展配置");
+
+        service.update(6L, req);
+
+        ArgumentCaptor<RptScreenDatasource> cap = ArgumentCaptor.forClass(RptScreenDatasource.class);
+        verify(dsMapper).updateById(cap.capture());
+        String config = cap.getValue().getConfigJson();
+        assertThat(config).contains("\"table\":\"ORG_INDEX_RESULT\"")
+                .contains("\"subjectCol\":\"org_code\"")
+                .contains("\"subjectParam\":\"orgCode\"")
+                .contains("\"metricName\":\"机构存款\"")
+                .contains("\"slot\":7")
+                .contains("\"batchPolicy\":{\"maxAgeDays\":7,\"requiredComplete\":true}")
+                .contains("\"qualityPolicy\":{\"maxAgeDays\":14,\"requiredComplete\":false}")
+                .contains("\"extensionMarker\":{\"uiOnly\":\"retain-me\"}");
+        assertThat(config).doesNotContain("client_subject", "clientSubject", "client metric", "\"slot\":999");
+    }
+
     /** 已发布屏快照引用的数据源允许原地改变查询语义，但必须经过引用屏安全矩阵并完整审计。 */
     @Test
     void update_publishedReferencesAllowsSemanticChangeAndAuditsAllScreenCodes() {
