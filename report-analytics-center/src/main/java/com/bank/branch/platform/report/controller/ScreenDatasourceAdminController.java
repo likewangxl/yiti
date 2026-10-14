@@ -10,7 +10,9 @@ import com.bank.branch.platform.report.dto.req.ScreenTryRunReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDataRespDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDatasourceRespDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenKpiSchemeRespDTO;
+import com.bank.branch.platform.report.dto.resp.ScreenMetricCatalogItemDTO;
 import com.bank.branch.platform.report.service.screen.ScreenDatasourceService;
+import com.bank.branch.platform.report.service.screen.ScreenMetricCatalogQuery;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -45,6 +47,7 @@ import java.util.List;
 public class ScreenDatasourceAdminController {
 
     private final ScreenDatasourceService datasourceService;
+    private final ScreenMetricCatalogQuery metricCatalogQuery;
 
     @GetMapping("/datasources")
     @BizAuth(bizType = BizType.REPORT, action = BizAction.LIST)
@@ -93,6 +96,20 @@ public class ScreenDatasourceAdminController {
     public ResponseWrapper<ScreenDataRespDTO> probeColumns(@PathVariable Long id,
                                                              @Valid @RequestBody ScreenDatasourceProbeReqDTO req) {
         return ResponseWrapper.success(datasourceService.probeColumns(id, req));
+    }
+
+    /**
+     * 绩效指标目录。大屏配置人员往往没有 PERF_CONFIG 列表权限，
+     * 因此用 REPORT 列表资源读取只读定义，而不是转发 /api/perf/metrics。
+     * 资源 R_RPT_SCR_METRIC_CAT 需在目标库登记后才会放行。
+     */
+    @GetMapping("/metric-catalog")
+    @BizAuth(bizType = BizType.REPORT, action = BizAction.LIST)
+    @Operation(summary = "大屏可绑定指标目录（PERF_METRIC_DEF 只读快照）")
+    public ResponseWrapper<List<ScreenMetricCatalogItemDTO>> metricCatalog(
+            @RequestParam(required = false) String baseDim,
+            @RequestParam(required = false) String keyword) {
+        return ResponseWrapper.success(metricCatalogQuery.list(baseDim, keyword));
     }
 
     /** 资源 R_RPT_SCR_KPI_SCH（PT_RESOURCE 注册 SQL 由后续统一脚本处理） */

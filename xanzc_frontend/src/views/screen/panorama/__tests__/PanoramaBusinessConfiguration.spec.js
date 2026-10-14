@@ -18,7 +18,8 @@ vi.mock('@/api/screen', () => ({
       fieldMeta: [{ col: 'old_balance', alias: '原存款余额', role: 'METRIC', semantic: 'deposit', unit: 'YUAN' },
         { col: 'balance', alias: '存款余额', role: 'METRIC', semantic: 'deposit', unit: 'YUAN' }] }), timeParamJson: '["LATEST"]' }]),
   getScreenView: vi.fn(), queryScreenData: vi.fn(), saveScreenCanvas: api.save,
-  publishScreenCanvas: vi.fn(), discardScreenCanvas: vi.fn(), listOrgProfiles: vi.fn(), listOrgGroups: vi.fn()
+  publishScreenCanvas: vi.fn(), discardScreenCanvas: vi.fn(), listOrgProfiles: vi.fn(), listOrgGroups: vi.fn(),
+  listScreenMetricCatalog: vi.fn(async () => []), saveScreenDatasource: vi.fn(), tryRunScreenDatasource: vi.fn()
 }));
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ push: vi.fn() }) }));
 import PanoramaBindings from '../PanoramaBindings.vue';

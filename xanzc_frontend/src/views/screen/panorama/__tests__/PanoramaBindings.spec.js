@@ -12,7 +12,10 @@ const api = vi.hoisted(() => ({
   discardScreenCanvas: vi.fn(),
   queryScreenData: vi.fn(),
   listOrgProfiles: vi.fn(),
-  listOrgGroups: vi.fn()
+  listOrgGroups: vi.fn(),
+  listScreenMetricCatalog: vi.fn(async () => []),
+  saveScreenDatasource: vi.fn(),
+  tryRunScreenDatasource: vi.fn()
 }));
 vi.mock('@/api/screen', () => api);
 

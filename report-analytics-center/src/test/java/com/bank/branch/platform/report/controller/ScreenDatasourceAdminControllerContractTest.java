@@ -2,9 +2,11 @@ package com.bank.branch.platform.report.controller;
 
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.report.dto.req.ScreenDatasourceProbeReqDTO;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PostMapping;
 
@@ -34,5 +36,16 @@ class ScreenDatasourceAdminControllerContractTest {
         assertThat(delete.getAnnotation(DeleteMapping.class).value()).containsExactly("/datasources/{id}");
         assertThat(delete.getParameters()[1].getAnnotation(RequestParam.class)).isNotNull();
         assertThat(delete.getAnnotation(BizAuth.class).action()).isEqualTo(BizAction.DELETE);
+    }
+
+    /** 指标目录是报表列表能力，不能复用绩效配置权限，也不能走试跑的高危执行权限。 */
+    @Test
+    void metricCatalog_usesReportListOnDedicatedPath() throws Exception {
+        Method catalog = ScreenDatasourceAdminController.class
+                .getMethod("metricCatalog", String.class, String.class);
+
+        assertThat(catalog.getAnnotation(GetMapping.class).value()).containsExactly("/metric-catalog");
+        assertThat(catalog.getAnnotation(BizAuth.class).bizType()).isEqualTo(BizType.REPORT);
+        assertThat(catalog.getAnnotation(BizAuth.class).action()).isEqualTo(BizAction.LIST);
     }
 }

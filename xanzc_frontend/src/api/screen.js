@@ -77,6 +77,14 @@ export function listKpiSchemes() {
   return call('get', '/screen/admin/kpi-schemes', {}, []);
 }
 
+/** 大屏可绑定指标目录。读取失败不能回落成本地假指标。 */
+export function listScreenMetricCatalog(params = {}) {
+  const query = {};
+  if (params.baseDim) query.baseDim = params.baseDim;
+  if (params.keyword) query.keyword = params.keyword;
+  return call('get', '/screen/admin/metric-catalog', { params: query });
+}
+
 // ===== 大屏布局管理 =====
 export function listScreens() {
   // 屏目录读取失败不能被误判为“没有屏”，否则管理页可能进入错误的新建态。

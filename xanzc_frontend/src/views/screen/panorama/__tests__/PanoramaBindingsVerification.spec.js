@@ -17,7 +17,8 @@ vi.mock('@/api/screen', () => ({
   listScreenDatasources: vi.fn(async () => [{ id: 77, dsName: '余额来源', status: 'ACTIVE', bizLine: 'COMMON', sourceKind: 'WIDE_TABLE',
     configJson: JSON.stringify({ fieldMeta: [{ col: 'balance', role: 'METRIC', unit: '元' }] }) }]),
   getScreenView: vi.fn(), queryScreenData: vi.fn(), saveScreenCanvas: vi.fn(),
-  publishScreenCanvas: vi.fn(), discardScreenCanvas: vi.fn(), listOrgProfiles: vi.fn(), listOrgGroups: vi.fn()
+  publishScreenCanvas: vi.fn(), discardScreenCanvas: vi.fn(), listOrgProfiles: vi.fn(), listOrgGroups: vi.fn(),
+  listScreenMetricCatalog: vi.fn(async () => []), saveScreenDatasource: vi.fn(), tryRunScreenDatasource: vi.fn()
 }));
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('../PanoramaDataVerification.vue', () => ({ default: {

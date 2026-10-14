@@ -106,6 +106,16 @@
                 :label="`选择${selectedBusinessField.label}指标`" :disabled="writing || loading"
                 @select="entry => applyBusinessMetric(selectedBusinessField, entry)" />
             </section>
+            <MetricBindingComposer v-if="!selectedCatalogReadonly"
+              :slot-key="selectedSlot"
+              :slot-label="selectedSpec.label"
+              :template-name="selectedTemplate"
+              :field-specs="selectedFieldSpecs"
+              :composition-mode="compositionMode"
+              :screen="screenScope"
+              :datasources="datasources"
+              :disabled="writing || loading"
+              @apply="applyMetricBindingPlan" />
             <details v-if="!selectedCatalogReadonly || comparisonConfigurable" class="panorama-bindings__advanced" data-testid="advanced-binding-fields">
               <summary>高级字段配置（技术维护）</summary>
             <template v-if="hasNewDisplayPresentation && selectedDisplayFieldMappings.length">
@@ -258,7 +268,8 @@ import {
   getScreenCanvas,
   listScreenDatasources,
   listScreens,
-  saveScreenCanvas
+  saveScreenCanvas,
+  saveScreenDatasource
 } from '@/api/screen';
 import { parseDatasourceConfig } from '../designer/widgets/chart-widget/dsFilter';
 import {
@@ -289,6 +300,7 @@ import {
 import PanoramaDatasourcePicker from './PanoramaDatasourcePicker.vue';
 import PanoramaDataVerification from './PanoramaDataVerification.vue';
 import BusinessMetricPicker from './BusinessMetricPicker.vue';
+import MetricBindingComposer from './MetricBindingComposer.vue';
 import { buildBusinessMetricCatalog } from './businessMetricCatalog';
 import { qualifyBusinessMetricEntries } from './businessMetricEligibility';
 import { buildBusinessSourceCandidates } from '../presentation/sources/businessSourceCandidates';
@@ -996,6 +1008,56 @@ function businessEntriesFor(fieldSpec) {
     fieldSpec, innerType: selectedSpec.value?.innerType, sources: scopedDatasources.value,
     period: selectedBinding.value.period, savedBindings: savedBindingsForCatalog.value
   });
+}
+
+async function applyMetricBindingPlan(plan) {
+  if (!plan?.ok || writing.value || loading.value) return;
+  saving.value = true;
+  error.value = '';
+  try {
+    let dsId = Number(plan.existingDatasourceId);
+    if (!Number.isSafeInteger(dsId) || dsId <= 0) {
+      const created = await saveScreenDatasource(plan.datasourceRequest);
+      dsId = typeof created === 'number' ? created : Number(created?.id ?? created);
+      if (!Number.isSafeInteger(dsId) || dsId <= 0) throw new Error('数据源已提交，但没有返回有效编号');
+      const sourceList = await listScreenDatasources();
+      datasources.value = Array.isArray(sourceList) ? sourceList : [];
+    }
+    const binding = selectedBinding.value;
+    binding.dsId = dsId;
+    binding.period = plan.binding.period;
+    binding.fields = { ...(plan.binding.fields || {}) };
+    binding.units = { ...(plan.binding.units || {}) };
+    manualSlots.add(selectedSlot.value);
+    autoReviewSlots.delete(selectedSlot.value);
+    syncDisplayFromPlan(plan);
+    conflict.value = '';
+    markLocalDirty();
+  } catch (bindError) {
+    error.value = bindError?.message || '指标绑定失败';
+    emit('error', bindError);
+  } finally {
+    saving.value = false;
+  }
+}
+
+function syncDisplayFromPlan(plan) {
+  if (!hasNewDisplayPresentation.value || !selectedDisplayComponent.value) return;
+  const fields = plan.binding?.fields || {};
+  const units = plan.binding?.units || {};
+  if (fields.value && isSchemaMetricCard.value) {
+    const component = selectedDisplayComponent.value;
+    displaySession.value = updateModelComponent(displaySession.value, component.componentId, {
+      dataRefs: (component.dataRefs || []).map(ref => ({ ...ref, unit: units.value }))
+    });
+    const mapping = selectedDisplayFieldMappings.value.find(item => item.kind === 'mainField');
+    if (mapping) setComponentField(mapping, fields.value);
+  }
+  const seriesSemantic = { retailDeposit: 'deposit', corpDeposit: 'deposit', retailLoan: 'loan', corpLoan: 'loan' };
+  for (const mapping of selectedDisplayFieldMappings.value.filter(item => item.kind === 'growthSeries')) {
+    const semantic = seriesSemantic[mapping.seriesKey];
+    if (semantic && fields[semantic]) setComponentField(mapping, fields[semantic]);
+  }
 }
 
 function applyBusinessMetric(fieldSpec, selection) {
