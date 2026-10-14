@@ -6,6 +6,7 @@ import {
   normalizeCorporateBinding,
   validateCorporateBinding
 } from './corporateBindings';
+import { getControlledSourceFieldOptions } from './controlledSourceFields';
 
 /**
  * 代码化经营大屏的绑定契约。
@@ -401,7 +402,14 @@ export function getDatasourceFieldOptions(datasource = {}) {
       role: String(item?.role || fallbackRole).toUpperCase(),
       amountScale: item?.amountScale || null,
       unit: item?.unit || null,
-      builtin: item?.builtin === true
+      builtin: item?.builtin === true,
+      semantic: item?.semantic || null,
+      profile: item?.profile || null,
+      fixedSlot: item?.fixedSlot || null,
+      fixed: item?.fixed === true,
+      kind: item?.kind || null,
+      disabled: item?.disabled === true,
+      disabledReason: item?.disabledReason || ''
     });
   };
   // fieldMeta is an explicit output schema: a missing/unknown role must stay
@@ -410,6 +418,10 @@ export function getDatasourceFieldOptions(datasource = {}) {
   // them as numeric output columns.
   for (const item of Array.isArray(config?.fieldMeta) ? config.fieldMeta : []) add(item, 'UNKNOWN');
   for (const item of Array.isArray(config?.metrics) ? config.metrics : []) add(item);
+
+  const controlled = getControlledSourceFieldOptions(datasource);
+  if (controlled.some(item => item?.role === 'NOTICE')) return controlled;
+  controlled.forEach(item => add(item, item.role || 'METRIC'));
 
   // 这些列由 ScreenQueryEngine 的固定 SELECT 形状产生，而不是 datasource
   // metrics 配置。它们是可证明的维度候选，可以安全补入管理页；CUSTOM_SQL

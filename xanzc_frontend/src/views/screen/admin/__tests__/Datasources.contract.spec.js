@@ -64,7 +64,7 @@ async function mountPage() {
 describe('Datasources.vue 最终契约', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('完整发布/归档引用允许编辑语义字段并显示影响已发布大屏的风险提示，但仍不允许删除', async () => {
+  it('完整发布/归档引用允许编辑语义字段并显示条件化版本风险提示，但仍不允许删除', async () => {
     const wrapper = await mountPage();
     wrapper.vm.openEdit(frozenRow);
     await wrapper.vm.$nextTick();
@@ -74,8 +74,13 @@ describe('Datasources.vue 最终契约', () => {
       draftCodes: ['SCR_DRAFT_A', 'SCR_DRAFT_B'],
       publishedCodes: ['SCR_LIVE_A', 'SCR_ARCHIVE_B'], publishedReferenced: true, deleteBlocked: true
     });
-    expect(wrapper.find('[data-testid="datasource-freeze-notice"]').text())
-      .toContain('直接影响引用该数据源的已发布大屏');
+    const notice = wrapper.find('[data-testid="datasource-freeze-notice"]').text();
+    expect(notice).toContain('编辑会影响引用草稿');
+    expect(notice).toContain('包含查询定义快照的发布版本须重新发布生效');
+    expect(notice).toContain('旧发布版本可能直接受影响');
+    expect(notice).toContain('请先核对引用版本或新建副本');
+    expect(notice).toContain('SCR_LIVE_A');
+    expect(notice).toContain('SCR_ARCHIVE_B');
     expect(wrapper.vm.dlg.remark).toBe('原始备注');
 
     const source = readFileSync(resolve(process.cwd(), 'src/views/screen/admin/Datasources.vue'), 'utf8');
@@ -241,5 +246,124 @@ describe('Datasources.vue 最终契约', () => {
     wrapper.vm.updateFieldMetaUnit(row, '维度单位');
     wrapper.vm.updateFieldMetaDecimals(row, '1');
     expect(row).toMatchObject({ unit: '维度单位', decimals: '1' });
+  });
+
+  it('列表筛选只向现有 API 发送 dsType/keyword，状态在页面本地筛选', async () => {
+    const wrapper = await mountPage();
+    api.listScreenDatasources.mockResolvedValueOnce([
+      { ...frozenRow, id: 81, dsName: '启用单值', dsType: 'SINGLE', status: 'ACTIVE' },
+      { ...frozenRow, id: 82, dsName: '停用单值', dsType: 'SINGLE', status: 'DISABLED' },
+      { ...frozenRow, id: 83, dsName: '启用时序', dsType: 'TIMESERIES', status: 'ACTIVE' }
+    ]);
+    wrapper.vm.filters.keyword = '单值';
+    wrapper.vm.filters.dsType = 'SINGLE';
+    wrapper.vm.filters.status = 'ACTIVE';
+    await wrapper.vm.reload();
+
+    expect(api.listScreenDatasources).toHaveBeenLastCalledWith({ dsType: 'SINGLE', keyword: '单值' });
+    expect(wrapper.vm.list.map(row => row.id)).toEqual([81]);
+  });
+
+  it('编辑固定来源后列表查询和重置控件仍保持可见', async () => {
+    const wrapper = await mountPage();
+    wrapper.vm.openEdit({
+      ...frozenRow,
+      sourceKind: 'M98_STAT',
+      dsType: 'SINGLE',
+      bizLine: 'CORP',
+      configJson: JSON.stringify({
+        schemaVersion: 2, scopeMode: 'NAMED_GROUP', profile: 'CORP_REVENUE', mode: 'SUMMARY'
+      })
+    });
+    await wrapper.vm.$nextTick();
+
+    const buttons = wrapper.findAll('button').map(button => button.text());
+    expect(buttons).toContain('查询');
+    expect(buttons).toContain('重置');
+  });
+
+  it('编辑往返保留策略和未知扩展字段，试跑当前表单不触发保存', async () => {
+    const wrapper = await mountPage();
+    const row = {
+      ...frozenRow,
+      id: 84,
+      configJson: JSON.stringify({
+        schemaVersion: 2, scopeMode: 'SUBJECT', table: 'EMP_INDEX_RESULT',
+        metrics: [{ metricCode: 'M1', metricName: '指标', slot: 1 }],
+        batchPolicy: { maxAgeDays: 3, requiredComplete: true },
+        qualityPolicy: { maxAgeDays: 5, requiredComplete: false },
+        xExtension: { keep: true }
+      }),
+      timeParamJson: '[]', bizLine: 'COMMON', dsType: 'TIMESERIES',
+      draftReferenceScreenCodes: [], publishedReferenceScreenCodes: []
+    };
+    wrapper.vm.openEdit(row);
+    wrapper.vm.dlg.reason = '验证配置往返';
+    api.tryRunScreenDatasource.mockResolvedValueOnce({ columns: [], rows: [] });
+    wrapper.vm.openCurrentTryRun();
+    wrapper.vm.tr.reason = '验证未保存配置';
+    await wrapper.vm.runTry();
+
+    expect(api.tryRunScreenDatasource).toHaveBeenCalledWith(expect.objectContaining({
+      sourceKind: 'WIDE_TABLE',
+      configJson: expect.stringContaining('xExtension')
+    }));
+    expect(api.updateScreenDatasource).not.toHaveBeenCalled();
+    expect(api.saveScreenDatasource).not.toHaveBeenCalled();
+
+    api.updateScreenDatasource.mockResolvedValueOnce();
+    await wrapper.vm.onSave();
+    const body = api.updateScreenDatasource.mock.calls.at(-1)[1];
+    expect(JSON.parse(body.configJson)).toMatchObject({
+      batchPolicy: { maxAgeDays: 3, requiredComplete: true },
+      qualityPolicy: { maxAgeDays: 5, requiredComplete: false },
+      xExtension: { keep: true }
+    });
+  });
+
+  it('切换编辑数据源或来源类型会清空上一来源的列候选', async () => {
+    const wrapper = await mountPage();
+    wrapper.vm.lastTryCols = ['old_metric'];
+    wrapper.vm.openCreate();
+    expect(wrapper.vm.lastTryCols).toEqual([]);
+    wrapper.vm.lastTryCols = ['wide_metric'];
+    wrapper.vm.onSourceKindChange('KPI_RESULT');
+    expect(wrapper.vm.lastTryCols).toEqual([]);
+  });
+
+  it('关闭或切换当前配置后，迟到的试跑响应不能写入新来源列候选', async () => {
+    const wrapper = await mountPage();
+    const row = {
+      ...frozenRow,
+      configJson: JSON.stringify({
+        schemaVersion: 2, scopeMode: 'SUBJECT', table: 'EMP_INDEX_RESULT',
+        metrics: [{ metricCode: 'M1' }]
+      }),
+      dsType: 'TIMESERIES'
+    };
+    let resolveTryRun;
+    api.tryRunScreenDatasource.mockImplementationOnce(() => new Promise(resolve => {
+      resolveTryRun = resolve;
+    }));
+    wrapper.vm.openTryRun(row);
+    wrapper.vm.tr.reason = '验证迟到响应';
+    const pending = wrapper.vm.runTry();
+    wrapper.vm.openCreate();
+    resolveTryRun({ columns: ['stale_column'], rows: [] });
+    await pending;
+
+    expect(wrapper.vm.lastTryCols).toEqual([]);
+  });
+
+  it('未知来源或坏 JSON 打开编辑后显示阻断状态且不能保存覆盖原定义', async () => {
+    const wrapper = await mountPage();
+    const invalid = { ...frozenRow, id: 85, sourceKind: 'NOT_A_SOURCE', configJson: '{bad json' };
+    wrapper.vm.openEdit(invalid);
+    wrapper.vm.dlg.reason = '尝试保存坏配置';
+    await wrapper.vm.onSave();
+
+    expect(wrapper.vm.dlg.configError).toMatch(/配置|来源|解析/);
+    expect(api.updateScreenDatasource).not.toHaveBeenCalled();
+    expect(api.saveScreenDatasource).not.toHaveBeenCalled();
   });
 });

@@ -90,6 +90,32 @@ describe('panorama bindings contract', () => {
     expect(PERIOD_VALUES).toEqual(['LATEST', 'LAST_10D', 'LAST_1M', 'LAST_6M_EOM']);
   });
 
+  it('固定来源复用受控 M98 输出字段；FREE_REPORT 不进入通用指标选择', () => {
+    const m98 = getDatasourceFieldOptions({
+      id: 9801,
+      sourceKind: 'M98_STAT',
+      dsType: 'SINGLE',
+      bizLine: 'CORP',
+      configJson: JSON.stringify({
+        schemaVersion: 2, scopeMode: 'NAMED_GROUP', profile: 'CORP_REVENUE', mode: 'SUMMARY'
+      })
+    });
+    expect(m98).toEqual(expect.arrayContaining([
+      expect.objectContaining({ col: 'data_date', role: 'DIM', builtin: true }),
+      expect.objectContaining({ col: 'amount', role: 'METRIC', semantic: 'corpRevenue', unit: null, fixedSlot: 'corpRevenue' })
+    ]));
+
+    const freeReport = getDatasourceFieldOptions({
+      sourceKind: 'FREE_REPORT',
+      dsType: 'SINGLE',
+      configJson: JSON.stringify({
+        schemaVersion: 2, scopeMode: 'NAMED_GROUP', dataClassification: 'TEST',
+        profile: 'BRANCH_OVERVIEW', batchId: 'TEST_BRANCH_OPERATING_20260921'
+      })
+    });
+    expect(freeReport).toEqual([expect.objectContaining({ role: 'NOTICE', disabled: true })]);
+  });
+
   it('保存绑定时保留已存在 blockId，未有身份的节点交给 save 生成', () => {
     const bindings = {
       deposit: buildBinding(7, { value: 'deposit_raw' }, { value: 'YUAN' }),

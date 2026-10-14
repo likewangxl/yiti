@@ -43,6 +43,36 @@ const singleBinding = (dsId = 11, field = 'amount') => ({
   units: { value: 'HUNDRED_MILLION' }
 });
 
+describe('草稿核验的数据质量证据', () => {
+  async function verifyQuality(quality) {
+    const bind = { ...singleBinding(), fields: { value: 'amount', date: 'data_date' } };
+    const component = makeComponent('deposit', 101, bind);
+    const canvas = makeCanvas({ components: [component], blocks: [{ id: 101, bindJson: JSON.stringify(bind) }] });
+    const service = createRuntimeDataVerificationService(deps({ canvas, view: makeView({ components: [component] }),
+      query: vi.fn().mockResolvedValue({ columns: ['amount', 'data_date'], rows: [[0, '2026-09-21']], ...(quality === undefined ? {} : { quality }) })
+    }));
+    return service.verify({ screen: { id: 7, screenCode: 'SCR_VERIFY' }, canvas, slotOrder: ['deposit'], bindingState: { deposit: bind } });
+  }
+
+  it.each(['STALE', 'PARTIAL', 'NO_COMPLETE_BATCH'])('服务端质量 %s 不得因二维结构正确而显示无缺口', async status => {
+    const result = await verifyQuality({ status, dataDate: '2026-09-21', expectedSubjects: 52, receivedSubjects: 51, ageDays: 22 });
+    expect(result.results[0].quality).toMatchObject({ status, dataDate: '2026-09-21', expectedSubjects: 52, receivedSubjects: 51 });
+    expect(result.results[0].issues.some(item => item.code === 'DATA_QUALITY_GAP')).toBe(true);
+    expect(result.overallStatus).toBe(OVERALL_STATUS.HAS_GAPS);
+  });
+
+  it('未返回质量信息明确保持未知，不能默认为最新完整', async () => {
+    const result = await verifyQuality(undefined);
+    expect(result.results[0].quality).toMatchObject({ status: 'UNVERIFIED', label: '未提供质量信息' });
+  });
+
+  it('COMPLETE 中的混期和覆盖不足仍显示风险，不忽略相互矛盾的元数据', async () => {
+    const result = await verifyQuality({ status: 'COMPLETE', dataDate: '2026-09-21', mixedPeriod: true, expectedSubjects: 52, receivedSubjects: 51 });
+    expect(result.results[0].issues.some(item => item.code === 'DATA_QUALITY_GAP')).toBe(true);
+    expect(result.overallStatus).toBe(OVERALL_STATUS.HAS_GAPS);
+  });
+});
+
 function deps({ canvas, view, query = vi.fn() } = {}) {
   return {
     getScreenCanvas: vi.fn().mockResolvedValue(canvas),

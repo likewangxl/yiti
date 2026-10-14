@@ -40,6 +40,7 @@
     </div>
 
     <section v-if="screenReady" class="card-section panorama-bindings__workbench" aria-label="大屏组件配置">
+      <p v-if="canvasStyle.dataClassification === 'TEST'" data-testid="business-test-notice" class="panorama-bindings__hint" role="note">当前大屏为联调测试模式，测试来源不代表正式经营数据。正式展示需要接入并核对业务来源。</p>
       <div class="panorama-bindings__section-head">
         <div>
           <h2>组件配置</h2>
@@ -93,6 +94,20 @@
             <p v-if="selectedCatalogEntry?.kind === 'INSTITUTION_MAP'" class="panorama-bindings__hint">数据来自当前授权机构目录/经营画像，仅区域标题可改。</p>
             <p v-else-if="selectedCatalogEntry?.kind === 'SYSTEM_METRIC'" class="panorama-bindings__hint">该指标由运行态系统生成，没有独立数据来源、字段或周期配置。</p>
 
+            <section v-if="selectedBusinessField" data-testid="business-metric-section">
+              <label for="business-semantic" class="panorama-bindings__field-label">配置项</label>
+              <select id="business-semantic" data-testid="business-semantic" :value="selectedBusinessField.semantic"
+                :disabled="writing || loading" @change="businessSemantic = $event.target.value">
+                <option v-for="fieldSpec in businessFieldSpecs" :key="fieldSpec.semantic" :value="fieldSpec.semantic">{{ fieldSpec.label }}</option>
+              </select>
+              <BusinessMetricPicker :entries="businessEntriesFor(selectedBusinessField)"
+                :relevance-context="businessRelevanceContext"
+                :model-value="{ datasourceId: selectedBinding.dsId, field: selectedBinding.fields[selectedBusinessField.semantic] }"
+                :label="`选择${selectedBusinessField.label}指标`" :disabled="writing || loading"
+                @select="entry => applyBusinessMetric(selectedBusinessField, entry)" />
+            </section>
+            <details v-if="!selectedCatalogReadonly || comparisonConfigurable" class="panorama-bindings__advanced" data-testid="advanced-binding-fields">
+              <summary>高级字段配置（技术维护）</summary>
             <template v-if="hasNewDisplayPresentation && selectedDisplayFieldMappings.length">
               <div v-for="mapping in selectedDisplayFieldMappings" :key="mapping.key" class="panorama-bindings__component-field">
                 <label class="panorama-bindings__field-label" :for="mapping.testId">{{ mapping.label }}</label>
@@ -209,18 +224,26 @@
               </div>
             </div>
 
-            <label v-if="!selectedCatalogReadonly" class="panorama-bindings__field-label" for="panorama-period">周期</label>
+            <p v-if="selectedSlot === 'citySummary'" class="panorama-bindings__hint">城市汇总必须使用已按城市汇总的来源，系统不会自动累加机构指标。</p>
+            </details>
+            <label v-if="!selectedCatalogReadonly" class="panorama-bindings__field-label" for="panorama-period">统计周期</label>
             <select v-if="!selectedCatalogReadonly" id="panorama-period" data-testid="binding-period" :disabled="writing || loading"
                     :value="selectedBinding.period" @change="setPeriod($event.target.value)">
-              <option v-for="period in PERIOD_VALUES" :key="period" :value="period">{{ PERIOD_LABELS[period] }}</option>
+              <option v-for="option in periodOptions" :key="option.value" :value="option.value" :disabled="option.disabled">{{ option.label }}</option>
             </select>
             <p v-if="!selectedCatalogReadonly" class="panorama-bindings__hint">字段候选来自数据来源已保存的字段说明；单位缺失时不会猜测，可随时修改配置。</p>
-            <p v-if="!selectedCatalogReadonly && selectedSlot === 'citySummary'" class="panorama-bindings__hint">城市汇总必须选择已按城市汇总的数据源；系统不会把支行机构数据相加成城市指标。</p>
+            <p v-if="!selectedCatalogReadonly && periodUnsupported" class="panorama-bindings__hint" role="alert">当前来源未声明已保存周期的支持能力，请核对后选择适用周期。历史缺失不会自动补零。</p>
           </template>
           <p v-else>请选择一个展示内容。</p>
         </main>
       </div>
     </section>
+
+    <p v-if="screenReady && hasLocalChanges" class="panorama-bindings__hint" role="status">有未保存修改，请先保存草稿，再验证实际数据。</p>
+    <PanoramaDataVerification v-if="screenReady"
+      :screen="activeScreen" :canvas="canvas" :datasources="datasources"
+      :slot-order="slotOrder" :binding-state="bindingState" :template="selectedTemplate"
+      :disabled="writing || loading || hasLocalChanges" />
 
     <footer class="panorama-bindings__footer">
       <span>当前版本 {{ canvasVersion ?? '-' }}</span>
@@ -264,6 +287,10 @@ import {
   AUTO_BIND_STATUS
 } from './defaultBindings';
 import PanoramaDatasourcePicker from './PanoramaDatasourcePicker.vue';
+import PanoramaDataVerification from './PanoramaDataVerification.vue';
+import BusinessMetricPicker from './BusinessMetricPicker.vue';
+import { buildBusinessMetricCatalog } from './businessMetricCatalog';
+import { qualifyBusinessMetricEntries } from './businessMetricEligibility';
 import { buildBusinessSourceCandidates } from '../presentation/sources/businessSourceCandidates';
 import { buildRuntimeComponentCatalog, resolveConfiguredMetricLabel } from '../presentation/editor/runtimeComponentCatalog';
 import { getEffectiveBusinessGrowthSeries } from '../presentation/model/businessGrowthModel';
@@ -915,10 +942,99 @@ const scopedDatasources = computed(() => datasources.value
 const availableDatasources = computed(() => buildBusinessSourceCandidates(scopedDatasources.value, {
   screenBizLine: screenScope.value.bizLine,
   scopeMode: screenScope.value.orgScopeMode,
+  period: selectedBinding.value.period,
   expectedShape: selectedSpec.value?.innerType === 'LINE_TREND' ? 'TIMESERIES' : 'SINGLE'
 }));
 const selectableDatasourceCount = computed(() => availableDatasources.value
   .filter(source => !source.__compositionColumnsUnsupported && !source.disabled).length);
+
+const businessFieldSpecs = computed(() => selectedCatalogReadonly.value ? []
+  : selectedFieldSpecs.value.filter(field => field.kind !== 'dimension' && field.unitKinds?.length));
+const businessSemantic = ref('value');
+const selectedBusinessField = computed(() => businessFieldSpecs.value.find(field => field.semantic === businessSemantic.value)
+  || businessFieldSpecs.value[0] || null);
+/** 名称关键词仅用于推荐顺序，不能替代来源资格、用途、单位或机构范围校验。 */
+const businessRelevanceContext = computed(() => {
+  const label = `${selectedSpec.value?.label || ''} ${selectedBusinessField.value?.label || ''}`;
+  const terms = ['存款', '贷款', '客户', '收入', '营收', '不良', 'AUM', '目标', '完成', '净增', '日均', '变化', '营销', '跟进'];
+  return {
+    semantic: [selectedSlot.value, selectedBusinessField.value?.semantic].filter(value => value && value !== 'value'),
+    keywords: [selectedSpec.value?.label, ...terms.filter(term => label.toUpperCase().includes(term.toUpperCase()))].filter(Boolean),
+    preferredSourceIds: [...new Set([selectedBinding.value.dsId, ...savedBindingsForCatalog.value.map(binding => binding.dsId)].filter(Boolean))]
+  };
+});
+
+/** 单位证据只来自服务端已保存绑定，编辑中的手工单位不用于认证目录。 */
+const savedBindingsForCatalog = computed(() => {
+  const draft = parse(canvas.value?.canvasDraftJson, {});
+  const bindings = [];
+  function visit(items) {
+    for (const item of Array.isArray(items) ? items : []) {
+      const bind = parse(item?.bindJson, null);
+      if (bind?.dsId && bind.fields && bind.units) bindings.push(bind);
+      visit(item?.children);
+    }
+  }
+  if (Array.isArray(canvas.value?.blocks) && canvas.value.blocks.length) {
+    for (const block of canvas.value.blocks) {
+      const bind = parse(block?.bindJson, null);
+      if (bind?.dsId && bind.fields && bind.units) bindings.push(bind);
+    }
+  } else visit(draft.components);
+  return bindings;
+});
+
+function businessEntriesFor(fieldSpec) {
+  const entries = buildBusinessMetricCatalog(scopedDatasources.value, {
+    screen: screenScope.value,
+    slot: selectedSlot.value,
+    period: selectedBinding.value.period,
+    expectedShape: selectedSpec.value?.innerType === 'LINE_TREND' ? 'TIMESERIES' : 'SINGLE',
+    savedBindings: savedBindingsForCatalog.value
+  });
+  return qualifyBusinessMetricEntries(entries, {
+    fieldSpec, innerType: selectedSpec.value?.innerType, sources: scopedDatasources.value,
+    period: selectedBinding.value.period, savedBindings: savedBindingsForCatalog.value
+  });
+}
+
+function applyBusinessMetric(fieldSpec, selection) {
+  if (writing.value || loading.value || !fieldSpec) return;
+  const allowed = businessEntriesFor(fieldSpec).find(entry => !entry.disabled
+    && String(entry.sourceId) === String(selection?.datasourceId) && entry.field === selection?.field);
+  if (!allowed) return;
+  if (String(selectedBinding.value.dsId) !== String(allowed.sourceId)) onDatasourceChange(String(allowed.sourceId));
+  setField(fieldSpec.semantic, allowed.field);
+  setUnit(fieldSpec.semantic, allowed.unit);
+  // 类型化卡片的独立展示字段和原始单位引用必须同步更新。
+  if (fieldSpec.semantic === 'value' && isSchemaMetricCard.value && selectedDisplayComponent.value) {
+    const component = selectedDisplayComponent.value;
+    displaySession.value = updateModelComponent(displaySession.value, component.componentId, {
+      dataRefs: (component.dataRefs || []).map(ref => ({ ...ref, unit: allowed.unit }))
+    });
+    const mapping = selectedDisplayFieldMappings.value.find(item => item.kind === 'mainField');
+    if (mapping) setComponentField(mapping, allowed.field);
+  }
+}
+
+const declaredPeriods = computed(() => {
+  const source = selectedDatasource.value;
+  if (!source) return ['LATEST'];
+  if (source.timeParamJson == null || source.timeParamJson === '') {
+    // 缺省的历史配置保持原周期行为；这只保留兼容，不认证历史数据覆盖。
+    return [...PERIOD_VALUES];
+  }
+  const periods = parse(source.timeParamJson, []);
+  return Array.isArray(periods) ? periods.filter(period => PERIOD_VALUES.includes(period)) : [];
+});
+const periodUnsupported = computed(() => Boolean(selectedDatasource.value)
+  && !declaredPeriods.value.includes(selectedBinding.value.period));
+const periodOptions = computed(() => {
+  const options = declaredPeriods.value.map(value => ({ value, label: PERIOD_LABELS[value], disabled: false }));
+  if (periodUnsupported.value) options.push({ value: selectedBinding.value.period,
+    label: `${PERIOD_LABELS[selectedBinding.value.period] || selectedBinding.value.period}（来源未声明）`, disabled: true });
+  return options;
+});
 
 function emptyBinding(slot = '') {
   return {
@@ -1249,7 +1365,7 @@ function setUnit(semantic, value) {
 }
 
 function setPeriod(value) {
-  if (PERIOD_VALUES.includes(value)) selectedBinding.value.period = value;
+  if (declaredPeriods.value.includes(value)) selectedBinding.value.period = value;
   conflict.value = '';
   markLocalDirty();
 }

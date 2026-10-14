@@ -10,6 +10,11 @@ import {
   CORPORATE_TEMPLATE
 } from './corporateBindings';
 import { isDatasourceCompatible, normalizeScreenScope } from '@/utils/screenScope';
+import {
+  M98_PROFILE_SLOTS,
+  getControlledSourceFieldOptions,
+  isStrictM98Source as isStrictM98Summary
+} from './controlledSourceFields';
 
 /**
  * 代码化大屏的安全默认绑定。
@@ -52,14 +57,6 @@ const SINGLE_VALUE_SLOTS = new Set([
   'corpDeposit', 'corpDepositAverage', 'corpLoan', 'corpRevenue', 'corpCustomers', 'corpNplRate'
 ]);
 const TIME_SERIES_SLOTS = new Set(['trend', 'retailTrend', 'branchTrend', 'corpTrend']);
-const M98_PROFILE_SLOTS = Object.freeze({
-  CORP_REVENUE: 'corpRevenue',
-  RETAIL_REVENUE: 'retailRevenue',
-  RETAIL_LOAN: 'retailLoan',
-  CORP_NPL_RATE: 'corpNplRate',
-  RETAIL_NPL_RATE: 'retailNplRate'
-});
-const M98_PROFILES = new Set(Object.keys(M98_PROFILE_SLOTS));
 const DIMENSION_SEMANTICS = new Set([
   'date', 'dataDate', 'orgCode', 'orgName', 'cityCode', 'cityName', 'ownerOperatingOrgCode',
   'parentOrgCode', 'lng', 'lat', 'coordSys', 'located', 'name', 'label', 'owner', 'deadline'
@@ -410,14 +407,7 @@ function sourceFields(source) {
       addBuiltin('metric_code', '指标编码');
     }
   } else if (sourceKind === 'M98_STAT' && isStrictM98Summary(source)) {
-    const profile = upper(config.profile);
-    addBuiltin('data_date', '数据日期');
-    add({
-      col: profile.endsWith('_NPL_RATE') ? 'ratio' : 'amount',
-      role: 'METRIC',
-      alias: '统计值',
-      semantic: M98_PROFILE_SLOTS[profile]
-    });
+    for (const fixedField of getControlledSourceFieldOptions(source)) add(fixedField);
   }
   return records;
 }
@@ -533,20 +523,6 @@ function isNamedKpiOrgSnapshot(source) {
     && upper(config.subjectType) === 'ORG'
     && upper(config.mode) === 'SNAPSHOT'
     && Boolean(text(config.schemeCode));
-}
-
-function isStrictM98Summary(source) {
-  const config = datasourceConfig(source);
-  const profile = upper(config.profile);
-  const expectedLine = profile.startsWith('CORP_') ? 'CORP' : profile.startsWith('RETAIL_') ? 'RETAIL' : '';
-  return upper(source?.sourceKind || source?.source_kind || config.sourceKind) === 'M98_STAT'
-    && sourceDsType(source, config) === 'SINGLE'
-    && hasExactKeys(config, ['mode', 'profile', 'schemaVersion', 'scopeMode'])
-    && Number(config.schemaVersion) === 2
-    && upper(config.scopeMode) === 'NAMED_GROUP'
-    && upper(config.mode) === 'SUMMARY'
-    && M98_PROFILES.has(profile)
-    && upper(source?.bizLine || source?.biz_line) === expectedLine;
 }
 
 function explicitSourceShape(source) {

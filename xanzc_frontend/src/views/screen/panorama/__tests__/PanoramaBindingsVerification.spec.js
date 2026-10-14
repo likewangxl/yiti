@@ -27,14 +27,17 @@ vi.mock('../PanoramaDataVerification.vue', () => ({ default: {
 import PanoramaBindings from '../PanoramaBindings.vue';
 
 describe('大屏管理的简化配置页', () => {
-  it('不挂载接入核验、目录和试跑入口', async () => {
+  it('接回只读已保存草稿核验，禁止未保存编辑被当作已核验，不提供SQL试跑', async () => {
     const wrapper = mount(PanoramaBindings, { global: { stubs: {
       PanoramaIntegrationReadiness: true, PanoramaSettings: true, PanoramaDatasourcePicker: true
     } } });
     await flushPromises();
     const verification = wrapper.findComponent({ name: 'PanoramaDataVerification' });
-    expect(verification.exists()).toBe(false);
-    expect(wrapper.find('[data-testid="verification-connected"]').exists()).toBe(false);
+    expect(verification.exists()).toBe(true);
+    expect(wrapper.find('[data-testid="verification-connected"]').exists()).toBe(true);
+    expect(verification.props('disabled')).toBe(false);
+    await wrapper.get('[data-testid="component-title"]').setValue('新的标题');
+    expect(verification.props('disabled')).toBe(true);
     expect(wrapper.find('[data-testid="integration-readiness"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="try-run"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="binding-datasources"]').exists()).toBe(false);

@@ -97,4 +97,91 @@ describe('经营大屏业务来源候选', () => {
     await expect(gate.run(async () => { throw Object.assign(new Error('403'), { status: 403 }); }))
       .rejects.toThrow('403');
   });
+
+  it('LATEST 单值请求允许合法 DATE 聚合的 WIDE_TABLE TIMESERIES 作为一行响应', () => {
+    const dateSeries = wide({
+      id: 9,
+      dsType: 'TIMESERIES',
+      configJson: JSON.stringify({
+        schemaVersion: 2,
+        scopeMode: 'LEGACY_CONTEXT',
+        table: 'ORG_INDEX_RESULT',
+        subjectCol: 'org_code',
+        aggregation: { groupBy: 'DATE', agg: 'SUM' },
+        fieldMeta: [{ col: 'deposit_balance', alias: '存款余额', role: 'METRIC', unit: 'YUAN' }],
+        metrics: [{ metricCode: 'M_DEP', metricName: '存款余额', unit: 'YUAN' }]
+      })
+    });
+    const result = buildBusinessSourceCandidates([dateSeries], {
+      screenBizLine: 'COMMON', scopeMode: 'LEGACY_CONTEXT', expectedShape: 'SINGLE', period: 'LATEST'
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ disabled: false, shape: 'TIMESERIES' });
+  });
+
+  it('DATE 聚合兼容只在 LATEST 生效，缺省 period 和非 LATEST 仍拒绝 TIMESERIES', () => {
+    const dateSeries = wide({
+      id: 10,
+      dsType: 'TIMESERIES',
+      configJson: JSON.stringify({
+        schemaVersion: 2,
+        scopeMode: 'LEGACY_CONTEXT',
+        table: 'ORG_INDEX_RESULT',
+        aggregation: { groupBy: 'DATE', agg: 'SUM' },
+        metrics: [{ metricCode: 'M_DEP', metricName: '存款余额', unit: 'YUAN' }]
+      })
+    });
+    const withoutPeriod = buildBusinessSourceCandidates([dateSeries], {
+      screenBizLine: 'COMMON', scopeMode: 'LEGACY_CONTEXT', expectedShape: 'SINGLE'
+    });
+    const otherPeriod = buildBusinessSourceCandidates([dateSeries], {
+      screenBizLine: 'COMMON', scopeMode: 'LEGACY_CONTEXT', expectedShape: 'SINGLE', period: 'LAST_1M'
+    });
+
+    expect(withoutPeriod[0].disabledReason).toContain('结果形状');
+    expect(otherPeriod[0].disabledReason).toContain('结果形状');
+
+    const invalidAggregation = buildBusinessSourceCandidates([{
+      ...dateSeries,
+      id: 13,
+      configJson: JSON.stringify({
+        ...JSON.parse(dateSeries.configJson),
+        aggregation: { groupBy: 'DATE', agg: 'UNKNOWN' }
+      })
+    }], {
+      screenBizLine: 'COMMON', scopeMode: 'LEGACY_CONTEXT', expectedShape: 'SINGLE', period: 'LATEST'
+    });
+    expect(invalidAggregation[0].disabledReason).toContain('结果形状');
+  });
+
+  it('不把主体聚合或未知来源类型放宽成单值兼容', () => {
+    const subjectSeries = wide({
+      id: 11,
+      dsType: 'TIMESERIES',
+      configJson: JSON.stringify({
+        schemaVersion: 2,
+        scopeMode: 'LEGACY_CONTEXT',
+        table: 'ORG_INDEX_RESULT',
+        subjectCol: 'org_code',
+        aggregation: { groupBy: 'SUBJECT', agg: 'SUM' },
+        metrics: [{ metricCode: 'M_DEP', metricName: '存款余额', unit: 'YUAN' }]
+      })
+    });
+    const unknownKind = {
+      ...subjectSeries,
+      id: 12,
+      sourceKind: 'UNKNOWN_KIND',
+      configJson: JSON.stringify({
+        ...JSON.parse(subjectSeries.configJson),
+        aggregation: { groupBy: 'DATE', agg: 'SUM' }
+      })
+    };
+    const result = buildBusinessSourceCandidates([subjectSeries, unknownKind], {
+      screenBizLine: 'COMMON', scopeMode: 'LEGACY_CONTEXT', expectedShape: 'SINGLE', period: 'LATEST'
+    });
+
+    expect(result.every(item => item.disabled)).toBe(true);
+    expect(result.map(item => item.disabledReason).join(' ')).toMatch(/结果形状|来源类型/);
+  });
 });

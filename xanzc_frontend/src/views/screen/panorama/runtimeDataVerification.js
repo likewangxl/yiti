@@ -88,7 +88,7 @@ const FATAL_ISSUES = new Set([
 const GAP_ISSUES = new Set([
   'NULL_VALUE', 'DATE_UNVERIFIABLE', 'MISSING_AUTHORIZED_DIRECTORY',
   'MISSING_AUTHORIZED_INSTITUTION', 'POSSIBLY_TRUNCATED',
-  'DATE_MISMATCH', 'NO_ROWS', 'INVALID_DATE', 'CONSTANT_SOURCE'
+  'DATE_MISMATCH', 'NO_ROWS', 'INVALID_DATE', 'CONSTANT_SOURCE', 'DATA_QUALITY_GAP'
 ]);
 
 function isObject(value) {
@@ -556,6 +556,7 @@ function validateTableResult(slot, binding, response, slotResult) {
     return;
   }
   const { table, rows } = tableInfo;
+  applyQualityEvidence(table, slotResult);
   slotResult.rowCount = rows.length;
   slotResult.maxRows = maxRowsOf(table);
   if (slotResult.maxRows && rows.length >= slotResult.maxRows) {
@@ -599,6 +600,43 @@ function validateTableResult(slot, binding, response, slotResult) {
   else if (gaps) slotResult.status = SLOT_STATUS.VERIFIED_WITH_WARNINGS;
   else slotResult.status = SLOT_STATUS.STRUCTURE_VERIFIED;
   slotResult.statusLabel = SLOT_STATUS_LABELS[slotResult.status];
+}
+
+/** 结构和质量分别取证；缺少服务端质量信息不能被解释成最新或完整。 */
+function applyQualityEvidence(table, slotResult) {
+  const source = table?.quality;
+  if (!isObject(source)) {
+    slotResult.quality = { status: 'UNVERIFIED', label: '未提供质量信息' };
+    return;
+  }
+  const labels = { COMPLETE: '完整批次', STALE: '数据已过期', PARTIAL: '数据覆盖不完整',
+    NO_COMPLETE_BATCH: '没有完整批次' };
+  const status = text(source.status).toUpperCase();
+  const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+  const expectedSubjects = count(source.expectedSubjects);
+  const receivedSubjects = count(source.receivedSubjects);
+  const dataDate = normalizeDate(source.dataDate);
+  slotResult.quality = {
+    status: labels[status] ? status : 'UNVERIFIED',
+    label: labels[status] || '质量状态无法确认',
+    dataDate, expectedSubjects, receivedSubjects,
+    ageDays: count(source.ageDays), maxAgeDays: count(source.maxAgeDays),
+    mixedPeriod: source.mixedPeriod === true,
+    sourceAsOf: isObject(source.sourceAsOf) ? { ...source.sourceAsOf } : {},
+    message: text(source.message)
+  };
+  const incomplete = expectedSubjects !== null && receivedSubjects !== null && receivedSubjects < expectedSubjects;
+  const inconsistent = status !== 'COMPLETE' || !dataDate || incomplete || source.mixedPeriod === true
+    || source.selectedComplete === false
+    || (Array.isArray(source.missing) && source.missing.length > 0)
+    || (Array.isArray(source.missingSubjects) && source.missingSubjects.length > 0);
+  if (inconsistent) {
+    const reasons = [slotResult.quality.label];
+    if (incomplete) reasons.push(`机构覆盖 ${receivedSubjects}/${expectedSubjects}`);
+    if (source.mixedPeriod === true) reasons.push('来源截至日期混期');
+    if (!dataDate) reasons.push('质量数据日期未提供或无效');
+    issue(slotResult, 'DATA_QUALITY_GAP', reasons.join('，'), 'warning');
+  }
 }
 
 function authorizedInstitutions(view, screen) {

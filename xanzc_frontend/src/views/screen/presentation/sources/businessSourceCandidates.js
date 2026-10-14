@@ -1,4 +1,6 @@
 const ACTIVE_VALUES = new Set(['ACTIVE', '1', 'TRUE']);
+const WIDE_AGG_FUNCS = new Set(['SUM', 'AVG', 'MAX', 'MIN', 'COUNT']);
+const WIDE_FILTER_OPS = new Set(['EQ', 'NE', 'IN', 'GT', 'GE', 'LT', 'LE']);
 
 function parseConfig(value) {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value;
@@ -43,6 +45,43 @@ function fieldOptions(config) {
   return result;
 }
 
+function isLegalDateAggregation(config) {
+  const aggregation = config?.aggregation;
+  if (!aggregation || typeof aggregation !== 'object' || Array.isArray(aggregation)
+      || String(aggregation.groupBy || '').trim() !== 'DATE'
+      || !WIDE_AGG_FUNCS.has(String(aggregation.agg || '').trim())) {
+    return false;
+  }
+  const filters = aggregation.filters;
+  if (filters === undefined || filters === null) return true;
+  if (!Array.isArray(filters)) return false;
+  const subjectCol = String(config.subjectCol || '').trim();
+  const slotCols = new Set();
+  for (const item of [
+    ...(Array.isArray(config.metrics) ? config.metrics : []),
+    ...(Array.isArray(config.fieldMeta) ? config.fieldMeta : [])
+  ]) {
+    const slot = Number(item?.slot);
+    if (Number.isSafeInteger(slot) && slot > 0) slotCols.add(`val_${slot}`);
+    const col = String(item?.col || '').trim();
+    if (/^val_\d+$/.test(col)) slotCols.add(col);
+  }
+  return filters.every(filter => {
+    const col = String(filter?.col || '').trim();
+    const valuePresent = filter?.value !== undefined && filter?.value !== null;
+    return (col === subjectCol || col === 'data_date' || slotCols.has(col))
+      && WIDE_FILTER_OPS.has(String(filter?.op || '').trim()) && valuePresent;
+  });
+}
+
+function isLatestDateAggregateSingle(source, config, context, expectedShape, shape) {
+  return upper(context.period) === 'LATEST'
+    && expectedShape === 'SINGLE'
+    && upper(source.sourceKind || source.source_kind) === 'WIDE_TABLE'
+    && shape === 'TIMESERIES'
+    && isLegalDateAggregation(config);
+}
+
 function compatibilityReasons(source, config, context) {
   const reasons = [];
   const status = upper(source.status, 'ACTIVE');
@@ -54,7 +93,9 @@ function compatibilityReasons(source, config, context) {
   const expectedShape = upper(context.expectedShape, 'ANY');
   if (!ACTIVE_VALUES.has(status)) reasons.push('数据来源已停用');
   if (screenLine !== 'COMMON' && line !== screenLine) reasons.push(`业务条线不匹配（需要${screenLine}）`);
-  if (expectedShape !== 'ANY' && shape !== expectedShape) reasons.push(`结果形状不匹配（需要${expectedShape}）`);
+  const shapeCompatible = expectedShape === 'ANY' || shape === expectedShape
+    || isLatestDateAggregateSingle(source, config, context, expectedShape, shape);
+  if (!shapeCompatible) reasons.push(`结果形状不匹配（需要${expectedShape}）`);
   if (kind === 'CUSTOM_SQL') reasons.push('自定义SQL仅保留旧高级来源，不进入标准绑定');
   if (namedGroup) {
     if (kind === 'WIDE_TABLE'

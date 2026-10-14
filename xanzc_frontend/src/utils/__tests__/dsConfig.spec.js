@@ -470,3 +470,142 @@ describe('NAMED_GROUP 数据源来源约束', () => {
     expect(validateDsModel(orgWide)).toEqual([]);
   });
 });
+
+describe('阶段 A：六类数据源配置安全往返', () => {
+  it('编辑往返保留 batchPolicy、qualityPolicy 及未知扩展字段', () => {
+    const original = {
+      schemaVersion: 2,
+      table: 'ORG_INDEX_RESULT',
+      subjectCol: 'org_code',
+      metrics: [{ metricCode: 'M1', metricName: '存款', slot: 1 }],
+      scopeMode: 'NAMED_GROUP',
+      batchPolicy: { maxAgeDays: 2, requiredComplete: true },
+      qualityPolicy: { maxAgeDays: 4, requiredComplete: false },
+      xTechnicalExtension: { sourceRevision: 'r7', flags: ['KEEP'] }
+    };
+    const patch = parseConfigJson('WIDE_TABLE', original, '[]');
+    const rebuilt = buildConfigJson({
+      ...defaultDsModel(), sourceKind: 'WIDE_TABLE', bizLine: 'COMMON', ...patch
+    });
+
+    expect(rebuilt).toMatchObject(original);
+    expect(rebuilt.xTechnicalExtension).toEqual(original.xTechnicalExtension);
+  });
+
+  it.each([
+    ['WIDE_TABLE', { schemaVersion: 2, table: 'EMP_INDEX_RESULT', metrics: [{ metricCode: 'M1' }] }, 'TIMESERIES'],
+    ['KPI_RESULT', { schemaVersion: 2, cycleType: 'MONTHLY' }, 'TIMESERIES'],
+    ['KPI_DETAIL', { schemaVersion: 2, schemeCode: 'S1', subjectType: 'EMP', mode: 'SNAPSHOT' }, 'SINGLE'],
+    ['CUSTOM_SQL', { schemaVersion: 2, sql: 'SELECT 1', dateCol: null }, 'SINGLE']
+  ])('%s 能类型化回填并按原来源保存', (sourceKind, config, expectedDsType) => {
+    const patch = parseConfigJson(sourceKind, config, null);
+    const m = { ...defaultDsModel(), sourceKind, bizLine: 'COMMON', ...patch };
+    expect(buildConfigJson(m)).toMatchObject(config);
+    expect(deriveDsType(m)).toBe(expectedDsType);
+  });
+
+  it('M98_STAT 只保存固定 profile/SUMMARY 命名组配置，不接受任意 SQL 扩展', () => {
+    const m = {
+      ...defaultDsModel(), sourceKind: 'M98_STAT', bizLine: 'CORP', scopeMode: 'NAMED_GROUP',
+      m98: { profile: 'CORP_REVENUE' }, configExtensions: {}
+    };
+    expect(validateDsModel(m)).toEqual([]);
+    expect(buildConfigJson(m)).toEqual({
+      schemaVersion: 2, scopeMode: 'NAMED_GROUP', profile: 'CORP_REVENUE', mode: 'SUMMARY'
+    });
+    const patch = parseConfigJson('M98_STAT', buildConfigJson(m), '[]');
+    expect(buildConfigJson({ ...defaultDsModel(), sourceKind: 'M98_STAT', ...patch })).toEqual({
+      schemaVersion: 2, scopeMode: 'NAMED_GROUP', profile: 'CORP_REVENUE', mode: 'SUMMARY'
+    });
+    expect(() => parseConfigJson('M98_STAT', {
+      schemaVersion: 2, scopeMode: 'NAMED_GROUP', profile: 'CORP_REVENUE', mode: 'SUMMARY', sql: 'SELECT 1'
+    }, null)).toThrow(/未知|严格|配置/);
+  });
+
+  it('FREE_REPORT 只保存 TEST/BRANCH_OVERVIEW/TEST_BRANCH_ 批次', () => {
+    const m = {
+      ...defaultDsModel(), sourceKind: 'FREE_REPORT', bizLine: 'COMMON', scopeMode: 'NAMED_GROUP',
+      freeReport: {
+        dataClassification: 'TEST', profile: 'BRANCH_OVERVIEW', batchId: 'TEST_BRANCH_OPERATING_20261013'
+      }, configExtensions: {}
+    };
+    expect(validateDsModel(m)).toEqual([]);
+    expect(buildConfigJson(m)).toEqual({
+      schemaVersion: 2, scopeMode: 'NAMED_GROUP', dataClassification: 'TEST',
+      profile: 'BRANCH_OVERVIEW', batchId: 'TEST_BRANCH_OPERATING_20261013'
+    });
+    const patch = parseConfigJson('FREE_REPORT', buildConfigJson(m), '[]');
+    expect(buildConfigJson({ ...defaultDsModel(), sourceKind: 'FREE_REPORT', ...patch })).toEqual({
+      schemaVersion: 2, scopeMode: 'NAMED_GROUP', dataClassification: 'TEST',
+      profile: 'BRANCH_OVERVIEW', batchId: 'TEST_BRANCH_OPERATING_20261013'
+    });
+    expect(validateDsModel({ ...m, freeReport: { ...m.freeReport, batchId: 'PROD_BRANCH_1' } }))
+      .toEqual(expect.arrayContaining([expect.stringMatching(/TEST_BRANCH/)]));
+  });
+
+  it('命名组允许 KPI_DETAIL 的 ORG + SNAPSHOT 组合', () => {
+    const m = model({ sourceKind: 'KPI_DETAIL', scopeMode: 'NAMED_GROUP' });
+    m.kpiDetail = { ...m.kpiDetail, schemeCode: 'S1', subjectType: 'ORG', mode: 'SNAPSHOT' };
+    expect(validateDsModel(m)).toEqual([]);
+    expect(buildConfigJson(m)).toMatchObject({
+      schemaVersion: 2, scopeMode: 'NAMED_GROUP', subjectType: 'ORG', mode: 'SNAPSHOT'
+    });
+  });
+
+  it('未知来源、未知版本、坏 JSON 均 fail-close', () => {
+    expect(() => parseConfigJson('NOT_A_SOURCE', {}, null)).toThrow(/来源/);
+    expect(() => parseConfigJson('WIDE_TABLE', { schemaVersion: 99 }, null)).toThrow(/版本/);
+    expect(() => parseConfigJson('WIDE_TABLE', '{bad json}', null)).toThrow(/解析|JSON/);
+  });
+
+  it('fieldMeta 的非表单受控声明字段在编辑往返中保留，表单字段仍可覆盖', () => {
+    const config = {
+      schemaVersion: 2,
+      sql: 'SELECT amount FROM RPT_X',
+      dateCol: null,
+      scopeMode: 'SUBJECT',
+      fieldMeta: [{
+        col: 'amount', alias: '余额', role: 'METRIC', unit: '元', decimals: 2,
+        semantic: 'DEPOSIT_BALANCE', metricCode: 'M_001', rawUnit: 'YUAN'
+      }]
+    };
+    const patch = parseConfigJson('CUSTOM_SQL', config, null);
+    patch.fieldMeta[0].alias = '调整后余额';
+    const rebuilt = buildConfigJson({ ...defaultDsModel(), sourceKind: 'CUSTOM_SQL', ...patch });
+
+    expect(rebuilt.fieldMeta[0]).toMatchObject({
+      col: 'amount', alias: '调整后余额', role: 'METRIC',
+      semantic: 'DEPOSIT_BALANCE', metricCode: 'M_001', rawUnit: 'YUAN'
+    });
+  });
+
+  it('KPI_DETAIL SNAPSHOT 保留已有 metrics 快照和显式取值列', () => {
+    const config = {
+      schemaVersion: 2, schemeCode: 'S1', subjectType: 'ORG', mode: 'SNAPSHOT',
+      metrics: [{ metricCode: 'M1', metricName: '存款', semantic: 'DEPOSIT' }],
+      valueCol: 'completeRate'
+    };
+    const patch = parseConfigJson('KPI_DETAIL', config, '["LATEST"]');
+    const rebuilt = buildConfigJson({ ...defaultDsModel(), sourceKind: 'KPI_DETAIL', ...patch });
+
+    expect(rebuilt.metrics).toEqual(config.metrics);
+    expect(rebuilt.valueCol).toBe('completeRate');
+    expect(buildTimeParamJson({ ...defaultDsModel(), sourceKind: 'KPI_DETAIL', ...patch }))
+      .toBe('["LATEST"]');
+  });
+
+  it.each(['KPI_RESULT', 'M98_STAT', 'FREE_REPORT', 'CUSTOM_SQL'])
+    ('%s 编辑往返保留既有合法 timeParamJson', (sourceKind) => {
+      const configBySource = {
+        KPI_RESULT: { schemaVersion: 2, cycleType: 'MONTHLY' },
+        M98_STAT: { schemaVersion: 2, scopeMode: 'NAMED_GROUP', profile: 'CORP_REVENUE', mode: 'SUMMARY' },
+        FREE_REPORT: {
+          schemaVersion: 2, scopeMode: 'NAMED_GROUP', dataClassification: 'TEST',
+          profile: 'BRANCH_OVERVIEW', batchId: 'TEST_BRANCH_OPERATING_20261013'
+        },
+        CUSTOM_SQL: { schemaVersion: 2, sql: 'SELECT 1', dateCol: null }
+      };
+      const patch = parseConfigJson(sourceKind, configBySource[sourceKind], '["LATEST"]');
+      expect(buildTimeParamJson({ ...defaultDsModel(), sourceKind, ...patch })).toBe('["LATEST"]');
+    });
+});

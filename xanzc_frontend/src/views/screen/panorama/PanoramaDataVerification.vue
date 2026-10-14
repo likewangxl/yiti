@@ -50,6 +50,7 @@
             <th scope="col">绑定</th>
             <th scope="col">返回行数</th>
             <th scope="col">覆盖 / 缺失</th>
+            <th scope="col">数据质量</th>
             <th scope="col">核验状态</th>
           </tr>
         </thead>
@@ -70,6 +71,13 @@
               <span>{{ coverageLabel(row) }}</span>
               <small v-if="row.dates?.length" class="panorama-data-verification__muted">最新日期 {{ row.dates[row.dates.length - 1] }}</small>
               <small v-else class="panorama-data-verification__warning">日期无法核验</small>
+            </td>
+            <td class="panorama-data-verification__quality" data-testid="verification-quality">
+              <strong>{{ row.quality?.label || '未提供质量信息' }}</strong>
+              <small v-if="row.quality?.dataDate">数据截至 {{ row.quality.dataDate }}</small>
+              <small v-if="row.quality?.expectedSubjects != null && row.quality?.receivedSubjects != null">机构覆盖 {{ row.quality.receivedSubjects }}/{{ row.quality.expectedSubjects }}</small>
+              <small v-if="row.quality?.mixedPeriod">各来源截至日期不一致</small>
+              <small v-if="row.quality?.message">{{ row.quality.message }}</small>
             </td>
             <td>
               <span class="panorama-data-verification__badge" :class="statusClass(row.status)">{{ row.statusLabel || '尚未验证' }}</span>
@@ -108,6 +116,7 @@ const props = defineProps({
   slotOrder: { type: Array, default: () => [...ALL_SLOT_ORDER] },
   bindingState: { type: Object, default: () => ({}) },
   disabled: { type: Boolean, default: false },
+  template: { type: String, default: '' },
   // 注入服务只用于测试隔离或宿主复用实例；默认实例仍只读现有 screen API。
   service: { type: Object, default: null }
 });
@@ -136,7 +145,8 @@ function snapshotInput() {
     canvas: props.canvas,
     datasources: props.datasources,
     slotOrder: props.slotOrder,
-    bindingState: props.bindingState
+    bindingState: props.bindingState,
+    template: props.template
   };
 }
 

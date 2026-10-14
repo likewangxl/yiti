@@ -145,3 +145,10 @@ snapshot.ifPresent(dto -> {
 - `report-analytics-center/src/main/java/com/bank/branch/platform/report/dto/req/presentation/ScreenDisplayComparisonDTO.java` 与 `CodeScreenPresentationValidator`：类型化 `display.comparisons`、开关语义、当前画布与不可变快照的受控历史区块引用。
 - `xanzc_frontend/src/views/screen/presentation/model/explicitComparisons.js`：以数据日计算昨日/上月末/上年末，唯一行及当前值一致性校验，金额单位换算、完成率百分点；缺值不得补零。
 - `xanzc_frontend/src/views/screen/panorama/usePanoramaData.js`：复用屏级授权/batchId查询历史，去重、权限与迟到响应处理，`comparisonResults`独立于增长曲线数据。
+
+### 大屏业务指标配置与安全维护
+
+- `xanzc_frontend/src/utils/dsConfig.js`：六类数据源保真回填、策略与扩展保留、固定来源白名单及未知配置阻断。
+- `xanzc_frontend/src/views/screen/panorama/businessMetricCatalog.js`、`controlledSourceFields.js`：授权来源的业务指标目录、受控M98字段、单位证据与不兼容来源说明。
+- `xanzc_frontend/src/views/screen/panorama/PanoramaBindings.vue`、`runtimeDataVerification.js`：业务选择同步绑定、周期候选和已保存草稿的只读结构/质量核验。
+- `report-analytics-center/src/main/java/com/bank/branch/platform/report/service/screen/ScreenCanvasServiceImpl.java`、同目录 `ScreenDatasourceServiceImpl.java`：新CODE发布包冻结查询定义，宽表权威字段重写并保留合法扩展。

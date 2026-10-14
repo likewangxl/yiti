@@ -15,6 +15,21 @@
             <el-option v-for="line in BIZ_LINES" :key="line.value" :label="line.label" :value="line.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="关键词">
+          <el-input v-model="filters.keyword" clearable placeholder="名称或编码" style="width:200px" @keyup.enter="reload" />
+        </el-form-item>
+        <el-form-item label="类型">
+          <el-select v-model="filters.dsType" clearable placeholder="全部" style="width:130px">
+            <el-option label="单值型" value="SINGLE" />
+            <el-option label="时序型" value="TIMESERIES" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="filters.status" clearable placeholder="全部" style="width:120px">
+            <el-option label="启用" value="ACTIVE" />
+            <el-option label="停用" value="DISABLED" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="reload">查询</el-button>
           <el-button @click="resetFilters">重置</el-button>
@@ -110,7 +125,7 @@
                     placeholder="新增、修改、停用数据源均须填写原因" />
         </el-form-item>
         <el-alert v-if="publishedReferenced" type="warning" :closable="false" show-icon
-                  title="发布/归档引用数据源，编辑会影响已发布大屏"
+                  title="发布/归档引用数据源，编辑需核对引用版本"
                   :description="publishedReferenceGuidance" data-testid="datasource-freeze-notice" />
         <el-form-item label="业务条线" required>
           <el-select v-model="dlg.m.bizLine" style="width:100%" placeholder="请选择数据归属">
@@ -119,10 +134,12 @@
           <span class="hint">由数据源显式声明，不能根据名称或指标中文名推断；共用请明确选择“共用”。</span>
         </el-form-item>
         <el-form-item label="来源类型" required>
-          <el-radio-group v-model="dlg.m.sourceKind" :disabled="!!dlg.editing">
+          <el-radio-group v-model="dlg.m.sourceKind" :disabled="!!dlg.editing" @change="onSourceKindChange">
             <el-radio-button value="WIDE_TABLE">指标宽表(引导式)</el-radio-button>
             <el-radio-button value="KPI_RESULT" :disabled="namedGroupMode">KPI结果(引导式)</el-radio-button>
-            <el-radio-button value="KPI_DETAIL" :disabled="namedGroupMode">KPI细项(引导式)</el-radio-button>
+            <el-radio-button value="KPI_DETAIL">KPI细项(引导式)</el-radio-button>
+            <el-radio-button value="M98_STAT">M98固定统计</el-radio-button>
+            <el-radio-button value="FREE_REPORT">测试分支批次</el-radio-button>
             <el-radio-button value="CUSTOM_SQL" :disabled="namedGroupMode">自定义 SQL</el-radio-button>
           </el-radio-group>
         </el-form-item>
@@ -241,8 +258,30 @@
           </template>
         </template>
 
+        <!-- M98 固定统计：服务端只允许固定 profile/SUMMARY，不暴露表名或 SQL。 -->
+        <template v-else-if="dlg.m.sourceKind === 'M98_STAT'">
+          <el-form-item label="固定统计 profile" required>
+            <el-select v-model="dlg.m.m98.profile" style="width:100%">
+              <el-option label="对公营业收入 CORP_REVENUE" value="CORP_REVENUE" />
+              <el-option label="零售营业收入 RETAIL_REVENUE" value="RETAIL_REVENUE" />
+              <el-option label="零售贷款 RETAIL_LOAN" value="RETAIL_LOAN" />
+              <el-option label="对公不良率 CORP_NPL_RATE" value="CORP_NPL_RATE" />
+              <el-option label="零售不良率 RETAIL_NPL_RATE" value="RETAIL_NPL_RATE" />
+            </el-select>
+          </el-form-item>
+          <span class="hint">查询模式固定为 SUMMARY，范围固定为 NAMED_GROUP；profile 与业务条线必须匹配。</span>
+        </template>
+
+        <!-- FREE_REPORT 固定读取已有 TEST 分支批次，不提供任意表/SQL/批次替代能力。 -->
+        <template v-else-if="dlg.m.sourceKind === 'FREE_REPORT'">
+          <el-form-item label="测试分支批次 ID" required>
+            <el-input v-model="dlg.m.freeReport.batchId" placeholder="TEST_BRANCH_OPERATING_20261013" />
+          </el-form-item>
+          <span class="hint">数据分类固定 TEST、profile 固定 BRANCH_OVERVIEW，批次必须以 TEST_BRANCH_ 开头并由服务端核验存在。</span>
+        </template>
+
         <!-- 自定义 SQL -->
-        <template v-else>
+        <template v-else-if="dlg.m.sourceKind === 'CUSTOM_SQL'">
           <el-form-item label="SELECT 语句（占位参数：#{orgCode} #{empId} #{dateFrom} #{dateTo}；仅白名单表）" required>
             <el-input v-model="dlg.m.sql.text" type="textarea" :rows="6"
                       placeholder="SELECT org_name, cnt FROM ... WHERE org_code = #{orgCode}" />
@@ -266,7 +305,7 @@
         </el-form-item>
 
         <!-- 字段元数据（全类型通用可选段，spec §3.2） -->
-        <el-form-item>
+        <el-form-item v-if="!fixedConfigSource">
           <template #label>
             字段元数据（可选：别名/角色/金额量级/单位/小数位，组件展示时套用）
             <el-button size="small" style="margin-left:8px"
@@ -327,17 +366,20 @@
         </el-form-item>
 
         <!-- 数据范围模式（spec §4） -->
-        <el-form-item label="数据范围模式">
+        <el-form-item v-if="!fixedConfigSource" label="数据范围模式">
           <el-radio-group v-model="dlg.m.scopeMode" @change="onScopeModeChange">
             <el-radio value="SUBJECT">主体范围（按 empId/orgCode 校验查看者数据范围，默认）</el-radio>
             <el-radio value="GLOBAL">全省聚合（无主体参数的全省类数据；查看需 ALL/省级数据范围权限）</el-radio>
-            <el-radio value="NAMED_GROUP">命名机构组（仅机构宽表；服务端按已授权组成员取数）</el-radio>
+            <el-radio value="NAMED_GROUP">命名机构组（仅后端允许的机构来源；服务端按已授权组成员取数）</el-radio>
           </el-radio-group>
-          <span v-if="namedGroupMode" class="hint">NAMED_GROUP 仅允许 WIDE_TABLE 的 ORG_INDEX_RESULT + org_code；CUSTOM_SQL 仅保留给 LEGACY_CONTEXT。</span>
+          <span v-if="namedGroupMode" class="hint">NAMED_GROUP 仅允许机构宽表、ORG 快照 KPI_DETAIL、固定 M98_STAT 或 TEST FREE_REPORT。</span>
         </el-form-item>
+        <el-alert v-if="dlg.configError" type="error" :closable="false" show-icon
+                  title="当前配置无法安全编辑" :description="dlg.configError" data-testid="datasource-config-error" />
       </el-form>
       <template #footer>
         <el-button @click="dlg.show = false">取消</el-button>
+        <el-button :disabled="!!dlg.configError" @click="openCurrentTryRun">试跑当前配置</el-button>
         <el-button :loading="dlg.saving" type="primary" @click="onSave">保存</el-button>
       </template>
     </el-dialog>
@@ -389,7 +431,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import {
@@ -408,7 +450,10 @@ import {
   filterActiveOrgGroups, filterReportScreenOrgGroups
 } from '@/utils/screenScope';
 
-const KIND_LABELS = { WIDE_TABLE: '指标宽表', KPI_RESULT: 'KPI结果', KPI_DETAIL: 'KPI细项', CUSTOM_SQL: '自定义SQL' };
+const KIND_LABELS = {
+  WIDE_TABLE: '指标宽表', KPI_RESULT: 'KPI结果', KPI_DETAIL: 'KPI细项',
+  M98_STAT: 'M98固定统计', FREE_REPORT: '测试分支批次', CUSTOM_SQL: '自定义SQL'
+};
 const DATASOURCE_STATUSES = ['ACTIVE', 'DISABLED'];
 
 const list = ref([]);
@@ -416,14 +461,15 @@ const loading = ref(false);
 const metrics = ref([]);
 const schemes = ref([]);       // KPI 方案下拉（/screen/admin/kpi-schemes）
 const lastTryCols = ref([]);   // 最近一次试跑返回的列名 → fieldMeta 的 col 下拉候选
+let tryGeneration = 0;
 const columnNameCollator = new Intl.Collator('zh-CN');
 const sortedLastTryCols = computed(() => [...lastTryCols.value].sort(columnNameCollator.compare));
 const testOrgGroups = ref([]); // NAMED_GROUP 试跑的显式候选，停用/非报表用途组不展示
-const filters = reactive({ bizLine: '' });
+const filters = reactive({ bizLine: '', keyword: '', dsType: '', status: '' });
 
 const dlg = reactive({
   show: false, editing: null, saving: false,
-  dsName: '', remark: '', reason: '', status: 'ACTIVE', editingRow: null,
+  dsName: '', remark: '', reason: '', status: 'ACTIVE', editingRow: null, configError: '',
   m: defaultDsModel()   // 表单模型（config_json 双向转换见 utils/dsConfig.js）
 });
 const deleteDialog = reactive({ show: false, saving: false, row: null, reason: '' });
@@ -432,18 +478,27 @@ const deleteDialog = reactive({ show: false, saving: false, row: null, reason: '
 const derivedDsType = computed(() => deriveDsType(dlg.m));
 const editingReferenceState = computed(() => datasourceReferenceState(dlg.editingRow || {}));
 const publishedReferenced = computed(() => editingReferenceState.value.publishedReferenced);
-const publishedReferenceGuidance = computed(() => editingReferenceState.value.guidance);
+const publishedReferenceGuidance = computed(() => {
+  const state = editingReferenceState.value;
+  if (!state.publishedReferenced) return state.guidance;
+  const references = [];
+  if (state.draftCodes.length) references.push(`草稿：${state.draftCodes.join('、')}`);
+  if (state.publishedCodes.length) references.push(`发布/归档：${state.publishedCodes.join('、')}`);
+  const referenceText = references.length ? ` 引用编码：${references.join('；')}` : '';
+  return `编辑会影响引用草稿；包含查询定义快照的发布版本须重新发布生效，旧发布版本可能直接受影响；请先核对引用版本或新建副本。${referenceText}`;
+});
 const namedGroupMode = computed(() => dlg.m.scopeMode === 'NAMED_GROUP');
+const fixedConfigSource = computed(() => ['M98_STAT', 'FREE_REPORT'].includes(dlg.m.sourceKind));
 
 // 宽表指标下拉：按所选宽表的维度过滤（EMP 表→EMP 指标）
 const wideMetricOptions = computed(() => {
-  const dim = dlg.m.wide.table.startsWith('EMP') ? 'EMP' : 'ORG';
+  const dim = String(dlg.m.wide?.table || '').startsWith('EMP') ? 'EMP' : 'ORG';
   return metrics.value.filter(m => m.baseDim === dim);
 });
 
 // KPI 细项指标下拉：按主体类型过滤（EMP/ORG 与指标 baseDim 对应）
 const kpiMetricOptions = computed(() =>
-  metrics.value.filter(m => m.baseDim === dlg.m.kpiDetail.subjectType));
+  metrics.value.filter(m => m.baseDim === dlg.m.kpiDetail?.subjectType));
 
 // KPI 细项多选：v-model 绑 code 数组，写入时同步组装 {metricCode, metricName} 名称快照
 // （后端 TREND 校验 code+name 均非空；编辑回填的已下架指标保留原快照名称）
@@ -495,10 +550,21 @@ function addFieldMetaRow() {
   dlg.m.fieldMeta.push({ col: '', alias: '', role: 'METRIC', amountScale: '', unit: '', decimals: null });
 }
 
+function clearColumnCandidates() {
+  lastTryCols.value = [];
+}
+
+function invalidateTryRun() {
+  tryGeneration += 1;
+  clearColumnCandidates();
+}
+
 function onWideTableChange() {
   // 换表后指标维度变化，清空已选指标与槽位缓存
   dlg.m.wide.metricCodes = [];
   dlg.m.wide.slotCols = [];
+  dlg.m.wide.metricSnapshots = [];
+  invalidateTryRun();
 }
 
 function referenceLabel(row) {
@@ -517,18 +583,28 @@ function datasourceStatus(row) {
 
 /** 清空仅影响列表筛选条件，不改变数据源 API 契约或当前数据口径。 */
 function resetFilters() {
-  filters.bizLine = '';
+  Object.assign(filters, { bizLine: '', keyword: '', dsType: '', status: '' });
   reload();
 }
 
 async function reload() {
   loading.value = true;
   try {
-    const result = await listScreenDatasources(filters.bizLine ? { bizLine: filters.bizLine } : {});
+    // 后端列表契约只声明 dsType/keyword；业务条线和状态均在返回 DTO 上本地筛选。
+    const query = {};
+    if (filters.dsType) query.dsType = filters.dsType;
+    if (String(filters.keyword || '').trim()) query.keyword = String(filters.keyword).trim();
+    const result = await listScreenDatasources(query);
     const rows = Array.isArray(result) ? result : (result?.records || []);
-    // 旧后端列表端点可能暂不接收 bizLine 查询参数，前端仍按已返回的显式字段过滤；
-    // 不把空值当 COMMON，存量后端已在 DTO 适配为 COMMON。
-    list.value = filters.bizLine ? rows.filter(row => (row.bizLine || 'COMMON') === filters.bizLine) : rows;
+    const keyword = String(filters.keyword || '').trim().toLocaleLowerCase();
+    list.value = rows.filter(row => {
+      const lineOk = !filters.bizLine || (row.bizLine || 'COMMON') === filters.bizLine;
+      const typeOk = !filters.dsType || row.dsType === filters.dsType;
+      const statusOk = !filters.status || row.status === filters.status;
+      const keywordOk = !keyword
+        || `${row.dsName || ''} ${row.dsCode || ''}`.toLocaleLowerCase().includes(keyword);
+      return lineOk && typeOk && statusOk && keywordOk;
+    });
   } finally {
     loading.value = false;
   }
@@ -541,17 +617,20 @@ function openCreate() {
   dlg.reason = '';
   dlg.status = 'ACTIVE';
   dlg.editingRow = null;
+  dlg.configError = '';
+  invalidateTryRun();
   dlg.m = defaultDsModel();
   dlg.show = true;
 }
 
-// 安全解析 JSON：解析失败时提示并回退到默认值，避免弹窗因脏数据无法打开
-function safeParse(str, fallback) {
+// 编辑只能基于完整、可识别的配置打开；失败时保留阻断状态，禁止默认空配置覆盖原定义。
+function safeParse(str) {
+  if (str && typeof str === 'object') return str;
+  if (typeof str !== 'string' || !str.trim()) throw new Error('配置 JSON 为空，已拒绝编辑');
   try {
     return JSON.parse(str);
-  } catch {
-    ElMessage.warning('配置 JSON 解析失败，已按空配置打开');
-    return fallback;
+  } catch (error) {
+    throw new Error(`配置 JSON 解析失败：${error?.message || '格式非法'}`);
   }
 }
 
@@ -561,13 +640,24 @@ function fillEditModel(row, { copy = false } = {}) {
   dlg.dsName = copy ? `${row.dsName} 副本` : row.dsName;
   dlg.remark = row.remark || '';
   dlg.reason = '';
+  dlg.configError = '';
+  invalidateTryRun();
   // 新建副本有明确新状态；普通编辑只保留后端返回的合法状态，未知旧值不允许静默复原为 ACTIVE。
   dlg.status = copy ? 'ACTIVE' : (DATASOURCE_STATUSES.includes(row.status) ? row.status : '');
-  const cfg = safeParse(row.configJson || '{}', {});
-  // 先重置默认再打补丁（读时兼容 v1 旧数据：缺 fieldMeta/aggregation/scopeMode 补默认）
   const fresh = defaultDsModel();
-  Object.assign(fresh, parseConfigJson(row.sourceKind, cfg, row.timeParamJson),
-    { sourceKind: row.sourceKind, dsType: row.dsType || fresh.dsType, bizLine: row.bizLine || 'COMMON' });
+  try {
+    const cfg = safeParse(row.configJson);
+    Object.assign(fresh, parseConfigJson(row.sourceKind, cfg, row.timeParamJson),
+      { sourceKind: row.sourceKind, dsType: row.dsType || fresh.dsType, bizLine: row.bizLine || 'COMMON' });
+  } catch (error) {
+    dlg.configError = error?.message || '配置无法安全解析，已拒绝保存';
+    Object.assign(fresh, {
+      sourceKind: row.sourceKind,
+      dsType: row.dsType || fresh.dsType,
+      bizLine: row.bizLine || ''
+    });
+    ElMessage.warning(dlg.configError);
+  }
   dlg.m = fresh;
   dlg.show = true;
 }
@@ -579,16 +669,47 @@ function openCopy(row) {
   ElMessage.info('已按副本打开：修改草稿绑定后重新发布，原发布/归档引用不会被原地改写。');
 }
 
-/** 切换到命名机构组时主动收敛为唯一允许的来源，避免保留 CUSTOM_SQL/员工宽表脏状态。 */
+/** 切换到命名机构组时收敛到后端可证明机构范围的来源组合。 */
 function onScopeModeChange(mode) {
   if (mode !== 'NAMED_GROUP') return;
+  invalidateTryRun();
+  if (dlg.m.sourceKind === 'KPI_DETAIL') {
+    dlg.m.kpiDetail.subjectType = 'ORG';
+    dlg.m.kpiDetail.mode = 'SNAPSHOT';
+    dlg.m.kpiDetail.metrics = [];
+    return;
+  }
+  if (['M98_STAT', 'FREE_REPORT'].includes(dlg.m.sourceKind)) return;
+  if (dlg.m.sourceKind !== 'WIDE_TABLE') {
+    dlg.m.configExtensions = {};
+    dlg.m.sourceKind = 'WIDE_TABLE';
+  }
   dlg.m.sourceKind = 'WIDE_TABLE';
   dlg.m.wide.table = 'ORG_INDEX_RESULT';
   dlg.m.wide.metricCodes = [];
   dlg.m.wide.slotCols = [];
+  dlg.m.wide.metricSnapshots = [];
+}
+
+/** 来源切换立即清空上一来源的列候选和未展示扩展，避免跨数据源污染。 */
+function onSourceKindChange(sourceKind) {
+  invalidateTryRun();
+  dlg.m.configExtensions = {};
+  if (sourceKind === 'M98_STAT' || sourceKind === 'FREE_REPORT') {
+    dlg.m.scopeMode = 'NAMED_GROUP';
+    return;
+  }
+  if (sourceKind === 'KPI_DETAIL' && dlg.m.scopeMode === 'NAMED_GROUP') {
+    dlg.m.kpiDetail.subjectType = 'ORG';
+    dlg.m.kpiDetail.mode = 'SNAPSHOT';
+    dlg.m.kpiDetail.metrics = [];
+    return;
+  }
+  if (dlg.m.scopeMode === 'NAMED_GROUP') dlg.m.scopeMode = 'SUBJECT';
 }
 
 async function onSave() {
+  if (dlg.configError) { ElMessage.warning(dlg.configError); return; }
   if (!dlg.dsName) { ElMessage.warning('名称必填'); return; }
   const reason = String(dlg.reason || '').trim();
   if (!reason) { ElMessage.warning('操作原因必填（高危审计）'); return; }
@@ -621,6 +742,33 @@ async function onSave() {
     // http.js 已弹错误 toast
   } finally {
     dlg.saving = false;
+  }
+}
+
+/** 用弹窗当前草稿直接试跑；请求只走高危试跑接口，不创建或更新数据源。 */
+function openCurrentTryRun() {
+  if (dlg.configError) { ElMessage.warning(dlg.configError); return; }
+  const errors = validateDsModel(dlg.m);
+  if (errors.length) { ElMessage.warning(errors[0]); return; }
+  try {
+    const configJson = JSON.stringify(buildConfigJson(dlg.m));
+    invalidateTryRun();
+    Object.assign(tr, {
+      show: true,
+      mode: 'try',
+      row: {
+        sourceKind: dlg.m.sourceKind,
+        dsType: derivedDsType.value,
+        bizLine: dlg.m.bizLine,
+        configJson,
+        timeParamJson: buildTimeParamJson(dlg.m)
+      },
+      result: null,
+      testOrgGroupCode: '',
+      reason: ''
+    });
+  } catch (error) {
+    ElMessage.warning(error?.message || '当前配置无法试跑');
   }
 }
 
@@ -666,6 +814,9 @@ const tr = reactive({
   show: false, mode: 'try', row: null, orgCode: '', empId: '', testOrgGroupCode: '', reason: '',
   period: 'LATEST', running: false, result: null
 });
+watch(() => tr.show, (show, previous) => {
+  if (previous && !show) invalidateTryRun();
+});
 const trRows = computed(() => tr.result?.rows || []);
 // 列头套用 columnsMeta（可空——旧数据源无 fieldMeta 时退化为原始列名）
 const previewCols = computed(() => buildPreviewColumns(tr.result?.columns, tr.result?.columnsMeta));
@@ -675,12 +826,15 @@ const tryRequiresNamedGroup = computed(() => {
 });
 
 function openTryRun(row) {
+  invalidateTryRun();
   Object.assign(tr, { show: true, mode: 'try', row, result: null, testOrgGroupCode: '', reason: '' });
 }
 function openProbeColumns(row) {
+  invalidateTryRun();
   Object.assign(tr, { show: true, mode: 'probe', row, result: null, testOrgGroupCode: '', reason: '' });
 }
 async function runTry() {
+  const generation = tryGeneration;
   let body;
   try {
     body = tr.mode === 'probe'
@@ -692,9 +846,11 @@ async function runTry() {
   }
   tr.running = true;
   try {
-    tr.result = tr.mode === 'probe'
+    const result = tr.mode === 'probe'
       ? await probeScreenDatasourceColumns(tr.row.id, body)
       : await tryRunScreenDatasource(body);
+    if (generation !== tryGeneration) return;
+    tr.result = result;
     // 记录返回列名，供编辑弹窗的字段元数据 col 下拉候选
     if (Array.isArray(tr.result?.columns) && tr.result.columns.length) {
       lastTryCols.value = tr.result.columns;
