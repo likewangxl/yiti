@@ -89,13 +89,6 @@
       </section>
 
       <div v-if="!comparisonsOnly" class="metric-binding__agg">
-        <el-form-item label="聚合维度">
-          <el-select data-testid="metric-catalog-groupby" v-model="groupBy" :disabled="disabled">
-            <el-option label="汇总为一行" value="NONE" />
-            <el-option label="按主体（排名）" value="SUBJECT" />
-            <el-option label="按日期（趋势）" value="DATE" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="聚合函数">
           <el-select data-testid="metric-catalog-agg" v-model="agg" :disabled="disabled">
             <el-option label="求和" value="SUM" />

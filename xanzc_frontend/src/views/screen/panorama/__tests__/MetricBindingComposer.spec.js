@@ -35,6 +35,27 @@ function mountComposer(props = {}) {
 }
 
 describe('MetricBindingComposer', () => {
+  it('不展示聚合维度，保留聚合函数、过滤及已保存分组口径', async () => {
+    const filters = [{ col: 'val_12', op: 'GT', value: '0' }];
+    const wrapper = mountComposer({
+      initialAggregation: { groupBy: 'DATE', agg: 'SUM' },
+      initialFilters: filters
+    });
+    try {
+      expect(wrapper.find('[data-testid="metric-catalog-groupby"]').exists()).toBe(false);
+      expect(wrapper.text()).not.toContain('聚合维度');
+      expect(wrapper.get('[data-testid="metric-catalog-agg"]').exists()).toBe(true);
+      expect(wrapper.get('[data-testid="metric-catalog-add-filter"]').exists()).toBe(true);
+      await wrapper.get('[data-testid="metric-catalog-suggest"]').trigger('click');
+      await wrapper.get('[data-testid="metric-catalog-apply"]').trigger('click');
+      const plan = wrapper.emitted('apply')[0][0];
+      expect(JSON.parse(plan.datasourceRequest.configJson).aggregation)
+        .toEqual({ groupBy: 'DATE', agg: 'SUM', filters });
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
   it('名称建议只填入月均余额，并生成可提交的绑定计划', async () => {
     const wrapper = mountComposer();
 
