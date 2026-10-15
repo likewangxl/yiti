@@ -489,4 +489,35 @@ describe('displayMetricsModel', () => {
     expect(disabled.comparisons).toBeNull();
     expect(disabled.monthDelta).toBeNull();
   });
+
+  it('指标库期间比较用结果表增量替换待接入，未绑定槽位仍无数据', () => {
+    const card = component('business-retail-deposit-balance', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'deposit', '存款余额', 'YUAN')],
+      content: { mainField: '存款余额', subFields: [] },
+      format: { displayUnit: 'YUAN', decimals: 2 }
+    });
+    const presentation = { template: 'branch-overview-v1', displaySchemaVersion: 1, display: { components: [card] } };
+    const model = {
+      dataDate: '2026-10-15',
+      blockResults: { 31: { 存款余额: 1000, unitByField: { 存款余额: 'YUAN' } } },
+      periodComparisonConfig: {
+        'business-retail-deposit-balance': {
+          day: { mode: 'METRIC', metricCode: 'M_0266', outputColumn: '较上日增量', unit: 'YUAN', tableName: 'ORG_INDEX_RESULT' },
+          month: { mode: 'UNSET' },
+          year: { mode: 'OFFSET', metricCode: 'M_0277', outputColumn: '存款余额', unit: 'YUAN', tableName: 'ORG_INDEX_RESULT' }
+        }
+      },
+      periodComparisonSources: {
+        'business-retail-deposit-balance': [
+          { data_date: '2026-10-15', 较上日增量: 15, 存款余额: 1000 },
+          { data_date: '2025-12-31', 存款余额: 800 }
+        ]
+      }
+    };
+    const result = buildDisplayMetricsModel(presentation, model, { draftOverview: true }).components[0];
+    expect(result.comparisons.day).toMatchObject({ state: 'READY', baseValue: 15, referenceDate: '2026-10-14', text: '较昨日 +15.00元' });
+    expect(result.comparisons.year).toMatchObject({ state: 'READY', baseValue: 200, referenceDate: '2025-12-31' });
+    expect(result.comparisons.month.text).toContain('暂无数据');
+  });
 });

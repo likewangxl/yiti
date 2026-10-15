@@ -86,7 +86,7 @@ export function buildMetricBindingPlan(input = {}) {
   const errors = [];
   const warnings = [];
   const reason = text(input.reason);
-  if (!reason) errors.push('必须填写原因');
+  if (!reason && !input.comparisonsOnly) errors.push('必须填写原因');
   const bizLine = upper(input.screen?.bizLine);
   if (!BIZ_LINES.includes(bizLine)) errors.push('屏业务条线无效');
   const namedGroup = upper(input.screen?.orgScopeMode) === 'NAMED_GROUP';
@@ -94,7 +94,7 @@ export function buildMetricBindingPlan(input = {}) {
   if (namedGroup && !text(input.screen?.orgGroupCode)) {
     warnings.push('当前屏未填写机构组编码，命名机构组试跑前需要选择测试机构组。');
   }
-  const groupBy = upper(input.aggregation?.groupBy) || shape.groupBy;
+  let groupBy = upper(input.aggregation?.groupBy) || shape.groupBy;
   if (!GROUP_BYS.includes(groupBy)) errors.push('聚合维度不受支持');
 
   const metrics = Array.isArray(input.metrics) ? input.metrics : [];
@@ -118,15 +118,27 @@ export function buildMetricBindingPlan(input = {}) {
     else if (fieldSpec?.unitKinds?.length && !fieldSpec.unitKinds.includes(unit)) errors.push(`${label} 的单位不适用`);
     selected.push({ semantic, metric, unit, label });
   }
-  if (!selected.length) errors.push('请至少选择一个指标');
+  const periodSelected = collectPeriodMetrics(input.periodComparisons, byCode, namedGroup, errors);
+  if (input.comparisonsOnly) {
+    if (!periodSelected.length) errors.push('请至少配置一个期间比较');
+  } else if (!selected.length) errors.push('请至少选择一个指标');
   for (const field of input.fieldSpecs || []) {
     if (field?.kind === 'dimension' || !field?.required) continue;
+    if (input.comparisonsOnly) continue;
     if (!selected.some(item => item.semantic === field.semantic)) errors.push(`请配置${field.label}`);
   }
-  const dimensions = new Set(selected.map(item => upper(item.metric.baseDim)));
+  const dimensions = new Set([...selected, ...periodSelected].map(item => upper(item.metric.baseDim)));
   if (dimensions.size > 1) errors.push('同一数据源只能使用同一维度的指标');
-  const table = selected[0]?.metric.tableName || '';
+  const table = selected[0]?.metric.tableName || periodSelected[0]?.metric.tableName || '';
+  if (periodSelected.some(item => item.metric.tableName !== table)) errors.push('期间比较必须与主指标同一结果表');
   if (namedGroup && table && table !== 'ORG_INDEX_RESULT') errors.push('命名机构组只能使用机构指标宽表');
+  if (periodSelected.some(item => item.mode === 'OFFSET')) {
+    if (groupBy === 'SUBJECT') errors.push('按主体聚合不能回推基准日');
+    else if (groupBy !== 'DATE') {
+      groupBy = 'DATE';
+      warnings.push('已有期间比较按基准日回推，聚合维度改为按日期，否则结果表不会按日返回历史值。主值查询仍使用最新周期。');
+    }
+  }
 
   let agg = upper(input.aggregation?.agg);
   if (!agg) agg = selected.some(item => RATIO_UNITS.has(item.unit)) ? 'AVG' : upper(selected[0]?.metric.summaryRule);
@@ -187,33 +199,63 @@ export function buildMetricBindingPlan(input = {}) {
 
   if (errors.length) return { ...empty, errors, warnings };
 
+  const metricItems = [];
+  const seenCodes = new Set();
+  for (const item of [...selected, ...periodSelected]) {
+    if (seenCodes.has(item.metric.metricCode)) continue;
+    seenCodes.add(item.metric.metricCode);
+    metricItems.push(item);
+  }
   const config = {
     schemaVersion: 2,
     scopeMode,
     table,
-    metrics: selected.map(item => ({ metricCode: item.metric.metricCode })),
+    metrics: metricItems.map(item => ({ metricCode: item.metric.metricCode })),
     aggregation: filters.length ? { groupBy, agg, filters } : { groupBy, agg },
-    fieldMeta: selected.map(item => ({
-      col: item.metric.outputColumn,
-      alias: item.metric.metricName,
-      role: 'METRIC',
-      unit: item.unit,
-      semantic: item.semantic
-    }))
+    fieldMeta: [
+      ...selected.map(item => ({
+        col: item.metric.outputColumn,
+        alias: item.metric.metricName,
+        role: 'METRIC',
+        unit: item.unit,
+        semantic: item.semantic
+      })),
+      ...periodSelected
+        .filter(item => !selected.some(main => main.metric.metricCode === item.metric.metricCode))
+        .map(item => ({
+          col: item.metric.outputColumn,
+          alias: item.metric.metricName,
+          role: 'METRIC',
+          unit: item.unit,
+          semantic: item.semantic
+        }))
+    ]
   };
   const configJson = JSON.stringify(config);
   const dsType = groupBy === 'DATE' ? 'TIMESERIES' : 'SINGLE';
   const period = PERIODS.includes(input.period) ? input.period : shape.period;
   const existing = findExisting(input.datasources, {
     table, scopeMode, bizLine, groupBy, agg, filters,
-    codes: selected.map(item => item.metric.metricCode)
+    codes: metricItems.map(item => item.metric.metricCode)
   });
+  const periodComparisons = storedPeriodComparisons(input.periodComparisons, periodSelected);
   return {
     ok: true,
     errors: [],
     warnings,
-    binding: { period, fields, units },
-    datasourceRequest: existing ? null : {
+    comparisonsOnly: Boolean(input.comparisonsOnly),
+    periodComparisons,
+    extraMetrics: periodSelected.map(item => ({
+      metricCode: item.metric.metricCode,
+      metricName: item.metric.metricName,
+      outputColumn: item.metric.outputColumn,
+      unit: item.unit,
+      tableName: item.metric.tableName,
+      semantic: item.semantic,
+      mode: item.mode
+    })),
+    binding: input.comparisonsOnly ? null : { period, fields, units },
+    datasourceRequest: input.comparisonsOnly || existing ? null : {
       dsName: datasourceName(input.slotLabel, selected),
       dsType,
       sourceKind: 'WIDE_TABLE',
@@ -308,6 +350,76 @@ function datasourceName(slotLabel, selected) {
   const metricNames = selected.map(item => item.metric.metricName).filter(Boolean).join('、');
   const name = `指标绑定·${text(slotLabel) || '组件'}·${metricNames}`;
   return name.length <= 100 ? name : `${name.slice(0, 97)}...`;
+}
+
+const PERIOD_LABELS = Object.freeze({ day: '较昨日', month: '较上月', year: '较上年' });
+const PERIOD_SEMANTICS = Object.freeze({ day: 'periodDay', month: 'periodMonth', year: 'periodYear' });
+const AMOUNT_UNITS = new Set(['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION']);
+
+function collectPeriodMetrics(raw, byCode, namedGroup, errors) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const selected = [];
+  for (const key of ['day', 'month', 'year']) {
+    const slot = raw[key] || {};
+    const mode = slot.mode === 'METRIC' || slot.mode === 'OFFSET' ? slot.mode : 'UNSET';
+    if (mode === 'UNSET') continue;
+    const label = PERIOD_LABELS[key];
+    const metric = byCode.get(slot.metricCode);
+    if (!metric?.bindable) {
+      errors.push(`${label} 的指标 ${text(slot.metricCode) || '未选择'} 不可绑定`);
+      continue;
+    }
+    if (namedGroup && upper(metric.baseDim) !== 'ORG') {
+      errors.push('命名机构组大屏只能绑定机构维度指标');
+      continue;
+    }
+    const explicit = text(slot.unit);
+    const unit = AMOUNT_UNITS.has(explicit) ? explicit : (AMOUNT_UNITS.has(text(metric.unit)) ? text(metric.unit) : '');
+    if (!unit) errors.push(`${label} 缺少金额单位，系统不会猜测`);
+    selected.push({ key, mode, semantic: PERIOD_SEMANTICS[key], metric, unit, label });
+  }
+  return selected;
+}
+
+function storedPeriodComparisons(raw, periodSelected) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const stored = {};
+  for (const key of ['day', 'month', 'year']) {
+    const found = periodSelected.find(item => item.key === key);
+    stored[key] = found
+      ? {
+        mode: found.mode,
+        metricCode: found.metric.metricCode,
+        outputColumn: text(found.metric.outputColumn),
+        unit: found.unit,
+        tableName: text(found.metric.tableName)
+      }
+      : { mode: 'UNSET', metricCode: '', outputColumn: '', unit: '', tableName: '' };
+  }
+  return stored;
+}
+
+/** 把期间比较指标并入已经绑定的宽表配置。主指标字段保持不变。 */
+export function mergePeriodMetrics(config, additions, { forceDate = false } = {}) {
+  if (!config || typeof config !== 'object' || !text(config.table)) return { ok: false, reason: '来源不是结果表宽表' };
+  const metrics = Array.isArray(config.metrics) ? config.metrics.map(item => ({ ...item })) : [];
+  const fieldMeta = Array.isArray(config.fieldMeta) ? config.fieldMeta.map(item => ({ ...item })) : [];
+  for (const item of additions || []) {
+    if (item?.tableName && item.tableName !== config.table) return { ok: false, reason: '期间比较必须与已绑定来源同一结果表' };
+    if (!item?.metricCode || !item?.outputColumn) return { ok: false, reason: '期间比较指标缺少编码或输出列' };
+    if (metrics.some(metric => metric?.metricCode === item.metricCode)) continue;
+    metrics.push({ metricCode: item.metricCode });
+    fieldMeta.push({
+      col: item.outputColumn,
+      alias: item.metricName || item.outputColumn,
+      role: 'METRIC',
+      unit: item.unit,
+      semantic: item.semantic || 'periodComparison'
+    });
+  }
+  const aggregation = { ...(config.aggregation || {}) };
+  if (forceDate) aggregation.groupBy = 'DATE';
+  return { ok: true, config: { ...config, metrics, fieldMeta, aggregation } };
 }
 
 function text(value) {

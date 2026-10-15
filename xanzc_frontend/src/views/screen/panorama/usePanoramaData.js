@@ -29,6 +29,7 @@ import {
   readBatchQuality
 } from './batchQuality';
 import { comparisonDates } from '../presentation/model/explicitComparisons';
+import { indexPeriodComparisonSources, normalizePeriodComparisonMap } from '../presentation/model/periodComparisons';
 
 const MAX_CONCURRENCY = 3;
 
@@ -232,9 +233,13 @@ function requestKey(body) {
   return stableSerialize(body);
 }
 
+function canvasStyleOfPackage(pkg) {
+  return parseJson(pkg?.canvasStyle ?? pkg?.canvas_style, {});
+}
+
 function presentationFromPackage(pkg) {
-  return parseJson(pkg?.canvasStyle?.presentation || pkg?.canvas_style?.presentation
-    || pkg?.renderPackage?.canvasStyle?.presentation, {});
+  const style = canvasStyleOfPackage(pkg);
+  return parseJson(style.presentation || pkg?.renderPackage?.canvasStyle?.presentation, {});
 }
 
 function explicitComparisonConfigs(packageInfo) {
@@ -291,6 +296,7 @@ function queryIdentity(view, context, options = {}) {
     orgGroupCode: String(view?.orgGroupCode || view?.org_group_code || '').trim(),
     template: packageInfo.template,
     comparisons: presentationFromPackage(packageInfo.package)?.display?.comparisons || {},
+    periodComparisons: normalizePeriodComparisonMap(canvasStyleOfPackage(packageInfo.package).periodComparisons),
     singleOrg: Boolean(options.singleOrg),
     bindings
   });
@@ -555,6 +561,56 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
   async function runQueue(requests, kind, token) {
     const settled = await Promise.all(requests.map(item => enqueueRequest(item, kind, token)));
     return settled.map((result, index) => ({ ...requests[index], ...result }));
+  }
+
+  async function loadPeriodComparisonRanges(blockIds, packageInfo, view, context, modelValue, generationToken, batchState) {
+    const results = {};
+    const issues = [];
+    const dates = comparisonDates(modelValue?.dataDate);
+    if (!blockIds.length || !dates.year || !modelValue?.dataDate) return { results, issues };
+    const historyByBlock = new Map([...packageInfo.slots.values()].map(entry => [Number(entry.blockId), entry]));
+    const requests = [];
+    for (const blockId of blockIds) {
+      const entry = historyByBlock.get(Number(blockId));
+      if (!entry || !isObject(entry.snapshot?.bind)) {
+        addIssue(issues, 'periodComparison', 'HISTORY_SOURCE_NOT_TRUSTED', '基准日回推需要当前屏已发布的绑定快照', String(blockId));
+        continue;
+      }
+      const { body, schema } = makeRequest(entry, view, context, '', batchState?.quality?.batchId || '');
+      requests.push({
+        blockId,
+        entry,
+        schema,
+        body: {
+          ...body,
+          period: 'RANGE',
+          dateFrom: dates.year,
+          dateTo: modelValue.dataDate,
+          batchId: batchState?.quality?.batchId || undefined
+        }
+      });
+    }
+    if (!requests.length) return { results, issues };
+    const settled = await runQueue(requests, 'periodComparison', generationToken);
+    if (!alive.value || disposed.value || screenGeneration.value !== generationToken) return { results, issues };
+    for (const item of settled) {
+      if (item.cancelled || item.error || !item.response) {
+        addIssue(issues, 'periodComparison', 'REQUEST_FAILED', errorMessage(item.error, '基准日回推取数失败'), String(item.blockId));
+        continue;
+      }
+      if (batchState?.required) {
+        const quality = readBatchQuality(item.response);
+        const comparison = compareBatchQuality(batchState.quality, quality);
+        if (!comparison.ok) {
+          addIssue(issues, 'periodComparison', comparison.code, comparison.message, String(item.blockId));
+          continue;
+        }
+      }
+      const normalized = normalizeBlockResult(item.blockId, item.entry.binding, item.response);
+      if (normalized) results[String(item.blockId)] = normalized;
+      else addIssue(issues, 'periodComparison', 'INVALID_RESPONSE', '基准日回推响应不是有效二维数据', String(item.blockId));
+    }
+    return { results, issues };
   }
 
   async function loadExplicitComparisons(packageInfo, view, context, modelValue, generationToken, batchState) {
@@ -963,6 +1019,36 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         }
         nextModel.comparisonResults = comparisonLoad?.results || {};
         nextModel.issues = [...(nextModel.issues || []), ...(comparisonLoad?.issues || [])];
+        const periodConfigs = normalizePeriodComparisonMap(canvasStyleOfPackage(packageInfo.package).periodComparisons);
+        const presentationComponents = Array.isArray(presentationFromPackage(packageInfo.package)?.display?.components)
+          ? presentationFromPackage(packageInfo.package).display.components : [];
+        const preliminary = indexPeriodComparisonSources({
+          configs: periodConfigs,
+          slots: {
+            deposit: packageInfo.slots.get('deposit')?.blockId,
+            loan: packageInfo.slots.get('loan')?.blockId
+          },
+          components: presentationComponents,
+          blockResults: nextModel.blockResults,
+          rangeResults: {}
+        });
+        const periodRangeLoad = await loadPeriodComparisonRanges(
+          preliminary.rangeBlockIds, packageInfo, view, context, nextModel, currentGeneration, batchState
+        );
+        if (!alive.value || disposed.value || screenGeneration.value !== currentGeneration) return model.value;
+        const indexed = indexPeriodComparisonSources({
+          configs: periodConfigs,
+          slots: {
+            deposit: packageInfo.slots.get('deposit')?.blockId,
+            loan: packageInfo.slots.get('loan')?.blockId
+          },
+          components: presentationComponents,
+          blockResults: nextModel.blockResults,
+          rangeResults: periodRangeLoad.results
+        });
+        nextModel.periodComparisonConfig = periodConfigs;
+        nextModel.periodComparisonSources = indexed.sources;
+        nextModel.issues = [...(nextModel.issues || []), ...(periodRangeLoad.issues || [])];
         nextModel.configuredSlots = [...slots.keys()];
         nextModel.permissionStatus = null;
         if (requiresBatch) {

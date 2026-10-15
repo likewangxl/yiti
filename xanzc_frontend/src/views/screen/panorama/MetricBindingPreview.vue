@@ -12,6 +12,7 @@
       :screen="screen"
       :datasources="[]"
       :catalog="catalog"
+      show-period-comparisons
       @apply="applied = $event" />
     <pre v-if="applied" data-testid="binding-preview-plan">{{ planText }}</pre>
   </main>

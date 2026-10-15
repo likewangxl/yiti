@@ -294,6 +294,7 @@ import { screenDisplayText } from '../model/screenDisplayText';
 import { buildSettlementDepositMetric } from '../../panorama/settlementDepositMapping';
 import { resolveConfiguredMetricLabel } from '../editor/runtimeComponentCatalog';
 import { computeExplicitComparison } from '../model/explicitComparisons';
+import { resolvePeriodComparisons } from '../model/periodComparisons';
 import {
   componentTitle,
   getDisplayComponents,
@@ -567,6 +568,34 @@ function summaryCardComparisons(metric, displayUnit) {
 }
 
 function explicitSummaryComparisons(key, metric, displayUnit) {
+  const history = explicitHistoryComparisons(key, metric, displayUnit);
+  const catalog = catalogSummaryComparisons(key, metric);
+  if (!catalog?.active) return history;
+  const base = history.comparisons && typeof history.comparisons === 'object'
+    ? { ...history.comparisons }
+    : {};
+  for (const slot of ['day', 'month', 'year']) {
+    const item = catalog.comparisons[slot];
+    if (!item) continue;
+    base[slot] = item.state === 'READY'
+      ? { state: 'READY', baseValue: item.baseValue, referenceDate: item.referenceDate, unit: 'YUAN' }
+      : { state: 'NO_VALUE', baseValue: null, referenceDate: '' };
+  }
+  return { configured: true, comparisons: base };
+}
+
+function catalogSummaryComparisons(key, metric) {
+  const config = props.model?.periodComparisonConfig?.[key];
+  if (!config) return null;
+  return resolvePeriodComparisons({
+    config,
+    dataDate: metric?.date || props.model?.dataDate,
+    currentYuan: metric?.baseValue,
+    rows: props.model?.periodComparisonSources?.[key] || []
+  });
+}
+
+function explicitHistoryComparisons(key, metric, displayUnit) {
   const config = resolvedPresentation.value?.display?.comparisons?.[key];
   if (!config) return { configured: false, comparisons: metric?.comparisons || {} };
   if (config.enabled === false) return { configured: true, comparisons: null };

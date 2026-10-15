@@ -56,9 +56,36 @@
         </el-form-item>
       </div>
       <p v-if="filtered.length > optionLimit" class="hint">只展示前 {{ optionLimit }} 条，请继续缩小搜索。</p>
-      <el-button data-testid="metric-catalog-suggest" :disabled="disabled || !hasSuggestion" @click="applySuggestions">填入名称建议</el-button>
+      <el-button v-if="!comparisonsOnly" data-testid="metric-catalog-suggest" :disabled="disabled || !hasSuggestion" @click="applySuggestions">填入名称建议</el-button>
 
-      <div class="metric-binding__agg">
+      <section v-if="showPeriodComparisons" class="metric-binding__periods" data-testid="metric-period-comparisons">
+        <h4>期间比较</h4>
+        <p class="hint">较昨日、较上月、较上年可以绑定结果表里已经算好的增量，或用该指标在基准日的余额回推。未配置、没有对应日期或单位不是金额时，预览保持待接入。绑定增量时，来源行的数据日必须是大屏数据日。按基准日回推会把聚合改为按日期。</p>
+        <p v-if="comparisonsOnly" class="hint">结算性存款没有独立查询。比较指标会并入本屏已绑定的同一结果表来源；没有可用来源时预览保持待接入。</p>
+        <div v-for="slot in periodSlots" :key="slot.key" class="metric-binding__period">
+          <el-form-item :label="slot.label">
+            <el-select :data-testid="`metric-period-mode-${slot.key}`" :disabled="disabled" v-model="periodModes[slot.key]">
+              <el-option label="不配置" value="UNSET" />
+              <el-option label="绑定增量指标" value="METRIC" />
+              <el-option label="按基准日回推" value="OFFSET" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="periodModes[slot.key] !== 'UNSET'" label="指标">
+            <el-select :data-testid="`metric-period-metric-${slot.key}`" filterable :disabled="disabled" :model-value="periodAssignments[slot.key]?.metricCode || ''" placeholder="请选择指标" @change="value => setPeriodMetric(slot.key, value)">
+              <el-option label="请选择指标" value="" />
+              <el-option v-for="metric in periodOptions(slot.key)" :key="metric.metricCode" :label="metricOptionLabel(metric)" :value="metric.metricCode" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="periodModes[slot.key] !== 'UNSET'" label="单位">
+            <el-select :data-testid="`metric-period-unit-${slot.key}`" :disabled="disabled" :model-value="periodAssignments[slot.key]?.unit || ''" placeholder="选择单位" @change="value => setPeriodUnit(slot.key, value)">
+              <el-option label="选择单位" value="" />
+              <el-option v-for="unit in amountUnits" :key="unit" :label="unitLabel(unit)" :value="unit" />
+            </el-select>
+          </el-form-item>
+        </div>
+      </section>
+
+      <div v-if="!comparisonsOnly" class="metric-binding__agg">
         <el-form-item label="聚合维度">
           <el-select data-testid="metric-catalog-groupby" v-model="groupBy" :disabled="disabled">
             <el-option label="汇总为一行" value="NONE" />
@@ -77,7 +104,7 @@
         </el-form-item>
       </div>
 
-      <div class="metric-binding__filters-editor">
+      <div v-if="!comparisonsOnly" class="metric-binding__filters-editor">
         <div class="metric-binding__filters-head">
           <span>过滤</span>
           <el-button data-testid="metric-catalog-add-filter" :disabled="disabled" @click="addFilter">添加条件</el-button>
@@ -106,16 +133,16 @@
         <p class="hint">指标值过滤会写成对应的 val_槽位，不会把指标名称拼进 SQL。</p>
       </div>
 
-      <el-form-item label="原因">
+      <el-form-item v-if="!comparisonsOnly" label="原因">
         <el-input data-testid="metric-catalog-reason" v-model="reason" :disabled="disabled" />
       </el-form-item>
       <el-alert v-for="item in plan.warnings" :key="item" class="metric-binding__status" data-testid="metric-catalog-warning" type="warning" :closable="false" show-icon :title="item" />
       <el-alert v-for="item in plan.errors" :key="item" class="metric-binding__status" type="error" :closable="false" show-icon :title="item" />
 
       <div class="metric-binding__actions">
-        <el-button data-testid="metric-catalog-preview" :disabled="disabled || !plan.ok || previewing" :loading="previewing" @click="preview">预览 10 行</el-button>
+        <el-button v-if="!comparisonsOnly" data-testid="metric-catalog-preview" :disabled="disabled || !plan.ok || previewing" :loading="previewing" @click="preview">预览 10 行</el-button>
         <el-button data-testid="metric-catalog-apply" type="primary" :disabled="disabled || !plan.ok" @click="$emit('apply', plan)">
-          {{ plan.existingDatasourceId ? '绑定到已有数据源' : '创建数据源并绑定' }}
+          {{ comparisonsOnly ? '保存期间比较' : (plan.existingDatasourceId ? '绑定到已有数据源' : '创建数据源并绑定') }}
         </el-button>
       </div>
       <el-alert v-if="previewError" class="metric-binding__status" type="error" :closable="false" show-icon :title="previewError" />
@@ -145,11 +172,20 @@ const props = defineProps({
   screen: { type: Object, default: () => ({}) },
   datasources: { type: Array, default: () => [] },
   disabled: { type: Boolean, default: false },
-  catalog: { type: Array, default: null }
+  catalog: { type: Array, default: null },
+  showPeriodComparisons: { type: Boolean, default: false },
+  comparisonsOnly: { type: Boolean, default: false },
+  periodComparisons: { type: Object, default: null }
 });
 defineEmits(['apply']);
 
 const optionLimit = 200;
+const amountUnits = ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'];
+const periodSlots = [
+  { key: 'day', label: '较昨日' },
+  { key: 'month', label: '较上月' },
+  { key: 'year', label: '较上年' }
+];
 const keyword = ref('');
 const baseDim = ref('ORG');
 const category = ref('');
@@ -158,6 +194,8 @@ const groupBy = ref('NONE');
 const agg = ref('SUM');
 const filters = ref([]);
 const reason = ref('从指标库绑定到当前组件');
+const periodModes = ref({ day: 'UNSET', month: 'UNSET', year: 'UNSET' });
+const periodAssignments = ref({ day: {}, month: {}, year: {} });
 const suggestionNotes = ref([]);
 const remoteCatalog = ref([]);
 const loadingCatalog = ref(false);
@@ -177,7 +215,7 @@ const filtered = computed(() => filterCatalog(catalogItems.value, {
   category: category.value,
   bindableOnly: true
 }));
-const metricFields = computed(() => (props.fieldSpecs || []).filter(field => field?.kind !== 'dimension'));
+const metricFields = computed(() => props.comparisonsOnly ? [] : (props.fieldSpecs || []).filter(field => field?.kind !== 'dimension'));
 const suggestion = computed(() => suggestAssignments({
   template: props.templateName,
   slot: props.slotKey,
@@ -200,7 +238,9 @@ const plan = computed(() => buildMetricBindingPlan({
   aggregation: { groupBy: groupBy.value, agg: agg.value },
   filters: filters.value,
   reason: reason.value,
-  datasources: props.datasources
+  datasources: props.datasources,
+  comparisonsOnly: props.comparisonsOnly,
+  periodComparisons: props.showPeriodComparisons ? periodPayload() : undefined
 }));
 const previewColumns = computed(() => previewResult.value?.columns || []);
 const previewRows = computed(() => previewResult.value?.rows || []);
@@ -209,18 +249,6 @@ const previewTableRows = computed(() => previewRows.value.map(row => {
   previewColumns.value.forEach((_, index) => { record[`c${index}`] = row?.[index] ?? ''; });
   return record;
 }));
-
-watch(() => [props.slotKey, props.compositionMode], () => {
-  const next = bindingShape(props.slotKey, props.compositionMode);
-  groupBy.value = next.groupBy || 'NONE';
-  agg.value = 'SUM';
-  assignments.value = {};
-  filters.value = [];
-  suggestionNotes.value = [];
-  previewResult.value = null;
-  previewEmpty.value = false;
-  previewError.value = '';
-}, { immediate: true });
 
 watch(namedGroup, value => { if (value) baseDim.value = 'ORG'; }, { immediate: true });
 watch(() => props.catalog, value => { if (!Array.isArray(value)) loadCatalog(); }, { immediate: true });
@@ -253,6 +281,73 @@ function setMetric(field, metricCode) {
   if (metric?.unit && (!field.unitKinds?.length || field.unitKinds.includes(metric.unit))) next.unit = metric.unit;
   assignments.value = { ...assignments.value, [field.semantic]: next };
 }
+
+function periodPayload() {
+  return Object.fromEntries(periodSlots.map(slot => [slot.key, {
+    mode: periodModes.value[slot.key] || 'UNSET',
+    metricCode: periodAssignments.value[slot.key]?.metricCode || '',
+    unit: periodAssignments.value[slot.key]?.unit || ''
+  }]));
+}
+
+function restorePeriodComparisons(value) {
+  const nextModes = { day: 'UNSET', month: 'UNSET', year: 'UNSET' };
+  const nextAssignments = { day: {}, month: {}, year: {} };
+  for (const slot of periodSlots) {
+    const saved = value?.[slot.key];
+    if (saved?.mode === 'METRIC' || saved?.mode === 'OFFSET') {
+      nextModes[slot.key] = saved.mode;
+      nextAssignments[slot.key] = { metricCode: saved.metricCode || '', unit: saved.unit || '' };
+    }
+  }
+  periodModes.value = nextModes;
+  periodAssignments.value = nextAssignments;
+}
+
+function periodOptions(key) {
+  const selected = periodAssignments.value[key]?.metricCode;
+  const rows = filtered.value.slice(0, optionLimit);
+  if (selected && !rows.some(item => item.metricCode === selected)) {
+    const current = catalogItems.value.find(item => item.metricCode === selected);
+    if (current) rows.unshift(current);
+  }
+  return rows;
+}
+
+function setPeriodMetric(key, metricCode) {
+  const metric = catalogItems.value.find(item => item.metricCode === metricCode);
+  if (!metricCode) {
+    periodAssignments.value = { ...periodAssignments.value, [key]: {} };
+    return;
+  }
+  const next = { ...(periodAssignments.value[key] || {}), metricCode };
+  if (amountUnits.includes(metric?.unit)) next.unit = metric.unit;
+  periodAssignments.value = { ...periodAssignments.value, [key]: next };
+}
+
+function setPeriodUnit(key, unit) {
+  periodAssignments.value = {
+    ...periodAssignments.value,
+    [key]: { ...(periodAssignments.value[key] || {}), unit }
+  };
+}
+
+watch(() => [props.slotKey, props.compositionMode, props.periodComparisons], () => {
+  const next = bindingShape(props.slotKey, props.compositionMode);
+  agg.value = 'SUM';
+  assignments.value = {};
+  filters.value = [];
+  suggestionNotes.value = [];
+  previewResult.value = null;
+  previewEmpty.value = false;
+  previewError.value = '';
+  restorePeriodComparisons(props.periodComparisons);
+  groupBy.value = Object.values(periodModes.value).includes('OFFSET') ? 'DATE' : (next.groupBy || 'NONE');
+}, { immediate: true });
+
+watch(periodModes, modes => {
+  if (Object.values(modes).includes('OFFSET') && groupBy.value === 'NONE') groupBy.value = 'DATE';
+}, { deep: true });
 
 function setUnit(semantic, unit) {
   assignments.value = {
@@ -336,6 +431,9 @@ function unitLabel(unit) {
 .metric-binding__filters, .metric-binding__agg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; }
 .metric-binding__agg { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
 .metric-binding__assign { display: grid; grid-template-columns: minmax(0, 1fr) 168px; column-gap: 12px; align-items: start; }
+.metric-binding__periods { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--color-border, #ebeef5); }
+.metric-binding__periods h4 { margin: 0; color: var(--color-text-strong, #303133); font-size: 13px; font-weight: 600; }
+.metric-binding__period { display: grid; grid-template-columns: 180px minmax(0, 1fr) 168px; column-gap: 12px; align-items: start; }
 .metric-binding :deep(.el-form-item) { margin-bottom: 12px; }
 .metric-binding :deep(.el-form-item__label) { margin-bottom: 6px; color: var(--color-text-strong, #303133); font-size: 13px; font-weight: 600; line-height: 20px; }
 .metric-binding :deep(.el-select), .metric-binding :deep(.el-input) { width: 100%; }
@@ -350,7 +448,7 @@ function unitLabel(unit) {
 .metric-binding :deep(.el-alert) { margin-top: 8px; }
 .metric-binding :deep(.el-alert__title) { font-size: 13px; line-height: 20px; }
 @media (max-width: 760px) {
-  .metric-binding__filters, .metric-binding__agg, .metric-binding__assign { grid-template-columns: 1fr; }
+  .metric-binding__filters, .metric-binding__agg, .metric-binding__assign, .metric-binding__period { grid-template-columns: 1fr; }
   .metric-binding__filter-row :deep(.el-select), .metric-binding__filter-row :deep(.el-input) { width: 100%; }
 }
 </style>

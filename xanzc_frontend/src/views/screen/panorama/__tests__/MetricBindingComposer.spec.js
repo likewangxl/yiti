@@ -57,6 +57,35 @@ describe('MetricBindingComposer', () => {
     expect(JSON.parse(plan.datasourceRequest.configJson).table).toBe('ORG_INDEX_RESULT');
   });
 
+  it('期间比较可以绑定增量指标，并把该指标写入同一结果表', async () => {
+    const wrapper = mountComposer({ showPeriodComparisons: true });
+    expect(wrapper.get('[data-testid="metric-period-comparisons"]').text()).toContain('较昨日');
+    expect(wrapper.text()).toContain('较上月');
+    expect(wrapper.text()).toContain('较上年');
+    const mode = wrapper.get('[data-testid="metric-period-mode-month"]').findComponent({ name: 'ElSelect' });
+    mode.vm.$emit('update:modelValue', 'METRIC');
+    await wrapper.vm.$nextTick();
+    const metric = wrapper.get('[data-testid="metric-period-metric-month"]').findComponent({ name: 'ElSelect' });
+    metric.vm.$emit('change', 'M_0266');
+    await wrapper.vm.$nextTick();
+    const unit = wrapper.get('[data-testid="metric-period-unit-month"]').findComponent({ name: 'ElSelect' });
+    unit.vm.$emit('change', 'YUAN');
+    await wrapper.vm.$nextTick();
+    await wrapper.get('[data-testid="metric-catalog-suggest"]').trigger('click');
+    await wrapper.get('[data-testid="metric-catalog-apply"]').trigger('click');
+    const plan = wrapper.emitted('apply').at(-1)[0];
+    expect(plan.ok).toBe(true);
+    expect(plan.periodComparisons.month).toMatchObject({
+      mode: 'METRIC',
+      metricCode: 'M_0266',
+      outputColumn: '一般性存款月均余额较上月-机构',
+      unit: 'YUAN'
+    });
+    expect(plan.periodComparisons.day.mode).toBe('UNSET');
+    expect(JSON.parse(plan.datasourceRequest.configJson).metrics.map(item => item.metricCode)).toEqual(['M_0265', 'M_0266']);
+    expect(wrapper.text()).not.toContain('选择数值指标');
+  });
+
   it('指标目录接口失败时仍显示后端状态', async () => {
     const wrapper = mountComposer({ catalog: null });
     await flushPromises();

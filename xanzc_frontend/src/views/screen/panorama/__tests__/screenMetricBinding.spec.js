@@ -3,6 +3,7 @@ import {
   bindingShape,
   buildMetricBindingPlan,
   filterCatalog,
+  mergePeriodMetrics,
   suggestAssignments
 } from '../screenMetricBinding';
 
@@ -157,6 +158,45 @@ describe('screen metric binding plan', () => {
     });
     expect(plan.ok).toBe(false);
     expect(plan.errors.join('')).toContain('机构');
+  });
+
+  it('期间比较的增量指标进入同一结果表，按基准日回推改为按日期聚合', () => {
+    const plan = buildMetricBindingPlan({
+      slot: 'deposit',
+      slotLabel: '存款总额',
+      template: 'branch-overview-v1',
+      fieldSpecs: [valueField],
+      screen,
+      metrics: [orgDeposit, monthDelta],
+      assignments: { value: { metricCode: 'M_0277', unit: 'YUAN' } },
+      periodComparisons: {
+        day: { mode: 'UNSET' },
+        month: { mode: 'METRIC', metricCode: 'M_0266', unit: 'YUAN' },
+        year: { mode: 'OFFSET', metricCode: 'M_0277', unit: 'YUAN' }
+      },
+      aggregation: { groupBy: 'NONE', agg: 'SUM' },
+      reason: '配置期间比较',
+      datasources: []
+    });
+    expect(plan.ok).toBe(true);
+    expect(plan.binding.fields).toEqual({ value: '对公一般性存款余额' });
+    expect(plan.periodComparisons.month).toMatchObject({
+      mode: 'METRIC', metricCode: 'M_0266', outputColumn: '一般性存款月均余额较上月-机构', unit: 'YUAN'
+    });
+    expect(plan.periodComparisons.year.mode).toBe('OFFSET');
+    expect(plan.periodComparisons.day.mode).toBe('UNSET');
+    const config = JSON.parse(plan.datasourceRequest.configJson);
+    expect(config.metrics.map(item => item.metricCode).sort()).toEqual(['M_0266', 'M_0277']);
+    expect(config.aggregation.groupBy).toBe('DATE');
+    expect(config.fieldMeta.map(item => item.semantic)).toEqual(['value', 'periodMonth']);
+    expect(plan.warnings.join('')).toContain('按日期');
+    expect(plan.datasourceRequest.dsType).toBe('TIMESERIES');
+
+    const merged = mergePeriodMetrics(config, [{
+      metricCode: 'M_0298', metricName: '结算性存款', outputColumn: '结算性存款', unit: 'YUAN', tableName: 'ORG_INDEX_RESULT', semantic: 'periodDay'
+    }]);
+    expect(merged.ok).toBe(true);
+    expect(merged.config.metrics.map(item => item.metricCode)).toContain('M_0298');
   });
 
   it('目录过滤只保留可绑定且维度匹配的指标', () => {

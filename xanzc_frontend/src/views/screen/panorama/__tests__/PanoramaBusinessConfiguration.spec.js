@@ -63,6 +63,22 @@ describe('业务人员配置指标', () => {
     expect(periods).toEqual(['LATEST']);
   });
 
+  it('总览存款可以配置较昨日、较上月、较上年，结算性存款也保留期间比较', async () => {
+    getScreenCanvas.mockResolvedValueOnce({ screenId: 19, screenCode: 'SCR_BUSINESS', canvasVersion: 4,
+      canvasStyleJson: JSON.stringify({ presentation: { type: 'CODE', template: 'branch-overview-v1', displaySchemaVersion: 1, display: { components: [] } } }),
+      canvasDraftJson: JSON.stringify({ components: [{ id: 'deposit', component: 'ChartWidget', blockId: 41,
+        propValue: { bindingKey: 'deposit' }, bindJson: JSON.stringify(fixture.binding) }] }) });
+    const wrapper = await page();
+    expect(wrapper.text()).not.toContain('选择数值指标');
+    expect(wrapper.get('[data-config-key="overview-deposit"]').text()).toContain('存款总额');
+    expect(wrapper.get('[data-testid="metric-period-comparisons"]').text()).toContain('较昨日');
+    expect(wrapper.get('[data-testid="metric-period-comparisons"]').text()).toContain('较上月');
+    expect(wrapper.get('[data-testid="metric-period-comparisons"]').text()).toContain('较上年');
+    await wrapper.get('[data-config-key="overview-settlementDeposit"]').trigger('click');
+    expect(wrapper.get('[data-testid="metric-period-comparisons"]').text()).toContain('没有独立查询');
+    expect(wrapper.text()).not.toContain('选择数值指标');
+  });
+
   it('命名机构组屏的指标库维度锁定为机构，不再列出选择数值指标', async () => {
     const bind = { dsId: 77, period: 'LATEST', fields: { value: 'amount', date: 'data_date' }, units: { value: 'YUAN' } };
     listScreens.mockResolvedValueOnce([{ ...fixture.screen, bizLine: 'CORP', orgScopeMode: 'NAMED_GROUP' }]);
