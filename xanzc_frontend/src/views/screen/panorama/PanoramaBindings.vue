@@ -94,18 +94,19 @@
             <p v-if="selectedCatalogEntry?.kind === 'INSTITUTION_MAP'" class="panorama-bindings__hint">数据来自当前授权机构目录/经营画像，仅区域标题可改。</p>
             <p v-else-if="selectedCatalogEntry?.kind === 'SYSTEM_METRIC'" class="panorama-bindings__hint">该指标由运行态系统生成，没有独立数据来源、字段或周期配置。</p>
 
-            <section v-if="selectedBusinessField" data-testid="business-metric-section">
-              <label for="business-semantic" class="panorama-bindings__field-label">配置项</label>
-              <select id="business-semantic" data-testid="business-semantic" :value="selectedBusinessField.semantic"
-                :disabled="writing || loading" @change="businessSemantic = $event.target.value">
-                <option v-for="fieldSpec in businessFieldSpecs" :key="fieldSpec.semantic" :value="fieldSpec.semantic">{{ fieldSpec.label }}</option>
-              </select>
-              <BusinessMetricPicker :entries="businessEntriesFor(selectedBusinessField)"
-                :relevance-context="businessRelevanceContext"
-                :model-value="{ datasourceId: selectedBinding.dsId, field: selectedBinding.fields[selectedBusinessField.semantic] }"
-                :label="`选择${selectedBusinessField.label}指标`" :disabled="writing || loading"
-                @select="entry => applyBusinessMetric(selectedBusinessField, entry)" />
-            </section>
+            <MetricBindingComposer v-if="!selectedCatalogReadonly || periodComparisonConfigurable"
+              :slot-key="selectedSlot"
+              :slot-label="selectedSpec.label"
+              :template-name="selectedTemplate"
+              :field-specs="selectedFieldSpecs"
+              :composition-mode="compositionMode"
+              :screen="screenScope"
+              :datasources="datasources"
+              :disabled="writing || loading"
+              :show-period-comparisons="periodComparisonConfigurable"
+              :comparisons-only="selectedCatalogReadonly && periodComparisonConfigurable"
+              :period-comparisons="selectedPeriodComparisons"
+              @apply="applyMetricBindingPlan" />
             <details v-if="!selectedCatalogReadonly || comparisonConfigurable" class="panorama-bindings__advanced" data-testid="advanced-binding-fields">
               <summary>高级字段配置（技术维护）</summary>
             <template v-if="hasNewDisplayPresentation && selectedDisplayFieldMappings.length">
@@ -258,7 +259,8 @@ import {
   getScreenCanvas,
   listScreenDatasources,
   listScreens,
-  saveScreenCanvas
+  saveScreenCanvas,
+  saveScreenDatasource
 } from '@/api/screen';
 import { parseDatasourceConfig } from '../designer/widgets/chart-widget/dsFilter';
 import {
@@ -288,9 +290,8 @@ import {
 } from './defaultBindings';
 import PanoramaDatasourcePicker from './PanoramaDatasourcePicker.vue';
 import PanoramaDataVerification from './PanoramaDataVerification.vue';
-import BusinessMetricPicker from './BusinessMetricPicker.vue';
-import { buildBusinessMetricCatalog } from './businessMetricCatalog';
-import { qualifyBusinessMetricEntries } from './businessMetricEligibility';
+import MetricBindingComposer from './MetricBindingComposer.vue';
+import { mergePeriodMetrics } from './screenMetricBinding';
 import { buildBusinessSourceCandidates } from '../presentation/sources/businessSourceCandidates';
 import { buildRuntimeComponentCatalog, resolveConfiguredMetricLabel } from '../presentation/editor/runtimeComponentCatalog';
 import { getEffectiveBusinessGrowthSeries } from '../presentation/model/businessGrowthModel';
@@ -386,6 +387,16 @@ const catalogEntries = computed(() => runtimeCatalog.value.entries || []);
 const selectedCatalogEntry = computed(() => catalogEntries.value.find(item => item.key === selectedCatalogKey.value)
   || catalogEntries.value[0] || null);
 const selectedCatalogReadonly = computed(() => ['SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(selectedCatalogEntry.value?.kind));
+const periodComparisonConfigurable = computed(() => {
+  const entry = selectedCatalogEntry.value;
+  if (!entry) return false;
+  if (entry.kind === 'DERIVED_TOTAL' || entry.key === 'overview-settlementDeposit') return true;
+  return ['METRIC_CARD', 'COMPLETION'].includes(entry.component?.componentType);
+});
+const selectedPeriodComparisons = computed(() => {
+  const key = selectedCatalogEntry.value?.key || selectedSlot.value;
+  return canvasStyle.value?.periodComparisons?.[key] || null;
+});
 const comparisonConfigurable = computed(() => {
   const entry = selectedCatalogEntry.value;
   const systemSettlement = entry?.key === 'overview-settlementDeposit';
@@ -948,72 +959,103 @@ const availableDatasources = computed(() => buildBusinessSourceCandidates(scoped
 const selectableDatasourceCount = computed(() => availableDatasources.value
   .filter(source => !source.__compositionColumnsUnsupported && !source.disabled).length);
 
-const businessFieldSpecs = computed(() => selectedCatalogReadonly.value ? []
-  : selectedFieldSpecs.value.filter(field => field.kind !== 'dimension' && field.unitKinds?.length));
-const businessSemantic = ref('value');
-const selectedBusinessField = computed(() => businessFieldSpecs.value.find(field => field.semantic === businessSemantic.value)
-  || businessFieldSpecs.value[0] || null);
-/** 名称关键词仅用于推荐顺序，不能替代来源资格、用途、单位或机构范围校验。 */
-const businessRelevanceContext = computed(() => {
-  const label = `${selectedSpec.value?.label || ''} ${selectedBusinessField.value?.label || ''}`;
-  const terms = ['存款', '贷款', '客户', '收入', '营收', '不良', 'AUM', '目标', '完成', '净增', '日均', '变化', '营销', '跟进'];
-  return {
-    semantic: [selectedSlot.value, selectedBusinessField.value?.semantic].filter(value => value && value !== 'value'),
-    keywords: [selectedSpec.value?.label, ...terms.filter(term => label.toUpperCase().includes(term.toUpperCase()))].filter(Boolean),
-    preferredSourceIds: [...new Set([selectedBinding.value.dsId, ...savedBindingsForCatalog.value.map(binding => binding.dsId)].filter(Boolean))]
+function rememberPeriodComparisons(config) {
+  if (!config) return;
+  const key = selectedCatalogEntry.value?.key || selectedSlot.value;
+  if (!key) return;
+  canvasStyle.value = {
+    ...canvasStyle.value,
+    periodComparisons: { ...(canvasStyle.value.periodComparisons || {}), [key]: config }
   };
-});
-
-/** 单位证据只来自服务端已保存绑定，编辑中的手工单位不用于认证目录。 */
-const savedBindingsForCatalog = computed(() => {
-  const draft = parse(canvas.value?.canvasDraftJson, {});
-  const bindings = [];
-  function visit(items) {
-    for (const item of Array.isArray(items) ? items : []) {
-      const bind = parse(item?.bindJson, null);
-      if (bind?.dsId && bind.fields && bind.units) bindings.push(bind);
-      visit(item?.children);
-    }
-  }
-  if (Array.isArray(canvas.value?.blocks) && canvas.value.blocks.length) {
-    for (const block of canvas.value.blocks) {
-      const bind = parse(block?.bindJson, null);
-      if (bind?.dsId && bind.fields && bind.units) bindings.push(bind);
-    }
-  } else visit(draft.components);
-  return bindings;
-});
-
-function businessEntriesFor(fieldSpec) {
-  const entries = buildBusinessMetricCatalog(scopedDatasources.value, {
-    screen: screenScope.value,
-    slot: selectedSlot.value,
-    period: selectedBinding.value.period,
-    expectedShape: selectedSpec.value?.innerType === 'LINE_TREND' ? 'TIMESERIES' : 'SINGLE',
-    savedBindings: savedBindingsForCatalog.value
-  });
-  return qualifyBusinessMetricEntries(entries, {
-    fieldSpec, innerType: selectedSpec.value?.innerType, sources: scopedDatasources.value,
-    period: selectedBinding.value.period, savedBindings: savedBindingsForCatalog.value
-  });
 }
 
-function applyBusinessMetric(fieldSpec, selection) {
-  if (writing.value || loading.value || !fieldSpec) return;
-  const allowed = businessEntriesFor(fieldSpec).find(entry => !entry.disabled
-    && String(entry.sourceId) === String(selection?.datasourceId) && entry.field === selection?.field);
-  if (!allowed) return;
-  if (String(selectedBinding.value.dsId) !== String(allowed.sourceId)) onDatasourceChange(String(allowed.sourceId));
-  setField(fieldSpec.semantic, allowed.field);
-  setUnit(fieldSpec.semantic, allowed.unit);
-  // 类型化卡片的独立展示字段和原始单位引用必须同步更新。
-  if (fieldSpec.semantic === 'value' && isSchemaMetricCard.value && selectedDisplayComponent.value) {
+async function attachPeriodMetrics(plan) {
+  const additions = Array.isArray(plan?.extraMetrics) ? plan.extraMetrics : [];
+  if (!additions.length) return '';
+  const preferred = ['deposit', 'loan', selectedSlot.value].filter(Boolean);
+  const candidates = [...new Set([...preferred, ...Object.keys(bindingState)])];
+  for (const slot of candidates) {
+    const binding = bindingState[slot];
+    const source = datasources.value.find(item => String(item.id) === String(binding?.dsId));
+    if (!source) continue;
+    const config = parseDatasourceConfig(source.configJson);
+    const merged = mergePeriodMetrics(config, additions, { forceDate: additions.some(item => item.mode === 'OFFSET') });
+    if (!merged.ok) continue;
+    const created = await saveScreenDatasource({
+      dsName: `${source.dsName || '指标绑定'}·期间比较`.slice(0, 100),
+      dsType: merged.config.aggregation?.groupBy === 'DATE' ? 'TIMESERIES' : (source.dsType || 'SINGLE'),
+      sourceKind: 'WIDE_TABLE',
+      bizLine: source.bizLine || screenScope.value.bizLine,
+      configJson: JSON.stringify(merged.config),
+      timeParamJson: source.timeParamJson || JSON.stringify(['LATEST', 'LAST_10D', 'LAST_1M', 'LAST_6M_EOM']),
+      status: 'ACTIVE',
+      reason: '把期间比较指标并入已绑定的结果表来源'
+    });
+    const dsId = typeof created === 'number' ? created : Number(created?.id ?? created);
+    if (!Number.isSafeInteger(dsId) || dsId <= 0) return '比较指标已记录，但没有写回来源编号';
+    binding.dsId = dsId;
+    const sourceList = await listScreenDatasources();
+    datasources.value = Array.isArray(sourceList) ? sourceList : [];
+    return '';
+  }
+  return '比较配置已记录。当前屏没有同一结果表的绑定来源，预览会保持待接入。';
+}
+
+async function applyMetricBindingPlan(plan) {
+  if (!plan?.ok || writing.value || loading.value) return;
+  saving.value = true;
+  error.value = '';
+  try {
+    if (plan.comparisonsOnly) {
+      rememberPeriodComparisons(plan.periodComparisons);
+      const warning = await attachPeriodMetrics(plan);
+      if (warning) autoNotice.value = warning;
+      markLocalDirty();
+      return;
+    }
+    let dsId = Number(plan.existingDatasourceId);
+    if (!Number.isSafeInteger(dsId) || dsId <= 0) {
+      const created = await saveScreenDatasource(plan.datasourceRequest);
+      dsId = typeof created === 'number' ? created : Number(created?.id ?? created);
+      if (!Number.isSafeInteger(dsId) || dsId <= 0) throw new Error('数据源已提交，但没有返回有效编号');
+      const sourceList = await listScreenDatasources();
+      datasources.value = Array.isArray(sourceList) ? sourceList : [];
+    }
+    const binding = selectedBinding.value;
+    binding.dsId = dsId;
+    binding.period = plan.binding.period;
+    binding.fields = { ...(plan.binding.fields || {}) };
+    binding.units = { ...(plan.binding.units || {}) };
+    manualSlots.add(selectedSlot.value);
+    autoReviewSlots.delete(selectedSlot.value);
+    syncDisplayFromPlan(plan);
+    rememberPeriodComparisons(plan.periodComparisons);
+    conflict.value = '';
+    markLocalDirty();
+  } catch (bindError) {
+    error.value = bindError?.message || '指标绑定失败';
+    emit('error', bindError);
+  } finally {
+    saving.value = false;
+  }
+}
+
+function syncDisplayFromPlan(plan) {
+  if (!hasNewDisplayPresentation.value || !selectedDisplayComponent.value) return;
+  const fields = plan.binding?.fields || {};
+  const units = plan.binding?.units || {};
+  if (fields.value && isSchemaMetricCard.value) {
     const component = selectedDisplayComponent.value;
     displaySession.value = updateModelComponent(displaySession.value, component.componentId, {
-      dataRefs: (component.dataRefs || []).map(ref => ({ ...ref, unit: allowed.unit }))
+      dataRefs: (component.dataRefs || []).map(ref => ({ ...ref, unit: units.value }))
     });
     const mapping = selectedDisplayFieldMappings.value.find(item => item.kind === 'mainField');
-    if (mapping) setComponentField(mapping, allowed.field);
+    if (mapping) setComponentField(mapping, fields.value);
+  }
+  const seriesSemantic = { retailDeposit: 'deposit', corpDeposit: 'deposit', retailLoan: 'loan', corpLoan: 'loan' };
+  for (const mapping of selectedDisplayFieldMappings.value.filter(item => item.kind === 'growthSeries')) {
+    const semantic = seriesSemantic[mapping.seriesKey];
+    if (semantic && fields[semantic]) setComponentField(mapping, fields[semantic]);
   }
 }
 

@@ -149,6 +149,7 @@ snapshot.ifPresent(dto -> {
 ### 大屏业务指标配置与安全维护
 
 - `xanzc_frontend/src/utils/dsConfig.js`：六类数据源保真回填、策略与扩展保留、固定来源白名单及未知配置阻断。
-- `xanzc_frontend/src/views/screen/panorama/businessMetricCatalog.js`、`controlledSourceFields.js`：授权来源的业务指标目录、受控M98字段、单位证据与不兼容来源说明。
-- `xanzc_frontend/src/views/screen/panorama/PanoramaBindings.vue`、`runtimeDataVerification.js`：业务选择同步绑定、周期候选和已保存草稿的只读结构/质量核验。
+- `xanzc_frontend/src/views/screen/panorama/screenMetricBinding.js`、`MetricBindingComposer.vue`、`presentation/model/periodComparisons.js`：从绩效指标定义选择指标，按机构/员工/客户结果表生成或复用宽表数据源并绑定组件。较昨日、较上月、较上年写在 `canvasStyle.periodComparisons`，可以绑定结果表增量列，或按基准日回推。
+- `xanzc_frontend/src/views/screen/panorama/controlledSourceFields.js`：受控 M98 字段、单位证据与不兼容来源说明。
+- `xanzc_frontend/src/views/screen/panorama/PanoramaBindings.vue`、`runtimeDataVerification.js`：指标库绑定写入草稿、周期候选和已保存草稿的只读结构/质量核验。
 - `report-analytics-center/src/main/java/com/bank/branch/platform/report/service/screen/ScreenCanvasServiceImpl.java`、同目录 `ScreenDatasourceServiceImpl.java`：新CODE发布包冻结查询定义，宽表权威字段重写并保留合法扩展。

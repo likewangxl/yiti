@@ -1,5 +1,6 @@
 import { resolveComponentTitle } from '../contract/displayContract';
 import { computeExplicitComparison } from './explicitComparisons';
+import { PERIOD_COMPARISON_LABELS, resolvePeriodComparisons } from './periodComparisons';
 
 const DISPLAY_COMPONENT_TYPES = new Set(['METRIC_CARD', 'COMPLETION']);
 const REGION_ORDER = Object.freeze({ HEADER: 0, LEFT: 1, CENTER: 2, RIGHT: 3, BOTTOM: 4, OVERLAY: 5 });
@@ -467,7 +468,55 @@ function buildComponent(component, model, index, options, presentation) {
   if (component.componentType === 'COMPLETION') {
     result.progress = result.value === null ? null : Math.max(0, Math.min(100, result.value));
   }
+  if (component.componentType === 'METRIC_CARD' || component.componentType === 'COMPLETION') {
+    applyCatalogPeriodComparisons(result, model, main, displayFormat);
+  }
   return result;
+}
+
+function applyCatalogPeriodComparisons(result, model, main, format) {
+  const config = model?.periodComparisonConfig?.[result.componentId];
+  if (!config) return;
+  const rows = model?.periodComparisonSources?.[result.componentId] || [];
+  const resolved = resolvePeriodComparisons({
+    config,
+    dataDate: text(model?.dataDate) || result.sourceDate,
+    currentYuan: amountToYuan(main?.value, main?.unit || result.sourceUnit),
+    rows
+  });
+  if (!resolved.active) return;
+  const comparisons = { ...(result.comparisons || {}) };
+  for (const key of ['day', 'month', 'year']) {
+    const slot = resolved.comparisons[key];
+    if (!slot) continue;
+    const label = PERIOD_COMPARISON_LABELS[key];
+    if (slot.state !== 'READY') {
+      comparisons[key] = unavailableComparison(label);
+      continue;
+    }
+    const formatted = formatDisplayMetric(slot.baseValue, { ...format, negativeStyle: 'SIGNED' }, 'YUAN');
+    comparisons[key] = formatted.value === null
+      ? unavailableComparison(label)
+      : {
+        state: 'READY',
+        value: formatted.value,
+        rawValue: null,
+        unit: 'YUAN',
+        baseValue: slot.baseValue,
+        referenceDate: slot.referenceDate,
+        text: `${label} ${signedText(formatted.value, formatted.text)}`
+      };
+  }
+  result.comparisons = comparisons;
+  result.comparisonConfigured = true;
+  if (comparisons.month?.state === 'READY') result.monthDelta = comparisons.month;
+}
+
+function amountToYuan(value, unit) {
+  const canonical = canonicalUnit(unit);
+  const scale = { YUAN: 1, TEN_THOUSAND: 1e4, HUNDRED_MILLION: 1e8 }[canonical];
+  const number = finite(value);
+  return !scale || number === null ? null : number * scale;
 }
 
 /**

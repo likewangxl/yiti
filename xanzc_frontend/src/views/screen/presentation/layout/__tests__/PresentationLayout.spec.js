@@ -803,6 +803,39 @@ describe('PresentationLayout', () => {
     expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="year"]').text()).toContain('待接入');
   });
 
+  it('指标库期间比较有结果时总览条不再待接入，未绑定槽位保持待接入', () => {
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        draftOverview: true,
+        amountUnit: 'HUNDRED_MILLION',
+        presentation: {
+          displaySchemaVersion: 1,
+          template: 'branch-overview-v1',
+          display: { components: [] }
+        },
+        model: {
+          dataDate: '2026-10-15',
+          kpis: [{ key: 'deposit', value: 1000, unit: 'HUNDRED_MILLION', dataDate: '2026-10-15' }],
+          periodComparisonConfig: {
+            'overview-deposit': {
+              day: { mode: 'METRIC', metricCode: 'M_0266', outputColumn: '较昨日增量', unit: 'HUNDRED_MILLION', tableName: 'ORG_INDEX_RESULT' },
+              month: { mode: 'UNSET' },
+              year: { mode: 'UNSET' }
+            }
+          },
+          periodComparisonSources: {
+            'overview-deposit': [{ data_date: '2026-10-15', 较昨日增量: 10 }]
+          }
+        }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+    expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="day"]').text()).toContain('990.00亿元');
+    expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="day"]').text()).not.toContain('待接入');
+    expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="month"]').text()).toContain('待接入');
+  });
+
   it('将配置组件重排为重点卡/次级卡、左中右三栏，并让地图先于趋势且明细下置', () => {
     const components = [
       ...Array.from({ length: 4 }, (_, index) => ({

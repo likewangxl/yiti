@@ -6,13 +6,19 @@ const api = vi.hoisted(() => ({
   listScreens: vi.fn(),
   getScreenCanvas: vi.fn(),
   listScreenDatasources: vi.fn(),
-  saveScreenCanvas: vi.fn()
+  saveScreenCanvas: vi.fn(),
+  listScreenMetricCatalog: vi.fn(async () => []),
+  saveScreenDatasource: vi.fn(),
+  tryRunScreenDatasource: vi.fn()
 }));
 vi.mock('@/api/screen', () => ({
   listScreens: api.listScreens,
   getScreenCanvas: api.getScreenCanvas,
   listScreenDatasources: api.listScreenDatasources,
-  saveScreenCanvas: api.saveScreenCanvas
+  saveScreenCanvas: api.saveScreenCanvas,
+  listScreenMetricCatalog: api.listScreenMetricCatalog,
+  saveScreenDatasource: api.saveScreenDatasource,
+  tryRunScreenDatasource: api.tryRunScreenDatasource
 }));
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
