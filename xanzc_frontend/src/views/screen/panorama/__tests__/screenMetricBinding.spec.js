@@ -199,6 +199,91 @@ describe('screen metric binding plan', () => {
     expect(merged.config.metrics.map(item => item.metricCode)).toContain('M_0298');
   });
 
+  it('完成率期间比较按主指标比例量纲接受 PERCENT/RATIO，拒绝金额单位', () => {
+    const rate = {
+      ...orgDeposit,
+      metricCode: 'M_RATE',
+      metricName: '测试完成率',
+      unit: 'RATIO',
+      outputColumn: '测试完成率',
+      summaryRule: 'AVG'
+    };
+    const accepted = buildMetricBindingPlan({
+      slot: 'rate', slotLabel: '完成率', template: 'branch-overview-v1', fieldSpecs: [
+        { semantic: 'value', label: '数值', kind: 'metric', required: true, unitKinds: ['PERCENT', 'RATIO'] }
+      ], screen, metrics: [rate], assignments: { value: { metricCode: 'M_RATE', unit: 'PERCENT' } },
+      periodComparisons: { month: { mode: 'METRIC', metricCode: 'M_RATE', unit: 'PERCENT' } },
+      aggregation: { groupBy: 'NONE', agg: 'AVG' }, reason: '绑定完成率', datasources: []
+    });
+    expect(accepted.ok).toBe(true);
+    expect(accepted.periodComparisons.month).toMatchObject({ metricCode: 'M_RATE', unit: 'PERCENT', outputColumn: '测试完成率' });
+
+    const rejected = buildMetricBindingPlan({
+      slot: 'rate', slotLabel: '完成率', template: 'branch-overview-v1', fieldSpecs: [
+        { semantic: 'value', label: '数值', kind: 'metric', required: true, unitKinds: ['PERCENT', 'RATIO'] }
+      ], screen, metrics: [rate], assignments: { value: { metricCode: 'M_RATE', unit: 'PERCENT' } },
+      periodComparisons: { month: { mode: 'METRIC', metricCode: 'M_RATE', unit: 'YUAN' } },
+      aggregation: { groupBy: 'NONE', agg: 'AVG' }, reason: '错误金额单位', datasources: []
+    });
+    expect(rejected.ok).toBe(false);
+    expect(rejected.errors.join('')).toContain('量纲');
+  });
+
+  it('期间比较不能跨越主指标量纲，金额与比例互相拒绝', () => {
+    const rate = {
+      ...orgDeposit,
+      metricCode: 'M_RATE_CROSS',
+      metricName: '测试完成率',
+      unit: 'PERCENT',
+      outputColumn: '测试完成率',
+      summaryRule: 'AVG'
+    };
+    const amount = {
+      ...orgDeposit,
+      metricCode: 'M_AMOUNT_CROSS',
+      metricName: '测试金额',
+      unit: 'YUAN',
+      outputColumn: '测试金额'
+    };
+    const ratioMainAmountComparison = buildMetricBindingPlan({
+      slot: 'rate', slotLabel: '完成率', template: 'branch-overview-v1', fieldSpecs: [
+        { semantic: 'value', label: '数值', kind: 'metric', required: true, unitKinds: ['PERCENT', 'RATIO'] }
+      ], screen, metrics: [rate, amount], assignments: { value: { metricCode: 'M_RATE_CROSS', unit: 'PERCENT' } },
+      periodComparisons: { month: { mode: 'METRIC', metricCode: 'M_AMOUNT_CROSS', unit: 'YUAN' } },
+      aggregation: { groupBy: 'NONE', agg: 'AVG' }, reason: '完成率跨量纲', datasources: []
+    });
+    expect(ratioMainAmountComparison.ok).toBe(false);
+    expect(ratioMainAmountComparison.errors.join('')).toContain('主指标');
+
+    const amountMainRatioComparison = buildMetricBindingPlan({
+      slot: 'deposit', slotLabel: '存款', template: 'branch-overview-v1', fieldSpecs: [valueField],
+      screen, metrics: [rate, amount], assignments: { value: { metricCode: 'M_AMOUNT_CROSS', unit: 'YUAN' } },
+      periodComparisons: { month: { mode: 'METRIC', metricCode: 'M_RATE_CROSS', unit: 'PERCENT' } },
+      aggregation: { groupBy: 'NONE', agg: 'SUM' }, reason: '金额跨量纲', datasources: []
+    });
+    expect(amountMainRatioComparison.ok).toBe(false);
+    expect(amountMainRatioComparison.errors.join('')).toContain('主指标');
+  });
+
+  it('结算性存款只有期间比较时仍按金额量纲拒绝比例指标', () => {
+    const rate = {
+      ...orgDeposit,
+      metricCode: 'M_RATE_SETTLEMENT',
+      metricName: '结算完成率',
+      unit: 'PERCENT',
+      outputColumn: '结算完成率',
+      summaryRule: 'AVG'
+    };
+    const plan = buildMetricBindingPlan({
+      slot: 'settlementDeposit', slotLabel: '结算性存款', template: 'branch-overview-v1', fieldSpecs: [],
+      screen, metrics: [rate], assignments: {}, comparisonsOnly: true,
+      periodComparisons: { month: { mode: 'METRIC', metricCode: 'M_RATE_SETTLEMENT', unit: 'PERCENT' } },
+      aggregation: { groupBy: 'NONE', agg: 'SUM' }, reason: '', datasources: []
+    });
+    expect(plan.ok).toBe(false);
+    expect(plan.errors.join('')).toContain('主指标');
+  });
+
   it('目录过滤只保留可绑定且维度匹配的指标', () => {
     const rows = filterCatalog([
       orgDeposit,

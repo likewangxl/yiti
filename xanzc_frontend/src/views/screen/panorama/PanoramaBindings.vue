@@ -94,7 +94,19 @@
             <p v-if="selectedCatalogEntry?.kind === 'INSTITUTION_MAP'" class="panorama-bindings__hint">数据来自当前授权机构目录/经营画像，仅区域标题可改。</p>
             <p v-else-if="selectedCatalogEntry?.kind === 'SYSTEM_METRIC'" class="panorama-bindings__hint">该指标由运行态系统生成，没有独立数据来源、字段或周期配置。</p>
 
+            <section v-if="comparisonConfigurable" class="panorama-bindings__comparison-mode" data-testid="comparison-mode-entry">
+              <label class="panorama-bindings__field-label" for="comparison-mode">比较方式</label>
+              <select id="comparison-mode" class="panorama-bindings__comparison-select" data-testid="comparison-mode" :value="comparisonMode" :disabled="writing || loading" @change="setComparisonMode($event.target.value)">
+                <option value="inherit">沿用现有</option>
+                <option value="catalog">指标目录比较</option>
+                <option value="custom">历史来源比较</option>
+                <option value="disabled">关闭比较</option>
+              </select>
+              <p class="panorama-bindings__hint">目录比较按当前指标单位计算；历史来源字段只在选择历史来源比较后展开。</p>
+            </section>
+
             <MetricBindingComposer v-if="!selectedCatalogReadonly || periodComparisonConfigurable"
+              :key="`${activeScreenId}-${selectedCatalogEntry?.key || selectedSlot}`"
               :slot-key="selectedSlot"
               :slot-label="selectedSpec.label"
               :template-name="selectedTemplate"
@@ -102,10 +114,18 @@
               :composition-mode="compositionMode"
               :screen="screenScope"
               :datasources="datasources"
+              :catalog="hasNewDisplayPresentation ? metricCatalog : null"
               :disabled="writing || loading"
-              :show-period-comparisons="periodComparisonConfigurable"
+              :show-period-comparisons="periodComparisonConfigurable && comparisonMode === 'catalog'"
               :comparisons-only="selectedCatalogReadonly && periodComparisonConfigurable"
               :period-comparisons="selectedPeriodComparisons"
+              :initial-fields="hasNewDisplayPresentation ? selectedSchemaInitialBinding.fields : {}"
+              :initial-units="hasNewDisplayPresentation ? selectedSchemaInitialBinding.units : {}"
+              :existing-field-notes="selectedExistingFieldNotes"
+              :initial-aggregation="hasNewDisplayPresentation ? selectedInitialAggregation : null"
+              :initial-filters="hasNewDisplayPresentation ? selectedInitialFilters : []"
+              :initial-period="selectedBinding.period"
+              :initial-datasource-id="selectedBinding.dsId"
               @apply="applyMetricBindingPlan" />
             <details v-if="!selectedCatalogReadonly || comparisonConfigurable" class="panorama-bindings__advanced" data-testid="advanced-binding-fields">
               <summary>高级字段配置（技术维护）</summary>
@@ -138,13 +158,7 @@
 
             <details v-if="comparisonConfigurable" class="panorama-bindings__comparison" data-testid="comparison-panel">
               <summary>比较数据（昨日/上月末/上年末）</summary>
-              <p class="panorama-bindings__hint">基期按数据日期固定为昨日、上月末、上年末；金额按差额计算，完成率按百分点计算。</p>
-              <label class="panorama-bindings__field-label" for="comparison-mode">比较配置</label>
-              <select id="comparison-mode" class="panorama-bindings__comparison-select" data-testid="comparison-mode" :value="comparisonMode" :disabled="writing || loading" @change="setComparisonMode($event.target.value)">
-                <option value="inherit">沿用原配置</option>
-                <option value="custom">自定义比较来源</option>
-                <option value="disabled">关闭比较</option>
-              </select>
+               <p class="panorama-bindings__hint">基期按数据日期固定为昨日、上月末、上年末；金额按差额计算，完成率按百分点计算。</p>
               <template v-if="comparisonMode === 'custom'">
                 <label class="panorama-bindings__field-label" for="comparison-history-block">历史区块</label>
                 <select id="comparison-history-block" class="panorama-bindings__comparison-select" data-testid="comparison-history-block" :value="comparisonConfig?.historyBlockId || ''" :disabled="writing || loading" @change="setComparisonField('historyBlockId', Number($event.target.value) || null)">
@@ -258,6 +272,7 @@ import { useRoute, useRouter } from 'vue-router';
 import {
   getScreenCanvas,
   listScreenDatasources,
+  listScreenMetricCatalog,
   listScreens,
   saveScreenCanvas,
   saveScreenDatasource
@@ -292,6 +307,12 @@ import PanoramaDatasourcePicker from './PanoramaDatasourcePicker.vue';
 import PanoramaDataVerification from './PanoramaDataVerification.vue';
 import MetricBindingComposer from './MetricBindingComposer.vue';
 import { mergePeriodMetrics } from './screenMetricBinding';
+import {
+  buildDatasourceFieldOptions,
+  buildSchemaFieldSpecs,
+  buildSchemaInitialBinding,
+  mergeCompatibleDatasourceRequest
+} from './visibleMetricBindings';
 import { buildBusinessSourceCandidates } from '../presentation/sources/businessSourceCandidates';
 import { buildRuntimeComponentCatalog, resolveConfiguredMetricLabel } from '../presentation/editor/runtimeComponentCatalog';
 import { getEffectiveBusinessGrowthSeries } from '../presentation/model/businessGrowthModel';
@@ -316,9 +337,13 @@ const canvas = ref(null);
 const canvasStyle = ref({});
 const draftComponents = ref([]);
 const datasources = ref([]);
+// null means the directory has not been loaded or failed; [] is reserved for
+// a confirmed empty response so a failed request is never shown as empty.
+const metricCatalog = ref(null);
 const selectedSlot = ref(SLOT_ORDER[0]);
 const selectedComponentId = ref('');
 const selectedCatalogKey = ref('');
+const comparisonModeOverrides = reactive({});
 const bindingState = reactive({});
 const loading = ref(false);
 const saving = ref(false);
@@ -374,12 +399,53 @@ const selectedBinding = computed(() => {
 });
 const selectedFieldSpecs = computed(() => {
   if (!selectedSpec.value) return [];
+  if (hasNewDisplayPresentation.value && selectedCatalogEntry.value?.kind === 'DERIVED_TOTAL') {
+    return [{ semantic: 'value', label: '当前金额', kind: 'metric', required: true,
+      unitKinds: ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'] }];
+  }
+  if (hasNewDisplayPresentation.value && selectedCatalogEntry.value
+      && !['DERIVED_TOTAL', 'SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(selectedCatalogEntry.value.kind)) {
+    return buildSchemaFieldSpecs({ entry: selectedCatalogEntry.value, component: selectedDisplayComponent.value });
+  }
   if (selectedSlot.value !== 'composition') return selectedSpec.value.fields || [];
   const semantics = compositionMode.value === 'columns'
     ? ['corporate', 'retail', 'total', 'corporateLoan', 'retailLoan', 'totalLoan', 'intermediaryIncome', 'operatingRevenue'] : ['name', 'value'];
   return (selectedSpec.value.fields || []).filter(fieldSpec => semantics.includes(fieldSpec.semantic));
 });
 const selectedDatasource = computed(() => datasources.value.find(item => String(item.id) === String(selectedBinding.value.dsId)) || null);
+const selectedSchemaInitialBinding = computed(() => {
+  if (!hasNewDisplayPresentation.value) return { fields: {}, units: {} };
+  if (selectedCatalogEntry.value?.kind === 'DERIVED_TOTAL') {
+    return {
+      fields: { value: selectedBinding.value.fields?.value || '' },
+      units: { value: selectedBinding.value.units?.value || '' }
+    };
+  }
+  if (!selectedDisplayComponent.value) return { fields: {}, units: {} };
+  return buildSchemaInitialBinding({
+    entry: selectedCatalogEntry.value,
+    component: selectedDisplayComponent.value,
+    binding: selectedBinding.value
+  });
+});
+const selectedExistingFieldNotes = computed(() => {
+  if (!hasNewDisplayPresentation.value || !selectedDatasource.value) return [];
+  const sourceLabel = selectedDatasource.value.dsName || selectedDatasource.value.ds_name || `数据来源 #${selectedDatasource.value.id}`;
+  const fields = selectedSchemaInitialBinding.value.fields || {};
+  const notes = [];
+  for (const [semantic, field] of Object.entries(fields)) {
+    if (!field || semantic === 'date' || (Array.isArray(metricCatalog.value)
+      && metricCatalog.value.some(item => String(item?.outputColumn || item?.metricName || '') === String(field)))) continue;
+    const unit = selectedSchemaInitialBinding.value.units?.[semantic] || '单位待确认';
+    notes.push(`已有来源：${sourceLabel} → ${field}（${unit}），目录未唯一匹配，保留原字段。`);
+  }
+  return notes;
+});
+const selectedInitialAggregation = computed(() => {
+  const config = parseDatasourceConfig(selectedDatasource.value?.configJson);
+  return config?.aggregation && typeof config.aggregation === 'object' ? config.aggregation : null;
+});
+const selectedInitialFilters = computed(() => selectedInitialAggregation.value?.filters || []);
 const runtimeCatalog = computed(() => buildRuntimeComponentCatalog(hasNewDisplayPresentation.value
   ? { ...displaySession.value?.presentation, metricLabels: canvasStyle.value?.metricLabels }
   : canvasStyle.value));
@@ -408,7 +474,15 @@ const comparisonAllowsMultiple = computed(() => comparisonKey.value.startsWith('
 const comparisonConfig = computed(() => comparisonKey.value
   ? displaySession.value?.presentation?.display?.comparisons?.[comparisonKey.value] || null : null);
 const comparisonMode = computed(() => {
-  if (!comparisonConfig.value) return 'inherit';
+  if (comparisonModeOverrides[comparisonKey.value]) return comparisonModeOverrides[comparisonKey.value];
+  if (!comparisonConfig.value) {
+    const catalogConfig = selectedPeriodComparisons.value;
+    if (catalogConfig?.__mode === 'inherit') return 'inherit';
+    if (catalogConfig && Object.prototype.hasOwnProperty.call(canvasStyle.value?.periodComparisons || {}, comparisonKey.value)) return 'catalog';
+    if (catalogConfig && Object.values(catalogConfig).some(item => item?.mode === 'METRIC' || item?.mode === 'OFFSET')) return 'catalog';
+    if (['DERIVED_TOTAL', 'SYSTEM_METRIC'].includes(selectedCatalogEntry.value?.kind)) return 'catalog';
+    return 'inherit';
+  }
   return comparisonConfig.value.enabled === false ? 'disabled' : 'custom';
 });
 const historyBlockOptions = computed(() => {
@@ -517,6 +591,7 @@ const selectedDisplayFieldMappings = computed(() => {
     return tabItems.flatMap(({ item, index }) => fields
       .filter(field => Object.prototype.hasOwnProperty.call(item || {}, field))
       .map(field => ({ key: `tab-${item.tabKey || index}-${field}`, kind: 'tabs', index, field,
+        tabKey: String(item.tabKey || ''),
         label: `${item.label || item.tabKey || '构成'}·${field.replace('Field', '')}`,
         value: String(item[field] || ''), testId: `component-tab-field-${item.tabKey || index}-${field}` })));
   }
@@ -568,7 +643,9 @@ function componentFieldOptions(mapping) {
   const expectedRole = mapping.kind === 'columns' && dimensionColumns.has(columnKey) ? 'DIM' : 'METRIC';
   const currentUnit = String(componentMappingItem(mapping)?.unit || selectedDisplayComponent.value?.dataRefs?.[0]?.unit || '');
   const currentKind = unitKindOf(currentUnit);
-  return getDatasourceFieldOptions(selectedDatasource.value)
+  const declared = [...getDatasourceFieldOptions(selectedDatasource.value), ...buildDatasourceFieldOptions(selectedDatasource.value, metricCatalog.value)]
+    .filter((option, index, list) => list.findIndex(item => item.col === option.col) === index);
+  return declared
     .filter(option => String(option.role || '').toUpperCase() === expectedRole)
     .filter(option => !currentKind || !option.unit || unitKindOf(option.unit) === currentKind);
 }
@@ -736,15 +813,52 @@ function updateComparisonPresentation(next) {
   markLocalDirty();
 }
 
+function emptyPeriodComparisonConfig() {
+  return {
+    day: { mode: 'UNSET', metricCode: '', outputColumn: '', unit: '', tableName: '' },
+    month: { mode: 'UNSET', metricCode: '', outputColumn: '', unit: '', tableName: '' },
+    year: { mode: 'UNSET', metricCode: '', outputColumn: '', unit: '', tableName: '' }
+  };
+}
+
 function setComparisonMode(mode) {
   if (!comparisonConfigurable.value) return;
+  const key = comparisonKey.value;
+  comparisonModeOverrides[key] = mode;
   if (mode === 'inherit') {
     updateComparisonPresentation(null);
+    const periodComparisons = { ...(canvasStyle.value.periodComparisons || {}) };
+    periodComparisons[key] = { ...emptyPeriodComparisonConfig(), __mode: 'inherit' };
+    canvasStyle.value = {
+      ...canvasStyle.value,
+      periodComparisons
+    };
+    markLocalDirty();
+    return;
+  }
+  if (mode === 'catalog') {
+    // 目录配置存放在 canvasStyle.periodComparisons；移除旧 display override，
+    // 否则历史 enabled=false 会继续压住目录结果。
+    updateComparisonPresentation(null);
+    const periodComparisons = { ...(canvasStyle.value.periodComparisons || {}) };
+    const current = periodComparisons[key] || emptyPeriodComparisonConfig();
+    delete current.__mode;
+    periodComparisons[key] = current;
+    canvasStyle.value = { ...canvasStyle.value, periodComparisons };
+    markLocalDirty();
     return;
   }
   if (mode === 'disabled') {
+    const periodComparisons = { ...(canvasStyle.value.periodComparisons || {}) };
+    delete periodComparisons[key];
+    canvasStyle.value = { ...canvasStyle.value, periodComparisons };
     updateComparisonPresentation({ enabled: false });
     return;
+  }
+  if (mode === 'custom') {
+    const periodComparisons = { ...(canvasStyle.value.periodComparisons || {}) };
+    delete periodComparisons[key];
+    canvasStyle.value = { ...canvasStyle.value, periodComparisons };
   }
   const current = comparisonConfig.value && comparisonConfig.value.enabled !== false ? comparisonConfig.value : {};
   updateComparisonPresentation({
@@ -839,14 +953,20 @@ function setComponentField(mapping, value) {
       let current = Array.isArray(selectedDisplayComponent.value.content?.[mapping.kind])
         ? selectedDisplayComponent.value.content[mapping.kind].map(item => ({ ...item })) : [];
       let targetIndex = mapping.index;
+      const desiredTabKey = mapping.kind === 'tabs'
+        ? String(selectedCatalogEntry.value?.tabKey || mapping.tabKey || '') : '';
+      if (mapping.kind === 'tabs' && desiredTabKey) {
+        const exactIndex = current.findIndex(item => String(item?.tabKey || '') === desiredTabKey);
+        if (exactIndex >= 0) targetIndex = exactIndex;
+      }
       if (mapping.kind === 'tabs' && selectedCatalogEntry.value?.materializedTabs?.length
           && selectedCatalogEntry.value.sourceTabKey
-          && !current.some(item => item?.tabKey === selectedCatalogEntry.value.tabKey)) {
+          && !current.some(item => item?.tabKey === desiredTabKey)) {
         const sourceIndex = current.findIndex(item => item?.tabKey === selectedCatalogEntry.value.sourceTabKey);
         if (sourceIndex >= 0) {
           current = current.flatMap(item => item?.tabKey === selectedCatalogEntry.value.sourceTabKey
             ? selectedCatalogEntry.value.materializedTabs.map(tab => ({ ...tab })) : [item]);
-          targetIndex = current.findIndex(item => item?.tabKey === selectedCatalogEntry.value.tabKey);
+          targetIndex = current.findIndex(item => item?.tabKey === desiredTabKey);
         }
       }
       const item = { ...(current[targetIndex] || {}) };
@@ -914,6 +1034,14 @@ function fieldLabel(slot, semantic) {
 
 const selectedGuidance = computed(() => {
   if (!selectedSpec.value) return '请选择展示内容';
+  if (hasNewDisplayPresentation.value) {
+    const visibleLabels = selectedFieldSpecs.value
+      .filter(field => field?.kind !== 'dimension')
+      .map(field => field?.label)
+      .filter(Boolean);
+    if (visibleLabels.length) return `当前组件仅配置${visibleLabels.join('、')}；已有绑定会保留。`;
+    return '当前组件没有可配置的展示字段。';
+  }
   if (selectedSlot.value === 'composition') {
     return compositionMode.value === 'columns'
       ? '对公金额/零售金额均需绑定；总量/分母可选，若配置必须是同类且有明确单位的指标，来源必须返回一行双列数据。'
@@ -963,9 +1091,11 @@ function rememberPeriodComparisons(config) {
   if (!config) return;
   const key = selectedCatalogEntry.value?.key || selectedSlot.value;
   if (!key) return;
+  const storedConfig = { ...config };
+  delete storedConfig.__mode;
   canvasStyle.value = {
     ...canvasStyle.value,
-    periodComparisons: { ...(canvasStyle.value.periodComparisons || {}), [key]: config }
+    periodComparisons: { ...(canvasStyle.value.periodComparisons || {}), [key]: storedConfig }
   };
 }
 
@@ -1001,6 +1131,33 @@ async function attachPeriodMetrics(plan) {
   return '比较配置已记录。当前屏没有同一结果表的绑定来源，预览会保持待接入。';
 }
 
+function mergedDatasourceRequestForDisplay(plan, source) {
+  if (!source && selectedBinding.value?.dsId) {
+    throw new Error(`已绑定数据源 ${selectedBinding.value.dsId} 当前不可读，已停止创建替代来源`);
+  }
+  if (!source || !hasNewDisplayPresentation.value || !selectedDisplayComponent.value) return plan.datasourceRequest;
+  const currentKind = selectedCatalogEntry.value?.kind;
+  if (['DERIVED_TOTAL', 'SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(currentKind)) return plan.datasourceRequest;
+  const request = plan.datasourceRequest || {
+    sourceKind: source.sourceKind || source.source_kind || 'WIDE_TABLE',
+    dsType: source.dsType || source.ds_type || 'SINGLE',
+    bizLine: source.bizLine || source.biz_line || screenScope.value.bizLine,
+    configJson: plan.previewRow?.configJson || source.configJson,
+    timeParamJson: source.timeParamJson || source.time_param_json,
+    status: 'ACTIVE',
+    reason: '为当前展示组件克隆并合并原宽表来源'
+  };
+  const merged = mergeCompatibleDatasourceRequest(source, request);
+  if (!merged.ok) throw new Error(merged.reason);
+  return {
+    ...request,
+    sourceKind: 'WIDE_TABLE',
+    dsType: merged.config?.aggregation?.groupBy === 'DATE' ? 'TIMESERIES' : (request.dsType || 'SINGLE'),
+    configJson: merged.configJson,
+    timeParamJson: source.timeParamJson || source.time_param_json || request.timeParamJson
+  };
+}
+
 async function applyMetricBindingPlan(plan) {
   if (!plan?.ok || writing.value || loading.value) return;
   saving.value = true;
@@ -1013,9 +1170,12 @@ async function applyMetricBindingPlan(plan) {
       markLocalDirty();
       return;
     }
+    const source = selectedDatasource.value;
+    const datasourceRequest = mergedDatasourceRequestForDisplay(plan, source);
     let dsId = Number(plan.existingDatasourceId);
-    if (!Number.isSafeInteger(dsId) || dsId <= 0) {
-      const created = await saveScreenDatasource(plan.datasourceRequest);
+    if (!Number.isSafeInteger(dsId) || dsId <= 0 || datasourceRequest) {
+      if (!datasourceRequest) throw new Error('没有可安全克隆的宽表来源，已停止保存');
+      const created = await saveScreenDatasource(datasourceRequest);
       dsId = typeof created === 'number' ? created : Number(created?.id ?? created);
       if (!Number.isSafeInteger(dsId) || dsId <= 0) throw new Error('数据源已提交，但没有返回有效编号');
       const sourceList = await listScreenDatasources();
@@ -1024,8 +1184,18 @@ async function applyMetricBindingPlan(plan) {
     const binding = selectedBinding.value;
     binding.dsId = dsId;
     binding.period = plan.binding.period;
-    binding.fields = { ...(plan.binding.fields || {}) };
-    binding.units = { ...(plan.binding.units || {}) };
+    const schemaDisplayEdit = hasNewDisplayPresentation.value
+      && selectedDisplayComponent.value
+      && !['DERIVED_TOTAL', 'SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(selectedCatalogEntry.value?.kind);
+    const rankingDisplayEdit = hasNewDisplayPresentation.value
+      && selectedCatalogEntry.value?.kind === 'INSTITUTION_RANKING';
+    if (rankingDisplayEdit) {
+      binding.fields = { ...(binding.fields || {}), ...(plan.binding.fields || {}) };
+      binding.units = { ...(binding.units || {}), ...(plan.binding.units || {}) };
+    } else if (!schemaDisplayEdit) {
+      binding.fields = { ...(plan.binding.fields || {}) };
+      binding.units = { ...(plan.binding.units || {}) };
+    }
     manualSlots.add(selectedSlot.value);
     autoReviewSlots.delete(selectedSlot.value);
     syncDisplayFromPlan(plan);
@@ -1052,10 +1222,18 @@ function syncDisplayFromPlan(plan) {
     const mapping = selectedDisplayFieldMappings.value.find(item => item.kind === 'mainField');
     if (mapping) setComponentField(mapping, fields.value);
   }
-  const seriesSemantic = { retailDeposit: 'deposit', corpDeposit: 'deposit', retailLoan: 'loan', corpLoan: 'loan' };
-  for (const mapping of selectedDisplayFieldMappings.value.filter(item => item.kind === 'growthSeries')) {
-    const semantic = seriesSemantic[mapping.seriesKey];
-    if (semantic && fields[semantic]) setComponentField(mapping, fields[semantic]);
+  if (selectedCatalogEntry.value?.kind === 'BUSINESS_GROWTH') {
+    for (const mapping of selectedDisplayFieldMappings.value.filter(item => item.kind === 'growthSeries')) {
+      if (fields[mapping.seriesKey]) setComponentField(mapping, fields[mapping.seriesKey]);
+    }
+  } else if (selectedCatalogEntry.value?.kind === 'COMPOSITION_TAB') {
+    for (const mapping of selectedDisplayFieldMappings.value.filter(item => item.kind === 'tabs')) {
+      const semantic = String(mapping.field || '').replace(/Field$/, '');
+      if (fields[semantic]) setComponentField(mapping, fields[semantic]);
+    }
+  } else if (selectedCatalogEntry.value?.kind === 'INSTITUTION_RANKING') {
+    // rankingMetrics.field is a runtime normalized key (deposit/increase/average);
+    // raw directory columns remain in the legacy binding fields above.
   }
 }
 
@@ -1178,6 +1356,8 @@ function clearCanvasState() {
   canvasStyle.value = {};
   draftComponents.value = [];
   datasources.value = [];
+  metricCatalog.value = null;
+  for (const key of Object.keys(comparisonModeOverrides)) delete comparisonModeOverrides[key];
   for (const key of Object.keys(bindingState)) delete bindingState[key];
   selectedSlot.value = SLOT_ORDER[0];
   selectedComponentId.value = '';
@@ -1232,9 +1412,14 @@ async function loadCanvas(requestedId = activeScreenId.value) {
   error.value = '';
   conflict.value = '';
   try {
-    const [resp, sourceList] = await Promise.all([
+    const catalogPromise = typeof listScreenMetricCatalog === 'function'
+      ? listScreenMetricCatalog({}).then(rows => ({ ok: true, rows: Array.isArray(rows) ? rows : (rows?.records || []) }))
+        .catch(error => ({ ok: false, error }))
+      : Promise.resolve({ ok: false, error: new Error('指标目录接口未接入') });
+    const [resp, sourceList, catalogResult] = await Promise.all([
       getScreenCanvas(id),
-      listScreenDatasources()
+      listScreenDatasources(),
+      catalogPromise
     ]);
     if (disposed || token !== loadGeneration) return false;
     if (!resp || typeof resp !== 'object') throw new Error('服务端未返回当前屏草稿，已停止加载');
@@ -1249,6 +1434,7 @@ async function loadCanvas(requestedId = activeScreenId.value) {
     draftComponents.value = Array.isArray(draft.components) ? draft.components : [];
     resetBindings(draftComponents.value);
     datasources.value = Array.isArray(sourceList) ? sourceList : [];
+    metricCatalog.value = catalogResult.ok && catalogResult.rows.length ? catalogResult.rows : null;
     for (const binding of Object.values(bindingState)) fillProvenUnits(binding);
     selectedCatalogKey.value = catalogEntries.value[0]?.key || '';
     selectedComponentId.value = catalogEntries.value[0]?.sourceComponentId || '';
@@ -1711,6 +1897,7 @@ defineExpose({
 .panorama-bindings__field-row select, .panorama-bindings__component-field select { min-height:34px; min-width:0; padding:0 10px; border:1px solid var(--color-border-strong, #c0c4cc); border-radius:var(--radius-control, 4px); background:var(--color-surface, #fff); color:inherit; }
 .panorama-bindings__component-field select { width:100%; max-width:100%; box-sizing:border-box; }
 .panorama-bindings__comparison { display:block; min-width:0; margin-top:16px; padding:10px 12px; border:1px solid var(--color-border, #ebeef5); border-radius:var(--radius-control, 4px); background:var(--color-surface-subtle, #fafafa); }
+.panorama-bindings__comparison-mode { margin-top:16px; padding:10px 12px; border:1px solid var(--color-border, #ebeef5); border-radius:var(--radius-control, 4px); background:var(--color-surface-subtle, #fafafa); }
 .panorama-bindings__comparison summary { cursor:pointer; color:var(--color-text-strong, #303133); font-size:13px; font-weight:600; }
 .panorama-bindings__comparison-select { display:block; width:100%; max-width:100%; min-width:0; min-height:34px; box-sizing:border-box; padding:0 10px; border:1px solid var(--color-border-strong, #c0c4cc); border-radius:var(--radius-control, 4px); background:var(--color-surface, #fff); color:inherit; }
 .panorama-bindings__comparison-select--multiple { min-height:88px; padding:6px 10px; }

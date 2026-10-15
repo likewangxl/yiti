@@ -118,7 +118,8 @@ export function buildMetricBindingPlan(input = {}) {
     else if (fieldSpec?.unitKinds?.length && !fieldSpec.unitKinds.includes(unit)) errors.push(`${label} 的单位不适用`);
     selected.push({ semantic, metric, unit, label });
   }
-  const periodSelected = collectPeriodMetrics(input.periodComparisons, byCode, namedGroup, errors);
+  const mainUnitKind = resolveMainUnitKind(input, selected);
+  const periodSelected = collectPeriodMetrics(input.periodComparisons, byCode, namedGroup, errors, mainUnitKind);
   if (input.comparisonsOnly) {
     if (!periodSelected.length) errors.push('请至少配置一个期间比较');
   } else if (!selected.length) errors.push('请至少选择一个指标');
@@ -159,6 +160,12 @@ export function buildMetricBindingPlan(input = {}) {
     }
     if (!value) {
       errors.push('过滤值不能为空');
+      continue;
+    }
+    if (filter.target === 'legacy') {
+      const legacyColumn = text(filter.col);
+      if (!legacyColumn) errors.push('历史过滤条件缺少原始列');
+      else filters.push({ col: legacyColumn, op, value });
       continue;
     }
     let col = '';
@@ -354,9 +361,28 @@ function datasourceName(slotLabel, selected) {
 
 const PERIOD_LABELS = Object.freeze({ day: '较昨日', month: '较上月', year: '较上年' });
 const PERIOD_SEMANTICS = Object.freeze({ day: 'periodDay', month: 'periodMonth', year: 'periodYear' });
-const AMOUNT_UNITS = new Set(['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION']);
+const PERIOD_UNITS = new Set(['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION', 'PERCENT', 'RATIO']);
 
-function collectPeriodMetrics(raw, byCode, namedGroup, errors) {
+function unitKind(value) {
+  const unit = upper(value);
+  if (['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'].includes(unit)) return 'AMOUNT';
+  if (['PERCENT', 'RATIO'].includes(unit)) return 'RATIO';
+  return '';
+}
+
+function resolveMainUnitKind(input, selected) {
+  if (input.comparisonsOnly) return 'AMOUNT';
+  const primaryField = (input.fieldSpecs || []).find(field => field?.semantic === 'value')
+    || (input.fieldSpecs || []).find(field => field?.kind !== 'dimension' && field?.required)
+    || (input.fieldSpecs || []).find(field => field?.kind !== 'dimension');
+  const primary = selected.find(item => item.semantic === primaryField?.semantic) || selected[0];
+  const selectedKind = unitKind(primary?.unit);
+  if (selectedKind) return selectedKind;
+  const kinds = [...new Set((primaryField?.unitKinds || []).map(unitKind).filter(Boolean))];
+  return kinds.length === 1 ? kinds[0] : '';
+}
+
+function collectPeriodMetrics(raw, byCode, namedGroup, errors, mainUnitKind = '') {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
   const selected = [];
   for (const key of ['day', 'month', 'year']) {
@@ -373,9 +399,12 @@ function collectPeriodMetrics(raw, byCode, namedGroup, errors) {
       errors.push('命名机构组大屏只能绑定机构维度指标');
       continue;
     }
-    const explicit = text(slot.unit);
-    const unit = AMOUNT_UNITS.has(explicit) ? explicit : (AMOUNT_UNITS.has(text(metric.unit)) ? text(metric.unit) : '');
-    if (!unit) errors.push(`${label} 缺少金额单位，系统不会猜测`);
+    const explicit = upper(slot.unit);
+    const metricUnit = upper(metric.unit);
+    const unit = PERIOD_UNITS.has(explicit) ? explicit : (PERIOD_UNITS.has(metricUnit) ? metricUnit : '');
+    if (!unit) errors.push(`${label} 缺少明确单位，系统不会猜测`);
+    else if (metricUnit && unitKind(unit) !== unitKind(metricUnit)) errors.push(`${label} 的单位量纲必须与当前主指标一致`);
+    else if (mainUnitKind && unitKind(unit) !== mainUnitKind) errors.push(`${label} 的单位量纲必须与主指标一致`);
     selected.push({ key, mode, semantic: PERIOD_SEMANTICS[key], metric, unit, label });
   }
   return selected;
