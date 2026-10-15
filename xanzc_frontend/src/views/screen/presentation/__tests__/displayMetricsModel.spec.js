@@ -520,4 +520,62 @@ describe('displayMetricsModel', () => {
     expect(result.comparisons.year).toMatchObject({ state: 'READY', baseValue: 200, referenceDate: '2025-12-31' });
     expect(result.comparisons.month.text).toContain('暂无数据');
   });
+
+  it('指标卡完成率按 PERCENT/RATIO 格式化期间差值，正负零均以百分点展示', () => {
+    const card = component('completion-rate', 'METRIC_CARD', {
+      layoutRegion: 'LEFT',
+      dataRefs: [ref(31, 'rate', '完成率', 'RATIO')],
+      content: { mainField: 'rate', subFields: [] },
+      format: { displayUnit: 'PERCENT', decimals: 2, thousandsSeparator: false }
+    });
+    const presentation = { displaySchemaVersion: 1, display: { components: [card] } };
+    const build = previous => buildDisplayMetricsModel(presentation, {
+      dataDate: '2026-10-15',
+      blockResults: { 31: { rate: 0.6, unitByField: { rate: 'RATIO' } } },
+      periodComparisonConfig: {
+        'completion-rate': { month: { mode: 'OFFSET', metricCode: 'M_RATE', outputColumn: 'rate', unit: 'RATIO' } }
+      },
+      periodComparisonSources: { 'completion-rate': [{ data_date: '2026-09-30', rate: previous }] }
+    }).components[0];
+
+    expect(build(0.55).comparisons.month).toMatchObject({
+      state: 'READY', value: 5, baseValue: 5, unit: 'PERCENT', text: '较上月 +5.00个百分点'
+    });
+    expect(build(0.65).comparisons.month).toMatchObject({
+      state: 'READY', value: -5, baseValue: -5, unit: 'PERCENT', text: '较上月 -5.00个百分点'
+    });
+    expect(build(0.6).comparisons.month).toMatchObject({
+      state: 'READY', value: 0, baseValue: 0, unit: 'PERCENT', text: '较上月 0.00个百分点'
+    });
+  });
+
+  it('display.comparisons 关闭时优先于历史比较和指标库比较，指标卡不回退覆盖', () => {
+    const card = component('completion-rate-disabled', 'METRIC_CARD', {
+      layoutRegion: 'LEFT',
+      dataRefs: [ref(31, 'rate', '完成率', 'RATIO')],
+      content: { mainField: 'rate', subFields: [] },
+      format: { displayUnit: 'PERCENT', decimals: 2 }
+    });
+    const presentation = {
+      displaySchemaVersion: 1,
+      display: {
+        components: [card],
+        comparisons: { 'completion-rate-disabled': { enabled: false } }
+      }
+    };
+    const result = buildDisplayMetricsModel(presentation, {
+      dataDate: '2026-10-15',
+      blockResults: { 31: { rate: 0.6, unitByField: { rate: 'RATIO' } } },
+      comparisonResults: { 57: { rows: [
+        { data_date: '2026-10-15', rate: 0.6 }, { data_date: '2026-09-30', rate: 0.5 }
+      ], unitByField: { rate: 'RATIO' } } },
+      periodComparisonConfig: {
+        'completion-rate-disabled': { month: { mode: 'OFFSET', metricCode: 'M_RATE', outputColumn: 'rate', unit: 'RATIO' } }
+      },
+      periodComparisonSources: { 'completion-rate-disabled': [{ data_date: '2026-09-30', rate: 0.5 }] }
+    }).components[0];
+    expect(result.comparisonConfigured).toBe(true);
+    expect(result.comparisons).toBeNull();
+    expect(result.monthDelta).toBeNull();
+  });
 });

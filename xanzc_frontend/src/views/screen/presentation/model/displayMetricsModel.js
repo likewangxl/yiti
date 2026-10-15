@@ -469,18 +469,27 @@ function buildComponent(component, model, index, options, presentation) {
     result.progress = result.value === null ? null : Math.max(0, Math.min(100, result.value));
   }
   if (component.componentType === 'METRIC_CARD' || component.componentType === 'COMPLETION') {
-    applyCatalogPeriodComparisons(result, model, main, displayFormat);
+    applyCatalogPeriodComparisons(result, model, main, displayFormat, presentation);
   }
   return result;
 }
 
-function applyCatalogPeriodComparisons(result, model, main, format) {
+function applyCatalogPeriodComparisons(result, model, main, format, presentation) {
+  const explicit = presentation?.display?.comparisons?.[result.componentId];
+  if (explicit?.enabled === false) {
+    result.comparisonConfigured = true;
+    result.comparisons = null;
+    result.monthDelta = null;
+    return;
+  }
   const config = model?.periodComparisonConfig?.[result.componentId];
   if (!config) return;
   const rows = model?.periodComparisonSources?.[result.componentId] || [];
   const resolved = resolvePeriodComparisons({
     config,
     dataDate: text(model?.dataDate) || result.sourceDate,
+    currentValue: main?.value,
+    currentUnit: main?.unit || result.sourceUnit,
     currentYuan: amountToYuan(main?.value, main?.unit || result.sourceUnit),
     rows
   });
@@ -494,17 +503,24 @@ function applyCatalogPeriodComparisons(result, model, main, format) {
       comparisons[key] = unavailableComparison(label);
       continue;
     }
-    const formatted = formatDisplayMetric(slot.baseValue, { ...format, negativeStyle: 'SIGNED' }, 'YUAN');
+    const isRatio = slot.unit === 'PERCENT';
+    const formatted = formatDisplayMetric(
+      slot.baseValue,
+      isRatio ? { ...format, displayUnit: 'PERCENT', negativeStyle: 'SIGNED' } : { ...format, negativeStyle: 'SIGNED' },
+      isRatio ? 'PERCENT' : 'YUAN'
+    );
     comparisons[key] = formatted.value === null
       ? unavailableComparison(label)
       : {
         state: 'READY',
         value: formatted.value,
         rawValue: null,
-        unit: 'YUAN',
+        unit: isRatio ? 'PERCENT' : 'YUAN',
         baseValue: slot.baseValue,
         referenceDate: slot.referenceDate,
-        text: `${label} ${signedText(formatted.value, formatted.text)}`
+        text: isRatio
+          ? `${label} ${signedText(formatted.value, formatted.text.replace(/%$/, ''))}个百分点`
+          : `${label} ${signedText(formatted.value, formatted.text)}`
       };
   }
   result.comparisons = comparisons;

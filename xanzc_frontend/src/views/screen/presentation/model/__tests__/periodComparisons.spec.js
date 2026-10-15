@@ -96,6 +96,79 @@ describe('期间比较配置', () => {
     expect(missing.comparisons.month).toMatchObject({ state: 'NO_VALUE', baseValue: null });
   });
 
+  it('按主值量纲解析 PERCENT/RATIO，比例统一输出百分点并保留正负零', () => {
+    const normalized = normalizePeriodComparisons({
+      day: { mode: 'METRIC', metricCode: 'M_RATE_DELTA', outputColumn: '日差', unit: 'PERCENT' },
+      month: { mode: 'OFFSET', metricCode: 'M_RATE', outputColumn: '完成率', unit: 'RATIO' }
+    });
+    expect(normalized.day.unit).toBe('PERCENT');
+    expect(normalized.month.unit).toBe('RATIO');
+
+    const resolved = resolvePeriodComparisons({
+      config: normalized,
+      dataDate: '2026-10-15',
+      currentValue: 0.6,
+      currentUnit: 'RATIO',
+      rows: [
+        { data_date: '2026-10-15', 日差: -2.5, 完成率: 0.6 },
+        { data_date: '2026-09-30', 完成率: 0.55 }
+      ]
+    });
+    expect(resolved.comparisons.day).toEqual({
+      state: 'READY', baseValue: -2.5, referenceDate: '2026-10-14', unit: 'PERCENT'
+    });
+    expect(resolved.comparisons.month).toEqual({
+      state: 'READY', baseValue: 5, referenceDate: '2026-09-30', unit: 'PERCENT'
+    });
+
+    const zero = resolvePeriodComparisons({
+      config: { month: { mode: 'OFFSET', metricCode: 'M_RATE', outputColumn: '完成率', unit: 'PERCENT' } },
+      dataDate: '2026-10-15',
+      currentValue: 50,
+      currentUnit: 'PERCENT',
+      rows: [{ data_date: '2026-09-30', 完成率: 50 }]
+    });
+    expect(zero.comparisons.month).toMatchObject({ state: 'READY', baseValue: 0, unit: 'PERCENT' });
+  });
+
+  it('金额、比例和其他量纲不混算，当前主值类型缺失时失败关闭', () => {
+    const amountAgainstRatio = resolvePeriodComparisons({
+      config: { month: { mode: 'OFFSET', metricCode: 'M_AMOUNT', outputColumn: '余额', unit: 'YUAN' } },
+      dataDate: '2026-10-15',
+      currentValue: 0.6,
+      currentUnit: 'RATIO',
+      rows: [{ data_date: '2026-09-30', 余额: 0.5 }]
+    });
+    expect(amountAgainstRatio.comparisons.month).toMatchObject({ state: 'NO_VALUE', baseValue: null, unit: 'YUAN' });
+
+    const ratioAgainstAmount = resolvePeriodComparisons({
+      config: { month: { mode: 'OFFSET', metricCode: 'M_RATE', outputColumn: '完成率', unit: 'RATIO' } },
+      dataDate: '2026-10-15',
+      currentYuan: 60,
+      rows: [{ data_date: '2026-09-30', 完成率: 50 }]
+    });
+    expect(ratioAgainstAmount.comparisons.month).toMatchObject({ state: 'NO_VALUE', baseValue: null, unit: 'PERCENT' });
+  });
+
+  it('无效数据日期、当前日期重复或基准日期重复都失败关闭', () => {
+    const config = { month: { mode: 'OFFSET', metricCode: 'M_RATE', outputColumn: '完成率', unit: 'RATIO' } };
+    const base = {
+      config,
+      dataDate: '2026-10-15',
+      currentValue: 0.6,
+      currentUnit: 'RATIO',
+      rows: [{ data_date: '2026-10-15', 完成率: 0.6 }, { data_date: '2026-09-30', 完成率: 0.5 }]
+    };
+    expect(resolvePeriodComparisons({ ...base, dataDate: '2026-02-30' }).comparisons.month)
+      .toMatchObject({ state: 'NO_VALUE', baseValue: null });
+    expect(resolvePeriodComparisons({ ...base, rows: [
+      ...base.rows, { data_date: '2026-10-15', 完成率: 0.6 }
+    ] }).comparisons.month).toMatchObject({ state: 'NO_VALUE', baseValue: null });
+    expect(resolvePeriodComparisons({ ...base, rows: [
+      ...base.rows, { data_date: '2026-09-30', 完成率: 0.5 }
+    ] }).comparisons.month).toMatchObject({ state: 'NO_VALUE', baseValue: null });
+  });
+
   it('结算性存款没有独立区块时扫描已加载结果行，回推则附带存款区块的区间查询', () => {
     const configs = {
       'overview-settlementDeposit': {

@@ -10,7 +10,7 @@
  * - OFFSET：增量 = 当前主值 − 该指标在基准日的值。缺该日行则无值。
  *   数据源必须按日期聚合，运行时从上年年末到数据日做 RANGE 查询。
  *
- * 金额统一折成元。非金额单位失败关闭，不猜测。
+ * 金额统一折成元；比例统一折成百分数，差值单位为百分点。不同量纲失败关闭。
  */
 
 import { comparisonDates } from './explicitComparisons';
@@ -24,6 +24,18 @@ export const PERIOD_COMPARISON_LABELS = Object.freeze({
 
 const AMOUNT_UNITS = Object.freeze(['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION']);
 const AMOUNT_SCALE = Object.freeze({ YUAN: 1, TEN_THOUSAND: 1e4, HUNDRED_MILLION: 1e8 });
+const PERIOD_UNITS = Object.freeze([...AMOUNT_UNITS, 'PERCENT', 'RATIO']);
+const UNIT_ALIASES = Object.freeze({
+  元: 'YUAN', 人民币元: 'YUAN', CNY: 'YUAN', RMB: 'YUAN', YUAN: 'YUAN',
+  万元: 'TEN_THOUSAND', TEN_THOUSAND: 'TEN_THOUSAND',
+  亿元: 'HUNDRED_MILLION', HUNDRED_MILLION: 'HUNDRED_MILLION',
+  百分比: 'PERCENT', 百分数: 'PERCENT', '%': 'PERCENT', PCT: 'PERCENT', PERCENT: 'PERCENT',
+  比例: 'RATIO', RATIO: 'RATIO'
+});
+const UNIT_KINDS = Object.freeze({
+  YUAN: 'amount', TEN_THOUSAND: 'amount', HUNDRED_MILLION: 'amount',
+  PERCENT: 'ratio', RATIO: 'ratio'
+});
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -40,6 +52,11 @@ function finite(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function canonicalUnit(value) {
+  const raw = text(value);
+  return UNIT_ALIASES[raw] || UNIT_ALIASES[raw.toUpperCase()] || null;
+}
+
 export function emptyPeriodSlot() {
   return { mode: 'UNSET', metricCode: '', outputColumn: '', unit: '', tableName: '' };
 }
@@ -50,7 +67,8 @@ export function normalizePeriodComparisons(raw) {
   for (const key of PERIOD_COMPARISON_KEYS) {
     const slot = isObject(source[key]) ? source[key] : {};
     const mode = slot.mode === 'METRIC' || slot.mode === 'OFFSET' ? slot.mode : 'UNSET';
-    const unit = AMOUNT_UNITS.includes(text(slot.unit)) ? text(slot.unit) : '';
+    const candidateUnit = canonicalUnit(slot.unit);
+    const unit = PERIOD_UNITS.includes(candidateUnit) ? candidateUnit : '';
     next[key] = mode === 'UNSET'
       ? emptyPeriodSlot()
       : {
@@ -83,25 +101,40 @@ function rowDate(row) {
   return text(row?.data_date || row?.dataDate || row?.date);
 }
 
-function toYuan(value, unit) {
-  if (!AMOUNT_UNITS.includes(unit)) return null;
+function toCanonicalValue(value, unit) {
   const number = finite(value);
-  return number === null ? null : number * AMOUNT_SCALE[unit];
+  const canonical = canonicalUnit(unit);
+  const kind = UNIT_KINDS[canonical];
+  if (number === null || !kind) return null;
+  if (kind === 'ratio') {
+    const percent = canonical === 'RATIO' ? number * 100 : number;
+    return { value: Number(percent.toFixed(12)), unit: 'PERCENT', kind };
+  }
+  return { value: number * AMOUNT_SCALE[canonical], unit: 'YUAN', kind };
 }
 
-function noValue() {
-  return { state: 'NO_VALUE', baseValue: null, referenceDate: '', unit: 'YUAN' };
+function noValue(unit = 'YUAN') {
+  const canonical = canonicalUnit(unit);
+  const outputUnit = UNIT_KINDS[canonical] === 'ratio' ? 'PERCENT' : 'YUAN';
+  return { state: 'NO_VALUE', baseValue: null, referenceDate: '', unit: outputUnit };
+}
+
+function resolveCurrentValue({ currentYuan, currentValue, currentUnit }) {
+  const hasExtendedCurrent = currentValue !== undefined || currentUnit !== undefined;
+  if (hasExtendedCurrent) return toCanonicalValue(currentValue, currentUnit);
+  return toCanonicalValue(currentYuan, 'YUAN');
 }
 
 /**
  * @returns {{ active: boolean, comparisons: Record<string, object|null> }}
  * 未配置槽位为 null。已配置但缺数、错单位或日期对不上时为 NO_VALUE。
- * READY.baseValue 是折成元的有符号增量。
+ * READY.baseValue 是按量纲归一后的有符号增量：金额为元，比例为百分点。
  */
-export function resolvePeriodComparisons({ config, dataDate, currentYuan, rows } = {}) {
+export function resolvePeriodComparisons({ config, dataDate, currentYuan, currentValue, currentUnit, rows } = {}) {
   const normalized = normalizePeriodComparisons(config);
   const dates = comparisonDates(dataDate);
   const list = (Array.isArray(rows) ? rows : []).filter(isObject);
+  const current = resolveCurrentValue({ currentYuan, currentValue, currentUnit });
   const comparisons = {};
   let active = false;
   for (const key of PERIOD_COMPARISON_KEYS) {
@@ -113,23 +146,40 @@ export function resolvePeriodComparisons({ config, dataDate, currentYuan, rows }
     active = true;
     const referenceDate = dates[key] || '';
     if (!slotReady(slot) || !slot.unit || !referenceDate) {
-      comparisons[key] = noValue();
+      comparisons[key] = noValue(slot.unit);
+      continue;
+    }
+    const expectedKind = UNIT_KINDS[slot.unit];
+    if (!current || current.kind !== expectedKind) {
+      comparisons[key] = noValue(slot.unit);
       continue;
     }
     if (slot.mode === 'METRIC') {
       const dated = list.filter(row => rowDate(row) === text(dataDate) && Object.prototype.hasOwnProperty.call(row, slot.outputColumn));
       const undated = list.filter(row => !rowDate(row) && Object.prototype.hasOwnProperty.call(row, slot.outputColumn));
       const usable = dated.length === 1 ? dated[0] : (dated.length === 0 && undated.length === 1 && list.length === 1 ? undated[0] : null);
-      const delta = usable ? toYuan(usable[slot.outputColumn], slot.unit) : null;
-      comparisons[key] = delta === null ? noValue() : { state: 'READY', baseValue: delta, referenceDate, unit: 'YUAN' };
+      const delta = usable ? toCanonicalValue(usable[slot.outputColumn], slot.unit) : null;
+      comparisons[key] = delta === null
+        ? noValue(slot.unit)
+        : { state: 'READY', baseValue: delta.value, referenceDate, unit: delta.unit };
       continue;
     }
     const historicalRows = list.filter(row => rowDate(row) === referenceDate && Object.prototype.hasOwnProperty.call(row, slot.outputColumn));
-    const historical = historicalRows.length === 1 ? toYuan(historicalRows[0][slot.outputColumn], slot.unit) : null;
-    const current = finite(currentYuan);
-    comparisons[key] = historical === null || current === null
-      ? noValue()
-      : { state: 'READY', baseValue: current - historical, referenceDate, unit: 'YUAN' };
+    const currentRows = list.filter(row => rowDate(row) === text(dataDate) && Object.prototype.hasOwnProperty.call(row, slot.outputColumn));
+    if (currentRows.length > 1) {
+      comparisons[key] = noValue(slot.unit);
+      continue;
+    }
+    const historical = historicalRows.length === 1
+      ? toCanonicalValue(historicalRows[0][slot.outputColumn], slot.unit) : null;
+    comparisons[key] = !historical
+      ? noValue(slot.unit)
+      : {
+        state: 'READY',
+        baseValue: current.kind === 'ratio' ? Number((current.value - historical.value).toFixed(12)) : current.value - historical.value,
+        referenceDate,
+        unit: current.unit
+      };
   }
   return { active, comparisons };
 }
