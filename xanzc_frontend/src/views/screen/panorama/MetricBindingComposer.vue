@@ -3,7 +3,7 @@
     <header class="metric-binding__head">
       <div>
         <h3>从指标库绑定</h3>
-        <p>指标来自绩效指标定义。选中后按结果表生成或复用宽表数据源：机构 ORG_INDEX_RESULT、员工 EMP_INDEX_RESULT、客户 CUST_INDEX_RESULT。查询列名是指标名称，不是槽位号。单位识别不了时需要手工选择。</p>
+        <p>选择本组件需要展示的业务指标，并核对单位。已有绑定会自动回显；单位无法识别时，请按指标实际口径选择。</p>
       </div>
       <el-button data-testid="metric-catalog-reload" :disabled="disabled || loadingCatalog" @click="loadCatalog">刷新目录</el-button>
     </header>
@@ -89,8 +89,9 @@
       </section>
 
       <div v-if="!comparisonsOnly" class="metric-binding__agg">
-        <el-form-item label="聚合函数">
-          <el-select data-testid="metric-catalog-agg" v-model="agg" :disabled="disabled">
+        <el-form-item label="汇总方式">
+          <p id="metric-catalog-aggregation-help" class="metric-binding__help" data-testid="metric-catalog-aggregation-help">决定同一指标的多条记录如何汇总：求和得到合计，平均得到平均值，最大/最小取极值，计数统计有值记录的条数。这里不能把两个不同指标相加；完成率等比例不能直接求和。不确定时请保持原配置。</p>
+          <el-select data-testid="metric-catalog-agg" v-model="agg" :disabled="disabled" aria-describedby="metric-catalog-aggregation-help">
             <el-option label="求和" value="SUM" />
             <el-option label="平均" value="AVG" />
             <el-option label="最大" value="MAX" />
@@ -102,9 +103,10 @@
 
       <div v-if="!comparisonsOnly" class="metric-binding__filters-editor">
         <div class="metric-binding__filters-head">
-          <span>过滤</span>
+          <span>筛选条件（可选）</span>
           <el-button data-testid="metric-catalog-add-filter" :disabled="disabled" @click="addFilter">添加条件</el-button>
         </div>
+        <p id="metric-catalog-filter-help" class="metric-binding__help" data-testid="metric-catalog-filter-help">限定哪些数据参与计算，例如只取某一天、某个机构，或只保留余额大于 0 的记录。不需要额外限制时不用添加。已有条件会保留，修改或删除会改变取数范围；筛选只能在已授权的数据范围内生效。</p>
         <div v-for="(filter, index) in filters" :key="index" class="metric-binding__filter-row">
           <div v-if="filter.readonly" class="metric-binding__legacy-filter" :data-testid="`metric-catalog-legacy-filter-${index}`">
             已保留来源条件：{{ filter.col }} {{ filter.op }} {{ filter.value }}（无法安全映射，保存时原样保留）
@@ -127,15 +129,15 @@
               <el-option label="小于" value="LT" />
               <el-option label="小于等于" value="LE" />
             </el-select>
-            <el-input v-model="filter.value" placeholder="过滤值" :disabled="disabled" />
+            <el-input v-model="filter.value" placeholder="填写筛选值" :disabled="disabled" aria-describedby="metric-catalog-filter-help" />
             <el-button link type="danger" :disabled="disabled" @click="filters.splice(index, 1)">移除</el-button>
           </template>
         </div>
-        <p class="hint">指标值过滤会写成对应的 val_槽位，不会把指标名称拼进 SQL。</p>
       </div>
 
-      <el-form-item v-if="!comparisonsOnly" label="原因">
-        <el-input data-testid="metric-catalog-reason" v-model="reason" :disabled="disabled" />
+      <el-form-item v-if="!comparisonsOnly" label="修改说明（原因）">
+        <p id="metric-catalog-reason-help" class="metric-binding__help" data-testid="metric-catalog-reason-help">说明本次预览取数或调整绑定的用途，供后续核对和追溯，不参与指标计算。例如“核对全辖存款总额”或“调整本屏的存款统计口径”。应用绑定或预览取数时需要填写。</p>
+        <el-input data-testid="metric-catalog-reason" v-model="reason" :disabled="disabled" aria-describedby="metric-catalog-reason-help" />
       </el-form-item>
       <el-alert v-for="item in plan.warnings" :key="item" class="metric-binding__status" data-testid="metric-catalog-warning" type="warning" :closable="false" show-icon :title="item" />
        <el-alert v-for="item in visiblePlanErrors" :key="item" class="metric-binding__status" type="error" :closable="false" show-icon :title="item" />
@@ -352,9 +354,8 @@ function optionsFor(field) {
 }
 
 function metricOptionLabel(metric) {
-  const table = metric.tableName || '结果表待定';
   const unit = metric.unit ? unitLabel(metric.unit) : '单位待选';
-  return `${metric.metricName}（${metric.metricCode} · ${table} · 槽位 ${metric.valSlot} · ${unit}）`;
+  return `${metric.metricName}（${metric.metricCode} · ${unit}）`;
 }
 
 function setMetric(field, metricCode) {
@@ -558,7 +559,8 @@ function unitLabel(unit) {
 .metric-binding__head h3 { margin: 0; color: var(--color-text-strong, #303133); font-size: 14px; font-weight: 600; }
 .metric-binding__head p, .metric-binding .hint { margin: 4px 0 0; color: var(--el-text-color-secondary, #909399); font-size: 12px; line-height: 18px; }
 .metric-binding__filters, .metric-binding__agg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; }
-.metric-binding__agg { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
+.metric-binding__agg { grid-template-columns: minmax(0, 1fr); margin-top: 12px; }
+.metric-binding__help { width: 100%; margin: 0 0 8px; color: var(--color-text-secondary, #606266); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .metric-binding__assign { display: grid; grid-template-columns: minmax(0, 1fr) 168px; column-gap: 12px; align-items: start; }
 .metric-binding__periods { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--color-border, #ebeef5); }
 .metric-binding__periods h4 { margin: 0; color: var(--color-text-strong, #303133); font-size: 13px; font-weight: 600; }

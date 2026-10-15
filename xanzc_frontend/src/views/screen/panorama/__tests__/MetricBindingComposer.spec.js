@@ -35,6 +35,30 @@ function mountComposer(props = {}) {
 }
 
 describe('MetricBindingComposer', () => {
+  it('在业务配置名称下解释用途并去除表名槽位说明，提交内容不变', async () => {
+    const wrapper = mountComposer();
+    try {
+      expect(wrapper.get('[data-testid="metric-catalog-aggregation-help"]').text()).toContain('不能把两个不同指标相加');
+      expect(wrapper.get('[data-testid="metric-catalog-filter-help"]').text()).toContain('不用添加');
+      expect(wrapper.get('[data-testid="metric-catalog-reason-help"]').text()).toContain('不参与指标计算');
+      expect(wrapper.text()).toContain('筛选条件（可选）');
+      expect(wrapper.text()).toContain('修改说明');
+      expect(wrapper.text()).not.toContain('ORG_INDEX_RESULT');
+      expect(wrapper.text()).not.toContain('val_槽位');
+      await wrapper.get('[data-testid="metric-catalog-suggest"]').trigger('click');
+      expect(wrapper.get('[data-testid="metric-catalog-assign-value"]').text()).toContain('M_0265');
+      expect(wrapper.get('[data-testid="metric-catalog-assign-value"]').text()).not.toContain('槽位');
+      await wrapper.get('[data-testid="metric-catalog-apply"]').trigger('click');
+      const plan = wrapper.emitted('apply')[0][0];
+      expect(plan.datasourceRequest.reason).toBe('从指标库绑定到当前组件');
+      expect(JSON.parse(plan.datasourceRequest.configJson)).toMatchObject({
+        table: 'ORG_INDEX_RESULT', aggregation: { groupBy: 'NONE', agg: 'SUM' }
+      });
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
   it('不展示聚合维度，保留聚合函数、过滤及已保存分组口径', async () => {
     const filters = [{ col: 'val_12', op: 'GT', value: '0' }];
     const wrapper = mountComposer({
@@ -61,7 +85,7 @@ describe('MetricBindingComposer', () => {
 
     expect(wrapper.get('.el-form').exists()).toBe(true);
     expect(wrapper.get('[data-testid="metric-catalog-dim"] .el-select__wrapper').classes()).toContain('is-disabled');
-    expect(wrapper.text()).toContain('ORG_INDEX_RESULT');
+    expect(wrapper.text()).toContain('选择本组件需要展示的业务指标');
     expect(wrapper.text()).toContain('需要配置');
     expect(wrapper.text()).toContain('较上期变化');
     await wrapper.get('[data-testid="metric-catalog-suggest"]').trigger('click');
