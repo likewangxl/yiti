@@ -3,140 +3,135 @@
     <header class="metric-binding__head">
       <div>
         <h3>从指标库绑定</h3>
-        <p>指标来自绩效指标定义。查询结果的列名是指标名称，不是宽表槽位号。单位识别不了时需要手工选择，系统不会猜成元。</p>
+        <p>指标来自绩效指标定义。选中后按结果表生成或复用宽表数据源：机构 ORG_INDEX_RESULT、员工 EMP_INDEX_RESULT、客户 CUST_INDEX_RESULT。查询列名是指标名称，不是槽位号。单位识别不了时需要手工选择。</p>
       </div>
-      <button type="button" data-testid="metric-catalog-reload" :disabled="disabled || loadingCatalog" @click="loadCatalog">刷新目录</button>
+      <el-button data-testid="metric-catalog-reload" :disabled="disabled || loadingCatalog" @click="loadCatalog">刷新目录</el-button>
     </header>
 
-    <p v-if="loadingCatalog" class="metric-binding__hint" role="status">正在读取指标目录…</p>
-    <p v-if="catalogError" class="metric-binding__alert" data-testid="metric-catalog-error" role="alert">{{ catalogError }}</p>
-    <p v-if="shape.blocked" class="metric-binding__alert" data-testid="metric-catalog-blocked" role="note">{{ shape.reason }}</p>
+    <p v-if="loadingCatalog" class="hint" role="status">正在读取指标目录…</p>
+    <div v-if="catalogError" data-testid="metric-catalog-error">
+      <el-alert type="error" :closable="false" show-icon :title="catalogError" />
+    </div>
+    <el-alert v-if="shape.blocked" data-testid="metric-catalog-blocked" type="warning" :closable="false" show-icon :title="shape.reason" />
 
-    <template v-else>
+    <el-form v-else label-position="top" size="default" class="metric-binding__form" @submit.prevent>
       <div class="metric-binding__filters">
-        <label>
-          搜索
-          <input data-testid="metric-catalog-search" :value="keyword" type="search" placeholder="名称、编码或分类" :disabled="disabled" @input="keyword = $event.target.value" />
-        </label>
-        <label>
-          维度
-          <select data-testid="metric-catalog-dim" :value="baseDim" :disabled="disabled || namedGroup" @change="baseDim = $event.target.value">
-            <option value="">全部维度</option>
-            <option value="ORG">机构</option>
-            <option value="EMP">员工</option>
-            <option value="CUST">客户</option>
-          </select>
-        </label>
-        <label>
-          分类
-          <select data-testid="metric-catalog-category" :value="category" :disabled="disabled" @change="category = $event.target.value">
-            <option value="">全部分类</option>
-            <option v-for="item in categories" :key="item" :value="item">{{ item }}</option>
-          </select>
-        </label>
+        <el-form-item label="搜索">
+          <el-input data-testid="metric-catalog-search" v-model="keyword" clearable placeholder="名称、编码或分类" :disabled="disabled" />
+        </el-form-item>
+        <el-form-item label="维度">
+          <el-select data-testid="metric-catalog-dim" v-model="baseDim" :disabled="disabled || namedGroup" placeholder="全部维度">
+            <el-option label="全部维度" value="" />
+            <el-option label="机构" value="ORG" />
+            <el-option label="员工" value="EMP" />
+            <el-option label="客户" value="CUST" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="分类">
+          <el-select data-testid="metric-catalog-category" v-model="category" :disabled="disabled" placeholder="全部分类">
+            <el-option label="全部分类" value="" />
+            <el-option v-for="item in categories" :key="item" :label="item" :value="item" />
+          </el-select>
+        </el-form-item>
       </div>
-      <p class="metric-binding__hint" data-testid="metric-catalog-count">可绑定 {{ filtered.length }} 项，目录 {{ catalogItems.length }} 项。{{ namedGroup ? '当前屏使用命名机构组，只能选择机构指标。' : '未使用命名机构组时，聚合结果按全辖口径校验权限。' }}</p>
-      <p v-for="note in suggestionNotes" :key="note" class="metric-binding__hint" data-testid="metric-catalog-note">{{ note }}</p>
+      <p class="hint" data-testid="metric-catalog-count">可绑定 {{ filtered.length }} 项，目录 {{ catalogItems.length }} 项。{{ namedGroup ? '当前屏使用命名机构组，只能选择机构指标。' : '未使用命名机构组时，聚合结果按全辖口径校验权限。' }}</p>
+      <p v-for="note in suggestionNotes" :key="note" class="hint" data-testid="metric-catalog-note">{{ note }}</p>
 
       <div v-for="field in metricFields" :key="field.semantic" class="metric-binding__assign">
-        <label :for="`metric-catalog-${field.semantic}`">{{ field.label }}<em v-if="field.required">需要配置</em></label>
-        <select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" :disabled="disabled" :value="assignments[field.semantic]?.metricCode || ''" @change="setMetric(field, $event.target.value)">
-          <option value="">请选择指标</option>
-          <option v-for="metric in optionsFor(field)" :key="metric.metricCode" :value="metric.metricCode">
-            {{ metric.metricName }}（{{ metric.metricCode }} · 槽位 {{ metric.valSlot }}{{ metric.unit ? ` · ${unitLabel(metric.unit)}` : ' · 单位待选' }}）
-          </option>
-        </select>
-        <select v-if="field.unitKinds?.length" :data-testid="`metric-catalog-unit-${field.semantic}`" :disabled="disabled" :value="assignments[field.semantic]?.unit || ''" @change="setUnit(field.semantic, $event.target.value)">
-          <option value="">选择单位</option>
-          <option v-for="unit in field.unitKinds" :key="unit" :value="unit">{{ unitLabel(unit) }}</option>
-        </select>
+        <el-form-item :required="Boolean(field.required)">
+          <template #label>
+            <span>{{ field.label }}</span>
+            <em v-if="field.required && !assignments[field.semantic]?.metricCode" class="metric-binding__required">需要配置</em>
+          </template>
+          <el-select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" filterable :disabled="disabled" :model-value="assignments[field.semantic]?.metricCode || ''" placeholder="请选择指标" @change="value => setMetric(field, value)">
+            <el-option label="请选择指标" value="" />
+            <el-option v-for="metric in optionsFor(field)" :key="metric.metricCode" :label="metricOptionLabel(metric)" :value="metric.metricCode" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="field.unitKinds?.length" label="单位">
+          <el-select :data-testid="`metric-catalog-unit-${field.semantic}`" :disabled="disabled" :model-value="assignments[field.semantic]?.unit || ''" placeholder="选择单位" @change="value => setUnit(field.semantic, value)">
+            <el-option label="选择单位" value="" />
+            <el-option v-for="unit in field.unitKinds" :key="unit" :label="unitLabel(unit)" :value="unit" />
+          </el-select>
+        </el-form-item>
       </div>
-      <p v-if="filtered.length > optionLimit" class="metric-binding__hint">只展示前 {{ optionLimit }} 条，请继续缩小搜索。</p>
-      <button type="button" data-testid="metric-catalog-suggest" :disabled="disabled || !hasSuggestion" @click="applySuggestions">填入名称建议</button>
+      <p v-if="filtered.length > optionLimit" class="hint">只展示前 {{ optionLimit }} 条，请继续缩小搜索。</p>
+      <el-button data-testid="metric-catalog-suggest" :disabled="disabled || !hasSuggestion" @click="applySuggestions">填入名称建议</el-button>
 
       <div class="metric-binding__agg">
-        <label>
-          聚合维度
-          <select data-testid="metric-catalog-groupby" :value="groupBy" :disabled="disabled" @change="groupBy = $event.target.value">
-            <option value="NONE">汇总为一行</option>
-            <option value="SUBJECT">按主体（排名）</option>
-            <option value="DATE">按日期（趋势）</option>
-          </select>
-        </label>
-        <label>
-          聚合函数
-          <select data-testid="metric-catalog-agg" :value="agg" :disabled="disabled" @change="agg = $event.target.value">
-            <option value="SUM">求和</option>
-            <option value="AVG">平均</option>
-            <option value="MAX">最大</option>
-            <option value="MIN">最小</option>
-            <option value="COUNT">计数</option>
-          </select>
-        </label>
+        <el-form-item label="聚合维度">
+          <el-select data-testid="metric-catalog-groupby" v-model="groupBy" :disabled="disabled">
+            <el-option label="汇总为一行" value="NONE" />
+            <el-option label="按主体（排名）" value="SUBJECT" />
+            <el-option label="按日期（趋势）" value="DATE" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="聚合函数">
+          <el-select data-testid="metric-catalog-agg" v-model="agg" :disabled="disabled">
+            <el-option label="求和" value="SUM" />
+            <el-option label="平均" value="AVG" />
+            <el-option label="最大" value="MAX" />
+            <el-option label="最小" value="MIN" />
+            <el-option label="计数" value="COUNT" />
+          </el-select>
+        </el-form-item>
       </div>
 
       <div class="metric-binding__filters-editor">
         <div class="metric-binding__filters-head">
-          <strong>过滤</strong>
-          <button type="button" data-testid="metric-catalog-add-filter" :disabled="disabled" @click="addFilter">添加条件</button>
+          <span>过滤</span>
+          <el-button data-testid="metric-catalog-add-filter" :disabled="disabled" @click="addFilter">添加条件</el-button>
         </div>
         <div v-for="(filter, index) in filters" :key="index" class="metric-binding__filter-row">
-          <select :data-testid="`metric-catalog-filter-target-${index}`" :value="filter.target" :disabled="disabled" @change="filter.target = $event.target.value">
-            <option value="metric">指标值</option>
-            <option value="subject">主体编码</option>
-            <option value="data_date">数据日期</option>
-          </select>
-          <select v-if="filter.target === 'metric'" :value="filter.metricCode" :disabled="disabled" @change="filter.metricCode = $event.target.value">
-            <option value="">选择已选指标</option>
-            <option v-for="metric in selectedMetrics" :key="metric.metricCode" :value="metric.metricCode">{{ metric.metricName }}</option>
-          </select>
-          <select :value="filter.op" :disabled="disabled" @change="filter.op = $event.target.value">
-            <option value="EQ">等于</option>
-            <option value="NE">不等于</option>
-            <option value="GT">大于</option>
-            <option value="GE">大于等于</option>
-            <option value="LT">小于</option>
-            <option value="LE">小于等于</option>
-          </select>
-          <input :value="filter.value" placeholder="过滤值" :disabled="disabled" @input="filter.value = $event.target.value" />
-          <button type="button" :disabled="disabled" @click="filters.splice(index, 1)">移除</button>
+          <el-select :data-testid="`metric-catalog-filter-target-${index}`" v-model="filter.target" :disabled="disabled">
+            <el-option label="指标值" value="metric" />
+            <el-option label="主体编码" value="subject" />
+            <el-option label="数据日期" value="data_date" />
+          </el-select>
+          <el-select v-if="filter.target === 'metric'" v-model="filter.metricCode" :disabled="disabled" placeholder="选择已选指标">
+            <el-option label="选择已选指标" value="" />
+            <el-option v-for="metric in selectedMetrics" :key="metric.metricCode" :label="metric.metricName" :value="metric.metricCode" />
+          </el-select>
+          <el-select v-model="filter.op" :disabled="disabled">
+            <el-option label="等于" value="EQ" />
+            <el-option label="不等于" value="NE" />
+            <el-option label="大于" value="GT" />
+            <el-option label="大于等于" value="GE" />
+            <el-option label="小于" value="LT" />
+            <el-option label="小于等于" value="LE" />
+          </el-select>
+          <el-input v-model="filter.value" placeholder="过滤值" :disabled="disabled" />
+          <el-button link type="danger" :disabled="disabled" @click="filters.splice(index, 1)">移除</el-button>
         </div>
-        <p class="metric-binding__hint">指标值过滤会写成对应的 val_槽位，不会把指标名称拼进 SQL。</p>
+        <p class="hint">指标值过滤会写成对应的 val_槽位，不会把指标名称拼进 SQL。</p>
       </div>
 
-      <label class="metric-binding__reason">
-        原因
-        <input data-testid="metric-catalog-reason" :value="reason" :disabled="disabled" @input="reason = $event.target.value" />
-      </label>
-      <p v-for="item in plan.warnings" :key="item" class="metric-binding__hint" data-testid="metric-catalog-warning">{{ item }}</p>
-      <p v-for="item in plan.errors" :key="item" class="metric-binding__alert">{{ item }}</p>
+      <el-form-item label="原因">
+        <el-input data-testid="metric-catalog-reason" v-model="reason" :disabled="disabled" />
+      </el-form-item>
+      <el-alert v-for="item in plan.warnings" :key="item" class="metric-binding__status" data-testid="metric-catalog-warning" type="warning" :closable="false" show-icon :title="item" />
+      <el-alert v-for="item in plan.errors" :key="item" class="metric-binding__status" type="error" :closable="false" show-icon :title="item" />
 
       <div class="metric-binding__actions">
-        <button type="button" data-testid="metric-catalog-preview" :disabled="disabled || !plan.ok || previewing" @click="preview">预览 10 行</button>
-        <button type="button" data-testid="metric-catalog-apply" :disabled="disabled || !plan.ok" @click="$emit('apply', plan)">
+        <el-button data-testid="metric-catalog-preview" :disabled="disabled || !plan.ok || previewing" :loading="previewing" @click="preview">预览 10 行</el-button>
+        <el-button data-testid="metric-catalog-apply" type="primary" :disabled="disabled || !plan.ok" @click="$emit('apply', plan)">
           {{ plan.existingDatasourceId ? '绑定到已有数据源' : '创建数据源并绑定' }}
-        </button>
+        </el-button>
       </div>
-      <p v-if="previewError" class="metric-binding__alert" role="alert">{{ previewError }}</p>
+      <el-alert v-if="previewError" class="metric-binding__status" type="error" :closable="false" show-icon :title="previewError" />
       <div v-if="previewRows.length" class="metric-binding__preview" data-testid="metric-catalog-preview-table">
-        <table>
-          <thead>
-            <tr><th v-for="column in previewColumns" :key="column">{{ column }}</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="(row, index) in previewRows" :key="index">
-              <td v-for="(cell, cellIndex) in row" :key="cellIndex">{{ cell ?? '' }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <el-table :data="previewTableRows" size="default" stripe border max-height="220">
+          <el-table-column v-for="(column, index) in previewColumns" :key="`${column}-${index}`" :prop="`c${index}`" :label="column || `列${index + 1}`" min-width="120" show-overflow-tooltip />
+        </el-table>
       </div>
-      <p v-else-if="previewEmpty" class="metric-binding__hint">试跑成功，但没有返回行。请核对数据日期、机构组和槽位是否有数。</p>
-    </template>
+      <p v-else-if="previewEmpty" class="hint">试跑成功，但没有返回行。请核对数据日期、机构组和槽位是否有数。</p>
+    </el-form>
   </section>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { ElAlert, ElButton, ElForm, ElFormItem, ElInput, ElOption, ElSelect, ElTable, ElTableColumn } from 'element-plus';
 import { listScreenMetricCatalog, tryRunScreenDatasource } from '@/api/screen';
 import { buildDatasourceTryRunRequest } from '@/utils/dsConfig';
 import { bindingShape, buildMetricBindingPlan, filterCatalog, suggestAssignments } from './screenMetricBinding';
@@ -209,6 +204,11 @@ const plan = computed(() => buildMetricBindingPlan({
 }));
 const previewColumns = computed(() => previewResult.value?.columns || []);
 const previewRows = computed(() => previewResult.value?.rows || []);
+const previewTableRows = computed(() => previewRows.value.map(row => {
+  const record = {};
+  previewColumns.value.forEach((_, index) => { record[`c${index}`] = row?.[index] ?? ''; });
+  return record;
+}));
 
 watch(() => [props.slotKey, props.compositionMode], () => {
   const next = bindingShape(props.slotKey, props.compositionMode);
@@ -233,6 +233,12 @@ function optionsFor(field) {
     if (current) rows.unshift(current);
   }
   return rows;
+}
+
+function metricOptionLabel(metric) {
+  const table = metric.tableName || '结果表待定';
+  const unit = metric.unit ? unitLabel(metric.unit) : '单位待选';
+  return `${metric.metricName}（${metric.metricCode} · ${table} · 槽位 ${metric.valSlot} · ${unit}）`;
 }
 
 function setMetric(field, metricCode) {
@@ -323,23 +329,28 @@ function unitLabel(unit) {
 </script>
 
 <style scoped>
-.metric-binding { margin-top: 16px; padding: 12px; border: 1px solid var(--color-border, #d9e2f2); border-radius: 6px; background: var(--color-surface-subtle, #f7f9fc); }
-.metric-binding__head, .metric-binding__filters, .metric-binding__agg, .metric-binding__actions, .metric-binding__filter-row, .metric-binding__assign { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.metric-binding__head { justify-content: space-between; align-items: flex-start; }
-.metric-binding h3 { margin: 0 0 4px; font-size: 14px; }
-.metric-binding p, .metric-binding__hint { margin: 6px 0; color: var(--color-text-muted, #667085); font-size: 12px; line-height: 18px; }
-.metric-binding__alert { margin: 6px 0; color: var(--color-danger-700, #b42318); font-size: 12px; }
-.metric-binding label { display: flex; flex-direction: column; gap: 4px; min-width: 0; color: var(--color-text-strong, #303133); font-size: 12px; font-weight: 600; }
-.metric-binding input, .metric-binding select, .metric-binding button { min-height: 32px; box-sizing: border-box; }
-.metric-binding input, .metric-binding select { min-width: 0; padding: 0 8px; border: 1px solid var(--color-border-strong, #c0c4cc); border-radius: 4px; background: #fff; color: inherit; font-weight: 400; }
-.metric-binding__assign select { flex: 1; }
-.metric-binding__reason input, .metric-binding__filters input[type="search"] { width: 100%; }
-.metric-binding__reason { display: block; margin-top: 8px; }
-.metric-binding button { padding: 0 10px; border: 1px solid var(--color-border-strong, #c0c4cc); border-radius: 4px; background: #fff; cursor: pointer; }
-.metric-binding button:disabled { cursor: not-allowed; opacity: .6; }
-.metric-binding__actions { margin-top: 8px; }
-.metric-binding__preview { overflow: auto; max-height: 220px; margin-top: 8px; background: #fff; }
-.metric-binding table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.metric-binding th, .metric-binding td { padding: 4px 6px; border-bottom: 1px solid var(--color-border, #ebeef5); text-align: left; white-space: nowrap; }
-.metric-binding em { margin-left: 4px; color: var(--color-danger-700, #b42318); font-style: normal; font-weight: 400; }
+.metric-binding { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--color-border, #ebeef5); }
+.metric-binding__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+.metric-binding__head h3 { margin: 0; color: var(--color-text-strong, #303133); font-size: 14px; font-weight: 600; }
+.metric-binding__head p, .metric-binding .hint { margin: 4px 0 0; color: var(--el-text-color-secondary, #909399); font-size: 12px; line-height: 18px; }
+.metric-binding__filters, .metric-binding__agg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; }
+.metric-binding__agg { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
+.metric-binding__assign { display: grid; grid-template-columns: minmax(0, 1fr) 168px; column-gap: 12px; align-items: start; }
+.metric-binding :deep(.el-form-item) { margin-bottom: 12px; }
+.metric-binding :deep(.el-form-item__label) { margin-bottom: 6px; color: var(--color-text-strong, #303133); font-size: 13px; font-weight: 600; line-height: 20px; }
+.metric-binding :deep(.el-select), .metric-binding :deep(.el-input) { width: 100%; }
+.metric-binding__required { margin-left: 6px; color: var(--el-color-danger, #f56c6c); font-size: 12px; font-style: normal; font-weight: 400; }
+.metric-binding__filters-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 8px; color: var(--color-text-strong, #303133); font-size: 13px; font-weight: 600; }
+.metric-binding__filter-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.metric-binding__filter-row :deep(.el-select) { width: 160px; }
+.metric-binding__filter-row :deep(.el-input) { width: 180px; }
+.metric-binding__actions { display: flex; gap: 8px; margin-top: 4px; }
+.metric-binding__status { margin-top: 8px; }
+.metric-binding__preview { margin-top: 8px; }
+.metric-binding :deep(.el-alert) { margin-top: 8px; }
+.metric-binding :deep(.el-alert__title) { font-size: 13px; line-height: 20px; }
+@media (max-width: 760px) {
+  .metric-binding__filters, .metric-binding__agg, .metric-binding__assign { grid-template-columns: 1fr; }
+  .metric-binding__filter-row :deep(.el-select), .metric-binding__filter-row :deep(.el-input) { width: 100%; }
+}
 </style>

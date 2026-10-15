@@ -64,6 +64,9 @@ const { datasourcePickerStub } = vi.hoisted(() => ({
   }
 }));
 vi.mock('../PanoramaDatasourcePicker.vue', () => ({ default: datasourcePickerStub }));
+vi.mock('../MetricBindingComposer.vue', () => ({
+  default: { name: 'MetricBindingComposer', template: '<section data-testid="metric-catalog-binder" />' }
+}));
 
 import PanoramaBindings from '../PanoramaBindings.vue';
 import PanoramaRuntime from '../PanoramaRuntime.vue';
