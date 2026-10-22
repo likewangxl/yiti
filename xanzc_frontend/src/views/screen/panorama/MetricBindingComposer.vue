@@ -3,7 +3,7 @@
     <header class="metric-binding__head">
       <div>
         <h3>从指标库绑定</h3>
-        <p>指标来自绩效指标定义。选中后按结果表生成或复用宽表数据源：机构 ORG_INDEX_RESULT、员工 EMP_INDEX_RESULT、客户 CUST_INDEX_RESULT。查询列名是指标名称，不是槽位号。单位识别不了时需要手工选择。</p>
+        <p>选择需要展示的指标；单位无法识别时，请手动选择。</p>
       </div>
       <el-button data-testid="metric-catalog-reload" :disabled="disabled || loadingCatalog" @click="loadCatalog">刷新目录</el-button>
     </header>
@@ -37,7 +37,7 @@
       <p class="hint" data-testid="metric-catalog-count">可绑定 {{ filtered.length }} 项，目录 {{ catalogItems.length }} 项。{{ namedGroup ? '当前屏使用命名机构组，只能选择机构指标。' : '未使用命名机构组时，聚合结果按全辖口径校验权限。' }}</p>
       <p v-for="note in suggestionNotes" :key="note" class="hint" data-testid="metric-catalog-note">{{ note }}</p>
 
-      <div v-for="field in metricFields" :key="field.semantic" class="metric-binding__assign">
+      <div v-for="field in primaryMetricFields" :key="field.semantic" class="metric-binding__assign">
         <el-form-item :required="Boolean(field.required)">
           <template #label>
             <span>{{ field.label }}</span>
@@ -85,57 +85,81 @@
         </div>
       </section>
 
-      <div v-if="!comparisonsOnly" class="metric-binding__agg">
-        <el-form-item label="聚合维度">
-          <el-select data-testid="metric-catalog-groupby" v-model="groupBy" :disabled="disabled">
-            <el-option label="汇总为一行" value="NONE" />
-            <el-option label="按主体（排名）" value="SUBJECT" />
-            <el-option label="按日期（趋势）" value="DATE" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="聚合函数">
-          <el-select data-testid="metric-catalog-agg" v-model="agg" :disabled="disabled">
-            <el-option label="求和" value="SUM" />
-            <el-option label="平均" value="AVG" />
-            <el-option label="最大" value="MAX" />
-            <el-option label="最小" value="MIN" />
-            <el-option label="计数" value="COUNT" />
-          </el-select>
-        </el-form-item>
-      </div>
-
-      <div v-if="!comparisonsOnly" class="metric-binding__filters-editor">
-        <div class="metric-binding__filters-head">
-          <span>过滤</span>
-          <el-button data-testid="metric-catalog-add-filter" :disabled="disabled" @click="addFilter">添加条件</el-button>
+      <details v-if="!comparisonsOnly" class="metric-binding__advanced" data-testid="metric-catalog-advanced">
+        <summary>高级取数设置</summary>
+        <p class="hint">默认按组件和指标口径取数，仅在需要特殊汇总或筛选时调整。</p>
+        <p class="hint">机构、员工、客户指标分别读取 ORG_INDEX_RESULT、EMP_INDEX_RESULT、CUST_INDEX_RESULT。输出列使用指标名称。</p>
+        <div v-for="field in legacyMetricFields" :key="field.semantic" class="metric-binding__assign">
+          <el-form-item :required="Boolean(field.required)">
+            <template #label>
+              <span>{{ field.label }}</span>
+              <em v-if="field.required && !assignments[field.semantic]?.metricCode" class="metric-binding__required">需要配置</em>
+            </template>
+            <el-select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" filterable :disabled="disabled" :model-value="assignments[field.semantic]?.metricCode || ''" placeholder="请选择指标" @change="value => setMetric(field, value)">
+              <el-option label="请选择指标" value="" />
+              <el-option v-for="metric in optionsFor(field)" :key="metric.metricCode" :label="metricOptionLabel(metric)" :value="metric.metricCode" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="field.unitKinds?.length" label="单位">
+            <el-select :data-testid="`metric-catalog-unit-${field.semantic}`" :disabled="disabled" :model-value="assignments[field.semantic]?.unit || ''" placeholder="选择单位" @change="value => setUnit(field.semantic, value)">
+              <el-option label="选择单位" value="" />
+              <el-option v-for="unit in field.unitKinds" :key="unit" :label="unitLabel(unit)" :value="unit" />
+            </el-select>
+          </el-form-item>
         </div>
-        <div v-for="(filter, index) in filters" :key="index" class="metric-binding__filter-row">
-          <el-select :data-testid="`metric-catalog-filter-target-${index}`" v-model="filter.target" :disabled="disabled">
-            <el-option label="指标值" value="metric" />
-            <el-option label="主体编码" value="subject" />
-            <el-option label="数据日期" value="data_date" />
-          </el-select>
-          <el-select v-if="filter.target === 'metric'" v-model="filter.metricCode" :disabled="disabled" placeholder="选择已选指标">
-            <el-option label="选择已选指标" value="" />
-            <el-option v-for="metric in selectedMetrics" :key="metric.metricCode" :label="metric.metricName" :value="metric.metricCode" />
-          </el-select>
-          <el-select v-model="filter.op" :disabled="disabled">
-            <el-option label="等于" value="EQ" />
-            <el-option label="不等于" value="NE" />
-            <el-option label="大于" value="GT" />
-            <el-option label="大于等于" value="GE" />
-            <el-option label="小于" value="LT" />
-            <el-option label="小于等于" value="LE" />
-          </el-select>
-          <el-input v-model="filter.value" placeholder="过滤值" :disabled="disabled" />
-          <el-button link type="danger" :disabled="disabled" @click="filters.splice(index, 1)">移除</el-button>
+        <div class="metric-binding__agg">
+          <el-form-item label="聚合维度">
+            <el-select data-testid="metric-catalog-groupby" v-model="groupBy" :disabled="disabled">
+              <el-option label="汇总为一行" value="NONE" />
+              <el-option label="按主体（排名）" value="SUBJECT" />
+              <el-option label="按日期（趋势）" value="DATE" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="聚合函数">
+            <el-select data-testid="metric-catalog-agg" v-model="agg" :disabled="disabled" placeholder="按指标口径自动选择">
+              <el-option label="按指标口径自动选择" value="" />
+              <el-option label="求和" value="SUM" />
+              <el-option label="平均" value="AVG" />
+              <el-option label="最大" value="MAX" />
+              <el-option label="最小" value="MIN" />
+              <el-option label="计数" value="COUNT" />
+            </el-select>
+          </el-form-item>
         </div>
-        <p class="hint">指标值过滤会写成对应的 val_槽位，不会把指标名称拼进 SQL。</p>
-      </div>
 
-      <el-form-item v-if="!comparisonsOnly" label="原因">
-        <el-input data-testid="metric-catalog-reason" v-model="reason" :disabled="disabled" />
-      </el-form-item>
+        <div class="metric-binding__filters-editor">
+          <div class="metric-binding__filters-head">
+            <span>过滤</span>
+            <el-button data-testid="metric-catalog-add-filter" :disabled="disabled" @click="addFilter">添加条件</el-button>
+          </div>
+          <div v-for="(filter, index) in filters" :key="index" class="metric-binding__filter-row">
+            <el-select :data-testid="`metric-catalog-filter-target-${index}`" v-model="filter.target" :disabled="disabled">
+              <el-option label="指标值" value="metric" />
+              <el-option label="主体编码" value="subject" />
+              <el-option label="数据日期" value="data_date" />
+            </el-select>
+            <el-select v-if="filter.target === 'metric'" v-model="filter.metricCode" :disabled="disabled" placeholder="选择已选指标">
+              <el-option label="选择已选指标" value="" />
+              <el-option v-for="metric in selectedMetrics" :key="metric.metricCode" :label="metric.metricName" :value="metric.metricCode" />
+            </el-select>
+            <el-select v-model="filter.op" :disabled="disabled">
+              <el-option label="等于" value="EQ" />
+              <el-option label="不等于" value="NE" />
+              <el-option label="大于" value="GT" />
+              <el-option label="大于等于" value="GE" />
+              <el-option label="小于" value="LT" />
+              <el-option label="小于等于" value="LE" />
+            </el-select>
+            <el-input v-model="filter.value" placeholder="过滤值" :disabled="disabled" />
+            <el-button link type="danger" :disabled="disabled" @click="filters.splice(index, 1)">移除</el-button>
+          </div>
+          <p class="hint">指标值过滤会写成对应的 val_槽位，不会把指标名称拼进 SQL。</p>
+        </div>
+
+        <el-form-item label="原因">
+          <el-input data-testid="metric-catalog-reason" v-model="reason" :disabled="disabled" />
+        </el-form-item>
+      </details>
       <el-alert v-for="item in plan.warnings" :key="item" class="metric-binding__status" data-testid="metric-catalog-warning" type="warning" :closable="false" show-icon :title="item" />
       <el-alert v-for="item in plan.errors" :key="item" class="metric-binding__status" type="error" :closable="false" show-icon :title="item" />
 
@@ -191,7 +215,7 @@ const baseDim = ref('ORG');
 const category = ref('');
 const assignments = ref({});
 const groupBy = ref('NONE');
-const agg = ref('SUM');
+const agg = ref('');
 const filters = ref([]);
 const reason = ref('从指标库绑定到当前组件');
 const periodModes = ref({ day: 'UNSET', month: 'UNSET', year: 'UNSET' });
@@ -215,7 +239,11 @@ const filtered = computed(() => filterCatalog(catalogItems.value, {
   category: category.value,
   bindableOnly: true
 }));
-const metricFields = computed(() => props.comparisonsOnly ? [] : (props.fieldSpecs || []).filter(field => field?.kind !== 'dimension'));
+// 已有变化绑定仍由父级保留；期间比较组件只提供含明确基期的比较入口。
+const metricFields = computed(() => props.comparisonsOnly ? [] : (props.fieldSpecs || []).filter(field =>
+  field?.kind !== 'dimension' && !(props.showPeriodComparisons && field.semantic === 'change')));
+const primaryMetricFields = computed(() => metricFields.value.filter(field => field.semantic !== 'change'));
+const legacyMetricFields = computed(() => metricFields.value.filter(field => field.semantic === 'change'));
 const suggestion = computed(() => suggestAssignments({
   template: props.templateName,
   slot: props.slotKey,
@@ -334,7 +362,7 @@ function setPeriodUnit(key, unit) {
 
 watch(() => [props.slotKey, props.compositionMode, props.periodComparisons], () => {
   const next = bindingShape(props.slotKey, props.compositionMode);
-  agg.value = 'SUM';
+  agg.value = '';
   assignments.value = {};
   filters.value = [];
   suggestionNotes.value = [];
@@ -429,6 +457,9 @@ function unitLabel(unit) {
 .metric-binding__head h3 { margin: 0; color: var(--color-text-strong, #303133); font-size: 14px; font-weight: 600; }
 .metric-binding__head p, .metric-binding .hint { margin: 4px 0 0; color: var(--el-text-color-secondary, #909399); font-size: 12px; line-height: 18px; }
 .metric-binding__filters, .metric-binding__agg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; }
+.metric-binding__advanced { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--color-border, #ebeef5); border-radius: 4px; }
+.metric-binding__advanced > summary { color: var(--color-text-regular, #606266); font-size: 13px; cursor: pointer; }
+.metric-binding__advanced[open] > summary { margin-bottom: 8px; }
 .metric-binding__agg { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
 .metric-binding__assign { display: grid; grid-template-columns: minmax(0, 1fr) 168px; column-gap: 12px; align-items: start; }
 .metric-binding__periods { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--color-border, #ebeef5); }

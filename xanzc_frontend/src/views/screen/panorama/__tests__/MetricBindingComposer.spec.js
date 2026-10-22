@@ -35,6 +35,52 @@ function mountComposer(props = {}) {
 }
 
 describe('MetricBindingComposer', () => {
+  it('期间比较组件不再显示通用变化值，技术取数配置默认收起', () => {
+    const wrapper = mountComposer({ showPeriodComparisons: true });
+    expect(wrapper.find('[data-testid="metric-catalog-assign-change"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="metric-period-comparisons"]').text()).toContain('较上月');
+    const advanced = wrapper.get('[data-testid="metric-catalog-advanced"]');
+    expect(advanced.attributes('open')).toBeUndefined();
+    expect(advanced.get('summary').text()).toBe('高级取数设置');
+    expect(advanced.find('[data-testid="metric-catalog-groupby"]').exists()).toBe(true);
+    expect(advanced.find('[data-testid="metric-catalog-add-filter"]').exists()).toBe(true);
+    expect(advanced.find('[data-testid="metric-catalog-reason"]').exists()).toBe(true);
+  });
+
+  it('收起高级设置仍按比例口径生成平均值，不把隐藏的求和默认值用于完成率', async () => {
+    const wrapper = mountComposer({
+      fieldSpecs: [{ ...valueField, unitKinds: ['PERCENT', 'RATIO'] }],
+      catalog: [{ ...catalog[0], unit: 'PERCENT', summaryRule: 'AVG' }]
+    });
+    wrapper.get('[data-testid="metric-catalog-assign-value"]').findComponent({ name: 'ElSelect' }).vm.$emit('change', 'M_0265');
+    await wrapper.vm.$nextTick();
+    await wrapper.get('[data-testid="metric-catalog-apply"]').trigger('click');
+    const plan = wrapper.emitted('apply').at(-1)[0];
+    expect(plan.ok).toBe(true);
+    expect(JSON.parse(plan.datasourceRequest.configJson).aggregation).toEqual({ groupBy: 'NONE', agg: 'AVG' });
+  });
+
+  it('高级设置展开调整后再收起，聚合、过滤与旧版变化配置仍参与绑定', async () => {
+    const wrapper = mountComposer();
+    const advanced = wrapper.get('[data-testid="metric-catalog-advanced"]');
+    advanced.element.open = true;
+    await wrapper.get('[data-testid="metric-catalog-suggest"]').trigger('click');
+    const change = wrapper.get('[data-testid="metric-catalog-assign-change"]').findComponent({ name: 'ElSelect' });
+    change.vm.$emit('change', 'M_0266');
+    wrapper.get('[data-testid="metric-catalog-unit-change"]').findComponent({ name: 'ElSelect' }).vm.$emit('change', 'PERCENT');
+    wrapper.get('[data-testid="metric-catalog-agg"]').findComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', 'MAX');
+    await wrapper.get('[data-testid="metric-catalog-add-filter"]').trigger('click');
+    await wrapper.get('input[placeholder="过滤值"]').setValue('100');
+    advanced.element.open = false;
+    await wrapper.get('[data-testid="metric-catalog-apply"]').trigger('click');
+    const plan = wrapper.emitted('apply').at(-1)[0];
+    expect(plan.ok).toBe(true);
+    expect(plan.binding.fields.change).toBe(catalog[1].outputColumn);
+    const config = JSON.parse(plan.datasourceRequest.configJson);
+    expect(config.aggregation.agg).toBe('MAX');
+    expect(config.aggregation.filters).toEqual([{ col: 'val_12', op: 'GT', value: '100' }]);
+  });
+
   it('名称建议只填入月均余额，并生成可提交的绑定计划', async () => {
     const wrapper = mountComposer();
 
