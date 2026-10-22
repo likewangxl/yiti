@@ -231,12 +231,15 @@ export function buildMetricBindingPlan(input = {}) {
         }))
     ]
   };
+  const inheritedBatchPolicy = compatibleInheritedBatchPolicy(input.boundDatasource, { table, scopeMode });
+  if (inheritedBatchPolicy) config.batchPolicy = inheritedBatchPolicy;
   const configJson = JSON.stringify(config);
   const dsType = groupBy === 'DATE' ? 'TIMESERIES' : 'SINGLE';
   const period = PERIODS.includes(input.period) ? input.period : shape.period;
   const existing = findExisting(input.datasources, {
     table, scopeMode, bizLine, groupBy, agg, filters,
-    codes: metricItems.map(item => item.metric.metricCode)
+    codes: metricItems.map(item => item.metric.metricCode),
+    batchPolicy: inheritedBatchPolicy
   });
   const periodComparisons = storedPeriodComparisons(input.periodComparisons, periodSelected);
   return {
@@ -325,6 +328,7 @@ function findExisting(datasources, expected) {
     const config = parseConfig(source.configJson ?? source.config_json);
     if (!config) continue;
     if (config.table !== expected.table || upper(config.scopeMode) !== expected.scopeMode) continue;
+    if (!sameBatchPolicy(config.batchPolicy, expected.batchPolicy)) continue;
     const codes = (config.metrics || []).map(item => item?.metricCode).filter(Boolean).sort();
     const wanted = [...expected.codes].sort();
     if (codes.length !== wanted.length || codes.some((code, index) => code !== wanted[index])) continue;
@@ -334,6 +338,47 @@ function findExisting(datasources, expected) {
     return source;
   }
   return null;
+}
+
+/**
+ * Only an active, already-bound named-group ORG wide-table source may carry
+ * its immutable-batch policy into a replacement source.  The policy remains
+ * server-authoritative; this helper only preserves a validated shape.
+ */
+function compatibleInheritedBatchPolicy(source, target = {}) {
+  if (upper(source?.status) !== 'ACTIVE') return undefined;
+  if (upper(source?.sourceKind || source?.source_kind) !== 'WIDE_TABLE') return undefined;
+  if (target.table !== 'ORG_INDEX_RESULT' || target.scopeMode !== 'NAMED_GROUP') return undefined;
+  const config = parseConfig(source.configJson ?? source.config_json);
+  if (!config || config.table !== 'ORG_INDEX_RESULT' || upper(config.scopeMode) !== 'NAMED_GROUP') return undefined;
+  const policy = normalizeBatchPolicy(config.batchPolicy);
+  return policy?.present && policy.valid ? policy.value : undefined;
+}
+
+function normalizeBatchPolicy(value) {
+  if (value === undefined || value === null) return { present: false, valid: true, value: null };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { present: true, valid: false, value: null };
+  const allowed = new Set(['maxAgeDays', 'requiredComplete']);
+  if (Object.keys(value).some(key => !allowed.has(key))) return { present: true, valid: false, value: null };
+  const normalized = {};
+  if (Object.prototype.hasOwnProperty.call(value, 'maxAgeDays')) {
+    if (!Number.isSafeInteger(value.maxAgeDays) || value.maxAgeDays < 0) return { present: true, valid: false, value: null };
+    normalized.maxAgeDays = value.maxAgeDays;
+  }
+  if (Object.prototype.hasOwnProperty.call(value, 'requiredComplete')) {
+    if (typeof value.requiredComplete !== 'boolean') return { present: true, valid: false, value: null };
+    normalized.requiredComplete = value.requiredComplete;
+  }
+  return { present: true, valid: true, value: normalized };
+}
+
+function sameBatchPolicy(left, right) {
+  const a = normalizeBatchPolicy(left);
+  const b = normalizeBatchPolicy(right);
+  if (!a.valid || !b.valid || a.present !== b.present) return false;
+  if (!a.present) return true;
+  return a.value.maxAgeDays === b.value.maxAgeDays
+    && (a.value.requiredComplete ?? true) === (b.value.requiredComplete ?? true);
 }
 
 function parseConfig(value) {

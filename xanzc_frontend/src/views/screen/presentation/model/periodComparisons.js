@@ -83,6 +83,21 @@ function rowDate(row) {
   return text(row?.data_date || row?.dataDate || row?.date);
 }
 
+/**
+ * RANGE may repeat the current date or contain multiple rows for a malformed
+ * source.  Keep the complete LATEST rows authoritative and retain duplicate
+ * historical rows so resolvePeriodComparisons can fail closed on ambiguity.
+ */
+function mergeCurrentAndRangeRows(currentRows, rangeRows, currentDate = '') {
+  const current = (Array.isArray(currentRows) ? currentRows : []).filter(isObject);
+  const currentDates = new Set(current.map(rowDate).filter(Boolean));
+  if (currentDate) currentDates.add(text(currentDate));
+  const historical = (Array.isArray(rangeRows) ? rangeRows : [])
+    .filter(isObject)
+    .filter(row => !currentDates.has(rowDate(row)));
+  return [...historical, ...current];
+}
+
 function toYuan(value, unit) {
   if (!AMOUNT_UNITS.includes(unit)) return null;
   const number = finite(value);
@@ -148,7 +163,7 @@ function needsRange(config) {
  * overview-deposit / overview-loan 使用同名槽位区块；指标卡使用 dataRefs.blockId。
  * 结算性存款没有独立区块，扫描全部已加载行。OFFSET 需要这些区块的 RANGE 结果。
  */
-export function indexPeriodComparisonSources({ configs, slots = {}, components = [], blockResults = {}, rangeResults = {} } = {}) {
+export function indexPeriodComparisonSources({ configs, slots = {}, components = [], blockResults = {}, rangeResults = {}, dataDate = '' } = {}) {
   const rangeBlockIds = [];
   const sources = {};
   const componentBlock = new Map((Array.isArray(components) ? components : []).map(component => [
@@ -166,11 +181,19 @@ export function indexPeriodComparisonSources({ configs, slots = {}, components =
       rangeBlockIds.push(...targets);
     }
     if (blockId) {
-      const bucket = ranged ? (rangeResults[String(blockId)] || blockResults[String(blockId)]) : blockResults[String(blockId)];
-      sources[key] = Array.isArray(bucket?.rows) ? bucket.rows : [];
+      const currentRows = Array.isArray(blockResults[String(blockId)]?.rows) ? blockResults[String(blockId)].rows : [];
+      const rangeRows = Array.isArray(rangeResults[String(blockId)]?.rows) ? rangeResults[String(blockId)].rows : [];
+      sources[key] = ranged
+        ? mergeCurrentAndRangeRows(currentRows, rangeRows, dataDate)
+        : currentRows;
     } else {
-      const pools = ranged && Object.keys(rangeResults).length ? rangeResults : blockResults;
-      sources[key] = Object.values(pools || {}).flatMap(item => Array.isArray(item?.rows) ? item.rows : []);
+      const currentRows = Object.values(blockResults || {})
+        .flatMap(item => Array.isArray(item?.rows) ? item.rows : []);
+      const rangeRows = Object.values(rangeResults || {})
+        .flatMap(item => Array.isArray(item?.rows) ? item.rows : []);
+      sources[key] = ranged
+        ? mergeCurrentAndRangeRows(currentRows, rangeRows, dataDate)
+        : currentRows;
     }
   }
   return { sources, rangeBlockIds: [...new Set(rangeBlockIds)] };

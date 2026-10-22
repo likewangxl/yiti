@@ -165,4 +165,56 @@ describe('MetricBindingComposer', () => {
     expect(alert.text()).toContain('资源未登记');
     expect(wrapper.get('[data-testid="metric-catalog-count"]').text()).toContain('目录 0 项');
   });
+
+  it('父级保存期间比较配置回显变化时保留主指标选择并允许再次提交', async () => {
+    const wrapper = mountComposer({
+      showPeriodComparisons: true,
+      periodComparisons: { day: { mode: 'UNSET' }, month: { mode: 'UNSET' }, year: { mode: 'UNSET' } }
+    });
+    const select = wrapper.get('[data-testid="metric-catalog-assign-value"]').findComponent({ name: 'ElSelect' });
+    select.vm.$emit('change', 'M_0265');
+    await wrapper.vm.$nextTick();
+    expect(select.props('modelValue')).toBe('M_0265');
+
+    await wrapper.setProps({
+      periodComparisons: {
+        day: { mode: 'UNSET' },
+        month: { mode: 'METRIC', metricCode: 'M_0266', unit: 'YUAN' },
+        year: { mode: 'UNSET' }
+      }
+    });
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.get('[data-testid="metric-catalog-assign-value"]').findComponent({ name: 'ElSelect' })
+      .props('modelValue')).toBe('M_0265');
+    await wrapper.get('[data-testid="metric-catalog-apply"]').trigger('click');
+    expect(wrapper.emitted('apply').at(-1)[0].binding.fields.value).toBe('一般性存款月均余额-机构');
+  });
+
+  it('从当前已绑定来源的列和指标编码恢复主指标，不从名称猜测', async () => {
+    const wrapper = mountComposer({
+      boundBinding: {
+        dsId: 9032,
+        fields: { value: '一般性存款月均余额-机构' },
+        units: { value: 'YUAN' }
+      },
+      boundDatasource: {
+        id: 9032,
+        configJson: JSON.stringify({
+          table: 'ORG_INDEX_RESULT',
+          metrics: [{ metricCode: 'M_0265', metricName: '一般性存款月均余额-机构', slot: 12 }],
+          aggregation: { groupBy: 'DATE', agg: 'SUM', filters: [{ col: 'val_12', op: 'GT', value: '0' }] },
+          fieldMeta: [{ col: '一般性存款月均余额-机构', alias: '一般性存款月均余额-机构', role: 'METRIC', unit: 'YUAN' }]
+        })
+      }
+    });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.get('[data-testid="metric-catalog-assign-value"]').findComponent({ name: 'ElSelect' })
+      .props('modelValue')).toBe('M_0265');
+    await wrapper.get('[data-testid="metric-catalog-apply"]').trigger('click');
+    const plan = wrapper.emitted('apply').at(-1)[0];
+    expect(JSON.parse(plan.datasourceRequest.configJson).aggregation).toEqual({
+      groupBy: 'DATE', agg: 'SUM', filters: [{ col: 'val_12', op: 'GT', value: '0' }]
+    });
+  });
 });

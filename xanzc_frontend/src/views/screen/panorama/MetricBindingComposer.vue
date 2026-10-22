@@ -210,6 +210,8 @@ const props = defineProps({
   compositionMode: { type: String, default: 'rows' },
   screen: { type: Object, default: () => ({}) },
   datasources: { type: Array, default: () => [] },
+  boundBinding: { type: Object, default: null },
+  boundDatasource: { type: Object, default: null },
   disabled: { type: Boolean, default: false },
   catalog: { type: Array, default: null },
   showPeriodComparisons: { type: Boolean, default: false },
@@ -243,6 +245,11 @@ const previewing = ref(false);
 const previewError = ref('');
 const previewResult = ref(null);
 const previewEmpty = ref(false);
+const restoredBoundKey = ref('');
+
+function text(value) {
+  return value === null || value === undefined ? '' : String(value).trim();
+}
 
 const namedGroup = computed(() => String(props.screen?.orgScopeMode || '').toUpperCase() === 'NAMED_GROUP');
 const shape = computed(() => bindingShape(props.slotKey, props.compositionMode));
@@ -282,6 +289,7 @@ const plan = computed(() => buildMetricBindingPlan({
   filters: filters.value,
   reason: reason.value,
   datasources: props.datasources,
+  boundDatasource: props.boundDatasource,
   comparisonsOnly: props.comparisonsOnly,
   periodComparisons: props.showPeriodComparisons ? periodPayload() : undefined
 }));
@@ -384,7 +392,87 @@ function setPeriodUnit(key, unit) {
   };
 }
 
-watch(() => [props.slotKey, props.compositionMode, props.periodComparisons], () => {
+function parseDatasourceConfig(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value || '');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+const boundStateKey = computed(() => JSON.stringify({
+  datasourceId: props.boundDatasource?.id ?? null,
+  datasourceConfig: props.boundDatasource?.configJson ?? props.boundDatasource?.config_json ?? '',
+  fields: props.boundBinding?.fields || {},
+  units: props.boundBinding?.units || {}
+}));
+
+function restoreBoundAssignments() {
+  if (props.comparisonsOnly || !props.boundBinding || !props.boundDatasource || !catalogItems.value.length) return;
+  if (restoredBoundKey.value === boundStateKey.value) return;
+  const config = parseDatasourceConfig(props.boundDatasource.configJson ?? props.boundDatasource.config_json);
+  restoreBoundAggregation(config);
+  const metrics = Array.isArray(config.metrics) ? config.metrics : [];
+  if (!metrics.length) {
+    restoredBoundKey.value = boundStateKey.value;
+    return;
+  }
+  const metricCodes = new Set(metrics.map(item => text(item?.metricCode)).filter(Boolean));
+  const declaredColumns = new Set((Array.isArray(config.fieldMeta) ? config.fieldMeta : [])
+    .map(item => text(item?.col)).filter(Boolean));
+  const next = { ...assignments.value };
+  let changed = false;
+  for (const field of metricFields.value) {
+    const column = text(props.boundBinding.fields?.[field.semantic]);
+    if (!column || (declaredColumns.size && !declaredColumns.has(column))) continue;
+    const matches = catalogItems.value.filter(item => text(item?.outputColumn) === column
+      && metricCodes.has(text(item?.metricCode)));
+    if (matches.length !== 1) continue;
+    const metric = matches[0];
+    const unit = text(props.boundBinding.units?.[field.semantic]);
+    const restored = { metricCode: metric.metricCode, unit };
+    if (JSON.stringify(next[field.semantic]) !== JSON.stringify(restored)) {
+      next[field.semantic] = restored;
+      changed = true;
+    }
+  }
+  if (changed) assignments.value = next;
+  restoredBoundKey.value = boundStateKey.value;
+}
+
+function restoreBoundAggregation(config) {
+  const aggregation = config?.aggregation;
+  if (!aggregation || typeof aggregation !== 'object' || Array.isArray(aggregation)) return;
+  if (['NONE', 'SUBJECT', 'DATE'].includes(String(aggregation.groupBy || '').toUpperCase())) {
+    groupBy.value = String(aggregation.groupBy).toUpperCase();
+  }
+  if (['SUM', 'AVG', 'MAX', 'MIN', 'COUNT'].includes(String(aggregation.agg || '').toUpperCase())) {
+    agg.value = String(aggregation.agg).toUpperCase();
+  }
+  const metrics = Array.isArray(config?.metrics) ? config.metrics : [];
+  const subjectColumn = text(config?.subjectCol || config?.subject_column
+    || (config?.table === 'ORG_INDEX_RESULT' ? 'org_code' : ''));
+  filters.value = (Array.isArray(aggregation.filters) ? aggregation.filters : []).map(item => {
+    const col = text(item?.col);
+    const base = { op: item?.op || 'EQ', value: item?.value ?? '' };
+    if (col === 'data_date') return { ...base, target: 'data_date' };
+    if (col && col === subjectColumn) return { ...base, target: 'subject' };
+    const matches = metrics.filter(metric => {
+      const metricCode = text(metric?.metricCode);
+      if (!metricCode) return false;
+      const catalogMetric = catalogItems.value.find(item => text(item?.metricCode) === metricCode);
+      const slot = metric?.slot ?? catalogMetric?.valSlot;
+      return `val_${slot}` === col;
+    });
+    return matches.length === 1
+      ? { ...base, target: 'metric', metricCode: text(matches[0].metricCode) }
+      : { ...base, target: 'metric', metricCode: '' };
+  });
+}
+
+watch(() => [props.slotKey, props.compositionMode, boundStateKey.value], () => {
   const next = bindingShape(props.slotKey, props.compositionMode);
   agg.value = '';
   resetMetricSearch();
@@ -394,9 +482,17 @@ watch(() => [props.slotKey, props.compositionMode, props.periodComparisons], () 
   previewResult.value = null;
   previewEmpty.value = false;
   previewError.value = '';
-  restorePeriodComparisons(props.periodComparisons);
   groupBy.value = Object.values(periodModes.value).includes('OFFSET') ? 'DATE' : (next.groupBy || 'NONE');
+  restoreBoundAssignments();
 }, { immediate: true });
+
+watch(() => props.periodComparisons, value => {
+  restorePeriodComparisons(value);
+  groupBy.value = Object.values(periodModes.value).includes('OFFSET')
+    ? 'DATE' : (groupBy.value || bindingShape(props.slotKey, props.compositionMode).groupBy || 'NONE');
+}, { immediate: true });
+
+watch(catalogItems, () => restoreBoundAssignments());
 
 watch(periodModes, modes => {
   if (Object.values(modes).includes('OFFSET') && groupBy.value === 'NONE') groupBy.value = 'DATE';

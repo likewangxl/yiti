@@ -118,4 +118,62 @@ describe('期间比较配置', () => {
     expect(indexed.sources['overview-deposit']).toEqual([{ data_date: '2026-10-15', 差额: 3 }]);
     expect(indexed.sources['overview-settlementDeposit']).toEqual([{ data_date: '2026-10-15', 差额: 3 }]);
   });
+
+  it('混合 METRIC 与 OFFSET 时保留 LATEST 当前字段，历史行只用于回推', () => {
+    const config = {
+      day: { mode: 'OFFSET', metricCode: 'M_0277', outputColumn: '余额', unit: 'YUAN', tableName: 'ORG_INDEX_RESULT' },
+      month: { mode: 'METRIC', metricCode: 'M_0298', outputColumn: '增量', unit: 'YUAN', tableName: 'ORG_INDEX_RESULT' },
+      year: { mode: 'OFFSET', metricCode: 'M_0277', outputColumn: '余额', unit: 'YUAN', tableName: 'ORG_INDEX_RESULT' }
+    };
+    const indexed = indexPeriodComparisonSources({
+      configs: { 'overview-deposit': config },
+      slots: { deposit: 41 },
+      blockResults: {
+        41: { rows: [{ data_date: '2026-09-21', 余额: 2262952430, 增量: 30889300.71 }] }
+      },
+      rangeResults: {
+        41: { rows: [
+          { data_date: '2026-09-21', 余额: 2262952430, 增量: 111 },
+          { data_date: '2026-09-20', 余额: 2261481510.93, 增量: 0 },
+          { data_date: '2026-08-31', 余额: 2232063129.29, 增量: 0 }
+        ] }
+      },
+      dataDate: '2026-09-21'
+    });
+
+    const resolved = resolvePeriodComparisons({
+      config,
+      dataDate: '2026-09-21',
+      currentYuan: 2262952430,
+      rows: indexed.sources['overview-deposit']
+    });
+    expect(resolved.comparisons.day.state).toBe('READY');
+    expect(resolved.comparisons.day.baseValue).toBeCloseTo(1470919.07, 5);
+    expect(resolved.comparisons.day.referenceDate).toBe('2026-09-20');
+    expect(resolved.comparisons.month).toMatchObject({ state: 'READY', baseValue: 30889300.71, referenceDate: '2026-08-31' });
+    expect(resolved.comparisons.year).toMatchObject({ state: 'NO_VALUE', baseValue: null });
+  });
+
+  it('历史或当前出现重复日期时不覆盖多行，不把歧义静默合并成可用值', () => {
+    const config = {
+      day: { mode: 'OFFSET', metricCode: 'M_0277', outputColumn: '余额', unit: 'YUAN', tableName: 'ORG_INDEX_RESULT' }
+    };
+    const indexed = indexPeriodComparisonSources({
+      configs: { 'overview-deposit': config },
+      slots: { deposit: 41 },
+      blockResults: { 41: { rows: [{ data_date: '2026-09-21', 余额: 100 }] } },
+      rangeResults: { 41: { rows: [
+        { data_date: '2026-09-20', 余额: 90 },
+        { data_date: '2026-09-20', 余额: 80 }
+      ] } },
+      dataDate: '2026-09-21'
+    });
+    const resolved = resolvePeriodComparisons({
+      config,
+      dataDate: '2026-09-21',
+      currentYuan: 100,
+      rows: indexed.sources['overview-deposit']
+    });
+    expect(resolved.comparisons.day).toMatchObject({ state: 'NO_VALUE', baseValue: null });
+  });
 });

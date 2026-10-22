@@ -102,6 +102,8 @@
               :composition-mode="compositionMode"
               :screen="screenScope"
               :datasources="datasources"
+              :bound-binding="selectedBinding"
+              :bound-datasource="selectedDatasource"
               :disabled="writing || loading"
               :show-period-comparisons="periodComparisonConfigurable"
               :comparisons-only="selectedCatalogReadonly && periodComparisonConfigurable"
