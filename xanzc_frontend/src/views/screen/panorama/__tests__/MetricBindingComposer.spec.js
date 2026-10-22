@@ -35,6 +35,31 @@ function mountComposer(props = {}) {
 }
 
 describe('MetricBindingComposer', () => {
+  it('把数值与单位移到首行，右侧保留维度和分类，不再提供独立搜索栏', () => {
+    const wrapper = mountComposer({ showPeriodComparisons: true });
+    expect(wrapper.find('[data-testid="metric-catalog-search"]').exists()).toBe(false);
+    const row = wrapper.get('[data-testid="metric-catalog-selection-row"]');
+    expect(row.findAll('.el-form-item__label').map(label => label.text())).toEqual(['数值需要配置', '单位', '维度', '分类']);
+    expect(wrapper.findAll('[data-testid="metric-catalog-assign-value"]')).toHaveLength(1);
+    expect(row.find('[data-testid="metric-catalog-unit-value"]').exists()).toBe(true);
+  });
+
+  it('独立搜索栏移除后，仍能在指标下拉中按编码查找展示上限之外的指标', async () => {
+    const many = Array.from({ length: 201 }, (_, i) => ({ ...catalog[0], metricCode: `M_${i}`, metricName: `余额${i}`, outputColumn: `余额${i}` }));
+    const wrapper = mountComposer({ catalog: many });
+    const select = wrapper.get('[data-testid="metric-catalog-assign-value"]').findComponent({ name: 'ElSelect' });
+    expect(wrapper.findAllComponents({ name: 'ElOption' }).some(option => option.props('value') === 'M_200')).toBe(false);
+    select.props('filterMethod')('M_200');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.findAllComponents({ name: 'ElOption' }).some(option => option.props('value') === 'M_200')).toBe(true);
+    select.vm.$emit('change', 'M_200');
+    select.vm.$emit('visible-change', false);
+    await wrapper.vm.$nextTick();
+    await wrapper.get('[data-testid="metric-catalog-apply"]').trigger('click');
+    expect(wrapper.emitted('apply').at(-1)[0].binding.fields.value).toBe('余额200');
+    expect(wrapper.get('[data-testid="metric-catalog-count"]').text()).toContain('可绑定 201 项');
+  });
+
   it('期间比较组件不再显示通用变化值，技术取数配置默认收起', () => {
     const wrapper = mountComposer({ showPeriodComparisons: true });
     expect(wrapper.find('[data-testid="metric-catalog-assign-change"]').exists()).toBe(false);

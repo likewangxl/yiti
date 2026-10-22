@@ -15,10 +15,25 @@
     <el-alert v-if="shape.blocked" data-testid="metric-catalog-blocked" type="warning" :closable="false" show-icon :title="shape.reason" />
 
     <el-form v-else label-position="top" size="default" class="metric-binding__form" @submit.prevent>
-      <div class="metric-binding__filters">
-        <el-form-item label="搜索">
-          <el-input data-testid="metric-catalog-search" v-model="keyword" clearable placeholder="名称、编码或分类" :disabled="disabled" />
-        </el-form-item>
+      <div class="metric-binding__selection-row" :class="{ 'metric-binding__selection-row--filters-only': !primaryMetricFields.length }" data-testid="metric-catalog-selection-row">
+        <div v-for="field in primaryMetricFields.slice(0, 1)" :key="field.semantic" class="metric-binding__assign">
+          <el-form-item :required="Boolean(field.required)">
+            <template #label>
+              <span>{{ field.label }}</span>
+              <em v-if="field.required && !assignments[field.semantic]?.metricCode" class="metric-binding__required">需要配置</em>
+            </template>
+            <el-select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" filterable :filter-method="filterMetrics" @visible-change="resetMetricSearch" :disabled="disabled" :model-value="assignments[field.semantic]?.metricCode || ''" placeholder="请选择指标" @change="value => setMetric(field, value)">
+              <el-option label="请选择指标" value="" />
+              <el-option v-for="metric in optionsFor(field)" :key="metric.metricCode" :label="metricOptionLabel(metric)" :value="metric.metricCode" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="field.unitKinds?.length" label="单位">
+            <el-select :data-testid="`metric-catalog-unit-${field.semantic}`" :disabled="disabled" :model-value="assignments[field.semantic]?.unit || ''" placeholder="选择单位" @change="value => setUnit(field.semantic, value)">
+              <el-option label="选择单位" value="" />
+              <el-option v-for="unit in field.unitKinds" :key="unit" :label="unitLabel(unit)" :value="unit" />
+            </el-select>
+          </el-form-item>
+        </div>
         <el-form-item label="维度">
           <el-select data-testid="metric-catalog-dim" v-model="baseDim" :disabled="disabled || namedGroup" placeholder="全部维度">
             <el-option label="全部维度" value="" />
@@ -37,13 +52,13 @@
       <p class="hint" data-testid="metric-catalog-count">可绑定 {{ filtered.length }} 项，目录 {{ catalogItems.length }} 项。{{ namedGroup ? '当前屏使用命名机构组，只能选择机构指标。' : '未使用命名机构组时，聚合结果按全辖口径校验权限。' }}</p>
       <p v-for="note in suggestionNotes" :key="note" class="hint" data-testid="metric-catalog-note">{{ note }}</p>
 
-      <div v-for="field in primaryMetricFields" :key="field.semantic" class="metric-binding__assign">
+      <div v-for="field in primaryMetricFields.slice(1)" :key="field.semantic" class="metric-binding__assign">
         <el-form-item :required="Boolean(field.required)">
           <template #label>
             <span>{{ field.label }}</span>
             <em v-if="field.required && !assignments[field.semantic]?.metricCode" class="metric-binding__required">需要配置</em>
           </template>
-          <el-select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" filterable :disabled="disabled" :model-value="assignments[field.semantic]?.metricCode || ''" placeholder="请选择指标" @change="value => setMetric(field, value)">
+          <el-select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" filterable :filter-method="filterMetrics" @visible-change="resetMetricSearch" :disabled="disabled" :model-value="assignments[field.semantic]?.metricCode || ''" placeholder="请选择指标" @change="value => setMetric(field, value)">
             <el-option label="请选择指标" value="" />
             <el-option v-for="metric in optionsFor(field)" :key="metric.metricCode" :label="metricOptionLabel(metric)" :value="metric.metricCode" />
           </el-select>
@@ -55,7 +70,7 @@
           </el-select>
         </el-form-item>
       </div>
-      <p v-if="filtered.length > optionLimit" class="hint">只展示前 {{ optionLimit }} 条，请继续缩小搜索。</p>
+      <p v-if="filtered.length > optionLimit" class="hint">下拉框默认展示前 {{ optionLimit }} 条，可输入名称或编码搜索更多指标。</p>
       <el-button v-if="!comparisonsOnly" data-testid="metric-catalog-suggest" :disabled="disabled || !hasSuggestion" @click="applySuggestions">填入名称建议</el-button>
 
       <section v-if="showPeriodComparisons" class="metric-binding__periods" data-testid="metric-period-comparisons">
@@ -71,7 +86,7 @@
             </el-select>
           </el-form-item>
           <el-form-item v-if="periodModes[slot.key] !== 'UNSET'" label="指标">
-            <el-select :data-testid="`metric-period-metric-${slot.key}`" filterable :disabled="disabled" :model-value="periodAssignments[slot.key]?.metricCode || ''" placeholder="请选择指标" @change="value => setPeriodMetric(slot.key, value)">
+            <el-select :data-testid="`metric-period-metric-${slot.key}`" filterable :filter-method="filterMetrics" @visible-change="resetMetricSearch" :disabled="disabled" :model-value="periodAssignments[slot.key]?.metricCode || ''" placeholder="请选择指标" @change="value => setPeriodMetric(slot.key, value)">
               <el-option label="请选择指标" value="" />
               <el-option v-for="metric in periodOptions(slot.key)" :key="metric.metricCode" :label="metricOptionLabel(metric)" :value="metric.metricCode" />
             </el-select>
@@ -95,7 +110,7 @@
               <span>{{ field.label }}</span>
               <em v-if="field.required && !assignments[field.semantic]?.metricCode" class="metric-binding__required">需要配置</em>
             </template>
-            <el-select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" filterable :disabled="disabled" :model-value="assignments[field.semantic]?.metricCode || ''" placeholder="请选择指标" @change="value => setMetric(field, value)">
+            <el-select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" filterable :filter-method="filterMetrics" @visible-change="resetMetricSearch" :disabled="disabled" :model-value="assignments[field.semantic]?.metricCode || ''" placeholder="请选择指标" @change="value => setMetric(field, value)">
               <el-option label="请选择指标" value="" />
               <el-option v-for="metric in optionsFor(field)" :key="metric.metricCode" :label="metricOptionLabel(metric)" :value="metric.metricCode" />
             </el-select>
@@ -281,6 +296,15 @@ const previewTableRows = computed(() => previewRows.value.map(row => {
 watch(namedGroup, value => { if (value) baseDim.value = 'ORG'; }, { immediate: true });
 watch(() => props.catalog, value => { if (!Array.isArray(value)) loadCatalog(); }, { immediate: true });
 
+// 搜索并入指标下拉框，先过滤全目录再截取，保证超出展示上限的指标仍可选择。
+function filterMetrics(query) {
+  keyword.value = String(query || '');
+}
+
+function resetMetricSearch() {
+  keyword.value = '';
+}
+
 function optionsFor(field) {
   const selected = assignments.value[field.semantic]?.metricCode;
   const rows = filtered.value.slice(0, optionLimit);
@@ -363,6 +387,7 @@ function setPeriodUnit(key, unit) {
 watch(() => [props.slotKey, props.compositionMode, props.periodComparisons], () => {
   const next = bindingShape(props.slotKey, props.compositionMode);
   agg.value = '';
+  resetMetricSearch();
   assignments.value = {};
   filters.value = [];
   suggestionNotes.value = [];
@@ -452,16 +477,19 @@ function unitLabel(unit) {
 </script>
 
 <style scoped>
-.metric-binding { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--color-border, #ebeef5); }
+.metric-binding { container-type: inline-size; --metric-control-width: 168px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--color-border, #ebeef5); }
 .metric-binding__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
 .metric-binding__head h3 { margin: 0; color: var(--color-text-strong, #303133); font-size: 14px; font-weight: 600; }
 .metric-binding__head p, .metric-binding .hint { margin: 4px 0 0; color: var(--el-text-color-secondary, #909399); font-size: 12px; line-height: 18px; }
-.metric-binding__filters, .metric-binding__agg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; }
+.metric-binding__selection-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, var(--metric-control-width)); column-gap: 12px; align-items: start; }
+.metric-binding__selection-row--filters-only { grid-template-columns: repeat(2, var(--metric-control-width)); }
+.metric-binding__selection-row > *, .metric-binding__assign > * { min-width: 0; }
+.metric-binding__agg { display: grid; column-gap: 12px; }
 .metric-binding__advanced { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--color-border, #ebeef5); border-radius: 4px; }
 .metric-binding__advanced > summary { color: var(--color-text-regular, #606266); font-size: 13px; cursor: pointer; }
 .metric-binding__advanced[open] > summary { margin-bottom: 8px; }
 .metric-binding__agg { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
-.metric-binding__assign { display: grid; grid-template-columns: minmax(0, 1fr) 168px; column-gap: 12px; align-items: start; }
+.metric-binding__assign { display: grid; grid-template-columns: minmax(0, 1fr) var(--metric-control-width); column-gap: 12px; align-items: start; }
 .metric-binding__periods { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--color-border, #ebeef5); }
 .metric-binding__periods h4 { margin: 0; color: var(--color-text-strong, #303133); font-size: 13px; font-weight: 600; }
 .metric-binding__period { display: grid; grid-template-columns: 180px minmax(0, 1fr) 168px; column-gap: 12px; align-items: start; }
@@ -478,8 +506,11 @@ function unitLabel(unit) {
 .metric-binding__preview { margin-top: 8px; }
 .metric-binding :deep(.el-alert) { margin-top: 8px; }
 .metric-binding :deep(.el-alert__title) { font-size: 13px; line-height: 20px; }
+@container (max-width: 740px) {
+  .metric-binding__selection-row { grid-template-columns: 1fr; }
+}
 @media (max-width: 760px) {
-  .metric-binding__filters, .metric-binding__agg, .metric-binding__assign, .metric-binding__period { grid-template-columns: 1fr; }
+  .metric-binding__selection-row, .metric-binding__agg, .metric-binding__assign, .metric-binding__period { grid-template-columns: 1fr; }
   .metric-binding__filter-row :deep(.el-select), .metric-binding__filter-row :deep(.el-input) { width: 100%; }
 }
 </style>
