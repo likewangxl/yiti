@@ -150,6 +150,8 @@ snapshot.ifPresent(dto -> {
 
 - `xanzc_frontend/src/utils/dsConfig.js`：六类数据源保真回填、策略与扩展保留、固定来源白名单及未知配置阻断。
 - `xanzc_frontend/src/views/screen/panorama/screenMetricBinding.js`、`MetricBindingComposer.vue`、`presentation/model/periodComparisons.js`：从绩效指标定义选择指标，按机构/员工/客户结果表生成或复用宽表数据源并绑定组件。较昨日、较上月、较上年写在 `canvasStyle.periodComparisons`，可以绑定结果表增量列，或按基准日回推。
+- `xanzc_frontend/src/views/screen/panorama/visibleMetricBindings.js`：配置化展示按当前可见组件、序列和页签生成绑定字段；已有绑定结合来源与目录唯一匹配回显，不能用共享区块的通用主字段替代各组件字段。克隆宽表时保留其他消费者的指标、单位与查询口径，不安全合并失败关闭。
+- `xanzc_frontend/src/views/screen/presentation/model/periodComparisons.js`、`displayMetricsModel.js`：金额比较归一为元；完成率的 `RATIO`/`PERCENT` 比较归一为百分点，不能混用金额。显式关闭比较优先于目录比较及历史数据回退。
 - `xanzc_frontend/src/views/screen/panorama/controlledSourceFields.js`：受控 M98 字段、单位证据与不兼容来源说明。
 - `xanzc_frontend/src/views/screen/panorama/PanoramaBindings.vue`、`runtimeDataVerification.js`：指标库绑定写入草稿、周期候选和已保存草稿的只读结构/质量核验。
 - `report-analytics-center/src/main/java/com/bank/branch/platform/report/service/screen/ScreenCanvasServiceImpl.java`、同目录 `ScreenDatasourceServiceImpl.java`：新CODE发布包冻结查询定义，宽表权威字段重写并保留合法扩展。

@@ -568,6 +568,8 @@ function summaryCardComparisons(metric, displayUnit) {
 }
 
 function explicitSummaryComparisons(key, metric, displayUnit) {
+  const displayConfig = resolvedPresentation.value?.display?.comparisons?.[key];
+  if (displayConfig?.enabled === false) return { configured: true, comparisons: null };
   const history = explicitHistoryComparisons(key, metric, displayUnit);
   const catalog = catalogSummaryComparisons(key, metric);
   if (!catalog?.active) return history;

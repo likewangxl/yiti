@@ -44,6 +44,7 @@ vi.mock('../PanoramaDataVerification.vue', () => ({ default: { template: '<div /
 vi.mock('../../presentation/editor/PresentationEditor.vue', () => ({ default: { template: '<div />' } }));
 
 import PanoramaBindings from '../PanoramaBindings.vue';
+import MetricBindingComposer from '../MetricBindingComposer.vue';
 import { resolveSourcePresentation } from '../sourcePresentation';
 import { buildInstitutionRankingModel } from '../../presentation/model/institutionRankingModel';
 
@@ -276,6 +277,62 @@ describe('PanoramaBindings simplified designer', () => {
     wrapper.unmount();
   });
 
+  it('共享 slot 的金额卡应用新目录指标时只改当前组件，保留 legacy rate 绑定字段并克隆完整宽表', async () => {
+    prepare(schemaCanvas());
+    api.saveScreenDatasource.mockResolvedValueOnce({ id: 99 });
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(wrapper.find('[data-component-id="card-a"]').exists()).toBe(true));
+    await wrapper.get('[data-component-id="card-a"]').trigger('click');
+    api.listScreenDatasources.mockResolvedValueOnce([{ ...source, id: 99 }]);
+    const binder = wrapper.findComponent(MetricBindingComposer);
+    binder.vm.$emit('apply', {
+      ok: true,
+      binding: { period: 'LATEST', fields: { value: 'sales_raw' }, units: { value: 'TEN_THOUSAND' } },
+      periodComparisons: null,
+      existingDatasourceId: null,
+      datasourceRequest: {
+        sourceKind: 'WIDE_TABLE', dsType: 'SINGLE', bizLine: 'COMMON',
+        configJson: JSON.stringify({ table: 'ORG_INDEX_RESULT', metrics: [{ metricCode: 'M_NEW' }], fieldMeta: [{ col: 'sales_raw', role: 'METRIC', unit: 'TEN_THOUSAND' }] })
+      },
+      previewRow: { configJson: JSON.stringify({ table: 'ORG_INDEX_RESULT', metrics: [{ metricCode: 'M_NEW' }], fieldMeta: [{ col: 'sales_raw', role: 'METRIC', unit: 'TEN_THOUSAND' }] }) }
+    });
+    await vi.waitFor(() => expect(api.saveScreenDatasource).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(wrapper.vm.collectValidBindings().bindings.deposit.dsId).toBe(99));
+    expect(wrapper.vm.collectValidBindings().bindings.deposit.fields.value).toBe('sales_raw');
+    expect(wrapper.vm.collectValidBindings().bindings.deposit.units.value).toBe('YUAN');
+    await wrapper.vm.saveDraft();
+    await vi.waitFor(() => expect(api.saveScreenCanvas).toHaveBeenCalledTimes(1));
+    const saved = api.saveScreenCanvas.mock.lastCall[0].canvasStyle.presentation.display.components;
+    expect(saved.find(item => item.componentId === 'card-a')).toMatchObject({ content: { mainField: 'sales_raw' }, dataRefs: [{ unit: 'TEN_THOUSAND' }] });
+    expect(saved.find(item => item.componentId === 'card-b')).toMatchObject({ content: { mainField: 'sales_raw' } });
+    wrapper.unmount();
+  });
+
+  it('已有数据源编号但来源目录不可读时应用目录计划 fail-close，不创建单列替代来源', async () => {
+    prepare(schemaCanvas());
+    api.listScreenDatasources.mockResolvedValue([]);
+    api.saveScreenDatasource.mockResolvedValueOnce({ id: 99 });
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(wrapper.find('[data-component-id="card-a"]').exists()).toBe(true));
+    await wrapper.get('[data-component-id="card-a"]').trigger('click');
+    const binder = wrapper.findComponent(MetricBindingComposer);
+    binder.vm.$emit('apply', {
+      ok: true,
+      binding: { period: 'LATEST', fields: { value: 'sales_raw' }, units: { value: 'TEN_THOUSAND' } },
+      periodComparisons: null,
+      existingDatasourceId: null,
+      datasourceRequest: {
+        sourceKind: 'WIDE_TABLE', dsType: 'SINGLE', bizLine: 'COMMON',
+        configJson: JSON.stringify({ table: 'ORG_INDEX_RESULT', metrics: [{ metricCode: 'M_NEW' }], fieldMeta: [{ col: 'sales_raw', role: 'METRIC', unit: 'TEN_THOUSAND' }] })
+      },
+      previewRow: { configJson: JSON.stringify({ table: 'ORG_INDEX_RESULT', metrics: [{ metricCode: 'M_NEW' }] }) }
+    });
+    await vi.waitFor(() => expect(wrapper.find('.panorama-bindings__error').exists()).toBe(true));
+    expect(wrapper.get('.panorama-bindings__error').text()).toContain('不可读');
+    expect(api.saveScreenDatasource).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
   it('保存冲突时保留当前标题和绑定编辑态', async () => {
     prepare(legacyCanvas());
     api.saveScreenCanvas.mockRejectedValue(Object.assign(new Error('版本冲突'), { code: 'RPT-43012' }));
@@ -323,6 +380,25 @@ describe('PanoramaBindings simplified designer', () => {
     wrapper.unmount();
   });
 
+  it('贷款分布连续修改对公/零售时按 tabKey 定位，不串改存款页签并保留展示单位', async () => {
+    const canvas = legacyProvinceCompositionCanvas();
+    const style = JSON.parse(canvas.canvasStyleJson);
+    style.presentation.display.components[0].content.tabs[0].unit = 'HUNDRED_MILLION';
+    canvas.canvasStyleJson = JSON.stringify(style);
+    prepare(canvas);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(wrapper.find('[data-config-key="overview-loan-composition"]').exists()).toBe(true));
+    await wrapper.get('[data-config-key="overview-loan-composition"]').trigger('click');
+    await wrapper.get('[data-testid="component-tab-field-loan-corporateField"]').setValue('测试_直营对公贷款');
+    await wrapper.get('[data-testid="component-tab-field-loan-retailField"]').setValue('测试_直营零售贷款');
+    await wrapper.vm.saveDraft();
+    await vi.waitFor(() => expect(api.saveScreenCanvas).toHaveBeenCalledTimes(1));
+    const tabs = api.saveScreenCanvas.mock.lastCall[0].canvasStyle.presentation.display.components[0].content.tabs;
+    expect(tabs.find(tab => tab.tabKey === 'deposit')).toMatchObject({ corporateField: '测试_直营对公存款', retailField: '测试_直营零售存款' });
+    expect(tabs.find(tab => tab.tabKey === 'loan')).toMatchObject({ corporateField: '测试_直营对公贷款', retailField: '测试_直营零售贷款', unit: 'HUNDRED_MILLION' });
+    wrapper.unmount();
+  });
+
   it('增长曲线配置展示四个稳定 semantic 字段，新增单项写入对应 seriesKey 并保留旧 series', async () => {
     prepare(schemaGrowthCanvas());
     const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
@@ -336,14 +412,46 @@ describe('PanoramaBindings simplified designer', () => {
     expect(wrapper.find('.panorama-bindings__error').text()).toContain('单位');
     expect(api.saveScreenCanvas).not.toHaveBeenCalled();
     await wrapper.get('[data-testid="component-series-unit-retailDeposit"]').setValue('YUAN');
+    await wrapper.get('[data-testid="component-series-field-retailLoan"]').setValue('测试_直营零售贷款');
+    await wrapper.get('[data-testid="component-series-unit-retailLoan"]').setValue('YUAN');
+    await wrapper.get('[data-testid="component-series-field-corpDeposit"]').setValue('测试_直营对公存款');
+    await wrapper.get('[data-testid="component-series-unit-corpDeposit"]').setValue('YUAN');
+    await wrapper.get('[data-testid="component-series-field-corpLoan"]').setValue('测试_直营对公贷款');
+    await wrapper.get('[data-testid="component-series-unit-corpLoan"]').setValue('YUAN');
     await wrapper.get('[data-testid="binding-save"]').trigger('click');
     await vi.waitFor(() => expect(api.saveScreenCanvas).toHaveBeenCalledTimes(1));
     const savedSeries = api.saveScreenCanvas.mock.lastCall[0].canvasStyle.presentation.display.components[0].content.series;
     expect(savedSeries).toEqual(expect.arrayContaining([
       expect.objectContaining({ seriesKey: 'deposit', field: '总存款' }),
-      expect.objectContaining({ seriesKey: 'retailDeposit', field: '测试_直营零售存款' })
+      expect.objectContaining({ seriesKey: 'retailDeposit', field: '测试_直营零售存款' }),
+      expect.objectContaining({ seriesKey: 'retailLoan', field: '测试_直营零售贷款' }),
+      expect.objectContaining({ seriesKey: 'corpDeposit', field: '测试_直营对公存款' }),
+      expect.objectContaining({ seriesKey: 'corpLoan', field: '测试_直营对公贷款' })
     ]));
     wrapper.unmount();
+  });
+
+  it('schema1 指导只说明当前增长四序列和已有卡片字段，不误报旧模板隐藏字段', async () => {
+    prepare(schemaGrowthCanvas());
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(wrapper.find('[data-config-key="business-growth"]').exists()).toBe(true));
+    await wrapper.get('[data-config-key="business-growth"]').trigger('click');
+    const growthGuidance = wrapper.get('[data-testid="binding-guidance"]').text();
+    expect(growthGuidance).toContain('零售存款');
+    expect(growthGuidance).toContain('零售贷款');
+    expect(growthGuidance).toContain('对公存款');
+    expect(growthGuidance).toContain('对公贷款');
+    expect(growthGuidance).not.toContain('存款较上月净增');
+    expect(growthGuidance).not.toContain('客户数');
+    expect(growthGuidance).not.toContain('完成率');
+
+    prepare(schemaCanvas());
+    wrapper.unmount();
+    const cardWrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(cardWrapper.find('[data-component-id="card-a"]').exists()).toBe(true));
+    await cardWrapper.get('[data-component-id="card-a"]').trigger('click');
+    expect(cardWrapper.get('[data-testid="binding-guidance"]').text()).not.toContain('数值需要配置');
+    cardWrapper.unmount();
   });
 
   it('机构排名只编辑 runtime 归一化字段，切换指标不写原 SQL 列名且保留其他指标', async () => {
@@ -368,6 +476,43 @@ describe('PanoramaBindings simplified designer', () => {
       rankingMetrics: metrics
     });
     expect(ranking.rankable[0].value).toBe(7);
+    wrapper.unmount();
+  });
+
+  it('排名目录应用更新原始 binding 字段，content 继续保存 normalized key 并能被排名模型消费', async () => {
+    prepare(schemaRankingCanvas());
+    api.saveScreenDatasource.mockResolvedValueOnce({ id: 99 });
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(wrapper.find('[data-config-key="institution-ranking"]').exists()).toBe(true));
+    await wrapper.get('[data-config-key="institution-ranking"]').trigger('click');
+    api.listScreenDatasources.mockResolvedValueOnce([{ ...source, id: 99, configJson: JSON.stringify({
+      table: 'ORG_INDEX_RESULT', fieldMeta: [
+        { col: 'rank_new', role: 'METRIC', unit: 'YUAN' }, { col: 'increase_new', role: 'METRIC', unit: 'YUAN' },
+        { col: 'average_new', role: 'METRIC', unit: 'YUAN' }, { col: 'org_code', role: 'DIM' }, { col: 'org_name', role: 'DIM' }
+      ]
+    }) }]);
+    const binder = wrapper.findComponent(MetricBindingComposer);
+    binder.vm.$emit('apply', {
+      ok: true,
+      binding: { period: 'LATEST', fields: { orgCode: 'org_code', name: 'org_name', value: 'rank_new', increase: 'increase_new', average: 'average_new' }, units: { value: 'YUAN', increase: 'YUAN', average: 'YUAN' } },
+      periodComparisons: null,
+      existingDatasourceId: null,
+      datasourceRequest: { sourceKind: 'WIDE_TABLE', dsType: 'SINGLE', bizLine: 'COMMON',
+        configJson: JSON.stringify({ table: 'ORG_INDEX_RESULT', metrics: [{ metricCode: 'M_NEW_RANK' }], fieldMeta: [
+          { col: 'rank_new', role: 'METRIC', unit: 'YUAN' }, { col: 'increase_new', role: 'METRIC', unit: 'YUAN' }, { col: 'average_new', role: 'METRIC', unit: 'YUAN' }
+        ] }) },
+      previewRow: { configJson: JSON.stringify({ table: 'ORG_INDEX_RESULT', metrics: [{ metricCode: 'M_NEW_RANK' }], fieldMeta: [] }) }
+    });
+    await vi.waitFor(() => expect(wrapper.vm.collectValidBindings().bindings.ranking.dsId).toBe(99));
+    await wrapper.vm.saveDraft();
+    await vi.waitFor(() => expect(api.saveScreenCanvas).toHaveBeenCalledTimes(1));
+    const payload = api.saveScreenCanvas.mock.lastCall[0];
+    const ranking = payload.canvasStyle.presentation.display.components.find(item => item.componentId === 'legacy-ranking-58');
+    expect(ranking.content.rankingMetrics.map(item => item.field)).toEqual(['deposit', 'increase', 'average']);
+    const savedBinding = JSON.parse(payload.components.find(item => item.propValue?.bindingKey === 'ranking').bindJson);
+    expect(savedBinding.fields).toMatchObject({ value: 'rank_new', increase: 'increase_new', average: 'average_new', orgCode: 'org_code', name: 'org_name' });
+    const model = buildInstitutionRankingModel({ institutions: [{ orgCode: 'A', orgName: '机构A', active: true, authorized: true }], rows: [{ orgCode: 'A', deposit: 100, increase: 7, average: 20 }], rankingMetrics: ranking.content.rankingMetrics });
+    expect(model.rankable[0].value).toBe(100);
     wrapper.unmount();
   });
 
@@ -398,6 +543,63 @@ describe('PanoramaBindings simplified designer', () => {
     expect(api.saveScreenCanvas.mock.lastCall[0].canvasStyle.presentation.display.comparisons['card-a']).toEqual({
       enabled: true, historyBlockId: 57, valueFields: ['deposit_raw'], dateField: 'data_date', sourceUnit: 'YUAN'
     });
+    wrapper.unmount();
+  });
+
+  it('比较关闭只写 enabled=false，重载仍保持关闭且不会被目录配置覆盖', async () => {
+    const canvas = schemaCanvas();
+    const style = JSON.parse(canvas.canvasStyleJson);
+    style.periodComparisons = { 'card-a': { month: { mode: 'METRIC', metricCode: 'M_A', unit: 'YUAN' } } };
+    prepare({ ...canvas, canvasStyleJson: JSON.stringify(style) });
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(wrapper.find('[data-component-id="card-a"]').exists()).toBe(true));
+    await wrapper.get('[data-component-id="card-a"]').trigger('click');
+    expect(wrapper.get('[data-testid="comparison-mode"]').element.value).toBe('catalog');
+    await wrapper.get('[data-testid="comparison-mode"]').setValue('disabled');
+    await wrapper.vm.saveDraft();
+    await vi.waitFor(() => expect(api.saveScreenCanvas).toHaveBeenCalledTimes(1));
+    const saved = api.saveScreenCanvas.mock.lastCall[0].canvasStyle;
+    expect(saved.presentation.display.comparisons['card-a']).toEqual({ enabled: false });
+    wrapper.unmount();
+
+    prepare({ ...canvas, canvasStyleJson: JSON.stringify({ ...style, presentation: {
+      ...style.presentation,
+      display: { ...style.presentation.display, comparisons: { 'card-a': { enabled: false } } }
+    } }) });
+    const reloaded = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(reloaded.find('[data-component-id="card-a"]').exists()).toBe(true));
+    await reloaded.get('[data-component-id="card-a"]').trigger('click');
+    expect(reloaded.get('[data-testid="comparison-mode"]').element.value).toBe('disabled');
+    reloaded.unmount();
+  });
+
+  it('普通比较入口首次切换目录会建立可编辑 period 配置，沿用会清空目录覆盖', async () => {
+    prepare(schemaCanvas());
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(wrapper.find('[data-component-id="card-a"]').exists()).toBe(true));
+    await wrapper.get('[data-component-id="card-a"]').trigger('click');
+    expect(wrapper.get('[data-testid="comparison-mode"]').element.value).toBe('inherit');
+    await wrapper.get('[data-testid="comparison-mode"]').setValue('catalog');
+    expect(wrapper.get('[data-testid="comparison-mode"]').element.value).toBe('catalog');
+    expect(wrapper.vm.canvasStyle.periodComparisons['card-a'].month.mode).toBe('UNSET');
+    await wrapper.get('[data-testid="comparison-mode"]').setValue('inherit');
+    expect(wrapper.get('[data-testid="comparison-mode"]').element.value).toBe('inherit');
+    expect(wrapper.vm.canvasStyle.periodComparisons['card-a'].month.mode).toBe('UNSET');
+    wrapper.unmount();
+  });
+
+  it('目录父请求失败时保留子表单错误并允许刷新恢复，不把失败伪装成静默空目录', async () => {
+    prepare(schemaCanvas());
+    api.listScreenMetricCatalog.mockRejectedValueOnce(new Error('CATALOG-403'));
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(wrapper.get('[data-testid="metric-catalog-error"]').exists()).toBe(true));
+    api.listScreenMetricCatalog.mockResolvedValueOnce([{
+      metricCode: 'M_RECOVER', metricName: '恢复字段', baseDim: 'ORG', valSlot: 1, unit: 'YUAN',
+      tableName: 'ORG_INDEX_RESULT', outputColumn: '恢复字段', bindable: true
+    }]);
+    await wrapper.get('[data-testid="metric-catalog-reload"]').trigger('click');
+    await vi.waitFor(() => expect(wrapper.get('[data-testid="metric-catalog-count"]').text()).toContain('目录 1 项'));
+    expect(wrapper.find('[data-testid="metric-catalog-error"]').exists()).toBe(false);
     wrapper.unmount();
   });
 

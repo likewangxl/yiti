@@ -3,7 +3,7 @@
     <header class="metric-binding__head">
       <div>
         <h3>从指标库绑定</h3>
-        <p>选择需要展示的指标；单位无法识别时，请手动选择。</p>
+        <p>选择本组件需要展示的业务指标，并核对单位。已有绑定会自动回显；单位无法识别时，请按指标实际口径选择。</p>
       </div>
       <el-button data-testid="metric-catalog-reload" :disabled="disabled || loadingCatalog" @click="loadCatalog">刷新目录</el-button>
     </header>
@@ -20,18 +20,20 @@
           <el-form-item :required="Boolean(field.required)">
             <template #label>
               <span>{{ field.label }}</span>
-              <em v-if="field.required && !assignments[field.semantic]?.metricCode" class="metric-binding__required">需要配置</em>
+              <em v-if="field.required && !assignments[field.semantic]?.metricCode && !existingFields[field.semantic]" class="metric-binding__required">需要配置</em>
             </template>
-            <el-select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" filterable :filter-method="filterMetrics" @visible-change="resetMetricSearch" :disabled="disabled" :model-value="assignments[field.semantic]?.metricCode || ''" placeholder="请选择指标" @change="value => setMetric(field, value)">
-              <el-option label="请选择指标" value="" />
+            <el-select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" filterable :filter-method="filterMetrics" @visible-change="resetMetricSearch" :disabled="disabled" :model-value="assignments[field.semantic]?.metricCode || ''" :placeholder="metricPlaceholder(field)" @change="value => setMetric(field, value)">
+              <el-option :label="metricEmptyLabel(field)" value="" />
               <el-option v-for="metric in optionsFor(field)" :key="metric.metricCode" :label="metricOptionLabel(metric)" :value="metric.metricCode" />
             </el-select>
+            <p v-if="existingFieldFor(field) && !assignments[field.semantic]?.metricCode" class="metric-binding__current" :data-testid="`metric-catalog-existing-${field.semantic}`">当前已有字段：{{ existingFieldFor(field) }}，选择目录指标后替换。</p>
           </el-form-item>
           <el-form-item v-if="field.unitKinds?.length" label="单位">
-            <el-select :data-testid="`metric-catalog-unit-${field.semantic}`" :disabled="disabled" :model-value="assignments[field.semantic]?.unit || ''" placeholder="选择单位" @change="value => setUnit(field.semantic, value)">
-              <el-option label="选择单位" value="" />
+            <el-select :data-testid="`metric-catalog-unit-${field.semantic}`" :disabled="disabled" :model-value="assignments[field.semantic]?.unit || ''" :placeholder="unitPlaceholder(field)" @change="value => setUnit(field.semantic, value)">
+              <el-option :label="unitEmptyLabel(field)" value="" />
               <el-option v-for="unit in field.unitKinds" :key="unit" :label="unitLabel(unit)" :value="unit" />
             </el-select>
+            <p v-if="existingUnitFor(field) && !assignments[field.semantic]?.metricCode" class="metric-binding__current" :data-testid="`metric-catalog-existing-unit-${field.semantic}`">当前已有单位：{{ existingUnitLabel(field) }}。</p>
           </el-form-item>
         </div>
         <el-form-item label="维度">
@@ -56,30 +58,33 @@
         <el-form-item :required="Boolean(field.required)">
           <template #label>
             <span>{{ field.label }}</span>
-            <em v-if="field.required && !assignments[field.semantic]?.metricCode" class="metric-binding__required">需要配置</em>
+            <em v-if="field.required && !assignments[field.semantic]?.metricCode && !existingFields[field.semantic]" class="metric-binding__required">需要配置</em>
           </template>
-          <el-select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" filterable :filter-method="filterMetrics" @visible-change="resetMetricSearch" :disabled="disabled" :model-value="assignments[field.semantic]?.metricCode || ''" placeholder="请选择指标" @change="value => setMetric(field, value)">
-            <el-option label="请选择指标" value="" />
+          <el-select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" filterable :filter-method="filterMetrics" @visible-change="resetMetricSearch" :disabled="disabled" :model-value="assignments[field.semantic]?.metricCode || ''" :placeholder="metricPlaceholder(field)" @change="value => setMetric(field, value)">
+            <el-option :label="metricEmptyLabel(field)" value="" />
             <el-option v-for="metric in optionsFor(field)" :key="metric.metricCode" :label="metricOptionLabel(metric)" :value="metric.metricCode" />
           </el-select>
+          <p v-if="existingFieldFor(field) && !assignments[field.semantic]?.metricCode" class="metric-binding__current" :data-testid="`metric-catalog-existing-${field.semantic}`">当前已有字段：{{ existingFieldFor(field) }}，选择目录指标后替换。</p>
         </el-form-item>
         <el-form-item v-if="field.unitKinds?.length" label="单位">
-          <el-select :data-testid="`metric-catalog-unit-${field.semantic}`" :disabled="disabled" :model-value="assignments[field.semantic]?.unit || ''" placeholder="选择单位" @change="value => setUnit(field.semantic, value)">
-            <el-option label="选择单位" value="" />
+          <el-select :data-testid="`metric-catalog-unit-${field.semantic}`" :disabled="disabled" :model-value="assignments[field.semantic]?.unit || ''" :placeholder="unitPlaceholder(field)" @change="value => setUnit(field.semantic, value)">
+            <el-option :label="unitEmptyLabel(field)" value="" />
             <el-option v-for="unit in field.unitKinds" :key="unit" :label="unitLabel(unit)" :value="unit" />
           </el-select>
+          <p v-if="existingUnitFor(field) && !assignments[field.semantic]?.metricCode" class="metric-binding__current" :data-testid="`metric-catalog-existing-unit-${field.semantic}`">当前已有单位：{{ existingUnitLabel(field) }}。</p>
         </el-form-item>
       </div>
+      <p v-for="note in existingFieldNotes" :key="note" class="hint" data-testid="metric-catalog-existing-field">{{ note }}</p>
       <p v-if="filtered.length > optionLimit" class="hint">下拉框默认展示前 {{ optionLimit }} 条，可输入名称或编码搜索更多指标。</p>
       <el-button v-if="!comparisonsOnly" data-testid="metric-catalog-suggest" :disabled="disabled || !hasSuggestion" @click="applySuggestions">填入名称建议</el-button>
 
       <section v-if="showPeriodComparisons" class="metric-binding__periods" data-testid="metric-period-comparisons">
         <h4>期间比较</h4>
-        <p class="hint">较昨日、较上月、较上年可以绑定结果表里已经算好的增量，或用该指标在基准日的余额回推。未配置、没有对应日期或单位不是金额时，预览保持待接入。绑定增量时，来源行的数据日必须是大屏数据日。按基准日回推会把聚合改为按日期。</p>
+        <p class="hint">较昨日、较上月、较上年按当前主指标量纲绑定增量或按基准日回推；金额使用金额单位，完成率使用百分数（如90）/比例（如0.9），差值按百分点显示。未配置或缺少对应日期时保持待接入。</p>
         <p v-if="comparisonsOnly" class="hint">结算性存款没有独立查询。比较指标会并入本屏已绑定的同一结果表来源；没有可用来源时预览保持待接入。</p>
         <div v-for="slot in periodSlots" :key="slot.key" class="metric-binding__period">
           <el-form-item :label="slot.label">
-            <el-select :data-testid="`metric-period-mode-${slot.key}`" :disabled="disabled" v-model="periodModes[slot.key]">
+            <el-select :data-testid="`metric-period-mode-${slot.key}`" :disabled="disabled" :model-value="periodModes[slot.key]" @update:modelValue="value => setPeriodMode(slot.key, value)">
               <el-option label="不配置" value="UNSET" />
               <el-option label="绑定增量指标" value="METRIC" />
               <el-option label="按基准日回推" value="OFFSET" />
@@ -94,7 +99,7 @@
           <el-form-item v-if="periodModes[slot.key] !== 'UNSET'" label="单位">
             <el-select :data-testid="`metric-period-unit-${slot.key}`" :disabled="disabled" :model-value="periodAssignments[slot.key]?.unit || ''" placeholder="选择单位" @change="value => setPeriodUnit(slot.key, value)">
               <el-option label="选择单位" value="" />
-              <el-option v-for="unit in amountUnits" :key="unit" :label="unitLabel(unit)" :value="unit" />
+            <el-option v-for="unit in periodUnitOptions(slot.key)" :key="unit" :label="unitLabel(unit)" :value="unit" />
             </el-select>
           </el-form-item>
         </div>
@@ -103,35 +108,30 @@
       <details v-if="!comparisonsOnly" class="metric-binding__advanced" data-testid="metric-catalog-advanced">
         <summary>高级取数设置</summary>
         <p class="hint">默认按组件和指标口径取数，仅在需要特殊汇总或筛选时调整。</p>
-        <p class="hint">机构、员工、客户指标分别读取 ORG_INDEX_RESULT、EMP_INDEX_RESULT、CUST_INDEX_RESULT。输出列使用指标名称。</p>
         <div v-for="field in legacyMetricFields" :key="field.semantic" class="metric-binding__assign">
           <el-form-item :required="Boolean(field.required)">
             <template #label>
               <span>{{ field.label }}</span>
-              <em v-if="field.required && !assignments[field.semantic]?.metricCode" class="metric-binding__required">需要配置</em>
+              <em v-if="field.required && !assignments[field.semantic]?.metricCode && !existingFields[field.semantic]" class="metric-binding__required">需要配置</em>
             </template>
-            <el-select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" filterable :filter-method="filterMetrics" @visible-change="resetMetricSearch" :disabled="disabled" :model-value="assignments[field.semantic]?.metricCode || ''" placeholder="请选择指标" @change="value => setMetric(field, value)">
-              <el-option label="请选择指标" value="" />
+            <el-select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" filterable :filter-method="filterMetrics" @visible-change="resetMetricSearch" :disabled="disabled" :model-value="assignments[field.semantic]?.metricCode || ''" :placeholder="metricPlaceholder(field)" @change="value => setMetric(field, value)">
+              <el-option :label="metricEmptyLabel(field)" value="" />
               <el-option v-for="metric in optionsFor(field)" :key="metric.metricCode" :label="metricOptionLabel(metric)" :value="metric.metricCode" />
             </el-select>
+            <p v-if="existingFieldFor(field) && !assignments[field.semantic]?.metricCode" class="metric-binding__current" :data-testid="`metric-catalog-existing-${field.semantic}`">当前已有字段：{{ existingFieldFor(field) }}，选择目录指标后替换。</p>
           </el-form-item>
           <el-form-item v-if="field.unitKinds?.length" label="单位">
-            <el-select :data-testid="`metric-catalog-unit-${field.semantic}`" :disabled="disabled" :model-value="assignments[field.semantic]?.unit || ''" placeholder="选择单位" @change="value => setUnit(field.semantic, value)">
-              <el-option label="选择单位" value="" />
+            <el-select :data-testid="`metric-catalog-unit-${field.semantic}`" :disabled="disabled" :model-value="assignments[field.semantic]?.unit || ''" :placeholder="unitPlaceholder(field)" @change="value => setUnit(field.semantic, value)">
+              <el-option :label="unitEmptyLabel(field)" value="" />
               <el-option v-for="unit in field.unitKinds" :key="unit" :label="unitLabel(unit)" :value="unit" />
             </el-select>
+            <p v-if="existingUnitFor(field) && !assignments[field.semantic]?.metricCode" class="metric-binding__current" :data-testid="`metric-catalog-existing-unit-${field.semantic}`">当前已有单位：{{ existingUnitLabel(field) }}。</p>
           </el-form-item>
         </div>
         <div class="metric-binding__agg">
-          <el-form-item label="聚合维度">
-            <el-select data-testid="metric-catalog-groupby" v-model="groupBy" :disabled="disabled">
-              <el-option label="汇总为一行" value="NONE" />
-              <el-option label="按主体（排名）" value="SUBJECT" />
-              <el-option label="按日期（趋势）" value="DATE" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="聚合函数">
-            <el-select data-testid="metric-catalog-agg" v-model="agg" :disabled="disabled" placeholder="按指标口径自动选择">
+          <el-form-item label="汇总方式">
+            <p id="metric-catalog-aggregation-help" class="metric-binding__help" data-testid="metric-catalog-aggregation-help">决定同一指标的多条记录如何汇总：求和得到合计，平均得到平均值，最大/最小取极值，计数统计有值记录的条数。这里不能把两个不同指标相加；完成率等比例不能直接求和。不确定时请保持原配置。</p>
+            <el-select data-testid="metric-catalog-agg" v-model="agg" :disabled="disabled" placeholder="按指标口径自动选择" aria-describedby="metric-catalog-aggregation-help">
               <el-option label="按指标口径自动选择" value="" />
               <el-option label="求和" value="SUM" />
               <el-option label="平均" value="AVG" />
@@ -144,39 +144,45 @@
 
         <div class="metric-binding__filters-editor">
           <div class="metric-binding__filters-head">
-            <span>过滤</span>
+            <span>筛选条件（可选）</span>
             <el-button data-testid="metric-catalog-add-filter" :disabled="disabled" @click="addFilter">添加条件</el-button>
           </div>
+          <p id="metric-catalog-filter-help" class="metric-binding__help" data-testid="metric-catalog-filter-help">限定哪些数据参与计算，例如只取某一天、某个机构，或只保留余额大于 0 的记录。不需要额外限制时不用添加。已有条件会保留，修改或删除会改变取数范围；筛选只能在已授权的数据范围内生效。</p>
           <div v-for="(filter, index) in filters" :key="index" class="metric-binding__filter-row">
-            <el-select :data-testid="`metric-catalog-filter-target-${index}`" v-model="filter.target" :disabled="disabled">
-              <el-option label="指标值" value="metric" />
-              <el-option label="主体编码" value="subject" />
-              <el-option label="数据日期" value="data_date" />
-            </el-select>
-            <el-select v-if="filter.target === 'metric'" v-model="filter.metricCode" :disabled="disabled" placeholder="选择已选指标">
-              <el-option label="选择已选指标" value="" />
-              <el-option v-for="metric in selectedMetrics" :key="metric.metricCode" :label="metric.metricName" :value="metric.metricCode" />
-            </el-select>
-            <el-select v-model="filter.op" :disabled="disabled">
-              <el-option label="等于" value="EQ" />
-              <el-option label="不等于" value="NE" />
-              <el-option label="大于" value="GT" />
-              <el-option label="大于等于" value="GE" />
-              <el-option label="小于" value="LT" />
-              <el-option label="小于等于" value="LE" />
-            </el-select>
-            <el-input v-model="filter.value" placeholder="过滤值" :disabled="disabled" />
-            <el-button link type="danger" :disabled="disabled" @click="filters.splice(index, 1)">移除</el-button>
+            <div v-if="filter.readonly" class="metric-binding__legacy-filter" :data-testid="`metric-catalog-legacy-filter-${index}`">
+              已保留来源条件：{{ filter.col }} {{ filter.op }} {{ filter.value }}（无法安全映射，保存时原样保留）
+            </div>
+            <template v-else>
+              <el-select :data-testid="`metric-catalog-filter-target-${index}`" v-model="filter.target" :disabled="disabled">
+                <el-option label="指标值" value="metric" />
+                <el-option label="主体编码" value="subject" />
+                <el-option label="数据日期" value="data_date" />
+              </el-select>
+              <el-select v-if="filter.target === 'metric'" v-model="filter.metricCode" :disabled="disabled" placeholder="选择已选指标">
+                <el-option label="选择已选指标" value="" />
+                <el-option v-for="metric in selectedMetrics" :key="metric.metricCode" :label="metric.metricName" :value="metric.metricCode" />
+              </el-select>
+              <el-select v-model="filter.op" :disabled="disabled">
+                <el-option label="等于" value="EQ" />
+                <el-option label="不等于" value="NE" />
+                <el-option label="大于" value="GT" />
+                <el-option label="大于等于" value="GE" />
+                <el-option label="小于" value="LT" />
+                <el-option label="小于等于" value="LE" />
+              </el-select>
+              <el-input v-model="filter.value" placeholder="过滤值" :disabled="disabled" aria-describedby="metric-catalog-filter-help" />
+              <el-button link type="danger" :disabled="disabled" @click="filters.splice(index, 1)">移除</el-button>
+            </template>
           </div>
-          <p class="hint">指标值过滤会写成对应的 val_槽位，不会把指标名称拼进 SQL。</p>
         </div>
 
-        <el-form-item label="原因">
-          <el-input data-testid="metric-catalog-reason" v-model="reason" :disabled="disabled" />
+        <el-form-item label="修改说明（原因）">
+          <p id="metric-catalog-reason-help" class="metric-binding__help" data-testid="metric-catalog-reason-help">说明本次预览取数或调整绑定的用途，供后续核对和追溯，不参与指标计算。例如“核对全辖存款总额”或“调整本屏的存款统计口径”。应用绑定或预览取数时需要填写。</p>
+          <el-input data-testid="metric-catalog-reason" v-model="reason" :disabled="disabled" aria-describedby="metric-catalog-reason-help" />
         </el-form-item>
       </details>
       <el-alert v-for="item in plan.warnings" :key="item" class="metric-binding__status" data-testid="metric-catalog-warning" type="warning" :closable="false" show-icon :title="item" />
-      <el-alert v-for="item in plan.errors" :key="item" class="metric-binding__status" type="error" :closable="false" show-icon :title="item" />
+       <el-alert v-for="item in visiblePlanErrors" :key="item" class="metric-binding__status" type="error" :closable="false" show-icon :title="item" />
 
       <div class="metric-binding__actions">
         <el-button v-if="!comparisonsOnly" data-testid="metric-catalog-preview" :disabled="disabled || !plan.ok || previewing" :loading="previewing" @click="preview">预览 10 行</el-button>
@@ -201,6 +207,7 @@ import { ElAlert, ElButton, ElForm, ElFormItem, ElInput, ElOption, ElSelect, ElT
 import { listScreenMetricCatalog, tryRunScreenDatasource } from '@/api/screen';
 import { buildDatasourceTryRunRequest } from '@/utils/dsConfig';
 import { bindingShape, buildMetricBindingPlan, filterCatalog, suggestAssignments } from './screenMetricBinding';
+import { normalizeInitialFilters, resolveInitialCatalogAssignments } from './visibleMetricBindings';
 
 const props = defineProps({
   slotKey: { type: String, default: '' },
@@ -216,12 +223,19 @@ const props = defineProps({
   catalog: { type: Array, default: null },
   showPeriodComparisons: { type: Boolean, default: false },
   comparisonsOnly: { type: Boolean, default: false },
-  periodComparisons: { type: Object, default: null }
+  periodComparisons: { type: Object, default: null },
+  initialFields: { type: Object, default: () => ({}) },
+  initialUnits: { type: Object, default: () => ({}) },
+  existingFieldNotes: { type: Array, default: () => [] },
+  initialAggregation: { type: Object, default: null },
+  initialFilters: { type: Array, default: () => [] },
+  initialPeriod: { type: String, default: '' },
+  initialDatasourceId: { type: [String, Number], default: '' }
 });
 defineEmits(['apply']);
 
 const optionLimit = 200;
-const amountUnits = ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'];
+const periodUnits = ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION', 'PERCENT', 'RATIO'];
 const periodSlots = [
   { key: 'day', label: '较昨日' },
   { key: 'month', label: '较上月' },
@@ -246,10 +260,11 @@ const previewError = ref('');
 const previewResult = ref(null);
 const previewEmpty = ref(false);
 const restoredBoundKey = ref('');
-
 function text(value) {
   return value === null || value === undefined ? '' : String(value).trim();
 }
+const userEdited = ref(false);
+const periodEdited = ref(false);
 
 const namedGroup = computed(() => String(props.screen?.orgScopeMode || '').toUpperCase() === 'NAMED_GROUP');
 const shape = computed(() => bindingShape(props.slotKey, props.compositionMode));
@@ -266,6 +281,8 @@ const metricFields = computed(() => props.comparisonsOnly ? [] : (props.fieldSpe
   field?.kind !== 'dimension' && !(props.showPeriodComparisons && field.semantic === 'change')));
 const primaryMetricFields = computed(() => metricFields.value.filter(field => field.semantic !== 'change'));
 const legacyMetricFields = computed(() => metricFields.value.filter(field => field.semantic === 'change'));
+const existingFields = computed(() => props.initialFields || {});
+const existingUnits = computed(() => props.initialUnits || {});
 const suggestion = computed(() => suggestAssignments({
   template: props.templateName,
   slot: props.slotKey,
@@ -275,6 +292,9 @@ const suggestion = computed(() => suggestAssignments({
 const hasSuggestion = computed(() => Object.values(suggestion.value.assignments).some(Boolean));
 const selectedMetrics = computed(() => metricFields.value
   .map(field => catalogItems.value.find(item => item.metricCode === assignments.value[field.semantic]?.metricCode))
+  .concat(filters.value
+    .filter(filter => filter.target === 'metric' && filter.metricCode)
+    .map(filter => catalogItems.value.find(item => item.metricCode === filter.metricCode)))
   .filter(Boolean));
 const plan = computed(() => buildMetricBindingPlan({
   slot: props.slotKey,
@@ -285,6 +305,7 @@ const plan = computed(() => buildMetricBindingPlan({
   screen: props.screen,
   metrics: catalogItems.value,
   assignments: assignments.value,
+  period: props.initialPeriod || undefined,
   aggregation: { groupBy: groupBy.value, agg: agg.value },
   filters: filters.value,
   reason: reason.value,
@@ -292,6 +313,14 @@ const plan = computed(() => buildMetricBindingPlan({
   boundDatasource: props.boundDatasource,
   comparisonsOnly: props.comparisonsOnly,
   periodComparisons: props.showPeriodComparisons ? periodPayload() : undefined
+}));
+const visiblePlanErrors = computed(() => plan.value.errors.filter(error => {
+  if (userEdited.value) return true;
+  const existingCoversRequired = metricFields.value
+    .filter(field => field.required)
+    .every(field => Boolean(existingFields.value[field.semantic]));
+  if (existingCoversRequired && /请配置|请至少选择一个指标|缺少单位/.test(error)) return false;
+  return true;
 }));
 const previewColumns = computed(() => previewResult.value?.columns || []);
 const previewRows = computed(() => previewResult.value?.rows || []);
@@ -303,6 +332,62 @@ const previewTableRows = computed(() => previewRows.value.map(row => {
 
 watch(namedGroup, value => { if (value) baseDim.value = 'ORG'; }, { immediate: true });
 watch(() => props.catalog, value => { if (!Array.isArray(value)) loadCatalog(); }, { immediate: true });
+function applyInitialAssignments() {
+  if (userEdited.value) return;
+  if (Object.keys(props.initialFields || {}).length && !catalogItems.value.length) return;
+  const resolved = resolveInitialCatalogAssignments({
+    fields: props.initialFields,
+    units: props.initialUnits,
+    fieldSpecs: metricFields.value,
+    catalog: catalogItems.value,
+    datasource: props.datasources?.find(item => String(item.id) === String(props.initialDatasourceId || ''))
+  });
+  if (Object.keys(resolved).length) assignments.value = { ...assignments.value, ...resolved };
+}
+
+function initialDatasource() {
+  return props.datasources?.find(item => String(item.id) === String(props.initialDatasourceId || '')) || {};
+}
+
+function restoreInitialFilters() {
+  if (userEdited.value) return;
+  filters.value = normalizeInitialFilters(props.initialFilters, {
+    datasource: initialDatasource(),
+    catalog: catalogItems.value
+  });
+}
+
+function existingFieldFor(field) {
+  return String(existingFields.value?.[field?.semantic] || '').trim();
+}
+
+function existingUnitFor(field) {
+  return String(existingUnits.value?.[field?.semantic] || '').trim();
+}
+
+function existingUnitLabel(field) {
+  return unitLabel(existingUnitFor(field));
+}
+
+function metricPlaceholder(field) {
+  const existing = existingFieldFor(field);
+  return existing && !assignments.value[field?.semantic]?.metricCode ? `现有字段：${existing}` : '请选择指标';
+}
+
+function metricEmptyLabel(field) {
+  const existing = existingFieldFor(field);
+  return existing && !assignments.value[field?.semantic]?.metricCode ? `沿用现有字段：${existing}` : '请选择指标';
+}
+
+function unitPlaceholder(field) {
+  const existing = existingUnitFor(field);
+  return existing && !assignments.value[field?.semantic]?.metricCode ? `当前单位：${existingUnitLabel(field)}` : '选择单位';
+}
+
+function unitEmptyLabel(field) {
+  const existing = existingUnitFor(field);
+  return existing && !assignments.value[field?.semantic]?.metricCode ? `沿用现有单位：${existingUnitLabel(field)}` : '选择单位';
+}
 
 // 搜索并入指标下拉框，先过滤全目录再截取，保证超出展示上限的指标仍可选择。
 function filterMetrics(query) {
@@ -324,12 +409,12 @@ function optionsFor(field) {
 }
 
 function metricOptionLabel(metric) {
-  const table = metric.tableName || '结果表待定';
   const unit = metric.unit ? unitLabel(metric.unit) : '单位待选';
-  return `${metric.metricName}（${metric.metricCode} · ${table} · 槽位 ${metric.valSlot} · ${unit}）`;
+  return `${metric.metricName}（${metric.metricCode} · ${unit}）`;
 }
 
 function setMetric(field, metricCode) {
+  userEdited.value = true;
   const metric = catalogItems.value.find(item => item.metricCode === metricCode);
   const next = { ...(assignments.value[field.semantic] || {}), metricCode };
   if (!metricCode) {
@@ -364,9 +449,22 @@ function restorePeriodComparisons(value) {
   periodAssignments.value = nextAssignments;
 }
 
+function setPeriodMode(key, mode) {
+  userEdited.value = true;
+  periodEdited.value = true;
+  periodModes.value = { ...periodModes.value, [key]: mode };
+  if (mode === 'UNSET') {
+    periodAssignments.value = { ...periodAssignments.value, [key]: {} };
+  }
+}
+
 function periodOptions(key) {
   const selected = periodAssignments.value[key]?.metricCode;
-  const rows = filtered.value.slice(0, optionLimit);
+  const mainKind = mainPeriodUnitKind();
+  const rows = filtered.value.filter(metric => {
+    const metricKind = metricUnitKind(metric?.unit);
+    return !mainKind || !metricKind || metricKind === mainKind;
+  }).slice(0, optionLimit);
   if (selected && !rows.some(item => item.metricCode === selected)) {
     const current = catalogItems.value.find(item => item.metricCode === selected);
     if (current) rows.unshift(current);
@@ -374,18 +472,45 @@ function periodOptions(key) {
   return rows;
 }
 
+function periodUnitOptions(key) {
+  const kind = mainPeriodUnitKind();
+  if (kind === 'RATIO') return periodUnits.filter(unit => ['PERCENT', 'RATIO'].includes(unit));
+  if (kind === 'AMOUNT') return periodUnits.filter(unit => ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'].includes(unit));
+  return periodUnits;
+}
+
+function metricUnitKind(unit) {
+  const normalized = String(unit || '').toUpperCase();
+  if (['PERCENT', 'RATIO'].includes(normalized)) return 'RATIO';
+  if (['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'].includes(normalized)) return 'AMOUNT';
+  return '';
+}
+
+function mainPeriodUnitKind() {
+  if (props.comparisonsOnly) return 'AMOUNT';
+  const primaryField = metricFields.value.find(field => field.semantic === 'value')
+    || metricFields.value.find(field => field.required)
+    || metricFields.value[0];
+  const selectedKind = metricUnitKind(assignments.value[primaryField?.semantic]?.unit);
+  if (selectedKind) return selectedKind;
+  const kinds = [...new Set((primaryField?.unitKinds || []).map(metricUnitKind).filter(Boolean))];
+  return kinds.length === 1 ? kinds[0] : '';
+}
+
 function setPeriodMetric(key, metricCode) {
+  userEdited.value = true;
   const metric = catalogItems.value.find(item => item.metricCode === metricCode);
   if (!metricCode) {
     periodAssignments.value = { ...periodAssignments.value, [key]: {} };
     return;
   }
   const next = { ...(periodAssignments.value[key] || {}), metricCode };
-  if (amountUnits.includes(metric?.unit)) next.unit = metric.unit;
+  if (periodUnits.includes(metric?.unit)) next.unit = metric.unit;
   periodAssignments.value = { ...periodAssignments.value, [key]: next };
 }
 
 function setPeriodUnit(key, unit) {
+  userEdited.value = true;
   periodAssignments.value = {
     ...periodAssignments.value,
     [key]: { ...(periodAssignments.value[key] || {}), unit }
@@ -409,8 +534,11 @@ const boundStateKey = computed(() => JSON.stringify({
   units: props.boundBinding?.units || {}
 }));
 
+const usesInitialBinding = computed(() => Object.keys(props.initialFields || {}).length > 0
+  || Object.keys(props.initialUnits || {}).length > 0);
+
 function restoreBoundAssignments() {
-  if (props.comparisonsOnly || !props.boundBinding || !props.boundDatasource || !catalogItems.value.length) return;
+  if (usesInitialBinding.value || props.comparisonsOnly || !props.boundBinding || !props.boundDatasource || !catalogItems.value.length) return;
   if (restoredBoundKey.value === boundStateKey.value) return;
   const config = parseDatasourceConfig(props.boundDatasource.configJson ?? props.boundDatasource.config_json);
   restoreBoundAggregation(config);
@@ -451,30 +579,44 @@ function restoreBoundAggregation(config) {
   if (['SUM', 'AVG', 'MAX', 'MIN', 'COUNT'].includes(String(aggregation.agg || '').toUpperCase())) {
     agg.value = String(aggregation.agg).toUpperCase();
   }
-  const metrics = Array.isArray(config?.metrics) ? config.metrics : [];
-  const subjectColumn = text(config?.subjectCol || config?.subject_column
-    || (config?.table === 'ORG_INDEX_RESULT' ? 'org_code' : ''));
-  filters.value = (Array.isArray(aggregation.filters) ? aggregation.filters : []).map(item => {
-    const col = text(item?.col);
-    const base = { op: item?.op || 'EQ', value: item?.value ?? '' };
-    if (col === 'data_date') return { ...base, target: 'data_date' };
-    if (col && col === subjectColumn) return { ...base, target: 'subject' };
-    const matches = metrics.filter(metric => {
-      const metricCode = text(metric?.metricCode);
-      if (!metricCode) return false;
-      const catalogMetric = catalogItems.value.find(item => text(item?.metricCode) === metricCode);
-      const slot = metric?.slot ?? catalogMetric?.valSlot;
-      return `val_${slot}` === col;
-    });
-    return matches.length === 1
-      ? { ...base, target: 'metric', metricCode: text(matches[0].metricCode) }
-      : { ...base, target: 'metric', metricCode: '' };
+  filters.value = normalizeInitialFilters(aggregation.filters, {
+    datasource: props.boundDatasource,
+    catalog: catalogItems.value
   });
 }
 
-watch(() => [props.slotKey, props.compositionMode, boundStateKey.value], () => {
+const initializedSourceKey = ref('');
+const sourceStateKey = computed(() => JSON.stringify({
+  slotKey: props.slotKey,
+  compositionMode: props.compositionMode,
+  fieldSpecs: (props.fieldSpecs || []).map(field => ({
+    semantic: field?.semantic,
+    kind: field?.kind,
+    required: field?.required,
+    unitKinds: field?.unitKinds
+  })),
+  initialFields: props.initialFields || {},
+  initialUnits: props.initialUnits || {},
+  initialAggregation: props.initialAggregation || null,
+  initialFilters: props.initialFilters || [],
+  initialPeriod: props.initialPeriod || '',
+  initialDatasourceId: props.initialDatasourceId || '',
+  boundState: usesInitialBinding.value ? null : boundStateKey.value
+}));
+
+function sourceNeedsCatalog() {
+  return !catalogItems.value.length && (usesInitialBinding.value
+    || Boolean(props.boundBinding && props.boundDatasource));
+}
+
+function restoreSourceState() {
+  if (sourceNeedsCatalog()) return;
+  if (initializedSourceKey.value === sourceStateKey.value) return;
+  initializedSourceKey.value = sourceStateKey.value;
+  restoredBoundKey.value = '';
+  userEdited.value = false;
+  periodEdited.value = false;
   const next = bindingShape(props.slotKey, props.compositionMode);
-  agg.value = '';
   resetMetricSearch();
   assignments.value = {};
   filters.value = [];
@@ -482,23 +624,30 @@ watch(() => [props.slotKey, props.compositionMode, boundStateKey.value], () => {
   previewResult.value = null;
   previewEmpty.value = false;
   previewError.value = '';
-  groupBy.value = Object.values(periodModes.value).includes('OFFSET') ? 'DATE' : (next.groupBy || 'NONE');
+  restorePeriodComparisons(props.periodComparisons);
+  groupBy.value = Object.values(periodModes.value).includes('OFFSET')
+    ? 'DATE' : (props.initialAggregation?.groupBy || next.groupBy || 'NONE');
+  agg.value = props.initialAggregation?.agg || '';
+  restoreInitialFilters();
+  applyInitialAssignments();
   restoreBoundAssignments();
-}, { immediate: true });
+}
+
+watch([sourceStateKey, catalogItems], restoreSourceState, { immediate: true, deep: true });
 
 watch(() => props.periodComparisons, value => {
+  if (periodEdited.value) return;
   restorePeriodComparisons(value);
   groupBy.value = Object.values(periodModes.value).includes('OFFSET')
     ? 'DATE' : (groupBy.value || bindingShape(props.slotKey, props.compositionMode).groupBy || 'NONE');
-}, { immediate: true });
-
-watch(catalogItems, () => restoreBoundAssignments());
+}, { immediate: true, deep: true });
 
 watch(periodModes, modes => {
   if (Object.values(modes).includes('OFFSET') && groupBy.value === 'NONE') groupBy.value = 'DATE';
 }, { deep: true });
 
 function setUnit(semantic, unit) {
+  userEdited.value = true;
   assignments.value = {
     ...assignments.value,
     [semantic]: { ...(assignments.value[semantic] || {}), unit }
@@ -506,6 +655,7 @@ function setUnit(semantic, unit) {
 }
 
 function applySuggestions() {
+  userEdited.value = true;
   suggestionNotes.value = suggestion.value.notes;
   const next = { ...assignments.value };
   for (const field of metricFields.value) {
@@ -518,6 +668,7 @@ function applySuggestions() {
 }
 
 function addFilter() {
+  userEdited.value = true;
   const metricCode = selectedMetrics.value[0]?.metricCode || '';
   filters.value = [...filters.value, { target: 'metric', metricCode, op: 'GT', value: '' }];
 }
@@ -567,7 +718,7 @@ async function preview() {
 function unitLabel(unit) {
   return ({
     YUAN: '元', TEN_THOUSAND: '万元', HUNDRED_MILLION: '亿元', COUNT: '个数',
-    TEN_THOUSAND_COUNT: '万户', PERCENT: '%', RATIO: '比例'
+    TEN_THOUSAND_COUNT: '万户', PERCENT: '百分数', RATIO: '比例'
   })[unit] || unit;
 }
 </script>
@@ -586,6 +737,7 @@ function unitLabel(unit) {
 .metric-binding__advanced[open] > summary { margin-bottom: 8px; }
 .metric-binding__agg { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
 .metric-binding__assign { display: grid; grid-template-columns: minmax(0, 1fr) var(--metric-control-width); column-gap: 12px; align-items: start; }
+.metric-binding__help { width: 100%; margin: 0 0 8px; color: var(--color-text-secondary, #606266); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .metric-binding__periods { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--color-border, #ebeef5); }
 .metric-binding__periods h4 { margin: 0; color: var(--color-text-strong, #303133); font-size: 13px; font-weight: 600; }
 .metric-binding__period { display: grid; grid-template-columns: 180px minmax(0, 1fr) 168px; column-gap: 12px; align-items: start; }
@@ -593,8 +745,10 @@ function unitLabel(unit) {
 .metric-binding :deep(.el-form-item__label) { margin-bottom: 6px; color: var(--color-text-strong, #303133); font-size: 13px; font-weight: 600; line-height: 20px; }
 .metric-binding :deep(.el-select), .metric-binding :deep(.el-input) { width: 100%; }
 .metric-binding__required { margin-left: 6px; color: var(--el-color-danger, #f56c6c); font-size: 12px; font-style: normal; font-weight: 400; }
+.metric-binding__current { margin: 4px 0 0; color: var(--el-text-color-secondary, #909399); font-size: 12px; line-height: 18px; }
 .metric-binding__filters-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 8px; color: var(--color-text-strong, #303133); font-size: 13px; font-weight: 600; }
 .metric-binding__filter-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.metric-binding__legacy-filter { flex: 1 1 100%; padding: 6px 8px; border: 1px solid var(--el-border-color-light, #ebeef5); border-radius: 4px; color: var(--el-text-color-secondary, #909399); font-size: 12px; line-height: 18px; }
 .metric-binding__filter-row :deep(.el-select) { width: 160px; }
 .metric-binding__filter-row :deep(.el-input) { width: 180px; }
 .metric-binding__actions { display: flex; gap: 8px; margin-top: 4px; }
