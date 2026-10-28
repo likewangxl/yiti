@@ -153,3 +153,11 @@ cd bootstrap && mvn spring-boot:run
 - [bootstrap/AGENTS.md](bootstrap/AGENTS.md)
 - [xanzc_frontend/AGENTS.md](xanzc_frontend/AGENTS.md)
 - [docs/AGENTS.md](docs/AGENTS.md)
+
+## Cursor Cloud specific instructions
+
+- 使用 JDK 17（`JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64`）和 Maven。Node 以 `xanzc_frontend/package.json` 的 `engines` 为准。本地 MySQL 只服务于本机，库名与 `application.yml` 数据源一致；它不是共享的 `yiti` / `yiti_test`，禁止把数据源改到远端库。
+- 日志默认目录是开发者本机路径。启动后端前设置 `LOG_HOME` 或 `-DLOG_HOME` 到可写目录，否则 Logback 会在创建日志文件时中止启动。
+- `vite.config.js` 的默认代理目标与 `application.yml` 的 `server.port` 不一致。启动 Vite 时用 `VITE_PROXY_TARGET` 指向当前后端，不要改共享默认值。
+- `docs/schema/` 里的历史快照落后于当前实体。Cloud 启动只在本地空库补齐启动和登录会读到的列（`PT_USER.MOBILE`，`EVAL_ASSIGN_BATCH` 的导入计数字段）以及 Flowable `ACT_GE_PROPERTY` 版本行、Quartz 锁行。Quartz 自动启动和边车注册保持关闭，避免 `FIRE_ONCE_NOW` 补跑批处理，也避免连接不存在的边车。
+- 依赖安装：仓库根目录 `mvn -DskipTests install`，以及 `xanzc_frontend` 的 `npm ci`。后端从 `bootstrap` 目录 `mvn spring-boot:run`。前端 `npm run dev`。普通账号登录页是 `/#/login?normal`。
