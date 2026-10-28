@@ -1498,7 +1498,10 @@ function resetBindings(components) {
 }
 
 async function loadScreens() {
-  const list = await listScreens();
+  const response = await listScreens();
+  // 个人驾驶舱由专用配置页维护，不能被机构模板转换并覆盖。
+  const list = Array.isArray(response)
+    ? response.filter(screen => (screen.screenCode || screen.screen_code) !== 'PERSONAL_COCKPIT') : response;
   if (!Array.isArray(list) || !list.length) throw new Error('未读取到可配置的大屏，已停止加载，不会新建未知屏幕');
   screens.value = list;
   const requested = requestedScreenId();

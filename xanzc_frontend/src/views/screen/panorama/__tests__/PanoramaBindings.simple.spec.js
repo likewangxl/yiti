@@ -208,6 +208,15 @@ function prepare(canvas) {
 }
 
 describe('PanoramaBindings simplified designer', () => {
+  it('个人驾驶舱配置由专用入口管理，不能被机构模板覆盖', async () => {
+    prepare(legacyCanvas());
+    api.listScreens.mockResolvedValue([screen, { id: 600, screenCode: 'PERSONAL_COCKPIT', screenName: '个人经营驾驶舱' }]);
+    const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
+    await vi.waitFor(() => expect(api.getScreenCanvas).toHaveBeenCalled());
+    expect(wrapper.get('[data-testid="screen-select"]').text()).not.toContain('个人经营驾驶舱');
+    wrapper.unmount();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     router.push.mockReset();

@@ -1,307 +1,151 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { describe, expect, it, vi } from "vitest";
+import { mount } from "@vue/test-utils";
+vi.mock("vue-echarts", () => ({
+  default: {
+    name: "VChartStub",
+    template: '<div data-testid="chart-stub" />',
+    props: ["option"],
+  },
+}));
+import PersonalDashboard from "../PersonalDashboard.vue";
 
 const model = {
-  identity: { name: '李经理', orgName: '西安高新支行' },
+  identity: { name: "李经理", orgName: "西安支行" },
+  settings: { title: "我的驾驶舱", defaultRange: "7d" },
   metrics: {
-    status: 'ready',
-    message: '个人指标',
-    sourceType: 'EMP_LATEST_IMPORT',
     items: [
       {
-        metricCode: 'customerCount',
-        metricName: '我的客户数',
-        currentValue: 0,
-        previousValue: 0,
-        comparisonType: 'PREVIOUS_MONTH_END',
-        targetValue: 100,
-        achievementRate: 0,
-        unit: null,
-        dataDate: '2026-09-20',
-        mom: null
+        metricCode: "a",
+        metricName: "客户数",
+        unit: "户",
+        currentValue: 10,
+        targetValue: 20,
+        achievementRate: 50,
+        dataDate: "2026-09-22",
+        orgValue: 100,
+        orgUnit: "户",
+        orgDataDate: "2026-09-22",
+        history: [
+          { date: "2026-09-20", value: 8 },
+          { date: "2026-09-22", value: 10 },
+        ],
       },
       {
-        metricCode: 'deposit',
-        metricName: '存款余额',
-        currentValue: 1280,
-        previousValue: 1200,
-        comparisonType: 'PREVIOUS_MONTH_END',
-        targetValue: null,
-        achievementRate: 88.5,
-        unit: '万元',
-        dataDate: '2026-09-20',
-        mom: 6.7
-      }
-    ]
+        metricCode: "b",
+        metricName: "余额",
+        unit: "万元",
+        currentValue: 0,
+        targetValue: 0,
+        achievementRate: null,
+        history: [],
+      },
+    ],
   },
-  priorities: {
-    status: 'ready',
-    message: '当前返回事项按最近跟进时间展示',
-    total: 0,
-    items: [{
-      id: 'todo-1',
-      title: '补充授信材料',
-      customerName: '陕西省一家名称很长的客户有限公司',
-      typeLabel: '授信',
-      nodeLabel: '材料补充',
-      urgency: 'overdue',
-      deadline: null,
-      reason: '客户已提交申请',
-      actionLabel: '去处理',
-      target: { kind: 'todo', id: 'todo-1', source: 'workflow' }
-    }]
-  },
-  customers: {
-    status: 'ready',
-    message: '',
-    total: 1,
-    items: [{
-      id: 'customer-1',
-      name: '陕西省一家名称很长的客户有限公司',
-      isKey: true,
-      opened: true,
-      lastTouchTime: '2026-09-19 10:20',
-      touchRestricted: false,
-      target: { kind: 'customer', id: 'customer-1' }
-    }]
-  },
-  progress: {
-    status: 'ready',
-    message: '',
-    total: 1,
-    items: [{
-      id: 'progress-1',
-      title: '授信申请',
-      customerName: '示例客户',
-      typeLabel: '授信',
-      statusLabel: '审批中',
-      nodeLabel: '分行审批',
-      submittedTime: '2026-09-18 09:00',
-      target: { kind: 'progress', id: 'progress-1' }
-    }]
-  },
-  refreshedAt: '2026-09-20 14:30'
+  refreshedAt: "2026-09-22 12:00",
 };
 
-describe('PersonalDashboard 个人经营驾驶舱', () => {
-  it('按契约呈现核心指标，保留 0、空值和返回的完成率，不自行计算', async () => {
-    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
-    const wrapper = mount(PersonalDashboard, { props: { model } });
-
-    expect(wrapper.attributes('aria-label')).toBe('个人经营驾驶舱');
-    expect(wrapper.text()).toContain('我的经营驾驶舱');
-    expect(wrapper.text()).toContain('李经理');
-    expect(wrapper.text()).toContain('本人经营指标 · 最新导入快照（非考核结算）');
-    expect(wrapper.findAll('[data-testid="personal-metric"]')).toHaveLength(2);
-    expect(wrapper.find('[data-testid="personal-metric"]').text()).toContain('0');
-    expect(wrapper.findAll('[data-testid="personal-metric"]')[0].find('.personal-metric__previous').text()).toContain('上月末值 0');
-    expect(wrapper.text()).toContain('完成率 0.00%');
-    expect(wrapper.text()).toContain('单位未配置');
-    expect(wrapper.findAll('[data-testid="personal-metric"]')[0].find('.personal-metric__unit').text()).toBe('单位未配置');
-    expect(wrapper.text()).toContain('较上月末');
-    expect(wrapper.text()).not.toContain('1280 /');
-    expect(wrapper.text()).toContain('当前返回事项按最近跟进时间展示');
-    expect(wrapper.text()).toContain('陕西省一家名称很长的客户有限公司');
-    expect(wrapper.text()).toContain('审批中');
+describe("PersonalDashboard 个人经营驾驶舱", () => {
+  it('没有指定颜色时，切换单项保留该指标在全量图中的颜色', async () => {
+    const items = model.metrics.items.map((item, index) => ({ ...item, color: '', history: model.metrics.items[0].history, metricCode: String(index) }));
+    const wrapper = mount(PersonalDashboard, { props: { model: { ...model, metrics: { items } } } });
+    const all = wrapper.findComponent({ name: 'VChartStub' }).props('option');
+    await wrapper.findAll('[data-testid="personal-metric"]')[1].trigger('click');
+    const one = wrapper.findComponent({ name: 'VChartStub' }).props('option');
+    expect(one.series).toHaveLength(1);
+    expect(one.series[0].lineStyle.color).toBe(all.series[1].lineStyle.color);
     wrapper.unmount();
   });
-
-  it('四个区域独立呈现空、错误和无权限状态', async () => {
-    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
+  it("只呈现核心指标、趋势、机构占比和目标完成，不呈现旧清单", () => {
     const wrapper = mount(PersonalDashboard, {
-      props: {
-        model: {
-          metrics: { status: 'empty', message: '暂无指标' },
-          priorities: { status: 'error', message: '事项服务暂不可用' },
-          customers: { status: 'forbidden', message: '无权查看客户' },
-          progress: { status: 'ready', message: '', items: [] }
-        }
-      }
+      props: { model },
+      global: { stubs: { "v-chart": true } },
     });
-
-    expect(wrapper.get('[data-testid="personal-metrics-state"]').text()).toContain('暂无指标');
-    expect(wrapper.get('[data-testid="personal-priorities-state"]').text()).toContain('事项服务暂不可用');
-    expect(wrapper.get('[data-testid="personal-customers-state"]').text()).toContain('无权查看客户');
-    expect(wrapper.get('[data-testid="personal-progress-state"]').text()).toContain('暂无可展示数据');
-    expect(wrapper.find('[data-testid="personal-priority"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="personal-customer"]').exists()).toBe(false);
-    wrapper.unmount();
+    expect(wrapper.text()).toContain("我的驾驶舱");
+    expect(wrapper.text()).toContain("客户数");
+    expect(wrapper.text()).toContain("指标趋势");
+    expect(wrapper.text()).toContain("机构占比");
+    expect(wrapper.text()).toContain("个人目标完成情况");
+    expect(wrapper.text()).not.toContain("今日优先事项");
+    expect(wrapper.text()).not.toContain("我的客户");
   });
 
-  it('清单条目和查看更多发送带 kind、id 的导航事件，头部按钮发送动作事件', async () => {
-    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
-    const wrapper = mount(PersonalDashboard, { props: { model } });
-
-    await wrapper.get('[data-testid="personal-priority"]').trigger('click');
-    await wrapper.get('[data-testid="personal-customer"]').trigger('click');
-    await wrapper.get('[data-testid="personal-progress"]').trigger('click');
-    await wrapper.get('[data-action="view-todos"]').trigger('click');
-    await wrapper.get('[data-action="view-customers"]').trigger('click');
-    await wrapper.get('[data-action="view-progress"]').trigger('click');
-    await wrapper.get('[data-action="refresh"]').trigger('click');
-    await wrapper.get('[data-action="fullscreen"]').trigger('click');
-    await wrapper.get('[data-action="back"]').trigger('click');
-
-    expect(wrapper.emitted('navigate')).toEqual([
-      [{ kind: 'todo', id: 'todo-1', source: 'workflow' }],
-      [{ kind: 'customer', id: 'customer-1' }],
-      [{ kind: 'progress', id: 'progress-1' }],
-      [{ kind: 'todos' }],
-      [{ kind: 'customers' }],
-      [{ kind: 'progress' }]
+  it("指标卡、范围和全部恢复发出受控事件", async () => {
+    const wrapper = mount(PersonalDashboard, {
+      props: { model },
+      global: { stubs: { "v-chart": true } },
+    });
+    await wrapper.get('[data-testid="personal-metric"]').trigger("click");
+    await wrapper
+      .get(".personal-range-tabs button:nth-child(2)")
+      .trigger("click");
+    await wrapper.get('[data-action="reset-metric"]').trigger("click");
+    expect(wrapper.emitted("metric-change").map((item) => item[0])).toEqual([
+      "a",
+      "",
     ]);
-    expect(wrapper.emitted('refresh')).toHaveLength(1);
-    expect(wrapper.emitted('fullscreen')).toHaveLength(1);
-    expect(wrapper.emitted('back')).toHaveLength(1);
-    expect(wrapper.get('[data-action="back"]').attributes('aria-label')).toBe('返回工作台');
-    wrapper.unmount();
+    expect(wrapper.emitted("range-change")).toEqual([["6m"]]);
   });
 
-  it('允许个人页按受控来源替换返回按钮文案', async () => {
-    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
-    const wrapper = mount(PersonalDashboard, { props: { model, backLabel: '返回大屏中心' } });
-
-    expect(wrapper.get('[data-action="back"]').attributes('aria-label')).toBe('返回大屏中心');
-    expect(wrapper.get('[data-action="back"]').attributes('title')).toBe('返回大屏中心');
-    wrapper.unmount();
-  });
-
-  it('展示受限触达和加载态时不泄露或伪造数据', async () => {
-    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
+  it("保留刷新、全屏、返回动作和无历史空态", async () => {
     const wrapper = mount(PersonalDashboard, {
       props: {
-        loading: true,
         model: {
-          customers: {
-            status: 'ready',
-            total: 1,
-            items: [{ id: 'c-1', name: '客户甲', touchRestricted: true, lastTouchTime: '2026-09-20 10:00' }]
-          }
-        }
-      }
+          ...model,
+          metrics: { items: [{ ...model.metrics.items[1] }] },
+        },
+      },
+      global: { stubs: { "v-chart": true } },
     });
-
-    expect(wrapper.get('[data-testid="personal-loading"]').text()).toContain('正在加载');
-    expect(wrapper.get('[data-testid="personal-customer"]').text()).toContain('触达受限');
-    expect(wrapper.get('[data-testid="personal-customer"]').text()).toContain('2026-09-20 10:00');
-    expect(wrapper.text()).toContain('—');
-    wrapper.unmount();
+    await wrapper.get('[data-action="refresh"]').trigger("click");
+    await wrapper.get('[data-action="fullscreen"]').trigger("click");
+    await wrapper.get('[data-action="back"]').trigger("click");
+    expect(wrapper.emitted("refresh")).toHaveLength(1);
+    expect(wrapper.emitted("fullscreen")).toHaveLength(1);
+    expect(wrapper.emitted("back")).toHaveLength(1);
+    expect(wrapper.get('[data-testid="personal-trend-empty"]').exists()).toBe(
+      true,
+    );
   });
 
-  it('缺少时效或重点标识时保持未知，不从空白或布尔值猜测数字', async () => {
-    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
+  it("错误指标状态不渲染残留条目，目标进度按当前值/目标计算", () => {
     const wrapper = mount(PersonalDashboard, {
       props: {
         model: {
           metrics: {
-            status: 'ready',
-            items: [{ metricName: '待更新指标', currentValue: ' ', previousValue: false, achievementRate: null, unit: '户' }]
+            status: "error",
+            message: "指标服务失败",
+            items: [{ metricCode: "stale", metricName: "残留" }],
           },
-          priorities: {
-            status: 'ready',
-            items: [{ id: 'todo-unknown', title: '待确认事项', urgency: null }]
+        },
+      },
+      global: { stubs: { "v-chart": true } },
+    });
+    expect(wrapper.find('[data-testid="personal-metric"]').exists()).toBe(
+      false,
+    );
+    expect(wrapper.text()).toContain("指标服务失败");
+    wrapper.unmount();
+    const progress = mount(PersonalDashboard, {
+      props: {
+        model: {
+          metrics: {
+            items: [
+              {
+                metricCode: "goal",
+                metricName: "目标",
+                currentValue: 120,
+                targetValue: 100,
+                achievementRate: 1,
+                unit: "户",
+              },
+            ],
           },
-          customers: {
-            status: 'ready',
-            items: [{ id: 'customer-unknown', name: '客户乙', isKey: null, opened: null }]
-          }
-        }
-      }
+        },
+      },
+      global: { stubs: { "v-chart": true } },
     });
-
-    expect(wrapper.text()).toContain('时效待确认');
-    expect(wrapper.text()).toContain('重点标识未知');
-    expect(wrapper.text()).not.toContain('普通客户');
-    expect(wrapper.get('[data-testid="personal-metric"]').text()).toContain('—');
-    expect(wrapper.get('[data-testid="personal-metric"]').find('.personal-metric__previous').exists()).toBe(false);
-    wrapper.unmount();
-  });
-
-  it('目标和完成率为空时只显示未关联考核目标，有效零值仍显示', async () => {
-    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
-    const wrapper = mount(PersonalDashboard, {
-      props: {
-        model: {
-          metrics: {
-            status: 'ready',
-            items: [{
-              metricCode: 'loan', metricName: '贷款余额', currentValue: 0,
-              targetValue: null, achievementRate: null, unit: ''
-            }]
-          }
-        }
-      }
-    });
-
-    const card = wrapper.get('[data-testid="personal-metric"]');
-    expect(card.text()).toContain('0');
-    expect(card.text()).toContain('单位未配置');
-    expect(card.text()).toContain('未关联考核目标');
-    expect(card.text()).not.toContain('目标 —');
-    expect(card.text()).not.toContain('完成率 —');
-    wrapper.unmount();
-  });
-
-  it('旧来源没有比较口径时保留上期文案，不误标为上月末', async () => {
-    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
-    const wrapper = mount(PersonalDashboard, {
-      props: {
-        model: {
-          metrics: {
-            status: 'ready',
-            items: [{
-              metricCode: 'legacy', metricName: '旧周期指标', currentValue: 110,
-              previousValue: 100, mom: 10, unit: '户'
-            }]
-          }
-        }
-      }
-    });
-
-    const card = wrapper.get('[data-testid="personal-metric"]');
-    expect(card.text()).toContain('上期值 100');
-    expect(card.text()).toContain('较上期 10.00%');
-    expect(card.text()).not.toContain('较上月末');
-    wrapper.unmount();
-  });
-
-  it('全部当前值为空时保留真实卡片并呈现后端数据日期提示', async () => {
-    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
-    const wrapper = mount(PersonalDashboard, {
-      props: {
-        model: {
-          metrics: {
-            status: 'ready',
-            message: '当前账号暂无员工指标结果',
-            items: [{ metricName: '指标 A', currentValue: null }]
-          }
-        }
-      }
-    });
-
-    expect(wrapper.findAll('[data-testid="personal-metric"]')).toHaveLength(1);
-    expect(wrapper.text()).toContain('当前账号暂无员工指标结果');
-    expect(wrapper.text()).not.toContain('未接指标');
-    wrapper.unmount();
-  });
-
-  it('有数据日期但全部当前值为空时保留按日期提示', async () => {
-    const { default: PersonalDashboard } = await import('../PersonalDashboard.vue');
-    const wrapper = mount(PersonalDashboard, {
-      props: {
-        model: {
-          metrics: {
-            status: 'ready',
-            message: '当前账号在该数据日期暂无所选指标结果',
-            items: [{ metricName: '指标 A', currentValue: null, dataDate: '2026-09-20' }]
-          }
-        }
-      }
-    });
-
-    expect(wrapper.text()).toContain('当前账号在该数据日期暂无所选指标结果');
-    expect(wrapper.text()).not.toContain('当前账号暂无员工指标结果');
-    wrapper.unmount();
+    expect(progress.text()).toContain("120 / 100 户");
+    expect(progress.text()).toContain("120.00%");
   });
 });

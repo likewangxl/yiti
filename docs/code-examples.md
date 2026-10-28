@@ -93,6 +93,8 @@
 
 ## 前端（xanzc_frontend）
 
+- 个人驾驶舱可配置指标与真实行列数据适配：`src/views/screen/personal/PersonalDashboardSettings.vue`、`personalDashboardConfig.js`、`personalAnalytics.js` 和 `src/api/personalCockpit.js`（均相对于 `xanzc_frontend/`）；操作与数据口径见 [个人经营驾驶舱](modules/report-analytics-center/12-个人经营驾驶舱.md)。
+
 - 市级支行经营全景排名布局和逐页轮播：`src/views/screen/panorama/CityPanorama.vue`、`CityBranchRanking.vue`；排名填满右栏，每5秒翻页，当前指标末页停留后才切下一指标。筛选与刷新保持有效页码，暂停、悬停、焦点、页面隐藏与卸载控制定时器；测试见相邻 `__tests__/CityBranchRanking.spec.js`。
 
 | 类型 | 范例 | 说明 |

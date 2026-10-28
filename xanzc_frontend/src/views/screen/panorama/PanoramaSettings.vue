@@ -3,8 +3,8 @@
     <header class="panorama-settings__header">
       <div>
         <span class="panorama-settings__eyebrow">SCREEN SETTINGS</span>
-        <h2 id="panorama-settings-title">经营全景设置</h2>
-        <p>{{ editing ? '编辑当前大屏元数据、访问范围和发布归档。' : '创建一个空画布大屏，保存后再绑定经营全景槽位。' }}</p>
+        <h2 id="panorama-settings-title">{{ rolesOnly ? '个人驾驶舱查看角色' : '经营全景设置' }}</h2>
+        <p>{{ rolesOnly ? '配置可查看此驾驶舱的角色；数据范围仍由服务端按当前员工和主机构校验。' : editing ? '编辑当前大屏元数据、访问范围和发布归档。' : '创建一个空画布大屏，保存后再绑定经营全景槽位。' }}</p>
       </div>
       <button type="button" class="panorama-settings__close" data-testid="settings-close" aria-label="关闭设置" @click="close">×</button>
     </header>
@@ -12,7 +12,7 @@
     <p v-if="error" class="panorama-settings__error" data-testid="settings-error" role="alert">{{ error }}</p>
     <p v-if="loading" class="panorama-settings__loading" role="status">正在读取设置…</p>
 
-    <form class="panorama-settings__form" @submit.prevent="saveMetadata">
+    <form v-if="!rolesOnly" class="panorama-settings__form" @submit.prevent="saveMetadata">
       <fieldset>
         <legend>基本信息</legend>
         <label for="settings-screen-name">屏名称</label>
@@ -85,7 +85,7 @@
       </button>
     </section>
 
-    <section v-if="editing" class="panorama-settings__section" data-testid="settings-rollback-section">
+    <section v-if="editing && !rolesOnly" class="panorama-settings__section" data-testid="settings-rollback-section">
       <header>
         <h3>发布日志与回滚</h3>
         <span>回滚会立即恢复选中的发布归档为当前发布版本，并同步覆盖草稿与绑定。</span>
@@ -132,6 +132,7 @@ import {
 
 const props = defineProps({
   screen: { type: Object, default: null },
+  rolesOnly: { type: Boolean, default: false },
   visible: { type: Boolean, default: false }
 });
 const emit = defineEmits(['update:visible', 'saved']);
@@ -231,10 +232,10 @@ async function loadSettings() {
       ? Promise.resolve().then(() => getScreenCanvas(id))
       : Promise.resolve(null);
     const settled = await Promise.allSettled([
-      Promise.resolve().then(() => listOrgGroups({ status: 'ACTIVE' })),
+      props.rolesOnly ? Promise.resolve([]) : Promise.resolve().then(() => listOrgGroups({ status: 'ACTIVE' })),
       Promise.resolve().then(() => listScreenRoles({ recordStatus: 0 })),
       id ? Promise.resolve().then(() => listScreenAccessRoles(id)) : Promise.resolve([]),
-      id ? Promise.resolve().then(() => listScreenPublishLogs(id)) : Promise.resolve([]),
+      id && !props.rolesOnly ? Promise.resolve().then(() => listScreenPublishLogs(id)) : Promise.resolve([]),
       canvasPromise
     ]);
     if (!isCurrentTarget(target, token)) return;

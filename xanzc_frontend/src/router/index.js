@@ -58,7 +58,7 @@ const routes = [
   {
     path: '/screen/:screenCode',
     name: 'ScreenView',
-    component: () => import('@/views/screen/ScreenView.vue'),
+    component: () => import('@/views/screen/ScreenRuntimePage.vue'),
     meta: { title: '经营大屏', requiredResource: '/api/screen/view/*' }
   },
   // 代码化大屏只接受 ScreenCenter 后端目录确认过的固定模板；页面自身仍复核目录授权。
@@ -79,7 +79,7 @@ const routes = [
   {
     path: '/screen-admin/designer',
     name: 'ScreenAdminDesigner',
-    component: () => import('@/views/screen/panorama/PanoramaBindings.vue'),
+    component: () => import('@/views/screen/ScreenManagement.vue'),
     meta: {
       title: '大屏管理',
       group: '报表分析',

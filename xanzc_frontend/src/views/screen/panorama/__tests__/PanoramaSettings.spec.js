@@ -56,6 +56,17 @@ function mountSettings(props = {}) {
 }
 
 describe('PanoramaSettings', () => {
+  it('个人驾驶舱可仅管理查看角色，禁止从此入口改变固定屏身份或回滚', async () => {
+    resetApi();
+    const wrapper = mountSettings({ rolesOnly: true });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="settings-roles"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="settings-screen-code"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="settings-rollback-section"]').exists()).toBe(false);
+    expect(api.listOrgGroups).not.toHaveBeenCalled();
+    expect(api.listScreenPublishLogs).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
   afterEach(() => {
     vi.clearAllMocks();
   });
