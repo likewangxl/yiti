@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-28",
+  "codeBaseBeforeAfternoon": "8a500a5c4",
+  "codeHead": "14cd4d4ac",
+  "screenCode": "SCR_PROVINCE",
+  "draftVersionBeforeRecordedAudit": 114,
+  "draftVersion": 116,
+  "publishStatus": 2,
+  "configurationEntriesChecked": 18,
+  "blockCount": 15,
+  "changedBlockIdsSinceRecordedAudit": [
+    55,
+    57,
+    61,
+    64
+  ],
+  "referencedDatasourceIds": [
+    9032,
+    9033,
+    9034
+  ],
+  "changedDatasourceIdsSinceRecordedAudit": [
+    9038,
+    9039
+  ],
+  "createdThenDisabledDatasourceIds": [
+    9038,
+    9039
+  ],
+  "sourceRecordsIncluded": 5,
+  "publishedSnapshotSHA256Before": "9e1bebce8fc35825dba0e38b31ac94b24fb2dc1c239e9c52ae12ad4a9548473f",
+  "publishedSnapshotSHA256After": "9e1bebce8fc35825dba0e38b31ac94b24fb2dc1c239e9c52ae12ad4a9548473f",
+  "databaseOperationsDuringExport": "none; readback evidence only",
+  "excluded": [
+    "business query results",
+    "institution directory and coordinates",
+    "credentials and sessions",
+    "published render package",
+    "operator identifiers",
+    "runtime and audit logs"
+  ],
+  "snapshotSHA256": "2d02a1d77659055872fd425756311df7825fe1b235899c31e23f0f4983211708"
+}
