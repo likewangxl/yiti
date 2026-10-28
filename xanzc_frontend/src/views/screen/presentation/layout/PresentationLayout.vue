@@ -1554,4 +1554,221 @@ function onMapContext(payload) {
 .presentation-layout--draft-overview .presentation-layout__overview-summary-card--composition :deep(.composition-tabs-widget--compact .composition-ring::after) {
   inset: 12px;
 }
+
+/* 分行经营总览卡片补强细边与四角短标，不参与布局尺寸计算。 */
+.presentation-layout--branch-overview .presentation-layout__overview-summary-card {
+  position: relative;
+  border-color: rgba(96, 214, 255, .46);
+  border-radius: 6px;
+}
+.presentation-layout--branch-overview .presentation-layout__overview-summary-card::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 rgba(201, 231, 255, .07), inset 0 0 14px rgba(77, 232, 239, .035);
+  background-image:
+    linear-gradient(rgba(77, 232, 239, .72), rgba(77, 232, 239, .72)),
+    linear-gradient(rgba(77, 232, 239, .72), rgba(77, 232, 239, .72)),
+    linear-gradient(rgba(88, 150, 255, .72), rgba(88, 150, 255, .72)),
+    linear-gradient(rgba(88, 150, 255, .72), rgba(88, 150, 255, .72)),
+    linear-gradient(rgba(77, 232, 239, .58), rgba(77, 232, 239, .58)),
+    linear-gradient(rgba(77, 232, 239, .58), rgba(77, 232, 239, .58)),
+    linear-gradient(rgba(88, 150, 255, .58), rgba(88, 150, 255, .58)),
+    linear-gradient(rgba(88, 150, 255, .58), rgba(88, 150, 255, .58));
+  background-repeat: no-repeat;
+  background-size: 18px 1px, 1px 18px, 18px 1px, 1px 18px, 18px 1px, 1px 18px, 18px 1px, 1px 18px;
+  background-position: left 1px top 1px, left 1px top 1px, right 1px top 1px, right 1px top 1px, left 1px bottom 1px, left 1px bottom 1px, right 1px bottom 1px, right 1px bottom 1px;
+  content: '';
+  pointer-events: none;
+}
+
+/* 指标卡保留各自的 metric accent，新增角标与内侧光沿用同一色调。 */
+.presentation-layout--branch-overview .presentation-layout__header--grouped :deep(.presentation-metric-widget) {
+  --branch-frame-corner: color-mix(in srgb, var(--metric-accent, var(--presentation-cyan)) 72%, transparent);
+  border-color: var(--metric-border);
+  border-radius: 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(201, 231, 255, .08),
+    inset 0 0 14px color-mix(in srgb, var(--metric-accent, var(--presentation-cyan)) 5%, transparent),
+    0 8px 22px rgba(0, 0, 0, .14);
+}
+.presentation-layout--branch-overview .presentation-layout__header--grouped :deep(.presentation-metric-widget::after) {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 12px color-mix(in srgb, var(--metric-accent, var(--presentation-cyan)) 4%, transparent);
+  background-image:
+    linear-gradient(var(--branch-frame-corner), var(--branch-frame-corner)),
+    linear-gradient(var(--branch-frame-corner), var(--branch-frame-corner)),
+    linear-gradient(var(--branch-frame-corner), var(--branch-frame-corner)),
+    linear-gradient(var(--branch-frame-corner), var(--branch-frame-corner)),
+    linear-gradient(var(--branch-frame-corner), var(--branch-frame-corner)),
+    linear-gradient(var(--branch-frame-corner), var(--branch-frame-corner)),
+    linear-gradient(var(--branch-frame-corner), var(--branch-frame-corner)),
+    linear-gradient(var(--branch-frame-corner), var(--branch-frame-corner));
+  background-repeat: no-repeat;
+  background-size: 18px 1px, 1px 18px, 18px 1px, 1px 18px, 18px 1px, 1px 18px, 18px 1px, 1px 18px;
+  background-position: left 1px top 1px, left 1px top 1px, right 1px top 1px, right 1px top 1px, left 1px bottom 1px, left 1px bottom 1px, right 1px bottom 1px, right 1px bottom 1px;
+  content: '';
+  pointer-events: none;
+}
+
+/* 主区在原有容器上叠加外框，内部 widget 自身边线透明以免出现双框。 */
+.presentation-layout--branch-overview .presentation-layout__main .presentation-layout__component {
+  position: relative;
+  border-radius: 6px;
+}
+.presentation-layout--branch-overview .presentation-layout__main .presentation-layout__component > :deep(*) {
+  border-color: transparent;
+}
+.presentation-layout--branch-overview .presentation-layout__main .presentation-layout__component--trend-tabs > :deep(.business-growth-widget) {
+  position: relative;
+  height: max-content;
+  align-self: flex-start;
+  border-radius: 6px;
+}
+.presentation-layout--branch-overview .presentation-layout__main .presentation-layout__component:not(.presentation-layout__component--trend-tabs)::after,
+.presentation-layout--branch-overview .presentation-layout__main .presentation-layout__component--trend-tabs > :deep(.business-growth-widget::after) {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  box-sizing: border-box;
+  border: 1px solid rgba(96, 214, 255, .54);
+  border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgba(201, 231, 255, .07), inset 0 0 18px rgba(77, 232, 239, .035);
+  background-image:
+    linear-gradient(rgba(77, 232, 239, .78), rgba(77, 232, 239, .78)),
+    linear-gradient(rgba(77, 232, 239, .78), rgba(77, 232, 239, .78)),
+    linear-gradient(rgba(88, 150, 255, .72), rgba(88, 150, 255, .72)),
+    linear-gradient(rgba(88, 150, 255, .72), rgba(88, 150, 255, .72)),
+    linear-gradient(rgba(77, 232, 239, .6), rgba(77, 232, 239, .6)),
+    linear-gradient(rgba(77, 232, 239, .6), rgba(77, 232, 239, .6)),
+    linear-gradient(rgba(88, 150, 255, .58), rgba(88, 150, 255, .58)),
+    linear-gradient(rgba(88, 150, 255, .58), rgba(88, 150, 255, .58));
+  background-repeat: no-repeat;
+  background-size: 18px 1px, 1px 18px, 18px 1px, 1px 18px, 18px 1px, 1px 18px, 18px 1px, 1px 18px;
+  background-position: left 1px top 1px, left 1px top 1px, right 1px top 1px, right 1px top 1px, left 1px bottom 1px, left 1px bottom 1px, right 1px bottom 1px, right 1px bottom 1px;
+  content: '';
+  pointer-events: none;
+}
+
+/* 主分析地图增加细光轨和柔和标题底色，位置不参与布局计算。 */
+.presentation-layout--branch-overview .presentation-layout__main .presentation-layout__component--map-primary::before {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 12px;
+  left: 12px;
+  height: 1px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, rgba(77, 232, 239, .8) 22%, rgba(88, 150, 255, .48) 68%, rgba(169, 121, 255, .42) 86%, transparent);
+  box-shadow: 0 0 8px rgba(77, 232, 239, .24);
+  content: '';
+  pointer-events: none;
+}
+.presentation-layout--branch-overview .presentation-layout__main .presentation-layout__component--map-primary :deep(.presentation-map-widget__header) {
+  border-bottom-color: rgba(96, 214, 255, .2);
+  background-image: linear-gradient(90deg, rgba(77, 232, 239, .08), rgba(88, 150, 255, .025) 54%, rgba(169, 121, 255, .035));
+}
+.presentation-layout--branch-overview .presentation-layout__main .presentation-layout__component--map-primary :deep(.presentation-map-widget__kicker) {
+  color: #84d9f7;
+  font-weight: 600;
+  letter-spacing: .08em;
+}
+.presentation-layout--branch-overview .presentation-layout__main .presentation-layout__component--map-primary :deep(.presentation-map-widget__header h2) {
+  text-shadow: 0 0 9px rgba(77, 232, 239, .12);
+}
+
+/* 用带切角的分区框包住零售、对公和收入指标。 */
+.presentation-layout--branch-overview .presentation-layout__header--grouped {
+  gap: 12px;
+}
+.presentation-layout--branch-overview .presentation-layout__metric-group {
+  --group-frame-rail: color-mix(in srgb, var(--group-accent, var(--presentation-cyan)) 68%, transparent);
+  --group-frame-tick: color-mix(in srgb, var(--group-accent, var(--presentation-cyan)) 42%, transparent);
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  padding: 10px 10px 11px;
+  gap: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.presentation-layout--branch-overview .presentation-layout__metric-group::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border: 1px solid color-mix(in srgb, var(--group-accent, var(--presentation-cyan)) 48%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--group-accent, var(--presentation-cyan)) 10%, transparent), rgba(8, 24, 61, .38) 56%, rgba(3, 14, 37, .38));
+  clip-path: polygon(0 12px, 12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+  content: '';
+  pointer-events: none;
+}
+.presentation-layout--branch-overview .presentation-layout__metric-group::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background-image:
+    linear-gradient(135deg, transparent 46%, var(--group-frame-rail) 49% 53%, transparent 56%),
+    linear-gradient(135deg, transparent 46%, var(--group-frame-rail) 49% 53%, transparent 56%),
+    linear-gradient(90deg, var(--group-frame-rail) 0 22px, transparent 22px calc(100% - 72px), var(--group-frame-rail) calc(100% - 72px) calc(100% - 24px), transparent calc(100% - 24px) 100%),
+    repeating-linear-gradient(90deg, var(--group-frame-tick) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(0deg, var(--group-frame-tick) 0 1px, transparent 1px 7px),
+    linear-gradient(90deg, transparent, var(--group-frame-rail) 22%, var(--group-frame-rail) 78%, transparent),
+    repeating-linear-gradient(125deg, var(--group-frame-tick) 0 2px, transparent 2px 6px),
+    linear-gradient(var(--group-frame-rail), var(--group-frame-rail)),
+    linear-gradient(var(--group-frame-rail), var(--group-frame-rail));
+  background-repeat: no-repeat;
+  background-size: 12px 12px, 12px 12px, 100% 2px, 40px 4px, 2px 32px, 38px 1px, 34px 5px, 2px 22px, 2px 22px;
+  background-position: left top, right bottom, right top, right 32px bottom 4px, left 4px bottom 20px, right 14px bottom 2px, right 94px top 4px, left top 52px, right bottom 52px;
+  clip-path: polygon(0 12px, 12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+  content: '';
+  pointer-events: none;
+}
+.presentation-layout--branch-overview .presentation-layout__metric-group-header,
+.presentation-layout--branch-overview .presentation-layout__metric-group-grid {
+  position: relative;
+  z-index: 2;
+}
+.presentation-layout--branch-overview .presentation-layout__metric-group-header {
+  box-sizing: border-box;
+  min-height: 28px;
+  padding: 3px 7px 5px;
+  border-bottom: 1px solid color-mix(in srgb, var(--group-accent, var(--presentation-cyan)) 28%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--group-accent, var(--presentation-cyan)) 10%, transparent), rgba(7, 22, 56, .22) 72%, transparent);
+}
+.presentation-layout--branch-overview .presentation-layout__metric-group-header::before {
+  width: 2px;
+  height: 12px;
+  border-radius: 1px;
+  box-shadow: none;
+  opacity: .76;
+}
+.presentation-layout--branch-overview .presentation-layout__metric-group-header h2 {
+  text-shadow: 0 0 8px color-mix(in srgb, var(--group-accent, var(--presentation-cyan)) 18%, transparent);
+}
+
+/* 指标小卡维持自身色调与图标，只保留浅边和克制的角标/左侧提示。 */
+.presentation-layout--branch-overview .presentation-layout__header--grouped :deep(.presentation-metric-widget) {
+  --branch-frame-corner: color-mix(in srgb, var(--metric-accent, var(--presentation-cyan)) 48%, transparent);
+  box-shadow: inset 0 1px 0 rgba(201, 231, 255, .045), 0 3px 8px rgba(0, 0, 0, .11);
+}
+.presentation-layout--branch-overview .presentation-layout__header--grouped :deep(.presentation-metric-widget::before) {
+  width: 2px;
+  height: 20px;
+  box-shadow: none;
+  opacity: .52;
+  pointer-events: none;
+}
+.presentation-layout--branch-overview .presentation-layout__header--grouped :deep(.presentation-metric-widget::after) {
+  box-shadow: inset 0 0 7px color-mix(in srgb, var(--metric-accent, var(--presentation-cyan)) 2%, transparent);
+  background-size: 12px 1px, 1px 12px, 12px 1px, 1px 12px, 12px 1px, 1px 12px, 12px 1px, 1px 12px;
+}
+.presentation-layout--branch-overview .presentation-layout__metric-group--revenue :deep(.presentation-metric-widget) {
+  padding: 8px 7px;
+  gap: 6px;
+}
 </style>
