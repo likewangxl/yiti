@@ -48,10 +48,9 @@ import {
   routeForInstitution,
   SOURCE_SCREEN_CODES
 } from '../presentation/navigation/navigationModel';
-import { buildRuntimePresentation, issueStatus } from '../presentation/runtime/runtimeState';
+import { buildRuntimePresentation } from '../presentation/runtime/runtimeState';
 import { buildInstitutionViewModel } from '../presentation/model/institutionViewModel';
 import { screenDisplayText } from '../presentation/model/screenDisplayText';
-import { supplementBranchDemoModel } from './branchDemoSupplement';
 
 const props = defineProps({
   view: { type: Object, default: () => ({}) },
@@ -64,7 +63,6 @@ const router = useRouter();
 const navigationError = ref('');
 const navigationPending = ref(false);
 let navigationGeneration = 0;
-const demoSupplementEnabled = ref(true);
 
 const isCorporate = computed(() => props.view?.renderPackage?.canvasStyle?.presentation?.template === 'corporate-overview-v1');
 const isRetail = computed(() => props.view?.renderPackage?.canvasStyle?.presentation?.template === 'retail-overview-v1');
@@ -240,64 +238,11 @@ const runtimePresentation = computed(() => {
     queriedAt: model.value?.queriedAt || state.lastQueriedAt?.value || ''
   });
 });
-// 只在后端确认的 TEST 分行草稿中补齐全辖展示。鉴权失败、请求失败和
-// 局部机构上下文继续显示原始状态；演示值不进入取数、授权或质量判断。
-const demoQueryFailed = computed(() => {
-  const guard = model.value?.qualityGuard;
-  const issues = Object.values(institutionRuntimeIssueGroups.value).flat();
-  // 保留旧批次时 status 可能是 STALE，查询失败原因仍在 code 中。
-  return [...issues, guard, { code: guard?.code }]
-    .some(issue => ['PERMISSION_DENIED', 'ERROR'].includes(issueStatus(issue)));
-});
-const demoSupplementAvailable = computed(() => ['draft', 'published'].includes(String(props.view?.state || '').trim().toLowerCase())
-  && String(props.view?.renderPackage?.canvasStyle?.dataClassification || '').trim().toUpperCase() === 'TEST'
-  && displayPresentation.value?.template === 'branch-overview-v1'
-  && displayPresentation.value?.displaySchemaVersion === 1
-  && !props.context?.orgCode && !props.context?.cityCode && !props.context?.empId
-  && !loading.value && !error.value
-  && !model.value?.permissionStatus
-  && !demoQueryFailed.value
-  && !['PERMISSION_DENIED', 'ERROR'].includes(runtimePresentation.value.status));
-const demoDisplayPresentation = computed(() => {
-  const presentation = displayPresentation.value;
-  if (!demoSupplementAvailable.value || !demoSupplementEnabled.value) return presentation;
-  // 旧组件只保存了存款 tab，兼容适配器为收入留空字段。演示时显式展开
-  // 三个环的绑定，让补齐值可被读取；这是视图副本，不回写保存的配置。
-  const components = presentation.display?.components || [];
-  return { ...presentation, display: { ...presentation.display, components: components.map(component => {
-    const tabs = component.content?.tabs || [];
-    const first = tabs[0];
-    if (component.componentId !== 'legacy-composition-64' || component.componentType !== 'COMPOSITION_TABS'
-      || component.dataRefs?.[0]?.blockId !== 64 || tabs.length !== 1
-      || first?.tabKey !== 'business-structure' || first.corporateField !== '测试_直营对公存款'
-      || first.retailField !== '测试_直营零售存款' || first.totalField) return component;
-    return { ...component, content: { ...component.content, tabs: [
-      { tabKey: 'deposit', label: '存款', corporateField: '测试_直营对公存款', retailField: '测试_直营零售存款',
-        totalField: '测试_直营存款余额', unit: 'HUNDRED_MILLION' },
-      { tabKey: 'loan', label: '贷款', corporateField: '测试_直营对公贷款', retailField: '测试_直营零售贷款',
-        totalField: '测试_直营贷款余额', unit: 'HUNDRED_MILLION' },
-      { tabKey: 'income', label: '收入', corporateField: '测试_直营对公营业收入', retailField: '测试_直营零售营业收入',
-        totalField: '测试_直营营业收入', unit: 'HUNDRED_MILLION' }
-    ] } };
-  }) } };
-});
-const demoSupplementSourcePresentation = computed(() => {
-  const presentation = demoDisplayPresentation.value;
-  if (!presentation || typeof presentation !== 'object') return presentation;
-  return {
-    ...presentation,
-    state: String(props.view?.state || '').trim().toLowerCase(),
-    dataClassification: String(props.view?.renderPackage?.canvasStyle?.dataClassification || '').trim().toUpperCase()
-  };
-});
-const demoSupplement = computed(() => demoSupplementAvailable.value && demoSupplementEnabled.value
-  ? supplementBranchDemoModel(originalDashboardModel.value, demoSupplementSourcePresentation.value)
-  : { model: originalDashboardModel.value, fields: [] });
-const dashboardModel = computed(() => demoSupplement.value.model);
+const dashboardModel = computed(() => originalDashboardModel.value);
 const dashboardSourcePresentation = computed(() => ({
   ...sourcePresentation.value,
   screenCode: String(props.view?.screenCode || props.view?.screen_code || '').trim(),
-  displayPresentation: demoDisplayPresentation.value,
+  displayPresentation: displayPresentation.value,
   scopeIdentity: [props.view?.screenCode, props.view?.orgScopeMode, props.view?.orgGroupCode, props.context?.orgCode].map(v => v || '').join('|'),
   runtimeIssues: institutionRuntimeIssueGroups.value,
   runtimeQuality: model.value?.qualityGuard || model.value?.quality || null,
