@@ -1,0 +1,5 @@
+### Result
+1. [GET] http://127.0.0.1:8766/preview.html => [200] OK
+2. [GET] https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js => [200] 
+3. [GET] https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js => [200] 
+4. [GET] https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js => [200] 

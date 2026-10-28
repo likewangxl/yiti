@@ -1,0 +1,38 @@
+async (page) => {
+  const frame = page.frameLocator('iframe');
+  const require = (condition, message) => { if (!condition) throw new Error(message); };
+  await frame.getByRole('button', { name: '下一方案', exact: true }).click();
+  const dual = frame.locator('#menu-dual');
+  await dual.getByRole('heading', { name: '我的客户', exact: true }).waitFor();
+  require(await dual.locator('tbody tr').count() === 3, '双栏必须显示同款业务表格');
+  await dual.getByRole('button', { name: '报表分析', exact: true }).click();
+  await dual.getByRole('heading', { name: '动态指标查询', exact: true }).waitFor();
+  await dual.getByRole('button', { name: '报表与大屏配置', exact: true }).click();
+  await dual.getByRole('button', { name: '大屏数据源', exact: true }).click();
+  require((await dual.locator('.mn-breadcrumb').innerText()).includes('报表与大屏配置'), '大屏配置路径必须正确');
+  const search = dual.getByRole('searchbox', { name: '搜索菜单', exact: true });
+  await search.fill('用户管理');
+  const results = dual.locator('.mn-search-results');
+  require((await results.innerText()).includes('系统设置 / 组织与权限'), '跨域搜索不能硬编码客户营销');
+  await results.getByRole('button').click();
+  await dual.getByRole('heading', { name: '用户管理', exact: true }).waitFor();
+  require((await dual.locator('.mn-tab.current').innerText()) === '用户管理', '页签应跟随当前页');
+  await dual.getByRole('button', { name: '收藏当前页面', exact: true }).click();
+  require(await dual.getByRole('button', { name: '用户管理', exact: true }).count() === 2, '双栏收藏必须新增快捷入口');
+  await dual.getByRole('button', { name: '客户营销', exact: true }).click();
+  await dual.getByRole('heading', { name: '我的客户', exact: true }).waitFor();
+  await page.screenshot({ path: 'E:/cx-workspace/yiti/prototypes/menu-navigation-20261028/evidence/dual-desktop.png', fullPage: true });
+  await frame.getByRole('button', { name: '上一方案', exact: true }).click();
+  const grouped = frame.locator('#menu-grouped');
+  require((await grouped.locator('.mn-tab.current').innerText()) === '我的客户', '两方案不能互相污染选中状态');
+  await page.setViewportSize({ width: 352, height: 940 });
+  const mockFrame = page.frames().find(f => f !== page.mainFrame());
+  const dimensions = await mockFrame.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+  require(dimensions.scroll <= dimensions.width + 1, '窄窗口不得整体横向溢出');
+  await page.screenshot({ path: 'E:/cx-workspace/yiti/prototypes/menu-navigation-20261028/evidence/grouped-narrow.png', fullPage: true });
+  await page.setViewportSize({ width: 1080, height: 900 });
+  await page.reload();
+  await page.frameLocator('iframe').locator('#menu-grouped h1').waitFor();
+  await page.screenshot({ path: 'E:/cx-workspace/yiti/prototypes/menu-navigation-20261028/evidence/grouped-desktop.png', fullPage: true });
+  return { checks: ['双栏业务表格', '报表分组跳转', '跨业务域搜索', '双栏收藏', '方案状态隔离', '窄窗口无整体溢出'], dimensions };
+}

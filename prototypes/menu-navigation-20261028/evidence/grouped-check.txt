@@ -1,0 +1,53 @@
+
+╔════════════════════════════════════════════════════════════════════╗
+║ Update available for @playwright/cli: 0.1.18 → 0.1.22              ║
+║ Run `npm install -g @playwright/cli@latest` (global) or            ║
+║ `npm install --save-dev @playwright/cli@latest` (local) to update. ║
+╚════════════════════════════════════════════════════════════════════╝
+
+### Result
+{"checks":["默认显示我的客户","分组展开、功能切换和完整面包屑","收藏与取消收藏更新常用入口","搜索结果跳转与路径展开","演示查询和重置"],"breadcrumb":"首页\n/\n客户营销\n/\n触达管理\n/\n我的触达任务"}
+### Ran Playwright code
+```js
+await (async (page) => {
+  const frame = page.frameLocator('iframe');
+  const grouped = frame.locator('#menu-grouped');
+  const require = (condition, message) => { if (!condition) throw new Error(message); };
+  const checks = [];
+  await grouped.getByRole('heading', { name: '我的客户', exact: true }).waitFor();
+  checks.push('默认显示我的客户');
+  const touchGroup = grouped.getByRole('button', { name: '触达管理', exact: true });
+  if (await touchGroup.getAttribute('aria-expanded') !== 'true') await touchGroup.click();
+  await grouped.getByRole('button', { name: '我的触达任务', exact: true }).last().click();
+  await grouped.getByRole('heading', { name: '我的触达任务', exact: true }).first().waitFor();
+  const breadcrumb = await grouped.locator('.mn-breadcrumb').innerText();
+  require(breadcrumb.includes('客户营销') && breadcrumb.includes('触达管理') && breadcrumb.includes('我的触达任务'), '面包屑必须包含完整业务路径');
+  checks.push('分组展开、功能切换和完整面包屑');
+  await grouped.getByRole('button', { name: '收藏当前页面', exact: true }).click();
+  await grouped.getByRole('button', { name: '取消收藏当前页面', exact: true }).waitFor();
+  require(await grouped.getByRole('button', { name: '我的触达任务', exact: true }).count() >= 2, '收藏必须增加常用入口');
+  await grouped.getByRole('button', { name: '取消收藏当前页面', exact: true }).click();
+  checks.push('收藏与取消收藏更新常用入口');
+  const search = grouped.getByRole('searchbox', { name: '搜索菜单', exact: true });
+  await search.fill('触达');
+  const results = grouped.locator('.mn-search-results');
+  require((await results.innerText()).includes('客户营销'), '搜索结果必须包含业务域');
+  await results.getByRole('button').filter({ hasText: '触达任务一览' }).click();
+  await grouped.getByRole('heading', { name: '触达任务一览', exact: true }).first().waitFor();
+  checks.push('搜索结果跳转与路径展开');
+  await search.fill('不存在的菜单ZZZ');
+  require((await results.innerText()).includes('未找到'), '搜索应有空结果反馈');
+  await search.fill('');
+  await grouped.getByRole('button', { name: '我的客户', exact: true }).first().click();
+  const keyword = grouped.getByLabel('客户名称', { exact: true });
+  await keyword.fill('甲');
+  await grouped.getByRole('button', { name: '查询', exact: true }).click();
+  require(await grouped.locator('tbody tr').count() === 1, '客户查询应过滤演示数据');
+  await grouped.getByRole('button', { name: '重置', exact: true }).click();
+  require(await grouped.locator('tbody tr').count() > 1, '重置应恢复演示数据');
+  checks.push('演示查询和重置');
+  await page.screenshot({ path: 'E:/cx-workspace/yiti/prototypes/menu-navigation-20261028/evidence/grouped-desktop.png', fullPage: true });
+  return { checks, breadcrumb };
+}
+)(page);
+```

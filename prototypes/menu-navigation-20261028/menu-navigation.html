@@ -1,0 +1,218 @@
+<div id="menu-navigation-prototype">
+<style>
+#menu-navigation-prototype{--mn-navy:#001a33;--mn-hover:#00264d;--mn-primary:#003d7a;--mn-blue:#1e5bba;--mn-bg:#f5f7fa;--mn-border:#e5e7eb;--mn-text:#1f2937;--mn-muted:#6b7280;--mn-side:236px;--mn-row:34px;font:14px/1.5 "Microsoft YaHei","Segoe UI",sans-serif;color:var(--mn-text);color-scheme:light}
+#menu-navigation-prototype *{box-sizing:border-box}
+#menu-navigation-prototype button,#menu-navigation-prototype input,#menu-navigation-prototype select{font:inherit}
+#menu-navigation-prototype button{cursor:var(--cursor-interaction,pointer)}
+#menu-navigation-prototype button:focus-visible,#menu-navigation-prototype input:focus-visible,#menu-navigation-prototype select:focus-visible{outline:2px solid #5b9bfa;outline-offset:2px}
+#menu-navigation-prototype .mn-app{display:flex;height:700px;overflow:hidden;background:var(--mn-bg);border:1px solid var(--mn-border)}
+#menu-navigation-prototype .mn-sidebar{width:var(--mn-side);flex:none;background:var(--mn-navy);color:#cbd5e1;display:flex;flex-direction:column;min-height:0}
+#menu-navigation-prototype .mn-brand{height:52px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--mn-hover);color:white;font-weight:500;white-space:nowrap}
+#menu-navigation-prototype .mn-mark{display:grid;place-items:center;width:26px;height:26px;flex:none;background:var(--mn-blue);border-radius:4px;font-size:13px}
+#menu-navigation-prototype .mn-search-wrap{position:relative;margin:14px 12px 8px;flex:none;z-index:4}
+#menu-navigation-prototype .mn-search-wrap>svg{position:absolute;left:10px;top:10px;width:16px;height:16px;color:#9db0c5;pointer-events:none}
+#menu-navigation-prototype .mn-search{width:100%;height:36px;padding:0 10px 0 32px;background:#0b2b48;border:1px solid #35516c;border-radius:4px;color:white;min-width:0}
+#menu-navigation-prototype .mn-search::placeholder{color:#aabccd}
+#menu-navigation-prototype .mn-search-results{position:absolute;top:42px;left:0;width:340px;max-width:calc(100vw - 56px);max-height:270px;overflow:auto;background:#fff;border:1px solid var(--mn-border);box-shadow:0 4px 12px #001a3326;color:var(--mn-text);border-radius:4px}
+#menu-navigation-prototype .mn-search-results[hidden]{display:none}
+#menu-navigation-prototype .mn-search-result{display:block;width:100%;text-align:left;border:0;background:#fff;padding:10px 12px;color:var(--mn-text)}
+#menu-navigation-prototype .mn-search-result:hover{background:#eef4fc}
+#menu-navigation-prototype .mn-search-result small{display:block;font-size:11px;color:var(--mn-muted);margin-top:3px;white-space:normal}
+#menu-navigation-prototype .mn-nav-scroll{flex:1;min-height:0;overflow:auto;padding:6px 10px 18px;scrollbar-width:thin;scrollbar-color:#36516b transparent}
+#menu-navigation-prototype .mn-caption{font-size:11px;letter-spacing:1px;color:#9bb1c6;padding:10px 10px 6px}
+#menu-navigation-prototype .mn-section-rule{border:0;border-top:1px solid #19364f;margin:10px 8px}
+#menu-navigation-prototype .mn-nav-row,#menu-navigation-prototype .mn-group-btn,#menu-navigation-prototype .mn-domain-btn{border:0;border-radius:4px;background:transparent;color:inherit;display:flex;width:100%;min-height:var(--mn-row);align-items:center;gap:9px;padding:6px 10px;text-align:left}
+#menu-navigation-prototype .mn-nav-row:hover,#menu-navigation-prototype .mn-group-btn:hover,#menu-navigation-prototype .mn-domain-btn:hover{background:var(--mn-hover)}
+#menu-navigation-prototype .mn-nav-row.active,#menu-navigation-prototype .mn-domain-btn.active{background:var(--mn-primary);color:#fff;box-shadow:inset 2px 0 var(--mn-blue)}
+#menu-navigation-prototype .mn-nav-row svg,#menu-navigation-prototype .mn-group-btn svg,#menu-navigation-prototype .mn-domain-btn svg{width:16px;height:16px;flex:none}
+#menu-navigation-prototype .mn-chevron{margin-left:auto;width:13px!important;height:13px!important;opacity:.7}
+#menu-navigation-prototype .mn-group-btn[aria-expanded="true"]>.mn-chevron{transform:rotate(90deg)}
+#menu-navigation-prototype .mn-group-title{flex:1;min-width:0}
+#menu-navigation-prototype .mn-subgroup{margin-left:20px}
+#menu-navigation-prototype .mn-subgroup>.mn-group-btn{font-size:12px;color:#bacbdb}
+#menu-navigation-prototype .mn-children{border-left:1px solid #2b445c;margin:2px 0 4px 10px;padding-left:8px}
+#menu-navigation-prototype .mn-children .mn-nav-row{font-size:12px;padding-left:10px;white-space:normal}
+#menu-navigation-prototype .mn-sidebar-footer{flex:none;border-top:1px solid #19364f;padding:10px 18px;font-size:11px;color:#9bb1c6}
+#menu-navigation-prototype .mn-main{min-width:0;flex:1;display:flex;flex-direction:column}
+#menu-navigation-prototype .mn-topbar{height:52px;flex:none;background:white;border-bottom:1px solid var(--mn-border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;gap:12px}
+#menu-navigation-prototype .mn-tabs{display:flex;height:100%;min-width:0;align-items:stretch;overflow:hidden;gap:4px}
+#menu-navigation-prototype .mn-tab{background:transparent;border:0;padding:0 13px;color:var(--mn-muted);white-space:nowrap;font-size:12px;border-bottom:2px solid transparent}
+#menu-navigation-prototype .mn-tab.current{border-bottom-color:var(--mn-blue);color:var(--mn-primary);font-weight:500}
+#menu-navigation-prototype .mn-account{display:flex;align-items:center;gap:8px;color:var(--mn-muted);font-size:12px;white-space:nowrap}
+#menu-navigation-prototype .mn-avatar{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#e6eef7;color:var(--mn-primary)}
+#menu-navigation-prototype .mn-account svg{width:13px;height:13px}
+#menu-navigation-prototype .mn-content{padding:20px 24px;overflow:auto;min-height:0;min-width:0;flex:1}
+#menu-navigation-prototype .mn-breadcrumb{font-size:12px;color:var(--mn-muted);display:flex;gap:7px;flex-wrap:wrap;margin-bottom:19px}
+#menu-navigation-prototype .mn-breadcrumb span:last-child{color:var(--mn-primary)}
+#menu-navigation-prototype .mn-breadcrumb b{font-weight:400;color:#9ca3af}
+#menu-navigation-prototype .mn-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
+#menu-navigation-prototype .mn-heading h1{font-size:20px;line-height:1.4;font-weight:500;margin:0 0 4px}
+#menu-navigation-prototype .mn-note{font-size:11px;color:var(--mn-muted)}
+#menu-navigation-prototype .mn-favorite,#menu-navigation-prototype .mn-filter button{display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;min-height:34px;background:white;color:var(--mn-primary);border:1px solid var(--mn-border);border-radius:4px;padding:0 12px;font-size:12px}
+#menu-navigation-prototype .mn-favorite svg{height:15px;width:15px}
+#menu-navigation-prototype .mn-favorite[aria-pressed="true"]{background:#e6eef7;border-color:#a3bce0}
+#menu-navigation-prototype .mn-filter{display:flex;flex-wrap:wrap;align-items:end;gap:12px;background:white;border:1px solid var(--mn-border);padding:16px;margin-bottom:16px;border-radius:4px}
+#menu-navigation-prototype .mn-field{display:flex;flex-direction:column;gap:7px;min-width:0;flex:1 1 150px}
+#menu-navigation-prototype .mn-field label{font-size:12px;color:var(--mn-muted)}
+#menu-navigation-prototype .mn-field input,#menu-navigation-prototype .mn-field select{min-width:0;width:100%;height:34px;padding:0 10px;border:1px solid #d1d5db;border-radius:4px;color:var(--mn-text);background:white;font-size:12px}
+#menu-navigation-prototype .mn-filter .primary{background:var(--mn-primary);border-color:var(--mn-primary);color:white}
+#menu-navigation-prototype .mn-table-wrap{width:100%;overflow:auto;background:white;border:1px solid var(--mn-border);border-radius:4px}
+#menu-navigation-prototype .mn-table{width:100%;border-collapse:collapse;font-size:12px;min-width:430px}
+#menu-navigation-prototype .mn-table th{background:#f9fafb;font-weight:500;color:#4b5563;text-align:left}
+#menu-navigation-prototype .mn-table th,#menu-navigation-prototype .mn-table td{padding:13px 16px;border-bottom:1px solid var(--mn-border);white-space:nowrap}
+#menu-navigation-prototype .mn-table tr:last-child td{border-bottom:0}
+#menu-navigation-prototype .mn-table .status{font-size:11px;color:#166534;background:#ecfdf5;border-radius:3px;display:inline-block;padding:2px 7px}
+#menu-navigation-prototype .mn-table-foot{display:flex;justify-content:space-between;margin-top:14px;gap:12px;font-size:11px;color:var(--mn-muted)}
+#menu-navigation-prototype .mn-preview{border:1px solid var(--mn-border);border-radius:4px;background:white;padding:24px;color:#4b5563;font-size:13px}
+#menu-navigation-prototype .mn-preview strong{display:block;font-weight:500;color:var(--mn-primary);margin-bottom:8px}
+#menu-navigation-prototype [data-mock="domain"]>.mn-sidebar{width:132px}
+#menu-navigation-prototype [data-mock="domain"] .mn-brand{padding:0 10px;gap:7px;font-size:12px}
+#menu-navigation-prototype [data-mock="domain"] .mn-domain-btn{gap:7px;padding:10px 8px;font-size:12px;white-space:normal}
+#menu-navigation-prototype .mn-domain-layout{display:flex;min-height:0;flex:1}
+#menu-navigation-prototype .mn-domain-bar{width:204px;flex:none;background:white;border-right:1px solid var(--mn-border);min-height:0;display:flex;flex-direction:column;color:#4b5563}
+#menu-navigation-prototype .mn-domain-bar .mn-search{background:#f5f7fa;border-color:#d1d5db;color:#1f2937}
+#menu-navigation-prototype .mn-domain-bar .mn-search::placeholder{color:#6b7280}
+#menu-navigation-prototype .mn-domain-bar .mn-caption{color:#6b7280}
+#menu-navigation-prototype .mn-domain-bar .mn-subgroup{margin-left:0}
+#menu-navigation-prototype .mn-domain-bar .mn-group-btn{color:#4b5563}
+#menu-navigation-prototype .mn-domain-bar .mn-children{border-left-color:#e5e7eb}
+#menu-navigation-prototype .mn-domain-bar .mn-group-btn:hover,#menu-navigation-prototype .mn-domain-bar .mn-nav-row:hover{background:#f0f4fa}
+#menu-navigation-prototype .mn-domain-bar .mn-nav-row.active{background:#e6eef7;color:var(--mn-primary)}
+#menu-navigation-prototype .mn-domain-bar .mn-section-rule{border-color:#e5e7eb}
+#menu-navigation-prototype .mn-domain-layout .mn-content{padding:20px}
+@media(max-width:850px){#menu-navigation-prototype{--mn-side:220px}#menu-navigation-prototype .mn-content{padding:18px 16px}#menu-navigation-prototype [data-mock="domain"]>.mn-sidebar{width:112px}#menu-navigation-prototype [data-mock="domain"] .mn-brand span:last-child{display:none}#menu-navigation-prototype .mn-domain-bar{width:182px}#menu-navigation-prototype .mn-account>span:not(.mn-avatar){display:none}}
+@media(max-width:620px){#menu-navigation-prototype .mn-app{height:auto;min-height:700px;display:block;overflow:visible}#menu-navigation-prototype .mn-sidebar,#menu-navigation-prototype [data-mock="domain"]>.mn-sidebar{width:100%;height:284px}#menu-navigation-prototype .mn-sidebar-footer{display:none}#menu-navigation-prototype .mn-brand{height:44px}#menu-navigation-prototype .mn-content{overflow:visible;padding:16px;min-height:400px}#menu-navigation-prototype .mn-topbar{height:48px;padding:0 12px}#menu-navigation-prototype .mn-account{display:none}#menu-navigation-prototype .mn-domain-layout{display:block}#menu-navigation-prototype .mn-domain-bar{width:100%;height:250px;border-right:0;border-bottom:1px solid var(--mn-border)}#menu-navigation-prototype [data-mock="domain"]>.mn-sidebar{height:auto}#menu-navigation-prototype [data-mock="domain"]>.mn-sidebar>.mn-nav-scroll{display:flex;overflow:auto;padding:8px}#menu-navigation-prototype [data-mock="domain"] .mn-domain-btn{width:auto;flex:none;white-space:nowrap}#menu-navigation-prototype .mn-field input,#menu-navigation-prototype .mn-field select,#menu-navigation-prototype .mn-search{font-size:16px}#menu-navigation-prototype .mn-nav-row,#menu-navigation-prototype .mn-group-btn{min-height:40px}#menu-navigation-prototype .mn-heading h1{font-size:18px}}
+</style>
+<div class="viz-carousel" aria-label="菜单改造方案对比" data-previous-label="上一方案" data-next-label="下一方案">
+  <section id="menu-grouped" data-variant="任务分组（推荐）" aria-label="任务分组菜单方案"><div class="mn-app" data-mock="task"></div></section>
+  <section id="menu-dual" data-variant="业务域双栏" aria-label="业务域双栏菜单方案" hidden><div class="mn-app" data-mock="domain"></div></section>
+</div>
+<script>
+(() => {
+  const root=document.getElementById('menu-navigation-prototype');
+  if(!root)return;
+  const domains=[
+    ['工作台','layout-dashboard',[[null,['工作台']]]],
+    ['客户营销','users',[
+      ['客户与客户池',['我的客户','营销客户列表','待认领客户','已认领客户']],
+      ['线索管理',['线索录入','线索审批']],
+      ['触达管理',['我的触达任务','触达任务一览']],
+      ['业务协作',['资产立项','中台支持','跨机构营销申请','客户转交记录']],
+      ['标签与规则',['营销客户标签','标签客户审核','客户触达周期管理']]]],
+    ['绩效与考核','target',[
+      ['指标与目标',['指标库','KPI 规则','目标管理','目标值管理']],
+      ['数据与计算',['数据导入','业绩调整','考核计算','任务监控']]]],
+    ['报表分析','chart-no-axes-combined',[
+      ['经营查询',['动态指标查询','预置报表','业绩分配查询']],
+      ['可视化展示',['行长仪表盘','大屏中心']],
+      ['报表与大屏配置',['自由报表','大屏管理','大屏数据源','机构经营画像','命名机构组']],
+      ['高级工具',['SQL 探查']]]],
+    ['系统设置','settings',[
+      ['组织与权限',['用户管理','角色管理','资源/菜单','权限配置']],
+      ['流程管理',['审批流程','审批流监控','超时规则']],
+      ['内容与文件',['公告管理','通知消息','文件管理']],
+      ['基础配置',['字典管理','工作日历','系统配置','人员标签']],
+      ['运行与审计',['任务调度','审计日志']]]],
+    ['信息聚合','library',[[null,['网址导航','通讯录','产品资料库','常用文档']]]],
+    ['内部评价','clipboard-check',[[null,['标签管理','人员标签','评价规则','评价任务','待处理任务']]]],
+    ['浦爱云盾','shield-check',[[null,['人员违规信息','信贷风险信息']]]],
+    ['历史数据查询','history',[[null,['担保查询','数据导入查询','公告查询','定价审批查询','业绩调整查询']]]],
+    ['红色引擎','flag',[[null,['红色引擎']]]]
+  ].map(([name,icon,groups],d)=>({id:'d'+d,name,icon,groups:groups.map(([label,names],g)=>({id:'d'+d+'g'+g,name:label,items:names.map((title,i)=>({id:'d'+d+'g'+g+'i'+i,title,domain:'d'+d,group:'d'+d+'g'+g,path:[name,label,title].filter((p,j,a)=>p&&(j===0||p!==a[0]))}))}))}));
+  const all=domains.flatMap(d=>d.groups.flatMap(g=>g.items));
+  const lookup=new Map(all.map(item=>[item.id,item]));
+  const initial=all.find(item=>item.title==='我的客户').id;
+  const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const icon=name=>'<i data-lucide="'+name+'" aria-hidden="true"></i>';
+  const rows=[['示例客户甲','公司客户','示例支行一','已开户'],['示例客户乙','公司客户','示例支行二','未开户'],['示例客户丙','机构客户','示例支行一','已开户']];
+  const state={};
+  const appearance={sidebarWidth:236,rowHeight:34};
+  const defaultState=()=>({selected:initial,domain:'d1',open:['d1','d1g0'],favorites:[initial]});
+  const snapshot=window.openai?.widgetState;
+  const prior=snapshot?.privateContent?.views||snapshot?.views;
+  ['task','domain'].forEach(key=>{
+    const previous=prior?.[key];
+    const s=defaultState();
+    if(previous&&lookup.has(previous.selected)){
+      s.selected=previous.selected;s.domain=lookup.get(previous.selected).domain;
+      s.open=Array.isArray(previous.open)?previous.open.filter(x=>typeof x==='string'):s.open;
+      s.favorites=Array.isArray(previous.favorites)?previous.favorites.filter(x=>lookup.has(x)):[];
+    }
+    state[key]=s;
+  });
+  const save=()=>{try{const result=window.openai?.setWidgetState?.({modelContent:{groupedPage:lookup.get(state.task.selected).title,dualPage:lookup.get(state.domain.selected).title},privateContent:{views:state}});result?.catch?.(()=>{});}catch{}};
+  const icons=()=>{if(globalThis.lucide?.createIcons)lucide.createIcons({attrs:{width:16,height:16}});};
+  const button=(item,s,extra='')=>'<button type="button" class="mn-nav-row '+(s.selected===item.id?'active':'')+'" data-action="select" data-id="'+item.id+'" '+(s.selected===item.id?'aria-current="page"':'')+'>'+extra+'<span>'+esc(item.title)+'</span></button>';
+  function groupMarkup(group,s,sub=true){
+    if(!group.name)return group.items.map(item=>button(item,s)).join('');
+    const open=s.open.includes(group.id);
+    return '<div class="'+(sub?'mn-subgroup':'mn-group')+'" data-group="'+esc(group.name)+'"><button type="button" class="mn-group-btn" data-action="toggle" data-id="'+group.id+'" aria-expanded="'+open+'"><span class="mn-group-title">'+esc(group.name)+'</span><i class="mn-chevron" data-lucide="chevron-right" aria-hidden="true"></i></button>'+(open?'<div class="mn-children">'+group.items.map(item=>button(item,s)).join('')+'</div>':'')+'</div>';
+  }
+  function favoriteMarkup(s){return '<div class="mn-favorite-links">'+s.favorites.map(id=>button(lookup.get(id),s,icon('star'))).join('')+'</div>';}
+  function navMarkup(s){
+    return '<div class="mn-caption">常用入口</div>'+favoriteMarkup(s)+'<hr class="mn-section-rule">'+domains.map(domain=>{
+      if(domain.id==='d0'||domain.id==='d9')return button(domain.groups[0].items[0],s,icon(domain.icon));
+      const open=s.open.includes(domain.id);
+      return '<div class="mn-group" data-group="'+esc(domain.name)+'"><button type="button" class="mn-group-btn" data-action="toggle" data-id="'+domain.id+'" aria-expanded="'+open+'">'+icon(domain.icon)+'<span class="mn-group-title">'+esc(domain.name)+'</span><i class="mn-chevron" data-lucide="chevron-right" aria-hidden="true"></i></button>'+(open?domain.groups.map(group=>groupMarkup(group,s)).join(''):'')+'</div>';
+    }).join('');
+  }
+  function searchMarkup(){return '<div class="mn-search-wrap">'+icon('search')+'<input class="mn-search" type="search" aria-label="搜索菜单" placeholder="搜索菜单，如：触达" autocomplete="off"><div class="mn-search-results" aria-live="polite" hidden></div></div>';}
+  function headerMarkup(key,s){return '<header class="mn-topbar"><div class="mn-tabs"><button class="mn-tab" data-action="select" data-id="d0g0i0" type="button">工作台</button><span class="mn-tab current" style="display:flex;align-items:center">'+esc(lookup.get(s.selected).title)+'</span></div><div class="mn-account"><span class="mn-avatar">演</span><span>演示用户</span>'+icon('chevron-down')+'</div></header>';}
+  function mainMarkup(key,s){const item=lookup.get(s.selected);const favorite=s.favorites.includes(item.id);return '<div class="mn-content"><div class="mn-breadcrumb" aria-live="polite">'+['首页',...item.path].map((p,i)=> (i?'<b>/</b>':'')+'<span>'+esc(p)+'</span>').join('')+'</div><div class="mn-heading"><div><h1>'+esc(item.title)+'</h1><div class="mn-note">交互原型 · 演示数据</div></div><button type="button" class="mn-favorite" data-action="favorite" aria-pressed="'+favorite+'" aria-label="'+(favorite?'取消收藏当前页面':'收藏当前页面')+'">'+icon('star')+'<span>'+(favorite?'已收藏':'收藏')+'</span></button></div><div class="mn-body">'+bodyMarkup(key,item)+'</div></div>';}
+  function bodyMarkup(key,item){
+    if(['我的客户','营销客户列表','待认领客户','已认领客户'].includes(item.title))return '<form class="mn-filter"><div class="mn-field"><label for="'+key+'-customer">客户名称</label><input id="'+key+'-customer" class="mn-keyword" type="search" placeholder="请输入客户名称"></div><div class="mn-field"><label for="'+key+'-status">开户状态</label><select id="'+key+'-status" class="mn-status"><option value="">全部</option><option>已开户</option><option>未开户</option></select></div><button class="primary" type="button" data-action="query">查询</button><button type="button" data-action="reset">重置</button></form><div class="mn-table-wrap"><table class="mn-table"><thead><tr><th>客户名称</th><th>客户类型</th><th>主办机构</th><th>开户状态</th></tr></thead><tbody>'+rowMarkup(rows)+'</tbody></table></div><div class="mn-table-foot"><span class="mn-total">共 3 条演示记录</span><span>所有记录均为虚构</span></div>';
+    if(['我的触达任务','触达任务一览'].includes(item.title))return '<div class="mn-table-wrap"><table class="mn-table"><thead><tr><th>客户名称</th><th>触达事项</th><th>负责人</th><th>任务状态</th></tr></thead><tbody><tr><td>示例客户甲</td><td>日常业务回访</td><td>演示用户</td><td><span class="status">待处理</span></td></tr><tr><td>示例客户乙</td><td>产品需求沟通</td><td>演示用户</td><td>已完成</td></tr></tbody></table></div><div class="mn-table-foot"><span>共 2 条演示任务</span><span>所有记录均为虚构</span></div>';
+    return '<div class="mn-preview"><strong>'+esc(item.title)+' · 功能入口预览</strong>已定位到“'+esc(item.path.join(' / '))+'”。此处仅展示导航效果，业务表单保持现有页面。</div>';
+  }
+  function rowMarkup(data){return data.length?data.map(row=>'<tr>'+row.map((cell,i)=>'<td>'+(i===3?'<span class="status">'+esc(cell)+'</span>':esc(cell))+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="4">暂无匹配的演示客户</td></tr>';}
+  function render(key){
+    const app=root.querySelector('[data-mock="'+key+'"]');const s=state[key];
+    const oldScroll=app.querySelector('.mn-nav-scroll')?.scrollTop||0;
+    const mark='<div class="mn-brand"><span class="mn-mark">银</span><span>'+(key==='task'?'银行营销平台':'业务平台')+'</span></div>';
+    if(key==='task')app.innerHTML='<aside class="mn-sidebar">'+mark+searchMarkup()+'<nav class="mn-nav-scroll" aria-label="任务分组菜单">'+navMarkup(s)+'</nav><div class="mn-sidebar-footer">业务域 / 任务分组 / 功能</div></aside><main class="mn-main">'+headerMarkup(key,s)+mainMarkup(key,s)+'</main>';
+    else{
+      const domain=domains.find(d=>d.id===s.domain);
+      app.innerHTML='<aside class="mn-sidebar">'+mark+'<nav class="mn-nav-scroll" aria-label="业务域菜单">'+domains.map(d=>'<button type="button" class="mn-domain-btn '+(d.id===s.domain?'active':'')+'" data-action="domain" data-id="'+d.id+'">'+icon(d.icon)+'<span>'+esc(d.name)+'</span></button>').join('')+'</nav></aside><main class="mn-main">'+headerMarkup(key,s)+'<div class="mn-domain-layout"><aside class="mn-domain-bar">'+searchMarkup()+'<nav class="mn-nav-scroll" aria-label="当前业务域功能"><div class="mn-caption">'+esc(domain.name)+'</div>'+domain.groups.map(g=>groupMarkup(g,s)).join('')+'<hr class="mn-section-rule"><div class="mn-caption">常用入口</div>'+favoriteMarkup(s)+'</nav></aside>'+mainMarkup(key,s)+'</div></main>';
+    }
+    app.querySelector('.mn-nav-scroll').scrollTop=oldScroll;
+    icons();
+  }
+  function navigate(key,id){
+    const item=lookup.get(id);if(!item)return;
+    const s=state[key];s.selected=id;s.domain=item.domain;s.open=[...new Set([...s.open,item.domain,item.group])];
+    render(key);save();
+  }
+  function filter(app){const keyword=app.querySelector('.mn-keyword')?.value.trim()||'';const status=app.querySelector('.mn-status')?.value||'';const filtered=rows.filter(row=>(!keyword||row[0].includes(keyword))&&(!status||row[3]===status));app.querySelector('tbody').innerHTML=rowMarkup(filtered);app.querySelector('.mn-total').textContent='共 '+filtered.length+' 条演示记录';}
+  ['task','domain'].forEach(key=>{
+    const app=root.querySelector('[data-mock="'+key+'"]');
+    app.addEventListener('click',event=>{
+      const button=event.target.closest('button[data-action]');if(!button||!app.contains(button))return;
+      const action=button.dataset.action,id=button.dataset.id,s=state[key];
+      if(action==='select'){navigate(key,id);return;}
+      if(action==='toggle'){s.open=s.open.includes(id)?s.open.filter(v=>v!==id):[...s.open,id];render(key);save();return;}
+      if(action==='domain'){const domain=domains.find(d=>d.id===id);const target=s.selected.startsWith(id+'g')?s.selected:domain.groups[0].items[0].id;navigate(key,target);return;}
+      if(action==='favorite'){s.favorites=s.favorites.includes(s.selected)?s.favorites.filter(v=>v!==s.selected):[...s.favorites,s.selected];render(key);save();return;}
+      if(action==='query'){filter(app);return;}
+      if(action==='reset'){app.querySelector('.mn-filter').reset();filter(app);}
+    });
+    app.addEventListener('input',event=>{
+      if(!event.target.matches('.mn-search'))return;
+      const query=event.target.value.trim().toLowerCase();const result=app.querySelector('.mn-search-results');
+      result.hidden=!query;
+      if(!query){result.innerHTML='';return;}
+      const hits=all.filter(item=>item.path.join(' ').toLowerCase().includes(query));
+      result.innerHTML=hits.length?hits.map(item=>'<button type="button" class="mn-search-result" data-action="select" data-id="'+item.id+'">'+esc(item.title)+'<small>首页 / '+esc(item.path.join(' / '))+'</small></button>').join(''):'<div class="mn-search-result">未找到匹配菜单</div>';
+    });
+    app.addEventListener('keydown',event=>{if(event.key==='Enter'&&event.target.matches('.mn-keyword')){event.preventDefault();filter(app);}if(event.key==='Escape'){const result=app.querySelector('.mn-search-results');if(result)result.hidden=true;}});
+    app.addEventListener('submit',event=>{event.preventDefault();filter(app);});
+    render(key);
+  });
+  window.addEventListener('openai:set_globals',event=>{
+    const restored=event.detail?.globals?.widgetState;const views=restored?.privateContent?.views||restored?.views;
+    if(!views)return;
+    for(const key of ['task','domain']){const v=views[key];if(!lookup.has(v?.selected))continue;state[key]={selected:v.selected,domain:lookup.get(v.selected).domain,open:Array.isArray(v.open)?v.open.filter(x=>typeof x==='string'):[],favorites:Array.isArray(v.favorites)?v.favorites.filter(x=>lookup.has(x)):[]};render(key);}
+  });
+  if(globalThis.Tweak){const tweaks=new Tweak({container:root.querySelector('#menu-grouped'),onChange:()=>{root.style.setProperty('--mn-side',appearance.sidebarWidth+'px');root.style.setProperty('--mn-row',appearance.rowHeight+'px');}});tweaks.addSlider(appearance,'sidebarWidth',{label:'侧栏宽度',min:220,max:270,unit:'px'});tweaks.addSlider(appearance,'rowHeight',{label:'菜单行高',min:32,max:40,unit:'px'});}
+})();
+</script>
+</div>
